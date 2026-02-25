@@ -10,25 +10,36 @@ The Spec module is the core domain layer of Bonsai. It owns all spec file operat
 
 **Pattern:** Service-centric (facade)
 
-`service.py` is the single entry point for all spec operations. It delegates to parser, validator, and graph as needed — there is no fixed pipeline order.
+`service.py` is the single entry point for all spec operations. It is called from two directions:
+1. **RPC methods** — user-initiated CRUD via JSON-RPC (`spec/create`, `spec/update`, etc.)
+2. **Watcher callback** — automatic, when any spec file changes on disk (from any source: user, agent, external tool). The callback is registered by `rpc/server.py`, which calls `spec/service` to validate and postprocess, then pushes notifications to the frontend.
+
+Both paths use the same service methods — there is no special case handling per caller.
 
 ```
-            ┌───────────────┐
-            │  service.py    │  ← Single entry point (facade)
-            │                │
-            └───┬───┬───┬───┘
-                │   │   │
-      ┌─────────┘   │   └─────────┐
-      ▼             ▼             ▼
-  ┌────────┐  ┌──────────┐  ┌────────┐
-  │parser  │  │validator │  │ graph  │
-  └────────┘  └──────────┘  └────────┘
-      ▲             ▲             ▲
-      │             │             │
-  ┌───┴─────────────┴─────────────┴───┐
-  │           models.py               │
-  │  Spec, RegistryEntry, Link, etc.  │
-  └───────────────────────────────────┘
+  ┌─────────────────────┐    ┌─────────────────────────────────┐
+  │  RPC methods        │    │  rpc/server.py watcher callback │
+  │  (user CRUD)        │    │  (any spec file change on disk) │
+  └──────────┬──────────┘    └──────────────┬──────────────────┘
+             │                              │
+             └──────────────┬───────────────┘
+                            ▼
+            ┌───────────────────────────────┐
+            │  service.py  (facade)         │
+            └───┬───────────┬───────────────┘
+                │           │           │
+      ┌─────────┘           │    └──────┘
+      ▼                     ▼           ▼
+  ┌────────┐  ┌──────────┐  ┌────────┐  ┌──────────┐
+  │parser  │  │validator │  │ graph  │  │registry  │
+  └────────┘  └──────────┘  └────────┘  └──────────┘
+      ▲             ▲             ▲            ▲
+      └─────────────┴─────────────┴────────────┘
+                            │
+              ┌─────────────┴──────────────┐
+              │         models.py          │
+              │  Spec, RegistryEntry, etc. │
+              └────────────────────────────┘
 ```
 
 ## File Organization
@@ -37,10 +48,10 @@ The Spec module is the core domain layer of Bonsai. It owns all spec file operat
 |------|---------------|------------|
 | `models.py` | Pydantic models: Spec, RegistryEntry, Link, SpecGraph, SpecSummary, SpecDetail | — |
 | `service.py` | Facade — all CRUD operations, delegates to other components | parser, validator, graph, registry, core/config |
-| `parser.py` | Parse Markdown spec files (frontmatter + content) | models |
+| `parser.py` | Parse Markdown spec files (frontmatter + content) | models, core/fileio |
 | `validator.py` | Validate spec structure, required fields, link integrity | models |
 | `graph.py` | Build in-memory hierarchy graph from registry entries + links | models |
-| `registry.py` | Read/write/validate `.specs/registry.json` — atomic writes, schema validation | models |
+| `registry.py` | Read/write/validate `.specs/registry.json` — atomic writes, schema validation | models, core/fileio |
 
 ## Public Interface
 
@@ -60,7 +71,7 @@ The Spec module is the core domain layer of Bonsai. It owns all spec file operat
 | Model | Fields | Description |
 |-------|--------|-------------|
 | `Spec` | type, content, frontmatter (dict) | Parsed spec from disk |
-| `RegistryEntry` | id, type, path, status, covers, tags, created, updated | Single entry in registry.json |
+| `RegistryEntry` | id, type, path, title, status, covers, tags, created, updated | Single entry in registry.json |
 | `Link` | from_id, to_id, type | Relationship between specs |
 | `SpecSummary` | id, type, path, status, title, tags | Lightweight listing model |
 | `SpecDetail` | id, type, path, status, title, tags, content, links | Full spec with content |
@@ -91,6 +102,7 @@ The Spec module is the core domain layer of Bonsai. It owns all spec file operat
 | Dependency | Usage |
 |------------|-------|
 | `core/config` | Project root path, spec directory config |
+| `core/fileio` | File read/write/delete for spec files and registry |
 | `pydantic` | Model validation and serialization |
 
 ## Known Limitations

@@ -4,25 +4,46 @@
 
 ## Purpose
 
-The Core module provides shared infrastructure for all backend modules. It handles application configuration (project root discovery, directory paths, settings) and async file system watching. It is a dependency of every domain module and has no dependencies on other app modules.
+The Core module provides shared infrastructure for all backend modules. It handles application
+configuration (project root discovery, directory paths, settings), file system operations
+(read, write, delete files and directories), and async filesystem watching.
+
+`watcher.py` watches the entire working directory and fires callbacks when files change.
+At this design stage, spec files (`*.md`, `.specs/*`, `registry.json`) are the primary
+consumers of change events. Source code files will be added as consumers in later stages
+(e.g. coverage tracking, detecting agent-authored source changes).
+
+The watcher serves two purposes:
+1. **User/external changes** — detect edits made outside Bonsai (editor, git, external tools)
+   so the backend can validate, postprocess, and notify the frontend to update views.
+2. **Agent changes** — detect spec file edits made by the AI agent during a run, applying
+   the same validation/postprocessing pipeline as for user changes (more reliable than
+   intercepting tool calls).
 
 ## Internal Architecture
 
-**Pattern:** Single responsibility — two independent utilities with no interaction between them.
+**Pattern:** Three independent utilities with no interaction between them.
 
 ```
-  ┌──────────────┐    ┌──────────────┐
-  │  config.py   │    │  watcher.py  │
-  │              │    │              │
-  │  project     │    │  async file  │
-  │  root,       │    │  change      │
-  │  paths,      │    │  detection   │
-  │  settings    │    │              │
-  └──────────────┘    └──────────────┘
-         ▲                    ▲
-         │                    │
-    Used by all          Used by rpc/ and spec/
-    modules              (notifications)
+  ┌──────────────┐    ┌──────────────┐    ┌───────────────────────────────────────────┐
+  │  config.py   │    │  fileio.py   │    │  watcher.py                               │
+  │              │    │              │    │                                           │
+  │  project     │    │  read,       │    │  watches working directory                │
+  │  root,       │    │  write,      │    │  fires callbacks on file changes          │
+  │  paths,      │    │  delete      │    │                                           │
+  │  settings    │    │  files/dirs  │    │  started by rpc/server.py at startup;     │
+  │              │    │              │    │  callback routes by file type:            │
+  └──────────────┘    └──────────────┘    │    spec/*.md, .specs/* →                  │
+         ▲                  ▲             │      spec/service (validate/postprocess)  │
+         │                  │             │      → rpc/notifications → frontend       │
+    Used by all        Used by            │    source files (future) → TBD            │
+    modules            spec/, agent/      └───────────────────────────────────────────┘
+                                                 ▲
+                                                 │
+                                            Used by rpc/
+                                            (spec/ is called via
+                                            the rpc callback,
+                                            not directly)
 ```
 
 ## File Organization
@@ -30,6 +51,7 @@ The Core module provides shared infrastructure for all backend modules. It handl
 | File | Responsibility | Depends On |
 |------|---------------|------------|
 | `config.py` | App configuration: project root discovery, directory paths, settings | pydantic |
+| `fileio.py` | File system operations: read, write, delete files; create directories | — |
 | `watcher.py` | Async file change watching: detect spec file and registry changes | watchfiles / watchdog |
 
 ## Public Interface
@@ -42,6 +64,15 @@ The Core module provides shared infrastructure for all backend modules. It handl
 | `get_spec_dir` | `() → Path` | Path to the `.specs/` directory |
 | `get_registry_path` | `() → Path` | Path to `.specs/registry.json` |
 | `load_config` | `() → AppConfig` | Load application settings (Pydantic model) |
+
+### fileio.py
+
+| Function | Signature | Description |
+|----------|-----------|-------------|
+| `read_text` | `(path: Path) → str` | Read file contents as text |
+| `write_text` | `(path: Path, content: str) → None` | Write text to file, creating parent directories if needed |
+| `delete_file` | `(path: Path) → None` | Delete a file |
+| `ensure_dir` | `(path: Path) → None` | Create directory and all parents if they don't exist |
 
 ### watcher.py
 
@@ -70,7 +101,7 @@ The Core module provides shared infrastructure for all backend modules. It handl
 
 | Decision | Choice | Rationale |
 |----------|--------|-----------|
-| No fileio abstraction | Domain modules use pathlib/json directly | Simplicity — one-line wrappers add indirection without value |
+| fileio.py in core/ | Shared file I/O utilities used by domain modules | Centralizes file operations, avoids scattered pathlib calls across modules, consistent error handling |
 | Registry handling in spec/, not core/ | spec/ owns the registry as domain state | Separation of concerns — registry is spec domain logic, not shared infrastructure |
 | Watcher as separate file from config | Async watching is a distinct infrastructure concern | Separation of concerns — config is synchronous project setup, watcher is async runtime |
 | No logging/error utilities | Use Python stdlib logging directly | Simplicity — add shared utilities only when a real pattern emerges |
@@ -93,4 +124,4 @@ None.
 ## Related Specs
 
 - **Parent:** [Architecture Design](../../../DESIGN_DOC.md)
-- **Consumers:** [Spec Module](../spec/README.md), Agent Module (TBD), RPC Module (TBD)
+- **Consumers:** [Spec Module](../spec/README.md), [Agent Module](../agent/README.md), RPC Module (TBD)

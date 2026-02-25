@@ -64,7 +64,7 @@ Bonsai serves as both a spec management layer and an AI agent orchestrator — e
  │        │         │         │
  │  ┌─────▼─────────▼──────┐ │
  │  │    Shared Core       │ │
- │  │  Config  FileIO      │ │
+ │  │ Config FileIO Watcher│ │
  │  └──────────┬───────────┘ │
  └─────────────┼─────────────┘
           ┌────▼─────┐  ┌───────────────┐
@@ -74,60 +74,85 @@ Bonsai serves as both a spec management layer and an AI agent orchestrator — e
           └──────────┘  └───────────────┘
 ```
 
-**Communication Protocol:** JSON-RPC over WebSocket (LSP-inspired)
+**Communication Protocol:** JSON-RPC 2.0 over WebSocket (LSP-style, true bidirectional)
 
-The frontend and backend communicate over a single WebSocket connection using JSON-RPC 2.0.
-This enables bidirectional messaging — the server can push file change notifications to the
-client without polling.
+The frontend and backend communicate over a single WebSocket connection. Both sides can send
+**requests** (with `id`, require a response) and **notifications** (no `id`, fire-and-forget).
+This mirrors the Language Server Protocol pattern exactly.
 
 ```
-  React Frontend ◀═══ JSON-RPC/WS ═══▶ FastAPI Backend
-    │                                        │
-    │  Client → Server (requests):           │
-    │   spec/*                               │
-    │   agent/*                              │
-    │                                        │
-    │  Server → Client (notifications):      │
-    │   spec/*                               │
-    │   registry/*                           │
-    ▼                                        ▼
-  Browser                     ┌──── File Watcher ────┐
-                              │  watches:             │
-                              │   .specs/registry.json│
-                              │   spec files (*.md)   │
-                              └───────────────────────┘
+  React Frontend ◀═══ JSON-RPC 2.0 / WebSocket ═══▶ FastAPI Backend
+    │                                                       │
+    │  Client → Server (requests):                         │
+    │   spec/*  agent/run  agent/interrupt                  │
+    │   agent/respond  (answers server requests)            │
+    │                                                       │
+    │  Server → Client (notifications, no response):        │
+    │   spec/did*  registry/didUpdate                       │
+    │   agent/sessionStart  agent/textDelta                 │
+    │   agent/toolCallStart  agent/toolCallEnd              │
+    │   agent/subagentStart  agent/subagentEnd              │
+    │   agent/notification  agent/compact                   │
+    │   agent/done  agent/error                             │
+    │                                                       │
+    │  Server → Client (requests, client must respond):     │
+    │   agent/askUserQuestion  agent/confirmAction          │
+    ▼                                                       ▼
+  Browser                              ┌──── File Watcher ────┐
+                                       │  .specs/registry.json │
+                                       │  spec files (*.md)    │
+                                       └───────────────────────┘
 ```
 
 **Data Flow:**
 
 ```
+  ── Request/Response path (user-initiated) ──────────────────────────────────────
+
   User (Browser)
     │
     ▼
-  React Frontend ◀══ JSON-RPC/WS ══╗
-    │                                ║
-    │  requests                      ║ notifications
-    ▼                                ║
-  FastAPI JSON-RPC Handler           ║
-    │                                ║
-    ├──▶ Spec Module ────────────────╝
-    │     │ read/write spec files
-    │     │ build hierarchy graph
-    │     │ validate & parse
-    │     ▼
-    │   Core (FileIO) ◀──▶ Repo FS
-    │         ▲
-    │         │ file watcher
-    │         │ (registry.json, specs)
-    │
-    ├──▶ Agent Module ───────────────╗
-    │     │ load specs as context    ║ agent/progress
-    │     │ call AI agent APIs       ║ agent/result
-    │     │ stream results back ─────╝
+  React Frontend ◀══ JSON-RPC 2.0 / WebSocket ════════════════╗
+    │                                                          ║
+    │  client→server requests                                  ║ server→client notifications
+    │                                                          ║ server→client requests
+    ▼                                                          ║
+  FastAPI JSON-RPC Handler                                     ║
+    │                                                          ║
+    ├──▶ Spec Module ──────────────────────────────────────────╢ spec/did*, registry/didUpdate
+    │     │ read/write spec files                              ║
+    │     │ build hierarchy graph                              ║
+    │     │ validate & parse                                   ║
+    │     ▼                                                    ║
+    │   Core (Watcher, FileIO) ◀──▶ Repo FS                   ║
+    │                                                          ║
+    ├──▶ Agent Module ─────────────────────────────────────────╢ agent/progress, agent/done
+    │     │ load specs as context                              ║ agent/textDelta, agent/toolCall*
+    │     │ call AI agent APIs                                 ║ agent/subagent*, agent/done
+    │     │ map SDK events → notifications ───────────────────▶╣
+    │     │ suspend on canUseTool / AskQuestion ───────────────▶ agent/confirmAction (request)
+    │     │ await agent/respond from client                      agent/askUserQuestion (request)
     │     ▼
     │   External AI APIs (Claude, etc.)
     │
-    └──▶ Core (Config, FileIO)
+    └──▶ Core (Config, Watcher, FileIO)
+
+  ── Async watcher path (any file change, any source) ────────────────────────────
+
+  Repo FS change (user edit / agent tool call / external tool)
+    │
+    ▼
+  Core (Watcher)  — watches working directory
+    │  fires callback registered by rpc/server.py at startup
+    ▼
+  rpc/server.py  routes by file type:
+    ├── spec file (*.md, .specs/*, registry.json)
+    │     ▼
+    │   Spec Module  (validate, re-parse, update registry + graph)
+    │     ▼
+    │   rpc/notifications ─────────────────────────────────────▶ spec/did*, registry/didUpdate
+    │
+    └── source files (*.py, *.ts, …)  [future: coverage, health]
 ```
 
 ## Backend (Python)
@@ -141,11 +166,11 @@ backend/
 ├── app/
 │   ├── main.py              # FastAPI app entry point
 │   ├── rpc/                 # JSON-RPC Layer
-│   │   ├── server.py        # WebSocket + JSON-RPC dispatcher
+│   │   ├── server.py        # WebSocket + JSON-RPC dispatcher (routes all 3 directions)
 │   │   ├── methods/
 │   │   │   ├── specs.py     # spec/* methods
-│   │   │   └── agents.py   # agent/* methods
-│   │   └── notifications.py # Server→client notifications
+│   │   │   └── agents.py    # agent/* methods (incl. agent/respond)
+│   │   └── notifications.py # Server→client push (notifications + requests)
 │   ├── spec/                # Spec Domain Module
 │   │   ├── models.py        # Spec, RegistryEntry, Link models
 │   │   ├── service.py       # CRUD operations
@@ -154,12 +179,13 @@ backend/
 │   │   └── graph.py         # Hierarchy & graph building
 │   ├── agent/               # Agent Domain Module
 │   │   ├── models.py        # AgentTask, AgentEvent, AgentResult models
-│   │   ├── service.py       # Orchestration logic
-│   │   ├── runner.py        # Agent execution
-│   │   └── tracker.py       # Progress & result tracking
+│   │   ├── service.py       # Orchestration facade
+│   │   ├── runner.py        # Claude Agent SDK integration; maps SDK events → notifications
+│   │   └── tracker.py       # Task lifecycle + asyncio.Future map for pending requests
 │   └── core/                # Shared Core
 │       ├── config.py        # App configuration
-│       └── fileio.py        # File system operations
+│       ├── fileio.py        # File system operations (read, write, delete files/dirs)
+│       └── watcher.py       # Async file change watching
 ├── tests/
 │   ├── test_spec/
 │   ├── test_agent/
@@ -213,22 +239,30 @@ Specs are stored as files in the repository. The registry tracks metadata:
 - `id` — unique identifier
 - `type` — goal-and-requirements | architecture-design | module-design | submodule-design | task-spec
 - `path` — relative file path
+- `title` — human-readable name
 - `status` — draft | active | stale | deprecated
 - `covers` — source paths this spec covers
 - `tags` — metadata labels
+- `created` — creation date (ISO 8601)
+- `updated` — last update date (ISO 8601)
 
 **Links (in registry):**
 - `from` / `to` — spec IDs
 - `type` — parent | child | depends-on | references | implements
 
-## API Design (to be designed)
+## API Design
 
-**Style:** JSON-RPC 2.0 over WebSocket (LSP-inspired)
+**Style:** JSON-RPC 2.0 over WebSocket — true bidirectional (LSP-style)
 
-All communication happens over a single WebSocket connection at `/ws`. Messages follow the
-JSON-RPC 2.0 specification — requests have `id` + `method` + `params`, notifications omit `id`.
+All communication happens over a single WebSocket at `/ws`. Messages follow JSON-RPC 2.0:
+- **Requests** have `id` + `method` + `params`; the other side must send back a response with the same `id`
+- **Notifications** omit `id`; fire-and-forget, no response expected
 
-**Client → Server (requests):**
+Both sides can send either. The server can initiate requests to the client (e.g. asking a question mid-agent-run), and the client responds via `agent/respond`.
+
+---
+
+### Client → Server (requests, client initiates)
 
 | Method | Params | Description |
 | --- | --- | --- |
@@ -241,8 +275,14 @@ JSON-RPC 2.0 specification — requests have `id` + `method` + `params`, notific
 | `agent/run` | `{ specIds, config }` | Start an agent task with spec context |
 | `agent/status` | `{ taskId }` | Get task status and results |
 | `agent/list` | `{}` | List all agent tasks |
+| `agent/interrupt` | `{ taskId }` | Interrupt a running agent task |
+| `agent/respond` | `{ taskId, requestId, response }` | Respond to a pending server→client request |
 
-**Server → Client (notifications):**
+---
+
+### Server → Client (notifications, no response needed)
+
+**Spec file changes** (from file watcher):
 
 | Method | Params | Description |
 | --- | --- | --- |
@@ -250,8 +290,51 @@ JSON-RPC 2.0 specification — requests have `id` + `method` + `params`, notific
 | `spec/didCreate` | `{ id, path }` | New spec file detected |
 | `spec/didDelete` | `{ id }` | Spec file removed |
 | `registry/didUpdate` | `{ registry }` | registry.json changed |
-| `agent/progress` | `{ taskId, status }` | Agent task progress update |
-| `agent/result` | `{ taskId, output }` | Agent task completed |
+
+**Agent viewer events** (mapped from Claude Agent SDK stream):
+
+| Method | Params | SDK source |
+| --- | --- | --- |
+| `agent/sessionStart` | `{ taskId, sessionId, model, tools[], cwd, permissionMode }` | `SDKSystemMessage` subtype `init` |
+| `agent/textDelta` | `{ taskId, sessionId, text, streaming }` | `SDKAssistantMessage` text block / `SDKPartialAssistantMessage` text_delta |
+| `agent/toolCallStart` | `{ taskId, sessionId, toolUseId, toolName, toolInput, parentToolUseId? }` | `SDKAssistantMessage` tool_use block |
+| `agent/toolCallEnd` | `{ taskId, sessionId, toolUseId, toolName, output, isError }` | `SDKUserMessage` tool_result block |
+| `agent/subagentStart` | `{ taskId, sessionId, agentId, agentType, parentToolUseId }` | `SubagentStart` hook |
+| `agent/subagentEnd` | `{ taskId, sessionId, agentId }` | `SubagentStop` hook |
+| `agent/notification` | `{ taskId, sessionId, message, title? }` | `Notification` hook |
+| `agent/compact` | `{ taskId, sessionId, trigger, preTokens }` | `SDKCompactBoundaryMessage` |
+| `agent/progress` | `{ taskId, status, message }` | General task progress |
+| `agent/done` | `{ taskId, sessionId, result, costUsd, turns, durationMs, usage }` | `SDKResultMessage` subtype `success` |
+| `agent/error` | `{ taskId, sessionId, subtype, errors[] }` | `SDKResultMessage` error subtypes |
+| `agent/permissionDenied` | `{ taskId, sessionId, toolName, toolInput }` | `SDKResultMessage.permission_denials` |
+
+> **Note:** Streaming text requires `includePartialMessages: true` in the SDK options to receive `agent/textDelta` with `streaming: true`. Without it, full text blocks are emitted per turn.
+
+---
+
+### Server → Client (requests, client must respond via `agent/respond`)
+
+The server suspends an `asyncio.Future` keyed by `requestId` until the client responds. If no response arrives within a timeout, the server auto-denies and continues.
+
+| Method | Params | Expected client response |
+| --- | --- | --- |
+| `agent/askUserQuestion` | `{ taskId, requestId, questions[] }` | `{ answers: { [questionText]: string } }` |
+| `agent/confirmAction` | `{ taskId, requestId, toolName, toolInput, description }` | `{ decision: "approve" \| "deny", reason? }` |
+
+**`agent/askUserQuestion` question shape** (maps directly from Claude `AskUserQuestion` tool input):
+```json
+{
+  "question": "Which approach should we use?",
+  "header": "Approach",
+  "options": [
+    { "label": "Option A", "description": "..." },
+    { "label": "Option B", "description": "..." }
+  ],
+  "multiSelect": false
+}
+```
+
+**`agent/confirmAction`** is triggered by the SDK `canUseTool` callback / `PermissionRequest` hook when a tool needs explicit approval (e.g. destructive Bash commands in `default` permission mode).
 
 ## Deployment
 

@@ -46,6 +46,17 @@
       "updated": "2026-02-25",
       "covers": ["backend/app/core/"],
       "tags": ["backend", "infrastructure"]
+    },
+    {
+      "id": "module-agent",
+      "type": "module-design",
+      "path": "backend/app/agent/README.md",
+      "title": "Agent Module Design",
+      "status": "active",
+      "created": "2026-02-25",
+      "updated": "2026-02-25",
+      "covers": ["backend/app/agent/"],
+      "tags": ["backend", "agent-orchestration"]
     }
   ],
   "links": [
@@ -63,6 +74,31 @@
       "from": "module-core",
       "to": "design-doc",
       "type": "parent"
+    },
+    {
+      "from": "module-agent",
+      "to": "design-doc",
+      "type": "parent"
+    },
+    {
+      "from": "module-agent",
+      "to": "module-core",
+      "type": "depends-on"
+    },
+    {
+      "from": "module-agent",
+      "to": "module-spec",
+      "type": "depends-on"
+    },
+    {
+      "from": "module-spec",
+      "to": "goal-and-requirements",
+      "type": "depends-on"
+    },
+    {
+      "from": "module-spec",
+      "to": "module-core",
+      "type": "depends-on"
     }
   ]
 }
