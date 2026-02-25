@@ -1,0 +1,68 @@
+{
+  "version": "2.0",
+  "project": "bonsai",
+  "created": "2026-02-25",
+  "specs": [
+    {
+      "id": "goal-and-requirements",
+      "type": "goal-and-requirements",
+      "path": "GOAL&REQUIREMENTS.md",
+      "title": "Bonsai Goal & Requirements",
+      "status": "active",
+      "created": "2026-02-25",
+      "updated": "2026-02-25",
+      "covers": [],
+      "tags": ["high", "new-project"]
+    },
+    {
+      "id": "design-doc",
+      "type": "architecture-design",
+      "path": "DESIGN_DOC.md",
+      "title": "Bonsai Architecture Design",
+      "status": "active",
+      "created": "2026-02-25",
+      "updated": "2026-02-25",
+      "covers": ["backend/", "frontend/"],
+      "tags": ["architecture"]
+    },
+    {
+      "id": "module-spec",
+      "type": "module-design",
+      "path": "backend/app/spec/README.md",
+      "title": "Spec Module Design",
+      "status": "active",
+      "created": "2026-02-25",
+      "updated": "2026-02-25",
+      "covers": ["backend/app/spec/"],
+      "tags": ["backend", "core-domain"]
+    },
+    {
+      "id": "module-core",
+      "type": "module-design",
+      "path": "backend/app/core/README.md",
+      "title": "Core Module Design",
+      "status": "active",
+      "created": "2026-02-25",
+      "updated": "2026-02-25",
+      "covers": ["backend/app/core/"],
+      "tags": ["backend", "infrastructure"]
+    }
+  ],
+  "links": [
+    {
+      "from": "design-doc",
+      "to": "goal-and-requirements",
+      "type": "depends-on"
+    },
+    {
+      "from": "module-spec",
+      "to": "design-doc",
+      "type": "parent"
+    },
+    {
+      "from": "module-core",
+      "to": "design-doc",
+      "type": "parent"
+    }
+  ]
+}
