@@ -9,7 +9,7 @@ configuration (project root discovery, directory paths, settings), file system o
 (read, write, delete files and directories), and async filesystem watching.
 
 `watcher.py` watches the entire working directory and fires callbacks when files change.
-At this design stage, spec files (`*.md`, `.specs/*`, `registry.json`) are the primary
+At this design stage, spec files (`*.md`, `*.json`), `.specs/*`, and `registry.json` are the primary
 consumers of change events. Source code files will be added as consumers in later stages
 (e.g. coverage tracking, detecting agent-authored source changes).
 
@@ -24,26 +24,23 @@ The watcher serves two purposes:
 
 **Pattern:** Three independent utilities with no interaction between them.
 
-```
-  ┌──────────────┐    ┌──────────────┐    ┌───────────────────────────────────────────┐
-  │  config.py   │    │  fileio.py   │    │  watcher.py                               │
-  │              │    │              │    │                                           │
-  │  project     │    │  read,       │    │  watches working directory                │
-  │  root,       │    │  write,      │    │  fires callbacks on file changes          │
-  │  paths,      │    │  delete      │    │                                           │
-  │  settings    │    │  files/dirs  │    │  started by rpc/server.py at startup;     │
-  │              │    │              │    │  callback routes by file type:            │
-  └──────────────┘    └──────────────┘    │    spec/*.md, .specs/* →                  │
-         ▲                  ▲             │      spec/service (validate/postprocess)  │
-         │                  │             │      → rpc/notifications → frontend       │
-    Used by all        Used by            │    source files (future) → TBD            │
-    modules            spec/, agent/      └───────────────────────────────────────────┘
-                                                 ▲
-                                                 │
-                                            Used by rpc/
-                                            (spec/ is called via
-                                            the rpc callback,
-                                            not directly)
+```mermaid
+graph TD
+    subgraph Core["Core Module — Three Independent Utilities"]
+        Config["**config.py**<br/>project root, paths, settings"]
+        FileIO["**fileio.py**<br/>read, write, delete files/dirs"]
+        Watcher["**watcher.py**<br/>watches working directory<br/>fires callbacks on file changes"]
+    end
+
+    Config -.- AllMods["Used by all modules"]
+    FileIO -.- SpecOnly["Used by spec/"]
+    Watcher -.- RPC["Used by rpc/<br/>(callback registered by rpc/server.py)"]
+
+    Watcher -- "fires callback" --> RPCCb["rpc/server.py<br/>_on_file_change callback"]
+    RPCCb -- "spec files (*.md or *.json)" --> SpecSvc["spec/service<br/>validate/postprocess → spec/did*"]
+    RPCCb -- ".specs/registry.json" --> Notify["rpc/notifications<br/>registry/didUpdate → frontend"]
+    SpecSvc --> Notify
+    Watcher -. "source files (future)" .-> TBD["TBD"]
 ```
 
 ## File Organization
@@ -124,4 +121,4 @@ None.
 ## Related Specs
 
 - **Parent:** [Architecture Design](../../../DESIGN_DOC.md)
-- **Consumers:** [Spec Module](../spec/README.md), [Agent Module](../agent/README.md), RPC Module (TBD)
+- **Consumers:** [Spec Module](../spec/README.md), [Agent Module](../agent/README.md), [RPC Module](../rpc/README.md)

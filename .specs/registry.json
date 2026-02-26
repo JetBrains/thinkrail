@@ -57,6 +57,17 @@
       "updated": "2026-02-25",
       "covers": ["backend/app/agent/"],
       "tags": ["backend", "agent-orchestration"]
+    },
+    {
+      "id": "module-rpc",
+      "type": "module-design",
+      "path": "backend/app/rpc/README.md",
+      "title": "RPC Module Design",
+      "status": "active",
+      "created": "2026-02-26",
+      "updated": "2026-02-26",
+      "covers": ["backend/app/rpc/"],
+      "tags": ["backend", "transport"]
     }
   ],
   "links": [
@@ -97,6 +108,26 @@
     },
     {
       "from": "module-spec",
+      "to": "module-core",
+      "type": "depends-on"
+    },
+    {
+      "from": "module-rpc",
+      "to": "design-doc",
+      "type": "parent"
+    },
+    {
+      "from": "module-rpc",
+      "to": "module-spec",
+      "type": "depends-on"
+    },
+    {
+      "from": "module-rpc",
+      "to": "module-agent",
+      "type": "depends-on"
+    },
+    {
+      "from": "module-rpc",
       "to": "module-core",
       "type": "depends-on"
     }

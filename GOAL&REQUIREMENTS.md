@@ -33,7 +33,7 @@ Bonsai serves as both a spec management layer and an AI agent orchestrator. By m
 | Frontend framework | React |
 | Communication protocol | JSON-RPC over WebSocket (LSP-inspired) |
 | File watching | watchfiles/watchdog (registry.json, spec files) |
-| Database | File-based (JSON/YAML in repo) |
+| Database | File-based (Markdown or JSON in repo) |
 | Testing (backend) | pytest |
 | Testing (frontend) | Jest or Vitest |
 

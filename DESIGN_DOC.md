@@ -40,38 +40,35 @@ Bonsai serves as both a spec management layer and an AI agent orchestrator — e
 
 **Pattern:** Hybrid — layered at the top level (frontend/backend split) with modular domains inside the backend.
 
-```
- ┌──────────────────────────┐
- │     React Frontend       │
- │  (spec editor, graph     │
- │   visualization, health) │
- └───────────┬──────────────┘
-             │ JSON-RPC over WebSocket
- ┌───────────▼──────────────┐
- │     FastAPI Backend       │
- │                           │
- │  ┌── JSON-RPC Handler ──┐ │
- │  │  spec/*   agent/*    │ │
- │  └──────────┬───────────┘ │
- │             │              │
- │  ┌──────────▼───────────┐ │
- │  │   Domain Modules     │ │
- │  │  ┌──────┐ ┌────────┐ │ │
- │  │  │ Spec │ │ Agent  │ │ │
- │  │  │+models│ │+models │ │ │
- │  │  └──┬───┘ └───┬────┘ │ │
- │  └─────┼─────────┼──────┘ │
- │        │         │         │
- │  ┌─────▼─────────▼──────┐ │
- │  │    Shared Core       │ │
- │  │ Config FileIO Watcher│ │
- │  └──────────┬───────────┘ │
- └─────────────┼─────────────┘
-          ┌────▼─────┐  ┌───────────────┐
-          │ Repo FS  │  │ AI Agent APIs │
-          │ (specs   │  │ (Claude, etc.)│
-          │ as files)│  │               │
-          └──────────┘  └───────────────┘
+```mermaid
+---
+title: Bonsai — System Architecture
+---
+graph TD
+    subgraph FEG ["React Frontend"]
+        FE["Spec editor, graph visualization, health"]
+    end
+
+    FE <-- "JSON-RPC over WebSocket" --> RPC
+
+    subgraph Backend ["FastAPI Backend"]
+        RPC["JSON-RPC Handler<br/>spec/*  agent/*"]
+        RPC --> Domain
+
+        subgraph Domain ["Domain Modules"]
+            Spec["Spec<br/>+models"]
+            Agent["Agent<br/>+models"]
+        end
+
+        Spec --> Core
+        Agent --> Core
+        Core["Shared Core<br/>Config FileIO Watcher"]
+    end
+
+    Core --> FS
+    Core --> AI
+    FS[("Repo FS<br/>(specs as files)")]
+    AI["AI Agent APIs<br/>(Claude, etc.)"]
 ```
 
 **Communication Protocol:** JSON-RPC 2.0 over WebSocket (LSP-style, true bidirectional)
@@ -83,9 +80,9 @@ This mirrors the Language Server Protocol pattern exactly.
 ```
   React Frontend ◀═══ JSON-RPC 2.0 / WebSocket ═══▶ FastAPI Backend
     │                                                       │
-    │  Client → Server (requests):                         │
-    │   spec/*  agent/run  agent/interrupt                  │
-    │   agent/respond  (answers server requests)            │
+    │  Client → Server (requests):                          │
+    │   spec/*  agent/run  agent/status  agent/list         │
+    │   agent/interrupt  agent/respond                      │
     │                                                       │
     │  Server → Client (notifications, no response):        │
     │   spec/did*  registry/didUpdate                       │
@@ -100,59 +97,70 @@ This mirrors the Language Server Protocol pattern exactly.
     ▼                                                       ▼
   Browser                              ┌──── File Watcher ────┐
                                        │  .specs/registry.json │
-                                       │  spec files (*.md)    │
+                                       │  spec files (*.md,    │
+                                       │  *.json per registry) │
                                        └───────────────────────┘
 ```
 
 **Data Flow:**
 
+```mermaid
+---
+title: "Data Flow — Request/Response path (user-initiated)"
+---
+graph TD
+    User["User (Browser)"]
+    FE["React Frontend"]
+    RPC["FastAPI JSON-RPC Handler"]
+    
+    subgraph Modules ["Modules"]
+      direction LR
+      Spec["**Spec Module**<br/>read/write spec files<br/>build hierarchy graph<br/>validate & parse"]
+      Agent["**Agent Module**<br/>load specs as context<br/>call AI agent APIs<br/>map SDK events → notifications"]
+    end
+
+    Core["Core (Config, FileIO, Watcher)"]
+
+    AI["External AI APIs (Claude, etc.)"]
+
+    FS["Repo FS"]
+
+    DIMMY["-"]
+
+    User --> FE
+    FE <-- "JSON-RPC 2.0 / WebSocket" --> RPC
+    RPC --> Spec
+    RPC --> Agent
+    RPC --> Core
+    Spec --> Core
+    Core <--> FS
+    Agent --> AI
+    Spec --"spec/did*"--> DIMMY
+    Agent -- "agent/textDelta, agent/toolCall*<br/>agent/subagent*, agent/done" --> DIMMY
+    Agent -- "agent/confirmAction (request)<br/>agent/askUserQuestion (request)" --> DIMMY
+    DIMMY --> RPC
 ```
-  ── Request/Response path (user-initiated) ──────────────────────────────────────
 
-  User (Browser)
-    │
-    ▼
-  React Frontend ◀══ JSON-RPC 2.0 / WebSocket ════════════════╗
-    │                                                          ║
-    │  client→server requests                                  ║ server→client notifications
-    │                                                          ║ server→client requests
-    ▼                                                          ║
-  FastAPI JSON-RPC Handler                                     ║
-    │                                                          ║
-    ├──▶ Spec Module ──────────────────────────────────────────╢ spec/did*, registry/didUpdate
-    │     │ read/write spec files                              ║
-    │     │ build hierarchy graph                              ║
-    │     │ validate & parse                                   ║
-    │     ▼                                                    ║
-    │   Core (Watcher, FileIO) ◀──▶ Repo FS                   ║
-    │                                                          ║
-    ├──▶ Agent Module ─────────────────────────────────────────╢ agent/progress, agent/done
-    │     │ load specs as context                              ║ agent/textDelta, agent/toolCall*
-    │     │ call AI agent APIs                                 ║ agent/subagent*, agent/done
-    │     │ map SDK events → notifications ───────────────────▶╣
-    │     │ suspend on canUseTool / AskQuestion ───────────────▶ agent/confirmAction (request)
-    │     │ await agent/respond from client                      agent/askUserQuestion (request)
-    │     ▼
-    │   External AI APIs (Claude, etc.)
-    │
-    └──▶ Core (Config, Watcher, FileIO)
+```mermaid
+---
+title: "Data Flow — Async watcher path (any file change, any source)"
+---
+graph TD
+    Change["Repo FS change<br/>(user edit / agent tool call / external tool)"]
+    Watcher["Core (Watcher)<br/>watches working directory"]
+    Router["rpc/server.py<br/>routes by file type"]
+    SpecMod["Spec Module<br/>validate, re-parse,<br/>update registry + graph"]
+    Notify["rpc/notifications"]
+    FE["Frontend"]
+    Future["source files (*.py, *.ts, …)<br/>[future: coverage, health]"]
 
-  ── Async watcher path (any file change, any source) ────────────────────────────
-
-  Repo FS change (user edit / agent tool call / external tool)
-    │
-    ▼
-  Core (Watcher)  — watches working directory
-    │  fires callback registered by rpc/server.py at startup
-    ▼
-  rpc/server.py  routes by file type:
-    ├── spec file (*.md, .specs/*, registry.json)
-    │     ▼
-    │   Spec Module  (validate, re-parse, update registry + graph)
-    │     ▼
-    │   rpc/notifications ─────────────────────────────────────▶ spec/did*, registry/didUpdate
-    │
-    └── source files (*.py, *.ts, …)  [future: coverage, health]
+    Change --> Watcher
+    Watcher -- "fires callback registered<br/>by rpc/server.py at startup" --> Router
+    Router -- "spec files (*.md or *.json per registry)" --> SpecMod
+    SpecMod -- "spec/did*" --> Notify
+    Router -- ".specs/registry.json" --> Notify
+    Notify -- "spec/did* or registry/didUpdate" --> FE
+    Router -. "source files" .-> Future
 ```
 
 ## Backend (Python)
@@ -174,9 +182,10 @@ backend/
 │   ├── spec/                # Spec Domain Module
 │   │   ├── models.py        # Spec, RegistryEntry, Link models
 │   │   ├── service.py       # CRUD operations
-│   │   ├── parser.py        # Spec file parsing (JSON/YAML/MD)
+│   │   ├── parser.py        # Spec file parsing (Markdown or JSON)
 │   │   ├── validator.py     # Spec validation
-│   │   └── graph.py         # Hierarchy & graph building
+│   │   ├── graph.py         # Hierarchy & graph building
+│   │   └── registry.py      # Registry read/write/validate (atomic writes)
 │   ├── agent/               # Agent Domain Module
 │   │   ├── models.py        # AgentTask, AgentEvent, AgentResult models
 │   │   ├── service.py       # Orchestration facade
@@ -189,6 +198,7 @@ backend/
 ├── tests/
 │   ├── test_spec/
 │   ├── test_agent/
+│   ├── test_rpc/
 │   └── test_core/
 ├── pyproject.toml
 └── requirements.txt
@@ -232,7 +242,9 @@ frontend/
 Specs are stored as files in the repository. The registry tracks metadata:
 
 **Spec (file on disk):**
-- Markdown files in the repo
+- Markdown or JSON files in the repo
+- Markdown specs have informal free-form structure (headers, lists, tables, prose)
+- JSON specs store structured content as a JSON object
 - Content varies by type (goal, architecture, module, task)
 
 **Registry Entry (`.specs/registry.json`):**
@@ -303,7 +315,7 @@ Both sides can send either. The server can initiate requests to the client (e.g.
 | `agent/subagentEnd` | `{ taskId, sessionId, agentId }` | `SubagentStop` hook |
 | `agent/notification` | `{ taskId, sessionId, message, title? }` | `Notification` hook |
 | `agent/compact` | `{ taskId, sessionId, trigger, preTokens }` | `SDKCompactBoundaryMessage` |
-| `agent/progress` | `{ taskId, status, message }` | General task progress |
+| `agent/progress` | `{ taskId, sessionId, status, message }` | General task progress |
 | `agent/done` | `{ taskId, sessionId, result, costUsd, turns, durationMs, usage }` | `SDKResultMessage` subtype `success` |
 | `agent/error` | `{ taskId, sessionId, subtype, errors[] }` | `SDKResultMessage` error subtypes |
 | `agent/permissionDenied` | `{ taskId, sessionId, toolName, toolInput }` | `SDKResultMessage.permission_denials` |
@@ -350,4 +362,4 @@ The server suspends an `asyncio.Future` keyed by `requestId` until the client re
 - How to handle agent API key management securely?
 - Should the frontend be served by FastAPI (single process) or run separately?
 - How to handle concurrent agent tasks and resource limits?
-- JSON-RPC library choice: custom implementation or existing library (e.g., jsonrpcserver)?
+- JSON-RPC library: resolved — using `jsonrpcserver` (see `rpc/README.md`)

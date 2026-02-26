@@ -10,25 +10,25 @@ The Agent module orchestrates AI coding agent runs. It accepts a task (a set of 
 
 **Pattern:** Service facade over two collaborators — `runner.py` (SDK integration) and `tracker.py` (task lifecycle + pending request state).
 
-```
-        ┌───────────────┐
-        │  service.py   │  ← Single entry point (facade)
-        └───┬───────────┘
-            │
-    ┌───────┴────────┐
-    ▼                ▼
-┌──────────┐  ┌────────────┐
-│ runner.py│  │ tracker.py │
-│ (SDK)    │  │ (state)    │
-└────┬─────┘  └─────┬──────┘
-     │               │
-     ▼               ▼
-Claude Agent SDK   asyncio.Future
-(event stream)     map per requestId
-     │
-     ▼
-External AI APIs
-(Claude, etc.)
+```mermaid
+---
+title: Agent Module — Internal Architecture
+---
+graph TD
+    subgraph AgentModule["Agent Module"]
+        Service["service.py<br/><i>Facade — single entry point</i>"]
+        Runner["runner.py<br/><i>SDK integration</i>"]
+        Tracker["tracker.py<br/><i>State management</i>"]
+    end
+
+    SDK["Claude Agent SDK<br/>(event stream)"]
+    AI["External AI APIs<br/>(Claude, etc.)"]
+    Futures["asyncio.Future<br/>map per requestId"]
+
+    Service --> Runner
+    Service --> Tracker
+    Runner --> SDK --> AI
+    Tracker --> Futures
 ```
 
 ## File Organization
@@ -36,7 +36,7 @@ External AI APIs
 | File | Responsibility | Depends On |
 |------|---------------|------------|
 | `models.py` | Pydantic models: AgentTask, AgentConfig, AgentEvent, AgentResult | — |
-| `service.py` | Facade — start/interrupt tasks, relay frontend responses to pending futures | runner, tracker, core/config |
+| `service.py` | Facade — start/interrupt tasks, relay frontend responses to pending futures | runner, tracker, core/config, spec/service |
 | `runner.py` | Claude Agent SDK integration: iterate event stream, map SDK events to `AgentEvent` notifications, register `canUseTool` / hooks | models, tracker |
 | `tracker.py` | Task lifecycle (pending/running/done/error), registry of in-flight `asyncio.Future` objects keyed by `requestId` | models |
 
@@ -46,7 +46,7 @@ External AI APIs
 
 | Method | Signature | Description |
 |--------|-----------|-------------|
-| `run_task` | `(spec_ids: list[str], config: AgentConfig, notify: Callable) → AgentTask` | Start an agent task; `notify` is a callback the runner uses to push events to the frontend |
+| `run_task` | `(spec_ids: list[str], config: AgentConfig, notify: Callable) → AgentTask` | Start an agent task; `notify` is a callback for server→client messages, signature: `async def notify(method: str, params: dict, request_id: str \| None = None) -> None` — created by `rpc/notifications.make_notify` |
 | `interrupt_task` | `(task_id: str) → None` | Interrupt a running task |
 | `get_task` | `(task_id: str) → AgentTask` | Get current task status and metadata |
 | `list_tasks` | `() → list[AgentTask]` | List all tasks (running, done, error) |
@@ -86,8 +86,8 @@ For mid-run interactions where the agent needs user input, `runner.py` suspends 
 
 | Trigger | Server sends | Client must respond |
 |---------|-------------|---------------------|
-| Claude calls `AskUserQuestion` tool | `agent/askUserQuestion` (JSON-RPC request with `id`) | `agent/respond { requestId, response: { answers } }` |
-| `canUseTool` / `PermissionRequest` hook fires | `agent/confirmAction` (JSON-RPC request with `id`) | `agent/respond { requestId, response: { decision, reason? } }` |
+| Claude calls `AskUserQuestion` tool | `agent/askUserQuestion` (JSON-RPC request with `id`) | `agent/respond { taskId, requestId, response: { answers } }` |
+| `canUseTool` / `PermissionRequest` hook fires | `agent/confirmAction` (JSON-RPC request with `id`) | `agent/respond { taskId, requestId, response: { decision, reason? } }` |
 
 **Suspension mechanism:**
 1. Runner registers a new `asyncio.Future` in `tracker.py` keyed by `requestId`
@@ -105,7 +105,7 @@ For mid-run interactions where the agent needs user input, `runner.py` suspends 
 | SDK integration point | `runner.py` only | Single place to swap SDK versions or add a Python-side SDK wrapper; service and tracker are SDK-agnostic |
 | Suspension pattern | `asyncio.Future` per `requestId` | Idiomatic async Python; futures can be awaited, cancelled, and inspected without threads |
 | Streaming text | `includePartialMessages: true` in SDK config | Required to emit `text_delta` events for live typewriter view; can be toggled via `AgentConfig.stream_text` |
-| Notify callback | Injected into runner at task start | Keeps the runner decoupled from WebSocket details; RPC layer owns the connection |
+| Notify callback | Injected into runner at task start; supports both notifications (`request_id=None`) and server-initiated requests (`request_id` set) | Keeps the runner decoupled from WebSocket details; RPC layer owns the connection and callback creation |
 | Agent file change tracking | Filesystem watcher (core/watcher), not tool call interception | Watcher is ground truth — catches all file changes regardless of source (agent, user, external). Same pipeline as user changes: watcher → spec/service → rpc/notifications. More reliable than intercepting agent tool calls, and adds no complexity to runner.py |
 
 ## Dependencies
@@ -114,7 +114,7 @@ For mid-run interactions where the agent needs user input, `runner.py` suspends 
 |------------|-------|
 | `core/config` | Project root, API key resolution |
 | `spec/service` | Load spec content to build agent context |
-| `claude-agent-sdk` (JS or Python) | Agent execution and event stream |
+| `claude-code-sdk` (Python) | Agent execution and event stream |
 | `asyncio` | Future-based suspension for interactive requests |
 
 ## Known Limitations
