@@ -35,7 +35,7 @@ Both sides can send either. The server can initiate requests to the client (e.g.
 | `agent/status` | `{ taskId: str }` | `AgentTask` | Get task status and results |
 | `agent/list` | `{}` | `list[AgentTask]` | List all agent tasks |
 | `agent/interrupt` | `{ taskId: str }` | `null` | Interrupt a running agent task |
-| `agent/respond` | `{ taskId: str, requestId: str, response: object }` | `null` | Respond to a pending server→client request |
+| `agent/respond` | `{ taskId: str, requestId: str, response: AskUserQuestionResponse \| ToolApprovalResponse }` | `null` | Respond to a pending server→client request. See [Agent Module models](../agent/README.md#interactive-requestresponse-models) for response type definitions. |
 
 ### Server → Client (notifications)
 
@@ -75,10 +75,10 @@ The server suspends an `asyncio.Future` keyed by `requestId` until the client re
 
 | Method | Params | Expected Response | Description |
 | --- | --- | --- | --- |
-| `agent/askUserQuestion` | `{ taskId, requestId, questions: Question[] }` | `AskUserQuestionResponse` | Ask the user a question during an agent run |
-| `agent/confirmAction` | `{ taskId, requestId, toolName, toolInput, description }` | `ConfirmActionResponse` | Request approval for a tool action |
+| `agent/askUserQuestion` | `{ taskId, requestId, questions: Question[] }` | [`AskUserQuestionResponse`](../agent/README.md#interactive-requestresponse-models) | Ask the user a question during an agent run |
+| `agent/confirmAction` | `{ taskId, requestId, toolName, toolInput, description }` | [`ToolApprovalResponse`](../agent/README.md#interactive-requestresponse-models) | Request approval for a tool action |
 
-`agent/confirmAction` is triggered by the SDK `canUseTool` callback / `PermissionRequest` hook when a tool needs explicit approval (e.g. destructive Bash commands in `default` permission mode).
+Both methods originate from the SDK's `canUseTool` callback. `runner.py` distinguishes them by `tool_name`: `"AskUserQuestion"` → `agent/askUserQuestion`, any other tool → `agent/confirmAction`. See [Agent Module — Interactive Request/Response Models](../agent/README.md#interactive-requestresponse-models) for `Question`, `QuestionOption`, `AskUserQuestionResponse`, and `ToolApprovalResponse` type definitions.
 
 ## Error Codes
 

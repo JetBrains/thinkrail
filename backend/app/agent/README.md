@@ -35,7 +35,7 @@ graph TD
 
 | File | Responsibility | Depends On |
 |------|---------------|------------|
-| `models.py` | Pydantic models: AgentTask, AgentConfig, AgentEvent, AgentResult | — |
+| `models.py` | Pydantic models: AgentTask, AgentConfig, AgentEvent, AgentResult, Question, QuestionOption, AskUserQuestionResponse, ToolApprovalResponse | — |
 | `service.py` | Facade — start/interrupt tasks, relay frontend responses to pending futures | runner, tracker, core/config, spec/service |
 | `runner.py` | Claude Agent SDK integration: iterate event stream, map SDK events to `AgentEvent` notifications, register `canUseTool` / hooks | models, tracker |
 | `tracker.py` | Task lifecycle (pending/running/done/error), registry of in-flight `asyncio.Future` objects keyed by `requestId` | models |
@@ -54,12 +54,41 @@ graph TD
 
 ### Models
 
+#### Core Models
+
 | Model | Fields | Description |
 |-------|--------|-------------|
 | `AgentTask` | id, status, spec_ids, config, session_id?, created, updated | Task record |
 | `AgentConfig` | model, max_turns, permission_mode, stream_text | Run configuration |
 | `AgentEvent` | task_id, session_id, event_type, payload | Serializable event to send as notification |
 | `AgentResult` | task_id, session_id, result, cost_usd, turns, duration_ms, usage | Terminal success result |
+
+#### Interactive Request/Response Models
+
+These types define the data exchanged during mid-run interactions. Both `AskUserQuestion` and tool approvals flow through the SDK's `canUseTool` callback — our `runner.py` translates them into JSON-RPC requests/responses for the frontend.
+
+**Question types** (sent to frontend in `agent/askUserQuestion` params):
+
+| Model | Fields | Description |
+|-------|--------|-------------|
+| `Question` | question: str, header: str, options: list[QuestionOption], multi_select: bool | A single question with selectable options. 1-4 questions per request, 2-4 options per question. |
+| `QuestionOption` | label: str, description: str | A selectable option within a question |
+
+**Response types** (received from frontend via `agent/respond`):
+
+| Model | Fields | Description |
+|-------|--------|-------------|
+| `AskUserQuestionResponse` | questions: list[Question], answers: dict[str, str] | Response to a question request. `questions` passes through the original questions. `answers` maps question text → selected label. Multi-select joins labels with `", "`. Free-text "Other" input uses the user's text directly. |
+| `ToolApprovalResponse` | behavior: `"allow"` \| `"deny"`, message?: str, interrupt?: bool | Response to a tool approval request. `message` is the denial reason. `interrupt=true` aborts the entire task. |
+
+**SDK mapping:**
+
+The SDK uses a single `canUseTool` callback for both questions and tool approvals. `runner.py` distinguishes them by `tool_name`:
+
+| `tool_name` in `canUseTool` | Bonsai protocol method | Frontend response → SDK return |
+|------------------------------|------------------------|-------------------------------|
+| `"AskUserQuestion"` | `agent/askUserQuestion` | `AskUserQuestionResponse` → `PermissionResultAllow(updated_input={"questions": [...], "answers": {...}})` |
+| Any other tool | `agent/confirmAction` | `ToolApprovalResponse` → `PermissionResultAllow()` or `PermissionResultDeny(message=..., interrupt=...)` |
 
 ### Event Types (AgentEvent.event_type)
 
@@ -84,10 +113,10 @@ These map 1-to-1 to the `agent/*` notification methods in the protocol:
 
 For mid-run interactions where the agent needs user input, `runner.py` suspends the SDK generator and the frontend must respond via `agent/respond`:
 
-| Trigger | Server sends | Client must respond |
-|---------|-------------|---------------------|
-| Claude calls `AskUserQuestion` tool | `agent/askUserQuestion` (JSON-RPC request with `id`) | `agent/respond { taskId, requestId, response: { answers } }` |
-| `canUseTool` / `PermissionRequest` hook fires | `agent/confirmAction` (JSON-RPC request with `id`) | `agent/respond { taskId, requestId, response: { decision, reason? } }` |
+| Trigger | Server sends | Client responds with |
+|---------|-------------|----------------------|
+| `canUseTool` fires with `tool_name="AskUserQuestion"` | `agent/askUserQuestion` (JSON-RPC request with `id`) | `agent/respond { taskId, requestId, response: AskUserQuestionResponse }` |
+| `canUseTool` fires with any other `tool_name` | `agent/confirmAction` (JSON-RPC request with `id`) | `agent/respond { taskId, requestId, response: ToolApprovalResponse }` |
 
 **Suspension mechanism:**
 1. Runner registers a new `asyncio.Future` in `tracker.py` keyed by `requestId`
@@ -114,7 +143,7 @@ For mid-run interactions where the agent needs user input, `runner.py` suspends 
 |------------|-------|
 | `core/config` | Project root, API key resolution |
 | `spec/service` | Load spec content to build agent context |
-| `claude-code-sdk` (Python) | Agent execution and event stream |
+| `claude-agent-sdk` (Python) | Agent execution and event stream |
 | `asyncio` | Future-based suspension for interactive requests |
 
 ## Known Limitations
