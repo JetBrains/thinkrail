@@ -55,12 +55,14 @@ graph TD
 
 ### config.py
 
-| Function | Signature | Description |
-|----------|-----------|-------------|
-| `get_project_root` | `() → Path` | Discover and return the project root directory |
-| `get_spec_dir` | `() → Path` | Path to the `.specs/` directory |
-| `get_registry_path` | `() → Path` | Path to `.specs/registry.json` |
-| `load_config` | `() → AppConfig` | Load application settings (Pydantic model) |
+These methods are of the `AppConfig` model
+
+| Function            | Signature                    | Description                                    |
+|---------------------|------------------------------|------------------------------------------------|
+| `get_project_root`  | `AppConfig.() → Path`        | Discover and return the project root directory |
+| `get_spec_dir`      | `AppConfig.() → Path`        | Path to the `.specs/` directory                |
+| `get_registry_path` | `AppConfig.() → Path`        | Path to `.specs/registry.json`                 |
+| `load_config`       | `(project_root) → AppConfig` | Load application settings (Pydantic model)     |
 
 ### fileio.py
 

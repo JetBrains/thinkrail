@@ -1,0 +1,32 @@
+Implement Core fileio.py: file read, write, delete, and directory operations
+
+fileio.py centralizes all filesystem operations used by domain modules (primarily spec/).
+It wraps pathlib calls with consistent error handling and automatic parent directory creation.
+
+Spec reference: backend/app/core/README.md
+
+Public interface to implement:
+- read_text(path: Path) → str        — read file contents as text
+- write_text(path: Path, content: str) → None — write text, create parents if needed
+- delete_file(path: Path) → None     — delete a file
+- ensure_dir(path: Path) → None      — create directory and all parents
+
+Plan:
+1. Implement read_text() with FileNotFoundError handling
+2. Implement write_text() with automatic parent directory creation
+3. Implement delete_file() with appropriate error handling
+4. Implement ensure_dir() using Path.mkdir(parents=True, exist_ok=True)
+5. Export from __init__.py
+6. Write unit tests using tmp_path fixture
+
+Files to modify:
+- backend/app/core/fileio.py        (create — main implementation)
+- backend/app/core/__init__.py      (update — add fileio exports)
+- tests/core/test_fileio.py         (create — unit tests)
+
+Definition of done:
+- All unit tests pass
+- Implementation matches the public interface defined in the module spec
+
+Priority: Critical
+Started: 2026-02-27

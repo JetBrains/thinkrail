@@ -90,6 +90,39 @@
       "updated": "2026-02-27",
       "covers": ["frontend/src/components/ChatStream/"],
       "tags": ["frontend", "ui", "chat", "rendering"]
+    },
+    {
+      "id": "task-core-config",
+      "type": "task-spec",
+      "path": "current_tasks/feature_core_config.txt",
+      "title": "Implement Core config.py",
+      "status": "active",
+      "created": "2026-02-27",
+      "updated": "2026-02-27",
+      "covers": ["backend/app/core/config.py"],
+      "tags": ["critical", "new-feature"]
+    },
+    {
+      "id": "task-core-fileio",
+      "type": "task-spec",
+      "path": "current_tasks/feature_core_fileio.txt",
+      "title": "Implement Core fileio.py",
+      "status": "active",
+      "created": "2026-02-27",
+      "updated": "2026-02-27",
+      "covers": ["backend/app/core/fileio.py"],
+      "tags": ["critical", "new-feature"]
+    },
+    {
+      "id": "task-core-watcher",
+      "type": "task-spec",
+      "path": "current_tasks/feature_core_watcher.txt",
+      "title": "Implement Core watcher.py",
+      "status": "active",
+      "created": "2026-02-27",
+      "updated": "2026-02-27",
+      "covers": ["backend/app/core/watcher.py"],
+      "tags": ["critical", "new-feature"]
     }
   ],
   "links": [
@@ -172,6 +205,21 @@
       "from": "chat-ui",
       "to": "module-rpc",
       "type": "depends-on"
+    },
+    {
+      "from": "task-core-config",
+      "to": "module-core",
+      "type": "implements"
+    },
+    {
+      "from": "task-core-fileio",
+      "to": "module-core",
+      "type": "implements"
+    },
+    {
+      "from": "task-core-watcher",
+      "to": "module-core",
+      "type": "implements"
     }
   ]
 }
