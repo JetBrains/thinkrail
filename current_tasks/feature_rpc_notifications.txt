@@ -1,0 +1,45 @@
+Implement RPC notifications.py: make_notify factory and current_notify state
+
+notifications.py provides the outgoing message interface for the RPC module.
+It creates per-connection notify callables bound to a WebSocket and holds
+a module-level reference to the active connection's callable. This decouples
+message sending from the WebSocket transport details.
+
+Spec reference: backend/app/rpc/README.md (lines 168-183)
+
+Public interface to implement:
+
+- make_notify(websocket: WebSocket) → Callable
+    Create a notify callable bound to the given WebSocket.
+    Returned callable signature:
+      async def notify(method: str, params: dict, request_id: str | None = None) -> None
+    - request_id=None → send JSON-RPC notification (no "id" field)
+    - request_id set → send JSON-RPC request (includes "id" field;
+      request_id appears as both JSON-RPC id and in params.requestId)
+
+- current_notify: Callable | None
+    Module-level variable holding the active notify callable.
+    Set by server.py on connect, cleared on disconnect.
+
+Plan:
+1. Define current_notify module-level variable (initially None)
+2. Implement make_notify — takes WebSocket, returns async notify callable
+3. Notify callable: build JSON-RPC notification dict when request_id is None
+4. Notify callable: build JSON-RPC request dict when request_id is set
+   (inject requestId into params, use request_id as JSON-RPC id)
+5. Send serialized JSON over the WebSocket via websocket.send_text
+6. Create rpc/__init__.py with module exports
+7. Write unit tests — mock WebSocket, verify message shapes for both modes
+
+Files to modify:
+- backend/app/rpc/notifications.py  (create — notify factory + state)
+- backend/app/rpc/__init__.py       (create — module exports)
+- backend/tests/rpc/__init__.py     (create — test package init)
+- backend/tests/rpc/test_notifications.py (create — unit tests)
+
+Definition of done:
+- All unit tests pass
+- Implementation matches the interface in backend/app/rpc/README.md
+
+Priority: High
+Started: 2026-02-27

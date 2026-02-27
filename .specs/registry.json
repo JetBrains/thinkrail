@@ -189,6 +189,39 @@
       "updated": "2026-02-27",
       "covers": ["backend/app/spec/service.py"],
       "tags": ["critical", "new-feature"]
+    },
+    {
+      "id": "task-rpc-notifications",
+      "type": "task-spec",
+      "path": "current_tasks/feature_rpc_notifications.txt",
+      "title": "Implement RPC notifications.py",
+      "status": "active",
+      "created": "2026-02-27",
+      "updated": "2026-02-27",
+      "covers": ["backend/app/rpc/notifications.py"],
+      "tags": ["high", "new-feature"]
+    },
+    {
+      "id": "task-rpc-methods-specs",
+      "type": "task-spec",
+      "path": "current_tasks/feature_rpc_methods_specs.txt",
+      "title": "Implement RPC methods/specs.py",
+      "status": "active",
+      "created": "2026-02-27",
+      "updated": "2026-02-27",
+      "covers": ["backend/app/rpc/methods/specs.py"],
+      "tags": ["high", "new-feature"]
+    },
+    {
+      "id": "task-rpc-server",
+      "type": "task-spec",
+      "path": "current_tasks/feature_rpc_server.txt",
+      "title": "Implement RPC server.py",
+      "status": "active",
+      "created": "2026-02-27",
+      "updated": "2026-02-27",
+      "covers": ["backend/app/rpc/server.py"],
+      "tags": ["high", "new-feature"]
     }
   ],
   "links": [
@@ -370,6 +403,36 @@
     {
       "from": "task-spec-service",
       "to": "task-spec-graph",
+      "type": "depends-on"
+    },
+    {
+      "from": "task-rpc-notifications",
+      "to": "module-rpc",
+      "type": "implements"
+    },
+    {
+      "from": "task-rpc-methods-specs",
+      "to": "module-rpc",
+      "type": "implements"
+    },
+    {
+      "from": "task-rpc-methods-specs",
+      "to": "task-rpc-notifications",
+      "type": "depends-on"
+    },
+    {
+      "from": "task-rpc-server",
+      "to": "module-rpc",
+      "type": "implements"
+    },
+    {
+      "from": "task-rpc-server",
+      "to": "task-rpc-notifications",
+      "type": "depends-on"
+    },
+    {
+      "from": "task-rpc-server",
+      "to": "task-rpc-methods-specs",
       "type": "depends-on"
     }
   ]
