@@ -68,6 +68,28 @@
       "updated": "2026-02-26",
       "covers": ["backend/app/rpc/"],
       "tags": ["backend", "transport"]
+    },
+    {
+      "id": "webview",
+      "type": "module-design",
+      "path": "WEBVIEW.md",
+      "title": "Web View — UI Specification",
+      "status": "active",
+      "created": "2026-02-27",
+      "updated": "2026-02-27",
+      "covers": ["frontend/"],
+      "tags": ["frontend", "ui", "webview"]
+    },
+    {
+      "id": "chat-ui",
+      "type": "submodule-design",
+      "path": "frontend/CHAT_UI.md",
+      "title": "Chat UI Rendering",
+      "status": "active",
+      "created": "2026-02-27",
+      "updated": "2026-02-27",
+      "covers": ["frontend/src/components/ChatStream/"],
+      "tags": ["frontend", "ui", "chat", "rendering"]
     }
   ],
   "links": [
@@ -129,6 +151,26 @@
     {
       "from": "module-rpc",
       "to": "module-core",
+      "type": "depends-on"
+    },
+    {
+      "from": "webview",
+      "to": "design-doc",
+      "type": "parent"
+    },
+    {
+      "from": "webview",
+      "to": "goal-and-requirements",
+      "type": "depends-on"
+    },
+    {
+      "from": "chat-ui",
+      "to": "webview",
+      "type": "parent"
+    },
+    {
+      "from": "chat-ui",
+      "to": "module-rpc",
       "type": "depends-on"
     }
   ]
