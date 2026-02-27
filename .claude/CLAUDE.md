@@ -3,7 +3,7 @@
 This project uses specification-driven development.
 
 ## Tech Stack
-- **Backend:** Python
+- **Backend:** Python (use `uv` to run Python, pytest, and manage dependencies)
 - **Frontend:** TypeScript/JavaScript
 
 ## Spec-Driven Rules

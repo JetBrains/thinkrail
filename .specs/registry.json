@@ -96,7 +96,7 @@
       "type": "task-spec",
       "path": "current_tasks/feature_core_config.txt",
       "title": "Implement Core config.py",
-      "status": "active",
+      "status": "done",
       "created": "2026-02-27",
       "updated": "2026-02-27",
       "covers": ["backend/app/core/config.py"],
@@ -107,7 +107,7 @@
       "type": "task-spec",
       "path": "current_tasks/feature_core_fileio.txt",
       "title": "Implement Core fileio.py",
-      "status": "active",
+      "status": "done",
       "created": "2026-02-27",
       "updated": "2026-02-27",
       "covers": ["backend/app/core/fileio.py"],
@@ -118,10 +118,76 @@
       "type": "task-spec",
       "path": "current_tasks/feature_core_watcher.txt",
       "title": "Implement Core watcher.py",
-      "status": "active",
+      "status": "done",
       "created": "2026-02-27",
       "updated": "2026-02-27",
       "covers": ["backend/app/core/watcher.py"],
+      "tags": ["critical", "new-feature"]
+    },
+    {
+      "id": "task-spec-models",
+      "type": "task-spec",
+      "path": "current_tasks/feature_spec_models.txt",
+      "title": "Implement Spec models.py",
+      "status": "done",
+      "created": "2026-02-27",
+      "updated": "2026-02-27",
+      "covers": ["backend/app/spec/models.py"],
+      "tags": ["critical", "new-feature"]
+    },
+    {
+      "id": "task-spec-parser",
+      "type": "task-spec",
+      "path": "current_tasks/feature_spec_parser.txt",
+      "title": "Implement Spec parser.py",
+      "status": "done",
+      "created": "2026-02-27",
+      "updated": "2026-02-27",
+      "covers": ["backend/app/spec/parser.py"],
+      "tags": ["critical", "new-feature"]
+    },
+    {
+      "id": "task-spec-validator",
+      "type": "task-spec",
+      "path": "current_tasks/feature_spec_validator.txt",
+      "title": "Implement Spec validator.py",
+      "status": "done",
+      "created": "2026-02-27",
+      "updated": "2026-02-27",
+      "covers": ["backend/app/spec/validator.py"],
+      "tags": ["critical", "new-feature"]
+    },
+    {
+      "id": "task-spec-registry",
+      "type": "task-spec",
+      "path": "current_tasks/feature_spec_registry.txt",
+      "title": "Implement Spec registry.py",
+      "status": "done",
+      "created": "2026-02-27",
+      "updated": "2026-02-27",
+      "covers": ["backend/app/spec/registry.py"],
+      "tags": ["critical", "new-feature"]
+    },
+    {
+      "id": "task-spec-graph",
+      "type": "task-spec",
+      "path": "current_tasks/feature_spec_graph.txt",
+      "title": "Implement Spec graph.py",
+      "status": "done",
+      "created": "2026-02-27",
+      "updated": "2026-02-27",
+      "covers": ["backend/app/spec/graph.py"],
+      "tags": ["critical", "new-feature"]
+    },
+    {
+      "id": "task-spec-service",
+      "type": "task-spec",
+      "path": "current_tasks/feature_spec_service.txt",
+      "title": "Implement Spec service.py",
+      "status": "done",
+      "created": "2026-02-27",
+      "updated": "2026-02-27",
+      "covers": ["backend/app/spec/service.py"],
       "tags": ["critical", "new-feature"]
     }
   ],
@@ -220,6 +286,91 @@
       "from": "task-core-watcher",
       "to": "module-core",
       "type": "implements"
+    },
+    {
+      "from": "task-spec-models",
+      "to": "module-spec",
+      "type": "implements"
+    },
+    {
+      "from": "task-spec-parser",
+      "to": "module-spec",
+      "type": "implements"
+    },
+    {
+      "from": "task-spec-parser",
+      "to": "task-spec-models",
+      "type": "depends-on"
+    },
+    {
+      "from": "task-spec-parser",
+      "to": "task-core-fileio",
+      "type": "depends-on"
+    },
+    {
+      "from": "task-spec-validator",
+      "to": "module-spec",
+      "type": "implements"
+    },
+    {
+      "from": "task-spec-validator",
+      "to": "task-spec-models",
+      "type": "depends-on"
+    },
+    {
+      "from": "task-spec-registry",
+      "to": "module-spec",
+      "type": "implements"
+    },
+    {
+      "from": "task-spec-registry",
+      "to": "task-spec-models",
+      "type": "depends-on"
+    },
+    {
+      "from": "task-spec-registry",
+      "to": "task-core-fileio",
+      "type": "depends-on"
+    },
+    {
+      "from": "task-spec-graph",
+      "to": "module-spec",
+      "type": "implements"
+    },
+    {
+      "from": "task-spec-graph",
+      "to": "task-spec-models",
+      "type": "depends-on"
+    },
+    {
+      "from": "task-spec-service",
+      "to": "module-spec",
+      "type": "implements"
+    },
+    {
+      "from": "task-spec-service",
+      "to": "task-spec-models",
+      "type": "depends-on"
+    },
+    {
+      "from": "task-spec-service",
+      "to": "task-spec-parser",
+      "type": "depends-on"
+    },
+    {
+      "from": "task-spec-service",
+      "to": "task-spec-validator",
+      "type": "depends-on"
+    },
+    {
+      "from": "task-spec-service",
+      "to": "task-spec-registry",
+      "type": "depends-on"
+    },
+    {
+      "from": "task-spec-service",
+      "to": "task-spec-graph",
+      "type": "depends-on"
     }
   ]
 }

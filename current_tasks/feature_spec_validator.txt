@@ -1,0 +1,42 @@
+Implement Spec validator.py: validate spec structure, fields, and link integrity
+
+validator.py ensures specs conform to required structure. It validates individual
+spec fields (required fields present, correct types) and cross-spec link integrity
+(all link targets exist, no orphaned references). Used by the service layer before
+writes and during health checks.
+
+Spec reference: backend/app/spec/README.md
+
+Public interface to implement:
+
+- validate_spec(spec: Spec, entry: RegistryEntry) → list[str]
+    Validate a single spec's structure and fields.
+    Returns list of error messages (empty = valid).
+    Checks: required fields present, type is recognized, path is valid.
+
+- validate_links(links: list[Link], entries: list[RegistryEntry]) → list[str]
+    Validate link integrity across the spec graph.
+    Returns list of error messages (empty = valid).
+    Checks: all from_id/to_id reference existing entries, no self-links,
+    link types are recognized.
+
+Dependencies:
+- spec/models.py (Spec, RegistryEntry, Link)
+
+Plan:
+1. Define recognized spec types and link types as constants
+2. Implement validate_spec — field presence, type checking, path validation
+3. Implement validate_links — referential integrity, self-link detection
+4. Write unit tests: valid specs, missing fields, invalid links, orphaned refs
+
+Files to modify:
+- backend/app/spec/validator.py     (create — validation logic)
+- tests/spec/test_validator.py      (create — unit tests)
+
+Definition of done:
+- All unit tests pass
+- Implementation matches the public interface defined in the module spec
+
+Priority: Critical
+Depends on: feature_spec_models
+Started: 2026-02-27
