@@ -9,6 +9,92 @@ It manages the WebSocket connection lifecycle, parses and dispatches incoming JS
 messages to domain handlers using `jsonrpcserver`, sends outgoing server→client messages
 (notifications and server-initiated requests), and starts and routes the filesystem watcher.
 
+## Protocol Overview
+
+**Style:** JSON-RPC 2.0 over WebSocket — true bidirectional (LSP-style)
+
+All communication happens over a single WebSocket at `/ws`. Messages follow JSON-RPC 2.0:
+- **Requests** have `id` + `method` + `params`; the other side must send back a response with the same `id`
+- **Notifications** omit `id`; fire-and-forget, no response expected
+
+Both sides can send either. The server can initiate requests to the client (e.g. asking a question mid-agent-run), and the client responds via `agent/respond`.
+
+## Methods
+
+### Client → Server (requests)
+
+| Method | Params | Returns | Description |
+| --- | --- | --- | --- |
+| `spec/list` | `{}` | `list[SpecSummary]` | List all specs with metadata |
+| `spec/get` | `{ id: str }` | `SpecDetail` | Get spec content and metadata |
+| `spec/create` | `{ type: str, path: str, content?: str }` | `SpecDetail` | Create a new spec |
+| `spec/update` | `{ id: str, content: str }` | `SpecDetail` | Update spec content |
+| `spec/delete` | `{ id: str }` | `null` | Delete a spec |
+| `spec/graph` | `{}` | `SpecGraph` | Get spec hierarchy graph |
+| `agent/run` | `{ specIds: list[str], config: AgentConfig }` | `{ taskId: str }` | Start an agent task with spec context |
+| `agent/status` | `{ taskId: str }` | `AgentTask` | Get task status and results |
+| `agent/list` | `{}` | `list[AgentTask]` | List all agent tasks |
+| `agent/interrupt` | `{ taskId: str }` | `null` | Interrupt a running agent task |
+| `agent/respond` | `{ taskId: str, requestId: str, response: object }` | `null` | Respond to a pending server→client request |
+
+### Server → Client (notifications)
+
+#### Spec Watcher Events
+
+| Method | Params | Description |
+| --- | --- | --- |
+| `spec/didChange` | `{ id: str, changes: object }` | Spec file changed on disk |
+| `spec/didCreate` | `{ id: str, path: str }` | New spec file detected |
+| `spec/didDelete` | `{ id: str }` | Spec file removed |
+| `registry/didUpdate` | `{ registry: object }` | registry.json changed |
+
+#### Agent Streaming Events
+
+| Method | Params | Description |
+| --- | --- | --- |
+| `agent/sessionStart` | `{ taskId, sessionId, model, tools[], cwd, permissionMode }` | Agent session initialized |
+| `agent/textDelta` | `{ taskId, sessionId, text, streaming }` | Text output (streaming or full block) |
+| `agent/toolCallStart` | `{ taskId, sessionId, toolUseId, toolName, toolInput, parentToolUseId? }` | Agent started a tool call |
+| `agent/toolCallEnd` | `{ taskId, sessionId, toolUseId, toolName, output, isError }` | Tool call completed with result |
+| `agent/subagentStart` | `{ taskId, sessionId, agentId, agentType, parentToolUseId }` | Subagent spawned |
+| `agent/subagentEnd` | `{ taskId, sessionId, agentId }` | Subagent finished |
+| `agent/notification` | `{ taskId, sessionId, message, title? }` | General agent notification |
+| `agent/compact` | `{ taskId, sessionId, trigger, preTokens }` | Context window compacted |
+| `agent/progress` | `{ taskId, sessionId, status, message }` | Task progress update |
+| `agent/done` | `{ taskId, sessionId, result, costUsd, turns, durationMs, usage }` | Agent task completed successfully |
+| `agent/error` | `{ taskId, sessionId, subtype, errors[] }` | Agent task failed |
+| `agent/permissionDenied` | `{ taskId, sessionId, toolName, toolInput }` | Tool blocked by permission policy |
+
+> **SDK event mapping:** `agent/sessionStart` ← `SDKSystemMessage` subtype `init` · `agent/textDelta` ← `SDKAssistantMessage` text block / `SDKPartialAssistantMessage` text_delta · `agent/toolCallStart` ← `SDKAssistantMessage` tool_use block · `agent/toolCallEnd` ← `SDKUserMessage` tool_result block · `agent/subagentStart` / `End` ← `SubagentStart` / `SubagentStop` hooks · `agent/notification` ← `Notification` hook · `agent/compact` ← `SDKCompactBoundaryMessage` · `agent/done` / `error` / `permissionDenied` ← `SDKResultMessage` subtypes
+
+> **Streaming text:** Requires `includePartialMessages: true` in SDK options to receive `agent/textDelta` with `streaming: true`. Without it, full text blocks are emitted per turn.
+
+### Server → Client (requests)
+
+The server suspends an `asyncio.Future` keyed by `requestId` until the client responds. If no response arrives within a timeout, the server auto-denies and continues.
+
+| Method | Params | Expected Response | Description |
+| --- | --- | --- | --- |
+| `agent/askUserQuestion` | `{ taskId, requestId, questions: Question[] }` | `AskUserQuestionResponse` | Ask the user a question during an agent run |
+| `agent/confirmAction` | `{ taskId, requestId, toolName, toolInput, description }` | `ConfirmActionResponse` | Request approval for a tool action |
+
+`agent/confirmAction` is triggered by the SDK `canUseTool` callback / `PermissionRequest` hook when a tool needs explicit approval (e.g. destructive Bash commands in `default` permission mode).
+
+## Error Codes
+
+Domain exceptions raised inside handlers are mapped to JSON-RPC error responses:
+
+| Exception | JSON-RPC Code | Message |
+| --- | --- | --- |
+| `SpecNotFoundError` | -32001 | "Spec not found" |
+| `RegistryError` | -32002 | "Registry error" |
+| `ValidationError` | -32003 | "Validation error" |
+| `AgentTaskNotFoundError` | -32011 | "Agent task not found" |
+| `KeyError` / missing params | -32602 | "Invalid params" |
+| Any other exception | -32603 | "Internal error" |
+
+Standard errors (-32700 parse error, -32601 method not found) are handled automatically by jsonrpcserver.
+
 ## Internal Architecture
 
 **Pattern:** Three-layer — WebSocket transport + dispatch in `server.py`, domain-organized
@@ -62,32 +148,32 @@ graph TD
     Callback -- "no connection" --> Dropped
 ```
 
-## File Organization
-
-| File | Responsibility | Depends On |
-|------|---------------|------------|
-| `server.py` | WebSocket endpoint, connection management, JSON-RPC dispatch loop, watcher startup + callback | jsonrpcserver, methods/specs, methods/agents, notifications, core/watcher, core/config, spec/service |
-| `notifications.py` | `make_notify` factory + `current_notify` module-level variable — creates per-connection notify callable, holds reference to active callable | — |
-| `methods/__init__.py` | Empty — makes `methods/` a Python package | — |
-| `methods/specs.py` | Handlers for all `spec/*` RPC methods | spec/service |
-| `methods/agents.py` | Handlers for all `agent/*` RPC methods; `agent/run` reads `notifications.current_notify` | agent/service, notifications |
-
-## Public Interface
+## File Organization & Public Interface
 
 ### server.py
 
-| Function | Signature | Description |
-|----------|-----------|-------------|
+**Responsibility:** WebSocket endpoint, connection management, JSON-RPC dispatch loop, watcher startup + callback.
+
+**Dependencies:** jsonrpcserver, methods/specs, methods/agents, notifications, core/watcher, core/config, spec/service
+
+| Export | Signature | Description |
+| --- | --- | --- |
 | `register_routes` | `(app: FastAPI) → None` | Register the `/ws` WebSocket endpoint on the FastAPI app. Called by `main.py` during setup. |
 | `start_watcher` | `() → WatchHandle` | Start `core/watcher` watching the project directory. Register the file-change callback. Called in `main.py` lifespan startup. |
 | `stop_watcher` | `(handle: WatchHandle) → None` | Stop the file watcher. Called in `main.py` lifespan shutdown. |
 
+`METHODS` is a mapping from JSON-RPC method names to handler coroutines, assembled in `server.py` from the functions in `methods/specs.py` and `methods/agents.py`.
+
 ### notifications.py
 
-| Function / Variable | Signature / Type | Description |
-|--------------------|-----------------|-------------|
+**Responsibility:** `make_notify` factory + `current_notify` module-level variable — creates per-connection notify callable, holds reference to active callable.
+
+**Dependencies:** none
+
+| Export | Type / Signature | Description |
+| --- | --- | --- |
 | `make_notify` | `(websocket: WebSocket) → Callable` | Create a notify callable bound to the given WebSocket. Called by `server.py` on each new connection. |
-| `current_notify` | `Callable \| None` | Module-level variable holding the active notify callable. Set by `server.py` on connect, cleared on disconnect. Read by `methods/agents.py` in `agent/run`. |
+| `current_notify` | `Callable \| None` | Module-level variable holding the active notify callable. Set by `server.py` on connect, cleared on disconnect. |
 
 **Returned callable signature:**
 ```python
@@ -98,40 +184,38 @@ async def notify(method: str, params: dict, request_id: str | None = None) -> No
 
 ### methods/specs.py
 
-Handlers registered with jsonrpcserver for all `spec/*` client→server methods. Each handler
-receives keyword arguments from the JSON-RPC `params` object and returns a serializable result.
+**Responsibility:** jsonrpcserver handlers for all `spec/*` methods.
 
-| Handler | JSON-RPC method | Params | Returns |
-|---------|----------------|--------|---------|
-| `list_specs` | `spec/list` | `{}` | `list[SpecSummary]` |
-| `get_spec` | `spec/get` | `{ id }` | `SpecDetail` |
-| `create_spec` | `spec/create` | `{ type, path, content? }` | `SpecDetail` |
-| `update_spec` | `spec/update` | `{ id, content }` | `SpecDetail` |
-| `delete_spec` | `spec/delete` | `{ id }` | `None` |
-| `get_graph` | `spec/graph` | `{}` | `SpecGraph` |
+**Dependencies:** spec/service
+
+| Export | Signature | Description |
+| --- | --- | --- |
+| `list_specs` | `(**params) → list[SpecSummary]` | Handler for `spec/list` |
+| `get_spec` | `(**params) → SpecDetail` | Handler for `spec/get` |
+| `create_spec` | `(**params) → SpecDetail` | Handler for `spec/create` |
+| `update_spec` | `(**params) → SpecDetail` | Handler for `spec/update` |
+| `delete_spec` | `(**params) → None` | Handler for `spec/delete` |
+| `get_graph` | `(**params) → SpecGraph` | Handler for `spec/graph` |
 
 ### methods/agents.py
 
-Handlers registered with jsonrpcserver for all `agent/*` client→server methods.
+**Responsibility:** jsonrpcserver handlers for all `agent/*` methods.
 
-| Handler | JSON-RPC method | Params | Returns |
-|---------|----------------|--------|---------|
-| `run_agent` | `agent/run` | `{ specIds, config }` | `{ taskId: str }` |
-| `get_agent_status` | `agent/status` | `{ taskId }` | `AgentTask` |
-| `list_agents` | `agent/list` | `{}` | `list[AgentTask]` |
-| `interrupt_agent` | `agent/interrupt` | `{ taskId }` | `None` |
-| `respond_agent` | `agent/respond` | `{ taskId, requestId, response }` | `None` |
+**Dependencies:** agent/service, notifications
 
-**Note on `agent/run`:** The handler captures `current_notify` at call time (the active connection's
-notify callable), passes it to `agent/service.run_task`, and immediately returns the `taskId`.
-The agent task runs asynchronously in the background; progress is pushed via `notify`.
+| Export | Signature | Description |
+| --- | --- | --- |
+| `run_agent` | `(**params) → dict` | Handler for `agent/run` |
+| `get_agent_status` | `(**params) → AgentTask` | Handler for `agent/status` |
+| `list_agents` | `(**params) → list[AgentTask]` | Handler for `agent/list` |
+| `interrupt_agent` | `(**params) → None` | Handler for `agent/interrupt` |
+| `respond_agent` | `(**params) → None` | Handler for `agent/respond` |
 
-**Note on `agent/respond`:** Routes to `agent/service.respond(task_id, request_id, response)`,
-which resolves the pending `asyncio.Future` in `tracker.py`. Returns `None` (result: null).
+`run_agent` captures `current_notify` at call time (the active connection's notify callable), passes it to `agent/service.run_task`, and immediately returns the `taskId`. The agent task runs asynchronously in the background; progress is pushed via `notify`.
+
+`respond_agent` routes to `agent/service.respond(task_id, request_id, response)`, which resolves the pending `asyncio.Future` in `tracker.py`.
 
 ## JSON-RPC Dispatch
-
-Uses `jsonrpcserver` for all incoming message handling:
 
 ```mermaid
 graph TD
@@ -150,23 +234,6 @@ graph TD
     IsRequest -- "No (notification)" --> Notification
     Validate -- "parse error /<br/>unknown method" --> Error
 ```
-
-`METHODS` is a mapping from JSON-RPC method names to handler coroutines assembled in `server.py`
-from the functions in `methods/specs.py` and `methods/agents.py`.
-
-**Error mapping:** Domain exceptions raised inside handlers are mapped to JSON-RPC error responses
-before jsonrpcserver returns them to the client:
-
-| Exception | JSON-RPC code | Message |
-|-----------|--------------|---------|
-| `SpecNotFoundError` | -32001 | "Spec not found" |
-| `RegistryError` | -32002 | "Registry error" |
-| `ValidationError` | -32003 | "Validation error" |
-| `AgentTaskNotFoundError` | -32011 | "Agent task not found" |
-| `KeyError` / missing params | -32602 | "Invalid params" |
-| Any other exception | -32603 | "Internal error" |
-
-Standard errors (-32700 parse error, -32601 method not found) are handled automatically by jsonrpcserver.
 
 ## Connection Management
 

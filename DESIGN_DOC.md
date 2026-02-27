@@ -90,6 +90,7 @@ This mirrors the Language Server Protocol pattern exactly.
     │   agent/toolCallStart  agent/toolCallEnd              │
     │   agent/subagentStart  agent/subagentEnd              │
     │   agent/notification  agent/compact                   │
+    │   agent/progress  agent/permissionDenied              │
     │   agent/done  agent/error                             │
     │                                                       │
     │  Server → Client (requests, client must respond):     │
@@ -266,87 +267,12 @@ Specs are stored as files in the repository. The registry tracks metadata:
 
 **Style:** JSON-RPC 2.0 over WebSocket — true bidirectional (LSP-style)
 
-All communication happens over a single WebSocket at `/ws`. Messages follow JSON-RPC 2.0:
-- **Requests** have `id` + `method` + `params`; the other side must send back a response with the same `id`
-- **Notifications** omit `id`; fire-and-forget, no response expected
+Communication flows in three directions over a single WebSocket at `/ws`:
+- **Client → Server requests:** `spec/*` CRUD + graph, `agent/run`, `agent/status`, `agent/list`, `agent/interrupt`, `agent/respond`
+- **Server → Client notifications:** file watcher events (`spec/did*`, `registry/didUpdate`), agent streaming events (`agent/sessionStart`, `agent/textDelta`, `agent/toolCall*`, `agent/subagent*`, `agent/notification`, `agent/compact`, `agent/progress`, `agent/done`, `agent/error`, `agent/permissionDenied`)
+- **Server → Client requests:** `agent/askUserQuestion`, `agent/confirmAction` — client responds via `agent/respond`
 
-Both sides can send either. The server can initiate requests to the client (e.g. asking a question mid-agent-run), and the client responds via `agent/respond`.
-
----
-
-### Client → Server (requests, client initiates)
-
-| Method | Params | Description |
-| --- | --- | --- |
-| `spec/list` | `{}` | List all specs with metadata |
-| `spec/get` | `{ id }` | Get spec content and metadata |
-| `spec/create` | `{ type, path, content? }` | Create a new spec |
-| `spec/update` | `{ id, content }` | Update spec content |
-| `spec/delete` | `{ id }` | Delete a spec |
-| `spec/graph` | `{}` | Get spec hierarchy graph |
-| `agent/run` | `{ specIds, config }` | Start an agent task with spec context |
-| `agent/status` | `{ taskId }` | Get task status and results |
-| `agent/list` | `{}` | List all agent tasks |
-| `agent/interrupt` | `{ taskId }` | Interrupt a running agent task |
-| `agent/respond` | `{ taskId, requestId, response }` | Respond to a pending server→client request |
-
----
-
-### Server → Client (notifications, no response needed)
-
-**Spec file changes** (from file watcher):
-
-| Method | Params | Description |
-| --- | --- | --- |
-| `spec/didChange` | `{ id, changes }` | Spec file changed on disk |
-| `spec/didCreate` | `{ id, path }` | New spec file detected |
-| `spec/didDelete` | `{ id }` | Spec file removed |
-| `registry/didUpdate` | `{ registry }` | registry.json changed |
-
-**Agent viewer events** (mapped from Claude Agent SDK stream):
-
-| Method | Params | SDK source |
-| --- | --- | --- |
-| `agent/sessionStart` | `{ taskId, sessionId, model, tools[], cwd, permissionMode }` | `SDKSystemMessage` subtype `init` |
-| `agent/textDelta` | `{ taskId, sessionId, text, streaming }` | `SDKAssistantMessage` text block / `SDKPartialAssistantMessage` text_delta |
-| `agent/toolCallStart` | `{ taskId, sessionId, toolUseId, toolName, toolInput, parentToolUseId? }` | `SDKAssistantMessage` tool_use block |
-| `agent/toolCallEnd` | `{ taskId, sessionId, toolUseId, toolName, output, isError }` | `SDKUserMessage` tool_result block |
-| `agent/subagentStart` | `{ taskId, sessionId, agentId, agentType, parentToolUseId }` | `SubagentStart` hook |
-| `agent/subagentEnd` | `{ taskId, sessionId, agentId }` | `SubagentStop` hook |
-| `agent/notification` | `{ taskId, sessionId, message, title? }` | `Notification` hook |
-| `agent/compact` | `{ taskId, sessionId, trigger, preTokens }` | `SDKCompactBoundaryMessage` |
-| `agent/progress` | `{ taskId, sessionId, status, message }` | General task progress |
-| `agent/done` | `{ taskId, sessionId, result, costUsd, turns, durationMs, usage }` | `SDKResultMessage` subtype `success` |
-| `agent/error` | `{ taskId, sessionId, subtype, errors[] }` | `SDKResultMessage` error subtypes |
-| `agent/permissionDenied` | `{ taskId, sessionId, toolName, toolInput }` | `SDKResultMessage.permission_denials` |
-
-> **Note:** Streaming text requires `includePartialMessages: true` in the SDK options to receive `agent/textDelta` with `streaming: true`. Without it, full text blocks are emitted per turn.
-
----
-
-### Server → Client (requests, client must respond via `agent/respond`)
-
-The server suspends an `asyncio.Future` keyed by `requestId` until the client responds. If no response arrives within a timeout, the server auto-denies and continues.
-
-| Method | Params | Expected client response |
-| --- | --- | --- |
-| `agent/askUserQuestion` | `{ taskId, requestId, questions[] }` | `{ answers: { [questionText]: string } }` |
-| `agent/confirmAction` | `{ taskId, requestId, toolName, toolInput, description }` | `{ decision: "approve" \| "deny", reason? }` |
-
-**`agent/askUserQuestion` question shape** (maps directly from Claude `AskUserQuestion` tool input):
-```json
-{
-  "question": "Which approach should we use?",
-  "header": "Approach",
-  "options": [
-    { "label": "Option A", "description": "..." },
-    { "label": "Option B", "description": "..." }
-  ],
-  "multiSelect": false
-}
-```
-
-**`agent/confirmAction`** is triggered by the SDK `canUseTool` callback / `PermissionRequest` hook when a tool needs explicit approval (e.g. destructive Bash commands in `default` permission mode).
+Full protocol reference (method tables, params, message shapes): **[RPC Module spec](backend/app/rpc/README.md#methods)**
 
 ## Deployment
 
