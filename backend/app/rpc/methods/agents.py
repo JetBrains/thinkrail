@@ -40,12 +40,12 @@ def _handle_errors(func):  # type: ignore[type-arg]
 
 @_handle_errors
 async def get_agent_status(service: AgentService, **params: Any) -> dict:
-    return service.get_task(params["taskId"]).model_dump()
+    return service.get_task(params["taskId"]).model_dump(by_alias=True)
 
 
 @_handle_errors
 async def list_agents(service: AgentService, **params: Any) -> list[dict]:
-    return [t.model_dump() for t in service.list_tasks()]
+    return [t.model_dump(by_alias=True) for t in service.list_tasks()]
 
 
 @_handle_errors

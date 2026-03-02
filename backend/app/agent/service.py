@@ -1,12 +1,15 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 from collections.abc import Callable
 from typing import Any
 
 from app.agent.models import AgentConfig, AgentTask
 from app.agent.runner import run
 from app.agent.tracker import Tracker
+
+logger = logging.getLogger(__name__)
 from app.core.config import AppConfig
 from app.spec.service import SpecService
 
@@ -64,8 +67,21 @@ class AgentService:
         try:
             await run(task, spec_context, notify, self._tracker)
             self._tracker.set_status(task.id, "done")
-        except Exception:
+        except Exception as exc:
+            logger.exception("Agent task %s failed", task.id)
             self._tracker.set_status(task.id, "error")
+            try:
+                await notify(
+                    "agent/error",
+                    {
+                        "taskId": task.id,
+                        "sessionId": task.session_id or "",
+                        "subtype": "crash",
+                        "errors": [str(exc)],
+                    },
+                )
+            except Exception:
+                pass
         finally:
             self._running_tasks.pop(task.id, None)
 

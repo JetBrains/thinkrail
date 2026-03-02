@@ -77,7 +77,7 @@ def register_routes(app: FastAPI, config: AppConfig) -> None:
         # Replace existing connection if any
         if _active_ws is not None:
             try:
-                await _active_ws.close()
+                await _active_ws.close(code=4000, reason="replaced")
             except Exception:
                 pass
 
@@ -98,8 +98,9 @@ def register_routes(app: FastAPI, config: AppConfig) -> None:
         except WebSocketDisconnect:
             logger.info("WebSocket client disconnected")
         finally:
-            notifications.current_notify = None
+            # Only clear if we're still the active connection
             if _active_ws is websocket:
+                notifications.current_notify = None
                 _active_ws = None
 
 

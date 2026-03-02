@@ -23,9 +23,18 @@ class AppConfig(BaseModel):
         """Return the path to ``.specs/registry.json``."""
         return self.spec_dir / "registry.json"
 
+def _discover_root() -> Path:
+    """Walk upward from cwd looking for a ``.specs/`` directory."""
+    current = Path.cwd().resolve()
+    for parent in [current, *current.parents]:
+        if (parent / ".specs").is_dir():
+            return parent
+    return current
+
+
 def load_config(project_root: Path | None = None) -> AppConfig:
     """Build an ``AppConfig`` from the given project root."""
-    root = project_root or Path.cwd()
+    root = project_root or _discover_root()
     return AppConfig(
         project_root=root,
         spec_dir=root / ".specs",

@@ -32,6 +32,20 @@ class TestAgentConfig:
         restored = AgentConfig(**data)
         assert restored == cfg
 
+    def test_wire_format_uses_camel_case(self) -> None:
+        cfg = AgentConfig(max_turns=10, permission_mode="strict", stream_text=False)
+        data = cfg.model_dump(by_alias=True)
+        assert "maxTurns" in data
+        assert "permissionMode" in data
+        assert "streamText" in data
+        assert data["maxTurns"] == 10
+        assert data["permissionMode"] == "strict"
+        assert data["streamText"] is False
+        # snake_case keys should not appear in wire format
+        assert "max_turns" not in data
+        assert "permission_mode" not in data
+        assert "stream_text" not in data
+
 
 class TestAgentTask:
     def test_defaults(self) -> None:
@@ -70,6 +84,21 @@ class TestAgentTask:
         assert restored.id == task.id
         assert restored.spec_ids == ["s1"]
 
+    def test_wire_format_uses_camel_case(self) -> None:
+        task = AgentTask(id="t1", spec_ids=["s1"], session_id="sess-1")
+        data = task.model_dump(by_alias=True)
+        assert "specIds" in data
+        assert "sessionId" in data
+        assert data["specIds"] == ["s1"]
+        assert data["sessionId"] == "sess-1"
+        # nested config should also use camelCase
+        assert "maxTurns" in data["config"]
+        assert "permissionMode" in data["config"]
+        assert "streamText" in data["config"]
+        # snake_case keys should not appear
+        assert "spec_ids" not in data
+        assert "session_id" not in data
+
 
 class TestAgentEvent:
     def test_construction(self) -> None:
@@ -97,6 +126,22 @@ class TestAgentEvent:
         data = event.model_dump()
         assert data["event_type"] == "session_start"
         assert data["payload"]["session_id"] == "s1"
+
+    def test_wire_format_uses_camel_case(self) -> None:
+        event = AgentEvent(
+            task_id="t1",
+            session_id="s1",
+            event_type="text_delta",
+        )
+        data = event.model_dump(by_alias=True)
+        assert "taskId" in data
+        assert "sessionId" in data
+        assert "eventType" in data
+        assert data["taskId"] == "t1"
+        assert data["eventType"] == "text_delta"
+        assert "task_id" not in data
+        assert "session_id" not in data
+        assert "event_type" not in data
 
 
 class TestAgentResult:
@@ -147,6 +192,14 @@ class TestInteractiveModels:
         opts = [QuestionOption(label="X", description="x")]
         q = Question(question="Select", header="H", options=opts, multi_select=True)
         assert q.multi_select is True
+
+    def test_question_wire_format(self) -> None:
+        opts = [QuestionOption(label="A", description="a")]
+        q = Question(question="Q?", header="H", options=opts, multi_select=True)
+        data = q.model_dump(by_alias=True)
+        assert "multiSelect" in data
+        assert data["multiSelect"] is True
+        assert "multi_select" not in data
 
     def test_ask_user_question_response(self) -> None:
         opts = [QuestionOption(label="A", description="a")]

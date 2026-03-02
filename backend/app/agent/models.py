@@ -4,7 +4,16 @@ from datetime import UTC, datetime
 from typing import Any, Literal
 from uuid import uuid4
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
+
+
+def to_camel(name: str) -> str:
+    """Convert snake_case to camelCase for JSON serialization."""
+    parts = name.split("_")
+    return parts[0] + "".join(p.capitalize() for p in parts[1:])
+
+
+_CAMEL_CONFIG = ConfigDict(alias_generator=to_camel, populate_by_name=True)
 
 TaskStatus = Literal["pending", "running", "done", "error"]
 
@@ -27,6 +36,8 @@ EventType = Literal[
 class AgentConfig(BaseModel):
     """Run configuration passed to the Claude Agent SDK."""
 
+    model_config = _CAMEL_CONFIG
+
     model: str = "claude-sonnet-4-6"
     max_turns: int = 25
     permission_mode: str = "default"
@@ -42,6 +53,8 @@ class QuestionOption(BaseModel):
 
 class Question(BaseModel):
     """A single question with selectable options."""
+
+    model_config = _CAMEL_CONFIG
 
     question: str
     header: str
@@ -67,6 +80,8 @@ class ToolApprovalResponse(BaseModel):
 class AgentEvent(BaseModel):
     """Serializable event sent as a notification to the frontend."""
 
+    model_config = _CAMEL_CONFIG
+
     task_id: str
     session_id: str
     event_type: EventType
@@ -75,6 +90,8 @@ class AgentEvent(BaseModel):
 
 class AgentResult(BaseModel):
     """Terminal success result from an agent run."""
+
+    model_config = _CAMEL_CONFIG
 
     task_id: str
     session_id: str
@@ -87,6 +104,8 @@ class AgentResult(BaseModel):
 
 class AgentTask(BaseModel):
     """Task record tracking an agent run."""
+
+    model_config = _CAMEL_CONFIG
 
     id: str = Field(default_factory=lambda: str(uuid4()))
     status: TaskStatus = "pending"

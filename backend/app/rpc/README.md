@@ -19,6 +19,8 @@ All communication happens over a single WebSocket at `/ws`. Messages follow JSON
 
 Both sides can send either. The server can initiate requests to the client (e.g. asking a question mid-agent-run), and the client responds via `agent/respond`.
 
+**Wire format convention:** All JSON-RPC params and result keys use **camelCase** (e.g. `taskId`, `sessionId`, `specIds`). Python models use `snake_case` internally and convert via Pydantic `alias_generator` + `model_dump(by_alias=True)`.
+
 ## Methods
 
 ### Client → Server (requests)
@@ -160,8 +162,8 @@ graph TD
 | Export | Signature | Description |
 | --- | --- | --- |
 | `register_routes` | `(app: FastAPI, config: AppConfig) → None` | Register the `/ws` WebSocket endpoint on the FastAPI app. Called by `main.py` during setup. |
-| `start_watcher` | `(config: AppConfig) → WatchHandle` | Start `core/watcher` watching the project directory. Register the file-change callback. Called in `main.py` lifespan startup. |
-| `stop_watcher` | `(handle: WatchHandle) → None` | Stop the file watcher. Called in `main.py` lifespan shutdown. |
+| `start_watcher` | `async (config: AppConfig) → WatchHandle` | Start `core/watcher` watching the project directory. Register the file-change callback. Called in `main.py` lifespan startup. |
+| `stop_watcher` | `async (handle: WatchHandle) → None` | Stop the file watcher. Called in `main.py` lifespan shutdown. |
 
 `METHODS` is a mapping from JSON-RPC method names to handler coroutines, assembled in `server.py` from the functions in `methods/specs.py` and `methods/agents.py`.
 

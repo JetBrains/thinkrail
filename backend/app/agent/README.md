@@ -54,14 +54,16 @@ graph TD
 
 ### Models
 
+All models with multi-word fields use a `camelCase` alias generator (`to_camel` in `models.py`). Python code uses `snake_case` field names; JSON wire format uses `camelCase` via `model_dump(by_alias=True)`.
+
 #### Core Models
 
-| Model | Fields | Description |
+| Model | Fields (Python / JSON wire) | Description |
 |-------|--------|-------------|
-| `AgentTask` | id, status, spec_ids, config, session_id?, created, updated | Task record |
-| `AgentConfig` | model, max_turns, permission_mode, stream_text | Run configuration |
-| `AgentEvent` | task_id, session_id, event_type, payload | Serializable event to send as notification |
-| `AgentResult` | task_id, session_id, result, cost_usd, turns, duration_ms, usage | Terminal success result |
+| `AgentTask` | id, status, spec_ids/`specIds`, config, session_id/`sessionId`?, created, updated | Task record |
+| `AgentConfig` | model, max_turns/`maxTurns`, permission_mode/`permissionMode`, stream_text/`streamText` | Run configuration |
+| `AgentEvent` | task_id/`taskId`, session_id/`sessionId`, event_type/`eventType`, payload | Serializable event to send as notification |
+| `AgentResult` | task_id/`taskId`, session_id/`sessionId`, result, cost_usd/`costUsd`, turns, duration_ms/`durationMs`, usage | Terminal success result |
 
 #### Interactive Request/Response Models
 
@@ -71,7 +73,7 @@ These types define the data exchanged during mid-run interactions. Both `AskUser
 
 | Model | Fields | Description |
 |-------|--------|-------------|
-| `Question` | question: str, header: str, options: list[QuestionOption], multi_select: bool | A single question with selectable options. 1-4 questions per request, 2-4 options per question. |
+| `Question` | question: str, header: str, options: list[QuestionOption], multi_select/`multiSelect`: bool | A single question with selectable options. 1-4 questions per request, 2-4 options per question. |
 | `QuestionOption` | label: str, description: str | A selectable option within a question |
 
 **Response types** (received from frontend via `agent/respond`):
@@ -94,20 +96,20 @@ The SDK uses a single `canUseTool` callback for both questions and tool approval
 
 These map 1-to-1 to the `agent/*` notification methods in the protocol:
 
-| event_type | Triggered by | Protocol method |
-|------------|-------------|-----------------|
-| `session_start` | `SDKSystemMessage` subtype `init` | `agent/sessionStart` |
-| `text_delta` | `SDKAssistantMessage` text block / `SDKPartialAssistantMessage` text_delta | `agent/textDelta` |
-| `tool_call_start` | `SDKAssistantMessage` tool_use block | `agent/toolCallStart` |
-| `tool_call_end` | `SDKUserMessage` tool_result block | `agent/toolCallEnd` |
-| `subagent_start` | `SubagentStart` hook | `agent/subagentStart` |
-| `subagent_end` | `SubagentStop` hook | `agent/subagentEnd` |
-| `notification` | `Notification` hook | `agent/notification` |
-| `compact` | `SDKCompactBoundaryMessage` | `agent/compact` |
-| `progress` | Internal milestones | `agent/progress` |
-| `done` | `SDKResultMessage` subtype `success` | `agent/done` |
-| `error` | `SDKResultMessage` error subtypes | `agent/error` |
-| `permission_denied` | `SDKResultMessage.permission_denials` | `agent/permissionDenied` |
+| event_type | Triggered by | Protocol method | Status |
+|------------|-------------|-----------------|--------|
+| `session_start` | `SDKSystemMessage` subtype `init` | `agent/sessionStart` | Implemented |
+| `text_delta` | `SDKAssistantMessage` text block / `SDKPartialAssistantMessage` text_delta | `agent/textDelta` | Partial — full blocks only; streaming partial messages not yet handled |
+| `tool_call_start` | `SDKAssistantMessage` tool_use block | `agent/toolCallStart` | Implemented |
+| `tool_call_end` | `SDKUserMessage` tool_result block | `agent/toolCallEnd` | Implemented |
+| `subagent_start` | `SubagentStart` hook | `agent/subagentStart` | Not yet implemented |
+| `subagent_end` | `SubagentStop` hook | `agent/subagentEnd` | Not yet implemented |
+| `notification` | `Notification` hook | `agent/notification` | Not yet implemented |
+| `compact` | `SDKCompactBoundaryMessage` | `agent/compact` | Not yet implemented |
+| `progress` | Internal milestones | `agent/progress` | Not yet implemented |
+| `done` | `SDKResultMessage` subtype `success` | `agent/done` | Implemented |
+| `error` | `SDKResultMessage` error subtypes | `agent/error` | Implemented |
+| `permission_denied` | `SDKResultMessage.permission_denials` | `agent/permissionDenied` | Not yet implemented |
 
 ### Interactive Request/Response Flow
 
@@ -126,6 +128,10 @@ For mid-run interactions where the agent needs user input, `runner.py` suspends 
 5. `tracker.py` resolves the Future; runner resumes and returns the response to the SDK
 
 **Timeout:** If no response arrives within a configurable deadline, the Future is cancelled, the action is auto-denied, and an `agent/notification` event is sent to inform the frontend.
+
+## TODO
+
+- **Rethink session lifecycle & initial prompt collection:** Currently `runner.py` sends an `agent/askUserQuestion` request to collect the initial user prompt before starting the SDK session. This flow reuses the interactive request/response mechanism but isn't part of the designed protocol. The full session lifecycle (prompt collection → SDK start → event streaming → completion) needs to be designed and documented as a first-class flow.
 
 ## Design Decisions
 

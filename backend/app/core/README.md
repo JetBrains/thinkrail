@@ -77,8 +77,8 @@ These methods are of the `AppConfig` model
 
 | Function | Signature | Description |
 |----------|-----------|-------------|
-| `watch` | `(paths: list[Path], callback: Callable) → WatchHandle` | Start watching paths for file changes |
-| `stop` | `(handle: WatchHandle) → None` | Stop a file watch |
+| `watch` | `async (paths: list[Path], callback: Callable) → WatchHandle` | Start watching paths for file changes |
+| `stop` | `async (handle: WatchHandle) → None` | Stop a file watch |
 
 ### Models
 
@@ -110,7 +110,7 @@ These methods are of the `AppConfig` model
 | Dependency | Usage |
 |------------|-------|
 | `pydantic` | AppConfig model validation |
-| `watchfiles` or `watchdog` | File system change detection |
+| `watchfiles` | File system change detection |
 
 ## Known Limitations
 

@@ -30,11 +30,16 @@ def svc() -> MagicMock:
 
 class TestGetAgentStatus:
     async def test_returns_task(self, svc: MagicMock) -> None:
-        task = AgentTask(id="t1", status="running", spec_ids=["s1"])
+        task = AgentTask(id="t1", status="running", spec_ids=["s1"], session_id="sess-1")
         svc.get_task.return_value = task
         result = _unwrap(await get_agent_status(svc, taskId="t1"))
         assert result["id"] == "t1"
         assert result["status"] == "running"
+        # Wire format uses camelCase
+        assert result["specIds"] == ["s1"]
+        assert result["sessionId"] == "sess-1"
+        assert "spec_ids" not in result
+        assert "session_id" not in result
         svc.get_task.assert_called_once_with("t1")
 
     async def test_not_found(self, svc: MagicMock) -> None:
@@ -52,13 +57,16 @@ class TestGetAgentStatus:
 class TestListAgents:
     async def test_returns_list(self, svc: MagicMock) -> None:
         svc.list_tasks.return_value = [
-            AgentTask(id="t1", status="done"),
+            AgentTask(id="t1", status="done", spec_ids=["s1"]),
             AgentTask(id="t2", status="running"),
         ]
         result = _unwrap(await list_agents(svc))
         assert len(result) == 2
         assert result[0]["id"] == "t1"
         assert result[1]["id"] == "t2"
+        # Wire format uses camelCase
+        assert result[0]["specIds"] == ["s1"]
+        assert "spec_ids" not in result[0]
 
     async def test_empty(self, svc: MagicMock) -> None:
         svc.list_tasks.return_value = []

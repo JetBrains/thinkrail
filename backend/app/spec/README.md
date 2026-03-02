@@ -61,7 +61,7 @@ graph TD
 |--------|-----------|-------------|
 | `list_specs` | `() → list[SpecSummary]` | List all specs with metadata from registry |
 | `get_spec` | `(id: str) → SpecDetail` | Get full spec content + metadata |
-| `create_spec` | `(type: str, path: str, content: str?) → SpecDetail` | Create spec file + registry entry. `title` is auto-derived from the first heading in content (or from path if no content). `id` is generated, `status` defaults to `draft`. |
+| `create_spec` | `(type: str, path: str, content: str?, id: str?) → SpecDetail` | Create spec file + registry entry. `title` is auto-derived from the first heading in content (or from path if no content). `id` is auto-generated if not provided, `status` defaults to `draft`. |
 | `update_spec` | `(id: str, content: str) → SpecDetail` | Update spec content on disk + registry |
 | `delete_spec` | `(id: str) → None` | Remove spec file + registry entry |
 | `get_graph` | `() → SpecGraph` | Return full hierarchy graph (nodes + edges) |
