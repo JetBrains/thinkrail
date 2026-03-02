@@ -1,0 +1,59 @@
+Implement Agent models.py: Pydantic models for agent tasks, events, and interactive flows
+
+models.py defines the data structures used across the Agent module. These are
+Pydantic models for task records, run configuration, streaming events, terminal
+results, and the interactive request/response types for mid-run user interactions
+(questions and tool approvals).
+
+Spec reference: backend/app/agent/README.md (lines 55-92)
+
+Models to implement:
+
+Core Models:
+- AgentTask(id, status, spec_ids, config, session_id?, created, updated)
+    Task record. status is one of: pending, running, done, error.
+- AgentConfig(model, max_turns, permission_mode, stream_text)
+    Run configuration passed to the SDK.
+- AgentEvent(task_id, session_id, event_type, payload)
+    Serializable event sent as a notification to the frontend.
+    event_type enum: session_start, text_delta, tool_call_start, tool_call_end,
+    subagent_start, subagent_end, notification, compact, progress, done, error,
+    permission_denied.
+- AgentResult(task_id, session_id, result, cost_usd, turns, duration_ms, usage)
+    Terminal success result.
+
+Interactive Request/Response Models:
+- Question(question: str, header: str, options: list[QuestionOption], multi_select: bool)
+    A single question with selectable options. 1-4 questions per request, 2-4 options per question.
+- QuestionOption(label: str, description: str)
+    A selectable option within a question.
+- AskUserQuestionResponse(questions: list[Question], answers: dict[str, str])
+    Response to a question request. questions passes through the original questions.
+    answers maps question text to selected label. Multi-select joins labels with ", ".
+- ToolApprovalResponse(behavior: "allow" | "deny", message?: str, interrupt?: bool)
+    Response to a tool approval request. message is the denial reason.
+    interrupt=true aborts the entire task.
+
+Plan:
+1. Define AgentConfig with field defaults (model="claude-sonnet-4-6", max_turns=25,
+   permission_mode="default", stream_text=True)
+2. Define QuestionOption and Question models
+3. Define AskUserQuestionResponse and ToolApprovalResponse models
+4. Define AgentEvent with event_type as a string enum/literal
+5. Define AgentResult with numeric fields
+6. Define AgentTask with status enum, auto-generated id (uuid4), timestamps
+7. Create agent/__init__.py with module exports
+8. Write unit tests — model construction, validation, serialization
+
+Files to modify:
+- backend/app/agent/models.py   (create — all Pydantic models)
+- backend/app/agent/__init__.py (create — module exports)
+- backend/tests/agent/__init__.py (create — test package init)
+- backend/tests/agent/test_models.py (create — unit tests)
+
+Definition of done:
+- All unit tests pass
+- Implementation matches the interface in backend/app/agent/README.md
+
+Priority: High
+Started: 2026-03-02

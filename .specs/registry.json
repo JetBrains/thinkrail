@@ -134,7 +134,7 @@
     {
       "id": "task-core-config",
       "type": "task-spec",
-      "path": "current_tasks/feature_core_config.txt",
+      "path": "current_tasks/core/feature_core_config.txt",
       "title": "Implement Core config.py",
       "status": "done",
       "covers": [
@@ -150,7 +150,7 @@
     {
       "id": "task-core-fileio",
       "type": "task-spec",
-      "path": "current_tasks/feature_core_fileio.txt",
+      "path": "current_tasks/core/feature_core_fileio.txt",
       "title": "Implement Core fileio.py",
       "status": "done",
       "covers": [
@@ -166,7 +166,7 @@
     {
       "id": "task-core-watcher",
       "type": "task-spec",
-      "path": "current_tasks/feature_core_watcher.txt",
+      "path": "current_tasks/core/feature_core_watcher.txt",
       "title": "Implement Core watcher.py",
       "status": "done",
       "covers": [
@@ -182,7 +182,7 @@
     {
       "id": "task-spec-models",
       "type": "task-spec",
-      "path": "current_tasks/feature_spec_models.txt",
+      "path": "current_tasks/spec/feature_spec_models.txt",
       "title": "Implement Spec models.py",
       "status": "done",
       "covers": [
@@ -198,7 +198,7 @@
     {
       "id": "task-spec-parser",
       "type": "task-spec",
-      "path": "current_tasks/feature_spec_parser.txt",
+      "path": "current_tasks/spec/feature_spec_parser.txt",
       "title": "Implement Spec parser.py",
       "status": "done",
       "covers": [
@@ -214,7 +214,7 @@
     {
       "id": "task-spec-validator",
       "type": "task-spec",
-      "path": "current_tasks/feature_spec_validator.txt",
+      "path": "current_tasks/spec/feature_spec_validator.txt",
       "title": "Implement Spec validator.py",
       "status": "done",
       "covers": [
@@ -230,7 +230,7 @@
     {
       "id": "task-spec-registry",
       "type": "task-spec",
-      "path": "current_tasks/feature_spec_registry.txt",
+      "path": "current_tasks/spec/feature_spec_registry.txt",
       "title": "Implement Spec registry.py",
       "status": "done",
       "covers": [
@@ -246,7 +246,7 @@
     {
       "id": "task-spec-graph",
       "type": "task-spec",
-      "path": "current_tasks/feature_spec_graph.txt",
+      "path": "current_tasks/spec/feature_spec_graph.txt",
       "title": "Implement Spec graph.py",
       "status": "done",
       "covers": [
@@ -262,7 +262,7 @@
     {
       "id": "task-spec-service",
       "type": "task-spec",
-      "path": "current_tasks/feature_spec_service.txt",
+      "path": "current_tasks/spec/feature_spec_service.txt",
       "title": "Implement Spec service.py",
       "status": "done",
       "covers": [
@@ -278,9 +278,9 @@
     {
       "id": "task-rpc-notifications",
       "type": "task-spec",
-      "path": "current_tasks/feature_rpc_notifications.txt",
+      "path": "current_tasks/rpc/feature_rpc_notifications.txt",
       "title": "Implement RPC notifications.py",
-      "status": "active",
+      "status": "done",
       "covers": [
         "backend/app/rpc/notifications.py"
       ],
@@ -294,9 +294,9 @@
     {
       "id": "task-rpc-methods-specs",
       "type": "task-spec",
-      "path": "current_tasks/feature_rpc_methods_specs.txt",
+      "path": "current_tasks/rpc/feature_rpc_methods_specs.txt",
       "title": "Implement RPC methods/specs.py",
-      "status": "active",
+      "status": "done",
       "covers": [
         "backend/app/rpc/methods/specs.py"
       ],
@@ -310,9 +310,9 @@
     {
       "id": "task-rpc-server",
       "type": "task-spec",
-      "path": "current_tasks/feature_rpc_server.txt",
+      "path": "current_tasks/rpc/feature_rpc_server.txt",
       "title": "Implement RPC server.py",
-      "status": "active",
+      "status": "done",
       "covers": [
         "backend/app/rpc/server.py"
       ],
@@ -322,6 +322,70 @@
       ],
       "created": "2026-02-27",
       "updated": "2026-02-27"
+    },
+    {
+      "id": "task-agent-models",
+      "type": "task-spec",
+      "path": "current_tasks/agent/feature_agent_models.txt",
+      "title": "Implement Agent models.py",
+      "status": "active",
+      "covers": [
+        "backend/app/agent/models.py"
+      ],
+      "tags": [
+        "high",
+        "new-feature"
+      ],
+      "created": "2026-03-02",
+      "updated": "2026-03-02"
+    },
+    {
+      "id": "task-agent-tracker",
+      "type": "task-spec",
+      "path": "current_tasks/agent/feature_agent_tracker.txt",
+      "title": "Implement Agent tracker.py",
+      "status": "active",
+      "covers": [
+        "backend/app/agent/tracker.py"
+      ],
+      "tags": [
+        "high",
+        "new-feature"
+      ],
+      "created": "2026-03-02",
+      "updated": "2026-03-02"
+    },
+    {
+      "id": "task-agent-runner",
+      "type": "task-spec",
+      "path": "current_tasks/agent/feature_agent_runner.txt",
+      "title": "Implement Agent runner.py",
+      "status": "active",
+      "covers": [
+        "backend/app/agent/runner.py"
+      ],
+      "tags": [
+        "high",
+        "new-feature"
+      ],
+      "created": "2026-03-02",
+      "updated": "2026-03-02"
+    },
+    {
+      "id": "task-agent-service",
+      "type": "task-spec",
+      "path": "current_tasks/agent/feature_agent_service.txt",
+      "title": "Implement Agent service.py",
+      "status": "active",
+      "covers": [
+        "backend/app/agent/service.py"
+      ],
+      "tags": [
+        "high",
+        "new-feature"
+      ],
+      "created": "2026-03-02",
+      "updated": "2026-03-02"
     }
   ],
   "links": [
@@ -533,6 +597,56 @@
     {
       "from": "task-rpc-server",
       "to": "task-rpc-methods-specs",
+      "type": "depends-on"
+    },
+    {
+      "from": "task-agent-models",
+      "to": "module-agent",
+      "type": "implements"
+    },
+    {
+      "from": "task-agent-tracker",
+      "to": "module-agent",
+      "type": "implements"
+    },
+    {
+      "from": "task-agent-tracker",
+      "to": "task-agent-models",
+      "type": "depends-on"
+    },
+    {
+      "from": "task-agent-runner",
+      "to": "module-agent",
+      "type": "implements"
+    },
+    {
+      "from": "task-agent-runner",
+      "to": "task-agent-models",
+      "type": "depends-on"
+    },
+    {
+      "from": "task-agent-runner",
+      "to": "task-agent-tracker",
+      "type": "depends-on"
+    },
+    {
+      "from": "task-agent-service",
+      "to": "module-agent",
+      "type": "implements"
+    },
+    {
+      "from": "task-agent-service",
+      "to": "task-agent-models",
+      "type": "depends-on"
+    },
+    {
+      "from": "task-agent-service",
+      "to": "task-agent-tracker",
+      "type": "depends-on"
+    },
+    {
+      "from": "task-agent-service",
+      "to": "task-agent-runner",
       "type": "depends-on"
     }
   ]
