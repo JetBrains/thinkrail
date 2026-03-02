@@ -1,6 +1,6 @@
 # Chat UI Rendering — Sub-Specification
 
-> Parent: [WEBVIEW.md](../WEBVIEW.md) §3 | Status: **Draft** | Created: 2026-02-27
+> Parent: [WEBVIEW.md](../WEBVIEW.md) §3 | Status: **Active** | Created: 2026-02-27
 
 ## Overview
 
@@ -475,3 +475,15 @@ All colors use CSS custom properties from the root theme. Components do not hard
 - Question options use `role="radio"` / `role="checkbox"` depending on `multiSelect`
 - Status changes (done, error) announced via `aria-live="polite"` region
 - Color indicators always paired with text/icon (not color-only)
+
+## Known Limitations
+
+- **No message editing:** Users cannot edit previously sent messages
+- **No message search:** No Ctrl+F search within chat history (only browser-native search)
+- **Streaming text only forward:** Cannot replay or slow down streaming — text appears at the speed the backend sends it
+
+## Related Specs
+
+- **Parent:** [Web View](WEBVIEW.md) §3
+- **Depends on:** [RPC Module](../../backend/app/rpc/README.md) (agent events), [API Client](../src/api/README.md) (event subscriptions)
+- **Related:** [Session History](SESSION_HISTORY.md) (read-only replay), [Notification System](NOTIFICATION_SYSTEM.md) (background alerts)

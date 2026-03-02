@@ -1,6 +1,6 @@
 # Web View — UI Specification
 
-> Status: **Draft** | Created: 2026-02-27
+> Parent: [Frontend Module](../README.md) | Status: **Active** | Created: 2026-02-27
 
 ## Overview
 
@@ -496,3 +496,27 @@ The following areas require their own detailed specs as the design matures:
 | **Notification System** | Toast queue management, priority ordering, sound configuration, persistence rules | Interaction with OS-level notifications |
 | **Theming** | Color scheme, dark/light mode, customization | CSS variable system, user preferences |
 | **Responsive Behavior** | Panel collapse rules at narrow widths, mobile considerations | Breakpoints, touch interactions |
+
+## 10. Backend API Gaps
+
+The following RPC methods and endpoints are referenced by frontend sub-specs but **not yet designed in the backend RPC module spec** (`backend/app/rpc/README.md`). These must be added before the corresponding frontend features can be implemented.
+
+| Methods | Referenced By | Description |
+| --- | --- | --- |
+| `cost/summary`, `cost/setBudget`, `cost/reset` | [Progress Tracker](PROGRESS_TRACKER.md) §6 | Cost tracking and budget management. Requires `.specs/cost.json` persistence. |
+| `diff/mappings`, `diff/commit`, `diff/scan` | [Diff Viewer](DIFF_VIEWER.md) §3 | Spec-to-code mapping extraction from git history. Requires mapping file I/O. |
+| `/terminal/create`, `/terminal/{id}/ws`, `/terminal/{id}/resize`, `/terminal/{id}/kill` | [Console](../src/components/Console/README.md) §Backend Integration | Terminal process management via PTY. Separate WebSocket per terminal (not JSON-RPC). Requires new FastAPI router. |
+| `cost/didUpdate` (notification) | [Progress Tracker](PROGRESS_TRACKER.md) §6.4 | Server→client notification when cost data changes. |
+
+## Known Limitations
+
+- **No offline mode:** Requires live WebSocket connection to backend for all functionality
+- **Single user:** No multi-user collaboration or concurrent editing
+- **Browser only:** No desktop app wrapper (Electron, Tauri) — runs in browser tab
+- **English only:** No internationalization support in v1
+
+## Related Specs
+
+- **Parent:** [Frontend Module](../README.md)
+- **Depends on:** [Goal & Requirements](../../GOAL&REQUIREMENTS.md)
+- **Sub-specs:** [Chat UI](CHAT_UI.md), [Graph](GRAPH_INTERACTIONS.md), [Modal](NEW_SESSION_MODAL.md), [Palette](COMMAND_PALETTE.md), [Notifications](NOTIFICATION_SYSTEM.md), [Diff](DIFF_VIEWER.md), [Progress](PROGRESS_TRACKER.md), [History](SESSION_HISTORY.md), [App Shell](APP_SHELL.md), [Theming](THEMING.md), [Responsive](RESPONSIVE_BEHAVIOR.md)

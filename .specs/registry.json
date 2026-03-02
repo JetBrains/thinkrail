@@ -70,26 +70,180 @@
       "tags": ["backend", "transport"]
     },
     {
+      "id": "frontend-module",
+      "type": "module-design",
+      "path": "frontend/README.md",
+      "title": "Frontend Module",
+      "status": "active",
+      "created": "2026-03-02",
+      "updated": "2026-03-02",
+      "covers": ["frontend/"],
+      "tags": ["frontend", "module", "react", "typescript"]
+    },
+    {
       "id": "webview",
       "type": "module-design",
-      "path": "WEBVIEW.md",
+      "path": "frontend/ui-specs/WEBVIEW.md",
       "title": "Web View — UI Specification",
       "status": "active",
       "created": "2026-02-27",
       "updated": "2026-02-27",
-      "covers": ["frontend/"],
+      "covers": ["frontend/ui-specs/"],
       "tags": ["frontend", "ui", "webview"]
     },
     {
       "id": "chat-ui",
       "type": "submodule-design",
-      "path": "frontend/CHAT_UI.md",
+      "path": "frontend/ui-specs/CHAT_UI.md",
       "title": "Chat UI Rendering",
       "status": "active",
       "created": "2026-02-27",
       "updated": "2026-02-27",
       "covers": ["frontend/src/components/ChatStream/"],
       "tags": ["frontend", "ui", "chat", "rendering"]
+    },
+    {
+      "id": "graph-interactions",
+      "type": "submodule-design",
+      "path": "frontend/ui-specs/GRAPH_INTERACTIONS.md",
+      "title": "Graph Interactions",
+      "status": "active",
+      "created": "2026-03-02",
+      "updated": "2026-03-02",
+      "covers": ["frontend/src/components/GraphView/"],
+      "tags": ["frontend", "ui", "graph", "visualization"]
+    },
+    {
+      "id": "new-session-modal",
+      "type": "submodule-design",
+      "path": "frontend/ui-specs/NEW_SESSION_MODAL.md",
+      "title": "New Session Modal",
+      "status": "active",
+      "created": "2026-03-02",
+      "updated": "2026-03-02",
+      "covers": ["frontend/src/components/NewSessionModal/"],
+      "tags": ["frontend", "ui", "modal", "session"]
+    },
+    {
+      "id": "command-palette",
+      "type": "submodule-design",
+      "path": "frontend/ui-specs/COMMAND_PALETTE.md",
+      "title": "Command Palette",
+      "status": "active",
+      "created": "2026-03-02",
+      "updated": "2026-03-02",
+      "covers": ["frontend/src/components/CommandPalette/"],
+      "tags": ["frontend", "ui", "search", "navigation"]
+    },
+    {
+      "id": "notification-system",
+      "type": "submodule-design",
+      "path": "frontend/ui-specs/NOTIFICATION_SYSTEM.md",
+      "title": "Notification System",
+      "status": "active",
+      "created": "2026-03-02",
+      "updated": "2026-03-02",
+      "covers": ["frontend/src/components/Notifications/"],
+      "tags": ["frontend", "ui", "notifications", "toasts"]
+    },
+    {
+      "id": "console",
+      "type": "submodule-design",
+      "path": "frontend/src/components/Console/README.md",
+      "title": "Console",
+      "status": "active",
+      "created": "2026-03-02",
+      "updated": "2026-03-02",
+      "covers": ["frontend/src/components/Console/"],
+      "tags": ["frontend", "ui", "terminal", "xterm"]
+    },
+    {
+      "id": "theming",
+      "type": "submodule-design",
+      "path": "frontend/ui-specs/THEMING.md",
+      "title": "Theming",
+      "status": "active",
+      "created": "2026-03-02",
+      "updated": "2026-03-02",
+      "covers": ["frontend/src/styles/"],
+      "tags": ["frontend", "ui", "theme", "css"]
+    },
+    {
+      "id": "responsive-behavior",
+      "type": "submodule-design",
+      "path": "frontend/ui-specs/RESPONSIVE_BEHAVIOR.md",
+      "title": "Responsive Behavior",
+      "status": "active",
+      "created": "2026-03-02",
+      "updated": "2026-03-02",
+      "covers": ["frontend/src/"],
+      "tags": ["frontend", "ui", "responsive", "layout"]
+    },
+    {
+      "id": "diff-viewer",
+      "type": "submodule-design",
+      "path": "frontend/ui-specs/DIFF_VIEWER.md",
+      "title": "Diff Viewer",
+      "status": "active",
+      "created": "2026-03-02",
+      "updated": "2026-03-02",
+      "covers": ["frontend/src/components/DiffViewer/"],
+      "tags": ["frontend", "ui", "diff", "git"]
+    },
+    {
+      "id": "progress-tracker",
+      "type": "submodule-design",
+      "path": "frontend/ui-specs/PROGRESS_TRACKER.md",
+      "title": "Progress Tracker",
+      "status": "active",
+      "created": "2026-03-02",
+      "updated": "2026-03-02",
+      "covers": ["frontend/src/components/ProgressTab/"],
+      "tags": ["frontend", "ui", "progress", "metrics"]
+    },
+    {
+      "id": "session-history",
+      "type": "submodule-design",
+      "path": "frontend/ui-specs/SESSION_HISTORY.md",
+      "title": "Session History & Persistence",
+      "status": "active",
+      "created": "2026-03-02",
+      "updated": "2026-03-02",
+      "covers": ["frontend/src/components/SessionHistory/"],
+      "tags": ["frontend", "ui", "sessions", "history"]
+    },
+    {
+      "id": "api-client",
+      "type": "submodule-design",
+      "path": "frontend/src/api/README.md",
+      "title": "API Client",
+      "status": "active",
+      "created": "2026-03-02",
+      "updated": "2026-03-02",
+      "covers": ["frontend/src/api/"],
+      "tags": ["frontend", "infrastructure", "websocket", "rpc"]
+    },
+    {
+      "id": "state-management",
+      "type": "submodule-design",
+      "path": "frontend/src/store/README.md",
+      "title": "State Management",
+      "status": "active",
+      "created": "2026-03-02",
+      "updated": "2026-03-02",
+      "covers": ["frontend/src/store/"],
+      "tags": ["frontend", "infrastructure", "zustand", "state"]
+    },
+    {
+      "id": "app-shell",
+      "type": "submodule-design",
+      "path": "frontend/ui-specs/APP_SHELL.md",
+      "title": "Component Tree & App Shell",
+      "status": "active",
+      "created": "2026-03-02",
+      "updated": "2026-03-02",
+      "covers": ["frontend/src/components/AppShell/"],
+      "tags": ["frontend", "ui", "routing", "layout"]
     },
     {
       "id": "task-core-config",
@@ -286,14 +440,34 @@
       "type": "depends-on"
     },
     {
-      "from": "webview",
+      "from": "frontend-module",
       "to": "design-doc",
       "type": "parent"
     },
     {
-      "from": "webview",
+      "from": "frontend-module",
       "to": "goal-and-requirements",
       "type": "depends-on"
+    },
+    {
+      "from": "webview",
+      "to": "frontend-module",
+      "type": "parent"
+    },
+    {
+      "from": "api-client",
+      "to": "frontend-module",
+      "type": "parent"
+    },
+    {
+      "from": "state-management",
+      "to": "frontend-module",
+      "type": "parent"
+    },
+    {
+      "from": "console",
+      "to": "frontend-module",
+      "type": "parent"
     },
     {
       "from": "chat-ui",
@@ -303,6 +477,96 @@
     {
       "from": "chat-ui",
       "to": "module-rpc",
+      "type": "depends-on"
+    },
+    {
+      "from": "graph-interactions",
+      "to": "webview",
+      "type": "parent"
+    },
+    {
+      "from": "graph-interactions",
+      "to": "module-spec",
+      "type": "depends-on"
+    },
+    {
+      "from": "new-session-modal",
+      "to": "webview",
+      "type": "parent"
+    },
+    {
+      "from": "new-session-modal",
+      "to": "module-agent",
+      "type": "depends-on"
+    },
+    {
+      "from": "command-palette",
+      "to": "webview",
+      "type": "parent"
+    },
+    {
+      "from": "notification-system",
+      "to": "webview",
+      "type": "parent"
+    },
+    {
+      "from": "theming",
+      "to": "webview",
+      "type": "parent"
+    },
+    {
+      "from": "responsive-behavior",
+      "to": "webview",
+      "type": "parent"
+    },
+    {
+      "from": "diff-viewer",
+      "to": "webview",
+      "type": "parent"
+    },
+    {
+      "from": "diff-viewer",
+      "to": "module-spec",
+      "type": "depends-on"
+    },
+    {
+      "from": "progress-tracker",
+      "to": "webview",
+      "type": "parent"
+    },
+    {
+      "from": "session-history",
+      "to": "webview",
+      "type": "parent"
+    },
+    {
+      "from": "session-history",
+      "to": "chat-ui",
+      "type": "depends-on"
+    },
+    {
+      "from": "api-client",
+      "to": "module-rpc",
+      "type": "depends-on"
+    },
+    {
+      "from": "state-management",
+      "to": "api-client",
+      "type": "depends-on"
+    },
+    {
+      "from": "app-shell",
+      "to": "webview",
+      "type": "parent"
+    },
+    {
+      "from": "app-shell",
+      "to": "state-management",
+      "type": "depends-on"
+    },
+    {
+      "from": "app-shell",
+      "to": "api-client",
       "type": "depends-on"
     },
     {
