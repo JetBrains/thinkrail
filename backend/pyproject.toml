@@ -9,6 +9,7 @@ dependencies = [
     "fastapi>=0.115",
     "uvicorn[standard]>=0.34",
     "jsonrpcserver>=5.0",
+    "claude-agent-sdk>=0.1",
 ]
 
 [project.optional-dependencies]

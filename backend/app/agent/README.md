@@ -115,8 +115,8 @@ For mid-run interactions where the agent needs user input, `runner.py` suspends 
 
 | Trigger | Server sends | Client responds with |
 |---------|-------------|----------------------|
-| `canUseTool` fires with `tool_name="AskUserQuestion"` | `agent/askUserQuestion` (JSON-RPC request with `id`) | `agent/respond { taskId, requestId, response: AskUserQuestionResponse }` |
-| `canUseTool` fires with any other `tool_name` | `agent/confirmAction` (JSON-RPC request with `id`) | `agent/respond { taskId, requestId, response: ToolApprovalResponse }` |
+| `canUseTool` fires with `tool_name="AskUserQuestion"` | `agent/askUserQuestion` (JSON-RPC request with `id`); params: `{ taskId, questions }` | `agent/respond { taskId, requestId, response: AskUserQuestionResponse }` |
+| `canUseTool` fires with any other `tool_name` | `agent/confirmAction` (JSON-RPC request with `id`); params: `{ taskId, toolName, toolInput }` | `agent/respond { taskId, requestId, response: ToolApprovalResponse }` |
 
 **Suspension mechanism:**
 1. Runner registers a new `asyncio.Future` in `tracker.py` keyed by `requestId`

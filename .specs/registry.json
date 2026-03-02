@@ -328,7 +328,7 @@
       "type": "task-spec",
       "path": "current_tasks/agent/feature_agent_models.txt",
       "title": "Implement Agent models.py",
-      "status": "active",
+      "status": "done",
       "covers": [
         "backend/app/agent/models.py"
       ],
@@ -344,7 +344,7 @@
       "type": "task-spec",
       "path": "current_tasks/agent/feature_agent_tracker.txt",
       "title": "Implement Agent tracker.py",
-      "status": "active",
+      "status": "done",
       "covers": [
         "backend/app/agent/tracker.py"
       ],
@@ -360,7 +360,7 @@
       "type": "task-spec",
       "path": "current_tasks/agent/feature_agent_runner.txt",
       "title": "Implement Agent runner.py",
-      "status": "active",
+      "status": "done",
       "covers": [
         "backend/app/agent/runner.py"
       ],
@@ -376,7 +376,7 @@
       "type": "task-spec",
       "path": "current_tasks/agent/feature_agent_service.txt",
       "title": "Implement Agent service.py",
-      "status": "active",
+      "status": "done",
       "covers": [
         "backend/app/agent/service.py"
       ],
