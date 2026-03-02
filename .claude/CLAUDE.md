@@ -11,6 +11,7 @@ This project uses specification-driven development.
 2. Create specs before code: use /spec-init, /module-design, etc.
 3. Update specs with code: when code changes, update corresponding spec
 4. Track progress: use /spec-status to check coverage
+5. **Post-implementation alignment check:** After finishing implementation of a task or group of tasks, compare the code against the relevant specs (module README.md, task specs, DESIGN_DOC.md). For each discrepancy found, use AskUserQuestion to ask the user what to do — options should include "Update spec to match code", "Update code to match spec", and "Skip / leave as-is". Address discrepancies one at a time.
 
 ## Project Structure
 Bonsai is a full-stack application with a Python backend and TypeScript/JavaScript frontend.

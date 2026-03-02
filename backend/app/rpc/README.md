@@ -158,8 +158,8 @@ graph TD
 
 | Export | Signature | Description |
 | --- | --- | --- |
-| `register_routes` | `(app: FastAPI) → None` | Register the `/ws` WebSocket endpoint on the FastAPI app. Called by `main.py` during setup. |
-| `start_watcher` | `() → WatchHandle` | Start `core/watcher` watching the project directory. Register the file-change callback. Called in `main.py` lifespan startup. |
+| `register_routes` | `(app: FastAPI, config: AppConfig) → None` | Register the `/ws` WebSocket endpoint on the FastAPI app. Called by `main.py` during setup. |
+| `start_watcher` | `(config: AppConfig) → WatchHandle` | Start `core/watcher` watching the project directory. Register the file-change callback. Called in `main.py` lifespan startup. |
 | `stop_watcher` | `(handle: WatchHandle) → None` | Stop the file watcher. Called in `main.py` lifespan shutdown. |
 
 `METHODS` is a mapping from JSON-RPC method names to handler coroutines, assembled in `server.py` from the functions in `methods/specs.py` and `methods/agents.py`.
@@ -172,8 +172,13 @@ graph TD
 
 | Export | Type / Signature | Description |
 | --- | --- | --- |
-| `make_notify` | `(websocket: WebSocket) → Callable` | Create a notify callable bound to the given WebSocket. Called by `server.py` on each new connection. |
-| `current_notify` | `Callable \| None` | Module-level variable holding the active notify callable. Set by `server.py` on connect, cleared on disconnect. |
+| `make_notify` | `(websocket: WebSocket) → NotifyCallable` | Create a notify callable bound to the given WebSocket. Called by `server.py` on each new connection. |
+| `current_notify` | `NotifyCallable \| None` | Module-level variable holding the active notify callable. Set by `server.py` on connect, cleared on disconnect. |
+
+**`NotifyCallable`** type alias:
+```python
+NotifyCallable = Callable[[str, dict, str | None], Awaitable[None]]
+```
 
 **Returned callable signature:**
 ```python

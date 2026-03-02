@@ -1,0 +1,281 @@
+from __future__ import annotations
+
+import json
+from pathlib import Path
+from unittest.mock import AsyncMock, MagicMock, patch
+
+import pytest
+from fastapi import FastAPI
+from starlette.testclient import TestClient
+from starlette.websockets import WebSocketDisconnect
+from watchfiles import Change
+
+from app.core.config import AppConfig, load_config
+from app.rpc import notifications
+from app.rpc.server import METHODS, register_routes, start_watcher, stop_watcher
+
+
+def _make_app(config: AppConfig) -> FastAPI:
+    app = FastAPI()
+    register_routes(app, config)
+    return app
+
+
+def _make_config(tmp_path: Path) -> AppConfig:
+    specs_dir = tmp_path / ".specs"
+    specs_dir.mkdir()
+    registry = {"version": "2.0", "project": "test", "specs": [], "links": []}
+    (specs_dir / "registry.json").write_text(json.dumps(registry), encoding="utf-8")
+    return load_config(tmp_path)
+
+
+class TestMethods:
+    def test_methods_dict_has_spec_methods(self) -> None:
+        expected = {
+            "spec/list", "spec/get", "spec/create",
+            "spec/update", "spec/delete", "spec/graph",
+        }
+        assert set(METHODS.keys()) == expected
+
+
+class TestWebSocket:
+    def test_connect_and_receive_response(self, tmp_path: Path) -> None:
+        config = _make_config(tmp_path)
+        app = _make_app(config)
+        client = TestClient(app)
+
+        with client.websocket_connect("/ws") as ws:
+            request = {
+                "jsonrpc": "2.0",
+                "method": "spec/list",
+                "params": {},
+                "id": 1,
+            }
+            ws.send_text(json.dumps(request))
+            response = json.loads(ws.receive_text())
+            assert response["jsonrpc"] == "2.0"
+            assert response["id"] == 1
+            assert isinstance(response["result"], list)
+
+    def test_notification_sets_current_notify(self, tmp_path: Path) -> None:
+        config = _make_config(tmp_path)
+        app = _make_app(config)
+        client = TestClient(app)
+
+        assert notifications.current_notify is None
+        with client.websocket_connect("/ws"):
+            assert notifications.current_notify is not None
+        # After disconnect, current_notify should be cleared
+        assert notifications.current_notify is None
+
+    def test_method_not_found_returns_error(self, tmp_path: Path) -> None:
+        config = _make_config(tmp_path)
+        app = _make_app(config)
+        client = TestClient(app)
+
+        with client.websocket_connect("/ws") as ws:
+            request = {
+                "jsonrpc": "2.0",
+                "method": "nonexistent/method",
+                "params": {},
+                "id": 1,
+            }
+            ws.send_text(json.dumps(request))
+            response = json.loads(ws.receive_text())
+            assert "error" in response
+            assert response["error"]["code"] == -32601  # Method not found
+
+    def test_invalid_json_returns_parse_error(self, tmp_path: Path) -> None:
+        config = _make_config(tmp_path)
+        app = _make_app(config)
+        client = TestClient(app)
+
+        with client.websocket_connect("/ws") as ws:
+            ws.send_text("not valid json{{{")
+            response = json.loads(ws.receive_text())
+            assert "error" in response
+            assert response["error"]["code"] == -32700  # Parse error
+
+    def test_spec_get_not_found_returns_domain_error(self, tmp_path: Path) -> None:
+        config = _make_config(tmp_path)
+        app = _make_app(config)
+        client = TestClient(app)
+
+        with client.websocket_connect("/ws") as ws:
+            request = {
+                "jsonrpc": "2.0",
+                "method": "spec/get",
+                "params": {"id": "nonexistent"},
+                "id": 1,
+            }
+            ws.send_text(json.dumps(request))
+            response = json.loads(ws.receive_text())
+            assert "error" in response
+            assert response["error"]["code"] == -32001  # Spec not found
+
+    def test_notification_no_response(self, tmp_path: Path) -> None:
+        """JSON-RPC notifications (no id) should not produce a response."""
+        config = _make_config(tmp_path)
+        app = _make_app(config)
+        client = TestClient(app)
+
+        with client.websocket_connect("/ws") as ws:
+            notification = {
+                "jsonrpc": "2.0",
+                "method": "spec/list",
+                "params": {},
+                # No "id" field — this is a notification
+            }
+            ws.send_text(json.dumps(notification))
+
+            # Send a real request after to confirm the connection is alive
+            request = {
+                "jsonrpc": "2.0",
+                "method": "spec/list",
+                "params": {},
+                "id": 99,
+            }
+            ws.send_text(json.dumps(request))
+            response = json.loads(ws.receive_text())
+            # The response should be for id=99, not for the notification
+            assert response["id"] == 99
+
+
+class TestWatcher:
+    async def test_start_and_stop_watcher(self, tmp_path: Path) -> None:
+        config = _make_config(tmp_path)
+        handle = await start_watcher(config)
+        assert handle is not None
+        await stop_watcher(handle)
+
+
+class TestOnFileChange:
+    """Test the _on_file_change callback by capturing it from start_watcher."""
+
+    @pytest.fixture
+    def config(self, tmp_path: Path) -> AppConfig:
+        specs_dir = tmp_path / ".specs"
+        specs_dir.mkdir()
+        registry = {
+            "version": "2.0", "project": "test",
+            "specs": [
+                {
+                    "id": "mod-a", "type": "module-design",
+                    "path": "mod_a/README.md", "title": "Module A",
+                    "status": "active", "covers": [], "tags": [],
+                    "created": "2026-01-01", "updated": "2026-01-01",
+                }
+            ],
+            "links": [],
+        }
+        (specs_dir / "registry.json").write_text(json.dumps(registry), encoding="utf-8")
+        (tmp_path / "mod_a").mkdir()
+        (tmp_path / "mod_a" / "README.md").write_text("# Module A", encoding="utf-8")
+        return load_config(tmp_path)
+
+    @pytest.fixture
+    async def callback(self, config: AppConfig):
+        """Start watcher, capture callback, then stop."""
+        import asyncio
+        captured = {}
+
+        async def fake_watch(paths, cb):
+            captured["cb"] = cb
+            from app.core.watcher import WatchHandle
+            return WatchHandle(_task=asyncio.create_task(asyncio.sleep(999)))
+
+        with patch("app.rpc.server.watch", side_effect=fake_watch):
+            handle = await start_watcher(config)
+        yield captured["cb"]
+        handle._task.cancel()
+        try:
+            await handle._task
+        except (asyncio.CancelledError, Exception):
+            pass
+
+    async def test_registry_change_sends_content(
+        self, config: AppConfig, callback
+    ) -> None:
+        mock_notify = AsyncMock()
+        notifications.current_notify = mock_notify
+        try:
+            registry_path = str(config.get_registry_path())
+            await callback({(Change.modified, registry_path)})
+
+            mock_notify.assert_called_once()
+            method, params = mock_notify.call_args[0]
+            assert method == "registry/didUpdate"
+            assert "registry" in params
+            assert params["registry"]["version"] == "2.0"
+        finally:
+            notifications.current_notify = None
+
+    async def test_spec_modified_sends_did_change(
+        self, config: AppConfig, callback
+    ) -> None:
+        mock_notify = AsyncMock()
+        notifications.current_notify = mock_notify
+        try:
+            spec_path = str(config.get_project_root() / "mod_a" / "README.md")
+            await callback({(Change.modified, spec_path)})
+
+            mock_notify.assert_called_once()
+            method, params = mock_notify.call_args[0]
+            assert method == "spec/didChange"
+            assert params["id"] == "mod-a"
+            assert "changes" in params
+        finally:
+            notifications.current_notify = None
+
+    async def test_spec_created_sends_did_create(
+        self, config: AppConfig, callback
+    ) -> None:
+        mock_notify = AsyncMock()
+        notifications.current_notify = mock_notify
+        try:
+            spec_path = str(config.get_project_root() / "mod_a" / "README.md")
+            await callback({(Change.added, spec_path)})
+
+            mock_notify.assert_called_once()
+            method, params = mock_notify.call_args[0]
+            assert method == "spec/didCreate"
+            assert params["id"] == "mod-a"
+            assert params["path"] == "mod_a/README.md"
+        finally:
+            notifications.current_notify = None
+
+    async def test_spec_deleted_sends_did_delete(
+        self, config: AppConfig, callback
+    ) -> None:
+        mock_notify = AsyncMock()
+        notifications.current_notify = mock_notify
+        try:
+            spec_path = str(config.get_project_root() / "mod_a" / "README.md")
+            await callback({(Change.deleted, spec_path)})
+
+            mock_notify.assert_called_once()
+            method, params = mock_notify.call_args[0]
+            assert method == "spec/didDelete"
+            assert params["id"] == "mod-a"
+        finally:
+            notifications.current_notify = None
+
+    async def test_no_notify_when_disconnected(
+        self, config: AppConfig, callback
+    ) -> None:
+        notifications.current_notify = None
+        spec_path = str(config.get_project_root() / "mod_a" / "README.md")
+        # Should not raise
+        await callback({(Change.modified, spec_path)})
+
+    async def test_non_spec_file_ignored(
+        self, config: AppConfig, callback
+    ) -> None:
+        mock_notify = AsyncMock()
+        notifications.current_notify = mock_notify
+        try:
+            random_path = str(config.get_project_root() / "some_file.py")
+            await callback({(Change.modified, random_path)})
+            mock_notify.assert_not_called()
+        finally:
+            notifications.current_notify = None
