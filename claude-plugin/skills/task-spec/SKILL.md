@@ -92,26 +92,26 @@ Use AskUserQuestion (multiSelect: true):
 
 ### Step 6: Generate the task spec
 
-Generate `current_tasks/{type}_{name}.txt`:
-```
-{Action verb} {component}: {specific description}
+Generate `current_tasks/{module_path}/{type}_{name}.md`:
+```markdown
+# {Action verb} {component}: {specific description}
 
 {Context: what the problem is and why it matters}
 
 {Technical details auto-extracted from code analysis}
 
-Plan:
+## Plan
 1. {Step}
 2. {Step}
 
-Files to modify:
+## Files to modify
 - {path} ({change description})
 
-Definition of done:
+## Definition of done
 - {Criteria from Step 5}
 
-Priority: {from Step 3}
-Started: {today's date}
+**Priority:** {from Step 3}
+**Started:** {today's date}
 ```
 
 ### Step 7: Review and confirm
@@ -130,8 +130,9 @@ Check `current_tasks/` for overlapping tasks.
 
 After saving, update `.specs/registry.json`:
 1. Add entry with `type: "task-spec"`, `status: "active"`, `tags: ["{priority}", "{type}"]`
-2. Add `implements` link to affected module spec
-3. Add `depends-on` links if user specifies dependencies
+2. Set `path` to the structured path (e.g., `current_tasks/spec/feature_spec_models.md`)
+3. Add `implements` link to affected module spec
+4. Add `depends-on` links if user specifies dependencies
 
 ## After Completion
 

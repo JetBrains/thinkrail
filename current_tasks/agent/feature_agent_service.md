@@ -1,0 +1,70 @@
+# Implement Agent service.py
+
+> Orchestration facade for agent task management
+
+**Status:** Done
+**Priority:** High
+**Started:** 2026-03-02
+**Depends on:** `feature_agent_models`, `feature_agent_tracker`, `feature_agent_runner`
+**Spec reference:** `backend/app/agent/README.md` (lines 46-53)
+
+## Summary
+
+`service.py` is the public facade for the Agent module. It is called by `rpc/methods/agents.py` and provides the complete interface for starting tasks, interrupting them, querying status, and relaying frontend responses to pending futures. It coordinates `runner.py` and `tracker.py` without exposing their internals.
+
+## Public Interface
+
+| Function | Signature | Description |
+|----------|-----------|-------------|
+| `run_task` | `(spec_ids: list[str], config: AgentConfig, notify: Callable) → AgentTask` | Start an agent task (returns immediately, run is async) |
+| `interrupt_task` | `(task_id: str) → None` | Interrupt a running task |
+| `get_task` | `(task_id: str) → AgentTask` | Delegate to `tracker.get_task` |
+| `list_tasks` | `() → list[AgentTask]` | Delegate to `tracker.list_tasks` |
+| `respond` | `(task_id: str, request_id: str, response: dict) → None` | Relay a frontend response to a pending future |
+
+### `run_task` Steps
+
+1. Create task via `tracker.create_task`
+2. Load spec content via `spec/service` for the given `spec_ids`
+3. Set task status to running
+4. Launch `runner.run` as a background `asyncio.Task`
+5. On completion: set status to done, store result
+6. On error: set status to error
+7. Return the `AgentTask` immediately
+
+### `interrupt_task` Steps
+
+1. Cancel all pending futures via `tracker.cancel_futures`
+2. Cancel the background `asyncio.Task`
+3. Set task status to error
+
+### Dependencies
+
+- `agent/runner` (run)
+- `agent/tracker` (task lifecycle + futures)
+- `core/config` (project root, API key)
+- `spec/service` (load spec content for agent context)
+
+## Plan
+
+1. Initialize with references to tracker (create instance) and spec service
+2. Implement `run_task` — create task, load specs, launch runner as `asyncio.Task`
+3. Implement background task wrapper — handle completion/error, update status
+4. Implement `interrupt_task` — cancel futures, cancel `asyncio.Task`, set error
+5. Implement `get_task`, `list_tasks` — delegate to tracker
+6. Implement `respond` — delegate to `tracker.resolve_future`
+7. Update `agent/__init__.py` with service exports
+8. Write unit tests — mock runner, tracker, spec/service; verify lifecycle
+
+## Files
+
+| File | Action | Description |
+|------|--------|-------------|
+| `backend/app/agent/service.py` | Create | Orchestration facade |
+| `backend/app/agent/__init__.py` | Update | Add service exports |
+| `backend/tests/agent/test_service.py` | Create | Unit tests |
+
+## Definition of Done
+
+- All unit tests pass
+- Implementation matches the interface in `backend/app/agent/README.md`

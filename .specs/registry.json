@@ -288,7 +288,7 @@
     {
       "id": "task-core-config",
       "type": "task-spec",
-      "path": "current_tasks/core/feature_core_config.txt",
+      "path": "current_tasks/core/feature_core_config.md",
       "title": "Implement Core config.py",
       "status": "done",
       "covers": [
@@ -304,7 +304,7 @@
     {
       "id": "task-core-fileio",
       "type": "task-spec",
-      "path": "current_tasks/core/feature_core_fileio.txt",
+      "path": "current_tasks/core/feature_core_fileio.md",
       "title": "Implement Core fileio.py",
       "status": "done",
       "covers": [
@@ -320,7 +320,7 @@
     {
       "id": "task-core-watcher",
       "type": "task-spec",
-      "path": "current_tasks/core/feature_core_watcher.txt",
+      "path": "current_tasks/core/feature_core_watcher.md",
       "title": "Implement Core watcher.py",
       "status": "done",
       "covers": [
@@ -336,7 +336,7 @@
     {
       "id": "task-spec-models",
       "type": "task-spec",
-      "path": "current_tasks/spec/feature_spec_models.txt",
+      "path": "current_tasks/spec/feature_spec_models.md",
       "title": "Implement Spec models.py",
       "status": "done",
       "covers": [
@@ -352,7 +352,7 @@
     {
       "id": "task-spec-parser",
       "type": "task-spec",
-      "path": "current_tasks/spec/feature_spec_parser.txt",
+      "path": "current_tasks/spec/feature_spec_parser.md",
       "title": "Implement Spec parser.py",
       "status": "done",
       "covers": [
@@ -368,7 +368,7 @@
     {
       "id": "task-spec-validator",
       "type": "task-spec",
-      "path": "current_tasks/spec/feature_spec_validator.txt",
+      "path": "current_tasks/spec/feature_spec_validator.md",
       "title": "Implement Spec validator.py",
       "status": "done",
       "covers": [
@@ -384,7 +384,7 @@
     {
       "id": "task-spec-registry",
       "type": "task-spec",
-      "path": "current_tasks/spec/feature_spec_registry.txt",
+      "path": "current_tasks/spec/feature_spec_registry.md",
       "title": "Implement Spec registry.py",
       "status": "done",
       "covers": [
@@ -400,7 +400,7 @@
     {
       "id": "task-spec-graph",
       "type": "task-spec",
-      "path": "current_tasks/spec/feature_spec_graph.txt",
+      "path": "current_tasks/spec/feature_spec_graph.md",
       "title": "Implement Spec graph.py",
       "status": "done",
       "covers": [
@@ -416,7 +416,7 @@
     {
       "id": "task-spec-service",
       "type": "task-spec",
-      "path": "current_tasks/spec/feature_spec_service.txt",
+      "path": "current_tasks/spec/feature_spec_service.md",
       "title": "Implement Spec service.py",
       "status": "done",
       "covers": [
@@ -432,7 +432,7 @@
     {
       "id": "task-rpc-notifications",
       "type": "task-spec",
-      "path": "current_tasks/rpc/feature_rpc_notifications.txt",
+      "path": "current_tasks/rpc/feature_rpc_notifications.md",
       "title": "Implement RPC notifications.py",
       "status": "done",
       "covers": [
@@ -448,7 +448,7 @@
     {
       "id": "task-rpc-methods-specs",
       "type": "task-spec",
-      "path": "current_tasks/rpc/feature_rpc_methods_specs.txt",
+      "path": "current_tasks/rpc/feature_rpc_methods_specs.md",
       "title": "Implement RPC methods/specs.py",
       "status": "done",
       "covers": [
@@ -464,7 +464,7 @@
     {
       "id": "task-rpc-server",
       "type": "task-spec",
-      "path": "current_tasks/rpc/feature_rpc_server.txt",
+      "path": "current_tasks/rpc/feature_rpc_server.md",
       "title": "Implement RPC server.py",
       "status": "done",
       "covers": [
@@ -480,7 +480,7 @@
     {
       "id": "task-agent-models",
       "type": "task-spec",
-      "path": "current_tasks/agent/feature_agent_models.txt",
+      "path": "current_tasks/agent/feature_agent_models.md",
       "title": "Implement Agent models.py",
       "status": "done",
       "covers": [
@@ -496,7 +496,7 @@
     {
       "id": "task-agent-tracker",
       "type": "task-spec",
-      "path": "current_tasks/agent/feature_agent_tracker.txt",
+      "path": "current_tasks/agent/feature_agent_tracker.md",
       "title": "Implement Agent tracker.py",
       "status": "done",
       "covers": [
@@ -512,7 +512,7 @@
     {
       "id": "task-agent-runner",
       "type": "task-spec",
-      "path": "current_tasks/agent/feature_agent_runner.txt",
+      "path": "current_tasks/agent/feature_agent_runner.md",
       "title": "Implement Agent runner.py",
       "status": "done",
       "covers": [
@@ -528,7 +528,7 @@
     {
       "id": "task-agent-service",
       "type": "task-spec",
-      "path": "current_tasks/agent/feature_agent_service.txt",
+      "path": "current_tasks/agent/feature_agent_service.md",
       "title": "Implement Agent service.py",
       "status": "done",
       "covers": [
@@ -544,7 +544,7 @@
     {
       "id": "task-rpc-methods-agents-basic",
       "type": "task-spec",
-      "path": "current_tasks/rpc/feature_rpc_methods_agents_basic.txt",
+      "path": "current_tasks/rpc/feature_rpc_methods_agents_basic.md",
       "title": "Implement RPC methods/agents.py: basic handlers (status + list)",
       "status": "done",
       "covers": [
@@ -560,7 +560,7 @@
     {
       "id": "task-rpc-methods-agents-run",
       "type": "task-spec",
-      "path": "current_tasks/rpc/feature_rpc_methods_agents_run.txt",
+      "path": "current_tasks/rpc/feature_rpc_methods_agents_run.md",
       "title": "Implement RPC methods/agents.py: run_agent handler",
       "status": "done",
       "covers": [
@@ -576,7 +576,7 @@
     {
       "id": "task-rpc-methods-agents-respond",
       "type": "task-spec",
-      "path": "current_tasks/rpc/feature_rpc_methods_agents_respond.txt",
+      "path": "current_tasks/rpc/feature_rpc_methods_agents_respond.md",
       "title": "Implement RPC methods/agents.py: respond + interrupt handlers",
       "status": "done",
       "covers": [
@@ -592,7 +592,7 @@
     {
       "id": "task-rpc-server-agent-wiring",
       "type": "task-spec",
-      "path": "current_tasks/rpc/feature_rpc_server_agent_wiring.txt",
+      "path": "current_tasks/rpc/feature_rpc_server_agent_wiring.md",
       "title": "Implement RPC server.py: wire agent handlers into METHODS",
       "status": "done",
       "covers": [
