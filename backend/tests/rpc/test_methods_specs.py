@@ -73,7 +73,7 @@ class TestCreateSpec:
         )
         result = _unwrap(await create_spec(svc, type="task-spec", path="t.md", content="# New"))
         assert result["id"] == "new"
-        svc.create_spec.assert_called_once_with(type="task-spec", path="t.md", content="# New")
+        svc.create_spec.assert_called_once_with(type="task-spec", path="t.md", content="# New", id=None)
 
     async def test_validation_error(self, svc: MagicMock) -> None:
         svc.create_spec.side_effect = ValueError("bad type")

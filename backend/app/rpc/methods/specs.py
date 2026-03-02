@@ -52,6 +52,7 @@ async def create_spec(service: SpecService, **params: Any) -> dict:
         type=params["type"],
         path=params["path"],
         content=params.get("content"),
+        id=params.get("id"),
     ).model_dump()
 
 

@@ -82,7 +82,7 @@ class SpecService:
         )
 
     def create_spec(
-        self, type: str, path: str, content: str | None = None
+        self, type: str, path: str, content: str | None = None, id: str | None = None
     ) -> SpecDetail:
         if type not in RECOGNIZED_TYPES:
             raise ValueError(f"Invalid spec type: '{type}'")
@@ -97,7 +97,7 @@ class SpecService:
         file_content = content or ""
 
         title = _extract_title(file_content, path)
-        spec_id = _generate_id(title)
+        spec_id = id if id is not None else _generate_id(title)
 
         # Avoid ID collision
         if find_entry(entries, spec_id) is not None:

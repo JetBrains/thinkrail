@@ -1,7 +1,6 @@
 {
   "version": "2.0",
   "project": "bonsai",
-  "created": "2026-02-25",
   "specs": [
     {
       "id": "goal-and-requirements",
@@ -9,10 +8,13 @@
       "path": "GOAL&REQUIREMENTS.md",
       "title": "Bonsai Goal & Requirements",
       "status": "active",
-      "created": "2026-02-25",
-      "updated": "2026-02-25",
       "covers": [],
-      "tags": ["high", "new-project"]
+      "tags": [
+        "high",
+        "new-project"
+      ],
+      "created": "2026-02-25",
+      "updated": "2026-02-25"
     },
     {
       "id": "design-doc",
@@ -20,10 +22,15 @@
       "path": "DESIGN_DOC.md",
       "title": "Bonsai Architecture Design",
       "status": "active",
+      "covers": [
+        "backend/",
+        "frontend/"
+      ],
+      "tags": [
+        "architecture"
+      ],
       "created": "2026-02-25",
-      "updated": "2026-02-25",
-      "covers": ["backend/", "frontend/"],
-      "tags": ["architecture"]
+      "updated": "2026-02-25"
     },
     {
       "id": "module-spec",
@@ -31,10 +38,15 @@
       "path": "backend/app/spec/README.md",
       "title": "Spec Module Design",
       "status": "active",
+      "covers": [
+        "backend/app/spec/"
+      ],
+      "tags": [
+        "backend",
+        "core-domain"
+      ],
       "created": "2026-02-25",
-      "updated": "2026-02-25",
-      "covers": ["backend/app/spec/"],
-      "tags": ["backend", "core-domain"]
+      "updated": "2026-02-25"
     },
     {
       "id": "module-core",
@@ -42,10 +54,15 @@
       "path": "backend/app/core/README.md",
       "title": "Core Module Design",
       "status": "active",
+      "covers": [
+        "backend/app/core/"
+      ],
+      "tags": [
+        "backend",
+        "infrastructure"
+      ],
       "created": "2026-02-25",
-      "updated": "2026-02-25",
-      "covers": ["backend/app/core/"],
-      "tags": ["backend", "infrastructure"]
+      "updated": "2026-02-25"
     },
     {
       "id": "module-agent",
@@ -53,10 +70,15 @@
       "path": "backend/app/agent/README.md",
       "title": "Agent Module Design",
       "status": "active",
+      "covers": [
+        "backend/app/agent/"
+      ],
+      "tags": [
+        "backend",
+        "agent-orchestration"
+      ],
       "created": "2026-02-25",
-      "updated": "2026-02-25",
-      "covers": ["backend/app/agent/"],
-      "tags": ["backend", "agent-orchestration"]
+      "updated": "2026-02-25"
     },
     {
       "id": "module-rpc",
@@ -64,21 +86,32 @@
       "path": "backend/app/rpc/README.md",
       "title": "RPC Module Design",
       "status": "active",
+      "covers": [
+        "backend/app/rpc/"
+      ],
+      "tags": [
+        "backend",
+        "transport"
+      ],
       "created": "2026-02-26",
-      "updated": "2026-02-26",
-      "covers": ["backend/app/rpc/"],
-      "tags": ["backend", "transport"]
+      "updated": "2026-02-26"
     },
     {
       "id": "webview",
       "type": "module-design",
       "path": "WEBVIEW.md",
-      "title": "Web View — UI Specification",
+      "title": "Web View \u2014 UI Specification",
       "status": "active",
+      "covers": [
+        "frontend/"
+      ],
+      "tags": [
+        "frontend",
+        "ui",
+        "webview"
+      ],
       "created": "2026-02-27",
-      "updated": "2026-02-27",
-      "covers": ["frontend/"],
-      "tags": ["frontend", "ui", "webview"]
+      "updated": "2026-02-27"
     },
     {
       "id": "chat-ui",
@@ -86,10 +119,17 @@
       "path": "frontend/CHAT_UI.md",
       "title": "Chat UI Rendering",
       "status": "active",
+      "covers": [
+        "frontend/src/components/ChatStream/"
+      ],
+      "tags": [
+        "frontend",
+        "ui",
+        "chat",
+        "rendering"
+      ],
       "created": "2026-02-27",
-      "updated": "2026-02-27",
-      "covers": ["frontend/src/components/ChatStream/"],
-      "tags": ["frontend", "ui", "chat", "rendering"]
+      "updated": "2026-02-27"
     },
     {
       "id": "task-core-config",
@@ -97,10 +137,15 @@
       "path": "current_tasks/feature_core_config.txt",
       "title": "Implement Core config.py",
       "status": "done",
+      "covers": [
+        "backend/app/core/config.py"
+      ],
+      "tags": [
+        "critical",
+        "new-feature"
+      ],
       "created": "2026-02-27",
-      "updated": "2026-02-27",
-      "covers": ["backend/app/core/config.py"],
-      "tags": ["critical", "new-feature"]
+      "updated": "2026-02-27"
     },
     {
       "id": "task-core-fileio",
@@ -108,10 +153,15 @@
       "path": "current_tasks/feature_core_fileio.txt",
       "title": "Implement Core fileio.py",
       "status": "done",
+      "covers": [
+        "backend/app/core/fileio.py"
+      ],
+      "tags": [
+        "critical",
+        "new-feature"
+      ],
       "created": "2026-02-27",
-      "updated": "2026-02-27",
-      "covers": ["backend/app/core/fileio.py"],
-      "tags": ["critical", "new-feature"]
+      "updated": "2026-02-27"
     },
     {
       "id": "task-core-watcher",
@@ -119,10 +169,15 @@
       "path": "current_tasks/feature_core_watcher.txt",
       "title": "Implement Core watcher.py",
       "status": "done",
+      "covers": [
+        "backend/app/core/watcher.py"
+      ],
+      "tags": [
+        "critical",
+        "new-feature"
+      ],
       "created": "2026-02-27",
-      "updated": "2026-02-27",
-      "covers": ["backend/app/core/watcher.py"],
-      "tags": ["critical", "new-feature"]
+      "updated": "2026-02-27"
     },
     {
       "id": "task-spec-models",
@@ -130,10 +185,15 @@
       "path": "current_tasks/feature_spec_models.txt",
       "title": "Implement Spec models.py",
       "status": "done",
+      "covers": [
+        "backend/app/spec/models.py"
+      ],
+      "tags": [
+        "critical",
+        "new-feature"
+      ],
       "created": "2026-02-27",
-      "updated": "2026-02-27",
-      "covers": ["backend/app/spec/models.py"],
-      "tags": ["critical", "new-feature"]
+      "updated": "2026-02-27"
     },
     {
       "id": "task-spec-parser",
@@ -141,10 +201,15 @@
       "path": "current_tasks/feature_spec_parser.txt",
       "title": "Implement Spec parser.py",
       "status": "done",
+      "covers": [
+        "backend/app/spec/parser.py"
+      ],
+      "tags": [
+        "critical",
+        "new-feature"
+      ],
       "created": "2026-02-27",
-      "updated": "2026-02-27",
-      "covers": ["backend/app/spec/parser.py"],
-      "tags": ["critical", "new-feature"]
+      "updated": "2026-02-27"
     },
     {
       "id": "task-spec-validator",
@@ -152,10 +217,15 @@
       "path": "current_tasks/feature_spec_validator.txt",
       "title": "Implement Spec validator.py",
       "status": "done",
+      "covers": [
+        "backend/app/spec/validator.py"
+      ],
+      "tags": [
+        "critical",
+        "new-feature"
+      ],
       "created": "2026-02-27",
-      "updated": "2026-02-27",
-      "covers": ["backend/app/spec/validator.py"],
-      "tags": ["critical", "new-feature"]
+      "updated": "2026-02-27"
     },
     {
       "id": "task-spec-registry",
@@ -163,10 +233,15 @@
       "path": "current_tasks/feature_spec_registry.txt",
       "title": "Implement Spec registry.py",
       "status": "done",
+      "covers": [
+        "backend/app/spec/registry.py"
+      ],
+      "tags": [
+        "critical",
+        "new-feature"
+      ],
       "created": "2026-02-27",
-      "updated": "2026-02-27",
-      "covers": ["backend/app/spec/registry.py"],
-      "tags": ["critical", "new-feature"]
+      "updated": "2026-02-27"
     },
     {
       "id": "task-spec-graph",
@@ -174,10 +249,15 @@
       "path": "current_tasks/feature_spec_graph.txt",
       "title": "Implement Spec graph.py",
       "status": "done",
+      "covers": [
+        "backend/app/spec/graph.py"
+      ],
+      "tags": [
+        "critical",
+        "new-feature"
+      ],
       "created": "2026-02-27",
-      "updated": "2026-02-27",
-      "covers": ["backend/app/spec/graph.py"],
-      "tags": ["critical", "new-feature"]
+      "updated": "2026-02-27"
     },
     {
       "id": "task-spec-service",
@@ -185,10 +265,15 @@
       "path": "current_tasks/feature_spec_service.txt",
       "title": "Implement Spec service.py",
       "status": "done",
+      "covers": [
+        "backend/app/spec/service.py"
+      ],
+      "tags": [
+        "critical",
+        "new-feature"
+      ],
       "created": "2026-02-27",
-      "updated": "2026-02-27",
-      "covers": ["backend/app/spec/service.py"],
-      "tags": ["critical", "new-feature"]
+      "updated": "2026-02-27"
     },
     {
       "id": "task-rpc-notifications",
@@ -196,10 +281,15 @@
       "path": "current_tasks/feature_rpc_notifications.txt",
       "title": "Implement RPC notifications.py",
       "status": "active",
+      "covers": [
+        "backend/app/rpc/notifications.py"
+      ],
+      "tags": [
+        "high",
+        "new-feature"
+      ],
       "created": "2026-02-27",
-      "updated": "2026-02-27",
-      "covers": ["backend/app/rpc/notifications.py"],
-      "tags": ["high", "new-feature"]
+      "updated": "2026-02-27"
     },
     {
       "id": "task-rpc-methods-specs",
@@ -207,10 +297,15 @@
       "path": "current_tasks/feature_rpc_methods_specs.txt",
       "title": "Implement RPC methods/specs.py",
       "status": "active",
+      "covers": [
+        "backend/app/rpc/methods/specs.py"
+      ],
+      "tags": [
+        "high",
+        "new-feature"
+      ],
       "created": "2026-02-27",
-      "updated": "2026-02-27",
-      "covers": ["backend/app/rpc/methods/specs.py"],
-      "tags": ["high", "new-feature"]
+      "updated": "2026-02-27"
     },
     {
       "id": "task-rpc-server",
@@ -218,10 +313,15 @@
       "path": "current_tasks/feature_rpc_server.txt",
       "title": "Implement RPC server.py",
       "status": "active",
+      "covers": [
+        "backend/app/rpc/server.py"
+      ],
+      "tags": [
+        "high",
+        "new-feature"
+      ],
       "created": "2026-02-27",
-      "updated": "2026-02-27",
-      "covers": ["backend/app/rpc/server.py"],
-      "tags": ["high", "new-feature"]
+      "updated": "2026-02-27"
     }
   ],
   "links": [

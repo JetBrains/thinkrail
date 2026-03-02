@@ -23,19 +23,19 @@ Both sides can send either. The server can initiate requests to the client (e.g.
 
 ### Client → Server (requests)
 
-| Method | Params | Returns | Description |
-| --- | --- | --- | --- |
-| `spec/list` | `{}` | `list[SpecSummary]` | List all specs with metadata |
-| `spec/get` | `{ id: str }` | `SpecDetail` | Get spec content and metadata |
-| `spec/create` | `{ type: str, path: str, content?: str }` | `SpecDetail` | Create a new spec |
-| `spec/update` | `{ id: str, content: str }` | `SpecDetail` | Update spec content |
-| `spec/delete` | `{ id: str }` | `null` | Delete a spec |
-| `spec/graph` | `{}` | `SpecGraph` | Get spec hierarchy graph |
-| `agent/run` | `{ specIds: list[str], config: AgentConfig }` | `{ taskId: str }` | Start an agent task with spec context |
-| `agent/status` | `{ taskId: str }` | `AgentTask` | Get task status and results |
-| `agent/list` | `{}` | `list[AgentTask]` | List all agent tasks |
-| `agent/interrupt` | `{ taskId: str }` | `null` | Interrupt a running agent task |
-| `agent/respond` | `{ taskId: str, requestId: str, response: AskUserQuestionResponse \| ToolApprovalResponse }` | `null` | Respond to a pending server→client request. See [Agent Module models](../agent/README.md#interactive-requestresponse-models) for response type definitions. |
+| Method            | Params                                                                                       | Returns             | Description                                                                                                                                                 |
+|-------------------|----------------------------------------------------------------------------------------------|---------------------|-------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `spec/list`       | `{}`                                                                                         | `list[SpecSummary]` | List all specs with metadata                                                                                                                                |
+| `spec/get`        | `{ id: str }`                                                                                | `SpecDetail`        | Get spec content and metadata                                                                                                                               |
+| `spec/create`     | `{ id: str, type: str, path: str, content?: str }`                                           | `SpecDetail`        | Create a new spec                                                                                                                                           |
+| `spec/update`     | `{ id: str, content: str }`                                                                  | `SpecDetail`        | Update spec content                                                                                                                                         |
+| `spec/delete`     | `{ id: str }`                                                                                | `null`              | Delete a spec                                                                                                                                               |
+| `spec/graph`      | `{}`                                                                                         | `SpecGraph`         | Get spec hierarchy graph                                                                                                                                    |
+| `agent/run`       | `{ specIds: list[str], config: AgentConfig }`                                                | `{ taskId: str }`   | Start an agent task with spec context                                                                                                                       |
+| `agent/status`    | `{ taskId: str }`                                                                            | `AgentTask`         | Get task status and results                                                                                                                                 |
+| `agent/list`      | `{}`                                                                                         | `list[AgentTask]`   | List all agent tasks                                                                                                                                        |
+| `agent/interrupt` | `{ taskId: str }`                                                                            | `null`              | Interrupt a running agent task                                                                                                                              |
+| `agent/respond`   | `{ taskId: str, requestId: str, response: AskUserQuestionResponse \| ToolApprovalResponse }` | `null`              | Respond to a pending server→client request. See [Agent Module models](../agent/README.md#interactive-requestresponse-models) for response type definitions. |
 
 ### Server → Client (notifications)
 

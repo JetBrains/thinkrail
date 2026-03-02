@@ -250,7 +250,7 @@ Specs are stored as files in the repository. The registry tracks metadata:
 
 **Registry Entry (`.specs/registry.json`):**
 - `id` — unique identifier
-- `type` — goal-and-requirements | architecture-design | module-design | submodule-design | task-spec
+- `type` — goal-and-requirements | architecture-design | module-design | task-spec
 - `path` — relative file path
 - `title` — human-readable name
 - `status` — draft | active | stale | deprecated
