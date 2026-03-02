@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import logging
+from functools import partial
 from pathlib import Path
 
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
@@ -18,6 +19,14 @@ from app.rpc.methods.specs import (
     list_specs,
     update_spec,
 )
+from app.rpc.methods.agents import (
+    get_agent_status,
+    interrupt_agent,
+    list_agents,
+    respond_agent,
+    run_agent,
+)
+from app.agent.service import AgentService
 from app.core.config import AppConfig
 from app.core.fileio import read_text
 from app.core.watcher import WatchHandle, watch, stop
@@ -32,14 +41,34 @@ METHODS = {
     "spec/update": update_spec,
     "spec/delete": delete_spec,
     "spec/graph": get_graph,
+    "agent/run": run_agent,
+    "agent/status": get_agent_status,
+    "agent/list": list_agents,
+    "agent/interrupt": interrupt_agent,
+    "agent/respond": respond_agent,
 }
 
 _active_ws: WebSocket | None = None
 
 
+def _bind_methods(
+    spec_service: SpecService, agent_service: AgentService
+) -> dict:
+    """Bind each handler in METHODS to its owning service via partial."""
+    bound = {}
+    for name, handler in METHODS.items():
+        if name.startswith("spec/"):
+            bound[name] = partial(handler, spec_service)
+        else:
+            bound[name] = partial(handler, agent_service)
+    return bound
+
+
 def register_routes(app: FastAPI, config: AppConfig) -> None:
     """Register the ``/ws`` WebSocket endpoint on the FastAPI app."""
-    service = SpecService(config)
+    spec_service = SpecService(config)
+    agent_service = AgentService(config, spec_service)
+    bound_methods = _bind_methods(spec_service, agent_service)
 
     @app.websocket("/ws")
     async def ws_endpoint(websocket: WebSocket) -> None:
@@ -62,7 +91,7 @@ def register_routes(app: FastAPI, config: AppConfig) -> None:
             while True:
                 text = await websocket.receive_text()
                 response = await async_dispatch(
-                    text, methods=METHODS, context=service
+                    text, methods=bound_methods
                 )
                 if response:
                     await websocket.send_text(response)

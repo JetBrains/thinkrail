@@ -90,6 +90,7 @@ Domain exceptions raised inside handlers are mapped to JSON-RPC error responses:
 | `RegistryError` | -32002 | "Registry error" |
 | `ValidationError` | -32003 | "Validation error" |
 | `AgentTaskNotFoundError` | -32011 | "Agent task not found" |
+| `FutureNotFoundError` | -32012 | "No pending request" |
 | `KeyError` / missing params | -32602 | "Invalid params" |
 | Any other exception | -32603 | "Internal error" |
 

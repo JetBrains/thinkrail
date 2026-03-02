@@ -30,10 +30,12 @@ def _make_config(tmp_path: Path) -> AppConfig:
 
 
 class TestMethods:
-    def test_methods_dict_has_spec_methods(self) -> None:
+    def test_methods_dict_has_all_methods(self) -> None:
         expected = {
             "spec/list", "spec/get", "spec/create",
             "spec/update", "spec/delete", "spec/graph",
+            "agent/run", "agent/status", "agent/list",
+            "agent/interrupt", "agent/respond",
         }
         assert set(METHODS.keys()) == expected
 
