@@ -1,0 +1,164 @@
+# Theming — Sub-Specification
+
+> Parent: [WEBVIEW.md](../WEBVIEW.md) §9 | Status: **Active** | Created: 2026-03-02
+
+## Overview
+
+Bonsai uses a CSS custom property system for theming. The default is a dark theme (Tokyo Night-inspired). A light theme variant is auto-activated via `prefers-color-scheme`. Users can override with an explicit preference.
+
+## Theme Architecture
+
+All colors are defined as CSS custom properties on `:root`. Components reference variables, never hardcode colors.
+
+```css
+:root { /* dark theme — default */ }
+:root[data-theme="light"] { /* light overrides */ }
+
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme="dark"]) { /* auto light */ }
+}
+```
+
+### Resolution Order
+
+1. Explicit `data-theme` attribute on `<html>` (set by user preference)
+2. `prefers-color-scheme` media query (system default)
+3. Fallback: dark theme
+
+## Color Tokens
+
+### Semantic Tokens (used by components)
+
+| Token | Purpose | Dark | Light |
+| --- | --- | --- | --- |
+| `--bg` | App background | `#0a0e1a` | `#f5f5f5` |
+| `--panel` | Panel backgrounds | `#1a1b26` | `#ffffff` |
+| `--elevated` | Cards, inputs, modals | `#24283b` | `#f0f0f0` |
+| `--hover` | Hover state backgrounds | `#2a2f47` | `#e8e8e8` |
+| `--border` | Primary borders | `#414868` | `#d0d0d0` |
+| `--border2` | Secondary borders | `#545c7e` | `#b0b0b0` |
+| `--text` | Primary text | `#c0caf5` | `#1a1b26` |
+| `--muted` | Secondary text | `#9aa5ce` | `#4a4a6a` |
+| `--hint` | Tertiary text, labels | `#565f89` | `#8888a0` |
+| `--sel` | Selection background | `#364a82` | `#cce0ff` |
+
+### Accent Tokens (consistent across themes)
+
+| Token | Purpose | Value |
+| --- | --- | --- |
+| `--blue` | Primary accent, links, active | `#7aa2f7` |
+| `--purple` | Interactive, Claude identity | `#bb9af7` |
+| `--green` | Success, done, additions | `#9ece6a` |
+| `--red` | Error, deletions, danger | `#f7768e` |
+| `--gold` | Warning, pending, approvals | `#e0af68` |
+| `--cyan` | Code, tool names | `#7dcfff` |
+
+**Note:** Accent colors are the same in dark and light themes for brand consistency. Their alpha variants (used for backgrounds) adjust automatically since they overlay different base colors.
+
+### Typography Token
+
+| Token | Value |
+| --- | --- |
+| `--font` | `'SF Mono','Monaco','Inconsolata','Fira Code',monospace` |
+
+## Theme Switching
+
+### User Preference Storage
+
+```typescript
+type ThemePreference = "dark" | "light" | "system";
+```
+
+- Stored in `localStorage` under key `bonsai-theme`
+- Default: `"system"` (follows OS preference)
+- Applied by setting `data-theme` attribute on `<html>`
+
+### Implementation
+
+```typescript
+function applyTheme(preference: ThemePreference): void {
+  const html = document.documentElement;
+  if (preference === "system") {
+    html.removeAttribute("data-theme"); // let media query decide
+  } else {
+    html.setAttribute("data-theme", preference);
+  }
+  localStorage.setItem("bonsai-theme", preference);
+}
+
+// On app start:
+const saved = localStorage.getItem("bonsai-theme") as ThemePreference || "system";
+applyTheme(saved);
+```
+
+### System Change Listener
+
+```typescript
+window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => {
+  if (localStorage.getItem("bonsai-theme") === "system") {
+    // Theme auto-updates via CSS media query — no JS needed
+    // But notify xterm.js and canvas-based components to update
+    updateTerminalTheme();
+    updateGraphColors();
+  }
+});
+```
+
+## Component-Specific Theme Concerns
+
+### xterm.js (Console)
+
+xterm.js doesn't use CSS variables — it needs explicit color objects. Update the theme object when the app theme changes:
+
+```typescript
+function getXtermTheme(): ITheme {
+  const isDark = getCurrentTheme() === "dark";
+  return isDark ? DARK_XTERM_THEME : LIGHT_XTERM_THEME;
+}
+```
+
+### SVG Graph Edges
+
+SVG elements use `stroke` attributes. Use `currentColor` or CSS `stroke: var(--border)` where possible. For markers (arrowheads), define both dark and light variants or use `currentColor`.
+
+### Syntax Highlighting (Chat UI code blocks)
+
+Code block syntax themes should switch with the app theme:
+- Dark: based on current color palette
+- Light: adapted lighter variant
+
+## CSS Structure
+
+```
+frontend/src/
+  styles/
+    tokens.css       # CSS custom property definitions (all themes)
+    theme-dark.css   # Dark theme values (default)
+    theme-light.css  # Light theme values
+    global.css       # Imports tokens + base styles
+```
+
+## Accessibility
+
+- All text meets WCAG 2.1 AA contrast ratio (4.5:1 for normal text, 3:1 for large text)
+- Accent colors on dark backgrounds are pre-validated for contrast
+- Light theme uses sufficiently dark text on light backgrounds
+- Focus indicators visible in both themes (outline uses `--blue`)
+
+## Future
+
+- Custom theme editor (pick accent colors)
+- Import/export theme presets
+- High contrast mode for accessibility
+
+## Known Limitations
+
+- **No per-component theme override:** All components use global CSS variables — cannot theme individual panels differently
+- **Light theme is approximate:** Light theme colors are specified but not validated against all component states
+- **No high contrast mode:** WCAG AAA compliance not guaranteed
+
+## Related Specs
+
+- **Parent:** [Web View](WEBVIEW.md)
+- **Depends on:** None (standalone CSS system)
+- **Related:** [Console](../src/components/Console/README.md) (xterm.js theme mapping), [Graph Interactions](GRAPH_INTERACTIONS.md) (node colors), [Responsive Behavior](RESPONSIVE_BEHAVIOR.md)
