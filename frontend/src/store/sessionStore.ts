@@ -21,8 +21,10 @@ interface SessionStore {
     name: string;
     skillId?: string;
   }) => Promise<string>;
+  sendMessage: (taskId: string, text: string) => Promise<void>;
   switchSession: (taskId: string) => void;
   closeSession: (taskId: string) => void;
+  endSession: (taskId: string) => Promise<void>;
   interruptSession: (taskId: string) => Promise<void>;
   resolveRequest: (
     taskId: string,
@@ -67,7 +69,7 @@ function ensureSession(
     name: taskId.slice(0, 8),
     skillId: null,
     specIds: [],
-    status: "running",
+    status: "idle",
     model: "",
     startedAt: Date.now(),
     events: [],
@@ -126,7 +128,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
         name,
         skillId: skillId ?? null,
         specIds,
-        status: "running",
+        status: "idle",
         model: config.model,
         startedAt: Date.now(),
         events: existing?.events ?? [],
@@ -140,10 +142,28 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
     return taskId;
   },
 
+  sendMessage: async (taskId, text) => {
+    const api = createAgentApi(getClient());
+    await api.send(taskId, text);
+    // Mark session as running (turn started)
+    set((s) => {
+      const session = s.sessions.get(taskId);
+      if (!session) return s;
+      const next = new Map(s.sessions);
+      next.set(taskId, { ...session, status: "running" });
+      return { sessions: next };
+    });
+  },
+
   switchSession: (taskId) => set({ activeSessionId: taskId }),
 
   closeSession: (taskId) => {
+    // Tell backend to gracefully close the session
     const session = get().sessions.get(taskId);
+    if (session && session.status !== "done" && session.status !== "error") {
+      const api = createAgentApi(getClient());
+      api.end(taskId).catch(() => {});
+    }
     set((s) => {
       const next = new Map(s.sessions);
       next.delete(taskId);
@@ -177,6 +197,11 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
         activeSessionId: nextActive,
       };
     });
+  },
+
+  endSession: async (taskId) => {
+    const api = createAgentApi(getClient());
+    await api.end(taskId);
   },
 
   interruptSession: async (taskId) => {
@@ -243,7 +268,26 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
 
   onAgentEvent: (method, params) => {
     const taskId = params.taskId as string;
-    set((s) => ({ sessions: appendEvent(s.sessions, taskId, method, params) }));
+    set((s) => {
+      const sessions = appendEvent(s.sessions, taskId, method, params);
+      // Update session status for turn lifecycle events
+      const session = sessions.get(taskId);
+      if (session) {
+        if (method === "agent/turnComplete" || method === "agent/interrupted") {
+          sessions.set(taskId, {
+            ...session,
+            status: "idle",
+            metrics: {
+              ...session.metrics,
+              costUsd: (params.costUsd as number) ?? session.metrics.costUsd,
+              turns: (params.turns as number) ?? session.metrics.turns,
+              durationMs: (params.durationMs as number) ?? session.metrics.durationMs,
+            },
+          });
+        }
+      }
+      return { sessions };
+    });
   },
 
   onAskQuestion: (params) => {

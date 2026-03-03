@@ -1,5 +1,6 @@
 import { useCallback } from "react";
 import { useSessionStore } from "@/store/sessionStore.ts";
+import type { SessionStatus } from "@/types/session.ts";
 import { ChatStream } from "@/components/ChatStream/ChatStream.tsx";
 import { SessionStatusLine } from "@/components/ChatStream/SessionStatusLine.tsx";
 import { InputArea } from "@/components/ChatStream/InputArea.tsx";
@@ -23,6 +24,8 @@ export function SessionPanel() {
     [activeId, resolveRequest],
   );
 
+  const sendMessage = useSessionStore((s) => s.sendMessage);
+
   const handleSend = useCallback(
     (text: string) => {
       if (!activeId || !active) return;
@@ -31,9 +34,12 @@ export function SessionPanel() {
         resolveRequest(activeId, active.pendingRequest.requestId, { text });
         return;
       }
-      // Otherwise, no-op for now (mid-session messaging not yet supported)
+      // Send a new message to the session (triggers a new turn)
+      if (active.status === "idle") {
+        sendMessage(activeId, text);
+      }
     },
-    [activeId, active, resolveRequest],
+    [activeId, active, resolveRequest, sendMessage],
   );
 
   if (sessionList.length === 0) {
@@ -44,21 +50,24 @@ export function SessionPanel() {
     );
   }
 
-  const isRunning = active?.status === "running";
+  const status = active?.status as SessionStatus | undefined;
   const hasPending = active?.pendingRequest != null;
-  const isDone = active?.status === "done" || active?.status === "error";
+  const isDone = status === "done" || status === "error";
+  const isRunning = status === "running";
 
   const placeholder = hasPending
     ? active?.pendingRequest?.type === "approval"
       ? "Waiting for your approval above..."
       : "Answer the question above or type a response..."
     : isDone
-      ? active?.status === "done"
+      ? status === "done"
         ? "Session complete"
         : "Session ended with error"
-      : "Message Claude...";
+      : isRunning
+        ? "Agent is working..."
+        : "Message Claude...";
 
-  const inputDisabled = isDone || (hasPending && active?.pendingRequest?.type === "approval");
+  const inputDisabled = isDone || isRunning || (hasPending && active?.pendingRequest?.type === "approval");
 
   return (
     <>

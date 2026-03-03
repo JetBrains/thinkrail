@@ -1,6 +1,6 @@
 import type { AgentConfig, AgentEvent, Question } from "./agent.ts";
 
-export type SessionStatus = "running" | "done" | "error" | "interrupted";
+export type SessionStatus = "idle" | "running" | "done" | "error" | "interrupted";
 
 export interface SessionMetrics {
   costUsd: number;

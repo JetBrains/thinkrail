@@ -11,6 +11,12 @@ export function createAgentApi(client: RpcClient) {
 
     list: () => client.request<AgentTask[]>("agent/list"),
 
+    send: (taskId: string, text: string) =>
+      client.request<null>("agent/send", { taskId, text }),
+
+    end: (taskId: string) =>
+      client.request<null>("agent/end", { taskId }),
+
     interrupt: (taskId: string) =>
       client.request<null>("agent/interrupt", { taskId }),
 

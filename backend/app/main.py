@@ -70,6 +70,47 @@ def create_app() -> FastAPI:
             )
         return {"path": str(p), "name": p.name}
 
+    @app.get("/api/project/files")
+    async def list_files(path: str = Query(...), max_depth: int = Query(4)):
+        """List project directory tree (files and folders)."""
+        root = Path(path).expanduser().resolve()
+        if not root.is_dir():
+            return {"entries": []}
+
+        IGNORE = {
+            "node_modules", ".venv", "__pycache__", ".git", ".claude",
+            "dist", ".vite", ".mypy_cache", ".pytest_cache", ".ruff_cache",
+            "target", "build", ".next", ".nuxt",
+        }
+
+        entries: list[dict] = []
+
+        def walk(dir_path: Path, depth: int) -> None:
+            if depth > max_depth:
+                return
+            try:
+                children = sorted(dir_path.iterdir(), key=lambda p: (not p.is_dir(), p.name.lower()))
+            except PermissionError:
+                return
+            for child in children:
+                if child.name.startswith(".") and child.name not in (".specs",):
+                    continue
+                if child.name in IGNORE:
+                    continue
+                rel = str(child.relative_to(root))
+                is_dir = child.is_dir()
+                entries.append({
+                    "path": rel,
+                    "name": child.name,
+                    "isDir": is_dir,
+                    "depth": depth,
+                })
+                if is_dir:
+                    walk(child, depth + 1)
+
+        walk(root, 0)
+        return {"entries": entries}
+
     return app
 
 

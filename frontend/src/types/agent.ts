@@ -1,12 +1,14 @@
 /** Mirrors backend/app/agent/models.py — camelCase JSON wire format. */
 
-export type TaskStatus = "pending" | "running" | "done" | "error";
+export type TaskStatus = "idle" | "running" | "done" | "error";
 
 export type EventType =
   | "sessionStart"
   | "textDelta"
   | "toolCallStart"
   | "toolCallEnd"
+  | "turnComplete"
+  | "interrupted"
   | "subagentStart"
   | "subagentEnd"
   | "notification"

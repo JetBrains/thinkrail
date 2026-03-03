@@ -46,6 +46,8 @@ export function wireEvents(client: RpcClient): Unsubscribe {
     "agent/textDelta",
     "agent/toolCallStart",
     "agent/toolCallEnd",
+    "agent/turnComplete",
+    "agent/interrupted",
     "agent/subagentStart",
     "agent/subagentEnd",
     "agent/notification",
