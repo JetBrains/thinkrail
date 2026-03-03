@@ -116,7 +116,8 @@ The frontend exposes no programmatic API — it's an end-user web application. I
 | `@xterm/xterm` + addons | ~105KB | Terminal emulator (lazy-loaded) |
 | `@monaco-editor/react` | ~2-5MB (lazy) | Code editor (VS Code engine, CDN-loaded) |
 | `react-markdown` + `remark-gfm` | ~15KB | Markdown preview rendering (GFM) |
-| **Total** | **~185KB** + Monaco (lazy) | |
+| `mermaid` | ~200KB | Diagram rendering in markdown (flowcharts, sequence, class, etc.) |
+| **Total** | **~385KB** + Monaco (lazy) | |
 
 Dev dependencies: `vite`, `typescript`, `vitest`, `@testing-library/react`, `eslint`.
 

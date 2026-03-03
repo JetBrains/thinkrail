@@ -409,7 +409,7 @@ Files open as tabs in the **center panel** tab bar alongside session tabs. Doubl
 
 **Preview mode** (default):
 - **Code files:** Read-only Monaco editor with syntax highlighting, line numbers, minimap, Cmd+F search
-- **Markdown files:** Rendered HTML preview using `react-markdown` + `remark-gfm` (GitHub-Flavored Markdown: tables, task lists, strikethrough). Styled with JetBrains-inspired typography.
+- **Markdown files:** Rendered HTML preview using `react-markdown` + `remark-gfm` + `mermaid`. GFM (tables, task lists, strikethrough) and Mermaid diagrams (` ```mermaid ` code blocks rendered as SVG with dark theme). Styled with JetBrains-inspired typography.
 - Toolbar: file path + language badge + line count + file size + Copy button
 - "Edit" button in toolbar → opens dropdown
 
