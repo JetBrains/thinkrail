@@ -2,6 +2,21 @@
 
 > Parent: [Frontend Module](../README.md) | Status: **Active** | Created: 2026-02-27
 
+## Table of Contents
+1. [Overview](#overview)
+2. [Architecture](#architecture)
+3. [Layout](#layout)
+4. [Header Bar](#1-header-bar)
+5. [Left Panel — Navigation & Progress](#2-left-panel--navigation--progress)
+6. [Center Panel — Claude Sessions](#3-center-panel--claude-sessions-chat-ui)
+7. [Right Panel — Contextual Views](#4-right-panel--contextual-views)
+8. [Status Bar](#5-status-bar)
+9. [Command Palette](#6-command-palette)
+10. [Keyboard Shortcuts](#7-keyboard-shortcuts)
+11. [Context Linking](#8-context-linking)
+12. [Known Limitations](#known-limitations)
+13. [Related Specs](#related-specs)
+
 ## Overview
 
 The Bonsai web view is a three-panel workspace for specification-driven development with AI agents. The center panel hosts Claude agent sessions (custom Chat UI), while the right panel provides contextual views (graph, spec, code, diff, console) that auto-link to the active session. The left panel combines navigation (spec tree, requirements, files) with a spec-driven progress tracker.

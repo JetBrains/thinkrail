@@ -2,6 +2,16 @@
 
 > Parent: [DESIGN_DOC.md](../../../DESIGN_DOC.md) | Status: **Active** | Created: 2026-02-25
 
+## Table of Contents
+1. [Purpose](#purpose)
+2. [Internal Architecture](#internal-architecture)
+3. [File Organization](#file-organization)
+4. [Public Interface](#public-interface)
+5. [Design Decisions](#design-decisions)
+6. [Dependencies](#dependencies)
+7. [Known Limitations](#known-limitations)
+8. [Related Specs](#related-specs)
+
 ## Purpose
 
 The Core module provides shared infrastructure for all backend modules. It handles application

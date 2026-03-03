@@ -14,7 +14,7 @@
         "new-project"
       ],
       "created": "2026-02-25",
-      "updated": "2026-02-25"
+      "updated": "2026-03-03"
     },
     {
       "id": "design-doc",
@@ -30,7 +30,7 @@
         "architecture"
       ],
       "created": "2026-02-25",
-      "updated": "2026-02-25"
+      "updated": "2026-03-03"
     },
     {
       "id": "module-spec",
@@ -46,7 +46,7 @@
         "core-domain"
       ],
       "created": "2026-02-25",
-      "updated": "2026-02-25"
+      "updated": "2026-03-03"
     },
     {
       "id": "module-core",
@@ -62,7 +62,7 @@
         "infrastructure"
       ],
       "created": "2026-02-25",
-      "updated": "2026-02-25"
+      "updated": "2026-03-03"
     },
     {
       "id": "module-agent",
@@ -78,7 +78,7 @@
         "agent-orchestration"
       ],
       "created": "2026-02-25",
-      "updated": "2026-02-25"
+      "updated": "2026-03-03"
     },
     {
       "id": "module-rpc",
@@ -94,7 +94,7 @@
         "transport"
       ],
       "created": "2026-02-26",
-      "updated": "2026-02-26"
+      "updated": "2026-03-03"
     },
     {
       "id": "frontend-module",
@@ -103,7 +103,7 @@
       "title": "Frontend Module",
       "status": "active",
       "created": "2026-03-02",
-      "updated": "2026-03-02",
+      "updated": "2026-03-03",
       "covers": ["frontend/"],
       "tags": ["frontend", "module", "react", "typescript"]
     },
@@ -122,7 +122,7 @@
         "webview"
       ],
       "created": "2026-02-27",
-      "updated": "2026-02-27"
+      "updated": "2026-03-03"
     },
     {
       "id": "chat-ui",
@@ -604,6 +604,160 @@
       ],
       "created": "2026-03-02",
       "updated": "2026-03-02"
+    },
+    {
+      "id": "task-backend-main",
+      "type": "task-spec",
+      "path": "current_tasks/rpc/feature_backend_main.md",
+      "title": "Implement Backend main.py",
+      "status": "active",
+      "covers": ["backend/app/main.py"],
+      "tags": ["critical", "new-feature"],
+      "created": "2026-03-03",
+      "updated": "2026-03-03"
+    },
+    {
+      "id": "task-fe-project-setup",
+      "type": "task-spec",
+      "path": "current_tasks/frontend/feature_project_setup.md",
+      "title": "Set Up Frontend Project",
+      "status": "active",
+      "covers": ["frontend/package.json", "frontend/src/styles/", "frontend/src/types/", "frontend/src/main.tsx"],
+      "tags": ["critical", "new-feature", "frontend"],
+      "created": "2026-03-03",
+      "updated": "2026-03-03"
+    },
+    {
+      "id": "task-fe-api-client",
+      "type": "task-spec",
+      "path": "current_tasks/frontend/feature_api_client.md",
+      "title": "Implement API Client",
+      "status": "active",
+      "covers": ["frontend/src/api/"],
+      "tags": ["critical", "new-feature", "frontend"],
+      "created": "2026-03-03",
+      "updated": "2026-03-03"
+    },
+    {
+      "id": "task-fe-state-management",
+      "type": "task-spec",
+      "path": "current_tasks/frontend/feature_state_management.md",
+      "title": "Implement State Management",
+      "status": "active",
+      "covers": ["frontend/src/store/"],
+      "tags": ["critical", "new-feature", "frontend"],
+      "created": "2026-03-03",
+      "updated": "2026-03-03"
+    },
+    {
+      "id": "task-fe-app-shell",
+      "type": "task-spec",
+      "path": "current_tasks/frontend/feature_app_shell.md",
+      "title": "Implement App Shell",
+      "status": "active",
+      "covers": ["frontend/src/components/AppShell/", "frontend/src/routes.tsx"],
+      "tags": ["high", "new-feature", "frontend"],
+      "created": "2026-03-03",
+      "updated": "2026-03-03"
+    },
+    {
+      "id": "task-fe-chat-ui",
+      "type": "task-spec",
+      "path": "current_tasks/frontend/feature_chat_ui.md",
+      "title": "Implement Chat UI",
+      "status": "active",
+      "covers": ["frontend/src/components/ChatStream/"],
+      "tags": ["high", "new-feature", "frontend"],
+      "created": "2026-03-03",
+      "updated": "2026-03-03"
+    },
+    {
+      "id": "task-fe-graph-view",
+      "type": "task-spec",
+      "path": "current_tasks/frontend/feature_graph_view.md",
+      "title": "Implement Graph View",
+      "status": "active",
+      "covers": ["frontend/src/components/GraphView/"],
+      "tags": ["high", "new-feature", "frontend"],
+      "created": "2026-03-03",
+      "updated": "2026-03-03"
+    },
+    {
+      "id": "task-fe-new-session-modal",
+      "type": "task-spec",
+      "path": "current_tasks/frontend/feature_new_session_modal.md",
+      "title": "Implement New Session Modal",
+      "status": "active",
+      "covers": ["frontend/src/components/NewSessionModal/"],
+      "tags": ["high", "new-feature", "frontend"],
+      "created": "2026-03-03",
+      "updated": "2026-03-03"
+    },
+    {
+      "id": "task-fe-command-palette",
+      "type": "task-spec",
+      "path": "current_tasks/frontend/feature_command_palette.md",
+      "title": "Implement Command Palette",
+      "status": "active",
+      "covers": ["frontend/src/components/CommandPalette/"],
+      "tags": ["medium", "new-feature", "frontend"],
+      "created": "2026-03-03",
+      "updated": "2026-03-03"
+    },
+    {
+      "id": "task-fe-notifications",
+      "type": "task-spec",
+      "path": "current_tasks/frontend/feature_notifications.md",
+      "title": "Implement Notification System",
+      "status": "active",
+      "covers": ["frontend/src/components/Notifications/"],
+      "tags": ["medium", "new-feature", "frontend"],
+      "created": "2026-03-03",
+      "updated": "2026-03-03"
+    },
+    {
+      "id": "task-fe-console",
+      "type": "task-spec",
+      "path": "current_tasks/frontend/feature_console.md",
+      "title": "Implement Console",
+      "status": "active",
+      "covers": ["frontend/src/components/Console/"],
+      "tags": ["medium", "new-feature", "frontend"],
+      "created": "2026-03-03",
+      "updated": "2026-03-03"
+    },
+    {
+      "id": "task-fe-diff-viewer",
+      "type": "task-spec",
+      "path": "current_tasks/frontend/feature_diff_viewer.md",
+      "title": "Implement Diff Viewer",
+      "status": "active",
+      "covers": ["frontend/src/components/DiffViewer/"],
+      "tags": ["low", "new-feature", "frontend"],
+      "created": "2026-03-03",
+      "updated": "2026-03-03"
+    },
+    {
+      "id": "task-fe-progress-tracker",
+      "type": "task-spec",
+      "path": "current_tasks/frontend/feature_progress_tracker.md",
+      "title": "Implement Progress Tracker",
+      "status": "active",
+      "covers": ["frontend/src/components/ProgressTab/"],
+      "tags": ["medium", "new-feature", "frontend"],
+      "created": "2026-03-03",
+      "updated": "2026-03-03"
+    },
+    {
+      "id": "task-fe-session-history",
+      "type": "task-spec",
+      "path": "current_tasks/frontend/feature_session_history.md",
+      "title": "Implement Session History",
+      "status": "active",
+      "covers": ["frontend/src/components/SessionHistory/"],
+      "tags": ["low", "new-feature", "frontend"],
+      "created": "2026-03-03",
+      "updated": "2026-03-03"
     }
   ],
   "links": [
@@ -1025,6 +1179,146 @@
     {
       "from": "task-rpc-server-agent-wiring",
       "to": "task-rpc-methods-agents-respond",
+      "type": "depends-on"
+    },
+    {
+      "from": "task-backend-main",
+      "to": "module-rpc",
+      "type": "implements"
+    },
+    {
+      "from": "task-backend-main",
+      "to": "task-rpc-server",
+      "type": "depends-on"
+    },
+    {
+      "from": "task-fe-project-setup",
+      "to": "frontend-module",
+      "type": "implements"
+    },
+    {
+      "from": "task-fe-api-client",
+      "to": "api-client",
+      "type": "implements"
+    },
+    {
+      "from": "task-fe-api-client",
+      "to": "task-fe-project-setup",
+      "type": "depends-on"
+    },
+    {
+      "from": "task-fe-state-management",
+      "to": "state-management",
+      "type": "implements"
+    },
+    {
+      "from": "task-fe-state-management",
+      "to": "task-fe-api-client",
+      "type": "depends-on"
+    },
+    {
+      "from": "task-fe-app-shell",
+      "to": "app-shell",
+      "type": "implements"
+    },
+    {
+      "from": "task-fe-app-shell",
+      "to": "task-fe-state-management",
+      "type": "depends-on"
+    },
+    {
+      "from": "task-fe-app-shell",
+      "to": "task-fe-project-setup",
+      "type": "depends-on"
+    },
+    {
+      "from": "task-fe-chat-ui",
+      "to": "chat-ui",
+      "type": "implements"
+    },
+    {
+      "from": "task-fe-chat-ui",
+      "to": "task-fe-app-shell",
+      "type": "depends-on"
+    },
+    {
+      "from": "task-fe-graph-view",
+      "to": "graph-interactions",
+      "type": "implements"
+    },
+    {
+      "from": "task-fe-graph-view",
+      "to": "task-fe-app-shell",
+      "type": "depends-on"
+    },
+    {
+      "from": "task-fe-new-session-modal",
+      "to": "new-session-modal",
+      "type": "implements"
+    },
+    {
+      "from": "task-fe-new-session-modal",
+      "to": "task-fe-app-shell",
+      "type": "depends-on"
+    },
+    {
+      "from": "task-fe-command-palette",
+      "to": "command-palette",
+      "type": "implements"
+    },
+    {
+      "from": "task-fe-command-palette",
+      "to": "task-fe-app-shell",
+      "type": "depends-on"
+    },
+    {
+      "from": "task-fe-notifications",
+      "to": "notification-system",
+      "type": "implements"
+    },
+    {
+      "from": "task-fe-notifications",
+      "to": "task-fe-state-management",
+      "type": "depends-on"
+    },
+    {
+      "from": "task-fe-console",
+      "to": "console",
+      "type": "implements"
+    },
+    {
+      "from": "task-fe-console",
+      "to": "task-fe-app-shell",
+      "type": "depends-on"
+    },
+    {
+      "from": "task-fe-diff-viewer",
+      "to": "diff-viewer",
+      "type": "implements"
+    },
+    {
+      "from": "task-fe-diff-viewer",
+      "to": "task-fe-app-shell",
+      "type": "depends-on"
+    },
+    {
+      "from": "task-fe-progress-tracker",
+      "to": "progress-tracker",
+      "type": "implements"
+    },
+    {
+      "from": "task-fe-progress-tracker",
+      "to": "task-fe-app-shell",
+      "type": "depends-on"
+    },
+    {
+      "from": "task-fe-session-history",
+      "to": "session-history",
+      "type": "implements"
+    },
+    {
+      "from": "task-fe-session-history",
+      "to": "task-fe-chat-ui",
       "type": "depends-on"
     }
   ]

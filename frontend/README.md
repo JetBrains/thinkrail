@@ -2,6 +2,17 @@
 
 > Parent: [DESIGN_DOC.md](../DESIGN_DOC.md) | Status: **Active** | Created: 2026-03-02
 
+## Table of Contents
+1. [Purpose](#purpose)
+2. [Internal Architecture](#internal-architecture)
+3. [File Organization](#file-organization)
+4. [Public Interface](#public-interface)
+5. [Design Decisions](#design-decisions)
+6. [Dependencies](#dependencies)
+7. [Known Limitations](#known-limitations)
+8. [Sub-Specifications](#sub-specifications)
+9. [Related Specs](#related-specs)
+
 ## Purpose
 
 The Frontend module is a React/TypeScript single-page application that provides the Bonsai web workspace. It communicates with the Python backend over a single WebSocket (JSON-RPC 2.0), renders agent sessions as a custom Chat UI, visualizes the spec hierarchy, and provides tools for spec-driven development.

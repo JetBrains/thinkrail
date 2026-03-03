@@ -2,6 +2,16 @@
 
 > Parent: [DESIGN_DOC.md](../../../DESIGN_DOC.md) | Status: **Active** | Created: 2026-02-25
 
+## Table of Contents
+1. [Purpose](#purpose)
+2. [Internal Architecture](#internal-architecture)
+3. [File Organization](#file-organization)
+4. [Public Interface](#public-interface)
+5. [Design Decisions](#design-decisions)
+6. [Dependencies](#dependencies)
+7. [Known Limitations](#known-limitations)
+8. [Related Specs](#related-specs)
+
 ## Purpose
 
 The Spec module is the core domain layer of Bonsai. It owns all spec file operations — parsing spec files from disk (Markdown or JSON), validating their structure, managing the registry (`.specs/registry.json`), and building the hierarchy graph that maps parent-child and cross-reference relationships. All spec CRUD flows through this module's service layer, which is the single source of truth for spec state.

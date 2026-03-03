@@ -10,8 +10,9 @@
 5. [Frontend (TypeScript/JavaScript)](#frontend-typescriptjavascript)
 6. [Data Model](#data-model)
 7. [API Design](#api-design)
-8. [Deployment](#deployment)
-9. [Open Questions](#open-questions)
+8. [Key Design Decisions](#key-design-decisions)
+9. [Deployment](#deployment)
+10. [Open Questions](#open-questions)
 
 ## Overview
 
@@ -173,7 +174,7 @@ graph TD
 ```
 backend/
 ├── app/
-│   ├── main.py              # FastAPI app entry point
+│   ├── main.py              # FastAPI app entry point (not yet implemented)
 │   ├── rpc/                 # JSON-RPC Layer
 │   │   ├── server.py        # WebSocket + JSON-RPC dispatcher (routes all 3 directions)
 │   │   ├── methods/
@@ -208,35 +209,62 @@ backend/
 **Key Dependencies:**
 - FastAPI + Uvicorn (web server + WebSocket)
 - Pydantic (data validation & models)
-- watchfiles or watchdog (file system watching)
+- jsonrpcserver (JSON-RPC 2.0 message parsing and dispatch)
+- claude-agent-sdk (Claude Agent SDK for AI agent orchestration)
+- watchfiles (file system watching)
 - pytest (testing)
+
+**Module Documentation:**
+
+| Module | Spec | Description |
+|--------|------|-------------|
+| Spec | [backend/app/spec/README.md](backend/app/spec/README.md) | Spec CRUD, parsing, validation, hierarchy graph |
+| Core | [backend/app/core/README.md](backend/app/core/README.md) | App configuration, file I/O, async file watcher |
+| Agent | [backend/app/agent/README.md](backend/app/agent/README.md) | Agent orchestration, Claude SDK integration, task lifecycle |
+| RPC | [backend/app/rpc/README.md](backend/app/rpc/README.md) | WebSocket endpoint, JSON-RPC dispatch, notifications |
+| Frontend | [frontend/README.md](frontend/README.md) | React SPA, UI components, state management |
 
 ## Frontend (TypeScript/JavaScript)
 
 **Framework:** React
 
-**Component Structure:**
+**Component Structure** (design phase — code not yet implemented):
 
 ```
 frontend/
 ├── src/
-│   ├── App.tsx              # Root component
+│   ├── main.tsx             # App bootstrap
+│   ├── App.tsx              # Root component: providers + global overlays
+│   ├── routes.tsx           # React Router route definitions
 │   ├── components/
-│   │   ├── SpecEditor/      # Spec CRUD & editing
-│   │   ├── SpecGraph/       # Hierarchy visualization + health
-│   │   └── AgentPanel/      # Agent orchestration UI
-│   ├── api/                 # Backend API client
-│   ├── hooks/               # Custom React hooks
+│   │   ├── AppShell/        # Three-panel layout, header, status bar
+│   │   ├── ChatStream/      # Agent event rendering, streaming text
+│   │   ├── GraphView/       # Spec hierarchy visualization + health
+│   │   ├── NewSessionModal/ # Session creation form
+│   │   ├── CommandPalette/  # Fuzzy search, action registry
+│   │   ├── Notifications/   # Toast queue, tab badges
+│   │   ├── DiffViewer/      # Spec + code side-by-side diff
+│   │   ├── ProgressTab/     # Spec metrics, session tracker
+│   │   ├── SessionHistory/  # Session archive, read-only replay
+│   │   └── Console/         # xterm.js terminal emulator
+│   ├── api/                 # WebSocket/JSON-RPC client
+│   ├── store/               # Zustand state management
+│   ├── styles/              # CSS custom properties, theming
 │   ├── types/               # TypeScript type definitions
 │   └── utils/               # Shared utilities
+├── index.html
 ├── package.json
-└── tsconfig.json
+├── tsconfig.json
+└── vite.config.ts
 ```
 
 **Key Dependencies:**
-- React (UI framework)
-- Graph visualization library (TBD — e.g., D3, React Flow, Cytoscape)
-- JSON-RPC client over WebSocket
+- React 19 (UI framework)
+- Zustand (state management, ~1KB)
+- React Router 7 (client-side routing)
+- xterm.js (terminal emulator, lazy-loaded)
+- Custom DOM + SVG graph (no heavy graph library — ≤15 nodes per layer)
+- Custom JSON-RPC client over WebSocket (~100 lines)
 
 ## Data Model
 
@@ -274,6 +302,22 @@ Communication flows in three directions over a single WebSocket at `/ws`:
 
 Full protocol reference (method tables, params, message shapes): **[RPC Module spec](backend/app/rpc/README.md#methods)**
 
+## Key Design Decisions
+
+| Decision | Choice | Rationale |
+|----------|--------|-----------|
+| Architecture pattern | Hybrid — layered top-level (frontend/backend) with modular domains inside backend | Clean separation between transport (RPC), domain logic (Spec, Agent), and infrastructure (Core). Each module has one responsibility. |
+| Communication protocol | JSON-RPC 2.0 over WebSocket | LSP-style true bidirectional messaging. Server can push notifications and initiate requests (e.g., agent questions). Single connection, simple framing. |
+| Spec storage | Files in the repo (Markdown or JSON) | Git-friendly, versionable alongside code. No external database. Developers can read/edit specs with any text editor. |
+| Registry as single JSON file | `.specs/registry.json` | Simplicity — one atomic file for all metadata. Easy to debug, version, and parse. Atomic writes prevent corruption. |
+| Graph visualization | Custom DOM + SVG (no library) | Layered view shows ≤15 nodes. D3/React Flow/Cytoscape add 80-170KB for no benefit at this scale. |
+| State management | Zustand (frontend) | 1KB, hook-based, no boilerplate. Stores split by domain for isolation. |
+| Agent SDK integration | Isolated in `runner.py` only | Single swap point for SDK versions. Service and tracker are SDK-agnostic. |
+| File change tracking | Filesystem watcher, not tool call interception | Ground truth — catches all file changes regardless of source (agent, user, external tool). Same validation pipeline for all changes. |
+| Single-user, localhost | No auth, no multi-user, no cloud | Simplicity first — Bonsai is a developer's local tool. Multi-user adds complexity with no current demand. |
+
+**Design Philosophy:** Start simple, add complexity only when proven necessary. Each module has one clear responsibility. The code should be small enough to read end-to-end. Prefer explicit wiring over implicit magic.
+
 ## Deployment
 
 - Runs locally on developer machines
@@ -284,8 +328,10 @@ Full protocol reference (method tables, params, message shapes): **[RPC Module s
 
 ## Open Questions
 
-- Which graph visualization library for the frontend? (D3, React Flow, Cytoscape)
 - How to handle agent API key management securely?
 - Should the frontend be served by FastAPI (single process) or run separately?
 - How to handle concurrent agent tasks and resource limits?
-- JSON-RPC library: resolved — using `jsonrpcserver` (see `rpc/README.md`)
+
+**Resolved:**
+- ~~Which graph visualization library?~~ → Custom DOM + SVG (no library needed for ≤15 nodes)
+- ~~JSON-RPC library?~~ → `jsonrpcserver` (see [rpc/README.md](backend/app/rpc/README.md))

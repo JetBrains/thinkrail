@@ -2,6 +2,16 @@
 
 > Parent: [DESIGN_DOC.md](../../../DESIGN_DOC.md) | Status: **Active** | Created: 2026-02-25
 
+## Table of Contents
+1. [Purpose](#purpose)
+2. [Internal Architecture](#internal-architecture)
+3. [File Organization](#file-organization)
+4. [Public Interface](#public-interface)
+5. [Design Decisions](#design-decisions)
+6. [Dependencies](#dependencies)
+7. [Known Limitations](#known-limitations)
+8. [Related Specs](#related-specs)
+
 ## Purpose
 
 The Agent module orchestrates AI coding agent runs. It accepts a task (a set of spec IDs + config), feeds the specs as context to the Claude Agent SDK, streams the resulting SDK events to the frontend as JSON-RPC notifications, and handles interactive mid-run flows (user questions, tool permission confirmations) by suspending execution until the frontend responds.
@@ -46,11 +56,21 @@ graph TD
 
 | Method | Signature | Description |
 |--------|-----------|-------------|
-| `run_task` | `(spec_ids: list[str], config: AgentConfig, notify: Callable) → AgentTask` | Start an agent task; `notify` is a callback for server→client messages, signature: `async def notify(method: str, params: dict, request_id: str \| None = None) -> None` — created by `rpc/notifications.make_notify` |
-| `interrupt_task` | `(task_id: str) → None` | Interrupt a running task |
+| `run_task` | `async (spec_ids: list[str], config: AgentConfig, notify: Callable) → AgentTask` | Start an agent task; `notify` is a callback for server→client messages, signature: `async def notify(method: str, params: dict, request_id: str \| None = None) -> None` — created by `rpc/notifications.make_notify` |
+| `interrupt_task` | `async (task_id: str) → None` | Interrupt a running task |
 | `get_task` | `(task_id: str) → AgentTask` | Get current task status and metadata |
 | `list_tasks` | `() → list[AgentTask]` | List all tasks (running, done, error) |
-| `respond` | `(task_id: str, request_id: str, response: dict) → None` | Resolve a pending `asyncio.Future` with the client's answer |
+| `respond` | `async (task_id: str, request_id: str, response: dict) → None` | Resolve a pending `asyncio.Future` with the client's answer |
+
+### Output Contracts
+
+| Method | Returns | Error Cases |
+|--------|---------|-------------|
+| `run_task` | `AgentTask` (status=pending, then running in background) | Invalid spec IDs, SDK initialization error |
+| `interrupt_task` | `None` | Task not found (`AgentTaskNotFoundError`), task not running |
+| `get_task` | `AgentTask` | Task not found (`AgentTaskNotFoundError`) |
+| `list_tasks` | `list[AgentTask]` (may be empty) | — |
+| `respond` | `None` | Task not found (`AgentTaskNotFoundError`), no pending request (`FutureNotFoundError`) |
 
 ### Models
 
@@ -129,9 +149,9 @@ For mid-run interactions where the agent needs user input, `runner.py` suspends 
 
 **Timeout:** If no response arrives within a configurable deadline, the Future is cancelled, the action is auto-denied, and an `agent/notification` event is sent to inform the frontend.
 
-## TODO
+## Design Note: Initial Prompt Collection
 
-- **Rethink session lifecycle & initial prompt collection:** Currently `runner.py` sends an `agent/askUserQuestion` request to collect the initial user prompt before starting the SDK session. This flow reuses the interactive request/response mechanism but isn't part of the designed protocol. The full session lifecycle (prompt collection → SDK start → event streaming → completion) needs to be designed and documented as a first-class flow.
+`runner.py` sends an `agent/askUserQuestion` request to collect the initial user prompt before starting the SDK session. This reuses the interactive request/response mechanism — the runner registers a Future, sends the question to the frontend, awaits the response, extracts the user's prompt, and passes it to `client.query()`. This flow works but is not part of the formal protocol design; the full session lifecycle (prompt collection → SDK start → event streaming → completion) may be redesigned as a first-class flow in a future iteration.
 
 ## Design Decisions
 

@@ -2,6 +2,21 @@
 
 > Parent: [DESIGN_DOC.md](../../../DESIGN_DOC.md) | Status: **Active** | Created: 2026-02-26
 
+## Table of Contents
+1. [Purpose](#purpose)
+2. [Protocol Overview](#protocol-overview)
+3. [Methods](#methods)
+4. [Error Codes](#error-codes)
+5. [Internal Architecture](#internal-architecture)
+6. [File Organization & Public Interface](#file-organization--public-interface)
+7. [JSON-RPC Dispatch](#json-rpc-dispatch)
+8. [Connection Management](#connection-management)
+9. [Watcher Integration](#watcher-integration)
+10. [Design Decisions](#design-decisions)
+11. [Dependencies](#dependencies)
+12. [Known Limitations](#known-limitations)
+13. [Related Specs](#related-specs)
+
 ## Purpose
 
 The RPC module is the transport layer bridging the WebSocket connection and the domain modules.
