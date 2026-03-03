@@ -2,7 +2,7 @@
 
 > Spec-to-code side-by-side diff with mapping files and commit navigation
 
-**Status:** Pending
+**Status:** Done
 **Priority:** Low
 **Depends on:** `feature_app_shell`, `feature_state_management`
 **Spec reference:** `frontend/ui-specs/DIFF_VIEWER.md`

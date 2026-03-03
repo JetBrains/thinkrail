@@ -2,7 +2,7 @@
 
 > WebSocket connection, JSON-RPC 2.0 protocol, typed method wrappers, React hooks
 
-**Status:** Pending
+**Status:** Done
 **Priority:** Critical
 **Depends on:** `feature_project_setup`
 **Spec reference:** `frontend/src/api/README.md`

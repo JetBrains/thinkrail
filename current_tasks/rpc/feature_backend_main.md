@@ -2,7 +2,7 @@
 
 > FastAPI app factory, lifespan, and application bootstrap
 
-**Status:** Pending
+**Status:** Done
 **Priority:** Critical
 **Spec reference:** `DESIGN_DOC.md` (lines 168-206), `backend/app/rpc/README.md` (server.py section)
 

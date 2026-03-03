@@ -1,0 +1,60 @@
+import { useEffect, useRef } from "react";
+import { BrowserRouter } from "react-router-dom";
+import { useRpc, useConnectionState, setClient } from "@/api/index.ts";
+import { wireEvents } from "@/store/wireEvents.ts";
+import { useSpecStore } from "@/store/specStore.ts";
+import { useUiStore } from "@/store/uiStore.ts";
+import { registerKeyboardShortcuts } from "@/utils/keyboard.ts";
+import { NewSessionModal } from "@/components/NewSessionModal/NewSessionModal.tsx";
+import { CommandPalette } from "@/components/CommandPalette/CommandPalette.tsx";
+import { ToastContainer } from "@/components/Notifications/ToastContainer.tsx";
+import { AppRoutes } from "./routes.tsx";
+
+function AppInner() {
+  const client = useRpc();
+  const connectionState = useConnectionState();
+  const wiredRef = useRef(false);
+
+  // Wire events + fetch initial data on connect
+  useEffect(() => {
+    console.log("[Bonsai] Connection state:", connectionState);
+    if (connectionState === "connected" && !wiredRef.current) {
+      wiredRef.current = true;
+      setClient(client);
+      wireEvents(client);
+      console.log("[Bonsai] Fetching specs...");
+      useSpecStore.getState().fetchSpecs().then(() => {
+        console.log("[Bonsai] Specs loaded:", useSpecStore.getState().specs.length);
+      });
+      useSpecStore.getState().fetchGraph();
+    }
+    if (connectionState === "disconnected" || connectionState === "failed") {
+      wiredRef.current = false;
+    }
+  }, [connectionState, client]);
+
+  // Global keyboard shortcuts
+  useEffect(() => registerKeyboardShortcuts(), []);
+
+  // Viewport resize tracking
+  useEffect(() => {
+    const onResize = () =>
+      useUiStore.getState().updateViewport(window.innerWidth);
+    onResize();
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  }, []);
+
+  return (
+    <BrowserRouter>
+      <AppRoutes />
+      <NewSessionModal />
+      <CommandPalette />
+      <ToastContainer />
+    </BrowserRouter>
+  );
+}
+
+export function App() {
+  return <AppInner />;
+}

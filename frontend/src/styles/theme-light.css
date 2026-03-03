@@ -1,0 +1,36 @@
+/*
+ * Light theme
+ * Applied when data-theme="light" or via prefers-color-scheme.
+ */
+
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme="dark"]) {
+    --bg: #f5f5f5;
+    --panel: #ffffff;
+    --elevated: #f0f0f0;
+    --hover: #e8e8e8;
+    --border: #d0d0d0;
+    --border2: #b0b0b0;
+    --text: #1a1b26;
+    --muted: #4a4a6a;
+    --hint: #8888a0;
+    --sel: #cce0ff;
+
+    color-scheme: light;
+  }
+}
+
+[data-theme="light"] {
+  --bg: #f5f5f5;
+  --panel: #ffffff;
+  --elevated: #f0f0f0;
+  --hover: #e8e8e8;
+  --border: #d0d0d0;
+  --border2: #b0b0b0;
+  --text: #1a1b26;
+  --muted: #4a4a6a;
+  --hint: #8888a0;
+  --sel: #cce0ff;
+
+  color-scheme: light;
+}

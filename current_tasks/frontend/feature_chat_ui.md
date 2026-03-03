@@ -2,7 +2,7 @@
 
 > Agent event stream rendering with tool cards, questions, and streaming text
 
-**Status:** Pending
+**Status:** Done
 **Priority:** High
 **Depends on:** `feature_app_shell`, `feature_state_management`
 **Spec reference:** `frontend/ui-specs/CHAT_UI.md`

@@ -2,7 +2,7 @@
 
 > Session creation form with skill selection and spec context picker
 
-**Status:** Pending
+**Status:** Done
 **Priority:** High
 **Depends on:** `feature_app_shell`, `feature_state_management`
 **Spec reference:** `frontend/ui-specs/NEW_SESSION_MODAL.md`

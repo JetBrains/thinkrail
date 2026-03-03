@@ -2,7 +2,7 @@
 
 > Zustand stores for specs, sessions, UI, cost, and notifications
 
-**Status:** Pending
+**Status:** Done
 **Priority:** Critical
 **Depends on:** `feature_api_client`
 **Spec reference:** `frontend/src/store/README.md`

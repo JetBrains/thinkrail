@@ -2,7 +2,7 @@
 
 > Vite + React + TypeScript project scaffold, theming, and shared types
 
-**Status:** Pending
+**Status:** Done
 **Priority:** Critical
 **Spec reference:** `frontend/README.md`, `frontend/ui-specs/APP_SHELL.md` (Tech Stack), `frontend/ui-specs/THEMING.md`
 

@@ -1,3 +1,25 @@
-.idea
-__pycache__/
+# IDE
+.idea/
 *.iml
+.vscode/
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+*.egg-info/
+dist/
+
+# Node
+node_modules/
+frontend/dist/
+frontend/.vite/
+*.local
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Bonsai runtime
+.specs/.progress.yaml
+.claude/settings.local.json

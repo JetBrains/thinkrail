@@ -2,7 +2,7 @@
 
 > xterm.js terminal emulator with multiple tabs in the right panel
 
-**Status:** Pending
+**Status:** Done
 **Priority:** Medium
 **Depends on:** `feature_app_shell`, `feature_project_setup`
 **Spec reference:** `frontend/src/components/Console/README.md`

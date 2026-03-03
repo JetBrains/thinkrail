@@ -2,7 +2,7 @@
 
 > Three-panel layout, routing, header, status bar, responsive behavior
 
-**Status:** Pending
+**Status:** Done
 **Priority:** High
 **Depends on:** `feature_state_management`, `feature_project_setup`
 **Spec reference:** `frontend/ui-specs/APP_SHELL.md`, `frontend/ui-specs/RESPONSIVE_BEHAVIOR.md`

@@ -2,7 +2,7 @@
 
 > Fuzzy search across specs, sessions, files, and actions (Cmd+K)
 
-**Status:** Pending
+**Status:** Done
 **Priority:** Medium
 **Depends on:** `feature_app_shell`, `feature_state_management`
 **Spec reference:** `frontend/ui-specs/COMMAND_PALETTE.md`

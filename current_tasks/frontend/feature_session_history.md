@@ -2,7 +2,7 @@
 
 > Archive completed sessions with read-only replay
 
-**Status:** Pending
+**Status:** Done
 **Priority:** Low
 **Depends on:** `feature_chat_ui`, `feature_state_management`
 **Spec reference:** `frontend/ui-specs/SESSION_HISTORY.md`

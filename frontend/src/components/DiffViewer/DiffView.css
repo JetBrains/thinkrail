@@ -1,0 +1,12 @@
+.diff-stub {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-sm);
+  color: var(--hint);
+}
+.diff-stub-icon { font-size: 32px; opacity: 0.5; }
+.diff-stub-title { font-size: 14px; font-weight: 500; }
+.diff-stub-text { font-size: 11px; text-align: center; line-height: 1.6; }

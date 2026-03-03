@@ -1,0 +1,38 @@
+/*
+ * Bonsai Design Tokens
+ *
+ * Semantic CSS variables consumed by all components.
+ * Values are set per-theme in theme-dark.css / theme-light.css.
+ * Accent colors are shared across themes.
+ */
+
+:root {
+  /* ── Accent colors (theme-independent) ── */
+  --blue: #7aa2f7;
+  --purple: #bb9af7;
+  --green: #9ece6a;
+  --red: #f7768e;
+  --gold: #e0af68;
+  --cyan: #7dcfff;
+
+  /* ── Typography ── */
+  --font: "SF Mono", "Monaco", "Inconsolata", "Fira Code", monospace;
+  --font-size: 13px;
+  --line-height: 1.6;
+
+  /* ── Spacing ── */
+  --space-xs: 4px;
+  --space-sm: 8px;
+  --space-md: 12px;
+  --space-lg: 16px;
+  --space-xl: 24px;
+
+  /* ── Radii ── */
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 8px;
+
+  /* ── Transitions ── */
+  --transition-fast: 120ms ease;
+  --transition-normal: 200ms ease;
+}

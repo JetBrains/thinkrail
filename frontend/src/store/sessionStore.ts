@@ -1,0 +1,338 @@
+import { create } from "zustand";
+import type { AgentEvent, AgentConfig } from "@/types/agent.ts";
+import type {
+  Session,
+  SessionStatus,
+  SessionMetrics,
+  ArchivedSession,
+  PendingRequest,
+} from "@/types/session.ts";
+import { getClient } from "@/api/index.ts";
+import { createAgentApi } from "@/api/methods/agents.ts";
+
+interface SessionStore {
+  sessions: Map<string, Session>;
+  activeSessionId: string | null;
+  archivedSessions: ArchivedSession[];
+
+  startSession: (params: {
+    specIds: string[];
+    config: AgentConfig;
+    name: string;
+    skillId?: string;
+  }) => Promise<string>;
+  switchSession: (taskId: string) => void;
+  closeSession: (taskId: string) => void;
+  interruptSession: (taskId: string) => Promise<void>;
+  resolveRequest: (
+    taskId: string,
+    requestId: string,
+    response: unknown,
+  ) => void;
+
+  // Event handlers (called by wireEvents)
+  onSessionStart: (params: Record<string, unknown>) => void;
+  onAgentEvent: (method: string, params: Record<string, unknown>) => void;
+  onAskQuestion: (params: Record<string, unknown>) => void;
+  onConfirmAction: (params: Record<string, unknown>) => void;
+  onSessionDone: (params: Record<string, unknown>) => void;
+  onSessionError: (params: Record<string, unknown>) => void;
+}
+
+function emptyMetrics(): SessionMetrics {
+  return {
+    costUsd: 0,
+    turns: 0,
+    toolCalls: 0,
+    contextTokens: 0,
+    contextMax: 0,
+    durationMs: 0,
+    filesChanged: {},
+  };
+}
+
+/**
+ * Ensure a session exists in the map. If not, create a placeholder.
+ * This handles the race condition where agent events arrive before
+ * startSession() finishes creating the Session object.
+ */
+function ensureSession(
+  sessions: Map<string, Session>,
+  taskId: string,
+): Map<string, Session> {
+  if (sessions.has(taskId)) return sessions;
+  const next = new Map(sessions);
+  next.set(taskId, {
+    taskId,
+    name: taskId.slice(0, 8),
+    skillId: null,
+    specIds: [],
+    status: "running",
+    model: "",
+    startedAt: Date.now(),
+    events: [],
+    metrics: emptyMetrics(),
+    pendingRequest: null,
+  });
+  return next;
+}
+
+function appendEvent(
+  sessions: Map<string, Session>,
+  taskId: string,
+  method: string,
+  params: Record<string, unknown>,
+): Map<string, Session> {
+  const withSession = ensureSession(sessions, taskId);
+  const session = withSession.get(taskId)!;
+
+  const event: AgentEvent = {
+    taskId,
+    sessionId: (params.sessionId as string) ?? "",
+    eventType: method.replace("agent/", "") as AgentEvent["eventType"],
+    payload: params,
+  };
+
+  const next = new Map(withSession);
+  const metrics = { ...session.metrics };
+  metrics.durationMs = Date.now() - session.startedAt;
+
+  if (method === "agent/toolCallEnd") metrics.toolCalls++;
+
+  next.set(taskId, {
+    ...session,
+    events: [...session.events, event],
+    metrics,
+  });
+  return next;
+}
+
+export const useSessionStore = create<SessionStore>((set, get) => ({
+  sessions: new Map(),
+  activeSessionId: null,
+  archivedSessions: [],
+
+  startSession: async ({ specIds, config, name, skillId }) => {
+    const api = createAgentApi(getClient());
+    const { taskId } = await api.run({ specIds, config });
+
+    set((s) => {
+      const next = new Map(s.sessions);
+      const existing = next.get(taskId);
+      // Merge with placeholder if events arrived before this resolved
+      next.set(taskId, {
+        taskId,
+        name,
+        skillId: skillId ?? null,
+        specIds,
+        status: "running",
+        model: config.model,
+        startedAt: Date.now(),
+        events: existing?.events ?? [],
+        metrics: existing?.metrics ?? emptyMetrics(),
+        pendingRequest: existing?.pendingRequest ?? null,
+      });
+      return { sessions: next, activeSessionId: taskId };
+    });
+
+    return taskId;
+  },
+
+  switchSession: (taskId) => set({ activeSessionId: taskId }),
+
+  closeSession: (taskId) => {
+    const session = get().sessions.get(taskId);
+    set((s) => {
+      const next = new Map(s.sessions);
+      next.delete(taskId);
+      const archived: ArchivedSession[] = session
+        ? [
+            ...s.archivedSessions,
+            {
+              taskId: session.taskId,
+              name: session.name,
+              skillId: session.skillId,
+              specIds: session.specIds,
+              startedAt: session.startedAt,
+              endedAt: Date.now(),
+              result: session.status === "done" ? "done" : "error",
+              costUsd: session.metrics.costUsd,
+              turns: session.metrics.turns,
+              durationMs: session.metrics.durationMs,
+              model: session.model,
+              config: { model: session.model, maxTurns: 25, permissionMode: "default", streamText: true },
+              events: session.events,
+            },
+          ]
+        : s.archivedSessions;
+      const nextActive =
+        s.activeSessionId === taskId
+          ? (next.keys().next().value ?? null)
+          : s.activeSessionId;
+      return {
+        sessions: next,
+        archivedSessions: archived,
+        activeSessionId: nextActive,
+      };
+    });
+  },
+
+  interruptSession: async (taskId) => {
+    const api = createAgentApi(getClient());
+    await api.interrupt(taskId);
+    set((s) => {
+      const session = s.sessions.get(taskId);
+      if (!session) return s;
+      const next = new Map(s.sessions);
+      next.set(taskId, { ...session, status: "interrupted" as SessionStatus });
+      return { sessions: next };
+    });
+  },
+
+  resolveRequest: (taskId, requestId, response) => {
+    // Send the response to the backend via agent/respond RPC method.
+    // This resolves the asyncio.Future in the backend tracker.
+    const api = createAgentApi(getClient());
+    api.respond(taskId, requestId, response).catch((err) => {
+      console.error("Failed to send agent/respond:", err);
+    });
+
+    // Clear pendingRequest on the session and decrement notification count
+    set((s) => {
+      const session = s.sessions.get(taskId);
+      if (!session) return s;
+      const nextSessions = new Map(s.sessions);
+      nextSessions.set(taskId, { ...session, pendingRequest: null });
+      return { sessions: nextSessions };
+    });
+  },
+
+  onSessionStart: (params) => {
+    const taskId = params.taskId as string;
+    set((s) => {
+      const withSession = ensureSession(s.sessions, taskId);
+      const session = withSession.get(taskId)!;
+      const next = new Map(withSession);
+      next.set(taskId, {
+        ...session,
+        model: (params.model as string) ?? session.model,
+        events: [
+          ...session.events,
+          {
+            taskId,
+            sessionId: (params.sessionId as string) ?? "",
+            eventType: "sessionStart",
+            payload: params,
+          },
+        ],
+      });
+      return { sessions: next };
+    });
+  },
+
+  onAgentEvent: (method, params) => {
+    const taskId = params.taskId as string;
+    set((s) => ({ sessions: appendEvent(s.sessions, taskId, method, params) }));
+  },
+
+  onAskQuestion: (params) => {
+    const taskId = params.taskId as string;
+    const requestId = params.requestId as string;
+    set((s) => {
+      const sessions = appendEvent(
+        s.sessions,
+        taskId,
+        "agent/askUserQuestion",
+        params,
+      );
+      const session = sessions.get(taskId);
+      if (session) {
+        sessions.set(taskId, {
+          ...session,
+          pendingRequest: {
+            requestId,
+            type: "question",
+            questions: params.questions as PendingRequest["questions"],
+          },
+        });
+      }
+      return { sessions };
+    });
+  },
+
+  onConfirmAction: (params) => {
+    const taskId = params.taskId as string;
+    const requestId = params.requestId as string;
+    set((s) => {
+      const sessions = appendEvent(
+        s.sessions,
+        taskId,
+        "agent/confirmAction",
+        params,
+      );
+      const session = sessions.get(taskId);
+      if (session) {
+        sessions.set(taskId, {
+          ...session,
+          pendingRequest: {
+            requestId,
+            type: "approval",
+            toolName: params.toolName as string,
+            toolInput: params.toolInput as Record<string, unknown>,
+          },
+        });
+      }
+      return { sessions };
+    });
+  },
+
+  onSessionDone: (params) => {
+    const taskId = params.taskId as string;
+    set((s) => {
+      const sessions = appendEvent(
+        s.sessions,
+        taskId,
+        "agent/done",
+        params,
+      );
+      const session = sessions.get(taskId);
+      if (session) {
+        sessions.set(taskId, {
+          ...session,
+          status: "done",
+          pendingRequest: null,
+          metrics: {
+            ...session.metrics,
+            costUsd: (params.costUsd as number) ?? session.metrics.costUsd,
+            durationMs:
+              (params.durationMs as number) ?? session.metrics.durationMs,
+            turns: (params.turns as number) ?? session.metrics.turns,
+          },
+        });
+      }
+      return { sessions };
+    });
+  },
+
+  onSessionError: (params) => {
+    const taskId = params.taskId as string;
+    set((s) => {
+      const sessions = appendEvent(
+        s.sessions,
+        taskId,
+        "agent/error",
+        params,
+      );
+      const session = sessions.get(taskId);
+      if (session) {
+        sessions.set(taskId, {
+          ...session,
+          status: "error",
+          pendingRequest: null,
+        });
+      }
+      return { sessions };
+    });
+  },
+
+}));

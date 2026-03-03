@@ -1,0 +1,20 @@
+/*
+ * Dark theme — Tokyo Night-inspired
+ * Applied by default and when data-theme="dark".
+ */
+
+:root,
+[data-theme="dark"] {
+  --bg: #0a0e1a;
+  --panel: #1a1b26;
+  --elevated: #24283b;
+  --hover: #2a2f47;
+  --border: #414868;
+  --border2: #545c7e;
+  --text: #c0caf5;
+  --muted: #9aa5ce;
+  --hint: #565f89;
+  --sel: #364a82;
+
+  color-scheme: dark;
+}

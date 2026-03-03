@@ -2,7 +2,7 @@
 
 > Toast notifications, tab badges, and status bar alerts for background sessions
 
-**Status:** Pending
+**Status:** Done
 **Priority:** Medium
 **Depends on:** `feature_state_management`, `feature_app_shell`
 **Spec reference:** `frontend/ui-specs/NOTIFICATION_SYSTEM.md`

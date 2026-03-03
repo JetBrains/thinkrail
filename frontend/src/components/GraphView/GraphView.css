@@ -1,0 +1,121 @@
+.graph-view {
+  position: relative;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.graph-canvas {
+  flex: 1;
+  background: var(--bg);
+}
+
+.graph-node:hover rect {
+  stroke: var(--blue);
+}
+
+/* ── Breadcrumb ── */
+.graph-breadcrumb {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+  padding: var(--space-sm) var(--space-md);
+  border-bottom: 1px solid var(--border);
+  font-size: 11px;
+  flex-shrink: 0;
+}
+
+.graph-breadcrumb-back {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--muted);
+  font-size: 12px;
+  cursor: pointer;
+  padding: 2px 6px;
+  font-family: var(--font);
+}
+.graph-breadcrumb-back:hover { background: var(--hover); }
+
+.graph-breadcrumb-item {
+  border: none;
+  background: transparent;
+  color: var(--blue);
+  cursor: pointer;
+  font-family: var(--font);
+  font-size: 11px;
+  padding: 0;
+}
+.graph-breadcrumb-item:hover { text-decoration: underline; }
+
+.graph-breadcrumb-sep { color: var(--hint); margin: 0 2px; }
+.graph-breadcrumb-current { color: var(--text); }
+
+/* ── Controls ── */
+.graph-controls {
+  position: absolute;
+  bottom: var(--space-md);
+  right: var(--space-md);
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: var(--space-xs);
+}
+
+.graph-control-btn {
+  width: 24px;
+  height: 24px;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text);
+  font-family: var(--font);
+  font-size: 14px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.graph-control-btn:hover { background: var(--hover); }
+.graph-control-zoom { font-size: 10px; color: var(--hint); min-width: 32px; text-align: center; }
+
+/* ── Legend ── */
+.graph-legend {
+  position: absolute;
+  bottom: var(--space-md);
+  left: var(--space-md);
+  display: flex;
+  gap: var(--space-md);
+  font-size: 10px;
+  color: var(--hint);
+}
+
+.graph-legend-item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+}
+
+.graph-legend-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 2px;
+}
+
+.graph-legend-line {
+  width: 16px;
+  border-top: 1.5px solid var(--hint);
+}
+
+/* ── Empty State ── */
+.graph-empty {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.graph-empty-text { color: var(--hint); font-size: 12px; }

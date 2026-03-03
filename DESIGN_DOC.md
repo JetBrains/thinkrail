@@ -174,7 +174,7 @@ graph TD
 ```
 backend/
 ├── app/
-│   ├── main.py              # FastAPI app entry point (not yet implemented)
+│   ├── main.py              # FastAPI app entry point
 │   ├── rpc/                 # JSON-RPC Layer
 │   │   ├── server.py        # WebSocket + JSON-RPC dispatcher (routes all 3 directions)
 │   │   ├── methods/

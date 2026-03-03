@@ -2,7 +2,7 @@
 
 > Left panel dashboard: spec metrics, session tracker, activity timeline, cost
 
-**Status:** Pending
+**Status:** Done
 **Priority:** Medium
 **Depends on:** `feature_app_shell`, `feature_state_management`
 **Spec reference:** `frontend/ui-specs/PROGRESS_TRACKER.md`

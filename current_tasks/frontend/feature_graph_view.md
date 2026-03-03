@@ -2,7 +2,7 @@
 
 > Interactive spec hierarchy visualization with layered drill-down navigation
 
-**Status:** Pending
+**Status:** Done
 **Priority:** High
 **Depends on:** `feature_app_shell`, `feature_state_management`
 **Spec reference:** `frontend/ui-specs/GRAPH_INTERACTIONS.md`
