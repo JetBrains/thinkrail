@@ -1,4 +1,9 @@
-"""Session persistence — saves/loads session data to .specs/sessions/ as JSON files."""
+"""Session persistence — saves/loads session data to .specs/sessions/.
+
+Storage layout:
+  .specs/sessions/{taskId}.json        — metadata (small, rewritten on status change)
+  .specs/sessions/{taskId}.events.jsonl — append-only event log (one JSON object per line)
+"""
 
 from __future__ import annotations
 
@@ -7,47 +12,82 @@ import logging
 from pathlib import Path
 from typing import Any
 
+from app.core.fileio import delete_file, ensure_dir, read_text, write_text
+
 logger = logging.getLogger(__name__)
 
 
 def _sessions_dir(project_root: Path) -> Path:
     d = project_root / ".specs" / "sessions"
-    d.mkdir(parents=True, exist_ok=True)
+    ensure_dir(d)
     return d
 
 
+def _meta_path(project_root: Path, task_id: str) -> Path:
+    return _sessions_dir(project_root) / f"{task_id}.json"
+
+
+def _events_path(project_root: Path, task_id: str) -> Path:
+    return _sessions_dir(project_root) / f"{task_id}.events.jsonl"
+
+
 def save_session(project_root: Path, data: dict[str, Any]) -> None:
-    """Write session data to .specs/sessions/{taskId}.json."""
+    """Write session metadata to .specs/sessions/{taskId}.json.
+
+    Events in ``data`` are written to the separate ``.events.jsonl`` file
+    (one JSON object per line) and stripped from the metadata file.
+    """
     task_id = data.get("taskId", "")
     if not task_id:
         return
-    path = _sessions_dir(project_root) / f"{task_id}.json"
+    # Separate events from metadata
+    events = data.pop("events", None)
     try:
-        path.write_text(json.dumps(data, indent=2, default=str))
+        write_text(_meta_path(project_root, task_id), json.dumps(data, indent=2, default=str))
     except Exception:
-        logger.exception("Failed to save session %s", task_id)
+        logger.exception("Failed to save session metadata %s", task_id)
+        return
+    # Bulk-write events if provided (used by initial save / continue_session)
+    if events:
+        try:
+            lines = [json.dumps(e, default=str) for e in events]
+            write_text(_events_path(project_root, task_id), "\n".join(lines) + "\n")
+        except Exception:
+            logger.exception("Failed to save session events %s", task_id)
 
 
 def load_session(project_root: Path, task_id: str) -> dict[str, Any] | None:
-    """Load a single session from disk. Returns None if not found."""
-    path = _sessions_dir(project_root) / f"{task_id}.json"
-    if not path.is_file():
+    """Load a session (metadata + events) from disk. Returns None if not found."""
+    meta = _meta_path(project_root, task_id)
+    if not meta.is_file():
         return None
     try:
-        return json.loads(path.read_text())
+        data = json.loads(read_text(meta))
     except Exception:
-        logger.exception("Failed to load session %s", task_id)
+        logger.exception("Failed to load session metadata %s", task_id)
         return None
+    # Load events from the append-only log
+    evts = _events_path(project_root, task_id)
+    events: list[dict[str, Any]] = []
+    if evts.is_file():
+        try:
+            for line in read_text(evts).splitlines():
+                line = line.strip()
+                if line:
+                    events.append(json.loads(line))
+        except Exception:
+            logger.exception("Failed to load session events %s", task_id)
+    data["events"] = events
+    return data
 
 
 def list_sessions(project_root: Path) -> list[dict[str, Any]]:
-    """List all sessions from disk (metadata only — no events/messages)."""
+    """List all sessions from disk (metadata only — no events loaded)."""
     sessions_dir = _sessions_dir(project_root)
     result: list[dict[str, Any]] = []
     for path in sorted(sessions_dir.glob("*.json"), key=lambda p: p.stat().st_mtime, reverse=True):
         try:
-            data = json.loads(path.read_text())
-            # Return metadata only — strip events/messages for list view
+            data = json.loads(read_text(path))
             result.append({
                 "taskId": data.get("taskId", ""),
                 "name": data.get("name", ""),
@@ -65,10 +105,28 @@ def list_sessions(project_root: Path) -> list[dict[str, Any]]:
     return result
 
 
+def append_event(project_root: Path, task_id: str, event: dict[str, Any]) -> None:
+    """Append a single event to the session's .events.jsonl log. O(1) operation."""
+    meta = _meta_path(project_root, task_id)
+    if not meta.is_file():
+        return
+    evts = _events_path(project_root, task_id)
+    try:
+        with evts.open("a", encoding="utf-8") as f:
+            f.write(json.dumps(event, default=str) + "\n")
+    except Exception:
+        logger.exception("Failed to append event for session %s", task_id)
+
+
 def delete_session(project_root: Path, task_id: str) -> bool:
-    """Delete a session file from disk. Returns True if deleted."""
-    path = _sessions_dir(project_root) / f"{task_id}.json"
-    if path.is_file():
-        path.unlink()
-        return True
-    return False
+    """Delete a session (metadata + events) from disk. Returns True if deleted."""
+    meta = _meta_path(project_root, task_id)
+    evts = _events_path(project_root, task_id)
+    deleted = False
+    if meta.is_file():
+        delete_file(meta)
+        deleted = True
+    if evts.is_file():
+        delete_file(evts)
+        deleted = True
+    return deleted

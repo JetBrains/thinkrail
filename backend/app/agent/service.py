@@ -8,7 +8,7 @@ from typing import Any
 
 from app.agent.context import build_context
 from app.agent.models import AgentConfig, AgentTask
-from app.agent.persistence import save_session, load_session, list_sessions as list_sessions_from_disk, delete_session as delete_session_from_disk
+from app.agent.persistence import append_event, save_session, load_session, list_sessions as list_sessions_from_disk, delete_session as delete_session_from_disk
 from app.agent.runner import run
 from app.agent.tracker import Tracker
 from app.core.config import AppConfig
@@ -138,13 +138,9 @@ class AgentService:
                 data["events"] = existing.get("events", [])
         save_session(self._config.project_root, data)
 
-    def save_event(self, task_id: str, event: dict) -> None:
+    def _save_event(self, task_id: str, event: dict) -> None:
         """Append an event to the persisted session file."""
-        task = self._tracker.get_task(task_id)
-        existing = load_session(self._config.project_root, task_id)
-        events = existing.get("events", []) if existing else []
-        events.append(event)
-        self._save_task(task, events=events)
+        append_event(self._config.project_root, task_id, event)
 
     def list_all_sessions(self) -> list[dict]:
         """List all sessions: in-memory active + on-disk archived."""
@@ -253,7 +249,7 @@ class AgentService:
             if method.startswith("agent/") and method not in ("agent/progress",):
                 event_type = method.replace("agent/", "")
                 try:
-                    self.save_event(task.id, {"eventType": event_type, "payload": params})
+                    self._save_event(task.id, {"eventType": event_type, "payload": params})
                 except Exception:
                     pass
         notify = _persisting_notify

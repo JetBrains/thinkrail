@@ -99,6 +99,24 @@
       "updated": "2026-03-03"
     },
     {
+      "id": "agent-persistence",
+      "type": "submodule-design",
+      "path": "backend/app/agent/PERSISTENCE.md",
+      "title": "Agent Session Persistence",
+      "status": "active",
+      "covers": [
+        "backend/app/agent/persistence.py"
+      ],
+      "tags": [
+        "backend",
+        "agent-orchestration",
+        "persistence",
+        "sessions"
+      ],
+      "created": "2026-03-03",
+      "updated": "2026-03-03"
+    },
+    {
       "id": "module-rpc",
       "type": "module-design",
       "path": "backend/app/rpc/README.md",
@@ -1012,6 +1030,22 @@
       "updated": "2026-03-03"
     },
     {
+      "id": "task-persistence-tests",
+      "type": "task-spec",
+      "path": "current_tasks/agent/feature_persistence_tests.md",
+      "title": "Unit tests for Agent persistence.py",
+      "status": "done",
+      "covers": [
+        "backend/tests/agent/test_persistence.py"
+      ],
+      "tags": [
+        "medium",
+        "tests"
+      ],
+      "created": "2026-03-03",
+      "updated": "2026-03-03"
+    },
+    {
       "id": "task-agent-context",
       "type": "task-spec",
       "path": "current_tasks/agent/feature_agent_context.md",
@@ -1093,6 +1127,21 @@
       "from": "agent-context",
       "to": "module-agent",
       "type": "parent"
+    },
+    {
+      "from": "agent-persistence",
+      "to": "module-agent",
+      "type": "parent"
+    },
+    {
+      "from": "task-persistence-tests",
+      "to": "agent-persistence",
+      "type": "implements"
+    },
+    {
+      "from": "agent-persistence",
+      "to": "module-core",
+      "type": "depends-on"
     },
     {
       "from": "agent-context",

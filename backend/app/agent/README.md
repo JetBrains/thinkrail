@@ -150,11 +150,11 @@ graph TD
 | File | Responsibility | Depends On |
 |------|---------------|------------|
 | `models.py` | Pydantic models: AgentTask, AgentConfig, AgentEvent, AgentResult, Question, QuestionOption, AskUserQuestionResponse, ToolApprovalResponse | — |
-| `context.py` | Context assembly pipeline: loads skill instructions, project metadata, and spec content; composes system prompt. See [CONTEXT.md](CONTEXT.md). | spec/service, core/config |
+| `context.py` | Context assembly pipeline: loads skill instructions, project metadata, and spec content; composes system prompt. See [CONTEXT.md](CONTEXT.md). | models, spec/service |
 | `service.py` | Facade — start sessions, send messages, interrupt turns, end sessions, relay responses to pending futures | context, runner, tracker, core/config, spec/service |
 | `runner.py` | Claude Agent SDK integration: manage SDK client lifecycle, conversation loop (wait for message → query → stream events → repeat), map SDK events to notifications, register `canUseTool` / hooks | models, tracker |
 | `tracker.py` | Session lifecycle (pending/idle/running/done/error), message queue per session (`asyncio.Queue`), registry of in-flight `asyncio.Future` objects keyed by `requestId` | models |
-| `persistence.py` | Session persistence to `.specs/sessions/{taskId}.json` — save/load/list/delete session data including events. Auto-saves on task creation, turn complete, done, and error. | core/fileio |
+| `persistence.py` | Session persistence — split storage: metadata in `.json`, events in append-only `.events.jsonl`. Save/load/list/append/delete. See [PERSISTENCE.md](PERSISTENCE.md). | core/fileio |
 
 ## Public Interface
 
@@ -184,7 +184,7 @@ All models with multi-word fields use a `camelCase` alias generator (`to_camel` 
 
 | Model | Fields (Python / JSON wire) | Description |
 |-------|--------|-------------|
-| `AgentTask` | id, status, spec_ids/`specIds`, config, session_id/`sessionId`?, created, updated | Session record. `status` is one of: `idle`, `running`, `done`, `error`. |
+| `AgentTask` | id, status, spec_ids/`specIds`, skill_id/`skillId`?, config, session_id/`sessionId`?, created, updated | Session record. `status` is one of: `idle`, `running`, `done`, `error`. `skill_id` references the selected skill (if any). |
 | `AgentConfig` | model, max_turns/`maxTurns`, permission_mode/`permissionMode`, stream_text/`streamText` | Run configuration |
 | `AgentEvent` | task_id/`taskId`, session_id/`sessionId`, event_type/`eventType`, payload | Serializable event to send as notification |
 | `AgentResult` | task_id/`taskId`, session_id/`sessionId`, result, cost_usd/`costUsd`, turns, duration_ms/`durationMs`, usage | Turn result (sent with `turnComplete`) or final session result (sent with `done`) |
@@ -324,13 +324,11 @@ Sections are ordered Skill → Project → Specs, with framing prompts (markdown
 ## Known Limitations
 
 - Single WebSocket connection assumed — if the client disconnects mid-session, pending futures will time out rather than being immediately cancelled
-- No persistent session storage — session list is in-memory only; restarts lose session history
 - Concurrent session limit is not yet defined; multiple simultaneous agent sessions are architecturally supported but resource limits are an open question
-- No session resume after disconnect — if the WebSocket drops, the session continues running but notifications are lost; reconnecting does not replay missed events
 
 ## Related Specs
 
 - **Parent:** [Architecture Design](../../../DESIGN_DOC.md)
-- **Submodules:** [Context Assembly](CONTEXT.md) — prompt construction pipeline
+- **Submodules:** [Context Assembly](CONTEXT.md) — prompt construction pipeline, [Session Persistence](PERSISTENCE.md) — disk I/O for session data
 - **Depends on:** [Spec Module](../spec/README.md) (for loading spec context), [Core Config](../core/README.md) (for project root and plugin dir)
 - **Related modules:** `rpc/methods/agents.py` (JSON-RPC interface to this module), `rpc/notifications.py` (WebSocket push)

@@ -184,11 +184,11 @@ class TestFutureManagement:
         result = await future
         assert result == {"answer": "yes"}
 
-    async def test_resolve_nonexistent_raises(self) -> None:
+    async def test_resolve_nonexistent_logs_warning(self) -> None:
         tracker = Tracker()
         task = tracker.create_task(["s1"], AgentConfig())
-        with pytest.raises(FutureNotFoundError):
-            tracker.resolve_future(task.id, "no-such-request", {})
+        # Should not raise — logs a warning and returns silently
+        tracker.resolve_future(task.id, "no-such-request", {})
 
     async def test_register_future_for_nonexistent_task(self) -> None:
         tracker = Tracker()

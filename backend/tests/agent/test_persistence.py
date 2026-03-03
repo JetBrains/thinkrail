@@ -1,0 +1,219 @@
+import json
+from pathlib import Path
+
+from app.agent.persistence import (
+    append_event,
+    delete_session,
+    list_sessions,
+    load_session,
+    save_session,
+)
+
+
+def _make_session_data(task_id: str = "task-1", **overrides) -> dict:
+    base = {
+        "taskId": task_id,
+        "name": "test session",
+        "skillId": "module-design",
+        "specIds": ["spec-1"],
+        "config": {"model": "claude-sonnet-4-6", "maxTurns": 25},
+        "status": "done",
+        "sessionId": "sess-abc",
+        "createdAt": "2026-03-03T10:00:00Z",
+        "updatedAt": "2026-03-03T10:05:00Z",
+        "continuedFrom": None,
+        "metrics": {},
+    }
+    base.update(overrides)
+    return base
+
+
+# -- save_session -------------------------------------------------------------
+
+
+class TestSaveSession:
+    def test_creates_metadata_file(self, tmp_path: Path) -> None:
+        save_session(tmp_path, _make_session_data())
+        meta = tmp_path / ".specs" / "sessions" / "task-1.json"
+        assert meta.is_file()
+        data = json.loads(meta.read_text())
+        assert data["taskId"] == "task-1"
+        assert "events" not in data
+
+    def test_strips_events_to_jsonl(self, tmp_path: Path) -> None:
+        events = [
+            {"eventType": "sessionStart", "payload": {}},
+            {"eventType": "textDelta", "payload": {"text": "hi"}},
+        ]
+        save_session(tmp_path, _make_session_data(events=events))
+
+        meta = tmp_path / ".specs" / "sessions" / "task-1.json"
+        assert "events" not in json.loads(meta.read_text())
+
+        evts = tmp_path / ".specs" / "sessions" / "task-1.events.jsonl"
+        assert evts.is_file()
+        lines = [l for l in evts.read_text().splitlines() if l.strip()]
+        assert len(lines) == 2
+        assert json.loads(lines[0])["eventType"] == "sessionStart"
+
+    def test_empty_task_id_noop(self, tmp_path: Path) -> None:
+        save_session(tmp_path, {"taskId": ""})
+        sessions_dir = tmp_path / ".specs" / "sessions"
+        assert not sessions_dir.exists() or not list(sessions_dir.iterdir())
+
+    def test_creates_sessions_dir(self, tmp_path: Path) -> None:
+        sessions_dir = tmp_path / ".specs" / "sessions"
+        assert not sessions_dir.exists()
+        save_session(tmp_path, _make_session_data())
+        assert sessions_dir.is_dir()
+
+
+# -- load_session --------------------------------------------------------------
+
+
+class TestLoadSession:
+    def test_combines_metadata_and_events(self, tmp_path: Path) -> None:
+        events = [{"eventType": "done", "payload": {}}]
+        save_session(tmp_path, _make_session_data(events=events))
+        loaded = load_session(tmp_path, "task-1")
+        assert loaded is not None
+        assert loaded["taskId"] == "task-1"
+        assert loaded["events"] == events
+
+    def test_missing_returns_none(self, tmp_path: Path) -> None:
+        assert load_session(tmp_path, "nonexistent") is None
+
+    def test_metadata_only_no_events(self, tmp_path: Path) -> None:
+        save_session(tmp_path, _make_session_data())
+        loaded = load_session(tmp_path, "task-1")
+        assert loaded is not None
+        assert loaded["events"] == []
+
+    def test_malformed_json_returns_none(self, tmp_path: Path) -> None:
+        sessions_dir = tmp_path / ".specs" / "sessions"
+        sessions_dir.mkdir(parents=True)
+        (sessions_dir / "bad.json").write_text("{broken", encoding="utf-8")
+        assert load_session(tmp_path, "bad") is None
+
+
+# -- list_sessions -------------------------------------------------------------
+
+
+class TestListSessions:
+    def test_returns_metadata_only(self, tmp_path: Path) -> None:
+        events = [{"eventType": "textDelta", "payload": {"text": "hi"}}]
+        save_session(tmp_path, _make_session_data("t1", events=events))
+        save_session(tmp_path, _make_session_data("t2", events=events))
+        result = list_sessions(tmp_path)
+        assert len(result) == 2
+        for entry in result:
+            assert "events" not in entry
+
+    def test_list_empty_dir(self, tmp_path: Path) -> None:
+        assert list_sessions(tmp_path) == []
+
+    def test_list_fields(self, tmp_path: Path) -> None:
+        save_session(tmp_path, _make_session_data())
+        result = list_sessions(tmp_path)
+        assert len(result) == 1
+        entry = result[0]
+        expected_fields = {
+            "taskId", "name", "skillId", "specIds", "status",
+            "model", "createdAt", "updatedAt", "metrics", "continuedFrom",
+        }
+        assert set(entry.keys()) == expected_fields
+
+
+# -- append_event --------------------------------------------------------------
+
+
+class TestAppendEvent:
+    def test_creates_jsonl_file(self, tmp_path: Path) -> None:
+        save_session(tmp_path, _make_session_data())
+        append_event(tmp_path, "task-1", {"eventType": "textDelta", "payload": {}})
+        evts = tmp_path / ".specs" / "sessions" / "task-1.events.jsonl"
+        assert evts.is_file()
+        lines = [l for l in evts.read_text().splitlines() if l.strip()]
+        assert len(lines) == 1
+
+    def test_adds_lines(self, tmp_path: Path) -> None:
+        save_session(tmp_path, _make_session_data())
+        for i in range(3):
+            append_event(tmp_path, "task-1", {"eventType": f"event_{i}", "payload": {}})
+        evts = tmp_path / ".specs" / "sessions" / "task-1.events.jsonl"
+        lines = [l for l in evts.read_text().splitlines() if l.strip()]
+        assert len(lines) == 3
+        for i, line in enumerate(lines):
+            assert json.loads(line)["eventType"] == f"event_{i}"
+
+    def test_does_not_touch_metadata(self, tmp_path: Path) -> None:
+        save_session(tmp_path, _make_session_data())
+        meta = tmp_path / ".specs" / "sessions" / "task-1.json"
+        original = meta.read_text()
+        append_event(tmp_path, "task-1", {"eventType": "textDelta", "payload": {}})
+        assert meta.read_text() == original
+
+    def test_missing_session_noop(self, tmp_path: Path) -> None:
+        # Should not raise or create any file
+        append_event(tmp_path, "nonexistent", {"eventType": "x", "payload": {}})
+        sessions_dir = tmp_path / ".specs" / "sessions"
+        jsonl_files = list(sessions_dir.glob("*.events.jsonl")) if sessions_dir.exists() else []
+        assert len(jsonl_files) == 0
+
+
+# -- delete_session ------------------------------------------------------------
+
+
+class TestDeleteSession:
+    def test_removes_both_files(self, tmp_path: Path) -> None:
+        events = [{"eventType": "done", "payload": {}}]
+        save_session(tmp_path, _make_session_data(events=events))
+        meta = tmp_path / ".specs" / "sessions" / "task-1.json"
+        evts = tmp_path / ".specs" / "sessions" / "task-1.events.jsonl"
+        assert meta.is_file() and evts.is_file()
+        assert delete_session(tmp_path, "task-1") is True
+        assert not meta.exists() and not evts.exists()
+
+    def test_metadata_only(self, tmp_path: Path) -> None:
+        save_session(tmp_path, _make_session_data())
+        assert delete_session(tmp_path, "task-1") is True
+        assert not (tmp_path / ".specs" / "sessions" / "task-1.json").exists()
+
+    def test_nonexistent_returns_false(self, tmp_path: Path) -> None:
+        assert delete_session(tmp_path, "nope") is False
+
+
+# -- round-trip ----------------------------------------------------------------
+
+
+class TestRoundTrip:
+    def test_save_load_roundtrip(self, tmp_path: Path) -> None:
+        events = [
+            {"eventType": "sessionStart", "payload": {}},
+            {"eventType": "textDelta", "payload": {"text": "hello"}},
+            {"eventType": "done", "payload": {"result": "ok"}},
+        ]
+        original = _make_session_data(events=events)
+        save_session(tmp_path, dict(original))  # copy since save pops events
+
+        loaded = load_session(tmp_path, "task-1")
+        assert loaded is not None
+        assert loaded["taskId"] == "task-1"
+        assert loaded["name"] == "test session"
+        assert loaded["events"] == events
+
+    def test_save_append_load_roundtrip(self, tmp_path: Path) -> None:
+        initial_events = [{"eventType": "sessionStart", "payload": {}}]
+        save_session(tmp_path, _make_session_data(events=initial_events))
+
+        append_event(tmp_path, "task-1", {"eventType": "textDelta", "payload": {"text": "a"}})
+        append_event(tmp_path, "task-1", {"eventType": "textDelta", "payload": {"text": "b"}})
+        append_event(tmp_path, "task-1", {"eventType": "done", "payload": {}})
+
+        loaded = load_session(tmp_path, "task-1")
+        assert loaded is not None
+        assert len(loaded["events"]) == 4
+        assert loaded["events"][0]["eventType"] == "sessionStart"
+        assert loaded["events"][1]["payload"]["text"] == "a"
+        assert loaded["events"][2]["payload"]["text"] == "b"
+        assert loaded["events"][3]["eventType"] == "done"
