@@ -83,7 +83,7 @@ def create_app() -> FastAPI:
         return {"path": str(p), "name": p.name}
 
     @app.get("/api/project/files")
-    async def list_files(path: str = Query(...), max_depth: int = Query(4)):
+    async def list_files(path: str = Query(...), max_depth: int = Query(10)):
         """List project directory tree (files and folders)."""
         root = Path(path).expanduser().resolve()
         if not root.is_dir():

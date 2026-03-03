@@ -81,15 +81,94 @@
 }
 .fv-btn-save:hover { background: rgba(33, 215, 137, 0.1); }
 
-/* ── Monaco Container ── */
+/* ── Editor/Preview Container ── */
 .fv-editor-container {
   flex: 1;
   min-height: 0;
   overflow: hidden;
+  display: flex;
+  flex-direction: column;
 }
 
-.fv-md-scroll {
+/* ── Markdown Preview Container ── */
+.md-preview-container {
+  position: relative;
+  flex: 1;
+  min-height: 0;
   overflow-y: auto;
+}
+
+/* ── Zoom Controls ── */
+.md-zoom-bar {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 2px;
+  user-select: none;
+}
+
+.md-zoom-btn {
+  width: 22px;
+  height: 22px;
+  border: none;
+  border-radius: 3px;
+  background: transparent;
+  color: var(--text);
+  font-family: var(--font);
+  font-size: 14px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+}
+.md-zoom-btn:hover { background: var(--hover); }
+
+.md-zoom-level {
+  font-size: 10px;
+  color: var(--hint);
+  min-width: 34px;
+  text-align: center;
+  cursor: pointer;
+}
+.md-zoom-level:hover { color: var(--text); }
+
+/* Global zoom — sticky top-right of the scrollable preview */
+.md-global-zoom {
+  position: sticky;
+  top: var(--space-sm);
+  float: right;
+  margin: var(--space-sm) var(--space-md) 0 0;
+  z-index: 5;
+}
+
+/* Per-diagram — resizable container with zoom controls */
+.md-mermaid-wrapper {
+  position: relative;
+  margin: 1.5em 0;
+  resize: both;
+  overflow: hidden;
+  min-height: 80px;
+  min-width: 200px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--elevated);
+}
+
+.md-mermaid-zoom {
+  position: absolute;
+  top: var(--space-sm);
+  right: var(--space-sm);
+  z-index: 5;
+  opacity: 0;
+  transition: opacity var(--transition-fast);
+}
+
+.md-mermaid-wrapper:hover .md-mermaid-zoom {
+  opacity: 1;
 }
 
 /* ── Markdown Preview ── */
@@ -99,7 +178,7 @@
   font-size: 13px;
   line-height: 1.7;
   color: var(--text);
-  max-width: 800px;
+  max-width: 100%;
 }
 
 .md-preview h1, .md-preview h2, .md-preview h3,
@@ -203,20 +282,16 @@
   margin-right: var(--space-xs);
 }
 
-/* Mermaid diagrams */
+/* Mermaid diagram inner container */
 .md-mermaid {
-  margin: 1.5em 0;
-  padding: var(--space-md);
-  background: var(--elevated);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-md);
+  padding: var(--space-lg);
   text-align: center;
-  overflow-x: auto;
+  overflow: auto;
+  height: 100%;
 }
 
 .md-mermaid svg {
-  max-width: 100%;
-  height: auto;
+  min-width: 400px;
 }
 
 .md-mermaid-error {

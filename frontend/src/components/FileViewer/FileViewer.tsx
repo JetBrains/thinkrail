@@ -123,7 +123,7 @@ export function FileViewer({ file }: { file: OpenFile }) {
 
       {/* Content: Markdown preview OR Monaco Editor */}
       {showMarkdownPreview ? (
-        <div className="fv-editor-container fv-md-scroll">
+        <div className="fv-editor-container">
           <MarkdownPreview content={file.content} />
         </div>
       ) : (
