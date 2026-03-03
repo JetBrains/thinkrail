@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useCallback, useState } from "react";
 import { Outlet } from "react-router-dom";
 import { useUiStore } from "@/store/uiStore.ts";
 import { Header } from "./Header.tsx";
@@ -7,6 +7,7 @@ import { LeftPanel } from "./LeftPanel.tsx";
 import { RightPanel } from "./RightPanel.tsx";
 import { ResizeHandle } from "./ResizeHandle.tsx";
 import { SessionPanel } from "@/components/SessionPanel/SessionPanel.tsx";
+import { SessionManager } from "@/components/SessionManager/SessionManager.tsx";
 import "@/components/ChatStream/ChatStream.css";
 import "./AppShell.css";
 
@@ -21,6 +22,15 @@ export function AppShell({ onSwitchProject }: { onSwitchProject: () => void }) {
 
   const [leftWidth, setLeftWidth] = useState(LEFT_DEFAULT);
   const [rightWidth, setRightWidth] = useState(RIGHT_DEFAULT);
+  const [showSessionManager, setShowSessionManager] = useState(false);
+
+  const handleOpenSessionManager = useCallback(() => {
+    setShowSessionManager(true);
+  }, []);
+
+  const handleCloseSessionManager = useCallback(() => {
+    setShowSessionManager(false);
+  }, []);
 
   return (
     <div className="app-shell">
@@ -44,7 +54,18 @@ export function AppShell({ onSwitchProject }: { onSwitchProject: () => void }) {
         )}
         <div className="center-panel">
           <Outlet />
-          <SessionPanel />
+          {showSessionManager ? (
+            <>
+              <div className="sm-tab-bar">
+                <button className="sm-tab-back" onClick={handleCloseSessionManager}>
+                  {"\u2190"} Back to sessions
+                </button>
+              </div>
+              <SessionManager onClose={handleCloseSessionManager} />
+            </>
+          ) : (
+            <SessionPanel />
+          )}
         </div>
         {!rightCollapsed && (
           <>
@@ -63,7 +84,7 @@ export function AppShell({ onSwitchProject }: { onSwitchProject: () => void }) {
           </>
         )}
       </div>
-      <StatusBar />
+      <StatusBar onOpenSessionManager={handleOpenSessionManager} />
     </div>
   );
 }

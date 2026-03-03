@@ -28,6 +28,12 @@ from app.rpc.methods.agents import (
     run_agent,
     send_message,
 )
+from app.rpc.methods.sessions import (
+    continue_session,
+    delete_session_data,
+    get_session,
+    list_all_sessions,
+)
 from app.agent.service import AgentService
 from app.core.config import AppConfig, load_config
 from app.core.fileio import read_text
@@ -50,6 +56,10 @@ METHODS = {
     "agent/interrupt": interrupt_agent,
     "agent/end": end_session,
     "agent/respond": respond_agent,
+    "session/list": list_all_sessions,
+    "session/get": get_session,
+    "session/continue": continue_session,
+    "session/delete": delete_session_data,
 }
 
 _active_ws: WebSocket | None = None

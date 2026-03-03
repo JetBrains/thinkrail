@@ -67,11 +67,12 @@ export function ChatStream({
     <div className="chat-stream" ref={scrollRef} onScroll={handleScroll}>
       {events.map((ev, i) => {
         const p = ev.payload;
+        const k = `${i}-${ev.eventType}`;
         switch (ev.eventType) {
           case "sessionStart":
             return (
               <SystemMessage
-                key={i}
+                key={k}
                 text={`Session started \u2014 ${(p.model as string) ?? "agent"}`}
                 variant="ok"
               />
@@ -80,7 +81,7 @@ export function ChatStream({
           case "textDelta":
             return (
               <AssistantMessage
-                key={i}
+                key={k}
                 text={(p.text as string) ?? ""}
                 streaming={(p.streaming as boolean) ?? false}
               />
@@ -97,7 +98,7 @@ export function ChatStream({
                   : "";
             return (
               <ToolCallCard
-                key={i}
+                key={k}
                 toolName={(p.toolName as string) ?? "tool"}
                 toolInput={toolInput}
                 output={end?.output}
@@ -113,7 +114,7 @@ export function ChatStream({
           case "subagentStart":
             return (
               <SubagentBlock
-                key={i}
+                key={k}
                 agentType={(p.agentType as string) ?? undefined}
                 finished={!activeSubagents.has(p.agentId as string)}
               >
@@ -130,7 +131,7 @@ export function ChatStream({
             const isAnswered = answeredRequests.has(requestId);
             return (
               <QuestionCard
-                key={i}
+                key={k}
                 questions={questions as never}
                 answered={isAnswered}
                 onSubmit={(response) => onResolveRequest(requestId, response)}
@@ -145,7 +146,7 @@ export function ChatStream({
             const decision = savedResponse?.behavior === "allow" ? "approve" as const : "deny" as const;
             return (
               <ApprovalCard
-                key={i}
+                key={k}
                 toolName={(p.toolName as string) ?? "action"}
                 toolInput={p.toolInput ?? undefined}
                 description={(p.description as string) ?? undefined}
@@ -168,7 +169,7 @@ export function ChatStream({
           case "turnComplete":
             return (
               <SystemMessage
-                key={i}
+                key={k}
                 text={`Turn complete \u2014 $${((p.costUsd as number) ?? 0).toFixed(2)} \u00B7 ${(p.turns as number) ?? 0} turns`}
                 variant="ok"
               />
@@ -177,7 +178,7 @@ export function ChatStream({
           case "interrupted":
             return (
               <SystemMessage
-                key={i}
+                key={k}
                 text="Turn interrupted"
               />
             );
@@ -185,7 +186,7 @@ export function ChatStream({
           case "done":
             return (
               <CompletionBanner
-                key={i}
+                key={k}
                 result={(p.result as string) ?? undefined}
                 costUsd={(p.costUsd as number) ?? undefined}
                 turns={(p.turns as number) ?? undefined}
@@ -196,7 +197,7 @@ export function ChatStream({
           case "error":
             return (
               <ErrorBanner
-                key={i}
+                key={k}
                 subtype={(p.subtype as string) ?? undefined}
                 errors={(p.errors as string[]) ?? undefined}
               />
@@ -205,7 +206,7 @@ export function ChatStream({
           case "notification":
             return (
               <SystemMessage
-                key={i}
+                key={k}
                 text={(p.message as string) ?? ""}
               />
             );
@@ -213,14 +214,14 @@ export function ChatStream({
           case "compact":
             return (
               <CompactMarker
-                key={i}
+                key={k}
                 preTokens={(p.preTokens as number) ?? undefined}
               />
             );
 
           case "permissionDenied":
             return (
-              <div key={i} className="chat-banner chat-banner-warn">
+              <div key={k} className="chat-banner chat-banner-warn">
                 Permission denied: {(p.toolName as string) ?? "action"}
               </div>
             );

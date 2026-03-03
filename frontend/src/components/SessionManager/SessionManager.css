@@ -1,0 +1,134 @@
+.session-manager {
+  flex: 1;
+  overflow-y: auto;
+  padding: var(--space-lg);
+}
+
+.sm-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: var(--space-lg);
+}
+
+.sm-title {
+  font-size: 14px;
+  font-weight: 600;
+  margin: 0;
+}
+
+.sm-refresh {
+  border: none;
+  background: transparent;
+  color: var(--muted);
+  font-size: 16px;
+  cursor: pointer;
+  padding: var(--space-xs);
+  border-radius: var(--radius-sm);
+}
+.sm-refresh:hover { background: var(--hover); color: var(--text); }
+
+.sm-loading, .sm-empty {
+  color: var(--hint);
+  font-size: 12px;
+  font-style: italic;
+  text-align: center;
+  padding: var(--space-xl);
+}
+
+/* Groups */
+.sm-group { margin-bottom: var(--space-lg); }
+.sm-group-label {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--hint);
+  font-weight: 600;
+  margin-bottom: var(--space-sm);
+}
+
+/* Session cards */
+.sm-card {
+  padding: var(--space-sm) var(--space-md);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--elevated);
+  margin-bottom: var(--space-xs);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+.sm-card:hover { border-color: var(--blue); }
+
+.sm-card-top {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  font-size: 12px;
+}
+
+.sm-badge {
+  font-size: 9px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+  padding: 1px 6px;
+  border-radius: 3px;
+  flex-shrink: 0;
+}
+.badge-idle { background: var(--blue); color: #fff; }
+.badge-running { background: var(--purple); color: #fff; }
+.badge-done { background: var(--green); color: #fff; }
+.badge-error { background: var(--red); color: #fff; }
+
+.sm-card-name {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text);
+}
+
+.sm-card-time {
+  color: var(--hint);
+  font-size: 10px;
+  flex-shrink: 0;
+}
+
+.sm-card-meta {
+  display: flex;
+  gap: var(--space-sm);
+  font-size: 10px;
+  color: var(--muted);
+  margin-top: 2px;
+}
+
+.sm-card-actions {
+  display: flex;
+  gap: var(--space-xs);
+  margin-top: var(--space-sm);
+}
+
+.sm-btn {
+  padding: 2px var(--space-sm);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--muted);
+  font-family: var(--font);
+  font-size: 11px;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+.sm-btn:hover { background: var(--hover); color: var(--text); }
+
+.sm-btn-continue {
+  border-color: var(--blue);
+  color: var(--blue);
+}
+.sm-btn-continue:hover { background: rgba(59, 116, 238, 0.1); }
+
+.sm-btn-delete {
+  border-color: var(--red);
+  color: var(--red);
+}
+.sm-btn-delete:hover { background: rgba(247, 84, 100, 0.1); }

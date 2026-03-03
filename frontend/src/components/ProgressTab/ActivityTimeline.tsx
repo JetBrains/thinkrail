@@ -15,6 +15,7 @@ const EVENT_ICONS: Record<string, string> = {
 };
 
 export function ActivityTimeline({ events }: ActivityTimelineProps) {
+  if (!Array.isArray(events)) return <div className="progress-empty">No activity yet</div>;
   const recent = events.slice(-20).reverse();
 
   if (recent.length === 0) {
@@ -31,7 +32,7 @@ export function ActivityTimeline({ events }: ActivityTimelineProps) {
         const icon = EVENT_ICONS[ev.eventType] ?? "\u25CF";
         const label =
           ev.eventType === "toolCallStart"
-            ? `${(ev.payload.toolName as string) ?? "tool"} ${((ev.payload.toolInput as string) ?? "").slice(0, 30)}`
+            ? `${(ev.payload.toolName as string) ?? "tool"} ${String(typeof ev.payload.toolInput === "object" ? JSON.stringify(ev.payload.toolInput) : ev.payload.toolInput ?? "").slice(0, 30)}`
             : ev.eventType;
 
         return (

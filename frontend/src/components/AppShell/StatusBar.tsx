@@ -1,14 +1,21 @@
 import { useSpecStore } from "@/store/specStore.ts";
+import { useSessionStore } from "@/store/sessionStore.ts";
 import { useNotificationStore } from "@/store/notificationStore.ts";
 
-export function StatusBar() {
+interface StatusBarProps {
+  onOpenSessionManager: () => void;
+}
+
+export function StatusBar({ onOpenSessionManager }: StatusBarProps) {
   const specs = useSpecStore((s) => s.specs);
+  const sessions = useSessionStore((s) => s.sessions);
   const pendingInputCount = useNotificationStore((s) => s.pendingInputCount);
   const total = specs.length;
   const done = specs.filter((s) => s.status === "done").length;
   const pending = specs.filter(
     (s) => s.status === "active" || s.status === "draft",
   ).length;
+  const sessionCount = sessions.size;
 
   return (
     <footer className="status-bar">
@@ -18,12 +25,15 @@ export function StatusBar() {
         <span>{done} done</span>
         <span className="status-sep" />
         <span>{pending} pending</span>
+        <span className="status-sep" />
+        <button className="status-sessions-btn" onClick={onOpenSessionManager}>
+          {sessionCount} session{sessionCount !== 1 ? "s" : ""}
+        </button>
         {pendingInputCount > 0 && (
           <>
             <span className="status-sep" />
             <span className="status-attention">
-              {pendingInputCount} session{pendingInputCount !== 1 ? "s" : ""}{" "}
-              need attention
+              {pendingInputCount} need attention
             </span>
           </>
         )}

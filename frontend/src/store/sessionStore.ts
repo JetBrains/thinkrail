@@ -32,6 +32,8 @@ interface SessionStore {
     response: unknown,
   ) => void;
 
+  restoreSession: (taskId: string) => Promise<void>;
+
   // Event handlers (called by wireEvents)
   onSessionStart: (params: Record<string, unknown>) => void;
   onAgentEvent: (method: string, params: Record<string, unknown>) => void;
@@ -156,6 +158,48 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
   },
 
   switchSession: (taskId) => set({ activeSessionId: taskId }),
+
+  restoreSession: async (taskId) => {
+    // Already in memory — just switch
+    if (get().sessions.has(taskId)) {
+      set({ activeSessionId: taskId });
+      return;
+    }
+    // Load from backend
+    const { createSessionApi } = await import("@/api/methods/sessions.ts");
+    const api = createSessionApi(getClient());
+    const data = await api.get(taskId);
+    console.log("[restoreSession]", taskId, "data:", data ? `${(data.events ?? []).length} events` : "null");
+    if (!data) return;
+
+    // Convert backend events to AgentEvent format
+    const events: AgentEvent[] = (data.events ?? []).map((ev: Record<string, unknown>) => ({
+      taskId,
+      sessionId: ((ev.payload as Record<string, unknown>)?.sessionId as string) ?? "",
+      eventType: ((ev.eventType as string) ?? "notification") as AgentEvent["eventType"],
+      payload: (ev.payload as Record<string, unknown>) ?? ev,
+    }));
+
+    const session: Session = {
+      taskId,
+      name: data.name ?? taskId.slice(0, 8),
+      skillId: (data.skillId as string) ?? null,
+      specIds: data.specIds ?? [],
+      status: (data.status as Session["status"]) ?? "done",
+      model: (data.config?.model as string) ?? "",
+      startedAt: new Date(data.createdAt).getTime(),
+      events,
+      metrics: emptyMetrics(),
+      pendingRequest: null,
+      answeredRequests: new Map(),
+    };
+
+    set((s) => {
+      const next = new Map(s.sessions);
+      next.set(taskId, session);
+      return { sessions: next, activeSessionId: taskId };
+    });
+  },
 
   closeSession: (taskId) => {
     // Tell backend to gracefully close the session

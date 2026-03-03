@@ -1,12 +1,14 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
 from collections.abc import Callable
 from typing import Any
 
 from app.agent.context import build_context
 from app.agent.models import AgentConfig, AgentTask
+from app.agent.persistence import save_session, load_session, list_sessions as list_sessions_from_disk, delete_session as delete_session_from_disk
 from app.agent.runner import run
 from app.agent.tracker import Tracker
 from app.core.config import AppConfig
@@ -45,6 +47,7 @@ class AgentService:
             self._run_background(task, spec_context, notify)
         )
         self._running_tasks[task.id] = bg_task
+        self._save_task(task)
         return task
 
     async def send_message(self, task_id: str, text: str) -> None:
@@ -111,6 +114,124 @@ class AgentService:
     async def respond(self, task_id: str, request_id: str, response: dict) -> None:
         self._tracker.resolve_future(task_id, request_id, response)
 
+    # -- session persistence --------------------------------------------------
+
+    def _save_task(self, task: AgentTask, events: list[dict] | None = None) -> None:
+        """Persist current task state to disk."""
+        data: dict = {
+            "taskId": task.id,
+            "name": getattr(task, "_name", task.id[:8]),
+            "skillId": task.skill_id,
+            "specIds": list(task.spec_ids),
+            "config": task.config.model_dump(by_alias=True),
+            "status": task.status,
+            "sessionId": task.session_id,
+            "createdAt": task.created,
+            "updatedAt": task.updated,
+        }
+        # Preserve existing events from disk if we don't have new ones
+        if events is not None:
+            data["events"] = events
+        else:
+            existing = load_session(self._config.project_root, task.id)
+            if existing:
+                data["events"] = existing.get("events", [])
+        save_session(self._config.project_root, data)
+
+    def save_event(self, task_id: str, event: dict) -> None:
+        """Append an event to the persisted session file."""
+        task = self._tracker.get_task(task_id)
+        existing = load_session(self._config.project_root, task_id)
+        events = existing.get("events", []) if existing else []
+        events.append(event)
+        self._save_task(task, events=events)
+
+    def list_all_sessions(self) -> list[dict]:
+        """List all sessions: in-memory active + on-disk archived."""
+        # Start with disk sessions
+        disk = {s["taskId"]: s for s in list_sessions_from_disk(self._config.project_root)}
+        # Overlay in-memory active sessions (they have fresher status)
+        for task in self._tracker.list_tasks():
+            disk[task.id] = {
+                "taskId": task.id,
+                "name": getattr(task, "_name", task.id[:8]),
+                "skillId": task.skill_id,
+                "specIds": list(task.spec_ids),
+                "status": task.status,
+                "model": task.config.model,
+                "createdAt": task.created,
+                "updatedAt": task.updated,
+                "active": True,
+            }
+        return list(disk.values())
+
+    def get_session_data(self, task_id: str) -> dict | None:
+        """Get full session data (events included) from disk."""
+        return load_session(self._config.project_root, task_id)
+
+    def delete_session_data(self, task_id: str) -> bool:
+        """Delete a session from disk."""
+        return delete_session_from_disk(self._config.project_root, task_id)
+
+    async def continue_session(
+        self, task_id: str, notify: Callable
+    ) -> AgentTask:
+        """Continue a dead session by replaying its history as context."""
+        old = load_session(self._config.project_root, task_id)
+        if not old:
+            raise ValueError(f"Session {task_id} not found on disk")
+
+        # Build context from old conversation
+        context_parts = []
+        for ev in old.get("events", []):
+            et = ev.get("eventType", "")
+            payload = ev.get("payload", {})
+            if et == "textDelta":
+                context_parts.append(f"Assistant: {payload.get('text', '')}")
+            elif et == "toolCallStart":
+                context_parts.append(f"Tool: {payload.get('toolName', '')} {json.dumps(payload.get('toolInput', ''))}")
+            elif et == "toolCallEnd":
+                output = payload.get("output", "")
+                if len(output) > 500:
+                    output = output[:500] + "..."
+                context_parts.append(f"Result: {output}")
+
+        history_context = "\n".join(context_parts)
+
+        # Create new task with old config
+        old_config = AgentConfig(**old.get("config", {}))
+        old_spec_ids = old.get("specIds", [])
+        skill_id = old.get("skillId")
+
+        task = self._tracker.create_task(old_spec_ids, old_config, skill_id=skill_id)
+        task._name = old.get("name", "continued")  # type: ignore[attr-defined]
+
+        # Build spec context + conversation history
+        spec_context = self._build_context_for(task)
+        combined_context = f"{spec_context}\n\n--- Previous conversation ---\n{history_context}" if history_context else spec_context
+
+        # Save with link to old session
+        data = {
+            "taskId": task.id,
+            "name": f"{old.get('name', 'session')} (continued)",
+            "skillId": skill_id,
+            "specIds": old_spec_ids,
+            "config": old_config.model_dump(by_alias=True),
+            "status": "idle",
+            "sessionId": None,
+            "createdAt": task.created,
+            "updatedAt": task.updated,
+            "continuedFrom": task_id,
+            "events": [],
+        }
+        save_session(self._config.project_root, data)
+
+        bg_task = asyncio.create_task(
+            self._run_background(task, combined_context, notify)
+        )
+        self._running_tasks[task.id] = bg_task
+        return task
+
     # -- helpers --------------------------------------------------------------
 
     async def _run_background(
@@ -124,9 +245,23 @@ class AgentService:
             self._last_notify: dict[str, Callable] = {}
         self._last_notify[task.id] = notify
 
+        # Wrap notify to also persist events to disk
+        _original_notify = notify
+        async def _persisting_notify(method: str, params: dict, request_id: str | None = None) -> None:
+            await _original_notify(method, params, request_id)
+            # Persist streaming events (skip overly frequent ones)
+            if method.startswith("agent/") and method not in ("agent/progress",):
+                event_type = method.replace("agent/", "")
+                try:
+                    self.save_event(task.id, {"eventType": event_type, "payload": params})
+                except Exception:
+                    pass
+        notify = _persisting_notify
+
         try:
             await run(task, spec_context, notify, self._tracker, cwd=self._config.project_root)
             self._tracker.set_status(task.id, "done")
+            self._save_task(task)
         except asyncio.CancelledError:
             # Interrupted — don't set error, let interrupt_task handle state
             pass
@@ -134,6 +269,7 @@ class AgentService:
             logger.exception("Agent task %s failed", task.id)
             if task.status not in ("done", "error"):
                 self._tracker.set_status(task.id, "error")
+            self._save_task(task)
             try:
                 await notify(
                     "agent/error",

@@ -207,6 +207,37 @@
   color: var(--gold);
 }
 
+/* ── Session Manager in center panel ── */
+.sm-tab-bar {
+  display: flex;
+  align-items: center;
+  border-bottom: 1px solid var(--border);
+  padding: var(--space-sm) var(--space-md);
+  flex-shrink: 0;
+}
+.sm-tab-back {
+  border: none;
+  background: transparent;
+  color: var(--blue);
+  font-family: var(--font);
+  font-size: 12px;
+  cursor: pointer;
+  padding: var(--space-xs) var(--space-sm);
+  border-radius: var(--radius-sm);
+}
+.sm-tab-back:hover { background: var(--hover); }
+
+.status-sessions-btn {
+  border: none;
+  background: transparent;
+  color: var(--blue);
+  font-family: var(--font);
+  font-size: 11px;
+  cursor: pointer;
+  padding: 0;
+}
+.status-sessions-btn:hover { text-decoration: underline; }
+
 .status-hint {
   color: var(--hint);
 }
