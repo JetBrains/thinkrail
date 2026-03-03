@@ -13,7 +13,7 @@ import "./AppShell.css";
 const LEFT_DEFAULT = 260;
 const RIGHT_DEFAULT = 380;
 
-export function AppShell() {
+export function AppShell({ onSwitchProject }: { onSwitchProject: () => void }) {
   const leftCollapsed = useUiStore((s) => s.leftPanelCollapsed);
   const rightCollapsed = useUiStore((s) => s.rightPanelCollapsed);
   const toggleLeft = useUiStore((s) => s.toggleLeftPanel);
@@ -24,7 +24,7 @@ export function AppShell() {
 
   return (
     <div className="app-shell">
-      <Header />
+      <Header onSwitchProject={onSwitchProject} />
       <div className="layout">
         {!leftCollapsed && (
           <>

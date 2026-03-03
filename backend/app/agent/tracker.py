@@ -1,8 +1,11 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 from datetime import UTC, datetime
 from typing import Any
+
+logger = logging.getLogger(__name__)
 
 from app.agent.models import AgentConfig, AgentTask, TaskStatus
 
@@ -91,7 +94,7 @@ class Tracker:
     # -- future management ----------------------------------------------------
 
     def register_future(
-        self, task_id: str, request_id: str, timeout_seconds: float = 30.0
+        self, task_id: str, request_id: str, timeout_seconds: float = 300.0
     ) -> asyncio.Future[dict]:
         self.get_task(task_id)  # validate task exists
         loop = asyncio.get_event_loop()
@@ -112,9 +115,10 @@ class Tracker:
         task_futures = self._futures.get(task_id, {})
         future = task_futures.pop(request_id, None)
         if future is None:
-            raise FutureNotFoundError(
-                f"No pending future for task '{task_id}', request '{request_id}'"
-            )
+            # Future already resolved, timed out, or cancelled — not an error,
+            # just a late response from the frontend.
+            logger.warning("No pending future for task %s request %s (already resolved or timed out)", task_id, request_id)
+            return
         if not future.done():
             future.set_result(response)
 

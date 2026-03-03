@@ -10,7 +10,7 @@ import { CommandPalette } from "@/components/CommandPalette/CommandPalette.tsx";
 import { ToastContainer } from "@/components/Notifications/ToastContainer.tsx";
 import { AppRoutes } from "./routes.tsx";
 
-function AppInner({ projectPath: _projectPath, onSwitchProject: _onSwitchProject }: { projectPath: string; onSwitchProject: () => void }) {
+function AppInner({ projectPath: _projectPath, onSwitchProject }: { projectPath: string; onSwitchProject: () => void }) {
   const client = useRpc();
   const connectionState = useConnectionState();
   const wiredRef = useRef(false);
@@ -48,7 +48,7 @@ function AppInner({ projectPath: _projectPath, onSwitchProject: _onSwitchProject
 
   return (
     <BrowserRouter>
-      <AppRoutes />
+      <AppRoutes onSwitchProject={onSwitchProject} />
       <NewSessionModal />
       <CommandPalette />
       <ToastContainer />

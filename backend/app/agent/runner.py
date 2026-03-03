@@ -30,6 +30,7 @@ async def run(
     spec_context: str,
     notify: Callable,
     tracker: Tracker,
+    cwd: Any = None,
 ) -> AgentResult:
     """Execute a persistent conversational agent session.
 
@@ -91,6 +92,7 @@ async def run(
         permission_mode=task.config.permission_mode,
         can_use_tool=can_use_tool,
         include_partial_messages=task.config.stream_text,
+        cwd=str(cwd) if cwd else None,
     )
 
     session_id = ""

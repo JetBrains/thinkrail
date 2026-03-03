@@ -1,10 +1,10 @@
 import { Navigate, Route, Routes } from "react-router-dom";
 import { AppShell } from "@/components/AppShell/AppShell.tsx";
 
-export function AppRoutes() {
+export function AppRoutes({ onSwitchProject }: { onSwitchProject: () => void }) {
   return (
     <Routes>
-      <Route path="/" element={<AppShell />}>
+      <Route path="/" element={<AppShell onSwitchProject={onSwitchProject} />}>
         <Route index element={<Navigate to="/workspace" replace />} />
         <Route path="workspace">
           <Route index element={null} />

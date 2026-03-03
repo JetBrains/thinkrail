@@ -7,7 +7,16 @@
   color: var(--text);
 }
 
+/* Modal mode: overlay on top of the app */
+.picker-modal {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+  z-index: 2000;
+}
+
 .picker-card {
+  position: relative;
   width: 460px;
   background: var(--panel);
   border: 1px solid var(--border);
@@ -15,6 +24,19 @@
   padding: var(--space-xl) var(--space-xl) var(--space-lg);
   box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
 }
+
+.picker-close {
+  position: absolute;
+  top: var(--space-md);
+  right: var(--space-md);
+  border: none;
+  background: transparent;
+  color: var(--hint);
+  font-size: 20px;
+  cursor: pointer;
+  line-height: 1;
+}
+.picker-close:hover { color: var(--text); }
 
 .picker-logo {
   font-size: 24px;

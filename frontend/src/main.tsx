@@ -1,4 +1,4 @@
-import { StrictMode, useState } from "react";
+import { StrictMode, useCallback, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { RpcProvider } from "@/api/index.ts";
 import { App } from "./App.tsx";
@@ -13,9 +13,25 @@ const WS_PROTO = import.meta.env.DEV ? "ws:" : location.protocol === "https:" ? 
 
 function Root() {
   const [projectPath, setProjectPath] = useState<string | null>(null);
+  const [showPicker, setShowPicker] = useState(true);
 
+  const handleSelect = useCallback((path: string) => {
+    setProjectPath(path);
+    setShowPicker(false);
+  }, []);
+
+  const handleSwitchProject = useCallback(() => {
+    setShowPicker(true);
+  }, []);
+
+  const handleClosePicker = useCallback(() => {
+    // Only allow close if we already have a project open
+    if (projectPath) setShowPicker(false);
+  }, [projectPath]);
+
+  // No project selected yet — full-screen picker (no close button)
   if (!projectPath) {
-    return <ProjectPicker onSelect={setProjectPath} />;
+    return <ProjectPicker onSelect={handleSelect} />;
   }
 
   const wsUrl = `${WS_PROTO}//${BACKEND}/ws?project=${encodeURIComponent(projectPath)}`;
@@ -24,8 +40,14 @@ function Root() {
     <RpcProvider url={wsUrl} key={projectPath}>
       <App
         projectPath={projectPath}
-        onSwitchProject={() => setProjectPath(null)}
+        onSwitchProject={handleSwitchProject}
       />
+      {showPicker && (
+        <ProjectPicker
+          onSelect={handleSelect}
+          onClose={handleClosePicker}
+        />
+      )}
     </RpcProvider>
   );
 }

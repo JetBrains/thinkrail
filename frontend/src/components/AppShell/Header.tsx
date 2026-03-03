@@ -1,7 +1,7 @@
 import { useUiStore } from "@/store/uiStore.ts";
 import { useSessionStore } from "@/store/sessionStore.ts";
 
-export function Header() {
+export function Header({ onSwitchProject }: { onSwitchProject: () => void }) {
   const toggleLeft = useUiStore((s) => s.toggleLeftPanel);
   const openModal = useUiStore((s) => s.openModal);
   const sessions = useSessionStore((s) => s.sessions);
@@ -13,7 +13,9 @@ export function Header() {
     <header className="header-bar">
       <div className="header-left">
         <span className="header-logo">Bonsai</span>
-        <span className="header-project">{useUiStore((s) => s.projectName)}</span>
+        <button className="header-project-btn" onClick={onSwitchProject} title="Switch project">
+          {useUiStore((s) => s.projectName)}
+        </button>
         {activeSessions.length > 0 && (
           <span className="header-sessions">
             <span className="session-dot" />

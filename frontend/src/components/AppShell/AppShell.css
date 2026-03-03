@@ -40,6 +40,19 @@
   color: var(--muted);
 }
 
+.header-project-btn {
+  border: none;
+  background: transparent;
+  color: var(--muted);
+  font-family: var(--font);
+  font-size: var(--font-size);
+  cursor: pointer;
+  padding: 2px var(--space-sm);
+  border-radius: var(--radius-sm);
+  transition: all var(--transition-fast);
+}
+.header-project-btn:hover { background: var(--hover); color: var(--text); }
+
 .header-sessions {
   display: flex;
   align-items: center;

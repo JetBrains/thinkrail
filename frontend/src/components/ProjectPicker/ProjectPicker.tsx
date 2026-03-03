@@ -26,17 +26,20 @@ function addRecent(path: string, name: string) {
 
 interface ProjectPickerProps {
   onSelect: (path: string) => void;
+  /** When provided, picker renders as a dismissable modal overlay */
+  onClose?: () => void;
 }
 
-export function ProjectPicker({ onSelect }: ProjectPickerProps) {
+export function ProjectPicker({ onSelect, onClose }: ProjectPickerProps) {
   const [path, setPath] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [recents] = useState(getRecents);
 
-  // Auto-open last project if only one recent
+  // Auto-open last project on initial load (not when switching projects).
+  // onClose is set when user is switching, so skip auto-open in that case.
   useEffect(() => {
-    if (recents.length === 1) {
+    if (!onClose && recents.length === 1) {
       handleOpen(recents[0].path);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -110,8 +113,11 @@ export function ProjectPicker({ onSelect }: ProjectPickerProps) {
   );
 
   return (
-    <div className="picker-container">
-      <div className="picker-card">
+    <div className={`picker-container ${onClose ? "picker-modal" : ""}`} onClick={onClose}>
+      <div className="picker-card" onClick={(e) => e.stopPropagation()}>
+        {onClose && (
+          <button className="picker-close" onClick={onClose}>{"\u00D7"}</button>
+        )}
         <div className="picker-logo">Bonsai</div>
         <div className="picker-subtitle">
           Specification-driven development workspace

@@ -123,8 +123,7 @@ class AgentService:
         self._last_notify[task.id] = notify
 
         try:
-            await run(task, spec_context, notify, self._tracker)
-            # Runner sets idle after last turnComplete, then exits on END_SIGNAL.
+            await run(task, spec_context, notify, self._tracker, cwd=self._config.project_root)
             self._tracker.set_status(task.id, "done")
         except asyncio.CancelledError:
             # Interrupted — don't set error, let interrupt_task handle state
