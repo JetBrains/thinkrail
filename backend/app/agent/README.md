@@ -25,25 +25,17 @@ Sessions are modeled after the Claude Code chat experience: the user starts a se
 
 ### States
 
-```
-   agent/run creates task in idle
+```mermaid
+stateDiagram-v2
+    [*] --> idle : agent/run
 
-            idle ◀──────────────────────────────┐
-              │                                    │
-         agent/send                                │
-              │                                    │
-              ▼          turn completes            │
-           running ──────────────────────▶ idle    │
-              │                            │       │
-              │       agent/interrupt      │       │
-              ├───────────────────────────▶┘       │
-              │                                    │
-              ├──── agent/end ────────▶ done       │
-              │                                    │
-              ├──── SDK error ────────▶ error      │
-              │                                    │
-            idle ─── agent/end ───────▶ done       │
-            idle ─── agent/send ──────▶ running ───┘
+    idle --> running : agent/send
+    idle --> done : agent/end
+
+    running --> idle : turn completes
+    running --> idle : agent/interrupt
+    running --> done : agent/end
+    running --> error : SDK error
 ```
 
 | State | Description |
@@ -55,50 +47,71 @@ Sessions are modeled after the Claude Code chat experience: the user starts a se
 
 ### Lifecycle Sequence
 
-```
-Frontend                      Backend (runner.py)              Claude SDK
-   │                               │                              │
-   │── agent/run {specIds,config} ─▶│── create SDK client ────────▶│
-   │◀── {taskId} ─────────────────│◀── SystemMessage(init) ──────│
-   │                               │   state: idle                 │
-   │                               │                               │
-   │   ┌── Conversation loop (repeats) ───────────────────────┐   │
-   │   │                                                       │   │
-   │── agent/send {taskId, text} ──▶│── query(text) ──────────▶│   │
-   │   │                            │   state: running          │   │
-   │◀─ agent/textDelta ────────────│◀─ streaming ──────────────│   │
-   │◀─ agent/toolCallStart ────────│◀─ ToolUseBlock ───────────│   │
-   │◀─ agent/toolCallEnd ──────────│◀─ ToolResultBlock ────────│   │
-   │   │                            │                           │   │
-   │   │   Mid-turn interactions (canUseTool):                 │   │
-   │   │   ◀─ agent/askUserQuestion ── (suspends on Future)    │   │
-   │   │   ─▶ agent/respond ────────── (Future resolved)       │   │
-   │   │   ◀─ agent/confirmAction ──── (suspends on Future)    │   │
-   │   │   ─▶ agent/respond ────────── (Future resolved)       │   │
-   │   │                                                       │   │
-   │◀─ agent/turnComplete ─────────│◀─ ResultMessage ──────────│   │
-   │   │                            │   state: idle             │   │
-   │   │                                                       │   │
-   │   └───────────────────────────────────────────────────────┘   │
-   │                               │                               │
-   │── agent/end {taskId} ─────────▶│── close SDK client ─────────▶│
-   │◀─ agent/done ─────────────────│   state: done                 │
+```mermaid
+sequenceDiagram
+    participant F as Frontend
+    participant B as Backend (runner.py)
+    participant S as Claude SDK
+
+    F->>B: agent/run {specIds, config}
+    B->>S: create SDK client
+    S-->>B: SystemMessage(init)
+    B-->>F: {taskId}
+    Note over B: state: idle
+
+    rect rgb(40, 40, 60)
+        Note over F,S: Conversation loop (repeats)
+
+        F->>B: agent/send {taskId, text}
+        B->>S: query(text)
+        Note over B: state: running
+        S-->>B: streaming
+        B-->>F: agent/textDelta
+        S-->>B: ToolUseBlock
+        B-->>F: agent/toolCallStart
+        S-->>B: ToolResultBlock
+        B-->>F: agent/toolCallEnd
+
+        opt Mid-turn interactions (canUseTool)
+            B->>F: agent/askUserQuestion
+            Note over B: suspends on Future
+            F->>B: agent/respond
+            Note over B: Future resolved
+            B->>F: agent/confirmAction
+            Note over B: suspends on Future
+            F->>B: agent/respond
+            Note over B: Future resolved
+        end
+
+        S-->>B: ResultMessage
+        B-->>F: agent/turnComplete
+        Note over B: state: idle
+    end
+
+    F->>B: agent/end {taskId}
+    B->>S: close SDK client
+    B-->>F: agent/done
+    Note over B: state: done
 ```
 
 ### Interrupt Flow
 
 `agent/interrupt` cancels the current turn but keeps the session alive:
 
-```
-Frontend                      Backend
-   │                               │
-   │   (agent is running a turn)   │   state: running
-   │── agent/interrupt {taskId} ──▶│
-   │                               │── cancel SDK turn
-   │◀─ agent/interrupted ─────────│   state: idle
-   │                               │
-   │   (user can send another message)
-   │── agent/send {taskId, text} ──▶│   state: running
+```mermaid
+sequenceDiagram
+    participant F as Frontend
+    participant B as Backend
+
+    Note over B: state: running
+    F->>B: agent/interrupt {taskId}
+    B->>B: cancel SDK turn
+    B-->>F: agent/interrupted
+    Note over B: state: idle
+
+    Note over F: user can send another message
+    F->>B: agent/send {taskId, text}
+    Note over B: state: running
 ```
 
 ## Internal Architecture
