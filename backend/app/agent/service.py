@@ -34,6 +34,7 @@ class AgentService:
         config: AgentConfig,
         notify: Callable,
         skill_id: str | None = None,
+        name: str = "",
     ) -> AgentTask:
         """Start a persistent agent session.
 
@@ -41,7 +42,7 @@ class AgentService:
         opens the SDK client and enters idle), and returns immediately.
         The session waits for messages via ``send_message``.
         """
-        task = self._tracker.create_task(spec_ids, config, skill_id=skill_id)
+        task = self._tracker.create_task(spec_ids, config, skill_id=skill_id, name=name)
         spec_context = self._build_context_for(task)
         bg_task = asyncio.create_task(
             self._run_background(task, spec_context, notify)
@@ -100,10 +101,17 @@ class AgentService:
 
     async def end_session(self, task_id: str) -> None:
         """Gracefully close the session."""
-        task = self._tracker.get_task(task_id)
-        if task.status in ("done", "error"):
-            return  # already finished
-        self._tracker.enqueue_end_signal(task_id)
+        try:
+            task = self._tracker.get_task(task_id)
+            if task.status in ("done", "error"):
+                return  # already finished
+            self._tracker.enqueue_end_signal(task_id)
+        except Exception:
+            # Task not in memory (e.g. backend restarted) — update on disk only
+            existing = load_session(self._config.project_root, task_id)
+            if existing and existing.get("status") not in ("done", "error"):
+                existing["status"] = "done"
+                save_session(self._config.project_root, existing)
 
     def get_task(self, task_id: str) -> AgentTask:
         return self._tracker.get_task(task_id)
@@ -120,7 +128,7 @@ class AgentService:
         """Persist current task state to disk."""
         data: dict = {
             "taskId": task.id,
-            "name": getattr(task, "_name", task.id[:8]),
+            "name": task.name or task.id[:8],
             "skillId": task.skill_id,
             "specIds": list(task.spec_ids),
             "config": task.config.model_dump(by_alias=True),
@@ -148,9 +156,12 @@ class AgentService:
         disk = {s["taskId"]: s for s in list_sessions_from_disk(self._config.project_root)}
         # Overlay in-memory active sessions (they have fresher status)
         for task in self._tracker.list_tasks():
+            # Preserve name from disk if the in-memory task has no custom name
+            disk_entry = disk.get(task.id, {})
+            name = task.name or disk_entry.get("name") or task.id[:8]
             disk[task.id] = {
                 "taskId": task.id,
-                "name": getattr(task, "_name", task.id[:8]),
+                "name": name,
                 "skillId": task.skill_id,
                 "specIds": list(task.spec_ids),
                 "status": task.status,
@@ -158,6 +169,7 @@ class AgentService:
                 "createdAt": task.created,
                 "updatedAt": task.updated,
                 "active": True,
+                "continuedFrom": disk_entry.get("continuedFrom"),
             }
         return list(disk.values())
 
@@ -199,8 +211,14 @@ class AgentService:
         old_spec_ids = old.get("specIds", [])
         skill_id = old.get("skillId")
 
-        task = self._tracker.create_task(old_spec_ids, old_config, skill_id=skill_id)
-        task._name = old.get("name", "continued")  # type: ignore[attr-defined]
+        # Clean name — strip previous "(continued)" suffixes
+        base_name = old.get("name", "session").replace(" (continued)", "")
+        continued_name = f"{base_name} (continued)"
+        task = self._tracker.create_task(old_spec_ids, old_config, skill_id=skill_id, name=continued_name)
+
+        # Mark the old session as done on disk
+        old["status"] = "done"
+        save_session(self._config.project_root, old)
 
         # Build spec context + conversation history
         spec_context = self._build_context_for(task)
@@ -209,7 +227,7 @@ class AgentService:
         # Save with link to old session
         data = {
             "taskId": task.id,
-            "name": f"{old.get('name', 'session')} (continued)",
+            "name": continued_name,
             "skillId": skill_id,
             "specIds": old_spec_ids,
             "config": old_config.model_dump(by_alias=True),
@@ -248,8 +266,13 @@ class AgentService:
             # Persist streaming events (skip overly frequent ones)
             if method.startswith("agent/") and method not in ("agent/progress",):
                 event_type = method.replace("agent/", "")
+                # Include requestId in persisted payload (notify injects it
+                # into the WebSocket message but not into the original params dict)
+                payload = {**params}
+                if request_id is not None:
+                    payload["requestId"] = request_id
                 try:
-                    self._save_event(task.id, {"eventType": event_type, "payload": params})
+                    self._save_event(task.id, {"eventType": event_type, "payload": payload})
                 except Exception:
                     pass
         notify = _persisting_notify

@@ -110,6 +110,7 @@ class AgentTask(BaseModel):
     model_config = _CAMEL_CONFIG
 
     id: str = Field(default_factory=lambda: str(uuid4()))
+    name: str = ""
     status: TaskStatus = "idle"
     spec_ids: list[str] = Field(default_factory=list)
     skill_id: str | None = None

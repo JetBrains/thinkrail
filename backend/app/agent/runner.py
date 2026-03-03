@@ -56,6 +56,13 @@ async def run(
                 request_id=request_id,
             )
             response = await future
+            # Check for timeout auto-deny
+            if response.get("behavior") == "deny":
+                return PermissionResultDeny(
+                    behavior="deny",
+                    message=response.get("message", "Timed out"),
+                    interrupt=response.get("interrupt", False),
+                )
             return PermissionResultAllow(
                 behavior="allow",
                 updated_input={
@@ -163,10 +170,12 @@ async def run(
                     duration_ms = int((time.monotonic() - start_time) * 1000)
 
                     if sdk_event.is_error:
+                        # Send error notification but DON'T terminate the session.
+                        # Go back to idle so the user can send another message.
                         await notify("agent/error", {
                             "taskId": task.id,
                             "sessionId": sdk_event.session_id or session_id,
-                            "subtype": "error",
+                            "subtype": "turn_error",
                             "errors": [sdk_event.result] if sdk_event.result else [],
                             "result": sdk_event.result or "",
                             "costUsd": total_cost,
@@ -174,16 +183,8 @@ async def run(
                             "durationMs": duration_ms,
                             "usage": sdk_event.usage or {},
                         })
-                        tracker.set_status(task.id, "error")
-                        return AgentResult(
-                            task_id=task.id,
-                            session_id=sdk_event.session_id or session_id,
-                            result=sdk_event.result or "",
-                            cost_usd=total_cost,
-                            turns=total_turns,
-                            duration_ms=duration_ms,
-                            usage=sdk_event.usage or {},
-                        )
+                        tracker.set_status(task.id, "idle")
+                        break  # back to conversation loop, wait for next message
                     else:
                         await notify("agent/turnComplete", {
                             "taskId": task.id,

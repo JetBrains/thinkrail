@@ -1,6 +1,8 @@
 import { useCallback } from "react";
 import { useSessionStore } from "@/store/sessionStore.ts";
 import { useFileStore } from "@/store/fileStore.ts";
+import { useRpc } from "@/api/hooks/useRpc.tsx";
+import { createSessionApi } from "@/api/methods/sessions.ts";
 import type { SessionStatus } from "@/types/session.ts";
 import { ChatStream } from "@/components/ChatStream/ChatStream.tsx";
 import { SessionStatusLine } from "@/components/ChatStream/SessionStatusLine.tsx";
@@ -122,15 +124,73 @@ export function SessionPanel() {
             metrics={activeSession.metrics}
             running={isRunning}
           />
-          <InputArea
-            disabled={inputDisabled}
-            placeholder={placeholder}
-            onSend={handleSend}
-          />
+          {activeSession.restored ? (
+            <RestoredBar taskId={activeSession.taskId} />
+          ) : (
+            <InputArea
+              disabled={inputDisabled}
+              placeholder={placeholder}
+              onSend={handleSend}
+            />
+          )}
         </>
       ) : (
         <div className="center-placeholder">Select a tab</div>
       )}
     </>
+  );
+}
+
+function RestoredBar({ taskId }: { taskId: string }) {
+  const client = useRpc();
+  const sessions = useSessionStore((s) => s.sessions);
+
+  const handleResume = useCallback(async () => {
+    try {
+      const api = createSessionApi(client);
+      const { taskId: newTaskId } = await api.continue(taskId);
+
+      // Get the old session's data to carry over into the new tab
+      const oldSession = sessions.get(taskId);
+      const baseName = (oldSession?.name ?? "session").replace(" (resumed)", "");
+      const name = `${baseName} (resumed)`;
+
+      // Create a placeholder that carries over the old conversation history
+      useSessionStore.setState((s) => {
+        const next = new Map(s.sessions);
+        const old = next.get(taskId);
+        next.delete(taskId);
+        if (!next.has(newTaskId)) {
+          next.set(newTaskId, {
+            taskId: newTaskId,
+            name,
+            skillId: old?.skillId ?? null,
+            specIds: old?.specIds ?? [],
+            status: "idle",
+            model: old?.model ?? "",
+            startedAt: old?.startedAt ?? Date.now(),
+            // Carry over old events so the chat history is preserved
+            events: old?.events ?? [],
+            metrics: old?.metrics ?? { costUsd: 0, turns: 0, toolCalls: 0, contextTokens: 0, contextMax: 0, durationMs: 0, filesChanged: {} },
+            pendingRequest: null,
+            answeredRequests: old?.answeredRequests ?? new Map(),
+          });
+        }
+        return { sessions: next, activeSessionId: newTaskId };
+      });
+    } catch (e) {
+      console.error("Failed to resume session:", e);
+    }
+  }, [client, taskId, sessions]);
+
+  return (
+    <div className="restored-bar">
+      <span className="restored-bar-text">
+        This is a restored session (read-only)
+      </span>
+      <button className="restored-bar-btn" onClick={handleResume}>
+        Resume Session
+      </button>
+    </div>
   );
 }

@@ -127,8 +127,23 @@
 }
 .sm-btn-continue:hover { background: rgba(59, 116, 238, 0.1); }
 
+.sm-btn-stop {
+  border-color: var(--gold);
+  color: var(--gold);
+}
+.sm-btn-stop:hover { background: rgba(232, 163, 54, 0.1); }
+
 .sm-btn-delete {
   border-color: var(--red);
   color: var(--red);
 }
 .sm-btn-delete:hover { background: rgba(247, 84, 100, 0.1); }
+
+.sm-error {
+  color: var(--red);
+  font-size: 12px;
+  padding: var(--space-sm) var(--space-md);
+  background: rgba(247, 84, 100, 0.1);
+  border-radius: var(--radius-sm);
+  margin-bottom: var(--space-md);
+}

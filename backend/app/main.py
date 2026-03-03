@@ -16,6 +16,18 @@ class _InitBody(BaseModel):
     path: str
 
 
+class _WriteFileBody(BaseModel):
+    project: str
+    path: str
+    content: str
+
+
+class _OpenExternalBody(BaseModel):
+    project: str
+    path: str
+    editor: str
+
+
 def create_app() -> FastAPI:
     """Create and configure the Bonsai FastAPI application."""
 
@@ -133,11 +145,6 @@ def create_app() -> FastAPI:
         except Exception as e:
             return {"error": str(e), "path": path}
 
-    class _WriteFileBody(BaseModel):
-        project: str
-        path: str
-        content: str
-
     @app.post("/api/file/write")
     async def write_file(body: _WriteFileBody):
         """Write content to a file. Path is relative to project root."""
@@ -146,11 +153,6 @@ def create_app() -> FastAPI:
         file_path.parent.mkdir(parents=True, exist_ok=True)
         file_path.write_text(body.content, encoding="utf-8")
         return {"ok": True, "path": body.path}
-
-    class _OpenExternalBody(BaseModel):
-        project: str
-        path: str
-        editor: str  # "idea" or "code"
 
     @app.post("/api/file/open-external")
     async def open_external(body: _OpenExternalBody):

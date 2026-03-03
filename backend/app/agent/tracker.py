@@ -41,9 +41,9 @@ class Tracker:
     # -- task lifecycle -------------------------------------------------------
 
     def create_task(
-        self, spec_ids: list[str], config: AgentConfig, skill_id: str | None = None
+        self, spec_ids: list[str], config: AgentConfig, skill_id: str | None = None, name: str = ""
     ) -> AgentTask:
-        task = AgentTask(spec_ids=spec_ids, skill_id=skill_id, config=config)
+        task = AgentTask(name=name, spec_ids=spec_ids, skill_id=skill_id, config=config)
         self._tasks[task.id] = task
         self._queues[task.id] = asyncio.Queue()
         return task
@@ -107,8 +107,12 @@ class Tracker:
 
         def _on_timeout() -> None:
             if not future.done():
-                future.cancel()
+                # Auto-deny on timeout instead of cancelling — this lets
+                # the runner handle it gracefully (PermissionResultDeny)
+                # rather than crashing the entire turn with CancelledError.
+                future.set_result({"behavior": "deny", "message": "Timed out waiting for user response", "interrupt": False})
                 task_futures.pop(request_id, None)
+                logger.warning("Future timed out for task %s request %s — auto-denied", task_id, request_id)
 
         loop.call_later(timeout_seconds, _on_timeout)
         return future

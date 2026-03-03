@@ -119,7 +119,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
 
   startSession: async ({ specIds, config, name, skillId }) => {
     const api = createAgentApi(getClient());
-    const { taskId } = await api.run({ specIds, config, skillId: skillId ?? undefined });
+    const { taskId } = await api.run({ specIds, config, skillId: skillId ?? undefined, name });
 
     set((s) => {
       const next = new Map(s.sessions);
@@ -180,18 +180,30 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
       payload: (ev.payload as Record<string, unknown>) ?? ev,
     }));
 
+    // Mark all question/approval events as answered (historical session)
+    const answered = new Map<string, unknown>();
+    for (const ev of events) {
+      if (ev.eventType === "askUserQuestion" || ev.eventType === "confirmAction") {
+        const rid = (ev.payload.requestId as string) ?? "";
+        if (rid) answered.set(rid, { historical: true });
+      }
+    }
+
     const session: Session = {
       taskId,
       name: data.name ?? taskId.slice(0, 8),
       skillId: (data.skillId as string) ?? null,
       specIds: data.specIds ?? [],
-      status: (data.status as Session["status"]) ?? "done",
+      // Restored sessions are read-only — force "done" regardless of disk
+      // status, because the backend runner is dead.
+      status: "done",
       model: (data.config?.model as string) ?? "",
       startedAt: new Date(data.createdAt).getTime(),
       events,
       metrics: emptyMetrics(),
       pendingRequest: null,
-      answeredRequests: new Map(),
+      answeredRequests: answered,
+      restored: true,
     };
 
     set((s) => {
@@ -415,6 +427,10 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
 
   onSessionError: (params) => {
     const taskId = params.taskId as string;
+    const subtype = params.subtype as string;
+    // "turn_error" = recoverable (e.g. permissions timeout) — go back to idle
+    // "crash" or other = terminal error
+    const isRecoverable = subtype === "turn_error";
     set((s) => {
       const sessions = appendEvent(
         s.sessions,
@@ -426,7 +442,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
       if (session) {
         sessions.set(taskId, {
           ...session,
-          status: "error",
+          status: isRecoverable ? "idle" : "error",
           pendingRequest: null,
         });
       }

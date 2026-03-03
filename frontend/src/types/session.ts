@@ -33,6 +33,8 @@ export interface Session {
   pendingRequest: PendingRequest | null;
   /** Maps requestId → the response that was sent (for rendering answered state) */
   answeredRequests: Map<string, unknown>;
+  /** True if this session was loaded from disk (read-only, no live backend runner) */
+  restored?: boolean;
 }
 
 export interface ArchivedSession {

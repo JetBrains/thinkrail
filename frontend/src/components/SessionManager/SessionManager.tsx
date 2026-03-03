@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { useRpc } from "@/api/hooks/useRpc.tsx";
 import { createSessionApi, type SessionSummary } from "@/api/methods/sessions.ts";
+import { createAgentApi } from "@/api/methods/agents.ts";
 import { useSessionStore } from "@/store/sessionStore.ts";
 import "./SessionManager.css";
 
@@ -31,16 +32,21 @@ export function SessionManager({ onClose }: { onClose?: () => void }) {
   const client = useRpc();
   const [sessions, setSessions] = useState<SessionSummary[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const switchSession = useSessionStore((s) => s.switchSession);
   const activeSessions = useSessionStore((s) => s.sessions);
+  const restoreSession = useSessionStore((s) => s.restoreSession);
+  const endSession = useSessionStore((s) => s.endSession);
 
   const fetchSessions = useCallback(async () => {
+    setLoading(true);
+    setError(null);
     try {
       const api = createSessionApi(client);
       const list = await api.list();
       setSessions(list);
-    } catch {
-      // ignore
+    } catch (e) {
+      setError(`Failed to load sessions: ${(e as Error).message}`);
     } finally {
       setLoading(false);
     }
@@ -57,12 +63,28 @@ export function SessionManager({ onClose }: { onClose?: () => void }) {
         const { taskId: newTaskId } = await api.continue(taskId);
         switchSession(newTaskId);
         onClose?.();
-        fetchSessions();
       } catch (e) {
         console.error("Failed to continue session:", e);
       }
     },
-    [client, switchSession, fetchSessions],
+    [client, switchSession, onClose],
+  );
+
+  const handleStop = useCallback(
+    async (taskId: string) => {
+      try {
+        const api = createAgentApi(client);
+        await api.end(taskId);
+        // Also end it in the local store if present
+        if (activeSessions.has(taskId)) {
+          try { await endSession(taskId); } catch { /* ignore */ }
+        }
+        fetchSessions();
+      } catch (e) {
+        console.error("Failed to stop session:", e);
+      }
+    },
+    [client, activeSessions, endSession, fetchSessions],
   );
 
   const handleDelete = useCallback(
@@ -77,8 +99,6 @@ export function SessionManager({ onClose }: { onClose?: () => void }) {
     },
     [client, fetchSessions],
   );
-
-  const restoreSession = useSessionStore((s) => s.restoreSession);
 
   const handleOpen = useCallback(
     async (taskId: string) => {
@@ -111,7 +131,9 @@ export function SessionManager({ onClose }: { onClose?: () => void }) {
         </button>
       </div>
 
-      {sessions.length === 0 && (
+      {error && <div className="sm-error">{error}</div>}
+
+      {sessions.length === 0 && !error && (
         <div className="sm-empty">No sessions yet. Create one with Cmd+T.</div>
       )}
 
@@ -120,6 +142,7 @@ export function SessionManager({ onClose }: { onClose?: () => void }) {
           label="Active"
           sessions={active}
           onOpen={handleOpen}
+          onStop={handleStop}
           onContinue={handleContinue}
           onDelete={handleDelete}
         />
@@ -129,6 +152,7 @@ export function SessionManager({ onClose }: { onClose?: () => void }) {
           label="Completed"
           sessions={completed}
           onOpen={handleOpen}
+          onStop={handleStop}
           onContinue={handleContinue}
           onDelete={handleDelete}
         />
@@ -138,6 +162,7 @@ export function SessionManager({ onClose }: { onClose?: () => void }) {
           label="Errors"
           sessions={errored}
           onOpen={handleOpen}
+          onStop={handleStop}
           onContinue={handleContinue}
           onDelete={handleDelete}
         />
@@ -150,12 +175,14 @@ function SessionGroup({
   label,
   sessions,
   onOpen,
+  onStop,
   onContinue,
   onDelete,
 }: {
   label: string;
   sessions: SessionSummary[];
   onOpen: (id: string) => void;
+  onStop: (id: string) => void;
   onContinue: (id: string) => void;
   onDelete: (id: string) => void;
 }) {
@@ -177,6 +204,16 @@ function SessionGroup({
               {s.model && <span>{s.model}</span>}
               {s.continuedFrom && <span>continued</span>}
             </div>
+            {isActive && (
+              <div className="sm-card-actions" onClick={(e) => e.stopPropagation()}>
+                <button className="sm-btn" onClick={() => onOpen(s.taskId)}>
+                  Switch to
+                </button>
+                <button className="sm-btn sm-btn-stop" onClick={() => onStop(s.taskId)}>
+                  Stop
+                </button>
+              </div>
+            )}
             {isDead && (
               <div className="sm-card-actions" onClick={(e) => e.stopPropagation()}>
                 <button className="sm-btn sm-btn-continue" onClick={() => onContinue(s.taskId)}>
@@ -184,13 +221,6 @@ function SessionGroup({
                 </button>
                 <button className="sm-btn sm-btn-delete" onClick={() => onDelete(s.taskId)}>
                   Delete
-                </button>
-              </div>
-            )}
-            {isActive && (
-              <div className="sm-card-actions" onClick={(e) => e.stopPropagation()}>
-                <button className="sm-btn" onClick={() => onOpen(s.taskId)}>
-                  Switch to
                 </button>
               </div>
             )}

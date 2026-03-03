@@ -346,3 +346,32 @@
   font-size: 8px;
   margin-left: 2px;
 }
+
+/* ── Restored Session Bar ── */
+.restored-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-md) var(--space-lg);
+  border-top: 1px solid var(--border);
+  background: var(--panel);
+  flex-shrink: 0;
+}
+.restored-bar-text {
+  font-size: 12px;
+  color: var(--hint);
+  font-style: italic;
+}
+.restored-bar-btn {
+  padding: var(--space-sm) var(--space-lg);
+  border: 1px solid var(--blue);
+  border-radius: var(--radius-sm);
+  background: var(--blue);
+  color: #fff;
+  font-family: var(--font);
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: opacity var(--transition-fast);
+}
+.restored-bar-btn:hover { opacity: 0.9; }
