@@ -44,12 +44,12 @@ async def run(
     ) -> PermissionResultAllow | PermissionResultDeny:
         if tool_name == "AskUserQuestion":
             request_id = str(uuid4())
+            future = tracker.register_future(task.id, request_id)
             await notify(
                 "agent/askUserQuestion",
                 {"taskId": task.id, "questions": input_data.get("questions", [])},
                 request_id=request_id,
             )
-            future = tracker.register_future(task.id, request_id)
             response = await future
             return PermissionResultAllow(
                 behavior="allow",
@@ -60,6 +60,7 @@ async def run(
             )
         else:
             request_id = str(uuid4())
+            future = tracker.register_future(task.id, request_id)
             await notify(
                 "agent/confirmAction",
                 {
@@ -69,7 +70,6 @@ async def run(
                 },
                 request_id=request_id,
             )
-            future = tracker.register_future(task.id, request_id)
             response = await future
             if response.get("behavior") == "allow":
                 return PermissionResultAllow(behavior="allow")
@@ -89,8 +89,12 @@ async def run(
         include_partial_messages=task.config.stream_text,
     )
 
-    # Ask the frontend for the initial prompt via the Future mechanism
+    # Ask the frontend for the initial prompt via the Future mechanism.
+    # Register the future BEFORE sending the notification, because the
+    # frontend may respond (via agent/respond RPC) before this coroutine
+    # continues — the WebSocket dispatch loop processes it first.
     prompt_request_id = str(uuid4())
+    prompt_future = tracker.register_future(task.id, prompt_request_id)
     await notify(
         "agent/askUserQuestion",
         {
@@ -107,7 +111,6 @@ async def run(
         },
         request_id=prompt_request_id,
     )
-    prompt_future = tracker.register_future(task.id, prompt_request_id)
     prompt_response = await prompt_future
     user_prompt = prompt_response.get("text", "")
     if not user_prompt:

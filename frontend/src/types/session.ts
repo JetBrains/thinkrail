@@ -31,6 +31,8 @@ export interface Session {
   events: AgentEvent[];
   metrics: SessionMetrics;
   pendingRequest: PendingRequest | null;
+  /** Maps requestId → the response that was sent (for rendering answered state) */
+  answeredRequests: Map<string, unknown>;
 }
 
 export interface ArchivedSession {

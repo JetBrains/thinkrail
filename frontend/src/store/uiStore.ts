@@ -12,6 +12,9 @@ interface ModalPrefill {
 }
 
 interface UiStore {
+  projectPath: string | null;
+  projectName: string;
+  setProject: (path: string) => void;
   leftPanelCollapsed: boolean;
   rightPanelCollapsed: boolean;
   leftDrawerOpen: boolean;
@@ -43,6 +46,10 @@ function computeBreakpoint(width: number): Breakpoint {
 export const useUiStore = create<UiStore>()(
   persist(
     (set) => ({
+      projectPath: null,
+      projectName: "Project",
+      setProject: (path: string) =>
+        set({ projectPath: path, projectName: path.split("/").pop() ?? "Project" }),
       leftPanelCollapsed: false,
       rightPanelCollapsed: false,
       leftDrawerOpen: false,

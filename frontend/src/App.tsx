@@ -10,7 +10,7 @@ import { CommandPalette } from "@/components/CommandPalette/CommandPalette.tsx";
 import { ToastContainer } from "@/components/Notifications/ToastContainer.tsx";
 import { AppRoutes } from "./routes.tsx";
 
-function AppInner() {
+function AppInner({ projectPath: _projectPath, onSwitchProject: _onSwitchProject }: { projectPath: string; onSwitchProject: () => void }) {
   const client = useRpc();
   const connectionState = useConnectionState();
   const wiredRef = useRef(false);
@@ -22,6 +22,7 @@ function AppInner() {
       wiredRef.current = true;
       setClient(client);
       wireEvents(client);
+      useUiStore.getState().setProject(_projectPath);
       console.log("[Bonsai] Fetching specs...");
       useSpecStore.getState().fetchSpecs().then(() => {
         console.log("[Bonsai] Specs loaded:", useSpecStore.getState().specs.length);
@@ -55,6 +56,12 @@ function AppInner() {
   );
 }
 
-export function App() {
-  return <AppInner />;
+export function App({
+  projectPath,
+  onSwitchProject,
+}: {
+  projectPath: string;
+  onSwitchProject: () => void;
+}) {
+  return <AppInner projectPath={projectPath} onSwitchProject={onSwitchProject} />;
 }

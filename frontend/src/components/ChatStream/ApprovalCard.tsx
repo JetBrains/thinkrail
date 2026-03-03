@@ -1,11 +1,26 @@
 interface ApprovalCardProps {
   toolName: string;
-  toolInput?: string;
+  toolInput?: unknown;
   description?: string;
   answered: boolean;
   decision?: "approve" | "deny";
   onApprove: () => void;
   onDeny: () => void;
+}
+
+function formatToolInput(input: unknown): string {
+  if (!input) return "";
+  if (typeof input === "string") return input;
+  if (typeof input === "object") {
+    const obj = input as Record<string, unknown>;
+    // Show the most relevant field for common tools
+    if (obj.command) return String(obj.command);
+    if (obj.file_path) return String(obj.file_path);
+    if (obj.path) return String(obj.path);
+    if (obj.pattern) return String(obj.pattern);
+    return JSON.stringify(input, null, 2);
+  }
+  return String(input);
 }
 
 export function ApprovalCard({
@@ -22,7 +37,7 @@ export function ApprovalCard({
       <div className="chat-approval-title">Action requires approval</div>
       <div className="chat-approval-tool">
         <span className="chat-tool-name">{toolName}</span>
-        {toolInput && <span className="chat-approval-input">{toolInput}</span>}
+        {toolInput != null && <span className="chat-approval-input">{formatToolInput(toolInput)}</span>}
       </div>
       {description && (
         <div className="chat-approval-desc">{description}</div>

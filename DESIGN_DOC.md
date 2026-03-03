@@ -295,7 +295,13 @@ Specs are stored as files in the repository. The registry tracks metadata:
 
 **Style:** JSON-RPC 2.0 over WebSocket — true bidirectional (LSP-style)
 
-Communication flows in three directions over a single WebSocket at `/ws`:
+**Project selection:** The WebSocket URL includes a `project` query parameter specifying the project directory: `ws://host/ws?project=/path/to/dir`. The backend validates `.specs/registry.json` exists and creates per-connection services scoped to that project.
+
+**REST endpoints** for project management (before WebSocket connection):
+- `GET /api/project/validate?path=...` — check if path is a valid Bonsai project
+- `POST /api/project/init` — initialize `.specs/` in a new directory
+
+Communication flows in three directions over a single WebSocket at `/ws?project=...`:
 - **Client → Server requests:** `spec/*` CRUD + graph, `agent/run`, `agent/status`, `agent/list`, `agent/interrupt`, `agent/respond`
 - **Server → Client notifications:** file watcher events (`spec/did*`, `registry/didUpdate`), agent streaming events (`agent/sessionStart`, `agent/textDelta`, `agent/toolCall*`, `agent/subagent*`, `agent/notification`, `agent/compact`, `agent/progress`, `agent/done`, `agent/error`, `agent/permissionDenied`)
 - **Server → Client requests:** `agent/askUserQuestion`, `agent/confirmAction` — client responds via `agent/respond`

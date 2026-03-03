@@ -9,17 +9,16 @@ import { ApprovalCard } from "./ApprovalCard.tsx";
 import { CompletionBanner } from "./CompletionBanner.tsx";
 import { ErrorBanner } from "./ErrorBanner.tsx";
 import { CompactMarker } from "./CompactMarker.tsx";
-import type { PendingRequest } from "@/types/session.ts";
 
 interface ChatStreamProps {
   events: AgentEvent[];
-  pendingRequest: PendingRequest | null;
+  answeredRequests: Map<string, unknown>;
   onResolveRequest: (requestId: string, response: unknown) => void;
 }
 
 export function ChatStream({
   events,
-  pendingRequest,
+  answeredRequests,
   onResolveRequest,
 }: ChatStreamProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -128,7 +127,7 @@ export function ChatStream({
           case "askUserQuestion": {
             const questions = (p.questions as AgentEvent["payload"][]) ?? [];
             const requestId = (p.requestId as string) ?? "";
-            const isAnswered = !pendingRequest || pendingRequest.requestId !== requestId;
+            const isAnswered = answeredRequests.has(requestId);
             return (
               <QuestionCard
                 key={i}
@@ -141,14 +140,17 @@ export function ChatStream({
 
           case "confirmAction": {
             const requestId = (p.requestId as string) ?? "";
-            const isAnswered = !pendingRequest || pendingRequest.requestId !== requestId;
+            const isAnswered = answeredRequests.has(requestId);
+            const savedResponse = answeredRequests.get(requestId) as Record<string, unknown> | undefined;
+            const decision = savedResponse?.behavior === "allow" ? "approve" as const : "deny" as const;
             return (
               <ApprovalCard
                 key={i}
                 toolName={(p.toolName as string) ?? "action"}
-                toolInput={(p.toolInput as string) ?? undefined}
+                toolInput={p.toolInput ?? undefined}
                 description={(p.description as string) ?? undefined}
                 answered={isAnswered}
+                decision={isAnswered ? decision : undefined}
                 onApprove={() =>
                   onResolveRequest(requestId, { behavior: "allow" })
                 }

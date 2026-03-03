@@ -73,6 +73,7 @@ function ensureSession(
     events: [],
     metrics: emptyMetrics(),
     pendingRequest: null,
+    answeredRequests: new Map(),
   });
   return next;
 }
@@ -131,6 +132,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
         events: existing?.events ?? [],
         metrics: existing?.metrics ?? emptyMetrics(),
         pendingRequest: existing?.pendingRequest ?? null,
+        answeredRequests: existing?.answeredRequests ?? new Map(),
       });
       return { sessions: next, activeSessionId: taskId };
     });
@@ -197,12 +199,21 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
       console.error("Failed to send agent/respond:", err);
     });
 
-    // Clear pendingRequest on the session and decrement notification count
+    // Mark request as answered (store the response) and clear pendingRequest
     set((s) => {
       const session = s.sessions.get(taskId);
       if (!session) return s;
       const nextSessions = new Map(s.sessions);
-      nextSessions.set(taskId, { ...session, pendingRequest: null });
+      const answered = new Map(session.answeredRequests);
+      answered.set(requestId, response);
+      nextSessions.set(taskId, {
+        ...session,
+        pendingRequest:
+          session.pendingRequest?.requestId === requestId
+            ? null
+            : session.pendingRequest,
+        answeredRequests: answered,
+      });
       return { sessions: nextSessions };
     });
   },

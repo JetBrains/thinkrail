@@ -13,7 +13,7 @@ export function Header() {
     <header className="header-bar">
       <div className="header-left">
         <span className="header-logo">Bonsai</span>
-        <span className="header-project">Project</span>
+        <span className="header-project">{useUiStore((s) => s.projectName)}</span>
         {activeSessions.length > 0 && (
           <span className="header-sessions">
             <span className="session-dot" />

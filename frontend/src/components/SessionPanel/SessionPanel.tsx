@@ -72,7 +72,7 @@ export function SessionPanel() {
         <>
           <ChatStream
             events={active.events}
-            pendingRequest={active.pendingRequest}
+            answeredRequests={active.answeredRequests}
             onResolveRequest={handleResolve}
           />
           <SessionStatusLine

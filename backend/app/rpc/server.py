@@ -27,7 +27,7 @@ from app.rpc.methods.agents import (
     run_agent,
 )
 from app.agent.service import AgentService
-from app.core.config import AppConfig
+from app.core.config import AppConfig, load_config
 from app.core.fileio import read_text
 from app.core.watcher import WatchHandle, watch, stop
 from app.spec.service import SpecService
@@ -49,6 +49,7 @@ METHODS = {
 }
 
 _active_ws: WebSocket | None = None
+_active_watcher: WatchHandle | None = None
 
 
 def _bind_methods(
@@ -64,15 +65,36 @@ def _bind_methods(
     return bound
 
 
-def register_routes(app: FastAPI, config: AppConfig) -> None:
-    """Register the ``/ws`` WebSocket endpoint on the FastAPI app."""
-    spec_service = SpecService(config)
-    agent_service = AgentService(config, spec_service)
-    bound_methods = _bind_methods(spec_service, agent_service)
+def register_routes(app: FastAPI) -> None:
+    """Register the ``/ws`` WebSocket endpoint on the FastAPI app.
+
+    Each connection specifies a project directory via the ``project``
+    query parameter. Services and watcher are created per-connection.
+    """
 
     @app.websocket("/ws")
     async def ws_endpoint(websocket: WebSocket) -> None:
-        global _active_ws
+        global _active_ws, _active_watcher
+
+        # Read project path from query params
+        project_param = websocket.query_params.get("project")
+        if not project_param:
+            await websocket.close(code=4001, reason="Missing project query parameter")
+            return
+
+        project_path = Path(project_param).expanduser().resolve()
+        if not (project_path / ".specs" / "registry.json").is_file():
+            await websocket.close(
+                code=4002,
+                reason=f"Invalid project: {project_path} has no .specs/registry.json",
+            )
+            return
+
+        # Build per-connection config and services
+        config = load_config(project_root=project_path)
+        spec_service = SpecService(config)
+        agent_service = AgentService(config, spec_service)
+        bound_methods = _bind_methods(spec_service, agent_service)
 
         # Replace existing connection if any
         if _active_ws is not None:
@@ -80,12 +102,22 @@ def register_routes(app: FastAPI, config: AppConfig) -> None:
                 await _active_ws.close(code=4000, reason="replaced")
             except Exception:
                 pass
+        if _active_watcher is not None:
+            try:
+                await stop(_active_watcher)
+            except Exception:
+                pass
+            _active_watcher = None
 
         await websocket.accept()
         _active_ws = websocket
 
         notify = make_notify(websocket)
         notifications.current_notify = notify
+
+        # Start per-connection file watcher
+        watcher_handle = await _start_watcher(config, spec_service)
+        _active_watcher = watcher_handle
 
         try:
             while True:
@@ -98,15 +130,19 @@ def register_routes(app: FastAPI, config: AppConfig) -> None:
         except WebSocketDisconnect:
             logger.info("WebSocket client disconnected")
         finally:
-            # Only clear if we're still the active connection
             if _active_ws is websocket:
                 notifications.current_notify = None
                 _active_ws = None
+            if _active_watcher is watcher_handle:
+                try:
+                    await stop(watcher_handle)
+                except Exception:
+                    pass
+                _active_watcher = None
 
 
-async def start_watcher(config: AppConfig) -> WatchHandle:
-    """Start the filesystem watcher on the project directory."""
-    service = SpecService(config)
+async def _start_watcher(config: AppConfig, service: SpecService) -> WatchHandle:
+    """Start the filesystem watcher for a project directory."""
     registry_path = config.get_registry_path()
 
     _change_to_method = {
@@ -130,7 +166,6 @@ async def start_watcher(config: AppConfig) -> WatchHandle:
                     registry_content = {}
                 await notify("registry/didUpdate", {"registry": registry_content})
             elif path.suffix in (".md", ".json"):
-                # Check if this path is a known spec file
                 try:
                     summaries = service.list_specs()
                 except Exception:
@@ -150,8 +185,3 @@ async def start_watcher(config: AppConfig) -> WatchHandle:
                     await notify(method, params)
 
     return await watch([config.get_project_root()], _on_file_change)
-
-
-async def stop_watcher(handle: WatchHandle) -> None:
-    """Stop the filesystem watcher."""
-    await stop(handle)
