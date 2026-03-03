@@ -112,6 +112,7 @@ class AgentTask(BaseModel):
     id: str = Field(default_factory=lambda: str(uuid4()))
     status: TaskStatus = "idle"
     spec_ids: list[str] = Field(default_factory=list)
+    skill_id: str | None = None
     config: AgentConfig = Field(default_factory=AgentConfig)
     session_id: str | None = None
     created: str = Field(default_factory=lambda: datetime.now(UTC).isoformat())

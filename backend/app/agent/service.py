@@ -5,13 +5,14 @@ import logging
 from collections.abc import Callable
 from typing import Any
 
+from app.agent.context import build_context
 from app.agent.models import AgentConfig, AgentTask
 from app.agent.runner import run
 from app.agent.tracker import Tracker
-
-logger = logging.getLogger(__name__)
 from app.core.config import AppConfig
 from app.spec.service import SpecService
+
+logger = logging.getLogger(__name__)
 
 
 class AgentService:
@@ -30,6 +31,7 @@ class AgentService:
         spec_ids: list[str],
         config: AgentConfig,
         notify: Callable,
+        skill_id: str | None = None,
     ) -> AgentTask:
         """Start a persistent agent session.
 
@@ -37,8 +39,8 @@ class AgentService:
         opens the SDK client and enters idle), and returns immediately.
         The session waits for messages via ``send_message``.
         """
-        task = self._tracker.create_task(spec_ids, config)
-        spec_context = self._build_context(spec_ids)
+        task = self._tracker.create_task(spec_ids, config, skill_id=skill_id)
+        spec_context = self._build_context_for(task)
         bg_task = asyncio.create_task(
             self._run_background(task, spec_context, notify)
         )
@@ -85,7 +87,7 @@ class AgentService:
                 except Exception:
                     pass
             # Re-launch the background runner for continued conversation
-            spec_context = self._build_context(task.spec_ids)
+            spec_context = self._build_context_for(task)
             notify = self._last_notify.get(task_id)
             if notify:
                 new_bg = asyncio.create_task(
@@ -148,9 +150,12 @@ class AgentService:
             self._running_tasks.pop(task.id, None)
             self._last_notify.pop(task.id, None)
 
-    def _build_context(self, spec_ids: list[str]) -> str:
-        parts = []
-        for sid in spec_ids:
-            detail = self._spec_service.get_spec(sid)
-            parts.append(f"# {detail.title}\n\n{detail.content}")
-        return "\n\n---\n\n".join(parts)
+    def _build_context_for(self, task: AgentTask) -> str:
+        return build_context(
+            spec_ids=task.spec_ids,
+            skill_id=task.skill_id,
+            project_root=self._config.project_root,
+            config=task.config,
+            spec_service=self._spec_service,
+            plugin_dir=self._config.plugin_dir,
+        )

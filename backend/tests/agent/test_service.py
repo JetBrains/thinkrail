@@ -178,15 +178,27 @@ class TestRespond:
 
 class TestBuildContext:
     def test_builds_context_from_specs(self) -> None:
-        service, _, spec_service = _make_service()
+        from pathlib import Path
+        from app.agent.context import build_context
+
+        spec_service = MagicMock()
         spec_service.get_spec.side_effect = [
             _make_spec_detail("s1", "First Spec", "Content one"),
             _make_spec_detail("s2", "Second Spec", "Content two"),
         ]
 
-        context = service._build_context(["s1", "s2"])
-        assert "# First Spec" in context
+        context = build_context(
+            spec_ids=["s1", "s2"],
+            skill_id=None,
+            project_root=Path("/tmp/test-project"),
+            config=AgentConfig(),
+            spec_service=spec_service,
+            plugin_dir=Path("/tmp/plugins"),
+        )
+        assert "### First Spec" in context
         assert "Content one" in context
-        assert "# Second Spec" in context
+        assert "### Second Spec" in context
         assert "Content two" in context
         assert "---" in context
+        assert "## Project" in context
+        assert "/tmp/test-project" in context

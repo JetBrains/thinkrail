@@ -8,11 +8,12 @@
 3. [Internal Architecture](#internal-architecture)
 4. [File Organization](#file-organization)
 5. [Public Interface](#public-interface)
-6. [TODO](#todo)
-7. [Design Decisions](#design-decisions)
-8. [Dependencies](#dependencies)
-9. [Known Limitations](#known-limitations)
-10. [Related Specs](#related-specs)
+6. [Context Assembly](#context-assembly)
+7. [TODO](#todo)
+8. [Design Decisions](#design-decisions)
+9. [Dependencies](#dependencies)
+10. [Known Limitations](#known-limitations)
+11. [Related Specs](#related-specs)
 
 ## Purpose
 
@@ -102,7 +103,7 @@ Frontend                      Backend
 
 ## Internal Architecture
 
-**Pattern:** Service facade over two collaborators — `runner.py` (SDK integration) and `tracker.py` (session lifecycle + pending request state).
+**Pattern:** Service facade over three collaborators — `context.py` (prompt assembly), `runner.py` (SDK integration), and `tracker.py` (session lifecycle + pending request state).
 
 ```mermaid
 ---
@@ -111,6 +112,7 @@ title: Agent Module — Internal Architecture
 graph TD
     subgraph AgentModule["Agent Module"]
         Service["service.py<br/><i>Facade — single entry point</i>"]
+        Context["context.py<br/><i>Context assembly pipeline</i>"]
         Runner["runner.py<br/><i>SDK integration + conversation loop</i>"]
         Tracker["tracker.py<br/><i>State management + message queue</i>"]
     end
@@ -119,9 +121,12 @@ graph TD
     AI["External AI APIs<br/>(Claude, etc.)"]
     Futures["asyncio.Future<br/>map per requestId"]
     Queue["asyncio.Queue<br/>user messages per session"]
+    PluginFS["Plugin FS<br/>(SKILL.md files)"]
 
+    Service --> Context
     Service --> Runner
     Service --> Tracker
+    Context --> PluginFS
     Runner --> SDK --> AI
     Tracker --> Futures
     Tracker --> Queue
@@ -132,7 +137,8 @@ graph TD
 | File | Responsibility | Depends On |
 |------|---------------|------------|
 | `models.py` | Pydantic models: AgentTask, AgentConfig, AgentEvent, AgentResult, Question, QuestionOption, AskUserQuestionResponse, ToolApprovalResponse | — |
-| `service.py` | Facade — start sessions, send messages, interrupt turns, end sessions, relay responses to pending futures | runner, tracker, core/config, spec/service |
+| `context.py` | Context assembly pipeline: loads skill instructions, project metadata, and spec content; composes system prompt. See [CONTEXT.md](CONTEXT.md). | spec/service, core/config |
+| `service.py` | Facade — start sessions, send messages, interrupt turns, end sessions, relay responses to pending futures | context, runner, tracker, core/config, spec/service |
 | `runner.py` | Claude Agent SDK integration: manage SDK client lifecycle, conversation loop (wait for message → query → stream events → repeat), map SDK events to notifications, register `canUseTool` / hooks | models, tracker |
 | `tracker.py` | Session lifecycle (pending/idle/running/done/error), message queue per session (`asyncio.Queue`), registry of in-flight `asyncio.Future` objects keyed by `requestId` | models |
 
@@ -144,7 +150,7 @@ graph TD
 
 | Method | Signature | Description |
 |--------|-----------|-------------|
-| `run_task` | `(spec_ids: list[str], config: AgentConfig, notify: Callable) → AgentTask` | Start a persistent agent session. Task is created in `idle` state and returned immediately; the background runner opens the SDK client and waits for messages. `notify` is a callback for server→client messages, signature: `async def notify(method: str, params: dict, request_id: str \| None = None) -> None` — created by `rpc/notifications.make_notify` |
+| `run_task` | `(spec_ids: list[str], config: AgentConfig, notify: Callable, skill_id: str \| None = None) → AgentTask` | Start a persistent agent session. Builds context from specs, skill, and project metadata via `context.build_context()`, then launches the background runner. Task is created in `idle` state and returned immediately. `notify` is a callback for server→client messages, signature: `async def notify(method: str, params: dict, request_id: str \| None = None) -> None` — created by `rpc/notifications.make_notify` |
 | `send_message` | `(task_id: str, text: str) → None` | Send a user message to the session, triggering a new turn. Enqueues the message; runner picks it up and calls `client.query()`. |
 | `interrupt_task` | `(task_id: str) → None` | Cancel the current turn. Session stays `idle` and can accept new messages. |
 | `end_session` | `(task_id: str) → None` | Gracefully close the session and SDK client. Session enters `done` state. |
@@ -257,6 +263,18 @@ async with ClaudeSDKClient(options=options) as client:
 
 **Message delivery:** `tracker.py` maintains an `asyncio.Queue` per session. `service.send_message()` pushes to the queue; `runner.py` pulls from it. `service.end_session()` pushes a sentinel `END_SIGNAL` to break the loop.
 
+## Context Assembly
+
+Context assembly is handled by the `context.py` submodule. It builds the system prompt passed to the Claude Agent SDK by gathering content from three sources:
+
+1. **Skill instructions** — loaded from `{plugin_dir}/skills/{skill_id}/SKILL.md` (if a skill is selected)
+2. **Project metadata** — working directory path from `AppConfig`
+3. **Specification content** — loaded by ID via `spec_service.get_spec()`
+
+Sections are ordered Skill → Project → Specs, with framing prompts (markdown headers and introductory text) between sections to help the LLM distinguish context types.
+
+**Full specification:** [CONTEXT.md](CONTEXT.md)
+
 ## TODO
 
 - **Add `streaming` field to `agent/textDelta`:** Set to `false` for `AssistantMessage` full blocks and `true` for `SDKPartialAssistantMessage` text deltas (once partial message handling is implemented).
@@ -274,7 +292,7 @@ async with ClaudeSDKClient(options=options) as client:
 | Streaming text | `includePartialMessages: true` in SDK config | Required to emit `text_delta` events for live typewriter view; can be toggled via `AgentConfig.stream_text` |
 | Notify callback | Injected into runner at session start; supports both notifications (`request_id=None`) and server-initiated requests (`request_id` set) | Keeps the runner decoupled from WebSocket details; RPC layer owns the connection and callback creation |
 | Agent file change tracking | Filesystem watcher (core/watcher), not tool call interception | Watcher is ground truth — catches all file changes regardless of source (agent, user, external). Same pipeline as user changes: watcher → spec/service → rpc/notifications. More reliable than intercepting agent tool calls, and adds no complexity to runner.py |
-| Commands/skills | Frontend responsibility — expand `/command` into prompt text, send via `agent/send` | Backend is command-agnostic; the SDK handles tool use natively. Keeps the protocol simple. |
+| Context assembly | Dedicated `context.py` submodule with pipeline: gather → compose | Separates prompt construction from session orchestration. Pure function, easy to test. Supports specs, skills, and project metadata as distinct sources with framing prompts. |
 
 ## Dependencies
 
@@ -295,5 +313,6 @@ async with ClaudeSDKClient(options=options) as client:
 ## Related Specs
 
 - **Parent:** [Architecture Design](../../../DESIGN_DOC.md)
-- **Depends on:** [Spec Module](../spec/README.md) (for loading spec context)
+- **Submodules:** [Context Assembly](CONTEXT.md) — prompt construction pipeline
+- **Depends on:** [Spec Module](../spec/README.md) (for loading spec context), [Core Config](../core/README.md) (for project root and plugin dir)
 - **Related modules:** `rpc/methods/agents.py` (JSON-RPC interface to this module), `rpc/notifications.py` (WebSocket push)

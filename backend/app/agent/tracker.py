@@ -40,8 +40,10 @@ class Tracker:
 
     # -- task lifecycle -------------------------------------------------------
 
-    def create_task(self, spec_ids: list[str], config: AgentConfig) -> AgentTask:
-        task = AgentTask(spec_ids=spec_ids, config=config)
+    def create_task(
+        self, spec_ids: list[str], config: AgentConfig, skill_id: str | None = None
+    ) -> AgentTask:
+        task = AgentTask(spec_ids=spec_ids, skill_id=skill_id, config=config)
         self._tasks[task.id] = task
         self._queues[task.id] = asyncio.Queue()
         return task

@@ -1,6 +1,6 @@
 # RPC Module — Design Specification
 
-> Parent: [DESIGN_DOC.md](../../../DESIGN_DOC.md) | Status: **Active** | Created: 2026-02-26
+> Parent: [DESIGN_DOC.md](../../../DESIGN_DOC.md) | Status: **Active** | Created: 2026-02-26 | Updated: 2026-03-03
 
 ## Table of Contents
 1. [Purpose](#purpose)
@@ -48,7 +48,7 @@ Both sides can send either. The server can initiate requests to the client (e.g.
 | `spec/update`     | `{ id: str, content: str }`                                                                  | `SpecDetail`        | Update spec content                                                                                                                                         |
 | `spec/delete`     | `{ id: str }`                                                                                | `null`              | Delete a spec                                                                                                                                               |
 | `spec/graph`      | `{}`                                                                                         | `SpecGraph`         | Get spec hierarchy graph                                                                                                                                    |
-| `agent/run`       | `{ specIds: list[str], config: AgentConfig }`                                                | `{ taskId: str }`   | Start a persistent agent session with spec context. Session starts in `idle` state, ready for messages. `sessionId` arrives later via `agent/sessionStart` notification. |
+| `agent/run`       | `{ specIds: list[str], config: AgentConfig, skillId?: str }`                                 | `{ taskId: str }`   | Start a persistent agent session with spec and optional skill context. If `skillId` is provided, the skill's instructions (from the Bonsai plugin's `SKILL.md`) are loaded and prepended to the system prompt. Session starts in `idle` state, ready for messages. `sessionId` arrives later via `agent/sessionStart` notification. See [Agent Context](../agent/CONTEXT.md). |
 | `agent/send`      | `{ taskId: str, text: str }`                                                                 | `null`              | Send a user message to the session, triggering a new turn. Session must be `idle`.                                                                          |
 | `agent/status`    | `{ taskId: str }`                                                                            | `AgentTask`         | Get session status and metadata                                                                                                                             |
 | `agent/list`      | `{}`                                                                                         | `list[AgentTask]`   | List all agent sessions                                                                                                                                     |
@@ -243,7 +243,7 @@ async def notify(method: str, params: dict, request_id: str | None = None) -> No
 | `end_session` | `(**params) → None` | Handler for `agent/end` |
 | `respond_agent` | `(**params) → None` | Handler for `agent/respond` |
 
-`run_agent` captures `current_notify` at call time (the active connection's notify callable), passes it to `agent/service.run_task`, and immediately returns `{ taskId }`. The agent session runs in the background; the runner enters a conversation loop waiting for messages. The `sessionId` arrives later via `agent/sessionStart` notification.
+`run_agent` captures `current_notify` at call time (the active connection's notify callable), extracts the optional `skillId` param, and passes both to `agent/service.run_task`. Returns `{ taskId }` immediately. The agent session runs in the background; the runner enters a conversation loop waiting for messages. The `sessionId` arrives later via `agent/sessionStart` notification.
 
 `send_message` routes to `agent/service.send_message(task_id, text)`, which enqueues the message. The runner picks it up and starts a new turn.
 

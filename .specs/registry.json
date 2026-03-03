@@ -81,6 +81,24 @@
       "updated": "2026-03-03"
     },
     {
+      "id": "agent-context",
+      "type": "submodule-design",
+      "path": "backend/app/agent/CONTEXT.md",
+      "title": "Agent Context Assembly",
+      "status": "active",
+      "covers": [
+        "backend/app/agent/context.py"
+      ],
+      "tags": [
+        "backend",
+        "agent-orchestration",
+        "context",
+        "prompt"
+      ],
+      "created": "2026-03-03",
+      "updated": "2026-03-03"
+    },
+    {
       "id": "module-rpc",
       "type": "module-design",
       "path": "backend/app/rpc/README.md",
@@ -994,6 +1012,25 @@
       "updated": "2026-03-03"
     },
     {
+      "id": "task-agent-context",
+      "type": "task-spec",
+      "path": "current_tasks/agent/feature_agent_context.md",
+      "title": "Implement Agent context.py and wire skill_id",
+      "status": "done",
+      "covers": [
+        "backend/app/agent/context.py",
+        "backend/app/agent/service.py",
+        "backend/app/rpc/methods/agents.py",
+        "backend/app/core/config.py"
+      ],
+      "tags": [
+        "high",
+        "new-feature"
+      ],
+      "created": "2026-03-03",
+      "updated": "2026-03-03"
+    },
+    {
       "id": "task-rpc-session-wiring",
       "type": "task-spec",
       "path": "current_tasks/rpc/feature_rpc_session_wiring.md",
@@ -1049,6 +1086,21 @@
     },
     {
       "from": "module-spec",
+      "to": "module-core",
+      "type": "depends-on"
+    },
+    {
+      "from": "agent-context",
+      "to": "module-agent",
+      "type": "parent"
+    },
+    {
+      "from": "agent-context",
+      "to": "module-spec",
+      "type": "depends-on"
+    },
+    {
+      "from": "agent-context",
       "to": "module-core",
       "type": "depends-on"
     },
@@ -1611,6 +1663,16 @@
       "from": "task-session-service",
       "to": "task-session-runner",
       "type": "depends-on"
+    },
+    {
+      "from": "task-agent-context",
+      "to": "agent-context",
+      "type": "implements"
+    },
+    {
+      "from": "task-agent-context",
+      "to": "module-agent",
+      "type": "implements"
     },
     {
       "from": "task-rpc-session-wiring",

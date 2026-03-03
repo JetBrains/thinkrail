@@ -117,7 +117,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
 
   startSession: async ({ specIds, config, name, skillId }) => {
     const api = createAgentApi(getClient());
-    const { taskId } = await api.run({ specIds, config });
+    const { taskId } = await api.run({ specIds, config, skillId: skillId ?? undefined });
 
     set((s) => {
       const next = new Map(s.sessions);

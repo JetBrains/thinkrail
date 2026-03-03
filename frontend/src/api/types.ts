@@ -15,6 +15,7 @@ export interface CreateSpecParams {
 export interface AgentRunParams {
   specIds: string[];
   config: AgentConfig;
+  skillId?: string;
 }
 
 export interface CostSummary {

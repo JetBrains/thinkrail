@@ -8,6 +8,7 @@ from pydantic import BaseModel
 class AppConfig(BaseModel):
     project_root: Path
     spec_dir: Path
+    plugin_dir: Path
     host: str = "127.0.0.1"
     port: int = 8000
 
@@ -22,6 +23,10 @@ class AppConfig(BaseModel):
     def get_registry_path(self) -> Path:
         """Return the path to ``.specs/registry.json``."""
         return self.spec_dir / "registry.json"
+
+# Bonsai repo root: backend/app/core/config.py → ../../.. → bonsai/
+_BONSAI_ROOT = Path(__file__).resolve().parent.parent.parent.parent
+
 
 def _discover_root() -> Path:
     """Walk upward from cwd looking for a ``.specs/`` directory."""
@@ -38,4 +43,5 @@ def load_config(project_root: Path | None = None) -> AppConfig:
     return AppConfig(
         project_root=root,
         spec_dir=root / ".specs",
+        plugin_dir=_BONSAI_ROOT / "claude-plugin",
     )

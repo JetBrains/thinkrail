@@ -54,7 +54,8 @@ async def run_agent(service: AgentService, **params: Any) -> dict:
     if notify is None:
         raise JsonRpcError(_INTERNAL_ERROR, "Internal error", "No active connection")
     config = AgentConfig(**params["config"])
-    task = await service.run_task(params["specIds"], config, notify)
+    skill_id = params.get("skillId")
+    task = await service.run_task(params["specIds"], config, notify, skill_id=skill_id)
     return {"taskId": task.id}
 
 
