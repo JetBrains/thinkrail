@@ -1,54 +1,114 @@
-.file-tree {
+/*
+ * File Tree — JetBrains IntelliJ-style
+ *
+ * Compact rows, subtle indent guides, muted colors,
+ * highlight on hover/select, monospace font.
+ */
+
+.ft {
   font-size: 12px;
+  line-height: 1;
+  user-select: none;
 }
 
-.file-tree-entry {
+/* ── Row ── */
+.ft-row {
   display: flex;
   align-items: center;
-  gap: var(--space-xs);
-  padding: 3px 8px;
-  cursor: default;
-  border-radius: var(--radius-sm);
-  transition: background var(--transition-fast);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  height: 22px;
+  padding-right: var(--space-sm);
+  cursor: pointer;
+  position: relative;
+  transition: background 60ms ease;
 }
 
-.file-tree-entry:hover {
+.ft-row:hover {
   background: var(--hover);
 }
 
-.file-tree-dir {
-  cursor: pointer;
+.ft-row-selected {
+  background: var(--sel);
+}
+
+.ft-row-selected:hover {
+  background: var(--sel);
+}
+
+/* ── Indent guides ── */
+.ft-guides {
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  display: flex;
+  pointer-events: none;
+}
+
+.ft-guide-line {
+  width: 20px;
+  height: 100%;
+  border-left: 1px solid var(--border);
+  margin-left: 9px;
+}
+
+/* ── Arrow ── */
+.ft-arrow {
+  width: 16px;
+  flex-shrink: 0;
+  text-align: center;
+  font-size: 10px;
+  color: var(--hint);
+}
+
+.ft-arrow-hidden {
+  visibility: hidden;
+}
+
+/* ── Icon ── */
+.ft-icon {
+  width: 16px;
+  flex-shrink: 0;
+  text-align: center;
+  font-size: 13px;
+}
+
+/* Icon colors by file type — IntelliJ-style */
+.fi-dir   { color: var(--gold); }
+.fi-specs  { color: var(--purple); }
+.fi-src   { color: var(--blue); }
+.fi-test  { color: var(--green); }
+.fi-py    { color: #3572A5; }
+.fi-ts    { color: #3178C6; }
+.fi-js    { color: #F0DB4F; }
+.fi-css   { color: #563D7C; }
+.fi-html  { color: #E34C26; }
+.fi-json  { color: var(--gold); }
+.fi-md    { color: var(--blue); }
+.fi-config { color: var(--hint); }
+.fi-lock  { color: var(--hint); }
+.fi-default { color: var(--muted); }
+
+/* ── Name ── */
+.ft-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--muted);
+  margin-left: 2px;
+}
+
+.ft-name-dir {
   color: var(--text);
 }
 
-.file-tree-file {
-  color: var(--muted);
+.ft-row-selected .ft-name {
+  color: var(--text);
 }
 
-.file-tree-arrow {
-  font-size: 8px;
-  width: 10px;
-  flex-shrink: 0;
-  color: var(--hint);
-}
-
-.file-tree-icon {
-  font-size: 13px;
-  flex-shrink: 0;
-}
-
-.file-tree-name {
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.file-tree-loading,
-.file-tree-empty {
+/* ── Empty state ── */
+.ft-empty {
   color: var(--hint);
   font-size: 12px;
-  font-style: italic;
-  padding: var(--space-md);
+  padding: var(--space-lg);
+  text-align: center;
 }

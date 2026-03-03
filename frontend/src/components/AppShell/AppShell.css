@@ -115,6 +115,7 @@
   background: var(--panel);
   overflow: hidden;
   flex-shrink: 0;
+  height: 100%;
 }
 
 .center-panel {
@@ -166,7 +167,13 @@
 .panel-content {
   flex: 1;
   overflow-y: auto;
+  overflow-x: hidden;
   padding: var(--space-md);
+  min-height: 0; /* crucial for flex child scrolling */
+}
+
+.panel-content-compact {
+  padding: 0;
 }
 
 .panel-placeholder {

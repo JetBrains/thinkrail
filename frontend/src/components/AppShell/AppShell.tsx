@@ -38,7 +38,7 @@ export function AppShell({ onSwitchProject }: { onSwitchProject: () => void }) {
       <div className="layout">
         {!leftCollapsed && (
           <>
-            <div style={{ width: leftWidth }}>
+            <div style={{ width: leftWidth, height: "100%", overflow: "hidden" }}>
               <LeftPanel />
             </div>
             <ResizeHandle
@@ -78,7 +78,7 @@ export function AppShell({ onSwitchProject }: { onSwitchProject: () => void }) {
               max={600}
               collapseThreshold={150}
             />
-            <div style={{ width: rightWidth }}>
+            <div style={{ width: rightWidth, height: "100%", overflow: "hidden" }}>
               <RightPanel />
             </div>
           </>

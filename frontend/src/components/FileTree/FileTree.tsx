@@ -11,21 +11,39 @@ interface FileEntry {
   depth: number;
 }
 
-function fileIcon(name: string, isDir: boolean): string {
-  if (isDir) return "\u{1F4C1}";
-  if (name.endsWith(".md")) return "\u{1F4C4}";
-  if (name.endsWith(".py")) return "\u{1F40D}";
-  if (name.endsWith(".ts") || name.endsWith(".tsx")) return "\u{1F535}";
-  if (name.endsWith(".css")) return "\u{1F3A8}";
-  if (name.endsWith(".json")) return "\u{1F4CB}";
-  if (name.endsWith(".html")) return "\u{1F310}";
-  return "\u{1F4C4}";
+/**
+ * IntelliJ-style file type → icon mapping.
+ * Uses plain text symbols that match JetBrains IDE appearance.
+ */
+function fileIcon(name: string, isDir: boolean): { icon: string; cls: string } {
+  if (isDir) {
+    // Special directories
+    if (name === ".specs") return { icon: "S", cls: "fi-specs" };
+    if (name === "src") return { icon: "S", cls: "fi-src" };
+    if (name === "tests" || name === "test") return { icon: "T", cls: "fi-test" };
+    return { icon: "", cls: "fi-dir" };
+  }
+  // Files by extension
+  const ext = name.split(".").pop()?.toLowerCase() ?? "";
+  switch (ext) {
+    case "py": return { icon: "", cls: "fi-py" };
+    case "ts": case "tsx": return { icon: "", cls: "fi-ts" };
+    case "js": case "jsx": return { icon: "", cls: "fi-js" };
+    case "css": return { icon: "", cls: "fi-css" };
+    case "html": return { icon: "", cls: "fi-html" };
+    case "json": return { icon: "", cls: "fi-json" };
+    case "md": case "txt": return { icon: "", cls: "fi-md" };
+    case "toml": case "yaml": case "yml": case "ini": case "cfg": return { icon: "", cls: "fi-config" };
+    case "lock": return { icon: "", cls: "fi-lock" };
+    default: return { icon: "", cls: "fi-default" };
+  }
 }
 
 export function FileTree() {
   const projectPath = useUiStore((s) => s.projectPath);
   const [entries, setEntries] = useState<FileEntry[]>([]);
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
+  const [selected, setSelected] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
   const fetchFiles = useCallback(async () => {
@@ -61,14 +79,13 @@ export function FileTree() {
   }, []);
 
   if (loading) {
-    return <div className="file-tree-loading">Loading files...</div>;
+    return <div className="ft-empty">Loading...</div>;
   }
 
   if (entries.length === 0) {
-    return <div className="file-tree-empty">No files</div>;
+    return <div className="ft-empty">Empty project</div>;
   }
 
-  // Filter out entries whose parent directory is collapsed
   const visible = entries.filter((entry) => {
     const parts = entry.path.split("/");
     for (let i = 1; i < parts.length; i++) {
@@ -79,23 +96,48 @@ export function FileTree() {
   });
 
   return (
-    <div className="file-tree">
-      {visible.map((entry) => (
-        <div
-          key={entry.path}
-          className={`file-tree-entry ${entry.isDir ? "file-tree-dir" : "file-tree-file"}`}
-          style={{ paddingLeft: entry.depth * 16 + 8 }}
-          onClick={entry.isDir ? () => toggleDir(entry.path) : undefined}
-        >
-          {entry.isDir && (
-            <span className="file-tree-arrow">
-              {collapsed.has(entry.path) ? "\u25B6" : "\u25BC"}
+    <div className="ft">
+      {visible.map((entry) => {
+        const { cls } = fileIcon(entry.name, entry.isDir);
+        const isOpen = entry.isDir && !collapsed.has(entry.path);
+        const isSelected = selected === entry.path;
+
+        return (
+          <div
+            key={entry.path}
+            className={`ft-row ${isSelected ? "ft-row-selected" : ""}`}
+            style={{ paddingLeft: entry.depth * 20 + 4 }}
+            onClick={() => {
+              setSelected(entry.path);
+              if (entry.isDir) toggleDir(entry.path);
+            }}
+          >
+            {/* Indent guides */}
+            {entry.depth > 0 && (
+              <span className="ft-guides">
+                {Array.from({ length: entry.depth }, (_, i) => (
+                  <span key={i} className="ft-guide-line" />
+                ))}
+              </span>
+            )}
+
+            {/* Expand/collapse arrow (dirs only) */}
+            <span className={`ft-arrow ${entry.isDir ? "" : "ft-arrow-hidden"}`}>
+              {entry.isDir ? (isOpen ? "\u25BE" : "\u25B8") : ""}
             </span>
-          )}
-          <span className="file-tree-icon">{fileIcon(entry.name, entry.isDir)}</span>
-          <span className="file-tree-name">{entry.name}</span>
-        </div>
-      ))}
+
+            {/* File/folder icon */}
+            <span className={`ft-icon ${cls}`}>
+              {entry.isDir ? (isOpen ? "\u{1F4C2}" : "\u{1F4C1}") : "\u{1F4C4}"}
+            </span>
+
+            {/* Name */}
+            <span className={`ft-name ${entry.isDir ? "ft-name-dir" : ""}`}>
+              {entry.name}
+            </span>
+          </div>
+        );
+      })}
     </div>
   );
 }

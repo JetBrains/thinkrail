@@ -33,7 +33,7 @@ export function LeftPanel() {
           </button>
         ))}
       </div>
-      <div className="panel-content">
+      <div className={`panel-content ${activeTab === "files" ? "panel-content-compact" : ""}`}>
         <TabContent tab={activeTab} />
       </div>
     </div>
