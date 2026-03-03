@@ -8,6 +8,10 @@
 **Depends on:** `task-session-models-tracker`
 **Spec reference:** `backend/app/agent/README.md` — Session Lifecycle, Conversation Loop
 
+## Files to Modify
+
+- `backend/app/agent/runner.py`
+
 ## Summary
 
 Rewrite `runner.py` to support persistent conversational sessions. The current implementation does a single `client.query()` and exits. The new implementation keeps the SDK client open and loops: wait for user message → query SDK → stream events → emit `turnComplete` → wait for next message. The initial `askUserQuestion` prompt hack is removed entirely.

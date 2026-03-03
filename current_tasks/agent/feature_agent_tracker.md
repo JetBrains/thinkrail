@@ -8,6 +8,10 @@
 **Depends on:** `feature_agent_models`
 **Spec reference:** `backend/app/agent/README.md` (lines 41, 121-128)
 
+## Files to Modify
+
+- `backend/app/agent/tracker.py`
+
 ## Summary
 
 `tracker.py` manages the lifecycle of agent tasks (pending/running/done/error) and maintains a registry of in-flight `asyncio.Future` objects keyed by `requestId`. This enables the suspension mechanism where `runner.py` awaits a Future while the frontend responds to a question or tool approval request.

@@ -299,12 +299,18 @@ Specs are stored as files in the repository. The registry tracks metadata:
 
 **Project selection:** The WebSocket URL includes a `project` query parameter specifying the project directory: `ws://host/ws?project=/path/to/dir`. The backend validates `.specs/registry.json` exists and creates per-connection services scoped to that project.
 
-**REST endpoints** for project management (before WebSocket connection):
+**REST endpoints** for project and file management:
 - `GET /api/project/validate?path=...` — check if path is a valid Bonsai project
 - `POST /api/project/init` — initialize `.specs/` in a new directory
+- `GET /api/project/files?path=...` — list project directory tree
+- `GET /api/file/read?project=...&path=...` — read file contents
+- `POST /api/file/write` — write file contents `{ project, path, content }`
+- `POST /api/file/open-external` — open file in IDE `{ project, path, editor: "idea"|"code" }`
+
+**Session persistence:** Agent sessions are persisted to `.specs/sessions/{taskId}.json`. Events are saved as they stream. Completed/errored sessions survive backend restarts and page refreshes. The `session/continue` method replays old conversation history as context for a new SDK session.
 
 Communication flows in three directions over a single WebSocket at `/ws?project=...`:
-- **Client → Server requests:** `spec/*` CRUD + graph, `agent/run`, `agent/send`, `agent/status`, `agent/list`, `agent/interrupt`, `agent/end`, `agent/respond`
+- **Client → Server requests:** `spec/*` CRUD + graph, `agent/*` session management, `session/*` persistence (list, get, continue, delete)
 - **Server → Client notifications:** file watcher events (`spec/did*`, `registry/didUpdate`), agent streaming events (`agent/sessionStart`, `agent/textDelta`, `agent/toolCall*`, `agent/subagent*`, `agent/notification`, `agent/compact`, `agent/progress`, `agent/turnComplete`, `agent/interrupted`, `agent/done`, `agent/error`, `agent/permissionDenied`)
 - **Server → Client requests:** `agent/askUserQuestion`, `agent/confirmAction` — client responds via `agent/respond`
 

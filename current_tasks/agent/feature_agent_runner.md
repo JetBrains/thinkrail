@@ -8,6 +8,10 @@
 **Depends on:** `feature_agent_models`, `feature_agent_tracker`
 **Spec reference:** `backend/app/agent/README.md` (lines 40, 84-128)
 
+## Files to Modify
+
+- `backend/app/agent/runner.py`
+
 ## Summary
 
 `runner.py` is the sole integration point with the Claude Agent SDK. It iterates the SDK's event stream, maps SDK events to `AgentEvent` notifications, and handles the `canUseTool` callback for both user questions and tool approvals by suspending execution via `asyncio.Future` (managed by `tracker.py`).

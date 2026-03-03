@@ -8,6 +8,10 @@
 **Depends on:** `feature_spec_models`, `feature_spec_parser`, `feature_spec_validator`, `feature_spec_registry`, `feature_spec_graph`
 **Spec reference:** `backend/app/spec/README.md`
 
+## Files to Modify
+
+- `backend/app/spec/service.py`
+
 ## Summary
 
 `service.py` is the single entry point for all spec operations. It is called from RPC methods (user CRUD) and watcher callbacks (disk change detection). It delegates to parser, validator, graph, and registry — no direct file or registry access happens outside this facade.

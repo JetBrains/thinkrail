@@ -8,6 +8,10 @@
 **Depends on:** `feature_spec_models`, `feature_core_fileio`
 **Spec reference:** `backend/app/spec/README.md`
 
+## Files to Modify
+
+- `backend/app/spec/parser.py`
+
 ## Summary
 
 `parser.py` reads spec files from the filesystem and returns structured `Spec` objects. It handles two formats: Markdown (narrative specs like README.md) and JSON (structured data specs). The parser is used by the service layer for all read operations.

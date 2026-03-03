@@ -8,6 +8,10 @@
 **Depends on:** `feature_spec_models`
 **Spec reference:** `backend/app/spec/README.md`
 
+## Files to Modify
+
+- `backend/app/spec/validator.py`
+
 ## Summary
 
 `validator.py` ensures specs conform to required structure. It validates individual spec fields (required fields present, correct types) and cross-spec link integrity (all link targets exist, no orphaned references). Used by the service layer before writes and during health checks.

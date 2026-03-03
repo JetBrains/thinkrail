@@ -8,6 +8,10 @@
 **Depends on:** `feature_rpc_methods_agents_basic`, `feature_rpc_methods_agents_run`, `feature_rpc_methods_agents_respond`
 **Spec reference:** `backend/app/rpc/README.md` (lines 153-165)
 
+## Files to Modify
+
+- `backend/app/rpc/server.py`
+
 ## Summary
 
 Update `server.py` to integrate the `agent/*` handlers from `methods/agents.py` into the METHODS dispatch dict, create `AgentService` alongside `SpecService`, and update the context passing so both services are available to their respective handlers.

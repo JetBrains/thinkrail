@@ -8,6 +8,10 @@
 **Depends on:** `feature_agent_models`, `feature_agent_tracker`, `feature_agent_runner`
 **Spec reference:** `backend/app/agent/README.md` (lines 46-53)
 
+## Files to Modify
+
+- `backend/app/agent/service.py`
+
 ## Summary
 
 `service.py` is the public facade for the Agent module. It is called by `rpc/methods/agents.py` and provides the complete interface for starting tasks, interrupting them, querying status, and relaying frontend responses to pending futures. It coordinates `runner.py` and `tracker.py` without exposing their internals.

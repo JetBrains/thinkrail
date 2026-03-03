@@ -8,6 +8,10 @@
 **Depends on:** `task-session-models-tracker`, `task-session-runner`
 **Spec reference:** `backend/app/agent/README.md` — Service Layer
 
+## Files to Modify
+
+- `backend/app/agent/service.py`
+
 ## Summary
 
 Update `AgentService` to expose the new conversational session API. Add `send_message()` and `end_session()` methods. Update `interrupt_task()` to cancel the current turn while keeping the session alive (idle state, not error). Update `run_task()` to create the session without requiring a prompt — the session starts idle and waits for the first `agent/send`.

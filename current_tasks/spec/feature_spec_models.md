@@ -7,6 +7,10 @@
 **Started:** 2026-02-27
 **Spec reference:** `backend/app/spec/README.md`
 
+## Files to Modify
+
+- `backend/app/spec/models.py`
+
 ## Summary
 
 The Spec module is the core domain layer of Bonsai. `models.py` defines all data structures used across the module — every other spec file imports from here. This is the foundational dependency with no internal module dependencies.

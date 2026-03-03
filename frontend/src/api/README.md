@@ -36,7 +36,8 @@ frontend/src/api/
 ├── client.ts            # RpcClient class — WebSocket + JSON-RPC core
 ├── methods/
 │   ├── specs.ts         # spec/list, spec/get, spec/create, etc.
-│   ├── agents.ts        # agent/run, agent/status, agent/respond, etc.
+│   ├── agents.ts        # agent/run, agent/send, agent/end, agent/respond, etc.
+│   ├── sessions.ts      # session/list, session/get, session/continue, session/delete
 │   ├── cost.ts          # cost/summary, cost/setBudget, cost/reset
 │   ├── diff.ts          # diff/mappings, diff/commit, diff/scan
 │   └── terminal.ts      # terminal/create, terminal WebSocket
@@ -210,6 +211,21 @@ export function createAgentApi(client: RpcClient) {
   };
 }
 ```
+
+### sessions.ts
+
+```typescript
+export function createSessionApi(client: RpcClient) {
+  return {
+    list: () => client.request<SessionSummary[]>("session/list"),
+    get: (taskId: string) => client.request<SessionData | null>("session/get", { taskId }),
+    continue: (taskId: string) => client.request<{ taskId: string }>("session/continue", { taskId }),
+    delete: (taskId: string) => client.request<boolean>("session/delete", { taskId }),
+  };
+}
+```
+
+**Note:** File operations (`/api/file/read`, `/api/file/write`, `/api/file/open-external`) use REST endpoints, not JSON-RPC. They are called directly via `fetch()` in `fileStore.ts`, not through `RpcClient`.
 
 ## Error Handling
 

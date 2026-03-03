@@ -111,6 +111,60 @@ def create_app() -> FastAPI:
         walk(root, 0)
         return {"entries": entries}
 
+    # ── REST: File read/write/open ──
+
+    @app.get("/api/file/read")
+    async def read_file(project: str = Query(...), path: str = Query(...)):
+        """Read a file's contents. Path is relative to project root."""
+        root = Path(project).expanduser().resolve()
+        file_path = root / path
+        if not file_path.is_file():
+            return {"error": "File not found", "path": path}
+        try:
+            content = file_path.read_text(encoding="utf-8")
+            return {
+                "content": content,
+                "path": path,
+                "name": file_path.name,
+                "size": file_path.stat().st_size,
+            }
+        except UnicodeDecodeError:
+            return {"error": "Binary file — cannot display", "path": path}
+        except Exception as e:
+            return {"error": str(e), "path": path}
+
+    class _WriteFileBody(BaseModel):
+        project: str
+        path: str
+        content: str
+
+    @app.post("/api/file/write")
+    async def write_file(body: _WriteFileBody):
+        """Write content to a file. Path is relative to project root."""
+        root = Path(body.project).expanduser().resolve()
+        file_path = root / body.path
+        file_path.parent.mkdir(parents=True, exist_ok=True)
+        file_path.write_text(body.content, encoding="utf-8")
+        return {"ok": True, "path": body.path}
+
+    class _OpenExternalBody(BaseModel):
+        project: str
+        path: str
+        editor: str  # "idea" or "code"
+
+    @app.post("/api/file/open-external")
+    async def open_external(body: _OpenExternalBody):
+        """Open a file in an external editor (IntelliJ IDEA or VS Code)."""
+        import subprocess
+        root = Path(body.project).expanduser().resolve()
+        file_path = root / body.path
+        cmd = body.editor  # "idea" or "code"
+        try:
+            subprocess.Popen([cmd, str(file_path)], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            return {"ok": True}
+        except FileNotFoundError:
+            return {"error": f"'{cmd}' not found in PATH"}
+
     return app
 
 

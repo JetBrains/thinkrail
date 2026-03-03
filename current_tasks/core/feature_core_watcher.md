@@ -7,6 +7,10 @@
 **Started:** 2026-02-27
 **Spec reference:** `backend/app/core/README.md`
 
+## Files to Modify
+
+- `backend/app/core/watcher.py`
+
 ## Summary
 
 `watcher.py` detects file changes in the working directory and fires callbacks. Primary consumers are spec files (`*.md`, `*.json`), `.specs/*`, and `registry.json`. The RPC module's `server.py` will register a callback to handle change events.

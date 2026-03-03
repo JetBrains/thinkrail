@@ -1,10 +1,15 @@
 import type { Session } from "@/types/session.ts";
+import type { OpenFile } from "@/store/fileStore.ts";
 
 interface SessionTabBarProps {
   sessions: Session[];
-  activeId: string | null;
-  onSwitch: (taskId: string) => void;
-  onClose: (taskId: string) => void;
+  activeSessionId: string | null;
+  onSwitchSession: (taskId: string) => void;
+  onCloseSession: (taskId: string) => void;
+  files: OpenFile[];
+  activeFilePath: string | null;
+  onSwitchFile: (path: string) => void;
+  onCloseFile: (path: string) => void;
 }
 
 function statusDotColor(status: Session["status"]): string {
@@ -22,19 +27,24 @@ function statusDotColor(status: Session["status"]): string {
 
 export function SessionTabBar({
   sessions,
-  activeId,
-  onSwitch,
-  onClose,
+  activeSessionId,
+  onSwitchSession,
+  onCloseSession,
+  files,
+  activeFilePath,
+  onSwitchFile,
+  onCloseFile,
 }: SessionTabBarProps) {
-  if (sessions.length === 0) return null;
+  if (sessions.length === 0 && files.length === 0) return null;
 
   return (
     <div className="session-tabs">
+      {/* Session tabs */}
       {sessions.map((s) => (
         <div
-          key={s.taskId}
-          className={`session-tab ${s.taskId === activeId ? "session-tab-active" : ""}`}
-          onClick={() => onSwitch(s.taskId)}
+          key={`s-${s.taskId}`}
+          className={`session-tab ${s.taskId === activeSessionId && !activeFilePath ? "session-tab-active" : ""}`}
+          onClick={() => onSwitchSession(s.taskId)}
         >
           <span
             className="session-tab-dot"
@@ -50,7 +60,34 @@ export function SessionTabBar({
             className="session-tab-close"
             onClick={(e) => {
               e.stopPropagation();
-              onClose(s.taskId);
+              onCloseSession(s.taskId);
+            }}
+          >
+            {"\u00D7"}
+          </button>
+        </div>
+      ))}
+
+      {/* Separator if both types exist */}
+      {sessions.length > 0 && files.length > 0 && (
+        <span className="session-tab-sep" />
+      )}
+
+      {/* File tabs */}
+      {files.map((f) => (
+        <div
+          key={`f-${f.path}`}
+          className={`session-tab file-tab ${f.path === activeFilePath ? "session-tab-active" : ""}`}
+          onClick={() => onSwitchFile(f.path)}
+        >
+          <span className="file-tab-icon">{"\u{1F4C4}"}</span>
+          <span className="session-tab-name">{f.name}</span>
+          {f.isDirty && <span className="file-tab-dirty">{"\u25CF"}</span>}
+          <button
+            className="session-tab-close"
+            onClick={(e) => {
+              e.stopPropagation();
+              onCloseFile(f.path);
             }}
           >
             {"\u00D7"}

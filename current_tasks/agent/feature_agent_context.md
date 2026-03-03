@@ -1,5 +1,9 @@
 # Implement Agent context.py and wire skill_id through service + RPC
 
+**Status:** Done
+**Priority:** High
+**Spec reference:** `backend/app/agent/README.md`, `backend/app/agent/CONTEXT.md`
+
 Skill selection in the frontend is currently UI-only — the backend never receives `skill_id` and never loads skill instructions. The `_build_context()` helper in `service.py` only loads spec content. This task implements the Context submodule (`context.py`) per [CONTEXT.md](../../backend/app/agent/CONTEXT.md) and wires `skill_id` from the RPC layer through to the runner.
 
 ## Plan

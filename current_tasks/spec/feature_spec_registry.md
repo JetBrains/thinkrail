@@ -8,6 +8,10 @@
 **Depends on:** `feature_spec_models`, `feature_core_fileio`
 **Spec reference:** `backend/app/spec/README.md`
 
+## Files to Modify
+
+- `backend/app/spec/registry.py`
+
 ## Summary
 
 `registry.py` manages the `.specs/registry.json` file — the single source of truth for all spec metadata and relationships. It provides atomic writes to prevent corruption and schema validation on read to catch manual edit errors.

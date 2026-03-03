@@ -397,13 +397,38 @@ Rendered markdown view of the selected specification.
 - **Edit mode toggle**: small "Edit" button in the top-right corner switches to a markdown editor for quick manual edits (typo fixes, small tweaks). Saving writes directly to the spec file on disk.
 - **Agent nudge**: when exiting edit mode after changes, a subtle prompt appears: "Want Claude to review these changes?" — clicking it opens a new session pre-loaded with the edited spec and a review prompt. This preserves the spec-driven workflow while allowing quick manual fixes.
 
-#### 4.3 Code
+#### 4.3 File Viewer / Code Editor
 
-Code view of files covered by the selected spec (from the `covers` field in registry).
+Files open as tabs in the **center panel** tab bar alongside session tabs. Double-clicking a file in the left panel's File Tree opens it.
 
-- Standard code viewer with syntax highlighting and line numbers
-- File tabs if multiple files are covered
-- Read-only (code changes happen via agent sessions)
+**Implementation:** Monaco Editor (`@monaco-editor/react`) with custom IntelliJ Darcula theme.
+
+**Preview mode** (default):
+- Read-only Monaco editor with syntax highlighting, line numbers, minimap
+- Bracket matching, code folding, indent guides
+- Cmd+F search (built-in Monaco)
+- Toolbar: file path + language badge (e.g. "Python") + line count + file size + Copy button
+- "Edit" button in toolbar → opens dropdown
+
+**Edit dropdown:**
+- "Edit in place" → switches to edit mode
+- "Open in IntelliJ IDEA" → calls backend `POST /api/file/open-external` with `editor: "idea"`
+- "Open in VS Code" → same with `editor: "code"`
+
+**Edit mode:**
+- Same Monaco editor, `readOnly: false`
+- Tab shows dirty indicator (gold dot) when content differs from saved
+- "Save" button → `POST /api/file/write` → clears dirty state
+- "Cancel" button → reverts to original content, switches back to preview
+
+**File tabs:**
+- Rendered in SessionTabBar after session tabs, separated by a vertical divider
+- Each tab: file icon + filename + dirty dot (if modified) + close button
+- Only one tab active at a time (session OR file)
+
+**Supported languages:** Python, TypeScript/TSX, JavaScript/JSX, CSS, HTML, JSON, Markdown, YAML, Shell, SQL, Rust, Go, Java, Kotlin, Ruby, XML
+
+**Theme:** IntelliJ Darcula colors — keywords (#CF8E6D orange), strings (#6AAB73 green), comments (#7A7E85 gray italic), functions (#56A8F5 blue), types (#C77DBB purple), numbers (#2AACB8 teal)
 
 #### 4.4 Diff
 
@@ -440,7 +465,22 @@ Standard terminal emulator in the right panel.
 
 Always visible at the bottom. Shows:
 - Spec counts (total, done, pending)
+- **"N sessions"** — clickable link that opens the Session Manager in the center panel
+- Attention indicator when sessions need user input
 - Keyboard shortcut hints
+
+### Session Manager
+
+Clicking "N sessions" in the status bar replaces the center panel content with the **Session Manager** — a list of all sessions (active + archived from `.specs/sessions/`).
+
+**Grouped by status:** Active (idle/running) → Completed (done) → Errors
+
+**Per session card:** name, status badge, model, created time, cost/turns
+
+**Actions:**
+- **Active sessions:** "Switch to" → returns to that session tab
+- **Completed/Error sessions:** "Continue" → creates new SDK session with old conversation replayed as context (via `session/continue` RPC), "Delete" → removes from disk
+- **"Back to sessions"** button → returns to normal tab view
 
 ## 6. Command Palette
 

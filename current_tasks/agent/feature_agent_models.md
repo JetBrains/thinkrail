@@ -7,6 +7,10 @@
 **Started:** 2026-03-02
 **Spec reference:** `backend/app/agent/README.md` (lines 55-92)
 
+## Files to Modify
+
+- `backend/app/agent/models.py`
+
 ## Summary
 
 `models.py` defines the data structures used across the Agent module. These are Pydantic models for task records, run configuration, streaming events, terminal results, and the interactive request/response types for mid-run user interactions (questions and tool approvals).

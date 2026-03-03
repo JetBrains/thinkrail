@@ -8,6 +8,10 @@
 **Depends on:** `feature_spec_models`
 **Spec reference:** `backend/app/spec/README.md`
 
+## Files to Modify
+
+- `backend/app/spec/graph.py`
+
 ## Summary
 
 `graph.py` constructs a `SpecGraph` from registry entries and links. The graph represents the full spec hierarchy (parent-child, depends-on, implements relationships) and is served to the frontend for visualization.

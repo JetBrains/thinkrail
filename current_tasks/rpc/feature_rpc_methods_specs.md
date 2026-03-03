@@ -8,6 +8,10 @@
 **Depends on:** `feature_rpc_notifications`
 **Spec reference:** `backend/app/rpc/README.md` (lines 185-198, 82-96)
 
+## Files to Modify
+
+- `backend/app/rpc/methods/specs.py`
+
 ## Summary
 
 `methods/specs.py` contains the jsonrpcserver handler functions for all `spec/*` JSON-RPC methods. Each handler delegates to `spec/service` and returns domain models directly (Pydantic models serialize to JSON automatically). Error mapping converts domain exceptions to JSON-RPC error codes per the spec.

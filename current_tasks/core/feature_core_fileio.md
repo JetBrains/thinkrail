@@ -7,6 +7,10 @@
 **Started:** 2026-02-27
 **Spec reference:** `backend/app/core/README.md`
 
+## Files to Modify
+
+- `backend/app/core/fileio.py`
+
 ## Summary
 
 `fileio.py` centralizes all filesystem operations used by domain modules (primarily `spec/`). It wraps pathlib calls with consistent error handling and automatic parent directory creation.

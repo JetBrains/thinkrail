@@ -141,6 +141,7 @@ graph TD
 | `service.py` | Facade — start sessions, send messages, interrupt turns, end sessions, relay responses to pending futures | context, runner, tracker, core/config, spec/service |
 | `runner.py` | Claude Agent SDK integration: manage SDK client lifecycle, conversation loop (wait for message → query → stream events → repeat), map SDK events to notifications, register `canUseTool` / hooks | models, tracker |
 | `tracker.py` | Session lifecycle (pending/idle/running/done/error), message queue per session (`asyncio.Queue`), registry of in-flight `asyncio.Future` objects keyed by `requestId` | models |
+| `persistence.py` | Session persistence to `.specs/sessions/{taskId}.json` — save/load/list/delete session data including events. Auto-saves on task creation, turn complete, done, and error. | core/fileio |
 
 ## Public Interface
 
@@ -157,6 +158,10 @@ graph TD
 | `get_task` | `(task_id: str) → AgentTask` | Get current session status and metadata |
 | `list_tasks` | `() → list[AgentTask]` | List all sessions (idle, running, done, error) |
 | `respond` | `(task_id: str, request_id: str, response: dict) → None` | Resolve a pending `asyncio.Future` with the client's answer (for mid-turn interactions) |
+| `list_all_sessions` | `() → list[dict]` | List all sessions: in-memory active + on-disk archived (metadata only) |
+| `get_session_data` | `(task_id: str) → dict \| None` | Get full session data including events from disk |
+| `continue_session` | `async (task_id: str, notify: Callable) → AgentTask` | Continue a dead session — loads old conversation, replays as context for new SDK session |
+| `delete_session_data` | `(task_id: str) → bool` | Delete a session file from disk |
 
 ### Models
 

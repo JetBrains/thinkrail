@@ -8,6 +8,10 @@
 **Depends on:** `feature_rpc_methods_agents_basic` (file + error decorator exist)
 **Spec reference:** `backend/app/rpc/README.md` (lines 37-38, 72-81, 205-217)
 
+## Files to Modify
+
+- `backend/app/rpc/methods/agents.py`
+
 ## Summary
 
 Add the `respond_agent` and `interrupt_agent` handlers to `methods/agents.py`. These complete the `agent/*` method set.

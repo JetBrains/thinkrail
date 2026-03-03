@@ -7,6 +7,10 @@
 **Started:** 2026-02-27
 **Spec reference:** `backend/app/rpc/README.md` (lines 168-183)
 
+## Files to Modify
+
+- `backend/app/rpc/notifications.py`
+
 ## Summary
 
 `notifications.py` provides the outgoing message interface for the RPC module. It creates per-connection notify callables bound to a WebSocket and holds a module-level reference to the active connection's callable. This decouples message sending from the WebSocket transport details.

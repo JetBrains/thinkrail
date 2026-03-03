@@ -55,6 +55,10 @@ Both sides can send either. The server can initiate requests to the client (e.g.
 | `agent/interrupt` | `{ taskId: str }`                                                                            | `null`              | Cancel the current turn. Session stays `idle` and can accept new messages.                                                                                  |
 | `agent/end`       | `{ taskId: str }`                                                                            | `null`              | Gracefully close the session. Session enters `done` state.                                                                                                  |
 | `agent/respond`   | `{ taskId: str, requestId: str, response: AskUserQuestionResponse \| ToolApprovalResponse }` | `null`              | Respond to a pending server→client request. See [Agent Module models](../agent/README.md#interactive-requestresponse-models) for response type definitions. |
+| `session/list`    | `{}`                                                                                         | `list[SessionSummary]` | List all sessions (in-memory active + on-disk archived from `.specs/sessions/`) |
+| `session/get`     | `{ taskId: str }`                                                                            | `SessionData \| null`  | Get full session data including events from disk |
+| `session/continue`| `{ taskId: str }`                                                                            | `{ taskId: str }`   | Continue a dead session — creates new SDK session with old conversation replayed as context |
+| `session/delete`  | `{ taskId: str }`                                                                            | `bool`              | Delete a session from disk |
 
 ### Server → Client (notifications)
 

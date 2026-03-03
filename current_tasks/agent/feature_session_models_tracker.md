@@ -8,6 +8,11 @@
 **Depends on:** `task-agent-models`, `task-agent-tracker` (existing implementations)
 **Spec reference:** `backend/app/agent/README.md` — Session Lifecycle, Models, Conversation Loop
 
+## Files to Modify
+
+- `backend/app/agent/models.py`
+- `backend/app/agent/tracker.py`
+
 ## Summary
 
 Update the agent infrastructure layer to support persistent conversational sessions. `models.py` needs the new `idle` task state and two new event types (`turn_complete`, `interrupted`). `tracker.py` needs an `asyncio.Queue` per session for message delivery, updated state transitions to include `idle`, and a mechanism for the runner to wait for user messages.

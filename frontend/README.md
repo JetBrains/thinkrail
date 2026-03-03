@@ -61,6 +61,10 @@ The Frontend module is a React/TypeScript single-page application that provides 
 | `src/components/ProgressTab/` | Spec metrics, session tracker, activity timeline, cost | [PROGRESS_TRACKER](ui-specs/PROGRESS_TRACKER.md) |
 | `src/components/SessionHistory/` | Session archive, read-only replay | [SESSION_HISTORY](ui-specs/SESSION_HISTORY.md) |
 | `src/components/Console/` | xterm.js terminal emulator, multiple tabs | [CONSOLE](src/components/Console/README.md) |
+| `src/components/FileViewer/` | Monaco Editor-based file viewer/editor with IntelliJ Darcula theme, preview/edit modes, Edit dropdown (IDE / in-place) | — |
+| `src/components/FileTree/` | IntelliJ-style project file tree with indent guides, collapsible dirs, double-click to open | — |
+| `src/components/SessionManager/` | Session list (active + archived from disk), continue/delete actions, status bar integration | — |
+| `src/components/ProjectPicker/` | Project directory picker with text input, recent projects, create new | — |
 | `src/components/SpecView/` | Markdown renderer, edit mode, agent nudge | — (in WEBVIEW.md §4.2) |
 | `src/components/CodeView/` | Syntax-highlighted code viewer | — (in WEBVIEW.md §4.3) |
 | `src/styles/` | CSS custom properties, dark/light themes | [THEMING](ui-specs/THEMING.md) |

@@ -8,6 +8,11 @@
 **Depends on:** `task-session-service`
 **Spec reference:** `backend/app/rpc/README.md` — Methods, methods/agents.py
 
+## Files to Modify
+
+- `backend/app/rpc/methods/agents.py`
+- `backend/app/rpc/server.py`
+
 ## Summary
 
 Add RPC handlers for the two new client→server methods (`agent/send`, `agent/end`) and wire them into the METHODS dict in `server.py`. Update `agent/run` return value to include `sessionId`. Update `agent/interrupt` behavior description (session stays alive).

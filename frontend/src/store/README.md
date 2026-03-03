@@ -27,6 +27,7 @@ frontend/src/store/
 ├── uiStore.ts             # Panel visibility, active tabs, modal state
 ├── costStore.ts           # Cost tracking, budget
 ├── notificationStore.ts   # Toast queue, tab badges
+├── fileStore.ts           # Open files, editor state, dirty tracking
 └── middleware/
     ├── persist.ts         # localStorage persistence config
     └── devtools.ts        # DevTools middleware wrapper
@@ -362,6 +363,38 @@ Enabled in development only. Connects to React DevTools / Redux DevTools extensi
 - **No undo/redo:** State changes are not reversible — no action history stack
 - **Session events accumulate unbounded:** Long-running sessions with many events may use significant memory
 - **No cross-tab sync:** Multiple browser tabs would have independent stores (but only one can connect at a time)
+
+### 6. fileStore
+
+Manages open file tabs (from double-clicking files in FileTree).
+
+```typescript
+interface OpenFile {
+  path: string;           // relative to project root
+  name: string;           // filename
+  content: string;        // current content
+  originalContent: string;// for dirty detection
+  mode: "preview" | "edit";
+  isDirty: boolean;       // content !== originalContent
+  saving: boolean;
+}
+
+interface FileStore {
+  openFiles: Map<string, OpenFile>;  // keyed by relative path
+  activeFilePath: string | null;
+
+  openFile: (path: string) => Promise<void>;     // fetch via REST, add to open files
+  closeFile: (path: string) => void;
+  activateFile: (path: string) => void;
+  setMode: (path: string, mode) => void;         // toggle preview/edit
+  updateContent: (path: string, content) => void; // local edit
+  saveFile: (path: string) => Promise<void>;     // POST /api/file/write
+  openExternal: (path: string, editor) => Promise<void>; // POST /api/file/open-external
+}
+```
+
+**Data source:** REST endpoints (`/api/file/read`, `/api/file/write`, `/api/file/open-external`)
+**Persistence:** None (open files are ephemeral — closed on page refresh)
 
 ## Related Specs
 

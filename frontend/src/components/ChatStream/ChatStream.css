@@ -330,3 +330,19 @@
 }
 .session-tab:hover .session-tab-close { opacity: 1; }
 .session-tab-close:hover { color: var(--red); }
+
+/* ── File Tabs ── */
+.session-tab-sep {
+  width: 1px;
+  height: 16px;
+  background: var(--border);
+  align-self: center;
+  margin: 0 var(--space-xs);
+  flex-shrink: 0;
+}
+.file-tab-icon { font-size: 11px; }
+.file-tab-dirty {
+  color: var(--gold);
+  font-size: 8px;
+  margin-left: 2px;
+}

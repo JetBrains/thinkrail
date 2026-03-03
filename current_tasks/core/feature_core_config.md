@@ -7,6 +7,10 @@
 **Started:** 2026-02-27
 **Spec reference:** `backend/app/core/README.md`
 
+## Files to Modify
+
+- `backend/app/core/config.py`
+
 ## Summary
 
 The Core module is the foundational dependency for all backend modules. `config.py` provides project root discovery, canonical directory paths, and application settings. Without it, no other module can locate files or load configuration.

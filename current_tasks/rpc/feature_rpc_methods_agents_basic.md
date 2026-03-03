@@ -8,6 +8,10 @@
 **Depends on:** `feature_rpc_methods_specs` (establishes handler pattern)
 **Spec reference:** `backend/app/rpc/README.md` (lines 205-217, 82-96)
 
+## Files to Modify
+
+- `backend/app/rpc/methods/agents.py`
+
 ## Summary
 
 `methods/agents.py` contains the jsonrpcserver handler functions for all `agent/*` JSON-RPC methods. This task covers the read-only handlers: `get_agent_status` and `list_agents`. These follow the same pattern as `methods/specs.py` — each handler delegates to `AgentService` and returns domain models directly.

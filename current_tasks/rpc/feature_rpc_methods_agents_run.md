@@ -8,6 +8,10 @@
 **Depends on:** `feature_rpc_methods_agents_basic` (file + error decorator exist)
 **Spec reference:** `backend/app/rpc/README.md` (lines 34, 205-219)
 
+## Files to Modify
+
+- `backend/app/rpc/methods/agents.py`
+
 ## Summary
 
 Add the `run_agent` handler to `methods/agents.py`. This is the most complex handler because it captures the current WebSocket notify callable at call time, passes it to `AgentService.run_task`, and returns immediately with the `taskId`. The actual agent run proceeds asynchronously in the background; streaming events are pushed to the client via the notify callable.

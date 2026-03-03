@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { useUiStore } from "@/store/uiStore.ts";
+import { useFileStore } from "@/store/fileStore.ts";
 import "./FileTree.css";
 
 const API_BASE = import.meta.env.DEV ? "http://localhost:8000" : "";
@@ -66,6 +67,17 @@ export function FileTree() {
     fetchFiles();
   }, [fetchFiles]);
 
+  const openFile = useFileStore((s) => s.openFile);
+
+  const handleDoubleClick = useCallback(
+    (entry: FileEntry) => {
+      if (!entry.isDir) {
+        openFile(entry.path);
+      }
+    },
+    [openFile],
+  );
+
   const toggleDir = useCallback((path: string) => {
     setCollapsed((prev) => {
       const next = new Set(prev);
@@ -111,6 +123,7 @@ export function FileTree() {
               setSelected(entry.path);
               if (entry.isDir) toggleDir(entry.path);
             }}
+            onDoubleClick={() => handleDoubleClick(entry)}
           >
             {/* Indent guides */}
             {entry.depth > 0 && (

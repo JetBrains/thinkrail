@@ -8,6 +8,10 @@
 **Depends on:** `feature_rpc_notifications`, `feature_rpc_methods_specs`
 **Spec reference:** `backend/app/rpc/README.md` (lines 153-166, 218-255)
 
+## Files to Modify
+
+- `backend/app/rpc/server.py`
+
 ## Summary
 
 `server.py` is the main entry point for the RPC module. It registers a `/ws` WebSocket endpoint on the FastAPI app, manages the connection lifecycle (single active connection), dispatches incoming JSON-RPC messages via jsonrpcserver, and starts/stops the filesystem watcher. For this spec-only phase, the METHODS dict registers only `spec/*` handlers (agent/* deferred).
