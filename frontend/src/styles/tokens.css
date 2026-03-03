@@ -1,5 +1,5 @@
 /*
- * Bonsai Design Tokens
+ * Bonsai Design Tokens — JetBrains-inspired
  *
  * Semantic CSS variables consumed by all components.
  * Values are set per-theme in theme-dark.css / theme-light.css.
@@ -7,16 +7,16 @@
  */
 
 :root {
-  /* ── Accent colors (theme-independent) ── */
-  --blue: #7aa2f7;
-  --purple: #bb9af7;
-  --green: #9ece6a;
-  --red: #f7768e;
-  --gold: #e0af68;
-  --cyan: #7dcfff;
+  /* ── Accent colors (JetBrains brand palette) ── */
+  --blue: #3B74EE;
+  --purple: #6B57FF;
+  --green: #21D789;
+  --red: #F75464;
+  --gold: #E8A336;
+  --cyan: #087CFA;
 
   /* ── Typography ── */
-  --font: "SF Mono", "Monaco", "Inconsolata", "Fira Code", monospace;
+  --font: "JetBrains Mono", "Fira Code", "SF Mono", "Cascadia Code", monospace;
   --font-size: 13px;
   --line-height: 1.6;
 

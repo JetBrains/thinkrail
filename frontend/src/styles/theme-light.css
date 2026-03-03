@@ -1,36 +1,36 @@
 /*
- * Light theme
+ * Light theme — JetBrains New UI Light inspired
  * Applied when data-theme="light" or via prefers-color-scheme.
  */
 
 @media (prefers-color-scheme: light) {
   :root:not([data-theme="dark"]) {
-    --bg: #f5f5f5;
+    --bg: #f7f8fa;
     --panel: #ffffff;
-    --elevated: #f0f0f0;
-    --hover: #e8e8e8;
-    --border: #d0d0d0;
-    --border2: #b0b0b0;
-    --text: #1a1b26;
-    --muted: #4a4a6a;
-    --hint: #8888a0;
-    --sel: #cce0ff;
+    --elevated: #f0f1f2;
+    --hover: #e8e9eb;
+    --border: #d1d3d8;
+    --border2: #b4b8bf;
+    --text: #1e1f22;
+    --muted: #5a5d63;
+    --hint: #8c8f96;
+    --sel: #d4e4fa;
 
     color-scheme: light;
   }
 }
 
 [data-theme="light"] {
-  --bg: #f5f5f5;
+  --bg: #f7f8fa;
   --panel: #ffffff;
-  --elevated: #f0f0f0;
-  --hover: #e8e8e8;
-  --border: #d0d0d0;
-  --border2: #b0b0b0;
-  --text: #1a1b26;
-  --muted: #4a4a6a;
-  --hint: #8888a0;
-  --sel: #cce0ff;
+  --elevated: #f0f1f2;
+  --hover: #e8e9eb;
+  --border: #d1d3d8;
+  --border2: #b4b8bf;
+  --text: #1e1f22;
+  --muted: #5a5d63;
+  --hint: #8c8f96;
+  --sel: #d4e4fa;
 
   color-scheme: light;
 }

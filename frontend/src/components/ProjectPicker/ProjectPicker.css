@@ -41,7 +41,7 @@
 .picker-logo {
   font-size: 24px;
   font-weight: 700;
-  color: var(--green);
+  color: var(--purple);
   text-align: center;
   margin-bottom: var(--space-xs);
 }
@@ -111,9 +111,9 @@
 .picker-btn:hover:not(:disabled) { background: var(--hover); color: var(--text); }
 .picker-btn:disabled { opacity: 0.4; cursor: not-allowed; }
 .picker-btn-primary {
-  background: var(--green);
-  color: var(--bg);
-  border-color: var(--green);
+  background: var(--blue);
+  color: #fff;
+  border-color: var(--blue);
   font-weight: 500;
 }
 .picker-btn-primary:hover:not(:disabled) { opacity: 0.9; }

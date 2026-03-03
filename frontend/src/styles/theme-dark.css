@@ -1,20 +1,25 @@
 /*
- * Dark theme — Tokyo Night-inspired
+ * Dark theme — JetBrains New UI / Darcula inspired
  * Applied by default and when data-theme="dark".
+ *
+ * Based on JetBrains IDE dark theme colors:
+ * - Near-black backgrounds with warm gray tones
+ * - Muted borders, high-contrast text
+ * - Purple (#6B57FF) as primary accent
  */
 
 :root,
 [data-theme="dark"] {
-  --bg: #0a0e1a;
-  --panel: #1a1b26;
-  --elevated: #24283b;
-  --hover: #2a2f47;
-  --border: #414868;
-  --border2: #545c7e;
-  --text: #c0caf5;
-  --muted: #9aa5ce;
-  --hint: #565f89;
-  --sel: #364a82;
+  --bg: #1e1f22;
+  --panel: #2b2d30;
+  --elevated: #393b40;
+  --hover: #43454a;
+  --border: #43454a;
+  --border2: #5a5d63;
+  --text: #dfe1e5;
+  --muted: #a8adb5;
+  --hint: #6f737a;
+  --sel: #2d4f67;
 
   color-scheme: dark;
 }
