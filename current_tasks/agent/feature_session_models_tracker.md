@@ -2,7 +2,7 @@
 
 > Infrastructure changes: idle state, new event types, message queue
 
-**Status:** Active
+**Status:** Done
 **Priority:** High
 **Started:** 2026-03-02
 **Depends on:** `task-agent-models`, `task-agent-tracker` (existing implementations)

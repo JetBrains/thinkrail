@@ -20,11 +20,13 @@ from app.rpc.methods.specs import (
     update_spec,
 )
 from app.rpc.methods.agents import (
+    end_session,
     get_agent_status,
     interrupt_agent,
     list_agents,
     respond_agent,
     run_agent,
+    send_message,
 )
 from app.agent.service import AgentService
 from app.core.config import AppConfig, load_config
@@ -42,9 +44,11 @@ METHODS = {
     "spec/delete": delete_spec,
     "spec/graph": get_graph,
     "agent/run": run_agent,
+    "agent/send": send_message,
     "agent/status": get_agent_status,
     "agent/list": list_agents,
     "agent/interrupt": interrupt_agent,
+    "agent/end": end_session,
     "agent/respond": respond_agent,
 }
 

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import time
 from collections.abc import Callable
 from typing import Any
@@ -20,8 +21,8 @@ from claude_agent_sdk import (
     UserMessage,
 )
 
-from app.agent.models import AgentEvent, AgentResult, AgentTask, to_camel
-from app.agent.tracker import Tracker
+from app.agent.models import AgentResult, AgentTask, to_camel
+from app.agent.tracker import END_SIGNAL, Tracker
 
 
 async def run(
@@ -30,12 +31,15 @@ async def run(
     notify: Callable,
     tracker: Tracker,
 ) -> AgentResult:
-    """Execute an agent run using the Claude Agent SDK.
+    """Execute a persistent conversational agent session.
 
-    Iterates the SDK event stream, maps SDK events to AgentEvent
-    notifications, and handles canUseTool for interactive flows.
+    Keeps the SDK client open and loops: wait for user message (via
+    tracker queue) → query SDK → stream events → emit turnComplete →
+    repeat. Exits when END_SIGNAL is received or an error occurs.
     """
     start_time = time.monotonic()
+    total_cost = 0.0
+    total_turns = 0
 
     async def can_use_tool(
         tool_name: str,
@@ -89,114 +93,125 @@ async def run(
         include_partial_messages=task.config.stream_text,
     )
 
-    # Ask the frontend for the initial prompt via the Future mechanism.
-    # Register the future BEFORE sending the notification, because the
-    # frontend may respond (via agent/respond RPC) before this coroutine
-    # continues — the WebSocket dispatch loop processes it first.
-    prompt_request_id = str(uuid4())
-    prompt_future = tracker.register_future(task.id, prompt_request_id)
-    await notify(
-        "agent/askUserQuestion",
-        {
-            "taskId": task.id,
-            "requestId": prompt_request_id,
-            "questions": [
-                {
-                    "question": "What would you like the agent to do?",
-                    "header": "Prompt",
-                    "options": [],
-                    "multiSelect": False,
-                }
-            ],
-        },
-        request_id=prompt_request_id,
-    )
-    prompt_response = await prompt_future
-    user_prompt = prompt_response.get("text", "")
-    if not user_prompt:
-        # Fallback: check answers dict
-        answers = prompt_response.get("answers", {})
-        user_prompt = next(iter(answers.values()), "") if answers else ""
-
     session_id = ""
 
     async with ClaudeSDKClient(options=options) as client:
-        await client.query(user_prompt)
+        # Wait for init message to get session_id
+        # The SDK may emit SystemMessage(init) before the first query,
+        # or after — handle both cases in the event loop below.
 
-        async for message in client.receive_response():
-            if isinstance(message, SystemMessage) and message.subtype == "init":
-                session_id = message.data.get("session_id", "")
-                tracker.set_session_id(task.id, session_id)
-                sdk_data = {to_camel(k): v for k, v in message.data.items()}
-                await notify("agent/sessionStart", {
-                    "taskId": task.id,
-                    "sessionId": session_id,
-                    **sdk_data,
-                })
+        # Task starts in idle — ready for first message
+        # -- conversation loop --
+        while True:
+            message = await tracker.get_next_message(task.id)
 
-            elif isinstance(message, AssistantMessage):
-                for block in message.content:
-                    if isinstance(block, TextBlock):
-                        await notify("agent/textDelta", {
-                            "taskId": task.id,
-                            "sessionId": session_id,
-                            "text": block.text,
-                        })
-                    elif isinstance(block, ToolUseBlock):
-                        await notify("agent/toolCallStart", {
-                            "taskId": task.id,
-                            "sessionId": session_id,
-                            "toolUseId": block.id,
-                            "toolName": block.name,
-                            "toolInput": block.input,
-                        })
+            if message is END_SIGNAL:
+                break
 
-            elif isinstance(message, UserMessage):
-                content = message.content
-                if isinstance(content, list):
-                    for block in content:
-                        if isinstance(block, ToolResultBlock):
-                            await notify("agent/toolCallEnd", {
+            tracker.set_status(task.id, "running")
+            await client.query(message)
+
+            async for sdk_event in client.receive_response():
+                if isinstance(sdk_event, SystemMessage) and sdk_event.subtype == "init":
+                    session_id = sdk_event.data.get("session_id", "")
+                    tracker.set_session_id(task.id, session_id)
+                    sdk_data = {to_camel(k): v for k, v in sdk_event.data.items()}
+                    await notify("agent/sessionStart", {
+                        "taskId": task.id,
+                        "sessionId": session_id,
+                        **sdk_data,
+                    })
+
+                elif isinstance(sdk_event, AssistantMessage):
+                    for block in sdk_event.content:
+                        if isinstance(block, TextBlock):
+                            await notify("agent/textDelta", {
                                 "taskId": task.id,
                                 "sessionId": session_id,
-                                "toolUseId": block.tool_use_id,
-                                "toolName": "",
-                                "output": block.content if isinstance(block.content, str) else str(block.content),
-                                "isError": block.is_error or False,
+                                "text": block.text,
+                            })
+                        elif isinstance(block, ToolUseBlock):
+                            await notify("agent/toolCallStart", {
+                                "taskId": task.id,
+                                "sessionId": session_id,
+                                "toolUseId": block.id,
+                                "toolName": block.name,
+                                "toolInput": block.input,
                             })
 
-            elif isinstance(message, ResultMessage):
-                duration_ms = int((time.monotonic() - start_time) * 1000)
-                result = AgentResult(
-                    task_id=task.id,
-                    session_id=message.session_id or session_id,
-                    result=message.result or "",
-                    cost_usd=message.total_cost_usd or 0.0,
-                    turns=message.num_turns,
-                    duration_ms=duration_ms,
-                    usage=message.usage or {},
-                )
-                event_type = "error" if message.is_error else "done"
-                await notify(f"agent/{event_type}", {
-                    "taskId": task.id,
-                    "sessionId": message.session_id or session_id,
-                    "result": message.result or "",
-                    "costUsd": message.total_cost_usd or 0.0,
-                    "turns": message.num_turns,
-                    "durationMs": duration_ms,
-                    "usage": message.usage or {},
-                    "subtype": event_type,
-                    "errors": [message.result] if message.is_error else [],
-                })
-                return result
+                elif isinstance(sdk_event, UserMessage):
+                    content = sdk_event.content
+                    if isinstance(content, list):
+                        for block in content:
+                            if isinstance(block, ToolResultBlock):
+                                await notify("agent/toolCallEnd", {
+                                    "taskId": task.id,
+                                    "sessionId": session_id,
+                                    "toolUseId": block.tool_use_id,
+                                    "toolName": "",
+                                    "output": block.content if isinstance(block.content, str) else str(block.content),
+                                    "isError": block.is_error or False,
+                                })
 
-    # Fallback if no ResultMessage received
+                elif isinstance(sdk_event, ResultMessage):
+                    turn_cost = sdk_event.total_cost_usd or 0.0
+                    turn_turns = sdk_event.num_turns
+                    total_cost += turn_cost
+                    total_turns += turn_turns
+                    duration_ms = int((time.monotonic() - start_time) * 1000)
+
+                    if sdk_event.is_error:
+                        await notify("agent/error", {
+                            "taskId": task.id,
+                            "sessionId": sdk_event.session_id or session_id,
+                            "subtype": "error",
+                            "errors": [sdk_event.result] if sdk_event.result else [],
+                            "result": sdk_event.result or "",
+                            "costUsd": total_cost,
+                            "turns": total_turns,
+                            "durationMs": duration_ms,
+                            "usage": sdk_event.usage or {},
+                        })
+                        tracker.set_status(task.id, "error")
+                        return AgentResult(
+                            task_id=task.id,
+                            session_id=sdk_event.session_id or session_id,
+                            result=sdk_event.result or "",
+                            cost_usd=total_cost,
+                            turns=total_turns,
+                            duration_ms=duration_ms,
+                            usage=sdk_event.usage or {},
+                        )
+                    else:
+                        await notify("agent/turnComplete", {
+                            "taskId": task.id,
+                            "sessionId": sdk_event.session_id or session_id,
+                            "result": sdk_event.result or "",
+                            "costUsd": turn_cost,
+                            "turns": turn_turns,
+                            "durationMs": duration_ms,
+                            "usage": sdk_event.usage or {},
+                        })
+                        tracker.set_status(task.id, "idle")
+                        break  # turn done, go back to waiting
+
+    # Session closed gracefully (END_SIGNAL received)
     duration_ms = int((time.monotonic() - start_time) * 1000)
+    await notify("agent/done", {
+        "taskId": task.id,
+        "sessionId": session_id,
+        "result": "",
+        "costUsd": total_cost,
+        "turns": total_turns,
+        "durationMs": duration_ms,
+        "usage": {},
+    })
+
     return AgentResult(
         task_id=task.id,
         session_id=session_id,
         result="",
-        cost_usd=0.0,
-        turns=0,
+        cost_usd=total_cost,
+        turns=total_turns,
         duration_ms=duration_ms,
     )

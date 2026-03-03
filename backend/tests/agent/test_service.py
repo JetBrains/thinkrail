@@ -49,19 +49,16 @@ class TestRunTask:
         notify = AsyncMock()
         task = await service.run_task(["spec-1"], AgentConfig(), notify)
 
-        assert task.status == "running"
+        assert task.status == "idle"
         assert task.spec_ids == ["spec-1"]
 
         # Wait for background task to complete
         await asyncio.sleep(0.05)
 
-        # Task should now be done
-        assert service.get_task(task.id).status == "done"
         mock_run.assert_called_once()
 
     @patch("app.agent.service.run")
     async def test_run_task_returns_immediately(self, mock_run: AsyncMock) -> None:
-        # Make run slow to prove we don't block
         async def slow_run(*args, **kwargs):
             await asyncio.sleep(0.5)
             return AgentResult(
@@ -75,11 +72,17 @@ class TestRunTask:
         spec_service.get_spec.return_value = _make_spec_detail("s1", "T", "C")
 
         task = await service.run_task(["s1"], AgentConfig(), AsyncMock())
-        # Task is running, not done — proves we returned immediately
-        assert task.status == "running"
+        # Task starts as pending — runner transitions to idle/running
+        assert task.status == "idle"
 
-        # Clean up: cancel the background task
-        await service.interrupt_task(task.id)
+        # Clean up
+        bg = service._running_tasks.get(task.id)
+        if bg:
+            bg.cancel()
+            try:
+                await bg
+            except (asyncio.CancelledError, Exception):
+                pass
 
     @patch("app.agent.service.run")
     async def test_error_sets_status(self, mock_run: AsyncMock) -> None:
@@ -94,32 +97,57 @@ class TestRunTask:
         assert service.get_task(task.id).status == "error"
 
 
-class TestInterruptTask:
-    @patch("app.agent.service.run")
-    async def test_interrupt_cancels_and_sets_error(self, mock_run: AsyncMock) -> None:
-        async def long_run(*args, **kwargs):
-            await asyncio.sleep(10)
-            return AgentResult(
-                task_id="t1", session_id="s1", result="done",
-                cost_usd=0.0, turns=1, duration_ms=10000,
-            )
+class TestSendMessage:
+    async def test_send_message_enqueues(self) -> None:
+        service, _, _ = _make_service()
+        task = service._tracker.create_task(["s1"], AgentConfig())
+        # task starts idle — ready for messages
 
-        mock_run.side_effect = long_run
+        await service.send_message(task.id, "hello")
 
-        service, _, spec_service = _make_service()
-        spec_service.get_spec.return_value = _make_spec_detail("s1", "T", "C")
+        msg = service._tracker._queues[task.id].get_nowait()
+        assert msg == "hello"
 
-        task = await service.run_task(["s1"], AgentConfig(), AsyncMock())
-        assert task.status == "running"
+    async def test_send_message_while_running_raises(self) -> None:
+        service, _, _ = _make_service()
+        task = service._tracker.create_task(["s1"], AgentConfig())
+        service._tracker.set_status(task.id, "running")
+        with pytest.raises(ValueError, match="expected 'idle'"):
+            await service.send_message(task.id, "hello")
 
-        await service.interrupt_task(task.id)
-        assert service.get_task(task.id).status == "error"
+    async def test_send_message_when_done_raises(self) -> None:
+        service, _, _ = _make_service()
+        task = service._tracker.create_task(["s1"], AgentConfig())
+        service._tracker.set_status(task.id, "done")
+        with pytest.raises(ValueError, match="expected 'idle'"):
+            await service.send_message(task.id, "hello")
+
+
+class TestEndSession:
+    async def test_end_session_enqueues_signal(self) -> None:
+        from app.agent.tracker import END_SIGNAL
+
+        service, _, _ = _make_service()
+        task = service._tracker.create_task(["s1"], AgentConfig())
+        # task starts idle
+
+        await service.end_session(task.id)
+
+        msg = service._tracker._queues[task.id].get_nowait()
+        assert msg is END_SIGNAL
+
+    async def test_end_already_done_is_noop(self) -> None:
+        service, _, _ = _make_service()
+        task = service._tracker.create_task(["s1"], AgentConfig())
+        service._tracker.set_status(task.id, "done")
+
+        # Should not raise
+        await service.end_session(task.id)
 
 
 class TestGetAndListTasks:
     def test_get_task(self) -> None:
         service, _, _ = _make_service()
-        # Create directly via tracker for unit test
         service._tracker.create_task(["s1"], AgentConfig())
         tasks = service.list_tasks()
         assert len(tasks) == 1

@@ -5,14 +5,19 @@ import asyncio
 import pytest
 
 from app.agent.models import AgentConfig
-from app.agent.tracker import FutureNotFoundError, TaskNotFoundError, Tracker
+from app.agent.tracker import (
+    END_SIGNAL,
+    FutureNotFoundError,
+    TaskNotFoundError,
+    Tracker,
+)
 
 
 class TestTaskLifecycle:
     def test_create_task(self) -> None:
         tracker = Tracker()
         task = tracker.create_task(["spec-1"], AgentConfig())
-        assert task.status == "pending"
+        assert task.status == "idle"
         assert task.spec_ids == ["spec-1"]
         assert len(task.id) > 0
 
@@ -43,8 +48,9 @@ class TestTaskLifecycle:
     def test_set_status_invalid_transition(self) -> None:
         tracker = Tracker()
         task = tracker.create_task(["s1"], AgentConfig())
+        tracker.set_status(task.id, "done")
         with pytest.raises(ValueError, match="Invalid transition"):
-            tracker.set_status(task.id, "done")  # pending -> done not allowed
+            tracker.set_status(task.id, "running")  # done -> running not allowed
 
     def test_set_status_updates_timestamp(self) -> None:
         tracker = Tracker()
@@ -62,9 +68,11 @@ class TestTaskLifecycle:
     def test_full_lifecycle(self) -> None:
         tracker = Tracker()
         task = tracker.create_task(["s1"], AgentConfig())
-        assert task.status == "pending"
+        assert task.status == "idle"
         tracker.set_status(task.id, "running")
         assert tracker.get_task(task.id).status == "running"
+        tracker.set_status(task.id, "idle")
+        assert tracker.get_task(task.id).status == "idle"
         tracker.set_status(task.id, "done")
         assert tracker.get_task(task.id).status == "done"
 
@@ -74,6 +82,97 @@ class TestTaskLifecycle:
         tracker.set_status(task.id, "running")
         tracker.set_status(task.id, "error")
         assert tracker.get_task(task.id).status == "error"
+
+    def test_idle_to_running(self) -> None:
+        tracker = Tracker()
+        task = tracker.create_task(["s1"], AgentConfig())
+        tracker.set_status(task.id, "running")
+        assert tracker.get_task(task.id).status == "running"
+
+    def test_running_to_idle(self) -> None:
+        """Turn completes -> back to idle."""
+        tracker = Tracker()
+        task = tracker.create_task(["s1"], AgentConfig())
+        tracker.set_status(task.id, "running")
+        tracker.set_status(task.id, "idle")
+        assert tracker.get_task(task.id).status == "idle"
+
+    def test_idle_to_done(self) -> None:
+        """Graceful session close from idle."""
+        tracker = Tracker()
+        task = tracker.create_task(["s1"], AgentConfig())
+        tracker.set_status(task.id, "done")
+        assert tracker.get_task(task.id).status == "done"
+
+
+class TestMessageQueue:
+    def test_create_task_creates_queue(self) -> None:
+        tracker = Tracker()
+        task = tracker.create_task(["s1"], AgentConfig())
+        assert task.id in tracker._queues
+
+    def test_enqueue_message(self) -> None:
+        tracker = Tracker()
+        task = tracker.create_task(["s1"], AgentConfig())
+        tracker.enqueue_message(task.id, "hello")
+        assert not tracker._queues[task.id].empty()
+
+    def test_enqueue_message_nonexistent_task(self) -> None:
+        tracker = Tracker()
+        with pytest.raises(TaskNotFoundError):
+            tracker.enqueue_message("no-task", "hello")
+
+    def test_enqueue_end_signal(self) -> None:
+        tracker = Tracker()
+        task = tracker.create_task(["s1"], AgentConfig())
+        tracker.enqueue_end_signal(task.id)
+        assert not tracker._queues[task.id].empty()
+
+    def test_enqueue_end_signal_nonexistent_task(self) -> None:
+        tracker = Tracker()
+        with pytest.raises(TaskNotFoundError):
+            tracker.enqueue_end_signal("no-task")
+
+    async def test_get_next_message_text(self) -> None:
+        tracker = Tracker()
+        task = tracker.create_task(["s1"], AgentConfig())
+        tracker.enqueue_message(task.id, "hello world")
+        msg = await tracker.get_next_message(task.id)
+        assert msg == "hello world"
+
+    async def test_get_next_message_end_signal(self) -> None:
+        tracker = Tracker()
+        task = tracker.create_task(["s1"], AgentConfig())
+        tracker.enqueue_end_signal(task.id)
+        msg = await tracker.get_next_message(task.id)
+        assert msg is END_SIGNAL
+
+    async def test_get_next_message_ordering(self) -> None:
+        tracker = Tracker()
+        task = tracker.create_task(["s1"], AgentConfig())
+        tracker.enqueue_message(task.id, "first")
+        tracker.enqueue_message(task.id, "second")
+        tracker.enqueue_end_signal(task.id)
+        assert await tracker.get_next_message(task.id) == "first"
+        assert await tracker.get_next_message(task.id) == "second"
+        assert await tracker.get_next_message(task.id) is END_SIGNAL
+
+    async def test_get_next_message_nonexistent_task(self) -> None:
+        tracker = Tracker()
+        with pytest.raises(TaskNotFoundError):
+            await tracker.get_next_message("no-task")
+
+    async def test_get_next_message_blocks_until_enqueued(self) -> None:
+        tracker = Tracker()
+        task = tracker.create_task(["s1"], AgentConfig())
+
+        async def delayed_enqueue():
+            await asyncio.sleep(0.05)
+            tracker.enqueue_message(task.id, "delayed")
+
+        asyncio.get_event_loop().create_task(delayed_enqueue())
+        msg = await tracker.get_next_message(task.id)
+        assert msg == "delayed"
 
 
 class TestFutureManagement:

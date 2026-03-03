@@ -15,13 +15,15 @@ def to_camel(name: str) -> str:
 
 _CAMEL_CONFIG = ConfigDict(alias_generator=to_camel, populate_by_name=True)
 
-TaskStatus = Literal["pending", "running", "done", "error"]
+TaskStatus = Literal["idle", "running", "done", "error"]
 
 EventType = Literal[
     "session_start",
     "text_delta",
     "tool_call_start",
     "tool_call_end",
+    "turn_complete",
+    "interrupted",
     "subagent_start",
     "subagent_end",
     "notification",
@@ -108,7 +110,7 @@ class AgentTask(BaseModel):
     model_config = _CAMEL_CONFIG
 
     id: str = Field(default_factory=lambda: str(uuid4()))
-    status: TaskStatus = "pending"
+    status: TaskStatus = "idle"
     spec_ids: list[str] = Field(default_factory=list)
     config: AgentConfig = Field(default_factory=AgentConfig)
     session_id: str | None = None

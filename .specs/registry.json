@@ -949,7 +949,7 @@
       "type": "task-spec",
       "path": "current_tasks/agent/feature_session_models_tracker.md",
       "title": "Update models.py and tracker.py for conversational sessions",
-      "status": "active",
+      "status": "done",
       "covers": [
         "backend/app/agent/models.py",
         "backend/app/agent/tracker.py"
@@ -966,7 +966,7 @@
       "type": "task-spec",
       "path": "current_tasks/agent/feature_session_runner.md",
       "title": "Rewrite runner.py for conversational session loop",
-      "status": "active",
+      "status": "done",
       "covers": [
         "backend/app/agent/runner.py"
       ],
@@ -982,7 +982,7 @@
       "type": "task-spec",
       "path": "current_tasks/agent/feature_session_service.md",
       "title": "Update service.py for conversational sessions",
-      "status": "active",
+      "status": "done",
       "covers": [
         "backend/app/agent/service.py"
       ],
@@ -998,7 +998,7 @@
       "type": "task-spec",
       "path": "current_tasks/rpc/feature_rpc_session_wiring.md",
       "title": "Wire new agent session methods into RPC layer",
-      "status": "active",
+      "status": "done",
       "covers": [
         "backend/app/rpc/methods/agents.py",
         "backend/app/rpc/server.py"

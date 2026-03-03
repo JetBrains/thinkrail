@@ -59,6 +59,16 @@ async def run_agent(service: AgentService, **params: Any) -> dict:
 
 
 @_handle_errors
+async def send_message(service: AgentService, **params: Any) -> None:
+    await service.send_message(params["taskId"], params["text"])
+
+
+@_handle_errors
+async def end_session(service: AgentService, **params: Any) -> None:
+    await service.end_session(params["taskId"])
+
+
+@_handle_errors
 async def interrupt_agent(service: AgentService, **params: Any) -> None:
     await service.interrupt_task(params["taskId"])
 

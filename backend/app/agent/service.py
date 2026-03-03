@@ -15,7 +15,7 @@ from app.spec.service import SpecService
 
 
 class AgentService:
-    """Facade — single entry point for agent task management."""
+    """Facade — single entry point for agent session management."""
 
     def __init__(self, config: AppConfig, spec_service: SpecService) -> None:
         self._config = config
@@ -31,21 +31,74 @@ class AgentService:
         config: AgentConfig,
         notify: Callable,
     ) -> AgentTask:
+        """Start a persistent agent session.
+
+        Creates the task, launches the runner in the background (which
+        opens the SDK client and enters idle), and returns immediately.
+        The session waits for messages via ``send_message``.
+        """
         task = self._tracker.create_task(spec_ids, config)
         spec_context = self._build_context(spec_ids)
-        self._tracker.set_status(task.id, "running")
         bg_task = asyncio.create_task(
             self._run_background(task, spec_context, notify)
         )
         self._running_tasks[task.id] = bg_task
         return task
 
+    async def send_message(self, task_id: str, text: str) -> None:
+        """Send a user message to the session, triggering a new turn."""
+        task = self._tracker.get_task(task_id)
+        if task.status != "idle":
+            raise ValueError(
+                f"Cannot send message: session is '{task.status}', expected 'idle'"
+            )
+        self._tracker.enqueue_message(task_id, text)
+
     async def interrupt_task(self, task_id: str) -> None:
+        """Cancel the current turn. Session stays alive (idle)."""
+        task = self._tracker.get_task(task_id)
+        if task.status != "running":
+            raise ValueError(
+                f"Cannot interrupt: session is '{task.status}', expected 'running'"
+            )
         self._tracker.cancel_futures(task_id)
-        bg = self._running_tasks.pop(task_id, None)
+        bg = self._running_tasks.get(task_id)
         if bg:
             bg.cancel()
-        self._tracker.set_status(task_id, "error")
+            # Runner will catch CancelledError and the session will
+            # be cleaned up. We re-launch a fresh background loop so
+            # the session can accept new messages.
+            try:
+                await bg
+            except (asyncio.CancelledError, Exception):
+                pass
+            self._running_tasks.pop(task_id, None)
+            self._tracker.set_status(task_id, "idle")
+            # Notify frontend that the turn was interrupted
+            notify = self._last_notify.get(task_id)
+            if notify:
+                try:
+                    await notify("agent/interrupted", {
+                        "taskId": task_id,
+                        "sessionId": task.session_id or "",
+                    })
+                except Exception:
+                    pass
+            # Re-launch the background runner for continued conversation
+            spec_context = self._build_context(task.spec_ids)
+            notify = self._last_notify.get(task_id)
+            if notify:
+                new_bg = asyncio.create_task(
+                    self._run_background(task, spec_context, notify)
+                )
+                self._running_tasks[task_id] = new_bg
+
+    async def end_session(self, task_id: str) -> None:
+        """Gracefully close the session."""
+        task = self._tracker.get_task(task_id)
+        if task.status in ("done", "error"):
+            return  # already finished
+        self._tracker.enqueue_end_signal(task_id)
 
     def get_task(self, task_id: str) -> AgentTask:
         return self._tracker.get_task(task_id)
@@ -64,12 +117,22 @@ class AgentService:
         spec_context: str,
         notify: Callable,
     ) -> None:
+        # Store notify for potential re-launch after interrupt
+        if not hasattr(self, "_last_notify"):
+            self._last_notify: dict[str, Callable] = {}
+        self._last_notify[task.id] = notify
+
         try:
             await run(task, spec_context, notify, self._tracker)
+            # Runner sets idle after last turnComplete, then exits on END_SIGNAL.
             self._tracker.set_status(task.id, "done")
+        except asyncio.CancelledError:
+            # Interrupted — don't set error, let interrupt_task handle state
+            pass
         except Exception as exc:
             logger.exception("Agent task %s failed", task.id)
-            self._tracker.set_status(task.id, "error")
+            if task.status not in ("done", "error"):
+                self._tracker.set_status(task.id, "error")
             try:
                 await notify(
                     "agent/error",
@@ -84,6 +147,7 @@ class AgentService:
                 pass
         finally:
             self._running_tasks.pop(task.id, None)
+            self._last_notify.pop(task.id, None)
 
     def _build_context(self, spec_ids: list[str]) -> str:
         parts = []

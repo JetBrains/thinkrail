@@ -2,7 +2,7 @@
 
 > Core change: single query → persistent conversation loop
 
-**Status:** Active
+**Status:** Done
 **Priority:** High
 **Started:** 2026-03-02
 **Depends on:** `task-session-models-tracker`

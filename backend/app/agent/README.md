@@ -25,29 +25,29 @@ Sessions are modeled after the Claude Code chat experience: the user starts a se
 ### States
 
 ```
-          agent/run
-pending ─────────────▶ idle ◀──────────────────────────────┐
-                        │                                    │
-                   agent/send                                │
-                        │                                    │
-                        ▼          turn completes            │
-                     running ──────────────────────▶ idle    │
-                        │                            │       │
-                        │       agent/interrupt      │       │
-                        ├───────────────────────────▶┘       │
-                        │                                    │
-                        ├──── agent/end ────────▶ done       │
-                        │                                    │
-                        ├──── SDK error ────────▶ error      │
-                        │                                    │
-                      idle ─── agent/end ───────▶ done       │
-                      idle ─── agent/send ──────▶ running ───┘
+   agent/run creates task in idle
+
+            idle ◀──────────────────────────────┐
+              │                                    │
+         agent/send                                │
+              │                                    │
+              ▼          turn completes            │
+           running ──────────────────────▶ idle    │
+              │                            │       │
+              │       agent/interrupt      │       │
+              ├───────────────────────────▶┘       │
+              │                                    │
+              ├──── agent/end ────────▶ done       │
+              │                                    │
+              ├──── SDK error ────────▶ error      │
+              │                                    │
+            idle ─── agent/end ───────▶ done       │
+            idle ─── agent/send ──────▶ running ───┘
 ```
 
 | State | Description |
 |-------|-------------|
-| `pending` | Task created, not yet started |
-| `idle` | SDK session open, waiting for user message |
+| `idle` | Session open, waiting for user message (initial state) |
 | `running` | SDK turn in progress (processing user message) |
 | `done` | Session ended gracefully |
 | `error` | Session ended due to error |
@@ -58,7 +58,7 @@ pending ─────────────▶ idle ◀───────
 Frontend                      Backend (runner.py)              Claude SDK
    │                               │                              │
    │── agent/run {specIds,config} ─▶│── create SDK client ────────▶│
-   │◀── {taskId, sessionId} ───────│◀── SystemMessage(init) ──────│
+   │◀── {taskId} ─────────────────│◀── SystemMessage(init) ──────│
    │                               │   state: idle                 │
    │                               │                               │
    │   ┌── Conversation loop (repeats) ───────────────────────┐   │
@@ -144,7 +144,7 @@ graph TD
 
 | Method | Signature | Description |
 |--------|-----------|-------------|
-| `run_task` | `(spec_ids: list[str], config: AgentConfig, notify: Callable) → AgentTask` | Start a persistent agent session; creates SDK client, enters `idle` state. `notify` is a callback for server→client messages, signature: `async def notify(method: str, params: dict, request_id: str \| None = None) -> None` — created by `rpc/notifications.make_notify` |
+| `run_task` | `(spec_ids: list[str], config: AgentConfig, notify: Callable) → AgentTask` | Start a persistent agent session. Task is created in `idle` state and returned immediately; the background runner opens the SDK client and waits for messages. `notify` is a callback for server→client messages, signature: `async def notify(method: str, params: dict, request_id: str \| None = None) -> None` — created by `rpc/notifications.make_notify` |
 | `send_message` | `(task_id: str, text: str) → None` | Send a user message to the session, triggering a new turn. Enqueues the message; runner picks it up and calls `client.query()`. |
 | `interrupt_task` | `(task_id: str) → None` | Cancel the current turn. Session stays `idle` and can accept new messages. |
 | `end_session` | `(task_id: str) → None` | Gracefully close the session and SDK client. Session enters `done` state. |
@@ -160,7 +160,7 @@ All models with multi-word fields use a `camelCase` alias generator (`to_camel` 
 
 | Model | Fields (Python / JSON wire) | Description |
 |-------|--------|-------------|
-| `AgentTask` | id, status, spec_ids/`specIds`, config, session_id/`sessionId`?, created, updated | Session record. `status` is one of: `pending`, `idle`, `running`, `done`, `error`. |
+| `AgentTask` | id, status, spec_ids/`specIds`, config, session_id/`sessionId`?, created, updated | Session record. `status` is one of: `idle`, `running`, `done`, `error`. |
 | `AgentConfig` | model, max_turns/`maxTurns`, permission_mode/`permissionMode`, stream_text/`streamText` | Run configuration |
 | `AgentEvent` | task_id/`taskId`, session_id/`sessionId`, event_type/`eventType`, payload | Serializable event to send as notification |
 | `AgentResult` | task_id/`taskId`, session_id/`sessionId`, result, cost_usd/`costUsd`, turns, duration_ms/`durationMs`, usage | Turn result (sent with `turnComplete`) or final session result (sent with `done`) |
@@ -202,14 +202,14 @@ These map 1-to-1 to the `agent/*` notification methods in the protocol:
 | `text_delta` | `SDKAssistantMessage` text block / `SDKPartialAssistantMessage` text_delta | `agent/textDelta` | Partial — full blocks only; streaming partial messages TODO |
 | `tool_call_start` | `SDKAssistantMessage` tool_use block | `agent/toolCallStart` | Implemented |
 | `tool_call_end` | `SDKUserMessage` tool_result block | `agent/toolCallEnd` | Implemented |
-| `turn_complete` | `SDKResultMessage` (non-terminal, session stays open) | `agent/turnComplete` | **New — not yet implemented** |
-| `interrupted` | `agent/interrupt` cancels current turn | `agent/interrupted` | **New — not yet implemented** |
+| `turn_complete` | `SDKResultMessage` (non-terminal, session stays open) | `agent/turnComplete` | Implemented |
+| `interrupted` | `agent/interrupt` cancels current turn | `agent/interrupted` | Implemented |
 | `subagent_start` | `SubagentStart` hook | `agent/subagentStart` | TODO |
 | `subagent_end` | `SubagentStop` hook | `agent/subagentEnd` | TODO |
 | `notification` | `Notification` hook | `agent/notification` | TODO |
 | `compact` | `SDKCompactBoundaryMessage` | `agent/compact` | TODO |
 | `progress` | Internal milestones | `agent/progress` | TODO |
-| `done` | Session closed (via `agent/end` or session-level termination) | `agent/done` | Needs update — currently fires per turn, should fire per session |
+| `done` | Session closed (via `agent/end` or session-level termination) | `agent/done` | Implemented |
 | `error` | `SDKResultMessage` error subtypes / unhandled exception | `agent/error` | Implemented |
 | `permission_denied` | `SDKResultMessage.permission_denials` | `agent/permissionDenied` | TODO |
 
@@ -245,7 +245,7 @@ async with ClaudeSDKClient(options=options) as client:
         if message is END_SIGNAL:
             break  # agent/end was called
 
-        await client.query(message.text)
+        await client.query(message)
         # state: running
 
         async for sdk_event in client.receive_response():

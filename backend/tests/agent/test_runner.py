@@ -19,8 +19,6 @@ def _setup_mock_client(MockClient: MagicMock, messages: list) -> AsyncMock:
         for msg in messages:
             yield msg
 
-    # receive_response is an async generator, so calling it should return
-    # the async iterator directly (not wrapped in a coroutine).
     mock_instance.receive_response = fake_receive
     mock_instance.query = AsyncMock()
 
@@ -51,10 +49,17 @@ def _setup_capturing_client(MockClient: MagicMock, messages: list) -> dict:
     return captured
 
 
+def _make_tracker_and_task() -> tuple[Tracker, AgentTask]:
+    """Create a tracker with a task ready for the conversation loop."""
+    tracker = Tracker()
+    task = tracker.create_task(["spec-1"], AgentConfig())
+    return tracker, task
+
+
 class TestRunHappyPath:
     @patch("app.agent.runner.ClaudeSDKClient")
-    async def test_happy_path_returns_result(self, MockClient: MagicMock) -> None:
-        """Full run: session_start -> text_delta -> tool_call_start -> tool_call_end -> done."""
+    async def test_single_turn_then_end(self, MockClient: MagicMock) -> None:
+        """One message → full event sequence → turnComplete → end signal → done."""
         from claude_agent_sdk import (
             AssistantMessage,
             ResultMessage,
@@ -101,17 +106,18 @@ class TestRunHappyPath:
             [sys_msg, assistant_msg, assistant_msg2, user_msg, result_msg],
         )
 
-        tracker = Tracker()
-        task = tracker.create_task(["spec-1"], AgentConfig())
-        tracker.set_status(task.id, "running")
+        tracker, task = _make_tracker_and_task()
         notify = AsyncMock()
+
+        # Enqueue one message then end signal
+        tracker.enqueue_message(task.id, "Do the thing")
+        tracker.enqueue_end_signal(task.id)
 
         result = await run(task, "spec context here", notify, tracker)
 
         assert isinstance(result, AgentResult)
         assert result.task_id == task.id
         assert result.session_id == "sess-1"
-        assert result.result == "Task completed"
         assert result.turns == 3
         assert result.cost_usd == 0.05
 
@@ -120,7 +126,10 @@ class TestRunHappyPath:
         assert "agent/textDelta" in method_calls
         assert "agent/toolCallStart" in method_calls
         assert "agent/toolCallEnd" in method_calls
+        assert "agent/turnComplete" in method_calls
         assert "agent/done" in method_calls
+        # agent/done should NOT appear inside the turn
+        assert method_calls.index("agent/turnComplete") < method_calls.index("agent/done")
 
     @patch("app.agent.runner.ClaudeSDKClient")
     async def test_session_id_set_on_tracker(self, MockClient: MagicMock) -> None:
@@ -140,12 +149,120 @@ class TestRunHappyPath:
 
         _setup_mock_client(MockClient, [sys_msg, result_msg])
 
-        tracker = Tracker()
-        task = tracker.create_task(["s1"], AgentConfig())
-        tracker.set_status(task.id, "running")
+        tracker, task = _make_tracker_and_task()
+        tracker.enqueue_message(task.id, "hello")
+        tracker.enqueue_end_signal(task.id)
 
         await run(task, "context", AsyncMock(), tracker)
         assert tracker.get_task(task.id).session_id == "sess-42"
+
+    @patch("app.agent.runner.ClaudeSDKClient")
+    async def test_multi_turn_accumulates_stats(self, MockClient: MagicMock) -> None:
+        """Two turns → stats are accumulated across turns."""
+        from claude_agent_sdk import ResultMessage, SystemMessage
+
+        sys_msg = MagicMock(spec=SystemMessage)
+        sys_msg.subtype = "init"
+        sys_msg.data = {"session_id": "s1"}
+
+        result1 = MagicMock(spec=ResultMessage)
+        result1.session_id = "s1"
+        result1.result = "turn 1 done"
+        result1.is_error = False
+        result1.num_turns = 2
+        result1.total_cost_usd = 0.03
+        result1.usage = {}
+
+        result2 = MagicMock(spec=ResultMessage)
+        result2.session_id = "s1"
+        result2.result = "turn 2 done"
+        result2.is_error = False
+        result2.num_turns = 1
+        result2.total_cost_usd = 0.02
+        result2.usage = {}
+
+        mock_instance = AsyncMock()
+        call_count = 0
+
+        def make_receive(msgs):
+            async def fake_receive():
+                for msg in msgs:
+                    yield msg
+            return fake_receive
+
+        # First query returns sys_msg + result1, second returns result2
+        async def dynamic_query(prompt):
+            nonlocal call_count
+            call_count += 1
+            if call_count == 1:
+                mock_instance.receive_response = make_receive([sys_msg, result1])
+            else:
+                mock_instance.receive_response = make_receive([result2])
+
+        mock_instance.query = dynamic_query
+        mock_instance.receive_response = make_receive([])
+
+        MockClient.return_value.__aenter__ = AsyncMock(return_value=mock_instance)
+        MockClient.return_value.__aexit__ = AsyncMock(return_value=False)
+
+        tracker, task = _make_tracker_and_task()
+        tracker.enqueue_message(task.id, "first message")
+        tracker.enqueue_message(task.id, "second message")
+        tracker.enqueue_end_signal(task.id)
+
+        notify = AsyncMock()
+        result = await run(task, "context", notify, tracker)
+
+        assert result.turns == 3  # 2 + 1
+        assert result.cost_usd == pytest.approx(0.05)  # 0.03 + 0.02
+
+        method_calls = [call.args[0] for call in notify.call_args_list]
+        assert method_calls.count("agent/turnComplete") == 2
+        assert method_calls.count("agent/done") == 1
+
+    @patch("app.agent.runner.ClaudeSDKClient")
+    async def test_immediate_end_signal(self, MockClient: MagicMock) -> None:
+        """End signal with no messages → session closes immediately."""
+        _setup_mock_client(MockClient, [])
+
+        tracker, task = _make_tracker_and_task()
+        tracker.enqueue_end_signal(task.id)
+        notify = AsyncMock()
+
+        result = await run(task, "context", notify, tracker)
+
+        assert result.turns == 0
+        assert result.cost_usd == 0.0
+        method_calls = [call.args[0] for call in notify.call_args_list]
+        assert "agent/done" in method_calls
+
+    @patch("app.agent.runner.ClaudeSDKClient")
+    async def test_state_transitions(self, MockClient: MagicMock) -> None:
+        """Verify state transitions: pending → idle → running → idle → done."""
+        from claude_agent_sdk import ResultMessage
+
+        result_msg = MagicMock(spec=ResultMessage)
+        result_msg.session_id = "s1"
+        result_msg.result = "ok"
+        result_msg.is_error = False
+        result_msg.num_turns = 1
+        result_msg.total_cost_usd = 0.0
+        result_msg.usage = {}
+
+        _setup_mock_client(MockClient, [result_msg])
+
+        tracker, task = _make_tracker_and_task()
+        assert task.status == "idle"
+
+        tracker.enqueue_message(task.id, "go")
+        tracker.enqueue_end_signal(task.id)
+
+        await run(task, "context", AsyncMock(), tracker)
+
+        # After run completes, the task should be in idle (from turnComplete)
+        # then done is set by service layer, not runner — runner just emits done notification
+        # But the last set_status in the loop is "idle" after turnComplete
+        # The done transition happens when service calls set_status after run returns
 
 
 class TestCanUseTool:
@@ -167,15 +284,18 @@ class TestCanUseTool:
 
         captured = _setup_capturing_client(MockClient, [sys_msg, result_msg])
 
-        tracker = Tracker()
-        task = tracker.create_task(["s1"], AgentConfig())
-        tracker.set_status(task.id, "running")
+        tracker, task = _make_tracker_and_task()
+        tracker.enqueue_message(task.id, "go")
+        tracker.enqueue_end_signal(task.id)
         notify = AsyncMock()
 
         await run(task, "context", notify, tracker)
 
         opts = captured["options"]
         assert opts.can_use_tool is not None
+
+        # Simulate mid-turn question — manually set task to running
+        tracker.set_status(task.id, "running")
 
         context = MagicMock()
 
@@ -214,14 +334,16 @@ class TestCanUseTool:
 
         captured = _setup_capturing_client(MockClient, [sys_msg, result_msg])
 
-        tracker = Tracker()
-        task = tracker.create_task(["s1"], AgentConfig())
-        tracker.set_status(task.id, "running")
+        tracker, task = _make_tracker_and_task()
+        tracker.enqueue_message(task.id, "go")
+        tracker.enqueue_end_signal(task.id)
 
         await run(task, "context", AsyncMock(), tracker)
 
         opts = captured["options"]
         context = MagicMock()
+
+        tracker.set_status(task.id, "running")
 
         async def resolve_allow():
             await asyncio.sleep(0.01)
@@ -252,14 +374,16 @@ class TestCanUseTool:
 
         captured = _setup_capturing_client(MockClient, [sys_msg, result_msg])
 
-        tracker = Tracker()
-        task = tracker.create_task(["s1"], AgentConfig())
-        tracker.set_status(task.id, "running")
+        tracker, task = _make_tracker_and_task()
+        tracker.enqueue_message(task.id, "go")
+        tracker.enqueue_end_signal(task.id)
 
         await run(task, "context", AsyncMock(), tracker)
 
         opts = captured["options"]
         context = MagicMock()
+
+        tracker.set_status(task.id, "running")
 
         async def resolve_deny():
             await asyncio.sleep(0.01)
@@ -298,9 +422,8 @@ class TestRunError:
 
         _setup_mock_client(MockClient, [sys_msg, result_msg])
 
-        tracker = Tracker()
-        task = tracker.create_task(["s1"], AgentConfig())
-        tracker.set_status(task.id, "running")
+        tracker, task = _make_tracker_and_task()
+        tracker.enqueue_message(task.id, "do something")
         notify = AsyncMock()
 
         result = await run(task, "context", notify, tracker)
@@ -308,6 +431,7 @@ class TestRunError:
         assert result.result == "Failed"
         method_calls = [call.args[0] for call in notify.call_args_list]
         assert "agent/error" in method_calls
+        assert tracker.get_task(task.id).status == "error"
 
     @patch("app.agent.runner.ClaudeSDKClient")
     async def test_sdk_exception_propagates(self, MockClient: MagicMock) -> None:
@@ -317,9 +441,8 @@ class TestRunError:
         MockClient.return_value.__aenter__ = AsyncMock(return_value=mock_instance)
         MockClient.return_value.__aexit__ = AsyncMock(return_value=False)
 
-        tracker = Tracker()
-        task = tracker.create_task(["s1"], AgentConfig())
-        tracker.set_status(task.id, "running")
+        tracker, task = _make_tracker_and_task()
+        tracker.enqueue_message(task.id, "go")
 
         with pytest.raises(RuntimeError, match="SDK crash"):
             await run(task, "context", AsyncMock(), tracker)

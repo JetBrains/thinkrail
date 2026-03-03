@@ -2,7 +2,7 @@
 
 > Add agent/send, agent/end handlers and METHODS entries
 
-**Status:** Active
+**Status:** Done
 **Priority:** High
 **Started:** 2026-03-02
 **Depends on:** `task-session-service`

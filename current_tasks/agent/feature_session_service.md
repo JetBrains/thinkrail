@@ -2,7 +2,7 @@
 
 > Facade changes: send_message, end_session, interrupt keeps session alive
 
-**Status:** Active
+**Status:** Done
 **Priority:** High
 **Started:** 2026-03-02
 **Depends on:** `task-session-models-tracker`, `task-session-runner`

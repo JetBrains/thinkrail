@@ -2,12 +2,18 @@ from __future__ import annotations
 
 import asyncio
 from datetime import UTC, datetime
+from typing import Any
 
 from app.agent.models import AgentConfig, AgentTask, TaskStatus
 
+_END_SIGNAL = object()
+"""Sentinel pushed by ``enqueue_end_signal`` to close the conversation loop."""
+
+END_SIGNAL = _END_SIGNAL  # public alias
+
 _VALID_TRANSITIONS: dict[TaskStatus, set[TaskStatus]] = {
-    "pending": {"running"},
-    "running": {"done", "error"},
+    "idle": {"running", "done", "error"},
+    "running": {"idle", "done", "error"},
     "done": set(),
     "error": set(),
 }
@@ -22,17 +28,19 @@ class FutureNotFoundError(Exception):
 
 
 class Tracker:
-    """Task lifecycle and asyncio.Future registry for pending requests."""
+    """Session lifecycle, message queue, and asyncio.Future registry."""
 
     def __init__(self) -> None:
         self._tasks: dict[str, AgentTask] = {}
         self._futures: dict[str, dict[str, asyncio.Future[dict]]] = {}
+        self._queues: dict[str, asyncio.Queue[Any]] = {}
 
     # -- task lifecycle -------------------------------------------------------
 
     def create_task(self, spec_ids: list[str], config: AgentConfig) -> AgentTask:
         task = AgentTask(spec_ids=spec_ids, config=config)
         self._tasks[task.id] = task
+        self._queues[task.id] = asyncio.Queue()
         return task
 
     def get_task(self, task_id: str) -> AgentTask:
@@ -58,6 +66,27 @@ class Tracker:
         task = self.get_task(task_id)
         task.session_id = session_id
         task.updated = datetime.now(UTC).isoformat()
+
+    # -- message queue --------------------------------------------------------
+
+    def enqueue_message(self, task_id: str, text: str) -> None:
+        """Push a user message onto the session's queue."""
+        self.get_task(task_id)  # validate task exists
+        self._queues[task_id].put_nowait(text)
+
+    def enqueue_end_signal(self, task_id: str) -> None:
+        """Push the END_SIGNAL sentinel to close the conversation loop."""
+        self.get_task(task_id)  # validate task exists
+        self._queues[task_id].put_nowait(_END_SIGNAL)
+
+    async def get_next_message(self, task_id: str) -> str | object:
+        """Await the next item from the session's queue.
+
+        Returns the user message text, or ``END_SIGNAL`` if the session
+        should close.
+        """
+        self.get_task(task_id)  # validate task exists
+        return await self._queues[task_id].get()
 
     # -- future management ----------------------------------------------------
 

@@ -34,8 +34,8 @@ class TestMethods:
         expected = {
             "spec/list", "spec/get", "spec/create",
             "spec/update", "spec/delete", "spec/graph",
-            "agent/run", "agent/status", "agent/list",
-            "agent/interrupt", "agent/respond",
+            "agent/run", "agent/send", "agent/status", "agent/list",
+            "agent/interrupt", "agent/end", "agent/respond",
         }
         assert set(METHODS.keys()) == expected
 
