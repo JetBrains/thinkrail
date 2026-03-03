@@ -114,7 +114,9 @@ The frontend exposes no programmatic API — it's an end-user web application. I
 | `react-router-dom` | ~15KB | Client-side routing |
 | `zustand` | ~1KB | State management |
 | `@xterm/xterm` + addons | ~105KB | Terminal emulator (lazy-loaded) |
-| **Total** | **~165KB** | |
+| `@monaco-editor/react` | ~2-5MB (lazy) | Code editor (VS Code engine, CDN-loaded) |
+| `react-markdown` + `remark-gfm` | ~15KB | Markdown preview rendering (GFM) |
+| **Total** | **~185KB** + Monaco (lazy) | |
 
 Dev dependencies: `vite`, `typescript`, `vitest`, `@testing-library/react`, `eslint`.
 

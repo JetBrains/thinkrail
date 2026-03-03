@@ -403,11 +403,14 @@ Files open as tabs in the **center panel** tab bar alongside session tabs. Doubl
 
 **Implementation:** Monaco Editor (`@monaco-editor/react`) with custom IntelliJ Darcula theme.
 
+**Opening files:**
+- Double-click any file in FileTree → opens as tab in center panel
+- `.md` files open as rendered markdown preview; other files open in Monaco Editor
+
 **Preview mode** (default):
-- Read-only Monaco editor with syntax highlighting, line numbers, minimap
-- Bracket matching, code folding, indent guides
-- Cmd+F search (built-in Monaco)
-- Toolbar: file path + language badge (e.g. "Python") + line count + file size + Copy button
+- **Code files:** Read-only Monaco editor with syntax highlighting, line numbers, minimap, Cmd+F search
+- **Markdown files:** Rendered HTML preview using `react-markdown` + `remark-gfm` (GitHub-Flavored Markdown: tables, task lists, strikethrough). Styled with JetBrains-inspired typography.
+- Toolbar: file path + language badge + line count + file size + Copy button
 - "Edit" button in toolbar → opens dropdown
 
 **Edit dropdown:**

@@ -4,6 +4,7 @@ import { useFileStore, type OpenFile } from "@/store/fileStore.ts";
 import { intellijDarcula } from "./intellijTheme.ts";
 import { detectLanguage, languageLabel } from "./languageMap.ts";
 import { EditDropdown } from "./EditDropdown.tsx";
+import { MarkdownPreview } from "./MarkdownPreview.tsx";
 import "./FileViewer.css";
 
 const THEME_NAME = "intellij-darcula";
@@ -66,6 +67,8 @@ export function FileViewer({ file }: { file: OpenFile }) {
 
   const language = detectLanguage(file.name);
   const langLabel = languageLabel(file.name);
+  const isMarkdown = file.name.endsWith(".md") || file.name.endsWith(".markdown");
+  const showMarkdownPreview = isMarkdown && file.mode === "preview";
   const lineCount = file.content.split("\n").length;
   const sizeKb = (new TextEncoder().encode(file.content).length / 1024).toFixed(1);
 
@@ -118,7 +121,12 @@ export function FileViewer({ file }: { file: OpenFile }) {
         </div>
       </div>
 
-      {/* Monaco Editor */}
+      {/* Content: Markdown preview OR Monaco Editor */}
+      {showMarkdownPreview ? (
+        <div className="fv-editor-container fv-md-scroll">
+          <MarkdownPreview content={file.content} />
+        </div>
+      ) : (
       <div className="fv-editor-container">
         <Editor
           value={file.content}
@@ -150,6 +158,7 @@ export function FileViewer({ file }: { file: OpenFile }) {
           loading={<div className="fv-loading">Loading editor...</div>}
         />
       </div>
+      )}
     </div>
   );
 }

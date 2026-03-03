@@ -88,6 +88,121 @@
   overflow: hidden;
 }
 
+.fv-md-scroll {
+  overflow-y: auto;
+}
+
+/* ── Markdown Preview ── */
+.md-preview {
+  padding: var(--space-lg) var(--space-xl);
+  font-family: var(--font);
+  font-size: 13px;
+  line-height: 1.7;
+  color: var(--text);
+  max-width: 800px;
+}
+
+.md-preview h1, .md-preview h2, .md-preview h3,
+.md-preview h4, .md-preview h5, .md-preview h6 {
+  color: var(--text);
+  margin-top: 1.5em;
+  margin-bottom: 0.5em;
+  font-weight: 600;
+}
+
+.md-preview h1 { font-size: 1.6em; border-bottom: 1px solid var(--border); padding-bottom: 0.3em; }
+.md-preview h2 { font-size: 1.3em; border-bottom: 1px solid var(--border); padding-bottom: 0.2em; }
+.md-preview h3 { font-size: 1.1em; }
+
+.md-preview p { margin: 0.8em 0; }
+
+.md-preview a { color: var(--blue); text-decoration: none; }
+.md-preview a:hover { text-decoration: underline; }
+
+.md-preview code {
+  font-family: var(--font);
+  background: var(--elevated);
+  color: var(--cyan);
+  padding: 2px 5px;
+  border-radius: 3px;
+  font-size: 0.9em;
+}
+
+.md-preview pre {
+  background: var(--elevated);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: var(--space-md);
+  overflow-x: auto;
+  margin: 1em 0;
+}
+
+.md-preview pre code {
+  background: transparent;
+  padding: 0;
+  color: var(--text);
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.md-preview blockquote {
+  border-left: 3px solid var(--purple);
+  margin: 1em 0;
+  padding: 0.5em 1em;
+  color: var(--muted);
+  background: rgba(107, 87, 255, 0.03);
+}
+
+.md-preview ul, .md-preview ol {
+  margin: 0.8em 0;
+  padding-left: 2em;
+}
+
+.md-preview li { margin: 0.3em 0; }
+
+.md-preview table {
+  border-collapse: collapse;
+  margin: 1em 0;
+  width: 100%;
+}
+
+.md-preview th, .md-preview td {
+  border: 1px solid var(--border);
+  padding: var(--space-sm) var(--space-md);
+  text-align: left;
+  font-size: 12px;
+}
+
+.md-preview th {
+  background: var(--elevated);
+  font-weight: 600;
+  color: var(--text);
+}
+
+.md-preview tr:nth-child(even) td {
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.md-preview hr {
+  border: none;
+  border-top: 1px solid var(--border);
+  margin: 1.5em 0;
+}
+
+.md-preview img {
+  max-width: 100%;
+  border-radius: var(--radius-sm);
+}
+
+.md-preview strong { color: var(--text); }
+.md-preview em { color: var(--muted); }
+
+/* Task list checkboxes (GFM) */
+.md-preview input[type="checkbox"] {
+  accent-color: var(--blue);
+  margin-right: var(--space-xs);
+}
+
 .fv-loading {
   display: flex;
   align-items: center;
