@@ -81,6 +81,48 @@
 .picker-input:focus { border-color: var(--blue); }
 .picker-input::placeholder { color: var(--hint); }
 
+/* ── Autocomplete Suggestions ── */
+.picker-suggestions {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 100%;
+  margin-top: 2px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
+  z-index: 10;
+  max-height: 200px;
+  overflow-y: auto;
+}
+
+.picker-suggestion {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+  width: 100%;
+  padding: var(--space-sm) var(--space-md);
+  border: none;
+  background: transparent;
+  color: var(--text);
+  font-family: var(--font);
+  font-size: 12px;
+  text-align: left;
+  cursor: pointer;
+  transition: background 60ms ease;
+}
+
+.picker-suggestion:hover,
+.picker-suggestion-active {
+  background: var(--hover);
+}
+
+.picker-suggestion-icon {
+  font-size: 13px;
+  flex-shrink: 0;
+}
+
 .picker-error {
   color: var(--red);
   font-size: 12px;

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import "./ProjectPicker.css";
 
 const STORAGE_KEY = "bonsai-recent-projects";
@@ -26,7 +26,6 @@ function addRecent(path: string, name: string) {
 
 interface ProjectPickerProps {
   onSelect: (path: string) => void;
-  /** When provided, picker renders as a dismissable modal overlay */
   onClose?: () => void;
 }
 
@@ -36,13 +35,54 @@ export function ProjectPicker({ onSelect, onClose }: ProjectPickerProps) {
   const [loading, setLoading] = useState(false);
   const [recents] = useState(getRecents);
 
-  // Auto-open last project on initial load (not when switching projects).
-  // onClose is set when user is switching, so skip auto-open in that case.
+  // Autocomplete state
+  const [suggestions, setSuggestions] = useState<string[]>([]);
+  const [highlightIdx, setHighlightIdx] = useState(-1);
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  // Auto-open last project on initial load
   useEffect(() => {
     if (!onClose && recents.length === 1) {
       handleOpen(recents[0].path);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Debounced autocomplete fetch
+  useEffect(() => {
+    if (!path || !path.includes("/")) {
+      setSuggestions([]);
+      setShowSuggestions(false);
+      return;
+    }
+    const timer = setTimeout(async () => {
+      const lastSlash = path.lastIndexOf("/");
+      const base = path.slice(0, lastSlash + 1);
+      const prefix = path.slice(lastSlash + 1);
+      try {
+        const res = await fetch(
+          `${API_BASE}/api/fs/list-dirs?base=${encodeURIComponent(base)}&prefix=${encodeURIComponent(prefix)}`,
+        );
+        const data = await res.json();
+        const dirs: string[] = data.dirs ?? [];
+        setSuggestions(dirs);
+        setShowSuggestions(dirs.length > 0);
+        setHighlightIdx(-1);
+      } catch {
+        setSuggestions([]);
+        setShowSuggestions(false);
+      }
+    }, 200);
+    return () => clearTimeout(timer);
+  }, [path]);
+
+  const acceptSuggestion = useCallback((dir: string) => {
+    setPath(dir);
+    setSuggestions([]);
+    setShowSuggestions(false);
+    setHighlightIdx(-1);
+    inputRef.current?.focus();
   }, []);
 
   const handleOpen = useCallback(
@@ -54,6 +94,7 @@ export function ProjectPicker({ onSelect, onClose }: ProjectPickerProps) {
       }
       setLoading(true);
       setError(null);
+      setShowSuggestions(false);
       try {
         const res = await fetch(
           `${API_BASE}/api/project/validate?path=${encodeURIComponent(target)}`,
@@ -86,6 +127,7 @@ export function ProjectPicker({ onSelect, onClose }: ProjectPickerProps) {
     }
     setLoading(true);
     setError(null);
+    setShowSuggestions(false);
     try {
       const res = await fetch(`${API_BASE}/api/project/init`, {
         method: "POST",
@@ -104,12 +146,35 @@ export function ProjectPicker({ onSelect, onClose }: ProjectPickerProps) {
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
+      if (showSuggestions && suggestions.length > 0) {
+        if (e.key === "ArrowDown") {
+          e.preventDefault();
+          setHighlightIdx((i) => Math.min(i + 1, suggestions.length - 1));
+          return;
+        }
+        if (e.key === "ArrowUp") {
+          e.preventDefault();
+          setHighlightIdx((i) => Math.max(i - 1, -1));
+          return;
+        }
+        if (e.key === "Tab" || (e.key === "Enter" && highlightIdx >= 0)) {
+          e.preventDefault();
+          const selected = suggestions[highlightIdx >= 0 ? highlightIdx : 0];
+          if (selected) acceptSuggestion(selected);
+          return;
+        }
+        if (e.key === "Escape") {
+          e.preventDefault();
+          setShowSuggestions(false);
+          return;
+        }
+      }
       if (e.key === "Enter") {
         e.preventDefault();
         handleOpen();
       }
     },
-    [handleOpen],
+    [handleOpen, showSuggestions, suggestions, highlightIdx, acceptSuggestion],
   );
 
   return (
@@ -123,9 +188,10 @@ export function ProjectPicker({ onSelect, onClose }: ProjectPickerProps) {
           Specification-driven development workspace
         </div>
 
-        <div className="picker-field">
+        <div className="picker-field" style={{ position: "relative" }}>
           <label className="picker-label">Project Directory</label>
           <input
+            ref={inputRef}
             className="picker-input"
             value={path}
             onChange={(e) => {
@@ -133,9 +199,27 @@ export function ProjectPicker({ onSelect, onClose }: ProjectPickerProps) {
               setError(null);
             }}
             onKeyDown={handleKeyDown}
+            onBlur={() => setTimeout(() => setShowSuggestions(false), 150)}
+            onFocus={() => { if (suggestions.length > 0) setShowSuggestions(true); }}
             placeholder="/home/user/my-project"
             autoFocus
+            autoComplete="off"
           />
+          {showSuggestions && suggestions.length > 0 && (
+            <div className="picker-suggestions">
+              {suggestions.map((dir, i) => (
+                <button
+                  key={dir}
+                  className={`picker-suggestion ${i === highlightIdx ? "picker-suggestion-active" : ""}`}
+                  onMouseDown={() => acceptSuggestion(dir)}
+                  onMouseEnter={() => setHighlightIdx(i)}
+                >
+                  <span className="picker-suggestion-icon">{"\u{1F4C1}"}</span>
+                  {dir}
+                </button>
+              ))}
+            </div>
+          )}
         </div>
 
         {error && <div className="picker-error">{error}</div>}

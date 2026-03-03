@@ -199,6 +199,31 @@ def create_app() -> FastAPI:
             except FileNotFoundError:
                 return {"error": f"'{cmd}' not found in PATH"}
 
+    # ── REST: Filesystem autocomplete ──
+
+    @app.get("/api/fs/list-dirs")
+    async def list_dirs(base: str = Query(...), prefix: str = Query("")):
+        """List subdirectories of `base` matching `prefix`. For path autocompletion."""
+        base_path = Path(base).expanduser().resolve()
+        if not base_path.is_dir():
+            return {"dirs": []}
+        try:
+            entries = sorted(base_path.iterdir(), key=lambda p: p.name.lower())
+        except PermissionError:
+            return {"dirs": []}
+        dirs = []
+        for entry in entries:
+            if not entry.is_dir():
+                continue
+            if entry.name.startswith("."):
+                continue
+            if prefix and not entry.name.lower().startswith(prefix.lower()):
+                continue
+            dirs.append(str(entry) + "/")
+            if len(dirs) >= 20:
+                break
+        return {"dirs": dirs}
+
     return app
 
 

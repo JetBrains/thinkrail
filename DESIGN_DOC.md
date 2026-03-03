@@ -305,6 +305,7 @@ Specs are stored as files in the repository. The registry tracks metadata:
 - `GET /api/project/files?path=...` — list project directory tree
 - `GET /api/file/read?project=...&path=...` — read file contents
 - `POST /api/file/write` — write file contents `{ project, path, content }`
+- `GET /api/fs/list-dirs?base=...&prefix=...` — list subdirectories for path autocompletion (max 20, directories only)
 - `POST /api/file/open-external` — open file in editor `{ project, path, editor: "idea"|"code"|"vim"|"nvim"|"nano" }`. Terminal editors (vim, nvim, nano, vi) open in a terminal emulator window.
 
 **Session persistence:** Agent sessions are persisted to `.specs/sessions/{taskId}.json`. Events are saved as they stream. Completed/errored sessions survive backend restarts and page refreshes. The `session/continue` method replays old conversation history as context for a new SDK session.
