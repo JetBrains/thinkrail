@@ -28,7 +28,7 @@ messages to domain handlers using `jsonrpcserver`, sends outgoing server→clien
 
 **Style:** JSON-RPC 2.0 over WebSocket — true bidirectional (LSP-style)
 
-All communication happens over a single WebSocket at `/ws`. Messages follow JSON-RPC 2.0:
+All communication happens over a single WebSocket at `/ws?project=<path>`. Messages follow JSON-RPC 2.0:
 - **Requests** have `id` + `method` + `params`; the other side must send back a response with the same `id`
 - **Notifications** omit `id`; fire-and-forget, no response expected
 
@@ -153,38 +153,41 @@ graph TD
 
 ```mermaid
 ---
-title: "Watcher path (application-level, not per-connection)"
+title: "Watcher path (per-connection, scoped to project)"
 ---
 graph TD
-    Startup["main.py lifespan startup"]
-    StartW["server.start_watcher()"]
+    Connect["WebSocket connect<br/>/ws?project=path"]
+    Validate["Validate project path<br/>+ .specs/registry.json"]
+    StartW["_start_watcher(config, service)"]
     Watch["core/watcher.watch(project_root, _on_file_change)"]
     Change["File change on disk"]
-    Callback["_on_file_change callback (in server.py)"]
+    Callback["_on_file_change callback"]
     SpecPath["spec/service → current_notify → frontend"]
     Dropped["notification dropped"]
+    StopW["Disconnect → stop(watcher_handle)"]
 
-    Startup --> StartW --> Watch
+    Connect --> Validate --> StartW --> Watch
     Change --> Callback
     Callback -- "spec file" --> SpecPath
     Callback -- "no connection" --> Dropped
+    Watch -.- StopW
 ```
 
 ## File Organization & Public Interface
 
 ### server.py
 
-**Responsibility:** WebSocket endpoint, connection management, JSON-RPC dispatch loop, watcher startup + callback.
+**Responsibility:** WebSocket endpoint with per-connection project selection, connection management, JSON-RPC dispatch loop, per-connection watcher lifecycle.
 
 **Dependencies:** jsonrpcserver, methods/specs, methods/agents, notifications, core/watcher, core/config, spec/service
 
 | Export | Signature | Description |
 | --- | --- | --- |
-| `register_routes` | `(app: FastAPI, config: AppConfig) → None` | Register the `/ws` WebSocket endpoint on the FastAPI app. Called by `main.py` during setup. |
-| `start_watcher` | `async (config: AppConfig) → WatchHandle` | Start `core/watcher` watching the project directory. Register the file-change callback. Called in `main.py` lifespan startup. |
-| `stop_watcher` | `async (handle: WatchHandle) → None` | Stop the file watcher. Called in `main.py` lifespan shutdown. |
+| `register_routes` | `(app: FastAPI) → None` | Register the `/ws` WebSocket endpoint on the FastAPI app. Called by `main.py` during setup. No config needed — config is built per-connection from the `project` query parameter. |
 
 `METHODS` is a mapping from JSON-RPC method names to handler coroutines, assembled in `server.py` from the functions in `methods/specs.py` and `methods/agents.py`.
+
+`_start_watcher` is a private helper that starts a filesystem watcher scoped to the connection's project directory. Called inside `ws_endpoint` after project validation; stopped on disconnect.
 
 ### notifications.py
 
@@ -271,21 +274,31 @@ graph TD
 ## Connection Management
 
 - Single active WebSocket connection at a time (single developer tool, localhost only)
-- On connect: create `notify = make_notify(ws)`, set `notifications.current_notify = notify`, begin dispatch loop
-- On disconnect / close: set `notifications.current_notify = None`
-- If a second client connects while one is already active, the new connection replaces the old one (previous connection is closed)
+- WebSocket URL: `/ws?project=<path>` — the `project` query parameter specifies the project directory
+- On connect:
+  1. Validate `project` param exists (close with 4001 if missing)
+  2. Validate `<project>/.specs/registry.json` exists (close with 4002 if invalid)
+  3. Build per-connection `AppConfig`, `SpecService`, `AgentService` scoped to the project
+  4. Replace existing connection if any (close old WebSocket + stop old watcher)
+  5. Create `notify = make_notify(ws)`, set `notifications.current_notify = notify`
+  6. Start per-connection file watcher for the project directory
+  7. Begin JSON-RPC dispatch loop
+- On disconnect / close: set `notifications.current_notify = None`, stop the file watcher
+- If a second client connects while one is already active, the new connection replaces the old one (previous connection and its watcher are closed)
 
 ## Watcher Integration
 
-1. `main.py` calls `server.start_watcher()` in the FastAPI lifespan startup event.
-2. `start_watcher()` calls `core/watcher.watch([project_root], _on_file_change)`.
-3. On file change, `_on_file_change(path, change_type)` runs:
+The file watcher is **per-connection**, scoped to the connected project directory. It starts when a WebSocket client connects and stops when the client disconnects.
+
+1. Inside `ws_endpoint`, after project validation: `_start_watcher(config, spec_service)` is called.
+2. `_start_watcher()` calls `core/watcher.watch([project_root], _on_file_change)`.
+3. On file change, `_on_file_change(changes)` runs:
    - Routes by file type:
      - `.specs/registry.json` → send `registry/didUpdate` via `current_notify`
-     - Any path registered as a spec in the registry (`*.md` or `*.json` spec files) → call `spec/service` to validate/postprocess → send `spec/didChange`, `spec/didCreate`, or `spec/didDelete` via `current_notify`
-     - Source files (`*.py`, `*.ts`, …) → no-op (future: coverage/health)
-   - If `notifications.current_notify is None` (no connected client): notifications are dropped silently
-4. At shutdown, `main.py` calls `server.stop_watcher(handle)`.
+     - Any path registered as a spec in the registry (`*.md` or `*.json` spec files) → send `spec/didChange`, `spec/didCreate`, or `spec/didDelete` via `current_notify`
+     - Other files → ignored
+   - If `notifications.current_notify is None`: notifications are dropped silently
+4. On disconnect, the watcher handle is stopped via `stop(watcher_handle)`.
 
 ## Design Decisions
 
@@ -293,10 +306,11 @@ graph TD
 |----------|--------|-----------|
 | JSON-RPC library | `jsonrpcserver` | Handles parse errors, method-not-found, and response formatting automatically; eliminates boilerplate in handlers |
 | Notify interface | Single `notify(method, params, request_id=None)` | Unified callable for notifications and server-initiated requests; decouples runner from WebSocket details |
-| Watcher lifecycle | Application startup via `main.py` lifespan | Watcher is filesystem-level; filesystem changes are independent of client connection state |
+| Watcher lifecycle | Per-connection, scoped to project directory | Watcher starts when a client connects with a valid project, stops on disconnect. Each connection watches only its project. Replaces the old application-level approach. |
 | `current_notify` in `notifications.py` | Module-level mutable ref, set by `server.py` on connect/disconnect | Avoids circular import between `server.py` and `methods/agents.py`; `notifications.py` is the natural owner of active-connection state |
 | Methods organized by domain namespace | `methods/specs.py`, `methods/agents.py` | Each file mirrors its domain module; easy to locate handlers by method prefix |
 | `METHODS` dict assembled in `server.py` | Explicit mapping from method name to handler | Avoids implicit global state from decorator-based registration; makes method set inspectable |
+| Per-connection project selection | `?project=` query param on WebSocket URL; services/watcher created per-connection | Allows the frontend to switch projects without restarting the backend; config + services are scoped to the validated project directory |
 | No RPC-layer models | Domain models serialized directly | Pydantic models in spec/ and agent/ serialize to JSON; no translation layer needed |
 
 ## Dependencies
@@ -321,4 +335,4 @@ graph TD
 
 - **Parent:** [Architecture Design](../../../DESIGN_DOC.md)
 - **Depends on:** [Spec Module](../spec/README.md), [Agent Module](../agent/README.md), [Core Module](../core/README.md)
-- **Related files:** `main.py` — FastAPI entry point; calls `register_routes` and manages watcher lifespan
+- **Related files:** `main.py` — FastAPI entry point; calls `register_routes(app)`
