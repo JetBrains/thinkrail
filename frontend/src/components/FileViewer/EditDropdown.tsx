@@ -4,6 +4,7 @@ interface EditDropdownProps {
   onEditInPlace: () => void;
   onOpenIdea: () => void;
   onOpenVscode: () => void;
+  onOpenVim: () => void;
   onClose: () => void;
 }
 
@@ -11,6 +12,7 @@ export function EditDropdown({
   onEditInPlace,
   onOpenIdea,
   onOpenVscode,
+  onOpenVim,
   onClose,
 }: EditDropdownProps) {
   const ref = useRef<HTMLDivElement>(null);
@@ -35,6 +37,9 @@ export function EditDropdown({
       </button>
       <button className="fv-dropdown-item" onClick={onOpenVscode}>
         {"\u{1F535}"} Open in VS Code
+      </button>
+      <button className="fv-dropdown-item" onClick={onOpenVim}>
+        {"\u{1F4BB}"} Open in Vim
       </button>
     </div>
   );

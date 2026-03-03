@@ -40,6 +40,11 @@ export function FileViewer({ file }: { file: OpenFile }) {
     setShowDropdown(false);
   }, [file.path, openExternal]);
 
+  const handleOpenVim = useCallback(() => {
+    openExternal(file.path, "vim");
+    setShowDropdown(false);
+  }, [file.path, openExternal]);
+
   const handleSave = useCallback(() => {
     saveFile(file.path);
   }, [file.path, saveFile]);
@@ -104,6 +109,7 @@ export function FileViewer({ file }: { file: OpenFile }) {
                   onEditInPlace={handleEditInPlace}
                   onOpenIdea={handleOpenIdea}
                   onOpenVscode={handleOpenVscode}
+                  onOpenVim={handleOpenVim}
                   onClose={() => setShowDropdown(false)}
                 />
               )}

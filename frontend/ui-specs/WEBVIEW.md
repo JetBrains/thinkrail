@@ -414,6 +414,7 @@ Files open as tabs in the **center panel** tab bar alongside session tabs. Doubl
 - "Edit in place" → switches to edit mode
 - "Open in IntelliJ IDEA" → calls backend `POST /api/file/open-external` with `editor: "idea"`
 - "Open in VS Code" → same with `editor: "code"`
+- "Open in Vim" → same with `editor: "vim"` (opens in a terminal emulator window with user's `.vimrc` settings). Also supports `nvim`, `nano`, `vi`.
 
 **Edit mode:**
 - Same Monaco editor, `readOnly: false`

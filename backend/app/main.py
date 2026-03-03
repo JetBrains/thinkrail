@@ -156,16 +156,48 @@ def create_app() -> FastAPI:
 
     @app.post("/api/file/open-external")
     async def open_external(body: _OpenExternalBody):
-        """Open a file in an external editor (IntelliJ IDEA or VS Code)."""
-        import subprocess
+        """Open a file in an external editor."""
+        import subprocess, os
         root = Path(body.project).expanduser().resolve()
         file_path = root / body.path
-        cmd = body.editor  # "idea" or "code"
-        try:
-            subprocess.Popen([cmd, str(file_path)], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-            return {"ok": True}
-        except FileNotFoundError:
-            return {"error": f"'{cmd}' not found in PATH"}
+        cmd = body.editor
+
+        # Terminal-based editors need a terminal emulator window
+        terminal_editors = {"vim", "nvim", "nano", "vi"}
+        if cmd in terminal_editors:
+            # Try common terminal emulators in order of preference
+            terminal_cmds = [
+                # $TERMINAL env var (user's preferred terminal)
+                (os.environ.get("TERMINAL", ""), "-e"),
+                ("kitty", "-e"),
+                ("alacritty", "-e"),
+                ("wezterm", "start", "--"),
+                ("gnome-terminal", "--"),
+                ("konsole", "-e"),
+                ("xfce4-terminal", "-e"),
+                ("xterm", "-e"),
+            ]
+            for term_entry in terminal_cmds:
+                term = term_entry[0]
+                if not term:
+                    continue
+                args = list(term_entry[1:])
+                try:
+                    subprocess.Popen(
+                        [term, *args, cmd, str(file_path)],
+                        stdout=subprocess.DEVNULL,
+                        stderr=subprocess.DEVNULL,
+                    )
+                    return {"ok": True, "terminal": term}
+                except FileNotFoundError:
+                    continue
+            return {"error": f"No terminal emulator found to run '{cmd}'"}
+        else:
+            try:
+                subprocess.Popen([cmd, str(file_path)], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                return {"ok": True}
+            except FileNotFoundError:
+                return {"error": f"'{cmd}' not found in PATH"}
 
     return app
 

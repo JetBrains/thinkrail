@@ -24,7 +24,7 @@ interface FileStore {
   setMode: (path: string, mode: "preview" | "edit") => void;
   updateContent: (path: string, content: string) => void;
   saveFile: (path: string) => Promise<void>;
-  openExternal: (path: string, editor: "idea" | "code") => Promise<void>;
+  openExternal: (path: string, editor: string) => Promise<void>;
 }
 
 function getProjectPath(): string {
