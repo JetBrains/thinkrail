@@ -12,12 +12,13 @@ from watchfiles import Change
 
 from app.core.config import AppConfig, load_config
 from app.rpc import notifications
-from app.rpc.server import METHODS, register_routes, start_watcher, stop_watcher
+from app.rpc.server import METHODS, register_routes, _start_watcher
+from app.spec.service import SpecService
 
 
-def _make_app(config: AppConfig) -> FastAPI:
+def _make_app() -> FastAPI:
     app = FastAPI()
-    register_routes(app, config)
+    register_routes(app)
     return app
 
 
@@ -42,11 +43,11 @@ class TestMethods:
 
 class TestWebSocket:
     def test_connect_and_receive_response(self, tmp_path: Path) -> None:
-        config = _make_config(tmp_path)
-        app = _make_app(config)
+        _make_config(tmp_path)  # ensure .specs exists
+        app = _make_app()
         client = TestClient(app)
 
-        with client.websocket_connect("/ws") as ws:
+        with client.websocket_connect(f"/ws?project={tmp_path}") as ws:
             request = {
                 "jsonrpc": "2.0",
                 "method": "spec/list",
@@ -60,22 +61,29 @@ class TestWebSocket:
             assert isinstance(response["result"], list)
 
     def test_notification_sets_current_notify(self, tmp_path: Path) -> None:
-        config = _make_config(tmp_path)
-        app = _make_app(config)
+        _make_config(tmp_path)
+        app = _make_app()
         client = TestClient(app)
 
         assert notifications.current_notify is None
-        with client.websocket_connect("/ws"):
+        with client.websocket_connect(f"/ws?project={tmp_path}"):
             assert notifications.current_notify is not None
-        # After disconnect, current_notify should be cleared
         assert notifications.current_notify is None
+
+    def test_missing_project_param_closes(self) -> None:
+        app = _make_app()
+        client = TestClient(app)
+
+        with pytest.raises(Exception):
+            with client.websocket_connect("/ws"):
+                pass
 
     def test_method_not_found_returns_error(self, tmp_path: Path) -> None:
-        config = _make_config(tmp_path)
-        app = _make_app(config)
+        _make_config(tmp_path)
+        app = _make_app()
         client = TestClient(app)
 
-        with client.websocket_connect("/ws") as ws:
+        with client.websocket_connect(f"/ws?project={tmp_path}") as ws:
             request = {
                 "jsonrpc": "2.0",
                 "method": "nonexistent/method",
@@ -85,25 +93,25 @@ class TestWebSocket:
             ws.send_text(json.dumps(request))
             response = json.loads(ws.receive_text())
             assert "error" in response
-            assert response["error"]["code"] == -32601  # Method not found
+            assert response["error"]["code"] == -32601
 
     def test_invalid_json_returns_parse_error(self, tmp_path: Path) -> None:
-        config = _make_config(tmp_path)
-        app = _make_app(config)
+        _make_config(tmp_path)
+        app = _make_app()
         client = TestClient(app)
 
-        with client.websocket_connect("/ws") as ws:
+        with client.websocket_connect(f"/ws?project={tmp_path}") as ws:
             ws.send_text("not valid json{{{")
             response = json.loads(ws.receive_text())
             assert "error" in response
-            assert response["error"]["code"] == -32700  # Parse error
+            assert response["error"]["code"] == -32700
 
     def test_spec_get_not_found_returns_domain_error(self, tmp_path: Path) -> None:
-        config = _make_config(tmp_path)
-        app = _make_app(config)
+        _make_config(tmp_path)
+        app = _make_app()
         client = TestClient(app)
 
-        with client.websocket_connect("/ws") as ws:
+        with client.websocket_connect(f"/ws?project={tmp_path}") as ws:
             request = {
                 "jsonrpc": "2.0",
                 "method": "spec/get",
@@ -113,24 +121,21 @@ class TestWebSocket:
             ws.send_text(json.dumps(request))
             response = json.loads(ws.receive_text())
             assert "error" in response
-            assert response["error"]["code"] == -32001  # Spec not found
+            assert response["error"]["code"] == -32001
 
     def test_notification_no_response(self, tmp_path: Path) -> None:
-        """JSON-RPC notifications (no id) should not produce a response."""
-        config = _make_config(tmp_path)
-        app = _make_app(config)
+        _make_config(tmp_path)
+        app = _make_app()
         client = TestClient(app)
 
-        with client.websocket_connect("/ws") as ws:
+        with client.websocket_connect(f"/ws?project={tmp_path}") as ws:
             notification = {
                 "jsonrpc": "2.0",
                 "method": "spec/list",
                 "params": {},
-                # No "id" field — this is a notification
             }
             ws.send_text(json.dumps(notification))
 
-            # Send a real request after to confirm the connection is alive
             request = {
                 "jsonrpc": "2.0",
                 "method": "spec/list",
@@ -139,20 +144,25 @@ class TestWebSocket:
             }
             ws.send_text(json.dumps(request))
             response = json.loads(ws.receive_text())
-            # The response should be for id=99, not for the notification
             assert response["id"] == 99
 
 
 class TestWatcher:
-    async def test_start_and_stop_watcher(self, tmp_path: Path) -> None:
+    async def test_start_watcher(self, tmp_path: Path) -> None:
+        import asyncio
         config = _make_config(tmp_path)
-        handle = await start_watcher(config)
+        service = SpecService(config)
+        handle = await _start_watcher(config, service)
         assert handle is not None
-        await stop_watcher(handle)
+        handle._task.cancel()
+        try:
+            await handle._task
+        except (asyncio.CancelledError, Exception):
+            pass
 
 
 class TestOnFileChange:
-    """Test the _on_file_change callback by capturing it from start_watcher."""
+    """Test the _on_file_change callback by capturing it from _start_watcher."""
 
     @pytest.fixture
     def config(self, tmp_path: Path) -> AppConfig:
@@ -186,8 +196,9 @@ class TestOnFileChange:
             from app.core.watcher import WatchHandle
             return WatchHandle(_task=asyncio.create_task(asyncio.sleep(999)))
 
+        service = SpecService(config)
         with patch("app.rpc.server.watch", side_effect=fake_watch):
-            handle = await start_watcher(config)
+            handle = await _start_watcher(config, service)
         yield captured["cb"]
         handle._task.cancel()
         try:
@@ -267,7 +278,6 @@ class TestOnFileChange:
     ) -> None:
         notifications.current_notify = None
         spec_path = str(config.get_project_root() / "mod_a" / "README.md")
-        # Should not raise
         await callback({(Change.modified, spec_path)})
 
     async def test_non_spec_file_ignored(

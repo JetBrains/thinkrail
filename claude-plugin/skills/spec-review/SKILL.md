@@ -47,7 +47,7 @@ You are helping the user **review and validate** their existing specifications. 
 - Are there TODO items in the spec that have been implemented?
 - Are there documented features that no longer exist?
 
-4. **Generate a review report** with:
+4. **Present a short summary** of all conflicts found:
 
 ```markdown
 # Specification Review: {path}
@@ -55,32 +55,44 @@ You are helping the user **review and validate** their existing specifications. 
 ## Summary
 {Overall assessment: Good/Needs Work/Incomplete}
 
-## Accuracy Issues
-- {Issue}: {description and suggested fix}
+Found **{N} issues** across the following categories:
+- Accuracy: {count}
+- Completeness: {count}
+- Structural: {count}
+- Cross-References: {count}
+- Freshness: {count}
 
-## Completeness Gaps
-- {Gap}: {what's missing and where it should be added}
-
-## Structural Improvements
-- {Improvement}: {what to change and why}
-
-## Cross-Reference Issues
-- {Issue}: {broken link or missing reference}
-
-## Freshness Issues
-- {Issue}: {outdated information}
-
-## Recommendations
-1. {Priority recommendation}
-2. {Next recommendation}
+Resolving each issue one by one...
 ```
 
-5. **Offer to fix** any issues found, updating the specifications to match the code.
+5. **Walk through each conflict one at a time**, in priority order (Accuracy > Completeness > Structure > Cross-References > Freshness):
+
+For each issue:
+- Describe the problem clearly: what the spec says vs what the code says (or what is missing/broken), with exact file paths and line references
+- Then use **AskUserQuestion** to ask the user how to resolve it, with options like:
+  - "Update spec to match code (Recommended)" — when code is the source of truth
+  - "Update code to match spec" — when the spec captures intended design
+  - "Skip / leave as-is" — defer this issue
+  - (Add other context-appropriate options as needed)
+- Apply the user's chosen resolution before moving to the next issue
+- After resolving, briefly confirm what was changed, then move on to the next issue
+
+Continue until all issues have been addressed.
+
+6. **After all issues are resolved**, present a final summary:
+
+```markdown
+## Review Complete
+
+- {X} issues fixed (spec updated)
+- {Y} issues fixed (code updated)
+- {Z} issues skipped
+```
 
 ## Registry Integration
 
 After reviewing, update `.specs/registry.json`:
-1. Update the `status` of reviewed specs: `"active"` if accurate, `"stale"` if needs update
+1. Update the `status` of reviewed specs: `"active"` if all issues resolved, `"stale"` if any were skipped
 2. Update the `updated` timestamp for specs that were corrected
 
 ## After Completion
@@ -88,8 +100,7 @@ After reviewing, update `.specs/registry.json`:
 Use AskUserQuestion:
 
 **What's next?**
-- "Fix the issues found — update specs now (Recommended)"
-- "/spec-lint — Run structural validation on other specs"
+- "/spec-lint — Run structural validation on other specs (Recommended)"
 - "/spec-status — Full coverage dashboard"
 - "Done for now"
 
