@@ -12,6 +12,8 @@ RECOGNIZED_TYPES = frozenset({
 RECOGNIZED_LINK_TYPES = frozenset({
     "depends-on",
     "parent",
+    "child",
+    "references",
     "implements",
 })
 

@@ -44,14 +44,16 @@ Both sides can send either. The server can initiate requests to the client (e.g.
 |-------------------|----------------------------------------------------------------------------------------------|---------------------|-------------------------------------------------------------------------------------------------------------------------------------------------------------|
 | `spec/list`       | `{}`                                                                                         | `list[SpecSummary]` | List all specs with metadata                                                                                                                                |
 | `spec/get`        | `{ id: str }`                                                                                | `SpecDetail`        | Get spec content and metadata                                                                                                                               |
-| `spec/create`     | `{ id: str, type: str, path: str, content?: str }`                                           | `SpecDetail`        | Create a new spec                                                                                                                                           |
+| `spec/create`     | `{ type: str, path: str, content?: str, id?: str }`                                           | `SpecDetail`        | Create a new spec                                                                                                                                           |
 | `spec/update`     | `{ id: str, content: str }`                                                                  | `SpecDetail`        | Update spec content                                                                                                                                         |
 | `spec/delete`     | `{ id: str }`                                                                                | `null`              | Delete a spec                                                                                                                                               |
 | `spec/graph`      | `{}`                                                                                         | `SpecGraph`         | Get spec hierarchy graph                                                                                                                                    |
-| `agent/run`       | `{ specIds: list[str], config: AgentConfig }`                                                | `{ taskId: str }`   | Start an agent task with spec context                                                                                                                       |
-| `agent/status`    | `{ taskId: str }`                                                                            | `AgentTask`         | Get task status and results                                                                                                                                 |
-| `agent/list`      | `{}`                                                                                         | `list[AgentTask]`   | List all agent tasks                                                                                                                                        |
-| `agent/interrupt` | `{ taskId: str }`                                                                            | `null`              | Interrupt a running agent task                                                                                                                              |
+| `agent/run`       | `{ specIds: list[str], config: AgentConfig }`                                                | `{ taskId: str, sessionId: str }` | Start a persistent agent session with spec context. Session enters `idle` state, ready for messages. |
+| `agent/send`      | `{ taskId: str, text: str }`                                                                 | `null`              | Send a user message to the session, triggering a new turn. Session must be `idle`.                                                                          |
+| `agent/status`    | `{ taskId: str }`                                                                            | `AgentTask`         | Get session status and metadata                                                                                                                             |
+| `agent/list`      | `{}`                                                                                         | `list[AgentTask]`   | List all agent sessions                                                                                                                                     |
+| `agent/interrupt` | `{ taskId: str }`                                                                            | `null`              | Cancel the current turn. Session stays `idle` and can accept new messages.                                                                                  |
+| `agent/end`       | `{ taskId: str }`                                                                            | `null`              | Gracefully close the session. Session enters `done` state.                                                                                                  |
 | `agent/respond`   | `{ taskId: str, requestId: str, response: AskUserQuestionResponse \| ToolApprovalResponse }` | `null`              | Respond to a pending server→client request. See [Agent Module models](../agent/README.md#interactive-requestresponse-models) for response type definitions. |
 
 ### Server → Client (notifications)
@@ -78,11 +80,13 @@ Both sides can send either. The server can initiate requests to the client (e.g.
 | `agent/notification` | `{ taskId, sessionId, message, title? }` | General agent notification |
 | `agent/compact` | `{ taskId, sessionId, trigger, preTokens }` | Context window compacted |
 | `agent/progress` | `{ taskId, sessionId, status, message }` | Task progress update |
-| `agent/done` | `{ taskId, sessionId, result, costUsd, turns, durationMs, usage }` | Agent task completed successfully |
-| `agent/error` | `{ taskId, sessionId, subtype, errors[] }` | Agent task failed |
+| `agent/turnComplete` | `{ taskId, sessionId, result, costUsd, turns, durationMs, usage }` | Turn finished; session is `idle`, ready for next `agent/send` |
+| `agent/interrupted` | `{ taskId, sessionId }` | Current turn was cancelled via `agent/interrupt`; session is `idle` |
+| `agent/done` | `{ taskId, sessionId, result, costUsd, turns, durationMs, usage }` | Session closed (via `agent/end` or terminal condition) |
+| `agent/error` | `{ taskId, sessionId, subtype, errors[], result, costUsd, turns, durationMs, usage }` | Session ended due to error |
 | `agent/permissionDenied` | `{ taskId, sessionId, toolName, toolInput }` | Tool blocked by permission policy |
 
-> **SDK event mapping:** `agent/sessionStart` ← `SDKSystemMessage` subtype `init` · `agent/textDelta` ← `SDKAssistantMessage` text block / `SDKPartialAssistantMessage` text_delta · `agent/toolCallStart` ← `SDKAssistantMessage` tool_use block · `agent/toolCallEnd` ← `SDKUserMessage` tool_result block · `agent/subagentStart` / `End` ← `SubagentStart` / `SubagentStop` hooks · `agent/notification` ← `Notification` hook · `agent/compact` ← `SDKCompactBoundaryMessage` · `agent/done` / `error` / `permissionDenied` ← `SDKResultMessage` subtypes
+> **SDK event mapping:** `agent/sessionStart` ← `SDKSystemMessage` subtype `init` · `agent/textDelta` ← `SDKAssistantMessage` text block / `SDKPartialAssistantMessage` text_delta · `agent/toolCallStart` ← `SDKAssistantMessage` tool_use block · `agent/toolCallEnd` ← `SDKUserMessage` tool_result block · `agent/subagentStart` / `End` ← `SubagentStart` / `SubagentStop` hooks · `agent/notification` ← `Notification` hook · `agent/compact` ← `SDKCompactBoundaryMessage` · `agent/turnComplete` ← `SDKResultMessage` (turn ends, session stays open) · `agent/interrupted` ← `agent/interrupt` cancels current turn · `agent/done` ← session closed via `agent/end` · `agent/error` / `permissionDenied` ← `SDKResultMessage` error subtypes
 
 > **Streaming text:** Requires `includePartialMessages: true` in SDK options to receive `agent/textDelta` with `streaming: true`. Without it, full text blocks are emitted per turn.
 
@@ -93,7 +97,7 @@ The server suspends an `asyncio.Future` keyed by `requestId` until the client re
 | Method | Params | Expected Response | Description |
 | --- | --- | --- | --- |
 | `agent/askUserQuestion` | `{ taskId, requestId, questions: Question[] }` | [`AskUserQuestionResponse`](../agent/README.md#interactive-requestresponse-models) | Ask the user a question during an agent run |
-| `agent/confirmAction` | `{ taskId, requestId, toolName, toolInput, description }` | [`ToolApprovalResponse`](../agent/README.md#interactive-requestresponse-models) | Request approval for a tool action |
+| `agent/confirmAction` | `{ taskId, requestId, toolName, toolInput }` | [`ToolApprovalResponse`](../agent/README.md#interactive-requestresponse-models) | Request approval for a tool action |
 
 Both methods originate from the SDK's `canUseTool` callback. `runner.py` distinguishes them by `tool_name`: `"AskUserQuestion"` → `agent/askUserQuestion`, any other tool → `agent/confirmAction`. See [Agent Module — Interactive Request/Response Models](../agent/README.md#interactive-requestresponse-models) for `Question`, `QuestionOption`, `AskUserQuestionResponse`, and `ToolApprovalResponse` type definitions.
 
@@ -229,12 +233,18 @@ async def notify(method: str, params: dict, request_id: str | None = None) -> No
 | Export | Signature | Description |
 | --- | --- | --- |
 | `run_agent` | `(**params) → dict` | Handler for `agent/run` |
+| `send_message` | `(**params) → None` | Handler for `agent/send` |
 | `get_agent_status` | `(**params) → AgentTask` | Handler for `agent/status` |
 | `list_agents` | `(**params) → list[AgentTask]` | Handler for `agent/list` |
 | `interrupt_agent` | `(**params) → None` | Handler for `agent/interrupt` |
+| `end_session` | `(**params) → None` | Handler for `agent/end` |
 | `respond_agent` | `(**params) → None` | Handler for `agent/respond` |
 
-`run_agent` captures `current_notify` at call time (the active connection's notify callable), passes it to `agent/service.run_task`, and immediately returns the `taskId`. The agent task runs asynchronously in the background; progress is pushed via `notify`.
+`run_agent` captures `current_notify` at call time (the active connection's notify callable), passes it to `agent/service.run_task`, and immediately returns `{ taskId, sessionId }`. The agent session runs in the background; the runner enters a conversation loop waiting for messages.
+
+`send_message` routes to `agent/service.send_message(task_id, text)`, which enqueues the message. The runner picks it up and starts a new turn.
+
+`end_session` routes to `agent/service.end_session(task_id)`, which sends a sentinel to the runner's message queue, causing it to close the SDK client and emit `agent/done`.
 
 `respond_agent` routes to `agent/service.respond(task_id, request_id, response)`, which resolves the pending `asyncio.Future` in `tracker.py`.
 

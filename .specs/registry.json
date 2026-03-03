@@ -104,14 +104,21 @@
       "status": "active",
       "created": "2026-03-02",
       "updated": "2026-03-03",
-      "covers": ["frontend/"],
-      "tags": ["frontend", "module", "react", "typescript"]
+      "covers": [
+        "frontend/"
+      ],
+      "tags": [
+        "frontend",
+        "module",
+        "react",
+        "typescript"
+      ]
     },
     {
       "id": "webview",
       "type": "module-design",
       "path": "frontend/ui-specs/WEBVIEW.md",
-      "title": "Web View — UI Specification",
+      "title": "Web View \u2014 UI Specification",
       "status": "active",
       "covers": [
         "frontend/"
@@ -150,8 +157,15 @@
       "status": "active",
       "created": "2026-03-02",
       "updated": "2026-03-02",
-      "covers": ["frontend/src/components/GraphView/"],
-      "tags": ["frontend", "ui", "graph", "visualization"]
+      "covers": [
+        "frontend/src/components/GraphView/"
+      ],
+      "tags": [
+        "frontend",
+        "ui",
+        "graph",
+        "visualization"
+      ]
     },
     {
       "id": "new-session-modal",
@@ -161,8 +175,15 @@
       "status": "active",
       "created": "2026-03-02",
       "updated": "2026-03-02",
-      "covers": ["frontend/src/components/NewSessionModal/"],
-      "tags": ["frontend", "ui", "modal", "session"]
+      "covers": [
+        "frontend/src/components/NewSessionModal/"
+      ],
+      "tags": [
+        "frontend",
+        "ui",
+        "modal",
+        "session"
+      ]
     },
     {
       "id": "command-palette",
@@ -172,8 +193,15 @@
       "status": "active",
       "created": "2026-03-02",
       "updated": "2026-03-02",
-      "covers": ["frontend/src/components/CommandPalette/"],
-      "tags": ["frontend", "ui", "search", "navigation"]
+      "covers": [
+        "frontend/src/components/CommandPalette/"
+      ],
+      "tags": [
+        "frontend",
+        "ui",
+        "search",
+        "navigation"
+      ]
     },
     {
       "id": "notification-system",
@@ -183,8 +211,15 @@
       "status": "active",
       "created": "2026-03-02",
       "updated": "2026-03-02",
-      "covers": ["frontend/src/components/Notifications/"],
-      "tags": ["frontend", "ui", "notifications", "toasts"]
+      "covers": [
+        "frontend/src/components/Notifications/"
+      ],
+      "tags": [
+        "frontend",
+        "ui",
+        "notifications",
+        "toasts"
+      ]
     },
     {
       "id": "console",
@@ -194,8 +229,15 @@
       "status": "active",
       "created": "2026-03-02",
       "updated": "2026-03-02",
-      "covers": ["frontend/src/components/Console/"],
-      "tags": ["frontend", "ui", "terminal", "xterm"]
+      "covers": [
+        "frontend/src/components/Console/"
+      ],
+      "tags": [
+        "frontend",
+        "ui",
+        "terminal",
+        "xterm"
+      ]
     },
     {
       "id": "theming",
@@ -205,8 +247,15 @@
       "status": "active",
       "created": "2026-03-02",
       "updated": "2026-03-02",
-      "covers": ["frontend/src/styles/"],
-      "tags": ["frontend", "ui", "theme", "css"]
+      "covers": [
+        "frontend/src/styles/"
+      ],
+      "tags": [
+        "frontend",
+        "ui",
+        "theme",
+        "css"
+      ]
     },
     {
       "id": "responsive-behavior",
@@ -216,8 +265,15 @@
       "status": "active",
       "created": "2026-03-02",
       "updated": "2026-03-02",
-      "covers": ["frontend/src/"],
-      "tags": ["frontend", "ui", "responsive", "layout"]
+      "covers": [
+        "frontend/src/"
+      ],
+      "tags": [
+        "frontend",
+        "ui",
+        "responsive",
+        "layout"
+      ]
     },
     {
       "id": "diff-viewer",
@@ -227,8 +283,15 @@
       "status": "active",
       "created": "2026-03-02",
       "updated": "2026-03-02",
-      "covers": ["frontend/src/components/DiffViewer/"],
-      "tags": ["frontend", "ui", "diff", "git"]
+      "covers": [
+        "frontend/src/components/DiffViewer/"
+      ],
+      "tags": [
+        "frontend",
+        "ui",
+        "diff",
+        "git"
+      ]
     },
     {
       "id": "progress-tracker",
@@ -238,8 +301,15 @@
       "status": "active",
       "created": "2026-03-02",
       "updated": "2026-03-02",
-      "covers": ["frontend/src/components/ProgressTab/"],
-      "tags": ["frontend", "ui", "progress", "metrics"]
+      "covers": [
+        "frontend/src/components/ProgressTab/"
+      ],
+      "tags": [
+        "frontend",
+        "ui",
+        "progress",
+        "metrics"
+      ]
     },
     {
       "id": "session-history",
@@ -249,8 +319,15 @@
       "status": "active",
       "created": "2026-03-02",
       "updated": "2026-03-02",
-      "covers": ["frontend/src/components/SessionHistory/"],
-      "tags": ["frontend", "ui", "sessions", "history"]
+      "covers": [
+        "frontend/src/components/SessionHistory/"
+      ],
+      "tags": [
+        "frontend",
+        "ui",
+        "sessions",
+        "history"
+      ]
     },
     {
       "id": "api-client",
@@ -260,8 +337,15 @@
       "status": "active",
       "created": "2026-03-02",
       "updated": "2026-03-02",
-      "covers": ["frontend/src/api/"],
-      "tags": ["frontend", "infrastructure", "websocket", "rpc"]
+      "covers": [
+        "frontend/src/api/"
+      ],
+      "tags": [
+        "frontend",
+        "infrastructure",
+        "websocket",
+        "rpc"
+      ]
     },
     {
       "id": "state-management",
@@ -271,8 +355,15 @@
       "status": "active",
       "created": "2026-03-02",
       "updated": "2026-03-02",
-      "covers": ["frontend/src/store/"],
-      "tags": ["frontend", "infrastructure", "zustand", "state"]
+      "covers": [
+        "frontend/src/store/"
+      ],
+      "tags": [
+        "frontend",
+        "infrastructure",
+        "zustand",
+        "state"
+      ]
     },
     {
       "id": "app-shell",
@@ -282,8 +373,15 @@
       "status": "active",
       "created": "2026-03-02",
       "updated": "2026-03-02",
-      "covers": ["frontend/src/components/AppShell/"],
-      "tags": ["frontend", "ui", "routing", "layout"]
+      "covers": [
+        "frontend/src/components/AppShell/"
+      ],
+      "tags": [
+        "frontend",
+        "ui",
+        "routing",
+        "layout"
+      ]
     },
     {
       "id": "task-core-config",
@@ -611,8 +709,13 @@
       "path": "current_tasks/rpc/feature_backend_main.md",
       "title": "Implement Backend main.py",
       "status": "done",
-      "covers": ["backend/app/main.py"],
-      "tags": ["critical", "new-feature"],
+      "covers": [
+        "backend/app/main.py"
+      ],
+      "tags": [
+        "critical",
+        "new-feature"
+      ],
       "created": "2026-03-03",
       "updated": "2026-03-03"
     },
@@ -622,8 +725,17 @@
       "path": "current_tasks/frontend/feature_project_setup.md",
       "title": "Set Up Frontend Project",
       "status": "done",
-      "covers": ["frontend/package.json", "frontend/src/styles/", "frontend/src/types/", "frontend/src/main.tsx"],
-      "tags": ["critical", "new-feature", "frontend"],
+      "covers": [
+        "frontend/package.json",
+        "frontend/src/styles/",
+        "frontend/src/types/",
+        "frontend/src/main.tsx"
+      ],
+      "tags": [
+        "critical",
+        "new-feature",
+        "frontend"
+      ],
       "created": "2026-03-03",
       "updated": "2026-03-03"
     },
@@ -633,8 +745,14 @@
       "path": "current_tasks/frontend/feature_api_client.md",
       "title": "Implement API Client",
       "status": "done",
-      "covers": ["frontend/src/api/"],
-      "tags": ["critical", "new-feature", "frontend"],
+      "covers": [
+        "frontend/src/api/"
+      ],
+      "tags": [
+        "critical",
+        "new-feature",
+        "frontend"
+      ],
       "created": "2026-03-03",
       "updated": "2026-03-03"
     },
@@ -644,8 +762,14 @@
       "path": "current_tasks/frontend/feature_state_management.md",
       "title": "Implement State Management",
       "status": "done",
-      "covers": ["frontend/src/store/"],
-      "tags": ["critical", "new-feature", "frontend"],
+      "covers": [
+        "frontend/src/store/"
+      ],
+      "tags": [
+        "critical",
+        "new-feature",
+        "frontend"
+      ],
       "created": "2026-03-03",
       "updated": "2026-03-03"
     },
@@ -655,8 +779,15 @@
       "path": "current_tasks/frontend/feature_app_shell.md",
       "title": "Implement App Shell",
       "status": "done",
-      "covers": ["frontend/src/components/AppShell/", "frontend/src/routes.tsx"],
-      "tags": ["high", "new-feature", "frontend"],
+      "covers": [
+        "frontend/src/components/AppShell/",
+        "frontend/src/routes.tsx"
+      ],
+      "tags": [
+        "high",
+        "new-feature",
+        "frontend"
+      ],
       "created": "2026-03-03",
       "updated": "2026-03-03"
     },
@@ -666,8 +797,14 @@
       "path": "current_tasks/frontend/feature_chat_ui.md",
       "title": "Implement Chat UI",
       "status": "done",
-      "covers": ["frontend/src/components/ChatStream/"],
-      "tags": ["high", "new-feature", "frontend"],
+      "covers": [
+        "frontend/src/components/ChatStream/"
+      ],
+      "tags": [
+        "high",
+        "new-feature",
+        "frontend"
+      ],
       "created": "2026-03-03",
       "updated": "2026-03-03"
     },
@@ -677,8 +814,14 @@
       "path": "current_tasks/frontend/feature_graph_view.md",
       "title": "Implement Graph View",
       "status": "done",
-      "covers": ["frontend/src/components/GraphView/"],
-      "tags": ["high", "new-feature", "frontend"],
+      "covers": [
+        "frontend/src/components/GraphView/"
+      ],
+      "tags": [
+        "high",
+        "new-feature",
+        "frontend"
+      ],
       "created": "2026-03-03",
       "updated": "2026-03-03"
     },
@@ -688,8 +831,14 @@
       "path": "current_tasks/frontend/feature_new_session_modal.md",
       "title": "Implement New Session Modal",
       "status": "done",
-      "covers": ["frontend/src/components/NewSessionModal/"],
-      "tags": ["high", "new-feature", "frontend"],
+      "covers": [
+        "frontend/src/components/NewSessionModal/"
+      ],
+      "tags": [
+        "high",
+        "new-feature",
+        "frontend"
+      ],
       "created": "2026-03-03",
       "updated": "2026-03-03"
     },
@@ -699,8 +848,14 @@
       "path": "current_tasks/frontend/feature_command_palette.md",
       "title": "Implement Command Palette",
       "status": "done",
-      "covers": ["frontend/src/components/CommandPalette/"],
-      "tags": ["medium", "new-feature", "frontend"],
+      "covers": [
+        "frontend/src/components/CommandPalette/"
+      ],
+      "tags": [
+        "medium",
+        "new-feature",
+        "frontend"
+      ],
       "created": "2026-03-03",
       "updated": "2026-03-03"
     },
@@ -710,8 +865,14 @@
       "path": "current_tasks/frontend/feature_notifications.md",
       "title": "Implement Notification System",
       "status": "done",
-      "covers": ["frontend/src/components/Notifications/"],
-      "tags": ["medium", "new-feature", "frontend"],
+      "covers": [
+        "frontend/src/components/Notifications/"
+      ],
+      "tags": [
+        "medium",
+        "new-feature",
+        "frontend"
+      ],
       "created": "2026-03-03",
       "updated": "2026-03-03"
     },
@@ -721,8 +882,14 @@
       "path": "current_tasks/frontend/feature_console.md",
       "title": "Implement Console",
       "status": "done",
-      "covers": ["frontend/src/components/Console/"],
-      "tags": ["medium", "new-feature", "frontend"],
+      "covers": [
+        "frontend/src/components/Console/"
+      ],
+      "tags": [
+        "medium",
+        "new-feature",
+        "frontend"
+      ],
       "created": "2026-03-03",
       "updated": "2026-03-03"
     },
@@ -732,8 +899,14 @@
       "path": "current_tasks/frontend/feature_diff_viewer.md",
       "title": "Implement Diff Viewer",
       "status": "done",
-      "covers": ["frontend/src/components/DiffViewer/"],
-      "tags": ["low", "new-feature", "frontend"],
+      "covers": [
+        "frontend/src/components/DiffViewer/"
+      ],
+      "tags": [
+        "low",
+        "new-feature",
+        "frontend"
+      ],
       "created": "2026-03-03",
       "updated": "2026-03-03"
     },
@@ -743,8 +916,14 @@
       "path": "current_tasks/frontend/feature_progress_tracker.md",
       "title": "Implement Progress Tracker",
       "status": "done",
-      "covers": ["frontend/src/components/ProgressTab/"],
-      "tags": ["medium", "new-feature", "frontend"],
+      "covers": [
+        "frontend/src/components/ProgressTab/"
+      ],
+      "tags": [
+        "medium",
+        "new-feature",
+        "frontend"
+      ],
       "created": "2026-03-03",
       "updated": "2026-03-03"
     },
@@ -754,8 +933,80 @@
       "path": "current_tasks/frontend/feature_session_history.md",
       "title": "Implement Session History",
       "status": "done",
-      "covers": ["frontend/src/components/SessionHistory/"],
-      "tags": ["low", "new-feature", "frontend"],
+      "covers": [
+        "frontend/src/components/SessionHistory/"
+      ],
+      "tags": [
+        "low",
+        "new-feature",
+        "frontend"
+      ],
+      "created": "2026-03-03",
+      "updated": "2026-03-03"
+    },
+    {
+      "id": "task-session-models-tracker",
+      "type": "task-spec",
+      "path": "current_tasks/agent/feature_session_models_tracker.md",
+      "title": "Update models.py and tracker.py for conversational sessions",
+      "status": "active",
+      "covers": [
+        "backend/app/agent/models.py",
+        "backend/app/agent/tracker.py"
+      ],
+      "tags": [
+        "high",
+        "new-feature"
+      ],
+      "created": "2026-03-03",
+      "updated": "2026-03-03"
+    },
+    {
+      "id": "task-session-runner",
+      "type": "task-spec",
+      "path": "current_tasks/agent/feature_session_runner.md",
+      "title": "Rewrite runner.py for conversational session loop",
+      "status": "active",
+      "covers": [
+        "backend/app/agent/runner.py"
+      ],
+      "tags": [
+        "high",
+        "new-feature"
+      ],
+      "created": "2026-03-03",
+      "updated": "2026-03-03"
+    },
+    {
+      "id": "task-session-service",
+      "type": "task-spec",
+      "path": "current_tasks/agent/feature_session_service.md",
+      "title": "Update service.py for conversational sessions",
+      "status": "active",
+      "covers": [
+        "backend/app/agent/service.py"
+      ],
+      "tags": [
+        "high",
+        "new-feature"
+      ],
+      "created": "2026-03-03",
+      "updated": "2026-03-03"
+    },
+    {
+      "id": "task-rpc-session-wiring",
+      "type": "task-spec",
+      "path": "current_tasks/rpc/feature_rpc_session_wiring.md",
+      "title": "Wire new agent session methods into RPC layer",
+      "status": "active",
+      "covers": [
+        "backend/app/rpc/methods/agents.py",
+        "backend/app/rpc/server.py"
+      ],
+      "tags": [
+        "high",
+        "new-feature"
+      ],
       "created": "2026-03-03",
       "updated": "2026-03-03"
     }
@@ -1319,6 +1570,56 @@
     {
       "from": "task-fe-session-history",
       "to": "task-fe-chat-ui",
+      "type": "depends-on"
+    },
+    {
+      "from": "task-session-models-tracker",
+      "to": "module-agent",
+      "type": "implements"
+    },
+    {
+      "from": "task-session-models-tracker",
+      "to": "task-agent-models",
+      "type": "depends-on"
+    },
+    {
+      "from": "task-session-models-tracker",
+      "to": "task-agent-tracker",
+      "type": "depends-on"
+    },
+    {
+      "from": "task-session-runner",
+      "to": "module-agent",
+      "type": "implements"
+    },
+    {
+      "from": "task-session-runner",
+      "to": "task-session-models-tracker",
+      "type": "depends-on"
+    },
+    {
+      "from": "task-session-service",
+      "to": "module-agent",
+      "type": "implements"
+    },
+    {
+      "from": "task-session-service",
+      "to": "task-session-models-tracker",
+      "type": "depends-on"
+    },
+    {
+      "from": "task-session-service",
+      "to": "task-session-runner",
+      "type": "depends-on"
+    },
+    {
+      "from": "task-rpc-session-wiring",
+      "to": "module-rpc",
+      "type": "implements"
+    },
+    {
+      "from": "task-rpc-session-wiring",
+      "to": "task-session-service",
       "type": "depends-on"
     }
   ]

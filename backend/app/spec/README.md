@@ -67,6 +67,8 @@ graph TD
 
 ### Service Layer (called by RPC methods)
 
+**Class:** `SpecService(config: AppConfig)`
+
 | Method | Signature | Description |
 |--------|-----------|-------------|
 | `list_specs` | `() → list[SpecSummary]` | List all specs with metadata from registry |

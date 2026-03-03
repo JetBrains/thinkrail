@@ -82,8 +82,9 @@ This mirrors the Language Server Protocol pattern exactly.
   React Frontend ◀═══ JSON-RPC 2.0 / WebSocket ═══▶ FastAPI Backend
     │                                                       │
     │  Client → Server (requests):                          │
-    │   spec/*  agent/run  agent/status  agent/list         │
-    │   agent/interrupt  agent/respond                      │
+    │   spec/*  agent/run  agent/send  agent/status         │
+    │   agent/list  agent/interrupt  agent/end              │
+    │   agent/respond                                       │
     │                                                       │
     │  Server → Client (notifications, no response):        │
     │   spec/did*  registry/didUpdate                       │
@@ -92,6 +93,7 @@ This mirrors the Language Server Protocol pattern exactly.
     │   agent/subagentStart  agent/subagentEnd              │
     │   agent/notification  agent/compact                   │
     │   agent/progress  agent/permissionDenied              │
+    │   agent/turnComplete  agent/interrupted               │
     │   agent/done  agent/error                             │
     │                                                       │
     │  Server → Client (requests, client must respond):     │
@@ -302,8 +304,8 @@ Specs are stored as files in the repository. The registry tracks metadata:
 - `POST /api/project/init` — initialize `.specs/` in a new directory
 
 Communication flows in three directions over a single WebSocket at `/ws?project=...`:
-- **Client → Server requests:** `spec/*` CRUD + graph, `agent/run`, `agent/status`, `agent/list`, `agent/interrupt`, `agent/respond`
-- **Server → Client notifications:** file watcher events (`spec/did*`, `registry/didUpdate`), agent streaming events (`agent/sessionStart`, `agent/textDelta`, `agent/toolCall*`, `agent/subagent*`, `agent/notification`, `agent/compact`, `agent/progress`, `agent/done`, `agent/error`, `agent/permissionDenied`)
+- **Client → Server requests:** `spec/*` CRUD + graph, `agent/run`, `agent/send`, `agent/status`, `agent/list`, `agent/interrupt`, `agent/end`, `agent/respond`
+- **Server → Client notifications:** file watcher events (`spec/did*`, `registry/didUpdate`), agent streaming events (`agent/sessionStart`, `agent/textDelta`, `agent/toolCall*`, `agent/subagent*`, `agent/notification`, `agent/compact`, `agent/progress`, `agent/turnComplete`, `agent/interrupted`, `agent/done`, `agent/error`, `agent/permissionDenied`)
 - **Server → Client requests:** `agent/askUserQuestion`, `agent/confirmAction` — client responds via `agent/respond`
 
 Full protocol reference (method tables, params, message shapes): **[RPC Module spec](backend/app/rpc/README.md#methods)**
