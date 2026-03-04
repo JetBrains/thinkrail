@@ -73,3 +73,4 @@
     - [ ] Bind tools, sessions, conversations, and/with tasks (at list like a link or folder)
     - [x] Session manager: manage and history of sessions, as well as ability to restore and continue
     - [ ] Skill a-la "let's reason and discuss something"
+    - [ ] Support scenarios-driven (like AI-CI-CD-pipeline) development
