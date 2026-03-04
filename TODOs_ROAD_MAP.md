@@ -56,6 +56,7 @@
     - [ ] **Graph view** has to be fixed
     - [ ] Reqs and Specs tabs displays nothing (mocks)
     - [ ] Progress definitely shows something wrong
+    - [ ] Tree-view (files tab) always appears fully unfolded --- not nice
 * Other
     - [x] add ~~somewhere~~ in main (session) tabs window file/code preview
     - [x] Support preview for markdowns and mermaid
