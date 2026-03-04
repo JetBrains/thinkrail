@@ -54,6 +54,8 @@
         ```
         I.e. session stopped by itself and didn't resume
     - [ ] **Graph view** has to be fixed
+    - [ ] Reqs and Specs tabs displays nothing (mocks)
+    - [ ] Progress definitely shows something wrong
 * Other
     - [x] add ~~somewhere~~ in main (session) tabs window file/code preview
     - [x] Support preview for markdowns and mermaid
@@ -63,6 +65,7 @@
     - [ ] Different (global) themes support
     - [ ] keybindings for non-mac
     - [ ] Better mermaid scrolling, focusing, etc
+    - [x] Add working-dir and project selection with autocomplete during project path typing
 * Features:
     - [ ] Bind tools, sessions, conversations, and/with tasks (at list like a link or folder)
     - [x] Session manager: manage and history of sessions, as well as ability to restore and continue
