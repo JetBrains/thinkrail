@@ -1,0 +1,226 @@
+/*
+ * Spec Tree — hierarchical spec browser
+ *
+ * Follows FileTree visual language: compact rows, indent guides,
+ * hover/select highlights, monospace badges.
+ */
+
+.st {
+  font-size: 12px;
+  line-height: 1;
+  user-select: none;
+}
+
+/* ── Row ── */
+.st-row {
+  display: flex;
+  align-items: center;
+  height: 24px;
+  padding-right: var(--space-sm);
+  cursor: pointer;
+  position: relative;
+  transition: background 60ms ease;
+}
+
+.st-row:hover {
+  background: var(--hover);
+}
+
+.st-row-selected {
+  background: var(--sel);
+}
+
+.st-row-selected:hover {
+  background: var(--sel);
+}
+
+/* ── Indent guides ── */
+.st-guides {
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  display: flex;
+  pointer-events: none;
+}
+
+.st-guide-line {
+  width: 20px;
+  height: 100%;
+  border-left: 1px solid var(--border);
+  margin-left: 9px;
+}
+
+/* ── Arrow ── */
+.st-arrow {
+  width: 16px;
+  flex-shrink: 0;
+  text-align: center;
+  font-size: 10px;
+  color: var(--hint);
+}
+
+.st-arrow-hidden {
+  visibility: hidden;
+}
+
+/* ── Type icon ── */
+.st-icon {
+  width: 18px;
+  flex-shrink: 0;
+  text-align: center;
+  font-size: 13px;
+}
+
+.st-icon-goal      { color: var(--gold); }
+.st-icon-arch      { color: var(--purple); }
+.st-icon-module    { color: var(--blue); }
+.st-icon-submodule { color: var(--teal); }
+.st-icon-task      { color: var(--muted); }
+.st-icon-default   { color: var(--hint); }
+
+/* ── Title ── */
+.st-title {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text);
+  margin-left: 2px;
+}
+
+.st-row:not(.st-row-selected) .st-title {
+  color: var(--muted);
+}
+
+.st-row-selected .st-title {
+  color: var(--text);
+}
+
+/* Parent nodes (hasChildren) get bolder text */
+.st-title-parent {
+  color: var(--text);
+}
+
+/* ── Status badge ── */
+.st-badge {
+  flex-shrink: 0;
+  width: 16px;
+  text-align: center;
+  font-size: 10px;
+  font-family: var(--font-mono);
+}
+
+.st-badge-done    { color: var(--green); }
+.st-badge-active  { color: var(--blue); }
+.st-badge-pending { color: var(--hint); }
+.st-badge-stale   { color: var(--gold); }
+.st-badge-waiting { color: var(--peach); }
+.st-badge-unknown { color: var(--hint); }
+
+/* ── Task count pill ── */
+.st-task-pill {
+  font-size: 10px;
+  padding: 1px 7px;
+  border-radius: 8px;
+  margin-left: 6px;
+  flex-shrink: 0;
+  cursor: pointer;
+  user-select: none;
+  border: 1px solid transparent;
+  transition: all 120ms;
+}
+
+/* Done-only: hidden by default, visible on row hover */
+.st-task-pill-done {
+  background: var(--elevated);
+  color: var(--hint);
+  border-color: var(--border);
+  opacity: 0;
+  transition: opacity 150ms;
+}
+
+.st-row:hover .st-task-pill-done {
+  opacity: 1;
+}
+
+.st-task-pill-done.st-task-pill-expanded {
+  opacity: 1;
+}
+
+.st-task-pill-done:hover {
+  background: var(--hover);
+  color: var(--muted);
+  border-color: var(--border2);
+}
+
+/* Has active tasks: always visible */
+.st-task-pill-active {
+  background: #89b4fa22;
+  color: #89b4facc;
+  border-color: #89b4fa33;
+}
+
+.st-task-pill-active:hover {
+  background: #89b4fa33;
+  color: var(--blue);
+  border-color: #89b4fa55;
+}
+
+/* Expanded state */
+.st-task-pill-expanded {
+  background: #6B57FF33;
+  color: #a89bff;
+  border-color: #6B57FF55;
+}
+
+/* ── Task card ── */
+.st-task-card {
+  background: var(--bg);
+  border: 1px solid var(--elevated);
+  border-radius: 6px;
+  margin: 2px 10px 4px;
+  overflow: hidden;
+}
+
+.st-task-card-row {
+  display: flex;
+  align-items: center;
+  height: 24px;
+  padding: 0 10px;
+  cursor: pointer;
+  transition: background 80ms;
+}
+
+.st-task-card-row:hover {
+  background: var(--panel);
+}
+
+.st-task-card-row + .st-task-card-row {
+  border-top: 1px solid var(--panel);
+}
+
+.st-task-card-row .st-icon {
+  font-size: 11px;
+  width: 16px;
+}
+
+.st-task-card-row .st-title {
+  font-size: 11px;
+}
+
+.st-task-card-row .st-badge {
+  font-size: 9px;
+}
+
+/* ── Empty / loading states ── */
+.st-empty {
+  color: var(--hint);
+  font-size: 12px;
+  padding: var(--space-lg);
+  text-align: center;
+}
+
+.st-error {
+  color: var(--red);
+}

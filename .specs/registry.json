@@ -1080,6 +1080,55 @@
       ],
       "created": "2026-03-03",
       "updated": "2026-03-03"
+    },
+    {
+      "id": "spec-tree",
+      "type": "submodule-design",
+      "path": "frontend/src/components/SpecTree/README.md",
+      "title": "SpecTree Component",
+      "status": "active",
+      "covers": [
+        "frontend/src/components/SpecTree/"
+      ],
+      "tags": [
+        "frontend",
+        "ui",
+        "component"
+      ],
+      "created": "2026-03-04",
+      "updated": "2026-03-04"
+    },
+    {
+      "id": "task-spec-tree",
+      "type": "task-spec",
+      "path": "current_tasks/frontend/feature_spec_tree.md",
+      "title": "Implement SpecTree Component",
+      "status": "done",
+      "covers": [
+        "frontend/src/components/SpecTree/"
+      ],
+      "tags": [
+        "high",
+        "new-feature"
+      ],
+      "created": "2026-03-04",
+      "updated": "2026-03-04"
+    },
+    {
+      "id": "task-spec-tree-badges",
+      "type": "task-spec",
+      "path": "current_tasks/frontend/improvement_spec_tree_task_badges.md",
+      "title": "Improve SpecTree: inline task count badges",
+      "status": "done",
+      "covers": [
+        "frontend/src/components/SpecTree/"
+      ],
+      "tags": [
+        "high",
+        "improvement"
+      ],
+      "created": "2026-03-04",
+      "updated": "2026-03-04"
     }
   ],
   "links": [
@@ -1731,6 +1780,41 @@
     {
       "from": "task-rpc-session-wiring",
       "to": "task-session-service",
+      "type": "depends-on"
+    },
+    {
+      "from": "spec-tree",
+      "to": "frontend-module",
+      "type": "parent"
+    },
+    {
+      "from": "spec-tree",
+      "to": "module-store",
+      "type": "depends-on"
+    },
+    {
+      "from": "spec-tree",
+      "to": "module-api-client",
+      "type": "depends-on"
+    },
+    {
+      "from": "task-spec-tree",
+      "to": "spec-tree",
+      "type": "implements"
+    },
+    {
+      "from": "task-spec-tree",
+      "to": "webview",
+      "type": "depends-on"
+    },
+    {
+      "from": "task-spec-tree-badges",
+      "to": "spec-tree",
+      "type": "implements"
+    },
+    {
+      "from": "task-spec-tree-badges",
+      "to": "task-spec-tree",
       "type": "depends-on"
     }
   ]
