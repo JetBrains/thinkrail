@@ -5,7 +5,11 @@
     - [ ] count money (globally spend on the project) on the fly
 
 * Chat
+    - [ ] Bug/Missing feature: Doesn't display user prompts
+    - [ ] Colours and AskUserQuestions are hard to see (small and violet on black)
+    - [ ] No "other" field
     - [ ] Visualize plan and display progress
+    - [ ] Re-visualise normally answers on askuserquestions
     - [ ] It can ask questions and do something at the same time. As a result "AskUserQuestion" or approval requests "slips upwards in history" or can appear simultaneously rather than being focused and displayed (ex. as in claude code)
     - [ ] I think we have to group tool calls and tasks somehow
     - [ ] add "don't ask approval again for ..."
@@ -36,6 +40,9 @@
 * left bar
     - [x] files tab doesn't display directory
     - [x] files tab doesn't have scrolling
+* right bar
+    - [ ] add toggle and button graph a-la tree
+    - [x] files tab doesn't have scrolling
 
 * bugs and strange behaviours:
     - [ ] Ones agent decided to go to inspect other projects on disk
@@ -58,6 +65,27 @@
     - [ ] Progress definitely shows something wrong
     - [ ] Tree-view (files tab) always appears fully unfolded --- not nice
     - [ ] Markdown preview doesn't support "follow links" (for example, for table of context)
+    - [ ] sessions working dir: `ls -la .../aiir/` instead of .../aiir/demo/`
+    - [ ] Session: AskUserQuestion:
+        ```
+        AskUserQuestion[object Object]✕ error
+
+        <tool_use_error>InputValidationError: [
+        {
+            "origin": "array",
+            "code": "too_big",
+            "maximum": 4,
+            "inclusive": true,
+            "path": [
+            "questions",
+            0,
+            "options"
+            ],
+            "message": "Too big: expected array to have <=4 items"
+        }
+        ]</tool_use_error>
+        ```
+
 * Other
     - [x] add ~~somewhere~~ in main (session) tabs window file/code preview
     - [x] Support preview for markdowns and mermaid
@@ -70,8 +98,11 @@
     - [x] Add working-dir and project selection with autocomplete during project path typing
     - [ ] Add preview for html-s
     - [ ] For Spec files in preview add clickable links -- connections to other specs
+
 * Features:
     - [ ] Bind tools, sessions, conversations, and/with tasks (at list like a link or folder)
     - [x] Session manager: manage and history of sessions, as well as ability to restore and continue
     - [ ] Skill a-la "let's reason and discuss something"
     - [ ] Support scenarios-driven (like AI-CI-CD-pipeline) development
+    - [ ] Search (Ctrl+k): fix
+    - [ ] Show skill progress with on-the-fly visualization on side of chat
