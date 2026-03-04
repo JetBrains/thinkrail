@@ -46,6 +46,7 @@
     - [x] files tab doesn't have scrolling
 
 * bugs and strange behaviours:
+    - [ ] Tree view is not update automatically: check events
     - [ ] Ones agent decided to go to inspect other projects on disk
     - [ ] Unexpected "session start". E,g, in one sessions:
         ```
