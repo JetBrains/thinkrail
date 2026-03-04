@@ -3,6 +3,7 @@ import { useSessionStore } from "@/store/sessionStore.ts";
 
 export function Header({ onSwitchProject }: { onSwitchProject: () => void }) {
   const toggleLeft = useUiStore((s) => s.toggleLeftPanel);
+  const toggleRight = useUiStore((s) => s.toggleRightPanel);
   const openModal = useUiStore((s) => s.openModal);
   const sessions = useSessionStore((s) => s.sessions);
   const activeSessions = Array.from(sessions.values()).filter(
@@ -27,6 +28,9 @@ export function Header({ onSwitchProject }: { onSwitchProject: () => void }) {
       <div className="header-right">
         <button className="header-btn" onClick={() => toggleLeft()} title="Toggle tree (Ctrl+B)">
           Tree
+        </button>
+        <button className="header-btn" onClick={() => toggleRight()} title="Toggle context panel (Cmd+J)">
+          Context
         </button>
         <button className="header-btn header-btn-primary" onClick={() => openModal()} title="New session (Cmd+T)">
           + New
