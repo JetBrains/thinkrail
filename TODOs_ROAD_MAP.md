@@ -68,6 +68,7 @@
     - [ ] Better mermaid scrolling, focusing, etc
     - [x] Add working-dir and project selection with autocomplete during project path typing
     - [ ] Add preview for html-s
+    - [ ] For Spec files in preview add clickable links -- connections to other specs
 * Features:
     - [ ] Bind tools, sessions, conversations, and/with tasks (at list like a link or folder)
     - [x] Session manager: manage and history of sessions, as well as ability to restore and continue
