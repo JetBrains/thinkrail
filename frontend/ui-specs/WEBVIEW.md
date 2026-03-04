@@ -9,7 +9,7 @@
 4. [Header Bar](#1-header-bar)
 5. [Left Panel — Navigation & Progress](#2-left-panel--navigation--progress)
 6. [Center Panel — Claude Sessions](#3-center-panel--claude-sessions-chat-ui)
-7. [Right Panel — Contextual Views](#4-right-panel--contextual-views)
+7. [Right Panel — Context Panel](#4-right-panel--context-panel)
 8. [Status Bar](#5-status-bar)
 9. [Command Palette](#6-command-palette)
 10. [Keyboard Shortcuts](#7-keyboard-shortcuts)
@@ -19,7 +19,7 @@
 
 ## Overview
 
-The Bonsai web view is a three-panel workspace for specification-driven development with AI agents. The center panel hosts Claude agent sessions (custom Chat UI), while the right panel provides contextual views (graph, spec, code, diff, console) that auto-link to the active session. The left panel combines navigation (spec tree, requirements, files) with a spec-driven progress tracker.
+The Bonsai web view is a three-panel workspace for specification-driven development with AI agents. The center panel hosts Claude agent sessions (custom Chat UI) and file views, while the right panel is a context-aware sidebar that auto-switches between spec context, agent context, code context, and a project dashboard based on what's active in the center. The left panel combines navigation (spec tree, requirements, files) with a spec-driven progress tracker.
 
 ## Architecture
 
@@ -43,17 +43,17 @@ The frontend renders agent events streamed from the backend via JSON-RPC notific
 ```
 ┌────────────────┬──────────────────────────┬──────────────────────────┐
 │  LEFT          │  CENTER                  │  RIGHT                   │
-│  PANEL         │  Claude Sessions         │  Graph|Spec|Code|Diff|Con│
+│  PANEL         │  Sessions + Files        │  Context Panel (auto)    │
 │                │                          │                          │
 │  [Specs]       │  ┌─ tab1 ─┬─ tab2 ─┬─+  │  ┌────────────────────┐ │
-│  [Reqs]        │  │                      ││  │ context-linked     │ │
-│  [Files]       │  │  Chat UI:            ││  │ view               │ │
-│  [Progress]    │  │  • Claude text        ││  │                    │ │
-│                │  │  • tool calls         ││  │ auto-follows       │ │
-│  tree / list / │  │  • questions          ││  │ active session     │ │
-│  dashboard     │  │  • approvals          ││  │                    │ │
-│                │  │                      ││  └────────────────────┘ │
-│                │  │  [Message...]  [Send] ││                          │
+│  [Reqs]        │  │                      ││  │ ▼ Connected Specs  │ │
+│  [Files]       │  │  Chat UI:            ││  │ ▼ Tasks (3)        │ │
+│  [Progress]    │  │  • Claude text        ││  │ ▼ Covered Files    │ │
+│                │  │  • tool calls         ││  │ ▶ Spec Health      │ │
+│  tree / list / │  │  • questions          ││  │                    │ │
+│  dashboard     │  │  • approvals          ││  │ (auto-switches by  │ │
+│                │  │                      ││  │  center content)   │ │
+│                │  │  [Message...]  [Send] ││  └────────────────────┘ │
 │                │  └──────────────────────┘│                          │
 ├────────────────┴──────────────────────────┴──────────────────────────┤
 │  STATUS BAR: specs count · done · pending · active sessions · keys  │
@@ -326,78 +326,42 @@ Triggered by `+ New Session` or `Cmd+T`:
 
 Clicking "Start Session" → calls `agent/run` with selected config.
 
-## 4. Right Panel — Contextual Views
+## 4. Right Panel — Context Panel
 
 Toggle visibility: `Cmd+J`
 
-The right panel provides views that **auto-link to the active session's context**. When a session is working on a spec, the right panel shows that spec's graph position, content, related code, etc.
+> **Full specification:** [CONTEXT_PANEL.md](CONTEXT_PANEL.md)
 
-### Tabs
+The right panel is a **context-aware sidebar** that auto-switches content based on what's active in the center panel. It has **no tabs** — instead, it renders stacked collapsible sections relevant to the current context.
 
-#### 4.1 Graph
+### Context Modes
 
-Interactive spec hierarchy visualization with **layered drill-down navigation**.
+| Center panel shows | Right panel mode | Key sections |
+|---|---|---|
+| Spec file open | **Spec Context** | Connected specs subgraph, linked tasks, covered files, spec health |
+| Active agent session | **Agent Context** | Task spec preview, files modified (live), related specs, compliance hints |
+| Code file open | **Code Context** | Covering specs, related tasks, staleness indicator |
+| Nothing selected | **Project Dashboard** | Spec coverage, open tasks, recent activity |
 
-##### Visual Elements
+Mode is derived from existing stores (`sessionStore`, `fileStore`, `specStore`) — no new state required. Priority: active session > spec file > code file > selected spec > dashboard.
 
-- **Nodes** = specs (colored by type: goal, architecture, module, submodule, task)
-- **Edges** = visible connections between nodes from `registry.json` (parent/child, depends-on, references, implements). Rendered as SVG lines/curves with arrowheads. Edge style indicates relationship type (solid = parent/child, dashed = depends-on, dotted = references).
-- **Active node** = highlighted based on current session's spec context
-- **Health overlay** = node border/color reflects status (done=green, active=blue, stale=red, pending=gray)
-- **Zoom/pan** controls
-- **Legend** showing node types, status colors, and edge types
+### Peek-to-Center
 
-##### Layered Navigation
+Sections with rich content (graphs, full spec text) show a compact preview with a `[⇱]` button that opens the full view in the center panel. This solves the 380px width constraint while keeping context accessible.
 
-The graph displays one layer at a time rather than the full hierarchy. Users drill down into nodes to explore children.
+### Previous Components (relocated)
 
-**Behavior:**
+The following views from the old tab-based right panel are now handled differently:
 
-1. **Default view** — shows the top-level layer: Goal node(s) and their direct children (Architecture specs), with edges connecting them
-2. **Click a node** → drills into that node: the view transitions to show the clicked node as the "root" with its direct children and their interconnections
-3. **Breadcrumb trail** — displayed at the top of the graph area, showing the ancestor path:
-   ```
-   ┌──────────────────────────────────────────────┐
-   │  ← │ Goal & Requirements > Architecture > ●  │
-   │─────────────────────────────────────────────-─│
-   │                                               │
-   │       ┌──────┐   ┌──────┐                    │
-   │       │ Spec │──→│ Core │                    │
-   │       │Module│   │Module│                    │
-   │       └──┬───┘   └──────┘                    │
-   │          │                                    │
-   │       ┌──┴───┐   ┌──────┐                    │
-   │       │Agent │──→│ RPC  │                    │
-   │       │Module│   │Module│                    │
-   │       └──────┘   └──────┘                    │
-   └──────────────────────────────────────────────┘
-   ```
-4. **Breadcrumb click** — clicking any ancestor in the breadcrumb navigates back up to that layer
-5. **Back button** (`←`) — goes up one level to the parent layer
-6. **Leaf nodes** — clicking a node with no children selects it (updates Spec/Code/Diff views) but does not drill down
+| Old tab | New location |
+|---------|-------------|
+| **Graph** | Compact "Connected Specs" subgraph in Spec Context mode. Full graph via `[⇱]` opens in center. See [GRAPH_INTERACTIONS.md](GRAPH_INTERACTIONS.md). |
+| **Spec** | Spec files now open directly in the center panel FileViewer |
+| **Code** | Code files open in the center panel FileViewer |
+| **Diff** | Available via DiffViewer in center panel. See [DIFF_VIEWER.md](DIFF_VIEWER.md). |
+| **Console** | Removed from UI for now. Not core to spec-driven workflow. |
 
-**Node context menu** (right-click):
-
-| Action | Description |
-| --- | --- |
-| New session for this spec | Creates a new center-panel session pre-loaded with this spec as context |
-| Ask about this spec | Opens a new session with a question prompt about this spec |
-| Implement / Specify | If spec exists → new session to implement. If unspecified → new session to create the spec |
-| Edit spec | New session with the relevant skill loaded to update this spec |
-
-**Single click** → drills into node (if it has children) or selects it (if leaf).
-**Double click** → selects the spec and updates Spec/Code/Diff views without drilling down.
-
-#### 4.2 Spec
-
-Rendered markdown view of the selected specification.
-
-- Nice, readable formatting (headers, tables, code blocks, mermaid diagrams)
-- Breadcrumb showing spec hierarchy path
-- **Edit mode toggle**: small "Edit" button in the top-right corner switches to a markdown editor for quick manual edits (typo fixes, small tweaks). Saving writes directly to the spec file on disk.
-- **Agent nudge**: when exiting edit mode after changes, a subtle prompt appears: "Want Claude to review these changes?" — clicking it opens a new session pre-loaded with the edited spec and a review prompt. This preserves the spec-driven workflow while allowing quick manual fixes.
-
-#### 4.3 File Viewer / Code Editor
+### File Viewer / Code Editor
 
 Files open as tabs in the **center panel** tab bar alongside session tabs. Double-clicking a file in the left panel's File Tree opens it.
 
@@ -433,31 +397,6 @@ Files open as tabs in the **center panel** tab bar alongside session tabs. Doubl
 **Supported languages:** Python, TypeScript/TSX, JavaScript/JSX, CSS, HTML, JSON, Markdown, YAML, Shell, SQL, Rust, Go, Java, Kotlin, Ruby, XML
 
 **Theme:** IntelliJ Darcula colors — keywords (#CF8E6D orange), strings (#6AAB73 green), comments (#7A7E85 gray italic), functions (#56A8F5 blue), types (#C77DBB purple), numbers (#2AACB8 teal)
-
-#### 4.4 Diff
-
-**Spec + Code side-by-side diff**, change-by-change.
-
-```
-┌──────────────────────┬──────────────────────┐
-│  SPEC DIFF           │  CODE DIFF           │
-│                      │                      │
-│  - old spec text     │  - old code line     │
-│  + new spec text     │  + new code line     │
-│                      │                      │
-└──────────────────────┴──────────────────────┘
-```
-
-- Shows how spec changes correspond to code changes
-- Commit-by-commit navigation (prev/next change)
-- Highlights additions (green) and deletions (red)
-
-#### 4.5 Console
-
-Standard terminal emulator in the right panel.
-
-- For running manual commands, viewing logs, etc.
-- Independent of the center panel sessions
 
 ## 5. Status Bar
 
@@ -525,18 +464,23 @@ Triggered by `Cmd+K`. A floating search modal for quick navigation and actions:
 | `Cmd+T` | New session |
 | `Cmd+1-9` | Switch session tabs |
 | `Cmd+Enter` | Send message |
-| `Cmd+G` | Focus graph view |
-| `Cmd+P` | Focus spec view |
+| `Cmd+G` | Open full graph view in center panel |
+| `Cmd+P` | Open spec view in center panel |
 
 ## 8. Context Linking
 
-The right panel auto-follows the active session's context:
+The right panel (Context Panel) **automatically derives its mode and content** from the center panel state. There are no manual tabs to switch — the panel always shows the most relevant context.
 
-1. When a session starts with spec context → right panel selects that spec
-2. When agent references a spec (`agent/toolCallStart` on a spec file) → graph highlights it
-3. When user clicks a spec in the left tree → right panel updates, center panel is unaffected
-4. When user clicks a graph node → right panel updates to that spec
-5. Manual override: user can click any tab/spec in right panel independently; auto-link resumes on next session event
+**Mode derivation priority:** active session > spec file > code file > selected spec > dashboard.
+
+**Linking behavior:**
+1. When a session starts → right panel switches to **Agent Context** (task spec, files modified, related specs, compliance)
+2. When user opens a spec file in center → right panel switches to **Spec Context** (connected specs, tasks, covered files, health)
+3. When user opens a code file in center → right panel switches to **Code Context** (covering specs, related tasks, staleness)
+4. When nothing is active → right panel shows **Project Dashboard** (coverage, open tasks, activity feed)
+5. Clicking items in the right panel (specs, tasks, files) opens them in the center panel, which may trigger a mode switch
+
+See [CONTEXT_PANEL.md](CONTEXT_PANEL.md) for full specification.
 
 ## 9. Future Sub-Specifications
 
@@ -549,7 +493,7 @@ The following areas require their own detailed specs as the design matures:
 | **Diff Viewer** | Spec-to-code correlation logic, commit navigation, inline vs side-by-side, change grouping | How to match spec sections to code files |
 | **Progress Tracker** | Data sources for each metric, update frequency, budget configuration, alert thresholds | Backend API additions needed for cost/token tracking |
 | **New Session Modal** | Skill registry integration, spec selector UI, session configuration options | Validation rules, default values |
-| **Console** | Terminal emulator choice (xterm.js), shell integration, session persistence | Interaction with agent sessions |
+| ~~**Console**~~ | ~~Terminal emulator~~ | Removed from UI for now — not core to spec-driven workflow |
 | **Command Palette** | Fuzzy search algorithm, indexing strategy, action registry, keyboard navigation | Performance with large projects |
 | **Session History & Persistence** | Storage format, retention policy, read-only replay mode, future disk persistence | Backend API additions for session archival |
 | **Notification System** | Toast queue management, priority ordering, sound configuration, persistence rules | Interaction with OS-level notifications |
@@ -578,4 +522,4 @@ The following RPC methods and endpoints are referenced by frontend sub-specs but
 
 - **Parent:** [Frontend Module](../README.md)
 - **Depends on:** [Goal & Requirements](../../GOAL&REQUIREMENTS.md)
-- **Sub-specs:** [Chat UI](CHAT_UI.md), [Graph](GRAPH_INTERACTIONS.md), [Modal](NEW_SESSION_MODAL.md), [Palette](COMMAND_PALETTE.md), [Notifications](NOTIFICATION_SYSTEM.md), [Diff](DIFF_VIEWER.md), [Progress](PROGRESS_TRACKER.md), [History](SESSION_HISTORY.md), [App Shell](APP_SHELL.md), [Theming](THEMING.md), [Responsive](RESPONSIVE_BEHAVIOR.md)
+- **Sub-specs:** [Chat UI](CHAT_UI.md), [Graph](GRAPH_INTERACTIONS.md), [Context Panel](CONTEXT_PANEL.md), [Modal](NEW_SESSION_MODAL.md), [Palette](COMMAND_PALETTE.md), [Notifications](NOTIFICATION_SYSTEM.md), [Diff](DIFF_VIEWER.md), [Progress](PROGRESS_TRACKER.md), [History](SESSION_HISTORY.md), [App Shell](APP_SHELL.md), [Theming](THEMING.md), [Responsive](RESPONSIVE_BEHAVIOR.md)

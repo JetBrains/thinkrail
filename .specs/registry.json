@@ -1129,6 +1129,75 @@
       ],
       "created": "2026-03-04",
       "updated": "2026-03-04"
+    },
+    {
+      "id": "ui-context-panel",
+      "type": "submodule-design",
+      "path": "frontend/ui-specs/CONTEXT_PANEL.md",
+      "title": "Context Panel UI Specification",
+      "status": "active",
+      "created": "2026-03-04",
+      "updated": "2026-03-04",
+      "covers": [
+        "frontend/src/components/AppShell/RightPanel.tsx"
+      ],
+      "tags": [
+        "frontend",
+        "ui-spec"
+      ]
+    },
+    {
+      "id": "task-context-panel-infrastructure",
+      "type": "task-spec",
+      "path": "current_tasks/frontend/feature_context_panel_infrastructure.md",
+      "title": "Create Context Panel infrastructure: useContextMode + CollapsibleSection",
+      "status": "done",
+      "covers": [
+        "frontend/src/components/ContextPanel/"
+      ],
+      "tags": [
+        "high",
+        "feature",
+        "frontend"
+      ],
+      "created": "2026-03-04",
+      "updated": "2026-03-04"
+    },
+    {
+      "id": "task-context-panel-modes-sections",
+      "type": "task-spec",
+      "path": "current_tasks/frontend/feature_context_panel_modes_sections.md",
+      "title": "Create Context Panel mode components and placeholder sections",
+      "status": "done",
+      "covers": [
+        "frontend/src/components/ContextPanel/modes/",
+        "frontend/src/components/ContextPanel/sections/"
+      ],
+      "tags": [
+        "high",
+        "feature",
+        "frontend"
+      ],
+      "created": "2026-03-04",
+      "updated": "2026-03-04"
+    },
+    {
+      "id": "task-context-panel-integration",
+      "type": "task-spec",
+      "path": "current_tasks/frontend/feature_context_panel_integration.md",
+      "title": "Replace RightPanel with ContextPanel and clean up store",
+      "status": "done",
+      "covers": [
+        "frontend/src/components/AppShell/RightPanel.tsx",
+        "frontend/src/store/uiStore.ts"
+      ],
+      "tags": [
+        "high",
+        "feature",
+        "frontend"
+      ],
+      "created": "2026-03-04",
+      "updated": "2026-03-04"
     }
   ],
   "links": [
@@ -1815,6 +1884,36 @@
     {
       "from": "task-spec-tree-badges",
       "to": "task-spec-tree",
+      "type": "depends-on"
+    },
+    {
+      "from": "ui-context-panel",
+      "to": "webview",
+      "type": "parent"
+    },
+    {
+      "from": "task-context-panel-infrastructure",
+      "to": "ui-context-panel",
+      "type": "implements"
+    },
+    {
+      "from": "task-context-panel-modes-sections",
+      "to": "ui-context-panel",
+      "type": "implements"
+    },
+    {
+      "from": "task-context-panel-modes-sections",
+      "to": "task-context-panel-infrastructure",
+      "type": "depends-on"
+    },
+    {
+      "from": "task-context-panel-integration",
+      "to": "ui-context-panel",
+      "type": "implements"
+    },
+    {
+      "from": "task-context-panel-integration",
+      "to": "task-context-panel-modes-sections",
       "type": "depends-on"
     }
   ]

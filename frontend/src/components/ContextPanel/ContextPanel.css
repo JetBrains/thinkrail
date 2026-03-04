@@ -1,0 +1,43 @@
+.context-panel {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  background: var(--panel);
+  overflow: hidden;
+}
+
+.context-panel__header {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  padding: var(--space-sm) var(--space-md);
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+.context-panel__mode-icon {
+  font-size: 12px;
+}
+
+.context-panel__mode-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.context-panel__body {
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
+  min-height: 0;
+}
+
+.section-placeholder {
+  color: var(--hint);
+  font-size: 12px;
+  text-align: center;
+  padding: var(--space-md) var(--space-sm);
+  font-style: italic;
+}

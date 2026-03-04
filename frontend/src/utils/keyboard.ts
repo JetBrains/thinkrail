@@ -50,16 +50,6 @@ export function registerKeyboardShortcuts(): () => void {
         e.preventDefault();
         store.toggleRightPanel();
         break;
-      case "g": // Cmd+G — focus graph
-        e.preventDefault();
-        store.setRightTab("graph");
-        if (store.rightPanelCollapsed) store.toggleRightPanel();
-        break;
-      case "p": // Cmd+P — focus spec
-        e.preventDefault();
-        store.setRightTab("spec");
-        if (store.rightPanelCollapsed) store.toggleRightPanel();
-        break;
     }
   }
 

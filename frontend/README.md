@@ -155,6 +155,7 @@ Dev dependencies: `vite`, `typescript`, `vitest`, `@testing-library/react`, `esl
 | Theming | [ui-specs/THEMING.md](ui-specs/THEMING.md) | CSS variables, dark/light mode |
 | Responsive Behavior | [ui-specs/RESPONSIVE_BEHAVIOR.md](ui-specs/RESPONSIVE_BEHAVIOR.md) | Breakpoints, panel collapse |
 | App Shell | [ui-specs/APP_SHELL.md](ui-specs/APP_SHELL.md) | Component tree, routing, bootstrap |
+| Context Panel | [ui-specs/CONTEXT_PANEL.md](ui-specs/CONTEXT_PANEL.md) | Context-aware right panel, auto-switching modes |
 
 ## Related Specs
 

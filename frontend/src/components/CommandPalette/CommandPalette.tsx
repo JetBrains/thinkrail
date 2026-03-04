@@ -34,7 +34,6 @@ export function CommandPalette() {
   const togglePalette = useUiStore((s) => s.togglePalette);
   const openModal = useUiStore((s) => s.openModal);
   const selectSpec = useSpecStore((s) => s.selectSpec);
-  const setRightTab = useUiStore((s) => s.setRightTab);
   const specs = useSpecStore((s) => s.specs);
   const sessions = useSessionStore((s) => s.sessions);
   const switchSession = useSessionStore((s) => s.switchSession);
@@ -64,7 +63,7 @@ export function CommandPalette() {
             id: `spec-${s.id}`,
             title: s.title,
             category: "spec",
-            action: () => { selectSpec(s.id); setRightTab("spec"); togglePalette(); },
+            action: () => { selectSpec(s.id); togglePalette(); },
           });
         }
       }
@@ -87,8 +86,6 @@ export function CommandPalette() {
     if (mode === "all" || mode === "actions") {
       const actions: PaletteItem[] = [
         { id: "action-new", title: "New session", category: "action", action: () => { openModal(); togglePalette(); } },
-        { id: "action-graph", title: "Focus graph", category: "action", action: () => { setRightTab("graph"); togglePalette(); } },
-        { id: "action-spec", title: "Focus spec view", category: "action", action: () => { setRightTab("spec"); togglePalette(); } },
       ];
       for (const a of actions) {
         if (fuzzyMatch(a.title, cleanQuery) > 0) result.push(a);
@@ -96,7 +93,7 @@ export function CommandPalette() {
     }
 
     return result;
-  }, [specs, sessions, mode, cleanQuery, selectSpec, setRightTab, togglePalette, switchSession, openModal]);
+  }, [specs, sessions, mode, cleanQuery, selectSpec, togglePalette, switchSession, openModal]);
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent) => {

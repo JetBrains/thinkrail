@@ -4,7 +4,7 @@ import { useUiStore } from "@/store/uiStore.ts";
 import { Header } from "./Header.tsx";
 import { StatusBar } from "./StatusBar.tsx";
 import { LeftPanel } from "./LeftPanel.tsx";
-import { RightPanel } from "./RightPanel.tsx";
+import { ContextPanel } from "@/components/ContextPanel/ContextPanel.tsx";
 import { ResizeHandle } from "./ResizeHandle.tsx";
 import { SessionPanel } from "@/components/SessionPanel/SessionPanel.tsx";
 import { SessionManager } from "@/components/SessionManager/SessionManager.tsx";
@@ -79,7 +79,7 @@ export function AppShell({ onSwitchProject }: { onSwitchProject: () => void }) {
               collapseThreshold={150}
             />
             <div style={{ width: rightWidth, height: "100%", overflow: "hidden" }}>
-              <RightPanel />
+              <ContextPanel />
             </div>
           </>
         )}

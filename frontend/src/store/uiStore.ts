@@ -2,7 +2,6 @@ import { create } from "zustand";
 import { persist } from "zustand/middleware";
 
 type LeftTab = "specs" | "reqs" | "files" | "progress";
-type RightTab = "graph" | "spec" | "code" | "diff" | "console";
 type Breakpoint = "desktop" | "laptop" | "below-min";
 
 interface ModalPrefill {
@@ -20,7 +19,6 @@ interface UiStore {
   leftDrawerOpen: boolean;
   rightDrawerOpen: boolean;
   leftActiveTab: LeftTab;
-  rightActiveTab: RightTab;
   modalOpen: boolean;
   modalPrefill: ModalPrefill | null;
   paletteOpen: boolean;
@@ -30,7 +28,6 @@ interface UiStore {
   toggleLeftPanel: () => void;
   toggleRightPanel: () => void;
   setLeftTab: (tab: LeftTab) => void;
-  setRightTab: (tab: RightTab) => void;
   openModal: (prefill?: ModalPrefill) => void;
   closeModal: () => void;
   togglePalette: () => void;
@@ -55,7 +52,6 @@ export const useUiStore = create<UiStore>()(
       leftDrawerOpen: false,
       rightDrawerOpen: false,
       leftActiveTab: "specs" as LeftTab,
-      rightActiveTab: "graph" as RightTab,
       modalOpen: false,
       modalPrefill: null,
       paletteOpen: false,
@@ -67,7 +63,6 @@ export const useUiStore = create<UiStore>()(
       toggleRightPanel: () =>
         set((s) => ({ rightPanelCollapsed: !s.rightPanelCollapsed })),
       setLeftTab: (tab) => set({ leftActiveTab: tab }),
-      setRightTab: (tab) => set({ rightActiveTab: tab }),
       openModal: (prefill) =>
         set({ modalOpen: true, modalPrefill: prefill ?? null }),
       closeModal: () => set({ modalOpen: false, modalPrefill: null }),
@@ -81,7 +76,6 @@ export const useUiStore = create<UiStore>()(
         leftPanelCollapsed: state.leftPanelCollapsed,
         rightPanelCollapsed: state.rightPanelCollapsed,
         leftActiveTab: state.leftActiveTab,
-        rightActiveTab: state.rightActiveTab,
       }),
     },
   ),

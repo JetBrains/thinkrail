@@ -1,0 +1,84 @@
+.collapsible-section {
+  border-bottom: 1px solid var(--border);
+}
+
+.collapsible-section__header {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  width: 100%;
+  padding: var(--space-sm) var(--space-md);
+  border: none;
+  background: transparent;
+  color: var(--text);
+  font-family: var(--font);
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  cursor: pointer;
+  transition: background var(--transition-fast);
+}
+
+.collapsible-section__header:hover {
+  background: var(--hover);
+}
+
+.collapsible-section__chevron {
+  font-size: 8px;
+  color: var(--muted);
+  width: 12px;
+  text-align: center;
+  transition: transform var(--transition-fast);
+}
+
+.collapsible-section__title {
+  flex: 1;
+  text-align: left;
+}
+
+.collapsible-section__count {
+  font-size: 10px;
+  font-weight: 400;
+  color: var(--muted);
+  background: var(--elevated);
+  padding: 0 var(--space-xs);
+  border-radius: var(--radius-sm);
+  min-width: 16px;
+  text-align: center;
+}
+
+.collapsible-section__summary {
+  font-size: 10px;
+  font-weight: 400;
+  color: var(--hint);
+  margin-left: auto;
+}
+
+.collapsible-section__expand {
+  font-size: 12px;
+  color: var(--hint);
+  padding: 2px var(--space-xs);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.collapsible-section__expand:hover {
+  color: var(--blue);
+  background: var(--hover);
+}
+
+.collapsible-section__body {
+  max-height: 0;
+  overflow: hidden;
+  transition: max-height var(--transition-normal);
+}
+
+.collapsible-section__body--open {
+  max-height: 2000px;
+}
+
+.collapsible-section__content {
+  padding: var(--space-sm) var(--space-md) var(--space-md);
+}
