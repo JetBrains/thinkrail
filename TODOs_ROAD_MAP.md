@@ -6,6 +6,7 @@
 
 * Chat
     - [ ] Bug/Missing feature: Doesn't display user prompts
+    - [ ] When ask multiple askUserQuestions in one use inlined tabs or something similar
     - [ ] Colours and AskUserQuestions are hard to see (small and violet on black)
     - [ ] No "other" field
     - [ ] Visualize plan and display progress
