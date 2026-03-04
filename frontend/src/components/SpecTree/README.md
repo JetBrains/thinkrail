@@ -175,7 +175,7 @@ export function SpecTree(): JSX.Element
 
 No props — reads all data from Zustand stores:
 - `useSpecStore()` — `specs`, `graph`, `selectedSpecId`, `selectSpec()`, `fetchSpecContent()`, `fetchSpecs()`, `fetchGraph()`
-- `useUiStore()` — `setRightTab()`
+- `useFileStore()` — `openFile()`
 
 ### State
 
@@ -232,7 +232,7 @@ const visible = useMemo(() => {
 | **Click node** | `specStore.selectSpec(id)` — updates selectedSpecId, highlights in graph |
 | **Click arrow** | Toggle node in `collapsed` Set (stopPropagation — does not select) |
 | **Click task pill** | Toggle `expandedTasks` Set (stopPropagation) — shows/hides task card below the node |
-| **Double-click** | `specStore.fetchSpecContent(id)` + `uiStore.setRightTab("spec")` — opens spec content in right panel |
+| **Double-click** | `fileStore.openFile(path)` — opens spec file in center panel (markdown preview via FileViewer) |
 
 ### Loading & Empty States
 
@@ -313,14 +313,14 @@ Follows the same visual language as FileTree:
 - **No drag-and-drop:** Cannot reorder or reparent specs via drag — hierarchy is defined in registry
 - **No context menu:** No right-click actions (create child, delete, rename)
 - **Orphan handling:** Specs with broken parent links appear as root nodes (graceful degradation)
-- **Task click:** Clicking a task card row does not navigate — tasks are display-only in this view
+- **Task single-click:** Clicking a task card row does not select — only double-click opens the task spec file
 
 ## Dependencies
 
 | Dependency | Usage |
 |------------|-------|
 | React (useState, useMemo, useEffect, useCallback) | Component state, memoization, and stable callbacks |
-| Zustand (useSpecStore, useUiStore) | Global state access |
+| Zustand (useSpecStore, useFileStore) | Global state access |
 | SpecGraph type | Input to buildTree() |
 
 No external dependencies beyond React and Zustand.

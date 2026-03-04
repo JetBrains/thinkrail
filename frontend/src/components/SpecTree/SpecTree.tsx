@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useSpecStore } from "@/store/specStore.ts";
-import { useUiStore } from "@/store/uiStore.ts";
+import { useFileStore } from "@/store/fileStore.ts";
 import {
   buildTree,
   getTasksForSpec,
@@ -17,10 +17,9 @@ export function SpecTree() {
   const selectSpec = useSpecStore((s) => s.selectSpec);
   const fetchSpecs = useSpecStore((s) => s.fetchSpecs);
   const fetchGraph = useSpecStore((s) => s.fetchGraph);
-  const fetchSpecContent = useSpecStore((s) => s.fetchSpecContent);
   const loading = useSpecStore((s) => s.loading);
   const error = useSpecStore((s) => s.error);
-  const setRightTab = useUiStore((s) => s.setRightTab);
+  const openFile = useFileStore((s) => s.openFile);
 
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
   const [expandedTasks, setExpandedTasks] = useState<Set<string>>(new Set());
@@ -101,11 +100,10 @@ export function SpecTree() {
   );
 
   const handleDoubleClick = useCallback(
-    (id: string) => {
-      fetchSpecContent(id);
-      setRightTab("spec");
+    (path: string) => {
+      openFile(path);
     },
-    [fetchSpecContent, setRightTab],
+    [openFile],
   );
 
   if (loading && !graph) {
@@ -140,7 +138,7 @@ export function SpecTree() {
               className={`st-row ${isSelected ? "st-row-selected" : ""}`}
               style={{ paddingLeft: node.depth * 20 + 4 }}
               onClick={() => handleClick(node.id)}
-              onDoubleClick={() => handleDoubleClick(node.id)}
+              onDoubleClick={() => handleDoubleClick(node.path)}
               title={node.path}
             >
               {/* Indent guides */}
@@ -205,7 +203,11 @@ export function SpecTree() {
                 {tasks.map((task) => {
                   const tBadge = statusBadge(task.status);
                   return (
-                    <div key={task.id} className="st-task-card-row">
+                    <div
+                      key={task.id}
+                      className="st-task-card-row"
+                      onDoubleClick={() => openFile(task.path)}
+                    >
                       <span className="st-icon st-icon-task">
                         {"\u270F\uFE0F"}
                       </span>

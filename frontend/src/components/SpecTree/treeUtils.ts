@@ -15,6 +15,7 @@ export interface TaskInfo {
   id: string;
   title: string;
   status: string;
+  path: string;
 }
 
 const TYPE_RANK: Record<string, number> = {
@@ -113,7 +114,7 @@ export function getTasksForSpec(graph: SpecGraph): Map<string, TaskInfo[]> {
     if (!taskNode || taskNode.type !== "task-spec") continue;
 
     const tasks = result.get(edge.to) ?? [];
-    tasks.push({ id: taskNode.id, title: taskNode.title, status: taskNode.status });
+    tasks.push({ id: taskNode.id, title: taskNode.title, status: taskNode.status, path: taskNode.path });
     result.set(edge.to, tasks);
   }
 
