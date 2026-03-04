@@ -108,3 +108,4 @@
     - [ ] Support scenarios-driven (like AI-CI-CD-pipeline) development
     - [ ] Search (Ctrl+k): fix
     - [ ] Show skill progress with on-the-fly visualization on side of chat
+    - [ ] Support "output view modes" like cltr+o ctrl+t in claude
