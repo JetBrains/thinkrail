@@ -107,8 +107,8 @@ export const useFileStore = create<FileStore>((set, get) => ({
     // Already previewing this exact path with content loaded
     if (get().previewFilePath === path && get().previewFile) return;
 
-    // Set path immediately so the tab appears
-    set({ previewFilePath: path, previewFile: null });
+    // Set path immediately so the tab appears and takes focus
+    set({ previewFilePath: path, previewFile: null, activeFilePath: null });
 
     const project = getProjectPath();
     if (!project) return;
