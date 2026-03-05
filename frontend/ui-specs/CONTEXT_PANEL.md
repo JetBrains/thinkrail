@@ -19,6 +19,8 @@
 
 The Context Panel is a context-aware sidebar (the right panel in the three-panel layout) that displays information related to the active content in the center panel. It auto-switches between three modes — **Spec Context**, **Agent Context**, and **Code Context** — showing connected specs, linked tasks, and covered files depending on what the user is working on. When nothing is selected, the panel shows an empty welcome state.
 
+**Key interaction:** Single-clicking a file in FileTree or a spec in SpecTree opens a **preview tab** in the center panel and immediately updates the context panel. Double-click pins the tab (fully opens it). This gives users instant context feedback while browsing.
+
 **Replaces:** The previous tab-based right panel (`Graph | Spec | Code | Diff | Console`). Console is removed from the UI for now. Rich views (graphs, full spec text) show compact previews in the sidebar with a "peek-to-center" expand button `[⇱]` to open the full view in the center panel.
 
 ## Overview
@@ -40,7 +42,7 @@ The panel has **no tabs**. Content auto-switches based on what's in the center p
 
 ### 1. Spec Context
 
-**Trigger:** A spec file is open in the center panel, or a spec is selected in the SpecTree.
+**Trigger:** A spec file is open or previewed in the center panel, or a spec is selected in the SpecTree (single-click previews the spec file and activates this mode).
 
 **Sections (top to bottom):**
 
@@ -115,7 +117,7 @@ The panel has **no tabs**. Content auto-switches based on what's in the center p
 
 ### 3. Code Context
 
-**Trigger:** A non-spec file is open in the center panel.
+**Trigger:** A non-spec file is open or previewed in the center panel (single-click on a file in FileTree previews it and activates this mode).
 
 **Sections (top to bottom):**
 
@@ -200,25 +202,35 @@ interface CollapsibleSectionProps {
 
 ## Mode Derivation
 
-The active mode is derived from existing Zustand stores — no new state required:
+The active mode is derived from Zustand stores. The hook reads both `activeFilePath` (pinned/opened files) and `previewFilePath` (single-click preview), preferring preview when present:
 
 ```typescript
 type ContextMode = 'spec' | 'agent' | 'code' | 'empty';
 
 function useContextMode(): ContextMode {
-  const activeSession = useSessionStore(s => s.activeSessionId);
-  const activeFile = useFileStore(s => s.activeFilePath);
-  const selectedSpec = useSpecStore(s => s.selectedSpecId);
+  const activeSessionId = useSessionStore(s => s.activeSessionId);
+  const activeFilePath = useFileStore(s => s.activeFilePath);
+  const previewFilePath = useFileStore(s => s.previewFilePath);
+  const selectedSpecId = useSpecStore(s => s.selectedSpecId);
 
-  if (activeSession) return 'agent';
-  if (activeFile && isSpecFile(activeFile)) return 'spec';
-  if (activeFile) return 'code';
-  if (selectedSpec) return 'spec';
+  // Only one of these is active at a time (mutually exclusive in the store layer)
+  const focusedFile = previewFilePath ?? activeFilePath;
+
+  if (focusedFile) return isSpecFile(focusedFile) ? 'spec' : 'code';
+  if (activeSessionId) return 'agent';
+  if (selectedSpecId) return 'spec';
   return 'empty';
 }
 ```
 
-**Priority:** active session > spec file > code file > selected spec > empty. An active agent session always takes precedence since it requires the most monitoring.
+**Only one thing is focused at a time.** The center panel shows either a session, a file, a preview, or nothing — these are mutually exclusive. The context mode simply reflects what's currently shown: file/preview → spec or code context, session → agent context, nothing → empty. The `selectedSpecId` fallback exists for edge cases where a spec is selected in the tree but no file is open.
+
+**Preview interaction:** The `previewFilePath` is set by single-click in FileTree or SpecTree. It is cleared when:
+- The user switches to a different pinned tab (context follows the pinned tab)
+- The user starts/switches to an agent session
+- The user double-clicks to pin the preview (it becomes `activeFilePath`)
+
+See [CENTER_PANEL.md — Preview Tabs](CENTER_PANEL.md#preview-tabs) for full preview tab lifecycle.
 
 ## Shared Patterns
 
@@ -248,10 +260,12 @@ Consistent badges across all sections:
 
 ### Click-to-Navigate
 
-All clickable items (specs, tasks, files) open in the center panel via existing store actions:
-- Spec → `specStore.selectSpec(id)` + open file
-- Task → `fileStore.openFile(taskPath)`
-- File → `fileStore.openFile(filePath)`
+All clickable items (specs, tasks, files) in context panel sections open in the center panel via store actions:
+- Spec → `specStore.selectSpec(id)` + `fileStore.loadPreview(path)`
+- Task → `fileStore.loadPreview(taskPath)`
+- File → `fileStore.loadPreview(filePath)`
+
+Clicking items within context panel sections creates preview tabs (single-click pattern). Double-clicking pins them.
 
 ## Design Decisions
 
@@ -260,7 +274,7 @@ All clickable items (specs, tasks, files) open in the center panel via existing 
 | No tabs, context-driven | Auto-switch based on center panel state | Reduces cognitive load — user doesn't have to manually find relevant info. Linear's peek and Figma's inspector panel validate this pattern. |
 | Stacked collapsible sections | Vertically stacked cards, each collapsible | Most common pattern for inspector/properties panels (Figma, Chrome DevTools, JetBrains). Allows scanning multiple info types. User controls density via collapse. |
 | Peek-to-center | Compact preview + `[⇱]` expand button for rich content | 380px is too narrow for full graph/spec. Inspired by Linear peek and Notion side peek. |
-| Mode from existing stores | `useContextMode()` reads sessionStore + fileStore + specStore | No new state. Single source of truth. Clear priority order. |
+| Mode from stores + preview | `useContextMode()` reads sessionStore + fileStore (activeFilePath + previewFilePath) + specStore | Single source of truth. Preview file takes precedence over active file so context updates on single-click. |
 | Compact list for agent specs | List with type icon + status, not subgraph | Active sessions need minimal visual noise. Graph available via `[⇱]` if needed. |
 | Console removed | Not in context panel or anywhere in UI for now | Not core to spec-driven workflow. Add back later if needed (likely as bottom drawer). |
 | Compliance is heuristic | Pattern match agent actions against spec requirements | True compliance requires code analysis. Heuristic gives useful signal without complexity. Clearly labeled as approximate. |
@@ -281,6 +295,7 @@ All clickable items (specs, tasks, files) open in the center panel via existing 
 - The panel has no fixed max-width — it is dynamically capped by available viewport space (respects center panel's 300px min-width and left panel width)
 - When collapsed, a thin `◀` button (`.right-collapse-btn`, 20px wide) remains visible on the right edge, allowing re-expansion without a keyboard shortcut
 - The `useContextMode` hook lives in `ContextPanel/useContextMode.ts`, not in a store
+- The hook reads `fileStore.previewFilePath` (new) in addition to `activeFilePath` — see [CENTER_PANEL.md — Store Integration](CENTER_PANEL.md#store-integration) for the fileStore additions
 - Most section components are currently placeholders — see Sub-Specifications table for implementation status
 
 ## Sub-Specifications

@@ -20,6 +20,8 @@ export function SpecTree() {
   const loading = useSpecStore((s) => s.loading);
   const error = useSpecStore((s) => s.error);
   const openFile = useFileStore((s) => s.openFile);
+  const loadPreview = useFileStore((s) => s.loadPreview);
+  const pinPreview = useFileStore((s) => s.pinPreview);
 
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
   const [expandedTasks, setExpandedTasks] = useState<Set<string>>(new Set());
@@ -77,10 +79,11 @@ export function SpecTree() {
   }, []);
 
   const handleClick = useCallback(
-    (id: string) => {
+    (id: string, path: string) => {
       selectSpec(id);
+      loadPreview(path);
     },
-    [selectSpec],
+    [selectSpec, loadPreview],
   );
 
   const handleArrowClick = useCallback(
@@ -101,9 +104,14 @@ export function SpecTree() {
 
   const handleDoubleClick = useCallback(
     (path: string) => {
-      openFile(path);
+      const { previewFilePath } = useFileStore.getState();
+      if (previewFilePath === path) {
+        pinPreview();
+      } else {
+        openFile(path);
+      }
     },
-    [openFile],
+    [openFile, pinPreview],
   );
 
   if (loading && !graph) {
@@ -137,7 +145,7 @@ export function SpecTree() {
             <div
               className={`st-row ${isSelected ? "st-row-selected" : ""}`}
               style={{ paddingLeft: node.depth * 20 + 4 }}
-              onClick={() => handleClick(node.id)}
+              onClick={() => handleClick(node.id, node.path)}
               onDoubleClick={() => handleDoubleClick(node.path)}
               title={node.path}
             >

@@ -366,7 +366,7 @@ Enabled in development only. Connects to React DevTools / Redux DevTools extensi
 
 ### 6. fileStore
 
-Manages open file tabs (from double-clicking files in FileTree).
+Manages open file tabs and preview state. Single-click in FileTree/SpecTree creates a preview tab; double-click pins it.
 
 ```typescript
 interface OpenFile {
@@ -382,16 +382,31 @@ interface OpenFile {
 interface FileStore {
   openFiles: Map<string, OpenFile>;  // keyed by relative path
   activeFilePath: string | null;
+  previewFilePath: string | null;    // single-click preview path (at most one)
+  previewFile: OpenFile | null;      // loaded content for preview tab
 
-  openFile: (path: string) => Promise<void>;     // fetch via REST, add to open files
+  // Pinned file operations
+  openFile: (path: string) => Promise<void>;     // fetch via REST, add to open files, pin
   closeFile: (path: string) => void;
-  activateFile: (path: string) => void;
+  activateFile: (path: string) => void;          // also calls clearPreview()
   setMode: (path: string, mode) => void;         // toggle preview/edit
   updateContent: (path: string, content) => void; // local edit
   saveFile: (path: string) => Promise<void>;     // POST /api/file/write
   openExternal: (path: string, editor) => Promise<void>; // POST /api/file/open-external
+
+  // Preview tab operations
+  loadPreview: (path: string) => Promise<void>;  // open as preview tab (replaces existing preview)
+  clearPreview: () => void;                      // remove preview tab
+  pinPreview: () => void;                        // convert preview → pinned (moves to openFiles + activeFilePath)
 }
 ```
+
+**Preview tab behavior:**
+- `loadPreview(path)` sets `previewFilePath` immediately, then loads content async into `previewFile`. If file is already pinned in `openFiles`, activates it instead.
+- Only one preview tab exists at a time — calling `loadPreview` again replaces the current one
+- `activateFile(path)` (clicking a pinned tab) calls `clearPreview()` automatically
+- `pinPreview()` moves the preview into `openFiles` as a permanent tab and sets it as `activeFilePath`
+- Starting/switching an agent session (via sessionStore) should also call `clearPreview()`
 
 **Data source:** REST endpoints (`/api/file/read`, `/api/file/write`, `/api/file/open-external`)
 **Persistence:** None (open files are ephemeral — closed on page refresh)

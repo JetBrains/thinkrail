@@ -68,11 +68,17 @@ export function FileTree() {
   }, [fetchFiles]);
 
   const openFile = useFileStore((s) => s.openFile);
+  const loadPreview = useFileStore((s) => s.loadPreview);
 
   const handleDoubleClick = useCallback(
     (entry: FileEntry) => {
       if (!entry.isDir) {
-        openFile(entry.path);
+        const { previewFilePath, pinPreview } = useFileStore.getState();
+        if (previewFilePath === entry.path) {
+          pinPreview();
+        } else {
+          openFile(entry.path);
+        }
       }
     },
     [openFile],
@@ -121,7 +127,11 @@ export function FileTree() {
             style={{ paddingLeft: entry.depth * 20 + 4 }}
             onClick={() => {
               setSelected(entry.path);
-              if (entry.isDir) toggleDir(entry.path);
+              if (entry.isDir) {
+                toggleDir(entry.path);
+              } else {
+                loadPreview(entry.path);
+              }
             }}
             onDoubleClick={() => handleDoubleClick(entry)}
           >

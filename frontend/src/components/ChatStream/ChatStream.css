@@ -347,6 +347,10 @@
   margin-left: 2px;
 }
 
+.file-tab-preview .session-tab-name {
+  font-style: italic;
+}
+
 /* ── Restored Session Bar ── */
 .restored-bar {
   display: flex;

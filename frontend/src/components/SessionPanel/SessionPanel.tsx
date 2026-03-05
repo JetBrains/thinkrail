@@ -22,18 +22,21 @@ export function SessionPanel() {
   const activeFilePath = useFileStore((s) => s.activeFilePath);
   const activateFile = useFileStore((s) => s.activateFile);
   const closeFile = useFileStore((s) => s.closeFile);
+  const previewFilePath = useFileStore((s) => s.previewFilePath);
+  const previewFileObj = useFileStore((s) => s.previewFile);
+  const clearPreview = useFileStore((s) => s.clearPreview);
+  const pinPreview = useFileStore((s) => s.pinPreview);
 
   const sessionList = Array.from(sessions.values());
   const fileList = Array.from(openFiles.values());
-  const activeSession = activeSessionId && !activeFilePath ? sessions.get(activeSessionId) : null;
+  const activeSession = activeSessionId && !activeFilePath && !previewFilePath ? sessions.get(activeSessionId) : null;
   const activeFile = activeFilePath ? openFiles.get(activeFilePath) : null;
+  const displayFile = activeFile ?? (previewFilePath ? previewFileObj : null);
 
   const handleSwitchSession = useCallback(
     (taskId: string) => {
       switchSession(taskId);
-      // Clear file selection when switching to a session
-      useFileStore.getState().activeFilePath = null;
-      useFileStore.setState({ activeFilePath: null });
+      useFileStore.setState({ activeFilePath: null, previewFilePath: null, previewFile: null });
     },
     [switchSession],
   );
@@ -67,7 +70,7 @@ export function SessionPanel() {
     [activeSessionId, activeSession, resolveRequest, sendMessage],
   );
 
-  if (sessionList.length === 0 && fileList.length === 0) {
+  if (sessionList.length === 0 && fileList.length === 0 && !previewFilePath) {
     return (
       <div className="center-placeholder">
         Select a session or create a new one (Cmd+T)
@@ -76,7 +79,7 @@ export function SessionPanel() {
   }
 
   // Determine what to show in the content area
-  const showFile = activeFile != null;
+  const showFile = displayFile != null;
   const showSession = activeSession != null && !showFile;
 
   const status = activeSession?.status as SessionStatus | undefined;
@@ -102,16 +105,20 @@ export function SessionPanel() {
     <>
       <SessionTabBar
         sessions={sessionList}
-        activeSessionId={activeFilePath ? null : activeSessionId}
+        activeSessionId={activeFilePath || previewFilePath ? null : activeSessionId}
         onSwitchSession={handleSwitchSession}
         onCloseSession={closeSession}
         files={fileList}
         activeFilePath={activeFilePath}
         onSwitchFile={handleSwitchFile}
         onCloseFile={closeFile}
+        previewFile={previewFileObj}
+        previewFilePath={previewFilePath}
+        onClearPreview={clearPreview}
+        onPinPreview={pinPreview}
       />
-      {showFile && activeFile ? (
-        <FileViewer file={activeFile} />
+      {showFile && displayFile ? (
+        <FileViewer file={displayFile} />
       ) : showSession && activeSession ? (
         <>
           <ChatStream

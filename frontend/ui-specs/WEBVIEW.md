@@ -8,7 +8,7 @@
 3. [Layout](#layout)
 4. [Header Bar](#1-header-bar)
 5. [Left Panel — Navigation & Progress](#2-left-panel--navigation--progress)
-6. [Center Panel — Claude Sessions](#3-center-panel--claude-sessions-chat-ui)
+6. [Center Panel](#3-center-panel)
 7. [Right Panel — Context Panel](#4-right-panel--context-panel)
 8. [Status Bar](#5-status-bar)
 9. [Command Palette](#6-command-palette)
@@ -218,113 +218,21 @@ Files modified across all active sessions:
 - Optional budget limit (configurable)
 - Warning indicator when approaching budget (>80%)
 
-## 3. Center Panel — Claude Sessions (Chat UI)
+## 3. Center Panel
 
-The primary workspace. Hosts one or more tabbed Claude agent sessions rendered as a custom Chat UI.
+> **Full specification:** [CENTER_PANEL.md](CENTER_PANEL.md)
 
-### Session Tabs
+The primary workspace area. Hosts a tab bar with session tabs and file tabs, renders Claude agent sessions via the Chat UI, and displays files via the File Viewer. Supports ephemeral preview tabs triggered by single-clicking items in the left panel trees.
 
-```
-┌─ module-spec ─┬─ refactor-agent ─┬─ + ─┐
-```
+Key features:
+- **Session tabs** — each tab is an agent session with status dots and alert badges
+- **File tabs** — opened files with dirty indicators, separated from sessions by divider
+- **Preview tabs** — ephemeral italic-titled tabs from single-click browsing, auto-close on navigation
+- **Background alerts** — tab badges + toast notifications for sessions needing attention
+- **File Viewer** — Monaco editor (code) or rendered markdown (`.md` files) with edit support
 
-- Each tab represents an agent session (started via `agent/run`)
-- Tab shows: session name + status dot (running/done/error)
-- **Background alert badge**: when a non-active session needs attention (question pending, error, or completed), its tab shows a notification badge (colored dot or count)
-- `+` button or `Cmd+T` opens the new session modal
-- `Cmd+1-9` switches between session tabs
-- Tabs can be closed (with confirmation if session is running)
-
-### Background Session Alerts
-
-When the user is viewing session A and session B needs attention:
-
-1. **Tab badge** — session B's tab shows a pulsing indicator:
-   - 🟣 purple dot = question pending (`agent/askUserQuestion`)
-   - 🟡 gold dot = approval pending (`agent/confirmAction`)
-   - 🟢 green dot = session completed (`agent/done`)
-   - 🔴 red dot = error (`agent/error`)
-2. **Toast notification** — a slide-in toast appears at the bottom-right:
-   - Shows session name, event type, and brief message
-   - Clickable → switches to that session
-   - Auto-dismisses after 5 seconds (except for pending user input — those persist)
-3. **Status bar indicator** — status bar shows "⚠ N sessions need attention" when any session has pending input
-4. **Sound** — optional audio ping for pending user input (configurable, off by default)
-
-### Session History
-
-Completed and closed sessions are preserved in a session archive:
-
-- Accessible via the Progress tab → "Session History" section (below active sessions)
-- Each archived session shows: name, skill, start/end time, result (done/error), cost, turns
-- Clicking an archived session opens it in read-only mode in the center panel (chat log viewable, input disabled)
-- Sessions persist for the lifetime of the server process (not persisted to disk in v1)
-
-### Chat UI — Message Types
-
-The Chat UI renders agent events from the JSON-RPC stream into rich visual elements:
-
-| Agent Event | UI Rendering |
-| --- | --- |
-| `agent/textDelta` | Claude's text, streamed character-by-character. Rendered as markdown with syntax highlighting. |
-| `agent/toolCallStart` | Collapsible tool call card: shows tool name, input params. Animated "running" indicator. |
-| `agent/toolCallEnd` | Tool call card updates: shows output/result, success/error status. |
-| `agent/subagentStart` | Nested indented section: "⚡ Subagent: {type}" with spinner. |
-| `agent/subagentEnd` | Subagent section collapses, shows summary. |
-| `agent/askUserQuestion` | Interactive question card: renders question text, option buttons (single/multi select). User clicks to respond → sends `agent/respond`. |
-| `agent/confirmAction` | Approval card: shows tool name, input, description. "Approve" / "Deny" buttons → sends `agent/respond`. |
-| `agent/done` | Completion banner: shows result summary, cost, duration, token usage. |
-| `agent/error` | Error banner: red, shows error details. |
-| `agent/notification` | System notification: subtle, centered text. |
-| `agent/compact` | Compact boundary marker: "Context compacted — {preTokens} tokens". |
-
-### Session Status Line
-
-A compact status strip displayed between the chat area and the input area, showing live session metrics:
-
-```
-┌──────────────────────────────────────────────────────────────────────┐
-│ claude-opus-4-6 │ $0.08 │ ██████░░ 12 calls │ ctx 45k/200k ██░░░░ │
-└──────────────────────────────────────────────────────────────────────┘
-```
-
-| Element | Description |
-| --- | --- |
-| Model | Model identifier used by the session (e.g., `claude-opus-4-6`) |
-| Cost | Running USD cost for this session (updated on each turn) |
-| Progress bar | Visual indicator of task activity — fills based on tool calls completed vs estimated. Animated while session is running. |
-| Tool calls | Count of tool calls made in this session |
-| Context bar | Visual bar showing context window usage: `{used}k / {max}k` with fill. Changes color as it fills: green (<50%), gold (50-80%), red (>80%) |
-
-The status line updates in real-time as agent events stream in. Data sources:
-- Model and cost: from `agent/sessionStart` and `agent/done`
-- Tool calls: incremented on each `agent/toolCallEnd`
-- Context size: from `agent/compact` (`preTokens`) and SDK configuration
-
-### Input Area
-
-```
-┌─────────────────────────────────────────┐
-│ [Message Claude...]              [Send] │
-│ Cmd+Enter send · Cmd+T new · Cmd+1-9   │
-└─────────────────────────────────────────┘
-```
-
-- Auto-resizing textarea
-- `Cmd+Enter` to send
-- When a session is waiting for user input (`agent/askUserQuestion`), the input area is supplemented by the interactive question card above it
-
-### New Session Modal
-
-Triggered by `+ New Session` or `Cmd+T`:
-
-| Field | Description |
-| --- | --- |
-| Session name | Free text (e.g., "Module: session-manager") |
-| Skill | Grid of available skills (goal-and-requirements, architecture-design, module-design, etc.) |
-| Target spec(s) | Optional — select specs to pass as context to the agent |
-
-Clicking "Start Session" → calls `agent/run` with selected config.
+> **Chat UI details:** [CHAT_UI.md](CHAT_UI.md) — event rendering, message types, streaming, interactive cards
+> **New Session Modal:** [NEW_SESSION_MODAL.md](NEW_SESSION_MODAL.md)
 
 ## 4. Right Panel — Context Panel
 
@@ -338,12 +246,14 @@ The right panel is a **context-aware sidebar** that auto-switches content based 
 
 | Center panel shows | Right panel mode | Key sections |
 |---|---|---|
-| Spec file open | **Spec Context** | Connected specs subgraph, linked tasks, covered files, spec health |
+| Spec file open or previewed | **Spec Context** | Connected specs subgraph, linked tasks, covered files, spec health |
 | Active agent session | **Agent Context** | Task spec preview, files modified (live), related specs, compliance hints |
-| Code file open | **Code Context** | Covering specs, related tasks, staleness indicator |
+| Code file open or previewed | **Code Context** | Covering specs, related tasks, staleness indicator |
 | Nothing selected | **Empty state** | Welcome message prompting user to select content |
 
-Mode is derived from existing stores (`sessionStore`, `fileStore`, `specStore`) — no new state required. Priority: active session > spec file > code file > selected spec > empty.
+Mode is derived from stores (`sessionStore`, `fileStore`, `specStore`). Only one thing is focused at a time — session, file, or preview are mutually exclusive. The context panel simply reflects what's currently shown in the center panel.
+
+**Single-click context activation:** Clicking a file in FileTree or a spec in SpecTree opens a preview tab and immediately switches the context panel. This is the primary way users browse context. See [CENTER_PANEL.md — Preview Tabs](CENTER_PANEL.md#preview-tabs) for details.
 
 ### Peek-to-Center
 
@@ -356,47 +266,12 @@ The following views from the old tab-based right panel are now handled different
 | Old tab | New location |
 |---------|-------------|
 | **Graph** | Compact "Connected Specs" subgraph in Spec Context mode. Full graph via `[⇱]` opens in center. See [GRAPH_INTERACTIONS.md](GRAPH_INTERACTIONS.md). |
-| **Spec** | Spec files now open directly in the center panel FileViewer |
-| **Code** | Code files open in the center panel FileViewer |
+| **Spec** | Spec files open in center panel FileViewer. See [CENTER_PANEL.md](CENTER_PANEL.md). |
+| **Code** | Code files open in center panel FileViewer. See [CENTER_PANEL.md](CENTER_PANEL.md). |
 | **Diff** | Available via DiffViewer in center panel. See [DIFF_VIEWER.md](DIFF_VIEWER.md). |
 | **Console** | Removed from UI for now. Not core to spec-driven workflow. |
 
-### File Viewer / Code Editor
-
-Files open as tabs in the **center panel** tab bar alongside session tabs. Double-clicking a file in the left panel's File Tree opens it.
-
-**Implementation:** Monaco Editor (`@monaco-editor/react`) with custom IntelliJ Darcula theme.
-
-**Opening files:**
-- Double-click any file in FileTree → opens as tab in center panel
-- `.md` files open as rendered markdown preview; other files open in Monaco Editor
-
-**Preview mode** (default):
-- **Code files:** Read-only Monaco editor with syntax highlighting, line numbers, minimap, Cmd+F search
-- **Markdown files:** Rendered HTML preview using `react-markdown` + `remark-gfm` + `mermaid`. GFM (tables, task lists, strikethrough) and Mermaid diagrams (` ```mermaid ` code blocks rendered as SVG with dark theme). Styled with JetBrains-inspired typography. Zoom controls: global +/−/reset (top-right, scales font-size) and per-diagram +/−/reset (hover to reveal, scales diagram SVG).
-- Toolbar: file path + language badge + line count + file size + Copy button
-- "Edit" button in toolbar → opens dropdown
-
-**Edit dropdown:**
-- "Edit in place" → switches to edit mode
-- "Open in IntelliJ IDEA" → calls backend `POST /api/file/open-external` with `editor: "idea"`
-- "Open in VS Code" → same with `editor: "code"`
-- "Open in Vim" → same with `editor: "vim"` (opens in a terminal emulator window with user's `.vimrc` settings). Also supports `nvim`, `nano`, `vi`.
-
-**Edit mode:**
-- Same Monaco editor, `readOnly: false`
-- Tab shows dirty indicator (gold dot) when content differs from saved
-- "Save" button → `POST /api/file/write` → clears dirty state
-- "Cancel" button → reverts to original content, switches back to preview
-
-**File tabs:**
-- Rendered in SessionTabBar after session tabs, separated by a vertical divider
-- Each tab: file icon + filename + dirty dot (if modified) + close button
-- Only one tab active at a time (session OR file)
-
-**Supported languages:** Python, TypeScript/TSX, JavaScript/JSX, CSS, HTML, JSON, Markdown, YAML, Shell, SQL, Rust, Go, Java, Kotlin, Ruby, XML
-
-**Theme:** IntelliJ Darcula colors — keywords (#CF8E6D orange), strings (#6AAB73 green), comments (#7A7E85 gray italic), functions (#56A8F5 blue), types (#C77DBB purple), numbers (#2AACB8 teal)
+> **File Viewer, preview tabs, file tabs, and edit mode** are fully specified in [CENTER_PANEL.md](CENTER_PANEL.md).
 
 ## 5. Status Bar
 
@@ -471,14 +346,16 @@ Triggered by `Cmd+K`. A floating search modal for quick navigation and actions:
 
 The right panel (Context Panel) **automatically derives its mode and content** from the center panel state. There are no manual tabs to switch — the panel always shows the most relevant context.
 
-**Mode derivation priority:** active session > spec file > code file > selected spec > dashboard.
+**Mode derivation:** Only one thing is focused at a time — session, file, or preview are mutually exclusive. The context panel reflects what's shown in the center panel.
 
 **Linking behavior:**
-1. When a session starts → right panel switches to **Agent Context** (task spec, files modified, related specs, compliance)
-2. When user opens a spec file in center → right panel switches to **Spec Context** (connected specs, tasks, covered files, health)
-3. When user opens a code file in center → right panel switches to **Code Context** (covering specs, related tasks, staleness)
-4. When nothing is active → right panel shows **Project Dashboard** (coverage, open tasks, activity feed)
-5. Clicking items in the right panel (specs, tasks, files) opens them in the center panel, which may trigger a mode switch
+1. When a session starts → right panel switches to **Agent Context** (task spec, files modified, related specs, compliance). Any preview tab auto-closes.
+2. When user single-clicks a spec in SpecTree → preview tab opens in center, right panel switches to **Spec Context**
+3. When user single-clicks a file in FileTree → preview tab opens in center, right panel switches to **Code Context** (or Spec Context if it's a spec file)
+4. When user double-clicks or opens a file fully → same context behavior, but tab is pinned (permanent)
+5. When user clicks a pinned tab → preview tab auto-closes, context follows the pinned tab
+6. When nothing is active → right panel shows **empty welcome state**
+7. Clicking items in the right panel sections (specs, tasks, files) opens them as preview tabs in center, which triggers a context mode switch
 
 See [CONTEXT_PANEL.md](CONTEXT_PANEL.md) for full specification.
 

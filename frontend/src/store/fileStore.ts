@@ -17,10 +17,15 @@ export interface OpenFile {
 interface FileStore {
   openFiles: Map<string, OpenFile>;
   activeFilePath: string | null;
+  previewFilePath: string | null;
+  previewFile: OpenFile | null;
 
   openFile: (path: string) => Promise<void>;
   closeFile: (path: string) => void;
   activateFile: (path: string) => void;
+  loadPreview: (path: string) => Promise<void>;
+  clearPreview: () => void;
+  pinPreview: () => void;
   setMode: (path: string, mode: "preview" | "edit") => void;
   updateContent: (path: string, content: string) => void;
   saveFile: (path: string) => Promise<void>;
@@ -34,6 +39,8 @@ function getProjectPath(): string {
 export const useFileStore = create<FileStore>((set, get) => ({
   openFiles: new Map(),
   activeFilePath: null,
+  previewFilePath: null,
+  previewFile: null,
 
   openFile: async (path) => {
     // Already open — just activate
@@ -88,7 +95,73 @@ export const useFileStore = create<FileStore>((set, get) => ({
     });
   },
 
-  activateFile: (path) => set({ activeFilePath: path }),
+  activateFile: (path) => set({ activeFilePath: path, previewFilePath: null, previewFile: null }),
+
+  loadPreview: async (path) => {
+    // If already pinned, just activate it
+    if (get().openFiles.has(path)) {
+      get().activateFile(path);
+      return;
+    }
+
+    // Already previewing this exact path with content loaded
+    if (get().previewFilePath === path && get().previewFile) return;
+
+    // Set path immediately so the tab appears
+    set({ previewFilePath: path, previewFile: null });
+
+    const project = getProjectPath();
+    if (!project) return;
+
+    try {
+      const res = await fetch(
+        `${API_BASE}/api/file/read?project=${encodeURIComponent(project)}&path=${encodeURIComponent(path)}`,
+      );
+      const data = await res.json();
+
+      if (data.error) {
+        console.error("Failed to read file for preview:", data.error);
+        return;
+      }
+
+      // Guard against stale response (user already clicked another file)
+      if (get().previewFilePath !== path) return;
+
+      const file: OpenFile = {
+        path,
+        name: data.name,
+        content: data.content,
+        originalContent: data.content,
+        mode: "preview",
+        isDirty: false,
+        saving: false,
+      };
+
+      set({ previewFile: file });
+    } catch (e) {
+      console.error("Failed to preview file:", e);
+    }
+  },
+
+  clearPreview: () => set({ previewFilePath: null, previewFile: null }),
+
+  pinPreview: () => {
+    const { previewFilePath, previewFile } = get();
+    if (!previewFilePath || !previewFile) return;
+
+    set((s) => {
+      const next = new Map(s.openFiles);
+      if (!next.has(previewFilePath)) {
+        next.set(previewFilePath, previewFile);
+      }
+      return {
+        openFiles: next,
+        activeFilePath: previewFilePath,
+        previewFilePath: null,
+        previewFile: null,
+      };
+    });
+  },
 
   setMode: (path, mode) => {
     set((s) => {

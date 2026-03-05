@@ -168,6 +168,23 @@
       "updated": "2026-03-03"
     },
     {
+      "id": "ui-center-panel",
+      "type": "submodule-design",
+      "path": "frontend/ui-specs/CENTER_PANEL.md",
+      "title": "Center Panel UI Specification",
+      "status": "active",
+      "covers": [
+        "frontend/src/components/SessionPanel/",
+        "frontend/src/components/FileViewer/"
+      ],
+      "tags": [
+        "frontend",
+        "ui-spec"
+      ],
+      "created": "2026-03-05",
+      "updated": "2026-03-05"
+    },
+    {
       "id": "chat-ui",
       "type": "submodule-design",
       "path": "frontend/ui-specs/CHAT_UI.md",
@@ -1198,6 +1215,71 @@
       ],
       "created": "2026-03-04",
       "updated": "2026-03-04"
+    },
+    {
+      "id": "task-preview-tab-store",
+      "type": "task-spec",
+      "path": "current_tasks/frontend/feature_preview_tab_store.md",
+      "title": "Add preview tab state to fileStore",
+      "status": "done",
+      "covers": [
+        "frontend/src/store/fileStore.ts"
+      ],
+      "tags": [
+        "high",
+        "new-feature"
+      ],
+      "created": "2026-03-05",
+      "updated": "2026-03-05"
+    },
+    {
+      "id": "task-preview-tab-ui",
+      "type": "task-spec",
+      "path": "current_tasks/frontend/feature_preview_tab_ui.md",
+      "title": "Add preview tab rendering to SessionTabBar",
+      "status": "done",
+      "covers": [
+        "frontend/src/components/SessionPanel/"
+      ],
+      "tags": [
+        "high",
+        "new-feature"
+      ],
+      "created": "2026-03-05",
+      "updated": "2026-03-05"
+    },
+    {
+      "id": "task-preview-context-mode",
+      "type": "task-spec",
+      "path": "current_tasks/frontend/feature_preview_context_mode.md",
+      "title": "Update useContextMode to react to preview tabs",
+      "status": "done",
+      "covers": [
+        "frontend/src/components/ContextPanel/useContextMode.ts"
+      ],
+      "tags": [
+        "high",
+        "new-feature"
+      ],
+      "created": "2026-03-05",
+      "updated": "2026-03-05"
+    },
+    {
+      "id": "task-preview-tree-wiring",
+      "type": "task-spec",
+      "path": "current_tasks/frontend/feature_preview_tree_wiring.md",
+      "title": "Wire single-click preview in SpecTree and FileTree",
+      "status": "done",
+      "covers": [
+        "frontend/src/components/SpecTree/",
+        "frontend/src/components/FileTree/"
+      ],
+      "tags": [
+        "high",
+        "new-feature"
+      ],
+      "created": "2026-03-05",
+      "updated": "2026-03-05"
     }
   ],
   "links": [
@@ -1322,9 +1404,19 @@
       "type": "parent"
     },
     {
-      "from": "chat-ui",
+      "from": "ui-center-panel",
       "to": "webview",
       "type": "parent"
+    },
+    {
+      "from": "chat-ui",
+      "to": "ui-center-panel",
+      "type": "parent"
+    },
+    {
+      "from": "ui-center-panel",
+      "to": "state-management",
+      "type": "depends-on"
     },
     {
       "from": "chat-ui",
@@ -1914,6 +2006,41 @@
     {
       "from": "task-context-panel-integration",
       "to": "task-context-panel-modes-sections",
+      "type": "depends-on"
+    },
+    {
+      "from": "task-preview-tab-store",
+      "to": "ui-center-panel",
+      "type": "implements"
+    },
+    {
+      "from": "task-preview-tab-ui",
+      "to": "ui-center-panel",
+      "type": "implements"
+    },
+    {
+      "from": "task-preview-tab-ui",
+      "to": "task-preview-tab-store",
+      "type": "depends-on"
+    },
+    {
+      "from": "task-preview-context-mode",
+      "to": "ui-context-panel",
+      "type": "implements"
+    },
+    {
+      "from": "task-preview-context-mode",
+      "to": "task-preview-tab-store",
+      "type": "depends-on"
+    },
+    {
+      "from": "task-preview-tree-wiring",
+      "to": "ui-center-panel",
+      "type": "implements"
+    },
+    {
+      "from": "task-preview-tree-wiring",
+      "to": "task-preview-tab-store",
       "type": "depends-on"
     }
   ]

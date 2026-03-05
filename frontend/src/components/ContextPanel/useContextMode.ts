@@ -14,11 +14,14 @@ function isSpecFile(path: string): boolean {
 export function useContextMode(): ContextMode {
   const activeSessionId = useSessionStore((s) => s.activeSessionId);
   const activeFilePath = useFileStore((s) => s.activeFilePath);
+  const previewFilePath = useFileStore((s) => s.previewFilePath);
   const selectedSpecId = useSpecStore((s) => s.selectedSpecId);
 
+  // Only one of these is active at a time (mutually exclusive in the store layer)
+  const focusedFile = previewFilePath ?? activeFilePath;
+
+  if (focusedFile) return isSpecFile(focusedFile) ? "spec" : "code";
   if (activeSessionId) return "agent";
-  if (activeFilePath && isSpecFile(activeFilePath)) return "spec";
-  if (activeFilePath) return "code";
   if (selectedSpecId) return "spec";
   return "empty";
 }

@@ -1,6 +1,6 @@
 # Chat UI Rendering — Sub-Specification
 
-> Parent: [WEBVIEW.md](../WEBVIEW.md) §3 | Status: **Active** | Created: 2026-02-27
+> Parent: [CENTER_PANEL.md](CENTER_PANEL.md) | Status: **Active** | Created: 2026-02-27
 
 ## Overview
 
@@ -484,6 +484,6 @@ All colors use CSS custom properties from the root theme. Components do not hard
 
 ## Related Specs
 
-- **Parent:** [Web View](WEBVIEW.md) §3
+- **Parent:** [Center Panel](CENTER_PANEL.md)
 - **Depends on:** [RPC Module](../../backend/app/rpc/README.md) (agent events), [API Client](../src/api/README.md) (event subscriptions)
 - **Related:** [Session History](SESSION_HISTORY.md) (read-only replay), [Notification System](NOTIFICATION_SYSTEM.md) (background alerts)

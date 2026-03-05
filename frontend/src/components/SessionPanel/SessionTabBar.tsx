@@ -10,6 +10,10 @@ interface SessionTabBarProps {
   activeFilePath: string | null;
   onSwitchFile: (path: string) => void;
   onCloseFile: (path: string) => void;
+  previewFile: OpenFile | null;
+  previewFilePath: string | null;
+  onClearPreview: () => void;
+  onPinPreview: () => void;
 }
 
 function statusDotColor(status: Session["status"]): string {
@@ -34,8 +38,16 @@ export function SessionTabBar({
   activeFilePath,
   onSwitchFile,
   onCloseFile,
+  previewFile,
+  previewFilePath,
+  onClearPreview,
+  onPinPreview,
 }: SessionTabBarProps) {
-  if (sessions.length === 0 && files.length === 0) return null;
+  const hasPreviewTab = previewFilePath != null && !files.some((f) => f.path === previewFilePath);
+  const hasFileArea = files.length > 0 || hasPreviewTab;
+  const previewIsActive = hasPreviewTab && !activeFilePath;
+
+  if (sessions.length === 0 && !hasFileArea) return null;
 
   return (
     <div className="session-tabs">
@@ -43,7 +55,7 @@ export function SessionTabBar({
       {sessions.map((s) => (
         <div
           key={`s-${s.taskId}`}
-          className={`session-tab ${s.taskId === activeSessionId && !activeFilePath ? "session-tab-active" : ""}`}
+          className={`session-tab ${s.taskId === activeSessionId && !activeFilePath && !previewFilePath ? "session-tab-active" : ""}`}
           onClick={() => onSwitchSession(s.taskId)}
         >
           <span
@@ -68,12 +80,12 @@ export function SessionTabBar({
         </div>
       ))}
 
-      {/* Separator if both types exist */}
-      {sessions.length > 0 && files.length > 0 && (
+      {/* Separator between session tabs and file/preview tabs */}
+      {sessions.length > 0 && hasFileArea && (
         <span className="session-tab-sep" />
       )}
 
-      {/* File tabs */}
+      {/* Pinned file tabs */}
       {files.map((f) => (
         <div
           key={`f-${f.path}`}
@@ -94,6 +106,28 @@ export function SessionTabBar({
           </button>
         </div>
       ))}
+
+      {/* Preview tab (ephemeral, italic) */}
+      {hasPreviewTab && (
+        <div
+          className={`session-tab file-tab file-tab-preview ${previewIsActive ? "session-tab-active" : ""}`}
+          onDoubleClick={() => onPinPreview()}
+        >
+          <span className="file-tab-icon">{"\u{1F4C4}"}</span>
+          <span className="session-tab-name">
+            {previewFile?.name ?? previewFilePath!.split("/").pop()}
+          </span>
+          <button
+            className="session-tab-close"
+            onClick={(e) => {
+              e.stopPropagation();
+              onClearPreview();
+            }}
+          >
+            {"\u00D7"}
+          </button>
+        </div>
+      )}
     </div>
   );
 }
