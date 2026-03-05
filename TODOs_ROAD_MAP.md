@@ -38,13 +38,10 @@
     - [x] Get rid of left panel max width limit and arrow side button when hidden
     - [ ] Reqs tab displays nothing (mock) — needs real requirements data
     - [ ] Tree-view (files tab) always appears fully unfolded — not nice
-    - [ ] Single-click in SpecTree/FileTree should open a preview tab (like VS Code) — temporary tab that gets replaced by the next preview click. Double-click to pin as a permanent tab.
+    - [x] Single-click in SpecTree/FileTree should open a preview tab (like VS Code) — temporary tab that gets replaced by the next preview click. Double-click to pin as a permanent tab.
 * Right panel (Context Panel)
     - [x] Get rid of right panel max width limit and arrow side button when hidden
     - [x] Replace tab-based right panel with context-aware ContextPanel (auto-switches: Spec/Agent/Code/Dashboard modes)
-    - [ ] **Bug: No way to return to Project Dashboard** — clicking a spec in SpecTree sets `selectedSpecId` which is sticky, so context is stuck on Spec Context forever. Need: (1) a way to deselect/clear spec (e.g., click again to deselect, or a "home" button in context panel header), (2) `selectedSpecId` should be cleared when user closes/deselects the spec
-    - [ ] **Bug: Clicking file in FileTree should trigger Code/Spec Context** — currently clicking a file in left panel FileTree opens it in center but doesn't reliably switch context panel mode. Need to ensure `activeFilePath` is set and takes priority over `selectedSpecId` when a file is actively viewed
-    - [ ] Design context mode transitions: define clear rules for when each mode activates/deactivates, how to manually return to dashboard, and how left panel clicks (SpecTree, FileTree) interact with context mode
     - [ ] Implement real data for ContextPanel sections (currently placeholders except ConnectedSpecs/GraphView):
         * [ ] Spec Context: LinkedTasks — fetch tasks linked to current spec from registry
         * [ ] Spec Context: CoveredFiles — show files from registry `covers` field with mod times
@@ -56,9 +53,7 @@
         * [ ] Code Context: CoveringSpecs — find specs whose `covers` includes current file
         * [ ] Code Context: RelatedTasks — tasks linked to covering specs
         * [ ] Code Context: SpecHealth — staleness: compare file mod time vs spec update time
-        * [ ] Project Dashboard: SpecCoverage — aggregate spec count, status breakdown, coverage %
-        * [ ] Project Dashboard: OpenTasks — pending/in-progress tasks grouped by module
-        * [ ] Project Dashboard: RecentActivity — timeline from session history + spec events
+        * ~~Project Dashboard removed — replaced by empty welcome state~~
     - [ ] ConnectedSpecs: replace full GraphView with filtered mini-subgraph (parent/children/siblings only)
     - [ ] Update graph implementation for context panel (fix layout, node sizing, interaction within 380px width)
     - [x] files tab doesn't have scrolling
@@ -106,3 +101,4 @@
 * Bonsai workflow:
     - [?] Should tasks (current tasks) be modifiable or append only? 
     - [?] Seems like structure in tasks is missing (like binding them to specs/specs changes) 
+    - [?] Skills implement, revise, and others for different cases?
