@@ -17,7 +17,7 @@
 
 ## Purpose
 
-The Context Panel is a context-aware sidebar (the right panel in the three-panel layout) that displays information related to the active content in the center panel. It auto-switches between four modes — **Spec Context**, **Agent Context**, **Code Context**, and **Project Dashboard** — showing connected specs, linked tasks, covered files, and project health depending on what the user is working on.
+The Context Panel is a context-aware sidebar (the right panel in the three-panel layout) that displays information related to the active content in the center panel. It auto-switches between three modes — **Spec Context**, **Agent Context**, and **Code Context** — showing connected specs, linked tasks, and covered files depending on what the user is working on. When nothing is selected, the panel shows an empty welcome state.
 
 **Replaces:** The previous tab-based right panel (`Graph | Spec | Code | Diff | Console`). Console is removed from the UI for now. Rich views (graphs, full spec text) show compact previews in the sidebar with a "peek-to-center" expand button `[⇱]` to open the full view in the center panel.
 
@@ -30,7 +30,7 @@ The Context Panel is a context-aware sidebar (the right panel in the three-panel
 │          │  Spec open?            │→  Spec Context        │
 │          │  Agent session?        │→  Agent Context       │
 │          │  Code file open?       │→  Code Context        │
-│          │  Nothing?              │→  Project Dashboard   │
+│          │  Nothing?              │→  Empty/welcome state  │
 └──────────┴────────────────────────┴──────────────────────┘
 ```
 
@@ -143,35 +143,19 @@ The panel has **no tabs**. Content auto-switches based on what's in the center p
 └──────────────────────────────┘
 ```
 
-### 4. Project Dashboard
+### 4. Empty State
 
 **Trigger:** No file or session is active — the "home" state.
 
-**Sections (top to bottom):**
-
-| Section | Shows | Peek-to-center |
-|---------|-------|---------------|
-| **Spec Coverage** | Project-wide summary: modules spec'd, task completion %, stale spec count, coverage gaps | No |
-| **Open Tasks** | Pending/in-progress tasks grouped by module area | No — click to open |
-| **Recent Activity** | Timeline of recent spec changes, completed tasks, agent sessions | No — click to navigate |
+Shows a simple welcome message: *"Select a file, spec, or agent session to see context."* The mode header is hidden in this state.
 
 ```
 ┌──────────────────────────────┐
-│ ▼ Spec Coverage              │
-│   Modules:  4/6 spec'd  67%  │
-│   Tasks:    28/36 done   78%  │
-│   ▃▃▃▃▃▃▃░░░                 │
-│   Stale specs: 2             │
-├──────────────────────────────┤
-│ ▼ Open Tasks (8)             │
-│   agent/  ◉2 ○1             │
-│   spec/   ◉1 ○2             │
-│   rpc/    ○2                 │
-├──────────────────────────────┤
-│ ▼ Recent Activity            │
-│   2m ago  Session completed   │
-│   1h ago  Spec updated        │
-│   3h ago  Task completed      │
+│                              │
+│  Select a file, spec, or    │
+│  agent session to see        │
+│  context.                    │
+│                              │
 └──────────────────────────────┘
 ```
 
@@ -213,16 +197,13 @@ interface CollapsibleSectionProps {
 | `ComplianceHints` | agent | Heuristic: agent output vs spec requirements |
 | `CoveringSpecs` | code | Registry entries matching file path |
 | `RelatedTasks` | code | Tasks linked to covering specs |
-| `SpecCoverage` | dashboard | Registry aggregation |
-| `OpenTasks` | dashboard | Registry task entries, grouped |
-| `RecentActivity` | dashboard | Session history + spec events |
 
 ## Mode Derivation
 
 The active mode is derived from existing Zustand stores — no new state required:
 
 ```typescript
-type ContextMode = 'spec' | 'agent' | 'code' | 'dashboard';
+type ContextMode = 'spec' | 'agent' | 'code' | 'empty';
 
 function useContextMode(): ContextMode {
   const activeSession = useSessionStore(s => s.activeSessionId);
@@ -233,11 +214,11 @@ function useContextMode(): ContextMode {
   if (activeFile && isSpecFile(activeFile)) return 'spec';
   if (activeFile) return 'code';
   if (selectedSpec) return 'spec';
-  return 'dashboard';
+  return 'empty';
 }
 ```
 
-**Priority:** active session > spec file > code file > selected spec > dashboard. An active agent session always takes precedence since it requires the most monitoring.
+**Priority:** active session > spec file > code file > selected spec > empty. An active agent session always takes precedence since it requires the most monitoring.
 
 ## Shared Patterns
 
@@ -295,7 +276,7 @@ All clickable items (specs, tasks, files) open in the center panel via existing 
 
 - The Context Panel has replaced `RightPanel.tsx` — it is now integrated in `AppShell.tsx` as `<ContextPanel />`
 - `rightActiveTab` and `setRightTab` have been removed from `uiStore` (no tabs needed)
-- Each mode component (`SpecContext`, `AgentContext`, `CodeContext`, `ProjectDashboard`) is a composition of section components
+- Each mode component (`SpecContext`, `AgentContext`, `CodeContext`) is a composition of section components; the `empty` mode renders a simple welcome message inline
 - Section components are independent and reusable — some appear in multiple modes (e.g., `SpecHealth` in both spec and code modes)
 - The panel has no fixed max-width — it is dynamically capped by available viewport space (respects center panel's 300px min-width and left panel width)
 - When collapsed, a thin `◀` button (`.right-collapse-btn`, 20px wide) remains visible on the right edge, allowing re-expansion without a keyboard shortcut
@@ -311,7 +292,7 @@ Each mode and complex section should have its own detailed sub-spec when impleme
 | Spec Context Mode | Sections, data flow, interactions for spec mode | Planned |
 | Agent Context Mode | Sections, live updates, compliance heuristic | Planned |
 | Code Context Mode | Sections, file-to-spec mapping | Planned |
-| Project Dashboard Mode | Sections, aggregation queries, activity feed | Planned |
+| ~~Project Dashboard Mode~~ | ~~Removed — replaced by empty welcome state~~ | N/A |
 | Connected Specs (mini graph) | Compact graph rendering, node layout, interactions | Planned |
 | Compliance Hints | Heuristic algorithm, requirement extraction, matching | Planned |
 

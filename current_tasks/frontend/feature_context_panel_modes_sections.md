@@ -31,10 +31,7 @@ All in `frontend/src/components/ContextPanel/sections/`:
 10. `RelatedTasks.tsx` — Placeholder: "Tasks related to this file will appear here"
     (Note: `SpecHealth` is reused from Spec Context)
 
-**Dashboard sections:**
-11. `SpecCoverage.tsx` — Placeholder: "Project spec coverage summary will appear here"
-12. `OpenTasks.tsx` — Placeholder: "Open tasks grouped by module will appear here"
-13. `RecentActivity.tsx` — Placeholder: "Recent activity timeline will appear here"
+**Empty state** (no dashboard — shows welcome message when nothing selected):
 
 ### Create mode components
 
@@ -43,7 +40,7 @@ All in `frontend/src/components/ContextPanel/modes/`:
 1. `SpecContext.tsx` — Renders: ConnectedSpecs, LinkedTasks, CoveredFiles, SpecHealth
 2. `AgentContext.tsx` — Renders: TaskSpecPreview, FilesModified, RelatedSpecs, ComplianceHints
 3. `CodeContext.tsx` — Renders: CoveringSpecs, RelatedTasks, SpecHealth
-4. `ProjectDashboard.tsx` — Renders: SpecCoverage, OpenTasks, RecentActivity
+4. ~~`ProjectDashboard.tsx`~~ — Removed; empty state rendered inline in ContextPanel
 
 Each mode component is a simple composition — imports its sections and renders them in order inside a scrollable container.
 
@@ -66,13 +63,9 @@ Each placeholder section should:
 - `frontend/src/components/ContextPanel/sections/ComplianceHints.tsx`
 - `frontend/src/components/ContextPanel/sections/CoveringSpecs.tsx`
 - `frontend/src/components/ContextPanel/sections/RelatedTasks.tsx`
-- `frontend/src/components/ContextPanel/sections/SpecCoverage.tsx`
-- `frontend/src/components/ContextPanel/sections/OpenTasks.tsx`
-- `frontend/src/components/ContextPanel/sections/RecentActivity.tsx`
 - `frontend/src/components/ContextPanel/modes/SpecContext.tsx`
 - `frontend/src/components/ContextPanel/modes/AgentContext.tsx`
 - `frontend/src/components/ContextPanel/modes/CodeContext.tsx`
-- `frontend/src/components/ContextPanel/modes/ProjectDashboard.tsx`
 
 ## Files to read (for reference)
 - `frontend/src/components/GraphView/GraphView.tsx` — to embed in ConnectedSpecs

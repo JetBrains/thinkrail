@@ -2,7 +2,7 @@ import { useSessionStore } from "@/store/sessionStore.ts";
 import { useFileStore } from "@/store/fileStore.ts";
 import { useSpecStore } from "@/store/specStore.ts";
 
-export type ContextMode = "spec" | "agent" | "code" | "dashboard";
+export type ContextMode = "spec" | "agent" | "code" | "empty";
 
 function isSpecFile(path: string): boolean {
   if (path.includes("/.specs/")) return true;
@@ -20,5 +20,5 @@ export function useContextMode(): ContextMode {
   if (activeFilePath && isSpecFile(activeFilePath)) return "spec";
   if (activeFilePath) return "code";
   if (selectedSpecId) return "spec";
-  return "dashboard";
+  return "empty";
 }

@@ -19,7 +19,7 @@
 
 ## Overview
 
-The Bonsai web view is a three-panel workspace for specification-driven development with AI agents. The center panel hosts Claude agent sessions (custom Chat UI) and file views, while the right panel is a context-aware sidebar that auto-switches between spec context, agent context, code context, and a project dashboard based on what's active in the center. The left panel combines navigation (spec tree, requirements, files) with a spec-driven progress tracker.
+The Bonsai web view is a three-panel workspace for specification-driven development with AI agents. The center panel hosts Claude agent sessions (custom Chat UI) and file views, while the right panel is a context-aware sidebar that auto-switches between spec context, agent context, and code context based on what's active in the center (showing an empty welcome state when nothing is selected). The left panel combines navigation (spec tree, requirements, files) with a spec-driven progress tracker.
 
 ## Architecture
 
@@ -341,9 +341,9 @@ The right panel is a **context-aware sidebar** that auto-switches content based 
 | Spec file open | **Spec Context** | Connected specs subgraph, linked tasks, covered files, spec health |
 | Active agent session | **Agent Context** | Task spec preview, files modified (live), related specs, compliance hints |
 | Code file open | **Code Context** | Covering specs, related tasks, staleness indicator |
-| Nothing selected | **Project Dashboard** | Spec coverage, open tasks, recent activity |
+| Nothing selected | **Empty state** | Welcome message prompting user to select content |
 
-Mode is derived from existing stores (`sessionStore`, `fileStore`, `specStore`) — no new state required. Priority: active session > spec file > code file > selected spec > dashboard.
+Mode is derived from existing stores (`sessionStore`, `fileStore`, `specStore`) — no new state required. Priority: active session > spec file > code file > selected spec > empty.
 
 ### Peek-to-Center
 

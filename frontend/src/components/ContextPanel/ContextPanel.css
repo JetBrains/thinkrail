@@ -34,6 +34,14 @@
   min-height: 0;
 }
 
+.context-panel__empty {
+  color: var(--hint);
+  font-size: 12px;
+  text-align: center;
+  padding: var(--space-lg) var(--space-md);
+  font-style: italic;
+}
+
 .section-placeholder {
   color: var(--hint);
   font-size: 12px;

@@ -17,7 +17,7 @@ See [CONTEXT_PANEL.md](../../frontend/ui-specs/CONTEXT_PANEL.md) for the full de
      - `'spec'` → `<SpecContext />`
      - `'agent'` → `<AgentContext />`
      - `'code'` → `<CodeContext />`
-     - `'dashboard'` → `<ProjectDashboard />`
+     - `'empty'` → empty welcome state (inline div, no separate component)
    - Wrap in a scrollable container with `ContextPanel.css` styles
    - Export as named export
 
