@@ -4,233 +4,221 @@
 
 ## Overview
 
-Completed and closed agent sessions are preserved with their full chat log (all agent events). Users can review past conversations in read-only mode. Session data is stored in-memory for v1, with a path toward disk persistence.
+Completed and closed agent sessions are preserved with their full chat log (all agent events). Users can review past conversations in read-only mode by restoring them into the existing session panel with a `restored: true` flag. Session data is stored in-memory for v1, with backend persistence for restore.
 
 ## 1. Component Hierarchy
 
 ```
-<SessionHistory>                       // section in Progress tab
-  <HistoryHeader />                    // "Session History" + count
-  <HistoryList>
-    <HistoryItem /> ...                // one per archived session
-  </HistoryList>
-</SessionHistory>
-
-<ReadOnlySession>                      // center-panel tab (when replaying)
-  <SessionHeader />                    // name, skill, "read-only" badge
-  <ChatStream />                       // same Chat UI components, non-interactive
-  <SessionSummary />                   // replaces input area
-</ReadOnlySession>
+<ProgressTab>
+  ...
+  <SessionHistory>                     // section in Progress tab
+    <HistoryItem /> ...                // one per archived session (direct children)
+  </SessionHistory>
+</ProgressTab>
 ```
+
+There are no `HistoryHeader`, `HistoryList`, `ReadOnlySession`, `SessionHeader`, or `SessionSummary` components. The `ProgressTab` renders the "History" section header itself; `SessionHistory` is a flat wrapper that maps `HistoryItem` components.
+
+Read-only replay reuses the existing `SessionPanel` -> `ChatStream` pipeline. When a session is restored from the backend, it is inserted into `sessionStore.sessions` with `restored: true`, and the `SessionPanel` renders a `RestoredBar` (with a "Resume Session" button) in place of the `InputArea`.
 
 ## 2. Session Lifecycle
 
 ```
-Running → Done/Error → Archived
-                ↓
-         Tab closed by user
-                ↓
-           Archived
+Running -> Done/Error -> Tab closed -> Archived (in-memory)
 ```
 
-A session enters the archive when:
-1. `agent/done` or `agent/error` received AND the user closes the tab
-2. User explicitly closes a completed session tab
-3. Running session is interrupted and then closed
+A session enters the archive when the user closes its tab via `closeSession(taskId)`:
+1. If the session is still running, the backend is told to end it (`api.end(taskId)`).
+2. The session is removed from `sessions` and appended to `archivedSessions[]`.
+3. The `result` field is set to `"done"` if the session status was `"done"`, otherwise `"error"`.
 
-## 3. Archived Session Data
+There is no `"interrupted"` result on `ArchivedSession` -- interrupted sessions that are closed are archived as `"error"`.
 
-Each archived session stores the **complete event log**:
+## 3. Data Types
+
+### ArchivedSession
 
 ```typescript
 interface ArchivedSession {
-  // Metadata
   taskId: string;
   name: string;
   skillId: string | null;
   specIds: string[];
   startedAt: number;              // epoch ms
   endedAt: number;                // epoch ms
-  result: "done" | "error" | "interrupted";
+  result: "done" | "error";       // no "interrupted"
   costUsd: number;
   turns: number;
   durationMs: number;
   model: string;
-
-  // Full event log
-  events: AgentEvent[];           // all agent/* events in order
+  config: AgentConfig;            // full agent configuration snapshot
+  events: AgentEvent[];           // all agent events in order
 }
-
-type AgentEvent = {
-  type: string;                   // "agent/textDelta", "agent/toolCallStart", etc.
-  timestamp: number;              // epoch ms
-  params: Record<string, any>;    // event-specific params
-};
 ```
+
+### AgentConfig
+
+```typescript
+interface AgentConfig {
+  model: string;
+  maxTurns: number;
+  permissionMode: string;
+  streamText: boolean;
+}
+```
+
+### AgentEvent
+
+```typescript
+interface AgentEvent {
+  taskId: string;
+  sessionId: string;
+  eventType: EventType;
+  payload: Record<string, unknown>;
+}
+```
+
+Where `EventType` is one of: `"sessionStart"`, `"textDelta"`, `"toolCallStart"`, `"toolCallEnd"`, `"turnComplete"`, `"interrupted"`, `"subagentStart"`, `"subagentEnd"`, `"notification"`, `"compact"`, `"progress"`, `"done"`, `"error"`, `"permissionDenied"`, `"askUserQuestion"`, `"confirmAction"`, `"userMessage"`.
 
 ## 4. History List (Progress Tab)
 
-Displayed in the Progress tab below Active Sessions:
+Displayed in the Progress tab inside a `<div className="progress-section">` beneath Active Sessions, Cost, and Activity sections. The section header ("History") is rendered by `ProgressTab`, not by `SessionHistory`.
 
 ```
-SESSION HISTORY                    12
-┌──────────────────────────────────────┐
-│  ✓  goal-and-requirements  $0.05 30s│
-│  ✓  spec-init              $0.03 12s│
-│  ✓  architecture-design    $0.12 45s│
-│  ✕  test-runner             $0.02 err│
-│  ✓  module-design          $0.34 3m │
-│         [Show more...]              │
-└──────────────────────────────────────┘
+History
++--------------------------------------+
+|  checkmark  goal-and-requirements    |
+|     $0.05 . 3 turns . 30s           |
+|  checkmark  spec-init               |
+|     $0.03 . 1 turns . 12s           |
+|  cross  test-runner                  |
+|     $0.02 . 2 turns . 8s            |
++--------------------------------------+
 ```
 
-| Column | Description |
+Each `HistoryItem` renders two rows:
+1. **Header row** (`.history-item-header`): status badge + session name
+2. **Meta row** (`.history-item-meta`): cost, turns count, and formatted duration
+
+| Element | Description |
 | --- | --- |
-| Status icon | `✓` (done, `--green`) / `✕` (error, `--red`) / `⊘` (interrupted, `--hint`) |
-| Session name | Truncated to fit panel width |
-| Cost | USD for that session |
-| Duration | Formatted: `12s`, `3m`, `1h 5m` |
+| Status badge | checkmark (`history-badge-done`, green) for `result === "done"` / cross (`history-badge-error`, red) for `result === "error"` |
+| Session name | Full name, not truncated |
+| Cost | `$X.XX` format |
+| Turns | `N turns` -- number of conversation turns |
+| Duration | `Ns` for < 60s, `Nm` for >= 60s |
 
-**Ordering:** newest first (most recent archived session at top).
+**Ordering:** newest first -- the `archivedSessions` array is spread, reversed, and sliced.
 
-**Pagination:** show last 5 by default, "Show more..." loads next 10.
+**Visible count:** 10 items maximum (hardcoded `slice(0, 10)`). There is no "Show more" button or pagination.
 
-**Click behavior:** clicking an archived session opens it in read-only mode in the center panel.
+**Empty state:** When no archived sessions exist, renders `<div className="progress-empty">No completed sessions</div>`.
+
+**Click behavior:** Not implemented. `HistoryItem` does not have an `onClick` handler.
 
 ## 5. Read-Only Replay Mode
 
-When an archived session is opened, it renders in the center panel as a new tab:
+Read-only replay is not triggered by clicking a `HistoryItem`. Instead, it is achieved through `sessionStore.restoreSession(taskId)`, which loads a session from the backend persistence layer.
+
+### Restore Flow
+
+1. If the session already exists in memory, it is simply activated (`switchSession`).
+2. Otherwise, `restoreSession` calls the backend `session/get` RPC method to load the session data.
+3. Backend events are converted to the `AgentEvent` format.
+4. All `askUserQuestion` and `confirmAction` events are marked as answered (with `{ historical: true }`).
+5. A `Session` object is created with `status: "done"` and `restored: true`.
+6. The session is added to `sessions` and set as active.
+
+### Rendering in SessionPanel
+
+When a restored session is displayed:
+- The same `<ChatStream>` component renders all events, reusing chat UI components.
+- The `<SessionStatusLine>` is shown but with controls disabled (`disabled={activeSession.restored || isDone}`).
+- Instead of `<InputArea>`, a `<RestoredBar>` is rendered:
 
 ```
-┌─ module-design (archived) ─┬─ ... ─┐
++----------------------------------------------+
+|  This is a restored session (read-only)      |
+|                          [Resume Session]    |
++----------------------------------------------+
 ```
 
-### Tab Appearance
+The "Resume Session" button calls `session/continue` on the backend, which creates a new task that continues from the old session's conversation. The old session tab is replaced with the new resumed session, carrying over the event history.
 
-- Tab name: `{name} (archived)`
-- Status dot: gray (not running)
-- No close confirmation needed (it's already archived)
+### CSS Classes for RestoredBar
 
-### Chat Rendering
-
-- Same `<ChatStream>` components from CHAT_UI.md
-- All message types rendered identically (text, tool cards, questions, etc.)
-- **Non-interactive:** question cards show the chosen answer (grayed out, non-clickable). Approval cards show the decision taken.
-- Input area replaced by `<SessionSummary>`:
-
-```
-┌──────────────────────────────────────────────┐
-│  Session completed · $0.34 · 15 turns · 3m   │
-│  claude-opus-4-6 · 45k tokens               │
-└──────────────────────────────────────────────┘
-```
-
-### Answered Question Display
-
-For `agent/askUserQuestion` events that were already answered:
-
-```
-┌─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─┐
-│  APPROACH                      │
-│  Which format to prioritize?   │
-│                                │
-│  ✓ Markdown first              │ ← chosen answer highlighted
-│    JSON first                  │ ← other options dimmed
-│                                │
-│  Answered                      │ ← status badge instead of buttons
-└ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ┘
-```
-
-### Answered Approval Display
-
-```
-┌─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─┐
-│  ✓ Approved                    │ ← green badge
-│  Bash: pip install markdown... │
-└ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ┘
-```
+| Class | Element |
+| --- | --- |
+| `.restored-bar` | Container bar at bottom |
+| `.restored-bar-text` | "This is a restored session (read-only)" label |
+| `.restored-bar-btn` | "Resume Session" button |
 
 ## 6. Storage
 
-### V1: In-Memory
+### V1: In-Memory Archive
 
-- All archived sessions stored in a client-side array
-- Lost on page refresh
-- Maximum: unlimited (memory-bound, typically <100 sessions)
+- `archivedSessions` array lives in `sessionStore` (not a separate store).
+- Populated when `closeSession(taskId)` is called.
+- Lost on page refresh.
+- No maximum limit (memory-bound).
 
-### V2 (future): Backend Persistence
+### Backend Persistence (Implemented)
 
-Path toward persistent storage:
-
-| Approach | Description |
-| --- | --- |
-| File-based | Each session saved as `.specs/sessions/{taskId}.json` |
-| RPC methods | `session/list`, `session/get`, `session/delete` |
-| Loading | Lazy-load event log on demand, metadata always in memory |
-| Cleanup | Auto-delete sessions older than N days (configurable) |
-
-**Note:** V2 is not implemented in this spec — listed as a future direction. The in-memory approach is sufficient for v1 since the backend is a localhost dev tool (sessions last as long as the browser tab is open).
+Sessions are persisted by the backend and can be loaded via `session/get`. The `restoreSession` action handles loading and inserting them into the live session map. This is used for the read-only replay feature described in section 5.
 
 ## 7. Search & Filter
 
-Within the history list:
-
-- **Filter by result:** buttons for `All | Done | Error | Interrupted`
-- **Filter by skill:** dropdown of skills used
-- **Search by name:** text filter on session name
-
-These filters are optional for v1 — implement when session count makes them necessary.
+Not implemented. Acknowledged as optional -- implement when session count makes filtering necessary.
 
 ## 8. State
 
+There is no dedicated `SessionHistoryState` store. All history state lives within the main `SessionStore`:
+
 ```typescript
-interface SessionHistoryState {
-  archivedSessions: ArchivedSession[];  // newest first
-  visibleCount: number;                  // pagination (default: 5)
-  openReplayId: string | null;           // taskId of session being replayed
-  filter: {
-    result: "all" | "done" | "error" | "interrupted";
-    skillId: string | null;
-    searchQuery: string;
-  };
+interface SessionStore {
+  sessions: Map<string, Session>;
+  activeSessionId: string | null;
+  archivedSessions: ArchivedSession[];
+
+  // ... other actions
+  closeSession: (taskId: string) => void;       // archives + removes from sessions
+  restoreSession: (taskId: string) => Promise<void>;  // loads from backend into sessions
 }
 ```
 
-### Actions
+The `Session` interface includes an optional `restored?: boolean` flag that marks sessions loaded from disk as read-only.
+
+### Relevant Actions
 
 | Action | Trigger | Effect |
 | --- | --- | --- |
-| `archiveSession(session)` | Session done/error + tab closed | Add to `archivedSessions` |
-| `openReplay(taskId)` | Click history item | Create read-only tab in center panel |
-| `closeReplay(taskId)` | Close archived tab | Remove read-only tab |
-| `showMore` | Click "Show more" | Increment `visibleCount` by 10 |
-| `setFilter(filter)` | Filter controls | Update filter, re-render list |
+| `closeSession(taskId)` | User closes session tab | Removes from `sessions`, appends to `archivedSessions`, optionally ends backend task |
+| `restoreSession(taskId)` | External trigger (not from HistoryItem click) | Loads session from backend, inserts into `sessions` with `restored: true`, sets as active |
 
 ## 9. CSS Classes
 
 | Class | Element |
 | --- | --- |
-| `.hist-section` | History section in Progress tab |
-| `.hist-header` | Section header with count |
-| `.hist-list` | Scrollable list container |
-| `.hist-item` | Individual session entry |
-| `.hist-item .hist-icon` | Result icon (✓/✕/⊘) |
-| `.hist-item .hist-name` | Session name |
-| `.hist-item .hist-meta` | Cost + duration |
-| `.hist-show-more` | "Show more" button |
-| `.replay-badge` | "read-only" / "archived" badge on tab |
-| `.replay-summary` | Session summary replacing input area |
-| `.q-answered` | Answered question card (non-interactive) |
-| `.ap-answered` | Answered approval card (non-interactive) |
+| `.session-history` | Outer wrapper of the history list |
+| `.history-item` | Individual archived session entry |
+| `.history-item-header` | Header row: badge + name |
+| `.history-badge` | Status icon span (base class) |
+| `.history-badge-done` | Done status modifier (checkmark, green) |
+| `.history-badge-error` | Error status modifier (cross, red) |
+| `.history-item-name` | Session name text |
+| `.history-item-meta` | Meta row: cost, turns, duration |
+| `.progress-empty` | Empty state ("No completed sessions") |
 
 ## Known Limitations
 
-- **In-memory only (v1):** All archived sessions lost on page refresh
-- **No export:** Cannot export session logs to file (JSON, markdown, etc.)
-- **No search within session:** Cannot search for text across archived session events
+- **In-memory archive only:** `archivedSessions` array is lost on page refresh (backend persistence covers the restore path separately).
+- **No click-to-replay from history list:** `HistoryItem` does not open the session; restore is triggered via a separate mechanism.
+- **No export:** Cannot export session logs to file.
+- **No search within session:** Cannot search for text across archived session events.
+- **Fixed visible count:** Hardcoded to 10 items; no pagination or "Show more".
 
 ## Related Specs
 
-- **Parent:** [Web View](WEBVIEW.md) §3
-- **Depends on:** [Chat UI](CHAT_UI.md) (reuses chat components for replay), [State Management](../src/store/README.md) (sessionStore.archivedSessions)
-- **Related:** [Progress Tracker](PROGRESS_TRACKER.md) (session history section)
+- **Parent:** [Web View](WEBVIEW.md) section 3
+- **Depends on:** [Chat UI](CHAT_UI.md) (reuses chat components for restored session rendering), sessionStore (`archivedSessions`, `restoreSession`)
+- **Related:** [Progress Tracker](PROGRESS_TRACKER.md) (session history section rendered within ProgressTab)

@@ -5,7 +5,7 @@
     - [ ] count money (globally spend on the project) on the fly
 
 * Chat
-    - [ ] Bug/Missing feature: Doesn't display user prompts
+    - [x] Bug/Missing feature: Doesn't display user prompts
     - [ ] When ask multiple askUserQuestions in one use inlined tabs or something similar
     - [ ] Colours and AskUserQuestions are hard to see (small and violet on black)
     - [ ] AskUserQuestion should always have "other" field
@@ -14,10 +14,10 @@
     - [ ] AskUserQuestion/approval requests can "slip upwards" when agent does things simultaneously — should be pinned/focused (like claude code)
     - [ ] Group tool calls and tasks somehow
     - [ ] add "don't ask approval again for ..."
-    - [ ] send message should always be active?
+    - [~] send message should always be active?
     - [ ] add interrupt
     - [ ] on approval "denied" agent stuck
-    - [ ] add something like "agent is thinking..." which tracks that agent is not stuck and displays user that "work is in progress"
+    - [x] add something like "agent is thinking..." which tracks that agent is not stuck and displays user that "work is in progress"
     - [ ] for each tool show the directory it is being executed from
     - [ ] "plan mode exit" should be separately handled — currently shows raw JSON blob of ExitPlanMode with the full plan text as an "Action requires approval" card
 
@@ -27,12 +27,13 @@
 * Session status bar
     - [ ] money is not counted on the fly
     - [ ] no context size and opacity
-    - [ ] Display current mode (plan, accept edits, spec, ...) in status bar in sessions tabs (right below chat box); should be clickable to quick switch modes (a-la `⏸️ plan mode on (shift+tab to cycle)`)
-    - [ ] Display current model (opus 4.5 1m, opus 4.5, ...) in status bar in sessions tabs (right below chat box); should be clickable to quick switch models
+    - [x] Display current mode (plan, accept edits, spec, ...) in status bar in sessions tabs (right below chat box); should be clickable to quick switch modes (a-la `⏸️ plan mode on (shift+tab to cycle)`)
+    - [x] Display current model (opus 4.5 1m, opus 4.5, ...) in status bar in sessions tabs (right below chat box); should be clickable to quick switch models
 * Notifications
     - [ ] Needs something like timeout (when active usage)
     - [ ] Should "focus on problem on click"
 * Left panel
+    - [ ] add context menu on click for files (ex. delete, open in ...)
     - [x] files tab doesn't display directory
     - [x] files tab doesn't have scrolling
     - [x] Get rid of left panel max width limit and arrow side button when hidden
@@ -83,7 +84,7 @@
     - [x] Support file editing and simple IDE features (monaco editor, open in IDE/Vim)
     - [x] IntelliJ Idea-style theme for `files` tab and code
     - [ ] Different (global) themes support
-    - [ ] keybindings for non-mac
+    - [~] keybindings for non-mac
     - [ ] Better mermaid scrolling, focusing, etc
     - [x] Add working-dir and project selection with autocomplete during project path typing
     - [ ] Add preview for html-s

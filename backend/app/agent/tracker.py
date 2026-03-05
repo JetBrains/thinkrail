@@ -37,6 +37,7 @@ class Tracker:
         self._tasks: dict[str, AgentTask] = {}
         self._futures: dict[str, dict[str, asyncio.Future[dict]]] = {}
         self._queues: dict[str, asyncio.Queue[Any]] = {}
+        self._clients: dict[str, Any] = {}
 
     # -- task lifecycle -------------------------------------------------------
 
@@ -71,6 +72,17 @@ class Tracker:
         task = self.get_task(task_id)
         task.session_id = session_id
         task.updated = datetime.now(UTC).isoformat()
+
+    # -- live SDK client reference --------------------------------------------
+
+    def set_client(self, task_id: str, client: Any) -> None:
+        self._clients[task_id] = client
+
+    def get_client(self, task_id: str) -> Any | None:
+        return self._clients.get(task_id)
+
+    def clear_client(self, task_id: str) -> None:
+        self._clients.pop(task_id, None)
 
     # -- message queue --------------------------------------------------------
 

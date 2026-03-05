@@ -4,164 +4,84 @@
 
 ## Overview
 
-The Progress tab in the left panel is the unified project health and session activity dashboard. It combines spec-driven metrics, live session tracking, file change monitoring, activity timeline, and cost/budget management. The backend provides a dedicated cost API for persistent tracking.
+The Progress tab in the left panel is the project health and session activity dashboard. It combines spec-driven metrics, live session tracking, an activity timeline, session history, and cost display. There is no dedicated ProgressState — the component composes state from `useSpecStore`, `useSessionStore`, and `useCostStore`.
 
 ## 1. Component Hierarchy
 
 ```
-<ProgressTab>                          // left-panel tab content
-  <SpecProgress />                     // spec completion + status breakdown
-  <RequirementsProgress />             // requirements coverage
-  <SourceCoverage />                   // source path coverage
-  <ActiveSessions>                     // running/completed session cards
-    <SessionTracker /> ...
-  </ActiveSessions>
-  <SessionHistory />                   // archived sessions (see SESSION_HISTORY.md)
-  <ActivityTimeline>                   // recent agent actions
-    <TimelineItem /> ...
-  </ActivityTimeline>
-  <FileChanges>                        // files modified by sessions
-    <FileChangeItem /> ...
-  </FileChanges>
-  <CostBudget />                       // cost tracking + budget bar
-</ProgressTab>
+<ProgressTab>                          // left-panel tab content (inline sections)
+  |- Spec Progress section             // inline — spec completion + status breakdown
+  |- Active Sessions section           // inline — running/completed session cards
+  |- Cost section                      // inline — session + project cost display
+  |- <ActivityTimeline />              // separate component — recent agent actions
+  +- <SessionHistory />               // separate component (from SessionHistory module)
 ```
+
+Only `ActivityTimeline` (in `ProgressTab/ActivityTimeline.tsx`) and `SessionHistory` (in `SessionHistory/SessionHistory.tsx`) are extracted as separate components. All other sections are rendered inline within `ProgressTab`.
 
 ## 2. Spec-Driven Metrics
 
 ### 2.1 Spec Progress
 
 ```
-┌─────────────────────────────────────┐
-│  SPEC PROGRESS              18%    │
-│  ███░░░░░░░░░░░░░░░░         2/11  │
-│                                     │
-│  ✓ 2 done  ● 4 active  ○ 5 pending│
-└─────────────────────────────────────┘
++-------------------------------------+
+|  SPEC PROGRESS              18%    |
+|  ###                         2/11  |
+|                                     |
+|  done 2 done  * 4 active  o 5 pending|
++-------------------------------------+
 ```
 
-**Data source:** `spec/list` RPC → count by status.
+**Data source:** `useSpecStore` -> `specs` array (type `RegistryEntry[]`). Counts are computed inline in the component.
 
 | Metric | Calculation |
 | --- | --- |
-| Percentage | `done / total * 100` |
+| Percentage | `done / total * 100`, rounded via `Math.round` |
 | Progress bar | Fill width = percentage, color `--green` |
-| Breakdown | Count per status: done, active, pending, stale, draft |
+| Breakdown | Three categories only: done (green), active (blue), pending = `total - done - active` (hint color) |
 
-### 2.2 Requirements Progress
+The component does not track `stale` or `draft` statuses separately — everything that is not `done` or `active` is counted as `pending`.
 
-```
-┌─────────────────────────────────────┐
-│  REQUIREMENTS               50%    │
-│  ██████████░░░░░░░░░░        2/4   │
-└─────────────────────────────────────┘
-```
+## 3. Active Session Cards
 
-**Data source:** Specs tagged with requirement IDs, cross-referenced with `GOAL&REQUIREMENTS.md` entries.
-
-| Metric | Calculation |
-| --- | --- |
-| Percentage | Requirements with at least one spec → count / total |
-| Bar color | `--blue` |
-
-### 2.3 Source Coverage
+Per-session card showing status and metrics:
 
 ```
-┌─────────────────────────────────────┐
-│  SOURCE COVERAGE            67%    │
-│  ████████████░░░░░░░         8/12  │
-└─────────────────────────────────────┘
-```
-
-**Data source:** Union of all `covers` fields from registry entries vs. total source directories.
-
-**Source path discovery:** Scan project root for top-level source directories (e.g., `backend/app/spec/`, `backend/app/core/`, `frontend/src/`). Compare against covered paths.
-
-## 3. Active Session Tracker
-
-Per-session card showing live metrics:
-
-```
-┌─────────────────────────────────────┐
-│  ● module-design         ▸ running  │
-│    Step: Writing models.py          │
-│    3 files · $0.08 · 2m 14s        │
-│    + models.py  + service.py        │
-└─────────────────────────────────────┘
++-------------------------------------+
+|  * module-design         > running  |
+|    3 calls . $0.08 . 14s           |
++-------------------------------------+
 ```
 
 | Field | Data Source |
 | --- | --- |
-| Name + status | Session store |
-| Current step | Latest `agent/toolCallStart` → `toolName: toolInput` |
-| File count | Count of unique files from `Write`/`Edit` tool calls |
-| Cost | Accumulated from backend cost API (see §6) |
-| Elapsed time | `Date.now() - session.startedAt` |
-| File chips | Files from `Write`/`Edit` tool calls. `+` = new, `~` = modified |
+| Dot (color) | `session.status`: running = `--blue`, done = `--green`, other = `--red` |
+| Name | `session.name` |
+| Status text | `session.status` string |
+| Tool calls | `session.metrics.toolCalls` |
+| Cost | `session.metrics.costUsd`, formatted to 2 decimal places |
+| Duration | `session.metrics.durationMs / 1000`, rounded to nearest second |
 
-**Update triggers:**
-- `agent/toolCallStart` → update "Current step"
-- `agent/toolCallEnd` where `toolName` is `Write`/`Edit` → add file chip
-- `agent/done` → update status to "done", finalize cost
-- Elapsed time → update every 1s via `setInterval`
+The session list is derived from `useSessionStore` -> `sessions` (a `Map<string, Session>`), converted to an array via `Array.from(sessions.values())`. The entire section is hidden when there are no sessions.
 
-**Click behavior:** clicking a session card switches to that session tab in the center panel.
+**Not implemented:** "current step" display, file chips, 1-second elapsed timer, click-to-switch behavior.
 
-## 4. Activity Timeline
-
-Compact log of recent agent actions across all sessions:
+## 4. Cost Display
 
 ```
-14:23  ✏️  Write models.py
-14:22  📖  Read README.md
-14:22  🔍  Grep "BaseModel"
-14:21  ⚡  Subagent: Explore
-14:20  🚀  Session started
++-------------------------------------+
+|  COST                               |
+|  $2.30 session . $12.45 total      |
++-------------------------------------+
 ```
 
-| Field | Description |
-| --- | --- |
-| Timestamp | HH:MM format |
-| Icon | Tool icon (same mapping as CHAT_UI.md §4 Tool Icons) |
-| Description | `toolName + summary` (file path for Read/Write, pattern for Grep) |
+**Data source:** `useCostStore` -> `summary` (type `CostSummary | null`).
 
-**Data source:** All `agent/toolCallStart` events across sessions. Stored in a ring buffer (max 50 entries).
+The cost section is only rendered when `costSummary` is non-null. It displays `sessionCost` and `projectCost` formatted to 2 decimal places. No token counts, no budget bar, no budget warnings are rendered.
 
-**Click behavior:** clicking a timeline entry switches to the session and scrolls chat to that event.
+**Note:** The cost store is currently a stub — all actions are no-ops. The `fetchSummary`, `setBudget`, and `reset` methods have TODO comments awaiting backend `cost/*` endpoint implementation. Polling interval is set to 5 seconds.
 
-## 5. File Changes
-
-Files modified across all active sessions:
-
-```
-+  backend/app/spec/models.py
-+  backend/app/spec/service.py
-~  backend/app/spec/README.md
-```
-
-| Prefix | Meaning | Color |
-| --- | --- | --- |
-| `+` | Created | `--green` |
-| `~` | Modified | `--gold` |
-| `-` | Deleted | `--red` |
-
-**Data source:** `agent/toolCallEnd` where `toolName` is `Write` (new file) or `Edit` (modified). Track unique file paths with their operation type.
-
-**Click behavior:** clicking a file opens the Diff view in the right panel for that file.
-
-**Badge:** The Progress tab label shows a badge count of changed files (e.g., `Progress 3`).
-
-## 6. Cost & Budget — Backend API
-
-### 6.1 New RPC Methods
-
-| Method | Params | Returns | Description |
-| --- | --- | --- | --- |
-| `cost/summary` | `{}` | `CostSummary` | Get current cost data |
-| `cost/setBudget` | `{ budget: CostBudget }` | `null` | Set budget configuration |
-| `cost/reset` | `{ scope: "session" }` | `null` | Reset session cost counter |
-
-### 6.2 CostSummary Shape
+### 4.1 CostSummary Shape
 
 ```typescript
 interface CostSummary {
@@ -170,142 +90,125 @@ interface CostSummary {
   sessionTokens: number;       // tokens since backend started
   projectTokens: number;       // tokens lifetime
   budget: CostBudget | null;   // configured budget
-  sessions: SessionCostEntry[];// per-session breakdown
 }
 
 interface CostBudget {
   amount: number;              // USD
   scope: "session" | "project";// which counter to check
-  warnAt: number;              // percentage (0-100) to trigger warning (default: 80)
-}
-
-interface SessionCostEntry {
-  taskId: string;
-  name: string;
-  costUsd: number;
-  tokens: number;
-  status: string;
+  warnAt: number;              // percentage (0-100) to trigger warning
 }
 ```
 
-### 6.3 Persistence
+`CostSummary` has no `sessions` field (no per-session cost breakdown).
 
-| Scope | Storage | Survives Restart |
-| --- | --- | --- |
-| Session cost | In-memory (backend) | No |
-| Project cost | `.specs/cost.json` | Yes |
-| Budget config | `.specs/cost.json` | Yes |
+## 5. Activity Timeline
 
-`.specs/cost.json` format:
-
-```json
-{
-  "projectCost": 12.45,
-  "projectTokens": 1250000,
-  "budget": { "amount": 50.00, "scope": "project", "warnAt": 80 },
-  "history": [
-    { "date": "2026-03-02", "cost": 2.30, "tokens": 230000, "sessions": 5 }
-  ]
-}
-```
-
-### 6.4 Cost Accumulation
-
-- On each `agent/done` event, backend adds `costUsd` and `usage` to both session and project counters
-- Project counter saved to `.specs/cost.json` after each update (atomic write)
-- Frontend polls `cost/summary` every 10s while sessions are running, or receives updates via a new `cost/didUpdate` notification
-
-## 7. Cost & Budget Display
+Compact log of recent agent actions across all sessions:
 
 ```
-┌─────────────────────────────────────┐
-│  SESSION COST                       │
-│  $2.30 total  ·  230k tokens       │
-│                                     │
-│  PROJECT COST                       │
-│  $12.45 lifetime  ·  1.25M tokens  │
-│                                     │
-│  Budget: $50.00          25% used   │
-│  █████████░░░░░░░░░░░░░░            │
-└─────────────────────────────────────┘
+14:23  wrench  Write models.py
+14:23  check   toolCallEnd
+14:22  speech  textDelta
+14:21  bolt    Subagent: Explore
+14:20  rocket  Session started
 ```
 
-### Budget Bar Colors
+### 5.1 Props and Data Flow
 
-| Usage | Color |
+`ActivityTimeline` receives `events: AgentEvent[]` as a prop. The parent `ProgressTab` collects all events across all sessions via:
+
+```typescript
+const allEvents: AgentEvent[] = sessionList.flatMap((s) => s.events);
+```
+
+The component slices the **last 20** entries (not 50) via `events.slice(-20).reverse()`, displaying newest first.
+
+### 5.2 EVENT_ICONS Map
+
+The timeline uses its own icon mapping, separate from the Chat UI tool icons:
+
+```typescript
+const EVENT_ICONS: Record<string, string> = {
+  toolCallStart: "wrench",
+  toolCallEnd:   "checkmark",
+  textDelta:     "speech bubble",
+  sessionStart:  "rocket",
+  subagentStart: "lightning",
+  done:          "checkmark",
+  error:         "cross",
+};
+```
+
+Unrecognized event types fall back to a filled circle character.
+
+### 5.3 Timeline Entry Layout
+
+Each entry shows: timestamp, icon, label.
+
+| Field | Description |
 | --- | --- |
-| < `warnAt`% | `--green` |
-| ≥ `warnAt`% and < 100% | `--gold` |
-| ≥ 100% | `--red` |
+| Timestamp | HH:MM format via `toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })` |
+| Icon | Looked up from `EVENT_ICONS` by `event.eventType` |
+| Label | For `toolCallStart`: `toolName + toolInput` (truncated to 30 chars). For all other types: the `eventType` string itself. |
 
-### Budget Warning
+### 5.4 Known Issue: Timestamps
 
-When budget threshold is reached:
-1. Budget bar turns gold/red
-2. Toast notification: "Budget warning: {X}% of ${amount} used"
-3. Status bar shows "⚠ Budget: {X}%"
-4. Sessions are NOT auto-stopped — warning only (user decides)
+Timestamps use `new Date()` at render time rather than the event's actual timestamp. All visible entries display the current clock time, not when the event occurred.
 
-## 8. Update Frequency
+## 6. Session History
+
+Rendered via the `<SessionHistory />` component imported from `@/components/SessionHistory/SessionHistory.tsx`. See [SESSION_HISTORY.md](SESSION_HISTORY.md) for details.
+
+## 7. Update Frequency
 
 | Metric | Update Trigger |
 | --- | --- |
-| Spec progress | On `registry/didUpdate` notification |
-| Requirements | On `registry/didUpdate` notification |
-| Source coverage | On `registry/didUpdate` notification |
-| Session tracker | On each `agent/*` event for that session |
-| Activity timeline | On each `agent/toolCallStart` |
-| File changes | On each `agent/toolCallEnd` (Write/Edit) |
-| Cost | On `agent/done` + poll every 10s |
+| Spec progress | On `registry/didUpdate` notification (triggers `specStore.fetchSpecs`) |
+| Session cards | On each `agent/*` event for that session (via `sessionStore.onAgentEvent`) |
+| Activity timeline | Re-renders when session events change (derived from session store) |
+| Cost | Currently stubbed; will poll every 5s via `costStore.startPolling` when implemented |
 
-## 9. State
+## 8. CSS Classes
 
-```typescript
-interface ProgressState {
-  // Spec metrics
-  specCounts: { done: number; active: number; pending: number; stale: number; draft: number; total: number };
-  requirementsProgress: { covered: number; total: number };
-  sourceCoverage: { covered: number; total: number };
-
-  // Sessions
-  activeSessions: SessionTrackerInfo[];
-
-  // Activity
-  timeline: TimelineEntry[];         // ring buffer, max 50
-  fileChanges: Map<string, "created" | "modified" | "deleted">;
-
-  // Cost
-  costSummary: CostSummary | null;
-}
-```
-
-## 10. CSS Classes
+All styles are defined in `ProgressTab.css`.
 
 | Class | Element |
 | --- | --- |
-| `.prog-section` | Metric card container |
-| `.prog-label` | Metric label + percentage |
-| `.prog-pct` | Percentage number |
-| `.prog-bar` | Progress bar track |
-| `.prog-bar-fill` | Progress bar fill |
-| `.prog-bar-fill.green` / `.blue` / `.gold` / `.red` | Fill color variants |
-| `.prog-counts` | Status breakdown row |
-| `.sess-tracker` | Session card |
-| `.st-top` / `.st-step` / `.st-meta` / `.st-files` | Session card parts |
-| `.st-file` / `.st-file.new` / `.st-file.mod` | File change chips |
-| `.timeline-item` | Timeline entry |
-| `.tl-time` / `.tl-icon` / `.tl-desc` | Timeline parts |
-| `.cost-section` | Cost card |
-| `.cost-row` / `.cost-val` / `.cost-label` | Cost display |
+| `.progress-tab` | Root container (flex column, gap between sections) |
+| `.progress-section-header` | Section label (uppercase, 10px, `--hint` color) |
+| `.progress-bar-row` | Flex row containing progress bar + percentage |
+| `.progress-bar` | Progress bar track (6px height, `--border` background) |
+| `.progress-bar-fill` | Progress bar fill (`--green`, animates width) |
+| `.progress-pct` | Percentage text (12px, bold, right-aligned) |
+| `.progress-stats` | Status breakdown row (done/active/pending counts) |
+| `.stat-done` / `.stat-active` / `.stat-pending` | Individual stat colors (green/blue/hint) |
+| `.progress-empty` | Empty state text (italic, hint color) |
+| `.session-card` | Session card container (elevated background, border) |
+| `.session-card-header` | Card header row (dot + name + status) |
+| `.session-card-dot` | 6px colored circle indicating status |
+| `.session-card-name` | Session name (truncated with ellipsis) |
+| `.session-card-status` | Status text (10px, hint color) |
+| `.session-card-metrics` | Metrics line (10px, muted color) |
+| `.cost-display` | Cost text (12px) |
+| `.activity-timeline` | Timeline container (flex column, max-height 200px, scrollable) |
+| `.timeline-entry` | Single timeline row (flex, 11px) |
+| `.timeline-time` | Timestamp (10px, hint color, 40px min-width) |
+| `.timeline-icon` | Event icon (12px) |
+| `.timeline-label` | Event description (muted, truncated with ellipsis) |
 
-## Known Limitations
+## 9. Known Limitations
 
-- **Source coverage is approximate:** Counts directory-level coverage, not file or function-level
-- **Cost estimates during run are approximate:** Exact cost only available from agent/done event
-- **Activity timeline is not persistent:** Lost on page refresh (ring buffer in memory only)
+- **No dedicated ProgressState:** State is composed from three separate Zustand stores (`specStore`, `sessionStore`, `costStore`) at render time
+- **Cost store is stubbed:** All cost actions are no-ops; backend `cost/*` endpoints do not exist yet
+- **Timeline timestamps are incorrect:** All entries show the current render time, not the actual event time
+- **Activity timeline is not persistent:** Events are held in session store memory only; lost on page refresh
+- **No budget bar or budget warnings:** The cost section only displays raw dollar amounts
+- **No requirements progress or source coverage sections:** These spec metrics are not implemented
+- **No file changes section:** File change tracking is not rendered in the progress tab
+- **Session cards have no click behavior:** Clicking a card does not navigate to the session
 
 ## Related Specs
 
 - **Parent:** [Web View](WEBVIEW.md) §2.1
-- **Depends on:** [API Client](../src/api/README.md) (cost/*, spec/list), [State Management](../src/store/README.md) (costStore, sessionStore)
-- **Related:** [Session History](SESSION_HISTORY.md) (archived sessions), [Diff Viewer](DIFF_VIEWER.md) (file changes → diff)
+- **Depends on:** [State Management](../src/store/README.md) (specStore, sessionStore, costStore)
+- **Related:** [Session History](SESSION_HISTORY.md) (archived sessions)

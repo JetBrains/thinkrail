@@ -27,6 +27,7 @@ from app.rpc.methods.agents import (
     respond_agent,
     run_agent,
     send_message,
+    update_config,
 )
 from app.rpc.methods.sessions import (
     continue_session,
@@ -56,6 +57,7 @@ METHODS = {
     "agent/interrupt": interrupt_agent,
     "agent/end": end_session,
     "agent/respond": respond_agent,
+    "agent/updateConfig": update_config,
     "session/list": list_all_sessions,
     "session/get": get_session,
     "session/continue": continue_session,
@@ -64,6 +66,7 @@ METHODS = {
 
 _active_ws: WebSocket | None = None
 _active_watcher: WatchHandle | None = None
+_agent_services: dict[str, AgentService] = {}
 
 
 def _bind_methods(
@@ -107,7 +110,16 @@ def register_routes(app: FastAPI) -> None:
         # Build per-connection config and services
         config = load_config(project_root=project_path)
         spec_service = SpecService(config)
-        agent_service = AgentService(config, spec_service)
+
+        # Reuse existing AgentService for this project so running tasks
+        # survive WebSocket reconnects (page refresh, network blip).
+        key = str(project_path)
+        if key in _agent_services:
+            agent_service = _agent_services[key]
+        else:
+            agent_service = AgentService(config, spec_service)
+            _agent_services[key] = agent_service
+
         bound_methods = _bind_methods(spec_service, agent_service)
 
         # Replace existing connection if any
@@ -128,6 +140,9 @@ def register_routes(app: FastAPI) -> None:
 
         notify = make_notify(websocket)
         notifications.current_notify = notify
+
+        # Point all running tasks at the fresh WebSocket callback
+        agent_service.rebind_notify(notify)
 
         # Start per-connection file watcher
         watcher_handle = await _start_watcher(config, spec_service)

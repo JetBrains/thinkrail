@@ -17,6 +17,7 @@ export function SessionPanel() {
   const closeSession = useSessionStore((s) => s.closeSession);
   const resolveRequest = useSessionStore((s) => s.resolveRequest);
   const sendMessage = useSessionStore((s) => s.sendMessage);
+  const updateConfig = useSessionStore((s) => s.updateConfig);
 
   const openFiles = useFileStore((s) => s.openFiles);
   const activeFilePath = useFileStore((s) => s.activeFilePath);
@@ -128,8 +129,12 @@ export function SessionPanel() {
           />
           <SessionStatusLine
             model={activeSession.model}
+            permissionMode={activeSession.permissionMode}
             metrics={activeSession.metrics}
-            running={isRunning}
+            status={status ?? "idle"}
+            disabled={activeSession.restored || isDone}
+            onChangeModel={(m) => updateConfig(activeSession.taskId, { model: m })}
+            onChangePermissionMode={(m) => updateConfig(activeSession.taskId, { permissionMode: m })}
           />
           {activeSession.restored ? (
             <RestoredBar taskId={activeSession.taskId} />
@@ -175,6 +180,7 @@ function RestoredBar({ taskId }: { taskId: string }) {
             specIds: old?.specIds ?? [],
             status: "idle",
             model: old?.model ?? "",
+            permissionMode: old?.permissionMode ?? "default",
             startedAt: old?.startedAt ?? Date.now(),
             // Carry over old events so the chat history is preserved
             events: old?.events ?? [],

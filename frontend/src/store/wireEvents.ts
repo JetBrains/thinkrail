@@ -105,6 +105,15 @@ export function wireEvents(client: RpcClient): Unsubscribe {
     }),
   );
 
+  // ── Config changes ──
+  unsubs.push(
+    client.on("agent/configChanged", (p) => {
+      useSessionStore
+        .getState()
+        .onConfigChanged(p as Record<string, unknown>);
+    }),
+  );
+
   // ── Server-initiated questions and approvals ──
   // These arrive with a JSON-RPC `id` (server-initiated request), but the
   // backend expects the answer via the `agent/respond` RPC method.

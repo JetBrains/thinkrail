@@ -25,6 +25,16 @@ class AgentService:
         self._spec_service = spec_service
         self._tracker = Tracker()
         self._running_tasks: dict[str, asyncio.Task[Any]] = {}
+        self._last_notify: dict[str, Callable] = {}
+
+    def rebind_notify(self, notify: Callable) -> None:
+        """Update the WebSocket callback for all running tasks.
+
+        Called when a new WebSocket connects so that in-flight runners
+        stream events to the fresh connection instead of a dead one.
+        """
+        for task_id in list(self._running_tasks):
+            self._last_notify[task_id] = notify
 
     # -- public methods -------------------------------------------------------
 
@@ -118,6 +128,26 @@ class AgentService:
 
     def list_tasks(self) -> list[AgentTask]:
         return self._tracker.list_tasks()
+
+    async def update_config(
+        self,
+        task_id: str,
+        model: str | None = None,
+        permission_mode: str | None = None,
+    ) -> dict:
+        """Update model and/or permission mode on a live session."""
+        task = self._tracker.get_task(task_id)
+        client = self._tracker.get_client(task_id)
+        if client is None:
+            raise ValueError(f"No live client for task {task_id}")
+        if model is not None:
+            await client.set_model(model)
+            task.config.model = model
+        if permission_mode is not None:
+            await client.set_permission_mode(permission_mode)
+            task.config.permission_mode = permission_mode
+        self._save_task(task)
+        return {"model": task.config.model, "permissionMode": task.config.permission_mode}
 
     async def respond(self, task_id: str, request_id: str, response: dict) -> None:
         self._tracker.resolve_future(task_id, request_id, response)
@@ -254,15 +284,18 @@ class AgentService:
         spec_context: str,
         notify: Callable,
     ) -> None:
-        # Store notify for potential re-launch after interrupt
-        if not hasattr(self, "_last_notify"):
-            self._last_notify: dict[str, Callable] = {}
         self._last_notify[task.id] = notify
 
-        # Wrap notify to also persist events to disk
-        _original_notify = notify
+        # Wrap notify to read the *current* callback from _last_notify each
+        # time, so that rebind_notify() transparently redirects events to a
+        # new WebSocket without restarting the runner.
         async def _persisting_notify(method: str, params: dict, request_id: str | None = None) -> None:
-            await _original_notify(method, params, request_id)
+            current = self._last_notify.get(task.id)
+            if current:
+                try:
+                    await current(method, params, request_id)
+                except Exception:
+                    pass  # WS dead — events still persisted below
             # Persist streaming events (skip overly frequent ones)
             if method.startswith("agent/") and method not in ("agent/progress",):
                 event_type = method.replace("agent/", "")

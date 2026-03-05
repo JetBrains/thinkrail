@@ -27,6 +27,7 @@ export interface Session {
   specIds: string[];
   status: SessionStatus;
   model: string;
+  permissionMode: string;
   startedAt: number;
   events: AgentEvent[];
   metrics: SessionMetrics;

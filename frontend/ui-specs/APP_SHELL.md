@@ -31,7 +31,9 @@ Defines the overall frontend project structure, component tree, React Router con
 | Vite | 6.x | Build tool, dev server, HMR |
 | React Router | 7.x | Client-side routing |
 | Zustand | 5.x | State management (see STATE_MANAGEMENT.md) |
-| xterm.js | 5.x | Terminal emulator (Console component) |
+| Monaco Editor | 0.55.x | Code viewer / editor (`@monaco-editor/react`) |
+| Mermaid | 11.x | Diagram rendering |
+| react-markdown | 10.x | Markdown rendering (with `remark-gfm`) |
 
 ## Project Structure
 
@@ -42,14 +44,22 @@ frontend/
 ├── tsconfig.json
 ├── vite.config.ts
 ├── src/
-│   ├── main.tsx               # App entry: mount React, init client
-│   ├── App.tsx                # Root component: providers + router
+│   ├── main.tsx               # App entry: theme init, Root component, mount
+│   ├── App.tsx                # Providers, keyboard shortcuts, event wiring
 │   ├── routes.tsx             # React Router route definitions
 │   │
 │   ├── api/                   # API client layer (see API_CLIENT.md)
 │   │   ├── client.ts
+│   │   ├── index.ts
 │   │   ├── methods/
+│   │   │   ├── index.ts
+│   │   │   ├── specs.ts
+│   │   │   ├── agents.ts
+│   │   │   └── sessions.ts
 │   │   ├── hooks/
+│   │   │   ├── useSpecs.ts
+│   │   │   ├── useSession.ts
+│   │   │   └── useCost.ts
 │   │   ├── types.ts
 │   │   └── errors.ts
 │   │
@@ -59,7 +69,12 @@ frontend/
 │   │   ├── sessionStore.ts
 │   │   ├── uiStore.ts
 │   │   ├── costStore.ts
-│   │   └── notificationStore.ts
+│   │   ├── fileStore.ts
+│   │   ├── notificationStore.ts
+│   │   └── wireEvents.ts
+│   │
+│   ├── constants/             # Shared constants
+│   │   └── skills.ts
 │   │
 │   ├── components/            # UI components (one folder per spec)
 │   │   ├── AppShell/          # Three-panel layout shell
@@ -71,22 +86,21 @@ frontend/
 │   │   │   └── AppShell.css
 │   │   │
 │   │   ├── ContextPanel/      # Context-aware right sidebar (see CONTEXT_PANEL.md)
-│   │   │   ├── ContextPanel.tsx
-│   │   │   ├── ContextPanel.css
-│   │   │   ├── useContextMode.ts
-│   │   │   ├── CollapsibleSection.tsx
-│   │   │   └── CollapsibleSection.css
-│   │   │
 │   │   ├── ChatStream/        # (see CHAT_UI.md)
 │   │   ├── GraphView/         # (see GRAPH_INTERACTIONS.md)
-│   │   ├── SpecView/          # Markdown renderer + edit mode
-│   │   ├── CodeView/          # Code viewer with syntax highlighting
+│   │   ├── FileViewer/        # File viewer with Monaco + markdown preview
 │   │   ├── DiffViewer/        # (see DIFF_VIEWER.md)
 │   │   ├── Console/           # (see CONSOLE.md)
 │   │   ├── NewSessionModal/   # (see NEW_SESSION_MODAL.md)
 │   │   ├── CommandPalette/    # (see COMMAND_PALETTE.md)
-│   │   ├── Notifications/     # (see NOTIFICATION_SYSTEM.md)
-│   │   └── SessionHistory/    # (see SESSION_HISTORY.md)
+│   │   ├── Notifications/     # Toast notifications (ToastContainer)
+│   │   ├── SessionHistory/    # (see SESSION_HISTORY.md)
+│   │   ├── SessionPanel/      # Session tab bar + active session display
+│   │   ├── SessionManager/    # Full session management view
+│   │   ├── FileTree/          # File tree navigation
+│   │   ├── SpecTree/          # Spec tree navigation
+│   │   ├── ProgressTab/       # Progress tracking + activity timeline
+│   │   └── ProjectPicker/     # Project selection modal
 │   │
 │   ├── styles/                # (see THEMING.md)
 │   │   ├── tokens.css
@@ -95,14 +109,14 @@ frontend/
 │   │   └── global.css
 │   │
 │   ├── types/                 # Shared TypeScript interfaces
+│   │   ├── index.ts
 │   │   ├── spec.ts            # RegistryEntry, Link, SpecGraph, SpecDetail
 │   │   ├── agent.ts           # AgentTask, AgentConfig, AgentEvent
 │   │   ├── session.ts         # Session, ArchivedSession, SessionMetrics
 │   │   └── rpc.ts             # JSON-RPC message types
 │   │
 │   └── utils/                 # Shared utilities
-│       ├── format.ts          # Duration, cost, token count formatting
-│       ├── markdown.ts        # Markdown rendering helpers
+│       ├── theme.ts           # Theme preference storage and application
 │       └── keyboard.ts        # Global keyboard shortcut registration
 ```
 
@@ -110,29 +124,40 @@ frontend/
 
 ```
 <StrictMode>
-  <RpcProvider url="ws://localhost:8000/ws">
-    <BrowserRouter>
-      <App>
-        <Routes>
-          <Route path="/" element={<AppShell />}>
-            <Route index element={<Navigate to="/workspace" />} />
-            <Route path="workspace" element={<WorkspaceLayout />}>
-              <Route index />
-              <Route path="spec/:specId" />
-              <Route path="session/:taskId" />
-              <Route path="graph" />
-            </Route>
-          </Route>
-        </Routes>
-        <NewSessionModal />       {/* global, rendered via portal */}
-        <CommandPalette />        {/* global, rendered via portal */}
-        <Notifications />         {/* global, fixed position */}
-        <ConnectionBanner />      {/* reconnect UI */}
+  <Root>                                {/* manages projectPath state + picker */}
+    <ProjectPicker />                   {/* full-screen if no project selected */}
+    <RpcProvider url={wsUrl} key={projectPath}>
+      <App projectPath={...} onSwitchProject={...}>
+        <BrowserRouter>
+          <AppRoutes onSwitchProject={...}>
+            <Routes>
+              <Route path="/" element={<AppShell onSwitchProject={...} />}>
+                <Route index element={<Navigate to="/workspace" />} />
+                <Route path="workspace">
+                  <Route index />
+                  <Route path="spec/:specId" />
+                  <Route path="session/:taskId" />
+                  <Route path="graph" />
+                </Route>
+              </Route>
+            </Routes>
+          </AppRoutes>
+          <NewSessionModal />           {/* global, rendered via portal */}
+          <CommandPalette />            {/* global, rendered via portal */}
+          <ToastContainer />            {/* global, fixed position */}
+        </BrowserRouter>
       </App>
-    </BrowserRouter>
-  </RpcProvider>
+    </RpcProvider>
+    {showPicker && <ProjectPicker onSelect={...} onClose={...} />}
+  </Root>
 </StrictMode>
 ```
+
+**Key points:**
+- `Root` (in `main.tsx`) owns project selection state and renders `ProjectPicker` full-screen until a project is chosen.
+- `RpcProvider` is keyed on `projectPath` so the WebSocket reconnects on project switch.
+- `BrowserRouter` lives inside `App`, not outside it.
+- `App` receives `projectPath` and `onSwitchProject` props from `Root`.
 
 ## Routing
 
@@ -140,24 +165,26 @@ frontend/
 
 | Route | Purpose | Effect |
 | --- | --- | --- |
-| `/` | Redirect | → `/workspace` |
+| `/` | Redirect | `<Navigate to="/workspace" replace />` |
 | `/workspace` | Default view | Three-panel layout, no specific selection |
 | `/workspace/spec/:specId` | Spec focused | Right panel shows spec, graph highlights it |
 | `/workspace/session/:taskId` | Session focused | Center panel activates that session tab |
 | `/workspace/graph` | Graph focused | Right panel switches to graph tab |
 
-### Route ↔ State Sync
+All workspace child routes render `element={null}` -- the `AppShell` reads route params via hooks and delegates to appropriate panels through `<Outlet />`.
+
+### Route <-> State Sync
 
 Routes are the **source of truth** for navigation-level state. Zustand stores handle app-level state.
 
 ```typescript
-// On route change → update stores:
+// On route change -> update stores:
 useEffect(() => {
   if (params.specId) specStore.selectSpec(params.specId);
   if (params.taskId) sessionStore.switchSession(params.taskId);
 }, [params]);
 
-// On store action → update route:
+// On store action -> update route:
 function selectSpec(id: string) {
   specStore.selectSpec(id);
   navigate(`/workspace/spec/${id}`);
@@ -167,96 +194,197 @@ function selectSpec(id: string) {
 ### Deep Linking
 
 URLs are shareable within a session:
-- `/workspace/spec/module-spec` → opens the app with Spec Module selected
-- `/workspace/session/abc123` → opens with that session active
+- `/workspace/spec/module-spec` -- opens the app with Spec Module selected
+- `/workspace/session/abc123` -- opens with that session active
 - Browser back/forward navigates between spec/session selections
 
 ## AppShell Component
 
-The three-panel layout wrapper:
+The three-panel layout wrapper. Receives `onSwitchProject` prop from the route tree and passes it to `Header`.
 
 ```tsx
-function AppShell() {
-  const { leftCollapsed, rightCollapsed, toggleLeft, toggleRight } = useUiStore();
+const LEFT_DEFAULT = 260;
+const RIGHT_DEFAULT = 380;
+
+function AppShell({ onSwitchProject }: { onSwitchProject: () => void }) {
+  const leftCollapsed = useUiStore((s) => s.leftPanelCollapsed);
+  const rightCollapsed = useUiStore((s) => s.rightPanelCollapsed);
+  const toggleLeft = useUiStore((s) => s.toggleLeftPanel);
+  const toggleRight = useUiStore((s) => s.toggleRightPanel);
+
+  const [leftWidth, setLeftWidth] = useState(LEFT_DEFAULT);   // 260px default
+  const [rightWidth, setRightWidth] = useState(RIGHT_DEFAULT); // 380px default
+  const [showSessionManager, setShowSessionManager] = useState(false);
 
   return (
     <div className="app-shell">
-      <Header />
+      <Header onSwitchProject={onSwitchProject} />
       <div className="layout">
         {leftCollapsed ? (
-          <button className="left-collapse-btn" onClick={toggleLeft} />
+          <button className="left-collapse-btn" onClick={toggleLeft}
+            title="Open left panel (Ctrl+B)">&#9654;</button>
         ) : (
           <>
-            <LeftPanel />
-            <ResizeHandle side="left" />
+            <div style={{ width: leftWidth }}>
+              <LeftPanel />
+            </div>
+            <ResizeHandle
+              side="left"
+              panelWidth={leftWidth}
+              onResize={handleLeftResize}
+              onCollapse={toggleLeft}
+              min={140}
+              collapseThreshold={100}
+            />
           </>
         )}
-        <CenterPanel />
+        <div className="center-panel">
+          <Outlet />
+          {showSessionManager ? (
+            <SessionManager onClose={handleCloseSessionManager} />
+          ) : (
+            <SessionPanel />
+          )}
+        </div>
         {rightCollapsed ? (
-          <button className="right-collapse-btn" onClick={toggleRight} />
+          <button className="right-collapse-btn" onClick={toggleRight}
+            title="Open context panel (Cmd+J)">&#9664;</button>
         ) : (
           <>
-            <ResizeHandle side="right" />
-            <ContextPanel />
+            <ResizeHandle
+              side="right"
+              panelWidth={rightWidth}
+              onResize={handleRightResize}
+              onCollapse={toggleRight}
+              min={200}
+              collapseThreshold={150}
+            />
+            <div style={{ width: rightWidth }}>
+              <ContextPanel />
+            </div>
           </>
         )}
       </div>
-      <StatusBar />
+      <StatusBar onOpenSessionManager={handleOpenSessionManager} />
     </div>
   );
 }
 ```
 
+### ResizeHandle Interface
+
+```typescript
+interface ResizeHandleProps {
+  side: "left" | "right";             // Which side of the layout
+  panelWidth: number;                 // Current width of the adjacent panel
+  onResize: (width: number) => void;  // Called on drag with new width
+  onCollapse: () => void;             // Called when dragged below collapseThreshold
+  min: number;                        // Minimum allowed width in px
+  max?: number;                       // Optional maximum width in px
+  collapseThreshold: number;          // Width below which panel auto-collapses
+}
+```
+
+The handle is a 4px-wide vertical bar using `cursor: col-resize`. It highlights with `var(--blue)` on hover. Drag logic attaches `mousemove`/`mouseup` listeners to `document` for reliable tracking outside the handle element.
+
+### Resize Width Constraints
+
+Each resize callback constrains the panel width to prevent overlapping with the opposite panel:
+
+```typescript
+const handleLeftResize = useCallback((w: number) => {
+  const rightSpace = rightCollapsed ? 20 : rightWidth + 4;
+  const maxLeft = window.innerWidth - rightSpace - 300 - 4;
+  setLeftWidth(Math.min(w, maxLeft));
+}, [rightCollapsed, rightWidth]);
+```
+
+The center panel has `min-width: 300px` enforced via CSS (`.center-panel`).
+
+### Header Component
+
+```tsx
+function Header({ onSwitchProject }: { onSwitchProject: () => void }) {
+  // Left side:
+  //   - Logo text "Bonsai" (purple, font-weight 600)
+  //   - Project button (calls onSwitchProject, shows projectName from uiStore)
+  //   - Active session count with pulsing green dot (hidden when 0)
+  // Right side:
+  //   - "Tree" button   -> toggleLeftPanel()   (Ctrl+B)
+  //   - "Context" button -> toggleRightPanel()  (Cmd+J)
+  //   - "+ New" button   -> openModal()          (Cmd+T, primary style)
+}
+```
+
+### StatusBar Component
+
+```typescript
+interface StatusBarProps {
+  onOpenSessionManager: () => void;
+}
+
+function StatusBar({ onOpenSessionManager }: StatusBarProps) {
+  // Left side: spec counts (total, done, pending), clickable session count,
+  //            pending attention count (gold, from notificationStore)
+  // Right side: keyboard shortcut hints (Cmd+T, Ctrl+B, Cmd+J, Cmd+K)
+}
+```
+
+Clicking the session count in the status bar triggers `onOpenSessionManager`, which toggles the center panel between `SessionPanel` and `SessionManager`.
+
+### SessionPanel / SessionManager Toggling
+
+The center panel below `<Outlet />` switches between two views:
+
+- **SessionPanel** (default): Shows the session tab bar and active chat stream
+- **SessionManager**: Full session management view with a "Back to sessions" button
+
+The toggle state is local to AppShell (`showSessionManager` via `useState`). The `StatusBar` session count button opens the manager; the back button in the manager header closes it.
+
 ## Bootstrap Sequence
 
-What happens on app load (`main.tsx`):
+What happens on app load (`main.tsx` and `App.tsx`):
 
 ```
-1. Mount React app
-2. Initialize RpcClient with ws://localhost:8000/ws
-3. Connect WebSocket
-4. Wire event subscriptions (see STATE_MANAGEMENT.md §Event Wiring)
-5. Fetch initial data in parallel:
-   - spec/list → specStore
-   - spec/graph → specStore
-   - agent/list → sessionStore (restore running sessions)
-   - cost/summary → costStore
-6. Apply theme from localStorage
-7. Restore UI state from localStorage (panel visibility, active tabs)
-8. Render AppShell
-9. Start cost polling (if sessions active)
+1. Apply theme from localStorage (before React mount, avoids flash):
+   applyTheme(getThemePreference())
+2. Construct backend address dynamically:
+   - DEV:  BACKEND = "localhost:8000", WS_PROTO = "ws:"
+   - PROD: BACKEND = location.host,    WS_PROTO matches page protocol
+3. Mount React app (<StrictMode> -> <Root>)
+4. Show ProjectPicker full-screen (no close button, no project yet)
+5. On project selection:
+   a. Build WebSocket URL: ws[s]://<BACKEND>/ws?project=<encodedPath>
+   b. Create RpcProvider keyed on projectPath
+   c. Render App component (BrowserRouter, keyboard shortcuts, viewport tracking)
+6. On WebSocket "connected" state:
+   a. Wire event subscriptions: wireEvents(client)
+   b. Set project in uiStore: setProject(projectPath)
+   c. Fetch initial data:
+      - spec/list  -> specStore.fetchSpecs()
+      - spec/graph -> specStore.fetchGraph()
+7. UI state restoration is automatic via Zustand persist middleware
+   (panel visibility, active tabs restored from localStorage)
+8. Render AppShell via route match
 ```
 
-### Loading State
+### Reconnection
 
-During bootstrap (steps 2-5), show a minimal loading screen:
-
-```
-┌──────────────────────────────────────┐
-│                                      │
-│        🌿 Bonsai                     │
-│        Connecting...                 │
-│                                      │
-└──────────────────────────────────────┘
-```
-
-On WebSocket failure: show connection error with retry button.
+When `connectionState` transitions to `"disconnected"` or `"failed"`, the `wiredRef` flag resets. On reconnection (state returns to `"connected"`), events are re-wired and initial data is re-fetched automatically.
 
 ## Global Keyboard Shortcuts
 
-Registered once at the app level (`utils/keyboard.ts`):
+Registered once at the app level (`utils/keyboard.ts`), via `useEffect(() => registerKeyboardShortcuts(), [])` in `App.tsx`:
 
 | Shortcut | Action | Handler |
 | --- | --- | --- |
 | `Cmd+K` | Open command palette | `uiStore.togglePalette()` |
-| `Cmd+T` | New session | `uiStore.openModal()` |
-| `Cmd+1-9` | Switch session tab | `sessionStore.switchSession(n)` |
-| `Cmd+Enter` | Send message | Delegated to ChatStream input |
-| `Ctrl+B` | Toggle left panel | `uiStore.toggleLeftPanel()` |
+| `Cmd+T` | New session modal | `uiStore.openModal()` |
 | `Cmd+J` | Toggle right panel | `uiStore.toggleRightPanel()` |
-| `Escape` | Close modal/palette | Context-dependent |
+| `Ctrl+B` | Toggle left panel | `uiStore.toggleLeftPanel()` |
+| `Escape` | Close modal/palette | Closes topmost: palette first, then modal |
 
-**Implementation:** Single `keydown` listener on `document`, routing to actions based on key combos. Disabled when a text input is focused (except `Cmd+Enter`, `Escape`).
+**Implementation:** Single `keydown` listener on `document`, routing to actions based on key combos. All shortcuts except `Escape` are disabled when a text input (`<input>`, `<textarea>`, or `contentEditable`) is focused. The `Ctrl+B` handler checks `e.ctrlKey && !e.metaKey` specifically to avoid conflicts with the browser bold shortcut on macOS.
 
 ## Naming Conventions
 
@@ -265,7 +393,7 @@ Registered once at the app level (`utils/keyboard.ts`):
 | Component files | PascalCase | `ChatStream.tsx` |
 | Component folders | PascalCase | `ChatStream/` |
 | Store files | camelCase | `sessionStore.ts` |
-| Utility files | camelCase | `format.ts` |
+| Utility files | camelCase | `theme.ts` |
 | Type files | camelCase | `spec.ts` |
 | CSS classes | kebab-case | `.chat-stream` |
 | CSS variables | kebab-case with `--` prefix | `--bg`, `--blue` |
@@ -278,24 +406,37 @@ Registered once at the app level (`utils/keyboard.ts`):
 
 ```typescript
 // vite.config.ts
+import path from "path";
+
 export default defineConfig({
   plugins: [react()],
+  resolve: {
+    alias: {
+      "@": path.resolve(__dirname, "src"),
+    },
+  },
   server: {
     port: 3000,
     proxy: {
-      '/ws': { target: 'ws://localhost:8000', ws: true },
-      '/terminal': { target: 'ws://localhost:8000', ws: true },
+      "/ws": {
+        target: "http://localhost:8000",
+        ws: true,
+        changeOrigin: true,
+      },
+      "/terminal": {
+        target: "http://localhost:8000",
+        ws: true,
+        changeOrigin: true,
+      },
     },
-  },
-  build: {
-    outDir: 'dist',
-    sourcemap: true,
   },
 });
 ```
 
-- Dev server on port 3000, proxies WebSocket to backend on 8000
-- Production build outputs to `dist/` — served by FastAPI as static files
+- Dev server on port 3000, proxies WebSocket paths to backend on 8000
+- `resolve.alias` maps `@/` to `src/` for clean imports
+- Proxy target uses `http://` (not `ws://`) with `changeOrigin: true`
+- No custom `build` section -- Vite defaults apply
 
 ### TypeScript
 
@@ -303,16 +444,28 @@ export default defineConfig({
 {
   "compilerOptions": {
     "target": "ES2022",
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
     "module": "ESNext",
+    "moduleResolution": "bundler",
     "jsx": "react-jsx",
     "strict": true,
-    "baseUrl": "src",
-    "paths": { "@/*": ["./*"] }
-  }
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "noFallthroughCasesInSwitch": true,
+    "isolatedModules": true,
+    "skipLibCheck": true,
+    "esModuleInterop": true,
+    "resolveJsonModule": true,
+    "allowImportingTsExtensions": true,
+    "noEmit": true,
+    "baseUrl": ".",
+    "paths": { "@/*": ["src/*"] }
+  },
+  "include": ["src"]
 }
 ```
 
-Path alias `@/` maps to `src/` for clean imports: `import { useSpecs } from "@/api/hooks/useSpecs"`.
+`baseUrl` is `.` (project root), not `src`. Path alias `@/` maps to `src/` for clean imports: `import { useSpecs } from "@/api/hooks/useSpecs"`.
 
 ## Testing Strategy (Overview)
 
@@ -327,23 +480,24 @@ Test files colocated with source: `ChatStream.test.tsx` next to `ChatStream.tsx`
 
 ## Dependencies Summary
 
-| Package | Size | Purpose |
-| --- | --- | --- |
-| `react` + `react-dom` | ~45KB | UI framework |
-| `react-router-dom` | ~15KB | Routing |
-| `zustand` | ~1KB | State management |
-| `@xterm/xterm` | ~100KB | Terminal emulator (loaded lazily for Console) |
-| `@xterm/addon-fit` | ~2KB | Terminal resize |
+| Package | Purpose |
+| --- | --- |
+| `react` + `react-dom` | UI framework |
+| `react-router-dom` | Client-side routing |
+| `zustand` | State management |
+| `@monaco-editor/react` + `monaco-editor` | Code viewer / editor (FileViewer) |
+| `react-markdown` + `remark-gfm` | Markdown rendering |
+| `mermaid` | Diagram rendering |
 
-**Total estimated bundle:** ~165KB gzipped (excluding xterm.js which is lazy-loaded).
+Dev dependencies: `@vitejs/plugin-react`, `typescript`, `vite`, `vitest`, `eslint`, `@testing-library/react`, `@types/react`, `@types/react-dom`.
 
-No graph library, no rich text editor, no CSS framework — intentionally minimal.
+No CSS framework -- intentionally minimal. Monaco and Mermaid are the heaviest runtime dependencies.
 
 ## Known Limitations
 
 - **No multi-window:** Cannot pop out panels into separate browser windows
-- **No workspace persistence beyond URL:** Panel widths and scroll positions are not saved (only panel visibility and active tabs)
-- **Single WebSocket:** Opening a second browser tab would disconnect the first
+- **Panel widths not persisted:** Resize widths (`leftWidth`/`rightWidth`) are local component state and reset on reload; only panel collapsed/expanded state and active tabs are persisted via Zustand persist middleware
+- **Single WebSocket per project:** Opening a second browser tab for the same project creates a separate connection
 
 ## Related Specs
 

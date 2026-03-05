@@ -1,6 +1,8 @@
 # Responsive Behavior — Sub-Specification
 
-> Parent: [WEBVIEW.md](../WEBVIEW.md) §9 | Status: **Active** | Created: 2026-03-02
+> Parent: [WEBVIEW.md](../WEBVIEW.md) §9 | Status: **Draft** | Created: 2026-03-02
+
+> **Note:** This spec is mostly a **design document for planned behavior**. Currently implemented: breakpoint detection in `uiStore`, hiding `.header-project`, `.header-sessions`, `.status-right` at `<1024px`. **Not yet implemented:** drawer mode, auto-collapse, panel max widths, collapse/expand animations, per-component responsive rules.
 
 ## Overview
 
@@ -129,15 +131,18 @@ At < 1024px:
 
 ## State
 
+These fields are part of the unified `UiStore` interface (not a separate interface):
+
 ```typescript
-interface ResponsiveState {
-  viewportWidth: number;
-  breakpoint: "desktop" | "laptop" | "below-min";
-  leftCollapsed: boolean;
-  rightCollapsed: boolean;
-  leftDrawerOpen: boolean;    // only used at < 1024px
-  rightDrawerOpen: boolean;   // only used at < 1024px
-}
+// In uiStore (implemented)
+viewportWidth: number;
+breakpoint: "desktop" | "laptop" | "below-min";
+leftPanelCollapsed: boolean;   // note: "Panel" in field name
+rightPanelCollapsed: boolean;
+
+// In uiStore (declared but not yet wired)
+leftDrawerOpen: boolean;    // only used at < 1024px (planned)
+rightDrawerOpen: boolean;   // only used at < 1024px (planned)
 ```
 
 ## CSS Implementation

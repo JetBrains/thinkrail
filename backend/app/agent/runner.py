@@ -112,98 +112,121 @@ async def run(
     session_id = ""
 
     async with ClaudeSDKClient(options=options) as client:
-        # Wait for init message to get session_id
-        # The SDK may emit SystemMessage(init) before the first query,
-        # or after — handle both cases in the event loop below.
+        tracker.set_client(task.id, client)
+        # Track tool calls that change permission mode (ExitPlanMode, EnterPlanMode)
+        # so we can notify the frontend when the SDK changes mode internally.
+        _mode_change_tools: dict[str, str] = {}  # tool_use_id → new permission_mode
+        try:
+            # Wait for init message to get session_id
+            # The SDK may emit SystemMessage(init) before the first query,
+            # or after — handle both cases in the event loop below.
 
-        # Task starts in idle — ready for first message
-        # -- conversation loop --
-        while True:
-            message = await tracker.get_next_message(task.id)
+            # Task starts in idle — ready for first message
+            # -- conversation loop --
+            while True:
+                message = await tracker.get_next_message(task.id)
 
-            if message is END_SIGNAL:
-                break
+                if message is END_SIGNAL:
+                    break
 
-            tracker.set_status(task.id, "running")
-            await client.query(message)
+                tracker.set_status(task.id, "running")
+                await client.query(message)
 
-            async for sdk_event in client.receive_response():
-                if isinstance(sdk_event, SystemMessage) and sdk_event.subtype == "init":
-                    session_id = sdk_event.data.get("session_id", "")
-                    tracker.set_session_id(task.id, session_id)
-                    sdk_data = {to_camel(k): v for k, v in sdk_event.data.items()}
-                    await notify("agent/sessionStart", {
-                        "taskId": task.id,
-                        "sessionId": session_id,
-                        **sdk_data,
-                    })
-
-                elif isinstance(sdk_event, AssistantMessage):
-                    for block in sdk_event.content:
-                        if isinstance(block, TextBlock):
-                            await notify("agent/textDelta", {
+                async for sdk_event in client.receive_response():
+                    if isinstance(sdk_event, SystemMessage) and sdk_event.subtype == "init":
+                        new_sid = sdk_event.data.get("session_id", "")
+                        first_init = not session_id
+                        session_id = new_sid
+                        tracker.set_session_id(task.id, session_id)
+                        if first_init:
+                            sdk_data = {to_camel(k): v for k, v in sdk_event.data.items()}
+                            await notify("agent/sessionStart", {
                                 "taskId": task.id,
                                 "sessionId": session_id,
-                                "text": block.text,
-                            })
-                        elif isinstance(block, ToolUseBlock):
-                            await notify("agent/toolCallStart", {
-                                "taskId": task.id,
-                                "sessionId": session_id,
-                                "toolUseId": block.id,
-                                "toolName": block.name,
-                                "toolInput": block.input,
+                                **sdk_data,
                             })
 
-                elif isinstance(sdk_event, UserMessage):
-                    content = sdk_event.content
-                    if isinstance(content, list):
-                        for block in content:
-                            if isinstance(block, ToolResultBlock):
-                                await notify("agent/toolCallEnd", {
+                    elif isinstance(sdk_event, AssistantMessage):
+                        for block in sdk_event.content:
+                            if isinstance(block, TextBlock):
+                                await notify("agent/textDelta", {
                                     "taskId": task.id,
                                     "sessionId": session_id,
-                                    "toolUseId": block.tool_use_id,
-                                    "toolName": "",
-                                    "output": block.content if isinstance(block.content, str) else str(block.content),
-                                    "isError": block.is_error or False,
+                                    "text": block.text,
+                                })
+                            elif isinstance(block, ToolUseBlock):
+                                if block.name == "ExitPlanMode":
+                                    _mode_change_tools[block.id] = "default"
+                                elif block.name == "EnterPlanMode":
+                                    _mode_change_tools[block.id] = "plan"
+                                await notify("agent/toolCallStart", {
+                                    "taskId": task.id,
+                                    "sessionId": session_id,
+                                    "toolUseId": block.id,
+                                    "toolName": block.name,
+                                    "toolInput": block.input,
                                 })
 
-                elif isinstance(sdk_event, ResultMessage):
-                    turn_cost = sdk_event.total_cost_usd or 0.0
-                    turn_turns = sdk_event.num_turns
-                    total_cost += turn_cost
-                    total_turns += turn_turns
-                    duration_ms = int((time.monotonic() - start_time) * 1000)
+                    elif isinstance(sdk_event, UserMessage):
+                        content = sdk_event.content
+                        if isinstance(content, list):
+                            for block in content:
+                                if isinstance(block, ToolResultBlock):
+                                    # Detect SDK-internal permission mode changes
+                                    new_mode = _mode_change_tools.pop(block.tool_use_id, None)
+                                    if new_mode and not (block.is_error or False):
+                                        task.config.permission_mode = new_mode
+                                        await notify("agent/configChanged", {
+                                            "taskId": task.id,
+                                            "model": task.config.model,
+                                            "permissionMode": new_mode,
+                                        })
+                                    await notify("agent/toolCallEnd", {
+                                        "taskId": task.id,
+                                        "sessionId": session_id,
+                                        "toolUseId": block.tool_use_id,
+                                        "toolName": "",
+                                        "output": block.content if isinstance(block.content, str) else str(block.content),
+                                        "isError": block.is_error or False,
+                                    })
 
-                    if sdk_event.is_error:
-                        # Send error notification but DON'T terminate the session.
-                        # Go back to idle so the user can send another message.
-                        await notify("agent/error", {
-                            "taskId": task.id,
-                            "sessionId": sdk_event.session_id or session_id,
-                            "subtype": "turn_error",
-                            "errors": [sdk_event.result] if sdk_event.result else [],
-                            "result": sdk_event.result or "",
-                            "costUsd": total_cost,
-                            "turns": total_turns,
-                            "durationMs": duration_ms,
-                            "usage": sdk_event.usage or {},
-                        })
-                        tracker.set_status(task.id, "idle")
-                        break  # back to conversation loop, wait for next message
-                    else:
-                        await notify("agent/turnComplete", {
-                            "taskId": task.id,
-                            "sessionId": sdk_event.session_id or session_id,
-                            "result": sdk_event.result or "",
-                            "costUsd": turn_cost,
-                            "turns": turn_turns,
-                            "durationMs": duration_ms,
-                            "usage": sdk_event.usage or {},
-                        })
-                        tracker.set_status(task.id, "idle")
-                        break  # turn done, go back to waiting
+                    elif isinstance(sdk_event, ResultMessage):
+                        turn_cost = sdk_event.total_cost_usd or 0.0
+                        turn_turns = sdk_event.num_turns
+                        total_cost += turn_cost
+                        total_turns += turn_turns
+                        duration_ms = int((time.monotonic() - start_time) * 1000)
+
+                        if sdk_event.is_error:
+                            # Send error notification but DON'T terminate the session.
+                            # Go back to idle so the user can send another message.
+                            await notify("agent/error", {
+                                "taskId": task.id,
+                                "sessionId": sdk_event.session_id or session_id,
+                                "subtype": "turn_error",
+                                "errors": [sdk_event.result] if sdk_event.result else [],
+                                "result": sdk_event.result or "",
+                                "costUsd": total_cost,
+                                "turns": total_turns,
+                                "durationMs": duration_ms,
+                                "usage": sdk_event.usage or {},
+                            })
+                            tracker.set_status(task.id, "idle")
+                            break  # back to conversation loop, wait for next message
+                        else:
+                            await notify("agent/turnComplete", {
+                                "taskId": task.id,
+                                "sessionId": sdk_event.session_id or session_id,
+                                "result": sdk_event.result or "",
+                                "costUsd": turn_cost,
+                                "turns": turn_turns,
+                                "durationMs": duration_ms,
+                                "usage": sdk_event.usage or {},
+                            })
+                            tracker.set_status(task.id, "idle")
+                            break  # turn done, go back to waiting
+        finally:
+            tracker.clear_client(task.id)
 
     # Session closed gracefully (END_SIGNAL received)
     duration_ms = int((time.monotonic() - start_time) * 1000)

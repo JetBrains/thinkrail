@@ -36,7 +36,7 @@ class TestMethods:
             "spec/list", "spec/get", "spec/create",
             "spec/update", "spec/delete", "spec/graph",
             "agent/run", "agent/send", "agent/status", "agent/list",
-            "agent/interrupt", "agent/end", "agent/respond",
+            "agent/interrupt", "agent/end", "agent/respond", "agent/updateConfig",
             "session/list", "session/get", "session/continue", "session/delete",
         }
         assert set(METHODS.keys()) == expected

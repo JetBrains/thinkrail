@@ -1,489 +1,769 @@
 # Chat UI Rendering — Sub-Specification
 
-> Parent: [CENTER_PANEL.md](CENTER_PANEL.md) | Status: **Active** | Created: 2026-02-27
+> Parent: [CENTER_PANEL.md](CENTER_PANEL.md) | Status: **Active** | Created: 2026-02-27 | Updated: 2026-03-05
 
 ## Overview
 
 The Chat UI is the center panel's primary content area. It renders a scrolling stream of visual elements derived from JSON-RPC agent event notifications. Each event type maps to a distinct React component with specific rendering rules, interaction behaviors, and state transitions.
 
+This spec reflects the **actual implemented code** as of 2026-03-05. Items not yet implemented are marked **[Planned]**.
+
+---
+
 ## Component Hierarchy
 
 ```
-<SessionPanel>                         // one per session tab
-  <SessionHeader />                    // skill badge, name, status, spec chips
-  <ChatStream>                         // scrollable message list
-    <SystemMessage />                  // agent/notification, session start
-    <AssistantMessage />               // agent/textDelta
-    <UserMessage />                    // user-submitted text
-    <ToolCallCard />                   // agent/toolCallStart + toolCallEnd
-    <SubagentBlock>                    // agent/subagentStart + subagentEnd
-      <ToolCallCard /> ...             // nested tool calls within subagent
-    </SubagentBlock>
-    <QuestionCard />                   // agent/askUserQuestion
-    <ApprovalCard />                   // agent/confirmAction
-    <CompletionBanner />               // agent/done
-    <ErrorBanner />                    // agent/error
-    <CompactMarker />                  // agent/compact
-    <PermissionDeniedBanner />         // agent/permissionDenied
-  </ChatStream>
-  <SessionStatusLine />                // model, cost, progress, context bar
-  <InputArea />                        // textarea + send button
-</SessionPanel>
+<SessionPanel>                         // manages sessions + file tabs; one instance in center panel
+  <SessionTabBar>                      // unified tab bar: session tabs + file tabs + preview tab
+  // Content area — one of the following three:
+  <FileViewer />                       // when a file or preview tab is active
+  <>
+    <ChatStream>                       // scrollable event list (flex column, overflow-y auto)
+      // Rendered per-event:
+      <SystemMessage />                // sessionStart, notification, turnComplete, interrupted
+      <div.chat-user>                  // userMessage (inline, not a named component)
+        <div.chat-user-text />
+      </div>
+      <AssistantMessage />             // textDelta
+      <ToolCallCard />                 // toolCallStart (paired with toolCallEnd state)
+      <SubagentBlock />                // subagentStart (finished derived from subagentEnd)
+      <QuestionCard />                 // askUserQuestion
+      <ApprovalCard />                 // confirmAction
+      <CompletionBanner />             // done
+      <ErrorBanner />                  // error
+      <CompactMarker />                // compact
+      <div.chat-banner.chat-banner-warn />  // permissionDenied (inline, no named component)
+      // turnComplete: AssistantMessage (if result) + SystemMessage
+      // toolCallEnd, subagentEnd: return null (handled by pairing logic)
+      // progress: return null (no visible element)
+      <button.chat-jump-btn />         // sticky "Jump to bottom" button (conditional)
+    </ChatStream>
+    <SessionStatusLine />              // model selector, permission mode selector, cost, tool calls, context bar, status indicator
+    <InputArea />                      // textarea + skill autocomplete + send button
+    // OR instead of InputArea:
+    <RestoredBar />                    // for restored (read-only) sessions
+  </>
+  <div.center-placeholder />          // when no sessions/files open, or no active tab
 ```
 
-## Event-to-Component Mapping
-
-### 1. `agent/sessionStart`
-
-**Params:** `{ taskId, sessionId, model, tools[], cwd, permissionMode }`
-
-**Rendering:** `<SystemMessage>` with session info.
-
-```
-┌─────────────────────────────────────────────────────────┐
-│  Session started — module-design · claude-opus-4-6      │
-│  12 tools available · permission: default               │
-└─────────────────────────────────────────────────────────┘
-```
-
-- Centered, italic, muted color (`--hint`)
-- Green color variant (`.ok`)
-- Populates `<SessionStatusLine>` with model name
-- Non-interactive
+**Key structural notes:**
+- `SessionPanel` is **not** structured as `SessionHeader + ChatStream + StatusLine + InputArea` as previously specced. There is **no `<SessionHeader>`** component.
+- The `<SessionTabBar>` handles both session tabs and file/preview tabs in a single unified bar.
+- When no sessions and no files are open, `SessionPanel` renders `<div className="center-placeholder">Select a session or create a new one (Cmd+T)</div>`.
+- When sessions/files exist but no active tab matches, it renders `<div className="center-placeholder">Select a tab</div>`.
 
 ---
 
-### 2. `agent/textDelta`
+## Sub-Components and Their Actual Props
 
-**Params:** `{ taskId, sessionId, text, streaming }`
+### `<ChatStream>`
 
-**Rendering:** `<AssistantMessage>` — Claude's text response.
-
-**Streaming behavior:**
-- When `streaming: true` — text is appended character-by-character to the current `<AssistantMessage>` bubble. A blinking cursor `▊` is shown at the end.
-- When `streaming: false` — the full text block is rendered at once (non-streaming mode).
-- Multiple consecutive `textDelta` events with `streaming: true` are concatenated into the same bubble.
-- A new `<AssistantMessage>` starts when:
-  - A non-textDelta event arrives between text events
-  - A new turn begins (after user message or tool result)
-
-**Markdown rendering:**
-- Render `text` as GitHub-Flavored Markdown
-- **Inline code** — `code` styled with `--cyan` on `--elevated` background
-- **Code blocks** — syntax-highlighted with language detection. Monospace font, `--elevated` background, rounded border, horizontal scroll if overflow.
-- **Bold** — `--text` color (brighter than surrounding `--muted`)
-- **Links** — `--blue` color, underline on hover
-- **Lists** — standard indentation, bullet/number styling
-- **Tables** — bordered, `--border` color, alternating row background
-- **Headings** — not typically in agent responses, but render if present
-
-**Layout:**
-```
-  Claude                                    ← author label (--purple, 10px)
-  ┌──────────────────────────────────────┐
-  │ I'll implement the **Spec Module**   │  ← bubble (--panel bg, left-aligned)
-  │ based on the specification in        │
-  │ `backend/app/spec/README.md`.        │
-  └──────────────────────────────────────┘
+```typescript
+interface ChatStreamProps {
+  events: AgentEvent[];
+  answeredRequests: Map<string, unknown>;
+  onResolveRequest: (requestId: string, response: unknown) => void;
+}
 ```
 
-- Left-aligned bubble, max-width 90%
-- Border-radius: `10px 10px 10px 2px` (tail bottom-left)
-- Entrance animation: `slideUp` (0.22s ease-out)
+- Root element: `<div className="chat-stream">` with `ref={scrollRef}` and `onScroll={handleScroll}`
+- Iterates `events` with `Array.map`, keyed `${index}-${eventType}`
+- Maintains `autoScroll` ref (boolean, default `true`) — not React state, so no re-render on change
+- Pauses auto-scroll when `distFromBottom >= 50px`
+- Resumes and jumps to bottom on "Jump to bottom" button click (smooth scroll)
+- **"Jump to bottom" button:** Rendered only when `!autoScroll.current`. Uses `position: sticky; bottom: var(--space-sm)` — **not** a floating overlay.
+
+**Event rendering dispatch table:**
+
+| `eventType` | Rendered Element |
+|---|---|
+| `sessionStart` | `<SystemMessage variant="ok" text="Session started — {model}">` |
+| `userMessage` | `<div.chat-user><div.chat-user-text>{text}</div></div>` |
+| `textDelta` | `<AssistantMessage text={text} streaming={streaming}>` |
+| `toolCallStart` | `<ToolCallCard>` (state derived from paired `toolCallEnd`) |
+| `toolCallEnd` | `null` (data consumed by `toolCallStart` pre-pass) |
+| `subagentStart` | `<SubagentBlock>` (finished derived from pre-pass; children=`null`) |
+| `subagentEnd` | `null` |
+| `askUserQuestion` | `<QuestionCard>` |
+| `confirmAction` | `<ApprovalCard>` |
+| `turnComplete` | Optional `<AssistantMessage>` (if `result`) + `<SystemMessage variant="ok">` showing cost and turns |
+| `interrupted` | `<SystemMessage text="Turn interrupted">` (default variant, i.e. `--hint` color) |
+| `done` | `<CompletionBanner>` |
+| `error` | `<ErrorBanner>` |
+| `notification` | `<SystemMessage text={message}>` (default variant) |
+| `compact` | `<CompactMarker>` |
+| `permissionDenied` | `<div className="chat-banner chat-banner-warn">Permission denied: {toolName}</div>` (no named component) |
+| `progress` | `null` (no visible element rendered) |
+| anything else | `null` |
+
+**Pre-pass computations** (done before rendering):
+1. `toolStates` Map: iterates all events to collect `toolCallEnd` payloads keyed by `toolUseId`
+2. `activeSubagents` Set: iterates all events, adds on `subagentStart`, deletes on `subagentEnd`
 
 ---
 
-### 3. User Messages
+### `<SystemMessage>`
 
-**Source:** User input via `<InputArea>` — sent as `agent/respond` or direct text.
-
-**Rendering:** `<UserMessage>` — right-aligned bubble.
-
-```
-                                    You  ← author label (--hint, 10px)
-  ┌──────────────────────────────────────┐
-  │              Markdown first. Go ahead.│  ← bubble (--elevated bg)
-  └──────────────────────────────────────┘
+```typescript
+interface SystemMessageProps {
+  text: string;
+  variant?: "info" | "ok";  // default: "info"
+}
 ```
 
-- Right-aligned, max-width 85%
-- Border-radius: `10px 10px 2px 10px` (tail bottom-right)
-- `--text` color (brighter than Claude's `--muted`)
+- Root: `<div className="chat-system [chat-system-ok?]">`
+- `variant="info"` (default): class `chat-system` only → `color: var(--hint)`, italic, 12px, centered
+- `variant="ok"`: adds `chat-system-ok` → `color: var(--green)`
+- Renders plain `{text}` — no markdown, no icon
+
+**Used for:** `sessionStart` (ok variant), `notification` (info variant), `turnComplete` (ok variant), `interrupted` (info variant)
 
 ---
 
-### 4. `agent/toolCallStart` + `agent/toolCallEnd`
+### `<AssistantMessage>`
 
-**Start params:** `{ taskId, sessionId, toolUseId, toolName, toolInput, parentToolUseId? }`
-**End params:** `{ taskId, sessionId, toolUseId, toolName, output, isError }`
+```typescript
+interface AssistantMessageProps {
+  text: string;
+  streaming?: boolean;
+}
+```
 
-**Rendering:** `<ToolCallCard>` — a collapsible card that transitions through states.
+- Root: `<div className="chat-assistant">` — `max-width: 90%`, `slideUp` entrance animation
+- Inner: `<pre className="chat-assistant-text">` — renders text as **plain pre-formatted text** (NOT markdown)
+- When `streaming=true`: renders `<span className="chat-cursor" />` — 7×14px block cursor, `blink` animation (1s step-end)
+- **No markdown rendering is implemented.** **[Planned]**
+- Each `textDelta` event renders its own `<AssistantMessage>`. They are **not concatenated** — each event index gets its own component with no merge logic.
+- No author label ("Claude") is rendered. **[Planned]**
+
+---
+
+### User Message (inline, no named component)
+
+- Rendered directly in `ChatStream`'s switch as `<div className="chat-user"><div className="chat-user-text">{text}</div></div>`
+- Right-aligned (`justify-content: flex-end`), max-width 85%
+- Background: `var(--elevated)`, border: `1px solid var(--border)`, border-radius: `10px 10px 2px 10px`
+- Color: `var(--text)`, `white-space: pre-wrap`
+- Entrance animation: `slideUp 0.22s ease-out`
+- No author label ("You") rendered. **[Planned]**
+
+---
+
+### `<ToolCallCard>`
+
+```typescript
+interface ToolCallCardProps {
+  toolName: string;
+  toolInput?: string;
+  output?: string;
+  isError?: boolean;
+  state: "running" | "success" | "error";
+}
+```
+
+- Root: `<div className="chat-tool">` with inline `borderLeftColor`
+- Max-width 90%, `background: var(--elevated)`, `slideUp` entrance animation
 
 **States:**
 
-| State | Border color | Status text | Body |
-| --- | --- | --- | --- |
-| Running | `--blue` | `● running...` (animated) | Hidden (collapsed) |
-| Success | `--green` | `✓ done` | Output (collapsed by default, expandable) |
-| Error | `--red` | `✕ error` | Error output (expanded by default) |
+| `state` | `isError` | Border color | Status icon | Status text | Initial `expanded` |
+|---|---|---|---|---|---|
+| `running` | — | `var(--blue)` | `●` | `running...` | `false` |
+| `success` | `false` | `var(--green)` | `✓` | `done` | `false` |
+| `error` | `true` | `var(--red)` | `✕` | `error` | `true` |
 
-**Layout:**
-```
-  ┃ 📖 Read  backend/app/spec/README.md       ✓ done  ← header (clickable)
-  ┃─────────────────────────────────────────────────────
-  ┃ Module spec content (148 lines)...                  ← body (toggle)
-```
+**Header** (`.chat-tool-header`, always visible, clickable when not running):
+- `.chat-tool-icon`: emoji from `TOOL_ICONS` lookup
+- `.chat-tool-name`: `toolName`, `color: var(--cyan)`, `font-weight: 600`
+- `.chat-tool-input`: `toolInput` if provided, `color: var(--muted)`, 11px, truncated with `text-overflow: ellipsis`, max-width 300px
+- `.chat-tool-status`: status icon + text, colored with `borderColor`, `margin-left: auto`
 
-- Left border: 3px colored stripe indicating state
-- **Header** — always visible. Contains:
-  - Tool icon (mapped by tool name, see §Tool Icons)
-  - Tool name (`--cyan`, bold)
-  - Tool input summary (first arg or file path, `--muted`, 10px, truncated)
-  - Status indicator (right-aligned)
-- **Body** — toggle on header click
-  - For `Read` / `Grep` / `Glob`: show output as monospace text, max-height 120px with scroll
-  - For `Write` / `Edit`: show file path and snippet of content
-  - For `Bash`: show command and output
-  - Truncate long outputs to 50 lines with "Show more" link
-- **Collapsing behavior:**
-  - Running: body hidden
-  - Success: body hidden by default (click header to expand)
-  - Error: body expanded by default
-- Max-width: 90% of chat area
+**Body** (`.chat-tool-body`, toggle on header click):
+- Only rendered when `expanded && output`
+- `<pre>` containing the raw output string, 11px, `white-space: pre-wrap`, `color: var(--muted)`
+- `max-height: 120px`, `overflow-y: auto`
+- Header click does nothing when `state === "running"`
 
-**Tool Icons:**
+**Input extraction** (in `ChatStream`, before passing to `ToolCallCard`):
+- if toolInput is a string → use as-is
+- if toolInput is an object → use first object value as string
+- otherwise → empty string ""
+
+**Tool icon map:**
 
 | Tool Name | Icon |
-| --- | --- |
+|---|---|
 | `Read` | 📖 |
 | `Write` | ✏️ |
 | `Edit` | ✏️ |
 | `Bash` | ▶ |
 | `Grep` | 🔍 |
 | `Glob` | 📂 |
+| `Agent` | ⚡ |
 | `WebSearch` | 🌐 |
 | `WebFetch` | 🌐 |
-| `Task` | ⚡ |
-| `TodoWrite` | ✅ |
-| `AskUserQuestion` | ❓ |
 | `NotebookEdit` | 📓 |
 | Other | 🔧 |
 
-**`parentToolUseId` handling:**
-- If `parentToolUseId` is set, this tool call was initiated by a subagent. Render it indented inside the parent `<SubagentBlock>`.
+**`parentToolUseId` nesting:** NOT implemented. Subagent tool calls are rendered at the flat event stream level regardless of `parentToolUseId`. **[Planned]**
 
 ---
 
-### 5. `agent/subagentStart` + `agent/subagentEnd`
+### `<SubagentBlock>`
 
-**Start params:** `{ taskId, sessionId, agentId, agentType, parentToolUseId }`
-**End params:** `{ taskId, sessionId, agentId }`
-
-**Rendering:** `<SubagentBlock>` — a visually indented section grouping nested events.
-
-**Running state:**
-```
-  ┃ ⚡ Subagent: Explore — searching codebase    [spinner]
-  ┃   ┃ 🔍 Grep  "class.*BaseModel"              ✓ 3 matches
-  ┃   ┃ 📖 Read  backend/app/spec/models.py       ✓ done
+```typescript
+interface SubagentBlockProps {
+  agentType?: string;
+  finished: boolean;
+  children: ReactNode;
+}
 ```
 
-**Completed state:**
-```
-  ┃ ⚡ Subagent: Explore                          ✓ done
-  ┃   [collapsed — click to expand]
-```
-
-- Left border: 2px `--purple` line
-- Indent: 12px margin-left, 12px padding-left
-- Header: agent type name, `--purple` color, bold
-- Running indicator: CSS spinner (10px, `--purple` border, 0.8s rotation)
-- On `subagentEnd`: collapse child tool calls, show summary ("N tool calls, done")
-- Child events (tool calls) between `subagentStart` and `subagentEnd` render indented inside this block
+- Root: `<div className="chat-subagent">` — `margin-left: 12px`, `padding-left: 12px`, `border-left: 2px solid var(--border2)`
+- Header (`.chat-subagent-header`): `color: var(--muted)`, 12px
+  - Icon: `✓` when `finished`, `⚡` when running
+  - Text: `Subagent: {agentType ?? "agent"}`
+  - When not finished: `<span className="chat-spinner" />` (10px CSS spinner, `border-top-color: var(--blue)`)
+- Body (`.chat-subagent-body`): renders `{children}`
+- In practice, `children` is always `null` as called from `ChatStream`. Child tool call nesting **is not implemented**. **[Planned]**
 
 ---
 
-### 6. `agent/askUserQuestion`
+### `<QuestionCard>`
 
-**Params:** `{ taskId, requestId, questions[] }`
-**Each question:** `{ question, header, options[], multiSelect }`
-**Each option:** `{ label, description, markdown? }`
+```typescript
+interface QuestionCardProps {
+  questions: Question[];
+  answered: boolean;
+  selectedAnswers?: Record<string, string>;
+  onSubmit: (response: Record<string, unknown>) => void;
+}
 
-**Rendering:** `<QuestionCard>` — interactive card requiring user response.
-
-```
-  ┌─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ┐  ← purple border (2px)
-  │ APPROACH                               │  ← header (9px, uppercase)
-  │                                        │
-  │ Which format should I prioritize?      │  ← question (12px, bold)
-  │                                        │
-  │ ┌────────────────────────────────────┐ │
-  │ │ ● Markdown first (Recommended)    │ │  ← selected option
-  │ │   All existing specs are Markdown. │ │
-  │ └────────────────────────────────────┘ │
-  │ ┌────────────────────────────────────┐ │
-  │ │ ○ JSON first                      │ │  ← unselected option
-  │ │   Simpler to parse.               │ │
-  │ └────────────────────────────────────┘ │
-  │                                        │
-  │            [Submit]  [Skip]            │  ← action buttons
-  └ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ┘
+interface Question {
+  question: string;
+  header: string;
+  options: QuestionOption[];
+  multiSelect: boolean;
+}
+interface QuestionOption {
+  label: string;
+  description: string;
+}
 ```
 
-**Interaction:**
-- Options are clickable. Single-select: radio behavior. Multi-select: checkbox behavior.
-- Selected option: `--purple` border, subtle purple background tint
-- Hover: `--purple` border, lighter tint
-- "Submit" button — sends `agent/respond` with `{ answers: { [questionText]: selectedLabel } }`
-- "Skip" / "Other" — opens the text input for a custom answer
-- **After response:** card becomes non-interactive, shows the chosen answer with a check mark
-- **Multiple questions:** render each question as a section within the card
+- Root: `<div className="chat-question [chat-question-answered?]">` — `border: 2px solid var(--purple)`, `max-width: 90%`, `background: var(--elevated)`, `slideUp`
+- When `answered`: `opacity: 0.7`
+- Renders each question in a `.chat-question-group`:
+  - `.chat-question-header`: `q.header`, 9px uppercase purple label
+  - `.chat-question-text`: `q.question`, 12px bold
+  - Options present: `.chat-question-options` list of `.chat-option` buttons
+  - No options + not answered: `<textarea className="chat-question-textarea">` (free-text mode, `autoFocus`)
+  - No options + answered: `<div className="chat-question-answer">` showing the text response
 
-**Pending state:**
-- While waiting for user response, the card pulses gently
-- The input area below shows "Answer the question above or type a response..."
+**Option button** (`.chat-option`):
+- Radio icon (`.chat-option-radio`): `●`/`○` for single-select, `☑`/`☐` for multi-select
+- `.chat-option-label`: option label, 12px, font-weight 500
+- `.chat-option-desc`: option description, 11px, `var(--muted)`
+- Selected: class `chat-option-selected` → `border-color: var(--purple)`, `background: rgba(187,154,247,0.1)`
+- Disabled when `answered`
+
+**Submission:**
+- If free-text question: sends `{ text: textInput, answers: selections }`
+- Otherwise: sends `{ questions, answers: { [questionText]: selectedLabel } }`
+- `Cmd/Ctrl+Enter` submits from the free-text textarea
+
+**Actions row** (`.chat-question-actions`, hidden when `answered`):
+- Single button: `.chat-btn.chat-btn-primary` labeled "Send"
+- Disabled when free-text mode and text is empty
 
 ---
 
-### 7. `agent/confirmAction`
+### `<ApprovalCard>`
 
-**Params:** `{ taskId, requestId, toolName, toolInput, description }`
-
-**Rendering:** `<ApprovalCard>` — confirmation prompt for tool execution.
-
-```
-  ┌─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ┐  ← gold border (2px)
-  │ ⚠ Action requires approval            │  ← title (gold, bold)
-  │                                        │
-  │ Bash: pip install markdown-it-py       │  ← tool + input (cyan)
-  │ Install Markdown parsing dependency    │  ← description (muted)
-  │                                        │
-  │    [✓ Approve]    [✕ Deny]            │  ← action buttons
-  └ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ┘
+```typescript
+interface ApprovalCardProps {
+  toolName: string;
+  toolInput?: unknown;
+  description?: string;
+  answered: boolean;
+  decision?: "approve" | "deny";
+  onApprove: () => void;
+  onDeny: () => void;
+}
 ```
 
-**Interaction:**
-- "Approve" — green button, sends `agent/respond` with `{ decision: "approve" }`
-- "Deny" — red outline button, sends `agent/respond` with `{ decision: "deny" }`
-- After response: card becomes non-interactive, shows "✓ Approved" or "✕ Denied"
-- **Tool input display:** for `Bash`, show the command. For `Write`/`Edit`, show the file path. For others, show a summary.
+- Root: `<div className="chat-approval [chat-approval-answered?]">` — `border: 2px solid var(--gold)`, `max-width: 90%`, `background: var(--elevated)`, `slideUp`
+- When `answered`: `opacity: 0.7`
+- `.chat-approval-title`: "Action requires approval", `color: var(--gold)`, 12px bold
+- `.chat-approval-tool`: tool name (`.chat-tool-name` class → `var(--cyan)`) + formatted input (`.chat-approval-input`)
+- `.chat-approval-desc`: optional description, 11px, `var(--muted)`
+
+**`formatToolInput()` logic:**
+- string → use as-is
+- object with `.command` → show command string
+- object with `.file_path` → show file_path string
+- object with `.path` → show path string
+- object with `.pattern` → show pattern string
+- other object → `JSON.stringify(input, null, 2)`
+
+**When not answered** (`.chat-approval-actions`):
+- `.chat-btn.chat-btn-approve` ("Approve") → green background, calls `onApprove`
+- `.chat-btn.chat-btn-deny` ("Deny") → red outline, calls `onDeny`
+
+**When answered** (`.chat-approval-result`):
+- `decision === "approve"`: `✓ Approved` in `var(--green)`
+- `decision === "deny"`: `✕ Denied` in `var(--red)`
+
+**Response sent to backend on approve:** `{ "behavior": "allow" }`
+**Response sent to backend on deny:** `{ "behavior": "deny", "message": "User denied", "interrupt": false }`
 
 ---
 
-### 8. `agent/done`
+### `<CompletionBanner>`
 
-**Params:** `{ taskId, sessionId, result, costUsd, turns, durationMs, usage }`
-
-**Rendering:** `<CompletionBanner>` — session success indicator.
-
+```typescript
+interface CompletionBannerProps {
+  result?: string;
+  costUsd?: number;
+  turns?: number;
+  durationMs?: number;
+}
 ```
-  ┌──────────────────────────────────────────────────────┐
-  │ ✓ Session complete                $0.12 · 8t · 45s  │  ← green border
-  └──────────────────────────────────────────────────────┘
-```
 
-- Green background tint, green border
-- Left: check mark + "Session complete"
-- Right: cost, turn count, duration (formatted)
-- Updates `<SessionStatusLine>` final values
-- Sets session tab status dot to blue (done)
-- Disables `<InputArea>` (session is finished)
+- Root: `<div className="chat-banner chat-banner-done">` — `background: rgba(158,206,106,0.1)`, `border: 1px solid var(--green)`, `color: var(--green)`
+- `.chat-banner-title`: `✓ Session complete`
+- `.chat-banner-metrics`: flex row with optional `$X.XX` / `N turns` / duration string
+  - Duration format: `< 60s → "X.Xs"`, `≥ 60s → "Xm Xs"`
+- `.chat-banner-result`: optional result text, `color: var(--muted)`
 
 ---
 
-### 9. `agent/error`
+### `<ErrorBanner>`
 
-**Params:** `{ taskId, sessionId, subtype, errors[] }`
-
-**Rendering:** `<ErrorBanner>` — session error indicator.
-
-```
-  ┌──────────────────────────────────────────────────────┐
-  │ ✕ Session error: max_turns_reached                   │  ← red border
-  │   Exceeded maximum turn limit (50)                   │
-  └──────────────────────────────────────────────────────┘
+```typescript
+interface ErrorBannerProps {
+  errors?: string[];
+  subtype?: string;
+}
 ```
 
-- Red background tint, red border
-- Shows error subtype and first error message
-- Expandable to show full error details if multiple errors
-- Sets session tab status dot to red (error)
+- Root: `<div className="chat-banner chat-banner-error">` — `background: rgba(247,118,142,0.1)`, `border: 1px solid var(--red)`, `color: var(--red)`
+- `.chat-banner-title`: `✕ Session error[: {subtype}]`
+- `.chat-banner-errors`: `<ul>` of all error strings (all shown, not just first)
 
-**Error subtypes:** `max_turns_reached`, `tool_error`, `api_error`, `context_overflow`, `user_interrupt`, `permission_denied`
+**Recoverable vs terminal errors (store logic, not rendering):**
+- `subtype === "turn_error"` → session status goes back to `"idle"` (recoverable)
+- Other subtypes → session status set to `"error"` (terminal)
 
 ---
 
-### 10. `agent/notification`
+### `<CompactMarker>`
 
-**Params:** `{ taskId, sessionId, message, title? }`
-
-**Rendering:** `<SystemMessage>` — subtle inline notification.
-
-```
-                    ℹ Searching for patterns...
+```typescript
+interface CompactMarkerProps {
+  preTokens?: number;
+}
 ```
 
-- Centered, italic, `--hint` color, 10px
-- If `title` present: show as bold prefix
-- Non-interactive
-- No bubble — plain text in the stream
+- Root: `<div className="chat-compact">` — flex row, 10px, `color: var(--hint)`
+- Two `.chat-compact-line` spans (flex: 1, `border-top: 1px dashed var(--border)`)
+- Center label `.chat-compact-label`: `"Context compacted"` or `"Context compacted — {N}k tokens"` (rounds to nearest 1k)
 
 ---
 
-### 11. `agent/compact`
+### Permission Denied (inline, no named component)
 
-**Params:** `{ taskId, sessionId, trigger, preTokens }`
-
-**Rendering:** `<CompactMarker>` — context boundary indicator.
-
+```html
+<div className="chat-banner chat-banner-warn">
+  Permission denied: {toolName}
+</div>
 ```
-  ─ ─ ─ context compacted — 145k tokens ─ ─ ─
-```
-
-- Dashed border top and bottom
-- Centered text, `--hint` color, 9px
-- Shows pre-compaction token count
-- Updates context bar in `<SessionStatusLine>`
+- Uses `.chat-banner-warn` (gold tint) — no title/tool-input breakdown beyond the tool name
 
 ---
 
-### 12. `agent/permissionDenied`
+### `<SessionStatusLine>`
 
-**Params:** `{ taskId, sessionId, toolName, toolInput }`
-
-**Rendering:** `<PermissionDeniedBanner>` — warning about denied tool.
-
+```typescript
+interface SessionStatusLineProps {
+  model: string;
+  permissionMode: string;
+  metrics: SessionMetrics;
+  status: SessionStatus;
+  disabled?: boolean;
+  onChangeModel?: (model: string) => void;
+  onChangePermissionMode?: (mode: string) => void;
+}
 ```
-  ┌──────────────────────────────────────────────────────┐
-  │ ⚠ Permission denied: Bash                            │  ← gold border
-  │   rm -rf /tmp/test-data                              │
-  └──────────────────────────────────────────────────────┘
-```
 
-- Gold background tint, gold border
-- Shows tool name and input that was denied
-- Non-interactive (informational only)
+Root: `<div className="session-status-line">` — flex row, 11px, `color: var(--hint)`, `border-top: 1px solid var(--border)`
+
+**Segments (left to right):**
+
+1. **Model selector** (`.ssl-selector` with dropdown)
+   - Button (`.ssl-selector-btn`): displays short model label
+   - When `disabled`: adds `.ssl-selector-disabled`
+   - Dropdown (`.ssl-dropdown`): opens upward (`bottom: 100%`), lists all available models
+   - Active model: `.ssl-dropdown-active` → `color: var(--blue)`
+   - Click outside closes via `mousedown` listener
+
+2. **Separator** (`.ssl-sep`: 1px × 12px `var(--border)`)
+
+3. **Permission mode selector** (`.ssl-selector` with dropdown)
+   - Displays short labels: `default` / `accept edits` / `yolo` / `plan`
+   - Full values: `default` / `acceptEdits` / `bypassPermissions` / `plan`
+
+4. **Separator**
+
+5. **Cost** (`.ssl-cost`): `$X.XX` from `metrics.costUsd`
+
+6. **Separator**
+
+7. **Tool calls** (`.ssl-tools`): `[ssl-pulse?] {toolCalls} calls`
+   - `.ssl-pulse`: 6px green dot with `pulse` animation — shown only when `status === "running"`
+
+8. **Context bar** (conditional — only when `metrics.contextMax > 0`):
+   - **Separator**
+   - `.ssl-context`: text `ctx {N}k/{M}k`
+   - `.ssl-context-bar`: 60px × 6px bar, uses CSS vars `--pct` and `--bar-color`
+   - Color thresholds: `> 80%` → `var(--red)`, `> 50%` → `var(--gold)`, else → `var(--green)`
+
+9. **Separator**
+
+10. **Status indicator** (`.ssl-status.ssl-status-{class}`):
+
+| `status` | CSS class | Elements | Color |
+|---|---|---|---|
+| `"running"` | `ssl-status-running` | `.ssl-status-spinner` (CSS spin) + `" running"` | `var(--blue)` |
+| `"idle"`, `"interrupted"` | `ssl-status-waiting` | `⏳ waiting` | `var(--hint)` |
+| `"done"`, `"error"` | `ssl-status-ended` | `⏹ ended` | `var(--muted)` |
+
+**Disabled state:** Both dropdowns get `disabled` attribute and `.ssl-selector-disabled` class. Set to `true` when `session.restored || isDone`.
+
+**Data sources:**
+- Model and permissionMode come from `session.model` and `session.permissionMode` — updated via `agent/configChanged` RPC notification
+- `metrics` comes from `SessionMetrics` — updated in store on `toolCallEnd`, `turnComplete`, `done`
+- Context (`contextTokens`, `contextMax`) must be set externally — there is **no automatic update from `agent/compact`** in the current store. `contextMax` defaults to 0, so the context bar is hidden until set. **[Planned]**
 
 ---
 
-### 13. `agent/progress`
+### `<InputArea>`
 
-**Params:** `{ taskId, sessionId, status, message }`
+```typescript
+interface InputAreaProps {
+  disabled: boolean;
+  placeholder: string;
+  onSend: (text: string) => void;
+}
+```
 
-**Rendering:** Updates `<SessionStatusLine>` progress bar and status text. Does not create a visible element in the chat stream.
+Root: `<div className="input-area">` with `style={{ position: "relative" }}`
+
+**Skill autocomplete:**
+- Triggered when text starts with `/`
+- Filters `SKILLS` array by `id.includes(query)` (case-insensitive)
+- Dropdown (`.input-autocomplete`): appears above input (`bottom: 100%`), max-height 240px
+- Each item (`.input-autocomplete-item`): icon + `/{skill.id}` (cyan) + description (hint, 11px)
+- Keyboard: ArrowUp/ArrowDown to move, Tab/Enter to insert, Escape to dismiss
+- Active item: `.input-autocomplete-active`
+- On select: inserts `/{id} ` into textarea and focuses
+- `onMouseDown` (not `onClick`) used on items to prevent textarea blur
+
+**Textarea** (`.input-textarea`):
+- `rows={1}`, auto-height up to `max-height: 150px`
+- `resize: none`, `border: 1px solid var(--border)`, `background: var(--elevated)`
+- Focus: `border-color: var(--blue)`
+- Disabled: `opacity: 0.5; cursor: not-allowed`
+- `Cmd/Ctrl+Enter` sends; plain `Enter` adds a newline
+
+**Send button** (`.input-send`):
+- Background: `var(--blue)`, label "Send"
+- Disabled when `disabled || !text.trim()`
+
+**Placeholder states** (computed in `SessionPanel`):
+
+| Condition | Placeholder text |
+|---|---|
+| `pendingRequest.type === "approval"` | `"Waiting for your approval above..."` |
+| `pendingRequest.type === "question"` | `"Answer the question above or type a response..."` |
+| `status === "done"` | `"Session complete"` |
+| `status === "error"` | `"Session ended with error"` |
+| `status === "running"` | `"Agent is working..."` |
+| `status === "idle"` (default) | `"Message Claude..."` |
+
+**`disabled` computation** (in `SessionPanel`):
+```typescript
+isDone = status === "done" || status === "error"
+isRunning = status === "running"
+hasPending = pendingRequest != null
+inputDisabled = isDone || isRunning || (hasPending && pendingRequest.type === "approval")
+```
+- Input is **enabled** when waiting for a question (user can type a custom answer)
+
+**Send behavior from `SessionPanel`:**
+- If `pendingRequest.type === "question"`: calls `resolveRequest(taskId, requestId, { text })`
+- If `status === "idle"`: calls `sendMessage(taskId, text)` (sends new turn message)
+- User message is added **optimistically** to events before API response, and status immediately set to `"running"`
+
+---
+
+### `<RestoredBar>`
+
+Shown instead of `<InputArea>` when `session.restored === true`.
+
+- Root: `<div className="restored-bar">` — flex row, `border-top: 1px solid var(--border)`, `background: var(--panel)`
+- `.restored-bar-text`: `"This is a restored session (read-only)"`, italic, 12px, `var(--hint)`
+- `.restored-bar-btn`: "Resume Session" button — calls `api.continue(taskId)`, creates a new session tab carrying over the old session's events and name (with `" (resumed)"` suffix)
+
+---
+
+### `<SessionTabBar>`
+
+Unified tab bar rendering both session tabs and file tabs.
+
+```typescript
+interface SessionTabBarProps {
+  sessions: Session[];
+  activeSessionId: string | null;
+  onSwitchSession: (taskId: string) => void;
+  onCloseSession: (taskId: string) => void;
+  files: OpenFile[];
+  activeFilePath: string | null;
+  onSwitchFile: (path: string) => void;
+  onCloseFile: (path: string) => void;
+  previewFile: OpenFile | null;
+  previewFilePath: string | null;
+  onClearPreview: () => void;
+  onPinPreview: () => void;
+}
+```
+
+Root: `<div className="session-tabs">` — flex row, `border-bottom: 1px solid var(--border)`, `overflow-x: auto`
+
+Returns `null` when no sessions and no files/preview.
+
+**Session tabs** (`.session-tab`):
+- Status dot (`.session-tab-dot`): 6px circle, color by status (`running` → blue, `done` → green, `error` → red, else → hint)
+- Name (`.session-tab-name`): `max-width: 120px`, truncated
+- Pending request badge (`.session-tab-badge`): animated pulse, shows `"Q"` for question or `"A"` for approval
+- Close button (`.session-tab-close`): hidden by default, visible on tab hover
+- Active tab: `.session-tab-active` → `color: var(--text)`, `border-bottom: 2px solid var(--purple)`
+
+**Separator** (`.session-tab-sep`): 1px × 16px between session and file tabs
+
+**Pinned file tabs** (`.session-tab.file-tab`):
+- File icon: 📄, dirty indicator (`.file-tab-dirty` → gold dot if `isDirty`)
+- Close button
+
+**Preview tab** (`.session-tab.file-tab.file-tab-preview`):
+- Name is italic
+- Double-click pins the preview
+- Close button calls `onClearPreview`
+
+---
 
 ## Chat Stream Behavior
 
 ### Auto-scroll
-- Chat auto-scrolls to bottom when new messages arrive
-- Auto-scroll pauses if user has scrolled up (> 50px from bottom)
-- "Jump to bottom" button appears when auto-scroll is paused
-- Auto-scroll resumes when user clicks "Jump to bottom" or scrolls to bottom manually
 
-### Message grouping
-- Consecutive tool calls (without intervening text) are grouped visually with reduced gap (4px instead of 12px)
-- System messages have reduced gap (2px)
+- Auto-scrolls to bottom when `events.length` changes via `useEffect`
+- Pauses when user scrolls up and `distFromBottom >= 50px`
+- `autoScroll` is a `useRef<boolean>` (not state) — toggling it does NOT cause a re-render
+- "Jump to bottom" sticky button appears based on `!autoScroll.current` (only updates on next render from new event)
 
-### Entrance animations
-- All new elements: `slideUp` animation (0.22s ease-out) — translate Y from 6px to 0, opacity 0 to 1
-- Streaming text: no animation per character, only on initial bubble appearance
+### Event key strategy
 
-### Maximum content sizes
-| Element | Max width | Max height |
-| --- | --- | --- |
-| Assistant bubble | 90% | unlimited (scrolls within chat) |
-| User bubble | 85% | unlimited |
-| Tool card body | 90% | 120px (scroll), expandable |
-| Question card | 90% | unlimited |
-| Approval card | 90% | unlimited |
-| Code blocks (in markdown) | 100% of bubble | 300px (scroll) |
+Keys are `${eventIndex}-${eventType}` — index-based, not content-based.
 
-## Session Status Line
+### Animations
 
-Compact strip between chat and input area. Always visible per session.
+All rendered event elements have `animation: slideUp 0.22s ease-out` (opacity 0→1, translateY 6→0px). Gap is uniform `var(--space-md)` on `.chat-stream`.
 
-```
-┌──────────────────────────────────────────────────────────────────────┐
-│ claude-opus-4-6 │ $0.08 │ ██████░░ 12 calls │ ctx 45k/200k ██░░░░ │
-└──────────────────────────────────────────────────────────────────────┘
+---
+
+## Session Status and Store
+
+### `SessionStatus` type
+
+```typescript
+type SessionStatus = "idle" | "running" | "done" | "error" | "interrupted";
 ```
 
-### Data sources and update triggers
+### `SessionMetrics` type
 
-| Element | Source event | Update logic |
-| --- | --- | --- |
-| Model | `agent/sessionStart` → `model` | Set once on session start |
-| Cost | `agent/done` → `costUsd`; estimated during run from `agent/toolCallEnd` count | Increment estimate per tool call; finalize on done |
-| Progress bar | `agent/toolCallEnd` count / estimated total | Fill increases with each tool call; animated pulse while running |
-| Tool calls | `agent/toolCallEnd` count | Increment on each toolCallEnd |
-| Context bar | `agent/compact` → `preTokens`; `agent/sessionStart` → infer from model | Set max from model (e.g., 200k for opus). Update used on compact events. |
+```typescript
+interface SessionMetrics {
+  costUsd: number;
+  turns: number;
+  toolCalls: number;
+  contextTokens: number;
+  contextMax: number;
+  durationMs: number;
+  filesChanged: Record<string, "created" | "modified" | "deleted">;
+}
+```
 
-### Context bar color thresholds
-| Usage | Color |
-| --- | --- |
-| < 50% | `--green` |
-| 50-80% | `--gold` |
-| > 80% | `--red` |
+### How metrics are updated in the store
 
-## Input Area
+| Metric | Update trigger |
+|---|---|
+| `toolCalls` | Incremented by 1 on every `agent/toolCallEnd` event |
+| `durationMs` | Set to `Date.now() - session.startedAt` on every event |
+| `costUsd`, `turns`, `durationMs` | Set from payload on `agent/turnComplete` |
+| `costUsd`, `durationMs`, `turns` | Set from payload on `agent/done` |
+| `contextTokens`, `contextMax` | NOT updated from any event — remain at 0 unless set externally **[Planned]** |
+| `filesChanged` | NOT updated from any event — always `{}` **[Planned]** |
 
-### States
+### Session status transitions
 
-| State | Placeholder | Behavior |
-| --- | --- | --- |
-| **Ready** | "Message Claude..." | Normal text input, Cmd+Enter to send |
-| **Waiting for question** | "Answer the question above or type a response..." | Question card is visible above; typing submits as custom answer |
-| **Waiting for approval** | "Waiting for your approval above..." | Input disabled; approval card buttons are the only way to respond |
-| **Session done** | "Session complete" | Input disabled, send button disabled |
-| **Session error** | "Session ended with error" | Input disabled |
+| Event | `status` → |
+|---|---|
+| `sendMessage()` | `"running"` (optimistic) |
+| `agent/turnComplete` | `"idle"` |
+| `agent/interrupted` | `"idle"` |
+| `agent/done` | `"done"` |
+| `agent/error` (subtype=`"turn_error"`) | `"idle"` (recoverable) |
+| `agent/error` (other subtypes) | `"error"` (terminal) |
+| `interruptSession()` | `"interrupted"` |
 
-### Send behavior
-- `Cmd+Enter` submits the message
-- Empty messages are not sent
-- After sending, textarea clears and auto-focuses
-- While agent is streaming a response, user can still type but sending queues the message until the current turn completes
+### Pending request management
 
-## Theming Integration
+- `pendingRequest` is set on `agent/askUserQuestion` and `agent/confirmAction`
+- Cleared on `resolveRequest()`, `agent/done`, `agent/error`
+- Both events are stored in `answeredRequests` Map (keyed by `requestId`) upon resolution
+- For restored sessions, all question/approval events are pre-populated into `answeredRequests` with `{ historical: true }`
 
-All colors use CSS custom properties from the root theme. Components do not hardcode colors.
+### Config changes
 
-| Semantic | Variable | Default |
-| --- | --- | --- |
-| Assistant bubble bg | `--panel` | `#1a1b26` |
-| User bubble bg | `--elevated` | `#24283b` |
-| Tool card bg | `--elevated` | `#24283b` |
-| Author label (Claude) | `--purple` | `#bb9af7` |
-| Author label (You) | `--hint` | `#565f89` |
-| Tool name | `--cyan` | `#7dcfff` |
-| Inline code | `--cyan` on `--elevated` | |
-| Success indicators | `--green` | `#9ece6a` |
-| Error indicators | `--red` | `#f7768e` |
-| Warning indicators | `--gold` | `#e0af68` |
-| Interactive borders | `--purple` | `#bb9af7` |
+- `agent/configChanged` RPC notification updates `session.model` and `session.permissionMode` in the store
+- `updateConfig()` store action calls `agent/updateConfig` RPC to change config on running session
 
-## Performance Considerations
+---
 
-- **Virtualization:** For sessions with 100+ messages, use virtual scrolling (e.g., `react-virtuoso`) to only render visible messages in the DOM.
-- **Streaming debounce:** Batch `agent/textDelta` events at 16ms intervals (one animation frame) to prevent excessive re-renders during fast streaming.
-- **Markdown memoization:** Memoize rendered markdown output keyed by raw text content. Only re-render when text changes.
-- **Tool card lazy expansion:** Tool card bodies are not rendered until expanded. Output content is stored in state but only mounted to DOM on expand.
+## Data Flow Summary
 
-## Accessibility
+```
+RPC server
+  └─ wireEvents() subscribes to all agent/* methods
+      ├─ agent/sessionStart → sessionStore.onSessionStart()
+      ├─ agent/textDelta, toolCallStart, etc. → sessionStore.onAgentEvent()
+      │     → appendEvent() → toolCallEnd increments metrics.toolCalls
+      │     → turnComplete/interrupted sets status="idle", updates metrics
+      ├─ agent/done → sessionStore.onSessionDone()
+      │     → status="done", update metrics, clear pendingRequest
+      │     → notificationStore: toast + badge
+      ├─ agent/error → sessionStore.onSessionError()
+      │     → status="idle"/"error", clear pendingRequest
+      ├─ agent/askUserQuestion → sessionStore.onAskQuestion()
+      │     → set pendingRequest={type:"question", ...}
+      │     → notificationStore: persistent toast + badge
+      ├─ agent/confirmAction → sessionStore.onConfirmAction()
+      │     → set pendingRequest={type:"approval", ...}
+      └─ agent/configChanged → sessionStore.onConfigChanged()
+            → updates session.model and session.permissionMode
+```
 
-- All interactive elements (options, buttons) are keyboard-navigable (Tab, Enter, Space)
-- Tool card expand/collapse uses `aria-expanded`
-- Question options use `role="radio"` / `role="checkbox"` depending on `multiSelect`
-- Status changes (done, error) announced via `aria-live="polite"` region
-- Color indicators always paired with text/icon (not color-only)
+---
 
-## Known Limitations
+## CSS Class Reference
 
-- **No message editing:** Users cannot edit previously sent messages
-- **No message search:** No Ctrl+F search within chat history (only browser-native search)
-- **Streaming text only forward:** Cannot replay or slow down streaming — text appears at the speed the backend sends it
+| Class | Element | Key styles |
+|---|---|---|
+| `.chat-stream` | ChatStream root | `flex: 1; overflow-y: auto; padding: lg; flex-direction: column; gap: md` |
+| `.chat-system` | SystemMessage | `text-align: center; font-style: italic; color: var(--hint); font-size: 12px` |
+| `.chat-system-ok` | SystemMessage variant=ok | `color: var(--green)` |
+| `.chat-user` | User message wrapper | `display: flex; justify-content: flex-end; animation: slideUp` |
+| `.chat-user-text` | User message bubble | `max-width: 85%; bg: var(--elevated); border-radius: 10px 10px 2px 10px` |
+| `.chat-assistant` | AssistantMessage wrapper | `max-width: 90%; animation: slideUp` |
+| `.chat-assistant-text` | AssistantMessage pre | `white-space: pre-wrap; color: var(--text)` |
+| `.chat-cursor` | Streaming cursor | `7×14px block; animation: blink 1s step-end infinite` |
+| `.chat-tool` | ToolCallCard root | `border-left: 3px solid {dynamic}; bg: var(--elevated); max-width: 90%` |
+| `.chat-tool-header` | ToolCallCard header | `flex; gap: sm; padding: sm md; cursor: pointer; font-size: 12px` |
+| `.chat-tool-name` | Tool name | `color: var(--cyan); font-weight: 600` |
+| `.chat-tool-input` | Tool input summary | `color: var(--muted); font-size: 11px; max-width: 300px` |
+| `.chat-tool-status` | Tool status | `margin-left: auto; font-size: 11px` |
+| `.chat-tool-body` | Tool output | `border-top: 1px solid border; max-height: 120px; overflow-y: auto` |
+| `.chat-subagent` | SubagentBlock root | `margin-left: 12px; padding-left: 12px; border-left: 2px solid var(--border2)` |
+| `.chat-subagent-header` | Subagent header | `flex; color: var(--muted); font-size: 12px` |
+| `.chat-spinner` | CSS spinner | `10×10px; border-top: var(--blue); animation: spin 0.8s` |
+| `.chat-question` | QuestionCard root | `border: 2px solid var(--purple); max-width: 90%; bg: var(--elevated)` |
+| `.chat-question-answered` | Answered state | `opacity: 0.7` |
+| `.chat-question-header` | Section header | `9px; uppercase; color: var(--purple)` |
+| `.chat-option` | Option button | `flex; padding: sm md; border: 1px solid border; border-radius: sm` |
+| `.chat-option-selected` | Selected option | `border-color: var(--purple); bg: rgba(187,154,247,0.1)` |
+| `.chat-approval` | ApprovalCard root | `border: 2px solid var(--gold); max-width: 90%; bg: var(--elevated)` |
+| `.chat-approval-title` | Title | `color: var(--gold); font-weight: 600; font-size: 12px` |
+| `.chat-btn` | Generic button | `padding: xs lg; border: 1px solid border; bg: transparent; font-size: 12px` |
+| `.chat-btn-primary` | Primary button | `bg: var(--purple); color: var(--bg)` |
+| `.chat-btn-approve` | Approve button | `bg: var(--green); color: var(--bg)` |
+| `.chat-btn-deny` | Deny button | `border-color: var(--red); color: var(--red)` |
+| `.chat-banner` | Banner base | `border-radius: md; padding: md lg; font-size: 12px; animation: slideUp` |
+| `.chat-banner-done` | Completion banner | `bg: rgba(158,206,106,0.1); border: var(--green)` |
+| `.chat-banner-error` | Error banner | `bg: rgba(247,118,142,0.1); border: var(--red)` |
+| `.chat-banner-warn` | Warning banner | `bg: rgba(224,175,104,0.1); border: var(--gold)` |
+| `.chat-compact` | CompactMarker | `flex; color: var(--hint); font-size: 10px` |
+| `.chat-jump-btn` | Jump to bottom | `position: sticky; bottom: sm; align-self: center` |
+| `.session-status-line` | StatusLine root | `flex; padding: xs lg; border-top: 1px solid border; font-size: 11px` |
+| `.ssl-selector` | Model/mode selector | `position: relative` |
+| `.ssl-selector-btn` | Selector button | `bg: transparent; color: var(--muted); font-size: 11px` |
+| `.ssl-selector-disabled` | Disabled state | `opacity: 0.5; cursor: not-allowed` |
+| `.ssl-dropdown` | Dropdown menu | `position: absolute; bottom: 100%; bg: var(--panel); z-index: 100` |
+| `.ssl-dropdown-active` | Active option | `color: var(--blue)` |
+| `.ssl-pulse` | Running dot | `6×6px; bg: var(--green); animation: pulse 2s infinite` |
+| `.ssl-context-bar` | Context bar | `60×6px; uses CSS vars --pct and --bar-color` |
+| `.ssl-status` | Status segment | `flex; align-items: center; gap: 4px; font-size: 11px` |
+| `.ssl-status-running` | Running state | `color: var(--blue)` |
+| `.ssl-status-waiting` | Idle/interrupted | `color: var(--hint)` |
+| `.ssl-status-ended` | Done/error | `color: var(--muted)` |
+| `.ssl-status-spinner` | Running spinner | `8×8px; border-top: var(--blue); animation: spin 0.8s` |
+| `.input-area` | InputArea root | `flex; align-items: flex-end; padding: md lg; border-top: 1px solid border` |
+| `.input-textarea` | Textarea | `flex: 1; max-height: 150px; bg: var(--elevated)` |
+| `.input-send` | Send button | `bg: var(--blue); color: var(--bg); font-size: 12px` |
+| `.input-autocomplete` | Skill dropdown | `position: absolute; bottom: 100%; max-height: 240px; z-index: 100` |
+| `.input-autocomplete-active` | Highlighted item | `bg: var(--hover); color: var(--text)` |
+| `.session-tabs` | Tab bar root | `flex; border-bottom: 1px solid border; overflow-x: auto` |
+| `.session-tab` | Tab | `flex; padding: sm md; font-size: 12px; border-bottom: 2px solid transparent` |
+| `.session-tab-active` | Active tab | `color: var(--text); border-bottom-color: var(--purple)` |
+| `.session-tab-dot` | Status dot | `6×6px; border-radius: 50%` |
+| `.session-tab-badge` | Pending badge | `9px; bg: var(--purple); animation: pulse 2s` |
+| `.session-tab-close` | Close button | `opacity: 0; visible on tab hover` |
+| `.restored-bar` | Restored bar root | `flex; border-top: 1px solid border; bg: var(--panel)` |
+| `.restored-bar-btn` | Resume button | `bg: var(--blue); color: #fff` |
+
+---
+
+## Animations
+
+| Name | Keyframes | Used by |
+|---|---|---|
+| `slideUp` | `from {opacity:0; transform:translateY(6px)} to {opacity:1; transform:translateY(0)}` | All chat event elements |
+| `blink` | `50% {opacity: 0}` | `.chat-cursor` |
+| `spin` | `to {transform: rotate(360deg)}` | `.chat-spinner`, `.ssl-status-spinner` |
+| `pulse` | (defined globally) | `.ssl-pulse`, `.session-tab-badge` |
+
+---
+
+## Not Implemented (Planned)
+
+| Feature | Notes |
+|---|---|
+| Markdown rendering in AssistantMessage | Currently renders raw text in `<pre>` |
+| Author labels ("Claude", "You") above bubbles | Not rendered |
+| Message concatenation (multiple textDelta → one bubble) | Each textDelta renders its own AssistantMessage |
+| `parentToolUseId` nesting (tool calls inside SubagentBlock) | SubagentBlock children are always null |
+| "Skip" / "Other" button in QuestionCard | Only "Send" is implemented |
+| Context tokens update from agent events | `contextTokens`/`contextMax` not updated |
+| `filesChanged` tracking in metrics | Always `{}` |
+| `agent/progress` visual rendering | Returns null |
+| Virtual scrolling for large sessions | Not implemented |
+| Accessibility (aria-expanded, role="radio", aria-live) | Not implemented |
+
+---
 
 ## Related Specs
 
 - **Parent:** [Center Panel](CENTER_PANEL.md)
 - **Depends on:** [RPC Module](../../backend/app/rpc/README.md) (agent events), [API Client](../src/api/README.md) (event subscriptions)
-- **Related:** [Session History](SESSION_HISTORY.md) (read-only replay), [Notification System](NOTIFICATION_SYSTEM.md) (background alerts)
+- **Types:** `frontend/src/types/agent.ts`, `frontend/src/types/session.ts`
+- **Store:** `frontend/src/store/sessionStore.ts`, `frontend/src/store/wireEvents.ts`
+- **Skills constant:** `frontend/src/constants/skills.ts`

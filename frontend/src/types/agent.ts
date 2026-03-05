@@ -18,7 +18,8 @@ export type EventType =
   | "error"
   | "permissionDenied"
   | "askUserQuestion"
-  | "confirmAction";
+  | "confirmAction"
+  | "userMessage";
 
 export interface AgentConfig {
   model: string;

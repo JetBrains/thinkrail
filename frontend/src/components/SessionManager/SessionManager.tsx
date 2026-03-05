@@ -3,6 +3,7 @@ import { useRpc } from "@/api/hooks/useRpc.tsx";
 import { createSessionApi, type SessionSummary } from "@/api/methods/sessions.ts";
 import { createAgentApi } from "@/api/methods/agents.ts";
 import { useSessionStore } from "@/store/sessionStore.ts";
+import type { AgentEvent } from "@/types/agent.ts";
 import "./SessionManager.css";
 
 function statusBadge(status: string): { label: string; cls: string } {
@@ -61,13 +62,52 @@ export function SessionManager({ onClose }: { onClose?: () => void }) {
       try {
         const api = createSessionApi(client);
         const { taskId: newTaskId } = await api.continue(taskId);
-        switchSession(newTaskId);
+
+        // Load old session events from backend
+        const oldData = await api.get(taskId);
+        const oldEvents: AgentEvent[] = (oldData?.events ?? []).map(
+          (ev: Record<string, unknown>) => ({
+            taskId,
+            sessionId: ((ev.payload as Record<string, unknown>)?.sessionId as string) ?? "",
+            eventType: ((ev.eventType as string) ?? "notification") as AgentEvent["eventType"],
+            payload: (ev.payload as Record<string, unknown>) ?? ev,
+          }),
+        );
+
+        // Prefer in-memory events (fresher) over disk events
+        const inMemory = useSessionStore.getState().sessions.get(taskId);
+        const events = inMemory?.events?.length ? inMemory.events : oldEvents;
+        const baseName = (oldData?.name ?? inMemory?.name ?? "session")
+          .replace(" (continued)", "");
+
+        // Create the new session in the store with old events carried over
+        useSessionStore.setState((s) => {
+          const next = new Map(s.sessions);
+          next.delete(taskId);
+          if (!next.has(newTaskId)) {
+            next.set(newTaskId, {
+              taskId: newTaskId,
+              name: `${baseName} (continued)`,
+              skillId: (oldData?.skillId as string) ?? inMemory?.skillId ?? null,
+              specIds: oldData?.specIds ?? inMemory?.specIds ?? [],
+              status: "idle",
+              model: (oldData?.config?.model as string) ?? inMemory?.model ?? "",
+              permissionMode: (oldData?.config?.permissionMode as string) ?? inMemory?.permissionMode ?? "default",
+              startedAt: inMemory?.startedAt ?? Date.now(),
+              events,
+              metrics: inMemory?.metrics ?? { costUsd: 0, turns: 0, toolCalls: 0, contextTokens: 0, contextMax: 0, durationMs: 0, filesChanged: {} },
+              pendingRequest: null,
+              answeredRequests: new Map(),
+            });
+          }
+          return { sessions: next, activeSessionId: newTaskId };
+        });
         onClose?.();
       } catch (e) {
         console.error("Failed to continue session:", e);
       }
     },
-    [client, switchSession, onClose],
+    [client, onClose],
   );
 
   const handleStop = useCallback(
@@ -116,11 +156,17 @@ export function SessionManager({ onClose }: { onClose?: () => void }) {
     return <div className="sm-loading">Loading sessions...</div>;
   }
 
-  const active = sessions.filter(
+  // Hide sessions that have been superseded by a continuation
+  const superseded = new Set(
+    sessions.filter((s) => s.continuedFrom).map((s) => s.continuedFrom!),
+  );
+  const visible = sessions.filter((s) => !superseded.has(s.taskId));
+
+  const active = visible.filter(
     (s) => s.status === "idle" || s.status === "running",
   );
-  const completed = sessions.filter((s) => s.status === "done");
-  const errored = sessions.filter((s) => s.status === "error");
+  const completed = visible.filter((s) => s.status === "done");
+  const errored = visible.filter((s) => s.status === "error");
 
   return (
     <div className="session-manager">

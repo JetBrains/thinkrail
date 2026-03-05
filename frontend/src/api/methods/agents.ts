@@ -22,6 +22,9 @@ export function createAgentApi(client: RpcClient) {
 
     respond: (taskId: string, requestId: string, response: unknown) =>
       client.request<null>("agent/respond", { taskId, requestId, response }),
+
+    updateConfig: (taskId: string, config: { model?: string; permissionMode?: string }) =>
+      client.request<{ model: string; permissionMode: string }>("agent/updateConfig", { taskId, ...config }),
   };
 }
 

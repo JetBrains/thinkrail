@@ -109,6 +109,8 @@ def create_app() -> FastAPI:
                     continue
                 if child.name in IGNORE:
                     continue
+                if child.name.endswith(".events.jsonl"):
+                    continue
                 rel = str(child.relative_to(root))
                 is_dir = child.is_dir()
                 entries.append({

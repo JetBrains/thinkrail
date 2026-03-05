@@ -19,6 +19,26 @@
 }
 .chat-system-ok { color: var(--green); }
 
+/* ── User Message ── */
+.chat-user {
+  display: flex;
+  justify-content: flex-end;
+  animation: slideUp 0.22s ease-out;
+}
+.chat-user-text {
+  max-width: 85%;
+  font-family: var(--font);
+  font-size: var(--font-size);
+  line-height: var(--line-height);
+  white-space: pre-wrap;
+  word-break: break-word;
+  color: var(--text);
+  background: var(--elevated);
+  border: 1px solid var(--border);
+  border-radius: 10px 10px 2px 10px;
+  padding: var(--space-sm) var(--space-md);
+}
+
 /* ── Assistant Message ── */
 .chat-assistant {
   max-width: 90%;
@@ -240,6 +260,31 @@
 }
 .ssl-sep { width: 1px; height: 12px; background: var(--border); }
 .ssl-model { color: var(--muted); }
+.ssl-selector { position: relative; }
+.ssl-selector-btn {
+  background: transparent; border: none; color: var(--muted);
+  font-family: var(--font); font-size: 11px; cursor: pointer;
+  padding: 1px 4px; border-radius: var(--radius-sm);
+}
+.ssl-selector-btn:hover:not(:disabled) { background: var(--hover); color: var(--text); }
+.ssl-selector-disabled { opacity: 0.5; cursor: not-allowed; }
+.ssl-dropdown {
+  position: absolute; bottom: 100%; left: 0;
+  margin-bottom: 4px;
+  background: var(--panel); border: 1px solid var(--border);
+  border-radius: var(--radius-sm); padding: 2px 0;
+  min-width: 100px; z-index: 100;
+  box-shadow: 0 -2px 8px rgba(0,0,0,0.3);
+}
+.ssl-dropdown-item {
+  display: block; width: 100%;
+  background: transparent; border: none;
+  color: var(--muted); font-family: var(--font); font-size: 11px;
+  padding: 4px 10px; cursor: pointer; text-align: left;
+  white-space: nowrap;
+}
+.ssl-dropdown-item:hover { background: var(--hover); color: var(--text); }
+.ssl-dropdown-active { color: var(--blue); }
 .ssl-pulse { display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: var(--green); animation: pulse 2s infinite; margin-right: 4px; }
 .ssl-context-bar {
   width: 60px; height: 6px;
@@ -254,6 +299,40 @@
   background: var(--bar-color);
   border-radius: 3px;
 }
+.ssl-status { display: flex; align-items: center; gap: 4px; font-size: 11px; }
+.ssl-status-running { color: var(--blue); }
+.ssl-status-waiting { color: var(--hint); }
+.ssl-status-ended { color: var(--muted); }
+.ssl-status-spinner {
+  width: 8px; height: 8px;
+  border: 1.5px solid var(--border);
+  border-top-color: var(--blue);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+/* ── Input Autocomplete ── */
+.input-autocomplete {
+  position: absolute; bottom: 100%; left: 0; right: 0;
+  margin-bottom: 4px;
+  background: var(--panel); border: 1px solid var(--border);
+  border-radius: var(--radius-sm); padding: 2px 0;
+  z-index: 100;
+  box-shadow: 0 -2px 8px rgba(0,0,0,0.3);
+  max-height: 240px; overflow-y: auto;
+}
+.input-autocomplete-item {
+  display: flex; align-items: center; gap: var(--space-sm);
+  width: 100%;
+  background: transparent; border: none;
+  color: var(--muted); font-family: var(--font); font-size: 12px;
+  padding: 6px 10px; cursor: pointer; text-align: left;
+}
+.input-autocomplete-item:hover,
+.input-autocomplete-active { background: var(--hover); color: var(--text); }
+.input-autocomplete-icon { font-size: 14px; flex-shrink: 0; }
+.input-autocomplete-name { color: var(--cyan); font-weight: 600; white-space: nowrap; }
+.input-autocomplete-desc { color: var(--hint); font-size: 11px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 /* ── Input Area ── */
 .input-area {

@@ -1,6 +1,6 @@
 # State Management — Module Specification
 
-> Parent: [Frontend Module](../../README.md) | Status: **Active** | Created: 2026-03-02
+> Parent: [Frontend Module](../../README.md) | Status: **Active** | Created: 2026-03-02 | Updated: 2026-03-05
 
 ## Purpose
 
@@ -9,79 +9,154 @@ Centralized state management for the Bonsai frontend using **Zustand**. Defines 
 ## Library Choice: Zustand
 
 | Factor | Assessment |
-| --- | --- |
+|---|---|
 | Bundle size | ~1KB gzipped |
 | Boilerplate | Minimal — no providers, reducers, or action creators |
 | React integration | Hook-based: `useStore(selector)` with automatic re-render optimization |
-| DevTools | Zustand devtools middleware for inspection |
-| Middleware | Built-in: persist (localStorage), devtools, immer |
-| Learning curve | Very low — plain functions mutating state |
+| Middleware | `persist` from `zustand/middleware` used in `uiStore` and `notificationStore` |
+| DevTools | Not currently used (plain `create()` calls) |
 
 ## File Organization
 
 ```
 frontend/src/store/
-├── index.ts               # Re-exports all stores
+├── index.ts               # Re-exports all stores and wireEvents
 ├── specStore.ts           # Spec data, graph, registry
-├── sessionStore.ts        # Sessions, events, history
+├── sessionStore.ts        # Active sessions, events, archived sessions
 ├── uiStore.ts             # Panel visibility, active tabs, modal state
-├── costStore.ts           # Cost tracking, budget
-├── notificationStore.ts   # Toast queue, tab badges
-├── fileStore.ts           # Open files, editor state, dirty tracking
-└── middleware/
-    ├── persist.ts         # localStorage persistence config
-    └── devtools.ts        # DevTools middleware wrapper
+├── costStore.ts           # Cost tracking stub (backend not implemented)
+├── notificationStore.ts   # Toast queue, tab badges, pending input count
+├── fileStore.ts           # Open file tabs, preview tab, editor state
+└── wireEvents.ts          # RPC event → store action wiring
 ```
+
+**Note:** `fileStore.ts` exists and is implemented, but is not re-exported from `index.ts`. It must be imported directly.
 
 ## Store Architecture
 
 ```
 ┌─────────────────────────────────────────────────┐
 │  React Components                                │
-│    useSpecStore()  useSessionStore()  useUiStore()│
+│   useSpecStore()  useSessionStore()  useUiStore() │
+│   useNotificationStore()  useFileStore()          │
+│   useCostStore() (stub)                           │
 ├─────────────────────────────────────────────────┤
-│  Zustand Stores (5 stores)                       │
+│  Zustand Stores (6 stores)                       │
 │    specStore  sessionStore  uiStore              │
-│    costStore  notificationStore                  │
+│    costStore  notificationStore  fileStore       │
 ├─────────────────────────────────────────────────┤
 │  API Client (data source)                        │
-│    RPC responses → store.setState()              │
-│    RPC events → store actions                    │
+│    RPC responses → store actions                 │
+│    RPC events (via wireEvents) → store actions   │
+│    REST fetch (fileStore) → /api/file/*          │
 └─────────────────────────────────────────────────┘
 ```
 
-**Data flow:**
-1. Component calls store action (e.g., `sessionStore.startSession(params)`)
-2. Action calls RPC method via API client (e.g., `agentApi.run(params)`)
-3. RPC response updates store state
-4. Streaming events (via `client.on()`) call store actions to update state
-5. Components re-render via Zustand selectors
+## Type Definitions
+
+### From `frontend/src/types/agent.ts`
+
+```typescript
+export type TaskStatus = "idle" | "running" | "done" | "error";
+
+export type EventType =
+  | "sessionStart" | "textDelta" | "toolCallStart" | "toolCallEnd"
+  | "turnComplete" | "interrupted" | "subagentStart" | "subagentEnd"
+  | "notification" | "compact" | "progress" | "done" | "error"
+  | "permissionDenied" | "askUserQuestion" | "confirmAction" | "userMessage";
+
+export interface AgentConfig {
+  model: string;
+  maxTurns: number;
+  permissionMode: string;
+  streamText: boolean;
+}
+
+export interface AgentEvent {
+  taskId: string;
+  sessionId: string;
+  eventType: EventType;
+  payload: Record<string, unknown>;
+}
+```
+
+### From `frontend/src/types/session.ts`
+
+```typescript
+export type SessionStatus = "idle" | "running" | "done" | "error" | "interrupted";
+
+export interface SessionMetrics {
+  costUsd: number;
+  turns: number;
+  toolCalls: number;
+  contextTokens: number;
+  contextMax: number;
+  durationMs: number;
+  filesChanged: Record<string, "created" | "modified" | "deleted">;
+}
+
+export interface PendingRequest {
+  requestId: string;
+  type: "question" | "approval";
+  questions?: Question[];
+  toolName?: string;
+  toolInput?: Record<string, unknown>;
+}
+
+export interface Session {
+  taskId: string;
+  name: string;
+  skillId: string | null;
+  specIds: string[];
+  status: SessionStatus;
+  model: string;
+  permissionMode: string;
+  startedAt: number;
+  events: AgentEvent[];
+  metrics: SessionMetrics;
+  pendingRequest: PendingRequest | null;
+  answeredRequests: Map<string, unknown>;
+  restored?: boolean;
+}
+
+export interface ArchivedSession {
+  taskId: string;
+  name: string;
+  skillId: string | null;
+  specIds: string[];
+  startedAt: number;
+  endedAt: number;
+  result: "done" | "error";
+  costUsd: number;
+  turns: number;
+  durationMs: number;
+  model: string;
+  config: AgentConfig;
+  events: AgentEvent[];
+}
+```
 
 ## Store Definitions
 
 ### 1. specStore
 
-Spec data, graph, and registry cache.
+Spec data, graph, and registry cache. Plain Zustand, no middleware.
 
 ```typescript
 interface SpecStore {
-  // Data
   specs: RegistryEntry[];
   graph: SpecGraph | null;
-  specContent: Map<string, string>;    // id → markdown content cache
+  specContent: Map<string, string>;
   loading: boolean;
   error: string | null;
-
-  // Selection
   selectedSpecId: string | null;
 
-  // Actions
   fetchSpecs: () => Promise<void>;
   fetchGraph: () => Promise<void>;
   fetchSpecContent: (id: string) => Promise<string>;
   selectSpec: (id: string | null) => void;
 
-  // Event handlers (called by API client subscriptions)
+  // Event handlers (called by wireEvents)
   onSpecChanged: (id: string) => void;
   onSpecCreated: (id: string, path: string) => void;
   onSpecDeleted: (id: string) => void;
@@ -89,109 +164,93 @@ interface SpecStore {
 }
 ```
 
-**Persistence:** None (fetched fresh from backend on connect).
+**Initial state:** `{ specs: [], graph: null, specContent: new Map(), loading: false, error: null, selectedSpecId: null }`
+
+**Key behaviors:**
+- `fetchSpecContent` checks in-memory cache first; only calls `spec/get` on miss
+- `onSpecChanged` evicts cached content and calls `fetchGraph()`
+- `onSpecDeleted` removes from `specs[]`, evicts cache, deselects if needed, calls `fetchGraph()`
+
+---
 
 ### 2. sessionStore
 
-Active sessions, event logs, and session history.
+Active sessions, streaming events, and archived history. Plain Zustand, no middleware.
 
 ```typescript
 interface SessionStore {
-  // Active sessions
   sessions: Map<string, Session>;
   activeSessionId: string | null;
-
-  // History
   archivedSessions: ArchivedSession[];
 
-  // Actions
-  startSession: (params: NewSessionParams) => Promise<string>;  // returns taskId
+  // User-initiated actions
+  startSession: (params: { specIds, config, name, skillId? }) => Promise<string>;
+  sendMessage: (taskId: string, text: string) => Promise<void>;
   switchSession: (taskId: string) => void;
   closeSession: (taskId: string) => void;
+  endSession: (taskId: string) => Promise<void>;
   interruptSession: (taskId: string) => Promise<void>;
-  respondToQuestion: (taskId: string, requestId: string, response: any) => Promise<void>;
-  respondToApproval: (taskId: string, requestId: string, decision: string) => Promise<void>;
+  resolveRequest: (taskId: string, requestId: string, response: unknown) => void;
+  updateConfig: (taskId: string, config: { model?, permissionMode? }) => Promise<void>;
+  restoreSession: (taskId: string) => Promise<void>;
 
-  // Event handlers
-  onSessionStart: (params: SessionStartParams) => void;
-  onTextDelta: (params: TextDeltaParams) => void;
-  onToolCallStart: (params: ToolCallStartParams) => void;
-  onToolCallEnd: (params: ToolCallEndParams) => void;
-  onSubagentStart: (params: SubagentStartParams) => void;
-  onSubagentEnd: (params: SubagentEndParams) => void;
-  onAskQuestion: (params: AskQuestionParams) => void;
-  onConfirmAction: (params: ConfirmActionParams) => void;
-  onSessionDone: (params: SessionDoneParams) => void;
-  onSessionError: (params: SessionErrorParams) => void;
-  onCompact: (params: CompactParams) => void;
-  onNotification: (params: NotificationParams) => void;
-  onPermissionDenied: (params: PermissionDeniedParams) => void;
-  onProgress: (params: ProgressParams) => void;
-}
-
-interface Session {
-  taskId: string;
-  name: string;
-  skillId: string | null;
-  specIds: string[];
-  status: "running" | "done" | "error" | "interrupted";
-  model: string;
-  startedAt: number;
-  events: AgentEvent[];          // full event log
-  metrics: SessionMetrics;       // derived: cost, turns, tool calls, context
-  pendingRequest: PendingRequest | null;  // question or approval awaiting response
-}
-
-interface SessionMetrics {
-  costUsd: number;
-  turns: number;
-  toolCalls: number;
-  contextTokens: number;
-  contextMax: number;
-  durationMs: number;
-  filesChanged: Map<string, "created" | "modified" | "deleted">;
+  // Event handlers (called by wireEvents)
+  onSessionStart: (params) => void;
+  onAgentEvent: (method: string, params) => void;
+  onAskQuestion: (params) => void;
+  onConfirmAction: (params) => void;
+  onSessionDone: (params) => void;
+  onSessionError: (params) => void;
+  onConfigChanged: (params) => void;
 }
 ```
 
-**Persistence:** `archivedSessions` persisted to localStorage via Zustand persist middleware (v1). Session event logs can be large — persist only metadata for old sessions if localStorage quota is a concern.
+**Initial state:** `{ sessions: new Map(), activeSessionId: null, archivedSessions: [] }`
+
+**Key behaviors:**
+- `sendMessage` optimistically appends `userMessage` event and sets status to `"running"`
+- `closeSession` calls `api.end()` if not done/error, removes from map, archives, switches to next session
+- `resolveRequest` calls `agent/respond` RPC, stores in `answeredRequests`, clears `pendingRequest`
+- `restoreSession` loads from backend, marks all question/approval events as answered with `{ historical: true }`, sets `status: "done"` and `restored: true`
+- `onAgentEvent` is the generic handler for all streaming events; increments `toolCalls` on `toolCallEnd`, updates metrics on `turnComplete`
+- `onSessionError` with `subtype === "turn_error"` sets status to `"idle"` (recoverable); other subtypes set `"error"` (terminal)
+- `ensureSession()` internal helper creates placeholder if events arrive before `startSession()` resolves
+- `archivedSessions` is **not persisted** to localStorage — lost on page refresh
+
+---
 
 ### 3. uiStore
 
-Panel visibility, active tabs, viewport state.
+Panel visibility, modal state, project identity. Uses `persist` middleware.
 
 ```typescript
+type LeftTab = "specs" | "reqs" | "files" | "progress";
+type Breakpoint = "desktop" | "laptop" | "below-min";
+
+interface ModalPrefill {
+  skillId?: string;
+  specIds?: string[];
+  name?: string;
+}
+
 interface UiStore {
-  // Panel visibility
+  projectPath: string | null;
+  projectName: string;
   leftPanelCollapsed: boolean;
   rightPanelCollapsed: boolean;
-  leftDrawerOpen: boolean;       // mobile drawer mode
+  leftDrawerOpen: boolean;
   rightDrawerOpen: boolean;
-
-  // Left panel
-  leftActiveTab: "specs" | "reqs" | "files" | "progress";
-
-  // Right panel
-  rightActiveTab: "graph" | "spec" | "code" | "diff" | "console";
-
-  // Graph state
-  graphState: GraphState;        // from GRAPH_INTERACTIONS.md §15
-
-  // Modal
+  leftActiveTab: LeftTab;
   modalOpen: boolean;
   modalPrefill: ModalPrefill | null;
-
-  // Command palette
   paletteOpen: boolean;
-
-  // Viewport
   viewportWidth: number;
-  breakpoint: "desktop" | "laptop" | "below-min";
+  breakpoint: Breakpoint;
 
-  // Actions
+  setProject: (path: string) => void;
   toggleLeftPanel: () => void;
   toggleRightPanel: () => void;
-  setLeftTab: (tab: string) => void;
-  setRightTab: (tab: string) => void;
+  setLeftTab: (tab: LeftTab) => void;
   openModal: (prefill?: ModalPrefill) => void;
   closeModal: () => void;
   togglePalette: () => void;
@@ -199,33 +258,34 @@ interface UiStore {
 }
 ```
 
-**Persistence:** `leftPanelCollapsed`, `rightPanelCollapsed`, `leftActiveTab`, `rightActiveTab` persisted to localStorage. Restored on page load.
+**Persistence key:** `"bonsai-ui"`. Persisted fields: `{ leftPanelCollapsed, rightPanelCollapsed, leftActiveTab }`.
+
+**Breakpoint thresholds:** `≥1280` → desktop, `≥1024` → laptop, else → below-min.
+
+---
 
 ### 4. costStore
 
-Cost tracking and budget management.
+**Stub — all actions are no-ops.** Plain Zustand, no middleware.
 
 ```typescript
 interface CostStore {
   summary: CostSummary | null;
   loading: boolean;
 
-  // Actions
-  fetchSummary: () => Promise<void>;
-  setBudget: (budget: CostBudget) => Promise<void>;
-  resetSessionCost: () => Promise<void>;
-
-  // Polling
-  startPolling: () => void;
+  fetchSummary: () => Promise<void>;    // no-op
+  setBudget: (budget: CostBudget) => Promise<void>;  // no-op
+  reset: () => Promise<void>;           // no-op
+  startPolling: () => void;             // sets 5s interval
   stopPolling: () => void;
 }
 ```
 
-**Persistence:** None (backend owns cost data in `.specs/cost.json`).
+---
 
 ### 5. notificationStore
 
-Toast queue and alert badges.
+Toast queue, tab badges, pending input counter. Uses `persist` middleware.
 
 ```typescript
 interface NotificationStore {
@@ -234,185 +294,131 @@ interface NotificationStore {
   pendingInputCount: number;
   soundEnabled: boolean;
 
-  // Actions
   addToast: (toast: Omit<Toast, "id" | "createdAt">) => void;
   dismissToast: (id: string) => void;
-  clearBadge: (taskId: string) => void;
   setBadge: (taskId: string, badge: TabBadge) => void;
+  clearBadge: (taskId: string) => void;
+  incrementPendingInput: () => void;
+  decrementPendingInput: () => void;
   toggleSound: () => void;
 }
 ```
 
-**Persistence:** `soundEnabled` persisted to localStorage.
+**Persistence key:** `"bonsai-notification-sound"`. Persisted: `{ soundEnabled }`.
 
-## Event Wiring
+**Toast behavior:** Max 5 visible (oldest dropped). Auto-dismiss: 5s normal, 8s error. Toast IDs: sequential `"toast-1"`, `"toast-2"`, etc.
 
-On app startup, the API client subscribes to all server events and routes them to store actions:
+---
+
+### 6. fileStore
+
+Open file tabs, preview tab, editor state. Plain Zustand, no middleware.
 
 ```typescript
-function wireEvents(client: RpcClient, stores: AllStores) {
-  // Spec events
-  client.on("spec/didChange", (p) => stores.spec.onSpecChanged(p.id));
-  client.on("spec/didCreate", (p) => stores.spec.onSpecCreated(p.id, p.path));
-  client.on("spec/didDelete", (p) => stores.spec.onSpecDeleted(p.id));
-  client.on("registry/didUpdate", () => stores.spec.onRegistryUpdated());
+interface OpenFile {
+  path: string;
+  name: string;
+  content: string;
+  originalContent: string;
+  mode: "preview" | "edit";
+  isDirty: boolean;
+  saving: boolean;
+  error?: string;
+}
 
-  // Agent events (routed by taskId to sessionStore)
-  client.on("agent/sessionStart", (p) => stores.session.onSessionStart(p));
-  client.on("agent/textDelta", (p) => stores.session.onTextDelta(p));
-  client.on("agent/toolCallStart", (p) => stores.session.onToolCallStart(p));
-  client.on("agent/toolCallEnd", (p) => stores.session.onToolCallEnd(p));
-  client.on("agent/subagentStart", (p) => stores.session.onSubagentStart(p));
-  client.on("agent/subagentEnd", (p) => stores.session.onSubagentEnd(p));
-  client.on("agent/done", (p) => stores.session.onSessionDone(p));
-  client.on("agent/error", (p) => stores.session.onSessionError(p));
-  client.on("agent/compact", (p) => stores.session.onCompact(p));
-  client.on("agent/notification", (p) => stores.session.onNotification(p));
-  client.on("agent/permissionDenied", (p) => stores.session.onPermissionDenied(p));
-  client.on("agent/progress", (p) => stores.session.onProgress(p));
+interface FileStore {
+  openFiles: Map<string, OpenFile>;
+  activeFilePath: string | null;
+  previewFilePath: string | null;
+  previewFile: OpenFile | null;
 
-  // Server-initiated requests (need response)
-  client.onRequest("agent/askUserQuestion", async (p) => {
-    stores.session.onAskQuestion(p);
-    stores.notification.addToast({ taskId: p.taskId, eventType: "question", ... });
-    // Response is sent later via sessionStore.respondToQuestion()
-    // Return a promise that resolves when user responds
-    return stores.session.waitForResponse(p.taskId, p.requestId);
-  });
-
-  client.onRequest("agent/confirmAction", async (p) => {
-    stores.session.onConfirmAction(p);
-    stores.notification.addToast({ taskId: p.taskId, eventType: "approval", ... });
-    return stores.session.waitForResponse(p.taskId, p.requestId);
-  });
+  openFile: (path: string) => Promise<void>;
+  closeFile: (path: string) => void;
+  activateFile: (path: string) => void;
+  loadPreview: (path: string) => Promise<void>;
+  clearPreview: () => void;
+  pinPreview: () => void;
+  setMode: (path: string, mode: "preview" | "edit") => void;
+  updateContent: (path: string, content: string) => void;
+  saveFile: (path: string) => Promise<void>;
+  openExternal: (path: string, editor: string) => Promise<void>;
 }
 ```
 
-## Selector Patterns
+**REST endpoints:** `GET /api/file/read`, `POST /api/file/write`, `POST /api/file/open-external`.
 
-Use Zustand selectors for optimal re-rendering:
+**Key behaviors:**
+- `activateFile` sets `activeFilePath` and clears preview
+- `loadPreview` routes to `activateFile` if path already pinned; otherwise sets preview fields and fetches content with stale-response guard
+- `pinPreview` moves `previewFile` into `openFiles`, sets `activeFilePath`, clears preview
+
+---
+
+## Event Wiring (`wireEvents.ts`)
+
+Called once at app startup. Returns cleanup function.
 
 ```typescript
-// Bad: re-renders on ANY store change
-const store = useSessionStore();
+export function wireEvents(client: RpcClient): Unsubscribe
+```
 
-// Good: re-renders only when activeSession changes
-const activeSession = useSessionStore((s) => s.sessions.get(s.activeSessionId));
+### Spec notifications → specStore
 
-// Good: derived data with shallow equality
-const specCounts = useSpecStore(
-  (s) => ({
-    done: s.specs.filter(sp => sp.status === "done").length,
-    active: s.specs.filter(sp => sp.status === "active").length,
-    total: s.specs.length,
-  }),
+| Event | Action |
+|---|---|
+| `spec/didChange` | `onSpecChanged(id)` |
+| `spec/didCreate` | `onSpecCreated(id, path)` |
+| `spec/didDelete` | `onSpecDeleted(id)` |
+| `registry/didUpdate` | `onRegistryUpdated()` |
+
+### Agent streaming → sessionStore.onAgentEvent
+
+`agent/textDelta`, `agent/toolCallStart`, `agent/toolCallEnd`, `agent/turnComplete`, `agent/interrupted`, `agent/subagentStart`, `agent/subagentEnd`, `agent/notification`, `agent/compact`, `agent/progress`, `agent/permissionDenied`
+
+### Agent lifecycle → individual handlers
+
+| Event | Actions |
+|---|---|
+| `agent/sessionStart` | `sessionStore.onSessionStart(params)` |
+| `agent/done` | `sessionStore.onSessionDone(params)` + toast + badge |
+| `agent/error` | `sessionStore.onSessionError(params)` + toast + badge |
+| `agent/configChanged` | `sessionStore.onConfigChanged(params)` |
+| `agent/askUserQuestion` | `sessionStore.onAskQuestion(params)` + `incrementPendingInput` + persistent toast + badge |
+| `agent/confirmAction` | `sessionStore.onConfirmAction(params)` + `incrementPendingInput` + persistent toast + badge |
+
+Questions and approvals arrive with a JSON-RPC `id` but are handled via `client.on()` (not `client.onRequest()`). Responses are sent via `agent/respond` RPC.
+
+---
+
+## Selector Patterns
+
+```typescript
+// Prefer: re-renders only when specific data changes
+const activeSession = useSessionStore(
+  (s) => s.sessions.get(s.activeSessionId ?? "") ?? null
+);
+
+// Derived data with shallow comparison
+const { done, active, total } = useSpecStore(
+  (s) => ({ done: s.specs.filter(...).length, ... }),
   shallow
 );
 ```
 
-## Middleware
-
-### Persist
-
-```typescript
-import { persist } from "zustand/middleware";
-
-const useUiStore = create(
-  persist(
-    (set) => ({ /* state + actions */ }),
-    {
-      name: "bonsai-ui",
-      partialize: (state) => ({
-        leftPanelCollapsed: state.leftPanelCollapsed,
-        rightPanelCollapsed: state.rightPanelCollapsed,
-        leftActiveTab: state.leftActiveTab,
-        rightActiveTab: state.rightActiveTab,
-      }),
-    }
-  )
-);
-```
-
-### DevTools
-
-```typescript
-import { devtools } from "zustand/middleware";
-
-const useSessionStore = create(
-  devtools(
-    (set) => ({ /* state + actions */ }),
-    { name: "SessionStore" }
-  )
-);
-```
-
-Enabled in development only. Connects to React DevTools / Redux DevTools extension.
-
-## Design Decisions
-
-| Decision | Choice | Rationale |
-| --- | --- | --- |
-| 5 separate stores | Not monolithic | Each store has a clear domain. Avoids mega-store with unrelated state. Components only subscribe to what they need. |
-| Events → store actions | Not direct state mutation | Keeps event handling testable. Store actions are the single entry point for state changes. |
-| localStorage persist | Not backend persist (v1) | Session history and UI preferences survive page refresh without backend changes. |
-| Zustand selectors | Not React.memo everywhere | Zustand's selector-based re-rendering is simpler and more performant than manual memoization. |
-| Flat session events array | Not nested message tree | Events arrive as a flat stream. The Chat UI components transform them into a tree at render time (grouping subagent events, etc.). |
+---
 
 ## Known Limitations
 
-- **No undo/redo:** State changes are not reversible — no action history stack
-- **Session events accumulate unbounded:** Long-running sessions with many events may use significant memory
-- **No cross-tab sync:** Multiple browser tabs would have independent stores (but only one can connect at a time)
-
-### 6. fileStore
-
-Manages open file tabs and preview state. Single-click in FileTree/SpecTree creates a preview tab; double-click pins it.
-
-```typescript
-interface OpenFile {
-  path: string;           // relative to project root
-  name: string;           // filename
-  content: string;        // current content
-  originalContent: string;// for dirty detection
-  mode: "preview" | "edit";
-  isDirty: boolean;       // content !== originalContent
-  saving: boolean;
-}
-
-interface FileStore {
-  openFiles: Map<string, OpenFile>;  // keyed by relative path
-  activeFilePath: string | null;
-  previewFilePath: string | null;    // single-click preview path (at most one)
-  previewFile: OpenFile | null;      // loaded content for preview tab
-
-  // Pinned file operations
-  openFile: (path: string) => Promise<void>;     // fetch via REST, add to open files, pin
-  closeFile: (path: string) => void;
-  activateFile: (path: string) => void;          // also calls clearPreview()
-  setMode: (path: string, mode) => void;         // toggle preview/edit
-  updateContent: (path: string, content) => void; // local edit
-  saveFile: (path: string) => Promise<void>;     // POST /api/file/write
-  openExternal: (path: string, editor) => Promise<void>; // POST /api/file/open-external
-
-  // Preview tab operations
-  loadPreview: (path: string) => Promise<void>;  // open as preview tab (replaces existing preview)
-  clearPreview: () => void;                      // remove preview tab
-  pinPreview: () => void;                        // convert preview → pinned (moves to openFiles + activeFilePath)
-}
-```
-
-**Preview tab behavior:**
-- `loadPreview(path)` sets `previewFilePath` immediately, then loads content async into `previewFile`. If file is already pinned in `openFiles`, activates it instead.
-- Only one preview tab exists at a time — calling `loadPreview` again replaces the current one
-- `activateFile(path)` (clicking a pinned tab) calls `clearPreview()` automatically
-- `pinPreview()` moves the preview into `openFiles` as a permanent tab and sets it as `activeFilePath`
-- Starting/switching an agent session (via sessionStore) should also call `clearPreview()`
-
-**Data source:** REST endpoints (`/api/file/read`, `/api/file/write`, `/api/file/open-external`)
-**Persistence:** None (open files are ephemeral — closed on page refresh)
+- **No undo/redo**
+- **Session events accumulate unbounded** — no pruning for long sessions
+- **No cross-tab sync** — multiple browser tabs have independent stores
+- **`archivedSessions` lost on refresh** — not persisted
+- **`costStore` is a stub** — all no-ops until backend implements cost endpoints
+- **`fileStore` not in index barrel** — must import directly
+- **No devtools middleware** — Redux DevTools not wired
 
 ## Related Specs
 
 - **Parent:** [Frontend Module](../../README.md)
 - **Depends on:** [API Client](../api/README.md) (event subscriptions, RPC calls)
-- **Related:** [Chat UI](../../ui-specs/CHAT_UI.md), [Graph Interactions](../../ui-specs/GRAPH_INTERACTIONS.md), [Notification System](../../ui-specs/NOTIFICATION_SYSTEM.md) (all consume store state)
+- **Related:** [Chat UI](../../ui-specs/CHAT_UI.md), [Notification System](../../ui-specs/NOTIFICATION_SYSTEM.md)

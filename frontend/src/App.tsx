@@ -3,6 +3,7 @@ import { BrowserRouter } from "react-router-dom";
 import { useRpc, useConnectionState, setClient } from "@/api/index.ts";
 import { wireEvents } from "@/store/wireEvents.ts";
 import { useSpecStore } from "@/store/specStore.ts";
+import { useSessionStore } from "@/store/sessionStore.ts";
 import { useUiStore } from "@/store/uiStore.ts";
 import { registerKeyboardShortcuts } from "@/utils/keyboard.ts";
 import { NewSessionModal } from "@/components/NewSessionModal/NewSessionModal.tsx";
@@ -28,6 +29,10 @@ function AppInner({ projectPath: _projectPath, onSwitchProject }: { projectPath:
         console.log("[Bonsai] Specs loaded:", useSpecStore.getState().specs.length);
       });
       useSpecStore.getState().fetchGraph();
+      // Restore sessions that have live backend runners (survives page refresh)
+      useSessionStore.getState().loadActiveSessions().catch((err) => {
+        console.warn("[Bonsai] Failed to load active sessions:", err);
+      });
     }
     if (connectionState === "disconnected" || connectionState === "failed") {
       wiredRef.current = false;

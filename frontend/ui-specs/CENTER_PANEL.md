@@ -1,292 +1,363 @@
 # Center Panel — UI Specification
 
-> Parent: [WEBVIEW.md](WEBVIEW.md) | Status: **Active** | Created: 2026-03-05
-
-## Table of Contents
-1. [Purpose](#purpose)
-2. [Overview](#overview)
-3. [Tab Bar](#tab-bar)
-4. [Preview Tabs](#preview-tabs)
-5. [File Viewer](#file-viewer)
-6. [Session Content](#session-content)
-7. [Session Manager](#session-manager)
-8. [Empty States](#empty-states)
-9. [Store Integration](#store-integration)
-10. [Design Decisions](#design-decisions)
-11. [Known Limitations](#known-limitations)
-12. [Implementation Notes](#implementation-notes)
-13. [Sub-Specifications](#sub-specifications)
-14. [Related Specs](#related-specs)
-
-## Purpose
-
-The Center Panel is the primary workspace area in the three-panel layout. It hosts a tab bar with session tabs and file tabs, renders Claude agent sessions via the Chat UI, and displays files via the File Viewer (Monaco editor for code, rendered markdown for `.md` files). It also supports ephemeral preview tabs triggered by single-clicking items in the left panel trees.
+> Parent: [WEBVIEW.md](WEBVIEW.md) | Status: **Active** | Created: 2026-03-05 | Updated: 2026-03-05
 
 ## Overview
 
+The center panel is the primary workspace in the three-panel layout. It hosts a tab bar with session and file tabs, renders Claude agent sessions as a streaming chat UI, and displays files via the File Viewer (Monaco editor for code, rendered markdown for `.md` files). It supports ephemeral preview tabs triggered by single-clicking items in the left panel trees.
+
 ```
 +---------------------------------------------------------------------+
-| [session-1] [session-2] | [file.py] [*preview.md*]  [+]            |
+| [session-1 •] [session-2 •] | [📄 file.py] [📄 *preview.md* ×]   |
 +---------------------------------------------------------------------+
 |                                                                     |
-|  Active tab content:                                                |
-|    - Session tab  -> ChatStream + StatusLine + InputArea            |
-|    - File tab     -> FileViewer (Monaco or Markdown)                |
-|    - Preview tab  -> FileViewer (same rendering, italic tab title)  |
-|    - No tabs      -> Empty placeholder                              |
+|  Active tab content (one of):                                       |
+|    - Session tab  -> ChatStream + SessionStatusLine + InputArea     |
+|                      (or RestoredBar instead of InputArea)          |
+|    - File tab     -> FileViewer (Monaco or MarkdownPreview)         |
+|    - Preview tab  -> FileViewer (italic tab title)                  |
+|    - No tabs      -> center-placeholder                             |
 |                                                                     |
 +---------------------------------------------------------------------+
 ```
 
-The center panel is implemented as `SessionPanel` (component name is historical — it now handles both sessions and files). It renders `SessionTabBar` at the top and switches content based on which tab is active.
+---
 
-## Tab Bar
+## Component Hierarchy
 
-The `SessionTabBar` renders two groups of tabs separated by a vertical divider:
+```
+<SessionPanel>                       components/SessionPanel/SessionPanel.tsx
+  <SessionTabBar />                  components/SessionPanel/SessionTabBar.tsx
+  {showFile}
+    <FileViewer file={displayFile} />  components/FileViewer/FileViewer.tsx
+  {showSession}
+    <ChatStream ... />               components/ChatStream/ChatStream.tsx
+    <SessionStatusLine ... />        components/ChatStream/SessionStatusLine.tsx
+    {session.restored}
+      <RestoredBar ... />            (inline in SessionPanel.tsx)
+    {!session.restored}
+      <InputArea ... />              components/ChatStream/InputArea.tsx
+  {!showFile && !showSession}
+    <div className="center-placeholder">
+```
+
+There is **no** `CenterPanel` directory or component. The component implementing the center panel is `SessionPanel`.
+
+---
+
+## Tab Bar — SessionTabBar
+
+**File:** `components/SessionPanel/SessionTabBar.tsx`
+
+Renders three zones in a single horizontal strip. Returns `null` when no sessions and no files.
+
+### Props
+
+```typescript
+interface SessionTabBarProps {
+  sessions: Session[];
+  activeSessionId: string | null;
+  onSwitchSession: (taskId: string) => void;
+  onCloseSession: (taskId: string) => void;
+  files: OpenFile[];
+  activeFilePath: string | null;
+  onSwitchFile: (path: string) => void;
+  onCloseFile: (path: string) => void;
+  previewFile: OpenFile | null;
+  previewFilePath: string | null;
+  onClearPreview: () => void;
+  onPinPreview: () => void;
+}
+```
 
 ### Session Tabs
-- Each tab represents an agent session (started via `agent/run`)
-- Shows: session name + status dot (colored by state)
-- Status dot colors: blue=running, green=done, red=error, gray=idle
-- **Alert badge**: when a non-active session needs attention, its tab shows a badge:
-  - `Q` = question pending (`agent/askUserQuestion`)
-  - `A` = approval pending (`agent/confirmAction`)
-- Close button (`x`) on each tab (with confirmation if session is running)
-- `+` button or `Cmd+T` opens the new session modal
-- `Cmd+1-9` switches between session tabs
 
-### File Tabs
-- Rendered after session tabs, separated by `|` divider
-- Each tab: file icon + filename + dirty dot (gold, if modified) + close button
-- Only one tab is active at a time (either a session tab OR a file tab, never both)
-- Clicking a session tab deactivates the file tab and vice versa
+- Status dot (`.session-tab-dot`): 6px circle — `running` → blue, `done` → green, `error` → red, else → hint
+- Name (`.session-tab-name`): `max-width: 120px`, truncated
+- Alert badge (`.session-tab-badge`): `Q` for question, `A` for approval, pulse animation
+- Close button (`.session-tab-close`): hidden by default, visible on hover
+- Active: `.session-tab-active` → purple bottom border
 
-### Tab Interactions
-| Action | Result |
-|--------|--------|
-| Click session tab | Activates session, deactivates file tab, clears preview |
-| Click file tab | Activates file, deactivates session tab, clears preview |
-| Click preview tab | Activates preview content (already showing) |
-| Close tab | Removes tab, activates nearest remaining tab |
-| `Cmd+1-9` | Switches to nth session tab |
+### Separator
+
+`.session-tab-sep` (1px vertical line) between session tabs and file tabs when both exist.
+
+### Pinned File Tabs
+
+- 📄 icon + filename + dirty indicator (`●` gold when `isDirty`) + close button
+- Active: `.session-tab-active` when `path === activeFilePath`
+
+### Preview Tab
+
+- Shown when `previewFilePath != null` and path not already pinned
+- Name in *italic* (`.file-tab-preview .session-tab-name { font-style: italic }`)
+- Double-click → `onPinPreview()` (converts to pinned tab)
+- Close → `onClearPreview()`
+
+---
 
 ## Preview Tabs
 
-Preview tabs are ephemeral, VS Code-style tabs created by single-clicking items in the left panel trees. They provide instant context feedback without cluttering the tab bar.
+Ephemeral VS Code-style tabs opened by single-clicking items in left panel trees.
 
 ### Trigger
-- **Single-click file in FileTree** -> preview tab opens for that file
-- **Single-click spec in SpecTree** -> preview tab opens for that spec file
 
-### Visual Distinction
-- Preview tab title is rendered in *italic* (vs bold for pinned tabs)
-- Only **one** preview tab exists at a time — single-clicking another item replaces it
+`fileStore.loadPreview(path)` → fetches content, sets `previewFilePath` and `previewFile`. If path already pinned, routes to `activateFile(path)` instead.
 
 ### Lifecycle
 
 ```
-Single-click file/spec in tree
-  |
-  v
-Preview tab appears (italic title)
-  |
-  +-- Single-click another item --> replaces preview
-  +-- Double-click same item -----> pins tab (italic -> bold, becomes permanent)
-  +-- Double-click tree item -----> pins directly (skips preview)
-  +-- Click a pinned tab ---------> preview auto-closes, context follows pinned tab
-  +-- Start/switch session -------> preview auto-closes
-  +-- Close button (x) -----------> preview removed
+Single-click → loadPreview(path)
+  ├── Already pinned → activateFile(path)
+  └── Not pinned → preview tab appears (italic title)
+       ├── Single-click another item → replaces preview
+       ├── Double-click preview tab → pin it
+       ├── Click session tab → clears preview
+       ├── Click pinned file tab → clears preview
+       └── Click × → clears preview
 ```
 
-### Context Panel Integration
-Preview tabs update the context panel (right sidebar) immediately:
-- Preview a spec file -> context panel switches to **Spec Context**
-- Preview a code file -> context panel switches to **Code Context**
-
-The `useContextMode` hook reads `previewFilePath ?? activeFilePath` as the "effective file" — preview takes priority so context updates on single-click.
-
-## File Viewer
-
-The `FileViewer` component renders file content in the center panel. It handles both code files (Monaco editor) and markdown files (rendered HTML preview).
-
-### Toolbar
-
-```
-+---------------------------------------------------------------------+
-| path/to/file.py  [Python]  142 lines  4.2 KB         [Copy] [Edit] |
-+---------------------------------------------------------------------+
-```
-
-- **File path**: relative to project root
-- **Language badge**: detected from file extension
-- **Line count** and **file size** (KB)
-- **Copy button**: copies file content to clipboard (shows "Copied!" for 2s)
-- **Edit button**: opens dropdown with editing options
-
-### Preview Mode (default)
-
-**Code files:** Read-only Monaco editor with:
-- IntelliJ Darcula theme (custom registered theme)
-- Syntax highlighting, line numbers, minimap
-- Bracket pair colorization, indent guides
-- Font: JetBrains Mono / Fira Code / SF Mono, 13px
-- Smooth scrolling, cursor animation
-- `Cmd+F` search
-
-**Markdown files:** Rendered HTML preview via `react-markdown` + `remark-gfm`:
-- GFM support: tables, task lists, strikethrough
-- Mermaid diagrams: fenced ` ```mermaid ` blocks rendered as SVG with dark theme
-- JetBrains-inspired typography
-- **Zoom controls**:
-  - Global zoom (top-right): scales font-size for entire document
-  - Per-diagram zoom (hover to reveal): scales individual Mermaid SVGs
-  - Both support +/-/reset, range 50%-200% (doc) / 30%-300% (diagram)
-
-### Edit Dropdown
-
-The "Edit" button opens a dropdown with options:
-- **Edit in place** -> switches Monaco to `readOnly: false`
-- **Open in IntelliJ IDEA** -> `POST /api/file/open-external` with `editor: "idea"`
-- **Open in VS Code** -> same with `editor: "code"`
-- **Open in Vim** -> same with `editor: "vim"`
-
-Dropdown closes on outside click.
-
-### Edit Mode
-
-- Same Monaco editor with `readOnly: false`
-- Tab shows dirty indicator (gold dot) when content differs from saved
-- **Save button** -> `POST /api/file/write` -> clears dirty state
-- **Cancel button** -> reverts to original content, switches back to preview mode
-
-### Supported Languages
-
-Python, TypeScript/TSX, JavaScript/JSX, CSS, HTML, JSON, Markdown, YAML, Shell, SQL, Rust, Go, Java, Kotlin, Ruby, XML
-
-### IntelliJ Darcula Theme
-
-| Token | Color | Hex |
-|-------|-------|-----|
-| Keywords | Orange | #CF8E6D |
-| Strings | Green | #6AAB73 |
-| Comments | Gray italic | #7A7E85 |
-| Functions | Blue | #56A8F5 |
-| Types | Purple | #C77DBB |
-| Numbers | Teal | #2AACB8 |
+---
 
 ## Session Content
 
-When a session tab is active, the center panel renders the Chat UI:
+When `activeSession != null` and no file active:
 
 ```
-+---------------------------------------------------------------------+
-| <ChatStream>                                                        |
-|   - Assistant messages (streamed markdown)                          |
-|   - Tool call cards (collapsible)                                   |
-|   - Subagent blocks (nested, indented)                              |
-|   - Question/approval cards (interactive)                           |
-|   - Completion/error banners                                        |
-+---------------------------------------------------------------------+
-| <SessionStatusLine>                                                 |
-|   model | $cost | tool calls | context usage bar                   |
-+---------------------------------------------------------------------+
-| <InputArea>                                                         |
-|   [Message Claude...]                                    [Send]     |
-+---------------------------------------------------------------------+
+<ChatStream events={...} answeredRequests={...} onResolveRequest={...} />
+<SessionStatusLine model={...} permissionMode={...} metrics={...} status={...} />
+{restored ? <RestoredBar /> : <InputArea />}
 ```
 
-For restored sessions, the `InputArea` is replaced with a `RestoredBar` showing a "Resume Session" button.
+See [CHAT_UI.md](CHAT_UI.md) for detailed event rendering.
 
-> **Full specification:** [CHAT_UI.md](CHAT_UI.md) — covers event rendering, message types, interactive cards, streaming behavior.
+### Input Disabled Logic
+
+```typescript
+inputDisabled = isDone || isRunning || (hasPending && pendingRequest.type === "approval")
+```
+
+Input enabled for pending questions (user can type freetext answer).
+
+### Send Behavior
+
+- Pending question → `resolveRequest(taskId, requestId, { text })`
+- Idle → `sendMessage(taskId, text)` (optimistic user message event + status → "running")
+
+---
+
+## Restored Session Bar
+
+When `session.restored === true`, `InputArea` replaced by:
+
+```
+| This is a restored session (read-only)          [Resume Session] |
+```
+
+- "Resume Session" calls `session/continue` API → new session with old events, name + " (resumed)"
+- Classes: `.restored-bar`, `.restored-bar-text`, `.restored-bar-btn`
+
+---
+
+## File Viewer
+
+**File:** `components/FileViewer/FileViewer.tsx`
+
+### OpenFile Shape
+
+```typescript
+interface OpenFile {
+  path: string;
+  name: string;
+  content: string;
+  originalContent: string;
+  mode: "preview" | "edit";
+  isDirty: boolean;
+  saving: boolean;
+  error?: string;
+}
+```
+
+### Toolbar
+
+Path + language badge + metadata (lines, KB) + Copy button + Edit/Save controls.
+
+### Edit Dropdown
+
+Options: Edit in place, Open in IntelliJ IDEA, Open in VS Code, Open in Vim.
+
+### Content Rendering
+
+- **Markdown** (`*.md` in preview mode): `<MarkdownPreview>` with `react-markdown` + `remark-gfm` + Mermaid diagrams
+- **Code** (all other files, or markdown in edit mode): Monaco editor with `intellij-darcula` theme
+- **Monaco options:** minimap enabled, lineNumbers on, fontSize 13, JetBrains Mono font, `automaticLayout: true`
+
+### Markdown Preview Features
+
+- Global zoom controls (50%–200%, sticky top-right)
+- Per-diagram zoom controls (30%–300%, shown on diagram hover)
+- Mermaid error handling (shows raw code + error message)
+- User-resizable diagram wrappers (`resize: both`)
+
+---
 
 ## Session Manager
 
-Accessible by clicking "N sessions" in the status bar. Replaces center panel content with a list of all sessions.
+**File:** `components/SessionManager/SessionManager.tsx`
 
-- **Grouped by status:** Active (idle/running) -> Completed (done) -> Errors
-- **Per session card:** name, status badge, model, created time, cost/turns
-- Clicking a session card switches to that session tab
+Standalone component (not rendered inside `SessionPanel`). Receives `onClose` prop.
+
+- Fetches sessions from backend via `session/list` RPC
+- Groups into Active, Completed, Errors
+- Actions: Switch to, Stop, Continue, Delete
+- Click card → restore/switch session, then close
+
+---
 
 ## Empty States
 
-| Condition | Display |
-|-----------|---------|
-| No sessions and no files open | "Select a session or create a new one (Cmd+T)" |
-| Tabs exist but none selected | "Select a tab" |
+| Condition | Message |
+|---|---|
+| No sessions, no files | "Select a session or create a new one (Cmd+T)" |
+| Tabs exist, none active | "Select a tab" |
+| Session Manager empty | "No sessions yet. Create one with Cmd+T." |
+
+---
 
 ## Store Integration
 
-The center panel reads from two stores:
-
 ### fileStore
-- `openFiles: Map<string, OpenFile>` — pinned file tabs
-- `activeFilePath: string | null` — currently active file tab
-- `previewFilePath: string | null` — single-click preview path (at most one)
-- `previewFile: OpenFile | null` — loaded content for the preview tab
-- `openFile(path)` — fetch + add to openFiles (pinned)
-- `activateFile(path)` — switch to file tab, calls `clearPreview()`
-- `loadPreview(path)` — open as preview tab (replaces existing preview). If file already pinned, activates it instead.
-- `clearPreview()` — remove preview tab
-- `pinPreview()` — convert preview to pinned tab
+
+```typescript
+interface FileStore {
+  openFiles: Map<string, OpenFile>;
+  activeFilePath: string | null;
+  previewFilePath: string | null;
+  previewFile: OpenFile | null;
+
+  openFile(path): Promise<void>;
+  closeFile(path): void;
+  activateFile(path): void;      // sets activeFilePath, clears preview
+  loadPreview(path): Promise<void>;
+  clearPreview(): void;
+  pinPreview(): void;            // move preview → openFiles
+  setMode(path, mode): void;
+  updateContent(path, content): void;
+  saveFile(path): Promise<void>;
+  openExternal(path, editor): Promise<void>;
+}
+```
 
 ### sessionStore
-- `sessions: Map<string, Session>` — all active sessions
-- `activeSessionId: string | null` — currently active session tab
-- `switchSession(taskId)` — activate session tab
 
-### Content switching logic (in SessionPanel)
+```typescript
+interface SessionStore {
+  sessions: Map<string, Session>;
+  activeSessionId: string | null;
+  archivedSessions: ArchivedSession[];
+
+  startSession({specIds, config, name, skillId?}): Promise<string>;
+  sendMessage(taskId, text): Promise<void>;
+  switchSession(taskId): void;
+  closeSession(taskId): void;
+  resolveRequest(taskId, requestId, response): void;
+  updateConfig(taskId, {model?, permissionMode?}): Promise<void>;
+  restoreSession(taskId): Promise<void>;
+}
 ```
-if activeFilePath (or previewFilePath) -> show FileViewer
-else if activeSessionId -> show ChatStream + StatusLine + InputArea
-else -> show empty placeholder
+
+### Content Switching Logic
+
+```typescript
+const activeSession = activeSessionId && !activeFilePath && !previewFilePath
+  ? sessions.get(activeSessionId) : null;
+const displayFile = activeFile ?? (previewFilePath ? previewFileObj : null);
+const showFile = displayFile != null;
+const showSession = activeSession != null && !showFile;
 ```
 
-When switching to a session tab, `activeFilePath` is cleared. When switching to a file tab, the session tab is deactivated visually (but session keeps running in background).
+Session tab switching clears file state; file tab switching clears preview.
 
-## Design Decisions
+---
 
-| Decision | Choice | Rationale |
-|----------|--------|-----------|
-| Preview tabs (single-click) | Ephemeral italic tab, auto-closes on navigation | Two equal goals: instant context panel feedback while browsing, and reduced tab clutter. Follows VS Code's proven preview tab pattern. |
-| Single component for sessions + files | `SessionPanel` handles both | Simpler than separate components — they share the same tab bar and content area. Historical naming kept to avoid churn. |
-| Monaco for code, react-markdown for .md | Different renderers per file type | Monaco provides IDE-quality editing. Markdown files benefit from rendered preview with Mermaid support. |
-| IntelliJ Darcula theme | Custom Monaco theme matching JetBrains palette | Familiar to target users (JetBrains IDE users). Consistent with app's dark theme. |
-| Edit via dropdown | Edit in place + external editors | Users may prefer their own editor. "Edit in place" for quick fixes, external editors for serious editing. |
-| Only one active tab | Session OR file, never both | Simplifies state management. Context panel can only show one thing. Center panel has one content area. |
-| Preview auto-close on tab switch | Clicking pinned tab closes preview | Preview is for browsing — once user commits to a pinned tab, the ephemeral preview is no longer needed. Keeps tab bar clean. |
+## CSS Classes
+
+### Layout
+
+| Class | Description |
+|---|---|
+| `.center-panel` | Flex column, `flex: 1`, `min-width: 300px` |
+| `.center-placeholder` | Centered hint text for empty state |
+
+### Tab Bar
+
+| Class | Description |
+|---|---|
+| `.session-tabs` | Flex row, border-bottom, overflow-x auto |
+| `.session-tab` | Individual tab (12px, 2px transparent bottom border) |
+| `.session-tab-active` | Purple bottom border, `var(--text)` color |
+| `.session-tab-dot` | 6px status circle |
+| `.session-tab-name` | Truncated label (max 120px) |
+| `.session-tab-badge` | Alert badge (Q/A, pulse animation) |
+| `.session-tab-close` | Hidden until hover |
+| `.session-tab-sep` | 1px vertical separator |
+| `.file-tab-dirty` | Gold dot (unsaved changes) |
+| `.file-tab-preview .session-tab-name` | Italic for preview tab |
+
+### File Viewer
+
+| Class | Description |
+|---|---|
+| `.fv` | Root container |
+| `.fv-toolbar` | Toolbar row |
+| `.fv-path` | File path (muted, ellipsis) |
+| `.fv-lang-badge` | Language badge (blue tint) |
+| `.fv-meta` | Line count, file size |
+| `.fv-btn` / `.fv-btn-edit` / `.fv-btn-save` | Toolbar buttons |
+| `.fv-editor-container` | Content area |
+| `.fv-dropdown` | Edit options dropdown |
+| `.md-preview-container` | Scrollable markdown wrapper |
+| `.md-preview` | Markdown content area |
+| `.md-zoom-bar` / `.md-zoom-btn` | Zoom controls |
+| `.md-mermaid-wrapper` | Resizable diagram container |
+
+---
+
+## Keyboard Shortcuts
+
+| Shortcut | Action |
+|---|---|
+| `Cmd+T` | Open New Session Modal |
+| `Cmd+K` | Open Command Palette |
+| `Cmd+J` | Toggle right panel |
+| `Ctrl+B` | Toggle left panel |
+| `Cmd+Enter` (in InputArea) | Send message |
+| `Cmd+1-9` tab switching | **[Not implemented]** |
+
+---
 
 ## Known Limitations
 
-- **No split view:** Cannot view a file and a session side-by-side in the center panel
-- **No tab reordering:** Tabs are ordered by creation time (sessions first, then files)
-- **Preview tab doesn't support edit mode:** Must pin first, then edit
-- **Single preview tab:** Cannot preview multiple files simultaneously
-- **Monaco lazy loading:** First file open has a brief loading delay while Monaco initializes
+- **No split view** — cannot view file and session side-by-side
+- **No tab reordering** — tabs ordered by creation order
+- **Single preview tab** — cannot preview multiple files
+- **Monaco lazy loading** — brief loading delay on first file open
+- **No dirty-state guard on close** — no warning for unsaved changes
+- **Session Manager standalone** — not integrated into center panel
 
-## Implementation Notes
-
-- The center panel component is `SessionPanel` (not `CenterPanel`) — located at `components/SessionPanel/SessionPanel.tsx`
-- `SessionTabBar` is a child component in the same directory
-- `FileViewer` is at `components/FileViewer/FileViewer.tsx` with sub-components: `EditDropdown.tsx`, `MarkdownPreview.tsx`, `intellijTheme.ts`, `languageMap.ts`
-- Chat UI components are at `components/ChatStream/` — see [CHAT_UI.md](CHAT_UI.md)
-- The `previewFilePath`/`previewFile` state and related actions (`loadPreview`, `clearPreview`, `pinPreview`) are implemented in `fileStore`
-- Monaco theme is registered once on first editor mount via `useRef` flag
+---
 
 ## Sub-Specifications
 
 | Sub-spec | Scope | Status |
-|----------|-------|--------|
-| [Chat UI](CHAT_UI.md) | Session rendering: event types, message components, streaming, interactions | Active |
-| File Viewer | Monaco config, markdown rendering, edit mode, supported languages | Covered here (extract to own spec if it grows) |
-| Preview Tabs | Lifecycle, store integration, auto-close rules | Covered here |
+|---|---|---|
+| [Chat UI](CHAT_UI.md) | Event rendering, message components, streaming | Active |
+
+---
 
 ## Related Specs
 
-- **Parent:** [WEBVIEW.md](WEBVIEW.md) — overall UI layout
-- **Child:** [CHAT_UI.md](CHAT_UI.md) — session rendering details
-- **Related:** [CONTEXT_PANEL.md](CONTEXT_PANEL.md) — reads `previewFilePath ?? activeFilePath` for mode derivation
-- **Related:** [APP_SHELL.md](APP_SHELL.md) — three-panel layout, `<SessionPanel />` placement
-- **Depends on:** [State Management](../src/store/README.md) — fileStore, sessionStore
-- **Related:** [DIFF_VIEWER.md](DIFF_VIEWER.md) — diff view rendered in center panel
-- **Related:** [NEW_SESSION_MODAL.md](NEW_SESSION_MODAL.md) — creates new session tabs
-- **Related:** [SESSION_HISTORY.md](SESSION_HISTORY.md) — archived sessions open as read-only tabs
+- **Parent:** [WEBVIEW.md](WEBVIEW.md)
+- **Child:** [CHAT_UI.md](CHAT_UI.md)
+- **Related:** [CONTEXT_PANEL.md](CONTEXT_PANEL.md), [APP_SHELL.md](APP_SHELL.md), [NEW_SESSION_MODAL.md](NEW_SESSION_MODAL.md), [SESSION_HISTORY.md](SESSION_HISTORY.md)
+- **Depends on:** `store/sessionStore.ts`, `store/fileStore.ts`, `store/uiStore.ts`

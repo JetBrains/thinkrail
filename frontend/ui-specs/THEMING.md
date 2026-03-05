@@ -4,15 +4,17 @@
 
 ## Overview
 
-Bonsai uses a CSS custom property system for theming. The default is a dark theme (Tokyo Night-inspired). A light theme variant is auto-activated via `prefers-color-scheme`. Users can override with an explicit preference.
+Bonsai uses a CSS custom property system for theming. The default is a dark theme (JetBrains New UI / Darcula-inspired). A light theme variant is auto-activated via `prefers-color-scheme`. Users can override with an explicit preference.
 
 ## Theme Architecture
 
 All colors are defined as CSS custom properties on `:root`. Components reference variables, never hardcode colors.
 
 ```css
-:root { /* dark theme — default */ }
-:root[data-theme="light"] { /* light overrides */ }
+:root,
+[data-theme="dark"] { /* dark theme — default */ }
+
+[data-theme="light"] { /* explicit light overrides */ }
 
 @media (prefers-color-scheme: light) {
   :root:not([data-theme="dark"]) { /* auto light */ }
@@ -31,35 +33,62 @@ All colors are defined as CSS custom properties on `:root`. Components reference
 
 | Token | Purpose | Dark | Light |
 | --- | --- | --- | --- |
-| `--bg` | App background | `#0a0e1a` | `#f5f5f5` |
-| `--panel` | Panel backgrounds | `#1a1b26` | `#ffffff` |
-| `--elevated` | Cards, inputs, modals | `#24283b` | `#f0f0f0` |
-| `--hover` | Hover state backgrounds | `#2a2f47` | `#e8e8e8` |
-| `--border` | Primary borders | `#414868` | `#d0d0d0` |
-| `--border2` | Secondary borders | `#545c7e` | `#b0b0b0` |
-| `--text` | Primary text | `#c0caf5` | `#1a1b26` |
-| `--muted` | Secondary text | `#9aa5ce` | `#4a4a6a` |
-| `--hint` | Tertiary text, labels | `#565f89` | `#8888a0` |
-| `--sel` | Selection background | `#364a82` | `#cce0ff` |
+| `--bg` | App background | `#1e1f22` | `#f7f8fa` |
+| `--panel` | Panel backgrounds | `#2b2d30` | `#ffffff` |
+| `--elevated` | Cards, inputs, modals | `#393b40` | `#f0f1f2` |
+| `--hover` | Hover state backgrounds | `#43454a` | `#e8e9eb` |
+| `--border` | Primary borders | `#43454a` | `#d1d3d8` |
+| `--border2` | Secondary borders | `#5a5d63` | `#b4b8bf` |
+| `--text` | Primary text | `#dfe1e5` | `#1e1f22` |
+| `--muted` | Secondary text | `#a8adb5` | `#5a5d63` |
+| `--hint` | Tertiary text, labels | `#6f737a` | `#8c8f96` |
+| `--sel` | Selection background | `#2d4f67` | `#d4e4fa` |
 
 ### Accent Tokens (consistent across themes)
 
 | Token | Purpose | Value |
 | --- | --- | --- |
-| `--blue` | Primary accent, links, active | `#7aa2f7` |
-| `--purple` | Interactive, Claude identity | `#bb9af7` |
-| `--green` | Success, done, additions | `#9ece6a` |
-| `--red` | Error, deletions, danger | `#f7768e` |
-| `--gold` | Warning, pending, approvals | `#e0af68` |
-| `--cyan` | Code, tool names | `#7dcfff` |
+| `--blue` | Primary accent, links, active | `#3B74EE` |
+| `--purple` | Interactive, branding | `#6B57FF` |
+| `--green` | Success, done, additions | `#21D789` |
+| `--red` | Error, deletions, danger | `#F75464` |
+| `--gold` | Warning, pending, approvals | `#E8A336` |
+| `--cyan` | Code, tool names | `#087CFA` |
 
 **Note:** Accent colors are the same in dark and light themes for brand consistency. Their alpha variants (used for backgrounds) adjust automatically since they overlay different base colors.
 
-### Typography Token
+### Typography Tokens
 
 | Token | Value |
 | --- | --- |
-| `--font` | `'SF Mono','Monaco','Inconsolata','Fira Code',monospace` |
+| `--font` | `"JetBrains Mono", "Fira Code", "SF Mono", "Cascadia Code", monospace` |
+| `--font-size` | `13px` |
+| `--line-height` | `1.6` |
+
+### Spacing Tokens
+
+| Token | Value |
+| --- | --- |
+| `--space-xs` | `4px` |
+| `--space-sm` | `8px` |
+| `--space-md` | `12px` |
+| `--space-lg` | `16px` |
+| `--space-xl` | `24px` |
+
+### Border Radius Tokens
+
+| Token | Value |
+| --- | --- |
+| `--radius-sm` | `4px` |
+| `--radius-md` | `6px` |
+| `--radius-lg` | `8px` |
+
+### Transition Tokens
+
+| Token | Value |
+| --- | --- |
+| `--transition-fast` | `120ms ease` |
+| `--transition-normal` | `200ms ease` |
 
 ## Theme Switching
 
@@ -91,18 +120,9 @@ const saved = localStorage.getItem("bonsai-theme") as ThemePreference || "system
 applyTheme(saved);
 ```
 
-### System Change Listener
+### System Change Listener (Planned)
 
-```typescript
-window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => {
-  if (localStorage.getItem("bonsai-theme") === "system") {
-    // Theme auto-updates via CSS media query — no JS needed
-    // But notify xterm.js and canvas-based components to update
-    updateTerminalTheme();
-    updateGraphColors();
-  }
-});
-```
+> **Not yet implemented.** When `prefers-color-scheme` changes and the user preference is `"system"`, the CSS media query handles theme switching automatically. A JS listener to notify non-CSS components (xterm.js, canvas) is planned but not yet built.
 
 ## Component-Specific Theme Concerns
 
@@ -132,9 +152,9 @@ Code block syntax themes should switch with the app theme:
 ```
 frontend/src/
   styles/
-    tokens.css       # CSS custom property definitions (all themes)
-    theme-dark.css   # Dark theme values (default)
-    theme-light.css  # Light theme values
+    tokens.css       # Accent colors + shared tokens (spacing, radii, typography, transitions)
+    theme-dark.css   # Dark theme semantic color values (default)
+    theme-light.css  # Light theme semantic color values
     global.css       # Imports tokens + base styles
 ```
 

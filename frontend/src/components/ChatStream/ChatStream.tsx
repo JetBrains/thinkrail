@@ -78,6 +78,15 @@ export function ChatStream({
               />
             );
 
+          case "userMessage":
+            return (
+              <div key={k} className="chat-user">
+                <div className="chat-user-text">
+                  {(p.text as string) ?? ""}
+                </div>
+              </div>
+            );
+
           case "textDelta":
             return (
               <AssistantMessage
@@ -166,14 +175,25 @@ export function ChatStream({
             );
           }
 
-          case "turnComplete":
+          case "turnComplete": {
+            const result = (p.result as string) ?? "";
             return (
-              <SystemMessage
-                key={k}
-                text={`Turn complete \u2014 $${((p.costUsd as number) ?? 0).toFixed(2)} \u00B7 ${(p.turns as number) ?? 0} turns`}
-                variant="ok"
-              />
+              <>
+                {result && (
+                  <AssistantMessage
+                    key={`${k}-result`}
+                    text={result}
+                    streaming={false}
+                  />
+                )}
+                <SystemMessage
+                  key={k}
+                  text={`Turn complete \u2014 $${((p.costUsd as number) ?? 0).toFixed(2)} \u00B7 ${(p.turns as number) ?? 0} turns`}
+                  variant="ok"
+                />
+              </>
             );
+          }
 
           case "interrupted":
             return (

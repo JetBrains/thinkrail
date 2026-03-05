@@ -200,7 +200,7 @@
         "rendering"
       ],
       "created": "2026-02-27",
-      "updated": "2026-02-27"
+      "updated": "2026-03-05"
     },
     {
       "id": "graph-interactions",
@@ -209,7 +209,7 @@
       "title": "Graph Interactions",
       "status": "active",
       "created": "2026-03-02",
-      "updated": "2026-03-02",
+      "updated": "2026-03-05",
       "covers": [
         "frontend/src/components/GraphView/"
       ],
@@ -227,7 +227,7 @@
       "title": "New Session Modal",
       "status": "active",
       "created": "2026-03-02",
-      "updated": "2026-03-02",
+      "updated": "2026-03-05",
       "covers": [
         "frontend/src/components/NewSessionModal/"
       ],
@@ -245,7 +245,7 @@
       "title": "Command Palette",
       "status": "active",
       "created": "2026-03-02",
-      "updated": "2026-03-02",
+      "updated": "2026-03-05",
       "covers": [
         "frontend/src/components/CommandPalette/"
       ],
@@ -263,7 +263,7 @@
       "title": "Notification System",
       "status": "active",
       "created": "2026-03-02",
-      "updated": "2026-03-02",
+      "updated": "2026-03-05",
       "covers": [
         "frontend/src/components/Notifications/"
       ],
@@ -299,7 +299,7 @@
       "title": "Theming",
       "status": "active",
       "created": "2026-03-02",
-      "updated": "2026-03-02",
+      "updated": "2026-03-05",
       "covers": [
         "frontend/src/styles/"
       ],
@@ -315,9 +315,9 @@
       "type": "submodule-design",
       "path": "frontend/ui-specs/RESPONSIVE_BEHAVIOR.md",
       "title": "Responsive Behavior",
-      "status": "active",
+      "status": "draft",
       "created": "2026-03-02",
-      "updated": "2026-03-02",
+      "updated": "2026-03-05",
       "covers": [
         "frontend/src/"
       ],
@@ -333,9 +333,9 @@
       "type": "submodule-design",
       "path": "frontend/ui-specs/DIFF_VIEWER.md",
       "title": "Diff Viewer",
-      "status": "active",
+      "status": "draft",
       "created": "2026-03-02",
-      "updated": "2026-03-02",
+      "updated": "2026-03-05",
       "covers": [
         "frontend/src/components/DiffViewer/"
       ],
@@ -353,7 +353,7 @@
       "title": "Progress Tracker",
       "status": "active",
       "created": "2026-03-02",
-      "updated": "2026-03-02",
+      "updated": "2026-03-05",
       "covers": [
         "frontend/src/components/ProgressTab/"
       ],
@@ -371,7 +371,7 @@
       "title": "Session History & Persistence",
       "status": "active",
       "created": "2026-03-02",
-      "updated": "2026-03-02",
+      "updated": "2026-03-05",
       "covers": [
         "frontend/src/components/SessionHistory/"
       ],
@@ -389,7 +389,7 @@
       "title": "API Client",
       "status": "active",
       "created": "2026-03-02",
-      "updated": "2026-03-02",
+      "updated": "2026-03-05",
       "covers": [
         "frontend/src/api/"
       ],
@@ -407,7 +407,7 @@
       "title": "State Management",
       "status": "active",
       "created": "2026-03-02",
-      "updated": "2026-03-02",
+      "updated": "2026-03-05",
       "covers": [
         "frontend/src/store/"
       ],

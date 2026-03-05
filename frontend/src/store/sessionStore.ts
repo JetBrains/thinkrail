@@ -32,7 +32,10 @@ interface SessionStore {
     response: unknown,
   ) => void;
 
+  updateConfig: (taskId: string, config: { model?: string; permissionMode?: string }) => Promise<void>;
+
   restoreSession: (taskId: string) => Promise<void>;
+  loadActiveSessions: () => Promise<void>;
 
   // Event handlers (called by wireEvents)
   onSessionStart: (params: Record<string, unknown>) => void;
@@ -41,6 +44,7 @@ interface SessionStore {
   onConfirmAction: (params: Record<string, unknown>) => void;
   onSessionDone: (params: Record<string, unknown>) => void;
   onSessionError: (params: Record<string, unknown>) => void;
+  onConfigChanged: (params: Record<string, unknown>) => void;
 }
 
 function emptyMetrics(): SessionMetrics {
@@ -73,6 +77,7 @@ function ensureSession(
     specIds: [],
     status: "idle",
     model: "",
+    permissionMode: "default",
     startedAt: Date.now(),
     events: [],
     metrics: emptyMetrics(),
@@ -132,6 +137,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
         specIds,
         status: "idle",
         model: config.model,
+        permissionMode: config.permissionMode,
         startedAt: Date.now(),
         events: existing?.events ?? [],
         metrics: existing?.metrics ?? emptyMetrics(),
@@ -145,16 +151,40 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
   },
 
   sendMessage: async (taskId, text) => {
-    const api = createAgentApi(getClient());
-    await api.send(taskId, text);
-    // Mark session as running (turn started)
+    // Add user message to events immediately (optimistic)
     set((s) => {
       const session = s.sessions.get(taskId);
       if (!session) return s;
       const next = new Map(s.sessions);
-      next.set(taskId, { ...session, status: "running" });
+      next.set(taskId, {
+        ...session,
+        status: "running",
+        events: [
+          ...session.events,
+          {
+            taskId,
+            sessionId: "",
+            eventType: "userMessage" as const,
+            payload: { text },
+          },
+        ],
+      });
       return { sessions: next };
     });
+    try {
+      const api = createAgentApi(getClient());
+      await api.send(taskId, text);
+    } catch (err) {
+      console.error("[sendMessage] failed:", err);
+      // Revert to idle so the user can retry
+      set((s) => {
+        const session = s.sessions.get(taskId);
+        if (!session) return s;
+        const next = new Map(s.sessions);
+        next.set(taskId, { ...session, status: "idle" });
+        return { sessions: next };
+      });
+    }
   },
 
   switchSession: (taskId) => set({ activeSessionId: taskId }),
@@ -172,6 +202,11 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
     console.log("[restoreSession]", taskId, "data:", data ? `${(data.events ?? []).length} events` : "null");
     if (!data) return;
 
+    // Check if this session has a live backend runner
+    const allSessions = await api.list();
+    const backendEntry = allSessions.find((s) => s.taskId === taskId);
+    const isActive = backendEntry?.active === true;
+
     // Convert backend events to AgentEvent format
     const events: AgentEvent[] = (data.events ?? []).map((ev: Record<string, unknown>) => ({
       taskId,
@@ -182,10 +217,12 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
 
     // Mark all question/approval events as answered (historical session)
     const answered = new Map<string, unknown>();
-    for (const ev of events) {
-      if (ev.eventType === "askUserQuestion" || ev.eventType === "confirmAction") {
-        const rid = (ev.payload.requestId as string) ?? "";
-        if (rid) answered.set(rid, { historical: true });
+    if (!isActive) {
+      for (const ev of events) {
+        if (ev.eventType === "askUserQuestion" || ev.eventType === "confirmAction") {
+          const rid = (ev.payload.requestId as string) ?? "";
+          if (rid) answered.set(rid, { historical: true });
+        }
       }
     }
 
@@ -194,22 +231,53 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
       name: data.name ?? taskId.slice(0, 8),
       skillId: (data.skillId as string) ?? null,
       specIds: data.specIds ?? [],
-      // Restored sessions are read-only — force "done" regardless of disk
-      // status, because the backend runner is dead.
-      status: "done",
+      // If the backend runner is alive, use the actual status; otherwise
+      // force "done" since there's nothing driving the session.
+      status: isActive
+        ? ((backendEntry?.status as SessionStatus) ?? "idle")
+        : "done",
       model: (data.config?.model as string) ?? "",
+      permissionMode: (data.config?.permissionMode as string) ?? "default",
       startedAt: new Date(data.createdAt).getTime(),
       events,
       metrics: emptyMetrics(),
       pendingRequest: null,
       answeredRequests: answered,
-      restored: true,
+      restored: !isActive,
     };
 
     set((s) => {
       const next = new Map(s.sessions);
       next.set(taskId, session);
       return { sessions: next, activeSessionId: taskId };
+    });
+  },
+
+  loadActiveSessions: async () => {
+    const { createSessionApi } = await import("@/api/methods/sessions.ts");
+    const api = createSessionApi(getClient());
+    const all = await api.list();
+    set((s) => {
+      const next = new Map(s.sessions);
+      for (const entry of all) {
+        // Only add sessions with a live backend runner that aren't already in memory
+        if (!entry.active || next.has(entry.taskId)) continue;
+        next.set(entry.taskId, {
+          taskId: entry.taskId,
+          name: entry.name ?? entry.taskId.slice(0, 8),
+          skillId: entry.skillId ?? null,
+          specIds: entry.specIds ?? [],
+          status: (entry.status as SessionStatus) ?? "idle",
+          model: entry.model ?? "",
+          permissionMode: "default",
+          startedAt: new Date(entry.createdAt).getTime(),
+          events: [],
+          metrics: emptyMetrics(),
+          pendingRequest: null,
+          answeredRequests: new Map(),
+        });
+      }
+      return { sessions: next };
     });
   },
 
@@ -296,6 +364,26 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
         answeredRequests: answered,
       });
       return { sessions: nextSessions };
+    });
+  },
+
+  updateConfig: async (taskId, config) => {
+    const api = createAgentApi(getClient());
+    await api.updateConfig(taskId, config);
+  },
+
+  onConfigChanged: (params) => {
+    const taskId = params.taskId as string;
+    set((s) => {
+      const session = s.sessions.get(taskId);
+      if (!session) return s;
+      const next = new Map(s.sessions);
+      next.set(taskId, {
+        ...session,
+        model: (params.model as string) ?? session.model,
+        permissionMode: (params.permissionMode as string) ?? session.permissionMode,
+      });
+      return { sessions: next };
     });
   },
 

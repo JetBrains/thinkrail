@@ -1,516 +1,355 @@
 # New Session Modal — Sub-Specification
 
-> Parent: [WEBVIEW.md](../WEBVIEW.md) §3 | Status: **Active** | Created: 2026-03-02
+> Parent: [WEBVIEW.md](../WEBVIEW.md) §3 | Status: **Active** | Created: 2026-03-02 | Updated: 2026-03-05
 
 ## Overview
 
-The New Session Modal is the entry point for starting Claude agent sessions. Users select a skill, optionally pick specs as context, and configure the session. On submit, it calls `agent/run` and creates a new tab in the center panel.
+The New Session Modal is the entry point for starting Claude agent sessions. Users select a skill, optionally pick specs as context, and configure the session. On submit, it calls `agent/run` via `sessionStore.startSession()` and switches focus to the new session tab.
 
 **Triggers:**
-- `+ New Session` button in header bar
-- `Cmd+T` keyboard shortcut
-- Context menu "New session for this spec" (pre-fills spec)
-- Context menu "Implement" / "Edit spec" (pre-fills spec + skill)
+- `+ New Session` button in the header bar
+- `Cmd+T` keyboard shortcut (globally registered)
+- Command palette "New session" action
+- `openModal(prefill?)` called from context menus — **[Planned]**
 
 ## 1. Component Hierarchy
 
 ```
-<ModalOverlay>                         // fixed backdrop, click-outside to close
-  <ModalContainer>                     // centered card
-    <ModalHeader>                      // title + close button
-    <SessionNameField />               // text input with auto-suggest
-    <SkillGrid>                        // skill selection cards
-      <SkillCard /> ...
-    </SkillGrid>
-    <SpecSelector />                   // multiselect spec picker
-    <AdvancedConfig />                 // collapsible config section
-    <ModalFooter>                      // Cancel + Start buttons
-      <CancelButton />
-      <StartButton />
-    </ModalFooter>
-  </ModalContainer>
-</ModalOverlay>
+<NewSessionModal>                         // renders null when closed
+  <div.modal-backdrop>                    // fixed overlay, click closes modal
+    <div.modal-container>                 // centered card, click.stopPropagation
+      <div.modal-header>
+        <h2.modal-title>                  // "New Session"
+        <button.modal-close>             // × (U+00D7)
+      <div.modal-body>
+        <label.modal-label>              // "Session Name"
+        <input.modal-input>              // name text input, autoFocus
+        <label.modal-label>              // "Skill"
+        <SkillGrid />                    // skill selection grid
+        <label.modal-label>              // "Spec Context"
+        <SpecSelector />                 // spec multiselect
+        <button.modal-advanced-toggle>   // ▶/▼ Advanced
+        <div.modal-advanced>             // conditionally rendered
+          <label.modal-label>            // "Model"
+          <select.modal-select>          // model dropdown
+          <label.modal-label>            // "Max Turns"
+          <div.modal-pills>              // turn preset pill buttons
+          <label.modal-label>            // "Permission Mode"
+          <div.modal-radio-group>        // radio buttons
+      <div.modal-footer>
+        <button.modal-cancel>           // "Cancel"
+        <button.modal-submit>           // "Start Session" / "Starting..."
 ```
+
+**Files:**
+- `frontend/src/components/NewSessionModal/NewSessionModal.tsx`
+- `frontend/src/components/NewSessionModal/NewSessionModal.css`
+- `frontend/src/components/NewSessionModal/SkillGrid.tsx`
+- `frontend/src/components/NewSessionModal/SpecSelector.tsx`
+- `frontend/src/constants/skills.ts`
 
 ## 2. Modal Chrome
 
 ### 2.1 Overlay
 
-- Fixed position, `inset: 0`
-- Background: `rgba(0,0,0,.55)` (semi-transparent dark)
-- Click outside modal → close (with confirmation if form is dirty)
-- `z-index: 1000`
+- Class: `.modal-backdrop`
+- `position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 1000`
+- Click on backdrop calls `closeModal()` — no dirty-check confirmation
 
 ### 2.2 Container
 
-```
-┌──────────────────────────────────────────────────┐
-│  ✨ New Session                              ✕   │
-│──────────────────────────────────────────────────│
-│                                                  │
-│  SESSION NAME                                    │
-│  ┌────────────────────────────────────────────┐  │
-│  │ e.g. Module: session-manager               │  │
-│  └────────────────────────────────────────────┘  │
-│                                                  │
-│  SKILL                                           │
-│  ┌────────┐ ┌────────┐ ┌────────┐ ┌────────┐   │
-│  │🎯 Goal │ │🏛 Arch │ │📦 Mod  │ │📋 Task │   │
-│  └────────┘ └────────┘ └────────┘ └────────┘   │
-│  ┌────────┐ ┌────────┐ ┌────────┐ ┌────────┐   │
-│  │🔍 Rev  │ │📊 Stat │ │🔧 Init │ │📝 Lint │   │
-│  └────────┘ └────────┘ └────────┘ └────────┘   │
-│                                                  │
-│  SPECS (optional)                                │
-│  ┌─ Spec Module ✕ ── Core Module ✕ ── + ──────┐ │
-│  └────────────────────────────────────────────┘  │
-│                                                  │
-│  ▸ Advanced                                      │
-│                                                  │
-│                    [Cancel]  [Start Session →]   │
-└──────────────────────────────────────────────────┘
-```
+- Class: `.modal-container`
+- Width: `520px`; max-height: `80vh`; overflow-y on `.modal-body` only
+- Background: `var(--panel)`, border: `1px solid var(--border)`, border-radius: `var(--radius-lg)`
+- Box-shadow: `0 8px 32px rgba(0,0,0,0.4)`
+- No open/close animation **[Planned]**
 
-- Width: 520px (max 96vw)
-- Background: `--panel`
-- Border: `1px solid --blue`
-- Border-radius: 12px
-- Box-shadow: `0 10px 50px rgba(0,0,0,.65)`
-- Entry animation: fade in overlay + slide up modal (200ms)
+### 2.3 Header
+
+- `.modal-header`: padding `var(--space-lg)`, `border-bottom: 1px solid var(--border)`
+- Title (`h2.modal-title`): "New Session", `font-size: 14px; font-weight: 600`
+- Close button (`.modal-close`): renders `×`, `color: var(--hint)`, hover → `var(--text)`
+
+### 2.4 Footer
+
+- `.modal-footer`: `display: flex; justify-content: flex-end; gap: var(--space-sm)`
+- Cancel button (`.modal-cancel`): transparent bg, `var(--muted)` text
+- Submit button (`.modal-submit`): `var(--blue)` bg, shows "Starting..." when submitting
 
 ## 3. Session Name Field
 
-### 3.1 Input
+- Label: `SESSION NAME` via `.modal-label` (10px uppercase, `var(--hint)`)
+- Input class: `.modal-input`
+- Placeholder: `"e.g. Module: session-manager"`
+- `maxLength={60}`, `autoFocus`
+- Focus state: `border-color: var(--blue)`
+- Default on submit: `name || (skillId ?? "session")`
+- Auto-suggest ghost text: **[Not implemented]**
 
-- Label: "SESSION NAME" (uppercase, 10px, `--hint`)
-- Placeholder: "e.g. Module: session-manager"
-- Full-width text input matching existing `.minput` style
-- Auto-focus on modal open
+## 4. Skill Grid (`SkillGrid`)
 
-### 3.2 Auto-Suggest
+### 4.1 Props
 
-When a skill and/or spec are selected, the placeholder updates to suggest a name:
-
-| Selection | Suggested Name |
-| --- | --- |
-| Skill: module-design | "module-design" |
-| Skill: module-design + Spec: Spec Module | "module-design: Spec Module" |
-| Spec only: Spec Module | "Spec Module" |
-
-The suggestion appears as a ghost text in the input if the user hasn't typed anything. User typing overrides it.
-
-### 3.3 Validation
-
-- **Optional** — if empty, auto-generated from skill + spec selection
-- Max length: 60 characters
-- Trimmed on submit
-
-## 4. Skill Grid
-
-### 4.1 Layout
-
-2-column or 4-column grid depending on modal width. Each skill is a card.
-
-### 4.2 Skill Cards
-
-```
-┌────────────────────────┐
-│ 🎯                     │
-│ Goal & Requirements    │
-│ Define project goal    │
-└────────────────────────┘
+```typescript
+interface SkillGridProps {
+  selectedId: string | null;
+  onSelect: (id: string | null) => void;
+}
 ```
 
-- Background: `--elevated`
-- Border: 2px solid `--border` (unselected) / `--blue` (selected)
-- Border-radius: 8px
-- Padding: 9px 11px
-- Icon: 17px emoji
-- Name: 11px, bold, `--text`
-- Description: 10px, `--hint`, 1-2 lines, line-height 1.35
+### 4.2 Layout
+
+Skills are grouped into named sections: `"Foundation"`, `"Creation"`, `"Review"`, `"Visualization"`.
+
+```
+<div.skill-grid>
+  <div.skill-group>
+    <div.skill-group-label>  Foundation
+    <div.skill-group-cards>
+      <button.skill-card> ...
+```
+
+Cards render only `icon` + `name` (description is **not displayed** in the card).
 
 ### 4.3 Skill Catalog
 
-Grouped by purpose:
+**Foundation:**
+- `goal-and-requirements` 🎯 Goal & Requirements
+- `architecture-design` 🏛 Architecture
 
-**Foundation**
+**Creation:**
+- `module-design` 📦 Module Design
+- `submodule-design` 📦 Submodule Design
+- `task-spec` 📋 Task Spec
+- `spec-from-code` 🔄 Spec from Code
 
-| Skill ID | Icon | Name | Description |
-| --- | --- | --- | --- |
-| `goal-and-requirements` | 🎯 | Goal & Requirements | Define project goal and requirements |
-| `architecture-design` | 🏛 | Architecture | Create system architecture document |
+**Review:**
+- `spec-review` 🔍 Review
+- `spec-lint` 📝 Lint
+- `spec-status` 📊 Status
+- `spec-next` 🧭 Next
+- `spec-init` 🔧 Init
 
-**Creation**
-
-| Skill ID | Icon | Name | Description |
-| --- | --- | --- | --- |
-| `module-design` | 📦 | Module Design | Design a module-level specification |
-| `submodule-design` | 📦 | Submodule Design | Design a sub-component specification |
-| `task-spec` | 📋 | Task Spec | Create an actionable task specification |
-| `spec-from-code` | 🔄 | Spec from Code | Reverse-engineer specs from existing code |
-
-**Review & Tooling**
-
-| Skill ID | Icon | Name | Description |
-| --- | --- | --- | --- |
-| `spec-review` | 🔍 | Review | Review specs against code for accuracy |
-| `spec-lint` | 📝 | Lint | Validate spec structure and consistency |
-| `spec-status` | 📊 | Status | Show coverage, health, and gaps |
-| `spec-next` | 🧭 | Next | Suggest what to specify next |
-| `spec-init` | 🔧 | Init | Initialize spec-driven project structure |
-
-**Visualization**
-
-| Skill ID | Icon | Name | Description |
-| --- | --- | --- | --- |
-| `visualisation` | 📈 | Visualize | Terminal visualization toolkit |
-| `cli-progress` | 📉 | Progress | Show progress with terminal graphics |
+**Visualization:**
+- `cli-progress` 📉 Progress
 
 ### 4.4 Selection Behavior
 
-- **Single select** — one skill at a time
-- Click to select, click again to deselect
-- Selected card: blue border, subtle blue background tint (`rgba(122,162,247,.07)`)
-- **Optional** — sessions can start without a skill (free-form chat)
+- Single select — click selected card deselects, click unselected card selects
+- Optional — user can start a session with no skill selected
 
-### 4.5 Pre-fill from Context Menu
+### 4.5 Card Styling
 
-When triggered from a graph node context menu:
-- "Implement" → pre-selects `task-spec` skill
-- "Edit spec" → pre-selects the matching design skill (module-design for modules, etc.)
-- "New session for this spec" → no skill pre-selected, spec pre-filled
+- `.skill-card`: `1px solid var(--border)`, `border-radius: var(--radius-sm)`, `font-size: 11px`
+- `.skill-card:hover`: `border-color: var(--blue); color: var(--text)`
+- `.skill-card-selected`: `border-color: var(--blue); background: rgba(122,162,247,0.07)`
 
-## 5. Spec Selector
+## 5. Spec Selector (`SpecSelector`)
 
-### 5.1 Layout
+### 5.1 Props
 
-A chip-based multiselect input that fetches specs via `spec/list`.
-
-```
-┌─ Spec Module ✕ ── Core Module ✕ ── + ──────────┐
-└─────────────────────────────────────────────────┘
+```typescript
+interface SpecSelectorProps {
+  selectedIds: string[];
+  onToggle: (id: string) => void;
+}
 ```
 
-### 5.2 Behavior
+### 5.2 Data Source
 
-- Click `+` or the empty area → opens a dropdown of all specs
-- Dropdown items: icon + title + type badge (grouped by spec type)
-- Search/filter input at top of dropdown
-- Click a spec → adds it as a chip
-- Click `✕` on a chip → removes it
-- Multiple specs can be selected
+Reads from `useSpecStore((s) => s.specs)` — already fetched into store (not fetched on modal open).
 
-### 5.3 Chip Display
+### 5.3 Layout
 
-Each selected spec appears as a removable chip:
-- Background: `--elevated`
-- Border: `1px solid --border`
-- Text: 10px, `--muted`
-- Icon: spec type emoji
-- Close button: `✕`, `--hint`, hover → `--text`
-
-### 5.4 Dropdown
-
-- Max height: 200px, scrollable
-- Items grouped by type: Goal, Architecture, Module, Submodule, Task
-- Each item: `icon + title + type badge`
-- Hover: `--elevated` background
-- Already-selected items: dimmed or checkmarked
-- Filter input at top for fuzzy search by title
-
-### 5.5 Pre-fill
-
-When triggered from context menu or graph node, the relevant spec is pre-filled as a chip.
-
-### 5.6 Data Source
-
-On modal open, call `spec/list` RPC to fetch current specs. Cache the result; invalidate on `registry/didUpdate` notification.
+- **Chips** (`.spec-chip`): selected specs with `×` remove button
+- **Add button** (`.spec-selector-add`): `"+ Add spec"`, dashed border, toggles dropdown
+- **Dropdown** (`.spec-selector-dropdown`): absolute positioned, search input + scrollable list
+  - Search: filters by `title` and `id` (case-insensitive substring)
+  - Items: `title` (left) + `type` (right, 10px hint)
+  - Selected items: `.spec-selector-item-selected`
+  - Click toggles selection (dropdown stays open for multi-select)
+  - Empty state: "No specs found"
+  - Not grouped by spec type (flat list)
 
 ## 6. Advanced Config
 
-Collapsible section, collapsed by default. Toggle via `▸ Advanced` / `▾ Advanced`.
+Collapsed by default. Toggle: `.modal-advanced-toggle` (▶/▼ Advanced).
 
-### 6.1 Fields
+### Model
 
-| Field | Type | Default | Options |
-| --- | --- | --- | --- |
-| **Model** | Dropdown | `claude-opus-4-6` | `claude-opus-4-6`, `claude-sonnet-4-6`, `claude-haiku-4-5` |
-| **Max turns** | Number input | `20` | 5, 10, 20, 50, 100 (preset buttons or free input) |
-| **Permission mode** | Radio group | `ask` | `allow` (auto-approve all), `ask` (prompt per tool), `deny` (block tools) |
+- `<select.modal-select>` with options: `"claude-opus-4-6"` (default), `"claude-sonnet-4-6"`, `"claude-haiku-4-5"`
 
-### 6.2 Layout
+### Max Turns
 
-```
-▾ Advanced
-  ┌────────────────────────────────────────────────┐
-  │  Model          [claude-opus-4-6        ▾]     │
-  │  Max turns      [5] [10] [●20] [50] [100]     │
-  │  Permissions    ○ Allow all  ● Ask  ○ Deny     │
-  └────────────────────────────────────────────────┘
-```
+- Pill buttons (`.modal-pills`): `5, 10, 20, 50, 100` — default `20`
+- `.modal-pill-active`: blue border + bg tint
+- No free-form number input
 
-- Model dropdown: styled select, `--elevated` background
-- Max turns: preset pill buttons, selected one highlighted with `--blue`
-- Permission mode: radio group with labels and brief descriptions on hover
+### Permission Mode
 
-### 6.3 Streaming
+- Radio group (`.modal-radio-group`): `"default"`, `"acceptEdits"`, `"bypassPermissions"`, `"plan"`
+- Default: `"default"`
 
-`stream_text` is always `true` — not exposed in the UI. The Chat UI depends on streaming for real-time text rendering.
+### Stream Text
 
-## 7. Modal Actions
+`streamText: true` always passed, not exposed in UI.
 
-### 7.1 Start Session
+## 7. Form State Management
 
-- Button text: "Start Session →"
-- Style: primary button (`--blue` background, `--panel` text, bold)
-- Disabled when no skill is selected (unless free-form sessions are allowed)
-- On click:
-  1. Validate form
-  2. Construct RPC params (see §9)
-  3. Call `agent/run`
-  4. Close modal
-  5. Create new session tab in center panel
-  6. Switch to the new tab
-
-### 7.2 Cancel
-
-- Button text: "Cancel"
-- Style: secondary button (`--elevated` background, `--text` color)
-- On click: close modal, discard form state
-
-### 7.3 Loading State
-
-After clicking "Start Session", the button shows a spinner and "Starting..." text. The modal stays open until the `agent/run` RPC response arrives (typically <1s). On error, show inline error message above the footer.
-
-## 8. Validation
-
-| Field | Rule | Error Message |
-| --- | --- | --- |
-| Session name | Max 60 chars, trimmed | "Name too long" |
-| Skill | Optional (free-form allowed) | — |
-| Specs | Optional | — |
-| Model | Must be valid model ID | — (dropdown enforces) |
-| Max turns | 1–500, integer | "Must be 1–500" |
-
-Minimal validation — the modal is intentionally lightweight. Most fields have sensible defaults.
-
-## 9. RPC Integration
-
-### 9.1 Constructing the Request
+All state is local React `useState`:
 
 ```typescript
-function buildRunParams(form: ModalForm): AgentRunParams {
-  return {
-    specIds: form.selectedSpecIds,          // string[] (may be empty)
-    config: {
-      model: form.model,                    // "claude-opus-4-6"
-      max_turns: form.maxTurns,             // 20
-      permission_mode: form.permissionMode, // "ask"
-      stream_text: true,                    // always true
-    }
-  };
+const [name, setName] = useState("");
+const [skillId, setSkillId] = useState<string | null>(null);
+const [specIds, setSpecIds] = useState<string[]>([]);
+const [model, setModel] = useState("claude-opus-4-6");
+const [maxTurns, setMaxTurns] = useState(20);
+const [permissionMode, setPermissionMode] = useState("default");
+const [showAdvanced, setShowAdvanced] = useState(false);
+const [submitting, setSubmitting] = useState(false);
+```
+
+No inline error state — submit errors only reset `submitting`.
+
+**Reset on close:** All fields reset via `useEffect` watching `[open, prefill]`.
+
+**Prefill on open:** From `uiStore.modalPrefill`:
+```typescript
+interface ModalPrefill {
+  skillId?: string;
+  specIds?: string[];
+  name?: string;
 }
 ```
 
-### 9.2 Skill Handling
+## 8. Session Creation Flow
 
-Skills are not part of `AgentConfig`. Instead, when a skill is selected:
-1. The skill's prompt/instructions are loaded from the plugin
-2. Passed as the initial user message or system context alongside spec content
-3. The backend `agent/run` handler loads spec content from `specIds` and prepends skill instructions
-
-**Note:** The exact mechanism for passing skill selection to the backend may need an additional field in `agent/run` params (e.g., `skillId: string`). This should be added to the Agent Module spec if not already present.
-
-### 9.3 Response Handling
+### Submit Handler
 
 ```typescript
-// On submit:
-const { taskId } = await rpc.call("agent/run", params);
-
-// Create session tab:
-sessionStore.addSession({
-  taskId,
-  name: form.sessionName || autoName(form),
-  skill: form.selectedSkill,
-  specIds: form.selectedSpecIds,
-  status: "running",
-  startedAt: new Date(),
+await startSession({
+  specIds,
+  config: { model, maxTurns, permissionMode, streamText: true },
+  name: name || (skillId ?? "session"),
+  skillId: skillId ?? undefined,
 });
-
-// Switch to new tab:
-sessionStore.setActiveSession(taskId);
-
-// Close modal:
-modalStore.close();
-
-// Agent events will stream in via agent/* notifications keyed by taskId
+closeModal();
 ```
 
-### 9.4 Error Handling
+### RPC Call
 
-| Error | Behavior |
-| --- | --- |
-| Network error | Show inline error: "Failed to connect to backend" |
-| RPC error (-32603) | Show inline error: "Internal server error" |
-| Invalid params | Should not happen (frontend validates) |
+`agent/run` with params: `{ specIds, config: { model, maxTurns, permissionMode, streamText }, name, skillId? }`
 
-Error message appears above the footer buttons in red. Modal stays open so user can retry.
+### Submit Button States
 
-## 10. Keyboard Shortcuts
+- Normal: `"Start Session"`
+- Submitting: `"Starting..."`, `disabled`, `opacity: 0.5`
+- No spinner element — text change only
+
+## 9. Store Interactions
+
+| Store | Fields Used | Purpose |
+|---|---|---|
+| `uiStore` | `modalOpen`, `modalPrefill`, `closeModal()` | Open/close state and prefill data |
+| `sessionStore` | `startSession()` | Creates session, sets `activeSessionId` |
+| `specStore` | `specs` (via `SpecSelector`) | Spec list for selection |
+
+## 10. Keyboard Behavior
 
 | Key | Action |
-| --- | --- |
-| `Cmd+T` | Open modal (global) |
-| `Escape` | Close modal |
-| `Enter` | Start session (when focused on Start button or name field) |
-| `Tab` | Move between fields (name → skills → specs → advanced → buttons) |
-| `Arrow keys` | Navigate within skill grid |
-| `Space` | Toggle selected skill card (when focused) |
+|---|---|
+| `Cmd+T` / `Ctrl+T` | Open modal (global) |
+| `Escape` | Close modal (global) |
+| `autoFocus` on name input | Immediate focus on open |
+| `Enter` → submit | **[Not implemented]** |
+| Arrow key skill navigation | **[Not implemented]** |
 
-### Focus Flow
+## 11. Validation
 
-1. Modal opens → focus on session name input
-2. Tab → first skill card
-3. Arrow keys → navigate skill grid
-4. Tab → spec selector
-5. Tab → advanced toggle
-6. Tab → Cancel button
-7. Tab → Start button
+| Field | Rule | Behavior |
+|---|---|---|
+| Session name | Max 60 chars | `maxLength` attribute; no inline error |
+| Skill | Optional | Defaults name to `"session"` if both name and skillId empty |
+| Specs | Optional | No validation |
+| Model / Max turns / Permission | Enforced by UI controls | Always valid |
 
-## 11. Animation
+Submit button is **not disabled** when no skill is selected — only disabled when `submitting`.
 
-### 11.1 Open
+## 12. CSS Class Reference
 
-```css
-/* Overlay */
-#modal-overlay {
-  transition: opacity 0.18s ease;
-}
-#modal-overlay.show { opacity: 1; }
-
-/* Container */
-#modal-container {
-  transition: transform 0.2s ease;
-  transform: translateY(8px);
-}
-#modal-overlay.show #modal-container {
-  transform: translateY(0);
-}
-```
-
-### 11.2 Close
-
-Reverse: fade out overlay, slide down container. Duration: 150ms.
-
-### 11.3 Skill Card Selection
-
-```css
-.skill-card {
-  transition: border-color 0.15s, background 0.15s;
-}
-.skill-card.selected {
-  border-color: var(--blue);
-  background: rgba(122,162,247,.07);
-}
-```
-
-## 12. State Management
-
-```typescript
-interface ModalState {
-  isOpen: boolean;
-
-  // Form fields
-  sessionName: string;
-  selectedSkillId: string | null;
-  selectedSpecIds: string[];
-  model: string;           // default: "claude-opus-4-6"
-  maxTurns: number;        // default: 20
-  permissionMode: string;  // default: "ask"
-
-  // UI
-  advancedOpen: boolean;
-  specDropdownOpen: boolean;
-  submitting: boolean;
-  error: string | null;
-
-  // Data (fetched)
-  availableSpecs: RegistryEntry[];
-
-  // Pre-fill (set by context menu trigger)
-  prefillSpecIds: string[];
-  prefillSkillId: string | null;
-}
-```
-
-### Actions
-
-| Action | Trigger | Effect |
-| --- | --- | --- |
-| `openModal(prefill?)` | Cmd+T, + button, context menu | Set `isOpen`, apply prefill, fetch specs |
-| `closeModal` | Escape, Cancel, overlay click | Reset form, set `isOpen: false` |
-| `setSessionName(name)` | Text input | Update `sessionName` |
-| `selectSkill(id)` | Click skill card | Set `selectedSkillId` (toggle off if same) |
-| `addSpec(id)` | Click spec in dropdown | Add to `selectedSpecIds` |
-| `removeSpec(id)` | Click ✕ on chip | Remove from `selectedSpecIds` |
-| `toggleAdvanced` | Click "Advanced" | Toggle `advancedOpen` |
-| `setModel(id)` | Dropdown change | Update `model` |
-| `setMaxTurns(n)` | Pill click or input | Update `maxTurns` |
-| `setPermissionMode(m)` | Radio change | Update `permissionMode` |
-| `submit` | Start Session click | Set `submitting`, call RPC, handle result |
-
-## 13. Accessibility
-
-- Modal uses `role="dialog"` with `aria-modal="true"` and `aria-labelledby` pointing to the title
-- Focus trapped inside modal while open
-- Escape key closes modal
-- Skill cards use `role="radio"` within a `role="radiogroup"`
-- Spec chips use `role="listitem"` with clear remove button labels
-- Loading state announced via `aria-live="polite"`
-- Error messages linked via `aria-describedby` to the Start button
-
-## 14. CSS Class Reference
-
-Classes reused from mockup (bonsai-web-v2.html modal pattern):
+**Modal chrome:**
 
 | Class | Element |
-| --- | --- |
-| `#overlay` | Modal backdrop |
-| `#modal` | Modal container |
-| `.mlabel` | Field labels |
-| `.minput` | Text inputs |
-| `.skgrid` | Skill grid container |
-| `.skcard` | Skill card |
-| `.skcard.on` | Selected skill |
-| `.mfooter` | Footer button row |
-| `.mbtn` | Button base |
-| `.mbtn.pri` | Primary button |
+|---|---|
+| `.modal-backdrop` | Fixed overlay |
+| `.modal-container` | Card (520px, max-height 80vh) |
+| `.modal-header` | Header row |
+| `.modal-title` | h2 title (14px, 600) |
+| `.modal-close` | × close button |
+| `.modal-body` | Scrollable body |
+| `.modal-label` | Field labels (10px uppercase, hint) |
+| `.modal-input` | Name text input |
+| `.modal-footer` | Footer row |
+| `.modal-cancel` | Cancel button |
+| `.modal-submit` | Submit button (blue bg) |
 
-New classes:
+**Skill grid:**
 
 | Class | Element |
-| --- | --- |
-| `.spec-selector` | Spec multiselect container |
+|---|---|
+| `.skill-grid` | Grid container (flex-column) |
+| `.skill-group` | Group wrapper |
+| `.skill-group-label` | Group heading (10px uppercase) |
+| `.skill-group-cards` | Card row (flex-wrap) |
+| `.skill-card` | Skill button (1px border) |
+| `.skill-card-selected` | Selected state (blue) |
+| `.skill-card-icon` | Icon span (14px) |
+| `.skill-card-name` | Name span |
+
+**Spec selector:**
+
+| Class | Element |
+|---|---|
+| `.spec-selector` | Wrapper (position: relative) |
+| `.spec-selector-chips` | Chip row |
 | `.spec-chip` | Selected spec chip |
-| `.spec-chip .chip-remove` | Remove button on chip |
-| `.spec-dropdown` | Spec dropdown panel |
-| `.spec-dropdown-item` | Dropdown item |
-| `.advanced-toggle` | Collapsible trigger |
-| `.advanced-body` | Collapsible content |
-| `.config-pills` | Max turns pill group |
-| `.config-pill` | Individual pill button |
-| `.config-pill.on` | Selected pill |
-| `.modal-error` | Inline error message |
-| `.modal-spinner` | Loading spinner in button |
+| `.spec-chip-remove` | Remove × button |
+| `.spec-selector-add` | Add button (dashed border) |
+| `.spec-selector-dropdown` | Dropdown panel |
+| `.spec-selector-search` | Search input |
+| `.spec-selector-list` | Scrollable list (max-height 200px) |
+| `.spec-selector-item` | Spec option button |
+| `.spec-selector-item-selected` | Selected item |
+| `.spec-selector-empty` | Empty state |
 
-## Known Limitations
+**Advanced config:**
 
-- **Skill list is hardcoded:** Skills are enumerated in the frontend, not dynamically fetched from the plugin system
-- **No session templates:** Cannot save and reuse session configurations
-- **No spec preview:** Selected specs are shown as chips but their content is not previewed in the modal
+| Class | Element |
+|---|---|
+| `.modal-advanced-toggle` | Toggle button |
+| `.modal-advanced` | Advanced panel |
+| `.modal-select` | Model dropdown |
+| `.modal-pills` | Pill container |
+| `.modal-pill` / `.modal-pill-active` | Turn preset pills |
+| `.modal-radio-group` | Radio container |
+| `.modal-radio` | Radio label |
+
+## 13. Known Limitations
+
+- **No auto-suggest name** — static placeholder only
+- **No entry animation** — renders/unmounts instantly
+- **No inline error message** — submit errors silently reset button
+- **No focus trap** — Tab can leave the modal
+- **No ARIA attributes** — no `role="dialog"`, `aria-modal`, or focus management
+- **No Enter-to-submit** — only button click works
+- **No dirty-check on backdrop click** — closes immediately
+- **Skill cards show icon + name only** — no description line
+- **Spec dropdown not grouped** — flat list
+- **No loading spinner** — text change only on submit
 
 ## Related Specs
 
 - **Parent:** [Web View](WEBVIEW.md) §3
-- **Depends on:** [Agent Module](../../backend/app/agent/README.md) (AgentConfig, agent/run), [API Client](../src/api/README.md)
-- **Related:** [State Management](../src/store/README.md) (sessionStore.startSession)
+- **Depends on:** [Agent Module](../../backend/app/agent/README.md) (`AgentConfig`, `agent/run`), [API Client](../src/api/README.md)
+- **Related:** [State Management](../src/store/README.md) (`sessionStore.startSession`, `uiStore`)
+- **Skills data:** `frontend/src/constants/skills.ts`

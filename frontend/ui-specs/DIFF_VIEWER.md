@@ -1,6 +1,8 @@
 # Diff Viewer — Sub-Specification
 
-> Parent: [WEBVIEW.md](../WEBVIEW.md) §4.4 | Status: **Active** | Created: 2026-03-02
+> Parent: [WEBVIEW.md](../WEBVIEW.md) §4.4 | Status: **Draft** | Created: 2026-03-02
+
+> **Note:** This is a design document for a **planned feature**. The current code is a stub placeholder. No backend diff methods, mapping files, types, or CSS classes described below have been implemented yet.
 
 ## Overview
 

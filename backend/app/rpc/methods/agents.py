@@ -78,3 +78,15 @@ async def interrupt_agent(service: AgentService, **params: Any) -> None:
 @_handle_errors
 async def respond_agent(service: AgentService, **params: Any) -> None:
     await service.respond(params["taskId"], params["requestId"], params["response"])
+
+
+@_handle_errors
+async def update_config(service: AgentService, **params: Any) -> dict:
+    task_id = params["taskId"]
+    model = params.get("model")
+    permission_mode = params.get("permissionMode")
+    result = await service.update_config(task_id, model=model, permission_mode=permission_mode)
+    notify = notifications.current_notify
+    if notify:
+        await notify("agent/configChanged", {"taskId": task_id, **result})
+    return result
