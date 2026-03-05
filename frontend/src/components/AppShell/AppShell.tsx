@@ -32,8 +32,14 @@ export function AppShell({ onSwitchProject }: { onSwitchProject: () => void }) {
     setShowSessionManager(false);
   }, []);
 
+  const handleLeftResize = useCallback((w: number) => {
+    const rightSpace = rightCollapsed ? 20 : rightWidth + 4;
+    const maxLeft = window.innerWidth - rightSpace - 300 - 4;
+    setLeftWidth(Math.min(w, maxLeft));
+  }, [rightCollapsed, rightWidth]);
+
   const handleRightResize = useCallback((w: number) => {
-    const leftSpace = leftCollapsed ? 0 : leftWidth + 4;
+    const leftSpace = leftCollapsed ? 20 : leftWidth + 4;
     const maxRight = window.innerWidth - leftSpace - 300 - 4;
     setRightWidth(Math.min(w, maxRight));
   }, [leftCollapsed, leftWidth]);
@@ -42,7 +48,10 @@ export function AppShell({ onSwitchProject }: { onSwitchProject: () => void }) {
     <div className="app-shell">
       <Header onSwitchProject={onSwitchProject} />
       <div className="layout">
-        {!leftCollapsed && (
+        {leftCollapsed ? (
+          <button className="left-collapse-btn" onClick={toggleLeft}
+            title="Open left panel (Ctrl+B)">&#9654;</button>
+        ) : (
           <>
             <div style={{ width: leftWidth, height: "100%", overflow: "hidden" }}>
               <LeftPanel />
@@ -50,10 +59,9 @@ export function AppShell({ onSwitchProject }: { onSwitchProject: () => void }) {
             <ResizeHandle
               side="left"
               panelWidth={leftWidth}
-              onResize={setLeftWidth}
+              onResize={handleLeftResize}
               onCollapse={toggleLeft}
               min={140}
-              max={420}
               collapseThreshold={100}
             />
           </>

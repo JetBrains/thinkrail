@@ -2,6 +2,20 @@
 
 > Parent: [Frontend Module](../../../README.md) | Status: **Active** | Created: 2026-03-04
 
+## Table of Contents
+1. [Purpose](#purpose)
+2. [Internal Architecture](#internal-architecture)
+3. [File Organization](#file-organization)
+4. [Data Types](#data-types)
+5. [treeUtils.ts](#treeutilsts)
+6. [SpecTree.tsx](#spectreetsx)
+7. [Task Display](#task-display)
+8. [Styling](#styling)
+9. [Design Decisions](#design-decisions)
+10. [Known Limitations](#known-limitations)
+11. [Dependencies](#dependencies)
+12. [Related Specs](#related-specs)
+
 ## Purpose
 
 SpecTree renders the project's specifications as a collapsible hierarchical tree in the left panel Specs tab. It derives the tree structure from the SpecGraph (parent edges), displays type-specific icons and status badges per node, and wires selection to specStore for cross-panel coordination.

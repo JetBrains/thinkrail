@@ -249,7 +249,8 @@
   color: var(--hint);
 }
 
-/* ── Right Panel Collapse Button ── */
+/* ── Panel Collapse Buttons ── */
+.left-collapse-btn,
 .right-collapse-btn {
   width: 20px;
   flex-shrink: 0;
@@ -266,9 +267,14 @@
   justify-content: center;
   transition: all var(--transition-fast);
 }
+.left-collapse-btn:hover,
 .right-collapse-btn:hover {
   background: var(--hover);
   color: var(--text);
+}
+.left-collapse-btn {
+  border-left: none;
+  border-right: 1px solid var(--border);
 }
 
 /* ── Responsive ── */

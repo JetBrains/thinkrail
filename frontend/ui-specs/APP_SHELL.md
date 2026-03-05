@@ -1,6 +1,22 @@
 # Component Tree & App Shell — Module Specification
 
-> Parent: [WEBVIEW.md](../WEBVIEW.md) | Status: **Active** | Created: 2026-03-02
+> Parent: [WEBVIEW.md](WEBVIEW.md) | Status: **Active** | Created: 2026-03-02
+
+## Table of Contents
+1. [Purpose](#purpose)
+2. [Tech Stack](#tech-stack)
+3. [Project Structure](#project-structure)
+4. [Component Tree](#component-tree)
+5. [Routing](#routing)
+6. [AppShell Component](#appshell-component)
+7. [Bootstrap Sequence](#bootstrap-sequence)
+8. [Global Keyboard Shortcuts](#global-keyboard-shortcuts)
+9. [Naming Conventions](#naming-conventions)
+10. [Build Configuration](#build-configuration)
+11. [Testing Strategy](#testing-strategy-overview)
+12. [Dependencies Summary](#dependencies-summary)
+13. [Known Limitations](#known-limitations)
+14. [Related Specs](#related-specs)
 
 ## Purpose
 
@@ -50,20 +66,16 @@ frontend/
 │   │   │   ├── AppShell.tsx
 │   │   │   ├── Header.tsx
 │   │   │   ├── StatusBar.tsx
-│   │   │   └── ResizeHandle.tsx
-│   │   │
-│   │   ├── LeftPanel/         # Left panel container + tabs
 │   │   │   ├── LeftPanel.tsx
-│   │   │   ├── SpecTree.tsx
-│   │   │   ├── RequirementsList.tsx
-│   │   │   ├── FileTree.tsx
-│   │   │   └── ProgressTab/   # (see PROGRESS_TRACKER.md)
+│   │   │   ├── ResizeHandle.tsx
+│   │   │   └── AppShell.css
 │   │   │
-│   │   ├── CenterPanel/       # Session container + tabs
-│   │   │   └── CenterPanel.tsx
-│   │   │
-│   │   ├── RightPanel/        # Right panel container + tabs
-│   │   │   └── RightPanel.tsx
+│   │   ├── ContextPanel/      # Context-aware right sidebar (see CONTEXT_PANEL.md)
+│   │   │   ├── ContextPanel.tsx
+│   │   │   ├── ContextPanel.css
+│   │   │   ├── useContextMode.ts
+│   │   │   ├── CollapsibleSection.tsx
+│   │   │   └── CollapsibleSection.css
 │   │   │
 │   │   ├── ChatStream/        # (see CHAT_UI.md)
 │   │   ├── GraphView/         # (see GRAPH_INTERACTIONS.md)
@@ -165,14 +177,20 @@ The three-panel layout wrapper:
 
 ```tsx
 function AppShell() {
-  const { leftCollapsed, rightCollapsed, toggleRight } = useUiStore();
+  const { leftCollapsed, rightCollapsed, toggleLeft, toggleRight } = useUiStore();
 
   return (
     <div className="app-shell">
       <Header />
       <div className="layout">
-        {!leftCollapsed && <LeftPanel />}
-        <ResizeHandle side="left" />
+        {leftCollapsed ? (
+          <button className="left-collapse-btn" onClick={toggleLeft} />
+        ) : (
+          <>
+            <LeftPanel />
+            <ResizeHandle side="left" />
+          </>
+        )}
         <CenterPanel />
         {rightCollapsed ? (
           <button className="right-collapse-btn" onClick={toggleRight} />
@@ -236,8 +254,6 @@ Registered once at the app level (`utils/keyboard.ts`):
 | `Cmd+Enter` | Send message | Delegated to ChatStream input |
 | `Ctrl+B` | Toggle left panel | `uiStore.toggleLeftPanel()` |
 | `Cmd+J` | Toggle right panel | `uiStore.toggleRightPanel()` |
-| `Cmd+G` | Focus graph view | `uiStore.setRightTab("graph")` |
-| `Cmd+P` | Focus spec view | `uiStore.setRightTab("spec")` |
 | `Escape` | Close modal/palette | Context-dependent |
 
 **Implementation:** Single `keydown` listener on `document`, routing to actions based on key combos. Disabled when a text input is focused (except `Cmd+Enter`, `Escape`).

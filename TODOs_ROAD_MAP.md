@@ -10,7 +10,7 @@
     - [ ] Colours and AskUserQuestions are hard to see (small and violet on black)
     - [ ] AskUserQuestion should always have "other" field
     - [ ] Visualize plan and display progress
-    - [ ] Re-visualise normally answers on askuserquestions
+    - [ ] Re-visualise normally answers on AskUserQuestions
     - [ ] AskUserQuestion/approval requests can "slip upwards" when agent does things simultaneously — should be pinned/focused (like claude code)
     - [ ] Group tool calls and tasks somehow
     - [ ] add "don't ask approval again for ..."
@@ -35,6 +35,7 @@
 * Left panel
     - [x] files tab doesn't display directory
     - [x] files tab doesn't have scrolling
+    - [x] Get rid of left panel max width limit and arrow side button when hidden
     - [ ] Reqs tab displays nothing (mock) — needs real requirements data
     - [ ] Tree-view (files tab) always appears fully unfolded — not nice
     - [ ] Single-click in SpecTree/FileTree should open a preview tab (like VS Code) — temporary tab that gets replaced by the next preview click. Double-click to pin as a permanent tab.
@@ -101,3 +102,7 @@
     - [ ] Search (Ctrl+k): fix
     - [ ] Show skill progress with on-the-fly visualization on side of chat (partially addressed by Agent Context mode ComplianceHints)
     - [ ] Support "output view modes" like ctrl+o ctrl+t in claude
+
+* Bonsai workflow:
+    - [?] Should tasks (current tasks) be modifiable or append only? 
+    - [?] Seems like structure in tasks is missing (like binding them to specs/specs changes) 
