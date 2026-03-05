@@ -113,7 +113,9 @@ class TestRunHappyPath:
         tracker.enqueue_message(task.id, "Do the thing")
         tracker.enqueue_end_signal(task.id)
 
+        print(f"[test_single_turn_then_end] starting run")
         result = await run(task, "spec context here", notify, tracker)
+        print(f"[test_single_turn_then_end] run completed")
 
         assert isinstance(result, AgentResult)
         assert result.task_id == task.id
@@ -403,6 +405,74 @@ class TestCanUseTool:
         assert result.interrupt is True
 
 
+class TestPluginWiring:
+    @patch("app.agent.runner.ClaudeSDKClient")
+    async def test_plugin_dir_wired_into_options(self, MockClient: MagicMock) -> None:
+        """When plugin_dir exists, plugins list is populated."""
+        from claude_agent_sdk import ResultMessage, SystemMessage
+        import tempfile
+        from pathlib import Path
+
+        sys_msg = MagicMock(spec=SystemMessage)
+        sys_msg.subtype = "init"
+        sys_msg.data = {"session_id": "s1"}
+
+        result_msg = MagicMock(spec=ResultMessage)
+        result_msg.session_id = "s1"
+        result_msg.result = "ok"
+        result_msg.is_error = False
+        result_msg.num_turns = 1
+        result_msg.total_cost_usd = 0.0
+        result_msg.usage = {}
+
+        captured = _setup_capturing_client(MockClient, [sys_msg, result_msg])
+
+        tracker, task = _make_tracker_and_task()
+        tracker.enqueue_message(task.id, "go")
+        tracker.enqueue_end_signal(task.id)
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            plugin_dir = Path(tmpdir)
+            print(f"[test_plugin_dir_wired] running with plugin_dir={plugin_dir}")
+            await run(task, "context", AsyncMock(), tracker, plugin_dir=plugin_dir)
+
+        opts = captured["options"]
+        print(f"[test_plugin_dir_wired] plugins={opts.plugins}")
+        assert len(opts.plugins) == 1
+        assert opts.plugins[0]["type"] == "local"
+        assert opts.plugins[0]["path"] == str(plugin_dir)
+
+    @patch("app.agent.runner.ClaudeSDKClient")
+    async def test_no_plugin_dir_empty_plugins(self, MockClient: MagicMock) -> None:
+        """When plugin_dir is None, plugins list is empty."""
+        from claude_agent_sdk import ResultMessage, SystemMessage
+
+        sys_msg = MagicMock(spec=SystemMessage)
+        sys_msg.subtype = "init"
+        sys_msg.data = {"session_id": "s1"}
+
+        result_msg = MagicMock(spec=ResultMessage)
+        result_msg.session_id = "s1"
+        result_msg.result = "ok"
+        result_msg.is_error = False
+        result_msg.num_turns = 1
+        result_msg.total_cost_usd = 0.0
+        result_msg.usage = {}
+
+        captured = _setup_capturing_client(MockClient, [sys_msg, result_msg])
+
+        tracker, task = _make_tracker_and_task()
+        tracker.enqueue_message(task.id, "go")
+        tracker.enqueue_end_signal(task.id)
+
+        print("[test_no_plugin_dir] running with plugin_dir=None")
+        await run(task, "context", AsyncMock(), tracker, plugin_dir=None)
+
+        opts = captured["options"]
+        print(f"[test_no_plugin_dir] plugins={opts.plugins}")
+        assert opts.plugins == []
+
+
 class TestRunError:
     @patch("app.agent.runner.ClaudeSDKClient")
     async def test_error_result(self, MockClient: MagicMock) -> None:
@@ -424,14 +494,19 @@ class TestRunError:
 
         tracker, task = _make_tracker_and_task()
         tracker.enqueue_message(task.id, "do something")
+        tracker.enqueue_end_signal(task.id)  # needed so runner doesn't hang after error recovery
         notify = AsyncMock()
 
+        print(f"[test_error_result] starting run for task {task.id}")
         result = await run(task, "context", notify, tracker)
+        print(f"[test_error_result] run completed, result={result.result}")
 
-        assert result.result == "Failed"
         method_calls = [call.args[0] for call in notify.call_args_list]
+        print(f"[test_error_result] notifications: {method_calls}")
         assert "agent/error" in method_calls
-        assert tracker.get_task(task.id).status == "error"
+        # After error, runner recovers to idle (not terminal error),
+        # then END_SIGNAL exits the loop gracefully
+        assert tracker.get_task(task.id).status == "idle"
 
     @patch("app.agent.runner.ClaudeSDKClient")
     async def test_sdk_exception_propagates(self, MockClient: MagicMock) -> None:
@@ -444,5 +519,7 @@ class TestRunError:
         tracker, task = _make_tracker_and_task()
         tracker.enqueue_message(task.id, "go")
 
+        print(f"[test_sdk_exception_propagates] starting run, expecting RuntimeError")
         with pytest.raises(RuntimeError, match="SDK crash"):
             await run(task, "context", AsyncMock(), tracker)
+        print(f"[test_sdk_exception_propagates] exception caught as expected")

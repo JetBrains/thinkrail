@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import time
 from collections.abc import Callable
+from pathlib import Path
 from typing import Any
 from uuid import uuid4
 
@@ -31,6 +32,7 @@ async def run(
     notify: Callable,
     tracker: Tracker,
     cwd: Any = None,
+    plugin_dir: Any = None,
 ) -> AgentResult:
     """Execute a persistent conversational agent session.
 
@@ -92,6 +94,10 @@ async def run(
                     interrupt=response.get("interrupt", False),
                 )
 
+    plugins = []
+    if plugin_dir and Path(plugin_dir).is_dir():
+        plugins.append({"type": "local", "path": str(plugin_dir)})
+
     options = ClaudeAgentOptions(
         system_prompt=spec_context,
         model=task.config.model,
@@ -100,6 +106,7 @@ async def run(
         can_use_tool=can_use_tool,
         include_partial_messages=task.config.stream_text,
         cwd=str(cwd) if cwd else None,
+        plugins=plugins,
     )
 
     session_id = ""

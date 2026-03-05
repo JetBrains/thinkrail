@@ -1,6 +1,6 @@
 # Agent Module — Design Specification
 
-> Parent: [DESIGN_DOC.md](../../../DESIGN_DOC.md) | Status: **Active** | Created: 2026-02-25 | Updated: 2026-03-03
+> Parent: [DESIGN_DOC.md](../../../DESIGN_DOC.md) | Status: **Active** | Created: 2026-02-25 | Updated: 2026-03-05
 
 ## Table of Contents
 1. [Purpose](#purpose)
@@ -152,7 +152,7 @@ graph TD
 | `models.py` | Pydantic models: AgentTask, AgentConfig, AgentEvent, AgentResult, Question, QuestionOption, AskUserQuestionResponse, ToolApprovalResponse | — |
 | `context.py` | Context assembly pipeline: loads skill instructions, project metadata, and spec content; composes system prompt. See [CONTEXT.md](CONTEXT.md). | models, spec/service |
 | `service.py` | Facade — start sessions, send messages, interrupt turns, end sessions, relay responses to pending futures | context, runner, tracker, core/config, spec/service |
-| `runner.py` | Claude Agent SDK integration: manage SDK client lifecycle, conversation loop (wait for message → query → stream events → repeat), map SDK events to notifications, register `canUseTool` / hooks | models, tracker |
+| `runner.py` | Claude Agent SDK integration: manage SDK client lifecycle, conversation loop (wait for message → query → stream events → repeat), map SDK events to notifications, register `canUseTool` / hooks, wire local plugin into SDK | models, tracker |
 | `tracker.py` | Session lifecycle (pending/idle/running/done/error), message queue per session (`asyncio.Queue`), registry of in-flight `asyncio.Future` objects keyed by `requestId` | models |
 | `persistence.py` | Session persistence — split storage: metadata in `.json`, events in append-only `.events.jsonl`. Save/load/list/append/delete. See [PERSISTENCE.md](PERSISTENCE.md). | core/fileio |
 
@@ -293,6 +293,74 @@ Sections are ordered Skill → Project → Specs, with framing prompts (markdown
 
 **Full specification:** [CONTEXT.md](CONTEXT.md)
 
+## Plugin Wiring
+
+The Bonsai `claude-plugin/` is wired into the Claude Agent SDK client as a **local plugin** via `ClaudeAgentOptions.plugins`. This gives sessions native SDK-level support for plugin hooks, custom commands, and namespaced skill invocation — beyond what context assembly alone provides.
+
+### How It Works
+
+```
+  context.py                          runner.py
+  ┌──────────────────┐                ┌──────────────────────────────┐
+  │ Loads SKILL.md   │                │ ClaudeAgentOptions(          │
+  │ into system      │                │   ...                        │
+  │ prompt text      │                │   plugins=[{                 │
+  └──────────────────┘                │     "type": "local",         │
+         │                            │     "path": plugin_dir       │
+         │                            │   }]                         │
+         ▼                            │ )                            │
+  System prompt has                   └──────────────────────────────┘
+  skill instructions                         │
+  (context assembly)                         ▼
+                                      SDK loads plugin natively
+                                      (hooks, commands, skills)
+```
+
+**Dual loading:** Skill instructions are loaded twice — once by `context.py` (into the system prompt as text) and once by the SDK (natively via the plugin manifest). This is intentional for now; the context assembly provides explicit framing, while the SDK plugin enables runtime features (hooks, commands). May be consolidated later.
+
+### Runner Changes
+
+`runner.run()` accepts an optional `plugin_dir: Path | None` parameter. When set and the path exists:
+
+```python
+plugins = []
+if plugin_dir and plugin_dir.is_dir():
+    plugins.append({"type": "local", "path": str(plugin_dir)})
+
+options = ClaudeAgentOptions(
+    ...
+    plugins=plugins,
+)
+```
+
+When `plugin_dir` is `None` or the directory doesn't exist, `plugins` is an empty list — the session works without a plugin, same as before.
+
+### Service Changes
+
+`service.py` passes `self._config.plugin_dir` through to `runner.run()`:
+
+```python
+await runner.run(
+    task=task,
+    spec_context=context,
+    notify=notify,
+    tracker=self._tracker,
+    cwd=self._config.project_root,
+    plugin_dir=self._config.plugin_dir,  # NEW
+)
+```
+
+### SDK Plugin Config
+
+The SDK `SdkPluginConfig` is a TypedDict:
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `type` | `Literal["local"]` | Must be `"local"` (only local plugins currently supported) |
+| `path` | `str` | Absolute or relative path to the plugin directory |
+
+The plugin directory must contain a `.claude-plugin/plugin.json` manifest for the SDK to recognize it.
+
 ## TODO
 
 - **Add `streaming` field to `agent/textDelta`:** Set to `false` for `AssistantMessage` full blocks and `true` for `SDKPartialAssistantMessage` text deltas (once partial message handling is implemented).
@@ -311,6 +379,9 @@ Sections are ordered Skill → Project → Specs, with framing prompts (markdown
 | Notify callback | Injected into runner at session start; supports both notifications (`request_id=None`) and server-initiated requests (`request_id` set) | Keeps the runner decoupled from WebSocket details; RPC layer owns the connection and callback creation |
 | Agent file change tracking | Filesystem watcher (core/watcher), not tool call interception | Watcher is ground truth — catches all file changes regardless of source (agent, user, external). Same pipeline as user changes: watcher → spec/service → rpc/notifications. More reliable than intercepting agent tool calls, and adds no complexity to runner.py |
 | Context assembly | Dedicated `context.py` submodule with pipeline: gather → compose | Separates prompt construction from session orchestration. Pure function, easy to test. Supports specs, skills, and project metadata as distinct sources with framing prompts. |
+| Plugin wiring | Pass `plugin_dir` to SDK via `plugins=[{"type": "local", "path": ...}]` | Enables native SDK features (hooks, commands, namespaced skills) beyond what system prompt text provides. Bonsai plugin only — no project-local plugin discovery. |
+| Dual skill loading | Skills loaded both in context.py (prompt text) and via SDK plugin (native) | Context assembly provides explicit framing for the LLM. SDK plugin enables runtime hook/command support. Intentional duplication, may consolidate later. |
+| Silent skip on missing plugin | Empty `plugins` list when `plugin_dir` is None or doesn't exist | Graceful degradation — sessions work without a plugin, matching current behavior. No error, no warning. |
 
 ## Dependencies
 

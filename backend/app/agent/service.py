@@ -278,7 +278,7 @@ class AgentService:
         notify = _persisting_notify
 
         try:
-            await run(task, spec_context, notify, self._tracker, cwd=self._config.project_root)
+            await run(task, spec_context, notify, self._tracker, cwd=self._config.project_root, plugin_dir=self._config.plugin_dir)
             self._tracker.set_status(task.id, "done")
             self._save_task(task)
         except asyncio.CancelledError:

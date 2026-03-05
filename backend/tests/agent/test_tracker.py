@@ -204,12 +204,16 @@ class TestFutureManagement:
         assert f1.cancelled()
         assert f2.cancelled()
 
-    async def test_timeout_cancels_future(self) -> None:
+    async def test_timeout_auto_denies_future(self) -> None:
         tracker = Tracker()
         task = tracker.create_task(["s1"], AgentConfig())
         future = tracker.register_future(task.id, "req-1", timeout_seconds=0.05)
         await asyncio.sleep(0.1)
-        assert future.cancelled()
+        assert future.done()
+        result = future.result()
+        assert result["behavior"] == "deny"
+        assert "Timed out" in result["message"]
+        assert result["interrupt"] is False
 
     async def test_resolve_before_timeout(self) -> None:
         tracker = Tracker()
