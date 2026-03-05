@@ -32,6 +32,12 @@ export function AppShell({ onSwitchProject }: { onSwitchProject: () => void }) {
     setShowSessionManager(false);
   }, []);
 
+  const handleRightResize = useCallback((w: number) => {
+    const leftSpace = leftCollapsed ? 0 : leftWidth + 4;
+    const maxRight = window.innerWidth - leftSpace - 300 - 4;
+    setRightWidth(Math.min(w, maxRight));
+  }, [leftCollapsed, leftWidth]);
+
   return (
     <div className="app-shell">
       <Header onSwitchProject={onSwitchProject} />
@@ -67,15 +73,17 @@ export function AppShell({ onSwitchProject }: { onSwitchProject: () => void }) {
             <SessionPanel />
           )}
         </div>
-        {!rightCollapsed && (
+        {rightCollapsed ? (
+          <button className="right-collapse-btn" onClick={toggleRight}
+            title="Open context panel (Cmd+J)">&#9664;</button>
+        ) : (
           <>
             <ResizeHandle
               side="right"
               panelWidth={rightWidth}
-              onResize={setRightWidth}
+              onResize={handleRightResize}
               onCollapse={toggleRight}
               min={200}
-              max={600}
               collapseThreshold={150}
             />
             <div style={{ width: rightWidth, height: "100%", overflow: "hidden" }}>

@@ -297,6 +297,8 @@ All clickable items (specs, tasks, files) open in the center panel via existing 
 - `rightActiveTab` and `setRightTab` have been removed from `uiStore` (no tabs needed)
 - Each mode component (`SpecContext`, `AgentContext`, `CodeContext`, `ProjectDashboard`) is a composition of section components
 - Section components are independent and reusable — some appear in multiple modes (e.g., `SpecHealth` in both spec and code modes)
+- The panel has no fixed max-width — it is dynamically capped by available viewport space (respects center panel's 300px min-width and left panel width)
+- When collapsed, a thin `◀` button (`.right-collapse-btn`, 20px wide) remains visible on the right edge, allowing re-expansion without a keyboard shortcut
 - The `useContextMode` hook lives in `ContextPanel/useContextMode.ts`, not in a store
 - Most section components are currently placeholders — see Sub-Specifications table for implementation status
 

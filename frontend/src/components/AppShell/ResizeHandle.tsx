@@ -6,7 +6,7 @@ interface ResizeHandleProps {
   onResize: (width: number) => void;
   onCollapse: () => void;
   min: number;
-  max: number;
+  max?: number;
   collapseThreshold: number;
 }
 
@@ -46,7 +46,7 @@ export function ResizeHandle({
           return;
         }
 
-        onResize(Math.max(min, Math.min(max, newWidth)));
+        onResize(Math.max(min, max != null ? Math.min(max, newWidth) : newWidth));
       };
 
       const onMouseUp = () => {

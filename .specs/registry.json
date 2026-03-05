@@ -408,7 +408,7 @@
       "title": "Component Tree & App Shell",
       "status": "active",
       "created": "2026-03-02",
-      "updated": "2026-03-02",
+      "updated": "2026-03-05",
       "covers": [
         "frontend/src/components/AppShell/"
       ],
@@ -1137,7 +1137,7 @@
       "title": "Context Panel UI Specification",
       "status": "active",
       "created": "2026-03-04",
-      "updated": "2026-03-04",
+      "updated": "2026-03-05",
       "covers": [
         "frontend/src/components/AppShell/RightPanel.tsx"
       ],

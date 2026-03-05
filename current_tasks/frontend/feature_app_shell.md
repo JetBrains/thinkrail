@@ -32,7 +32,7 @@ Update `frontend/src/App.tsx` to wire providers (RpcProvider, BrowserRouter) and
 |-------|---------|-----|-----|
 | Left  | 260px   | 140px | 420px |
 | Center| flex    | 300px | — |
-| Right | 380px   | 200px | 600px |
+| Right | 380px   | 200px | dynamic (viewport) |
 
 ### Responsive Breakpoints
 - Desktop (>=1280px): all panels visible at default widths

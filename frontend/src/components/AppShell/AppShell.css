@@ -249,6 +249,28 @@
   color: var(--hint);
 }
 
+/* ── Right Panel Collapse Button ── */
+.right-collapse-btn {
+  width: 20px;
+  flex-shrink: 0;
+  height: 100%;
+  border: none;
+  border-left: 1px solid var(--border);
+  background: var(--panel);
+  color: var(--hint);
+  font-size: 10px;
+  cursor: pointer;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all var(--transition-fast);
+}
+.right-collapse-btn:hover {
+  background: var(--hover);
+  color: var(--text);
+}
+
 /* ── Responsive ── */
 @media (max-width: 1023px) {
   .header-project,

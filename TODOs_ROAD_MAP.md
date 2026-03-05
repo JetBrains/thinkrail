@@ -39,6 +39,7 @@
     - [ ] Tree-view (files tab) always appears fully unfolded — not nice
     - [ ] Single-click in SpecTree/FileTree should open a preview tab (like VS Code) — temporary tab that gets replaced by the next preview click. Double-click to pin as a permanent tab.
 * Right panel (Context Panel)
+    - [x] Get rid of right panel max width limit and arrow side button when hidden
     - [x] Replace tab-based right panel with context-aware ContextPanel (auto-switches: Spec/Agent/Code/Dashboard modes)
     - [ ] **Bug: No way to return to Project Dashboard** — clicking a spec in SpecTree sets `selectedSpecId` which is sticky, so context is stuck on Spec Context forever. Need: (1) a way to deselect/clear spec (e.g., click again to deselect, or a "home" button in context panel header), (2) `selectedSpecId` should be cleared when user closes/deselects the spec
     - [ ] **Bug: Clicking file in FileTree should trigger Code/Spec Context** — currently clicking a file in left panel FileTree opens it in center but doesn't reliably switch context panel mode. Need to ensure `activeFilePath` is set and takes priority over `selectedSpecId` when a file is actively viewed

@@ -165,7 +165,7 @@ The three-panel layout wrapper:
 
 ```tsx
 function AppShell() {
-  const { leftCollapsed, rightCollapsed } = useUiStore();
+  const { leftCollapsed, rightCollapsed, toggleRight } = useUiStore();
 
   return (
     <div className="app-shell">
@@ -174,8 +174,14 @@ function AppShell() {
         {!leftCollapsed && <LeftPanel />}
         <ResizeHandle side="left" />
         <CenterPanel />
-        <ResizeHandle side="right" />
-        {!rightCollapsed && <RightPanel />}
+        {rightCollapsed ? (
+          <button className="right-collapse-btn" onClick={toggleRight} />
+        ) : (
+          <>
+            <ResizeHandle side="right" />
+            <ContextPanel />
+          </>
+        )}
       </div>
       <StatusBar />
     </div>
