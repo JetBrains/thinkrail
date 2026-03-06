@@ -24,6 +24,7 @@ interface UiStore {
   paletteOpen: boolean;
   viewportWidth: number;
   breakpoint: Breakpoint;
+  fileTreeVersion: number;
 
   toggleLeftPanel: () => void;
   toggleRightPanel: () => void;
@@ -32,6 +33,7 @@ interface UiStore {
   closeModal: () => void;
   togglePalette: () => void;
   updateViewport: (width: number) => void;
+  onFileTreeChanged: () => void;
 }
 
 function computeBreakpoint(width: number): Breakpoint {
@@ -57,6 +59,7 @@ export const useUiStore = create<UiStore>()(
       paletteOpen: false,
       viewportWidth: typeof window !== "undefined" ? window.innerWidth : 1440,
       breakpoint: "desktop" as Breakpoint,
+      fileTreeVersion: 0,
 
       toggleLeftPanel: () =>
         set((s) => ({ leftPanelCollapsed: !s.leftPanelCollapsed })),
@@ -69,6 +72,8 @@ export const useUiStore = create<UiStore>()(
       togglePalette: () => set((s) => ({ paletteOpen: !s.paletteOpen })),
       updateViewport: (width) =>
         set({ viewportWidth: width, breakpoint: computeBreakpoint(width) }),
+      onFileTreeChanged: () =>
+        set((s) => ({ fileTreeVersion: s.fileTreeVersion + 1 })),
     }),
     {
       name: "bonsai-ui",

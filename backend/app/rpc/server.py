@@ -213,4 +213,7 @@ async def _start_watcher(config: AppConfig, service: SpecService) -> WatchHandle
                         params["changes"] = {}
                     await notify(method, params)
 
+        if any(ct in (Change.added, Change.deleted) for ct, _ in changes):
+            await notify("files/treeChanged", {})
+
     return await watch([config.get_project_root()], _on_file_change)

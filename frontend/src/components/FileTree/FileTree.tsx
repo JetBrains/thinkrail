@@ -33,6 +33,7 @@ function fileIcon(name: string, isDir: boolean): { icon: string; cls: string } {
     case "css": return { icon: "", cls: "fi-css" };
     case "html": return { icon: "", cls: "fi-html" };
     case "json": return { icon: "", cls: "fi-json" };
+    case "jsonl": return { icon: "", cls: "fi-json" };
     case "md": case "txt": return { icon: "", cls: "fi-md" };
     case "toml": case "yaml": case "yml": case "ini": case "cfg": return { icon: "", cls: "fi-config" };
     case "lock": return { icon: "", cls: "fi-lock" };
@@ -42,6 +43,7 @@ function fileIcon(name: string, isDir: boolean): { icon: string; cls: string } {
 
 export function FileTree() {
   const projectPath = useUiStore((s) => s.projectPath);
+  const fileTreeVersion = useUiStore((s) => s.fileTreeVersion);
   const [entries, setEntries] = useState<FileEntry[]>([]);
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
   const [selected, setSelected] = useState<string | null>(null);
@@ -65,7 +67,7 @@ export function FileTree() {
 
   useEffect(() => {
     fetchFiles();
-  }, [fetchFiles]);
+  }, [fetchFiles, fileTreeVersion]);
 
   const openFile = useFileStore((s) => s.openFile);
   const loadPreview = useFileStore((s) => s.loadPreview);
