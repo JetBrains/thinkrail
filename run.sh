@@ -3,6 +3,25 @@ set -e
 
 ROOT="$(cd "$(dirname "$0")" && pwd)"
 
+# ── Prerequisite checks ──
+if ! command -v uv &>/dev/null; then
+    echo "Error: 'uv' is not installed."
+    echo "Install it with:  curl -LsSf https://astral.sh/uv/install.sh | sh"
+    exit 1
+fi
+
+if ! command -v node &>/dev/null; then
+    echo "Error: 'node' is not installed."
+    echo "Install it from https://nodejs.org or via your package manager."
+    exit 1
+fi
+
+if ! command -v npm &>/dev/null; then
+    echo "Error: 'npm' is not installed."
+    echo "It should come with Node.js — see https://nodejs.org"
+    exit 1
+fi
+
 cleanup() {
     trap - EXIT INT TERM
     echo ""
@@ -14,8 +33,10 @@ cleanup() {
 trap cleanup EXIT INT TERM
 
 # ── Backend (FastAPI + uvicorn on :8000) ──
-echo "Starting backend..."
+echo "Installing backend dependencies..."
 cd "$ROOT/backend"
+uv sync
+echo "Starting backend..."
 uv run python -m app.main &
 BACKEND_PID=$!
 
