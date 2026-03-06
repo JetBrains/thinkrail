@@ -34,7 +34,7 @@ All communication happens over a single WebSocket at `/ws?project=<path>`. Messa
 
 Both sides can send either. The server can initiate requests to the client (e.g. asking a question mid-agent-run), and the client responds via `agent/respond`.
 
-**Wire format convention:** All JSON-RPC params and result keys use **camelCase** (e.g. `taskId`, `sessionId`, `specIds`). Python models use `snake_case` internally and convert via Pydantic `alias_generator` + `model_dump(by_alias=True)`.
+**Wire format convention:** All JSON-RPC params and result keys use **camelCase** (e.g. `bonsaiSid`, `sessionId`, `specIds`). Python models use `snake_case` internally and convert via Pydantic `alias_generator` + `model_dump(by_alias=True)`.
 
 ## Methods
 
@@ -48,17 +48,17 @@ Both sides can send either. The server can initiate requests to the client (e.g.
 | `spec/update`     | `{ id: str, content: str }`                                                                  | `SpecDetail`        | Update spec content                                                                                                                                         |
 | `spec/delete`     | `{ id: str }`                                                                                | `null`              | Delete a spec                                                                                                                                               |
 | `spec/graph`      | `{}`                                                                                         | `SpecGraph`         | Get spec hierarchy graph                                                                                                                                    |
-| `agent/run`       | `{ specIds: list[str], config: AgentConfig, skillId?: str }`                                 | `{ taskId: str }`   | Start a persistent agent session with spec and optional skill context. If `skillId` is provided, the skill's instructions (from the Bonsai plugin's `SKILL.md`) are loaded and prepended to the system prompt. Session starts in `idle` state, ready for messages. `sessionId` arrives later via `agent/sessionStart` notification. See [Agent Context](../agent/CONTEXT.md). |
-| `agent/send`      | `{ taskId: str, text: str }`                                                                 | `null`              | Send a user message to the session, triggering a new turn. Session must be `idle`.                                                                          |
-| `agent/status`    | `{ taskId: str }`                                                                            | `AgentTask`         | Get session status and metadata                                                                                                                             |
+| `agent/run`       | `{ specIds: list[str], config: AgentConfig, skillId?: str }`                                 | `{ bonsaiSid: str }`   | Start a persistent agent session with spec and optional skill context. If `skillId` is provided, the skill's instructions (from the Bonsai plugin's `SKILL.md`) are loaded and prepended to the system prompt. Session starts in `idle` state, ready for messages. `sessionId` arrives later via `agent/sessionStart` notification. See [Agent Context](../agent/CONTEXT.md). |
+| `agent/send`      | `{ bonsaiSid: str, text: str }`                                                                 | `null`              | Send a user message to the session, triggering a new turn. Session must be `idle`.                                                                          |
+| `agent/status`    | `{ bonsaiSid: str }`                                                                            | `AgentTask`         | Get session status and metadata                                                                                                                             |
 | `agent/list`      | `{}`                                                                                         | `list[AgentTask]`   | List all agent sessions                                                                                                                                     |
-| `agent/interrupt` | `{ taskId: str }`                                                                            | `null`              | Cancel the current turn. Session stays `idle` and can accept new messages.                                                                                  |
-| `agent/end`       | `{ taskId: str }`                                                                            | `null`              | Gracefully close the session. Session enters `done` state.                                                                                                  |
-| `agent/respond`   | `{ taskId: str, requestId: str, response: AskUserQuestionResponse \| ToolApprovalResponse }` | `null`              | Respond to a pending server→client request. See [Agent Module models](../agent/README.md#interactive-requestresponse-models) for response type definitions. |
+| `agent/interrupt` | `{ bonsaiSid: str }`                                                                            | `null`              | Cancel the current turn. Session stays `idle` and can accept new messages.                                                                                  |
+| `agent/end`       | `{ bonsaiSid: str }`                                                                            | `null`              | Gracefully close the session. Session enters `done` state.                                                                                                  |
+| `agent/respond`   | `{ bonsaiSid: str, requestId: str, response: AskUserQuestionResponse \| ToolApprovalResponse }` | `null`              | Respond to a pending server→client request. See [Agent Module models](../agent/README.md#interactive-requestresponse-models) for response type definitions. |
 | `session/list`    | `{}`                                                                                         | `list[SessionSummary]` | List all sessions (in-memory active + on-disk archived from `.specs/sessions/`) |
-| `session/get`     | `{ taskId: str }`                                                                            | `SessionData \| null`  | Get full session data including events from disk |
-| `session/continue`| `{ taskId: str }`                                                                            | `{ taskId: str }`   | Continue a dead session — creates new SDK session with old conversation replayed as context |
-| `session/delete`  | `{ taskId: str }`                                                                            | `bool`              | Delete a session from disk |
+| `session/get`     | `{ bonsaiSid: str }`                                                                            | `SessionData \| null`  | Get full session data including events from disk |
+| `session/continue`| `{ bonsaiSid: str }`                                                                            | `{ bonsaiSid: str }`   | Resume a session — reuses the same `bonsaiSid`, loads old conversation as context for a new SDK session |
+| `session/delete`  | `{ bonsaiSid: str }`                                                                            | `bool`              | Delete a session from disk |
 
 ### Server → Client (notifications)
 
@@ -75,20 +75,20 @@ Both sides can send either. The server can initiate requests to the client (e.g.
 
 | Method | Params | Description |
 | --- | --- | --- |
-| `agent/sessionStart` | `{ taskId, sessionId, model, tools[], cwd, permissionMode }` | Agent session initialized |
-| `agent/textDelta` | `{ taskId, sessionId, text, streaming }` | Text output (streaming or full block) |
-| `agent/toolCallStart` | `{ taskId, sessionId, toolUseId, toolName, toolInput, parentToolUseId? }` | Agent started a tool call |
-| `agent/toolCallEnd` | `{ taskId, sessionId, toolUseId, toolName, output, isError }` | Tool call completed with result |
-| `agent/subagentStart` | `{ taskId, sessionId, agentId, agentType, parentToolUseId }` | Subagent spawned |
-| `agent/subagentEnd` | `{ taskId, sessionId, agentId }` | Subagent finished |
-| `agent/notification` | `{ taskId, sessionId, message, title? }` | General agent notification |
-| `agent/compact` | `{ taskId, sessionId, trigger, preTokens }` | Context window compacted |
-| `agent/progress` | `{ taskId, sessionId, status, message }` | Task progress update |
-| `agent/turnComplete` | `{ taskId, sessionId, result, costUsd, turns, durationMs, usage }` | Turn finished; session is `idle`, ready for next `agent/send` |
-| `agent/interrupted` | `{ taskId, sessionId }` | Current turn was cancelled via `agent/interrupt`; session is `idle` |
-| `agent/done` | `{ taskId, sessionId, result, costUsd, turns, durationMs, usage }` | Session closed (via `agent/end` or terminal condition) |
-| `agent/error` | `{ taskId, sessionId, subtype, errors[], result, costUsd, turns, durationMs, usage }` | Session ended due to error |
-| `agent/permissionDenied` | `{ taskId, sessionId, toolName, toolInput }` | Tool blocked by permission policy |
+| `agent/sessionStart` | `{ bonsaiSid, sessionId, model, tools[], cwd, permissionMode }` | Agent session initialized |
+| `agent/textDelta` | `{ bonsaiSid, sessionId, text, streaming }` | Text output (streaming or full block) |
+| `agent/toolCallStart` | `{ bonsaiSid, sessionId, toolUseId, toolName, toolInput, parentToolUseId? }` | Agent started a tool call |
+| `agent/toolCallEnd` | `{ bonsaiSid, sessionId, toolUseId, toolName, output, isError }` | Tool call completed with result |
+| `agent/subagentStart` | `{ bonsaiSid, sessionId, agentId, agentType, parentToolUseId }` | Subagent spawned |
+| `agent/subagentEnd` | `{ bonsaiSid, sessionId, agentId }` | Subagent finished |
+| `agent/notification` | `{ bonsaiSid, sessionId, message, title? }` | General agent notification |
+| `agent/compact` | `{ bonsaiSid, sessionId, trigger, preTokens }` | Context window compacted |
+| `agent/progress` | `{ bonsaiSid, sessionId, status, message }` | Task progress update |
+| `agent/turnComplete` | `{ bonsaiSid, sessionId, result, costUsd, turns, durationMs, usage }` | Turn finished; session is `idle`, ready for next `agent/send` |
+| `agent/interrupted` | `{ bonsaiSid, sessionId }` | Current turn was cancelled via `agent/interrupt`; session is `idle` |
+| `agent/done` | `{ bonsaiSid, sessionId, result, costUsd, turns, durationMs, usage }` | Session closed (via `agent/end` or terminal condition) |
+| `agent/error` | `{ bonsaiSid, sessionId, subtype, errors[], result, costUsd, turns, durationMs, usage }` | Session ended due to error |
+| `agent/permissionDenied` | `{ bonsaiSid, sessionId, toolName, toolInput }` | Tool blocked by permission policy |
 
 > **SDK event mapping:** `agent/sessionStart` ← `SDKSystemMessage` subtype `init` · `agent/textDelta` ← `SDKAssistantMessage` text block / `SDKPartialAssistantMessage` text_delta · `agent/toolCallStart` ← `SDKAssistantMessage` tool_use block · `agent/toolCallEnd` ← `SDKUserMessage` tool_result block · `agent/subagentStart` / `End` ← `SubagentStart` / `SubagentStop` hooks · `agent/notification` ← `Notification` hook · `agent/compact` ← `SDKCompactBoundaryMessage` · `agent/turnComplete` ← `SDKResultMessage` (turn ends, session stays open) · `agent/interrupted` ← `agent/interrupt` cancels current turn · `agent/done` ← session closed via `agent/end` · `agent/error` / `permissionDenied` ← `SDKResultMessage` error subtypes
 
@@ -100,8 +100,8 @@ The server suspends an `asyncio.Future` keyed by `requestId` until the client re
 
 | Method | Params | Expected Response | Description |
 | --- | --- | --- | --- |
-| `agent/askUserQuestion` | `{ taskId, requestId, questions: Question[] }` | [`AskUserQuestionResponse`](../agent/README.md#interactive-requestresponse-models) | Ask the user a question during an agent run |
-| `agent/confirmAction` | `{ taskId, requestId, toolName, toolInput }` | [`ToolApprovalResponse`](../agent/README.md#interactive-requestresponse-models) | Request approval for a tool action |
+| `agent/askUserQuestion` | `{ bonsaiSid, requestId, questions: Question[] }` | [`AskUserQuestionResponse`](../agent/README.md#interactive-requestresponse-models) | Ask the user a question during an agent run |
+| `agent/confirmAction` | `{ bonsaiSid, requestId, toolName, toolInput }` | [`ToolApprovalResponse`](../agent/README.md#interactive-requestresponse-models) | Request approval for a tool action |
 
 Both methods originate from the SDK's `canUseTool` callback. `runner.py` distinguishes them by `tool_name`: `"AskUserQuestion"` → `agent/askUserQuestion`, any other tool → `agent/confirmAction`. See [Agent Module — Interactive Request/Response Models](../agent/README.md#interactive-requestresponse-models) for `Question`, `QuestionOption`, `AskUserQuestionResponse`, and `ToolApprovalResponse` type definitions.
 
@@ -247,13 +247,13 @@ async def notify(method: str, params: dict, request_id: str | None = None) -> No
 | `end_session` | `(**params) → None` | Handler for `agent/end` |
 | `respond_agent` | `(**params) → None` | Handler for `agent/respond` |
 
-`run_agent` captures `current_notify` at call time (the active connection's notify callable), extracts the optional `skillId` param, and passes both to `agent/service.run_task`. Returns `{ taskId }` immediately. The agent session runs in the background; the runner enters a conversation loop waiting for messages. The `sessionId` arrives later via `agent/sessionStart` notification.
+`run_agent` captures `current_notify` at call time (the active connection's notify callable), extracts the optional `skillId` param, and passes both to `agent/service.run_task`. Returns `{ bonsaiSid }` immediately. The agent session runs in the background; the runner enters a conversation loop waiting for messages. The `sessionId` arrives later via `agent/sessionStart` notification.
 
-`send_message` routes to `agent/service.send_message(task_id, text)`, which enqueues the message. The runner picks it up and starts a new turn.
+`send_message` routes to `agent/service.send_message(bonsai_sid, text)`, which enqueues the message. The runner picks it up and starts a new turn.
 
-`end_session` routes to `agent/service.end_session(task_id)`, which sends a sentinel to the runner's message queue, causing it to close the SDK client and emit `agent/done`.
+`end_session` routes to `agent/service.end_session(bonsai_sid)`, which sends a sentinel to the runner's message queue, causing it to close the SDK client and emit `agent/done`.
 
-`respond_agent` routes to `agent/service.respond(task_id, request_id, response)`, which resolves the pending `asyncio.Future` in `tracker.py`.
+`respond_agent` routes to `agent/service.respond(bonsai_sid, request_id, response)`, which resolves the pending `asyncio.Future` in `tracker.py`.
 
 ## JSON-RPC Dispatch
 

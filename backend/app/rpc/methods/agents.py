@@ -40,7 +40,7 @@ def _handle_errors(func):  # type: ignore[type-arg]
 
 @_handle_errors
 async def get_agent_status(service: AgentService, **params: Any) -> dict:
-    return service.get_task(params["taskId"]).model_dump(by_alias=True)
+    return service.get_task(params["bonsaiSid"]).model_dump(by_alias=True)
 
 
 @_handle_errors
@@ -57,36 +57,36 @@ async def run_agent(service: AgentService, **params: Any) -> dict:
     skill_id = params.get("skillId")
     name = params.get("name", "")
     task = await service.run_task(params["specIds"], config, notify, skill_id=skill_id, name=name)
-    return {"taskId": task.id}
+    return {"bonsaiSid": task.bonsai_sid}
 
 
 @_handle_errors
 async def send_message(service: AgentService, **params: Any) -> None:
-    await service.send_message(params["taskId"], params["text"])
+    await service.send_message(params["bonsaiSid"], params["text"])
 
 
 @_handle_errors
 async def end_session(service: AgentService, **params: Any) -> None:
-    await service.end_session(params["taskId"])
+    await service.end_session(params["bonsaiSid"])
 
 
 @_handle_errors
 async def interrupt_agent(service: AgentService, **params: Any) -> None:
-    await service.interrupt_task(params["taskId"])
+    await service.interrupt_task(params["bonsaiSid"])
 
 
 @_handle_errors
 async def respond_agent(service: AgentService, **params: Any) -> None:
-    await service.respond(params["taskId"], params["requestId"], params["response"])
+    await service.respond(params["bonsaiSid"], params["requestId"], params["response"])
 
 
 @_handle_errors
 async def update_config(service: AgentService, **params: Any) -> dict:
-    task_id = params["taskId"]
+    bonsai_sid = params["bonsaiSid"]
     model = params.get("model")
     permission_mode = params.get("permissionMode")
-    result = await service.update_config(task_id, model=model, permission_mode=permission_mode)
+    result = await service.update_config(bonsai_sid, model=model, permission_mode=permission_mode)
     notify = notifications.current_notify
     if notify:
-        await notify("agent/configChanged", {"taskId": task_id, **result})
+        await notify("agent/configChanged", {"bonsaiSid": bonsai_sid, **result})
     return result

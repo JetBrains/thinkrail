@@ -10,9 +10,9 @@ from app.agent.persistence import (
 )
 
 
-def _make_session_data(task_id: str = "task-1", **overrides) -> dict:
+def _make_session_data(bonsai_sid: str = "task-1", **overrides) -> dict:
     base = {
-        "taskId": task_id,
+        "bonsaiSid": bonsai_sid,
         "name": "test session",
         "skillId": "module-design",
         "specIds": ["spec-1"],
@@ -21,7 +21,6 @@ def _make_session_data(task_id: str = "task-1", **overrides) -> dict:
         "sessionId": "sess-abc",
         "createdAt": "2026-03-03T10:00:00Z",
         "updatedAt": "2026-03-03T10:05:00Z",
-        "continuedFrom": None,
         "metrics": {},
     }
     base.update(overrides)
@@ -37,7 +36,7 @@ class TestSaveSession:
         meta = tmp_path / ".specs" / "sessions" / "task-1.json"
         assert meta.is_file()
         data = json.loads(meta.read_text())
-        assert data["taskId"] == "task-1"
+        assert data["bonsaiSid"] == "task-1"
         assert "events" not in data
 
     def test_strips_events_to_jsonl(self, tmp_path: Path) -> None:
@@ -56,16 +55,40 @@ class TestSaveSession:
         assert len(lines) == 2
         assert json.loads(lines[0])["eventType"] == "sessionStart"
 
-    def test_empty_task_id_noop(self, tmp_path: Path) -> None:
-        save_session(tmp_path, {"taskId": ""})
+    def test_empty_bonsai_sid_noop(self, tmp_path: Path) -> None:
+        save_session(tmp_path, {"bonsaiSid": ""})
         sessions_dir = tmp_path / ".specs" / "sessions"
         assert not sessions_dir.exists() or not list(sessions_dir.iterdir())
+
+    def test_creates_events_jsonl_without_events(self, tmp_path: Path) -> None:
+        save_session(tmp_path, _make_session_data())
+        evts = tmp_path / ".specs" / "sessions" / "task-1.events.jsonl"
+        assert evts.is_file()
+        assert evts.read_text() == ""
 
     def test_creates_sessions_dir(self, tmp_path: Path) -> None:
         sessions_dir = tmp_path / ".specs" / "sessions"
         assert not sessions_dir.exists()
         save_session(tmp_path, _make_session_data())
         assert sessions_dir.is_dir()
+
+    def test_backward_compat_taskId_key(self, tmp_path: Path) -> None:
+        """Old-format data with 'taskId' key should still save correctly."""
+        old_data = {
+            "taskId": "old-task-1",
+            "name": "old session",
+            "specIds": [],
+            "config": {},
+            "status": "done",
+            "createdAt": "2026-01-01T00:00:00Z",
+            "updatedAt": "2026-01-01T00:00:00Z",
+        }
+        save_session(tmp_path, old_data)
+        meta = tmp_path / ".specs" / "sessions" / "old-task-1.json"
+        assert meta.is_file()
+        data = json.loads(meta.read_text())
+        assert data["bonsaiSid"] == "old-task-1"
+        assert "taskId" not in data
 
 
 # -- load_session --------------------------------------------------------------
@@ -77,7 +100,7 @@ class TestLoadSession:
         save_session(tmp_path, _make_session_data(events=events))
         loaded = load_session(tmp_path, "task-1")
         assert loaded is not None
-        assert loaded["taskId"] == "task-1"
+        assert loaded["bonsaiSid"] == "task-1"
         assert loaded["events"] == events
 
     def test_missing_returns_none(self, tmp_path: Path) -> None:
@@ -94,6 +117,18 @@ class TestLoadSession:
         sessions_dir.mkdir(parents=True)
         (sessions_dir / "bad.json").write_text("{broken", encoding="utf-8")
         assert load_session(tmp_path, "bad") is None
+
+    def test_backward_compat_loads_old_taskId_key(self, tmp_path: Path) -> None:
+        """Files with old 'taskId' key should load with 'bonsaiSid'."""
+        sessions_dir = tmp_path / ".specs" / "sessions"
+        sessions_dir.mkdir(parents=True)
+        old_meta = {"taskId": "old-1", "name": "old", "status": "done"}
+        (sessions_dir / "old-1.json").write_text(json.dumps(old_meta))
+        (sessions_dir / "old-1.events.jsonl").touch()
+        loaded = load_session(tmp_path, "old-1")
+        assert loaded is not None
+        assert loaded["bonsaiSid"] == "old-1"
+        assert "taskId" not in loaded
 
 
 # -- list_sessions -------------------------------------------------------------
@@ -118,8 +153,8 @@ class TestListSessions:
         assert len(result) == 1
         entry = result[0]
         expected_fields = {
-            "taskId", "name", "skillId", "specIds", "status",
-            "model", "createdAt", "updatedAt", "metrics", "continuedFrom",
+            "bonsaiSid", "name", "skillId", "specIds", "status",
+            "model", "createdAt", "updatedAt", "metrics",
         }
         assert set(entry.keys()) == expected_fields
 
@@ -198,7 +233,7 @@ class TestRoundTrip:
 
         loaded = load_session(tmp_path, "task-1")
         assert loaded is not None
-        assert loaded["taskId"] == "task-1"
+        assert loaded["bonsaiSid"] == "task-1"
         assert loaded["name"] == "test session"
         assert loaded["events"] == events
 

@@ -84,7 +84,7 @@ class AgentEvent(BaseModel):
 
     model_config = _CAMEL_CONFIG
 
-    task_id: str
+    bonsai_sid: str
     session_id: str
     event_type: EventType
     payload: dict[str, Any] = Field(default_factory=dict)
@@ -95,7 +95,7 @@ class AgentResult(BaseModel):
 
     model_config = _CAMEL_CONFIG
 
-    task_id: str
+    bonsai_sid: str
     session_id: str
     result: str
     cost_usd: float
@@ -109,7 +109,7 @@ class AgentTask(BaseModel):
 
     model_config = _CAMEL_CONFIG
 
-    id: str = Field(default_factory=lambda: str(uuid4()))
+    bonsai_sid: str = Field(default_factory=lambda: str(uuid4()))
     name: str = ""
     status: TaskStatus = "idle"
     spec_ids: list[str] = Field(default_factory=list)

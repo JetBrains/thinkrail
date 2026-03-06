@@ -54,15 +54,15 @@ export function SessionTabBar({
       {/* Session tabs */}
       {sessions.map((s) => (
         <div
-          key={`s-${s.taskId}`}
-          className={`session-tab ${s.taskId === activeSessionId && !activeFilePath && !previewFilePath ? "session-tab-active" : ""}`}
-          onClick={() => onSwitchSession(s.taskId)}
+          key={`s-${s.bonsaiSid}`}
+          className={`session-tab ${s.bonsaiSid === activeSessionId && !activeFilePath && !previewFilePath ? "session-tab-active" : ""}`}
+          onClick={() => onSwitchSession(s.bonsaiSid)}
         >
           <span
             className="session-tab-dot"
             style={{ background: statusDotColor(s.status) }}
           />
-          <span className="session-tab-name">{s.name || s.taskId.slice(0, 8)}</span>
+          <span className="session-tab-name">{s.name || s.bonsaiSid.slice(0, 8)}</span>
           {s.pendingRequest && (
             <span className="session-tab-badge">
               {s.pendingRequest.type === "question" ? "Q" : "A"}
@@ -72,7 +72,7 @@ export function SessionTabBar({
             className="session-tab-close"
             onClick={(e) => {
               e.stopPropagation();
-              onCloseSession(s.taskId);
+              onCloseSession(s.bonsaiSid);
             }}
           >
             {"\u00D7"}

@@ -52,14 +52,14 @@ export interface ToolApprovalResponse {
 }
 
 export interface AgentEvent {
-  taskId: string;
+  bonsaiSid: string;
   sessionId: string;
   eventType: EventType;
   payload: Record<string, unknown>;
 }
 
 export interface AgentResult {
-  taskId: string;
+  bonsaiSid: string;
   sessionId: string;
   result: string;
   costUsd: number;
@@ -69,7 +69,7 @@ export interface AgentResult {
 }
 
 export interface AgentTask {
-  id: string;
+  bonsaiSid: string;
   status: TaskStatus;
   specIds: string[];
   config: AgentConfig;

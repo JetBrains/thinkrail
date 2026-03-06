@@ -13,7 +13,7 @@ export function SessionHistory() {
   return (
     <div className="session-history">
       {sorted.map((s) => (
-        <HistoryItem key={s.taskId} session={s} />
+        <HistoryItem key={s.bonsaiSid} session={s} />
       ))}
     </div>
   );

@@ -51,10 +51,10 @@ async def run(
     ) -> PermissionResultAllow | PermissionResultDeny:
         if tool_name == "AskUserQuestion":
             request_id = str(uuid4())
-            future = tracker.register_future(task.id, request_id)
+            future = tracker.register_future(task.bonsai_sid, request_id)
             await notify(
                 "agent/askUserQuestion",
-                {"taskId": task.id, "questions": input_data.get("questions", [])},
+                {"bonsaiSid": task.bonsai_sid, "questions": input_data.get("questions", [])},
                 request_id=request_id,
             )
             response = await future
@@ -74,11 +74,11 @@ async def run(
             )
         else:
             request_id = str(uuid4())
-            future = tracker.register_future(task.id, request_id)
+            future = tracker.register_future(task.bonsai_sid, request_id)
             await notify(
                 "agent/confirmAction",
                 {
-                    "taskId": task.id,
+                    "bonsaiSid": task.bonsai_sid,
                     "toolName": tool_name,
                     "toolInput": input_data,
                 },
@@ -112,7 +112,7 @@ async def run(
     session_id = ""
 
     async with ClaudeSDKClient(options=options) as client:
-        tracker.set_client(task.id, client)
+        tracker.set_client(task.bonsai_sid, client)
         # Track tool calls that change permission mode (ExitPlanMode, EnterPlanMode)
         # so we can notify the frontend when the SDK changes mode internally.
         _mode_change_tools: dict[str, str] = {}  # tool_use_id → new permission_mode
@@ -124,12 +124,12 @@ async def run(
             # Task starts in idle — ready for first message
             # -- conversation loop --
             while True:
-                message = await tracker.get_next_message(task.id)
+                message = await tracker.get_next_message(task.bonsai_sid)
 
                 if message is END_SIGNAL:
                     break
 
-                tracker.set_status(task.id, "running")
+                tracker.set_status(task.bonsai_sid, "running")
                 await client.query(message)
 
                 async for sdk_event in client.receive_response():
@@ -137,11 +137,11 @@ async def run(
                         new_sid = sdk_event.data.get("session_id", "")
                         first_init = not session_id
                         session_id = new_sid
-                        tracker.set_session_id(task.id, session_id)
+                        tracker.set_session_id(task.bonsai_sid, session_id)
                         if first_init:
                             sdk_data = {to_camel(k): v for k, v in sdk_event.data.items()}
                             await notify("agent/sessionStart", {
-                                "taskId": task.id,
+                                "bonsaiSid": task.bonsai_sid,
                                 "sessionId": session_id,
                                 **sdk_data,
                             })
@@ -150,7 +150,7 @@ async def run(
                         for block in sdk_event.content:
                             if isinstance(block, TextBlock):
                                 await notify("agent/textDelta", {
-                                    "taskId": task.id,
+                                    "bonsaiSid": task.bonsai_sid,
                                     "sessionId": session_id,
                                     "text": block.text,
                                 })
@@ -160,7 +160,7 @@ async def run(
                                 elif block.name == "EnterPlanMode":
                                     _mode_change_tools[block.id] = "plan"
                                 await notify("agent/toolCallStart", {
-                                    "taskId": task.id,
+                                    "bonsaiSid": task.bonsai_sid,
                                     "sessionId": session_id,
                                     "toolUseId": block.id,
                                     "toolName": block.name,
@@ -177,12 +177,12 @@ async def run(
                                     if new_mode and not (block.is_error or False):
                                         task.config.permission_mode = new_mode
                                         await notify("agent/configChanged", {
-                                            "taskId": task.id,
+                                            "bonsaiSid": task.bonsai_sid,
                                             "model": task.config.model,
                                             "permissionMode": new_mode,
                                         })
                                     await notify("agent/toolCallEnd", {
-                                        "taskId": task.id,
+                                        "bonsaiSid": task.bonsai_sid,
                                         "sessionId": session_id,
                                         "toolUseId": block.tool_use_id,
                                         "toolName": "",
@@ -201,7 +201,7 @@ async def run(
                             # Send error notification but DON'T terminate the session.
                             # Go back to idle so the user can send another message.
                             await notify("agent/error", {
-                                "taskId": task.id,
+                                "bonsaiSid": task.bonsai_sid,
                                 "sessionId": sdk_event.session_id or session_id,
                                 "subtype": "turn_error",
                                 "errors": [sdk_event.result] if sdk_event.result else [],
@@ -211,11 +211,11 @@ async def run(
                                 "durationMs": duration_ms,
                                 "usage": sdk_event.usage or {},
                             })
-                            tracker.set_status(task.id, "idle")
+                            tracker.set_status(task.bonsai_sid, "idle")
                             break  # back to conversation loop, wait for next message
                         else:
                             await notify("agent/turnComplete", {
-                                "taskId": task.id,
+                                "bonsaiSid": task.bonsai_sid,
                                 "sessionId": sdk_event.session_id or session_id,
                                 "result": sdk_event.result or "",
                                 "costUsd": turn_cost,
@@ -223,15 +223,15 @@ async def run(
                                 "durationMs": duration_ms,
                                 "usage": sdk_event.usage or {},
                             })
-                            tracker.set_status(task.id, "idle")
+                            tracker.set_status(task.bonsai_sid, "idle")
                             break  # turn done, go back to waiting
         finally:
-            tracker.clear_client(task.id)
+            tracker.clear_client(task.bonsai_sid)
 
     # Session closed gracefully (END_SIGNAL received)
     duration_ms = int((time.monotonic() - start_time) * 1000)
     await notify("agent/done", {
-        "taskId": task.id,
+        "bonsaiSid": task.bonsai_sid,
         "sessionId": session_id,
         "result": "",
         "costUsd": total_cost,
@@ -241,7 +241,7 @@ async def run(
     })
 
     return AgentResult(
-        task_id=task.id,
+        bonsai_sid=task.bonsai_sid,
         session_id=session_id,
         result="",
         cost_usd=total_cost,

@@ -3,7 +3,7 @@ import { persist } from "zustand/middleware";
 
 interface Toast {
   id: string;
-  taskId?: string;
+  bonsaiSid?: string;
   eventType: "question" | "approval" | "notification" | "error" | "success";
   message: string;
   persistent: boolean;

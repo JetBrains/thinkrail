@@ -110,15 +110,15 @@ class TestRunHappyPath:
         notify = AsyncMock()
 
         # Enqueue one message then end signal
-        tracker.enqueue_message(task.id, "Do the thing")
-        tracker.enqueue_end_signal(task.id)
+        tracker.enqueue_message(task.bonsai_sid, "Do the thing")
+        tracker.enqueue_end_signal(task.bonsai_sid)
 
         print(f"[test_single_turn_then_end] starting run")
         result = await run(task, "spec context here", notify, tracker)
         print(f"[test_single_turn_then_end] run completed")
 
         assert isinstance(result, AgentResult)
-        assert result.task_id == task.id
+        assert result.bonsai_sid == task.bonsai_sid
         assert result.session_id == "sess-1"
         assert result.turns == 3
         assert result.cost_usd == 0.05
@@ -152,11 +152,11 @@ class TestRunHappyPath:
         _setup_mock_client(MockClient, [sys_msg, result_msg])
 
         tracker, task = _make_tracker_and_task()
-        tracker.enqueue_message(task.id, "hello")
-        tracker.enqueue_end_signal(task.id)
+        tracker.enqueue_message(task.bonsai_sid, "hello")
+        tracker.enqueue_end_signal(task.bonsai_sid)
 
         await run(task, "context", AsyncMock(), tracker)
-        assert tracker.get_task(task.id).session_id == "sess-42"
+        assert tracker.get_task(task.bonsai_sid).session_id == "sess-42"
 
     @patch("app.agent.runner.ClaudeSDKClient")
     async def test_multi_turn_accumulates_stats(self, MockClient: MagicMock) -> None:
@@ -208,9 +208,9 @@ class TestRunHappyPath:
         MockClient.return_value.__aexit__ = AsyncMock(return_value=False)
 
         tracker, task = _make_tracker_and_task()
-        tracker.enqueue_message(task.id, "first message")
-        tracker.enqueue_message(task.id, "second message")
-        tracker.enqueue_end_signal(task.id)
+        tracker.enqueue_message(task.bonsai_sid, "first message")
+        tracker.enqueue_message(task.bonsai_sid, "second message")
+        tracker.enqueue_end_signal(task.bonsai_sid)
 
         notify = AsyncMock()
         result = await run(task, "context", notify, tracker)
@@ -228,7 +228,7 @@ class TestRunHappyPath:
         _setup_mock_client(MockClient, [])
 
         tracker, task = _make_tracker_and_task()
-        tracker.enqueue_end_signal(task.id)
+        tracker.enqueue_end_signal(task.bonsai_sid)
         notify = AsyncMock()
 
         result = await run(task, "context", notify, tracker)
@@ -256,8 +256,8 @@ class TestRunHappyPath:
         tracker, task = _make_tracker_and_task()
         assert task.status == "idle"
 
-        tracker.enqueue_message(task.id, "go")
-        tracker.enqueue_end_signal(task.id)
+        tracker.enqueue_message(task.bonsai_sid, "go")
+        tracker.enqueue_end_signal(task.bonsai_sid)
 
         await run(task, "context", AsyncMock(), tracker)
 
@@ -287,8 +287,8 @@ class TestCanUseTool:
         captured = _setup_capturing_client(MockClient, [sys_msg, result_msg])
 
         tracker, task = _make_tracker_and_task()
-        tracker.enqueue_message(task.id, "go")
-        tracker.enqueue_end_signal(task.id)
+        tracker.enqueue_message(task.bonsai_sid, "go")
+        tracker.enqueue_end_signal(task.bonsai_sid)
         notify = AsyncMock()
 
         await run(task, "context", notify, tracker)
@@ -297,15 +297,15 @@ class TestCanUseTool:
         assert opts.can_use_tool is not None
 
         # Simulate mid-turn question — manually set task to running
-        tracker.set_status(task.id, "running")
+        tracker.set_status(task.bonsai_sid, "running")
 
         context = MagicMock()
 
         async def resolve_after_register():
             await asyncio.sleep(0.01)
-            for req_id in list(tracker._futures.get(task.id, {})):
+            for req_id in list(tracker._futures.get(task.bonsai_sid, {})):
                 tracker.resolve_future(
-                    task.id, req_id, {"questions": [], "answers": {"Q?": "A"}}
+                    task.bonsai_sid, req_id, {"questions": [], "answers": {"Q?": "A"}}
                 )
                 break
 
@@ -337,20 +337,20 @@ class TestCanUseTool:
         captured = _setup_capturing_client(MockClient, [sys_msg, result_msg])
 
         tracker, task = _make_tracker_and_task()
-        tracker.enqueue_message(task.id, "go")
-        tracker.enqueue_end_signal(task.id)
+        tracker.enqueue_message(task.bonsai_sid, "go")
+        tracker.enqueue_end_signal(task.bonsai_sid)
 
         await run(task, "context", AsyncMock(), tracker)
 
         opts = captured["options"]
         context = MagicMock()
 
-        tracker.set_status(task.id, "running")
+        tracker.set_status(task.bonsai_sid, "running")
 
         async def resolve_allow():
             await asyncio.sleep(0.01)
-            for req_id in list(tracker._futures.get(task.id, {})):
-                tracker.resolve_future(task.id, req_id, {"behavior": "allow"})
+            for req_id in list(tracker._futures.get(task.bonsai_sid, {})):
+                tracker.resolve_future(task.bonsai_sid, req_id, {"behavior": "allow"})
                 break
 
         asyncio.get_event_loop().create_task(resolve_allow())
@@ -377,21 +377,21 @@ class TestCanUseTool:
         captured = _setup_capturing_client(MockClient, [sys_msg, result_msg])
 
         tracker, task = _make_tracker_and_task()
-        tracker.enqueue_message(task.id, "go")
-        tracker.enqueue_end_signal(task.id)
+        tracker.enqueue_message(task.bonsai_sid, "go")
+        tracker.enqueue_end_signal(task.bonsai_sid)
 
         await run(task, "context", AsyncMock(), tracker)
 
         opts = captured["options"]
         context = MagicMock()
 
-        tracker.set_status(task.id, "running")
+        tracker.set_status(task.bonsai_sid, "running")
 
         async def resolve_deny():
             await asyncio.sleep(0.01)
-            for req_id in list(tracker._futures.get(task.id, {})):
+            for req_id in list(tracker._futures.get(task.bonsai_sid, {})):
                 tracker.resolve_future(
-                    task.id,
+                    task.bonsai_sid,
                     req_id,
                     {"behavior": "deny", "message": "Not allowed", "interrupt": True},
                 )
@@ -428,8 +428,8 @@ class TestPluginWiring:
         captured = _setup_capturing_client(MockClient, [sys_msg, result_msg])
 
         tracker, task = _make_tracker_and_task()
-        tracker.enqueue_message(task.id, "go")
-        tracker.enqueue_end_signal(task.id)
+        tracker.enqueue_message(task.bonsai_sid, "go")
+        tracker.enqueue_end_signal(task.bonsai_sid)
 
         with tempfile.TemporaryDirectory() as tmpdir:
             plugin_dir = Path(tmpdir)
@@ -462,8 +462,8 @@ class TestPluginWiring:
         captured = _setup_capturing_client(MockClient, [sys_msg, result_msg])
 
         tracker, task = _make_tracker_and_task()
-        tracker.enqueue_message(task.id, "go")
-        tracker.enqueue_end_signal(task.id)
+        tracker.enqueue_message(task.bonsai_sid, "go")
+        tracker.enqueue_end_signal(task.bonsai_sid)
 
         print("[test_no_plugin_dir] running with plugin_dir=None")
         await run(task, "context", AsyncMock(), tracker, plugin_dir=None)
@@ -493,11 +493,11 @@ class TestRunError:
         _setup_mock_client(MockClient, [sys_msg, result_msg])
 
         tracker, task = _make_tracker_and_task()
-        tracker.enqueue_message(task.id, "do something")
-        tracker.enqueue_end_signal(task.id)  # needed so runner doesn't hang after error recovery
+        tracker.enqueue_message(task.bonsai_sid, "do something")
+        tracker.enqueue_end_signal(task.bonsai_sid)  # needed so runner doesn't hang after error recovery
         notify = AsyncMock()
 
-        print(f"[test_error_result] starting run for task {task.id}")
+        print(f"[test_error_result] starting run for task {task.bonsai_sid}")
         result = await run(task, "context", notify, tracker)
         print(f"[test_error_result] run completed, result={result.result}")
 
@@ -506,7 +506,7 @@ class TestRunError:
         assert "agent/error" in method_calls
         # After error, runner recovers to idle (not terminal error),
         # then END_SIGNAL exits the loop gracefully
-        assert tracker.get_task(task.id).status == "idle"
+        assert tracker.get_task(task.bonsai_sid).status == "idle"
 
     @patch("app.agent.runner.ClaudeSDKClient")
     async def test_sdk_exception_propagates(self, MockClient: MagicMock) -> None:
@@ -517,7 +517,7 @@ class TestRunError:
         MockClient.return_value.__aexit__ = AsyncMock(return_value=False)
 
         tracker, task = _make_tracker_and_task()
-        tracker.enqueue_message(task.id, "go")
+        tracker.enqueue_message(task.bonsai_sid, "go")
 
         print(f"[test_sdk_exception_propagates] starting run, expecting RuntimeError")
         with pytest.raises(RuntimeError, match="SDK crash"):

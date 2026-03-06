@@ -9,7 +9,7 @@ export function AppRoutes({ onSwitchProject }: { onSwitchProject: () => void }) 
         <Route path="workspace">
           <Route index element={null} />
           <Route path="spec/:specId" element={null} />
-          <Route path="session/:taskId" element={null} />
+          <Route path="session/:bonsaiSid" element={null} />
           <Route path="graph" element={null} />
         </Route>
       </Route>

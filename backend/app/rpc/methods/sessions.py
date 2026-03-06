@@ -40,20 +40,20 @@ async def list_all_sessions(service: AgentService, **params: Any) -> list[dict]:
 @_handle_errors
 async def get_session(service: AgentService, **params: Any) -> dict | None:
     """Get full session data including events."""
-    return service.get_session_data(params["taskId"])
+    return service.get_session_data(params["bonsaiSid"])
 
 
 @_handle_errors
 async def continue_session(service: AgentService, **params: Any) -> dict:
-    """Continue a dead session — create new task with old conversation as context."""
+    """Continue a dead session — reuse same bonsai_sid with old conversation as context."""
     notify = notifications.current_notify
     if notify is None:
         raise JsonRpcError(_INTERNAL_ERROR, "Internal error", "No active connection")
-    task = await service.continue_session(params["taskId"], notify)
-    return {"taskId": task.id}
+    task = await service.continue_session(params["bonsaiSid"], notify)
+    return {"bonsaiSid": task.bonsai_sid}
 
 
 @_handle_errors
 async def delete_session_data(service: AgentService, **params: Any) -> bool:
     """Delete a session from disk."""
-    return service.delete_session_data(params["taskId"])
+    return service.delete_session_data(params["bonsaiSid"])

@@ -1,7 +1,7 @@
 import type { RpcClient } from "../client.ts";
 
 export interface SessionSummary {
-  taskId: string;
+  bonsaiSid: string;
   name: string;
   skillId?: string;
   specIds: string[];
@@ -11,11 +11,10 @@ export interface SessionSummary {
   updatedAt: string;
   metrics?: Record<string, unknown>;
   active?: boolean;
-  continuedFrom?: string;
 }
 
 export interface SessionData {
-  taskId: string;
+  bonsaiSid: string;
   name: string;
   skillId?: string;
   specIds: string[];
@@ -25,21 +24,20 @@ export interface SessionData {
   createdAt: string;
   updatedAt: string;
   events: Record<string, unknown>[];
-  continuedFrom?: string;
 }
 
 export function createSessionApi(client: RpcClient) {
   return {
     list: () => client.request<SessionSummary[]>("session/list"),
 
-    get: (taskId: string) =>
-      client.request<SessionData | null>("session/get", { taskId }),
+    get: (bonsaiSid: string) =>
+      client.request<SessionData | null>("session/get", { bonsaiSid }),
 
-    continue: (taskId: string) =>
-      client.request<{ taskId: string }>("session/continue", { taskId }),
+    continue: (bonsaiSid: string) =>
+      client.request<{ bonsaiSid: string }>("session/continue", { bonsaiSid }),
 
-    delete: (taskId: string) =>
-      client.request<boolean>("session/delete", { taskId }),
+    delete: (bonsaiSid: string) =>
+      client.request<boolean>("session/delete", { bonsaiSid }),
   };
 }
 

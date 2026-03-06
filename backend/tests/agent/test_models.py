@@ -50,7 +50,7 @@ class TestAgentConfig:
 class TestAgentTask:
     def test_defaults(self) -> None:
         task = AgentTask()
-        assert len(task.id) > 0
+        assert len(task.bonsai_sid) > 0
         assert task.status == "idle"
         assert task.spec_ids == []
         assert task.session_id is None
@@ -60,18 +60,18 @@ class TestAgentTask:
     def test_unique_ids(self) -> None:
         t1 = AgentTask()
         t2 = AgentTask()
-        assert t1.id != t2.id
+        assert t1.bonsai_sid != t2.bonsai_sid
 
     def test_custom_values(self) -> None:
         cfg = AgentConfig(model="claude-opus-4-6")
         task = AgentTask(
-            id="test-id",
+            bonsai_sid="test-id",
             status="running",
             spec_ids=["spec-1", "spec-2"],
             config=cfg,
             session_id="sess-1",
         )
-        assert task.id == "test-id"
+        assert task.bonsai_sid == "test-id"
         assert task.status == "running"
         assert task.spec_ids == ["spec-1", "spec-2"]
         assert task.config.model == "claude-opus-4-6"
@@ -81,14 +81,16 @@ class TestAgentTask:
         task = AgentTask(spec_ids=["s1"])
         data = task.model_dump()
         restored = AgentTask(**data)
-        assert restored.id == task.id
+        assert restored.bonsai_sid == task.bonsai_sid
         assert restored.spec_ids == ["s1"]
 
     def test_wire_format_uses_camel_case(self) -> None:
-        task = AgentTask(id="t1", spec_ids=["s1"], session_id="sess-1")
+        task = AgentTask(bonsai_sid="t1", spec_ids=["s1"], session_id="sess-1")
         data = task.model_dump(by_alias=True)
+        assert "bonsaiSid" in data
         assert "specIds" in data
         assert "sessionId" in data
+        assert data["bonsaiSid"] == "t1"
         assert data["specIds"] == ["s1"]
         assert data["sessionId"] == "sess-1"
         # nested config should also use camelCase
@@ -96,6 +98,7 @@ class TestAgentTask:
         assert "permissionMode" in data["config"]
         assert "streamText" in data["config"]
         # snake_case keys should not appear
+        assert "bonsai_sid" not in data
         assert "spec_ids" not in data
         assert "session_id" not in data
 
@@ -103,22 +106,22 @@ class TestAgentTask:
 class TestAgentEvent:
     def test_construction(self) -> None:
         event = AgentEvent(
-            task_id="t1",
+            bonsai_sid="t1",
             session_id="s1",
             event_type="text_delta",
             payload={"text": "hello"},
         )
-        assert event.task_id == "t1"
+        assert event.bonsai_sid == "t1"
         assert event.event_type == "text_delta"
         assert event.payload == {"text": "hello"}
 
     def test_default_payload(self) -> None:
-        event = AgentEvent(task_id="t1", session_id="s1", event_type="done")
+        event = AgentEvent(bonsai_sid="t1", session_id="s1", event_type="done")
         assert event.payload == {}
 
     def test_serialization(self) -> None:
         event = AgentEvent(
-            task_id="t1",
+            bonsai_sid="t1",
             session_id="s1",
             event_type="session_start",
             payload={"session_id": "s1"},
@@ -129,17 +132,17 @@ class TestAgentEvent:
 
     def test_wire_format_uses_camel_case(self) -> None:
         event = AgentEvent(
-            task_id="t1",
+            bonsai_sid="t1",
             session_id="s1",
             event_type="text_delta",
         )
         data = event.model_dump(by_alias=True)
-        assert "taskId" in data
+        assert "bonsaiSid" in data
         assert "sessionId" in data
         assert "eventType" in data
-        assert data["taskId"] == "t1"
+        assert data["bonsaiSid"] == "t1"
         assert data["eventType"] == "text_delta"
-        assert "task_id" not in data
+        assert "bonsai_sid" not in data
         assert "session_id" not in data
         assert "event_type" not in data
 
@@ -147,7 +150,7 @@ class TestAgentEvent:
 class TestAgentResult:
     def test_construction(self) -> None:
         result = AgentResult(
-            task_id="t1",
+            bonsai_sid="t1",
             session_id="s1",
             result="Task completed",
             cost_usd=0.05,
@@ -162,7 +165,7 @@ class TestAgentResult:
 
     def test_default_usage(self) -> None:
         result = AgentResult(
-            task_id="t1",
+            bonsai_sid="t1",
             session_id="s1",
             result="done",
             cost_usd=0.0,

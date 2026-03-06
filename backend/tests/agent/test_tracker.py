@@ -19,13 +19,13 @@ class TestTaskLifecycle:
         task = tracker.create_task(["spec-1"], AgentConfig())
         assert task.status == "idle"
         assert task.spec_ids == ["spec-1"]
-        assert len(task.id) > 0
+        assert len(task.bonsai_sid) > 0
 
     def test_get_task(self) -> None:
         tracker = Tracker()
         task = tracker.create_task(["s1"], AgentConfig())
-        retrieved = tracker.get_task(task.id)
-        assert retrieved.id == task.id
+        retrieved = tracker.get_task(task.bonsai_sid)
+        assert retrieved.bonsai_sid == task.bonsai_sid
 
     def test_get_task_not_found(self) -> None:
         tracker = Tracker()
@@ -42,80 +42,80 @@ class TestTaskLifecycle:
     def test_set_status_valid_transition(self) -> None:
         tracker = Tracker()
         task = tracker.create_task(["s1"], AgentConfig())
-        tracker.set_status(task.id, "running")
-        assert tracker.get_task(task.id).status == "running"
+        tracker.set_status(task.bonsai_sid, "running")
+        assert tracker.get_task(task.bonsai_sid).status == "running"
 
     def test_set_status_invalid_transition(self) -> None:
         tracker = Tracker()
         task = tracker.create_task(["s1"], AgentConfig())
-        tracker.set_status(task.id, "done")
+        tracker.set_status(task.bonsai_sid, "done")
         with pytest.raises(ValueError, match="Invalid transition"):
-            tracker.set_status(task.id, "running")  # done -> running not allowed
+            tracker.set_status(task.bonsai_sid, "running")  # done -> running not allowed
 
     def test_set_status_updates_timestamp(self) -> None:
         tracker = Tracker()
         task = tracker.create_task(["s1"], AgentConfig())
         original_updated = task.updated
-        tracker.set_status(task.id, "running")
-        assert tracker.get_task(task.id).updated >= original_updated
+        tracker.set_status(task.bonsai_sid, "running")
+        assert tracker.get_task(task.bonsai_sid).updated >= original_updated
 
     def test_set_session_id(self) -> None:
         tracker = Tracker()
         task = tracker.create_task(["s1"], AgentConfig())
-        tracker.set_session_id(task.id, "sess-123")
-        assert tracker.get_task(task.id).session_id == "sess-123"
+        tracker.set_session_id(task.bonsai_sid, "sess-123")
+        assert tracker.get_task(task.bonsai_sid).session_id == "sess-123"
 
     def test_full_lifecycle(self) -> None:
         tracker = Tracker()
         task = tracker.create_task(["s1"], AgentConfig())
         assert task.status == "idle"
-        tracker.set_status(task.id, "running")
-        assert tracker.get_task(task.id).status == "running"
-        tracker.set_status(task.id, "idle")
-        assert tracker.get_task(task.id).status == "idle"
-        tracker.set_status(task.id, "done")
-        assert tracker.get_task(task.id).status == "done"
+        tracker.set_status(task.bonsai_sid, "running")
+        assert tracker.get_task(task.bonsai_sid).status == "running"
+        tracker.set_status(task.bonsai_sid, "idle")
+        assert tracker.get_task(task.bonsai_sid).status == "idle"
+        tracker.set_status(task.bonsai_sid, "done")
+        assert tracker.get_task(task.bonsai_sid).status == "done"
 
     def test_error_lifecycle(self) -> None:
         tracker = Tracker()
         task = tracker.create_task(["s1"], AgentConfig())
-        tracker.set_status(task.id, "running")
-        tracker.set_status(task.id, "error")
-        assert tracker.get_task(task.id).status == "error"
+        tracker.set_status(task.bonsai_sid, "running")
+        tracker.set_status(task.bonsai_sid, "error")
+        assert tracker.get_task(task.bonsai_sid).status == "error"
 
     def test_idle_to_running(self) -> None:
         tracker = Tracker()
         task = tracker.create_task(["s1"], AgentConfig())
-        tracker.set_status(task.id, "running")
-        assert tracker.get_task(task.id).status == "running"
+        tracker.set_status(task.bonsai_sid, "running")
+        assert tracker.get_task(task.bonsai_sid).status == "running"
 
     def test_running_to_idle(self) -> None:
         """Turn completes -> back to idle."""
         tracker = Tracker()
         task = tracker.create_task(["s1"], AgentConfig())
-        tracker.set_status(task.id, "running")
-        tracker.set_status(task.id, "idle")
-        assert tracker.get_task(task.id).status == "idle"
+        tracker.set_status(task.bonsai_sid, "running")
+        tracker.set_status(task.bonsai_sid, "idle")
+        assert tracker.get_task(task.bonsai_sid).status == "idle"
 
     def test_idle_to_done(self) -> None:
         """Graceful session close from idle."""
         tracker = Tracker()
         task = tracker.create_task(["s1"], AgentConfig())
-        tracker.set_status(task.id, "done")
-        assert tracker.get_task(task.id).status == "done"
+        tracker.set_status(task.bonsai_sid, "done")
+        assert tracker.get_task(task.bonsai_sid).status == "done"
 
 
 class TestMessageQueue:
     def test_create_task_creates_queue(self) -> None:
         tracker = Tracker()
         task = tracker.create_task(["s1"], AgentConfig())
-        assert task.id in tracker._queues
+        assert task.bonsai_sid in tracker._queues
 
     def test_enqueue_message(self) -> None:
         tracker = Tracker()
         task = tracker.create_task(["s1"], AgentConfig())
-        tracker.enqueue_message(task.id, "hello")
-        assert not tracker._queues[task.id].empty()
+        tracker.enqueue_message(task.bonsai_sid, "hello")
+        assert not tracker._queues[task.bonsai_sid].empty()
 
     def test_enqueue_message_nonexistent_task(self) -> None:
         tracker = Tracker()
@@ -125,8 +125,8 @@ class TestMessageQueue:
     def test_enqueue_end_signal(self) -> None:
         tracker = Tracker()
         task = tracker.create_task(["s1"], AgentConfig())
-        tracker.enqueue_end_signal(task.id)
-        assert not tracker._queues[task.id].empty()
+        tracker.enqueue_end_signal(task.bonsai_sid)
+        assert not tracker._queues[task.bonsai_sid].empty()
 
     def test_enqueue_end_signal_nonexistent_task(self) -> None:
         tracker = Tracker()
@@ -136,26 +136,26 @@ class TestMessageQueue:
     async def test_get_next_message_text(self) -> None:
         tracker = Tracker()
         task = tracker.create_task(["s1"], AgentConfig())
-        tracker.enqueue_message(task.id, "hello world")
-        msg = await tracker.get_next_message(task.id)
+        tracker.enqueue_message(task.bonsai_sid, "hello world")
+        msg = await tracker.get_next_message(task.bonsai_sid)
         assert msg == "hello world"
 
     async def test_get_next_message_end_signal(self) -> None:
         tracker = Tracker()
         task = tracker.create_task(["s1"], AgentConfig())
-        tracker.enqueue_end_signal(task.id)
-        msg = await tracker.get_next_message(task.id)
+        tracker.enqueue_end_signal(task.bonsai_sid)
+        msg = await tracker.get_next_message(task.bonsai_sid)
         assert msg is END_SIGNAL
 
     async def test_get_next_message_ordering(self) -> None:
         tracker = Tracker()
         task = tracker.create_task(["s1"], AgentConfig())
-        tracker.enqueue_message(task.id, "first")
-        tracker.enqueue_message(task.id, "second")
-        tracker.enqueue_end_signal(task.id)
-        assert await tracker.get_next_message(task.id) == "first"
-        assert await tracker.get_next_message(task.id) == "second"
-        assert await tracker.get_next_message(task.id) is END_SIGNAL
+        tracker.enqueue_message(task.bonsai_sid, "first")
+        tracker.enqueue_message(task.bonsai_sid, "second")
+        tracker.enqueue_end_signal(task.bonsai_sid)
+        assert await tracker.get_next_message(task.bonsai_sid) == "first"
+        assert await tracker.get_next_message(task.bonsai_sid) == "second"
+        assert await tracker.get_next_message(task.bonsai_sid) is END_SIGNAL
 
     async def test_get_next_message_nonexistent_task(self) -> None:
         tracker = Tracker()
@@ -168,10 +168,10 @@ class TestMessageQueue:
 
         async def delayed_enqueue():
             await asyncio.sleep(0.05)
-            tracker.enqueue_message(task.id, "delayed")
+            tracker.enqueue_message(task.bonsai_sid, "delayed")
 
         asyncio.get_event_loop().create_task(delayed_enqueue())
-        msg = await tracker.get_next_message(task.id)
+        msg = await tracker.get_next_message(task.bonsai_sid)
         assert msg == "delayed"
 
 
@@ -179,8 +179,8 @@ class TestFutureManagement:
     async def test_register_and_resolve(self) -> None:
         tracker = Tracker()
         task = tracker.create_task(["s1"], AgentConfig())
-        future = tracker.register_future(task.id, "req-1")
-        tracker.resolve_future(task.id, "req-1", {"answer": "yes"})
+        future = tracker.register_future(task.bonsai_sid, "req-1")
+        tracker.resolve_future(task.bonsai_sid, "req-1", {"answer": "yes"})
         result = await future
         assert result == {"answer": "yes"}
 
@@ -188,7 +188,7 @@ class TestFutureManagement:
         tracker = Tracker()
         task = tracker.create_task(["s1"], AgentConfig())
         # Should not raise — logs a warning and returns silently
-        tracker.resolve_future(task.id, "no-such-request", {})
+        tracker.resolve_future(task.bonsai_sid, "no-such-request", {})
 
     async def test_register_future_for_nonexistent_task(self) -> None:
         tracker = Tracker()
@@ -198,16 +198,16 @@ class TestFutureManagement:
     async def test_cancel_futures(self) -> None:
         tracker = Tracker()
         task = tracker.create_task(["s1"], AgentConfig())
-        f1 = tracker.register_future(task.id, "req-1")
-        f2 = tracker.register_future(task.id, "req-2")
-        tracker.cancel_futures(task.id)
+        f1 = tracker.register_future(task.bonsai_sid, "req-1")
+        f2 = tracker.register_future(task.bonsai_sid, "req-2")
+        tracker.cancel_futures(task.bonsai_sid)
         assert f1.cancelled()
         assert f2.cancelled()
 
     async def test_timeout_auto_denies_future(self) -> None:
         tracker = Tracker()
         task = tracker.create_task(["s1"], AgentConfig())
-        future = tracker.register_future(task.id, "req-1", timeout_seconds=0.05)
+        future = tracker.register_future(task.bonsai_sid, "req-1", timeout_seconds=0.05)
         await asyncio.sleep(0.1)
         assert future.done()
         result = future.result()
@@ -218,7 +218,7 @@ class TestFutureManagement:
     async def test_resolve_before_timeout(self) -> None:
         tracker = Tracker()
         task = tracker.create_task(["s1"], AgentConfig())
-        future = tracker.register_future(task.id, "req-1", timeout_seconds=5.0)
-        tracker.resolve_future(task.id, "req-1", {"ok": True})
+        future = tracker.register_future(task.bonsai_sid, "req-1", timeout_seconds=5.0)
+        tracker.resolve_future(task.bonsai_sid, "req-1", {"ok": True})
         result = await future
         assert result == {"ok": True}

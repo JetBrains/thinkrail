@@ -77,12 +77,12 @@ export function wireEvents(client: RpcClient): Unsubscribe {
       const params = p as Record<string, unknown>;
       useSessionStore.getState().onSessionDone(params);
       useNotificationStore.getState().addToast({
-        taskId: params.taskId as string,
+        bonsaiSid: params.bonsaiSid as string,
         eventType: "success",
         message: "Session completed",
         persistent: false,
       });
-      useNotificationStore.getState().setBadge(params.taskId as string, {
+      useNotificationStore.getState().setBadge(params.bonsaiSid as string, {
         type: "done",
         pulsing: false,
       });
@@ -93,12 +93,12 @@ export function wireEvents(client: RpcClient): Unsubscribe {
       const params = p as Record<string, unknown>;
       useSessionStore.getState().onSessionError(params);
       useNotificationStore.getState().addToast({
-        taskId: params.taskId as string,
+        bonsaiSid: params.bonsaiSid as string,
         eventType: "error",
         message: "Session error",
         persistent: false,
       });
-      useNotificationStore.getState().setBadge(params.taskId as string, {
+      useNotificationStore.getState().setBadge(params.bonsaiSid as string, {
         type: "error",
         pulsing: false,
       });
@@ -124,16 +124,16 @@ export function wireEvents(client: RpcClient): Unsubscribe {
   unsubs.push(
     client.on("agent/askUserQuestion", (p) => {
       const params = p as Record<string, unknown>;
-      const taskId = params.taskId as string;
+      const bonsaiSid = params.bonsaiSid as string;
       useSessionStore.getState().onAskQuestion(params);
       useNotificationStore.getState().incrementPendingInput();
       useNotificationStore.getState().addToast({
-        taskId,
+        bonsaiSid,
         eventType: "question",
         message: "Agent has a question",
         persistent: false,
       });
-      useNotificationStore.getState().setBadge(taskId, {
+      useNotificationStore.getState().setBadge(bonsaiSid, {
         type: "question",
         pulsing: true,
       });
@@ -143,16 +143,16 @@ export function wireEvents(client: RpcClient): Unsubscribe {
   unsubs.push(
     client.on("agent/confirmAction", (p) => {
       const params = p as Record<string, unknown>;
-      const taskId = params.taskId as string;
+      const bonsaiSid = params.bonsaiSid as string;
       useSessionStore.getState().onConfirmAction(params);
       useNotificationStore.getState().incrementPendingInput();
       useNotificationStore.getState().addToast({
-        taskId,
+        bonsaiSid,
         eventType: "approval",
         message: `Approve: ${(params.toolName as string) ?? "action"}`,
         persistent: false,
       });
-      useNotificationStore.getState().setBadge(taskId, {
+      useNotificationStore.getState().setBadge(bonsaiSid, {
         type: "approval",
         pulsing: true,
       });

@@ -24,7 +24,7 @@ _VALID_TRANSITIONS: dict[TaskStatus, set[TaskStatus]] = {
 
 
 class TaskNotFoundError(Exception):
-    """Raised when a task ID does not exist."""
+    """Raised when a bonsai_sid does not exist."""
 
 
 class FutureNotFoundError(Exception):
@@ -43,24 +43,35 @@ class Tracker:
     # -- task lifecycle -------------------------------------------------------
 
     def create_task(
-        self, spec_ids: list[str], config: AgentConfig, skill_id: str | None = None, name: str = ""
+        self,
+        spec_ids: list[str],
+        config: AgentConfig,
+        skill_id: str | None = None,
+        name: str = "",
+        bonsai_sid: str | None = None,
     ) -> AgentTask:
-        task = AgentTask(name=name, spec_ids=spec_ids, skill_id=skill_id, config=config)
-        self._tasks[task.id] = task
-        self._queues[task.id] = asyncio.Queue()
+        task = AgentTask(
+            **({"bonsai_sid": bonsai_sid} if bonsai_sid else {}),
+            name=name,
+            spec_ids=spec_ids,
+            skill_id=skill_id,
+            config=config,
+        )
+        self._tasks[task.bonsai_sid] = task
+        self._queues[task.bonsai_sid] = asyncio.Queue()
         return task
 
-    def get_task(self, task_id: str) -> AgentTask:
+    def get_task(self, bonsai_sid: str) -> AgentTask:
         try:
-            return self._tasks[task_id]
+            return self._tasks[bonsai_sid]
         except KeyError:
-            raise TaskNotFoundError(f"Task '{task_id}' not found")
+            raise TaskNotFoundError(f"Session '{bonsai_sid}' not found")
 
     def list_tasks(self) -> list[AgentTask]:
         return list(self._tasks.values())
 
-    def set_status(self, task_id: str, status: TaskStatus) -> None:
-        task = self.get_task(task_id)
+    def set_status(self, bonsai_sid: str, status: TaskStatus) -> None:
+        task = self.get_task(bonsai_sid)
         allowed = _VALID_TRANSITIONS[task.status]
         if status not in allowed:
             raise ValueError(
@@ -69,80 +80,75 @@ class Tracker:
         task.status = status
         task.updated = datetime.now(UTC).isoformat()
 
-    def set_session_id(self, task_id: str, session_id: str) -> None:
-        task = self.get_task(task_id)
+    def set_session_id(self, bonsai_sid: str, session_id: str) -> None:
+        task = self.get_task(bonsai_sid)
         task.session_id = session_id
         task.updated = datetime.now(UTC).isoformat()
 
     # -- live SDK client reference --------------------------------------------
 
-    def set_client(self, task_id: str, client: Any) -> None:
-        self._clients[task_id] = client
+    def set_client(self, bonsai_sid: str, client: Any) -> None:
+        self._clients[bonsai_sid] = client
 
-    def get_client(self, task_id: str) -> Any | None:
-        return self._clients.get(task_id)
+    def get_client(self, bonsai_sid: str) -> Any | None:
+        return self._clients.get(bonsai_sid)
 
-    def clear_client(self, task_id: str) -> None:
-        self._clients.pop(task_id, None)
+    def clear_client(self, bonsai_sid: str) -> None:
+        self._clients.pop(bonsai_sid, None)
 
     # -- message queue --------------------------------------------------------
 
-    def enqueue_message(self, task_id: str, text: str) -> None:
+    def enqueue_message(self, bonsai_sid: str, text: str) -> None:
         """Push a user message onto the session's queue."""
-        self.get_task(task_id)  # validate task exists
-        self._queues[task_id].put_nowait(text)
+        self.get_task(bonsai_sid)  # validate task exists
+        self._queues[bonsai_sid].put_nowait(text)
 
-    def enqueue_end_signal(self, task_id: str) -> None:
+    def enqueue_end_signal(self, bonsai_sid: str) -> None:
         """Push the END_SIGNAL sentinel to close the conversation loop."""
-        self.get_task(task_id)  # validate task exists
-        self._queues[task_id].put_nowait(_END_SIGNAL)
+        self.get_task(bonsai_sid)  # validate task exists
+        self._queues[bonsai_sid].put_nowait(_END_SIGNAL)
 
-    async def get_next_message(self, task_id: str) -> str | object:
+    async def get_next_message(self, bonsai_sid: str) -> str | object:
         """Await the next item from the session's queue.
 
         Returns the user message text, or ``END_SIGNAL`` if the session
         should close.
         """
-        self.get_task(task_id)  # validate task exists
-        return await self._queues[task_id].get()
+        self.get_task(bonsai_sid)  # validate task exists
+        return await self._queues[bonsai_sid].get()
 
     # -- future management ----------------------------------------------------
 
     def register_future(
-        self, task_id: str, request_id: str, timeout_seconds: float = 300.0
+        self, bonsai_sid: str, request_id: str, timeout_seconds: float = 300.0
     ) -> asyncio.Future[dict]:
-        self.get_task(task_id)  # validate task exists
+        self.get_task(bonsai_sid)  # validate task exists
         loop = asyncio.get_event_loop()
         future: asyncio.Future[dict] = loop.create_future()
 
-        task_futures = self._futures.setdefault(task_id, {})
+        task_futures = self._futures.setdefault(bonsai_sid, {})
         task_futures[request_id] = future
 
         def _on_timeout() -> None:
             if not future.done():
-                # Auto-deny on timeout instead of cancelling — this lets
-                # the runner handle it gracefully (PermissionResultDeny)
-                # rather than crashing the entire turn with CancelledError.
                 future.set_result({"behavior": "deny", "message": "Timed out waiting for user response", "interrupt": False})
                 task_futures.pop(request_id, None)
-                logger.warning("Future timed out for task %s request %s — auto-denied", task_id, request_id)
+                logger.warning("Future timed out for session %s request %s — auto-denied", bonsai_sid, request_id)
 
         loop.call_later(timeout_seconds, _on_timeout)
         return future
 
-    def resolve_future(self, task_id: str, request_id: str, response: dict) -> None:
-        task_futures = self._futures.get(task_id, {})
+    def resolve_future(self, bonsai_sid: str, request_id: str, response: dict) -> None:
+        task_futures = self._futures.get(bonsai_sid, {})
         future = task_futures.pop(request_id, None)
         if future is None:
-            # Future already resolved, timed out, or cancelled — not an error,
-            # just a late response from the frontend.
-            logger.warning("No pending future for task %s request %s (already resolved or timed out)", task_id, request_id)
+            logger.warning("No pending future for session %s request %s (already resolved or timed out)", bonsai_sid, request_id)
             return
         if not future.done():
             future.set_result(response)
 
-    def cancel_futures(self, task_id: str) -> None:
-        task_futures = self._futures.pop(task_id, {})
+    def cancel_futures(self, bonsai_sid: str) -> None:
+        task_futures = self._futures.pop(bonsai_sid, {})
         for future in task_futures.values():
             if not future.done():
                 future.cancel()

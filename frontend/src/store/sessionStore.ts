@@ -15,6 +15,8 @@ interface SessionStore {
   sessions: Map<string, Session>;
   activeSessionId: string | null;
   archivedSessions: ArchivedSession[];
+  /** IDs of sessions explicitly closed by the user — ignore late-arriving events */
+  closedIds: Set<string>;
 
   startSession: (params: {
     specIds: string[];
@@ -22,20 +24,21 @@ interface SessionStore {
     name: string;
     skillId?: string;
   }) => Promise<string>;
-  sendMessage: (taskId: string, text: string) => Promise<void>;
-  switchSession: (taskId: string) => void;
-  closeSession: (taskId: string) => void;
-  endSession: (taskId: string) => Promise<void>;
-  interruptSession: (taskId: string) => Promise<void>;
+  sendMessage: (bonsaiSid: string, text: string) => Promise<void>;
+  switchSession: (bonsaiSid: string) => void;
+  closeSession: (bonsaiSid: string) => void;
+  endSession: (bonsaiSid: string) => Promise<void>;
+  interruptSession: (bonsaiSid: string) => Promise<void>;
   resolveRequest: (
-    taskId: string,
+    bonsaiSid: string,
     requestId: string,
     response: unknown,
   ) => void;
 
-  updateConfig: (taskId: string, config: { model?: string; permissionMode?: string }) => Promise<void>;
+  updateConfig: (bonsaiSid: string, config: { model?: string; permissionMode?: string }) => Promise<void>;
 
-  restoreSession: (taskId: string) => Promise<void>;
+  continueSession: (bonsaiSid: string) => Promise<void>;
+  restoreSession: (bonsaiSid: string) => Promise<void>;
   loadActiveSessions: () => Promise<void>;
 
   // Event handlers (called by wireEvents)
@@ -67,13 +70,15 @@ function emptyMetrics(): SessionMetrics {
  */
 function ensureSession(
   sessions: Map<string, Session>,
-  taskId: string,
+  bonsaiSid: string,
+  closedIds?: Set<string>,
 ): Map<string, Session> {
-  if (sessions.has(taskId)) return sessions;
+  if (sessions.has(bonsaiSid)) return sessions;
+  if (closedIds?.has(bonsaiSid)) return sessions;
   const next = new Map(sessions);
-  next.set(taskId, {
-    taskId,
-    name: taskId.slice(0, 8),
+  next.set(bonsaiSid, {
+    bonsaiSid,
+    name: bonsaiSid.slice(0, 8),
     skillId: null,
     specIds: [],
     status: "idle",
@@ -90,15 +95,17 @@ function ensureSession(
 
 function appendEvent(
   sessions: Map<string, Session>,
-  taskId: string,
+  bonsaiSid: string,
   method: string,
   params: Record<string, unknown>,
+  closedIds?: Set<string>,
 ): Map<string, Session> {
-  const withSession = ensureSession(sessions, taskId);
-  const session = withSession.get(taskId)!;
+  const withSession = ensureSession(sessions, bonsaiSid, closedIds);
+  const session = withSession.get(bonsaiSid);
+  if (!session) return sessions;
 
   const event: AgentEvent = {
-    taskId,
+    bonsaiSid,
     sessionId: (params.sessionId as string) ?? "",
     eventType: method.replace("agent/", "") as AgentEvent["eventType"],
     payload: params,
@@ -110,7 +117,7 @@ function appendEvent(
 
   if (method === "agent/toolCallEnd") metrics.toolCalls++;
 
-  next.set(taskId, {
+  next.set(bonsaiSid, {
     ...session,
     events: [...session.events, event],
     metrics,
@@ -122,17 +129,18 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
   sessions: new Map(),
   activeSessionId: null,
   archivedSessions: [],
+  closedIds: new Set(),
 
   startSession: async ({ specIds, config, name, skillId }) => {
     const api = createAgentApi(getClient());
-    const { taskId } = await api.run({ specIds, config, skillId: skillId ?? undefined, name });
+    const { bonsaiSid } = await api.run({ specIds, config, skillId: skillId ?? undefined, name });
 
     set((s) => {
       const next = new Map(s.sessions);
-      const existing = next.get(taskId);
+      const existing = next.get(bonsaiSid);
       // Merge with placeholder if events arrived before this resolved
-      next.set(taskId, {
-        taskId,
+      next.set(bonsaiSid, {
+        bonsaiSid,
         name,
         skillId: skillId ?? null,
         specIds,
@@ -145,25 +153,25 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
         pendingRequest: existing?.pendingRequest ?? null,
         answeredRequests: existing?.answeredRequests ?? new Map(),
       });
-      return { sessions: next, activeSessionId: taskId };
+      return { sessions: next, activeSessionId: bonsaiSid };
     });
 
-    return taskId;
+    return bonsaiSid;
   },
 
-  sendMessage: async (taskId, text) => {
+  sendMessage: async (bonsaiSid, text) => {
     // Add user message to events immediately (optimistic)
     set((s) => {
-      const session = s.sessions.get(taskId);
+      const session = s.sessions.get(bonsaiSid);
       if (!session) return s;
       const next = new Map(s.sessions);
-      next.set(taskId, {
+      next.set(bonsaiSid, {
         ...session,
         status: "running",
         events: [
           ...session.events,
           {
-            taskId,
+            bonsaiSid,
             sessionId: "",
             eventType: "userMessage" as const,
             payload: { text },
@@ -174,43 +182,86 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
     });
     try {
       const api = createAgentApi(getClient());
-      await api.send(taskId, text);
+      await api.send(bonsaiSid, text);
     } catch (err) {
       console.error("[sendMessage] failed:", err);
       // Revert to idle so the user can retry
       set((s) => {
-        const session = s.sessions.get(taskId);
+        const session = s.sessions.get(bonsaiSid);
         if (!session) return s;
         const next = new Map(s.sessions);
-        next.set(taskId, { ...session, status: "idle" });
+        next.set(bonsaiSid, { ...session, status: "idle" });
         return { sessions: next };
       });
     }
   },
 
-  switchSession: (taskId) => set({ activeSessionId: taskId }),
+  switchSession: (bonsaiSid) => set({ activeSessionId: bonsaiSid }),
 
-  restoreSession: async (taskId) => {
+  continueSession: async (bonsaiSid) => {
+    const { createSessionApi } = await import("@/api/methods/sessions.ts");
+    const api = createSessionApi(getClient());
+    await api.continue(bonsaiSid);
+
+    // If session is in memory, just update it
+    if (get().sessions.has(bonsaiSid)) {
+      set((s) => {
+        const session = s.sessions.get(bonsaiSid);
+        if (!session) return s;
+
+        // Mark old question/approval events as answered
+        const answered = new Map<string, unknown>(session.answeredRequests);
+        for (const ev of session.events) {
+          if (ev.eventType === "askUserQuestion" || ev.eventType === "confirmAction") {
+            const rid = (ev.payload.requestId as string) ?? "";
+            if (rid) answered.set(rid, { historical: true });
+          }
+        }
+
+        const next = new Map(s.sessions);
+        next.set(bonsaiSid, {
+          ...session,
+          status: "idle",
+          restored: undefined,
+          pendingRequest: null,
+          answeredRequests: answered,
+        });
+        return { sessions: next, activeSessionId: bonsaiSid };
+      });
+    } else {
+      // Session NOT in memory — restore it first
+      await get().restoreSession(bonsaiSid);
+      set((s) => {
+        const session = s.sessions.get(bonsaiSid);
+        if (!session) return s;
+        const next = new Map(s.sessions);
+        next.set(bonsaiSid, { ...session, status: "idle", restored: undefined });
+        return { sessions: next };
+      });
+    }
+  },
+
+  restoreSession: async (bonsaiSid) => {
     // Already in memory — just switch
-    if (get().sessions.has(taskId)) {
-      set({ activeSessionId: taskId });
+    if (get().sessions.has(bonsaiSid)) {
+      set({ activeSessionId: bonsaiSid });
       return;
     }
     // Load from backend
     const { createSessionApi } = await import("@/api/methods/sessions.ts");
     const api = createSessionApi(getClient());
-    const data = await api.get(taskId);
-    console.log("[restoreSession]", taskId, "data:", data ? `${(data.events ?? []).length} events` : "null");
+    const data = await api.get(bonsaiSid);
+    console.log("[restoreSession]", bonsaiSid, "data:", data ? `${(data.events ?? []).length} events` : "null");
     if (!data) return;
 
     // Check if this session has a live backend runner
     const allSessions = await api.list();
-    const backendEntry = allSessions.find((s) => s.taskId === taskId);
+    const backendEntry = allSessions.find((s) => s.bonsaiSid === bonsaiSid);
     const isActive = backendEntry?.active === true;
 
     // Convert backend events to AgentEvent format
     const events: AgentEvent[] = (data.events ?? []).map((ev: Record<string, unknown>) => ({
-      taskId,
+      bonsaiSid,
       sessionId: ((ev.payload as Record<string, unknown>)?.sessionId as string) ?? "",
       eventType: ((ev.eventType as string) ?? "notification") as AgentEvent["eventType"],
       payload: (ev.payload as Record<string, unknown>) ?? ev,
@@ -228,8 +279,8 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
     }
 
     const session: Session = {
-      taskId,
-      name: data.name ?? taskId.slice(0, 8),
+      bonsaiSid,
+      name: data.name ?? bonsaiSid.slice(0, 8),
       skillId: (data.skillId as string) ?? null,
       specIds: data.specIds ?? [],
       // If the backend runner is alive, use the actual status; otherwise
@@ -249,8 +300,10 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
 
     set((s) => {
       const next = new Map(s.sessions);
-      next.set(taskId, session);
-      return { sessions: next, activeSessionId: taskId };
+      next.set(bonsaiSid, session);
+      const nextClosed = new Set(s.closedIds);
+      nextClosed.delete(bonsaiSid);
+      return { sessions: next, activeSessionId: bonsaiSid, closedIds: nextClosed };
     });
   },
 
@@ -262,10 +315,10 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
       const next = new Map(s.sessions);
       for (const entry of all) {
         // Only add sessions with a live backend runner that aren't already in memory
-        if (!entry.active || next.has(entry.taskId)) continue;
-        next.set(entry.taskId, {
-          taskId: entry.taskId,
-          name: entry.name ?? entry.taskId.slice(0, 8),
+        if (!entry.active || next.has(entry.bonsaiSid)) continue;
+        next.set(entry.bonsaiSid, {
+          bonsaiSid: entry.bonsaiSid,
+          name: entry.name ?? entry.bonsaiSid.slice(0, 8),
           skillId: entry.skillId ?? null,
           specIds: entry.specIds ?? [],
           status: (entry.status as SessionStatus) ?? "idle",
@@ -282,21 +335,23 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
     });
   },
 
-  closeSession: (taskId) => {
+  closeSession: (bonsaiSid) => {
     // Tell backend to gracefully close the session
-    const session = get().sessions.get(taskId);
+    const session = get().sessions.get(bonsaiSid);
     if (session && session.status !== "done" && session.status !== "error") {
       const api = createAgentApi(getClient());
-      api.end(taskId).catch(() => {});
+      api.end(bonsaiSid).catch(() => {});
     }
     set((s) => {
       const next = new Map(s.sessions);
-      next.delete(taskId);
+      next.delete(bonsaiSid);
+      const nextClosed = new Set(s.closedIds);
+      nextClosed.add(bonsaiSid);
       const archived: ArchivedSession[] = session
         ? [
             ...s.archivedSessions,
             {
-              taskId: session.taskId,
+              bonsaiSid: session.bonsaiSid,
               name: session.name,
               skillId: session.skillId,
               specIds: session.specIds,
@@ -313,50 +368,51 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
           ]
         : s.archivedSessions;
       const nextActive =
-        s.activeSessionId === taskId
+        s.activeSessionId === bonsaiSid
           ? (next.keys().next().value ?? null)
           : s.activeSessionId;
       return {
         sessions: next,
         archivedSessions: archived,
         activeSessionId: nextActive,
+        closedIds: nextClosed,
       };
     });
   },
 
-  endSession: async (taskId) => {
+  endSession: async (bonsaiSid) => {
     const api = createAgentApi(getClient());
-    await api.end(taskId);
+    await api.end(bonsaiSid);
   },
 
-  interruptSession: async (taskId) => {
+  interruptSession: async (bonsaiSid) => {
     const api = createAgentApi(getClient());
-    await api.interrupt(taskId);
+    await api.interrupt(bonsaiSid);
     set((s) => {
-      const session = s.sessions.get(taskId);
+      const session = s.sessions.get(bonsaiSid);
       if (!session) return s;
       const next = new Map(s.sessions);
-      next.set(taskId, { ...session, status: "interrupted" as SessionStatus });
+      next.set(bonsaiSid, { ...session, status: "interrupted" as SessionStatus });
       return { sessions: next };
     });
   },
 
-  resolveRequest: (taskId, requestId, response) => {
+  resolveRequest: (bonsaiSid, requestId, response) => {
     // Send the response to the backend via agent/respond RPC method.
     // This resolves the asyncio.Future in the backend tracker.
     const api = createAgentApi(getClient());
-    api.respond(taskId, requestId, response).catch((err) => {
+    api.respond(bonsaiSid, requestId, response).catch((err) => {
       console.error("Failed to send agent/respond:", err);
     });
 
     // Mark request as answered (store the response) and clear pendingRequest
     set((s) => {
-      const session = s.sessions.get(taskId);
+      const session = s.sessions.get(bonsaiSid);
       if (!session) return s;
       const nextSessions = new Map(s.sessions);
       const answered = new Map(session.answeredRequests);
       answered.set(requestId, response);
-      nextSessions.set(taskId, {
+      nextSessions.set(bonsaiSid, {
         ...session,
         status: "running",
         pendingRequest:
@@ -372,25 +428,25 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
     const ns = useNotificationStore.getState();
     ns.decrementPendingInput();
     for (const t of ns.toasts) {
-      if (t.taskId === taskId && (t.eventType === "question" || t.eventType === "approval")) {
+      if (t.bonsaiSid === bonsaiSid && (t.eventType === "question" || t.eventType === "approval")) {
         ns.dismissToast(t.id);
       }
     }
-    ns.clearBadge(taskId);
+    ns.clearBadge(bonsaiSid);
   },
 
-  updateConfig: async (taskId, config) => {
+  updateConfig: async (bonsaiSid, config) => {
     const api = createAgentApi(getClient());
-    await api.updateConfig(taskId, config);
+    await api.updateConfig(bonsaiSid, config);
   },
 
   onConfigChanged: (params) => {
-    const taskId = params.taskId as string;
+    const bonsaiSid = params.bonsaiSid as string;
     set((s) => {
-      const session = s.sessions.get(taskId);
+      const session = s.sessions.get(bonsaiSid);
       if (!session) return s;
       const next = new Map(s.sessions);
-      next.set(taskId, {
+      next.set(bonsaiSid, {
         ...session,
         model: (params.model as string) ?? session.model,
         permissionMode: (params.permissionMode as string) ?? session.permissionMode,
@@ -400,18 +456,19 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
   },
 
   onSessionStart: (params) => {
-    const taskId = params.taskId as string;
+    const bonsaiSid = params.bonsaiSid as string;
     set((s) => {
-      const withSession = ensureSession(s.sessions, taskId);
-      const session = withSession.get(taskId)!;
+      const withSession = ensureSession(s.sessions, bonsaiSid, s.closedIds);
+      const session = withSession.get(bonsaiSid);
+      if (!session) return s;
       const next = new Map(withSession);
-      next.set(taskId, {
+      next.set(bonsaiSid, {
         ...session,
         model: (params.model as string) ?? session.model,
         events: [
           ...session.events,
           {
-            taskId,
+            bonsaiSid,
             sessionId: (params.sessionId as string) ?? "",
             eventType: "sessionStart",
             payload: params,
@@ -423,14 +480,14 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
   },
 
   onAgentEvent: (method, params) => {
-    const taskId = params.taskId as string;
+    const bonsaiSid = params.bonsaiSid as string;
     set((s) => {
-      const sessions = appendEvent(s.sessions, taskId, method, params);
+      const sessions = appendEvent(s.sessions, bonsaiSid, method, params, s.closedIds);
       // Update session status for turn lifecycle events
-      const session = sessions.get(taskId);
+      const session = sessions.get(bonsaiSid);
       if (session) {
         if (method === "agent/turnComplete" || method === "agent/interrupted") {
-          sessions.set(taskId, {
+          sessions.set(bonsaiSid, {
             ...session,
             status: "idle",
             metrics: {
@@ -447,18 +504,19 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
   },
 
   onAskQuestion: (params) => {
-    const taskId = params.taskId as string;
+    const bonsaiSid = params.bonsaiSid as string;
     const requestId = params.requestId as string;
     set((s) => {
       const sessions = appendEvent(
         s.sessions,
-        taskId,
+        bonsaiSid,
         "agent/askUserQuestion",
         params,
+        s.closedIds,
       );
-      const session = sessions.get(taskId);
+      const session = sessions.get(bonsaiSid);
       if (session) {
-        sessions.set(taskId, {
+        sessions.set(bonsaiSid, {
           ...session,
           status: "waiting",
           pendingRequest: {
@@ -473,18 +531,19 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
   },
 
   onConfirmAction: (params) => {
-    const taskId = params.taskId as string;
+    const bonsaiSid = params.bonsaiSid as string;
     const requestId = params.requestId as string;
     set((s) => {
       const sessions = appendEvent(
         s.sessions,
-        taskId,
+        bonsaiSid,
         "agent/confirmAction",
         params,
+        s.closedIds,
       );
-      const session = sessions.get(taskId);
+      const session = sessions.get(bonsaiSid);
       if (session) {
-        sessions.set(taskId, {
+        sessions.set(bonsaiSid, {
           ...session,
           status: "waiting",
           pendingRequest: {
@@ -500,17 +559,18 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
   },
 
   onSessionDone: (params) => {
-    const taskId = params.taskId as string;
+    const bonsaiSid = params.bonsaiSid as string;
     set((s) => {
       const sessions = appendEvent(
         s.sessions,
-        taskId,
+        bonsaiSid,
         "agent/done",
         params,
+        s.closedIds,
       );
-      const session = sessions.get(taskId);
+      const session = sessions.get(bonsaiSid);
       if (session) {
-        sessions.set(taskId, {
+        sessions.set(bonsaiSid, {
           ...session,
           status: "done",
           pendingRequest: null,
@@ -528,7 +588,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
   },
 
   onSessionError: (params) => {
-    const taskId = params.taskId as string;
+    const bonsaiSid = params.bonsaiSid as string;
     const subtype = params.subtype as string;
     // "turn_error" = recoverable (e.g. permissions timeout) — go back to idle
     // "crash" or other = terminal error
@@ -536,13 +596,14 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
     set((s) => {
       const sessions = appendEvent(
         s.sessions,
-        taskId,
+        bonsaiSid,
         "agent/error",
         params,
+        s.closedIds,
       );
-      const session = sessions.get(taskId);
+      const session = sessions.get(bonsaiSid);
       if (session) {
-        sessions.set(taskId, {
+        sessions.set(bonsaiSid, {
           ...session,
           status: isRecoverable ? "idle" : "error",
           pendingRequest: null,

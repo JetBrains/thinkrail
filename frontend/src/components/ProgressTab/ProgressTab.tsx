@@ -42,7 +42,7 @@ export function ProgressTab() {
         <div className="progress-section">
           <div className="progress-section-header">Active Sessions</div>
           {sessionList.map((s) => (
-            <div key={`progress-${s.taskId}`} className="session-card">
+            <div key={`progress-${s.bonsaiSid}`} className="session-card">
               <div className="session-card-header">
                 <span
                   className="session-card-dot"

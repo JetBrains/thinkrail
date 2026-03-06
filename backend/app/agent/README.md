@@ -56,13 +56,13 @@ sequenceDiagram
     F->>B: agent/run {specIds, config}
     B->>S: create SDK client
     S-->>B: SystemMessage(init)
-    B-->>F: {taskId}
+    B-->>F: {bonsaiSid}
     Note over B: state: idle
 
     rect rgb(40, 40, 60)
         Note over F,S: Conversation loop (repeats)
 
-        F->>B: agent/send {taskId, text}
+        F->>B: agent/send {bonsaiSid, text}
         B->>S: query(text)
         Note over B: state: running
         S-->>B: streaming
@@ -88,7 +88,7 @@ sequenceDiagram
         Note over B: state: idle
     end
 
-    F->>B: agent/end {taskId}
+    F->>B: agent/end {bonsaiSid}
     B->>S: close SDK client
     B-->>F: agent/done
     Note over B: state: done
@@ -104,13 +104,13 @@ sequenceDiagram
     participant B as Backend
 
     Note over B: state: running
-    F->>B: agent/interrupt {taskId}
+    F->>B: agent/interrupt {bonsaiSid}
     B->>B: cancel SDK turn
     B-->>F: agent/interrupted
     Note over B: state: idle
 
     Note over F: user can send another message
-    F->>B: agent/send {taskId, text}
+    F->>B: agent/send {bonsaiSid, text}
     Note over B: state: running
 ```
 
@@ -165,16 +165,16 @@ graph TD
 | Method | Signature | Description |
 |--------|-----------|-------------|
 | `run_task` | `(spec_ids: list[str], config: AgentConfig, notify: Callable, skill_id: str \| None = None) → AgentTask` | Start a persistent agent session. Builds context from specs, skill, and project metadata via `context.build_context()`, then launches the background runner. Task is created in `idle` state and returned immediately. `notify` is a callback for server→client messages, signature: `async def notify(method: str, params: dict, request_id: str \| None = None) -> None` — created by `rpc/notifications.make_notify` |
-| `send_message` | `(task_id: str, text: str) → None` | Send a user message to the session, triggering a new turn. Enqueues the message; runner picks it up and calls `client.query()`. |
-| `interrupt_task` | `(task_id: str) → None` | Cancel the current turn. Session stays `idle` and can accept new messages. |
-| `end_session` | `(task_id: str) → None` | Gracefully close the session and SDK client. Session enters `done` state. |
-| `get_task` | `(task_id: str) → AgentTask` | Get current session status and metadata |
+| `send_message` | `(bonsai_sid: str, text: str) → None` | Send a user message to the session, triggering a new turn. Enqueues the message; runner picks it up and calls `client.query()`. |
+| `interrupt_task` | `(bonsai_sid: str) → None` | Cancel the current turn. Session stays `idle` and can accept new messages. |
+| `end_session` | `(bonsai_sid: str) → None` | Gracefully close the session and SDK client. Session enters `done` state. |
+| `get_task` | `(bonsai_sid: str) → AgentTask` | Get current session status and metadata |
 | `list_tasks` | `() → list[AgentTask]` | List all sessions (idle, running, done, error) |
-| `respond` | `(task_id: str, request_id: str, response: dict) → None` | Resolve a pending `asyncio.Future` with the client's answer (for mid-turn interactions) |
+| `respond` | `(bonsai_sid: str, request_id: str, response: dict) → None` | Resolve a pending `asyncio.Future` with the client's answer (for mid-turn interactions) |
 | `list_all_sessions` | `() → list[dict]` | List all sessions: in-memory active + on-disk archived (metadata only) |
-| `get_session_data` | `(task_id: str) → dict \| None` | Get full session data including events from disk |
-| `continue_session` | `async (task_id: str, notify: Callable) → AgentTask` | Continue a dead session — loads old conversation, replays as context for new SDK session |
-| `delete_session_data` | `(task_id: str) → bool` | Delete a session file from disk |
+| `get_session_data` | `(bonsai_sid: str) → dict \| None` | Get full session data including events from disk |
+| `continue_session` | `async (bonsai_sid: str, notify: Callable) → AgentTask` | Resume a session — loads old conversation as context, reuses the same `bonsai_sid`, appends new events to the same persistence files |
+| `delete_session_data` | `(bonsai_sid: str) → bool` | Delete a session file from disk |
 
 ### Models
 
@@ -184,10 +184,10 @@ All models with multi-word fields use a `camelCase` alias generator (`to_camel` 
 
 | Model | Fields (Python / JSON wire) | Description |
 |-------|--------|-------------|
-| `AgentTask` | id, status, spec_ids/`specIds`, skill_id/`skillId`?, config, session_id/`sessionId`?, created, updated | Session record. `status` is one of: `idle`, `running`, `done`, `error`. `skill_id` references the selected skill (if any). |
+| `AgentTask` | bonsai_sid/`bonsaiSid`, status, spec_ids/`specIds`, skill_id/`skillId`?, config, session_id/`sessionId`?, created, updated | Session record. `status` is one of: `idle`, `running`, `done`, `error`. `skill_id` references the selected skill (if any). |
 | `AgentConfig` | model, max_turns/`maxTurns`, permission_mode/`permissionMode`, stream_text/`streamText` | Run configuration |
-| `AgentEvent` | task_id/`taskId`, session_id/`sessionId`, event_type/`eventType`, payload | Serializable event to send as notification |
-| `AgentResult` | task_id/`taskId`, session_id/`sessionId`, result, cost_usd/`costUsd`, turns, duration_ms/`durationMs`, usage | Turn result (sent with `turnComplete`) or final session result (sent with `done`) |
+| `AgentEvent` | bonsai_sid/`bonsaiSid`, session_id/`sessionId`, event_type/`eventType`, payload | Serializable event to send as notification |
+| `AgentResult` | bonsai_sid/`bonsaiSid`, session_id/`sessionId`, result, cost_usd/`costUsd`, turns, duration_ms/`durationMs`, usage | Turn result (sent with `turnComplete`) or final session result (sent with `done`) |
 
 #### Interactive Request/Response Models
 
@@ -243,14 +243,14 @@ For mid-turn interactions where the agent needs user input, `runner.py` suspends
 
 | Trigger | Server sends | Client responds with |
 |---------|-------------|----------------------|
-| `canUseTool` fires with `tool_name="AskUserQuestion"` | `agent/askUserQuestion` (JSON-RPC request with `id`); params: `{ taskId, questions }` | `agent/respond { taskId, requestId, response: AskUserQuestionResponse }` |
-| `canUseTool` fires with any other `tool_name` | `agent/confirmAction` (JSON-RPC request with `id`); params: `{ taskId, toolName, toolInput }` | `agent/respond { taskId, requestId, response: ToolApprovalResponse }` |
+| `canUseTool` fires with `tool_name="AskUserQuestion"` | `agent/askUserQuestion` (JSON-RPC request with `id`); params: `{ bonsaiSid, questions }` | `agent/respond { bonsaiSid, requestId, response: AskUserQuestionResponse }` |
+| `canUseTool` fires with any other `tool_name` | `agent/confirmAction` (JSON-RPC request with `id`); params: `{ bonsaiSid, toolName, toolInput }` | `agent/respond { bonsaiSid, requestId, response: ToolApprovalResponse }` |
 
 **Suspension mechanism:**
 1. Runner registers a new `asyncio.Future` in `tracker.py` keyed by `requestId`
 2. Runner sends the JSON-RPC request to the frontend via the `notify` callback
 3. Runner `await`s the Future
-4. Frontend user responds → RPC layer calls `service.respond(task_id, request_id, response)`
+4. Frontend user responds → RPC layer calls `service.respond(bonsai_sid, request_id, response)`
 5. `tracker.py` resolves the Future; runner resumes and returns the response to the SDK
 
 **Timeout:** If no response arrives within a configurable deadline, the Future is cancelled, the action is auto-denied, and an `agent/notification` event is sent to inform the frontend.
@@ -264,7 +264,7 @@ async with ClaudeSDKClient(options=options) as client:
     # Emit agent/sessionStart, enter idle state
 
     while True:
-        message = await tracker.get_next_message(task.id)  # blocks until agent/send
+        message = await tracker.get_next_message(task.bonsai_sid)  # blocks until agent/send
 
         if message is END_SIGNAL:
             break  # agent/end was called

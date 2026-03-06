@@ -73,7 +73,7 @@ export interface AgentConfig {
 }
 
 export interface AgentEvent {
-  taskId: string;
+  bonsaiSid: string;
   sessionId: string;
   eventType: EventType;
   payload: Record<string, unknown>;
@@ -104,7 +104,7 @@ export interface PendingRequest {
 }
 
 export interface Session {
-  taskId: string;
+  bonsaiSid: string;
   name: string;
   skillId: string | null;
   specIds: string[];
@@ -120,7 +120,7 @@ export interface Session {
 }
 
 export interface ArchivedSession {
-  taskId: string;
+  bonsaiSid: string;
   name: string;
   skillId: string | null;
   specIds: string[];
@@ -185,14 +185,14 @@ interface SessionStore {
 
   // User-initiated actions
   startSession: (params: { specIds, config, name, skillId? }) => Promise<string>;
-  sendMessage: (taskId: string, text: string) => Promise<void>;
-  switchSession: (taskId: string) => void;
-  closeSession: (taskId: string) => void;
-  endSession: (taskId: string) => Promise<void>;
-  interruptSession: (taskId: string) => Promise<void>;
-  resolveRequest: (taskId: string, requestId: string, response: unknown) => void;
-  updateConfig: (taskId: string, config: { model?, permissionMode? }) => Promise<void>;
-  restoreSession: (taskId: string) => Promise<void>;
+  sendMessage: (bonsaiSid: string, text: string) => Promise<void>;
+  switchSession: (bonsaiSid: string) => void;
+  closeSession: (bonsaiSid: string) => void;
+  endSession: (bonsaiSid: string) => Promise<void>;
+  interruptSession: (bonsaiSid: string) => Promise<void>;
+  resolveRequest: (bonsaiSid: string, requestId: string, response: unknown) => void;
+  updateConfig: (bonsaiSid: string, config: { model?, permissionMode? }) => Promise<void>;
+  restoreSession: (bonsaiSid: string) => Promise<void>;
 
   // Event handlers (called by wireEvents)
   onSessionStart: (params) => void;
@@ -296,8 +296,8 @@ interface NotificationStore {
 
   addToast: (toast: Omit<Toast, "id" | "createdAt">) => void;
   dismissToast: (id: string) => void;
-  setBadge: (taskId: string, badge: TabBadge) => void;
-  clearBadge: (taskId: string) => void;
+  setBadge: (bonsaiSid: string, badge: TabBadge) => void;
+  clearBadge: (bonsaiSid: string) => void;
   incrementPendingInput: () => void;
   decrementPendingInput: () => void;
   toggleSound: () => void;

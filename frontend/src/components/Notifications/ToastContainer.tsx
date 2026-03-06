@@ -25,7 +25,7 @@ export function ToastContainer() {
           className="toast"
           style={{ borderLeftColor: EVENT_COLORS[toast.eventType] ?? "var(--border)" }}
           onClick={() => {
-            if (toast.taskId) switchSession(toast.taskId);
+            if (toast.bonsaiSid) switchSession(toast.bonsaiSid);
             dismiss(toast.id);
           }}
         >

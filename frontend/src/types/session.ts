@@ -21,7 +21,7 @@ export interface PendingRequest {
 }
 
 export interface Session {
-  taskId: string;
+  bonsaiSid: string;
   name: string;
   skillId: string | null;
   specIds: string[];
@@ -39,7 +39,7 @@ export interface Session {
 }
 
 export interface ArchivedSession {
-  taskId: string;
+  bonsaiSid: string;
   name: string;
   skillId: string | null;
   specIds: string[];

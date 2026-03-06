@@ -33,7 +33,7 @@ class TestRunTask:
     @patch("app.agent.service.run")
     async def test_creates_task_and_launches_background(self, mock_run: AsyncMock) -> None:
         mock_run.return_value = AgentResult(
-            task_id="t1",
+            bonsai_sid="t1",
             session_id="s1",
             result="done",
             cost_usd=0.0,
@@ -62,7 +62,7 @@ class TestRunTask:
         async def slow_run(*args, **kwargs):
             await asyncio.sleep(0.5)
             return AgentResult(
-                task_id="t1", session_id="s1", result="done",
+                bonsai_sid="t1", session_id="s1", result="done",
                 cost_usd=0.0, turns=1, duration_ms=500,
             )
 
@@ -76,7 +76,7 @@ class TestRunTask:
         assert task.status == "idle"
 
         # Clean up
-        bg = service._running_tasks.get(task.id)
+        bg = service._running_tasks.get(task.bonsai_sid)
         if bg:
             bg.cancel()
             try:
@@ -94,7 +94,7 @@ class TestRunTask:
         task = await service.run_task(["s1"], AgentConfig(), AsyncMock())
         await asyncio.sleep(0.05)
 
-        assert service.get_task(task.id).status == "error"
+        assert service.get_task(task.bonsai_sid).status == "error"
 
 
 class TestSendMessage:
@@ -103,24 +103,24 @@ class TestSendMessage:
         task = service._tracker.create_task(["s1"], AgentConfig())
         # task starts idle — ready for messages
 
-        await service.send_message(task.id, "hello")
+        await service.send_message(task.bonsai_sid, "hello")
 
-        msg = service._tracker._queues[task.id].get_nowait()
+        msg = service._tracker._queues[task.bonsai_sid].get_nowait()
         assert msg == "hello"
 
     async def test_send_message_while_running_raises(self) -> None:
         service, _, _ = _make_service()
         task = service._tracker.create_task(["s1"], AgentConfig())
-        service._tracker.set_status(task.id, "running")
+        service._tracker.set_status(task.bonsai_sid, "running")
         with pytest.raises(ValueError, match="expected 'idle'"):
-            await service.send_message(task.id, "hello")
+            await service.send_message(task.bonsai_sid, "hello")
 
     async def test_send_message_when_done_raises(self) -> None:
         service, _, _ = _make_service()
         task = service._tracker.create_task(["s1"], AgentConfig())
-        service._tracker.set_status(task.id, "done")
+        service._tracker.set_status(task.bonsai_sid, "done")
         with pytest.raises(ValueError, match="expected 'idle'"):
-            await service.send_message(task.id, "hello")
+            await service.send_message(task.bonsai_sid, "hello")
 
 
 class TestEndSession:
@@ -131,18 +131,18 @@ class TestEndSession:
         task = service._tracker.create_task(["s1"], AgentConfig())
         # task starts idle
 
-        await service.end_session(task.id)
+        await service.end_session(task.bonsai_sid)
 
-        msg = service._tracker._queues[task.id].get_nowait()
+        msg = service._tracker._queues[task.bonsai_sid].get_nowait()
         assert msg is END_SIGNAL
 
     async def test_end_already_done_is_noop(self) -> None:
         service, _, _ = _make_service()
         task = service._tracker.create_task(["s1"], AgentConfig())
-        service._tracker.set_status(task.id, "done")
+        service._tracker.set_status(task.bonsai_sid, "done")
 
         # Should not raise
-        await service.end_session(task.id)
+        await service.end_session(task.bonsai_sid)
 
 
 class TestGetAndListTasks:
@@ -152,8 +152,8 @@ class TestGetAndListTasks:
         tasks = service.list_tasks()
         assert len(tasks) == 1
 
-        retrieved = service.get_task(tasks[0].id)
-        assert retrieved.id == tasks[0].id
+        retrieved = service.get_task(tasks[0].bonsai_sid)
+        assert retrieved.bonsai_sid == tasks[0].bonsai_sid
 
     def test_get_nonexistent_raises(self) -> None:
         service, _, _ = _make_service()
@@ -169,9 +169,9 @@ class TestRespond:
     async def test_respond_delegates_to_tracker(self) -> None:
         service, _, _ = _make_service()
         task = service._tracker.create_task(["s1"], AgentConfig())
-        future = service._tracker.register_future(task.id, "req-1")
+        future = service._tracker.register_future(task.bonsai_sid, "req-1")
 
-        await service.respond(task.id, "req-1", {"answer": "yes"})
+        await service.respond(task.bonsai_sid, "req-1", {"answer": "yes"})
         result = await future
         assert result == {"answer": "yes"}
 

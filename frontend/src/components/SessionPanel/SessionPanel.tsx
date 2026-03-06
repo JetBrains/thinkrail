@@ -1,8 +1,6 @@
 import { useCallback } from "react";
 import { useSessionStore } from "@/store/sessionStore.ts";
 import { useFileStore } from "@/store/fileStore.ts";
-import { useRpc } from "@/api/hooks/useRpc.tsx";
-import { createSessionApi } from "@/api/methods/sessions.ts";
 import type { SessionStatus } from "@/types/session.ts";
 import { ChatStream } from "@/components/ChatStream/ChatStream.tsx";
 import { SessionStatusLine } from "@/components/ChatStream/SessionStatusLine.tsx";
@@ -133,11 +131,11 @@ export function SessionPanel() {
             metrics={activeSession.metrics}
             status={status ?? "idle"}
             disabled={activeSession.restored || isDone}
-            onChangeModel={(m) => updateConfig(activeSession.taskId, { model: m })}
-            onChangePermissionMode={(m) => updateConfig(activeSession.taskId, { permissionMode: m })}
+            onChangeModel={(m) => updateConfig(activeSession.bonsaiSid, { model: m })}
+            onChangePermissionMode={(m) => updateConfig(activeSession.bonsaiSid, { permissionMode: m })}
           />
           {activeSession.restored ? (
-            <RestoredBar taskId={activeSession.taskId} />
+            <RestoredBar bonsaiSid={activeSession.bonsaiSid} />
           ) : (
             <InputArea
               disabled={inputDisabled}
@@ -153,48 +151,14 @@ export function SessionPanel() {
   );
 }
 
-function RestoredBar({ taskId }: { taskId: string }) {
-  const client = useRpc();
-  const sessions = useSessionStore((s) => s.sessions);
-
+function RestoredBar({ bonsaiSid }: { bonsaiSid: string }) {
   const handleResume = useCallback(async () => {
     try {
-      const api = createSessionApi(client);
-      const { taskId: newTaskId } = await api.continue(taskId);
-
-      // Get the old session's data to carry over into the new tab
-      const oldSession = sessions.get(taskId);
-      const baseName = (oldSession?.name ?? "session").replace(" (resumed)", "");
-      const name = `${baseName} (resumed)`;
-
-      // Create a placeholder that carries over the old conversation history
-      useSessionStore.setState((s) => {
-        const next = new Map(s.sessions);
-        const old = next.get(taskId);
-        next.delete(taskId);
-        if (!next.has(newTaskId)) {
-          next.set(newTaskId, {
-            taskId: newTaskId,
-            name,
-            skillId: old?.skillId ?? null,
-            specIds: old?.specIds ?? [],
-            status: "idle",
-            model: old?.model ?? "",
-            permissionMode: old?.permissionMode ?? "default",
-            startedAt: old?.startedAt ?? Date.now(),
-            // Carry over old events so the chat history is preserved
-            events: old?.events ?? [],
-            metrics: old?.metrics ?? { costUsd: 0, turns: 0, toolCalls: 0, contextTokens: 0, contextMax: 0, durationMs: 0, filesChanged: {} },
-            pendingRequest: null,
-            answeredRequests: old?.answeredRequests ?? new Map(),
-          });
-        }
-        return { sessions: next, activeSessionId: newTaskId };
-      });
+      await useSessionStore.getState().continueSession(bonsaiSid);
     } catch (e) {
       console.error("Failed to resume session:", e);
     }
-  }, [client, taskId, sessions]);
+  }, [bonsaiSid]);
 
   return (
     <div className="restored-bar">

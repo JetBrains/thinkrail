@@ -48,10 +48,10 @@ export function useSession(taskId: string | null) {
     const unsubs = AGENT_METHODS.map((method) =>
       client.on(method, (params: unknown) => {
         const p = params as Record<string, unknown>;
-        if (p.taskId !== taskId) return;
+        if (p.bonsaiSid !== taskId) return;
 
         const event: AgentEvent = {
-          taskId: p.taskId as string,
+          bonsaiSid: p.bonsaiSid as string,
           sessionId: (p.sessionId as string) ?? "",
           eventType: method.replace("agent/", "") as AgentEvent["eventType"],
           payload: p,

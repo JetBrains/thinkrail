@@ -74,10 +74,10 @@ export function CommandPalette() {
         const score = fuzzyMatch(s.name, cleanQuery);
         if (score > 0) {
           result.push({
-            id: `session-${s.taskId}`,
+            id: `session-${s.bonsaiSid}`,
             title: s.name,
             category: "session",
-            action: () => { switchSession(s.taskId); togglePalette(); },
+            action: () => { switchSession(s.bonsaiSid); togglePalette(); },
           });
         }
       }

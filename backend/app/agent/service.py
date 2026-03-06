@@ -33,8 +33,8 @@ class AgentService:
         Called when a new WebSocket connects so that in-flight runners
         stream events to the fresh connection instead of a dead one.
         """
-        for task_id in list(self._running_tasks):
-            self._last_notify[task_id] = notify
+        for bonsai_sid in list(self._running_tasks):
+            self._last_notify[bonsai_sid] = notify
 
     # -- public methods -------------------------------------------------------
 
@@ -57,89 +57,86 @@ class AgentService:
         bg_task = asyncio.create_task(
             self._run_background(task, spec_context, notify)
         )
-        self._running_tasks[task.id] = bg_task
+        self._running_tasks[task.bonsai_sid] = bg_task
         self._save_task(task)
         return task
 
-    async def send_message(self, task_id: str, text: str) -> None:
+    async def send_message(self, bonsai_sid: str, text: str) -> None:
         """Send a user message to the session, triggering a new turn."""
-        task = self._tracker.get_task(task_id)
+        task = self._tracker.get_task(bonsai_sid)
         if task.status != "idle":
             raise ValueError(
                 f"Cannot send message: session is '{task.status}', expected 'idle'"
             )
-        self._tracker.enqueue_message(task_id, text)
+        self._tracker.enqueue_message(bonsai_sid, text)
 
-    async def interrupt_task(self, task_id: str) -> None:
+    async def interrupt_task(self, bonsai_sid: str) -> None:
         """Cancel the current turn. Session stays alive (idle)."""
-        task = self._tracker.get_task(task_id)
+        task = self._tracker.get_task(bonsai_sid)
         if task.status != "running":
             raise ValueError(
                 f"Cannot interrupt: session is '{task.status}', expected 'running'"
             )
-        self._tracker.cancel_futures(task_id)
-        bg = self._running_tasks.get(task_id)
+        self._tracker.cancel_futures(bonsai_sid)
+        bg = self._running_tasks.get(bonsai_sid)
         if bg:
             bg.cancel()
-            # Runner will catch CancelledError and the session will
-            # be cleaned up. We re-launch a fresh background loop so
-            # the session can accept new messages.
             try:
                 await bg
             except (asyncio.CancelledError, Exception):
                 pass
-            self._running_tasks.pop(task_id, None)
-            self._tracker.set_status(task_id, "idle")
+            self._running_tasks.pop(bonsai_sid, None)
+            self._tracker.set_status(bonsai_sid, "idle")
             # Notify frontend that the turn was interrupted
-            notify = self._last_notify.get(task_id)
+            notify = self._last_notify.get(bonsai_sid)
             if notify:
                 try:
                     await notify("agent/interrupted", {
-                        "taskId": task_id,
+                        "bonsaiSid": bonsai_sid,
                         "sessionId": task.session_id or "",
                     })
                 except Exception:
                     pass
             # Re-launch the background runner for continued conversation
             spec_context = self._build_context_for(task)
-            notify = self._last_notify.get(task_id)
+            notify = self._last_notify.get(bonsai_sid)
             if notify:
                 new_bg = asyncio.create_task(
                     self._run_background(task, spec_context, notify)
                 )
-                self._running_tasks[task_id] = new_bg
+                self._running_tasks[bonsai_sid] = new_bg
 
-    async def end_session(self, task_id: str) -> None:
+    async def end_session(self, bonsai_sid: str) -> None:
         """Gracefully close the session."""
         try:
-            task = self._tracker.get_task(task_id)
+            task = self._tracker.get_task(bonsai_sid)
             if task.status in ("done", "error"):
                 return  # already finished
-            self._tracker.enqueue_end_signal(task_id)
+            self._tracker.enqueue_end_signal(bonsai_sid)
         except Exception:
             # Task not in memory (e.g. backend restarted) — update on disk only
-            existing = load_session(self._config.project_root, task_id)
+            existing = load_session(self._config.project_root, bonsai_sid)
             if existing and existing.get("status") not in ("done", "error"):
                 existing["status"] = "done"
                 save_session(self._config.project_root, existing)
 
-    def get_task(self, task_id: str) -> AgentTask:
-        return self._tracker.get_task(task_id)
+    def get_task(self, bonsai_sid: str) -> AgentTask:
+        return self._tracker.get_task(bonsai_sid)
 
     def list_tasks(self) -> list[AgentTask]:
         return self._tracker.list_tasks()
 
     async def update_config(
         self,
-        task_id: str,
+        bonsai_sid: str,
         model: str | None = None,
         permission_mode: str | None = None,
     ) -> dict:
         """Update model and/or permission mode on a live session."""
-        task = self._tracker.get_task(task_id)
-        client = self._tracker.get_client(task_id)
+        task = self._tracker.get_task(bonsai_sid)
+        client = self._tracker.get_client(bonsai_sid)
         if client is None:
-            raise ValueError(f"No live client for task {task_id}")
+            raise ValueError(f"No live client for session {bonsai_sid}")
         if model is not None:
             await client.set_model(model)
             task.config.model = model
@@ -149,16 +146,16 @@ class AgentService:
         self._save_task(task)
         return {"model": task.config.model, "permissionMode": task.config.permission_mode}
 
-    async def respond(self, task_id: str, request_id: str, response: dict) -> None:
-        self._tracker.resolve_future(task_id, request_id, response)
+    async def respond(self, bonsai_sid: str, request_id: str, response: dict) -> None:
+        self._tracker.resolve_future(bonsai_sid, request_id, response)
 
     # -- session persistence --------------------------------------------------
 
     def _save_task(self, task: AgentTask, events: list[dict] | None = None) -> None:
         """Persist current task state to disk."""
         data: dict = {
-            "taskId": task.id,
-            "name": task.name or task.id[:8],
+            "bonsaiSid": task.bonsai_sid,
+            "name": task.name or task.bonsai_sid[:8],
             "skillId": task.skill_id,
             "specIds": list(task.spec_ids),
             "config": task.config.model_dump(by_alias=True),
@@ -171,26 +168,26 @@ class AgentService:
         if events is not None:
             data["events"] = events
         else:
-            existing = load_session(self._config.project_root, task.id)
+            existing = load_session(self._config.project_root, task.bonsai_sid)
             if existing:
                 data["events"] = existing.get("events", [])
         save_session(self._config.project_root, data)
 
-    def _save_event(self, task_id: str, event: dict) -> None:
+    def _save_event(self, bonsai_sid: str, event: dict) -> None:
         """Append an event to the persisted session file."""
-        append_event(self._config.project_root, task_id, event)
+        append_event(self._config.project_root, bonsai_sid, event)
 
     def list_all_sessions(self) -> list[dict]:
         """List all sessions: in-memory active + on-disk archived."""
         # Start with disk sessions
-        disk = {s["taskId"]: s for s in list_sessions_from_disk(self._config.project_root)}
+        disk = {s["bonsaiSid"]: s for s in list_sessions_from_disk(self._config.project_root)}
         # Overlay in-memory active sessions (they have fresher status)
         for task in self._tracker.list_tasks():
             # Preserve name from disk if the in-memory task has no custom name
-            disk_entry = disk.get(task.id, {})
-            name = task.name or disk_entry.get("name") or task.id[:8]
-            disk[task.id] = {
-                "taskId": task.id,
+            disk_entry = disk.get(task.bonsai_sid, {})
+            name = task.name or disk_entry.get("name") or task.bonsai_sid[:8]
+            disk[task.bonsai_sid] = {
+                "bonsaiSid": task.bonsai_sid,
                 "name": name,
                 "skillId": task.skill_id,
                 "specIds": list(task.spec_ids),
@@ -199,25 +196,30 @@ class AgentService:
                 "createdAt": task.created,
                 "updatedAt": task.updated,
                 "active": True,
-                "continuedFrom": disk_entry.get("continuedFrom"),
             }
         return list(disk.values())
 
-    def get_session_data(self, task_id: str) -> dict | None:
+    def get_session_data(self, bonsai_sid: str) -> dict | None:
         """Get full session data (events included) from disk."""
-        return load_session(self._config.project_root, task_id)
+        return load_session(self._config.project_root, bonsai_sid)
 
-    def delete_session_data(self, task_id: str) -> bool:
+    def delete_session_data(self, bonsai_sid: str) -> bool:
         """Delete a session from disk."""
-        return delete_session_from_disk(self._config.project_root, task_id)
+        return delete_session_from_disk(self._config.project_root, bonsai_sid)
 
     async def continue_session(
-        self, task_id: str, notify: Callable
+        self, bonsai_sid: str, notify: Callable
     ) -> AgentTask:
-        """Continue a dead session by replaying its history as context."""
-        old = load_session(self._config.project_root, task_id)
+        """Continue a dead session by replaying its history as context.
+
+        Reuses the same bonsai_sid — no new ID is created.
+        """
+        if bonsai_sid in self._running_tasks:
+            raise ValueError(f"Session {bonsai_sid} is already running")
+
+        old = load_session(self._config.project_root, bonsai_sid)
         if not old:
-            raise ValueError(f"Session {task_id} not found on disk")
+            raise ValueError(f"Session {bonsai_sid} not found on disk")
 
         # Build context from old conversation
         context_parts = []
@@ -236,44 +238,41 @@ class AgentService:
 
         history_context = "\n".join(context_parts)
 
-        # Create new task with old config
+        # Re-create task with SAME ID
         old_config = AgentConfig(**old.get("config", {}))
         old_spec_ids = old.get("specIds", [])
         skill_id = old.get("skillId")
+        name = old.get("name", "session")
 
-        # Clean name — strip previous "(continued)" suffixes
-        base_name = old.get("name", "session").replace(" (continued)", "")
-        continued_name = f"{base_name} (continued)"
-        task = self._tracker.create_task(old_spec_ids, old_config, skill_id=skill_id, name=continued_name)
+        task = self._tracker.create_task(
+            old_spec_ids, old_config,
+            skill_id=skill_id,
+            name=name,
+            bonsai_sid=bonsai_sid,
+        )
 
-        # Mark the old session as done on disk
-        old["status"] = "done"
-        save_session(self._config.project_root, old)
-
-        # Build spec context + conversation history
-        spec_context = self._build_context_for(task)
-        combined_context = f"{spec_context}\n\n--- Previous conversation ---\n{history_context}" if history_context else spec_context
-
-        # Save with link to old session
-        data = {
-            "taskId": task.id,
-            "name": continued_name,
+        # Update metadata only (don't touch events JSONL)
+        metadata = {
+            "bonsaiSid": bonsai_sid,
+            "name": name,
             "skillId": skill_id,
             "specIds": old_spec_ids,
             "config": old_config.model_dump(by_alias=True),
             "status": "idle",
             "sessionId": None,
-            "createdAt": task.created,
+            "createdAt": old.get("createdAt", task.created),
             "updatedAt": task.updated,
-            "continuedFrom": task_id,
-            "events": [],
         }
-        save_session(self._config.project_root, data)
+        save_session(self._config.project_root, metadata)
+
+        # Build spec context + conversation history
+        spec_context = self._build_context_for(task)
+        combined_context = f"{spec_context}\n\n--- Previous conversation ---\n{history_context}" if history_context else spec_context
 
         bg_task = asyncio.create_task(
             self._run_background(task, combined_context, notify)
         )
-        self._running_tasks[task.id] = bg_task
+        self._running_tasks[task.bonsai_sid] = bg_task
         return task
 
     # -- helpers --------------------------------------------------------------
@@ -284,13 +283,13 @@ class AgentService:
         spec_context: str,
         notify: Callable,
     ) -> None:
-        self._last_notify[task.id] = notify
+        self._last_notify[task.bonsai_sid] = notify
 
         # Wrap notify to read the *current* callback from _last_notify each
         # time, so that rebind_notify() transparently redirects events to a
         # new WebSocket without restarting the runner.
         async def _persisting_notify(method: str, params: dict, request_id: str | None = None) -> None:
-            current = self._last_notify.get(task.id)
+            current = self._last_notify.get(task.bonsai_sid)
             if current:
                 try:
                     await current(method, params, request_id)
@@ -305,28 +304,28 @@ class AgentService:
                 if request_id is not None:
                     payload["requestId"] = request_id
                 try:
-                    self._save_event(task.id, {"eventType": event_type, "payload": payload})
+                    self._save_event(task.bonsai_sid, {"eventType": event_type, "payload": payload})
                 except Exception:
-                    pass
+                    logger.exception("Failed to persist event %s for session %s", method, task.bonsai_sid)
         notify = _persisting_notify
 
         try:
             await run(task, spec_context, notify, self._tracker, cwd=self._config.project_root, plugin_dir=self._config.plugin_dir)
-            self._tracker.set_status(task.id, "done")
+            self._tracker.set_status(task.bonsai_sid, "done")
             self._save_task(task)
         except asyncio.CancelledError:
             # Interrupted — don't set error, let interrupt_task handle state
             pass
         except Exception as exc:
-            logger.exception("Agent task %s failed", task.id)
+            logger.exception("Agent session %s failed", task.bonsai_sid)
             if task.status not in ("done", "error"):
-                self._tracker.set_status(task.id, "error")
+                self._tracker.set_status(task.bonsai_sid, "error")
             self._save_task(task)
             try:
                 await notify(
                     "agent/error",
                     {
-                        "taskId": task.id,
+                        "bonsaiSid": task.bonsai_sid,
                         "sessionId": task.session_id or "",
                         "subtype": "crash",
                         "errors": [str(exc)],
@@ -335,8 +334,8 @@ class AgentService:
             except Exception:
                 pass
         finally:
-            self._running_tasks.pop(task.id, None)
-            self._last_notify.pop(task.id, None)
+            self._running_tasks.pop(task.bonsai_sid, None)
+            self._last_notify.pop(task.bonsai_sid, None)
 
     def _build_context_for(self, task: AgentTask) -> str:
         return build_context(
