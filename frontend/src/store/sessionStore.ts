@@ -9,6 +9,7 @@ import type {
 } from "@/types/session.ts";
 import { getClient } from "@/api/index.ts";
 import { createAgentApi } from "@/api/methods/agents.ts";
+import { useNotificationStore } from "./notificationStore.ts";
 
 interface SessionStore {
   sessions: Map<string, Session>;
@@ -365,6 +366,16 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
       });
       return { sessions: nextSessions };
     });
+
+    // Dismiss related toasts, decrement counter, and clear tab badge
+    const ns = useNotificationStore.getState();
+    ns.decrementPendingInput();
+    for (const t of ns.toasts) {
+      if (t.taskId === taskId && (t.eventType === "question" || t.eventType === "approval")) {
+        ns.dismissToast(t.id);
+      }
+    }
+    ns.clearBadge(taskId);
   },
 
   updateConfig: async (taskId, config) => {

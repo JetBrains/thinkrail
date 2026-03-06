@@ -131,7 +131,7 @@ export function wireEvents(client: RpcClient): Unsubscribe {
         taskId,
         eventType: "question",
         message: "Agent has a question",
-        persistent: true,
+        persistent: false,
       });
       useNotificationStore.getState().setBadge(taskId, {
         type: "question",
@@ -150,7 +150,7 @@ export function wireEvents(client: RpcClient): Unsubscribe {
         taskId,
         eventType: "approval",
         message: `Approve: ${(params.toolName as string) ?? "action"}`,
-        persistent: true,
+        persistent: false,
       });
       useNotificationStore.getState().setBadge(taskId, {
         type: "approval",

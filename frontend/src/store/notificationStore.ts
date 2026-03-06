@@ -50,7 +50,9 @@ export const useNotificationStore = create<NotificationStore>()(
         }));
 
         if (!toast.persistent) {
-          const duration = toast.eventType === "error" ? 8000 : 5000;
+          const duration = toast.eventType === "error" ? 8000
+            : toast.eventType === "question" || toast.eventType === "approval" ? 10000
+            : 5000;
           setTimeout(() => get().dismissToast(id), duration);
         }
       },

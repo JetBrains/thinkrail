@@ -32,13 +32,11 @@ StatusBar                            // "{N} need attention" inline in status ba
 | --- | --- | --- |
 | `success` | 5 seconds | No |
 | `error` | 8 seconds | No |
-| `question` | Never | Yes — until user dismisses or switches to session |
-| `approval` | Never | Yes — until user dismisses or switches to session |
+| `question` | 10 seconds | No — auto-dismisses, or dismissed immediately when resolved |
+| `approval` | 10 seconds | No — auto-dismisses, or dismissed immediately when resolved |
 | `notification` | 5 seconds | No |
 
-Persistent toasts (questions/approvals) stay visible until the user either:
-- Clicks the toast — switches to that session and dismisses the toast
-- Manually dismisses via the x button
+Question/approval toasts auto-dismiss after 10 seconds. They are also dismissed immediately when the user resolves the request (answers a question or approves/denies an action). Resolving a request also decrements `pendingInputCount` and clears the tab badge for that session.
 
 ### Toast Layout
 
