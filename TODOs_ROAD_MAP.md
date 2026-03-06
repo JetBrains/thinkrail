@@ -5,6 +5,7 @@
     - [ ] count money (globally spend on the project) on the fly
 
 * Chat
+    - [x] History search
     - [x] Bug/Missing feature: Doesn't display user prompts
     - [ ] When ask multiple askUserQuestions in one use inlined tabs or something similar
     - [ ] Colours and AskUserQuestions are hard to see (small and violet on black)

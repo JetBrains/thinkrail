@@ -336,6 +336,55 @@
 .input-autocomplete-name { color: var(--cyan); font-weight: 600; white-space: nowrap; }
 .input-autocomplete-desc { color: var(--hint); font-size: 11px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
+/* ── Message History Popup ── */
+.input-history {
+  position: absolute; bottom: 100%; left: 0; right: 0;
+  margin-bottom: 4px;
+  background: var(--panel); border: 1px solid var(--border);
+  border-radius: var(--radius-sm); padding: 2px 0;
+  z-index: 100;
+  box-shadow: 0 -2px 8px rgba(0,0,0,0.3);
+  max-height: 280px; overflow-y: auto;
+  display: flex; flex-direction: column;
+}
+.input-history-filter {
+  width: 100%; box-sizing: border-box;
+  border: none; border-bottom: 1px solid var(--border);
+  background: transparent; color: var(--text);
+  font-family: var(--font); font-size: 12px;
+  padding: 6px 10px; outline: none;
+}
+.input-history-filter::placeholder { color: var(--hint); }
+.input-history-list {
+  overflow-y: auto; flex: 1;
+}
+.input-history-item {
+  display: block; width: 100%;
+  background: transparent; border: none;
+  color: var(--muted); font-family: var(--font); font-size: 12px;
+  padding: 6px 10px; cursor: pointer; text-align: left;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.input-history-item:hover,
+.input-history-active { background: var(--hover); color: var(--text); }
+.input-history-empty {
+  padding: 12px 10px; text-align: center;
+  color: var(--hint); font-size: 12px;
+}
+.input-history-btn {
+  padding: var(--space-xs) var(--space-sm);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--muted);
+  font-family: var(--font);
+  font-size: 14px;
+  cursor: pointer;
+  flex-shrink: 0;
+  line-height: 1;
+}
+.input-history-btn:hover { background: var(--hover); color: var(--text); }
+
 /* ── Input Area ── */
 .input-area {
   display: flex; align-items: flex-end; gap: var(--space-sm);

@@ -6,6 +6,7 @@ import { ChatStream } from "@/components/ChatStream/ChatStream.tsx";
 import { SessionStatusLine } from "@/components/ChatStream/SessionStatusLine.tsx";
 import { InputArea } from "@/components/ChatStream/InputArea.tsx";
 import { FileViewer } from "@/components/FileViewer/FileViewer.tsx";
+import { useMessageHistoryStore } from "@/store/messageHistoryStore";
 import { SessionTabBar } from "./SessionTabBar.tsx";
 
 export function SessionPanel() {
@@ -66,6 +67,7 @@ export function SessionPanel() {
       if (activeSession.status === "idle") {
         sendMessage(activeSessionId, text);
       }
+      useMessageHistoryStore.getState().addMessage(text);
     },
     [activeSessionId, activeSession, resolveRequest, sendMessage],
   );

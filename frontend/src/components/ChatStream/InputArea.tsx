@@ -1,5 +1,6 @@
 import { useCallback, useRef, useState } from "react";
 import { SKILLS } from "@/constants/skills";
+import { MessageHistory } from "./MessageHistory";
 
 interface InputAreaProps {
   disabled: boolean;
@@ -13,6 +14,7 @@ export function InputArea({ disabled, placeholder, onSend, isRunning, onInterrup
   const [text, setText] = useState("");
   const [suggestions, setSuggestions] = useState<typeof SKILLS>([]);
   const [selectedIndex, setSelectedIndex] = useState(0);
+  const [showHistory, setShowHistory] = useState(false);
   const ref = useRef<HTMLTextAreaElement>(null);
 
   const closeSuggestions = useCallback(() => {
@@ -47,6 +49,21 @@ export function InputArea({ disabled, placeholder, onSend, isRunning, onInterrup
         return;
       }
 
+      // Ctrl+R toggles history popup
+      if (e.ctrlKey && e.key === "r") {
+        e.preventDefault();
+        closeSuggestions();
+        setShowHistory((v) => !v);
+        return;
+      }
+
+      // Escape closes history popup
+      if (e.key === "Escape" && showHistory) {
+        e.preventDefault();
+        setShowHistory(false);
+        return;
+      }
+
       if (suggestions.length === 0) return;
 
       if (e.key === "ArrowDown") {
@@ -63,7 +80,7 @@ export function InputArea({ disabled, placeholder, onSend, isRunning, onInterrup
         closeSuggestions();
       }
     },
-    [handleSend, suggestions, selectedIndex, insertSkill, closeSuggestions],
+    [handleSend, suggestions, selectedIndex, insertSkill, closeSuggestions, showHistory],
   );
 
   const handleChange = useCallback(
@@ -74,12 +91,35 @@ export function InputArea({ disabled, placeholder, onSend, isRunning, onInterrup
         const filtered = SKILLS.filter((s) => s.id.includes(query));
         setSuggestions(filtered);
         setSelectedIndex(0);
+        setShowHistory(false);
       } else {
         closeSuggestions();
       }
     },
     [closeSuggestions],
   );
+
+  const handleHistorySelect = useCallback(
+    (msg: string) => {
+      setText(msg);
+      setShowHistory(false);
+      // Defer focus and resize to next tick so the textarea value is updated
+      setTimeout(() => {
+        const el = ref.current;
+        if (el) {
+          el.focus();
+          el.style.height = "auto";
+          el.style.height = Math.min(el.scrollHeight, 150) + "px";
+        }
+      }, 0);
+    },
+    [],
+  );
+
+  const handleHistoryClose = useCallback(() => {
+    setShowHistory(false);
+    ref.current?.focus();
+  }, []);
 
   const handleInput = useCallback(() => {
     const el = ref.current;
@@ -90,6 +130,9 @@ export function InputArea({ disabled, placeholder, onSend, isRunning, onInterrup
 
   return (
     <div className="input-area" style={{ position: "relative" }}>
+      {showHistory && (
+        <MessageHistory onSelect={handleHistorySelect} onClose={handleHistoryClose} />
+      )}
       {suggestions.length > 0 && (
         <div className="input-autocomplete">
           {suggestions.map((skill, i) => (
@@ -122,6 +165,16 @@ export function InputArea({ disabled, placeholder, onSend, isRunning, onInterrup
         disabled={disabled}
         rows={1}
       />
+      <button
+        className="input-history-btn"
+        onClick={() => {
+          closeSuggestions();
+          setShowHistory((v) => !v);
+        }}
+        title="Message history (Ctrl+R)"
+      >
+        {"\u2191"}
+      </button>
       {isRunning && onInterrupt ? (
         <button className="input-interrupt" onClick={onInterrupt}>{"\u25A0"}</button>
       ) : (

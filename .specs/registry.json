@@ -1412,6 +1412,23 @@
       ],
       "created": "2026-03-05",
       "updated": "2026-03-05"
+    },
+    {
+      "id": "feature-message-history",
+      "type": "task",
+      "path": "current_tasks/frontend/feature_message_history.md",
+      "title": "Message History Navigation",
+      "status": "active",
+      "covers": [
+        "frontend/src/store/messageHistoryStore.ts",
+        "frontend/src/components/ChatStream/MessageHistory.tsx"
+      ],
+      "tags": [
+        "frontend",
+        "ux"
+      ],
+      "created": "2026-03-06",
+      "updated": "2026-03-06"
     }
   ],
   "links": [
