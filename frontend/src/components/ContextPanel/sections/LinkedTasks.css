@@ -1,0 +1,56 @@
+.linked-task {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  width: 100%;
+  padding: var(--space-xs) var(--space-sm);
+  border: none;
+  background: transparent;
+  color: var(--text);
+  font-family: var(--font);
+  font-size: 12px;
+  line-height: 1.5;
+  text-align: left;
+  cursor: pointer;
+  border-radius: var(--radius-sm);
+  transition: background var(--transition-fast);
+}
+
+.linked-task:hover {
+  background: var(--hover);
+}
+
+.linked-task__status {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  background: var(--muted);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--border) 50%, transparent);
+}
+
+.linked-task__status[data-status="active"] {
+  background: var(--blue);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--blue) 30%, transparent);
+}
+
+.linked-task__status[data-status="draft"] {
+  background: var(--muted);
+}
+
+.linked-task__status[data-status="done"] {
+  background: var(--green);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--green) 30%, transparent);
+}
+
+.linked-task__status[data-status="blocked"] {
+  background: var(--gold);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--gold) 30%, transparent);
+}
+
+.linked-task__title {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

@@ -55,33 +55,19 @@ All files under `frontend/src/components/ContextPanel/`.
 
 **Trigger:** A spec file is open/previewed, or `selectedSpecId` is set with no file open.
 
-| Section | Component | Status |
-|---|---|---|
-| Connected Specs | `ConnectedSpecs` | Partial — renders full `<GraphView />` at 280px height; no subgraph filtering |
-| Tasks | `LinkedTasks` | Placeholder |
-| Covered Files | `CoveredFiles` | Placeholder |
-| Spec Health | `SpecHealth` | Placeholder (`defaultExpanded={false}`) |
+See [SPEC_CONTEXT.md](context-panel/SPEC_CONTEXT.md) for section details.
 
 ### 2. Agent Context
 
 **Trigger:** `activeSessionId` is non-null and no file/preview focused.
 
-| Section | Component | Status |
-|---|---|---|
-| Task Spec | `TaskSpecPreview` | Placeholder (has `expandToCenter` stub) |
-| Files Modified | `FilesModified` | Placeholder |
-| Related Specs | `RelatedSpecs` | Placeholder |
-| Compliance | `ComplianceHints` | Placeholder |
+See [AGENT_CONTEXT.md](context-panel/AGENT_CONTEXT.md) for section details.
 
 ### 3. Code Context
 
 **Trigger:** A non-spec file is open/previewed.
 
-| Section | Component | Status |
-|---|---|---|
-| Covering Specs | `CoveringSpecs` | Placeholder |
-| Related Tasks | `RelatedTasks` | Placeholder |
-| Spec Health | `SpecHealth` | Placeholder (`defaultExpanded={false}`) |
+See [CODE_CONTEXT.md](context-panel/CODE_CONTEXT.md) for section details.
 
 ### 4. Empty State
 

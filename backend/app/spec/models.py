@@ -50,6 +50,9 @@ class SpecSummary(BaseModel):
     status: str
     title: str
     tags: list[str] = Field(default_factory=list)
+    covers: list[str] = Field(default_factory=list)
+    created: str = ""
+    updated: str = ""
 
 
 class SpecDetail(BaseModel):

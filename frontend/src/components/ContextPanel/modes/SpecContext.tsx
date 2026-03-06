@@ -6,10 +6,10 @@ import { SpecHealth } from "../sections/SpecHealth.tsx";
 export function SpecContext() {
   return (
     <>
+      <SpecHealth />
       <ConnectedSpecs />
       <LinkedTasks />
       <CoveredFiles />
-      <SpecHealth />
     </>
   );
 }

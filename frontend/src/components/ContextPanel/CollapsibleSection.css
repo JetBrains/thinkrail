@@ -9,7 +9,7 @@
   width: 100%;
   padding: var(--space-sm) var(--space-md);
   border: none;
-  background: transparent;
+  background: color-mix(in srgb, var(--elevated) 40%, transparent);
   color: var(--text);
   font-family: var(--font);
   font-size: 11px;
@@ -39,12 +39,12 @@
 
 .collapsible-section__count {
   font-size: 10px;
-  font-weight: 400;
+  font-weight: 600;
   color: var(--muted);
   background: var(--elevated);
-  padding: 0 var(--space-xs);
+  padding: 1px 6px;
   border-radius: var(--radius-sm);
-  min-width: 16px;
+  min-width: 18px;
   text-align: center;
 }
 
@@ -53,6 +53,10 @@
   font-weight: 400;
   color: var(--hint);
   margin-left: auto;
+  max-width: 60%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .collapsible-section__expand {

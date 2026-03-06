@@ -13,6 +13,7 @@
   padding: var(--space-sm) var(--space-md);
   border-bottom: 1px solid var(--border);
   flex-shrink: 0;
+  background: color-mix(in srgb, var(--elevated) 30%, transparent);
 }
 
 .context-panel__mode-icon {
@@ -38,14 +39,16 @@
   color: var(--hint);
   font-size: 12px;
   text-align: center;
-  padding: var(--space-lg) var(--space-md);
+  padding: var(--space-xl) var(--space-md);
   font-style: italic;
+  line-height: 1.6;
 }
 
 .section-placeholder {
   color: var(--hint);
-  font-size: 12px;
+  font-size: 11px;
   text-align: center;
   padding: var(--space-md) var(--space-sm);
   font-style: italic;
+  line-height: 1.5;
 }

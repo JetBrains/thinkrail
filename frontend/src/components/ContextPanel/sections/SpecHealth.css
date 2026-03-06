@@ -1,0 +1,24 @@
+.spec-health {
+  display: flex;
+  flex-direction: column;
+}
+
+.spec-health__row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 5px 0;
+  font-size: 12px;
+  line-height: 1.4;
+  border-bottom: 1px solid color-mix(in srgb, var(--border) 40%, transparent);
+}
+
+.spec-health__row:last-child {
+  border-bottom: none;
+}
+
+.spec-health__label {
+  color: var(--muted);
+  font-size: 11px;
+  min-width: 80px;
+}

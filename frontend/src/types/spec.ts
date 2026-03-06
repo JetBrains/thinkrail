@@ -25,6 +25,9 @@ export interface SpecSummary {
   status: string;
   title: string;
   tags: string[];
+  covers: string[];
+  created: string;
+  updated: string;
 }
 
 export interface SpecDetail {

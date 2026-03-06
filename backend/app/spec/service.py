@@ -56,6 +56,9 @@ class SpecService:
                 status=e.status,
                 title=e.title,
                 tags=e.tags,
+                covers=e.covers,
+                created=e.created,
+                updated=e.updated,
             )
             for e in entries
         ]

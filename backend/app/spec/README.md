@@ -85,7 +85,7 @@ graph TD
 | `Spec` | type, content, metadata (dict \| None) | Parsed spec from disk; `metadata` is the parsed JSON object for JSON specs; `None` for Markdown specs |
 | `RegistryEntry` | id, type, path, title, status, covers, tags, created, updated | Single entry in registry.json |
 | `Link` | from_id, to_id, type | Relationship between specs. Fields serialize to `from`/`to` in JSON (Pydantic alias) since `from` is a Python reserved keyword. |
-| `SpecSummary` | id, type, path, status, title, tags | Lightweight listing model |
+| `SpecSummary` | id, type, path, status, title, tags, covers, created, updated | Lightweight listing model |
 | `SpecDetail` | id, type, path, status, title, tags, content, links | Full spec with content |
 | `SpecGraph` | nodes: list[RegistryEntry], edges: list[Link] | Complete hierarchy |
 

@@ -139,7 +139,7 @@
       "title": "Frontend Module",
       "status": "active",
       "created": "2026-03-02",
-      "updated": "2026-03-03",
+      "updated": "2026-03-06",
       "covers": [
         "frontend/"
       ],
@@ -1164,6 +1164,121 @@
       ]
     },
     {
+      "id": "ui-context-panel-spec-mode",
+      "type": "submodule-design",
+      "path": "frontend/ui-specs/context-panel/SPEC_CONTEXT.md",
+      "title": "Spec Context Sections Design",
+      "status": "active",
+      "created": "2026-03-06",
+      "updated": "2026-03-06",
+      "covers": [
+        "frontend/src/components/ContextPanel/modes/SpecContext.tsx",
+        "frontend/src/components/ContextPanel/sections/ConnectedSpecs.tsx",
+        "frontend/src/components/ContextPanel/sections/LinkedTasks.tsx",
+        "frontend/src/components/ContextPanel/sections/CoveredFiles.tsx",
+        "frontend/src/components/ContextPanel/sections/SpecHealth.tsx"
+      ],
+      "tags": [
+        "frontend",
+        "ui-spec"
+      ]
+    },
+    {
+      "id": "ui-context-panel-agent-mode",
+      "type": "submodule-design",
+      "path": "frontend/ui-specs/context-panel/AGENT_CONTEXT.md",
+      "title": "Agent Context Sections Design",
+      "status": "active",
+      "created": "2026-03-06",
+      "updated": "2026-03-06",
+      "covers": [
+        "frontend/src/components/ContextPanel/modes/AgentContext.tsx",
+        "frontend/src/components/ContextPanel/sections/TaskSpecPreview.tsx",
+        "frontend/src/components/ContextPanel/sections/FilesModified.tsx",
+        "frontend/src/components/ContextPanel/sections/RelatedSpecs.tsx",
+        "frontend/src/components/ContextPanel/sections/ComplianceHints.tsx"
+      ],
+      "tags": [
+        "frontend",
+        "ui-spec"
+      ]
+    },
+    {
+      "id": "ui-context-panel-code-mode",
+      "type": "submodule-design",
+      "path": "frontend/ui-specs/context-panel/CODE_CONTEXT.md",
+      "title": "Code Context Sections Design",
+      "status": "draft",
+      "created": "2026-03-06",
+      "updated": "2026-03-06",
+      "covers": [
+        "frontend/src/components/ContextPanel/modes/CodeContext.tsx",
+        "frontend/src/components/ContextPanel/sections/CoveringSpecs.tsx",
+        "frontend/src/components/ContextPanel/sections/RelatedTasks.tsx"
+      ],
+      "tags": [
+        "frontend",
+        "ui-spec"
+      ]
+    },
+    {
+      "id": "task-context-panel-shared-infra",
+      "type": "task-spec",
+      "path": "current_tasks/frontend/feature_context_panel_shared_infra.md",
+      "title": "Context Panel shared infrastructure: hooks and utils",
+      "status": "done",
+      "created": "2026-03-06",
+      "updated": "2026-03-06",
+      "covers": [
+        "frontend/src/components/ContextPanel/useSelectedSpec.ts",
+        "frontend/src/components/ContextPanel/useActiveSession.ts",
+        "frontend/src/components/ContextPanel/utils.ts"
+      ],
+      "tags": [
+        "high",
+        "feature",
+        "frontend"
+      ]
+    },
+    {
+      "id": "task-context-panel-spec-sections",
+      "type": "task-spec",
+      "path": "current_tasks/frontend/feature_context_panel_spec_sections.md",
+      "title": "Implement Spec Context sections: ConnectedSpecs, LinkedTasks, SpecHealth",
+      "status": "done",
+      "created": "2026-03-06",
+      "updated": "2026-03-06",
+      "covers": [
+        "frontend/src/components/ContextPanel/sections/ConnectedSpecs.tsx",
+        "frontend/src/components/ContextPanel/sections/LinkedTasks.tsx",
+        "frontend/src/components/ContextPanel/sections/SpecHealth.tsx"
+      ],
+      "tags": [
+        "high",
+        "feature",
+        "frontend"
+      ]
+    },
+    {
+      "id": "task-context-panel-agent-sections",
+      "type": "task-spec",
+      "path": "current_tasks/frontend/feature_context_panel_agent_sections.md",
+      "title": "Implement Agent Context sections: TaskSpecPreview, FilesModified, RelatedSpecs",
+      "status": "done",
+      "created": "2026-03-06",
+      "updated": "2026-03-06",
+      "covers": [
+        "frontend/src/components/ContextPanel/sections/TaskSpecPreview.tsx",
+        "frontend/src/components/ContextPanel/sections/FilesModified.tsx",
+        "frontend/src/components/ContextPanel/sections/RelatedSpecs.tsx"
+      ],
+      "tags": [
+        "high",
+        "feature",
+        "frontend"
+      ]
+    },
+    {
       "id": "task-context-panel-infrastructure",
       "type": "task-spec",
       "path": "current_tasks/frontend/feature_context_panel_infrastructure.md",
@@ -1967,12 +2082,12 @@
     },
     {
       "from": "spec-tree",
-      "to": "module-store",
+      "to": "state-management",
       "type": "depends-on"
     },
     {
       "from": "spec-tree",
-      "to": "module-api-client",
+      "to": "api-client",
       "type": "depends-on"
     },
     {
@@ -1999,6 +2114,51 @@
       "from": "ui-context-panel",
       "to": "webview",
       "type": "parent"
+    },
+    {
+      "from": "ui-context-panel-spec-mode",
+      "to": "ui-context-panel",
+      "type": "parent"
+    },
+    {
+      "from": "ui-context-panel-agent-mode",
+      "to": "ui-context-panel",
+      "type": "parent"
+    },
+    {
+      "from": "ui-context-panel-code-mode",
+      "to": "ui-context-panel",
+      "type": "parent"
+    },
+    {
+      "from": "task-context-panel-shared-infra",
+      "to": "ui-context-panel-spec-mode",
+      "type": "implements"
+    },
+    {
+      "from": "task-context-panel-shared-infra",
+      "to": "ui-context-panel-agent-mode",
+      "type": "implements"
+    },
+    {
+      "from": "task-context-panel-spec-sections",
+      "to": "ui-context-panel-spec-mode",
+      "type": "implements"
+    },
+    {
+      "from": "task-context-panel-spec-sections",
+      "to": "task-context-panel-shared-infra",
+      "type": "depends-on"
+    },
+    {
+      "from": "task-context-panel-agent-sections",
+      "to": "ui-context-panel-agent-mode",
+      "type": "implements"
+    },
+    {
+      "from": "task-context-panel-agent-sections",
+      "to": "task-context-panel-shared-infra",
+      "type": "depends-on"
     },
     {
       "from": "task-context-panel-infrastructure",
