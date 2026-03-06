@@ -18,8 +18,8 @@ class RegistryEntry(BaseModel):
 
     id: str
     type: str
-    path: str
-    title: str
+    path: str = ""
+    title: str = ""
     status: str = "draft"
     covers: list[str] = Field(default_factory=list)
     tags: list[str] = Field(default_factory=list)

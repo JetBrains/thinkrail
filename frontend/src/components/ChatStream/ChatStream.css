@@ -373,6 +373,17 @@
 }
 .input-send:disabled { opacity: 0.4; cursor: not-allowed; }
 .input-send:hover:not(:disabled) { opacity: 0.9; }
+.input-interrupt {
+  padding: var(--space-xs) var(--space-md);
+  border: none;
+  border-radius: var(--radius-sm);
+  background: var(--red);
+  color: var(--bg);
+  font-size: 11px;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+.input-interrupt:hover { opacity: 0.9; }
 
 /* ── Session Tabs ── */
 .session-tabs {

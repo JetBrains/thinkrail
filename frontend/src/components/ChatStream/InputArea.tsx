@@ -5,9 +5,11 @@ interface InputAreaProps {
   disabled: boolean;
   placeholder: string;
   onSend: (text: string) => void;
+  isRunning?: boolean;
+  onInterrupt?: () => void;
 }
 
-export function InputArea({ disabled, placeholder, onSend }: InputAreaProps) {
+export function InputArea({ disabled, placeholder, onSend, isRunning, onInterrupt }: InputAreaProps) {
   const [text, setText] = useState("");
   const [suggestions, setSuggestions] = useState<typeof SKILLS>([]);
   const [selectedIndex, setSelectedIndex] = useState(0);
@@ -120,13 +122,17 @@ export function InputArea({ disabled, placeholder, onSend }: InputAreaProps) {
         disabled={disabled}
         rows={1}
       />
-      <button
-        className="input-send"
-        onClick={handleSend}
-        disabled={disabled || !text.trim()}
-      >
-        Send
-      </button>
+      {isRunning && onInterrupt ? (
+        <button className="input-interrupt" onClick={onInterrupt}>{"\u25A0"}</button>
+      ) : (
+        <button
+          className="input-send"
+          onClick={handleSend}
+          disabled={disabled || !text.trim()}
+        >
+          Send
+        </button>
+      )}
     </div>
   );
 }

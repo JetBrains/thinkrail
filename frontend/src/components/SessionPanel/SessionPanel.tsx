@@ -15,6 +15,7 @@ export function SessionPanel() {
   const closeSession = useSessionStore((s) => s.closeSession);
   const resolveRequest = useSessionStore((s) => s.resolveRequest);
   const sendMessage = useSessionStore((s) => s.sendMessage);
+  const interruptSession = useSessionStore((s) => s.interruptSession);
   const updateConfig = useSessionStore((s) => s.updateConfig);
 
   const openFiles = useFileStore((s) => s.openFiles);
@@ -141,6 +142,8 @@ export function SessionPanel() {
               disabled={inputDisabled}
               placeholder={placeholder}
               onSend={handleSend}
+              isRunning={isRunning}
+              onInterrupt={() => interruptSession(activeSession!.bonsaiSid)}
             />
           )}
         </>

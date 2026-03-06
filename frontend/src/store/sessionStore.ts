@@ -386,15 +386,13 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
   },
 
   interruptSession: async (bonsaiSid) => {
-    const api = createAgentApi(getClient());
-    await api.interrupt(bonsaiSid);
-    set((s) => {
-      const session = s.sessions.get(bonsaiSid);
-      if (!session) return s;
-      const next = new Map(s.sessions);
-      next.set(bonsaiSid, { ...session, status: "interrupted" as SessionStatus });
-      return { sessions: next };
-    });
+    try {
+      const api = createAgentApi(getClient());
+      await api.interrupt(bonsaiSid);
+      // Status transition is handled by the agent/interrupted notification
+    } catch (err) {
+      console.warn("[interruptSession] failed:", err);
+    }
   },
 
   resolveRequest: (bonsaiSid, requestId, response) => {

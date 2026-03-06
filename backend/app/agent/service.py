@@ -73,38 +73,36 @@ class AgentService:
     async def interrupt_task(self, bonsai_sid: str) -> None:
         """Cancel the current turn. Session stays alive (idle)."""
         task = self._tracker.get_task(bonsai_sid)
-        if task.status != "running":
-            raise ValueError(
-                f"Cannot interrupt: session is '{task.status}', expected 'running'"
-            )
+        if task.status not in ("running", "waiting"):
+            # Already idle/done — nothing to interrupt
+            return
         self._tracker.cancel_futures(bonsai_sid)
-        bg = self._running_tasks.get(bonsai_sid)
+        # Grab notify before cancelling — _run_background's finally block
+        # clears _last_notify on cancellation.
+        notify = self._last_notify.get(bonsai_sid)
+        bg = self._running_tasks.pop(bonsai_sid, None)
         if bg:
             bg.cancel()
             try:
                 await bg
             except (asyncio.CancelledError, Exception):
                 pass
-            self._running_tasks.pop(bonsai_sid, None)
-            self._tracker.set_status(bonsai_sid, "idle")
-            # Notify frontend that the turn was interrupted
-            notify = self._last_notify.get(bonsai_sid)
-            if notify:
-                try:
-                    await notify("agent/interrupted", {
-                        "bonsaiSid": bonsai_sid,
-                        "sessionId": task.session_id or "",
-                    })
-                except Exception:
-                    pass
+        self._tracker.set_status(bonsai_sid, "idle")
+        # Notify frontend that the turn was interrupted
+        if notify:
+            try:
+                await notify("agent/interrupted", {
+                    "bonsaiSid": bonsai_sid,
+                    "sessionId": task.session_id or "",
+                })
+            except Exception:
+                pass
             # Re-launch the background runner for continued conversation
             spec_context = self._build_context_for(task)
-            notify = self._last_notify.get(bonsai_sid)
-            if notify:
-                new_bg = asyncio.create_task(
-                    self._run_background(task, spec_context, notify)
-                )
-                self._running_tasks[bonsai_sid] = new_bg
+            new_bg = asyncio.create_task(
+                self._run_background(task, spec_context, notify)
+            )
+            self._running_tasks[bonsai_sid] = new_bg
 
     async def end_session(self, bonsai_sid: str) -> None:
         """Gracefully close the session."""
