@@ -214,7 +214,8 @@ export function SpecTree() {
                     <div
                       key={task.id}
                       className="st-task-card-row"
-                      onDoubleClick={() => openFile(task.path)}
+                      onClick={() => loadPreview(task.path)}
+                      onDoubleClick={() => handleDoubleClick(task.path)}
                     >
                       <span className="st-icon st-icon-task">
                         {"\u270F\uFE0F"}
