@@ -15,7 +15,7 @@ def to_camel(name: str) -> str:
 
 _CAMEL_CONFIG = ConfigDict(alias_generator=to_camel, populate_by_name=True)
 
-TaskStatus = Literal["idle", "running", "done", "error"]
+TaskStatus = Literal["idle", "running", "waiting", "done", "error"]
 
 EventType = Literal[
     "session_start",

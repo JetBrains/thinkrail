@@ -358,6 +358,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
       answered.set(requestId, response);
       nextSessions.set(taskId, {
         ...session,
+        status: "running",
         pendingRequest:
           session.pendingRequest?.requestId === requestId
             ? null
@@ -459,6 +460,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
       if (session) {
         sessions.set(taskId, {
           ...session,
+          status: "waiting",
           pendingRequest: {
             requestId,
             type: "question",
@@ -484,6 +486,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
       if (session) {
         sessions.set(taskId, {
           ...session,
+          status: "waiting",
           pendingRequest: {
             requestId,
             type: "approval",

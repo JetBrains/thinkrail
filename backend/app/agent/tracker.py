@@ -16,7 +16,8 @@ END_SIGNAL = _END_SIGNAL  # public alias
 
 _VALID_TRANSITIONS: dict[TaskStatus, set[TaskStatus]] = {
     "idle": {"running", "done", "error"},
-    "running": {"idle", "done", "error"},
+    "running": {"idle", "waiting", "done", "error"},
+    "waiting": {"running", "idle", "done", "error"},
     "done": set(),
     "error": set(),
 }

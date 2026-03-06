@@ -301,7 +301,9 @@
 }
 .ssl-status { display: flex; align-items: center; gap: 4px; font-size: 11px; }
 .ssl-status-running { color: var(--blue); }
-.ssl-status-waiting { color: var(--hint); }
+.ssl-status-waiting { color: var(--gold); }
+.ssl-status-idle { color: var(--hint); }
+.ssl-status-interrupted { color: var(--gold); }
 .ssl-status-ended { color: var(--muted); }
 .ssl-status-spinner {
   width: 8px; height: 8px;

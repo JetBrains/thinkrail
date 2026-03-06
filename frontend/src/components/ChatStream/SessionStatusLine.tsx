@@ -26,12 +26,15 @@ function statusInfo(status: SessionStatus): { icon: string; label: string; cssCl
   switch (status) {
     case "running":
       return { icon: "", label: "running", cssClass: "running" };
+    case "waiting":
+      return { icon: "⏳", label: "waiting", cssClass: "waiting" };
     case "idle":
+      return { icon: "💤", label: "idle", cssClass: "idle" };
     case "interrupted":
-      return { icon: "\u23F3", label: "waiting", cssClass: "waiting" };
+      return { icon: "⏸", label: "interrupted", cssClass: "interrupted" };
     case "done":
     case "error":
-      return { icon: "\u23F9", label: "ended", cssClass: "ended" };
+      return { icon: "⏹", label: "ended", cssClass: "ended" };
   }
 }
 
