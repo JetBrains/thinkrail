@@ -147,6 +147,13 @@ class Tracker:
         if not future.done():
             future.set_result(response)
 
+    def remove_task(self, bonsai_sid: str) -> None:
+        """Remove a completed task and all associated state."""
+        self._tasks.pop(bonsai_sid, None)
+        self._queues.pop(bonsai_sid, None)
+        self._futures.pop(bonsai_sid, None)
+        self._clients.pop(bonsai_sid, None)
+
     def cancel_futures(self, bonsai_sid: str) -> None:
         task_futures = self._futures.pop(bonsai_sid, {})
         for future in task_futures.values():

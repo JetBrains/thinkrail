@@ -146,6 +146,10 @@ class AgentService:
 
     async def respond(self, bonsai_sid: str, request_id: str, response: dict) -> None:
         self._tracker.resolve_future(bonsai_sid, request_id, response)
+        self._save_event(bonsai_sid, {
+            "eventType": "requestResolved",
+            "payload": {"requestId": request_id, "response": response},
+        })
 
     # -- session persistence --------------------------------------------------
 
@@ -193,7 +197,7 @@ class AgentService:
                 "model": task.config.model,
                 "createdAt": task.created,
                 "updatedAt": task.updated,
-                "active": True,
+                "active": task.status not in ("done", "error"),
             }
         return list(disk.values())
 
@@ -311,6 +315,7 @@ class AgentService:
             await run(task, spec_context, notify, self._tracker, cwd=self._config.project_root, plugin_dir=self._config.plugin_dir)
             self._tracker.set_status(task.bonsai_sid, "done")
             self._save_task(task)
+            self._tracker.remove_task(task.bonsai_sid)
         except asyncio.CancelledError:
             # Interrupted — don't set error, let interrupt_task handle state
             pass
@@ -319,6 +324,7 @@ class AgentService:
             if task.status not in ("done", "error"):
                 self._tracker.set_status(task.bonsai_sid, "error")
             self._save_task(task)
+            self._tracker.remove_task(task.bonsai_sid)
             try:
                 await notify(
                     "agent/error",

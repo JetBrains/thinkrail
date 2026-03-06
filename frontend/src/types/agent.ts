@@ -19,6 +19,7 @@ export type EventType =
   | "permissionDenied"
   | "askUserQuestion"
   | "confirmAction"
+  | "requestResolved"
   | "userMessage";
 
 export interface AgentConfig {

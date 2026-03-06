@@ -94,7 +94,7 @@ class TestRunTask:
         task = await service.run_task(["s1"], AgentConfig(), AsyncMock())
         await asyncio.sleep(0.05)
 
-        assert service.get_task(task.bonsai_sid).status == "error"
+        assert task.status == "error"
 
 
 class TestSendMessage:
@@ -174,6 +174,26 @@ class TestRespond:
         await service.respond(task.bonsai_sid, "req-1", {"answer": "yes"})
         result = await future
         assert result == {"answer": "yes"}
+
+
+class TestRespondPersistsEvent:
+    async def test_respond_saves_request_resolved_event(self) -> None:
+        service, _, _ = _make_service()
+        task = service._tracker.create_task(["s1"], AgentConfig())
+        future = service._tracker.register_future(task.bonsai_sid, "req-1")
+
+        service._save_event = MagicMock()
+        await service.respond(task.bonsai_sid, "req-1", {"behavior": "allow"})
+
+        service._save_event.assert_called_once_with(
+            task.bonsai_sid,
+            {
+                "eventType": "requestResolved",
+                "payload": {"requestId": "req-1", "response": {"behavior": "allow"}},
+            },
+        )
+        result = await future
+        assert result == {"behavior": "allow"}
 
 
 class TestBuildContext:

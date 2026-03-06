@@ -125,6 +125,37 @@ function appendEvent(
   return next;
 }
 
+/**
+ * Reconstruct answeredRequests from persisted events.
+ * For non-active sessions, unresolved requests get marked as { historical: true }.
+ */
+function buildAnsweredRequests(
+  events: AgentEvent[],
+  isActive: boolean,
+): Map<string, unknown> {
+  const answered = new Map<string, unknown>();
+
+  // First pass: collect requestResolved events
+  for (const ev of events) {
+    if (ev.eventType === "requestResolved") {
+      const rid = (ev.payload.requestId as string) ?? "";
+      if (rid) answered.set(rid, ev.payload.response);
+    }
+  }
+
+  // Second pass (non-active only): mark remaining unresolved requests as historical
+  if (!isActive) {
+    for (const ev of events) {
+      if (ev.eventType === "askUserQuestion" || ev.eventType === "confirmAction") {
+        const rid = (ev.payload.requestId as string) ?? "";
+        if (rid && !answered.has(rid)) answered.set(rid, { historical: true });
+      }
+    }
+  }
+
+  return answered;
+}
+
 export const useSessionStore = create<SessionStore>((set, get) => ({
   sessions: new Map(),
   activeSessionId: null,
@@ -209,14 +240,8 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
         const session = s.sessions.get(bonsaiSid);
         if (!session) return s;
 
-        // Mark old question/approval events as answered
-        const answered = new Map<string, unknown>(session.answeredRequests);
-        for (const ev of session.events) {
-          if (ev.eventType === "askUserQuestion" || ev.eventType === "confirmAction") {
-            const rid = (ev.payload.requestId as string) ?? "";
-            if (rid) answered.set(rid, { historical: true });
-          }
-        }
+        // Reconstruct answered requests, marking unresolved as historical
+        const answered = buildAnsweredRequests(session.events, false);
 
         const next = new Map(s.sessions);
         next.set(bonsaiSid, {
@@ -267,16 +292,8 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
       payload: (ev.payload as Record<string, unknown>) ?? ev,
     }));
 
-    // Mark all question/approval events as answered (historical session)
-    const answered = new Map<string, unknown>();
-    if (!isActive) {
-      for (const ev of events) {
-        if (ev.eventType === "askUserQuestion" || ev.eventType === "confirmAction") {
-          const rid = (ev.payload.requestId as string) ?? "";
-          if (rid) answered.set(rid, { historical: true });
-        }
-      }
-    }
+    // Reconstruct answered requests from persisted events
+    const answered = buildAnsweredRequests(events, isActive);
 
     const session: Session = {
       bonsaiSid,
@@ -311,24 +328,47 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
     const { createSessionApi } = await import("@/api/methods/sessions.ts");
     const api = createSessionApi(getClient());
     const all = await api.list();
+
+    // Filter to active sessions not already in memory
+    const currentSessions = get().sessions;
+    const toLoad = all.filter((e) => e.active && !currentSessions.has(e.bonsaiSid));
+
+    // Fetch full data (with events) for each session in parallel
+    const results = await Promise.allSettled(
+      toLoad.map(async (entry) => {
+        const data = await api.get(entry.bonsaiSid);
+        return { entry, data };
+      }),
+    );
+
     set((s) => {
       const next = new Map(s.sessions);
-      for (const entry of all) {
-        // Only add sessions with a live backend runner that aren't already in memory
-        if (!entry.active || next.has(entry.bonsaiSid)) continue;
+      for (const result of results) {
+        if (result.status === "rejected") continue;
+        const { entry, data } = result.value;
+        if (next.has(entry.bonsaiSid)) continue;
+
+        // Convert backend events to AgentEvent format
+        const events: AgentEvent[] = (data?.events ?? []).map((ev: Record<string, unknown>) => ({
+          bonsaiSid: entry.bonsaiSid,
+          sessionId: ((ev.payload as Record<string, unknown>)?.sessionId as string) ?? "",
+          eventType: ((ev.eventType as string) ?? "notification") as AgentEvent["eventType"],
+          payload: (ev.payload as Record<string, unknown>) ?? ev,
+        }));
+
         next.set(entry.bonsaiSid, {
           bonsaiSid: entry.bonsaiSid,
-          name: entry.name ?? entry.bonsaiSid.slice(0, 8),
-          skillId: entry.skillId ?? null,
-          specIds: entry.specIds ?? [],
+          name: data?.name ?? entry.name ?? entry.bonsaiSid.slice(0, 8),
+          skillId: (data?.skillId as string) ?? entry.skillId ?? null,
+          specIds: data?.specIds ?? entry.specIds ?? [],
           status: (entry.status as SessionStatus) ?? "idle",
-          model: entry.model ?? "",
-          permissionMode: "default",
+          model: (data?.config?.model as string) ?? entry.model ?? "",
+          permissionMode: (data?.config?.permissionMode as string) ?? "default",
           startedAt: new Date(entry.createdAt).getTime(),
-          events: [],
+          events,
           metrics: emptyMetrics(),
           pendingRequest: null,
-          answeredRequests: new Map(),
+          answeredRequests: buildAnsweredRequests(events, true),
         });
       }
       return { sessions: next };

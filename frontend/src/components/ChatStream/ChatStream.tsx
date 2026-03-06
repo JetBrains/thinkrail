@@ -246,6 +246,9 @@ export function ChatStream({
               </div>
             );
 
+          case "requestResolved":
+            return null;
+
           default:
             return null;
         }
