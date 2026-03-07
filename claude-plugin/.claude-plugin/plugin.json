@@ -18,6 +18,5 @@
     "requirements",
     "progress-tracking"
   ],
-  "skills": "./skills/",
-  "hooks": "./hooks/hooks.json"
+  "skills": "./skills/"
 }
