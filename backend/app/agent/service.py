@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import asyncio
-import json
 import logging
 from collections.abc import Callable
 from typing import Any
@@ -216,9 +215,10 @@ class AgentService:
     async def continue_session(
         self, bonsai_sid: str, notify: Callable
     ) -> AgentTask:
-        """Continue a dead session by replaying its history as context.
+        """Resume a session using the SDK's native --resume <sessionId>.
 
-        Reuses the same bonsai_sid — no new ID is created.
+        Reuses the same bonsai_sid. The CLI restores full conversation
+        context natively — no lossy text replay needed.
         """
         if bonsai_sid in self._running_tasks:
             raise ValueError(f"Session {bonsai_sid} is already running")
@@ -227,24 +227,13 @@ class AgentService:
         if not old:
             raise ValueError(f"Session {bonsai_sid} not found on disk")
 
-        # Build context from old conversation
-        context_parts = []
-        for ev in old.get("events", []):
-            et = ev.get("eventType", "")
-            payload = ev.get("payload", {})
-            if et == "textDelta":
-                context_parts.append(f"Assistant: {payload.get('text', '')}")
-            elif et == "toolCallStart":
-                context_parts.append(f"Tool: {payload.get('toolName', '')} {json.dumps(payload.get('toolInput', ''))}")
-            elif et == "toolCallEnd":
-                output = payload.get("output", "")
-                if len(output) > 500:
-                    output = output[:500] + "..."
-                context_parts.append(f"Result: {output}")
+        old_session_id = old.get("sessionId")
+        if not old_session_id:
+            raise ValueError(
+                f"Cannot resume session {bonsai_sid}: no stored sessionId"
+            )
 
-        history_context = "\n".join(context_parts)
-
-        # Re-create task with SAME ID
+        # Re-create task with SAME bonsai_sid
         old_config = AgentConfig(**old.get("config", {}))
         old_spec_ids = old.get("specIds", [])
         skill_id = old.get("skillId")
@@ -265,18 +254,18 @@ class AgentService:
             "specIds": old_spec_ids,
             "config": old_config.model_dump(by_alias=True),
             "status": "idle",
-            "sessionId": None,
+            "sessionId": old_session_id,
             "createdAt": old.get("createdAt", task.created),
             "updatedAt": task.updated,
         }
         save_session(self._config.project_root, metadata)
 
-        # Build spec context + conversation history
+        # Build fresh spec context (no history replay — CLI restores context)
         spec_context = self._build_context_for(task)
-        combined_context = f"{spec_context}\n\n--- Previous conversation ---\n{history_context}" if history_context else spec_context
 
         bg_task = asyncio.create_task(
-            self._run_background(task, combined_context, notify)
+            self._run_background(task, spec_context, notify,
+                                 resume_session_id=old_session_id)
         )
         self._running_tasks[task.bonsai_sid] = bg_task
         return task
@@ -288,6 +277,7 @@ class AgentService:
         task: AgentTask,
         spec_context: str,
         notify: Callable,
+        resume_session_id: str | None = None,
     ) -> None:
         self._last_notify[task.bonsai_sid] = notify
 
@@ -316,7 +306,7 @@ class AgentService:
         notify = _persisting_notify
 
         try:
-            await run(task, spec_context, notify, self._tracker, cwd=self._config.project_root, plugin_dir=self._config.plugin_dir)
+            await run(task, spec_context, notify, self._tracker, cwd=self._config.project_root, plugin_dir=self._config.plugin_dir, resume_session_id=resume_session_id)
             self._tracker.set_status(task.bonsai_sid, "done")
             self._save_task(task)
             self._tracker.remove_task(task.bonsai_sid)

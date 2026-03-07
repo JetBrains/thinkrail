@@ -40,6 +40,7 @@ graph TD
     GetData --> Load
     DelData --> Delete
     Continue --> Load
+    Continue --> Save
 
     Save --> Meta
     Save -.->|bulk-write events on initial save| Events
