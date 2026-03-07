@@ -6,11 +6,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash -c 'FILE=\"$CLAUDE_TOOL_ARG_FILE_PATH\"; if [[ \"$FILE\" == *.rs || \"$FILE\" == *.ts || \"$FILE\" == *.py || \"$FILE\" == *.go || \"$FILE\" == *.js || \"$FILE\" == *.c || \"$FILE\" == *.cpp || \"$FILE\" == *.java ]] && [[ \"$FILE\" != *README* ]] && [[ \"$FILE\" != *DESIGN_DOC* ]] && [[ \"$FILE\" != *.specs/* ]]; then DIR=$(dirname \"$FILE\"); if [ ! -f \"$DIR/README.md\" ]; then echo \"[specdriven] Source file modified in $DIR but no README.md spec exists. Consider running /specdriven:spec-from-code or /specdriven:module-design for this module.\"; fi; fi'"
-          },
-          {
-            "type": "command",
-            "command": "bash -c 'FILE=\"$CLAUDE_TOOL_ARG_FILE_PATH\"; if [[ \"$FILE\" == *GOAL\\&REQUIREMENTS.md || \"$FILE\" == *DESIGN_DOC.md || \"$FILE\" == *.specs/* || \"$FILE\" == *current_tasks/* ]]; then PROGRESS=\".specs/.progress.yaml\"; mkdir -p .specs; TIMESTAMP=$(date -u +\"%Y-%m-%dT%H:%M:%SZ\"); if [ ! -f \"$PROGRESS\" ]; then echo \"updated: $TIMESTAMP\" > \"$PROGRESS\"; else sed -i \"s/^updated:.*/updated: $TIMESTAMP/\" \"$PROGRESS\" 2>/dev/null || true; fi; fi'"
+            "command": "python3 \"$CLAUDE_PLUGIN_ROOT/tools/compute-dashboard.py\" \"$CLAUDE_PROJECT_DIR\" 2>/dev/null || true"
           }
         ]
       }
@@ -20,7 +16,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash -c 'if [ -f .specs/registry.json ]; then TOTAL=$(python3 -c \"import json; r=json.load(open(\\'.specs/registry.json\\')); print(len(r.get(\\'specs\\', [])))\" 2>/dev/null || echo 0); GNR=\"\"; if [ -f \"GOAL&REQUIREMENTS.md\" ]; then GNR=\" Goal & requirements: defined.\"; fi; echo \"[specdriven] Spec-driven project: $TOTAL specs tracked.$GNR Run /specdriven:cli-progress for workflow status.\"; else echo \"[specdriven] No spec registry found. Run /specdriven:spec-init to set up specification-driven development.\"; fi'"
+            "command": "python3 \"$CLAUDE_PLUGIN_ROOT/tools/compute-dashboard.py\" \"$CLAUDE_PROJECT_DIR\" 2>/dev/null || true"
           }
         ]
       }

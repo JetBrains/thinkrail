@@ -22,5 +22,9 @@ Thumbs.db
 
 # Bonsai runtime
 .specs/.progress.yaml
+.specs/.progress.json
+.specs/dashboard.json
+.specs/dashboard.html
+.specs/vendor/
 .claude/settings.local.json
 .specs/sessions

@@ -8,6 +8,10 @@ argument-hint: "[spec-path-or-directory]"
 
 You are helping the user **review and validate** their existing specifications. You will check for accuracy, completeness, consistency, and adherence to specification best practices.
 
+## Quick Context
+
+Before diving in, read `.specs/dashboard.json` for pre-computed project context (coverage, freshness, lint issues). This tells you which specs are stale and need review most urgently -- no need to read registry.json.
+
 ## Your Process
 
 1. **Read the specifications** at the path provided by the user (or the whole project if no path given).

@@ -8,6 +8,10 @@ argument-hint: "[path-to-analyze]"
 
 You are analyzing an existing codebase to **generate specification skeletons**. This is the reverse path: code → specs, instead of specs → code. The generated specs need human review and refinement, but they provide a strong starting point.
 
+## Quick Context
+
+Before analyzing, read `.specs/dashboard.json` for pre-computed project context (coverage gaps, existing specs). The `coverage[]` array shows which source directories lack specs -- no need to read registry.json.
+
 ## What You Will Generate
 
 Depending on the scope:
