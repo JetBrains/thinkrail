@@ -1,0 +1,89 @@
+/* ── High Contrast (VSCode Dark HC) ── */
+[data-theme="high-contrast"] {
+  --bg: #000000;
+  --panel: #0a0a0a;
+  --elevated: #1a1a1a;
+  --hover: #2a2a2a;
+  --border: #6fc3df;
+  --border2: #6fc3df;
+  --text: #ffffff;
+  --muted: #d4d4d4;
+  --hint: #808080;
+  --sel: #264f78;
+  color-scheme: dark;
+}
+
+/* ── Dracula ── */
+[data-theme="dracula"] {
+  --bg: #282a36;
+  --panel: #21222c;
+  --elevated: #343746;
+  --hover: #44475a;
+  --border: #44475a;
+  --border2: #6272a4;
+  --text: #f8f8f2;
+  --muted: #bfbfbf;
+  --hint: #6272a4;
+  --sel: #44475a;
+  color-scheme: dark;
+}
+
+/* ── Nord ── */
+[data-theme="nord"] {
+  --bg: #2e3440;
+  --panel: #3b4252;
+  --elevated: #434c5e;
+  --hover: #4c566a;
+  --border: #4c566a;
+  --border2: #616e88;
+  --text: #d8dee9;
+  --muted: #a5adba;
+  --hint: #616e88;
+  --sel: #434c5e;
+  color-scheme: dark;
+}
+
+/* ── Solarized Dark ── */
+[data-theme="solarized-dark"] {
+  --bg: #002b36;
+  --panel: #073642;
+  --elevated: #0a4050;
+  --hover: #124e5e;
+  --border: #2a5e6e;
+  --border2: #586e75;
+  --text: #839496;
+  --muted: #657b83;
+  --hint: #586e75;
+  --sel: #073642;
+  color-scheme: dark;
+}
+
+/* ── Solarized Light ── */
+[data-theme="solarized-light"] {
+  --bg: #fdf6e3;
+  --panel: #eee8d5;
+  --elevated: #e8e2cf;
+  --hover: #ddd6c1;
+  --border: #c9c2ab;
+  --border2: #93a1a1;
+  --text: #657b83;
+  --muted: #839496;
+  --hint: #93a1a1;
+  --sel: #eee8d5;
+  color-scheme: light;
+}
+
+/* ── Claude Code ── */
+[data-theme="claude-code"] {
+  --bg: #191a23;
+  --panel: #1f2029;
+  --elevated: #2a2b36;
+  --hover: #353640;
+  --border: #353640;
+  --border2: #4a4b56;
+  --text: #e0ddd5;
+  --muted: #a8a5a0;
+  --hint: #6b6966;
+  --sel: #2d3a50;
+  color-scheme: dark;
+}

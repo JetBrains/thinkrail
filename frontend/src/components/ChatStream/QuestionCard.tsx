@@ -1,5 +1,9 @@
-import { useState } from "react";
+import { useState, useRef, useCallback, useEffect } from "react";
 import type { Question } from "@/types/agent.ts";
+import { AnsweredTable } from "./AnsweredTable.tsx";
+import { QuestionTabBar } from "./QuestionTabBar.tsx";
+import { QuestionOptionsPanel } from "./QuestionOptionsPanel.tsx";
+import { QuestionPreviewPanel } from "./QuestionPreviewPanel.tsx";
 
 interface QuestionCardProps {
   questions: Question[];
@@ -14,103 +18,261 @@ export function QuestionCard({
   selectedAnswers,
   onSubmit,
 }: QuestionCardProps) {
-  const [selections, setSelections] = useState<Record<string, string>>({});
-  const [textInput, setTextInput] = useState("");
+  const [activeTab, setActiveTab] = useState(0);
+  const [highlighted, setHighlighted] = useState<Record<number, number>>(() =>
+    Object.fromEntries(questions.map((_, i) => [i, 0])),
+  );
+  const [selectedSingle, setSelectedSingle] = useState<Record<number, number | null>>(() =>
+    Object.fromEntries(questions.map((_, i) => [i, null])),
+  );
+  const [checkedItems, setCheckedItems] = useState<Record<number, Set<number>>>(() =>
+    Object.fromEntries(questions.map((_, i) => [i, new Set<number>()])),
+  );
+  const [otherText, setOtherText] = useState<Record<number, string>>(() =>
+    Object.fromEntries(questions.map((_, i) => [i, ""])),
+  );
+  const [confirmingSubmit, setConfirmingSubmit] = useState(false);
 
-  const handleSelect = (questionText: string, label: string, multiSelect: boolean) => {
-    if (answered) return;
-    setSelections((prev) => {
-      if (multiSelect) {
-        const current = prev[questionText] ?? "";
-        const labels = current ? current.split(", ") : [];
-        const idx = labels.indexOf(label);
-        if (idx >= 0) labels.splice(idx, 1);
-        else labels.push(label);
-        return { ...prev, [questionText]: labels.join(", ") };
+  const containerRef = useRef<HTMLDivElement>(null);
+  const otherInputRef = useRef<HTMLInputElement>(null);
+
+  // Focus container on mount so keyboard works immediately
+  useEffect(() => {
+    if (!answered) containerRef.current?.focus();
+  }, [answered]);
+
+  const q = questions[activeTab];
+  const isMulti = q?.multiSelect ?? false;
+  const optionCount = (q?.options.length ?? 0) + 1; // +1 for "Other"
+  const otherIndex = q?.options.length ?? 0;
+
+  const getAnswerForQuestion = useCallback(
+    (qIdx: number): string | null => {
+      const question = questions[qIdx];
+      if (question.multiSelect) {
+        const checked = checkedItems[qIdx];
+        if (!checked || checked.size === 0) return null;
+        const labels: string[] = [];
+        for (const idx of checked) {
+          if (idx === question.options.length) {
+            labels.push(`Other: ${otherText[qIdx] || ""}`);
+          } else {
+            labels.push(question.options[idx].label);
+          }
+        }
+        return labels.join(", ");
+      } else {
+        const sel = selectedSingle[qIdx];
+        if (sel === null) return null;
+        if (sel === question.options.length) {
+          return `Other: ${otherText[qIdx] || ""}`;
+        }
+        return question.options[sel].label;
       }
-      return { ...prev, [questionText]: label };
-    });
-  };
+    },
+    [questions, selectedSingle, checkedItems, otherText],
+  );
 
-  const handleSubmit = () => {
-    if (answered) return;
-    // If any question has no options (free-text prompt), use the text input
-    const hasEmptyOptions = questions.some((q) => q.options.length === 0);
-    if (hasEmptyOptions && textInput.trim()) {
-      // Backend expects { text: "..." } for free-text, plus answers dict
-      onSubmit({ text: textInput.trim(), answers: selections });
-    } else {
-      // Backend expects { questions: [...], answers: { questionText: selectedLabel } }
-      onSubmit({ questions, answers: selections });
+  const answeredIndices = new Set<number>();
+  for (let i = 0; i < questions.length; i++) {
+    if (getAnswerForQuestion(i) !== null) answeredIndices.add(i);
+  }
+
+  // Reset confirming when tab changes or answers change
+  useEffect(() => setConfirmingSubmit(false), [activeTab, answeredIndices.size]);
+
+  const submitAll = useCallback(() => {
+    const answers: Record<string, string> = {};
+    for (let i = 0; i < questions.length; i++) {
+      const a = getAnswerForQuestion(i);
+      if (a !== null) answers[questions[i].question] = a;
     }
-  };
+    onSubmit({ questions, answers });
+  }, [questions, getAnswerForQuestion, onSubmit]);
 
-  const handleKeyDown = (e: React.KeyboardEvent) => {
-    if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
-      e.preventDefault();
-      handleSubmit();
+  const handleSubmit = useCallback(() => {
+    if (answeredIndices.size < questions.length && !confirmingSubmit) {
+      setConfirmingSubmit(true);
+      return;
     }
-  };
+    submitAll();
+  }, [answeredIndices.size, questions.length, confirmingSubmit, submitAll]);
 
-  // Check if this is a free-text prompt (question with empty options)
-  const isFreeText = questions.length > 0 && questions.every((q) => q.options.length === 0);
+  const advanceToNext = useCallback(() => {
+    for (let offset = 1; offset <= questions.length; offset++) {
+      const next = (activeTab + offset) % questions.length;
+      if (!answeredIndices.has(next)) {
+        setActiveTab(next);
+        return;
+      }
+    }
+    // All answered — submit
+    submitAll();
+  }, [activeTab, questions.length, answeredIndices, submitAll]);
+
+  const handleOptionClick = useCallback(
+    (index: number) => {
+      setHighlighted((prev) => ({ ...prev, [activeTab]: index }));
+      if (isMulti) {
+        setCheckedItems((prev) => {
+          const next = new Set(prev[activeTab]);
+          if (next.has(index)) next.delete(index);
+          else next.add(index);
+          return { ...prev, [activeTab]: next };
+        });
+      } else {
+        setSelectedSingle((prev) => ({ ...prev, [activeTab]: index }));
+        // Auto-advance for single-select
+        setTimeout(() => advanceToNext(), 150);
+      }
+      if (index === otherIndex) {
+        setTimeout(() => otherInputRef.current?.focus(), 0);
+      }
+    },
+    [activeTab, isMulti, otherIndex, advanceToNext],
+  );
+
+  const handleKeyDown = useCallback(
+    (e: React.KeyboardEvent) => {
+      // When other input is focused, only handle Escape
+      if (document.activeElement === otherInputRef.current) {
+        if (e.key === "Escape") {
+          e.preventDefault();
+          e.stopPropagation();
+          containerRef.current?.focus();
+        }
+        return;
+      }
+
+      if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
+        e.preventDefault();
+        handleSubmit();
+        return;
+      }
+
+      switch (e.key) {
+        case "ArrowLeft":
+          e.preventDefault();
+          setActiveTab((prev) => (prev - 1 + questions.length) % questions.length);
+          break;
+        case "ArrowRight":
+          e.preventDefault();
+          setActiveTab((prev) => (prev + 1) % questions.length);
+          break;
+        case "ArrowUp":
+          e.preventDefault();
+          setHighlighted((prev) => ({
+            ...prev,
+            [activeTab]: ((prev[activeTab] ?? 0) - 1 + optionCount) % optionCount,
+          }));
+          break;
+        case "ArrowDown":
+          e.preventDefault();
+          setHighlighted((prev) => ({
+            ...prev,
+            [activeTab]: ((prev[activeTab] ?? 0) + 1) % optionCount,
+          }));
+          break;
+        case "Enter": {
+          e.preventDefault();
+          const hi = highlighted[activeTab] ?? 0;
+          handleOptionClick(hi);
+          break;
+        }
+      }
+    },
+    [activeTab, questions.length, optionCount, highlighted, handleOptionClick, handleSubmit],
+  );
+
+  // Answered state
+  if (answered && selectedAnswers) {
+    return (
+      <div className="chat-question chat-question-answered">
+        <div className="chat-question-answered-header-row">
+          <span className="chat-question-header">AskUserQuestion</span>
+          <span className="chat-question-answered-done">&#x2713; done</span>
+        </div>
+        <AnsweredTable questions={questions} answers={selectedAnswers} />
+      </div>
+    );
+  }
+
+  // Get description for currently highlighted option
+  const hi = highlighted[activeTab] ?? 0;
+  const previewDesc =
+    hi < (q?.options.length ?? 0)
+      ? (q?.options[hi]?.description ?? "")
+      : "";
 
   return (
-    <div className={`chat-question ${answered ? "chat-question-answered" : ""}`}>
-      {questions.map((q) => (
-        <div key={q.question} className="chat-question-group">
+    <div
+      className="chat-question"
+      ref={containerRef}
+      tabIndex={0}
+      onKeyDown={handleKeyDown}
+    >
+      {questions.length > 1 && (
+        <QuestionTabBar
+          questions={questions}
+          activeIndex={activeTab}
+          answeredIndices={answeredIndices}
+          onTabClick={setActiveTab}
+        />
+      )}
+
+      {q && (
+        <>
           <div className="chat-question-header">{q.header}</div>
           <div className="chat-question-text">{q.question}</div>
-          {q.options.length > 0 ? (
-            <div className="chat-question-options">
-              {q.options.map((opt) => {
-                const display = answered ? selectedAnswers : selections;
-                const isSelected = display?.[q.question]?.includes(opt.label);
-                return (
-                  <button
-                    key={opt.label}
-                    className={`chat-option ${isSelected ? "chat-option-selected" : ""}`}
-                    onClick={() => handleSelect(q.question, opt.label, q.multiSelect)}
-                    disabled={answered}
-                  >
-                    <span className="chat-option-radio">
-                      {isSelected ? (q.multiSelect ? "\u2611" : "\u25CF") : (q.multiSelect ? "\u2610" : "\u25CB")}
-                    </span>
-                    <div>
-                      <div className="chat-option-label">{opt.label}</div>
-                      <div className="chat-option-desc">{opt.description}</div>
-                    </div>
-                  </button>
-                );
-              })}
-            </div>
-          ) : !answered ? (
-            <textarea
-              className="chat-question-textarea"
-              value={textInput}
-              onChange={(e) => setTextInput(e.target.value)}
-              onKeyDown={handleKeyDown}
-              placeholder="Type your response..."
-              rows={3}
-              autoFocus
+
+          <div className="chat-question-body">
+            <QuestionOptionsPanel
+              question={q}
+              highlightedIndex={highlighted[activeTab] ?? 0}
+              selectedIndex={selectedSingle[activeTab] ?? null}
+              checkedIndices={checkedItems[activeTab] ?? new Set()}
+              otherText={otherText[activeTab] ?? ""}
+              onOptionClick={handleOptionClick}
+              onOtherTextChange={(text) =>
+                setOtherText((prev) => ({ ...prev, [activeTab]: text }))
+              }
+              otherInputRef={otherInputRef}
             />
-          ) : (
-            <div className="chat-question-answer">
-              {selectedAnswers?.text ?? textInput}
-            </div>
-          )}
-        </div>
-      ))}
-      {!answered && (
-        <div className="chat-question-actions">
-          <button
-            className="chat-btn chat-btn-primary"
-            onClick={handleSubmit}
-            disabled={isFreeText && !textInput.trim()}
-          >
-            Send
-          </button>
-        </div>
+            <QuestionPreviewPanel description={previewDesc} />
+          </div>
+
+          <div className="chat-question-submit-hint">
+            {confirmingSubmit ? (
+              <>
+                <span className="chat-question-warning">
+                  {questions.length - answeredIndices.size} of {questions.length} unanswered
+                </span>
+                <button className="chat-btn chat-btn-primary" onClick={submitAll}>
+                  Submit anyway
+                </button>
+                <button className="chat-btn" onClick={() => setConfirmingSubmit(false)}>
+                  Cancel
+                </button>
+              </>
+            ) : (
+              <>
+                {questions.length > 1 && answeredIndices.size < questions.length && (
+                  <button className="chat-btn" onClick={advanceToNext}>
+                    Next &rarr;
+                  </button>
+                )}
+                <button className="chat-btn chat-btn-primary" onClick={handleSubmit}>
+                  {questions.length === 1 ? "Submit" : "Submit all"}
+                </button>
+                <span>
+                  {isMulti ? "Enter toggles" : "Enter selects"}
+                  {questions.length > 1 ? " / \u2190\u2192 switches" : ""}
+                  {" / Ctrl+Enter submits"}
+                </span>
+              </>
+            )}
+          </div>
+        </>
       )}
     </div>
   );

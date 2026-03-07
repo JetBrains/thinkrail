@@ -1,5 +1,6 @@
 import { useUiStore } from "@/store/uiStore.ts";
 import { useSessionStore } from "@/store/sessionStore.ts";
+import { ThemeSwitcher } from "./ThemeSwitcher.tsx";
 
 export function Header({ onSwitchProject }: { onSwitchProject: () => void }) {
   const toggleLeft = useUiStore((s) => s.toggleLeftPanel);
@@ -32,6 +33,7 @@ export function Header({ onSwitchProject }: { onSwitchProject: () => void }) {
         <button className="header-btn" onClick={() => toggleRight()} title="Toggle context panel (Cmd+J)">
           Context
         </button>
+        <ThemeSwitcher />
         <button className="header-btn header-btn-primary" onClick={() => openModal()} title="New session (Cmd+T)">
           + New
         </button>

@@ -97,13 +97,18 @@ export function ChatStream({
             );
 
           case "toolCallStart": {
+            if ((p.toolName as string) === "AskUserQuestion") return null;
             const toolUseId = (p.toolUseId as string) ?? "";
             const end = toolStates.get(toolUseId);
             const toolInput =
               typeof p.toolInput === "string"
                 ? p.toolInput
                 : typeof p.toolInput === "object" && p.toolInput
-                  ? Object.values(p.toolInput as Record<string, unknown>)[0]?.toString() ?? ""
+                  ? (() => {
+                      const raw = Object.values(p.toolInput as Record<string, unknown>)[0];
+                      const str = raw?.toString() ?? "";
+                      return str.includes("[object Object]") ? "" : str;
+                    })()
                   : "";
             return (
               <ToolCallCard
@@ -138,11 +143,13 @@ export function ChatStream({
             const questions = (p.questions as AgentEvent["payload"][]) ?? [];
             const requestId = (p.requestId as string) ?? "";
             const isAnswered = answeredRequests.has(requestId);
+            const savedAnswer = answeredRequests.get(requestId) as Record<string, unknown> | undefined;
             return (
               <QuestionCard
                 key={k}
                 questions={questions as never}
                 answered={isAnswered}
+                selectedAnswers={isAnswered ? (savedAnswer?.answers as Record<string, string>) : undefined}
                 onSubmit={(response) => onResolveRequest(requestId, response)}
               />
             );

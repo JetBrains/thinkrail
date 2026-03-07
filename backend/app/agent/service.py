@@ -68,6 +68,10 @@ class AgentService:
             raise ValueError(
                 f"Cannot send message: session is '{task.status}', expected 'idle'"
             )
+        self._save_event(bonsai_sid, {
+            "eventType": "userMessage",
+            "payload": {"text": text},
+        })
         self._tracker.enqueue_message(bonsai_sid, text)
 
     async def interrupt_task(self, bonsai_sid: str) -> None:

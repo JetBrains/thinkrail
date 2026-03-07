@@ -216,12 +216,30 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
       await api.send(bonsaiSid, text);
     } catch (err) {
       console.error("[sendMessage] failed:", err);
-      // Revert to idle so the user can retry
+      const msg = err instanceof Error ? err.message : String(err);
+      useNotificationStore.getState().addToast({
+        eventType: "error",
+        message: `Send failed: ${msg}`,
+        persistent: true,
+        bonsaiSid,
+      });
+      // Revert status and remove optimistic userMessage
       set((s) => {
         const session = s.sessions.get(bonsaiSid);
         if (!session) return s;
         const next = new Map(s.sessions);
-        next.set(bonsaiSid, { ...session, status: "idle" });
+        next.set(bonsaiSid, {
+          ...session,
+          status: "idle",
+          events: session.events.filter(
+            (e, i) =>
+              !(
+                e.eventType === "userMessage" &&
+                i === session.events.length - 1 &&
+                (e.payload.text as string) === text
+              ),
+          ),
+        });
         return { sessions: next };
       });
     }
@@ -441,6 +459,13 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
     const api = createAgentApi(getClient());
     api.respond(bonsaiSid, requestId, response).catch((err) => {
       console.error("Failed to send agent/respond:", err);
+      set((s) => {
+        const session = s.sessions.get(bonsaiSid);
+        if (!session || session.status !== "running") return s;
+        const next = new Map(s.sessions);
+        next.set(bonsaiSid, { ...session, status: "idle" });
+        return { sessions: next };
+      });
     });
 
     // Mark request as answered (store the response) and clear pendingRequest
@@ -528,6 +553,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
           sessions.set(bonsaiSid, {
             ...session,
             status: "idle",
+            pendingRequest: null,
             metrics: {
               ...session.metrics,
               costUsd: (params.costUsd as number) ?? session.metrics.costUsd,
