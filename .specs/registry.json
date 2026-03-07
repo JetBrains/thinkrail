@@ -1446,9 +1446,191 @@
       ],
       "created": "2026-03-07",
       "updated": "2026-03-07"
+    },
+    {
+      "id": "proactive-agent-experience",
+      "type": "goal-and-requirements",
+      "path": "features/PROACTIVE_AGENT_EXPERIENCE.md",
+      "title": "Proactive Agent Experience",
+      "status": "active",
+      "covers": [
+        "backend/app/agent/",
+        "frontend/src/components/ContextPanel/",
+        "frontend/src/components/ChatStream/",
+        "claude-plugin/"
+      ],
+      "tags": [
+        "high",
+        "improvement",
+        "new-feature",
+        "agent-ux"
+      ],
+      "created": "2026-03-07",
+      "updated": "2026-03-07"
+    },
+    {
+      "id": "proactive-agent-design",
+      "type": "architecture-design",
+      "path": "features/PROACTIVE_AGENT_EXPERIENCE_DESIGN.md",
+      "title": "Proactive Agent Experience — Architecture Design",
+      "status": "draft",
+      "covers": [
+        "backend/app/agent/runner.py",
+        "frontend/src/components/ChatStream/",
+        "frontend/src/components/ContextPanel/",
+        "frontend/src/store/sessionStore.ts",
+        "frontend/src/store/wireEvents.ts"
+      ],
+      "tags": [
+        "architecture",
+        "agent-ux"
+      ],
+      "created": "2026-03-07",
+      "updated": "2026-03-07"
+    },
+    {
+      "id": "agent-suggest-session",
+      "type": "submodule-design",
+      "path": "backend/app/agent/tools/SUGGEST_SESSION.md",
+      "title": "SuggestSession — Backend Spec",
+      "status": "draft",
+      "covers": [
+        "backend/app/agent/runner.py"
+      ],
+      "tags": [
+        "backend",
+        "proactive",
+        "interactive"
+      ],
+      "created": "2026-03-07",
+      "updated": "2026-03-07"
+    },
+    {
+      "id": "agent-progress",
+      "type": "submodule-design",
+      "path": "backend/app/agent/tools/PROGRESS.md",
+      "title": "UpdateProgress — Backend Spec",
+      "status": "draft",
+      "covers": [
+        "backend/app/agent/runner.py"
+      ],
+      "tags": [
+        "backend",
+        "proactive",
+        "passive"
+      ],
+      "created": "2026-03-07",
+      "updated": "2026-03-07"
+    },
+    {
+      "id": "feature-suggest-session",
+      "type": "submodule-design",
+      "path": "features/SUGGEST_SESSION.md",
+      "title": "SuggestSession — Feature Spec",
+      "status": "draft",
+      "covers": [
+        "backend/app/agent/runner.py",
+        "frontend/src/components/ChatStream/SuggestionCard.tsx",
+        "frontend/src/store/sessionStore.ts",
+        "frontend/src/store/wireEvents.ts"
+      ],
+      "tags": [
+        "feature",
+        "agent-ux",
+        "proactive",
+        "interactive"
+      ],
+      "created": "2026-03-07",
+      "updated": "2026-03-07"
+    },
+    {
+      "id": "feature-update-progress",
+      "type": "submodule-design",
+      "path": "features/UPDATE_PROGRESS.md",
+      "title": "UpdateProgress — Feature Spec",
+      "status": "draft",
+      "covers": [
+        "backend/app/agent/runner.py",
+        "frontend/src/components/ContextPanel/sections/ProgressSection.tsx",
+        "frontend/src/store/sessionStore.ts",
+        "frontend/src/store/wireEvents.ts"
+      ],
+      "tags": [
+        "feature",
+        "agent-ux",
+        "proactive",
+        "passive"
+      ],
+      "created": "2026-03-07",
+      "updated": "2026-03-07"
     }
   ],
   "links": [
+    {
+      "from": "agent-suggest-session",
+      "to": "module-agent",
+      "type": "parent"
+    },
+    {
+      "from": "agent-suggest-session",
+      "to": "feature-suggest-session",
+      "type": "implements"
+    },
+    {
+      "from": "agent-progress",
+      "to": "module-agent",
+      "type": "parent"
+    },
+    {
+      "from": "agent-progress",
+      "to": "feature-update-progress",
+      "type": "implements"
+    },
+    {
+      "from": "feature-suggest-session",
+      "to": "proactive-agent-design",
+      "type": "parent"
+    },
+    {
+      "from": "feature-suggest-session",
+      "to": "agent-suggest-session",
+      "type": "references"
+    },
+    {
+      "from": "feature-update-progress",
+      "to": "proactive-agent-design",
+      "type": "parent"
+    },
+    {
+      "from": "feature-update-progress",
+      "to": "agent-progress",
+      "type": "references"
+    },
+    {
+      "from": "proactive-agent-design",
+      "to": "design-doc",
+      "type": "parent"
+    },
+    {
+      "from": "proactive-agent-design",
+      "to": "proactive-agent-experience",
+      "type": "implements"
+    },
+    {
+      "from": "proactive-agent-design",
+      "to": "module-agent",
+      "type": "depends-on"
+    },
+    {
+      "from": "proactive-agent-design",
+      "to": "module-rpc",
+      "type": "depends-on"
+    },
+    {
+      "from": "proactive-agent-design",
+      "to": "frontend-module",
+      "type": "depends-on"
+    },
     {
       "from": "design-doc",
       "to": "goal-and-requirements",
@@ -2263,6 +2445,26 @@
       "from": "task-native-resume",
       "to": "module-agent",
       "type": "implements"
+    },
+    {
+      "from": "proactive-agent-experience",
+      "to": "goal-and-requirements",
+      "type": "parent"
+    },
+    {
+      "from": "proactive-agent-experience",
+      "to": "module-agent",
+      "type": "depends-on"
+    },
+    {
+      "from": "proactive-agent-experience",
+      "to": "module-rpc",
+      "type": "depends-on"
+    },
+    {
+      "from": "proactive-agent-experience",
+      "to": "frontend-module",
+      "type": "depends-on"
     }
   ]
 }

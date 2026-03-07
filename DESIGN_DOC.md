@@ -226,6 +226,12 @@ backend/
 | RPC | [backend/app/rpc/README.md](backend/app/rpc/README.md) | WebSocket endpoint, JSON-RPC dispatch, notifications |
 | Frontend | [frontend/README.md](frontend/README.md) | React SPA, UI components, state management |
 
+**Feature Designs:**
+
+| Feature | Spec | Description |
+|---------|------|-------------|
+| Proactive Agent Experience | [PROACTIVE_AGENT_EXPERIENCE_DESIGN.md](features/PROACTIVE_AGENT_EXPERIENCE_DESIGN.md) | Agent-driven UI: SuggestSession and UpdateProgress tools via canUseTool interception |
+
 ## Frontend (TypeScript/JavaScript)
 
 **Framework:** React

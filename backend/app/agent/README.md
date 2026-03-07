@@ -475,6 +475,6 @@ await runner.run(
 ## Related Specs
 
 - **Parent:** [Architecture Design](../../../DESIGN_DOC.md)
-- **Submodules:** [Context Assembly](CONTEXT.md) — prompt construction pipeline, [Session Persistence](PERSISTENCE.md) — disk I/O for session data
+- **Submodules:** [Context Assembly](CONTEXT.md) — prompt construction pipeline, [Session Persistence](PERSISTENCE.md) — disk I/O for session data, [SuggestSession](tools/SUGGEST_SESSION.md) — proactive session suggestions, [UpdateProgress](tools/PROGRESS.md) — proactive progress updates
 - **Depends on:** [Spec Module](../spec/README.md) (for loading spec context), [Core Config](../core/README.md) (for project root and plugin dir)
 - **Related modules:** `rpc/methods/agents.py` (JSON-RPC interface to this module), `rpc/notifications.py` (WebSocket push)
