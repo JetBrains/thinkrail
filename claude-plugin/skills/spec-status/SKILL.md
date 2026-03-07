@@ -17,7 +17,7 @@ The dashboard data is **pre-computed by a script**. Do NOT manually read registr
 
 Execute:
 ```bash
-python3 "$CLAUDE_PLUGIN_ROOT/tools/compute-dashboard.py" "$CLAUDE_PROJECT_DIR" --terminal status
+python3 claude-plugin/tools/compute-dashboard.py . --terminal status
 ```
 
 This outputs a fully formatted ANSI status report including:

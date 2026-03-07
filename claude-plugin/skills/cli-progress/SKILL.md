@@ -21,7 +21,7 @@ The progress display is **computed by a script** — no need to read registry.js
 
 Execute:
 ```bash
-python3 "$CLAUDE_PLUGIN_ROOT/tools/compute-dashboard.py" "$CLAUDE_PROJECT_DIR" --terminal progress
+python3 claude-plugin/tools/compute-dashboard.py . --terminal progress
 ```
 
 This outputs a fully formatted ANSI progress display including:

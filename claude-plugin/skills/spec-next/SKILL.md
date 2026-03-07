@@ -17,7 +17,7 @@ Recommendations are **pre-computed by the dashboard script**. Do NOT manually re
 
 Execute:
 ```bash
-python3 "$CLAUDE_PLUGIN_ROOT/tools/compute-dashboard.py" "$CLAUDE_PROJECT_DIR" --terminal next
+python3 claude-plugin/tools/compute-dashboard.py . --terminal next
 ```
 
 This outputs prioritized recommendations including:

@@ -6,7 +6,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3 \"$CLAUDE_PLUGIN_ROOT/tools/compute-dashboard.py\" \"$CLAUDE_PROJECT_DIR\" 2>/dev/null || true"
+            "command": "python3 claude-plugin/tools/compute-dashboard.py . 2>/dev/null || true"
           }
         ]
       }
@@ -16,7 +16,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3 \"$CLAUDE_PLUGIN_ROOT/tools/compute-dashboard.py\" \"$CLAUDE_PROJECT_DIR\" 2>/dev/null || true"
+            "command": "python3 claude-plugin/tools/compute-dashboard.py . 2>/dev/null || true"
           }
         ]
       }

@@ -21,7 +21,7 @@ When invoked directly (`/specdriven:visualisation`):
 
 Execute:
 ```bash
-python3 "$CLAUDE_PLUGIN_ROOT/tools/compute-dashboard.py" "$CLAUDE_PROJECT_DIR" --terminal status
+python3 claude-plugin/tools/compute-dashboard.py . --terminal status
 ```
 
 ### Option 2: Browser dashboard
