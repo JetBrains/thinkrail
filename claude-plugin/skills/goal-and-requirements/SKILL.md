@@ -242,7 +242,7 @@ Use AskUserQuestion and clarify the project/feature name; suggest 3—5 options.
 ### Step 10: Registry Integration
 
 Update `.specs/registry.json` (if exists; create and update if doesn't):
-1. Add entry with `type: "goal"`, `status: "active"`, `tags: ["{priority}", "{category}"]`
+1. Add entry with `type: "goal-and-requirements"`, `status: "active"`, `tags: ["{priority}", "{category}"]`
 2. If code exists and modules are detected, add `references` links to affected module specs
 
 ### Step 11: Show Progress

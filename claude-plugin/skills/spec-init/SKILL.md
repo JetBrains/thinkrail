@@ -50,7 +50,6 @@ Create `.specs/registry.json` with this initial structure:
 {
   "version": "2.0",
   "project": "{project-name}",
-  "created": "{ISO-date}",
   "specs": [],
   "links": []
 }

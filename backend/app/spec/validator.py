@@ -6,6 +6,7 @@ RECOGNIZED_TYPES = frozenset({
     "goal-and-requirements",
     "architecture-design",
     "module-design",
+    "submodule-design",
     "task-spec",
 })
 

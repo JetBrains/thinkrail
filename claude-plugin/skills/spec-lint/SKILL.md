@@ -79,6 +79,24 @@ For each spec with a `covers` field:
 - No TODO placeholders remaining in "active" specs (OK in "draft")
 - No empty sections
 
+### 6. Registry Format Validation
+
+Validate `.specs/registry.json` entries against the backend schema:
+
+**Spec entries:**
+- Every entry has non-empty `id`, `type`, `path`, `title`
+- `type` is one of: `goal-and-requirements`, `architecture-design`, `module-design`, `submodule-design`, `task-spec`
+- `status` is one of: `draft`, `active`, `stale`, `deprecated`
+
+**Links:**
+- Every link's `type` is one of: `depends-on`, `parent`, `child`, `references`, `implements`
+- No self-links (link `from` == `to`)
+- Link source and target IDs both exist as spec entries in the registry
+
+**Top-level fields:**
+- Only recognized top-level keys: `version`, `project`, `specs`, `links`
+- Flag any unrecognized top-level fields (e.g. `created`)
+
 ## Output Format
 
 ```markdown
@@ -141,6 +159,9 @@ For fixable issues, offer to:
 - Register unregistered specs
 - Update stale registry entries
 - Fix simple broken links
+- Remove unrecognized top-level fields from registry.json
+- Remove self-links from registry.json
+- Remove links referencing non-existent spec IDs
 
 ## After Completion
 
