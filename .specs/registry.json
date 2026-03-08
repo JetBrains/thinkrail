@@ -78,7 +78,7 @@
         "agent-orchestration"
       ],
       "created": "2026-02-25",
-      "updated": "2026-03-07"
+      "updated": "2026-03-08"
     },
     {
       "id": "agent-context",
@@ -130,7 +130,7 @@
         "transport"
       ],
       "created": "2026-02-26",
-      "updated": "2026-03-03"
+      "updated": "2026-03-08"
     },
     {
       "id": "frontend-module",
@@ -139,7 +139,7 @@
       "title": "Frontend Module",
       "status": "active",
       "created": "2026-03-02",
-      "updated": "2026-03-06",
+      "updated": "2026-03-08",
       "covers": [
         "frontend/"
       ],
@@ -200,7 +200,7 @@
         "rendering"
       ],
       "created": "2026-02-27",
-      "updated": "2026-03-05"
+      "updated": "2026-03-08"
     },
     {
       "id": "graph-interactions",
@@ -407,7 +407,7 @@
       "title": "State Management",
       "status": "active",
       "created": "2026-03-02",
-      "updated": "2026-03-05",
+      "updated": "2026-03-08",
       "covers": [
         "frontend/src/store/"
       ],
@@ -1448,6 +1448,25 @@
       "updated": "2026-03-07"
     },
     {
+      "id": "improvement-nondestructive-interrupt",
+      "type": "task-spec",
+      "path": "current_tasks/agent/improvement_nondestructive_interrupt.md",
+      "title": "Replace destructive interrupt with SDK native client.interrupt()",
+      "status": "done",
+      "covers": [
+        "backend/app/agent/service.py",
+        "backend/app/agent/runner.py",
+        "backend/app/agent/tracker.py"
+      ],
+      "tags": [
+        "high",
+        "improvement"
+      ],
+      "implements": "module-agent",
+      "created": "2026-03-08",
+      "updated": "2026-03-08"
+    },
+    {
       "id": "proactive-agent-experience",
       "type": "goal-and-requirements",
       "path": "features/PROACTIVE_AGENT_EXPERIENCE.md",
@@ -1472,7 +1491,7 @@
       "id": "proactive-agent-design",
       "type": "architecture-design",
       "path": "features/PROACTIVE_AGENT_EXPERIENCE_DESIGN.md",
-      "title": "Proactive Agent Experience — Architecture Design",
+      "title": "Proactive Agent Experience \u2014 Architecture Design",
       "status": "draft",
       "covers": [
         "backend/app/agent/runner.py",
@@ -1492,7 +1511,7 @@
       "id": "agent-suggest-session",
       "type": "submodule-design",
       "path": "backend/app/agent/tools/SUGGEST_SESSION.md",
-      "title": "SuggestSession — Backend Spec",
+      "title": "SuggestSession \u2014 Backend Spec",
       "status": "draft",
       "covers": [
         "backend/app/agent/runner.py"
@@ -1509,7 +1528,7 @@
       "id": "agent-progress",
       "type": "submodule-design",
       "path": "backend/app/agent/tools/PROGRESS.md",
-      "title": "UpdateProgress — Backend Spec",
+      "title": "UpdateProgress \u2014 Backend Spec",
       "status": "draft",
       "covers": [
         "backend/app/agent/runner.py"
@@ -1526,7 +1545,7 @@
       "id": "feature-suggest-session",
       "type": "submodule-design",
       "path": "features/SUGGEST_SESSION.md",
-      "title": "SuggestSession — Feature Spec",
+      "title": "SuggestSession \u2014 Feature Spec",
       "status": "draft",
       "covers": [
         "backend/app/agent/runner.py",
@@ -1541,13 +1560,13 @@
         "interactive"
       ],
       "created": "2026-03-07",
-      "updated": "2026-03-07"
+      "updated": "2026-03-08"
     },
     {
       "id": "feature-update-progress",
       "type": "submodule-design",
       "path": "features/UPDATE_PROGRESS.md",
-      "title": "UpdateProgress — Feature Spec",
+      "title": "UpdateProgress \u2014 Feature Spec",
       "status": "draft",
       "covers": [
         "backend/app/agent/runner.py",
@@ -1563,6 +1582,64 @@
       ],
       "created": "2026-03-07",
       "updated": "2026-03-07"
+    },
+    {
+      "id": "improvement-chat-ui-task-folding",
+      "type": "task-spec",
+      "path": "current_tasks/frontend/improvement_chat_ui_task_folding.md",
+      "title": "Improve Chat UI: Nest subagent tool calls into foldable groups",
+      "status": "active",
+      "covers": [
+        "frontend/src/components/ChatStream/",
+        "backend/app/agent/runner.py"
+      ],
+      "tags": [
+        "high",
+        "improvement"
+      ],
+      "implements": [
+        "chat-ui",
+        "module-agent"
+      ],
+      "depends-on": [],
+      "created": "2026-03-08",
+      "updated": "2026-03-08"
+    },
+    {
+      "id": "task-suggest-session-runner",
+      "type": "task-spec",
+      "path": "current_tasks/agent/feature_suggest_session_runner.md",
+      "title": "Implement SuggestSession branch in runner.py can_use_tool",
+      "status": "active",
+      "covers": [
+        "backend/app/agent/runner.py"
+      ],
+      "tags": [
+        "high",
+        "new-feature"
+      ],
+      "created": "2026-03-08",
+      "updated": "2026-03-08"
+    },
+    {
+      "id": "task-suggest-session-ui",
+      "type": "task-spec",
+      "path": "current_tasks/frontend/feature_suggest_session_ui.md",
+      "title": "Implement SuggestSession frontend: wiring, store, SuggestionCard",
+      "status": "active",
+      "covers": [
+        "frontend/src/store/wireEvents.ts",
+        "frontend/src/store/sessionStore.ts",
+        "frontend/src/components/ChatStream/SuggestionCard.tsx",
+        "frontend/src/components/ChatStream/ChatStream.tsx"
+      ],
+      "tags": [
+        "high",
+        "new-feature",
+        "frontend"
+      ],
+      "created": "2026-03-08",
+      "updated": "2026-03-08"
     }
   ],
   "links": [
@@ -2464,6 +2541,36 @@
     {
       "from": "proactive-agent-experience",
       "to": "frontend-module",
+      "type": "depends-on"
+    },
+    {
+      "from": "improvement-nondestructive-interrupt",
+      "to": "module-agent",
+      "type": "implements"
+    },
+    {
+      "from": "task-suggest-session-runner",
+      "to": "module-agent",
+      "type": "implements"
+    },
+    {
+      "from": "task-suggest-session-runner",
+      "to": "feature-suggest-session",
+      "type": "implements"
+    },
+    {
+      "from": "task-suggest-session-ui",
+      "to": "chat-ui",
+      "type": "implements"
+    },
+    {
+      "from": "task-suggest-session-ui",
+      "to": "feature-suggest-session",
+      "type": "implements"
+    },
+    {
+      "from": "task-suggest-session-ui",
+      "to": "task-suggest-session-runner",
       "type": "depends-on"
     }
   ]
