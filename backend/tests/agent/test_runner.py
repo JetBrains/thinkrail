@@ -744,9 +744,7 @@ class TestSubagentHooks:
 
         # Extract the hook callback and invoke it
         hook_fn = captured["options"].hooks["SubagentStart"][0].hooks[0]
-        mock_input = MagicMock()
-        mock_input.agent_id = "agent-42"
-        mock_input.agent_type = "Explore"
+        mock_input = {"agent_id": "agent-42", "agent_type": "Explore"}
 
         result = await hook_fn(mock_input, None, MagicMock())
 
@@ -791,8 +789,7 @@ class TestSubagentHooks:
 
         # Extract the hook callback and invoke it
         hook_fn = captured["options"].hooks["SubagentStop"][0].hooks[0]
-        mock_input = MagicMock()
-        mock_input.agent_id = "agent-42"
+        mock_input = {"agent_id": "agent-42"}
 
         result = await hook_fn(mock_input, None, MagicMock())
 

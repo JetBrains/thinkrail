@@ -14,7 +14,7 @@
     - [ ] Re-visualise normally answers on AskUserQuestions
     - [ ] AskUserQuestion/approval requests can "slip upwards" when agent does things simultaneously — should be pinned/focused (like claude code)
     - [ ] Group tool calls and tasks somehow
-    - [ ] add "don't ask approval again for ..."
+    - [ ] add "don't ask approval again for ..." — "Allow for Session" button on ApprovalCard that uses SDK's `PermissionUpdate(type="addRules", destination="session")` via `PermissionResultAllow.updated_permissions` to auto-allow matching tools for the rest of the session (SDK enforces it natively, no custom state needed)
     - [~] send message should always be active?
     - [ ] add interrupt
     - [ ] on approval "denied" agent stuck

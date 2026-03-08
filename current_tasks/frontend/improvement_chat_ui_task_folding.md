@@ -54,14 +54,16 @@ their parent `SubagentBlock`, with fold/expand to keep the stream scannable.
 
 ## Definition of done
 
-- [ ] Existing and new tests pass verifying subagent nesting and fold/expand behavior
-- [ ] `toolCallStart` events inside a subagent include `parentToolUseId`
-- [ ] `subagentStart` / `subagentEnd` events are emitted by the backend
-- [ ] Tool calls render nested inside their parent SubagentBlock
-- [ ] SubagentBlock is collapsible with summary when folded
-- [ ] Flat (non-subagent) tool calls render unchanged
+- [x] Existing and new tests pass verifying subagent nesting and fold/expand behavior
+- [x] `toolCallStart` events inside a subagent include `parentToolUseId`
+- [x] `subagentStart` / `subagentEnd` events are emitted by the backend
+- [x] Tool calls render nested inside their parent SubagentBlock
+- [x] SubagentBlock is collapsible with summary when folded
+- [x] Flat (non-subagent) tool calls render unchanged
 
 **Priority:** High
 **Type:** Improvement
+**Status:** Done
 **Started:** 2026-03-08
+**Completed:** 2026-03-08
 **Spec references:** `frontend/ui-specs/CHAT_UI.md`, `backend/app/rpc/README.md`

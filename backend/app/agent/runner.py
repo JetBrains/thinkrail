@@ -103,12 +103,12 @@ async def run(
 
     async def on_subagent_start(hook_input: Any, tool_use_id: str | None, context: Any) -> dict:
         nonlocal _current_subagent_id
-        _current_subagent_id = hook_input.agent_id
+        _current_subagent_id = hook_input["agent_id"]
         await notify("agent/subagentStart", {
             "bonsaiSid": task.bonsai_sid,
             "sessionId": session_id,
-            "agentId": hook_input.agent_id,
-            "agentType": hook_input.agent_type,
+            "agentId": hook_input["agent_id"],
+            "agentType": hook_input["agent_type"],
         })
         return {}
 
@@ -118,7 +118,7 @@ async def run(
         await notify("agent/subagentEnd", {
             "bonsaiSid": task.bonsai_sid,
             "sessionId": session_id,
-            "agentId": hook_input.agent_id,
+            "agentId": hook_input["agent_id"],
         })
         return {}
 

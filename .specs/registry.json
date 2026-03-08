@@ -1588,7 +1588,7 @@
       "type": "task-spec",
       "path": "current_tasks/frontend/improvement_chat_ui_task_folding.md",
       "title": "Improve Chat UI: Nest subagent tool calls into foldable groups",
-      "status": "active",
+      "status": "done",
       "covers": [
         "frontend/src/components/ChatStream/",
         "backend/app/agent/runner.py"
