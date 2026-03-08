@@ -1,134 +1,233 @@
 ---
 name: visualisation
-description: Utility skill for generating rich terminal visualizations in CLI. Provides patterns for ASCII diagrams, box formatting, progress indicators, architecture views, and side-by-side comparisons. Other skills reference this for consistent visual output.
+description: Utility skill for generating rich visualizations using the bonsai_visualize MCP tool. Provides patterns for progress trackers, summary boxes, comparisons, data tables, status lists, and diagrams. Other skills reference this for consistent visual output.
 ---
 
-# Terminal Visualisation Toolkit
+# Visualization Toolkit
 
-You are a **visualization utility** for specification-driven development. Use these patterns whenever presenting information to the user in the CLI. All other skills should apply these patterns for consistent, clear visual output.
+You are a **visualization utility** for specification-driven development. Use the `bonsai_visualize` MCP tool for all structured visual output. All other skills should apply these patterns for consistent, clear visualizations.
 
-## IMPORTANT: When to Use
+## IMPORTANT: Rules
+
+- **ALWAYS** use `bonsai_visualize` tool for structured displays
+- **NEVER** use Bash echo/printf for visual output
+- **NEVER** embed ANSI escape codes (`\e[1;36m`, etc.) in text
+- **NEVER** hand-draw ASCII boxes (`┌─┐`, `╔═╗`, `━━━`, etc.) in text output
+- For simple inline information, use Markdown (bold, code, tables, blockquotes)
+
+## When to Use
 
 - This skill is invoked **automatically by other skills** when they need visualizations
 - It can also be invoked **directly** to visualize existing specifications
-- If invoked directly: run the dashboard script or open the HTML dashboard
+- If invoked directly: read `.specs/registry.json` and `current_tasks/` to gather data, then visualize
 
 ## Direct Invocation
 
 When invoked directly (`/specdriven:visualisation`):
 
-### Option 1: Terminal dashboard
+### Step 1: Gather data
 
-Execute:
-```bash
-python3 claude-plugin/tools/compute-dashboard.py . --terminal status
+Read `.specs/registry.json` and scan `current_tasks/` for task status. Compute:
+- Workflow step completion (goal, architecture, modules, tasks)
+- Task counts by status and module
+- Spec coverage and freshness
+
+### Step 2: Show dashboard
+
+Call `bonsai_visualize` with a `summary-box` showing the overall project status:
+```json
+{
+  "type": "summary-box",
+  "title": "Project Dashboard",
+  "vizId": "project-dashboard",
+  "data": {
+    "sections": [
+      {"heading": "Workflow Progress", "status": "current", "items": [
+        {"label": "Goal & Requirements", "value": "[status]"},
+        {"label": "Architecture", "value": "[status]"},
+        {"label": "Module Specs", "value": "[X/Y complete]"},
+        {"label": "Task Specs", "value": "[X/Y complete]"}
+      ]},
+      {"heading": "Task Summary", "items": [
+        {"label": "Total", "value": "[count]"},
+        {"label": "Done", "value": "[count]"},
+        {"label": "In Progress", "value": "[count]"},
+        {"label": "Pending", "value": "[count]"}
+      ]}
+    ]
+  }
+}
 ```
-
-### Option 2: Browser dashboard
-
-The HTML dashboard at `.specs/dashboard.html` provides an interactive view with:
-- **Overview tab**: Workflow steps, recommendations
-- **Graph tab**: Cytoscape.js interactive spec dependency graph
-- **Specs tab**: Coverage table with freshness indicators
-- **Tasks tab**: Task status by module
-- **Lint tab**: Structural issues
-
-Tell the user to open `.specs/dashboard.html` in their browser. It auto-refreshes every 3 seconds.
 
 ### Step 3: Offer actions
 
 Use AskUserQuestion:
 
 **What would you like to visualize?**
-- "Open browser dashboard" -- Open .specs/dashboard.html
-- "Terminal status report" -- Run --terminal status
-- "Terminal progress" -- Run --terminal progress
+- "Detailed task breakdown by module"
+- "Spec coverage report"
+- "Workflow progress tracker"
 - "Done"
 
-## Color Output Guide
+## Visualization Types Reference
 
-When rendering custom visualizations (not from the script), apply ANSI color codes:
+Call `bonsai_visualize` with the appropriate type:
 
-| Element | Color | ANSI Code |
-|---------|-------|-----------|
-| Titles / Headers | Bold Cyan | `\e[1;36m` |
-| Box Borders | Cyan | `\e[36m` |
-| `[✓]` Done | Bold Green | `\e[1;32m` |
-| `▶` Current | Bold Yellow | `\e[1;33m` |
-| `[✗]` Failed | Bold Red | `\e[1;31m` |
-| `⚠` Warning | Yellow | `\e[33m` |
-| `[⊘]` Skipped | Dim + Strikethrough | `\e[2;9m` |
-| `[ ]` Pending | Dark Gray | `\e[90m` |
-| File paths | Blue | `\e[34m` |
-| Reset | -- | `\e[0m` |
+### 1. `progress-tracker` — Workflow steps with status
 
-## Visualization Patterns
-
-These patterns remain available for skills that generate custom output:
-
-### Box Formatting
-
-**Double-line box** (summaries):
-```
-╔════════════════════════════════╗
-║ TITLE                          ║
-╠════════════════════════════════╣
-║ Content                        ║
-╚════════════════════════════════╝
+```json
+{
+  "type": "progress-tracker",
+  "title": "Specification-Driven Development",
+  "vizId": "workflow-progress",
+  "data": {
+    "steps": [
+      {"label": "Goal & Requirements", "status": "done", "file": "GOAL&REQUIREMENTS.md"},
+      {"label": "Architecture", "status": "current", "file": "DESIGN_DOC.md"},
+      {"label": "Module Specs", "status": "pending"},
+      {"label": "Task Specs", "status": "pending"},
+      {"label": "Implementation", "status": "pending"}
+    ]
+  }
+}
 ```
 
-**Single-line box** (progress):
-```
-┌───────────────────────────────┐
-│ Title                         │
-├───────────────────────────────┤
-│ Content                       │
-└───────────────────────────────┘
-```
+### 2. `summary-box` — Key-value data in sections
 
-### Progress Bars
-
-```
-[████████░░░░░░░░] 8/14 tasks (57%)
-```
-
-Construction: `█` filled, `░` empty, 16 chars wide.
-
-### Status Indicators
-
-| Symbol | Meaning |
-|--------|---------|
-| `[✓]` | Completed |
-| `[⊘]` | Skipped |
-| ` ▶ ` | Current |
-| `[ ]` | Pending |
-| `[✗]` | Failed |
-| `[~]` | Partial |
-
-### Architecture Diagrams
-
-```
-┌──────────────┐
-│ Component A  ├──────>┌──────────────┐
-└──────┬───────┘       │ Component B  │
-       │               └──────────────┘
-       ↓
-┌──────────────┐
-│ Component C  │
-└──────────────┘
+```json
+{
+  "type": "summary-box",
+  "title": "Requirements Summary",
+  "vizId": "requirements-summary",
+  "data": {
+    "sections": [
+      {"heading": "Business Requirements", "status": "done", "items": [
+        {"label": "Auth system", "value": "JWT-based authentication"},
+        {"label": "API", "value": "RESTful endpoints"}
+      ]},
+      {"heading": "Technology Stack", "status": "current", "items": [
+        {"label": "Language", "value": "Python 3.11+"},
+        {"label": "Framework", "value": "FastAPI"}
+      ]}
+    ]
+  }
+}
 ```
 
-### Side-by-Side Comparison
+### 3. `comparison` — Side-by-side option comparison
 
+```json
+{
+  "type": "comparison",
+  "title": "Architecture Approaches",
+  "vizId": "arch-comparison",
+  "data": {
+    "options": [
+      {
+        "name": "Pipeline",
+        "description": "Data flows through sequential stages",
+        "pros": ["Simple to understand", "Easy to test"],
+        "cons": ["Less flexible", "Sequential bottleneck"]
+      },
+      {
+        "name": "Event-driven",
+        "description": "Components react to events",
+        "pros": ["Highly decoupled", "Scalable"],
+        "cons": ["Complex debugging", "Eventual consistency"]
+      }
+    ]
+  }
+}
 ```
-#1 [Approach Name]          ║  #2 [Approach Name]
-                            ║
-[diagram 1]                 ║  [diagram 2]
+
+### 4. `data-table` — Tabular data (coverage, tasks)
+
+```json
+{
+  "type": "data-table",
+  "title": "Spec Coverage",
+  "vizId": "spec-coverage",
+  "data": {
+    "columns": ["Module", "Spec", "Status", "Freshness"],
+    "rows": [
+      ["agent/", "README.md", "active", "fresh"],
+      ["core/", "README.md", "active", "stale"],
+      ["rpc/", "—", "missing", "—"]
+    ]
+  }
+}
 ```
+
+### 5. `status-list` — Vertical list with status icons
+
+```json
+{
+  "type": "status-list",
+  "title": "Module Status",
+  "vizId": "module-status",
+  "data": {
+    "items": [
+      {"label": "agent/runner.py", "status": "done", "detail": "All tests passing"},
+      {"label": "rpc/server.py", "status": "current", "detail": "In progress"},
+      {"label": "core/watcher.py", "status": "pending", "detail": "Not started"}
+    ]
+  }
+}
+```
+
+### 6. `diagram` — Component boxes and connections
+
+```json
+{
+  "type": "diagram",
+  "title": "System Architecture",
+  "vizId": "system-diagram",
+  "data": {
+    "nodes": [
+      {"id": "frontend", "label": "Frontend (React)", "status": "done"},
+      {"id": "rpc", "label": "RPC Server", "status": "current"},
+      {"id": "agent", "label": "Agent Runner", "status": "done"},
+      {"id": "spec", "label": "Spec Service", "status": "done"}
+    ],
+    "edges": [
+      {"from": "frontend", "to": "rpc", "label": "WebSocket"},
+      {"from": "rpc", "to": "agent", "label": "JSON-RPC"},
+      {"from": "rpc", "to": "spec", "label": "JSON-RPC"}
+    ]
+  }
+}
+```
+
+## Status Values
+
+| Status | Icon | Meaning |
+|--------|------|---------|
+| `done` | ✓ | Completed |
+| `current` | ▶ | In progress |
+| `pending` | ○ | Not started |
+| `error` | ✗ | Failed |
+| `skipped` | ⊘ | Intentionally skipped |
+| `stale` | ~ | Outdated |
+
+## Using `vizId` for Updates
+
+When a visualization has a `vizId`, subsequent calls with the same `vizId` will **update** the existing card in the UI instead of creating a new one. Use this for:
+- Progress trackers that advance through steps
+- Summary boxes that fill in as data is gathered
+- Any visualization that changes over time during a session
+
+## For Inline Text (simple cases only)
+
+Use Markdown formatting:
+- **Bold** for emphasis
+- `code` for file paths, tool names
+- Tables for structured data
+- Blockquotes for callouts
 
 ## Key Principles
 
-- **Consistency**: Same symbols and patterns across all skills
+- **Structured data over text**: Describe WHAT to show, let the UI decide HOW
+- **Use `bonsai_visualize` for all structured displays**: Never fall back to ASCII art
+- **Consistency**: Same status values and types across all skills
 - **Clarity**: Visualizations make complex information easier to understand
-- **Brevity**: Keep diagrams focused
-- **Accessibility**: ASCII art readable in any terminal
+- **Brevity**: Keep data focused

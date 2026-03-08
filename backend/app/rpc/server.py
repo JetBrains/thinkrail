@@ -35,11 +35,13 @@ from app.rpc.methods.sessions import (
     get_session,
     list_all_sessions,
 )
+from app.rpc.methods.viz import get_viz_state, recompute_viz
 from app.agent.service import AgentService
 from app.core.config import AppConfig, load_config
 from app.core.fileio import read_text
 from app.core.watcher import WatchHandle, watch, stop
 from app.spec.service import SpecService, detect_spec_type
+from app.viz.service import VisualizationService
 
 logger = logging.getLogger(__name__)
 
@@ -62,21 +64,28 @@ METHODS = {
     "session/get": get_session,
     "session/continue": continue_session,
     "session/delete": delete_session_data,
+    "viz/state": get_viz_state,
+    "viz/recompute": recompute_viz,
 }
 
 _active_ws: WebSocket | None = None
 _active_watcher: WatchHandle | None = None
 _agent_services: dict[str, AgentService] = {}
+_viz_services: dict[str, VisualizationService] = {}
 
 
 def _bind_methods(
-    spec_service: SpecService, agent_service: AgentService
+    spec_service: SpecService,
+    agent_service: AgentService,
+    viz_service: VisualizationService,
 ) -> dict:
     """Bind each handler in METHODS to its owning service via partial."""
     bound = {}
     for name, handler in METHODS.items():
         if name.startswith("spec/"):
             bound[name] = partial(handler, spec_service)
+        elif name.startswith("viz/"):
+            bound[name] = partial(handler, viz_service)
         else:
             bound[name] = partial(handler, agent_service)
     return bound
@@ -120,7 +129,13 @@ def register_routes(app: FastAPI) -> None:
             agent_service = AgentService(config, spec_service)
             _agent_services[key] = agent_service
 
-        bound_methods = _bind_methods(spec_service, agent_service)
+        if key in _viz_services:
+            viz_service = _viz_services[key]
+        else:
+            viz_service = VisualizationService(project_path)
+            _viz_services[key] = viz_service
+
+        bound_methods = _bind_methods(spec_service, agent_service, viz_service)
 
         # Replace existing connection if any
         if _active_ws is not None:
@@ -144,8 +159,16 @@ def register_routes(app: FastAPI) -> None:
         # Point all running tasks at the fresh WebSocket callback
         agent_service.rebind_notify(notify)
 
+        # Bind viz service to current WebSocket for file-change-driven updates.
+        # Initial state is fetched on-demand by the frontend via viz/state.
+        async def _viz_notify(method: str, params: dict) -> None:
+            await notify(method, params)
+
+        viz_service.bind_notify(_viz_notify)
+        viz_service.refresh()  # Compute state silently on connect (no push)
+
         # Start per-connection file watcher
-        watcher_handle = await _start_watcher(config, spec_service)
+        watcher_handle = await _start_watcher(config, spec_service, viz_service)
         _active_watcher = watcher_handle
 
         try:
@@ -170,7 +193,9 @@ def register_routes(app: FastAPI) -> None:
                 _active_watcher = None
 
 
-async def _start_watcher(config: AppConfig, service: SpecService) -> WatchHandle:
+async def _start_watcher(
+    config: AppConfig, service: SpecService, viz_service: VisualizationService
+) -> WatchHandle:
     """Start the filesystem watcher for a project directory."""
     registry_path = config.get_registry_path()
 
@@ -223,5 +248,9 @@ async def _start_watcher(config: AppConfig, service: SpecService) -> WatchHandle
 
         if any(ct in (Change.added, Change.deleted) for ct, _ in changes):
             await notify("files/treeChanged", {})
+
+        # Recompute dashboard on any .md/.json change (specs, tasks, registry)
+        if any(Path(p).suffix in (".md", ".json") for _, p in changes):
+            await viz_service.recompute()
 
     return await watch([config.get_project_root()], _on_file_change)

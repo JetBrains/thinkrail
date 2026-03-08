@@ -51,6 +51,10 @@ async def run(
         input_data: dict[str, Any],
         context: ToolPermissionContext,
     ) -> PermissionResultAllow | PermissionResultDeny:
+        if tool_name.endswith("bonsai_visualize"):
+            # Auto-allow: display-only tool, no side effects
+            # Note: MCP tools may be prefixed with server name (e.g. mcp__bonsai-viz__bonsai_visualize)
+            return PermissionResultAllow(behavior="allow")
         if tool_name == "AskUserQuestion":
             request_id = str(uuid4())
             future = tracker.register_future(task.bonsai_sid, request_id)

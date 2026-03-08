@@ -15,6 +15,9 @@ You are creating a **Sub-Module Design Specification** (README.md for a sub-comp
 - Present analysis and ask user to confirm/correct
 - Offer **2-4 choices** for judgment calls
 - The user should finalize in ~3-5 multi-choice decisions
+- Use `bonsai_visualize` tool with structured data for all visualizations (diagrams, confirmations)
+- **NEVER** use ASCII box-drawing characters (`┌─┐`, `╔═╗`, `+---+`, etc.) in text output
+- **NEVER** use Bash, echo, printf, or ANSI escape codes for visual output
 
 ## Prerequisites
 

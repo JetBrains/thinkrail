@@ -3,12 +3,14 @@ import type { AgentEvent } from "@/types/agent.ts";
 import { SystemMessage } from "./SystemMessage.tsx";
 import { AssistantMessage } from "./AssistantMessage.tsx";
 import { ToolCallCard } from "./ToolCallCard.tsx";
+import { VisualizationCard } from "./VisualizationCard.tsx";
 import { SubagentBlock } from "./SubagentBlock.tsx";
 import { QuestionCard } from "./QuestionCard.tsx";
 import { ApprovalCard } from "./ApprovalCard.tsx";
 import { CompletionBanner } from "./CompletionBanner.tsx";
 import { ErrorBanner } from "./ErrorBanner.tsx";
 import { CompactMarker } from "./CompactMarker.tsx";
+import type { VizData } from "@/types/viz.ts";
 
 /** Shared type for tool call end-state, used by SubagentBlock too. */
 export type ToolState = { output?: string; isError?: boolean; finished: boolean };
@@ -75,6 +77,16 @@ export function ChatStream({
       activeSubagents.delete(ev.payload.agentId as string);
   }
 
+  // Pre-scan: track latest bonsai_visualize event per vizId for hybrid collapse.
+  const latestVizByVizId = new Map<string, number>();
+  for (let i = 0; i < events.length; i++) {
+    const ev = events[i];
+    if (ev.eventType === "toolCallStart" && (ev.payload.toolName as string)?.endsWith("bonsai_visualize")) {
+      const vizId = (ev.payload.toolInput as Record<string, unknown>)?.vizId as string | undefined;
+      if (vizId) latestVizByVizId.set(vizId, i);
+    }
+  }
+
   // Pre-scan: group child events under their parent subagentStart.
   // Uses a stack to support nested subagents.
   const subagentChildren = new Map<number, number[]>(); // subagentStart idx → child idxs
@@ -136,6 +148,21 @@ export function ChatStream({
 
           case "toolCallStart": {
             if ((p.toolName as string) === "AskUserQuestion") return null;
+            // MCP tools may be prefixed with server name (e.g. mcp__bonsai-viz__bonsai_visualize)
+            if ((p.toolName as string)?.endsWith("bonsai_visualize")) {
+              const vizInput = p.toolInput as VizData | undefined;
+              if (vizInput) {
+                const vizId = vizInput.vizId;
+                const isLatest = !vizId || latestVizByVizId.get(vizId) === i;
+                return (
+                  <VisualizationCard
+                    key={k}
+                    data={vizInput}
+                    collapsed={!isLatest}
+                  />
+                );
+              }
+            }
             const toolUseId = (p.toolUseId as string) ?? "";
             const end = toolStates.get(toolUseId);
             return (

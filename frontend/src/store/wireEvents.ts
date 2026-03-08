@@ -3,6 +3,7 @@ import { useSpecStore } from "./specStore.ts";
 import { useSessionStore } from "./sessionStore.ts";
 import { useNotificationStore } from "./notificationStore.ts";
 import { useUiStore } from "./uiStore.ts";
+import { useVizStore } from "./vizStore.ts";
 import type { Unsubscribe } from "@/api/types.ts";
 
 /**
@@ -164,6 +165,13 @@ export function wireEvents(client: RpcClient): Unsubscribe {
         type: "approval",
         pulsing: true,
       });
+    }),
+  );
+
+  // ── Visualization dashboard ──
+  unsubs.push(
+    client.on("viz/stateChanged", (p) => {
+      useVizStore.getState().onStateChanged(p as import("./vizStore.ts").DashboardState);
     }),
   );
 

@@ -14,6 +14,7 @@ from app.core.config import AppConfig, load_config
 from app.rpc import notifications
 from app.rpc.server import METHODS, register_routes, _start_watcher
 from app.spec.service import SpecService
+from app.viz.service import VisualizationService
 
 
 def _make_app() -> FastAPI:
@@ -38,6 +39,7 @@ class TestMethods:
             "agent/run", "agent/send", "agent/status", "agent/list",
             "agent/interrupt", "agent/end", "agent/respond", "agent/updateConfig",
             "session/list", "session/get", "session/continue", "session/delete",
+            "viz/state", "viz/recompute",
         }
         assert set(METHODS.keys()) == expected
 
@@ -153,7 +155,8 @@ class TestWatcher:
         import asyncio
         config = _make_config(tmp_path)
         service = SpecService(config)
-        handle = await _start_watcher(config, service)
+        viz_service = VisualizationService(tmp_path)
+        handle = await _start_watcher(config, service, viz_service)
         assert handle is not None
         handle._task.cancel()
         try:
@@ -198,8 +201,9 @@ class TestOnFileChange:
             return WatchHandle(_task=asyncio.create_task(asyncio.sleep(999)))
 
         service = SpecService(config)
+        viz_service = VisualizationService(config.project_root)
         with patch("app.rpc.server.watch", side_effect=fake_watch):
-            handle = await _start_watcher(config, service)
+            handle = await _start_watcher(config, service, viz_service)
         yield captured["cb"]
         handle._task.cancel()
         try:

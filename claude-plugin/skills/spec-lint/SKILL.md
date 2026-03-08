@@ -8,27 +8,39 @@ argument-hint: "[spec-path-or-directory]"
 
 You are validating specifications for **structural quality, completeness, and consistency**. This is the automated quality gate for spec-driven development.
 
-## IMPORTANT: Use Pre-Computed Data
+## IMPORTANT: Use Pre-Computed Data + bonsai_visualize
 
 Lint results are **pre-computed by the dashboard script**. Do NOT manually read all spec files.
 
+**NEVER** output ASCII box-drawing characters or ANSI escape codes. Always use `bonsai_visualize` to display results.
+
 ## Process
 
-### Step 1: Run the dashboard script
+### Step 1: Get the data
 
-Execute:
-```bash
-python3 claude-plugin/tools/compute-dashboard.py . --terminal lint
+Read `.specs/dashboard.json` and extract the `lint[]` array for lint issues.
+
+### Step 2: Display lint results using bonsai_visualize
+
+Show the lint report using `bonsai_visualize` with type `data-table`:
+```json
+{
+  "type": "data-table",
+  "title": "Specification Lint Report",
+  "vizId": "spec-lint-report",
+  "data": {
+    "columns": ["Severity", "Spec", "Issue", "Fixable"],
+    "rows": [
+      ["ERROR", "[spec-id]", "[message]", "yes/no"],
+      ["WARNING", "[spec-id]", "[message]", "yes/no"]
+    ]
+  }
+}
 ```
 
-This outputs a formatted lint report including:
-1. **Error/warning/fixable counts**
-2. **Per-issue details** with severity, spec, and message
-3. **Fixable items** clearly marked
+### Step 3: Filter by path (if argument provided)
 
-### Step 2: Filter by path (if argument provided)
-
-If the user specified a path, read `.specs/dashboard.json` and filter the `lint[]` array to show only issues matching that path or spec_id.
+If the user specified a path, filter the `lint[]` array to show only issues matching that path or spec_id.
 
 ### Step 3: Deep analysis (optional)
 

@@ -1,8 +1,10 @@
+import { useState } from "react";
 import { useContextMode } from "./useContextMode.ts";
 import type { ContextMode } from "./useContextMode.ts";
 import { SpecContext } from "./modes/SpecContext.tsx";
 import { AgentContext } from "./modes/AgentContext.tsx";
 import { CodeContext } from "./modes/CodeContext.tsx";
+import { VizTab } from "./modes/VizTab.tsx";
 import "./ContextPanel.css";
 
 const MODE_CONFIG: Record<ContextMode, { icon: string; label: string }> = {
@@ -12,7 +14,8 @@ const MODE_CONFIG: Record<ContextMode, { icon: string; label: string }> = {
   empty: { icon: "", label: "" },
 };
 
-function ModeContent({ mode }: { mode: ContextMode }) {
+function ModeContent({ mode, pinDashboard }: { mode: ContextMode; pinDashboard: boolean }) {
+  if (pinDashboard) return <VizTab />;
   switch (mode) {
     case "spec": return <SpecContext />;
     case "agent": return <AgentContext />;
@@ -26,19 +29,37 @@ function ModeContent({ mode }: { mode: ContextMode }) {
 }
 
 export function ContextPanel() {
-  const mode = useContextMode();
-  const config = MODE_CONFIG[mode];
+  const autoMode = useContextMode();
+  const [pinDashboard, setPinDashboard] = useState(false);
+  const config = pinDashboard
+    ? { icon: "\uD83D\uDCCA", label: "Dashboard" }
+    : MODE_CONFIG[autoMode];
 
   return (
     <div className="context-panel">
-      {mode !== "empty" && (
-        <div className="context-panel__header">
-          <span className="context-panel__mode-icon">{config.icon}</span>
-          <span className="context-panel__mode-label">{config.label}</span>
-        </div>
-      )}
+      <div className="context-panel__header">
+        {!pinDashboard && autoMode !== "empty" && (
+          <>
+            <span className="context-panel__mode-icon">{config.icon}</span>
+            <span className="context-panel__mode-label">{config.label}</span>
+          </>
+        )}
+        {pinDashboard && (
+          <>
+            <span className="context-panel__mode-icon">{config.icon}</span>
+            <span className="context-panel__mode-label">{config.label}</span>
+          </>
+        )}
+        <button
+          className={`context-panel__dash-btn${pinDashboard ? " context-panel__dash-btn--active" : ""}`}
+          onClick={() => setPinDashboard((v) => !v)}
+          title={pinDashboard ? "Back to context" : "Show dashboard"}
+        >
+          {pinDashboard ? "\u00D7" : "\uD83D\uDCCA"}
+        </button>
+      </div>
       <div className="context-panel__body">
-        <ModeContent mode={mode} />
+        <ModeContent mode={autoMode} pinDashboard={pinDashboard} />
       </div>
     </div>
   );

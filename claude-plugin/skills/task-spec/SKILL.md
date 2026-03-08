@@ -15,22 +15,27 @@ You are creating an **actionable Task Specification**. Guide the user through st
 - Offer **2-4 choices** for task classification, scope, and priority
 - The user should define a complete task in ~4-5 multi-choice decisions
 - Auto-detect affected files from the codebase when possible
-- Use terminal graphics from `/specdriven:visualisation` patterns for confirmations
-- Apply colors from the `/specdriven:visualisation` Color Output Guide when rendering (ANSI codes for dark theme)
+- Use `bonsai_visualize` tool with structured data for confirmations and progress displays
+- NEVER use Bash, echo, printf, or ANSI escape codes for visual output
 
 ## Show Progress
 
-Show current workflow position using `/specdriven:cli-progress` pattern before starting:
-
-```
-┌─────────────────────────────────────────────────────┐
-│         Specification-Driven Development Progress   │
-├─────────────────────────────────────────────────────┤
-│ [✓] 1. Goal & Requirements    GOAL&REQUIREMENTS.md  │
-│ [✓] 2. Architecture           DESIGN_DOC.md         │
-│ [✓] 3. Module Specs           src/*/README.md       │
-│  ▶  4. Task Specs             current_tasks/        │
-└─────────────────────────────────────────────────────┘
+Show current workflow position by calling `bonsai_visualize` with type `progress-tracker`:
+```json
+{
+  "type": "progress-tracker",
+  "title": "Specification-Driven Development",
+  "vizId": "workflow-progress",
+  "data": {
+    "steps": [
+      {"label": "Goal & Requirements", "status": "done", "file": "GOAL&REQUIREMENTS.md"},
+      {"label": "Architecture", "status": "done", "file": "DESIGN_DOC.md"},
+      {"label": "Module Specs", "status": "done"},
+      {"label": "Task Specs", "status": "current"},
+      {"label": "Implementation", "status": "pending"}
+    ]
+  }
+}
 ```
 
 ## Step-by-Step Guided Process

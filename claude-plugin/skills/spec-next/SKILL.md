@@ -7,35 +7,42 @@ description: Suggest what to specify next based on current coverage, dependencie
 
 You are the **workflow orchestrator** for specification-driven development. You analyze the current state and recommend what to create or update next.
 
-## IMPORTANT: Use Pre-Computed Data
+## IMPORTANT: Use Pre-Computed Data + bonsai_visualize
 
 Recommendations are **pre-computed by the dashboard script**. Do NOT manually read registry.json or scan the codebase.
 
+**NEVER** output ASCII box-drawing characters or ANSI escape codes. Always use `bonsai_visualize` to display results.
+
 ## Process
 
-### Step 1: Run the dashboard script
+### Step 1: Get the data
 
-Execute:
-```bash
-python3 claude-plugin/tools/compute-dashboard.py . --terminal next
-```
-
-This outputs prioritized recommendations including:
-1. **Stale specs** -- highest priority (documentation debt)
-2. **Lint errors** -- structural issues
-3. **Coverage gaps** -- source dirs without specs
-4. **Pending tasks** -- remaining implementation work
-
-Each recommendation includes the exact command to run.
-
-### Step 2: Context-aware interpretation (optional)
-
-If the user asks "why" or wants tailored advice, read `.specs/dashboard.json` for:
+Read `.specs/dashboard.json` to get:
 - `recommendations[]` -- heuristic-ranked priorities
 - `coverage[]` -- which dirs lack specs
 - `workflow` -- current phase and step
 
-Add your own context-aware interpretation (e.g., "Focus on X because the demo is Friday").
+### Step 2: Display recommendations using bonsai_visualize
+
+Show recommendations using `bonsai_visualize` with type `status-list`:
+```json
+{
+  "type": "status-list",
+  "title": "Recommended Next Actions",
+  "vizId": "spec-next-recommendations",
+  "data": {
+    "items": [
+      {"label": "[Action 1]", "status": "error", "detail": "[Why this is highest priority]"},
+      {"label": "[Action 2]", "status": "current", "detail": "[Reason]"},
+      {"label": "[Action 3]", "status": "pending", "detail": "[Reason]"}
+    ]
+  }
+}
+```
+
+### Step 3: Context-aware interpretation (optional)
+
+If the user asks "why" or wants tailored advice, add your own context-aware interpretation (e.g., "Focus on X because the demo is Friday").
 
 ### Step 3: Offer to act
 
