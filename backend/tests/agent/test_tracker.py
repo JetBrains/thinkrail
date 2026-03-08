@@ -222,3 +222,81 @@ class TestFutureManagement:
         tracker.resolve_future(task.bonsai_sid, "req-1", {"ok": True})
         result = await future
         assert result == {"ok": True}
+
+
+class TestInterruptManagement:
+    def test_interrupt_flag_lifecycle(self) -> None:
+        """set_interrupted → is_interrupted True → clear → False."""
+        tracker = Tracker()
+        task = tracker.create_task(["s1"], AgentConfig())
+
+        assert tracker.is_interrupted(task.bonsai_sid) is False
+
+        tracker.set_interrupted(task.bonsai_sid)
+        assert tracker.is_interrupted(task.bonsai_sid) is True
+
+        tracker.clear_interrupted(task.bonsai_sid)
+        assert tracker.is_interrupted(task.bonsai_sid) is False
+
+    def test_is_interrupted_unknown_session(self) -> None:
+        """Unknown session returns False, doesn't raise."""
+        tracker = Tracker()
+        assert tracker.is_interrupted("nonexistent") is False
+
+    def test_clear_interrupted_unknown_session(self) -> None:
+        """Clearing an unknown session is a no-op."""
+        tracker = Tracker()
+        tracker.clear_interrupted("nonexistent")  # should not raise
+
+    async def test_interrupt_futures_resolves_with_deny(self) -> None:
+        """interrupt_futures resolves with deny+interrupt=True, not cancel."""
+        tracker = Tracker()
+        task = tracker.create_task(["s1"], AgentConfig())
+        f1 = tracker.register_future(task.bonsai_sid, "req-1")
+        f2 = tracker.register_future(task.bonsai_sid, "req-2")
+
+        tracker.interrupt_futures(task.bonsai_sid)
+
+        # Futures should be resolved (not cancelled)
+        assert not f1.cancelled()
+        assert not f2.cancelled()
+        assert f1.done()
+        assert f2.done()
+
+        r1 = f1.result()
+        assert r1["behavior"] == "deny"
+        assert r1["message"] == "Interrupted"
+        assert r1["interrupt"] is True
+
+        r2 = f2.result()
+        assert r2["behavior"] == "deny"
+        assert r2["interrupt"] is True
+
+    async def test_interrupt_futures_empty_is_noop(self) -> None:
+        """interrupt_futures on session with no futures doesn't raise."""
+        tracker = Tracker()
+        task = tracker.create_task(["s1"], AgentConfig())
+        tracker.interrupt_futures(task.bonsai_sid)  # should not raise
+
+    async def test_interrupt_futures_skips_already_done(self) -> None:
+        """Already-resolved futures are not touched by interrupt_futures."""
+        tracker = Tracker()
+        task = tracker.create_task(["s1"], AgentConfig())
+        f1 = tracker.register_future(task.bonsai_sid, "req-1")
+        tracker.resolve_future(task.bonsai_sid, "req-1", {"ok": True})
+
+        f2 = tracker.register_future(task.bonsai_sid, "req-2")
+        tracker.interrupt_futures(task.bonsai_sid)
+
+        assert f1.result() == {"ok": True}  # unchanged
+        assert f2.result()["behavior"] == "deny"  # interrupted
+
+    def test_remove_task_clears_interrupted(self) -> None:
+        """remove_task also cleans up the interrupt flag."""
+        tracker = Tracker()
+        task = tracker.create_task(["s1"], AgentConfig())
+        tracker.set_interrupted(task.bonsai_sid)
+        assert tracker.is_interrupted(task.bonsai_sid) is True
+
+        tracker.remove_task(task.bonsai_sid)
+        assert tracker.is_interrupted(task.bonsai_sid) is False

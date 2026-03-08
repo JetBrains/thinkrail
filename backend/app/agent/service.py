@@ -74,38 +74,33 @@ class AgentService:
         self._tracker.enqueue_message(bonsai_sid, text)
 
     async def interrupt_task(self, bonsai_sid: str) -> None:
-        """Cancel the current turn. Session stays alive (idle)."""
+        """Cancel the current turn non-destructively.
+
+        Uses the SDK's ``client.interrupt()`` control protocol to stop the
+        current generation while preserving the client, conversation context,
+        and runner loop.  The runner stays alive — no re-launch needed.
+        """
         task = self._tracker.get_task(bonsai_sid)
         if task.status not in ("running", "waiting"):
             # Already idle/done — nothing to interrupt
             return
-        self._tracker.cancel_futures(bonsai_sid)
-        # Grab notify before cancelling — _run_background's finally block
-        # clears _last_notify on cancellation.
-        notify = self._last_notify.get(bonsai_sid)
-        bg = self._running_tasks.pop(bonsai_sid, None)
-        if bg:
-            bg.cancel()
+
+        # 1. Set interrupt flag BEFORE calling client.interrupt() so the
+        #    runner knows to emit agent/interrupted instead of turnComplete.
+        self._tracker.set_interrupted(bonsai_sid)
+
+        # 2. Resolve pending futures with deny+interrupt (for waiting state).
+        #    Unlike cancel_futures(), this produces a clean
+        #    PermissionResultDeny(interrupt=True) through the SDK.
+        self._tracker.interrupt_futures(bonsai_sid)
+
+        # 3. Interrupt the SDK turn (for running state).
+        client = self._tracker.get_client(bonsai_sid)
+        if client:
             try:
-                await bg
-            except (asyncio.CancelledError, Exception):
-                pass
-        self._tracker.set_status(bonsai_sid, "idle")
-        # Notify frontend that the turn was interrupted
-        if notify:
-            try:
-                await notify("agent/interrupted", {
-                    "bonsaiSid": bonsai_sid,
-                    "sessionId": task.session_id or "",
-                })
+                await client.interrupt()
             except Exception:
-                pass
-            # Re-launch the background runner for continued conversation
-            spec_context = self._build_context_for(task)
-            new_bg = asyncio.create_task(
-                self._run_background(task, spec_context, notify)
-            )
-            self._running_tasks[bonsai_sid] = new_bg
+                pass  # Client may already be disconnected
 
     async def end_session(self, bonsai_sid: str) -> None:
         """Gracefully close the session."""
@@ -338,8 +333,9 @@ class AgentService:
             self._save_task(task)
             self._tracker.remove_task(task.bonsai_sid)
         except asyncio.CancelledError:
-            # Interrupted — don't set error, let interrupt_task handle state
-            pass
+            # Should no longer happen during interrupt (uses client.interrupt() now).
+            # Keep as safety net for unexpected cancellation.
+            logger.warning("Runner for %s received unexpected CancelledError", task.bonsai_sid)
         except Exception as exc:
             logger.exception("Agent session %s failed", task.bonsai_sid)
             if task.status not in ("done", "error"):

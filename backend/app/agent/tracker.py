@@ -39,6 +39,7 @@ class Tracker:
         self._futures: dict[str, dict[str, asyncio.Future[dict]]] = {}
         self._queues: dict[str, asyncio.Queue[Any]] = {}
         self._clients: dict[str, Any] = {}
+        self._interrupted: set[str] = set()
 
     # -- task lifecycle -------------------------------------------------------
 
@@ -153,9 +154,45 @@ class Tracker:
         self._queues.pop(bonsai_sid, None)
         self._futures.pop(bonsai_sid, None)
         self._clients.pop(bonsai_sid, None)
+        self._interrupted.discard(bonsai_sid)
 
     def cancel_futures(self, bonsai_sid: str) -> None:
         task_futures = self._futures.pop(bonsai_sid, {})
         for future in task_futures.values():
             if not future.done():
                 future.cancel()
+
+    # -- interrupt management -------------------------------------------------
+
+    def set_interrupted(self, bonsai_sid: str) -> None:
+        """Mark session as interrupted.
+
+        Called by ``service.interrupt_task()`` before calling
+        ``client.interrupt()`` so the runner knows to emit
+        ``agent/interrupted`` instead of ``agent/turnComplete``.
+        """
+        self._interrupted.add(bonsai_sid)
+
+    def is_interrupted(self, bonsai_sid: str) -> bool:
+        """Check whether the session has a pending interrupt flag."""
+        return bonsai_sid in self._interrupted
+
+    def clear_interrupted(self, bonsai_sid: str) -> None:
+        """Clear the interrupt flag after the runner has processed it."""
+        self._interrupted.discard(bonsai_sid)
+
+    def interrupt_futures(self, bonsai_sid: str) -> None:
+        """Resolve pending futures with deny + interrupt instead of cancelling.
+
+        Unlike ``cancel_futures()`` which raises ``CancelledError``, this
+        produces a clean ``PermissionResultDeny(interrupt=True)`` that tells
+        the SDK to stop the turn gracefully.
+        """
+        task_futures = self._futures.pop(bonsai_sid, {})
+        for future in task_futures.values():
+            if not future.done():
+                future.set_result({
+                    "behavior": "deny",
+                    "message": "Interrupted",
+                    "interrupt": True,
+                })

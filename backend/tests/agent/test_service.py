@@ -196,6 +196,126 @@ class TestRespondPersistsEvent:
         assert result == {"behavior": "allow"}
 
 
+class TestInterruptTask:
+    async def test_interrupt_calls_client_interrupt(self) -> None:
+        """interrupt_task calls client.interrupt() on the stored SDK client."""
+        service, _, _ = _make_service()
+        task = service._tracker.create_task(["s1"], AgentConfig())
+        service._tracker.set_status(task.bonsai_sid, "running")
+
+        mock_client = AsyncMock()
+        service._tracker.set_client(task.bonsai_sid, mock_client)
+
+        await service.interrupt_task(task.bonsai_sid)
+
+        mock_client.interrupt.assert_called_once()
+
+    async def test_interrupt_sets_flag_before_client_interrupt(self) -> None:
+        """set_interrupted is called before client.interrupt()."""
+        service, _, _ = _make_service()
+        task = service._tracker.create_task(["s1"], AgentConfig())
+        service._tracker.set_status(task.bonsai_sid, "running")
+
+        call_order: list[str] = []
+
+        mock_client = AsyncMock()
+
+        async def track_interrupt():
+            call_order.append("client.interrupt")
+
+        mock_client.interrupt = track_interrupt
+
+        original_set = service._tracker.set_interrupted
+
+        def track_set_interrupted(bonsai_sid: str) -> None:
+            call_order.append("set_interrupted")
+            original_set(bonsai_sid)
+
+        service._tracker.set_interrupted = track_set_interrupted
+        service._tracker.set_client(task.bonsai_sid, mock_client)
+
+        await service.interrupt_task(task.bonsai_sid)
+
+        assert call_order == ["set_interrupted", "client.interrupt"]
+
+    async def test_interrupt_resolves_futures_with_deny(self) -> None:
+        """interrupt_task calls interrupt_futures, not cancel_futures."""
+        service, _, _ = _make_service()
+        task = service._tracker.create_task(["s1"], AgentConfig())
+        service._tracker.set_status(task.bonsai_sid, "running")
+        service._tracker.set_client(task.bonsai_sid, AsyncMock())
+
+        future = service._tracker.register_future(task.bonsai_sid, "req-1")
+
+        await service.interrupt_task(task.bonsai_sid)
+
+        # Future should be resolved (not cancelled)
+        assert not future.cancelled()
+        assert future.done()
+        result = future.result()
+        assert result["behavior"] == "deny"
+        assert result["interrupt"] is True
+
+    async def test_interrupt_no_relaunch(self) -> None:
+        """After interrupt, no new background task is created."""
+        service, _, _ = _make_service()
+        task = service._tracker.create_task(["s1"], AgentConfig())
+        service._tracker.set_status(task.bonsai_sid, "running")
+        service._tracker.set_client(task.bonsai_sid, AsyncMock())
+
+        # Record existing background tasks
+        service._running_tasks[task.bonsai_sid] = AsyncMock()
+        original_bg = service._running_tasks[task.bonsai_sid]
+
+        await service.interrupt_task(task.bonsai_sid)
+
+        # The background task reference should be unchanged (not replaced)
+        assert service._running_tasks.get(task.bonsai_sid) is original_bg
+
+    async def test_interrupt_idle_is_noop(self) -> None:
+        """Interrupting an idle session does nothing."""
+        service, _, _ = _make_service()
+        task = service._tracker.create_task(["s1"], AgentConfig())
+
+        mock_client = AsyncMock()
+        service._tracker.set_client(task.bonsai_sid, mock_client)
+
+        await service.interrupt_task(task.bonsai_sid)
+
+        mock_client.interrupt.assert_not_called()
+        assert service._tracker.is_interrupted(task.bonsai_sid) is False
+
+    async def test_interrupt_waiting_state(self) -> None:
+        """Interrupting a waiting session resolves futures and calls client.interrupt."""
+        service, _, _ = _make_service()
+        task = service._tracker.create_task(["s1"], AgentConfig())
+        service._tracker.set_status(task.bonsai_sid, "running")
+        service._tracker.set_status(task.bonsai_sid, "waiting")
+
+        mock_client = AsyncMock()
+        service._tracker.set_client(task.bonsai_sid, mock_client)
+
+        future = service._tracker.register_future(task.bonsai_sid, "req-1")
+
+        await service.interrupt_task(task.bonsai_sid)
+
+        mock_client.interrupt.assert_called_once()
+        assert future.done()
+        assert future.result()["interrupt"] is True
+
+    async def test_interrupt_no_client_does_not_raise(self) -> None:
+        """If no client is stored (edge case), interrupt still sets flag."""
+        service, _, _ = _make_service()
+        task = service._tracker.create_task(["s1"], AgentConfig())
+        service._tracker.set_status(task.bonsai_sid, "running")
+        # No client set
+
+        await service.interrupt_task(task.bonsai_sid)
+
+        # Should have set the flag even without a client
+        assert service._tracker.is_interrupted(task.bonsai_sid) is True
+
+
 class TestBuildContext:
     def test_builds_context_from_specs(self) -> None:
         from pathlib import Path
