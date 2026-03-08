@@ -107,18 +107,19 @@ Backend implementation is scoped to `runner.py` and `models.py` in the agent mod
 
 ## Frontend
 
-> **TBD** — Frontend implementation details to be specified separately.
+Frontend implementation is specified in [Chat UI — SuggestionCard](../frontend/ui-specs/CHAT_UI.md#suggestioncard) (component spec) and [State Management — onSuggestSession](../frontend/src/store/README.md#2-sessionstore) (store handler + wireEvents).
 
 **Expected changes:**
 - `wireEvents.ts` — wire `agent/suggestSession` event
 - `sessionStore.ts` — add `onSuggestSession` handler, store as `pendingRequest`
-- `SuggestionCard.tsx` — new component rendering suggestion with approve/dismiss buttons
-- `ChatStream.tsx` — new case for `suggestSession` event type
-- `types/session.ts` — add `"suggestion"` to `PendingRequest.type` union
+- `SuggestionCard.tsx` — new component with skill pill, name, reason, Start/Dismiss buttons
+- `ChatStream.tsx` — new case for `suggestSession` event type → renders `<SuggestionCard>`
+- `types/session.ts` — add `"suggestion"` to `PendingRequest.type` union with `skill`, `specIds`, `name`, `reason` fields
 
 **UX behavior:**
-- On "Start Session": resolve request, call `startSession()` with suggested params, auto-switch to new session
+- On "Start Session": resolve request with approve, call `startSession()` with suggested params, auto-switch to new session
 - On "Dismiss": resolve request with deny, agent continues
+- Visual: blue border (vs. purple for questions), skill pill, session name, reason text
 
 ## Scenarios
 

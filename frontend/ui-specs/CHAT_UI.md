@@ -28,6 +28,7 @@ This spec reflects the **actual implemented code** as of 2026-03-05. Items not y
       <ToolCallCard />                 // toolCallStart (paired with toolCallEnd state)
       <SubagentBlock />                // subagentStart (finished derived from subagentEnd)
       <QuestionCard />                 // askUserQuestion
+      <SuggestionCard />               // suggestSession
       <ApprovalCard />                 // confirmAction
       <CompletionBanner />             // done
       <ErrorBanner />                  // error
@@ -85,6 +86,7 @@ interface ChatStreamProps {
 | `subagentStart` | `<SubagentBlock>` (finished derived from pre-pass; children=`null`) |
 | `subagentEnd` | `null` |
 | `askUserQuestion` | `<QuestionCard>` |
+| `suggestSession` | `<SuggestionCard>` |
 | `confirmAction` | `<ApprovalCard>` |
 | `turnComplete` | Optional `<AssistantMessage>` (if `result`) + `<SystemMessage variant="ok">` showing cost and turns |
 | `interrupted` | `<SystemMessage text="Turn interrupted">` (default variant, i.e. `--hint` color) |
@@ -275,6 +277,80 @@ interface QuestionOption {
 **Actions row** (`.chat-question-actions`, hidden when `answered`):
 - Single button: `.chat-btn.chat-btn-primary` labeled "Send"
 - Disabled when free-text mode and text is empty
+
+---
+
+### `<SuggestionCard>`
+
+Standalone component for rendering session suggestions from the `SuggestSession` proactive tool. Triggered by `suggestSession` events.
+
+```typescript
+interface SuggestionCardProps {
+  skill: string;
+  specIds: string[];
+  name: string;
+  reason: string;
+  answered: boolean;
+  decision?: "approved" | "dismissed";
+  onApprove: () => void;
+  onDismiss: () => void;
+}
+```
+
+- Root: `<div className="chat-suggestion [chat-suggestion-answered?]">` — `border: 2px solid var(--blue)`, `max-width: 90%`, `background: var(--elevated)`, `slideUp`
+- When `answered`: `opacity: 0.7`
+
+**Layout:**
+
+1. **Header** (`.chat-suggestion-header`): `"Session Suggestion"`, 9px uppercase, `color: var(--blue)`, `letter-spacing: 0.05em`
+2. **Name** (`.chat-suggestion-name`): suggested session name, `font-weight: 600`, `font-size: 13px`, `color: var(--text)`
+3. **Reason** (`.chat-suggestion-reason`): why the agent suggests this, `font-size: 12px`, `color: var(--muted)`
+4. **Skill pill** (`.chat-suggestion-skill`): `color: var(--cyan)`, `background: rgba(125,207,255,0.1)`, `padding: 2px 8px`, `border-radius: 4px`, `font-size: 11px`, inline pill showing skill ID
+5. **Spec IDs** (`.chat-suggestion-specs`): comma-separated spec IDs, `font-size: 11px`, `color: var(--hint)` — only rendered when `specIds.length > 0`
+
+**Actions row** (`.chat-suggestion-actions`, hidden when `answered`):
+- "Start Session" (`.chat-btn.chat-btn-approve`) → green background, calls `onApprove`
+- "Dismiss" (`.chat-btn.chat-btn-deny`) → red outline, calls `onDismiss`
+
+**Answered state** (`.chat-suggestion-result`):
+- `decision === "approved"`: `✓ Session started` in `var(--green)`
+- `decision === "dismissed"`: `✕ Dismissed` in `var(--hint)`
+
+**Rendering in ChatStream:**
+
+```typescript
+case "suggestSession":
+  return (
+    <SuggestionCard
+      skill={payload.skill}
+      specIds={payload.specIds ?? []}
+      name={payload.name}
+      reason={payload.reason}
+      answered={isAnswered}
+      decision={answeredResponse?.behavior === "allow" ? "approved" : "dismissed"}
+      onApprove={() => onResolveRequest(requestId, { behavior: "allow" })}
+      onDismiss={() => onResolveRequest(requestId, { behavior: "deny", message: "Dismissed" })}
+    />
+  );
+```
+
+**Submission behavior:**
+- "Start Session" → `onApprove()` → `resolveRequest` sends `agent/respond` with `{ behavior: "allow" }` → `sessionStore.startSession({ skillId: skill, specIds, name })` → auto-switch to new session
+- "Dismiss" → `onDismiss()` → `resolveRequest` sends `{ behavior: "deny", message: "Dismissed" }` → agent continues
+
+**CSS classes:**
+
+| Class | Element | Styles |
+|---|---|---|
+| `.chat-suggestion` | Root | `border: 2px solid var(--blue); max-width: 90%; background: var(--elevated); border-radius: var(--radius-md); padding: var(--space-md) var(--space-lg)` |
+| `.chat-suggestion-answered` | Answered state | `opacity: 0.7` |
+| `.chat-suggestion-header` | Header label | `font-size: 9px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--blue)` |
+| `.chat-suggestion-name` | Session name | `font-weight: 600; font-size: 13px; color: var(--text)` |
+| `.chat-suggestion-reason` | Reason text | `font-size: 12px; color: var(--muted)` |
+| `.chat-suggestion-skill` | Skill pill | `color: var(--cyan); background: rgba(125,207,255,0.1); padding: 2px 8px; border-radius: 4px; font-size: 11px` |
+| `.chat-suggestion-specs` | Spec IDs list | `font-size: 11px; color: var(--hint)` |
+| `.chat-suggestion-actions` | Button row | `display: flex; gap: var(--space-sm); margin-top: var(--space-md)` |
+| `.chat-suggestion-result` | Answered display | `font-size: 12px; margin-top: var(--space-sm)` |
 
 ---
 
@@ -485,6 +561,7 @@ Root: `<div className="input-area">` with `style={{ position: "relative" }}`
 | Condition | Placeholder text |
 |---|---|
 | `pendingRequest.type === "approval"` | `"Waiting for your approval above..."` |
+| `pendingRequest.type === "suggestion"` | `"Review the session suggestion above..."` |
 | `pendingRequest.type === "question"` | `"Answer the question above or type a response..."` |
 | `status === "done"` | `"Session complete"` |
 | `status === "error"` | `"Session ended with error"` |
@@ -496,7 +573,7 @@ Root: `<div className="input-area">` with `style={{ position: "relative" }}`
 isDone = status === "done" || status === "error"
 isRunning = status === "running"
 hasPending = pendingRequest != null
-inputDisabled = isDone || isRunning || (hasPending && pendingRequest.type === "approval")
+inputDisabled = isDone || isRunning || (hasPending && (pendingRequest.type === "approval" || pendingRequest.type === "suggestion"))
 ```
 - Input is **enabled** when waiting for a question (user can type a custom answer)
 
@@ -545,7 +622,7 @@ Returns `null` when no sessions and no files/preview.
 **Session tabs** (`.session-tab`):
 - Status dot (`.session-tab-dot`): 6px circle, color by status (`running` → blue, `done` → green, `error` → red, else → hint)
 - Name (`.session-tab-name`): `max-width: 120px`, truncated
-- Pending request badge (`.session-tab-badge`): animated pulse, shows `"Q"` for question or `"A"` for approval
+- Pending request badge (`.session-tab-badge`): animated pulse, shows `"Q"` for question, `"A"` for approval, or `"S"` for suggestion
 - Close button (`.session-tab-close`): hidden by default, visible on tab hover
 - Active tab: `.session-tab-active` → `color: var(--text)`, `border-bottom: 2px solid var(--purple)`
 
@@ -628,9 +705,9 @@ interface SessionMetrics {
 
 ### Pending request management
 
-- `pendingRequest` is set on `agent/askUserQuestion` and `agent/confirmAction`
+- `pendingRequest` is set on `agent/askUserQuestion`, `agent/confirmAction`, and `agent/suggestSession`
 - Cleared on `resolveRequest()`, `agent/done`, `agent/error`
-- Both events are stored in `answeredRequests` Map (keyed by `requestId`) upon resolution
+- All events are stored in `answeredRequests` Map (keyed by `requestId`) upon resolution
 - For restored sessions, all question/approval events are pre-populated into `answeredRequests` with `{ historical: true }`
 
 ### Config changes
@@ -659,6 +736,10 @@ RPC server
       │     → notificationStore: persistent toast + badge
       ├─ agent/confirmAction → sessionStore.onConfirmAction()
       │     → set pendingRequest={type:"approval", ...}
+      │     → notificationStore: persistent toast + badge
+      ├─ agent/suggestSession → sessionStore.onSuggestSession()
+      │     → set pendingRequest={type:"suggestion", ...}
+      │     → notificationStore: persistent toast + badge
       └─ agent/configChanged → sessionStore.onConfigChanged()
             → updates session.model and session.permissionMode
 ```
@@ -691,6 +772,11 @@ RPC server
 | `.chat-question-header` | Section header | `9px; uppercase; color: var(--purple)` |
 | `.chat-option` | Option button | `flex; padding: sm md; border: 1px solid border; border-radius: sm` |
 | `.chat-option-selected` | Selected option | `border-color: var(--purple); bg: rgba(187,154,247,0.1)` |
+| `.chat-suggestion` | SuggestionCard root | `border: 2px solid var(--blue); max-width: 90%; bg: var(--elevated)` |
+| `.chat-suggestion-answered` | Answered state | `opacity: 0.7` |
+| `.chat-suggestion-header` | Header label | `9px; uppercase; color: var(--blue)` |
+| `.chat-suggestion-name` | Session name | `font-weight: 600; font-size: 13px` |
+| `.chat-suggestion-skill` | Skill pill | `color: var(--cyan); bg: rgba(125,207,255,0.1); border-radius: 4px` |
 | `.chat-approval` | ApprovalCard root | `border: 2px solid var(--gold); max-width: 90%; bg: var(--elevated)` |
 | `.chat-approval-title` | Title | `color: var(--gold); font-weight: 600; font-size: 12px` |
 | `.chat-btn` | Generic button | `padding: xs lg; border: 1px solid border; bg: transparent; font-size: 12px` |

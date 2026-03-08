@@ -102,8 +102,9 @@ The server suspends an `asyncio.Future` keyed by `requestId` until the client re
 | --- | --- | --- | --- |
 | `agent/askUserQuestion` | `{ bonsaiSid, requestId, questions: Question[] }` | [`AskUserQuestionResponse`](../agent/README.md#interactive-requestresponse-models) | Ask the user a question during an agent run |
 | `agent/confirmAction` | `{ bonsaiSid, requestId, toolName, toolInput }` | [`ToolApprovalResponse`](../agent/README.md#interactive-requestresponse-models) | Request approval for a tool action |
+| `agent/suggestSession` | `{ bonsaiSid, requestId, skill, specIds, name, reason }` | [`ToolApprovalResponse`](../agent/README.md#interactive-requestresponse-models) | Suggest a follow-up session to the developer. Approve creates a new session with the suggested skill/specs; dismiss returns `PermissionResultAllow` with `dismissed: true` so the agent continues. |
 
-Both methods originate from the SDK's `canUseTool` callback. `runner.py` distinguishes them by `tool_name`: `"AskUserQuestion"` → `agent/askUserQuestion`, any other tool → `agent/confirmAction`. See [Agent Module — Interactive Request/Response Models](../agent/README.md#interactive-requestresponse-models) for `Question`, `QuestionOption`, `AskUserQuestionResponse`, and `ToolApprovalResponse` type definitions.
+All methods originate from the SDK's `canUseTool` callback. `runner.py` distinguishes them by `tool_name`: `"AskUserQuestion"` → `agent/askUserQuestion`, `"SuggestSession"` → `agent/suggestSession`, any other tool → `agent/confirmAction`. See [Agent Module — Interactive Request/Response Models](../agent/README.md#interactive-requestresponse-models) for `Question`, `QuestionOption`, `AskUserQuestionResponse`, and `ToolApprovalResponse` type definitions. See [SuggestSession Backend Spec](../agent/tools/SUGGEST_SESSION.md) for the suggestion wire format.
 
 ## Error Codes
 

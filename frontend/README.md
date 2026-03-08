@@ -52,7 +52,7 @@ The Frontend module is a React/TypeScript single-page application that provides 
 | `src/api/` | WebSocket/JSON-RPC client, typed method wrappers, React hooks | [API_CLIENT](src/api/README.md) |
 | `src/store/` | Zustand stores (spec, session, UI, cost, notifications) | [STATE_MANAGEMENT](src/store/README.md) |
 | `src/components/AppShell/` | Three-panel layout, header, status bar, resize handles | [APP_SHELL](ui-specs/APP_SHELL.md) |
-| `src/components/ChatStream/` | Agent event rendering, streaming text, tool cards | [CHAT_UI](ui-specs/CHAT_UI.md) |
+| `src/components/ChatStream/` | Agent event rendering, streaming text, tool cards, SuggestionCard for session suggestions | [CHAT_UI](ui-specs/CHAT_UI.md) |
 | `src/components/GraphView/` | Spec hierarchy graph, layered drill-down, breadcrumb | [GRAPH_INTERACTIONS](ui-specs/GRAPH_INTERACTIONS.md) |
 | `src/components/NewSessionModal/` | Session creation form, skill grid, spec selector | [NEW_SESSION_MODAL](ui-specs/NEW_SESSION_MODAL.md) |
 | `src/components/CommandPalette/` | Fuzzy search, prefix modes, action registry | [COMMAND_PALETTE](ui-specs/COMMAND_PALETTE.md) |

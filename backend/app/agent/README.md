@@ -1,6 +1,6 @@
 # Agent Module — Design Specification
 
-> Parent: [DESIGN_DOC.md](../../../DESIGN_DOC.md) | Status: **Active** | Created: 2026-02-25 | Updated: 2026-03-07
+> Parent: [DESIGN_DOC.md](../../../DESIGN_DOC.md) | Status: **Active** | Created: 2026-02-25 | Updated: 2026-03-08
 
 ## Table of Contents
 1. [Purpose](#purpose)
@@ -105,23 +105,43 @@ sequenceDiagram
 
 ### Interrupt Flow
 
-`agent/interrupt` cancels the current turn but keeps the session alive:
+`agent/interrupt` cancels the current turn but keeps the session alive. The SDK client is **not destroyed** — `service.py` calls `client.interrupt()` which sends a control protocol message to the CLI subprocess, gracefully stopping the current generation while preserving full conversation context.
+
+**Two states require different mechanisms:**
+
+| Current state | What's blocked | Interrupt mechanism |
+|---------------|----------------|---------------------|
+| `running` | `client.receive_response()` streaming | `await client.interrupt()` → SDK sends `{"subtype": "interrupt"}` control request to CLI |
+| `waiting` | `await future` in `can_use_tool` callback | `tracker.interrupt_futures()` resolves futures with `{"behavior": "deny", "interrupt": true}` → SDK stops turn |
 
 ```mermaid
 sequenceDiagram
     participant F as Frontend
-    participant B as Backend
+    participant Svc as service.py
+    participant R as runner.py
+    participant SDK as SDK Client
+    participant CLI as Claude CLI
 
-    Note over B: state: running
-    F->>B: agent/interrupt {bonsaiSid}
-    B->>B: cancel SDK turn
-    B-->>F: agent/interrupted
-    Note over B: state: idle
+    Note over R: state: running
+
+    F->>Svc: agent/interrupt {bonsaiSid}
+    Svc->>Svc: tracker.interrupt_futures(bonsaiSid)
+    Svc->>SDK: client.interrupt()
+    SDK->>CLI: control_request {subtype: interrupt}
+    CLI-->>SDK: control_response {subtype: success}
+    SDK-->>R: ResultMessage (turn ended)
+
+    R->>R: check tracker.is_interrupted()
+    R-->>F: agent/interrupted
+    R->>R: tracker.clear_interrupted()
+    Note over R: state: idle
 
     Note over F: user can send another message
-    F->>B: agent/send {bonsaiSid, text}
-    Note over B: state: running
+    F->>Svc: agent/send {bonsaiSid, text}
+    Note over R: same client, same context, state: running
 ```
+
+**Key:** The runner stays alive in its conversation loop — no re-launch, no new client, no context rebuilt. After the interrupted `ResultMessage` is processed, the runner goes back to `await tracker.get_next_message()`, waiting for the next user message on the same SDK client.
 
 ## Session Continuation (Resume)
 
@@ -217,7 +237,7 @@ graph TD
 | `context.py` | Context assembly pipeline: loads skill instructions, project metadata, and spec content; composes system prompt. See [CONTEXT.md](CONTEXT.md). | models, spec/service |
 | `service.py` | Facade — start sessions, send messages, interrupt turns, end sessions, continue sessions (native resume), relay responses to pending futures | context, runner, tracker, core/config, spec/service |
 | `runner.py` | Claude Agent SDK integration: manage SDK client lifecycle, conversation loop (wait for message -> query -> stream events -> repeat), map SDK events to notifications, register `canUseTool` / hooks, wire local plugin into SDK. Accepts optional `resume_session_id` to pass to `ClaudeAgentOptions.resume`. | models, tracker |
-| `tracker.py` | Session lifecycle (pending/idle/running/done/error), message queue per session (`asyncio.Queue`), registry of in-flight `asyncio.Future` objects keyed by `requestId` | models |
+| `tracker.py` | Session lifecycle (pending/idle/running/done/error), message queue per session (`asyncio.Queue`), registry of in-flight `asyncio.Future` objects keyed by `requestId`, **interrupt flag** per session for notification routing | models |
 | `persistence.py` | Session persistence — split storage: metadata in `.json`, events in append-only `.events.jsonl`. Save/load/list/append/delete. See [PERSISTENCE.md](PERSISTENCE.md). | core/fileio |
 
 ## Public Interface
@@ -231,7 +251,7 @@ graph TD
 | `rebind_notify` | `(notify: Callable) -> None` | Update the WebSocket callback for all running tasks. Called when a new WebSocket connects so in-flight runners stream to the fresh connection. |
 | `run_task` | `(spec_ids: list[str], config: AgentConfig, notify: Callable, skill_id: str \| None = None, name: str = "") -> AgentTask` | Start a persistent agent session. Builds context from specs, skill, and project metadata via `context.build_context()`, then launches the background runner. Task is created in `idle` state and returned immediately. |
 | `send_message` | `(bonsai_sid: str, text: str) -> None` | Send a user message to the session, triggering a new turn. Enqueues the message; runner picks it up and calls `client.query()`. |
-| `interrupt_task` | `(bonsai_sid: str) -> None` | Cancel the current turn. Session stays `idle` and can accept new messages. |
+| `interrupt_task` | `(bonsai_sid: str) -> None` | Cancel the current turn non-destructively. Calls `tracker.interrupt_futures()` to resolve pending futures with deny+interrupt, then calls `client.interrupt()` on the stored SDK client. The runner stays alive, the client is preserved, and the session returns to `idle` — ready for new messages with full context intact. |
 | `end_session` | `(bonsai_sid: str) -> None` | Gracefully close the session and SDK client. Session enters `done` state. |
 | `update_config` | `(bonsai_sid: str, model: str \| None = None, permission_mode: str \| None = None) -> dict` | Update model and/or permission mode on a live session via the SDK client. |
 | `get_task` | `(bonsai_sid: str) -> AgentTask` | Get current session status and metadata |
@@ -294,6 +314,7 @@ The SDK uses a single `canUseTool` callback for both questions and tool approval
 | `tool_name` in `canUseTool` | Bonsai protocol method | Frontend response -> SDK return |
 |------------------------------|------------------------|-------------------------------|
 | `"AskUserQuestion"` | `agent/askUserQuestion` | `AskUserQuestionResponse` -> `PermissionResultAllow(updated_input={"questions": [...], "answers": {...}})` |
+| `"SuggestSession"` | `agent/suggestSession` | Approve `{"behavior":"allow"}` -> `PermissionResultAllow(updated_input={...input, "approved": true})`. Dismiss `{"behavior":"deny"}` -> `PermissionResultAllow(updated_input={...input, "dismissed": true})`. Never returns `PermissionResultDeny`. See [SuggestSession Backend Spec](tools/SUGGEST_SESSION.md). |
 | Any other tool | `agent/confirmAction` | `ToolApprovalResponse` -> `PermissionResultAllow()` or `PermissionResultDeny(message=..., interrupt=...)` |
 
 ### Event Types (AgentEvent.event_type)
@@ -324,6 +345,7 @@ For mid-turn interactions where the agent needs user input, `runner.py` suspends
 | Trigger | Server sends | Client responds with |
 |---------|-------------|----------------------|
 | `canUseTool` fires with `tool_name="AskUserQuestion"` | `agent/askUserQuestion` (JSON-RPC request with `id`); params: `{ bonsaiSid, questions }` | `agent/respond { bonsaiSid, requestId, response: AskUserQuestionResponse }` |
+| `canUseTool` fires with `tool_name="SuggestSession"` | `agent/suggestSession` (JSON-RPC request with `id`); params: `{ bonsaiSid, skill, specIds, name, reason }` | `agent/respond { bonsaiSid, requestId, response: ToolApprovalResponse }` — approve: `{"behavior":"allow"}`, dismiss: `{"behavior":"deny"}` |
 | `canUseTool` fires with any other `tool_name` | `agent/confirmAction` (JSON-RPC request with `id`); params: `{ bonsaiSid, toolName, toolInput }` | `agent/respond { bonsaiSid, requestId, response: ToolApprovalResponse }` |
 
 **Suspension mechanism:**
@@ -335,12 +357,26 @@ For mid-turn interactions where the agent needs user input, `runner.py` suspends
 
 **Timeout:** If no response arrives within a configurable deadline, the Future is cancelled, the action is auto-denied, and an `agent/notification` event is sent to inform the frontend.
 
+### Tracker — Interrupt Primitives
+
+The tracker manages an **interrupt flag** per session, used to coordinate between `service.interrupt_task()` (which sets the flag) and `runner.py` (which checks and clears it when processing the resulting `ResultMessage`).
+
+| Method | Signature | Description |
+|--------|-----------|-------------|
+| `set_interrupted` | `(bonsai_sid: str) -> None` | Set the interrupt flag for this session. Called by `service.interrupt_task()` before calling `client.interrupt()`. |
+| `is_interrupted` | `(bonsai_sid: str) -> bool` | Check whether the interrupt flag is set. Called by runner when processing `ResultMessage` to decide between emitting `agent/interrupted` vs `agent/turnComplete`. |
+| `clear_interrupted` | `(bonsai_sid: str) -> None` | Clear the interrupt flag after processing. Called by runner after emitting the `agent/interrupted` notification. |
+| `interrupt_futures` | `(bonsai_sid: str) -> None` | Resolve all pending futures for this session with `{"behavior": "deny", "message": "Interrupted", "interrupt": true}`. Unlike `cancel_futures()` (which raises `CancelledError`), this produces a clean `PermissionResultDeny(interrupt=True)` that tells the SDK to stop the turn gracefully. |
+
+**Why resolve instead of cancel?** Cancelling a future raises `CancelledError` which propagates unpredictably through the SDK's `can_use_tool` callback. Resolving with `deny + interrupt=True` uses the SDK's intended mechanism — `PermissionResultDeny(interrupt=True)` tells the SDK to end the turn cleanly and emit a `ResultMessage`.
+
 ### Conversation Loop (runner.py)
 
 The runner maintains a persistent SDK client and loops over user messages:
 
 ```python
 async with ClaudeSDKClient(options=options) as client:
+    tracker.set_client(task.bonsai_sid, client)
     # Emit agent/sessionStart, enter idle state
 
     while True:
@@ -354,12 +390,23 @@ async with ClaudeSDKClient(options=options) as client:
 
         async for sdk_event in client.receive_response():
             # Map SDK events -> notifications (same as current)
-            # On ResultMessage -> emit agent/turnComplete, enter idle state
+
+            if isinstance(sdk_event, ResultMessage):
+                if tracker.is_interrupted(task.bonsai_sid):
+                    # Interrupt path — emit interrupted, not turnComplete
+                    await notify("agent/interrupted", {...})
+                    tracker.clear_interrupted(task.bonsai_sid)
+                else:
+                    await notify("agent/turnComplete", {...})
+                tracker.set_status(task.bonsai_sid, "idle")
+                break  # back to conversation loop, same client
 
     # Session closed -> emit agent/done
 ```
 
 **Message delivery:** `tracker.py` maintains an `asyncio.Queue` per session. `service.send_message()` pushes to the queue; `runner.py` pulls from it. `service.end_session()` pushes a sentinel `END_SIGNAL` to break the loop.
+
+**Interrupt handling:** When `service.interrupt_task()` calls `client.interrupt()`, the SDK sends a control request to the CLI and the `receive_response()` generator yields a final `ResultMessage`. The runner checks `tracker.is_interrupted()` to emit `agent/interrupted` instead of `agent/turnComplete`, then clears the flag and returns to idle — same client, same context, no re-launch.
 
 ## Context Assembly
 
@@ -443,7 +490,9 @@ await runner.run(
 | **resume_session_id as runner param** | `runner.run()` accepts optional `resume_session_id: str \| None`; service decides when to pass it | Runner stays SDK-focused (just maps param to options). Service owns the "should we resume?" decision. Clean separation. |
 | **No text replay fallback** | If stored session has no `sessionId`, raise `ValueError` instead of falling back to text replay | Simplicity. Text replay was lossy anyway. Old sessions without `sessionId` are rare and can be started fresh. |
 | Message queue for user input | `asyncio.Queue` per session in `tracker.py` | Clean producer-consumer pattern; `agent/send` pushes, runner pulls. Decouples RPC layer from runner timing. |
-| Interrupt vs End | `interrupt` cancels current turn (session stays idle); `end` closes the session | Mirrors Claude Code behavior — Escape stops the current response, but you can keep chatting |
+| **Non-destructive interrupt** | `interrupt` calls `client.interrupt()` on the live SDK client; `end` pushes END_SIGNAL to close the session | Uses the SDK's built-in control protocol (`{"subtype": "interrupt"}`) to stop the current turn without destroying the client or conversation context. Previous approach (`bg.cancel()` + re-launch) was destructive — killed the runner, destroyed the SDK client, and lost all accumulated context. |
+| **Interrupt flag on tracker** | Tracker holds a per-session interrupt flag; runner checks it on ResultMessage | Cleanly routes `ResultMessage` to either `agent/interrupted` or `agent/turnComplete` notification without race conditions. Service sets the flag before calling `client.interrupt()`; runner clears it after emitting the notification. |
+| **Resolve futures, don't cancel** | `interrupt_futures()` resolves with `deny + interrupt=True` instead of `cancel()` | Cancelling a future raises `CancelledError` which propagates unpredictably. Resolving with `PermissionResultDeny(interrupt=True)` uses the SDK's intended mechanism to end the turn cleanly. |
 | `turnComplete` vs `done` | `turnComplete` fires after each turn; `done` fires once when session closes | Clear separation between turn-level and session-level events; frontend can distinguish "ready for next message" from "conversation over" |
 | SDK integration point | `runner.py` only | Single place to swap SDK versions or add a Python-side SDK wrapper; service and tracker are SDK-agnostic |
 | Suspension pattern | `asyncio.Future` per `requestId` | Idiomatic async Python; futures can be awaited, cancelled, and inspected without threads |

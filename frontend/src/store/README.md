@@ -63,7 +63,8 @@ export type EventType =
   | "sessionStart" | "textDelta" | "toolCallStart" | "toolCallEnd"
   | "turnComplete" | "interrupted" | "subagentStart" | "subagentEnd"
   | "notification" | "compact" | "progress" | "done" | "error"
-  | "permissionDenied" | "askUserQuestion" | "confirmAction" | "userMessage";
+  | "permissionDenied" | "askUserQuestion" | "confirmAction"
+  | "suggestSession" | "userMessage";
 
 export interface AgentConfig {
   model: string;
@@ -97,10 +98,15 @@ export interface SessionMetrics {
 
 export interface PendingRequest {
   requestId: string;
-  type: "question" | "approval";
+  type: "question" | "approval" | "suggestion";
   questions?: Question[];
   toolName?: string;
   toolInput?: Record<string, unknown>;
+  // SuggestSession fields (when type === "suggestion")
+  skill?: string;
+  specIds?: string[];
+  name?: string;
+  reason?: string;
 }
 
 export interface Session {
@@ -199,6 +205,7 @@ interface SessionStore {
   onAgentEvent: (method: string, params) => void;
   onAskQuestion: (params) => void;
   onConfirmAction: (params) => void;
+  onSuggestSession: (params: { bonsaiSid: string; skill: string; specIds: string[]; name: string; reason: string; requestId: string }) => void;
   onSessionDone: (params) => void;
   onSessionError: (params) => void;
   onConfigChanged: (params) => void;
@@ -212,6 +219,7 @@ interface SessionStore {
 - `closeSession` calls `api.end()` if not done/error, removes from map, archives, switches to next session
 - `resolveRequest` calls `agent/respond` RPC, stores in `answeredRequests`, clears `pendingRequest`
 - `restoreSession` loads from backend, marks all question/approval events as answered with `{ historical: true }`, sets `status: "done"` and `restored: true`
+- `onSuggestSession` stores suggestion params in `pendingRequest` as `{type: "suggestion", skill, specIds, name, reason, requestId}` and appends a `suggestSession` event
 - `onAgentEvent` is the generic handler for all streaming events; increments `toolCalls` on `toolCallEnd`, updates metrics on `turnComplete`
 - `onSessionError` with `subtype === "turn_error"` sets status to `"idle"` (recoverable); other subtypes set `"error"` (terminal)
 - `ensureSession()` internal helper creates placeholder if events arrive before `startSession()` resolves
@@ -385,8 +393,9 @@ export function wireEvents(client: RpcClient): Unsubscribe
 | `agent/configChanged` | `sessionStore.onConfigChanged(params)` |
 | `agent/askUserQuestion` | `sessionStore.onAskQuestion(params)` + `incrementPendingInput` + persistent toast + badge |
 | `agent/confirmAction` | `sessionStore.onConfirmAction(params)` + `incrementPendingInput` + persistent toast + badge |
+| `agent/suggestSession` | `sessionStore.onSuggestSession(params)` + `incrementPendingInput` + persistent toast + badge |
 
-Questions and approvals arrive with a JSON-RPC `id` but are handled via `client.on()` (not `client.onRequest()`). Responses are sent via `agent/respond` RPC.
+Questions, approvals, and suggestions arrive with a JSON-RPC `id` but are handled via `client.on()` (not `client.onRequest()`). Responses are sent via `agent/respond` RPC.
 
 ---
 
