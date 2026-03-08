@@ -1,18 +1,18 @@
 * Global bottom status bar
 
-    - [ ] "**45** sessions need attention" —- counter has to be up-to-date
+    - [~] "**45** sessions need attention" —- counter has to be up-to-date
     - [ ] "1 need attention" should be clickable -> choose ...
-    - [ ] count money (globally spend on the project) on the fly
+    - [~] count money (globally spend on the project) on the fly
 
 * Chat
     - [x] History search
     - [x] Bug/Missing feature: Doesn't display user prompts
-    - [ ] When ask multiple askUserQuestions in one use inlined tabs or something similar
+    - [x] When ask multiple askUserQuestions in one use inlined tabs or something similar
     - [ ] Colours and AskUserQuestions are hard to see (small and violet on black)
-    - [ ] AskUserQuestion should always have "other" field
+    - [x] AskUserQuestion should always have "other" field
     - [ ] Visualize plan and display progress
-    - [ ] Re-visualise normally answers on AskUserQuestions
-    - [ ] AskUserQuestion/approval requests can "slip upwards" when agent does things simultaneously — should be pinned/focused (like claude code)
+    - [~] Re-visualise normally answers on AskUserQuestions
+    - [x] AskUserQuestion/approval requests can "slip upwards" when agent does things simultaneously — should be pinned/focused (like claude code)
     - [ ] Group tool calls and tasks somehow
     - [ ] add "don't ask approval again for ..." — "Allow for Session" button on ApprovalCard that uses SDK's `PermissionUpdate(type="addRules", destination="session")` via `PermissionResultAllow.updated_permissions` to auto-allow matching tools for the rest of the session (SDK enforces it natively, no custom state needed)
     - [~] send message should always be active?
@@ -26,12 +26,12 @@
     - [ ] sessions do not restore after restart
     - [~] save and restore sessions
 * Session status bar
-    - [ ] money is not counted on the fly
+    - [~] money is not counted on the fly
     - [ ] no context size and opacity
     - [x] Display current mode (plan, accept edits, spec, ...) in status bar in sessions tabs (right below chat box); should be clickable to quick switch modes (a-la `⏸️ plan mode on (shift+tab to cycle)`)
     - [x] Display current model (opus 4.5 1m, opus 4.5, ...) in status bar in sessions tabs (right below chat box); should be clickable to quick switch models
 * Notifications
-    - [ ] Needs something like timeout (when active usage)
+    - [~] Needs something like timeout (when active usage)
     - [ ] Should "focus on problem on click"
 * Left panel
     - [ ] add context menu on click for files (ex. delete, open in ...)
@@ -61,19 +61,19 @@
     - [x] files tab doesn't have scrolling
 
 * Bugs and strange behaviours:
-    - [ ] Tree view is not updated automatically: check events
+    - [x] Tree view is not updated automatically: check events
     - [ ] Once agent decided to go to inspect other projects on disk
-    - [ ] Unexpected "session start" after turn complete — agent auto-restarts:
+    - [x] Unexpected "session start" after turn complete — agent auto-restarts:
         ```
         Turn complete — $1.80 · 21 turns
         Session started — claude-opus-4-6
         ```
-    - [ ] Session stops by itself and doesn't resume (session renew issue)
+    - [~] Session stops by itself and doesn't resume (session renew issue)
     - [ ] **Graph view** has to be fixed
     - [ ] Progress tab definitely shows something wrong
     - [ ] Markdown preview doesn't support "follow links" (for example, for table of contents)
     - [ ] Sessions working dir: `ls -la .../aiir/` instead of `.../aiir/demo/`
-    - [ ] Session: AskUserQuestion validation error when agent sends >4 options:
+    - [x] Session: AskUserQuestion validation error when agent sends >4 options:
         ```
         AskUserQuestion[object Object]✕ error
         InputValidationError: Too big: expected array to have <=4 items
@@ -84,7 +84,7 @@
     - [x] Support preview for markdowns and mermaid
     - [x] Support file editing and simple IDE features (monaco editor, open in IDE/Vim)
     - [x] IntelliJ Idea-style theme for `files` tab and code
-    - [ ] Different (global) themes support
+    - [x] Different (global) themes support
     - [~] keybindings for non-mac
     - [ ] Better mermaid scrolling, focusing, etc
     - [x] Add working-dir and project selection with autocomplete during project path typing
