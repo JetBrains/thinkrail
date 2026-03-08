@@ -11,6 +11,7 @@ from claude_agent_sdk import (
     AssistantMessage,
     ClaudeAgentOptions,
     ClaudeSDKClient,
+    HookMatcher,
     PermissionResultAllow,
     PermissionResultDeny,
     ResultMessage,
@@ -95,6 +96,32 @@ async def run(
                     interrupt=response.get("interrupt", False),
                 )
 
+    # -- Subagent lifecycle hooks --
+    # Track the currently-active subagent so toolCallStart events can be
+    # correlated with their parent subagent on the frontend.
+    _current_subagent_id: str | None = None
+
+    async def on_subagent_start(hook_input: Any, tool_use_id: str | None, context: Any) -> dict:
+        nonlocal _current_subagent_id
+        _current_subagent_id = hook_input.agent_id
+        await notify("agent/subagentStart", {
+            "bonsaiSid": task.bonsai_sid,
+            "sessionId": session_id,
+            "agentId": hook_input.agent_id,
+            "agentType": hook_input.agent_type,
+        })
+        return {}
+
+    async def on_subagent_stop(hook_input: Any, tool_use_id: str | None, context: Any) -> dict:
+        nonlocal _current_subagent_id
+        _current_subagent_id = None
+        await notify("agent/subagentEnd", {
+            "bonsaiSid": task.bonsai_sid,
+            "sessionId": session_id,
+            "agentId": hook_input.agent_id,
+        })
+        return {}
+
     plugins = []
     if plugin_dir and Path(plugin_dir).is_dir():
         plugins.append({"type": "local", "path": str(plugin_dir)})
@@ -109,6 +136,10 @@ async def run(
         cwd=str(cwd) if cwd else None,
         plugins=plugins,
         resume=resume_session_id,
+        hooks={
+            "SubagentStart": [HookMatcher(hooks=[on_subagent_start])],
+            "SubagentStop": [HookMatcher(hooks=[on_subagent_stop])],
+        },
     )
 
     session_id = ""
@@ -199,7 +230,12 @@ async def run(
                         total_turns += turn_turns
                         duration_ms = int((time.monotonic() - start_time) * 1000)
 
-                        if sdk_event.is_error:
+                        # Check if this ResultMessage came from an interrupt
+                        interrupted = tracker.is_interrupted(task.bonsai_sid)
+                        if interrupted:
+                            tracker.clear_interrupted(task.bonsai_sid)
+
+                        if sdk_event.is_error and not interrupted:
                             # Send error notification but DON'T terminate the session.
                             # Go back to idle so the user can send another message.
                             await notify("agent/error", {
@@ -213,8 +249,17 @@ async def run(
                                 "durationMs": duration_ms,
                                 "usage": sdk_event.usage or {},
                             })
-                            tracker.set_status(task.bonsai_sid, "idle")
-                            break  # back to conversation loop, wait for next message
+                        elif interrupted:
+                            # Interrupt path — emit interrupted, not turnComplete.
+                            # Same client, same context — runner goes back to idle.
+                            await notify("agent/interrupted", {
+                                "bonsaiSid": task.bonsai_sid,
+                                "sessionId": sdk_event.session_id or session_id,
+                                "costUsd": total_cost,
+                                "turns": total_turns,
+                                "durationMs": duration_ms,
+                                "usage": sdk_event.usage or {},
+                            })
                         else:
                             await notify("agent/turnComplete", {
                                 "bonsaiSid": task.bonsai_sid,
@@ -225,8 +270,8 @@ async def run(
                                 "durationMs": duration_ms,
                                 "usage": sdk_event.usage or {},
                             })
-                            tracker.set_status(task.bonsai_sid, "idle")
-                            break  # turn done, go back to waiting
+                        tracker.set_status(task.bonsai_sid, "idle")
+                        break  # back to conversation loop, same client
         finally:
             tracker.clear_client(task.bonsai_sid)
 

@@ -473,6 +473,162 @@ class TestPluginWiring:
         assert opts.plugins == []
 
 
+class TestInterruptHandling:
+    @patch("app.agent.runner.ClaudeSDKClient")
+    async def test_interrupt_emits_interrupted_not_turn_complete(self, MockClient: MagicMock) -> None:
+        """When interrupt flag is set, ResultMessage emits agent/interrupted."""
+        from claude_agent_sdk import ResultMessage, SystemMessage
+
+        sys_msg = MagicMock(spec=SystemMessage)
+        sys_msg.subtype = "init"
+        sys_msg.data = {"session_id": "s1"}
+
+        result_msg = MagicMock(spec=ResultMessage)
+        result_msg.session_id = "s1"
+        result_msg.result = ""
+        result_msg.is_error = False
+        result_msg.num_turns = 1
+        result_msg.total_cost_usd = 0.01
+        result_msg.usage = {}
+
+        _setup_mock_client(MockClient, [sys_msg, result_msg])
+
+        tracker, task = _make_tracker_and_task()
+        tracker.enqueue_message(task.bonsai_sid, "go")
+        tracker.enqueue_end_signal(task.bonsai_sid)
+
+        # Set interrupt flag BEFORE the run processes ResultMessage
+        tracker.set_interrupted(task.bonsai_sid)
+
+        notify = AsyncMock()
+        await run(task, "context", notify, tracker)
+
+        method_calls = [call.args[0] for call in notify.call_args_list]
+        assert "agent/interrupted" in method_calls
+        assert "agent/turnComplete" not in method_calls
+        # Flag should be cleared after processing
+        assert tracker.is_interrupted(task.bonsai_sid) is False
+
+    @patch("app.agent.runner.ClaudeSDKClient")
+    async def test_normal_result_emits_turn_complete(self, MockClient: MagicMock) -> None:
+        """Without interrupt flag, ResultMessage emits agent/turnComplete."""
+        from claude_agent_sdk import ResultMessage
+
+        result_msg = MagicMock(spec=ResultMessage)
+        result_msg.session_id = "s1"
+        result_msg.result = "done"
+        result_msg.is_error = False
+        result_msg.num_turns = 1
+        result_msg.total_cost_usd = 0.01
+        result_msg.usage = {}
+
+        _setup_mock_client(MockClient, [result_msg])
+
+        tracker, task = _make_tracker_and_task()
+        tracker.enqueue_message(task.bonsai_sid, "go")
+        tracker.enqueue_end_signal(task.bonsai_sid)
+
+        notify = AsyncMock()
+        await run(task, "context", notify, tracker)
+
+        method_calls = [call.args[0] for call in notify.call_args_list]
+        assert "agent/turnComplete" in method_calls
+        assert "agent/interrupted" not in method_calls
+
+    @patch("app.agent.runner.ClaudeSDKClient")
+    async def test_interrupted_result_returns_to_idle(self, MockClient: MagicMock) -> None:
+        """After interrupt, runner goes back to idle and can process next message."""
+        from claude_agent_sdk import ResultMessage
+
+        result1 = MagicMock(spec=ResultMessage)
+        result1.session_id = "s1"
+        result1.result = ""
+        result1.is_error = False
+        result1.num_turns = 1
+        result1.total_cost_usd = 0.01
+        result1.usage = {}
+
+        result2 = MagicMock(spec=ResultMessage)
+        result2.session_id = "s1"
+        result2.result = "completed"
+        result2.is_error = False
+        result2.num_turns = 1
+        result2.total_cost_usd = 0.02
+        result2.usage = {}
+
+        mock_instance = AsyncMock()
+        call_count = 0
+
+        def make_receive(msgs):
+            async def fake_receive():
+                for msg in msgs:
+                    yield msg
+            return fake_receive
+
+        async def dynamic_query(prompt):
+            nonlocal call_count
+            call_count += 1
+            if call_count == 1:
+                mock_instance.receive_response = make_receive([result1])
+            else:
+                mock_instance.receive_response = make_receive([result2])
+
+        mock_instance.query = dynamic_query
+        mock_instance.receive_response = make_receive([])
+
+        MockClient.return_value.__aenter__ = AsyncMock(return_value=mock_instance)
+        MockClient.return_value.__aexit__ = AsyncMock(return_value=False)
+
+        tracker, task = _make_tracker_and_task()
+        # First message will be interrupted, second will complete normally
+        tracker.enqueue_message(task.bonsai_sid, "first")
+        tracker.enqueue_message(task.bonsai_sid, "second")
+        tracker.enqueue_end_signal(task.bonsai_sid)
+
+        # Set interrupt flag for the first turn
+        tracker.set_interrupted(task.bonsai_sid)
+
+        notify = AsyncMock()
+        result = await run(task, "context", notify, tracker)
+
+        method_calls = [call.args[0] for call in notify.call_args_list]
+        assert "agent/interrupted" in method_calls
+        assert "agent/turnComplete" in method_calls
+        # interrupted should come before turnComplete
+        assert method_calls.index("agent/interrupted") < method_calls.index("agent/turnComplete")
+        # Both turns processed — stats accumulated
+        assert result.turns == 2
+        assert result.cost_usd == pytest.approx(0.03)
+
+    @patch("app.agent.runner.ClaudeSDKClient")
+    async def test_interrupt_error_result_treated_as_interrupt(self, MockClient: MagicMock) -> None:
+        """If ResultMessage.is_error and interrupted flag set, emit interrupted not error."""
+        from claude_agent_sdk import ResultMessage
+
+        result_msg = MagicMock(spec=ResultMessage)
+        result_msg.session_id = "s1"
+        result_msg.result = "cancelled"
+        result_msg.is_error = True
+        result_msg.num_turns = 0
+        result_msg.total_cost_usd = 0.0
+        result_msg.usage = {}
+
+        _setup_mock_client(MockClient, [result_msg])
+
+        tracker, task = _make_tracker_and_task()
+        tracker.enqueue_message(task.bonsai_sid, "go")
+        tracker.enqueue_end_signal(task.bonsai_sid)
+        tracker.set_interrupted(task.bonsai_sid)
+
+        notify = AsyncMock()
+        await run(task, "context", notify, tracker)
+
+        method_calls = [call.args[0] for call in notify.call_args_list]
+        # Interrupted flag takes precedence over is_error
+        assert "agent/interrupted" in method_calls
+        assert "agent/error" not in method_calls
+
+
 class TestRunError:
     @patch("app.agent.runner.ClaudeSDKClient")
     async def test_error_result(self, MockClient: MagicMock) -> None:
@@ -523,3 +679,131 @@ class TestRunError:
         with pytest.raises(RuntimeError, match="SDK crash"):
             await run(task, "context", AsyncMock(), tracker)
         print(f"[test_sdk_exception_propagates] exception caught as expected")
+
+
+class TestSubagentHooks:
+    @patch("app.agent.runner.ClaudeSDKClient")
+    async def test_subagent_hooks_registered(self, MockClient: MagicMock) -> None:
+        """Verify SubagentStart and SubagentStop hooks are wired into options."""
+        from claude_agent_sdk import ResultMessage, SystemMessage
+
+        sys_msg = MagicMock(spec=SystemMessage)
+        sys_msg.subtype = "init"
+        sys_msg.data = {"session_id": "s1"}
+
+        result_msg = MagicMock(spec=ResultMessage)
+        result_msg.session_id = "s1"
+        result_msg.result = "ok"
+        result_msg.is_error = False
+        result_msg.num_turns = 1
+        result_msg.total_cost_usd = 0.0
+        result_msg.usage = {}
+
+        captured = _setup_capturing_client(MockClient, [sys_msg, result_msg])
+
+        tracker, task = _make_tracker_and_task()
+        tracker.enqueue_message(task.bonsai_sid, "go")
+        tracker.enqueue_end_signal(task.bonsai_sid)
+
+        await run(task, "context", AsyncMock(), tracker)
+
+        opts = captured["options"]
+        assert opts.hooks is not None
+        assert "SubagentStart" in opts.hooks
+        assert "SubagentStop" in opts.hooks
+        assert len(opts.hooks["SubagentStart"]) == 1
+        assert len(opts.hooks["SubagentStop"]) == 1
+        assert len(opts.hooks["SubagentStart"][0].hooks) == 1
+        assert len(opts.hooks["SubagentStop"][0].hooks) == 1
+
+    @patch("app.agent.runner.ClaudeSDKClient")
+    async def test_subagent_start_emits_notification(self, MockClient: MagicMock) -> None:
+        """SubagentStart hook emits agent/subagentStart notification."""
+        from claude_agent_sdk import ResultMessage, SystemMessage
+
+        sys_msg = MagicMock(spec=SystemMessage)
+        sys_msg.subtype = "init"
+        sys_msg.data = {"session_id": "s1"}
+
+        result_msg = MagicMock(spec=ResultMessage)
+        result_msg.session_id = "s1"
+        result_msg.result = "ok"
+        result_msg.is_error = False
+        result_msg.num_turns = 1
+        result_msg.total_cost_usd = 0.0
+        result_msg.usage = {}
+
+        captured = _setup_capturing_client(MockClient, [sys_msg, result_msg])
+
+        tracker, task = _make_tracker_and_task()
+        tracker.enqueue_message(task.bonsai_sid, "go")
+        tracker.enqueue_end_signal(task.bonsai_sid)
+        notify = AsyncMock()
+
+        await run(task, "context", notify, tracker)
+
+        # Extract the hook callback and invoke it
+        hook_fn = captured["options"].hooks["SubagentStart"][0].hooks[0]
+        mock_input = MagicMock()
+        mock_input.agent_id = "agent-42"
+        mock_input.agent_type = "Explore"
+
+        result = await hook_fn(mock_input, None, MagicMock())
+
+        assert result == {}
+
+        # Find the subagentStart notification
+        start_calls = [
+            call for call in notify.call_args_list
+            if call.args[0] == "agent/subagentStart"
+        ]
+        assert len(start_calls) == 1
+        payload = start_calls[0].args[1]
+        assert payload["agentId"] == "agent-42"
+        assert payload["agentType"] == "Explore"
+        assert payload["bonsaiSid"] == task.bonsai_sid
+
+    @patch("app.agent.runner.ClaudeSDKClient")
+    async def test_subagent_stop_emits_notification(self, MockClient: MagicMock) -> None:
+        """SubagentStop hook emits agent/subagentEnd notification."""
+        from claude_agent_sdk import ResultMessage, SystemMessage
+
+        sys_msg = MagicMock(spec=SystemMessage)
+        sys_msg.subtype = "init"
+        sys_msg.data = {"session_id": "s1"}
+
+        result_msg = MagicMock(spec=ResultMessage)
+        result_msg.session_id = "s1"
+        result_msg.result = "ok"
+        result_msg.is_error = False
+        result_msg.num_turns = 1
+        result_msg.total_cost_usd = 0.0
+        result_msg.usage = {}
+
+        captured = _setup_capturing_client(MockClient, [sys_msg, result_msg])
+
+        tracker, task = _make_tracker_and_task()
+        tracker.enqueue_message(task.bonsai_sid, "go")
+        tracker.enqueue_end_signal(task.bonsai_sid)
+        notify = AsyncMock()
+
+        await run(task, "context", notify, tracker)
+
+        # Extract the hook callback and invoke it
+        hook_fn = captured["options"].hooks["SubagentStop"][0].hooks[0]
+        mock_input = MagicMock()
+        mock_input.agent_id = "agent-42"
+
+        result = await hook_fn(mock_input, None, MagicMock())
+
+        assert result == {}
+
+        # Find the subagentEnd notification
+        end_calls = [
+            call for call in notify.call_args_list
+            if call.args[0] == "agent/subagentEnd"
+        ]
+        assert len(end_calls) == 1
+        payload = end_calls[0].args[1]
+        assert payload["agentId"] == "agent-42"
+        assert payload["bonsaiSid"] == task.bonsai_sid
