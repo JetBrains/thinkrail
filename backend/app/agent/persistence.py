@@ -128,6 +128,32 @@ def append_event(project_root: Path, bonsai_sid: str, event: dict[str, Any]) -> 
         logger.exception("Failed to append event for session %s", bonsai_sid)
 
 
+def update_session_metadata(
+    project_root: Path,
+    bonsai_sid: str,
+    updates: dict[str, Any],
+    *,
+    overwrite: bool = True,
+) -> None:
+    """Read-modify-write session metadata JSON, merging *updates* into it.
+
+    When *overwrite* is False, existing keys are not replaced.
+    """
+    path = _meta_path(project_root, bonsai_sid)
+    if not path.is_file():
+        return
+    try:
+        meta = json.loads(read_text(path))
+        if overwrite:
+            meta.update(updates)
+        else:
+            for k, v in updates.items():
+                meta.setdefault(k, v)
+        write_text(path, json.dumps(meta, indent=2, default=str))
+    except Exception:
+        logger.debug("Failed to update metadata for %s", bonsai_sid)
+
+
 def delete_session(project_root: Path, bonsai_sid: str) -> bool:
     """Delete a session (metadata + events) from disk. Returns True if deleted."""
     meta = _meta_path(project_root, bonsai_sid)

@@ -10,6 +10,7 @@ import type {
 import { getClient } from "@/api/index.ts";
 import { createAgentApi } from "@/api/methods/agents.ts";
 import { useNotificationStore } from "./notificationStore.ts";
+import { getErrorMessage } from "@/utils/errors.ts";
 
 interface SessionStore {
   sessions: Map<string, Session>;
@@ -78,6 +79,33 @@ function reconstructCost(events: AgentEvent[]): number {
     }
   }
   return 0;
+}
+
+/**
+ * Apply cost + metrics from event params to a session, returning the
+ * updated session and the change in project-wide cost.
+ */
+function applyMetrics(
+  session: Session,
+  params: Record<string, unknown>,
+  status: SessionStatus,
+): { updated: Session; costDelta: number } {
+  const newCost = (params.costUsd as number) ?? session.metrics.costUsd;
+  const costDelta = newCost - session.metrics.costUsd;
+  return {
+    updated: {
+      ...session,
+      status,
+      pendingRequest: null,
+      metrics: {
+        ...session.metrics,
+        costUsd: newCost,
+        turns: (params.turns as number) ?? session.metrics.turns,
+        durationMs: (params.durationMs as number) ?? session.metrics.durationMs,
+      },
+    },
+    costDelta,
+  };
 }
 
 /**
@@ -234,7 +262,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
       await api.send(bonsaiSid, text);
     } catch (err) {
       console.error("[sendMessage] failed:", err);
-      const msg = err instanceof Error ? err.message : String(err);
+      const msg = getErrorMessage(err);
       useNotificationStore.getState().addToast({
         eventType: "error",
         message: `Send failed: ${msg}`,
@@ -588,20 +616,9 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
       let projectCost = s.projectCost;
       if (session) {
         if (method === "agent/turnComplete" || method === "agent/interrupted") {
-          const newCost = (params.costUsd as number) ?? session.metrics.costUsd;
-          const costDelta = newCost - session.metrics.costUsd;
+          const { updated, costDelta } = applyMetrics(session, params, "idle");
           projectCost += costDelta;
-          sessions.set(bonsaiSid, {
-            ...session,
-            status: "idle",
-            pendingRequest: null,
-            metrics: {
-              ...session.metrics,
-              costUsd: newCost,
-              turns: (params.turns as number) ?? session.metrics.turns,
-              durationMs: (params.durationMs as number) ?? session.metrics.durationMs,
-            },
-          });
+          sessions.set(bonsaiSid, updated);
         }
       }
       return { sessions, projectCost };
@@ -676,21 +693,9 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
       const session = sessions.get(bonsaiSid);
       let projectCost = s.projectCost;
       if (session) {
-        const newCost = (params.costUsd as number) ?? session.metrics.costUsd;
-        const costDelta = newCost - session.metrics.costUsd;
+        const { updated, costDelta } = applyMetrics(session, params, "done");
         projectCost += costDelta;
-        sessions.set(bonsaiSid, {
-          ...session,
-          status: "done",
-          pendingRequest: null,
-          metrics: {
-            ...session.metrics,
-            costUsd: newCost,
-            durationMs:
-              (params.durationMs as number) ?? session.metrics.durationMs,
-            turns: (params.turns as number) ?? session.metrics.turns,
-          },
-        });
+        sessions.set(bonsaiSid, updated);
       }
       return { sessions, projectCost };
     });

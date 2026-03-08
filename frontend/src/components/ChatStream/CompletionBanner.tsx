@@ -1,3 +1,5 @@
+import { formatDuration } from "@/utils/format.ts";
+
 interface CompletionBannerProps {
   result?: string;
   costUsd?: number;
@@ -11,11 +13,7 @@ export function CompletionBanner({
   turns,
   durationMs,
 }: CompletionBannerProps) {
-  const duration = durationMs
-    ? durationMs < 60000
-      ? `${(durationMs / 1000).toFixed(1)}s`
-      : `${Math.floor(durationMs / 60000)}m ${Math.floor((durationMs % 60000) / 1000)}s`
-    : null;
+  const duration = durationMs ? formatDuration(durationMs) : null;
 
   return (
     <div className="chat-banner chat-banner-done">

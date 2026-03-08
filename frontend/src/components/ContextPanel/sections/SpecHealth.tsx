@@ -1,6 +1,6 @@
 import { CollapsibleSection } from "../CollapsibleSection.tsx";
 import { useSelectedSpec } from "../useSelectedSpec.ts";
-import { StatusBadge, relativeDate } from "../utils.tsx";
+import { StatusBadge } from "../utils.tsx";
 import "./SpecHealth.css";
 
 export function SpecHealth() {

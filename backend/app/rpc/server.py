@@ -39,7 +39,7 @@ from app.agent.service import AgentService
 from app.core.config import AppConfig, load_config
 from app.core.fileio import read_text
 from app.core.watcher import WatchHandle, watch, stop
-from app.spec.service import SpecService
+from app.spec.service import SpecService, detect_spec_type
 
 logger = logging.getLogger(__name__)
 
@@ -212,6 +212,14 @@ async def _start_watcher(config: AppConfig, service: SpecService) -> WatchHandle
                     elif method == "spec/didChange":
                         params["changes"] = {}
                     await notify(method, params)
+                elif change_type == Change.added and path.suffix == ".md":
+                    spec_type = detect_spec_type(path.name)
+                    if spec_type:
+                        rel = str(path.relative_to(config.get_project_root()))
+                        try:
+                            service.register_existing(rel, spec_type)
+                        except Exception:
+                            pass  # best-effort
 
         if any(ct in (Change.added, Change.deleted) for ct, _ in changes):
             await notify("files/treeChanged", {})

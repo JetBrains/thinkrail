@@ -15,8 +15,6 @@ export { RpcError, RpcTimeoutError, RpcConnectionError, toRpcError } from "./err
 export { createSpecApi, createAgentApi, type SpecApi, type AgentApi } from "./methods/index.ts";
 export { RpcProvider, useRpc, useConnectionState } from "./hooks/useRpc.tsx";
 export { useSpecs, useSpec, useGraph } from "./hooks/useSpecs.ts";
-export { useSession } from "./hooks/useSession.ts";
-export { useCost } from "./hooks/useCost.ts";
 export type {
   Unsubscribe,
   CreateSpecParams,

@@ -250,8 +250,8 @@ class TestOnFileChange:
             spec_path = str(config.get_project_root() / "mod_a" / "README.md")
             await callback({(Change.added, spec_path)})
 
-            mock_notify.assert_called_once()
-            method, params = mock_notify.call_args[0]
+            calls = mock_notify.call_args_list
+            method, params = calls[0][0]
             assert method == "spec/didCreate"
             assert params["id"] == "mod-a"
             assert params["path"] == "mod_a/README.md"
@@ -267,8 +267,8 @@ class TestOnFileChange:
             spec_path = str(config.get_project_root() / "mod_a" / "README.md")
             await callback({(Change.deleted, spec_path)})
 
-            mock_notify.assert_called_once()
-            method, params = mock_notify.call_args[0]
+            calls = mock_notify.call_args_list
+            method, params = calls[0][0]
             assert method == "spec/didDelete"
             assert params["id"] == "mod-a"
         finally:

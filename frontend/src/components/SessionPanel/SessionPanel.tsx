@@ -1,5 +1,7 @@
 import { useCallback } from "react";
 import { useSessionStore } from "@/store/sessionStore.ts";
+import { useNotificationStore } from "@/store/notificationStore.ts";
+import { getErrorMessage } from "@/utils/errors.ts";
 import { useFileStore } from "@/store/fileStore.ts";
 import type { SessionStatus } from "@/types/session.ts";
 import { ChatStream } from "@/components/ChatStream/ChatStream.tsx";
@@ -164,11 +166,9 @@ function RestoredBar({ bonsaiSid }: { bonsaiSid: string }) {
       await useSessionStore.getState().continueSession(bonsaiSid);
     } catch (e) {
       console.error("Failed to resume session:", e);
-      const msg = e instanceof Error ? e.message : String(e);
-      const { useNotificationStore } = await import("@/store/notificationStore.ts");
       useNotificationStore.getState().addToast({
         eventType: "error",
-        message: `Resume failed: ${msg}`,
+        message: `Resume failed: ${getErrorMessage(e)}`,
         persistent: true,
         bonsaiSid,
       });

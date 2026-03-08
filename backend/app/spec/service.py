@@ -26,6 +26,18 @@ from app.spec.registry import (
 from app.spec.validator import RECOGNIZED_TYPES, validate_spec
 
 
+SPEC_FILENAME_MAP: dict[str, str] = {
+    "GOAL&REQUIREMENTS.md": "goal-and-requirements",
+    "GOAL_AND_REQUIREMENTS.md": "goal-and-requirements",
+    "DESIGN_DOC.md": "architecture-design",
+}
+
+
+def detect_spec_type(filename: str) -> str | None:
+    """Return spec type if filename matches a known spec pattern."""
+    return SPEC_FILENAME_MAP.get(filename)
+
+
 class SpecNotFoundError(Exception):
     """Raised when a spec ID does not exist in the registry."""
 
@@ -175,6 +187,38 @@ class SpecService:
         # Remove links referencing this spec
         links = [l for l in links if l.from_id != id and l.to_id != id]
         write_registry(self._registry_path, entries, links)
+
+    def register_existing(self, path: str, type: str) -> RegistryEntry | None:
+        """Register an existing spec file that's not yet in the registry."""
+        entries, links = read_registry(self._registry_path)
+        if any(e.path == path for e in entries):
+            return None  # already registered
+
+        file_path = self._root / path
+        if not file_path.exists():
+            return None
+
+        content = read_text(file_path)
+        title = _extract_title(content, path)
+        spec_id = _generate_id(title)
+
+        # Avoid ID collision
+        if find_entry(entries, spec_id) is not None:
+            return None
+
+        today = date.today().isoformat()
+        entry = RegistryEntry(
+            id=spec_id,
+            type=type,
+            path=path,
+            title=title,
+            status="active",
+            created=today,
+            updated=today,
+        )
+        entries = add_entry(entries, entry)
+        write_registry(self._registry_path, entries, links)
+        return entry
 
     def get_graph(self) -> SpecGraph:
         entries, links = read_registry(self._registry_path)

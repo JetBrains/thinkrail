@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
 import type { SessionMetrics, SessionStatus } from "@/types/session.ts";
 
 const MODELS = [
@@ -27,15 +27,35 @@ function statusInfo(status: SessionStatus): { icon: string; label: string; cssCl
     case "running":
       return { icon: "", label: "running", cssClass: "running" };
     case "waiting":
-      return { icon: "⏳", label: "waiting", cssClass: "waiting" };
+      return { icon: "\u23F3", label: "waiting", cssClass: "waiting" };
     case "idle":
-      return { icon: "💤", label: "idle", cssClass: "idle" };
+      return { icon: "\uD83D\uDCA4", label: "idle", cssClass: "idle" };
     case "interrupted":
-      return { icon: "⏸", label: "interrupted", cssClass: "interrupted" };
+      return { icon: "\u23F8", label: "interrupted", cssClass: "interrupted" };
     case "done":
     case "error":
-      return { icon: "⏹", label: "ended", cssClass: "ended" };
+      return { icon: "\u23F9", label: "ended", cssClass: "ended" };
   }
+}
+
+function useDropdown() {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+  const toggle = useCallback(() => setOpen((v) => !v), []);
+  const close = useCallback(() => setOpen(false), []);
+
+  useEffect(() => {
+    if (!open) return;
+    function handleMouseDown(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) {
+        setOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handleMouseDown);
+    return () => document.removeEventListener("mousedown", handleMouseDown);
+  }, [open]);
+
+  return { open, ref, toggle, close } as const;
 }
 
 interface SessionStatusLineProps {
@@ -61,23 +81,8 @@ export function SessionStatusLine({
 }: SessionStatusLineProps) {
   const running = status === "running";
   const { icon: statusIcon, label: statusLabel, cssClass: statusClass } = statusInfo(status);
-  const [modelOpen, setModelOpen] = useState(false);
-  const [modeOpen, setModeOpen] = useState(false);
-  const modelRef = useRef<HTMLDivElement>(null);
-  const modeRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    function handleMouseDown(e: MouseEvent) {
-      if (modelRef.current && !modelRef.current.contains(e.target as Node)) {
-        setModelOpen(false);
-      }
-      if (modeRef.current && !modeRef.current.contains(e.target as Node)) {
-        setModeOpen(false);
-      }
-    }
-    document.addEventListener("mousedown", handleMouseDown);
-    return () => document.removeEventListener("mousedown", handleMouseDown);
-  }, []);
+  const modelDd = useDropdown();
+  const modeDd = useDropdown();
 
   const contextPct =
     metrics.contextMax > 0
@@ -92,15 +97,15 @@ export function SessionStatusLine({
 
   return (
     <div className="session-status-line">
-      <div className="ssl-selector" ref={modelRef}>
+      <div className="ssl-selector" ref={modelDd.ref}>
         <button
           className={`ssl-selector-btn${disabled ? " ssl-selector-disabled" : ""}`}
-          onClick={() => !disabled && setModelOpen((v) => !v)}
+          onClick={() => !disabled && modelDd.toggle()}
           disabled={disabled}
         >
           {displayModel(model)}
         </button>
-        {modelOpen && (
+        {modelDd.open && (
           <div className="ssl-dropdown">
             {MODELS.map((m) => (
               <button
@@ -108,7 +113,7 @@ export function SessionStatusLine({
                 className={`ssl-dropdown-item${m.value === model ? " ssl-dropdown-active" : ""}`}
                 onClick={() => {
                   if (m.value !== model) onChangeModel?.(m.value);
-                  setModelOpen(false);
+                  modelDd.close();
                 }}
               >
                 {m.label}
@@ -118,15 +123,15 @@ export function SessionStatusLine({
         )}
       </div>
       <span className="ssl-sep" />
-      <div className="ssl-selector" ref={modeRef}>
+      <div className="ssl-selector" ref={modeDd.ref}>
         <button
           className={`ssl-selector-btn${disabled ? " ssl-selector-disabled" : ""}`}
-          onClick={() => !disabled && setModeOpen((v) => !v)}
+          onClick={() => !disabled && modeDd.toggle()}
           disabled={disabled}
         >
           {displayMode(permissionMode)}
         </button>
-        {modeOpen && (
+        {modeDd.open && (
           <div className="ssl-dropdown">
             {PERMISSION_MODES.map((m) => (
               <button
@@ -134,7 +139,7 @@ export function SessionStatusLine({
                 className={`ssl-dropdown-item${m.value === permissionMode ? " ssl-dropdown-active" : ""}`}
                 onClick={() => {
                   if (m.value !== permissionMode) onChangePermissionMode?.(m.value);
-                  setModeOpen(false);
+                  modeDd.close();
                 }}
               >
                 {m.label}

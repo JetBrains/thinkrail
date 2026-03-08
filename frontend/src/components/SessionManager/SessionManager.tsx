@@ -3,30 +3,10 @@ import { useRpc } from "@/api/hooks/useRpc.tsx";
 import { createSessionApi, type SessionSummary } from "@/api/methods/sessions.ts";
 import { createAgentApi } from "@/api/methods/agents.ts";
 import { useSessionStore } from "@/store/sessionStore.ts";
+import { getErrorMessage } from "@/utils/errors.ts";
+import { timeAgo } from "@/utils/format.ts";
+import { getStatusStyle } from "@/utils/status.ts";
 import "./SessionManager.css";
-
-function statusBadge(status: string): { label: string; cls: string } {
-  switch (status) {
-    case "idle":
-      return { label: "Idle", cls: "badge-idle" };
-    case "running":
-      return { label: "Running", cls: "badge-running" };
-    case "done":
-      return { label: "Done", cls: "badge-done" };
-    case "error":
-      return { label: "Error", cls: "badge-error" };
-    default:
-      return { label: status, cls: "" };
-  }
-}
-
-function timeAgo(iso: string): string {
-  const ms = Date.now() - new Date(iso).getTime();
-  if (ms < 60_000) return "just now";
-  if (ms < 3_600_000) return `${Math.floor(ms / 60_000)}m ago`;
-  if (ms < 86_400_000) return `${Math.floor(ms / 3_600_000)}h ago`;
-  return `${Math.floor(ms / 86_400_000)}d ago`;
-}
 
 export function SessionManager({ onClose }: { onClose?: () => void }) {
   const client = useRpc();
@@ -63,8 +43,7 @@ export function SessionManager({ onClose }: { onClose?: () => void }) {
         onClose?.();
       } catch (e) {
         console.error("Failed to continue session:", e);
-        const msg = e instanceof Error ? e.message : String(e);
-        setError(`Failed to resume session: ${msg}`);
+        setError(`Failed to resume session: ${getErrorMessage(e)}`);
       }
     },
     [onClose],
@@ -190,7 +169,7 @@ function SessionGroup({
     <div className="sm-group">
       <div className="sm-group-label">{label}</div>
       {sessions.map((s) => {
-        const badge = statusBadge(s.status);
+        const badge = getStatusStyle(s.status);
         const isActive = s.status === "idle" || s.status === "running";
         const isDead = s.status === "done" || s.status === "error";
         return (

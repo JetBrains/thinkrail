@@ -1,13 +1,12 @@
 import type { ArchivedSession } from "@/types/session.ts";
+import { formatDuration } from "@/utils/format.ts";
 
 interface HistoryItemProps {
   session: ArchivedSession;
 }
 
 export function HistoryItem({ session }: HistoryItemProps) {
-  const duration = session.durationMs < 60000
-    ? `${(session.durationMs / 1000).toFixed(0)}s`
-    : `${Math.floor(session.durationMs / 60000)}m`;
+  const duration = formatDuration(session.durationMs, false);
 
   return (
     <div className="history-item">

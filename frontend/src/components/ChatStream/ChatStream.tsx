@@ -38,7 +38,8 @@ export function ChatStream({
     autoScroll.current = distFromBottom < 50;
   }, []);
 
-  // Build tool call state map (pair start/end by toolUseId)
+  // Pre-scan: index toolCallEnd results by toolUseId so that
+  // when rendering a toolCallStart we can show its output inline.
   const toolStates = new Map<
     string,
     { output?: string; isError?: boolean; finished: boolean }
@@ -54,7 +55,7 @@ export function ChatStream({
     }
   }
 
-  // Track active subagents
+  // Pre-scan: track which subagents are still running (started but not ended).
   const activeSubagents = new Set<string>();
   for (const ev of events) {
     if (ev.eventType === "subagentStart")
