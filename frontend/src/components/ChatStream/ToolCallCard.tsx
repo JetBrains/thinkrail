@@ -25,6 +25,7 @@ interface ToolCallCardProps {
   output?: string;
   isError?: boolean;
   state: CardState;
+  compact?: boolean;
 }
 
 export function ToolCallCard({
@@ -33,6 +34,7 @@ export function ToolCallCard({
   output,
   isError,
   state,
+  compact = false,
 }: ToolCallCardProps) {
   const [expanded, setExpanded] = useState(state === "error");
 
@@ -54,7 +56,7 @@ export function ToolCallCard({
     state === "running" ? "\u25CF" : isError ? "\u2715" : "\u2713";
 
   return (
-    <div className="chat-tool" style={{ borderLeftColor: borderColor }}>
+    <div className={`chat-tool${compact ? " chat-tool--compact" : ""}`} style={{ borderLeftColor: borderColor }}>
       <div
         className="chat-tool-header"
         onClick={() => state !== "running" && setExpanded(!expanded)}

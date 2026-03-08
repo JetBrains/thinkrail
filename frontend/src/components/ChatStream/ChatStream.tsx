@@ -10,6 +10,20 @@ import { CompletionBanner } from "./CompletionBanner.tsx";
 import { ErrorBanner } from "./ErrorBanner.tsx";
 import { CompactMarker } from "./CompactMarker.tsx";
 
+/** Shared type for tool call end-state, used by SubagentBlock too. */
+export type ToolState = { output?: string; isError?: boolean; finished: boolean };
+
+/** Extract a displayable string from a toolInput payload value. */
+export function extractToolInput(raw: unknown): string {
+  if (typeof raw === "string") return raw;
+  if (typeof raw === "object" && raw) {
+    const val = Object.values(raw as Record<string, unknown>)[0];
+    const str = val?.toString() ?? "";
+    return str.includes("[object Object]") ? "" : str;
+  }
+  return "";
+}
+
 interface ChatStreamProps {
   events: AgentEvent[];
   answeredRequests: Map<string, unknown>;
@@ -40,10 +54,7 @@ export function ChatStream({
 
   // Pre-scan: index toolCallEnd results by toolUseId so that
   // when rendering a toolCallStart we can show its output inline.
-  const toolStates = new Map<
-    string,
-    { output?: string; isError?: boolean; finished: boolean }
-  >();
+  const toolStates = new Map<string, ToolState>();
   for (const ev of events) {
     if (ev.eventType === "toolCallEnd") {
       const id = (ev.payload.toolUseId as string) ?? "";
@@ -64,9 +75,35 @@ export function ChatStream({
       activeSubagents.delete(ev.payload.agentId as string);
   }
 
+  // Pre-scan: group child events under their parent subagentStart.
+  // Uses a stack to support nested subagents.
+  const subagentChildren = new Map<number, number[]>(); // subagentStart idx → child idxs
+  const childIndices = new Set<number>();               // events to skip in render
+  {
+    const stack: [number, string][] = []; // [(startIdx, agentId)]
+    for (let i = 0; i < events.length; i++) {
+      const ev = events[i];
+      if (ev.eventType === "subagentStart") {
+        stack.push([i, (ev.payload.agentId as string) ?? ""]);
+        subagentChildren.set(i, []);
+      } else if (ev.eventType === "subagentEnd") {
+        const aid = (ev.payload.agentId as string) ?? "";
+        for (let j = stack.length - 1; j >= 0; j--) {
+          if (stack[j][1] === aid) { stack.splice(j, 1); break; }
+        }
+      } else if (stack.length > 0) {
+        const [parentIdx] = stack[stack.length - 1];
+        subagentChildren.get(parentIdx)!.push(i);
+        childIndices.add(i);
+      }
+    }
+  }
+
   return (
     <div className="chat-stream" ref={scrollRef} onScroll={handleScroll}>
       {events.map((ev, i) => {
+        // Skip events that are children of a subagent (rendered inside SubagentBlock)
+        if (childIndices.has(i)) return null;
         const p = ev.payload;
         const k = `${i}-${ev.eventType}`;
         switch (ev.eventType) {
@@ -101,21 +138,11 @@ export function ChatStream({
             if ((p.toolName as string) === "AskUserQuestion") return null;
             const toolUseId = (p.toolUseId as string) ?? "";
             const end = toolStates.get(toolUseId);
-            const toolInput =
-              typeof p.toolInput === "string"
-                ? p.toolInput
-                : typeof p.toolInput === "object" && p.toolInput
-                  ? (() => {
-                      const raw = Object.values(p.toolInput as Record<string, unknown>)[0];
-                      const str = raw?.toString() ?? "";
-                      return str.includes("[object Object]") ? "" : str;
-                    })()
-                  : "";
             return (
               <ToolCallCard
                 key={k}
                 toolName={(p.toolName as string) ?? "tool"}
-                toolInput={toolInput}
+                toolInput={extractToolInput(p.toolInput)}
                 output={end?.output}
                 isError={end?.isError}
                 state={end?.finished ? (end.isError ? "error" : "success") : "running"}
@@ -126,16 +153,18 @@ export function ChatStream({
           case "toolCallEnd":
             return null; // Handled by toolCallStart pairing
 
-          case "subagentStart":
+          case "subagentStart": {
+            const cEvents = (subagentChildren.get(i) ?? []).map(idx => events[idx]);
             return (
               <SubagentBlock
                 key={k}
                 agentType={(p.agentType as string) ?? undefined}
                 finished={!activeSubagents.has(p.agentId as string)}
-              >
-                {null}
-              </SubagentBlock>
+                childEvents={cEvents}
+                toolStates={toolStates}
+              />
             );
+          }
 
           case "subagentEnd":
             return null; // Handled by subagentStart

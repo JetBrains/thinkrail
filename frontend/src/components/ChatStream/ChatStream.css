@@ -122,6 +122,71 @@
 }
 @keyframes spin { to { transform: rotate(360deg); } }
 
+/* ── SubagentBlock clickable header ── */
+.chat-subagent-header--clickable {
+  cursor: pointer;
+  user-select: none;
+  border-radius: var(--radius-sm);
+  transition: background var(--transition-fast, 0.12s);
+}
+.chat-subagent-header--clickable:hover {
+  background: var(--hover);
+}
+
+/* ── SubagentBlock toggle chevron ── */
+.chat-subagent-toggle {
+  font-size: 10px;
+  color: var(--hint);
+  width: 12px;
+  text-align: center;
+  flex-shrink: 0;
+}
+
+/* ── SubagentBlock collapsed summary ── */
+.chat-subagent-summary {
+  color: var(--hint);
+  font-size: 11px;
+  margin-left: auto;
+}
+
+/* ── SubagentBlock body ── */
+.chat-subagent-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+  padding: var(--space-xs) 0;
+}
+
+/* ── SubagentBlock inline text ── */
+.chat-subagent-text {
+  font-size: 12px;
+  color: var(--muted);
+  padding: var(--space-xs) 0;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+/* ── ToolCallCard compact variant (inside SubagentBlock) ── */
+.chat-tool--compact {
+  border-left-width: 2px;
+  background: transparent;
+  max-width: 100%;
+}
+.chat-tool--compact .chat-tool-header {
+  padding: 2px var(--space-sm);
+  font-size: 11px;
+}
+.chat-tool--compact .chat-tool-icon {
+  font-size: 12px;
+}
+.chat-tool--compact .chat-tool-body {
+  padding: 2px var(--space-sm);
+  max-height: 80px;
+}
+.chat-tool--compact .chat-tool-body pre {
+  font-size: 10px;
+}
+
 /* ── Question Card ── */
 .chat-question {
   border: 2px solid var(--purple);
