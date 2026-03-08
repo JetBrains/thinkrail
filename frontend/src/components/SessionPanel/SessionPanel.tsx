@@ -18,6 +18,7 @@ export function SessionPanel() {
   const sendMessage = useSessionStore((s) => s.sendMessage);
   const interruptSession = useSessionStore((s) => s.interruptSession);
   const updateConfig = useSessionStore((s) => s.updateConfig);
+  const projectCost = useSessionStore((s) => s.projectCost);
 
   const openFiles = useFileStore((s) => s.openFiles);
   const activeFilePath = useFileStore((s) => s.activeFilePath);
@@ -133,6 +134,7 @@ export function SessionPanel() {
             permissionMode={activeSession.permissionMode}
             metrics={activeSession.metrics}
             status={status ?? "idle"}
+            projectCost={projectCost}
             disabled={activeSession.restored || isDone}
             onChangeModel={(m) => updateConfig(activeSession.bonsaiSid, { model: m })}
             onChangePermissionMode={(m) => updateConfig(activeSession.bonsaiSid, { permissionMode: m })}
@@ -162,6 +164,14 @@ function RestoredBar({ bonsaiSid }: { bonsaiSid: string }) {
       await useSessionStore.getState().continueSession(bonsaiSid);
     } catch (e) {
       console.error("Failed to resume session:", e);
+      const msg = e instanceof Error ? e.message : String(e);
+      const { useNotificationStore } = await import("@/store/notificationStore.ts");
+      useNotificationStore.getState().addToast({
+        eventType: "error",
+        message: `Resume failed: ${msg}`,
+        persistent: true,
+        bonsaiSid,
+      });
     }
   }, [bonsaiSid]);
 

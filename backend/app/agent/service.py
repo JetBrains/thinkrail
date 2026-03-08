@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
 from collections.abc import Callable
+from pathlib import Path
 from typing import Any
 
 from app.agent.context import build_context
@@ -228,6 +230,13 @@ class AgentService:
             raise ValueError(f"Session {bonsai_sid} not found on disk")
 
         old_session_id = old.get("sessionId")
+        # Fallback: look for sessionId in persisted events (sessionStart)
+        if not old_session_id:
+            for ev in old.get("events", []):
+                if ev.get("eventType") == "sessionStart":
+                    old_session_id = (ev.get("payload") or {}).get("sessionId", "")
+                    if old_session_id:
+                        break
         if not old_session_id:
             raise ValueError(
                 f"Cannot resume session {bonsai_sid}: no stored sessionId"
@@ -303,6 +312,37 @@ class AgentService:
                     self._save_event(task.bonsai_sid, {"eventType": event_type, "payload": payload})
                 except Exception:
                     logger.exception("Failed to persist event %s for session %s", method, task.bonsai_sid)
+
+            # Persist metrics to metadata on turnComplete/done so that
+            # list_all_sessions can return cost per session without loading events.
+            if method in ("agent/turnComplete", "agent/done"):
+                try:
+                    meta_path = Path(self._config.project_root) / ".specs" / "sessions" / f"{task.bonsai_sid}.json"
+                    if meta_path.is_file():
+                        meta = json.loads(meta_path.read_text())
+                        meta["metrics"] = {
+                            "costUsd": params.get("costUsd", 0),
+                            "turns": params.get("turns", 0),
+                            "durationMs": params.get("durationMs", 0),
+                        }
+                        meta_path.write_text(json.dumps(meta, indent=2, default=str))
+                except Exception:
+                    logger.debug("Failed to persist metrics for %s", task.bonsai_sid)
+
+            # Persist sessionId to disk as soon as the SDK provides it,
+            # so that continue_session can resume after a backend restart.
+            if method == "agent/sessionStart":
+                sid = params.get("sessionId", "")
+                if sid:
+                    try:
+                        meta_path = Path(self._config.project_root) / ".specs" / "sessions" / f"{task.bonsai_sid}.json"
+                        if meta_path.is_file():
+                            meta = json.loads(meta_path.read_text())
+                            if not meta.get("sessionId"):
+                                meta["sessionId"] = sid
+                                meta_path.write_text(json.dumps(meta, indent=2, default=str))
+                    except Exception:
+                        logger.debug("Failed to persist sessionId for %s", task.bonsai_sid)
         notify = _persisting_notify
 
         try:

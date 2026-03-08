@@ -63,6 +63,8 @@ export function SessionManager({ onClose }: { onClose?: () => void }) {
         onClose?.();
       } catch (e) {
         console.error("Failed to continue session:", e);
+        const msg = e instanceof Error ? e.message : String(e);
+        setError(`Failed to resume session: ${msg}`);
       }
     },
     [onClose],

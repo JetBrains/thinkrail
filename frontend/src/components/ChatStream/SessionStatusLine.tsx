@@ -43,6 +43,7 @@ interface SessionStatusLineProps {
   permissionMode: string;
   metrics: SessionMetrics;
   status: SessionStatus;
+  projectCost: number;
   disabled?: boolean;
   onChangeModel?: (model: string) => void;
   onChangePermissionMode?: (mode: string) => void;
@@ -53,6 +54,7 @@ export function SessionStatusLine({
   permissionMode,
   metrics,
   status,
+  projectCost,
   disabled,
   onChangeModel,
   onChangePermissionMode,
@@ -142,7 +144,7 @@ export function SessionStatusLine({
         )}
       </div>
       <span className="ssl-sep" />
-      <span className="ssl-cost">${metrics.costUsd.toFixed(2)}</span>
+      <span className="ssl-cost">${metrics.costUsd.toFixed(2)} | ${projectCost.toFixed(2)}</span>
       <span className="ssl-sep" />
       <span className="ssl-tools">
         {running && <span className="ssl-pulse" />}

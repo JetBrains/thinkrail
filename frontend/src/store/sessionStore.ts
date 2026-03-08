@@ -17,6 +17,8 @@ interface SessionStore {
   archivedSessions: ArchivedSession[];
   /** IDs of sessions explicitly closed by the user — ignore late-arriving events */
   closedIds: Set<string>;
+  /** Sum of costUsd across all known sessions (in-memory + from backend list) */
+  projectCost: number;
 
   startSession: (params: {
     specIds: string[];
@@ -61,6 +63,21 @@ function emptyMetrics(): SessionMetrics {
     durationMs: 0,
     filesChanged: {},
   };
+}
+
+/**
+ * Reconstruct cost from persisted events by scanning backwards
+ * for the last turnComplete or done event with costUsd.
+ */
+function reconstructCost(events: AgentEvent[]): number {
+  for (let i = events.length - 1; i >= 0; i--) {
+    const p = events[i].payload;
+    const type = events[i].eventType;
+    if ((type === "turnComplete" || type === "done") && typeof p?.costUsd === "number") {
+      return p.costUsd;
+    }
+  }
+  return 0;
 }
 
 /**
@@ -161,6 +178,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
   activeSessionId: null,
   archivedSessions: [],
   closedIds: new Set(),
+  projectCost: 0,
 
   startSession: async ({ specIds, config, name, skillId }) => {
     const api = createAgentApi(getClient());
@@ -313,6 +331,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
     // Reconstruct answered requests from persisted events
     const answered = buildAnsweredRequests(events, isActive);
 
+    const restoredCost = reconstructCost(events);
     const session: Session = {
       bonsaiSid,
       name: data.name ?? bonsaiSid.slice(0, 8),
@@ -327,7 +346,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
       permissionMode: (data.config?.permissionMode as string) ?? "default",
       startedAt: new Date(data.createdAt).getTime(),
       events,
-      metrics: emptyMetrics(),
+      metrics: { ...emptyMetrics(), costUsd: restoredCost },
       pendingRequest: null,
       answeredRequests: answered,
       restored: !isActive,
@@ -346,6 +365,14 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
     const { createSessionApi } = await import("@/api/methods/sessions.ts");
     const api = createSessionApi(getClient());
     const all = await api.list();
+
+    // Compute project cost from ALL sessions returned by the list API
+    // (includes metrics.costUsd from persisted metadata)
+    let totalProjectCost = 0;
+    for (const entry of all) {
+      const m = entry.metrics;
+      totalProjectCost += (typeof m?.costUsd === "number" ? m.costUsd : 0);
+    }
 
     // Filter to active sessions not already in memory
     const currentSessions = get().sessions;
@@ -374,6 +401,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
           payload: (ev.payload as Record<string, unknown>) ?? ev,
         }));
 
+        const restoredCost = reconstructCost(events);
         next.set(entry.bonsaiSid, {
           bonsaiSid: entry.bonsaiSid,
           name: data?.name ?? entry.name ?? entry.bonsaiSid.slice(0, 8),
@@ -384,12 +412,21 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
           permissionMode: (data?.config?.permissionMode as string) ?? "default",
           startedAt: new Date(entry.createdAt).getTime(),
           events,
-          metrics: emptyMetrics(),
+          metrics: { ...emptyMetrics(), costUsd: restoredCost },
           pendingRequest: null,
           answeredRequests: buildAnsweredRequests(events, true),
         });
       }
-      return { sessions: next };
+
+      // Also add cost from in-memory sessions not in the backend list
+      // (shouldn't happen normally, but be safe)
+      for (const [sid, session] of s.sessions) {
+        if (!all.find((e) => e.bonsaiSid === sid)) {
+          totalProjectCost += session.metrics.costUsd;
+        }
+      }
+
+      return { sessions: next, projectCost: totalProjectCost };
     });
   },
 
@@ -548,22 +585,26 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
       const sessions = appendEvent(s.sessions, bonsaiSid, method, params, s.closedIds);
       // Update session status for turn lifecycle events
       const session = sessions.get(bonsaiSid);
+      let projectCost = s.projectCost;
       if (session) {
         if (method === "agent/turnComplete" || method === "agent/interrupted") {
+          const newCost = (params.costUsd as number) ?? session.metrics.costUsd;
+          const costDelta = newCost - session.metrics.costUsd;
+          projectCost += costDelta;
           sessions.set(bonsaiSid, {
             ...session,
             status: "idle",
             pendingRequest: null,
             metrics: {
               ...session.metrics,
-              costUsd: (params.costUsd as number) ?? session.metrics.costUsd,
+              costUsd: newCost,
               turns: (params.turns as number) ?? session.metrics.turns,
               durationMs: (params.durationMs as number) ?? session.metrics.durationMs,
             },
           });
         }
       }
-      return { sessions };
+      return { sessions, projectCost };
     });
   },
 
@@ -633,21 +674,25 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
         s.closedIds,
       );
       const session = sessions.get(bonsaiSid);
+      let projectCost = s.projectCost;
       if (session) {
+        const newCost = (params.costUsd as number) ?? session.metrics.costUsd;
+        const costDelta = newCost - session.metrics.costUsd;
+        projectCost += costDelta;
         sessions.set(bonsaiSid, {
           ...session,
           status: "done",
           pendingRequest: null,
           metrics: {
             ...session.metrics,
-            costUsd: (params.costUsd as number) ?? session.metrics.costUsd,
+            costUsd: newCost,
             durationMs:
               (params.durationMs as number) ?? session.metrics.durationMs,
             turns: (params.turns as number) ?? session.metrics.turns,
           },
         });
       }
-      return { sessions };
+      return { sessions, projectCost };
     });
   },
 
