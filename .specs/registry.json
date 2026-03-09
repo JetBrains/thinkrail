@@ -1415,7 +1415,7 @@
     },
     {
       "id": "feature-message-history",
-      "type": "task",
+      "type": "task-spec",
       "path": "current_tasks/frontend/feature_message_history.md",
       "title": "Message History Navigation",
       "status": "active",
