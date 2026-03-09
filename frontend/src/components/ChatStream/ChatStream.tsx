@@ -91,7 +91,9 @@ export function ChatStream({
         for (let j = stack.length - 1; j >= 0; j--) {
           if (stack[j][1] === aid) { stack.splice(j, 1); break; }
         }
-      } else if (stack.length > 0) {
+      } else if (stack.length > 0
+          && ev.eventType !== "askUserQuestion"
+          && ev.eventType !== "confirmAction") {
         const [parentIdx] = stack[stack.length - 1];
         subagentChildren.get(parentIdx)!.push(i);
         childIndices.add(i);
@@ -244,7 +246,6 @@ export function ChatStream({
             return (
               <CompletionBanner
                 key={k}
-                result={(p.result as string) ?? undefined}
                 costUsd={(p.costUsd as number) ?? undefined}
                 turns={(p.turns as number) ?? undefined}
                 durationMs={(p.durationMs as number) ?? undefined}
