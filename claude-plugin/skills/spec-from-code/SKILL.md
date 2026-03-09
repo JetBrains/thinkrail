@@ -16,7 +16,7 @@ You are analyzing an existing codebase to **generate specification skeletons**. 
 
 ## Quick Context
 
-Before analyzing, read `.specs/dashboard.json` for pre-computed project context (coverage gaps, existing specs). The `coverage[]` array shows which source directories lack specs -- no need to read registry.json.
+Before analyzing, read `.specs/registry.json` for existing specs and their `covers` entries. Compare against source directories to identify coverage gaps.
 
 ## What You Will Generate
 

@@ -8,17 +8,15 @@ argument-hint: "[spec-path-or-directory]"
 
 You are validating specifications for **structural quality, completeness, and consistency**. This is the automated quality gate for spec-driven development.
 
-## IMPORTANT: Use Pre-Computed Data + bonsai_visualize
-
-Lint results are **pre-computed by the dashboard script**. Do NOT manually read all spec files.
+## IMPORTANT: Visualization Rules
 
 **NEVER** output ASCII box-drawing characters or ANSI escape codes. Always use `bonsai_visualize` to display results.
 
 ## Process
 
-### Step 1: Get the data
+### Step 1: Gather data
 
-Read `.specs/dashboard.json` and extract the `lint[]` array for lint issues.
+Read `.specs/registry.json` for the full spec list and links. For each spec, read the first ~4KB to check for required sections per type. Validate that all link `from`/`to` IDs reference existing specs.
 
 ### Step 2: Display lint results using bonsai_visualize
 
@@ -83,5 +81,5 @@ Use AskUserQuestion:
 
 - **Errors vs Warnings**: Missing required sections = WARNING. Missing files/broken links = ERROR.
 - **Auto-fix safely**: Only offer to fix unambiguous issues (registry updates, not content)
-- **Fast**: Pre-computed; only read individual files for deep analysis
+- **Fast**: Read registry + spec headers; only read full files for deep analysis
 - **Actionable**: Every issue includes what to do about it

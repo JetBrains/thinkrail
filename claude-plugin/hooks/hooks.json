@@ -1,25 +1,3 @@
 {
-  "hooks": {
-    "PostToolUse": [
-      {
-        "matcher": "Edit|Write",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "python3 claude-plugin/tools/compute-dashboard.py . 2>/dev/null || true"
-          }
-        ]
-      }
-    ],
-    "SessionStart": [
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "python3 claude-plugin/tools/compute-dashboard.py . 2>/dev/null || true"
-          }
-        ]
-      }
-    ]
-  }
+  "hooks": {}
 }

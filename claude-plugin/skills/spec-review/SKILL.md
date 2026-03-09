@@ -15,7 +15,7 @@ You are helping the user **review and validate** their existing specifications. 
 
 ## Quick Context
 
-Before diving in, read `.specs/dashboard.json` for pre-computed project context (coverage, freshness, lint issues). This tells you which specs are stale and need review most urgently -- no need to read registry.json.
+Before diving in, read `.specs/registry.json` for the list of specs and their metadata. Compare spec file mtimes against covered code mtimes to identify which specs are stale and need review most urgently.
 
 ## Your Process
 

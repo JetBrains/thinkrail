@@ -22,7 +22,7 @@ from app.viz.models import (
 
 logger = logging.getLogger(__name__)
 
-# ── Constants (mirrors compute-dashboard.py) ──────────────────────────────────
+# ── Constants ─────────────────────────────────────────────────────────────────
 
 REQUIRED_SECTIONS: dict[str, list[str]] = {
     "architecture-design": [
@@ -72,7 +72,7 @@ NotifyFn = Callable[[str, dict], Awaitable[None]]
 # ── VisualizationService ──────────────────────────────────────────────────────
 
 class VisualizationService:
-    """Maintains live dashboard state. Replaces compute-dashboard.py."""
+    """Maintains live dashboard state for the Bonsai web UI."""
 
     def __init__(self, project_root: Path) -> None:
         self._root = project_root

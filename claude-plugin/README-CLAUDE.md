@@ -1262,17 +1262,11 @@ Agent: Creating specification 2/4: Authentication Module [○]
 ... and so on
 ```
 
-**See [VISUALIZATION.md](VISUALIZATION.md) for complete documentation.**
+**See [VISUALIZATION_REVISED.md](VISUALIZATION_REVISED.md) for complete documentation.**
 
 ---
 
 ## Additional Features
-
-### Visualization Tool
-
-A mockup visualization tool is included for exploring hierarchical specs:
-- **macOS/Linux**: `./run-visualization.sh`
-- **Windows**: `run-visualization.bat`
 
 ### Format Flexibility
 

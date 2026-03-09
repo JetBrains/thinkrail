@@ -7,20 +7,15 @@ description: Suggest what to specify next based on current coverage, dependencie
 
 You are the **workflow orchestrator** for specification-driven development. You analyze the current state and recommend what to create or update next.
 
-## IMPORTANT: Use Pre-Computed Data + bonsai_visualize
-
-Recommendations are **pre-computed by the dashboard script**. Do NOT manually read registry.json or scan the codebase.
+## IMPORTANT: Visualization Rules
 
 **NEVER** output ASCII box-drawing characters or ANSI escape codes. Always use `bonsai_visualize` to display results.
 
 ## Process
 
-### Step 1: Get the data
+### Step 1: Gather data
 
-Read `.specs/dashboard.json` to get:
-- `recommendations[]` -- heuristic-ranked priorities
-- `coverage[]` -- which dirs lack specs
-- `workflow` -- current phase and step
+Read `.specs/registry.json` for specs (type, status, covers, paths). Scan `current_tasks/**/*.md` for task statuses. Identify coverage gaps by comparing registered `covers` entries against source directories.
 
 ### Step 2: Display recommendations using bonsai_visualize
 

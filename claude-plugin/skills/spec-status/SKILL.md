@@ -7,22 +7,15 @@ description: Show specification coverage, health, and gaps for the current proje
 
 You are generating a **specification status report** for the current project. This is the dashboard for spec-driven development.
 
-## IMPORTANT: Use Pre-Computed Data + bonsai_visualize
-
-The dashboard data is **pre-computed by a script**. Do NOT manually read registry.json or scan the codebase.
+## IMPORTANT: Visualization Rules
 
 **NEVER** output ASCII box-drawing characters or ANSI escape codes. Always use `bonsai_visualize` to display results.
 
 ## Process
 
-### Step 1: Get the data
+### Step 1: Gather data
 
-Read `.specs/dashboard.json` (~5KB pre-computed summary) to get:
-- `coverage[]` -- per-directory spec coverage with freshness
-- `lint[]` -- structural issues
-- `recommendations[]` -- prioritized next actions
-- `pending_tasks[]` -- remaining work items
-- `stats` -- spec counts, task counts
+Read `.specs/registry.json` to get the list of specs (with type, status, covers, paths). Then scan `current_tasks/**/*.md` for task statuses. Use file mtimes to determine freshness (compare spec mtime vs covered code mtime).
 
 ### Step 2: Display using bonsai_visualize
 
@@ -82,7 +75,7 @@ Use AskUserQuestion:
 
 ## Key Principles
 
-- **Fast**: Dashboard data is pre-computed
+- **Fast**: Read registry.json + task files, compute metrics directly
 - **Actionable**: Every issue has a suggested action with explicit `/skill-name`
 - **Non-destructive**: Only reads and reports, never modifies code or specs
 - **Visual**: Always display results via `bonsai_visualize`, never ASCII art
