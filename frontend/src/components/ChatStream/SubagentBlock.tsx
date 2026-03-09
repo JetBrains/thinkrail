@@ -1,6 +1,8 @@
 import { useState, useEffect, useRef } from "react";
 import type { AgentEvent } from "@/types/agent.ts";
+import type { VizData } from "@/types/viz.ts";
 import { ToolCallCard } from "./ToolCallCard.tsx";
+import { VisualizationCard, VizErrorBoundary } from "./VisualizationCard.tsx";
 import { extractToolInput, type ToolState } from "./ChatStream.tsx";
 
 interface SubagentBlockProps {
@@ -69,6 +71,17 @@ export function SubagentBlock({
             if (ev.eventType === "toolCallStart") {
               const toolName = (ev.payload.toolName as string) ?? "tool";
               if (toolName === "AskUserQuestion") return null;
+              // Render bonsai_visualize as VisualizationCard (mirrors ChatStream.tsx)
+              if (toolName.endsWith("bonsai_visualize")) {
+                const vizInput = ev.payload.toolInput as VizData | undefined;
+                if (vizInput) {
+                  return (
+                    <VizErrorBoundary key={`subagent-viz-${ci}`}>
+                      <VisualizationCard data={vizInput} />
+                    </VizErrorBoundary>
+                  );
+                }
+              }
               const toolUseId = (ev.payload.toolUseId as string) ?? "";
               const end = toolStates.get(toolUseId);
               return (

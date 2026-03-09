@@ -342,3 +342,42 @@ class TestBuildContext:
         assert "---" in context
         assert "## Project" in context
         assert "/tmp/test-project" in context
+
+    def test_includes_viz_instructions_in_freeform_session(self) -> None:
+        from pathlib import Path
+        from app.agent.context import build_context
+
+        spec_service = MagicMock()
+
+        context = build_context(
+            spec_ids=[],
+            skill_id=None,
+            project_root=Path("/tmp/test-project"),
+            config=AgentConfig(),
+            spec_service=spec_service,
+            plugin_dir=Path("/tmp/plugins"),
+        )
+        assert "bonsai_visualize" in context
+        assert "## Visualization Tool" in context
+
+    def test_includes_viz_instructions_in_skill_session(self) -> None:
+        from pathlib import Path
+        from unittest.mock import patch as mock_patch
+        from app.agent.context import build_context
+
+        spec_service = MagicMock()
+
+        with mock_patch(
+            "app.agent.context._load_skill", return_value="Do the thing."
+        ):
+            context = build_context(
+                spec_ids=[],
+                skill_id="test-skill",
+                project_root=Path("/tmp/test-project"),
+                config=AgentConfig(),
+                spec_service=spec_service,
+                plugin_dir=Path("/tmp/plugins"),
+            )
+        assert "## Your Task" in context
+        assert "bonsai_visualize" in context
+        assert "## Visualization Tool" in context

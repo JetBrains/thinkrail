@@ -3,7 +3,7 @@ import type { AgentEvent } from "@/types/agent.ts";
 import { SystemMessage } from "./SystemMessage.tsx";
 import { AssistantMessage } from "./AssistantMessage.tsx";
 import { ToolCallCard } from "./ToolCallCard.tsx";
-import { VisualizationCard } from "./VisualizationCard.tsx";
+import { VisualizationCard, VizErrorBoundary } from "./VisualizationCard.tsx";
 import { SubagentBlock } from "./SubagentBlock.tsx";
 import { QuestionCard } from "./QuestionCard.tsx";
 import { ApprovalCard } from "./ApprovalCard.tsx";
@@ -104,9 +104,15 @@ export function ChatStream({
           if (stack[j][1] === aid) { stack.splice(j, 1); break; }
         }
       } else if (stack.length > 0) {
-        const [parentIdx] = stack[stack.length - 1];
-        subagentChildren.get(parentIdx)!.push(i);
-        childIndices.add(i);
+        // Hoist bonsai_visualize to top level so it persists
+        // outside the collapsible SubagentBlock
+        const isViz = ev.eventType === "toolCallStart" &&
+          (ev.payload.toolName as string)?.endsWith("bonsai_visualize");
+        if (!isViz) {
+          const [parentIdx] = stack[stack.length - 1];
+          subagentChildren.get(parentIdx)!.push(i);
+          childIndices.add(i);
+        }
       }
     }
   }
@@ -155,11 +161,12 @@ export function ChatStream({
                 const vizId = vizInput.vizId;
                 const isLatest = !vizId || latestVizByVizId.get(vizId) === i;
                 return (
-                  <VisualizationCard
-                    key={k}
-                    data={vizInput}
-                    collapsed={!isLatest}
-                  />
+                  <VizErrorBoundary key={k}>
+                    <VisualizationCard
+                      data={vizInput}
+                      collapsed={!isLatest}
+                    />
+                  </VizErrorBoundary>
                 );
               }
             }

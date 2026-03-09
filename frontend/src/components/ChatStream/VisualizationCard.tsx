@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { Component, useState } from "react";
+import type { ErrorInfo, ReactNode } from "react";
 import type {
   VizData,
   VizStatus,
@@ -244,6 +245,40 @@ const VIZ_ICONS: Record<string, string> = {
   "diagram": "\u{1F5FA}\uFE0F",
 };
 
+/* ── Error Boundary ── */
+
+export class VizErrorBoundary extends Component<
+  { children: ReactNode },
+  { error: string | null }
+> {
+  state = { error: null as string | null };
+
+  static getDerivedStateFromError(error: Error) {
+    return { error: error.message };
+  }
+
+  componentDidCatch(error: Error, info: ErrorInfo) {
+    console.error("[VisualizationCard] render error:", error, info);
+  }
+
+  render() {
+    if (this.state.error) {
+      return (
+        <div className="viz-card" style={{ borderColor: "var(--red)" }}>
+          <div className="viz-card-header">
+            <span className="viz-card-icon">{"\u26A0"}</span>
+            <span className="viz-card-title">Visualization Error</span>
+          </div>
+          <div className="viz-card-body" style={{ fontSize: 11, color: "var(--red)" }}>
+            {this.state.error}
+          </div>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
+
 /* ── Main Component ── */
 
 interface VisualizationCardProps {
@@ -253,7 +288,21 @@ interface VisualizationCardProps {
 
 export function VisualizationCard({ data, collapsed = false }: VisualizationCardProps) {
   const [isCollapsed, setIsCollapsed] = useState(collapsed);
-  const icon = VIZ_ICONS[data.type] ?? "\u{1F4CA}";
+  const icon = VIZ_ICONS[data?.type] ?? "\u{1F4CA}";
+
+  if (!data?.type || !data?.data) {
+    return (
+      <div className="viz-card" style={{ borderColor: "var(--red)" }}>
+        <div className="viz-card-header">
+          <span className="viz-card-icon">{"\u26A0"}</span>
+          <span className="viz-card-title">Visualization Error</span>
+        </div>
+        <div className="viz-card-body" style={{ fontSize: 11, color: "var(--red)" }}>
+          Invalid data: type={data?.type ?? "missing"}, data={typeof data?.data}
+        </div>
+      </div>
+    );
+  }
 
   if (isCollapsed) {
     return (

@@ -48,17 +48,17 @@
 .context-panel__dash-btn {
   margin-left: auto;
   background: transparent;
-  border: none;
-  color: var(--hint);
-  font-size: 14px;
+  border: 1px solid var(--border);
+  color: var(--muted);
+  font-size: 12px;
   cursor: pointer;
-  padding: 2px 4px;
+  padding: 2px 8px;
   border-radius: var(--radius-sm);
-  line-height: 1;
+  line-height: 1.4;
   flex-shrink: 0;
 }
-.context-panel__dash-btn:hover { color: var(--text); background: var(--hover); }
-.context-panel__dash-btn--active { color: var(--cyan); }
+.context-panel__dash-btn:hover { color: var(--text); background: var(--hover); border-color: var(--muted); }
+.context-panel__dash-btn--active { color: var(--cyan); border-color: var(--cyan); background: rgba(8,124,250,0.08); }
 
 /* VizTab */
 .viz-tab { display: flex; flex-direction: column; padding: 0; }

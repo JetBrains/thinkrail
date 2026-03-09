@@ -625,6 +625,7 @@
   max-width: 90%;
   animation: slideUp 0.22s ease-out;
   overflow: hidden;
+  flex-shrink: 0;
 }
 .viz-card--collapsed {
   display: flex; align-items: center; gap: var(--space-sm);

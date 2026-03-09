@@ -18,11 +18,5 @@
     "requirements",
     "progress-tracking"
   ],
-  "skills": "./skills/",
-  "mcpServers": {
-    "bonsai-viz": {
-      "command": "python3",
-      "args": ["${CLAUDE_PLUGIN_ROOT}/tools/viz-server.py"]
-    }
-  }
+  "skills": "./skills/"
 }

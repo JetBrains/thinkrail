@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 import time
 from collections.abc import Callable
 from pathlib import Path
@@ -21,10 +22,66 @@ from claude_agent_sdk import (
     ToolResultBlock,
     ToolUseBlock,
     UserMessage,
+    create_sdk_mcp_server,
+    tool,
 )
 
 from app.agent.models import AgentResult, AgentTask, to_camel
 from app.agent.tracker import END_SIGNAL, Tracker
+
+logger = logging.getLogger(__name__)
+
+# ── In-process bonsai_visualize MCP tool ──────────────────────────────────────
+# Runs inside the backend process — no subprocess spawning needed.
+# The actual rendering happens in the frontend via the toolCallStart event's
+# toolInput payload; this handler just returns a short confirmation.
+
+_VIZ_SCHEMA: dict = {
+    "type": "object",
+    "required": ["type", "data"],
+    "properties": {
+        "type": {
+            "type": "string",
+            "enum": [
+                "progress-tracker", "summary-box", "comparison",
+                "data-table", "status-list", "diagram",
+            ],
+            "description": "The visualization type to render",
+        },
+        "title": {
+            "type": "string",
+            "description": "Title displayed in the visualization card header",
+        },
+        "vizId": {
+            "type": "string",
+            "description": (
+                "Optional stable ID for the visualization. When the same vizId "
+                "is used across multiple calls, older cards auto-collapse and "
+                "the latest one renders in full."
+            ),
+        },
+        "data": {
+            "type": "object",
+            "description": "Type-specific structured data (see documentation for schemas)",
+        },
+    },
+}
+
+
+@tool(
+    "bonsai_visualize",
+    "Render a structured visualization in the Bonsai UI. "
+    "Use this instead of ASCII art, ANSI escape codes, or Bash echo commands. "
+    "The Bonsai frontend renders the data as an interactive card.",
+    _VIZ_SCHEMA,
+)
+async def _bonsai_visualize(args: dict) -> dict:
+    viz_type = args.get("type", "")
+    title = args.get("title", viz_type)
+    return {"content": [{"type": "text", "text": f"\u2713 Rendered: {title} ({viz_type})"}]}
+
+
+_viz_mcp_server = create_sdk_mcp_server(name="bonsai-viz", tools=[_bonsai_visualize])
 
 
 async def run(
@@ -130,6 +187,9 @@ async def run(
     if plugin_dir and Path(plugin_dir).is_dir():
         plugins.append({"type": "local", "path": str(plugin_dir)})
 
+    def _on_cli_stderr(line: str) -> None:
+        logger.warning("CLI stderr: %s", line)
+
     options = ClaudeAgentOptions(
         system_prompt=spec_context,
         model=task.config.model,
@@ -139,7 +199,9 @@ async def run(
         include_partial_messages=task.config.stream_text,
         cwd=str(cwd) if cwd else None,
         plugins=plugins,
+        mcp_servers={"bonsai-viz": _viz_mcp_server},
         resume=resume_session_id,
+        stderr=_on_cli_stderr,
         hooks={
             "SubagentStart": [HookMatcher(hooks=[on_subagent_start])],
             "SubagentStop": [HookMatcher(hooks=[on_subagent_stop])],
@@ -170,6 +232,7 @@ async def run(
                 await client.query(message)
 
                 async for sdk_event in client.receive_response():
+                    logger.warning("SDK event: %s", type(sdk_event).__name__)
                     if isinstance(sdk_event, SystemMessage) and sdk_event.subtype == "init":
                         new_sid = sdk_event.data.get("session_id", "")
                         first_init = not session_id
@@ -192,6 +255,7 @@ async def run(
                                     "text": block.text,
                                 })
                             elif isinstance(block, ToolUseBlock):
+                                logger.warning("Tool call: %s", block.name)
                                 if block.name == "ExitPlanMode":
                                     _mode_change_tools[block.id] = "default"
                                 elif block.name == "EnterPlanMode":

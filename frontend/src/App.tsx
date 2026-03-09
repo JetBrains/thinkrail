@@ -5,6 +5,7 @@ import { wireEvents } from "@/store/wireEvents.ts";
 import { useSpecStore } from "@/store/specStore.ts";
 import { useSessionStore } from "@/store/sessionStore.ts";
 import { useUiStore } from "@/store/uiStore.ts";
+import { useVizStore } from "@/store/vizStore.ts";
 import { registerKeyboardShortcuts } from "@/utils/keyboard.ts";
 import { NewSessionModal } from "@/components/NewSessionModal/NewSessionModal.tsx";
 import { CommandPalette } from "@/components/CommandPalette/CommandPalette.tsx";
@@ -33,6 +34,8 @@ function AppInner({ projectPath: _projectPath, onSwitchProject }: { projectPath:
       useSessionStore.getState().loadActiveSessions().catch((err) => {
         console.warn("[Bonsai] Failed to load active sessions:", err);
       });
+      // Load viz dashboard for StatusBar one-liner and VizTab
+      useVizStore.getState().fetchState();
     }
     if (connectionState === "disconnected" || connectionState === "failed") {
       wiredRef.current = false;
