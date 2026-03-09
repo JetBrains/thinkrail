@@ -43,7 +43,7 @@ Before diving in, read `.specs/dashboard.json` for pre-computed project context 
 ### Cross-References
 - Do all links work?
 - Does it link to its parent document?
-- Does it link to its children?
+- Do its children have `parent` links back to it?
 - Are sibling references present for dependencies?
 
 ### Freshness

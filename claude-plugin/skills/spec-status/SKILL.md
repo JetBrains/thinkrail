@@ -20,7 +20,7 @@ Execute:
 python3 claude-plugin/tools/compute-dashboard.py . --terminal status
 ```
 
-This outputs a fully formatted ANSI status report including:
+This outputs a fully formatted status report including:
 1. **Coverage percentage** with progress bar
 2. **Spec counts** (total, active, stale, draft)
 3. **Task progress** bar
@@ -55,4 +55,3 @@ Use AskUserQuestion:
 - **Fast**: Script computes everything in ~150ms
 - **Actionable**: Every issue has a suggested action with explicit `/skill-name`
 - **Non-destructive**: Only reads and reports, never modifies code or specs
-- **Colored output**: Script applies ANSI colors for dark theme automatically

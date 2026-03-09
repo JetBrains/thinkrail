@@ -16,7 +16,6 @@ You are creating an **actionable Task Specification**. Guide the user through st
 - The user should define a complete task in ~4-5 multi-choice decisions
 - Auto-detect affected files from the codebase when possible
 - Use terminal graphics from `/specdriven:visualisation` patterns for confirmations
-- Apply colors from the `/specdriven:visualisation` Color Output Guide when rendering (ANSI codes for dark theme)
 
 ## Show Progress
 

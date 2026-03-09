@@ -15,7 +15,6 @@ You are creating a the **Foundational Specification** that guides all subsequent
 - Offer **3-5 choices** per question, never open-ended dumps
 - Proactively suggest refined versions
 - **Use terminal graphics** to show goal structure (see `/specdriven:visualisation` patterns) and confirmations
-- **APPLY COLOURS** from the `/specdriven:visualisation` Color Output Guide when rendering (ANSI codes for dark theme)
 
 ## Output
 
@@ -288,7 +287,6 @@ Important:
 - Offer **3-5 choices** per question
 - Use web search if needed to examine solutions
 - Use terminal graphics from `/specdriven:visualisation` patterns
-- Apply colors from the `/specdriven:visualisation` Color Output Guide when rendering (ANSI codes for dark theme)
 - If some requirements or constraints are clear from the context, explicitly notice it to user and offer to add them one-by-one
 
 ### Output

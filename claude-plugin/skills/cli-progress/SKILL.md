@@ -24,7 +24,7 @@ Execute:
 python3 claude-plugin/tools/compute-dashboard.py . --terminal progress
 ```
 
-This outputs a fully formatted ANSI progress display including:
+This outputs a fully formatted progress display including:
 1. **Workflow steps** with completion status
 2. **Overall task progress** bar
 3. **Pending tasks** by module

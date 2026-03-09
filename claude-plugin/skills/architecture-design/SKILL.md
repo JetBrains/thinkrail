@@ -16,7 +16,6 @@ You are helping the user create an **Architecture Design Document** (DESIGN_DOC.
 - Present your analysis and ask user to confirm/correct, not start from scratch
 - The user should finalize an architecture doc in ~5-7 multi-choice decisions
 - Use terminal graphics from `/specdriven:visualisation` patterns for diagrams and confirmations
-- Apply colors from the `/specdriven:visualisation` Color Output Guide when rendering (ANSI codes for dark theme)
 
 ## Step-by-Step Guided Process
 
@@ -152,7 +151,7 @@ Use AskUserQuestion:
 
 After saving, update `.specs/registry.json`:
 1. Add entry with `type: "architecture-design"`, `status: "active"`
-2. Add `child` links to any module READMEs referenced
+2. Add `parent` links from module READMEs to this architecture doc
 3. Add `parent` link from README.md
 
 ## After Completion

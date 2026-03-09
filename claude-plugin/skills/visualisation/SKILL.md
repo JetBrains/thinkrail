@@ -45,22 +45,9 @@ Use AskUserQuestion:
 - "Terminal progress" -- Run --terminal progress
 - "Done"
 
-## Color Output Guide
+## Rendering Guide
 
-When rendering custom visualizations (not from the script), apply ANSI color codes:
-
-| Element | Color | ANSI Code |
-|---------|-------|-----------|
-| Titles / Headers | Bold Cyan | `\e[1;36m` |
-| Box Borders | Cyan | `\e[36m` |
-| `[✓]` Done | Bold Green | `\e[1;32m` |
-| `▶` Current | Bold Yellow | `\e[1;33m` |
-| `[✗]` Failed | Bold Red | `\e[1;31m` |
-| `⚠` Warning | Yellow | `\e[33m` |
-| `[⊘]` Skipped | Dim + Strikethrough | `\e[2;9m` |
-| `[ ]` Pending | Dark Gray | `\e[90m` |
-| File paths | Blue | `\e[34m` |
-| Reset | -- | `\e[0m` |
+Output as **plain text and markdown** — do not use ANSI escape codes or `printf`. Use markdown formatting (bold, code spans, tables, fenced code blocks) for emphasis. The ASCII symbol patterns below work well and should be used for structured output.
 
 ## Visualization Patterns
 

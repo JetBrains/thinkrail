@@ -16,7 +16,6 @@ You are helping the user create a **Module Design Specification** (README.md). A
 - Offer **2-4 choices** for anything that requires human judgment
 - The user should finalize a module spec in ~4-6 multi-choice decisions
 - Use terminal graphics from `/specdriven:visualisation` patterns (component highlighting, box formatting)
-- Apply colors from the `/specdriven:visualisation` Color Output Guide when rendering (ANSI codes for dark theme)
 
 ## Show Progress
 
@@ -129,7 +128,7 @@ Use AskUserQuestion:
 After saving, update `.specs/registry.json`:
 1. Add entry with `type: "module-design"`, `path`, `status: "active"`, `covers: ["{module}/"]`
 2. Add `parent` link to DESIGN_DOC.md
-3. Add `child` links to sub-module READMEs
+3. Add `parent` links from sub-module READMEs to this module
 4. Update DESIGN_DOC.md index if this module isn't listed
 
 ## After Completion
