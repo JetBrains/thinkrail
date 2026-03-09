@@ -1640,6 +1640,23 @@
       ],
       "created": "2026-03-08",
       "updated": "2026-03-08"
+    },
+    {
+      "id": "task-bugfix-subagent-attention",
+      "type": "task-spec",
+      "path": "current_tasks/frontend/bugfix_subagent_attention_cards.md",
+      "title": "Fix subagent attention cards not rendering in chat",
+      "status": "done",
+      "covers": [
+        "frontend/src/components/ChatStream/ChatStream.tsx"
+      ],
+      "tags": [
+        "critical",
+        "bug-fix",
+        "frontend"
+      ],
+      "created": "2026-03-09",
+      "updated": "2026-03-09"
     }
   ],
   "links": [
@@ -2572,6 +2589,11 @@
       "from": "task-suggest-session-ui",
       "to": "task-suggest-session-runner",
       "type": "depends-on"
+    },
+    {
+      "from": "task-bugfix-subagent-attention",
+      "to": "chat-ui",
+      "type": "implements"
     }
   ]
 }
