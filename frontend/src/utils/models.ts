@@ -10,12 +10,13 @@ export interface ModelDef {
 
 export const MODELS: ModelDef[] = [
   { id: "claude-opus-4-6",            label: "Opus 4.6",   group: "current", contextWindow: 200_000, supports1M: true },
-  { id: "claude-sonnet-4-6",          label: "Sonnet 4.6", group: "current", contextWindow: 200_000, supports1M: true },
-  { id: "claude-haiku-4-5-20251001",  label: "Haiku 4.5",  group: "current", contextWindow: 200_000, supports1M: false },
-  { id: "claude-sonnet-4-5-20250929", label: "Sonnet 4.5", group: "legacy",  contextWindow: 200_000, supports1M: true },
   { id: "claude-opus-4-5-20251101",   label: "Opus 4.5",   group: "legacy",  contextWindow: 200_000, supports1M: false },
+  { id: "claude-sonnet-4-6",          label: "Sonnet 4.6", group: "current", contextWindow: 200_000, supports1M: true },
+  { id: "claude-sonnet-4-5-20250929", label: "Sonnet 4.5", group: "legacy",  contextWindow: 200_000, supports1M: true },
   { id: "claude-sonnet-4-20250514",   label: "Sonnet 4.0", group: "legacy",  contextWindow: 200_000, supports1M: true },
-  { id: "claude-3-5-haiku-latest",    label: "Haiku 3.5",  group: "legacy",  contextWindow: 200_000, supports1M: false },
+  { id: "claude-haiku-4-5-20251001",  label: "Haiku 4.5",  group: "current", contextWindow: 200_000, supports1M: false },
+  // claude-3-haiku-20240307 (scheduled retirement Apr 2026)
+  { id: "claude-3-haiku-20240307",   label: "Haiku 3.5",  group: "legacy",  contextWindow: 200_000, supports1M: false },
 ];
 
 export const BETA_1M = "context-1m-2025-08-07";
