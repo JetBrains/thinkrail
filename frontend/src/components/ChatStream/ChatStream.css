@@ -94,8 +94,9 @@
 .chat-tool-body {
   border-top: 1px solid var(--border);
   padding: var(--space-sm) var(--space-md);
-  max-height: 120px;
   overflow-y: auto;
+  resize: vertical;
+  min-height: 40px;
 }
 .chat-tool-body pre { font-size: 11px; white-space: pre-wrap; word-break: break-all; color: var(--muted); margin: 0; }
 
@@ -155,6 +156,9 @@
   flex-direction: column;
   gap: var(--space-xs);
   padding: var(--space-xs) 0;
+  overflow-y: auto;
+  resize: vertical;
+  min-height: 60px;
 }
 
 /* ── SubagentBlock inline text ── */
@@ -181,7 +185,7 @@
 }
 .chat-tool--compact .chat-tool-body {
   padding: 2px var(--space-sm);
-  max-height: 80px;
+  min-height: 30px;
 }
 .chat-tool--compact .chat-tool-body pre {
   font-size: 10px;
@@ -314,10 +318,12 @@
 /* Compact answered state */
 .chat-approval-compact {
   padding: var(--space-sm) var(--space-md);
+}
+.chat-approval-compact .chat-approval-row {
   cursor: pointer;
   user-select: none;
 }
-.chat-approval-compact:hover { background: var(--hover); }
+.chat-approval-compact .chat-approval-row:hover { background: var(--hover); }
 .chat-approval--approved { border-color: var(--green); }
 .chat-approval--denied { border-color: var(--red); }
 
@@ -346,6 +352,9 @@
   margin-top: var(--space-sm);
   padding-top: var(--space-sm);
   border-top: 1px solid var(--border);
+  overflow-y: auto;
+  resize: vertical;
+  min-height: 40px;
 }
 .chat-approval-full-command {
   font-size: 11px;
@@ -686,7 +695,7 @@
 .viz-card-type { margin-left: auto; font-size: 10px; color: var(--hint); }
 .viz-card-tag { margin-left: auto; font-size: 9px; color: var(--cyan); background: rgba(8,124,250,0.1); padding: 1px 6px; border-radius: 3px; }
 .viz-card-expand { font-size: 10px; color: var(--hint); }
-.viz-card-body { padding: var(--space-md); }
+.viz-card-body { padding: var(--space-md); overflow-y: auto; resize: vertical; min-height: 60px; }
 
 /* Collapsed Marker */
 .viz-collapsed-marker {

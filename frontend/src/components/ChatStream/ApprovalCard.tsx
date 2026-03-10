@@ -48,16 +48,16 @@ export function ApprovalCard({
       decision === "approve" ? "chat-approval--approved" : "chat-approval--denied";
 
     return (
-      <div
-        className={`chat-approval chat-approval-compact ${stateClass}`}
-        onClick={() => setExpanded((v) => !v)}
-        role="button"
-        tabIndex={0}
-        onKeyDown={(e) => {
-          if (e.key === "Enter" || e.key === " ") setExpanded((v) => !v);
-        }}
-      >
-        <div className="chat-approval-row">
+      <div className={`chat-approval chat-approval-compact ${stateClass}`}>
+        <div
+          className="chat-approval-row"
+          onClick={() => setExpanded((v) => !v)}
+          role="button"
+          tabIndex={0}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" || e.key === " ") setExpanded((v) => !v);
+          }}
+        >
           <span className="chat-approval-label">Action requires approval</span>
           <span className="chat-approval-command">
             <span className="chat-tool-name">{toolName}</span>
