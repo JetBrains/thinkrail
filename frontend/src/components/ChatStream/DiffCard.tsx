@@ -158,7 +158,7 @@ export function DiffCard({
   if (!diffData || isBinaryFile(diffData.filePath)) {
     return (
       <div className={`diff-card${compact ? " diff-card--compact" : ""}`} style={{ borderLeftColor: borderColor }}>
-        <div className="diff-card-header" onClick={() => state !== "running" && setExpanded(!expanded)}>
+        <div className="diff-card-header" onClick={() => setExpanded(!expanded)}>
           <span className="diff-card-icon">{TOOL_ICONS[toolName] ?? "\u{1F527}"}</span>
           <span className="diff-card-name">{toolName}</span>
           {diffData && <span className="diff-card-path">{truncatePath(diffData.filePath)}</span>}
@@ -183,7 +183,7 @@ export function DiffCard({
 
   return (
     <div className={`diff-card${compact ? " diff-card--compact" : ""}`} style={{ borderLeftColor: borderColor }}>
-      <div className="diff-card-header" onClick={() => state !== "running" && setExpanded(!expanded)}>
+      <div className="diff-card-header" onClick={() => setExpanded(!expanded)}>
         <span className="diff-card-icon">{TOOL_ICONS[toolName] ?? "\u{1F527}"}</span>
         <span className="diff-card-name">{toolName}</span>
         <span className="diff-card-path">{truncatePath(filePath)}</span>
