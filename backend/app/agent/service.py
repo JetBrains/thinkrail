@@ -153,6 +153,8 @@ class AgentService:
 
     def _save_task(self, task: AgentTask, events: list[dict] | None = None) -> None:
         """Persist current task state to disk."""
+        # Load existing metadata to preserve metrics and events
+        existing = load_session(self._config.project_root, task.bonsai_sid)
         data: dict = {
             "bonsaiSid": task.bonsai_sid,
             "name": task.name or task.bonsai_sid[:8],
@@ -164,13 +166,14 @@ class AgentService:
             "createdAt": task.created,
             "updatedAt": task.updated,
         }
+        # Preserve metrics from disk (written by update_session_metadata)
+        if existing and existing.get("metrics"):
+            data["metrics"] = existing["metrics"]
         # Preserve existing events from disk if we don't have new ones
         if events is not None:
             data["events"] = events
-        else:
-            existing = load_session(self._config.project_root, task.bonsai_sid)
-            if existing:
-                data["events"] = existing.get("events", [])
+        elif existing:
+            data["events"] = existing.get("events", [])
         save_session(self._config.project_root, data)
 
     def _save_event(self, bonsai_sid: str, event: dict) -> None:
@@ -259,6 +262,7 @@ class AgentService:
             "sessionId": old_session_id,
             "createdAt": old.get("createdAt", task.created),
             "updatedAt": task.updated,
+            "metrics": old.get("metrics", {}),
         }
         save_session(self._config.project_root, metadata)
 
