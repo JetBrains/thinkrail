@@ -313,6 +313,8 @@ class AgentService:
                     "metrics": {
                         "costUsd": params.get("costUsd", 0),
                         "turns": params.get("turns", 0),
+                        "turnCostUsd": params.get("turnCostUsd", 0),
+                        "turnTurns": params.get("turn_turns", 0),
                         "durationMs": params.get("durationMs", 0),
                     },
                 })

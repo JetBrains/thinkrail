@@ -263,7 +263,7 @@ export function ChatStream({
                 )}
                 <SystemMessage
                   key={k}
-                  text={`Turn complete \u2014 $${((p.costUsd as number) ?? 0).toFixed(2)} \u00B7 ${(p.turns as number) ?? 0} turns`}
+                  text={`Turn complete \u2014 $${((p.turnCostUsd as number) ?? 0).toFixed(2)} \u00B7 ${(p.turn_turns as number) ?? 0} turns`}
                   variant="ok"
                 />
               </>
