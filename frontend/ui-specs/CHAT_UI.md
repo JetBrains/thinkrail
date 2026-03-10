@@ -399,7 +399,6 @@ interface ApprovalCardProps {
 
 ```typescript
 interface CompletionBannerProps {
-  result?: string;
   costUsd?: number;
   turns?: number;
   durationMs?: number;
@@ -410,7 +409,6 @@ interface CompletionBannerProps {
 - `.chat-banner-title`: `✓ Session complete`
 - `.chat-banner-metrics`: flex row with optional `$X.XX` / `N turns` / duration string
   - Duration format: `< 60s → "X.Xs"`, `≥ 60s → "Xm Xs"`
-- `.chat-banner-result`: optional result text, `color: var(--muted)`
 
 ---
 

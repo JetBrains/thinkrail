@@ -19,7 +19,7 @@ The Chat UI is the center panel's primary content. It renders a scrolling stream
 - `frontend/src/components/ChatStream/SubagentBlock.tsx` — nested indented section with spinner, collapsed summary on end
 - `frontend/src/components/ChatStream/QuestionCard.tsx` — interactive question with option buttons (single/multi select). Sends `agent/respond` on click.
 - `frontend/src/components/ChatStream/ApprovalCard.tsx` — tool approval with Approve/Deny buttons. Sends `agent/respond` on click.
-- `frontend/src/components/ChatStream/CompletionBanner.tsx` — result summary, cost, duration, token usage
+- `frontend/src/components/ChatStream/CompletionBanner.tsx` — session-complete metrics: cost, duration, turns
 - `frontend/src/components/ChatStream/ErrorBanner.tsx` — red error display with details
 - `frontend/src/components/ChatStream/CompactMarker.tsx` — context compacted boundary marker
 - `frontend/src/components/ChatStream/SessionStatusLine.tsx` — model, cost, tool calls, context bar between chat and input

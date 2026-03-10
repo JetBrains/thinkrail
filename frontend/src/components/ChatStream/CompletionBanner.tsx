@@ -1,15 +1,12 @@
 import { formatDuration } from "@/utils/format.ts";
-import { ChatMarkdown } from "./ChatMarkdown.tsx";
 
 interface CompletionBannerProps {
-  result?: string;
   costUsd?: number;
   turns?: number;
   durationMs?: number;
 }
 
 export function CompletionBanner({
-  result,
   costUsd,
   turns,
   durationMs,
@@ -24,11 +21,6 @@ export function CompletionBanner({
         {turns != null && <span>{turns} turns</span>}
         {duration && <span>{duration}</span>}
       </div>
-      {result && (
-        <div className="chat-banner-result">
-          <ChatMarkdown content={result} />
-        </div>
-      )}
     </div>
   );
 }

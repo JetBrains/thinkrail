@@ -104,11 +104,12 @@ export function ChatStream({
           if (stack[j][1] === aid) { stack.splice(j, 1); break; }
         }
       } else if (stack.length > 0) {
-        // Hoist bonsai_visualize to top level so it persists
-        // outside the collapsible SubagentBlock
+        // Hoist bonsai_visualize, askUserQuestion, and confirmAction to top level
+        // so they remain visible outside the collapsible SubagentBlock
         const isViz = ev.eventType === "toolCallStart" &&
           (ev.payload.toolName as string)?.endsWith("bonsai_visualize");
-        if (!isViz) {
+        const isInteraction = ev.eventType === "askUserQuestion" || ev.eventType === "confirmAction";
+        if (!isViz && !isInteraction) {
           const [parentIdx] = stack[stack.length - 1];
           subagentChildren.get(parentIdx)!.push(i);
           childIndices.add(i);
@@ -282,7 +283,6 @@ export function ChatStream({
             return (
               <CompletionBanner
                 key={k}
-                result={(p.result as string) ?? undefined}
                 costUsd={(p.costUsd as number) ?? undefined}
                 turns={(p.turns as number) ?? undefined}
                 durationMs={(p.durationMs as number) ?? undefined}

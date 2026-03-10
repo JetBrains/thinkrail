@@ -82,7 +82,7 @@ The registry schema:
 {
   "from": "spec-id",
   "to": "spec-id",
-  "type": "parent|child|depends-on|references|implements"
+  "type": "parent|depends-on|references|implements"
 }
 ```
 
