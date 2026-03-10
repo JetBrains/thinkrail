@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import type { AgentEvent } from "@/types/agent.ts";
 import type { VizData } from "@/types/viz.ts";
+import { ChatMarkdown } from "./ChatMarkdown.tsx";
 import { ToolCallCard } from "./ToolCallCard.tsx";
 import { VisualizationCard, VizErrorBoundary } from "./VisualizationCard.tsx";
 import { extractToolInput, type ToolState } from "./ChatStream.tsx";
@@ -105,7 +106,7 @@ export function SubagentBlock({
             if (ev.eventType === "textDelta") {
               return (
                 <div key={`subagent-text-${ci}`} className="chat-subagent-text">
-                  {(ev.payload.text as string) ?? ""}
+                  <ChatMarkdown content={(ev.payload.text as string) ?? ""} />
                 </div>
               );
             }

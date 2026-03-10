@@ -44,15 +44,6 @@
   max-width: 90%;
   animation: slideUp 0.22s ease-out;
 }
-.chat-assistant-text {
-  font-family: var(--font);
-  font-size: var(--font-size);
-  line-height: var(--line-height);
-  white-space: pre-wrap;
-  word-break: break-word;
-  color: var(--text);
-  margin: 0;
-}
 .chat-cursor {
   display: inline-block;
   width: 7px;
@@ -68,6 +59,107 @@
 @keyframes slideUp {
   from { opacity: 0; transform: translateY(6px); }
   to { opacity: 1; transform: translateY(0); }
+}
+
+/* ── Chat Markdown ── */
+.chat-md {
+  font-family: var(--font);
+  font-size: var(--font-size);
+  line-height: var(--line-height);
+  color: var(--text);
+  word-break: break-word;
+}
+.chat-md > :first-child { margin-top: 0; }
+.chat-md > :last-child { margin-bottom: 0; }
+
+.chat-md h1, .chat-md h2, .chat-md h3,
+.chat-md h4, .chat-md h5, .chat-md h6 {
+  color: var(--text);
+  margin: 1em 0 0.4em;
+  line-height: 1.3;
+}
+.chat-md h1 { font-size: 1.3em; }
+.chat-md h2 { font-size: 1.15em; }
+.chat-md h3 { font-size: 1.05em; }
+.chat-md h4, .chat-md h5, .chat-md h6 { font-size: 1em; }
+
+.chat-md p { margin: 0.5em 0; }
+
+.chat-md a { color: var(--blue); text-decoration: none; }
+.chat-md a:hover { text-decoration: underline; }
+
+.chat-md code {
+  font-family: var(--font);
+  background: var(--elevated);
+  color: var(--cyan);
+  padding: 1px 4px;
+  border-radius: 3px;
+  font-size: 0.9em;
+}
+.chat-md pre {
+  background: var(--elevated);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: var(--space-sm) var(--space-md);
+  overflow-x: auto;
+  margin: 0.5em 0;
+}
+.chat-md pre code {
+  background: transparent;
+  padding: 0;
+  color: var(--text);
+  font-size: 12px;
+}
+
+.chat-md blockquote {
+  border-left: 3px solid var(--purple);
+  margin: 0.5em 0;
+  padding: 0.3em 0.8em;
+  color: var(--muted);
+}
+.chat-md blockquote > :first-child { margin-top: 0; }
+.chat-md blockquote > :last-child { margin-bottom: 0; }
+
+.chat-md ul, .chat-md ol {
+  margin: 0.5em 0;
+  padding-left: 1.6em;
+}
+.chat-md li { margin: 0.2em 0; }
+
+.chat-md table {
+  border-collapse: collapse;
+  margin: 0.5em 0;
+  width: 100%;
+  font-size: 12px;
+}
+.chat-md th, .chat-md td {
+  border: 1px solid var(--border);
+  padding: var(--space-xs) var(--space-sm);
+  text-align: left;
+}
+.chat-md th {
+  background: var(--elevated);
+  font-weight: 600;
+  color: var(--text);
+}
+
+.chat-md hr {
+  border: none;
+  border-top: 1px solid var(--border);
+  margin: 1em 0;
+}
+
+.chat-md strong { color: var(--text); }
+.chat-md em { color: var(--muted); }
+
+.chat-md img {
+  max-width: 100%;
+  border-radius: var(--radius-sm);
+}
+
+.chat-md input[type="checkbox"] {
+  accent-color: var(--blue);
+  margin-right: var(--space-xs);
 }
 
 /* ── Tool Call Card ── */
@@ -166,8 +258,6 @@
   font-size: 12px;
   color: var(--muted);
   padding: var(--space-xs) 0;
-  white-space: pre-wrap;
-  word-break: break-word;
 }
 
 /* ── ToolCallCard compact variant (inside SubagentBlock) ── */
