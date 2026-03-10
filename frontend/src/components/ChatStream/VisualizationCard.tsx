@@ -51,7 +51,7 @@ function StatusIcon({ status }: { status: VizStatus }) {
 function ProgressTracker({ data }: { data: ProgressTrackerData }) {
   return (
     <div className="viz-progress">
-      {data.steps.map((step, i) => (
+      {(data.steps ?? []).map((step, i) => (
         <div key={i} className="viz-progress-step">
           <div className="viz-progress-step-row">
             <StatusIcon status={step.status} />
@@ -91,15 +91,15 @@ function ProgressTracker({ data }: { data: ProgressTrackerData }) {
 function SummaryBox({ data }: { data: SummaryBoxData }) {
   return (
     <div className="viz-summary">
-      {data.sections.map((section, i) => (
+      {(data.sections ?? []).map((section, i) => (
         <div key={i} className="viz-summary-section">
           <div className="viz-summary-heading">
             {section.status && <StatusIcon status={section.status} />}
             <span>{section.heading}</span>
           </div>
-          {section.items.length > 0 ? (
+          {(section.items ?? []).length > 0 ? (
             <div className="viz-summary-items">
-              {section.items.map((item, j) => (
+              {(section.items ?? []).map((item, j) => (
                 <div key={j} className="viz-summary-item">
                   <span className="viz-summary-item-label">{item.label}</span>
                   <span className="viz-summary-item-value">{item.value}</span>
@@ -120,7 +120,7 @@ function SummaryBox({ data }: { data: SummaryBoxData }) {
 function Comparison({ data }: { data: ComparisonData }) {
   return (
     <div className="viz-comparison">
-      {data.options.map((opt, i) => (
+      {(data.options ?? []).map((opt, i) => (
         <div key={i} className="viz-comparison-card">
           <div className="viz-comparison-name">{opt.name}</div>
           {opt.description && (
@@ -158,13 +158,13 @@ function DataTable({ data }: { data: DataTableData }) {
       <table className="viz-table">
         <thead>
           <tr>
-            {data.columns.map((col, i) => (
+            {(data.columns ?? []).map((col, i) => (
               <th key={i}>{col}</th>
             ))}
           </tr>
         </thead>
         <tbody>
-          {data.rows.map((row, i) => (
+          {(data.rows ?? []).map((row, i) => (
             <tr key={i}>
               {row.map((cell, j) => (
                 <td
@@ -191,7 +191,7 @@ function DataTable({ data }: { data: DataTableData }) {
 function StatusList({ data }: { data: StatusListData }) {
   return (
     <div className="viz-status-list">
-      {data.items.map((item, i) => (
+      {(data.items ?? []).map((item, i) => (
         <div key={i} className="viz-status-list-item">
           <StatusIcon status={item.status} />
           <span className="viz-status-list-label">{item.label}</span>
@@ -211,7 +211,7 @@ function Diagram({ data }: { data: DiagramData }) {
   return (
     <div className="viz-diagram">
       <div className="viz-diagram-nodes">
-        {data.nodes.map((node) => (
+        {(data.nodes ?? []).map((node) => (
           <div key={node.id} className="viz-diagram-node">
             <span className="viz-diagram-node-label">{node.label}</span>
             {node.type && (
@@ -220,9 +220,9 @@ function Diagram({ data }: { data: DiagramData }) {
           </div>
         ))}
       </div>
-      {data.edges.length > 0 && (
+      {(data.edges ?? []).length > 0 && (
         <div className="viz-diagram-edges">
-          {data.edges.map((edge, i) => (
+          {(data.edges ?? []).map((edge, i) => (
             <div key={i} className="viz-diagram-edge">
               {edge.from} {"\u2192"} {edge.to}
               {edge.label && <span className="viz-diagram-edge-label"> ({edge.label})</span>}

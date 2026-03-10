@@ -162,6 +162,12 @@ def handle_tool_call(arguments: dict) -> dict:
     viz_type = arguments.get("type", "")
     title = arguments.get("title", viz_type)
     data = arguments.get("data", {})
+    # LLMs sometimes pass `data` as a JSON string instead of an object — auto-parse it
+    if isinstance(data, str):
+        try:
+            data = json.loads(data)
+        except (json.JSONDecodeError, ValueError):
+            pass
 
     renderer = MD_RENDERERS.get(viz_type)
     if renderer:
@@ -179,28 +185,29 @@ def handle_tool_call(arguments: dict) -> dict:
 
 def send(msg: dict) -> None:
     """Write a JSON-RPC message to stdout."""
-    raw = json.dumps(msg)
-    sys.stdout.write(f"Content-Length: {len(raw)}\r\n\r\n{raw}")
-    sys.stdout.flush()
+    raw = json.dumps(msg).encode("utf-8")
+    sys.stdout.buffer.write(f"Content-Length: {len(raw)}\r\n\r\n".encode("utf-8"))
+    sys.stdout.buffer.write(raw)
+    sys.stdout.buffer.flush()
 
 
 def read_message() -> dict | None:
     """Read a JSON-RPC message from stdin (Content-Length framing)."""
     headers = {}
     while True:
-        line = sys.stdin.readline()
+        line = sys.stdin.buffer.readline()
         if not line:
             return None
         line = line.strip()
         if not line:
             break
-        if ":" in line:
-            key, val = line.split(":", 1)
-            headers[key.strip()] = val.strip()
+        if b":" in line:
+            key, val = line.split(b":", 1)
+            headers[key.strip().decode("utf-8")] = val.strip().decode("utf-8")
     length = int(headers.get("Content-Length", 0))
     if length == 0:
         return None
-    body = sys.stdin.read(length)
+    body = sys.stdin.buffer.read(length)
     return json.loads(body)
 
 
@@ -225,6 +232,8 @@ def main() -> None:
             })
         elif method == "notifications/initialized":
             pass  # Client acknowledgment, no response needed
+        elif method == "ping":
+            send({"jsonrpc": "2.0", "id": msg_id, "result": {}})
         elif method == "tools/list":
             send({
                 "jsonrpc": "2.0",

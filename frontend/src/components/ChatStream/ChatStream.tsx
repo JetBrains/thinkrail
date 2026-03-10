@@ -157,6 +157,10 @@ export function ChatStream({
             // MCP tools may be prefixed with server name (e.g. mcp__bonsai-viz__bonsai_visualize)
             if ((p.toolName as string)?.endsWith("bonsai_visualize")) {
               const vizInput = p.toolInput as VizData | undefined;
+              // LLMs sometimes pass `data` as a JSON string instead of an object — auto-parse it
+              if (vizInput && typeof vizInput.data === "string") {
+                try { vizInput.data = JSON.parse(vizInput.data); } catch { /* leave as-is */ }
+              }
               if (vizInput) {
                 const vizId = vizInput.vizId;
                 const isLatest = !vizId || latestVizByVizId.get(vizId) === i;
