@@ -41,6 +41,65 @@ function fileIcon(name: string, isDir: boolean): { icon: string; cls: string } {
   }
 }
 
+/** Get all directory paths from entries. */
+function allDirPaths(entries: FileEntry[]): Set<string> {
+  const dirs = new Set<string>();
+  for (const e of entries) {
+    if (e.isDir) dirs.add(e.path);
+  }
+  return dirs;
+}
+
+/**
+ * Smart default collapse: collapse everything, then expand root-level dirs
+ * and single-child directory chains (e.g. backend/ → app/ → core/).
+ */
+function computeDefaultCollapsed(entries: FileEntry[]): Set<string> {
+  const dirs = allDirPaths(entries);
+  const collapsed = new Set(dirs); // start with everything collapsed
+
+  // Expand depth-0 directories
+  for (const e of entries) {
+    if (e.isDir && e.depth === 0) collapsed.delete(e.path);
+  }
+
+  // Auto-expand single-child chains: if a visible (expanded) dir has exactly
+  // one direct child that is also a dir, expand that child too. Repeat until stable.
+  let changed = true;
+  while (changed) {
+    changed = false;
+    for (const e of entries) {
+      if (!e.isDir || collapsed.has(e.path)) continue;
+      // Find direct children that are directories
+      const dirChildren = entries.filter(
+        (c) => c.isDir && c.depth === e.depth + 1 && c.path.startsWith(e.path + "/"),
+      );
+      if (dirChildren.length === 1 && collapsed.has(dirChildren[0].path)) {
+        collapsed.delete(dirChildren[0].path);
+        changed = true;
+      }
+    }
+  }
+
+  return collapsed;
+}
+
+function storageKey(projectPath: string): string {
+  return `bonsai-filetree-collapsed-${projectPath}`;
+}
+
+function persistCollapsed(projectPath: string, set: Set<string>): void {
+  try { localStorage.setItem(storageKey(projectPath), JSON.stringify([...set])); } catch { /* ignore */ }
+}
+
+function readPersistedCollapsed(projectPath: string): Set<string> | null {
+  try {
+    const val = localStorage.getItem(storageKey(projectPath));
+    if (val !== null) return new Set(JSON.parse(val) as string[]);
+  } catch { /* ignore */ }
+  return null;
+}
+
 export function FileTree() {
   const projectPath = useUiStore((s) => s.projectPath);
   const fileTreeVersion = useUiStore((s) => s.fileTreeVersion);
@@ -57,7 +116,10 @@ export function FileTree() {
         `${API_BASE}/api/project/files?path=${encodeURIComponent(projectPath)}`,
       );
       const data = await res.json();
-      setEntries(data.entries ?? []);
+      const fetched: FileEntry[] = data.entries ?? [];
+      setEntries(fetched);
+      const persisted = readPersistedCollapsed(projectPath);
+      setCollapsed(persisted ?? computeDefaultCollapsed(fetched));
     } catch {
       setEntries([]);
     } finally {
@@ -94,9 +156,22 @@ export function FileTree() {
       } else {
         next.add(path);
       }
+      if (projectPath) persistCollapsed(projectPath, next);
       return next;
     });
-  }, []);
+  }, [projectPath]);
+
+  const collapseAll = useCallback(() => {
+    const dirs = allDirPaths(entries);
+    setCollapsed(dirs);
+    if (projectPath) persistCollapsed(projectPath, dirs);
+  }, [entries, projectPath]);
+
+  const expandAll = useCallback(() => {
+    const empty = new Set<string>();
+    setCollapsed(empty);
+    if (projectPath) persistCollapsed(projectPath, empty);
+  }, [projectPath]);
 
   if (loading) {
     return <div className="ft-empty">Loading...</div>;
@@ -117,6 +192,14 @@ export function FileTree() {
 
   return (
     <div className="ft">
+      <div className="ft-toolbar">
+        <button className="ft-toolbar-btn" onClick={collapseAll} title="Collapse All">
+          ⊟
+        </button>
+        <button className="ft-toolbar-btn" onClick={expandAll} title="Expand All">
+          ⊞
+        </button>
+      </div>
       {visible.map((entry) => {
         const { cls } = fileIcon(entry.name, entry.isDir);
         const isOpen = entry.isDir && !collapsed.has(entry.path);

@@ -39,7 +39,7 @@
     - [x] files tab doesn't have scrolling
     - [x] Get rid of left panel max width limit and arrow side button when hidden
     - [ ] Reqs tab displays nothing (mock) — needs real requirements data
-    - [ ] Tree-view (files tab) always appears fully unfolded — not nice
+    - [x] Tree-view (files tab) always appears fully unfolded — not nice
     - [x] Single-click in SpecTree/FileTree should open a preview tab (like VS Code) — temporary tab that gets replaced by the next preview click. Double-click to pin as a permanent tab.
 * Right panel (Context Panel)
     - [x] Get rid of right panel max width limit and arrow side button when hidden
