@@ -4,11 +4,14 @@ import type {
   Session,
   SessionStatus,
   SessionMetrics,
+  ContextUsage,
+  TurnUsage,
   ArchivedSession,
   PendingRequest,
 } from "@/types/session.ts";
 import { getClient } from "@/api/index.ts";
 import { createAgentApi } from "@/api/methods/agents.ts";
+import { getContextWindowSize } from "@/utils/modelContext.ts";
 import { useNotificationStore } from "./notificationStore.ts";
 import { getErrorMessage } from "@/utils/errors.ts";
 
@@ -54,6 +57,23 @@ interface SessionStore {
   onConfigChanged: (params: Record<string, unknown>) => void;
 }
 
+function emptyContextUsage(): ContextUsage {
+  return {
+    contextMax: 0,
+    contextTokens: 0,
+    outputTokens: 0,
+    cacheReadTokens: 0,
+    cacheCreationTokens: 0,
+    inputTokens: 0,
+    turnHistory: [],
+    runBoundaries: [],
+    toolCallCounts: {},
+    toolTokens: {},
+    filesRead: [],
+    filesWritten: [],
+  };
+}
+
 function emptyMetrics(): SessionMetrics {
   return {
     costUsd: 0,
@@ -63,6 +83,7 @@ function emptyMetrics(): SessionMetrics {
     contextMax: 0,
     durationMs: 0,
     filesChanged: {},
+    contextUsage: emptyContextUsage(),
   };
 }
 
@@ -82,6 +103,93 @@ function reconstructCost(events: AgentEvent[]): number {
 }
 
 /**
+ * Reconstruct context usage from persisted events.
+ * Scans for turnComplete/interrupted events with usage data and
+ * toolCallStart events for tool/file tracking.
+ */
+function reconstructContextUsage(events: AgentEvent[], model: string): ContextUsage {
+  const cu = emptyContextUsage();
+  cu.contextMax = getContextWindowSize(model);
+  const toolUseIdToName = new Map<string, string>();
+
+  for (const ev of events) {
+    const p = ev.payload;
+
+    // Record run boundaries from sessionStart events
+    if (ev.eventType === "sessionStart") {
+      cu.runBoundaries.push(cu.turnHistory.length);
+    }
+
+    // Accumulate turn usage from turnComplete/interrupted events
+    if ((ev.eventType === "turnComplete" || ev.eventType === "interrupted") && p?.usage) {
+      const usage = p.usage as Record<string, number>;
+      const inputTokens = usage.input_tokens ?? 0;
+      const cacheCreation = usage.cache_creation_input_tokens ?? 0;
+      const cacheRead = usage.cache_read_input_tokens ?? 0;
+      const outputTokens = usage.output_tokens ?? 0;
+      const totalContext = inputTokens + outputTokens;
+
+      cu.contextTokens = totalContext;
+      cu.outputTokens = outputTokens;
+      cu.inputTokens = inputTokens;
+      cu.cacheReadTokens = cacheRead;
+      cu.cacheCreationTokens = cacheCreation;
+
+      cu.turnHistory.push({
+        turnIndex: cu.turnHistory.length,
+        inputTokens,
+        outputTokens,
+        cacheCreationTokens: cacheCreation,
+        cacheReadTokens: cacheRead,
+        totalContextTokens: totalContext,
+        costUsd: (p.turnCostUsd as number) ?? 0,
+        timestamp: 0, // not available from persisted events
+        sdkTurns: (p.turn_turns as number) ?? 1,
+      });
+    }
+
+    // Track tool calls and files
+    if (ev.eventType === "toolCallStart" && p) {
+      const toolName = (p.toolName as string) ?? "";
+      const toolUseId = (p.toolUseId as string) ?? "";
+      cu.toolCallCounts[toolName] = (cu.toolCallCounts[toolName] ?? 0) + 1;
+
+      if (toolUseId) toolUseIdToName.set(toolUseId, toolName);
+
+      const toolInput = (p.toolInput as Record<string, unknown>) ?? {};
+
+      // Estimate input tokens from serialized tool input (~4 chars per token)
+      const inputEstimate = Math.ceil(JSON.stringify(toolInput).length / 4);
+      if (!cu.toolTokens[toolName]) cu.toolTokens[toolName] = { inputTokens: 0, outputTokens: 0 };
+      cu.toolTokens[toolName].inputTokens += inputEstimate;
+
+      if (toolName === "Read" || toolName === "Grep" || toolName === "Glob") {
+        const filePath = ((toolInput.file_path ?? toolInput.path ?? "") as string);
+        if (filePath && !cu.filesRead.includes(filePath)) cu.filesRead.push(filePath);
+      }
+      if (toolName === "Write" || toolName === "Edit" || toolName === "NotebookEdit") {
+        const filePath = ((toolInput.file_path ?? "") as string);
+        if (filePath && !cu.filesWritten.includes(filePath)) cu.filesWritten.push(filePath);
+      }
+    }
+
+    // Track tool output tokens
+    if (ev.eventType === "toolCallEnd" && p) {
+      const toolUseId = (p.toolUseId as string) ?? "";
+      const toolName = toolUseIdToName.get(toolUseId) ?? "";
+      if (toolName) {
+        const output = (p.output as string) ?? "";
+        const outputEstimate = Math.ceil(output.length / 4);
+        if (!cu.toolTokens[toolName]) cu.toolTokens[toolName] = { inputTokens: 0, outputTokens: 0 };
+        cu.toolTokens[toolName].outputTokens += outputEstimate;
+      }
+    }
+  }
+
+  return cu;
+}
+
+/**
  * Apply cost + metrics from event params to a session, returning the
  * updated session and the change in project-wide cost.
  */
@@ -92,6 +200,29 @@ function applyMetrics(
 ): { updated: Session; costDelta: number } {
   const newCost = (params.costUsd as number) ?? session.metrics.costUsd;
   const costDelta = newCost - session.metrics.costUsd;
+
+  // Parse the usage dict from the SDK (arrives on turnComplete/interrupted/done)
+  const usage = (params.usage as Record<string, number> | undefined) ?? {};
+  const inputTokens = usage.input_tokens ?? 0;
+  const cacheCreation = usage.cache_creation_input_tokens ?? 0;
+  const cacheRead = usage.cache_read_input_tokens ?? 0;
+  const outputTokens = usage.output_tokens ?? 0;
+  const totalContext = inputTokens + outputTokens;
+  const contextMax = getContextWindowSize(session.model);
+
+  const prevUsage = session.metrics.contextUsage;
+  const turnUsage: TurnUsage = {
+    turnIndex: prevUsage.turnHistory.length,
+    inputTokens,
+    outputTokens,
+    cacheCreationTokens: cacheCreation,
+    cacheReadTokens: cacheRead,
+    totalContextTokens: totalContext,
+    costUsd: (params.turnCostUsd as number) ?? 0,
+    timestamp: Date.now(),
+    sdkTurns: (params.turn_turns as number) ?? 1,
+  };
+
   return {
     updated: {
       ...session,
@@ -102,6 +233,18 @@ function applyMetrics(
         costUsd: newCost,
         turns: (params.turns as number) ?? session.metrics.turns,
         durationMs: (params.durationMs as number) ?? session.metrics.durationMs,
+        contextTokens: totalContext,
+        contextMax,
+        contextUsage: {
+          ...prevUsage,
+          contextMax,
+          contextTokens: totalContext,
+          outputTokens,
+          cacheReadTokens: cacheRead,
+          cacheCreationTokens: cacheCreation,
+          inputTokens,
+          turnHistory: [...prevUsage.turnHistory, turnUsage],
+        },
       },
     },
     costDelta,
@@ -160,7 +303,64 @@ function appendEvent(
   const metrics = { ...session.metrics };
   metrics.durationMs = Date.now() - session.startedAt;
 
-  if (method === "agent/toolCallEnd") metrics.toolCalls++;
+  if (method === "agent/toolCallEnd") {
+    metrics.toolCalls++;
+    // Estimate output tokens and attribute to the matching toolCallStart
+    const toolUseId = (params.toolUseId as string) ?? "";
+    let toolName = "";
+    if (toolUseId) {
+      // Search backwards through events to find the matching toolCallStart
+      const events = session.events;
+      for (let i = events.length - 1; i >= 0; i--) {
+        const ev = events[i];
+        if (ev.eventType === "toolCallStart" && ev.payload?.toolUseId === toolUseId) {
+          toolName = (ev.payload.toolName as string) ?? "";
+          break;
+        }
+      }
+    }
+    if (toolName) {
+      const cu = { ...metrics.contextUsage };
+      const tt = { ...cu.toolTokens };
+      const entry = tt[toolName] ? { ...tt[toolName] } : { inputTokens: 0, outputTokens: 0 };
+      const output = (params.output as string) ?? "";
+      entry.outputTokens += Math.ceil(output.length / 4);
+      tt[toolName] = entry;
+      cu.toolTokens = tt;
+      metrics.contextUsage = cu;
+    }
+  }
+
+  // Track tool call counts and files accessed
+  if (method === "agent/toolCallStart") {
+    const toolName = (params.toolName as string) ?? "";
+    const toolInput = (params.toolInput as Record<string, unknown>) ?? {};
+    const cu = { ...metrics.contextUsage };
+    const counts = { ...cu.toolCallCounts };
+    counts[toolName] = (counts[toolName] ?? 0) + 1;
+    cu.toolCallCounts = counts;
+
+    // Estimate input tokens from serialized tool input
+    const tt = { ...cu.toolTokens };
+    const entry = tt[toolName] ? { ...tt[toolName] } : { inputTokens: 0, outputTokens: 0 };
+    entry.inputTokens += Math.ceil(JSON.stringify(toolInput).length / 4);
+    tt[toolName] = entry;
+    cu.toolTokens = tt;
+
+    if (toolName === "Read" || toolName === "Grep" || toolName === "Glob") {
+      const filePath = ((toolInput.file_path ?? toolInput.path ?? "") as string);
+      if (filePath && !cu.filesRead.includes(filePath)) {
+        cu.filesRead = [...cu.filesRead, filePath];
+      }
+    }
+    if (toolName === "Write" || toolName === "Edit" || toolName === "NotebookEdit") {
+      const filePath = ((toolInput.file_path ?? "") as string);
+      if (filePath && !cu.filesWritten.includes(filePath)) {
+        cu.filesWritten = [...cu.filesWritten, filePath];
+      }
+    }
+    metrics.contextUsage = cu;
+  }
 
   next.set(bonsaiSid, {
     ...session,
@@ -360,6 +560,8 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
     const answered = buildAnsweredRequests(events, isActive);
 
     const restoredCost = reconstructCost(events);
+    const restoredModel = (data.config?.model as string) ?? "";
+    const restoredCtx = reconstructContextUsage(events, restoredModel);
     const session: Session = {
       bonsaiSid,
       name: data.name ?? bonsaiSid.slice(0, 8),
@@ -370,11 +572,17 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
       status: isActive
         ? ((backendEntry?.status as SessionStatus) ?? "idle")
         : "done",
-      model: (data.config?.model as string) ?? "",
+      model: restoredModel,
       permissionMode: (data.config?.permissionMode as string) ?? "default",
       startedAt: new Date(data.createdAt).getTime(),
       events,
-      metrics: { ...emptyMetrics(), costUsd: restoredCost },
+      metrics: {
+        ...emptyMetrics(),
+        costUsd: restoredCost,
+        contextTokens: restoredCtx.contextTokens,
+        contextMax: restoredCtx.contextMax,
+        contextUsage: restoredCtx,
+      },
       pendingRequest: null,
       answeredRequests: answered,
       restored: !isActive,
@@ -430,17 +638,25 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
         }));
 
         const restoredCost = reconstructCost(events);
+        const entryModel = (data?.config?.model as string) ?? entry.model ?? "";
+        const restoredCtx = reconstructContextUsage(events, entryModel);
         next.set(entry.bonsaiSid, {
           bonsaiSid: entry.bonsaiSid,
           name: data?.name ?? entry.name ?? entry.bonsaiSid.slice(0, 8),
           skillId: (data?.skillId as string) ?? entry.skillId ?? null,
           specIds: data?.specIds ?? entry.specIds ?? [],
           status: (entry.status as SessionStatus) ?? "idle",
-          model: (data?.config?.model as string) ?? entry.model ?? "",
+          model: entryModel,
           permissionMode: (data?.config?.permissionMode as string) ?? "default",
           startedAt: new Date(entry.createdAt).getTime(),
           events,
-          metrics: { ...emptyMetrics(), costUsd: restoredCost },
+          metrics: {
+            ...emptyMetrics(),
+            costUsd: restoredCost,
+            contextTokens: restoredCtx.contextTokens,
+            contextMax: restoredCtx.contextMax,
+            contextUsage: restoredCtx,
+          },
           pendingRequest: null,
           answeredRequests: buildAnsweredRequests(events, true),
         });
@@ -590,6 +806,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
       const session = withSession.get(bonsaiSid);
       if (!session) return s;
       const next = new Map(withSession);
+      const cu = session.metrics.contextUsage;
       next.set(bonsaiSid, {
         ...session,
         model: (params.model as string) ?? session.model,
@@ -602,6 +819,13 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
             payload: params,
           },
         ],
+        metrics: {
+          ...session.metrics,
+          contextUsage: {
+            ...cu,
+            runBoundaries: [...cu.runBoundaries, cu.turnHistory.length],
+          },
+        },
       });
       return { sessions: next };
     });

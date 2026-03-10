@@ -159,7 +159,7 @@ export function SessionStatusLine({
         <>
           <span className="ssl-sep" />
           <span className="ssl-context">
-            ctx {Math.round(metrics.contextTokens / 1000)}k/
+            {Math.round(metrics.contextTokens / 1000)}k/
             {Math.round(metrics.contextMax / 1000)}k
           </span>
           <span

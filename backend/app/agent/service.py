@@ -326,6 +326,11 @@ class AgentService:
             # Persist metrics to metadata on turnComplete/done/interrupted so that
             # list_all_sessions can return cost per session without loading events.
             if method in ("agent/turnComplete", "agent/done", "agent/interrupted"):
+                usage = params.get("usage", {})
+                ctx_tokens = (
+                    usage.get("input_tokens", 0)
+                    + usage.get("output_tokens", 0)
+                )
                 update_session_metadata(self._config.project_root, task.bonsai_sid, {
                     "metrics": {
                         "costUsd": _base_cost + params.get("costUsd", 0),
@@ -333,6 +338,9 @@ class AgentService:
                         "turnCostUsd": params.get("turnCostUsd", 0),
                         "turnTurns": params.get("turn_turns", 0),
                         "durationMs": _base_duration + params.get("durationMs", 0),
+                        "contextTokens": ctx_tokens,
+                        "contextMax": 200000,
+                        "outputTokens": usage.get("output_tokens", 0),
                     },
                 })
 
