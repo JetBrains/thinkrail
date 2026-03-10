@@ -41,7 +41,8 @@ interface SessionStore {
     response: unknown,
   ) => void;
 
-  updateConfig: (bonsaiSid: string, config: { model?: string; permissionMode?: string; betas?: string[] }) => Promise<void>;
+  updateConfig: (bonsaiSid: string, config: { model?: string; permissionMode?: string; betas?: string[]; effort?: string | null }) => Promise<void>;
+  restartSession: (bonsaiSid: string) => Promise<void>;
 
   continueSession: (bonsaiSid: string) => Promise<void>;
   restoreSession: (bonsaiSid: string) => Promise<void>;
@@ -278,6 +279,7 @@ function ensureSession(
     model: "",
     permissionMode: "default",
     betas: [],
+    effort: null,
     startedAt: Date.now(),
     events: [],
     metrics: emptyMetrics(),
@@ -431,6 +433,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
         model: config.model,
         permissionMode: config.permissionMode,
         betas: config.betas ?? [],
+        effort: config.effort ?? null,
         startedAt: Date.now(),
         events: existing?.events ?? [],
         metrics: existing?.metrics ?? emptyMetrics(),
@@ -583,6 +586,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
       model: restoredModel,
       permissionMode: (data.config?.permissionMode as string) ?? "default",
       betas: restoredBetas,
+      effort: (data.config?.effort as string) ?? null,
       startedAt: new Date(data.createdAt).getTime(),
       events,
       metrics: {
@@ -659,6 +663,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
           model: entryModel,
           permissionMode: (data?.config?.permissionMode as string) ?? "default",
           betas: entryBetas,
+          effort: (data?.config?.effort as string) ?? null,
           startedAt: new Date(entry.createdAt).getTime(),
           events,
           metrics: {
@@ -775,7 +780,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
               turns: session.metrics.turns,
               durationMs: session.metrics.durationMs,
               model: session.model,
-              config: { model: session.model, maxTurns: 25, permissionMode: session.permissionMode, streamText: true, betas: session.betas ?? [] },
+              config: { model: session.model, maxTurns: 25, permissionMode: session.permissionMode, streamText: true, betas: session.betas ?? [], effort: session.effort ?? null },
               events: session.events,
             },
           ]
@@ -858,6 +863,20 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
     await api.updateConfig(bonsaiSid, config);
   },
 
+  restartSession: async (bonsaiSid) => {
+    const { createSessionApi } = await import("@/api/methods/sessions.ts");
+    const api = createSessionApi(getClient());
+    await api.restart(bonsaiSid);
+    // Session will go through done → re-init via backend notifications
+    set((s) => {
+      const session = s.sessions.get(bonsaiSid);
+      if (!session) return s;
+      const next = new Map(s.sessions);
+      next.set(bonsaiSid, { ...session, status: "idle" });
+      return { sessions: next };
+    });
+  },
+
   onConfigChanged: (params) => {
     const bonsaiSid = params.bonsaiSid as string;
     set((s) => {
@@ -873,6 +892,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
         model: newModel,
         permissionMode: (params.permissionMode as string) ?? session.permissionMode,
         betas: newBetas,
+        effort: (params.effort as string | null) ?? session.effort,
         metrics: {
           ...session.metrics,
           contextMax,

@@ -203,6 +203,7 @@ async def run(
         resume=resume_session_id,
         stderr=_on_cli_stderr,
         betas=task.config.betas,
+        effort=task.config.effort,
         hooks={
             "SubagentStart": [HookMatcher(hooks=[on_subagent_start])],
             "SubagentStop": [HookMatcher(hooks=[on_subagent_stop])],
@@ -295,6 +296,7 @@ async def run(
                                             "bonsaiSid": task.bonsai_sid,
                                             "model": task.config.model,
                                             "permissionMode": new_mode,
+                                            "effort": task.config.effort,
                                         })
                                     await notify("agent/toolCallEnd", {
                                         "bonsaiSid": task.bonsai_sid,

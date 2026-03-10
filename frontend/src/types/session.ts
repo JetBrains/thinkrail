@@ -59,6 +59,7 @@ export interface Session {
   model: string;
   permissionMode: string;
   betas: string[];
+  effort: string | null;
   startedAt: number;
   events: AgentEvent[];
   metrics: SessionMetrics;

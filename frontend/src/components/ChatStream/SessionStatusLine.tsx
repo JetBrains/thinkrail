@@ -2,6 +2,18 @@ import { useState, useRef, useEffect, useCallback } from "react";
 import type { SessionMetrics, SessionStatus } from "@/types/session.ts";
 import { buildModelOptions, currentModelOptionKey } from "@/utils/models.ts";
 
+const EFFORT_OPTIONS = [
+  { value: null, label: "auto" },
+  { value: "low", label: "low" },
+  { value: "medium", label: "medium" },
+  { value: "high", label: "high" },
+  { value: "max", label: "max" },
+] as const;
+
+function displayEffort(effort: string | null): string {
+  return EFFORT_OPTIONS.find((o) => o.value === effort)?.label ?? effort ?? "auto";
+}
+
 const PERMISSION_MODES = [
   { value: "default", label: "default" },
   { value: "acceptEdits", label: "accept edits" },
@@ -55,24 +67,28 @@ interface SessionStatusLineProps {
   model: string;
   betas: string[];
   permissionMode: string;
+  effort: string | null;
   metrics: SessionMetrics;
   status: SessionStatus;
   projectCost: number;
   disabled?: boolean;
   onChangeModel?: (model: string, betas: string[]) => void;
   onChangePermissionMode?: (mode: string) => void;
+  onChangeEffort?: (effort: string | null) => void;
 }
 
 export function SessionStatusLine({
   model,
   betas,
   permissionMode,
+  effort,
   metrics,
   status,
   projectCost,
   disabled,
   onChangeModel,
   onChangePermissionMode,
+  onChangeEffort,
 }: SessionStatusLineProps) {
   const running = status === "running";
   const activeKey = currentModelOptionKey(model, betas);
@@ -80,6 +96,7 @@ export function SessionStatusLine({
   const { icon: statusIcon, label: statusLabel, cssClass: statusClass } = statusInfo(status);
   const modelDd = useDropdown();
   const modeDd = useDropdown();
+  const effortDd = useDropdown();
 
   const contextPct =
     metrics.contextMax > 0
@@ -154,6 +171,32 @@ export function SessionStatusLine({
                 }}
               >
                 {m.label}
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+      <span className="ssl-sep" />
+      <div className="ssl-selector" ref={effortDd.ref}>
+        <button
+          className={`ssl-selector-btn${disabled ? " ssl-selector-disabled" : ""}`}
+          onClick={() => !disabled && effortDd.toggle()}
+          disabled={disabled}
+        >
+          {displayEffort(effort)}
+        </button>
+        {effortDd.open && (
+          <div className="ssl-dropdown">
+            {EFFORT_OPTIONS.map((o) => (
+              <button
+                key={o.value ?? "auto"}
+                className={`ssl-dropdown-item${o.value === effort ? " ssl-dropdown-active" : ""}`}
+                onClick={() => {
+                  if (o.value !== effort) onChangeEffort?.(o.value);
+                  effortDd.close();
+                }}
+              >
+                {o.label}
               </button>
             ))}
           </div>

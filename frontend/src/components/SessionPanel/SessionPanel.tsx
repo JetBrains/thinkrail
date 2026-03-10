@@ -22,6 +22,7 @@ export function SessionPanel() {
   const sendMessage = useSessionStore((s) => s.sendMessage);
   const interruptSession = useSessionStore((s) => s.interruptSession);
   const updateConfig = useSessionStore((s) => s.updateConfig);
+  const restartSession = useSessionStore((s) => s.restartSession);
   const projectCost = useSessionStore((s) => s.projectCost);
 
   const openFiles = useFileStore((s) => s.openFiles);
@@ -164,12 +165,17 @@ export function SessionPanel() {
             model={activeSession.model}
             betas={activeSession.betas ?? []}
             permissionMode={activeSession.permissionMode}
+            effort={activeSession.effort ?? null}
             metrics={activeSession.metrics}
             status={status ?? "idle"}
             projectCost={projectCost}
             disabled={activeSession.restored || isDone}
             onChangeModel={(m, betas) => updateConfig(activeSession.bonsaiSid, { model: m, betas })}
             onChangePermissionMode={(m) => updateConfig(activeSession.bonsaiSid, { permissionMode: m })}
+            onChangeEffort={async (e) => {
+              await updateConfig(activeSession.bonsaiSid, { effort: e });
+              await restartSession(activeSession.bonsaiSid);
+            }}
           />
           {activeSession.restored ? (
             <RestoredBar bonsaiSid={activeSession.bonsaiSid} />

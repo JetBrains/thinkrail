@@ -21,6 +21,7 @@ export function NewSessionModal() {
   const [use1M, setUse1M] = useState(false);
   const [maxTurns, setMaxTurns] = useState(20);
   const [permissionMode, setPermissionMode] = useState("default");
+  const [effort, setEffort] = useState<string | null>(null);
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [submitting, setSubmitting] = useState(false);
 
@@ -38,6 +39,7 @@ export function NewSessionModal() {
       setModel(DEFAULT_MODEL);
       setUse1M(false);
       setMaxTurns(20);
+      setEffort(null);
       setPermissionMode("default");
       setShowAdvanced(false);
       setSubmitting(false);
@@ -62,6 +64,7 @@ export function NewSessionModal() {
           permissionMode,
           streamText: true,
           betas: use1M ? [BETA_1M] : [],
+          effort,
         },
         name: name || (skillId ?? "session"),
         skillId: skillId ?? undefined,
@@ -70,7 +73,7 @@ export function NewSessionModal() {
     } catch {
       setSubmitting(false);
     }
-  }, [submitting, startSession, specIds, model, use1M, maxTurns, permissionMode, name, skillId, closeModal]);
+  }, [submitting, startSession, specIds, model, use1M, maxTurns, permissionMode, effort, name, skillId, closeModal]);
 
   if (!open) return null;
 
@@ -167,6 +170,19 @@ export function NewSessionModal() {
                     />
                     {m}
                   </label>
+                ))}
+              </div>
+
+              <label className="modal-label">Effort</label>
+              <div className="modal-pills">
+                {([null, "low", "medium", "high", "max"] as const).map((e) => (
+                  <button
+                    key={e ?? "auto"}
+                    className={`modal-pill ${effort === e ? "modal-pill-active" : ""}`}
+                    onClick={() => setEffort(e)}
+                  >
+                    {e ?? "auto"}
+                  </button>
                 ))}
               </div>
             </div>

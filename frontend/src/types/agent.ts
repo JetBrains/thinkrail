@@ -28,6 +28,7 @@ export interface AgentConfig {
   permissionMode: string;
   streamText: boolean;
   betas: string[];
+  effort: string | null;
 }
 
 export interface QuestionOption {

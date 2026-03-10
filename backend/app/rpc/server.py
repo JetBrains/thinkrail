@@ -34,6 +34,7 @@ from app.rpc.methods.sessions import (
     delete_session_data,
     get_session,
     list_all_sessions,
+    restart_session,
 )
 from app.rpc.methods.viz import get_viz_state, recompute_viz
 from app.agent.service import AgentService
@@ -63,6 +64,7 @@ METHODS = {
     "session/list": list_all_sessions,
     "session/get": get_session,
     "session/continue": continue_session,
+    "session/restart": restart_session,
     "session/delete": delete_session_data,
     "viz/state": get_viz_state,
     "viz/recompute": recompute_viz,

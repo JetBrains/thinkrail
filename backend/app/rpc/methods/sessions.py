@@ -54,6 +54,16 @@ async def continue_session(service: AgentService, **params: Any) -> dict:
 
 
 @_handle_errors
+async def restart_session(service: AgentService, **params: Any) -> dict:
+    """End current session and resume with updated config."""
+    notify = notifications.current_notify
+    if notify is None:
+        raise JsonRpcError(_INTERNAL_ERROR, "Internal error", "No active connection")
+    task = await service.restart_session(params["bonsaiSid"], notify)
+    return {"bonsaiSid": task.bonsai_sid}
+
+
+@_handle_errors
 async def delete_session_data(service: AgentService, **params: Any) -> bool:
     """Delete a session from disk."""
     return service.delete_session_data(params["bonsaiSid"])

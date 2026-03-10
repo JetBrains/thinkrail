@@ -128,6 +128,7 @@ class AgentService:
         model: str | None = None,
         permission_mode: str | None = None,
         betas: list[str] | None = None,
+        effort: str | None = None,
     ) -> dict:
         """Update model and/or permission mode on a live session."""
         task = self._tracker.get_task(bonsai_sid)
@@ -142,8 +143,21 @@ class AgentService:
             task.config.permission_mode = permission_mode
         if betas is not None:
             task.config.betas = betas
+        if effort is not None:
+            task.config.effort = effort
         self._save_task(task)
-        return {"model": task.config.model, "permissionMode": task.config.permission_mode, "betas": task.config.betas}
+        return {"model": task.config.model, "permissionMode": task.config.permission_mode, "betas": task.config.betas, "effort": task.config.effort}
+
+    async def restart_session(self, bonsai_sid: str, notify: Callable) -> AgentTask:
+        """End current session and resume with current (updated) config."""
+        self._tracker.enqueue_end_signal(bonsai_sid)
+        bg_task = self._running_tasks.get(bonsai_sid)
+        if bg_task:
+            try:
+                await bg_task
+            except Exception:
+                pass
+        return await self.continue_session(bonsai_sid, notify)
 
     async def respond(self, bonsai_sid: str, request_id: str, response: dict) -> None:
         self._tracker.resolve_future(bonsai_sid, request_id, response)
