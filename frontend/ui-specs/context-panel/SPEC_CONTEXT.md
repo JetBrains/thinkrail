@@ -160,19 +160,54 @@ CollapsibleSection
 
 ---
 
-## Section 3: CoveredFiles — PLACEHOLDER
+## Section 3: CoveredFiles
 
-**Purpose:** Show source files covered by the selected spec's `covers[]` patterns.
+**Purpose:** Show the `covers[]` patterns from the selected spec as a clickable list.
 
-**Status:** Not implemented. Requires a backend API to resolve glob patterns against the project file tree (e.g., `spec/resolve-covers`).
+**Status:** Implemented. Renders patterns directly from `RegistryEntry.covers` (no backend resolution needed).
 
-**Current rendering:** Static placeholder text: *"Files covered by this spec will appear here"*
+### Data
 
-**Future design notes:**
-- Backend endpoint receives spec ID or covers[] patterns, returns resolved file paths
-- Frontend renders file list grouped by covers pattern
-- Each file clickable to open in center panel via `fileStore.openFile(path)`
-- Count badge shows total resolved file count
+```
+Input:  selectedSpec.covers: string[]
+Output: List of cover patterns (file paths or directory patterns)
+
+- Patterns ending in "/" are treated as directories (folder icon, not clickable)
+- Other patterns are treated as files (file icon, clickable to preview/open)
+```
+
+### Props & Rendering
+
+```
+CollapsibleSection
+  title: "Covered Files"
+  count: covers.length
+
+  {covers.map(pattern =>
+    <button className="covered-files__item"
+      onClick={() => isDir ? noop : loadPreview(pattern)}
+      onDoubleClick={() => isDir ? noop : openFile(pattern)}>
+      <span className="covered-files__icon">{isDir ? "📁" : "📄"}</span>
+      <span className="covered-files__path">{pattern}</span>
+    </button>
+  )}
+
+  If no covers: "No coverage patterns defined"
+  If no spec selected: "Select a spec to see covered files"
+```
+
+### CSS Classes
+
+| Class | Description |
+|---|---|
+| `.covered-files__item` | Clickable pattern row (11px, mono font, flex, hover highlight) |
+| `.covered-files__icon` | Icon (folder or file emoji, flex-shrink 0) |
+| `.covered-files__path` | Pattern text (ellipsis overflow) |
+
+### Store Dependencies
+
+- `useFileStore` → `openFile`, `loadPreview`
+- `useSelectedSpec()` → resolved spec entry (has `covers` field)
 
 ---
 
@@ -278,7 +313,7 @@ function relativeDate(iso: string): string {
 | `modes/SpecContext.tsx` | Composes 4 sections (unchanged) |
 | `sections/ConnectedSpecs.tsx` | Grouped list of linked specs (rewrite from GraphView) |
 | `sections/LinkedTasks.tsx` | Task specs implementing this spec |
-| `sections/CoveredFiles.tsx` | Placeholder (unchanged) |
+| `sections/CoveredFiles.tsx` | Clickable list of covers[] patterns |
 | `sections/SpecHealth.tsx` | Status badge, date, covers count, type |
 
 ---
@@ -288,4 +323,4 @@ function relativeDate(iso: string): string {
 - **Parent spec:** [CONTEXT_PANEL.md](../CONTEXT_PANEL.md)
 - **Stores:** `specStore` (specs, graph, selectSpec), `fileStore` (activeFilePath, previewFilePath)
 - **Components:** `CollapsibleSection` (shared wrapper)
-- **No backend changes required** (CoveredFiles deferred)
+- **No backend changes required**
