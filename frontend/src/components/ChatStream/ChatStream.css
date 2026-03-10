@@ -699,6 +699,31 @@
   flex-shrink: 0;
 }
 .input-interrupt:hover { opacity: 0.9; }
+.input-actions {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 4px;
+  flex-shrink: 0;
+}
+.input-continue {
+  padding: 2px var(--space-sm);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--muted);
+  font-family: var(--font);
+  font-size: 10px;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: all var(--transition-fast);
+  white-space: nowrap;
+}
+.input-continue:hover {
+  background: var(--hover);
+  color: var(--text);
+  border-color: var(--border2);
+}
 
 /* ── Session Tabs ── */
 .session-tabs {

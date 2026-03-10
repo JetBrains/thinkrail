@@ -8,9 +8,11 @@ interface InputAreaProps {
   onSend: (text: string) => void;
   isRunning?: boolean;
   onInterrupt?: () => void;
+  showContinue?: boolean;
+  onContinue?: () => void;
 }
 
-export function InputArea({ disabled, placeholder, onSend, isRunning, onInterrupt }: InputAreaProps) {
+export function InputArea({ disabled, placeholder, onSend, isRunning, onInterrupt, showContinue, onContinue }: InputAreaProps) {
   const [text, setText] = useState("");
   const [suggestions, setSuggestions] = useState<typeof SKILLS>([]);
   const [selectedIndex, setSelectedIndex] = useState(0);
@@ -175,17 +177,24 @@ export function InputArea({ disabled, placeholder, onSend, isRunning, onInterrup
       >
         {"\u2191"}
       </button>
-      {isRunning && onInterrupt ? (
-        <button className="input-interrupt" onClick={onInterrupt}>{"\u25A0"}</button>
-      ) : (
-        <button
-          className="input-send"
-          onClick={handleSend}
-          disabled={disabled || !text.trim()}
-        >
-          Send
-        </button>
-      )}
+      <div className="input-actions">
+        {showContinue && onContinue && (
+          <button className="input-continue" onClick={onContinue} title="Continue without a message">
+            Continue
+          </button>
+        )}
+        {isRunning && onInterrupt ? (
+          <button className="input-interrupt" onClick={onInterrupt}>{"\u25A0"}</button>
+        ) : (
+          <button
+            className="input-send"
+            onClick={handleSend}
+            disabled={disabled || !text.trim()}
+          >
+            Send
+          </button>
+        )}
+      </div>
     </div>
   );
 }

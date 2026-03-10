@@ -110,6 +110,18 @@ export function SessionPanel() {
         : "Message Claude...";
 
   const inputDisabled = isDone || isRunning || (hasPending && activeSession?.pendingRequest?.type === "approval");
+  const showContinue = !inputDisabled && !isRunning && (activeSession?.events.length ?? 0) > 0;
+
+  const handleContinue = useCallback(() => {
+    if (!activeSessionId || !activeSession) return;
+    if (activeSession.pendingRequest?.type === "question") {
+      resolveRequest(activeSessionId, activeSession.pendingRequest.requestId, { text: "continue" });
+      return;
+    }
+    if (activeSession.status === "idle" || activeSession.status === "interrupted") {
+      sendMessage(activeSessionId, "continue");
+    }
+  }, [activeSessionId, activeSession, resolveRequest, sendMessage]);
 
   return (
     <>
@@ -168,6 +180,8 @@ export function SessionPanel() {
               onSend={handleSend}
               isRunning={isRunning}
               onInterrupt={() => interruptSession(activeSession!.bonsaiSid)}
+              showContinue={showContinue}
+              onContinue={handleContinue}
             />
           )}
         </>
