@@ -1657,6 +1657,25 @@
       ],
       "created": "2026-03-09",
       "updated": "2026-03-09"
+    },
+    {
+      "id": "task-fe-diff-card",
+      "type": "task-spec",
+      "path": "current_tasks/frontend/feature_diff_card.md",
+      "title": "Implement DiffCard",
+      "status": "done",
+      "covers": [
+        "frontend/src/components/ChatStream/DiffCard.tsx",
+        "frontend/src/components/ChatStream/DiffCard.css",
+        "backend/app/agent/runner.py"
+      ],
+      "tags": [
+        "medium",
+        "new-feature",
+        "frontend"
+      ],
+      "created": "2026-03-10",
+      "updated": "2026-03-10"
     }
   ],
   "links": [
@@ -2594,6 +2613,16 @@
       "from": "task-bugfix-subagent-attention",
       "to": "chat-ui",
       "type": "implements"
+    },
+    {
+      "from": "task-fe-diff-card",
+      "to": "chat-ui",
+      "type": "implements"
+    },
+    {
+      "from": "task-fe-diff-card",
+      "to": "task-fe-chat-ui",
+      "type": "depends-on"
     }
   ]
 }

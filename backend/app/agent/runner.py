@@ -260,12 +260,24 @@ async def run(
                                     _mode_change_tools[block.id] = "default"
                                 elif block.name == "EnterPlanMode":
                                     _mode_change_tools[block.id] = "plan"
+                                tool_input = dict(block.input) if isinstance(block.input, dict) else block.input
+                                if block.name == "Write" and isinstance(tool_input, dict):
+                                    file_path = tool_input.get("file_path", "")
+                                    if file_path:
+                                        try:
+                                            target = Path(file_path) if Path(file_path).is_absolute() else Path(cwd or ".") / file_path
+                                            if target.is_file():
+                                                tool_input["_previousContent"] = target.read_text(encoding="utf-8", errors="replace")
+                                            else:
+                                                tool_input["_previousContent"] = ""
+                                        except Exception:
+                                            tool_input["_previousContent"] = ""
                                 await notify("agent/toolCallStart", {
                                     "bonsaiSid": task.bonsai_sid,
                                     "sessionId": session_id,
                                     "toolUseId": block.id,
                                     "toolName": block.name,
-                                    "toolInput": block.input,
+                                    "toolInput": tool_input,
                                 })
 
                     elif isinstance(sdk_event, UserMessage):

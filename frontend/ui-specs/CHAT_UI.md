@@ -26,6 +26,7 @@ This spec reflects the **actual implemented code** as of 2026-03-05. Items not y
       </div>
       <AssistantMessage />             // textDelta
       <ToolCallCard />                 // toolCallStart (paired with toolCallEnd state)
+      <DiffCard />                     // toolCallStart for Edit/Write/NotebookEdit (lazy-loaded)
       <SubagentBlock />                // subagentStart (finished derived from subagentEnd)
       <QuestionCard />                 // askUserQuestion
       <SuggestionCard />               // suggestSession
@@ -81,7 +82,7 @@ interface ChatStreamProps {
 | `sessionStart` | `<SystemMessage variant="ok" text="Session started — {model}">` |
 | `userMessage` | `<div.chat-user><div.chat-user-text>{text}</div></div>` |
 | `textDelta` | `<AssistantMessage text={text} streaming={streaming}>` |
-| `toolCallStart` | `<ToolCallCard>` (state derived from paired `toolCallEnd`) |
+| `toolCallStart` | `<ToolCallCard>` (state derived from paired `toolCallEnd`) — **or `<DiffCard>`** for Edit/Write/NotebookEdit |
 | `toolCallEnd` | `null` (data consumed by `toolCallStart` pre-pass) |
 | `subagentStart` | `<SubagentBlock>` (finished derived from pre-pass; children=`null`) |
 | `subagentEnd` | `null` |
@@ -208,6 +209,107 @@ interface ToolCallCardProps {
 | Other | 🔧 |
 
 **`parentToolUseId` nesting:** NOT implemented. Subagent tool calls are rendered at the flat event stream level regardless of `parentToolUseId`. **[Planned]**
+
+---
+
+### `<DiffCard>`
+
+Monaco DiffEditor-based replacement for `<ToolCallCard>` when the tool is Edit, Write, or NotebookEdit. Shows a side-by-side diff of the original and modified content.
+
+```typescript
+interface DiffCardProps {
+  toolName: string;
+  toolInput: Record<string, unknown>;
+  output?: string;
+  isError?: boolean;
+  state: "running" | "success" | "error";
+  compact?: boolean;  // true when rendered inside SubagentBlock
+}
+
+interface DiffData {
+  filePath: string;
+  original: string;
+  modified: string;
+}
+```
+
+**Routing logic:**
+
+Both `ChatStream` and `SubagentBlock` define:
+```typescript
+const DIFF_TOOLS = new Set(["Edit", "Write", "NotebookEdit"]);
+const DiffCard = lazy(() => import("./DiffCard.tsx").then(m => ({ default: m.DiffCard })));
+```
+
+When `DIFF_TOOLS.has(toolName)`, the event is rendered as:
+```tsx
+<Suspense fallback={<ToolCallCard toolName={toolName} toolInput={...} state="running" />}>
+  <DiffCard toolName={toolName} toolInput={...} output={end?.output} isError={end?.isError} state={state} />
+</Suspense>
+```
+
+**DiffData extraction** (`extractDiffData` function):
+
+| Tool | `filePath` | `original` | `modified` |
+|------|-----------|------------|------------|
+| Edit | `toolInput.file_path` | `toolInput.old_string` | `toolInput.new_string` |
+| Write | `toolInput.file_path` | `toolInput._previousContent` (injected by backend) | `toolInput.content` |
+| NotebookEdit | `toolInput.notebook_path` | `toolInput.old_source` | `toolInput.new_source` or `toolInput.source` |
+
+Returns `null` if required fields are missing → falls back to JSON display.
+
+**Backend `_previousContent` injection** (in `runner.py`):
+
+When a `Write` ToolUseBlock is detected, the backend reads the target file's current content and injects it as `_previousContent` into the `toolInput` dict before emitting `agent/toolCallStart`. If the file does not exist or cannot be read, `_previousContent` is set to `""`.
+
+**Monaco DiffEditor configuration:**
+
+```typescript
+options={{
+  readOnly: true,
+  renderSideBySide: true,
+  minimap: { enabled: false },
+  scrollBeyondLastLine: false,
+  fontSize: 12,
+  fontFamily: "'JetBrains Mono', 'Fira Code', 'SF Mono', monospace",
+  lineNumbers: "on",
+  automaticLayout: true,
+  enableSplitViewResizing: true,
+  ignoreTrimWhitespace: false,
+}}
+```
+
+Uses the `intellij-darcula` custom theme (shared with `FileViewer`).
+
+**Header** (`.diff-card-header`, always visible, clickable when not running):
+- `.diff-card-icon`: emoji from `TOOL_ICONS` (Edit/Write → ✏️, NotebookEdit → 📓)
+- `.diff-card-name`: tool name, `color: var(--cyan)`, `font-weight: 600`
+- `.diff-card-path`: truncated file path, `max-width: 300px`
+- `.diff-card-lang`: language badge from `detectLanguage()`
+- `.diff-card-stats`: `+N` (green) / `-N` (red) line change counts
+- `.diff-card-status`: status icon + text, same as ToolCallCard
+
+**Horizontal scrolling:**
+- `.diff-card-editor-scroll`: `overflow-x: auto; overflow-y: hidden`
+- `.diff-card-editor`: `min-width: 900px` (700px in compact mode) ensures side-by-side diff is readable; viewport scrolls horizontally if narrower
+
+**Resize behavior:**
+- `.diff-card-editor` has `resize: vertical`, `min-height: 100px`, `max-height: 600px`, default `height: 300px` (200px compact)
+- A `ResizeObserver` syncs the container's `contentRect.height` to the Monaco `height` prop
+
+**Edge cases:**
+
+| Scenario | Behavior |
+|----------|----------|
+| Binary file (png, jpg, zip, etc.) | Falls back to text display: `"Binary file: {path}"` |
+| Large file (original + modified > 100KB) | Shows warning + "Load diff anyway" button |
+| Missing diff fields (null from extractDiffData) | Falls back to `JSON.stringify(toolInput)` display |
+| Error state | Diff editor + error output `<pre>` below |
+
+**Compact variant** (`compact={true}`, used inside SubagentBlock):
+- `.diff-card--compact`: `border-left-width: 2px`, `background: transparent`, `max-width: 100%`
+- Header: smaller padding/font (2px / 11px)
+- Editor: `min-width: 700px`, `min-height: 80px`, `max-height: 400px`, default height 200px
 
 ---
 
@@ -762,6 +864,21 @@ RPC server
 | `.chat-tool-input` | Tool input summary | `color: var(--muted); font-size: 11px; max-width: 300px` |
 | `.chat-tool-status` | Tool status | `margin-left: auto; font-size: 11px` |
 | `.chat-tool-body` | Tool output | `border-top: 1px solid border; max-height: 120px; overflow-y: auto` |
+| `.diff-card` | DiffCard root | `border-left: 3px solid {dynamic}; bg: var(--elevated); max-width: 90%; animation: slideUp` |
+| `.diff-card--compact` | DiffCard compact variant | `border-left-width: 2px; bg: transparent; max-width: 100%` |
+| `.diff-card-header` | DiffCard header | `flex; gap: sm; padding: sm md; cursor: pointer; font-size: 12px` |
+| `.diff-card-name` | Tool name | `color: var(--cyan); font-weight: 600` |
+| `.diff-card-path` | File path | `color: var(--muted); font-size: 11px; max-width: 300px; text-overflow: ellipsis` |
+| `.diff-card-lang` | Language badge | `font-size: 10px; color: var(--hint); bg: var(--hover); border-radius: sm` |
+| `.diff-card-stats` | Change stats | `font-size: 11px; flex; gap: xs` |
+| `.diff-card-stats-add` | Added lines | `color: var(--green)` |
+| `.diff-card-stats-del` | Removed lines | `color: var(--red)` |
+| `.diff-card-status` | Status indicator | `margin-left: auto; font-size: 11px` |
+| `.diff-card-editor-scroll` | Editor scroll wrapper | `border-top: 1px solid border; overflow-x: auto; overflow-y: hidden` |
+| `.diff-card-editor` | Editor container | `min-width: 900px; resize: vertical; min-height: 100px; max-height: 600px; height: 300px` |
+| `.diff-card-error` | Error output | `border-top: 1px solid border; padding: sm md` |
+| `.diff-card-fallback` | Fallback display | `border-top: 1px solid border; padding: sm md` |
+| `.diff-card-large-warning` | Large file warning | `border-top: 1px solid border; padding: md; text-align: center` |
 | `.chat-subagent` | SubagentBlock root | `margin-left: 12px; padding-left: 12px; border-left: 2px solid var(--border2)` |
 | `.chat-subagent-header` | Subagent header | `flex; color: var(--muted); font-size: 12px` |
 | `.chat-spinner` | CSS spinner | `10×10px; border-top: var(--blue); animation: spin 0.8s` |

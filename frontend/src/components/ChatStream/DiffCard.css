@@ -1,0 +1,123 @@
+/* ── DiffCard ── */
+.diff-card {
+  border-left: 3px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--elevated);
+  max-width: 90%;
+  animation: slideUp 0.22s ease-out;
+}
+.diff-card-header {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  padding: var(--space-sm) var(--space-md);
+  cursor: pointer;
+  font-size: 12px;
+}
+.diff-card-header:hover { background: var(--hover); }
+.diff-card-icon { font-size: 14px; }
+.diff-card-name { color: var(--cyan); font-weight: 600; }
+.diff-card-path {
+  color: var(--muted);
+  font-size: 11px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 300px;
+}
+.diff-card-lang {
+  font-size: 10px;
+  color: var(--hint);
+  background: var(--hover);
+  padding: 1px 5px;
+  border-radius: var(--radius-sm);
+  white-space: nowrap;
+}
+.diff-card-stats {
+  font-size: 11px;
+  white-space: nowrap;
+  display: flex;
+  gap: var(--space-xs);
+}
+.diff-card-stats-add { color: var(--green); }
+.diff-card-stats-del { color: var(--red); }
+.diff-card-status { margin-left: auto; font-size: 11px; white-space: nowrap; }
+.diff-card-editor-scroll {
+  border-top: 1px solid var(--border);
+  overflow-x: auto;
+  overflow-y: hidden;
+}
+.diff-card-editor {
+  min-width: 900px;
+  resize: vertical;
+  overflow: hidden;
+  min-height: 100px;
+  max-height: 600px;
+  height: 300px;
+}
+.diff-card-error {
+  border-top: 1px solid var(--border);
+  padding: var(--space-sm) var(--space-md);
+}
+.diff-card-error pre {
+  font-size: 11px;
+  white-space: pre-wrap;
+  word-break: break-all;
+  color: var(--red);
+  margin: 0;
+}
+.diff-card-fallback {
+  border-top: 1px solid var(--border);
+  padding: var(--space-sm) var(--space-md);
+}
+.diff-card-fallback pre {
+  font-size: 11px;
+  white-space: pre-wrap;
+  word-break: break-all;
+  color: var(--muted);
+  margin: 0;
+}
+.diff-card-large-warning {
+  border-top: 1px solid var(--border);
+  padding: var(--space-md);
+  text-align: center;
+}
+.diff-card-large-warning button {
+  background: var(--hover);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--fg);
+  padding: var(--space-xs) var(--space-md);
+  cursor: pointer;
+  font-size: 12px;
+}
+.diff-card-large-warning button:hover {
+  background: var(--border);
+}
+.diff-loading {
+  border-top: 1px solid var(--border);
+  padding: var(--space-md);
+  text-align: center;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+/* ── DiffCard compact variant (inside SubagentBlock) ── */
+.diff-card--compact {
+  border-left-width: 2px;
+  background: transparent;
+  max-width: 100%;
+}
+.diff-card--compact .diff-card-header {
+  padding: 2px var(--space-sm);
+  font-size: 11px;
+}
+.diff-card--compact .diff-card-icon {
+  font-size: 12px;
+}
+.diff-card--compact .diff-card-editor {
+  min-width: 700px;
+  min-height: 80px;
+  max-height: 400px;
+  height: 200px;
+}

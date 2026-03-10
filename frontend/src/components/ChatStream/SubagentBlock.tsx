@@ -1,10 +1,13 @@
-import { useState, useEffect, useRef } from "react";
+import { lazy, Suspense, useState, useEffect, useRef } from "react";
 import type { AgentEvent } from "@/types/agent.ts";
 import type { VizData } from "@/types/viz.ts";
 import { ChatMarkdown } from "./ChatMarkdown.tsx";
 import { ToolCallCard } from "./ToolCallCard.tsx";
 import { VisualizationCard, VizErrorBoundary } from "./VisualizationCard.tsx";
 import { extractToolInput, type ToolState } from "./ChatStream.tsx";
+
+const DIFF_TOOLS = new Set(["Edit", "Write", "NotebookEdit"]);
+const DiffCard = lazy(() => import("./DiffCard.tsx").then(m => ({ default: m.DiffCard })));
 
 interface SubagentBlockProps {
   agentType?: string;
@@ -85,6 +88,21 @@ export function SubagentBlock({
               }
               const toolUseId = (ev.payload.toolUseId as string) ?? "";
               const end = toolStates.get(toolUseId);
+              const state = end?.finished ? (end.isError ? "error" as const : "success" as const) : "running" as const;
+              if (DIFF_TOOLS.has(toolName)) {
+                return (
+                  <Suspense key={`subagent-diff-${ci}`} fallback={<ToolCallCard toolName={toolName} toolInput={extractToolInput(ev.payload.toolInput)} state="running" compact />}>
+                    <DiffCard
+                      toolName={toolName}
+                      toolInput={(ev.payload.toolInput as Record<string, unknown>) ?? {}}
+                      output={end?.output}
+                      isError={end?.isError}
+                      state={state}
+                      compact
+                    />
+                  </Suspense>
+                );
+              }
               return (
                 <ToolCallCard
                   key={`subagent-tool-${ci}`}
@@ -92,13 +110,7 @@ export function SubagentBlock({
                   toolInput={extractToolInput(ev.payload.toolInput)}
                   output={end?.output}
                   isError={end?.isError}
-                  state={
-                    end?.finished
-                      ? end.isError
-                        ? "error"
-                        : "success"
-                      : "running"
-                  }
+                  state={state}
                   compact
                 />
               );

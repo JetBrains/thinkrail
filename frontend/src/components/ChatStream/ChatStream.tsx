@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef } from "react";
+import { lazy, Suspense, useCallback, useEffect, useRef } from "react";
 import type { AgentEvent } from "@/types/agent.ts";
 import { SystemMessage } from "./SystemMessage.tsx";
 import { AssistantMessage } from "./AssistantMessage.tsx";
@@ -11,6 +11,9 @@ import { CompletionBanner } from "./CompletionBanner.tsx";
 import { ErrorBanner } from "./ErrorBanner.tsx";
 import { CompactMarker } from "./CompactMarker.tsx";
 import type { VizData } from "@/types/viz.ts";
+
+const DIFF_TOOLS = new Set(["Edit", "Write", "NotebookEdit"]);
+const DiffCard = lazy(() => import("./DiffCard.tsx").then(m => ({ default: m.DiffCard })));
 
 /** Shared type for tool call end-state, used by SubagentBlock too. */
 export type ToolState = { output?: string; isError?: boolean; finished: boolean };
@@ -175,16 +178,31 @@ export function ChatStream({
                 );
               }
             }
+            const toolName = (p.toolName as string) ?? "tool";
             const toolUseId = (p.toolUseId as string) ?? "";
             const end = toolStates.get(toolUseId);
+            const state = end?.finished ? (end.isError ? "error" as const : "success" as const) : "running" as const;
+            if (DIFF_TOOLS.has(toolName)) {
+              return (
+                <Suspense key={k} fallback={<ToolCallCard toolName={toolName} toolInput={extractToolInput(p.toolInput)} state="running" />}>
+                  <DiffCard
+                    toolName={toolName}
+                    toolInput={(p.toolInput as Record<string, unknown>) ?? {}}
+                    output={end?.output}
+                    isError={end?.isError}
+                    state={state}
+                  />
+                </Suspense>
+              );
+            }
             return (
               <ToolCallCard
                 key={k}
-                toolName={(p.toolName as string) ?? "tool"}
+                toolName={toolName}
                 toolInput={extractToolInput(p.toolInput)}
                 output={end?.output}
                 isError={end?.isError}
-                state={end?.finished ? (end.isError ? "error" : "success") : "running"}
+                state={state}
               />
             );
           }
