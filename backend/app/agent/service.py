@@ -199,6 +199,7 @@ class AgentService:
                 "createdAt": task.created,
                 "updatedAt": task.updated,
                 "active": task.status not in ("done", "error"),
+                "metrics": disk_entry.get("metrics", {}),
             }
         return list(disk.values())
 
@@ -287,6 +288,18 @@ class AgentService:
     ) -> None:
         self._last_notify[task.bonsai_sid] = notify
 
+        # Base metrics from previous run (for cumulative tracking across resumes)
+        _base_cost = 0.0
+        _base_turns = 0
+        _base_duration = 0
+        if resume_session_id:
+            _existing = load_session(self._config.project_root, task.bonsai_sid)
+            if _existing and _existing.get("metrics"):
+                _m = _existing["metrics"]
+                _base_cost = _m.get("costUsd", 0.0)
+                _base_turns = _m.get("turns", 0)
+                _base_duration = _m.get("durationMs", 0)
+
         # Wrap notify to read the *current* callback from _last_notify each
         # time, so that rebind_notify() transparently redirects events to a
         # new WebSocket without restarting the runner.
@@ -310,16 +323,16 @@ class AgentService:
                 except Exception:
                     logger.exception("Failed to persist event %s for session %s", method, task.bonsai_sid)
 
-            # Persist metrics to metadata on turnComplete/done so that
+            # Persist metrics to metadata on turnComplete/done/interrupted so that
             # list_all_sessions can return cost per session without loading events.
-            if method in ("agent/turnComplete", "agent/done"):
+            if method in ("agent/turnComplete", "agent/done", "agent/interrupted"):
                 update_session_metadata(self._config.project_root, task.bonsai_sid, {
                     "metrics": {
-                        "costUsd": params.get("costUsd", 0),
-                        "turns": params.get("turns", 0),
+                        "costUsd": _base_cost + params.get("costUsd", 0),
+                        "turns": _base_turns + params.get("turns", 0),
                         "turnCostUsd": params.get("turnCostUsd", 0),
                         "turnTurns": params.get("turn_turns", 0),
-                        "durationMs": params.get("durationMs", 0),
+                        "durationMs": _base_duration + params.get("durationMs", 0),
                     },
                 })
 
