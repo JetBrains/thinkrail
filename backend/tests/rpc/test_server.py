@@ -38,6 +38,7 @@ class TestMethods:
             "spec/update", "spec/delete", "spec/graph",
             "agent/run", "agent/send", "agent/status", "agent/list",
             "agent/interrupt", "agent/end", "agent/respond", "agent/updateConfig",
+            "agent/transcribe",
             "session/list", "session/get", "session/continue", "session/restart", "session/delete",
             "viz/state", "viz/recompute",
         }

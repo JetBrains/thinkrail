@@ -1,5 +1,7 @@
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { SKILLS } from "@/constants/skills";
+import { useVoiceInput } from "@/hooks/useVoiceInput";
+import { useNotificationStore } from "@/store/notificationStore";
 import { MessageHistory } from "./MessageHistory";
 
 interface InputAreaProps {
@@ -18,6 +20,7 @@ export function InputArea({ disabled, placeholder, onSend, isRunning, onInterrup
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [showHistory, setShowHistory] = useState(false);
   const ref = useRef<HTMLTextAreaElement>(null);
+  const voice = useVoiceInput();
 
   const closeSuggestions = useCallback(() => {
     setSuggestions([]);
@@ -130,6 +133,51 @@ export function InputArea({ disabled, placeholder, onSend, isRunning, onInterrup
     el.style.height = Math.min(el.scrollHeight, 150) + "px";
   }, []);
 
+  // Show voice input errors as toasts
+  useEffect(() => {
+    if (voice.error) {
+      useNotificationStore.getState().addToast({
+        eventType: "error",
+        message: voice.error,
+        persistent: false,
+      });
+    }
+  }, [voice.error]);
+
+  // Sync interim text from Web Speech API into textarea
+  useEffect(() => {
+    if (voice.mode === "speech-api" && voice.isRecording && voice.interimText) {
+      setText(voice.interimText);
+      // Resize textarea to fit
+      setTimeout(() => {
+        const el = ref.current;
+        if (el) {
+          el.style.height = "auto";
+          el.style.height = Math.min(el.scrollHeight, 150) + "px";
+        }
+      }, 0);
+    }
+  }, [voice.mode, voice.isRecording, voice.interimText]);
+
+  const handleMicClick = useCallback(async () => {
+    if (voice.isRecording) {
+      const transcript = await voice.stopRecording();
+      if (transcript) {
+        setText(transcript);
+        setTimeout(() => {
+          const el = ref.current;
+          if (el) {
+            el.focus();
+            el.style.height = "auto";
+            el.style.height = Math.min(el.scrollHeight, 150) + "px";
+          }
+        }, 0);
+      }
+    } else {
+      voice.startRecording();
+    }
+  }, [voice]);
+
   return (
     <div className="input-area" style={{ position: "relative" }}>
       {showHistory && (
@@ -163,8 +211,8 @@ export function InputArea({ disabled, placeholder, onSend, isRunning, onInterrup
           handleInput();
         }}
         onKeyDown={handleKeyDown}
-        placeholder={placeholder}
-        disabled={disabled}
+        placeholder={voice.isTranscribing ? "Transcribing..." : placeholder}
+        disabled={disabled || voice.isTranscribing}
         rows={1}
       />
       <button
@@ -177,6 +225,16 @@ export function InputArea({ disabled, placeholder, onSend, isRunning, onInterrup
       >
         {"\u2191"}
       </button>
+      {voice.isSupported && (
+        <button
+          className={`input-mic${voice.isRecording ? " input-mic-recording" : ""}${voice.isTranscribing ? " input-mic-transcribing" : ""}`}
+          onClick={handleMicClick}
+          disabled={disabled || voice.isTranscribing}
+          title={voice.isRecording ? "Stop recording" : "Start voice input"}
+        >
+          {voice.isTranscribing ? <span className="input-mic-spinner" /> : "\uD83C\uDF99"}
+        </button>
+      )}
       <div className="input-actions">
         {showContinue && onContinue && (
           <button className="input-continue" onClick={onContinue} title="Continue without a message">

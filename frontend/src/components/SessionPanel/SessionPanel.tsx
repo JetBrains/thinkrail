@@ -81,6 +81,17 @@ export function SessionPanel() {
     [activeSessionId, activeSession, resolveRequest, sendMessage],
   );
 
+  const handleContinue = useCallback(() => {
+    if (!activeSessionId || !activeSession) return;
+    if (activeSession.pendingRequest?.type === "question") {
+      resolveRequest(activeSessionId, activeSession.pendingRequest.requestId, { text: "continue" });
+      return;
+    }
+    if (activeSession.status === "idle" || activeSession.status === "interrupted") {
+      sendMessage(activeSessionId, "continue");
+    }
+  }, [activeSessionId, activeSession, resolveRequest, sendMessage]);
+
   if (sessionList.length === 0 && fileList.length === 0 && !previewFilePath) {
     return (
       <div className="center-placeholder">
@@ -112,17 +123,6 @@ export function SessionPanel() {
 
   const inputDisabled = isDone || isRunning || (hasPending && activeSession?.pendingRequest?.type === "approval");
   const showContinue = !inputDisabled && !isRunning && (activeSession?.events.length ?? 0) > 0;
-
-  const handleContinue = useCallback(() => {
-    if (!activeSessionId || !activeSession) return;
-    if (activeSession.pendingRequest?.type === "question") {
-      resolveRequest(activeSessionId, activeSession.pendingRequest.requestId, { text: "continue" });
-      return;
-    }
-    if (activeSession.status === "idle" || activeSession.status === "interrupted") {
-      sendMessage(activeSessionId, "continue");
-    }
-  }, [activeSessionId, activeSession, resolveRequest, sendMessage]);
 
   return (
     <>

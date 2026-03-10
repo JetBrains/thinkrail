@@ -25,6 +25,9 @@ export function createAgentApi(client: RpcClient) {
 
     updateConfig: (bonsaiSid: string, config: { model?: string; permissionMode?: string; betas?: string[]; effort?: string | null }) =>
       client.request<{ model: string; permissionMode: string; betas: string[]; effort: string | null }>("agent/updateConfig", { bonsaiSid, ...config }),
+
+    transcribe: (audioBase64: string, mimeType: string) =>
+      client.request<{ text: string }>("agent/transcribe", { audioBase64, mimeType }),
   };
 }
 

@@ -651,6 +651,53 @@
 }
 .input-history-btn:hover { background: var(--hover); color: var(--text); }
 
+/* ── Mic Button ── */
+.input-mic {
+  padding: var(--space-xs) var(--space-sm);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--muted);
+  font-family: var(--font);
+  font-size: 14px;
+  cursor: pointer;
+  flex-shrink: 0;
+  line-height: 1;
+  position: relative;
+}
+.input-mic:hover { background: var(--hover); color: var(--text); }
+.input-mic-recording {
+  color: var(--red);
+  border-color: var(--red);
+}
+.input-mic-recording::after {
+  content: "";
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--red);
+  animation: pulse 2s infinite;
+}
+.input-mic-transcribing {
+  color: var(--blue);
+  border-color: var(--blue);
+  pointer-events: none;
+  opacity: 0.7;
+}
+.input-mic-spinner {
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  border: 1.5px solid var(--border);
+  border-top-color: var(--blue);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+  vertical-align: middle;
+}
+
 /* ── Input Area ── */
 .input-area {
   display: flex; align-items: flex-end; gap: var(--space-sm);

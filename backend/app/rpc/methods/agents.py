@@ -81,6 +81,17 @@ async def respond_agent(service: AgentService, **params: Any) -> None:
 
 
 @_handle_errors
+async def transcribe_audio(service: AgentService, **params: Any) -> dict:
+    """Transcribe audio via OpenAI Whisper API (fallback for browsers without Web Speech API)."""
+    try:
+        from app.agent.transcribe import transcribe
+    except ImportError:
+        raise JsonRpcError(_INTERNAL_ERROR, "Transcription module unavailable")
+    text = await transcribe(params["audioBase64"], params["mimeType"])
+    return {"text": text}
+
+
+@_handle_errors
 async def update_config(service: AgentService, **params: Any) -> dict:
     bonsai_sid = params["bonsaiSid"]
     model = params.get("model")

@@ -27,6 +27,7 @@ from app.rpc.methods.agents import (
     respond_agent,
     run_agent,
     send_message,
+    transcribe_audio,
     update_config,
 )
 from app.rpc.methods.sessions import (
@@ -61,6 +62,7 @@ METHODS = {
     "agent/end": end_session,
     "agent/respond": respond_agent,
     "agent/updateConfig": update_config,
+    "agent/transcribe": transcribe_audio,
     "session/list": list_all_sessions,
     "session/get": get_session,
     "session/continue": continue_session,
