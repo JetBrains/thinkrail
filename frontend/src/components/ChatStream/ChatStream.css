@@ -880,3 +880,113 @@
   transition: opacity var(--transition-fast);
 }
 .restored-bar-btn:hover { opacity: 0.9; }
+
+/* ── Session Context Card ── */
+.session-context-card {
+  border-left: 3px solid var(--purple);
+  background: var(--elevated);
+  border-radius: var(--radius-md);
+  padding: var(--space-md) var(--space-lg);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+  animation: slideUp 0.22s ease-out;
+}
+.session-context-row {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-md);
+  font-size: 12px;
+}
+.session-context-label {
+  color: var(--hint);
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  font-weight: 600;
+  min-width: 48px;
+  flex-shrink: 0;
+}
+.session-context-value {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+  color: var(--text);
+}
+.session-context-desc {
+  color: var(--muted);
+}
+.session-context-pill {
+  display: inline-block;
+  font-size: 11px;
+  padding: 1px 6px;
+  border-radius: 3px;
+  background: rgba(187, 154, 247, 0.1);
+  color: var(--purple);
+}
+.session-context-pill--model {
+  background: rgba(8, 124, 250, 0.1);
+  color: var(--blue);
+}
+.session-context-pill--beta {
+  background: rgba(224, 175, 104, 0.1);
+  color: var(--gold);
+}
+.session-context-prompt {
+  margin-top: var(--space-xs);
+  border-top: 1px solid var(--border);
+  padding-top: var(--space-sm);
+}
+.session-context-prompt-toggle {
+  background: transparent;
+  border: none;
+  color: var(--muted);
+  font-family: var(--font);
+  font-size: 11px;
+  cursor: pointer;
+  padding: 2px 4px;
+  border-radius: var(--radius-sm);
+}
+.session-context-prompt-toggle:hover {
+  background: var(--hover);
+  color: var(--text);
+}
+.session-context-prompt-body {
+  margin-top: var(--space-sm);
+  max-height: 300px;
+  overflow-y: auto;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: var(--space-sm) var(--space-md);
+  background: var(--panel);
+}
+.session-context-prompt-body pre {
+  font-size: 11px;
+  white-space: pre-wrap;
+  word-break: break-word;
+  color: var(--muted);
+  margin: 0;
+}
+
+/* ── Sticky Context Bar ── */
+.sticky-context-bar {
+  display: flex;
+  align-items: center;
+  padding: var(--space-xs) var(--space-lg);
+  font-size: 11px;
+  color: var(--muted);
+  background: var(--panel);
+  border-bottom: 1px solid var(--border);
+  cursor: pointer;
+  flex-shrink: 0;
+  animation: slideDown 0.2s ease-out;
+}
+.sticky-context-bar:hover {
+  background: var(--hover);
+  color: var(--text);
+}
+@keyframes slideDown {
+  from { opacity: 0; transform: translateY(-100%); }
+  to { opacity: 1; transform: translateY(0); }
+}

@@ -244,6 +244,7 @@ async def run(
                             await notify("agent/sessionStart", {
                                 "bonsaiSid": task.bonsai_sid,
                                 "sessionId": session_id,
+                                "systemPrompt": spec_context,
                                 **sdk_data,
                             })
 

@@ -1,8 +1,10 @@
-import { lazy, Suspense, useCallback, useEffect, useRef } from "react";
+import { lazy, Suspense, useCallback, useEffect, useRef, forwardRef, useImperativeHandle } from "react";
 import type { AgentEvent } from "@/types/agent.ts";
+import type { Session } from "@/types/session.ts";
 import { SystemMessage } from "./SystemMessage.tsx";
 import { AssistantMessage } from "./AssistantMessage.tsx";
 import { ToolCallCard } from "./ToolCallCard.tsx";
+import { SessionContextCard } from "./SessionContextCard.tsx";
 import { VisualizationCard, VizErrorBoundary } from "./VisualizationCard.tsx";
 import { SubagentBlock } from "./SubagentBlock.tsx";
 import { QuestionCard } from "./QuestionCard.tsx";
@@ -29,17 +31,25 @@ export function extractToolInput(raw: unknown): string {
   return "";
 }
 
+export interface ChatStreamHandle {
+  scrollToTop: () => void;
+}
+
 interface ChatStreamProps {
   events: AgentEvent[];
   answeredRequests: Map<string, unknown>;
   onResolveRequest: (requestId: string, response: unknown) => void;
+  session?: Session;
+  onContextCardVisibility?: (visible: boolean) => void;
 }
 
-export function ChatStream({
+export const ChatStream = forwardRef<ChatStreamHandle, ChatStreamProps>(function ChatStream({
   events,
   answeredRequests,
   onResolveRequest,
-}: ChatStreamProps) {
+  session,
+  onContextCardVisibility,
+}, ref) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const autoScroll = useRef(true);
 
@@ -56,6 +66,12 @@ export function ChatStream({
     const distFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
     autoScroll.current = distFromBottom < 50;
   }, []);
+
+  useImperativeHandle(ref, () => ({
+    scrollToTop() {
+      scrollRef.current?.scrollTo({ top: 0, behavior: "smooth" });
+    },
+  }));
 
   // Pre-scan: index toolCallEnd results by toolUseId so that
   // when rendering a toolCallStart we can show its output inline.
@@ -131,10 +147,15 @@ export function ChatStream({
         switch (ev.eventType) {
           case "sessionStart":
             return (
-              <SystemMessage
+              <SessionContextCard
                 key={k}
-                text={`Session started \u2014 ${(p.model as string) ?? "agent"}`}
-                variant="ok"
+                skillId={session?.skillId ?? undefined}
+                specIds={session?.specIds ?? []}
+                model={(p.model as string) ?? session?.model ?? "agent"}
+                permissionMode={session?.permissionMode ?? "default"}
+                betas={session?.betas ?? []}
+                systemPrompt={session?.systemPrompt ?? (p.systemPrompt as string) ?? undefined}
+                onVisibilityChange={onContextCardVisibility}
               />
             );
 
@@ -363,4 +384,4 @@ export function ChatStream({
       )}
     </div>
   );
-}
+});

@@ -67,6 +67,8 @@ export interface Session {
   answeredRequests: Map<string, unknown>;
   /** True if this session was loaded from disk (read-only, no live backend runner) */
   restored?: boolean;
+  /** The system prompt sent to the agent at session start */
+  systemPrompt?: string;
 }
 
 export interface ArchivedSession {

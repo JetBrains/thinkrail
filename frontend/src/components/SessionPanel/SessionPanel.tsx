@@ -1,15 +1,17 @@
-import { useCallback } from "react";
+import { useCallback, useRef, useState } from "react";
 import { useSessionStore } from "@/store/sessionStore.ts";
 import { useNotificationStore } from "@/store/notificationStore.ts";
 import { getErrorMessage } from "@/utils/errors.ts";
 import { useFileStore } from "@/store/fileStore.ts";
 import type { SessionStatus } from "@/types/session.ts";
 import { ChatStream } from "@/components/ChatStream/ChatStream.tsx";
+import type { ChatStreamHandle } from "@/components/ChatStream/ChatStream.tsx";
 import { SessionStatusLine } from "@/components/ChatStream/SessionStatusLine.tsx";
 import { InputArea } from "@/components/ChatStream/InputArea.tsx";
 import { FileViewer } from "@/components/FileViewer/FileViewer.tsx";
 import { useMessageHistoryStore } from "@/store/messageHistoryStore";
 import { SessionTabBar } from "./SessionTabBar.tsx";
+import { StickyContextBar } from "./StickyContextBar.tsx";
 
 export function SessionPanel() {
   const sessions = useSessionStore((s) => s.sessions);
@@ -30,6 +32,9 @@ export function SessionPanel() {
   const previewFileObj = useFileStore((s) => s.previewFile);
   const clearPreview = useFileStore((s) => s.clearPreview);
   const pinPreview = useFileStore((s) => s.pinPreview);
+
+  const [contextCardVisible, setContextCardVisible] = useState(true);
+  const chatStreamRef = useRef<ChatStreamHandle>(null);
 
   const sessionList = Array.from(sessions.values());
   const fileList = Array.from(openFiles.values());
@@ -126,10 +131,22 @@ export function SessionPanel() {
         <FileViewer file={displayFile} />
       ) : showSession && activeSession ? (
         <>
+          {!contextCardVisible && activeSession.events.length > 0 && (
+            <StickyContextBar
+              skillId={activeSession.skillId ?? undefined}
+              specCount={activeSession.specIds.length}
+              model={activeSession.model}
+              permissionMode={activeSession.permissionMode}
+              onScrollToTop={() => chatStreamRef.current?.scrollToTop()}
+            />
+          )}
           <ChatStream
+            ref={chatStreamRef}
             events={activeSession.events}
             answeredRequests={activeSession.answeredRequests}
             onResolveRequest={handleResolve}
+            session={activeSession}
+            onContextCardVisibility={setContextCardVisible}
           />
           <SessionStatusLine
             model={activeSession.model}

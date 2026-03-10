@@ -894,6 +894,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
       next.set(bonsaiSid, {
         ...session,
         model: (params.model as string) ?? session.model,
+        systemPrompt: (params.systemPrompt as string) ?? undefined,
         events: [
           ...session.events,
           {
