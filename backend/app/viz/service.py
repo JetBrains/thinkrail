@@ -142,7 +142,7 @@ class VisualizationService:
         # Workflow steps
         done_types: set[str] = set()
         for spec in specs:
-            if spec.get("status") == "done":
+            if spec.get("status") in ("active", "done"):
                 wf_step = SPEC_TYPE_TO_WORKFLOW.get(spec.get("type", ""))
                 if wf_step:
                     done_types.add(wf_step)
