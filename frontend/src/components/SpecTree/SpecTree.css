@@ -131,40 +131,43 @@
   transition: all 120ms;
 }
 
-/* Done-only: hidden by default, visible on row hover */
-.st-task-pill-done {
-  background: var(--elevated);
-  color: var(--hint);
-  border-color: var(--border);
-  opacity: 0;
-  transition: opacity 150ms;
+/* All done: green tint */
+.st-task-pill-alldone {
+  background: #21d78922;
+  color: #21d789cc;
+  border-color: #21d78933;
 }
 
-.st-row:hover .st-task-pill-done {
-  opacity: 1;
+.st-task-pill-alldone:hover {
+  background: #21d78933;
+  color: #21d789;
+  border-color: #21d78955;
 }
 
-.st-task-pill-done.st-task-pill-expanded {
-  opacity: 1;
-}
-
-.st-task-pill-done:hover {
-  background: var(--hover);
-  color: var(--muted);
-  border-color: var(--border2);
-}
-
-/* Has active tasks: always visible */
-.st-task-pill-active {
+/* Some done / in progress: blue tint */
+.st-task-pill-progress {
   background: #89b4fa22;
   color: #89b4facc;
   border-color: #89b4fa33;
 }
 
-.st-task-pill-active:hover {
+.st-task-pill-progress:hover {
   background: #89b4fa33;
   color: var(--blue);
   border-color: #89b4fa55;
+}
+
+/* None done: gray */
+.st-task-pill-none {
+  background: var(--elevated);
+  color: var(--hint);
+  border-color: var(--border);
+}
+
+.st-task-pill-none:hover {
+  background: var(--hover);
+  color: var(--muted);
+  border-color: var(--border2);
 }
 
 /* Expanded state */
@@ -223,4 +226,12 @@
 
 .st-error {
   color: var(--red);
+}
+
+/* ── Task dependency arrow ── */
+.st-task-dep-arrow {
+  color: var(--hint);
+  font-size: 10px;
+  margin-right: 2px;
+  flex-shrink: 0;
 }

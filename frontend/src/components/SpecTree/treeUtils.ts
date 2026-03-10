@@ -121,6 +121,85 @@ export function getTasksForSpec(graph: SpecGraph): Map<string, TaskInfo[]> {
   return result;
 }
 
+/* ── Task dependency tree ── */
+
+const TASK_STATUS_RANK: Record<string, number> = {
+  active: 0,
+  pending: 1,
+  waiting: 2,
+  stale: 3,
+  done: 4,
+};
+
+export interface TaskTreeNode extends TaskInfo {
+  depth: number;
+}
+
+/**
+ * Build a depth-annotated flat list of tasks for a single spec,
+ * ordered by intra-set dependency tree (roots first, dependents indented).
+ * Siblings are sorted by status rank, then alphabetically.
+ */
+export function buildTaskTree(
+  tasks: TaskInfo[],
+  graph: SpecGraph,
+): TaskTreeNode[] {
+  const taskIds = new Set(tasks.map((t) => t.id));
+  const taskById = new Map(tasks.map((t) => [t.id, t]));
+
+  // Build intra-set dependency maps from "depends-on" edges
+  // depsOf: taskId → [ids it depends ON]
+  // dependents: taskId → [ids that depend on IT]
+  const depsOf = new Map<string, string[]>();
+  const dependents = new Map<string, string[]>();
+  for (const edge of graph.edges) {
+    if (edge.type !== "depends-on") continue;
+    if (!taskIds.has(edge.from) || !taskIds.has(edge.to)) continue;
+    depsOf.set(edge.from, [...(depsOf.get(edge.from) ?? []), edge.to]);
+    dependents.set(edge.to, [...(dependents.get(edge.to) ?? []), edge.from]);
+  }
+
+  // Roots: tasks with no intra-set dependencies
+  const roots = tasks.filter((t) => !(depsOf.get(t.id)?.length));
+
+  const sortTasks = (arr: TaskInfo[]) =>
+    [...arr].sort((a, b) => {
+      const ra = TASK_STATUS_RANK[a.status] ?? 5;
+      const rb = TASK_STATUS_RANK[b.status] ?? 5;
+      return ra !== rb ? ra - rb : a.title.localeCompare(b.title);
+    });
+
+  // DFS flatten with depth tracking
+  const result: TaskTreeNode[] = [];
+  const visited = new Set<string>();
+
+  function walk(taskId: string, depth: number) {
+    if (visited.has(taskId)) return;
+    visited.add(taskId);
+    const task = taskById.get(taskId)!;
+    result.push({ ...task, depth });
+    const children = (dependents.get(taskId) ?? [])
+      .map((id) => taskById.get(id)!)
+      .filter(Boolean);
+    for (const child of sortTasks(children)) {
+      walk(child.id, depth + 1);
+    }
+  }
+
+  for (const root of sortTasks(roots)) {
+    walk(root.id, 0);
+  }
+
+  // Add any orphaned tasks not reached (circular deps edge case)
+  for (const task of tasks) {
+    if (!visited.has(task.id)) {
+      result.push({ ...task, depth: 0 });
+    }
+  }
+
+  return result;
+}
+
 /** Map spec status to a badge character and CSS class. */
 export function statusBadge(status: string): { badge: string; cls: string } {
   switch (status) {

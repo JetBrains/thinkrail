@@ -3,8 +3,8 @@ import { useSpecStore } from "@/store/specStore.ts";
 import { useFileStore } from "@/store/fileStore.ts";
 import {
   buildTree,
+  buildTaskTree,
   getTasksForSpec,
-
   specTypeIcon,
   statusBadge,
 } from "./treeUtils.ts";
@@ -136,8 +136,23 @@ export function SpecTree() {
         const tasks = taskMap.get(node.id);
         const taskCount = tasks?.length ?? 0;
         const tasksOpen = expandedTasks.has(node.id);
-        const hasActiveTasks =
-          taskCount > 0 && tasks!.some((t) => t.status === "active");
+        const doneCount =
+          tasks?.filter((t) => t.status === "done").length ?? 0;
+
+        const pillCls = tasksOpen
+          ? "st-task-pill-expanded"
+          : doneCount === taskCount
+            ? "st-task-pill-alldone"
+            : doneCount > 0
+              ? "st-task-pill-progress"
+              : "st-task-pill-none";
+
+        const pillIcon =
+          doneCount === taskCount
+            ? "\u2713"
+            : doneCount > 0
+              ? "\u25D1"
+              : "\u25CB";
 
         return (
           <div key={node.id}>
@@ -180,19 +195,13 @@ export function SpecTree() {
                 {node.title}
               </span>
 
-              {/* Task count pill — hidden for 0 tasks */}
+              {/* Task completion pill — always visible when tasks > 0 */}
               {taskCount > 0 && (
                 <span
-                  className={`st-task-pill ${
-                    tasksOpen
-                      ? "st-task-pill-expanded"
-                      : hasActiveTasks
-                        ? "st-task-pill-active"
-                        : "st-task-pill-done"
-                  }`}
+                  className={`st-task-pill ${pillCls}`}
                   onClick={(e) => handlePillClick(e, node.id)}
                 >
-                  {taskCount} {taskCount === 1 ? "task" : "tasks"}
+                  {pillIcon} {doneCount}/{taskCount}
                 </span>
               )}
 
@@ -201,22 +210,26 @@ export function SpecTree() {
             </div>
 
             {/* Task card — expanded below the row */}
-            {tasksOpen && tasks && (
+            {tasksOpen && tasks && graph && (
               <div
                 className="st-task-card"
                 style={{ marginLeft: node.depth * 20 + 20 }}
                 role="group"
                 aria-label={`Tasks for ${node.title}`}
               >
-                {tasks.map((task) => {
+                {buildTaskTree(tasks, graph).map((task) => {
                   const tBadge = statusBadge(task.status);
                   return (
                     <div
                       key={task.id}
                       className="st-task-card-row"
+                      style={{ paddingLeft: task.depth * 16 + 10 }}
                       onClick={() => loadPreview(task.path)}
                       onDoubleClick={() => handleDoubleClick(task.path)}
                     >
+                      {task.depth > 0 && (
+                        <span className="st-task-dep-arrow">{"\u21B3"}</span>
+                      )}
                       <span className="st-icon st-icon-task">
                         {"\u270F\uFE0F"}
                       </span>
