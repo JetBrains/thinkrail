@@ -99,6 +99,18 @@
     - [ ] Search (Ctrl+k): fix
     - [ ] Show skill progress with on-the-fly visualization on side of chat (partially addressed by Agent Context mode ComplianceHints)
     - [ ] Support "output view modes" like ctrl+o ctrl+t in claude
+    - [~] Support effort --- done but limitation: need to restart session
+    - [ ] `Compact`: how to influence, manage, and when to call
+    - [ ] Support: discuss --separate session and chat--> create plan --> return to `parent` session
+    - [ ] skill creator
+    - [ ] brainstorming
+    - [ ] plugins and mcp support
+    - [ ] something like `ultrathink` support
+    - [ ] support voice input
+    - [ ] support `simplify`
+    - [ ] support remote control
+    - [ ] memory management
+    - [ ] markdown input mode
 
 * Bonsai workflow:
     - [?] Should tasks (current tasks) be modifiable or append only? 
