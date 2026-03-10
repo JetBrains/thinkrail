@@ -27,6 +27,7 @@ export interface AgentConfig {
   maxTurns: number;
   permissionMode: string;
   streamText: boolean;
+  betas: string[];
 }
 
 export interface QuestionOption {

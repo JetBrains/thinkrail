@@ -202,6 +202,7 @@ async def run(
         mcp_servers={"bonsai-viz": _viz_mcp_server},
         resume=resume_session_id,
         stderr=_on_cli_stderr,
+        betas=task.config.betas,
         hooks={
             "SubagentStart": [HookMatcher(hooks=[on_subagent_start])],
             "SubagentStop": [HookMatcher(hooks=[on_subagent_stop])],

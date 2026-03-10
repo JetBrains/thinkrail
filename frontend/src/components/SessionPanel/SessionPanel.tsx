@@ -133,12 +133,13 @@ export function SessionPanel() {
           />
           <SessionStatusLine
             model={activeSession.model}
+            betas={activeSession.betas ?? []}
             permissionMode={activeSession.permissionMode}
             metrics={activeSession.metrics}
             status={status ?? "idle"}
             projectCost={projectCost}
             disabled={activeSession.restored || isDone}
-            onChangeModel={(m) => updateConfig(activeSession.bonsaiSid, { model: m })}
+            onChangeModel={(m, betas) => updateConfig(activeSession.bonsaiSid, { model: m, betas })}
             onChangePermissionMode={(m) => updateConfig(activeSession.bonsaiSid, { permissionMode: m })}
           />
           {activeSession.restored ? (

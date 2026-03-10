@@ -127,6 +127,7 @@ class AgentService:
         bonsai_sid: str,
         model: str | None = None,
         permission_mode: str | None = None,
+        betas: list[str] | None = None,
     ) -> dict:
         """Update model and/or permission mode on a live session."""
         task = self._tracker.get_task(bonsai_sid)
@@ -139,8 +140,10 @@ class AgentService:
         if permission_mode is not None:
             await client.set_permission_mode(permission_mode)
             task.config.permission_mode = permission_mode
+        if betas is not None:
+            task.config.betas = betas
         self._save_task(task)
-        return {"model": task.config.model, "permissionMode": task.config.permission_mode}
+        return {"model": task.config.model, "permissionMode": task.config.permission_mode, "betas": task.config.betas}
 
     async def respond(self, bonsai_sid: str, request_id: str, response: dict) -> None:
         self._tracker.resolve_future(bonsai_sid, request_id, response)
@@ -339,7 +342,7 @@ class AgentService:
                         "turnTurns": params.get("turn_turns", 0),
                         "durationMs": _base_duration + params.get("durationMs", 0),
                         "contextTokens": ctx_tokens,
-                        "contextMax": 200000,
+                        "contextMax": 1_000_000 if "context-1m-2025-08-07" in task.config.betas else 200_000,
                         "outputTokens": usage.get("output_tokens", 0),
                     },
                 })

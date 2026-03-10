@@ -1,11 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import type { SessionMetrics, SessionStatus } from "@/types/session.ts";
-
-const MODELS = [
-  { value: "claude-opus-4-6", label: "opus-4-6" },
-  { value: "claude-sonnet-4-6", label: "sonnet-4-6" },
-  { value: "claude-haiku-4-5-20251001", label: "haiku-4-5" },
-];
+import { buildModelOptions, currentModelOptionKey } from "@/utils/models.ts";
 
 const PERMISSION_MODES = [
   { value: "default", label: "default" },
@@ -14,9 +9,7 @@ const PERMISSION_MODES = [
   { value: "plan", label: "plan" },
 ];
 
-function displayModel(model: string): string {
-  return MODELS.find((m) => m.value === model)?.label ?? model;
-}
+const MODEL_OPTIONS = buildModelOptions();
 
 function displayMode(mode: string): string {
   return PERMISSION_MODES.find((m) => m.value === mode)?.label ?? mode;
@@ -60,17 +53,19 @@ function useDropdown() {
 
 interface SessionStatusLineProps {
   model: string;
+  betas: string[];
   permissionMode: string;
   metrics: SessionMetrics;
   status: SessionStatus;
   projectCost: number;
   disabled?: boolean;
-  onChangeModel?: (model: string) => void;
+  onChangeModel?: (model: string, betas: string[]) => void;
   onChangePermissionMode?: (mode: string) => void;
 }
 
 export function SessionStatusLine({
   model,
+  betas,
   permissionMode,
   metrics,
   status,
@@ -80,6 +75,8 @@ export function SessionStatusLine({
   onChangePermissionMode,
 }: SessionStatusLineProps) {
   const running = status === "running";
+  const activeKey = currentModelOptionKey(model, betas);
+  const activeOption = MODEL_OPTIONS.find((o) => o.key === activeKey);
   const { icon: statusIcon, label: statusLabel, cssClass: statusClass } = statusInfo(status);
   const modelDd = useDropdown();
   const modeDd = useDropdown();
@@ -103,20 +100,34 @@ export function SessionStatusLine({
           onClick={() => !disabled && modelDd.toggle()}
           disabled={disabled}
         >
-          {displayModel(model)}
+          {activeOption?.label ?? model}
         </button>
         {modelDd.open && (
           <div className="ssl-dropdown">
-            {MODELS.map((m) => (
+            <div className="ssl-dropdown-group">Current</div>
+            {MODEL_OPTIONS.filter((o) => o.group === "current").map((o) => (
               <button
-                key={m.value}
-                className={`ssl-dropdown-item${m.value === model ? " ssl-dropdown-active" : ""}`}
+                key={o.key}
+                className={`ssl-dropdown-item${o.key === activeKey ? " ssl-dropdown-active" : ""}`}
                 onClick={() => {
-                  if (m.value !== model) onChangeModel?.(m.value);
+                  if (o.key !== activeKey) onChangeModel?.(o.modelId, o.betas);
                   modelDd.close();
                 }}
               >
-                {m.label}
+                {o.label}
+              </button>
+            ))}
+            <div className="ssl-dropdown-group">Legacy</div>
+            {MODEL_OPTIONS.filter((o) => o.group === "legacy").map((o) => (
+              <button
+                key={o.key}
+                className={`ssl-dropdown-item${o.key === activeKey ? " ssl-dropdown-active" : ""}`}
+                onClick={() => {
+                  if (o.key !== activeKey) onChangeModel?.(o.modelId, o.betas);
+                  modelDd.close();
+                }}
+              >
+                {o.label}
               </button>
             ))}
           </div>

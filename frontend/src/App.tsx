@@ -3,7 +3,7 @@ import { BrowserRouter } from "react-router-dom";
 import { useRpc, useConnectionState, setClient } from "@/api/index.ts";
 import { wireEvents } from "@/store/wireEvents.ts";
 import { useSpecStore } from "@/store/specStore.ts";
-import { useSessionStore } from "@/store/sessionStore.ts";
+import { useSessionStore, startWatchdog, stopWatchdog } from "@/store/sessionStore.ts";
 import { useUiStore } from "@/store/uiStore.ts";
 import { useVizStore } from "@/store/vizStore.ts";
 import { registerKeyboardShortcuts } from "@/utils/keyboard.ts";
@@ -21,6 +21,7 @@ function AppInner({ projectPath: _projectPath, onSwitchProject }: { projectPath:
   useEffect(() => {
     console.log("[Bonsai] Connection state:", connectionState);
     if (connectionState === "connected" && !wiredRef.current) {
+      // ── Initial connect ──
       wiredRef.current = true;
       setClient(client);
       wireEvents(client);
@@ -36,11 +37,27 @@ function AppInner({ projectPath: _projectPath, onSwitchProject }: { projectPath:
       });
       // Load viz dashboard for StatusBar one-liner and VizTab
       useVizStore.getState().fetchState();
+    } else if (connectionState === "connected" && wiredRef.current) {
+      // ── Reconnect: WS recovered — sync session statuses immediately ──
+      console.log("[Bonsai] Reconnected — syncing session statuses");
+      useSessionStore.getState().syncSessionStatuses().catch((err) => {
+        console.warn("[Bonsai] Failed to sync session statuses on reconnect:", err);
+      });
     }
     if (connectionState === "disconnected" || connectionState === "failed") {
       wiredRef.current = false;
     }
   }, [connectionState, client]);
+
+  // Watchdog: start/stop based on connection state
+  useEffect(() => {
+    if (connectionState === "connected") {
+      startWatchdog();
+    } else {
+      stopWatchdog();
+    }
+    return () => stopWatchdog();
+  }, [connectionState]);
 
   // Global keyboard shortcuts
   useEffect(() => registerKeyboardShortcuts(), []);

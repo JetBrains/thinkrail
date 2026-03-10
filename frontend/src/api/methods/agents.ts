@@ -23,8 +23,8 @@ export function createAgentApi(client: RpcClient) {
     respond: (bonsaiSid: string, requestId: string, response: unknown) =>
       client.request<null>("agent/respond", { bonsaiSid, requestId, response }),
 
-    updateConfig: (bonsaiSid: string, config: { model?: string; permissionMode?: string }) =>
-      client.request<{ model: string; permissionMode: string }>("agent/updateConfig", { bonsaiSid, ...config }),
+    updateConfig: (bonsaiSid: string, config: { model?: string; permissionMode?: string; betas?: string[] }) =>
+      client.request<{ model: string; permissionMode: string; betas: string[] }>("agent/updateConfig", { bonsaiSid, ...config }),
   };
 }
 

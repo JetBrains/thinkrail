@@ -85,7 +85,8 @@ async def update_config(service: AgentService, **params: Any) -> dict:
     bonsai_sid = params["bonsaiSid"]
     model = params.get("model")
     permission_mode = params.get("permissionMode")
-    result = await service.update_config(bonsai_sid, model=model, permission_mode=permission_mode)
+    betas = params.get("betas")
+    result = await service.update_config(bonsai_sid, model=model, permission_mode=permission_mode, betas=betas)
     notify = notifications.current_notify
     if notify:
         await notify("agent/configChanged", {"bonsaiSid": bonsai_sid, **result})
