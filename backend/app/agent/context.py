@@ -10,28 +10,10 @@ import re
 from pathlib import Path
 
 from app.agent.models import AgentConfig
+from app.agent.visualization import VIZ_INSTRUCTIONS
 from app.spec.service import SpecService
 
 _FRONTMATTER_RE = re.compile(r"\A---\s*\n.*?\n---\s*\n", re.DOTALL)
-
-_VIZ_INSTRUCTIONS = """\
-## Visualization Tool
-
-You have access to the `bonsai_visualize` MCP tool for rendering structured \
-visual output in the UI. Use it instead of ASCII art, markdown tables, or \
-plain-text diagrams whenever the output would benefit from visual structure.
-
-**Available types:** progress-tracker, summary-box, comparison, data-table, \
-status-list, diagram.
-
-**When to use:** reporting status, showing progress, comparing options, \
-presenting tabular data, or illustrating architecture. Call the tool with \
-a JSON object containing `type`, `title`, `data`, and optionally `vizId` \
-(reuse the same `vizId` to update a previous visualization in-place).
-
-**Anti-patterns:** Do NOT use Bash to print ANSI-colored text, do NOT \
-render ASCII-art tables, do NOT approximate visualizations with markdown \
-when the tool can do it better."""
 
 
 def _strip_frontmatter(text: str) -> str:
@@ -76,7 +58,7 @@ def build_context(
     sections.append(f"## Project\n\nWorking directory: {project_root}")
 
     # 3. Visualization tool instructions (always included)
-    sections.append(_VIZ_INSTRUCTIONS)
+    sections.append(VIZ_INSTRUCTIONS)
 
     # 4. Specification content
     if spec_ids:

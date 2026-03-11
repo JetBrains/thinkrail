@@ -234,9 +234,10 @@ graph TD
 | File | Responsibility | Depends On |
 |------|---------------|------------|
 | `models.py` | Pydantic models: AgentTask, AgentConfig, AgentEvent, AgentResult, Question, QuestionOption, AskUserQuestionResponse, ToolApprovalResponse | — |
-| `context.py` | Context assembly pipeline: loads skill instructions, project metadata, and spec content; composes system prompt. See [CONTEXT.md](CONTEXT.md). | models, spec/service |
+| `context.py` | Context assembly pipeline: loads skill instructions, project metadata, and spec content; composes system prompt. See [CONTEXT.md](CONTEXT.md). | models, visualization, spec/service |
 | `service.py` | Facade — start sessions, send messages, interrupt turns, end sessions, continue sessions (native resume), relay responses to pending futures | context, runner, tracker, core/config, spec/service |
-| `runner.py` | Claude Agent SDK integration: manage SDK client lifecycle, conversation loop (wait for message -> query -> stream events -> repeat), map SDK events to notifications, register `canUseTool` / hooks, wire local plugin into SDK. Accepts optional `resume_session_id` to pass to `ClaudeAgentOptions.resume`. | models, tracker |
+| `visualization.py` | Bonsai visualization MCP tool: JSON schema (`VIZ_SCHEMA`), async handler, MCP server instance (`viz_mcp_server`), and system prompt instructions (`VIZ_INSTRUCTIONS`). Consumed by `runner.py` (wiring) and `context.py` (prompt assembly). | claude-agent-sdk |
+| `runner.py` | Claude Agent SDK integration: manage SDK client lifecycle, conversation loop (wait for message -> query -> stream events -> repeat), map SDK events to notifications, register `canUseTool` / hooks, wire local plugin into SDK. Accepts optional `resume_session_id` to pass to `ClaudeAgentOptions.resume`. | models, tracker, visualization |
 | `tracker.py` | Session lifecycle (pending/idle/running/done/error), message queue per session (`asyncio.Queue`), registry of in-flight `asyncio.Future` objects keyed by `requestId`, **interrupt flag** per session for notification routing | models |
 | `persistence.py` | Session persistence — split storage: metadata in `.json`, events in append-only `.events.jsonl`. Save/load/list/append/delete. See [PERSISTENCE.md](PERSISTENCE.md). | core/fileio |
 
