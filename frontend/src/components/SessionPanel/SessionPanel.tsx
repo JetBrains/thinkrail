@@ -92,6 +92,13 @@ export function SessionPanel() {
     }
   }, [activeSessionId, activeSession, resolveRequest, sendMessage]);
 
+  const handleStartSession = useCallback(() => {
+    if (!activeSessionId || !activeSession) return;
+    if (activeSession.status === "idle") {
+      sendMessage(activeSessionId, "start");
+    }
+  }, [activeSessionId, activeSession, sendMessage]);
+
   if (sessionList.length === 0 && fileList.length === 0 && !previewFilePath) {
     return (
       <div className="center-placeholder">
@@ -123,6 +130,9 @@ export function SessionPanel() {
 
   const inputDisabled = isDone || isRunning || (hasPending && activeSession?.pendingRequest?.type === "approval");
   const showContinue = !inputDisabled && !isRunning && (activeSession?.events.length ?? 0) > 0;
+  const showStartSession = !inputDisabled && !isRunning
+    && (activeSession?.events.length ?? 0) === 0
+    && activeSession?.skillId != null;
 
   return (
     <>
@@ -188,6 +198,9 @@ export function SessionPanel() {
               onInterrupt={() => interruptSession(activeSession!.bonsaiSid)}
               showContinue={showContinue}
               onContinue={handleContinue}
+              showStartSession={showStartSession}
+              onStartSession={handleStartSession}
+              skillId={activeSession.skillId}
             />
           )}
         </>

@@ -15,6 +15,9 @@ interface InputAreaProps {
   onInterrupt?: () => void;
   showContinue?: boolean;
   onContinue?: () => void;
+  showStartSession?: boolean;
+  onStartSession?: () => void;
+  skillId?: string | null;
 }
 
 const FORMAT_ACTIONS = [
@@ -30,7 +33,7 @@ const FORMAT_ACTIONS = [
   { label: "```", title: "Code block", prefix: "\n```\n", suffix: "\n```\n" },
 ] as const;
 
-export function InputArea({ disabled, placeholder, onSend, isRunning, onInterrupt, showContinue, onContinue }: InputAreaProps) {
+export function InputArea({ disabled, placeholder, onSend, isRunning, onInterrupt, showContinue, onContinue, showStartSession, onStartSession, skillId }: InputAreaProps) {
   const [text, setText] = useState("");
   const [suggestions, setSuggestions] = useState<typeof SKILLS>([]);
   const [selectedIndex, setSelectedIndex] = useState(0);
@@ -459,6 +462,11 @@ export function InputArea({ disabled, placeholder, onSend, isRunning, onInterrup
         {showContinue && onContinue && (
           <button className="input-continue" onClick={onContinue} title="Continue without a message">
             Continue
+          </button>
+        )}
+        {showStartSession && onStartSession && (
+          <button className="input-continue" onClick={onStartSession} title="Start the skill session">
+            {skillId ? `Start: ${SKILLS.find(s => s.id === skillId)?.name ?? "Session"}` : "Start"}
           </button>
         )}
         {isRunning && onInterrupt ? (

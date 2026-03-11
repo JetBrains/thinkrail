@@ -1904,6 +1904,65 @@
       ],
       "created": "2026-03-11",
       "updated": "2026-03-11"
+    },
+    {
+      "id": "skill-session-start-design",
+      "type": "architecture-design",
+      "path": "features/SKILL_SESSION_START_DESIGN.md",
+      "title": "Skill Session Start — Architecture Design",
+      "status": "active",
+      "covers": [
+        "frontend/src/components/SessionPanel/SessionPanel.tsx",
+        "frontend/src/components/ChatStream/InputArea.tsx"
+      ],
+      "tags": [
+        "architecture",
+        "frontend",
+        "session",
+        "skill"
+      ],
+      "created": "2026-03-11",
+      "updated": "2026-03-11"
+    },
+    {
+      "id": "ui-skill-session-start",
+      "type": "submodule-design",
+      "path": "frontend/ui-specs/SKILL_SESSION_START.md",
+      "title": "Skill Session Start Button — Frontend Spec",
+      "status": "active",
+      "covers": [
+        "frontend/src/components/SessionPanel/SessionPanel.tsx",
+        "frontend/src/components/ChatStream/InputArea.tsx"
+      ],
+      "tags": [
+        "frontend",
+        "ui",
+        "session",
+        "skill",
+        "input"
+      ],
+      "created": "2026-03-11",
+      "updated": "2026-03-11"
+    },
+    {
+      "id": "task-skill-session-start",
+      "type": "task-spec",
+      "path": "current_tasks/frontend/feature_skill_session_start.md",
+      "title": "Implement Start Session Button for Skill-Loaded Sessions",
+      "status": "done",
+      "covers": [
+        "frontend/src/components/SessionPanel/SessionPanel.tsx",
+        "frontend/src/components/ChatStream/InputArea.tsx"
+      ],
+      "tags": [
+        "medium",
+        "new-feature",
+        "frontend",
+        "session",
+        "skill"
+      ],
+      "created": "2026-03-11",
+      "updated": "2026-03-11"
     }
   ],
   "links": [
@@ -2960,6 +3019,46 @@
     {
       "from": "task-dual-mode-input",
       "to": "dual-mode-input-design",
+      "type": "implements"
+    },
+    {
+      "from": "skill-session-start-design",
+      "to": "design-doc",
+      "type": "parent"
+    },
+    {
+      "from": "skill-session-start-design",
+      "to": "frontend-module",
+      "type": "depends-on"
+    },
+    {
+      "from": "skill-session-start-design",
+      "to": "chat-ui",
+      "type": "depends-on"
+    },
+    {
+      "from": "ui-skill-session-start",
+      "to": "skill-session-start-design",
+      "type": "parent"
+    },
+    {
+      "from": "ui-skill-session-start",
+      "to": "chat-ui",
+      "type": "references"
+    },
+    {
+      "from": "ui-skill-session-start",
+      "to": "ui-center-panel",
+      "type": "references"
+    },
+    {
+      "from": "task-skill-session-start",
+      "to": "skill-session-start-design",
+      "type": "implements"
+    },
+    {
+      "from": "task-skill-session-start",
+      "to": "ui-skill-session-start",
       "type": "implements"
     }
   ]
