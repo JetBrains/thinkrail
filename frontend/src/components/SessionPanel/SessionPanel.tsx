@@ -192,6 +192,7 @@ export function SessionPanel() {
             <RestoredBar bonsaiSid={activeSession.bonsaiSid} />
           ) : (
             <InputArea
+              sessionId={activeSession.bonsaiSid}
               disabled={inputDisabled}
               placeholder={placeholder}
               onSend={handleSend}

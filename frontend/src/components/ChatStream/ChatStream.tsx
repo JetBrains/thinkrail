@@ -326,22 +326,12 @@ export const ChatStream = forwardRef<ChatStreamHandle, ChatStreamProps>(function
           }
 
           case "turnComplete": {
-            const result = (p.result as string) ?? "";
             return (
-              <>
-                {result && (
-                  <AssistantMessage
-                    key={`${k}-result`}
-                    text={result}
-                    streaming={false}
-                  />
-                )}
-                <SystemMessage
-                  key={k}
-                  text={`Turn complete \u2014 $${((p.turnCostUsd as number) ?? 0).toFixed(2)} \u00B7 ${(p.turn_turns as number) ?? 0} turns`}
-                  variant="ok"
-                />
-              </>
+              <SystemMessage
+                key={k}
+                text={`Turn complete \u2014 $${((p.turnCostUsd as number) ?? 0).toFixed(2)} \u00B7 ${(p.turn_turns as number) ?? 0} turns`}
+                variant="ok"
+              />
             );
           }
 

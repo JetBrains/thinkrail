@@ -1982,6 +1982,27 @@
       ],
       "created": "2026-03-11",
       "updated": "2026-03-11"
+    },
+    {
+      "id": "concurrency-orchestration",
+      "type": "architecture-design",
+      "path": "features/CONCURRENCY_ORCHESTRATION_DESIGN.md",
+      "title": "Concurrency & Orchestration Design",
+      "status": "draft",
+      "covers": [
+        "backend/app/coordinator/",
+        "backend/app/agent/",
+        "backend/app/rpc/",
+        "frontend/"
+      ],
+      "tags": [
+        "concurrency",
+        "orchestration",
+        "coordinator",
+        "multi-session"
+      ],
+      "created": "2026-03-10",
+      "updated": "2026-03-11"
     }
   ],
   "links": [
@@ -3056,7 +3077,27 @@
       "type": "parent"
     },
     {
+      "from": "concurrency-orchestration",
+      "to": "design-doc",
+      "type": "parent"
+    },
+    {
       "from": "skill-session-start-design",
+      "to": "frontend-module",
+      "type": "depends-on"
+    },
+    {
+      "from": "concurrency-orchestration",
+      "to": "module-agent",
+      "type": "references"
+    },
+    {
+      "from": "concurrency-orchestration",
+      "to": "module-rpc",
+      "type": "depends-on"
+    },
+    {
+      "from": "concurrency-orchestration",
       "to": "frontend-module",
       "type": "depends-on"
     },
@@ -3089,6 +3130,11 @@
       "from": "task-skill-session-start",
       "to": "ui-skill-session-start",
       "type": "implements"
+    },
+    {
+      "from": "concurrency-orchestration",
+      "to": "proactive-agent-design",
+      "type": "references"
     }
   ]
 }

@@ -2,11 +2,13 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { SKILLS } from "@/constants/skills";
 import { useVoiceInput } from "@/hooks/useVoiceInput";
 import { useNotificationStore } from "@/store/notificationStore";
+import { useInputDraftStore } from "@/store/inputDraftStore";
 import { isMod, modLabel } from "@/utils/platform";
 import { ChatMarkdown } from "./ChatMarkdown";
 import { MessageHistory } from "./MessageHistory";
 
 interface InputAreaProps {
+  sessionId: string;
   disabled: boolean;
   placeholder: string;
   onSend: (text: string, isMarkdown?: boolean) => void;
@@ -32,8 +34,8 @@ const FORMAT_ACTIONS = [
   { label: "```", title: "Code block", prefix: "\n```\n", suffix: "\n```\n" },
 ];
 
-export function InputArea({ disabled, placeholder, onSend, isRunning, onInterrupt, showContinue, onContinue, showStartSession, onStartSession, skillId }: InputAreaProps) {
-  const [text, setText] = useState("");
+export function InputArea({ sessionId, disabled, placeholder, onSend, isRunning, onInterrupt, showContinue, onContinue, showStartSession, onStartSession, skillId }: InputAreaProps) {
+  const [text, setText] = useState(() => useInputDraftStore.getState().getDraft(sessionId));
   const [suggestions, setSuggestions] = useState<typeof SKILLS>([]);
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [showHistory, setShowHistory] = useState(false);
@@ -57,6 +59,11 @@ export function InputArea({ disabled, placeholder, onSend, isRunning, onInterrup
       ref.current.style.height = "";
     }
   }, [isManual]);
+
+  // Sync local state when sessionId changes (e.g. switching between sessions)
+  useEffect(() => {
+    setText(useInputDraftStore.getState().getDraft(sessionId));
+  }, [sessionId]);
 
   const closeSuggestions = useCallback(() => {
     setSuggestions([]);
@@ -93,6 +100,7 @@ export function InputArea({ disabled, placeholder, onSend, isRunning, onInterrup
     if (!trimmed || disabled) return;
     onSend(trimmed, true);
     setText("");
+    useInputDraftStore.getState().clearDraft(sessionId);
     closeSuggestions();
     setPreviewActive(false);
     setPanelHeight(null);
@@ -105,7 +113,7 @@ export function InputArea({ disabled, placeholder, onSend, isRunning, onInterrup
       }
     }, 0);
     ref.current?.focus();
-  }, [text, disabled, onSend, closeSuggestions]);
+  }, [text, disabled, onSend, sessionId, closeSuggestions]);
 
   // -- Drag handle for panel resize --
   const handleDragStart = useCallback((e: React.MouseEvent) => {
@@ -234,6 +242,7 @@ export function InputArea({ disabled, placeholder, onSend, isRunning, onInterrup
   const handleChange = useCallback(
     (value: string) => {
       setText(value);
+      useInputDraftStore.getState().setDraft(sessionId, value);
       if (value.startsWith("/")) {
         const query = value.slice(1).toLowerCase();
         const filtered = SKILLS.filter((s) => s.id.includes(query));
