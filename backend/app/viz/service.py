@@ -2,15 +2,16 @@ from __future__ import annotations
 
 import datetime
 import glob
-import json
 import logging
 import os
 import re
 import time
 from collections.abc import Callable, Awaitable
 from pathlib import Path
-from typing import Any
 
+from app.core.config import AppConfig
+from app.spec.models import Link, RegistryEntry
+from app.spec.registry import read_registry
 from app.viz.models import (
     CoverageEntry,
     DashboardState,
@@ -74,8 +75,9 @@ NotifyFn = Callable[[str, dict], Awaitable[None]]
 class VisualizationService:
     """Maintains live dashboard state for the Bonsai web UI."""
 
-    def __init__(self, project_root: Path) -> None:
-        self._root = project_root
+    def __init__(self, config: AppConfig) -> None:
+        self._config = config
+        self._root = config.get_project_root()
         self._state = DashboardState()
         self._notify: NotifyFn | None = None
 
@@ -108,23 +110,28 @@ class VisualizationService:
 
     # ── Computation ──────────────────────────────────────────────────────────
 
+    def _read_registry(self) -> tuple[list[RegistryEntry], list[Link]]:
+        try:
+            return read_registry(self._config.get_registry_path())
+        except (FileNotFoundError, ValueError):
+            return [], []
+
     def _compute(self) -> DashboardState:
         start = time.monotonic()
-        registry = self._read_registry()
-        specs = registry.get("specs", [])
+        entries, links = self._read_registry()
 
         # Coverage
         source_dirs = self._find_source_dirs()
-        coverage_list = self._compute_coverage(registry, source_dirs)
-        freshness = self._compute_freshness(registry)
+        coverage_list = self._compute_coverage(entries, source_dirs)
+        freshness = self._compute_freshness(entries)
 
         covered = sum(1 for c in coverage_list if c.spec_id)
         total_dirs = len(coverage_list)
         coverage_pct = round(covered * 100 / total_dirs) if total_dirs else 100
 
         # Specs counts
-        spec_count = len(specs)
-        active_count = sum(1 for s in specs if s.get("status") == "active")
+        spec_count = len(entries)
+        active_count = sum(1 for s in entries if s.status == "active")
         stale_ids = {sid for sid, f in freshness.items() if f == "stale"}
         stale_count = len(stale_ids)
 
@@ -135,15 +142,15 @@ class VisualizationService:
         tasks_pending = task_count - tasks_done
 
         # Lint
-        lint_issues = self._run_lint(registry)
+        lint_issues = self._run_lint(entries, links)
         lint_errors = sum(1 for i in lint_issues if i.severity == "error")
         lint_warnings = sum(1 for i in lint_issues if i.severity == "warning")
 
         # Workflow steps
         done_types: set[str] = set()
-        for spec in specs:
-            if spec.get("status") in ("active", "done"):
-                wf_step = SPEC_TYPE_TO_WORKFLOW.get(spec.get("type", ""))
+        for entry in entries:
+            if entry.status in ("active", "done"):
+                wf_step = SPEC_TYPE_TO_WORKFLOW.get(entry.type)
                 if wf_step:
                     done_types.add(wf_step)
         steps = self._compute_workflow_steps(done_types, tasks_done, task_count)
@@ -184,13 +191,6 @@ class VisualizationService:
             one_liner=one_liner,
         )
 
-    def _read_registry(self) -> dict[str, Any]:
-        registry_path = self._root / ".specs" / "registry.json"
-        try:
-            return json.loads(registry_path.read_text())
-        except Exception:
-            return {"specs": [], "links": []}
-
     def _find_source_dirs(self) -> list[str]:
         dirs: set[str] = set()
         for dirpath, dirnames, filenames in os.walk(self._root):
@@ -205,55 +205,53 @@ class VisualizationService:
         return sorted(dirs)
 
     def _compute_coverage(
-        self, registry: dict[str, Any], source_dirs: list[str]
+        self, entries: list[RegistryEntry], source_dirs: list[str]
     ) -> list[CoverageEntry]:
-        specs = registry.get("specs", [])
         result = []
         for src_dir in source_dirs:
-            matching = None
-            for spec in specs:
-                for cover in spec.get("covers", []):
+            matching: RegistryEntry | None = None
+            for entry in entries:
+                for cover in entry.covers:
                     if src_dir.startswith(cover) or cover.startswith(src_dir):
-                        matching = spec
+                        matching = entry
                         break
                 if matching:
                     break
             result.append(CoverageEntry(
                 path=src_dir,
-                spec_id=matching["id"] if matching else None,
-                spec_path=matching["path"] if matching else None,
+                spec_id=matching.id if matching else None,
+                spec_path=matching.path if matching else None,
                 freshness="uncovered",  # will be overridden below
             ))
         # Annotate freshness from freshness map
-        freshness = self._compute_freshness(registry)
+        freshness = self._compute_freshness(entries)
         for entry in result:
             if entry.spec_id and entry.spec_id in freshness:
                 entry.freshness = freshness[entry.spec_id]
         return result
 
-    def _compute_freshness(self, registry: dict[str, Any]) -> dict[str, str]:
+    def _compute_freshness(self, entries: list[RegistryEntry]) -> dict[str, str]:
         results: dict[str, str] = {}
-        for spec in registry.get("specs", []):
-            covers = spec.get("covers", [])
-            if not covers:
-                results[spec["id"]] = "n/a"
+        for entry in entries:
+            if not entry.covers:
+                results[entry.id] = "n/a"
                 continue
-            spec_path = self._root / spec["path"]
+            spec_path = self._root / entry.path
             try:
                 spec_mt = spec_path.stat().st_mtime
             except OSError:
-                results[spec["id"]] = "n/a"
+                results[entry.id] = "n/a"
                 continue
             code_mt = max(
-                (self._max_code_mtime(cover) for cover in covers),
+                (self._max_code_mtime(cover) for cover in entry.covers),
                 default=0,
             )
             if code_mt == 0:
-                results[spec["id"]] = "n/a"
+                results[entry.id] = "n/a"
             elif spec_mt >= code_mt:
-                results[spec["id"]] = "fresh"
+                results[entry.id] = "fresh"
             else:
-                results[spec["id"]] = "stale"
+                results[entry.id] = "stale"
         return results
 
     def _max_code_mtime(self, cover_path: str) -> float:
@@ -275,46 +273,47 @@ class VisualizationService:
                         pass
         return best
 
-    def _run_lint(self, registry: dict[str, Any]) -> list[LintIssue]:
+    def _run_lint(
+        self, entries: list[RegistryEntry], links: list[Link]
+    ) -> list[LintIssue]:
         issues: list[LintIssue] = []
-        for spec in registry.get("specs", []):
-            spec_type = spec.get("type", "")
-            required = REQUIRED_SECTIONS.get(spec_type)
+        for entry in entries:
+            required = REQUIRED_SECTIONS.get(entry.type)
             if not required:
                 continue
-            spec_path = self._root / spec["path"]
+            spec_path = self._root / entry.path
             try:
                 content = spec_path.read_text(encoding="utf-8")[:4096]
             except OSError:
                 issues.append(LintIssue(
-                    spec_id=spec["id"], path=spec["path"],
+                    spec_id=entry.id, path=entry.path,
                     severity="error", category="missing-file",
-                    message=f"Spec file not found: {spec['path']}", fixable=False,
+                    message=f"Spec file not found: {entry.path}", fixable=False,
                 ))
                 continue
             headings = set(HEADING_RE.findall(content))
             for section in required:
                 if not any(section.lower() in h.lower() for h in headings):
                     issues.append(LintIssue(
-                        spec_id=spec["id"], path=spec["path"],
+                        spec_id=entry.id, path=entry.path,
                         severity="warning", category="structure",
                         message=f"Missing section: {section}", fixable=False,
                     ))
         # Check broken links
-        spec_ids = {s["id"] for s in registry.get("specs", [])}
-        for link in registry.get("links", []):
-            if link.get("from") not in spec_ids:
+        spec_ids = {e.id for e in entries}
+        for link in links:
+            if link.from_id not in spec_ids:
                 issues.append(LintIssue(
                     spec_id=None, path="", severity="error",
                     category="broken-link",
-                    message=f"Link from '{link['from']}' references non-existent spec",
+                    message=f"Link from '{link.from_id}' references non-existent spec",
                     fixable=True,
                 ))
-            if link.get("to") not in spec_ids:
+            if link.to_id not in spec_ids:
                 issues.append(LintIssue(
                     spec_id=None, path="", severity="error",
                     category="broken-link",
-                    message=f"Link to '{link['to']}' references non-existent spec",
+                    message=f"Link to '{link.to_id}' references non-existent spec",
                     fixable=True,
                 ))
         return issues

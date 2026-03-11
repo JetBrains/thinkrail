@@ -136,7 +136,7 @@ def register_routes(app: FastAPI) -> None:
         if key in _viz_services:
             viz_service = _viz_services[key]
         else:
-            viz_service = VisualizationService(project_path)
+            viz_service = VisualizationService(config)
             _viz_services[key] = viz_service
 
         bound_methods = _bind_methods(spec_service, agent_service, viz_service)

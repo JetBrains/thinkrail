@@ -133,6 +133,22 @@
       "updated": "2026-03-08"
     },
     {
+      "id": "module-viz",
+      "type": "module-design",
+      "path": "backend/app/viz/README.md",
+      "title": "Viz Module Design",
+      "status": "active",
+      "covers": [
+        "backend/app/viz/"
+      ],
+      "tags": [
+        "backend",
+        "dashboard"
+      ],
+      "created": "2026-03-11",
+      "updated": "2026-03-11"
+    },
+    {
       "id": "frontend-module",
       "type": "module-design",
       "path": "frontend/README.md",
@@ -1832,6 +1848,21 @@
     {
       "from": "module-rpc",
       "to": "module-core",
+      "type": "depends-on"
+    },
+    {
+      "from": "module-viz",
+      "to": "design-doc",
+      "type": "parent"
+    },
+    {
+      "from": "module-viz",
+      "to": "module-core",
+      "type": "depends-on"
+    },
+    {
+      "from": "module-viz",
+      "to": "module-spec",
       "type": "depends-on"
     },
     {

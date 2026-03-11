@@ -156,7 +156,7 @@ class TestWatcher:
         import asyncio
         config = _make_config(tmp_path)
         service = SpecService(config)
-        viz_service = VisualizationService(tmp_path)
+        viz_service = VisualizationService(config)
         handle = await _start_watcher(config, service, viz_service)
         assert handle is not None
         handle._task.cancel()
@@ -202,7 +202,7 @@ class TestOnFileChange:
             return WatchHandle(_task=asyncio.create_task(asyncio.sleep(999)))
 
         service = SpecService(config)
-        viz_service = VisualizationService(config.project_root)
+        viz_service = VisualizationService(config)
         with patch("app.rpc.server.watch", side_effect=fake_watch):
             handle = await _start_watcher(config, service, viz_service)
         yield captured["cb"]
