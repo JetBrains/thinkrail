@@ -1,6 +1,6 @@
 # SuggestSession — Backend Spec
 
-> Parent: [Agent Module](../README.md) | Feature: [features/SUGGEST_SESSION.md](../../../../features/SUGGEST_SESSION.md) | Status: **Draft** | Created: 2026-03-07
+> Parent: [Agent Module](../README.md) | Feature: [features/SUGGEST_SESSION.md](../../../../features/SUGGEST_SESSION.md) | Status: **Draft** | Created: 2026-03-07 | Updated: 2026-03-11
 
 ## Purpose
 
@@ -31,36 +31,18 @@ See the [full feature spec](../../../../features/SUGGEST_SESSION.md) for protoco
 
 ## runner.py
 
-New branch in `can_use_tool`:
+Two changes in `runner.py`:
 
-```python
-elif tool_name == "SuggestSession":
-    request_id = str(uuid4())
-    future = tracker.register_future(task.bonsai_sid, request_id)
-    await notify(
-        "agent/suggestSession",
-        {
-            "bonsaiSid": task.bonsai_sid,
-            "skill": input_data.get("skill", ""),
-            "specIds": input_data.get("specIds", []),
-            "name": input_data.get("name", ""),
-            "reason": input_data.get("reason", ""),
-        },
-        request_id=request_id,
-    )
-    response = await future
-    if response.get("behavior") == "deny":
-        return PermissionResultAllow(
-            behavior="allow",
-            updated_input={**input_data, "dismissed": True},
-        )
-    return PermissionResultAllow(
-        behavior="allow",
-        updated_input={**input_data, "approved": True},
-    )
-```
+**1. MCP tool registration** — register SuggestSession as an MCP tool (same `@tool` + `create_sdk_mcp_server` pattern as `bonsai_visualize`). This makes the tool callable by the agent with a real schema.
 
-**Key:** Both approve and dismiss return `PermissionResultAllow`. We use `updated_input` to signal the outcome — never `PermissionResultDeny` (which would trigger SDK error handling).
+**2. canUseTool interception** — new branch that validates inputs, sends a request to the frontend, and awaits the developer's response:
+
+- Validate `skill` exists in the plugin and `specIds` exist in the registry
+- If validation fails: return `PermissionResultAllow` with `updated_input` containing `{error: "..."}` — agent sees the error gracefully
+- If valid: create `asyncio.Future`, send `agent/suggestSession` request, await response
+- Both approve and dismiss return `PermissionResultAllow` — never `PermissionResultDeny` (which triggers SDK error handling)
+- Approve: `updated_input` contains `{approved: true}`
+- Dismiss: `updated_input` contains `{dismissed: true}`
 
 ## models.py (optional)
 

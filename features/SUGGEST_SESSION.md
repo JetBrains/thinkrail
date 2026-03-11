@@ -1,6 +1,6 @@
 # SuggestSession — Feature Spec
 
-> Parent: [Proactive Agent Experience Design](PROACTIVE_AGENT_EXPERIENCE_DESIGN.md) | Status: **Draft** | Created: 2026-03-07
+> Parent: [Proactive Agent Experience Design](PROACTIVE_AGENT_EXPERIENCE_DESIGN.md) | Status: **Draft** | Created: 2026-03-07 | Updated: 2026-03-11
 
 ## Table of Contents
 1. [Summary](#summary)
@@ -150,9 +150,9 @@ Agent: [calls SuggestSession] → "New: File Watcher Submodule Spec"
 Developer: [approves] → session created
 ```
 
-## Open Questions
+## Resolved Questions
 
-1. **Validation:** Should the backend validate that `skill` and `specIds` exist before forwarding to the frontend? If yes, invalid suggestions are auto-dismissed with an error. If no, the frontend fails when creating the session.
+1. ~~**Validation:**~~ **Resolved** — Backend validates that `skill` exists in the plugin and `specIds` exist in the registry before forwarding to the frontend. Invalid suggestions are auto-dismissed with an error message back to the agent. This catches bad suggestions early and ensures the frontend never renders an invalid suggestion card.
 
 ## Related Specs
 

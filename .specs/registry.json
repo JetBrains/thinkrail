@@ -1508,9 +1508,10 @@
       "type": "architecture-design",
       "path": "features/PROACTIVE_AGENT_EXPERIENCE_DESIGN.md",
       "title": "Proactive Agent Experience \u2014 Architecture Design",
-      "status": "draft",
+      "status": "active",
       "covers": [
         "backend/app/agent/runner.py",
+        "backend/app/agent/context.py",
         "frontend/src/components/ChatStream/",
         "frontend/src/components/ContextPanel/",
         "frontend/src/store/sessionStore.ts",
@@ -1521,7 +1522,7 @@
         "agent-ux"
       ],
       "created": "2026-03-07",
-      "updated": "2026-03-07"
+      "updated": "2026-03-11"
     },
     {
       "id": "agent-suggest-session",
@@ -1562,7 +1563,7 @@
       "type": "submodule-design",
       "path": "features/SUGGEST_SESSION.md",
       "title": "SuggestSession \u2014 Feature Spec",
-      "status": "draft",
+      "status": "active",
       "covers": [
         "backend/app/agent/runner.py",
         "frontend/src/components/ChatStream/SuggestionCard.tsx",
@@ -1576,7 +1577,7 @@
         "interactive"
       ],
       "created": "2026-03-07",
-      "updated": "2026-03-08"
+      "updated": "2026-03-11"
     },
     {
       "id": "feature-update-progress",
@@ -1988,7 +1989,7 @@
       "type": "architecture-design",
       "path": "features/CONCURRENCY_ORCHESTRATION_DESIGN.md",
       "title": "Concurrency & Orchestration Design",
-      "status": "draft",
+      "status": "active",
       "covers": [
         "backend/app/coordinator/",
         "backend/app/agent/",

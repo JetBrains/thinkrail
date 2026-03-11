@@ -10,7 +10,7 @@ interface LinkGroup {
   entries: RegistryEntry[];
 }
 
-const GROUP_ORDER = ["Parent", "Children", "Implements", "Depends on", "Depended by"];
+const GROUP_ORDER = ["Parent", "Children", "Implements", "Depends on", "Depended by", "References", "Referenced by"];
 
 export function ConnectedSpecs() {
   const spec = useSelectedSpec();
@@ -32,12 +32,14 @@ export function ConnectedSpecs() {
         if (edge.type === "parent") groupLabel = "Parent";
         else if (edge.type === "implements") groupLabel = "Implements";
         else if (edge.type === "depends-on") groupLabel = "Depends on";
+        else if (edge.type === "references") groupLabel = "References";
         else groupLabel = edge.type;
       } else if (edge.to === specId) {
         otherId = edge.from;
         if (edge.type === "parent") groupLabel = "Children";
         else if (edge.type === "implements") groupLabel = "Implemented by";
         else if (edge.type === "depends-on") groupLabel = "Depended by";
+        else if (edge.type === "references") groupLabel = "Referenced by";
         else groupLabel = edge.type;
       } else {
         continue;

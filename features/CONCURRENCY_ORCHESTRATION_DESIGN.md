@@ -1,6 +1,6 @@
 # Concurrency & Orchestration — Architecture Design
 
-> Parent: [DESIGN_DOC.md](../DESIGN_DOC.md) | Status: **Draft** | Created: 2026-03-10 | Updated: 2026-03-11
+> Parent: [DESIGN_DOC.md](../DESIGN_DOC.md) | Status: **Active** | Created: 2026-03-10 | Updated: 2026-03-11
 
 ## Table of Contents
 1. [Overview](#overview)
@@ -17,7 +17,7 @@
 12. [Frontend UX](#frontend-ux)
 13. [Key Design Decisions](#key-design-decisions)
 14. [Implementation Roadmap](#implementation-roadmap)
-15. [Open Questions](#open-questions)
+15. [Resolved Questions](#resolved-questions)
 
 ## Overview
 
@@ -497,6 +497,11 @@ A compact side panel showing coordination state at a glance:
 | Resource limits | None | Developer has full freedom. No session caps, no cost caps. Coordinator manages scopes and conflicts only. |
 | Parallel work trigger | Both explicit (user) and proactive (via SuggestSession) | User can manually start parallel sessions. Agents can also propose parallel work via existing proactive tool pattern. |
 | Backward compatibility | Coordinator activates only with concurrent sessions | Single-session usage is completely unaffected. Coordinator overhead is zero when not needed. |
+| Scope granularity | Both directory-level and file-level globs | Matches existing `covers` format in registry.json. No need to restrict — same matching logic for both. |
+| Lock lifetime | Turn-scoped only (no timeout) | Released when holding session's turn ends (status → idle). Crash recovery via disconnect detection. Simple and predictable. |
+| Cross-session dependencies | No auto-detection — workers ask when needed | Workers use `coordinator_query` tool to check for changes. No import graph analysis. Keep it simple. |
+| Session handoff | No explicit protocol — stale-context tools suffice | Workers pull updates via `coordinator_file_changes`. No special handoff notification needed. |
+| Testing approach | Mock LLM + test rules directly | Rules engine tested with deterministic inputs. LLM mocked with canned responses. Integration tests verify routing. |
 
 ## Implementation Roadmap
 
@@ -528,16 +533,14 @@ card rendering, and coordinator status display.
 Analyze coordinator LLM call patterns, extract common decisions into deterministic
 rules, evaluate local model for medium-complexity decisions, measure cost savings.
 
-## Open Questions
+## Resolved Questions
 
-- **Scope granularity:** Should scopes be directory-level only, or support file-level globs?
-  (Directory-level is simpler; file-level may be needed for fine-grained modules.)
-- **Lock timeout:** Should shared-zone locks have a timeout, or only release when the
-  holding session's turn completes?
-- **Cross-session dependencies:** If Agent A's output is needed by Agent B (e.g., Agent A
-  generates types that Agent B imports), should the coordinator detect and sequence this
-  automatically?
-- **Session handoff:** When one agent finishes and another needs its output, should there
-  be an explicit handoff protocol or just stale-context tools?
-- **Testing strategy:** How to test coordinator decisions deterministically when the LLM
-  tier is involved?
+1. ~~**Scope granularity:**~~ **Resolved** — Both directory-level and file-level globs are supported. This matches the existing `covers` field format in `registry.json`, which already contains both directory paths (`"backend/app/agent/"`) and file paths (`"backend/app/agent/runner.py"`). The scope matching logic handles both consistently.
+
+2. ~~**Lock timeout:**~~ **Resolved** — Turn-scoped only. Shared-zone locks are released when the holding session's turn ends (status → idle). Simple, predictable, no configuration needed. If a session crashes, the coordinator detects the disconnection and releases its locks. No timeout mechanism needed.
+
+3. ~~**Cross-session dependencies:**~~ **Resolved** — No auto-detection. Workers use `coordinator_query` or `coordinator_file_changes` tools to ask about dependencies when they suspect them. The coordinator does not try to infer import graphs or analyze semantic dependencies automatically. Keep it simple — agents are responsible for checking what they need.
+
+4. ~~**Session handoff:**~~ **Resolved** — No explicit handoff protocol. Stale-context tools (`coordinator_file_changes`) are sufficient. Agent B uses `coordinator_file_changes` to pull updates about files it cares about. Workers are responsible for checking what changed. No special handoff notification or protocol needed.
+
+5. ~~**Testing strategy:**~~ **Resolved** — Mock LLM + test rules directly. Unit tests mock the LLM client with canned responses. The rules engine is tested independently with deterministic inputs. Integration tests verify the rules → LLM → escalate routing by mocking the LLM layer and asserting the correct decision path is taken for each conflict type.
