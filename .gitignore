@@ -25,3 +25,8 @@ Thumbs.db
 .specs/.progress.json
 .claude/settings.local.json
 .specs/sessions
+
+# Spec dashboard (generated)
+.specs/dashboard.html
+.specs/dashboard.json
+.specs/vendor/
