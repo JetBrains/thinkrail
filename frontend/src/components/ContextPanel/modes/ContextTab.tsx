@@ -21,7 +21,7 @@ function pctColor(pct: number): string {
 function Section({
   title,
   badge,
-  defaultOpen = false,
+  defaultOpen = true,
   children,
 }: {
   title: string;

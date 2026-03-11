@@ -10,18 +10,6 @@ interface CollapsibleSectionProps {
   children: React.ReactNode;
 }
 
-function getStorageKey(title: string): string {
-  return `bonsai-section-${title}`;
-}
-
-function readExpanded(title: string, defaultExpanded: boolean): boolean {
-  try {
-    const val = localStorage.getItem(getStorageKey(title));
-    if (val !== null) return val === "true";
-  } catch { /* ignore */ }
-  return defaultExpanded;
-}
-
 export function CollapsibleSection({
   title,
   count,
@@ -30,15 +18,11 @@ export function CollapsibleSection({
   summary,
   children,
 }: CollapsibleSectionProps) {
-  const [expanded, setExpanded] = useState(() => readExpanded(title, defaultExpanded));
+  const [expanded, setExpanded] = useState(defaultExpanded);
 
   const toggle = useCallback(() => {
-    setExpanded((prev) => {
-      const next = !prev;
-      try { localStorage.setItem(getStorageKey(title), String(next)); } catch { /* ignore */ }
-      return next;
-    });
-  }, [title]);
+    setExpanded((prev) => !prev);
+  }, []);
 
   return (
     <div className={`collapsible-section ${expanded ? "collapsible-section--expanded" : ""}`}>

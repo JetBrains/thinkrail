@@ -237,6 +237,7 @@ graph TD
 | `context.py` | Context assembly pipeline: loads skill instructions, project metadata, and spec content; composes system prompt. See [CONTEXT.md](CONTEXT.md). | models, visualization, spec/service |
 | `service.py` | Facade — start sessions, send messages, interrupt turns, end sessions, continue sessions (native resume), relay responses to pending futures | context, runner, tracker, core/config, spec/service |
 | `visualization.py` | Bonsai visualization MCP tool: JSON schema (`VIZ_SCHEMA`), async handler, MCP server instance (`viz_mcp_server`), and system prompt instructions (`VIZ_INSTRUCTIONS`). Consumed by `runner.py` (wiring) and `context.py` (prompt assembly). | claude-agent-sdk |
+| `transcribe.py` | Audio transcription via OpenAI Whisper API. `transcribe(audio_base64, mime_type) -> str`. Lazy-imports `openai`; optional dependency for browsers without Web Speech API. See [TRANSCRIBE.md](TRANSCRIBE.md). | openai (optional) |
 | `runner.py` | Claude Agent SDK integration: manage SDK client lifecycle, conversation loop (wait for message -> query -> stream events -> repeat), map SDK events to notifications, register `canUseTool` / hooks, wire local plugin into SDK. Accepts optional `resume_session_id` to pass to `ClaudeAgentOptions.resume`. | models, tracker, visualization |
 | `tracker.py` | Session lifecycle (pending/idle/running/done/error), message queue per session (`asyncio.Queue`), registry of in-flight `asyncio.Future` objects keyed by `requestId`, **interrupt flag** per session for notification routing | models |
 | `persistence.py` | Session persistence — split storage: metadata in `.json`, events in append-only `.events.jsonl`. Save/load/list/append/delete. See [PERSISTENCE.md](PERSISTENCE.md). | core/fileio |
@@ -254,7 +255,7 @@ graph TD
 | `send_message` | `(bonsai_sid: str, text: str) -> None` | Send a user message to the session, triggering a new turn. Enqueues the message; runner picks it up and calls `client.query()`. |
 | `interrupt_task` | `(bonsai_sid: str) -> None` | Cancel the current turn non-destructively. Calls `tracker.interrupt_futures()` to resolve pending futures with deny+interrupt, then calls `client.interrupt()` on the stored SDK client. The runner stays alive, the client is preserved, and the session returns to `idle` — ready for new messages with full context intact. |
 | `end_session` | `(bonsai_sid: str) -> None` | Gracefully close the session and SDK client. Session enters `done` state. |
-| `update_config` | `(bonsai_sid: str, model: str \| None = None, permission_mode: str \| None = None) -> dict` | Update model and/or permission mode on a live session via the SDK client. |
+| `update_config` | `(bonsai_sid: str, model: str \| None = None, permission_mode: str \| None = None, betas: list[str] \| None = None, effort: str \| None = None) -> dict` | Update config on a live session. Model and permissionMode go through SDK methods; betas and effort are stored in task.config and take effect on next turn. |
 | `get_task` | `(bonsai_sid: str) -> AgentTask` | Get current session status and metadata |
 | `list_tasks` | `() -> list[AgentTask]` | List all sessions (idle, running, done, error) |
 | `respond` | `(bonsai_sid: str, request_id: str, response: dict) -> None` | Resolve a pending `asyncio.Future` with the client's answer (for mid-turn interactions) |
@@ -286,7 +287,7 @@ All models with multi-word fields use a `camelCase` alias generator (`to_camel` 
 | Model | Fields (Python / JSON wire) | Description |
 |-------|--------|-------------|
 | `AgentTask` | bonsai_sid/`bonsaiSid`, status, spec_ids/`specIds`, skill_id/`skillId`?, config, session_id/`sessionId`?, created, updated | Session record. `status` is one of: `idle`, `running`, `done`, `error`. `skill_id` references the selected skill (if any). |
-| `AgentConfig` | model, max_turns/`maxTurns`, permission_mode/`permissionMode`, stream_text/`streamText` | Run configuration |
+| `AgentConfig` | model, max_turns/`maxTurns`, permission_mode/`permissionMode`, stream_text/`streamText`, betas, effort | Run configuration. `effort` is `str \| None` — null for auto, or `"low"`/`"medium"`/`"high"`/`"max"`. |
 | `AgentEvent` | bonsai_sid/`bonsaiSid`, session_id/`sessionId`, event_type/`eventType`, payload | Serializable event to send as notification |
 | `AgentResult` | bonsai_sid/`bonsaiSid`, session_id/`sessionId`, result, cost_usd/`costUsd`, turns, duration_ms/`durationMs`, usage | Turn result (sent with `turnComplete`) or final session result (sent with `done`) |
 

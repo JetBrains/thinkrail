@@ -1692,6 +1692,171 @@
       ],
       "created": "2026-03-10",
       "updated": "2026-03-10"
+    },
+    {
+      "id": "visualization-design",
+      "type": "architecture-design",
+      "path": "features/VISUALIZATION_DESIGN.md",
+      "title": "MCP Visualization — Architecture Design",
+      "status": "active",
+      "covers": [
+        "backend/app/agent/visualization.py",
+        "frontend/src/components/ChatStream/VisualizationCard.tsx",
+        "frontend/src/types/viz.ts"
+      ],
+      "tags": [
+        "feature",
+        "visualization",
+        "mcp"
+      ],
+      "created": "2026-03-11",
+      "updated": "2026-03-11"
+    },
+    {
+      "id": "voice-input-design",
+      "type": "architecture-design",
+      "path": "features/VOICE_INPUT_DESIGN.md",
+      "title": "Voice Input — Architecture Design",
+      "status": "active",
+      "covers": [
+        "frontend/src/hooks/useVoiceInput.ts",
+        "backend/app/agent/transcribe.py",
+        "frontend/src/components/ChatStream/InputArea.tsx"
+      ],
+      "tags": [
+        "feature",
+        "voice",
+        "transcription"
+      ],
+      "created": "2026-03-11",
+      "updated": "2026-03-11"
+    },
+    {
+      "id": "effort-support-design",
+      "type": "submodule-design",
+      "path": "features/EFFORT_SUPPORT_DESIGN.md",
+      "title": "Effort Support — Feature Design",
+      "status": "active",
+      "covers": [
+        "backend/app/agent/models.py",
+        "backend/app/agent/service.py",
+        "frontend/src/components/ChatStream/SessionStatusLine.tsx"
+      ],
+      "tags": [
+        "feature",
+        "effort",
+        "config"
+      ],
+      "created": "2026-03-11",
+      "updated": "2026-03-11"
+    },
+    {
+      "id": "agent-transcribe",
+      "type": "submodule-design",
+      "path": "backend/app/agent/TRANSCRIBE.md",
+      "title": "Audio Transcription — Submodule Design",
+      "status": "active",
+      "covers": [
+        "backend/app/agent/transcribe.py"
+      ],
+      "tags": [
+        "backend",
+        "agent-orchestration",
+        "voice",
+        "whisper"
+      ],
+      "created": "2026-03-11",
+      "updated": "2026-03-11"
+    },
+    {
+      "id": "task-voice-input",
+      "type": "task-spec",
+      "path": "current_tasks/frontend/feature_voice_input.md",
+      "title": "Voice Input",
+      "status": "done",
+      "covers": [
+        "frontend/src/hooks/useVoiceInput.ts",
+        "frontend/src/components/ChatStream/InputArea.tsx",
+        "backend/app/agent/transcribe.py"
+      ],
+      "tags": [
+        "medium",
+        "new-feature",
+        "frontend"
+      ],
+      "created": "2026-03-11",
+      "updated": "2026-03-11"
+    },
+    {
+      "id": "task-effort-support",
+      "type": "task-spec",
+      "path": "current_tasks/frontend/feature_effort_support.md",
+      "title": "Effort Support",
+      "status": "done",
+      "covers": [
+        "backend/app/agent/models.py",
+        "frontend/src/components/ChatStream/SessionStatusLine.tsx",
+        "backend/app/agent/service.py"
+      ],
+      "tags": [
+        "medium",
+        "new-feature"
+      ],
+      "created": "2026-03-11",
+      "updated": "2026-03-11"
+    },
+    {
+      "id": "task-visualization-card",
+      "type": "task-spec",
+      "path": "current_tasks/frontend/feature_visualization_card.md",
+      "title": "Visualization Card",
+      "status": "done",
+      "covers": [
+        "frontend/src/components/ChatStream/VisualizationCard.tsx",
+        "frontend/src/types/viz.ts"
+      ],
+      "tags": [
+        "medium",
+        "new-feature",
+        "frontend"
+      ],
+      "created": "2026-03-11",
+      "updated": "2026-03-11"
+    },
+    {
+      "id": "task-resizable-boxes",
+      "type": "task-spec",
+      "path": "current_tasks/frontend/feature_resizable_boxes.md",
+      "title": "Resizable Session Boxes",
+      "status": "done",
+      "covers": [
+        "frontend/src/components/ChatStream/ChatStream.css"
+      ],
+      "tags": [
+        "low",
+        "improvement",
+        "frontend"
+      ],
+      "created": "2026-03-11",
+      "updated": "2026-03-11"
+    },
+    {
+      "id": "task-continue-button",
+      "type": "task-spec",
+      "path": "current_tasks/frontend/feature_continue_button.md",
+      "title": "Continue Button",
+      "status": "done",
+      "covers": [
+        "frontend/src/components/ChatStream/InputArea.tsx",
+        "frontend/src/components/SessionPanel/SessionPanel.tsx"
+      ],
+      "tags": [
+        "medium",
+        "new-feature",
+        "frontend"
+      ],
+      "created": "2026-03-11",
+      "updated": "2026-03-11"
     }
   ],
   "links": [
@@ -2653,6 +2818,81 @@
     {
       "from": "task-fe-diff-card",
       "to": "task-fe-chat-ui",
+      "type": "depends-on"
+    },
+    {
+      "from": "visualization-design",
+      "to": "design-doc",
+      "type": "parent"
+    },
+    {
+      "from": "visualization-design",
+      "to": "module-agent",
+      "type": "depends-on"
+    },
+    {
+      "from": "visualization-design",
+      "to": "module-viz",
+      "type": "depends-on"
+    },
+    {
+      "from": "voice-input-design",
+      "to": "design-doc",
+      "type": "parent"
+    },
+    {
+      "from": "voice-input-design",
+      "to": "module-agent",
+      "type": "depends-on"
+    },
+    {
+      "from": "voice-input-design",
+      "to": "module-rpc",
+      "type": "depends-on"
+    },
+    {
+      "from": "effort-support-design",
+      "to": "design-doc",
+      "type": "parent"
+    },
+    {
+      "from": "effort-support-design",
+      "to": "module-agent",
+      "type": "depends-on"
+    },
+    {
+      "from": "agent-transcribe",
+      "to": "module-agent",
+      "type": "parent"
+    },
+    {
+      "from": "agent-transcribe",
+      "to": "voice-input-design",
+      "type": "implements"
+    },
+    {
+      "from": "task-voice-input",
+      "to": "voice-input-design",
+      "type": "implements"
+    },
+    {
+      "from": "task-effort-support",
+      "to": "effort-support-design",
+      "type": "implements"
+    },
+    {
+      "from": "task-visualization-card",
+      "to": "visualization-design",
+      "type": "implements"
+    },
+    {
+      "from": "task-resizable-boxes",
+      "to": "chat-ui",
+      "type": "implements"
+    },
+    {
+      "from": "task-continue-button",
+      "to": "module-agent",
       "type": "depends-on"
     }
   ]
