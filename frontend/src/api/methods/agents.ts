@@ -11,8 +11,8 @@ export function createAgentApi(client: RpcClient) {
 
     list: () => client.request<AgentTask[]>("agent/list"),
 
-    send: (bonsaiSid: string, text: string) =>
-      client.request<null>("agent/send", { bonsaiSid, text }),
+    send: (bonsaiSid: string, text: string, isMarkdown?: boolean) =>
+      client.request<null>("agent/send", { bonsaiSid, text, ...(isMarkdown ? { isMarkdown } : {}) }),
 
     end: (bonsaiSid: string) =>
       client.request<null>("agent/end", { bonsaiSid }),

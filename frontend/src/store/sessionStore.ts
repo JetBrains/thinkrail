@@ -30,7 +30,7 @@ interface SessionStore {
     name: string;
     skillId?: string;
   }) => Promise<string>;
-  sendMessage: (bonsaiSid: string, text: string) => Promise<void>;
+  sendMessage: (bonsaiSid: string, text: string, isMarkdown?: boolean) => Promise<void>;
   switchSession: (bonsaiSid: string) => void;
   closeSession: (bonsaiSid: string) => void;
   endSession: (bonsaiSid: string) => Promise<void>;
@@ -446,7 +446,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
     return bonsaiSid;
   },
 
-  sendMessage: async (bonsaiSid, text) => {
+  sendMessage: async (bonsaiSid, text, isMarkdown) => {
     // Add user message to events immediately (optimistic)
     set((s) => {
       const session = s.sessions.get(bonsaiSid);
@@ -461,7 +461,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
             bonsaiSid,
             sessionId: "",
             eventType: "userMessage" as const,
-            payload: { text },
+            payload: { text, isMarkdown: isMarkdown ?? false },
           },
         ],
       });
@@ -469,7 +469,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
     });
     try {
       const api = createAgentApi(getClient());
-      await api.send(bonsaiSid, text);
+      await api.send(bonsaiSid, text, isMarkdown);
     } catch (err) {
       console.error("[sendMessage] failed:", err);
       const msg = getErrorMessage(err);

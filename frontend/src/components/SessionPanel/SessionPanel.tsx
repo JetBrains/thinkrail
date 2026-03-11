@@ -67,14 +67,14 @@ export function SessionPanel() {
   );
 
   const handleSend = useCallback(
-    (text: string) => {
+    (text: string, isMarkdown?: boolean) => {
       if (!activeSessionId || !activeSession) return;
       if (activeSession.pendingRequest && activeSession.pendingRequest.type === "question") {
         resolveRequest(activeSessionId, activeSession.pendingRequest.requestId, { text });
         return;
       }
       if (activeSession.status === "idle") {
-        sendMessage(activeSessionId, text);
+        sendMessage(activeSessionId, text, isMarkdown);
       }
       useMessageHistoryStore.getState().addMessage(text);
     },

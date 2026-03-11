@@ -62,7 +62,8 @@ async def run_agent(service: AgentService, **params: Any) -> dict:
 
 @_handle_errors
 async def send_message(service: AgentService, **params: Any) -> None:
-    await service.send_message(params["bonsaiSid"], params["text"])
+    is_markdown = params.get("isMarkdown", False)
+    await service.send_message(params["bonsaiSid"], params["text"], is_markdown=is_markdown)
 
 
 @_handle_errors

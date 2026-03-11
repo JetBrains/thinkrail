@@ -1,4 +1,4 @@
-import { lazy, Suspense, useCallback, useEffect, useRef, forwardRef, useImperativeHandle } from "react";
+import { lazy, Suspense, useCallback, useEffect, useRef, useState, forwardRef, useImperativeHandle } from "react";
 import type { AgentEvent } from "@/types/agent.ts";
 import type { Session } from "@/types/session.ts";
 import { SystemMessage } from "./SystemMessage.tsx";
@@ -12,10 +12,45 @@ import { ApprovalCard } from "./ApprovalCard.tsx";
 import { CompletionBanner } from "./CompletionBanner.tsx";
 import { ErrorBanner } from "./ErrorBanner.tsx";
 import { CompactMarker } from "./CompactMarker.tsx";
+import { ChatMarkdown } from "./ChatMarkdown.tsx";
 import type { VizData } from "@/types/viz.ts";
 
 const DIFF_TOOLS = new Set(["Edit", "Write", "NotebookEdit"]);
 const DiffCard = lazy(() => import("./DiffCard.tsx").then(m => ({ default: m.DiffCard })));
+
+/** User message bubble with optional markdown rendering and raw/rendered toggle. */
+function UserMessageBubble({ text, isMarkdown }: { text: string; isMarkdown: boolean }) {
+  const [showRaw, setShowRaw] = useState(false);
+
+  if (!isMarkdown) {
+    return (
+      <div className="chat-user">
+        <div className="chat-user-text">{text}</div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="chat-user">
+      <div className="chat-user-bubble">
+        {showRaw ? (
+          <div className="chat-user-text">{text}</div>
+        ) : (
+          <div className="chat-user-text--md">
+            <ChatMarkdown content={text} />
+          </div>
+        )}
+        <button
+          className="chat-user-toggle"
+          onClick={() => setShowRaw((v) => !v)}
+          title={showRaw ? "Show rendered" : "Show raw"}
+        >
+          {showRaw ? "md" : "raw"}
+        </button>
+      </div>
+    </div>
+  );
+}
 
 /** Shared type for tool call end-state, used by SubagentBlock too. */
 export type ToolState = { output?: string; isError?: boolean; finished: boolean };
@@ -161,11 +196,11 @@ export const ChatStream = forwardRef<ChatStreamHandle, ChatStreamProps>(function
 
           case "userMessage":
             return (
-              <div key={k} className="chat-user">
-                <div className="chat-user-text">
-                  {(p.text as string) ?? ""}
-                </div>
-              </div>
+              <UserMessageBubble
+                key={k}
+                text={(p.text as string) ?? ""}
+                isMarkdown={(p.isMarkdown as boolean) ?? false}
+              />
             );
 
           case "textDelta":

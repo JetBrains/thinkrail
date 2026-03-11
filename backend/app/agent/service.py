@@ -60,7 +60,7 @@ class AgentService:
         self._save_task(task)
         return task
 
-    async def send_message(self, bonsai_sid: str, text: str) -> None:
+    async def send_message(self, bonsai_sid: str, text: str, *, is_markdown: bool = False) -> None:
         """Send a user message to the session, triggering a new turn."""
         task = self._tracker.get_task(bonsai_sid)
         if task.status != "idle":
@@ -69,7 +69,7 @@ class AgentService:
             )
         self._save_event(bonsai_sid, {
             "eventType": "userMessage",
-            "payload": {"text": text},
+            "payload": {"text": text, "isMarkdown": is_markdown},
         })
         self._tracker.enqueue_message(bonsai_sid, text)
 

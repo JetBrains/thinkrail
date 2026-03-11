@@ -704,6 +704,42 @@
   padding: var(--space-md) var(--space-lg);
   border-top: 1px solid var(--border);
   flex-shrink: 0;
+  position: relative;
+}
+.input-area--manual {
+  align-items: stretch;
+}
+.input-area--manual .input-mode-btn,
+.input-area--manual .input-history-btn,
+.input-area--manual .input-mic,
+.input-area--manual .input-actions {
+  align-self: flex-end;
+}
+.input-resize-handle {
+  position: absolute;
+  top: -3px;
+  left: 0;
+  right: 0;
+  height: 7px;
+  cursor: ns-resize;
+  z-index: 10;
+  user-select: none;
+}
+.input-resize-handle::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  width: 32px;
+  height: 3px;
+  border-radius: 2px;
+  background: transparent;
+  transition: background var(--transition-fast);
+}
+.input-resize-handle:hover::after,
+.input-resize-handle:active::after {
+  background: var(--border2);
 }
 .input-textarea {
   flex: 1;
@@ -716,12 +752,16 @@
   font-size: var(--font-size);
   padding: var(--space-sm) var(--space-md);
   line-height: var(--line-height);
-  max-height: 150px;
+  min-height: 36px;
   outline: none;
 }
 .input-textarea:focus { border-color: var(--blue); }
 .input-textarea:disabled { opacity: 0.5; cursor: not-allowed; }
 .input-textarea::placeholder { color: var(--hint); }
+.input-textarea--fill {
+  flex: 1;
+  min-height: 0;
+}
 .input-send {
   padding: var(--space-sm) var(--space-lg);
   border: none;
@@ -771,6 +811,152 @@
   color: var(--text);
   border-color: var(--border2);
 }
+
+/* ── Markdown Mode Toggle ── */
+.input-mode-btn {
+  padding: var(--space-xs) var(--space-sm);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--muted);
+  font-family: var(--font);
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  flex-shrink: 0;
+  line-height: 1;
+}
+.input-mode-btn:hover { background: var(--hover); color: var(--text); }
+.input-mode-btn--active {
+  color: var(--cyan);
+  border-color: var(--cyan);
+  background: rgba(125, 207, 255, 0.08);
+}
+
+/* ── Markdown Editor Wrapper ── */
+.input-editor-wrapper {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
+}
+
+/* ── Markdown Toolbar ── */
+.input-md-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 3px var(--space-sm);
+  border: 1px solid var(--border);
+  border-bottom: none;
+  border-radius: var(--radius-sm) var(--radius-sm) 0 0;
+  background: var(--elevated);
+}
+.input-md-tab {
+  padding: 2px var(--space-sm);
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--muted);
+  background: transparent;
+  border: none;
+  border-bottom: 2px solid transparent;
+  cursor: pointer;
+  font-family: var(--font);
+  transition: all var(--transition-fast);
+}
+.input-md-tab:hover { color: var(--text); }
+.input-md-tab--active { font-weight: 700; color: var(--text); border-bottom-color: var(--cyan); }
+.input-md-sep {
+  width: 1px;
+  height: 14px;
+  background: var(--border);
+  margin: 0 4px;
+  flex-shrink: 0;
+}
+.input-md-fmt {
+  padding: 2px 5px;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--hint);
+  font-family: var(--font);
+  font-size: 11px;
+  cursor: pointer;
+  line-height: 1;
+}
+.input-md-fmt:hover { background: var(--hover); color: var(--text); }
+
+/* ── Markdown Preview Pane ── */
+.input-preview {
+  flex: 1;
+  resize: none;
+  border: 1px solid var(--border);
+  border-radius: 0 0 var(--radius-sm) var(--radius-sm);
+  background: var(--elevated);
+  color: var(--text);
+  font-family: var(--font);
+  font-size: var(--font-size);
+  padding: var(--space-sm) var(--space-md);
+  line-height: var(--line-height);
+  min-height: 60px;
+  overflow-y: auto;
+  outline: none;
+}
+.input-preview-empty {
+  color: var(--hint);
+  font-style: italic;
+}
+.input-preview--fill {
+  flex: 1;
+  min-height: 0;
+}
+
+/* ── Textarea in markdown mode ── */
+.input-textarea--md {
+  border-radius: 0 0 var(--radius-sm) var(--radius-sm);
+  border-top: none;
+}
+
+/* ── Editor wrapper in manual resize mode ── */
+.input-editor-wrapper--fill {
+  align-self: stretch;
+}
+
+/* ── User message markdown rendering ── */
+.chat-user-bubble {
+  max-width: 85%;
+  position: relative;
+}
+.chat-user-text--md {
+  font-family: var(--font);
+  font-size: var(--font-size);
+  line-height: var(--line-height);
+  word-break: break-word;
+  color: var(--text);
+  background: var(--elevated);
+  border: 1px solid var(--border);
+  border-radius: 10px 10px 2px 10px;
+  padding: var(--space-sm) var(--space-md);
+}
+.chat-user-text--md .chat-md > :first-child { margin-top: 0; }
+.chat-user-text--md .chat-md > :last-child { margin-bottom: 0; }
+.chat-user-toggle {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  padding: 1px 5px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--panel);
+  color: var(--hint);
+  font-family: var(--font);
+  font-size: 9px;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity var(--transition-fast);
+}
+.chat-user-bubble:hover .chat-user-toggle { opacity: 1; }
+.chat-user-toggle:hover { background: var(--hover); color: var(--text); }
 
 /* ── Session Tabs ── */
 .session-tabs {

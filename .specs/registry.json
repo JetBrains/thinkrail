@@ -1857,6 +1857,53 @@
       ],
       "created": "2026-03-11",
       "updated": "2026-03-11"
+    },
+    {
+      "id": "dual-mode-input-design",
+      "type": "architecture-design",
+      "path": "features/DUAL_MODE_INPUT_DESIGN.md",
+      "title": "Dual-Mode Message Input — Architecture Design",
+      "status": "active",
+      "covers": [
+        "frontend/src/components/ChatStream/InputArea.tsx",
+        "frontend/src/components/ChatStream/ChatStream.tsx",
+        "frontend/src/components/ChatStream/ChatStream.css",
+        "frontend/src/store/sessionStore.ts",
+        "frontend/src/api/methods/agents.ts",
+        "backend/app/rpc/methods/agents.py",
+        "backend/app/agent/service.py"
+      ],
+      "tags": [
+        "feature",
+        "markdown",
+        "input"
+      ],
+      "created": "2026-03-11",
+      "updated": "2026-03-11"
+    },
+    {
+      "id": "task-dual-mode-input",
+      "type": "task-spec",
+      "path": "current_tasks/frontend/feature_dual_mode_input.md",
+      "title": "Dual-Mode Message Input",
+      "status": "done",
+      "covers": [
+        "frontend/src/components/ChatStream/InputArea.tsx",
+        "frontend/src/components/ChatStream/ChatStream.tsx",
+        "frontend/src/components/ChatStream/ChatStream.css",
+        "frontend/src/components/SessionPanel/SessionPanel.tsx",
+        "frontend/src/store/sessionStore.ts",
+        "frontend/src/api/methods/agents.ts",
+        "backend/app/rpc/methods/agents.py",
+        "backend/app/agent/service.py"
+      ],
+      "tags": [
+        "medium",
+        "new-feature",
+        "frontend"
+      ],
+      "created": "2026-03-11",
+      "updated": "2026-03-11"
     }
   ],
   "links": [
@@ -2894,6 +2941,26 @@
       "from": "task-continue-button",
       "to": "module-agent",
       "type": "depends-on"
+    },
+    {
+      "from": "dual-mode-input-design",
+      "to": "design-doc",
+      "type": "parent"
+    },
+    {
+      "from": "dual-mode-input-design",
+      "to": "module-agent",
+      "type": "depends-on"
+    },
+    {
+      "from": "dual-mode-input-design",
+      "to": "module-rpc",
+      "type": "depends-on"
+    },
+    {
+      "from": "task-dual-mode-input",
+      "to": "dual-mode-input-design",
+      "type": "implements"
     }
   ]
 }
