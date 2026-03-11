@@ -3,6 +3,7 @@ import { useSpecStore } from "./specStore.ts";
 import { useSessionStore } from "./sessionStore.ts";
 import { useNotificationStore } from "./notificationStore.ts";
 import { useUiStore } from "./uiStore.ts";
+import { useFileStore } from "./fileStore.ts";
 import { useVizStore } from "./vizStore.ts";
 import type { Unsubscribe } from "@/api/types.ts";
 
@@ -47,6 +48,14 @@ export function wireEvents(client: RpcClient): Unsubscribe {
   unsubs.push(
     client.on("files/treeChanged", () => {
       useUiStore.getState().onFileTreeChanged();
+    }),
+  );
+
+  // ── File content notifications ──
+  unsubs.push(
+    client.on("file/didChange", (p) => {
+      const { path } = p as { path: string };
+      useFileStore.getState().onFileChanged(path);
     }),
   );
 

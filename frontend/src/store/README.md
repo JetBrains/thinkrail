@@ -350,6 +350,9 @@ interface FileStore {
   updateContent: (path: string, content: string) => void;
   saveFile: (path: string) => Promise<void>;
   openExternal: (path: string, editor: string) => Promise<void>;
+
+  // Event handler (called by wireEvents)
+  onFileChanged: (path: string) => void;
 }
 ```
 
@@ -359,6 +362,7 @@ interface FileStore {
 - `activateFile` sets `activeFilePath` and clears preview
 - `loadPreview` routes to `activateFile` if path already pinned; otherwise sets preview fields and fetches content with stale-response guard
 - `pinPreview` moves `previewFile` into `openFiles`, sets `activeFilePath`, clears preview
+- `onFileChanged` re-fetches content from `/api/file/read` for open files (if not dirty) and preview file when the file is modified on disk
 
 ---
 
@@ -378,6 +382,12 @@ export function wireEvents(client: RpcClient): Unsubscribe
 | `spec/didCreate` | `onSpecCreated(id, path)` |
 | `spec/didDelete` | `onSpecDeleted(id)` |
 | `registry/didUpdate` | `onRegistryUpdated()` |
+
+### File notifications → fileStore
+
+| Event | Action |
+|---|---|
+| `file/didChange` | `onFileChanged(path)` |
 
 ### Agent streaming → sessionStore.onAgentEvent
 

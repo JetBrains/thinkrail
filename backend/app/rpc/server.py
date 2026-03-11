@@ -253,6 +253,12 @@ async def _start_watcher(
         if any(ct in (Change.added, Change.deleted) for ct, _ in changes):
             await notify("files/treeChanged", {})
 
+        # Notify frontend about modified files so open editors can refresh
+        for change_type, path_str in changes:
+            if change_type == Change.modified:
+                rel = str(Path(path_str).relative_to(config.get_project_root()))
+                await notify("file/didChange", {"path": rel})
+
         # Recompute dashboard on any .md/.json change (specs, tasks, registry)
         if any(Path(p).suffix in (".md", ".json") for _, p in changes):
             await viz_service.recompute()

@@ -30,6 +30,7 @@ interface FileStore {
   updateContent: (path: string, content: string) => void;
   saveFile: (path: string) => Promise<void>;
   openExternal: (path: string, editor: string) => Promise<void>;
+  onFileChanged: (path: string) => void;
 }
 
 function getProjectPath(): string {
@@ -240,6 +241,49 @@ export const useFileStore = create<FileStore>((set, get) => ({
       });
     } catch (e) {
       console.error("Failed to open external editor:", e);
+    }
+  },
+
+  onFileChanged: (path) => {
+    const { openFiles, previewFilePath, previewFile } = get();
+    const project = getProjectPath();
+    if (!project) return;
+
+    const fetchUrl = `${API_BASE}/api/file/read?project=${encodeURIComponent(project)}&path=${encodeURIComponent(path)}`;
+
+    // Reload open file if not dirty
+    const openFile = openFiles.get(path);
+    if (openFile && !openFile.isDirty) {
+      fetch(fetchUrl)
+        .then((res) => res.json())
+        .then((data) => {
+          if (data.error) return;
+          set((s) => {
+            const f = s.openFiles.get(path);
+            if (!f || f.isDirty) return s;
+            const next = new Map(s.openFiles);
+            next.set(path, { ...f, content: data.content, originalContent: data.content });
+            return { openFiles: next };
+          });
+        })
+        .catch(() => {});
+    }
+
+    // Reload preview file
+    if (previewFilePath === path && previewFile) {
+      fetch(fetchUrl)
+        .then((res) => res.json())
+        .then((data) => {
+          if (data.error) return;
+          if (get().previewFilePath !== path) return;
+          set((s) => {
+            if (!s.previewFile || s.previewFilePath !== path) return s;
+            return {
+              previewFile: { ...s.previewFile, content: data.content, originalContent: data.content },
+            };
+          });
+        })
+        .catch(() => {});
     }
   },
 }));
