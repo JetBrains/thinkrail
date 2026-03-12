@@ -149,7 +149,7 @@ export function wireEvents(client: RpcClient): Unsubscribe {
         bonsaiSid,
         eventType: "question",
         message: "Agent has a question",
-        persistent: false,
+        persistent: true,
       });
       useNotificationStore.getState().setBadge(bonsaiSid, {
         type: "question",
@@ -168,7 +168,7 @@ export function wireEvents(client: RpcClient): Unsubscribe {
         bonsaiSid,
         eventType: "approval",
         message: `Approve: ${(params.toolName as string) ?? "action"}`,
-        persistent: false,
+        persistent: true,
       });
       useNotificationStore.getState().setBadge(bonsaiSid, {
         type: "approval",

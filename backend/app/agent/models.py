@@ -41,7 +41,7 @@ class AgentConfig(BaseModel):
     model_config = _CAMEL_CONFIG
 
     model: str = "claude-sonnet-4-6"
-    max_turns: int = 25
+    max_turns: int = 50
     permission_mode: str = "default"
     stream_text: bool = True
     betas: list[str] = Field(default_factory=list)
