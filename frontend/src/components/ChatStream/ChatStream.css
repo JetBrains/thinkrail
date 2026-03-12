@@ -455,6 +455,117 @@
 }
 .chat-approval-expanded .chat-approval-desc { margin-top: var(--space-xs); margin-bottom: 0; }
 
+/* ── Plan Approval Card ── */
+.chat-plan-approval {
+  border: 2px solid var(--purple);
+  border-radius: var(--radius-md);
+  padding: var(--space-lg);
+  max-width: 90%;
+  background: var(--elevated);
+  animation: slideUp 0.22s ease-out;
+}
+
+/* Header */
+.chat-plan-approval-header {
+  font-size: 9px;
+  text-transform: uppercase;
+  font-weight: 700;
+  color: var(--purple);
+  letter-spacing: 0.5px;
+  margin-bottom: var(--space-sm);
+}
+
+/* Markdown body */
+.chat-plan-approval-body {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: var(--space-sm) var(--space-md);
+  max-height: 400px;
+  overflow-y: auto;
+  resize: vertical;
+  min-height: 60px;
+  margin-bottom: var(--space-md);
+}
+
+/* Permission tags */
+.chat-plan-approval-tags {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-xs);
+  margin-bottom: var(--space-md);
+}
+.chat-plan-approval-tags-label {
+  font-size: 11px;
+  color: var(--muted);
+  margin-right: var(--space-xs);
+}
+.chat-plan-approval-tag {
+  display: inline-block;
+  font-size: 11px;
+  padding: 1px 8px;
+  border-radius: 3px;
+  background: rgba(187, 154, 247, 0.1);
+  color: var(--purple);
+}
+
+/* Action buttons */
+.chat-plan-approval-actions {
+  display: flex;
+  gap: var(--space-sm);
+}
+
+/* Answered (compact) state */
+.chat-plan-approval-answered {
+  opacity: 0.7;
+  border-width: 1px;
+  border-color: var(--border);
+  padding: var(--space-sm) var(--space-md);
+}
+.chat-plan-approval--approved { border-color: var(--green); }
+.chat-plan-approval--denied { border-color: var(--red); }
+
+/* Compact row */
+.chat-plan-approval-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-md);
+  font-size: 12px;
+  min-height: 20px;
+  cursor: pointer;
+  user-select: none;
+}
+.chat-plan-approval-row:hover { background: var(--hover); }
+.chat-plan-approval-label {
+  color: var(--purple);
+  font-weight: 600;
+  white-space: nowrap;
+}
+.chat-plan-approval-title {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text);
+}
+.chat-plan-approval-status { white-space: nowrap; font-weight: 500; }
+.chat-plan-approval-approved { color: var(--green); }
+.chat-plan-approval-denied { color: var(--red); }
+
+/* Expanded detail panel */
+.chat-plan-approval-expanded {
+  margin-top: var(--space-sm);
+  padding-top: var(--space-sm);
+  border-top: 1px solid var(--border);
+}
+.chat-plan-approval-expanded .chat-plan-approval-body {
+  margin-bottom: var(--space-sm);
+}
+.chat-plan-approval-expanded .chat-plan-approval-tags {
+  margin-bottom: 0;
+}
+
 /* ── Buttons ── */
 .chat-btn {
   padding: var(--space-xs) var(--space-lg);

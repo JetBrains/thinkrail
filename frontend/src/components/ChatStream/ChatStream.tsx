@@ -9,6 +9,7 @@ import { VisualizationCard, VizErrorBoundary } from "./VisualizationCard.tsx";
 import { SubagentBlock } from "./SubagentBlock.tsx";
 import { QuestionCard } from "./QuestionCard.tsx";
 import { ApprovalCard } from "./ApprovalCard.tsx";
+import { PlanApprovalCard } from "./PlanApprovalCard.tsx";
 import { CompletionBanner } from "./CompletionBanner.tsx";
 import { ErrorBanner } from "./ErrorBanner.tsx";
 import { CompactMarker } from "./CompactMarker.tsx";
@@ -123,12 +124,16 @@ export const ChatStream = forwardRef<ChatStreamHandle, ChatStreamProps>(function
   }
 
   // Pre-scan: track which subagents are still running (started but not ended).
+  // interrupted / turnComplete implicitly close all open subagents because
+  // the SDK's SubagentStop hook isn't guaranteed to fire on interrupt.
   const activeSubagents = new Set<string>();
   for (const ev of events) {
     if (ev.eventType === "subagentStart")
       activeSubagents.add(ev.payload.agentId as string);
     if (ev.eventType === "subagentEnd")
       activeSubagents.delete(ev.payload.agentId as string);
+    if (ev.eventType === "interrupted" || ev.eventType === "turnComplete")
+      activeSubagents.clear();
   }
 
   // Pre-scan: track latest bonsai_visualize event per vizId for hybrid collapse.
@@ -157,6 +162,10 @@ export const ChatStream = forwardRef<ChatStreamHandle, ChatStreamProps>(function
         for (let j = stack.length - 1; j >= 0; j--) {
           if (stack[j][1] === aid) { stack.splice(j, 1); break; }
         }
+      } else if (ev.eventType === "interrupted" || ev.eventType === "turnComplete") {
+        // Turn ended — close all open subagent scopes. No events after this
+        // can belong to a prior subagent.
+        stack.length = 0;
       } else if (stack.length > 0) {
         // Hoist bonsai_visualize, askUserQuestion, and confirmAction to top level
         // so they remain visible outside the collapsible SubagentBlock
@@ -303,6 +312,31 @@ export const ChatStream = forwardRef<ChatStreamHandle, ChatStreamProps>(function
             const isAnswered = answeredRequests.has(requestId);
             const savedResponse = answeredRequests.get(requestId) as Record<string, unknown> | undefined;
             const decision = savedResponse?.behavior === "allow" ? "approve" as const : "deny" as const;
+
+            // ExitPlanMode gets a dedicated plan review card
+            if ((p.toolName as string) === "ExitPlanMode") {
+              const toolInput = p.toolInput as Record<string, unknown> | undefined;
+              return (
+                <PlanApprovalCard
+                  key={k}
+                  planContent={(toolInput?.planContent as string) ?? undefined}
+                  allowedPrompts={(toolInput?.allowedPrompts as Array<{ tool: "Bash"; prompt: string }>) ?? undefined}
+                  answered={isAnswered}
+                  decision={isAnswered ? decision : undefined}
+                  onApprove={() =>
+                    onResolveRequest(requestId, { behavior: "allow" })
+                  }
+                  onDeny={() =>
+                    onResolveRequest(requestId, {
+                      behavior: "deny",
+                      message: "Plan rejected",
+                      interrupt: false,
+                    })
+                  }
+                />
+              );
+            }
+
             return (
               <ApprovalCard
                 key={k}

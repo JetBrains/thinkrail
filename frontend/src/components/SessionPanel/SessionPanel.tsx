@@ -119,7 +119,9 @@ export function SessionPanel() {
 
   const placeholder = hasPending
     ? activeSession?.pendingRequest?.type === "approval"
-      ? "Waiting for your approval above..."
+      ? activeSession?.pendingRequest?.toolName === "ExitPlanMode"
+        ? "Review the plan above..."
+        : "Waiting for your approval above..."
       : "Answer the question above or type a response..."
     : isDone
       ? status === "done"
