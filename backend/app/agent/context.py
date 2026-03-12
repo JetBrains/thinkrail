@@ -10,7 +10,7 @@ import re
 from pathlib import Path
 
 from app.agent.models import AgentConfig
-from app.agent.visualization import VIZ_INSTRUCTIONS
+from app.agent.tools.visualization import VIZ_INSTRUCTIONS
 from app.spec.service import SpecService
 
 _FRONTMATTER_RE = re.compile(r"\A---\s*\n.*?\n---\s*\n", re.DOTALL)

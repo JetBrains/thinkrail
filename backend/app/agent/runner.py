@@ -4,29 +4,27 @@ import asyncio
 import logging
 import time
 from collections.abc import Callable
+from functools import partial
 from pathlib import Path
 from typing import Any
-from uuid import uuid4
 
 from claude_agent_sdk import (
     AssistantMessage,
     ClaudeAgentOptions,
     ClaudeSDKClient,
     HookMatcher,
-    PermissionResultAllow,
-    PermissionResultDeny,
     ResultMessage,
     SystemMessage,
     TextBlock,
-    ToolPermissionContext,
     ToolResultBlock,
     ToolUseBlock,
     UserMessage,
 )
 
 from app.agent.models import AgentResult, AgentTask, to_camel
+from app.agent.permissions import can_use_tool
+from app.agent.tools import MCP_SERVERS
 from app.agent.tracker import END_SIGNAL, Tracker
-from app.agent.visualization import viz_mcp_server
 
 logger = logging.getLogger(__name__)
 
@@ -49,60 +47,6 @@ async def run(
     start_time = time.monotonic()
     total_cost = 0.0
     total_turns = 0
-
-    async def can_use_tool(
-        tool_name: str,
-        input_data: dict[str, Any],
-        context: ToolPermissionContext,
-    ) -> PermissionResultAllow | PermissionResultDeny:
-        if tool_name.endswith("bonsai_visualize"):
-            # Auto-allow: display-only tool, no side effects
-            # Note: MCP tools may be prefixed with server name (e.g. mcp__bonsai-viz__bonsai_visualize)
-            return PermissionResultAllow(behavior="allow")
-        if tool_name == "AskUserQuestion":
-            request_id = str(uuid4())
-            future = tracker.register_future(task.bonsai_sid, request_id)
-            await notify(
-                "agent/askUserQuestion",
-                {"bonsaiSid": task.bonsai_sid, "questions": input_data.get("questions", [])},
-                request_id=request_id,
-            )
-            response = await future
-            # Check for timeout auto-deny
-            if response.get("behavior") == "deny":
-                return PermissionResultDeny(
-                    behavior="deny",
-                    message=response.get("message", "Timed out"),
-                    interrupt=response.get("interrupt", False),
-                )
-            return PermissionResultAllow(
-                behavior="allow",
-                updated_input={
-                    "questions": response.get("questions", []),
-                    "answers": response.get("answers", {}),
-                },
-            )
-        else:
-            request_id = str(uuid4())
-            future = tracker.register_future(task.bonsai_sid, request_id)
-            await notify(
-                "agent/confirmAction",
-                {
-                    "bonsaiSid": task.bonsai_sid,
-                    "toolName": tool_name,
-                    "toolInput": input_data,
-                },
-                request_id=request_id,
-            )
-            response = await future
-            if response.get("behavior") == "allow":
-                return PermissionResultAllow(behavior="allow")
-            else:
-                return PermissionResultDeny(
-                    behavior="deny",
-                    message=response.get("message", "Denied by user"),
-                    interrupt=response.get("interrupt", False),
-                )
 
     # -- Subagent lifecycle hooks --
     # Track the currently-active subagent so toolCallStart events can be
@@ -142,11 +86,11 @@ async def run(
         model=task.config.model,
         max_turns=task.config.max_turns,
         permission_mode=task.config.permission_mode,
-        can_use_tool=can_use_tool,
+        can_use_tool=partial(can_use_tool, tracker=tracker, notify=notify, task=task),
         include_partial_messages=task.config.stream_text,
         cwd=str(cwd) if cwd else None,
         plugins=plugins,
-        mcp_servers={"bonsai-viz": viz_mcp_server},
+        mcp_servers=MCP_SERVERS,
         resume=resume_session_id,
         stderr=_on_cli_stderr,
         betas=task.config.betas,

@@ -7,7 +7,12 @@ toolInput payload; this handler returns a short confirmation.
 
 from __future__ import annotations
 
-from claude_agent_sdk import create_sdk_mcp_server, tool
+from typing import Any
+
+from claude_agent_sdk import PermissionResultAllow, create_sdk_mcp_server, tool
+
+from app.agent.models import AgentTask
+from app.agent.tracker import Tracker
 
 VIZ_SCHEMA: dict = {
     "type": "object",
@@ -74,3 +79,13 @@ async def _bonsai_visualize(args: dict) -> dict:
 
 
 viz_mcp_server = create_sdk_mcp_server(name="bonsai-viz", tools=[_bonsai_visualize])
+
+
+async def intercept_visualize(
+    input_data: dict[str, Any],
+    tracker: Tracker,
+    notify: Any,
+    task: AgentTask,
+) -> PermissionResultAllow:
+    """Auto-approve: display-only tool, no side effects."""
+    return PermissionResultAllow(behavior="allow")
