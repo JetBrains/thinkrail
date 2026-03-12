@@ -11,6 +11,7 @@ interface PlanApprovalCardProps {
   allowedPrompts?: AllowedPrompt[];
   answered: boolean;
   decision?: "approve" | "deny";
+  interrupted?: boolean;
   rejectionReason?: string;
   onApprove: () => void;
   onDeny: (reason?: string) => void;
@@ -30,6 +31,7 @@ export function PlanApprovalCard({
   allowedPrompts,
   answered,
   decision,
+  interrupted,
   rejectionReason,
   onApprove,
   onDeny,
@@ -67,7 +69,7 @@ export function PlanApprovalCard({
                 : "chat-plan-approval-denied"
             }`}
           >
-            {decision === "approve" ? "\u2713 Approved" : "\u2715 Rejected"}
+            {interrupted ? "\u2718 Interrupted" : decision === "approve" ? "\u2713 Approved" : "\u2715 Rejected"}
           </span>
         </div>
 

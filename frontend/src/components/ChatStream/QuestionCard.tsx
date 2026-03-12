@@ -9,6 +9,7 @@ import { QuestionPreviewPanel } from "./QuestionPreviewPanel.tsx";
 interface QuestionCardProps {
   questions: Question[];
   answered: boolean;
+  interrupted?: boolean;
   selectedAnswers?: Record<string, string>;
   onSubmit: (response: Record<string, unknown>) => void;
 }
@@ -16,6 +17,7 @@ interface QuestionCardProps {
 export function QuestionCard({
   questions,
   answered,
+  interrupted,
   selectedAnswers,
   onSubmit,
 }: QuestionCardProps) {
@@ -186,14 +188,18 @@ export function QuestionCard({
   );
 
   // Answered state
-  if (answered && selectedAnswers) {
+  if (answered && (selectedAnswers || interrupted)) {
     return (
       <div className="chat-question chat-question-answered">
         <div className="chat-question-answered-header-row">
           <span className="chat-question-header">AskUserQuestion</span>
-          <span className="chat-question-answered-done">&#x2713; done</span>
+          <span className={`chat-question-answered-done${interrupted ? " chat-question-answered-interrupted" : ""}`}>
+            {interrupted ? "\u2718 interrupted" : "\u2713 done"}
+          </span>
         </div>
-        <AnsweredTable questions={questions} answers={selectedAnswers} />
+        {!interrupted && selectedAnswers && (
+          <AnsweredTable questions={questions} answers={selectedAnswers} />
+        )}
       </div>
     );
   }

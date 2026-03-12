@@ -913,6 +913,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
       const cu = session.metrics.contextUsage;
       next.set(bonsaiSid, {
         ...session,
+        status: session.status === "idle" ? "running" : session.status,
         model: (params.model as string) ?? session.model,
         systemPrompt: (params.systemPrompt as string) ?? undefined,
         events: [
@@ -947,11 +948,40 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
         if (method === "agent/turnComplete" || method === "agent/interrupted") {
           const { updated, costDelta } = applyMetrics(session, params, "idle");
           projectCost += costDelta;
+
+          // If interrupted while a question/approval was pending, mark it as
+          // answered so the card collapses into its "interrupted" state.
+          if (method === "agent/interrupted" && session.pendingRequest) {
+            const rid = session.pendingRequest.requestId;
+            const answered = new Map(updated.answeredRequests);
+            answered.set(rid, {
+              behavior: "deny",
+              message: "Interrupted",
+              interrupt: true,
+            });
+            updated.answeredRequests = answered;
+          }
+
           sessions.set(bonsaiSid, updated);
         }
       }
       return { sessions, projectCost };
     });
+
+    // Clean up notifications when interrupted during a pending request
+    if (method === "agent/interrupted") {
+      const ns = useNotificationStore.getState();
+      ns.decrementPendingInput();
+      for (const t of ns.toasts) {
+        if (
+          t.bonsaiSid === bonsaiSid &&
+          (t.eventType === "question" || t.eventType === "approval")
+        ) {
+          ns.dismissToast(t.id);
+        }
+      }
+      ns.clearBadge(bonsaiSid);
+    }
   },
 
   onAskQuestion: (params) => {

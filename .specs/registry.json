@@ -2061,7 +2061,7 @@
       "type": "task-spec",
       "path": "current_tasks/frontend/improvement_plan_rejection_reason.md",
       "title": "Improve plan rejection: add reason text so agent can align",
-      "status": "active",
+      "status": "done",
       "covers": [
         "frontend/src/components/ChatStream/PlanApprovalCard.tsx",
         "frontend/src/components/ChatStream/ChatStream.tsx",

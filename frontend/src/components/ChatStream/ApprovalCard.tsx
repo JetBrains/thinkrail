@@ -6,6 +6,7 @@ interface ApprovalCardProps {
   description?: string;
   answered: boolean;
   decision?: "approve" | "deny";
+  interrupted?: boolean;
   onApprove: () => void;
   onDeny: () => void;
 }
@@ -36,6 +37,7 @@ export function ApprovalCard({
   description,
   answered,
   decision,
+  interrupted,
   onApprove,
   onDeny,
 }: ApprovalCardProps) {
@@ -74,7 +76,7 @@ export function ApprovalCard({
                 : "chat-approval-denied"
             }`}
           >
-            {decision === "approve" ? "\u2713 Approved" : "\u2715 Denied"}
+            {interrupted ? "\u2718 Interrupted" : decision === "approve" ? "\u2713 Approved" : "\u2715 Denied"}
           </span>
         </div>
 

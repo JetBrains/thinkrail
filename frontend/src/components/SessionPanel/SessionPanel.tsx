@@ -116,6 +116,7 @@ export function SessionPanel() {
   const hasPending = activeSession?.pendingRequest != null;
   const isDone = status === "done" || status === "error";
   const isRunning = status === "running";
+  const canInterrupt = status === "running" || status === "waiting";
 
   const placeholder = hasPending
     ? activeSession?.pendingRequest?.type === "approval"
@@ -132,8 +133,8 @@ export function SessionPanel() {
         : "Message Claude...";
 
   const inputDisabled = isDone || isRunning || (hasPending && activeSession?.pendingRequest?.type === "approval");
-  const showContinue = !inputDisabled && !isRunning && (activeSession?.events.length ?? 0) > 0;
-  const showStartSession = !inputDisabled && !isRunning
+  const showContinue = !inputDisabled && !canInterrupt && (activeSession?.events.length ?? 0) > 0;
+  const showStartSession = !inputDisabled && !canInterrupt
     && (activeSession?.events.length ?? 0) === 0
     && activeSession?.skillId != null;
 
@@ -199,6 +200,7 @@ export function SessionPanel() {
               placeholder={placeholder}
               onSend={handleSend}
               isRunning={isRunning}
+              canInterrupt={canInterrupt}
               onInterrupt={() => interruptSession(activeSession!.bonsaiSid)}
               showContinue={showContinue}
               onContinue={handleContinue}

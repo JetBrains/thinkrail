@@ -38,7 +38,7 @@ export function NewSessionModal() {
       setSpecIds([]);
       setModel(DEFAULT_MODEL);
       setUse1M(false);
-      setMaxTurns(20);
+      setMaxTurns(50);
       setEffort(null);
       setPermissionMode("default");
       setShowAdvanced(false);

@@ -306,11 +306,13 @@ export const ChatStream = forwardRef<ChatStreamHandle, ChatStreamProps>(function
             const requestId = (p.requestId as string) ?? "";
             const isAnswered = answeredRequests.has(requestId);
             const savedAnswer = answeredRequests.get(requestId) as Record<string, unknown> | undefined;
+            const qInterrupted = savedAnswer?.interrupt === true;
             return (
               <QuestionCard
                 key={k}
                 questions={questions as never}
                 answered={isAnswered}
+                interrupted={qInterrupted}
                 selectedAnswers={isAnswered ? (savedAnswer?.answers as Record<string, string>) : undefined}
                 onSubmit={(response) => onResolveRequest(requestId, response)}
               />
@@ -321,6 +323,7 @@ export const ChatStream = forwardRef<ChatStreamHandle, ChatStreamProps>(function
             const requestId = (p.requestId as string) ?? "";
             const isAnswered = answeredRequests.has(requestId);
             const savedResponse = answeredRequests.get(requestId) as Record<string, unknown> | undefined;
+            const aInterrupted = savedResponse?.interrupt === true;
             const decision = savedResponse?.behavior === "allow" ? "approve" as const : "deny" as const;
 
             // ExitPlanMode gets a dedicated plan review card
@@ -333,11 +336,12 @@ export const ChatStream = forwardRef<ChatStreamHandle, ChatStreamProps>(function
                   allowedPrompts={(toolInput?.allowedPrompts as Array<{ tool: "Bash"; prompt: string }>) ?? undefined}
                   answered={isAnswered}
                   decision={isAnswered ? decision : undefined}
+                  interrupted={aInterrupted}
                   onApprove={() =>
                     onResolveRequest(requestId, { behavior: "allow" })
                   }
                   rejectionReason={
-                    isAnswered && decision === "deny"
+                    isAnswered && decision === "deny" && !aInterrupted
                       ? (savedResponse?.rejectionReason as string) ?? undefined
                       : undefined
                   }
@@ -363,6 +367,7 @@ export const ChatStream = forwardRef<ChatStreamHandle, ChatStreamProps>(function
                 description={(p.description as string) ?? undefined}
                 answered={isAnswered}
                 decision={isAnswered ? decision : undefined}
+                interrupted={aInterrupted}
                 onApprove={() =>
                   onResolveRequest(requestId, { behavior: "allow" })
                 }

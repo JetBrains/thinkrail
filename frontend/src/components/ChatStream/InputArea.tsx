@@ -13,6 +13,7 @@ interface InputAreaProps {
   placeholder: string;
   onSend: (text: string, isMarkdown?: boolean) => void;
   isRunning?: boolean;
+  canInterrupt?: boolean;
   onInterrupt?: () => void;
   showContinue?: boolean;
   onContinue?: () => void;
@@ -34,7 +35,7 @@ const FORMAT_ACTIONS = [
   { label: "```", title: "Code block", prefix: "\n```\n", suffix: "\n```\n" },
 ];
 
-export function InputArea({ sessionId, disabled, placeholder, onSend, isRunning, onInterrupt, showContinue, onContinue, showStartSession, onStartSession, skillId }: InputAreaProps) {
+export function InputArea({ sessionId, disabled, placeholder, onSend, isRunning, canInterrupt, onInterrupt, showContinue, onContinue, showStartSession, onStartSession, skillId }: InputAreaProps) {
   const [text, setText] = useState(() => useInputDraftStore.getState().getDraft(sessionId));
   const [suggestions, setSuggestions] = useState<typeof SKILLS>([]);
   const [selectedIndex, setSelectedIndex] = useState(0);
@@ -475,9 +476,10 @@ export function InputArea({ sessionId, disabled, placeholder, onSend, isRunning,
             {skillId ? `Start: ${SKILLS.find(s => s.id === skillId)?.name ?? "Session"}` : "Start"}
           </button>
         )}
-        {isRunning && onInterrupt ? (
+        {canInterrupt && onInterrupt && (
           <button className="input-interrupt" onClick={onInterrupt}>{"\u25A0"}</button>
-        ) : (
+        )}
+        {!(isRunning && onInterrupt) && (
           <button
             className="input-send"
             onClick={handleSend}

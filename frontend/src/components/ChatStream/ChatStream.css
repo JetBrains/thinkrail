@@ -295,6 +295,7 @@
 .chat-question-answered-header-row { display: flex; align-items: center; margin-bottom: var(--space-sm); }
 .chat-question-answered-header-row .chat-question-header { margin-bottom: 0; }
 .chat-question-answered-done { margin-left: auto; font-size: 11px; color: var(--green); }
+.chat-question-answered-interrupted { color: var(--muted); }
 .chat-question-header { font-size: 9px; text-transform: uppercase; font-weight: 700; color: var(--purple); letter-spacing: 0.5px; margin-bottom: var(--space-sm); }
 .chat-question-text { font-size: 12px; font-weight: 600; color: var(--text); margin-bottom: var(--space-md); }
 
