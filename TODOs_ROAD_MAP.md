@@ -9,10 +9,12 @@
     - [x] Bug/Missing feature: Doesn't display user prompts
     - [x] When ask multiple askUserQuestions in one use inlined tabs or something similar
     - [ ] Colours and AskUserQuestions are hard to see (small and violet on black)
-    - [x] AskUserQuestion should always have "other" field
     - [ ] Visualize plan and display progress
     - [~] Re-visualise normally answers on AskUserQuestions
+    - [x] AskUserQuestion should always have "other" field
     - [x] AskUserQuestion/approval requests can "slip upwards" when agent does things simultaneously — should be pinned/focused (like claude code)
+    - [x] Subagent blocks collapsed by default (expandable on click)
+    - [x] Fix input draft store sync — drafts now survive history select, skill insert, formatting, voice input, and session switching
     - [ ] Group tool calls and tasks somehow
     - [ ] add "don't ask approval again for ..." — "Allow for Session" button on ApprovalCard that uses SDK's `PermissionUpdate(type="addRules", destination="session")` via `PermissionResultAllow.updated_permissions` to auto-allow matching tools for the rest of the session (SDK enforces it natively, no custom state needed)
     - [~] send message should always be active?
@@ -20,7 +22,7 @@
     - [x] on approval "denied" agent stuck
     - [x] add something like "agent is thinking..." which tracks that agent is not stuck and displays user that "work is in progress"
     - [ ] for each tool show the directory it is being executed from
-    - [ ] "plan mode exit" should be separately handled — currently shows raw JSON blob of ExitPlanMode with the full plan text as an "Action requires approval" card
+    - [x] "plan mode exit" should be separately handled — PlanApprovalCard now shows actual plan content from file (not raw JSON blob)
 
 * Project memory/state
     - [~] sessions do not restore after restart
@@ -78,6 +80,13 @@
         AskUserQuestion[object Object]✕ error
         InputValidationError: Too big: expected array to have <=4 items
         ```
+    - [ ] **Visualization cards — diagram type broken**:
+        * [ ] Sequence diagrams render blank — LLM sends `{entities, steps}` but component only handles `{nodes, edges}`
+        * [ ] Flow diagram node `group`/`style` fields ignored — no visual distinction between node types
+        * [ ] Multiline node labels (`\n`) render on single line — needs `white-space: pre-wrap`
+        * [ ] `layout` prop defined in types but never implemented in renderer
+        * [ ] Edges render as flat text list below nodes — no spatial connection to nodes
+    - [ ] **Visualization cards — status-list `detail` field silently dropped**: LLM sends `detail` but type only has `meta` — descriptions invisible
 
 * Other
     - [x] add ~~somewhere~~ in main (session) tabs window file/code preview
@@ -106,11 +115,11 @@
     - [ ] brainstorming
     - [ ] plugins and mcp support
     - [ ] something like `ultrathink` support
-    - [ ] support voice input
+    - [x] support voice input — InputArea has mic button with Web Speech API + Whisper fallback
     - [ ] support `simplify`
     - [ ] support remote control
     - [ ] memory management
-    - [ ] markdown input mode
+    - [x] markdown input mode — InputArea has md toolbar (bold/italic/code/link/headings/lists/blockquote/codeblock) + split preview pane
 
 * Bonsai workflow:
     - [?] Should tasks (current tasks) be modifiable or append only? 

@@ -2055,9 +2055,42 @@
       ],
       "created": "2026-03-12",
       "updated": "2026-03-12"
+    },
+    {
+      "id": "improvement-plan-rejection-reason",
+      "type": "task-spec",
+      "path": "current_tasks/frontend/improvement_plan_rejection_reason.md",
+      "title": "Improve plan rejection: add reason text so agent can align",
+      "status": "active",
+      "covers": [
+        "frontend/src/components/ChatStream/PlanApprovalCard.tsx",
+        "frontend/src/components/ChatStream/ChatStream.tsx",
+        "frontend/src/components/ChatStream/ChatStream.css"
+      ],
+      "tags": [
+        "high",
+        "improvement"
+      ],
+      "created": "2026-03-12",
+      "updated": "2026-03-12"
     }
   ],
   "links": [
+    {
+      "from": "improvement-plan-rejection-reason",
+      "to": "chat-ui",
+      "type": "implements"
+    },
+    {
+      "from": "improvement-plan-rejection-reason",
+      "to": "improvement-plan-approval-card",
+      "type": "depends-on"
+    },
+    {
+      "from": "improvement-plan-rejection-reason",
+      "to": "bugfix-plan-approval-content",
+      "type": "depends-on"
+    },
     {
       "from": "agent-tools",
       "to": "module-agent",

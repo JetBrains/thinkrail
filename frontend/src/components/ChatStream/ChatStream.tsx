@@ -336,13 +336,21 @@ export const ChatStream = forwardRef<ChatStreamHandle, ChatStreamProps>(function
                   onApprove={() =>
                     onResolveRequest(requestId, { behavior: "allow" })
                   }
-                  onDeny={() =>
+                  rejectionReason={
+                    isAnswered && decision === "deny"
+                      ? (savedResponse?.rejectionReason as string) ?? undefined
+                      : undefined
+                  }
+                  onDeny={(reason?: string) => {
                     onResolveRequest(requestId, {
                       behavior: "deny",
-                      message: "Plan rejected",
+                      message: reason
+                        ? `Plan rejected: ${reason}`
+                        : "Plan rejected",
                       interrupt: false,
-                    })
-                  }
+                      rejectionReason: reason ?? "",
+                    });
+                  }}
                 />
               );
             }

@@ -573,6 +573,52 @@
   margin-bottom: 0;
 }
 
+/* Rejection reason UI */
+.chat-plan-approval-reason {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+}
+.chat-plan-approval-reason-prompt {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text);
+}
+.chat-plan-approval-reason-input {
+  width: 100%;
+  padding: var(--space-sm) var(--space-md);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font);
+  font-size: 12px;
+  resize: vertical;
+  min-height: 40px;
+}
+.chat-plan-approval-reason-input:focus {
+  outline: none;
+  border-color: var(--red);
+}
+.chat-plan-approval-reason-input::placeholder {
+  color: var(--hint);
+}
+.chat-plan-approval-reason-actions {
+  display: flex;
+  gap: var(--space-sm);
+}
+
+/* Rejection reason in answered/expanded state */
+.chat-plan-approval-reason-display {
+  font-size: 12px;
+  color: var(--red);
+  padding: var(--space-xs) 0;
+  margin-bottom: var(--space-sm);
+}
+.chat-plan-approval-reason-label {
+  font-weight: 600;
+}
+
 /* ── Buttons ── */
 .chat-btn {
   padding: var(--space-xs) var(--space-lg);
@@ -591,6 +637,8 @@
 .chat-btn-approve { background: var(--green); color: var(--bg); border-color: var(--green); }
 .chat-btn-deny { border-color: var(--red); color: var(--red); }
 .chat-btn-deny:hover { background: rgba(247, 118, 142, 0.1); }
+.chat-btn-muted { border-color: var(--border); color: var(--muted); }
+.chat-btn-muted:hover { color: var(--text); }
 
 /* ── Banners ── */
 .chat-banner {

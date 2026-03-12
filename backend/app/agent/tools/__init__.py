@@ -19,7 +19,8 @@ InterceptFn = Callable[
 
 MCP_SERVERS: dict[str, Any] = {
     "bonsai-viz": viz_mcp_server,
-    "bonsai-proactive": suggest_session_mcp_server,
+    # TODO: proactive isn't ready
+    # "bonsai-proactive": suggest_session_mcp_server,
 }
 
 INTERCEPTORS: dict[str, InterceptFn] = {

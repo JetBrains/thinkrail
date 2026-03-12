@@ -11,8 +11,9 @@ interface PlanApprovalCardProps {
   allowedPrompts?: AllowedPrompt[];
   answered: boolean;
   decision?: "approve" | "deny";
+  rejectionReason?: string;
   onApprove: () => void;
-  onDeny: () => void;
+  onDeny: (reason?: string) => void;
 }
 
 /** Extract a short title from plan markdown: first heading or first line. */
@@ -29,10 +30,13 @@ export function PlanApprovalCard({
   allowedPrompts,
   answered,
   decision,
+  rejectionReason,
   onApprove,
   onDeny,
 }: PlanApprovalCardProps) {
   const [expanded, setExpanded] = useState(false);
+  const [rejecting, setRejecting] = useState(false);
+  const [reason, setReason] = useState("");
   const title = extractPlanTitle(planContent);
   const hasPrompts = allowedPrompts && allowedPrompts.length > 0;
 
@@ -78,6 +82,12 @@ export function PlanApprovalCard({
                 Plan written to file
               </div>
             )}
+            {rejectionReason && (
+              <div className="chat-plan-approval-reason-display">
+                <span className="chat-plan-approval-reason-label">Reason:</span>{" "}
+                {rejectionReason}
+              </div>
+            )}
             {hasPrompts && (
               <div className="chat-plan-approval-tags">
                 {allowedPrompts!.map((p, i) => (
@@ -119,14 +129,49 @@ export function PlanApprovalCard({
         </div>
       )}
 
-      <div className="chat-plan-approval-actions">
-        <button className="chat-btn chat-btn-approve" onClick={onApprove}>
-          Approve Plan
-        </button>
-        <button className="chat-btn chat-btn-deny" onClick={onDeny}>
-          Reject Plan
-        </button>
-      </div>
+      {rejecting ? (
+        <div className="chat-plan-approval-reason">
+          <label className="chat-plan-approval-reason-prompt">
+            Why are you rejecting this plan?
+          </label>
+          <textarea
+            className="chat-plan-approval-reason-input"
+            rows={3}
+            placeholder="Describe what should change..."
+            value={reason}
+            onChange={(e) => setReason(e.target.value)}
+            autoFocus
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
+                onDeny(reason.trim() || undefined);
+              }
+            }}
+          />
+          <div className="chat-plan-approval-reason-actions">
+            <button
+              className="chat-btn chat-btn-deny"
+              onClick={() => onDeny(reason.trim() || undefined)}
+            >
+              Submit Rejection
+            </button>
+            <button
+              className="chat-btn chat-btn-muted"
+              onClick={() => { setRejecting(false); setReason(""); }}
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      ) : (
+        <div className="chat-plan-approval-actions">
+          <button className="chat-btn chat-btn-approve" onClick={onApprove}>
+            Approve Plan
+          </button>
+          <button className="chat-btn chat-btn-deny" onClick={() => setRejecting(true)}>
+            Reject Plan
+          </button>
+        </div>
+      )}
     </div>
   );
 }
