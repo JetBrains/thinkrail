@@ -41,3 +41,14 @@ export function fileMatchesCovers(filePath: string, covers: string[]): boolean {
     filePath.startsWith(pattern) || filePath === pattern
   );
 }
+
+export function fmtTokens(n: number): string {
+  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
+  if (n >= 1_000) return `${(n / 1_000).toFixed(1)}k`;
+  return String(n);
+}
+
+export function shortPath(p: string): string {
+  const parts = p.split("/");
+  return parts.length > 3 ? `.../${parts.slice(-3).join("/")}` : p;
+}

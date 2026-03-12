@@ -1220,16 +1220,13 @@
       "id": "ui-context-panel-agent-mode",
       "type": "submodule-design",
       "path": "frontend/ui-specs/context-panel/AGENT_CONTEXT.md",
-      "title": "Agent Context Sections Design",
+      "title": "Agent Context — Context Usage Analytics",
       "status": "active",
       "created": "2026-03-06",
-      "updated": "2026-03-06",
+      "updated": "2026-03-12",
       "covers": [
         "frontend/src/components/ContextPanel/modes/AgentContext.tsx",
-        "frontend/src/components/ContextPanel/sections/TaskSpecPreview.tsx",
-        "frontend/src/components/ContextPanel/sections/FilesModified.tsx",
-        "frontend/src/components/ContextPanel/sections/RelatedSpecs.tsx",
-        "frontend/src/components/ContextPanel/sections/ComplianceHints.tsx"
+        "frontend/src/components/ContextPanel/modes/AgentContext.css"
       ],
       "tags": [
         "frontend",
@@ -1308,6 +1305,24 @@
       "tags": [
         "high",
         "feature",
+        "frontend"
+      ]
+    },
+    {
+      "id": "task-refactor-agent-context-analytics",
+      "type": "task-spec",
+      "path": "current_tasks/frontend/refactor_agent_context_usage_analytics.md",
+      "title": "Refactor Agent Context: Replace with Context Usage Analytics",
+      "status": "done",
+      "created": "2026-03-12",
+      "updated": "2026-03-12",
+      "covers": [
+        "frontend/src/components/ContextPanel/modes/AgentContext.tsx",
+        "frontend/src/components/ContextPanel/modes/AgentContext.css"
+      ],
+      "tags": [
+        "high",
+        "refactor",
         "frontend"
       ]
     },
@@ -2930,6 +2945,16 @@
       "from": "task-context-panel-agent-sections",
       "to": "task-context-panel-shared-infra",
       "type": "depends-on"
+    },
+    {
+      "from": "task-refactor-agent-context-analytics",
+      "to": "ui-context-panel-agent-mode",
+      "type": "implements"
+    },
+    {
+      "from": "task-refactor-agent-context-analytics",
+      "to": "task-context-panel-agent-sections",
+      "type": "supersedes"
     },
     {
       "from": "task-context-panel-infrastructure",

@@ -1,12 +1,14 @@
 # Context Panel — UI Specification
 
-> Parent: [WEBVIEW.md](WEBVIEW.md) | Status: **Active** | Created: 2026-03-04 | Updated: 2026-03-05
+> Parent: [WEBVIEW.md](WEBVIEW.md) | Status: **Active** | Created: 2026-03-04 | Updated: 2026-03-12
 
 ## Overview
 
-The Context Panel is a context-aware sidebar (the right panel in the three-panel layout) that displays information related to the active content in the center panel. It auto-switches between three modes — **Spec Context**, **Agent Context**, and **Code Context** — showing connected specs, linked tasks, and covered files depending on what the user is working on. When nothing is selected, the panel shows an empty welcome state.
+The Context Panel is a context-aware sidebar (the right panel in the three-panel layout) that displays information related to the active content in the center panel. It auto-switches between three modes — **Spec Context**, **Agent Context**, and **Code Context** — depending on what the user is working on. When nothing is selected, the panel shows an empty welcome state.
 
-The panel has **no tabs**. Content auto-switches based on what is in the center panel. A small mode indicator at the top shows the current mode (emoji icon + uppercase label). Below it, each mode renders a vertical stack of collapsible sections.
+The panel has **no tabs** for mode switching — content auto-switches based on what is in the center panel. A small mode indicator at the top shows the current mode (emoji icon + uppercase label). The header also contains a **Dashboard pin button** (📊) that overrides the auto mode to show the VizTab dashboard. Below the header, each mode renders a vertical stack of collapsible sections.
+
+**Agent Context** shows context usage analytics (token utilization, turn history, tool costs, file I/O, cache stats) for the active session. **Spec Context** and **Code Context** show spec-related information.
 
 ---
 
@@ -15,20 +17,23 @@ The panel has **no tabs**. Content auto-switches based on what is in the center 
 ```
 AppShell
 └── ContextPanel                  (ContextPanel.tsx)
-    ├── .context-panel__header    (hidden when mode == "empty")
-    │   ├── .context-panel__mode-icon
-    │   └── .context-panel__mode-label
+    ├── .context-panel__header    (always rendered; icon + label hidden when mode == "empty")
+    │   ├── .context-panel__mode-icon   (conditional: shown when pin != "none" || mode != "empty")
+    │   ├── .context-panel__mode-label  (conditional: same)
+    │   └── .context-panel__dash-btn    (📊 dashboard pin — always visible)
     └── .context-panel__body
         ├── SpecContext            (modes/SpecContext.tsx)
         │   ├── ConnectedSpecs    (sections/ConnectedSpecs.tsx)
         │   ├── LinkedTasks       (sections/LinkedTasks.tsx)
         │   ├── CoveredFiles      (sections/CoveredFiles.tsx)
         │   └── SpecHealth        (sections/SpecHealth.tsx)
-        ├── AgentContext           (modes/AgentContext.tsx)
-        │   ├── TaskSpecPreview   (sections/TaskSpecPreview.tsx)
-        │   ├── FilesModified     (sections/FilesModified.tsx)
-        │   ├── RelatedSpecs      (sections/RelatedSpecs.tsx)
-        │   └── ComplianceHints   (sections/ComplianceHints.tsx)
+        ├── AgentContext           (modes/AgentContext.tsx + AgentContext.css)
+        │   ├── UtilizationHeader (inline — always visible)
+        │   ├── TokenBreakdown    (CollapsibleSection)
+        │   ├── TurnHistory       (CollapsibleSection)
+        │   ├── ToolCalls         (CollapsibleSection)
+        │   ├── FilesAccessed     (CollapsibleSection)
+        │   └── CacheStats        (CollapsibleSection)
         ├── CodeContext            (modes/CodeContext.tsx)
         │   ├── CoveringSpecs     (sections/CoveringSpecs.tsx)
         │   ├── RelatedTasks      (sections/RelatedTasks.tsx)
@@ -57,9 +62,11 @@ All files under `frontend/src/components/ContextPanel/`.
 
 See [SPEC_CONTEXT.md](context-panel/SPEC_CONTEXT.md) for section details.
 
-### 2. Agent Context
+### 2. Agent Context (Context Usage Analytics)
 
 **Trigger:** `activeSessionId` is non-null and no file/preview focused.
+
+Renders a metrics dashboard: utilization header, token breakdown, turn history, tool calls, files accessed, and cache stats — all sourced from `session.metrics.contextUsage`.
 
 See [AGENT_CONTEXT.md](context-panel/AGENT_CONTEXT.md) for section details.
 
@@ -96,7 +103,7 @@ interface CollapsibleSectionProps {
 
 ### Behavior
 
-- Expand/collapse state persisted to `localStorage` key `bonsai-section-{title}`
+- Expand/collapse state managed via `useState(defaultExpanded)` — resets on remount
 - Collapse animation via `max-height` CSS transition (0 ↔ 2000px)
 - Chevron: `▼` expanded, `▶` collapsed
 - `expandToCenter` button renders `⇱` with `stopPropagation`
@@ -119,20 +126,31 @@ interface CollapsibleSectionProps {
 
 ## Section Components
 
-All in `frontend/src/components/ContextPanel/sections/`. All placeholder sections render `<div className="section-placeholder">` with static italic hint text.
+### Spec & Code Context Sections
 
-| Component | Section Title | Hint Text |
+All in `frontend/src/components/ContextPanel/sections/`. Placeholder sections render `<div className="section-placeholder">` with static italic hint text.
+
+| Component | Mode | Section Title | Hint Text |
+|---|---|---|---|
+| `ConnectedSpecs` | spec | Connected Specs | *(renders `<GraphView />` at 280px)* |
+| `LinkedTasks` | spec | Tasks | "Tasks linked to this spec will appear here" |
+| `CoveredFiles` | spec | Covered Files | "Files covered by this spec will appear here" |
+| `SpecHealth` | spec, code | Spec Health | "Spec health summary will appear here" |
+| `CoveringSpecs` | code | Covering Specs | "Specs covering this file will appear here" |
+| `RelatedTasks` | code | Related Tasks | "Tasks related to this file will appear here" |
+
+### Agent Context Sections
+
+All defined inline in `modes/AgentContext.tsx` (not separate files). Uses `session.metrics.contextUsage` data.
+
+| Component | Section Title | Content |
 |---|---|---|
-| `ConnectedSpecs` | Connected Specs | *(renders `<GraphView />` at 280px)* |
-| `LinkedTasks` | Tasks | "Tasks linked to this spec will appear here" |
-| `CoveredFiles` | Covered Files | "Files covered by this spec will appear here" |
-| `SpecHealth` | Spec Health | "Spec health summary will appear here" |
-| `TaskSpecPreview` | Task Spec | "Task spec driving this session will appear here" |
-| `FilesModified` | Files Modified | "Files modified by agent will appear here" |
-| `RelatedSpecs` | Related Specs | "Specs related to this session will appear here" |
-| `ComplianceHints` | Compliance | "Compliance tracking will appear here" |
-| `CoveringSpecs` | Covering Specs | "Specs covering this file will appear here" |
-| `RelatedTasks` | Related Tasks | "Tasks related to this file will appear here" |
+| *(header)* | — | Utilization % bar (always visible, not collapsible) |
+| `TokenBreakdown` | Token Breakdown | Stacked bar + 4-row legend (input, cache read, cache creation, output) |
+| `TurnHistory` | Turn History | Grid table of turns with run separators |
+| `ToolCalls` | Tool Calls | Grid table sorted by token cost |
+| `FilesAccessed` | Files Accessed | Read/Written file lists with click-to-preview |
+| `CacheStats` | Cache Stats | Hit rate bar + breakdown |
 
 ---
 
@@ -214,11 +232,11 @@ export function useContextMode(): ContextMode {
 
 ## Known Limitations
 
-- **Most sections are placeholders** — only `ConnectedSpecs` has real content (full GraphView)
+- **Spec/Code sections are placeholders** — only `ConnectedSpecs` has real content (full GraphView)
 - **ConnectedSpecs shows full graph** — not filtered to spec neighborhood
-- **`expandToCenter` is a no-op** — TODO stubs on ConnectedSpecs and TaskSpecPreview
-- **No props passed to sections** — no data fetching implemented in any section
-- **No manual mode override** — always follows center panel state
+- **`expandToCenter` is a no-op** — TODO stubs on ConnectedSpecs
+- **Agent context is metrics-only** — no spec/task context in agent mode (by design)
+- **Dashboard pin is the only override** — no manual mode switching beyond the 📊 button
 
 ---
 
