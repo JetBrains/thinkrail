@@ -98,9 +98,11 @@ Terminals connect to the backend via a WebSocket endpoint (separate from the JSO
 
 ## Keyboard Shortcuts
 
+> **Modifier key:** Mod = Ctrl on macOS, Alt on Linux/Windows
+
 | Key | Action | Scope |
 | --- | --- | --- |
-| `Cmd+\`` | Focus console tab (global) | Switches right panel to Console |
+| `Mod+\`` | Focus console tab (global) | Switches right panel to Console |
 | `Ctrl+Shift+T` | New terminal | Within Console |
 | `Ctrl+Shift+W` | Close current terminal | Within Console |
 | `Ctrl+Shift+[` / `]` | Switch terminal tabs | Within Console |

@@ -8,6 +8,8 @@ The Chat UI is the center panel's primary content area. It renders a scrolling s
 
 This spec reflects the **actual implemented code** as of 2026-03-05. Items not yet implemented are marked **[Planned]**.
 
+> **Modifier key:** Mod = Ctrl on macOS, Alt on Linux/Windows
+
 ---
 
 ## Component Hierarchy
@@ -51,7 +53,7 @@ This spec reflects the **actual implemented code** as of 2026-03-05. Items not y
 **Key structural notes:**
 - `SessionPanel` is **not** structured as `SessionHeader + ChatStream + StatusLine + InputArea` as previously specced. There is **no `<SessionHeader>`** component.
 - The `<SessionTabBar>` handles both session tabs and file/preview tabs in a single unified bar.
-- When no sessions and no files are open, `SessionPanel` renders `<div className="center-placeholder">Select a session or create a new one (Cmd+T)</div>`.
+- When no sessions and no files are open, `SessionPanel` renders `<div className="center-placeholder">Select a session or create a new one (Mod+T)</div>`.
 - When sessions/files exist but no active tab matches, it renders `<div className="center-placeholder">Select a tab</div>`.
 
 ---
@@ -374,7 +376,7 @@ interface QuestionOption {
 **Submission:**
 - If free-text question: sends `{ text: textInput, answers: selections }`
 - Otherwise: sends `{ questions, answers: { [questionText]: selectedLabel } }`
-- `Cmd/Ctrl+Enter` submits from the free-text textarea
+- `Mod+Enter` submits from the free-text textarea
 
 **Actions row** (`.chat-question-actions`, hidden when `answered`):
 - Single button: `.chat-btn.chat-btn-primary` labeled "Send"
@@ -671,7 +673,7 @@ Root: `<div className="input-area">` with `style={{ position: "relative" }}`
 - `resize: none`, `border: 1px solid var(--border)`, `background: var(--elevated)`
 - Focus: `border-color: var(--blue)`
 - Disabled: `opacity: 0.5; cursor: not-allowed`
-- `Cmd/Ctrl+Enter` sends; plain `Enter` adds a newline
+- `Mod+Enter` sends; plain `Enter` adds a newline
 
 **Mic button** (`.input-mic`, conditional on `voice.isSupported`):
 - Emoji: 🎙 (replaced by `.input-mic-spinner` when transcribing)

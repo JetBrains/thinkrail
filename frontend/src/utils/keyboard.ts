@@ -1,4 +1,5 @@
 import { useUiStore } from "@/store/uiStore.ts";
+import { isMod } from "@/utils/platform.ts";
 
 function isTextInput(el: EventTarget | null): boolean {
   if (!el || !(el instanceof HTMLElement)) return false;
@@ -10,7 +11,7 @@ function isTextInput(el: EventTarget | null): boolean {
 
 export function registerKeyboardShortcuts(): () => void {
   function handler(e: KeyboardEvent) {
-    const meta = e.metaKey || e.ctrlKey;
+    const meta = isMod(e);
     const store = useUiStore.getState();
 
     // Escape — always works, closes topmost overlay
@@ -28,25 +29,22 @@ export function registerKeyboardShortcuts(): () => void {
     // Skip other shortcuts when text input focused
     if (isTextInput(e.target)) return;
 
-    // Ctrl+B — toggle left panel
-    if (e.key === "b" && e.ctrlKey && !e.metaKey) {
-      e.preventDefault();
-      store.toggleLeftPanel();
-      return;
-    }
-
     if (!meta) return;
 
     switch (e.key) {
-      case "k": // Cmd+K — command palette
+      case "b": // Mod+B — toggle left panel
+        e.preventDefault();
+        store.toggleLeftPanel();
+        break;
+      case "k": // Mod+K — command palette
         e.preventDefault();
         store.togglePalette();
         break;
-      case "t": // Cmd+T — new session
+      case "t": // Mod+T — new session
         e.preventDefault();
         store.openModal();
         break;
-      case "j": // Cmd+J — toggle right panel
+      case "j": // Mod+J — toggle right panel
         e.preventDefault();
         store.toggleRightPanel();
         break;

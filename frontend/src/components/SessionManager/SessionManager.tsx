@@ -6,6 +6,7 @@ import { useSessionStore } from "@/store/sessionStore.ts";
 import { getErrorMessage } from "@/utils/errors.ts";
 import { timeAgo } from "@/utils/format.ts";
 import { getStatusStyle } from "@/utils/status.ts";
+import { modLabel } from "@/utils/platform.ts";
 import "./SessionManager.css";
 
 export function SessionManager({ onClose }: { onClose?: () => void }) {
@@ -113,7 +114,7 @@ export function SessionManager({ onClose }: { onClose?: () => void }) {
       {error && <div className="sm-error">{error}</div>}
 
       {sessions.length === 0 && !error && (
-        <div className="sm-empty">No sessions yet. Create one with Cmd+T.</div>
+        <div className="sm-empty">No sessions yet. Create one with {modLabel("T")}.</div>
       )}
 
       {active.length > 0 && (

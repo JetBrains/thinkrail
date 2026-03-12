@@ -4,6 +4,7 @@ import { useNotificationStore } from "@/store/notificationStore.ts";
 import { getErrorMessage } from "@/utils/errors.ts";
 import { useFileStore } from "@/store/fileStore.ts";
 import type { SessionStatus } from "@/types/session.ts";
+import { modLabel } from "@/utils/platform.ts";
 import { ChatStream } from "@/components/ChatStream/ChatStream.tsx";
 import type { ChatStreamHandle } from "@/components/ChatStream/ChatStream.tsx";
 import { SessionStatusLine } from "@/components/ChatStream/SessionStatusLine.tsx";
@@ -102,7 +103,7 @@ export function SessionPanel() {
   if (sessionList.length === 0 && fileList.length === 0 && !previewFilePath) {
     return (
       <div className="center-placeholder">
-        Select a session or create a new one (Cmd+T)
+        Select a session or create a new one ({modLabel("T")})
       </div>
     );
   }

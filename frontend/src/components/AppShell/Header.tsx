@@ -1,5 +1,6 @@
 import { useUiStore } from "@/store/uiStore.ts";
 import { useSessionStore } from "@/store/sessionStore.ts";
+import { modLabel } from "@/utils/platform.ts";
 import { ThemeSwitcher } from "./ThemeSwitcher.tsx";
 
 export function Header({ onSwitchProject }: { onSwitchProject: () => void }) {
@@ -27,14 +28,14 @@ export function Header({ onSwitchProject }: { onSwitchProject: () => void }) {
         )}
       </div>
       <div className="header-right">
-        <button className="header-btn" onClick={() => toggleLeft()} title="Toggle tree (Ctrl+B)">
+        <button className="header-btn" onClick={() => toggleLeft()} title={`Toggle tree (${modLabel("B")})`}>
           Tree
         </button>
-        <button className="header-btn" onClick={() => toggleRight()} title="Toggle context panel (Cmd+J)">
+        <button className="header-btn" onClick={() => toggleRight()} title={`Toggle context panel (${modLabel("J")})`}>
           Context
         </button>
         <ThemeSwitcher />
-        <button className="header-btn header-btn-primary" onClick={() => openModal()} title="New session (Cmd+T)">
+        <button className="header-btn header-btn-primary" onClick={() => openModal()} title={`New session (${modLabel("T")})`}>
           + New
         </button>
       </div>

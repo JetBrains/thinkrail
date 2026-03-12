@@ -160,8 +160,10 @@ export function useContextMode(): ContextMode {
 
 ## Panel Toggle
 
+> **Modifier key:** Mod = Ctrl on macOS, Alt on Linux/Windows
+
 - `uiStore.rightPanelCollapsed` controls visibility
-- Collapsed: 20px-wide button with `◀` and tooltip "Open context panel (Cmd+J)"
+- Collapsed: 20px-wide button with `◀` and tooltip "Open context panel (Mod+J)"
 - Expanded: `ResizeHandle` for drag-to-resize
 - Default width: 380px, minimum 200px, collapse threshold 150px
 

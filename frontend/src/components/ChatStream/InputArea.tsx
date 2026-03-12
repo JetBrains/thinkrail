@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { SKILLS } from "@/constants/skills";
 import { useVoiceInput } from "@/hooks/useVoiceInput";
 import { useNotificationStore } from "@/store/notificationStore";
+import { isMod, modLabel, MOD_LABEL } from "@/utils/platform";
 import { ChatMarkdown } from "./ChatMarkdown";
 import { MessageHistory } from "./MessageHistory";
 
@@ -21,17 +22,17 @@ interface InputAreaProps {
 }
 
 const FORMAT_ACTIONS = [
-  { label: "B", title: "Bold (Ctrl+B)", prefix: "**", suffix: "**" },
-  { label: "I", title: "Italic (Ctrl+I)", prefix: "*", suffix: "*" },
+  { label: "B", title: `Bold (${modLabel("B")})`, prefix: "**", suffix: "**" },
+  { label: "I", title: `Italic (${modLabel("I")})`, prefix: "*", suffix: "*" },
   { label: "</>", title: "Inline code", prefix: "`", suffix: "`" },
-  { label: "\uD83D\uDD17", title: "Link (Ctrl+K)", prefix: "[", suffix: "](url)" },
+  { label: "\uD83D\uDD17", title: `Link (${modLabel("K")})`, prefix: "[", suffix: "](url)" },
   { label: "H", title: "Heading", prefix: "\n## ", suffix: "" },
   { label: "\u2022", title: "Bullet list", prefix: "\n- ", suffix: "" },
   { label: "1.", title: "Numbered list", prefix: "\n1. ", suffix: "" },
   { label: "\u275D", title: "Blockquote", prefix: "\n> ", suffix: "" },
   { label: "\u2014", title: "Horizontal rule", prefix: "\n---\n", suffix: "" },
   { label: "```", title: "Code block", prefix: "\n```\n", suffix: "\n```\n" },
-] as const;
+];
 
 export function InputArea({ disabled, placeholder, onSend, isRunning, onInterrupt, showContinue, onContinue, showStartSession, onStartSession, skillId }: InputAreaProps) {
   const [text, setText] = useState("");
@@ -158,9 +159,9 @@ export function InputArea({ disabled, placeholder, onSend, isRunning, onInterrup
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
-      const mod = e.metaKey || e.ctrlKey;
+      const mod = isMod(e);
 
-      // Cmd/Ctrl+Enter always sends
+      // Mod+Enter always sends
       if (mod && e.key === "Enter") {
         e.preventDefault();
         handleSend();
@@ -198,8 +199,8 @@ export function InputArea({ disabled, placeholder, onSend, isRunning, onInterrup
         return;
       }
 
-      // Ctrl+R toggles history popup
-      if (e.ctrlKey && e.key === "r") {
+      // Mod+R toggles history popup
+      if (isMod(e) && e.key === "r") {
         e.preventDefault();
         closeSuggestions();
         setShowHistory((v) => !v);
@@ -328,7 +329,7 @@ export function InputArea({ disabled, placeholder, onSend, isRunning, onInterrup
   // Handle Cmd/Ctrl+Enter in preview pane to send
   const handlePreviewKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
-      if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
+      if (isMod(e) && e.key === "Enter") {
         e.preventDefault();
         handleSend();
       }
@@ -372,7 +373,7 @@ export function InputArea({ disabled, placeholder, onSend, isRunning, onInterrup
       <button
         className={`input-mode-btn${isMd ? " input-mode-btn--active" : ""}`}
         onClick={toggleMode}
-        title="Toggle markdown mode (Ctrl+Shift+M)"
+        title={`Toggle markdown mode (${MOD_LABEL}+Shift+M)`}
       >
         Md
       </button>
@@ -444,7 +445,7 @@ export function InputArea({ disabled, placeholder, onSend, isRunning, onInterrup
           closeSuggestions();
           setShowHistory((v) => !v);
         }}
-        title="Message history (Ctrl+R)"
+        title={`Message history (${modLabel("R")})`}
       >
         {"\u2191"}
       </button>

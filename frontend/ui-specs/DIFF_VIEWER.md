@@ -235,10 +235,12 @@ The nav bar shows commit-by-commit navigation:
 
 ## 7. Keyboard Shortcuts
 
+> **Modifier key:** Mod = Ctrl on macOS, Alt on Linux/Windows
+
 | Key | Action |
 | --- | --- |
 | `[` / `]` | Previous / next commit |
-| `Cmd+D` | Focus diff view |
+| `Mod+D` | Focus diff view |
 
 ## 8. State
 

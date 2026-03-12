@@ -177,7 +177,9 @@ rightDrawerOpen: boolean;   // only used at < 1024px (planned)
 
 ## Accessibility
 
-- Collapsed panels remain accessible via keyboard shortcuts (`Ctrl+B`, `Cmd+J`)
+> **Modifier key:** Mod = Ctrl on macOS, Alt on Linux/Windows
+
+- Collapsed panels remain accessible via keyboard shortcuts (`Mod+B`, `Mod+J`)
 - Drawer mode traps focus within the open drawer
 - Escape closes the active drawer
 - Screen readers announce panel state changes
