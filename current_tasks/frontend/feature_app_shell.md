@@ -20,7 +20,7 @@ The App Shell is the root layout component: a three-panel workspace (left nav, c
 - `frontend/src/components/AppShell/ResizeHandle.tsx` — drag handle with snap-to-collapse behavior
 - `frontend/src/components/AppShell/LeftPanel.tsx` — tab container (Specs, Requirements, Files, Progress)
 - `frontend/src/components/AppShell/CenterPanel.tsx` — session tab bar + active session content area
-- `frontend/src/utils/keyboard.ts` — global keyboard shortcut registration (Cmd+K, Cmd+T, Cmd+1-9, Ctrl+B, Cmd+J)
+- `frontend/src/utils/keyboard.ts` — global keyboard shortcut registration (Mod+K, Mod+T, Mod+1-9, Mod+B, Mod+J)
 
 Update `frontend/src/App.tsx` to wire providers (RpcProvider, BrowserRouter) and render AppShell.
 
@@ -48,7 +48,7 @@ Update `frontend/src/App.tsx` to wire providers (RpcProvider, BrowserRouter) and
 
 - [ ] Three-panel layout renders with correct proportions
 - [ ] Drag handles resize panels with min/max constraints
-- [ ] Panels collapse/expand via keyboard shortcuts (Ctrl+B, Cmd+J)
+- [ ] Panels collapse/expand via keyboard shortcuts (Mod+B, Mod+J)
 - [ ] Header shows project name and session count
 - [ ] Status bar shows spec counts
 - [ ] React Router navigates between workspace views

@@ -222,7 +222,7 @@ function AppShell({ onSwitchProject }: { onSwitchProject: () => void }) {
       <div className="layout">
         {leftCollapsed ? (
           <button className="left-collapse-btn" onClick={toggleLeft}
-            title="Open left panel (Ctrl/Alt+B)">&#9654;</button>
+            title="Open left panel (Mod+B)">&#9654;</button>
         ) : (
           <>
             <div style={{ width: leftWidth }}>
@@ -310,7 +310,7 @@ function Header({ onSwitchProject }: { onSwitchProject: () => void }) {
   //   - Project button (calls onSwitchProject, shows projectName from uiStore)
   //   - Active session count with pulsing green dot (hidden when 0)
   // Right side:
-  //   - "Tree" button   -> toggleLeftPanel()   (Ctrl/Alt+B)
+  //   - "Tree" button   -> toggleLeftPanel()   (Mod+B)
   //   - "Context" button -> toggleRightPanel()  (Mod+J)
   //   - "+ New" button   -> openModal()          (Mod+T, primary style)
 }
@@ -326,7 +326,7 @@ interface StatusBarProps {
 function StatusBar({ onOpenSessionManager }: StatusBarProps) {
   // Left side: spec counts (total, done, pending), clickable session count,
   //            pending attention count (gold, from notificationStore)
-  // Right side: keyboard shortcut hints (Mod+T, Ctrl/Alt+B, Mod+J, Mod+K)
+  // Right side: keyboard shortcut hints (Mod+T, Mod+B, Mod+J, Mod+K)
 }
 ```
 
@@ -376,17 +376,17 @@ When `connectionState` transitions to `"disconnected"` or `"failed"`, the `wired
 
 Registered once at the app level (`utils/keyboard.ts`), via `useEffect(() => registerKeyboardShortcuts(), [])` in `App.tsx`:
 
-**Modifier key:** `Mod` = Ctrl on macOS, Alt on Linux/Windows. `Ctrl/Alt` = Ctrl on macOS, Alt on Linux/Windows.
+**Modifier key:** `Mod` = Ctrl on macOS, Alt on Linux/Windows.
 
 | Shortcut | Action | Handler |
 | --- | --- | --- |
 | `Mod+K` | Open command palette | `uiStore.togglePalette()` |
 | `Mod+T` | New session modal | `uiStore.openModal()` |
 | `Mod+J` | Toggle right panel | `uiStore.toggleRightPanel()` |
-| `Ctrl/Alt+B` | Toggle left panel | `uiStore.toggleLeftPanel()` |
+| `Mod+B` | Toggle left panel | `uiStore.toggleLeftPanel()` |
 | `Escape` | Close modal/palette | Closes topmost: palette first, then modal |
 
-**Implementation:** Single `keydown` listener on `document`, routing to actions based on key combos. All shortcuts except `Escape` are disabled when a text input (`<input>`, `<textarea>`, or `contentEditable`) is focused. The `Ctrl/Alt+B` handler checks the platform-appropriate modifier to avoid conflicts with the browser bold shortcut.
+**Implementation:** Single `keydown` listener on `document`, routing to actions based on key combos. All shortcuts except `Escape` are disabled when a text input (`<input>`, `<textarea>`, or `contentEditable`) is focused. The `Mod+B` handler checks the platform-appropriate modifier (Ctrl on macOS, Alt on Linux/Windows) to avoid conflicts with the browser bold shortcut.
 
 ## Naming Conventions
 

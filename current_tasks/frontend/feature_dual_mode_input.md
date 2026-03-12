@@ -20,16 +20,16 @@ Implement dual-mode (text + markdown) message input with formatting toolbar, Wri
 ## Acceptance Criteria
 
 - [x] Md toggle button switches between text and markdown mode
-- [x] Ctrl+Shift+M keyboard shortcut toggles mode from either mode
+- [x] Mod+Shift+M keyboard shortcut toggles mode from either mode
 - [x] Write/Preview tabs appear in markdown mode toolbar
 - [x] 10 formatting buttons insert correct markdown syntax (bold, italic, code, link, heading, bullet, numbered, blockquote, hr, code block)
-- [x] Ctrl+B, Ctrl+I, Ctrl+K shortcuts insert bold, italic, link markers in markdown mode
+- [x] Mod+B, Mod+I, Mod+K shortcuts insert bold, italic, link markers in markdown mode
 - [x] Preview tab renders live markdown via ChatMarkdown
 - [x] Drag-to-resize handle controls panel height; double-click resets to auto-size
 - [x] `isMarkdown` flag threaded through store → RPC → backend → persistence
 - [x] UserMessageBubble renders markdown messages with ChatMarkdown
 - [x] Raw/rendered toggle button appears on hover over markdown user bubbles
-- [x] Cmd/Ctrl+Enter sends message from preview pane
+- [x] Mod+Enter sends message from preview pane
 - [x] Existing features preserved (autocomplete, voice input, message history)
 
 ## Design Reference

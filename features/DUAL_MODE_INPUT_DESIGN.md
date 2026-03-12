@@ -17,7 +17,7 @@
 Dual-mode message input adds a **markdown editing mode** alongside the default plain-text mode in `InputArea`. Users toggle between modes via a button or shortcut. Markdown mode provides a formatting toolbar, Write/Preview tabs, and live preview powered by the existing `ChatMarkdown` component. An `isMarkdown` boolean flag is threaded through the entire stack so that markdown-authored messages render with full formatting in the chat stream.
 
 - **Text mode** (default): single-row auto-expanding textarea — existing behavior, unchanged.
-- **Markdown mode**: toolbar with Write/Preview tabs, 10 formatting buttons, and live preview pane. Textarea gains markdown-specific shortcuts (Ctrl+B/I/K).
+- **Markdown mode**: toolbar with Write/Preview tabs, 10 formatting buttons, and live preview pane. Textarea gains markdown-specific shortcuts (Mod+B/I/K).
 - **Rendering**: `UserMessageBubble` checks `isMarkdown` — if true, renders via `ChatMarkdown` with a hover-visible raw/rendered toggle button.
 
 ## Two-Mode Architecture
@@ -94,7 +94,7 @@ ChatStream receives events[]
 
 | File | Change |
 |------|--------|
-| `InputArea.tsx` | `InputMode` type, `inputMode`/`previewActive`/`panelHeight` state, `toggleMode()`, `insertFormat()`, `Md` toggle button, Write/Preview tabs, 10-button formatting toolbar (`FORMAT_ACTIONS`), preview pane with `ChatMarkdown`, drag-to-resize handle, `handleDragStart`/`handleDragDoubleClick`, Ctrl+Shift+M / Ctrl+B / Ctrl+I / Ctrl+K shortcuts, Cmd/Ctrl+Enter from preview, `isManual` flex mode |
+| `InputArea.tsx` | `InputMode` type, `inputMode`/`previewActive`/`panelHeight` state, `toggleMode()`, `insertFormat()`, `Md` toggle button, Write/Preview tabs, 10-button formatting toolbar (`FORMAT_ACTIONS`), preview pane with `ChatMarkdown`, drag-to-resize handle, `handleDragStart`/`handleDragDoubleClick`, Mod+Shift+M / Mod+B / Mod+I / Mod+K shortcuts, Mod+Enter from preview, `isManual` flex mode |
 | `ChatStream.tsx` | `UserMessageBubble` component — dual rendering path (plain text vs `ChatMarkdown`), `showRaw` state toggle, `chat-user-toggle` button visible on hover |
 | `ChatStream.css` | ~15 class groups: `.input-mode-btn`, `.input-editor-wrapper`, `.input-md-toolbar`, `.input-md-tab`, `.input-md-sep`, `.input-md-fmt`, `.input-preview`, `.input-preview-empty`, `.input-preview--fill`, `.input-textarea--md`, `.input-editor-wrapper--fill`, `.input-area--manual`, `.input-resize-handle`, `.chat-user-bubble`, `.chat-user-text--md`, `.chat-user-toggle` |
 | `SessionPanel.tsx` | `handleSend` callback accepts `(text, isMarkdown?)` and passes through to `sendMessage` |
@@ -117,13 +117,15 @@ No changes to: `runner.py`, `tracker.py`, `models.py`, `context.py`, `persistenc
 
 ## Keyboard Shortcuts
 
+> **Modifier key:** Mod = Ctrl on macOS, Alt on Linux/Windows
+
 | Shortcut | Context | Action |
 |----------|---------|--------|
-| `Ctrl+Shift+M` | Any mode | Toggle between text and markdown mode |
-| `Ctrl+B` | Markdown mode | Insert bold markers `**text**` |
-| `Ctrl+I` | Markdown mode | Insert italic markers `*text*` |
-| `Ctrl+K` | Markdown mode | Insert link markers `[text](url)` |
-| `Cmd/Ctrl+Enter` | Any mode, including preview pane | Send message |
+| `Mod+Shift+M` | Any mode | Toggle between text and markdown mode |
+| `Mod+B` | Markdown mode | Insert bold markers `**text**` |
+| `Mod+I` | Markdown mode | Insert italic markers `*text*` |
+| `Mod+K` | Markdown mode | Insert link markers `[text](url)` |
+| `Mod+Enter` | Any mode, including preview pane | Send message |
 
 All shortcuts use `e.metaKey || e.ctrlKey` for cross-platform compatibility. Formatting shortcuts wrap the current selection (or insert placeholder text if nothing is selected).
 

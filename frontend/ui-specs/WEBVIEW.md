@@ -81,12 +81,12 @@ All three panels have **flexible width**, resizable via drag handles between the
 | Logo | "🌿 Bonsai" branding |
 | Project name | Current project root name |
 | Session indicator | Count of active agent sessions, pulsing dot |
-| `◀ Tree` button | Toggle left panel visibility (`Ctrl/Alt+B`) |
+| `◀ Tree` button | Toggle left panel visibility (`Mod+B`) |
 | `+ New Session` button | Opens new session modal (`Mod+T`) |
 
 ## 2. Left Panel — Navigation & Progress
 
-Toggle visibility: `Ctrl/Alt+B`
+Toggle visibility: `Mod+B`
 
 ### Tabs
 
@@ -277,7 +277,7 @@ The following views from the old tab-based right panel are now handled different
 
 ```
 ┌──────────────────────────────────────────────────────────────────────────┐
-│ 🌿 N specs │ ● N done │ ⏳ N pending │        Mod+T New · Ctrl/Alt+B Tree  │
+│ 🌿 N specs │ ● N done │ ⏳ N pending │        Mod+T New · Mod+B Tree  │
 └──────────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -331,12 +331,12 @@ Triggered by `Mod+K`. A floating search modal for quick navigation and actions:
 
 ## 7. Keyboard Shortcuts
 
-**Modifier key:** `Mod` = Ctrl on macOS, Alt on Linux/Windows. `Ctrl/Alt` = Ctrl on macOS, Alt on Linux/Windows.
+**Modifier key:** `Mod` = Ctrl on macOS, Alt on Linux/Windows.
 
 | Shortcut | Action |
 | --- | --- |
 | `Mod+K` | Open command palette |
-| `Ctrl/Alt+B` | Toggle left panel |
+| `Mod+B` | Toggle left panel |
 | `Mod+J` | Toggle right panel |
 | `Mod+T` | New session |
 | `Mod+1-9` | Switch session tabs |

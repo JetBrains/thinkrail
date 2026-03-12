@@ -325,14 +325,14 @@ Session tab switching clears file state; file tab switching clears preview.
 
 ## Keyboard Shortcuts
 
-**Modifier key:** `Mod` = Ctrl on macOS, Alt on Linux/Windows. `Ctrl/Alt` = Ctrl on macOS, Alt on Linux/Windows.
+**Modifier key:** `Mod` = Ctrl on macOS, Alt on Linux/Windows.
 
 | Shortcut | Action |
 |---|---|
 | `Mod+T` | Open New Session Modal |
 | `Mod+K` | Open Command Palette |
 | `Mod+J` | Toggle right panel |
-| `Ctrl/Alt+B` | Toggle left panel |
+| `Mod+B` | Toggle left panel |
 | `Mod+Enter` (in InputArea) | Send message |
 | `Mod+1-9` tab switching | **[Not implemented]** |
 

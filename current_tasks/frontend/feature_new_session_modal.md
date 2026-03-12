@@ -20,7 +20,7 @@ The New Session Modal is the entry point for starting Claude agent sessions. Use
 
 ## Key Implementation Details
 
-- Triggered by `+ New Session` button in header or `Cmd+T`
+- Triggered by `+ New Session` button in header or `Mod+T`
 - Session name auto-suggested from skill + target spec
 - Pre-fill supported when invoked from graph context menu (skill + spec pre-selected)
 - On submit: calls `agent/run` RPC, creates session in sessionStore, opens new tab in center panel
@@ -28,7 +28,7 @@ The New Session Modal is the entry point for starting Claude agent sessions. Use
 
 ## Definition of Done
 
-- [ ] Modal opens on Cmd+T or header button click
+- [ ] Modal opens on Mod+T or header button click
 - [ ] Skill grid shows all available skills with icons and descriptions
 - [ ] Spec selector allows multi-select with search filtering
 - [ ] Advanced config controls model, max turns, permission mode
