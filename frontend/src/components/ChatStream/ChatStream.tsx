@@ -146,37 +146,47 @@ export const ChatStream = forwardRef<ChatStreamHandle, ChatStreamProps>(function
     }
   }
 
-  // Pre-scan: group child events under their parent subagentStart.
-  // Uses a stack to support nested subagents.
+  // Pre-scan: group child events under their parent subagentStart using
+  // explicit agentId from backend (resolved via SDK parent_tool_use_id).
   const subagentChildren = new Map<number, number[]>(); // subagentStart idx → child idxs
   const childIndices = new Set<number>();               // events to skip in render
   {
-    const stack: [number, string][] = []; // [(startIdx, agentId)]
+    // First pass: map agentId → subagentStart event index.
+    // Agent IDs are unique random strings, so the mapping persists across
+    // turn boundaries (interrupted / turnComplete) without collision risk.
+    // Previously this map was cleared on turn-end events, which broke
+    // subagent grouping when events were replayed after an interrupt.
+    const agentStartIdx = new Map<string, number>();
     for (let i = 0; i < events.length; i++) {
       const ev = events[i];
       if (ev.eventType === "subagentStart") {
-        stack.push([i, (ev.payload.agentId as string) ?? ""]);
-        subagentChildren.set(i, []);
-      } else if (ev.eventType === "subagentEnd") {
         const aid = (ev.payload.agentId as string) ?? "";
-        for (let j = stack.length - 1; j >= 0; j--) {
-          if (stack[j][1] === aid) { stack.splice(j, 1); break; }
-        }
-      } else if (ev.eventType === "interrupted" || ev.eventType === "turnComplete") {
-        // Turn ended — close all open subagent scopes. No events after this
-        // can belong to a prior subagent.
-        stack.length = 0;
-      } else if (stack.length > 0) {
-        // Hoist bonsai_visualize, askUserQuestion, and confirmAction to top level
-        // so they remain visible outside the collapsible SubagentBlock
-        const isViz = ev.eventType === "toolCallStart" &&
-          (ev.payload.toolName as string)?.endsWith("bonsai_visualize");
-        const isInteraction = ev.eventType === "askUserQuestion" || ev.eventType === "confirmAction";
-        if (!isViz && !isInteraction) {
-          const [parentIdx] = stack[stack.length - 1];
-          subagentChildren.get(parentIdx)!.push(i);
-          childIndices.add(i);
-        }
+        agentStartIdx.set(aid, i);
+        subagentChildren.set(i, []);
+      }
+    }
+
+    // Second pass: assign child events to their parent subagentStart via agentId
+    for (let i = 0; i < events.length; i++) {
+      const ev = events[i];
+      if (ev.eventType === "subagentStart" || ev.eventType === "subagentEnd"
+          || ev.eventType === "interrupted" || ev.eventType === "turnComplete")
+        continue;
+
+      const agentId = ev.payload.agentId as string | undefined;
+      if (!agentId) continue;
+
+      const parentIdx = agentStartIdx.get(agentId);
+      if (parentIdx === undefined) continue;
+
+      // Hoist bonsai_visualize, askUserQuestion, and confirmAction to top level
+      // so they remain visible outside the collapsible SubagentBlock
+      const isViz = ev.eventType === "toolCallStart" &&
+        (ev.payload.toolName as string)?.endsWith("bonsai_visualize");
+      const isInteraction = ev.eventType === "askUserQuestion" || ev.eventType === "confirmAction";
+      if (!isViz && !isInteraction) {
+        subagentChildren.get(parentIdx)!.push(i);
+        childIndices.add(i);
       }
     }
   }

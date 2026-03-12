@@ -53,18 +53,33 @@ async def run(
     # when a turn is interrupted (the SDK's SubagentStop hook isn't
     # guaranteed to fire on interrupt).
     _active_subagent_ids: set[str] = set()
+    # Maps parent_tool_use_id (from SDK messages) → agent_id so the
+    # frontend can group events under the correct SubagentBlock.
+    _parent_to_agent: dict[str, str] = {}
+    # Queue of Task ToolUseBlock.id values awaiting their SubagentStart hook.
+    # Each Task tool call triggers exactly one SubagentStart in order.
+    _pending_task_tool_ids: list[str] = []
 
     async def on_subagent_start(hook_input: Any, tool_use_id: str | None, context: Any) -> dict:
-        _active_subagent_ids.add(hook_input["agent_id"])
+        logger.warning("[subagent] START agent_id=%s tool_use_id=%s hook_input=%s",
+                       hook_input.get("agent_id"), tool_use_id, hook_input)
+        agent_id = hook_input["agent_id"]
+        _active_subagent_ids.add(agent_id)
+        # Correlate this subagent with its Task tool call so we can
+        # resolve parent_tool_use_id → agentId on subsequent messages.
+        if _pending_task_tool_ids:
+            parent_id = _pending_task_tool_ids.pop(0)
+            _parent_to_agent[parent_id] = agent_id
         await notify("agent/subagentStart", {
             "bonsaiSid": task.bonsai_sid,
             "sessionId": session_id,
-            "agentId": hook_input["agent_id"],
+            "agentId": agent_id,
             "agentType": hook_input["agent_type"],
         })
         return {}
 
     async def on_subagent_stop(hook_input: Any, tool_use_id: str | None, context: Any) -> dict:
+        logger.warning("[subagent] STOP agent_id=%s tool_use_id=%s", hook_input.get("agent_id"), tool_use_id)
         _active_subagent_ids.discard(hook_input["agent_id"])
         await notify("agent/subagentEnd", {
             "bonsaiSid": task.bonsai_sid,
@@ -72,6 +87,12 @@ async def run(
             "agentId": hook_input["agent_id"],
         })
         return {}
+
+    def _resolve_agent_id(parent_tool_use_id: str | None) -> str | None:
+        """Resolve SDK parent_tool_use_id to our agentId."""
+        if parent_tool_use_id is None:
+            return None
+        return _parent_to_agent.get(parent_tool_use_id)
 
     async def _close_orphaned_subagents() -> None:
         """Emit synthetic subagentEnd for any subagents still open."""
@@ -82,6 +103,7 @@ async def run(
                 "agentId": orphan_id,
             })
         _active_subagent_ids.clear()
+        _pending_task_tool_ids.clear()
 
     plugins = []
     if plugin_dir and Path(plugin_dir).is_dir():
@@ -151,16 +173,26 @@ async def run(
                             })
 
                     elif isinstance(sdk_event, AssistantMessage):
+                        logger.warning("[subagent] AssistantMessage parent_tool_use_id=%s active=%s",
+                                       sdk_event.parent_tool_use_id, _active_subagent_ids)
+                        agent_id = _resolve_agent_id(sdk_event.parent_tool_use_id)
                         for block in sdk_event.content:
                             if isinstance(block, TextBlock):
                                 tracker.append_turn_text(task.bonsai_sid, block.text)
-                                await notify("agent/textDelta", {
+                                msg: dict[str, Any] = {
                                     "bonsaiSid": task.bonsai_sid,
                                     "sessionId": session_id,
                                     "text": block.text,
-                                })
+                                }
+                                if agent_id:
+                                    msg["agentId"] = agent_id
+                                await notify("agent/textDelta", msg)
                             elif isinstance(block, ToolUseBlock):
                                 logger.warning("Tool call: %s", block.name)
+                                # Track Task tool calls so we can correlate
+                                # them with SubagentStart hooks.
+                                if block.name == "Task":
+                                    _pending_task_tool_ids.append(block.id)
                                 if block.name == "ExitPlanMode":
                                     _mode_change_tools[block.id] = "default"
                                 elif block.name == "EnterPlanMode":
@@ -177,15 +209,21 @@ async def run(
                                                 tool_input["_previousContent"] = ""
                                         except Exception:
                                             tool_input["_previousContent"] = ""
-                                await notify("agent/toolCallStart", {
+                                tc_msg: dict[str, Any] = {
                                     "bonsaiSid": task.bonsai_sid,
                                     "sessionId": session_id,
                                     "toolUseId": block.id,
                                     "toolName": block.name,
                                     "toolInput": tool_input,
-                                })
+                                }
+                                if agent_id:
+                                    tc_msg["agentId"] = agent_id
+                                await notify("agent/toolCallStart", tc_msg)
 
                     elif isinstance(sdk_event, UserMessage):
+                        logger.warning("[subagent] UserMessage parent_tool_use_id=%s active=%s",
+                                       sdk_event.parent_tool_use_id, _active_subagent_ids)
+                        agent_id = _resolve_agent_id(sdk_event.parent_tool_use_id)
                         content = sdk_event.content
                         if isinstance(content, list):
                             for block in content:
@@ -200,14 +238,17 @@ async def run(
                                             "permissionMode": new_mode,
                                             "effort": task.config.effort,
                                         })
-                                    await notify("agent/toolCallEnd", {
+                                    te_msg: dict[str, Any] = {
                                         "bonsaiSid": task.bonsai_sid,
                                         "sessionId": session_id,
                                         "toolUseId": block.tool_use_id,
                                         "toolName": "",
                                         "output": block.content if isinstance(block.content, str) else str(block.content),
                                         "isError": block.is_error or False,
-                                    })
+                                    }
+                                    if agent_id:
+                                        te_msg["agentId"] = agent_id
+                                    await notify("agent/toolCallEnd", te_msg)
 
                     elif isinstance(sdk_event, ResultMessage):
                         turn_cost = sdk_event.total_cost_usd or 0.0

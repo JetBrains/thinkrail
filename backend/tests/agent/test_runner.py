@@ -804,3 +804,156 @@ class TestSubagentHooks:
         payload = end_calls[0].args[1]
         assert payload["agentId"] == "agent-42"
         assert payload["bonsaiSid"] == task.bonsai_sid
+
+    @patch("app.agent.runner.ClaudeSDKClient")
+    async def test_subagent_agent_id_mapping_end_to_end(self, MockClient: MagicMock) -> None:
+        """Full integration: Task tool → SubagentStart hook → subagent messages get agentId."""
+        from claude_agent_sdk import (
+            AssistantMessage,
+            ResultMessage,
+            SystemMessage,
+            TextBlock,
+            ToolResultBlock,
+            ToolUseBlock,
+            UserMessage,
+        )
+
+        sys_msg = MagicMock(spec=SystemMessage)
+        sys_msg.subtype = "init"
+        sys_msg.data = {"session_id": "s1"}
+
+        # Main agent: Task tool call
+        task_block = MagicMock(spec=ToolUseBlock)
+        task_block.id = "toolu_task_1"
+        task_block.name = "Task"
+        task_block.input = {"prompt": "explore", "subagent_type": "Explore", "description": "test"}
+        main_msg = MagicMock(spec=AssistantMessage)
+        main_msg.parent_tool_use_id = None
+        main_msg.content = [task_block]
+
+        # Subagent text
+        sub_text = MagicMock(spec=TextBlock)
+        sub_text.text = "from subagent"
+        sub_msg = MagicMock(spec=AssistantMessage)
+        sub_msg.parent_tool_use_id = "toolu_task_1"
+        sub_msg.content = [sub_text]
+
+        # Subagent tool call
+        sub_tool = MagicMock(spec=ToolUseBlock)
+        sub_tool.id = "toolu_sub_1"
+        sub_tool.name = "Bash"
+        sub_tool.input = {"command": "ls"}
+        sub_msg2 = MagicMock(spec=AssistantMessage)
+        sub_msg2.parent_tool_use_id = "toolu_task_1"
+        sub_msg2.content = [sub_tool]
+
+        # Subagent tool result
+        sub_result = MagicMock(spec=ToolResultBlock)
+        sub_result.tool_use_id = "toolu_sub_1"
+        sub_result.content = "file1.py"
+        sub_result.is_error = False
+        sub_user = MagicMock(spec=UserMessage)
+        sub_user.parent_tool_use_id = "toolu_task_1"
+        sub_user.content = [sub_result]
+
+        result_msg = MagicMock(spec=ResultMessage)
+        result_msg.session_id = "s1"
+        result_msg.result = "ok"
+        result_msg.is_error = False
+        result_msg.num_turns = 1
+        result_msg.total_cost_usd = 0.0
+        result_msg.usage = {}
+
+        # Key: we need SubagentStart to fire BETWEEN main_msg and sub_msg.
+        # We simulate this by injecting the hook call into the event stream.
+        hook_called = False
+
+        async def events_with_hook():
+            """Yield events, firing SubagentStart hook after Task tool call."""
+            nonlocal hook_called
+            yield sys_msg
+            yield main_msg
+            # After Task tool is processed, the SDK fires SubagentStart.
+            # We simulate by directly calling the hook before yielding
+            # subagent messages. The hook_fn won't exist yet, so we
+            # use a sentinel to trigger it.
+            yield sub_msg      # These arrive after SubagentStart
+            yield sub_msg2
+            yield sub_user
+            yield result_msg
+
+        mock_instance = AsyncMock()
+        mock_instance.receive_response = events_with_hook
+        mock_instance.query = AsyncMock()
+
+        captured: dict[str, Any] = {}
+
+        def capture_init(options=None, **kwargs):
+            captured["options"] = options
+            return MockClient.return_value
+
+        MockClient.side_effect = capture_init
+        MockClient.return_value.__aenter__ = AsyncMock(return_value=mock_instance)
+        MockClient.return_value.__aexit__ = AsyncMock(return_value=False)
+
+        tracker, task = _make_tracker_and_task()
+        tracker.enqueue_message(task.bonsai_sid, "go")
+        tracker.enqueue_end_signal(task.bonsai_sid)
+        notify = AsyncMock()
+
+        # We need SubagentStart to fire after the Task tool call is processed
+        # but before sub_msg is processed. We'll do this by wrapping
+        # receive_response to call the hook at the right time.
+        original_events = events_with_hook
+
+        async def events_with_hook_injection():
+            idx = 0
+            async for ev in original_events():
+                yield ev
+                idx += 1
+                # After yielding main_msg (idx=2), fire SubagentStart
+                if idx == 2 and "options" in captured:
+                    hook_fn = captured["options"].hooks["SubagentStart"][0].hooks[0]
+                    await hook_fn(
+                        {"agent_id": "agent-X", "agent_type": "Explore"},
+                        "some-uuid", MagicMock(),
+                    )
+
+        mock_instance.receive_response = events_with_hook_injection
+
+        await run(task, "context", notify, tracker)
+
+        # Collect notifications
+        text_deltas = [
+            c.args[1] for c in notify.call_args_list
+            if c.args[0] == "agent/textDelta"
+        ]
+        tool_starts = [
+            c.args[1] for c in notify.call_args_list
+            if c.args[0] == "agent/toolCallStart"
+        ]
+        tool_ends = [
+            c.args[1] for c in notify.call_args_list
+            if c.args[0] == "agent/toolCallEnd"
+        ]
+
+        # Main agent's Task toolCallStart should NOT have agentId
+        task_starts = [t for t in tool_starts if t["toolName"] == "Task"]
+        assert len(task_starts) == 1
+        assert "agentId" not in task_starts[0], "Main agent Task call should not have agentId"
+
+        # Subagent's textDelta should have agentId
+        assert len(text_deltas) == 1
+        assert text_deltas[0].get("agentId") == "agent-X", \
+            f"Subagent textDelta should have agentId=agent-X, got {text_deltas[0]}"
+
+        # Subagent's toolCallStart (Bash) should have agentId
+        bash_starts = [t for t in tool_starts if t["toolName"] == "Bash"]
+        assert len(bash_starts) == 1
+        assert bash_starts[0].get("agentId") == "agent-X", \
+            f"Subagent toolCallStart should have agentId=agent-X, got {bash_starts[0]}"
+
+        # Subagent's toolCallEnd should have agentId
+        assert len(tool_ends) == 1
+        assert tool_ends[0].get("agentId") == "agent-X", \
+            f"Subagent toolCallEnd should have agentId=agent-X, got {tool_ends[0]}"
