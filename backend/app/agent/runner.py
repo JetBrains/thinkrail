@@ -49,13 +49,13 @@ async def run(
     total_turns = 0
 
     # -- Subagent lifecycle hooks --
-    # Track the currently-active subagent so toolCallStart events can be
-    # correlated with their parent subagent on the frontend.
-    _current_subagent_id: str | None = None
+    # Track active subagents so we can emit synthetic subagentEnd events
+    # when a turn is interrupted (the SDK's SubagentStop hook isn't
+    # guaranteed to fire on interrupt).
+    _active_subagent_ids: set[str] = set()
 
     async def on_subagent_start(hook_input: Any, tool_use_id: str | None, context: Any) -> dict:
-        nonlocal _current_subagent_id
-        _current_subagent_id = hook_input["agent_id"]
+        _active_subagent_ids.add(hook_input["agent_id"])
         await notify("agent/subagentStart", {
             "bonsaiSid": task.bonsai_sid,
             "sessionId": session_id,
@@ -65,14 +65,23 @@ async def run(
         return {}
 
     async def on_subagent_stop(hook_input: Any, tool_use_id: str | None, context: Any) -> dict:
-        nonlocal _current_subagent_id
-        _current_subagent_id = None
+        _active_subagent_ids.discard(hook_input["agent_id"])
         await notify("agent/subagentEnd", {
             "bonsaiSid": task.bonsai_sid,
             "sessionId": session_id,
             "agentId": hook_input["agent_id"],
         })
         return {}
+
+    async def _close_orphaned_subagents() -> None:
+        """Emit synthetic subagentEnd for any subagents still open."""
+        for orphan_id in list(_active_subagent_ids):
+            await notify("agent/subagentEnd", {
+                "bonsaiSid": task.bonsai_sid,
+                "sessionId": session_id,
+                "agentId": orphan_id,
+            })
+        _active_subagent_ids.clear()
 
     plugins = []
     if plugin_dir and Path(plugin_dir).is_dir():
@@ -122,6 +131,7 @@ async def run(
                     break
 
                 tracker.set_status(task.bonsai_sid, "running")
+                tracker.clear_turn_text(task.bonsai_sid)
                 await client.query(message)
 
                 async for sdk_event in client.receive_response():
@@ -143,6 +153,7 @@ async def run(
                     elif isinstance(sdk_event, AssistantMessage):
                         for block in sdk_event.content:
                             if isinstance(block, TextBlock):
+                                tracker.append_turn_text(task.bonsai_sid, block.text)
                                 await notify("agent/textDelta", {
                                     "bonsaiSid": task.bonsai_sid,
                                     "sessionId": session_id,
@@ -229,6 +240,9 @@ async def run(
                         elif interrupted:
                             # Interrupt path — emit interrupted, not turnComplete.
                             # Same client, same context — runner goes back to idle.
+                            # Close any subagents left open (SubagentStop hook may
+                            # not fire when the SDK is interrupted mid-turn).
+                            await _close_orphaned_subagents()
                             await notify("agent/interrupted", {
                                 "bonsaiSid": task.bonsai_sid,
                                 "sessionId": sdk_event.session_id or session_id,

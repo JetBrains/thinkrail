@@ -40,6 +40,7 @@ class Tracker:
         self._queues: dict[str, asyncio.Queue[Any]] = {}
         self._clients: dict[str, Any] = {}
         self._interrupted: set[str] = set()
+        self._turn_text: dict[str, list[str]] = {}  # bonsai_sid → accumulated text blocks
 
     # -- task lifecycle -------------------------------------------------------
 
@@ -155,6 +156,7 @@ class Tracker:
         self._futures.pop(bonsai_sid, None)
         self._clients.pop(bonsai_sid, None)
         self._interrupted.discard(bonsai_sid)
+        self._turn_text.pop(bonsai_sid, None)
 
     def cancel_futures(self, bonsai_sid: str) -> None:
         task_futures = self._futures.pop(bonsai_sid, {})
@@ -196,3 +198,22 @@ class Tracker:
                     "message": "Interrupted",
                     "interrupt": True,
                 })
+
+    # -- turn text accumulation ------------------------------------------------
+
+    def append_turn_text(self, bonsai_sid: str, text: str) -> None:
+        """Append assistant text to the current turn buffer.
+
+        Called by the runner for each ``TextBlock`` so that ``can_use_tool``
+        can inject accumulated plan content into ``ExitPlanMode`` payloads.
+        """
+        self._turn_text.setdefault(bonsai_sid, []).append(text)
+
+    def get_turn_text(self, bonsai_sid: str) -> str:
+        """Return accumulated assistant text for the current turn."""
+        parts = self._turn_text.get(bonsai_sid, [])
+        return "".join(parts)
+
+    def clear_turn_text(self, bonsai_sid: str) -> None:
+        """Clear the turn text buffer (called at the start of each query)."""
+        self._turn_text.pop(bonsai_sid, None)
