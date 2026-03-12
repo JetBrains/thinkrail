@@ -13,6 +13,9 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+transcription = [
+    "openai>=1.0",
+]
 dev = [
     "pytest>=8.0",
     "pytest-asyncio>=0.24",

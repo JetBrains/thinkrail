@@ -8,7 +8,7 @@ The New Session Modal is the entry point for starting Claude agent sessions. Use
 
 **Triggers:**
 - `+ New Session` button in the header bar
-- `Cmd+T` keyboard shortcut (globally registered)
+- `Mod+T` keyboard shortcut (globally registered)
 - Command palette "New session" action
 - `openModal(prefill?)` called from context menus — **[Planned]**
 
@@ -256,9 +256,11 @@ closeModal();
 
 ## 10. Keyboard Behavior
 
+> **Modifier key:** Mod = Ctrl on macOS, Alt on Linux/Windows
+
 | Key | Action |
 |---|---|
-| `Cmd+T` / `Ctrl+T` | Open modal (global) |
+| `Mod+T` | Open modal (global) |
 | `Escape` | Close modal (global) |
 | `autoFocus` on name input | Immediate focus on open |
 | `Enter` → submit | **[Not implemented]** |

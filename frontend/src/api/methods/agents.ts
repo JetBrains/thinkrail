@@ -11,8 +11,8 @@ export function createAgentApi(client: RpcClient) {
 
     list: () => client.request<AgentTask[]>("agent/list"),
 
-    send: (bonsaiSid: string, text: string) =>
-      client.request<null>("agent/send", { bonsaiSid, text }),
+    send: (bonsaiSid: string, text: string, isMarkdown?: boolean) =>
+      client.request<null>("agent/send", { bonsaiSid, text, ...(isMarkdown ? { isMarkdown } : {}) }),
 
     end: (bonsaiSid: string) =>
       client.request<null>("agent/end", { bonsaiSid }),
@@ -23,8 +23,11 @@ export function createAgentApi(client: RpcClient) {
     respond: (bonsaiSid: string, requestId: string, response: unknown) =>
       client.request<null>("agent/respond", { bonsaiSid, requestId, response }),
 
-    updateConfig: (bonsaiSid: string, config: { model?: string; permissionMode?: string }) =>
-      client.request<{ model: string; permissionMode: string }>("agent/updateConfig", { bonsaiSid, ...config }),
+    updateConfig: (bonsaiSid: string, config: { model?: string; permissionMode?: string; betas?: string[]; effort?: string | null }) =>
+      client.request<{ model: string; permissionMode: string; betas: string[]; effort: string | null }>("agent/updateConfig", { bonsaiSid, ...config }),
+
+    transcribe: (audioBase64: string, mimeType: string) =>
+      client.request<{ text: string }>("agent/transcribe", { audioBase64, mimeType }),
   };
 }
 

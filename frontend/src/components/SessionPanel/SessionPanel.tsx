@@ -1,15 +1,18 @@
-import { useCallback } from "react";
+import { useCallback, useRef, useState } from "react";
 import { useSessionStore } from "@/store/sessionStore.ts";
 import { useNotificationStore } from "@/store/notificationStore.ts";
 import { getErrorMessage } from "@/utils/errors.ts";
 import { useFileStore } from "@/store/fileStore.ts";
 import type { SessionStatus } from "@/types/session.ts";
+import { modLabel } from "@/utils/platform.ts";
 import { ChatStream } from "@/components/ChatStream/ChatStream.tsx";
+import type { ChatStreamHandle } from "@/components/ChatStream/ChatStream.tsx";
 import { SessionStatusLine } from "@/components/ChatStream/SessionStatusLine.tsx";
 import { InputArea } from "@/components/ChatStream/InputArea.tsx";
 import { FileViewer } from "@/components/FileViewer/FileViewer.tsx";
 import { useMessageHistoryStore } from "@/store/messageHistoryStore";
 import { SessionTabBar } from "./SessionTabBar.tsx";
+import { StickyContextBar } from "./StickyContextBar.tsx";
 
 export function SessionPanel() {
   const sessions = useSessionStore((s) => s.sessions);
@@ -20,6 +23,7 @@ export function SessionPanel() {
   const sendMessage = useSessionStore((s) => s.sendMessage);
   const interruptSession = useSessionStore((s) => s.interruptSession);
   const updateConfig = useSessionStore((s) => s.updateConfig);
+  const restartSession = useSessionStore((s) => s.restartSession);
   const projectCost = useSessionStore((s) => s.projectCost);
 
   const openFiles = useFileStore((s) => s.openFiles);
@@ -30,6 +34,9 @@ export function SessionPanel() {
   const previewFileObj = useFileStore((s) => s.previewFile);
   const clearPreview = useFileStore((s) => s.clearPreview);
   const pinPreview = useFileStore((s) => s.pinPreview);
+
+  const [contextCardVisible, setContextCardVisible] = useState(true);
+  const chatStreamRef = useRef<ChatStreamHandle>(null);
 
   const sessionList = Array.from(sessions.values());
   const fileList = Array.from(openFiles.values());
@@ -61,24 +68,42 @@ export function SessionPanel() {
   );
 
   const handleSend = useCallback(
-    (text: string) => {
+    (text: string, isMarkdown?: boolean) => {
       if (!activeSessionId || !activeSession) return;
       if (activeSession.pendingRequest && activeSession.pendingRequest.type === "question") {
         resolveRequest(activeSessionId, activeSession.pendingRequest.requestId, { text });
         return;
       }
       if (activeSession.status === "idle") {
-        sendMessage(activeSessionId, text);
+        sendMessage(activeSessionId, text, isMarkdown);
       }
       useMessageHistoryStore.getState().addMessage(text);
     },
     [activeSessionId, activeSession, resolveRequest, sendMessage],
   );
 
+  const handleContinue = useCallback(() => {
+    if (!activeSessionId || !activeSession) return;
+    if (activeSession.pendingRequest?.type === "question") {
+      resolveRequest(activeSessionId, activeSession.pendingRequest.requestId, { text: "continue" });
+      return;
+    }
+    if (activeSession.status === "idle" || activeSession.status === "interrupted") {
+      sendMessage(activeSessionId, "continue");
+    }
+  }, [activeSessionId, activeSession, resolveRequest, sendMessage]);
+
+  const handleStartSession = useCallback(() => {
+    if (!activeSessionId || !activeSession) return;
+    if (activeSession.status === "idle") {
+      sendMessage(activeSessionId, "start");
+    }
+  }, [activeSessionId, activeSession, sendMessage]);
+
   if (sessionList.length === 0 && fileList.length === 0 && !previewFilePath) {
     return (
       <div className="center-placeholder">
-        Select a session or create a new one (Cmd+T)
+        Select a session or create a new one ({modLabel("T")})
       </div>
     );
   }
@@ -105,6 +130,10 @@ export function SessionPanel() {
         : "Message Claude...";
 
   const inputDisabled = isDone || isRunning || (hasPending && activeSession?.pendingRequest?.type === "approval");
+  const showContinue = !inputDisabled && !isRunning && (activeSession?.events.length ?? 0) > 0;
+  const showStartSession = !inputDisabled && !isRunning
+    && (activeSession?.events.length ?? 0) === 0
+    && activeSession?.skillId != null;
 
   return (
     <>
@@ -126,20 +155,38 @@ export function SessionPanel() {
         <FileViewer file={displayFile} />
       ) : showSession && activeSession ? (
         <>
+          {!contextCardVisible && activeSession.events.length > 0 && (
+            <StickyContextBar
+              skillId={activeSession.skillId ?? undefined}
+              specCount={activeSession.specIds.length}
+              model={activeSession.model}
+              permissionMode={activeSession.permissionMode}
+              onScrollToTop={() => chatStreamRef.current?.scrollToTop()}
+            />
+          )}
           <ChatStream
+            ref={chatStreamRef}
             events={activeSession.events}
             answeredRequests={activeSession.answeredRequests}
             onResolveRequest={handleResolve}
+            session={activeSession}
+            onContextCardVisibility={setContextCardVisible}
           />
           <SessionStatusLine
             model={activeSession.model}
+            betas={activeSession.betas ?? []}
             permissionMode={activeSession.permissionMode}
+            effort={activeSession.effort ?? null}
             metrics={activeSession.metrics}
             status={status ?? "idle"}
             projectCost={projectCost}
             disabled={activeSession.restored || isDone}
-            onChangeModel={(m) => updateConfig(activeSession.bonsaiSid, { model: m })}
+            onChangeModel={(m, betas) => updateConfig(activeSession.bonsaiSid, { model: m, betas })}
             onChangePermissionMode={(m) => updateConfig(activeSession.bonsaiSid, { permissionMode: m })}
+            onChangeEffort={async (e) => {
+              await updateConfig(activeSession.bonsaiSid, { effort: e });
+              await restartSession(activeSession.bonsaiSid);
+            }}
           />
           {activeSession.restored ? (
             <RestoredBar bonsaiSid={activeSession.bonsaiSid} />
@@ -150,6 +197,11 @@ export function SessionPanel() {
               onSend={handleSend}
               isRunning={isRunning}
               onInterrupt={() => interruptSession(activeSession!.bonsaiSid)}
+              showContinue={showContinue}
+              onContinue={handleContinue}
+              showStartSession={showStartSession}
+              onStartSession={handleStartSession}
+              skillId={activeSession.skillId}
             />
           )}
         </>

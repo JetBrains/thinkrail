@@ -1,6 +1,6 @@
 # Implement Command Palette
 
-> Fuzzy search across specs, sessions, files, and actions (Cmd+K)
+> Fuzzy search across specs, sessions, files, and actions (Mod+K)
 
 **Status:** Done
 **Priority:** Medium
@@ -9,7 +9,7 @@
 
 ## Summary
 
-A floating search modal triggered by `Cmd+K`. Supports prefix modes for filtered search (`/` actions, `#` specs, `@` sessions), fuzzy matching with scoring, result grouping by category, and keyboard navigation.
+A floating search modal triggered by `Mod+K`. Supports prefix modes for filtered search (`/` actions, `#` specs, `@` sessions), fuzzy matching with scoring, result grouping by category, and keyboard navigation.
 
 ## Files to Create
 
@@ -28,7 +28,7 @@ A floating search modal triggered by `Cmd+K`. Supports prefix modes for filtered
 
 ## Definition of Done
 
-- [ ] Cmd+K opens palette, Escape closes
+- [ ] Mod+K opens palette, Escape closes
 - [ ] Prefix modes filter results by category
 - [ ] Fuzzy search matches specs, sessions, and actions
 - [ ] Keyboard navigation works (arrows, Enter, Tab)

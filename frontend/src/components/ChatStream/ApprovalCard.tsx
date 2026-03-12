@@ -1,3 +1,5 @@
+import { useState } from "react";
+
 interface ApprovalCardProps {
   toolName: string;
   toolInput?: unknown;
@@ -23,6 +25,11 @@ function formatToolInput(input: unknown): string {
   return String(input);
 }
 
+function truncate(text: string, maxLen = 60): string {
+  if (text.length <= maxLen) return text;
+  return text.slice(0, maxLen) + "\u2026";
+}
+
 export function ApprovalCard({
   toolName,
   toolInput,
@@ -32,32 +39,78 @@ export function ApprovalCard({
   onApprove,
   onDeny,
 }: ApprovalCardProps) {
+  const [expanded, setExpanded] = useState(false);
+  const fullInput = toolInput != null ? formatToolInput(toolInput) : "";
+
+  /* ── Answered: compact single-line, click to expand ── */
+  if (answered) {
+    const stateClass =
+      decision === "approve" ? "chat-approval--approved" : "chat-approval--denied";
+
+    return (
+      <div className={`chat-approval chat-approval-compact ${stateClass}`}>
+        <div
+          className="chat-approval-row"
+          onClick={() => setExpanded((v) => !v)}
+          role="button"
+          tabIndex={0}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" || e.key === " ") setExpanded((v) => !v);
+          }}
+        >
+          <span className="chat-approval-label">Action requires approval</span>
+          <span className="chat-approval-command">
+            <span className="chat-tool-name">{toolName}</span>
+            {fullInput && (
+              <span className="chat-approval-input-short">
+                {truncate(fullInput)}
+              </span>
+            )}
+          </span>
+          <span
+            className={`chat-approval-status ${
+              decision === "approve"
+                ? "chat-approval-approved"
+                : "chat-approval-denied"
+            }`}
+          >
+            {decision === "approve" ? "\u2713 Approved" : "\u2715 Denied"}
+          </span>
+        </div>
+
+        {expanded && (
+          <div className="chat-approval-expanded">
+            {fullInput && (
+              <pre className="chat-approval-full-command">{fullInput}</pre>
+            )}
+            {description && (
+              <div className="chat-approval-desc">{description}</div>
+            )}
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  /* ── Pending: full card with approve / deny buttons ── */
   return (
-    <div className={`chat-approval ${answered ? "chat-approval-answered" : ""}`}>
+    <div className="chat-approval">
       <div className="chat-approval-title">Action requires approval</div>
       <div className="chat-approval-tool">
         <span className="chat-tool-name">{toolName}</span>
-        {toolInput != null && <span className="chat-approval-input">{formatToolInput(toolInput)}</span>}
+        {toolInput != null && (
+          <span className="chat-approval-input">{fullInput}</span>
+        )}
       </div>
-      {description && (
-        <div className="chat-approval-desc">{description}</div>
-      )}
-      {answered ? (
-        <div
-          className={`chat-approval-result ${decision === "approve" ? "chat-approval-approved" : "chat-approval-denied"}`}
-        >
-          {decision === "approve" ? "\u2713 Approved" : "\u2715 Denied"}
-        </div>
-      ) : (
-        <div className="chat-approval-actions">
-          <button className="chat-btn chat-btn-approve" onClick={onApprove}>
-            Approve
-          </button>
-          <button className="chat-btn chat-btn-deny" onClick={onDeny}>
-            Deny
-          </button>
-        </div>
-      )}
+      {description && <div className="chat-approval-desc">{description}</div>}
+      <div className="chat-approval-actions">
+        <button className="chat-btn chat-btn-approve" onClick={onApprove}>
+          Approve
+        </button>
+        <button className="chat-btn chat-btn-deny" onClick={onDeny}>
+          Deny
+        </button>
+      </div>
     </div>
   );
 }

@@ -60,7 +60,7 @@ class AgentService:
         self._save_task(task)
         return task
 
-    async def send_message(self, bonsai_sid: str, text: str) -> None:
+    async def send_message(self, bonsai_sid: str, text: str, *, is_markdown: bool = False) -> None:
         """Send a user message to the session, triggering a new turn."""
         task = self._tracker.get_task(bonsai_sid)
         if task.status != "idle":
@@ -69,7 +69,7 @@ class AgentService:
             )
         self._save_event(bonsai_sid, {
             "eventType": "userMessage",
-            "payload": {"text": text},
+            "payload": {"text": text, "isMarkdown": is_markdown},
         })
         self._tracker.enqueue_message(bonsai_sid, text)
 
@@ -127,6 +127,8 @@ class AgentService:
         bonsai_sid: str,
         model: str | None = None,
         permission_mode: str | None = None,
+        betas: list[str] | None = None,
+        effort: str | None = None,
     ) -> dict:
         """Update model and/or permission mode on a live session."""
         task = self._tracker.get_task(bonsai_sid)
@@ -139,8 +141,23 @@ class AgentService:
         if permission_mode is not None:
             await client.set_permission_mode(permission_mode)
             task.config.permission_mode = permission_mode
+        if betas is not None:
+            task.config.betas = betas
+        if effort is not None:
+            task.config.effort = effort
         self._save_task(task)
-        return {"model": task.config.model, "permissionMode": task.config.permission_mode}
+        return {"model": task.config.model, "permissionMode": task.config.permission_mode, "betas": task.config.betas, "effort": task.config.effort}
+
+    async def restart_session(self, bonsai_sid: str, notify: Callable) -> AgentTask:
+        """End current session and resume with current (updated) config."""
+        self._tracker.enqueue_end_signal(bonsai_sid)
+        bg_task = self._running_tasks.get(bonsai_sid)
+        if bg_task:
+            try:
+                await bg_task
+            except Exception:
+                pass
+        return await self.continue_session(bonsai_sid, notify)
 
     async def respond(self, bonsai_sid: str, request_id: str, response: dict) -> None:
         self._tracker.resolve_future(bonsai_sid, request_id, response)
@@ -153,6 +170,8 @@ class AgentService:
 
     def _save_task(self, task: AgentTask, events: list[dict] | None = None) -> None:
         """Persist current task state to disk."""
+        # Load existing metadata to preserve metrics and events
+        existing = load_session(self._config.project_root, task.bonsai_sid)
         data: dict = {
             "bonsaiSid": task.bonsai_sid,
             "name": task.name or task.bonsai_sid[:8],
@@ -164,13 +183,14 @@ class AgentService:
             "createdAt": task.created,
             "updatedAt": task.updated,
         }
+        # Preserve metrics from disk (written by update_session_metadata)
+        if existing and existing.get("metrics"):
+            data["metrics"] = existing["metrics"]
         # Preserve existing events from disk if we don't have new ones
         if events is not None:
             data["events"] = events
-        else:
-            existing = load_session(self._config.project_root, task.bonsai_sid)
-            if existing:
-                data["events"] = existing.get("events", [])
+        elif existing:
+            data["events"] = existing.get("events", [])
         save_session(self._config.project_root, data)
 
     def _save_event(self, bonsai_sid: str, event: dict) -> None:
@@ -196,6 +216,7 @@ class AgentService:
                 "createdAt": task.created,
                 "updatedAt": task.updated,
                 "active": task.status not in ("done", "error"),
+                "metrics": disk_entry.get("metrics", {}),
             }
         return list(disk.values())
 
@@ -259,6 +280,7 @@ class AgentService:
             "sessionId": old_session_id,
             "createdAt": old.get("createdAt", task.created),
             "updatedAt": task.updated,
+            "metrics": old.get("metrics", {}),
         }
         save_session(self._config.project_root, metadata)
 
@@ -283,6 +305,18 @@ class AgentService:
     ) -> None:
         self._last_notify[task.bonsai_sid] = notify
 
+        # Base metrics from previous run (for cumulative tracking across resumes)
+        _base_cost = 0.0
+        _base_turns = 0
+        _base_duration = 0
+        if resume_session_id:
+            _existing = load_session(self._config.project_root, task.bonsai_sid)
+            if _existing and _existing.get("metrics"):
+                _m = _existing["metrics"]
+                _base_cost = _m.get("costUsd", 0.0)
+                _base_turns = _m.get("turns", 0)
+                _base_duration = _m.get("durationMs", 0)
+
         # Wrap notify to read the *current* callback from _last_notify each
         # time, so that rebind_notify() transparently redirects events to a
         # new WebSocket without restarting the runner.
@@ -306,14 +340,24 @@ class AgentService:
                 except Exception:
                     logger.exception("Failed to persist event %s for session %s", method, task.bonsai_sid)
 
-            # Persist metrics to metadata on turnComplete/done so that
+            # Persist metrics to metadata on turnComplete/done/interrupted so that
             # list_all_sessions can return cost per session without loading events.
-            if method in ("agent/turnComplete", "agent/done"):
+            if method in ("agent/turnComplete", "agent/done", "agent/interrupted"):
+                usage = params.get("usage", {})
+                ctx_tokens = (
+                    usage.get("input_tokens", 0)
+                    + usage.get("output_tokens", 0)
+                )
                 update_session_metadata(self._config.project_root, task.bonsai_sid, {
                     "metrics": {
-                        "costUsd": params.get("costUsd", 0),
-                        "turns": params.get("turns", 0),
-                        "durationMs": params.get("durationMs", 0),
+                        "costUsd": _base_cost + params.get("costUsd", 0),
+                        "turns": _base_turns + params.get("turns", 0),
+                        "turnCostUsd": params.get("turnCostUsd", 0),
+                        "turnTurns": params.get("turn_turns", 0),
+                        "durationMs": _base_duration + params.get("durationMs", 0),
+                        "contextTokens": ctx_tokens,
+                        "contextMax": 1_000_000 if "context-1m-2025-08-07" in task.config.betas else 200_000,
+                        "outputTokens": usage.get("output_tokens", 0),
                     },
                 })
 

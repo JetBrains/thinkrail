@@ -1,6 +1,7 @@
 import { useCallback, useState } from "react";
 import { Outlet } from "react-router-dom";
 import { useUiStore } from "@/store/uiStore.ts";
+import { modLabel } from "@/utils/platform.ts";
 import { Header } from "./Header.tsx";
 import { StatusBar } from "./StatusBar.tsx";
 import { LeftPanel } from "./LeftPanel.tsx";
@@ -50,7 +51,7 @@ export function AppShell({ onSwitchProject }: { onSwitchProject: () => void }) {
       <div className="layout">
         {leftCollapsed ? (
           <button className="left-collapse-btn" onClick={toggleLeft}
-            title="Open left panel (Ctrl+B)">&#9654;</button>
+            title={`Open left panel (${modLabel("B")})`}>&#9654;</button>
         ) : (
           <>
             <div style={{ width: leftWidth, height: "100%", overflow: "hidden" }}>
@@ -83,7 +84,7 @@ export function AppShell({ onSwitchProject }: { onSwitchProject: () => void }) {
         </div>
         {rightCollapsed ? (
           <button className="right-collapse-btn" onClick={toggleRight}
-            title="Open context panel (Cmd+J)">&#9664;</button>
+            title={`Open context panel (${modLabel("J")})`}>&#9664;</button>
         ) : (
           <>
             <ResizeHandle

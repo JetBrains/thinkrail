@@ -81,12 +81,12 @@ All three panels have **flexible width**, resizable via drag handles between the
 | Logo | "🌿 Bonsai" branding |
 | Project name | Current project root name |
 | Session indicator | Count of active agent sessions, pulsing dot |
-| `◀ Tree` button | Toggle left panel visibility (`Ctrl+B`) |
-| `+ New Session` button | Opens new session modal (`Cmd+T`) |
+| `◀ Tree` button | Toggle left panel visibility (`Mod+B`) |
+| `+ New Session` button | Opens new session modal (`Mod+T`) |
 
 ## 2. Left Panel — Navigation & Progress
 
-Toggle visibility: `Ctrl+B`
+Toggle visibility: `Mod+B`
 
 ### Tabs
 
@@ -236,7 +236,7 @@ Key features:
 
 ## 4. Right Panel — Context Panel
 
-Toggle visibility: `Cmd+J`
+Toggle visibility: `Mod+J`
 
 > **Full specification:** [CONTEXT_PANEL.md](CONTEXT_PANEL.md)
 
@@ -277,7 +277,7 @@ The following views from the old tab-based right panel are now handled different
 
 ```
 ┌──────────────────────────────────────────────────────────────────────────┐
-│ 🌿 N specs │ ● N done │ ⏳ N pending │        Cmd+T New · Ctrl+B Tree  │
+│ 🌿 N specs │ ● N done │ ⏳ N pending │        Mod+T New · Mod+B Tree  │
 └──────────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -302,7 +302,7 @@ Clicking "N sessions" in the status bar replaces the center panel content with t
 
 ## 6. Command Palette
 
-Triggered by `Cmd+K`. A floating search modal for quick navigation and actions:
+Triggered by `Mod+K`. A floating search modal for quick navigation and actions:
 
 ```
 ┌──────────────────────────────────────────────┐
@@ -331,16 +331,18 @@ Triggered by `Cmd+K`. A floating search modal for quick navigation and actions:
 
 ## 7. Keyboard Shortcuts
 
+**Modifier key:** `Mod` = Ctrl on macOS, Alt on Linux/Windows.
+
 | Shortcut | Action |
 | --- | --- |
-| `Cmd+K` | Open command palette |
-| `Ctrl+B` | Toggle left panel |
-| `Cmd+J` | Toggle right panel |
-| `Cmd+T` | New session |
-| `Cmd+1-9` | Switch session tabs |
-| `Cmd+Enter` | Send message |
-| `Cmd+G` | Open full graph view in center panel |
-| `Cmd+P` | Open spec view in center panel |
+| `Mod+K` | Open command palette |
+| `Mod+B` | Toggle left panel |
+| `Mod+J` | Toggle right panel |
+| `Mod+T` | New session |
+| `Mod+1-9` | Switch session tabs |
+| `Mod+Enter` | Send message |
+| `Mod+G` | Open full graph view in center panel |
+| `Mod+P` | Open spec view in center panel |
 
 ## 8. Context Linking
 

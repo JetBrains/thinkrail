@@ -44,6 +44,8 @@ class AgentConfig(BaseModel):
     max_turns: int = 25
     permission_mode: str = "default"
     stream_text: bool = True
+    betas: list[str] = Field(default_factory=list)
+    effort: str | None = None
 
 
 class QuestionOption(BaseModel):

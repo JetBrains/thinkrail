@@ -20,11 +20,8 @@ frontend/.vite/
 .DS_Store
 Thumbs.db
 
-# Bonsai runtime
+# Bonsai runtime (legacy generated files)
 .specs/.progress.yaml
 .specs/.progress.json
-.specs/dashboard.json
-.specs/dashboard.html
-.specs/vendor/
 .claude/settings.local.json
 .specs/sessions

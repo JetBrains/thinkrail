@@ -7,38 +7,61 @@ description: Show specification coverage, health, and gaps for the current proje
 
 You are generating a **specification status report** for the current project. This is the dashboard for spec-driven development.
 
-## IMPORTANT: Use Pre-Computed Data
+## IMPORTANT: Visualization Rules
 
-The dashboard data is **pre-computed by a script**. Do NOT manually read registry.json or scan the codebase.
+**NEVER** output ASCII box-drawing characters or ANSI escape codes. Always use `bonsai_visualize` to display results.
 
 ## Process
 
-### Step 1: Run the dashboard script
+### Step 1: Gather data
 
-Execute:
-```bash
-python3 claude-plugin/tools/compute-dashboard.py . --terminal status
+Read `.specs/registry.json` to get the list of specs (with type, status, covers, paths). Then scan `current_tasks/**/*.md` for task statuses. Use file mtimes to determine freshness (compare spec mtime vs covered code mtime).
+
+### Step 2: Display using bonsai_visualize
+
+Show the status report using `bonsai_visualize` with type `summary-box`:
+```json
+{
+  "type": "summary-box",
+  "title": "Specification Status Report",
+  "vizId": "spec-status",
+  "data": {
+    "sections": [
+      {"heading": "Coverage", "items": [
+        {"label": "Specs", "value": "[total] total, [active] active, [stale] stale, [draft] draft"},
+        {"label": "Coverage", "value": "[X]%"}
+      ]},
+      {"heading": "Tasks", "items": [
+        {"label": "Progress", "value": "[done]/[total] complete"},
+        {"label": "Pending", "value": "[count] remaining"}
+      ]},
+      {"heading": "Lint", "items": [
+        {"label": "Errors", "value": "[count]"},
+        {"label": "Warnings", "value": "[count]"}
+      ]},
+      {"heading": "Top Recommendations", "items": [
+        {"label": "1", "value": "[recommendation]"},
+        {"label": "2", "value": "[recommendation]"}
+      ]}
+    ]
+  }
+}
 ```
 
-This outputs a fully formatted status report including:
-1. **Coverage percentage** with progress bar
-2. **Spec counts** (total, active, stale, draft)
-3. **Task progress** bar
-4. **Lint summary** (errors, warnings)
-5. **Workflow steps** with status
-6. **Top recommendations** prioritized by importance
+### Step 3: For deeper analysis (optional)
 
-### Step 2: For deeper analysis (optional)
-
-If the user wants details on specific specs, coverage gaps, or freshness:
-
-Read `.specs/dashboard.json` and examine:
-- `coverage[]` -- per-directory spec coverage with freshness
-- `lint[]` -- structural issues
-- `recommendations[]` -- prioritized next actions
-- `pending_tasks[]` -- remaining work items
-
-This is ~5KB of pre-computed data vs reading the full registry (~68KB).
+If the user wants details on specific specs, coverage gaps, or freshness, show additional breakdowns using `bonsai_visualize` `data-table` type:
+```json
+{
+  "type": "data-table",
+  "title": "Spec Coverage by Module",
+  "vizId": "spec-coverage-detail",
+  "data": {
+    "columns": ["Module", "Spec", "Status", "Freshness"],
+    "rows": [["[module]", "[spec path]", "[status]", "[fresh/stale]"]]
+  }
+}
+```
 
 ### Step 3: Offer actions
 
@@ -52,6 +75,7 @@ Use AskUserQuestion:
 
 ## Key Principles
 
-- **Fast**: Script computes everything in ~150ms
+- **Fast**: Read registry.json + task files, compute metrics directly
 - **Actionable**: Every issue has a suggested action with explicit `/skill-name`
 - **Non-destructive**: Only reads and reports, never modifies code or specs
+- **Visual**: Always display results via `bonsai_visualize`, never ASCII art

@@ -8,6 +8,8 @@ The Chat UI is the center panel's primary content area. It renders a scrolling s
 
 This spec reflects the **actual implemented code** as of 2026-03-05. Items not yet implemented are marked **[Planned]**.
 
+> **Modifier key:** Mod = Ctrl on macOS, Alt on Linux/Windows
+
 ---
 
 ## Component Hierarchy
@@ -26,6 +28,7 @@ This spec reflects the **actual implemented code** as of 2026-03-05. Items not y
       </div>
       <AssistantMessage />             // textDelta
       <ToolCallCard />                 // toolCallStart (paired with toolCallEnd state)
+      <DiffCard />                     // toolCallStart for Edit/Write/NotebookEdit (lazy-loaded)
       <SubagentBlock />                // subagentStart (finished derived from subagentEnd)
       <QuestionCard />                 // askUserQuestion
       <SuggestionCard />               // suggestSession
@@ -50,7 +53,7 @@ This spec reflects the **actual implemented code** as of 2026-03-05. Items not y
 **Key structural notes:**
 - `SessionPanel` is **not** structured as `SessionHeader + ChatStream + StatusLine + InputArea` as previously specced. There is **no `<SessionHeader>`** component.
 - The `<SessionTabBar>` handles both session tabs and file/preview tabs in a single unified bar.
-- When no sessions and no files are open, `SessionPanel` renders `<div className="center-placeholder">Select a session or create a new one (Cmd+T)</div>`.
+- When no sessions and no files are open, `SessionPanel` renders `<div className="center-placeholder">Select a session or create a new one (Mod+T)</div>`.
 - When sessions/files exist but no active tab matches, it renders `<div className="center-placeholder">Select a tab</div>`.
 
 ---
@@ -81,7 +84,7 @@ interface ChatStreamProps {
 | `sessionStart` | `<SystemMessage variant="ok" text="Session started — {model}">` |
 | `userMessage` | `<div.chat-user><div.chat-user-text>{text}</div></div>` |
 | `textDelta` | `<AssistantMessage text={text} streaming={streaming}>` |
-| `toolCallStart` | `<ToolCallCard>` (state derived from paired `toolCallEnd`) |
+| `toolCallStart` | `<ToolCallCard>` (state derived from paired `toolCallEnd`) — **or `<DiffCard>`** for Edit/Write/NotebookEdit |
 | `toolCallEnd` | `null` (data consumed by `toolCallStart` pre-pass) |
 | `subagentStart` | `<SubagentBlock>` (finished derived from pre-pass; children=`null`) |
 | `subagentEnd` | `null` |
@@ -132,9 +135,9 @@ interface AssistantMessageProps {
 ```
 
 - Root: `<div className="chat-assistant">` — `max-width: 90%`, `slideUp` entrance animation
-- Inner: `<pre className="chat-assistant-text">` — renders text as **plain pre-formatted text** (NOT markdown)
+- Inner: renders text via `<ChatMarkdown>` component — full markdown rendering using `react-markdown` + `remark-gfm`
 - When `streaming=true`: renders `<span className="chat-cursor" />` — 7×14px block cursor, `blink` animation (1s step-end)
-- **No markdown rendering is implemented.** **[Planned]**
+- **Markdown rendering:** Implemented via `ChatMarkdown` component. Uses `react-markdown` with `remark-gfm` plugin for GitHub-Flavored Markdown (tables, strikethrough, task lists). Links render as `<ExternalLink>` component (opens in new tab). Code blocks render with syntax highlighting.
 - Each `textDelta` event renders its own `<AssistantMessage>`. They are **not concatenated** — each event index gets its own component with no merge logic.
 - No author label ("Claude") is rendered. **[Planned]**
 
@@ -211,6 +214,107 @@ interface ToolCallCardProps {
 
 ---
 
+### `<DiffCard>`
+
+Monaco DiffEditor-based replacement for `<ToolCallCard>` when the tool is Edit, Write, or NotebookEdit. Shows a side-by-side diff of the original and modified content.
+
+```typescript
+interface DiffCardProps {
+  toolName: string;
+  toolInput: Record<string, unknown>;
+  output?: string;
+  isError?: boolean;
+  state: "running" | "success" | "error";
+  compact?: boolean;  // true when rendered inside SubagentBlock
+}
+
+interface DiffData {
+  filePath: string;
+  original: string;
+  modified: string;
+}
+```
+
+**Routing logic:**
+
+Both `ChatStream` and `SubagentBlock` define:
+```typescript
+const DIFF_TOOLS = new Set(["Edit", "Write", "NotebookEdit"]);
+const DiffCard = lazy(() => import("./DiffCard.tsx").then(m => ({ default: m.DiffCard })));
+```
+
+When `DIFF_TOOLS.has(toolName)`, the event is rendered as:
+```tsx
+<Suspense fallback={<ToolCallCard toolName={toolName} toolInput={...} state="running" />}>
+  <DiffCard toolName={toolName} toolInput={...} output={end?.output} isError={end?.isError} state={state} />
+</Suspense>
+```
+
+**DiffData extraction** (`extractDiffData` function):
+
+| Tool | `filePath` | `original` | `modified` |
+|------|-----------|------------|------------|
+| Edit | `toolInput.file_path` | `toolInput.old_string` | `toolInput.new_string` |
+| Write | `toolInput.file_path` | `toolInput._previousContent` (injected by backend) | `toolInput.content` |
+| NotebookEdit | `toolInput.notebook_path` | `toolInput.old_source` | `toolInput.new_source` or `toolInput.source` |
+
+Returns `null` if required fields are missing → falls back to JSON display.
+
+**Backend `_previousContent` injection** (in `runner.py`):
+
+When a `Write` ToolUseBlock is detected, the backend reads the target file's current content and injects it as `_previousContent` into the `toolInput` dict before emitting `agent/toolCallStart`. If the file does not exist or cannot be read, `_previousContent` is set to `""`.
+
+**Monaco DiffEditor configuration:**
+
+```typescript
+options={{
+  readOnly: true,
+  renderSideBySide: true,
+  minimap: { enabled: false },
+  scrollBeyondLastLine: false,
+  fontSize: 12,
+  fontFamily: "'JetBrains Mono', 'Fira Code', 'SF Mono', monospace",
+  lineNumbers: "on",
+  automaticLayout: true,
+  enableSplitViewResizing: true,
+  ignoreTrimWhitespace: false,
+}}
+```
+
+Uses the `intellij-darcula` custom theme (shared with `FileViewer`).
+
+**Header** (`.diff-card-header`, always visible, clickable when not running):
+- `.diff-card-icon`: emoji from `TOOL_ICONS` (Edit/Write → ✏️, NotebookEdit → 📓)
+- `.diff-card-name`: tool name, `color: var(--cyan)`, `font-weight: 600`
+- `.diff-card-path`: truncated file path, `max-width: 300px`
+- `.diff-card-lang`: language badge from `detectLanguage()`
+- `.diff-card-stats`: `+N` (green) / `-N` (red) line change counts
+- `.diff-card-status`: status icon + text, same as ToolCallCard
+
+**Horizontal scrolling:**
+- `.diff-card-editor-scroll`: `overflow-x: auto; overflow-y: hidden`
+- `.diff-card-editor`: `min-width: 900px` (700px in compact mode) ensures side-by-side diff is readable; viewport scrolls horizontally if narrower
+
+**Resize behavior:**
+- `.diff-card-editor` has `resize: vertical`, `min-height: 100px`, `max-height: 600px`, default `height: 300px` (200px compact)
+- A `ResizeObserver` syncs the container's `contentRect.height` to the Monaco `height` prop
+
+**Edge cases:**
+
+| Scenario | Behavior |
+|----------|----------|
+| Binary file (png, jpg, zip, etc.) | Falls back to text display: `"Binary file: {path}"` |
+| Large file (original + modified > 100KB) | Shows warning + "Load diff anyway" button |
+| Missing diff fields (null from extractDiffData) | Falls back to `JSON.stringify(toolInput)` display |
+| Error state | Diff editor + error output `<pre>` below |
+
+**Compact variant** (`compact={true}`, used inside SubagentBlock):
+- `.diff-card--compact`: `border-left-width: 2px`, `background: transparent`, `max-width: 100%`
+- Header: smaller padding/font (2px / 11px)
+- Editor: `min-width: 700px`, `min-height: 80px`, `max-height: 400px`, default height 200px
+
+---
+
 ### `<SubagentBlock>`
 
 ```typescript
@@ -272,7 +376,7 @@ interface QuestionOption {
 **Submission:**
 - If free-text question: sends `{ text: textInput, answers: selections }`
 - Otherwise: sends `{ questions, answers: { [questionText]: selectedLabel } }`
-- `Cmd/Ctrl+Enter` submits from the free-text textarea
+- `Mod+Enter` submits from the free-text textarea
 
 **Actions row** (`.chat-question-actions`, hidden when `answered`):
 - Single button: `.chat-btn.chat-btn-primary` labeled "Send"
@@ -386,7 +490,15 @@ interface ApprovalCardProps {
 - `.chat-btn.chat-btn-approve` ("Approve") → green background, calls `onApprove`
 - `.chat-btn.chat-btn-deny` ("Deny") → red outline, calls `onDeny`
 
-**When answered** (`.chat-approval-result`):
+**When answered — Compact mode** (`.chat-approval-compact`):
+- Single-line row: "Action requires approval" | tool name + truncated input | approval status
+- CSS class includes state modifier: `.chat-approval--approved` or `.chat-approval--denied`
+- `formatToolInput()`: extracts most relevant field (command, file_path, path, pattern) or JSON
+- `truncate()`: limits display to 60 characters with ellipsis
+- Clickable to expand: shows full input in `<pre className="chat-approval-full-command">` and description in `.chat-approval-desc`
+- Approval status: `✓ Approved` in `var(--green)` or `✕ Denied` in `var(--red)`
+
+**When not answered** (full card — `.chat-approval-result`):
 - `decision === "approve"`: `✓ Approved` in `var(--green)`
 - `decision === "deny"`: `✕ Denied` in `var(--red)`
 
@@ -462,11 +574,14 @@ interface CompactMarkerProps {
 interface SessionStatusLineProps {
   model: string;
   permissionMode: string;
+  effort: string | null;
   metrics: SessionMetrics;
   status: SessionStatus;
+  projectCost?: number;
   disabled?: boolean;
   onChangeModel?: (model: string) => void;
   onChangePermissionMode?: (mode: string) => void;
+  onChangeEffort?: (effort: string | null) => void;
 }
 ```
 
@@ -489,22 +604,30 @@ Root: `<div className="session-status-line">` — flex row, 11px, `color: var(--
 
 4. **Separator**
 
-5. **Cost** (`.ssl-cost`): `$X.XX` from `metrics.costUsd`
+5. **Effort selector** (`.ssl-selector` with dropdown)
+   - Displays current effort label via `displayEffort()`: `null` → `"auto"`, otherwise the effort string
+   - Dropdown lists `EFFORT_OPTIONS`: `[{value: null, label: "auto"}, {value: "low"}, {value: "medium"}, {value: "high"}, {value: "max"}]`
+   - Uses `useDropdown()` hook (same pattern as model and permission mode)
+   - Disabled when session is running or ended
 
 6. **Separator**
 
-7. **Tool calls** (`.ssl-tools`): `[ssl-pulse?] {toolCalls} calls`
+7. **Cost** (`.ssl-cost`): `$X.XX | $Y.YY` — session cost (`metrics.costUsd`) + project cost (`projectCost`). Uses `reconstructCost()` / `reconstructContextUsage()` to derive from persisted events on restored sessions.
+
+8. **Separator**
+
+9. **Tool calls** (`.ssl-tools`): `[ssl-pulse?] {toolCalls} calls`
    - `.ssl-pulse`: 6px green dot with `pulse` animation — shown only when `status === "running"`
 
-8. **Context bar** (conditional — only when `metrics.contextMax > 0`):
+10. **Context bar** (conditional — only when `metrics.contextMax > 0`):
    - **Separator**
    - `.ssl-context`: text `ctx {N}k/{M}k`
    - `.ssl-context-bar`: 60px × 6px bar, uses CSS vars `--pct` and `--bar-color`
    - Color thresholds: `> 80%` → `var(--red)`, `> 50%` → `var(--gold)`, else → `var(--green)`
 
-9. **Separator**
+11. **Separator**
 
-10. **Status indicator** (`.ssl-status.ssl-status-{class}`):
+12. **Status indicator** (`.ssl-status.ssl-status-{class}`):
 
 | `status` | CSS class | Elements | Color |
 |---|---|---|---|
@@ -528,6 +651,8 @@ interface InputAreaProps {
   disabled: boolean;
   placeholder: string;
   onSend: (text: string) => void;
+  showContinue?: boolean;
+  onContinue?: () => void;
 }
 ```
 
@@ -548,11 +673,27 @@ Root: `<div className="input-area">` with `style={{ position: "relative" }}`
 - `resize: none`, `border: 1px solid var(--border)`, `background: var(--elevated)`
 - Focus: `border-color: var(--blue)`
 - Disabled: `opacity: 0.5; cursor: not-allowed`
-- `Cmd/Ctrl+Enter` sends; plain `Enter` adds a newline
+- `Mod+Enter` sends; plain `Enter` adds a newline
+
+**Mic button** (`.input-mic`, conditional on `voice.isSupported`):
+- Emoji: 🎙 (replaced by `.input-mic-spinner` when transcribing)
+- CSS states: `.input-mic-recording` (active recording), `.input-mic-transcribing` (awaiting backend)
+- `handleMicClick`: toggle between `startRecording()` and `stopRecording()`
+- On stop: awaits `voice.stopRecording()`, sets textarea text to transcript, auto-resizes
+- Speech API mode: `interimText` synced into textarea in real-time during recording
+- Disabled when `disabled || voice.isTranscribing`
+- Uses `useVoiceInput()` hook — see [Voice Input Design](../../features/VOICE_INPUT_DESIGN.md)
 
 **Send button** (`.input-send`):
 - Background: `var(--blue)`, label "Send"
 - Disabled when `disabled || !text.trim()`
+
+**Continue button** (`.input-continue`, conditional on `showContinue && onContinue`):
+- Label: "Continue", title: "Continue without a message"
+- Visible when: input enabled, agent not running, session has events
+- Behavior (in `SessionPanel`):
+  - If question pending: `resolveRequest(sessionId, requestId, { text: "continue" })`
+  - If idle/interrupted: `sendMessage(sessionId, "continue")`
 
 **Placeholder states** (computed in `SessionPanel`):
 
@@ -579,6 +720,109 @@ inputDisabled = isDone || isRunning || (hasPending && (pendingRequest.type === "
 - If `pendingRequest.type === "question"`: calls `resolveRequest(taskId, requestId, { text })`
 - If `status === "idle"`: calls `sendMessage(taskId, text)` (sends new turn message)
 - User message is added **optimistically** to events before API response, and status immediately set to `"running"`
+
+---
+
+### `<VisualizationCard>`
+
+Rendered for `toolCallStart` events where `toolName === "bonsai_visualize"`. See [Visualization Design](../../features/VISUALIZATION_DESIGN.md).
+
+```typescript
+// VizData is a discriminated union on `type`
+type VizData =
+  | { type: "progress-tracker"; title?: string; vizId?: string; data: ProgressTrackerData }
+  | { type: "summary-box"; title?: string; vizId?: string; data: SummaryBoxData }
+  | { type: "comparison"; title?: string; vizId?: string; data: ComparisonData }
+  | { type: "data-table"; title?: string; vizId?: string; data: DataTableData }
+  | { type: "status-list"; title?: string; vizId?: string; data: StatusListData }
+  | { type: "diagram"; title?: string; vizId?: string; data: DiagramData }
+```
+
+- Root: `<div className="viz-card">` — wrapped in `<VizErrorBoundary>`
+- Header (`.viz-card-header`): type emoji icon (`VIZ_ICONS` map) + title + type label, click toggles collapse
+- Body (`.viz-card-body`): one of 6 sub-renderers selected by `data.type`
+- Collapse state: `useState(false)` — toggled by header click
+
+**Sub-renderers:**
+
+| Renderer | Data | Renders |
+|----------|------|---------|
+| `ProgressTracker` | `steps[]: { label, status, file?, substeps? }` | Steps with status icons, optional substeps indented |
+| `SummaryBox` | `sections[]: { heading, status?, items[]: { label, value } }` | Grouped label/value pairs |
+| `Comparison` | `options[]: { name, description?, pros?, cons? }` | Option cards with pro/con lists |
+| `DataTable` | `columns[], rows[][], statusColumn?` | HTML table with optional status-colored column |
+| `StatusList` | `items[]: { label, status, meta? }` | Flat list with status badges |
+| `Diagram` | `nodes[], edges[], layout?` | Text-based node/edge diagram |
+
+**Status icons and colors:** `STATUS_ICONS` maps `VizStatus` → Unicode symbol, `STATUS_COLORS` maps → CSS var.
+
+**vizId collapse pattern:** When multiple cards share the same `vizId`, earlier ones render as `<CollapsedVizMarker>` (icon + title + "updated" tag, single line).
+
+**Error boundary:** `<VizErrorBoundary>` catches render errors and shows a fallback message without crashing ChatStream.
+
+**CSS classes:**
+
+| Class | Element | Styles |
+|---|---|---|
+| `.viz-card` | Root | `border: 1px solid var(--border); border-radius: var(--radius-md); max-width: 90%; bg: var(--elevated)` |
+| `.viz-card-header` | Header | `flex; padding: sm md; cursor: pointer; font-size: 12px` |
+| `.viz-card-body` | Body | `border-top: 1px solid border; padding: sm md; resize: vertical; min-height: 60px` |
+
+---
+
+### `<SessionContextCard>`
+
+Rendered at the start of a session to display session configuration and context.
+
+```typescript
+interface SessionContextCardProps {
+  skillId?: string;
+  specIds: string[];
+  model: string;
+  permissionMode: string;
+  betas: string[];
+  systemPrompt?: string;
+  onVisibilityChange?: (visible: boolean) => void;
+}
+```
+
+- Root: `<div className="session-context-card">`
+- Uses `IntersectionObserver` on `cardRef` to track visibility and call `onVisibilityChange` — used by `StickyContextBar` to show/hide a condensed context bar when the card scrolls out of view
+- Conditionally renders sections:
+  1. **Skill info** (if `skillId`): icon, name, description from skill lookup
+  2. **Specs** (if `specIds` not empty): pills with spec titles from `useSpecStore()`
+  3. **Config** (always): model pill (`.session-context-pill--model`), permission mode, beta feature pills (`.session-context-pill--beta`)
+  4. **System prompt** (if provided): collapsible toggle (`.session-context-prompt-toggle`), pre-formatted body (`.session-context-prompt-body`)
+
+**CSS classes:** `.session-context-card`, `.session-context-row`, `.session-context-label`, `.session-context-value`, `.session-context-pill`, `.session-context-desc`, `.session-context-prompt`
+
+---
+
+### Resize Behavior
+
+Several ChatStream containers support manual vertical resizing via CSS `resize: vertical`:
+
+| Container | CSS Rule | Min Height |
+|-----------|----------|------------|
+| `.chat-tool-body` | `resize: vertical` | 40px |
+| `.chat-subagent-body` | `resize: vertical` | 60px |
+| `.chat-approval-expanded` | `resize: vertical` | 40px |
+| `.viz-card-body` | `resize: vertical` | 60px |
+| `.diff-card-editor` | `resize: vertical` | 100px (max: 600px, default: 300px) |
+
+`DiffCard` additionally uses a `ResizeObserver` to sync the Monaco editor height with its container when expanded:
+
+```typescript
+useEffect(() => {
+  const el = editorContainerRef.current;
+  if (!el || !expanded) return;
+  const observer = new ResizeObserver((entries) => {
+    for (const entry of entries) setEditorHeight(entry.contentRect.height);
+  });
+  observer.observe(el);
+  return () => observer.disconnect();
+}, [expanded]);
+```
 
 ---
 
@@ -762,6 +1006,21 @@ RPC server
 | `.chat-tool-input` | Tool input summary | `color: var(--muted); font-size: 11px; max-width: 300px` |
 | `.chat-tool-status` | Tool status | `margin-left: auto; font-size: 11px` |
 | `.chat-tool-body` | Tool output | `border-top: 1px solid border; max-height: 120px; overflow-y: auto` |
+| `.diff-card` | DiffCard root | `border-left: 3px solid {dynamic}; bg: var(--elevated); max-width: 90%; animation: slideUp` |
+| `.diff-card--compact` | DiffCard compact variant | `border-left-width: 2px; bg: transparent; max-width: 100%` |
+| `.diff-card-header` | DiffCard header | `flex; gap: sm; padding: sm md; cursor: pointer; font-size: 12px` |
+| `.diff-card-name` | Tool name | `color: var(--cyan); font-weight: 600` |
+| `.diff-card-path` | File path | `color: var(--muted); font-size: 11px; max-width: 300px; text-overflow: ellipsis` |
+| `.diff-card-lang` | Language badge | `font-size: 10px; color: var(--hint); bg: var(--hover); border-radius: sm` |
+| `.diff-card-stats` | Change stats | `font-size: 11px; flex; gap: xs` |
+| `.diff-card-stats-add` | Added lines | `color: var(--green)` |
+| `.diff-card-stats-del` | Removed lines | `color: var(--red)` |
+| `.diff-card-status` | Status indicator | `margin-left: auto; font-size: 11px` |
+| `.diff-card-editor-scroll` | Editor scroll wrapper | `border-top: 1px solid border; overflow-x: auto; overflow-y: hidden` |
+| `.diff-card-editor` | Editor container | `min-width: 900px; resize: vertical; min-height: 100px; max-height: 600px; height: 300px` |
+| `.diff-card-error` | Error output | `border-top: 1px solid border; padding: sm md` |
+| `.diff-card-fallback` | Fallback display | `border-top: 1px solid border; padding: sm md` |
+| `.diff-card-large-warning` | Large file warning | `border-top: 1px solid border; padding: md; text-align: center` |
 | `.chat-subagent` | SubagentBlock root | `margin-left: 12px; padding-left: 12px; border-left: 2px solid var(--border2)` |
 | `.chat-subagent-header` | Subagent header | `flex; color: var(--muted); font-size: 12px` |
 | `.chat-spinner` | CSS spinner | `10×10px; border-top: var(--blue); animation: spin 0.8s` |
@@ -803,6 +1062,11 @@ RPC server
 | `.input-area` | InputArea root | `flex; align-items: flex-end; padding: md lg; border-top: 1px solid border` |
 | `.input-textarea` | Textarea | `flex: 1; max-height: 150px; bg: var(--elevated)` |
 | `.input-send` | Send button | `bg: var(--blue); color: var(--bg); font-size: 12px` |
+| `.input-mic` | Mic button | `bg: transparent; cursor: pointer` |
+| `.input-mic-recording` | Recording state | Active indicator |
+| `.input-mic-transcribing` | Transcribing state | Shows spinner |
+| `.input-mic-spinner` | Transcription spinner | Animated spinner replacing mic icon |
+| `.input-continue` | Continue button | Visible when idle with events |
 | `.input-autocomplete` | Skill dropdown | `position: absolute; bottom: 100%; max-height: 240px; z-index: 100` |
 | `.input-autocomplete-active` | Highlighted item | `bg: var(--hover); color: var(--text)` |
 | `.session-tabs` | Tab bar root | `flex; border-bottom: 1px solid border; overflow-x: auto` |
@@ -813,6 +1077,17 @@ RPC server
 | `.session-tab-close` | Close button | `opacity: 0; visible on tab hover` |
 | `.restored-bar` | Restored bar root | `flex; border-top: 1px solid border; bg: var(--panel)` |
 | `.restored-bar-btn` | Resume button | `bg: var(--blue); color: #fff` |
+| `.viz-card` | VisualizationCard root | `border: 1px solid var(--border); max-width: 90%; bg: var(--elevated)` |
+| `.viz-card-header` | Viz header | `flex; padding: sm md; cursor: pointer; font-size: 12px` |
+| `.viz-card-body` | Viz body | `border-top: 1px solid border; resize: vertical; min-height: 60px` |
+| `.session-context-card` | SessionContextCard | `bg: var(--elevated); border: 1px solid var(--border)` |
+| `.session-context-row` | Context row | `flex; gap: sm` |
+| `.session-context-pill` | Info pill | `font-size: 11px; border-radius: 4px; padding: 2px 8px` |
+| `.session-context-pill--model` | Model pill variant | `color: var(--blue)` |
+| `.session-context-pill--beta` | Beta pill variant | `color: var(--cyan)` |
+| `.chat-approval-compact` | Compact approval | Single-line answered approval |
+| `.chat-approval--approved` | Approved state | `border-color: var(--green)` |
+| `.chat-approval--denied` | Denied state | `border-color: var(--red)` |
 
 ---
 
@@ -831,7 +1106,6 @@ RPC server
 
 | Feature | Notes |
 |---|---|
-| Markdown rendering in AssistantMessage | Currently renders raw text in `<pre>` |
 | Author labels ("Claude", "You") above bubbles | Not rendered |
 | Message concatenation (multiple textDelta → one bubble) | Each textDelta renders its own AssistantMessage |
 | `parentToolUseId` nesting (tool calls inside SubagentBlock) | SubagentBlock children are always null |

@@ -218,9 +218,9 @@ Standalone component (not rendered inside `SessionPanel`). Receives `onClose` pr
 
 | Condition | Message |
 |---|---|
-| No sessions, no files | "Select a session or create a new one (Cmd+T)" |
+| No sessions, no files | "Select a session or create a new one (Mod+T)" |
 | Tabs exist, none active | "Select a tab" |
-| Session Manager empty | "No sessions yet. Create one with Cmd+T." |
+| Session Manager empty | "No sessions yet. Create one with Mod+T." |
 
 ---
 
@@ -325,14 +325,16 @@ Session tab switching clears file state; file tab switching clears preview.
 
 ## Keyboard Shortcuts
 
+**Modifier key:** `Mod` = Ctrl on macOS, Alt on Linux/Windows.
+
 | Shortcut | Action |
 |---|---|
-| `Cmd+T` | Open New Session Modal |
-| `Cmd+K` | Open Command Palette |
-| `Cmd+J` | Toggle right panel |
-| `Ctrl+B` | Toggle left panel |
-| `Cmd+Enter` (in InputArea) | Send message |
-| `Cmd+1-9` tab switching | **[Not implemented]** |
+| `Mod+T` | Open New Session Modal |
+| `Mod+K` | Open Command Palette |
+| `Mod+J` | Toggle right panel |
+| `Mod+B` | Toggle left panel |
+| `Mod+Enter` (in InputArea) | Send message |
+| `Mod+1-9` tab switching | **[Not implemented]** |
 
 ---
 

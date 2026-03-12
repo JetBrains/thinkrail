@@ -133,6 +133,22 @@
       "updated": "2026-03-08"
     },
     {
+      "id": "module-viz",
+      "type": "module-design",
+      "path": "backend/app/viz/README.md",
+      "title": "Viz Module Design",
+      "status": "active",
+      "covers": [
+        "backend/app/viz/"
+      ],
+      "tags": [
+        "backend",
+        "dashboard"
+      ],
+      "created": "2026-03-11",
+      "updated": "2026-03-11"
+    },
+    {
       "id": "frontend-module",
       "type": "module-design",
       "path": "frontend/README.md",
@@ -1657,6 +1673,296 @@
       ],
       "created": "2026-03-09",
       "updated": "2026-03-09"
+    },
+    {
+      "id": "task-fe-diff-card",
+      "type": "task-spec",
+      "path": "current_tasks/frontend/feature_diff_card.md",
+      "title": "Implement DiffCard",
+      "status": "done",
+      "covers": [
+        "frontend/src/components/ChatStream/DiffCard.tsx",
+        "frontend/src/components/ChatStream/DiffCard.css",
+        "backend/app/agent/runner.py"
+      ],
+      "tags": [
+        "medium",
+        "new-feature",
+        "frontend"
+      ],
+      "created": "2026-03-10",
+      "updated": "2026-03-10"
+    },
+    {
+      "id": "visualization-design",
+      "type": "architecture-design",
+      "path": "features/VISUALIZATION_DESIGN.md",
+      "title": "MCP Visualization — Architecture Design",
+      "status": "active",
+      "covers": [
+        "backend/app/agent/visualization.py",
+        "frontend/src/components/ChatStream/VisualizationCard.tsx",
+        "frontend/src/types/viz.ts"
+      ],
+      "tags": [
+        "feature",
+        "visualization",
+        "mcp"
+      ],
+      "created": "2026-03-11",
+      "updated": "2026-03-11"
+    },
+    {
+      "id": "voice-input-design",
+      "type": "architecture-design",
+      "path": "features/VOICE_INPUT_DESIGN.md",
+      "title": "Voice Input — Architecture Design",
+      "status": "active",
+      "covers": [
+        "frontend/src/hooks/useVoiceInput.ts",
+        "backend/app/agent/transcribe.py",
+        "frontend/src/components/ChatStream/InputArea.tsx"
+      ],
+      "tags": [
+        "feature",
+        "voice",
+        "transcription"
+      ],
+      "created": "2026-03-11",
+      "updated": "2026-03-11"
+    },
+    {
+      "id": "effort-support-design",
+      "type": "submodule-design",
+      "path": "features/EFFORT_SUPPORT_DESIGN.md",
+      "title": "Effort Support — Feature Design",
+      "status": "active",
+      "covers": [
+        "backend/app/agent/models.py",
+        "backend/app/agent/service.py",
+        "frontend/src/components/ChatStream/SessionStatusLine.tsx"
+      ],
+      "tags": [
+        "feature",
+        "effort",
+        "config"
+      ],
+      "created": "2026-03-11",
+      "updated": "2026-03-11"
+    },
+    {
+      "id": "agent-transcribe",
+      "type": "submodule-design",
+      "path": "backend/app/agent/TRANSCRIBE.md",
+      "title": "Audio Transcription — Submodule Design",
+      "status": "active",
+      "covers": [
+        "backend/app/agent/transcribe.py"
+      ],
+      "tags": [
+        "backend",
+        "agent-orchestration",
+        "voice",
+        "whisper"
+      ],
+      "created": "2026-03-11",
+      "updated": "2026-03-11"
+    },
+    {
+      "id": "task-voice-input",
+      "type": "task-spec",
+      "path": "current_tasks/frontend/feature_voice_input.md",
+      "title": "Voice Input",
+      "status": "done",
+      "covers": [
+        "frontend/src/hooks/useVoiceInput.ts",
+        "frontend/src/components/ChatStream/InputArea.tsx",
+        "backend/app/agent/transcribe.py"
+      ],
+      "tags": [
+        "medium",
+        "new-feature",
+        "frontend"
+      ],
+      "created": "2026-03-11",
+      "updated": "2026-03-11"
+    },
+    {
+      "id": "task-effort-support",
+      "type": "task-spec",
+      "path": "current_tasks/frontend/feature_effort_support.md",
+      "title": "Effort Support",
+      "status": "done",
+      "covers": [
+        "backend/app/agent/models.py",
+        "frontend/src/components/ChatStream/SessionStatusLine.tsx",
+        "backend/app/agent/service.py"
+      ],
+      "tags": [
+        "medium",
+        "new-feature"
+      ],
+      "created": "2026-03-11",
+      "updated": "2026-03-11"
+    },
+    {
+      "id": "task-visualization-card",
+      "type": "task-spec",
+      "path": "current_tasks/frontend/feature_visualization_card.md",
+      "title": "Visualization Card",
+      "status": "done",
+      "covers": [
+        "frontend/src/components/ChatStream/VisualizationCard.tsx",
+        "frontend/src/types/viz.ts"
+      ],
+      "tags": [
+        "medium",
+        "new-feature",
+        "frontend"
+      ],
+      "created": "2026-03-11",
+      "updated": "2026-03-11"
+    },
+    {
+      "id": "task-resizable-boxes",
+      "type": "task-spec",
+      "path": "current_tasks/frontend/feature_resizable_boxes.md",
+      "title": "Resizable Session Boxes",
+      "status": "done",
+      "covers": [
+        "frontend/src/components/ChatStream/ChatStream.css"
+      ],
+      "tags": [
+        "low",
+        "improvement",
+        "frontend"
+      ],
+      "created": "2026-03-11",
+      "updated": "2026-03-11"
+    },
+    {
+      "id": "task-continue-button",
+      "type": "task-spec",
+      "path": "current_tasks/frontend/feature_continue_button.md",
+      "title": "Continue Button",
+      "status": "done",
+      "covers": [
+        "frontend/src/components/ChatStream/InputArea.tsx",
+        "frontend/src/components/SessionPanel/SessionPanel.tsx"
+      ],
+      "tags": [
+        "medium",
+        "new-feature",
+        "frontend"
+      ],
+      "created": "2026-03-11",
+      "updated": "2026-03-11"
+    },
+    {
+      "id": "dual-mode-input-design",
+      "type": "architecture-design",
+      "path": "features/DUAL_MODE_INPUT_DESIGN.md",
+      "title": "Dual-Mode Message Input — Architecture Design",
+      "status": "active",
+      "covers": [
+        "frontend/src/components/ChatStream/InputArea.tsx",
+        "frontend/src/components/ChatStream/ChatStream.tsx",
+        "frontend/src/components/ChatStream/ChatStream.css",
+        "frontend/src/store/sessionStore.ts",
+        "frontend/src/api/methods/agents.ts",
+        "backend/app/rpc/methods/agents.py",
+        "backend/app/agent/service.py"
+      ],
+      "tags": [
+        "feature",
+        "markdown",
+        "input"
+      ],
+      "created": "2026-03-11",
+      "updated": "2026-03-11"
+    },
+    {
+      "id": "task-dual-mode-input",
+      "type": "task-spec",
+      "path": "current_tasks/frontend/feature_dual_mode_input.md",
+      "title": "Dual-Mode Message Input",
+      "status": "done",
+      "covers": [
+        "frontend/src/components/ChatStream/InputArea.tsx",
+        "frontend/src/components/ChatStream/ChatStream.tsx",
+        "frontend/src/components/ChatStream/ChatStream.css",
+        "frontend/src/components/SessionPanel/SessionPanel.tsx",
+        "frontend/src/store/sessionStore.ts",
+        "frontend/src/api/methods/agents.ts",
+        "backend/app/rpc/methods/agents.py",
+        "backend/app/agent/service.py"
+      ],
+      "tags": [
+        "medium",
+        "new-feature",
+        "frontend"
+      ],
+      "created": "2026-03-11",
+      "updated": "2026-03-11"
+    },
+    {
+      "id": "skill-session-start-design",
+      "type": "architecture-design",
+      "path": "features/SKILL_SESSION_START_DESIGN.md",
+      "title": "Skill Session Start — Architecture Design",
+      "status": "active",
+      "covers": [
+        "frontend/src/components/SessionPanel/SessionPanel.tsx",
+        "frontend/src/components/ChatStream/InputArea.tsx"
+      ],
+      "tags": [
+        "architecture",
+        "frontend",
+        "session",
+        "skill"
+      ],
+      "created": "2026-03-11",
+      "updated": "2026-03-11"
+    },
+    {
+      "id": "ui-skill-session-start",
+      "type": "submodule-design",
+      "path": "frontend/ui-specs/SKILL_SESSION_START.md",
+      "title": "Skill Session Start Button — Frontend Spec",
+      "status": "active",
+      "covers": [
+        "frontend/src/components/SessionPanel/SessionPanel.tsx",
+        "frontend/src/components/ChatStream/InputArea.tsx"
+      ],
+      "tags": [
+        "frontend",
+        "ui",
+        "session",
+        "skill",
+        "input"
+      ],
+      "created": "2026-03-11",
+      "updated": "2026-03-11"
+    },
+    {
+      "id": "task-skill-session-start",
+      "type": "task-spec",
+      "path": "current_tasks/frontend/feature_skill_session_start.md",
+      "title": "Implement Start Session Button for Skill-Loaded Sessions",
+      "status": "done",
+      "covers": [
+        "frontend/src/components/SessionPanel/SessionPanel.tsx",
+        "frontend/src/components/ChatStream/InputArea.tsx"
+      ],
+      "tags": [
+        "medium",
+        "new-feature",
+        "frontend",
+        "session",
+        "skill"
+      ],
+      "created": "2026-03-11",
+      "updated": "2026-03-11"
     }
   ],
   "links": [
@@ -1813,6 +2119,21 @@
     {
       "from": "module-rpc",
       "to": "module-core",
+      "type": "depends-on"
+    },
+    {
+      "from": "module-viz",
+      "to": "design-doc",
+      "type": "parent"
+    },
+    {
+      "from": "module-viz",
+      "to": "module-core",
+      "type": "depends-on"
+    },
+    {
+      "from": "module-viz",
+      "to": "module-spec",
       "type": "depends-on"
     },
     {
@@ -2593,6 +2914,151 @@
     {
       "from": "task-bugfix-subagent-attention",
       "to": "chat-ui",
+      "type": "implements"
+    },
+    {
+      "from": "task-fe-diff-card",
+      "to": "chat-ui",
+      "type": "implements"
+    },
+    {
+      "from": "task-fe-diff-card",
+      "to": "task-fe-chat-ui",
+      "type": "depends-on"
+    },
+    {
+      "from": "visualization-design",
+      "to": "design-doc",
+      "type": "parent"
+    },
+    {
+      "from": "visualization-design",
+      "to": "module-agent",
+      "type": "depends-on"
+    },
+    {
+      "from": "visualization-design",
+      "to": "module-viz",
+      "type": "depends-on"
+    },
+    {
+      "from": "voice-input-design",
+      "to": "design-doc",
+      "type": "parent"
+    },
+    {
+      "from": "voice-input-design",
+      "to": "module-agent",
+      "type": "depends-on"
+    },
+    {
+      "from": "voice-input-design",
+      "to": "module-rpc",
+      "type": "depends-on"
+    },
+    {
+      "from": "effort-support-design",
+      "to": "design-doc",
+      "type": "parent"
+    },
+    {
+      "from": "effort-support-design",
+      "to": "module-agent",
+      "type": "depends-on"
+    },
+    {
+      "from": "agent-transcribe",
+      "to": "module-agent",
+      "type": "parent"
+    },
+    {
+      "from": "agent-transcribe",
+      "to": "voice-input-design",
+      "type": "implements"
+    },
+    {
+      "from": "task-voice-input",
+      "to": "voice-input-design",
+      "type": "implements"
+    },
+    {
+      "from": "task-effort-support",
+      "to": "effort-support-design",
+      "type": "implements"
+    },
+    {
+      "from": "task-visualization-card",
+      "to": "visualization-design",
+      "type": "implements"
+    },
+    {
+      "from": "task-resizable-boxes",
+      "to": "chat-ui",
+      "type": "implements"
+    },
+    {
+      "from": "task-continue-button",
+      "to": "module-agent",
+      "type": "depends-on"
+    },
+    {
+      "from": "dual-mode-input-design",
+      "to": "design-doc",
+      "type": "parent"
+    },
+    {
+      "from": "dual-mode-input-design",
+      "to": "module-agent",
+      "type": "depends-on"
+    },
+    {
+      "from": "dual-mode-input-design",
+      "to": "module-rpc",
+      "type": "depends-on"
+    },
+    {
+      "from": "task-dual-mode-input",
+      "to": "dual-mode-input-design",
+      "type": "implements"
+    },
+    {
+      "from": "skill-session-start-design",
+      "to": "design-doc",
+      "type": "parent"
+    },
+    {
+      "from": "skill-session-start-design",
+      "to": "frontend-module",
+      "type": "depends-on"
+    },
+    {
+      "from": "skill-session-start-design",
+      "to": "chat-ui",
+      "type": "depends-on"
+    },
+    {
+      "from": "ui-skill-session-start",
+      "to": "skill-session-start-design",
+      "type": "parent"
+    },
+    {
+      "from": "ui-skill-session-start",
+      "to": "chat-ui",
+      "type": "references"
+    },
+    {
+      "from": "ui-skill-session-start",
+      "to": "ui-center-panel",
+      "type": "references"
+    },
+    {
+      "from": "task-skill-session-start",
+      "to": "skill-session-start-design",
+      "type": "implements"
+    },
+    {
+      "from": "task-skill-session-start",
+      "to": "ui-skill-session-start",
       "type": "implements"
     }
   ]

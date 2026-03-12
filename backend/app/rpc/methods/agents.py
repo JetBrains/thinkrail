@@ -62,7 +62,8 @@ async def run_agent(service: AgentService, **params: Any) -> dict:
 
 @_handle_errors
 async def send_message(service: AgentService, **params: Any) -> None:
-    await service.send_message(params["bonsaiSid"], params["text"])
+    is_markdown = params.get("isMarkdown", False)
+    await service.send_message(params["bonsaiSid"], params["text"], is_markdown=is_markdown)
 
 
 @_handle_errors
@@ -81,11 +82,24 @@ async def respond_agent(service: AgentService, **params: Any) -> None:
 
 
 @_handle_errors
+async def transcribe_audio(service: AgentService, **params: Any) -> dict:
+    """Transcribe audio via OpenAI Whisper API (fallback for browsers without Web Speech API)."""
+    try:
+        from app.agent.transcribe import transcribe
+    except ImportError:
+        raise JsonRpcError(_INTERNAL_ERROR, "Transcription module unavailable")
+    text = await transcribe(params["audioBase64"], params["mimeType"])
+    return {"text": text}
+
+
+@_handle_errors
 async def update_config(service: AgentService, **params: Any) -> dict:
     bonsai_sid = params["bonsaiSid"]
     model = params.get("model")
     permission_mode = params.get("permissionMode")
-    result = await service.update_config(bonsai_sid, model=model, permission_mode=permission_mode)
+    betas = params.get("betas")
+    effort = params.get("effort")
+    result = await service.update_config(bonsai_sid, model=model, permission_mode=permission_mode, betas=betas, effort=effort)
     notify = notifications.current_notify
     if notify:
         await notify("agent/configChanged", {"bonsaiSid": bonsai_sid, **result})

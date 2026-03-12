@@ -1,6 +1,6 @@
 # Implement Message History Navigation
 
-> Global message history dropdown with Ctrl+R and button trigger for quick re-sending
+> Global message history dropdown with Mod+R and button trigger for quick re-sending
 
 **Status:** Done
 **Priority:** Medium
@@ -9,7 +9,7 @@
 ## Summary
 
 Add a message history popup to the InputArea, allowing users to quickly access and
-resend previously typed messages across all sessions. Triggered via Ctrl+R or a
+resend previously typed messages across all sessions. Triggered via Mod+R or a
 history button in the input area. History is stored globally using Zustand persist
 middleware (localStorage) and survives page reloads.
 
@@ -22,7 +22,7 @@ middleware (localStorage) and survives page reloads.
 
 ## Files Modified
 
-- `frontend/src/components/ChatStream/InputArea.tsx` — Ctrl+R handler, history
+- `frontend/src/components/ChatStream/InputArea.tsx` — Mod+R handler, history
   button, showHistory state, mutual exclusion with autocomplete
 - `frontend/src/components/SessionPanel/SessionPanel.tsx` — Record sent messages
   into messageHistoryStore
@@ -34,7 +34,7 @@ middleware (localStorage) and survives page reloads.
 ### Triggers
 | Trigger | Action |
 |---------|--------|
-| Ctrl+R (textarea or filter focused) | Toggle history popup |
+| Mod+R (textarea or filter focused) | Toggle history popup |
 | History button (near Send) | Toggle history popup |
 | Escape (filter focused) | Close popup |
 
@@ -54,13 +54,13 @@ middleware (localStorage) and survives page reloads.
 - Messages truncated to single line in list
 
 ### Focus Flow
-1. Ctrl+R or button click → popup opens → filter input auto-focused
+1. Mod+R or button click → popup opens → filter input auto-focused
 2. Navigate/filter → Enter or click → textarea filled → popup closes → textarea focused
 3. Escape → popup closes → textarea focused
 
 ## Definition of Done
 
-- [x] Ctrl+R toggles history popup when textarea or filter input is focused
+- [x] Mod+R toggles history popup when textarea or filter input is focused
 - [x] History button visible near Send button, toggles popup on click
 - [x] Sent messages recorded globally across all sessions
 - [x] History persists across page reloads (Zustand persist / localStorage)

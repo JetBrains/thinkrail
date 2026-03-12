@@ -1,14 +1,56 @@
-import { useCallback, useEffect, useRef } from "react";
+import { lazy, Suspense, useCallback, useEffect, useRef, useState, forwardRef, useImperativeHandle } from "react";
 import type { AgentEvent } from "@/types/agent.ts";
+import type { Session } from "@/types/session.ts";
 import { SystemMessage } from "./SystemMessage.tsx";
 import { AssistantMessage } from "./AssistantMessage.tsx";
 import { ToolCallCard } from "./ToolCallCard.tsx";
+import { SessionContextCard } from "./SessionContextCard.tsx";
+import { VisualizationCard, VizErrorBoundary } from "./VisualizationCard.tsx";
 import { SubagentBlock } from "./SubagentBlock.tsx";
 import { QuestionCard } from "./QuestionCard.tsx";
 import { ApprovalCard } from "./ApprovalCard.tsx";
 import { CompletionBanner } from "./CompletionBanner.tsx";
 import { ErrorBanner } from "./ErrorBanner.tsx";
 import { CompactMarker } from "./CompactMarker.tsx";
+import { ChatMarkdown } from "./ChatMarkdown.tsx";
+import type { VizData } from "@/types/viz.ts";
+
+const DIFF_TOOLS = new Set(["Edit", "Write", "NotebookEdit"]);
+const DiffCard = lazy(() => import("./DiffCard.tsx").then(m => ({ default: m.DiffCard })));
+
+/** User message bubble with optional markdown rendering and raw/rendered toggle. */
+function UserMessageBubble({ text, isMarkdown }: { text: string; isMarkdown: boolean }) {
+  const [showRaw, setShowRaw] = useState(false);
+
+  if (!isMarkdown) {
+    return (
+      <div className="chat-user">
+        <div className="chat-user-text">{text}</div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="chat-user">
+      <div className="chat-user-bubble">
+        {showRaw ? (
+          <div className="chat-user-text">{text}</div>
+        ) : (
+          <div className="chat-user-text--md">
+            <ChatMarkdown content={text} />
+          </div>
+        )}
+        <button
+          className="chat-user-toggle"
+          onClick={() => setShowRaw((v) => !v)}
+          title={showRaw ? "Show rendered" : "Show raw"}
+        >
+          {showRaw ? "md" : "raw"}
+        </button>
+      </div>
+    </div>
+  );
+}
 
 /** Shared type for tool call end-state, used by SubagentBlock too. */
 export type ToolState = { output?: string; isError?: boolean; finished: boolean };
@@ -24,17 +66,25 @@ export function extractToolInput(raw: unknown): string {
   return "";
 }
 
+export interface ChatStreamHandle {
+  scrollToTop: () => void;
+}
+
 interface ChatStreamProps {
   events: AgentEvent[];
   answeredRequests: Map<string, unknown>;
   onResolveRequest: (requestId: string, response: unknown) => void;
+  session?: Session;
+  onContextCardVisibility?: (visible: boolean) => void;
 }
 
-export function ChatStream({
+export const ChatStream = forwardRef<ChatStreamHandle, ChatStreamProps>(function ChatStream({
   events,
   answeredRequests,
   onResolveRequest,
-}: ChatStreamProps) {
+  session,
+  onContextCardVisibility,
+}, ref) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const autoScroll = useRef(true);
 
@@ -51,6 +101,12 @@ export function ChatStream({
     const distFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
     autoScroll.current = distFromBottom < 50;
   }, []);
+
+  useImperativeHandle(ref, () => ({
+    scrollToTop() {
+      scrollRef.current?.scrollTo({ top: 0, behavior: "smooth" });
+    },
+  }));
 
   // Pre-scan: index toolCallEnd results by toolUseId so that
   // when rendering a toolCallStart we can show its output inline.
@@ -75,6 +131,16 @@ export function ChatStream({
       activeSubagents.delete(ev.payload.agentId as string);
   }
 
+  // Pre-scan: track latest bonsai_visualize event per vizId for hybrid collapse.
+  const latestVizByVizId = new Map<string, number>();
+  for (let i = 0; i < events.length; i++) {
+    const ev = events[i];
+    if (ev.eventType === "toolCallStart" && (ev.payload.toolName as string)?.endsWith("bonsai_visualize")) {
+      const vizId = (ev.payload.toolInput as Record<string, unknown>)?.vizId as string | undefined;
+      if (vizId) latestVizByVizId.set(vizId, i);
+    }
+  }
+
   // Pre-scan: group child events under their parent subagentStart.
   // Uses a stack to support nested subagents.
   const subagentChildren = new Map<number, number[]>(); // subagentStart idx → child idxs
@@ -91,12 +157,17 @@ export function ChatStream({
         for (let j = stack.length - 1; j >= 0; j--) {
           if (stack[j][1] === aid) { stack.splice(j, 1); break; }
         }
-      } else if (stack.length > 0
-          && ev.eventType !== "askUserQuestion"
-          && ev.eventType !== "confirmAction") {
-        const [parentIdx] = stack[stack.length - 1];
-        subagentChildren.get(parentIdx)!.push(i);
-        childIndices.add(i);
+      } else if (stack.length > 0) {
+        // Hoist bonsai_visualize, askUserQuestion, and confirmAction to top level
+        // so they remain visible outside the collapsible SubagentBlock
+        const isViz = ev.eventType === "toolCallStart" &&
+          (ev.payload.toolName as string)?.endsWith("bonsai_visualize");
+        const isInteraction = ev.eventType === "askUserQuestion" || ev.eventType === "confirmAction";
+        if (!isViz && !isInteraction) {
+          const [parentIdx] = stack[stack.length - 1];
+          subagentChildren.get(parentIdx)!.push(i);
+          childIndices.add(i);
+        }
       }
     }
   }
@@ -111,20 +182,25 @@ export function ChatStream({
         switch (ev.eventType) {
           case "sessionStart":
             return (
-              <SystemMessage
+              <SessionContextCard
                 key={k}
-                text={`Session started \u2014 ${(p.model as string) ?? "agent"}`}
-                variant="ok"
+                skillId={session?.skillId ?? undefined}
+                specIds={session?.specIds ?? []}
+                model={(p.model as string) ?? session?.model ?? "agent"}
+                permissionMode={session?.permissionMode ?? "default"}
+                betas={session?.betas ?? []}
+                systemPrompt={session?.systemPrompt ?? (p.systemPrompt as string) ?? undefined}
+                onVisibilityChange={onContextCardVisibility}
               />
             );
 
           case "userMessage":
             return (
-              <div key={k} className="chat-user">
-                <div className="chat-user-text">
-                  {(p.text as string) ?? ""}
-                </div>
-              </div>
+              <UserMessageBubble
+                key={k}
+                text={(p.text as string) ?? ""}
+                isMarkdown={(p.isMarkdown as boolean) ?? false}
+              />
             );
 
           case "textDelta":
@@ -138,16 +214,51 @@ export function ChatStream({
 
           case "toolCallStart": {
             if ((p.toolName as string) === "AskUserQuestion") return null;
+            // MCP tools may be prefixed with server name (e.g. mcp__bonsai-viz__bonsai_visualize)
+            if ((p.toolName as string)?.endsWith("bonsai_visualize")) {
+              const vizInput = p.toolInput as VizData | undefined;
+              // LLMs sometimes pass `data` as a JSON string instead of an object — auto-parse it
+              if (vizInput && typeof vizInput.data === "string") {
+                try { vizInput.data = JSON.parse(vizInput.data); } catch { /* leave as-is */ }
+              }
+              if (vizInput) {
+                const vizId = vizInput.vizId;
+                const isLatest = !vizId || latestVizByVizId.get(vizId) === i;
+                return (
+                  <VizErrorBoundary key={k}>
+                    <VisualizationCard
+                      data={vizInput}
+                      collapsed={!isLatest}
+                    />
+                  </VizErrorBoundary>
+                );
+              }
+            }
+            const toolName = (p.toolName as string) ?? "tool";
             const toolUseId = (p.toolUseId as string) ?? "";
             const end = toolStates.get(toolUseId);
+            const state = end?.finished ? (end.isError ? "error" as const : "success" as const) : "running" as const;
+            if (DIFF_TOOLS.has(toolName)) {
+              return (
+                <Suspense key={k} fallback={<ToolCallCard toolName={toolName} toolInput={extractToolInput(p.toolInput)} state="running" />}>
+                  <DiffCard
+                    toolName={toolName}
+                    toolInput={(p.toolInput as Record<string, unknown>) ?? {}}
+                    output={end?.output}
+                    isError={end?.isError}
+                    state={state}
+                  />
+                </Suspense>
+              );
+            }
             return (
               <ToolCallCard
                 key={k}
-                toolName={(p.toolName as string) ?? "tool"}
+                toolName={toolName}
                 toolInput={extractToolInput(p.toolInput)}
                 output={end?.output}
                 isError={end?.isError}
-                state={end?.finished ? (end.isError ? "error" : "success") : "running"}
+                state={state}
               />
             );
           }
@@ -227,7 +338,7 @@ export function ChatStream({
                 )}
                 <SystemMessage
                   key={k}
-                  text={`Turn complete \u2014 $${((p.costUsd as number) ?? 0).toFixed(2)} \u00B7 ${(p.turns as number) ?? 0} turns`}
+                  text={`Turn complete \u2014 $${((p.turnCostUsd as number) ?? 0).toFixed(2)} \u00B7 ${(p.turn_turns as number) ?? 0} turns`}
                   variant="ok"
                 />
               </>
@@ -308,4 +419,4 @@ export function ChatStream({
       )}
     </div>
   );
-}
+});

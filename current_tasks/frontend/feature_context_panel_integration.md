@@ -33,8 +33,8 @@ See [CONTEXT_PANEL.md](../../frontend/ui-specs/CONTEXT_PANEL.md) for the full de
    - Update localStorage persistence to remove `rightActiveTab`
 
 4. Update keyboard shortcuts
-   - `Cmd+J` still toggles right panel visibility (no change)
-   - Remove or repurpose `Cmd+G` (was "focus graph tab") and `Cmd+P` (was "focus spec tab") — these no longer make sense with auto-switching
+   - `Mod+J` still toggles right panel visibility (no change)
+   - Remove or repurpose `Mod+G` (was "focus graph tab") and `Mod+P` (was "focus spec tab") — these no longer make sense with auto-switching
    - If shortcuts reference `setRightTab`, remove those references
 
 5. Clean up old imports
@@ -62,7 +62,7 @@ See [CONTEXT_PANEL.md](../../frontend/ui-specs/CONTEXT_PANEL.md) for the full de
 ## Definition of done
 - `ContextPanel` renders in the right panel position, auto-switching modes correctly
 - No tabs visible in the right panel
-- `Cmd+J` still toggles right panel collapse
+- `Mod+J` still toggles right panel collapse
 - Panel resizing still works via drag handle
 - No TypeScript errors or broken imports
 - Old `RightPanel.tsx` is removed or clearly marked as deprecated

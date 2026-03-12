@@ -1,11 +1,18 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import type { SessionMetrics, SessionStatus } from "@/types/session.ts";
+import { buildModelOptions, currentModelOptionKey } from "@/utils/models.ts";
 
-const MODELS = [
-  { value: "claude-opus-4-6", label: "opus-4-6" },
-  { value: "claude-sonnet-4-6", label: "sonnet-4-6" },
-  { value: "claude-haiku-4-5-20251001", label: "haiku-4-5" },
-];
+const EFFORT_OPTIONS = [
+  { value: null, label: "auto" },
+  { value: "low", label: "low" },
+  { value: "medium", label: "medium" },
+  { value: "high", label: "high" },
+  { value: "max", label: "max" },
+] as const;
+
+function displayEffort(effort: string | null): string {
+  return EFFORT_OPTIONS.find((o) => o.value === effort)?.label ?? effort ?? "auto";
+}
 
 const PERMISSION_MODES = [
   { value: "default", label: "default" },
@@ -14,9 +21,7 @@ const PERMISSION_MODES = [
   { value: "plan", label: "plan" },
 ];
 
-function displayModel(model: string): string {
-  return MODELS.find((m) => m.value === model)?.label ?? model;
-}
+const MODEL_OPTIONS = buildModelOptions();
 
 function displayMode(mode: string): string {
   return PERMISSION_MODES.find((m) => m.value === mode)?.label ?? mode;
@@ -60,29 +65,38 @@ function useDropdown() {
 
 interface SessionStatusLineProps {
   model: string;
+  betas: string[];
   permissionMode: string;
+  effort: string | null;
   metrics: SessionMetrics;
   status: SessionStatus;
   projectCost: number;
   disabled?: boolean;
-  onChangeModel?: (model: string) => void;
+  onChangeModel?: (model: string, betas: string[]) => void;
   onChangePermissionMode?: (mode: string) => void;
+  onChangeEffort?: (effort: string | null) => void;
 }
 
 export function SessionStatusLine({
   model,
+  betas,
   permissionMode,
+  effort,
   metrics,
   status,
   projectCost,
   disabled,
   onChangeModel,
   onChangePermissionMode,
+  onChangeEffort,
 }: SessionStatusLineProps) {
   const running = status === "running";
+  const activeKey = currentModelOptionKey(model, betas);
+  const activeOption = MODEL_OPTIONS.find((o) => o.key === activeKey);
   const { icon: statusIcon, label: statusLabel, cssClass: statusClass } = statusInfo(status);
   const modelDd = useDropdown();
   const modeDd = useDropdown();
+  const effortDd = useDropdown();
 
   const contextPct =
     metrics.contextMax > 0
@@ -103,20 +117,34 @@ export function SessionStatusLine({
           onClick={() => !disabled && modelDd.toggle()}
           disabled={disabled}
         >
-          {displayModel(model)}
+          {activeOption?.label ?? model}
         </button>
         {modelDd.open && (
           <div className="ssl-dropdown">
-            {MODELS.map((m) => (
+            <div className="ssl-dropdown-group">Current</div>
+            {MODEL_OPTIONS.filter((o) => o.group === "current").map((o) => (
               <button
-                key={m.value}
-                className={`ssl-dropdown-item${m.value === model ? " ssl-dropdown-active" : ""}`}
+                key={o.key}
+                className={`ssl-dropdown-item${o.key === activeKey ? " ssl-dropdown-active" : ""}`}
                 onClick={() => {
-                  if (m.value !== model) onChangeModel?.(m.value);
+                  if (o.key !== activeKey) onChangeModel?.(o.modelId, o.betas);
                   modelDd.close();
                 }}
               >
-                {m.label}
+                {o.label}
+              </button>
+            ))}
+            <div className="ssl-dropdown-group">Legacy</div>
+            {MODEL_OPTIONS.filter((o) => o.group === "legacy").map((o) => (
+              <button
+                key={o.key}
+                className={`ssl-dropdown-item${o.key === activeKey ? " ssl-dropdown-active" : ""}`}
+                onClick={() => {
+                  if (o.key !== activeKey) onChangeModel?.(o.modelId, o.betas);
+                  modelDd.close();
+                }}
+              >
+                {o.label}
               </button>
             ))}
           </div>
@@ -149,6 +177,32 @@ export function SessionStatusLine({
         )}
       </div>
       <span className="ssl-sep" />
+      <div className="ssl-selector" ref={effortDd.ref}>
+        <button
+          className={`ssl-selector-btn${disabled ? " ssl-selector-disabled" : ""}`}
+          onClick={() => !disabled && effortDd.toggle()}
+          disabled={disabled}
+        >
+          {displayEffort(effort)}
+        </button>
+        {effortDd.open && (
+          <div className="ssl-dropdown">
+            {EFFORT_OPTIONS.map((o) => (
+              <button
+                key={o.value ?? "auto"}
+                className={`ssl-dropdown-item${o.value === effort ? " ssl-dropdown-active" : ""}`}
+                onClick={() => {
+                  if (o.value !== effort) onChangeEffort?.(o.value);
+                  effortDd.close();
+                }}
+              >
+                {o.label}
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+      <span className="ssl-sep" />
       <span className="ssl-cost">${metrics.costUsd.toFixed(2)} | ${projectCost.toFixed(2)}</span>
       <span className="ssl-sep" />
       <span className="ssl-tools">
@@ -159,7 +213,7 @@ export function SessionStatusLine({
         <>
           <span className="ssl-sep" />
           <span className="ssl-context">
-            ctx {Math.round(metrics.contextTokens / 1000)}k/
+            {Math.round(metrics.contextTokens / 1000)}k/
             {Math.round(metrics.contextMax / 1000)}k
           </span>
           <span

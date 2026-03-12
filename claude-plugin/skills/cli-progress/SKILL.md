@@ -1,6 +1,6 @@
 ---
 name: cli-progress
-description: Show and track specification-driven development progress. Displays phase progress, milestone completion, and workflow status with rich terminal visualizations. Use at the beginning of any phase or to check overall progress.
+description: Show and track specification-driven development progress. Displays phase progress, milestone completion, and workflow status using bonsai_visualize. Use at the beginning of any phase or to check overall progress.
 ---
 
 # CLI Progress Tracker
@@ -10,43 +10,83 @@ You are the **progress tracker** for specification-driven development. You displ
 ## IMPORTANT: Interaction Style
 
 - This skill can be invoked directly or called by other skills
-- When invoked, run the dashboard script for terminal output, then offer next actions
+- When invoked, gather progress data and display via `bonsai_visualize`
+- **NEVER** use Bash, echo, printf, or ANSI escape codes for visual output
+- **NEVER** draw ASCII boxes — always use `bonsai_visualize` tool
 - Use the **AskUserQuestion** tool to offer next actions
 
 ## How It Works
 
-The progress display is **computed by a script** — no need to read registry.json or scan files manually.
+### Step 1: Gather progress data
 
-### Step 1: Run the dashboard script
+Read `.specs/registry.json` and scan `current_tasks/` to determine:
+1. **Workflow steps** — which phases are done/current/pending
+2. **Task counts** — total, done, in-progress, pending by module
+3. **Spec coverage** — which modules have specs
 
-Execute:
-```bash
-python3 claude-plugin/tools/compute-dashboard.py . --terminal progress
+### Step 2: Show workflow progress
+
+Call `bonsai_visualize` with type `progress-tracker`:
+```json
+{
+  "type": "progress-tracker",
+  "title": "Specification-Driven Development",
+  "vizId": "workflow-progress",
+  "data": {
+    "steps": [
+      {"label": "Goal & Requirements", "status": "done", "file": "GOAL&REQUIREMENTS.md"},
+      {"label": "Architecture", "status": "done", "file": "DESIGN_DOC.md"},
+      {"label": "Module Specs", "status": "done"},
+      {"label": "Task Specs", "status": "current"},
+      {"label": "Implementation", "status": "pending"}
+    ]
+  }
+}
 ```
 
-This outputs a fully formatted progress display including:
-1. **Workflow steps** with completion status
-2. **Overall task progress** bar
-3. **Pending tasks** by module
+Set each step's `status` based on what actually exists:
+- `done` — file exists and is populated
+- `current` — actively being worked on
+- `pending` — not started yet
 
-### Step 2: For deeper analysis (optional)
+### Step 3: Show task summary (if tasks exist)
 
-If the user asks "why" or wants details beyond what the script shows, read `.specs/dashboard.json` (~5KB summary) instead of registry.json (~68KB). The dashboard.json contains pre-computed coverage, freshness, lint, and recommendations.
+Call `bonsai_visualize` with type `summary-box`:
+```json
+{
+  "type": "summary-box",
+  "title": "Task Progress",
+  "vizId": "task-progress",
+  "data": {
+    "sections": [
+      {"heading": "Overview", "items": [
+        {"label": "Total tasks", "value": "[count]"},
+        {"label": "Completed", "value": "[count]"},
+        {"label": "In progress", "value": "[count]"},
+        {"label": "Pending", "value": "[count]"}
+      ]},
+      {"heading": "By Module", "items": [
+        {"label": "[module1]", "value": "[X/Y done]"},
+        {"label": "[module2]", "value": "[X/Y done]"}
+      ]}
+    ]
+  }
+}
+```
 
-### Step 3: Offer actions
+### Step 4: Offer actions
 
 Use AskUserQuestion:
 
 **What's next?**
 - "[Continue to next step] (Recommended)"
-- "/spec-status -- Detailed coverage report"
-- "/visualisation -- Full project dashboard"
+- "/spec-status — Detailed coverage report"
+- "/visualisation — Full project dashboard"
 - "Done for now"
 
 ## Key Principles
 
-- **Zero manual file scanning**: The script does all computation
 - **Always show context**: User should always know where they are in the workflow
+- **Use `bonsai_visualize`**: All progress displays go through the visualization tool
 - **Non-blocking**: Progress display should be quick and not interrupt workflow
-- **Persistent**: Progress is tracked in `.specs/.progress.json` across sessions
 - **Hook context**: When files are edited, the PostToolUse hook prints a one-liner summary automatically

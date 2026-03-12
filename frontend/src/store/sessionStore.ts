@@ -4,11 +4,14 @@ import type {
   Session,
   SessionStatus,
   SessionMetrics,
+  ContextUsage,
+  TurnUsage,
   ArchivedSession,
   PendingRequest,
 } from "@/types/session.ts";
 import { getClient } from "@/api/index.ts";
 import { createAgentApi } from "@/api/methods/agents.ts";
+import { getContextWindowSize, BETA_1M } from "@/utils/models.ts";
 import { useNotificationStore } from "./notificationStore.ts";
 import { getErrorMessage } from "@/utils/errors.ts";
 
@@ -27,7 +30,7 @@ interface SessionStore {
     name: string;
     skillId?: string;
   }) => Promise<string>;
-  sendMessage: (bonsaiSid: string, text: string) => Promise<void>;
+  sendMessage: (bonsaiSid: string, text: string, isMarkdown?: boolean) => Promise<void>;
   switchSession: (bonsaiSid: string) => void;
   closeSession: (bonsaiSid: string) => void;
   endSession: (bonsaiSid: string) => Promise<void>;
@@ -38,11 +41,15 @@ interface SessionStore {
     response: unknown,
   ) => void;
 
-  updateConfig: (bonsaiSid: string, config: { model?: string; permissionMode?: string }) => Promise<void>;
+  updateConfig: (bonsaiSid: string, config: { model?: string; permissionMode?: string; betas?: string[]; effort?: string | null }) => Promise<void>;
+  restartSession: (bonsaiSid: string) => Promise<void>;
 
   continueSession: (bonsaiSid: string) => Promise<void>;
   restoreSession: (bonsaiSid: string) => Promise<void>;
   loadActiveSessions: () => Promise<void>;
+
+  /** Poll backend for actual status of sessions stuck in transient states */
+  syncSessionStatuses: () => Promise<void>;
 
   // Event handlers (called by wireEvents)
   onSessionStart: (params: Record<string, unknown>) => void;
@@ -54,6 +61,23 @@ interface SessionStore {
   onConfigChanged: (params: Record<string, unknown>) => void;
 }
 
+function emptyContextUsage(): ContextUsage {
+  return {
+    contextMax: 0,
+    contextTokens: 0,
+    outputTokens: 0,
+    cacheReadTokens: 0,
+    cacheCreationTokens: 0,
+    inputTokens: 0,
+    turnHistory: [],
+    runBoundaries: [],
+    toolCallCounts: {},
+    toolTokens: {},
+    filesRead: [],
+    filesWritten: [],
+  };
+}
+
 function emptyMetrics(): SessionMetrics {
   return {
     costUsd: 0,
@@ -63,6 +87,7 @@ function emptyMetrics(): SessionMetrics {
     contextMax: 0,
     durationMs: 0,
     filesChanged: {},
+    contextUsage: emptyContextUsage(),
   };
 }
 
@@ -82,6 +107,94 @@ function reconstructCost(events: AgentEvent[]): number {
 }
 
 /**
+ * Reconstruct context usage from persisted events.
+ * Scans for turnComplete/interrupted events with usage data and
+ * toolCallStart events for tool/file tracking.
+ */
+function reconstructContextUsage(events: AgentEvent[], model: string, betas: string[] = []): ContextUsage {
+  const cu = emptyContextUsage();
+  const use1M = betas.includes(BETA_1M);
+  cu.contextMax = getContextWindowSize(model, use1M);
+  const toolUseIdToName = new Map<string, string>();
+
+  for (const ev of events) {
+    const p = ev.payload;
+
+    // Record run boundaries from sessionStart events
+    if (ev.eventType === "sessionStart") {
+      cu.runBoundaries.push(cu.turnHistory.length);
+    }
+
+    // Accumulate turn usage from turnComplete/interrupted events
+    if ((ev.eventType === "turnComplete" || ev.eventType === "interrupted") && p?.usage) {
+      const usage = p.usage as Record<string, number>;
+      const inputTokens = usage.input_tokens ?? 0;
+      const cacheCreation = usage.cache_creation_input_tokens ?? 0;
+      const cacheRead = usage.cache_read_input_tokens ?? 0;
+      const outputTokens = usage.output_tokens ?? 0;
+      const totalContext = inputTokens + outputTokens;
+
+      cu.contextTokens = totalContext;
+      cu.outputTokens = outputTokens;
+      cu.inputTokens = inputTokens;
+      cu.cacheReadTokens = cacheRead;
+      cu.cacheCreationTokens = cacheCreation;
+
+      cu.turnHistory.push({
+        turnIndex: cu.turnHistory.length,
+        inputTokens,
+        outputTokens,
+        cacheCreationTokens: cacheCreation,
+        cacheReadTokens: cacheRead,
+        totalContextTokens: totalContext,
+        costUsd: (p.turnCostUsd as number) ?? 0,
+        timestamp: 0, // not available from persisted events
+        sdkTurns: (p.turn_turns as number) ?? 1,
+      });
+    }
+
+    // Track tool calls and files
+    if (ev.eventType === "toolCallStart" && p) {
+      const toolName = (p.toolName as string) ?? "";
+      const toolUseId = (p.toolUseId as string) ?? "";
+      cu.toolCallCounts[toolName] = (cu.toolCallCounts[toolName] ?? 0) + 1;
+
+      if (toolUseId) toolUseIdToName.set(toolUseId, toolName);
+
+      const toolInput = (p.toolInput as Record<string, unknown>) ?? {};
+
+      // Estimate input tokens from serialized tool input (~4 chars per token)
+      const inputEstimate = Math.ceil(JSON.stringify(toolInput).length / 4);
+      if (!cu.toolTokens[toolName]) cu.toolTokens[toolName] = { inputTokens: 0, outputTokens: 0 };
+      cu.toolTokens[toolName].inputTokens += inputEstimate;
+
+      if (toolName === "Read" || toolName === "Grep" || toolName === "Glob") {
+        const filePath = ((toolInput.file_path ?? toolInput.path ?? "") as string);
+        if (filePath && !cu.filesRead.includes(filePath)) cu.filesRead.push(filePath);
+      }
+      if (toolName === "Write" || toolName === "Edit" || toolName === "NotebookEdit") {
+        const filePath = ((toolInput.file_path ?? "") as string);
+        if (filePath && !cu.filesWritten.includes(filePath)) cu.filesWritten.push(filePath);
+      }
+    }
+
+    // Track tool output tokens
+    if (ev.eventType === "toolCallEnd" && p) {
+      const toolUseId = (p.toolUseId as string) ?? "";
+      const toolName = toolUseIdToName.get(toolUseId) ?? "";
+      if (toolName) {
+        const output = (p.output as string) ?? "";
+        const outputEstimate = Math.ceil(output.length / 4);
+        if (!cu.toolTokens[toolName]) cu.toolTokens[toolName] = { inputTokens: 0, outputTokens: 0 };
+        cu.toolTokens[toolName].outputTokens += outputEstimate;
+      }
+    }
+  }
+
+  return cu;
+}
+
+/**
  * Apply cost + metrics from event params to a session, returning the
  * updated session and the change in project-wide cost.
  */
@@ -92,6 +205,30 @@ function applyMetrics(
 ): { updated: Session; costDelta: number } {
   const newCost = (params.costUsd as number) ?? session.metrics.costUsd;
   const costDelta = newCost - session.metrics.costUsd;
+
+  // Parse the usage dict from the SDK (arrives on turnComplete/interrupted/done)
+  const usage = (params.usage as Record<string, number> | undefined) ?? {};
+  const inputTokens = usage.input_tokens ?? 0;
+  const cacheCreation = usage.cache_creation_input_tokens ?? 0;
+  const cacheRead = usage.cache_read_input_tokens ?? 0;
+  const outputTokens = usage.output_tokens ?? 0;
+  const totalContext = inputTokens + outputTokens;
+  const use1M = session.betas?.includes(BETA_1M) ?? false;
+  const contextMax = getContextWindowSize(session.model, use1M);
+
+  const prevUsage = session.metrics.contextUsage;
+  const turnUsage: TurnUsage = {
+    turnIndex: prevUsage.turnHistory.length,
+    inputTokens,
+    outputTokens,
+    cacheCreationTokens: cacheCreation,
+    cacheReadTokens: cacheRead,
+    totalContextTokens: totalContext,
+    costUsd: (params.turnCostUsd as number) ?? 0,
+    timestamp: Date.now(),
+    sdkTurns: (params.turn_turns as number) ?? 1,
+  };
+
   return {
     updated: {
       ...session,
@@ -102,6 +239,18 @@ function applyMetrics(
         costUsd: newCost,
         turns: (params.turns as number) ?? session.metrics.turns,
         durationMs: (params.durationMs as number) ?? session.metrics.durationMs,
+        contextTokens: totalContext,
+        contextMax,
+        contextUsage: {
+          ...prevUsage,
+          contextMax,
+          contextTokens: totalContext,
+          outputTokens,
+          cacheReadTokens: cacheRead,
+          cacheCreationTokens: cacheCreation,
+          inputTokens,
+          turnHistory: [...prevUsage.turnHistory, turnUsage],
+        },
       },
     },
     costDelta,
@@ -129,6 +278,8 @@ function ensureSession(
     status: "idle",
     model: "",
     permissionMode: "default",
+    betas: [],
+    effort: null,
     startedAt: Date.now(),
     events: [],
     metrics: emptyMetrics(),
@@ -160,7 +311,64 @@ function appendEvent(
   const metrics = { ...session.metrics };
   metrics.durationMs = Date.now() - session.startedAt;
 
-  if (method === "agent/toolCallEnd") metrics.toolCalls++;
+  if (method === "agent/toolCallEnd") {
+    metrics.toolCalls++;
+    // Estimate output tokens and attribute to the matching toolCallStart
+    const toolUseId = (params.toolUseId as string) ?? "";
+    let toolName = "";
+    if (toolUseId) {
+      // Search backwards through events to find the matching toolCallStart
+      const events = session.events;
+      for (let i = events.length - 1; i >= 0; i--) {
+        const ev = events[i];
+        if (ev.eventType === "toolCallStart" && ev.payload?.toolUseId === toolUseId) {
+          toolName = (ev.payload.toolName as string) ?? "";
+          break;
+        }
+      }
+    }
+    if (toolName) {
+      const cu = { ...metrics.contextUsage };
+      const tt = { ...cu.toolTokens };
+      const entry = tt[toolName] ? { ...tt[toolName] } : { inputTokens: 0, outputTokens: 0 };
+      const output = (params.output as string) ?? "";
+      entry.outputTokens += Math.ceil(output.length / 4);
+      tt[toolName] = entry;
+      cu.toolTokens = tt;
+      metrics.contextUsage = cu;
+    }
+  }
+
+  // Track tool call counts and files accessed
+  if (method === "agent/toolCallStart") {
+    const toolName = (params.toolName as string) ?? "";
+    const toolInput = (params.toolInput as Record<string, unknown>) ?? {};
+    const cu = { ...metrics.contextUsage };
+    const counts = { ...cu.toolCallCounts };
+    counts[toolName] = (counts[toolName] ?? 0) + 1;
+    cu.toolCallCounts = counts;
+
+    // Estimate input tokens from serialized tool input
+    const tt = { ...cu.toolTokens };
+    const entry = tt[toolName] ? { ...tt[toolName] } : { inputTokens: 0, outputTokens: 0 };
+    entry.inputTokens += Math.ceil(JSON.stringify(toolInput).length / 4);
+    tt[toolName] = entry;
+    cu.toolTokens = tt;
+
+    if (toolName === "Read" || toolName === "Grep" || toolName === "Glob") {
+      const filePath = ((toolInput.file_path ?? toolInput.path ?? "") as string);
+      if (filePath && !cu.filesRead.includes(filePath)) {
+        cu.filesRead = [...cu.filesRead, filePath];
+      }
+    }
+    if (toolName === "Write" || toolName === "Edit" || toolName === "NotebookEdit") {
+      const filePath = ((toolInput.file_path ?? "") as string);
+      if (filePath && !cu.filesWritten.includes(filePath)) {
+        cu.filesWritten = [...cu.filesWritten, filePath];
+      }
+    }
+    metrics.contextUsage = cu;
+  }
 
   next.set(bonsaiSid, {
     ...session,
@@ -224,6 +432,8 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
         status: "idle",
         model: config.model,
         permissionMode: config.permissionMode,
+        betas: config.betas ?? [],
+        effort: config.effort ?? null,
         startedAt: Date.now(),
         events: existing?.events ?? [],
         metrics: existing?.metrics ?? emptyMetrics(),
@@ -236,7 +446,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
     return bonsaiSid;
   },
 
-  sendMessage: async (bonsaiSid, text) => {
+  sendMessage: async (bonsaiSid, text, isMarkdown) => {
     // Add user message to events immediately (optimistic)
     set((s) => {
       const session = s.sessions.get(bonsaiSid);
@@ -251,7 +461,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
             bonsaiSid,
             sessionId: "",
             eventType: "userMessage" as const,
-            payload: { text },
+            payload: { text, isMarkdown: isMarkdown ?? false },
           },
         ],
       });
@@ -259,7 +469,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
     });
     try {
       const api = createAgentApi(getClient());
-      await api.send(bonsaiSid, text);
+      await api.send(bonsaiSid, text, isMarkdown);
     } catch (err) {
       console.error("[sendMessage] failed:", err);
       const msg = getErrorMessage(err);
@@ -360,6 +570,9 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
     const answered = buildAnsweredRequests(events, isActive);
 
     const restoredCost = reconstructCost(events);
+    const restoredModel = (data.config?.model as string) ?? "";
+    const restoredBetas = (data.config?.betas as string[]) ?? [];
+    const restoredCtx = reconstructContextUsage(events, restoredModel, restoredBetas);
     const session: Session = {
       bonsaiSid,
       name: data.name ?? bonsaiSid.slice(0, 8),
@@ -370,11 +583,19 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
       status: isActive
         ? ((backendEntry?.status as SessionStatus) ?? "idle")
         : "done",
-      model: (data.config?.model as string) ?? "",
+      model: restoredModel,
       permissionMode: (data.config?.permissionMode as string) ?? "default",
+      betas: restoredBetas,
+      effort: (data.config?.effort as string) ?? null,
       startedAt: new Date(data.createdAt).getTime(),
       events,
-      metrics: { ...emptyMetrics(), costUsd: restoredCost },
+      metrics: {
+        ...emptyMetrics(),
+        costUsd: restoredCost,
+        contextTokens: restoredCtx.contextTokens,
+        contextMax: restoredCtx.contextMax,
+        contextUsage: restoredCtx,
+      },
       pendingRequest: null,
       answeredRequests: answered,
       restored: !isActive,
@@ -430,17 +651,28 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
         }));
 
         const restoredCost = reconstructCost(events);
+        const entryModel = (data?.config?.model as string) ?? entry.model ?? "";
+        const entryBetas = (data?.config?.betas as string[]) ?? [];
+        const restoredCtx = reconstructContextUsage(events, entryModel, entryBetas);
         next.set(entry.bonsaiSid, {
           bonsaiSid: entry.bonsaiSid,
           name: data?.name ?? entry.name ?? entry.bonsaiSid.slice(0, 8),
           skillId: (data?.skillId as string) ?? entry.skillId ?? null,
           specIds: data?.specIds ?? entry.specIds ?? [],
           status: (entry.status as SessionStatus) ?? "idle",
-          model: (data?.config?.model as string) ?? entry.model ?? "",
+          model: entryModel,
           permissionMode: (data?.config?.permissionMode as string) ?? "default",
+          betas: entryBetas,
+          effort: (data?.config?.effort as string) ?? null,
           startedAt: new Date(entry.createdAt).getTime(),
           events,
-          metrics: { ...emptyMetrics(), costUsd: restoredCost },
+          metrics: {
+            ...emptyMetrics(),
+            costUsd: restoredCost,
+            contextTokens: restoredCtx.contextTokens,
+            contextMax: restoredCtx.contextMax,
+            contextUsage: restoredCtx,
+          },
           pendingRequest: null,
           answeredRequests: buildAnsweredRequests(events, true),
         });
@@ -456,6 +688,69 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
 
       return { sessions: next, projectCost: totalProjectCost };
     });
+  },
+
+  syncSessionStatuses: async () => {
+    const sessions = get().sessions;
+    // Collect sessions in transient states that need checking
+    const toCheck: string[] = [];
+    for (const [sid, session] of sessions) {
+      if (session.status === "running" || session.status === "waiting") {
+        toCheck.push(sid);
+      }
+    }
+    if (toCheck.length === 0) return;
+
+    const api = createAgentApi(getClient());
+    await Promise.allSettled(
+      toCheck.map(async (bonsaiSid) => {
+        try {
+          const task = await api.status(bonsaiSid);
+          const backendStatus = task.status; // "idle" | "running" | "done" | "error"
+          const session = get().sessions.get(bonsaiSid);
+          if (!session) return;
+
+          // Map backend TaskStatus to frontend SessionStatus
+          // Backend "idle" means the turn finished → frontend should be "idle"
+          // Backend "done" → frontend "done"
+          // Backend "error" → frontend "error"
+          // Backend "running" → keep current frontend status (still in progress)
+          if (backendStatus === "running") return; // still running, no update needed
+
+          if (session.status !== backendStatus) {
+            console.log(`[syncSessionStatuses] ${bonsaiSid}: ${session.status} → ${backendStatus}`);
+            set((s) => {
+              const current = s.sessions.get(bonsaiSid);
+              if (!current) return s;
+              // Don't overwrite if status already changed (e.g., event arrived)
+              if (current.status !== "running" && current.status !== "waiting") return s;
+              const next = new Map(s.sessions);
+              next.set(bonsaiSid, {
+                ...current,
+                status: backendStatus as SessionStatus,
+                pendingRequest: backendStatus === "idle" || backendStatus === "done" ? null : current.pendingRequest,
+              });
+              return { sessions: next };
+            });
+          }
+        } catch {
+          // Task not found in backend tracker = session finished
+          const session = get().sessions.get(bonsaiSid);
+          if (!session) return;
+          if (session.status === "running" || session.status === "waiting") {
+            console.log(`[syncSessionStatuses] ${bonsaiSid}: task not found, marking done`);
+            set((s) => {
+              const current = s.sessions.get(bonsaiSid);
+              if (!current) return s;
+              if (current.status !== "running" && current.status !== "waiting") return s;
+              const next = new Map(s.sessions);
+              next.set(bonsaiSid, { ...current, status: "done", pendingRequest: null });
+              return { sessions: next };
+            });
+          }
+        }
+      }),
+    );
   },
 
   closeSession: (bonsaiSid) => {
@@ -485,7 +780,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
               turns: session.metrics.turns,
               durationMs: session.metrics.durationMs,
               model: session.model,
-              config: { model: session.model, maxTurns: 25, permissionMode: "default", streamText: true },
+              config: { model: session.model, maxTurns: 25, permissionMode: session.permissionMode, streamText: true, betas: session.betas ?? [], effort: session.effort ?? null },
               events: session.events,
             },
           ]
@@ -568,16 +863,41 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
     await api.updateConfig(bonsaiSid, config);
   },
 
+  restartSession: async (bonsaiSid) => {
+    const { createSessionApi } = await import("@/api/methods/sessions.ts");
+    const api = createSessionApi(getClient());
+    await api.restart(bonsaiSid);
+    // Session will go through done → re-init via backend notifications
+    set((s) => {
+      const session = s.sessions.get(bonsaiSid);
+      if (!session) return s;
+      const next = new Map(s.sessions);
+      next.set(bonsaiSid, { ...session, status: "idle" });
+      return { sessions: next };
+    });
+  },
+
   onConfigChanged: (params) => {
     const bonsaiSid = params.bonsaiSid as string;
     set((s) => {
       const session = s.sessions.get(bonsaiSid);
       if (!session) return s;
+      const newModel = (params.model as string) ?? session.model;
+      const newBetas = (params.betas as string[]) ?? session.betas;
+      const use1M = newBetas.includes(BETA_1M);
+      const contextMax = getContextWindowSize(newModel, use1M);
       const next = new Map(s.sessions);
       next.set(bonsaiSid, {
         ...session,
-        model: (params.model as string) ?? session.model,
+        model: newModel,
         permissionMode: (params.permissionMode as string) ?? session.permissionMode,
+        betas: newBetas,
+        effort: (params.effort as string | null) ?? session.effort,
+        metrics: {
+          ...session.metrics,
+          contextMax,
+          contextUsage: { ...session.metrics.contextUsage, contextMax },
+        },
       });
       return { sessions: next };
     });
@@ -590,9 +910,11 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
       const session = withSession.get(bonsaiSid);
       if (!session) return s;
       const next = new Map(withSession);
+      const cu = session.metrics.contextUsage;
       next.set(bonsaiSid, {
         ...session,
         model: (params.model as string) ?? session.model,
+        systemPrompt: (params.systemPrompt as string) ?? undefined,
         events: [
           ...session.events,
           {
@@ -602,6 +924,13 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
             payload: params,
           },
         ],
+        metrics: {
+          ...session.metrics,
+          contextUsage: {
+            ...cu,
+            runBoundaries: [...cu.runBoundaries, cu.turnHistory.length],
+          },
+        },
       });
       return { sessions: next };
     });
@@ -728,3 +1057,33 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
   },
 
 }));
+
+// ── Watchdog: polls for stuck sessions every 5 seconds ──
+
+let _watchdogTimer: ReturnType<typeof setInterval> | null = null;
+
+export function startWatchdog(): void {
+  if (_watchdogTimer) return;
+  _watchdogTimer = setInterval(() => {
+    const sessions = useSessionStore.getState().sessions;
+    let hasTransient = false;
+    for (const session of sessions.values()) {
+      if (session.status === "running" || session.status === "waiting") {
+        hasTransient = true;
+        break;
+      }
+    }
+    if (hasTransient) {
+      useSessionStore.getState().syncSessionStatuses().catch((err) => {
+        console.warn("[watchdog] syncSessionStatuses failed:", err);
+      });
+    }
+  }, 5000);
+}
+
+export function stopWatchdog(): void {
+  if (_watchdogTimer) {
+    clearInterval(_watchdogTimer);
+    _watchdogTimer = null;
+  }
+}

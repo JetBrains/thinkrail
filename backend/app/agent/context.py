@@ -10,6 +10,7 @@ import re
 from pathlib import Path
 
 from app.agent.models import AgentConfig
+from app.agent.visualization import VIZ_INSTRUCTIONS
 from app.spec.service import SpecService
 
 _FRONTMATTER_RE = re.compile(r"\A---\s*\n.*?\n---\s*\n", re.DOTALL)
@@ -56,7 +57,10 @@ def build_context(
     # 2. Project metadata
     sections.append(f"## Project\n\nWorking directory: {project_root}")
 
-    # 3. Specification content
+    # 3. Visualization tool instructions (always included)
+    sections.append(VIZ_INSTRUCTIONS)
+
+    # 4. Specification content
     if spec_ids:
         spec_parts: list[str] = []
         for sid in spec_ids:

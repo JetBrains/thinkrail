@@ -15,23 +15,29 @@ You are helping the user create an **Architecture Design Document** (DESIGN_DOC.
 - **Read the codebase first** — auto-detect components, dependencies, and patterns
 - Present your analysis and ask user to confirm/correct, not start from scratch
 - The user should finalize an architecture doc in ~5-7 multi-choice decisions
-- Use terminal graphics from `/specdriven:visualisation` patterns for diagrams and confirmations
+- Use `bonsai_visualize` tool with structured data for diagrams, comparisons, and confirmations
+- NEVER use Bash, echo, printf, or ANSI escape codes for visual output
 
 ## Step-by-Step Guided Process
 
 ### Step 0: Show Progress
 
-Show current workflow position using `/specdriven:cli-progress` pattern:
-
-```
-┌─────────────────────────────────────────────────────┐
-│         Specification-Driven Development Progress   │
-├─────────────────────────────────────────────────────┤
-│ [✓] 1. Goal & Requirements    GOAL&REQUIREMENTS.md  │
-│  ▶  2. Architecture           DESIGN_DOC.md         │
-│ [ ] 3. Module Specs           src/*/README.md       │
-│ [ ] 4. Task Specs             current_tasks/        │
-└─────────────────────────────────────────────────────┘
+Show current workflow position by calling `bonsai_visualize` with type `progress-tracker`:
+```json
+{
+  "type": "progress-tracker",
+  "title": "Specification-Driven Development",
+  "vizId": "workflow-progress",
+  "data": {
+    "steps": [
+      {"label": "Goal & Requirements", "status": "done", "file": "GOAL&REQUIREMENTS.md"},
+      {"label": "Architecture", "status": "current", "file": "DESIGN_DOC.md"},
+      {"label": "Module Specs", "status": "pending"},
+      {"label": "Task Specs", "status": "pending"},
+      {"label": "Implementation", "status": "pending"}
+    ]
+  }
+}
 ```
 
 ### Step 1: Auto-detect architecture
@@ -46,21 +52,37 @@ Present findings: "I found these major components: [list]. Here's how they seem 
 
 ### Step 2: Architecture pattern with visual comparison
 
-Provide several most-common architecture approaches for the goal and **visualize them side-by-side** (or sequentially if they don't fit):
-
-```
-#1 [Approach Name]                   ║  #2 [Approach Name]
-                                     ║
-[ASCII diagram 1]                    ║  [ASCII diagram 2]
-                                     ║
-**Component Name**                   ║  **Component Name**
-  - Purpose: [short]                 ║    - Purpose: [short]
-  - Input: [what]                    ║    - Input: [what]
-  - Output: [what]                   ║    - Output: [what]
-                                     ║
-**Key Technologies**                 ║  **Key Technologies**
-  - [tech 1]                         ║    - [tech 1]
-  - [tech 2]                         ║    - [tech 2]
+Provide several most-common architecture approaches for the goal and **visualize them side-by-side** using `bonsai_visualize` with type `comparison`:
+```json
+{
+  "type": "comparison",
+  "title": "Architecture Approaches",
+  "vizId": "arch-comparison",
+  "data": {
+    "options": [
+      {
+        "name": "[Approach 1]",
+        "description": "[Brief description]",
+        "pros": ["[pro 1]", "[pro 2]"],
+        "cons": ["[con 1]", "[con 2]"],
+        "details": [
+          {"label": "Components", "value": "[component list]"},
+          {"label": "Key Technologies", "value": "[tech list]"}
+        ]
+      },
+      {
+        "name": "[Approach 2]",
+        "description": "[Brief description]",
+        "pros": ["[pro 1]", "[pro 2]"],
+        "cons": ["[con 1]", "[con 2]"],
+        "details": [
+          {"label": "Components", "value": "[component list]"},
+          {"label": "Key Technologies", "value": "[tech list]"}
+        ]
+      }
+    ]
+  }
+}
 ```
 
 MUST show visualizations! Then use AskUserQuestion:
@@ -114,7 +136,7 @@ Use AskUserQuestion:
 ### Step 7: Generate the document
 
 Generate `DESIGN_DOC.md` with:
-- ASCII art pipeline diagram based on architecture pattern choice (use `/specdriven:visualisation` box and arrow patterns)
+- Architecture diagram generated via `bonsai_visualize` `diagram` type
 - Annotated source tree from auto-detection
 - Data flow with concrete types from code analysis
 - Design decisions with rationale from user choices
@@ -122,24 +144,29 @@ Generate `DESIGN_DOC.md` with:
 
 ### Step 8: Visual confirmation and review
 
-Show complete architecture in a confirmation box:
-
-```
-╔════════════════════════════════════════════════════════╗
-║ CORE ARCHITECTURE DESIGN                               ║
-╠════════════════════════════════════════════════════════╣
-║                                                        ║
-║ Main Components: [count]                               ║
-║ [Component list]                                       ║
-║                                                        ║
-║ Architecture Diagram:                                  ║
-║ [ASCII diagram]                                        ║
-║                                                        ║
-║ Key Data Flows:                                        ║
-║ - [Flow 1]                                             ║
-║ - [Flow 2]                                             ║
-║                                                        ║
-╚════════════════════════════════════════════════════════╝
+Show complete architecture using `bonsai_visualize` with type `summary-box`:
+```json
+{
+  "type": "summary-box",
+  "title": "Core Architecture Design",
+  "vizId": "arch-confirmation",
+  "data": {
+    "sections": [
+      {"heading": "Main Components", "items": [
+        {"label": "Count", "value": "[count]"},
+        {"label": "Components", "value": "[component list]"}
+      ]},
+      {"heading": "Key Data Flows", "items": [
+        {"label": "Flow 1", "value": "[description]"},
+        {"label": "Flow 2", "value": "[description]"}
+      ]},
+      {"heading": "Design Decisions", "items": [
+        {"label": "Pattern", "value": "[chosen pattern]"},
+        {"label": "Rationale", "value": "[key rationale]"}
+      ]}
+    ]
+  }
+}
 ```
 
 Use AskUserQuestion:

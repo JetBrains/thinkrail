@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 import time
 from collections.abc import Callable
 from pathlib import Path
@@ -25,6 +26,9 @@ from claude_agent_sdk import (
 
 from app.agent.models import AgentResult, AgentTask, to_camel
 from app.agent.tracker import END_SIGNAL, Tracker
+from app.agent.visualization import viz_mcp_server
+
+logger = logging.getLogger(__name__)
 
 
 async def run(
@@ -51,6 +55,10 @@ async def run(
         input_data: dict[str, Any],
         context: ToolPermissionContext,
     ) -> PermissionResultAllow | PermissionResultDeny:
+        if tool_name.endswith("bonsai_visualize"):
+            # Auto-allow: display-only tool, no side effects
+            # Note: MCP tools may be prefixed with server name (e.g. mcp__bonsai-viz__bonsai_visualize)
+            return PermissionResultAllow(behavior="allow")
         if tool_name == "AskUserQuestion":
             request_id = str(uuid4())
             future = tracker.register_future(task.bonsai_sid, request_id)
@@ -126,6 +134,9 @@ async def run(
     if plugin_dir and Path(plugin_dir).is_dir():
         plugins.append({"type": "local", "path": str(plugin_dir)})
 
+    def _on_cli_stderr(line: str) -> None:
+        logger.warning("CLI stderr: %s", line)
+
     options = ClaudeAgentOptions(
         system_prompt=spec_context,
         model=task.config.model,
@@ -135,7 +146,11 @@ async def run(
         include_partial_messages=task.config.stream_text,
         cwd=str(cwd) if cwd else None,
         plugins=plugins,
+        mcp_servers={"bonsai-viz": viz_mcp_server},
         resume=resume_session_id,
+        stderr=_on_cli_stderr,
+        betas=task.config.betas,
+        effort=task.config.effort,
         hooks={
             "SubagentStart": [HookMatcher(hooks=[on_subagent_start])],
             "SubagentStop": [HookMatcher(hooks=[on_subagent_stop])],
@@ -166,6 +181,7 @@ async def run(
                 await client.query(message)
 
                 async for sdk_event in client.receive_response():
+                    logger.warning("SDK event: %s", type(sdk_event).__name__)
                     if isinstance(sdk_event, SystemMessage) and sdk_event.subtype == "init":
                         new_sid = sdk_event.data.get("session_id", "")
                         first_init = not session_id
@@ -176,6 +192,7 @@ async def run(
                             await notify("agent/sessionStart", {
                                 "bonsaiSid": task.bonsai_sid,
                                 "sessionId": session_id,
+                                "systemPrompt": spec_context,
                                 **sdk_data,
                             })
 
@@ -188,16 +205,29 @@ async def run(
                                     "text": block.text,
                                 })
                             elif isinstance(block, ToolUseBlock):
+                                logger.warning("Tool call: %s", block.name)
                                 if block.name == "ExitPlanMode":
                                     _mode_change_tools[block.id] = "default"
                                 elif block.name == "EnterPlanMode":
                                     _mode_change_tools[block.id] = "plan"
+                                tool_input = dict(block.input) if isinstance(block.input, dict) else block.input
+                                if block.name == "Write" and isinstance(tool_input, dict):
+                                    file_path = tool_input.get("file_path", "")
+                                    if file_path:
+                                        try:
+                                            target = Path(file_path) if Path(file_path).is_absolute() else Path(cwd or ".") / file_path
+                                            if target.is_file():
+                                                tool_input["_previousContent"] = target.read_text(encoding="utf-8", errors="replace")
+                                            else:
+                                                tool_input["_previousContent"] = ""
+                                        except Exception:
+                                            tool_input["_previousContent"] = ""
                                 await notify("agent/toolCallStart", {
                                     "bonsaiSid": task.bonsai_sid,
                                     "sessionId": session_id,
                                     "toolUseId": block.id,
                                     "toolName": block.name,
-                                    "toolInput": block.input,
+                                    "toolInput": tool_input,
                                 })
 
                     elif isinstance(sdk_event, UserMessage):
@@ -213,6 +243,7 @@ async def run(
                                             "bonsaiSid": task.bonsai_sid,
                                             "model": task.config.model,
                                             "permissionMode": new_mode,
+                                            "effort": task.config.effort,
                                         })
                                     await notify("agent/toolCallEnd", {
                                         "bonsaiSid": task.bonsai_sid,
@@ -244,6 +275,8 @@ async def run(
                                 "subtype": "turn_error",
                                 "errors": [sdk_event.result] if sdk_event.result else [],
                                 "result": sdk_event.result or "",
+                                "turnCostUsd": turn_cost,
+                                "turn_turns": turn_turns,
                                 "costUsd": total_cost,
                                 "turns": total_turns,
                                 "durationMs": duration_ms,
@@ -255,6 +288,8 @@ async def run(
                             await notify("agent/interrupted", {
                                 "bonsaiSid": task.bonsai_sid,
                                 "sessionId": sdk_event.session_id or session_id,
+                                "turnCostUsd": turn_cost,
+                                "turn_turns": turn_turns,
                                 "costUsd": total_cost,
                                 "turns": total_turns,
                                 "durationMs": duration_ms,
@@ -265,8 +300,10 @@ async def run(
                                 "bonsaiSid": task.bonsai_sid,
                                 "sessionId": sdk_event.session_id or session_id,
                                 "result": sdk_event.result or "",
-                                "costUsd": turn_cost,
-                                "turns": turn_turns,
+                                "turnCostUsd": turn_cost,
+                                "turn_turns": turn_turns,
+                                "costUsd": total_cost,
+                                "turns": total_turns,
                                 "durationMs": duration_ms,
                                 "usage": sdk_event.usage or {},
                             })

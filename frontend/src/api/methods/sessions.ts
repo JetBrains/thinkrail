@@ -36,6 +36,9 @@ export function createSessionApi(client: RpcClient) {
     continue: (bonsaiSid: string) =>
       client.request<{ bonsaiSid: string }>("session/continue", { bonsaiSid }),
 
+    restart: (bonsaiSid: string) =>
+      client.request<{ bonsaiSid: string }>("session/restart", { bonsaiSid }),
+
     delete: (bonsaiSid: string) =>
       client.request<boolean>("session/delete", { bonsaiSid }),
   };

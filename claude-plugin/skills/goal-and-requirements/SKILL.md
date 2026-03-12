@@ -14,7 +14,8 @@ You are creating a the **Foundational Specification** that guides all subsequent
 - If code exists, **analyze it first** to provide context-aware suggestions
 - Offer **3-5 choices** per question, never open-ended dumps
 - Proactively suggest refined versions
-- **Use terminal graphics** to show goal structure (see `/specdriven:visualisation` patterns) and confirmations
+- **Use `bonsai_visualize` tool** with structured data for all visualizations (progress trackers, summary boxes, confirmations)
+- **NEVER** use Bash, echo, printf, or ANSI escape codes for visual output
 
 ## Output
 
@@ -42,16 +43,22 @@ Creates `GOAL&REQUIREMENTS.md` at the project root with structure (add more sect
 
 ### Step 1: Show Progress
 
-Show current workflow position using `/specdriven:cli-progress` pattern:
-
-```
-┌─────────────────────────────────────────────────────┐
-│         Specification-Driven Development Progress   │
-├─────────────────────────────────────────────────────┤
-│ ▶  1. Goal & Requirements    GOAL&REQUIREMENTS.md  │
-│ [ ] 2. Architecture           DESIGN_DOC.md         │
-│ [ ] ...                                             │
-└─────────────────────────────────────────────────────┘
+Show current workflow position by calling `bonsai_visualize` with type `progress-tracker`:
+```json
+{
+  "type": "progress-tracker",
+  "title": "Specification-Driven Development",
+  "vizId": "workflow-progress",
+  "data": {
+    "steps": [
+      {"label": "Goal & Requirements", "status": "current", "file": "GOAL&REQUIREMENTS.md"},
+      {"label": "Architecture", "status": "pending", "file": "DESIGN_DOC.md"},
+      {"label": "Module Specs", "status": "pending"},
+      {"label": "Task Specs", "status": "pending"},
+      {"label": "Implementation", "status": "pending"}
+    ]
+  }
+}
 ```
 
 ### Step 2: Initial Input
@@ -122,15 +129,19 @@ Based on initial input, ask clarifying questions as multi-choice selections (use
 
 ### Step 4: Draft Goal Statement
 
-Based on responses, draft a goal statement. Show it to user:
-
-```
-Proposed Goal:
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-[Draft goal statement]
-
-Does this capture your intent?
+Based on responses, draft a goal statement. Show it using `bonsai_visualize` with type `summary-box`:
+```json
+{
+  "type": "summary-box",
+  "title": "Proposed Goal",
+  "vizId": "goal-draft",
+  "data": {
+    "sections": [
+      {"heading": "Goal", "items": [{"label": "Statement", "value": "[drafted goal]"}]},
+      {"heading": "Category", "items": [{"label": "Type", "value": "[category]"}]}
+    ]
+  }
+}
 ```
 
 Use AskUserQuestion:
@@ -146,18 +157,23 @@ If refinement needed:
 
 ### Step 5: Draft Description
 
-Draft a 1-2 paragraph description. Show it:
-
-```
-Proposed Description:
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-[Draft description]
-
-Key aspects to verify:
-- What the project does: [aspect]
-- Why it's needed: [aspect]
-- Who will use it: [aspect]
+Draft a 1-2 paragraph description. Show it using `bonsai_visualize` with type `summary-box`:
+```json
+{
+  "type": "summary-box",
+  "title": "Proposed Description",
+  "vizId": "description-draft",
+  "data": {
+    "sections": [
+      {"heading": "Description", "items": [{"label": "Text", "value": "[draft description]"}]},
+      {"heading": "Key Aspects", "items": [
+        {"label": "What", "value": "[what the project does]"},
+        {"label": "Why", "value": "[why it's needed]"},
+        {"label": "Who", "value": "[who will use it]"}
+      ]}
+    ]
+  }
+}
 ```
 
 Use AskUserQuestion:
@@ -198,20 +214,23 @@ Share with users if they struggle:
 
 ### Step 7: Visual Confirmation
 
-Show the complete goal specification in a box:
-
-```
-╔═══════════════════════════════════════════════════════╗
-║ GOAL                                                  ║
-║  [Goal statement]                                     ║
-║                                                       ║
-║ DESCRIPTION                                           ║
-║   [Description paragraph 1]                           ║
-║                                                       ║
-║   [Description paragraph 2 (optional)]                ║
-║                                                       ║
-║ Category: [category]    Priority: [priority]          ║
-╚═══════════════════════════════════════════════════════╝
+Show the complete goal specification using `bonsai_visualize` with type `summary-box`:
+```json
+{
+  "type": "summary-box",
+  "title": "Goal Specification",
+  "vizId": "goal-confirmation",
+  "data": {
+    "sections": [
+      {"heading": "Goal", "items": [{"label": "Statement", "value": "[goal statement]"}]},
+      {"heading": "Description", "items": [{"label": "Text", "value": "[description]"}]},
+      {"heading": "Metadata", "items": [
+        {"label": "Category", "value": "[category]"},
+        {"label": "Priority", "value": "[priority]"}
+      ]}
+    ]
+  }
+}
 ```
 
 Use AskUserQuestion:
@@ -246,17 +265,27 @@ Update `.specs/registry.json` (if exists; create and update if doesn't):
 
 ### Step 11: Show Progress
 
-Show current workflow position using `/specdriven:cli-progress` pattern:
-
+Show updated workflow position by calling `bonsai_visualize` with type `progress-tracker` (update the vizId `workflow-progress` so the existing card refreshes):
+```json
+{
+  "type": "progress-tracker",
+  "title": "Specification-Driven Development",
+  "vizId": "workflow-progress",
+  "data": {
+    "steps": [
+      {"label": "Goal & Requirements", "status": "current", "file": "GOAL&REQUIREMENTS.md",
+       "substeps": [
+         {"label": "Goal", "status": "done"},
+         {"label": "Requirements", "status": "current"}
+       ]},
+      {"label": "Architecture", "status": "pending", "file": "DESIGN_DOC.md"},
+      {"label": "Module Specs", "status": "pending"},
+      {"label": "Task Specs", "status": "pending"},
+      {"label": "Implementation", "status": "pending"}
+    ]
+  }
+}
 ```
-┌─────────────────────────────────────────────────────┐
-│         Specification-Driven Development Progress   │
-├─────────────────────────────────────────────────────┤
-│ ▶  1. Goal & Requirements    GOAL&REQUIREMENTS.md  │
-|    [✓] ├─ Goal                                      |
-|     ▶ └─ Requirements                              |
-│ [ ] 2. Architecture           DESIGN_DOC.md         │
-│ [ ] ...                                             │
 
 ## Example Output
 
@@ -286,7 +315,8 @@ On this stage you are creating **Project Requirements** — the bridge between t
 Important:
 - Offer **3-5 choices** per question
 - Use web search if needed to examine solutions
-- Use terminal graphics from `/specdriven:visualisation` patterns
+- Use `bonsai_visualize` tool with structured data for visualizations (summary boxes, progress trackers)
+- NEVER use Bash, echo, printf, or ANSI escape codes for visual output
 - If some requirements or constraints are clear from the context, explicitly notice it to user and offer to add them one-by-one
 
 ### Output
@@ -327,32 +357,36 @@ Update `GOAL&REQUIREMENTS.md` at the project root with:
 
 ### VISUALIZATION
 
-During each step always show current state of requirements summary. If some information is yet missing show `to be defined`. Highlight the current step and progress (`✓` - done, `~>` - pointer to current point / question, ` ` - pending, `✗` - skipped or cancelled):
-
-```
-  ╔════════════════════════════════════════════════════════╗
-  ║ REQUIREMENTS SUMMARY                                   ║
-  ╠════════════════════════════════════════════════════════╣
-✓ ║ Business                                               ║
-  ║   [HIGH] ║ Requirement 1                               ║
-  ║   [MED]  ║ Requirement 2                               ║
-  ║   [LOW]  ║ Requirement 3                               ║
-  ╠════════════════════════════════════════════════════════╣
-~>║ Technology Stack                                       ║
-  ║   Language     ║ [Language(s)]                         ║
-  ║   Frameworks   ║ [Frameworks]                          ║
-  ║   Database     ║ [Database]                            ║
-  ║   Build system ║ [Build system]                        ║
-  ║   TBD          ║ to-be-defined                         ║
-  ╠════════════════════════════════════════════════════════╣
-  ║ Key Constraints                                        ║
-  ║   - [Constraint 1]                                     ║
-  ║   - [Constraint 2]                                     ║
-  ╠════════════════════════════════════════════════════════╣
-  ║ Non-Functional                                         ║
-  ║   - Performance: [Requirement]                         ║
-  ║   - Security: [Requirement]                            ║
-  ╚════════════════════════════════════════════════════════╝
+During each step always show current state of requirements summary using `bonsai_visualize` with type `summary-box`. If some information is yet missing show `to be defined`. Use section `status` to highlight progress (`done`, `current`, `pending`, `skipped`):
+```json
+{
+  "type": "summary-box",
+  "title": "Requirements Summary",
+  "vizId": "requirements-summary",
+  "data": {
+    "sections": [
+      {"heading": "Business Requirements", "status": "done", "items": [
+        {"label": "[HIGH]", "value": "Requirement 1"},
+        {"label": "[MED]", "value": "Requirement 2"},
+        {"label": "[LOW]", "value": "Requirement 3"}
+      ]},
+      {"heading": "Technology Stack", "status": "current", "items": [
+        {"label": "Language", "value": "[Language(s)]"},
+        {"label": "Frameworks", "value": "[Frameworks]"},
+        {"label": "Database", "value": "[Database]"},
+        {"label": "Build system", "value": "to be defined"}
+      ]},
+      {"heading": "Key Constraints", "status": "pending", "items": [
+        {"label": "1", "value": "[Constraint 1]"},
+        {"label": "2", "value": "[Constraint 2]"}
+      ]},
+      {"heading": "Non-Functional", "status": "pending", "items": [
+        {"label": "Performance", "value": "[Requirement]"},
+        {"label": "Security", "value": "[Requirement]"}
+      ]}
+    ]
+  }
+}
 ```
 
 ### Step 1: Business Requirements
@@ -474,14 +508,13 @@ Before saving, verify:
 3. No contradictory requirements
 4. At least 2-3 high-priority business requirements exist
 
-If issues found:
-```
-Warning: Consistency Issues:
-- [Issue 1]
-- [Issue 2]
+If issues found, show them in plain markdown:
 
-Suggested resolutions:
-```
+> **Warning: Consistency Issues**
+> - [Issue 1]
+> - [Issue 2]
+>
+> **Suggested resolutions:**
 
 Use AskUserQuestion:
 - "[Resolution option 1]"
@@ -516,5 +549,5 @@ Using all gathered information, write (update) of GOAL&REQUIREMENTS.md following
 - **Goal first**: A clear goal guides everything else
 - **Brevity**: Keep goal and description concise and focused
 - **Clarity**: Ensure goal is unambiguous and measurable
-- **Visual**: Use box formatting for confirmations
+- **Visual**: Use `bonsai_visualize` for all structured displays (progress, summaries, confirmations)
 - **Interactive**: Every decision through multi-choice questions

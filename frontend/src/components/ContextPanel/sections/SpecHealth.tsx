@@ -8,7 +8,7 @@ export function SpecHealth() {
 
   if (!spec) {
     return (
-      <CollapsibleSection title="Spec Health" defaultExpanded={false}>
+      <CollapsibleSection title="Spec Health">
         <div className="section-placeholder">Select a spec to see health</div>
       </CollapsibleSection>
     );
@@ -17,7 +17,6 @@ export function SpecHealth() {
   return (
     <CollapsibleSection
       title="Spec Health"
-      defaultExpanded={false}
       summary={<StatusBadge status={spec.status} />}
     >
       <div className="spec-health">

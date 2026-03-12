@@ -15,24 +15,30 @@ You are helping the user create a **Module Design Specification** (README.md). A
 - Present your analysis: "I found X. Is this correct?"
 - Offer **2-4 choices** for anything that requires human judgment
 - The user should finalize a module spec in ~4-6 multi-choice decisions
-- Use terminal graphics from `/specdriven:visualisation` patterns (component highlighting, box formatting)
+- Use `bonsai_visualize` tool with structured data for component diagrams and confirmations
+- NEVER use Bash, echo, printf, or ANSI escape codes for visual output
 
 ## Show Progress
 
-Show current workflow position using `/specdriven:cli-progress` pattern before starting:
-
+Show current workflow position by calling `bonsai_visualize` with type `progress-tracker`:
+```json
+{
+  "type": "progress-tracker",
+  "title": "Specification-Driven Development",
+  "vizId": "workflow-progress",
+  "data": {
+    "steps": [
+      {"label": "Goal & Requirements", "status": "done", "file": "GOAL&REQUIREMENTS.md"},
+      {"label": "Architecture", "status": "done", "file": "DESIGN_DOC.md"},
+      {"label": "Module Specs", "status": "current"},
+      {"label": "Task Specs", "status": "pending"},
+      {"label": "Implementation", "status": "pending"}
+    ]
+  }
+}
 ```
-┌─────────────────────────────────────────────────────┐
-│         Specification-Driven Development Progress   │
-├─────────────────────────────────────────────────────┤
-│ [✓] 1. Goal & Requirements    GOAL&REQUIREMENTS.md  │
-│ [✓] 2. Architecture           DESIGN_DOC.md         │
-│  ▶  3. Module Specs           src/*/README.md       │
-│ [ ] 4. Task Specs             current_tasks/        │
-└─────────────────────────────────────────────────────┘
-```
 
-When specifying a module, show the architecture diagram with the current module highlighted using heavy-line box (`┏━━┓┗━━┛`).
+When specifying a module, highlight the current module using `bonsai_visualize` `diagram` type with the module marked as `current`.
 
 ## Prerequisites
 
@@ -106,9 +112,29 @@ Use AskUserQuestion (multiSelect: true):
 
 ### Step 7: Generate the specification
 
+Before writing, show the module's architecture using `bonsai_visualize` with type `diagram`:
+```json
+{
+  "type": "diagram",
+  "title": "{Module Name} Architecture",
+  "vizId": "module-arch-{module}",
+  "data": {
+    "nodes": [
+      {"id": "comp1", "label": "{Component 1}", "status": "current"},
+      {"id": "comp2", "label": "{Component 2}"},
+      {"id": "comp3", "label": "{Component 3}"}
+    ],
+    "edges": [
+      {"from": "comp1", "to": "comp2", "label": "{relationship}"},
+      {"from": "comp2", "to": "comp3", "label": "{relationship}"}
+    ]
+  }
+}
+```
+
 Generate README.md with:
 - Module purpose from Step 2
-- Pipeline/architecture diagram from Step 3
+- Architecture description from Step 3 (reference the bonsai_visualize diagram shown above; do NOT put ASCII art diagrams in the README — use plain text or mermaid if needed)
 - Public interface table from Step 4
 - Output contract table (extracted from return types)
 - Internal file organization (auto-detected)

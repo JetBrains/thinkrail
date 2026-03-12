@@ -23,8 +23,9 @@ The Context submodule is responsible for assembling the full prompt context that
   │                                                                 │
   │  1. Load skill instructions (SKILL.md)                          │
   │  2. Gather project metadata                                     │
-  │  3. Load spec content by IDs                                    │
-  │  4. Compose with framing prompts                                │
+  │  3. Insert visualization tool instructions                      │
+  │  4. Load spec content by IDs                                    │
+  │  5. Compose with framing prompts                                │
   │                                                                 │
   └──────────────────────────┬──────────────────────────────────────┘
                              │
@@ -94,7 +95,20 @@ Working directory: {project_root}
 - Always present — every session has a project root
 - May be extended in future with additional metadata (e.g., git branch, language, framework)
 
-### 3. Specification Context (if `spec_ids` is non-empty)
+### 3. Visualization Tool Instructions
+
+```
+## Visualization Tool
+
+You have access to the `bonsai_visualize` MCP tool ...
+```
+
+- **Always present** — included in both skill-based and free-form sessions
+- Describes the tool's available visualization types (progress-tracker, summary-box, comparison, data-table, status-list, diagram)
+- Includes anti-patterns (no Bash/ANSI, no ASCII art) to steer the model toward using the tool
+- Without this section, the model would not know the `bonsai_visualize` tool exists or when to call it
+
+### 4. Specification Context (if `spec_ids` is non-empty)
 
 ```
 ## Specifications
@@ -118,7 +132,7 @@ The following specifications provide context for this session.
 
 ### Free-form Sessions
 
-When both `skill_id` is `None` and `spec_ids` is empty, the system prompt contains only the project metadata section. The agent starts with minimal context and relies entirely on user messages.
+When both `skill_id` is `None` and `spec_ids` is empty, the system prompt contains the project metadata section and the visualization tool instructions. This ensures the agent always knows about `bonsai_visualize`, even in free-form sessions with no skill or specs.
 
 ## Skill Resolution
 
@@ -171,7 +185,7 @@ This is a single-file submodule. No classes — just a pure function with helper
 
 | Decision | Choice | Rationale |
 |----------|--------|-----------|
-| Section ordering | Skill → Project → Specs | Skill instructions set the agent's role/framing first. Project grounds it in a directory. Specs provide domain knowledge last (largest section, furthest from the start). |
+| Section ordering | Skill → Project → Visualization → Specs | Skill instructions set the agent's role/framing first. Project grounds it in a directory. Visualization instructions ensure the model knows about `bonsai_visualize` in all sessions. Specs provide domain knowledge last (largest section, furthest from the start). |
 | Framing prompts | Markdown headers and introductory sentences between sections | Raw concatenation loses structure. Framing helps the LLM distinguish between skill instructions, project info, and spec content. |
 | Frontmatter stripping | Remove YAML frontmatter from SKILL.md | Frontmatter is metadata for the plugin system (name, description), not instructions for the agent. Including it would confuse the prompt. |
 | Pure function | `build_context()` not a class | No state to manage. Takes inputs, returns a string. Simple to test and compose. |

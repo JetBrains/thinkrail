@@ -16,18 +16,18 @@
     - [ ] Group tool calls and tasks somehow
     - [ ] add "don't ask approval again for ..." — "Allow for Session" button on ApprovalCard that uses SDK's `PermissionUpdate(type="addRules", destination="session")` via `PermissionResultAllow.updated_permissions` to auto-allow matching tools for the rest of the session (SDK enforces it natively, no custom state needed)
     - [~] send message should always be active?
-    - [ ] add interrupt
-    - [ ] on approval "denied" agent stuck
+    - [x] add interrupt
+    - [x] on approval "denied" agent stuck
     - [x] add something like "agent is thinking..." which tracks that agent is not stuck and displays user that "work is in progress"
     - [ ] for each tool show the directory it is being executed from
     - [ ] "plan mode exit" should be separately handled — currently shows raw JSON blob of ExitPlanMode with the full plan text as an "Action requires approval" card
 
 * Project memory/state
-    - [ ] sessions do not restore after restart
+    - [~] sessions do not restore after restart
     - [~] save and restore sessions
 * Session status bar
     - [~] money is not counted on the fly
-    - [ ] no context size and opacity
+    - [x] no context size and opacity
     - [x] Display current mode (plan, accept edits, spec, ...) in status bar in sessions tabs (right below chat box); should be clickable to quick switch modes (a-la `⏸️ plan mode on (shift+tab to cycle)`)
     - [x] Display current model (opus 4.5 1m, opus 4.5, ...) in status bar in sessions tabs (right below chat box); should be clickable to quick switch models
 * Notifications
@@ -39,7 +39,7 @@
     - [x] files tab doesn't have scrolling
     - [x] Get rid of left panel max width limit and arrow side button when hidden
     - [ ] Reqs tab displays nothing (mock) — needs real requirements data
-    - [ ] Tree-view (files tab) always appears fully unfolded — not nice
+    - [x] Tree-view (files tab) always appears fully unfolded — not nice
     - [x] Single-click in SpecTree/FileTree should open a preview tab (like VS Code) — temporary tab that gets replaced by the next preview click. Double-click to pin as a permanent tab.
 * Right panel (Context Panel)
     - [x] Get rid of right panel max width limit and arrow side button when hidden
@@ -62,7 +62,7 @@
 
 * Bugs and strange behaviours:
     - [x] Tree view is not updated automatically: check events
-    - [ ] Once agent decided to go to inspect other projects on disk
+    - [~] Once agent decided to go to inspect other projects on disk
     - [x] Unexpected "session start" after turn complete — agent auto-restarts:
         ```
         Turn complete — $1.80 · 21 turns
@@ -72,7 +72,7 @@
     - [ ] **Graph view** has to be fixed
     - [ ] Progress tab definitely shows something wrong
     - [ ] Markdown preview doesn't support "follow links" (for example, for table of contents)
-    - [ ] Sessions working dir: `ls -la .../aiir/` instead of `.../aiir/demo/`
+    - [~] Sessions working dir: `ls -la .../aiir/` instead of `.../aiir/demo/`
     - [x] Session: AskUserQuestion validation error when agent sends >4 options:
         ```
         AskUserQuestion[object Object]✕ error
@@ -85,7 +85,7 @@
     - [x] Support file editing and simple IDE features (monaco editor, open in IDE/Vim)
     - [x] IntelliJ Idea-style theme for `files` tab and code
     - [x] Different (global) themes support
-    - [~] keybindings for non-mac
+    - [x] keybindings for non-mac
     - [ ] Better mermaid scrolling, focusing, etc
     - [x] Add working-dir and project selection with autocomplete during project path typing
     - [ ] Add preview for html-s
@@ -99,6 +99,18 @@
     - [ ] Search (Ctrl+k): fix
     - [ ] Show skill progress with on-the-fly visualization on side of chat (partially addressed by Agent Context mode ComplianceHints)
     - [ ] Support "output view modes" like ctrl+o ctrl+t in claude
+    - [~] Support effort --- done but limitation: need to restart session
+    - [ ] `Compact`: how to influence, manage, and when to call
+    - [ ] Support: discuss --separate session and chat--> create plan --> return to `parent` session
+    - [ ] skill creator
+    - [ ] brainstorming
+    - [ ] plugins and mcp support
+    - [ ] something like `ultrathink` support
+    - [ ] support voice input
+    - [ ] support `simplify`
+    - [ ] support remote control
+    - [ ] memory management
+    - [ ] markdown input mode
 
 * Bonsai workflow:
     - [?] Should tasks (current tasks) be modifiable or append only? 

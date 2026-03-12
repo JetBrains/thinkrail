@@ -4,7 +4,9 @@
 
 ## Overview
 
-A floating search modal (`Cmd+K`) for quick navigation across specs, sessions, and actions. Supports prefix modes for filtered search.
+A floating search modal (`Mod+K`) for quick navigation across specs, sessions, and actions. Supports prefix modes for filtered search.
+
+**Modifier key:** `Mod` = Ctrl on macOS, Alt on Linux/Windows.
 
 ## Component Hierarchy
 
@@ -103,7 +105,7 @@ Results are displayed as a **flat list** with a badge on each item indicating it
 
 | Key | Action |
 | --- | --- |
-| `Cmd+K` | Toggle palette (global) |
+| `Mod+K` | Toggle palette (global) |
 | `Escape` | Close palette |
 | `ArrowUp` / `ArrowDown` | Move selection through results |
 | `Enter` | Execute selected result |

@@ -8,9 +8,15 @@ argument-hint: "[path-to-analyze]"
 
 You are analyzing an existing codebase to **generate specification skeletons**. This is the reverse path: code → specs, instead of specs → code. The generated specs need human review and refinement, but they provide a strong starting point.
 
+## IMPORTANT: Visualization Rules
+
+- Use `bonsai_visualize` tool for all structured visual output (diagrams, progress, summaries)
+- **NEVER** use ASCII box-drawing characters (`┌─┐`, `╔═╗`, `+---+`, etc.) in text output
+- **NEVER** use Bash, echo, printf, or ANSI escape codes for visual output
+
 ## Quick Context
 
-Before analyzing, read `.specs/dashboard.json` for pre-computed project context (coverage gaps, existing specs). The `coverage[]` array shows which source directories lack specs -- no need to read registry.json.
+Before analyzing, read `.specs/registry.json` for existing specs and their `covers` entries. Compare against source directories to identify coverage gaps.
 
 ## What You Will Generate
 
@@ -77,13 +83,9 @@ If analyzing the full project, generate a `DESIGN_DOC.md` skeleton:
 
 ## High-Level Architecture
 
-{Generate ASCII art diagram based on discovered module dependencies}
+{Generate architecture diagram using `bonsai_visualize` `diagram` type — do NOT put ASCII art here}
 
-```
-  +----------+     +----------+     +----------+
-  | {mod_a}  |---->| {mod_b}  |---->| {mod_c}  |
-  +----------+     +----------+     +----------+
-```
+[Architecture diagram rendered via bonsai_visualize in chat]
 
 ---
 

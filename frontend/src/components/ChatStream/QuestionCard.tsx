@@ -1,5 +1,6 @@
 import { useState, useRef, useCallback, useEffect } from "react";
 import type { Question } from "@/types/agent.ts";
+import { isMod, modLabel } from "@/utils/platform.ts";
 import { AnsweredTable } from "./AnsweredTable.tsx";
 import { QuestionTabBar } from "./QuestionTabBar.tsx";
 import { QuestionOptionsPanel } from "./QuestionOptionsPanel.tsx";
@@ -144,7 +145,7 @@ export function QuestionCard({
         return;
       }
 
-      if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
+      if (isMod(e) && e.key === "Enter") {
         e.preventDefault();
         handleSubmit();
         return;
@@ -267,7 +268,7 @@ export function QuestionCard({
                 <span>
                   {isMulti ? "Enter toggles" : "Enter selects"}
                   {questions.length > 1 ? " / \u2190\u2192 switches" : ""}
-                  {" / Ctrl+Enter submits"}
+                  {` / ${modLabel("Enter")} submits`}
                 </span>
               </>
             )}

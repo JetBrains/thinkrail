@@ -1,11 +1,11 @@
 import { useCallback, useEffect, useState } from "react";
 import { useUiStore } from "@/store/uiStore.ts";
 import { useSessionStore } from "@/store/sessionStore.ts";
+import { MODELS, DEFAULT_MODEL, BETA_1M, getModelDef } from "@/utils/models.ts";
 import { SkillGrid } from "./SkillGrid.tsx";
 import { SpecSelector } from "./SpecSelector.tsx";
 import "./NewSessionModal.css";
 
-const MODELS = ["claude-opus-4-6", "claude-sonnet-4-6", "claude-haiku-4-5"];
 const TURN_OPTIONS = [5, 10, 20, 50, 100];
 
 export function NewSessionModal() {
@@ -17,9 +17,11 @@ export function NewSessionModal() {
   const [name, setName] = useState("");
   const [skillId, setSkillId] = useState<string | null>(null);
   const [specIds, setSpecIds] = useState<string[]>([]);
-  const [model, setModel] = useState(MODELS[0]);
+  const [model, setModel] = useState(DEFAULT_MODEL);
+  const [use1M, setUse1M] = useState(false);
   const [maxTurns, setMaxTurns] = useState(20);
   const [permissionMode, setPermissionMode] = useState("default");
+  const [effort, setEffort] = useState<string | null>(null);
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [submitting, setSubmitting] = useState(false);
 
@@ -34,8 +36,10 @@ export function NewSessionModal() {
       setName("");
       setSkillId(null);
       setSpecIds([]);
-      setModel(MODELS[0]);
+      setModel(DEFAULT_MODEL);
+      setUse1M(false);
       setMaxTurns(20);
+      setEffort(null);
       setPermissionMode("default");
       setShowAdvanced(false);
       setSubmitting(false);
@@ -59,6 +63,8 @@ export function NewSessionModal() {
           maxTurns,
           permissionMode,
           streamText: true,
+          betas: use1M ? [BETA_1M] : [],
+          effort,
         },
         name: name || (skillId ?? "session"),
         skillId: skillId ?? undefined,
@@ -67,7 +73,7 @@ export function NewSessionModal() {
     } catch {
       setSubmitting(false);
     }
-  }, [submitting, startSession, specIds, model, maxTurns, permissionMode, name, skillId, closeModal]);
+  }, [submitting, startSession, specIds, model, use1M, maxTurns, permissionMode, effort, name, skillId, closeModal]);
 
   if (!open) return null;
 
@@ -111,14 +117,32 @@ export function NewSessionModal() {
               <select
                 className="modal-select"
                 value={model}
-                onChange={(e) => setModel(e.target.value)}
+                onChange={(e) => {
+                  setModel(e.target.value);
+                  if (!getModelDef(e.target.value)?.supports1M) setUse1M(false);
+                }}
               >
-                {MODELS.map((m) => (
-                  <option key={m} value={m}>
-                    {m}
-                  </option>
-                ))}
+                <optgroup label="Current">
+                  {MODELS.filter((m) => m.group === "current").map((m) => (
+                    <option key={m.id} value={m.id}>{m.label}</option>
+                  ))}
+                </optgroup>
+                <optgroup label="Legacy">
+                  {MODELS.filter((m) => m.group === "legacy").map((m) => (
+                    <option key={m.id} value={m.id}>{m.label}</option>
+                  ))}
+                </optgroup>
               </select>
+              {getModelDef(model)?.supports1M && (
+                <label className="modal-checkbox">
+                  <input
+                    type="checkbox"
+                    checked={use1M}
+                    onChange={(e) => setUse1M(e.target.checked)}
+                  />
+                  1M context window (beta)
+                </label>
+              )}
 
               <label className="modal-label">Max Turns</label>
               <div className="modal-pills">
@@ -146,6 +170,19 @@ export function NewSessionModal() {
                     />
                     {m}
                   </label>
+                ))}
+              </div>
+
+              <label className="modal-label">Effort</label>
+              <div className="modal-pills">
+                {([null, "low", "medium", "high", "max"] as const).map((e) => (
+                  <button
+                    key={e ?? "auto"}
+                    className={`modal-pill ${effort === e ? "modal-pill-active" : ""}`}
+                    onClick={() => setEffort(e)}
+                  >
+                    {e ?? "auto"}
+                  </button>
                 ))}
               </div>
             </div>

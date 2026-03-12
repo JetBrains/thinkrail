@@ -1,0 +1,32 @@
+.covered-files__item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  padding: 3px 8px;
+  border: none;
+  background: none;
+  color: var(--muted);
+  font-size: 11px;
+  font-family: var(--font-mono);
+  text-align: left;
+  cursor: pointer;
+  border-radius: 3px;
+  transition: background 80ms;
+}
+
+.covered-files__item:hover {
+  background: var(--hover);
+  color: var(--text);
+}
+
+.covered-files__icon {
+  flex-shrink: 0;
+  font-size: 12px;
+}
+
+.covered-files__path {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

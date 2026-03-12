@@ -23,7 +23,7 @@ The Chat UI is the center panel's primary content. It renders a scrolling stream
 - `frontend/src/components/ChatStream/ErrorBanner.tsx` — red error display with details
 - `frontend/src/components/ChatStream/CompactMarker.tsx` — context compacted boundary marker
 - `frontend/src/components/ChatStream/SessionStatusLine.tsx` — model, cost, tool calls, context bar between chat and input
-- `frontend/src/components/ChatStream/InputArea.tsx` — auto-resizing textarea, Cmd+Enter to send
+- `frontend/src/components/ChatStream/InputArea.tsx` — auto-resizing textarea, Mod+Enter to send
 - `frontend/src/components/ChatStream/SessionTabBar.tsx` — tab per session with status dots, background alert badges, close button
 
 ## Key Implementation Details
@@ -51,5 +51,5 @@ Read: 📖, Write: ✏️, Edit: ✏️, Bash: ▶, Grep: 🔍, Glob: 📁, Agen
 - [ ] Question and approval cards are interactive and send `agent/respond`
 - [ ] Auto-scroll works with pause-on-scroll-up behavior
 - [ ] Session tabs show status dots and background alert badges
-- [ ] Input area sends messages via Cmd+Enter
+- [ ] Input area sends messages via Mod+Enter
 - [ ] Session status line shows live metrics (model, cost, context)
