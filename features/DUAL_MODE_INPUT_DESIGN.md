@@ -1,56 +1,51 @@
-# Dual-Mode Message Input — Architecture Design
+# Markdown Input with Split-Pane Preview — Architecture Design
 
-> Parent: [DESIGN_DOC.md](../DESIGN_DOC.md) | Status: **Active** | Created: 2026-03-11
+> Parent: [DESIGN_DOC.md](../DESIGN_DOC.md) | Status: **Active** | Created: 2026-03-11 | Updated: 2026-03-12
 
 ## Table of Contents
 1. [Overview](#overview)
-2. [Two-Mode Architecture](#two-mode-architecture)
+2. [Layout Architecture](#layout-architecture)
 3. [Data Flow](#data-flow)
 4. [Changes by Layer](#changes-by-layer)
 5. [Keyboard Shortcuts](#keyboard-shortcuts)
 6. [Panel Resize](#panel-resize)
-7. [Key Design Decisions](#key-design-decisions)
-8. [Feature & Task Specs](#feature--task-specs)
+7. [Split-Pane Resize](#split-pane-resize)
+8. [Key Design Decisions](#key-design-decisions)
+9. [Migration from Dual-Mode](#migration-from-dual-mode)
+10. [Feature & Task Specs](#feature--task-specs)
 
 ## Overview
 
-Dual-mode message input adds a **markdown editing mode** alongside the default plain-text mode in `InputArea`. Users toggle between modes via a button or shortcut. Markdown mode provides a formatting toolbar, Write/Preview tabs, and live preview powered by the existing `ChatMarkdown` component. An `isMarkdown` boolean flag is threaded through the entire stack so that markdown-authored messages render with full formatting in the chat stream.
+The input area is **always in markdown mode**. There is no text/markdown toggle — every message is sent as markdown. The formatting toolbar is always visible, and a **Preview** toggle button enables a side-by-side split-pane view where the textarea and a live-rendered preview appear next to each other horizontally.
 
-- **Text mode** (default): single-row auto-expanding textarea — existing behavior, unchanged.
-- **Markdown mode**: toolbar with Write/Preview tabs, 10 formatting buttons, and live preview pane. Textarea gains markdown-specific shortcuts (Mod+B/I/K).
-- **Rendering**: `UserMessageBubble` checks `isMarkdown` — if true, renders via `ChatMarkdown` with a hover-visible raw/rendered toggle button.
+- **Default state**: toolbar + textarea (full width). All formatting shortcuts (Mod+B/I/K) are always active.
+- **Preview toggled on**: textarea and rendered preview appear side by side in a split pane with a draggable divider. The textarea is always visible — the preview supplements, never replaces it.
+- **Rendering**: `UserMessageBubble` checks `isMarkdown` — if true, renders via `ChatMarkdown` with a hover-visible raw/rendered toggle button. Legacy messages with `isMarkdown: false` (or missing) render as plain text.
 
-## Two-Mode Architecture
+## Layout Architecture
 
-### Text Mode Layout
+### Default (Preview Off)
 ```
 ┌──────────────────────────────────────────────┐
-│ [Md]  [textarea ···························] │
-│       [                                    ] │
-│                              [↑] [🎙] [Send] │
+│ ┌ Preview | ── B I </> 🔗 H • 1. ❝ — ``` ──┐│
+│ │ [textarea ·································]││
+│ │ [                                          ]││
+│ └────────────────────────────────────────────┘│
+│                                [↑] [🎙] [Send]│
 └──────────────────────────────────────────────┘
 ```
 
-### Markdown Mode — Write Tab
+### Preview Toggled On (Split Pane)
 ```
 ┌──────────────────────────────────────────────┐
-│ [Md*] ┌ Write | Preview | ── B I </> 🔗 H … ┐│
-│       │ [textarea ·························] ││
-│       │ [                                  ] ││
-│       └──────────────────────────────────────┘│
-│                              [↑] [🎙] [Send] │
+│ ┌ Preview* | ── B I </> 🔗 H • 1. ❝ — ``` ─┐│
+│ │ [textarea ·······] │▌│ Rendered markdown  ││
+│ │ [                ] │▌│ output (ChatMd)    ││
+│ └────────────────────────────────────────────┘│
+│                                [↑] [🎙] [Send]│
 └──────────────────────────────────────────────┘
-```
 
-### Markdown Mode — Preview Tab
-```
-┌──────────────────────────────────────────────┐
-│ [Md*] ┌ Write | Preview* | ── B I </> 🔗 H …┐│
-│       │  Rendered markdown output            ││
-│       │  (ChatMarkdown)                      ││
-│       └──────────────────────────────────────┘│
-│                              [↑] [🎙] [Send] │
-└──────────────────────────────────────────────┘
+           ← 20% ─── │▌│ ─── 80% →  (draggable, clamped)
 ```
 
 ### User Bubble with Markdown Toggle
@@ -66,7 +61,7 @@ Dual-mode message input adds a **markdown editing mode** alongside the default p
 
 ### Send Path
 ```
-InputArea.handleSend(text, isMarkdown=true)
+InputArea.handleSend(text, isMarkdown=true)      ← always true now
   → SessionPanel.handleSend(text, isMarkdown)
     → sessionStore.sendMessage(bonsaiSid, text, isMarkdown)
       ├── optimistic event: { eventType: "userMessage", payload: { text, isMarkdown: true } }
@@ -83,37 +78,39 @@ InputArea.handleSend(text, isMarkdown=true)
 ChatStream receives events[]
   → event.eventType === "userMessage"
     → <UserMessageBubble text={p.text} isMarkdown={p.isMarkdown ?? false} />
-      ├── isMarkdown=false → <div className="chat-user-text">{text}</div>
+      ├── isMarkdown=false → <div className="chat-user-text">{text}</div>      (legacy messages)
       └── isMarkdown=true  → <div className="chat-user-text--md"><ChatMarkdown content={text} /></div>
                               + <button className="chat-user-toggle"> raw / md </button>  (visible on hover)
 ```
 
 ## Changes by Layer
 
-### Frontend
+### Frontend — InputArea.tsx
 
-| File | Change |
-|------|--------|
-| `InputArea.tsx` | `InputMode` type, `inputMode`/`previewActive`/`panelHeight` state, `toggleMode()`, `insertFormat()`, `Md` toggle button, Write/Preview tabs, 10-button formatting toolbar (`FORMAT_ACTIONS`), preview pane with `ChatMarkdown`, drag-to-resize handle, `handleDragStart`/`handleDragDoubleClick`, Mod+Shift+M / Mod+B / Mod+I / Mod+K shortcuts, Mod+Enter from preview, `isManual` flex mode |
-| `ChatStream.tsx` | `UserMessageBubble` component — dual rendering path (plain text vs `ChatMarkdown`), `showRaw` state toggle, `chat-user-toggle` button visible on hover |
-| `ChatStream.css` | ~15 class groups: `.input-mode-btn`, `.input-editor-wrapper`, `.input-md-toolbar`, `.input-md-tab`, `.input-md-sep`, `.input-md-fmt`, `.input-preview`, `.input-preview-empty`, `.input-preview--fill`, `.input-textarea--md`, `.input-editor-wrapper--fill`, `.input-area--manual`, `.input-resize-handle`, `.chat-user-bubble`, `.chat-user-text--md`, `.chat-user-toggle` |
-| `SessionPanel.tsx` | `handleSend` callback accepts `(text, isMarkdown?)` and passes through to `sendMessage` |
+| Aspect | Detail |
+|--------|--------|
+| Removed | `InputMode` type, `inputMode` state, `isMd` derived boolean, `toggleMode()` callback, `Md` toggle button, `Ctrl+Shift+M` shortcut, `Write` tab button |
+| Added | `splitRatio` state (default `0.5`), `splitPaneRef` ref, `handleSplitDragStart()` drag handler |
+| Changed | Toolbar always renders (no `isMd` guard). Preview is a toggle button (not a tab). Format shortcuts (Mod+B/I/K) always active (no mode guard). `handleSend` always passes `isMarkdown=true`. |
+| State | `previewActive` (boolean), `splitRatio` (number, 0.2–0.8), `panelHeight` (number|null) |
 
-### Store / API
+### Frontend — ChatStream.css
 
-| File | Change |
-|------|--------|
-| `sessionStore.ts` | `sendMessage` signature: `(bonsaiSid, text, isMarkdown?) → void`. Optimistic event includes `isMarkdown` in payload. |
-| `agents.ts` | `send` function: `(bonsaiSid, text, isMarkdown?) → request`. Conditionally includes `isMarkdown` in RPC params. |
+| Class | Role |
+|-------|------|
+| `.input-split-pane` | Flex container for textarea + divider + preview |
+| `.input-split-divider` | 5px-wide vertical drag handle, `cursor: col-resize` |
+| `.input-textarea--split` | Bottom-left-only border-radius when preview visible |
+| `.input-preview` | Right pane — bottom-right border-radius, no left/top border |
+| Removed | `.input-mode-btn`, `.input-mode-btn--active`, `.input-mode-btn:hover` |
 
-### Backend
+### Frontend — No Other Changes
 
-| File | Change |
-|------|--------|
-| `rpc/methods/agents.py` | `send_message`: extracts `isMarkdown` from params with `params.get("isMarkdown", False)`, passes to `service.send_message()` as keyword arg |
-| `agent/service.py` | `send_message`: accepts `is_markdown: bool = False` keyword arg, includes `"isMarkdown": is_markdown` in persisted `userMessage` event payload |
+`ChatStream.tsx`, `SessionPanel.tsx`, `sessionStore.ts`, `agents.ts` are **unchanged** — the `isMarkdown` parameter already existed in all interfaces. The only difference is that `InputArea` now always sends `true`.
 
-No changes to: `runner.py`, `tracker.py`, `models.py`, `context.py`, `persistence.py`.
+### Backend — No Changes
+
+The backend layer (`agents.py`, `service.py`) already handles `isMarkdown` as an optional boolean. No backend changes required.
 
 ## Keyboard Shortcuts
 
@@ -121,38 +118,66 @@ No changes to: `runner.py`, `tracker.py`, `models.py`, `context.py`, `persistenc
 
 | Shortcut | Context | Action |
 |----------|---------|--------|
-| `Mod+Shift+M` | Any mode | Toggle between text and markdown mode |
-| `Mod+B` | Markdown mode | Insert bold markers `**text**` |
-| `Mod+I` | Markdown mode | Insert italic markers `*text*` |
-| `Mod+K` | Markdown mode | Insert link markers `[text](url)` |
-| `Mod+Enter` | Any mode, including preview pane | Send message |
+| `Mod+B` | Always | Insert bold markers `**text**` |
+| `Mod+I` | Always | Insert italic markers `*text*` |
+| `Mod+K` | Always | Insert link markers `[text](url)` |
+| `Mod+Enter` | Textarea or preview pane | Send message |
+| `Mod+R` | Textarea | Toggle message history popup |
 
-All shortcuts use `e.metaKey || e.ctrlKey` for cross-platform compatibility. Formatting shortcuts wrap the current selection (or insert placeholder text if nothing is selected).
+Removed: `Mod+Shift+M` (no mode toggle needed).
+
+All shortcuts use `isMod(e)` (`e.metaKey || e.ctrlKey`) for cross-platform compatibility. Formatting shortcuts wrap the current selection (or insert placeholder "text" if nothing is selected).
 
 ## Panel Resize
 
-The input area includes a **drag handle** at its top edge for manual height control:
+The input area includes a **vertical drag handle** at its top edge for manual height control:
 
 - **Drag handle**: a 7px-tall invisible hit area (`.input-resize-handle`) positioned absolutely at `top: -3px`. A 32×3px pill indicator appears on hover/active.
 - **Drag behavior**: `mousedown` captures `startY` and `startHeight`, then tracks `mousemove` to compute `delta = startY - ev.clientY`. New height is clamped between `56px` and `70vh`.
-- **Manual mode** (`panelHeight !== null`): the panel gets a fixed `height` via inline style. The textarea and preview pane fill available space via flex (`--fill` modifiers). Side buttons (`Md`, history, mic, Send) align to `flex-end`.
+- **Manual mode** (`panelHeight !== null`): the panel gets a fixed `height` via inline style. The textarea and preview pane fill available space via flex (`--fill` modifiers). Side buttons (history, mic, Send) align to `flex-end`.
 - **Auto mode** (`panelHeight === null`): default behavior — textarea auto-expands with content via `scrollHeight` measurement on input.
 - **Double-click**: resets to auto mode (`setPanelHeight(null)`) and recalculates textarea height.
+
+## Split-Pane Resize
+
+When preview is active, a **horizontal drag divider** separates the textarea and preview:
+
+- **Divider** (`.input-split-divider`): 5px-wide bar between textarea and preview. `cursor: col-resize`. Highlights with `var(--cyan)` on hover/active.
+- **Drag behavior**: `mousedown` captures `startX`, current `splitRatio`, and container width. `mousemove` computes `newRatio = startRatio + (ev.clientX - startX) / paneWidth`, clamped to `[0.2, 0.8]`.
+- **Implementation**: textarea gets `style={{ flex: splitRatio }}`, preview gets `style={{ flex: 1 - splitRatio }}`. Default is `0.5` (equal split).
+- **During drag**: `document.body.style.cursor = "col-resize"` and `userSelect = "none"` prevent text selection artifacts.
 
 ## Key Design Decisions
 
 | Decision | Choice | Rationale |
 |----------|--------|-----------|
-| Boolean `isMarkdown` flag | Simple boolean, not a format enum | Only two modes needed; avoids over-engineering for hypothetical future formats |
+| Always markdown | Removed text mode entirely | The two-mode toggle was redundant — text mode was just markdown without the toolbar. Simplifies state management and eliminates a confusing UI toggle. |
+| Split-pane preview | Side-by-side instead of tab-switch | Tab-based Write/Preview forced users to switch away from the editor to see output. Side-by-side lets users edit and preview simultaneously — a pattern proven in VS Code, GitHub, and every modern markdown editor. |
+| Draggable split ratio | Flex-based with mouse capture | Same proven pattern as the vertical panel resize. Clamped 20–80% to prevent either pane from becoming unusably small. |
+| `isMarkdown` still threaded | Keep boolean in persistence | Backward-compatible — old messages with `isMarkdown: false` or `undefined` still render as plain text. New messages always get `true`. |
 | Reuse existing `ChatMarkdown` | No new rendering dependencies | `ChatMarkdown` (react-markdown + rehype/remark plugins) already handles all markdown features for assistant messages |
-| Optimistic rendering | User message appears immediately in chat stream | Consistent with existing send behavior; rollback on error |
-| Raw/rendered toggle on hover | Small `raw`/`md` button in top-right of user bubble | Non-intrusive — only appears when you hover over a markdown message. Lets users inspect the source without disrupting flow |
-| Drag-to-resize panel | Global mouse tracking with clamped height | More precise than CSS `resize` property. Works across textarea and preview pane uniformly. Double-click escape hatch prevents users from getting stuck |
-| Input mode is component-local state | Not persisted to store or backend | Mode preference is ephemeral — new sessions start in text mode. Avoids unnecessary complexity |
+| Preview state is ephemeral | Not persisted to store | Whether the preview pane is open is a transient editing preference. Resets on send. |
 | Backend is format-agnostic | Just threads `isMarkdown` through to persistence | Backend doesn't parse, validate, or transform markdown. It's a client-side rendering concern stored as metadata |
+
+## Migration from Dual-Mode
+
+This design **supersedes** the original dual-mode architecture. Key removals:
+
+| Removed | Reason |
+|---------|--------|
+| `type InputMode = "text" \| "markdown"` | No mode concept needed |
+| `inputMode` state + `isMd` derived boolean | Always markdown |
+| `toggleMode()` callback | Nothing to toggle |
+| `Md` button (`.input-mode-btn`) | No mode toggle UI |
+| `Mod+Shift+M` shortcut | No mode toggle shortcut |
+| `Write` tab button | Textarea is always visible; no need for a tab to switch to it |
+| `isMd` guard on format shortcuts | Shortcuts always active |
+
+What was kept: toolbar, format buttons, preview rendering, `previewActive` state, `insertFormat()`, all panel resize logic, `Mod+Enter` from preview.
 
 ## Feature & Task Specs
 
 | Component | Spec | Description |
 |-----------|------|-------------|
-| Frontend task | [feature_dual_mode_input.md](../current_tasks/frontend/feature_dual_mode_input.md) | Full implementation: InputArea toggle, toolbar, preview, resize, ChatStream rendering |
+| Original task | [feature_dual_mode_input.md](../current_tasks/frontend/feature_dual_mode_input.md) | Original dual-mode implementation (Done, superseded) |
+| Refactor task | [feature_split_pane_preview.md](../current_tasks/frontend/feature_split_pane_preview.md) | Remove text mode, add split-pane preview |

@@ -2,11 +2,9 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { SKILLS } from "@/constants/skills";
 import { useVoiceInput } from "@/hooks/useVoiceInput";
 import { useNotificationStore } from "@/store/notificationStore";
-import { isMod, modLabel, MOD_LABEL } from "@/utils/platform";
+import { isMod, modLabel } from "@/utils/platform";
 import { ChatMarkdown } from "./ChatMarkdown";
 import { MessageHistory } from "./MessageHistory";
-
-type InputMode = "text" | "markdown";
 
 interface InputAreaProps {
   disabled: boolean;
@@ -39,15 +37,15 @@ export function InputArea({ disabled, placeholder, onSend, isRunning, onInterrup
   const [suggestions, setSuggestions] = useState<typeof SKILLS>([]);
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [showHistory, setShowHistory] = useState(false);
-  const [inputMode, setInputMode] = useState<InputMode>("text");
   const [previewActive, setPreviewActive] = useState(false);
+  const [splitRatio, setSplitRatio] = useState(0.5);
   const [panelHeight, setPanelHeight] = useState<number | null>(null);
   const ref = useRef<HTMLTextAreaElement>(null);
   const panelRef = useRef<HTMLDivElement>(null);
+  const splitPaneRef = useRef<HTMLDivElement>(null);
   const manualRef = useRef(false);
   const voice = useVoiceInput();
 
-  const isMd = inputMode === "markdown";
   const isManual = panelHeight !== null;
 
   // Keep manualRef in sync so callbacks don't need panelHeight in deps
@@ -93,7 +91,7 @@ export function InputArea({ disabled, placeholder, onSend, isRunning, onInterrup
   const handleSend = useCallback(() => {
     const trimmed = text.trim();
     if (!trimmed || disabled) return;
-    onSend(trimmed, isMd ? true : undefined);
+    onSend(trimmed, true);
     setText("");
     closeSuggestions();
     setPreviewActive(false);
@@ -107,18 +105,7 @@ export function InputArea({ disabled, placeholder, onSend, isRunning, onInterrup
       }
     }, 0);
     ref.current?.focus();
-  }, [text, disabled, onSend, isMd, closeSuggestions]);
-
-  const toggleMode = useCallback(() => {
-    setInputMode((m) => {
-      if (m === "markdown") {
-        setPreviewActive(false);
-        return "text";
-      }
-      return "markdown";
-    });
-    ref.current?.focus();
-  }, []);
+  }, [text, disabled, onSend, closeSuggestions]);
 
   // -- Drag handle for panel resize --
   const handleDragStart = useCallback((e: React.MouseEvent) => {
@@ -157,6 +144,29 @@ export function InputArea({ disabled, placeholder, onSend, isRunning, onInterrup
     }, 0);
   }, []);
 
+  // -- Horizontal split-pane drag handler --
+  const handleSplitDragStart = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    const startX = e.clientX;
+    const paneWidth = splitPaneRef.current?.offsetWidth ?? 400;
+    const startRatio = splitRatio;
+
+    const onMove = (ev: MouseEvent) => {
+      const newRatio = startRatio + (ev.clientX - startX) / paneWidth;
+      setSplitRatio(Math.max(0.2, Math.min(0.8, newRatio)));
+    };
+    const onUp = () => {
+      document.removeEventListener("mousemove", onMove);
+      document.removeEventListener("mouseup", onUp);
+      document.body.style.cursor = "";
+      document.body.style.userSelect = "";
+    };
+    document.body.style.cursor = "col-resize";
+    document.body.style.userSelect = "none";
+    document.addEventListener("mousemove", onMove);
+    document.addEventListener("mouseup", onUp);
+  }, [splitRatio]);
+
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
       const mod = isMod(e);
@@ -168,13 +178,8 @@ export function InputArea({ disabled, placeholder, onSend, isRunning, onInterrup
         return;
       }
 
-      // Markdown shortcuts (only in md mode)
-      if (isMd && mod) {
-        if (e.shiftKey && e.key.toLowerCase() === "m") {
-          e.preventDefault();
-          toggleMode();
-          return;
-        }
+      // Markdown format shortcuts (always active)
+      if (mod) {
         if (e.key.toLowerCase() === "b") {
           e.preventDefault();
           insertFormat("**", "**");
@@ -190,13 +195,6 @@ export function InputArea({ disabled, placeholder, onSend, isRunning, onInterrup
           insertFormat("[", "](url)");
           return;
         }
-      }
-
-      // Cmd/Ctrl+Shift+M toggles mode (also works from text mode)
-      if (!isMd && mod && e.shiftKey && e.key.toLowerCase() === "m") {
-        e.preventDefault();
-        toggleMode();
-        return;
       }
 
       // Mod+R toggles history popup
@@ -230,7 +228,7 @@ export function InputArea({ disabled, placeholder, onSend, isRunning, onInterrup
         closeSuggestions();
       }
     },
-    [handleSend, suggestions, selectedIndex, insertSkill, closeSuggestions, showHistory, isMd, insertFormat, toggleMode],
+    [handleSend, suggestions, selectedIndex, insertSkill, closeSuggestions, showHistory, insertFormat],
   );
 
   const handleChange = useCallback(
@@ -370,63 +368,37 @@ export function InputArea({ disabled, placeholder, onSend, isRunning, onInterrup
           ))}
         </div>
       )}
-      <button
-        className={`input-mode-btn${isMd ? " input-mode-btn--active" : ""}`}
-        onClick={toggleMode}
-        title={`Toggle markdown mode (${MOD_LABEL}+Shift+M)`}
-      >
-        Md
-      </button>
       <div className={`input-editor-wrapper${isManual ? " input-editor-wrapper--fill" : ""}`}>
-        {isMd && (
-          <div className="input-md-toolbar">
+        <div className="input-md-toolbar">
+          <button
+            className={`input-md-tab${previewActive ? " input-md-tab--active" : ""}`}
+            onClick={() => {
+              setPreviewActive((v) => !v);
+              if (previewActive) setTimeout(() => ref.current?.focus(), 0);
+            }}
+          >
+            Preview
+          </button>
+          <span className="input-md-sep" />
+          {FORMAT_ACTIONS.map((action) => (
             <button
-              className={`input-md-tab${!previewActive ? " input-md-tab--active" : ""}`}
-              onClick={() => {
-                setPreviewActive(false);
-                setTimeout(() => ref.current?.focus(), 0);
+              key={action.label}
+              className="input-md-fmt"
+              title={action.title}
+              onMouseDown={(e) => {
+                e.preventDefault();
+                insertFormat(action.prefix, action.suffix);
               }}
             >
-              Write
+              {action.label}
             </button>
-            <button
-              className={`input-md-tab${previewActive ? " input-md-tab--active" : ""}`}
-              onClick={() => setPreviewActive(true)}
-            >
-              Preview
-            </button>
-            <span className="input-md-sep" />
-            {FORMAT_ACTIONS.map((action) => (
-              <button
-                key={action.label}
-                className="input-md-fmt"
-                title={action.title}
-                onMouseDown={(e) => {
-                  e.preventDefault();
-                  insertFormat(action.prefix, action.suffix);
-                }}
-              >
-                {action.label}
-              </button>
-            ))}
-          </div>
-        )}
-        {isMd && previewActive ? (
-          <div
-            className={`input-preview${isManual ? " input-preview--fill" : ""}`}
-            tabIndex={0}
-            onKeyDown={handlePreviewKeyDown}
-          >
-            {text.trim() ? (
-              <ChatMarkdown content={text} />
-            ) : (
-              <span className="input-preview-empty">Nothing to preview</span>
-            )}
-          </div>
-        ) : (
+          ))}
+        </div>
+        <div className="input-split-pane" ref={splitPaneRef}>
           <textarea
             ref={ref}
-            className={`input-textarea${isMd ? " input-textarea--md" : ""}${isManual ? " input-textarea--fill" : ""}`}
+            className={`input-textarea input-textarea--md${isManual ? " input-textarea--fill" : ""}${previewActive ? " input-textarea--split" : ""}`}
+            style={previewActive ? { flex: splitRatio } : undefined}
             value={text}
             onChange={(e) => {
               handleChange(e.target.value);
@@ -437,7 +409,24 @@ export function InputArea({ disabled, placeholder, onSend, isRunning, onInterrup
             disabled={disabled || voice.isTranscribing}
             rows={1}
           />
-        )}
+          {previewActive && (
+            <>
+              <div className="input-split-divider" onMouseDown={handleSplitDragStart} />
+              <div
+                className={`input-preview${isManual ? " input-preview--fill" : ""}`}
+                style={{ flex: 1 - splitRatio }}
+                tabIndex={0}
+                onKeyDown={handlePreviewKeyDown}
+              >
+                {text.trim() ? (
+                  <ChatMarkdown content={text} />
+                ) : (
+                  <span className="input-preview-empty">Nothing to preview</span>
+                )}
+              </div>
+            </>
+          )}
+        </div>
       </div>
       <button
         className="input-history-btn"

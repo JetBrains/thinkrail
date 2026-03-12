@@ -1,10 +1,12 @@
 # Task: Dual-Mode Message Input
 
-> Status: **Done** | Created: 2026-03-11
+> Status: **Done (Superseded)** | Created: 2026-03-11 | Superseded: 2026-03-12
 
 ## Summary
 
 Implement dual-mode (text + markdown) message input with formatting toolbar, Write/Preview tabs, live preview, drag-to-resize panel, and markdown rendering in chat bubbles.
+
+> **Note:** The dual-mode (text/markdown toggle) approach was superseded by always-markdown with split-pane preview. See [feature_split_pane_preview.md](./feature_split_pane_preview.md).
 
 ## Covers
 

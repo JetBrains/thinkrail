@@ -709,7 +709,6 @@
 .input-area--manual {
   align-items: stretch;
 }
-.input-area--manual .input-mode-btn,
 .input-area--manual .input-history-btn,
 .input-area--manual .input-mic,
 .input-area--manual .input-actions {
@@ -812,27 +811,6 @@
   border-color: var(--border2);
 }
 
-/* ── Markdown Mode Toggle ── */
-.input-mode-btn {
-  padding: var(--space-xs) var(--space-sm);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  background: transparent;
-  color: var(--muted);
-  font-family: var(--font);
-  font-size: 11px;
-  font-weight: 600;
-  cursor: pointer;
-  flex-shrink: 0;
-  line-height: 1;
-}
-.input-mode-btn:hover { background: var(--hover); color: var(--text); }
-.input-mode-btn--active {
-  color: var(--cyan);
-  border-color: var(--cyan);
-  background: rgba(125, 207, 255, 0.08);
-}
-
 /* ── Markdown Editor Wrapper ── */
 .input-editor-wrapper {
   display: flex;
@@ -886,12 +864,14 @@
 }
 .input-md-fmt:hover { background: var(--hover); color: var(--text); }
 
-/* ── Markdown Preview Pane ── */
+/* ── Markdown Preview Pane (split-pane right side) ── */
 .input-preview {
   flex: 1;
   resize: none;
   border: 1px solid var(--border);
-  border-radius: 0 0 var(--radius-sm) var(--radius-sm);
+  border-radius: 0 0 var(--radius-sm) 0;
+  border-left: none;
+  border-top: none;
   background: var(--elevated);
   color: var(--text);
   font-family: var(--font);
@@ -911,10 +891,34 @@
   min-height: 0;
 }
 
+/* ── Split pane container ── */
+.input-split-pane {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+}
+
+/* ── Horizontal drag divider ── */
+.input-split-divider {
+  width: 5px;
+  cursor: col-resize;
+  background: var(--border);
+  flex-shrink: 0;
+  transition: background var(--transition-fast);
+}
+.input-split-divider:hover,
+.input-split-divider:active {
+  background: var(--cyan);
+}
+
 /* ── Textarea in markdown mode ── */
 .input-textarea--md {
   border-radius: 0 0 var(--radius-sm) var(--radius-sm);
   border-top: none;
+}
+.input-textarea--split {
+  border-radius: 0 0 0 var(--radius-sm);
 }
 
 /* ── Editor wrapper in manual resize mode ── */

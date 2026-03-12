@@ -650,13 +650,22 @@ Root: `<div className="session-status-line">` — flex row, 11px, `color: var(--
 interface InputAreaProps {
   disabled: boolean;
   placeholder: string;
-  onSend: (text: string) => void;
+  onSend: (text: string, isMarkdown?: boolean) => void;
+  isRunning?: boolean;
+  onInterrupt?: () => void;
   showContinue?: boolean;
   onContinue?: () => void;
+  showStartSession?: boolean;
+  onStartSession?: () => void;
+  skillId?: string | null;
 }
 ```
 
 Root: `<div className="input-area">` with `style={{ position: "relative" }}`
+
+See [Markdown Input Design](../../features/DUAL_MODE_INPUT_DESIGN.md) for full architecture.
+
+**Always-markdown input** — no text/markdown mode toggle. All messages are sent as markdown (`onSend(trimmed, true)`). The toolbar is always visible.
 
 **Skill autocomplete:**
 - Triggered when text starts with `/`
@@ -668,12 +677,27 @@ Root: `<div className="input-area">` with `style={{ position: "relative" }}`
 - On select: inserts `/{id} ` into textarea and focuses
 - `onMouseDown` (not `onClick`) used on items to prevent textarea blur
 
-**Textarea** (`.input-textarea`):
-- `rows={1}`, auto-height up to `max-height: 150px`
+**Markdown toolbar** (`.input-md-toolbar`, always visible):
+- Preview toggle button (`.input-md-tab`): toggles side-by-side split-pane preview. Highlighted (`.input-md-tab--active`) when active.
+- Separator (`.input-md-sep`)
+- 10 format buttons (`.input-md-fmt`): B, I, `</>`, 🔗, H, •, 1., ❝, —, ` ``` `
+
+**Textarea** (`.input-textarea.input-textarea--md`):
+- Always visible (never replaced by preview)
+- `rows={1}`, auto-height in auto mode
 - `resize: none`, `border: 1px solid var(--border)`, `background: var(--elevated)`
 - Focus: `border-color: var(--blue)`
 - Disabled: `opacity: 0.5; cursor: not-allowed`
 - `Mod+Enter` sends; plain `Enter` adds a newline
+- `Mod+B/I/K` insert bold/italic/link markers (always active)
+- Gets `.input-textarea--split` class when preview visible (bottom-left-only radius)
+
+**Split-pane preview** (`.input-split-pane`, when `previewActive`):
+- Textarea and preview appear side by side in a flex container
+- Draggable divider (`.input-split-divider`, 5px wide, `cursor: col-resize`)
+- Preview pane (`.input-preview`): renders `ChatMarkdown` or "Nothing to preview" placeholder
+- Split ratio controlled by `splitRatio` state (default 0.5, clamped 0.2–0.8)
+- `Mod+Enter` sends from preview pane via `handlePreviewKeyDown`
 
 **Mic button** (`.input-mic`, conditional on `voice.isSupported`):
 - Emoji: 🎙 (replaced by `.input-mic-spinner` when transcribing)
