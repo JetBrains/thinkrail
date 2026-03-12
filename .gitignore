@@ -9,6 +9,7 @@ __pycache__/
 .venv/
 *.egg-info/
 dist/
+.pytest_cache/
 
 # Node
 node_modules/
@@ -30,3 +31,13 @@ Thumbs.db
 .specs/dashboard.html
 .specs/dashboard.json
 .specs/vendor/
+
+# TypeScript build
+*.tsbuildinfo
+
+# Environment / secrets
+.env
+.env.*
+
+# Logs
+*.log
