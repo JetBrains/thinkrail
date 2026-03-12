@@ -78,7 +78,24 @@
         "agent-orchestration"
       ],
       "created": "2026-02-25",
-      "updated": "2026-03-08"
+      "updated": "2026-03-11"
+    },
+    {
+      "id": "agent-tools",
+      "type": "module-design",
+      "path": "backend/app/agent/tools/README.md",
+      "title": "Agent Tools Package",
+      "status": "active",
+      "covers": [
+        "backend/app/agent/tools/"
+      ],
+      "tags": [
+        "backend",
+        "agent-orchestration",
+        "mcp-tools"
+      ],
+      "created": "2026-03-11",
+      "updated": "2026-03-11"
     },
     {
       "id": "agent-context",
@@ -1531,7 +1548,7 @@
       "title": "SuggestSession \u2014 Backend Spec",
       "status": "draft",
       "covers": [
-        "backend/app/agent/runner.py"
+        "backend/app/agent/tools/suggest_session.py"
       ],
       "tags": [
         "backend",
@@ -1539,7 +1556,7 @@
         "interactive"
       ],
       "created": "2026-03-07",
-      "updated": "2026-03-07"
+      "updated": "2026-03-11"
     },
     {
       "id": "agent-progress",
@@ -1548,7 +1565,7 @@
       "title": "UpdateProgress \u2014 Backend Spec",
       "status": "draft",
       "covers": [
-        "backend/app/agent/runner.py"
+        "backend/app/agent/tools/progress.py"
       ],
       "tags": [
         "backend",
@@ -1556,7 +1573,7 @@
         "passive"
       ],
       "created": "2026-03-07",
-      "updated": "2026-03-07"
+      "updated": "2026-03-11"
     },
     {
       "id": "feature-suggest-session",
@@ -2008,8 +2025,18 @@
   ],
   "links": [
     {
+      "from": "agent-tools",
+      "to": "module-agent",
+      "type": "parent"
+    },
+    {
       "from": "agent-suggest-session",
       "to": "module-agent",
+      "type": "parent"
+    },
+    {
+      "from": "agent-suggest-session",
+      "to": "agent-tools",
       "type": "parent"
     },
     {
@@ -2020,6 +2047,11 @@
     {
       "from": "agent-progress",
       "to": "module-agent",
+      "type": "parent"
+    },
+    {
+      "from": "agent-progress",
+      "to": "agent-tools",
       "type": "parent"
     },
     {

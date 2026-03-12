@@ -200,7 +200,7 @@ sequenceDiagram
 
 ## Internal Architecture
 
-**Pattern:** Service facade over three collaborators — `context.py` (prompt assembly), `runner.py` (SDK integration), and `tracker.py` (session lifecycle + pending request state).
+**Pattern:** Service facade over collaborators — `context.py` (prompt assembly), `runner.py` (SDK loop), `tracker.py` (session state), `permissions.py` (tool routing), and `tools/` (self-contained MCP tools).
 
 ```mermaid
 ---
@@ -210,8 +210,15 @@ graph TD
     subgraph AgentModule["Agent Module"]
         Service["service.py<br/><i>Facade — single entry point</i>"]
         Context["context.py<br/><i>Context assembly pipeline</i>"]
-        Runner["runner.py<br/><i>SDK integration + conversation loop</i>"]
+        Runner["runner.py<br/><i>SDK lifecycle + conversation loop</i>"]
+        Permissions["permissions.py<br/><i>Tool permission routing</i>"]
         Tracker["tracker.py<br/><i>State management + message queue</i>"]
+        subgraph Tools["tools/ package"]
+            ToolsInit["__init__.py<br/><i>MCP_SERVERS + INTERCEPTORS</i>"]
+            Viz["visualization.py"]
+            Suggest["suggest_session.py"]
+            Progress["progress.py<br/><i>(future)</i>"]
+        end
     end
 
     SDK["Claude Agent SDK<br/>(event stream)"]
@@ -224,6 +231,9 @@ graph TD
     Service --> Runner
     Service --> Tracker
     Context --> PluginFS
+    Runner --> Permissions
+    Runner --> ToolsInit
+    Permissions --> ToolsInit
     Runner --> SDK --> AI
     Tracker --> Futures
     Tracker --> Queue
@@ -234,13 +244,14 @@ graph TD
 | File | Responsibility | Depends On |
 |------|---------------|------------|
 | `models.py` | Pydantic models: AgentTask, AgentConfig, AgentEvent, AgentResult, Question, QuestionOption, AskUserQuestionResponse, ToolApprovalResponse | — |
-| `context.py` | Context assembly pipeline: loads skill instructions, project metadata, and spec content; composes system prompt. See [CONTEXT.md](CONTEXT.md). | models, visualization, spec/service |
+| `context.py` | Context assembly pipeline: loads skill instructions, project metadata, and spec content; composes system prompt. See [CONTEXT.md](CONTEXT.md). | models, tools/visualization, spec/service |
 | `service.py` | Facade — start sessions, send messages, interrupt turns, end sessions, continue sessions (native resume), relay responses to pending futures | context, runner, tracker, core/config, spec/service |
-| `visualization.py` | Bonsai visualization MCP tool: JSON schema (`VIZ_SCHEMA`), async handler, MCP server instance (`viz_mcp_server`), and system prompt instructions (`VIZ_INSTRUCTIONS`). Consumed by `runner.py` (wiring) and `context.py` (prompt assembly). | claude-agent-sdk |
+| `permissions.py` | Tool permission routing. Thin `can_use_tool()` callback that routes to tool-specific `intercept()` functions via `tools.INTERCEPTORS` registry, plus built-in handling for AskUserQuestion and default tool approval. | tools, tracker, models |
 | `transcribe.py` | Audio transcription via OpenAI Whisper API. `transcribe(audio_base64, mime_type) -> str`. Lazy-imports `openai`; optional dependency for browsers without Web Speech API. See [TRANSCRIBE.md](TRANSCRIBE.md). | openai (optional) |
-| `runner.py` | Claude Agent SDK integration: manage SDK client lifecycle, conversation loop (wait for message -> query -> stream events -> repeat), map SDK events to notifications, register `canUseTool` / hooks, wire local plugin into SDK. Accepts optional `resume_session_id` to pass to `ClaudeAgentOptions.resume`. | models, tracker, visualization |
+| `runner.py` | Claude Agent SDK integration: manage SDK client lifecycle, conversation loop (wait for message → query → stream events → repeat), map SDK events to notifications, wire MCP servers and hooks into SDK. Accepts optional `resume_session_id` to pass to `ClaudeAgentOptions.resume`. No tool-specific logic — delegates to `permissions.py` and `tools/`. | models, tracker, permissions, tools |
 | `tracker.py` | Session lifecycle (pending/idle/running/done/error), message queue per session (`asyncio.Queue`), registry of in-flight `asyncio.Future` objects keyed by `requestId`, **interrupt flag** per session for notification routing | models |
 | `persistence.py` | Session persistence — split storage: metadata in `.json`, events in append-only `.events.jsonl`. Save/load/list/append/delete. See [PERSISTENCE.md](PERSISTENCE.md). | core/fileio |
+| `tools/` | Self-contained MCP tools package. Each tool is one file: schema + handler + MCP server + `intercept()`. Exports `MCP_SERVERS` and `INTERCEPTORS` registries. See [tools/README.md](tools/README.md). | claude-agent-sdk, tracker, models |
 
 ## Public Interface
 
@@ -526,6 +537,6 @@ await runner.run(
 ## Related Specs
 
 - **Parent:** [Architecture Design](../../../DESIGN_DOC.md)
-- **Submodules:** [Context Assembly](CONTEXT.md) — prompt construction pipeline, [Session Persistence](PERSISTENCE.md) — disk I/O for session data, [SuggestSession](tools/SUGGEST_SESSION.md) — proactive session suggestions, [UpdateProgress](tools/PROGRESS.md) — proactive progress updates
+- **Submodules:** [Tools Package](tools/README.md) — self-contained MCP tools (viz, SuggestSession, UpdateProgress), [Context Assembly](CONTEXT.md) — prompt construction pipeline, [Session Persistence](PERSISTENCE.md) — disk I/O for session data
 - **Depends on:** [Spec Module](../spec/README.md) (for loading spec context), [Core Config](../core/README.md) (for project root and plugin dir)
 - **Related modules:** `rpc/methods/agents.py` (JSON-RPC interface to this module), `rpc/notifications.py` (WebSocket push)
