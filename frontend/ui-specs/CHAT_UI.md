@@ -1,6 +1,6 @@
 # Chat UI Rendering — Sub-Specification
 
-> Parent: [CENTER_PANEL.md](CENTER_PANEL.md) | Status: **Active** | Created: 2026-02-27 | Updated: 2026-03-05
+> Parent: [CENTER_PANEL.md](CENTER_PANEL.md) | Status: **Active** | Created: 2026-02-27 | Updated: 2026-03-12
 
 ## Overview
 
@@ -86,7 +86,7 @@ interface ChatStreamProps {
 | `textDelta` | `<AssistantMessage text={text} streaming={streaming}>` |
 | `toolCallStart` | `<ToolCallCard>` (state derived from paired `toolCallEnd`) — **or `<DiffCard>`** for Edit/Write/NotebookEdit |
 | `toolCallEnd` | `null` (data consumed by `toolCallStart` pre-pass) |
-| `subagentStart` | `<SubagentBlock>` (finished derived from pre-pass; children=`null`) |
+| `subagentStart` | `<SubagentBlock>` (finished + childEvents from pre-pass; expand/collapse with summary) |
 | `subagentEnd` | `null` |
 | `askUserQuestion` | `<QuestionCard>` |
 | `suggestSession` | `<SuggestionCard>` |
@@ -103,7 +103,8 @@ interface ChatStreamProps {
 
 **Pre-pass computations** (done before rendering):
 1. `toolStates` Map: iterates all events to collect `toolCallEnd` payloads keyed by `toolUseId`
-2. `activeSubagents` Set: iterates all events, adds on `subagentStart`, deletes on `subagentEnd`
+2. `activeSubagents` Set: iterates all events, adds on `subagentStart`, deletes on `subagentEnd`, **clears on `interrupted` or `turnComplete`** (turn-end events implicitly close all open subagents because the SDK's `SubagentStop` hook isn't guaranteed to fire on interrupt)
+3. `subagentChildren` Map + `childIndices` Set: stack-based grouping of child events under their parent `subagentStart`. The stack is **cleared on `interrupted` or `turnComplete`** — no events after a turn-end can belong to a prior subagent. Events of type `bonsai_visualize`, `askUserQuestion`, and `confirmAction` are hoisted to top-level (not grouped under the subagent) so they remain visible when the SubagentBlock is collapsed
 
 ---
 
@@ -321,17 +322,21 @@ Uses the `intellij-darcula` custom theme (shared with `FileViewer`).
 interface SubagentBlockProps {
   agentType?: string;
   finished: boolean;
-  children: ReactNode;
+  childEvents: AgentEvent[];
+  toolStates: Map<string, ToolState>;
 }
 ```
 
 - Root: `<div className="chat-subagent">` — `margin-left: 12px`, `padding-left: 12px`, `border-left: 2px solid var(--border2)`
-- Header (`.chat-subagent-header`): `color: var(--muted)`, 12px
+- Header (`.chat-subagent-header`): clickable toggle, `color: var(--muted)`, 12px
+  - Toggle: `▼` expanded, `▶` collapsed
   - Icon: `✓` when `finished`, `⚡` when running
   - Text: `Subagent: {agentType ?? "agent"}`
   - When not finished: `<span className="chat-spinner" />` (10px CSS spinner, `border-top-color: var(--blue)`)
-- Body (`.chat-subagent-body`): renders `{children}`
-- In practice, `children` is always `null` as called from `ChatStream`. Child tool call nesting **is not implemented**. **[Planned]**
+  - When collapsed: summary line (e.g. "8 tool calls (3 Read, 2 Edit, 2 Bash, 1 Grep)")
+- Body (`.chat-subagent-body`): renders `childEvents` — `toolCallStart` as `ToolCallCard`/`DiffCard` (compact), `textDelta` as `ChatMarkdown`
+- Auto-collapses when `finished` transitions from `false` → `true` (via useEffect)
+- **Interrupt safety**: `finished` is derived from the `activeSubagents` pre-pass which clears on `interrupted`/`turnComplete`, so interrupted subagents are correctly shown as finished
 
 ---
 
@@ -1132,7 +1137,7 @@ RPC server
 |---|---|
 | Author labels ("Claude", "You") above bubbles | Not rendered |
 | Message concatenation (multiple textDelta → one bubble) | Each textDelta renders its own AssistantMessage |
-| `parentToolUseId` nesting (tool calls inside SubagentBlock) | SubagentBlock children are always null |
+| `parentToolUseId` precise nesting | Stack-based grouping implemented; `parentToolUseId`-based disambiguation for concurrent subagents not yet available |
 | "Skip" / "Other" button in QuestionCard | Only "Send" is implemented |
 | Context tokens update from agent events | `contextTokens`/`contextMax` not updated |
 | `filesChanged` tracking in metrics | Always `{}` |

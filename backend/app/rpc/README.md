@@ -89,13 +89,13 @@ Both sides can send either. The server can initiate requests to the client (e.g.
 | `agent/textDelta` | `{ bonsaiSid, sessionId, text, streaming }` | Text output (streaming or full block) |
 | `agent/toolCallStart` | `{ bonsaiSid, sessionId, toolUseId, toolName, toolInput, parentToolUseId? }` | Agent started a tool call |
 | `agent/toolCallEnd` | `{ bonsaiSid, sessionId, toolUseId, toolName, output, isError }` | Tool call completed with result |
-| `agent/subagentStart` | `{ bonsaiSid, sessionId, agentId, agentType, parentToolUseId }` | Subagent spawned |
+| `agent/subagentStart` | `{ bonsaiSid, sessionId, agentId, agentType }` | Subagent spawned |
 | `agent/subagentEnd` | `{ bonsaiSid, sessionId, agentId }` | Subagent finished |
 | `agent/notification` | `{ bonsaiSid, sessionId, message, title? }` | General agent notification |
 | `agent/compact` | `{ bonsaiSid, sessionId, trigger, preTokens }` | Context window compacted |
 | `agent/progress` | `{ bonsaiSid, sessionId, status, message }` | Task progress update |
 | `agent/turnComplete` | `{ bonsaiSid, sessionId, result, costUsd, turns, durationMs, usage }` | Turn finished; session is `idle`, ready for next `agent/send` |
-| `agent/interrupted` | `{ bonsaiSid, sessionId }` | Current turn was cancelled via `agent/interrupt`; session is `idle` |
+| `agent/interrupted` | `{ bonsaiSid, sessionId }` | Current turn was cancelled via `agent/interrupt`; session is `idle`. Preceded by synthetic `agent/subagentEnd` for any subagents still open when the interrupt fired. |
 | `agent/done` | `{ bonsaiSid, sessionId, result, costUsd, turns, durationMs, usage }` | Session closed (via `agent/end` or terminal condition) |
 | `agent/error` | `{ bonsaiSid, sessionId, subtype, errors[], result, costUsd, turns, durationMs, usage }` | Session ended due to error |
 | `agent/permissionDenied` | `{ bonsaiSid, sessionId, toolName, toolInput }` | Tool blocked by permission policy |

@@ -1,6 +1,6 @@
 # Agent Module — Design Specification
 
-> Parent: [DESIGN_DOC.md](../../../DESIGN_DOC.md) | Status: **Active** | Created: 2026-02-25 | Updated: 2026-03-08
+> Parent: [DESIGN_DOC.md](../../../DESIGN_DOC.md) | Status: **Active** | Created: 2026-02-25 | Updated: 2026-03-12
 
 ## Table of Contents
 1. [Purpose](#purpose)
@@ -342,8 +342,8 @@ These map 1-to-1 to the `agent/*` notification methods in the protocol:
 | `tool_call_end` | `SDKUserMessage` tool_result block | `agent/toolCallEnd` | Implemented |
 | `turn_complete` | `SDKResultMessage` (non-terminal, session stays open) | `agent/turnComplete` | Implemented |
 | `interrupted` | `agent/interrupt` cancels current turn | `agent/interrupted` | Implemented |
-| `subagent_start` | `SubagentStart` hook | `agent/subagentStart` | TODO |
-| `subagent_end` | `SubagentStop` hook | `agent/subagentEnd` | TODO |
+| `subagent_start` | `SubagentStart` hook | `agent/subagentStart` | Implemented |
+| `subagent_end` | `SubagentStop` hook — also emitted synthetically for orphaned subagents before `agent/interrupted` | `agent/subagentEnd` | Implemented |
 | `notification` | `Notification` hook | `agent/notification` | TODO |
 | `compact` | `SDKCompactBoundaryMessage` | `agent/compact` | TODO |
 | `progress` | Internal milestones | `agent/progress` | TODO |

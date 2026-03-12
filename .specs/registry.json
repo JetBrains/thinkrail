@@ -78,7 +78,7 @@
         "agent-orchestration"
       ],
       "created": "2026-02-25",
-      "updated": "2026-03-11"
+      "updated": "2026-03-12"
     },
     {
       "id": "agent-tools",
@@ -147,7 +147,7 @@
         "transport"
       ],
       "created": "2026-02-26",
-      "updated": "2026-03-08"
+      "updated": "2026-03-12"
     },
     {
       "id": "module-viz",
@@ -233,7 +233,7 @@
         "rendering"
       ],
       "created": "2026-02-27",
-      "updated": "2026-03-08"
+      "updated": "2026-03-12"
     },
     {
       "id": "graph-interactions",
@@ -2021,6 +2021,22 @@
       ],
       "created": "2026-03-10",
       "updated": "2026-03-11"
+    },
+    {
+      "id": "improvement-plan-approval-card",
+      "type": "task-spec",
+      "path": "current_tasks/frontend/improvement_plan_approval_card.md",
+      "title": "Improve ExitPlanMode display: PlanApprovalCard",
+      "status": "done",
+      "covers": [
+        "frontend/src/components/ChatStream/PlanApprovalCard.tsx"
+      ],
+      "tags": [
+        "medium",
+        "improvement"
+      ],
+      "created": "2026-03-12",
+      "updated": "2026-03-12"
     }
   ],
   "links": [
@@ -3168,6 +3184,21 @@
       "from": "concurrency-orchestration",
       "to": "proactive-agent-design",
       "type": "references"
+    },
+    {
+      "from": "improvement-plan-approval-card",
+      "to": "chat-ui",
+      "type": "implements"
+    },
+    {
+      "from": "improvement-plan-approval-card",
+      "to": "module-agent",
+      "type": "implements"
+    },
+    {
+      "from": "improvement-plan-approval-card",
+      "to": "task-fe-chat-ui",
+      "type": "depends-on"
     }
   ]
 }
