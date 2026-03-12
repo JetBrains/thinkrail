@@ -510,6 +510,13 @@
 }
 
 /* Action buttons */
+.chat-plan-approval-empty {
+  font-size: 12px;
+  font-style: italic;
+  color: var(--hint);
+  padding: var(--space-sm) 0;
+}
+
 .chat-plan-approval-actions {
   display: flex;
   gap: var(--space-sm);

@@ -69,9 +69,13 @@ export function PlanApprovalCard({
 
         {expanded && (
           <div className="chat-plan-approval-expanded">
-            {planContent && (
+            {planContent ? (
               <div className="chat-plan-approval-body">
                 <ChatMarkdown content={planContent} />
+              </div>
+            ) : (
+              <div className="chat-plan-approval-empty">
+                Plan written to file
               </div>
             )}
             {hasPrompts && (
@@ -94,9 +98,13 @@ export function PlanApprovalCard({
     <div className="chat-plan-approval">
       <div className="chat-plan-approval-header">Plan Ready for Review</div>
 
-      {planContent && (
+      {planContent ? (
         <div className="chat-plan-approval-body">
           <ChatMarkdown content={planContent} />
+        </div>
+      ) : (
+        <div className="chat-plan-approval-empty">
+          Plan written to file — approve to continue
         </div>
       )}
 

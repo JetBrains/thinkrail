@@ -2037,6 +2037,24 @@
       ],
       "created": "2026-03-12",
       "updated": "2026-03-12"
+    },
+    {
+      "id": "bugfix-plan-approval-content",
+      "type": "task-spec",
+      "path": "current_tasks/frontend/bugfix_plan_approval_content.md",
+      "title": "Fix PlanApprovalCard: shows random assistant text instead of actual plan",
+      "status": "done",
+      "covers": [
+        "backend/app/agent/permissions.py",
+        "frontend/src/components/ChatStream/ChatStream.tsx",
+        "frontend/ui-specs/CHAT_UI.md"
+      ],
+      "tags": [
+        "high",
+        "bug-fix"
+      ],
+      "created": "2026-03-12",
+      "updated": "2026-03-12"
     }
   ],
   "links": [
@@ -3198,6 +3216,21 @@
     {
       "from": "improvement-plan-approval-card",
       "to": "task-fe-chat-ui",
+      "type": "depends-on"
+    },
+    {
+      "from": "bugfix-plan-approval-content",
+      "to": "chat-ui",
+      "type": "implements"
+    },
+    {
+      "from": "bugfix-plan-approval-content",
+      "to": "module-agent",
+      "type": "implements"
+    },
+    {
+      "from": "bugfix-plan-approval-content",
+      "to": "improvement-plan-approval-card",
       "type": "depends-on"
     }
   ]

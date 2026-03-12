@@ -47,6 +47,14 @@ export function InputArea({ sessionId, disabled, placeholder, onSend, isRunning,
   const splitPaneRef = useRef<HTMLDivElement>(null);
   const manualRef = useRef(false);
   const voice = useVoiceInput();
+  const sessionIdRef = useRef(sessionId);
+  useEffect(() => { sessionIdRef.current = sessionId; }, [sessionId]);
+
+  /** Set local text state AND sync the draft store in one call. */
+  const setTextAndDraft = useCallback((value: string) => {
+    setText(value);
+    useInputDraftStore.getState().setDraft(sessionIdRef.current, value);
+  }, []);
 
   const isManual = panelHeight !== null;
 
@@ -72,11 +80,11 @@ export function InputArea({ sessionId, disabled, placeholder, onSend, isRunning,
 
   const insertSkill = useCallback(
     (id: string) => {
-      setText(`/${id} `);
+      setTextAndDraft(`/${id} `);
       closeSuggestions();
       ref.current?.focus();
     },
-    [closeSuggestions],
+    [closeSuggestions, setTextAndDraft],
   );
 
   const insertFormat = useCallback((prefix: string, suffix: string) => {
@@ -87,13 +95,13 @@ export function InputArea({ sessionId, disabled, placeholder, onSend, isRunning,
     const selected = text.substring(start, end);
     const replacement = prefix + (selected || "text") + suffix;
     const newText = text.substring(0, start) + replacement + text.substring(end);
-    setText(newText);
+    setTextAndDraft(newText);
     const cursorPos = start + prefix.length + (selected || "text").length;
     setTimeout(() => {
       el.focus();
       el.setSelectionRange(cursorPos, cursorPos);
     }, 0);
-  }, [text]);
+  }, [text, setTextAndDraft]);
 
   const handleSend = useCallback(() => {
     const trimmed = text.trim();
@@ -241,8 +249,7 @@ export function InputArea({ sessionId, disabled, placeholder, onSend, isRunning,
 
   const handleChange = useCallback(
     (value: string) => {
-      setText(value);
-      useInputDraftStore.getState().setDraft(sessionId, value);
+      setTextAndDraft(value);
       if (value.startsWith("/")) {
         const query = value.slice(1).toLowerCase();
         const filtered = SKILLS.filter((s) => s.id.includes(query));
@@ -253,12 +260,12 @@ export function InputArea({ sessionId, disabled, placeholder, onSend, isRunning,
         closeSuggestions();
       }
     },
-    [closeSuggestions],
+    [closeSuggestions, setTextAndDraft],
   );
 
   const handleHistorySelect = useCallback(
     (msg: string) => {
-      setText(msg);
+      setTextAndDraft(msg);
       setShowHistory(false);
       setTimeout(() => {
         const el = ref.current;
@@ -271,7 +278,7 @@ export function InputArea({ sessionId, disabled, placeholder, onSend, isRunning,
         }
       }, 0);
     },
-    [],
+    [setTextAndDraft],
   );
 
   const handleHistoryClose = useCallback(() => {
@@ -301,7 +308,7 @@ export function InputArea({ sessionId, disabled, placeholder, onSend, isRunning,
   // Sync interim text from Web Speech API into textarea
   useEffect(() => {
     if (voice.mode === "speech-api" && voice.isRecording && voice.interimText) {
-      setText(voice.interimText);
+      setTextAndDraft(voice.interimText);
       setTimeout(() => {
         const el = ref.current;
         if (el && !manualRef.current) {
@@ -310,13 +317,13 @@ export function InputArea({ sessionId, disabled, placeholder, onSend, isRunning,
         }
       }, 0);
     }
-  }, [voice.mode, voice.isRecording, voice.interimText]);
+  }, [voice.mode, voice.isRecording, voice.interimText, setTextAndDraft]);
 
   const handleMicClick = useCallback(async () => {
     if (voice.isRecording) {
       const transcript = await voice.stopRecording();
       if (transcript) {
-        setText(transcript);
+        setTextAndDraft(transcript);
         setTimeout(() => {
           const el = ref.current;
           if (el) {
@@ -331,7 +338,7 @@ export function InputArea({ sessionId, disabled, placeholder, onSend, isRunning,
     } else {
       voice.startRecording();
     }
-  }, [voice]);
+  }, [voice, setTextAndDraft]);
 
   // Handle Cmd/Ctrl+Enter in preview pane to send
   const handlePreviewKeyDown = useCallback(

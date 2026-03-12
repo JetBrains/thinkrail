@@ -337,12 +337,12 @@ These map 1-to-1 to the `agent/*` notification methods in the protocol:
 | event_type | Triggered by | Protocol method | Status |
 |------------|-------------|-----------------|--------|
 | `session_start` | `SDKSystemMessage` subtype `init` | `agent/sessionStart` | Implemented |
-| `text_delta` | `SDKAssistantMessage` text block / `SDKPartialAssistantMessage` text_delta | `agent/textDelta` | Partial — full blocks only; streaming partial messages TODO |
-| `tool_call_start` | `SDKAssistantMessage` tool_use block | `agent/toolCallStart` | Implemented |
-| `tool_call_end` | `SDKUserMessage` tool_result block | `agent/toolCallEnd` | Implemented |
+| `text_delta` | `SDKAssistantMessage` text block / `SDKPartialAssistantMessage` text_delta | `agent/textDelta` | Partial — full blocks only; streaming partial messages TODO. Includes `agentId` when from a subagent. |
+| `tool_call_start` | `SDKAssistantMessage` tool_use block | `agent/toolCallStart` | Implemented. Includes `agentId` when from a subagent. |
+| `tool_call_end` | `SDKUserMessage` tool_result block | `agent/toolCallEnd` | Implemented. Includes `agentId` when from a subagent. |
 | `turn_complete` | `SDKResultMessage` (non-terminal, session stays open) | `agent/turnComplete` | Implemented |
 | `interrupted` | `agent/interrupt` cancels current turn | `agent/interrupted` | Implemented |
-| `subagent_start` | `SubagentStart` hook | `agent/subagentStart` | Implemented |
+| `subagent_start` | `SubagentStart` hook | `agent/subagentStart` | Implemented. Includes `taskToolUseId` (the Task tool_use_id that spawned it) when available from the hook. Runner builds `tool_use_id → agent_id` mapping to resolve `parent_tool_use_id` on subsequent SDK messages into `agentId` on outgoing notifications. |
 | `subagent_end` | `SubagentStop` hook — also emitted synthetically for orphaned subagents before `agent/interrupted` | `agent/subagentEnd` | Implemented |
 | `notification` | `Notification` hook | `agent/notification` | TODO |
 | `compact` | `SDKCompactBoundaryMessage` | `agent/compact` | TODO |

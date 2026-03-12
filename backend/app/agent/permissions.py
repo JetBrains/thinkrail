@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from typing import Any
 from uuid import uuid4
 
@@ -10,6 +11,8 @@ from claude_agent_sdk import PermissionResultAllow, PermissionResultDeny, ToolPe
 from app.agent.models import AgentTask
 from app.agent.tools import INTERCEPTORS
 from app.agent.tracker import Tracker
+
+logger = logging.getLogger(__name__)
 
 
 async def can_use_tool(
@@ -62,20 +65,12 @@ async def can_use_tool(
         request_id = str(uuid4())
         future = tracker.register_future(task.bonsai_sid, request_id)
 
-        # Enrich ExitPlanMode with accumulated plan text so the frontend
-        # can render the plan content instead of showing raw JSON.
-        tool_input = input_data
-        if tool_name == "ExitPlanMode":
-            plan_content = tracker.get_turn_text(task.bonsai_sid)
-            if plan_content:
-                tool_input = {**input_data, "planContent": plan_content}
-
         await notify(
             "agent/confirmAction",
             {
                 "bonsaiSid": task.bonsai_sid,
                 "toolName": tool_name,
-                "toolInput": tool_input,
+                "toolInput": input_data,
             },
             request_id=request_id,
         )

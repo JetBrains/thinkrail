@@ -24,16 +24,17 @@ The backend is also updated to enrich the `agent/confirmAction` event with the p
 
 ## Plan
 
-### Backend: runner.py enrichment
+### Backend: SDK-native plan content (no enrichment needed)
 
-1. Add `_current_turn_text: list[str]` buffer inside the conversation loop scope
-2. Append each `TextBlock.text` from `AssistantMessage` events to the buffer
-3. Clear the buffer at the start of each `client.query()` call
-4. In `can_use_tool`, when `tool_name == "ExitPlanMode"`:
-   - Join `_current_turn_text` into a single string
-   - Inject `"planContent": joined_text` into a copy of `input_data`
-   - Send the enriched `toolInput` in the `agent/confirmAction` notification
-5. All other tools continue to use `input_data` as-is
+The Claude Agent SDK's `ExitPlanMode` tool call natively includes:
+- `plan` — Clean plan markdown (the actual plan content)
+- `planContent` — Accumulated turn text (noisy, not useful)
+- `allowedPrompts` — Requested permissions
+
+The backend passes `input_data` through to the frontend as-is via `agent/confirmAction` — **no enrichment or text accumulation needed**. The frontend reads `toolInput.plan` for the clean plan content.
+
+~~1. Add `_current_turn_text` buffer~~ — NOT NEEDED (SDK provides plan natively)
+~~2-5. Enrichment logic~~ — NOT NEEDED
 
 ### Frontend: PlanApprovalCard component
 
@@ -55,7 +56,7 @@ The backend is also updated to enrich the `agent/confirmAction` event with the p
 7. In `ChatStream.tsx`:
    - Import `PlanApprovalCard`
    - In the `confirmAction` case, add: `if (p.toolName === "ExitPlanMode")` → render `<PlanApprovalCard>` instead of `<ApprovalCard>`
-   - Pass `toolInput.planContent` and `toolInput.allowedPrompts` as props
+   - Pass `toolInput.plan` (SDK-native field) as `planContent` prop, and `toolInput.allowedPrompts` as props
 
 ### Frontend: SessionPanel placeholder
 
@@ -76,22 +77,24 @@ The backend is also updated to enrich the `agent/confirmAction` event with the p
 
 ## Files to modify
 
-- `backend/app/agent/runner.py` — Add `_current_turn_text` buffer, enrich ExitPlanMode in `can_use_tool`
 - `frontend/src/components/ChatStream/PlanApprovalCard.tsx` — **NEW** — dedicated plan approval component
-- `frontend/src/components/ChatStream/ChatStream.tsx` — Import PlanApprovalCard, route ExitPlanMode
+- `frontend/src/components/ChatStream/ChatStream.tsx` — Import PlanApprovalCard, route ExitPlanMode, read `toolInput.plan`
 - `frontend/src/components/ChatStream/ChatStream.css` — Add `.chat-plan-approval-*` styles
 - `frontend/src/components/ChatStream/SessionPanel.tsx` — Update placeholder text for plan approvals
+- `frontend/ui-specs/CHAT_UI.md` — Document PlanApprovalCard routing and SDK-native data source
 
 ## Definition of done
 
-- [ ] ExitPlanMode displays plan content as rendered markdown (not raw JSON)
-- [ ] `allowedPrompts` appear as compact purple tag chips
-- [ ] "Approve Plan" / "Reject Plan" buttons work and send correct `behavior` response
-- [ ] Compact answered state shows extracted plan title + approval/rejection badge
-- [ ] Backend accumulates turn text and injects `planContent` into confirmAction payload
-- [ ] Implementation matches `CHAT_UI.md` PlanApprovalCard spec exactly
+- [x] ExitPlanMode displays plan content as rendered markdown (not raw JSON)
+- [x] `allowedPrompts` appear as compact purple tag chips
+- [x] "Approve Plan" / "Reject Plan" buttons work and send correct `behavior` response
+- [x] Compact answered state shows extracted plan title + approval/rejection badge
+- [x] Backend passes SDK-native `input_data` through (no enrichment needed)
+- [x] Frontend reads `toolInput.plan` for clean plan content
+- [x] Implementation matches `CHAT_UI.md` PlanApprovalCard spec
 - [ ] Unit tests for PlanApprovalCard rendering (pending, answered-approved, answered-denied states)
 - [ ] Unit test for `extractPlanTitle()` helper
 - [ ] Manual verification: trigger ExitPlanMode in a plan-mode session and verify the full flow
 
+**Status:** Active (implementation complete, tests pending)
 **Started:** 2026-03-12

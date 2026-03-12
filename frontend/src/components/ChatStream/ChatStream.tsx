@@ -329,7 +329,7 @@ export const ChatStream = forwardRef<ChatStreamHandle, ChatStreamProps>(function
               return (
                 <PlanApprovalCard
                   key={k}
-                  planContent={(toolInput?.planContent as string) ?? undefined}
+                  planContent={(toolInput?.plan as string) ?? undefined}
                   allowedPrompts={(toolInput?.allowedPrompts as Array<{ tool: "Bash"; prompt: string }>) ?? undefined}
                   answered={isAnswered}
                   decision={isAnswered ? decision : undefined}

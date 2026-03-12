@@ -1,6 +1,6 @@
 # Chat UI Rendering — Sub-Specification
 
-> Parent: [CENTER_PANEL.md](CENTER_PANEL.md) | Status: **Active** | Created: 2026-02-27 | Updated: 2026-03-12
+> Parent: [CENTER_PANEL.md](CENTER_PANEL.md) | Status: **Active** | Created: 2026-02-27 | Updated: 2026-03-13
 
 ## Overview
 
@@ -32,7 +32,8 @@ This spec reflects the **actual implemented code** as of 2026-03-05. Items not y
       <SubagentBlock />                // subagentStart (finished derived from subagentEnd)
       <QuestionCard />                 // askUserQuestion
       <SuggestionCard />               // suggestSession
-      <ApprovalCard />                 // confirmAction
+      <ApprovalCard />                 // confirmAction (generic tools)
+      <PlanApprovalCard />             // confirmAction when toolName === "ExitPlanMode"
       <CompletionBanner />             // done
       <ErrorBanner />                  // error
       <CompactMarker />                // compact
@@ -90,7 +91,7 @@ interface ChatStreamProps {
 | `subagentEnd` | `null` |
 | `askUserQuestion` | `<QuestionCard>` |
 | `suggestSession` | `<SuggestionCard>` |
-| `confirmAction` | `<ApprovalCard>` |
+| `confirmAction` | `<ApprovalCard>` — or `<PlanApprovalCard>` when `toolName === "ExitPlanMode"` |
 | `turnComplete` | Optional `<AssistantMessage>` (if `result`) + `<SystemMessage variant="ok">` showing cost and turns |
 | `interrupted` | `<SystemMessage text="Turn interrupted">` (default variant, i.e. `--hint` color) |
 | `done` | `<CompletionBanner>` |
@@ -104,7 +105,7 @@ interface ChatStreamProps {
 **Pre-pass computations** (done before rendering):
 1. `toolStates` Map: iterates all events to collect `toolCallEnd` payloads keyed by `toolUseId`
 2. `activeSubagents` Set: iterates all events, adds on `subagentStart`, deletes on `subagentEnd`, **clears on `interrupted` or `turnComplete`** (turn-end events implicitly close all open subagents because the SDK's `SubagentStop` hook isn't guaranteed to fire on interrupt)
-3. `subagentChildren` Map + `childIndices` Set: stack-based grouping of child events under their parent `subagentStart`. The stack is **cleared on `interrupted` or `turnComplete`** — no events after a turn-end can belong to a prior subagent. Events of type `bonsai_visualize`, `askUserQuestion`, and `confirmAction` are hoisted to top-level (not grouped under the subagent) so they remain visible when the SubagentBlock is collapsed
+3. `subagentChildren` Map + `childIndices` Set: **agentId-based grouping** of child events under their parent `subagentStart`. First pass builds `agentStartIdx` (Map of `agentId → subagentStart event index`), cleared on `interrupted`/`turnComplete`. Second pass iterates all events — those with a `payload.agentId` matching a known subagent are added as children of that subagent's start event. Events of type `bonsai_visualize`, `askUserQuestion`, and `confirmAction` are hoisted to top-level (not grouped under the subagent) so they remain visible when the SubagentBlock is collapsed. The `agentId` field is set by the backend, which resolves the SDK's `parent_tool_use_id` on each message via a `tool_use_id → agent_id` mapping built from `SubagentStart` hooks.
 
 ---
 
@@ -211,7 +212,7 @@ interface ToolCallCardProps {
 | `NotebookEdit` | 📓 |
 | Other | 🔧 |
 
-**`parentToolUseId` nesting:** NOT implemented. Subagent tool calls are rendered at the flat event stream level regardless of `parentToolUseId`. **[Planned]**
+**`agentId`-based nesting:** Events from subagents carry `payload.agentId` (resolved by the backend from the SDK's `parent_tool_use_id`). The pre-pass groups these events under their parent `subagentStart`. Events without `agentId` (root agent or old persisted events) render at the top-level stream.
 
 ---
 
@@ -509,6 +510,68 @@ interface ApprovalCardProps {
 
 **Response sent to backend on approve:** `{ "behavior": "allow" }`
 **Response sent to backend on deny:** `{ "behavior": "deny", "message": "User denied", "interrupt": false }`
+
+---
+
+### `<PlanApprovalCard>`
+
+Specialized approval card for `ExitPlanMode` tool calls. Renders the plan content (markdown) instead of raw tool JSON.
+
+```typescript
+interface PlanApprovalCardProps {
+  planContent?: string;
+  allowedPrompts?: AllowedPrompt[];
+  answered: boolean;
+  decision?: "approve" | "deny";
+  onApprove: () => void;
+  onDeny: () => void;
+}
+```
+
+**Routing:** In `ChatStream`, the `confirmAction` case checks `toolName === "ExitPlanMode"` and renders `<PlanApprovalCard>` instead of `<ApprovalCard>`. The `planContent` prop is extracted from `toolInput.plan` — the SDK's ExitPlanMode tool natively includes the plan markdown in its `plan` field.
+
+**Plan content source (SDK-native):** The Claude Agent SDK's ExitPlanMode tool call includes a `plan` field containing the clean plan markdown that the agent wrote. The backend passes `input_data` through to the frontend as-is — no enrichment needed. The `toolInput` also contains `planContent` (accumulated turn text) and `allowedPrompts`, but only `plan` is used for rendering.
+
+**Title extraction:** `extractPlanTitle(planContent)` extracts a short title from the plan markdown — first `#` heading, or first line, or fallback `"Plan"`.
+
+**When not answered** (pending — full card):
+- Root: `<div className="chat-plan-approval">` — `border: 2px solid var(--purple)`, `max-width: 90%`, `background: var(--elevated)`, `slideUp`
+- `.chat-plan-approval-header`: "Plan Ready for Review" — 9px uppercase, `font-weight: 700`, `color: var(--purple)`, `letter-spacing: 0.5px`
+- `.chat-plan-approval-body`: `<ChatMarkdown content={planContent} />` — renders full plan as markdown, `max-height: 400px`, `overflow-y: auto`, `resize: vertical`, `min-height: 60px`
+- `.chat-plan-approval-empty`: Shown when `!planContent` — italic hint text "Plan written to file — approve to continue"
+- `.chat-plan-approval-tags`: If `allowedPrompts` present, shows "Requested permissions:" label (`.chat-plan-approval-tags-label`) + tag chips
+- `.chat-plan-approval-actions`: Approve Plan / Reject Plan buttons (same `.chat-btn` classes as `ApprovalCard`)
+
+**When answered** (compact, expandable):
+- Root: `<div className="chat-plan-approval chat-plan-approval-answered [--approved|--denied]">`
+- `.chat-plan-approval-row`: Clickable single row with "Plan Review" label, extracted title, and status (`✓ Approved` / `✕ Rejected`)
+- Click toggles `.chat-plan-approval-expanded`: shows full plan body (or empty-state fallback "Plan written to file") + permission tags
+- State classes: `.chat-plan-approval--approved` or `.chat-plan-approval--denied`
+
+**Response sent to backend on approve:** `{ "behavior": "allow" }`
+**Response sent to backend on deny:** `{ "behavior": "deny", "message": "User denied", "interrupt": false }`
+
+**CSS classes:**
+
+| Class | Element | Key Styles |
+|---|---|---|
+| `.chat-plan-approval` | Root | `border: 2px solid var(--purple); max-width: 90%; bg: var(--elevated); animation: slideUp` |
+| `.chat-plan-approval-header` | Uppercase label (pending) | `font-size: 9px; text-transform: uppercase; font-weight: 700; color: var(--purple); letter-spacing: 0.5px` |
+| `.chat-plan-approval-body` | Markdown plan content | `border: 1px solid var(--border); max-height: 400px; overflow-y: auto; resize: vertical; min-height: 60px` |
+| `.chat-plan-approval-empty` | Fallback when no content | `font-size: 12px; font-style: italic; color: var(--hint)` |
+| `.chat-plan-approval-tags` | Tags wrapper | `display: flex; flex-wrap: wrap; gap: var(--space-xs)` |
+| `.chat-plan-approval-tags-label` | "Requested permissions:" | `font-size: 11px; color: var(--muted)` |
+| `.chat-plan-approval-tag` | Permission tag chip | `font-size: 11px; bg: rgba(187,154,247,0.1); color: var(--purple); border-radius: 3px` |
+| `.chat-plan-approval-answered` | Answered state | `opacity: 0.7; border-width: 1px; border-color: var(--border)` |
+| `.chat-plan-approval--approved` | Approved modifier | `border-color: var(--green)` |
+| `.chat-plan-approval--denied` | Denied modifier | `border-color: var(--red)` |
+| `.chat-plan-approval-row` | Answered compact row | `display: flex; align-items: center; gap: var(--space-md); font-size: 12px; cursor: pointer; user-select: none` |
+| `.chat-plan-approval-label` | "Plan Review" label | `color: var(--purple); font-weight: 600; white-space: nowrap` |
+| `.chat-plan-approval-title` | Extracted plan title | `flex: 1; text-overflow: ellipsis; color: var(--text)` |
+| `.chat-plan-approval-status` | Status text wrapper | `white-space: nowrap; font-weight: 500` |
+| `.chat-plan-approval-approved` | "✓ Approved" text | `color: var(--green)` |
+| `.chat-plan-approval-denied` | "✕ Rejected" text | `color: var(--red)` |
+| `.chat-plan-approval-expanded` | Expand panel | `margin-top: var(--space-sm); border-top: 1px solid var(--border)` |
 
 ---
 
@@ -1117,6 +1180,15 @@ RPC server
 | `.chat-approval-compact` | Compact approval | Single-line answered approval |
 | `.chat-approval--approved` | Approved state | `border-color: var(--green)` |
 | `.chat-approval--denied` | Denied state | `border-color: var(--red)` |
+| `.chat-plan-approval` | PlanApprovalCard root | `border: 2px solid var(--purple); max-width: 90%; bg: var(--elevated)` |
+| `.chat-plan-approval-header` | Uppercase label | `font-size: 9px; text-transform: uppercase; font-weight: 700; color: var(--purple)` |
+| `.chat-plan-approval-body` | Markdown content | `max-height: 400px; overflow-y: auto; resize: vertical` |
+| `.chat-plan-approval-empty` | No-content fallback | `font-size: 12px; font-style: italic; color: var(--hint)` |
+| `.chat-plan-approval-tag` | Permission chip | `font-size: 11px; bg: rgba(187,154,247,0.1); color: var(--purple)` |
+| `.chat-plan-approval-answered` | Answered state | `opacity: 0.7; border-width: 1px` |
+| `.chat-plan-approval--approved` | Approved modifier | `border-color: var(--green)` |
+| `.chat-plan-approval--denied` | Denied modifier | `border-color: var(--red)` |
+| `.chat-plan-approval-row` | Compact row | `flex; gap: md; font-size: 12px; cursor: pointer` |
 
 ---
 
@@ -1137,7 +1209,7 @@ RPC server
 |---|---|
 | Author labels ("Claude", "You") above bubbles | Not rendered |
 | Message concatenation (multiple textDelta → one bubble) | Each textDelta renders its own AssistantMessage |
-| `parentToolUseId` precise nesting | Stack-based grouping implemented; `parentToolUseId`-based disambiguation for concurrent subagents not yet available |
+| `parentToolUseId` precise nesting | Implemented via `agentId`-based grouping — backend resolves SDK `parent_tool_use_id` to `agentId` on all event notifications; frontend groups by `agentId` instead of temporal stack |
 | "Skip" / "Other" button in QuestionCard | Only "Send" is implemented |
 | Context tokens update from agent events | `contextTokens`/`contextMax` not updated |
 | `filesChanged` tracking in metrics | Always `{}` |

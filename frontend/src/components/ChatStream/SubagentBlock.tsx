@@ -1,4 +1,4 @@
-import { lazy, Suspense, useState, useEffect, useRef } from "react";
+import { lazy, Suspense, useState } from "react";
 import type { AgentEvent } from "@/types/agent.ts";
 import type { VizData } from "@/types/viz.ts";
 import { ChatMarkdown } from "./ChatMarkdown.tsx";
@@ -40,16 +40,7 @@ export function SubagentBlock({
   childEvents,
   toolStates,
 }: SubagentBlockProps) {
-  const [expanded, setExpanded] = useState(!finished);
-  const wasFinished = useRef(finished);
-
-  // Auto-collapse when subagent finishes
-  useEffect(() => {
-    if (finished && !wasFinished.current) {
-      setExpanded(false);
-    }
-    wasFinished.current = finished;
-  }, [finished]);
+  const [expanded, setExpanded] = useState(false);
 
   const summary = buildSummary(childEvents);
 
