@@ -29,6 +29,7 @@ interface SessionStore {
     config: AgentConfig;
     name: string;
     skillId?: string;
+    prompt?: string;
   }) => Promise<string>;
   sendMessage: (bonsaiSid: string, text: string, isMarkdown?: boolean) => Promise<void>;
   switchSession: (bonsaiSid: string) => void;
@@ -417,9 +418,9 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
   closedIds: new Set(),
   projectCost: 0,
 
-  startSession: async ({ specIds, config, name, skillId }) => {
+  startSession: async ({ specIds, config, name, skillId, prompt }) => {
     const api = createAgentApi(getClient());
-    const { bonsaiSid } = await api.run({ specIds, config, skillId: skillId ?? undefined, name });
+    const { bonsaiSid } = await api.run({ specIds, config, skillId: skillId ?? undefined, prompt: prompt ?? undefined, name });
 
     set((s) => {
       const next = new Map(s.sessions);
@@ -1063,6 +1064,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
             specIds: (params.specIds as string[]) ?? [],
             name: params.name as string,
             reason: params.reason as string,
+            prompt: (params.prompt as string) ?? undefined,
           },
         });
       }

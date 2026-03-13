@@ -528,6 +528,79 @@
   margin-top: var(--space-sm);
 }
 .chat-suggestion-expanded .chat-suggestion-reason { margin-bottom: 0; }
+.chat-suggestion-dismiss-reason {
+  font-size: 12px;
+  color: var(--red);
+  padding: var(--space-xs) 0;
+}
+.chat-suggestion-dismiss-reason-label {
+  font-weight: 600;
+}
+.chat-suggestion-dismiss-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+  margin-top: var(--space-md);
+}
+.chat-suggestion-dismiss-prompt {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text);
+}
+.chat-suggestion-dismiss-input {
+  width: 100%;
+  box-sizing: border-box;
+  padding: var(--space-sm) var(--space-md);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font);
+  font-size: 12px;
+  resize: vertical;
+  min-height: 36px;
+}
+.chat-suggestion-dismiss-input:focus {
+  outline: none;
+  border-color: var(--red);
+}
+.chat-suggestion-dismiss-input::placeholder {
+  color: var(--hint);
+}
+
+/* Prompt / Instructions collapsible */
+.chat-suggestion-prompt-section {
+  margin-top: var(--space-xs);
+  margin-bottom: var(--space-xs);
+}
+.chat-suggestion-prompt-toggle {
+  all: unset;
+  cursor: pointer;
+  font-size: 11px;
+  color: var(--muted);
+  font-weight: 500;
+  padding: var(--space-xs) 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.chat-suggestion-prompt-toggle:hover {
+  color: var(--text);
+}
+.chat-suggestion-prompt-content {
+  font-family: var(--font-mono, monospace);
+  font-size: 11px;
+  color: var(--muted);
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: var(--space-sm) var(--space-md);
+  margin-top: var(--space-xs);
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-height: 200px;
+  overflow-y: auto;
+}
 
 /* ── Plan Approval Card ── */
 .chat-plan-approval {

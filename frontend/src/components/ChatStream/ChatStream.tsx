@@ -397,8 +397,14 @@ export const ChatStream = forwardRef<ChatStreamHandle, ChatStreamProps>(function
                 specIds={(p.specIds as string[]) ?? []}
                 name={(p.name as string) ?? ""}
                 reason={(p.reason as string) ?? ""}
+                prompt={(p.prompt as string) ?? undefined}
                 answered={isAnswered}
                 decision={isAnswered ? decision : undefined}
+                dismissReason={
+                  isAnswered && decision === "dismissed"
+                    ? (savedResponse?.dismissReason as string) ?? undefined
+                    : undefined
+                }
                 onApprove={async () => {
                   onResolveRequest(requestId, { behavior: "allow" });
                   // Create the suggested session and auto-switch to it
@@ -408,6 +414,7 @@ export const ChatStream = forwardRef<ChatStreamHandle, ChatStreamProps>(function
                     const newSid = await store.startSession({
                       skillId: (p.skill as string) ?? undefined,
                       specIds: (p.specIds as string[]) ?? [],
+                      prompt: (p.prompt as string) ?? undefined,
                       name: (p.name as string) ?? "Suggested Session",
                       config: {
                         model: currentSession?.model ?? "sonnet",
@@ -423,10 +430,13 @@ export const ChatStream = forwardRef<ChatStreamHandle, ChatStreamProps>(function
                     console.error("[SuggestionCard] Failed to start suggested session:", err);
                   }
                 }}
-                onDismiss={() =>
+                onDismiss={(reason) =>
                   onResolveRequest(requestId, {
                     behavior: "deny",
-                    message: "Dismissed",
+                    message: reason
+                      ? `Dismissed: ${reason}`
+                      : "Dismissed",
+                    dismissReason: reason ?? "",
                   })
                 }
               />

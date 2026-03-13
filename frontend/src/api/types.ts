@@ -16,6 +16,7 @@ export interface AgentRunParams {
   specIds: string[];
   config: AgentConfig;
   skillId?: string;
+  prompt?: string;
   name?: string;
 }
 

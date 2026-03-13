@@ -55,8 +55,12 @@ async def run_agent(service: AgentService, **params: Any) -> dict:
         raise JsonRpcError(_INTERNAL_ERROR, "Internal error", "No active connection")
     config = AgentConfig(**params["config"])
     skill_id = params.get("skillId")
+    session_prompt = params.get("prompt")
     name = params.get("name", "")
-    task = await service.run_task(params["specIds"], config, notify, skill_id=skill_id, name=name)
+    task = await service.run_task(
+        params["specIds"], config, notify,
+        skill_id=skill_id, session_prompt=session_prompt, name=name,
+    )
     return {"bonsaiSid": task.bonsai_sid}
 
 

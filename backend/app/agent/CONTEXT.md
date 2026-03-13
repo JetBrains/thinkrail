@@ -52,6 +52,7 @@ def build_context(
     config: AgentConfig,
     spec_service: SpecService,
     plugin_dir: Path | None = None,
+    session_prompt: str | None = None,
 ) -> str:
 ```
 
@@ -63,6 +64,7 @@ def build_context(
 | `config` | `AgentConfig` | Run configuration — may influence context composition (e.g., permission_mode) |
 | `spec_service` | `SpecService` | Service to load spec content by ID |
 | `plugin_dir` | `Path` | Bonsai's plugin directory (contains `skills/`). Set via `AppConfig.plugin_dir`, which resolves to the `claude-plugin/` directory in the Bonsai installation (not the target project). |
+| `session_prompt` | `str \| None` | Custom instructions or task description for this session. Placed inside the "Your Task" section before the SKILL.md body. Passed via `agent/run` RPC `prompt` param or `SuggestSession` tool. |
 
 **Returns:** A composed system prompt string with framing sections.
 
@@ -78,8 +80,6 @@ The system prompt is assembled in this order, with framing text between sections
 
 ```
 ## General Instructions
-
-You are a Claude agent, built on Anthropic's Claude Agent SDK.
 
 ### Visualization
 
@@ -116,12 +116,15 @@ tables, do NOT approximate visualizations with markdown when the tool can do it 
 
 When you complete a task or discover follow-up work, use the `SuggestSession` tool
 to propose a new session instead of just mentioning it. Common triggers:
-- A spec is stale or missing after a code change you just made
-- A dependent module needs updating because of what you just designed
+- Next step in the project plan
+- Have several independent directions/modules to design/implement
 - Implementation tasks should be created for a spec you just wrote
 
 Include relevant `specIds` so the new session starts with the right context.
+Use `prompt` to carry over specific instructions or focus areas for the new session.
 Write a `reason` that explains *why* this follow-up matters now.
+
+The developer sees a card and can approve or dismiss.
 Respect dismissals — do not re-suggest the same session. Limit to 1-3 per session.
 
 ### Available Skills
@@ -138,19 +141,26 @@ This section is **always present** — every session (skill-based or free-form) 
 
 **Skills table generation:** `build_context` scans `{plugin_dir}/skills/*/SKILL.md`, reads the YAML frontmatter from each file, and generates a compact table of `name` + `description`. This ensures the agent always knows what skills are available for recommending next actions, without hardcoding the list.
 
-### 2. Skill Instructions (if `skill_id` is provided)
+### 2. Your Task (if `skill_id` or `session_prompt` is provided)
 
 ```
 ## Your Task
 
 You are running the "{skill_name}" skill.
 
+{session_prompt — custom instructions from the caller}
+
+---
+
 {SKILL.md content — full prompt text from the skill file}
 ```
 
-- **Source:** `{plugin_dir}/skills/{skill_id}/SKILL.md`
-- Reads the SKILL.md file, strips the YAML frontmatter (between `---` delimiters), and uses the body as the skill instructions
-- If `skill_id` is `None`, this section is omitted entirely (free-form session)
+- This section is present when either `skill_id` or `session_prompt` is provided
+- **Skill header:** `You are running the "{skill_id}" skill.` — only if `skill_id` is set
+- **Session prompt:** Custom instructions placed after the skill header and before the SKILL.md body. Separated from the body by `---` when both are present. Source: `agent/run` RPC `prompt` param or `SuggestSession` tool `prompt` field.
+- **SKILL.md body:** Loaded from `{plugin_dir}/skills/{skill_id}/SKILL.md`, YAML frontmatter stripped
+- If only `session_prompt` is provided (no skill), the section contains just the prompt
+- If neither `skill_id` nor `session_prompt` is provided, this section is omitted entirely
 - **Skill files should no longer contain** visualization rules, interaction style mandates, or spec workflow instructions — those are now in General Instructions. Skills focus purely on their task-specific logic.
 
 ### 3. Project Metadata (always present)
@@ -206,7 +216,7 @@ The General Instructions section consolidates behavioral rules that were previou
 | **Visualization** | `bonsai_visualize` tool reference, available types, when to use, anti-patterns (no Bash/ANSI/ASCII) | Previously copy-pasted into 13/14 skills. Without this, the model doesn't know `bonsai_visualize` exists. |
 | **Interaction Style** | Use `AskUserQuestion` for decisions, 2-4 choices, end with "What's next?" | Previously repeated in 13/14 skills. Ensures consistent interaction pattern. |
 | **Spec-Driven Workflow** | Read `registry.json` at start, update after saving, respect spec hierarchy | Previously in 10-11/14 skills. Grounds the agent in the spec-driven methodology. |
-| **Proactive Suggestions** | Use `SuggestSession` for follow-up work, respect dismissals, limit to 1-3 per session | Agents need to know the tool exists and when to use it proactively. Two-line guidance keeps it concise. |
+| **Proactive Suggestions** | `SuggestSession` triggers, key tips (`specIds`, `prompt`, `reason`), behavioral rules (respect dismissals, limit to 1-3) | Agents need to know the tool exists and when to use it proactively. Parameter details come from the tool schema. |
 | **Available Skills** | Compact table of skill name + description, dynamically generated | Enables the agent to recommend relevant next actions without hardcoding suggestions into each skill. |
 
 ### What is NOT in General Instructions
@@ -343,7 +353,7 @@ async def run_task(self, spec_ids, config, notify, skill_id=None):
 
 ### RPC Layer Change
 
-`agent/run` params must include optional `skillId`:
+`agent/run` params include optional `skillId` and `prompt`:
 
 ```json
 {
@@ -351,10 +361,13 @@ async def run_task(self, spec_ids, config, notify, skill_id=None):
   "params": {
     "specIds": ["module-agent"],
     "skillId": "module-design",
+    "prompt": "Focus on the build_context() helpers.",
     "config": { "model": "claude-opus-4-6", "maxTurns": 25 }
   }
 }
 ```
+
+The `prompt` field is optional. When provided, it becomes the `session_prompt` on the `AgentTask` and is placed inside the "Your Task" section of the system prompt, before the SKILL.md body. This field is also available via the `SuggestSession` tool's `prompt` parameter.
 
 ## Known Limitations
 

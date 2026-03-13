@@ -221,11 +221,15 @@ class TestOnFileChange:
             registry_path = str(config.get_registry_path())
             await callback({(Change.modified, registry_path)})
 
-            mock_notify.assert_called_once()
-            method, params = mock_notify.call_args[0]
-            assert method == "registry/didUpdate"
+            calls = mock_notify.call_args_list
+            methods = [c[0][0] for c in calls]
+            assert "registry/didUpdate" in methods
+            reg_call = next(c for c in calls if c[0][0] == "registry/didUpdate")
+            params = reg_call[0][1]
             assert "registry" in params
             assert params["registry"]["version"] == "2.0"
+            # Also sends file/didChange for editor refresh
+            assert "file/didChange" in methods
         finally:
             notifications.current_notify = None
 
@@ -238,11 +242,15 @@ class TestOnFileChange:
             spec_path = str(config.get_project_root() / "mod_a" / "README.md")
             await callback({(Change.modified, spec_path)})
 
-            mock_notify.assert_called_once()
-            method, params = mock_notify.call_args[0]
-            assert method == "spec/didChange"
+            calls = mock_notify.call_args_list
+            methods = [c[0][0] for c in calls]
+            assert "spec/didChange" in methods
+            spec_call = next(c for c in calls if c[0][0] == "spec/didChange")
+            params = spec_call[0][1]
             assert params["id"] == "mod-a"
             assert "changes" in params
+            # Also sends file/didChange for editor refresh
+            assert "file/didChange" in methods
         finally:
             notifications.current_notify = None
 
@@ -289,11 +297,22 @@ class TestOnFileChange:
     async def test_non_spec_file_ignored(
         self, config: AppConfig, callback
     ) -> None:
+        """Non-spec files should not trigger spec/registry notifications.
+
+        A generic ``file/didChange`` notification is still sent so that
+        open editors in the frontend can refresh.
+        """
         mock_notify = AsyncMock()
         notifications.current_notify = mock_notify
         try:
             random_path = str(config.get_project_root() / "some_file.py")
             await callback({(Change.modified, random_path)})
-            mock_notify.assert_not_called()
+            # Should only get a generic file/didChange, no spec/registry notifications
+            calls = mock_notify.call_args_list
+            methods = [c[0][0] for c in calls]
+            assert "spec/didChange" not in methods
+            assert "spec/didCreate" not in methods
+            assert "spec/didDelete" not in methods
+            assert "registry/didUpdate" not in methods
         finally:
             notifications.current_notify = None

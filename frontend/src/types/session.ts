@@ -55,6 +55,7 @@ export interface PendingRequest {
   specIds?: string[];
   name?: string;
   reason?: string;
+  prompt?: string;
 }
 
 export interface Session {

@@ -5,10 +5,12 @@ interface SuggestionCardProps {
   specIds: string[];
   name: string;
   reason: string;
+  prompt?: string;
   answered: boolean;
   decision?: "approved" | "dismissed";
+  dismissReason?: string;
   onApprove: () => void;
-  onDismiss: () => void;
+  onDismiss: (reason?: string) => void;
 }
 
 export default function SuggestionCard({
@@ -16,12 +18,17 @@ export default function SuggestionCard({
   specIds,
   name,
   reason,
+  prompt,
   answered,
   decision,
+  dismissReason,
   onApprove,
   onDismiss,
 }: SuggestionCardProps) {
   const [expanded, setExpanded] = useState(false);
+  const [promptExpanded, setPromptExpanded] = useState(false);
+  const [dismissing, setDismissing] = useState(false);
+  const [dismissText, setDismissText] = useState("");
 
   if (answered) {
     const stateClass =
@@ -55,13 +62,22 @@ export default function SuggestionCard({
 
         {expanded && (
           <div className="chat-suggestion-expanded">
-            <span className="chat-suggestion-skill">{skill}</span>
+            {skill && <span className="chat-suggestion-skill">{skill}</span>}
             {specIds.length > 0 && (
               <span className="chat-suggestion-specs">
                 {specIds.join(", ")}
               </span>
             )}
             <div className="chat-suggestion-reason">{reason}</div>
+            {prompt && (
+              <pre className="chat-suggestion-prompt-content">{prompt}</pre>
+            )}
+            {dismissReason && (
+              <div className="chat-suggestion-dismiss-reason">
+                <span className="chat-suggestion-dismiss-reason-label">Reason:</span>{" "}
+                {dismissReason}
+              </div>
+            )}
           </div>
         )}
       </div>
@@ -74,19 +90,73 @@ export default function SuggestionCard({
       <div className="chat-suggestion-name">{name}</div>
       <div className="chat-suggestion-reason">{reason}</div>
       <div className="chat-suggestion-meta">
-        <span className="chat-suggestion-skill">{skill}</span>
+        {skill && <span className="chat-suggestion-skill">{skill}</span>}
         {specIds.length > 0 && (
           <span className="chat-suggestion-specs">{specIds.join(", ")}</span>
         )}
       </div>
-      <div className="chat-suggestion-actions">
-        <button className="chat-btn chat-btn-approve" onClick={onApprove}>
-          Start Session
-        </button>
-        <button className="chat-btn chat-btn-deny" onClick={onDismiss}>
-          Dismiss
-        </button>
-      </div>
+
+      {prompt && (
+        <div className="chat-suggestion-prompt-section">
+          <button
+            className="chat-suggestion-prompt-toggle"
+            onClick={() => setPromptExpanded((v) => !v)}
+          >
+            {promptExpanded ? "▾" : "▸"} Instructions
+          </button>
+          {promptExpanded && (
+            <pre className="chat-suggestion-prompt-content">{prompt}</pre>
+          )}
+        </div>
+      )}
+
+      {dismissing ? (
+        <div className="chat-suggestion-dismiss-form">
+          <label className="chat-suggestion-dismiss-prompt">
+            Why dismiss this suggestion?
+          </label>
+          <textarea
+            className="chat-suggestion-dismiss-input"
+            rows={2}
+            placeholder="Optional — tell the agent why..."
+            value={dismissText}
+            onChange={(e) => setDismissText(e.target.value)}
+            autoFocus
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
+                onDismiss(dismissText.trim() || undefined);
+              }
+              if (e.key === "Escape") {
+                setDismissing(false);
+                setDismissText("");
+              }
+            }}
+          />
+          <div className="chat-suggestion-actions">
+            <button
+              className="chat-btn chat-btn-deny"
+              onClick={() => onDismiss(dismissText.trim() || undefined)}
+            >
+              Dismiss
+            </button>
+            <button
+              className="chat-btn chat-btn-muted"
+              onClick={() => { setDismissing(false); setDismissText(""); }}
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      ) : (
+        <div className="chat-suggestion-actions">
+          <button className="chat-btn chat-btn-approve" onClick={onApprove}>
+            Start Session
+          </button>
+          <button className="chat-btn chat-btn-deny" onClick={() => setDismissing(true)}>
+            Dismiss
+          </button>
+        </div>
+      )}
     </div>
   );
 }

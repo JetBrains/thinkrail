@@ -36,7 +36,7 @@ export function ToolCallCard({
   state,
   compact = false,
 }: ToolCallCardProps) {
-  const [expanded, setExpanded] = useState(state === "error");
+  const [expanded, setExpanded] = useState(false);
 
   const borderColor =
     state === "running"

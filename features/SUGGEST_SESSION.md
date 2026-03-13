@@ -27,16 +27,18 @@ The agent calls `SuggestSession` with:
   "skill": "module-design",
   "specIds": ["module-agent"],
   "name": "Design: Agent Context Module",
-  "reason": "The context assembly pipeline needs its own module spec before we refactor it."
+  "reason": "The context assembly pipeline needs its own module spec before we refactor it.",
+  "prompt": "Focus on the build_context() helpers. The user wants compact output."
 }
 ```
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
-| `skill` | string | yes | Skill ID from the plugin (e.g., "module-design", "task-spec") |
+| `skill` | string | no | Skill ID from the plugin (e.g., "module-design", "task-spec"). Omit for free-form sessions. |
 | `specIds` | string[] | no | Spec IDs to attach as context (defaults to []) |
 | `name` | string | yes | Suggested session name |
 | `reason` | string | yes | Why the agent suggests this session |
+| `prompt` | string | no | Custom instructions or task description for the new session. Placed before the skill instructions in the system prompt. |
 
 ## Protocol
 

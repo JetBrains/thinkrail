@@ -116,6 +116,7 @@ class AgentTask(BaseModel):
     status: TaskStatus = "idle"
     spec_ids: list[str] = Field(default_factory=list)
     skill_id: str | None = None
+    session_prompt: str | None = None
     config: AgentConfig = Field(default_factory=AgentConfig)
     session_id: str | None = None
     created: str = Field(default_factory=lambda: datetime.now(UTC).isoformat())

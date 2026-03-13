@@ -43,6 +43,7 @@ class AgentService:
         config: AgentConfig,
         notify: Callable,
         skill_id: str | None = None,
+        session_prompt: str | None = None,
         name: str = "",
     ) -> AgentTask:
         """Start a persistent agent session.
@@ -51,7 +52,9 @@ class AgentService:
         opens the SDK client and enters idle), and returns immediately.
         The session waits for messages via ``send_message``.
         """
-        task = self._tracker.create_task(spec_ids, config, skill_id=skill_id, name=name)
+        task = self._tracker.create_task(
+            spec_ids, config, skill_id=skill_id, session_prompt=session_prompt, name=name,
+        )
         spec_context = self._build_context_for(task)
         bg_task = asyncio.create_task(
             self._run_background(task, spec_context, notify)
@@ -176,6 +179,7 @@ class AgentService:
             "bonsaiSid": task.bonsai_sid,
             "name": task.name or task.bonsai_sid[:8],
             "skillId": task.skill_id,
+            "sessionPrompt": task.session_prompt,
             "specIds": list(task.spec_ids),
             "config": task.config.model_dump(by_alias=True),
             "status": task.status,
@@ -260,11 +264,13 @@ class AgentService:
         old_config = AgentConfig(**old.get("config", {}))
         old_spec_ids = old.get("specIds", [])
         skill_id = old.get("skillId")
+        session_prompt = old.get("sessionPrompt")
         name = old.get("name", "session")
 
         task = self._tracker.create_task(
             old_spec_ids, old_config,
             skill_id=skill_id,
+            session_prompt=session_prompt,
             name=name,
             bonsai_sid=bonsai_sid,
         )
@@ -406,6 +412,7 @@ class AgentService:
         return build_context(
             spec_ids=task.spec_ids,
             skill_id=task.skill_id,
+            session_prompt=task.session_prompt,
             project_root=self._config.project_root,
             config=task.config,
             spec_service=self._spec_service,

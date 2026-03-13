@@ -24,7 +24,7 @@ logger = logging.getLogger(__name__)
 
 SUGGEST_SESSION_SCHEMA: dict = {
     "type": "object",
-    "required": ["skill", "name", "reason"],
+    "required": ["name", "reason"],
     "properties": {
         "skill": {
             "type": "string",
@@ -43,6 +43,13 @@ SUGGEST_SESSION_SCHEMA: dict = {
             "type": "string",
             "description": "Why the agent suggests this session",
         },
+        "prompt": {
+            "type": "string",
+            "description": (
+                "Optional instructions or task description for the new session. "
+                "Placed before the skill instructions in the system prompt."
+            ),
+        },
     },
 }
 
@@ -50,7 +57,7 @@ SUGGEST_SESSION_SCHEMA: dict = {
 @tool(
     "SuggestSession",
     "Suggest a follow-up session to the developer. The developer sees a card "
-    "with the skill, specs, name, and reason — and can approve or dismiss. "
+    "with the skill, specs, name, and reason \u2014 and can approve or dismiss. "
     "If approved, a new session is auto-created. If dismissed, you receive "
     "a dismissal flag and should continue your current work.",
     SUGGEST_SESSION_SCHEMA,
@@ -61,7 +68,9 @@ async def _suggest_session(args: dict) -> dict:
     if args.get("error"):
         return {"content": [{"type": "text", "text": f"Error: {args['error']}"}]}
     if args.get("dismissed"):
-        return {"content": [{"type": "text", "text": "✗ Suggestion dismissed by developer."}]}
+        reason = args.get("dismissReason", "")
+        msg = f"✗ Suggestion dismissed by developer: {reason}" if reason else "✗ Suggestion dismissed by developer."
+        return {"content": [{"type": "text", "text": msg}]}
     if args.get("approved"):
         return {"content": [{"type": "text", "text": f"✓ Session '{args.get('name', '')}' approved and created."}]}
     return {"content": [{"type": "text", "text": "Suggestion processed."}]}
@@ -129,22 +138,30 @@ async def intercept_suggest_session(
     # Validation passed — proceed with interactive flow
     request_id = str(uuid4())
     future = tracker.register_future(task.bonsai_sid, request_id)
+    payload: dict[str, Any] = {
+        "bonsaiSid": task.bonsai_sid,
+        "skill": skill,
+        "specIds": spec_ids,
+        "name": input_data.get("name", ""),
+        "reason": input_data.get("reason", ""),
+    }
+    prompt = input_data.get("prompt")
+    if prompt:
+        payload["prompt"] = prompt
     await notify(
         "agent/suggestSession",
-        {
-            "bonsaiSid": task.bonsai_sid,
-            "skill": skill,
-            "specIds": spec_ids,
-            "name": input_data.get("name", ""),
-            "reason": input_data.get("reason", ""),
-        },
+        payload,
         request_id=request_id,
     )
     response = await future
     if response.get("behavior") == "deny":
+        dismiss_reason = response.get("dismissReason") or response.get("message") or ""
+        updated = {**input_data, "dismissed": True}
+        if dismiss_reason:
+            updated["dismissReason"] = dismiss_reason
         return PermissionResultAllow(
             behavior="allow",
-            updated_input={**input_data, "dismissed": True},
+            updated_input=updated,
         )
     return PermissionResultAllow(
         behavior="allow",

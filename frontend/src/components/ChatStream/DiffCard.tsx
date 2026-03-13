@@ -108,7 +108,7 @@ export function DiffCard({
   state,
   compact = false,
 }: DiffCardProps) {
-  const [expanded, setExpanded] = useState(state === "error");
+  const [expanded, setExpanded] = useState(false);
   const [forceLoadLarge, setForceLoadLarge] = useState(false);
   const [editorHeight, setEditorHeight] = useState(compact ? 200 : 300);
   const editorContainerRef = useRef<HTMLDivElement>(null);

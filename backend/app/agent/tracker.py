@@ -49,6 +49,7 @@ class Tracker:
         spec_ids: list[str],
         config: AgentConfig,
         skill_id: str | None = None,
+        session_prompt: str | None = None,
         name: str = "",
         bonsai_sid: str | None = None,
     ) -> AgentTask:
@@ -57,6 +58,7 @@ class Tracker:
             name=name,
             spec_ids=spec_ids,
             skill_id=skill_id,
+            session_prompt=session_prompt,
             config=config,
         )
         self._tasks[task.bonsai_sid] = task
