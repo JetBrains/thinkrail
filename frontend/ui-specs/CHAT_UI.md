@@ -400,31 +400,47 @@ interface SuggestionCardProps {
   specIds: string[];
   name: string;
   reason: string;
+  prompt?: string;
   answered: boolean;
   decision?: "approved" | "dismissed";
+  dismissReason?: string;
   onApprove: () => void;
-  onDismiss: () => void;
+  onDismiss: (reason?: string) => void;
 }
 ```
 
 - Root: `<div className="chat-suggestion [chat-suggestion-answered?]">` — `border: 2px solid var(--blue)`, `max-width: 90%`, `background: var(--elevated)`, `slideUp`
-- When `answered`: `opacity: 0.7`
+- When `answered`: `opacity: 0.7`, collapses to single-line summary row (click to expand details)
 
 **Layout:**
 
 1. **Header** (`.chat-suggestion-header`): `"Session Suggestion"`, 9px uppercase, `color: var(--blue)`, `letter-spacing: 0.05em`
 2. **Name** (`.chat-suggestion-name`): suggested session name, `font-weight: 600`, `font-size: 13px`, `color: var(--text)`
 3. **Reason** (`.chat-suggestion-reason`): why the agent suggests this, `font-size: 12px`, `color: var(--muted)`
-4. **Skill pill** (`.chat-suggestion-skill`): `color: var(--cyan)`, `background: rgba(125,207,255,0.1)`, `padding: 2px 8px`, `border-radius: 4px`, `font-size: 11px`, inline pill showing skill ID
-5. **Spec IDs** (`.chat-suggestion-specs`): comma-separated spec IDs, `font-size: 11px`, `color: var(--hint)` — only rendered when `specIds.length > 0`
+4. **Meta row** (`.chat-suggestion-meta`): skill pill + spec IDs inline
+   - **Skill pill** (`.chat-suggestion-skill`): `color: var(--cyan)`, `background: rgba(125,207,255,0.1)`, `padding: 2px 8px`, `border-radius: 4px`, `font-size: 11px`, inline pill showing skill ID — only rendered when `skill` is non-empty
+   - **Spec IDs** (`.chat-suggestion-specs`): comma-separated spec IDs, `font-size: 11px`, `color: var(--hint)` — only rendered when `specIds.length > 0`
+5. **Prompt section** (`.chat-suggestion-prompt-section`, optional): Collapsible section showing `session_prompt` instructions from the agent
+   - Toggle button (`.chat-suggestion-prompt-toggle`): `▸ Instructions` / `▾ Instructions`
+   - Content (`.chat-suggestion-prompt-content`): `<pre>` block with prompt text, `font-size: 11px`
 
 **Actions row** (`.chat-suggestion-actions`, hidden when `answered`):
 - "Start Session" (`.chat-btn.chat-btn-approve`) → green background, calls `onApprove`
-- "Dismiss" (`.chat-btn.chat-btn-deny`) → red outline, calls `onDismiss`
+- "Dismiss" (`.chat-btn.chat-btn-deny`) → red outline, opens dismiss form
 
-**Answered state** (`.chat-suggestion-result`):
-- `decision === "approved"`: `✓ Session started` in `var(--green)`
-- `decision === "dismissed"`: `✕ Dismissed` in `var(--hint)`
+**Dismiss form** (`.chat-suggestion-dismiss-form`): Shown when user clicks "Dismiss" (replaces action buttons)
+- Label: `"Why dismiss this suggestion?"`
+- `<textarea>` (`.chat-suggestion-dismiss-input`): 2 rows, placeholder "Optional — tell the agent why...", autoFocus
+- Keyboard: `Cmd/Ctrl+Enter` submits, `Escape` cancels
+- "Dismiss" button → calls `onDismiss(reason)` with optional text
+- "Cancel" button → hides form, returns to action buttons
+
+**Answered state** (`.chat-suggestion-answered`): Collapses to single-line clickable summary
+- Row shows: `"Session Suggestion"` + name + status badge
+- `decision === "approved"`: `✓ Session started` in `var(--green)`, class `.chat-suggestion--approved`
+- `decision === "dismissed"`: `✕ Dismissed` in `var(--hint)`, class `.chat-suggestion--dismissed`
+- Click to expand: shows skill, specIds, reason, prompt (if present), and dismissReason (if present)
+- Dismiss reason shown as: `"Reason: {dismissReason}"` (`.chat-suggestion-dismiss-reason`)
 
 **Rendering in ChatStream:**
 
@@ -432,21 +448,23 @@ interface SuggestionCardProps {
 case "suggestSession":
   return (
     <SuggestionCard
-      skill={payload.skill}
+      skill={payload.skill ?? ""}
       specIds={payload.specIds ?? []}
       name={payload.name}
       reason={payload.reason}
+      prompt={payload.prompt}
       answered={isAnswered}
       decision={answeredResponse?.behavior === "allow" ? "approved" : "dismissed"}
+      dismissReason={answeredResponse?.dismissReason}
       onApprove={() => onResolveRequest(requestId, { behavior: "allow" })}
-      onDismiss={() => onResolveRequest(requestId, { behavior: "deny", message: "Dismissed" })}
+      onDismiss={(reason) => onResolveRequest(requestId, { behavior: "deny", dismissReason: reason })}
     />
   );
 ```
 
 **Submission behavior:**
-- "Start Session" → `onApprove()` → `resolveRequest` sends `agent/respond` with `{ behavior: "allow" }` → `sessionStore.startSession({ skillId: skill, specIds, name })` → auto-switch to new session
-- "Dismiss" → `onDismiss()` → `resolveRequest` sends `{ behavior: "deny", message: "Dismissed" }` → agent continues
+- "Start Session" → `onApprove()` → `resolveRequest` sends `agent/respond` with `{ behavior: "allow" }` → `sessionStore.startSession({ skillId: skill, specIds, name, prompt })` → auto-switch to new session
+- "Dismiss" → opens dismiss form → user optionally types reason → `onDismiss(reason)` → `resolveRequest` sends `{ behavior: "deny", dismissReason: "..." }` → agent receives dismissal with reason
 
 **CSS classes:**
 
@@ -454,11 +472,19 @@ case "suggestSession":
 |---|---|---|
 | `.chat-suggestion` | Root | `border: 2px solid var(--blue); max-width: 90%; background: var(--elevated); border-radius: var(--radius-md); padding: var(--space-md) var(--space-lg)` |
 | `.chat-suggestion-answered` | Answered state | `opacity: 0.7` |
+| `.chat-suggestion--approved` | Approved modifier | Green tint on left border |
+| `.chat-suggestion--dismissed` | Dismissed modifier | Muted appearance |
 | `.chat-suggestion-header` | Header label | `font-size: 9px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--blue)` |
 | `.chat-suggestion-name` | Session name | `font-weight: 600; font-size: 13px; color: var(--text)` |
 | `.chat-suggestion-reason` | Reason text | `font-size: 12px; color: var(--muted)` |
 | `.chat-suggestion-skill` | Skill pill | `color: var(--cyan); background: rgba(125,207,255,0.1); padding: 2px 8px; border-radius: 4px; font-size: 11px` |
 | `.chat-suggestion-specs` | Spec IDs list | `font-size: 11px; color: var(--hint)` |
+| `.chat-suggestion-prompt-section` | Prompt container | Collapsible section |
+| `.chat-suggestion-prompt-toggle` | Expand/collapse button | `font-size: 11px; cursor: pointer` |
+| `.chat-suggestion-prompt-content` | Prompt text | `<pre>; font-size: 11px; background: var(--bg); padding: var(--space-sm)` |
+| `.chat-suggestion-dismiss-form` | Dismiss reason form | Replaces action buttons |
+| `.chat-suggestion-dismiss-input` | Dismiss textarea | 2 rows, optional reason |
+| `.chat-suggestion-dismiss-reason` | Shown dismiss reason (answered state) | `font-size: 11px; color: var(--muted)` |
 | `.chat-suggestion-actions` | Button row | `display: flex; gap: var(--space-sm); margin-top: var(--space-md)` |
 | `.chat-suggestion-result` | Answered display | `font-size: 12px; margin-top: var(--space-sm)` |
 

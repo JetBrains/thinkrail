@@ -21,13 +21,18 @@ See the [full feature spec](../../../../features/SUGGEST_SESSION.md) for protoco
   "specIds": ["module-agent"],
   "name": "Design: Agent Context Module",
   "reason": "The context assembly pipeline needs its own module spec.",
+  "prompt": "Focus on the build_context() helpers.",
   "requestId": "..."
 }
 ```
 
+Note: `prompt` is only included when the agent provides it. `skill` may be empty for free-form sessions.
+
 **Response from frontend** (via `agent/respond`):
 - Approve: `{ "behavior": "allow" }`
-- Dismiss: `{ "behavior": "deny", "message": "Dismissed" }`
+- Dismiss: `{ "behavior": "deny", "dismissReason": "Already covered in another session" }`
+
+The `dismissReason` field is optional. The backend reads `dismissReason` first, falling back to `message` for backwards compatibility.
 
 ## suggest_session.py
 
@@ -46,12 +51,13 @@ Single file exports:
 - If valid: create `asyncio.Future`, send `agent/suggestSession` request, await response
 - Both approve and dismiss return `PermissionResultAllow` — never `PermissionResultDeny` (which triggers SDK error handling)
 - Approve: `updated_input` contains `{approved: true}`
-- Dismiss: `updated_input` contains `{dismissed: true}`
+- Dismiss: `updated_input` contains `{dismissed: true, dismissReason: "..."}` — reason is optional, sourced from `dismissReason` or `message` field in the frontend response
 
-## No Other Backend Changes
+## Related Backend Changes
 
 - `runner.py` — no changes (imports `MCP_SERVERS` from `tools/`, delegates to `permissions.py`)
 - `permissions.py` — no changes (routes via `INTERCEPTORS` registry)
-- `service.py` — no changes (existing `respond()` method handles the Future resolution)
-- `tracker.py` — no changes (existing `register_future()` / `resolve_future()` reused)
+- `service.py` — updated: `run_task()` and `continue_session()` accept `session_prompt`, threaded from RPC `prompt` param or SuggestSession `prompt` field
+- `tracker.py` — updated: `create_task()` accepts `session_prompt`, stored on `AgentTask`
+- `models.py` — updated: `AgentTask` has `session_prompt: str | None` field
 - `persistence.py` — no changes (event persisted by frontend via `appendEvent`)

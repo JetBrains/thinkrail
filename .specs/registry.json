@@ -78,7 +78,7 @@
         "agent-orchestration"
       ],
       "created": "2026-02-25",
-      "updated": "2026-03-12"
+      "updated": "2026-03-13"
     },
     {
       "id": "agent-tools",
@@ -95,7 +95,7 @@
         "mcp-tools"
       ],
       "created": "2026-03-11",
-      "updated": "2026-03-11"
+      "updated": "2026-03-13"
     },
     {
       "id": "agent-context",
@@ -106,7 +106,7 @@
       "covers": [
         "backend/app/agent/context.py"
       ],
-      "updated": "2026-03-03",
+      "updated": "2026-03-13",
       "tags": [
         "backend",
         "agent-orchestration",
@@ -233,7 +233,7 @@
         "rendering"
       ],
       "created": "2026-02-27",
-      "updated": "2026-03-12"
+      "updated": "2026-03-13"
     },
     {
       "id": "graph-interactions",

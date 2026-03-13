@@ -53,7 +53,8 @@ The agent calls `SuggestSession` with:
        │                                    │
        │  agent/suggestSession (request)    │
        │  { bonsaiSid, skill, specIds,      │
-       │    name, reason, requestId }       │
+       │    name, reason, prompt?,          │
+       │    requestId }                     │
        │──────────────────────────────────→ │
        │                                    │  renders SuggestionCard
        │         (runner awaits Future)     │  in ChatStream
@@ -73,31 +74,32 @@ The agent calls `SuggestSession` with:
        │  agent/respond                     │
        │  { requestId, response:            │
        │    { behavior: "deny",             │
-       │      message: "Dismissed" } }      │
+       │      dismissReason: "..." } }      │
        │←─────────────────────────────────  │
        │                                    │
        │  Future resolved                   │
        │  → PermissionResultAllow           │
-       │    (updated_input: {dismissed: true})
-       │  Agent sees dismissal, continues   │
+       │    (updated_input: {dismissed: true,│
+       │     dismissReason: "..."})         │
+       │  Agent sees dismissal + reason     │
 ```
 
-**On dismiss:** Returns `PermissionResultAllow` (not Deny) with `dismissed: true` in `updated_input`. The agent sees the dismissal and continues working.
+**On dismiss:** Returns `PermissionResultAllow` (not Deny) with `dismissed: true` and optional `dismissReason` in `updated_input`. The agent sees the dismissal reason and can adjust its behavior accordingly.
 
 ### Full Lifecycle
 
 ```
-1. Agent (LLM) generates tool call: SuggestSession({skill, specIds, name, reason})
+1. Agent (LLM) generates tool call: SuggestSession({skill?, specIds, name, reason, prompt?})
 2. SDK fires canUseTool("SuggestSession", input_data, context)
 3. permissions.py routes via INTERCEPTORS → suggest_session.py intercept_suggest_session()
-4. Intercept validates inputs, creates Future, sends agent/suggestSession request over WebSocket (with id)
+4. Intercept validates skill + specIds, creates Future, sends agent/suggestSession request (incl. prompt) over WebSocket (with id)
 5. wireEvents.ts receives → dispatches to sessionStore.onSuggestSession()
-6. sessionStore stores pending suggestion → ChatStream renders SuggestionCard
-7. User clicks "Start Session"
+6. sessionStore stores pending suggestion → ChatStream renders SuggestionCard (shows prompt if present)
+7. User clicks "Start Session" (or "Dismiss" → dismiss form → optional reason)
 8. sessionStore.resolveRequest() → sends agent/respond RPC to backend
 9. rpc/methods/agents.py → service.respond() → tracker resolves Future
-10. runner.py resumes → returns PermissionResultAllow to SDK
-11. Frontend: startSession() with suggested params → new session created
+10. runner.py resumes → returns PermissionResultAllow to SDK (approved or dismissed+reason)
+11. Frontend: startSession() with suggested params (incl. prompt) → new session created with session_prompt
 12. Frontend: switchSession() → auto-switches to new session tab
 ```
 
@@ -105,7 +107,7 @@ The agent calls `SuggestSession` with:
 
 Backend implementation is self-contained in `backend/app/agent/tools/suggest_session.py`, following the [tools package pattern](../backend/app/agent/tools/README.md). See [backend/app/agent/tools/SUGGEST_SESSION.md](../backend/app/agent/tools/SUGGEST_SESSION.md) for the backend-only spec.
 
-**Summary:** `suggest_session.py` defines the MCP tool schema, handler, and `intercept_suggest_session()` function. The `permissions.py` module routes `can_use_tool` callbacks to the intercept function via the `INTERCEPTORS` registry (suffix match). The intercept function validates inputs, creates a Future, sends `agent/suggestSession` request, awaits response, and returns `PermissionResultAllow` with either `approved: true` or `dismissed: true` in `updated_input`. No changes needed in `runner.py`, `service.py`, or `tracker.py`.
+**Summary:** `suggest_session.py` defines the MCP tool schema, handler, and `intercept_suggest_session()` function. The `permissions.py` module routes `can_use_tool` callbacks to the intercept function via the `INTERCEPTORS` registry (suffix match). The intercept function validates inputs (skill exists, specIds valid), creates a Future, sends `agent/suggestSession` request (including optional `prompt`), awaits response, and returns `PermissionResultAllow` with either `approved: true` or `{dismissed: true, dismissReason: "..."}` in `updated_input`. When approved, the frontend calls `startSession()` with the suggested params including `prompt`, which is threaded through `service.run_task()` → `tracker.create_task()` → `AgentTask.session_prompt` → `build_context()` as the session prompt in the system prompt.
 
 ## Frontend
 

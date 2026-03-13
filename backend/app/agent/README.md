@@ -244,7 +244,7 @@ graph TD
 | File | Responsibility | Depends On |
 |------|---------------|------------|
 | `models.py` | Pydantic models: AgentTask, AgentConfig, AgentEvent, AgentResult, Question, QuestionOption, AskUserQuestionResponse, ToolApprovalResponse | — |
-| `context.py` | Context assembly pipeline: loads skill instructions, project metadata, and spec content; composes system prompt. See [CONTEXT.md](CONTEXT.md). | models, tools/visualization, spec/service |
+| `context.py` | Context assembly pipeline: builds general instructions, loads skill instructions, project metadata, and spec content; composes system prompt. See [CONTEXT.md](CONTEXT.md). | models, spec/service |
 | `service.py` | Facade — start sessions, send messages, interrupt turns, end sessions, continue sessions (native resume), relay responses to pending futures | context, runner, tracker, core/config, spec/service |
 | `permissions.py` | Tool permission routing. Thin `can_use_tool()` callback that routes to tool-specific `intercept()` functions via `tools.INTERCEPTORS` registry, plus built-in handling for AskUserQuestion and default tool approval. | tools, tracker, models |
 | `transcribe.py` | Audio transcription via OpenAI Whisper API. `transcribe(audio_base64, mime_type) -> str`. Lazy-imports `openai`; optional dependency for browsers without Web Speech API. See [TRANSCRIBE.md](TRANSCRIBE.md). | openai (optional) |
@@ -262,7 +262,7 @@ graph TD
 | Method | Signature | Description |
 |--------|-----------|-------------|
 | `rebind_notify` | `(notify: Callable) -> None` | Update the WebSocket callback for all running tasks. Called when a new WebSocket connects so in-flight runners stream to the fresh connection. |
-| `run_task` | `(spec_ids: list[str], config: AgentConfig, notify: Callable, skill_id: str \| None = None, name: str = "") -> AgentTask` | Start a persistent agent session. Builds context from specs, skill, and project metadata via `context.build_context()`, then launches the background runner. Task is created in `idle` state and returned immediately. |
+| `run_task` | `(spec_ids: list[str], config: AgentConfig, notify: Callable, skill_id: str \| None = None, session_prompt: str \| None = None, name: str = "") -> AgentTask` | Start a persistent agent session. Builds context from specs, skill, session prompt, and project metadata via `context.build_context()`, then launches the background runner. Task is created in `idle` state and returned immediately. |
 | `send_message` | `(bonsai_sid: str, text: str) -> None` | Send a user message to the session, triggering a new turn. Enqueues the message; runner picks it up and calls `client.query()`. |
 | `interrupt_task` | `(bonsai_sid: str) -> None` | Cancel the current turn non-destructively. Calls `tracker.interrupt_futures()` to resolve pending futures with deny+interrupt, then calls `client.interrupt()` on the stored SDK client. The runner stays alive, the client is preserved, and the session returns to `idle` — ready for new messages with full context intact. |
 | `end_session` | `(bonsai_sid: str) -> None` | Gracefully close the session and SDK client. Session enters `done` state. |
@@ -297,7 +297,7 @@ All models with multi-word fields use a `camelCase` alias generator (`to_camel` 
 
 | Model | Fields (Python / JSON wire) | Description |
 |-------|--------|-------------|
-| `AgentTask` | bonsai_sid/`bonsaiSid`, status, spec_ids/`specIds`, skill_id/`skillId`?, config, session_id/`sessionId`?, created, updated | Session record. `status` is one of: `idle`, `running`, `done`, `error`. `skill_id` references the selected skill (if any). |
+| `AgentTask` | bonsai_sid/`bonsaiSid`, name, status, spec_ids/`specIds`, skill_id/`skillId`?, session_prompt/`sessionPrompt`?, config, session_id/`sessionId`?, created, updated | Session record. `status` is one of: `idle`, `running`, `done`, `error`. `skill_id` references the selected skill (if any). `session_prompt` holds custom instructions passed via `agent/run` or `SuggestSession`. |
 | `AgentConfig` | model, max_turns/`maxTurns`, permission_mode/`permissionMode`, stream_text/`streamText`, betas, effort | Run configuration. `effort` is `str \| None` — null for auto, or `"low"`/`"medium"`/`"high"`/`"max"`. |
 | `AgentEvent` | bonsai_sid/`bonsaiSid`, session_id/`sessionId`, event_type/`eventType`, payload | Serializable event to send as notification |
 | `AgentResult` | bonsai_sid/`bonsaiSid`, session_id/`sessionId`, result, cost_usd/`costUsd`, turns, duration_ms/`durationMs`, usage | Turn result (sent with `turnComplete`) or final session result (sent with `done`) |
@@ -358,7 +358,7 @@ For mid-turn interactions where the agent needs user input, `runner.py` suspends
 | Trigger | Server sends | Client responds with |
 |---------|-------------|----------------------|
 | `canUseTool` fires with `tool_name="AskUserQuestion"` | `agent/askUserQuestion` (JSON-RPC request with `id`); params: `{ bonsaiSid, questions }` | `agent/respond { bonsaiSid, requestId, response: AskUserQuestionResponse }` |
-| `canUseTool` fires with `tool_name="SuggestSession"` | `agent/suggestSession` (JSON-RPC request with `id`); params: `{ bonsaiSid, skill, specIds, name, reason }` | `agent/respond { bonsaiSid, requestId, response: ToolApprovalResponse }` — approve: `{"behavior":"allow"}`, dismiss: `{"behavior":"deny"}` |
+| `canUseTool` fires with `tool_name="SuggestSession"` | `agent/suggestSession` (JSON-RPC request with `id`); params: `{ bonsaiSid, skill, specIds, name, reason, prompt? }` | `agent/respond { bonsaiSid, requestId, response: ToolApprovalResponse }` — approve: `{"behavior":"allow"}`, dismiss: `{"behavior":"deny", "dismissReason": "..."}` |
 | `canUseTool` fires with any other `tool_name` | `agent/confirmAction` (JSON-RPC request with `id`); params: `{ bonsaiSid, toolName, toolInput }` | `agent/respond { bonsaiSid, requestId, response: ToolApprovalResponse }` |
 
 **Suspension mechanism:**
@@ -423,13 +423,14 @@ async with ClaudeSDKClient(options=options) as client:
 
 ## Context Assembly
 
-Context assembly is handled by the `context.py` submodule. It builds the system prompt passed to the Claude Agent SDK by gathering content from three sources:
+Context assembly is handled by the `context.py` submodule. It builds the system prompt passed to the Claude Agent SDK by gathering content from four sources:
 
-1. **Skill instructions** — loaded from `{plugin_dir}/skills/{skill_id}/SKILL.md` (if a skill is selected)
-2. **Project metadata** — working directory path from `AppConfig`
-3. **Specification content** — loaded by ID via `spec_service.get_spec()`
+1. **General Instructions** — always-present behavioral rules: visualization, interaction style, spec-driven workflow, proactive suggestions, and available skills table (dynamically generated from SKILL.md frontmatter)
+2. **Skill instructions** — loaded from `{plugin_dir}/skills/{skill_id}/SKILL.md` (if a skill is selected). Combined with optional `session_prompt` into a "Your Task" section.
+3. **Project metadata** — working directory path from `AppConfig`
+4. **Specification content** — loaded by ID via `spec_service.get_spec()`
 
-Sections are ordered Skill -> Project -> Specs, with framing prompts (markdown headers and introductory text) between sections to help the LLM distinguish context types.
+Sections are ordered General Instructions → Skill → Project → Specs, with framing prompts (markdown headers and introductory text) between sections to help the LLM distinguish context types.
 
 **Full specification:** [CONTEXT.md](CONTEXT.md)
 

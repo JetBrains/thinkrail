@@ -295,9 +295,11 @@ This is a single-file submodule. No classes — just a pure function with helper
 
 | Helper | Responsibility |
 |--------|---------------|
+| `_strip_frontmatter(text)` | Removes YAML frontmatter (between `---` delimiters) from a string |
+| `_parse_frontmatter(text)` | Extracts simple `key: value` YAML frontmatter into a dict without requiring PyYAML |
+| `_scan_skill_frontmatter(plugin_dir)` | Scans all `skills/*/SKILL.md`, parses YAML frontmatter, returns sorted list of `(name, description)` tuples |
 | `_build_general_instructions(plugin_dir)` | Composes the General Instructions section, including scanning skills/ for the available skills table |
-| `_load_skill_body(plugin_dir, skill_id)` | Reads SKILL.md, strips frontmatter, returns markdown body |
-| `_scan_skill_frontmatter(plugin_dir)` | Scans all `skills/*/SKILL.md`, parses YAML frontmatter, returns list of `(name, description)` tuples |
+| `_load_skill(skill_id, plugin_dir)` | Reads SKILL.md, strips frontmatter, returns markdown body |
 | `_build_specs_section(spec_ids, spec_service)` | Loads specs by ID, formats as titled sections |
 
 ## Design Decisions
@@ -318,37 +320,21 @@ This is a single-file submodule. No classes — just a pure function with helper
 
 ## Integration with Agent Module
 
-### Current State (before implementation)
-
-`service.py._build_context()` loads specs only:
-
-```python
-def _build_context(self, spec_ids: list[str]) -> str:
-    parts = []
-    for sid in spec_ids:
-        detail = self._spec_service.get_spec(sid)
-        parts.append(f"# {detail.title}\n\n{detail.content}")
-    return "\n\n---\n\n".join(parts)
-```
-
-### Target State (after implementation)
-
-`service.py.run_task()` calls `build_context()` from `context.py`:
+`service.py._build_context_for()` delegates to `build_context()` from `context.py`:
 
 ```python
 from app.agent.context import build_context
 
-async def run_task(self, spec_ids, config, notify, skill_id=None):
-    task = self._tracker.create_task(spec_ids, config)
-    spec_context = build_context(
-        spec_ids=spec_ids,
-        skill_id=skill_id,
+def _build_context_for(self, task: AgentTask) -> str:
+    return build_context(
+        spec_ids=task.spec_ids,
+        skill_id=task.skill_id,
+        session_prompt=task.session_prompt,
         project_root=self._config.project_root,
-        config=config,
+        config=task.config,
         spec_service=self._spec_service,
         plugin_dir=self._config.plugin_dir,
     )
-    # ... launch runner with spec_context as system_prompt
 ```
 
 ### RPC Layer Change

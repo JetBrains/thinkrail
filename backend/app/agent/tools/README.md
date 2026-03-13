@@ -75,10 +75,11 @@ async def intercept_<tool>(
     tracker: Tracker,
     notify: Callable,
     task: AgentTask,
+    config: AppConfig,
 ) -> PermissionResultAllow | PermissionResultDeny
 ```
 
-Each intercept function receives the tool input, tracker (for futures), notify callback (for frontend requests), and the current task. Returns a permission result that the SDK understands.
+Each intercept function receives the tool input, tracker (for futures), notify callback (for frontend requests), the current task, and the app config (for plugin dir, registry path, etc.). Returns a permission result that the SDK understands.
 
 ## Tool File Contract
 
@@ -89,7 +90,6 @@ Every tool file in `tools/` must export:
 | `<tool>_mcp_server` | MCP server instance | Created via `create_sdk_mcp_server()`. Registered in `MCP_SERVERS`. |
 | `intercept_<tool>()` | `InterceptFn` | Handles the `can_use_tool()` callback for this tool. Registered in `INTERCEPTORS`. |
 | `<TOOL>_SCHEMA` | `dict` | JSON Schema for the tool's input parameters. Used by `@tool()` decorator. |
-| `VIZ_INSTRUCTIONS` *(viz only)* | `str` | System prompt instructions. Consumed by `context.py`. |
 
 ### Example: suggest_session.py
 
@@ -99,13 +99,18 @@ Every tool file in `tools/` must export:
 from claude_agent_sdk import create_sdk_mcp_server, tool, PermissionResultAllow
 from app.agent.tracker import Tracker
 from app.agent.models import AgentTask
+from app.core.config import AppConfig
 
 SUGGEST_SESSION_SCHEMA: dict = { ... }
 
 @tool("SuggestSession", "Suggest a follow-up session...", SUGGEST_SESSION_SCHEMA)
 async def _suggest_session(args: dict) -> dict:
+    if args.get("error"):
+        return {"content": [{"type": "text", "text": f"Error: {args['error']}"}]}
     if args.get("dismissed"):
-        return {"content": [{"type": "text", "text": "✗ Suggestion dismissed."}]}
+        reason = args.get("dismissReason", "")
+        msg = f"✗ Suggestion dismissed by developer: {reason}" if reason else "✗ Suggestion dismissed by developer."
+        return {"content": [{"type": "text", "text": msg}]}
     if args.get("approved"):
         return {"content": [{"type": "text", "text": f"✓ Session '{args.get('name', '')}' approved."}]}
     return {"content": [{"type": "text", "text": "Suggestion processed."}]}
@@ -115,23 +120,36 @@ suggest_session_mcp_server = create_sdk_mcp_server(
 )
 
 async def intercept_suggest_session(
-input_data: dict, tracker: Tracker, notify, task: AgentTask,
+    input_data: dict, tracker: Tracker, notify, task: AgentTask, config: AppConfig,
 ) -> PermissionResultAllow:
+    # Validate skill and specIds against plugin dir and registry
+    skill = input_data.get("skill", "")
+    if skill:
+        skill_error = _validate_skill(skill, config.plugin_dir)
+        if skill_error:
+            return PermissionResultAllow(behavior="allow", updated_input={**input_data, "error": skill_error})
+    # ... (specIds validation omitted for brevity)
+
     request_id = str(uuid4())
     future = tracker.register_future(task.bonsai_sid, request_id)
-    await notify("agent/suggestSession", {
+    payload = {
         "bonsaiSid": task.bonsai_sid,
-        "skill": input_data.get("skill", ""),
+        "skill": skill,
         "specIds": input_data.get("specIds", []),
         "name": input_data.get("name", ""),
         "reason": input_data.get("reason", ""),
-    }, request_id=request_id)
+    }
+    prompt = input_data.get("prompt")
+    if prompt:
+        payload["prompt"] = prompt
+    await notify("agent/suggestSession", payload, request_id=request_id)
     response = await future
     if response.get("behavior") == "deny":
-        return PermissionResultAllow(
-            behavior="allow",
-            updated_input={**input_data, "dismissed": True},
-        )
+        dismiss_reason = response.get("dismissReason") or response.get("message") or ""
+        updated = {**input_data, "dismissed": True}
+        if dismiss_reason:
+            updated["dismissReason"] = dismiss_reason
+        return PermissionResultAllow(behavior="allow", updated_input=updated)
     return PermissionResultAllow(
         behavior="allow",
         updated_input={**input_data, "approved": True},
