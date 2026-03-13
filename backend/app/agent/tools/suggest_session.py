@@ -28,7 +28,11 @@ SUGGEST_SESSION_SCHEMA: dict = {
     "properties": {
         "skill": {
             "type": "string",
-            "description": "Skill ID for the suggested session (e.g. 'module-design', 'task-spec')",
+            "description": (
+                "Skill ID for the suggested session. "
+                "Use the SHORT name without namespace prefix "
+                "(e.g. 'module-design', 'task-spec', NOT 'specdriven:module-design')."
+            ),
         },
         "specIds": {
             "type": "array",
@@ -66,7 +70,7 @@ async def _suggest_session(args: dict) -> dict:
     # Actual interaction handled by canUseTool interception.
     # This handler runs AFTER canUseTool returns Allow with updated_input.
     if args.get("error"):
-        return {"content": [{"type": "text", "text": f"Error: {args['error']}"}]}
+        return {"content": [{"type": "text", "text": f"Error: {args['error']}"}], "isError": True}
     if args.get("dismissed"):
         reason = args.get("dismissReason", "")
         msg = f"✗ Suggestion dismissed by developer: {reason}" if reason else "✗ Suggestion dismissed by developer."

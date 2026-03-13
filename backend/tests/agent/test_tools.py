@@ -389,9 +389,10 @@ class TestSuggestSessionHandler:
         assert "dismissed" in text.lower()
 
     async def test_handler_error(self) -> None:
-        """error field → content contains 'Error: ...'."""
+        """error field → isError=True and content contains 'Error: ...'."""
         from app.agent.tools.suggest_session import _suggest_session
 
         result = await _suggest_session.handler({"error": "Unknown skill"})
         text = result["content"][0]["text"]
         assert "Error: Unknown skill" in text
+        assert result["isError"] is True
