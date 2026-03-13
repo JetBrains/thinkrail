@@ -7,10 +7,6 @@ description: Show specification coverage, health, and gaps for the current proje
 
 You are generating a **specification status report** for the current project. This is the dashboard for spec-driven development.
 
-## IMPORTANT: Visualization Rules
-
-**NEVER** output ASCII box-drawing characters or ANSI escape codes. Always use `bonsai_visualize` to display results.
-
 ## Process
 
 ### Step 1: Gather data

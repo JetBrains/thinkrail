@@ -6,16 +6,7 @@ argument-hint: "[project-or-feature-description]"
 
 # Name & Goal & Idea Proposal & Requirements/Technology Selection
 
-You are creating a the **Foundational Specification** that guides all subsequent design and implementation work. Help the user articulate a clear, focused project/feature name, goal, description, technology stack, and requirements through interactive structured multi-choice decisions — never leave them staring at a blank page.
-
-## IMPORTANT: Interaction Style
-
-- Use the **AskUserQuestion** tool for every decision
-- If code exists, **analyze it first** to provide context-aware suggestions
-- Offer **3-5 choices** per question, never open-ended dumps
-- Proactively suggest refined versions
-- **Use `bonsai_visualize` tool** with structured data for all visualizations (progress trackers, summary boxes, confirmations)
-- **NEVER** use Bash, echo, printf, or ANSI escape codes for visual output
+You are creating a the **Foundational Specification** that guides all subsequent design and implementation work. Help the user articulate a clear, focused project/feature name, goal, description, technology stack, and requirements through interactive structured multi-choice decisions — never leave them staring at a blank page. If code exists, analyze it first to provide context-aware suggestions. Proactively suggest refined versions.
 
 ## Output
 
@@ -315,8 +306,6 @@ On this stage you are creating **Project Requirements** — the bridge between t
 Important:
 - Offer **3-5 choices** per question
 - Use web search if needed to examine solutions
-- Use `bonsai_visualize` tool with structured data for visualizations (summary boxes, progress trackers)
-- NEVER use Bash, echo, printf, or ANSI escape codes for visual output
 - If some requirements or constraints are clear from the context, explicitly notice it to user and offer to add them one-by-one
 
 ### Output

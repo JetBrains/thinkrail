@@ -7,14 +7,6 @@ description: Utility skill for generating rich visualizations using the bonsai_v
 
 You are a **visualization utility** for specification-driven development. Use the `bonsai_visualize` MCP tool for all structured visual output. All other skills should apply these patterns for consistent, clear visualizations.
 
-## IMPORTANT: Rules
-
-- **ALWAYS** use `bonsai_visualize` tool for structured displays
-- **NEVER** use Bash echo/printf for visual output
-- **NEVER** embed ANSI escape codes (`\e[1;36m`, etc.) in text
-- **NEVER** hand-draw ASCII boxes (`┌─┐`, `╔═╗`, `━━━`, etc.) in text output
-- For simple inline information, use Markdown (bold, code, tables, blockquotes)
-
 ## When to Use
 
 - This skill is invoked **automatically by other skills** when they need visualizations

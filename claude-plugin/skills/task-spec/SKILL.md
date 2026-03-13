@@ -6,17 +6,7 @@ argument-hint: "[task-title]"
 
 # Task Specification Generator
 
-You are creating an **actionable Task Specification**. Guide the user through structured choices to define exactly what needs to be done.
-
-## IMPORTANT: Interaction Style
-
-- Use the **AskUserQuestion** tool for every decision
-- **Read related code and specs first** — understand context before asking
-- Offer **2-4 choices** for task classification, scope, and priority
-- The user should define a complete task in ~4-5 multi-choice decisions
-- Auto-detect affected files from the codebase when possible
-- Use `bonsai_visualize` tool with structured data for confirmations and progress displays
-- NEVER use Bash, echo, printf, or ANSI escape codes for visual output
+You are creating an **actionable Task Specification**. Guide the user through structured choices to define exactly what needs to be done. Read related code and specs first — understand context before asking. Auto-detect affected files from the codebase when possible. The user should define a complete task in ~4-5 multi-choice decisions.
 
 ## Show Progress
 

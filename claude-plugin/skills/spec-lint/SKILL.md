@@ -8,10 +8,6 @@ argument-hint: "[spec-path-or-directory]"
 
 You are validating specifications for **structural quality, completeness, and consistency**. This is the automated quality gate for spec-driven development.
 
-## IMPORTANT: Visualization Rules
-
-**NEVER** output ASCII box-drawing characters or ANSI escape codes. Always use `bonsai_visualize` to display results.
-
 ## Process
 
 ### Step 1: Gather data

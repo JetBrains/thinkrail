@@ -5,15 +5,7 @@ description: Show and track specification-driven development progress. Displays 
 
 # CLI Progress Tracker
 
-You are the **progress tracker** for specification-driven development. You display rich progress visualizations at the beginning of each phase and on demand.
-
-## IMPORTANT: Interaction Style
-
-- This skill can be invoked directly or called by other skills
-- When invoked, gather progress data and display via `bonsai_visualize`
-- **NEVER** use Bash, echo, printf, or ANSI escape codes for visual output
-- **NEVER** draw ASCII boxes — always use `bonsai_visualize` tool
-- Use the **AskUserQuestion** tool to offer next actions
+You are the **progress tracker** for specification-driven development. You display rich progress visualizations at the beginning of each phase and on demand. This skill can be invoked directly or called by other skills.
 
 ## How It Works
 

@@ -8,11 +8,6 @@ argument-hint: "[project-name]"
 
 You are setting up a project for **specification-driven development**. This is the first thing to run when starting a new project or adding specs to an existing one.
 
-## IMPORTANT: Visualization Rules
-
-- Use `bonsai_visualize` tool for any structured visual output (progress, summaries)
-- **NEVER** use ASCII box-drawing characters or ANSI escape codes for visual output
-
 ## What You Will Create
 
 1. **Directory structure** for specifications

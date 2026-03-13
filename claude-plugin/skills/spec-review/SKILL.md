@@ -8,11 +8,6 @@ argument-hint: "[spec-path-or-directory]"
 
 You are helping the user **review and validate** their existing specifications. You will check for accuracy, completeness, consistency, and adherence to specification best practices.
 
-## IMPORTANT: Visualization Rules
-
-- Use `bonsai_visualize` tool for any structured visual output (summaries, tables)
-- **NEVER** use ASCII box-drawing characters or ANSI escape codes for visual output
-
 ## Quick Context
 
 Before diving in, read `.specs/registry.json` for the list of specs and their metadata. Compare spec file mtimes against covered code mtimes to identify which specs are stale and need review most urgently.

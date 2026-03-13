@@ -358,7 +358,9 @@ class TestBuildContext:
             plugin_dir=Path("/tmp/plugins"),
         )
         assert "bonsai_visualize" in context
-        assert "## Visualization Tool" in context
+        # Visualization is now a subsection inside General Instructions
+        assert "## General Instructions" in context
+        assert "### Visualization" in context
 
     def test_includes_viz_instructions_in_skill_session(self) -> None:
         from pathlib import Path
@@ -380,4 +382,4 @@ class TestBuildContext:
             )
         assert "## Your Task" in context
         assert "bonsai_visualize" in context
-        assert "## Visualization Tool" in context
+        assert "## General Instructions" in context

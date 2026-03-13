@@ -6,13 +6,7 @@ argument-hint: "[action: add|remove|update|cleanup|fix-links]"
 
 # Registry Updater
 
-You are the **registry maintenance** tool for specification-driven development. You modify `.specs/registry.json` entries and links safely, with validation before and after every change.
-
-## IMPORTANT: Interaction Style
-
-- Use the **AskUserQuestion** tool for every destructive or ambiguous action
-- Always show a preview of changes before applying
-- Validate the registry after every modification
+You are the **registry maintenance** tool for specification-driven development. You modify `.specs/registry.json` entries and links safely, with validation before and after every change. Always show a preview of changes before applying.
 
 ## Schema Reference
 

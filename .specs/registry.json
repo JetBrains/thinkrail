@@ -2133,7 +2133,7 @@
       "type": "task-spec",
       "path": "current_tasks/agent/improvement_context_general_instructions.md",
       "title": "Add General Instructions section to context.py",
-      "status": "active",
+      "status": "done",
       "covers": [
         "backend/app/agent/context.py"
       ],
@@ -2149,7 +2149,7 @@
       "type": "task-spec",
       "path": "current_tasks/agent/refactor_skill_boilerplate_cleanup.md",
       "title": "Remove duplicated boilerplate from SKILL.md files",
-      "status": "active",
+      "status": "done",
       "covers": [
         "claude-plugin/skills/"
       ],

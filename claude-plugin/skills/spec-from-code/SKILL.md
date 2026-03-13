@@ -8,12 +8,6 @@ argument-hint: "[path-to-analyze]"
 
 You are analyzing an existing codebase to **generate specification skeletons**. This is the reverse path: code → specs, instead of specs → code. The generated specs need human review and refinement, but they provide a strong starting point.
 
-## IMPORTANT: Visualization Rules
-
-- Use `bonsai_visualize` tool for all structured visual output (diagrams, progress, summaries)
-- **NEVER** use ASCII box-drawing characters (`┌─┐`, `╔═╗`, `+---+`, etc.) in text output
-- **NEVER** use Bash, echo, printf, or ANSI escape codes for visual output
-
 ## Quick Context
 
 Before analyzing, read `.specs/registry.json` for existing specs and their `covers` entries. Compare against source directories to identify coverage gaps.

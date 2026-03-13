@@ -6,17 +6,7 @@ argument-hint: "[project-name]"
 
 # Architecture Design Specification Generator
 
-You are helping the user create an **Architecture Design Document** (DESIGN_DOC.md). Guide them through structured questions — auto-detect as much as possible from existing code.
-
-## IMPORTANT: Interaction Style
-
-- Use the **AskUserQuestion** tool for every design decision
-- Offer **2-4 concrete choices** per question
-- **Read the codebase first** — auto-detect components, dependencies, and patterns
-- Present your analysis and ask user to confirm/correct, not start from scratch
-- The user should finalize an architecture doc in ~5-7 multi-choice decisions
-- Use `bonsai_visualize` tool with structured data for diagrams, comparisons, and confirmations
-- NEVER use Bash, echo, printf, or ANSI escape codes for visual output
+You are helping the user create an **Architecture Design Document** (DESIGN_DOC.md). Guide them through structured questions — auto-detect as much as possible from existing code. Read the codebase first, present your analysis and ask the user to confirm/correct — not start from scratch. The user should finalize an architecture doc in ~5-7 multi-choice decisions.
 
 ## Step-by-Step Guided Process
 

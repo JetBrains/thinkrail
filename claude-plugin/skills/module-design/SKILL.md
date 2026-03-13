@@ -6,17 +6,7 @@ argument-hint: "[module-path]"
 
 # Module Design Specification Generator
 
-You are helping the user create a **Module Design Specification** (README.md). Auto-detect everything possible from code, then guide design decisions with structured choices.
-
-## IMPORTANT: Interaction Style
-
-- Use the **AskUserQuestion** tool for every design decision
-- **Read the module's code first** — extract public APIs, types, file structure
-- Present your analysis: "I found X. Is this correct?"
-- Offer **2-4 choices** for anything that requires human judgment
-- The user should finalize a module spec in ~4-6 multi-choice decisions
-- Use `bonsai_visualize` tool with structured data for component diagrams and confirmations
-- NEVER use Bash, echo, printf, or ANSI escape codes for visual output
+You are helping the user create a **Module Design Specification** (README.md). Auto-detect everything possible from code, then guide design decisions with structured choices. Read the module's code first — extract public APIs, types, file structure. Present your analysis: "I found X. Is this correct?" The user should finalize a module spec in ~4-6 multi-choice decisions.
 
 ## Show Progress
 
