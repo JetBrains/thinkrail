@@ -11,6 +11,7 @@ from claude_agent_sdk import PermissionResultAllow, PermissionResultDeny, ToolPe
 from app.agent.models import AgentTask
 from app.agent.tools import INTERCEPTORS
 from app.agent.tracker import Tracker
+from app.core.config import AppConfig
 
 logger = logging.getLogger(__name__)
 
@@ -23,6 +24,7 @@ async def can_use_tool(
     tracker: Tracker,
     notify: Any,
     task: AgentTask,
+    config: AppConfig,
 ) -> PermissionResultAllow | PermissionResultDeny:
     """Route tool permission requests to the appropriate handler.
 
@@ -33,7 +35,7 @@ async def can_use_tool(
     # Check registered tool interceptors (suffix match)
     for suffix, intercept_fn in INTERCEPTORS.items():
         if tool_name.endswith(suffix):
-            return await intercept_fn(input_data, tracker, notify, task)
+            return await intercept_fn(input_data, tracker, notify, task, config)
 
     # Built-in: AskUserQuestion
     if tool_name == "AskUserQuestion":

@@ -13,6 +13,7 @@ from claude_agent_sdk import PermissionResultAllow, create_sdk_mcp_server, tool
 
 from app.agent.models import AgentTask
 from app.agent.tracker import Tracker
+from app.core.config import AppConfig
 
 VIZ_SCHEMA: dict = {
     "type": "object",
@@ -86,6 +87,7 @@ async def intercept_visualize(
     tracker: Tracker,
     notify: Any,
     task: AgentTask,
+    config: AppConfig,
 ) -> PermissionResultAllow:
     """Auto-approve: display-only tool, no side effects."""
     return PermissionResultAllow(behavior="allow")

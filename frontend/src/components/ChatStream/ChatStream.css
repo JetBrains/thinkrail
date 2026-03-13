@@ -456,6 +456,79 @@
 }
 .chat-approval-expanded .chat-approval-desc { margin-top: var(--space-xs); margin-bottom: 0; }
 
+/* ── Suggestion Card ── */
+.chat-suggestion {
+  border: 2px solid var(--blue);
+  border-radius: var(--radius-md);
+  padding: var(--space-md) var(--space-lg);
+  max-width: 90%;
+  background: var(--elevated);
+  animation: slideUp 0.22s ease-out;
+}
+.chat-suggestion-answered { opacity: 0.7; }
+.chat-suggestion--approved { border-color: var(--green); }
+.chat-suggestion--dismissed { border-color: var(--hint); }
+.chat-suggestion-header {
+  font-size: 9px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--blue);
+  margin-bottom: var(--space-xs);
+}
+.chat-suggestion-name {
+  font-weight: 600;
+  font-size: 13px;
+  color: var(--text);
+  margin-bottom: var(--space-xs);
+}
+.chat-suggestion-reason {
+  font-size: 12px;
+  color: var(--muted);
+  margin-bottom: var(--space-sm);
+}
+.chat-suggestion-meta {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  margin-bottom: var(--space-xs);
+}
+.chat-suggestion-skill {
+  color: var(--cyan);
+  background: rgba(125, 207, 255, 0.1);
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 11px;
+}
+.chat-suggestion-specs {
+  font-size: 11px;
+  color: var(--hint);
+}
+.chat-suggestion-actions {
+  display: flex;
+  gap: var(--space-sm);
+  margin-top: var(--space-md);
+}
+.chat-suggestion-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  cursor: pointer;
+  padding: var(--space-xs) 0;
+}
+.chat-suggestion-row:hover { background: var(--hover); }
+.chat-suggestion-status { white-space: nowrap; font-weight: 500; font-size: 12px; }
+.chat-suggestion-approved { color: var(--green); }
+.chat-suggestion-dismissed { color: var(--hint); }
+.chat-suggestion-expanded {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+  padding-top: var(--space-sm);
+  border-top: 1px solid var(--border);
+  margin-top: var(--space-sm);
+}
+.chat-suggestion-expanded .chat-suggestion-reason { margin-bottom: 0; }
+
 /* ── Plan Approval Card ── */
 .chat-plan-approval {
   border: 2px solid var(--purple);

@@ -19,7 +19,7 @@
 
 This design introduces **proactive tools** — a class of agent tools that let the LLM drive the developer's UI and workflow, not just respond in a chat stream. Instead of the developer manually orchestrating sessions and checking context, the agent calls proactive tools to suggest actions, report progress, and push structured information to UI surfaces beyond the chat.
 
-All proactive tools follow a single pattern already proven in the codebase: **`canUseTool` interception** in `runner.py`. The agent calls a tool, the SDK's permission hook fires, and the runner translates it into a frontend-facing notification or request — exactly how `AskUserQuestion` already works.
+All proactive tools follow a single pattern already proven in the codebase: **`canUseTool` interception**. The agent calls a tool, the SDK's permission hook fires, and the intercept function translates it into a frontend-facing notification or request — exactly how `AskUserQuestion` already works.
 
 ## Current State
 
@@ -61,16 +61,18 @@ Agent (LLM)
 All agent-to-UI communication goes through the SDK's `canUseTool` hook. When the agent calls a tool, the hook fires before the tool executes:
 
 ```python
-# runner.py — can_use_tool
-async def can_use_tool(tool_name, input_data, context):
+# permissions.py — can_use_tool (routes via INTERCEPTORS registry)
+async def can_use_tool(tool_name, input_data, context, *, tracker, notify, task, ctx):
+    # Dispatch to registered tool interceptors (suffix match)
+    for suffix, intercept_fn in INTERCEPTORS.items():
+        if tool_name.endswith(suffix):
+            return await intercept_fn(input_data, tracker, notify, task, ctx)
+    # Built-in: AskUserQuestion
     if tool_name == "AskUserQuestion":
-        # existing: send request, await response
-    elif tool_name in PROACTIVE_INTERACTIVE_TOOLS:
-        # NEW: send request, await approval/dismiss
-    elif tool_name in PROACTIVE_PASSIVE_TOOLS:
-        # NEW: emit notification, auto-approve immediately
+        ...  # existing: send request, await response
+    # Default: generic tool approval
     else:
-        # existing: send confirmAction, await approval
+        ...  # existing: send confirmAction, await approval
 ```
 
 ### Interactive proactive tools
@@ -101,35 +103,16 @@ For tools that push info without needing a response (e.g., progress updates):
 | **Passive** | Auto-approved, notification only | UpdateProgress | [PROGRESS.md](../backend/app/agent/tools/PROGRESS.md) |
 
 Future proactive tools (e.g., PushContext, SuggestAction) would follow one of these two categories. The pattern is extensible — adding a new proactive tool only requires:
-1. A new branch in `can_use_tool` (runner.py)
-2. A new notification/request method name
-3. Frontend handler + UI component
+1. A new tool file in `tools/` (schema + handler + MCP server + intercept)
+2. Registration in `tools/__init__.py` (`MCP_SERVERS` + `INTERCEPTORS`)
+3. A new notification/request method name
+4. Frontend handler + UI component
 
-## Source Tree
+## Affected Areas
 
-```
-backend/app/agent/
-  runner.py              # MODIFIED — new @tool definitions for SuggestSession + UpdateProgress,
-                         #            new branches in can_use_tool for interception,
-                         #            new MCP server registration (or extend existing bonsai-viz server)
-  models.py              # MODIFIED — add SessionSuggestion + ProgressUpdate Pydantic models
-  context.py             # MODIFIED — add shared proactive-tools preamble to system prompt
+**Backend:** Each proactive tool is self-contained in the `backend/app/agent/tools/` package (schema, handler, MCP server, and intercept logic in one file). Permission routing dispatches `canUseTool` callbacks via the `INTERCEPTORS` registry. No changes to runner, service, tracker, or persistence — all existing infrastructure is reused as-is. See [Tools Package spec](../backend/app/agent/tools/README.md) for the implementation pattern.
 
-frontend/src/
-  store/wireEvents.ts    # MODIFIED — wire agent/suggestSession + agent/progressUpdate
-  store/sessionStore.ts  # MODIFIED — add onSuggestSession handler, progress state, pending suggestion
-  components/ChatStream/
-    ChatStream.tsx        # MODIFIED — new case for suggestSession event → SuggestionCard
-    SuggestionCard.tsx    # NEW — interactive card: skill pill, name, reason, Start/Dismiss
-  components/ContextPanel/
-    sections/
-      ProgressSection.tsx # NEW — phase, plan, status display in Agent Context mode
-    modes/
-      AgentContext.tsx     # MODIFIED — add ProgressSection as first section
-  types/session.ts        # MODIFIED — add ProgressData type, suggestion to PendingRequest union
-```
-
-**Unchanged files:** `service.py`, `tracker.py`, `persistence.py`, `notifications.py` — all existing infrastructure is reused as-is.
+**Frontend:** Event wiring, store handlers, chat stream rendering, and context panel sections. Each tool needs a wire subscription, store handler, and UI component. See individual feature specs for file-level details.
 
 ## Data Flow
 
@@ -142,7 +125,7 @@ Agent LLM
 SDK canUseTool fires
   │
   ▼
-runner.py can_use_tool
+permissions.py → intercept function
   │ 1. Validate skill exists in plugin, specIds exist in registry
   │ 2. Create asyncio.Future via tracker.register_future()
   │ 3. Send agent/suggestSession (JSON-RPC request with id) → frontend
@@ -154,7 +137,7 @@ Frontend wireEvents.ts → sessionStore.onSuggestSession()
 Developer clicks Start or Dismiss
   │ sessionStore.resolveRequest() → agent/respond RPC → backend
   ▼
-tracker resolves Future → runner.py resumes
+tracker resolves Future → intercept function resumes
   │ Return PermissionResultAllow with {approved: true} or {dismissed: true}
   ▼
 Agent receives tool result, continues
@@ -169,7 +152,7 @@ Agent LLM
 SDK canUseTool fires
   │
   ▼
-runner.py can_use_tool
+permissions.py → intercept function
   │ 1. Emit agent/progressUpdate notification (no id) → frontend
   │ 2. Immediately return PermissionResultAllow (no suspension)
   ▼
@@ -183,30 +166,19 @@ Agent continues immediately (no waiting)
 
 ### Backend
 
-| File | Change |
-|------|--------|
-| `runner.py` | Register SuggestSession + UpdateProgress as MCP tools (same `@tool` + `create_sdk_mcp_server` pattern as `bonsai_visualize`). Add branches in `can_use_tool` for interception. Backend validates skill/specIds before forwarding SuggestSession. |
-| `models.py` | Add `SessionSuggestion` and `ProgressUpdate` Pydantic models for validation |
-| `context.py` | Add shared proactive-tools preamble to system prompt — all skills get awareness of SuggestSession and UpdateProgress |
+Each proactive tool lives in the `backend/app/agent/tools/` package as a self-contained file. The tools package exposes `MCP_SERVERS` (wired into the SDK) and `INTERCEPTORS` (used by `permissions.py` for `canUseTool` routing). See [Tools Package spec](../backend/app/agent/tools/README.md) for the pattern and file-level details.
 
-No changes to: `service.py`, `tracker.py`, `persistence.py`, `notifications.py`.
+No changes to: `runner.py`, `service.py`, `tracker.py`, `persistence.py`, `notifications.py`.
 
 ### Frontend
 
-| File | Change |
-|------|--------|
-| `wireEvents.ts` | Wire `agent/suggestSession` (request) and `agent/progressUpdate` (notification) |
-| `sessionStore.ts` | Add handlers, `progress` state field, pending suggestion state |
-| `ChatStream.tsx` | New case for `suggestSession` event → renders `<SuggestionCard>` |
-| `SuggestionCard.tsx` | NEW: interactive card with skill pill, name, reason, Start/Dismiss buttons |
-| `ProgressSection.tsx` | NEW: phase, plan steps, status display in ContextPanel Agent Context mode |
-| `types/session.ts` | Add `ProgressData` type, `"suggestion"` to `PendingRequest.type` union |
+Each proactive tool needs: event subscription in the store wiring layer, a store handler, and a UI component in the chat stream. See individual feature specs ([SuggestSession](SUGGEST_SESSION.md), [UpdateProgress](UPDATE_PROGRESS.md)) for file-level details.
 
-### Plugin / Context
+### Tool Availability & Skill Awareness
 
 | Concern | Approach |
 |---------|----------|
-| Tool availability | **MCP tool registration** — same `@tool` + `create_sdk_mcp_server` pattern as `bonsai_visualize`. Tools registered in `runner.py`, agent sees real schemas. |
+| Tool availability | **MCP tool registration** — same `@tool` + `create_sdk_mcp_server` pattern as `bonsai_visualize`. Tools registered in `tools/__init__.py`, agent sees real schemas. |
 | Skill awareness | **Shared preamble** — `context.py` injects proactive tool instructions into every session's system prompt. All skills can suggest sessions and report progress. |
 
 ## Key Design Decisions
@@ -216,15 +188,15 @@ No changes to: `service.py`, `tracker.py`, `persistence.py`, `notifications.py`.
 | Reuse canUseTool | All proactive tools go through the same hook as AskUserQuestion | Zero new infrastructure. Proven pattern. Single interception point. |
 | Two categories | Interactive (suspend + await) vs. Passive (auto-approve) | Right semantics: meaningful actions need approval, informational updates shouldn't block. |
 | Allow on dismiss | `PermissionResultAllow` with dismissal flag, never `PermissionResultDeny` | Deny triggers SDK error handling. We want graceful continuation. |
-| No new backend files | Changes fit in existing `runner.py` + `models.py` + `context.py` | Small, focused additions. Each tool is a few lines in the hook. |
+| Self-contained tool files | Each proactive tool is one file in `tools/` with schema + handler + server + intercept | Follows the tools package pattern. Easy to find everything about a tool in one place. |
 | Extensible pattern | Adding a new proactive tool = one hook branch + one notification + one component | Low cost to add future tools (PushContext, SuggestAction, etc.) |
-| Tool registration | MCP tools via `@tool` + `create_sdk_mcp_server` (same as `bonsai_visualize`) | Proven pattern already in `runner.py`. Agent sees real tool schemas with names, descriptions, and parameter definitions. `canUseTool` fires before execution, so interception is guaranteed. |
+| Tool registration | MCP tools via `@tool` + `create_sdk_mcp_server` (same as `bonsai_visualize`) | Proven pattern in the tools package. Agent sees real tool schemas with names, descriptions, and parameter definitions. `canUseTool` fires before execution, so interception is guaranteed. |
 | Skill awareness | Shared preamble in `context.py` for all skills | All skills benefit from UpdateProgress (progress reporting) and SuggestSession (follow-up suggestions). No opt-in overhead — every session gets proactive tool awareness. |
 | Backend validation | Runner validates `skill` and `specIds` exist before forwarding SuggestSession to frontend | Catches bad suggestions early. Agent gets clear error feedback. Frontend never renders an invalid suggestion card. |
 
 ## Resolved Questions
 
-1. ~~**Tool availability:**~~ **Resolved** — MCP tool registration using `@tool` + `create_sdk_mcp_server`, the same pattern as `bonsai_visualize`. Tools are registered in `runner.py` and the agent sees real schemas.
+1. ~~**Tool availability:**~~ **Resolved** — MCP tool registration using `@tool` + `create_sdk_mcp_server`, the same pattern as `bonsai_visualize`. Tools are registered in the `tools/` package and the agent sees real schemas.
 
 2. ~~**Skill awareness:**~~ **Resolved** — Shared preamble in `context.py`. All skills automatically know about proactive tools. No per-skill opt-in needed.
 
@@ -234,7 +206,7 @@ No changes to: `service.py`, `tracker.py`, `persistence.py`, `notifications.py`.
 
 ## Feature & Backend Specs
 
-Each proactive tool has a **feature spec** (full end-to-end: protocol + backend + frontend + scenarios) and a **backend spec** (runner.py changes only):
+Each proactive tool has a **feature spec** (full end-to-end: protocol + backend + frontend + scenarios) and a **backend spec** (tool file implementation):
 
 | Tool | Feature Spec | Backend Spec | Category |
 |------|-------------|-------------|----------|

@@ -177,6 +177,25 @@ export function wireEvents(client: RpcClient): Unsubscribe {
     }),
   );
 
+  unsubs.push(
+    client.on("agent/suggestSession", (p) => {
+      const params = p as Record<string, unknown>;
+      const bonsaiSid = params.bonsaiSid as string;
+      useSessionStore.getState().onSuggestSession(params);
+      useNotificationStore.getState().incrementPendingInput();
+      useNotificationStore.getState().addToast({
+        bonsaiSid,
+        eventType: "suggestion",
+        message: "Agent suggests a new session",
+        persistent: false,
+      });
+      useNotificationStore.getState().setBadge(bonsaiSid, {
+        type: "suggestion",
+        pulsing: true,
+      });
+    }),
+  );
+
   // ── Visualization dashboard ──
   unsubs.push(
     client.on("viz/stateChanged", (p) => {

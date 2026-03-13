@@ -1,6 +1,7 @@
 import { lazy, Suspense, useCallback, useEffect, useRef, useState, forwardRef, useImperativeHandle } from "react";
 import type { AgentEvent } from "@/types/agent.ts";
 import type { Session } from "@/types/session.ts";
+import { useSessionStore } from "@/store/sessionStore.ts";
 import { SystemMessage } from "./SystemMessage.tsx";
 import { AssistantMessage } from "./AssistantMessage.tsx";
 import { ToolCallCard } from "./ToolCallCard.tsx";
@@ -10,6 +11,7 @@ import { SubagentBlock } from "./SubagentBlock.tsx";
 import { QuestionCard } from "./QuestionCard.tsx";
 import { ApprovalCard } from "./ApprovalCard.tsx";
 import { PlanApprovalCard } from "./PlanApprovalCard.tsx";
+import SuggestionCard from "./SuggestionCard.tsx";
 import { CompletionBanner } from "./CompletionBanner.tsx";
 import { ErrorBanner } from "./ErrorBanner.tsx";
 import { CompactMarker } from "./CompactMarker.tsx";
@@ -179,11 +181,11 @@ export const ChatStream = forwardRef<ChatStreamHandle, ChatStreamProps>(function
       const parentIdx = agentStartIdx.get(agentId);
       if (parentIdx === undefined) continue;
 
-      // Hoist bonsai_visualize, askUserQuestion, and confirmAction to top level
-      // so they remain visible outside the collapsible SubagentBlock
+      // Hoist bonsai_visualize, askUserQuestion, confirmAction, and suggestSession
+      // to top level so they remain visible outside the collapsible SubagentBlock
       const isViz = ev.eventType === "toolCallStart" &&
         (ev.payload.toolName as string)?.endsWith("bonsai_visualize");
-      const isInteraction = ev.eventType === "askUserQuestion" || ev.eventType === "confirmAction";
+      const isInteraction = ev.eventType === "askUserQuestion" || ev.eventType === "confirmAction" || ev.eventType === "suggestSession";
       if (!isViz && !isInteraction) {
         subagentChildren.get(parentIdx)!.push(i);
         childIndices.add(i);
@@ -376,6 +378,55 @@ export const ChatStream = forwardRef<ChatStreamHandle, ChatStreamProps>(function
                     behavior: "deny",
                     message: "User denied",
                     interrupt: false,
+                  })
+                }
+              />
+            );
+          }
+
+          case "suggestSession": {
+            const requestId = (p.requestId as string) ?? "";
+            const isAnswered = answeredRequests.has(requestId);
+            const savedResponse = answeredRequests.get(requestId) as Record<string, unknown> | undefined;
+            const decision = savedResponse?.behavior === "allow" ? "approved" as const : "dismissed" as const;
+
+            return (
+              <SuggestionCard
+                key={k}
+                skill={(p.skill as string) ?? ""}
+                specIds={(p.specIds as string[]) ?? []}
+                name={(p.name as string) ?? ""}
+                reason={(p.reason as string) ?? ""}
+                answered={isAnswered}
+                decision={isAnswered ? decision : undefined}
+                onApprove={async () => {
+                  onResolveRequest(requestId, { behavior: "allow" });
+                  // Create the suggested session and auto-switch to it
+                  const store = useSessionStore.getState();
+                  const currentSession = session;
+                  try {
+                    const newSid = await store.startSession({
+                      skillId: (p.skill as string) ?? undefined,
+                      specIds: (p.specIds as string[]) ?? [],
+                      name: (p.name as string) ?? "Suggested Session",
+                      config: {
+                        model: currentSession?.model ?? "sonnet",
+                        maxTurns: 25,
+                        permissionMode: currentSession?.permissionMode ?? "default",
+                        streamText: true,
+                        betas: currentSession?.betas ?? [],
+                        effort: currentSession?.effort ?? null,
+                      },
+                    });
+                    store.switchSession(newSid);
+                  } catch (err) {
+                    console.error("[SuggestionCard] Failed to start suggested session:", err);
+                  }
+                }}
+                onDismiss={() =>
+                  onResolveRequest(requestId, {
+                    behavior: "deny",
+                    message: "Dismissed",
                   })
                 }
               />

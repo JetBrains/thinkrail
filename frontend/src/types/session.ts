@@ -44,10 +44,17 @@ export interface SessionMetrics {
 
 export interface PendingRequest {
   requestId: string;
-  type: "question" | "approval";
+  type: "question" | "approval" | "suggestion";
+  // Question fields
   questions?: Question[];
+  // Approval fields
   toolName?: string;
   toolInput?: Record<string, unknown>;
+  // Suggestion fields
+  skill?: string;
+  specIds?: string[];
+  name?: string;
+  reason?: string;
 }
 
 export interface Session {

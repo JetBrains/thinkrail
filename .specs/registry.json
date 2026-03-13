@@ -106,14 +106,14 @@
       "covers": [
         "backend/app/agent/context.py"
       ],
+      "updated": "2026-03-03",
       "tags": [
         "backend",
         "agent-orchestration",
         "context",
         "prompt"
       ],
-      "created": "2026-03-03",
-      "updated": "2026-03-03"
+      "created": "2026-03-03"
     },
     {
       "id": "agent-persistence",
@@ -171,8 +171,6 @@
       "path": "frontend/README.md",
       "title": "Frontend Module",
       "status": "active",
-      "created": "2026-03-02",
-      "updated": "2026-03-08",
       "covers": [
         "frontend/"
       ],
@@ -181,7 +179,9 @@
         "module",
         "react",
         "typescript"
-      ]
+      ],
+      "created": "2026-03-02",
+      "updated": "2026-03-08"
     },
     {
       "id": "webview",
@@ -241,8 +241,6 @@
       "path": "frontend/ui-specs/GRAPH_INTERACTIONS.md",
       "title": "Graph Interactions",
       "status": "active",
-      "created": "2026-03-02",
-      "updated": "2026-03-05",
       "covers": [
         "frontend/src/components/GraphView/"
       ],
@@ -251,7 +249,9 @@
         "ui",
         "graph",
         "visualization"
-      ]
+      ],
+      "created": "2026-03-02",
+      "updated": "2026-03-05"
     },
     {
       "id": "new-session-modal",
@@ -259,8 +259,6 @@
       "path": "frontend/ui-specs/NEW_SESSION_MODAL.md",
       "title": "New Session Modal",
       "status": "active",
-      "created": "2026-03-02",
-      "updated": "2026-03-05",
       "covers": [
         "frontend/src/components/NewSessionModal/"
       ],
@@ -269,7 +267,9 @@
         "ui",
         "modal",
         "session"
-      ]
+      ],
+      "created": "2026-03-02",
+      "updated": "2026-03-05"
     },
     {
       "id": "command-palette",
@@ -277,8 +277,6 @@
       "path": "frontend/ui-specs/COMMAND_PALETTE.md",
       "title": "Command Palette",
       "status": "active",
-      "created": "2026-03-02",
-      "updated": "2026-03-05",
       "covers": [
         "frontend/src/components/CommandPalette/"
       ],
@@ -287,7 +285,9 @@
         "ui",
         "search",
         "navigation"
-      ]
+      ],
+      "created": "2026-03-02",
+      "updated": "2026-03-05"
     },
     {
       "id": "notification-system",
@@ -295,8 +295,6 @@
       "path": "frontend/ui-specs/NOTIFICATION_SYSTEM.md",
       "title": "Notification System",
       "status": "active",
-      "created": "2026-03-02",
-      "updated": "2026-03-05",
       "covers": [
         "frontend/src/components/Notifications/"
       ],
@@ -305,7 +303,9 @@
         "ui",
         "notifications",
         "toasts"
-      ]
+      ],
+      "created": "2026-03-02",
+      "updated": "2026-03-05"
     },
     {
       "id": "console",
@@ -313,8 +313,6 @@
       "path": "frontend/src/components/Console/README.md",
       "title": "Console",
       "status": "active",
-      "created": "2026-03-02",
-      "updated": "2026-03-02",
       "covers": [
         "frontend/src/components/Console/"
       ],
@@ -323,7 +321,9 @@
         "ui",
         "terminal",
         "xterm"
-      ]
+      ],
+      "created": "2026-03-02",
+      "updated": "2026-03-02"
     },
     {
       "id": "theming",
@@ -331,8 +331,6 @@
       "path": "frontend/ui-specs/THEMING.md",
       "title": "Theming",
       "status": "active",
-      "created": "2026-03-02",
-      "updated": "2026-03-05",
       "covers": [
         "frontend/src/styles/"
       ],
@@ -341,7 +339,9 @@
         "ui",
         "theme",
         "css"
-      ]
+      ],
+      "created": "2026-03-02",
+      "updated": "2026-03-05"
     },
     {
       "id": "responsive-behavior",
@@ -349,8 +349,6 @@
       "path": "frontend/ui-specs/RESPONSIVE_BEHAVIOR.md",
       "title": "Responsive Behavior",
       "status": "draft",
-      "created": "2026-03-02",
-      "updated": "2026-03-05",
       "covers": [
         "frontend/src/"
       ],
@@ -359,7 +357,9 @@
         "ui",
         "responsive",
         "layout"
-      ]
+      ],
+      "created": "2026-03-02",
+      "updated": "2026-03-05"
     },
     {
       "id": "diff-viewer",
@@ -367,8 +367,6 @@
       "path": "frontend/ui-specs/DIFF_VIEWER.md",
       "title": "Diff Viewer",
       "status": "draft",
-      "created": "2026-03-02",
-      "updated": "2026-03-05",
       "covers": [
         "frontend/src/components/DiffViewer/"
       ],
@@ -377,7 +375,9 @@
         "ui",
         "diff",
         "git"
-      ]
+      ],
+      "created": "2026-03-02",
+      "updated": "2026-03-05"
     },
     {
       "id": "progress-tracker",
@@ -385,8 +385,6 @@
       "path": "frontend/ui-specs/PROGRESS_TRACKER.md",
       "title": "Progress Tracker",
       "status": "active",
-      "created": "2026-03-02",
-      "updated": "2026-03-05",
       "covers": [
         "frontend/src/components/ProgressTab/"
       ],
@@ -395,7 +393,9 @@
         "ui",
         "progress",
         "metrics"
-      ]
+      ],
+      "created": "2026-03-02",
+      "updated": "2026-03-05"
     },
     {
       "id": "session-history",
@@ -403,8 +403,6 @@
       "path": "frontend/ui-specs/SESSION_HISTORY.md",
       "title": "Session History & Persistence",
       "status": "active",
-      "created": "2026-03-02",
-      "updated": "2026-03-05",
       "covers": [
         "frontend/src/components/SessionHistory/"
       ],
@@ -413,7 +411,9 @@
         "ui",
         "sessions",
         "history"
-      ]
+      ],
+      "created": "2026-03-02",
+      "updated": "2026-03-05"
     },
     {
       "id": "api-client",
@@ -421,8 +421,6 @@
       "path": "frontend/src/api/README.md",
       "title": "API Client",
       "status": "active",
-      "created": "2026-03-02",
-      "updated": "2026-03-05",
       "covers": [
         "frontend/src/api/"
       ],
@@ -431,7 +429,9 @@
         "infrastructure",
         "websocket",
         "rpc"
-      ]
+      ],
+      "created": "2026-03-02",
+      "updated": "2026-03-05"
     },
     {
       "id": "state-management",
@@ -439,8 +439,6 @@
       "path": "frontend/src/store/README.md",
       "title": "State Management",
       "status": "active",
-      "created": "2026-03-02",
-      "updated": "2026-03-08",
       "covers": [
         "frontend/src/store/"
       ],
@@ -449,7 +447,9 @@
         "infrastructure",
         "zustand",
         "state"
-      ]
+      ],
+      "created": "2026-03-02",
+      "updated": "2026-03-08"
     },
     {
       "id": "app-shell",
@@ -457,8 +457,6 @@
       "path": "frontend/ui-specs/APP_SHELL.md",
       "title": "Component Tree & App Shell",
       "status": "active",
-      "created": "2026-03-02",
-      "updated": "2026-03-05",
       "covers": [
         "frontend/src/components/AppShell/"
       ],
@@ -467,7 +465,9 @@
         "ui",
         "routing",
         "layout"
-      ]
+      ],
+      "created": "2026-03-02",
+      "updated": "2026-03-05"
     },
     {
       "id": "task-core-config",
@@ -1186,15 +1186,15 @@
       "path": "frontend/ui-specs/CONTEXT_PANEL.md",
       "title": "Context Panel UI Specification",
       "status": "active",
-      "created": "2026-03-04",
-      "updated": "2026-03-05",
       "covers": [
         "frontend/src/components/AppShell/RightPanel.tsx"
       ],
       "tags": [
         "frontend",
         "ui-spec"
-      ]
+      ],
+      "created": "2026-03-04",
+      "updated": "2026-03-05"
     },
     {
       "id": "ui-context-panel-spec-mode",
@@ -1202,8 +1202,6 @@
       "path": "frontend/ui-specs/context-panel/SPEC_CONTEXT.md",
       "title": "Spec Context Sections Design",
       "status": "active",
-      "created": "2026-03-06",
-      "updated": "2026-03-06",
       "covers": [
         "frontend/src/components/ContextPanel/modes/SpecContext.tsx",
         "frontend/src/components/ContextPanel/sections/ConnectedSpecs.tsx",
@@ -1214,16 +1212,16 @@
       "tags": [
         "frontend",
         "ui-spec"
-      ]
+      ],
+      "created": "2026-03-06",
+      "updated": "2026-03-06"
     },
     {
       "id": "ui-context-panel-agent-mode",
       "type": "submodule-design",
       "path": "frontend/ui-specs/context-panel/AGENT_CONTEXT.md",
-      "title": "Agent Context — Context Usage Analytics",
+      "title": "Agent Context \u2014 Context Usage Analytics",
       "status": "active",
-      "created": "2026-03-06",
-      "updated": "2026-03-12",
       "covers": [
         "frontend/src/components/ContextPanel/modes/AgentContext.tsx",
         "frontend/src/components/ContextPanel/modes/AgentContext.css"
@@ -1231,7 +1229,9 @@
       "tags": [
         "frontend",
         "ui-spec"
-      ]
+      ],
+      "created": "2026-03-06",
+      "updated": "2026-03-12"
     },
     {
       "id": "ui-context-panel-code-mode",
@@ -1239,8 +1239,6 @@
       "path": "frontend/ui-specs/context-panel/CODE_CONTEXT.md",
       "title": "Code Context Sections Design",
       "status": "draft",
-      "created": "2026-03-06",
-      "updated": "2026-03-06",
       "covers": [
         "frontend/src/components/ContextPanel/modes/CodeContext.tsx",
         "frontend/src/components/ContextPanel/sections/CoveringSpecs.tsx",
@@ -1249,7 +1247,9 @@
       "tags": [
         "frontend",
         "ui-spec"
-      ]
+      ],
+      "created": "2026-03-06",
+      "updated": "2026-03-06"
     },
     {
       "id": "task-context-panel-shared-infra",
@@ -1257,8 +1257,6 @@
       "path": "current_tasks/frontend/feature_context_panel_shared_infra.md",
       "title": "Context Panel shared infrastructure: hooks and utils",
       "status": "done",
-      "created": "2026-03-06",
-      "updated": "2026-03-06",
       "covers": [
         "frontend/src/components/ContextPanel/useSelectedSpec.ts",
         "frontend/src/components/ContextPanel/useActiveSession.ts",
@@ -1268,7 +1266,9 @@
         "high",
         "feature",
         "frontend"
-      ]
+      ],
+      "created": "2026-03-06",
+      "updated": "2026-03-06"
     },
     {
       "id": "task-context-panel-spec-sections",
@@ -1276,8 +1276,6 @@
       "path": "current_tasks/frontend/feature_context_panel_spec_sections.md",
       "title": "Implement Spec Context sections: ConnectedSpecs, LinkedTasks, SpecHealth",
       "status": "done",
-      "created": "2026-03-06",
-      "updated": "2026-03-06",
       "covers": [
         "frontend/src/components/ContextPanel/sections/ConnectedSpecs.tsx",
         "frontend/src/components/ContextPanel/sections/LinkedTasks.tsx",
@@ -1287,7 +1285,9 @@
         "high",
         "feature",
         "frontend"
-      ]
+      ],
+      "created": "2026-03-06",
+      "updated": "2026-03-06"
     },
     {
       "id": "task-context-panel-agent-sections",
@@ -1295,8 +1295,6 @@
       "path": "current_tasks/frontend/feature_context_panel_agent_sections.md",
       "title": "Implement Agent Context sections: TaskSpecPreview, FilesModified, RelatedSpecs",
       "status": "done",
-      "created": "2026-03-06",
-      "updated": "2026-03-06",
       "covers": [
         "frontend/src/components/ContextPanel/sections/TaskSpecPreview.tsx",
         "frontend/src/components/ContextPanel/sections/FilesModified.tsx",
@@ -1306,7 +1304,9 @@
         "high",
         "feature",
         "frontend"
-      ]
+      ],
+      "created": "2026-03-06",
+      "updated": "2026-03-06"
     },
     {
       "id": "task-refactor-agent-context-analytics",
@@ -1314,8 +1314,6 @@
       "path": "current_tasks/frontend/refactor_agent_context_usage_analytics.md",
       "title": "Refactor Agent Context: Replace with Context Usage Analytics",
       "status": "done",
-      "created": "2026-03-12",
-      "updated": "2026-03-12",
       "covers": [
         "frontend/src/components/ContextPanel/modes/AgentContext.tsx",
         "frontend/src/components/ContextPanel/modes/AgentContext.css"
@@ -1324,7 +1322,9 @@
         "high",
         "refactor",
         "frontend"
-      ]
+      ],
+      "created": "2026-03-12",
+      "updated": "2026-03-12"
     },
     {
       "id": "task-context-panel-infrastructure",
@@ -1510,7 +1510,6 @@
         "high",
         "improvement"
       ],
-      "implements": "module-agent",
       "created": "2026-03-08",
       "updated": "2026-03-08"
     },
@@ -1542,8 +1541,8 @@
       "title": "Proactive Agent Experience \u2014 Architecture Design",
       "status": "active",
       "covers": [
-        "backend/app/agent/runner.py",
-        "backend/app/agent/context.py",
+        "backend/app/agent/tools/",
+        "backend/app/agent/permissions.py",
         "frontend/src/components/ChatStream/",
         "frontend/src/components/ContextPanel/",
         "frontend/src/store/sessionStore.ts",
@@ -1554,14 +1553,14 @@
         "agent-ux"
       ],
       "created": "2026-03-07",
-      "updated": "2026-03-11"
+      "updated": "2026-03-13"
     },
     {
       "id": "agent-suggest-session",
       "type": "submodule-design",
       "path": "backend/app/agent/tools/SUGGEST_SESSION.md",
       "title": "SuggestSession \u2014 Backend Spec",
-      "status": "draft",
+      "status": "active",
       "covers": [
         "backend/app/agent/tools/suggest_session.py"
       ],
@@ -1597,7 +1596,7 @@
       "title": "SuggestSession \u2014 Feature Spec",
       "status": "active",
       "covers": [
-        "backend/app/agent/runner.py",
+        "backend/app/agent/tools/suggest_session.py",
         "frontend/src/components/ChatStream/SuggestionCard.tsx",
         "frontend/src/store/sessionStore.ts",
         "frontend/src/store/wireEvents.ts"
@@ -1609,7 +1608,7 @@
         "interactive"
       ],
       "created": "2026-03-07",
-      "updated": "2026-03-11"
+      "updated": "2026-03-13"
     },
     {
       "id": "feature-update-progress",
@@ -1646,11 +1645,6 @@
         "high",
         "improvement"
       ],
-      "implements": [
-        "chat-ui",
-        "module-agent"
-      ],
-      "depends-on": [],
       "created": "2026-03-08",
       "updated": "2026-03-08"
     },
@@ -1659,28 +1653,34 @@
       "type": "task-spec",
       "path": "current_tasks/agent/feature_suggest_session_runner.md",
       "title": "Implement SuggestSession branch in runner.py can_use_tool",
-      "status": "active",
+      "status": "done",
       "covers": [
-        "backend/app/agent/runner.py"
+        "backend/app/agent/tools/suggest_session.py",
+        "backend/app/agent/tools/__init__.py",
+        "backend/app/agent/permissions.py"
       ],
       "tags": [
         "high",
         "new-feature"
       ],
       "created": "2026-03-08",
-      "updated": "2026-03-08"
+      "updated": "2026-03-13"
     },
     {
       "id": "task-suggest-session-ui",
       "type": "task-spec",
       "path": "current_tasks/frontend/feature_suggest_session_ui.md",
       "title": "Implement SuggestSession frontend: wiring, store, SuggestionCard",
-      "status": "active",
+      "status": "done",
       "covers": [
         "frontend/src/store/wireEvents.ts",
         "frontend/src/store/sessionStore.ts",
         "frontend/src/components/ChatStream/SuggestionCard.tsx",
-        "frontend/src/components/ChatStream/ChatStream.tsx"
+        "frontend/src/components/ChatStream/ChatStream.tsx",
+        "frontend/src/components/ChatStream/ChatStream.css",
+        "frontend/src/types/agent.ts",
+        "frontend/src/types/session.ts",
+        "frontend/src/store/notificationStore.ts"
       ],
       "tags": [
         "high",
@@ -1688,7 +1688,24 @@
         "frontend"
       ],
       "created": "2026-03-08",
-      "updated": "2026-03-08"
+      "updated": "2026-03-13"
+    },
+    {
+      "id": "task-suggest-session-tests",
+      "type": "task-spec",
+      "path": "current_tasks/agent/feature_suggest_session_tests.md",
+      "title": "Write tests for SuggestSession backend and tool interceptors",
+      "status": "done",
+      "covers": [
+        "backend/tests/agent/test_tools.py"
+      ],
+      "tags": [
+        "high",
+        "new-feature",
+        "testing"
+      ],
+      "created": "2026-03-13",
+      "updated": "2026-03-13"
     },
     {
       "id": "task-bugfix-subagent-attention",
@@ -1730,7 +1747,7 @@
       "id": "visualization-design",
       "type": "architecture-design",
       "path": "features/VISUALIZATION_DESIGN.md",
-      "title": "MCP Visualization — Architecture Design",
+      "title": "MCP Visualization \u2014 Architecture Design",
       "status": "active",
       "covers": [
         "backend/app/agent/visualization.py",
@@ -1749,7 +1766,7 @@
       "id": "voice-input-design",
       "type": "architecture-design",
       "path": "features/VOICE_INPUT_DESIGN.md",
-      "title": "Voice Input — Architecture Design",
+      "title": "Voice Input \u2014 Architecture Design",
       "status": "active",
       "covers": [
         "frontend/src/hooks/useVoiceInput.ts",
@@ -1768,7 +1785,7 @@
       "id": "effort-support-design",
       "type": "submodule-design",
       "path": "features/EFFORT_SUPPORT_DESIGN.md",
-      "title": "Effort Support — Feature Design",
+      "title": "Effort Support \u2014 Feature Design",
       "status": "active",
       "covers": [
         "backend/app/agent/models.py",
@@ -1787,7 +1804,7 @@
       "id": "agent-transcribe",
       "type": "submodule-design",
       "path": "backend/app/agent/TRANSCRIBE.md",
-      "title": "Audio Transcription — Submodule Design",
+      "title": "Audio Transcription \u2014 Submodule Design",
       "status": "active",
       "covers": [
         "backend/app/agent/transcribe.py"
@@ -1895,7 +1912,7 @@
       "id": "dual-mode-input-design",
       "type": "architecture-design",
       "path": "features/DUAL_MODE_INPUT_DESIGN.md",
-      "title": "Markdown Input with Split-Pane Preview — Architecture Design",
+      "title": "Markdown Input with Split-Pane Preview \u2014 Architecture Design",
       "status": "active",
       "covers": [
         "frontend/src/components/ChatStream/InputArea.tsx",
@@ -1961,7 +1978,7 @@
       "id": "skill-session-start-design",
       "type": "architecture-design",
       "path": "features/SKILL_SESSION_START_DESIGN.md",
-      "title": "Skill Session Start — Architecture Design",
+      "title": "Skill Session Start \u2014 Architecture Design",
       "status": "active",
       "covers": [
         "frontend/src/components/SessionPanel/SessionPanel.tsx",
@@ -1980,7 +1997,7 @@
       "id": "ui-skill-session-start",
       "type": "submodule-design",
       "path": "frontend/ui-specs/SKILL_SESSION_START.md",
-      "title": "Skill Session Start Button — Frontend Spec",
+      "title": "Skill Session Start Button \u2014 Frontend Spec",
       "status": "active",
       "covers": [
         "frontend/src/components/SessionPanel/SessionPanel.tsx",
@@ -2088,6 +2105,60 @@
       ],
       "created": "2026-03-12",
       "updated": "2026-03-12"
+    },
+    {
+      "id": "bonsai-architecture-design",
+      "type": "architecture-design",
+      "path": ".claude/worktrees/agent-af8f1ee7/DESIGN_DOC.md",
+      "title": "Bonsai \u2014 Architecture Design",
+      "status": "active",
+      "covers": [],
+      "tags": [],
+      "created": "2026-03-13",
+      "updated": "2026-03-13"
+    },
+    {
+      "id": "goal-requirements",
+      "type": "goal-and-requirements",
+      "path": ".claude/worktrees/agent-af8f1ee7/GOAL&REQUIREMENTS.md",
+      "title": "Goal&Requirements",
+      "status": "active",
+      "covers": [],
+      "tags": [],
+      "created": "2026-03-13",
+      "updated": "2026-03-13"
+    },
+    {
+      "id": "task-context-general-instructions",
+      "type": "task-spec",
+      "path": "current_tasks/agent/improvement_context_general_instructions.md",
+      "title": "Add General Instructions section to context.py",
+      "status": "active",
+      "covers": [
+        "backend/app/agent/context.py"
+      ],
+      "tags": [
+        "high",
+        "improvement"
+      ],
+      "created": "2026-03-13",
+      "updated": "2026-03-13"
+    },
+    {
+      "id": "task-skill-boilerplate-cleanup",
+      "type": "task-spec",
+      "path": "current_tasks/agent/refactor_skill_boilerplate_cleanup.md",
+      "title": "Remove duplicated boilerplate from SKILL.md files",
+      "status": "active",
+      "covers": [
+        "claude-plugin/skills/"
+      ],
+      "tags": [
+        "medium",
+        "refactor"
+      ],
+      "created": "2026-03-13",
+      "updated": "2026-03-13"
     }
   ],
   "links": [
@@ -3077,6 +3148,21 @@
       "type": "depends-on"
     },
     {
+      "from": "task-suggest-session-tests",
+      "to": "module-agent",
+      "type": "implements"
+    },
+    {
+      "from": "task-suggest-session-tests",
+      "to": "feature-suggest-session",
+      "type": "implements"
+    },
+    {
+      "from": "task-suggest-session-tests",
+      "to": "task-suggest-session-runner",
+      "type": "depends-on"
+    },
+    {
       "from": "task-bugfix-subagent-attention",
       "to": "chat-ui",
       "type": "implements"
@@ -3289,6 +3375,26 @@
     {
       "from": "bugfix-plan-approval-content",
       "to": "improvement-plan-approval-card",
+      "type": "depends-on"
+    },
+    {
+      "from": "task-context-general-instructions",
+      "to": "agent-context",
+      "type": "implements"
+    },
+    {
+      "from": "task-context-general-instructions",
+      "to": "module-agent",
+      "type": "implements"
+    },
+    {
+      "from": "task-skill-boilerplate-cleanup",
+      "to": "agent-context",
+      "type": "implements"
+    },
+    {
+      "from": "task-skill-boilerplate-cleanup",
+      "to": "task-context-general-instructions",
       "type": "depends-on"
     }
   ]

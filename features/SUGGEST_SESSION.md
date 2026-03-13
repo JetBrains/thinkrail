@@ -87,8 +87,8 @@ The agent calls `SuggestSession` with:
 ```
 1. Agent (LLM) generates tool call: SuggestSession({skill, specIds, name, reason})
 2. SDK fires canUseTool("SuggestSession", input_data, context)
-3. runner.py intercepts → creates Future → sends agent/suggestSession request
-4. notifications.py sends JSON-RPC request over WebSocket (with id)
+3. permissions.py routes via INTERCEPTORS → suggest_session.py intercept_suggest_session()
+4. Intercept validates inputs, creates Future, sends agent/suggestSession request over WebSocket (with id)
 5. wireEvents.ts receives → dispatches to sessionStore.onSuggestSession()
 6. sessionStore stores pending suggestion → ChatStream renders SuggestionCard
 7. User clicks "Start Session"
@@ -101,9 +101,9 @@ The agent calls `SuggestSession` with:
 
 ## Backend
 
-Backend implementation is scoped to `runner.py` and `models.py` in the agent module. See [backend/app/agent/tools/SUGGEST_SESSION.md](../backend/app/agent/tools/SUGGEST_SESSION.md) for the backend-only spec.
+Backend implementation is self-contained in `backend/app/agent/tools/suggest_session.py`, following the [tools package pattern](../backend/app/agent/tools/README.md). See [backend/app/agent/tools/SUGGEST_SESSION.md](../backend/app/agent/tools/SUGGEST_SESSION.md) for the backend-only spec.
 
-**Summary:** New branch in `can_use_tool` that creates a Future, sends `agent/suggestSession` request, awaits response, and returns `PermissionResultAllow` with either `approved: true` or `dismissed: true` in `updated_input`.
+**Summary:** `suggest_session.py` defines the MCP tool schema, handler, and `intercept_suggest_session()` function. The `permissions.py` module routes `can_use_tool` callbacks to the intercept function via the `INTERCEPTORS` registry (suffix match). The intercept function validates inputs, creates a Future, sends `agent/suggestSession` request, awaits response, and returns `PermissionResultAllow` with either `approved: true` or `dismissed: true` in `updated_input`. No changes needed in `runner.py`, `service.py`, or `tracker.py`.
 
 ## Frontend
 
@@ -142,6 +142,7 @@ Developer: [sees SuggestionCard, clicks "Start Session"]
 
 ```
 Agent: [finishes architecture review]
+Agent: [tells that it's going to suggest several sessions]
 Agent: [calls SuggestSession] → "Update: Core Module Spec"
 Developer: [approves] → session created
 Agent: [calls SuggestSession] → "Update: RPC Module Spec"
@@ -158,4 +159,4 @@ Developer: [approves] → session created
 
 - **Parent:** [Proactive Agent Experience Design](PROACTIVE_AGENT_EXPERIENCE_DESIGN.md)
 - **Backend:** [backend/app/agent/tools/SUGGEST_SESSION.md](../backend/app/agent/tools/SUGGEST_SESSION.md)
-- **Pattern reference:** `AskUserQuestion` interception in `runner.py`
+- **Pattern reference:** `AskUserQuestion` interception in `permissions.py`, tool package pattern in `tools/README.md`

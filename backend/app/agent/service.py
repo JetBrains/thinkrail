@@ -372,7 +372,7 @@ class AgentService:
         notify = _persisting_notify
 
         try:
-            await run(task, spec_context, notify, self._tracker, cwd=self._config.project_root, plugin_dir=self._config.plugin_dir, resume_session_id=resume_session_id)
+            await run(task, spec_context, notify, self._tracker, cwd=self._config.project_root, plugin_dir=self._config.plugin_dir, resume_session_id=resume_session_id, config=self._config)
             self._tracker.set_status(task.bonsai_sid, "done")
             self._save_task(task)
             self._tracker.remove_task(task.bonsai_sid)

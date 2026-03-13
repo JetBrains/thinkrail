@@ -1,31 +1,35 @@
 # Agent Context — Submodule Specification
 
-> Parent: [Agent Module](README.md) | Status: **Active** | Created: 2026-03-03
+> Parent: [Agent Module](README.md) | Status: **Active** | Created: 2026-03-03 | Updated: 2026-03-13
 
 ## Purpose
 
-The Context submodule is responsible for assembling the full prompt context that feeds an agent session. It gathers content from multiple sources — skill instructions (loaded from plugin SKILL.md files), project metadata (working directory path and configuration), and specification documents (loaded by ID from the registry) — and composes them into a structured system prompt passed to the Claude Agent SDK. It owns the ordering, formatting, framing, and separation of context sections.
+The Context submodule is responsible for assembling the full prompt context that feeds an agent session. It gathers content from multiple sources — general behavioral instructions (built-in), skill instructions (loaded from plugin SKILL.md files), project metadata (working directory path and configuration), and specification documents (loaded by ID from the registry) — and composes them into a structured system prompt passed to the Claude Agent SDK. It owns the ordering, formatting, framing, and separation of context sections.
 
 ## Architecture
 
 **Pattern:** Pipeline — gather → compose.
 
+The pipeline assembles four context sections in a fixed order. General Instructions are always present and set the behavioral foundation. Skill instructions narrow the task. Project metadata and specs provide domain context.
+
 ```
   Inputs
   ┌────────────┐  ┌────────────────┐  ┌─────────────┐  ┌────────────┐
-  │ skill_id   │  │ spec_ids[]     │  │ project_root│  │ config     │
-  │ (optional) │  │ (from registry)│  │ (Path)      │  │ (AgentCfg) │
+  │ skill_id   │  │ spec_ids[]     │  │ project_root│  │ plugin_dir │
+  │ (optional) │  │ (from registry)│  │ (Path)      │  │ (Path)     │
   └─────┬──────┘  └───────┬────────┘  └──────┬──────┘  └─────┬──────┘
         │                 │                   │               │
         ▼                 ▼                   ▼               ▼
   ┌─────────────────────────────────────────────────────────────────┐
   │                    build_context()                               │
   │                                                                 │
-  │  1. Load skill instructions (SKILL.md)                          │
-  │  2. Gather project metadata                                     │
-  │  3. Insert visualization tool instructions                      │
-  │  4. Load spec content by IDs                                    │
-  │  5. Compose with framing prompts                                │
+  │  1. Build General Instructions (always)                         │
+  │     a. Scan skills/ dir for available skills table              │
+  │     b. Compose viz rules, interaction style, spec workflow      │
+  │  2. Load skill instructions from SKILL.md (if skill_id)        │
+  │  3. Gather project metadata (always)                            │
+  │  4. Load spec content by IDs (if spec_ids)                      │
+  │  5. Compose all sections with framing prompts                   │
   │                                                                 │
   └──────────────────────────┬──────────────────────────────────────┘
                              │
@@ -64,13 +68,77 @@ def build_context(
 
 **Raises:**
 - `FileNotFoundError` — if `skill_id` is provided but SKILL.md does not exist at the expected path
-- No error for empty `spec_ids` — returns prompt with skill + project sections only
+- No error for empty `spec_ids` — returns prompt with general instructions + project sections only
 
 ## Context Sections & Ordering
 
 The system prompt is assembled in this order, with framing text between sections:
 
-### 1. Skill Instructions (if `skill_id` is provided)
+### 1. General Instructions (always present)
+
+```
+## General Instructions
+
+You are a Claude agent, built on Anthropic's Claude Agent SDK.
+
+### Visualization
+
+You have access to the `bonsai_visualize` MCP tool for rendering structured visual
+output in the UI. Use it instead of ASCII art, markdown tables, or plain-text diagrams
+whenever the output would benefit from visual structure.
+
+**Available types:** progress-tracker, summary-box, comparison, data-table, status-list, diagram.
+
+**When to use:** reporting status, showing progress, comparing options, presenting tabular
+data, or illustrating architecture. Call the tool with a JSON object containing `type`,
+`title`, `data`, and optionally `vizId` (reuse the same `vizId` to update a previous
+visualization in-place).
+
+**Anti-patterns:** Do NOT use Bash to print ANSI-colored text, do NOT render ASCII-art
+tables, do NOT approximate visualizations with markdown when the tool can do it better.
+
+### Interaction Style
+
+- Use the `AskUserQuestion` tool for every user-facing decision. Offer 2-4 concrete
+  choices per question.
+- After completing the primary task, use `AskUserQuestion` to offer relevant next
+  actions, always including "Done for now" as an option.
+- Prefer structured choices over open-ended questions.
+
+### Spec-Driven Workflow
+
+- Read `.specs/registry.json` at the start to understand project state and existing specs.
+- After creating or modifying any spec file, update `.specs/registry.json` with the
+  appropriate entry and links.
+- Respect the spec hierarchy: Goal > Architecture > Modules > Submodules > Tasks.
+
+### Proactive Suggestions
+
+When you complete a task or discover follow-up work, use the `SuggestSession` tool
+to propose a new session instead of just mentioning it. Common triggers:
+- A spec is stale or missing after a code change you just made
+- A dependent module needs updating because of what you just designed
+- Implementation tasks should be created for a spec you just wrote
+
+Include relevant `specIds` so the new session starts with the right context.
+Write a `reason` that explains *why* this follow-up matters now.
+Respect dismissals — do not re-suggest the same session. Limit to 1-3 per session.
+
+### Available Skills
+
+| Skill | Description |
+|-------|-------------|
+| goal-and-requirements | Define project/feature goals and requirements |
+| architecture-design | Create system-wide architecture design |
+| module-design | Design a module-level specification |
+| ... | (dynamically generated from SKILL.md frontmatter) |
+```
+
+This section is **always present** — every session (skill-based or free-form) receives these behavioral instructions. It replaces the former standalone "Visualization Tool" section and consolidates rules previously duplicated across 13 of 14 SKILL.md files.
+
+**Skills table generation:** `build_context` scans `{plugin_dir}/skills/*/SKILL.md`, reads the YAML frontmatter from each file, and generates a compact table of `name` + `description`. This ensures the agent always knows what skills are available for recommending next actions, without hardcoding the list.
+
+### 2. Skill Instructions (if `skill_id` is provided)
 
 ```
 ## Your Task
@@ -83,8 +151,9 @@ You are running the "{skill_name}" skill.
 - **Source:** `{plugin_dir}/skills/{skill_id}/SKILL.md`
 - Reads the SKILL.md file, strips the YAML frontmatter (between `---` delimiters), and uses the body as the skill instructions
 - If `skill_id` is `None`, this section is omitted entirely (free-form session)
+- **Skill files should no longer contain** visualization rules, interaction style mandates, or spec workflow instructions — those are now in General Instructions. Skills focus purely on their task-specific logic.
 
-### 2. Project Metadata
+### 3. Project Metadata (always present)
 
 ```
 ## Project
@@ -94,19 +163,6 @@ Working directory: {project_root}
 
 - Always present — every session has a project root
 - May be extended in future with additional metadata (e.g., git branch, language, framework)
-
-### 3. Visualization Tool Instructions
-
-```
-## Visualization Tool
-
-You have access to the `bonsai_visualize` MCP tool ...
-```
-
-- **Always present** — included in both skill-based and free-form sessions
-- Describes the tool's available visualization types (progress-tracker, summary-box, comparison, data-table, status-list, diagram)
-- Includes anti-patterns (no Bash/ANSI, no ASCII art) to steer the model toward using the tool
-- Without this section, the model would not know the `bonsai_visualize` tool exists or when to call it
 
 ### 4. Specification Context (if `spec_ids` is non-empty)
 
@@ -132,7 +188,35 @@ The following specifications provide context for this session.
 
 ### Free-form Sessions
 
-When both `skill_id` is `None` and `spec_ids` is empty, the system prompt contains the project metadata section and the visualization tool instructions. This ensures the agent always knows about `bonsai_visualize`, even in free-form sessions with no skill or specs.
+When both `skill_id` is `None` and `spec_ids` is empty, the system prompt contains:
+
+1. **General Instructions** — behavioral rules, visualization tool reference, interaction style, spec workflow, and available skills table
+2. **Project Metadata** — working directory
+
+This ensures the agent always knows about `bonsai_visualize`, `AskUserQuestion` patterns, and available skills, even in free-form sessions with no skill or specs.
+
+## General Instructions Content
+
+The General Instructions section consolidates behavioral rules that were previously duplicated across skill files. This is the canonical source of truth for what goes into the section:
+
+### Subsections
+
+| Subsection | Content | Rationale |
+|------------|---------|-----------|
+| **Visualization** | `bonsai_visualize` tool reference, available types, when to use, anti-patterns (no Bash/ANSI/ASCII) | Previously copy-pasted into 13/14 skills. Without this, the model doesn't know `bonsai_visualize` exists. |
+| **Interaction Style** | Use `AskUserQuestion` for decisions, 2-4 choices, end with "What's next?" | Previously repeated in 13/14 skills. Ensures consistent interaction pattern. |
+| **Spec-Driven Workflow** | Read `registry.json` at start, update after saving, respect spec hierarchy | Previously in 10-11/14 skills. Grounds the agent in the spec-driven methodology. |
+| **Proactive Suggestions** | Use `SuggestSession` for follow-up work, respect dismissals, limit to 1-3 per session | Agents need to know the tool exists and when to use it proactively. Two-line guidance keeps it concise. |
+| **Available Skills** | Compact table of skill name + description, dynamically generated | Enables the agent to recommend relevant next actions without hardcoding suggestions into each skill. |
+
+### What is NOT in General Instructions
+
+| Instruction | Why it stays skill-specific |
+|-------------|-----------------------------|
+| Code-first analysis ("read code first, present findings") | Only relevant for 7/14 skills (design/creation skills). Would confuse utility skills like `spec-status` or `registry-update`. |
+| Progress tracker JSON template | The specific step to highlight as "current" varies per skill. Skills own their progress display. |
+| Specific question trees and multi-choice options | Domain logic that defines the skill's workflow. |
+| Registry entry schema (type, links, covers) | Varies per skill type. General Instructions says "update the registry"; skills say *how*. |
 
 ## Skill Resolution
 
@@ -142,7 +226,7 @@ Skills are resolved from the plugin directory on disk:
 {plugin_dir}/
   skills/
     {skill_id}/
-      SKILL.md          ← loaded by build_context
+      SKILL.md          ← loaded by build_context (body for active skill, frontmatter for skills table)
 ```
 
 ### SKILL.md Format
@@ -161,10 +245,10 @@ argument-hint: "[module-path]"
 You are helping the user create a **Module Design Specification**...
 ```
 
-The `build_context` function:
-1. Reads the file
-2. Strips the YAML frontmatter (everything between the first two `---` lines)
-3. Uses the remaining markdown body as skill instructions
+The `build_context` function uses SKILL.md in two ways:
+
+1. **Active skill** (the one being run): Reads the file, strips YAML frontmatter, uses the markdown body as skill instructions in section 2.
+2. **All skills** (for the skills table): Reads the YAML frontmatter `name` and `description` fields to populate the Available Skills table in section 1.
 
 ### Plugin Directory Resolution
 
@@ -172,6 +256,20 @@ Skills are part of the Bonsai application, not the target project. The plugin di
 
 - `AppConfig.plugin_dir` is set by `load_config()` using the Bonsai repo root (derived from the package location: `backend/app/core/config.py` → `../../../claude-plugin/`)
 - This is independent of `project_root`, which is the user's connected project directory
+
+## SKILL.md Cleanup Guide
+
+With General Instructions now handling common behavioral rules, existing SKILL.md files should be cleaned up to remove duplicated boilerplate. The following sections can be **removed** from each skill:
+
+| Boilerplate to remove | Was in | Now handled by |
+|-----------------------|--------|----------------|
+| "NEVER use Bash, echo, printf, or ANSI escape codes for visual output" | 13/14 skills | General Instructions → Visualization |
+| "Use `bonsai_visualize` tool for all structured visual output" | 13/14 skills | General Instructions → Visualization |
+| "Use the `AskUserQuestion` tool for every design decision" | 13/14 skills | General Instructions → Interaction Style |
+| "Read `.specs/registry.json`" as a first step | 11/14 skills | General Instructions → Spec-Driven Workflow |
+| Available visualization types reference (progress-tracker, summary-box, etc.) | 13/14 skills | General Instructions → Visualization |
+
+Each skill should **keep**: its unique task logic, question trees, specific visualization templates (e.g., progress-tracker JSON with the right "current" step), registry entry specifics, and domain-specific instructions.
 
 ## File Organization
 
@@ -181,12 +279,28 @@ Skills are part of the Bonsai application, not the target project. The plugin di
 
 This is a single-file submodule. No classes — just a pure function with helpers.
 
+### Internal Helpers
+
+`build_context()` uses internal helper functions:
+
+| Helper | Responsibility |
+|--------|---------------|
+| `_build_general_instructions(plugin_dir)` | Composes the General Instructions section, including scanning skills/ for the available skills table |
+| `_load_skill_body(plugin_dir, skill_id)` | Reads SKILL.md, strips frontmatter, returns markdown body |
+| `_scan_skill_frontmatter(plugin_dir)` | Scans all `skills/*/SKILL.md`, parses YAML frontmatter, returns list of `(name, description)` tuples |
+| `_build_specs_section(spec_ids, spec_service)` | Loads specs by ID, formats as titled sections |
+
 ## Design Decisions
 
 | Decision | Choice | Rationale |
 |----------|--------|-----------|
-| Section ordering | Skill → Project → Visualization → Specs | Skill instructions set the agent's role/framing first. Project grounds it in a directory. Visualization instructions ensure the model knows about `bonsai_visualize` in all sessions. Specs provide domain knowledge last (largest section, furthest from the start). |
-| Framing prompts | Markdown headers and introductory sentences between sections | Raw concatenation loses structure. Framing helps the LLM distinguish between skill instructions, project info, and spec content. |
+| General Instructions section | New always-present section before skill instructions | Consolidates rules duplicated across 13/14 skills. Eliminates ~15-25 lines of boilerplate per skill. Ensures consistent behavior in all sessions including free-form. |
+| Section ordering | General → Skill → Project → Specs | General rules set the behavioral foundation first. Skill narrows the task. Project grounds it in a directory. Specs provide domain knowledge last (largest section). |
+| Visualization Tool merged into General | Removed standalone "Visualization Tool" section | The visualization tool reference and the anti-pattern rules are logically one topic. Merging eliminates a section boundary and keeps all visualization guidance together. |
+| Dynamic skills table | Scan `skills/*/SKILL.md` frontmatter at build time | Avoids hardcoding the skills list. Skills can be added/removed without updating a separate manifest. The scan is cheap (just YAML frontmatter parsing). |
+| Skills table: name + description only | No argument-hint in the table | The table helps the agent *recommend* skills. Argument details are the skill's own concern once invoked. Keeps the table compact. |
+| Code-first analysis NOT extracted | Stays in individual skill files | Only relevant for design/creation skills (7/14). Including it in general instructions would confuse utility skills that don't analyze code. |
+| Framing prompts | Markdown headers and introductory sentences between sections | Raw concatenation loses structure. Framing helps the LLM distinguish between general rules, skill instructions, project info, and spec content. |
 | Frontmatter stripping | Remove YAML frontmatter from SKILL.md | Frontmatter is metadata for the plugin system (name, description), not instructions for the agent. Including it would confuse the prompt. |
 | Pure function | `build_context()` not a class | No state to manage. Takes inputs, returns a string. Simple to test and compose. |
 | Config parameter | Accept `AgentConfig` | Future-proofs for config-dependent context (e.g., include/exclude sections based on permission_mode or other flags). Currently used minimally. |
@@ -248,6 +362,7 @@ async def run_task(self, spec_ids, config, notify, skill_id=None):
 - **Single plugin directory** — only one `plugin_dir` is supported. No merging from multiple plugin sources (e.g., project-local + global `~/.claude/skills/`).
 - **No dynamic context updates** — context is built once at session start. If specs or skill files change mid-session, the agent's context is stale until a new session is started.
 - **No SKILL.md validation** — assumes well-formed frontmatter. Malformed SKILL.md files may produce unexpected prompt content.
+- **Skills table scan cost** — scanning all SKILL.md files at session start adds I/O. With ~14 skills this is negligible, but could matter if the skills directory grows significantly.
 
 ## Related Specs
 

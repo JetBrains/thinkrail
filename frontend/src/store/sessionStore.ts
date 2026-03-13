@@ -56,6 +56,7 @@ interface SessionStore {
   onAgentEvent: (method: string, params: Record<string, unknown>) => void;
   onAskQuestion: (params: Record<string, unknown>) => void;
   onConfirmAction: (params: Record<string, unknown>) => void;
+  onSuggestSession: (params: Record<string, unknown>) => void;
   onSessionDone: (params: Record<string, unknown>) => void;
   onSessionError: (params: Record<string, unknown>) => void;
   onConfigChanged: (params: Record<string, unknown>) => void;
@@ -399,7 +400,7 @@ function buildAnsweredRequests(
   // Second pass (non-active only): mark remaining unresolved requests as historical
   if (!isActive) {
     for (const ev of events) {
-      if (ev.eventType === "askUserQuestion" || ev.eventType === "confirmAction") {
+      if (ev.eventType === "askUserQuestion" || ev.eventType === "confirmAction" || ev.eventType === "suggestSession") {
         const rid = (ev.payload.requestId as string) ?? "";
         if (rid && !answered.has(rid)) answered.set(rid, { historical: true });
       }
@@ -851,7 +852,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
     const ns = useNotificationStore.getState();
     ns.decrementPendingInput();
     for (const t of ns.toasts) {
-      if (t.bonsaiSid === bonsaiSid && (t.eventType === "question" || t.eventType === "approval")) {
+      if (t.bonsaiSid === bonsaiSid && (t.eventType === "question" || t.eventType === "approval" || t.eventType === "suggestion")) {
         ns.dismissToast(t.id);
       }
     }
@@ -975,7 +976,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
       for (const t of ns.toasts) {
         if (
           t.bonsaiSid === bonsaiSid &&
-          (t.eventType === "question" || t.eventType === "approval")
+          (t.eventType === "question" || t.eventType === "approval" || t.eventType === "suggestion")
         ) {
           ns.dismissToast(t.id);
         }
@@ -1032,6 +1033,36 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
             type: "approval",
             toolName: params.toolName as string,
             toolInput: params.toolInput as Record<string, unknown>,
+          },
+        });
+      }
+      return { sessions };
+    });
+  },
+
+  onSuggestSession: (params) => {
+    const bonsaiSid = params.bonsaiSid as string;
+    const requestId = params.requestId as string;
+    set((s) => {
+      const sessions = appendEvent(
+        s.sessions,
+        bonsaiSid,
+        "agent/suggestSession",
+        params,
+        s.closedIds,
+      );
+      const session = sessions.get(bonsaiSid);
+      if (session) {
+        sessions.set(bonsaiSid, {
+          ...session,
+          status: "waiting",
+          pendingRequest: {
+            requestId,
+            type: "suggestion",
+            skill: params.skill as string,
+            specIds: (params.specIds as string[]) ?? [],
+            name: params.name as string,
+            reason: params.reason as string,
           },
         });
       }

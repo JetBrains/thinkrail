@@ -37,6 +37,7 @@ async def run(
     cwd: Any = None,
     plugin_dir: Any = None,
     resume_session_id: str | None = None,
+    config: Any = None,
 ) -> AgentResult:
     """Execute a persistent conversational agent session.
 
@@ -117,7 +118,7 @@ async def run(
         model=task.config.model,
         max_turns=task.config.max_turns,
         permission_mode=task.config.permission_mode,
-        can_use_tool=partial(can_use_tool, tracker=tracker, notify=notify, task=task),
+        can_use_tool=partial(can_use_tool, tracker=tracker, notify=notify, task=task, config=config),
         include_partial_messages=task.config.stream_text,
         cwd=str(cwd) if cwd else None,
         plugins=plugins,

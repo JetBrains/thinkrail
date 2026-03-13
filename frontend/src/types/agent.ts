@@ -19,6 +19,7 @@ export type EventType =
   | "permissionDenied"
   | "askUserQuestion"
   | "confirmAction"
+  | "suggestSession"
   | "requestResolved"
   | "userMessage";
 

@@ -16,7 +16,7 @@ class TestAgentConfig:
     def test_defaults(self) -> None:
         cfg = AgentConfig()
         assert cfg.model == "claude-sonnet-4-6"
-        assert cfg.max_turns == 25
+        assert cfg.max_turns == 50
         assert cfg.permission_mode == "default"
         assert cfg.stream_text is True
 
