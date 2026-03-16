@@ -11,7 +11,7 @@ You are generating a **specification status report** for the current project. Th
 
 ### Step 1: Gather data
 
-Read `.specs/registry.json` to get the list of specs (with type, status, covers, paths). Then scan `current_tasks/**/*.md` for task statuses. Use file mtimes to determine freshness (compare spec mtime vs covered code mtime).
+Use `registry_query` to get specs (with type, status, covers, paths). Use `spec_list` with `type: "task-spec"` for task statuses. Use file mtimes to determine freshness (compare spec mtime vs covered code mtime).
 
 ### Step 2: Display using bonsai_visualize
 
@@ -71,7 +71,7 @@ Use AskUserQuestion:
 
 ## Key Principles
 
-- **Fast**: Read registry.json + task files, compute metrics directly
+- **Fast**: Use `registry_query` + `spec_list`, compute metrics directly
 - **Actionable**: Every issue has a suggested action with explicit `/skill-name`
 - **Non-destructive**: Only reads and reports, never modifies code or specs
 - **Visual**: Always display results via `bonsai_visualize`, never ASCII art

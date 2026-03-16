@@ -32,7 +32,7 @@ When specifying a module, highlight the current module using `bonsai_visualize` 
 
 ## Prerequisites
 
-Check: Does `DESIGN_DOC.md` exist and reference this module?
+Use `spec_list` with `type: "architecture-design"` to check if a DESIGN_DOC.md exists. If it does, use `spec_get` to read it and verify it references this module.
 If not, use AskUserQuestion:
 - "Create architecture doc first (/architecture-design) (Recommended)"
 - "Skip, create module spec directly"
@@ -122,7 +122,7 @@ Before writing, show the module's architecture using `bonsai_visualize` with typ
 }
 ```
 
-Generate README.md with:
+Use `spec_save` to create the module README.md with `type: "module-design"`, `status: "active"`, `covers: ["{module}/"]`. Include:
 - Module purpose from Step 2
 - Architecture description from Step 3 (reference the bonsai_visualize diagram shown above; do NOT put ASCII art diagrams in the README — use plain text or mermaid if needed)
 - Public interface table from Step 4
@@ -141,11 +141,11 @@ Use AskUserQuestion:
 
 ## Registry Integration
 
-After saving, update `.specs/registry.json`:
-1. Add entry with `type: "module-design"`, `path`, `status: "active"`, `covers: ["{module}/"]`
-2. Add `parent` link to DESIGN_DOC.md
-3. Add `parent` links from sub-module READMEs to this module
-4. Update DESIGN_DOC.md index if this module isn't listed
+The `spec_save` call already created the registry entry. Use `registry_mutate` to add links:
+1. Add `parent` link to DESIGN_DOC.md
+2. Add `parent` links from sub-module READMEs to this module
+
+If this module isn't listed in DESIGN_DOC.md, use Edit to update its Module Index.
 
 ## After Completion
 

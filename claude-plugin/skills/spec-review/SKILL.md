@@ -10,11 +10,11 @@ You are helping the user **review and validate** their existing specifications. 
 
 ## Quick Context
 
-Before diving in, read `.specs/registry.json` for the list of specs and their metadata. Compare spec file mtimes against covered code mtimes to identify which specs are stale and need review most urgently.
+Before diving in, use `spec_list` to get the list of specs and their metadata. Compare spec file mtimes against covered code mtimes to identify which specs are stale and need review most urgently.
 
 ## Your Process
 
-1. **Read the specifications** at the path provided by the user (or the whole project if no path given).
+1. **Read the specifications** using `spec_get` for the path provided by the user (or the whole project if no path given).
 
 2. **Read the corresponding source code** to validate accuracy.
 
@@ -95,9 +95,9 @@ Continue until all issues have been addressed.
 
 ## Registry Integration
 
-After reviewing, update `.specs/registry.json`:
+After reviewing, use `registry_mutate` with `update_entries` to:
 1. Update the `status` of reviewed specs: `"active"` if all issues resolved, `"stale"` if any were skipped
-2. Update the `updated` timestamp for specs that were corrected
+2. The `updated` timestamp is set automatically by `registry_mutate`
 
 ## After Completion
 

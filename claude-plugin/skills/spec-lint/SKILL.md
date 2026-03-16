@@ -12,7 +12,7 @@ You are validating specifications for **structural quality, completeness, and co
 
 ### Step 1: Gather data
 
-Read `.specs/registry.json` for the full spec list and links. For each spec, read the first ~4KB to check for required sections per type. Validate that all link `from`/`to` IDs reference existing specs.
+Use `spec_list` for the full spec list. Use `spec_links` to get all links and validate that all `from`/`to` IDs reference existing specs. For each spec, use `spec_get` to read the content and check for required sections per type.
 
 ### Step 2: Display lint results using bonsai_visualize
 
@@ -38,7 +38,7 @@ If the user specified a path, filter the `lint[]` array to show only issues matc
 
 ### Step 3: Deep analysis (optional)
 
-For issues the script flags, you may need to read the specific spec file to understand the issue in context. Only read files the lint report flags -- don't scan everything.
+For issues flagged above, use `spec_get` to read the specific spec file and understand the issue in context. Only read specs the lint report flags — don't scan everything.
 
 ### What Gets Checked
 
@@ -58,10 +58,10 @@ The script checks:
 
 ### Step 4: Offer auto-fixes
 
-For fixable issues, offer to:
-- Register unregistered specs
-- Update stale registry entries
-- Remove broken links from registry
+For fixable issues, use `registry_mutate` to:
+- Register unregistered specs (via `add_entries`)
+- Update stale registry entries (via `update_entries`)
+- Remove broken links from registry (via `remove_links`)
 
 ### Step 5: Offer next actions
 
@@ -77,5 +77,5 @@ Use AskUserQuestion:
 
 - **Errors vs Warnings**: Missing required sections = WARNING. Missing files/broken links = ERROR.
 - **Auto-fix safely**: Only offer to fix unambiguous issues (registry updates, not content)
-- **Fast**: Read registry + spec headers; only read full files for deep analysis
+- **Fast**: Use `spec_list` + `spec_links` for overview; only use `spec_get` for deep analysis
 - **Actionable**: Every issue includes what to do about it

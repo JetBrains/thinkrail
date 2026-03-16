@@ -123,14 +123,14 @@
       "covers": [
         "backend/app/agent/context.py"
       ],
-      "updated": "2026-03-13",
       "tags": [
         "backend",
         "agent-orchestration",
         "context",
         "prompt"
       ],
-      "created": "2026-03-03"
+      "created": "2026-03-03",
+      "updated": "2026-03-13"
     },
     {
       "id": "agent-persistence",
@@ -2170,6 +2170,22 @@
       ],
       "created": "2026-03-13",
       "updated": "2026-03-13"
+    },
+    {
+      "id": "task-skill-mcp-migration",
+      "type": "task-spec",
+      "path": "current_tasks/agent/refactor_skill_mcp_migration.md",
+      "title": "Refactor skills: replace raw file I/O with bonsai-specs MCP tools",
+      "status": "done",
+      "covers": [
+        "claude-plugin/skills/"
+      ],
+      "tags": [
+        "high",
+        "refactor"
+      ],
+      "created": "2026-03-16",
+      "updated": "2026-03-16"
     }
   ],
   "links": [
@@ -3421,6 +3437,16 @@
     {
       "from": "task-skill-boilerplate-cleanup",
       "to": "task-context-general-instructions",
+      "type": "depends-on"
+    },
+    {
+      "from": "task-skill-mcp-migration",
+      "to": "agent-specs-tools",
+      "type": "implements"
+    },
+    {
+      "from": "task-skill-mcp-migration",
+      "to": "task-specs-mcp-tools",
       "type": "depends-on"
     }
   ]

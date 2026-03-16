@@ -125,7 +125,7 @@ Use AskUserQuestion:
 
 ### Step 7: Generate the document
 
-Generate `DESIGN_DOC.md` with:
+Use `spec_save` to create `DESIGN_DOC.md` with `type: "architecture-design"`, `status: "active"`. Include:
 - Architecture diagram generated via `bonsai_visualize` `diagram` type
 - Annotated source tree from auto-detection
 - Data flow with concrete types from code analysis
@@ -166,14 +166,13 @@ Use AskUserQuestion:
 
 ## Registry Integration
 
-After saving, update `.specs/registry.json`:
-1. Add entry with `type: "architecture-design"`, `status: "active"`
-2. Add `parent` links from module READMEs to this architecture doc
-3. Add `parent` link from README.md
+The `spec_save` call already created the registry entry. Use `registry_mutate` to add links:
+1. Add `parent` links from module READMEs to this architecture doc
+2. Add `parent` link from README.md
 
 ## After Completion
 
-Read the DESIGN_DOC.md module list and use `SuggestSession` to propose a `module-design` session for each major module (up to 3, prioritized by dependency order). Include the architecture spec ID (and goal spec ID if it exists) in `specIds`. Carry forward each module's path and key responsibilities in the `prompt`.
+Use `spec_get` to read the DESIGN_DOC.md module list and use `SuggestSession` to propose a `module-design` session for each major module (up to 3, prioritized by dependency order). Include the architecture spec ID (and goal spec ID if it exists) in `specIds`. Carry forward each module's path and key responsibilities in the `prompt`.
 
 Then use `AskUserQuestion`:
 - "/spec-from-code — Generate module spec skeletons from code"

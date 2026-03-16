@@ -109,8 +109,8 @@ Run /spec-status to see specification coverage.
 ### Step 5: Create skeleton specifications
 
 **For new projects:**
-- Create a minimal `README.md` with project name and description (ask user to fill in details later)
-- Create a minimal `DESIGN_DOC.md` skeleton with TOC placeholders
+- Use `spec_save` to create a minimal `README.md` with `type: "goal-and-requirements"`, `status: "draft"` (ask user to fill in details later)
+- Use `spec_save` to create a minimal `DESIGN_DOC.md` skeleton with `type: "architecture-design"`, `status: "draft"` and TOC placeholders
 
 **For existing projects:**
 - Analyze the directory structure
@@ -120,7 +120,7 @@ Run /spec-status to see specification coverage.
 
 ### Step 6: Register initial specs
 
-Add all created specs to `.specs/registry.json`.
+The `spec_save` calls above already created the registry entries. Use `registry_mutate` to add any `parent` or `depends-on` links between the created specs.
 
 ### Step 7: Report and suggest next steps
 

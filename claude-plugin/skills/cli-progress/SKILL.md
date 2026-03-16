@@ -11,7 +11,7 @@ You are the **progress tracker** for specification-driven development. You displ
 
 ### Step 1: Gather progress data
 
-Read `.specs/registry.json` and scan `current_tasks/` to determine:
+Use `registry_query` to get specs by type and status, and `spec_list` with `type: "task-spec"` for task counts. Determine:
 1. **Workflow steps** — which phases are done/current/pending
 2. **Task counts** — total, done, in-progress, pending by module
 3. **Spec coverage** — which modules have specs

@@ -87,7 +87,7 @@ Use AskUserQuestion (multiSelect: true):
 
 ### Step 6: Generate the task spec
 
-Generate `current_tasks/{module_path}/{type}_{name}.md`:
+Use `spec_save` to create the task spec at `current_tasks/{module_path}/{type}_{name}.md` with `type: "task-spec"`, `status: "active"`, `tags: ["{priority}", "{type}"]`:
 ```markdown
 # {Action verb} {component}: {specific description}
 
@@ -118,16 +118,14 @@ Use AskUserQuestion:
 
 ## Prerequisites
 
-Check for existing module specs — read them for context before asking questions.
-Check `current_tasks/` for overlapping tasks.
+Use `spec_list` to enumerate existing module specs, then `spec_get` to read them for context before asking questions.
+Use `spec_list` with `type: "task-spec"` to check for overlapping tasks.
 
 ## Registry Integration
 
-After saving, update `.specs/registry.json`:
-1. Add entry with `type: "task-spec"`, `status: "active"`, `tags: ["{priority}", "{type}"]`
-2. Set `path` to the structured path (e.g., `current_tasks/spec/feature_spec_models.md`)
-3. Add `implements` link to affected module spec
-4. Add `depends-on` links if user specifies dependencies
+The `spec_save` call already created the registry entry. Use `registry_mutate` to add links:
+1. Add `implements` link to affected module spec
+2. Add `depends-on` links if user specifies dependencies
 
 ## After Completion
 

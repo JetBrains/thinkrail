@@ -244,15 +244,13 @@ Use AskUserQuestion and clarify the project/feature name; suggest 3—5 options.
 
 ### Step 9: Save Output
 
-1. Write `GOAL&REQUIREMENTS.md` with proper md and required output formatting
+1. Use `spec_save` to create `GOAL&REQUIREMENTS.md` with `type: "goal-and-requirements"`, `status: "active"`, `tags: ["{priority}", "{category}"]`. This atomically writes the file and adds the registry entry.
 2. Confirm: "Goal and description are saved to GOAL&REQUIREMENTS.md"
 3. Show file path as clickable link: `[GOAL&REQUIREMENTS.md](./GOAL&REQUIREMENTS.md)`
 
 ### Step 10: Registry Integration
 
-Update `.specs/registry.json` (if exists; create and update if doesn't):
-1. Add entry with `type: "goal-and-requirements"`, `status: "active"`, `tags: ["{priority}", "{category}"]`
-2. If code exists and modules are detected, add `references` links to affected module specs
+If code exists and modules are detected, use `registry_mutate` to add `references` links to affected module specs.
 
 ### Step 11: Show Progress
 

@@ -11,7 +11,7 @@ You are the **workflow orchestrator** for specification-driven development. You 
 
 ### Step 1: Gather data
 
-Read `.specs/registry.json` for specs (type, status, covers, paths). Scan `current_tasks/**/*.md` for task statuses. Identify coverage gaps by comparing registered `covers` entries against source directories.
+Use `registry_query` to get specs (type, status, covers, paths). Use `spec_list` with `type: "task-spec"` for task statuses. Identify coverage gaps by comparing registered `covers` entries against source directories.
 
 ### Step 2: Display recommendations using bonsai_visualize
 
