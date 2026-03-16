@@ -462,7 +462,7 @@ A single intercept function covers all 7 tools (they share the `bonsai-specs` su
 from app.agent.tools.specs import specs_mcp_server, intercept_specs
 
 MCP_SERVERS: dict[str, Any] = {
-    "bonsai-viz": viz_mcp_server,
+    "bonsai-vis": vis_mcp_server,
     "bonsai-proactive": suggest_session_mcp_server,
     "bonsai-specs": specs_mcp_server,
 }
