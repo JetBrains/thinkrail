@@ -17,7 +17,7 @@ Show current workflow position by calling `bonsai_visualize` with type `progress
 {
   "type": "progress-tracker",
   "title": "Specification-Driven Development",
-  "vizId": "workflow-progress",
+  "visId": "workflow-progress",
   "data": {
     "steps": [
       {"label": "Goal & Requirements", "status": "done", "file": "GOAL&REQUIREMENTS.md"},
@@ -42,33 +42,27 @@ Present findings: "I found these major components: [list]. Here's how they seem 
 
 ### Step 2: Architecture pattern with visual comparison
 
-Provide several most-common architecture approaches for the goal and **visualize them side-by-side** using `bonsai_visualize` with type `comparison`:
+Provide several most-common architecture approaches for the goal and **visualize them side-by-side** using `bonsai_visualize` with type `comparison`. Include a `visualization` field with a Mermaid diagram illustrating each approach's component structure:
 ```json
 {
   "type": "comparison",
   "title": "Architecture Approaches",
-  "vizId": "arch-comparison",
+  "visId": "arch-comparison",
   "data": {
     "options": [
       {
         "name": "[Approach 1]",
         "description": "[Brief description]",
+        "visualization": "graph TD\n  A[Component A] --> B[Component B]\n  B --> C[Component C]",
         "pros": ["[pro 1]", "[pro 2]"],
-        "cons": ["[con 1]", "[con 2]"],
-        "details": [
-          {"label": "Components", "value": "[component list]"},
-          {"label": "Key Technologies", "value": "[tech list]"}
-        ]
+        "cons": ["[con 1]", "[con 2]"]
       },
       {
         "name": "[Approach 2]",
         "description": "[Brief description]",
+        "visualization": "graph LR\n  X[Service X] --> Y[Service Y]\n  X --> Z[Service Z]",
         "pros": ["[pro 1]", "[pro 2]"],
-        "cons": ["[con 1]", "[con 2]"],
-        "details": [
-          {"label": "Components", "value": "[component list]"},
-          {"label": "Key Technologies", "value": "[tech list]"}
-        ]
+        "cons": ["[con 1]", "[con 2]"]
       }
     ]
   }
@@ -95,7 +89,30 @@ Present 2-3 alternative ways to group the discovered modules. For example:
 
 ### Step 4: Data flow
 
-Based on code analysis, present the discovered type flow and use AskUserQuestion:
+Based on code analysis, present the discovered type flow. Visualize it using `bonsai_visualize` with type `diagram` (use structured `nodes`/`edges`, NOT ASCII art):
+```json
+{
+  "type": "diagram",
+  "title": "Data Flow",
+  "visId": "data-flow",
+  "data": {
+    "nodes": [
+      {"id": "input", "label": "User Input"},
+      {"id": "parser", "label": "Parser"},
+      {"id": "engine", "label": "Processing Engine"},
+      {"id": "output", "label": "Output"}
+    ],
+    "edges": [
+      {"from": "input", "to": "parser", "label": "raw data"},
+      {"from": "parser", "to": "engine", "label": "parsed"},
+      {"from": "engine", "to": "output", "label": "result"}
+    ],
+    "layout": "left-to-right"
+  }
+}
+```
+
+Then use AskUserQuestion:
 
 **Question 3 — Data flow accuracy:**
 - "This looks correct" — Use the auto-detected flow
@@ -139,7 +156,7 @@ Show complete architecture using `bonsai_visualize` with type `summary-box`:
 {
   "type": "summary-box",
   "title": "Core Architecture Design",
-  "vizId": "arch-confirmation",
+  "visId": "arch-confirmation",
   "data": {
     "sections": [
       {"heading": "Main Components", "items": [

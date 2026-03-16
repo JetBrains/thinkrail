@@ -39,7 +39,7 @@ Show current workflow position by calling `bonsai_visualize` with type `progress
 {
   "type": "progress-tracker",
   "title": "Specification-Driven Development",
-  "vizId": "workflow-progress",
+  "visId": "workflow-progress",
   "data": {
     "steps": [
       {"label": "Goal & Requirements", "status": "current", "file": "GOAL&REQUIREMENTS.md"},
@@ -125,7 +125,7 @@ Based on responses, draft a goal statement. Show it using `bonsai_visualize` wit
 {
   "type": "summary-box",
   "title": "Proposed Goal",
-  "vizId": "goal-draft",
+  "visId": "goal-draft",
   "data": {
     "sections": [
       {"heading": "Goal", "items": [{"label": "Statement", "value": "[drafted goal]"}]},
@@ -153,7 +153,7 @@ Draft a 1-2 paragraph description. Show it using `bonsai_visualize` with type `s
 {
   "type": "summary-box",
   "title": "Proposed Description",
-  "vizId": "description-draft",
+  "visId": "description-draft",
   "data": {
     "sections": [
       {"heading": "Description", "items": [{"label": "Text", "value": "[draft description]"}]},
@@ -210,7 +210,7 @@ Show the complete goal specification using `bonsai_visualize` with type `summary
 {
   "type": "summary-box",
   "title": "Goal Specification",
-  "vizId": "goal-confirmation",
+  "visId": "goal-confirmation",
   "data": {
     "sections": [
       {"heading": "Goal", "items": [{"label": "Statement", "value": "[goal statement]"}]},
@@ -256,12 +256,12 @@ Update `.specs/registry.json` (if exists; create and update if doesn't):
 
 ### Step 11: Show Progress
 
-Show updated workflow position by calling `bonsai_visualize` with type `progress-tracker` (update the vizId `workflow-progress` so the existing card refreshes):
+Show updated workflow position by calling `bonsai_visualize` with type `progress-tracker` (update the visId `workflow-progress` so the existing card refreshes):
 ```json
 {
   "type": "progress-tracker",
   "title": "Specification-Driven Development",
-  "vizId": "workflow-progress",
+  "visId": "workflow-progress",
   "data": {
     "steps": [
       {"label": "Goal & Requirements", "status": "current", "file": "GOAL&REQUIREMENTS.md",
@@ -351,7 +351,7 @@ During each step always show current state of requirements summary using `bonsai
 {
   "type": "summary-box",
   "title": "Requirements Summary",
-  "vizId": "requirements-summary",
+  "visId": "requirements-summary",
   "data": {
     "sections": [
       {"heading": "Business Requirements", "status": "done", "items": [

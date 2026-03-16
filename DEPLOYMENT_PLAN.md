@@ -66,13 +66,13 @@ bonsai_workspace-0.1.0-py3-none-any.whl  (~5 MB)
 │   ├── agent/
 │   ├── rpc/
 │   ├── spec/
-│   └── viz/
+│   └── vis/
 ├── bonsai/frontend_dist/      Pre-built React SPA (from frontend/dist/)
 │   ├── index.html
 │   └── assets/                JS/CSS bundles
 └── bonsai/claude_plugin/      Skills + MCP tools (from claude-plugin/)
     ├── skills/                15 SKILL.md files
-    └── tools/                 viz-server.py
+    └── tools/                 vis-server.py
 ```
 
 Estimated size: ~3.4 MB frontend + ~0.2 MB plugin + ~1 MB Python = **~5 MB**.
@@ -100,13 +100,13 @@ name. The package on PyPI will be `bonsai-workspace`, importable as `bonsai`.
    ```
    Files affected (every `.py` that imports across modules):
    - `bonsai/main.py` — `from app.rpc.server import register_routes`
-   - `bonsai/rpc/server.py` — imports from `app.core`, `app.spec`, `app.agent`, `app.viz`
+   - `bonsai/rpc/server.py` — imports from `app.core`, `app.spec`, `app.agent`, `app.vis`
    - `bonsai/rpc/methods/*.py` — imports from `app.agent`, `app.spec`
    - `bonsai/agent/service.py` — imports from `app.agent.*`, `app.core`
    - `bonsai/agent/runner.py` — imports from `app.agent.*`
    - `bonsai/agent/context.py` — imports from `app.spec`
    - `bonsai/spec/service.py` — imports from `app.core`
-   - `bonsai/viz/service.py` — imports from `app.spec`, `app.core`
+   - `bonsai/vis/service.py` — imports from `app.spec`, `app.core`
    - All `tests/` files
    - The `__main__` block in `main.py`: `"app.main:create_app"` → `"bonsai.main:create_app"`
 

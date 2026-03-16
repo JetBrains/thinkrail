@@ -7,7 +7,7 @@
 The agent tools package spec (`backend/app/agent/tools/README.md`) defines a clean architecture where each MCP tool lives in its own file with schema + handler + MCP server + `intercept()`. Currently, all tool code is inline in `runner.py`:
 
 - **SuggestSession**: schema, handler, MCP server (lines 35-86) and interception logic (lines 117-142)
-- **Visualization**: import of `viz_mcp_server` from `agent/visualization.py`; interception is a 2-line auto-approve in `can_use_tool` (lines 113-116)
+- **Visualization**: import of `vis_mcp_server` from `agent/visualization.py`; interception is a 2-line auto-approve in `can_use_tool` (lines 113-116)
 - **`can_use_tool`**: monolithic nested function (lines 108-186) that mixes tool interception with AskUserQuestion and generic confirmAction logic
 
 The tools package spec prescribes:
@@ -85,7 +85,7 @@ async def intercept_suggest_session(
 Move the file and add the `intercept_visualize` function:
 
 ```python
-# Add to existing visualization.py after viz_mcp_server:
+# Add to existing visualization.py after vis_mcp_server:
 
 async def intercept_visualize(
     input_data: dict[str, Any],
@@ -96,7 +96,7 @@ async def intercept_visualize(
     return PermissionResultAllow(behavior="allow")
 ```
 
-`VIZ_INSTRUCTIONS` stays exported — consumed by `context.py`.
+`VIS_INSTRUCTIONS` stays exported — consumed by `context.py`.
 
 ### 3. Create `tools/__init__.py`
 
@@ -113,7 +113,7 @@ from claude_agent_sdk import PermissionResultAllow, PermissionResultDeny
 from app.agent.models import AgentTask
 from app.agent.tracker import Tracker
 from app.agent.tools.suggest_session import intercept_suggest_session, suggest_session_mcp_server
-from app.agent.tools.visualization import intercept_visualize, viz_mcp_server
+from app.agent.tools.visualization import intercept_visualize, vis_mcp_server
 
 InterceptFn = Callable[
     [dict[str, Any], Tracker, Any, AgentTask],
@@ -121,7 +121,7 @@ InterceptFn = Callable[
 ]
 
 MCP_SERVERS: dict[str, Any] = {
-    "bonsai-viz": viz_mcp_server,
+    "bonsai-vis": vis_mcp_server,
     "bonsai-proactive": suggest_session_mcp_server,
 }
 
@@ -215,7 +215,7 @@ Replace all tool-related code with imports from the new modules:
 # Remove:
 #   - Lines 35-86 (SuggestSession schema, handler, MCP server)
 #   - Lines 108-186 (entire can_use_tool nested function)
-#   - import of viz_mcp_server from agent.visualization
+#   - import of vis_mcp_server from agent.visualization
 #   - uuid4 import (no longer needed in runner.py)
 #
 # Add:
@@ -235,9 +235,9 @@ options = ClaudeAgentOptions(
 
 ```python
 # Change:
-from app.agent.visualization import VIZ_INSTRUCTIONS
+from app.agent.visualization import VIS_INSTRUCTIONS
 # To:
-from app.agent.tools.visualization import VIZ_INSTRUCTIONS
+from app.agent.tools.visualization import VIS_INSTRUCTIONS
 ```
 
 ### 7. Update tests
@@ -252,7 +252,7 @@ from app.agent.tools.visualization import VIZ_INSTRUCTIONS
 |------|-------------|
 | `backend/app/agent/tools/__init__.py` | `MCP_SERVERS` and `INTERCEPTORS` registries |
 | `backend/app/agent/tools/suggest_session.py` | SuggestSession: schema + handler + MCP server + `intercept_suggest_session()` |
-| `backend/app/agent/tools/visualization.py` | Moved from `agent/visualization.py`: schema + handler + MCP server + `intercept_visualize()` + `VIZ_INSTRUCTIONS` |
+| `backend/app/agent/tools/visualization.py` | Moved from `agent/visualization.py`: schema + handler + MCP server + `intercept_visualize()` + `VIS_INSTRUCTIONS` |
 | `backend/app/agent/permissions.py` | `can_use_tool()` routing function using `INTERCEPTORS` |
 
 ## Files to modify
@@ -260,7 +260,7 @@ from app.agent.tools.visualization import VIZ_INSTRUCTIONS
 | File | Change |
 |------|--------|
 | `backend/app/agent/runner.py` | Remove inline tool code + `can_use_tool` nested fn. Import `MCP_SERVERS` from tools, `can_use_tool` from permissions. Use `functools.partial` to bind tracker/notify/task. |
-| `backend/app/agent/context.py` | Update `VIZ_INSTRUCTIONS` import path |
+| `backend/app/agent/context.py` | Update `VIS_INSTRUCTIONS` import path |
 | `backend/tests/agent/test_runner.py` | Update mocks/imports for new module paths |
 
 ## Files to delete
@@ -280,10 +280,10 @@ from app.agent.tools.visualization import VIZ_INSTRUCTIONS
 
 - [ ] `tools/__init__.py` exports `MCP_SERVERS` and `INTERCEPTORS`
 - [ ] `tools/suggest_session.py` has schema + handler + MCP server + `intercept_suggest_session()`
-- [ ] `tools/visualization.py` has schema + handler + MCP server + `intercept_visualize()` + `VIZ_INSTRUCTIONS`
+- [ ] `tools/visualization.py` has schema + handler + MCP server + `intercept_visualize()` + `VIS_INSTRUCTIONS`
 - [ ] `permissions.py` has `can_use_tool()` routing via `INTERCEPTORS` + AskUserQuestion + generic confirmAction
 - [ ] `runner.py` has no inline tool code — imports from `tools` and `permissions`
-- [ ] `context.py` imports `VIZ_INSTRUCTIONS` from `tools.visualization`
+- [ ] `context.py` imports `VIS_INSTRUCTIONS` from `tools.visualization`
 - [ ] `agent/visualization.py` is deleted (moved to `tools/`)
 - [ ] All 23 existing tests pass with no behavioral changes
 - [ ] New test verifies `INTERCEPTORS` routing dispatches correctly

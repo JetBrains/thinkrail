@@ -93,7 +93,7 @@ def _build_general_instructions(plugin_dir: Path) -> str:
     proactive suggestions, and available skills.
     """
     # 1. Visualization subsection
-    viz = """\
+    vis = """\
 ### Visualization
 
 You have access to the `bonsai_visualize` MCP tool for rendering structured visual \
@@ -105,8 +105,23 @@ status-list, diagram.
 
 **When to use:** reporting status, showing progress, comparing options, presenting \
 tabular data, or illustrating architecture. Call the tool with a JSON object containing \
-`type`, `title`, `data`, and optionally `vizId` (reuse the same `vizId` to update a \
+`type`, `title`, `data`, and optionally `visId` (reuse the same `visId` to update a \
 previous visualization in-place).
+
+**Status values:** `done`, `current`, `pending`, `error`, `skipped`, `stale` (use these exact strings).
+
+**Layout hints (optional):** `"layout": {"width": "compact"|"normal"|"wide", "maxHeight": 300}`
+Use `compact` for small status badges, `wide` for architecture diagrams.
+
+**`data` format by type:**
+- **progress-tracker:** `{"steps": [{"label": "...", "status": "done", "file?": "path"}]}`
+- **summary-box:** `{"sections": [{"heading": "...", "status?": "done", "items": [{"label": "Key", "value": "Val"}]}]}`
+- **comparison:** `{"options": [{"name": "...", "description?": "...", "pros?": ["..."], "cons?": ["..."], "visualization?": "graph LR; ..."}]}`
+- **data-table:** `{"columns": ["Col1", "Col2"], "rows": [["a", "b"]], "statusColumn?": 1}`
+- **status-list:** `{"items": [{"label": "...", "status": "done", "meta?": "detail text"}]}`
+- **diagram:** `{"nodes": [{"id": "a", "label": "A"}], "edges": [{"from": "a", "to": "b", "label?": "calls"}]}` for structured, or `{"diagram": "graph LR; A-->B", "notation": "mermaid"}` for raw Mermaid
+
+Prefer structured `nodes`/`edges` for new diagrams; use `notation: "mermaid"` only when raw Mermaid syntax is more expressive.
 
 **Anti-patterns:** Do NOT use Bash to print ANSI-colored text, do NOT render ASCII-art \
 tables, do NOT approximate visualizations with markdown when the tool can do it better."""
@@ -163,7 +178,7 @@ Respect dismissals — do not re-suggest the same session. Limit to 1-3 per sess
 
 No skills available."""
 
-    subsections = [viz, interaction, spec_workflow, proactive, skills_table]
+    subsections = [vis, interaction, spec_workflow, proactive, skills_table]
     body = "\n\n".join(subsections)
     return f"## General Instructions\n\n{body}"
 

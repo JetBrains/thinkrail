@@ -150,13 +150,13 @@
       "updated": "2026-03-12"
     },
     {
-      "id": "module-viz",
+      "id": "module-vis",
       "type": "module-design",
-      "path": "backend/app/viz/README.md",
-      "title": "Viz Module Design",
+      "path": "backend/app/vis/README.md",
+      "title": "Vis Module Design",
       "status": "active",
       "covers": [
-        "backend/app/viz/"
+        "backend/app/vis/"
       ],
       "tags": [
         "backend",
@@ -1750,9 +1750,13 @@
       "title": "MCP Visualization \u2014 Architecture Design",
       "status": "active",
       "covers": [
-        "backend/app/agent/visualization.py",
+        "backend/app/agent/tools/visualization.py",
+        "backend/app/agent/tools/_vis_validation.py",
+        "claude-plugin/tools/vis-server.py",
         "frontend/src/components/ChatStream/VisualizationCard.tsx",
-        "frontend/src/types/viz.ts"
+        "frontend/src/types/vis.ts",
+        "frontend/src/utils/mermaid.ts",
+        "frontend/src/utils/ZoomBar.tsx"
       ],
       "tags": [
         "feature",
@@ -1760,7 +1764,7 @@
         "mcp"
       ],
       "created": "2026-03-11",
-      "updated": "2026-03-11"
+      "updated": "2026-03-16"
     },
     {
       "id": "voice-input-design",
@@ -1863,7 +1867,7 @@
       "status": "done",
       "covers": [
         "frontend/src/components/ChatStream/VisualizationCard.tsx",
-        "frontend/src/types/viz.ts"
+        "frontend/src/types/vis.ts"
       ],
       "tags": [
         "medium",
@@ -2159,6 +2163,69 @@
       ],
       "created": "2026-03-13",
       "updated": "2026-03-13"
+    },
+    {
+      "id": "feature-visualization",
+      "type": "submodule-design",
+      "path": "features/VISUALIZATION.md",
+      "title": "MCP Visualization \u2014 Feature Spec",
+      "status": "active",
+      "covers": [
+        "backend/app/agent/tools/visualization.py",
+        "backend/app/agent/tools/_vis_validation.py",
+        "claude-plugin/tools/vis-server.py",
+        "frontend/src/components/ChatStream/VisualizationCard.tsx",
+        "frontend/src/types/vis.ts",
+        "frontend/src/utils/mermaid.ts"
+      ],
+      "tags": [
+        "feature",
+        "visualization",
+        "mcp"
+      ],
+      "created": "2026-03-16",
+      "updated": "2026-03-16"
+    },
+    {
+      "id": "agent-visualization",
+      "type": "submodule-design",
+      "path": "backend/app/agent/tools/VISUALIZATION.md",
+      "title": "Visualization \u2014 Backend Spec",
+      "status": "active",
+      "covers": [
+        "backend/app/agent/tools/visualization.py",
+        "backend/app/agent/tools/_vis_validation.py",
+        "claude-plugin/tools/vis-server.py"
+      ],
+      "tags": [
+        "backend",
+        "visualization",
+        "mcp-tools"
+      ],
+      "created": "2026-03-16",
+      "updated": "2026-03-16"
+    },
+    {
+      "id": "ui-visualization-card",
+      "type": "submodule-design",
+      "path": "frontend/ui-specs/VISUALIZATION_CARD.md",
+      "title": "Visualization Card \u2014 Frontend Spec",
+      "status": "active",
+      "covers": [
+        "frontend/src/components/ChatStream/VisualizationCard.tsx",
+        "frontend/src/types/vis.ts",
+        "frontend/src/utils/mermaid.ts",
+        "frontend/src/utils/ZoomBar.tsx",
+        "frontend/src/components/ChatStream/__tests__/VisualizationCard.test.tsx",
+        "frontend/src/components/ChatStream/__tests__/toMermaidSyntax.test.ts"
+      ],
+      "tags": [
+        "frontend",
+        "visualization",
+        "ui"
+      ],
+      "created": "2026-03-16",
+      "updated": "2026-03-16"
     }
   ],
   "links": [
@@ -2348,17 +2415,17 @@
       "type": "depends-on"
     },
     {
-      "from": "module-viz",
+      "from": "module-vis",
       "to": "design-doc",
       "type": "parent"
     },
     {
-      "from": "module-viz",
+      "from": "module-vis",
       "to": "module-core",
       "type": "depends-on"
     },
     {
-      "from": "module-viz",
+      "from": "module-vis",
       "to": "module-spec",
       "type": "depends-on"
     },
@@ -3188,11 +3255,6 @@
       "type": "depends-on"
     },
     {
-      "from": "visualization-design",
-      "to": "module-viz",
-      "type": "depends-on"
-    },
-    {
       "from": "voice-input-design",
       "to": "design-doc",
       "type": "parent"
@@ -3396,6 +3458,61 @@
       "from": "task-skill-boilerplate-cleanup",
       "to": "task-context-general-instructions",
       "type": "depends-on"
+    },
+    {
+      "from": "feature-visualization",
+      "to": "visualization-design",
+      "type": "parent"
+    },
+    {
+      "from": "feature-visualization",
+      "to": "agent-visualization",
+      "type": "references"
+    },
+    {
+      "from": "feature-visualization",
+      "to": "ui-visualization-card",
+      "type": "references"
+    },
+    {
+      "from": "agent-visualization",
+      "to": "module-agent",
+      "type": "parent"
+    },
+    {
+      "from": "agent-visualization",
+      "to": "agent-tools",
+      "type": "parent"
+    },
+    {
+      "from": "agent-visualization",
+      "to": "feature-visualization",
+      "type": "implements"
+    },
+    {
+      "from": "ui-visualization-card",
+      "to": "chat-ui",
+      "type": "parent"
+    },
+    {
+      "from": "ui-visualization-card",
+      "to": "frontend-module",
+      "type": "parent"
+    },
+    {
+      "from": "ui-visualization-card",
+      "to": "feature-visualization",
+      "type": "implements"
+    },
+    {
+      "from": "visualization-design",
+      "to": "agent-context",
+      "type": "references"
+    },
+    {
+      "from": "task-visualization-card",
+      "to": "ui-visualization-card",
+      "type": "implements"
     }
   ]
 }

@@ -1,61 +1,11 @@
 import { createContext, useCallback, useContext, useEffect, useRef, useState, type ComponentPropsWithoutRef } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
-import mermaid from "mermaid";
-
-// Initialize mermaid once with dark theme matching our JetBrains palette
-let mermaidInitialized = false;
-function ensureMermaid() {
-  if (mermaidInitialized) return;
-  mermaid.initialize({
-    startOnLoad: false,
-    theme: "dark",
-    themeVariables: {
-      primaryColor: "#393b40",
-      primaryTextColor: "#dfe1e5",
-      primaryBorderColor: "#43454a",
-      lineColor: "#6f737a",
-      secondaryColor: "#2b2d30",
-      tertiaryColor: "#1e1f22",
-      fontFamily: "'JetBrains Mono', monospace",
-      fontSize: "16px",
-    },
-  });
-  mermaidInitialized = true;
-}
+import { ensureMermaid, mermaid } from "@/utils/mermaid.ts";
+import { ZoomBar } from "@/utils/ZoomBar.tsx";
 
 // Context to pass document zoom level to child components
 const DocZoomContext = createContext(1);
-
-// ── Zoom Controls (reusable) ──
-
-function ZoomBar({
-  zoom,
-  onZoomIn,
-  onZoomOut,
-  onReset,
-  className,
-}: {
-  zoom: number;
-  onZoomIn: () => void;
-  onZoomOut: () => void;
-  onReset: () => void;
-  className?: string;
-}) {
-  return (
-    <div className={`md-zoom-bar ${className ?? ""}`}>
-      <button className="md-zoom-btn" onClick={onZoomOut} title="Zoom out">
-        −
-      </button>
-      <span className="md-zoom-level" onClick={onReset} title="Reset zoom">
-        {Math.round(zoom * 100)}%
-      </span>
-      <button className="md-zoom-btn" onClick={onZoomIn} title="Zoom in">
-        +
-      </button>
-    </div>
-  );
-}
 
 // ── Mermaid Block with zoom ──
 

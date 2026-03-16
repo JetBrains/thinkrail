@@ -15,7 +15,7 @@ Show current workflow position by calling `bonsai_visualize` with type `progress
 {
   "type": "progress-tracker",
   "title": "Specification-Driven Development",
-  "vizId": "workflow-progress",
+  "visId": "workflow-progress",
   "data": {
     "steps": [
       {"label": "Goal & Requirements", "status": "done", "file": "GOAL&REQUIREMENTS.md"},

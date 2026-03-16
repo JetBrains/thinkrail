@@ -1,8 +1,8 @@
 {
   "mcpServers": {
-    "bonsai-viz": {
+    "bonsai-vis": {
       "command": "python3",
-      "args": ["claude-plugin/tools/viz-server.py"]
+      "args": ["claude-plugin/tools/vis-server.py"]
     }
   }
 }

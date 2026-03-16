@@ -12,7 +12,7 @@ from pathlib import Path
 from app.core.config import AppConfig
 from app.spec.models import Link, RegistryEntry
 from app.spec.registry import read_registry
-from app.viz.models import (
+from app.vis.models import (
     CoverageEntry,
     DashboardState,
     LintIssue,
@@ -103,9 +103,9 @@ class VisualizationService:
             return self._state
         if self._notify:
             try:
-                await self._notify("viz/stateChanged", self._state.to_dict())
+                await self._notify("vis/stateChanged", self._state.to_dict())
             except Exception:
-                logger.debug("viz/stateChanged notify failed (WS disconnected?)")
+                logger.debug("vis/stateChanged notify failed (WS disconnected?)")
         return self._state
 
     # ── Computation ──────────────────────────────────────────────────────────

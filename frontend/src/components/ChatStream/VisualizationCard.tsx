@@ -1,19 +1,22 @@
-import { Component, useState } from "react";
+import { Component, useEffect, useRef, useState } from "react";
 import type { ErrorInfo, ReactNode } from "react";
 import type {
-  VizData,
-  VizStatus,
+  VisData,
+  VisStatus,
   ProgressTrackerData,
   SummaryBoxData,
   ComparisonData,
   DataTableData,
   StatusListData,
   DiagramData,
-} from "@/types/viz.ts";
+  StructuredDiagramData,
+} from "@/types/vis.ts";
+import { ensureMermaid, mermaid } from "@/utils/mermaid.ts";
+import { ZoomBar } from "@/utils/ZoomBar.tsx";
 
 /* ── Status rendering ── */
 
-const STATUS_ICONS: Record<VizStatus, string> = {
+const STATUS_ICONS: Record<VisStatus, string> = {
   done: "\u2713",
   current: "\u25B6",
   pending: "\u25CB",
@@ -24,7 +27,7 @@ const STATUS_ICONS: Record<VizStatus, string> = {
   in_progress: "\u25D0",
 };
 
-const STATUS_COLORS: Record<VizStatus, string> = {
+const STATUS_COLORS: Record<VisStatus, string> = {
   done: "var(--green)",
   current: "var(--blue)",
   pending: "var(--hint)",
@@ -35,10 +38,10 @@ const STATUS_COLORS: Record<VizStatus, string> = {
   in_progress: "var(--blue)",
 };
 
-function StatusIcon({ status }: { status: VizStatus }) {
+function StatusIcon({ status }: { status: VisStatus }) {
   return (
     <span
-      className="viz-status-icon"
+      className="vis-status-icon"
       style={{ color: STATUS_COLORS[status] }}
     >
       {STATUS_ICONS[status]}
@@ -50,13 +53,13 @@ function StatusIcon({ status }: { status: VizStatus }) {
 
 function ProgressTracker({ data }: { data: ProgressTrackerData }) {
   return (
-    <div className="viz-progress">
+    <div className="vis-progress">
       {(data.steps ?? []).map((step, i) => (
-        <div key={i} className="viz-progress-step">
-          <div className="viz-progress-step-row">
+        <div key={i} className="vis-progress-step">
+          <div className="vis-progress-step-row">
             <StatusIcon status={step.status} />
             <span
-              className="viz-progress-label"
+              className="vis-progress-label"
               style={{
                 fontWeight: step.status === "current" ? 600 : 400,
                 color: step.status === "pending" ? "var(--hint)" : "var(--text)",
@@ -65,13 +68,13 @@ function ProgressTracker({ data }: { data: ProgressTrackerData }) {
               {step.label}
             </span>
             {step.file && (
-              <span className="viz-progress-file">{step.file}</span>
+              <span className="vis-progress-file">{step.file}</span>
             )}
           </div>
           {step.substeps && (
-            <div className="viz-progress-substeps">
+            <div className="vis-progress-substeps">
               {step.substeps.map((sub, j) => (
-                <div key={j} className="viz-progress-substep">
+                <div key={j} className="vis-progress-substep">
                   <StatusIcon status={sub.status} />
                   <span style={{ color: sub.status === "pending" ? "var(--hint)" : "var(--muted)" }}>
                     {sub.label}
@@ -90,24 +93,24 @@ function ProgressTracker({ data }: { data: ProgressTrackerData }) {
 
 function SummaryBox({ data }: { data: SummaryBoxData }) {
   return (
-    <div className="viz-summary">
+    <div className="vis-summary">
       {(data.sections ?? []).map((section, i) => (
-        <div key={i} className="viz-summary-section">
-          <div className="viz-summary-heading">
+        <div key={i} className="vis-summary-section">
+          <div className="vis-summary-heading">
             {section.status && <StatusIcon status={section.status} />}
             <span>{section.heading}</span>
           </div>
           {(section.items ?? []).length > 0 ? (
-            <div className="viz-summary-items">
+            <div className="vis-summary-items">
               {(section.items ?? []).map((item, j) => (
-                <div key={j} className="viz-summary-item">
-                  <span className="viz-summary-item-label">{item.label}</span>
-                  <span className="viz-summary-item-value">{item.value}</span>
+                <div key={j} className="vis-summary-item">
+                  <span className="vis-summary-item-label">{item.label}</span>
+                  <span className="vis-summary-item-value">{item.value}</span>
                 </div>
               ))}
             </div>
           ) : (
-            <div className="viz-summary-empty">No items yet</div>
+            <div className="vis-summary-empty">No items yet</div>
           )}
         </div>
       ))}
@@ -119,26 +122,31 @@ function SummaryBox({ data }: { data: SummaryBoxData }) {
 
 function Comparison({ data }: { data: ComparisonData }) {
   return (
-    <div className="viz-comparison">
+    <div className="vis-comparison">
       {(data.options ?? []).map((opt, i) => (
-        <div key={i} className="viz-comparison-card">
-          <div className="viz-comparison-name">{opt.name}</div>
+        <div key={i} className="vis-comparison-card">
+          <div className="vis-comparison-name">{opt.name}</div>
           {opt.description && (
-            <div className="viz-comparison-desc">{opt.description}</div>
+            <div className="vis-comparison-desc">{opt.description}</div>
+          )}
+          {opt.visualization && (
+            <div className="vis-comparison-diagram">
+              <MermaidDiagram syntax={opt.visualization} />
+            </div>
           )}
           {opt.pros && opt.pros.length > 0 && (
-            <div className="viz-comparison-list">
+            <div className="vis-comparison-list">
               {opt.pros.map((p, j) => (
-                <div key={j} className="viz-comparison-pro">
+                <div key={j} className="vis-comparison-pro">
                   <span style={{ color: "var(--green)" }}>{"\u2713"}</span> {p}
                 </div>
               ))}
             </div>
           )}
           {opt.cons && opt.cons.length > 0 && (
-            <div className="viz-comparison-list">
+            <div className="vis-comparison-list">
               {opt.cons.map((c, j) => (
-                <div key={j} className="viz-comparison-con">
+                <div key={j} className="vis-comparison-con">
                   <span style={{ color: "var(--red)" }}>{"\u2715"}</span> {c}
                 </div>
               ))}
@@ -154,8 +162,8 @@ function Comparison({ data }: { data: ComparisonData }) {
 
 function DataTable({ data }: { data: DataTableData }) {
   return (
-    <div className="viz-table-wrap">
-      <table className="viz-table">
+    <div className="vis-table-wrap">
+      <table className="vis-table">
         <thead>
           <tr>
             {(data.columns ?? []).map((col, i) => (
@@ -190,13 +198,13 @@ function DataTable({ data }: { data: DataTableData }) {
 
 function StatusList({ data }: { data: StatusListData }) {
   return (
-    <div className="viz-status-list">
+    <div className="vis-status-list">
       {(data.items ?? []).map((item, i) => (
-        <div key={i} className="viz-status-list-item">
+        <div key={i} className="vis-status-list-item">
           <StatusIcon status={item.status} />
-          <span className="viz-status-list-label">{item.label}</span>
+          <span className="vis-status-list-label">{item.label}</span>
           {item.meta && (
-            <span className="viz-status-list-meta">{item.meta}</span>
+            <span className="vis-status-list-meta">{item.meta}</span>
           )}
         </div>
       ))}
@@ -204,39 +212,128 @@ function StatusList({ data }: { data: StatusListData }) {
   );
 }
 
-/* ── Diagram (simple box-and-arrow) ── */
+/* ── Diagram (Mermaid-based) ── */
+
+/** Convert structured {nodes, edges, layout?} to mermaid flowchart syntax. */
+export function toMermaidSyntax(data: StructuredDiagramData): string {
+  const direction = data.layout === "left-to-right" ? "LR" : "TD";
+  const lines: string[] = [`graph ${direction}`];
+
+  for (const node of data.nodes) {
+    // Wrap label in quotes to escape special mermaid chars
+    const escaped = node.label.replace(/"/g, "#quot;");
+    lines.push(`  ${node.id}["${escaped}"]`);
+  }
+  for (const edge of data.edges) {
+    if (edge.label) {
+      const escaped = edge.label.replace(/"/g, "#quot;");
+      lines.push(`  ${edge.from} -->|${escaped}| ${edge.to}`);
+    } else {
+      lines.push(`  ${edge.from} --> ${edge.to}`);
+    }
+  }
+  return lines.join("\n");
+}
+
+function MermaidDiagram({ syntax }: { syntax: string }) {
+  const ref = useRef<HTMLDivElement>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [zoom, setZoom] = useState(1);
+
+  useEffect(() => {
+    ensureMermaid();
+    let cancelled = false;
+    const id = `vis-mermaid-${Math.random().toString(36).slice(2, 9)}`;
+
+    mermaid
+      .render(id, syntax)
+      .then(({ svg }) => {
+        if (!cancelled && ref.current) {
+          ref.current.innerHTML = svg;
+          const svgEl = ref.current.querySelector("svg");
+          if (svgEl) {
+            svgEl.setAttribute("width", "100%");
+            svgEl.setAttribute("height", "100%");
+          }
+          setError(null);
+        }
+      })
+      .catch((err) => {
+        if (!cancelled) setError(String(err));
+      });
+
+    return () => { cancelled = true; };
+  }, [syntax]);
+
+  if (error) {
+    return (
+      <div className="vis-diagram">
+        <pre className="vis-diagram-text" style={{ color: "var(--red)" }}>{error}</pre>
+        <pre className="vis-diagram-text">{syntax}</pre>
+      </div>
+    );
+  }
+
+  return (
+    <div className="vis-mermaid-wrapper">
+      <ZoomBar
+        zoom={zoom}
+        onZoomIn={() => setZoom((z) => Math.min(z + 0.15, 3))}
+        onZoomOut={() => setZoom((z) => Math.max(z - 0.15, 0.3))}
+        onReset={() => setZoom(1)}
+        className="vis-mermaid-zoom"
+      />
+      <div style={{ overflow: "auto", flex: 1 }}>
+        <div
+          ref={ref}
+          style={{
+            transform: `scale(${zoom})`,
+            transformOrigin: "top left",
+            width: "100%",
+            height: "100%",
+          }}
+        />
+      </div>
+    </div>
+  );
+}
 
 function Diagram({ data }: { data: DiagramData }) {
-  // Simple text-based rendering for now; can be upgraded to SVG later
-  return (
-    <div className="viz-diagram">
-      <div className="viz-diagram-nodes">
-        {(data.nodes ?? []).map((node) => (
-          <div key={node.id} className="viz-diagram-node">
-            <span className="viz-diagram-node-label">{node.label}</span>
-            {node.type && (
-              <span className="viz-diagram-node-type">{node.type}</span>
-            )}
-          </div>
-        ))}
-      </div>
-      {(data.edges ?? []).length > 0 && (
-        <div className="viz-diagram-edges">
-          {(data.edges ?? []).map((edge, i) => (
-            <div key={i} className="viz-diagram-edge">
-              {edge.from} {"\u2192"} {edge.to}
-              {edge.label && <span className="viz-diagram-edge-label"> ({edge.label})</span>}
-            </div>
-          ))}
+  // Text-based diagram: check for mermaid notation
+  if ("diagram" in data && typeof data.diagram === "string") {
+    if ("notation" in data && data.notation === "mermaid") {
+      return (
+        <div className="vis-diagram">
+          <MermaidDiagram syntax={data.diagram} />
         </div>
-      )}
+      );
+    }
+    return (
+      <div className="vis-diagram">
+        <pre className="vis-diagram-text">{data.diagram}</pre>
+      </div>
+    );
+  }
+
+  // Structured diagram: render with Mermaid
+  if ("nodes" in data && Array.isArray(data.nodes) && data.nodes.length > 0) {
+    const syntax = toMermaidSyntax(data);
+    return <MermaidDiagram syntax={syntax} />;
+  }
+
+  // Neither format: show informative empty state
+  return (
+    <div className="vis-diagram">
+      <div style={{ color: "var(--hint)", fontSize: 11 }}>
+        No diagram data
+      </div>
     </div>
   );
 }
 
 /* ── Type icons ── */
 
-const VIZ_ICONS: Record<string, string> = {
+const VIS_ICONS: Record<string, string> = {
   "progress-tracker": "\u{1F4CA}",
   "summary-box": "\u{1F4CB}",
   "comparison": "\u2194\uFE0F",
@@ -247,7 +344,7 @@ const VIZ_ICONS: Record<string, string> = {
 
 /* ── Error Boundary ── */
 
-export class VizErrorBoundary extends Component<
+export class VisErrorBoundary extends Component<
   { children: ReactNode },
   { error: string | null }
 > {
@@ -264,12 +361,12 @@ export class VizErrorBoundary extends Component<
   render() {
     if (this.state.error) {
       return (
-        <div className="viz-card" style={{ borderColor: "var(--red)" }}>
-          <div className="viz-card-header">
-            <span className="viz-card-icon">{"\u26A0"}</span>
-            <span className="viz-card-title">Visualization Error</span>
+        <div className="vis-card" style={{ borderColor: "var(--red)" }}>
+          <div className="vis-card-header">
+            <span className="vis-card-icon">{"\u26A0"}</span>
+            <span className="vis-card-title">Visualization Error</span>
           </div>
-          <div className="viz-card-body" style={{ fontSize: 11, color: "var(--red)" }}>
+          <div className="vis-card-body" style={{ fontSize: 11, color: "var(--red)" }}>
             {this.state.error}
           </div>
         </div>
@@ -282,50 +379,63 @@ export class VizErrorBoundary extends Component<
 /* ── Main Component ── */
 
 interface VisualizationCardProps {
-  data: VizData;
+  data: VisData;
   collapsed?: boolean;
 }
 
 export function VisualizationCard({ data, collapsed = false }: VisualizationCardProps) {
   const [isCollapsed, setIsCollapsed] = useState(collapsed);
-  const icon = VIZ_ICONS[data?.type] ?? "\u{1F4CA}";
+  const icon = VIS_ICONS[data?.type] ?? "\u{1F4CA}";
 
   if (!data?.type || !data?.data) {
     return (
-      <div className="viz-card" style={{ borderColor: "var(--red)" }}>
-        <div className="viz-card-header">
-          <span className="viz-card-icon">{"\u26A0"}</span>
-          <span className="viz-card-title">Visualization Error</span>
+      <div className="vis-card" style={{ borderColor: "var(--red)" }}>
+        <div className="vis-card-header">
+          <span className="vis-card-icon">{"\u26A0"}</span>
+          <span className="vis-card-title">Visualization Error</span>
         </div>
-        <div className="viz-card-body" style={{ fontSize: 11, color: "var(--red)" }}>
+        <div className="vis-card-body" style={{ fontSize: 11, color: "var(--red)" }}>
           Invalid data: type={data?.type ?? "missing"}, data={typeof data?.data}
         </div>
       </div>
     );
   }
 
+  const layout = data.layout;
+  const widthClass = layout?.width === "compact"
+    ? "vis-card--compact"
+    : layout?.width === "wide"
+      ? "vis-card--wide"
+      : "";
+
   if (isCollapsed) {
     return (
       <div
-        className="viz-card viz-card--collapsed"
+        className={`vis-card vis-card--collapsed ${widthClass}`}
         onClick={() => setIsCollapsed(false)}
       >
-        <span className="viz-card-icon">{icon}</span>
-        <span className="viz-card-title">{data.title ?? data.type}</span>
-        <span className="viz-card-tag">updated</span>
-        <span className="viz-card-expand">{"\u25B6"}</span>
+        <span className="vis-card-icon">{icon}</span>
+        <span className="vis-card-title">{data.title ?? data.type}</span>
+        <span className="vis-card-tag">updated</span>
+        <span className="vis-card-expand">{"\u25B6"}</span>
       </div>
     );
   }
 
   return (
-    <div className="viz-card">
-      <div className="viz-card-header" onClick={() => collapsed && setIsCollapsed(true)}>
-        <span className="viz-card-icon">{icon}</span>
-        <span className="viz-card-title">{data.title ?? data.type}</span>
-        <span className="viz-card-type">{data.type}</span>
+    <div className={`vis-card ${widthClass}`}>
+      <div className="vis-card-header" onClick={() => collapsed && setIsCollapsed(true)}>
+        <span className="vis-card-icon">{icon}</span>
+        <span className="vis-card-title">{data.title ?? data.type}</span>
+        <span className="vis-card-type">{data.type}</span>
       </div>
-      <div className="viz-card-body">
+      <div
+        className="vis-card-body"
+        style={{
+          maxHeight: layout?.maxHeight ? `${layout.maxHeight}px` : undefined,
+          overflowY: layout?.maxHeight ? "auto" : undefined,
+        }}
+      >
         {data.type === "progress-tracker" && <ProgressTracker data={data.data} />}
         {data.type === "summary-box" && <SummaryBox data={data.data} />}
         {data.type === "comparison" && <Comparison data={data.data} />}
@@ -339,19 +449,19 @@ export function VisualizationCard({ data, collapsed = false }: VisualizationCard
 
 /* ── Collapsed Marker (for hybrid collapse pattern) ── */
 
-export function CollapsedVizMarker({ title, type }: { title?: string; type?: string }) {
+export function CollapsedVisMarker({ title, type }: { title?: string; type?: string }) {
   const [expanded, setExpanded] = useState(false);
-  const icon = VIZ_ICONS[type ?? ""] ?? "\u{1F4CA}";
+  const icon = VIS_ICONS[type ?? ""] ?? "\u{1F4CA}";
 
   if (expanded) {
     return null; // Handled by parent re-rendering full card
   }
 
   return (
-    <div className="viz-collapsed-marker" onClick={() => setExpanded(true)}>
+    <div className="vis-collapsed-marker" onClick={() => setExpanded(true)}>
       <span>{icon}</span>
-      <span className="viz-collapsed-marker-title">{title ?? type ?? "Visualization"}</span>
-      <span className="viz-collapsed-marker-tag">updated</span>
+      <span className="vis-collapsed-marker-title">{title ?? type ?? "Visualization"}</span>
+      <span className="vis-collapsed-marker-tag">updated</span>
     </div>
   );
 }

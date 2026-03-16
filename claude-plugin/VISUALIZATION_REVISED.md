@@ -18,7 +18,7 @@ The current visualization system instructs the LLM to render ANSI-colored ASCII 
 | File | Lines | Issue |
 |------|-------|-------|
 | `claude-plugin/VISUALIZATION.md` | All | Defines ANSI Color Output Guide |
-| `claude-plugin/skills/visualisation/SKILL.md` | 48-63 | ANSI color code table |
+| `claude-plugin/skills/visualization/SKILL.md` | 48-63 | ANSI color code table |
 | `claude-plugin/skills/goal-and-requirements/SKILL.md` | 17-18, 290-291 | "APPLY COLOURS... ANSI codes" |
 | `claude-plugin/skills/architecture-design/SKILL.md` | 18-19, 118 | "Apply colors... ANSI codes" |
 | `claude-plugin/skills/task-spec/SKILL.md` | 18-19 | "Apply colors... ANSI codes" |
@@ -52,13 +52,13 @@ The current visualization system instructs the LLM to render ANSI-colored ASCII 
 │  SDK processes tool call │  Computes metrics (coverage,      │
 │        ↓                 │  progress, lint, tasks)            │
 │  Runner emits            │        ↓                          │
-│  agent/toolCallStart     │  Emits viz/stateChanged           │
+│  agent/toolCallStart     │  Emits vis/stateChanged           │
 │        ↓                 │  via WebSocket                    │
 │  Frontend renders        │        ↓                          │
 │  VisualizationCard       │  Frontend updates ProgressTab,    │
-│  inline in ChatStream    │  VizTab, StatusBar                │
+│  inline in ChatStream    │  VisTab, StatusBar                │
 ├──────────────────────────┴──────────────────────────────────┤
-│  Both channels share: vizStore, visualization types, CSS     │
+│  Both channels share: visStore, visualization types, CSS     │
 └─────────────────────────────────────────────────────────────┘
 ```
 
@@ -107,7 +107,7 @@ case "toolCallStart": {
     return (
       <VisualizationCard
         key={k}
-        data={p.toolInput as VizData}
+        data={p.toolInput as VisData}
       />
     );
   }
@@ -334,7 +334,7 @@ Structural diagram (architecture, data flow, component relationships).
 
 ### VisualizationService (Backend)
 
-**Location:** `backend/app/viz/service.py` (new module)
+**Location:** `backend/app/vis/service.py` (new module)
 
 Replaces `compute-dashboard.py` with a live, stateful service integrated into the Bonsai backend.
 
@@ -354,7 +354,7 @@ class VisualizationService:
         # Same logic as compute-dashboard.py but in-process
         ...
         if self._notify:
-            await self._notify("viz/stateChanged", self._state.to_dict())
+            await self._notify("vis/stateChanged", self._state.to_dict())
 
     # Called when spec files change (wired from file watcher)
     async def on_spec_changed(self, spec_id: str) -> None: ...
@@ -392,21 +392,21 @@ class DashboardState:
 
 | Notification | Trigger | Payload |
 |-------------|---------|---------|
-| `viz/stateChanged` | File change, agent event, explicit recompute | Full `DashboardState` |
+| `vis/stateChanged` | File change, agent event, explicit recompute | Full `DashboardState` |
 
 **New RPC methods:**
 
 | Method | Purpose | Returns |
 |--------|---------|---------|
-| `viz/state` | Get current dashboard state | `DashboardState` |
-| `viz/recompute` | Force recompute | `DashboardState` |
+| `vis/state` | Get current dashboard state | `DashboardState` |
+| `vis/recompute` | Force recompute | `DashboardState` |
 
 ### Frontend Integration
 
-**New store:** `frontend/src/store/vizStore.ts`
+**New store:** `frontend/src/store/visStore.ts`
 
 ```typescript
-interface VizStore {
+interface VisStore {
   dashboard: DashboardState | null;
   loading: boolean;
 
@@ -419,15 +419,15 @@ interface VizStore {
 
 ```typescript
 unsubs.push(
-  client.on("viz/stateChanged", (p) => {
-    useVizStore.getState().onStateChanged(p as DashboardState);
+  client.on("vis/stateChanged", (p) => {
+    useVisStore.getState().onStateChanged(p as DashboardState);
   }),
 );
 ```
 
 **UI placement:**
 
-1. **New VizTab** in right panel (`ContextPanel`) — primary home for autonomous dashboard: coverage table, lint issues, task breakdown, recommendations, workflow phase
+1. **New VisTab** in right panel (`ContextPanel`) — primary home for autonomous dashboard: coverage table, lint issues, task breakdown, recommendations, workflow phase
 2. **StatusBar** (`frontend/src/components/AppShell/StatusBar.tsx`) — one-line summary: `"85% coverage | 13/18 tasks | 2 stale"`
 3. **ProgressTab** — unchanged (stays focused on sessions, cost, activity timeline)
 
@@ -439,8 +439,8 @@ unsubs.push(
 
 **Before** (causes Bash misuse):
 ```markdown
-- Use terminal graphics to show goal structure (see `/specdriven:visualisation` patterns)
-- APPLY COLOURS from the `/specdriven:visualisation` Color Output Guide when rendering (ANSI codes for dark theme)
+- Use terminal graphics to show goal structure (see `/specdriven:visualization` patterns)
+- APPLY COLOURS from the `/specdriven:visualization` Color Output Guide when rendering (ANSI codes for dark theme)
 ```
 
 **After** (uses structured visualization):
@@ -453,7 +453,7 @@ unsubs.push(
 
 ### Updated Visualization Reference
 
-Replace the "Color Output Guide" in `VISUALIZATION.md` / `visualisation/SKILL.md` with:
+Replace the "Color Output Guide" in `VISUALIZATION.md` / `visualization/SKILL.md` with:
 
 ```markdown
 ## Visualization Guide
@@ -509,13 +509,13 @@ Use Markdown:
 
 **spec-status/SKILL.md:**
 - Lines 23, 58: Remove "ANSI" references
-- Use autonomous dashboard state from `viz/state` RPC method
+- Use autonomous dashboard state from `vis/state` RPC method
 - Show details via `bonsai_visualize({ type: "data-table", ... })` if needed
 
-**visualisation/SKILL.md:**
+**visualization/SKILL.md:**
 - Remove entire "Color Output Guide" section (lines 48-63)
 - Replace "Visualization Patterns" (lines 65-134) with JSON schema reference
-- Update direct invocation to use `viz/state` RPC + VisualizationCard
+- Update direct invocation to use `vis/state` RPC + VisualizationCard
 
 ---
 
@@ -576,7 +576,7 @@ The MCP tool checks for the Bonsai backend connection. If absent, it falls back 
 | `compute-dashboard.py` script | `VisualizationService` in backend | Phase 2 |
 | PostToolUse hook trigger | File watcher + agent event subscription | Phase 2 |
 | `dashboard.json` static file | Live `DashboardState` in memory + RPC | Phase 2 |
-| `dashboard.html` standalone page | VizTab in Bonsai right panel | Phase 2 |
+| `dashboard.html` standalone page | VisTab in Bonsai right panel | Phase 2 |
 | stdout one-liner for hooks | StatusBar component (already exists) | Phase 2 |
 | Cytoscape.js graph in HTML | Existing `GraphView` component (already exists) | Already done |
 
@@ -617,11 +617,11 @@ During migration, both systems run in parallel:
 **New files:**
 - `claude-plugin/tools/visualize-tool/` — MCP tool implementation
 - `frontend/src/components/ChatStream/VisualizationCard.tsx` — main renderer
-- `frontend/src/components/ChatStream/viz/` — per-type renderers (ProgressTracker, SummaryBox, etc.)
-- `frontend/src/types/viz.ts` — TypeScript types for visualization data
+- `frontend/src/components/ChatStream/vis/` — per-type renderers (ProgressTracker, SummaryBox, etc.)
+- `frontend/src/types/vis.ts` — TypeScript types for visualization data
 
 **Modified files:**
-- `frontend/src/components/ChatStream/ChatStream.tsx` — add viz tool pattern match
+- `frontend/src/components/ChatStream/ChatStream.tsx` — add vis tool pattern match
 - `claude-plugin/skills/*/SKILL.md` — update visualization instructions
 - `claude-plugin/VISUALIZATION.md` — reference new system
 
@@ -633,28 +633,28 @@ During migration, both systems run in parallel:
 **Goal:** Replace `compute-dashboard.py` with live backend service. Dashboard data available in UI without LLM calls.
 
 **Changes:**
-1. Create `backend/app/viz/` module with `VisualizationService`
-2. Add `viz/state` and `viz/recompute` RPC methods
-3. Add `viz/stateChanged` WebSocket notification
-4. Create `vizStore.ts` Zustand store
-5. Add `VizTab` to right panel (ContextPanel)
+1. Create `backend/app/vis/` module with `VisualizationService`
+2. Add `vis/state` and `vis/recompute` RPC methods
+3. Add `vis/stateChanged` WebSocket notification
+4. Create `visStore.ts` Zustand store
+5. Add `VisTab` to right panel (ContextPanel)
 6. Wire file watcher events to VisualizationService
 7. Update `StatusBar` with live one-liner
 
 **New files:**
-- `backend/app/viz/__init__.py`
-- `backend/app/viz/service.py`
-- `backend/app/viz/models.py`
-- `backend/app/rpc/methods/viz.py`
-- `frontend/src/store/vizStore.ts`
-- `frontend/src/components/ContextPanel/modes/VizTab.tsx`
+- `backend/app/vis/__init__.py`
+- `backend/app/vis/service.py`
+- `backend/app/vis/models.py`
+- `backend/app/rpc/methods/vis.py`
+- `frontend/src/store/visStore.ts`
+- `frontend/src/components/ContextPanel/modes/VisTab.tsx`
 
 **Modified files:**
-- `backend/app/main.py` — register VizService
-- `backend/app/rpc/server.py` — register viz RPC methods
-- `frontend/src/store/wireEvents.ts` — subscribe to viz notifications
+- `backend/app/main.py` — register VisService
+- `backend/app/rpc/server.py` — register vis RPC methods
+- `frontend/src/store/wireEvents.ts` — subscribe to vis notifications
 - `frontend/src/components/AppShell/StatusBar.tsx` — show one-liner
-- `frontend/src/components/ContextPanel/ContextPanel.tsx` — add VizTab
+- `frontend/src/components/ContextPanel/ContextPanel.tsx` — add VisTab
 
 **Effort:** ~5-7 days
 **Risk:** Medium — new backend service, but computation logic is ported from existing script
@@ -679,51 +679,51 @@ During migration, both systems run in parallel:
 
 ### D1: Hybrid Collapse for Repeated Visualizations
 
-**Decision:** When the LLM calls `bonsai_visualize` multiple times with the same `vizId`, previous cards auto-collapse to a thin "updated" marker. The latest card renders in full.
+**Decision:** When the LLM calls `bonsai_visualize` multiple times with the same `visId`, previous cards auto-collapse to a thin "updated" marker. The latest card renders in full.
 
 **Why:** Preserves history (expandable) while keeping chat clean. Avoids the complexity of in-place DOM replacement.
 
-**Schema addition:** All viz types accept an optional `vizId: string` field. When present, ChatStream scans backward for previous events with the same `vizId` and collapses them.
+**Schema addition:** All vis types accept an optional `visId: string` field. When present, ChatStream scans backward for previous events with the same `visId` and collapses them.
 
 **Implementation pattern** (follows existing SubagentBlock approach):
 
 ```tsx
 // In ChatStream.tsx — pre-scan phase (alongside toolStates, activeSubagents)
-const latestVizByVizId = new Map<string, number>(); // vizId → last event index
+const latestVisByVisId = new Map<string, number>(); // visId → last event index
 for (let i = 0; i < events.length; i++) {
   const ev = events[i];
   if (ev.eventType === "toolCallStart" && ev.payload.toolName === "bonsai_visualize") {
-    const vizId = (ev.payload.toolInput as any)?.vizId;
-    if (vizId) latestVizByVizId.set(vizId, i);
+    const visId = (ev.payload.toolInput as any)?.visId;
+    if (visId) latestVisByVisId.set(visId, i);
   }
 }
 
 // In render — for bonsai_visualize events:
-const vizId = (p.toolInput as any)?.vizId;
-const isLatest = !vizId || latestVizByVizId.get(vizId) === i;
+const visId = (p.toolInput as any)?.visId;
+const isLatest = !visId || latestVisByVisId.get(visId) === i;
 if (!isLatest) {
-  return <CollapsedVizMarker key={k} title={vizTitle} />;
+  return <CollapsedVisMarker key={k} title={visTitle} />;
 }
-return <VisualizationCard key={k} data={p.toolInput as VizData} />;
+return <VisualizationCard key={k} data={p.toolInput as VisData} />;
 ```
 
-**CollapsedVizMarker:** Thin bar with icon + "Requirements Summary (updated)" text, expandable on click.
+**CollapsedVisMarker:** Thin bar with icon + "Requirements Summary (updated)" text, expandable on click.
 
 ### D2: Full Persistence
 
 **Decision:** Persist visualization events in full, same as all other agent events.
 
-**Why:** Session restore needs to show visualizations. The `_persisting_notify` pipeline in `service.py:296-307` already handles this automatically — no extra work needed. Disk cost is acceptable since viz data is structured JSON (typically 1-5KB per event).
+**Why:** Session restore needs to show visualizations. The `_persisting_notify` pipeline in `service.py:296-307` already handles this automatically — no extra work needed. Disk cost is acceptable since vis data is structured JSON (typically 1-5KB per event).
 
-### D3: New VizTab in Right Panel
+### D3: New VisTab in Right Panel
 
-**Decision:** Add a dedicated VizTab in the ContextPanel (right panel) for autonomous dashboard data.
+**Decision:** Add a dedicated VisTab in the ContextPanel (right panel) for autonomous dashboard data.
 
-**Why:** Separation of concerns — ProgressTab stays focused on sessions/cost/activity. VizTab shows spec health: coverage details, lint issues, task breakdown, recommendations. This maps cleanly to the data sections in `DashboardState`.
+**Why:** Separation of concerns — ProgressTab stays focused on sessions/cost/activity. VisTab shows spec health: coverage details, lint issues, task breakdown, recommendations. This maps cleanly to the data sections in `DashboardState`.
 
-**ContextPanel tab order:** Agent | Spec | Code | **Viz** (new)
+**ContextPanel tab order:** Agent | Spec | Code | **Vis** (new)
 
-The VizTab is always available (not context-dependent like Spec/Code tabs), since dashboard data is project-wide.
+The VisTab is always available (not context-dependent like Spec/Code tabs), since dashboard data is project-wide.
 
 ### D4: Auto-Allow for bonsai_visualize
 

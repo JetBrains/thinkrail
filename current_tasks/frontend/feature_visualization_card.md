@@ -9,17 +9,17 @@ Implement VisualizationCard component for rendering structured visualizations in
 ## Covers
 
 - `frontend/src/components/ChatStream/VisualizationCard.tsx`
-- `frontend/src/types/viz.ts`
+- `frontend/src/types/vis.ts`
 
 ## Acceptance Criteria
 
 - [x] VisualizationCard renders based on `data.type` discriminated union
 - [x] 6 sub-renderers: ProgressTracker, SummaryBox, Comparison, DataTable, StatusList, Diagram
 - [x] STATUS_ICONS and STATUS_COLORS maps for consistent visual indicators
-- [x] vizId-based auto-collapse: older cards with same vizId show CollapsedVizMarker
-- [x] VizErrorBoundary catches rendering errors without crashing ChatStream
+- [x] visId-based auto-collapse: older cards with same visId show CollapsedVisMarker
+- [x] VisErrorBoundary catches rendering errors without crashing ChatStream
 - [x] Collapse/expand toggle on card header
-- [x] CSS classes: .viz-card, .viz-card-header, .viz-card-body (resizable vertical)
+- [x] CSS classes: .vis-card, .vis-card-header, .vis-card-body (resizable vertical)
 
 ## Design Reference
 

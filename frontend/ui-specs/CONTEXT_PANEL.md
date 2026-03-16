@@ -6,7 +6,7 @@
 
 The Context Panel is a context-aware sidebar (the right panel in the three-panel layout) that displays information related to the active content in the center panel. It auto-switches between three modes — **Spec Context**, **Agent Context**, and **Code Context** — depending on what the user is working on. When nothing is selected, the panel shows an empty welcome state.
 
-The panel has **no tabs** for mode switching — content auto-switches based on what is in the center panel. A small mode indicator at the top shows the current mode (emoji icon + uppercase label). The header also contains a **Dashboard pin button** (📊) that overrides the auto mode to show the VizTab dashboard. Below the header, each mode renders a vertical stack of collapsible sections.
+The panel has **no tabs** for mode switching — content auto-switches based on what is in the center panel. A small mode indicator at the top shows the current mode (emoji icon + uppercase label). The header also contains a **Dashboard pin button** (📊) that overrides the auto mode to show the VisTab dashboard. Below the header, each mode renders a vertical stack of collapsible sections.
 
 **Agent Context** shows context usage analytics (token utilization, turn history, tool costs, file I/O, cache stats) for the active session. **Spec Context** and **Code Context** show spec-related information.
 

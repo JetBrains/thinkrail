@@ -20,7 +20,7 @@ Show recommendations using `bonsai_visualize` with type `status-list`:
 {
   "type": "status-list",
   "title": "Recommended Next Actions",
-  "vizId": "spec-next-recommendations",
+  "visId": "spec-next-recommendations",
   "data": {
     "items": [
       {"label": "[Action 1]", "status": "error", "detail": "[Why this is highest priority]"},

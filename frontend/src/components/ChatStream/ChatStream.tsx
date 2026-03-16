@@ -6,7 +6,7 @@ import { SystemMessage } from "./SystemMessage.tsx";
 import { AssistantMessage } from "./AssistantMessage.tsx";
 import { ToolCallCard } from "./ToolCallCard.tsx";
 import { SessionContextCard } from "./SessionContextCard.tsx";
-import { VisualizationCard, VizErrorBoundary } from "./VisualizationCard.tsx";
+import { VisualizationCard, VisErrorBoundary } from "./VisualizationCard.tsx";
 import { SubagentBlock } from "./SubagentBlock.tsx";
 import { QuestionCard } from "./QuestionCard.tsx";
 import { ApprovalCard } from "./ApprovalCard.tsx";
@@ -16,7 +16,7 @@ import { CompletionBanner } from "./CompletionBanner.tsx";
 import { ErrorBanner } from "./ErrorBanner.tsx";
 import { CompactMarker } from "./CompactMarker.tsx";
 import { ChatMarkdown } from "./ChatMarkdown.tsx";
-import type { VizData } from "@/types/viz.ts";
+import type { VisData } from "@/types/vis.ts";
 
 const DIFF_TOOLS = new Set(["Edit", "Write", "NotebookEdit"]);
 const DiffCard = lazy(() => import("./DiffCard.tsx").then(m => ({ default: m.DiffCard })));
@@ -138,13 +138,13 @@ export const ChatStream = forwardRef<ChatStreamHandle, ChatStreamProps>(function
       activeSubagents.clear();
   }
 
-  // Pre-scan: track latest bonsai_visualize event per vizId for hybrid collapse.
-  const latestVizByVizId = new Map<string, number>();
+  // Pre-scan: track latest bonsai_visualize event per visId for hybrid collapse.
+  const latestVisByVisId = new Map<string, number>();
   for (let i = 0; i < events.length; i++) {
     const ev = events[i];
     if (ev.eventType === "toolCallStart" && (ev.payload.toolName as string)?.endsWith("bonsai_visualize")) {
-      const vizId = (ev.payload.toolInput as Record<string, unknown>)?.vizId as string | undefined;
-      if (vizId) latestVizByVizId.set(vizId, i);
+      const visId = (ev.payload.toolInput as Record<string, unknown>)?.visId as string | undefined;
+      if (visId) latestVisByVisId.set(visId, i);
     }
   }
 
@@ -183,10 +183,10 @@ export const ChatStream = forwardRef<ChatStreamHandle, ChatStreamProps>(function
 
       // Hoist bonsai_visualize, askUserQuestion, confirmAction, and suggestSession
       // to top level so they remain visible outside the collapsible SubagentBlock
-      const isViz = ev.eventType === "toolCallStart" &&
+      const isVis = ev.eventType === "toolCallStart" &&
         (ev.payload.toolName as string)?.endsWith("bonsai_visualize");
       const isInteraction = ev.eventType === "askUserQuestion" || ev.eventType === "confirmAction" || ev.eventType === "suggestSession";
-      if (!isViz && !isInteraction) {
+      if (!isVis && !isInteraction) {
         subagentChildren.get(parentIdx)!.push(i);
         childIndices.add(i);
       }
@@ -235,23 +235,23 @@ export const ChatStream = forwardRef<ChatStreamHandle, ChatStreamProps>(function
 
           case "toolCallStart": {
             if ((p.toolName as string) === "AskUserQuestion") return null;
-            // MCP tools may be prefixed with server name (e.g. mcp__bonsai-viz__bonsai_visualize)
+            // MCP tools may be prefixed with server name (e.g. mcp__bonsai-vis__bonsai_visualize)
             if ((p.toolName as string)?.endsWith("bonsai_visualize")) {
-              const vizInput = p.toolInput as VizData | undefined;
+              const visInput = p.toolInput as VisData | undefined;
               // LLMs sometimes pass `data` as a JSON string instead of an object — auto-parse it
-              if (vizInput && typeof vizInput.data === "string") {
-                try { vizInput.data = JSON.parse(vizInput.data); } catch { /* leave as-is */ }
+              if (visInput && typeof visInput.data === "string") {
+                try { visInput.data = JSON.parse(visInput.data); } catch { /* leave as-is */ }
               }
-              if (vizInput) {
-                const vizId = vizInput.vizId;
-                const isLatest = !vizId || latestVizByVizId.get(vizId) === i;
+              if (visInput) {
+                const visId = visInput.visId;
+                const isLatest = !visId || latestVisByVisId.get(visId) === i;
                 return (
-                  <VizErrorBoundary key={k}>
+                  <VisErrorBoundary key={k}>
                     <VisualizationCard
-                      data={vizInput}
+                      data={visInput}
                       collapsed={!isLatest}
                     />
-                  </VizErrorBoundary>
+                  </VisErrorBoundary>
                 );
               }
             }

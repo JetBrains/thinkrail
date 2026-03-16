@@ -846,19 +846,19 @@ inputDisabled = isDone || isRunning || (hasPending && (pendingRequest.type === "
 Rendered for `toolCallStart` events where `toolName === "bonsai_visualize"`. See [Visualization Design](../../features/VISUALIZATION_DESIGN.md).
 
 ```typescript
-// VizData is a discriminated union on `type`
-type VizData =
-  | { type: "progress-tracker"; title?: string; vizId?: string; data: ProgressTrackerData }
-  | { type: "summary-box"; title?: string; vizId?: string; data: SummaryBoxData }
-  | { type: "comparison"; title?: string; vizId?: string; data: ComparisonData }
-  | { type: "data-table"; title?: string; vizId?: string; data: DataTableData }
-  | { type: "status-list"; title?: string; vizId?: string; data: StatusListData }
-  | { type: "diagram"; title?: string; vizId?: string; data: DiagramData }
+// VisData is a discriminated union on `type`
+type VisData =
+  | { type: "progress-tracker"; title?: string; visId?: string; data: ProgressTrackerData }
+  | { type: "summary-box"; title?: string; visId?: string; data: SummaryBoxData }
+  | { type: "comparison"; title?: string; visId?: string; data: ComparisonData }
+  | { type: "data-table"; title?: string; visId?: string; data: DataTableData }
+  | { type: "status-list"; title?: string; visId?: string; data: StatusListData }
+  | { type: "diagram"; title?: string; visId?: string; data: DiagramData }
 ```
 
-- Root: `<div className="viz-card">` — wrapped in `<VizErrorBoundary>`
-- Header (`.viz-card-header`): type emoji icon (`VIZ_ICONS` map) + title + type label, click toggles collapse
-- Body (`.viz-card-body`): one of 6 sub-renderers selected by `data.type`
+- Root: `<div className="vis-card">` — wrapped in `<VisErrorBoundary>`
+- Header (`.vis-card-header`): type emoji icon (`VIS_ICONS` map) + title + type label, click toggles collapse
+- Body (`.vis-card-body`): one of 6 sub-renderers selected by `data.type`
 - Collapse state: `useState(false)` — toggled by header click
 
 **Sub-renderers:**
@@ -872,19 +872,19 @@ type VizData =
 | `StatusList` | `items[]: { label, status, meta? }` | Flat list with status badges |
 | `Diagram` | `nodes[], edges[], layout?` | Text-based node/edge diagram |
 
-**Status icons and colors:** `STATUS_ICONS` maps `VizStatus` → Unicode symbol, `STATUS_COLORS` maps → CSS var.
+**Status icons and colors:** `STATUS_ICONS` maps `VisStatus` → Unicode symbol, `STATUS_COLORS` maps → CSS var.
 
-**vizId collapse pattern:** When multiple cards share the same `vizId`, earlier ones render as `<CollapsedVizMarker>` (icon + title + "updated" tag, single line).
+**visId collapse pattern:** When multiple cards share the same `visId`, earlier ones render as `<CollapsedVisMarker>` (icon + title + "updated" tag, single line).
 
-**Error boundary:** `<VizErrorBoundary>` catches render errors and shows a fallback message without crashing ChatStream.
+**Error boundary:** `<VisErrorBoundary>` catches render errors and shows a fallback message without crashing ChatStream.
 
 **CSS classes:**
 
 | Class | Element | Styles |
 |---|---|---|
-| `.viz-card` | Root | `border: 1px solid var(--border); border-radius: var(--radius-md); max-width: 90%; bg: var(--elevated)` |
-| `.viz-card-header` | Header | `flex; padding: sm md; cursor: pointer; font-size: 12px` |
-| `.viz-card-body` | Body | `border-top: 1px solid border; padding: sm md; resize: vertical; min-height: 60px` |
+| `.vis-card` | Root | `border: 1px solid var(--border); border-radius: var(--radius-md); max-width: 90%; bg: var(--elevated)` |
+| `.vis-card-header` | Header | `flex; padding: sm md; cursor: pointer; font-size: 12px` |
+| `.vis-card-body` | Body | `border-top: 1px solid border; padding: sm md; resize: vertical; min-height: 60px` |
 
 ---
 
@@ -925,7 +925,7 @@ Several ChatStream containers support manual vertical resizing via CSS `resize: 
 | `.chat-tool-body` | `resize: vertical` | 40px |
 | `.chat-subagent-body` | `resize: vertical` | 60px |
 | `.chat-approval-expanded` | `resize: vertical` | 40px |
-| `.viz-card-body` | `resize: vertical` | 60px |
+| `.vis-card-body` | `resize: vertical` | 60px |
 | `.diff-card-editor` | `resize: vertical` | 100px (max: 600px, default: 300px) |
 
 `DiffCard` additionally uses a `ResizeObserver` to sync the Monaco editor height with its container when expanded:
@@ -1195,9 +1195,9 @@ RPC server
 | `.session-tab-close` | Close button | `opacity: 0; visible on tab hover` |
 | `.restored-bar` | Restored bar root | `flex; border-top: 1px solid border; bg: var(--panel)` |
 | `.restored-bar-btn` | Resume button | `bg: var(--blue); color: #fff` |
-| `.viz-card` | VisualizationCard root | `border: 1px solid var(--border); max-width: 90%; bg: var(--elevated)` |
-| `.viz-card-header` | Viz header | `flex; padding: sm md; cursor: pointer; font-size: 12px` |
-| `.viz-card-body` | Viz body | `border-top: 1px solid border; resize: vertical; min-height: 60px` |
+| `.vis-card` | VisualizationCard root | `border: 1px solid var(--border); max-width: 90%; bg: var(--elevated)` |
+| `.vis-card-header` | Vis header | `flex; padding: sm md; cursor: pointer; font-size: 12px` |
+| `.vis-card-body` | Vis body | `border-top: 1px solid border; resize: vertical; min-height: 60px` |
 | `.session-context-card` | SessionContextCard | `bg: var(--elevated); border: 1px solid var(--border)` |
 | `.session-context-row` | Context row | `flex; gap: sm` |
 | `.session-context-pill` | Info pill | `font-size: 11px; border-radius: 4px; padding: 2px 8px` |

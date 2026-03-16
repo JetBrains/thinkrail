@@ -23,7 +23,7 @@ Call `bonsai_visualize` with type `progress-tracker`:
 {
   "type": "progress-tracker",
   "title": "Specification-Driven Development",
-  "vizId": "workflow-progress",
+  "visId": "workflow-progress",
   "data": {
     "steps": [
       {"label": "Goal & Requirements", "status": "done", "file": "GOAL&REQUIREMENTS.md"},
@@ -48,7 +48,7 @@ Call `bonsai_visualize` with type `summary-box`:
 {
   "type": "summary-box",
   "title": "Task Progress",
-  "vizId": "task-progress",
+  "visId": "task-progress",
   "data": {
     "sections": [
       {"heading": "Overview", "items": [
@@ -73,7 +73,7 @@ Use AskUserQuestion:
 **What's next?**
 - "[Continue to next step] (Recommended)"
 - "/spec-status — Detailed coverage report"
-- "/visualisation — Full project dashboard"
+- "/visualization — Full project dashboard"
 - "Done for now"
 
 ## Key Principles
