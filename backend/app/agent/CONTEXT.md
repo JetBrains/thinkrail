@@ -107,9 +107,9 @@ tables, do NOT approximate visualizations with markdown when the tool can do it 
 
 ### Spec-Driven Workflow
 
-- Read `.specs/registry.json` at the start to understand project state and existing specs.
-- After creating or modifying any spec file, update `.specs/registry.json` with the
-  appropriate entry and links.
+- Use `spec_list` or `registry_query` at the start to understand project state and existing specs.
+- After creating or modifying any spec file, use `spec_save` and `registry_mutate` to
+  update the registry with the appropriate entry and links.
 - Respect the spec hierarchy: Goal > Architecture > Modules > Submodules > Tasks.
 
 ### Proactive Suggestions
@@ -215,7 +215,7 @@ The General Instructions section consolidates behavioral rules that were previou
 |------------|---------|-----------|
 | **Visualization** | `bonsai_visualize` tool reference, available types, when to use, anti-patterns (no Bash/ANSI/ASCII) | Previously copy-pasted into 13/14 skills. Without this, the model doesn't know `bonsai_visualize` exists. |
 | **Interaction Style** | Use `AskUserQuestion` for decisions, 2-4 choices, end with "What's next?" | Previously repeated in 13/14 skills. Ensures consistent interaction pattern. |
-| **Spec-Driven Workflow** | Read `registry.json` at start, update after saving, respect spec hierarchy | Previously in 10-11/14 skills. Grounds the agent in the spec-driven methodology. |
+| **Spec-Driven Workflow** | Use `spec_list`/`registry_query` at start, use `spec_save`/`registry_mutate` after saving, respect spec hierarchy | Previously in 10-11/14 skills. Grounds the agent in the spec-driven methodology. |
 | **Proactive Suggestions** | `SuggestSession` triggers, key tips (`specIds`, `prompt`, `reason`), behavioral rules (respect dismissals, limit to 1-3) | Agents need to know the tool exists and when to use it proactively. Parameter details come from the tool schema. |
 | **Available Skills** | Compact table of skill name + description, dynamically generated | Enables the agent to recommend relevant next actions without hardcoding suggestions into each skill. |
 
@@ -276,7 +276,7 @@ With General Instructions now handling common behavioral rules, existing SKILL.m
 | "NEVER use Bash, echo, printf, or ANSI escape codes for visual output" | 13/14 skills | General Instructions → Visualization |
 | "Use `bonsai_visualize` tool for all structured visual output" | 13/14 skills | General Instructions → Visualization |
 | "Use the `AskUserQuestion` tool for every design decision" | 13/14 skills | General Instructions → Interaction Style |
-| "Read `.specs/registry.json`" as a first step | 11/14 skills | General Instructions → Spec-Driven Workflow |
+| "Use `spec_list`/`registry_query`" as a first step | 11/14 skills | General Instructions → Spec-Driven Workflow |
 | Available visualization types reference (progress-tracker, summary-box, etc.) | 13/14 skills | General Instructions → Visualization |
 
 Each skill should **keep**: its unique task logic, question trees, specific visualization templates (e.g., progress-tracker JSON with the right "current" step), registry entry specifics, and domain-specific instructions.
