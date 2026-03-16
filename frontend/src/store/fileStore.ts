@@ -31,6 +31,7 @@ interface FileStore {
   saveFile: (path: string) => Promise<void>;
   openExternal: (path: string, editor: string) => Promise<void>;
   onFileChanged: (path: string) => void;
+  unload: () => void;
 }
 
 function getProjectPath(): string {
@@ -145,6 +146,8 @@ export const useFileStore = create<FileStore>((set, get) => ({
   },
 
   clearPreview: () => set({ previewFilePath: null, previewFile: null }),
+
+  unload: () => set({ openFiles: new Map(), activeFilePath: null, previewFilePath: null, previewFile: null }),
 
   pinPreview: () => {
     const { previewFilePath, previewFile } = get();

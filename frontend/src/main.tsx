@@ -4,6 +4,8 @@ import { RpcProvider } from "@/api/index.ts";
 import { App } from "./App.tsx";
 import { ProjectPicker } from "@/components/ProjectPicker/ProjectPicker.tsx";
 import { applyTheme, getThemePreference } from "./utils/theme.ts";
+import { useFileStore } from "@/store/fileStore.ts";
+import { useSessionStore } from "@/store/sessionStore.ts";
 import "./styles/global.css";
 
 applyTheme(getThemePreference());
@@ -16,6 +18,8 @@ function Root() {
   const [showPicker, setShowPicker] = useState(true);
 
   const handleSelect = useCallback((path: string) => {
+    useFileStore.getState().unload();
+    useSessionStore.getState().unload();
     setProjectPath(path);
     setShowPicker(false);
   }, []);

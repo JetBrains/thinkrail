@@ -135,6 +135,10 @@ export function ProjectPicker({ onSelect, onClose }: ProjectPickerProps) {
         body: JSON.stringify({ path: target }),
       });
       const data = await res.json();
+      if (data.error) {
+        setError(data.error);
+        return;
+      }
       addRecent(data.path, data.name);
       onSelect(data.path);
     } catch (e) {
