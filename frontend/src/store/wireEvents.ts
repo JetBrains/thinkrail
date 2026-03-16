@@ -72,6 +72,7 @@ export function wireEvents(client: RpcClient): Unsubscribe {
     "agent/compact",
     "agent/progress",
     "agent/permissionDenied",
+    "agent/ready",
   ];
   for (const method of agentMethods) {
     unsubs.push(
@@ -110,11 +111,15 @@ export function wireEvents(client: RpcClient): Unsubscribe {
     client.on("agent/error", (p) => {
       const params = p as Record<string, unknown>;
       useSessionStore.getState().onSessionError(params);
+      const subtype = (params.subtype as string) ?? "";
+      const errors = (params.errors as string[]) ?? [];
+      const isCrash = subtype === "crash";
+      const detail = errors[0] || subtype || "unknown error";
       useNotificationStore.getState().addToast({
         bonsaiSid: params.bonsaiSid as string,
         eventType: "error",
-        message: "Session error",
-        persistent: false,
+        message: isCrash ? `Session crashed: ${detail}` : `Session error: ${detail}`,
+        persistent: isCrash,
       });
       useNotificationStore.getState().setBadge(params.bonsaiSid as string, {
         type: "error",

@@ -75,6 +75,7 @@
   border-radius: 3px;
   flex-shrink: 0;
 }
+.badge-initializing { background: var(--blue); color: #fff; }
 .badge-idle { background: var(--blue); color: #fff; }
 .badge-running { background: var(--purple); color: #fff; }
 .badge-done { background: var(--green); color: #fff; }

@@ -10,7 +10,7 @@ You are analyzing an existing codebase to **generate specification skeletons**. 
 
 ## Quick Context
 
-Before analyzing, read `.specs/registry.json` for existing specs and their `covers` entries. Compare against source directories to identify coverage gaps.
+Before analyzing, use `registry_query` to get existing specs and their `covers` entries. Compare against source directories to identify coverage gaps.
 
 ## What You Will Generate
 
@@ -66,7 +66,7 @@ For each major directory/module:
 
 ### Step 4: Generate Architecture Design skeleton
 
-If analyzing the full project, generate a `DESIGN_DOC.md` skeleton:
+If analyzing the full project, use `spec_save` to create a `DESIGN_DOC.md` skeleton with `type: "architecture-design"`, `status: "draft"`:
 
 ```markdown
 # {Project Name} Design Document
@@ -118,7 +118,7 @@ If analyzing the full project, generate a `DESIGN_DOC.md` skeleton:
 
 ### Step 5: Generate Module Design skeletons
 
-For each major module, generate a README.md:
+For each major module, use `spec_save` to create a README.md with `type: "module-design"`, `status: "draft"`, `covers: ["{module}/"]`:
 
 ```markdown
 # {Module Name}
@@ -151,9 +151,9 @@ For each major module, generate a README.md:
 {TODO: Document limitations}
 ```
 
-### Step 6: Register generated specs
+### Step 6: Register links
 
-Add all generated specs to `.specs/registry.json` with status `"draft"`.
+The `spec_save` calls above already created the registry entries with status `"draft"`. Use `registry_mutate` to add `parent` links between the generated specs (e.g., module specs → architecture doc).
 
 ### Step 7: Report results
 
@@ -181,11 +181,10 @@ Suggested next steps:
 
 ## After Completion
 
-Use AskUserQuestion:
+Use `SuggestSession` to propose a `spec-review` session for the generated drafts. Include all draft spec IDs you just registered in `specIds` and list the spec paths needing review in `prompt`.
 
-**What's next?**
-- "/spec-status — See coverage after generation (Recommended)"
-- "/spec-review — Review generated specs for accuracy"
+Then use `AskUserQuestion`:
+- "/spec-status — See coverage after generation"
 - "/spec-lint — Validate spec structure"
 - "Done for now"
 

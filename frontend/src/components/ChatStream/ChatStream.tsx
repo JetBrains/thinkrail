@@ -431,7 +431,7 @@ export const ChatStream = forwardRef<ChatStreamHandle, ChatStreamProps>(function
                       name: (p.name as string) ?? "Suggested Session",
                       config: {
                         model: currentSession?.model ?? "sonnet",
-                        maxTurns: 25,
+                        maxTurns: currentSession?.maxTurns ?? 50,
                         permissionMode: currentSession?.permissionMode ?? "default",
                         streamText: true,
                         betas: currentSession?.betas ?? [],

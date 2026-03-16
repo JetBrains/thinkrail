@@ -277,11 +277,12 @@ function ensureSession(
     name: bonsaiSid.slice(0, 8),
     skillId: null,
     specIds: [],
-    status: "idle",
+    status: "initializing",
     model: "",
     permissionMode: "default",
     betas: [],
     effort: null,
+    maxTurns: 50,
     startedAt: Date.now(),
     events: [],
     metrics: emptyMetrics(),
@@ -431,11 +432,12 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
         name,
         skillId: skillId ?? null,
         specIds,
-        status: "idle",
+        status: "initializing",
         model: config.model,
         permissionMode: config.permissionMode,
         betas: config.betas ?? [],
         effort: config.effort ?? null,
+        maxTurns: config.maxTurns,
         startedAt: Date.now(),
         events: existing?.events ?? [],
         metrics: existing?.metrics ?? emptyMetrics(),
@@ -449,14 +451,16 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
   },
 
   sendMessage: async (bonsaiSid, text, isMarkdown) => {
-    // Add user message to events immediately (optimistic)
+    // Add user message to events immediately (optimistic).
+    // Status is NOT changed here — backend drives transitions:
+    //   idle → running happens when runner calls client.query()
+    //   and we receive agent/sessionStart or agent/textDelta.
     set((s) => {
       const session = s.sessions.get(bonsaiSid);
       if (!session) return s;
       const next = new Map(s.sessions);
       next.set(bonsaiSid, {
         ...session,
-        status: "running",
         events: [
           ...session.events,
           {
@@ -481,14 +485,13 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
         persistent: true,
         bonsaiSid,
       });
-      // Revert status and remove optimistic userMessage
+      // Remove optimistic userMessage on failure
       set((s) => {
         const session = s.sessions.get(bonsaiSid);
         if (!session) return s;
         const next = new Map(s.sessions);
         next.set(bonsaiSid, {
           ...session,
-          status: "idle",
           events: session.events.filter(
             (e, i) =>
               !(
@@ -522,7 +525,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
         const next = new Map(s.sessions);
         next.set(bonsaiSid, {
           ...session,
-          status: "idle",
+          status: "initializing",
           restored: undefined,
           pendingRequest: null,
           answeredRequests: answered,
@@ -536,7 +539,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
         const session = s.sessions.get(bonsaiSid);
         if (!session) return s;
         const next = new Map(s.sessions);
-        next.set(bonsaiSid, { ...session, status: "idle", restored: undefined });
+        next.set(bonsaiSid, { ...session, status: "initializing", restored: undefined });
         return { sessions: next };
       });
     }
@@ -589,6 +592,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
       permissionMode: (data.config?.permissionMode as string) ?? "default",
       betas: restoredBetas,
       effort: (data.config?.effort as string) ?? null,
+      maxTurns: (data.config?.maxTurns as number) ?? 50,
       startedAt: new Date(data.createdAt).getTime(),
       events,
       metrics: {
@@ -666,6 +670,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
           permissionMode: (data?.config?.permissionMode as string) ?? "default",
           betas: entryBetas,
           effort: (data?.config?.effort as string) ?? null,
+          maxTurns: (data?.config?.maxTurns as number) ?? 50,
           startedAt: new Date(entry.createdAt).getTime(),
           events,
           metrics: {
@@ -697,7 +702,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
     // Collect sessions in transient states that need checking
     const toCheck: string[] = [];
     for (const [sid, session] of sessions) {
-      if (session.status === "running" || session.status === "waiting") {
+      if (session.status === "initializing" || session.status === "running" || session.status === "waiting") {
         toCheck.push(sid);
       }
     }
@@ -708,7 +713,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
       toCheck.map(async (bonsaiSid) => {
         try {
           const task = await api.status(bonsaiSid);
-          const backendStatus = task.status; // "idle" | "running" | "done" | "error"
+          const backendStatus = task.status; // "initializing" | "idle" | "running" | "waiting" | "done" | "error"
           const session = get().sessions.get(bonsaiSid);
           if (!session) return;
 
@@ -725,7 +730,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
               const current = s.sessions.get(bonsaiSid);
               if (!current) return s;
               // Don't overwrite if status already changed (e.g., event arrived)
-              if (current.status !== "running" && current.status !== "waiting") return s;
+              if (current.status !== "initializing" && current.status !== "running" && current.status !== "waiting") return s;
               const next = new Map(s.sessions);
               next.set(bonsaiSid, {
                 ...current,
@@ -782,7 +787,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
               turns: session.metrics.turns,
               durationMs: session.metrics.durationMs,
               model: session.model,
-              config: { model: session.model, maxTurns: 25, permissionMode: session.permissionMode, streamText: true, betas: session.betas ?? [], effort: session.effort ?? null },
+              config: { model: session.model, maxTurns: session.maxTurns, permissionMode: session.permissionMode, streamText: true, betas: session.betas ?? [], effort: session.effort ?? null },
               events: session.events,
             },
           ]
@@ -821,16 +826,12 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
     const api = createAgentApi(getClient());
     api.respond(bonsaiSid, requestId, response).catch((err) => {
       console.error("Failed to send agent/respond:", err);
-      set((s) => {
-        const session = s.sessions.get(bonsaiSid);
-        if (!session || session.status !== "running") return s;
-        const next = new Map(s.sessions);
-        next.set(bonsaiSid, { ...session, status: "idle" });
-        return { sessions: next };
-      });
     });
 
-    // Mark request as answered (store the response) and clear pendingRequest
+    // Mark request as answered, clear pendingRequest, and restore running status.
+    // The backend stays in "running" throughout the turn — only the frontend
+    // shows "waiting" while the user answers. Setting "running" here is correct
+    // state sync (not optimism), since the backend never left "running".
     set((s) => {
       const session = s.sessions.get(bonsaiSid);
       if (!session) return s;
@@ -869,12 +870,12 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
     const { createSessionApi } = await import("@/api/methods/sessions.ts");
     const api = createSessionApi(getClient());
     await api.restart(bonsaiSid);
-    // Session will go through done → re-init via backend notifications
+    // Backend creates a new session starting in initializing
     set((s) => {
       const session = s.sessions.get(bonsaiSid);
       if (!session) return s;
       const next = new Map(s.sessions);
-      next.set(bonsaiSid, { ...session, status: "idle" });
+      next.set(bonsaiSid, { ...session, status: "initializing" });
       return { sessions: next };
     });
   },
@@ -915,7 +916,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
       const cu = session.metrics.contextUsage;
       next.set(bonsaiSid, {
         ...session,
-        status: session.status === "idle" ? "running" : session.status,
+        status: session.status === "initializing" || session.status === "idle" ? "running" : session.status,
         model: (params.model as string) ?? session.model,
         systemPrompt: (params.systemPrompt as string) ?? undefined,
         events: [
@@ -947,7 +948,11 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
       const session = sessions.get(bonsaiSid);
       let projectCost = s.projectCost;
       if (session) {
-        if (method === "agent/turnComplete" || method === "agent/interrupted") {
+        if (method === "agent/ready") {
+          if (session.status === "initializing") {
+            sessions.set(bonsaiSid, { ...session, status: "idle" });
+          }
+        } else if (method === "agent/turnComplete" || method === "agent/interrupted") {
           const { updated, costDelta } = applyMetrics(session, params, "idle");
           projectCost += costDelta;
 

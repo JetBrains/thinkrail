@@ -40,9 +40,11 @@ The `tools/__init__.py` re-exports everything the runner needs:
 | `__init__.py` | Re-exports `MCP_SERVERS` and `INTERCEPTORS` registries from all tool files | New |
 | `suggest_session.py` | SuggestSession proactive tool — agent suggests a follow-up session, developer approves/dismisses | New (extracted from runner.py lines 35–86, 117–142) |
 | `visualization.py` | bonsai_visualize display tool — agent renders structured visualizations in the UI | Moved from `agent/visualization.py` |
+| `specs.py` | Spec & registry MCP tools — 7 tools for spec CRUD, link queries, registry mutations (auto-approved, validated) | New |
 | `_vis_validation.py` | Shared visualization validation — `VALID_STATUSES`, `VIS_EXAMPLES`, `_validate_status()`, `_validate_vis_data()`. Pure stdlib, imported by both `visualization.py` and `vis-server.py`. | New |
 | `progress.py` | UpdateProgress proactive tool — agent broadcasts phase/plan/status (auto-approved) | Future |
 | `SUGGEST_SESSION.md` | Backend spec for SuggestSession | Existing |
+| `SPECS_TOOLS.md` | Backend spec for Spec & Registry MCP Tools | New |
 | `VISUALIZATION.md` | Backend spec for visualization tool (SDK handler, CLI server, shared validation) | New |
 | `PROGRESS.md` | Backend spec for UpdateProgress | Existing |
 

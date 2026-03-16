@@ -1,7 +1,7 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 
-type LeftTab = "specs" | "reqs" | "files" | "progress";
+type LeftTab = "specs" | "files" | "progress";
 type Breakpoint = "desktop" | "laptop" | "below-min";
 
 interface ModalPrefill {

@@ -74,7 +74,7 @@ export function SessionPanel() {
         resolveRequest(activeSessionId, activeSession.pendingRequest.requestId, { text });
         return;
       }
-      if (activeSession.status === "idle") {
+      if (activeSession.status === "initializing" || activeSession.status === "idle") {
         sendMessage(activeSessionId, text, isMarkdown);
       }
       useMessageHistoryStore.getState().addMessage(text);
@@ -88,14 +88,14 @@ export function SessionPanel() {
       resolveRequest(activeSessionId, activeSession.pendingRequest.requestId, { text: "continue" });
       return;
     }
-    if (activeSession.status === "idle" || activeSession.status === "interrupted") {
+    if (activeSession.status === "initializing" || activeSession.status === "idle" || activeSession.status === "interrupted") {
       sendMessage(activeSessionId, "continue");
     }
   }, [activeSessionId, activeSession, resolveRequest, sendMessage]);
 
   const handleStartSession = useCallback(() => {
     if (!activeSessionId || !activeSession) return;
-    if (activeSession.status === "idle") {
+    if (activeSession.status === "initializing" || activeSession.status === "idle") {
       sendMessage(activeSessionId, "start");
     }
   }, [activeSessionId, activeSession, sendMessage]);

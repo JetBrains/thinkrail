@@ -142,9 +142,9 @@ actions, always including "Done for now" as an option.
     spec_workflow = """\
 ### Spec-Driven Workflow
 
-- Read `.specs/registry.json` at the start to understand project state and existing specs.
-- After creating or modifying any spec file, update `.specs/registry.json` with the \
-appropriate entry and links.
+- Use `spec_list` or `registry_query` at the start to understand project state and existing specs.
+- After creating or modifying any spec file, use `spec_save` and `registry_mutate` to \
+update the registry with the appropriate entry and links.
 - Respect the spec hierarchy: Goal > Architecture > Modules > Submodules > Tasks."""
 
     # 4. Proactive Suggestions subsection

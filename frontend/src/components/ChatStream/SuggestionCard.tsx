@@ -152,8 +152,14 @@ export default function SuggestionCard({
           <button className="chat-btn chat-btn-approve" onClick={onApprove}>
             Start Session
           </button>
+          <button
+            className="chat-btn chat-btn-muted"
+            onClick={() => onDismiss("Let's stay in this session")}
+          >
+            Stay in this session
+          </button>
           <button className="chat-btn chat-btn-deny" onClick={() => setDismissing(true)}>
-            Dismiss
+            Dismiss…
           </button>
         </div>
       )}

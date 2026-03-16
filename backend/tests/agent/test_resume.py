@@ -146,7 +146,7 @@ class TestContinueSession:
 
         task = await service.continue_session("sid-1", notify)
         assert task.bonsai_sid == "sid-1"
-        assert task.status == "idle"
+        assert task.status == "initializing"
 
         # Wait for background task
         await asyncio.sleep(0.05)

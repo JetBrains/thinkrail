@@ -254,7 +254,7 @@ class TestRunHappyPath:
         _setup_mock_client(MockClient, [result_msg])
 
         tracker, task = _make_tracker_and_task()
-        assert task.status == "idle"
+        assert task.status == "initializing"
 
         tracker.enqueue_message(task.bonsai_sid, "go")
         tracker.enqueue_end_signal(task.bonsai_sid)

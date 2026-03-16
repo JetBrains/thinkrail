@@ -10,7 +10,7 @@ You are creating a **Sub-Module Design Specification** (README.md for a sub-comp
 
 ## Prerequisites
 
-Check: Does the parent module have a README.md?
+Use `spec_list` with `type: "module-design"` or `registry_query` with a `covers` filter to check if the parent module has a spec.
 If not, use AskUserQuestion:
 - "Create parent module spec first (/module-design) (Recommended)"
 - "Skip, create sub-module spec directly"
@@ -59,7 +59,7 @@ For each non-obvious choice, use AskUserQuestion:
 
 ### Step 5: Generate the specification
 
-Generate README.md with:
+Use `spec_save` to create the sub-module README.md with `type: "submodule-design"`, `status: "active"`, `covers: ["{path}/"]`. Include:
 - Title and purpose
 - Why this exists (from Step 2)
 - Algorithm/architecture description (from Step 3)
@@ -77,17 +77,17 @@ Use AskUserQuestion:
 
 ## Registry Integration
 
-After saving, update `.specs/registry.json`:
-1. Add entry with `type: "submodule-design"`, `status: "active"`, `covers: ["{path}/"]`
-2. Add `parent` link to parent module README
-3. Update parent module's Module Index to include this sub-module
+The `spec_save` call already created the registry entry. Use `registry_mutate` to add links:
+1. Add `parent` link to parent module README
+
+Use Edit to update the parent module's Module Index to include this sub-module.
 
 ## After Completion
 
-Use AskUserQuestion:
+Check the parent module README for remaining sub-components. Use `SuggestSession` to propose follow-up sessions (up to 3):
+- `submodule-design` for each remaining sub-component. Include the parent module spec ID in `specIds`.
+- `task-spec` for implementation tasks on the parent module. Include both the submodule and parent module spec IDs in `specIds`.
 
-**What's next?**
-- "/submodule-design {next} — Specify another sub-component (Recommended)"
+Then use `AskUserQuestion`:
 - "/module-design — Specify the next major module"
-- "/task-spec — Create implementation tasks"
 - "Done for now"

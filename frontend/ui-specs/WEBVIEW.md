@@ -19,7 +19,7 @@
 
 ## Overview
 
-The Bonsai web view is a three-panel workspace for specification-driven development with AI agents. The center panel hosts Claude agent sessions (custom Chat UI) and file views, while the right panel is a context-aware sidebar that auto-switches between spec context, agent context, and code context based on what's active in the center (showing an empty welcome state when nothing is selected). The left panel combines navigation (spec tree, requirements, files) with a spec-driven progress tracker.
+The Bonsai web view is a three-panel workspace for specification-driven development with AI agents. The center panel hosts Claude agent sessions (custom Chat UI) and file views, while the right panel is a context-aware sidebar that auto-switches between spec context, agent context, and code context based on what's active in the center (showing an empty welcome state when nothing is selected). The left panel combines navigation (spec tree, files) with a spec-driven progress tracker.
 
 ## Architecture
 
@@ -46,9 +46,9 @@ The frontend renders agent events streamed from the backend via JSON-RPC notific
 │  PANEL         │  Sessions + Files        │  Context Panel (auto)    │
 │                │                          │                          │
 │  [Specs]       │  ┌─ tab1 ─┬─ tab2 ─┬─+  │  ┌────────────────────┐ │
-│  [Reqs]        │  │                      ││  │ ▼ Connected Specs  │ │
-│  [Files]       │  │  Chat UI:            ││  │ ▼ Tasks (3)        │ │
-│  [Progress]    │  │  • Claude text        ││  │ ▼ Covered Files    │ │
+│  [Files]       │  │                      ││  │ ▼ Connected Specs  │ │
+│  [Progress]    │  │  Chat UI:            ││  │ ▼ Tasks (3)        │ │
+│                │  │  • Claude text        ││  │ ▼ Covered Files    │ │
 │                │  │  • tool calls         ││  │ ▶ Spec Health      │ │
 │  tree / list / │  │  • questions          ││  │                    │ │
 │  dashboard     │  │  • approvals          ││  │ (auto-switches by  │ │
@@ -93,7 +93,6 @@ Toggle visibility: `Mod+B`
 | Tab | Description |
 | --- | --- |
 | **Specs** | Hierarchical tree of specifications grouped by type (goal → architecture → module → submodule → task). Each node shows icon, title, and status badge (✓ done, ● active, ○ pending, ! waiting, ~ stale). |
-| **Requirements** | List of project requirements as cards. Each card shows: ID, text, priority badge (critical/high/medium), and implementation coverage state. |
 | **Files** | Standard folder tree of the project repository. |
 | **Progress** | Spec-driven progress dashboard — the primary way to track project state and session activity. See §2.1. |
 

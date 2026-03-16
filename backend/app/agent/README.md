@@ -1,6 +1,6 @@
 # Agent Module — Design Specification
 
-> Parent: [DESIGN_DOC.md](../../../DESIGN_DOC.md) | Status: **Active** | Created: 2026-02-25 | Updated: 2026-03-12
+> Parent: [DESIGN_DOC.md](../../../DESIGN_DOC.md) | Status: **Active** | Created: 2026-02-25 | Updated: 2026-03-16
 
 ## Table of Contents
 1. [Purpose](#purpose)
@@ -29,7 +29,11 @@ Sessions are modeled after the Claude Code chat experience: the user starts a se
 
 ```mermaid
 stateDiagram-v2
-    [*] --> idle : agent/run
+    [*] --> initializing : agent/run
+
+    initializing --> idle : SDK client ready
+    initializing --> done : agent/end
+    initializing --> error : SDK init error
 
     idle --> running : agent/send
     idle --> done : agent/end
@@ -48,7 +52,8 @@ stateDiagram-v2
 
 | State | Description |
 |-------|-------------|
-| `idle` | Session open, waiting for user message (initial state) |
+| `initializing` | Session created, SDK client being set up. Messages sent during this phase are queued and processed once `idle` is reached. |
+| `idle` | Session open, SDK client ready, waiting for user message |
 | `running` | SDK turn in progress (processing user message) |
 | `waiting` | Suspended on a mid-turn interaction (question or tool approval) — runner awaits a Future |
 | `done` | Session ended gracefully |
@@ -63,10 +68,10 @@ sequenceDiagram
     participant S as Claude SDK
 
     F->>B: agent/run {specIds, config}
-    B->>S: create SDK client
-    S-->>B: SystemMessage(init)
     B-->>F: {bonsaiSid}
-    Note over B: state: idle
+    Note over B: state: initializing
+    B->>S: create SDK client (async)
+    Note over B: state: idle (SDK client ready)
 
     rect rgb(40, 40, 60)
         Note over F,S: Conversation loop (repeats)
@@ -169,12 +174,13 @@ sequenceDiagram
     Svc->>Svc: build spec_context (fresh)
     Svc->>R: run(task, spec_context, ...,<br/>resume_session_id=old_sessionId)
 
+    Note over R: state: initializing
     R->>SDK: ClaudeSDKClient(<br/>  resume=old_sessionId,<br/>  system_prompt=spec_context)
     SDK->>SDK: CLI restores full conversation<br/>from ~/.claude/ session store
     SDK-->>R: SystemMessage(init) — new session_id
 
     R-->>F: agent/sessionStart
-    Note over R: state: idle, ready for messages
+    Note over R: state: idle (SDK client ready)
 ```
 
 ### Key Design Points
@@ -249,7 +255,7 @@ graph TD
 | `permissions.py` | Tool permission routing. Thin `can_use_tool()` callback that routes to tool-specific `intercept()` functions via `tools.INTERCEPTORS` registry, plus built-in handling for AskUserQuestion and default tool approval. | tools, tracker, models |
 | `transcribe.py` | Audio transcription via OpenAI Whisper API. `transcribe(audio_base64, mime_type) -> str`. Lazy-imports `openai`; optional dependency for browsers without Web Speech API. See [TRANSCRIBE.md](TRANSCRIBE.md). | openai (optional) |
 | `runner.py` | Claude Agent SDK integration: manage SDK client lifecycle, conversation loop (wait for message → query → stream events → repeat), map SDK events to notifications, wire MCP servers and hooks into SDK. Accepts optional `resume_session_id` to pass to `ClaudeAgentOptions.resume`. No tool-specific logic — delegates to `permissions.py` and `tools/`. | models, tracker, permissions, tools |
-| `tracker.py` | Session lifecycle (pending/idle/running/done/error), message queue per session (`asyncio.Queue`), registry of in-flight `asyncio.Future` objects keyed by `requestId`, **interrupt flag** per session for notification routing | models |
+| `tracker.py` | Session lifecycle (initializing/idle/running/waiting/done/error), message queue per session (`asyncio.Queue`), registry of in-flight `asyncio.Future` objects keyed by `requestId`, **interrupt flag** per session for notification routing | models |
 | `persistence.py` | Session persistence — split storage: metadata in `.json`, events in append-only `.events.jsonl`. Save/load/list/append/delete. See [PERSISTENCE.md](PERSISTENCE.md). | core/fileio |
 | `tools/` | Self-contained MCP tools package. Each tool is one file: schema + handler + MCP server + `intercept()`. Exports `MCP_SERVERS` and `INTERCEPTORS` registries. See [tools/README.md](tools/README.md). | claude-agent-sdk, tracker, models |
 
@@ -262,13 +268,13 @@ graph TD
 | Method | Signature | Description |
 |--------|-----------|-------------|
 | `rebind_notify` | `(notify: Callable) -> None` | Update the WebSocket callback for all running tasks. Called when a new WebSocket connects so in-flight runners stream to the fresh connection. |
-| `run_task` | `(spec_ids: list[str], config: AgentConfig, notify: Callable, skill_id: str \| None = None, session_prompt: str \| None = None, name: str = "") -> AgentTask` | Start a persistent agent session. Builds context from specs, skill, session prompt, and project metadata via `context.build_context()`, then launches the background runner. Task is created in `idle` state and returned immediately. |
-| `send_message` | `(bonsai_sid: str, text: str) -> None` | Send a user message to the session, triggering a new turn. Enqueues the message; runner picks it up and calls `client.query()`. |
+| `run_task` | `(spec_ids: list[str], config: AgentConfig, notify: Callable, skill_id: str \| None = None, session_prompt: str \| None = None, name: str = "") -> AgentTask` | Start a persistent agent session. Builds context from specs, skill, session prompt, and project metadata via `context.build_context()`, then launches the background runner. Task is created in `initializing` state and returned immediately. Transitions to `idle` once the SDK client is ready. |
+| `send_message` | `(bonsai_sid: str, text: str, *, is_markdown: bool = False) -> None` | Send a user message to the session, triggering a new turn. Enqueues the message; runner picks it up and calls `client.query()`. Accepted during `initializing` (queued until SDK client is ready) and `idle`. |
 | `interrupt_task` | `(bonsai_sid: str) -> None` | Cancel the current turn non-destructively. Calls `tracker.interrupt_futures()` to resolve pending futures with deny+interrupt, then calls `client.interrupt()` on the stored SDK client. The runner stays alive, the client is preserved, and the session returns to `idle` — ready for new messages with full context intact. |
 | `end_session` | `(bonsai_sid: str) -> None` | Gracefully close the session and SDK client. Session enters `done` state. |
 | `update_config` | `(bonsai_sid: str, model: str \| None = None, permission_mode: str \| None = None, betas: list[str] \| None = None, effort: str \| None = None) -> dict` | Update config on a live session. Model and permissionMode go through SDK methods; betas and effort are stored in task.config and take effect on next turn. |
 | `get_task` | `(bonsai_sid: str) -> AgentTask` | Get current session status and metadata |
-| `list_tasks` | `() -> list[AgentTask]` | List all sessions (idle, running, done, error) |
+| `list_tasks` | `() -> list[AgentTask]` | List all sessions (initializing, idle, running, waiting, done, error) |
 | `respond` | `(bonsai_sid: str, request_id: str, response: dict) -> None` | Resolve a pending `asyncio.Future` with the client's answer (for mid-turn interactions) |
 | `list_all_sessions` | `() -> list[dict]` | List all sessions: in-memory active + on-disk archived (metadata only) |
 | `get_session_data` | `(bonsai_sid: str) -> dict \| None` | Get full session data including events from disk |
@@ -297,7 +303,7 @@ All models with multi-word fields use a `camelCase` alias generator (`to_camel` 
 
 | Model | Fields (Python / JSON wire) | Description |
 |-------|--------|-------------|
-| `AgentTask` | bonsai_sid/`bonsaiSid`, name, status, spec_ids/`specIds`, skill_id/`skillId`?, session_prompt/`sessionPrompt`?, config, session_id/`sessionId`?, created, updated | Session record. `status` is one of: `idle`, `running`, `done`, `error`. `skill_id` references the selected skill (if any). `session_prompt` holds custom instructions passed via `agent/run` or `SuggestSession`. |
+| `AgentTask` | bonsai_sid/`bonsaiSid`, name, status, spec_ids/`specIds`, skill_id/`skillId`?, session_prompt/`sessionPrompt`?, config, session_id/`sessionId`?, created, updated | Session record. `status` is one of: `initializing`, `idle`, `running`, `waiting`, `done`, `error`. `skill_id` references the selected skill (if any). `session_prompt` holds custom instructions passed via `agent/run` or `SuggestSession`. |
 | `AgentConfig` | model, max_turns/`maxTurns`, permission_mode/`permissionMode`, stream_text/`streamText`, betas, effort | Run configuration. `effort` is `str \| None` — null for auto, or `"low"`/`"medium"`/`"high"`/`"max"`. |
 | `AgentEvent` | bonsai_sid/`bonsaiSid`, session_id/`sessionId`, event_type/`eventType`, payload | Serializable event to send as notification |
 | `AgentResult` | bonsai_sid/`bonsaiSid`, session_id/`sessionId`, result, cost_usd/`costUsd`, turns, duration_ms/`durationMs`, usage | Turn result (sent with `turnComplete`) or final session result (sent with `done`) |
@@ -336,6 +342,7 @@ These map 1-to-1 to the `agent/*` notification methods in the protocol:
 
 | event_type | Triggered by | Protocol method | Status |
 |------------|-------------|-----------------|--------|
+| `ready` | SDK client initialized, session is idle | `agent/ready` | Implemented |
 | `session_start` | `SDKSystemMessage` subtype `init` | `agent/sessionStart` | Implemented |
 | `text_delta` | `SDKAssistantMessage` text block / `SDKPartialAssistantMessage` text_delta | `agent/textDelta` | Partial — full blocks only; streaming partial messages TODO. Includes `agentId` when from a subagent. |
 | `tool_call_start` | `SDKAssistantMessage` tool_use block | `agent/toolCallStart` | Implemented. Includes `agentId` when from a subagent. |
@@ -388,9 +395,10 @@ The tracker manages an **interrupt flag** per session, used to coordinate betwee
 The runner maintains a persistent SDK client and loops over user messages:
 
 ```python
+# Task starts in initializing — SDK client not yet ready
 async with ClaudeSDKClient(options=options) as client:
     tracker.set_client(task.bonsai_sid, client)
-    # Emit agent/sessionStart, enter idle state
+    tracker.set_status(task.bonsai_sid, "idle")  # SDK client ready → initializing → idle
 
     while True:
         message = await tracker.get_next_message(task.bonsai_sid)  # blocks until agent/send
@@ -499,6 +507,7 @@ await runner.run(
 
 | Decision | Choice | Rationale |
 |----------|--------|-----------|
+| **`initializing` state** | Task starts in `initializing`; transitions to `idle` once `ClaudeSDKClient` context manager is entered and `set_client()` completes. Messages sent during `initializing` are queued (not rejected). `agent/end` is allowed to cancel before ready. | Frontend can distinguish "SDK still spinning up" from "ready for messages". Avoids a race where the frontend sends a message before the SDK client exists. Queuing (not rejecting) keeps the UX seamless — user can type immediately without waiting. |
 | Persistent session model | SDK client stays open across multiple turns; user sends messages via `agent/send` | Matches Claude Code chat experience; enables multi-turn conversation with accumulated context |
 | **Native resume for continue** | `continue_session` passes stored `sessionId` to `ClaudeAgentOptions(resume=...)` | Full conversation context restored by CLI natively. Eliminates lossy text replay (old approach truncated tool outputs to 500 chars, lost structured data, cost extra input tokens). |
 | **resume_session_id as runner param** | `runner.run()` accepts optional `resume_session_id: str \| None`; service decides when to pass it | Runner stays SDK-focused (just maps param to options). Service owns the "should we resume?" decision. Clean separation. |

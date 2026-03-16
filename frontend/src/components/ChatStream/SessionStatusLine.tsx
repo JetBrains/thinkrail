@@ -29,6 +29,8 @@ function displayMode(mode: string): string {
 
 function statusInfo(status: SessionStatus): { icon: string; label: string; cssClass: string } {
   switch (status) {
+    case "initializing":
+      return { icon: "⏳", label: "initializing", cssClass: "initializing" };
     case "running":
       return { icon: "", label: "running", cssClass: "running" };
     case "waiting":
@@ -229,7 +231,7 @@ export function SessionStatusLine({
       )}
       <span className="ssl-sep" />
       <span className={`ssl-status ssl-status-${statusClass}`}>
-        {status === "running" && <span className="ssl-status-spinner" />}
+        {(status === "initializing" || status === "running") && <span className="ssl-status-spinner" />}
         {statusIcon} {statusLabel}
       </span>
     </div>

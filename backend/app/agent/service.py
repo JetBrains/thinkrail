@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import time
 from collections.abc import Callable
 from typing import Any
 
@@ -66,9 +67,9 @@ class AgentService:
     async def send_message(self, bonsai_sid: str, text: str, *, is_markdown: bool = False) -> None:
         """Send a user message to the session, triggering a new turn."""
         task = self._tracker.get_task(bonsai_sid)
-        if task.status != "idle":
+        if task.status not in ("initializing", "idle"):
             raise ValueError(
-                f"Cannot send message: session is '{task.status}', expected 'idle'"
+                f"Cannot send message: session is '{task.status}', expected 'initializing' or 'idle'"
             )
         self._save_event(bonsai_sid, {
             "eventType": "userMessage",
@@ -282,7 +283,7 @@ class AgentService:
             "skillId": skill_id,
             "specIds": old_spec_ids,
             "config": old_config.model_dump(by_alias=True),
-            "status": "idle",
+            "status": "initializing",
             "sessionId": old_session_id,
             "createdAt": old.get("createdAt", task.created),
             "updatedAt": task.updated,
@@ -409,7 +410,8 @@ class AgentService:
             self._last_notify.pop(task.bonsai_sid, None)
 
     def _build_context_for(self, task: AgentTask) -> str:
-        return build_context(
+        t0 = time.monotonic()
+        ctx = build_context(
             spec_ids=task.spec_ids,
             skill_id=task.skill_id,
             session_prompt=task.session_prompt,
@@ -418,3 +420,6 @@ class AgentService:
             spec_service=self._spec_service,
             plugin_dir=self._config.plugin_dir,
         )
+        ms = int((time.monotonic() - t0) * 1000)
+        logger.info("[%s] build_context: %dms (%d chars)", task.bonsai_sid[:8], ms, len(ctx))
+        return ctx

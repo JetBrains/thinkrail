@@ -62,8 +62,6 @@ async def run(
     _pending_task_tool_ids: list[str] = []
 
     async def on_subagent_start(hook_input: Any, tool_use_id: str | None, context: Any) -> dict:
-        logger.warning("[subagent] START agent_id=%s tool_use_id=%s hook_input=%s",
-                       hook_input.get("agent_id"), tool_use_id, hook_input)
         agent_id = hook_input["agent_id"]
         _active_subagent_ids.add(agent_id)
         # Correlate this subagent with its Task tool call so we can
@@ -80,7 +78,6 @@ async def run(
         return {}
 
     async def on_subagent_stop(hook_input: Any, tool_use_id: str | None, context: Any) -> dict:
-        logger.warning("[subagent] STOP agent_id=%s tool_use_id=%s", hook_input.get("agent_id"), tool_use_id)
         _active_subagent_ids.discard(hook_input["agent_id"])
         await notify("agent/subagentEnd", {
             "bonsaiSid": task.bonsai_sid,
@@ -111,7 +108,7 @@ async def run(
         plugins.append({"type": "local", "path": str(plugin_dir)})
 
     def _on_cli_stderr(line: str) -> None:
-        logger.warning("CLI stderr: %s", line)
+        logger.debug("CLI stderr: %s", line)
 
     options = ClaudeAgentOptions(
         system_prompt=spec_context,
@@ -135,17 +132,19 @@ async def run(
 
     session_id = ""
 
+    t0 = time.monotonic()
     async with ClaudeSDKClient(options=options) as client:
+        sdk_init_ms = int((time.monotonic() - t0) * 1000)
+        logger.info("[%s] SDK client ready in %dms", task.bonsai_sid[:8], sdk_init_ms)
         tracker.set_client(task.bonsai_sid, client)
+        tracker.set_status(task.bonsai_sid, "idle")
+        await notify("agent/ready", {
+            "bonsaiSid": task.bonsai_sid,
+        })
         # Track tool calls that change permission mode (ExitPlanMode, EnterPlanMode)
         # so we can notify the frontend when the SDK changes mode internally.
         _mode_change_tools: dict[str, str] = {}  # tool_use_id → new permission_mode
         try:
-            # Wait for init message to get session_id
-            # The SDK may emit SystemMessage(init) before the first query,
-            # or after — handle both cases in the event loop below.
-
-            # Task starts in idle — ready for first message
             # -- conversation loop --
             while True:
                 message = await tracker.get_next_message(task.bonsai_sid)
@@ -155,10 +154,10 @@ async def run(
 
                 tracker.set_status(task.bonsai_sid, "running")
                 tracker.clear_turn_text(task.bonsai_sid)
+                turn_t0 = time.monotonic()
                 await client.query(message)
 
                 async for sdk_event in client.receive_response():
-                    logger.warning("SDK event: %s", type(sdk_event).__name__)
                     if isinstance(sdk_event, SystemMessage) and sdk_event.subtype == "init":
                         new_sid = sdk_event.data.get("session_id", "")
                         first_init = not session_id
@@ -174,8 +173,6 @@ async def run(
                             })
 
                     elif isinstance(sdk_event, AssistantMessage):
-                        logger.warning("[subagent] AssistantMessage parent_tool_use_id=%s active=%s",
-                                       sdk_event.parent_tool_use_id, _active_subagent_ids)
                         agent_id = _resolve_agent_id(sdk_event.parent_tool_use_id)
                         for block in sdk_event.content:
                             if isinstance(block, TextBlock):
@@ -189,7 +186,6 @@ async def run(
                                     msg["agentId"] = agent_id
                                 await notify("agent/textDelta", msg)
                             elif isinstance(block, ToolUseBlock):
-                                logger.warning("Tool call: %s", block.name)
                                 # Track Task tool calls so we can correlate
                                 # them with SubagentStart hooks.
                                 if block.name == "Task":
@@ -222,8 +218,6 @@ async def run(
                                 await notify("agent/toolCallStart", tc_msg)
 
                     elif isinstance(sdk_event, UserMessage):
-                        logger.warning("[subagent] UserMessage parent_tool_use_id=%s active=%s",
-                                       sdk_event.parent_tool_use_id, _active_subagent_ids)
                         agent_id = _resolve_agent_id(sdk_event.parent_tool_use_id)
                         content = sdk_event.content
                         if isinstance(content, list):
@@ -252,6 +246,9 @@ async def run(
                                     await notify("agent/toolCallEnd", te_msg)
 
                     elif isinstance(sdk_event, ResultMessage):
+                        turn_ms = int((time.monotonic() - turn_t0) * 1000)
+                        logger.info("[%s] turn completed in %dms (cost=$%.4f)",
+                                    task.bonsai_sid[:8], turn_ms, sdk_event.total_cost_usd or 0.0)
                         turn_cost = sdk_event.total_cost_usd or 0.0
                         turn_turns = sdk_event.num_turns
                         total_cost += turn_cost

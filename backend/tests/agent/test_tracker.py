@@ -17,7 +17,7 @@ class TestTaskLifecycle:
     def test_create_task(self) -> None:
         tracker = Tracker()
         task = tracker.create_task(["spec-1"], AgentConfig())
-        assert task.status == "idle"
+        assert task.status == "initializing"
         assert task.spec_ids == ["spec-1"]
         assert len(task.bonsai_sid) > 0
 
@@ -42,6 +42,7 @@ class TestTaskLifecycle:
     def test_set_status_valid_transition(self) -> None:
         tracker = Tracker()
         task = tracker.create_task(["s1"], AgentConfig())
+        tracker.set_status(task.bonsai_sid, "idle")
         tracker.set_status(task.bonsai_sid, "running")
         assert tracker.get_task(task.bonsai_sid).status == "running"
 
@@ -56,7 +57,7 @@ class TestTaskLifecycle:
         tracker = Tracker()
         task = tracker.create_task(["s1"], AgentConfig())
         original_updated = task.updated
-        tracker.set_status(task.bonsai_sid, "running")
+        tracker.set_status(task.bonsai_sid, "idle")
         assert tracker.get_task(task.bonsai_sid).updated >= original_updated
 
     def test_set_session_id(self) -> None:
@@ -68,7 +69,9 @@ class TestTaskLifecycle:
     def test_full_lifecycle(self) -> None:
         tracker = Tracker()
         task = tracker.create_task(["s1"], AgentConfig())
-        assert task.status == "idle"
+        assert task.status == "initializing"
+        tracker.set_status(task.bonsai_sid, "idle")
+        assert tracker.get_task(task.bonsai_sid).status == "idle"
         tracker.set_status(task.bonsai_sid, "running")
         assert tracker.get_task(task.bonsai_sid).status == "running"
         tracker.set_status(task.bonsai_sid, "idle")
@@ -79,6 +82,7 @@ class TestTaskLifecycle:
     def test_error_lifecycle(self) -> None:
         tracker = Tracker()
         task = tracker.create_task(["s1"], AgentConfig())
+        tracker.set_status(task.bonsai_sid, "idle")
         tracker.set_status(task.bonsai_sid, "running")
         tracker.set_status(task.bonsai_sid, "error")
         assert tracker.get_task(task.bonsai_sid).status == "error"
@@ -86,6 +90,7 @@ class TestTaskLifecycle:
     def test_idle_to_running(self) -> None:
         tracker = Tracker()
         task = tracker.create_task(["s1"], AgentConfig())
+        tracker.set_status(task.bonsai_sid, "idle")
         tracker.set_status(task.bonsai_sid, "running")
         assert tracker.get_task(task.bonsai_sid).status == "running"
 
@@ -93,6 +98,7 @@ class TestTaskLifecycle:
         """Turn completes -> back to idle."""
         tracker = Tracker()
         task = tracker.create_task(["s1"], AgentConfig())
+        tracker.set_status(task.bonsai_sid, "idle")
         tracker.set_status(task.bonsai_sid, "running")
         tracker.set_status(task.bonsai_sid, "idle")
         assert tracker.get_task(task.bonsai_sid).status == "idle"
@@ -101,6 +107,7 @@ class TestTaskLifecycle:
         """Graceful session close from idle."""
         tracker = Tracker()
         task = tracker.create_task(["s1"], AgentConfig())
+        tracker.set_status(task.bonsai_sid, "idle")
         tracker.set_status(task.bonsai_sid, "done")
         assert tracker.get_task(task.bonsai_sid).status == "done"
 
