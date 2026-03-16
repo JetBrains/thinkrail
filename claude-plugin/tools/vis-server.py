@@ -13,7 +13,16 @@ returns a Markdown-formatted version of the visualization.
 """
 
 import json
+import os
 import sys
+
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", "backend"))
+from app.agent.tools._vis_validation import (
+    VALID_STATUSES,
+    VIS_EXAMPLES,
+    _validate_status,
+    _validate_vis_data,
+)
 
 TOOL_DEFINITION = {
     "name": "bonsai_visualize",
@@ -42,17 +51,35 @@ TOOL_DEFINITION = {
                 "type": "string",
                 "description": "Title displayed in the visualization card header",
             },
-            "vizId": {
+            "visId": {
                 "type": "string",
                 "description": (
-                    "Optional stable ID for the visualization. When the same vizId "
+                    "Optional stable ID for the visualization. When the same visId "
                     "is used across multiple calls, older cards auto-collapse and "
                     "the latest one renders in full."
                 ),
             },
             "data": {
                 "type": "object",
-                "description": "Type-specific structured data (see documentation for schemas)",
+                "description": (
+                    "IMPORTANT: must be a JSON object, not a string. "
+                    "Type-specific structured data. "
+                    "For diagram: {nodes: [{id, label, type?}], edges: [{from, to, label?}], layout?} "
+                    "OR {diagram: '...', notation?: 'mermaid'}. "
+                    "For progress-tracker: {steps: [{label, status, file?, substeps?}]}. "
+                    "For summary-box: {sections: [{heading, status?, items: [{label, value}]}]}. "
+                    "For comparison: {options: [{name, description?, pros?, cons?, visualization?}]}. "
+                    "For data-table: {columns: string[], rows: string[][], statusColumn?}. "
+                    "For status-list: {items: [{label, status, meta?}]}."
+                ),
+            },
+            "layout": {
+                "type": "object",
+                "description": "Optional layout hints: {width?: 'compact'|'normal'|'wide', maxHeight?: number}",
+                "properties": {
+                    "width": {"type": "string", "enum": ["compact", "normal", "wide"]},
+                    "maxHeight": {"type": "number", "description": "Max card body height in px (scrolls if exceeded)"},
+                },
             },
         },
     },
@@ -107,6 +134,8 @@ def _md_comparison(title: str, data: dict) -> str:
         lines.append(f"\n**{opt.get('name', '')}**")
         if opt.get("description"):
             lines.append(opt["description"])
+        if opt.get("visualization"):
+            lines.append(f"\n```mermaid\n{opt['visualization']}\n```")
         for p in opt.get("pros", []):
             lines.append(f"- \u2713 {p}")
         for c in opt.get("cons", []):
@@ -135,6 +164,11 @@ def _md_status_list(title: str, data: dict) -> str:
 
 
 def _md_diagram(title: str, data: dict) -> str:
+    # Text-based diagram
+    if isinstance(data.get("diagram"), str):
+        lang = "mermaid" if data.get("notation") == "mermaid" else ""
+        return f"### {title}\n\n```{lang}\n{data['diagram']}\n```"
+    # Structured nodes/edges diagram
     lines = [f"### {title}", "", "```"]
     for node in data.get("nodes", []):
         t = f" ({node['type']})" if node.get("type") else ""
@@ -159,27 +193,40 @@ MD_RENDERERS = {
 
 def handle_tool_call(arguments: dict) -> dict:
     """Process a bonsai_visualize tool call."""
-    viz_type = arguments.get("type", "")
-    title = arguments.get("title", viz_type)
+    vis_type = arguments.get("type", "")
+    title = arguments.get("title", vis_type)
     data = arguments.get("data", {})
     # LLMs sometimes pass `data` as a JSON string instead of an object — auto-parse it
     if isinstance(data, str):
         try:
             data = json.loads(data)
         except (json.JSONDecodeError, ValueError):
-            pass
+            example = VIS_EXAMPLES.get(vis_type, "{}")
+            return {
+                "content": [{"type": "text", "text": f"\u274c `data` must be a JSON object, not a string. Pass data directly as {{...}}, not as \"{{...}}\"\n\nExpected data for '{vis_type}': {example}"}],
+                "isError": True,
+            }
 
-    renderer = MD_RENDERERS.get(viz_type)
+    if isinstance(data, dict):
+        error = _validate_vis_data(vis_type, data)
+        if error:
+            example = VIS_EXAMPLES.get(vis_type, "{}")
+            return {
+                "content": [{"type": "text", "text": f"\u274c Validation error for '{vis_type}': {error}\n\nExpected format: {example}"}],
+                "isError": True,
+            }
+
+    renderer = MD_RENDERERS.get(vis_type)
     if renderer:
         md = renderer(title, data)
         return {
             "content": [
-                {"type": "text", "text": f"\u2713 Rendered: {title} ({viz_type})"},
+                {"type": "text", "text": f"\u2713 Rendered: {title} ({vis_type})"},
                 {"type": "text", "text": md},
             ]
         }
     return {
-        "content": [{"type": "text", "text": f"\u2713 Rendered: {title} ({viz_type})"}]
+        "content": [{"type": "text", "text": f"\u2713 Rendered: {title} ({vis_type})"}]
     }
 
 
@@ -227,7 +274,7 @@ def main() -> None:
                 "result": {
                     "protocolVersion": "2024-11-05",
                     "capabilities": {"tools": {}},
-                    "serverInfo": {"name": "bonsai-viz", "version": "1.0.0"},
+                    "serverInfo": {"name": "bonsai-vis", "version": "1.0.0"},
                 },
             })
         elif method == "notifications/initialized":

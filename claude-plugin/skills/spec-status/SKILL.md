@@ -20,7 +20,7 @@ Show the status report using `bonsai_visualize` with type `summary-box`:
 {
   "type": "summary-box",
   "title": "Specification Status Report",
-  "vizId": "spec-status",
+  "visId": "spec-status",
   "data": {
     "sections": [
       {"heading": "Coverage", "items": [
@@ -51,7 +51,7 @@ If the user wants details on specific specs, coverage gaps, or freshness, show a
 {
   "type": "data-table",
   "title": "Spec Coverage by Module",
-  "vizId": "spec-coverage-detail",
+  "visId": "spec-coverage-detail",
   "data": {
     "columns": ["Module", "Spec", "Status", "Freshness"],
     "rows": [["[module]", "[spec path]", "[status]", "[fresh/stale]"]]

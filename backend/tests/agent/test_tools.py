@@ -353,7 +353,7 @@ class TestInterceptorRouting:
             {"bonsai_visualize": mock_intercept},
         ):
             result = await can_use_tool(
-                "mcp__bonsai-viz__bonsai_visualize",
+                "mcp__bonsai-vis__bonsai_visualize",
                 {"type": "diagram", "data": {}},
                 context,
                 tracker=tracker,
@@ -1315,3 +1315,294 @@ class TestInterceptSpecs:
         assert result.updated_input["id"] == "some-spec"
         # No side effects
         notify.assert_not_called()
+
+
+# ===========================================================================
+# _validate_vis_data — unit tests
+# ===========================================================================
+
+
+class TestValidateVisData:
+    """Tests for the visualization data validation function."""
+
+    def test_valid_progress_tracker(self) -> None:
+        from app.agent.tools.visualization import _validate_vis_data
+
+        data = {"steps": [{"label": "Step 1", "status": "done"}, {"label": "Step 2", "status": "pending"}]}
+        assert _validate_vis_data("progress-tracker", data) is None
+
+    def test_valid_summary_box(self) -> None:
+        from app.agent.tools.visualization import _validate_vis_data
+
+        data = {"sections": [{"heading": "Info", "items": [{"label": "Key", "value": "Val"}]}]}
+        assert _validate_vis_data("summary-box", data) is None
+
+    def test_valid_comparison(self) -> None:
+        from app.agent.tools.visualization import _validate_vis_data
+
+        data = {"options": [{"name": "Option A", "pros": ["fast"], "cons": ["complex"]}]}
+        assert _validate_vis_data("comparison", data) is None
+
+    def test_valid_data_table(self) -> None:
+        from app.agent.tools.visualization import _validate_vis_data
+
+        data = {"columns": ["Name", "Status"], "rows": [["foo", "done"], ["bar", "pending"]]}
+        assert _validate_vis_data("data-table", data) is None
+
+    def test_valid_status_list(self) -> None:
+        from app.agent.tools.visualization import _validate_vis_data
+
+        data = {"items": [{"label": "Item 1", "status": "done", "meta": "All good"}]}
+        assert _validate_vis_data("status-list", data) is None
+
+    def test_valid_diagram_structured(self) -> None:
+        from app.agent.tools.visualization import _validate_vis_data
+
+        data = {"nodes": [{"id": "a", "label": "A"}], "edges": [{"from": "a", "to": "b"}]}
+        assert _validate_vis_data("diagram", data) is None
+
+    def test_valid_diagram_text(self) -> None:
+        from app.agent.tools.visualization import _validate_vis_data
+
+        data = {"diagram": "A --> B --> C"}
+        assert _validate_vis_data("diagram", data) is None
+
+    def test_valid_diagram_text_with_notation(self) -> None:
+        from app.agent.tools.visualization import _validate_vis_data
+
+        data = {"diagram": "graph LR\n  A --> B", "notation": "mermaid"}
+        assert _validate_vis_data("diagram", data) is None
+
+    def test_valid_comparison_with_visualization(self) -> None:
+        from app.agent.tools.visualization import _validate_vis_data
+
+        data = {"options": [{"name": "Option A", "visualization": "graph TD\n  A --> B"}]}
+        assert _validate_vis_data("comparison", data) is None
+
+    def test_invalid_comparison_visualization_type(self) -> None:
+        from app.agent.tools.visualization import _validate_vis_data
+
+        data = {"options": [{"name": "Option A", "visualization": 42}]}
+        result = _validate_vis_data("comparison", data)
+        assert result is not None
+        assert "visualization" in result
+
+    # --- Missing required keys ---
+
+    def test_missing_steps(self) -> None:
+        from app.agent.tools.visualization import _validate_vis_data
+
+        assert _validate_vis_data("progress-tracker", {}) is not None
+
+    def test_missing_sections(self) -> None:
+        from app.agent.tools.visualization import _validate_vis_data
+
+        assert _validate_vis_data("summary-box", {}) is not None
+
+    def test_missing_options(self) -> None:
+        from app.agent.tools.visualization import _validate_vis_data
+
+        assert _validate_vis_data("comparison", {}) is not None
+
+    def test_missing_columns(self) -> None:
+        from app.agent.tools.visualization import _validate_vis_data
+
+        assert _validate_vis_data("data-table", {"rows": []}) is not None
+
+    def test_missing_items(self) -> None:
+        from app.agent.tools.visualization import _validate_vis_data
+
+        assert _validate_vis_data("status-list", {}) is not None
+
+    def test_missing_nodes_and_edges(self) -> None:
+        from app.agent.tools.visualization import _validate_vis_data
+
+        assert _validate_vis_data("diagram", {}) is not None
+
+    # --- Invalid sub-fields ---
+
+    def test_step_missing_label(self) -> None:
+        from app.agent.tools.visualization import _validate_vis_data
+
+        data = {"steps": [{"status": "done"}]}
+        result = _validate_vis_data("progress-tracker", data)
+        assert result is not None
+        assert "label" in result
+
+    def test_section_missing_items(self) -> None:
+        from app.agent.tools.visualization import _validate_vis_data
+
+        data = {"sections": [{"heading": "Title"}]}
+        result = _validate_vis_data("summary-box", data)
+        assert result is not None
+        assert "items" in result
+
+    def test_summary_item_missing_value(self) -> None:
+        from app.agent.tools.visualization import _validate_vis_data
+
+        data = {"sections": [{"heading": "T", "items": [{"label": "K"}]}]}
+        result = _validate_vis_data("summary-box", data)
+        assert result is not None
+        assert "value" in result
+
+    def test_option_missing_name(self) -> None:
+        from app.agent.tools.visualization import _validate_vis_data
+
+        data = {"options": [{"description": "no name"}]}
+        result = _validate_vis_data("comparison", data)
+        assert result is not None
+        assert "name" in result
+
+    def test_row_length_mismatch(self) -> None:
+        from app.agent.tools.visualization import _validate_vis_data
+
+        data = {"columns": ["A", "B"], "rows": [["only-one"]]}
+        result = _validate_vis_data("data-table", data)
+        assert result is not None
+        assert "cells" in result
+
+    def test_node_missing_id(self) -> None:
+        from app.agent.tools.visualization import _validate_vis_data
+
+        data = {"nodes": [{"label": "A"}], "edges": []}
+        result = _validate_vis_data("diagram", data)
+        assert result is not None
+        assert "id" in result
+
+    def test_edge_missing_to(self) -> None:
+        from app.agent.tools.visualization import _validate_vis_data
+
+        data = {"nodes": [{"id": "a", "label": "A"}], "edges": [{"from": "a"}]}
+        result = _validate_vis_data("diagram", data)
+        assert result is not None
+        assert "to" in result
+
+    # --- Invalid status values ---
+
+    def test_invalid_status_progress_tracker(self) -> None:
+        from app.agent.tools.visualization import _validate_vis_data
+
+        data = {"steps": [{"label": "Step", "status": "INVALID"}]}
+        result = _validate_vis_data("progress-tracker", data)
+        assert result is not None
+        assert "Valid values" in result
+
+    def test_invalid_status_status_list(self) -> None:
+        from app.agent.tools.visualization import _validate_vis_data
+
+        data = {"items": [{"label": "Item", "status": "NOT_REAL"}]}
+        result = _validate_vis_data("status-list", data)
+        assert result is not None
+        assert "Valid values" in result
+
+    # --- Unknown type ---
+
+    def test_unknown_type(self) -> None:
+        from app.agent.tools.visualization import _validate_vis_data
+
+        result = _validate_vis_data("nonexistent-type", {})
+        assert result is not None
+        assert "Unknown visualization type" in result
+
+
+# ===========================================================================
+# bonsai_visualize handler — integration tests
+# ===========================================================================
+
+
+class TestBonsaiVisualizeHandler:
+    async def test_valid_payload_returns_success(self) -> None:
+        from app.agent.tools.visualization import _bonsai_visualize
+
+        result = await _bonsai_visualize.handler({
+            "type": "progress-tracker",
+            "title": "Build",
+            "data": {"steps": [{"label": "Compile", "status": "done"}]},
+        })
+        assert "isError" not in result
+        assert "Rendered" in result["content"][0]["text"]
+
+    async def test_invalid_payload_returns_error(self) -> None:
+        from app.agent.tools.visualization import _bonsai_visualize
+
+        result = await _bonsai_visualize.handler({
+            "type": "summary-box",
+            "title": "Bad",
+            "data": {"wrong_key": "nope"},
+        })
+        assert result["isError"] is True
+        assert "Validation error" in result["content"][0]["text"]
+
+    async def test_json_string_data_auto_parsed(self) -> None:
+        from app.agent.tools.visualization import _bonsai_visualize
+
+        result = await _bonsai_visualize.handler({
+            "type": "status-list",
+            "title": "Items",
+            "data": '{"items": [{"label": "X", "status": "done"}]}',
+        })
+        assert "isError" not in result
+        assert "Rendered" in result["content"][0]["text"]
+
+    async def test_invalid_json_string_data(self) -> None:
+        from app.agent.tools.visualization import _bonsai_visualize
+
+        result = await _bonsai_visualize.handler({
+            "type": "diagram",
+            "title": "Bad",
+            "data": "not json at all{{{",
+        })
+        assert result["isError"] is True
+        assert "must be a JSON object, not a string" in result["content"][0]["text"]
+
+    async def test_unknown_type_returns_error(self) -> None:
+        from app.agent.tools.visualization import _bonsai_visualize
+
+        result = await _bonsai_visualize.handler({
+            "type": "sparkline",
+            "title": "Nope",
+            "data": {},
+        })
+        assert result["isError"] is True
+        assert "Unknown visualization type" in result["content"][0]["text"]
+
+
+# ===========================================================================
+# vis-server uses shared _vis_validation — integration test
+# ===========================================================================
+
+
+class TestVisServerSharedValidation:
+    """Verify vis-server.py imports from the shared _vis_validation module."""
+
+    def test_vis_server_uses_shared_validation(self) -> None:
+        """vis-server.py's handle_tool_call catches the same errors as the SDK handler."""
+        import importlib
+        import sys
+        import os
+
+        # Add backend to path (mirroring what vis-server.py does)
+        backend_path = os.path.join(os.path.dirname(__file__), "..", "..", "app", "agent", "tools")
+        # Import the shared module directly
+        from app.agent.tools._vis_validation import _validate_vis_data as shared_validate
+
+        # Also import vis-server to check it uses the same function
+        vis_server_dir = os.path.join(os.path.dirname(__file__), "..", "..", "..", "claude-plugin", "tools")
+        if os.path.isdir(vis_server_dir):
+            sys.path.insert(0, vis_server_dir)
+            try:
+                # Force fresh import
+                if "vis-server" in sys.modules:
+                    del sys.modules["vis-server"]
+                # Can't use importlib on hyphenated names directly, use spec
+                import importlib.util
+                spec = importlib.util.spec_from_file_location(
+                    "vis_server", os.path.join(vis_server_dir, "vis-server.py")
+                )
+                if spec and spec.loader:
+                    mod = importlib.util.module_from_spec(spec)
+                    spec.loader.exec_module(mod)
+                    # vis-server's _validate_vis_data should be the same function
+                    assert mod._validate_vis_data is shared_validate
+            finally:
+                sys.path.pop(0)

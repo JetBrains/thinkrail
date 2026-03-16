@@ -4,7 +4,7 @@ import type { ContextMode } from "./useContextMode.ts";
 import { SpecContext } from "./modes/SpecContext.tsx";
 import { AgentContext } from "./modes/AgentContext.tsx";
 import { CodeContext } from "./modes/CodeContext.tsx";
-import { VizTab } from "./modes/VizTab.tsx";
+import { VisTab } from "./modes/VisTab.tsx";
 import "./ContextPanel.css";
 
 const MODE_CONFIG: Record<ContextMode, { icon: string; label: string }> = {
@@ -17,7 +17,7 @@ const MODE_CONFIG: Record<ContextMode, { icon: string; label: string }> = {
 type PinMode = "none" | "dashboard";
 
 function ModeContent({ mode, pin }: { mode: ContextMode; pin: PinMode }) {
-  if (pin === "dashboard") return <VizTab />;
+  if (pin === "dashboard") return <VisTab />;
   switch (mode) {
     case "spec": return <SpecContext />;
     case "agent": return <AgentContext />;

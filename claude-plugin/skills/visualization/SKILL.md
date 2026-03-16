@@ -1,5 +1,5 @@
 ---
-name: visualisation
+name: visualization
 description: Utility skill for generating rich visualizations using the bonsai_visualize MCP tool. Provides patterns for progress trackers, summary boxes, comparisons, data tables, status lists, and diagrams. Other skills reference this for consistent visual output.
 ---
 
@@ -15,7 +15,7 @@ You are a **visualization utility** for specification-driven development. Use th
 
 ## Direct Invocation
 
-When invoked directly (`/specdriven:visualisation`):
+When invoked directly (`/specdriven:visualization`):
 
 ### Step 1: Gather data
 
@@ -31,7 +31,7 @@ Call `bonsai_visualize` with a `summary-box` showing the overall project status:
 {
   "type": "summary-box",
   "title": "Project Dashboard",
-  "vizId": "project-dashboard",
+  "visId": "project-dashboard",
   "data": {
     "sections": [
       {"heading": "Workflow Progress", "status": "current", "items": [
@@ -71,7 +71,7 @@ Call `bonsai_visualize` with the appropriate type:
 {
   "type": "progress-tracker",
   "title": "Specification-Driven Development",
-  "vizId": "workflow-progress",
+  "visId": "workflow-progress",
   "data": {
     "steps": [
       {"label": "Goal & Requirements", "status": "done", "file": "GOAL&REQUIREMENTS.md"},
@@ -90,7 +90,7 @@ Call `bonsai_visualize` with the appropriate type:
 {
   "type": "summary-box",
   "title": "Requirements Summary",
-  "vizId": "requirements-summary",
+  "visId": "requirements-summary",
   "data": {
     "sections": [
       {"heading": "Business Requirements", "status": "done", "items": [
@@ -108,22 +108,26 @@ Call `bonsai_visualize` with the appropriate type:
 
 ### 3. `comparison` — Side-by-side option comparison
 
+Options can include an optional `visualization` field with Mermaid syntax to illustrate each approach visually.
+
 ```json
 {
   "type": "comparison",
   "title": "Architecture Approaches",
-  "vizId": "arch-comparison",
+  "visId": "arch-comparison",
   "data": {
     "options": [
       {
         "name": "Pipeline",
         "description": "Data flows through sequential stages",
+        "visualization": "graph LR\n  A[Input] --> B[Process] --> C[Output]",
         "pros": ["Simple to understand", "Easy to test"],
         "cons": ["Less flexible", "Sequential bottleneck"]
       },
       {
         "name": "Event-driven",
         "description": "Components react to events",
+        "visualization": "graph TD\n  A[Event Bus] --> B[Handler 1]\n  A --> C[Handler 2]",
         "pros": ["Highly decoupled", "Scalable"],
         "cons": ["Complex debugging", "Eventual consistency"]
       }
@@ -138,7 +142,7 @@ Call `bonsai_visualize` with the appropriate type:
 {
   "type": "data-table",
   "title": "Spec Coverage",
-  "vizId": "spec-coverage",
+  "visId": "spec-coverage",
   "data": {
     "columns": ["Module", "Spec", "Status", "Freshness"],
     "rows": [
@@ -156,12 +160,12 @@ Call `bonsai_visualize` with the appropriate type:
 {
   "type": "status-list",
   "title": "Module Status",
-  "vizId": "module-status",
+  "visId": "module-status",
   "data": {
     "items": [
-      {"label": "agent/runner.py", "status": "done", "detail": "All tests passing"},
-      {"label": "rpc/server.py", "status": "current", "detail": "In progress"},
-      {"label": "core/watcher.py", "status": "pending", "detail": "Not started"}
+      {"label": "agent/runner.py", "status": "done", "meta": "All tests passing"},
+      {"label": "rpc/server.py", "status": "current", "meta": "In progress"},
+      {"label": "core/watcher.py", "status": "pending", "meta": "Not started"}
     ]
   }
 }
@@ -169,11 +173,12 @@ Call `bonsai_visualize` with the appropriate type:
 
 ### 6. `diagram` — Component boxes and connections
 
+Structured format (nodes/edges — recommended for most use cases):
 ```json
 {
   "type": "diagram",
   "title": "System Architecture",
-  "vizId": "system-diagram",
+  "visId": "system-diagram",
   "data": {
     "nodes": [
       {"id": "frontend", "label": "Frontend (React)", "status": "done"},
@@ -190,6 +195,19 @@ Call `bonsai_visualize` with the appropriate type:
 }
 ```
 
+Raw Mermaid syntax (use when Mermaid features like subgraphs, styling, or sequence diagrams are needed):
+```json
+{
+  "type": "diagram",
+  "title": "Data Flow",
+  "visId": "data-flow",
+  "data": {
+    "diagram": "graph LR\n  A[Input] --> B[Parser]\n  B --> C[Engine]\n  C --> D[Output]",
+    "notation": "mermaid"
+  }
+}
+```
+
 ## Status Values
 
 | Status | Icon | Meaning |
@@ -201,9 +219,9 @@ Call `bonsai_visualize` with the appropriate type:
 | `skipped` | ⊘ | Intentionally skipped |
 | `stale` | ~ | Outdated |
 
-## Using `vizId` for Updates
+## Using `visId` for Updates
 
-When a visualization has a `vizId`, subsequent calls with the same `vizId` will **update** the existing card in the UI instead of creating a new one. Use this for:
+When a visualization has a `visId`, subsequent calls with the same `visId` will **update** the existing card in the UI instead of creating a new one. Use this for:
 - Progress trackers that advance through steps
 - Summary boxes that fill in as data is gathered
 - Any visualization that changes over time during a session

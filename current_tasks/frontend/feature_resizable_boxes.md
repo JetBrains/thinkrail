@@ -15,7 +15,7 @@ Add CSS `resize: vertical` to key ChatStream containers, allowing users to manua
 - [x] `.chat-tool-body` has `resize: vertical; min-height: 40px`
 - [x] `.chat-subagent-body` has `resize: vertical; min-height: 60px`
 - [x] `.chat-approval-expanded` has `resize: vertical; min-height: 40px`
-- [x] `.viz-card-body` has `resize: vertical; min-height: 60px`
+- [x] `.vis-card-body` has `resize: vertical; min-height: 60px`
 - [x] DiffCard uses ResizeObserver to sync Monaco editor height with container
 
 ## Design Reference

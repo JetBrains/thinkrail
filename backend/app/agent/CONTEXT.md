@@ -25,7 +25,7 @@ The pipeline assembles four context sections in a fixed order. General Instructi
   │                                                                 │
   │  1. Build General Instructions (always)                         │
   │     a. Scan skills/ dir for available skills table              │
-  │     b. Compose viz rules, interaction style, spec workflow      │
+  │     b. Compose visualization rules, interaction style, spec workflow      │
   │  2. Load skill instructions from SKILL.md (if skill_id)        │
   │  3. Gather project metadata (always)                            │
   │  4. Load spec content by IDs (if spec_ids)                      │
@@ -91,7 +91,7 @@ whenever the output would benefit from visual structure.
 
 **When to use:** reporting status, showing progress, comparing options, presenting tabular
 data, or illustrating architecture. Call the tool with a JSON object containing `type`,
-`title`, `data`, and optionally `vizId` (reuse the same `vizId` to update a previous
+`title`, `data`, and optionally `visId` (reuse the same `visId` to update a previous
 visualization in-place).
 
 **Anti-patterns:** Do NOT use Bash to print ANSI-colored text, do NOT render ASCII-art
@@ -213,7 +213,7 @@ The General Instructions section consolidates behavioral rules that were previou
 
 | Subsection | Content | Rationale |
 |------------|---------|-----------|
-| **Visualization** | `bonsai_visualize` tool reference, available types, when to use, anti-patterns (no Bash/ANSI/ASCII) | Previously copy-pasted into 13/14 skills. Without this, the model doesn't know `bonsai_visualize` exists. |
+| **Visualization** | `bonsai_visualize` tool reference, 6 available types, layout hints (`width`, `maxHeight`), 6 primary status values, when to use, anti-patterns (no Bash/ANSI/ASCII) | Previously copy-pasted into 13/14 skills. Without this, the model doesn't know `bonsai_visualize` exists. |
 | **Interaction Style** | Use `AskUserQuestion` for decisions, 2-4 choices, end with "What's next?" | Previously repeated in 13/14 skills. Ensures consistent interaction pattern. |
 | **Spec-Driven Workflow** | Use `spec_list`/`registry_query` at start, use `spec_save`/`registry_mutate` after saving, respect spec hierarchy | Previously in 10-11/14 skills. Grounds the agent in the spec-driven methodology. |
 | **Proactive Suggestions** | `SuggestSession` triggers, key tips (`specIds`, `prompt`, `reason`), behavioral rules (respect dismissals, limit to 1-3) | Agents need to know the tool exists and when to use it proactively. Parameter details come from the tool schema. |

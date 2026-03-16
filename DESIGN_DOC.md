@@ -197,9 +197,9 @@ backend/
 │   │   ├── tracker.py       # Task lifecycle + asyncio.Future map for pending requests
 │   │   ├── context.py       # Context assembly: skill instructions, project metadata, system prompt
 │   │   ├── persistence.py   # Session persistence: metadata JSON + events JSONL
-│   │   ├── visualization.py # MCP visualization tool: 6 viz types rendered in ChatStream
+│   │   ├── visualization.py # MCP visualization tool: 6 vis types rendered in ChatStream
 │   │   └── transcribe.py    # Audio transcription via OpenAI Whisper (optional)
-│   ├── viz/                 # Visualization Dashboard Module
+│   ├── vis/                 # Visualization Dashboard Module
 │   │   ├── models.py        # Dashboard dataclasses (DashboardState, WorkflowStep, etc.)
 │   │   └── service.py       # VisualizationService: compute dashboard state, push notifications
 │   └── core/                # Shared Core
@@ -231,7 +231,7 @@ backend/
 | Core | [backend/app/core/README.md](backend/app/core/README.md) | App configuration, file I/O, async file watcher |
 | Agent | [backend/app/agent/README.md](backend/app/agent/README.md) | Agent orchestration, Claude SDK integration, task lifecycle |
 | RPC | [backend/app/rpc/README.md](backend/app/rpc/README.md) | WebSocket endpoint, JSON-RPC dispatch, notifications |
-| Viz | [backend/app/viz/README.md](backend/app/viz/README.md) | Dashboard state computation: spec coverage, tasks, lint, recommendations |
+| Vis | [backend/app/vis/README.md](backend/app/vis/README.md) | Dashboard state computation: spec coverage, tasks, lint, recommendations |
 | Frontend | [frontend/README.md](frontend/README.md) | React SPA, UI components, state management |
 
 **Feature Designs:**
@@ -239,7 +239,7 @@ backend/
 | Feature | Spec | Description |
 |---------|------|-------------|
 | Proactive Agent Experience | [PROACTIVE_AGENT_EXPERIENCE_DESIGN.md](features/PROACTIVE_AGENT_EXPERIENCE_DESIGN.md) | Agent-driven UI: SuggestSession and UpdateProgress tools via canUseTool interception |
-| MCP Visualization | [VISUALIZATION_DESIGN.md](features/VISUALIZATION_DESIGN.md) | Structured visual output via MCP tool: 6 viz types rendered in ChatStream |
+| MCP Visualization | [VISUALIZATION_DESIGN.md](features/VISUALIZATION_DESIGN.md) | Structured visual output via MCP tool: 6 vis types rendered in ChatStream |
 | Voice Input | [VOICE_INPUT_DESIGN.md](features/VOICE_INPUT_DESIGN.md) | Browser voice input: Web Speech API + MediaRecorder/Whisper fallback |
 | Effort Support | [EFFORT_SUPPORT_DESIGN.md](features/EFFORT_SUPPORT_DESIGN.md) | Configurable reasoning effort level passed to Claude SDK |
 

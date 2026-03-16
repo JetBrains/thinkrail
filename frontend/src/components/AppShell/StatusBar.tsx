@@ -1,7 +1,7 @@
 import { useSpecStore } from "@/store/specStore.ts";
 import { useSessionStore } from "@/store/sessionStore.ts";
 import { useNotificationStore } from "@/store/notificationStore.ts";
-import { useVizStore } from "@/store/vizStore.ts";
+import { useVisStore } from "@/store/visStore.ts";
 import { modLabel } from "@/utils/platform.ts";
 
 interface StatusBarProps {
@@ -12,7 +12,7 @@ export function StatusBar({ onOpenSessionManager }: StatusBarProps) {
   const specs = useSpecStore((s) => s.specs);
   const sessions = useSessionStore((s) => s.sessions);
   const pendingInputCount = useNotificationStore((s) => s.pendingInputCount);
-  const dashboard = useVizStore((s) => s.dashboard);
+  const dashboard = useVisStore((s) => s.dashboard);
   const total = specs.length;
   const done = specs.filter((s) => s.status === "done").length;
   const pending = specs.filter(

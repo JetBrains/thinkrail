@@ -8,8 +8,8 @@ The context assembly pipeline currently has no "General Instructions" section �
 
 ## Current state
 
-`build_context()` assembles: Skill → Project → Viz Tool → Specs.
-The "Viz Tool" section is imported from `VIZ_INSTRUCTIONS` in `visualization.py` — a static string.
+`build_context()` assembles: Skill → Project → Vis Tool → Specs.
+The "Vis Tool" section is imported from `VIS_INSTRUCTIONS` in `visualization.py` — a static string.
 There is no skills table, no interaction style guidance, no spec workflow rules, and no proactive suggestions guidance in the system prompt.
 
 ## Target state
@@ -43,7 +43,7 @@ def _build_general_instructions(plugin_dir: Path) -> str:
 ```
 
 Assembles the five subsections in order as a single markdown string:
-1. **Visualization** — `bonsai_visualize` tool reference, available types, anti-patterns (content matches current `VIZ_INSTRUCTIONS` but nested under General Instructions header)
+1. **Visualization** — `bonsai_visualize` tool reference, available types, anti-patterns (content matches current `VIS_INSTRUCTIONS` but nested under General Instructions header)
 2. **Interaction Style** — `AskUserQuestion` rules, 2-4 choices, end with next actions
 3. **Spec-Driven Workflow** — read registry, update after saving, respect hierarchy
 4. **Proactive Suggestions** — `SuggestSession` triggers, include specIds, respect dismissals
@@ -62,7 +62,7 @@ def _build_specs_section(spec_ids: list[str], spec_service: SpecService) -> str:
 
 ### 4. Update `build_context()` pipeline
 
-- Remove the `VIZ_INSTRUCTIONS` import from `app.agent.tools.visualization`
+- Remove the `VIS_INSTRUCTIONS` import from `app.agent.tools.visualization`
 - Reorder section assembly:
   1. `_build_general_instructions(plugin_dir)` — always
   2. Skill instructions (existing `_load_skill()`) — if `skill_id`
@@ -81,14 +81,14 @@ def _build_specs_section(spec_ids: list[str], spec_service: SpecService) -> str:
 
 | File | Change |
 |------|--------|
-| `backend/app/agent/context.py` | Add `_scan_skill_frontmatter()`, `_build_general_instructions()`, `_build_specs_section()` helpers; reorder `build_context()` pipeline; remove `VIZ_INSTRUCTIONS` import |
+| `backend/app/agent/context.py` | Add `_scan_skill_frontmatter()`, `_build_general_instructions()`, `_build_specs_section()` helpers; reorder `build_context()` pipeline; remove `VIS_INSTRUCTIONS` import |
 | `backend/tests/agent/test_context.py` | Add/update tests for new helpers and reordered pipeline |
 
 ## Files NOT modified
 
 | File | Why |
 |------|-----|
-| `visualization.py` | `VIZ_INSTRUCTIONS` stays (used by the MCP tool description); only the import in `context.py` is removed |
+| `visualization.py` | `VIS_INSTRUCTIONS` stays (used by the MCP tool description); only the import in `context.py` is removed |
 | SKILL.md files | Boilerplate cleanup is a separate task |
 | `service.py` | No signature change — `build_context()` API is unchanged |
 
@@ -99,7 +99,7 @@ def _build_specs_section(spec_ids: list[str], spec_service: SpecService) -> str:
 - Available Skills table is dynamically generated from SKILL.md frontmatter
 - Free-form sessions (no skill, no specs) include General Instructions + Project
 - Existing tests updated and passing (`uv run pytest`)
-- `VIZ_INSTRUCTIONS` no longer imported by `context.py`
+- `VIS_INSTRUCTIONS` no longer imported by `context.py`
 
 **Priority:** High
 **Spec:** [CONTEXT.md](../../backend/app/agent/CONTEXT.md)

@@ -1,6 +1,6 @@
 /** Visualization data types for the bonsai_visualize MCP tool. */
 
-export type VizStatus =
+export type VisStatus =
   | "done"
   | "current"
   | "pending"
@@ -10,7 +10,7 @@ export type VizStatus =
   | "fresh"
   | "in_progress";
 
-export type VizType =
+export type VisType =
   | "progress-tracker"
   | "summary-box"
   | "comparison"
@@ -21,9 +21,9 @@ export type VizType =
 /* ── progress-tracker ── */
 export interface ProgressStep {
   label: string;
-  status: VizStatus;
+  status: VisStatus;
   file?: string;
-  substeps?: { label: string; status: VizStatus }[];
+  substeps?: { label: string; status: VisStatus }[];
 }
 
 export interface ProgressTrackerData {
@@ -33,7 +33,7 @@ export interface ProgressTrackerData {
 /* ── summary-box ── */
 export interface SummarySection {
   heading: string;
-  status?: VizStatus;
+  status?: VisStatus;
   items: { label: string; value: string }[];
 }
 
@@ -47,6 +47,7 @@ export interface ComparisonOption {
   pros?: string[];
   cons?: string[];
   description?: string;
+  visualization?: string; // Mermaid syntax string
 }
 
 export interface ComparisonData {
@@ -63,7 +64,7 @@ export interface DataTableData {
 /* ── status-list ── */
 export interface StatusListItem {
   label: string;
-  status: VizStatus;
+  status: VisStatus;
   meta?: string;
 }
 
@@ -84,17 +85,32 @@ export interface DiagramEdge {
   label?: string;
 }
 
-export interface DiagramData {
+/** Structured node/edge diagram */
+export interface StructuredDiagramData {
   nodes: DiagramNode[];
   edges: DiagramEdge[];
   layout?: "left-to-right" | "top-to-bottom";
 }
 
+/** Text-based diagram (ASCII art, flowchart notation, etc.) */
+export interface TextDiagramData {
+  diagram: string;
+  notation?: string;
+}
+
+export type DiagramData = StructuredDiagramData | TextDiagramData;
+
+/* ── Layout hints ── */
+export interface VisLayout {
+  width?: "compact" | "normal" | "wide";
+  maxHeight?: number;
+}
+
 /* ── Union type ── */
-export type VizData =
-  | { type: "progress-tracker"; title?: string; vizId?: string; data: ProgressTrackerData }
-  | { type: "summary-box"; title?: string; vizId?: string; data: SummaryBoxData }
-  | { type: "comparison"; title?: string; vizId?: string; data: ComparisonData }
-  | { type: "data-table"; title?: string; vizId?: string; data: DataTableData }
-  | { type: "status-list"; title?: string; vizId?: string; data: StatusListData }
-  | { type: "diagram"; title?: string; vizId?: string; data: DiagramData };
+export type VisData =
+  | { type: "progress-tracker"; title?: string; visId?: string; layout?: VisLayout; data: ProgressTrackerData }
+  | { type: "summary-box"; title?: string; visId?: string; layout?: VisLayout; data: SummaryBoxData }
+  | { type: "comparison"; title?: string; visId?: string; layout?: VisLayout; data: ComparisonData }
+  | { type: "data-table"; title?: string; visId?: string; layout?: VisLayout; data: DataTableData }
+  | { type: "status-list"; title?: string; visId?: string; layout?: VisLayout; data: StatusListData }
+  | { type: "diagram"; title?: string; visId?: string; layout?: VisLayout; data: DiagramData };

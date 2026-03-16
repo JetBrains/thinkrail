@@ -58,7 +58,7 @@ export interface DashboardState {
   one_liner: string;
 }
 
-interface VizStore {
+interface VisStore {
   dashboard: DashboardState | null;
   loading: boolean;
 
@@ -67,7 +67,7 @@ interface VizStore {
   onStateChanged: (state: DashboardState) => void;
 }
 
-export const useVizStore = create<VizStore>((set) => ({
+export const useVisStore = create<VisStore>((set) => ({
   dashboard: null,
   loading: false,
 
@@ -75,10 +75,10 @@ export const useVizStore = create<VizStore>((set) => ({
     set({ loading: true });
     try {
       const client = getClient();
-      const result = await client.request("viz/state", {});
+      const result = await client.request("vis/state", {});
       set({ dashboard: result as DashboardState, loading: false });
     } catch (e) {
-      console.error("[vizStore] fetchState error:", e);
+      console.error("[visStore] fetchState error:", e);
       set({ loading: false });
     }
   },
@@ -87,10 +87,10 @@ export const useVizStore = create<VizStore>((set) => ({
     set({ loading: true });
     try {
       const client = getClient();
-      const result = await client.request("viz/recompute", {});
+      const result = await client.request("vis/recompute", {});
       set({ dashboard: result as DashboardState, loading: false });
     } catch (e) {
-      console.error("[vizStore] recompute error:", e);
+      console.error("[visStore] recompute error:", e);
       set({ loading: false });
     }
   },

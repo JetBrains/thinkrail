@@ -1,6 +1,6 @@
 import { useEffect } from "react";
-import { useVizStore } from "@/store/vizStore.ts";
-import type { WorkflowStep, CoverageEntry, Recommendation, LintIssue } from "@/store/vizStore.ts";
+import { useVisStore } from "@/store/visStore.ts";
+import type { WorkflowStep, CoverageEntry, Recommendation, LintIssue } from "@/store/visStore.ts";
 
 // ── Workflow Steps ────────────────────────────────────────────────────────────
 
@@ -17,15 +17,15 @@ const STEP_COLORS: Record<string, string> = {
 
 function WorkflowSection({ steps }: { steps: WorkflowStep[] }) {
   return (
-    <div className="viz-tab-section">
-      <div className="viz-tab-heading">Workflow</div>
+    <div className="vis-tab-section">
+      <div className="vis-tab-heading">Workflow</div>
       {steps.map((step) => (
-        <div key={step.id} className="viz-tab-workflow-step">
+        <div key={step.id} className="vis-tab-workflow-step">
           <span style={{ color: STEP_COLORS[step.status], fontSize: 11 }}>
             {STEP_ICONS[step.status]}
           </span>
           <span
-            className="viz-tab-workflow-label"
+            className="vis-tab-workflow-label"
             style={{
               fontWeight: step.status === "in_progress" ? 600 : 400,
               color: step.status === "pending" ? "var(--hint)" : "var(--text)",
@@ -34,7 +34,7 @@ function WorkflowSection({ steps }: { steps: WorkflowStep[] }) {
             {step.label}
           </span>
           {step.file && (
-            <span className="viz-tab-workflow-file">{step.file}</span>
+            <span className="vis-tab-workflow-file">{step.file}</span>
           )}
         </div>
       ))}
@@ -56,32 +56,32 @@ function CoverageSection({ coverage }: { coverage: CoverageEntry[] }) {
   const stale = coverage.filter((c) => c.freshness === "stale").length;
 
   return (
-    <div className="viz-tab-section">
-      <div className="viz-tab-heading">Coverage</div>
+    <div className="vis-tab-section">
+      <div className="vis-tab-heading">Coverage</div>
       {uncovered > 0 && (
-        <div className="viz-tab-coverage-warn">
+        <div className="vis-tab-coverage-warn">
           {uncovered} uncovered director{uncovered === 1 ? "y" : "ies"}
         </div>
       )}
       {stale > 0 && (
-        <div className="viz-tab-coverage-warn" style={{ color: "var(--gold)" }}>
+        <div className="vis-tab-coverage-warn" style={{ color: "var(--gold)" }}>
           {stale} stale spec{stale === 1 ? "" : "s"}
         </div>
       )}
-      <div className="viz-tab-coverage-list">
+      <div className="vis-tab-coverage-list">
         {coverage.slice(0, 12).map((entry, i) => (
-          <div key={i} className="viz-tab-coverage-entry">
+          <div key={i} className="vis-tab-coverage-entry">
             <span
-              className="viz-tab-coverage-dot"
+              className="vis-tab-coverage-dot"
               style={{ color: FRESHNESS_COLORS[entry.freshness] }}
             >
               ●
             </span>
-            <span className="viz-tab-coverage-path">{entry.path}</span>
+            <span className="vis-tab-coverage-path">{entry.path}</span>
           </div>
         ))}
         {coverage.length > 12 && (
-          <div className="viz-tab-coverage-more">
+          <div className="vis-tab-coverage-more">
             +{coverage.length - 12} more
           </div>
         )}
@@ -95,13 +95,13 @@ function CoverageSection({ coverage }: { coverage: CoverageEntry[] }) {
 function RecommendationsSection({ recs }: { recs: Recommendation[] }) {
   if (recs.length === 0) return null;
   return (
-    <div className="viz-tab-section">
-      <div className="viz-tab-heading">Recommendations</div>
+    <div className="vis-tab-section">
+      <div className="vis-tab-heading">Recommendations</div>
       {recs.map((rec, i) => (
-        <div key={i} className="viz-tab-rec">
-          <div className="viz-tab-rec-title">{rec.title}</div>
-          <div className="viz-tab-rec-reason">{rec.reason}</div>
-          <code className="viz-tab-rec-action">{rec.action}</code>
+        <div key={i} className="vis-tab-rec">
+          <div className="vis-tab-rec-title">{rec.title}</div>
+          <div className="vis-tab-rec-reason">{rec.reason}</div>
+          <code className="vis-tab-rec-action">{rec.action}</code>
         </div>
       ))}
     </div>
@@ -117,45 +117,45 @@ function LintSection({ issues }: { issues: LintIssue[] }) {
   const shown = [...errors, ...warnings].slice(0, 10);
 
   return (
-    <div className="viz-tab-section">
-      <div className="viz-tab-heading">
+    <div className="vis-tab-section">
+      <div className="vis-tab-heading">
         Lint
         {errors.length > 0 && (
-          <span className="viz-tab-lint-badge viz-tab-lint-error">
+          <span className="vis-tab-lint-badge vis-tab-lint-error">
             {errors.length} error{errors.length !== 1 ? "s" : ""}
           </span>
         )}
         {warnings.length > 0 && (
-          <span className="viz-tab-lint-badge viz-tab-lint-warn">
+          <span className="vis-tab-lint-badge vis-tab-lint-warn">
             {warnings.length} warning{warnings.length !== 1 ? "s" : ""}
           </span>
         )}
       </div>
       {shown.map((issue, i) => (
-        <div key={i} className="viz-tab-lint-item">
+        <div key={i} className="vis-tab-lint-item">
           <span
-            className="viz-tab-lint-icon"
+            className="vis-tab-lint-icon"
             style={{ color: issue.severity === "error" ? "var(--red)" : "var(--gold)" }}
           >
             {issue.severity === "error" ? "\u2715" : "\u26A0"}
           </span>
-          <span className="viz-tab-lint-msg">{issue.message}</span>
+          <span className="vis-tab-lint-msg">{issue.message}</span>
         </div>
       ))}
       {issues.length > 10 && (
-        <div className="viz-tab-coverage-more">+{issues.length - 10} more</div>
+        <div className="vis-tab-coverage-more">+{issues.length - 10} more</div>
       )}
     </div>
   );
 }
 
-// ── Main VizTab ───────────────────────────────────────────────────────────────
+// ── Main VisTab ───────────────────────────────────────────────────────────────
 
-export function VizTab() {
-  const dashboard = useVizStore((s) => s.dashboard);
-  const loading = useVizStore((s) => s.loading);
-  const fetchState = useVizStore((s) => s.fetchState);
-  const recompute = useVizStore((s) => s.recompute);
+export function VisTab() {
+  const dashboard = useVisStore((s) => s.dashboard);
+  const loading = useVisStore((s) => s.loading);
+  const fetchState = useVisStore((s) => s.fetchState);
+  const recompute = useVisStore((s) => s.recompute);
 
   useEffect(() => {
     if (!dashboard) fetchState();
@@ -163,15 +163,15 @@ export function VizTab() {
 
   if (loading && !dashboard) {
     return (
-      <div className="viz-tab-loading">Computing dashboard...</div>
+      <div className="vis-tab-loading">Computing dashboard...</div>
     );
   }
 
   if (!dashboard) {
     return (
-      <div className="viz-tab-empty">
+      <div className="vis-tab-empty">
         <div>No dashboard data yet.</div>
-        <button className="viz-tab-refresh-btn" onClick={recompute}>
+        <button className="vis-tab-refresh-btn" onClick={recompute}>
           Compute now
         </button>
       </div>
@@ -181,14 +181,14 @@ export function VizTab() {
   const pct = dashboard.coverage_pct;
 
   return (
-    <div className="viz-tab">
+    <div className="vis-tab">
       {/* Summary header */}
-      <div className="viz-tab-summary">
-        <div className="viz-tab-pct">{pct}%</div>
-        <div className="viz-tab-pct-bar">
-          <div className="viz-tab-pct-fill" style={{ width: `${pct}%` }} />
+      <div className="vis-tab-summary">
+        <div className="vis-tab-pct">{pct}%</div>
+        <div className="vis-tab-pct-bar">
+          <div className="vis-tab-pct-fill" style={{ width: `${pct}%` }} />
         </div>
-        <div className="viz-tab-meta">
+        <div className="vis-tab-meta">
           {dashboard.tasks_done}/{dashboard.task_count} tasks
           {dashboard.stale_count > 0 && (
             <span style={{ color: "var(--gold)" }}>
@@ -202,7 +202,7 @@ export function VizTab() {
           )}
         </div>
         <button
-          className="viz-tab-refresh-btn"
+          className="vis-tab-refresh-btn"
           onClick={recompute}
           disabled={loading}
           title="Recompute dashboard"

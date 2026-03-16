@@ -339,7 +339,7 @@ class TestBuildContext:
 
         assert gi_pos < task_pos < proj_pos < spec_pos
 
-    def test_no_viz_instructions_standalone(self, tmp_path: Path) -> None:
+    def test_no_vis_instructions_standalone(self, tmp_path: Path) -> None:
         """The old standalone '## Visualization Tool' section should not appear."""
         plugin = self._make_plugin_dir(tmp_path)
         result = build_context(
@@ -428,3 +428,48 @@ class TestBuildContext:
             session_prompt=None,
         )
         assert "## Your Task" not in result
+
+
+# ---------------------------------------------------------------------------
+# Visualization examples in General Instructions
+# ---------------------------------------------------------------------------
+
+class TestVisExamplesInGeneralInstructions:
+    """All 6 visualization type examples and status values must appear in the prompt."""
+
+    def test_all_six_types_have_examples(self, tmp_path: Path) -> None:
+        (tmp_path / "skills").mkdir()
+        result = _build_general_instructions(tmp_path)
+        for vis_type in [
+            "progress-tracker",
+            "summary-box",
+            "comparison",
+            "data-table",
+            "status-list",
+            "diagram",
+        ]:
+            assert f"**{vis_type}:**" in result, f"Missing example for {vis_type}"
+
+    def test_valid_status_values_listed(self, tmp_path: Path) -> None:
+        (tmp_path / "skills").mkdir()
+        result = _build_general_instructions(tmp_path)
+        assert "**Status values:**" in result
+        for status in ["done", "current", "pending", "error", "skipped", "stale"]:
+            assert status in result, f"Missing status value '{status}'"
+
+    def test_deprecated_statuses_not_advertised(self, tmp_path: Path) -> None:
+        """fresh and in_progress should not appear in the status values line."""
+        (tmp_path / "skills").mkdir()
+        result = _build_general_instructions(tmp_path)
+        status_line_start = result.index("**Status values:**")
+        # Extract just the status values line (up to next newline)
+        status_line = result[status_line_start:result.index("\n", status_line_start)]
+        assert "fresh" not in status_line
+        assert "in_progress" not in status_line
+
+    def test_layout_hints_mentioned(self, tmp_path: Path) -> None:
+        (tmp_path / "skills").mkdir()
+        result = _build_general_instructions(tmp_path)
+        assert "**Layout hints" in result
+        assert "compact" in result
+        assert "wide" in result

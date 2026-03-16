@@ -4,7 +4,7 @@ import { useSessionStore } from "./sessionStore.ts";
 import { useNotificationStore } from "./notificationStore.ts";
 import { useUiStore } from "./uiStore.ts";
 import { useFileStore } from "./fileStore.ts";
-import { useVizStore } from "./vizStore.ts";
+import { useVisStore } from "./visStore.ts";
 import type { Unsubscribe } from "@/api/types.ts";
 
 /**
@@ -203,8 +203,8 @@ export function wireEvents(client: RpcClient): Unsubscribe {
 
   // ── Visualization dashboard ──
   unsubs.push(
-    client.on("viz/stateChanged", (p) => {
-      useVizStore.getState().onStateChanged(p as import("./vizStore.ts").DashboardState);
+    client.on("vis/stateChanged", (p) => {
+      useVisStore.getState().onStateChanged(p as import("./visStore.ts").DashboardState);
     }),
   );
 

@@ -21,7 +21,7 @@ Show the lint report using `bonsai_visualize` with type `data-table`:
 {
   "type": "data-table",
   "title": "Specification Lint Report",
-  "vizId": "spec-lint-report",
+  "visId": "spec-lint-report",
   "data": {
     "columns": ["Severity", "Spec", "Issue", "Fixable"],
     "rows": [

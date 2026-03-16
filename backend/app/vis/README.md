@@ -1,4 +1,4 @@
-# Viz Module — Design Specification
+# Vis Module — Design Specification
 
 > Parent: [DESIGN_DOC.md](../../../DESIGN_DOC.md) | Status: **Active** | Created: 2026-03-11
 
@@ -16,17 +16,17 @@
 
 ## Purpose
 
-The Viz module computes and maintains a live dashboard state for the Bonsai web UI. It aggregates data from the spec registry, source tree, task files, and lint checks into a single `DashboardState` that the frontend consumes to render the spec-driven development dashboard.
+The Vis module computes and maintains a live dashboard state for the Bonsai web UI. It aggregates data from the spec registry, source tree, task files, and lint checks into a single `DashboardState` that the frontend consumes to render the spec-driven development dashboard.
 
 The module operates in two modes:
-- **Pull:** Frontend requests current state via `viz/state` RPC — returns cached state without recomputing.
-- **Push:** File watcher triggers `recompute()` on `.md`/`.json` changes → pushes `viz/stateChanged` notification to the frontend.
+- **Pull:** Frontend requests current state via `vis/state` RPC — returns cached state without recomputing.
+- **Push:** File watcher triggers `recompute()` on `.md`/`.json` changes → pushes `vis/stateChanged` notification to the frontend.
 
 ## Internal Architecture
 
 ```mermaid
 graph TD
-    subgraph VizModule["Viz Module"]
+    subgraph VisModule["Vis Module"]
         Service["service.py<br/><i>VisualizationService</i><br/>computation + caching + push"]
         Models["models.py<br/><i>DashboardState, dataclasses</i>"]
     end
@@ -67,9 +67,9 @@ graph TD
 | Method | Signature | Description |
 |--------|-----------|-------------|
 | `bind_notify` | `(notify: NotifyFn) -> None` | Bind a WebSocket push callback. Called by `server.py` on each new connection. |
-| `get_state` | `() -> DashboardState` | Return cached state without recomputing. Used by `viz/state` RPC. |
+| `get_state` | `() -> DashboardState` | Return cached state without recomputing. Used by `vis/state` RPC. |
 | `refresh` | `() -> None` | Recompute state synchronously, no push notification. Called on WebSocket connect. |
-| `recompute` | `async () -> DashboardState` | Recompute state and push `viz/stateChanged` if bound. Called by file watcher on `.md`/`.json` changes and by `viz/recompute` RPC. |
+| `recompute` | `async () -> DashboardState` | Recompute state and push `vis/stateChanged` if bound. Called by file watcher on `.md`/`.json` changes and by `vis/recompute` RPC. |
 
 **`NotifyFn`** type: `Callable[[str, dict], Awaitable[None]]`
 
@@ -147,7 +147,7 @@ Fixed 5-step workflow: Goal & Requirements → Architecture Design → Module Sp
 | Accept AppConfig | Constructor takes `AppConfig`, not `Path` | Uses `config.get_registry_path()` for registry location. Follows the same pattern as `SpecService` and `AgentService`. |
 | Synchronous compute | `_compute()` is sync; `recompute()` is async only for the notify call | File I/O is fast on local disk. No benefit from async file reads for small files (<4KB reads). |
 | Cached state | `get_state()` returns last computed state | Frontend can poll without triggering recomputation. Watcher-driven `recompute()` keeps state fresh. |
-| Push + pull | `viz/stateChanged` notification + `viz/state` RPC | Push keeps UI live; pull ensures fresh state on page load / reconnect. |
+| Push + pull | `vis/stateChanged` notification + `vis/state` RPC | Push keeps UI live; pull ensures fresh state on page load / reconnect. |
 
 ## Dependencies
 
@@ -168,4 +168,4 @@ Fixed 5-step workflow: Goal & Requirements → Architecture Design → Module Sp
 
 - **Parent:** [Architecture Design](../../../DESIGN_DOC.md)
 - **Depends on:** [Core Config](../core/README.md) (for `AppConfig`), [Spec Module](../spec/README.md) (for registry access)
-- **Consumed by:** [RPC Module](../rpc/README.md) (`methods/viz.py` handlers, `server.py` watcher integration)
+- **Consumed by:** [RPC Module](../rpc/README.md) (`methods/vis.py` handlers, `server.py` watcher integration)

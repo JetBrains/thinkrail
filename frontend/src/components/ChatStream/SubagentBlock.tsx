@@ -1,9 +1,9 @@
 import { lazy, Suspense, useState } from "react";
 import type { AgentEvent } from "@/types/agent.ts";
-import type { VizData } from "@/types/viz.ts";
+import type { VisData } from "@/types/vis.ts";
 import { ChatMarkdown } from "./ChatMarkdown.tsx";
 import { ToolCallCard } from "./ToolCallCard.tsx";
-import { VisualizationCard, VizErrorBoundary } from "./VisualizationCard.tsx";
+import { VisualizationCard, VisErrorBoundary } from "./VisualizationCard.tsx";
 import { extractToolInput, type ToolState } from "./ChatStream.tsx";
 
 const DIFF_TOOLS = new Set(["Edit", "Write", "NotebookEdit"]);
@@ -68,12 +68,12 @@ export function SubagentBlock({
               if (toolName === "AskUserQuestion") return null;
               // Render bonsai_visualize as VisualizationCard (mirrors ChatStream.tsx)
               if (toolName.endsWith("bonsai_visualize")) {
-                const vizInput = ev.payload.toolInput as VizData | undefined;
-                if (vizInput) {
+                const visInput = ev.payload.toolInput as VisData | undefined;
+                if (visInput) {
                   return (
-                    <VizErrorBoundary key={`subagent-viz-${ci}`}>
-                      <VisualizationCard data={vizInput} />
-                    </VizErrorBoundary>
+                    <VisErrorBoundary key={`subagent-vis-${ci}`}>
+                      <VisualizationCard data={visInput} />
+                    </VisErrorBoundary>
                   );
                 }
               }

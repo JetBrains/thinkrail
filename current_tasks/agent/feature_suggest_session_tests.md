@@ -60,7 +60,7 @@ The tests should follow the established patterns in `test_runner.py`: use `_setu
 | Test | Description |
 |------|-------------|
 | `test_interceptor_suffix_match_suggest_session` | Call `can_use_tool("mcp__bonsai-proactive__SuggestSession", ...)` with a mock. Verify: `intercept_suggest_session` is invoked (suffix match on `"SuggestSession"`). |
-| `test_interceptor_suffix_match_visualize` | Call `can_use_tool("mcp__bonsai-viz__bonsai_visualize", ...)` with a mock. Verify: `intercept_visualize` is invoked (suffix match on `"bonsai_visualize"`). |
+| `test_interceptor_suffix_match_visualize` | Call `can_use_tool("mcp__bonsai-vis__bonsai_visualize", ...)` with a mock. Verify: `intercept_visualize` is invoked (suffix match on `"bonsai_visualize"`). |
 
 ### `_suggest_session` handler (unit tests)
 

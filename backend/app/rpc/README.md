@@ -60,8 +60,8 @@ Both sides can send either. The server can initiate requests to the client (e.g.
 | `session/continue`| `{ bonsaiSid: str }`                                                                            | `{ bonsaiSid: str }`   | Resume a session — reuses the same `bonsaiSid`, loads old conversation as context for a new SDK session |
 | `session/delete`  | `{ bonsaiSid: str }`                                                                            | `bool`              | Delete a session from disk |
 | `agent/transcribe`| `{ audioBase64: str, mimeType: str }`                                                        | `{ text: str }`     | Transcribe audio via OpenAI Whisper API (fallback for browsers without Web Speech API). See [TRANSCRIBE.md](../agent/TRANSCRIBE.md). |
-| `viz/state`       | `{}`                                                                                         | `DashboardState`    | Return the current dashboard state without recomputing. State is computed on WebSocket connect and after file changes. |
-| `viz/recompute`   | `{}`                                                                                         | `DashboardState`    | Force a dashboard recompute from registry, specs, and tasks on disk. Returns the new state and pushes `viz/stateChanged` notification. |
+| `vis/state`       | `{}`                                                                                         | `DashboardState`    | Return the current dashboard state without recomputing. State is computed on WebSocket connect and after file changes. |
+| `vis/recompute`   | `{}`                                                                                         | `DashboardState`    | Force a dashboard recompute from registry, specs, and tasks on disk. Returns the new state and pushes `vis/stateChanged` notification. |
 
 ### Server → Client (notifications)
 
@@ -105,7 +105,7 @@ Both sides can send either. The server can initiate requests to the client (e.g.
 
 | Method | Params | Description |
 | --- | --- | --- |
-| `viz/stateChanged` | `DashboardState` | Dashboard state recomputed (triggered by file changes to `.md`/`.json` files or explicit `viz/recompute`) |
+| `vis/stateChanged` | `DashboardState` | Dashboard state recomputed (triggered by file changes to `.md`/`.json` files or explicit `vis/recompute`) |
 
 > **SDK event mapping:** `agent/ready` ← `ClaudeSDKClient` context manager entered · `agent/sessionStart` ← `SDKSystemMessage` subtype `init` · `agent/textDelta` ← `SDKAssistantMessage` text block / `SDKPartialAssistantMessage` text_delta · `agent/toolCallStart` ← `SDKAssistantMessage` tool_use block · `agent/toolCallEnd` ← `SDKUserMessage` tool_result block · `agent/subagentStart` / `End` ← `SubagentStart` / `SubagentStop` hooks · `agent/notification` ← `Notification` hook · `agent/compact` ← `SDKCompactBoundaryMessage` · `agent/turnComplete` ← `SDKResultMessage` (turn ends, session stays open) · `agent/interrupted` ← `agent/interrupt` cancels current turn · `agent/done` ← session closed via `agent/end` · `agent/error` / `permissionDenied` ← `SDKResultMessage` error subtypes
 >
@@ -161,8 +161,8 @@ graph TD
           direction LR
           Specs["methods/specs.py"]
           Agents["methods/agents.py"]
-          Viz["methods/viz.py"]
-          Agents ~~~ Specs ~~~ Viz
+          Vis["methods/vis.py"]
+          Agents ~~~ Specs ~~~ Vis
         end
         Server ---> Methods
         Server -- "Creates notify on connect" --> Notify["notifications.py<br/>make_notify(ws) → notify callable<br/>current_notify module-level ref"]
@@ -171,11 +171,11 @@ graph TD
 
     SpecSvc["spec/service<br/>Spec CRUD"]
     AgentSvc["agent/service<br/>Agent task management"]
-    VizSvc["viz/service<br/>Dashboard state"]
+    VisSvc["vis/service<br/>Dashboard state"]
 
     Specs ---> SpecSvc
     Agents ---> AgentSvc
-    Viz ---> VizSvc
+    Vis ---> VisSvc
 ```
 
 ```mermaid
@@ -206,13 +206,13 @@ graph TD
 
 **Responsibility:** WebSocket endpoint with per-connection project selection, connection management, JSON-RPC dispatch loop, per-connection watcher lifecycle.
 
-**Dependencies:** jsonrpcserver, methods/specs, methods/agents, methods/viz, notifications, core/watcher, core/config, spec/service, viz/service
+**Dependencies:** jsonrpcserver, methods/specs, methods/agents, methods/vis, notifications, core/watcher, core/config, spec/service, vis/service
 
 | Export | Signature | Description |
 | --- | --- | --- |
 | `register_routes` | `(app: FastAPI) → None` | Register the `/ws` WebSocket endpoint on the FastAPI app. Called by `main.py` during setup. No config needed — config is built per-connection from the `project` query parameter. |
 
-`METHODS` is a mapping from JSON-RPC method names to handler coroutines, assembled in `server.py` from the functions in `methods/specs.py`, `methods/agents.py`, and `methods/viz.py`.
+`METHODS` is a mapping from JSON-RPC method names to handler coroutines, assembled in `server.py` from the functions in `methods/specs.py`, `methods/agents.py`, and `methods/vis.py`.
 
 `_start_watcher` is a private helper that starts a filesystem watcher scoped to the connection's project directory. Called inside `ws_endpoint` after project validation; stopped on disconnect.
 
@@ -278,16 +278,16 @@ async def notify(method: str, params: dict, request_id: str | None = None) -> No
 
 `respond_agent` routes to `agent/service.respond(bonsai_sid, request_id, response)`, which resolves the pending `asyncio.Future` in `tracker.py`.
 
-### methods/viz.py
+### methods/vis.py
 
-**Responsibility:** jsonrpcserver handlers for all `viz/*` methods.
+**Responsibility:** jsonrpcserver handlers for all `vis/*` methods.
 
-**Dependencies:** viz/service
+**Dependencies:** vis/service
 
 | Export | Signature | Description |
 | --- | --- | --- |
-| `get_viz_state` | `(service, **params) → DashboardState` | Handler for `viz/state` — returns current state without recomputing |
-| `recompute_viz` | `(service, **params) → DashboardState` | Handler for `viz/recompute` — forces recompute and returns new state |
+| `get_vis_state` | `(service, **params) → DashboardState` | Handler for `vis/state` — returns current state without recomputing |
+| `recompute_vis` | `(service, **params) → DashboardState` | Handler for `vis/recompute` — forces recompute and returns new state |
 
 ## JSON-RPC Dispatch
 
@@ -346,7 +346,7 @@ The file watcher is **per-connection**, scoped to the connected project director
 | Notify interface | Single `notify(method, params, request_id=None)` | Unified callable for notifications and server-initiated requests; decouples runner from WebSocket details |
 | Watcher lifecycle | Per-connection, scoped to project directory | Watcher starts when a client connects with a valid project, stops on disconnect. Each connection watches only its project. Replaces the old application-level approach. |
 | `current_notify` in `notifications.py` | Module-level mutable ref, set by `server.py` on connect/disconnect | Avoids circular import between `server.py` and `methods/agents.py`; `notifications.py` is the natural owner of active-connection state |
-| Methods organized by domain namespace | `methods/specs.py`, `methods/agents.py`, `methods/viz.py` | Each file mirrors its domain module; easy to locate handlers by method prefix |
+| Methods organized by domain namespace | `methods/specs.py`, `methods/agents.py`, `methods/vis.py` | Each file mirrors its domain module; easy to locate handlers by method prefix |
 | `METHODS` dict assembled in `server.py` | Explicit mapping from method name to handler | Avoids implicit global state from decorator-based registration; makes method set inspectable |
 | Per-connection project selection | `?project=` query param on WebSocket URL; services/watcher created per-connection | Allows the frontend to switch projects without restarting the backend; config + services are scoped to the validated project directory |
 | No RPC-layer models | Domain models serialized directly | Pydantic models in spec/ and agent/ serialize to JSON; no translation layer needed |
@@ -359,7 +359,7 @@ The file watcher is **per-connection**, scoped to the connected project director
 | `jsonrpcserver` | JSON-RPC 2.0 message parsing and dispatch |
 | `spec/service` | Spec CRUD operations; watcher postprocessing |
 | `agent/service` | Agent task management |
-| `viz/service` | Dashboard state computation and push notifications |
+| `vis/service` | Dashboard state computation and push notifications |
 | `core/watcher` | File change detection |
 | `core/config` | Project root path for watcher |
 

@@ -31,7 +31,7 @@ plugin/
 │   ├── spec-from-code/SKILL.md
 │   ├── spec-lint/SKILL.md
 │   ├── spec-review/SKILL.md
-│   ├── visualisation/SKILL.md   # Terminal visualization toolkit
+│   ├── visualization/SKILL.md   # Terminal visualization toolkit
 │   └── cli-progress/SKILL.md   # CLI progress tracking
 ├── hooks/
 │   └── hooks.json               # PostToolUse and SessionStart hooks
@@ -59,7 +59,7 @@ plugin/
 
 | Skill | Command | Purpose |
 |-------|---------|---------|
-| Visualisation | `/specdriven:visualisation` | Terminal visualization toolkit — ASCII diagrams, box formatting, progress indicators |
+| Visualization | `/specdriven:visualization` | Terminal visualization toolkit — ASCII diagrams, box formatting, progress indicators |
 | CLI Progress | `/specdriven:cli-progress` | Workflow progress tracking — phase visualization, milestone dashboards |
 
 ### Workflow and Tooling (6 skills)

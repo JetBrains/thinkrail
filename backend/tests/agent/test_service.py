@@ -350,7 +350,7 @@ class TestBuildContext:
         assert "## Project" in context
         assert "/tmp/test-project" in context
 
-    def test_includes_viz_instructions_in_freeform_session(self) -> None:
+    def test_includes_vis_instructions_in_freeform_session(self) -> None:
         from pathlib import Path
         from app.agent.context import build_context
 
@@ -369,7 +369,7 @@ class TestBuildContext:
         assert "## General Instructions" in context
         assert "### Visualization" in context
 
-    def test_includes_viz_instructions_in_skill_session(self) -> None:
+    def test_includes_vis_instructions_in_skill_session(self) -> None:
         from pathlib import Path
         from unittest.mock import patch as mock_patch
         from app.agent.context import build_context

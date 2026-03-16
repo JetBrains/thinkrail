@@ -17,7 +17,7 @@ Per the CONTEXT.md Cleanup Guide, the following patterns should be removed from 
 | Viz tool mandate | "Use `bonsai_visualize` tool for all structured visual output" | 13/14 skills |
 | AskUserQuestion mandate | "Use the `AskUserQuestion` tool for every design decision" | 7/14 skills |
 | Registry read instruction | "Read `.specs/registry.json`" as a prerequisite step | 6/14 skills |
-| Available viz types listing | "progress-tracker, summary-box, comparison, data-table, status-list, diagram" (as standalone reference) | 3/14 skills |
+| Available vis types listing | "progress-tracker, summary-box, comparison, data-table, status-list, diagram" (as standalone reference) | 3/14 skills |
 
 **All 14 skills** have a dedicated `## IMPORTANT: Interaction Style` or `## IMPORTANT: Visualization Rules` section near the top that contains most of this boilerplate.
 
@@ -37,7 +37,7 @@ Each skill should retain:
 Each of the 14 skills has one of these sections near the top:
 - `## IMPORTANT: Interaction Style` — in architecture-design, cli-progress, goal-and-requirements, module-design, registry-update, submodule-design, task-spec
 - `## IMPORTANT: Visualization Rules` — in spec-from-code, spec-init, spec-lint, spec-next, spec-review, spec-status
-- `## IMPORTANT: Rules` — in visualisation
+- `## IMPORTANT: Rules` — in visualization
 
 **Action:** Remove the entire section. If it contains skill-specific rules mixed in (e.g., registry-update's "Always show a preview" or "Validate the registry"), keep those and move them into the skill's main workflow section.
 
@@ -71,7 +71,7 @@ After removal, read each file top-to-bottom to ensure:
 | spec-status | `claude-plugin/skills/spec-status/SKILL.md` | ~3 |
 | submodule-design | `claude-plugin/skills/submodule-design/SKILL.md` | ~10 |
 | task-spec | `claude-plugin/skills/task-spec/SKILL.md` | ~9 |
-| visualisation | `claude-plugin/skills/visualisation/SKILL.md` | ~7 |
+| visualization | `claude-plugin/skills/visualization/SKILL.md` | ~7 |
 
 **Total:** ~84 lines of boilerplate removed across 14 files.
 
