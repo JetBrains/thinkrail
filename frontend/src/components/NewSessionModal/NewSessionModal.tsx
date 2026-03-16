@@ -19,7 +19,7 @@ export function NewSessionModal() {
   const [specIds, setSpecIds] = useState<string[]>([]);
   const [model, setModel] = useState(DEFAULT_MODEL);
   const [use1M, setUse1M] = useState(false);
-  const [maxTurns, setMaxTurns] = useState(20);
+  const [maxTurns, setMaxTurns] = useState(50);
   const [permissionMode, setPermissionMode] = useState("default");
   const [effort, setEffort] = useState<string | null>(null);
   const [showAdvanced, setShowAdvanced] = useState(false);

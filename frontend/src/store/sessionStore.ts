@@ -282,6 +282,7 @@ function ensureSession(
     permissionMode: "default",
     betas: [],
     effort: null,
+    maxTurns: 50,
     startedAt: Date.now(),
     events: [],
     metrics: emptyMetrics(),
@@ -436,6 +437,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
         permissionMode: config.permissionMode,
         betas: config.betas ?? [],
         effort: config.effort ?? null,
+        maxTurns: config.maxTurns,
         startedAt: Date.now(),
         events: existing?.events ?? [],
         metrics: existing?.metrics ?? emptyMetrics(),
@@ -589,6 +591,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
       permissionMode: (data.config?.permissionMode as string) ?? "default",
       betas: restoredBetas,
       effort: (data.config?.effort as string) ?? null,
+      maxTurns: (data.config?.maxTurns as number) ?? 50,
       startedAt: new Date(data.createdAt).getTime(),
       events,
       metrics: {
@@ -666,6 +669,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
           permissionMode: (data?.config?.permissionMode as string) ?? "default",
           betas: entryBetas,
           effort: (data?.config?.effort as string) ?? null,
+          maxTurns: (data?.config?.maxTurns as number) ?? 50,
           startedAt: new Date(entry.createdAt).getTime(),
           events,
           metrics: {
@@ -782,7 +786,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
               turns: session.metrics.turns,
               durationMs: session.metrics.durationMs,
               model: session.model,
-              config: { model: session.model, maxTurns: 25, permissionMode: session.permissionMode, streamText: true, betas: session.betas ?? [], effort: session.effort ?? null },
+              config: { model: session.model, maxTurns: session.maxTurns, permissionMode: session.permissionMode, streamText: true, betas: session.betas ?? [], effort: session.effort ?? null },
               events: session.events,
             },
           ]

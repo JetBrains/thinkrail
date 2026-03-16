@@ -68,6 +68,7 @@ export interface Session {
   permissionMode: string;
   betas: string[];
   effort: string | null;
+  maxTurns: number;
   startedAt: number;
   events: AgentEvent[];
   metrics: SessionMetrics;
