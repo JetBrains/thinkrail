@@ -391,7 +391,7 @@ export function wireEvents(client: RpcClient): Unsubscribe
 
 ### Agent streaming → sessionStore.onAgentEvent
 
-`agent/textDelta`, `agent/toolCallStart`, `agent/toolCallEnd`, `agent/turnComplete`, `agent/interrupted`, `agent/subagentStart`, `agent/subagentEnd`, `agent/notification`, `agent/compact`, `agent/progress`, `agent/permissionDenied`
+`agent/textDelta`, `agent/toolCallStart`, `agent/toolCallEnd`, `agent/turnComplete`, `agent/interrupted`, `agent/subagentStart`, `agent/subagentEnd`, `agent/notification`, `agent/compact`, `agent/progress`, `agent/permissionDenied`, `agent/ready`
 
 ### Agent lifecycle → individual handlers
 

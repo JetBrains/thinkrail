@@ -138,6 +138,9 @@ async def run(
         logger.info("[%s] SDK client ready in %dms", task.bonsai_sid[:8], sdk_init_ms)
         tracker.set_client(task.bonsai_sid, client)
         tracker.set_status(task.bonsai_sid, "idle")
+        await notify("agent/ready", {
+            "bonsaiSid": task.bonsai_sid,
+        })
         # Track tool calls that change permission mode (ExitPlanMode, EnterPlanMode)
         # so we can notify the frontend when the SDK changes mode internally.
         _mode_change_tools: dict[str, str] = {}  # tool_use_id → new permission_mode

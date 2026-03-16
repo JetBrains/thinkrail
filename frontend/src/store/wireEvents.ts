@@ -72,6 +72,7 @@ export function wireEvents(client: RpcClient): Unsubscribe {
     "agent/compact",
     "agent/progress",
     "agent/permissionDenied",
+    "agent/ready",
   ];
   for (const method of agentMethods) {
     unsubs.push(

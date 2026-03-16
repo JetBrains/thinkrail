@@ -17,6 +17,7 @@ export type EventType =
   | "done"
   | "error"
   | "permissionDenied"
+  | "ready"
   | "askUserQuestion"
   | "confirmAction"
   | "suggestSession"

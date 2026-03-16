@@ -99,15 +99,17 @@ def list_sessions(project_root: Path) -> list[dict[str, Any]]:
             data = json.loads(read_text(path))
             # Backward compat: support both bonsaiSid and taskId
             sid = data.get("bonsaiSid") or data.get("taskId", "")
+            status = data.get("status", "done")
             result.append({
                 "bonsaiSid": sid,
                 "name": data.get("name", ""),
                 "skillId": data.get("skillId"),
                 "specIds": data.get("specIds", []),
-                "status": data.get("status", "done"),
+                "status": status,
                 "model": data.get("config", {}).get("model", ""),
                 "createdAt": data.get("createdAt", ""),
                 "updatedAt": data.get("updatedAt", ""),
+                "active": status not in ("done", "error"),
                 "metrics": data.get("metrics", {}),
             })
         except Exception:

@@ -342,6 +342,7 @@ These map 1-to-1 to the `agent/*` notification methods in the protocol:
 
 | event_type | Triggered by | Protocol method | Status |
 |------------|-------------|-----------------|--------|
+| `ready` | SDK client initialized, session is idle | `agent/ready` | Implemented |
 | `session_start` | `SDKSystemMessage` subtype `init` | `agent/sessionStart` | Implemented |
 | `text_delta` | `SDKAssistantMessage` text block / `SDKPartialAssistantMessage` text_delta | `agent/textDelta` | Partial — full blocks only; streaming partial messages TODO. Includes `agentId` when from a subagent. |
 | `tool_call_start` | `SDKAssistantMessage` tool_use block | `agent/toolCallStart` | Implemented. Includes `agentId` when from a subagent. |

@@ -32,6 +32,7 @@ EventType = Literal[
     "done",
     "error",
     "permission_denied",
+    "ready",
 ]
 
 

@@ -948,7 +948,11 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
       const session = sessions.get(bonsaiSid);
       let projectCost = s.projectCost;
       if (session) {
-        if (method === "agent/turnComplete" || method === "agent/interrupted") {
+        if (method === "agent/ready") {
+          if (session.status === "initializing") {
+            sessions.set(bonsaiSid, { ...session, status: "idle" });
+          }
+        } else if (method === "agent/turnComplete" || method === "agent/interrupted") {
           const { updated, costDelta } = applyMetrics(session, params, "idle");
           projectCost += costDelta;
 
