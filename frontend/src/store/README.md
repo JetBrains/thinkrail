@@ -232,7 +232,7 @@ interface SessionStore {
 Panel visibility, modal state, project identity. Uses `persist` middleware.
 
 ```typescript
-type LeftTab = "specs" | "reqs" | "files" | "progress";
+type LeftTab = "specs" | "files" | "progress";
 type Breakpoint = "desktop" | "laptop" | "below-min";
 
 interface ModalPrefill {
