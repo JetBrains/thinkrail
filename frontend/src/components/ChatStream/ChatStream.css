@@ -9,30 +9,6 @@
   position: relative;
 }
 
-/* ── Initializing indicator ── */
-.chat-initializing {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: var(--space-sm);
-  padding: var(--space-lg) 0;
-  animation: fadeIn 0.3s ease-out;
-}
-.chat-initializing-spinner {
-  width: 14px;
-  height: 14px;
-  border: 2px solid var(--border);
-  border-top-color: var(--accent);
-  border-radius: 50%;
-  animation: spin 0.8s linear infinite;
-}
-.chat-initializing-text {
-  font-size: 13px;
-  color: var(--muted);
-  font-style: italic;
-}
-/* spin & fadeIn keyframes reused from below */
-
 /* ── System Message ── */
 .chat-system {
   text-align: center;

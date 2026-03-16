@@ -451,16 +451,16 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
   },
 
   sendMessage: async (bonsaiSid, text, isMarkdown) => {
-    // Capture pre-send status so we can revert on error
-    const prevStatus = get().sessions.get(bonsaiSid)?.status ?? "idle";
-    // Add user message to events immediately (optimistic)
+    // Add user message to events immediately (optimistic).
+    // Status is NOT changed here — backend drives transitions:
+    //   idle → running happens when runner calls client.query()
+    //   and we receive agent/sessionStart or agent/textDelta.
     set((s) => {
       const session = s.sessions.get(bonsaiSid);
       if (!session) return s;
       const next = new Map(s.sessions);
       next.set(bonsaiSid, {
         ...session,
-        status: "running",
         events: [
           ...session.events,
           {
@@ -485,14 +485,13 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
         persistent: true,
         bonsaiSid,
       });
-      // Revert status and remove optimistic userMessage
+      // Remove optimistic userMessage on failure
       set((s) => {
         const session = s.sessions.get(bonsaiSid);
         if (!session) return s;
         const next = new Map(s.sessions);
         next.set(bonsaiSid, {
           ...session,
-          status: prevStatus,
           events: session.events.filter(
             (e, i) =>
               !(
@@ -827,16 +826,12 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
     const api = createAgentApi(getClient());
     api.respond(bonsaiSid, requestId, response).catch((err) => {
       console.error("Failed to send agent/respond:", err);
-      set((s) => {
-        const session = s.sessions.get(bonsaiSid);
-        if (!session || session.status !== "running") return s;
-        const next = new Map(s.sessions);
-        next.set(bonsaiSid, { ...session, status: "idle" });
-        return { sessions: next };
-      });
     });
 
-    // Mark request as answered (store the response) and clear pendingRequest
+    // Mark request as answered, clear pendingRequest, and restore running status.
+    // The backend stays in "running" throughout the turn — only the frontend
+    // shows "waiting" while the user answers. Setting "running" here is correct
+    // state sync (not optimism), since the backend never left "running".
     set((s) => {
       const session = s.sessions.get(bonsaiSid);
       if (!session) return s;
@@ -875,12 +870,12 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
     const { createSessionApi } = await import("@/api/methods/sessions.ts");
     const api = createSessionApi(getClient());
     await api.restart(bonsaiSid);
-    // Session will go through done → re-init via backend notifications
+    // Backend creates a new session starting in initializing
     set((s) => {
       const session = s.sessions.get(bonsaiSid);
       if (!session) return s;
       const next = new Map(s.sessions);
-      next.set(bonsaiSid, { ...session, status: "idle" });
+      next.set(bonsaiSid, { ...session, status: "initializing" });
       return { sessions: next };
     });
   },
