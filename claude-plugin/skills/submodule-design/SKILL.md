@@ -84,10 +84,10 @@ After saving, update `.specs/registry.json`:
 
 ## After Completion
 
-Use AskUserQuestion:
+Check the parent module README for remaining sub-components. Use `SuggestSession` to propose follow-up sessions (up to 3):
+- `submodule-design` for each remaining sub-component. Include the parent module spec ID in `specIds`.
+- `task-spec` for implementation tasks on the parent module. Include both the submodule and parent module spec IDs in `specIds`.
 
-**What's next?**
-- "/submodule-design {next} — Specify another sub-component (Recommended)"
+Then use `AskUserQuestion`:
 - "/module-design — Specify the next major module"
-- "/task-spec — Create implementation tasks"
 - "Done for now"

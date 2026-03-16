@@ -131,10 +131,9 @@ After saving, update `.specs/registry.json`:
 
 ## After Completion
 
-Use AskUserQuestion:
+If more tasks are needed for the same module or related modules, use `SuggestSession` to propose a `task-spec` session. Include the parent module spec ID in `specIds` and list already-created task titles in `prompt` so the next session avoids duplicates.
 
-**What's next?**
-- "/task-spec — Create another task (Recommended)"
+Then use `AskUserQuestion`:
 - "Start implementing this task"
 - "/spec-status — Check overall coverage"
 - "Done for now"

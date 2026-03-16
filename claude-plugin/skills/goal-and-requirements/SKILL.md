@@ -528,8 +528,9 @@ Using all gathered information, write (update) of GOAL&REQUIREMENTS.md following
 
 ## After Completion
 
-**What's next?**
-- "/architecture-design — Document the system architecture (Recommended)"
+Use `SuggestSession` to propose an `architecture-design` session, carrying forward the goal statement and top requirements as context. Include the goal spec ID in `specIds`.
+
+Then use `AskUserQuestion`:
 - "/spec-status — Check overall specification coverage"
 - "Done for now"
 

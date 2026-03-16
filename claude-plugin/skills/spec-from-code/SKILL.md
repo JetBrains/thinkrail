@@ -181,11 +181,10 @@ Suggested next steps:
 
 ## After Completion
 
-Use AskUserQuestion:
+Use `SuggestSession` to propose a `spec-review` session for the generated drafts. Include all draft spec IDs you just registered in `specIds` and list the spec paths needing review in `prompt`.
 
-**What's next?**
-- "/spec-status — See coverage after generation (Recommended)"
-- "/spec-review — Review generated specs for accuracy"
+Then use `AskUserQuestion`:
+- "/spec-status — See coverage after generation"
 - "/spec-lint — Validate spec structure"
 - "Done for now"
 

@@ -173,10 +173,9 @@ After saving, update `.specs/registry.json`:
 
 ## After Completion
 
-Use AskUserQuestion:
+Read the DESIGN_DOC.md module list and use `SuggestSession` to propose a `module-design` session for each major module (up to 3, prioritized by dependency order). Include the architecture spec ID (and goal spec ID if it exists) in `specIds`. Carry forward each module's path and key responsibilities in the `prompt`.
 
-**What's next?**
-- "/module-design — Specify the first major module (Recommended)"
-- "/spec-status — Check specification coverage"
+Then use `AskUserQuestion`:
 - "/spec-from-code — Generate module spec skeletons from code"
+- "/spec-status — Check specification coverage"
 - "Done for now"

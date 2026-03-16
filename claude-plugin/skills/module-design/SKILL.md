@@ -149,10 +149,10 @@ After saving, update `.specs/registry.json`:
 
 ## After Completion
 
-Use AskUserQuestion:
+Use `SuggestSession` to propose follow-up sessions (up to 3, prioritized):
+1. `submodule-design` for each complex sub-component discovered during analysis (Step 1). Include the module spec ID in `specIds` and describe the sub-component's role in `prompt`.
+2. `module-design` for remaining unspecified modules from DESIGN_DOC.md. Include architecture + module spec IDs in `specIds`.
+3. `task-spec` for implementation tasks on the module just completed. Include the module spec ID in `specIds`.
 
-**What's next?**
-- "/module-design {next-module} — Specify the next module (Recommended)"
-- "/submodule-design — Detail a complex sub-component"
-- "/task-spec — Create implementation tasks for this module"
+Then use `AskUserQuestion`:
 - "Done for now"

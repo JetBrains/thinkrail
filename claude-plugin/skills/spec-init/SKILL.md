@@ -144,11 +144,11 @@ Suggested workflow:
 
 ## After Completion
 
-Use AskUserQuestion:
+Use `SuggestSession` to propose the natural first step based on project state:
+- **New projects** (no existing code): suggest a `goal-and-requirements` session.
+- **Existing codebases**: suggest a `spec-from-code` session.
 
-**What's next?**
-- "/goal-and-requirements — Define goal and requirements (Recommended)"
-- "/spec-from-code — Generate specs from existing code (Recommended for existing codebases)"
+Then use `AskUserQuestion`:
 - "/spec-status — Check current coverage"
 - "Done for now"
 
