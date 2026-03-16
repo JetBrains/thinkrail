@@ -98,6 +98,23 @@
       "updated": "2026-03-13"
     },
     {
+      "id": "agent-specs-tools",
+      "type": "submodule-design",
+      "path": "backend/app/agent/tools/SPECS_TOOLS.md",
+      "title": "Spec & Registry MCP Tools",
+      "status": "active",
+      "covers": [
+        "backend/app/agent/tools/specs.py"
+      ],
+      "tags": [
+        "backend",
+        "agent-orchestration",
+        "mcp-tools"
+      ],
+      "created": "2026-03-16",
+      "updated": "2026-03-16"
+    },
+    {
       "id": "agent-context",
       "type": "submodule-design",
       "path": "backend/app/agent/CONTEXT.md",
@@ -1708,6 +1725,22 @@
       "updated": "2026-03-13"
     },
     {
+      "id": "task-specs-mcp-tools",
+      "type": "task-spec",
+      "path": "current_tasks/agent/feature_specs_mcp_tools.md",
+      "title": "Implement Spec & Registry MCP Tools",
+      "status": "done",
+      "covers": [
+        "backend/app/agent/tools/specs.py"
+      ],
+      "tags": [
+        "high",
+        "new-feature"
+      ],
+      "created": "2026-03-16",
+      "updated": "2026-03-16"
+    },
+    {
       "id": "task-bugfix-subagent-attention",
       "type": "task-spec",
       "path": "current_tasks/frontend/bugfix_subagent_attention_cards.md",
@@ -2107,28 +2140,6 @@
       "updated": "2026-03-12"
     },
     {
-      "id": "bonsai-architecture-design",
-      "type": "architecture-design",
-      "path": ".claude/worktrees/agent-af8f1ee7/DESIGN_DOC.md",
-      "title": "Bonsai \u2014 Architecture Design",
-      "status": "active",
-      "covers": [],
-      "tags": [],
-      "created": "2026-03-13",
-      "updated": "2026-03-13"
-    },
-    {
-      "id": "goal-requirements",
-      "type": "goal-and-requirements",
-      "path": ".claude/worktrees/agent-af8f1ee7/GOAL&REQUIREMENTS.md",
-      "title": "Goal&Requirements",
-      "status": "active",
-      "covers": [],
-      "tags": [],
-      "created": "2026-03-13",
-      "updated": "2026-03-13"
-    },
-    {
       "id": "task-context-general-instructions",
       "type": "task-spec",
       "path": "current_tasks/agent/improvement_context_general_instructions.md",
@@ -2195,6 +2206,21 @@
     {
       "from": "agent-suggest-session",
       "to": "feature-suggest-session",
+      "type": "implements"
+    },
+    {
+      "from": "agent-specs-tools",
+      "to": "agent-tools",
+      "type": "parent"
+    },
+    {
+      "from": "agent-specs-tools",
+      "to": "module-spec",
+      "type": "depends-on"
+    },
+    {
+      "from": "task-specs-mcp-tools",
+      "to": "agent-specs-tools",
       "type": "implements"
     },
     {
