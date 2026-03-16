@@ -190,21 +190,44 @@ export function ProjectPicker({ onSelect, onClose }: ProjectPickerProps) {
 
         <div className="picker-field" style={{ position: "relative" }}>
           <label className="picker-label">Project Directory</label>
-          <input
-            ref={inputRef}
-            className="picker-input"
-            value={path}
-            onChange={(e) => {
-              setPath(e.target.value);
-              setError(null);
-            }}
-            onKeyDown={handleKeyDown}
-            onBlur={() => setTimeout(() => setShowSuggestions(false), 150)}
-            onFocus={() => { if (suggestions.length > 0) setShowSuggestions(true); }}
-            placeholder="/home/user/my-project"
-            autoFocus
-            autoComplete="off"
-          />
+          <div className="picker-input-wrap">
+            <input
+              ref={inputRef}
+              className="picker-input"
+              value={path}
+              onChange={(e) => {
+                setPath(e.target.value);
+                setError(null);
+              }}
+              onKeyDown={handleKeyDown}
+              onBlur={() => setTimeout(() => setShowSuggestions(false), 150)}
+              onFocus={() => { if (suggestions.length > 0) setShowSuggestions(true); }}
+              placeholder="/home/user/my-project"
+              autoFocus
+              autoComplete="off"
+            />
+            <button
+              className="picker-browse-btn"
+              title="Browse folders"
+              onClick={async () => {
+                try {
+                  const res = await fetch(`${API_BASE}/api/fs/browse`);
+                  const data = await res.json();
+                  if (data.path) {
+                    setPath(data.path);
+                    setError(null);
+                    inputRef.current?.focus();
+                  }
+                } catch {
+                  // ignore
+                }
+              }}
+            >
+              <svg width="14" height="14" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M1.5 3.5C1.5 2.948 1.948 2.5 2.5 2.5H6.086C6.351 2.5 6.605 2.605 6.793 2.793L7.707 3.707C7.895 3.895 8.149 4 8.414 4H13.5C14.052 4 14.5 4.448 14.5 5V12.5C14.5 13.052 14.052 13.5 13.5 13.5H2.5C1.948 13.5 1.5 13.052 1.5 12.5V3.5Z" stroke="currentColor" strokeWidth="1.3" strokeLinejoin="round"/>
+              </svg>
+            </button>
+          </div>
           {showSuggestions && suggestions.length > 0 && (
             <div className="picker-suggestions">
               {suggestions.map((dir, i) => (

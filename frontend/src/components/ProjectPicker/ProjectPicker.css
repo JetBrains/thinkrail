@@ -67,9 +67,16 @@
   margin-bottom: var(--space-xs);
 }
 
+.picker-input-wrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
 .picker-input {
   width: 100%;
   padding: var(--space-sm) var(--space-md);
+  padding-right: 36px;
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
   background: var(--elevated);
@@ -80,6 +87,27 @@
 }
 .picker-input:focus { border-color: var(--blue); }
 .picker-input::placeholder { color: var(--hint); }
+
+.picker-browse-btn {
+  position: absolute;
+  right: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border: none;
+  background: transparent;
+  color: var(--hint);
+  cursor: pointer;
+  border-radius: var(--radius-sm);
+  transition: color var(--transition-fast), background var(--transition-fast);
+  flex-shrink: 0;
+}
+.picker-browse-btn:hover {
+  color: var(--text);
+  background: var(--hover);
+}
 
 /* ── Autocomplete Suggestions ── */
 .picker-suggestions {
