@@ -436,12 +436,20 @@ export function VisualizationCard({ data, collapsed = false }: VisualizationCard
           overflowY: layout?.maxHeight ? "auto" : undefined,
         }}
       >
-        {data.type === "progress-tracker" && <ProgressTracker data={data.data} />}
-        {data.type === "summary-box" && <SummaryBox data={data.data} />}
-        {data.type === "comparison" && <Comparison data={data.data} />}
-        {data.type === "data-table" && <DataTable data={data.data} />}
-        {data.type === "status-list" && <StatusList data={data.data} />}
-        {data.type === "diagram" && <Diagram data={data.data} />}
+        {typeof data.data !== "object" || data.data === null || (data.data as unknown as { _parseError?: boolean })._parseError ? (
+          <div style={{ color: "var(--hint)", fontSize: 12, padding: "var(--space-sm)" }}>
+            Visualization data could not be parsed — the model sent malformed input.
+          </div>
+        ) : (
+          <>
+            {data.type === "progress-tracker" && <ProgressTracker data={data.data} />}
+            {data.type === "summary-box" && <SummaryBox data={data.data} />}
+            {data.type === "comparison" && <Comparison data={data.data} />}
+            {data.type === "data-table" && <DataTable data={data.data} />}
+            {data.type === "status-list" && <StatusList data={data.data} />}
+            {data.type === "diagram" && <Diagram data={data.data} />}
+          </>
+        )}
       </div>
     </div>
   );

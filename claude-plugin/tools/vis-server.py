@@ -62,6 +62,7 @@ TOOL_DEFINITION = {
             "data": {
                 "type": "object",
                 "description": (
+                    "IMPORTANT: must be a JSON object, not a string. "
                     "Type-specific structured data. "
                     "For diagram: {nodes: [{id, label, type?}], edges: [{from, to, label?}], layout?} "
                     "OR {diagram: '...', notation?: 'mermaid'}. "
@@ -202,7 +203,7 @@ def handle_tool_call(arguments: dict) -> dict:
         except (json.JSONDecodeError, ValueError):
             example = VIS_EXAMPLES.get(vis_type, "{}")
             return {
-                "content": [{"type": "text", "text": f"\u274c Validation error for '{vis_type}': data is a string but not valid JSON\n\nExpected format: {example}"}],
+                "content": [{"type": "text", "text": f"\u274c `data` must be a JSON object, not a string. Pass data directly as {{...}}, not as \"{{...}}\"\n\nExpected data for '{vis_type}': {example}"}],
                 "isError": True,
             }
 

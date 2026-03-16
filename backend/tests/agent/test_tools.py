@@ -634,7 +634,7 @@ class TestBonsaiVisualizeHandler:
             "data": "not json at all{{{",
         })
         assert result["isError"] is True
-        assert "not valid JSON" in result["content"][0]["text"]
+        assert "must be a JSON object, not a string" in result["content"][0]["text"]
 
     async def test_unknown_type_returns_error(self) -> None:
         from app.agent.tools.visualization import _bonsai_visualize

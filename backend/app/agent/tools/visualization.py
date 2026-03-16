@@ -50,6 +50,7 @@ VIS_SCHEMA: dict = {
         "data": {
             "type": "object",
             "description": (
+                "IMPORTANT: must be a JSON object, not a string. "
                 "Type-specific structured data. "
                 "For diagram: {nodes: [{id, label, type?}], edges: [{from, to, label?}], layout?} "
                 "OR {diagram: '...', notation?: 'mermaid'}. "
@@ -98,10 +99,18 @@ async def _bonsai_visualize(args: dict) -> dict:
         try:
             data = json.loads(data)
         except (json.JSONDecodeError, ValueError):
-            return _error_response(vis_type, "data is a string but not valid JSON")
+            return _error_response(
+                vis_type,
+                "`data` must be a JSON object, not a string. "
+                'Pass data directly as {...}, not as "{...}"',
+            )
 
     if not isinstance(data, dict):
-        return _error_response(vis_type, f"data must be an object, got {type(data).__name__}")
+        return _error_response(
+            vis_type,
+            f"`data` must be a JSON object, not {type(data).__name__}. "
+            'Pass data directly as {...}, not as "{...}"',
+        )
 
     error = _validate_vis_data(vis_type, data)
     if error:

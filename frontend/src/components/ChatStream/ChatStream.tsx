@@ -240,7 +240,20 @@ export const ChatStream = forwardRef<ChatStreamHandle, ChatStreamProps>(function
               const visInput = p.toolInput as VisData | undefined;
               // LLMs sometimes pass `data` as a JSON string instead of an object — auto-parse it
               if (visInput && typeof visInput.data === "string") {
-                try { visInput.data = JSON.parse(visInput.data); } catch { /* leave as-is */ }
+                try {
+                  visInput.data = JSON.parse(visInput.data);
+                } catch {
+                  // Repair attempt: LLMs double-serializing often produce \\" instead
+                  // of \\\" inside nested strings — fix the escaping and retry.
+                  try {
+                    const repaired = (visInput.data as unknown as string).replace(/\\"/g, '\\\\"');
+                    visInput.data = JSON.parse(repaired);
+                  } catch {
+                    // Still failed — mark as parse error so the card shows an error
+                    // message instead of rendering blank content
+                    visInput.data = { _parseError: true } as any;
+                  }
+                }
               }
               if (visInput) {
                 const visId = visInput.visId;

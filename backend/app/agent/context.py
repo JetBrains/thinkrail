@@ -106,7 +106,9 @@ status-list, diagram.
 **When to use:** reporting status, showing progress, comparing options, presenting \
 tabular data, or illustrating architecture. Call the tool with a JSON object containing \
 `type`, `title`, `data`, and optionally `visId` (reuse the same `visId` to update a \
-previous visualization in-place).
+previous visualization in-place). **Important:** `data` must be a JSON object, not a \
+JSON string — pass `{"options": [...]}` directly, not `"{\"options\": [...]}"`.
+
 
 **Status values:** `done`, `current`, `pending`, `error`, `skipped`, `stale` (use these exact strings).
 
