@@ -51,7 +51,7 @@ class TestAgentTask:
     def test_defaults(self) -> None:
         task = AgentTask()
         assert len(task.bonsai_sid) > 0
-        assert task.status == "idle"
+        assert task.status == "initializing"
         assert task.spec_ids == []
         assert task.session_id is None
         assert task.created != ""

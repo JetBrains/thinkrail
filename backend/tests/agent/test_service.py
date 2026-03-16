@@ -49,7 +49,7 @@ class TestRunTask:
         notify = AsyncMock()
         task = await service.run_task(["spec-1"], AgentConfig(), notify)
 
-        assert task.status == "idle"
+        assert task.status == "initializing"
         assert task.spec_ids == ["spec-1"]
 
         # Wait for background task to complete
@@ -73,7 +73,7 @@ class TestRunTask:
 
         task = await service.run_task(["s1"], AgentConfig(), AsyncMock())
         # Task starts as pending — runner transitions to idle/running
-        assert task.status == "idle"
+        assert task.status == "initializing"
 
         # Clean up
         bg = service._running_tasks.get(task.bonsai_sid)
@@ -111,15 +111,16 @@ class TestSendMessage:
     async def test_send_message_while_running_raises(self) -> None:
         service, _, _ = _make_service()
         task = service._tracker.create_task(["s1"], AgentConfig())
+        service._tracker.set_status(task.bonsai_sid, "idle")
         service._tracker.set_status(task.bonsai_sid, "running")
-        with pytest.raises(ValueError, match="expected 'idle'"):
+        with pytest.raises(ValueError, match="expected 'initializing' or 'idle'"):
             await service.send_message(task.bonsai_sid, "hello")
 
     async def test_send_message_when_done_raises(self) -> None:
         service, _, _ = _make_service()
         task = service._tracker.create_task(["s1"], AgentConfig())
         service._tracker.set_status(task.bonsai_sid, "done")
-        with pytest.raises(ValueError, match="expected 'idle'"):
+        with pytest.raises(ValueError, match="expected 'initializing' or 'idle'"):
             await service.send_message(task.bonsai_sid, "hello")
 
 
@@ -201,6 +202,7 @@ class TestInterruptTask:
         """interrupt_task calls client.interrupt() on the stored SDK client."""
         service, _, _ = _make_service()
         task = service._tracker.create_task(["s1"], AgentConfig())
+        service._tracker.set_status(task.bonsai_sid, "idle")
         service._tracker.set_status(task.bonsai_sid, "running")
 
         mock_client = AsyncMock()
@@ -214,6 +216,7 @@ class TestInterruptTask:
         """set_interrupted is called before client.interrupt()."""
         service, _, _ = _make_service()
         task = service._tracker.create_task(["s1"], AgentConfig())
+        service._tracker.set_status(task.bonsai_sid, "idle")
         service._tracker.set_status(task.bonsai_sid, "running")
 
         call_order: list[str] = []
@@ -242,6 +245,7 @@ class TestInterruptTask:
         """interrupt_task calls interrupt_futures, not cancel_futures."""
         service, _, _ = _make_service()
         task = service._tracker.create_task(["s1"], AgentConfig())
+        service._tracker.set_status(task.bonsai_sid, "idle")
         service._tracker.set_status(task.bonsai_sid, "running")
         service._tracker.set_client(task.bonsai_sid, AsyncMock())
 
@@ -260,6 +264,7 @@ class TestInterruptTask:
         """After interrupt, no new background task is created."""
         service, _, _ = _make_service()
         task = service._tracker.create_task(["s1"], AgentConfig())
+        service._tracker.set_status(task.bonsai_sid, "idle")
         service._tracker.set_status(task.bonsai_sid, "running")
         service._tracker.set_client(task.bonsai_sid, AsyncMock())
 
@@ -289,6 +294,7 @@ class TestInterruptTask:
         """Interrupting a waiting session resolves futures and calls client.interrupt."""
         service, _, _ = _make_service()
         task = service._tracker.create_task(["s1"], AgentConfig())
+        service._tracker.set_status(task.bonsai_sid, "idle")
         service._tracker.set_status(task.bonsai_sid, "running")
         service._tracker.set_status(task.bonsai_sid, "waiting")
 
@@ -307,6 +313,7 @@ class TestInterruptTask:
         """If no client is stored (edge case), interrupt still sets flag."""
         service, _, _ = _make_service()
         task = service._tracker.create_task(["s1"], AgentConfig())
+        service._tracker.set_status(task.bonsai_sid, "idle")
         service._tracker.set_status(task.bonsai_sid, "running")
         # No client set
 

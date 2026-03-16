@@ -193,8 +193,29 @@ export const ChatStream = forwardRef<ChatStreamHandle, ChatStreamProps>(function
     }
   }
 
+  // Session is "initializing" when the user has sent a message (status is
+  // "running") but no visible output has arrived yet. The spinner disappears
+  // once sessionStart arrives (which renders the context card with system
+  // prompt and config), or any other visible content event.
+  const contentTypes = new Set([
+    "sessionStart", "textDelta", "toolCallStart", "toolCallEnd",
+    "notification", "compact", "progress", "askUserQuestion",
+    "confirmAction",
+  ]);
+  const hasContent = events.some((e) => contentTypes.has(e.eventType));
+  const isInitializing =
+    session != null &&
+    session.status === "running" &&
+    !hasContent;
+
   return (
     <div className="chat-stream" ref={scrollRef} onScroll={handleScroll}>
+      {isInitializing && (
+        <div className="chat-initializing">
+          <span className="chat-initializing-spinner" />
+          <span className="chat-initializing-text">Starting session…</span>
+        </div>
+      )}
       {events.map((ev, i) => {
         // Skip events that are children of a subagent (rendered inside SubagentBlock)
         if (childIndices.has(i)) return null;

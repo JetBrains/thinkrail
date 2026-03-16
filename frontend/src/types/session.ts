@@ -1,6 +1,6 @@
 import type { AgentConfig, AgentEvent, Question } from "./agent.ts";
 
-export type SessionStatus = "idle" | "running" | "waiting" | "done" | "error" | "interrupted";
+export type SessionStatus = "initializing" | "idle" | "running" | "waiting" | "done" | "error" | "interrupted";
 
 export interface TurnUsage {
   turnIndex: number;

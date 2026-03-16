@@ -25,7 +25,8 @@ from app.spec.registry import (
     remove_entry,
     write_registry,
 )
-from app.spec.service import SpecNotFoundError, SpecService
+from app.core.fileio import read_text
+from app.spec.service import SpecNotFoundError, SpecService, _extract_title
 from app.spec.validator import RECOGNIZED_LINK_TYPES, RECOGNIZED_TYPES
 
 logger = logging.getLogger(__name__)
@@ -96,7 +97,7 @@ SPEC_GET_SCHEMA: dict = {
 
 SPEC_SAVE_SCHEMA: dict = {
     "type": "object",
-    "required": ["path", "content"],
+    "required": ["path"],
     "properties": {
         "path": {
             "type": "string",
@@ -104,7 +105,12 @@ SPEC_SAVE_SCHEMA: dict = {
         },
         "content": {
             "type": "string",
-            "description": "Full spec file content (Markdown)",
+            "description": (
+                "Full spec file content (Markdown). "
+                "Required for new specs. Optional for updates — when omitted, "
+                "spec_save reads current content from disk and syncs the registry "
+                "without rewriting the file."
+            ),
         },
         "type": {
             "type": "string",
@@ -114,6 +120,13 @@ SPEC_SAVE_SCHEMA: dict = {
         "id": {
             "type": "string",
             "description": "Explicit spec ID. If omitted, auto-generated from title.",
+        },
+        "title": {
+            "type": "string",
+            "description": (
+                "Override the registry title. If omitted, auto-derived from "
+                "the first # heading in the content."
+            ),
         },
         "status": {
             "type": "string",
@@ -335,8 +348,6 @@ async def _spec_save(args: dict) -> dict:
     content = args.get("content", "")
     if not path:
         return _error("Missing required parameter: path")
-    if not content:
-        return _error("Missing required parameter: content")
 
     try:
         config = _get_config(args)
@@ -349,60 +360,74 @@ async def _spec_save(args: dict) -> dict:
 
         if existing:
             # --- Update ---
-            detail = svc.update_spec(existing.id, content)
-
-            # Apply optional metadata updates
-            meta_changed = False
-            if "status" in args:
-                existing.status = args["status"]
-                meta_changed = True
-            if "covers" in args:
-                existing.covers = args["covers"]
-                meta_changed = True
-            if "tags" in args:
-                existing.tags = args["tags"]
-                meta_changed = True
-            if meta_changed:
+            if content:
+                # Content provided: write to disk via service
+                svc.update_spec(existing.id, content)
+                # Re-read registry (update_spec wrote it)
                 entries, links = read_registry(registry_path)
                 entry = find_entry(entries, existing.id)
+            else:
+                # Content omitted: registry-sync path — read from disk
+                file_path = config.get_project_root() / path
+                try:
+                    disk_content = read_text(file_path)
+                except FileNotFoundError:
+                    return _error(
+                        f"Cannot sync: file not found at '{path}'. "
+                        "Provide 'content' to create the file, or fix the path."
+                    )
+                # Re-derive title from on-disk content
+                entry = find_entry(entries, existing.id)
                 if entry:
+                    entry.title = _extract_title(disk_content, path)
+                    entry.updated = date.today().isoformat()
+
+            # Apply optional metadata (single pass, no extra registry read)
+            if entry:
+                if "title" in args:
+                    entry.title = args["title"]
+                if "status" in args:
+                    entry.status = args["status"]
+                if "covers" in args:
+                    entry.covers = args["covers"]
+                if "tags" in args:
+                    entry.tags = args["tags"]
+                write_registry(registry_path, entries, links)
+
+            # Return final state
+            detail = svc.get_spec(existing.id)
+        else:
+            # --- Create ---
+            if not content:
+                return _error(
+                    "Missing 'content' for new spec (required when path is new)"
+                )
+            spec_type = args.get("type")
+            if not spec_type:
+                return _error(
+                    "Missing 'type' for new spec (required when path is new)"
+                )
+
+            spec_id = args.get("id")
+            detail = svc.create_spec(spec_type, path, content, spec_id)
+
+            # Apply optional metadata (single registry read after create)
+            meta_keys = {"title", "status", "covers", "tags"}
+            if meta_keys & args.keys():
+                cr_entries, cr_links = read_registry(registry_path)
+                entry = find_entry(cr_entries, detail.id)
+                if entry:
+                    if "title" in args:
+                        entry.title = args["title"]
                     if "status" in args:
                         entry.status = args["status"]
                     if "covers" in args:
                         entry.covers = args["covers"]
                     if "tags" in args:
                         entry.tags = args["tags"]
-                    write_registry(registry_path, entries, links)
+                    write_registry(registry_path, cr_entries, cr_links)
 
-            # Re-read to get final state
-            detail = svc.get_spec(existing.id)
-        else:
-            # --- Create ---
-            spec_type = args.get("type")
-            if not spec_type:
-                return _error("Missing 'type' for new spec (required when path is new)")
-
-            spec_id = args.get("id")
-            detail = svc.create_spec(spec_type, path, content, spec_id)
-
-            # Apply optional metadata
-            meta_changed = False
-            re_entries, re_links = read_registry(registry_path)
-            entry = find_entry(re_entries, detail.id)
-            if entry:
-                if "status" in args:
-                    entry.status = args["status"]
-                    meta_changed = True
-                if "covers" in args:
-                    entry.covers = args["covers"]
-                    meta_changed = True
-                if "tags" in args:
-                    entry.tags = args["tags"]
-                    meta_changed = True
-                if meta_changed:
-                    write_registry(registry_path, re_entries, re_links)
-
-            # Re-read to get final state
+            # Return final state
             detail = svc.get_spec(detail.id)
 
     except SpecNotFoundError as exc:

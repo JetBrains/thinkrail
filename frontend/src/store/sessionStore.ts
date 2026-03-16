@@ -277,7 +277,7 @@ function ensureSession(
     name: bonsaiSid.slice(0, 8),
     skillId: null,
     specIds: [],
-    status: "idle",
+    status: "initializing",
     model: "",
     permissionMode: "default",
     betas: [],
@@ -432,7 +432,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
         name,
         skillId: skillId ?? null,
         specIds,
-        status: "idle",
+        status: "initializing",
         model: config.model,
         permissionMode: config.permissionMode,
         betas: config.betas ?? [],
@@ -451,6 +451,8 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
   },
 
   sendMessage: async (bonsaiSid, text, isMarkdown) => {
+    // Capture pre-send status so we can revert on error
+    const prevStatus = get().sessions.get(bonsaiSid)?.status ?? "idle";
     // Add user message to events immediately (optimistic)
     set((s) => {
       const session = s.sessions.get(bonsaiSid);
@@ -490,7 +492,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
         const next = new Map(s.sessions);
         next.set(bonsaiSid, {
           ...session,
-          status: "idle",
+          status: prevStatus,
           events: session.events.filter(
             (e, i) =>
               !(
@@ -524,7 +526,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
         const next = new Map(s.sessions);
         next.set(bonsaiSid, {
           ...session,
-          status: "idle",
+          status: "initializing",
           restored: undefined,
           pendingRequest: null,
           answeredRequests: answered,
@@ -538,7 +540,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
         const session = s.sessions.get(bonsaiSid);
         if (!session) return s;
         const next = new Map(s.sessions);
-        next.set(bonsaiSid, { ...session, status: "idle", restored: undefined });
+        next.set(bonsaiSid, { ...session, status: "initializing", restored: undefined });
         return { sessions: next };
       });
     }
@@ -701,7 +703,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
     // Collect sessions in transient states that need checking
     const toCheck: string[] = [];
     for (const [sid, session] of sessions) {
-      if (session.status === "running" || session.status === "waiting") {
+      if (session.status === "initializing" || session.status === "running" || session.status === "waiting") {
         toCheck.push(sid);
       }
     }
@@ -712,7 +714,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
       toCheck.map(async (bonsaiSid) => {
         try {
           const task = await api.status(bonsaiSid);
-          const backendStatus = task.status; // "idle" | "running" | "done" | "error"
+          const backendStatus = task.status; // "initializing" | "idle" | "running" | "waiting" | "done" | "error"
           const session = get().sessions.get(bonsaiSid);
           if (!session) return;
 
@@ -729,7 +731,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
               const current = s.sessions.get(bonsaiSid);
               if (!current) return s;
               // Don't overwrite if status already changed (e.g., event arrived)
-              if (current.status !== "running" && current.status !== "waiting") return s;
+              if (current.status !== "initializing" && current.status !== "running" && current.status !== "waiting") return s;
               const next = new Map(s.sessions);
               next.set(bonsaiSid, {
                 ...current,
@@ -919,7 +921,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
       const cu = session.metrics.contextUsage;
       next.set(bonsaiSid, {
         ...session,
-        status: session.status === "idle" ? "running" : session.status,
+        status: session.status === "initializing" || session.status === "idle" ? "running" : session.status,
         model: (params.model as string) ?? session.model,
         systemPrompt: (params.systemPrompt as string) ?? undefined,
         events: [

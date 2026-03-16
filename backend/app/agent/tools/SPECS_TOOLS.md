@@ -1,6 +1,6 @@
 # Spec & Registry MCP Tools — Design Specification
 
-> Parent: [Agent Tools](README.md) | Status: **Draft** | Created: 2026-03-16
+> Parent: [Agent Tools](README.md) | Status: **Active** | Created: 2026-03-16
 
 ## Table of Contents
 
@@ -143,12 +143,12 @@ SPEC_GET_SCHEMA = {
 
 ### spec_save
 
-Create or update a spec file + registry entry atomically.
+Create or update a spec file and its registry entry atomically. If the path matches an existing entry, updates it; otherwise creates new.
 
 ```python
 SPEC_SAVE_SCHEMA = {
     "type": "object",
-    "required": ["path", "content"],
+    "required": ["path"],
     "properties": {
         "path": {
             "type": "string",
@@ -156,7 +156,10 @@ SPEC_SAVE_SCHEMA = {
         },
         "content": {
             "type": "string",
-            "description": "Full spec file content (Markdown)",
+            "description": "Full spec file content (Markdown). "
+                "Required for new specs. Optional for updates — when omitted, "
+                "spec_save reads current content from disk and syncs the registry "
+                "without rewriting the file.",
         },
         "type": {
             "type": "string",
@@ -167,6 +170,11 @@ SPEC_SAVE_SCHEMA = {
         "id": {
             "type": "string",
             "description": "Explicit spec ID. If omitted, auto-generated from title.",
+        },
+        "title": {
+            "type": "string",
+            "description": "Override the registry title. If omitted, auto-derived "
+                "from the first # heading in the content.",
         },
         "status": {
             "type": "string",
@@ -188,14 +196,26 @@ SPEC_SAVE_SCHEMA = {
 ```
 
 **Behavior:**
-- If `path` matches an existing registry entry → **update** (writes content, updates timestamp, optionally updates status/covers/tags).
-- If `path` is new → **create** (requires `type`, creates file + entry, auto-generates ID/title if omitted).
-- Title is extracted from first `# heading` in content.
+
+- If `path` matches an existing registry entry → **update**:
+  - If `content` is provided: writes content to disk, updates timestamp, optionally updates status/covers/tags.
+  - If `content` is omitted: reads current file from disk (no file write), re-derives title from the on-disk content, updates timestamp and any provided metadata (status/covers/tags). This is the **registry-sync** path — used after the agent edits a spec file via the Edit tool.
+- If `path` is new → **create** (requires both `type` and `content`, creates file + entry, auto-generates ID/title if omitted).
+- Title: if `title` is provided, it overrides the registry title directly. Otherwise, title is auto-derived from the first `# heading` in the content (whether provided or read from disk).
 - Atomic: file write + registry update succeed together or not at all.
+
+**Registry-sync workflow (the main use case for omitting content):**
+
+```
+Agent edits spec file via Edit tool
+  → Agent calls spec_save(path="backend/app/foo/README.md", status="active")
+  → spec_save reads file from disk, extracts title, syncs registry
+  → Returns SpecDetail (no token cost for re-sending content)
+```
 
 **Returns:** JSON `SpecDetail` of the created/updated spec.
 
-**Errors:** `isError: true` for invalid type, path conflicts, ID collisions, validation failures.
+**Errors:** `isError: true` for invalid type, path conflicts, ID collisions, validation failures, missing content on create, file not found on disk when content omitted.
 
 ---
 
@@ -474,7 +494,7 @@ Agent calls tool
   → Return JSON as MCP text content
 ```
 
-### Write path (spec_save, spec_delete, registry_mutate)
+### Write path (spec_save with content, spec_delete, registry_mutate)
 
 ```
 Agent calls tool
@@ -484,6 +504,21 @@ Agent calls tool
   → Service handles atomic file + registry write
   → Return success summary or isError with details
 ```
+
+### Registry-sync path (spec_save without content)
+
+```
+Agent edits spec file via Edit tool
+  → Agent calls spec_save(path=..., status=..., tags=...) — no content param
+  → Handler detects existing entry + missing content
+  → Reads file from disk via parser
+  → Extracts title from first # heading
+  → Updates registry entry (title, timestamp, metadata)
+  → Atomic registry write (file is NOT rewritten)
+  → Return SpecDetail with on-disk content
+```
+
+This path saves significant tokens when the agent has already modified the file via the Edit tool and just needs the registry to reflect the changes. The agent avoids re-reading the file and re-sending its full content.
 
 ### SpecService instantiation
 
@@ -513,6 +548,7 @@ The handler reconstructs `AppConfig` from the injected `_config` dict and instan
 | **Apply removals before additions** | Delete → Add → Update order | Prevents transient conflicts (e.g., remove old entry then add replacement with same path). |
 | **Config injection via updated_input** | Intercept passes config to handler | Avoids global state, follows existing suggest_session pattern. |
 | **spec_save is create-or-update** | Upsert by path | Agent doesn't need to check existence first. Simplifies skill instructions. |
+| **Content optional on updates** | `content` only required for creates; omit on updates to sync from disk | After using Edit tool on a spec file, the agent shouldn't need to re-read and re-send the full content (~2-20KB) just to sync the registry. Reading from disk is cheaper (0 agent tokens) and guarantees registry reflects actual file state. Alternatives rejected: metadata-only mode (adds cognitive load, risks registry-file drift), extending registry_mutate to parse frontmatter (breaks separation of concerns). |
 | **Delegate to SpecService** | No new business logic | Reuses atomic writes, ID generation, validation. Single source of truth. |
 
 ---
@@ -525,6 +561,7 @@ The handler reconstructs `AppConfig` from the injected `_config` dict and instan
 - **Single intercept function** — All 7 tools share one intercept. If a specific tool later needs interactive approval, this must be refactored.
 - **Config serialization** — Passing `AppConfig` via `updated_input` relies on it being JSON-serializable. If `AppConfig` gains non-serializable fields, the pattern breaks.
 - **Suffix collision** — Tool names like `spec_list` are short. If a future tool ends with the same suffix, `INTERCEPTORS` routing could conflict. Mitigated by explicit per-tool registration.
+- **Disk-read on sync assumes valid Markdown** — When `content` is omitted in `spec_save`, the tool reads from disk and parses the file to extract the title. If the file has been partially written or contains invalid Markdown (e.g., mid-edit crash), the title extraction may fail or produce unexpected results. Mitigated by returning `isError: true` if parsing fails.
 
 ---
 

@@ -137,15 +137,11 @@ async def run(
 
     async with ClaudeSDKClient(options=options) as client:
         tracker.set_client(task.bonsai_sid, client)
+        tracker.set_status(task.bonsai_sid, "idle")  # SDK client ready → initializing → idle
         # Track tool calls that change permission mode (ExitPlanMode, EnterPlanMode)
         # so we can notify the frontend when the SDK changes mode internally.
         _mode_change_tools: dict[str, str] = {}  # tool_use_id → new permission_mode
         try:
-            # Wait for init message to get session_id
-            # The SDK may emit SystemMessage(init) before the first query,
-            # or after — handle both cases in the event loop below.
-
-            # Task starts in idle — ready for first message
             # -- conversation loop --
             while True:
                 message = await tracker.get_next_message(task.bonsai_sid)

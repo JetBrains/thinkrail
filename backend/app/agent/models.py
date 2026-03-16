@@ -15,7 +15,7 @@ def to_camel(name: str) -> str:
 
 _CAMEL_CONFIG = ConfigDict(alias_generator=to_camel, populate_by_name=True)
 
-TaskStatus = Literal["idle", "running", "waiting", "done", "error"]
+TaskStatus = Literal["initializing", "idle", "running", "waiting", "done", "error"]
 
 EventType = Literal[
     "session_start",
@@ -113,7 +113,7 @@ class AgentTask(BaseModel):
 
     bonsai_sid: str = Field(default_factory=lambda: str(uuid4()))
     name: str = ""
-    status: TaskStatus = "idle"
+    status: TaskStatus = "initializing"
     spec_ids: list[str] = Field(default_factory=list)
     skill_id: str | None = None
     session_prompt: str | None = None

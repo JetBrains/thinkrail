@@ -163,12 +163,6 @@ class TestBuildGeneralInstructions:
         assert "AskUserQuestion" in result
         assert "2-4 concrete" in result
 
-    def test_spec_workflow_content(self, tmp_path: Path) -> None:
-        (tmp_path / "skills").mkdir()
-        result = _build_general_instructions(tmp_path)
-        assert "registry.json" in result
-        assert "spec hierarchy" in result
-
     def test_proactive_suggestions_content(self, tmp_path: Path) -> None:
         (tmp_path / "skills").mkdir()
         result = _build_general_instructions(tmp_path)

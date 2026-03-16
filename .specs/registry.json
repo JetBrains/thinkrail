@@ -78,7 +78,7 @@
         "agent-orchestration"
       ],
       "created": "2026-02-25",
-      "updated": "2026-03-13"
+      "updated": "2026-03-16"
     },
     {
       "id": "agent-tools",
@@ -2186,6 +2186,22 @@
       ],
       "created": "2026-03-16",
       "updated": "2026-03-16"
+    },
+    {
+      "id": "task-spec-save-content-optional",
+      "type": "task-spec",
+      "path": "current_tasks/agent/improvement_spec_save_content_optional.md",
+      "title": "Improve spec_save: make content optional for updates (registry-sync path)",
+      "status": "done",
+      "covers": [
+        "backend/app/agent/tools/specs.py"
+      ],
+      "tags": [
+        "high",
+        "improvement"
+      ],
+      "created": "2026-03-16",
+      "updated": "2026-03-16"
     }
   ],
   "links": [
@@ -3448,6 +3464,11 @@
       "from": "task-skill-mcp-migration",
       "to": "task-specs-mcp-tools",
       "type": "depends-on"
+    },
+    {
+      "from": "task-spec-save-content-optional",
+      "to": "agent-specs-tools",
+      "type": "implements"
     }
   ]
 }

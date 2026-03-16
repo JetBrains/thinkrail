@@ -66,9 +66,9 @@ class AgentService:
     async def send_message(self, bonsai_sid: str, text: str, *, is_markdown: bool = False) -> None:
         """Send a user message to the session, triggering a new turn."""
         task = self._tracker.get_task(bonsai_sid)
-        if task.status != "idle":
+        if task.status not in ("initializing", "idle"):
             raise ValueError(
-                f"Cannot send message: session is '{task.status}', expected 'idle'"
+                f"Cannot send message: session is '{task.status}', expected 'initializing' or 'idle'"
             )
         self._save_event(bonsai_sid, {
             "eventType": "userMessage",
@@ -282,7 +282,7 @@ class AgentService:
             "skillId": skill_id,
             "specIds": old_spec_ids,
             "config": old_config.model_dump(by_alias=True),
-            "status": "idle",
+            "status": "initializing",
             "sessionId": old_session_id,
             "createdAt": old.get("createdAt", task.created),
             "updatedAt": task.updated,

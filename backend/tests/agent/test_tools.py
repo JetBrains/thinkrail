@@ -136,6 +136,7 @@ class TestInterceptSuggestSession:
         _write_registry(config.get_registry_path(), ["spec-a"])
 
         tracker, task = _make_tracker_and_task()
+        tracker.set_status(task.bonsai_sid, "idle")
         tracker.set_status(task.bonsai_sid, "running")
         notify = AsyncMock()
 
@@ -182,6 +183,7 @@ class TestInterceptSuggestSession:
         (skill_dir / "SKILL.md").write_text("# skill")
 
         tracker, task = _make_tracker_and_task()
+        tracker.set_status(task.bonsai_sid, "idle")
         tracker.set_status(task.bonsai_sid, "running")
         notify = AsyncMock()
 
@@ -737,6 +739,159 @@ class TestSpecSave:
         assert entry is not None
         assert entry.status == "active"
         assert "updated" in entry.tags
+
+    # --- Registry-sync path (content omitted on updates) ---
+
+    async def test_update_without_content(self, tmp_path: Path) -> None:
+        """Existing path + no content → reads from disk, syncs registry metadata."""
+        from app.agent.tools.specs import _spec_save
+
+        config = _setup_registry_with_specs(tmp_path)
+        result = await _spec_save.handler(
+            _make_spec_args(
+                {
+                    "path": "modules/b/README.md",
+                    "status": "active",
+                    "tags": ["frontend", "synced"],
+                },
+                config,
+            )
+        )
+        data, is_error = _parse_result(result)
+
+        assert not is_error
+        # Content should come from the file on disk (not empty)
+        assert "Spec content for mod-b" in data["content"]
+        # Registry metadata should be updated
+        from app.spec.registry import find_entry, read_registry
+
+        entries, _ = read_registry(config.get_registry_path())
+        entry = find_entry(entries, "mod-b")
+        assert entry is not None
+        assert entry.status == "active"
+        assert "synced" in entry.tags
+        # File on disk should be unchanged (not rewritten)
+        file_content = (config.get_project_root() / "modules/b/README.md").read_text()
+        assert "Spec content for mod-b" in file_content
+
+    async def test_update_without_content_title_sync(self, tmp_path: Path) -> None:
+        """Edit file heading on disk, call spec_save without content → title re-derived."""
+        from app.agent.tools.specs import _spec_save
+
+        config = _setup_registry_with_specs(tmp_path)
+        # Simulate editing the file's heading via Edit tool
+        file_path = config.get_project_root() / "modules/a/README.md"
+        file_path.write_text("# Module A Revised\n\nUpdated heading.\n")
+
+        result = await _spec_save.handler(
+            _make_spec_args(
+                {"path": "modules/a/README.md"},
+                config,
+            )
+        )
+        data, is_error = _parse_result(result)
+
+        assert not is_error
+        assert data["title"] == "Module A Revised"
+        # Registry entry title should also be updated
+        from app.spec.registry import find_entry, read_registry
+
+        entries, _ = read_registry(config.get_registry_path())
+        entry = find_entry(entries, "mod-a")
+        assert entry is not None
+        assert entry.title == "Module A Revised"
+
+    async def test_create_without_content_fails(self, tmp_path: Path) -> None:
+        """New path + no content → isError (content required for creates)."""
+        from app.agent.tools.specs import _spec_save
+
+        config = _setup_registry_with_specs(tmp_path)
+        result = await _spec_save.handler(
+            _make_spec_args(
+                {
+                    "path": "modules/new/README.md",
+                    "type": "module-design",
+                },
+                config,
+            )
+        )
+        _, is_error = _parse_result(result)
+
+        assert is_error
+
+    async def test_update_without_content_missing_file(self, tmp_path: Path) -> None:
+        """Entry exists but file missing on disk → isError."""
+        from app.agent.tools.specs import _spec_save
+
+        config = _setup_registry_with_specs(tmp_path)
+        # Delete the file but keep the registry entry
+        file_path = config.get_project_root() / "modules/a/README.md"
+        file_path.unlink()
+
+        result = await _spec_save.handler(
+            _make_spec_args(
+                {"path": "modules/a/README.md", "status": "stale"},
+                config,
+            )
+        )
+        _, is_error = _parse_result(result)
+
+        assert is_error
+
+    # --- Title override ---
+
+    async def test_update_with_title_override(self, tmp_path: Path) -> None:
+        """Explicit title → overrides auto-derived heading in registry."""
+        from app.agent.tools.specs import _spec_save
+
+        config = _setup_registry_with_specs(tmp_path)
+        result = await _spec_save.handler(
+            _make_spec_args(
+                {
+                    "path": "modules/a/README.md",
+                    "content": "# Module A\n\nSame heading.\n",
+                    "title": "Custom Registry Title",
+                },
+                config,
+            )
+        )
+        data, is_error = _parse_result(result)
+
+        assert not is_error
+        # Registry title should use the override, not the heading
+        from app.spec.registry import find_entry, read_registry
+
+        entries, _ = read_registry(config.get_registry_path())
+        entry = find_entry(entries, "mod-a")
+        assert entry is not None
+        assert entry.title == "Custom Registry Title"
+
+    async def test_create_with_title_override(self, tmp_path: Path) -> None:
+        """New spec with explicit title → uses override instead of heading."""
+        from app.agent.tools.specs import _spec_save
+
+        config = _setup_registry_with_specs(tmp_path)
+        result = await _spec_save.handler(
+            _make_spec_args(
+                {
+                    "path": "modules/e/README.md",
+                    "content": "# Module E Heading\n\nContent.\n",
+                    "type": "module-design",
+                    "title": "My Custom Title",
+                },
+                config,
+            )
+        )
+        data, is_error = _parse_result(result)
+
+        assert not is_error
+        from app.spec.registry import find_entry, read_registry
+
+        entries, _ = read_registry(config.get_registry_path())
+        # ID is auto-generated from the heading, but title should be overridden
+        entry = next((e for e in entries if e.path == "modules/e/README.md"), None)
+        assert entry is not None
+        assert entry.title == "My Custom Title"
 
 
 # ===========================================================================
