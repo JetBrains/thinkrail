@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import time
 from collections.abc import Callable
 from typing import Any
 
@@ -409,7 +410,8 @@ class AgentService:
             self._last_notify.pop(task.bonsai_sid, None)
 
     def _build_context_for(self, task: AgentTask) -> str:
-        return build_context(
+        t0 = time.monotonic()
+        ctx = build_context(
             spec_ids=task.spec_ids,
             skill_id=task.skill_id,
             session_prompt=task.session_prompt,
@@ -418,3 +420,6 @@ class AgentService:
             spec_service=self._spec_service,
             plugin_dir=self._config.plugin_dir,
         )
+        ms = int((time.monotonic() - t0) * 1000)
+        logger.info("[%s] build_context: %dms (%d chars)", task.bonsai_sid[:8], ms, len(ctx))
+        return ctx
