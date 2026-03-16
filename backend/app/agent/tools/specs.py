@@ -619,9 +619,11 @@ async def _registry_mutate(args: dict) -> dict:
             return _error(f"Cannot add entry: {exc}")
 
     # --- 4. Add links ---
+    new_link_indices: set[int] = set()
     for lnk_data in args.get("add_links", []):
         try:
             lnk = Link(**lnk_data)
+            new_link_indices.add(len(links))
             links.append(lnk)
             counts["links_added"] += 1
         except Exception as exc:
@@ -645,17 +647,20 @@ async def _registry_mutate(args: dict) -> dict:
         counts["entries_updated"] += 1
 
     # --- 6. Validate final state ---
+    # Structural checks (targets exist, no self-links) apply to ALL links.
+    # Type checks only apply to newly-added links — pre-existing links may
+    # use types the validator doesn't know about (e.g. "supersedes").
     errors: list[str] = []
     entry_ids = {e.id for e in entries}
 
-    for lnk in links:
+    for idx, lnk in enumerate(links):
         if lnk.from_id == lnk.to_id:
             errors.append(f"Self-link: {lnk.from_id}")
         if lnk.from_id not in entry_ids:
             errors.append(f"Link source '{lnk.from_id}' not found")
         if lnk.to_id not in entry_ids:
             errors.append(f"Link target '{lnk.to_id}' not found")
-        if lnk.type not in RECOGNIZED_LINK_TYPES:
+        if idx in new_link_indices and lnk.type not in RECOGNIZED_LINK_TYPES:
             errors.append(f"Unrecognized link type: {lnk.type}")
 
     # Check for duplicate IDs
