@@ -96,20 +96,32 @@ export function ProjectPicker({ onSelect, onClose }: ProjectPickerProps) {
       setError(null);
       setShowSuggestions(false);
       try {
-        const res = await fetch(
+        const validateRes = await fetch(
           `${API_BASE}/api/project/validate?path=${encodeURIComponent(target)}`,
         );
-        const data = await res.json();
-        if (!data.exists) {
+        const validateData = await validateRes.json();
+        if (!validateData.exists) {
           setError(`Directory does not exist: ${target}`);
-        } else if (!data.valid) {
-          setError(
-            `No .specs/registry.json found in ${target}. Use "Create New" to initialize.`,
-          );
-        } else {
-          addRecent(data.path, data.name);
-          onSelect(data.path);
+          return;
         }
+        if (validateData.valid) {
+          addRecent(validateData.path, validateData.name);
+          onSelect(validateData.path);
+          return;
+        }
+        // Not yet initialized — auto-init
+        const initRes = await fetch(`${API_BASE}/api/project/init`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ path: target }),
+        });
+        const initData = await initRes.json();
+        if (initData.error) {
+          setError(initData.error);
+          return;
+        }
+        addRecent(initData.path, initData.name);
+        onSelect(initData.path);
       } catch (e) {
         setError(`Cannot reach backend: ${(e as Error).message}`);
       } finally {
@@ -118,35 +130,6 @@ export function ProjectPicker({ onSelect, onClose }: ProjectPickerProps) {
     },
     [path, onSelect],
   );
-
-  const handleCreate = useCallback(async () => {
-    const target = path.trim();
-    if (!target) {
-      setError("Please enter a directory path");
-      return;
-    }
-    setLoading(true);
-    setError(null);
-    setShowSuggestions(false);
-    try {
-      const res = await fetch(`${API_BASE}/api/project/init`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ path: target }),
-      });
-      const data = await res.json();
-      if (data.error) {
-        setError(data.error);
-        return;
-      }
-      addRecent(data.path, data.name);
-      onSelect(data.path);
-    } catch (e) {
-      setError(`Cannot reach backend: ${(e as Error).message}`);
-    } finally {
-      setLoading(false);
-    }
-  }, [path, onSelect]);
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
@@ -258,13 +241,6 @@ export function ProjectPicker({ onSelect, onClose }: ProjectPickerProps) {
             disabled={loading || !path.trim()}
           >
             {loading ? "Loading..." : "Open Project"}
-          </button>
-          <button
-            className="picker-btn"
-            onClick={handleCreate}
-            disabled={loading || !path.trim()}
-          >
-            Create New
           </button>
         </div>
 
