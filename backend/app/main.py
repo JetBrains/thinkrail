@@ -253,10 +253,12 @@ def create_app() -> FastAPI:
 
 if __name__ == "__main__":
     import uvicorn
+    from app.core.config import ServerSettings
 
+    srv = ServerSettings()
     uvicorn.run(
         "app.main:create_app",
         factory=True,
-        host="127.0.0.1",
-        port=8000,
+        host=srv.backend_host,
+        port=srv.backend_port,
     )

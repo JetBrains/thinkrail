@@ -1,7 +1,6 @@
 import { create } from "zustand";
 import { useUiStore } from "./uiStore.ts";
 
-const API_BASE = import.meta.env.DEV ? "http://localhost:8000" : "";
 
 export interface OpenFile {
   path: string;
@@ -56,7 +55,7 @@ export const useFileStore = create<FileStore>((set, get) => ({
 
     try {
       const res = await fetch(
-        `${API_BASE}/api/file/read?project=${encodeURIComponent(project)}&path=${encodeURIComponent(path)}`,
+        `/api/file/read?project=${encodeURIComponent(project)}&path=${encodeURIComponent(path)}`,
       );
       const data = await res.json();
 
@@ -117,7 +116,7 @@ export const useFileStore = create<FileStore>((set, get) => ({
 
     try {
       const res = await fetch(
-        `${API_BASE}/api/file/read?project=${encodeURIComponent(project)}&path=${encodeURIComponent(path)}`,
+        `/api/file/read?project=${encodeURIComponent(project)}&path=${encodeURIComponent(path)}`,
       );
       const data = await res.json();
 
@@ -204,7 +203,7 @@ export const useFileStore = create<FileStore>((set, get) => ({
     });
 
     try {
-      await fetch(`${API_BASE}/api/file/write`, {
+      await fetch(`/api/file/write`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ project, path, content: file.content }),
@@ -237,7 +236,7 @@ export const useFileStore = create<FileStore>((set, get) => ({
     const project = getProjectPath();
     if (!project) return;
     try {
-      await fetch(`${API_BASE}/api/file/open-external`, {
+      await fetch(`/api/file/open-external`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ project, path, editor }),
@@ -252,7 +251,7 @@ export const useFileStore = create<FileStore>((set, get) => ({
     const project = getProjectPath();
     if (!project) return;
 
-    const fetchUrl = `${API_BASE}/api/file/read?project=${encodeURIComponent(project)}&path=${encodeURIComponent(path)}`;
+    const fetchUrl = `/api/file/read?project=${encodeURIComponent(project)}&path=${encodeURIComponent(path)}`;
 
     // Reload open file if not dirty
     const openFile = openFiles.get(path);

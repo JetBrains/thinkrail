@@ -3,8 +3,6 @@ import { useUiStore } from "@/store/uiStore.ts";
 import { useFileStore } from "@/store/fileStore.ts";
 import "./FileTree.css";
 
-const API_BASE = import.meta.env.DEV ? "http://localhost:8000" : "";
-
 interface FileEntry {
   path: string;
   name: string;
@@ -113,7 +111,7 @@ export function FileTree() {
     setLoading(true);
     try {
       const res = await fetch(
-        `${API_BASE}/api/project/files?path=${encodeURIComponent(projectPath)}`,
+        `/api/project/files?path=${encodeURIComponent(projectPath)}`,
       );
       const data = await res.json();
       const fetched: FileEntry[] = data.entries ?? [];

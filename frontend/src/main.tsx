@@ -10,8 +10,8 @@ import "./styles/global.css";
 
 applyTheme(getThemePreference());
 
-const BACKEND = import.meta.env.DEV ? "localhost:8000" : location.host;
-const WS_PROTO = import.meta.env.DEV ? "ws:" : location.protocol === "https:" ? "wss:" : "ws:";
+const BACKEND = location.host;
+const WS_PROTO = location.protocol === "https:" ? "wss:" : "ws:";
 
 function Root() {
   const [projectPath, setProjectPath] = useState<string | null>(null);

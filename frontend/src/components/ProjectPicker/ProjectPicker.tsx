@@ -2,8 +2,6 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import "./ProjectPicker.css";
 
 const STORAGE_KEY = "bonsai-recent-projects";
-const API_BASE = import.meta.env.DEV ? "http://localhost:8000" : "";
-
 interface RecentProject {
   path: string;
   name: string;
@@ -62,7 +60,7 @@ export function ProjectPicker({ onSelect, onClose }: ProjectPickerProps) {
       const prefix = path.slice(lastSlash + 1);
       try {
         const res = await fetch(
-          `${API_BASE}/api/fs/list-dirs?base=${encodeURIComponent(base)}&prefix=${encodeURIComponent(prefix)}`,
+          `/api/fs/list-dirs?base=${encodeURIComponent(base)}&prefix=${encodeURIComponent(prefix)}`,
         );
         const data = await res.json();
         const dirs: string[] = data.dirs ?? [];
@@ -97,7 +95,7 @@ export function ProjectPicker({ onSelect, onClose }: ProjectPickerProps) {
       setShowSuggestions(false);
       try {
         const validateRes = await fetch(
-          `${API_BASE}/api/project/validate?path=${encodeURIComponent(target)}`,
+          `/api/project/validate?path=${encodeURIComponent(target)}`,
         );
         const validateData = await validateRes.json();
         if (!validateData.exists) {
@@ -110,7 +108,7 @@ export function ProjectPicker({ onSelect, onClose }: ProjectPickerProps) {
           return;
         }
         // Not yet initialized — auto-init
-        const initRes = await fetch(`${API_BASE}/api/project/init`, {
+        const initRes = await fetch(`/api/project/init`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ path: target }),
@@ -198,7 +196,7 @@ export function ProjectPicker({ onSelect, onClose }: ProjectPickerProps) {
               title="Browse folders"
               onClick={async () => {
                 try {
-                  const res = await fetch(`${API_BASE}/api/fs/browse`);
+                  const res = await fetch(`/api/fs/browse`);
                   const data = await res.json();
                   if (data.path) {
                     setPath(data.path);

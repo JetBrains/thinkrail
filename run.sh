@@ -3,6 +3,25 @@ set -e
 
 ROOT="$(cd "$(dirname "$0")" && pwd)"
 
+# ── Ensure .env exists ──
+if [ ! -f "$ROOT/.env" ]; then
+    if [ -f "$ROOT/.env.example" ]; then
+        cp "$ROOT/.env.example" "$ROOT/.env"
+        echo "Created .env from .env.example"
+    fi
+fi
+
+# ── Load .env ──
+if [ -f "$ROOT/.env" ]; then
+    set -a
+    # shellcheck source=/dev/null
+    source "$ROOT/.env"
+    set +a
+fi
+
+BACKEND_PORT="${BACKEND_PORT:-8080}"
+FRONTEND_PORT="${FRONTEND_PORT:-5173}"
+
 # ── Prerequisite checks ──
 if ! command -v uv &>/dev/null; then
     echo "Error: 'uv' is not installed."
@@ -32,25 +51,25 @@ cleanup() {
 }
 trap cleanup EXIT INT TERM
 
-# ── Backend (FastAPI + uvicorn on :8000) ──
+# ── Backend ──
 echo "Installing backend dependencies..."
 cd "$ROOT/backend"
 uv sync
-echo "Starting backend..."
+echo "Starting backend on :$BACKEND_PORT..."
 uv run python -m app.main &
 BACKEND_PID=$!
 
-# ── Frontend (Vite dev server on :3000) ──
+# ── Frontend ──
 echo "Installing frontend dependencies..."
 cd "$ROOT/frontend"
 npm install
-echo "Starting frontend..."
+echo "Starting frontend on :$FRONTEND_PORT..."
 npm run dev &
 FRONTEND_PID=$!
 
 echo ""
-echo "Backend:  http://localhost:8000"
-echo "Frontend: http://localhost:3000"
+echo "Backend:  http://localhost:$BACKEND_PORT"
+echo "Frontend: http://localhost:$FRONTEND_PORT"
 echo ""
 echo "Press Ctrl+C to stop both."
 
