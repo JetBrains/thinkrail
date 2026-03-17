@@ -1,0 +1,1370 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Spec-Code Mapping — ChatFlow Example</title>
+<style>
+:root {
+  --bg: #0d1117; --bg-card: #161b22; --bg-hover: #1c2333; --border: #30363d;
+  --text: #e6edf3; --text-dim: #8b949e; --text-muted: #484f58;
+  --accent: #58a6ff; --green: #3fb950; --yellow: #d29922; --red: #f85149;
+  --orange: #db6d28; --purple: #bc8cff;
+  --green-bg: rgba(63,185,80,0.15); --yellow-bg: rgba(210,153,34,0.15);
+  --red-bg: rgba(248,81,73,0.15); --orange-bg: rgba(219,109,40,0.15);
+  --purple-bg: rgba(188,140,255,0.15); --blue-bg: rgba(88,166,255,0.15);
+  --radius: 8px; --radius-sm: 4px;
+  --font: 'SF Mono','Cascadia Code','Fira Code',Consolas,monospace;
+  --font-sans: -apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;
+}
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { height: 100%; }
+body { background: var(--bg); color: var(--text); font-family: var(--font-sans); font-size: 14px; line-height: 1.5; }
+::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar-track { background: var(--bg); }
+::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+::-webkit-scrollbar-thumb:hover { background: var(--text-muted); }
+
+.app { display: flex; flex-direction: column; height: 100vh; }
+.header { padding: 16px 24px; border-bottom: 1px solid var(--border); }
+.header h1 { font-size: 20px; font-weight: 600; }
+.header h1 span { margin-right: 8px; }
+.header .subtitle { color: var(--text-dim); font-size: 13px; margin-top: 2px; }
+
+.tabs { display: flex; gap: 2px; padding: 0 24px; border-bottom: 1px solid var(--border); background: var(--bg-card); overflow-x: auto; flex-shrink: 0; }
+.tab-btn { padding: 10px 16px; background: none; border: none; border-bottom: 2px solid transparent; color: var(--text-dim); font-family: var(--font-sans); font-size: 13px; cursor: pointer; white-space: nowrap; transition: color .15s, border-color .15s; }
+.tab-btn:hover { color: var(--text); background: var(--bg-hover); }
+.tab-btn.active { color: var(--accent); border-bottom-color: var(--accent); }
+
+.content { flex: 1; overflow: auto; padding: 20px 24px; }
+.panel { display: none; }
+.panel.active { display: block; }
+
+.card { background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius); margin-bottom: 12px; overflow: hidden; }
+.card-header { padding: 12px 16px; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
+.card-title { font-weight: 600; font-size: 14px; }
+.card-body { padding: 16px; }
+
+.badge { display: inline-block; padding: 2px 8px; border-radius: 12px; font-size: 11px; font-weight: 600; line-height: 1.5; }
+.badge-green { background: var(--green-bg); color: var(--green); }
+.badge-yellow { background: var(--yellow-bg); color: var(--yellow); }
+.badge-red { background: var(--red-bg); color: var(--red); }
+.badge-orange { background: var(--orange-bg); color: var(--orange); }
+.badge-purple { background: var(--purple-bg); color: var(--purple); }
+.badge-blue { background: var(--blue-bg); color: var(--accent); }
+.badge-muted { background: rgba(72,79,88,0.2); color: var(--text-muted); }
+
+.health-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; vertical-align: middle; }
+.health-dot.green { background: var(--green); }
+.health-dot.orange { background: var(--orange); }
+.health-dot.red { background: var(--red); }
+.health-dot.gray { background: var(--text-muted); }
+
+.code-block { background: #0d1117; border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 12px; font-family: var(--font); font-size: 12px; line-height: 1.6; overflow-x: auto; white-space: pre; color: var(--text); }
+.kw { color: var(--purple); }
+.fn { color: var(--accent); }
+.str { color: var(--green); }
+.cm { color: var(--text-muted); }
+.num { color: var(--orange); }
+
+.diff-line { font-family: var(--font); font-size: 12px; padding: 1px 12px; line-height: 1.6; white-space: pre; }
+.diff-line.added { background: var(--green-bg); color: var(--green); }
+.diff-line.removed { background: var(--red-bg); color: var(--red); }
+.diff-line.modified { background: var(--yellow-bg); color: var(--yellow); }
+.diff-line.context { color: var(--text-dim); }
+
+.chain-step { background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px; }
+.chain-arrow { text-align: center; padding: 6px 0; color: var(--text-muted); font-size: 18px; }
+.chain-step-header { display: flex; align-items: center; gap: 8px; cursor: pointer; }
+.chain-step-header:hover { color: var(--accent); }
+.chain-step-body { display: none; margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--border); }
+.chain-step-body.open { display: block; }
+
+.timeline-item { position: relative; padding: 8px 0 8px 28px; border-left: 2px solid var(--border); margin-left: 8px; }
+.timeline-dot { position: absolute; left: -6px; top: 12px; width: 10px; height: 10px; border-radius: 50%; border: 2px solid var(--bg); }
+.timeline-dot.spec { background: var(--purple); }
+.timeline-dot.code { background: var(--green); }
+.timeline-dot.task { background: var(--accent); }
+.timeline-dot.stale { background: var(--orange); }
+.timeline-date { color: var(--text-muted); font-size: 12px; font-family: var(--font); }
+.timeline-text { color: var(--text-dim); font-size: 13px; margin-top: 2px; }
+.timeline-text strong { color: var(--text); font-weight: 600; }
+
+.metrics-row { display: flex; gap: 12px; margin-bottom: 20px; flex-wrap: wrap; }
+.metric-box { background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px 20px; text-align: center; flex: 1; min-width: 100px; }
+.metric-num { font-size: 28px; font-weight: 700; font-family: var(--font); }
+.metric-label { font-size: 11px; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.5px; margin-top: 4px; }
+
+.tree-node { padding: 2px 0; }
+.tree-row { display: flex; align-items: center; gap: 6px; padding: 4px 8px; border-radius: var(--radius-sm); cursor: pointer; font-size: 13px; }
+.tree-row:hover { background: var(--bg-hover); }
+.tree-row.selected { background: var(--blue-bg); }
+.tree-toggle { width: 16px; text-align: center; color: var(--text-muted); font-size: 11px; flex-shrink: 0; user-select: none; }
+.tree-icon { flex-shrink: 0; }
+.tree-label { flex: 1; }
+.tree-children { padding-left: 20px; }
+.tree-children.collapsed { display: none; }
+
+.btn { display: inline-flex; align-items: center; gap: 4px; padding: 4px 12px; border-radius: var(--radius-sm); border: 1px solid var(--border); background: var(--bg-card); color: var(--text-dim); font-size: 12px; font-family: var(--font-sans); cursor: pointer; transition: all .15s; }
+.btn:hover { background: var(--bg-hover); color: var(--text); border-color: var(--text-muted); }
+.btn-accent { border-color: var(--accent); color: var(--accent); }
+.btn-accent:hover { background: var(--blue-bg); }
+.btn-sm { padding: 2px 8px; font-size: 11px; }
+
+.filter-bar { display: flex; gap: 6px; margin-bottom: 16px; flex-wrap: wrap; }
+.filter-btn { padding: 4px 12px; border-radius: 16px; border: 1px solid var(--border); background: none; color: var(--text-dim); font-size: 12px; cursor: pointer; font-family: var(--font-sans); }
+.filter-btn:hover { border-color: var(--text-muted); color: var(--text); }
+.filter-btn.active { background: var(--blue-bg); border-color: var(--accent); color: var(--accent); }
+
+.data-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.data-table th { text-align: left; padding: 8px 12px; border-bottom: 2px solid var(--border); color: var(--text-dim); font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; }
+.data-table td { padding: 8px 12px; border-bottom: 1px solid var(--border); }
+.data-table tr:hover td { background: var(--bg-hover); }
+.data-table .id-col { font-family: var(--font); color: var(--accent); white-space: nowrap; }
+
+.spec-detail-header { margin-bottom: 20px; }
+.spec-detail-header h2 { font-size: 18px; margin-bottom: 4px; }
+.spec-detail-header .spec-path { font-family: var(--font); color: var(--text-dim); font-size: 12px; }
+.item-row { display: flex; align-items: flex-start; gap: 12px; padding: 12px; border-bottom: 1px solid var(--border); }
+.item-row:last-child { border-bottom: none; }
+.item-row:hover { background: var(--bg-hover); }
+.item-id { font-family: var(--font); color: var(--accent); font-size: 12px; white-space: nowrap; min-width: 60px; }
+.item-desc { flex: 1; font-size: 13px; }
+.item-actions { display: flex; gap: 4px; flex-shrink: 0; }
+
+.impact-card { background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px; margin-bottom: 12px; }
+.impact-card h4 { font-size: 14px; margin-bottom: 8px; }
+.impact-list { list-style: none; }
+.impact-list li { padding: 6px 0; border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 8px; font-size: 13px; }
+.impact-list li:last-child { border-bottom: none; }
+
+.select-wrap { position: relative; display: inline-block; }
+.select-wrap select { appearance: none; background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius-sm); color: var(--text); padding: 6px 32px 6px 12px; font-size: 13px; font-family: var(--font-sans); cursor: pointer; }
+.select-wrap::after { content: '\25BC'; position: absolute; right: 10px; top: 50%; transform: translateY(-50%); color: var(--text-muted); font-size: 10px; pointer-events: none; }
+
+.diff-container { display: grid; grid-template-columns: 1fr 0.8fr 0.7fr 1.2fr; gap: 0; }
+.diff-4col { display: grid; grid-template-columns: 1fr 0.8fr 0.7fr 1.2fr; gap: 0; border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; }
+.diff-pane { background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; }
+.diff-pane-header { padding: 8px 12px; border-bottom: 1px solid var(--border); font-size: 12px; color: var(--text-dim); font-weight: 600; }
+
+.collapsible-toggle { cursor: pointer; user-select: none; }
+.collapsible-toggle::before { content: '\25B6'; display: inline-block; width: 16px; font-size: 10px; transition: transform .15s; }
+.collapsible-toggle.open::before { transform: rotate(90deg); }
+
+@media (max-width: 768px) {
+  .content { padding: 12px; }
+  .diff-container { grid-template-columns: 1fr; }
+  .diff-4col { grid-template-columns: 1fr; }
+  .metrics-row { flex-direction: column; }
+  .tabs { padding: 0 12px; }
+  .header { padding: 12px 16px; }
+}
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="header">
+    <h1><span>🌳</span>Spec-Code Mapping</h1>
+    <div class="subtitle">ChatFlow — Real-time Chat Application &bull; Prototype Mockup</div>
+  </div>
+  <div class="tabs" id="tab-bar"></div>
+  <div class="content">
+    <div class="panel" id="panel-tree"></div>
+    <div class="panel" id="panel-detail"></div>
+    <div class="panel" id="panel-chain"></div>
+    <div class="panel" id="panel-diff"></div>
+    <div class="panel" id="panel-impact"></div>
+    <div class="panel" id="panel-staleness"></div>
+    <div class="panel" id="panel-timeline"></div>
+    <div class="panel" id="panel-state"></div>
+  </div>
+</div>
+<script>
+// ── DATA ──────────────────────────────────────────────────────────
+const DATA = {
+  specs: {
+    'ARCHITECTURE.spec.md': {
+      icon: '\u{1F3AF}', type: 'architecture', health: 'green', path: 'ARCHITECTURE.spec.md',
+      overview: 'High-level architecture for ChatFlow: a real-time chat application with frontend SPA, backend API/WS server, and a shared communication protocol.',
+      items: [
+        { id: 'AR-001', kind: 'conceptual', desc: 'Frontend application', link: 'frontend/FRONTEND.spec.md', status: 'linked' },
+        { id: 'AR-002', kind: 'conceptual', desc: 'Backend server', link: 'backend/BACKEND.spec.md', status: 'linked' },
+        { id: 'AR-003', kind: 'conceptual', desc: 'Communication protocol', link: 'protocol/PROTOCOL.spec.md', status: 'linked' },
+        { id: 'AR-004', kind: 'constraint', desc: 'All communication over WebSocket for real-time, REST for CRUD', status: 'mapped' },
+        { id: 'AR-005', kind: 'constraint', desc: 'Authentication required for all features', status: 'mapped' },
+      ],
+      children: ['frontend/FRONTEND.spec.md', 'backend/BACKEND.spec.md', 'protocol/PROTOCOL.spec.md']
+    },
+    'frontend/FRONTEND.spec.md': {
+      icon: '\u{1F4BB}', type: 'module', health: 'green', path: 'frontend/FRONTEND.spec.md',
+      overview: 'React 18 SPA built with Vite and TypeScript. Dark theme by default, responsive, no external UI libraries.',
+      items: [
+        { id: 'FE-001', kind: 'conceptual', desc: 'UI Components', link: 'frontend/components/COMPONENTS.spec.md', status: 'linked' },
+        { id: 'FE-002', kind: 'conceptual', desc: 'State Management', link: 'frontend/state/STATE.spec.md', status: 'linked' },
+        { id: 'FE-003', kind: 'actionable', desc: 'React 18 SPA with Vite, TypeScript strict mode', status: 'mapped', code: ['vite.config.ts', 'tsconfig.json'] },
+        { id: 'FE-004', kind: 'constraint', desc: 'Dark theme by default, CSS variables for theming', status: 'mapped', code: ['styles/theme.css:1-40'] },
+        { id: 'FE-005', kind: 'actionable', desc: 'Responsive layout: mobile-first, breakpoints at 768px, 1200px', status: 'mapped', code: ['styles/layout.css:1-65'] },
+        { id: 'FE-006', kind: 'constraint', desc: 'No external UI libraries \u2014 custom components only', status: 'mapped' },
+      ],
+      children: ['frontend/components/COMPONENTS.spec.md', 'frontend/state/STATE.spec.md']
+    },
+    'frontend/components/COMPONENTS.spec.md': {
+      icon: '\u2699', type: 'submodule', health: 'green', path: 'frontend/components/COMPONENTS.spec.md',
+      overview: 'Custom React components for the ChatFlow UI. All components use forwardRef and have loading states for async operations.',
+      items: [
+        { id: 'FC-001', kind: 'actionable', desc: 'ChatRoom \u2014 main chat interface with message list and input', status: 'mapped', code: ['components/ChatRoom.tsx:1-85'] },
+        { id: 'FC-002', kind: 'actionable', desc: 'MessageList \u2014 virtualized scrolling message display', status: 'mapped', code: ['components/MessageList.tsx:1-120'] },
+        { id: 'FC-003', kind: 'actionable', desc: 'MessageInput \u2014 text input with send button', status: 'mapped', code: ['components/MessageInput.tsx:1-65'] },
+        { id: 'FC-004', kind: 'actionable', desc: 'UserPanel \u2014 sidebar showing online users', status: 'mapped', code: ['components/UserPanel.tsx:1-48'] },
+        { id: 'FC-005', kind: 'actionable', desc: 'RoomList \u2014 sidebar listing rooms with join/create', status: 'mapped', code: ['components/RoomList.tsx:1-72'] },
+        { id: 'FC-006', kind: 'actionable', desc: 'LoginForm \u2014 email/password with validation', status: 'mapped', code: ['components/LoginForm.tsx:1-58'] },
+        { id: 'FC-007', kind: 'constraint', desc: 'All components use forwardRef for composability', status: 'mapped' },
+        { id: 'FC-008', kind: 'constraint', desc: 'Loading states required for all async components', status: 'mapped' },
+      ],
+      children: []
+    },
+    'frontend/state/STATE.spec.md': {
+      icon: '\u{1F4BE}', type: 'submodule', health: 'orange', path: 'frontend/state/STATE.spec.md',
+      overview: 'Zustand-based state management with immer middleware. Handles WebSocket client, auth, and chat state.',
+      items: [
+        { id: 'FS-001', kind: 'actionable', desc: 'WebSocket client with auto-reconnect and message queue', status: 'mapped', code: ['state/wsClient.ts:1-88'] },
+        { id: 'FS-002', kind: 'actionable', desc: 'Auth store: JWT token, user profile, login/logout', status: 'stale', staleReason: 'Spec added refresh token rotation \u2014 code not updated', code: ['state/authStore.ts:1-45'] },
+        { id: 'FS-003', kind: 'actionable', desc: 'Chat store: rooms, messages, typing indicators', status: 'mapped', code: ['state/chatStore.ts:1-72'] },
+        { id: 'FS-004', kind: 'constraint', desc: 'All stores use Zustand with immer middleware', status: 'mapped' },
+      ],
+      children: []
+    },
+    'backend/BACKEND.spec.md': {
+      icon: '\u{1F5A5}', type: 'module', health: 'orange', path: 'backend/BACKEND.spec.md',
+      overview: 'Node.js/Express server providing REST API endpoints and WebSocket server for real-time messaging. Authentication via JWT.',
+      items: [
+        { id: 'BE-001', kind: 'actionable', desc: 'POST /rooms \u2014 Create a new chat room. Returns room ID and join token.', status: 'mapped', task: 'create_room_endpoint', code: ['api/rooms.js:15-68', 'api/schemas.js:8-26'] },
+        { id: 'BE-002', kind: 'actionable', desc: 'GET /rooms \u2014 List all available rooms with member count and last activity.', status: 'mapped', task: 'create_room_endpoint', code: ['api/rooms.js:70-95'] },
+        { id: 'BE-003', kind: 'actionable', desc: 'POST /rooms/:id/join \u2014 Join existing room. Validates room exists and user authenticated.', status: 'mapped', task: 'create_room_endpoint', code: ['api/rooms.js:97-130'] },
+        { id: 'BE-004', kind: 'actionable', desc: 'POST /auth/login \u2014 Authenticate user with email/password. Returns JWT.', status: 'stale', staleReason: 'Spec updated to require refresh token \u2014 code still returns single JWT', task: 'auth_endpoints', code: ['api/auth.js:12-45'] },
+        { id: 'BE-005', kind: 'constraint', desc: 'JWT authentication required for all endpoints except /auth/login and /auth/register', status: 'mapped', code: ['middleware/auth.js:8-25'] },
+        { id: 'BE-006', kind: 'constraint', desc: 'Rate limit: 100 requests per minute per user. Return 429 with retry header.', status: 'unmapped' },
+        { id: 'BE-007', kind: 'conceptual', desc: 'Database layer', link: 'backend/db/DATABASE.spec.md', status: 'linked' },
+        { id: 'BE-008', kind: 'conceptual', desc: 'WebSocket server', link: 'backend/ws/WEBSOCKET.spec.md', status: 'linked' },
+      ],
+      children: ['backend/api/API.spec.md', 'backend/ws/WEBSOCKET.spec.md', 'backend/db/DATABASE.spec.md']
+    },
+    'backend/api/API.spec.md': {
+      icon: '\u{1F50C}', type: 'submodule', health: 'orange', path: 'backend/api/API.spec.md',
+      overview: 'REST API routes for authentication and room management. All responses use the {data, error, meta} envelope format.',
+      items: [
+        { id: 'BA-001', kind: 'actionable', desc: 'POST /auth/register \u2014 create account with email validation', status: 'mapped', task: 'auth_endpoints', code: ['api/auth.js:47-82'] },
+        { id: 'BA-002', kind: 'actionable', desc: 'POST /auth/login \u2014 authenticate, return JWT + refresh token', status: 'mapped', task: 'auth_endpoints', code: ['api/auth.js:12-45'] },
+        { id: 'BA-003', kind: 'actionable', desc: 'POST /rooms \u2014 create room (delegates to room service)', status: 'mapped', code: ['api/rooms.js:15-68'] },
+        { id: 'BA-004', kind: 'actionable', desc: 'DELETE /rooms/:id \u2014 delete room (owner only)', status: 'stale', staleReason: 'Code does soft delete, spec says hard delete', code: ['api/rooms.js:132-155'] },
+        { id: 'BA-005', kind: 'actionable', desc: 'GET /rooms/:id/messages \u2014 paginated message history', status: 'mapped', code: ['api/messages.js:10-48'] },
+        { id: 'BA-006', kind: 'constraint', desc: 'All responses follow {data, error, meta} envelope format', status: 'mapped', code: ['middleware/response.js:1-22'] },
+      ],
+      children: []
+    },
+    'backend/ws/WEBSOCKET.spec.md': {
+      icon: '\u26A1', type: 'submodule', health: 'red', path: 'backend/ws/WEBSOCKET.spec.md',
+      overview: 'WebSocket server handling real-time communication: connection lifecycle, room management, message routing, and presence tracking.',
+      items: [
+        { id: 'WS-001', kind: 'actionable', desc: 'Connection lifecycle: connect, authenticate via token, heartbeat every 30s, graceful disconnect', status: 'mapped', task: 'ws_handler', code: ['ws/handler.js:1-45'] },
+        { id: 'WS-002', kind: 'actionable', desc: 'Room join/leave via WebSocket commands', status: 'mapped', task: 'ws_handler', code: ['ws/rooms.js:1-38'] },
+        { id: 'WS-003', kind: 'actionable', desc: 'Message routing: client \u2192 server \u2192 room members', status: 'stale', staleReason: 'Spec updated with broadcast support \u2014 code not updated', task: 'ws_event_handler', code: ['ws/router.js:1-52'] },
+        { id: 'WS-004', kind: 'constraint', desc: 'Messages must be JSON with {type, payload, timestamp, senderId}', status: 'mapped', code: ['ws/protocol.js:5-18'] },
+        { id: 'WS-005', kind: 'actionable', desc: 'Presence tracking: broadcast online/offline status to room members', status: 'unmapped' },
+      ],
+      children: []
+    },
+    'backend/db/DATABASE.spec.md': {
+      icon: '\u{1F5C3}', type: 'submodule', health: 'orange', path: 'backend/db/DATABASE.spec.md',
+      overview: 'Sequelize ORM models and migrations for User, Room, and Message entities with enforced foreign key constraints.',
+      items: [
+        { id: 'DB-001', kind: 'actionable', desc: 'User model \u2014 id, email, passwordHash, displayName, createdAt', status: 'mapped', task: 'user_model', code: ['db/models.js:5-22'] },
+        { id: 'DB-002', kind: 'actionable', desc: 'Room model \u2014 id, name, maxMembers, isPrivate, joinToken, createdBy', status: 'stale', staleReason: 'Code added lastSeen field not in spec (commit f91ab3c)', task: 'user_model', code: ['db/models.js:24-45'] },
+        { id: 'DB-003', kind: 'actionable', desc: 'Message model \u2014 id, roomId, userId, content, timestamp', status: 'mapped', code: ['db/models.js:47-62'] },
+        { id: 'DB-004', kind: 'constraint', desc: 'Foreign keys enforced, cascade delete on room removal', status: 'mapped', code: ['db/migrations/001.js:15-30'] },
+      ],
+      children: []
+    },
+    'protocol/PROTOCOL.spec.md': {
+      icon: '\u{1F4DC}', type: 'module', health: 'gray', path: 'protocol/PROTOCOL.spec.md',
+      overview: 'Defines all WebSocket message types and formats for client-server communication in ChatFlow.',
+      items: [
+        { id: 'PR-001', kind: 'actionable', desc: 'Message types: chat, join, leave, typing, presence', status: 'unmapped' },
+        { id: 'PR-002', kind: 'actionable', desc: 'Chat message format: {type:"chat", roomId, content, timestamp}', status: 'unmapped' },
+        { id: 'PR-003', kind: 'constraint', desc: 'All messages include senderId and timestamp', status: 'unmapped' },
+        { id: 'PR-004', kind: 'actionable', desc: 'Error message: {type:"error", code, message}', status: 'unmapped' },
+        { id: 'PR-005', kind: 'actionable', desc: 'Presence update: {type:"presence", userId, status, roomId}', status: 'unmapped' },
+      ],
+      children: []
+    },
+  },
+  treeRoot: 'ARCHITECTURE.spec.md',
+  tasks: {
+    create_room_endpoint: {
+      id: 'create_room_endpoint', title: 'Create Room Endpoint', status: 'Done', priority: 'High',
+      implements: ['BE-001', 'BE-002', 'BE-003'],
+      files: ['api/rooms.js', 'api/schemas.js'],
+      commits: [
+        { hash: 'a3f2c1b', msg: 'implement room creation API endpoint' },
+        { hash: 'e7d4f09', msg: 'add room validation and join token generation' },
+      ],
+      plan: ['Add Room schema (name, maxMembers, isPrivate)', 'Implement createRoom handler', 'Generate unique join token', 'Add listRooms handler', 'Add joinRoom handler', 'Register routes'],
+      acceptance: 'Room created with valid token, list returns active rooms, join validates auth',
+    },
+    auth_endpoints: {
+      id: 'auth_endpoints', title: 'Auth Endpoints', status: 'Done', priority: 'High',
+      implements: ['BE-004', 'BA-001', 'BA-002'],
+      files: ['api/auth.js', 'middleware/jwt.js'],
+      commits: [
+        { hash: 'd45b2e1', msg: 'implement auth login and register' },
+        { hash: 'b12c5e3', msg: 'add JWT middleware' },
+      ],
+      plan: ['Create auth router', 'Implement register with email validation', 'Implement login with bcrypt', 'Generate JWT with 24h expiry', 'Add JWT verification middleware'],
+      acceptance: 'User can register and login, JWT is returned, middleware rejects invalid tokens',
+    },
+    ws_handler: {
+      id: 'ws_handler', title: 'WebSocket Handler', status: 'Done', priority: 'High',
+      implements: ['WS-001', 'WS-002'],
+      files: ['ws/handler.js', 'ws/rooms.js'],
+      commits: [
+        { hash: 'c89d1f2', msg: 'implement WebSocket connection handler and room management' },
+      ],
+      plan: ['Create WebSocket server', 'Implement token-based auth on connect', 'Add heartbeat with 30s interval', 'Implement room join/leave commands', 'Track client-room associations'],
+      acceptance: 'Client connects with token, heartbeat keeps alive, can join/leave rooms',
+    },
+    user_model: {
+      id: 'user_model', title: 'Database Models', status: 'Done', priority: 'Medium',
+      implements: ['DB-001', 'DB-002', 'DB-003'],
+      files: ['db/models.js', 'db/migrations/001.js'],
+      commits: [
+        { hash: '7a2e3f1', msg: 'create database models and initial migration' },
+      ],
+      plan: ['Define User model with Sequelize', 'Define Room model with foreign keys', 'Define Message model', 'Create initial migration with constraints', 'Add cascade delete rules'],
+      acceptance: 'Models created, migration runs, foreign keys enforced',
+    },
+    broadcast_endpoint: {
+      id: 'broadcast_endpoint', title: 'Broadcast Endpoint', status: 'Open', priority: 'Medium',
+      implements: ['BE-009'],
+      files: ['api/rooms.js', 'ws/broadcast.js'],
+      commits: [],
+      plan: ['Add POST /rooms/:id/broadcast route', 'Validate sender is room member', 'Forward message to WebSocket broadcast', 'Return delivery confirmation'],
+      acceptance: 'Authenticated room member can broadcast, message reaches all room members via WS',
+    },
+    ws_event_handler: {
+      id: 'ws_event_handler', title: 'WebSocket Event Handler', status: 'In Progress', priority: 'High',
+      implements: ['WS-003'],
+      files: ['ws/router.js', 'ws/handler.js'],
+      commits: [
+        { hash: '8b1c4d2', msg: 'start message routing implementation' },
+      ],
+      plan: ['Parse incoming messages by type', 'Route chat messages to room members', 'Handle typing indicator events', 'Add broadcast support per updated spec'],
+      acceptance: 'Messages routed to correct room members, typing indicators work, broadcast supported',
+    },
+  },
+  codeSnippets: {
+    'api/rooms.js:15-68': {
+      file: 'api/rooms.js', lines: '15-68', fn: 'createRoom',
+      code: '<span class="kw">const</span> crypto = <span class="fn">require</span>(<span class="str">\'crypto\'</span>);\n<span class="kw">const</span> { RoomSchema } = <span class="fn">require</span>(<span class="str">\'./schemas\'</span>);\n<span class="kw">const</span> { Room } = <span class="fn">require</span>(<span class="str">\'../db/models\'</span>);\n\n<span class="kw">async function</span> <span class="fn">createRoom</span>(req, res) {\n  <span class="kw">const</span> { error, value } = RoomSchema.<span class="fn">validate</span>(req.body);\n  <span class="kw">if</span> (error) {\n    <span class="kw">return</span> res.<span class="fn">status</span>(<span class="num">400</span>).<span class="fn">json</span>({\n      error: { code: <span class="str">\'VALIDATION\'</span>, message: error.message }\n    });\n  }\n\n  <span class="kw">const</span> { name, maxMembers, isPrivate } = value;\n  <span class="kw">const</span> joinToken = crypto.<span class="fn">randomUUID</span>();\n\n  <span class="kw">const</span> room = <span class="kw">await</span> Room.<span class="fn">create</span>({\n    name,\n    maxMembers: maxMembers || <span class="num">50</span>,\n    isPrivate: isPrivate || <span class="kw">false</span>,\n    joinToken,\n    createdBy: req.user.id,\n  });\n\n  res.<span class="fn">status</span>(<span class="num">201</span>).<span class="fn">json</span>({\n    data: { roomId: room.id, joinToken },\n    meta: { created: room.createdAt }\n  });\n}'
+    },
+    'api/rooms.js:70-95': {
+      file: 'api/rooms.js', lines: '70-95', fn: 'listRooms',
+      code: '<span class="kw">async function</span> <span class="fn">listRooms</span>(req, res) {\n  <span class="kw">const</span> rooms = <span class="kw">await</span> Room.<span class="fn">findAll</span>({\n    attributes: [<span class="str">\'id\'</span>, <span class="str">\'name\'</span>, <span class="str">\'isPrivate\'</span>, <span class="str">\'createdAt\'</span>],\n    include: [{\n      model: Message,\n      attributes: [],\n      required: <span class="kw">false</span>,\n    }],\n    group: [<span class="str">\'Room.id\'</span>],\n  });\n\n  res.<span class="fn">json</span>({\n    data: rooms,\n    meta: { count: rooms.length }\n  });\n}'
+    },
+    'api/rooms.js:97-130': {
+      file: 'api/rooms.js', lines: '97-130', fn: 'joinRoom',
+      code: '<span class="kw">async function</span> <span class="fn">joinRoom</span>(req, res) {\n  <span class="kw">const</span> { id } = req.params;\n  <span class="kw">const</span> room = <span class="kw">await</span> Room.<span class="fn">findByPk</span>(id);\n\n  <span class="kw">if</span> (!room) {\n    <span class="kw">return</span> res.<span class="fn">status</span>(<span class="num">404</span>).<span class="fn">json</span>({\n      error: { code: <span class="str">\'NOT_FOUND\'</span>, message: <span class="str">\'Room not found\'</span> }\n    });\n  }\n\n  <span class="cm">// Check member count</span>\n  <span class="kw">const</span> memberCount = <span class="kw">await</span> RoomMember.<span class="fn">count</span>({\n    where: { roomId: id }\n  });\n\n  <span class="kw">if</span> (memberCount >= room.maxMembers) {\n    <span class="kw">return</span> res.<span class="fn">status</span>(<span class="num">403</span>).<span class="fn">json</span>({\n      error: { code: <span class="str">\'ROOM_FULL\'</span>, message: <span class="str">\'Room is at capacity\'</span> }\n    });\n  }\n\n  <span class="kw">await</span> RoomMember.<span class="fn">create</span>({ roomId: id, userId: req.user.id });\n  res.<span class="fn">status</span>(<span class="num">200</span>).<span class="fn">json</span>({ data: { joined: <span class="kw">true</span> } });\n}'
+    },
+    'api/rooms.js:132-155': {
+      file: 'api/rooms.js', lines: '132-155', fn: 'deleteRoom',
+      code: '<span class="kw">async function</span> <span class="fn">deleteRoom</span>(req, res) {\n  <span class="kw">const</span> { id } = req.params;\n  <span class="kw">const</span> room = <span class="kw">await</span> Room.<span class="fn">findByPk</span>(id);\n\n  <span class="kw">if</span> (!room || room.createdBy !== req.user.id) {\n    <span class="kw">return</span> res.<span class="fn">status</span>(<span class="num">404</span>).<span class="fn">json</span>({\n      error: { code: <span class="str">\'NOT_FOUND\'</span>, message: <span class="str">\'Room not found\'</span> }\n    });\n  }\n\n  <span class="cm">// DRIFT: Spec says hard delete, code does soft delete</span>\n  <span class="kw">await</span> room.<span class="fn">update</span>({ deletedAt: <span class="kw">new</span> <span class="fn">Date</span>() });\n  res.<span class="fn">status</span>(<span class="num">200</span>).<span class="fn">json</span>({ data: { deleted: <span class="kw">true</span> } });\n}'
+    },
+    'api/schemas.js:8-26': {
+      file: 'api/schemas.js', lines: '8-26', fn: 'RoomSchema',
+      code: '<span class="kw">const</span> Joi = <span class="fn">require</span>(<span class="str">\'joi\'</span>);\n\n<span class="kw">const</span> RoomSchema = Joi.<span class="fn">object</span>({\n  name: Joi.<span class="fn">string</span>().<span class="fn">min</span>(<span class="num">3</span>).<span class="fn">max</span>(<span class="num">100</span>).<span class="fn">required</span>(),\n  maxMembers: Joi.<span class="fn">number</span>().<span class="fn">integer</span>().<span class="fn">min</span>(<span class="num">2</span>).<span class="fn">max</span>(<span class="num">500</span>).<span class="fn">default</span>(<span class="num">50</span>),\n  isPrivate: Joi.<span class="fn">boolean</span>().<span class="fn">default</span>(<span class="kw">false</span>),\n});\n\nmodule.exports = { RoomSchema };'
+    },
+    'api/auth.js:12-45': {
+      file: 'api/auth.js', lines: '12-45', fn: 'login',
+      code: '<span class="kw">const</span> bcrypt = <span class="fn">require</span>(<span class="str">\'bcrypt\'</span>);\n<span class="kw">const</span> jwt = <span class="fn">require</span>(<span class="str">\'jsonwebtoken\'</span>);\n\n<span class="kw">async function</span> <span class="fn">login</span>(req, res) {\n  <span class="kw">const</span> { email, password } = req.body;\n  <span class="kw">const</span> user = <span class="kw">await</span> User.<span class="fn">findOne</span>({ where: { email } });\n\n  <span class="kw">if</span> (!user || !<span class="kw">await</span> bcrypt.<span class="fn">compare</span>(password, user.passwordHash)) {\n    <span class="kw">return</span> res.<span class="fn">status</span>(<span class="num">401</span>).<span class="fn">json</span>({\n      error: { code: <span class="str">\'AUTH_FAILED\'</span>, message: <span class="str">\'Invalid credentials\'</span> }\n    });\n  }\n\n  <span class="cm">// STALE: Spec now requires refresh token \u2014 not implemented</span>\n  <span class="kw">const</span> token = jwt.<span class="fn">sign</span>(\n    { id: user.id, email: user.email },\n    process.env.JWT_SECRET,\n    { expiresIn: <span class="str">\'24h\'</span> }\n  );\n\n  res.<span class="fn">json</span>({ data: { token } });\n}'
+    },
+    'api/auth.js:47-82': {
+      file: 'api/auth.js', lines: '47-82', fn: 'register',
+      code: '<span class="kw">async function</span> <span class="fn">register</span>(req, res) {\n  <span class="kw">const</span> { email, password, displayName } = req.body;\n\n  <span class="kw">const</span> existing = <span class="kw">await</span> User.<span class="fn">findOne</span>({ where: { email } });\n  <span class="kw">if</span> (existing) {\n    <span class="kw">return</span> res.<span class="fn">status</span>(<span class="num">409</span>).<span class="fn">json</span>({\n      error: { code: <span class="str">\'DUPLICATE\'</span>, message: <span class="str">\'Email already registered\'</span> }\n    });\n  }\n\n  <span class="kw">const</span> passwordHash = <span class="kw">await</span> bcrypt.<span class="fn">hash</span>(password, <span class="num">12</span>);\n  <span class="kw">const</span> user = <span class="kw">await</span> User.<span class="fn">create</span>({\n    email,\n    passwordHash,\n    displayName,\n  });\n\n  <span class="kw">const</span> token = jwt.<span class="fn">sign</span>(\n    { id: user.id, email },\n    process.env.JWT_SECRET,\n    { expiresIn: <span class="str">\'24h\'</span> }\n  );\n\n  res.<span class="fn">status</span>(<span class="num">201</span>).<span class="fn">json</span>({\n    data: { userId: user.id, token }\n  });\n}'
+    },
+    'middleware/auth.js:8-25': {
+      file: 'middleware/auth.js', lines: '8-25', fn: 'authMiddleware',
+      code: '<span class="kw">function</span> <span class="fn">authMiddleware</span>(req, res, next) {\n  <span class="kw">const</span> authHeader = req.headers.authorization;\n  <span class="kw">if</span> (!authHeader || !authHeader.<span class="fn">startsWith</span>(<span class="str">\'Bearer \'</span>)) {\n    <span class="kw">return</span> res.<span class="fn">status</span>(<span class="num">401</span>).<span class="fn">json</span>({\n      error: { code: <span class="str">\'NO_TOKEN\'</span>, message: <span class="str">\'Authentication required\'</span> }\n    });\n  }\n  <span class="kw">try</span> {\n    <span class="kw">const</span> token = authHeader.<span class="fn">split</span>(<span class="str">\' \'</span>)[<span class="num">1</span>];\n    req.user = jwt.<span class="fn">verify</span>(token, process.env.JWT_SECRET);\n    <span class="fn">next</span>();\n  } <span class="kw">catch</span> (e) {\n    res.<span class="fn">status</span>(<span class="num">401</span>).<span class="fn">json</span>({\n      error: { code: <span class="str">\'INVALID_TOKEN\'</span>, message: <span class="str">\'Token expired or invalid\'</span> }\n    });\n  }\n}'
+    },
+    'ws/handler.js:1-45': {
+      file: 'ws/handler.js', lines: '1-45', fn: 'ConnectionHandler',
+      code: '<span class="kw">const</span> WebSocket = <span class="fn">require</span>(<span class="str">\'ws\'</span>);\n<span class="kw">const</span> { verifyToken } = <span class="fn">require</span>(<span class="str">\'../middleware/jwt\'</span>);\n\n<span class="kw">class</span> <span class="fn">ConnectionHandler</span> {\n  <span class="fn">constructor</span>(wss) {\n    <span class="kw">this</span>.wss = wss;\n    <span class="kw">this</span>.clients = <span class="kw">new</span> <span class="fn">Map</span>();\n    <span class="kw">this</span>.heartbeatInterval = <span class="num">30000</span>;\n  }\n\n  <span class="fn">handleConnection</span>(ws, req) {\n    <span class="kw">const</span> token = req.url.<span class="fn">split</span>(<span class="str">\'token=\'</span>)[<span class="num">1</span>];\n    <span class="kw">const</span> user = <span class="fn">verifyToken</span>(token);\n    <span class="kw">if</span> (!user) {\n      ws.<span class="fn">close</span>(<span class="num">4001</span>, <span class="str">\'Authentication failed\'</span>);\n      <span class="kw">return</span>;\n    }\n\n    <span class="kw">this</span>.clients.<span class="fn">set</span>(user.id, { ws, user, rooms: <span class="kw">new</span> <span class="fn">Set</span>() });\n    <span class="kw">this</span>.<span class="fn">startHeartbeat</span>(ws, user.id);\n\n    ws.<span class="fn">on</span>(<span class="str">\'message\'</span>, (data) =&gt; <span class="kw">this</span>.<span class="fn">handleMessage</span>(user.id, data));\n    ws.<span class="fn">on</span>(<span class="str">\'close\'</span>, () =&gt; <span class="kw">this</span>.<span class="fn">handleDisconnect</span>(user.id));\n  }\n\n  <span class="fn">startHeartbeat</span>(ws, userId) {\n    <span class="kw">const</span> interval = <span class="fn">setInterval</span>(() =&gt; {\n      <span class="kw">if</span> (ws.readyState === WebSocket.OPEN) {\n        ws.<span class="fn">ping</span>();\n      } <span class="kw">else</span> {\n        <span class="fn">clearInterval</span>(interval);\n        <span class="kw">this</span>.<span class="fn">handleDisconnect</span>(userId);\n      }\n    }, <span class="kw">this</span>.heartbeatInterval);\n  }\n}'
+    },
+    'ws/rooms.js:1-38': {
+      file: 'ws/rooms.js', lines: '1-38', fn: 'RoomManager',
+      code: '<span class="kw">class</span> <span class="fn">RoomManager</span> {\n  <span class="fn">constructor</span>(handler) {\n    <span class="kw">this</span>.handler = handler;\n  }\n\n  <span class="fn">joinRoom</span>(userId, roomId) {\n    <span class="kw">const</span> client = <span class="kw">this</span>.handler.clients.<span class="fn">get</span>(userId);\n    <span class="kw">if</span> (!client) <span class="kw">return false</span>;\n\n    client.rooms.<span class="fn">add</span>(roomId);\n    <span class="kw">this</span>.<span class="fn">broadcastToRoom</span>(roomId, {\n      type: <span class="str">\'join\'</span>,\n      userId,\n      roomId,\n      timestamp: <span class="fn">Date</span>.<span class="fn">now</span>(),\n    });\n    <span class="kw">return true</span>;\n  }\n\n  <span class="fn">leaveRoom</span>(userId, roomId) {\n    <span class="kw">const</span> client = <span class="kw">this</span>.handler.clients.<span class="fn">get</span>(userId);\n    <span class="kw">if</span> (!client) <span class="kw">return</span>;\n\n    client.rooms.<span class="fn">delete</span>(roomId);\n    <span class="kw">this</span>.<span class="fn">broadcastToRoom</span>(roomId, {\n      type: <span class="str">\'leave\'</span>,\n      userId,\n      roomId,\n      timestamp: <span class="fn">Date</span>.<span class="fn">now</span>(),\n    });\n  }\n}'
+    },
+    'ws/router.js:1-52': {
+      file: 'ws/router.js', lines: '1-52', fn: 'MessageRouter',
+      code: '<span class="cm">// [#WS-003] Message routing \u2014 STALE: needs broadcast support</span>\n<span class="kw">class</span> <span class="fn">MessageRouter</span> {\n  <span class="fn">constructor</span>(roomManager) {\n    <span class="kw">this</span>.roomManager = roomManager;\n    <span class="kw">this</span>.handlers = <span class="kw">new</span> <span class="fn">Map</span>();\n    <span class="kw">this</span>.<span class="fn">registerHandlers</span>();\n  }\n\n  <span class="fn">registerHandlers</span>() {\n    <span class="kw">this</span>.handlers.<span class="fn">set</span>(<span class="str">\'chat\'</span>, <span class="kw">this</span>.handleChat.<span class="fn">bind</span>(<span class="kw">this</span>));\n    <span class="kw">this</span>.handlers.<span class="fn">set</span>(<span class="str">\'typing\'</span>, <span class="kw">this</span>.handleTyping.<span class="fn">bind</span>(<span class="kw">this</span>));\n  }\n\n  <span class="fn">route</span>(userId, message) {\n    <span class="kw">const</span> parsed = <span class="fn">JSON</span>.<span class="fn">parse</span>(message);\n    <span class="kw">const</span> handler = <span class="kw">this</span>.handlers.<span class="fn">get</span>(parsed.type);\n    <span class="kw">if</span> (handler) {\n      <span class="fn">handler</span>(userId, parsed);\n    }\n  }\n\n  <span class="fn">handleChat</span>(userId, msg) {\n    <span class="kw">this</span>.roomManager.<span class="fn">broadcastToRoom</span>(msg.roomId, {\n      type: <span class="str">\'chat\'</span>,\n      senderId: userId,\n      content: msg.content,\n      roomId: msg.roomId,\n      timestamp: <span class="fn">Date</span>.<span class="fn">now</span>(),\n    });\n  }\n\n  <span class="fn">handleTyping</span>(userId, msg) {\n    <span class="kw">this</span>.roomManager.<span class="fn">broadcastToRoom</span>(msg.roomId, {\n      type: <span class="str">\'typing\'</span>,\n      senderId: userId,\n      roomId: msg.roomId,\n    }, userId); <span class="cm">// exclude sender</span>\n  }\n}'
+    },
+    'ws/protocol.js:5-18': {
+      file: 'ws/protocol.js', lines: '5-18', fn: 'validateMessage',
+      code: '<span class="kw">function</span> <span class="fn">validateMessage</span>(data) {\n  <span class="kw">const</span> required = [<span class="str">\'type\'</span>, <span class="str">\'payload\'</span>, <span class="str">\'timestamp\'</span>, <span class="str">\'senderId\'</span>];\n  <span class="kw">for</span> (<span class="kw">const</span> field <span class="kw">of</span> required) {\n    <span class="kw">if</span> (!(field <span class="kw">in</span> data)) {\n      <span class="kw">return</span> { valid: <span class="kw">false</span>, error: `Missing field: ${field}` };\n    }\n  }\n  <span class="kw">return</span> { valid: <span class="kw">true</span> };\n}'
+    },
+    'middleware/response.js:1-22': {
+      file: 'middleware/response.js', lines: '1-22', fn: 'responseEnvelope',
+      code: '<span class="kw">function</span> <span class="fn">responseEnvelope</span>(req, res, next) {\n  <span class="kw">const</span> origJson = res.json.<span class="fn">bind</span>(res);\n\n  res.json = (body) =&gt; {\n    <span class="kw">if</span> (!body.data &amp;&amp; !body.error) {\n      body = { data: body, error: <span class="kw">null</span>, meta: {} };\n    }\n    <span class="kw">if</span> (!body.meta) body.meta = {};\n    body.meta.timestamp = <span class="kw">new</span> <span class="fn">Date</span>().<span class="fn">toISOString</span>();\n    <span class="kw">return</span> <span class="fn">origJson</span>(body);\n  };\n\n  <span class="fn">next</span>();\n}'
+    },
+    'db/models.js:5-22': {
+      file: 'db/models.js', lines: '5-22', fn: 'User model',
+      code: '<span class="cm">// [#DB-001] User model</span>\n<span class="kw">const</span> User = sequelize.<span class="fn">define</span>(<span class="str">\'User\'</span>, {\n  id: { type: DataTypes.UUID, defaultValue: DataTypes.UUIDV4, primaryKey: <span class="kw">true</span> },\n  email: { type: DataTypes.STRING, unique: <span class="kw">true</span>, allowNull: <span class="kw">false</span> },\n  passwordHash: { type: DataTypes.STRING, allowNull: <span class="kw">false</span> },\n  displayName: { type: DataTypes.STRING(<span class="num">50</span>), allowNull: <span class="kw">false</span> },\n  lastSeen: { type: DataTypes.DATE }, <span class="cm">// NOT IN SPEC \u2014 added in commit f91ab3c</span>\n  createdAt: { type: DataTypes.DATE, defaultValue: DataTypes.NOW },\n});'
+    },
+    'db/models.js:24-45': {
+      file: 'db/models.js', lines: '24-45', fn: 'Room model',
+      code: '<span class="cm">// [#DB-002] Room model</span>\n<span class="kw">const</span> Room = sequelize.<span class="fn">define</span>(<span class="str">\'Room\'</span>, {\n  id: { type: DataTypes.UUID, defaultValue: DataTypes.UUIDV4, primaryKey: <span class="kw">true</span> },\n  name: { type: DataTypes.STRING(<span class="num">100</span>), allowNull: <span class="kw">false</span> },\n  maxMembers: { type: DataTypes.INTEGER, defaultValue: <span class="num">50</span> },\n  isPrivate: { type: DataTypes.BOOLEAN, defaultValue: <span class="kw">false</span> },\n  joinToken: { type: DataTypes.UUID, unique: <span class="kw">true</span> },\n  createdBy: { type: DataTypes.UUID, references: { model: User, key: <span class="str">\'id\'</span> } },\n});'
+    },
+    'db/models.js:47-62': {
+      file: 'db/models.js', lines: '47-62', fn: 'Message model',
+      code: '<span class="cm">// [#DB-003] Message model</span>\n<span class="kw">const</span> Message = sequelize.<span class="fn">define</span>(<span class="str">\'Message\'</span>, {\n  id: { type: DataTypes.UUID, defaultValue: DataTypes.UUIDV4, primaryKey: <span class="kw">true</span> },\n  content: { type: DataTypes.TEXT, allowNull: <span class="kw">false</span> },\n  roomId: { type: DataTypes.UUID, references: { model: Room, key: <span class="str">\'id\'</span> } },\n  userId: { type: DataTypes.UUID, references: { model: User, key: <span class="str">\'id\'</span> } },\n  timestamp: { type: DataTypes.DATE, defaultValue: DataTypes.NOW },\n});'
+    },
+    'db/migrations/001.js:15-30': {
+      file: 'db/migrations/001.js', lines: '15-30', fn: 'migration constraints',
+      code: '<span class="cm">// [#DB-004] Foreign key constraints</span>\n<span class="kw">await</span> queryInterface.<span class="fn">addConstraint</span>(<span class="str">\'Messages\'</span>, {\n  fields: [<span class="str">\'roomId\'</span>],\n  type: <span class="str">\'foreign key\'</span>,\n  references: { table: <span class="str">\'Rooms\'</span>, field: <span class="str">\'id\'</span> },\n  onDelete: <span class="str">\'CASCADE\'</span>,\n});\n\n<span class="kw">await</span> queryInterface.<span class="fn">addConstraint</span>(<span class="str">\'Messages\'</span>, {\n  fields: [<span class="str">\'userId\'</span>],\n  type: <span class="str">\'foreign key\'</span>,\n  references: { table: <span class="str">\'Users\'</span>, field: <span class="str">\'id\'</span> },\n  onDelete: <span class="str">\'SET NULL\'</span>,\n});'
+    },
+  },
+  timeline: [
+    { date: 'Mar 12 14:22', type: 'stale', text: 'Staleness detected: <strong>#DB-002</strong> code changed without spec update (f91ab3c added lastSeen)' },
+    { date: 'Mar 12 11:05', type: 'code', text: 'Code change: commit <strong>f91ab3c</strong> "add lastSeen timestamp to User model"' },
+    { date: 'Mar 11 16:42', type: 'spec', text: 'Spec change: <strong>#BE-009</strong> created (POST /rooms/:id/broadcast)' },
+    { date: 'Mar 11 16:40', type: 'spec', text: 'Spec change: <strong>#BE-001</strong> updated (added "supports broadcast to members")' },
+    { date: 'Mar 11 10:00', type: 'spec', text: 'Spec change: <strong>#FS-002</strong> updated (added refresh token rotation)' },
+    { date: 'Mar 10 09:15', type: 'task', text: 'Task completed: <strong>create_room_endpoint</strong> (implements BE-001, BE-002, BE-003)' },
+    { date: 'Mar 9 14:30', type: 'code', text: 'Code change: commit <strong>8b1c4d2</strong> "start message routing implementation"' },
+    { date: 'Mar 8 15:30', type: 'code', text: 'Code change: commits <strong>a3f2c1b</strong>, <strong>e7d4f09</strong> (room creation API)' },
+    { date: 'Mar 7 10:00', type: 'task', text: 'Task created: <strong>create_room_endpoint</strong>' },
+    { date: 'Mar 5 14:00', type: 'spec', text: 'Spec created: <strong>BACKEND.spec.md</strong> (8 items)' },
+    { date: 'Mar 3 11:00', type: 'spec', text: 'Spec created: <strong>ARCHITECTURE.spec.md</strong> (5 items)' },
+  ],
+  staleness: {
+    forward: [
+      { id: 'BE-004', reason: 'Spec now requires refresh token \u2014 code still returns single JWT', specChanged: 'Mar 11', file: 'api/auth.js:12-45' },
+      { id: 'WS-003', reason: 'Spec updated with broadcast support \u2014 code not updated', specChanged: 'Mar 11', file: 'ws/router.js:1-52' },
+      { id: 'FS-002', reason: 'Spec added refresh token rotation \u2014 code not updated', specChanged: 'Mar 11', file: 'state/authStore.ts:1-45' },
+    ],
+    reverse: [
+      { id: 'DB-002', reason: 'Code added lastSeen field not in spec (commit f91ab3c)', codeChanged: 'Mar 12', file: 'db/models.js:24-45' },
+      { id: 'BA-004', reason: 'Code does soft delete, spec says hard delete', codeChanged: 'Unknown', file: 'api/rooms.js:132-155' },
+    ],
+  },
+  metrics: { total: 51, mapped: 37, stale: 5, drift: 2, unmapped: 7 },
+};
+
+// ── HELPERS ───────────────────────────────────────────────────────
+function getAllItems() {
+  const items = [];
+  for (const [specKey, spec] of Object.entries(DATA.specs)) {
+    for (const item of spec.items) {
+      items.push({ ...item, specKey, specPath: spec.path, specIcon: spec.icon });
+    }
+  }
+  return items;
+}
+
+function findItem(id) {
+  for (const [specKey, spec] of Object.entries(DATA.specs)) {
+    for (const item of spec.items) {
+      if (item.id === id) return { ...item, specKey, specPath: spec.path };
+    }
+  }
+  return null;
+}
+
+function statusBadge(status) {
+  const map = { mapped: 'badge-green', stale: 'badge-yellow', unmapped: 'badge-red', linked: 'badge-purple', Done: 'badge-green', Open: 'badge-blue', 'In Progress': 'badge-orange' };
+  return '<span class="badge ' + (map[status] || 'badge-muted') + '">' + status + '</span>';
+}
+
+function kindBadge(kind) {
+  const map = { actionable: 'badge-blue', constraint: 'badge-purple', conceptual: 'badge-muted' };
+  return '<span class="badge ' + (map[kind] || 'badge-muted') + '">' + kind + '</span>';
+}
+
+function healthDot(h) {
+  return '<span class="health-dot ' + h + '"></span>';
+}
+
+function esc(s) {
+  var d = document.createElement('div');
+  d.textContent = s;
+  return d.innerHTML;
+}
+
+// ── STATE ─────────────────────────────────────────────────────────
+var currentTab = 'tree';
+var selectedSpec = 'ARCHITECTURE.spec.md';
+var selectedChainItem = null;
+var timelineFilter = 'all';
+var stateSpecSelector = 'ARCHITECTURE.spec.md';
+var expandedTreeNodes = new Set(['ARCHITECTURE.spec.md', 'backend/BACKEND.spec.md', 'frontend/FRONTEND.spec.md']);
+var expandedChainSteps = new Set();
+var chainStepCounter = 0;
+
+// ── TAB BAR ──────────────────────────────────────────────────────
+var TABS = [
+  { id: 'tree', label: 'Spec Tree' },
+  { id: 'detail', label: 'Spec Detail' },
+  { id: 'chain', label: 'Mapping Chain' },
+  { id: 'diff', label: 'Side-by-Side Diff' },
+  { id: 'impact', label: 'Impact Advisory' },
+  { id: 'staleness', label: 'Staleness' },
+  { id: 'timeline', label: 'Timeline' },
+  { id: 'state', label: 'Current State' },
+];
+
+function renderTabs() {
+  var bar = document.getElementById('tab-bar');
+  bar.innerHTML = TABS.map(function(t) {
+    return '<button class="tab-btn' + (currentTab === t.id ? ' active' : '') + '" data-tab="' + t.id + '">' + t.label + '</button>';
+  }).join('');
+  bar.querySelectorAll('.tab-btn').forEach(function(btn) {
+    btn.addEventListener('click', function() { switchTab(btn.dataset.tab); });
+  });
+}
+
+function switchTab(id) {
+  currentTab = id;
+  renderTabs();
+  document.querySelectorAll('.panel').forEach(function(p) { p.classList.remove('active'); });
+  document.getElementById('panel-' + id).classList.add('active');
+  renderPanel(id);
+}
+
+function navigateToDetail(specKey) {
+  selectedSpec = specKey;
+  switchTab('detail');
+}
+
+function navigateToChain(itemId) {
+  selectedChainItem = itemId;
+  expandedChainSteps = new Set();
+  chainStepCounter = 0;
+  switchTab('chain');
+}
+
+function renderPanel(id) {
+  var renderers = { tree: renderTree, detail: renderDetail, chain: renderChain, diff: renderDiff, impact: renderImpact, staleness: renderStaleness, timeline: renderTimeline, state: renderState };
+  renderers[id]();
+}
+
+// ── TREE ─────────────────────────────────────────────────────────
+function renderTree() {
+  var panel = document.getElementById('panel-tree');
+
+  function renderNode(key) {
+    var spec = DATA.specs[key];
+    if (!spec) return '';
+    var expanded = expandedTreeNodes.has(key);
+    var hasChildren = spec.children && spec.children.length > 0;
+    var toggle = hasChildren ? (expanded ? '\u25BC' : '\u25B6') : '&nbsp;';
+    var sel = selectedSpec === key ? ' selected' : '';
+    var html = '<div class="tree-node"><div class="tree-row' + sel + '" data-spec="' + key + '">' +
+      '<span class="tree-toggle" data-toggle="' + key + '">' + toggle + '</span>' +
+      '<span class="tree-icon">' + spec.icon + '</span>' +
+      '<span class="tree-label">' + esc(key.split('/').pop()) + '</span>' +
+      healthDot(spec.health) +
+      '<span class="badge badge-muted" style="font-size:10px">' + spec.items.length + ' items</span>' +
+      '</div>';
+    if (hasChildren) {
+      html += '<div class="tree-children' + (expanded ? '' : ' collapsed') + '">';
+      for (var i = 0; i < spec.children.length; i++) {
+        html += renderNode(spec.children[i]);
+      }
+      html += '</div>';
+    }
+    html += '</div>';
+    return html;
+  }
+
+  var summary = '<div class="metrics-row">' +
+    '<div class="metric-box"><div class="metric-num" style="color:var(--text)">' + DATA.metrics.total + '</div><div class="metric-label">Total Items</div></div>' +
+    '<div class="metric-box"><div class="metric-num" style="color:var(--green)">' + DATA.metrics.mapped + '</div><div class="metric-label">Mapped</div></div>' +
+    '<div class="metric-box"><div class="metric-num" style="color:var(--yellow)">' + DATA.metrics.stale + '</div><div class="metric-label">Stale</div></div>' +
+    '<div class="metric-box"><div class="metric-num" style="color:var(--orange)">' + DATA.metrics.drift + '</div><div class="metric-label">Drift</div></div>' +
+    '<div class="metric-box"><div class="metric-num" style="color:var(--red)">' + DATA.metrics.unmapped + '</div><div class="metric-label">Unmapped</div></div>' +
+    '</div>';
+
+  panel.innerHTML = summary + '<div class="card"><div class="card-header"><span class="card-title">Specification Hierarchy</span></div><div class="card-body">' + renderNode(DATA.treeRoot) + '</div></div>';
+
+  panel.querySelectorAll('.tree-toggle').forEach(function(el) {
+    el.addEventListener('click', function(e) {
+      e.stopPropagation();
+      var key = el.dataset.toggle;
+      if (expandedTreeNodes.has(key)) expandedTreeNodes.delete(key);
+      else expandedTreeNodes.add(key);
+      renderTree();
+    });
+  });
+  panel.querySelectorAll('.tree-row').forEach(function(el) {
+    el.addEventListener('click', function() { navigateToDetail(el.dataset.spec); });
+  });
+}
+
+// ── DETAIL ───────────────────────────────────────────────────────
+function renderDetail() {
+  var panel = document.getElementById('panel-detail');
+  var spec = DATA.specs[selectedSpec];
+  if (!spec) { panel.innerHTML = '<p>Select a spec from the tree.</p>'; return; }
+
+  var html = '<div class="spec-detail-header">' +
+    '<h2>' + spec.icon + ' ' + esc(selectedSpec.split('/').pop()) + '</h2>' +
+    '<div class="spec-path">' + esc(spec.path) + '</div>' +
+    '<div style="margin-top:8px">' + healthDot(spec.health) + ' <span class="badge badge-muted">' + spec.type + '</span> <span class="badge badge-muted">' + spec.items.length + ' items</span></div>' +
+    '</div>';
+
+  if (spec.overview) {
+    html += '<div class="card" style="margin-bottom:16px"><div class="card-body" style="color:var(--text-dim);font-size:13px">' + esc(spec.overview) + '</div></div>';
+  }
+
+  html += '<div class="card"><div class="card-header"><span class="card-title">Spec Items</span></div><div class="card-body" style="padding:0">';
+
+  for (var i = 0; i < spec.items.length; i++) {
+    var item = spec.items[i];
+    var codeLinks = item.code ? item.code.map(function(c) { return '<span style="font-family:var(--font);font-size:11px;color:var(--text-dim)">' + esc(c) + '</span>'; }).join(', ') : '';
+    var taskLink = item.task ? '<span class="badge badge-blue" style="font-size:10px">' + esc(item.task) + '</span>' : '';
+    var linkBtn = item.link ? '<button class="btn btn-sm" data-nav-spec="' + item.link + '">Go to spec</button>' : '';
+    var chainBtn = (item.status === 'mapped' || item.status === 'stale') ? '<button class="btn btn-sm btn-accent" data-chain="' + item.id + '">Chain</button>' : '';
+    var staleNote = item.staleReason ? '<div style="color:var(--yellow);font-size:12px;margin-top:4px">' + esc(item.staleReason) + '</div>' : '';
+
+    html += '<div class="item-row">' +
+      '<div class="item-id">' + item.id + '</div>' +
+      '<div class="item-desc">' +
+        '<div>' + esc(item.desc) + '</div>' +
+        staleNote +
+        '<div style="margin-top:4px;display:flex;gap:6px;align-items:center;flex-wrap:wrap">' +
+          kindBadge(item.kind) + ' ' + statusBadge(item.status) + ' ' + taskLink + ' ' + codeLinks +
+        '</div>' +
+      '</div>' +
+      '<div class="item-actions">' + linkBtn + ' ' + chainBtn + '</div>' +
+      '</div>';
+  }
+  html += '</div></div>';
+
+  if (spec.children && spec.children.length > 0) {
+    html += '<div class="card" style="margin-top:16px"><div class="card-header"><span class="card-title">Child Specs</span></div><div class="card-body">';
+    for (var j = 0; j < spec.children.length; j++) {
+      var child = spec.children[j];
+      var cs = DATA.specs[child];
+      if (!cs) continue;
+      html += '<div class="tree-row" data-nav-spec="' + child + '" style="cursor:pointer">' +
+        '<span class="tree-icon">' + cs.icon + '</span>' +
+        '<span class="tree-label">' + esc(child) + '</span>' +
+        healthDot(cs.health) +
+        '<span class="badge badge-muted" style="font-size:10px">' + cs.items.length + ' items</span>' +
+        '</div>';
+    }
+    html += '</div></div>';
+  }
+
+  panel.innerHTML = html;
+  panel.querySelectorAll('[data-nav-spec]').forEach(function(el) {
+    el.addEventListener('click', function() { navigateToDetail(el.dataset.navSpec); });
+  });
+  panel.querySelectorAll('[data-chain]').forEach(function(el) {
+    el.addEventListener('click', function() { navigateToChain(el.dataset.chain); });
+  });
+}
+
+// ── CHAIN ────────────────────────────────────────────────────────
+function makeChainStep(type, title, subtitle, content) {
+  var id = 'cs-' + (chainStepCounter++);
+  var isOpen = expandedChainSteps.has(id);
+  return '<div class="chain-step">' +
+    '<div class="chain-step-header" data-step-id="' + id + '">' +
+      '<span class="collapsible-toggle' + (isOpen ? ' open' : '') + '"></span>' +
+      '<strong>' + title + '</strong>' +
+      '<span style="color:var(--text-dim);font-size:12px;margin-left:8px">' + subtitle + '</span>' +
+    '</div>' +
+    '<div class="chain-step-body' + (isOpen ? ' open' : '') + '">' + content + '</div>' +
+    '</div>';
+}
+
+function renderChain() {
+  chainStepCounter = 0;
+  var panel = document.getElementById('panel-chain');
+  if (!selectedChainItem) {
+    var mapped = getAllItems().filter(function(i) { return i.status === 'mapped' || i.status === 'stale'; });
+    var html = '<div class="card"><div class="card-header"><span class="card-title">Select an item to view its mapping chain</span></div><div class="card-body">' +
+      '<table class="data-table"><thead><tr><th>ID</th><th>Description</th><th>Status</th><th></th></tr></thead><tbody>';
+    for (var i = 0; i < mapped.length; i++) {
+      html += '<tr><td class="id-col">' + mapped[i].id + '</td><td>' + esc(mapped[i].desc) + '</td><td>' + statusBadge(mapped[i].status) + '</td><td><button class="btn btn-sm btn-accent" data-chain="' + mapped[i].id + '">View Chain</button></td></tr>';
+    }
+    html += '</tbody></table></div></div>';
+    panel.innerHTML = html;
+    panel.querySelectorAll('[data-chain]').forEach(function(el) {
+      el.addEventListener('click', function() { navigateToChain(el.dataset.chain); });
+    });
+    return;
+  }
+
+  var item = findItem(selectedChainItem);
+  if (!item) { panel.innerHTML = '<p>Item not found.</p>'; return; }
+
+  var html = '<div style="margin-bottom:16px;display:flex;align-items:center;gap:12px">' +
+    '<button class="btn" id="chain-back">\u2190 Back to list</button>' +
+    '<h3 style="font-size:16px">Mapping Chain: ' + item.id + '</h3></div>';
+
+  // Step 1: Spec Item
+  html += makeChainStep('spec', '\u{1F4CB} Spec Item', item.id + ' in ' + item.specPath,
+    '<div style="margin-bottom:8px"><strong>Spec:</strong> ' + esc(item.specPath) + '</div>' +
+    '<div style="margin-bottom:8px"><strong>Kind:</strong> ' + kindBadge(item.kind) + ' <strong>Status:</strong> ' + statusBadge(item.status) + '</div>' +
+    '<div style="margin-bottom:8px"><strong>Description:</strong> ' + esc(item.desc) + '</div>' +
+    (item.staleReason ? '<div style="color:var(--yellow);margin-top:8px">\u26A0 ' + esc(item.staleReason) + '</div>' : '')
+  );
+
+  html += '<div class="chain-arrow">\u2193</div>';
+
+  // Step 2: Task
+  if (item.task) {
+    var task = DATA.tasks[item.task];
+    if (task) {
+      var planHtml = '<ol style="padding-left:20px;color:var(--text-dim);font-size:13px">';
+      for (var p = 0; p < task.plan.length; p++) planHtml += '<li>' + esc(task.plan[p]) + '</li>';
+      planHtml += '</ol>';
+
+      html += makeChainStep('task', '\u{1F4DD} Task', task.title,
+        '<div style="margin-bottom:8px"><strong>Task:</strong> ' + esc(task.title) + ' ' + statusBadge(task.status) + ' <span class="badge badge-muted">' + task.priority + '</span></div>' +
+        '<div style="margin-bottom:8px"><strong>Implements:</strong> ' + task.implements.map(function(x) { return '<span style="font-family:var(--font);color:var(--accent)">' + x + '</span>'; }).join(', ') + '</div>' +
+        '<div style="margin-bottom:8px"><strong>Plan:</strong></div>' + planHtml +
+        '<div style="margin-top:8px"><strong>Acceptance:</strong> <span style="color:var(--text-dim)">' + esc(task.acceptance) + '</span></div>'
+      );
+      html += '<div class="chain-arrow">\u2193</div>';
+
+      // Step 3: Commits
+      if (task.commits.length > 0) {
+        var commitHtml = '';
+        for (var c = 0; c < task.commits.length; c++) {
+          commitHtml += '<div style="margin-bottom:6px"><span style="font-family:var(--font);color:var(--accent)">' + task.commits[c].hash + '</span><span style="color:var(--text-dim);margin-left:8px">' + esc(task.commits[c].msg) + '</span></div>';
+        }
+        html += makeChainStep('commit', '\u{1F500} Commits', task.commits.length + ' commit(s)', commitHtml);
+        html += '<div class="chain-arrow">\u2193</div>';
+      }
+    }
+  }
+
+  // Step 4: Code
+  if (item.code && item.code.length > 0) {
+    var codeContent = '';
+    for (var k = 0; k < item.code.length; k++) {
+      var ref = item.code[k];
+      var snippet = DATA.codeSnippets[ref];
+      if (snippet) {
+        codeContent += '<div style="margin-bottom:12px">' +
+          '<div style="font-family:var(--font);font-size:12px;color:var(--text-dim);margin-bottom:4px">' + esc(snippet.file) + ' : ' + snippet.lines + ' \u2014 ' + esc(snippet.fn) + '</div>' +
+          '<div class="code-block">' + snippet.code + '</div></div>';
+      } else {
+        codeContent += '<div style="font-family:var(--font);color:var(--text-dim);font-size:12px;margin-bottom:4px">' + esc(ref) + '</div>';
+      }
+    }
+    html += makeChainStep('code', '\u{1F4BB} Source Code', item.code.join(', '), codeContent);
+  }
+
+  panel.innerHTML = html;
+
+  document.getElementById('chain-back').addEventListener('click', function() {
+    selectedChainItem = null;
+    renderChain();
+  });
+
+  panel.querySelectorAll('.chain-step-header').forEach(function(el) {
+    el.addEventListener('click', function() {
+      var id = el.dataset.stepId;
+      var body = el.parentElement.querySelector('.chain-step-body');
+      if (expandedChainSteps.has(id)) {
+        expandedChainSteps.delete(id);
+        body.classList.remove('open');
+        el.querySelector('.collapsible-toggle').classList.remove('open');
+      } else {
+        expandedChainSteps.add(id);
+        body.classList.add('open');
+        el.querySelector('.collapsible-toggle').classList.add('open');
+      }
+    });
+  });
+}
+
+// ── DIFF ─────────────────────────────────────────────────────────
+function renderDiff() {
+  var panel = document.getElementById('panel-diff');
+  var staleItems = getAllItems().filter(function(i) { return i.status === 'stale'; });
+
+  // Diff scenarios: each stale item has spec diff, connected specs, tasks, and code diff
+  var diffScenarios = {
+    'BA-004': {
+      title: 'DELETE /rooms/:id — soft vs hard delete drift',
+      specFile: 'backend/api/API.spec.md',
+      specDiff: [
+        { type: 'context', text: '## API Endpoints' },
+        { type: 'context', text: '' },
+        { type: 'context', text: '- [#BA-004 actionable] DELETE /rooms/:id' },
+        { type: 'removed', text: '  Action: Hard delete room and all data' },
+        { type: 'removed', text: '  Cascade: Remove messages, memberships' },
+        { type: 'context', text: '  Returns: { data: { deleted: true } }' },
+        { type: 'context', text: '  Auth: Owner only (createdBy === user.id)' }
+      ],
+      connectedSpecs: [
+        { file: 'DATABASE.spec.md', items: [
+          { type: 'modified', text: '[#DB-004] FK cascade on delete \u2014 spec says CASCADE but code does soft delete' }
+        ]},
+        { file: 'BACKEND.spec.md', items: [
+          { type: 'context', text: '[#BE-007] Database layer \u2192 DATABASE.spec.md (linked)' }
+        ]}
+      ],
+      tasks: [
+        { name: '\u2014', desc: 'No task created for this drift', status: 'none', note: 'Code was changed directly without a task. Consider creating a task to reconcile spec vs code.' }
+      ],
+      codeFile: 'api/rooms.js',
+      codeDiff: [
+        { type: 'context', text: '// api/rooms.js:132-155' },
+        { type: 'context', text: 'async function deleteRoom(req, res) {' },
+        { type: 'context', text: '  const room = await Room.findByPk(id);' },
+        { type: 'context', text: '  if (!room || room.createdBy !== req.user.id)' },
+        { type: 'context', text: '    return res.status(404)...;' },
+        { type: 'context', text: '' },
+        { type: 'added', text: '  // Soft delete instead of hard delete' },
+        { type: 'added', text: '  await room.update({ deletedAt: new Date() });' },
+        { type: 'removed', text: '  await room.destroy(); // hard delete' },
+        { type: 'removed', text: '  await Message.destroy({ where: { roomId } });' },
+        { type: 'context', text: '  res.status(200).json({' },
+        { type: 'context', text: '    data: { deleted: true }' },
+        { type: 'context', text: '  });' },
+        { type: 'context', text: '}' }
+      ]
+    },
+    'BE-004': {
+      title: 'POST /auth/login — refresh token added to spec',
+      specFile: 'backend/BACKEND.spec.md',
+      specDiff: [
+        { type: 'context', text: '## REST API Endpoints' },
+        { type: 'context', text: '' },
+        { type: 'context', text: '- [#BE-004 actionable] POST /auth/login' },
+        { type: 'context', text: '  Authenticate user with email/password.' },
+        { type: 'added', text: '  Returns JWT access token AND refresh token' },
+        { type: 'added', text: '  Refresh token stored in httpOnly cookie' },
+        { type: 'added', text: '  Refresh token rotated on each use' },
+        { type: 'context', text: '  Error: 401 for invalid credentials' }
+      ],
+      connectedSpecs: [
+        { file: 'API.spec.md', items: [
+          { type: 'modified', text: '[#BA-002] POST /auth/login \u2014 should also return refresh token' }
+        ]},
+        { file: 'STATE.spec.md', items: [
+          { type: 'modified', text: '[#FS-002] Auth store \u2014 needs refresh token rotation logic' }
+        ]}
+      ],
+      tasks: [
+        { name: 'auth_endpoints', desc: 'Implements #BE-004, #BA-001, #BA-002', status: 'Done', note: 'Completed before refresh token was added to spec. Needs a follow-up task.' }
+      ],
+      codeFile: 'api/auth.js',
+      codeDiff: [
+        { type: 'context', text: '// api/auth.js:12-45' },
+        { type: 'context', text: 'async function login(req, res) {' },
+        { type: 'context', text: '  const { email, password } = req.body;' },
+        { type: 'context', text: '  const user = await User.findOne({' },
+        { type: 'context', text: '    where: { email }' },
+        { type: 'context', text: '  });' },
+        { type: 'context', text: '  // ... validate credentials ...' },
+        { type: 'context', text: '' },
+        { type: 'context', text: '  const token = jwt.sign(' },
+        { type: 'context', text: '    { id: user.id, email },' },
+        { type: 'context', text: '    process.env.JWT_SECRET,' },
+        { type: 'context', text: '    { expiresIn: \'24h\' }' },
+        { type: 'context', text: '  );' },
+        { type: 'context', text: '' },
+        { type: 'removed', text: '  // Missing: refresh token generation' },
+        { type: 'removed', text: '  // Missing: httpOnly cookie for refresh' },
+        { type: 'context', text: '  res.json({ data: { token } });' },
+        { type: 'context', text: '}' }
+      ]
+    },
+    'WS-003': {
+      title: 'Message routing — broadcast support added to spec',
+      specFile: 'backend/ws/WEBSOCKET.spec.md',
+      specDiff: [
+        { type: 'context', text: '## Message Handling' },
+        { type: 'context', text: '' },
+        { type: 'context', text: '- [#WS-003 actionable] Message routing:' },
+        { type: 'context', text: '  client \u2192 server \u2192 room members' },
+        { type: 'added', text: '  Support broadcast to all room members' },
+        { type: 'added', text: '  Handle "broadcast" message type' },
+        { type: 'context', text: '  Exclude sender from own messages' }
+      ],
+      connectedSpecs: [
+        { file: 'BACKEND.spec.md', items: [
+          { type: 'added', text: '[#BE-009] POST /rooms/:id/broadcast \u2014 new endpoint' }
+        ]},
+        { file: 'PROTOCOL.spec.md', items: [
+          { type: 'added', text: '[#PR-001] Add "broadcast" to message types list' }
+        ]}
+      ],
+      tasks: [
+        { name: 'ws_event_handler', desc: 'Implements #WS-003', status: 'In Progress', note: 'Partially implemented \u2014 commit 8b1c4d2 started routing, broadcast handler still missing.' },
+        { name: 'broadcast_endpoint', desc: 'Implements #BE-009', status: 'Open', note: 'New task needed for the REST broadcast endpoint.' }
+      ],
+      codeFile: 'ws/router.js',
+      codeDiff: [
+        { type: 'context', text: '// ws/router.js:1-52' },
+        { type: 'context', text: 'class MessageRouter {' },
+        { type: 'context', text: '  registerHandlers() {' },
+        { type: 'context', text: '    this.handlers.set(\'chat\', ...);' },
+        { type: 'context', text: '    this.handlers.set(\'typing\', ...);' },
+        { type: 'removed', text: '    // No \'broadcast\' handler registered' },
+        { type: 'added', text: '    // TODO: add broadcast handler' },
+        { type: 'added', text: '    // this.handlers.set(\'broadcast\', ...)' },
+        { type: 'context', text: '  }' },
+        { type: 'context', text: '' },
+        { type: 'context', text: '  route(userId, message) {' },
+        { type: 'context', text: '    const parsed = JSON.parse(message);' },
+        { type: 'context', text: '    const handler = this.handlers.get(...)' },
+        { type: 'context', text: '  }' },
+        { type: 'context', text: '}' }
+      ]
+    },
+    'FS-002': {
+      title: 'Auth store — refresh token rotation added to spec',
+      specFile: 'frontend/state/STATE.spec.md',
+      specDiff: [
+        { type: 'context', text: '## State Stores' },
+        { type: 'context', text: '' },
+        { type: 'context', text: '- [#FS-002 actionable] Auth store:' },
+        { type: 'context', text: '  JWT token, user profile, login/logout' },
+        { type: 'added', text: '  Refresh token rotation on expiry' },
+        { type: 'added', text: '  Auto-refresh before token expires (30s buffer)' },
+        { type: 'context', text: '  Clear state on logout' }
+      ],
+      connectedSpecs: [
+        { file: 'BACKEND.spec.md', items: [
+          { type: 'modified', text: '[#BE-004] POST /auth/login \u2014 now returns refresh token' }
+        ]},
+        { file: 'FRONTEND.spec.md', items: [
+          { type: 'context', text: '[#FE-002] State Management \u2192 STATE.spec.md (linked)' }
+        ]}
+      ],
+      tasks: [
+        { name: '\u2014', desc: 'No task exists yet', status: 'none', note: 'Needs a new task for refresh token rotation in the frontend auth store.' }
+      ],
+      codeFile: 'state/authStore.ts',
+      codeDiff: [
+        { type: 'context', text: '// state/authStore.ts:1-45' },
+        { type: 'context', text: 'const useAuthStore = create(' },
+        { type: 'context', text: '  immer((set, get) => ({' },
+        { type: 'context', text: '    token: null as string | null,' },
+        { type: 'context', text: '    user: null as User | null,' },
+        { type: 'removed', text: '    // No refreshToken field' },
+        { type: 'removed', text: '    // No auto-refresh logic' },
+        { type: 'context', text: '' },
+        { type: 'context', text: '    login: async (email, password) => {' },
+        { type: 'context', text: '      const { data } = await api.post(...)' },
+        { type: 'context', text: '      set({ token: data.token, user: ... })' },
+        { type: 'context', text: '    },' },
+        { type: 'context', text: '  }))' },
+        { type: 'context', text: ');' }
+      ]
+    },
+    'DB-002': {
+      title: 'Room model — lastSeen field added in code but not in spec',
+      specFile: 'backend/db/DATABASE.spec.md',
+      specDiff: [
+        { type: 'context', text: '## Data Models' },
+        { type: 'context', text: '' },
+        { type: 'context', text: '- [#DB-002 actionable] Room model:' },
+        { type: 'context', text: '  id, name, maxMembers,' },
+        { type: 'context', text: '  isPrivate, joinToken, createdBy' },
+        { type: 'removed', text: '  // No lastSeen field defined here' }
+      ],
+      connectedSpecs: [
+        { file: 'BACKEND.spec.md', items: [
+          { type: 'context', text: '[#BE-007] Database layer \u2192 DATABASE.spec.md (linked)' }
+        ]}
+      ],
+      tasks: [
+        { name: 'user_model', desc: 'Implements #DB-001, #DB-002, #DB-003', status: 'Done', note: 'Originally created models without lastSeen. Field was added later in an ad-hoc commit.' }
+      ],
+      codeFile: 'db/models.js',
+      codeDiff: [
+        { type: 'context', text: '// db/models.js:24-45' },
+        { type: 'context', text: 'const Room = sequelize.define(\'Room\', {' },
+        { type: 'context', text: '  id: { type: DataTypes.UUID, ... },' },
+        { type: 'context', text: '  name: { type: DataTypes.STRING(100) },' },
+        { type: 'context', text: '  maxMembers: { type: DataTypes.INTEGER },' },
+        { type: 'context', text: '  isPrivate: { type: DataTypes.BOOLEAN },' },
+        { type: 'context', text: '  joinToken: { type: DataTypes.UUID },' },
+        { type: 'context', text: '  createdBy: { type: DataTypes.UUID },' },
+        { type: 'added', text: '  lastSeen: { type: DataTypes.DATE },' },
+        { type: 'context', text: '});' }
+      ]
+    }
+  };
+
+  // Build selector
+  var selectorHtml = '<div style="margin-bottom:16px;display:flex;align-items:center;gap:12px;flex-wrap:wrap">' +
+    '<span style="color:var(--text-dim);font-size:13px">View drift for:</span>' +
+    '<div class="select-wrap"><select id="diff-selector">';
+  for (var i = 0; i < staleItems.length; i++) {
+    var si = staleItems[i];
+    selectorHtml += '<option value="' + si.id + '">' + si.id + ' \u2014 ' + esc(si.desc).substring(0, 60) + '</option>';
+  }
+  selectorHtml += '</select></div>' +
+    '<div style="margin-left:auto;display:flex;gap:6px">' +
+      '<span class="badge badge-green" style="font-size:11px">\u2795 Added</span>' +
+      '<span class="badge badge-red" style="font-size:11px">\u2796 Removed</span>' +
+      '<span class="badge badge-yellow" style="font-size:11px">\u270E Modified</span>' +
+    '</div></div>';
+
+  panel.innerHTML = selectorHtml + '<div id="diff-content"></div>';
+
+  function diffLine(entry) {
+    var cls = entry.type === 'added' ? 'added' : entry.type === 'removed' ? 'removed' : entry.type === 'modified' ? 'modified' : 'context';
+    var prefix = entry.type === 'added' ? '+' : entry.type === 'removed' ? '-' : entry.type === 'modified' ? '~' : ' ';
+    return '<div class="diff-line ' + cls + '"><span style="user-select:none;width:16px;flex-shrink:0;color:var(--text-muted)">' + prefix + '</span><span style="flex:1;white-space:pre-wrap">' + esc(entry.text) + '</span></div>';
+  }
+
+  function renderDiffContent(itemId) {
+    var item = findItem(itemId);
+    var container = document.getElementById('diff-content');
+    if (!item) { container.innerHTML = ''; return; }
+    var sc = diffScenarios[itemId];
+    if (!sc) { container.innerHTML = '<p style="color:var(--text-muted)">No diff data for this item.</p>'; return; }
+
+    // Title bar
+    var html = '<div class="card" style="margin-bottom:12px;padding:12px 16px">' +
+      '<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">' +
+        '<span class="card-title">' + item.id + '</span>' +
+        statusBadge(item.status) +
+        '<span style="color:var(--text-dim);font-size:13px">' + esc(sc.title) + '</span>' +
+        (item.staleReason ? '<span style="color:var(--yellow);font-size:12px;margin-left:auto">\u26A0 ' + esc(item.staleReason) + '</span>' : '') +
+      '</div></div>';
+
+    // 4-column header
+    html += '<div class="diff-4col">';
+
+    // Column headers
+    html += '<div style="padding:10px 14px;background:var(--bg-hover);border-bottom:1px solid var(--border);border-right:1px solid var(--border);font-size:12px;font-weight:600;display:flex;align-items:center;gap:6px">' +
+      '<span>\u{1F4C4}</span> Spec Diff <span style="margin-left:auto;font-size:10px;color:var(--text-muted)">' + esc(sc.specFile) + '</span></div>';
+    html += '<div style="padding:10px 14px;background:var(--bg-hover);border-bottom:1px solid var(--border);border-right:1px solid var(--border);font-size:12px;font-weight:600;display:flex;align-items:center;gap:6px">' +
+      '<span>\u{1F517}</span> Connected Specs <span style="margin-left:auto;font-size:10px;color:var(--text-muted)">' + sc.connectedSpecs.length + ' spec(s)</span></div>';
+    html += '<div style="padding:10px 14px;background:var(--bg-hover);border-bottom:1px solid var(--border);border-right:1px solid var(--border);font-size:12px;font-weight:600;display:flex;align-items:center;gap:6px">' +
+      '<span>\u2611</span> Task(s) <span style="margin-left:auto;font-size:10px;color:var(--text-muted)">' + sc.tasks.length + '</span></div>';
+    html += '<div style="padding:10px 14px;background:var(--bg-hover);border-bottom:1px solid var(--border);font-size:12px;font-weight:600;display:flex;align-items:center;gap:6px">' +
+      '<span>\u{1F4BB}</span> Code Diff <span style="margin-left:auto;font-size:10px;color:var(--text-muted)">' + esc(sc.codeFile) + '</span></div>';
+
+    // Column 1: Spec Diff
+    html += '<div style="border-right:1px solid var(--border);font-family:var(--font);font-size:12px;line-height:1.7;overflow-x:auto">';
+    for (var s = 0; s < sc.specDiff.length; s++) html += diffLine(sc.specDiff[s]);
+    html += '</div>';
+
+    // Column 2: Connected Specs
+    html += '<div style="border-right:1px solid var(--border);font-size:12px">';
+    for (var c = 0; c < sc.connectedSpecs.length; c++) {
+      var cs = sc.connectedSpecs[c];
+      html += '<div style="padding:8px 12px;' + (c > 0 ? 'border-top:1px solid var(--border);' : '') + '">' +
+        '<div style="font-weight:600;margin-bottom:6px;font-size:11px;color:var(--accent)">' + esc(cs.file) + '</div>';
+      for (var ci = 0; ci < cs.items.length; ci++) {
+        html += '<div class="diff-line ' + cs.items[ci].type + '" style="font-family:var(--font);font-size:11px;line-height:1.6;margin:2px 0;padding:2px 8px">' + esc(cs.items[ci].text) + '</div>';
+      }
+      html += '</div>';
+    }
+    html += '</div>';
+
+    // Column 3: Tasks
+    html += '<div style="border-right:1px solid var(--border);font-size:12px">';
+    for (var t = 0; t < sc.tasks.length; t++) {
+      var tk = sc.tasks[t];
+      var taskStatusBadge = tk.status === 'Done' ? '<span class="badge badge-green">' + tk.status + '</span>'
+        : tk.status === 'In Progress' ? '<span class="badge badge-blue">' + tk.status + '</span>'
+        : tk.status === 'Open' ? '<span class="badge badge-yellow">' + tk.status + '</span>'
+        : '<span class="badge badge-muted">No task</span>';
+      html += '<div style="padding:10px 12px;' + (t > 0 ? 'border-top:1px solid var(--border);' : '') + '">' +
+        '<div style="display:flex;align-items:center;gap:6px;margin-bottom:4px">' +
+          '<strong style="font-family:var(--font);font-size:12px">' + esc(tk.name) + '</strong>' +
+          taskStatusBadge +
+        '</div>' +
+        '<div style="color:var(--text-dim);font-size:11px;margin-bottom:4px">' + esc(tk.desc) + '</div>' +
+        '<div style="color:var(--text-muted);font-size:11px;font-style:italic">' + esc(tk.note) + '</div>' +
+      '</div>';
+    }
+    html += '</div>';
+
+    // Column 4: Code Diff
+    html += '<div style="font-family:var(--font);font-size:12px;line-height:1.7;overflow-x:auto">';
+    for (var d = 0; d < sc.codeDiff.length; d++) html += diffLine(sc.codeDiff[d]);
+    html += '</div>';
+
+    html += '</div>'; // close diff-4col
+
+    // Action buttons
+    html += '<div style="margin-top:12px;display:flex;gap:8px">' +
+      '<button class="btn btn-accent" data-chain="' + item.id + '">View Full Chain</button>' +
+      '<button class="btn" data-nav-spec="' + item.specKey + '">View Spec Detail</button>' +
+    '</div>';
+
+    container.innerHTML = html;
+
+    container.querySelectorAll('[data-chain]').forEach(function(el) {
+      el.addEventListener('click', function() { navigateToChain(el.dataset.chain); });
+    });
+    container.querySelectorAll('[data-nav-spec]').forEach(function(el) {
+      el.addEventListener('click', function() { navigateToDetail(el.dataset.navSpec); });
+    });
+  }
+
+  var sel = document.getElementById('diff-selector');
+  sel.addEventListener('change', function() { renderDiffContent(sel.value); });
+  if (staleItems.length > 0) renderDiffContent(staleItems[0].id);
+}
+
+// ── IMPACT ───────────────────────────────────────────────────────
+function renderImpact() {
+  var panel = document.getElementById('panel-impact');
+
+  var html = '<div style="margin-bottom:16px">' +
+    '<h3 style="font-size:16px;margin-bottom:8px">Impact Advisory</h3>' +
+    '<p style="color:var(--text-dim);font-size:13px">Analyze the downstream impact of spec or code changes. Select a scenario below.</p></div>';
+
+  html += '<div class="impact-card">' +
+    '<h4 style="color:var(--accent)">Scenario: Update BACKEND.spec.md</h4>' +
+    '<p style="color:var(--text-dim);font-size:13px;margin-bottom:12px">If the backend spec is updated, the following items and files would be impacted:</p>' +
+    '<ul class="impact-list">' +
+      '<li>' + healthDot('orange') + ' <span class="badge badge-orange">Direct</span> <strong>BE-001 to BE-006</strong> \u2014 6 actionable items need review</li>' +
+      '<li>' + healthDot('orange') + ' <span class="badge badge-orange">Direct</span> <strong>api/rooms.js</strong> \u2014 implements 3 spec items</li>' +
+      '<li>' + healthDot('orange') + ' <span class="badge badge-orange">Direct</span> <strong>api/auth.js</strong> \u2014 implements 2 spec items</li>' +
+      '<li>' + healthDot('yellow') + ' <span class="badge badge-yellow">Downstream</span> <strong>API.spec.md</strong> \u2014 child spec, 6 items may need alignment</li>' +
+      '<li>' + healthDot('yellow') + ' <span class="badge badge-yellow">Downstream</span> <strong>WEBSOCKET.spec.md</strong> \u2014 child spec, 5 items may need alignment</li>' +
+      '<li>' + healthDot('yellow') + ' <span class="badge badge-yellow">Downstream</span> <strong>DATABASE.spec.md</strong> \u2014 child spec, 4 items may need alignment</li>' +
+      '<li>' + healthDot('gray') + ' <span class="badge badge-muted">Indirect</span> <strong>PROTOCOL.spec.md</strong> \u2014 depends on backend message format</li>' +
+    '</ul>' +
+    '<div style="margin-top:12px;display:flex;gap:8px"><button class="btn btn-accent" data-nav-spec="backend/BACKEND.spec.md">View Spec</button></div></div>';
+
+  html += '<div class="impact-card">' +
+    '<h4 style="color:var(--green)">Scenario: Modify ws/handler.js</h4>' +
+    '<p style="color:var(--text-dim);font-size:13px;margin-bottom:12px">If the WebSocket handler code changes, these specs and tasks are affected:</p>' +
+    '<ul class="impact-list">' +
+      '<li>' + healthDot('red') + ' <span class="badge badge-red">Mapped</span> <strong>WS-001</strong> \u2014 Connection lifecycle (lines 1-45)</li>' +
+      '<li>' + healthDot('red') + ' <span class="badge badge-red">Mapped</span> <strong>WS-002</strong> \u2014 Room join/leave (via ws/rooms.js dependency)</li>' +
+      '<li>' + healthDot('orange') + ' <span class="badge badge-orange">Task</span> <strong>ws_handler</strong> \u2014 Task implements WS-001, WS-002</li>' +
+      '<li>' + healthDot('orange') + ' <span class="badge badge-orange">Task</span> <strong>ws_event_handler</strong> \u2014 Task modifies ws/handler.js</li>' +
+      '<li>' + healthDot('yellow') + ' <span class="badge badge-yellow">Upstream</span> <strong>WEBSOCKET.spec.md</strong> \u2014 Parent spec may need update</li>' +
+      '<li>' + healthDot('gray') + ' <span class="badge badge-muted">Indirect</span> <strong>FRONTEND state</strong> \u2014 wsClient.ts depends on WS protocol</li>' +
+    '</ul>' +
+    '<div style="margin-top:12px;display:flex;gap:8px">' +
+      '<button class="btn btn-accent" data-chain="WS-001">View WS-001 Chain</button>' +
+      '<button class="btn" data-nav-spec="backend/ws/WEBSOCKET.spec.md">View WS Spec</button>' +
+    '</div></div>';
+
+  html += '<div class="impact-card">' +
+    '<h4 style="color:var(--purple)">Scenario: Complete Task "ws_event_handler"</h4>' +
+    '<p style="color:var(--text-dim);font-size:13px;margin-bottom:12px">When this in-progress task is completed, these items will be resolved:</p>' +
+    '<ul class="impact-list">' +
+      '<li>' + healthDot('green') + ' <span class="badge badge-green">Resolves</span> <strong>WS-003</strong> \u2014 Message routing: currently stale, will be updated</li>' +
+      '<li>' + healthDot('green') + ' <span class="badge badge-green">Resolves</span> <strong>ws/router.js</strong> \u2014 Broadcast handler will be added</li>' +
+      '<li>' + healthDot('yellow') + ' <span class="badge badge-yellow">Verify</span> <strong>WS-004</strong> \u2014 Message format constraint should be checked</li>' +
+      '<li>' + healthDot('yellow') + ' <span class="badge badge-yellow">Verify</span> <strong>PROTOCOL.spec.md</strong> \u2014 Protocol items still unmapped after this</li>' +
+    '</ul>' +
+    '<div style="margin-top:12px;display:flex;gap:8px"><button class="btn btn-accent" data-chain="WS-003">View WS-003 Chain</button></div></div>';
+
+  panel.innerHTML = html;
+
+  panel.querySelectorAll('[data-nav-spec]').forEach(function(el) {
+    el.addEventListener('click', function() { navigateToDetail(el.dataset.navSpec); });
+  });
+  panel.querySelectorAll('[data-chain]').forEach(function(el) {
+    el.addEventListener('click', function() { navigateToChain(el.dataset.chain); });
+  });
+}
+
+// ── STALENESS ────────────────────────────────────────────────────
+function renderStaleness() {
+  var panel = document.getElementById('panel-staleness');
+
+  var html = '<div class="metrics-row">' +
+    '<div class="metric-box"><div class="metric-num" style="color:var(--yellow)">' + DATA.staleness.forward.length + '</div><div class="metric-label">Forward Stale</div></div>' +
+    '<div class="metric-box"><div class="metric-num" style="color:var(--orange)">' + DATA.staleness.reverse.length + '</div><div class="metric-label">Reverse Stale</div></div>' +
+    '<div class="metric-box"><div class="metric-num" style="color:var(--red)">' + (DATA.staleness.forward.length + DATA.staleness.reverse.length) + '</div><div class="metric-label">Total Issues</div></div></div>';
+
+  html += '<div class="card"><div class="card-header"><span class="card-title" style="color:var(--yellow)">\u26A0 Forward Stale</span><span class="badge badge-yellow">Spec changed, code outdated</span></div>' +
+    '<div class="card-body" style="padding:0"><table class="data-table"><thead><tr><th>ID</th><th>Reason</th><th>Spec Changed</th><th>File</th><th></th></tr></thead><tbody>';
+  for (var i = 0; i < DATA.staleness.forward.length; i++) {
+    var s = DATA.staleness.forward[i];
+    html += '<tr><td class="id-col">' + s.id + '</td><td style="color:var(--text-dim)">' + esc(s.reason) + '</td><td><span class="badge badge-muted">' + s.specChanged + '</span></td><td style="font-family:var(--font);font-size:12px;color:var(--text-dim)">' + esc(s.file) + '</td><td><button class="btn btn-sm btn-accent" data-chain="' + s.id + '">Chain</button></td></tr>';
+  }
+  html += '</tbody></table></div></div>';
+
+  html += '<div class="card"><div class="card-header"><span class="card-title" style="color:var(--orange)">\u{1F504} Reverse Stale</span><span class="badge badge-orange">Code changed, spec outdated</span></div>' +
+    '<div class="card-body" style="padding:0"><table class="data-table"><thead><tr><th>ID</th><th>Reason</th><th>Code Changed</th><th>File</th><th></th></tr></thead><tbody>';
+  for (var j = 0; j < DATA.staleness.reverse.length; j++) {
+    var r = DATA.staleness.reverse[j];
+    html += '<tr><td class="id-col">' + r.id + '</td><td style="color:var(--text-dim)">' + esc(r.reason) + '</td><td><span class="badge badge-muted">' + r.codeChanged + '</span></td><td style="font-family:var(--font);font-size:12px;color:var(--text-dim)">' + esc(r.file) + '</td><td><button class="btn btn-sm btn-accent" data-chain="' + r.id + '">Chain</button></td></tr>';
+  }
+  html += '</tbody></table></div></div>';
+
+  html += '<div class="card"><div class="card-header"><span class="card-title">Resolution Guidance</span></div><div class="card-body">' +
+    '<div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">' +
+      '<div>' +
+        '<h4 style="color:var(--yellow);font-size:13px;margin-bottom:8px">Forward Stale (Spec \u2192 Code)</h4>' +
+        '<p style="color:var(--text-dim);font-size:12px">The spec was updated but the code has not been changed to match. Options:</p>' +
+        '<ul style="color:var(--text-dim);font-size:12px;padding-left:16px;margin-top:6px"><li>Update code to match the new spec</li><li>Create a task to implement the spec change</li><li>Revert the spec change if it was premature</li></ul>' +
+      '</div>' +
+      '<div>' +
+        '<h4 style="color:var(--orange);font-size:13px;margin-bottom:8px">Reverse Stale (Code \u2192 Spec)</h4>' +
+        '<p style="color:var(--text-dim);font-size:12px">The code was changed but the spec was not updated. Options:</p>' +
+        '<ul style="color:var(--text-dim);font-size:12px;padding-left:16px;margin-top:6px"><li>Update spec to document the code change</li><li>Revert the code change if unauthorized</li><li>Flag for architecture review</li></ul>' +
+      '</div>' +
+    '</div></div></div>';
+
+  panel.innerHTML = html;
+  panel.querySelectorAll('[data-chain]').forEach(function(el) {
+    el.addEventListener('click', function() { navigateToChain(el.dataset.chain); });
+  });
+}
+
+// ── TIMELINE ─────────────────────────────────────────────────────
+function renderTimeline() {
+  var panel = document.getElementById('panel-timeline');
+  var filters = [
+    { id: 'all', label: 'All' },
+    { id: 'spec', label: 'Spec Changes' },
+    { id: 'code', label: 'Code Changes' },
+    { id: 'task', label: 'Tasks' },
+    { id: 'stale', label: 'Staleness' },
+  ];
+
+  var html = '<div class="filter-bar">';
+  for (var i = 0; i < filters.length; i++) {
+    html += '<button class="filter-btn' + (timelineFilter === filters[i].id ? ' active' : '') + '" data-filter="' + filters[i].id + '">' + filters[i].label + '</button>';
+  }
+  html += '</div>';
+
+  var filtered = timelineFilter === 'all' ? DATA.timeline : DATA.timeline.filter(function(e) { return e.type === timelineFilter; });
+
+  html += '<div class="card"><div class="card-body">';
+  if (filtered.length === 0) {
+    html += '<p style="color:var(--text-muted)">No events match this filter.</p>';
+  } else {
+    for (var j = 0; j < filtered.length; j++) {
+      html += '<div class="timeline-item"><div class="timeline-dot ' + filtered[j].type + '"></div>' +
+        '<div class="timeline-date">' + filtered[j].date + '</div>' +
+        '<div class="timeline-text">' + filtered[j].text + '</div></div>';
+    }
+  }
+  html += '</div></div>';
+
+  panel.innerHTML = html;
+  panel.querySelectorAll('.filter-btn').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+      timelineFilter = btn.dataset.filter;
+      renderTimeline();
+    });
+  });
+}
+
+// ── CURRENT STATE ────────────────────────────────────────────────
+function renderState() {
+  var panel = document.getElementById('panel-state');
+
+  var html = '<div class="metrics-row">' +
+    '<div class="metric-box"><div class="metric-num" style="color:var(--text)">' + DATA.metrics.total + '</div><div class="metric-label">Total Items</div></div>' +
+    '<div class="metric-box"><div class="metric-num" style="color:var(--green)">' + DATA.metrics.mapped + '</div><div class="metric-label">Mapped</div></div>' +
+    '<div class="metric-box"><div class="metric-num" style="color:var(--yellow)">' + DATA.metrics.stale + '</div><div class="metric-label">Stale</div></div>' +
+    '<div class="metric-box"><div class="metric-num" style="color:var(--orange)">' + DATA.metrics.drift + '</div><div class="metric-label">Drift</div></div>' +
+    '<div class="metric-box"><div class="metric-num" style="color:var(--red)">' + DATA.metrics.unmapped + '</div><div class="metric-label">Unmapped</div></div></div>';
+
+  html += '<div style="margin-bottom:16px;display:flex;align-items:center;gap:12px">' +
+    '<span style="color:var(--text-dim);font-size:13px">Show items for:</span>' +
+    '<div class="select-wrap"><select id="state-spec-selector">';
+  var specKeys = Object.keys(DATA.specs);
+  for (var i = 0; i < specKeys.length; i++) {
+    var key = specKeys[i];
+    html += '<option value="' + key + '"' + (stateSpecSelector === key ? ' selected' : '') + '>' + DATA.specs[key].icon + ' ' + key + '</option>';
+  }
+  html += '</select></div></div><div id="state-table-content"></div>';
+
+  panel.innerHTML = html;
+
+  function renderStateTable(specKey) {
+    var spec = DATA.specs[specKey];
+    var container = document.getElementById('state-table-content');
+    if (!spec) { container.innerHTML = ''; return; }
+
+    var t = '<div class="card"><div class="card-header"><span class="card-title">' + spec.icon + ' ' + esc(specKey) + '</span>' + healthDot(spec.health) + '<span class="badge badge-muted">' + spec.type + '</span></div>' +
+      '<div class="card-body" style="padding:0"><table class="data-table"><thead><tr><th>ID</th><th>Kind</th><th>Description</th><th>Status</th><th>Task</th><th>Code</th><th></th></tr></thead><tbody>';
+
+    for (var i = 0; i < spec.items.length; i++) {
+      var item = spec.items[i];
+      var taskCell = item.task ? '<span class="badge badge-blue" style="font-size:10px">' + esc(item.task) + '</span>' : '<span style="color:var(--text-muted)">\u2014</span>';
+      var codeCell;
+      if (item.code) {
+        codeCell = item.code.map(function(c) { return '<span style="font-family:var(--font);font-size:11px;color:var(--text-dim)">' + esc(c.split(':')[0]) + '</span>'; }).join('<br>');
+      } else if (item.link) {
+        codeCell = '<span style="font-size:11px;color:var(--purple)">\u2192 ' + esc(item.link.split('/').pop()) + '</span>';
+      } else {
+        codeCell = '<span style="color:var(--text-muted)">\u2014</span>';
+      }
+      var actions = '';
+      if (item.status === 'mapped' || item.status === 'stale') {
+        actions = '<button class="btn btn-sm btn-accent" data-chain="' + item.id + '">Chain</button>';
+      } else if (item.link) {
+        actions = '<button class="btn btn-sm" data-nav-spec="' + item.link + '">Go</button>';
+      }
+
+      t += '<tr><td class="id-col">' + item.id + '</td>' +
+        '<td>' + kindBadge(item.kind) + '</td>' +
+        '<td style="max-width:300px">' + esc(item.desc) + (item.staleReason ? '<div style="color:var(--yellow);font-size:11px;margin-top:2px">' + esc(item.staleReason) + '</div>' : '') + '</td>' +
+        '<td>' + statusBadge(item.status) + '</td>' +
+        '<td>' + taskCell + '</td>' +
+        '<td>' + codeCell + '</td>' +
+        '<td>' + actions + '</td></tr>';
+    }
+    t += '</tbody></table></div></div>';
+
+    // Related tasks
+    var relatedTasks = new Set();
+    for (var j = 0; j < spec.items.length; j++) {
+      if (spec.items[j].task) relatedTasks.add(spec.items[j].task);
+    }
+
+    if (relatedTasks.size > 0) {
+      t += '<div class="card" style="margin-top:16px"><div class="card-header"><span class="card-title">Related Tasks</span></div><div class="card-body" style="padding:0">' +
+        '<table class="data-table"><thead><tr><th>Task</th><th>Status</th><th>Priority</th><th>Implements</th><th>Commits</th></tr></thead><tbody>';
+      relatedTasks.forEach(function(tid) {
+        var task = DATA.tasks[tid];
+        if (!task) return;
+        t += '<tr><td><strong>' + esc(task.title) + '</strong><div style="font-family:var(--font);font-size:11px;color:var(--text-muted)">' + task.id + '</div></td>' +
+          '<td>' + statusBadge(task.status) + '</td>' +
+          '<td><span class="badge badge-muted">' + task.priority + '</span></td>' +
+          '<td>' + task.implements.map(function(x) { return '<span style="font-family:var(--font);font-size:11px;color:var(--accent)">' + x + '</span>'; }).join(', ') + '</td>' +
+          '<td>' + (task.commits.length > 0 ? task.commits.map(function(c) { return '<span style="font-family:var(--font);font-size:11px;color:var(--text-dim)">' + c.hash + '</span>'; }).join(', ') : '<span style="color:var(--text-muted)">none</span>') + '</td></tr>';
+      });
+      t += '</tbody></table></div></div>';
+    }
+
+    container.innerHTML = t;
+    container.querySelectorAll('[data-chain]').forEach(function(el) {
+      el.addEventListener('click', function() { navigateToChain(el.dataset.chain); });
+    });
+    container.querySelectorAll('[data-nav-spec]').forEach(function(el) {
+      el.addEventListener('click', function() { navigateToDetail(el.dataset.navSpec); });
+    });
+  }
+
+  var sel = document.getElementById('state-spec-selector');
+  sel.addEventListener('change', function() {
+    stateSpecSelector = sel.value;
+    renderStateTable(sel.value);
+  });
+  renderStateTable(stateSpecSelector);
+}
+
+// ── INIT ─────────────────────────────────────────────────────────
+renderTabs();
+switchTab('tree');
+</script>
+</body>
+</html>
