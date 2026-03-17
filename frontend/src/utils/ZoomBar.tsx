@@ -8,12 +8,14 @@ export function ZoomBar({
   onZoomIn,
   onZoomOut,
   onReset,
+  onPopout,
   className,
 }: {
   zoom: number;
   onZoomIn: () => void;
   onZoomOut: () => void;
   onReset: () => void;
+  onPopout?: () => void;
   className?: string;
 }) {
   return (
@@ -27,6 +29,14 @@ export function ZoomBar({
       <button className="md-zoom-btn" onClick={onZoomIn} title="Zoom in">
         +
       </button>
+      {onPopout && (
+        <>
+          <span className="md-zoom-sep" />
+          <button className="md-zoom-btn" onClick={onPopout} title="Open in new window">
+            ⧉
+          </button>
+        </>
+      )}
     </div>
   );
 }

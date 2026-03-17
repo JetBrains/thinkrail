@@ -1797,7 +1797,7 @@
         "mcp"
       ],
       "created": "2026-03-11",
-      "updated": "2026-03-16"
+      "updated": "2026-03-17"
     },
     {
       "id": "voice-input-design",
@@ -2211,7 +2211,7 @@
         "mcp"
       ],
       "created": "2026-03-16",
-      "updated": "2026-03-16"
+      "updated": "2026-03-17"
     },
     {
       "id": "task-spec-save-content-optional",
@@ -2268,7 +2268,7 @@
         "ui"
       ],
       "created": "2026-03-16",
-      "updated": "2026-03-16"
+      "updated": "2026-03-17"
     }
   ],
   "links": [

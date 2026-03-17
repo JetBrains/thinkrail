@@ -136,6 +136,8 @@
 }
 .md-zoom-level:hover { color: var(--text); }
 
+.md-zoom-sep { width: 1px; height: 14px; background: var(--border); margin: 0 2px; align-self: center; }
+
 /* Global zoom — sticky top-right of the scrollable preview */
 .md-global-zoom {
   position: sticky;

@@ -1,4 +1,4 @@
-import { Component, useEffect, useRef, useState } from "react";
+import { Component, useCallback, useEffect, useRef, useState } from "react";
 import type { ErrorInfo, ReactNode } from "react";
 import type {
   VisData,
@@ -235,6 +235,17 @@ export function toMermaidSyntax(data: StructuredDiagramData): string {
   return lines.join("\n");
 }
 
+function buildPopoutHtml(svgHtml: string): string {
+  return `<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>Mermaid Diagram</title>
+<style>
+  html, body { margin: 0; height: 100%; background: #1e1f22; }
+  body { display: flex; justify-content: center; align-items: flex-start; padding: 24px; }
+  svg { max-width: 100%; height: auto; }
+</style></head>
+<body>${svgHtml}</body></html>`;
+}
+
 function MermaidDiagram({ syntax }: { syntax: string }) {
   const ref = useRef<HTMLDivElement>(null);
   const [error, setError] = useState<string | null>(null);
@@ -265,6 +276,19 @@ function MermaidDiagram({ syntax }: { syntax: string }) {
     return () => { cancelled = true; };
   }, [syntax]);
 
+  const handlePopout = useCallback(() => {
+    const svgHtml = ref.current?.innerHTML;
+    if (!svgHtml) return;
+    const blob = new Blob([buildPopoutHtml(svgHtml)], { type: "text/html" });
+    const url = URL.createObjectURL(blob);
+    const win = window.open(url, "_blank");
+    if (win) {
+      setTimeout(() => URL.revokeObjectURL(url), 5000);
+    } else {
+      URL.revokeObjectURL(url);
+    }
+  }, []);
+
   if (error) {
     return (
       <div className="vis-diagram">
@@ -281,6 +305,7 @@ function MermaidDiagram({ syntax }: { syntax: string }) {
         onZoomIn={() => setZoom((z) => Math.min(z + 0.15, 3))}
         onZoomOut={() => setZoom((z) => Math.max(z - 0.15, 0.3))}
         onReset={() => setZoom(1)}
+        onPopout={handlePopout}
         className="vis-mermaid-zoom"
       />
       <div style={{ overflow: "auto", flex: 1 }}>

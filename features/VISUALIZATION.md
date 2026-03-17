@@ -209,7 +209,7 @@ Backend implementation is self-contained in the `tools/` package. See [backend/a
 
 Frontend implementation renders the cards in the ChatStream. See [frontend/ui-specs/VISUALIZATION_CARD.md](../frontend/ui-specs/VISUALIZATION_CARD.md) for the frontend-only spec.
 
-**Summary:** `VisualizationCard.tsx` is the main component with 6 sub-renderers, `VisErrorBoundary`, `CollapsedVisMarker`, `StatusIcon`, and Mermaid diagram support. `vis.ts` defines the TypeScript types as a discriminated union on `type`. `mermaid.ts` provides shared Mermaid initialization. `ChatStream.css` contains all `.vis-card*` classes.
+**Summary:** `VisualizationCard.tsx` is the main component with 6 sub-renderers, `VisErrorBoundary`, `CollapsedVisMarker`, `StatusIcon`, and Mermaid diagram support. `vis.ts` defines the TypeScript types as a discriminated union on `type`. `mermaid.ts` provides shared Mermaid initialization. `ChatStream.css` contains all `.vis-card*` classes. `MermaidDiagram` includes a popout button (`⧉`) that opens the rendered SVG in a new browser tab, and `resize: vertical` on diagram containers for user-adjustable height.
 
 ## Context Integration
 
@@ -280,6 +280,25 @@ Agent calls bonsai_visualize with type="diagram", data={diagram: "graph LR; A-->
 Agent calls bonsai_visualize with type="comparison", data={options: [{name: "A", visualization: "graph TD; X-->Y", ...}]}
   → Each option renders an inline MermaidDiagram between description and pros/cons
   → Zoom controls available on each diagram
+```
+
+### Mermaid popout
+
+```
+User hovers over a Mermaid diagram → zoom bar appears: − 100% + | ⧉
+  → User clicks ⧉
+  → SVG extracted from container, wrapped in standalone HTML (dark bg #1e1f22)
+  → window.open with Blob URL → new tab with full-size diagram
+  → Blob URL revoked after 5s
+```
+
+### Resizable Mermaid container
+
+```
+User sees a Mermaid diagram (any type — comparison, text, structured)
+  → Container has resize: vertical grip at bottom-right
+  → User drags to enlarge → container height grows
+  → In comparison context: starts at 200px; elsewhere: flex-sized
 ```
 
 ## Related Specs

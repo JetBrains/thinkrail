@@ -26,6 +26,8 @@ VisErrorBoundary (class component — catches render errors)
                     └── structured → MermaidDiagram (async render + zoom)
 
 ZoomBar (shared component — utils/ZoomBar.tsx, used by MermaidDiagram and MarkdownPreview)
+  ├── zoom: −/+/reset controls
+  └── onPopout? → separator + ⧉ popout button (opens SVG in new tab)
 CollapsedVisMarker (standalone — used by ChatStream for visId pre-scan)
 ```
 
@@ -112,9 +114,28 @@ Converts structured `{nodes, edges, layout?}` into Mermaid flowchart syntax:
 
 Async renders Mermaid SVG into a ref div with zoom controls (`ZoomBar`). Zoom range: 0.3×–3×, step 0.15. Controls appear on hover via `.vis-mermaid-wrapper:hover .vis-mermaid-zoom`. Handles errors gracefully — shows the error message plus raw syntax as fallback. SVG is resized to `width: 100%` for responsive layout.
 
+**Popout preview:** `handlePopout` extracts the rendered SVG from the container's `innerHTML`, wraps it in a standalone HTML page (dark background `#1e1f22` matching the Mermaid `tertiaryColor`, flex-centered, responsive `max-width: 100%`), opens it via `window.open` with a Blob URL, and revokes the URL after 5 seconds (immediately if popup was blocked). The `onPopout` callback is passed to `ZoomBar`, so the `⧉` button appears on all Mermaid diagrams: comparison inline diagrams, text-based `notation: "mermaid"` diagrams, and structured node/edge diagrams.
+
+**Resizable containers:** `.vis-mermaid-wrapper` has `resize: vertical`, allowing users to drag the bottom-right grip to adjust diagram height. In comparison context, the wrapper starts at `height: 200px` (set by `.vis-comparison-diagram .vis-mermaid-wrapper`); elsewhere it sizes naturally via flex.
+
+Helper: `buildPopoutHtml(svgHtml: string): string` — generates self-contained HTML with dark background, centered SVG, and "Mermaid Diagram" title.
+
 ### `ZoomBar` component — `utils/ZoomBar.tsx`
 
-Reusable zoom UI with −/+/reset buttons. Shared by `MermaidDiagram` (in VisualizationCard) and `MermaidBlock`/`MarkdownPreview` (in FileViewer). Uses `.md-zoom-*` CSS classes from `FileViewer.css`.
+Reusable zoom UI shared by `MermaidDiagram` (in VisualizationCard) and `MermaidBlock`/`MarkdownPreview` (in FileViewer). Uses `.md-zoom-*` CSS classes from `FileViewer.css`.
+
+**Props:**
+
+| Prop | Type | Required | Description |
+|------|------|----------|-------------|
+| `zoom` | `number` | yes | Current zoom level |
+| `onZoomIn` | `() => void` | yes | Increment zoom |
+| `onZoomOut` | `() => void` | yes | Decrement zoom |
+| `onReset` | `() => void` | yes | Reset zoom to 1× |
+| `onPopout` | `() => void` | no | Open diagram in new browser tab. When provided, renders a `⧉` button after a vertical separator |
+| `className` | `string` | no | Additional CSS class |
+
+When `onPopout` is provided, the bar renders: `− 100% + | ⧉`. The separator uses `.md-zoom-sep` (1px vertical divider). The popout button reuses `.md-zoom-btn` styling. Backward-compatible — callers that don't pass `onPopout` see no change.
 
 ## Layout Hints
 
@@ -173,3 +194,12 @@ React class component wrapping each `VisualizationCard`. Catches render errors a
 - **Types:** `types/vis.ts`
 - **Mermaid utils:** `utils/mermaid.ts`
 - **CSS:** `ChatStream.css` (`.vis-card*`, `.vis-collapsed-marker*` classes)
+
+### CSS — Mermaid containers
+
+| Selector | Key properties | Purpose |
+|----------|---------------|---------|
+| `.vis-mermaid-wrapper` | `resize: vertical; overflow: hidden` | Vertically resizable diagram container |
+| `.vis-comparison-diagram` | `overflow: auto` (no max-height) | Outer wrapper for comparison diagrams — grows with content |
+| `.vis-comparison-diagram .vis-mermaid-wrapper` | `height: 200px` | Initial height for comparison diagrams (user can resize) |
+| `.md-zoom-sep` | `width: 1px; height: 14px; background: var(--border)` | Vertical separator between zoom buttons and popout button |

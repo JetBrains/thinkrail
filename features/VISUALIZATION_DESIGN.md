@@ -128,7 +128,8 @@ No changes to: `service.py`, `tracker.py`, `models.py`, `rpc/`.
 | `types/vis.ts` | TypeScript types: `VisStatus`, `VisType`, `VisLayout`, `VisData` discriminated union, per-type data interfaces |
 | `components/ChatStream/VisualizationCard.tsx` | Main component + 6 sub-renderers + `VisErrorBoundary` + `CollapsedVisMarker` + `MermaidDiagram` (with zoom) + `toMermaidSyntax()` |
 | `utils/mermaid.ts` | Shared Mermaid initialization (`ensureMermaid()`) — used by VisualizationCard and MarkdownPreview |
-| `utils/ZoomBar.tsx` | Reusable zoom controls — shared by MarkdownPreview and VisualizationCard |
+| `utils/ZoomBar.tsx` | Reusable zoom controls with optional popout button — shared by MarkdownPreview and VisualizationCard |
+| `components/FileViewer/FileViewer.css` | `.md-zoom-*` classes including `.md-zoom-sep` separator for popout button |
 | `components/ChatStream/ChatStream.tsx` | Renders `VisualizationCard` for `toolCallStart` events where `toolName === "bonsai_visualize"` |
 | `components/ChatStream/ChatStream.css` | `.vis-card`, `.vis-card-header`, `.vis-card-body`, layout classes (`--compact`, `--wide`), `.vis-collapsed-marker` |
 
@@ -164,6 +165,8 @@ No changes to: `service.py`, `tracker.py`, `models.py`, `rpc/`.
 | visId auto-collapse | Same visId collapses older cards | Agent can update a progress tracker repeatedly without flooding the chat |
 | VisErrorBoundary | React error boundary wrapping each card | Malformed vis data doesn't crash the entire ChatStream |
 | Emoji icons per type | `VIS_ICONS` map in VisualizationCard | Quick visual identification without additional icon libraries |
+| Popout via Blob URL | SVG opened in new tab via `URL.createObjectURL` | No server round-trip; self-contained HTML with matching dark theme; works offline |
+| CSS resize: vertical | Native browser resize grip on diagram containers | Zero JS required; `overflow: hidden` already satisfied the prerequisite |
 
 ## Relation to vis/ Module
 
