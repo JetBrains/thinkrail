@@ -301,11 +301,15 @@ function appendEvent(
   params: Record<string, unknown>,
   closedIds?: Set<string>,
 ): Map<string, Session> {
+  // Skip ephemeral events — costEstimate updates metrics directly, not stored in events
+  if (method === "agent/costEstimate") return sessions;
   // Don't create phantom sessions — only update sessions that already exist
   if (!sessions.has(bonsaiSid)) return sessions;
   if (closedIds?.has(bonsaiSid)) return sessions;
-  const withSession = sessions;
+
+  const withSession = ensureSession(sessions, bonsaiSid, closedIds);
   const session = withSession.get(bonsaiSid);
+  if (!session) return sessions;
 
   const event: AgentEvent = {
     bonsaiSid,
@@ -430,13 +434,17 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
     set((s) => {
       const next = new Map(s.sessions);
       const existing = next.get(bonsaiSid);
-      // Merge with placeholder if events arrived before this resolved
+      // Merge with placeholder if events arrived before this resolved.
+      // Preserve status if agent/ready already transitioned it past "initializing".
+      const resolvedStatus = existing && existing.status !== "initializing"
+        ? existing.status
+        : "initializing";
       next.set(bonsaiSid, {
         bonsaiSid,
         name,
         skillId: skillId ?? null,
         specIds,
-        status: "initializing",
+        status: resolvedStatus,
         model: config.model,
         permissionMode: config.permissionMode,
         betas: config.betas ?? [],
@@ -582,6 +590,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
     const restoredModel = (data.config?.model as string) ?? "";
     const restoredBetas = (data.config?.betas as string[]) ?? [];
     const restoredCtx = reconstructContextUsage(events, restoredModel, restoredBetas);
+    const diskMetrics = (data?.metrics ?? {}) as Record<string, unknown>;
     const session: Session = {
       bonsaiSid,
       name: data.name ?? bonsaiSid.slice(0, 8),
@@ -602,6 +611,9 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
       metrics: {
         ...emptyMetrics(),
         costUsd: restoredCost,
+        turns: typeof diskMetrics.turns === "number" ? diskMetrics.turns : 0,
+        toolCalls: typeof diskMetrics.toolCalls === "number" ? diskMetrics.toolCalls : 0,
+        durationMs: typeof diskMetrics.durationMs === "number" ? diskMetrics.durationMs : 0,
         contextTokens: restoredCtx.contextTokens,
         contextMax: restoredCtx.contextMax,
         contextUsage: restoredCtx,
@@ -674,6 +686,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
         const entryModel = (data?.config?.model as string) ?? entry.model ?? "";
         const entryBetas = (data?.config?.betas as string[]) ?? [];
         const restoredCtx = reconstructContextUsage(events, entryModel, entryBetas);
+        const diskMetrics = (data?.metrics ?? {}) as Record<string, unknown>;
         next.set(entry.bonsaiSid, {
           bonsaiSid: entry.bonsaiSid,
           name: data?.name ?? entry.name ?? entry.bonsaiSid.slice(0, 8),
@@ -690,6 +703,9 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
           metrics: {
             ...emptyMetrics(),
             costUsd: restoredCost,
+            turns: typeof diskMetrics.turns === "number" ? diskMetrics.turns : 0,
+            toolCalls: typeof diskMetrics.toolCalls === "number" ? diskMetrics.toolCalls : 0,
+            durationMs: typeof diskMetrics.durationMs === "number" ? diskMetrics.durationMs : 0,
             contextTokens: restoredCtx.contextTokens,
             contextMax: restoredCtx.contextMax,
             contextUsage: restoredCtx,
@@ -979,6 +995,16 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
           if (session.status === "initializing") {
             sessions.set(bonsaiSid, { ...session, status: "idle" });
           }
+        } else if (method === "agent/costEstimate") {
+          const est = params.estimatedCostUsd as number;
+          if (typeof est === "number") {
+            const next = new Map(sessions);
+            next.set(bonsaiSid, {
+              ...session,
+              metrics: { ...session.metrics, costUsd: est },
+            });
+            return { sessions: next, projectCost };
+          }
         } else if (method === "agent/turnComplete" || method === "agent/interrupted") {
           const { updated, costDelta } = applyMetrics(session, params, "idle");
           projectCost += costDelta;
@@ -1152,6 +1178,18 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
   },
 
 }));
+
+// ── HMR: force full reload when this module changes ──
+// Zustand's create() produces a new store instance on each HMR re-execution,
+// but wireEvents handlers (registered once in App.tsx) keep closures over the
+// OLD store — causing WebSocket-driven updates to be invisible to React.
+// accept() makes this module a self-accepting HMR boundary; the callback fires
+// only during HMR updates (never on initial load) and forces a clean page load.
+if (import.meta.hot) {
+  import.meta.hot.accept(() => {
+    window.location.reload();
+  });
+}
 
 // ── Watchdog: polls for stuck sessions every 5 seconds ──
 

@@ -133,9 +133,10 @@ export function SessionPanel() {
         : "Message Claude...";
 
   const inputDisabled = isDone || isRunning || (hasPending && activeSession?.pendingRequest?.type === "approval");
-  const showContinue = !inputDisabled && !canInterrupt && (activeSession?.events.length ?? 0) > 0;
+  const hasUserMessage = activeSession?.events.some(e => e.eventType === "userMessage") ?? false;
+  const showContinue = !inputDisabled && !canInterrupt && hasUserMessage;
   const showStartSession = !inputDisabled && !canInterrupt
-    && (activeSession?.events.length ?? 0) === 0
+    && !hasUserMessage
     && activeSession?.skillId != null;
 
   return (

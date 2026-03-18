@@ -865,6 +865,7 @@
 .ssl-dropdown-item:hover { background: var(--hover); color: var(--text); }
 .ssl-dropdown-active { color: var(--blue); }
 .ssl-dropdown-group { padding: var(--space-xs) var(--space-sm); font-size: 9px; text-transform: uppercase; letter-spacing: 0.5px; color: var(--hint); }
+.ssl-cost-active { opacity: 0.75; }
 .ssl-pulse { display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: var(--green); animation: pulse 2s infinite; margin-right: 4px; }
 .ssl-context-bar {
   width: 60px; height: 6px;

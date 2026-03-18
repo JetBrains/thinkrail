@@ -1,0 +1,66 @@
+"""Tests for app.agent.pricing — model pricing and cost estimation."""
+
+from app.agent.pricing import PRICES, _resolve_tier, estimate_cost
+
+
+class TestResolveTier:
+    def test_opus_model(self):
+        assert _resolve_tier("claude-opus-4-6") is PRICES["opus"]
+
+    def test_opus_case_insensitive(self):
+        assert _resolve_tier("Claude-Opus-4-6") is PRICES["opus"]
+
+    def test_haiku_model(self):
+        assert _resolve_tier("claude-haiku-4-5-20251001") is PRICES["haiku"]
+
+    def test_sonnet_model(self):
+        assert _resolve_tier("claude-sonnet-4-6") is PRICES["sonnet"]
+
+    def test_unknown_defaults_to_sonnet(self):
+        assert _resolve_tier("some-unknown-model") is PRICES["sonnet"]
+
+
+class TestEstimateCost:
+    def test_input_only(self):
+        cost = estimate_cost("claude-sonnet-4-6", input_tokens=1_000_000, output_tokens=0)
+        assert cost == 3.0  # $3/M input tokens for sonnet
+
+    def test_output_only(self):
+        cost = estimate_cost("claude-sonnet-4-6", input_tokens=0, output_tokens=1_000_000)
+        assert cost == 15.0  # $15/M output tokens for sonnet
+
+    def test_cache_write(self):
+        cost = estimate_cost("claude-sonnet-4-6", input_tokens=0, output_tokens=0, cache_creation_tokens=1_000_000)
+        assert cost == 3.75  # $3.75/M cache write for sonnet
+
+    def test_cache_read(self):
+        cost = estimate_cost("claude-sonnet-4-6", input_tokens=0, output_tokens=0, cache_read_tokens=1_000_000)
+        assert cost == 0.30  # $0.30/M cache read for sonnet
+
+    def test_mixed_tokens(self):
+        cost = estimate_cost(
+            "claude-sonnet-4-6",
+            input_tokens=10_000,
+            output_tokens=5_000,
+            cache_creation_tokens=20_000,
+            cache_read_tokens=50_000,
+        )
+        expected = (
+            10_000 * 3.0 / 1_000_000
+            + 5_000 * 15.0 / 1_000_000
+            + 20_000 * 3.75 / 1_000_000
+            + 50_000 * 0.30 / 1_000_000
+        )
+        assert abs(cost - expected) < 1e-10
+
+    def test_opus_pricing(self):
+        cost = estimate_cost("claude-opus-4-6", input_tokens=1_000_000, output_tokens=1_000_000)
+        assert cost == 90.0  # $15 input + $75 output
+
+    def test_haiku_pricing(self):
+        cost = estimate_cost("claude-haiku-4-5", input_tokens=1_000_000, output_tokens=1_000_000)
+        assert cost == 4.80  # $0.80 input + $4.00 output
+
+    def test_zero_tokens(self):
+        cost = estimate_cost("claude-sonnet-4-6", input_tokens=0, output_tokens=0)
+        assert cost == 0.0

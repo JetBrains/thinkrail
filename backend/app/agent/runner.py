@@ -20,8 +20,10 @@ from claude_agent_sdk import (
     ToolUseBlock,
     UserMessage,
 )
+from claude_agent_sdk.types import StreamEvent
 
 from app.agent.models import AgentResult, AgentTask, to_camel
+from app.agent.pricing import estimate_cost
 from app.agent.permissions import can_use_tool
 from app.agent.tools import MCP_SERVERS
 from app.agent.tools._context import set_tool_context
@@ -162,6 +164,7 @@ async def run(
                 tracker.set_status(task.bonsai_sid, "running")
                 tracker.clear_turn_text(task.bonsai_sid)
                 turn_t0 = time.monotonic()
+                turn_input = turn_output = turn_cache_write = turn_cache_read = 0
                 await client.query(message)
 
                 async for sdk_event in client.receive_response():
@@ -251,6 +254,30 @@ async def run(
                                     if agent_id:
                                         te_msg["agentId"] = agent_id
                                     await notify("agent/toolCallEnd", te_msg)
+
+                    elif isinstance(sdk_event, StreamEvent):
+                        raw = sdk_event.event
+                        etype = raw.get("type")
+                        if etype == "message_start":
+                            u = raw.get("message", {}).get("usage", {})
+                            turn_input += u.get("input_tokens", 0)
+                            turn_cache_write += u.get("cache_creation_input_tokens", 0)
+                            turn_cache_read += u.get("cache_read_input_tokens", 0)
+                        elif etype == "message_delta":
+                            u = raw.get("usage", {})
+                            turn_output += u.get("output_tokens", 0)
+
+                        if etype in ("message_start", "message_delta"):
+                            est = estimate_cost(
+                                task.config.model, turn_input, turn_output,
+                                turn_cache_write, turn_cache_read,
+                            )
+                            await notify("agent/costEstimate", {
+                                "bonsaiSid": task.bonsai_sid,
+                                "sessionId": session_id,
+                                "estimatedTurnCostUsd": est,
+                                "estimatedCostUsd": total_cost + est,
+                            })
 
                     elif isinstance(sdk_event, ResultMessage):
                         turn_ms = int((time.monotonic() - turn_t0) * 1000)

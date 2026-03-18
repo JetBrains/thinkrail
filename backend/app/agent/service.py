@@ -191,6 +191,13 @@ class AgentService:
         # Preserve metrics from disk (written by update_session_metadata)
         if existing and existing.get("metrics"):
             data["metrics"] = existing["metrics"]
+        else:
+            data["metrics"] = {
+                "costUsd": 0, "turns": 0, "toolCalls": 0,
+                "turnCostUsd": 0, "turnTurns": 0,
+                "durationMs": 0, "contextTokens": 0,
+                "contextMax": 200_000, "outputTokens": 0,
+            }
         # Preserve existing events from disk if we don't have new ones
         if events is not None:
             data["events"] = events
@@ -316,6 +323,7 @@ class AgentService:
         _base_cost = 0.0
         _base_turns = 0
         _base_duration = 0
+        _base_tool_calls = 0
         if resume_session_id:
             _existing = load_session(self._config.project_root, task.bonsai_sid)
             if _existing and _existing.get("metrics"):
@@ -323,6 +331,21 @@ class AgentService:
                 _base_cost = _m.get("costUsd", 0.0)
                 _base_turns = _m.get("turns", 0)
                 _base_duration = _m.get("durationMs", 0)
+                _base_tool_calls = _m.get("toolCalls", 0)
+
+        # Mutable live metrics dict — updated incrementally by _persisting_notify
+        _live_metrics: dict = {
+            "costUsd": _base_cost,
+            "turns": _base_turns,
+            "toolCalls": _base_tool_calls,
+            "turnCostUsd": 0,
+            "turnTurns": 0,
+            "durationMs": _base_duration,
+            "contextTokens": 0,
+            "contextMax": 200_000,
+            "outputTokens": 0,
+        }
+        _wall_start = time.monotonic()
 
         # Wrap notify to read the *current* callback from _last_notify each
         # time, so that rebind_notify() transparently redirects events to a
@@ -334,8 +357,8 @@ class AgentService:
                     await current(method, params, request_id)
                 except Exception:
                     pass  # WS dead — events still persisted below
-            # Persist streaming events (skip overly frequent ones)
-            if method.startswith("agent/") and method not in ("agent/progress",):
+            # Persist streaming events (skip overly frequent and ephemeral ones)
+            if method.startswith("agent/") and method not in ("agent/progress", "agent/costEstimate"):
                 event_type = method.replace("agent/", "")
                 # Include requestId in persisted payload (notify injects it
                 # into the WebSocket message but not into the original params dict)
@@ -347,25 +370,35 @@ class AgentService:
                 except Exception:
                     logger.exception("Failed to persist event %s for session %s", method, task.bonsai_sid)
 
-            # Persist metrics to metadata on turnComplete/done/interrupted so that
-            # list_all_sessions can return cost per session without loading events.
-            if method in ("agent/turnComplete", "agent/done", "agent/interrupted"):
-                usage = params.get("usage", {})
-                ctx_tokens = (
-                    usage.get("input_tokens", 0)
-                    + usage.get("output_tokens", 0)
-                )
-                update_session_metadata(self._config.project_root, task.bonsai_sid, {
-                    "metrics": {
+            # -- Incremental metrics persistence --
+            # Skip only high-frequency events; all others update metrics on disk.
+            _SKIP_METRICS = {"agent/textDelta", "agent/progress", "agent/costEstimate"}
+            _FULL_METRICS = {"agent/turnComplete", "agent/done", "agent/interrupted"}
+
+            if method not in _SKIP_METRICS:
+                _live_metrics["durationMs"] = _base_duration + int((time.monotonic() - _wall_start) * 1000)
+
+                if method == "agent/toolCallEnd":
+                    _live_metrics["toolCalls"] += 1
+
+                if method in _FULL_METRICS:
+                    usage = params.get("usage", {})
+                    ctx_tokens = (
+                        usage.get("input_tokens", 0)
+                        + usage.get("output_tokens", 0)
+                    )
+                    _live_metrics.update({
                         "costUsd": _base_cost + params.get("costUsd", 0),
                         "turns": _base_turns + params.get("turns", 0),
                         "turnCostUsd": params.get("turnCostUsd", 0),
                         "turnTurns": params.get("turn_turns", 0),
-                        "durationMs": _base_duration + params.get("durationMs", 0),
                         "contextTokens": ctx_tokens,
                         "contextMax": 1_000_000 if "context-1m-2025-08-07" in task.config.betas else 200_000,
                         "outputTokens": usage.get("output_tokens", 0),
-                    },
+                    })
+
+                update_session_metadata(self._config.project_root, task.bonsai_sid, {
+                    "metrics": dict(_live_metrics),
                 })
 
             # Persist sessionId to disk as soon as the SDK provides it,

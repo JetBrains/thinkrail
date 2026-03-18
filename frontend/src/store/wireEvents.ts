@@ -71,6 +71,7 @@ export function wireEvents(client: RpcClient): Unsubscribe {
     "agent/notification",
     "agent/compact",
     "agent/progress",
+    "agent/costEstimate",
     "agent/permissionDenied",
     "agent/ready",
   ];
@@ -209,4 +210,14 @@ export function wireEvents(client: RpcClient): Unsubscribe {
   );
 
   return () => unsubs.forEach((u) => u());
+}
+
+// ── HMR: force full reload when event wiring changes ──
+// Without this, editing wireEvents.ts creates a new function that's never
+// called (wiredRef guard in App.tsx), while old handlers stay active with
+// stale store imports.
+if (import.meta.hot) {
+  import.meta.hot.accept(() => {
+    window.location.reload();
+  });
 }

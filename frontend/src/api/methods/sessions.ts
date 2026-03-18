@@ -24,6 +24,7 @@ export interface SessionData {
   createdAt: string;
   updatedAt: string;
   events: Record<string, unknown>[];
+  metrics?: Record<string, unknown>;
 }
 
 export function createSessionApi(client: RpcClient) {

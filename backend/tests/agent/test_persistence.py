@@ -7,6 +7,7 @@ from app.agent.persistence import (
     list_sessions,
     load_session,
     save_session,
+    update_session_metadata,
 )
 
 
@@ -216,6 +217,47 @@ class TestDeleteSession:
 
     def test_nonexistent_returns_false(self, tmp_path: Path) -> None:
         assert delete_session(tmp_path, "nope") is False
+
+
+# -- update_session_metadata ---------------------------------------------------
+
+
+class TestUpdateSessionMetadata:
+    def test_merges_incremental_metrics(self, tmp_path: Path) -> None:
+        """update_session_metadata correctly merges metrics including toolCalls."""
+        save_session(tmp_path, _make_session_data(metrics={
+            "costUsd": 0, "turns": 0, "toolCalls": 0,
+            "durationMs": 0, "contextTokens": 0,
+        }))
+        # Simulate incremental update (e.g. after a toolCallEnd)
+        update_session_metadata(tmp_path, "task-1", {
+            "metrics": {"costUsd": 0, "turns": 0, "toolCalls": 3, "durationMs": 1500},
+        })
+        loaded = load_session(tmp_path, "task-1")
+        assert loaded is not None
+        assert loaded["metrics"]["toolCalls"] == 3
+        assert loaded["metrics"]["durationMs"] == 1500
+
+    def test_overwrites_metrics_by_default(self, tmp_path: Path) -> None:
+        save_session(tmp_path, _make_session_data(metrics={"costUsd": 0.5, "toolCalls": 2}))
+        update_session_metadata(tmp_path, "task-1", {
+            "metrics": {"costUsd": 1.0, "toolCalls": 5, "turns": 3},
+        })
+        loaded = load_session(tmp_path, "task-1")
+        assert loaded is not None
+        # The entire metrics dict is replaced
+        assert loaded["metrics"] == {"costUsd": 1.0, "toolCalls": 5, "turns": 3}
+
+    def test_no_overwrite_preserves_existing(self, tmp_path: Path) -> None:
+        save_session(tmp_path, _make_session_data(metrics={"costUsd": 0.5}))
+        update_session_metadata(tmp_path, "task-1", {"metrics": {"costUsd": 9.0}}, overwrite=False)
+        loaded = load_session(tmp_path, "task-1")
+        assert loaded is not None
+        assert loaded["metrics"]["costUsd"] == 0.5
+
+    def test_missing_session_is_noop(self, tmp_path: Path) -> None:
+        # Should not raise
+        update_session_metadata(tmp_path, "nonexistent", {"metrics": {"toolCalls": 1}})
 
 
 # -- round-trip ----------------------------------------------------------------

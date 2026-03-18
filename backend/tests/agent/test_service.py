@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -321,6 +322,56 @@ class TestInterruptTask:
 
         # Should have set the flag even without a client
         assert service._tracker.is_interrupted(task.bonsai_sid) is True
+
+
+class TestSaveTask:
+    def test_new_session_gets_zeroed_metrics(self, tmp_path: Path) -> None:
+        """_save_task produces zeroed metrics for a brand-new session (no disk data)."""
+        config = MagicMock()
+        config.project_root = tmp_path
+        spec_service = MagicMock()
+        service = AgentService(config, spec_service)
+
+        task = service._tracker.create_task(["s1"], AgentConfig())
+        service._save_task(task)
+
+        from app.agent.persistence import load_session
+        loaded = load_session(tmp_path, task.bonsai_sid)
+        assert loaded is not None
+        m = loaded["metrics"]
+        assert m["costUsd"] == 0
+        assert m["turns"] == 0
+        assert m["toolCalls"] == 0
+        assert m["durationMs"] == 0
+        assert m["contextTokens"] == 0
+        assert m["contextMax"] == 200_000
+        assert m["outputTokens"] == 0
+
+    def test_existing_metrics_preserved(self, tmp_path: Path) -> None:
+        """_save_task preserves existing metrics from disk."""
+        from app.agent.persistence import save_session, load_session
+
+        config = MagicMock()
+        config.project_root = tmp_path
+        spec_service = MagicMock()
+        service = AgentService(config, spec_service)
+
+        task = service._tracker.create_task(["s1"], AgentConfig())
+        # Pre-populate disk with metrics
+        save_session(tmp_path, {
+            "bonsaiSid": task.bonsai_sid,
+            "name": "test",
+            "specIds": [],
+            "config": {},
+            "status": "idle",
+            "metrics": {"costUsd": 1.5, "toolCalls": 10, "turns": 3},
+        })
+
+        service._save_task(task)
+        loaded = load_session(tmp_path, task.bonsai_sid)
+        assert loaded is not None
+        assert loaded["metrics"]["costUsd"] == 1.5
+        assert loaded["metrics"]["toolCalls"] == 10
 
 
 class TestBuildContext:

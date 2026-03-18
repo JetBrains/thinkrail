@@ -16,6 +16,7 @@ function AppInner({ projectPath: _projectPath, onSwitchProject }: { projectPath:
   const client = useRpc();
   const connectionState = useConnectionState();
   const wiredRef = useRef(false);
+  const wireCleanupRef = useRef<(() => void) | null>(null);
 
   // Wire events + fetch initial data on connect
   useEffect(() => {
@@ -24,7 +25,8 @@ function AppInner({ projectPath: _projectPath, onSwitchProject }: { projectPath:
       // ── Initial connect ──
       wiredRef.current = true;
       setClient(client);
-      wireEvents(client);
+      wireCleanupRef.current?.();
+      wireCleanupRef.current = wireEvents(client);
       useUiStore.getState().setProject(_projectPath);
       console.log("[Bonsai] Fetching specs...");
       useSpecStore.getState().fetchSpecs().then(() => {

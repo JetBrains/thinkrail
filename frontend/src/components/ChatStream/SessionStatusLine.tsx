@@ -205,7 +205,9 @@ export function SessionStatusLine({
         )}
       </div>
       <span className="ssl-sep" />
-      <span className="ssl-cost">${metrics.costUsd.toFixed(2)} | ${projectCost.toFixed(2)}</span>
+      <span className={`ssl-cost${(status === "running" || status === "waiting") ? " ssl-cost-active" : ""}`}>
+        {(status === "running" || status === "waiting") ? `~$${metrics.costUsd.toFixed(2)}` : `$${metrics.costUsd.toFixed(2)}`} | ${projectCost.toFixed(2)}
+      </span>
       <span className="ssl-sep" />
       <span className="ssl-tools">
         {running && <span className="ssl-pulse" />}
