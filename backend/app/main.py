@@ -226,15 +226,41 @@ def create_app() -> FastAPI:
                 break
         return {"dirs": dirs}
 
+    @app.get("/api/fs/browse")
+    async def browse_folder():
+        """Open a native OS folder picker dialog and return the selected path."""
+        import asyncio
+        import sys
+
+        if sys.platform == "darwin":
+            script = 'POSIX path of (choose folder with prompt "Select project folder")'
+            try:
+                proc = await asyncio.create_subprocess_exec(
+                    "osascript", "-e", script,
+                    stdout=asyncio.subprocess.PIPE,
+                    stderr=asyncio.subprocess.PIPE,
+                )
+                stdout, _ = await proc.communicate()
+                if proc.returncode == 0:
+                    selected = stdout.decode().strip()
+                    return {"path": selected}
+                return {"path": None}
+            except Exception as e:
+                return {"error": str(e)}
+        else:
+            return {"error": "Native folder picker not supported on this platform"}
+
     return app
 
 
 if __name__ == "__main__":
     import uvicorn
+    from app.core.config import ServerSettings
 
+    srv = ServerSettings()
     uvicorn.run(
         "app.main:create_app",
         factory=True,
-        host="127.0.0.1",
-        port=8000,
+        host=srv.backend_host,
+        port=srv.backend_port,
     )

@@ -1,27 +1,37 @@
-import { defineConfig } from "vite";
+import { defineConfig, loadEnv } from "vite";
 import react from "@vitejs/plugin-react";
 import path from "path";
 
-export default defineConfig({
-  plugins: [react()],
-  resolve: {
-    alias: {
-      "@": path.resolve(__dirname, "src"),
-    },
-  },
-  server: {
-    port: 3000,
-    proxy: {
-      "/ws": {
-        target: "http://localhost:8000",
-        ws: true,
-        changeOrigin: true,
-      },
-      "/terminal": {
-        target: "http://localhost:8000",
-        ws: true,
-        changeOrigin: true,
+export default defineConfig(({ mode }) => {
+  const env = loadEnv(mode, path.resolve(__dirname, ".."), "");
+  const backendPort = env.BACKEND_PORT ?? "8080";
+  const frontendPort = parseInt(env.FRONTEND_PORT ?? "5173", 10);
+
+  return {
+    plugins: [react()],
+    resolve: {
+      alias: {
+        "@": path.resolve(__dirname, "src"),
       },
     },
-  },
+    server: {
+      port: frontendPort,
+      proxy: {
+        "/ws": {
+          target: `http://localhost:${backendPort}`,
+          ws: true,
+          changeOrigin: true,
+        },
+        "/terminal": {
+          target: `http://localhost:${backendPort}`,
+          ws: true,
+          changeOrigin: true,
+        },
+        "/api": {
+          target: `http://localhost:${backendPort}`,
+          changeOrigin: true,
+        },
+      },
+    },
+  };
 });

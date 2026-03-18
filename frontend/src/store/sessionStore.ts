@@ -52,6 +52,8 @@ interface SessionStore {
   /** Poll backend for actual status of sessions stuck in transient states */
   syncSessionStatuses: () => Promise<void>;
 
+  unload: () => void;
+
   // Event handlers (called by wireEvents)
   onSessionStart: (params: Record<string, unknown>) => void;
   onAgentEvent: (method: string, params: Record<string, unknown>) => void;
@@ -299,9 +301,11 @@ function appendEvent(
   params: Record<string, unknown>,
   closedIds?: Set<string>,
 ): Map<string, Session> {
-  const withSession = ensureSession(sessions, bonsaiSid, closedIds);
+  // Don't create phantom sessions — only update sessions that already exist
+  if (!sessions.has(bonsaiSid)) return sessions;
+  if (closedIds?.has(bonsaiSid)) return sessions;
+  const withSession = sessions;
   const session = withSession.get(bonsaiSid);
-  if (!session) return sessions;
 
   const event: AgentEvent = {
     bonsaiSid,
@@ -616,6 +620,16 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
     });
   },
 
+  unload: () => {
+    set({
+      sessions: new Map(),
+      activeSessionId: null,
+      archivedSessions: [],
+      closedIds: new Set(),
+      projectCost: 0,
+    });
+  },
+
   loadActiveSessions: async () => {
     const { createSessionApi } = await import("@/api/methods/sessions.ts");
     const api = createSessionApi(getClient());
@@ -693,7 +707,20 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
         }
       }
 
-      return { sessions: next, projectCost: totalProjectCost };
+      // Auto-activate the most relevant session if none is active yet:
+      // prefer running → then most recently started active session.
+      const currentActiveId = s.activeSessionId;
+      let autoActiveId: string | null = currentActiveId;
+      if (!currentActiveId) {
+        const activeCandidates = all.filter((e) => e.active);
+        const running = activeCandidates.find((e) => e.status === "running");
+        const best = running ?? activeCandidates.sort(
+          (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+        )[0];
+        autoActiveId = best?.bonsaiSid ?? null;
+      }
+
+      return { sessions: next, projectCost: totalProjectCost, activeSessionId: autoActiveId };
     });
   },
 

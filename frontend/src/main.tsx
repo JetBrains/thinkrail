@@ -4,18 +4,22 @@ import { RpcProvider } from "@/api/index.ts";
 import { App } from "./App.tsx";
 import { ProjectPicker } from "@/components/ProjectPicker/ProjectPicker.tsx";
 import { applyTheme, getThemePreference } from "./utils/theme.ts";
+import { useFileStore } from "@/store/fileStore.ts";
+import { useSessionStore } from "@/store/sessionStore.ts";
 import "./styles/global.css";
 
 applyTheme(getThemePreference());
 
-const BACKEND = import.meta.env.DEV ? "localhost:8000" : location.host;
-const WS_PROTO = import.meta.env.DEV ? "ws:" : location.protocol === "https:" ? "wss:" : "ws:";
+const BACKEND = location.host;
+const WS_PROTO = location.protocol === "https:" ? "wss:" : "ws:";
 
 function Root() {
   const [projectPath, setProjectPath] = useState<string | null>(null);
   const [showPicker, setShowPicker] = useState(true);
 
   const handleSelect = useCallback((path: string) => {
+    useFileStore.getState().unload();
+    useSessionStore.getState().unload();
     setProjectPath(path);
     setShowPicker(false);
   }, []);

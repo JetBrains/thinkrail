@@ -2,7 +2,7 @@ from pathlib import Path
 
 import pytest
 
-from app.core.config import AppConfig, load_config
+from app.core.config import AppConfig, ServerSettings, load_config
 
 class TestAppConfigMethods:
     def test_get_project_root(self, tmp_path: Path) -> None:
@@ -24,8 +24,11 @@ class TestLoadConfig:
         assert isinstance(cfg, AppConfig)
         assert cfg.project_root == tmp_path
         assert cfg.spec_dir == tmp_path / ".specs"
-        assert cfg.host == "127.0.0.1"
-        assert cfg.port == 8000
+
+    def test_server_settings_reads_env(self) -> None:
+        srv = ServerSettings()
+        assert isinstance(srv.backend_port, int)
+        assert isinstance(srv.backend_host, str)
 
     def test_discovers_root_when_not_given(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
         (tmp_path / ".specs").mkdir()
