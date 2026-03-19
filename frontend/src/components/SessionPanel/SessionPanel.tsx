@@ -51,7 +51,6 @@ export function SessionPanel() {
   const handleSwitchSession = useCallback(
     (taskId: string) => {
       switchSession(taskId);
-      useFileStore.setState({ activeFilePath: null, previewFilePath: null, previewFile: null });
     },
     [switchSession],
   );

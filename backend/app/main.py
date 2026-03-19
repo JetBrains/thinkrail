@@ -511,6 +511,19 @@ def create_app() -> FastAPI:
                 break
         return {"dirs": dirs}
 
+    @app.post("/api/fs/mkdir")
+    async def make_directory(body: dict):
+        """Create a directory (and parents) at the given path."""
+        import pathlib
+        target = body.get("path", "").strip()
+        if not target:
+            return {"error": "Path is required"}
+        try:
+            pathlib.Path(target).mkdir(parents=True, exist_ok=True)
+            return {"ok": True}
+        except Exception as e:
+            return {"error": str(e)}
+
     @app.get("/api/fs/browse")
     async def browse_folder():
         """Open a native OS folder picker dialog and return the selected path."""
@@ -532,6 +545,25 @@ def create_app() -> FastAPI:
                 return {"path": None}
             except Exception as e:
                 return {"error": str(e)}
+        elif sys.platform == "linux":
+            # Try zenity first, then kdialog
+            for cmd in [
+                ["zenity", "--file-selection", "--directory", "--title=Select project folder"],
+                ["kdialog", "--getexistingdirectory", "/", "--title", "Select project folder"],
+            ]:
+                try:
+                    proc = await asyncio.create_subprocess_exec(
+                        *cmd,
+                        stdout=asyncio.subprocess.PIPE,
+                        stderr=asyncio.subprocess.PIPE,
+                    )
+                    stdout, _ = await proc.communicate()
+                    if proc.returncode == 0:
+                        selected = stdout.decode().strip()
+                        return {"path": selected}
+                except FileNotFoundError:
+                    continue
+            return {"error": "No folder picker available. Install zenity or kdialog."}
         else:
             return {"error": "Native folder picker not supported on this platform"}
 

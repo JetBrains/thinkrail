@@ -634,6 +634,9 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
       return { sessions: next, openTabs: tabs, activeSessionId: bonsaiSid };
     });
 
+    // Clear file viewer so the new session becomes visible immediately
+    useFileStore.setState({ activeFilePath: null, previewFilePath: null, previewFile: null });
+
     return bonsaiSid;
   },
 
