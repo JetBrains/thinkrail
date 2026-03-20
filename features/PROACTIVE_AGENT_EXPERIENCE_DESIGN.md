@@ -56,44 +56,48 @@ Agent (LLM)
 
 **Key principle:** No new backend infrastructure. All proactive tools reuse the existing `canUseTool` hook, `asyncio.Future` suspension, and JSON-RPC notification/request channels.
 
-## Tool Interception Pattern
+## Tool Permission & Interaction Pattern
 
-All agent-to-UI communication goes through the SDK's `canUseTool` hook. When the agent calls a tool, the hook fires before the tool executes:
+Proactive tools use a **hybrid pattern**: `INTERCEPTORS` for auto-approval in `canUseTool` (non-yolo modes) + `contextvars` for handler logic (all modes including yolo).
 
 ```python
 # permissions.py — can_use_tool (routes via INTERCEPTORS registry)
-async def can_use_tool(tool_name, input_data, context, *, tracker, notify, task, ctx):
-    # Dispatch to registered tool interceptors (suffix match)
+async def can_use_tool(tool_name, input_data, context, *, tracker, notify, task, config):
+    # MCP tools: dispatch via INTERCEPTORS (suffix match → auto-approve)
     for suffix, intercept_fn in INTERCEPTORS.items():
         if tool_name.endswith(suffix):
-            return await intercept_fn(input_data, tracker, notify, task, ctx)
+            return await intercept_fn(input_data, tracker, notify, task, config)
     # Built-in: AskUserQuestion
     if tool_name == "AskUserQuestion":
-        ...  # existing: send request, await response
+        ...  # interactive flow (Future + card)
     # Default: generic tool approval
     else:
-        ...  # existing: send confirmAction, await approval
+        ...  # confirmAction flow
 ```
+
+In `bypassPermissions` (yolo) mode, the CLI skips `canUseTool` entirely and sends `mcp_message` directly. Tool handlers access session state via `get_tool_context()` (set by `runner.py` before SDK client creation), so they work regardless of permission mode.
 
 ### Interactive proactive tools
 
 For tools where the developer must approve or choose (e.g., session suggestions):
 
-1. Runner creates an `asyncio.Future` via `tracker.register_future()`
-2. Runner sends a **server-initiated request** (JSON-RPC with `id`) to the frontend
-3. Runner awaits the Future — agent is suspended
-4. Developer responds → `agent/respond` RPC → Future resolved → runner resumes
-5. Runner returns `PermissionResultAllow` with `updated_input` carrying the response
+1. Interceptor auto-approves in `canUseTool` (or skipped in yolo mode)
+2. **Handler** creates an `asyncio.Future` via `ctx.tracker.register_future()`
+3. Handler sends a **server-initiated request** (JSON-RPC with `id`) to the frontend
+4. Handler awaits the Future — agent is suspended
+5. Developer responds → `agent/respond` RPC → Future resolved → handler resumes
+6. Handler returns MCP text result (approve/dismiss message)
 
-**On dismiss:** Return `PermissionResultAllow` (not Deny) with a dismissal flag in `updated_input`. This prevents the SDK from treating it as an error.
+**On dismiss:** Handler returns a text message with dismissal reason. Never uses `PermissionResultDeny` — the SDK would treat it as an error.
 
 ### Passive proactive tools
 
 For tools that push info without needing a response (e.g., progress updates):
 
-1. Runner emits a **notification** (JSON-RPC without `id`) to the frontend
-2. Runner immediately returns `PermissionResultAllow` — no suspension
-3. Frontend updates its state and renders the info
+1. Interceptor auto-approves in `canUseTool` (or skipped in yolo mode)
+2. **Handler** emits a **notification** (JSON-RPC without `id`) via `ctx.notify()`
+3. Handler returns immediately — no suspension
+4. Frontend updates its state and renders the info
 
 ## Proactive Tool Categories
 
@@ -110,7 +114,7 @@ Future proactive tools (e.g., PushContext, SuggestAction) would follow one of th
 
 ## Affected Areas
 
-**Backend:** Each proactive tool is self-contained in the `backend/app/agent/tools/` package (schema, handler, MCP server, and intercept logic in one file). Permission routing dispatches `canUseTool` callbacks via the `INTERCEPTORS` registry. No changes to runner, service, tracker, or persistence — all existing infrastructure is reused as-is. See [Tools Package spec](../backend/app/agent/tools/README.md) for the implementation pattern.
+**Backend:** Each proactive tool is self-contained in the `backend/app/agent/tools/` package (schema, handler, MCP server, and auto-approve intercept in one file). Permission routing dispatches `canUseTool` callbacks via the `INTERCEPTORS` registry. Tool handlers access session state via `get_tool_context()` (contextvars set by `runner.py`). See [Tools Package spec](../backend/app/agent/tools/README.md) for the implementation pattern.
 
 **Frontend:** Event wiring, store handlers, chat stream rendering, and context panel sections. Each tool needs a wire subscription, store handler, and UI component. See individual feature specs for file-level details.
 
@@ -122,12 +126,12 @@ Future proactive tools (e.g., PushContext, SuggestAction) would follow one of th
 Agent LLM
   │ calls SuggestSession({skill, specIds, name, reason})
   ▼
-SDK canUseTool fires
-  │
+SDK canUseTool fires (skipped in yolo mode)
+  │ → INTERCEPTORS auto-approve
   ▼
-permissions.py → intercept function
+Tool handler runs (via get_tool_context())
   │ 1. Validate skill exists in plugin, specIds exist in registry
-  │ 2. Create asyncio.Future via tracker.register_future()
+  │ 2. Create asyncio.Future via ctx.tracker.register_future()
   │ 3. Send agent/suggestSession (JSON-RPC request with id) → frontend
   │ 4. Await Future (agent suspended)
   ▼
@@ -137,8 +141,8 @@ Frontend wireEvents.ts → sessionStore.onSuggestSession()
 Developer clicks Start or Dismiss
   │ sessionStore.resolveRequest() → agent/respond RPC → backend
   ▼
-tracker resolves Future → intercept function resumes
-  │ Return PermissionResultAllow with {approved: true} or {dismissed: true}
+tracker resolves Future → handler resumes
+  │ Return approve/dismiss text as MCP tool result
   ▼
 Agent receives tool result, continues
 ```
@@ -149,12 +153,12 @@ Agent receives tool result, continues
 Agent LLM
   │ calls UpdateProgress({phase, plan, status})
   ▼
-SDK canUseTool fires
-  │
+SDK canUseTool fires (skipped in yolo mode)
+  │ → INTERCEPTORS auto-approve
   ▼
-permissions.py → intercept function
-  │ 1. Emit agent/progressUpdate notification (no id) → frontend
-  │ 2. Immediately return PermissionResultAllow (no suspension)
+Tool handler runs (via get_tool_context())
+  │ 1. Emit agent/progressUpdate notification (no id) via ctx.notify()
+  │ 2. Return immediately
   ▼
 Frontend wireEvents.ts → sessionStore.onProgressUpdate()
   │ Update session.progress → ContextPanel re-renders ProgressSection
@@ -166,9 +170,9 @@ Agent continues immediately (no waiting)
 
 ### Backend
 
-Each proactive tool lives in the `backend/app/agent/tools/` package as a self-contained file. The tools package exposes `MCP_SERVERS` (wired into the SDK) and `INTERCEPTORS` (used by `permissions.py` for `canUseTool` routing). See [Tools Package spec](../backend/app/agent/tools/README.md) for the pattern and file-level details.
+Each proactive tool lives in the `backend/app/agent/tools/` package as a self-contained file. The tools package exposes `MCP_SERVERS` (wired into the SDK), `INTERCEPTORS` (auto-approve routing in `permissions.py`), and `set_tool_context()`/`get_tool_context()` (contextvars for handler logic). See [Tools Package spec](../backend/app/agent/tools/README.md) for the pattern and file-level details.
 
-No changes to: `runner.py`, `service.py`, `tracker.py`, `persistence.py`, `notifications.py`.
+`runner.py` calls `set_tool_context()` before SDK client creation. No changes to: `service.py`, `tracker.py`, `persistence.py`, `notifications.py`.
 
 ### Frontend
 
@@ -185,14 +189,14 @@ Each proactive tool needs: event subscription in the store wiring layer, a store
 
 | Decision | Choice | Rationale |
 |----------|--------|-----------|
-| Reuse canUseTool | All proactive tools go through the same hook as AskUserQuestion | Zero new infrastructure. Proven pattern. Single interception point. |
-| Two categories | Interactive (suspend + await) vs. Passive (auto-approve) | Right semantics: meaningful actions need approval, informational updates shouldn't block. |
-| Allow on dismiss | `PermissionResultAllow` with dismissal flag, never `PermissionResultDeny` | Deny triggers SDK error handling. We want graceful continuation. |
+| Hybrid pattern | INTERCEPTORS for auto-approval + contextvars for handler logic | INTERCEPTORS ensure MCP tools bypass `agent/confirmAction` in non-yolo modes. contextvars ensure handlers work in yolo mode (where `canUseTool` is skipped). |
+| Two categories | Interactive (handler suspends + awaits) vs. Passive (handler notifies + returns) | Right semantics: meaningful actions need developer response, informational updates shouldn't block. |
+| Never PermissionResultDeny | Interactive tools return text results, never permission denials | Deny triggers SDK error handling. Handler returns dismiss message as tool text. |
 | Self-contained tool files | Each proactive tool is one file in `tools/` with schema + handler + server + intercept | Follows the tools package pattern. Easy to find everything about a tool in one place. |
 | Extensible pattern | Adding a new proactive tool = one hook branch + one notification + one component | Low cost to add future tools (PushContext, SuggestAction, etc.) |
 | Tool registration | MCP tools via `@tool` + `create_sdk_mcp_server` (same as `bonsai_visualize`) | Proven pattern in the tools package. Agent sees real tool schemas with names, descriptions, and parameter definitions. `canUseTool` fires before execution, so interception is guaranteed. |
 | Skill awareness | Shared preamble in `context.py` for all skills | All skills benefit from UpdateProgress (progress reporting) and SuggestSession (follow-up suggestions). No opt-in overhead — every session gets proactive tool awareness. |
-| Backend validation | Runner validates `skill` and `specIds` exist before forwarding SuggestSession to frontend | Catches bad suggestions early. Agent gets clear error feedback. Frontend never renders an invalid suggestion card. |
+| Backend validation | Handler validates `skill` and `specIds` exist via `get_tool_context()` before sending card | Catches bad suggestions early. Agent gets clear error feedback. Frontend never renders an invalid suggestion card. |
 
 ## Resolved Questions
 

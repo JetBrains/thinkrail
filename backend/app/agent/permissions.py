@@ -28,11 +28,13 @@ async def can_use_tool(
 ) -> PermissionResultAllow | PermissionResultDeny:
     """Route tool permission requests to the appropriate handler.
 
-    Custom MCP tools are dispatched via the INTERCEPTORS registry (suffix match).
-    SDK built-in tools (AskUserQuestion) and unknown tools go through the
-    interactive approval flow.
+    Dispatch order:
+    1. INTERCEPTORS — suffix-matched MCP tool interceptors (auto-approve).
+       All real tool logic lives in handlers via get_tool_context().
+    2. AskUserQuestion — SDK built-in, interactive (Future + card).
+    3. Default — generic tool approval via agent/confirmAction.
     """
-    # Check registered tool interceptors (suffix match)
+    # MCP tools: dispatch via INTERCEPTORS registry (suffix match)
     for suffix, intercept_fn in INTERCEPTORS.items():
         if tool_name.endswith(suffix):
             return await intercept_fn(input_data, tracker, notify, task, config)

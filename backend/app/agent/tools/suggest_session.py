@@ -1,9 +1,8 @@
 """SuggestSession proactive tool — agent suggests follow-up sessions.
 
-Interactive proactive tool: the agent suggests a follow-up session.
-canUseTool intercepts the call, sends a request to the frontend, and awaits
-the developer's approve/dismiss.  The handler runs after interception and
-returns a result message based on the updated_input.
+In-handler interaction: the handler validates inputs, sends a card to the
+frontend, and awaits the developer's approve/dismiss.  Uses ``get_tool_context()``
+to access session state — works in all permission modes including yolo.
 """
 
 from __future__ import annotations
@@ -16,6 +15,7 @@ from uuid import uuid4
 from claude_agent_sdk import PermissionResultAllow, create_sdk_mcp_server, tool
 
 from app.agent.models import AgentTask
+from app.agent.tools._context import get_tool_context
 from app.agent.tracker import Tracker
 from app.core.config import AppConfig
 from app.spec.registry import find_entry, read_registry
@@ -58,33 +58,6 @@ SUGGEST_SESSION_SCHEMA: dict = {
 }
 
 
-@tool(
-    "SuggestSession",
-    "Suggest a follow-up session to the developer. The developer sees a card "
-    "with the skill, specs, name, and reason \u2014 and can approve or dismiss. "
-    "If approved, a new session is auto-created. If dismissed, you receive "
-    "a dismissal flag and should continue your current work.",
-    SUGGEST_SESSION_SCHEMA,
-)
-async def _suggest_session(args: dict) -> dict:
-    # Actual interaction handled by canUseTool interception.
-    # This handler runs AFTER canUseTool returns Allow with updated_input.
-    if args.get("error"):
-        return {"content": [{"type": "text", "text": f"Error: {args['error']}"}], "isError": True}
-    if args.get("dismissed"):
-        reason = args.get("dismissReason", "")
-        msg = f"✗ Suggestion dismissed by developer: {reason}" if reason else "✗ Suggestion dismissed by developer."
-        return {"content": [{"type": "text", "text": msg}]}
-    if args.get("approved"):
-        return {"content": [{"type": "text", "text": f"✓ Session '{args.get('name', '')}' approved and created."}]}
-    return {"content": [{"type": "text", "text": "Suggestion processed."}]}
-
-
-suggest_session_mcp_server = create_sdk_mcp_server(
-    name="bonsai-proactive", tools=[_suggest_session]
-)
-
-
 def _validate_skill(skill: str, plugin_dir: Path) -> str | None:
     """Return an error message if the skill does not exist, else None."""
     skill_path = plugin_dir / "skills" / skill / "SKILL.md"
@@ -108,6 +81,84 @@ def _validate_spec_ids(spec_ids: list[str], registry_path: Path) -> str | None:
     return None
 
 
+def _error(text: str) -> dict:
+    return {"content": [{"type": "text", "text": f"Error: {text}"}], "isError": True}
+
+
+@tool(
+    "SuggestSession",
+    "Suggest a follow-up session to the developer. The developer sees a card "
+    "with the skill, specs, name, and reason — and can approve or dismiss. "
+    "If approved, a new session is auto-created. If dismissed, you receive "
+    "a dismissal flag and should continue your current work.",
+    SUGGEST_SESSION_SCHEMA,
+)
+async def _suggest_session(args: dict) -> dict:
+    ctx = get_tool_context()
+
+    # --- Validate inputs ---
+    skill = args.get("skill", "")
+    if skill:
+        skill_error = _validate_skill(skill, ctx.config.plugin_dir)
+        if skill_error:
+            return _error(skill_error)
+
+    spec_ids = args.get("specIds", [])
+    if spec_ids:
+        spec_error = _validate_spec_ids(spec_ids, ctx.config.get_registry_path())
+        if spec_error:
+            return _error(spec_error)
+
+    # --- Interactive flow: send card → await developer response ---
+    request_id = str(uuid4())
+    future = ctx.tracker.register_future(ctx.task.bonsai_sid, request_id)
+
+    payload: dict[str, Any] = {
+        "bonsaiSid": ctx.task.bonsai_sid,
+        "skill": skill,
+        "specIds": spec_ids,
+        "name": args.get("name", ""),
+        "reason": args.get("reason", ""),
+    }
+    prompt = args.get("prompt")
+    if prompt:
+        payload["prompt"] = prompt
+
+    await ctx.notify(
+        "agent/suggestSession",
+        payload,
+        request_id=request_id,
+    )
+
+    response = await future  # agent suspended until developer responds
+
+    # --- Handle response ---
+    if response.get("behavior") == "deny":
+        dismiss_reason = (
+            response.get("dismissReason") or response.get("message") or ""
+        )
+        msg = (
+            f"✗ Suggestion dismissed by developer: {dismiss_reason}"
+            if dismiss_reason
+            else "✗ Suggestion dismissed by developer."
+        )
+        return {"content": [{"type": "text", "text": msg}]}
+
+    return {
+        "content": [
+            {
+                "type": "text",
+                "text": f"✓ Session '{args.get('name', '')}' approved and created.",
+            }
+        ]
+    }
+
+
+suggest_session_mcp_server = create_sdk_mcp_server(
+    name="bonsai-proactive", tools=[_suggest_session]
+)
+
+
 async def intercept_suggest_session(
     input_data: dict[str, Any],
     tracker: Tracker,
@@ -115,59 +166,9 @@ async def intercept_suggest_session(
     task: AgentTask,
     config: AppConfig,
 ) -> PermissionResultAllow:
-    """Intercept SuggestSession tool call — validate inputs, suspend agent, await developer response."""
-    plugin_dir = config.plugin_dir
-    registry_path = config.get_registry_path()
+    """Auto-approve — interactive flow is handled inside the tool handler.
 
-    # Validate skill exists in the plugin
-    skill = input_data.get("skill", "")
-    if skill:
-        skill_error = _validate_skill(skill, plugin_dir)
-        if skill_error:
-            return PermissionResultAllow(
-                behavior="allow",
-                updated_input={**input_data, "error": skill_error},
-            )
-
-    # Validate specIds exist in the registry
-    spec_ids = input_data.get("specIds", [])
-    if spec_ids:
-        spec_error = _validate_spec_ids(spec_ids, registry_path)
-        if spec_error:
-            return PermissionResultAllow(
-                behavior="allow",
-                updated_input={**input_data, "error": spec_error},
-            )
-
-    # Validation passed — proceed with interactive flow
-    request_id = str(uuid4())
-    future = tracker.register_future(task.bonsai_sid, request_id)
-    payload: dict[str, Any] = {
-        "bonsaiSid": task.bonsai_sid,
-        "skill": skill,
-        "specIds": spec_ids,
-        "name": input_data.get("name", ""),
-        "reason": input_data.get("reason", ""),
-    }
-    prompt = input_data.get("prompt")
-    if prompt:
-        payload["prompt"] = prompt
-    await notify(
-        "agent/suggestSession",
-        payload,
-        request_id=request_id,
-    )
-    response = await future
-    if response.get("behavior") == "deny":
-        dismiss_reason = response.get("dismissReason") or response.get("message") or ""
-        updated = {**input_data, "dismissed": True}
-        if dismiss_reason:
-            updated["dismissReason"] = dismiss_reason
-        return PermissionResultAllow(
-            behavior="allow",
-            updated_input=updated,
-        )
-    return PermissionResultAllow(
-        behavior="allow",
-        updated_input={**input_data, "approved": True},
-    )
+    The handler uses get_tool_context() for validation, card notification,
+    and Future-based suspension.  This interceptor just lets it through.
+    """
+    return PermissionResultAllow(behavior="allow")

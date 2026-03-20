@@ -24,6 +24,7 @@ from claude_agent_sdk import (
 from app.agent.models import AgentResult, AgentTask, to_camel
 from app.agent.permissions import can_use_tool
 from app.agent.tools import MCP_SERVERS
+from app.agent.tools._context import set_tool_context
 from app.agent.tracker import END_SIGNAL, Tracker
 
 logger = logging.getLogger(__name__)
@@ -106,6 +107,12 @@ async def run(
     plugins = []
     if plugin_dir and Path(plugin_dir).is_dir():
         plugins.append({"type": "local", "path": str(plugin_dir)})
+
+    # Set tool context BEFORE SDK client creation so that MCP tool handlers
+    # can access session state (tracker, notify, task, config) via
+    # get_tool_context().  This is critical for yolo mode where the CLI
+    # bypasses canUseTool and invokes MCP tools directly.
+    set_tool_context(tracker, notify, task, config)
 
     def _on_cli_stderr(line: str) -> None:
         logger.debug("CLI stderr: %s", line)

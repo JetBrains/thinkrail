@@ -1,4 +1,4 @@
-"""Tests for the agent tools package — SuggestSession, visualization, specs tools, and interceptor routing."""
+"""Tests for the agent tools package — SuggestSession, visualization, specs tools, and tool context."""
 
 from __future__ import annotations
 
@@ -11,6 +11,7 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 
 from app.agent.models import AgentConfig, AgentTask
+from app.agent.tools._context import set_tool_context
 from app.agent.tracker import Tracker
 from app.core.config import AppConfig
 
@@ -118,36 +119,34 @@ class TestValidateSpecIds:
 
 
 # ===========================================================================
-# intercept_suggest_session — async tests
+# _suggest_session handler — in-handler interaction tests
 # ===========================================================================
 
 
-class TestInterceptSuggestSession:
-    async def test_intercept_approve_flow(self, tmp_path: Path) -> None:
-        """Approve → PermissionResultAllow with approved=True in updated_input."""
-        from app.agent.tools.suggest_session import intercept_suggest_session
+class TestSuggestSessionInHandlerInteraction:
+    async def test_handler_approve_flow(self, tmp_path: Path) -> None:
+        """Approve → result contains 'approved and created'."""
+        from app.agent.tools.suggest_session import _suggest_session
 
         config = _make_config(tmp_path)
-        # Create skill on disk
         skill_dir = config.plugin_dir / "skills" / "module-design"
         skill_dir.mkdir(parents=True)
         (skill_dir / "SKILL.md").write_text("# skill")
-        # Create registry with a valid specId
         _write_registry(config.get_registry_path(), ["spec-a"])
 
         tracker, task = _make_tracker_and_task()
         tracker.set_status(task.bonsai_sid, "idle")
         tracker.set_status(task.bonsai_sid, "running")
         notify = AsyncMock()
+        set_tool_context(tracker, notify, task, config)
 
-        input_data = {
+        args = {
             "skill": "module-design",
             "specIds": ["spec-a"],
             "name": "Design: Agent Module",
             "reason": "Needs its own spec.",
         }
 
-        # Schedule future resolution (approve) after a tick
         async def resolve_approve():
             await asyncio.sleep(0.01)
             for req_id in list(tracker._futures.get(task.bonsai_sid, {})):
@@ -156,11 +155,10 @@ class TestInterceptSuggestSession:
 
         asyncio.get_event_loop().create_task(resolve_approve())
 
-        result = await intercept_suggest_session(input_data, tracker, notify, task, config)
-
-        assert result.behavior == "allow"
-        assert result.updated_input["approved"] is True
-        assert "dismissed" not in result.updated_input
+        result = await _suggest_session.handler(args)
+        text = result["content"][0]["text"]
+        assert "approved and created" in text
+        assert "Design: Agent Module" in text
 
         # Verify notify was called with the right method and params
         notify.assert_called_once()
@@ -170,12 +168,10 @@ class TestInterceptSuggestSession:
         assert params["bonsaiSid"] == task.bonsai_sid
         assert params["skill"] == "module-design"
         assert params["specIds"] == ["spec-a"]
-        assert params["name"] == "Design: Agent Module"
-        assert params["reason"] == "Needs its own spec."
 
-    async def test_intercept_dismiss_flow(self, tmp_path: Path) -> None:
-        """Dismiss → PermissionResultAllow (not Deny!) with dismissed=True."""
-        from app.agent.tools.suggest_session import intercept_suggest_session
+    async def test_handler_dismiss_flow(self, tmp_path: Path) -> None:
+        """Dismiss → result contains 'dismissed'."""
+        from app.agent.tools.suggest_session import _suggest_session
 
         config = _make_config(tmp_path)
         skill_dir = config.plugin_dir / "skills" / "task-spec"
@@ -186,8 +182,9 @@ class TestInterceptSuggestSession:
         tracker.set_status(task.bonsai_sid, "idle")
         tracker.set_status(task.bonsai_sid, "running")
         notify = AsyncMock()
+        set_tool_context(tracker, notify, task, config)
 
-        input_data = {
+        args = {
             "skill": "task-spec",
             "specIds": [],
             "name": "Some Task",
@@ -202,202 +199,62 @@ class TestInterceptSuggestSession:
 
         asyncio.get_event_loop().create_task(resolve_deny())
 
-        result = await intercept_suggest_session(input_data, tracker, notify, task, config)
+        result = await _suggest_session.handler(args)
+        text = result["content"][0]["text"]
+        assert "dismissed" in text.lower()
 
-        # Key invariant: never PermissionResultDeny — always Allow
-        assert result.behavior == "allow"
-        assert result.updated_input["dismissed"] is True
-        assert "approved" not in result.updated_input
-
-    async def test_intercept_validation_failure_bad_skill(self, tmp_path: Path) -> None:
-        """Invalid skill → returns Allow with error, no future registered."""
-        from app.agent.tools.suggest_session import intercept_suggest_session
+    async def test_handler_validation_failure_bad_skill(self, tmp_path: Path) -> None:
+        """Invalid skill → returns isError with error message."""
+        from app.agent.tools.suggest_session import _suggest_session
 
         config = _make_config(tmp_path)
-        # No skill on disk
-
         tracker, task = _make_tracker_and_task()
         notify = AsyncMock()
+        set_tool_context(tracker, notify, task, config)
 
-        input_data = {
+        args = {
             "skill": "nonexistent-skill",
             "specIds": [],
             "name": "Bad Skill",
             "reason": "Testing.",
         }
 
-        result = await intercept_suggest_session(input_data, tracker, notify, task, config)
+        result = await _suggest_session.handler(args)
 
-        assert result.behavior == "allow"
-        assert "error" in result.updated_input
-        assert "Unknown skill: nonexistent-skill" in result.updated_input["error"]
-        # No future should have been registered
-        assert not tracker._futures.get(task.bonsai_sid, {})
-        # No notification sent
+        assert result.get("isError") is True
+        text = result["content"][0]["text"]
+        assert "Unknown skill: nonexistent-skill" in text
         notify.assert_not_called()
 
-    async def test_intercept_validation_failure_bad_spec_id(self, tmp_path: Path) -> None:
-        """Valid skill but invalid specId → returns Allow with error."""
-        from app.agent.tools.suggest_session import intercept_suggest_session
+    async def test_handler_validation_failure_bad_spec_id(self, tmp_path: Path) -> None:
+        """Valid skill but invalid specId → returns isError with error."""
+        from app.agent.tools.suggest_session import _suggest_session
 
         config = _make_config(tmp_path)
-        # Create valid skill
         skill_dir = config.plugin_dir / "skills" / "module-design"
         skill_dir.mkdir(parents=True)
         (skill_dir / "SKILL.md").write_text("# skill")
-        # Registry with only "a"
         _write_registry(config.get_registry_path(), ["a"])
 
         tracker, task = _make_tracker_and_task()
         notify = AsyncMock()
+        set_tool_context(tracker, notify, task, config)
 
-        input_data = {
+        args = {
             "skill": "module-design",
             "specIds": ["a", "missing-spec"],
             "name": "Bad Spec",
             "reason": "Testing.",
         }
 
-        result = await intercept_suggest_session(input_data, tracker, notify, task, config)
+        result = await _suggest_session.handler(args)
 
-        assert result.behavior == "allow"
-        assert "error" in result.updated_input
-        assert "Unknown specIds: missing-spec" in result.updated_input["error"]
-        assert not tracker._futures.get(task.bonsai_sid, {})
+        assert result.get("isError") is True
+        text = result["content"][0]["text"]
+        assert "Unknown specIds: missing-spec" in text
         notify.assert_not_called()
 
 
-# ===========================================================================
-# intercept_visualize — async test
-# ===========================================================================
-
-
-class TestInterceptVisualize:
-    async def test_intercept_visualize_auto_approve(self, tmp_path: Path) -> None:
-        """intercept_visualize returns Allow immediately, no side effects."""
-        from app.agent.tools.visualization import intercept_visualize
-
-        config = _make_config(tmp_path)
-        tracker, task = _make_tracker_and_task()
-        notify = AsyncMock()
-
-        input_data = {"type": "summary-box", "title": "Test", "data": {"text": "hi"}}
-
-        result = await intercept_visualize(input_data, tracker, notify, task, config)
-
-        assert result.behavior == "allow"
-        # No future, no notification
-        assert not tracker._futures.get(task.bonsai_sid, {})
-        notify.assert_not_called()
-
-
-# ===========================================================================
-# INTERCEPTORS routing via permissions.py — integration tests
-# ===========================================================================
-
-
-class TestInterceptorRouting:
-    async def test_interceptor_suffix_match_suggest_session(self, tmp_path: Path) -> None:
-        """can_use_tool with SuggestSession suffix dispatches to intercept_suggest_session."""
-        from unittest.mock import patch
-
-        from app.agent.permissions import can_use_tool
-
-        config = _make_config(tmp_path)
-        tracker, task = _make_tracker_and_task()
-        notify = AsyncMock()
-        context = MagicMock()
-
-        mock_result = MagicMock()
-        mock_result.behavior = "allow"
-
-        mock_intercept = AsyncMock(return_value=mock_result)
-
-        # INTERCEPTORS is a dict imported by reference — patch via dict replacement
-        with patch.dict(
-            "app.agent.tools.INTERCEPTORS",
-            {"SuggestSession": mock_intercept},
-        ):
-            # The SDK prefixes with "mcp__bonsai-proactive__"
-            result = await can_use_tool(
-                "mcp__bonsai-proactive__SuggestSession",
-                {"skill": "x", "name": "n", "reason": "r"},
-                context,
-                tracker=tracker,
-                notify=notify,
-                task=task,
-                config=config,
-            )
-
-        mock_intercept.assert_called_once()
-        assert result is mock_result
-
-    async def test_interceptor_suffix_match_visualize(self, tmp_path: Path) -> None:
-        """can_use_tool with bonsai_visualize suffix dispatches to intercept_visualize."""
-        from unittest.mock import patch
-
-        from app.agent.permissions import can_use_tool
-
-        config = _make_config(tmp_path)
-        tracker, task = _make_tracker_and_task()
-        notify = AsyncMock()
-        context = MagicMock()
-
-        mock_result = MagicMock()
-        mock_result.behavior = "allow"
-
-        mock_intercept = AsyncMock(return_value=mock_result)
-
-        with patch.dict(
-            "app.agent.tools.INTERCEPTORS",
-            {"bonsai_visualize": mock_intercept},
-        ):
-            result = await can_use_tool(
-                "mcp__bonsai-vis__bonsai_visualize",
-                {"type": "diagram", "data": {}},
-                context,
-                tracker=tracker,
-                notify=notify,
-                task=task,
-                config=config,
-            )
-
-        mock_intercept.assert_called_once()
-        assert result is mock_result
-
-
-# ===========================================================================
-# _suggest_session handler — unit tests
-# ===========================================================================
-
-
-class TestSuggestSessionHandler:
-    async def test_handler_approved(self) -> None:
-        """approved=True → content contains 'approved and created'."""
-        from app.agent.tools.suggest_session import _suggest_session
-
-        # @tool decorator wraps the function in SdkMcpTool; .handler is the raw async fn
-        result = await _suggest_session.handler({"approved": True, "name": "Design: X"})
-        text = result["content"][0]["text"]
-        assert "approved and created" in text
-        assert "Design: X" in text
-
-    async def test_handler_dismissed(self) -> None:
-        """dismissed=True → content contains 'dismissed'."""
-        from app.agent.tools.suggest_session import _suggest_session
-
-        result = await _suggest_session.handler({"dismissed": True})
-        text = result["content"][0]["text"]
-        assert "dismissed" in text.lower()
-
-    async def test_handler_error(self) -> None:
-        """error field → isError=True and content contains 'Error: ...'."""
-        from app.agent.tools.suggest_session import _suggest_session
-
-        result = await _suggest_session.handler({"error": "Unknown skill"})
-        text = result["content"][0]["text"]
-        assert "Error: Unknown skill" in text
-        assert result["isError"] is True
 
 
 # ===========================================================================
@@ -421,8 +278,15 @@ def _write_full_registry(
 
 
 def _make_spec_args(args: dict[str, Any], config: AppConfig) -> dict[str, Any]:
-    """Inject _config into tool args (simulating intercept)."""
-    return {**args, "_config": config.model_dump(mode="json")}
+    """Set tool context for spec tool tests and return raw args.
+
+    Previously injected ``_config`` into args (simulating the interceptor).
+    Now sets tool context via contextvars — matching the new in-handler pattern.
+    """
+    tracker = Tracker()
+    task = tracker.create_task(["spec-test"], AgentConfig())
+    set_tool_context(tracker, AsyncMock(), task, config)
+    return args
 
 
 def _parse_result(result: dict) -> tuple[Any, bool]:
@@ -1287,34 +1151,6 @@ class TestRegistryMutate:
         assert not is_error
         assert data["entries_removed"] == 1
         assert data["entries_added"] == 1
-
-
-# ===========================================================================
-# intercept_specs — tests
-# ===========================================================================
-
-
-class TestInterceptSpecs:
-    async def test_auto_approve_with_config(self, tmp_path: Path) -> None:
-        """intercept_specs returns Allow with _config injected."""
-        from app.agent.tools.specs import intercept_specs
-
-        config = _make_config(tmp_path)
-        tracker, task = _make_tracker_and_task()
-        notify = AsyncMock()
-
-        result = await intercept_specs(
-            {"id": "some-spec"}, tracker, notify, task, config
-        )
-
-        assert result.behavior == "allow"
-        assert "_config" in result.updated_input
-        # Config should be JSON-serializable dict
-        assert isinstance(result.updated_input["_config"], dict)
-        # Original args preserved
-        assert result.updated_input["id"] == "some-spec"
-        # No side effects
-        notify.assert_not_called()
 
 
 # ===========================================================================

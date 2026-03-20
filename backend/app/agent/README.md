@@ -252,12 +252,12 @@ graph TD
 | `models.py` | Pydantic models: AgentTask, AgentConfig, AgentEvent, AgentResult, Question, QuestionOption, AskUserQuestionResponse, ToolApprovalResponse | — |
 | `context.py` | Context assembly pipeline: builds general instructions, loads skill instructions, project metadata, and spec content; composes system prompt. See [CONTEXT.md](CONTEXT.md). | models, spec/service |
 | `service.py` | Facade — start sessions, send messages, interrupt turns, end sessions, continue sessions (native resume), relay responses to pending futures | context, runner, tracker, core/config, spec/service |
-| `permissions.py` | Tool permission routing. Thin `can_use_tool()` callback that routes to tool-specific `intercept()` functions via `tools.INTERCEPTORS` registry, plus built-in handling for AskUserQuestion and default tool approval. | tools, tracker, models |
+| `permissions.py` | Tool permission routing. `can_use_tool()` callback that routes MCP tools to auto-approve `intercept()` functions via `tools.INTERCEPTORS` (suffix match), handles AskUserQuestion interactively, and falls back to `agent/confirmAction` for unknown tools. Real MCP tool logic lives in handlers via `get_tool_context()`. | tools, tracker, models |
 | `transcribe.py` | Audio transcription via OpenAI Whisper API. `transcribe(audio_base64, mime_type) -> str`. Lazy-imports `openai`; optional dependency for browsers without Web Speech API. See [TRANSCRIBE.md](TRANSCRIBE.md). | openai (optional) |
-| `runner.py` | Claude Agent SDK integration: manage SDK client lifecycle, conversation loop (wait for message → query → stream events → repeat), map SDK events to notifications, wire MCP servers and hooks into SDK. Accepts optional `resume_session_id` to pass to `ClaudeAgentOptions.resume`. No tool-specific logic — delegates to `permissions.py` and `tools/`. | models, tracker, permissions, tools |
+| `runner.py` | Claude Agent SDK integration: manage SDK client lifecycle, conversation loop (wait for message → query → stream events → repeat), map SDK events to notifications, wire MCP servers and hooks into SDK. Calls `set_tool_context()` before SDK client creation so handlers work in all permission modes. Accepts optional `resume_session_id` for `ClaudeAgentOptions.resume`. No tool-specific logic — delegates to `permissions.py` and `tools/`. | models, tracker, permissions, tools |
 | `tracker.py` | Session lifecycle (initializing/idle/running/waiting/done/error), message queue per session (`asyncio.Queue`), registry of in-flight `asyncio.Future` objects keyed by `requestId`, **interrupt flag** per session for notification routing | models |
 | `persistence.py` | Session persistence — split storage: metadata in `.json`, events in append-only `.events.jsonl`. Save/load/list/append/delete. See [PERSISTENCE.md](PERSISTENCE.md). | core/fileio |
-| `tools/` | Self-contained MCP tools package. Each tool is one file: schema + handler + MCP server + `intercept()`. Exports `MCP_SERVERS` and `INTERCEPTORS` registries. See [tools/README.md](tools/README.md). | claude-agent-sdk, tracker, models |
+| `tools/` | Self-contained MCP tools package. Each tool is one file: schema + handler + MCP server + `intercept()`. Exports `MCP_SERVERS`, `INTERCEPTORS`, and `set_tool_context()`/`get_tool_context()` (contextvars for yolo mode). See [tools/README.md](tools/README.md). | claude-agent-sdk, tracker, models |
 
 ## Public Interface
 
@@ -333,7 +333,7 @@ The SDK uses a single `canUseTool` callback for both questions and tool approval
 | `tool_name` in `canUseTool` | Bonsai protocol method | Frontend response -> SDK return |
 |------------------------------|------------------------|-------------------------------|
 | `"AskUserQuestion"` | `agent/askUserQuestion` | `AskUserQuestionResponse` -> `PermissionResultAllow(updated_input={"questions": [...], "answers": {...}})` |
-| `"SuggestSession"` | `agent/suggestSession` | Approve `{"behavior":"allow"}` -> `PermissionResultAllow(updated_input={...input, "approved": true})`. Dismiss `{"behavior":"deny"}` -> `PermissionResultAllow(updated_input={...input, "dismissed": true})`. Never returns `PermissionResultDeny`. See [SuggestSession Backend Spec](tools/SUGGEST_SESSION.md). |
+| `"SuggestSession"` | — (auto-approved by interceptor) | `PermissionResultAllow(behavior="allow")`. Interactive flow (card, Future, await) runs inside the tool handler via `get_tool_context()` — not in `canUseTool`. See [SuggestSession Backend Spec](tools/SUGGEST_SESSION.md). |
 | Any other tool | `agent/confirmAction` | `ToolApprovalResponse` -> `PermissionResultAllow()` or `PermissionResultDeny(message=..., interrupt=...)` |
 
 ### Event Types (AgentEvent.event_type)
@@ -365,7 +365,7 @@ For mid-turn interactions where the agent needs user input, `runner.py` suspends
 | Trigger | Server sends | Client responds with |
 |---------|-------------|----------------------|
 | `canUseTool` fires with `tool_name="AskUserQuestion"` | `agent/askUserQuestion` (JSON-RPC request with `id`); params: `{ bonsaiSid, questions }` | `agent/respond { bonsaiSid, requestId, response: AskUserQuestionResponse }` |
-| `canUseTool` fires with `tool_name="SuggestSession"` | `agent/suggestSession` (JSON-RPC request with `id`); params: `{ bonsaiSid, skill, specIds, name, reason, prompt? }` | `agent/respond { bonsaiSid, requestId, response: ToolApprovalResponse }` — approve: `{"behavior":"allow"}`, dismiss: `{"behavior":"deny", "dismissReason": "..."}` |
+| SuggestSession tool handler (via `get_tool_context()`) | `agent/suggestSession` (JSON-RPC request with `id`); params: `{ bonsaiSid, skill, specIds, name, reason, prompt? }` | `agent/respond { bonsaiSid, requestId, response: ToolApprovalResponse }` — approve: `{"behavior":"allow"}`, dismiss: `{"behavior":"deny", "dismissReason": "..."}` |
 | `canUseTool` fires with any other `tool_name` | `agent/confirmAction` (JSON-RPC request with `id`); params: `{ bonsaiSid, toolName, toolInput }` | `agent/respond { bonsaiSid, requestId, response: ToolApprovalResponse }` |
 
 **Suspension mechanism:**

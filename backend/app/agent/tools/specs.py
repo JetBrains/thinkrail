@@ -3,6 +3,9 @@
 7 tools giving the Claude agent structured, validated access to the spec
 registry and spec files.  All tools are auto-approved; validation errors
 are returned as ``isError`` MCP responses, never as permission denials.
+
+Uses ``get_tool_context()`` to access AppConfig — works in all permission
+modes including ``bypassPermissions`` (yolo).
 """
 
 from __future__ import annotations
@@ -15,6 +18,7 @@ from typing import Any
 from claude_agent_sdk import PermissionResultAllow, create_sdk_mcp_server, tool
 
 from app.agent.models import AgentTask
+from app.agent.tools._context import get_tool_context
 from app.agent.tracker import Tracker
 from app.core.config import AppConfig
 from app.spec.models import Link, RegistryEntry
@@ -48,16 +52,13 @@ def _error(text: str) -> dict:
     return {"content": [{"type": "text", "text": text}], "isError": True}
 
 
-def _get_config(args: dict) -> AppConfig:
-    """Reconstruct AppConfig from the ``_config`` dict injected by the intercept."""
-    raw = args.get("_config")
-    if raw is None:
-        raise RuntimeError("Missing _config in tool args — intercept not wired?")
-    return AppConfig(**raw)
+def _get_config():
+    """Read AppConfig from tool context (set by runner)."""
+    return get_tool_context().config
 
 
-def _get_service(args: dict) -> SpecService:
-    return SpecService(_get_config(args))
+def _get_service() -> SpecService:
+    return SpecService(_get_config())
 
 
 # ---------------------------------------------------------------------------
@@ -296,7 +297,7 @@ REGISTRY_MUTATE_SCHEMA: dict = {
 )
 async def _spec_list(args: dict) -> dict:
     try:
-        svc = _get_service(args)
+        svc = _get_service()
         summaries = svc.list_specs()
     except Exception as exc:
         return _error(f"Failed to list specs: {exc}")
@@ -327,7 +328,7 @@ async def _spec_get(args: dict) -> dict:
     if not spec_id:
         return _error("Missing required parameter: id")
     try:
-        svc = _get_service(args)
+        svc = _get_service()
         detail = svc.get_spec(spec_id)
     except SpecNotFoundError:
         return _error(f"Spec '{spec_id}' not found")
@@ -350,7 +351,7 @@ async def _spec_save(args: dict) -> dict:
         return _error("Missing required parameter: path")
 
     try:
-        config = _get_config(args)
+        config = _get_config()
         svc = SpecService(config)
         registry_path = config.get_registry_path()
         entries, links = read_registry(registry_path)
@@ -450,7 +451,7 @@ async def _spec_delete(args: dict) -> dict:
     if not spec_id:
         return _error("Missing required parameter: id")
     try:
-        svc = _get_service(args)
+        svc = _get_service()
         svc.delete_spec(spec_id)
     except SpecNotFoundError:
         return _error(f"Spec '{spec_id}' not found")
@@ -472,7 +473,7 @@ async def _spec_links(args: dict) -> dict:
         return _error("Missing required parameter: ids")
 
     try:
-        config = _get_config(args)
+        config = _get_config()
         registry_path = config.get_registry_path()
         entries, links = read_registry(registry_path)
     except Exception as exc:
@@ -529,7 +530,7 @@ async def _spec_links(args: dict) -> dict:
 )
 async def _registry_query(args: dict) -> dict:
     try:
-        config = _get_config(args)
+        config = _get_config()
         registry_path = config.get_registry_path()
         entries, links = read_registry(registry_path)
     except Exception as exc:
@@ -583,7 +584,7 @@ async def _registry_query(args: dict) -> dict:
 )
 async def _registry_mutate(args: dict) -> dict:
     try:
-        config = _get_config(args)
+        config = _get_config()
         registry_path = config.get_registry_path()
         entries, links = read_registry(registry_path)
     except Exception as exc:
@@ -728,11 +729,6 @@ specs_mcp_server = create_sdk_mcp_server(
 )
 
 
-# ---------------------------------------------------------------------------
-# Interceptor
-# ---------------------------------------------------------------------------
-
-
 async def intercept_specs(
     input_data: dict[str, Any],
     tracker: Tracker,
@@ -740,8 +736,10 @@ async def intercept_specs(
     task: AgentTask,
     config: AppConfig,
 ) -> PermissionResultAllow:
-    """Auto-approve all spec tools; inject config for handler use."""
-    return PermissionResultAllow(
-        behavior="allow",
-        updated_input={**input_data, "_config": config.model_dump(mode="json")},
-    )
+    """Auto-approve — validation happens inside the tool handler.
+
+    The handler uses get_tool_context() to access AppConfig.
+    """
+    return PermissionResultAllow(behavior="allow")
+
+

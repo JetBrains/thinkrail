@@ -33,26 +33,28 @@ Single file exports:
 |--------|------|-------------|
 | `PROGRESS_SCHEMA` | `dict` | JSON Schema for tool input parameters |
 | `progress_mcp_server` | MCP server | Created via `create_sdk_mcp_server()`, registered in `tools.MCP_SERVERS` |
-| `intercept_progress()` | `InterceptFn` | Handles `can_use_tool()` callback: emit notification, auto-approve |
+| `intercept_progress()` | `InterceptFn` | Auto-approve in `canUseTool`. Registered in `INTERCEPTORS`. |
 
-**Interception logic:**
+**Handler logic** (uses `get_tool_context()` for yolo-mode compatibility):
 
 ```python
-async def intercept_progress(input_data, tracker, notify, task):
-    await notify("agent/progressUpdate", {
-        "bonsaiSid": task.bonsai_sid,
-        "phase": input_data.get("phase", ""),
-        "plan": input_data.get("plan", []),
-        "status": input_data.get("status", ""),
+@tool("UpdateProgress", "...", PROGRESS_SCHEMA)
+async def _update_progress(args: dict) -> dict:
+    ctx = get_tool_context()
+    await ctx.notify("agent/progressUpdate", {
+        "bonsaiSid": ctx.task.bonsai_sid,
+        "phase": args.get("phase", ""),
+        "plan": args.get("plan", []),
+        "status": args.get("status", ""),
     })
-    return PermissionResultAllow(behavior="allow")
+    return {"content": [{"type": "text", "text": "✓ Progress updated."}]}
 ```
 
-No suspension, no Future. The intercept emits the notification and auto-approves immediately.
+No suspension, no Future. The handler emits the notification and returns immediately. The interceptor just auto-approves (for non-yolo modes where `canUseTool` fires).
 
 ## No Other Backend Changes
 
-- `runner.py` — no changes (imports `MCP_SERVERS` from `tools/`, delegates to `permissions.py`)
+- `runner.py` — no changes (already calls `set_tool_context()` before SDK client creation)
 - `permissions.py` — no changes (routes via `INTERCEPTORS` registry)
 - `service.py` — no changes
 - `tracker.py` — no changes (no Future needed for passive tools)

@@ -129,5 +129,5 @@ async def intercept_visualize(
     task: AgentTask,
     config: AppConfig,
 ) -> PermissionResultAllow:
-    """Auto-approve: display-only tool, no side effects."""
+    """Auto-approve — display-only tool with no side effects."""
     return PermissionResultAllow(behavior="allow")

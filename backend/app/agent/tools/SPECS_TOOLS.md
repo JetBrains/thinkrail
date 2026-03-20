@@ -48,7 +48,8 @@ All 7 tools live in one file (`specs.py`) under one MCP server (`bonsai-specs`).
 ```
 backend/app/agent/tools/
 ├── __init__.py              ← registers bonsai-specs in MCP_SERVERS + INTERCEPTORS
-├── specs.py                 ← NEW: 7 tools, 1 MCP server, 1 intercept function
+├── _context.py              ← contextvars: set_tool_context / get_tool_context
+├── specs.py                 ← 7 tools, 1 MCP server, 1 intercept function
 ├── visualization.py         ← existing
 ├── suggest_session.py       ← existing
 └── SPECS_TOOLS.md           ← this spec
@@ -418,19 +419,11 @@ REGISTRY_MUTATE_SCHEMA = {
 
 All 7 tools are **auto-approved** with strict server-side validation. No tool suspends on a Future.
 
-```python
-async def intercept_specs(
-    input_data: dict[str, Any],
-    tracker: Tracker,
-    notify: Any,
-    task: AgentTask,
-    config: AppConfig,
-) -> PermissionResultAllow:
-    """Auto-approve: validation happens inside the tool handler."""
-    return PermissionResultAllow(behavior="allow")
-```
+A single `intercept_specs()` function covers all 7 tools via the `INTERCEPTORS` registry (suffix-match routing in `permissions.py`). It returns `PermissionResultAllow` immediately — all validation happens inside the tool handlers.
 
-A single intercept function covers all 7 tools (they share the `bonsai-specs` suffix pattern). Validation errors are returned as `isError: true` MCP responses, not permission denials — this avoids SDK error propagation issues (same pattern as SuggestSession's "never return PermissionResultDeny" rule).
+In `bypassPermissions` (yolo) mode, the CLI skips `canUseTool` entirely, so the interceptor never fires. Tool handlers access `AppConfig` via `get_tool_context()` (set by `runner.py` before SDK client creation), so they work correctly regardless of permission mode.
+
+Validation errors are returned as `isError: true` MCP responses, not permission denials — this avoids SDK error propagation issues (same pattern as SuggestSession's "never return PermissionResultDeny" rule).
 
 ---
 
@@ -522,17 +515,16 @@ This path saves significant tokens when the agent has already modified the file 
 
 ### SpecService instantiation
 
-The `AppConfig` is obtained from the intercept function's `config` parameter, passed to the handler via `updated_input`. This avoids global state:
+The `AppConfig` is obtained from `get_tool_context().config` — set by `runner.py` via `set_tool_context()` before SDK client creation. This avoids global state and works in all permission modes:
 
 ```python
-async def intercept_specs(..., config: AppConfig) -> PermissionResultAllow:
-    return PermissionResultAllow(
-        behavior="allow",
-        updated_input={**input_data, "_config": config.model_dump()},
-    )
-```
+def _get_config():
+    """Read AppConfig from tool context (set by runner)."""
+    return get_tool_context().config
 
-The handler reconstructs `AppConfig` from the injected `_config` dict and instantiates `SpecService`.
+def _get_service() -> SpecService:
+    return SpecService(_get_config())
+```
 
 ---
 
@@ -546,7 +538,7 @@ The handler reconstructs `AppConfig` from the injected `_config` dict and instan
 | **Validation, not denial** | Errors returned as `isError: true` responses | Follows SuggestSession precedent: never `PermissionResultDeny` to avoid SDK error propagation. |
 | **Full batch for registry_mutate** | Single call handles entries + links | Creating a spec typically needs: add entry + add parent link + set covers. One call vs three. |
 | **Apply removals before additions** | Delete → Add → Update order | Prevents transient conflicts (e.g., remove old entry then add replacement with same path). |
-| **Config injection via updated_input** | Intercept passes config to handler | Avoids global state, follows existing suggest_session pattern. |
+| **Config via contextvars** | Handler reads `get_tool_context().config` | Avoids global state. Works in all permission modes including yolo (where interceptors don't fire). Runner sets context once before SDK client creation. |
 | **spec_save is create-or-update** | Upsert by path | Agent doesn't need to check existence first. Simplifies skill instructions. |
 | **Content optional on updates** | `content` only required for creates; omit on updates to sync from disk | After using Edit tool on a spec file, the agent shouldn't need to re-read and re-send the full content (~2-20KB) just to sync the registry. Reading from disk is cheaper (0 agent tokens) and guarantees registry reflects actual file state. Alternatives rejected: metadata-only mode (adds cognitive load, risks registry-file drift), extending registry_mutate to parse frontmatter (breaks separation of concerns). |
 | **Delegate to SpecService** | No new business logic | Reuses atomic writes, ID generation, validation. Single source of truth. |
@@ -559,7 +551,6 @@ The handler reconstructs `AppConfig` from the injected `_config` dict and instan
 - **No content search** — Cannot grep within spec content via these tools. Agent still uses Grep tool for content-based search.
 - **No file watcher integration** — External edits to `registry.json` are not detected. Tools always read from disk.
 - **Single intercept function** — All 7 tools share one intercept. If a specific tool later needs interactive approval, this must be refactored.
-- **Config serialization** — Passing `AppConfig` via `updated_input` relies on it being JSON-serializable. If `AppConfig` gains non-serializable fields, the pattern breaks.
 - **Suffix collision** — Tool names like `spec_list` are short. If a future tool ends with the same suffix, `INTERCEPTORS` routing could conflict. Mitigated by explicit per-tool registration.
 - **Disk-read on sync assumes valid Markdown** — When `content` is omitted in `spec_save`, the tool reads from disk and parses the file to extract the title. If the file has been partially written or contains invalid Markdown (e.g., mid-edit crash), the title extraction may fail or produce unexpected results. Mitigated by returning `isError: true` if parsing fails.
 
