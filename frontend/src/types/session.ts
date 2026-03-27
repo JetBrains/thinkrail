@@ -44,7 +44,7 @@ export interface SessionMetrics {
 
 export interface PendingRequest {
   requestId: string;
-  type: "question" | "approval" | "suggestion";
+  type: "question" | "approval" | "suggestion" | "step-proposal";
   // Question fields
   questions?: Question[];
   // Approval fields
@@ -56,6 +56,11 @@ export interface PendingRequest {
   name?: string;
   reason?: string;
   prompt?: string;
+  // Step proposal fields
+  ticketId?: string;
+  stepNumber?: number;
+  stepTitle?: string;
+  inputSpecIds?: string[];
 }
 
 export interface Session {
@@ -75,6 +80,8 @@ export interface Session {
   pendingRequest: PendingRequest | null;
   /** Maps requestId → the response that was sent (for rendering answered state) */
   answeredRequests: Map<string, unknown>;
+  /** Associated meta-ticket ID (persists across session lifecycle) */
+  metaTicketId?: string | null;
   /** True if this session was loaded from disk (read-only, no live backend runner) */
   restored?: boolean;
   /** The system prompt sent to the agent at session start */

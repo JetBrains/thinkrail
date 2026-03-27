@@ -4,12 +4,14 @@ import { useNotificationStore } from "@/store/notificationStore.ts";
 import { getErrorMessage } from "@/utils/errors.ts";
 import { useFileStore } from "@/store/fileStore.ts";
 import type { SessionStatus } from "@/types/session.ts";
-import { modLabel } from "@/utils/platform.ts";
 import { ChatStream } from "@/components/ChatStream/ChatStream.tsx";
 import type { ChatStreamHandle } from "@/components/ChatStream/ChatStream.tsx";
 import { SessionStatusLine } from "@/components/ChatStream/SessionStatusLine.tsx";
 import { InputArea } from "@/components/ChatStream/InputArea.tsx";
 import { FileViewer } from "@/components/FileViewer/FileViewer.tsx";
+import { BoardView } from "@/components/BoardView/BoardView.tsx";
+import { MetaTicketDetail } from "@/components/MetaTicketDetail/MetaTicketDetail.tsx";
+import { useBoardStore } from "@/store/boardStore.ts";
 import { useMessageHistoryStore } from "@/store/messageHistoryStore";
 import { SessionTabBar } from "./SessionTabBar.tsx";
 import { StickyContextBar } from "./StickyContextBar.tsx";
@@ -100,17 +102,17 @@ export function SessionPanel() {
     }
   }, [activeSessionId, activeSession, sendMessage]);
 
-  if (sessionList.length === 0 && fileList.length === 0 && !previewFilePath) {
-    return (
-      <div className="center-placeholder">
-        Select a session or create a new one ({modLabel("T")})
-      </div>
-    );
-  }
+  const activeTicketId = useBoardStore((s) => s.activeTicketId);
+  const openTicket = useBoardStore((s) => s.openTicket);
+
+  const handleOpenTicket = useCallback((ticketId: string) => {
+    openTicket(ticketId);
+  }, [openTicket]);
 
   // Determine what to show in the content area
-  const showFile = displayFile != null;
-  const showSession = activeSession != null && !showFile;
+  const showTicket = activeTicketId != null;
+  const showFile = !showTicket && displayFile != null;
+  const showSession = !showTicket && activeSession != null && !showFile;
 
   const status = activeSession?.status as SessionStatus | undefined;
   const hasPending = activeSession?.pendingRequest != null;
@@ -143,19 +145,21 @@ export function SessionPanel() {
     <>
       <SessionTabBar
         sessions={sessionList}
-        activeSessionId={activeFilePath || previewFilePath ? null : activeSessionId}
+        activeSessionId={!showTicket && !showFile ? activeSessionId : null}
         onSwitchSession={handleSwitchSession}
         onCloseSession={closeSession}
         files={fileList}
-        activeFilePath={activeFilePath}
+        activeFilePath={!showTicket ? activeFilePath : null}
         onSwitchFile={handleSwitchFile}
         onCloseFile={closeFile}
         previewFile={previewFileObj}
-        previewFilePath={previewFilePath}
+        previewFilePath={!showTicket ? previewFilePath : null}
         onClearPreview={clearPreview}
         onPinPreview={pinPreview}
       />
-      {showFile && displayFile ? (
+      {showTicket && activeTicketId ? (
+        <MetaTicketDetail ticketId={activeTicketId} />
+      ) : showFile && displayFile ? (
         <FileViewer file={displayFile} />
       ) : showSession && activeSession ? (
         <>
@@ -212,7 +216,7 @@ export function SessionPanel() {
           )}
         </>
       ) : (
-        <div className="center-placeholder">Select a tab</div>
+        <BoardView onOpenTicket={handleOpenTicket} />
       )}
     </>
   );

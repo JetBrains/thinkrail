@@ -5,6 +5,7 @@ import { useNotificationStore } from "./notificationStore.ts";
 import { useUiStore } from "./uiStore.ts";
 import { useFileStore } from "./fileStore.ts";
 import { useVisStore } from "./visStore.ts";
+import { useBoardStore } from "./boardStore.ts";
 import type { Unsubscribe } from "@/api/types.ts";
 
 /**
@@ -199,6 +200,44 @@ export function wireEvents(client: RpcClient): Unsubscribe {
         type: "suggestion",
         pulsing: true,
       });
+    }),
+  );
+
+  // ── Orchestrator step proposals ──
+  unsubs.push(
+    client.on("agent/suggestStep", (p) => {
+      const params = p as Record<string, unknown>;
+      const bonsaiSid = params.bonsaiSid as string;
+      useSessionStore.getState().onSuggestStep(params);
+      useNotificationStore.getState().incrementPendingInput();
+      useNotificationStore.getState().addToast({
+        bonsaiSid,
+        eventType: "suggestion",
+        message: `Step ${params.stepNumber}: ${params.stepTitle}`,
+        persistent: false,
+      });
+      useNotificationStore.getState().setBadge(bonsaiSid, {
+        type: "suggestion",
+        pulsing: true,
+      });
+    }),
+  );
+
+  // ── Board notifications ──
+  unsubs.push(
+    client.on("board/didChange", (p) => {
+      useBoardStore.getState().handleDidChange(p as import("@/types/board.ts").MetaTicketSummary);
+    }),
+  );
+  unsubs.push(
+    client.on("board/didCreate", (p) => {
+      useBoardStore.getState().handleDidCreate(p as import("@/types/board.ts").MetaTicketSummary);
+    }),
+  );
+  unsubs.push(
+    client.on("board/didDelete", (p) => {
+      const { id } = p as { id: string };
+      useBoardStore.getState().handleDidDelete(id);
     }),
   );
 

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { useSpecStore } from "@/store/specStore.ts";
 import { useFileStore } from "@/store/fileStore.ts";
 import {
@@ -11,12 +11,9 @@ import {
 import "./SpecTree.css";
 
 export function SpecTree() {
-  const specs = useSpecStore((s) => s.specs);
   const graph = useSpecStore((s) => s.graph);
   const selectedSpecId = useSpecStore((s) => s.selectedSpecId);
   const selectSpec = useSpecStore((s) => s.selectSpec);
-  const fetchSpecs = useSpecStore((s) => s.fetchSpecs);
-  const fetchGraph = useSpecStore((s) => s.fetchGraph);
   const loading = useSpecStore((s) => s.loading);
   const error = useSpecStore((s) => s.error);
   const openFile = useFileStore((s) => s.openFile);
@@ -26,11 +23,8 @@ export function SpecTree() {
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
   const [expandedTasks, setExpandedTasks] = useState<Set<string>>(new Set());
 
-  // Fetch data on mount if not already loaded
-  useEffect(() => {
-    if (specs.length === 0) fetchSpecs();
-    if (!graph) fetchGraph();
-  }, [specs.length, graph, fetchSpecs, fetchGraph]);
+  // Initial fetch is handled by App.tsx after WebSocket connects.
+  // No useEffect needed here — the store updates trigger re-render.
 
   // Build flat tree from graph (excludes task-spec nodes)
   const nodes = useMemo(() => (graph ? buildTree(graph) : []), [graph]);

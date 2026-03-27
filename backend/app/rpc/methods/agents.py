@@ -57,9 +57,11 @@ async def run_agent(service: AgentService, **params: Any) -> dict:
     skill_id = params.get("skillId")
     session_prompt = params.get("prompt")
     name = params.get("name", "")
+    meta_ticket_id = params.get("metaTicketId")
     task = await service.run_task(
         params["specIds"], config, notify,
         skill_id=skill_id, session_prompt=session_prompt, name=name,
+        meta_ticket_id=meta_ticket_id,
     )
     return {"bonsaiSid": task.bonsai_sid}
 

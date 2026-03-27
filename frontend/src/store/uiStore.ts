@@ -8,6 +8,7 @@ interface ModalPrefill {
   skillId?: string;
   specIds?: string[];
   name?: string;
+  metaTicketId?: string;
 }
 
 interface UiStore {

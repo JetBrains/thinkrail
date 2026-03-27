@@ -41,6 +41,10 @@ class TestMethods:
             "agent/transcribe",
             "session/list", "session/get", "session/continue", "session/restart", "session/delete",
             "vis/state", "vis/recompute",
+            "board/list", "board/get", "board/create", "board/update", "board/delete",
+            "board/linkSpec", "board/unlinkSpec",
+            "board/attachSession", "board/setPlanPath", "board/setOrchestrator",
+            "board/getPlan", "board/createPlan", "board/updateStep", "board/getNextStep",
         }
         assert set(METHODS.keys()) == expected
 

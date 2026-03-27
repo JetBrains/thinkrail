@@ -26,6 +26,7 @@ class AgentService:
         self._tracker = Tracker()
         self._running_tasks: dict[str, asyncio.Task[Any]] = {}
         self._last_notify: dict[str, Callable] = {}
+        self.board_service: Any = None  # Injected by server.py
 
     def rebind_notify(self, notify: Callable) -> None:
         """Update the WebSocket callback for all running tasks.
@@ -46,6 +47,7 @@ class AgentService:
         skill_id: str | None = None,
         session_prompt: str | None = None,
         name: str = "",
+        meta_ticket_id: str | None = None,
     ) -> AgentTask:
         """Start a persistent agent session.
 
@@ -56,6 +58,18 @@ class AgentService:
         task = self._tracker.create_task(
             spec_ids, config, skill_id=skill_id, session_prompt=session_prompt, name=name,
         )
+        task.meta_ticket_id = meta_ticket_id
+        # Auto-attach session to meta-ticket and set orchestrator if applicable
+        if meta_ticket_id and self.board_service:
+            try:
+                self.board_service.attach_session(meta_ticket_id, task.bonsai_sid)
+                # If the ticket has a plan and this session name starts with "Execute:",
+                # treat it as the orchestrator
+                ticket = self.board_service.get_ticket(meta_ticket_id)
+                if ticket.plan_path and (name.startswith("Execute:") or name.startswith("Orchestrate:")):
+                    self.board_service.set_orchestrator(meta_ticket_id, task.bonsai_sid)
+            except Exception:
+                logger.warning("Failed to attach session to ticket %s", meta_ticket_id)
         spec_context = self._build_context_for(task)
         bg_task = asyncio.create_task(
             self._run_background(task, spec_context, notify)
@@ -185,6 +199,7 @@ class AgentService:
             "config": task.config.model_dump(by_alias=True),
             "status": task.status,
             "sessionId": task.session_id,
+            "metaTicketId": task.meta_ticket_id,
             "createdAt": task.created,
             "updatedAt": task.updated,
         }
@@ -225,6 +240,7 @@ class AgentService:
                 "specIds": list(task.spec_ids),
                 "status": task.status,
                 "model": task.config.model,
+                "metaTicketId": task.meta_ticket_id,
                 "createdAt": task.created,
                 "updatedAt": task.updated,
                 "active": task.status not in ("done", "error"),
@@ -441,13 +457,67 @@ class AgentService:
         finally:
             self._running_tasks.pop(task.bonsai_sid, None)
             self._last_notify.pop(task.bonsai_sid, None)
+            # Notify orchestrator if this was a step session
+            await self._notify_orchestrator_on_step_complete(task)
+
+    async def _notify_orchestrator_on_step_complete(self, task: AgentTask) -> None:
+        """If this session belongs to a meta-ticket with an orchestrator, notify it."""
+        if not task.meta_ticket_id or not self.board_service:
+            return
+        try:
+            ticket = self.board_service.get_ticket(task.meta_ticket_id)
+            orch_sid = ticket.orchestrator_session_id
+            if not orch_sid or orch_sid == task.bonsai_sid:
+                return  # Don't notify self, or no orchestrator
+
+            # Update the plan step that matches this session
+            if ticket.plan_path and self.board_service.plans.plan_exists(task.meta_ticket_id):
+                plan = self.board_service.plans.read_plan(task.meta_ticket_id)
+                for step in plan.steps:
+                    if step.session_id == task.bonsai_sid:
+                        new_status = "done" if task.status == "done" else "failed"
+                        self.board_service.plans.update_step_status(
+                            task.meta_ticket_id, step.number, new_status,
+                        )
+                        break
+
+            # Inject a message into the orchestrator session
+            if self._tracker.has_task(orch_sid):
+                status_word = "completed successfully" if task.status == "done" else f"ended with status: {task.status}"
+                msg = f"[Step session {task.name or task.bonsai_sid[:8]} {status_word}]"
+                self._tracker.enqueue_message(orch_sid, msg)
+        except Exception:
+            logger.debug("Failed to notify orchestrator for ticket %s", task.meta_ticket_id)
 
     def _build_context_for(self, task: AgentTask) -> str:
         t0 = time.monotonic()
+
+        # Inject plan content into session prompt for sessions linked to a ticket with a plan
+        session_prompt = task.session_prompt
+        if task.meta_ticket_id and self.board_service:
+            try:
+                ticket = self.board_service.get_ticket(task.meta_ticket_id)
+                if ticket.plan_path and self.board_service.plans.plan_exists(task.meta_ticket_id):
+                    from app.board.plan import _render_plan
+                    plan = self.board_service.plans.read_plan(task.meta_ticket_id)
+                    plan_text = _render_plan(plan)
+                    plan_section = (
+                        "## Implementation Plan\n\n"
+                        "The following plan is associated with this ticket. "
+                        "As the orchestrator, read the plan, identify the next unblocked step, "
+                        "and call `suggest_step` to propose it for execution.\n\n"
+                        f"{plan_text}"
+                    )
+                    session_prompt = (
+                        f"{session_prompt}\n\n{plan_section}" if session_prompt else plan_section
+                    )
+            except Exception:
+                logger.debug("Failed to inject plan for ticket %s", task.meta_ticket_id)
+
         ctx = build_context(
             spec_ids=task.spec_ids,
             skill_id=task.skill_id,
-            session_prompt=task.session_prompt,
+            session_prompt=session_prompt,
             project_root=self._config.project_root,
             config=task.config,
             spec_service=self._spec_service,

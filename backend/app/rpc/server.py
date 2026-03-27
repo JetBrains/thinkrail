@@ -38,7 +38,24 @@ from app.rpc.methods.sessions import (
     restart_session,
 )
 from app.rpc.methods.vis import get_vis_state, recompute_vis
+from app.rpc.methods.board import (
+    attach_session as board_attach_session,
+    create_plan,
+    create_ticket,
+    delete_ticket,
+    get_next_step,
+    get_plan,
+    get_ticket,
+    link_spec as board_link_spec,
+    list_tickets,
+    set_orchestrator as board_set_orchestrator,
+    set_plan_path as board_set_plan_path,
+    unlink_spec as board_unlink_spec,
+    update_step,
+    update_ticket,
+)
 from app.agent.service import AgentService
+from app.board.service import BoardService
 from app.core.config import AppConfig, load_config
 from app.core.fileio import read_text
 from app.core.watcher import WatchHandle, watch, stop
@@ -70,18 +87,34 @@ METHODS = {
     "session/delete": delete_session_data,
     "vis/state": get_vis_state,
     "vis/recompute": recompute_vis,
+    "board/list": list_tickets,
+    "board/get": get_ticket,
+    "board/create": create_ticket,
+    "board/update": update_ticket,
+    "board/delete": delete_ticket,
+    "board/linkSpec": board_link_spec,
+    "board/unlinkSpec": board_unlink_spec,
+    "board/attachSession": board_attach_session,
+    "board/setPlanPath": board_set_plan_path,
+    "board/setOrchestrator": board_set_orchestrator,
+    "board/getPlan": get_plan,
+    "board/createPlan": create_plan,
+    "board/updateStep": update_step,
+    "board/getNextStep": get_next_step,
 }
 
 _active_ws: WebSocket | None = None
 _active_watcher: WatchHandle | None = None
 _agent_services: dict[str, AgentService] = {}
 _vis_services: dict[str, VisualizationService] = {}
+_board_services: dict[str, BoardService] = {}
 
 
 def _bind_methods(
     spec_service: SpecService,
     agent_service: AgentService,
     vis_service: VisualizationService,
+    board_service: BoardService,
 ) -> dict:
     """Bind each handler in METHODS to its owning service via partial."""
     bound = {}
@@ -90,6 +123,8 @@ def _bind_methods(
             bound[name] = partial(handler, spec_service)
         elif name.startswith("vis/"):
             bound[name] = partial(handler, vis_service)
+        elif name.startswith("board/"):
+            bound[name] = partial(handler, board_service)
         else:
             bound[name] = partial(handler, agent_service)
     return bound
@@ -139,7 +174,16 @@ def register_routes(app: FastAPI) -> None:
             vis_service = VisualizationService(config)
             _vis_services[key] = vis_service
 
-        bound_methods = _bind_methods(spec_service, agent_service, vis_service)
+        if key in _board_services:
+            board_service = _board_services[key]
+        else:
+            board_service = BoardService(config)
+            _board_services[key] = board_service
+
+        # Make board service available to agent service for auto-linking
+        agent_service.board_service = board_service
+
+        bound_methods = _bind_methods(spec_service, agent_service, vis_service, board_service)
 
         # Replace existing connection if any
         if _active_ws is not None:

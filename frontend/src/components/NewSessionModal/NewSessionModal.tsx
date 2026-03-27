@@ -68,6 +68,7 @@ export function NewSessionModal() {
         },
         name: name || (skillId ?? "session"),
         skillId: skillId ?? undefined,
+        metaTicketId: prefill?.metaTicketId,
       });
       closeModal();
     } catch {

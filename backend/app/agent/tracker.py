@@ -72,6 +72,9 @@ class Tracker:
         except KeyError:
             raise TaskNotFoundError(f"Session '{bonsai_sid}' not found")
 
+    def has_task(self, bonsai_sid: str) -> bool:
+        return bonsai_sid in self._tasks
+
     def list_tasks(self) -> list[AgentTask]:
         return list(self._tasks.values())
 

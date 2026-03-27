@@ -61,6 +61,20 @@ def _get_service() -> SpecService:
     return SpecService(_get_config())
 
 
+def _auto_link_spec_to_ticket(spec_id: str) -> None:
+    """If the current session is attached to a meta-ticket, link the spec."""
+    try:
+        ctx = get_tool_context()
+        ticket_id = ctx.task.meta_ticket_id
+        if not ticket_id:
+            return
+        from app.board.service import BoardService
+        board_svc = BoardService(ctx.config)
+        board_svc.link_spec(ticket_id, spec_id)
+    except Exception:
+        logger.debug("Auto-link spec %s to ticket failed (non-critical)", spec_id)
+
+
 # ---------------------------------------------------------------------------
 # Schemas
 # ---------------------------------------------------------------------------
@@ -437,6 +451,9 @@ async def _spec_save(args: dict) -> dict:
         return _error(f"Validation error: {exc}")
     except Exception as exc:
         return _error(f"Failed to save spec: {exc}")
+
+    # Auto-link spec to meta-ticket if session is attached to one
+    _auto_link_spec_to_ticket(detail.id)
 
     return _json_ok(detail.model_dump(by_alias=True))
 

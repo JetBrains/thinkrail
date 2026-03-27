@@ -2269,6 +2269,99 @@
       ],
       "created": "2026-03-16",
       "updated": "2026-03-17"
+    },
+    {
+      "id": "feature_board_module",
+      "type": "module-design",
+      "path": "backend/app/board/README.md",
+      "title": "Board Module \u2014 Meta-Ticket Lifecycle Engine",
+      "status": "active",
+      "covers": [
+        "backend/app/board/"
+      ],
+      "tags": [
+        "backend",
+        "board",
+        "meta-ticket",
+        "orchestration"
+      ],
+      "created": "2026-03-27",
+      "updated": "2026-03-27"
+    },
+    {
+      "id": "feature_board_plan_service",
+      "type": "submodule-design",
+      "path": "backend/app/board/PLAN_SERVICE.md",
+      "title": "Plan Document Service",
+      "status": "active",
+      "covers": [
+        "backend/app/board/plan.py"
+      ],
+      "tags": [
+        "backend",
+        "board",
+        "plan",
+        "orchestration"
+      ],
+      "created": "2026-03-27",
+      "updated": "2026-03-27"
+    },
+    {
+      "id": "feature_board_view",
+      "type": "submodule-design",
+      "path": "frontend/src/components/BoardView/README.md",
+      "title": "Board View \u2014 Kanban UI",
+      "status": "active",
+      "covers": [
+        "frontend/src/components/BoardView/",
+        "frontend/src/store/boardStore.ts",
+        "frontend/src/types/board.ts",
+        "frontend/src/api/methods/board.ts"
+      ],
+      "tags": [
+        "frontend",
+        "board",
+        "kanban",
+        "ui"
+      ],
+      "created": "2026-03-27",
+      "updated": "2026-03-27"
+    },
+    {
+      "id": "feature_ticket_detail",
+      "type": "submodule-design",
+      "path": "frontend/src/components/MetaTicketDetail/README.md",
+      "title": "Meta-Ticket Detail View",
+      "status": "active",
+      "covers": [
+        "frontend/src/components/MetaTicketDetail/"
+      ],
+      "tags": [
+        "frontend",
+        "board",
+        "ticket",
+        "ui"
+      ],
+      "created": "2026-03-27",
+      "updated": "2026-03-27"
+    },
+    {
+      "id": "feature_orchestrator",
+      "type": "submodule-design",
+      "path": "backend/app/agent/tools/ORCHESTRATOR.md",
+      "title": "Plan Orchestrator \u2014 Semi-Automatic Execution",
+      "status": "active",
+      "covers": [
+        "backend/app/agent/tools/orchestrator.py"
+      ],
+      "tags": [
+        "backend",
+        "agent",
+        "orchestration",
+        "plan"
+      ],
+      "created": "2026-03-27",
+      "updated": "2026-03-27"
     }
   ],
   "links": [
@@ -3586,6 +3679,31 @@
       "from": "task-visualization-card",
       "to": "ui-visualization-card",
       "type": "implements"
+    },
+    {
+      "from": "feature_board_plan_service",
+      "to": "feature_board_module",
+      "type": "parent"
+    },
+    {
+      "from": "feature_board_view",
+      "to": "feature_board_module",
+      "type": "parent"
+    },
+    {
+      "from": "feature_ticket_detail",
+      "to": "feature_board_module",
+      "type": "parent"
+    },
+    {
+      "from": "feature_orchestrator",
+      "to": "feature_board_module",
+      "type": "parent"
+    },
+    {
+      "from": "feature_board_module",
+      "to": "design-doc",
+      "type": "parent"
     }
   ]
 }

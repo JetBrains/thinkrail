@@ -40,5 +40,8 @@ Thumbs.db
 .env.*
 !.env.example
 
+# Superpowers brainstorming (generated mockups)
+.superpowers/
+
 # Logs
 *.log

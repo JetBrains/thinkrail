@@ -18,6 +18,7 @@ export interface AgentRunParams {
   skillId?: string;
   prompt?: string;
   name?: string;
+  metaTicketId?: string;
 }
 
 export interface CostSummary {

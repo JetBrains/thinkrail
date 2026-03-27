@@ -1,5 +1,6 @@
 import type { Session } from "@/types/session.ts";
 import type { OpenFile } from "@/store/fileStore.ts";
+import { useBoardStore } from "@/store/boardStore.ts";
 
 interface SessionTabBarProps {
   sessions: Session[];
@@ -43,20 +44,76 @@ export function SessionTabBar({
   onClearPreview,
   onPinPreview,
 }: SessionTabBarProps) {
+  const openTicketIds = useBoardStore((s) => s.openTicketIds);
+  const activeTicketId = useBoardStore((s) => s.activeTicketId);
+  const tickets = useBoardStore((s) => s.tickets);
+  const activateTicket = useBoardStore((s) => s.activateTicket);
+  const closeTicket = useBoardStore((s) => s.closeTicket);
+  const showBoard = useBoardStore((s) => s.showBoard);
+
   const hasPreviewTab = previewFilePath != null && !files.some((f) => f.path === previewFilePath);
-  const hasFileArea = files.length > 0 || hasPreviewTab;
   const previewIsActive = hasPreviewTab && !activeFilePath;
 
-  if (sessions.length === 0 && !hasFileArea) return null;
+  // Board tab is active when no ticket, session, or file is active
+  const boardIsActive =
+    !activeTicketId && !activeSessionId && !activeFilePath && !previewFilePath;
+
+  const handleSwitchSession = (sid: string) => {
+    // Deactivate ticket when switching to a session
+    useBoardStore.setState({ activeTicketId: null });
+    onSwitchSession(sid);
+  };
+
+  const handleSwitchFile = (path: string) => {
+    useBoardStore.setState({ activeTicketId: null });
+    onSwitchFile(path);
+  };
 
   return (
     <div className="session-tabs">
+      {/* Board tab (fixed, always present) */}
+      <div
+        className={`session-tab board-tab ${boardIsActive ? "session-tab-active" : ""}`}
+        onClick={() => showBoard()}
+      >
+        <span className="session-tab-name">Board</span>
+      </div>
+
+      {/* Ticket tabs */}
+      {openTicketIds.map((tid) => {
+        const t = tickets.get(tid);
+        const isActive = tid === activeTicketId;
+        return (
+          <div
+            key={`t-${tid}`}
+            className={`session-tab ticket-tab ${isActive ? "session-tab-active" : ""}`}
+            onClick={() => activateTicket(tid)}
+          >
+            <span className="session-tab-name">{t?.title ?? tid.slice(0, 8)}</span>
+            <button
+              className="session-tab-close"
+              onClick={(e) => {
+                e.stopPropagation();
+                closeTicket(tid);
+              }}
+            >
+              {"\u00D7"}
+            </button>
+          </div>
+        );
+      })}
+
+      {/* Separator */}
+      {(openTicketIds.length > 0 && (sessions.length > 0 || files.length > 0 || hasPreviewTab)) && (
+        <span className="session-tab-sep" />
+      )}
+
       {/* Session tabs */}
       {sessions.map((s) => (
         <div
           key={`s-${s.bonsaiSid}`}
-          className={`session-tab ${s.bonsaiSid === activeSessionId && !activeFilePath && !previewFilePath ? "session-tab-active" : ""}`}
-          onClick={() => onSwitchSession(s.bonsaiSid)}
+          className={`session-tab ${s.bonsaiSid === activeSessionId && !activeTicketId && !activeFilePath && !previewFilePath ? "session-tab-active" : ""}`}
+          onClick={() => handleSwitchSession(s.bonsaiSid)}
         >
           <span
             className="session-tab-dot"
@@ -81,7 +138,7 @@ export function SessionTabBar({
       ))}
 
       {/* Separator between session tabs and file/preview tabs */}
-      {sessions.length > 0 && hasFileArea && (
+      {sessions.length > 0 && (files.length > 0 || hasPreviewTab) && (
         <span className="session-tab-sep" />
       )}
 
@@ -89,8 +146,8 @@ export function SessionTabBar({
       {files.map((f) => (
         <div
           key={`f-${f.path}`}
-          className={`session-tab file-tab ${f.path === activeFilePath ? "session-tab-active" : ""}`}
-          onClick={() => onSwitchFile(f.path)}
+          className={`session-tab file-tab ${f.path === activeFilePath && !activeTicketId ? "session-tab-active" : ""}`}
+          onClick={() => handleSwitchFile(f.path)}
         >
           <span className="file-tab-icon">{"\u{1F4C4}"}</span>
           <span className="session-tab-name">{f.name}</span>
@@ -110,7 +167,7 @@ export function SessionTabBar({
       {/* Preview tab (ephemeral, italic) */}
       {hasPreviewTab && (
         <div
-          className={`session-tab file-tab file-tab-preview ${previewIsActive ? "session-tab-active" : ""}`}
+          className={`session-tab file-tab file-tab-preview ${previewIsActive && !activeTicketId ? "session-tab-active" : ""}`}
           onDoubleClick={() => onPinPreview()}
         >
           <span className="file-tab-icon">{"\u{1F4C4}"}</span>

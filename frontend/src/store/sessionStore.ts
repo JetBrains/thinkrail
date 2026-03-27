@@ -30,6 +30,7 @@ interface SessionStore {
     name: string;
     skillId?: string;
     prompt?: string;
+    metaTicketId?: string;
   }) => Promise<string>;
   sendMessage: (bonsaiSid: string, text: string, isMarkdown?: boolean) => Promise<void>;
   switchSession: (bonsaiSid: string) => void;
@@ -60,6 +61,7 @@ interface SessionStore {
   onAskQuestion: (params: Record<string, unknown>) => void;
   onConfirmAction: (params: Record<string, unknown>) => void;
   onSuggestSession: (params: Record<string, unknown>) => void;
+  onSuggestStep: (params: Record<string, unknown>) => void;
   onSessionDone: (params: Record<string, unknown>) => void;
   onSessionError: (params: Record<string, unknown>) => void;
   onConfigChanged: (params: Record<string, unknown>) => void;
@@ -427,9 +429,9 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
   closedIds: new Set(),
   projectCost: 0,
 
-  startSession: async ({ specIds, config, name, skillId, prompt }) => {
+  startSession: async ({ specIds, config, name, skillId, prompt, metaTicketId }) => {
     const api = createAgentApi(getClient());
-    const { bonsaiSid } = await api.run({ specIds, config, skillId: skillId ?? undefined, prompt: prompt ?? undefined, name });
+    const { bonsaiSid } = await api.run({ specIds, config, skillId: skillId ?? undefined, prompt: prompt ?? undefined, name, metaTicketId: metaTicketId ?? undefined });
 
     set((s) => {
       const next = new Map(s.sessions);
@@ -455,8 +457,12 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
         metrics: existing?.metrics ?? emptyMetrics(),
         pendingRequest: existing?.pendingRequest ?? null,
         answeredRequests: existing?.answeredRequests ?? new Map(),
+        metaTicketId: metaTicketId ?? null,
       });
-      return { sessions: next, activeSessionId: bonsaiSid };
+      // Don't switch to this session if it's embedded in a meta-ticket
+      return metaTicketId
+        ? { sessions: next }
+        : { sessions: next, activeSessionId: bonsaiSid };
     });
 
     return bonsaiSid;
@@ -1123,6 +1129,38 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
             name: params.name as string,
             reason: params.reason as string,
             prompt: (params.prompt as string) ?? undefined,
+          },
+        });
+      }
+      return { sessions };
+    });
+  },
+
+  onSuggestStep: (params) => {
+    const bonsaiSid = params.bonsaiSid as string;
+    const requestId = params.requestId as string;
+    set((s) => {
+      const sessions = appendEvent(
+        s.sessions,
+        bonsaiSid,
+        "agent/suggestStep",
+        params,
+        s.closedIds,
+      );
+      const session = sessions.get(bonsaiSid);
+      if (session) {
+        sessions.set(bonsaiSid, {
+          ...session,
+          status: "waiting",
+          pendingRequest: {
+            requestId,
+            type: "step-proposal",
+            ticketId: params.ticketId as string,
+            stepNumber: params.stepNumber as number,
+            stepTitle: params.stepTitle as string,
+            skill: params.skill as string,
+            inputSpecIds: (params.inputSpecIds as string[]) ?? [],
+            reason: params.reason as string,
           },
         });
       }
