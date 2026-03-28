@@ -76,7 +76,7 @@ export function SessionPanel() {
         resolveRequest(activeSessionId, activeSession.pendingRequest.requestId, { text });
         return;
       }
-      if (activeSession.status === "initializing" || activeSession.status === "idle") {
+      if (activeSession.status === "draft" || activeSession.status === "initializing" || activeSession.status === "idle") {
         sendMessage(activeSessionId, text, isMarkdown);
       }
       useMessageHistoryStore.getState().addMessage(text);
@@ -132,13 +132,15 @@ export function SessionPanel() {
         : "Session ended with error"
       : isRunning
         ? "Agent is working..."
-        : "Message Claude...";
+        : status === "draft"
+          ? "Type a message to start, or adjust config above..."
+          : "Message Claude...";
 
+  const isDraft = status === "draft";
   const inputDisabled = isDone || isRunning || (hasPending && activeSession?.pendingRequest?.type === "approval");
-  const hasUserMessage = activeSession?.events.some(e => e.eventType === "userMessage") ?? false;
-  const showContinue = !inputDisabled && !canInterrupt && hasUserMessage;
-  const showStartSession = !inputDisabled && !canInterrupt
-    && !hasUserMessage
+  const showContinue = !inputDisabled && !canInterrupt && !isDraft && (activeSession?.events.length ?? 0) > 0;
+  const showStartSession = !inputDisabled && !canInterrupt && !isDraft
+    && (activeSession?.events.length ?? 0) === 0
     && activeSession?.skillId != null;
 
   return (
@@ -180,22 +182,24 @@ export function SessionPanel() {
             session={activeSession}
             onContextCardVisibility={setContextCardVisible}
           />
-          <SessionStatusLine
-            model={activeSession.model}
-            betas={activeSession.betas ?? []}
-            permissionMode={activeSession.permissionMode}
-            effort={activeSession.effort ?? null}
-            metrics={activeSession.metrics}
-            status={status ?? "idle"}
-            projectCost={projectCost}
-            disabled={activeSession.restored || isDone}
-            onChangeModel={(m, betas) => updateConfig(activeSession.bonsaiSid, { model: m, betas })}
-            onChangePermissionMode={(m) => updateConfig(activeSession.bonsaiSid, { permissionMode: m })}
-            onChangeEffort={async (e) => {
-              await updateConfig(activeSession.bonsaiSid, { effort: e });
-              await restartSession(activeSession.bonsaiSid);
-            }}
-          />
+          {!isDraft && (
+            <SessionStatusLine
+              model={activeSession.model}
+              betas={activeSession.betas ?? []}
+              permissionMode={activeSession.permissionMode}
+              effort={activeSession.effort ?? null}
+              metrics={activeSession.metrics}
+              status={status ?? "idle"}
+              projectCost={projectCost}
+              disabled={activeSession.restored || isDone}
+              onChangeModel={(m, betas) => updateConfig(activeSession.bonsaiSid, { model: m, betas })}
+              onChangePermissionMode={(m) => updateConfig(activeSession.bonsaiSid, { permissionMode: m })}
+              onChangeEffort={async (e) => {
+                await updateConfig(activeSession.bonsaiSid, { effort: e });
+                await restartSession(activeSession.bonsaiSid);
+              }}
+            />
+          )}
           {activeSession.restored ? (
             <RestoredBar bonsaiSid={activeSession.bonsaiSid} />
           ) : (

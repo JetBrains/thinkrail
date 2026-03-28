@@ -15,7 +15,7 @@ def to_camel(name: str) -> str:
 
 _CAMEL_CONFIG = ConfigDict(alias_generator=to_camel, populate_by_name=True)
 
-TaskStatus = Literal["initializing", "idle", "running", "waiting", "done", "error"]
+TaskStatus = Literal["draft", "initializing", "idle", "running", "waiting", "done", "error"]
 
 EventType = Literal[
     "session_start",
@@ -121,5 +121,6 @@ class AgentTask(BaseModel):
     config: AgentConfig = Field(default_factory=AgentConfig)
     session_id: str | None = None
     meta_ticket_id: str | None = None
+    system_prompt: str | None = None
     created: str = Field(default_factory=lambda: datetime.now(UTC).isoformat())
     updated: str = Field(default_factory=lambda: datetime.now(UTC).isoformat())

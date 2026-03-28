@@ -11,6 +11,12 @@ export interface SessionSummary {
   updatedAt: string;
   metrics?: Record<string, unknown>;
   active?: boolean;
+  /** Present for draft sessions — full config object */
+  config?: Record<string, unknown>;
+  /** Present for draft sessions — assembled system prompt */
+  systemPrompt?: string;
+  /** Present for draft sessions — user's session prompt */
+  sessionPrompt?: string;
 }
 
 export interface SessionData {

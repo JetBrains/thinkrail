@@ -2362,6 +2362,50 @@
       ],
       "created": "2026-03-27",
       "updated": "2026-03-27"
+    },
+    {
+      "id": "draft-session-design",
+      "type": "submodule-design",
+      "path": "features/DRAFT_SESSION_DESIGN.md",
+      "title": "Draft Session (Pre-Start Config) \u2014 Feature Design",
+      "status": "active",
+      "covers": [
+        "backend/app/agent/service.py",
+        "backend/app/agent/models.py",
+        "backend/app/rpc/methods/agents.py",
+        "frontend/src/components/ChatStream/DraftConfigCard.tsx",
+        "frontend/src/store/sessionStore.ts",
+        "frontend/src/components/NewSessionModal/NewSessionModal.tsx"
+      ],
+      "tags": [
+        "feature",
+        "session",
+        "config",
+        "draft"
+      ],
+      "created": "2026-03-28",
+      "updated": "2026-03-28"
+    },
+    {
+      "id": "task-draft-session",
+      "type": "task-spec",
+      "path": "current_tasks/agent/feature_draft_session.md",
+      "title": "Implement Draft Session (Pre-Start Config View)",
+      "status": "done",
+      "covers": [
+        "backend/app/agent/service.py",
+        "backend/app/agent/models.py",
+        "backend/app/rpc/methods/agents.py",
+        "frontend/src/components/ChatStream/DraftConfigCard.tsx",
+        "frontend/src/store/sessionStore.ts"
+      ],
+      "tags": [
+        "high",
+        "new-feature",
+        "session"
+      ],
+      "created": "2026-03-28",
+      "updated": "2026-03-28"
     }
   ],
   "links": [
@@ -3704,6 +3748,31 @@
       "from": "feature_board_module",
       "to": "design-doc",
       "type": "parent"
+    },
+    {
+      "from": "draft-session-design",
+      "to": "design-doc",
+      "type": "parent"
+    },
+    {
+      "from": "draft-session-design",
+      "to": "module-agent",
+      "type": "depends-on"
+    },
+    {
+      "from": "draft-session-design",
+      "to": "module-rpc",
+      "type": "depends-on"
+    },
+    {
+      "from": "draft-session-design",
+      "to": "skill-session-start-design",
+      "type": "references"
+    },
+    {
+      "from": "task-draft-session",
+      "to": "draft-session-design",
+      "type": "implements"
     }
   ]
 }

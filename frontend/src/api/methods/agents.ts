@@ -1,10 +1,27 @@
 import type { RpcClient } from "../client.ts";
-import type { AgentTask, AgentRunParams } from "../types.ts";
+import type { AgentTask, AgentRunParams, AgentConfig } from "../types.ts";
+
+export interface DraftUpdateParams {
+  bonsaiSid: string;
+  specIds?: string[];
+  skillId?: string | null;
+  config?: AgentConfig;
+  prompt?: string | null;
+}
 
 export function createAgentApi(client: RpcClient) {
   return {
     run: (params: AgentRunParams) =>
       client.request<{ bonsaiSid: string }>("agent/run", params),
+
+    prepare: (params: AgentRunParams) =>
+      client.request<{ bonsaiSid: string; systemPrompt: string }>("agent/prepare", params),
+
+    updateDraft: (params: DraftUpdateParams) =>
+      client.request<{ systemPrompt: string }>("agent/updateDraft", params),
+
+    startDraft: (bonsaiSid: string, prompt?: string) =>
+      client.request<{ bonsaiSid: string }>("agent/startDraft", { bonsaiSid, ...(prompt ? { prompt } : {}) }),
 
     status: (bonsaiSid: string) =>
       client.request<AgentTask>("agent/status", { bonsaiSid }),

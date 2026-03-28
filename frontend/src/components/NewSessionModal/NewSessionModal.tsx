@@ -12,7 +12,7 @@ export function NewSessionModal() {
   const open = useUiStore((s) => s.modalOpen);
   const prefill = useUiStore((s) => s.modalPrefill);
   const closeModal = useUiStore((s) => s.closeModal);
-  const startSession = useSessionStore((s) => s.startSession);
+  const createDraft = useSessionStore((s) => s.createDraft);
 
   const [name, setName] = useState("");
   const [skillId, setSkillId] = useState<string | null>(null);
@@ -56,7 +56,7 @@ export function NewSessionModal() {
     if (submitting) return;
     setSubmitting(true);
     try {
-      await startSession({
+      await createDraft({
         specIds,
         config: {
           model,
@@ -74,7 +74,7 @@ export function NewSessionModal() {
     } catch {
       setSubmitting(false);
     }
-  }, [submitting, startSession, specIds, model, use1M, maxTurns, permissionMode, effort, name, skillId, closeModal]);
+  }, [submitting, createDraft, specIds, model, use1M, maxTurns, permissionMode, effort, name, skillId, closeModal]);
 
   if (!open) return null;
 
@@ -199,7 +199,7 @@ export function NewSessionModal() {
             onClick={handleSubmit}
             disabled={submitting}
           >
-            {submitting ? "Starting..." : "Start Session"}
+            {submitting ? "Creating..." : "Create Session"}
           </button>
         </div>
       </div>

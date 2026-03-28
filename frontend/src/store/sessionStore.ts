@@ -32,6 +32,21 @@ interface SessionStore {
     prompt?: string;
     metaTicketId?: string;
   }) => Promise<string>;
+  createDraft: (params: {
+    specIds: string[];
+    config: AgentConfig;
+    name: string;
+    skillId?: string;
+    prompt?: string;
+    metaTicketId?: string;
+  }) => Promise<string>;
+  updateDraft: (bonsaiSid: string, changes: {
+    specIds?: string[];
+    skillId?: string | null;
+    config?: AgentConfig;
+    prompt?: string | null;
+  }) => Promise<string>;
+  startDraft: (bonsaiSid: string, prompt?: string) => Promise<void>;
   sendMessage: (bonsaiSid: string, text: string, isMarkdown?: boolean) => Promise<void>;
   switchSession: (bonsaiSid: string) => void;
   closeSession: (bonsaiSid: string) => void;
@@ -468,7 +483,100 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
     return bonsaiSid;
   },
 
+  createDraft: async ({ specIds, config, name, skillId, prompt, metaTicketId }) => {
+    const api = createAgentApi(getClient());
+    const { bonsaiSid, systemPrompt } = await api.prepare({
+      specIds,
+      config,
+      skillId: skillId ?? undefined,
+      prompt: prompt ?? undefined,
+      name,
+      metaTicketId: metaTicketId ?? undefined,
+    });
+
+    set((s) => {
+      const next = new Map(s.sessions);
+      next.set(bonsaiSid, {
+        bonsaiSid,
+        name,
+        skillId: skillId ?? null,
+        specIds,
+        status: "draft",
+        model: config.model,
+        permissionMode: config.permissionMode,
+        betas: config.betas ?? [],
+        effort: config.effort ?? null,
+        maxTurns: config.maxTurns,
+        startedAt: Date.now(),
+        events: [],
+        metrics: emptyMetrics(),
+        pendingRequest: null,
+        answeredRequests: new Map(),
+        metaTicketId: metaTicketId ?? null,
+        systemPrompt,
+      });
+      return metaTicketId
+        ? { sessions: next }
+        : { sessions: next, activeSessionId: bonsaiSid };
+    });
+
+    return bonsaiSid;
+  },
+
+  updateDraft: async (bonsaiSid, changes) => {
+    const api = createAgentApi(getClient());
+    const { systemPrompt } = await api.updateDraft({
+      bonsaiSid,
+      ...changes,
+    });
+
+    set((s) => {
+      const session = s.sessions.get(bonsaiSid);
+      if (!session || session.status !== "draft") return s;
+      const next = new Map(s.sessions);
+      next.set(bonsaiSid, {
+        ...session,
+        ...(changes.specIds !== undefined ? { specIds: changes.specIds } : {}),
+        ...(changes.skillId !== undefined ? { skillId: changes.skillId } : {}),
+        ...(changes.config ? {
+          model: changes.config.model,
+          permissionMode: changes.config.permissionMode,
+          betas: changes.config.betas ?? [],
+          effort: changes.config.effort ?? null,
+          maxTurns: changes.config.maxTurns,
+        } : {}),
+        systemPrompt,
+      });
+      return { sessions: next };
+    });
+
+    return systemPrompt;
+  },
+
+  startDraft: async (bonsaiSid, prompt) => {
+    const api = createAgentApi(getClient());
+    await api.startDraft(bonsaiSid, prompt);
+
+    set((s) => {
+      const session = s.sessions.get(bonsaiSid);
+      if (!session) return s;
+      const next = new Map(s.sessions);
+      next.set(bonsaiSid, {
+        ...session,
+        status: "initializing",
+      });
+      return { sessions: next };
+    });
+  },
+
   sendMessage: async (bonsaiSid, text, isMarkdown) => {
+    // If session is in draft status, auto-start it with this message
+    const session = get().sessions.get(bonsaiSid);
+    if (session?.status === "draft") {
+      await get().startDraft(bonsaiSid, text);
+      return;
+    }
+
     // Add user message to events immediately (optimistic).
     // Status is NOT changed here — backend drives transitions:
     //   idle → running happens when runner calls client.query()
@@ -718,6 +826,8 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
           },
           pendingRequest: null,
           answeredRequests: buildAnsweredRequests(events, true),
+          // Restore system prompt for draft sessions
+          ...(entry.status === "draft" && entry.systemPrompt ? { systemPrompt: entry.systemPrompt } : {}),
         });
       }
 

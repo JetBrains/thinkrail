@@ -29,6 +29,8 @@ function displayMode(mode: string): string {
 
 function statusInfo(status: SessionStatus): { icon: string; label: string; cssClass: string } {
   switch (status) {
+    case "draft":
+      return { icon: "\u270F", label: "draft", cssClass: "idle" };
     case "initializing":
       return { icon: "⏳", label: "initializing", cssClass: "initializing" };
     case "running":

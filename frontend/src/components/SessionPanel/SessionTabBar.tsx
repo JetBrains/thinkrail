@@ -19,6 +19,8 @@ interface SessionTabBarProps {
 
 function statusDotColor(status: Session["status"]): string {
   switch (status) {
+    case "draft":
+      return "var(--gold)";
     case "running":
       return "var(--blue)";
     case "done":

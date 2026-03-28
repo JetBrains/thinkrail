@@ -36,7 +36,8 @@ class TestMethods:
         expected = {
             "spec/list", "spec/get", "spec/create",
             "spec/update", "spec/delete", "spec/graph",
-            "agent/run", "agent/send", "agent/status", "agent/list",
+            "agent/run", "agent/prepare", "agent/updateDraft", "agent/startDraft",
+            "agent/send", "agent/status", "agent/list",
             "agent/interrupt", "agent/end", "agent/respond", "agent/updateConfig",
             "agent/transcribe",
             "session/list", "session/get", "session/continue", "session/restart", "session/delete",

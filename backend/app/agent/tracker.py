@@ -15,6 +15,7 @@ _END_SIGNAL = object()
 END_SIGNAL = _END_SIGNAL  # public alias
 
 _VALID_TRANSITIONS: dict[TaskStatus, set[TaskStatus]] = {
+    "draft": {"initializing", "done", "error"},
     "initializing": {"idle", "done", "error"},
     "idle": {"running", "done", "error"},
     "running": {"idle", "waiting", "done", "error"},

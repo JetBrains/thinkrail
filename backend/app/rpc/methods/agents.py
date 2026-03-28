@@ -99,6 +99,50 @@ async def transcribe_audio(service: AgentService, **params: Any) -> dict:
 
 
 @_handle_errors
+async def prepare_agent(service: AgentService, **params: Any) -> dict:
+    """Create a draft session without starting it. Returns bonsaiSid + systemPrompt."""
+    config = AgentConfig(**params["config"])
+    task = service.prepare_task(
+        params["specIds"], config,
+        skill_id=params.get("skillId"),
+        session_prompt=params.get("prompt"),
+        name=params.get("name", ""),
+        meta_ticket_id=params.get("metaTicketId"),
+    )
+    return {"bonsaiSid": task.bonsai_sid, "systemPrompt": task.system_prompt}
+
+
+@_handle_errors
+async def update_draft(service: AgentService, **params: Any) -> dict:
+    """Update a draft session's config and return the rebuilt system prompt."""
+    bonsai_sid = params["bonsaiSid"]
+    kwargs: dict[str, Any] = {}
+    if "specIds" in params:
+        kwargs["spec_ids"] = params["specIds"]
+    if "skillId" in params:
+        kwargs["skill_id"] = params["skillId"]
+    if "config" in params:
+        kwargs["config"] = AgentConfig(**params["config"])
+    if "prompt" in params:
+        kwargs["session_prompt"] = params["prompt"]
+    system_prompt = service.update_draft(bonsai_sid, **kwargs)
+    return {"systemPrompt": system_prompt}
+
+
+@_handle_errors
+async def start_draft(service: AgentService, **params: Any) -> dict:
+    """Start a draft session — transitions to initializing and launches the runner."""
+    notify = notifications.current_notify
+    if notify is None:
+        raise JsonRpcError(_INTERNAL_ERROR, "Internal error", "No active connection")
+    task = await service.start_draft(
+        params["bonsaiSid"], notify,
+        prompt=params.get("prompt"),
+    )
+    return {"bonsaiSid": task.bonsai_sid}
+
+
+@_handle_errors
 async def update_config(service: AgentService, **params: Any) -> dict:
     bonsai_sid = params["bonsaiSid"]
     model = params.get("model")

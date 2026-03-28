@@ -39,6 +39,81 @@ class AgentService:
 
     # -- public methods -------------------------------------------------------
 
+    def prepare_task(
+        self,
+        spec_ids: list[str],
+        config: AgentConfig,
+        skill_id: str | None = None,
+        session_prompt: str | None = None,
+        name: str = "",
+        meta_ticket_id: str | None = None,
+    ) -> AgentTask:
+        """Create a draft session without starting the runner.
+
+        Builds the system prompt and persists the task in "draft" status.
+        Call ``start_draft`` to actually launch the SDK session.
+        """
+        task = self._tracker.create_task(
+            spec_ids, config, skill_id=skill_id, session_prompt=session_prompt, name=name,
+        )
+        task.status = "draft"
+        task.meta_ticket_id = meta_ticket_id
+        self._attach_to_ticket(task)
+        task.system_prompt = self._build_context_for(task)
+        self._save_task(task)
+        return task
+
+    def update_draft(
+        self,
+        bonsai_sid: str,
+        spec_ids: list[str] | None = None,
+        skill_id: str | None = ...,  # type: ignore[assignment]
+        config: AgentConfig | None = None,
+        session_prompt: str | None = ...,  # type: ignore[assignment]
+    ) -> str:
+        """Update a draft session's config and rebuild its system prompt.
+
+        Returns the new system prompt string.
+        """
+        task = self._tracker.get_task(bonsai_sid)
+        if task.status != "draft":
+            raise ValueError(f"Cannot update: session is '{task.status}', expected 'draft'")
+        if spec_ids is not None:
+            task.spec_ids = spec_ids
+        if skill_id is not ...:
+            task.skill_id = skill_id
+        if config is not None:
+            task.config = config
+        if session_prompt is not ...:
+            task.session_prompt = session_prompt
+        task.system_prompt = self._build_context_for(task)
+        self._save_task(task)
+        return task.system_prompt
+
+    async def start_draft(
+        self,
+        bonsai_sid: str,
+        notify: Callable,
+        prompt: str | None = None,
+    ) -> AgentTask:
+        """Start a draft session — transitions to initializing and launches the runner.
+
+        If *prompt* is provided it is enqueued as the first user message.
+        """
+        task = self._tracker.get_task(bonsai_sid)
+        if task.status != "draft":
+            raise ValueError(f"Cannot start: session is '{task.status}', expected 'draft'")
+        self._tracker.set_status(bonsai_sid, "initializing")
+        spec_context = task.system_prompt or self._build_context_for(task)
+        if prompt:
+            self._tracker.enqueue_message(bonsai_sid, prompt)
+        bg_task = asyncio.create_task(
+            self._run_background(task, spec_context, notify)
+        )
+        self._running_tasks[task.bonsai_sid] = bg_task
+        self._save_task(task)
+        return task
+
     async def run_task(
         self,
         spec_ids: list[str],
@@ -49,7 +124,7 @@ class AgentService:
         name: str = "",
         meta_ticket_id: str | None = None,
     ) -> AgentTask:
-        """Start a persistent agent session.
+        """Start a persistent agent session (one-step shortcut).
 
         Creates the task, launches the runner in the background (which
         opens the SDK client and enters idle), and returns immediately.
@@ -59,17 +134,7 @@ class AgentService:
             spec_ids, config, skill_id=skill_id, session_prompt=session_prompt, name=name,
         )
         task.meta_ticket_id = meta_ticket_id
-        # Auto-attach session to meta-ticket and set orchestrator if applicable
-        if meta_ticket_id and self.board_service:
-            try:
-                self.board_service.attach_session(meta_ticket_id, task.bonsai_sid)
-                # If the ticket has a plan and this session name starts with "Execute:",
-                # treat it as the orchestrator
-                ticket = self.board_service.get_ticket(meta_ticket_id)
-                if ticket.plan_path and (name.startswith("Execute:") or name.startswith("Orchestrate:")):
-                    self.board_service.set_orchestrator(meta_ticket_id, task.bonsai_sid)
-            except Exception:
-                logger.warning("Failed to attach session to ticket %s", meta_ticket_id)
+        self._attach_to_ticket(task)
         spec_context = self._build_context_for(task)
         bg_task = asyncio.create_task(
             self._run_background(task, spec_context, notify)
@@ -126,6 +191,12 @@ class AgentService:
             task = self._tracker.get_task(bonsai_sid)
             if task.status in ("done", "error"):
                 return  # already finished
+            if task.status == "draft":
+                # Draft sessions have no runner — just clean up directly
+                self._tracker.set_status(bonsai_sid, "done")
+                self._save_task(task)
+                self._tracker.remove_task(bonsai_sid)
+                return
             self._tracker.enqueue_end_signal(bonsai_sid)
         except Exception:
             # Task not in memory (e.g. backend restarted) — update on disk only
@@ -203,6 +274,8 @@ class AgentService:
             "createdAt": task.created,
             "updatedAt": task.updated,
         }
+        if task.system_prompt is not None:
+            data["systemPrompt"] = task.system_prompt
         # Preserve metrics from disk (written by update_session_metadata)
         if existing and existing.get("metrics"):
             data["metrics"] = existing["metrics"]
@@ -233,7 +306,7 @@ class AgentService:
             # Preserve name from disk if the in-memory task has no custom name
             disk_entry = disk.get(task.bonsai_sid, {})
             name = task.name or disk_entry.get("name") or task.bonsai_sid[:8]
-            disk[task.bonsai_sid] = {
+            entry: dict[str, Any] = {
                 "bonsaiSid": task.bonsai_sid,
                 "name": name,
                 "skillId": task.skill_id,
@@ -246,6 +319,11 @@ class AgentService:
                 "active": task.status not in ("done", "error"),
                 "metrics": disk_entry.get("metrics", {}),
             }
+            if task.status == "draft":
+                entry["config"] = task.config.model_dump(by_alias=True)
+                entry["systemPrompt"] = task.system_prompt
+                entry["sessionPrompt"] = task.session_prompt
+            disk[task.bonsai_sid] = entry
         return list(disk.values())
 
     def get_session_data(self, bonsai_sid: str) -> dict | None:
@@ -325,6 +403,18 @@ class AgentService:
         return task
 
     # -- helpers --------------------------------------------------------------
+
+    def _attach_to_ticket(self, task: AgentTask) -> None:
+        """Auto-attach session to meta-ticket and set orchestrator if applicable."""
+        if not task.meta_ticket_id or not self.board_service:
+            return
+        try:
+            self.board_service.attach_session(task.meta_ticket_id, task.bonsai_sid)
+            ticket = self.board_service.get_ticket(task.meta_ticket_id)
+            if ticket.plan_path and (task.name.startswith("Execute:") or task.name.startswith("Orchestrate:")):
+                self.board_service.set_orchestrator(task.meta_ticket_id, task.bonsai_sid)
+        except Exception:
+            logger.warning("Failed to attach session to ticket %s", task.meta_ticket_id)
 
     async def _run_background(
         self,

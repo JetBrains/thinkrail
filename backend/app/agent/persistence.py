@@ -100,7 +100,7 @@ def list_sessions(project_root: Path) -> list[dict[str, Any]]:
             # Backward compat: support both bonsaiSid and taskId
             sid = data.get("bonsaiSid") or data.get("taskId", "")
             status = data.get("status", "done")
-            result.append({
+            entry: dict[str, Any] = {
                 "bonsaiSid": sid,
                 "name": data.get("name", ""),
                 "skillId": data.get("skillId"),
@@ -111,7 +111,13 @@ def list_sessions(project_root: Path) -> list[dict[str, Any]]:
                 "updatedAt": data.get("updatedAt", ""),
                 "active": status not in ("done", "error"),
                 "metrics": data.get("metrics", {}),
-            })
+            }
+            # Include full config and system prompt for draft sessions
+            if status == "draft":
+                entry["config"] = data.get("config", {})
+                entry["systemPrompt"] = data.get("systemPrompt")
+                entry["sessionPrompt"] = data.get("sessionPrompt")
+            result.append(entry)
         except Exception:
             logger.exception("Failed to read session file %s", path)
     return result

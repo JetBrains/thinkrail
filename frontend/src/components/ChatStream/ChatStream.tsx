@@ -6,6 +6,7 @@ import { SystemMessage } from "./SystemMessage.tsx";
 import { AssistantMessage } from "./AssistantMessage.tsx";
 import { ToolCallCard } from "./ToolCallCard.tsx";
 import { SessionContextCard } from "./SessionContextCard.tsx";
+import { DraftConfigCard } from "./DraftConfigCard.tsx";
 import { VisualizationCard, VisErrorBoundary } from "./VisualizationCard.tsx";
 import { SubagentBlock } from "./SubagentBlock.tsx";
 import { QuestionCard } from "./QuestionCard.tsx";
@@ -195,6 +196,9 @@ export const ChatStream = forwardRef<ChatStreamHandle, ChatStreamProps>(function
 
   return (
     <div className="chat-stream" ref={scrollRef} onScroll={handleScroll}>
+      {session?.status === "draft" && (
+        <DraftConfigCard bonsaiSid={session.bonsaiSid} />
+      )}
       {events.map((ev, i) => {
         // Skip events that are children of a subagent (rendered inside SubagentBlock)
         if (childIndices.has(i)) return null;
