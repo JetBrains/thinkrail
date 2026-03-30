@@ -151,3 +151,40 @@ class TestLinking:
         updated = svc.set_orchestrator(t.id, "orch-session-1")
         assert updated.orchestrator_session_id == "orch-session-1"
         assert updated.status == "executing"
+
+
+class TestDetachSessionFromAll:
+    def test_removes_from_all_tickets(self, tmp_path: Path) -> None:
+        svc = _setup_board(tmp_path)
+        t1 = svc.create_ticket("T1")
+        t2 = svc.create_ticket("T2")
+        svc.attach_session(t1.id, "sess-x")
+        svc.attach_session(t2.id, "sess-x")
+        svc.attach_session(t1.id, "sess-y")
+
+        svc.detach_session_from_all("sess-x")
+
+        t1 = svc.get_ticket(t1.id)
+        t2 = svc.get_ticket(t2.id)
+        assert "sess-x" not in t1.session_ids
+        assert "sess-y" in t1.session_ids
+        assert "sess-x" not in t2.session_ids
+
+    def test_clears_orchestrator(self, tmp_path: Path) -> None:
+        svc = _setup_board(tmp_path)
+        t = svc.create_ticket("T")
+        svc.attach_session(t.id, "orch-1")
+        svc.update_ticket(t.id, status="specified")
+        svc.set_plan_path(t.id, "plans/test.md")
+        svc.set_orchestrator(t.id, "orch-1")
+
+        svc.detach_session_from_all("orch-1")
+
+        t = svc.get_ticket(t.id)
+        assert t.orchestrator_session_id is None
+        assert "orch-1" not in t.session_ids
+
+    def test_noop_when_no_references(self, tmp_path: Path) -> None:
+        svc = _setup_board(tmp_path)
+        svc.create_ticket("T")
+        svc.detach_session_from_all("nonexistent")  # should not raise

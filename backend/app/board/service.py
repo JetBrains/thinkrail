@@ -151,6 +151,23 @@ class BoardService:
         write_ticket(ticket_path(self._tickets_dir, ticket_id), ticket)
         return ticket
 
+    def detach_session(self, ticket_id: str, session_id: str) -> MetaTicket:
+        """Remove a session link from a ticket."""
+        ticket = self.get_ticket(ticket_id)
+        if session_id in ticket.session_ids:
+            ticket.session_ids.remove(session_id)
+        if ticket.orchestrator_session_id == session_id:
+            ticket.orchestrator_session_id = None
+        ticket.updated = datetime.now(UTC).isoformat()
+        write_ticket(ticket_path(self._tickets_dir, ticket_id), ticket)
+        return ticket
+
+    def detach_session_from_all(self, session_id: str) -> None:
+        """Remove a session reference from every ticket that has it."""
+        for ticket in _list_files(self._tickets_dir):
+            if session_id in ticket.session_ids or ticket.orchestrator_session_id == session_id:
+                self.detach_session(ticket.id, session_id)
+
     def set_orchestrator(self, ticket_id: str, session_id: str) -> MetaTicket:
         """Set the orchestrator session for a ticket and auto-transition to executing."""
         ticket = self.get_ticket(ticket_id)
