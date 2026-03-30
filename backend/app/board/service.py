@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import Any
 
 from app.board.models import MetaTicket, MetaTicketSummary, MetaTicketStatus, MetaTicketType
 from app.board.plan import PlanService
@@ -26,6 +27,7 @@ class BoardService:
     def __init__(self, config: AppConfig) -> None:
         self._config = config
         self.plans = PlanService(config)
+        self.trash_service: Any = None  # Injected by server.py
 
     @property
     def _tickets_dir(self) -> Path:
@@ -117,10 +119,12 @@ class BoardService:
 
     def delete_ticket(self, id: str) -> None:
         path = ticket_path(self._tickets_dir, id)
-        try:
+        if not path.is_file():
+            raise TicketNotFoundError(f"Ticket '{id}' not found")
+        if self.trash_service:
+            self.trash_service.trash_ticket(id)
+        else:
             _delete_file(path)
-        except FileNotFoundError:
-            raise TicketNotFoundError(f"Ticket '{id}' not found") from None
 
     # -- linking ---------------------------------------------------------------
 

@@ -186,6 +186,12 @@ def register_routes(app: FastAPI) -> None:
             board_service = BoardService(config)
             _board_services[key] = board_service
 
+        # Trash service for soft-delete
+        from app.trash.service import TrashService
+        trash_service = TrashService(project_root=project_path)
+        agent_service.trash_service = trash_service
+        board_service.trash_service = trash_service
+
         # Make board service available to agent service for auto-linking
         agent_service.board_service = board_service
 

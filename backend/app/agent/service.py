@@ -26,7 +26,8 @@ class AgentService:
         self._tracker = Tracker()
         self._running_tasks: dict[str, asyncio.Task[Any]] = {}
         self._last_notify: dict[str, Callable] = {}
-        self.board_service: Any = None  # Injected by server.py
+        self.board_service: Any = None   # Injected by server.py
+        self.trash_service: Any = None  # Injected by server.py
 
     def rebind_notify(self, notify: Callable) -> None:
         """Update the WebSocket callback for all running tasks.
@@ -70,6 +71,8 @@ class AgentService:
         skill_id: str | None = ...,  # type: ignore[assignment]
         config: AgentConfig | None = None,
         session_prompt: str | None = ...,  # type: ignore[assignment]
+        name: str | None = ...,  # type: ignore[assignment]
+        meta_ticket_id: str | None = ...,  # type: ignore[assignment]
     ) -> str:
         """Update a draft session's config and rebuild its system prompt.
 
@@ -86,6 +89,18 @@ class AgentService:
             task.config = config
         if session_prompt is not ...:
             task.session_prompt = session_prompt
+        if name is not ...:
+            task.name = name
+        if meta_ticket_id is not ...:
+            old_ticket_id = task.meta_ticket_id
+            if old_ticket_id and old_ticket_id != meta_ticket_id and self.board_service:
+                try:
+                    self.board_service.detach_session(old_ticket_id, task.bonsai_sid)
+                except Exception:
+                    logger.warning("Failed to detach session from ticket %s", old_ticket_id)
+            task.meta_ticket_id = meta_ticket_id
+            if meta_ticket_id:
+                self._attach_to_ticket(task)
         task.system_prompt = self._build_context_for(task)
         self._save_task(task)
         return task.system_prompt
@@ -330,9 +345,22 @@ class AgentService:
         """Get full session data (events included) from disk."""
         return load_session(self._config.project_root, bonsai_sid)
 
-    def delete_session_data(self, bonsai_sid: str) -> bool:
-        """Delete a session from disk."""
-        return delete_session_from_disk(self._config.project_root, bonsai_sid)
+    def trash_session(self, bonsai_sid: str) -> None:
+        """Soft-delete a session: detach from tickets, move to trash."""
+        if self.board_service:
+            try:
+                self.board_service.detach_session_from_all(bonsai_sid)
+            except Exception:
+                logger.warning("Failed to detach session %s from tickets", bonsai_sid)
+        if self.trash_service:
+            self.trash_service.trash_session(bonsai_sid)
+        else:
+            # Fallback: hard-delete if no trash service
+            delete_session_from_disk(self._config.project_root, bonsai_sid)
+        # Clean up in-memory state if still tracked
+        if self._tracker.has_task(bonsai_sid):
+            self._tracker.remove_task(bonsai_sid)
+            self._running_tasks.pop(bonsai_sid, None)
 
     async def continue_session(
         self, bonsai_sid: str, notify: Callable
