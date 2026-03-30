@@ -48,6 +48,7 @@ function formatDate(iso: string): string {
 
 export function TicketInfo({ ticket, plan, onTicketUpdated, rightPanel, onSelectPanel }: TicketInfoProps) {
   const updateTicket = useBoardStore((s) => s.updateTicket);
+  const deleteTicket = useBoardStore((s) => s.deleteTicket);
   const liveSessions = useSessionStore((s) => s.sessions);
   const specs = useSpecStore((s) => s.specs);
   const [descHeight, setDescHeight] = useState(140);
@@ -67,6 +68,11 @@ export function TicketInfo({ ticket, plan, onTicketUpdated, rightPanel, onSelect
     },
     [ticket.id, updateTicket, onTicketUpdated],
   );
+
+  const handleDelete = useCallback(async () => {
+    if (!window.confirm(`Delete ticket "${ticket.title}"?`)) return;
+    await deleteTicket(ticket.id);
+  }, [ticket.id, ticket.title, deleteTicket]);
 
   const linkedSpecs = ticket.linkedSpecIds.map((id) => {
     const spec = specs.find((s) => s.id === id);
@@ -119,6 +125,9 @@ export function TicketInfo({ ticket, plan, onTicketUpdated, rightPanel, onSelect
               <option key={t} value={t}>{t}</option>
             ))}
           </select>
+          <button className="ticket-header-delete" onClick={handleDelete} title="Delete ticket">
+            Delete
+          </button>
         </div>
         <div className="ticket-header-meta">
           <span>Created {formatDate(ticket.created)}</span>

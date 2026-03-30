@@ -78,6 +78,21 @@
   font-size: 11px;
   font-family: var(--font);
 }
+.ticket-header-delete {
+  background: none;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--red);
+  font-size: 11px;
+  padding: 2px 8px;
+  cursor: pointer;
+  font-family: inherit;
+  margin-left: auto;
+}
+.ticket-header-delete:hover {
+  background: rgba(255, 85, 85, 0.1);
+  border-color: var(--red);
+}
 
 .ticket-header-meta {
   display: flex;
