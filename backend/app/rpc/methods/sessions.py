@@ -64,6 +64,14 @@ async def restart_session(service: AgentService, **params: Any) -> dict:
 
 
 @_handle_errors
-async def delete_session_data(service: AgentService, **params: Any) -> bool:
-    """Delete a session from disk."""
-    return service.delete_session_data(params["bonsaiSid"])
+async def delete_session_data(service: AgentService, **params: Any) -> None:
+    """Trash a session (soft-delete) and detach from all tickets."""
+    service.trash_session(params["bonsaiSid"])
+
+
+@_handle_errors
+async def restore_session(service: AgentService, **params: Any) -> None:
+    """Restore a trashed session."""
+    if not service.trash_service:
+        raise JsonRpcError(_INTERNAL_ERROR, "Trash service not available")
+    service.trash_service.restore_session(params["bonsaiSid"])

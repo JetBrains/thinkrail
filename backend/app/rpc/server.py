@@ -39,6 +39,12 @@ from app.rpc.methods.sessions import (
     get_session,
     list_all_sessions,
     restart_session,
+    restore_session,
+)
+from app.rpc.methods.trash import (
+    empty_trash,
+    list_trashed,
+    purge_trashed,
 )
 from app.rpc.methods.vis import get_vis_state, recompute_vis
 from app.rpc.methods.board import (
@@ -91,6 +97,7 @@ METHODS = {
     "session/continue": continue_session,
     "session/restart": restart_session,
     "session/delete": delete_session_data,
+    "session/restore": restore_session,
     "vis/state": get_vis_state,
     "vis/recompute": recompute_vis,
     "board/list": list_tickets,
@@ -107,6 +114,9 @@ METHODS = {
     "board/createPlan": create_plan,
     "board/updateStep": update_step,
     "board/getNextStep": get_next_step,
+    "trash/list": list_trashed,
+    "trash/purge": purge_trashed,
+    "trash/empty": empty_trash,
 }
 
 _active_ws: WebSocket | None = None
@@ -121,6 +131,7 @@ def _bind_methods(
     agent_service: AgentService,
     vis_service: VisualizationService,
     board_service: BoardService,
+    trash_service: "TrashService | None" = None,
 ) -> dict:
     """Bind each handler in METHODS to its owning service via partial."""
     bound = {}
@@ -131,6 +142,8 @@ def _bind_methods(
             bound[name] = partial(handler, vis_service)
         elif name.startswith("board/"):
             bound[name] = partial(handler, board_service)
+        elif name.startswith("trash/") and trash_service:
+            bound[name] = partial(handler, trash_service)
         else:
             bound[name] = partial(handler, agent_service)
     return bound
@@ -195,7 +208,7 @@ def register_routes(app: FastAPI) -> None:
         # Make board service available to agent service for auto-linking
         agent_service.board_service = board_service
 
-        bound_methods = _bind_methods(spec_service, agent_service, vis_service, board_service)
+        bound_methods = _bind_methods(spec_service, agent_service, vis_service, board_service, trash_service)
 
         # Replace existing connection if any
         if _active_ws is not None:
