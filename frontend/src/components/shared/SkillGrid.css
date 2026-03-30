@@ -1,0 +1,19 @@
+/* ── Skill Grid ── */
+.skill-grid { display: flex; flex-direction: column; gap: var(--space-md); }
+.skill-group-label { font-size: 10px; color: var(--hint); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: var(--space-xs); }
+.skill-group-cards { display: flex; flex-wrap: wrap; gap: var(--space-sm); }
+.skill-card {
+  display: flex; align-items: center; gap: var(--space-xs);
+  padding: var(--space-xs) var(--space-md);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--muted);
+  font-family: var(--font);
+  font-size: 11px;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+.skill-card:hover { border-color: var(--blue); color: var(--text); }
+.skill-card-selected { border-color: var(--blue); background: rgba(122, 162, 247, 0.07); color: var(--text); }
+.skill-card-icon { font-size: 14px; }

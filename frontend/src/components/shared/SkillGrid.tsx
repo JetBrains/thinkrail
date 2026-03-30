@@ -1,4 +1,5 @@
 import { SKILLS, type Skill } from "@/constants/skills";
+import "./SkillGrid.css";
 
 interface SkillGridProps {
   selectedId: string | null;

@@ -6,7 +6,7 @@ import { ThemeSwitcher } from "./ThemeSwitcher.tsx";
 export function Header({ onSwitchProject }: { onSwitchProject: () => void }) {
   const toggleLeft = useUiStore((s) => s.toggleLeftPanel);
   const toggleRight = useUiStore((s) => s.toggleRightPanel);
-  const openModal = useUiStore((s) => s.openModal);
+  const createNewSession = useSessionStore((s) => s.createNewSession);
   const sessions = useSessionStore((s) => s.sessions);
   const activeSessions = Array.from(sessions.values()).filter(
     (s) => s.status === "running",
@@ -35,7 +35,7 @@ export function Header({ onSwitchProject }: { onSwitchProject: () => void }) {
           Context
         </button>
         <ThemeSwitcher />
-        <button className="header-btn header-btn-primary" onClick={() => openModal()} title={`New session (${modLabel("T")})`}>
+        <button className="header-btn header-btn-primary" onClick={() => createNewSession()} title={`New session (${modLabel("T")})`}>
           + New
         </button>
       </div>

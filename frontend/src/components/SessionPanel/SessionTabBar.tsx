@@ -1,6 +1,9 @@
+import { useState, useEffect, useRef } from "react";
 import type { Session } from "@/types/session.ts";
 import type { OpenFile } from "@/store/fileStore.ts";
 import { useBoardStore } from "@/store/boardStore.ts";
+import { useFileStore } from "@/store/fileStore.ts";
+import { useSessionStore } from "@/store/sessionStore.ts";
 
 interface SessionTabBarProps {
   sessions: Session[];
@@ -52,6 +55,23 @@ export function SessionTabBar({
   const activateTicket = useBoardStore((s) => s.activateTicket);
   const closeTicket = useBoardStore((s) => s.closeTicket);
   const showBoard = useBoardStore((s) => s.showBoard);
+  const updateTicket = useBoardStore((s) => s.updateTicket);
+  const deleteTicket = useBoardStore((s) => s.deleteTicket);
+
+  const [ctxMenu, setCtxMenu] = useState<{ tid: string; x: number; y: number } | null>(null);
+  const ctxMenuRef = useRef<HTMLDivElement>(null);
+
+  // Close context menu on click outside
+  useEffect(() => {
+    if (!ctxMenu) return;
+    function handleClick(e: MouseEvent) {
+      if (ctxMenuRef.current && !ctxMenuRef.current.contains(e.target as Node)) {
+        setCtxMenu(null);
+      }
+    }
+    document.addEventListener("mousedown", handleClick);
+    return () => document.removeEventListener("mousedown", handleClick);
+  }, [ctxMenu]);
 
   const hasPreviewTab = previewFilePath != null && !files.some((f) => f.path === previewFilePath);
   const previewIsActive = hasPreviewTab && !activeFilePath;
@@ -60,9 +80,21 @@ export function SessionTabBar({
   const boardIsActive =
     !activeTicketId && !activeSessionId && !activeFilePath && !previewFilePath;
 
+  const handleShowBoard = () => {
+    // Clear all active contexts so Board becomes visible
+    showBoard();
+    useSessionStore.setState({ activeSessionId: null });
+    useFileStore.setState({ activeFilePath: null, previewFilePath: null, previewFile: null });
+  };
+
+  const handleActivateTicket = (tid: string) => {
+    useFileStore.setState({ activeFilePath: null, previewFilePath: null, previewFile: null });
+    activateTicket(tid);
+  };
+
   const handleSwitchSession = (sid: string) => {
-    // Deactivate ticket when switching to a session
     useBoardStore.setState({ activeTicketId: null });
+    useFileStore.setState({ activeFilePath: null, previewFilePath: null, previewFile: null });
     onSwitchSession(sid);
   };
 
@@ -71,12 +103,38 @@ export function SessionTabBar({
     onSwitchFile(path);
   };
 
+  const handleTicketContextMenu = (e: React.MouseEvent, tid: string) => {
+    e.preventDefault();
+    setCtxMenu({ tid, x: e.clientX, y: e.clientY });
+  };
+
+  const handleRename = async () => {
+    if (!ctxMenu) return;
+    const t = tickets.get(ctxMenu.tid);
+    const newTitle = window.prompt("Rename ticket:", t?.title ?? "");
+    if (newTitle && newTitle.trim()) {
+      await updateTicket(ctxMenu.tid, { title: newTitle.trim() });
+    }
+    setCtxMenu(null);
+  };
+
+  const handleDelete = async () => {
+    if (!ctxMenu) return;
+    const t = tickets.get(ctxMenu.tid);
+    if (!window.confirm(`Delete ticket "${t?.title ?? ctxMenu.tid}"?`)) {
+      setCtxMenu(null);
+      return;
+    }
+    await deleteTicket(ctxMenu.tid);
+    setCtxMenu(null);
+  };
+
   return (
     <div className="session-tabs">
       {/* Board tab (fixed, always present) */}
       <div
         className={`session-tab board-tab ${boardIsActive ? "session-tab-active" : ""}`}
-        onClick={() => showBoard()}
+        onClick={handleShowBoard}
       >
         <span className="session-tab-name">Board</span>
       </div>
@@ -89,7 +147,8 @@ export function SessionTabBar({
           <div
             key={`t-${tid}`}
             className={`session-tab ticket-tab ${isActive ? "session-tab-active" : ""}`}
-            onClick={() => activateTicket(tid)}
+            onClick={() => handleActivateTicket(tid)}
+            onContextMenu={(e) => handleTicketContextMenu(e, tid)}
           >
             <span className="session-tab-name">{t?.title ?? tid.slice(0, 8)}</span>
             <button
@@ -184,6 +243,22 @@ export function SessionTabBar({
             }}
           >
             {"\u00D7"}
+          </button>
+        </div>
+      )}
+
+      {/* Ticket tab context menu */}
+      {ctxMenu && (
+        <div
+          ref={ctxMenuRef}
+          className="ticket-ctx-menu"
+          style={{ left: ctxMenu.x, top: ctxMenu.y }}
+        >
+          <button className="ticket-ctx-menu-item" onClick={handleRename}>
+            Rename
+          </button>
+          <button className="ticket-ctx-menu-item ticket-ctx-menu-item--danger" onClick={handleDelete}>
+            Delete
           </button>
         </div>
       )}

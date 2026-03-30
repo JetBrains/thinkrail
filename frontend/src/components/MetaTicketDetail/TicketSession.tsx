@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import type { MetaTicket } from "@/types/board.ts";
 import { useSessionStore } from "@/store/sessionStore.ts";
 import { DEFAULT_MODEL } from "@/utils/models.ts";
@@ -45,13 +45,25 @@ function getPhaseConfig(ticket: MetaTicket): { skillId: string; label: string; d
 export function TicketSession({ ticket, embeddedSid, onSessionStarted }: TicketSessionProps) {
   const sessions = useSessionStore((s) => s.sessions);
   const startSession = useSessionStore((s) => s.startSession);
+  const restoreSession = useSessionStore((s) => s.restoreSession);
   const sendMessage = useSessionStore((s) => s.sendMessage);
   const interruptSession = useSessionStore((s) => s.interruptSession);
   const resolveRequest = useSessionStore((s) => s.resolveRequest);
   const [starting, setStarting] = useState(false);
+  const [restoring, setRestoring] = useState(false);
 
   const session = embeddedSid ? sessions.get(embeddedSid) : null;
   const phase = useMemo(() => getPhaseConfig(ticket), [ticket]);
+
+  // Auto-restore session from disk if embeddedSid is set but session isn't in store
+  useEffect(() => {
+    if (embeddedSid && !session && !restoring) {
+      setRestoring(true);
+      restoreSession(embeddedSid)
+        .catch((e) => console.error("[TicketSession] Failed to restore:", e))
+        .finally(() => setRestoring(false));
+    }
+  }, [embeddedSid, session, restoring, restoreSession]);
 
   const handleStart = useCallback(async () => {
     if (starting) return;
@@ -104,7 +116,7 @@ export function TicketSession({ ticket, embeddedSid, onSessionStarted }: TicketS
     [embeddedSid, resolveRequest],
   );
 
-  // No active session — show phase-appropriate start prompt
+  // No active session — show loading if restoring, or phase-appropriate start prompt
   if (!session) {
     return (
       <div className="ticket-session">
@@ -112,14 +124,20 @@ export function TicketSession({ ticket, embeddedSid, onSessionStarted }: TicketS
           <span className="ticket-session-title">Session</span>
         </div>
         <div className="ticket-session-empty">
-          <p>{phase.description}</p>
-          <button
-            className="ticket-session-start-btn"
-            onClick={handleStart}
-            disabled={starting}
-          >
-            {starting ? "Starting..." : phase.label}
-          </button>
+          {restoring ? (
+            <p>Loading session...</p>
+          ) : (
+            <>
+              <p>{phase.description}</p>
+              <button
+                className="ticket-session-start-btn"
+                onClick={handleStart}
+                disabled={starting}
+              >
+                {starting ? "Starting..." : phase.label}
+              </button>
+            </>
+          )}
         </div>
       </div>
     );

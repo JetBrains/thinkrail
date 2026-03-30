@@ -203,6 +203,26 @@ export function wireEvents(client: RpcClient): Unsubscribe {
     }),
   );
 
+  // ── Description suggestions ──
+  unsubs.push(
+    client.on("agent/suggestDescription", (p) => {
+      const params = p as Record<string, unknown>;
+      const bonsaiSid = params.bonsaiSid as string;
+      useSessionStore.getState().onSuggestDescription(params);
+      useNotificationStore.getState().incrementPendingInput();
+      useNotificationStore.getState().addToast({
+        bonsaiSid,
+        eventType: "suggestion",
+        message: "Agent suggests a description",
+        persistent: false,
+      });
+      useNotificationStore.getState().setBadge(bonsaiSid, {
+        type: "suggestion",
+        pulsing: true,
+      });
+    }),
+  );
+
   // ── Orchestrator step proposals ──
   unsubs.push(
     client.on("agent/suggestStep", (p) => {

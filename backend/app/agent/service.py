@@ -632,6 +632,21 @@ class AgentService:
             except Exception:
                 logger.debug("Failed to inject plan for ticket %s", task.meta_ticket_id)
 
+        # Inject ticket title + body for describe sessions
+        if task.meta_ticket_id and self.board_service and task.skill_id == "ticket-describe":
+            try:
+                ticket = self.board_service.get_ticket(task.meta_ticket_id)
+                ticket_section = (
+                    "## Current Ticket\n\n"
+                    f"**Title:** {ticket.title}\n\n"
+                    f"**Current body:**\n{ticket.body or '(empty)'}\n"
+                )
+                session_prompt = (
+                    f"{session_prompt}\n\n{ticket_section}" if session_prompt else ticket_section
+                )
+            except Exception:
+                logger.debug("Failed to inject ticket for %s", task.meta_ticket_id)
+
         ctx = build_context(
             spec_ids=task.spec_ids,
             skill_id=task.skill_id,

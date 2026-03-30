@@ -47,6 +47,7 @@ class MetaTicket(BaseModel):
     orchestrator_session_id: str | None = None
     linked_spec_ids: list[str] = Field(default_factory=list)
     session_ids: list[str] = Field(default_factory=list)
+    order: int = 0
     created: str = Field(default_factory=_now_iso)
     updated: str = Field(default_factory=_now_iso)
 
@@ -64,5 +65,6 @@ class MetaTicketSummary(BaseModel):
     orchestrator_session_id: str | None = None
     linked_spec_ids: list[str] = Field(default_factory=list)
     session_ids: list[str] = Field(default_factory=list)
+    order: int = 0
     created: str = ""
     updated: str = ""

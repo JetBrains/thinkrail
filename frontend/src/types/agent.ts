@@ -21,6 +21,7 @@ export type EventType =
   | "askUserQuestion"
   | "confirmAction"
   | "suggestSession"
+  | "suggestDescription"
   | "requestResolved"
   | "userMessage";
 

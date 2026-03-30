@@ -1336,6 +1336,39 @@
   font-style: italic;
 }
 
+/* ── Ticket Tab Context Menu ── */
+.ticket-ctx-menu {
+  position: fixed;
+  z-index: 1000;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: 4px 0;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+  min-width: 120px;
+}
+.ticket-ctx-menu-item {
+  display: block;
+  width: 100%;
+  text-align: left;
+  background: none;
+  border: none;
+  color: var(--text);
+  font-family: var(--font);
+  font-size: 12px;
+  padding: 6px 12px;
+  cursor: pointer;
+}
+.ticket-ctx-menu-item:hover {
+  background: var(--hover);
+}
+.ticket-ctx-menu-item--danger {
+  color: var(--red);
+}
+.ticket-ctx-menu-item--danger:hover {
+  background: rgba(255, 85, 85, 0.1);
+}
+
 /* ── Visualization Card ── */
 .vis-card {
   border: 1px solid var(--border);

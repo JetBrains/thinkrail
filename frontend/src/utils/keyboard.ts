@@ -1,4 +1,5 @@
 import { useUiStore } from "@/store/uiStore.ts";
+import { useSessionStore } from "@/store/sessionStore.ts";
 import { isMod } from "@/utils/platform.ts";
 
 function isTextInput(el: EventTarget | null): boolean {
@@ -18,9 +19,6 @@ export function registerKeyboardShortcuts(): () => void {
     if (e.key === "Escape") {
       if (store.paletteOpen) {
         store.togglePalette();
-        e.preventDefault();
-      } else if (store.modalOpen) {
-        store.closeModal();
         e.preventDefault();
       }
       return;
@@ -42,7 +40,7 @@ export function registerKeyboardShortcuts(): () => void {
         break;
       case "t": // Mod+T — new session
         e.preventDefault();
-        store.openModal();
+        useSessionStore.getState().createNewSession();
         break;
       case "j": // Mod+J — toggle right panel
         e.preventDefault();

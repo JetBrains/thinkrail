@@ -33,6 +33,7 @@ interface BoardStore {
     },
   ) => Promise<MetaTicket>;
   deleteTicket: (id: string) => Promise<void>;
+  reorderTicket: (id: string, status: MetaTicketStatus, order: number) => Promise<void>;
   /** Open a ticket as a tab and activate it */
   openTicket: (id: string) => void;
   /** Close a ticket tab */
@@ -87,6 +88,14 @@ export const useBoardStore = create<BoardStore>((set, get) => ({
     tickets.set(ticket.id, ticket);
     set({ tickets });
     return ticket;
+  },
+
+  reorderTicket: async (id, status, order) => {
+    const api = createBoardApi(getClient());
+    const ticket = await api.reorder(id, status, order);
+    const tickets = new Map(get().tickets);
+    tickets.set(ticket.id, ticket);
+    set({ tickets });
   },
 
   deleteTicket: async (id) => {

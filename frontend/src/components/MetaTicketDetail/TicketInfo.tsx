@@ -1,4 +1,4 @@
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import type { MetaTicket, MetaTicketStatus, MetaTicketType } from "@/types/board.ts";
 import type { RightPanelContent } from "./MetaTicketDetail.tsx";
 import { useSpecStore } from "@/store/specStore.ts";
@@ -48,10 +48,24 @@ function formatDate(iso: string): string {
 
 export function TicketInfo({ ticket, plan, onTicketUpdated, rightPanel, onSelectPanel }: TicketInfoProps) {
   const updateTicket = useBoardStore((s) => s.updateTicket);
-  const deleteTicket = useBoardStore((s) => s.deleteTicket);
   const liveSessions = useSessionStore((s) => s.sessions);
+  const archivedSessions = useSessionStore((s) => s.archivedSessions);
+  const restoreSession = useSessionStore((s) => s.restoreSession);
   const specs = useSpecStore((s) => s.specs);
   const [descHeight, setDescHeight] = useState(140);
+  const [editTitle, setEditTitle] = useState(ticket.title);
+
+  useEffect(() => setEditTitle(ticket.title), [ticket.title]);
+
+  const handleTitleBlur = useCallback(async () => {
+    const trimmed = editTitle.trim();
+    if (!trimmed || trimmed === ticket.title) {
+      setEditTitle(ticket.title);
+      return;
+    }
+    const updated = await updateTicket(ticket.id, { title: trimmed });
+    onTicketUpdated?.(updated as MetaTicket);
+  }, [editTitle, ticket.id, ticket.title, updateTicket, onTicketUpdated]);
 
   const handleStatusChange = useCallback(
     async (e: React.ChangeEvent<HTMLSelectElement>) => {
@@ -68,11 +82,6 @@ export function TicketInfo({ ticket, plan, onTicketUpdated, rightPanel, onSelect
     },
     [ticket.id, updateTicket, onTicketUpdated],
   );
-
-  const handleDelete = useCallback(async () => {
-    if (!window.confirm(`Delete ticket "${ticket.title}"?`)) return;
-    await deleteTicket(ticket.id);
-  }, [ticket.id, ticket.title, deleteTicket]);
 
   const linkedSpecs = ticket.linkedSpecIds.map((id) => {
     const spec = specs.find((s) => s.id === id);
@@ -112,22 +121,41 @@ export function TicketInfo({ ticket, plan, onTicketUpdated, rightPanel, onSelect
     <div className="ticket-info-inner">
       {/* ── Ticket Header Card ── */}
       <div className="ticket-header">
-        <div className="ticket-header-id">{ticket.id}</div>
-        <div className="ticket-header-title">{ticket.title}</div>
-        <div className="ticket-header-controls">
-          <select value={ticket.status} onChange={handleStatusChange}>
-            {STATUS_OPTIONS.map((s) => (
-              <option key={s} value={s}>{s}</option>
-            ))}
-          </select>
-          <select value={ticket.type} onChange={handleTypeChange}>
-            {TYPE_OPTIONS.map((t) => (
-              <option key={t} value={t}>{t}</option>
-            ))}
-          </select>
-          <button className="ticket-header-delete" onClick={handleDelete} title="Delete ticket">
-            Delete
-          </button>
+        <input
+          className="ticket-header-title-input"
+          value={editTitle}
+          onChange={(e) => setEditTitle(e.target.value)}
+          onBlur={handleTitleBlur}
+          onKeyDown={(e) => { if (e.key === "Enter") e.currentTarget.blur(); }}
+        />
+        <div className="ticket-header-id" title={ticket.id}>
+          Ticket #{ticket.id.slice(-4)}
+        </div>
+        <div className="ticket-header-props">
+          <div className="ticket-header-prop-row">
+            <span className="ticket-header-prop-label">Status</span>
+            <select
+              className={`ticket-header-badge ticket-header-badge--${ticket.status}`}
+              value={ticket.status}
+              onChange={handleStatusChange}
+            >
+              {STATUS_OPTIONS.map((s) => (
+                <option key={s} value={s}>{s}</option>
+              ))}
+            </select>
+          </div>
+          <div className="ticket-header-prop-row">
+            <span className="ticket-header-prop-label">Type</span>
+            <select
+              className={`ticket-header-badge ticket-header-badge--${ticket.type}`}
+              value={ticket.type}
+              onChange={handleTypeChange}
+            >
+              {TYPE_OPTIONS.map((t) => (
+                <option key={t} value={t}>{t}</option>
+              ))}
+            </select>
+          </div>
         </div>
         <div className="ticket-header-meta">
           <span>Created {formatDate(ticket.created)}</span>
@@ -252,14 +280,20 @@ export function TicketInfo({ ticket, plan, onTicketUpdated, rightPanel, onSelect
             }
             return [...allIds].map((sid) => {
               const live = liveSessions.get(sid);
-              const name = live?.name || sid.slice(0, 8);
-              const status = live?.status ?? "done";
+              const archived = !live ? archivedSessions.find((a) => a.bonsaiSid === sid) : null;
+              const name = live?.name || archived?.name || sid.slice(0, 8);
+              const status = live?.status ?? (archived ? "done" : "done");
               const isSessionActive = rightPanel.type === "session" && rightPanel.sessionId === sid;
               return (
                 <div
                   key={sid}
                   className={`ticket-linked-item ticket-linked-item--clickable ${isSessionActive ? "ticket-linked-item--active" : ""}`}
-                  onClick={() => onSelectPanel({ type: "session", sessionId: sid })}
+                  onClick={async () => {
+                    if (!live) {
+                      await restoreSession(sid);
+                    }
+                    onSelectPanel({ type: "session", sessionId: sid });
+                  }}
                 >
                   <span>{name}</span>
                   <span className={`ticket-linked-status ticket-linked-status--${status}`}>

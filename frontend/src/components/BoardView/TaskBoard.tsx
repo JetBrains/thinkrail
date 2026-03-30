@@ -46,7 +46,7 @@ export function TaskBoard() {
         {COLUMNS.map((col) => {
           const items = grouped.get(col.status) ?? [];
           return (
-            <KanbanColumn key={col.status} title={col.label} count={items.length}>
+            <KanbanColumn key={col.status} id={`task-${col.status}`} title={col.label} count={items.length}>
               {items.map((t) => (
                 <TaskCard key={t.id} task={t} />
               ))}

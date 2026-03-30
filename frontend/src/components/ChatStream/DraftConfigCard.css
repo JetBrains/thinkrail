@@ -16,9 +16,29 @@
   padding-bottom: var(--space-sm);
   border-bottom: 1px solid var(--border);
 }
-.draft-config-title {
+.draft-config-name-input {
   font-size: 13px;
   font-weight: 500;
+  color: var(--text);
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  padding: 1px 4px;
+  font-family: inherit;
+  outline: none;
+  flex: 1;
+  min-width: 0;
+}
+.draft-config-name-input:hover {
+  border-color: var(--border);
+}
+.draft-config-name-input:focus {
+  border-color: var(--blue);
+  background: var(--surface);
+}
+.draft-config-name-input::placeholder {
+  color: var(--hint);
+  font-style: italic;
 }
 .draft-config-badge {
   font-size: 10px;

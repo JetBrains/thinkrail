@@ -87,7 +87,10 @@ class BoardService:
         body: str = "",
         type: MetaTicketType = "feature",
     ) -> MetaTicket:
-        ticket = MetaTicket(title=title, body=body, type=type)
+        # Set order to max+1 within the default "idea" column
+        existing = _list_files(self._tickets_dir)
+        max_order = max((t.order for t in existing if t.status == "idea"), default=-1)
+        ticket = MetaTicket(title=title, body=body, type=type, order=max_order + 1)
         write_ticket(ticket_path(self._tickets_dir, ticket.id), ticket)
         return ticket
 
@@ -125,6 +128,19 @@ class BoardService:
             self.trash_service.trash_ticket(id)
         else:
             _delete_file(path)
+
+    def reorder_ticket(
+        self, id: str, status: MetaTicketStatus, order: int
+    ) -> MetaTicket:
+        """Move a ticket to a new status column and/or position within a column."""
+        ticket = self.get_ticket(id)
+        if status != ticket.status:
+            validate_transition(ticket.status, status)
+            ticket.status = status
+        ticket.order = order
+        ticket.updated = datetime.now(UTC).isoformat()
+        write_ticket(ticket_path(self._tickets_dir, id), ticket)
+        return ticket
 
     # -- linking ---------------------------------------------------------------
 

@@ -13,6 +13,7 @@ import { QuestionCard } from "./QuestionCard.tsx";
 import { ApprovalCard } from "./ApprovalCard.tsx";
 import { PlanApprovalCard } from "./PlanApprovalCard.tsx";
 import SuggestionCard from "./SuggestionCard.tsx";
+import DescriptionSuggestionCard from "./DescriptionSuggestionCard.tsx";
 import { CompletionBanner } from "./CompletionBanner.tsx";
 import { ErrorBanner } from "./ErrorBanner.tsx";
 import { CompactMarker } from "./CompactMarker.tsx";
@@ -80,6 +81,7 @@ interface ChatStreamProps {
   onResolveRequest: (requestId: string, response: unknown) => void;
   session?: Session;
   onContextCardVisibility?: (visible: boolean) => void;
+  onApplyDescription?: (text: string) => void;
 }
 
 export const ChatStream = forwardRef<ChatStreamHandle, ChatStreamProps>(function ChatStream({
@@ -88,6 +90,7 @@ export const ChatStream = forwardRef<ChatStreamHandle, ChatStreamProps>(function
   onResolveRequest,
   session,
   onContextCardVisibility,
+  onApplyDescription,
 }, ref) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const autoScroll = useRef(true);
@@ -186,7 +189,7 @@ export const ChatStream = forwardRef<ChatStreamHandle, ChatStreamProps>(function
       // to top level so they remain visible outside the collapsible SubagentBlock
       const isVis = ev.eventType === "toolCallStart" &&
         (ev.payload.toolName as string)?.endsWith("bonsai_visualize");
-      const isInteraction = ev.eventType === "askUserQuestion" || ev.eventType === "confirmAction" || ev.eventType === "suggestSession";
+      const isInteraction = ev.eventType === "askUserQuestion" || ev.eventType === "confirmAction" || ev.eventType === "suggestSession" || ev.eventType === "suggestDescription";
       if (!isVis && !isInteraction) {
         subagentChildren.get(parentIdx)!.push(i);
         childIndices.add(i);
@@ -446,6 +449,42 @@ export const ChatStream = forwardRef<ChatStreamHandle, ChatStreamProps>(function
                   } catch (err) {
                     console.error("[SuggestionCard] Failed to start suggested session:", err);
                   }
+                }}
+                onDismiss={(reason) =>
+                  onResolveRequest(requestId, {
+                    behavior: "deny",
+                    message: reason
+                      ? `Dismissed: ${reason}`
+                      : "Dismissed",
+                    dismissReason: reason ?? "",
+                  })
+                }
+              />
+            );
+          }
+
+          case "suggestDescription": {
+            const requestId = (p.requestId as string) ?? "";
+            const isAnswered = answeredRequests.has(requestId);
+            const savedResponse = answeredRequests.get(requestId) as Record<string, unknown> | undefined;
+            const decision = savedResponse?.behavior === "allow" ? "applied" as const : "dismissed" as const;
+            const descText = (p.description as string) ?? "";
+
+            return (
+              <DescriptionSuggestionCard
+                key={k}
+                description={descText}
+                section={(p.section as string) ?? undefined}
+                answered={isAnswered}
+                decision={isAnswered ? decision : undefined}
+                dismissReason={
+                  isAnswered && decision === "dismissed"
+                    ? (savedResponse?.dismissReason as string) ?? undefined
+                    : undefined
+                }
+                onApply={() => {
+                  onResolveRequest(requestId, { behavior: "allow" });
+                  onApplyDescription?.(descText);
                 }}
                 onDismiss={(reason) =>
                   onResolveRequest(requestId, {

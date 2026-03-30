@@ -8,7 +8,6 @@ import { useUiStore } from "@/store/uiStore.ts";
 import { useVisStore } from "@/store/visStore.ts";
 import { useBoardStore } from "@/store/boardStore.ts";
 import { registerKeyboardShortcuts } from "@/utils/keyboard.ts";
-import { NewSessionModal } from "@/components/NewSessionModal/NewSessionModal.tsx";
 import { CommandPalette } from "@/components/CommandPalette/CommandPalette.tsx";
 import { ToastContainer } from "@/components/Notifications/ToastContainer.tsx";
 import { AppRoutes } from "./routes.tsx";
@@ -79,7 +78,6 @@ function AppInner({ projectPath: _projectPath, onSwitchProject }: { projectPath:
   return (
     <BrowserRouter>
       <AppRoutes onSwitchProject={onSwitchProject} />
-      <NewSessionModal />
       <CommandPalette />
       <ToastContainer />
     </BrowserRouter>

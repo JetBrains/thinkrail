@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import { useSpecStore } from "@/store/specStore.ts";
+import "./SpecSelector.css";
 
 interface SpecSelectorProps {
   selectedIds: string[];

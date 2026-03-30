@@ -8,6 +8,10 @@ from claude_agent_sdk import PermissionResultAllow, PermissionResultDeny
 
 from app.agent.tools._context import ToolContext, get_tool_context, set_tool_context
 from app.agent.tools.specs import intercept_specs, specs_mcp_server
+from app.agent.tools.suggest_description import (
+    intercept_suggest_description,
+    suggest_description_mcp_server,
+)
 from app.agent.tools.suggest_session import (
     intercept_suggest_session,
     suggest_session_mcp_server,
@@ -21,6 +25,7 @@ InterceptFn = Callable[..., Coroutine[Any, Any, PermissionResultAllow | Permissi
 MCP_SERVERS: dict[str, Any] = {
     "bonsai-vis": vis_mcp_server,
     "bonsai-proactive": suggest_session_mcp_server,
+    "bonsai-describe": suggest_description_mcp_server,
     "bonsai-specs": specs_mcp_server,
     "bonsai-orchestrator": orchestrator_mcp_server,
 }
@@ -33,6 +38,7 @@ MCP_SERVERS: dict[str, Any] = {
 INTERCEPTORS: dict[str, InterceptFn] = {
     "bonsai_visualize": intercept_visualize,
     "SuggestSession": intercept_suggest_session,
+    "SuggestDescription": intercept_suggest_description,
     "spec_list": intercept_specs,
     "spec_get": intercept_specs,
     "spec_save": intercept_specs,

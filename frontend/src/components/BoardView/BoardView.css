@@ -285,3 +285,52 @@
   border-color: var(--blue);
   color: white;
 }
+
+/* ── Drag-and-Drop ── */
+.ticket-card--dragging {
+  opacity: 0.4;
+}
+.kanban-column--drop-target {
+  background: rgba(122, 162, 247, 0.05);
+  border-color: var(--blue);
+}
+
+/* ── Board Card Context Menu ── */
+.board-ctx-menu {
+  position: fixed;
+  z-index: 1000;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: 4px 0;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+  min-width: 140px;
+}
+.board-ctx-menu-item {
+  display: block;
+  width: 100%;
+  text-align: left;
+  background: none;
+  border: none;
+  color: var(--text);
+  font-family: var(--font);
+  font-size: 12px;
+  padding: 5px 12px;
+  cursor: pointer;
+}
+.board-ctx-menu-item:hover { background: var(--hover); }
+.board-ctx-menu-item--indent { padding-left: 20px; }
+.board-ctx-menu-item--danger { color: var(--red); }
+.board-ctx-menu-item--danger:hover { background: rgba(255, 85, 85, 0.1); }
+.board-ctx-menu-label {
+  font-size: 10px;
+  color: var(--hint);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  padding: 4px 12px 2px;
+}
+.board-ctx-menu-sep {
+  height: 1px;
+  background: var(--border);
+  margin: 4px 0;
+}

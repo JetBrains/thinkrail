@@ -23,6 +23,9 @@ export function createBoardApi(client: RpcClient) {
     delete: (id: string) =>
       client.request<null>("board/delete", { id }),
 
+    reorder: (id: string, status: MetaTicketStatus, order: number) =>
+      client.request<MetaTicket>("board/reorder", { id, status, order }),
+
     linkSpec: (ticketId: string, specId: string) =>
       client.request<MetaTicket>("board/linkSpec", { ticketId, specId }),
 

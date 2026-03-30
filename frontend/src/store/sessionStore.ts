@@ -11,7 +11,7 @@ import type {
 } from "@/types/session.ts";
 import { getClient } from "@/api/index.ts";
 import { createAgentApi } from "@/api/methods/agents.ts";
-import { getContextWindowSize, BETA_1M } from "@/utils/models.ts";
+import { getContextWindowSize, BETA_1M, DEFAULT_MODEL } from "@/utils/models.ts";
 import { useNotificationStore } from "./notificationStore.ts";
 import { getErrorMessage } from "@/utils/errors.ts";
 
@@ -23,6 +23,16 @@ interface SessionStore {
   closedIds: Set<string>;
   /** Sum of costUsd across all known sessions (in-memory + from backend list) */
   projectCost: number;
+  /** Monotonically increasing counter for default "Session N" names */
+  sessionCounter: number;
+
+  /** Create a draft session with sensible defaults. Used by + New, Cmd+T, palette. */
+  createNewSession: (prefill?: {
+    skillId?: string;
+    specIds?: string[];
+    name?: string;
+    metaTicketId?: string;
+  }) => Promise<string>;
 
   startSession: (params: {
     specIds: string[];
@@ -45,6 +55,8 @@ interface SessionStore {
     skillId?: string | null;
     config?: AgentConfig;
     prompt?: string | null;
+    name?: string;
+    metaTicketId?: string | null;
   }) => Promise<string>;
   startDraft: (bonsaiSid: string, prompt?: string) => Promise<void>;
   sendMessage: (bonsaiSid: string, text: string, isMarkdown?: boolean) => Promise<void>;
@@ -76,6 +88,7 @@ interface SessionStore {
   onAskQuestion: (params: Record<string, unknown>) => void;
   onConfirmAction: (params: Record<string, unknown>) => void;
   onSuggestSession: (params: Record<string, unknown>) => void;
+  onSuggestDescription: (params: Record<string, unknown>) => void;
   onSuggestStep: (params: Record<string, unknown>) => void;
   onSessionDone: (params: Record<string, unknown>) => void;
   onSessionError: (params: Record<string, unknown>) => void;
@@ -427,7 +440,7 @@ function buildAnsweredRequests(
   // Second pass (non-active only): mark remaining unresolved requests as historical
   if (!isActive) {
     for (const ev of events) {
-      if (ev.eventType === "askUserQuestion" || ev.eventType === "confirmAction" || ev.eventType === "suggestSession") {
+      if (ev.eventType === "askUserQuestion" || ev.eventType === "confirmAction" || ev.eventType === "suggestSession" || ev.eventType === "suggestDescription") {
         const rid = (ev.payload.requestId as string) ?? "";
         if (rid && !answered.has(rid)) answered.set(rid, { historical: true });
       }
@@ -443,6 +456,29 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
   archivedSessions: [],
   closedIds: new Set(),
   projectCost: 0,
+  sessionCounter: 0,
+
+  createNewSession: async (prefill) => {
+    const state = get();
+    const counter = state.sessionCounter + 1;
+    set({ sessionCounter: counter });
+    const name = prefill?.name ?? `Session ${counter}`;
+    const bonsaiSid = await state.createDraft({
+      specIds: prefill?.specIds ?? [],
+      config: {
+        model: DEFAULT_MODEL,
+        maxTurns: 50,
+        permissionMode: "default",
+        streamText: true,
+        betas: [],
+        effort: null,
+      },
+      name,
+      skillId: prefill?.skillId,
+      metaTicketId: prefill?.metaTicketId,
+    });
+    return bonsaiSid;
+  },
 
   startSession: async ({ specIds, config, name, skillId, prompt, metaTicketId }) => {
     const api = createAgentApi(getClient());
@@ -545,6 +581,8 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
           effort: changes.config.effort ?? null,
           maxTurns: changes.config.maxTurns,
         } : {}),
+        ...(changes.name !== undefined ? { name: changes.name } : {}),
+        ...(changes.metaTicketId !== undefined ? { metaTicketId: changes.metaTicketId } : {}),
         systemPrompt,
       });
       return { sessions: next };
@@ -753,6 +791,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
       archivedSessions: [],
       closedIds: new Set(),
       projectCost: 0,
+      sessionCounter: 0,
     });
   },
 
@@ -852,7 +891,12 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
         autoActiveId = best?.bonsaiSid ?? null;
       }
 
-      return { sessions: next, projectCost: totalProjectCost, activeSessionId: autoActiveId };
+      return {
+        sessions: next,
+        projectCost: totalProjectCost,
+        activeSessionId: autoActiveId,
+        sessionCounter: Math.max(s.sessionCounter, all.length),
+      };
     });
   },
 
@@ -1239,6 +1283,34 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
             name: params.name as string,
             reason: params.reason as string,
             prompt: (params.prompt as string) ?? undefined,
+          },
+        });
+      }
+      return { sessions };
+    });
+  },
+
+  onSuggestDescription: (params) => {
+    const bonsaiSid = params.bonsaiSid as string;
+    const requestId = params.requestId as string;
+    set((s) => {
+      const sessions = appendEvent(
+        s.sessions,
+        bonsaiSid,
+        "agent/suggestDescription",
+        params,
+        s.closedIds,
+      );
+      const session = sessions.get(bonsaiSid);
+      if (session) {
+        sessions.set(bonsaiSid, {
+          ...session,
+          status: "waiting",
+          pendingRequest: {
+            requestId,
+            type: "description-suggestion",
+            description: params.description as string,
+            section: (params.section as string) ?? "full",
           },
         });
       }

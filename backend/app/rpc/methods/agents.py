@@ -125,6 +125,10 @@ async def update_draft(service: AgentService, **params: Any) -> dict:
         kwargs["config"] = AgentConfig(**params["config"])
     if "prompt" in params:
         kwargs["session_prompt"] = params["prompt"]
+    if "name" in params:
+        kwargs["name"] = params["name"]
+    if "metaTicketId" in params:
+        kwargs["meta_ticket_id"] = params["metaTicketId"]
     system_prompt = service.update_draft(bonsai_sid, **kwargs)
     return {"systemPrompt": system_prompt}
 

@@ -4,13 +4,6 @@ import { persist } from "zustand/middleware";
 type LeftTab = "specs" | "files" | "progress";
 type Breakpoint = "desktop" | "laptop" | "below-min";
 
-interface ModalPrefill {
-  skillId?: string;
-  specIds?: string[];
-  name?: string;
-  metaTicketId?: string;
-}
-
 interface UiStore {
   projectPath: string | null;
   projectName: string;
@@ -20,8 +13,6 @@ interface UiStore {
   leftDrawerOpen: boolean;
   rightDrawerOpen: boolean;
   leftActiveTab: LeftTab;
-  modalOpen: boolean;
-  modalPrefill: ModalPrefill | null;
   paletteOpen: boolean;
   viewportWidth: number;
   breakpoint: Breakpoint;
@@ -30,8 +21,6 @@ interface UiStore {
   toggleLeftPanel: () => void;
   toggleRightPanel: () => void;
   setLeftTab: (tab: LeftTab) => void;
-  openModal: (prefill?: ModalPrefill) => void;
-  closeModal: () => void;
   togglePalette: () => void;
   updateViewport: (width: number) => void;
   onFileTreeChanged: () => void;
@@ -55,8 +44,6 @@ export const useUiStore = create<UiStore>()(
       leftDrawerOpen: false,
       rightDrawerOpen: false,
       leftActiveTab: "specs" as LeftTab,
-      modalOpen: false,
-      modalPrefill: null,
       paletteOpen: false,
       viewportWidth: typeof window !== "undefined" ? window.innerWidth : 1440,
       breakpoint: "desktop" as Breakpoint,
@@ -67,9 +54,6 @@ export const useUiStore = create<UiStore>()(
       toggleRightPanel: () =>
         set((s) => ({ rightPanelCollapsed: !s.rightPanelCollapsed })),
       setLeftTab: (tab) => set({ leftActiveTab: tab }),
-      openModal: (prefill) =>
-        set({ modalOpen: true, modalPrefill: prefill ?? null }),
-      closeModal: () => set({ modalOpen: false, modalPrefill: null }),
       togglePalette: () => set((s) => ({ paletteOpen: !s.paletteOpen })),
       updateViewport: (width) =>
         set({ viewportWidth: width, breakpoint: computeBreakpoint(width) }),

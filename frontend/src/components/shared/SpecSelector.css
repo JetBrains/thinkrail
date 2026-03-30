@@ -1,0 +1,62 @@
+/* ── Spec Selector ── */
+.spec-selector { position: relative; }
+.spec-selector-chips { display: flex; flex-wrap: wrap; gap: var(--space-xs); align-items: center; }
+.spec-chip {
+  display: flex; align-items: center; gap: var(--space-xs);
+  padding: 2px var(--space-sm);
+  background: var(--elevated);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  font-size: 11px;
+  color: var(--text);
+}
+.spec-chip-remove {
+  border: none; background: transparent;
+  color: var(--hint); cursor: pointer;
+  font-size: 12px; line-height: 1;
+}
+.spec-chip-remove:hover { color: var(--red); }
+.spec-selector-add {
+  border: 1px dashed var(--border);
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--hint);
+  font-family: var(--font);
+  font-size: 11px;
+  padding: 2px var(--space-sm);
+  cursor: pointer;
+}
+.spec-selector-add:hover { border-color: var(--blue); color: var(--blue); }
+.spec-selector-dropdown {
+  position: absolute; left: 0; right: 0; top: 100%;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  margin-top: var(--space-xs);
+  z-index: 10;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
+}
+.spec-selector-search {
+  width: 100%;
+  padding: var(--space-sm) var(--space-md);
+  border: none;
+  border-bottom: 1px solid var(--border);
+  background: transparent;
+  color: var(--text);
+  font-family: var(--font);
+  font-size: 12px;
+  outline: none;
+}
+.spec-selector-search::placeholder { color: var(--hint); }
+.spec-selector-list { max-height: 200px; overflow-y: auto; }
+.spec-selector-item {
+  display: flex; justify-content: space-between; align-items: center;
+  width: 100%; padding: var(--space-sm) var(--space-md);
+  border: none; background: transparent;
+  color: var(--text); font-family: var(--font); font-size: 12px;
+  cursor: pointer; text-align: left;
+}
+.spec-selector-item:hover { background: var(--hover); }
+.spec-selector-item-selected { background: rgba(122, 162, 247, 0.07); }
+.spec-selector-item-type { font-size: 10px; color: var(--hint); }
+.spec-selector-empty { padding: var(--space-md); color: var(--hint); font-size: 12px; text-align: center; }

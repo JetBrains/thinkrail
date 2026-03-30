@@ -76,6 +76,12 @@ async def delete_ticket(service: BoardService, **params: Any) -> None:
 
 
 @_handle_errors
+async def reorder_ticket(service: BoardService, **params: Any) -> dict:
+    ticket = service.reorder_ticket(params["id"], params["status"], params["order"])
+    return ticket.model_dump(by_alias=True)
+
+
+@_handle_errors
 async def link_spec(service: BoardService, **params: Any) -> dict:
     ticket = service.link_spec(params["ticketId"], params["specId"])
     return ticket.model_dump(by_alias=True)

@@ -229,17 +229,11 @@ interface SessionStore {
 
 ### 3. uiStore
 
-Panel visibility, modal state, project identity. Uses `persist` middleware.
+Panel visibility, palette state, project identity. Uses `persist` middleware.
 
 ```typescript
 type LeftTab = "specs" | "files" | "progress";
 type Breakpoint = "desktop" | "laptop" | "below-min";
-
-interface ModalPrefill {
-  skillId?: string;
-  specIds?: string[];
-  name?: string;
-}
 
 interface UiStore {
   projectPath: string | null;
@@ -249,8 +243,6 @@ interface UiStore {
   leftDrawerOpen: boolean;
   rightDrawerOpen: boolean;
   leftActiveTab: LeftTab;
-  modalOpen: boolean;
-  modalPrefill: ModalPrefill | null;
   paletteOpen: boolean;
   viewportWidth: number;
   breakpoint: Breakpoint;
@@ -259,8 +251,6 @@ interface UiStore {
   toggleLeftPanel: () => void;
   toggleRightPanel: () => void;
   setLeftTab: (tab: LeftTab) => void;
-  openModal: (prefill?: ModalPrefill) => void;
-  closeModal: () => void;
   togglePalette: () => void;
   updateViewport: (width: number) => void;
 }

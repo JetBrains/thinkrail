@@ -11,6 +11,9 @@
     "lint": "tsc --noEmit && eslint src/"
   },
   "dependencies": {
+    "@dnd-kit/abstract": "^0.3.2",
+    "@dnd-kit/helpers": "^0.3.2",
+    "@dnd-kit/react": "^0.3.2",
     "@monaco-editor/react": "^4.7.0",
     "mermaid": "^11.13.0",
     "monaco-editor": "^0.55.1",

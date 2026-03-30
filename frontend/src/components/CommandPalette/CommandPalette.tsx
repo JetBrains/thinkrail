@@ -32,7 +32,7 @@ function fuzzyMatch(text: string, query: string): number {
 export function CommandPalette() {
   const open = useUiStore((s) => s.paletteOpen);
   const togglePalette = useUiStore((s) => s.togglePalette);
-  const openModal = useUiStore((s) => s.openModal);
+  const createNewSession = useSessionStore((s) => s.createNewSession);
   const selectSpec = useSpecStore((s) => s.selectSpec);
   const specs = useSpecStore((s) => s.specs);
   const sessions = useSessionStore((s) => s.sessions);
@@ -85,7 +85,7 @@ export function CommandPalette() {
 
     if (mode === "all" || mode === "actions") {
       const actions: PaletteItem[] = [
-        { id: "action-new", title: "New session", category: "action", action: () => { openModal(); togglePalette(); } },
+        { id: "action-new", title: "New session", category: "action", action: () => { createNewSession(); togglePalette(); } },
       ];
       for (const a of actions) {
         if (fuzzyMatch(a.title, cleanQuery) > 0) result.push(a);
@@ -93,7 +93,7 @@ export function CommandPalette() {
     }
 
     return result;
-  }, [specs, sessions, mode, cleanQuery, selectSpec, togglePalette, switchSession, openModal]);
+  }, [specs, sessions, mode, cleanQuery, selectSpec, togglePalette, switchSession, createNewSession]);
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent) => {

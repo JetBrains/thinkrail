@@ -19,6 +19,7 @@ export interface MetaTicket {
   orchestratorSessionId: string | null;
   linkedSpecIds: string[];
   sessionIds: string[];
+  order: number;
   created: string;
   updated: string;
 }
@@ -32,6 +33,7 @@ export interface MetaTicketSummary {
   orchestratorSessionId: string | null;
   linkedSpecIds: string[];
   sessionIds: string[];
+  order: number;
   created: string;
   updated: string;
 }

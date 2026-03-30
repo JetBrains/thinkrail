@@ -56,43 +56,70 @@
   font-family: var(--font);
 }
 
-.ticket-header-title {
+.ticket-header-title-input {
   font-size: 14px;
   font-weight: 600;
   color: var(--text);
   line-height: 1.3;
+  background: transparent;
+  border: none;
+  border-bottom: 1px dashed transparent;
+  padding: 0 0 1px 0;
+  font-family: inherit;
+  outline: none;
+  width: 100%;
+}
+.ticket-header-title-input:hover {
+  border-bottom-color: var(--border);
+}
+.ticket-header-title-input:focus {
+  border-bottom-color: var(--blue);
+  border-bottom-style: solid;
 }
 
-.ticket-header-controls {
+.ticket-header-props {
   display: flex;
-  gap: var(--space-sm);
+  flex-direction: column;
+  gap: var(--space-xs);
   margin-top: var(--space-xs);
 }
-
-.ticket-header-controls select {
-  background: var(--bg);
-  color: var(--text);
-  border: 1px solid var(--border);
+.ticket-header-prop-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+}
+.ticket-header-prop-label {
+  font-size: 10px;
+  color: var(--hint);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  width: 48px;
+  flex-shrink: 0;
+}
+.ticket-header-badge {
+  appearance: none;
+  -webkit-appearance: none;
+  border: none;
   border-radius: var(--radius-sm);
-  padding: 2px var(--space-sm);
+  padding: 2px 8px;
   font-size: 11px;
   font-family: var(--font);
-}
-.ticket-header-delete {
-  background: none;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  color: var(--red);
-  font-size: 11px;
-  padding: 2px 8px;
   cursor: pointer;
-  font-family: inherit;
-  margin-left: auto;
+  outline: none;
 }
-.ticket-header-delete:hover {
-  background: rgba(255, 85, 85, 0.1);
-  border-color: var(--red);
-}
+.ticket-header-badge:hover { opacity: 0.85; }
+
+/* Status badge colors */
+.ticket-header-badge--idea { background: rgba(86, 95, 137, 0.2); color: var(--hint); }
+.ticket-header-badge--specified { background: rgba(122, 162, 247, 0.15); color: var(--blue); }
+.ticket-header-badge--planned { background: rgba(115, 218, 202, 0.15); color: var(--green); }
+.ticket-header-badge--executing { background: rgba(232, 163, 54, 0.15); color: var(--gold); }
+.ticket-header-badge--done { background: rgba(86, 95, 137, 0.15); color: var(--muted); }
+
+/* Type badge colors */
+.ticket-header-badge--bug { background: rgba(247, 118, 142, 0.15); color: var(--red); }
+.ticket-header-badge--feature { background: rgba(122, 162, 247, 0.15); color: var(--blue); }
+.ticket-header-badge--improvement { background: rgba(115, 218, 202, 0.15); color: var(--green); }
 
 .ticket-header-meta {
   display: flex;
@@ -581,6 +608,7 @@
   display: flex;
   flex-direction: column;
   background: var(--bg);
+  overflow: hidden;
 }
 
 .ticket-session-header {
@@ -622,4 +650,69 @@
 
 .ticket-session-start-btn:hover {
   opacity: 0.9;
+}
+
+/* ── Description split pane (editor + AI chat) ── */
+.ticket-describe-split {
+  display: flex;
+  flex: 1;
+  overflow: hidden;
+}
+
+.ticket-describe-editor {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+  padding: var(--space-lg);
+  min-width: 250px;
+}
+
+.ticket-describe-chat {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  border-left: 1px solid var(--border);
+  min-width: 280px;
+  max-width: 55%;
+  background: var(--bg);
+  overflow: hidden;
+}
+
+.ticket-describe-chat-header {
+  padding: var(--space-sm) var(--space-md);
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-shrink: 0;
+}
+
+.ticket-describe-chat-title {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.ticket-describe-chat-status {
+  font-size: 10px;
+}
+
+.ticket-right-header-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+}
+
+.ticket-describe-ai-btn {
+  background: rgba(122, 162, 247, 0.1);
+  border-color: var(--blue);
+  color: var(--blue);
+}
+
+.ticket-describe-ai-btn:hover {
+  background: rgba(122, 162, 247, 0.2);
+  color: var(--blue);
 }

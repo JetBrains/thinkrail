@@ -7,6 +7,8 @@ export interface DraftUpdateParams {
   skillId?: string | null;
   config?: AgentConfig;
   prompt?: string | null;
+  name?: string;
+  metaTicketId?: string | null;
 }
 
 export function createAgentApi(client: RpcClient) {
