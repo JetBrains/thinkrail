@@ -83,7 +83,9 @@ graph TD
 | `get_ticket` | `(id: str) -> MetaTicket` | Get full ticket with auto-plan detection |
 | `create_ticket` | `(title: str, body: str, type: MetaTicketType) -> MetaTicket` | Create new ticket (defaults to `idea` status) |
 | `update_ticket` | `(id: str, *, title?, body?, status?, type?) -> MetaTicket` | Update fields; validates status transitions |
-| `delete_ticket` | `(id: str) -> None` | Remove ticket file from disk |
+| `delete_ticket` | `(id: str) -> None` | Soft-delete ticket to `.bonsai/trash/` via TrashService (falls back to hard-delete if no TrashService) |
+| `detach_session` | `(ticket_id: str, session_id: str) -> MetaTicket` | Remove a session reference from a ticket's session_ids and clear orchestrator_session_id if it matches |
+| `detach_session_from_all` | `(session_id: str) -> None` | Scan all tickets and detach the given session. Called automatically when a session is trashed. |
 | `link_spec` | `(ticket_id: str, spec_id: str) -> MetaTicket` | Link a spec; auto-transitions `idea` to `specified` |
 | `unlink_spec` | `(ticket_id: str, spec_id: str) -> MetaTicket` | Remove spec link |
 | `attach_session` | `(ticket_id: str, session_id: str) -> MetaTicket` | Associate a session with the ticket |

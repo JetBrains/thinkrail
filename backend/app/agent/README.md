@@ -279,7 +279,7 @@ graph TD
 | `list_all_sessions` | `() -> list[dict]` | List all sessions: in-memory active + on-disk archived (metadata only) |
 | `get_session_data` | `(bonsai_sid: str) -> dict \| None` | Get full session data including events from disk |
 | `continue_session` | `async (bonsai_sid: str, notify: Callable) -> AgentTask` | **Resume a session using SDK native `--resume`.** Loads stored `sessionId` from disk, validates it exists, builds fresh spec context, then launches `_run_background` with `resume_session_id=old_session_id`. Raises `ValueError` if session not found or has no stored `sessionId`. |
-| `delete_session_data` | `(bonsai_sid: str) -> bool` | Delete a session file from disk |
+| `trash_session` | `(bonsai_sid: str) -> None` | Soft-delete: detach from all tickets via `BoardService.detach_session_from_all`, move files to `.bonsai/trash/` via `TrashService`, clean up in-memory tracker state. Falls back to hard-delete if no TrashService is available. |
 
 ### Runner Interface
 
