@@ -7,13 +7,15 @@ export interface RpcClientOptions {
   maxReconnectAttempts: number;
   reconnectBackoff: number[];
   requestTimeout: number;
+  connectTimeout: number;
 }
 
 const DEFAULT_OPTIONS: RpcClientOptions = {
   autoReconnect: true,
-  maxReconnectAttempts: 3,
-  reconnectBackoff: [1000, 2000, 4000],
+  maxReconnectAttempts: Infinity,
+  reconnectBackoff: [1000, 2000, 3000],
   requestTimeout: 30_000,
+  connectTimeout: 3000,
 };
 
 interface PendingRequest {
@@ -34,6 +36,7 @@ export class RpcClient {
   private _state: ConnectionState = "disconnected";
   private reconnectAttempt = 0;
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+  private connectTimer: ReturnType<typeof setTimeout> | null = null;
   private manualDisconnect = false;
 
   constructor(url: string, options?: Partial<RpcClientOptions>) {
@@ -66,7 +69,17 @@ export class RpcClient {
 
       const ws = new WebSocket(this.url);
 
+      // Time out if onopen doesn't fire within connectTimeout.
+      // Defer the close to the microtask queue so that timer-based
+      // reconnect scheduling doesn't cascade synchronously inside
+      // a single advanceTimersByTime call.
+      this.connectTimer = setTimeout(() => {
+        this.connectTimer = null;
+        queueMicrotask(() => ws.close());
+      }, this.options.connectTimeout);
+
       ws.onopen = () => {
+        this.clearConnectTimer();
         this.ws = ws;
         this.reconnectAttempt = 0;
         this.setState("connected");
@@ -74,6 +87,7 @@ export class RpcClient {
       };
 
       ws.onerror = () => {
+        this.clearConnectTimer();
         if (this._state === "connecting") {
           reject(new RpcConnectionError());
         }
@@ -82,6 +96,12 @@ export class RpcClient {
       ws.onclose = (event) => {
         this.ws = null;
         this.rejectAllPending();
+
+        // Reject if we never successfully connected
+        const wasConnecting = this._state === "connecting";
+        if (wasConnecting) {
+          reject(new RpcConnectionError());
+        }
 
         if (this.manualDisconnect) {
           this.setState("disconnected");
@@ -111,6 +131,7 @@ export class RpcClient {
 
   disconnect(): void {
     this.manualDisconnect = true;
+    this.clearConnectTimer();
     if (this.reconnectTimer) {
       clearTimeout(this.reconnectTimer);
       this.reconnectTimer = null;
@@ -184,6 +205,13 @@ export class RpcClient {
   }
 
   // ── Private ──
+
+  private clearConnectTimer(): void {
+    if (this.connectTimer) {
+      clearTimeout(this.connectTimer);
+      this.connectTimer = null;
+    }
+  }
 
   private handleMessage(data: string): void {
     let msg: Record<string, unknown>;
