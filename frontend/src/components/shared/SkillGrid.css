@@ -16,4 +16,6 @@
 }
 .skill-card:hover { border-color: var(--blue); color: var(--text); }
 .skill-card-selected { border-color: var(--blue); background: rgba(122, 162, 247, 0.07); color: var(--text); }
+.skill-card--irrelevant { opacity: 0.35; cursor: default; }
+.skill-card--irrelevant:hover { border-color: var(--border); color: var(--muted); }
 .skill-card-icon { font-size: 14px; }

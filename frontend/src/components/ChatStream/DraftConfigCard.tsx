@@ -160,6 +160,7 @@ export function DraftConfigCard({ bonsaiSid }: DraftConfigCardProps) {
                 debouncedUpdate({ skillId: id });
                 setSkillPickerOpen(false);
               }}
+              context={{ hasTicket: !!session.metaTicketId }}
             />
           </div>
         )}

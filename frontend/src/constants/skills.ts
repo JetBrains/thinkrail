@@ -4,6 +4,7 @@ export interface Skill {
   name: string;
   description: string;
   group: string;
+  requires?: "ticket";
 }
 
 export const SKILLS: Skill[] = [
@@ -19,4 +20,8 @@ export const SKILLS: Skill[] = [
   { id: "spec-next", icon: "\u{1F9ED}", name: "Next", description: "Suggest what to specify next", group: "Review" },
   { id: "spec-init", icon: "\u{1F527}", name: "Init", description: "Initialize spec-driven project structure", group: "Review" },
   { id: "cli-progress", icon: "\u{1F4C9}", name: "Progress", description: "Show progress with terminal graphics", group: "Visualization" },
+  { id: "ticket-describe", icon: "\u{270F}\u{FE0F}", name: "Describe", description: "Formulate a structured ticket description", group: "Ticket", requires: "ticket" },
+  { id: "ticket-specify", icon: "\u{1F50D}", name: "Specify", description: "Create specifications from ticket description", group: "Ticket", requires: "ticket" },
+  { id: "ticket-plan", icon: "\u{1F5FA}\u{FE0F}", name: "Plan", description: "Create implementation plan from specs", group: "Ticket", requires: "ticket" },
+  { id: "ticket-execute", icon: "\u{1F680}", name: "Execute", description: "Orchestrate plan execution", group: "Ticket", requires: "ticket" },
 ];
