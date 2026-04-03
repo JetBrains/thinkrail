@@ -96,12 +96,12 @@ export function MetaTicketDetail({ ticketId }: MetaTicketDetailProps) {
     setRightPanel({ type: "session", sessionId: sid });
   }, []);
 
-  const startSession = useSessionStore((s) => s.startSession);
+  const createDraft = useSessionStore((s) => s.createDraft);
 
   const handleStartSession = useCallback(async (skillId: string) => {
     if (!ticket) return;
     const isExecute = skillId === "ticket-execute";
-    const sid = await startSession({
+    const sid = await createDraft({
       specIds: isExecute ? ticket.linkedSpecIds : [],
       config: {
         model: DEFAULT_MODEL,
@@ -116,7 +116,7 @@ export function MetaTicketDetail({ ticketId }: MetaTicketDetailProps) {
       metaTicketId: ticket.id,
     });
     setRightPanel({ type: "session", sessionId: sid });
-  }, [ticket, startSession]);
+  }, [ticket, createDraft]);
 
   if (error) {
     return <div className="center-placeholder">Error loading ticket: {error}</div>;
