@@ -11,6 +11,9 @@ const TOOL_ICONS: Record<string, string> = {
   WebSearch: "\u{1F310}",
   WebFetch: "\u{1F310}",
   NotebookEdit: "\u{1F4D3}",
+  TodoWrite: "\u2611",
+  TaskCreate: "\u2611",
+  TaskUpdate: "\u2611",
 };
 
 function getToolIcon(name: string): string {

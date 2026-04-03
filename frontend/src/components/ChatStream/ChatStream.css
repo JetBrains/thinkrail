@@ -192,6 +192,14 @@
 }
 .chat-tool-body pre { font-size: 11px; white-space: pre-wrap; word-break: break-all; color: var(--muted); margin: 0; }
 
+/* ── Task Checklist (TodoWrite / TaskCreate / TaskUpdate) ── */
+.task-list { display: flex; flex-direction: column; gap: 4px; }
+.task-item { display: flex; align-items: center; gap: 8px; font-size: 12px; }
+.task-item--completed { color: var(--muted); text-decoration: line-through; }
+.task-item--in-progress { color: var(--text); }
+.task-item--pending { color: var(--muted); opacity: 0.8; }
+.task-status-icon { width: 16px; text-align: center; font-size: 13px; flex-shrink: 0; }
+
 /* ── Subagent Block ── */
 .chat-subagent {
   margin-left: 12px;

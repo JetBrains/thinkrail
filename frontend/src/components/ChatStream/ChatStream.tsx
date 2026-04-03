@@ -9,6 +9,7 @@ import { SessionContextCard } from "./SessionContextCard.tsx";
 import { DraftConfigCard } from "./DraftConfigCard.tsx";
 import { VisualizationCard, VisErrorBoundary } from "./VisualizationCard.tsx";
 import { SubagentBlock } from "./SubagentBlock.tsx";
+import { TaskCard } from "./TaskCard.tsx";
 import { QuestionCard } from "./QuestionCard.tsx";
 import { ApprovalCard } from "./ApprovalCard.tsx";
 import { PlanApprovalCard } from "./PlanApprovalCard.tsx";
@@ -21,6 +22,7 @@ import { ChatMarkdown } from "./ChatMarkdown.tsx";
 import type { VisData } from "@/types/vis.ts";
 
 const DIFF_TOOLS = new Set(["Edit", "Write", "NotebookEdit"]);
+const TASK_TOOLS = new Set(["TodoWrite", "TaskCreate", "TaskUpdate"]);
 const DiffCard = lazy(() => import("./DiffCard.tsx").then(m => ({ default: m.DiffCard })));
 
 /** User message bubble with optional markdown rendering and raw/rendered toggle. */
@@ -279,6 +281,17 @@ export const ChatStream = forwardRef<ChatStreamHandle, ChatStreamProps>(function
             const toolUseId = (p.toolUseId as string) ?? "";
             const end = toolStates.get(toolUseId);
             const state = end?.finished ? (end.isError ? "error" as const : "success" as const) : "running" as const;
+            if (TASK_TOOLS.has(toolName)) {
+              return (
+                <TaskCard
+                  key={k}
+                  toolName={toolName}
+                  toolInput={(p.toolInput as Record<string, unknown>) ?? {}}
+                  state={state}
+                  isError={end?.isError}
+                />
+              );
+            }
             if (DIFF_TOOLS.has(toolName)) {
               return (
                 <Suspense key={k} fallback={<ToolCallCard toolName={toolName} toolInput={extractToolInput(p.toolInput)} state="running" />}>
