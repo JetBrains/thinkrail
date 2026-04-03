@@ -48,11 +48,41 @@ export function createBoardApi(client: RpcClient) {
     createPlan: (ticketId: string, title: string, steps: Record<string, unknown>[], verification?: Record<string, unknown>[]) =>
       client.request<Record<string, unknown>>("board/createPlan", { ticketId, title, steps, verification }),
 
+    savePlan: (ticketId: string, plan: Record<string, unknown>) =>
+      client.request<Record<string, unknown>>("board/savePlan", { ticketId, plan }),
+
+    getPlanRaw: (ticketId: string) =>
+      client.request<{ content: string }>("board/getPlanRaw", { ticketId }),
+
+    savePlanRaw: (ticketId: string, content: string) =>
+      client.request<Record<string, unknown>>("board/savePlanRaw", { ticketId, content }),
+
     updateStep: (ticketId: string, stepNumber: number, status: string, sessionId?: string) =>
       client.request<Record<string, unknown>>("board/updateStep", { ticketId, stepNumber, status, sessionId }),
 
     getNextStep: (ticketId: string) =>
       client.request<Record<string, unknown> | null>("board/getNextStep", { ticketId }),
+
+    // Spec draft methods
+    listDrafts: (ticketId: string) =>
+      client.request<Record<string, unknown>[]>("board/listDrafts", { ticketId }),
+
+    getDraftDiff: (ticketId: string, index: number) =>
+      client.request<{ original: string; draft: string; path: string; operation: string; registryId: string; registryTitle: string }>(
+        "board/getDraftDiff", { ticketId, index },
+      ),
+
+    applyDraft: (ticketId: string, index: number) =>
+      client.request<null>("board/applyDraft", { ticketId, index }),
+
+    applyAllDrafts: (ticketId: string) =>
+      client.request<null>("board/applyAllDrafts", { ticketId }),
+
+    discardDraft: (ticketId: string, index: number) =>
+      client.request<null>("board/discardDraft", { ticketId, index }),
+
+    discardAllDrafts: (ticketId: string) =>
+      client.request<null>("board/discardAllDrafts", { ticketId }),
   };
 }
 

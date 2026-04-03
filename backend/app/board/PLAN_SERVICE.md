@@ -104,6 +104,9 @@ stateDiagram-v2
 | `update_step_status` | `(ticket_id: str, step_number: int, status: str, session_id?: str) -> Plan` | Update a step's status (and optional session ID); auto-computes plan status |
 | `check_criterion` | `(ticket_id: str, step_number: int, criterion_index: int, checked: bool) -> Plan` | Toggle a success criterion checkbox on a step |
 | `get_next_step` | `(ticket_id: str) -> PlanStep \| None` | Find next unblocked pending step (all dependencies done) |
+| `read_plan_raw` | `(ticket_id: str) -> str` | Return raw Markdown content of the plan file (not parsed) |
+| `write_plan_raw` | `(ticket_id: str, content: str) -> Plan` | Write raw Markdown to disk, re-parse, return Plan model |
+| `save_plan` | `(ticket_id: str, plan: Plan) -> Plan` | Write a full structured Plan model to disk |
 
 ### Output Contracts
 
@@ -116,6 +119,9 @@ stateDiagram-v2
 | `update_step_status` | `Plan` | `FileNotFoundError`, step not found (silently skipped) |
 | `check_criterion` | `Plan` | `FileNotFoundError`, step/criterion not found (silently skipped) |
 | `get_next_step` | `PlanStep \| None` | `FileNotFoundError` |
+| `read_plan_raw` | `str` | `FileNotFoundError` |
+| `write_plan_raw` | `Plan` | Parse errors if markdown is malformed |
+| `save_plan` | `Plan` | — |
 
 ## Markdown Format
 

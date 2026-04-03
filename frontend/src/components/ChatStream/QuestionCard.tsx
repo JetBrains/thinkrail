@@ -102,16 +102,16 @@ export function QuestionCard({
   }, [answeredIndices.size, questions.length, confirmingSubmit, submitAll]);
 
   const advanceToNext = useCallback(() => {
-    for (let offset = 1; offset <= questions.length; offset++) {
+    // Only auto-advance to the next unanswered question in multi-question flows.
+    // Never auto-submit — user must explicitly click Submit.
+    for (let offset = 1; offset < questions.length; offset++) {
       const next = (activeTab + offset) % questions.length;
       if (!answeredIndices.has(next)) {
         setActiveTab(next);
         return;
       }
     }
-    // All answered — submit
-    submitAll();
-  }, [activeTab, questions.length, answeredIndices, submitAll]);
+  }, [activeTab, questions.length, answeredIndices]);
 
   const handleOptionClick = useCallback(
     (index: number) => {

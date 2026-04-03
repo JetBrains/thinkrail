@@ -4,7 +4,7 @@ from typing import Any
 
 from jsonrpcserver import JsonRpcError, Result, Success
 
-from app.board.plan import PlanStep, SuccessCriterion
+from app.board.plan import Milestone, Plan, PlanStep, SuccessCriterion
 from app.board.service import BoardService, TicketNotFoundError
 from app.board.state_machine import InvalidTransitionError
 
@@ -151,8 +151,95 @@ async def update_step(service: BoardService, **params: Any) -> dict:
 
 
 @_handle_errors
+async def save_plan(service: BoardService, **params: Any) -> dict:
+    """Save a full structured plan (milestones + verification)."""
+    ticket_id = params["ticketId"]
+    raw_plan = params["plan"]
+    milestones = [
+        Milestone(
+            number=m["number"],
+            title=m["title"],
+            description=m.get("description", ""),
+            steps=[PlanStep(**s) for s in m.get("steps", [])],
+        )
+        for m in raw_plan.get("milestones", [])
+    ]
+    verification = [SuccessCriterion(**c) for c in raw_plan.get("verification", [])]
+    plan = Plan(
+        ticket_id=ticket_id,
+        title=raw_plan.get("title", ""),
+        status=raw_plan.get("status", "draft"),
+        milestones=milestones,
+        verification=verification,
+    )
+    result = service.plans.save_plan(ticket_id, plan)
+    # Ensure planPath is set on the ticket
+    ticket = service.get_ticket(ticket_id)
+    if not ticket.plan_path:
+        service.set_plan_path(ticket_id, f"plans/{ticket_id}.md")
+    return result.model_dump(by_alias=True)
+
+
+@_handle_errors
+async def get_plan_raw(service: BoardService, **params: Any) -> dict:
+    """Return the raw markdown content of a plan file."""
+    ticket_id = params["ticketId"]
+    if not service.plans.plan_exists(ticket_id):
+        return {"content": ""}
+    content = service.plans.read_plan_raw(ticket_id)
+    return {"content": content}
+
+
+@_handle_errors
+async def save_plan_raw(service: BoardService, **params: Any) -> dict:
+    """Write raw markdown and return the parsed plan."""
+    ticket_id = params["ticketId"]
+    content = params["content"]
+    plan = service.plans.write_plan_raw(ticket_id, content)
+    # Ensure planPath is set on the ticket
+    ticket = service.get_ticket(ticket_id)
+    if not ticket.plan_path:
+        service.set_plan_path(ticket_id, f"plans/{ticket_id}.md")
+    return plan.model_dump(by_alias=True)
+
+
+@_handle_errors
 async def get_next_step(service: BoardService, **params: Any) -> dict | None:
     step = service.plans.get_next_step(params["ticketId"])
     if step is None:
         return None
     return step.model_dump(by_alias=True)
+
+
+# -- Spec draft methods -------------------------------------------------------
+
+
+@_handle_errors
+async def list_drafts(service: BoardService, **params: Any) -> list[dict]:
+    entries = service.spec_drafts.list_drafts(params["ticketId"])
+    return [e.model_dump(by_alias=True) for e in entries]
+
+
+@_handle_errors
+async def get_draft_diff(service: BoardService, **params: Any) -> dict:
+    return service.spec_drafts.get_draft_diff(params["ticketId"], params["index"])
+
+
+@_handle_errors
+async def apply_draft(service: BoardService, **params: Any) -> None:
+    service.spec_drafts.apply_draft(params["ticketId"], params["index"])
+
+
+@_handle_errors
+async def apply_all_drafts(service: BoardService, **params: Any) -> None:
+    service.spec_drafts.apply_all(params["ticketId"])
+
+
+@_handle_errors
+async def discard_draft(service: BoardService, **params: Any) -> None:
+    service.spec_drafts.discard_draft(params["ticketId"], params["index"])
+
+
+@_handle_errors
+async def discard_all_drafts(service: BoardService, **params: Any) -> None:
+    service.spec_drafts.discard_all(params["ticketId"])

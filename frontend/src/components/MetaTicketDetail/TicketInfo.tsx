@@ -4,6 +4,8 @@ import type { RightPanelContent } from "./MetaTicketDetail.tsx";
 import { useSpecStore } from "@/store/specStore.ts";
 import { useBoardStore } from "@/store/boardStore.ts";
 import { useSessionStore } from "@/store/sessionStore.ts";
+import { getClient } from "@/api/index.ts";
+import { createSessionApi } from "@/api/methods/sessions.ts";
 import { timeAgo } from "@/utils/format.ts";
 
 interface PlanStepView {
@@ -53,6 +55,20 @@ export function TicketInfo({ ticket, plan, onTicketUpdated, rightPanel, onSelect
   const restoreSession = useSessionStore((s) => s.restoreSession);
   const specs = useSpecStore((s) => s.specs);
   const [descHeight, setDescHeight] = useState(140);
+
+  // Fetch session names from backend so we always show names, even before sessions are restored
+  const [sessionNameMap, setSessionNameMap] = useState<Map<string, string>>(new Map());
+  useEffect(() => {
+    if (ticket.sessionIds.length === 0) return;
+    const api = createSessionApi(getClient());
+    api.list().then((summaries) => {
+      const map = new Map<string, string>();
+      for (const s of summaries) {
+        if (s.name) map.set(s.bonsaiSid, s.name);
+      }
+      setSessionNameMap(map);
+    }).catch(() => {});
+  }, [ticket.sessionIds.length]);
   const [editTitle, setEditTitle] = useState(ticket.title);
 
   useEffect(() => setEditTitle(ticket.title), [ticket.title]);
@@ -88,7 +104,8 @@ export function TicketInfo({ ticket, plan, onTicketUpdated, rightPanel, onSelect
     return { id, title: spec?.title ?? id, status: spec?.status ?? "unknown" };
   });
 
-  const planSteps = (plan?.steps as PlanStepView[]) ?? [];
+  const planMilestones = (plan?.milestones as { steps?: PlanStepView[] }[]) ?? [];
+  const planSteps = planMilestones.flatMap((m) => (m.steps as PlanStepView[]) ?? []);
   const planDone = planSteps.filter((s) => s.status === "done").length;
 
 
@@ -235,6 +252,16 @@ export function TicketInfo({ ticket, plan, onTicketUpdated, rightPanel, onSelect
         </div>
       )}
 
+      {/* ── Spec Drafts ── */}
+      <div className="ticket-section">
+        <div
+          className={`ticket-section-header ticket-section-clickable ${isActive({ type: "drafts" }) ? "ticket-section-clickable--active" : ""}`}
+          onClick={() => onSelectPanel({ type: "drafts" })}
+        >
+          <span className="ticket-section-title">Spec Drafts</span>
+        </div>
+      </div>
+
       {/* ── Plan ── */}
       <div className="ticket-section">
         <div
@@ -294,7 +321,7 @@ export function TicketInfo({ ticket, plan, onTicketUpdated, rightPanel, onSelect
             return [...allIds].map((sid) => {
               const live = liveSessions.get(sid);
               const archived = !live ? archivedSessions.find((a) => a.bonsaiSid === sid) : null;
-              const name = live?.name || archived?.name || sid.slice(0, 8);
+              const name = live?.name || archived?.name || sessionNameMap.get(sid) || sid.slice(0, 8);
               const status = live?.status ?? (archived ? "done" : "done");
               const isSessionActive = rightPanel.type === "session" && rightPanel.sessionId === sid;
               return (

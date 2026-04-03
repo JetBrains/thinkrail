@@ -129,8 +129,12 @@ async def update_draft(service: AgentService, **params: Any) -> dict:
         kwargs["name"] = params["name"]
     if "metaTicketId" in params:
         kwargs["meta_ticket_id"] = params["metaTicketId"]
-    system_prompt = service.update_draft(bonsai_sid, **kwargs)
-    return {"systemPrompt": system_prompt}
+    structured = service.update_draft(bonsai_sid, **kwargs)
+    return {
+        "systemPrompt": structured["full"],
+        "sections": structured["sections"],
+        "totalTokens": structured["totalTokens"],
+    }
 
 
 @_handle_errors

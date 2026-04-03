@@ -65,7 +65,8 @@ graph TD
 | File | Responsibility | Depends On |
 |------|---------------|------------|
 | `models.py` | Pydantic models: MetaTicket, MetaTicketSummary, SpecChange, status/type literals, camelCase serialization config. `MetaTicketSummary.from_ticket()` builds summaries with `spec_change_count`. | pydantic |
-| `service.py` | Facade — all ticket CRUD, spec linking, session attachment, orchestrator setting, plan auto-detection. Composes `PlanService`. | models, storage, state_machine, plan, core/config |
+| `service.py` | Facade — all ticket CRUD, spec linking, session attachment, orchestrator setting, plan auto-detection. Composes `PlanService` and `SpecDraftService`. | models, storage, state_machine, plan, spec_drafts, core/config |
+| `spec_drafts.py` | SpecDraftService — shadow directory for spec changes during ticket-specify sessions. Writes go to `.bonsai/spec-drafts/{ticket_id}/` with manifest tracking. Supports apply/discard per-entry or all-at-once. | core/config, core/fileio, spec/service |
 | `storage.py` | Ticket file I/O: `ticket_path`, `read_ticket`, `write_ticket` (atomic via temp+rename), `list_tickets`, `delete_ticket` | models, core/fileio |
 | `state_machine.py` | `VALID_TRANSITIONS` dict, `can_transition`, `validate_transition`, `InvalidTransitionError` | models |
 | `plan.py` | PlanService + Plan/PlanStep/SuccessCriterion models + Markdown render/parse round-trip | models (camelCase config), core/config, core/fileio |
@@ -81,7 +82,7 @@ graph TD
 |--------|-----------|-------------|
 | `list_tickets` | `() -> list[MetaTicketSummary]` | List all tickets with auto-detected plan paths |
 | `get_ticket` | `(id: str) -> MetaTicket` | Get full ticket with auto-plan detection |
-| `create_ticket` | `(title: str, body: str, type: MetaTicketType) -> MetaTicket` | Create new ticket (defaults to `idea` status) |
+| `create_ticket` | `(title: str, body: str, type: MetaTicketType) -> MetaTicket` | Create new ticket (defaults to `idea` status). Auto-creates a draft plan skeleton at `.bonsai/plans/{ticket_id}.md` and sets `plan_path`. |
 | `update_ticket` | `(id: str, *, title?, body?, status?, type?) -> MetaTicket` | Update fields; validates status transitions |
 | `delete_ticket` | `(id: str) -> None` | Soft-delete ticket to `.bonsai/trash/` via TrashService (falls back to hard-delete if no TrashService) |
 | `detach_session` | `(ticket_id: str, session_id: str) -> MetaTicket` | Remove a session reference from a ticket's session_ids and clear orchestrator_session_id if it matches |
@@ -93,7 +94,9 @@ graph TD
 | `set_plan_path` | `(ticket_id: str, plan_path: str) -> MetaTicket` | Set plan path; auto-transitions `specified` to `planned` |
 | `add_spec_change` | `(ticket_id: str, change: SpecChange) -> MetaTicket` | Append a `SpecChange` entry to the ticket's `spec_changes` list. Called by `RecordSpecChange` tool after each spec save. |
 
-**Property:** `plans: PlanService` — sub-service for plan document operations (see [PLAN_SERVICE.md](PLAN_SERVICE.md))
+**Properties:**
+- `plans: PlanService` — sub-service for plan document operations (see [PLAN_SERVICE.md](PLAN_SERVICE.md))
+- `spec_drafts: SpecDraftService` — sub-service for spec draft management during ticket-specify sessions. Drafts stored at `.bonsai/spec-drafts/{ticket_id}/` with a manifest.json tracking operations (create/update/delete). See `docs/superpowers/specs/2026-04-03-spec-drafts-design.md`.
 
 ### Models
 

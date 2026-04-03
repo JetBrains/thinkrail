@@ -54,11 +54,12 @@ graph TD
 | `MetaTicketDetail.tsx` | Orchestrator: fetches ticket + plan, manages `rightPanel` state, `leftWidth` resize, session starting | `ticketId: string` |
 | `TicketInfo.tsx` | Left sidebar: header card (ID, title, status/type dropdowns, timestamps, summary counts), description preview, clickable specs/plan/sessions lists | `ticket, plan, onTicketUpdated, rightPanel, onSelectPanel` |
 | `TicketProgressBar.tsx` | Sticky bar: state pipeline dots (idea through done), computed primary action button, "More" dropdown for secondary actions | `ticket, onStartSession, onSelectPanel` |
-| `TicketSession.tsx` | Embedded session: auto-selects skill by ticket state, start button, ChatStream + InputArea when active | `ticket, embeddedSid, onSessionStarted` |
-| `TicketDescriptionView.tsx` | Full description editor with read/edit toggle | `ticket, onTicketUpdated` |
+| `TicketSession.tsx` | Embedded session with full parity to standalone SessionPanel: ChatStream, InputArea (with Continue/Start buttons), SessionStatusLine (model/cost/effort), StickyContextBar, RestoredBar. Auto-selects skill by ticket state. | `ticket, embeddedSid, onSessionStarted` |
+| `TicketDescriptionView.tsx` | Description view: MarkdownEditor (initialMode="preview") with Edit/Preview tabs, "Describe with AI" button for embedded agent session, split pane when session active | `ticket, onTicketUpdated` |
 | `TicketSpecView.tsx` | Placeholder spec viewer ("coming soon") | `specId, specTitle` |
-| `TicketPlanView.tsx` | Plan document viewer with steps, criteria, verification sections | `plan: Record` |
+| `TicketPlanView.tsx` | Three-tab plan editor: **View** (read-only rendered milestones+steps), **Steps** (structured form for adding/editing milestones and steps), **Raw** (MarkdownEditor for direct markdown editing). Uses `board/savePlan` and `board/savePlanRaw` RPCs. | `plan, ticketId, onPlanUpdated` |
 | `TicketSpecChangesView.tsx` | Right panel tab showing spec changes grouped by session. Each session group is collapsible and lists individual `SpecChange` entries with change_type badge, spec title, summary, and expandable detail. | `ticket: MetaTicket` |
+| `TicketDraftsView.tsx` | Spec drafts review panel: lists pending draft entries from `.bonsai/spec-drafts/{ticket_id}/`. Monaco DiffEditor for side-by-side comparison (original vs draft). Per-entry Apply/Discard buttons + global Apply All/Discard All. Uses `board/listDrafts`, `board/getDraftDiff`, `board/applyDraft` RPCs. | `ticketId, onDraftsChanged?` |
 | `MetaTicketDetail.css` | All detail view styles | |
 
 ## Component Interface
@@ -172,11 +173,16 @@ Note: The `plan` prop was removed from TicketProgressBar. The component now deri
 | `maxTurns` | 100 | 50 |
 | `metaTicketId` | `ticket.id` | `ticket.id` |
 
-When no active session is selected, shows a start prompt with phase description and button. When active, renders full ChatStream + InputArea with message handling, question answering, and interrupt support.
+When no active session is selected, shows a start prompt with phase description and button. When active, renders with **full parity to the standalone SessionPanel**:
+- `StickyContextBar` — skill/spec/model info bar
+- `ChatStream` — event rendering with context card visibility tracking
+- `SessionStatusLine` — model switcher, cost counter, effort selector, permission mode toggle
+- `InputArea` — with Continue button (idle sessions), Start button (skill sessions), interrupt, message history
+- `RestoredSessionBar` — resume button for restored sessions
 
 ## Right Panel Content Routing
 
-The right content area renders one of five views based on `rightPanel.type`:
+The right content area renders one of six views based on `rightPanel.type`:
 
 ```mermaid
 ---
@@ -228,8 +234,8 @@ The execute session name starts with `"Execute:"` which triggers auto-detection 
 - **TicketSpecView is a placeholder:** Displays "coming soon" instead of actual spec content. Full spec rendering is deferred.
 - **No real-time ticket updates:** If another user/agent modifies the ticket, the detail view does not auto-refresh. Requires manual navigation away and back.
 - **Single session per view:** Only one session is embedded at a time. Switching sessions discards the previous session's scroll position.
-- **No milestone grouping in TicketPlanView yet:** Plan data now includes milestones with nested steps (Phase 3), but TicketPlanView still renders a flat step list. Updating it to show milestone grouping with headers is future work within this phase.
-- **No plan editing:** TicketPlanView is read-only. Plan modifications require starting a new session or editing the Markdown file directly.
+- ~~No milestone grouping in TicketPlanView~~ **Resolved:** TicketPlanView now renders milestones with headers and nested steps.
+- ~~No plan editing~~ **Resolved:** TicketPlanView has three tabs (View/Steps/Raw) for viewing and editing plans. Steps tab provides structured form editing; Raw tab uses MarkdownEditor for direct markdown access.
 - **Description edit is basic:** Plain textarea, no Markdown preview or rich text editing.
 
 ## Related Specs

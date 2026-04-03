@@ -6,6 +6,7 @@ import { useSessionStore } from "@/store/sessionStore.ts";
 import { DEFAULT_MODEL } from "@/utils/models.ts";
 import { ChatStream } from "@/components/ChatStream/ChatStream.tsx";
 import { InputArea } from "@/components/ChatStream/InputArea.tsx";
+import { MarkdownEditor } from "@/components/MarkdownEditor/MarkdownEditor.tsx";
 
 interface TicketDescriptionViewProps {
   ticket: MetaTicket;
@@ -52,11 +53,6 @@ export function TicketDescriptionView({ ticket, onTicketUpdated }: TicketDescrip
       setEditing(true);
     }
   }, [session?.status]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  const handleEdit = useCallback(() => {
-    setDraft(ticket.body);
-    setEditing(true);
-  }, [ticket.body]);
 
   const handleSave = useCallback(async () => {
     const updated = await updateTicket(ticket.id, { body: draft });
@@ -143,29 +139,27 @@ export function TicketDescriptionView({ ticket, onTicketUpdated }: TicketDescrip
   // --- Editor pane (always shown) ---
   const editorPane = (
     <div className={session ? "ticket-describe-editor" : "ticket-right-body"}>
-      {editing ? (
-        <>
-          <textarea
-            className="ticket-description-edit ticket-description-edit--full"
-            value={draft}
-            onChange={(e) => setDraft(e.target.value)}
-            autoFocus
-          />
-          <div className="ticket-right-actions">
-            <button className="ticket-section-action" onClick={() => setEditing(false)}>
-              Cancel
-            </button>
-            <button className="ticket-section-action ticket-section-action--primary" onClick={handleSave}>
-              Save
-            </button>
-          </div>
-        </>
-      ) : (
-        <div
-          className={`ticket-description-full ${!ticket.body ? "ticket-description-empty" : ""}`}
-          onClick={handleEdit}
-        >
-          {ticket.body || "Click to add a description..."}
+      <MarkdownEditor
+        value={editing ? draft : ticket.body}
+        onChange={(v) => {
+          if (!editing) {
+            setDraft(v);
+            setEditing(true);
+          } else {
+            setDraft(v);
+          }
+        }}
+        preview={true}
+        initialMode={editing ? "edit" : "preview"}
+      />
+      {editing && (
+        <div className="ticket-right-actions">
+          <button className="ticket-section-action" onClick={() => setEditing(false)}>
+            Cancel
+          </button>
+          <button className="ticket-section-action ticket-section-action--primary" onClick={handleSave}>
+            Save
+          </button>
         </div>
       )}
     </div>
@@ -177,11 +171,6 @@ export function TicketDescriptionView({ ticket, onTicketUpdated }: TicketDescrip
       <div className="ticket-right-panel">
         <div className="ticket-right-header">
           <span className="ticket-right-title">Description</span>
-          {!editing && (
-            <button className="ticket-section-action" onClick={handleEdit}>
-              Edit
-            </button>
-          )}
         </div>
         <div className="ticket-describe-split">
           {editorPane}
@@ -223,11 +212,6 @@ export function TicketDescriptionView({ ticket, onTicketUpdated }: TicketDescrip
       <div className="ticket-right-header">
         <span className="ticket-right-title">Description</span>
         <div className="ticket-right-header-actions">
-          {!editing && (
-            <button className="ticket-section-action" onClick={handleEdit}>
-              Edit
-            </button>
-          )}
           <button
             className="ticket-section-action ticket-describe-ai-btn"
             onClick={handleStartAI}

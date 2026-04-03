@@ -1,13 +1,11 @@
-import { useCallback, useRef, useState } from "react";
-import Editor, { type OnMount } from "@monaco-editor/react";
+import { useCallback, useState } from "react";
+import Editor from "@monaco-editor/react";
 import { useFileStore, type OpenFile } from "@/store/fileStore.ts";
-import { intellijDarcula } from "./intellijTheme.ts";
+import { useMonacoTheme } from "@/components/MarkdownEditor/useMonacoTheme.ts";
 import { detectLanguage, languageLabel } from "./languageMap.ts";
 import { EditDropdown } from "./EditDropdown.tsx";
 import { MarkdownPreview } from "./MarkdownPreview.tsx";
 import "./FileViewer.css";
-
-const THEME_NAME = "intellij-darcula";
 
 export function FileViewer({ file }: { file: OpenFile }) {
   const setMode = useFileStore((s) => s.setMode);
@@ -16,15 +14,7 @@ export function FileViewer({ file }: { file: OpenFile }) {
   const openExternal = useFileStore((s) => s.openExternal);
   const [showDropdown, setShowDropdown] = useState(false);
   const [copied, setCopied] = useState(false);
-  const themeRegistered = useRef(false);
-
-  const handleMount: OnMount = (_editor, monaco) => {
-    if (!themeRegistered.current) {
-      monaco.editor.defineTheme(THEME_NAME, intellijDarcula);
-      themeRegistered.current = true;
-    }
-    monaco.editor.setTheme(THEME_NAME);
-  };
+  const monacoTheme = useMonacoTheme();
 
   const handleEditInPlace = useCallback(() => {
     setMode(file.path, "edit");
@@ -131,8 +121,7 @@ export function FileViewer({ file }: { file: OpenFile }) {
         <Editor
           value={file.content}
           language={language}
-          theme={THEME_NAME}
-          onMount={handleMount}
+          theme={monacoTheme}
           onChange={(val) => {
             if (file.mode === "edit") {
               updateContent(file.path, val ?? "");

@@ -5,11 +5,15 @@ import "./SpecSelector.css";
 interface SpecSelectorProps {
   selectedIds: string[];
   onToggle: (id: string) => void;
+  /** Start with dropdown open. Default: false */
+  initiallyOpen?: boolean;
+  /** Render list inline (no absolute positioning). Use inside popovers. Default: false */
+  inline?: boolean;
 }
 
-export function SpecSelector({ selectedIds, onToggle }: SpecSelectorProps) {
+export function SpecSelector({ selectedIds, onToggle, initiallyOpen = false, inline = false }: SpecSelectorProps) {
   const specs = useSpecStore((s) => s.specs);
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(initiallyOpen);
   const [search, setSearch] = useState("");
 
   const filtered = useMemo(() => {
@@ -37,15 +41,17 @@ export function SpecSelector({ selectedIds, onToggle }: SpecSelectorProps) {
             </button>
           </span>
         ))}
-        <button
-          className="spec-selector-add"
-          onClick={() => setOpen(!open)}
-        >
-          + Add spec
-        </button>
+        {!inline && (
+          <button
+            className="spec-selector-add"
+            onClick={() => setOpen(!open)}
+          >
+            + Add spec
+          </button>
+        )}
       </div>
       {open && (
-        <div className="spec-selector-dropdown">
+        <div className={inline ? "spec-selector-inline" : "spec-selector-dropdown"}>
           <input
             className="spec-selector-search"
             value={search}

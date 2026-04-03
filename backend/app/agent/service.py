@@ -103,7 +103,9 @@ class AgentService:
                 self._attach_to_ticket(task)
         task.system_prompt = self._build_context_for(task)
         self._save_task(task)
-        return task.system_prompt
+        # Build structured sections for the prompt preview
+        structured = self._build_context_structured_for(task)
+        return structured
 
     async def start_draft(
         self,
@@ -619,13 +621,22 @@ class AgentService:
                     from app.board.plan import _render_plan
                     plan = self.board_service.plans.read_plan(task.meta_ticket_id)
                     plan_text = _render_plan(plan)
-                    plan_section = (
-                        "## Implementation Plan\n\n"
-                        "The following plan is associated with this ticket. "
-                        "As the orchestrator, read the plan, identify the next unblocked step, "
-                        "and call `suggest_step` to propose it for execution.\n\n"
-                        f"{plan_text}"
-                    )
+                    if task.skill_id == "ticket-plan":
+                        plan_section = (
+                            "## Existing Plan\n\n"
+                            "The following plan already exists for this ticket. "
+                            "Review it and update/refine it based on the user's feedback. "
+                            "Write the updated plan back to the same file.\n\n"
+                            f"{plan_text}"
+                        )
+                    else:
+                        plan_section = (
+                            "## Implementation Plan\n\n"
+                            "The following plan is associated with this ticket. "
+                            "As the orchestrator, read the plan, identify the next unblocked step, "
+                            "and call `suggest_step` to propose it for execution.\n\n"
+                            f"{plan_text}"
+                        )
                     session_prompt = (
                         f"{session_prompt}\n\n{plan_section}" if session_prompt else plan_section
                     )
@@ -659,3 +670,39 @@ class AgentService:
         ms = int((time.monotonic() - t0) * 1000)
         logger.info("[%s] build_context: %dms (%d chars)", task.bonsai_sid[:8], ms, len(ctx))
         return ctx
+
+    def _build_context_structured_for(self, task: AgentTask) -> dict:
+        """Build structured section data for the prompt preview UI."""
+        from app.agent.context import build_context_structured
+
+        # Compute the same session_prompt augmentations as _build_context_for
+        session_prompt = task.session_prompt
+        if task.meta_ticket_id and self.board_service:
+            try:
+                ticket = self.board_service.get_ticket(task.meta_ticket_id)
+                if ticket.plan_path and self.board_service.plans.plan_exists(task.meta_ticket_id):
+                    from app.board.plan import _render_plan
+                    plan = self.board_service.plans.read_plan(task.meta_ticket_id)
+                    plan_text = _render_plan(plan)
+                    label = "Existing Plan" if task.skill_id == "ticket-plan" else "Implementation Plan"
+                    plan_section = f"## {label}\n\n{plan_text}"
+                    session_prompt = f"{session_prompt}\n\n{plan_section}" if session_prompt else plan_section
+            except Exception:
+                pass
+            if task.skill_id == "ticket-describe":
+                try:
+                    ticket = self.board_service.get_ticket(task.meta_ticket_id)
+                    ticket_section = f"## Current Ticket\n\n**Title:** {ticket.title}\n\n**Current body:**\n{ticket.body or '(empty)'}\n"
+                    session_prompt = f"{session_prompt}\n\n{ticket_section}" if session_prompt else ticket_section
+                except Exception:
+                    pass
+
+        return build_context_structured(
+            spec_ids=task.spec_ids,
+            skill_id=task.skill_id,
+            session_prompt=session_prompt,
+            project_root=self._config.project_root,
+            config=task.config,
+            spec_service=self._spec_service,
+            plugin_dir=self._config.plugin_dir,
+        )

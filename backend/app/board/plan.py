@@ -376,6 +376,23 @@ class PlanService:
         self.write_plan(ticket_id, plan)
         return plan
 
+    def read_plan_raw(self, ticket_id: str) -> str:
+        """Read the raw markdown content of a plan file."""
+        path = self._plan_path(ticket_id)
+        return read_text(path)
+
+    def write_plan_raw(self, ticket_id: str, content: str) -> Plan:
+        """Write raw markdown to disk, re-parse, and return the Plan."""
+        path = self._plan_path(ticket_id)
+        ensure_dir(path.parent)
+        write_text(path, content)
+        return _parse_plan(content, ticket_id)
+
+    def save_plan(self, ticket_id: str, plan: Plan) -> Plan:
+        """Write a full structured Plan to disk."""
+        self.write_plan(ticket_id, plan)
+        return plan
+
     def get_next_step(self, ticket_id: str) -> PlanStep | None:
         """Find the next unblocked pending step, respecting milestone order."""
         plan = self.read_plan(ticket_id)

@@ -425,6 +425,20 @@ In `bypassPermissions` (yolo) mode, the CLI skips `canUseTool` entirely, so the 
 
 Validation errors are returned as `isError: true` MCP responses, not permission denials — this avoids SDK error propagation issues (same pattern as SuggestSession's "never return PermissionResultDeny" rule).
 
+### Draft Mode (ticket-specify sessions)
+
+When a session has `skill_id == "ticket-specify"` AND `meta_ticket_id` is set, spec tools enter **draft mode**:
+
+- **`spec_save`**: Instead of writing to disk via `SpecService`, redirects content to `.bonsai/spec-drafts/{ticket_id}/{path}` via `SpecDraftService.write_draft()`. The agent receives a response indicating the draft was saved. Registry is NOT modified.
+- **`spec_get`**: Read-through semantics — checks the shadow directory first. If a draft exists for the requested spec, returns draft content overlaid on the real spec's metadata. Otherwise returns the real file as normal.
+- **`spec_delete`**: Records a "delete" operation in the draft manifest via `SpecDraftService.record_delete()`. The real file is NOT deleted.
+
+Draft mode is detected by `_is_draft_mode()` helper which checks `get_tool_context().task`. The `SpecDraftService` is accessed via `BoardService(config).spec_drafts`.
+
+After the session, the user reviews diffs in the `TicketDraftsView` frontend component and applies/discards drafts selectively.
+
+See also: `backend/app/board/spec_drafts.py` (SpecDraftService) and `docs/superpowers/specs/2026-04-03-spec-drafts-design.md`.
+
 ---
 
 ## Output Contract

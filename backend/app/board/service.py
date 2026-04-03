@@ -6,6 +6,7 @@ from typing import Any
 
 from app.board.models import MetaTicket, MetaTicketSummary, MetaTicketStatus, MetaTicketType, SpecChange
 from app.board.plan import PlanService
+from app.board.spec_drafts import SpecDraftService
 from app.board.state_machine import validate_transition
 from app.board.storage import (
     delete_ticket as _delete_file,
@@ -27,6 +28,7 @@ class BoardService:
     def __init__(self, config: AppConfig) -> None:
         self._config = config
         self.plans = PlanService(config)
+        self.spec_drafts = SpecDraftService(config)
         self.trash_service: Any = None  # Injected by server.py
 
     @property
@@ -92,6 +94,9 @@ class BoardService:
         existing = _list_files(self._tickets_dir)
         max_order = max((t.order for t in existing if t.status == "idea"), default=-1)
         ticket = MetaTicket(title=title, body=body, type=type, order=max_order + 1)
+        # Auto-create a skeleton plan (draft, no steps) so users can edit immediately
+        self.plans.create_plan(ticket.id, title, steps=[], verification=[])
+        ticket.plan_path = f"plans/{ticket.id}.md"
         write_ticket(ticket_path(self._tickets_dir, ticket.id), ticket)
         return ticket
 

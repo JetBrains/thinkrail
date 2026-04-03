@@ -149,8 +149,10 @@ The `DraftConfigCard` is a stacked card rendered at the top of `ChatStream` when
 | `api/methods/agents.ts` | Add `prepare()`, `updateDraft()`, `startDraft()` API calls. Add `DraftUpdateParams` interface. |
 | `api/methods/sessions.ts` | Add `config`, `systemPrompt`, `sessionPrompt` optional fields to `SessionSummary`. |
 | `store/sessionStore.ts` | Add `createDraft()`, `updateDraft()`, `startDraft()` actions. Modify `sendMessage()` to auto-start drafts. Update `loadActiveSessions()` to restore `systemPrompt` for drafts. |
-| `components/ChatStream/DraftConfigCard.tsx` | **New** — editable stacked config card with skill/spec/config editing and system prompt preview. |
+| `components/ChatStream/DraftConfigCard.tsx` | **New** — editable stacked config card with skill/spec/config editing. System prompt preview delegated to `PromptPreview` component. |
 | `components/ChatStream/DraftConfigCard.css` | **New** — styles using Bonsai CSS variables. Gold left-border, `.draft-config-*` class prefix. |
+| `components/ChatStream/PromptPreview.tsx` | **New** — structured prompt preview with stacked bar (token breakdown by section: general/task/project/specs), clickable legend, collapsible sections with rendered markdown (react-markdown), per-spec sub-entries. Replaces the old `<pre>` prompt dump. |
+| `components/ChatStream/PromptPreview.css` | **New** — bar, legend, section, spec entry, rendered markdown styles. |
 | `components/ChatStream/ChatStream.tsx` | Render `DraftConfigCard` when `session.status === "draft"`. |
 | `components/ChatStream/SessionStatusLine.tsx` | Add `"draft"` case to `statusInfo()` switch. |
 | `components/NewSessionModal/NewSessionModal.tsx` | Change button from "Start Session" to "Create Session". Call `createDraft()` instead of `startSession()`. |

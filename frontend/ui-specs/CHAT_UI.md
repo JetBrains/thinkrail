@@ -347,40 +347,46 @@ interface SubagentBlockProps {
 interface QuestionCardProps {
   questions: Question[];
   answered: boolean;
+  interrupted?: boolean;
   selectedAnswers?: Record<string, string>;
   onSubmit: (response: Record<string, unknown>) => void;
 }
-
-interface Question {
-  question: string;
-  header: string;
-  options: QuestionOption[];
-  multiSelect: boolean;
-}
-interface QuestionOption {
-  label: string;
-  description: string;
-}
 ```
 
-- Root: `<div className="chat-question [chat-question-answered?]">` — `border: 2px solid var(--purple)`, `max-width: 90%`, `background: var(--elevated)`, `slideUp`
-- When `answered`: `opacity: 0.7`
-- Renders each question in a `.chat-question-group`:
-  - `.chat-question-header`: `q.header`, 9px uppercase purple label
-  - `.chat-question-text`: `q.question`, 12px bold
-  - Options present: `.chat-question-options` list of `.chat-option` buttons
-  - No options + not answered: `<textarea className="chat-question-textarea">` (free-text mode, `autoFocus`)
-  - No options + answered: `<div className="chat-question-answer">` showing the text response
+**Architecture:** Tabbed multi-question card with keyboard navigation and preview panel.
 
-**Option button** (`.chat-option`):
-- Radio icon (`.chat-option-radio`): `●`/`○` for single-select, `☑`/`☐` for multi-select
-- `.chat-option-label`: option label, 12px, font-weight 500
-- `.chat-option-desc`: option description, 11px, `var(--muted)`
-- Selected: class `chat-option-selected` → `border-color: var(--purple)`, `background: rgba(187,154,247,0.1)`
-- Disabled when `answered`
+**Sub-components:**
+- `QuestionTabBar` — tab buttons for multi-question flows (shows header + answered indicator per question)
+- `QuestionOptionsPanel` — option list (radio for single-select, checkbox for multi-select) + "Other" free-text input
+- `QuestionPreviewPanel` — description preview for the currently highlighted option
 
-**Submission:**
-- If free-text question: sends `{ text: textInput, answers: selections }`
+**Layout:**
+- Root: `<div className="chat-question">` with `tabIndex=0` for keyboard focus
+- Tab bar (if `questions.length > 1`): horizontal tabs showing each question's header
+- Question text: `.chat-question-header` (header badge) + `.chat-question-text` (question)
+- Body: split into options panel (left) + preview panel (right)
+- Submit bar: Next/Submit buttons + keyboard shortcut hints
+
+**Selection semantics:**
+- **Single-select:** Click selects option + auto-advances to next unanswered question (150ms delay). Does NOT auto-submit — user must explicitly click Submit.
+- **Multi-select:** Click toggles option (add/remove from selection).
+- **"Other":** Always present as the last option. Selecting it focuses a text input for free-text entry.
+
+**Keyboard navigation:**
+- `ArrowUp`/`ArrowDown` — highlight next/previous option
+- `Enter` — select highlighted option (same as click)
+- `ArrowLeft`/`ArrowRight` — switch between question tabs (multi-question)
+- `Cmd/Ctrl+Enter` — submit all answers
+- `Escape` (when in Other input) — return focus to option list
+
+**Submission flow:**
+- If all questions answered: Submit button sends `{ questions, answers }` via `onSubmit`
+- If some unanswered: first click shows confirmation ("N of M unanswered"), second click submits
+- `advanceToNext()` only advances tabs, never auto-submits
+
+**Answered state:**
+- When `answered`: renders `AnsweredTable` showing question→answer mapping
+- When `interrupted`: shows "interrupted" badge instead of answers
 - Otherwise: sends `{ questions, answers: { [questionText]: selectedLabel } }`
 - `Mod+Enter` submits from the free-text textarea
 

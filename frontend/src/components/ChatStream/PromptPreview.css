@@ -1,0 +1,161 @@
+/* ── Prompt Preview ── */
+.prompt-preview {
+  border-top: 1px solid var(--border);
+  padding-top: var(--space-sm);
+}
+
+.prompt-preview-toggle {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  width: 100%;
+  padding: var(--space-xs) 0;
+  border: none;
+  background: transparent;
+  color: var(--muted);
+  font-family: var(--font);
+  font-size: 12px;
+  cursor: pointer;
+  text-align: left;
+}
+.prompt-preview-toggle:hover { color: var(--text); }
+.prompt-preview-token-count { color: var(--hint); font-size: 11px; }
+
+/* ── Stacked bar ── */
+.prompt-bar {
+  display: flex;
+  height: 14px;
+  border-radius: 3px;
+  overflow: hidden;
+  margin: var(--space-sm) 0 var(--space-xs);
+  gap: 1px;
+}
+.prompt-bar-segment {
+  min-width: 2px;
+  transition: flex var(--transition-fast);
+}
+
+/* ── Legend ── */
+.prompt-legend {
+  display: flex;
+  gap: var(--space-sm);
+  flex-wrap: wrap;
+  margin-bottom: var(--space-sm);
+}
+.prompt-legend-item {
+  font-size: 10px;
+  padding: 1px 6px;
+  border-radius: 3px;
+  cursor: pointer;
+  transition: opacity var(--transition-fast);
+  font-family: var(--font);
+}
+.prompt-legend-item:hover { opacity: 0.8; }
+
+/* ── Sections ── */
+.prompt-sections {
+  border-top: 1px solid var(--border);
+}
+
+.prompt-section {
+  border-bottom: 1px solid color-mix(in srgb, var(--border) 50%, transparent);
+}
+
+.prompt-section-header {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  padding: var(--space-xs) 0;
+  cursor: pointer;
+  font-size: 12px;
+  font-family: var(--font);
+  color: var(--text);
+}
+.prompt-section-header:hover { background: color-mix(in srgb, var(--hover) 30%, transparent); }
+
+.prompt-section-bar {
+  width: 3px;
+  height: 14px;
+  border-radius: 1px;
+  flex-shrink: 0;
+}
+
+.prompt-section-label { flex: 1; }
+.prompt-section-count { color: var(--hint); font-size: 10px; }
+.prompt-section-tokens { color: var(--hint); font-size: 10px; margin-left: auto; }
+
+/* ── Rendered markdown content ── */
+.prompt-section-content {
+  margin: 0 0 var(--space-sm) 12px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: var(--space-sm) var(--space-md);
+  max-height: 200px;
+  overflow-y: auto;
+  font-size: 12px;
+  line-height: 1.7;
+  color: var(--text);
+}
+.prompt-section-content--fallback {
+  margin-left: 0;
+  max-height: 400px;
+}
+
+.prompt-section-content h1,
+.prompt-section-content h2,
+.prompt-section-content h3,
+.prompt-section-content h4 {
+  color: var(--text);
+  margin: 0.8em 0 0.3em;
+  line-height: 1.3;
+}
+.prompt-section-content h1 { font-size: 1.3em; }
+.prompt-section-content h2 { font-size: 1.15em; border-bottom: 1px solid var(--border); padding-bottom: 0.2em; }
+.prompt-section-content h3 { font-size: 1.05em; }
+.prompt-section-content p { margin: 0.4em 0; color: var(--muted); }
+.prompt-section-content code {
+  background: var(--elevated);
+  padding: 1px 4px;
+  border-radius: 3px;
+  font-size: 0.9em;
+}
+.prompt-section-content pre {
+  background: var(--elevated);
+  padding: var(--space-sm);
+  border-radius: var(--radius-sm);
+  overflow-x: auto;
+  margin: 0.4em 0;
+}
+.prompt-section-content pre code { background: none; padding: 0; }
+.prompt-section-content ul, .prompt-section-content ol {
+  padding-left: 1.3em;
+  margin: 0.3em 0;
+}
+.prompt-section-content li { margin: 0.15em 0; color: var(--muted); }
+.prompt-section-content strong { color: var(--text); }
+.prompt-section-content a { color: var(--blue); }
+
+/* ── Spec sub-entries ── */
+.prompt-spec-list {
+  margin-left: 20px;
+  margin-bottom: var(--space-sm);
+}
+.prompt-spec-entry {
+  border-bottom: 1px solid color-mix(in srgb, var(--border) 30%, transparent);
+}
+.prompt-spec-header {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  padding: 3px 0;
+  cursor: pointer;
+  font-size: 11px;
+  font-family: var(--font);
+  color: var(--text);
+}
+.prompt-spec-header:hover { color: var(--muted); }
+
+/* Scrollbar styling */
+.prompt-section-content::-webkit-scrollbar { width: 6px; }
+.prompt-section-content::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }

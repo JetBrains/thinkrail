@@ -1,10 +1,8 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import { DiffEditor, type DiffOnMount } from "@monaco-editor/react";
 import { detectLanguage, languageLabel } from "@/components/FileViewer/languageMap.ts";
-import { intellijDarcula } from "@/components/FileViewer/intellijTheme.ts";
+import { useMonacoTheme } from "@/components/MarkdownEditor/useMonacoTheme.ts";
 import "./DiffCard.css";
-
-const THEME_NAME = "intellij-darcula";
 
 const TOOL_ICONS: Record<string, string> = {
   Edit: "\u270F\uFE0F",
@@ -112,7 +110,7 @@ export function DiffCard({
   const [forceLoadLarge, setForceLoadLarge] = useState(false);
   const [editorHeight, setEditorHeight] = useState(compact ? 200 : 300);
   const editorContainerRef = useRef<HTMLDivElement>(null);
-  const themeRegistered = useRef(false);
+  const monacoTheme = useMonacoTheme();
 
   const diffData = extractDiffData(toolName, toolInput);
 
@@ -129,12 +127,8 @@ export function DiffCard({
     return () => observer.disconnect();
   }, [expanded]);
 
-  const handleMount: DiffOnMount = useCallback((_editor, monaco) => {
-    if (!themeRegistered.current) {
-      monaco.editor.defineTheme(THEME_NAME, intellijDarcula);
-      themeRegistered.current = true;
-    }
-    monaco.editor.setTheme(THEME_NAME);
+  const handleMount: DiffOnMount = useCallback(() => {
+    // Theme is managed globally by useMonacoTheme
   }, []);
 
   const borderColor =
@@ -215,15 +209,9 @@ export function DiffCard({
                   original={original}
                   modified={modified}
                   language={lang}
-                  theme={THEME_NAME}
+                  theme={monacoTheme}
                   height={editorHeight}
                   loading={<div className="diff-loading">Loading diff editor...</div>}
-                  beforeMount={(monaco) => {
-                    if (!themeRegistered.current) {
-                      monaco.editor.defineTheme(THEME_NAME, intellijDarcula);
-                      themeRegistered.current = true;
-                    }
-                  }}
                   onMount={handleMount}
                   options={{
                     readOnly: true,

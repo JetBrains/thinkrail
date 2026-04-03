@@ -12,12 +12,14 @@ import { TicketSpecView } from "./TicketSpecView.tsx";
 import { TicketProgressBar } from "./TicketProgressBar.tsx";
 import { TicketPlanView } from "./TicketPlanView.tsx";
 import { TicketSpecChangesView } from "./TicketSpecChangesView.tsx";
+import { TicketDraftsView } from "./TicketDraftsView.tsx";
 import "./MetaTicketDetail.css";
 
 export type RightPanelContent =
   | { type: "description" }
   | { type: "spec"; specId: string; specTitle: string }
   | { type: "spec-changes" }
+  | { type: "drafts" }
   | { type: "plan" }
   | { type: "session"; sessionId: string };
 
@@ -55,20 +57,33 @@ export function MetaTicketDetail({ ticketId }: MetaTicketDetailProps) {
         setRightPanel(defaultPanel);
         // Fetch plan if ticket has one
         if (t.planPath) {
+          lastPlanPath.current = t.planPath;
           api.getPlan(ticketId).then(setPlan).catch(() => {});
         }
       })
       .catch((e) => setError((e as Error).message));
   }, [ticketId]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Re-fetch full ticket when boardStore summary changes (e.g., agent direct-apply)
+  // Re-fetch full ticket (and plan) when boardStore summary changes (e.g., agent direct-apply)
   const boardSummary = useBoardStore((s) => s.tickets.get(ticketId));
   const lastUpdated = useRef(boardSummary?.updated);
+  const lastPlanPath = useRef<string | null>(null);
   useEffect(() => {
     if (!boardSummary || boardSummary.updated === lastUpdated.current) return;
     lastUpdated.current = boardSummary.updated;
     const api = createBoardApi(getClient());
-    api.get(ticketId).then(setTicket).catch(() => {});
+    api.get(ticketId).then((t) => {
+      setTicket(t);
+      // Re-fetch plan when planPath changes (e.g., after ticket-plan session)
+      if (t.planPath && t.planPath !== lastPlanPath.current) {
+        lastPlanPath.current = t.planPath;
+        api.getPlan(ticketId).then((p) => {
+          setPlan(p);
+          // Auto-switch to plan view when plan first appears
+          setRightPanel((prev) => prev.type === "description" ? { type: "plan" } : prev);
+        }).catch(() => {});
+      }
+    }).catch(() => {});
   }, [boardSummary?.updated, ticketId]);
 
   // Resize handler
@@ -162,18 +177,15 @@ export function MetaTicketDetail({ ticketId }: MetaTicketDetailProps) {
         {rightPanel.type === "spec-changes" && (
           <TicketSpecChangesView specChanges={ticket.specChanges ?? []} />
         )}
-        {rightPanel.type === "plan" && plan && (
-          <TicketPlanView plan={plan} />
+        {rightPanel.type === "drafts" && (
+          <TicketDraftsView ticketId={ticketId} />
         )}
-        {rightPanel.type === "plan" && !plan && (
-          <div className="ticket-right-panel">
-            <div className="ticket-right-header">
-              <span className="ticket-right-title">Plan</span>
-            </div>
-            <div className="ticket-right-body">
-              <div className="ticket-placeholder">No plan created yet.</div>
-            </div>
-          </div>
+        {rightPanel.type === "plan" && (
+          <TicketPlanView
+            plan={plan}
+            ticketId={ticketId}
+            onPlanUpdated={setPlan}
+          />
         )}
         {rightPanel.type === "session" && (
           <TicketSession

@@ -89,6 +89,16 @@ export interface Session {
   restored?: boolean;
   /** The system prompt sent to the agent at session start */
   systemPrompt?: string;
+  /** Structured prompt sections for the preview UI */
+  promptSections?: PromptSection[] | null;
+}
+
+export interface PromptSection {
+  key: string;
+  label: string;
+  content: string;
+  tokens: number;
+  specDetails?: { id: string; title: string; content: string; tokens: number }[];
 }
 
 export interface ArchivedSession {

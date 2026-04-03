@@ -61,6 +61,25 @@ def _get_service() -> SpecService:
     return SpecService(_get_config())
 
 
+def _is_draft_mode() -> tuple[bool, str]:
+    """Check if current session should use draft mode (ticket-specify)."""
+    try:
+        ctx = get_tool_context()
+        ticket_id = ctx.task.meta_ticket_id
+        if ticket_id and ctx.task.skill_id == "ticket-specify":
+            return True, ticket_id
+    except Exception:
+        pass
+    return False, ""
+
+
+def _get_draft_service():
+    """Get SpecDraftService from BoardService."""
+    from app.board.service import BoardService
+    ctx = get_tool_context()
+    return BoardService(ctx.config).spec_drafts
+
+
 def _auto_link_spec_to_ticket(spec_id: str) -> None:
     """If the current session is attached to a meta-ticket, link the spec."""
     try:
@@ -344,6 +363,15 @@ async def _spec_get(args: dict) -> dict:
     try:
         svc = _get_service()
         detail = svc.get_spec(spec_id)
+
+        # Read-through: if in draft mode, overlay draft content
+        draft_mode, draft_ticket_id = _is_draft_mode()
+        if draft_mode and detail.path:
+            draft_svc = _get_draft_service()
+            draft_content = draft_svc.read_draft(draft_ticket_id, detail.path)
+            if draft_content is not None:
+                detail.content = draft_content
+
     except SpecNotFoundError:
         return _error(f"Spec '{spec_id}' not found")
     except Exception as exc:
@@ -363,6 +391,43 @@ async def _spec_save(args: dict) -> dict:
     content = args.get("content", "")
     if not path:
         return _error("Missing required parameter: path")
+
+    # ── Draft mode: redirect writes to shadow directory ──
+    draft_mode, draft_ticket_id = _is_draft_mode()
+    if draft_mode and content:
+        try:
+            config = _get_config()
+            draft_svc = _get_draft_service()
+            registry_path = config.get_registry_path()
+            entries, _links = read_registry(registry_path)
+            existing = next((e for e in entries if e.path == path), None)
+
+            operation = "update" if existing else "create"
+            ctx = get_tool_context()
+
+            entry = draft_svc.write_draft(
+                ticket_id=draft_ticket_id,
+                real_path=path,
+                content=content,
+                operation=operation,
+                registry_id=existing.id if existing else args.get("id", ""),
+                registry_type=args.get("type", existing.type if existing else ""),
+                registry_title=args.get("title", _extract_title(content, path)),
+                registry_covers=args.get("covers", existing.covers if existing else []),
+                registry_tags=args.get("tags", existing.tags if existing else []),
+                session_id=ctx.task.bonsai_sid,
+            )
+
+            # Auto-link spec to ticket
+            if existing:
+                _auto_link_spec_to_ticket(existing.id)
+
+            return _ok(
+                f"Draft saved: {operation} '{path}' "
+                f"(will be applied when you review drafts)"
+            )
+        except Exception as exc:
+            return _error(f"Failed to save draft: {exc}")
 
     try:
         config = _get_config()
@@ -467,6 +532,24 @@ async def _spec_delete(args: dict) -> dict:
     spec_id = args.get("id", "")
     if not spec_id:
         return _error("Missing required parameter: id")
+
+    # Draft mode: record deletion without actually deleting
+    draft_mode, draft_ticket_id = _is_draft_mode()
+    if draft_mode:
+        try:
+            svc = _get_service()
+            detail = svc.get_spec(spec_id)
+            draft_svc = _get_draft_service()
+            draft_svc.record_delete(draft_ticket_id, detail.path, registry_id=spec_id)
+            return _ok(
+                f"Draft: recorded deletion of '{spec_id}' "
+                f"(will be applied when you review drafts)"
+            )
+        except SpecNotFoundError:
+            return _error(f"Spec '{spec_id}' not found")
+        except Exception as exc:
+            return _error(f"Failed to record draft deletion: {exc}")
+
     try:
         svc = _get_service()
         svc.delete_spec(spec_id)
@@ -475,7 +558,7 @@ async def _spec_delete(args: dict) -> dict:
     except Exception as exc:
         return _error(f"Failed to delete spec: {exc}")
 
-    return _ok(f"✓ Deleted spec '{spec_id}' and cleaned up related links.")
+    return _ok(f"Deleted spec '{spec_id}' and cleaned up related links.")
 
 
 @tool(

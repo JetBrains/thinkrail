@@ -20,7 +20,7 @@ export function createAgentApi(client: RpcClient) {
       client.request<{ bonsaiSid: string; systemPrompt: string }>("agent/prepare", params),
 
     updateDraft: (params: DraftUpdateParams) =>
-      client.request<{ systemPrompt: string }>("agent/updateDraft", params),
+      client.request<{ systemPrompt: string; sections?: unknown[]; totalTokens?: number }>("agent/updateDraft", params),
 
     startDraft: (bonsaiSid: string, prompt?: string) =>
       client.request<{ bonsaiSid: string }>("agent/startDraft", { bonsaiSid, ...(prompt ? { prompt } : {}) }),

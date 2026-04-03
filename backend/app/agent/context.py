@@ -210,6 +210,33 @@ def _build_specs_section(spec_ids: list[str], spec_service: SpecService) -> str:
     )
 
 
+def _build_spec_details(
+    spec_ids: list[str], spec_service: SpecService,
+) -> list[dict]:
+    """Return per-spec metadata for the structured prompt view."""
+    details: list[dict] = []
+    for sid in spec_ids:
+        try:
+            detail = spec_service.get_spec(sid)
+            details.append({
+                "id": detail.id,
+                "title": detail.title,
+                "content": detail.content,
+                "tokens": len(detail.content) // 4,
+            })
+        except Exception:
+            pass
+    return details
+
+
+SECTION_LABELS: dict[str, str] = {
+    "general": "General Instructions",
+    "task": "Skill / Task",
+    "project": "Project",
+    "specs": "Specifications",
+}
+
+
 def build_context(
     spec_ids: list[str],
     skill_id: str | None,
@@ -266,3 +293,71 @@ def build_context(
         sections.append(_build_specs_section(spec_ids, spec_service))
 
     return "\n\n".join(sections)
+
+
+def build_context_structured(
+    spec_ids: list[str],
+    skill_id: str | None,
+    project_root: Path,
+    config: AgentConfig,
+    spec_service: SpecService,
+    plugin_dir: Path | None = None,
+    session_prompt: str | None = None,
+) -> dict:
+    """Build context and return structured section data for the prompt preview.
+
+    Returns a dict with:
+      - ``full``: the complete system prompt string
+      - ``sections``: list of section dicts with key, label, content, tokens
+      - ``totalTokens``: estimated total tokens (chars // 4)
+    """
+    if plugin_dir is None:
+        raise ValueError("plugin_dir is required")
+
+    ordered: list[tuple[str, str]] = []
+
+    # 1. General
+    general = _build_general_instructions(plugin_dir)
+    ordered.append(("general", general))
+
+    # 2. Task
+    task_parts: list[str] = []
+    if skill_id is not None:
+        task_parts.append(f'You are running the "{skill_id}" skill.')
+    if session_prompt:
+        task_parts.append(session_prompt)
+    if skill_id is not None:
+        body = _load_skill(skill_id, plugin_dir)
+        if session_prompt:
+            task_parts.append(f"---\n\n{body}")
+        else:
+            task_parts.append(body)
+    if task_parts:
+        ordered.append(("task", "## Your Task\n\n" + "\n\n".join(task_parts)))
+
+    # 3. Project
+    ordered.append(("project", f"## Project\n\nWorking directory: {project_root}"))
+
+    # 4. Specs
+    if spec_ids:
+        ordered.append(("specs", _build_specs_section(spec_ids, spec_service)))
+
+    full = "\n\n".join(content for _, content in ordered)
+
+    sections = []
+    for key, content in ordered:
+        section: dict = {
+            "key": key,
+            "label": SECTION_LABELS.get(key, key),
+            "content": content,
+            "tokens": len(content) // 4,
+        }
+        if key == "specs":
+            section["specDetails"] = _build_spec_details(spec_ids, spec_service)
+        sections.append(section)
+
+    return {
+        "full": full,
+        "sections": sections,
+        "totalTokens": len(full) // 4,
+    }

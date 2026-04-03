@@ -561,10 +561,12 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
 
   updateDraft: async (bonsaiSid, changes) => {
     const api = createAgentApi(getClient());
-    const { systemPrompt } = await api.updateDraft({
+    const result = await api.updateDraft({
       bonsaiSid,
       ...changes,
     });
+    const systemPrompt = result.systemPrompt as string;
+    const promptSections = (result.sections as Session["promptSections"]) ?? null;
 
     set((s) => {
       const session = s.sessions.get(bonsaiSid);
@@ -584,6 +586,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
         ...(changes.name !== undefined ? { name: changes.name } : {}),
         ...(changes.metaTicketId !== undefined ? { metaTicketId: changes.metaTicketId } : {}),
         systemPrompt,
+        promptSections,
       });
       return { sessions: next };
     });

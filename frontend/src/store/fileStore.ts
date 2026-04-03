@@ -169,10 +169,23 @@ export const useFileStore = create<FileStore>((set, get) => ({
   setMode: (path, mode) => {
     set((s) => {
       const file = s.openFiles.get(path);
-      if (!file) return s;
-      const next = new Map(s.openFiles);
-      next.set(path, { ...file, mode });
-      return { openFiles: next };
+      if (file) {
+        const next = new Map(s.openFiles);
+        next.set(path, { ...file, mode });
+        return { openFiles: next };
+      }
+      // Auto-pin preview file when switching to edit mode
+      if (s.previewFilePath === path && s.previewFile) {
+        const next = new Map(s.openFiles);
+        next.set(path, { ...s.previewFile, mode });
+        return {
+          openFiles: next,
+          activeFilePath: path,
+          previewFilePath: null,
+          previewFile: null,
+        };
+      }
+      return s;
     });
   },
 

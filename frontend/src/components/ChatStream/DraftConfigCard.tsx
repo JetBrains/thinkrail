@@ -7,6 +7,7 @@ import { MODELS, BETA_1M, getModelDef } from "@/utils/models.ts";
 import { SkillGrid } from "@/components/shared/SkillGrid.tsx";
 import { SpecSelector } from "@/components/shared/SpecSelector.tsx";
 import { TicketSelector } from "@/components/shared/TicketSelector.tsx";
+import { PromptPreview } from "./PromptPreview.tsx";
 import "./DraftConfigCard.css";
 
 const TURN_OPTIONS = [5, 10, 20, 50, 100];
@@ -25,7 +26,6 @@ export function DraftConfigCard({ bonsaiSid }: DraftConfigCardProps) {
   const tickets = useBoardStore((s) => s.tickets);
 
   const [editName, setEditName] = useState("");
-  const [promptExpanded, setPromptExpanded] = useState(false);
   const [skillPickerOpen, setSkillPickerOpen] = useState(false);
   const [specPickerOpen, setSpecPickerOpen] = useState(false);
   const [ticketPickerOpen, setTicketPickerOpen] = useState(false);
@@ -196,6 +196,8 @@ export function DraftConfigCard({ bonsaiSid }: DraftConfigCardProps) {
           <div className="draft-config-popover">
             <SpecSelector
               selectedIds={session.specIds}
+              initiallyOpen
+              inline
               onToggle={(id) => {
                 const next = session.specIds.includes(id)
                   ? session.specIds.filter((s) => s !== id)
@@ -347,24 +349,10 @@ export function DraftConfigCard({ bonsaiSid }: DraftConfigCardProps) {
       </div>
 
       {/* System Prompt Preview */}
-      <div className="draft-config-prompt">
-        <button
-          className="draft-config-prompt-toggle"
-          onClick={() => setPromptExpanded(!promptExpanded)}
-        >
-          {promptExpanded ? "\u25BC" : "\u25B6"} System Prompt
-          {session.systemPrompt && (
-            <span className="draft-config-prompt-size">
-              ({Math.ceil(session.systemPrompt.length / 4).toLocaleString()} est. tokens)
-            </span>
-          )}
-        </button>
-        {promptExpanded && session.systemPrompt && (
-          <div className="draft-config-prompt-body">
-            <pre>{session.systemPrompt}</pre>
-          </div>
-        )}
-      </div>
+      <PromptPreview
+        systemPrompt={session.systemPrompt ?? ""}
+        sections={session.promptSections}
+      />
 
       {/* Actions */}
       <div className="draft-config-actions">

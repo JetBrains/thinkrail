@@ -1,0 +1,126 @@
+.markdown-editor {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+
+/* Wrapper ensures Monaco gets a computed pixel height from the flex layout */
+.markdown-editor-body {
+  flex: 1;
+  min-height: 0;
+  position: relative;
+}
+
+/* ── Edit / Preview toggle ── */
+.markdown-editor-tabs {
+  display: flex;
+  gap: 2px;
+  padding: var(--space-xs) var(--space-sm);
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+.markdown-editor-tab {
+  padding: 2px var(--space-sm);
+  font-size: 11px;
+  font-family: var(--font);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--hint);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+.markdown-editor-tab:hover { color: var(--muted); background: var(--hover); }
+.markdown-editor-tab--active { color: var(--text); background: var(--sel); border-color: var(--purple); }
+
+/* ── Preview pane ── */
+.markdown-editor-preview {
+  flex: 1;
+  overflow-y: auto;
+  padding: var(--space-md) var(--space-lg);
+  font-size: 13px;
+  line-height: 1.7;
+  color: var(--text);
+}
+
+.markdown-editor-preview h1,
+.markdown-editor-preview h2,
+.markdown-editor-preview h3,
+.markdown-editor-preview h4 {
+  color: var(--text);
+  margin: 1.2em 0 0.4em;
+  line-height: 1.3;
+}
+.markdown-editor-preview h1 { font-size: 1.5em; border-bottom: 1px solid var(--border); padding-bottom: 0.3em; }
+.markdown-editor-preview h2 { font-size: 1.25em; border-bottom: 1px solid var(--border); padding-bottom: 0.2em; }
+.markdown-editor-preview h3 { font-size: 1.1em; }
+
+.markdown-editor-preview p { margin: 0.6em 0; }
+
+.markdown-editor-preview code {
+  background: var(--elevated);
+  padding: 1px 4px;
+  border-radius: 3px;
+  font-size: 0.9em;
+  font-family: 'JetBrains Mono', 'Fira Code', monospace;
+}
+
+.markdown-editor-preview pre {
+  background: var(--elevated);
+  padding: var(--space-md);
+  border-radius: var(--radius-sm);
+  overflow-x: auto;
+  margin: 0.6em 0;
+}
+.markdown-editor-preview pre code {
+  background: none;
+  padding: 0;
+}
+
+.markdown-editor-preview ul,
+.markdown-editor-preview ol {
+  padding-left: 1.5em;
+  margin: 0.4em 0;
+}
+.markdown-editor-preview li { margin: 0.2em 0; }
+
+.markdown-editor-preview blockquote {
+  border-left: 3px solid var(--purple);
+  padding-left: var(--space-md);
+  color: var(--muted);
+  margin: 0.6em 0;
+}
+
+.markdown-editor-preview table {
+  border-collapse: collapse;
+  width: 100%;
+  margin: 0.6em 0;
+}
+.markdown-editor-preview th,
+.markdown-editor-preview td {
+  border: 1px solid var(--border);
+  padding: var(--space-xs) var(--space-sm);
+  font-size: 12px;
+}
+.markdown-editor-preview th {
+  background: var(--elevated);
+  font-weight: 600;
+}
+
+.markdown-editor-preview a {
+  color: var(--blue);
+}
+
+.markdown-editor-preview hr {
+  border: none;
+  border-top: 1px solid var(--border);
+  margin: 1em 0;
+}
+
+/* Task list checkboxes (GFM) */
+.markdown-editor-preview input[type="checkbox"] {
+  margin-right: var(--space-xs);
+}

@@ -72,6 +72,31 @@ def build_context(
 - `FileNotFoundError` — if `skill_id` is provided but SKILL.md does not exist at the expected path
 - No error for empty `spec_ids` — returns prompt with general instructions + project sections only
 
+### `build_context_structured`
+
+Same signature as `build_context`, but returns structured section data for the prompt preview UI instead of a flat string.
+
+```python
+def build_context_structured(
+    spec_ids: list[str],
+    skill_id: str | None,
+    project_root: Path,
+    config: AgentConfig,
+    spec_service: SpecService,
+    plugin_dir: Path | None = None,
+    session_prompt: str | None = None,
+) -> dict:
+```
+
+**Returns:** A dict with:
+- `full` (`str`) — the complete system prompt (same as `build_context` output)
+- `sections` (`list[dict]`) — each section with `key`, `label`, `content`, `tokens`. Specs section includes `specDetails` with per-spec breakdown.
+- `totalTokens` (`int`) — estimated total tokens (`len(full) // 4`)
+
+**Section keys:** `"general"`, `"task"`, `"project"`, `"specs"` — mapped to labels via `SECTION_LABELS` constant.
+
+Used by `AgentService.update_draft()` to provide the DraftConfigCard's structured prompt preview (stacked bar + collapsible sections).
+
 ## Context Sections & Ordering
 
 The system prompt is assembled in this order, with framing text between sections:
