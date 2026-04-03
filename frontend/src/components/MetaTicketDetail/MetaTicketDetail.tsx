@@ -11,11 +11,13 @@ import { TicketDescriptionView } from "./TicketDescriptionView.tsx";
 import { TicketSpecView } from "./TicketSpecView.tsx";
 import { TicketProgressBar } from "./TicketProgressBar.tsx";
 import { TicketPlanView } from "./TicketPlanView.tsx";
+import { TicketSpecChangesView } from "./TicketSpecChangesView.tsx";
 import "./MetaTicketDetail.css";
 
 export type RightPanelContent =
   | { type: "description" }
   | { type: "spec"; specId: string; specTitle: string }
+  | { type: "spec-changes" }
   | { type: "plan" }
   | { type: "session"; sessionId: string };
 
@@ -148,7 +150,6 @@ export function MetaTicketDetail({ ticketId }: MetaTicketDetailProps) {
       <div className="ticket-right-area">
         <TicketProgressBar
           ticket={ticket}
-          plan={plan}
           onStartSession={handleStartSession}
           onSelectPanel={setRightPanel}
         />
@@ -157,6 +158,9 @@ export function MetaTicketDetail({ ticketId }: MetaTicketDetailProps) {
         )}
         {rightPanel.type === "spec" && (
           <TicketSpecView specId={rightPanel.specId} specTitle={rightPanel.specTitle} />
+        )}
+        {rightPanel.type === "spec-changes" && (
+          <TicketSpecChangesView specChanges={ticket.specChanges ?? []} />
         )}
         {rightPanel.type === "plan" && plan && (
           <TicketPlanView plan={plan} />

@@ -591,7 +591,7 @@ class AgentService:
             # Update the plan step that matches this session
             if ticket.plan_path and self.board_service.plans.plan_exists(task.meta_ticket_id):
                 plan = self.board_service.plans.read_plan(task.meta_ticket_id)
-                for step in plan.steps:
+                for step in plan.all_steps():
                     if step.session_id == task.bonsai_sid:
                         new_status = "done" if task.status == "done" else "failed"
                         self.board_service.plans.update_step_status(

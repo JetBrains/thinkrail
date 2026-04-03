@@ -9,6 +9,7 @@ import { BoardCardContextMenu } from "./BoardCardContextMenu.tsx";
 
 const COLUMNS: { status: MetaTicketStatus; label: string }[] = [
   { status: "idea", label: "Idea" },
+  { status: "described", label: "Described" },
   { status: "specified", label: "Specified" },
   { status: "planned", label: "Planned" },
   { status: "executing", label: "Executing" },
@@ -16,8 +17,9 @@ const COLUMNS: { status: MetaTicketStatus; label: string }[] = [
 ];
 
 const VALID_TRANSITIONS: Record<MetaTicketStatus, MetaTicketStatus[]> = {
-  idea: ["specified", "done"],
-  specified: ["idea", "planned", "done"],
+  idea: ["described", "done"],
+  described: ["idea", "specified", "done"],
+  specified: ["described", "planned", "done"],
   planned: ["specified", "executing", "done"],
   executing: ["planned", "done"],
   done: ["idea", "executing"],

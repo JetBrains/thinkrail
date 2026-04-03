@@ -179,7 +179,7 @@ async def _notify_orchestrator_on_step_complete(self, task: AgentTask) -> None:
     # 3. Update plan step status matching this session
     if ticket.plan_path and self.board_service.plans.plan_exists(task.meta_ticket_id):
         plan = self.board_service.plans.read_plan(task.meta_ticket_id)
-        for step in plan.steps:
+        for step in plan.all_steps():
             if step.session_id == task.bonsai_sid:
                 new_status = "done" if task.status == "done" else "failed"
                 self.board_service.plans.update_step_status(
@@ -287,7 +287,8 @@ Four skills in `claude-plugin/skills/` map to the ticket lifecycle stages. Each 
 | Plan injection into prompt | Full plan Markdown prepended to session prompt | Agent has complete context without needing to read the plan file. One-shot context is more reliable than tool-based plan reading. |
 | Step completion via finally block | `_run_background` always calls `_notify_orchestrator_on_step_complete` | Guaranteed execution regardless of how the session ends (success, error, cancel). |
 | Message injection for orchestrator | `tracker.enqueue_message(orch_sid, msg)` | Wakes up the orchestrator if idle, adding completion info to its conversation. |
-| Plan step update by session_id match | Loop through plan steps to find matching session_id | Simple, O(n) where n is number of steps (small). No index needed. |
+| Milestone-aware orchestration | Orchestrator uses `plan.all_steps()` instead of `plan.steps` to iterate across all milestones | Decouples orchestrator logic from milestone structure; flat step iteration works regardless of grouping. |
+| Plan step update by session_id match | Loop through `plan.all_steps()` to find matching session_id | Simple, O(n) where n is number of steps (small). No index needed. |
 
 ## Known Limitations
 
@@ -296,7 +297,7 @@ Four skills in `claude-plugin/skills/` map to the ticket lifecycle stages. Each 
 - **Single orchestrator per ticket:** Only one session can be the orchestrator. Starting a new execute session overwrites the previous orchestrator_session_id.
 - **No plan modification tool:** The orchestrator cannot modify the plan (add/remove/reorder steps) during execution. Plan changes require a new session.
 - **Completion notification is fire-and-forget:** If the orchestrator session crashed between step start and completion, the notification is lost. The plan step status is still updated on disk.
-- **No parallel step execution:** suggest_step proposes one step at a time. Parallel steps with no dependencies must be proposed sequentially.
+- **No parallel step execution yet:** Steps now have a `parallel_with` field indicating which steps can run concurrently, but the orchestrator still proposes one step at a time via suggest_step. Parallel execution support is future work.
 
 ## Related Specs
 

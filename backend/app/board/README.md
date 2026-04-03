@@ -64,7 +64,7 @@ graph TD
 
 | File | Responsibility | Depends On |
 |------|---------------|------------|
-| `models.py` | Pydantic models: MetaTicket, MetaTicketSummary, status/type literals, camelCase serialization config | pydantic |
+| `models.py` | Pydantic models: MetaTicket, MetaTicketSummary, SpecChange, status/type literals, camelCase serialization config. `MetaTicketSummary.from_ticket()` builds summaries with `spec_change_count`. | pydantic |
 | `service.py` | Facade — all ticket CRUD, spec linking, session attachment, orchestrator setting, plan auto-detection. Composes `PlanService`. | models, storage, state_machine, plan, core/config |
 | `storage.py` | Ticket file I/O: `ticket_path`, `read_ticket`, `write_ticket` (atomic via temp+rename), `list_tickets`, `delete_ticket` | models, core/fileio |
 | `state_machine.py` | `VALID_TRANSITIONS` dict, `can_transition`, `validate_transition`, `InvalidTransitionError` | models |
@@ -86,11 +86,12 @@ graph TD
 | `delete_ticket` | `(id: str) -> None` | Soft-delete ticket to `.bonsai/trash/` via TrashService (falls back to hard-delete if no TrashService) |
 | `detach_session` | `(ticket_id: str, session_id: str) -> MetaTicket` | Remove a session reference from a ticket's session_ids and clear orchestrator_session_id if it matches |
 | `detach_session_from_all` | `(session_id: str) -> None` | Scan all tickets and detach the given session. Called automatically when a session is trashed. |
-| `link_spec` | `(ticket_id: str, spec_id: str) -> MetaTicket` | Link a spec; auto-transitions `idea` to `specified` |
+| `link_spec` | `(ticket_id: str, spec_id: str) -> MetaTicket` | Link a spec; auto-transitions `described` to `specified` |
 | `unlink_spec` | `(ticket_id: str, spec_id: str) -> MetaTicket` | Remove spec link |
 | `attach_session` | `(ticket_id: str, session_id: str) -> MetaTicket` | Associate a session with the ticket |
 | `set_orchestrator` | `(ticket_id: str, session_id: str) -> MetaTicket` | Set orchestrator session; auto-transitions `planned` to `executing` |
 | `set_plan_path` | `(ticket_id: str, plan_path: str) -> MetaTicket` | Set plan path; auto-transitions `specified` to `planned` |
+| `add_spec_change` | `(ticket_id: str, change: SpecChange) -> MetaTicket` | Append a `SpecChange` entry to the ticket's `spec_changes` list. Called by `RecordSpecChange` tool after each spec save. |
 
 **Property:** `plans: PlanService` — sub-service for plan document operations (see [PLAN_SERVICE.md](PLAN_SERVICE.md))
 
@@ -98,9 +99,10 @@ graph TD
 
 | Model | Fields | Description |
 |-------|--------|-------------|
-| `MetaTicket` | id, title, body, status, type, plan_path, orchestrator_session_id, linked_spec_ids, session_ids, created, updated | Full ticket with all fields. CamelCase serialization via alias generator. |
-| `MetaTicketSummary` | id, title, status, type, plan_path, orchestrator_session_id, linked_spec_ids, session_ids, created, updated | Lightweight listing model (no body). Wire-identical to MetaTicket minus body field. |
-| `MetaTicketStatus` | `Literal["idea", "specified", "planned", "executing", "done"]` | Status type alias |
+| `MetaTicket` | id, title, body, status, type, plan_path, orchestrator_session_id, linked_spec_ids, session_ids, spec_changes, created, updated | Full ticket with all fields. `spec_changes` is a list of `SpecChange` entries recording spec modifications made during agent sessions. CamelCase serialization via alias generator. |
+| `MetaTicketSummary` | id, title, status, type, plan_path, orchestrator_session_id, linked_spec_ids, session_ids, spec_change_count, created, updated | Lightweight listing model (no body, no full spec_changes). `spec_change_count: int` provides a count for UI display without sending full change data. Constructed via `MetaTicketSummary.from_ticket()` class method. |
+| `SpecChange` | spec_id, spec_title, change_type, summary, sections_changed, detail, session_id, created | Records a single spec modification. `change_type` is one of `"created"`, `"modified"`, `"deleted"`. `sections_changed` lists which spec sections were affected. `detail` is an optional longer description. `session_id` links the change to the agent session that made it. |
+| `MetaTicketStatus` | `Literal["idea", "described", "specified", "planned", "executing", "done"]` | Status type alias (6 states) |
 | `MetaTicketType` | `Literal["feature", "bug", "idea", "improvement"]` | Type classification alias |
 
 ### Auto-Transitions
@@ -109,7 +111,8 @@ The service automatically advances ticket status when preconditions are met:
 
 | Trigger | From | To | Condition |
 |---------|------|----|-----------|
-| `link_spec` | `idea` | `specified` | First spec linked |
+| SuggestDescription | `idea` | `described` | Agent suggests a description (via "Describe with AI") |
+| `link_spec` | `described` | `specified` | First spec linked |
 | Plan file detected | `specified` | `planned` | `.bonsai/plans/{id}.md` exists (checked on `list_tickets` / `get_ticket`) |
 | `set_plan_path` | `specified` | `planned` | Explicit plan path set |
 | `set_orchestrator` | `planned` | `executing` | Orchestrator session assigned |
@@ -117,19 +120,32 @@ The service automatically advances ticket status when preconditions are met:
 ### State Machine
 
 ```
-idea --> specified --> planned --> executing --> done
-  |         |            |            |          |
-  +-> done  +-> idea     +-> specified +-> planned +-> idea
-            +-> done     +-> done     +-> done   +-> executing
+idea --> described --> specified --> planned --> executing --> done
+  |         |             |            |            |          |
+  +-> done  +-> idea      +-> described +-> specified +-> planned +-> idea
+            +-> done      +-> done     +-> done     +-> done   +-> executing
 ```
 
 | From | Valid Targets |
 |------|--------------|
-| `idea` | `specified`, `done` |
-| `specified` | `idea`, `planned`, `done` |
+| `idea` | `described`, `done` |
+| `described` | `idea`, `specified`, `done` |
+| `specified` | `described`, `planned`, `done` |
 | `planned` | `specified`, `executing`, `done` |
 | `executing` | `planned`, `done` |
 | `done` | `idea`, `executing` |
+
+### Agent Tool: ChangeTicketStatus
+
+**File:** `backend/app/agent/tools/change_ticket_status.py`
+
+An MCP tool that allows agents to change a ticket's status. The agent proposes a status change, which requires user confirmation via `AskUserQuestion` before being applied. This enables agents to advance the ticket lifecycle (e.g., moving from `idea` to `described` after generating a description) while keeping the user in the loop.
+
+### Agent Tool: RecordSpecChange
+
+**File:** `backend/app/agent/tools/record_spec_change.py`
+
+An MCP tool that agents call after each `spec_save` to record what changed. Creates a `SpecChange` entry and appends it to the ticket via `board_svc.add_spec_change()`. The `ticket-specify` skill is updated to call this tool after each spec save, capturing the spec_id, change_type (created/modified/deleted), a summary of what changed, and which sections were affected.
 
 ### Output Contracts
 
@@ -144,6 +160,7 @@ idea --> specified --> planned --> executing --> done
 | `attach_session` | `MetaTicket` | `TicketNotFoundError` |
 | `set_orchestrator` | `MetaTicket` | `TicketNotFoundError` |
 | `set_plan_path` | `MetaTicket` | `TicketNotFoundError` |
+| `add_spec_change` | `MetaTicket` | `TicketNotFoundError` |
 
 ### Exceptions
 

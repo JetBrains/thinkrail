@@ -4,7 +4,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-from app.board.models import MetaTicket, MetaTicketSummary, MetaTicketStatus, MetaTicketType
+from app.board.models import MetaTicket, MetaTicketSummary, MetaTicketStatus, MetaTicketType, SpecChange
 from app.board.plan import PlanService
 from app.board.state_machine import validate_transition
 from app.board.storage import (
@@ -59,6 +59,7 @@ class BoardService:
                 orchestrator_session_id=t.orchestrator_session_id,
                 linked_spec_ids=t.linked_spec_ids,
                 session_ids=t.session_ids,
+                spec_change_count=len(t.spec_changes),
                 created=t.created,
                 updated=t.updated,
             ))
@@ -148,8 +149,8 @@ class BoardService:
         ticket = self.get_ticket(ticket_id)
         if spec_id not in ticket.linked_spec_ids:
             ticket.linked_spec_ids.append(spec_id)
-            # Auto-transition: idea → specified when first spec is linked
-            if ticket.status == "idea":
+            # Auto-transition: described → specified when first spec is linked
+            if ticket.status == "described":
                 ticket.status = "specified"
             ticket.updated = datetime.now(UTC).isoformat()
             write_ticket(ticket_path(self._tickets_dir, ticket_id), ticket)
@@ -161,6 +162,14 @@ class BoardService:
             ticket.linked_spec_ids.remove(spec_id)
             ticket.updated = datetime.now(UTC).isoformat()
             write_ticket(ticket_path(self._tickets_dir, ticket_id), ticket)
+        return ticket
+
+    def add_spec_change(self, ticket_id: str, change: SpecChange) -> MetaTicket:
+        """Append a spec change record to a ticket."""
+        ticket = self.get_ticket(ticket_id)
+        ticket.spec_changes.append(change)
+        ticket.updated = datetime.now(UTC).isoformat()
+        write_ticket(ticket_path(self._tickets_dir, ticket_id), ticket)
         return ticket
 
     def attach_session(self, ticket_id: str, session_id: str) -> MetaTicket:

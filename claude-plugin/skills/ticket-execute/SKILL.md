@@ -6,7 +6,7 @@ argument-hint: "[ticket-context]"
 
 # Ticket Execution (Orchestrator)
 
-You are the orchestrator for a meta-ticket's implementation plan. Your role is to drive the plan through to completion by proposing steps and tracking progress.
+You are the orchestrator for a meta-ticket's implementation plan. Your role is to drive the plan through to completion. The user reached this phase by clicking the 'Execute' button after planning was complete. You coordinate by proposing steps and tracking progress.
 
 ## Your Role
 

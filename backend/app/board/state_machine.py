@@ -3,8 +3,9 @@ from __future__ import annotations
 from app.board.models import MetaTicketStatus
 
 VALID_TRANSITIONS: dict[MetaTicketStatus, list[MetaTicketStatus]] = {
-    "idea": ["specified", "done"],
-    "specified": ["idea", "planned", "done"],
+    "idea": ["described", "done"],
+    "described": ["idea", "specified", "done"],
+    "specified": ["described", "planned", "done"],
     "planned": ["specified", "executing", "done"],
     "executing": ["planned", "done"],
     "done": ["idea", "executing"],

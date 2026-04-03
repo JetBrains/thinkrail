@@ -14,32 +14,33 @@ interface TicketSessionProps {
 
 /** Determine which skill and label to use based on ticket state. */
 function getPhaseConfig(ticket: MetaTicket): { skillId: string; label: string; description: string } {
-  if (ticket.planPath) {
-    return {
-      skillId: "ticket-execute",
-      label: "Start Executing",
-      description: "Plan is ready. Start executing to run the steps.",
-    };
+  switch (ticket.status) {
+    case "planned":
+    case "executing":
+      return {
+        skillId: "ticket-execute",
+        label: "Execute",
+        description: "Plan is ready. Start executing to run the steps.",
+      };
+    case "specified":
+      return {
+        skillId: "ticket-plan",
+        label: "Plan with AI",
+        description: "Specifications are ready. Create an implementation plan.",
+      };
+    case "described":
+      return {
+        skillId: "ticket-specify",
+        label: "Specify with AI",
+        description: "Description is ready. Create specifications for the changes.",
+      };
+    default:
+      return {
+        skillId: "ticket-describe",
+        label: "Describe with AI",
+        description: "Start by formulating a clear, structured description.",
+      };
   }
-  if (ticket.status === "specified") {
-    return {
-      skillId: "ticket-plan",
-      label: "Create Plan",
-      description: "Specifications are ready. Create an implementation plan.",
-    };
-  }
-  if (ticket.status === "idea" && ticket.body) {
-    return {
-      skillId: "ticket-specify",
-      label: "Specify",
-      description: "Description is ready. Create specifications for the changes.",
-    };
-  }
-  return {
-    skillId: "ticket-describe",
-    label: "Describe",
-    description: "Start by formulating a clear, structured description.",
-  };
 }
 
 export function TicketSession({ ticket, embeddedSid, onSessionStarted }: TicketSessionProps) {

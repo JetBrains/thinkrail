@@ -22,7 +22,7 @@ interface TicketInfoProps {
 }
 
 const STATUS_OPTIONS: MetaTicketStatus[] = [
-  "idea", "specified", "planned", "executing", "done",
+  "idea", "described", "specified", "planned", "executing", "done",
 ];
 
 const TYPE_OPTIONS: MetaTicketType[] = [
@@ -221,6 +221,19 @@ export function TicketInfo({ ticket, plan, onTicketUpdated, rightPanel, onSelect
           )}
         </div>
       </div>
+
+      {/* ── Spec Changes ── */}
+      {(ticket.specChanges?.length ?? 0) > 0 && (
+        <div className="ticket-section">
+          <div
+            className={`ticket-section-header ticket-section-clickable ${isActive({ type: "spec-changes" }) ? "ticket-section-clickable--active" : ""}`}
+            onClick={() => onSelectPanel({ type: "spec-changes" })}
+          >
+            <span className="ticket-section-title">Spec Changes</span>
+            <span className="ticket-section-count">{ticket.specChanges.length}</span>
+          </div>
+        </div>
+      )}
 
       {/* ── Plan ── */}
       <div className="ticket-section">

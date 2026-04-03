@@ -37,12 +37,14 @@ graph TD
     RightArea --> TicketSpecView["TicketSpecView<br/><i>Spec viewer (placeholder)</i>"]
     RightArea --> TicketPlanView["TicketPlanView<br/><i>Plan document viewer</i>"]
     RightArea --> TicketSession["TicketSession<br/><i>Embedded ChatStream + InputArea</i>"]
+    RightArea --> TicketSpecChangesView["TicketSpecChangesView<br/><i>Spec changes grouped by session</i>"]
 
     TicketInfo --> Header["Header Card<br/><i>ID, title, status/type dropdowns</i>"]
     TicketInfo --> DescPreview["Description Preview<br/><i>Resizable height, clickable</i>"]
     TicketInfo --> SpecsList["Linked Specs List<br/><i>Clickable spec items</i>"]
     TicketInfo --> PlanSteps["Plan Steps List<br/><i>Clickable step items</i>"]
     TicketInfo --> SessionsList["Sessions List<br/><i>Clickable session items</i>"]
+    TicketInfo --> SpecChangesSec["Spec Changes Section<br/><i>Count + clickable link (if specChanges exist)</i>"]
 ```
 
 ## File Organization
@@ -51,11 +53,12 @@ graph TD
 |------|---------------|-----------|
 | `MetaTicketDetail.tsx` | Orchestrator: fetches ticket + plan, manages `rightPanel` state, `leftWidth` resize, session starting | `ticketId: string` |
 | `TicketInfo.tsx` | Left sidebar: header card (ID, title, status/type dropdowns, timestamps, summary counts), description preview, clickable specs/plan/sessions lists | `ticket, plan, onTicketUpdated, rightPanel, onSelectPanel` |
-| `TicketProgressBar.tsx` | Sticky bar: state pipeline dots (idea through done), computed primary action button, "More" dropdown for secondary actions | `ticket, plan, onStartSession, onSelectPanel` |
+| `TicketProgressBar.tsx` | Sticky bar: state pipeline dots (idea through done), computed primary action button, "More" dropdown for secondary actions | `ticket, onStartSession, onSelectPanel` |
 | `TicketSession.tsx` | Embedded session: auto-selects skill by ticket state, start button, ChatStream + InputArea when active | `ticket, embeddedSid, onSessionStarted` |
 | `TicketDescriptionView.tsx` | Full description editor with read/edit toggle | `ticket, onTicketUpdated` |
 | `TicketSpecView.tsx` | Placeholder spec viewer ("coming soon") | `specId, specTitle` |
 | `TicketPlanView.tsx` | Plan document viewer with steps, criteria, verification sections | `plan: Record` |
+| `TicketSpecChangesView.tsx` | Right panel tab showing spec changes grouped by session. Each session group is collapsible and lists individual `SpecChange` entries with change_type badge, spec title, summary, and expandable detail. | `ticket: MetaTicket` |
 | `MetaTicketDetail.css` | All detail view styles | |
 
 ## Component Interface
@@ -93,7 +96,8 @@ type RightPanelContent =
   | { type: "description" }
   | { type: "spec"; specId: string; specTitle: string }
   | { type: "plan" }
-  | { type: "session"; sessionId: string };
+  | { type: "session"; sessionId: string }
+  | { type: "spec-changes" };
 ```
 
 ### TicketInfo (left sidebar)
@@ -107,6 +111,7 @@ Sections displayed top-to-bottom:
 | Specifications | List of linked specs with title and status badge | Click opens spec in right panel |
 | Plan | Plan steps list with status icons (pending/executing/done/failed) and step count | Click opens plan or step session in right panel |
 | Sessions | All session IDs with live status from sessionStore | Click opens session in right panel |
+| Spec Changes | Shown when `ticket.specChanges` is non-empty. Displays count of spec changes with a summary line. | Click opens TicketSpecChangesView in right panel |
 
 **Step status icons:**
 
@@ -121,11 +126,11 @@ Sections displayed top-to-bottom:
 
 The progress bar sits at the top of the right panel and shows two things:
 
-**1. State Pipeline** — visual dots for the 5 lifecycle states:
+**1. State Pipeline** — visual dots for the 6 lifecycle states:
 
 ```
- (past)----(past)----(current)----(future)----(future)
-  Idea     Specified  Planned     Executing    Done
+ (past)----(past)----(past)----(current)----(future)----(future)
+  Idea     Described  Specified  Planned     Executing    Done
 ```
 
 | Dot State | Meaning |
@@ -134,17 +139,19 @@ The progress bar sits at the top of the right panel and shows two things:
 | `current` | Current ticket status |
 | `future` | State not yet reached |
 
-**2. Computed Actions** — primary button + "More" dropdown, based on ticket state:
+**2. Computed Actions** — primary button + "More" dropdown, purely state-driven (no body/planPath checks for primary button):
 
 | Ticket State | Primary Action | Secondary Actions |
 |-------------|----------------|-------------------|
-| `idea` (no body) | "Describe" (open description) | (none) |
-| `idea` (has body) | "Specify" (start ticket-specify) | Revise description |
-| `specified` | "Create Plan" (start ticket-plan) | Add more specs, Revise description |
-| `specified` (has plan) | "Start Executing" (start ticket-execute) | Revise plan, Add specs |
-| `executing` (no live orchestrator) | "Start Executing" (start ticket-execute) | View plan |
-| `executing` (live orchestrator) | "Continue Execution" (show orchestrator session) | View plan |
+| `idea` | "Describe with AI" (start ticket-describe) | "Edit Description" |
+| `described` | "Specify with AI" (start ticket-specify) | "Edit Description", "Revise with AI" |
+| `specified` | "Plan with AI" (start ticket-plan) | "Add more specs", "Edit Description" |
+| `planned` | "Execute" (start ticket-execute) | "Revise plan", "Add specs" |
+| `executing` (no live orchestrator) | "Execute" (start ticket-execute) | "View plan" |
+| `executing` (live orchestrator) | "Continue" (show orchestrator session) | "View plan" |
 | `done` | (none) | (none) |
+
+Note: The `plan` prop was removed from TicketProgressBar. The component now derives all actions purely from `ticket.status`.
 
 ### TicketSession
 
@@ -152,10 +159,10 @@ The progress bar sits at the top of the right panel and shows two things:
 
 | Ticket State | Skill ID | Label | Session Name |
 |-------------|----------|-------|-------------|
-| No body | `ticket-describe` | "Describe" | `"Describe: {title}"` |
-| `idea` + body | `ticket-specify` | "Specify" | `"Specify: {title}"` |
-| `specified` | `ticket-plan` | "Create Plan" | `"Create Plan: {title}"` |
-| Has plan path | `ticket-execute` | "Start Executing" | `"Execute: {title}"` |
+| `idea` | `ticket-describe` | "Describe with AI" | `"Describe: {title}"` |
+| `described` | `ticket-specify` | "Specify with AI" | `"Specify: {title}"` |
+| `specified` | `ticket-plan` | "Plan with AI" | `"Plan: {title}"` |
+| `planned` / `executing` | `ticket-execute` | "Execute" | `"Execute: {title}"` |
 
 **Session configuration:**
 
@@ -169,7 +176,7 @@ When no active session is selected, shows a start prompt with phase description 
 
 ## Right Panel Content Routing
 
-The right content area renders one of four views based on `rightPanel.type`:
+The right content area renders one of five views based on `rightPanel.type`:
 
 ```mermaid
 ---
@@ -181,6 +188,7 @@ graph LR
     RP -->|spec| SV["TicketSpecView"]
     RP -->|plan| PV["TicketPlanView"]
     RP -->|session| TS["TicketSession"]
+    RP -->|spec-changes| SC["TicketSpecChangesView"]
 ```
 
 Panel selection sources:
@@ -188,6 +196,7 @@ Panel selection sources:
 - **TicketInfo sidebar clicks** (description, spec item, plan, session item)
 - **TicketProgressBar actions** (primary/secondary action buttons)
 - **Session start** (switches to session panel when new session created)
+- **TicketInfo "Spec Changes" click** (switches to spec-changes panel)
 
 ## Lifecycle Skills
 
@@ -212,13 +221,14 @@ The execute session name starts with `"Execute:"` which triggers auto-detection 
 | Embedded sessions | ChatStream + InputArea rendered inline, not in a separate panel | Ticket context is always visible alongside the session. No context-switching. |
 | Phase-based skill auto-selection | `getPhaseConfig()` maps ticket state to skill | Reduces decision fatigue. Developer just clicks the primary action. |
 | Orchestrator detection by name | `"Execute: {title}"` prefix triggers set_orchestrator | Convention-based, avoids explicit orchestrator flag in session creation. |
-| Plan as `Record<string, unknown>` | TypeScript uses untyped record for plan data | Plans are complex and evolving. Typed models would require constant sync with backend. |
+| Plan as `Record<string, unknown>` | TypeScript uses untyped record for plan data | Plans are complex and evolving. Typed models would require constant sync with backend. Plan data now includes `milestones` (list of milestone objects with nested `steps`) instead of a flat `steps` array, plus `allSteps` for flat access. |
 
 ## Known Limitations
 
 - **TicketSpecView is a placeholder:** Displays "coming soon" instead of actual spec content. Full spec rendering is deferred.
 - **No real-time ticket updates:** If another user/agent modifies the ticket, the detail view does not auto-refresh. Requires manual navigation away and back.
 - **Single session per view:** Only one session is embedded at a time. Switching sessions discards the previous session's scroll position.
+- **No milestone grouping in TicketPlanView yet:** Plan data now includes milestones with nested steps (Phase 3), but TicketPlanView still renders a flat step list. Updating it to show milestone grouping with headers is future work within this phase.
 - **No plan editing:** TicketPlanView is read-only. Plan modifications require starting a new session or editing the Markdown file directly.
 - **Description edit is basic:** Plain textarea, no Markdown preview or rich text editing.
 

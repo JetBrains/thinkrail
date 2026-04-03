@@ -24,16 +24,17 @@ title: BoardView — Component Hierarchy
 ---
 graph TD
     BoardView["BoardView<br/><i>Split layout + resize</i>"]
-    BoardView --> MetaTicketBoard["MetaTicketBoard<br/><i>5 kanban columns</i>"]
+    BoardView --> MetaTicketBoard["MetaTicketBoard<br/><i>6 kanban columns</i>"]
     BoardView --> ResizeHandle["Resize Handle<br/><i>Draggable split</i>"]
     BoardView --> TaskBoard["TaskBoard<br/><i>3 kanban columns</i>"]
     BoardView --> CreateTicketModal["CreateTicketModal<br/><i>New ticket form</i>"]
 
     MetaTicketBoard --> KanbanCol1["KanbanColumn<br/><i>Idea</i>"]
-    MetaTicketBoard --> KanbanCol2["KanbanColumn<br/><i>Specified</i>"]
-    MetaTicketBoard --> KanbanCol3["KanbanColumn<br/><i>Planned</i>"]
-    MetaTicketBoard --> KanbanCol4["KanbanColumn<br/><i>Executing</i>"]
-    MetaTicketBoard --> KanbanCol5["KanbanColumn<br/><i>Done</i>"]
+    MetaTicketBoard --> KanbanCol2["KanbanColumn<br/><i>Described</i>"]
+    MetaTicketBoard --> KanbanCol3["KanbanColumn<br/><i>Specified</i>"]
+    MetaTicketBoard --> KanbanCol4["KanbanColumn<br/><i>Planned</i>"]
+    MetaTicketBoard --> KanbanCol5["KanbanColumn<br/><i>Executing</i>"]
+    MetaTicketBoard --> KanbanCol6["KanbanColumn<br/><i>Done</i>"]
 
     KanbanCol1 --> MetaTicketCard["MetaTicketCard"]
     TaskBoard --> TaskCol1["KanbanColumn<br/><i>Pending</i>"]
@@ -47,7 +48,7 @@ graph TD
 | File | Responsibility | Props |
 |------|---------------|-------|
 | `BoardView.tsx` | Split layout with draggable resize handle (top ratio 20%-80%), "+ New" button, loading state | `onOpenTicket: (id) => void` |
-| `MetaTicketBoard.tsx` | Groups tickets into 5 status columns, renders KanbanColumn for each | `tickets: MetaTicketSummary[]`, `onOpenTicket: (id) => void` |
+| `MetaTicketBoard.tsx` | Groups tickets into 6 status columns, renders KanbanColumn for each | `tickets: MetaTicketSummary[]`, `onOpenTicket: (id) => void` |
 | `MetaTicketCard.tsx` | Card displaying title, type badge, spec count, plan progress, session count | `ticket: MetaTicketSummary`, `onClick: () => void` |
 | `TaskBoard.tsx` | Legacy task-spec kanban with 3 columns (reads from specStore task specs) | (none) |
 | `TaskCard.tsx` | Simple card showing task title and status | `task: SpecSummary`, `onClick: () => void` |
@@ -83,6 +84,7 @@ Distributes tickets into columns by status:
 | Column | Status Filter | Color Accent |
 |--------|--------------|-------------|
 | Idea | `status === "idea"` | Neutral |
+| Described | `status === "described"` | Teal |
 | Specified | `status === "specified"` | Blue |
 | Planned | `status === "planned"` | Gold |
 | Executing | `status === "executing"` | Green |
@@ -162,7 +164,7 @@ interface BoardStore {
 ### Types (`types/board.ts`)
 
 ```typescript
-type MetaTicketStatus = "idea" | "specified" | "planned" | "executing" | "done";
+type MetaTicketStatus = "idea" | "described" | "specified" | "planned" | "executing" | "done";
 type MetaTicketType = "feature" | "bug" | "idea" | "improvement";
 
 interface MetaTicket {

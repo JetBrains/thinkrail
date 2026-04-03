@@ -2,8 +2,9 @@ import { useEffect, useRef } from "react";
 import type { MetaTicketSummary, MetaTicketStatus, MetaTicketType } from "@/types/board.ts";
 
 const VALID_TRANSITIONS: Record<MetaTicketStatus, MetaTicketStatus[]> = {
-  idea: ["specified", "done"],
-  specified: ["idea", "planned", "done"],
+  idea: ["described", "done"],
+  described: ["idea", "specified", "done"],
+  specified: ["described", "planned", "done"],
   planned: ["specified", "executing", "done"],
   executing: ["planned", "done"],
   done: ["idea", "executing"],

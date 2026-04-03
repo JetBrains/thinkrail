@@ -34,10 +34,33 @@ class PlanStep(BaseModel):
     title: str
     status: Literal["pending", "executing", "done", "failed"] = "pending"
     skill: str = "default"
+    milestone_number: int = 1
     depends_on: list[int] = Field(default_factory=list)
+    parallel_with: list[int] = Field(default_factory=list)
     input_spec_ids: list[str] = Field(default_factory=list)
     session_id: str | None = None
+    agent_instructions: str = ""
     success_criteria: list[SuccessCriterion] = Field(default_factory=list)
+
+
+class Milestone(BaseModel):
+    model_config = _CAMEL_CONFIG
+
+    number: int
+    title: str
+    description: str = ""
+    steps: list[PlanStep] = Field(default_factory=list)
+
+    @property
+    def status(self) -> str:
+        """Computed from step statuses."""
+        if not self.steps:
+            return "pending"
+        if any(s.status == "executing" for s in self.steps):
+            return "executing"
+        if all(s.status in ("done", "failed") for s in self.steps):
+            return "done"
+        return "pending"
 
 
 class Plan(BaseModel):
@@ -46,11 +69,43 @@ class Plan(BaseModel):
     ticket_id: str
     title: str
     status: Literal["draft", "ready", "executing", "done"] = "draft"
-    steps: list[PlanStep] = Field(default_factory=list)
+    milestones: list[Milestone] = Field(default_factory=list)
     verification: list[SuccessCriterion] = Field(default_factory=list)
+
+    def all_steps(self) -> list[PlanStep]:
+        """Flatten all steps from all milestones."""
+        result: list[PlanStep] = []
+        for m in self.milestones:
+            result.extend(m.steps)
+        return result
 
 
 # -- Markdown serialization ---------------------------------------------------
+
+def _render_step(step: PlanStep, lines: list[str]) -> None:
+    """Render a single step into the lines list."""
+    lines.append(f"### Step {step.number}: {step.title}")
+    lines.append(f"- **Status:** {step.status}")
+    lines.append(f"- **Skill:** {step.skill}")
+    if step.depends_on:
+        deps = ", ".join(f"Step {d}" for d in step.depends_on)
+        lines.append(f"- **Depends on:** {deps}")
+    if step.parallel_with:
+        par = ", ".join(f"Step {p}" for p in step.parallel_with)
+        lines.append(f"- **Parallel with:** {par}")
+    if step.input_spec_ids:
+        specs = ", ".join(step.input_spec_ids)
+        lines.append(f"- **Input specs:** [{specs}]")
+    if step.session_id:
+        lines.append(f"- **Session:** {step.session_id}")
+    if step.agent_instructions:
+        lines.append(f"- **Agent instructions:** {step.agent_instructions}")
+    if step.success_criteria:
+        lines.append("- **Success criteria:**")
+        for c in step.success_criteria:
+            check = "x" if c.checked else " "
+            lines.append(f"  - [{check}] {c.text}")
+
 
 def _render_plan(plan: Plan) -> str:
     """Render a Plan model to Markdown."""
@@ -61,27 +116,15 @@ def _render_plan(plan: Plan) -> str:
     lines.append(f"- **Ticket:** {plan.ticket_id}")
     lines.append(f"- **Status:** {plan.status}")
     lines.append(f"- **Updated:** {date.today().isoformat()}")
-    lines.append("")
-    lines.append("## Steps")
 
-    for step in plan.steps:
+    for milestone in plan.milestones:
         lines.append("")
-        lines.append(f"### Step {step.number}: {step.title}")
-        lines.append(f"- **Status:** {step.status}")
-        lines.append(f"- **Skill:** {step.skill}")
-        if step.depends_on:
-            deps = ", ".join(f"Step {d}" for d in step.depends_on)
-            lines.append(f"- **Depends on:** {deps}")
-        if step.input_spec_ids:
-            specs = ", ".join(step.input_spec_ids)
-            lines.append(f"- **Input specs:** [{specs}]")
-        if step.session_id:
-            lines.append(f"- **Session:** {step.session_id}")
-        if step.success_criteria:
-            lines.append("- **Success criteria:**")
-            for c in step.success_criteria:
-                check = "x" if c.checked else " "
-                lines.append(f"  - [{check}] {c.text}")
+        lines.append(f"## Milestone {milestone.number}: {milestone.title}")
+        if milestone.description:
+            lines.append(milestone.description)
+        for step in milestone.steps:
+            lines.append("")
+            _render_step(step, lines)
 
     if plan.verification:
         lines.append("")
@@ -97,10 +140,16 @@ def _render_plan(plan: Plan) -> str:
 # -- Markdown parsing ---------------------------------------------------------
 
 def _parse_plan(content: str, ticket_id: str) -> Plan:
-    """Parse a plan Markdown document into a Plan model."""
+    """Parse a plan Markdown document into a Plan model.
+
+    Supports two formats:
+    - **Milestone format**: ``## Milestone N: Title`` with nested ``### Step``
+    - **Legacy flat format**: ``## Steps`` with ``### Step`` — wrapped in
+      a single implicit milestone for backward compatibility.
+    """
     title = ""
     status = "draft"
-    steps: list[PlanStep] = []
+    milestones: list[Milestone] = []
     verification: list[SuccessCriterion] = []
 
     # Extract title from first heading
@@ -116,22 +165,54 @@ def _parse_plan(content: str, ticket_id: str) -> Plan:
     # Split into sections by ## headings
     sections = re.split(r"^##\s+", content, flags=re.MULTILINE)
 
-    for section in sections:
-        if section.startswith("Steps"):
-            steps = _parse_steps(section)
-        elif section.startswith("Verification"):
-            verification = _parse_criteria(section)
+    has_milestones = any(s.startswith("Milestone") for s in sections)
+
+    if has_milestones:
+        for section in sections:
+            if section.startswith("Milestone"):
+                milestones.append(_parse_milestone(section))
+            elif section.startswith("Verification"):
+                verification = _parse_criteria(section)
+    else:
+        # Legacy flat format — wrap in single milestone
+        flat_steps: list[PlanStep] = []
+        for section in sections:
+            if section.startswith("Steps"):
+                flat_steps = _parse_steps(section, milestone_number=1)
+            elif section.startswith("Verification"):
+                verification = _parse_criteria(section)
+        if flat_steps:
+            milestones = [Milestone(number=1, title="Implementation", steps=flat_steps)]
 
     return Plan(
         ticket_id=ticket_id,
         title=title,
         status=status,  # type: ignore[arg-type]
-        steps=steps,
+        milestones=milestones,
         verification=verification,
     )
 
 
-def _parse_steps(section: str) -> list[PlanStep]:
+def _parse_milestone(section: str) -> Milestone:
+    """Parse a Milestone section into a Milestone model."""
+    # First line: "Milestone N: Title\n..."
+    header_match = re.match(r"Milestone\s+(\d+):\s*(.+)", section)
+    number = int(header_match.group(1)) if header_match else 1
+    title = header_match.group(2).strip() if header_match else "Untitled"
+
+    # Description is text between the header and the first ### Step
+    first_step = re.search(r"^###\s+", section, re.MULTILINE)
+    description = ""
+    if header_match and first_step:
+        desc_text = section[header_match.end():first_step.start()].strip()
+        if desc_text:
+            description = desc_text
+
+    steps = _parse_steps(section, milestone_number=number)
+    return Milestone(number=number, title=title, description=description, steps=steps)
+
+
+def _parse_steps(section: str, *, milestone_number: int = 1) -> list[PlanStep]:
     """Parse the Steps section into PlanStep models."""
     steps: list[PlanStep] = []
     # Split by ### headings
@@ -149,6 +230,7 @@ def _parse_steps(section: str) -> list[PlanStep]:
         status = _extract_field(block, "Status") or "pending"
         skill = _extract_field(block, "Skill") or "default"
         session_id = _extract_field(block, "Session") or None
+        agent_instructions = _extract_field(block, "Agent instructions") or ""
 
         # Parse depends on
         depends_on: list[int] = []
@@ -156,6 +238,13 @@ def _parse_steps(section: str) -> list[PlanStep]:
         if deps_match:
             for d in re.findall(r"Step\s+(\d+)", deps_match.group(1)):
                 depends_on.append(int(d))
+
+        # Parse parallel with
+        parallel_with: list[int] = []
+        par_match = re.search(r"\*\*Parallel with:\*\*\s*(.+)", block)
+        if par_match:
+            for p in re.findall(r"Step\s+(\d+)", par_match.group(1)):
+                parallel_with.append(int(p))
 
         # Parse input specs
         input_spec_ids: list[str] = []
@@ -174,9 +263,12 @@ def _parse_steps(section: str) -> list[PlanStep]:
             title=title,
             status=status,  # type: ignore[arg-type]
             skill=skill,
+            milestone_number=milestone_number,
             depends_on=depends_on,
+            parallel_with=parallel_with,
             input_spec_ids=input_spec_ids,
             session_id=session_id,
+            agent_instructions=agent_instructions,
             success_criteria=criteria,
         ))
 
@@ -234,12 +326,17 @@ class PlanService:
 
     def create_plan(self, ticket_id: str, title: str, steps: list[PlanStep],
                     verification: list[SuccessCriterion] | None = None) -> Plan:
-        """Create a new plan and write to disk."""
+        """Create a new plan and write to disk.
+
+        For backward compatibility, accepts a flat list of steps and wraps
+        them in a single milestone.
+        """
+        milestones = [Milestone(number=1, title="Implementation", steps=steps)]
         plan = Plan(
             ticket_id=ticket_id,
             title=title,
             status="draft",
-            steps=steps,
+            milestones=milestones,
             verification=verification or [],
         )
         self.write_plan(ticket_id, plan)
@@ -251,16 +348,17 @@ class PlanService:
     ) -> Plan:
         """Update a step's status and optionally its session ID."""
         plan = self.read_plan(ticket_id)
-        for step in plan.steps:
+        for step in plan.all_steps():
             if step.number == step_number:
                 step.status = status  # type: ignore[assignment]
                 if session_id is not None:
                     step.session_id = session_id
                 break
         # Auto-update plan status
-        if any(s.status == "executing" for s in plan.steps):
+        all_steps = plan.all_steps()
+        if any(s.status == "executing" for s in all_steps):
             plan.status = "executing"
-        if all(s.status in ("done", "failed") for s in plan.steps) and plan.steps:
+        if all(s.status in ("done", "failed") for s in all_steps) and all_steps:
             plan.status = "done"
         self.write_plan(ticket_id, plan)
         return plan
@@ -270,7 +368,7 @@ class PlanService:
     ) -> Plan:
         """Toggle a success criterion checkbox."""
         plan = self.read_plan(ticket_id)
-        for step in plan.steps:
+        for step in plan.all_steps():
             if step.number == step_number:
                 if 0 <= criterion_index < len(step.success_criteria):
                     step.success_criteria[criterion_index].checked = checked
@@ -279,10 +377,11 @@ class PlanService:
         return plan
 
     def get_next_step(self, ticket_id: str) -> PlanStep | None:
-        """Find the next unblocked pending step."""
+        """Find the next unblocked pending step, respecting milestone order."""
         plan = self.read_plan(ticket_id)
-        done_steps = {s.number for s in plan.steps if s.status == "done"}
-        for step in plan.steps:
+        all_steps = plan.all_steps()
+        done_steps = {s.number for s in all_steps if s.status == "done"}
+        for step in all_steps:
             if step.status != "pending":
                 continue
             # Check dependencies

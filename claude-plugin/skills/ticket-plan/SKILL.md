@@ -11,10 +11,11 @@ You are helping the user create an implementation plan for a meta-ticket. The pl
 ## Process
 
 1. **Read the ticket description and linked specs** to understand the full scope
-2. **Analyze what needs to be built** — identify distinct implementation units
-3. **Propose steps** — ordered, with dependencies between them
-4. **Define success criteria** for each step — verifiable, ideally executable
+2. **Ask the user about plan depth**: "How granular should the plan be? (a) High-level milestones only, (b) Milestones + steps, (c) Full detail with small tasks (recommended)"
+3. **Analyze what needs to be built** — identify milestones and distinct implementation units
+4. **Propose the plan structure** — milestones, steps within milestones, dependencies
 5. **Write the plan** to `.bonsai/plans/{ticket_id}.md`
+6. **Suggest state transition** — Ask via `AskUserQuestion`: "The plan is ready. Shall I move the ticket to Planned state?" If yes, call `ChangeTicketStatus` with `status='planned'`
 
 ## Plan Format
 
@@ -28,25 +29,33 @@ Write the plan as a markdown file with this structure:
 - **Status:** draft
 - **Updated:** {today}
 
-## Steps
+## Milestone 1: {title}
+{Brief description of what this milestone achieves}
 
 ### Step 1: {title}
 - **Status:** pending
 - **Skill:** {skill_id or "default"}
 - **Input specs:** [{spec_ids}]
+- **Depends on:** (none or Step N)
+- **Parallel with:** (none or Step N)
+- **Agent instructions:** {Specific guidance for the implementing agent}
 - **Success criteria:**
-  - [ ] {criterion}
+  - [ ] Builds and compiles without errors
+  - [ ] No linter/static analysis warnings
+  - [ ] All existing tests pass
+  - [ ] New changes covered with unit and integration tests
+  - [ ] Follows specification constraints
+  - [ ] {Custom criterion specific to this step}
 
 ### Step 2: {title}
-- **Status:** pending
-- **Skill:** default
-- **Depends on:** Step 1
-- **Input specs:** [{spec_ids}]
-- **Success criteria:**
-  - [ ] {criterion}
+...
+
+## Milestone 2: {title}
+...
 
 ## Verification
 - [ ] {ticket-level success criterion from description}
+- [ ] All success criteria from all steps verified
 ```
 
 ## Guidelines
@@ -57,7 +66,11 @@ Write the plan as a markdown file with this structure:
 - **Skill assignment** — use "default" for coding, existing skill IDs for design work
 - **Verification section** — copy the ticket's Success Criteria here as the final checklist
 - Keep steps focused — a step that takes more than one session is too big
-- After writing the plan, tell the user the plan is ready for execution
+- **Milestones** group related steps. Use milestones for large changes; for small changes, a single milestone is fine.
+- **Every step MUST include** the 5 mandatory success criteria (builds, no lint warnings, tests pass, changes tested, follows spec). Add custom criteria on top.
+- **Agent instructions** should tell the implementing agent exactly what to do: which files to modify, what patterns to follow, what to watch out for.
+- **Parallel with** indicates steps that have no mutual dependency and could theoretically run at the same time.
+- After writing the plan, go through the ticket's Success Criteria one more time and verify each is addressed by at least one step's criteria.
 
 ## Available Tools
 
@@ -65,3 +78,4 @@ Write the plan as a markdown file with this structure:
 - `registry_query` — understand the project structure
 - Read files directly to understand current code
 - Write the plan file to `.bonsai/plans/{ticket_id}.md`
+- `ChangeTicketStatus` — transition the ticket to 'planned' after user confirmation

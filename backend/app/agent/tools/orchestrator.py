@@ -66,8 +66,9 @@ async def _suggest_step(args: dict) -> dict:
         return _error(f"No plan found for ticket {ticket_id}")
 
     plan = plan_svc.read_plan(ticket_id)
+    all_steps = plan.all_steps()
     step = None
-    for s in plan.steps:
+    for s in all_steps:
         if s.number == step_number:
             step = s
             break
@@ -79,7 +80,7 @@ async def _suggest_step(args: dict) -> dict:
         return _error(f"Step {step_number} is already '{step.status}', cannot propose")
 
     # Check dependencies are met
-    done_steps = {s.number for s in plan.steps if s.status == "done"}
+    done_steps = {s.number for s in all_steps if s.status == "done"}
     unmet = [d for d in step.depends_on if d not in done_steps]
     if unmet:
         deps = ", ".join(f"Step {d}" for d in unmet)

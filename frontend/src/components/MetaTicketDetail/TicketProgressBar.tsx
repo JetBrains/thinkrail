@@ -5,13 +5,13 @@ import { useSessionStore } from "@/store/sessionStore.ts";
 
 interface TicketProgressBarProps {
   ticket: MetaTicket;
-  plan?: Record<string, unknown> | null;
   onStartSession: (skillId: string) => void;
   onSelectPanel: (panel: RightPanelContent) => void;
 }
 
 const STATES: { key: MetaTicketStatus; label: string }[] = [
   { key: "idea", label: "Idea" },
+  { key: "described", label: "Described" },
   { key: "specified", label: "Specified" },
   { key: "planned", label: "Planned" },
   { key: "executing", label: "Executing" },
@@ -20,10 +20,11 @@ const STATES: { key: MetaTicketStatus; label: string }[] = [
 
 const STATE_ORDER: Record<MetaTicketStatus, number> = {
   idea: 0,
-  specified: 1,
-  planned: 2,
-  executing: 3,
-  done: 4,
+  described: 1,
+  specified: 2,
+  planned: 3,
+  executing: 4,
+  done: 5,
 };
 
 interface Action {
@@ -37,49 +38,52 @@ export function TicketProgressBar({ ticket, onStartSession, onSelectPanel }: Tic
 
   const currentIndex = STATE_ORDER[ticket.status] ?? 0;
 
-  // Compute primary + secondary actions
+  // Compute primary + secondary actions — purely state-driven
   const { primary, secondary } = useMemo(() => {
     const sec: Action[] = [];
     let prim: Action | null = null;
 
-    if (ticket.status === "done") {
-      return { primary: null, secondary: [] };
+    switch (ticket.status) {
+      case "idea":
+        prim = { label: "Describe with AI", onClick: () => onStartSession("ticket-describe") };
+        sec.push({ label: "Edit Description", onClick: () => onSelectPanel({ type: "description" }) });
+        break;
+
+      case "described":
+        prim = { label: "Specify with AI", onClick: () => onStartSession("ticket-specify") };
+        sec.push({ label: "Edit Description", onClick: () => onSelectPanel({ type: "description" }) });
+        sec.push({ label: "Revise with AI", onClick: () => onStartSession("ticket-describe") });
+        break;
+
+      case "specified":
+        prim = { label: "Plan with AI", onClick: () => onStartSession("ticket-plan") };
+        sec.push({ label: "Add more specs", onClick: () => onStartSession("ticket-specify") });
+        sec.push({ label: "Edit Description", onClick: () => onSelectPanel({ type: "description" }) });
+        break;
+
+      case "planned":
+        prim = { label: "Execute", onClick: () => onStartSession("ticket-execute") };
+        sec.push({ label: "Revise plan", onClick: () => onSelectPanel({ type: "plan" }) });
+        sec.push({ label: "Add specs", onClick: () => onStartSession("ticket-specify") });
+        break;
+
+      case "executing":
+        if (ticket.orchestratorSessionId && liveSessions.has(ticket.orchestratorSessionId)) {
+          prim = {
+            label: "Continue",
+            onClick: () => onSelectPanel({ type: "session", sessionId: ticket.orchestratorSessionId! }),
+          };
+        } else {
+          prim = { label: "Execute", onClick: () => onStartSession("ticket-execute") };
+        }
+        sec.push({ label: "View plan", onClick: () => onSelectPanel({ type: "plan" }) });
+        break;
+
+      case "done":
+        // No actions for completed tickets
+        break;
     }
 
-    if (ticket.status === "executing") {
-      if (ticket.orchestratorSessionId && liveSessions.has(ticket.orchestratorSessionId)) {
-        prim = {
-          label: "Continue Execution",
-          onClick: () => onSelectPanel({ type: "session", sessionId: ticket.orchestratorSessionId! }),
-        };
-      } else {
-        prim = { label: "Start Executing", onClick: () => onStartSession("ticket-execute") };
-      }
-      sec.push({ label: "View plan", onClick: () => onSelectPanel({ type: "plan" }) });
-      return { primary: prim, secondary: sec };
-    }
-
-    if (ticket.planPath) {
-      prim = { label: "Start Executing", onClick: () => onStartSession("ticket-execute") };
-      sec.push({ label: "Revise plan", onClick: () => onSelectPanel({ type: "plan" }) });
-      sec.push({ label: "Add specs", onClick: () => onStartSession("ticket-specify") });
-      return { primary: prim, secondary: sec };
-    }
-
-    if (ticket.status === "specified") {
-      prim = { label: "Create Plan", onClick: () => onStartSession("ticket-plan") };
-      sec.push({ label: "Add more specs", onClick: () => onStartSession("ticket-specify") });
-      sec.push({ label: "Revise description", onClick: () => onSelectPanel({ type: "description" }) });
-      return { primary: prim, secondary: sec };
-    }
-
-    if (ticket.status === "idea" && ticket.body) {
-      prim = { label: "Specify", onClick: () => onStartSession("ticket-specify") };
-      sec.push({ label: "Revise description", onClick: () => onSelectPanel({ type: "description" }) });
-      return { primary: prim, secondary: sec };
-    }
-
-    prim = { label: "Describe", onClick: () => onSelectPanel({ type: "description" }) };
     return { primary: prim, secondary: sec };
   }, [ticket, liveSessions, onStartSession, onSelectPanel]);
 

@@ -40,6 +40,7 @@ class TestSessionTrashIntegration:
         t2 = board.create_ticket("Ticket B")
         board.attach_session(t1.id, "s1")
         board.attach_session(t2.id, "s1")
+        board.update_ticket(t1.id, status="described")
         board.update_ticket(t1.id, status="specified")
         board.set_plan_path(t1.id, "plans/test.md")
         board.set_orchestrator(t1.id, "s1")

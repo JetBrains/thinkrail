@@ -72,8 +72,8 @@ class TestUpdateTicket:
     def test_update_status(self, tmp_path: Path) -> None:
         svc = _setup_board(tmp_path)
         t = svc.create_ticket("Test")
-        updated = svc.update_ticket(t.id, status="specified")
-        assert updated.status == "specified"
+        updated = svc.update_ticket(t.id, status="described")
+        assert updated.status == "described"
 
     def test_invalid_transition_raises(self, tmp_path: Path) -> None:
         svc = _setup_board(tmp_path)
@@ -112,6 +112,8 @@ class TestLinking:
         svc = _setup_board(tmp_path)
         t = svc.create_ticket("Test")
         assert t.status == "idea"
+        # Move to described first (auto-transition triggers described->specified)
+        svc.update_ticket(t.id, status="described")
         updated = svc.link_spec(t.id, "spec-1")
         assert updated.status == "specified"
 
@@ -138,6 +140,7 @@ class TestLinking:
     def test_set_plan_path(self, tmp_path: Path) -> None:
         svc = _setup_board(tmp_path)
         t = svc.create_ticket("Test")
+        svc.update_ticket(t.id, status="described")
         svc.update_ticket(t.id, status="specified")
         updated = svc.set_plan_path(t.id, "plans/mt_test.md")
         assert updated.plan_path == "plans/mt_test.md"
@@ -146,6 +149,7 @@ class TestLinking:
     def test_set_orchestrator(self, tmp_path: Path) -> None:
         svc = _setup_board(tmp_path)
         t = svc.create_ticket("Test")
+        svc.update_ticket(t.id, status="described")
         svc.update_ticket(t.id, status="specified")
         svc.set_plan_path(t.id, "plans/mt_test.md")
         updated = svc.set_orchestrator(t.id, "orch-session-1")
@@ -174,6 +178,7 @@ class TestDetachSessionFromAll:
         svc = _setup_board(tmp_path)
         t = svc.create_ticket("T")
         svc.attach_session(t.id, "orch-1")
+        svc.update_ticket(t.id, status="described")
         svc.update_ticket(t.id, status="specified")
         svc.set_plan_path(t.id, "plans/test.md")
         svc.set_orchestrator(t.id, "orch-1")
