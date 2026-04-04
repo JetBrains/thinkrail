@@ -4,7 +4,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-from app.board.models import MetaTicket, MetaTicketSummary, MetaTicketStatus, MetaTicketType, SpecChange
+from app.board.models import MetaTicket, MetaTicketSummary, MetaTicketStatus, MetaTicketType, SpecPatch
 from app.board.plan import PlanService
 from app.board.spec_drafts import SpecDraftService
 from app.board.state_machine import validate_transition
@@ -61,7 +61,7 @@ class BoardService:
                 orchestrator_session_id=t.orchestrator_session_id,
                 linked_spec_ids=t.linked_spec_ids,
                 session_ids=t.session_ids,
-                spec_change_count=len(t.spec_changes),
+                spec_patch_count=len(t.spec_patches),
                 created=t.created,
                 updated=t.updated,
             ))
@@ -169,10 +169,10 @@ class BoardService:
             write_ticket(ticket_path(self._tickets_dir, ticket_id), ticket)
         return ticket
 
-    def add_spec_change(self, ticket_id: str, change: SpecChange) -> MetaTicket:
-        """Append a spec change record to a ticket."""
+    def add_spec_patch(self, ticket_id: str, patch: SpecPatch) -> MetaTicket:
+        """Append a spec patch record to a ticket."""
         ticket = self.get_ticket(ticket_id)
-        ticket.spec_changes.append(change)
+        ticket.spec_patches.append(patch)
         ticket.updated = datetime.now(UTC).isoformat()
         write_ticket(ticket_path(self._tickets_dir, ticket_id), ticket)
         return ticket

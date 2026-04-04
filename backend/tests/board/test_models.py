@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from app.board.models import MetaTicket, MetaTicketSummary
+from app.board.models import MetaTicket, MetaTicketSummary, SpecPatch
 
 
 class TestMetaTicket:
@@ -36,6 +36,32 @@ class TestMetaTicket:
         assert t.linked_spec_ids == ["s1"]
         assert t.session_ids == ["sid1"]
         assert t.plan_path == "plans/mt_test.md"
+
+
+class TestSpecPatch:
+    def test_defaults(self) -> None:
+        p = SpecPatch(
+            spec_id="mod-runner",
+            spec_title="Agent Runner",
+            operation="created",
+            patch_path="spec-patches/mt_abc/mod-runner-2026.patch",
+            spec_path="backend/app/agent/README.md",
+            session_id="sid-1",
+        )
+        assert p.spec_id == "mod-runner"
+        assert p.operation == "created"
+        assert p.created  # auto-generated
+
+    def test_camel_serialization(self) -> None:
+        p = SpecPatch(
+            spec_id="x", spec_title="X", operation="modified",
+            patch_path="p.patch", spec_path="x.md", session_id="s",
+        )
+        d = p.model_dump(by_alias=True)
+        assert "specId" in d
+        assert "patchPath" in d
+        assert "specPath" in d
+        assert "sessionId" in d
 
 
 class TestMetaTicketSummary:

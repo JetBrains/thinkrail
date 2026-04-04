@@ -15,7 +15,7 @@ from claude_agent_sdk import PermissionResultAllow, create_sdk_mcp_server, tool
 from app.agent.models import AgentTask
 from app.agent.tools._context import get_tool_context
 from app.agent.tracker import Tracker
-from app.board.models import MetaTicketSummary, SpecChange
+from app.board.models import MetaTicketSummary, SpecPatch
 from app.board.service import BoardService, TicketNotFoundError
 from app.core.config import AppConfig
 
@@ -82,19 +82,18 @@ async def _record_spec_change(args: dict) -> dict:
     if not spec_id:
         return _error("specId is required")
 
-    change = SpecChange(
+    patch = SpecPatch(
         spec_id=spec_id,
         spec_title=args.get("specTitle", ""),
-        change_type=args.get("changeType", "created"),
-        summary=args.get("summary", ""),
-        sections_changed=args.get("sectionsChanged", []),
-        detail=args.get("detail", ""),
+        operation=args.get("changeType", "created"),
+        patch_path="",
+        spec_path="",
         session_id=ctx.task.bonsai_sid,
     )
 
     board_service = BoardService(ctx.config)
     try:
-        ticket = board_service.add_spec_change(ticket_id, change)
+        ticket = board_service.add_spec_patch(ticket_id, patch)
     except TicketNotFoundError:
         return _error(f"Ticket {ticket_id} not found — it may have been deleted")
 
@@ -106,7 +105,7 @@ async def _record_spec_change(args: dict) -> dict:
         "content": [
             {
                 "type": "text",
-                "text": f"✓ Recorded spec change: {change.change_type} '{change.spec_title}'.",
+                "text": f"✓ Recorded spec patch: {patch.operation} '{patch.spec_title}'.",
             }
         ]
     }

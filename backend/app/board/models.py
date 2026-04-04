@@ -34,20 +34,16 @@ def _now_iso() -> str:
     return datetime.now(UTC).isoformat()
 
 
-SpecChangeType = Literal["created", "modified", "deleted"]
-
-
-class SpecChange(BaseModel):
-    """A structured record of a spec modification made during a specify session."""
+class SpecPatch(BaseModel):
+    """A permanent record of a spec change, stored as a unified diff patch file."""
 
     model_config = _CAMEL_CONFIG
 
     spec_id: str
     spec_title: str
-    change_type: SpecChangeType
-    summary: str
-    sections_changed: list[str] = Field(default_factory=list)
-    detail: str = ""
+    operation: Literal["created", "modified", "deleted"]
+    patch_path: str  # relative path to .patch file
+    spec_path: str   # path to the actual spec file
     session_id: str = ""
     created: str = Field(default_factory=_now_iso)
 
@@ -66,7 +62,7 @@ class MetaTicket(BaseModel):
     orchestrator_session_id: str | None = None
     linked_spec_ids: list[str] = Field(default_factory=list)
     session_ids: list[str] = Field(default_factory=list)
-    spec_changes: list[SpecChange] = Field(default_factory=list)
+    spec_patches: list[SpecPatch] = Field(default_factory=list)
     order: int = 0
     created: str = Field(default_factory=_now_iso)
     updated: str = Field(default_factory=_now_iso)
@@ -85,7 +81,7 @@ class MetaTicketSummary(BaseModel):
     orchestrator_session_id: str | None = None
     linked_spec_ids: list[str] = Field(default_factory=list)
     session_ids: list[str] = Field(default_factory=list)
-    spec_change_count: int = 0
+    spec_patch_count: int = 0
     order: int = 0
     created: str = ""
     updated: str = ""
@@ -102,7 +98,7 @@ class MetaTicketSummary(BaseModel):
             orchestrator_session_id=ticket.orchestrator_session_id,
             linked_spec_ids=ticket.linked_spec_ids,
             session_ids=ticket.session_ids,
-            spec_change_count=len(ticket.spec_changes),
+            spec_patch_count=len(ticket.spec_patches),
             order=ticket.order,
             created=ticket.created,
             updated=ticket.updated,
