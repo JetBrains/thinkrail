@@ -239,26 +239,16 @@ export function TicketInfo({ ticket, plan, onTicketUpdated, rightPanel, onSelect
         </div>
       </div>
 
-      {/* ── Spec Changes ── */}
-      {(ticket.specChanges?.length ?? 0) > 0 && (
-        <div className="ticket-section">
-          <div
-            className={`ticket-section-header ticket-section-clickable ${isActive({ type: "spec-changes" }) ? "ticket-section-clickable--active" : ""}`}
-            onClick={() => onSelectPanel({ type: "spec-changes" })}
-          >
-            <span className="ticket-section-title">Spec Changes</span>
-            <span className="ticket-section-count">{ticket.specChanges.length}</span>
-          </div>
-        </div>
-      )}
-
-      {/* ── Spec Drafts ── */}
+      {/* ── Spec Diffs (replaces Spec Changes + Spec Drafts) ── */}
       <div className="ticket-section">
         <div
-          className={`ticket-section-header ticket-section-clickable ${isActive({ type: "drafts" }) ? "ticket-section-clickable--active" : ""}`}
-          onClick={() => onSelectPanel({ type: "drafts" })}
+          className={`ticket-section-header ticket-section-clickable ${isActive({ type: "spec-diffs" }) ? "ticket-section-clickable--active" : ""}`}
+          onClick={() => onSelectPanel({ type: "spec-diffs" })}
         >
-          <span className="ticket-section-title">Spec Drafts</span>
+          <span className="ticket-section-title">Spec Diffs</span>
+          {(ticket.specPatches?.length ?? 0) > 0 && (
+            <span className="ticket-section-count">{ticket.specPatches.length} applied</span>
+          )}
         </div>
       </div>
 

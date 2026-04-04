@@ -7,11 +7,12 @@ The user reviews diffs and applies changes selectively.
 
 from __future__ import annotations
 
+import difflib
 import json
 import shutil
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Literal
+from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -202,7 +203,9 @@ class SpecDraftService:
 
     # -- Apply / Discard --
 
-    def apply_draft(self, ticket_id: str, index: int) -> None:
+    def apply_draft(
+        self, ticket_id: str, index: int, *, board_service: Any = None,
+    ) -> None:
         """Apply a single draft entry to the real filesystem + registry."""
         from app.spec.service import SpecService
 
@@ -213,13 +216,24 @@ class SpecDraftService:
         entry = manifest.entries[index]
         svc = SpecService(self._config)
 
+        # Read original content before applying
+        original_content = ""
+        if entry.operation != "create":
+            real_path = self._real_file_path(entry.real_path)
+            if real_path.is_file():
+                original_content = read_text(real_path)
+
+        # Read draft content
+        draft_content = ""
+        if entry.operation != "delete":
+            draft_content = self.read_draft(ticket_id, entry.real_path) or ""
+
+        # Apply to real filesystem (existing logic)
         if entry.operation == "delete" and entry.registry_id:
             svc.delete_spec(entry.registry_id)
         elif entry.operation in ("create", "update"):
-            draft_content = self.read_draft(ticket_id, entry.real_path)
-            if draft_content is None:
+            if not draft_content:
                 raise FileNotFoundError(f"Draft file not found for {entry.real_path}")
-
             if entry.operation == "create":
                 svc.create_spec(
                     entry.registry_type or "module-design",
@@ -231,10 +245,16 @@ class SpecDraftService:
                 if entry.registry_id:
                     svc.update_spec(entry.registry_id, draft_content)
                 else:
-                    # Fallback: write file directly
                     real = self._real_file_path(entry.real_path)
                     ensure_dir(real.parent)
                     write_text(real, draft_content)
+
+        # Generate patch file and record on ticket
+        if board_service is not None:
+            self._generate_patch(
+                ticket_id, entry, original_content, draft_content, board_service,
+                session_id=manifest.session_id,
+            )
 
         # Remove applied entry
         manifest.entries.pop(index)
@@ -245,12 +265,59 @@ class SpecDraftService:
         if draft_file.is_file():
             draft_file.unlink()
 
-    def apply_all(self, ticket_id: str) -> None:
+    def _generate_patch(
+        self,
+        ticket_id: str,
+        entry: DraftEntry,
+        original: str,
+        modified: str,
+        board_service: Any,
+        session_id: str = "",
+    ) -> None:
+        """Generate a unified diff patch file and record it on the ticket."""
+        from app.board.models import SpecPatch
+
+        timestamp = datetime.now(UTC).strftime("%Y%m%d%H%M%S")
+        spec_id = entry.registry_id or entry.real_path.replace("/", "-")
+        patch_filename = f"{spec_id}-{timestamp}.patch"
+        patch_rel = f"spec-patches/{ticket_id}/{patch_filename}"
+
+        # Compute unified diff
+        original_lines = original.splitlines(keepends=True)
+        modified_lines = modified.splitlines(keepends=True)
+        diff = difflib.unified_diff(
+            original_lines, modified_lines,
+            fromfile=f"a/{entry.real_path}",
+            tofile=f"b/{entry.real_path}",
+        )
+        patch_content = "".join(diff)
+
+        # Write patch file
+        patch_path = self._config.get_project_root() / ".bonsai" / patch_rel
+        ensure_dir(patch_path.parent)
+        write_text(patch_path, patch_content)
+
+        # Record on ticket
+        op_map = {"create": "created", "update": "modified", "delete": "deleted"}
+        patch_record = SpecPatch(
+            spec_id=entry.registry_id,
+            spec_title=entry.registry_title,
+            operation=op_map.get(entry.operation, entry.operation),
+            patch_path=patch_rel,
+            spec_path=entry.real_path,
+            session_id=session_id,
+        )
+        board_service.add_spec_patch(ticket_id, patch_record)
+
+        # Auto-link spec to ticket
+        if entry.registry_id and entry.operation != "delete":
+            board_service.link_spec(ticket_id, entry.registry_id)
+
+    def apply_all(self, ticket_id: str, *, board_service: Any = None) -> None:
         """Apply all draft entries."""
         manifest = self._read_manifest(ticket_id)
-        # Apply in order, but use index 0 each time since apply_draft pops
         for _ in range(len(manifest.entries)):
-            self.apply_draft(ticket_id, 0)
+            self.apply_draft(ticket_id, 0, board_service=board_service)
         self.discard_all(ticket_id)
 
     def discard_draft(self, ticket_id: str, index: int) -> None:

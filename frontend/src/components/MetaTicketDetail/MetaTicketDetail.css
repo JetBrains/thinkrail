@@ -911,77 +911,183 @@
   color: var(--blue);
 }
 
-/* ── Spec Drafts View ── */
-.ticket-drafts-list {
+/* ── Spec View ── */
+.spec-view-meta {
+  display: flex;
+  gap: var(--space-xs);
+  padding: var(--space-xs) var(--space-md);
   border-bottom: 1px solid var(--border);
-  max-height: 200px;
-  overflow-y: auto;
+  flex-wrap: wrap;
+  align-items: center;
 }
 
-.ticket-drafts-entry {
+.spec-view-badge {
+  font-size: 10px;
+  padding: 2px 8px;
+  border-radius: var(--radius-sm);
+  background: var(--panel);
+  color: var(--muted);
+  border: 1px solid var(--border);
+}
+.spec-view-badge--active { color: var(--green); border-color: var(--green); }
+.spec-view-badge--draft { color: var(--yellow); border-color: var(--yellow); }
+
+.spec-view-tag {
+  font-size: 10px;
+  padding: 2px 6px;
+  border-radius: var(--radius-sm);
+  background: var(--hover);
+  color: var(--hint);
+}
+
+.spec-view-tabs {
+  display: flex;
+  gap: 0;
+  border-bottom: 1px solid var(--border);
+  align-items: center;
+  padding: 0 var(--space-sm);
+}
+
+.spec-view-tab {
+  padding: var(--space-sm) var(--space-md);
+  font-size: 12px;
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  color: var(--muted);
+  cursor: pointer;
   display: flex;
   align-items: center;
-  gap: var(--space-sm);
-  padding: var(--space-xs) var(--space-md);
-  cursor: pointer;
-  font-size: 12px;
-  transition: background var(--transition-fast);
+  gap: var(--space-xs);
 }
-.ticket-drafts-entry:hover { background: var(--hover); }
-.ticket-drafts-entry--active { background: var(--sel); }
-
-.ticket-drafts-op {
-  font-size: 9px;
-  font-weight: 700;
-  letter-spacing: 0.5px;
-  min-width: 28px;
+.spec-view-tab:hover { color: var(--text); }
+.spec-view-tab--active {
+  color: var(--text);
+  border-bottom-color: var(--blue);
 }
 
-.ticket-drafts-path {
-  flex: 1;
+.spec-view-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--yellow);
+}
+
+.spec-view-count {
+  font-size: 10px;
+  padding: 1px 6px;
+  border-radius: 8px;
+  background: var(--panel);
   color: var(--muted);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
-.ticket-drafts-actions {
-  display: flex;
-  gap: 2px;
-  opacity: 0;
-  transition: opacity var(--transition-fast);
-}
-.ticket-drafts-entry:hover .ticket-drafts-actions { opacity: 1; }
-
-.ticket-drafts-action-btn {
+.spec-view-save {
+  margin-left: auto;
+  padding: var(--space-xs) var(--space-md);
+  font-size: 11px;
+  background: var(--green);
+  color: var(--bg);
   border: none;
-  background: transparent;
+  border-radius: var(--radius-sm);
   cursor: pointer;
-  font-size: 14px;
-  padding: 0 4px;
-  line-height: 1;
 }
-.ticket-drafts-action-btn:hover { opacity: 0.7; }
+.spec-view-save:disabled { opacity: 0.4; cursor: default; }
 
-.ticket-drafts-diff {
+.spec-view-content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.spec-view-preview {
+  flex: 1;
+  overflow: auto;
+  padding: var(--space-md);
+}
+
+.spec-view-diff-layout {
   flex: 1;
   display: flex;
   flex-direction: column;
   min-height: 0;
 }
 
-.ticket-drafts-diff-header {
+/* ── Spec Diffs shared list ── */
+.spec-diffs-list {
+  border-bottom: 1px solid var(--border);
+  max-height: 200px;
+  overflow-y: auto;
+}
+
+.spec-diffs-entry {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  padding: var(--space-sm) var(--space-md);
+  cursor: pointer;
+  font-size: 12px;
+  transition: background var(--transition-fast);
+}
+.spec-diffs-entry:hover { background: var(--hover); }
+.spec-diffs-entry--active { background: var(--sel); }
+
+.spec-diffs-op {
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  min-width: 28px;
+}
+
+.spec-diffs-label {
+  flex: 1;
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.spec-diffs-time {
+  font-size: 10px;
+  color: var(--hint);
+}
+
+.spec-diffs-discard {
+  border: none;
+  background: transparent;
+  color: var(--red);
+  cursor: pointer;
+  font-size: 14px;
+  padding: 0 4px;
+  opacity: 0;
+  transition: opacity var(--transition-fast);
+}
+.spec-diffs-entry:hover .spec-diffs-discard { opacity: 1; }
+
+.spec-diffs-editor {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.spec-diffs-editor-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
   padding: var(--space-xs) var(--space-md);
   font-size: 11px;
-  color: var(--hint);
+  color: var(--muted);
   border-bottom: 1px solid var(--border);
-  flex-shrink: 0;
 }
 
-.ticket-drafts-diff-editor {
+.spec-diffs-editor-op {
+  font-size: 10px;
+  color: var(--hint);
+}
+
+.spec-diffs-monaco {
   flex: 1;
   min-height: 0;
 }

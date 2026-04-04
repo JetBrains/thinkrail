@@ -21,10 +21,6 @@ from app.agent.tools.change_ticket_status import (
     intercept_change_ticket_status,
 )
 from app.agent.tools.orchestrator import intercept_orchestrator, orchestrator_mcp_server
-from app.agent.tools.record_spec_change import (
-    intercept_record_spec_change,
-    record_spec_change_mcp_server,
-)
 from app.agent.tools.visualization import intercept_visualize, vis_mcp_server
 
 # Type for intercept functions: (input_data, tracker, notify, task, config) -> result
@@ -37,7 +33,6 @@ MCP_SERVERS: dict[str, Any] = {
     "bonsai-specs": specs_mcp_server,
     "bonsai-orchestrator": orchestrator_mcp_server,
     "bonsai-ticket-status": change_ticket_status_mcp_server,
-    "bonsai-spec-changes": record_spec_change_mcp_server,
 }
 
 # canUseTool interceptors — keyed by tool name suffix.
@@ -58,7 +53,6 @@ INTERCEPTORS: dict[str, InterceptFn] = {
     "registry_mutate": intercept_specs,
     "suggest_step": intercept_orchestrator,
     "ChangeTicketStatus": intercept_change_ticket_status,
-    "RecordSpecChange": intercept_record_spec_change,
 }
 
 __all__ = [

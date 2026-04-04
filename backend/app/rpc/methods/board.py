@@ -227,12 +227,14 @@ async def get_draft_diff(service: BoardService, **params: Any) -> dict:
 
 @_handle_errors
 async def apply_draft(service: BoardService, **params: Any) -> None:
-    service.spec_drafts.apply_draft(params["ticketId"], params["index"])
+    service.spec_drafts.apply_draft(
+        params["ticketId"], params["index"], board_service=service,
+    )
 
 
 @_handle_errors
 async def apply_all_drafts(service: BoardService, **params: Any) -> None:
-    service.spec_drafts.apply_all(params["ticketId"])
+    service.spec_drafts.apply_all(params["ticketId"], board_service=service)
 
 
 @_handle_errors
@@ -243,3 +245,136 @@ async def discard_draft(service: BoardService, **params: Any) -> None:
 @_handle_errors
 async def discard_all_drafts(service: BoardService, **params: Any) -> None:
     service.spec_drafts.discard_all(params["ticketId"])
+
+
+# -- Spec patch methods -------------------------------------------------------
+
+
+@_handle_errors
+async def list_patches(service: BoardService, **params: Any) -> list[dict]:
+    ticket = service.get_ticket(params["ticketId"])
+    return [p.model_dump(by_alias=True) for p in ticket.spec_patches]
+
+
+@_handle_errors
+async def get_patch_diff(service: BoardService, **params: Any) -> dict:
+    """Read a .patch file and reconstruct original/modified pair for DiffEditor."""
+    ticket = service.get_ticket(params["ticketId"])
+    index = params["index"]
+    if index < 0 or index >= len(ticket.spec_patches):
+        raise IndexError(f"Patch index {index} out of range")
+
+    patch_record = ticket.spec_patches[index]
+    patch_path = service._config.get_project_root() / ".bonsai" / patch_record.patch_path
+
+    if not patch_path.is_file():
+        return {
+            "original": "",
+            "modified": "",
+            "path": patch_record.spec_path,
+            "operation": patch_record.operation,
+        }
+
+    from app.core.fileio import read_text
+    patch_content = read_text(patch_path)
+
+    # Reconstruct original and modified from unified diff
+    original_lines: list[str] = []
+    modified_lines: list[str] = []
+    for line in patch_content.splitlines(keepends=True):
+        if line.startswith("---") or line.startswith("+++") or line.startswith("@@"):
+            continue
+        if line.startswith("-"):
+            original_lines.append(line[1:])
+        elif line.startswith("+"):
+            modified_lines.append(line[1:])
+        elif line.startswith(" "):
+            original_lines.append(line[1:])
+            modified_lines.append(line[1:])
+
+    return {
+        "original": "".join(original_lines),
+        "modified": "".join(modified_lines),
+        "path": patch_record.spec_path,
+        "operation": patch_record.operation,
+    }
+
+
+@_handle_errors
+async def revert_patch(service: BoardService, **params: Any) -> dict:
+    """Revert a previously applied patch by applying it in reverse."""
+    ticket = service.get_ticket(params["ticketId"])
+    index = params["index"]
+    if index < 0 or index >= len(ticket.spec_patches):
+        raise IndexError(f"Patch index {index} out of range")
+
+    patch_record = ticket.spec_patches[index]
+    spec_path = service._config.get_project_root() / patch_record.spec_path
+
+    from app.core.fileio import read_text as _read, write_text as _write, ensure_dir
+    current_content = _read(spec_path) if spec_path.is_file() else ""
+
+    # Read the original from the patch
+    patch_path = service._config.get_project_root() / ".bonsai" / patch_record.patch_path
+    if not patch_path.is_file():
+        raise FileNotFoundError(f"Patch file not found: {patch_record.patch_path}")
+
+    patch_content = _read(patch_path)
+    original_lines: list[str] = []
+    for line in patch_content.splitlines(keepends=True):
+        if line.startswith("---") or line.startswith("+++") or line.startswith("@@"):
+            continue
+        if line.startswith("-"):
+            original_lines.append(line[1:])
+        elif line.startswith("+"):
+            pass
+        elif line.startswith(" "):
+            original_lines.append(line[1:])
+
+    original_content = "".join(original_lines)
+
+    # Write the original content back
+    if patch_record.operation == "created":
+        if spec_path.is_file():
+            spec_path.unlink()
+        from app.spec.service import SpecService
+        try:
+            SpecService(service._config).delete_spec(patch_record.spec_id)
+        except Exception:
+            pass
+    else:
+        _write(spec_path, original_content)
+        from app.spec.service import SpecService
+        try:
+            SpecService(service._config).update_spec(patch_record.spec_id, original_content)
+        except Exception:
+            pass
+
+    # Record a reverse patch
+    import difflib
+    from app.board.models import SpecPatch
+    from datetime import UTC, datetime
+
+    timestamp = datetime.now(UTC).strftime("%Y%m%d%H%M%S")
+    rev_filename = f"{patch_record.spec_id}-revert-{timestamp}.patch"
+    rev_rel = f"spec-patches/{params['ticketId']}/{rev_filename}"
+    rev_diff = difflib.unified_diff(
+        current_content.splitlines(keepends=True),
+        original_content.splitlines(keepends=True),
+        fromfile=f"a/{patch_record.spec_path}",
+        tofile=f"b/{patch_record.spec_path}",
+    )
+    rev_path = service._config.get_project_root() / ".bonsai" / rev_rel
+    ensure_dir(rev_path.parent)
+    _write(rev_path, "".join(rev_diff))
+
+    rev_record = SpecPatch(
+        spec_id=patch_record.spec_id,
+        spec_title=f"Revert: {patch_record.spec_title}",
+        operation="modified" if patch_record.operation != "created" else "deleted",
+        patch_path=rev_rel,
+        spec_path=patch_record.spec_path,
+        session_id="revert",
+    )
+    updated = service.add_spec_patch(params["ticketId"], rev_record)
+    return updated.model_dump(by_alias=True)

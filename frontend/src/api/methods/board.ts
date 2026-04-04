@@ -1,6 +1,7 @@
 import type { RpcClient } from "../client.ts";
 import type { MetaTicket, MetaTicketSummary, MetaTicketStatus, MetaTicketType } from "@/types/board.ts";
 
+
 export function createBoardApi(client: RpcClient) {
   return {
     list: () =>
@@ -83,6 +84,18 @@ export function createBoardApi(client: RpcClient) {
 
     discardAllDrafts: (ticketId: string) =>
       client.request<null>("board/discardAllDrafts", { ticketId }),
+
+    // Spec patch methods (history)
+    listPatches: (ticketId: string) =>
+      client.request<Record<string, unknown>[]>("board/listPatches", { ticketId }),
+
+    getPatchDiff: (ticketId: string, index: number) =>
+      client.request<{ original: string; modified: string; path: string; operation: string }>(
+        "board/getPatchDiff", { ticketId, index },
+      ),
+
+    revertPatch: (ticketId: string, index: number) =>
+      client.request<MetaTicket>("board/revertPatch", { ticketId, index }),
   };
 }
 

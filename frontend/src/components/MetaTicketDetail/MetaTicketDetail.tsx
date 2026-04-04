@@ -11,15 +11,13 @@ import { TicketDescriptionView } from "./TicketDescriptionView.tsx";
 import { TicketSpecView } from "./TicketSpecView.tsx";
 import { TicketProgressBar } from "./TicketProgressBar.tsx";
 import { TicketPlanView } from "./TicketPlanView.tsx";
-import { TicketSpecChangesView } from "./TicketSpecChangesView.tsx";
-import { TicketDraftsView } from "./TicketDraftsView.tsx";
+import { TicketSpecDiffsView } from "./TicketSpecDiffsView.tsx";
 import "./MetaTicketDetail.css";
 
 export type RightPanelContent =
   | { type: "description" }
   | { type: "spec"; specId: string; specTitle: string }
-  | { type: "spec-changes" }
-  | { type: "drafts" }
+  | { type: "spec-diffs" }
   | { type: "plan" }
   | { type: "session"; sessionId: string };
 
@@ -172,13 +170,19 @@ export function MetaTicketDetail({ ticketId }: MetaTicketDetailProps) {
           <TicketDescriptionView ticket={ticket} onTicketUpdated={setTicket} />
         )}
         {rightPanel.type === "spec" && (
-          <TicketSpecView specId={rightPanel.specId} specTitle={rightPanel.specTitle} />
+          <TicketSpecView
+            specId={rightPanel.specId}
+            specTitle={rightPanel.specTitle}
+            ticketId={ticketId}
+            ticket={ticket}
+          />
         )}
-        {rightPanel.type === "spec-changes" && (
-          <TicketSpecChangesView specChanges={ticket.specChanges ?? []} />
-        )}
-        {rightPanel.type === "drafts" && (
-          <TicketDraftsView ticketId={ticketId} />
+        {rightPanel.type === "spec-diffs" && (
+          <TicketSpecDiffsView
+            ticketId={ticketId}
+            ticket={ticket}
+            onTicketUpdated={setTicket}
+          />
         )}
         {rightPanel.type === "plan" && (
           <TicketPlanView

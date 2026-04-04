@@ -45,7 +45,13 @@ class TestMethods:
             "board/list", "board/get", "board/create", "board/update", "board/delete",
             "board/linkSpec", "board/unlinkSpec",
             "board/attachSession", "board/setPlanPath", "board/setOrchestrator",
-            "board/getPlan", "board/createPlan", "board/updateStep", "board/getNextStep", "board/reorder",
+            "board/getPlan", "board/createPlan", "board/savePlan",
+            "board/getPlanRaw", "board/savePlanRaw",
+            "board/updateStep", "board/getNextStep", "board/reorder",
+            "board/listDrafts", "board/getDraftDiff",
+            "board/applyDraft", "board/applyAllDrafts",
+            "board/discardDraft", "board/discardAllDrafts",
+            "board/listPatches", "board/getPatchDiff", "board/revertPatch",
             "trash/list", "trash/purge", "trash/empty",
         }
         assert set(METHODS.keys()) == expected
