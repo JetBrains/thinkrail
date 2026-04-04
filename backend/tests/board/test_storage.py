@@ -75,6 +75,30 @@ class TestListTickets:
         assert len(tickets) == 1
 
 
+class TestMigration:
+    def test_old_spec_changes_field_dropped(self, tmp_path: Path) -> None:
+        """Tickets with old specChanges field load successfully — field is ignored."""
+        data = {
+            "id": "mt_old1",
+            "title": "Legacy ticket",
+            "status": "idea",
+            "type": "feature",
+            "linkedSpecIds": [],
+            "sessionIds": [],
+            "specChanges": [{"specId": "x", "specTitle": "X", "changeType": "created",
+                             "summary": "s", "sectionsChanged": [], "detail": "", "sessionId": ""}],
+            "specPatches": [],
+            "order": 0,
+            "created": "2026-01-01T00:00:00+00:00",
+            "updated": "2026-01-01T00:00:00+00:00",
+        }
+        path = tmp_path / "mt_old1.json"
+        path.write_text(json.dumps(data), encoding="utf-8")
+        ticket = read_ticket(path)
+        assert ticket.id == "mt_old1"
+        assert ticket.spec_patches == []
+
+
 class TestDeleteTicket:
     def test_delete(self, tmp_path: Path) -> None:
         t = MetaTicket(title="Delete me")

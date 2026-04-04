@@ -25,6 +25,8 @@ def read_ticket(path: Path) -> MetaTicket:
         data = json.loads(content)
     except json.JSONDecodeError as exc:
         raise ValueError(f"Malformed ticket JSON at {path}: {exc}") from exc
+    # Migration: drop legacy specChanges field (replaced by specPatches)
+    data.pop("specChanges", None)
     return MetaTicket(**data)
 
 
