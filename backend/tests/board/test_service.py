@@ -5,6 +5,7 @@ from pathlib import Path
 
 import pytest
 
+from app.board.models import SpecPatch
 from app.board.service import BoardService, TicketNotFoundError
 from app.board.state_machine import InvalidTransitionError
 from app.core.config import load_config
@@ -155,6 +156,20 @@ class TestLinking:
         updated = svc.set_orchestrator(t.id, "orch-session-1")
         assert updated.orchestrator_session_id == "orch-session-1"
         assert updated.status == "executing"
+
+
+class TestSpecPatches:
+    def test_add_spec_patch(self, tmp_path: Path) -> None:
+        svc = _setup_board(tmp_path)
+        t = svc.create_ticket("Test")
+        patch = SpecPatch(
+            spec_id="mod-runner", spec_title="Runner",
+            operation="created", patch_path="patches/mod-runner.patch",
+            spec_path="backend/app/agent/README.md", session_id="s1",
+        )
+        updated = svc.add_spec_patch(t.id, patch)
+        assert len(updated.spec_patches) == 1
+        assert updated.spec_patches[0].spec_id == "mod-runner"
 
 
 class TestDetachSessionFromAll:
