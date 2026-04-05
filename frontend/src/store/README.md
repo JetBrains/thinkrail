@@ -418,6 +418,7 @@ const { done, active, total } = useSpecStore(
 
 ## Known Limitations
 
+- **Some UI preferences live in `localStorage`, not Zustand** — FileTree component manages `collapsed` and `showHidden` state in `localStorage` (keys: `bonsai-filetree-collapsed-{projectPath}`, `bonsai-filetree-showHidden-{projectPath}`). These are component-local, not in any Zustand store.
 - **No undo/redo**
 - **Session events accumulate unbounded** — no pruning for long sessions
 - **No cross-tab sync** — multiple browser tabs have independent stores

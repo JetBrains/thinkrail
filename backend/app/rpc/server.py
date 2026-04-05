@@ -345,7 +345,11 @@ async def _start_watcher(
                         except Exception:
                             pass  # best-effort
 
-        if any(ct in (Change.added, Change.deleted) for ct, _ in changes):
+        bonsaihide_modified = any(
+            ct == Change.modified and Path(p).name == ".bonsaihide"
+            for ct, p in changes
+        )
+        if bonsaihide_modified or any(ct in (Change.added, Change.deleted) for ct, _ in changes):
             await notify("files/treeChanged", {})
 
         # Notify frontend about modified files so open editors can refresh

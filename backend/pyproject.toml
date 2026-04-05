@@ -11,6 +11,7 @@ dependencies = [
     "jsonrpcserver>=5.0",
     "claude-agent-sdk>=0.1",
     "pydantic-settings>=2.13.1",
+    "pathspec>=1.0.4",
 ]
 
 [project.optional-dependencies]

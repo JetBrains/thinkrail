@@ -319,7 +319,7 @@ Specs are stored as files in the repository. The registry tracks metadata:
 **REST endpoints** for project and file management:
 - `GET /api/project/validate?path=...` — check if path is a valid Bonsai project
 - `POST /api/project/init` — initialize `.specs/` in a new directory
-- `GET /api/project/files?path=...` — list project directory tree
+- `GET /api/project/files?path=...&show_hidden=false` — list project directory tree. Visibility is controlled by `.bonsaihide` (gitignore-style config in project root; `pathspec` library). Pass `show_hidden=true` to bypass `.bonsaihide` rules and return all files.
 - `GET /api/file/read?project=...&path=...` — read file contents
 - `POST /api/file/write` — write file contents `{ project, path, content }`
 - `GET /api/fs/list-dirs?base=...&prefix=...` — list subdirectories for path autocompletion (max 20, directories only)

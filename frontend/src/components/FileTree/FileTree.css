@@ -43,6 +43,12 @@
   border-color: var(--border);
 }
 
+.ft-toolbar-btn-active {
+  background: var(--sel);
+  color: var(--text);
+  border-color: var(--border);
+}
+
 /* ── Row ── */
 .ft-row {
   display: flex;

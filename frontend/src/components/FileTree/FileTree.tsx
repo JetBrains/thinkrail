@@ -86,6 +86,16 @@ function storageKey(projectPath: string): string {
   return `bonsai-filetree-collapsed-${projectPath}`;
 }
 
+function showHiddenKey(projectPath: string): string {
+  return `bonsai-filetree-showHidden-${projectPath}`;
+}
+
+function readShowHidden(projectPath: string): boolean {
+  try {
+    return localStorage.getItem(showHiddenKey(projectPath)) === "true";
+  } catch { return false; }
+}
+
 function persistCollapsed(projectPath: string, set: Set<string>): void {
   try { localStorage.setItem(storageKey(projectPath), JSON.stringify([...set])); } catch { /* ignore */ }
 }
@@ -105,14 +115,17 @@ export function FileTree() {
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
   const [selected, setSelected] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [showHidden, setShowHidden] = useState(() =>
+    projectPath ? readShowHidden(projectPath) : false,
+  );
 
   const fetchFiles = useCallback(async () => {
     if (!projectPath) return;
     setLoading(true);
     try {
-      const res = await fetch(
-        `/api/project/files?path=${encodeURIComponent(projectPath)}`,
-      );
+      let url = `/api/project/files?path=${encodeURIComponent(projectPath)}`;
+      if (showHidden) url += "&show_hidden=true";
+      const res = await fetch(url);
       const data = await res.json();
       const fetched: FileEntry[] = data.entries ?? [];
       setEntries(fetched);
@@ -123,7 +136,7 @@ export function FileTree() {
     } finally {
       setLoading(false);
     }
-  }, [projectPath]);
+  }, [projectPath, showHidden]);
 
   useEffect(() => {
     fetchFiles();
@@ -171,6 +184,16 @@ export function FileTree() {
     if (projectPath) persistCollapsed(projectPath, empty);
   }, [projectPath]);
 
+  const toggleShowHidden = useCallback(() => {
+    setShowHidden((prev) => {
+      const next = !prev;
+      if (projectPath) {
+        try { localStorage.setItem(showHiddenKey(projectPath), String(next)); } catch { /* ignore */ }
+      }
+      return next;
+    });
+  }, [projectPath]);
+
   if (loading) {
     return <div className="ft-empty">Loading...</div>;
   }
@@ -196,6 +219,13 @@ export function FileTree() {
         </button>
         <button className="ft-toolbar-btn" onClick={expandAll} title="Expand All">
           ⊞
+        </button>
+        <button
+          className={`ft-toolbar-btn${showHidden ? " ft-toolbar-btn-active" : ""}`}
+          onClick={toggleShowHidden}
+          title={showHidden ? "Hide hidden files" : "Show hidden files"}
+        >
+          👁
         </button>
       </div>
       {visible.map((entry) => {

@@ -1,0 +1,27 @@
+# Build artifacts & dependencies
+node_modules/
+dist/
+build/
+target/
+.next/
+.nuxt/
+.vite/
+
+# Caches
+__pycache__/
+.mypy_cache/
+.pytest_cache/
+.ruff_cache/
+
+# Version control & tools
+.git/
+.claude/
+.venv/
+
+# All dotfiles hidden by default
+.*
+
+# Exceptions — show these
+!.specs/
+!.bonsai/
+!.bonsaihide

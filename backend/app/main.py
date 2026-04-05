@@ -6,6 +6,8 @@ from contextlib import asynccontextmanager
 from collections.abc import AsyncIterator
 from pathlib import Path
 
+import pathspec
+
 from fastapi import FastAPI, Query
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
@@ -27,6 +29,47 @@ class _OpenExternalBody(BaseModel):
     project: str
     path: str
     editor: str
+
+
+_BONSAIHIDE_DEFAULTS = """\
+# Build artifacts & dependencies
+node_modules/
+dist/
+build/
+target/
+.next/
+.nuxt/
+.vite/
+
+# Caches
+__pycache__/
+.mypy_cache/
+.pytest_cache/
+.ruff_cache/
+
+# Version control & tools
+.git/
+.claude/
+.venv/
+
+# All dotfiles hidden by default
+.*
+
+# Exceptions — show these
+!.specs/
+!.bonsai/
+!.bonsaihide
+"""
+
+
+def _load_bonsaihide(root: Path) -> pathspec.PathSpec:
+    """Load .bonsaihide from the project root, falling back to built-in defaults."""
+    hide_file = root / ".bonsaihide"
+    try:
+        text = hide_file.read_text(encoding="utf-8")
+    except (FileNotFoundError, PermissionError):
+        text = _BONSAIHIDE_DEFAULTS
+    return pathspec.PathSpec.from_lines("gitwildmatch", text.splitlines())
 
 
 def create_app() -> FastAPI:
@@ -85,18 +128,17 @@ def create_app() -> FastAPI:
         return {"path": str(p), "name": p.name}
 
     @app.get("/api/project/files")
-    async def list_files(path: str = Query(...), max_depth: int = Query(10)):
+    async def list_files(
+        path: str = Query(...),
+        max_depth: int = Query(10),
+        show_hidden: bool = Query(False),
+    ):
         """List project directory tree (files and folders)."""
         root = Path(path).expanduser().resolve()
         if not root.is_dir():
             return {"entries": []}
 
-        IGNORE = {
-            "node_modules", ".venv", "__pycache__", ".git", ".claude",
-            "dist", ".vite", ".mypy_cache", ".pytest_cache", ".ruff_cache",
-            "target", "build", ".next", ".nuxt",
-        }
-
+        spec = _load_bonsaihide(root)
         entries: list[dict] = []
 
         def walk(dir_path: Path, depth: int) -> None:
@@ -107,12 +149,10 @@ def create_app() -> FastAPI:
             except PermissionError:
                 return
             for child in children:
-                if child.name.startswith(".") and child.name not in (".specs",):
-                    continue
-                if child.name in IGNORE:
-                    continue
                 rel = str(child.relative_to(root))
                 is_dir = child.is_dir()
+                if not show_hidden and spec.match_file(rel + "/" if is_dir else rel):
+                    continue
                 entries.append({
                     "path": rel,
                     "name": child.name,

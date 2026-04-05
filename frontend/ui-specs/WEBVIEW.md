@@ -93,7 +93,7 @@ Toggle visibility: `Mod+B`
 | Tab | Description |
 | --- | --- |
 | **Specs** | Hierarchical tree of specifications grouped by type (goal → architecture → module → submodule → task). Each node shows icon, title, and status badge (✓ done, ● active, ○ pending, ! waiting, ~ stale). |
-| **Files** | Standard folder tree of the project repository. |
+| **Files** | Folder tree of the project repository. Visibility is controlled by `.bonsaihide` (gitignore-style config file in project root; `!` prefix for exceptions, last-match-wins). Toolbar has Collapse All, Expand All, and a Show Hidden toggle (👁) that temporarily bypasses `.bonsaihide` rules. Toggle state is persisted per-project in `localStorage`. |
 | **Progress** | Spec-driven progress dashboard — the primary way to track project state and session activity. See §2.1. |
 
 ### Behavior

@@ -78,7 +78,7 @@ Both sides can send either. The server can initiate requests to the client (e.g.
 
 | Method | Params | Description |
 | --- | --- | --- |
-| `files/treeChanged` | `{}` | File added or deleted in project |
+| `files/treeChanged` | `{}` | File added/deleted in project, or `.bonsaihide` modified |
 | `file/didChange` | `{ path: str }` | File content modified on disk (relative path from project root) |
 
 #### Agent Streaming Events
@@ -334,6 +334,7 @@ The file watcher is **per-connection**, scoped to the connected project director
    - Routes by file type:
      - `.specs/registry.json` → send `registry/didUpdate` via `current_notify`
      - Any path registered as a spec in the registry (`*.md` or `*.json` spec files) → send `spec/didChange`, `spec/didCreate`, or `spec/didDelete` via `current_notify`
+     - `.bonsaihide` modified → send `files/treeChanged` (so the file tree re-fetches with updated visibility rules)
      - Any modified file → send `file/didChange` with relative path (so open editors can refresh)
    - If `notifications.current_notify is None`: notifications are dropped silently
 4. On disconnect, the watcher handle is stopped via `stop(watcher_handle)`.
