@@ -1,9 +1,33 @@
-import { useCallback, useEffect, useState } from "react";
-import { DiffEditor } from "@monaco-editor/react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { DiffEditor, type DiffOnMount } from "@monaco-editor/react";
 import { getClient } from "@/api/index.ts";
 import { createBoardApi } from "@/api/methods/board.ts";
 import { useMonacoTheme } from "@/components/MarkdownEditor/useMonacoTheme.ts";
 import type { MetaTicket } from "@/types/board.ts";
+
+/**
+ * Wrapper that detaches models before unmount to avoid the Monaco
+ * "TextModel got disposed before DiffEditorWidget model got reset" error.
+ */
+function SafeDiffEditor(props: React.ComponentProps<typeof DiffEditor>) {
+  const editorRef = useRef<Parameters<DiffOnMount>[0] | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (editorRef.current) {
+        try { editorRef.current.setModel(null); } catch { /* ignore */ }
+        editorRef.current = null;
+      }
+    };
+  }, []);
+
+  const handleMount: DiffOnMount = useCallback((editor, monaco) => {
+    editorRef.current = editor;
+    props.onMount?.(editor, monaco);
+  }, [props.onMount]);
+
+  return <DiffEditor {...props} onMount={handleMount} />;
+}
 
 type Tab = "pending" | "history";
 
@@ -172,7 +196,7 @@ export function TicketSpecDiffsView({ ticketId, ticket, onTicketUpdated }: Ticke
                     </span>
                   </div>
                   <div className="spec-diffs-monaco">
-                    <DiffEditor
+                    <SafeDiffEditor
                       original={diff.original}
                       modified={diff.modified}
                       language="markdown"
@@ -230,7 +254,7 @@ export function TicketSpecDiffsView({ ticketId, ticket, onTicketUpdated }: Ticke
                     <span className="spec-diffs-editor-op">{diff.operation}</span>
                   </div>
                   <div className="spec-diffs-monaco">
-                    <DiffEditor
+                    <SafeDiffEditor
                       original={diff.original}
                       modified={diff.modified}
                       language="markdown"

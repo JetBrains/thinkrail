@@ -1,6 +1,6 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import Editor from "@monaco-editor/react";
-import { DiffEditor } from "@monaco-editor/react";
+import { DiffEditor, type DiffOnMount } from "@monaco-editor/react";
 import { getClient } from "@/api/index.ts";
 import { createSpecApi } from "@/api/methods/specs.ts";
 import { createBoardApi } from "@/api/methods/board.ts";
@@ -8,6 +8,30 @@ import { useMonacoTheme } from "@/components/MarkdownEditor/useMonacoTheme.ts";
 import { MarkdownPreview } from "@/components/FileViewer/MarkdownPreview.tsx";
 import type { MetaTicket } from "@/types/board.ts";
 import type { SpecDetail } from "@/types/spec.ts";
+
+/**
+ * Wrapper that detaches models before unmount to avoid the Monaco
+ * "TextModel got disposed before DiffEditorWidget model got reset" error.
+ */
+function SafeDiffEditor(props: React.ComponentProps<typeof DiffEditor>) {
+  const editorRef = useRef<Parameters<DiffOnMount>[0] | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (editorRef.current) {
+        try { editorRef.current.setModel(null); } catch { /* ignore */ }
+        editorRef.current = null;
+      }
+    };
+  }, []);
+
+  const handleMount: DiffOnMount = useCallback((editor, monaco) => {
+    editorRef.current = editor;
+    props.onMount?.(editor, monaco);
+  }, [props.onMount]);
+
+  return <DiffEditor {...props} onMount={handleMount} />;
+}
 
 type Tab = "preview" | "source" | "diff";
 
@@ -230,7 +254,7 @@ export function TicketSpecView({ specId, specTitle, ticketId, ticket }: TicketSp
                 </div>
                 {diffData && (
                   <div className="spec-diffs-editor">
-                    <DiffEditor
+                    <SafeDiffEditor
                       original={diffData.original}
                       modified={diffData.modified}
                       language="markdown"
