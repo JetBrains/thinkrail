@@ -7,6 +7,7 @@ import { MODELS, BETA_1M, getModelDef } from "@/utils/models.ts";
 import { SkillGrid } from "@/components/shared/SkillGrid.tsx";
 import { SpecSelector } from "@/components/shared/SpecSelector.tsx";
 import { TicketSelector } from "@/components/shared/TicketSelector.tsx";
+import { FileSelector } from "@/components/shared/FileSelector.tsx";
 import { PromptPreview } from "./PromptPreview.tsx";
 import "./DraftConfigCard.css";
 
@@ -31,12 +32,15 @@ export function DraftConfigCard({ bonsaiSid, readOnly, onVisibilityChange }: Dra
   const [skillPickerOpen, setSkillPickerOpen] = useState(false);
   const [specPickerOpen, setSpecPickerOpen] = useState(false);
   const [ticketPickerOpen, setTicketPickerOpen] = useState(false);
+  const [filePickerOpen, setFilePickerOpen] = useState(false);
+  const [dragOver, setDragOver] = useState(false);
   const [updating, setUpdating] = useState(false);
   const [starting, setStarting] = useState(false);
 
   const skillPickerRef = useRef<HTMLDivElement>(null);
   const specPickerRef = useRef<HTMLDivElement>(null);
   const ticketPickerRef = useRef<HTMLDivElement>(null);
+  const filePickerRef = useRef<HTMLDivElement>(null);
   const cardRef = useRef<HTMLDivElement>(null);
 
   // IntersectionObserver to track visibility (used in readOnly mode for sticky header)
@@ -67,10 +71,13 @@ export function DraftConfigCard({ bonsaiSid, readOnly, onVisibilityChange }: Dra
       if (ticketPickerOpen && ticketPickerRef.current && !ticketPickerRef.current.contains(e.target as Node)) {
         setTicketPickerOpen(false);
       }
+      if (filePickerOpen && filePickerRef.current && !filePickerRef.current.contains(e.target as Node)) {
+        setFilePickerOpen(false);
+      }
     }
     document.addEventListener("mousedown", handleClick);
     return () => document.removeEventListener("mousedown", handleClick);
-  }, [skillPickerOpen, specPickerOpen, ticketPickerOpen]);
+  }, [skillPickerOpen, specPickerOpen, ticketPickerOpen, filePickerOpen]);
 
   // Debounced update helper
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -174,6 +181,20 @@ export function DraftConfigCard({ bonsaiSid, readOnly, onVisibilityChange }: Dra
           </div>
         </div>
 
+        {/* Files */}
+        <div className="draft-config-row">
+          <span className="draft-config-label">Files</span>
+          <div className="draft-config-value">
+            {session.filePaths.length > 0
+              ? session.filePaths.map((p) => (
+                  <span key={p} className="draft-config-pill" title={p}>
+                    {p.includes("/") ? p.split("/").pop() : p}
+                  </span>
+                ))
+              : <span className="draft-config-muted">none</span>}
+          </div>
+        </div>
+
         {/* Config */}
         <div className="draft-config-row">
           <span className="draft-config-label">Config</span>
@@ -200,7 +221,25 @@ export function DraftConfigCard({ bonsaiSid, readOnly, onVisibilityChange }: Dra
   }
 
   return (
-    <div className="draft-config-card" ref={cardRef}>
+    <div
+      className={`draft-config-card${dragOver ? " draft-config-card--drag-over" : ""}`}
+      ref={cardRef}
+      onDragOver={(e) => {
+        if (e.dataTransfer.types.includes("application/x-bonsai-file")) {
+          e.preventDefault();
+          setDragOver(true);
+        }
+      }}
+      onDragLeave={() => setDragOver(false)}
+      onDrop={(e) => {
+        e.preventDefault();
+        setDragOver(false);
+        const path = e.dataTransfer.getData("application/x-bonsai-file");
+        if (path && !session.filePaths.includes(path)) {
+          debouncedUpdate({ filePaths: [...session.filePaths, path] });
+        }
+      }}
+    >
       <div className="draft-config-header">
         <input
           className="draft-config-name-input"
@@ -328,6 +367,65 @@ export function DraftConfigCard({ bonsaiSid, readOnly, onVisibilityChange }: Dra
               onSelect={(id) => {
                 debouncedUpdate({ metaTicketId: id });
                 setTicketPickerOpen(false);
+              }}
+            />
+          </div>
+        )}
+      </div>
+
+      {/* Files Row */}
+      <div className="draft-config-row" ref={filePickerRef}>
+        <span className="draft-config-label">Files</span>
+        <div className="draft-config-value">
+          {session.filePaths.map((p) => (
+            <span key={p} className="draft-config-pill" title={p}>
+              {p.includes("/") ? p.split("/").pop() : p}
+              <button
+                className="draft-config-pill-remove"
+                onClick={() =>
+                  debouncedUpdate({
+                    filePaths: session.filePaths.filter((f) => f !== p),
+                  })
+                }
+              >
+                {"\u00D7"}
+              </button>
+            </span>
+          ))}
+          <button
+            className="draft-config-action draft-config-action--dashed"
+            onClick={() => setFilePickerOpen(!filePickerOpen)}
+          >
+            + attach file
+          </button>
+          <button
+            className="draft-config-action draft-config-action--dashed"
+            onClick={async () => {
+              try {
+                const res = await fetch("/api/file/browse", { method: "POST" });
+                const data = await res.json();
+                const paths: string[] = data.paths ?? [];
+                if (paths.length > 0) {
+                  const merged = [...session.filePaths, ...paths.filter((p) => !session.filePaths.includes(p))];
+                  debouncedUpdate({ filePaths: merged });
+                }
+              } catch (err) {
+                console.error("[DraftConfigCard] browse failed:", err);
+              }
+            }}
+          >
+            + external
+          </button>
+        </div>
+        {filePickerOpen && (
+          <div className="draft-config-popover">
+            <FileSelector
+              selectedPaths={session.filePaths}
+              onToggle={(path) => {
+                const next = session.filePaths.includes(path)
+                  ? session.filePaths.filter((f) => f !== path)
+                  : [...session.filePaths, path];
+                debouncedUpdate({ filePaths: next });
               }}
             />
           </div>

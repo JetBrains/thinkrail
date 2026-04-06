@@ -187,6 +187,73 @@ def create_app() -> FastAPI:
         except Exception as e:
             return {"error": str(e), "path": path}
 
+    @app.get("/api/file/raw")
+    async def read_file_raw(project: str = Query(...), path: str = Query(...)):
+        """Serve a file's raw content with appropriate content type (for images etc.)."""
+        from fastapi.responses import FileResponse
+        p = Path(path)
+        file_path = p if p.is_absolute() else Path(project).expanduser().resolve() / path
+        if not file_path.is_file():
+            return {"error": "File not found"}
+        return FileResponse(file_path)
+
+    @app.post("/api/file/browse")
+    async def browse_files():
+        """Open a native file dialog and return selected absolute paths."""
+        import asyncio
+        import os
+        import shutil
+        import subprocess
+
+        def _pick() -> list[str]:
+            env = {**os.environ}
+            # Ensure DISPLAY is set for X11 dialogs
+            if "DISPLAY" not in env:
+                env["DISPLAY"] = ":0"
+
+            # Try zenity (GTK), then kdialog (KDE), then tkinter as fallback
+            zenity = shutil.which("zenity")
+            if zenity:
+                result = subprocess.run(
+                    [zenity, "--file-selection", "--multiple", "--separator=\n",
+                     "--title=Select files to attach"],
+                    capture_output=True, text=True, env=env,
+                )
+                if result.returncode == 0 and result.stdout.strip():
+                    return result.stdout.strip().split("\n")
+                return []
+
+            kdialog = shutil.which("kdialog")
+            if kdialog:
+                result = subprocess.run(
+                    [kdialog, "--getopenfilename", ".", "--multiple",
+                     "--title", "Select files to attach"],
+                    capture_output=True, text=True, env=env,
+                )
+                if result.returncode == 0 and result.stdout.strip():
+                    return result.stdout.strip().split("\n")
+                return []
+
+            # Fallback to tkinter
+            try:
+                import tkinter as tk
+                from tkinter import filedialog
+                root = tk.Tk()
+                root.withdraw()
+                root.attributes("-topmost", True)
+                paths = filedialog.askopenfilenames(title="Select files to attach")
+                root.destroy()
+                return list(paths)
+            except Exception:
+                return []
+
+        try:
+            loop = asyncio.get_running_loop()
+            paths = await loop.run_in_executor(None, _pick)
+            return {"paths": paths}
+        except Exception as exc:
+            return {"paths": [], "error": str(exc)}
+
     @app.post("/api/file/write")
     async def write_file(body: _WriteFileBody):
         """Write content to a file. Path is relative to project root."""

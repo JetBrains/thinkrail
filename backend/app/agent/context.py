@@ -229,10 +229,55 @@ def _build_spec_details(
     return details
 
 
+def _read_file_preview(project_root: Path, rel_path: str, max_lines: int = 30) -> str:
+    """Read first N lines of a file for UI preview. Returns empty string on failure.
+
+    Handles both relative (project) paths and absolute (external) paths.
+    """
+    try:
+        p = Path(rel_path)
+        full = p if p.is_absolute() else project_root / rel_path
+        if not full.is_file():
+            return ""
+        lines = full.read_text(encoding="utf-8", errors="replace").splitlines()[:max_lines]
+        return "\n".join(lines)
+    except Exception:
+        return ""
+
+
+def _build_files_section(file_paths: list[str]) -> str:
+    """Build the Relevant Files section for the system prompt (paths only)."""
+    listing = "\n".join(f"- {p}" for p in file_paths)
+    return (
+        "## Relevant Files\n\n"
+        "The user has flagged these files as potentially relevant to this session.\n"
+        "Read them if you need their content.\n\n"
+        + listing
+    )
+
+
+def _build_file_details(
+    file_paths: list[str], project_root: Path,
+) -> list[dict]:
+    """Return per-file metadata for the structured prompt view."""
+    details: list[dict] = []
+    for p in file_paths:
+        name = p.rsplit("/", 1)[-1] if "/" in p else p
+        preview = _read_file_preview(project_root, p)
+        details.append({
+            "path": p,
+            "name": name,
+            "preview": preview,
+            "tokens": len(preview) // 4,
+        })
+    return details
+
+
 SECTION_LABELS: dict[str, str] = {
     "general": "General Instructions",
     "task": "Skill / Task",
     "project": "Project",
+    "files": "Relevant Files",
     "specs": "Specifications",
 }
 
@@ -245,6 +290,7 @@ def build_context(
     spec_service: SpecService,
     plugin_dir: Path | None = None,
     session_prompt: str | None = None,
+    file_paths: list[str] | None = None,
 ) -> str:
     """Assemble the full system prompt for an agent session.
 
@@ -288,7 +334,11 @@ def build_context(
     # 3. Project metadata
     sections.append(f"## Project\n\nWorking directory: {project_root}")
 
-    # 4. Specification content
+    # 4. Relevant files (paths only)
+    if file_paths:
+        sections.append(_build_files_section(file_paths))
+
+    # 5. Specification content
     if spec_ids:
         sections.append(_build_specs_section(spec_ids, spec_service))
 
@@ -303,6 +353,7 @@ def build_context_structured(
     spec_service: SpecService,
     plugin_dir: Path | None = None,
     session_prompt: str | None = None,
+    file_paths: list[str] | None = None,
 ) -> dict:
     """Build context and return structured section data for the prompt preview.
 
@@ -338,7 +389,11 @@ def build_context_structured(
     # 3. Project
     ordered.append(("project", f"## Project\n\nWorking directory: {project_root}"))
 
-    # 4. Specs
+    # 4. Files
+    if file_paths:
+        ordered.append(("files", _build_files_section(file_paths)))
+
+    # 5. Specs
     if spec_ids:
         ordered.append(("specs", _build_specs_section(spec_ids, spec_service)))
 
@@ -354,6 +409,8 @@ def build_context_structured(
         }
         if key == "specs":
             section["specDetails"] = _build_spec_details(spec_ids, spec_service)
+        if key == "files":
+            section["fileDetails"] = _build_file_details(file_paths or [], project_root)
         sections.append(section)
 
     return {

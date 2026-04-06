@@ -114,6 +114,7 @@ export interface Session {
   name: string;
   skillId: string | null;
   specIds: string[];
+  filePaths: string[];             // attached file paths (relative to project root)
   status: SessionStatus;          // includes "draft" | "initializing" | "waiting"
   model: string;
   permissionMode: string;
@@ -196,7 +197,7 @@ interface SessionStore {
   archivedSessions: ArchivedSession[];
 
   // User-initiated actions
-  startSession: (params: { specIds, config, name, skillId? }) => Promise<string>;
+  startSession: (params: { specIds, config, name, skillId?, filePaths? }) => Promise<string>;
   sendMessage: (bonsaiSid: string, text: string) => Promise<void>;
   switchSession: (bonsaiSid: string) => void;
   closeSession: (bonsaiSid: string) => void;

@@ -911,6 +911,7 @@ When `readOnly` is true, the component renders a display-only version of the dra
 - **Skill row:** Read-only pill (no remove/change buttons)
 - **Specs row:** Read-only pills (no remove/add buttons)
 - **Ticket row:** Read-only pill (no remove/attach buttons)
+- **Files row:** Read-only pills showing filenames (tooltip: full path), or "none"
 - **Config row:** Static pills showing model, permission mode, turns, effort, 1M context (no selects or interactive buttons)
 - **Prompt preview:** Full `<PromptPreview>` with structured sections, token bar chart, collapsible markdown — identical to draft view
 - **No actions row** (Start/Discard buttons hidden)
@@ -919,7 +920,57 @@ Uses `IntersectionObserver` on `cardRef` to track visibility via `onVisibilityCh
 
 **Data source:** Reads all data from the session store by `bonsaiSid`. For `systemPrompt` and `promptSections`: available in-memory for sessions started from a draft; for restored sessions, `systemPrompt` is extracted from the persisted `sessionStart` event payload. `PromptPreview` falls back to markdown rendering of raw `systemPrompt` when structured `promptSections` are unavailable.
 
-**CSS classes:** `.draft-config-card--readonly` (modifier, removes margin), `.draft-config-name` (plain text session name), plus shared `.draft-config-*` classes from DraftConfigCard
+**CSS classes:** `.draft-config-card--readonly` (modifier, removes margin), `.draft-config-name` (plain text session name), `.draft-config-card--drag-over` (dashed blue outline when dragging files over), plus shared `.draft-config-*` classes from DraftConfigCard
+
+---
+
+### `<DraftConfigCard>` — File Attachments
+
+Users can attach project files to a draft session. Attached file paths are listed in the agent's system prompt so it can read them on demand.
+
+**Files row** (between Ticket and Config rows):
+- Pills showing filename (basename), tooltip shows full relative path, `×` to remove
+- `+ attach file` button opens a `FileSelector` popover
+- Read-only mode: pills only (no buttons)
+
+**Drag-and-drop:** Files can be dragged from the left-panel `FileTree` and dropped onto the draft card. Uses native HTML5 drag API with custom MIME type `application/x-bonsai-file`. Drop zone shows dashed blue outline (`.draft-config-card--drag-over`).
+
+### `<FileSelector>`
+
+Compact file tree browser for selecting files to attach to a draft session.
+
+```typescript
+interface FileSelectorProps {
+  selectedPaths: string[];
+  onToggle: (path: string) => void;
+}
+```
+
+- Fetches project file tree from `/api/project/files`
+- Tree view with expandable directories (collapsed by default)
+- Search input filters files by name
+- Click a file to toggle selection; selected files show checkmark
+- Rendered inside `DraftConfigCard`'s popover
+
+**CSS classes:** `.file-selector`, `.file-selector-search`, `.file-selector-list`, `.file-selector-item`, `.file-selector-item--selected`, `.file-selector-check`
+
+### `<PromptPreview>` — Files Section
+
+The "Relevant Files" prompt section uses teal color (`#56B6C2`). When expanded, shows each file as an expandable entry with:
+- Header: `▶ filename.tsx` + token count
+- Expanded: **Monaco editor** (read-only, syntax highlighted via `detectLanguage()`) for code/text files, auto-sized to content (max 300px). Falls back to `<pre>` while Monaco loads.
+- **Image files** (png, jpg, gif, svg, webp, etc.): rendered as `<img>` via `/api/file/raw` endpoint, max 300px height
+- Empty preview: italic "No preview available" message
+
+Reuses the same expand/collapse state (`expandedSpecs`) and CSS classes (`prompt-spec-list`, `prompt-spec-entry`) as spec details.
+
+**CSS classes:** `.prompt-file-preview`, `.prompt-file-preview--image`, `.prompt-file-image`, `.prompt-file-preview--empty`, `.prompt-file-fallback`
+
+### FileTree — Drag Source
+
+File rows (not directories) in `FileTree` are draggable (`draggable="true"`). On drag start, sets `application/x-bonsai-file` and `text/plain` data transfer types with the file path.
+
+**CSS:** `.ft-row[draggable="true"]` gets `cursor: grab`.
 
 ---
 

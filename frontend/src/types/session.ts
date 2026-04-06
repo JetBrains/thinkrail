@@ -71,6 +71,7 @@ export interface Session {
   name: string;
   skillId: string | null;
   specIds: string[];
+  filePaths: string[];
   status: SessionStatus;
   model: string;
   permissionMode: string;
@@ -99,6 +100,7 @@ export interface PromptSection {
   content: string;
   tokens: number;
   specDetails?: { id: string; title: string; content: string; tokens: number }[];
+  fileDetails?: { path: string; name: string; preview: string; tokens: number }[];
 }
 
 export interface ArchivedSession {

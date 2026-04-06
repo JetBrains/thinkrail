@@ -49,9 +49,11 @@ interface SessionStore {
     skillId?: string;
     prompt?: string;
     metaTicketId?: string;
+    filePaths?: string[];
   }) => Promise<string>;
   updateDraft: (bonsaiSid: string, changes: {
     specIds?: string[];
+    filePaths?: string[];
     skillId?: string | null;
     config?: AgentConfig;
     prompt?: string | null;
@@ -309,6 +311,7 @@ function ensureSession(
     name: bonsaiSid.slice(0, 8),
     skillId: null,
     specIds: [],
+    filePaths: [],
     status: "initializing",
     model: "",
     permissionMode: "default",
@@ -497,6 +500,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
         name,
         skillId: skillId ?? null,
         specIds,
+        filePaths: [],
         status: resolvedStatus,
         model: config.model,
         permissionMode: config.permissionMode,
@@ -519,7 +523,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
     return bonsaiSid;
   },
 
-  createDraft: async ({ specIds, config, name, skillId, prompt, metaTicketId }) => {
+  createDraft: async ({ specIds, config, name, skillId, prompt, metaTicketId, filePaths }) => {
     const api = createAgentApi(getClient());
     const { bonsaiSid, systemPrompt } = await api.prepare({
       specIds,
@@ -528,6 +532,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
       prompt: prompt ?? undefined,
       name,
       metaTicketId: metaTicketId ?? undefined,
+      filePaths: filePaths ?? undefined,
     });
 
     set((s) => {
@@ -537,6 +542,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
         name,
         skillId: skillId ?? null,
         specIds,
+        filePaths: filePaths ?? [],
         status: "draft",
         model: config.model,
         permissionMode: config.permissionMode,
@@ -585,6 +591,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
         } : {}),
         ...(changes.name !== undefined ? { name: changes.name } : {}),
         ...(changes.metaTicketId !== undefined ? { metaTicketId: changes.metaTicketId } : {}),
+        ...(changes.filePaths !== undefined ? { filePaths: changes.filePaths } : {}),
         systemPrompt,
         promptSections,
       });
@@ -755,6 +762,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
       name: data.name ?? bonsaiSid.slice(0, 8),
       skillId: (data.skillId as string) ?? null,
       specIds: data.specIds ?? [],
+      filePaths: (data.filePaths as string[]) ?? [],
       // If the backend runner is alive, use the actual status; otherwise
       // force "done" since there's nothing driving the session.
       status: isActive
@@ -858,6 +866,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
           name: data?.name ?? entry.name ?? entry.bonsaiSid.slice(0, 8),
           skillId: (data?.skillId as string) ?? entry.skillId ?? null,
           specIds: data?.specIds ?? entry.specIds ?? [],
+          filePaths: (data?.filePaths as string[]) ?? [],
           status: (entry.status as SessionStatus) ?? "idle",
           model: entryModel,
           permissionMode: (data?.config?.permissionMode as string) ?? "default",

@@ -108,6 +108,7 @@ async def prepare_agent(service: AgentService, **params: Any) -> dict:
         session_prompt=params.get("prompt"),
         name=params.get("name", ""),
         meta_ticket_id=params.get("metaTicketId"),
+        file_paths=params.get("filePaths"),
     )
     return {"bonsaiSid": task.bonsai_sid, "systemPrompt": task.system_prompt}
 
@@ -129,6 +130,8 @@ async def update_draft(service: AgentService, **params: Any) -> dict:
         kwargs["name"] = params["name"]
     if "metaTicketId" in params:
         kwargs["meta_ticket_id"] = params["metaTicketId"]
+    if "filePaths" in params:
+        kwargs["file_paths"] = params["filePaths"]
     structured = service.update_draft(bonsai_sid, **kwargs)
     return {
         "systemPrompt": structured["full"],

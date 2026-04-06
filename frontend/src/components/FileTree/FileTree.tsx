@@ -238,6 +238,11 @@ export function FileTree() {
             key={entry.path}
             className={`ft-row ${isSelected ? "ft-row-selected" : ""}`}
             style={{ paddingLeft: entry.depth * 20 + 4 }}
+            draggable={!entry.isDir}
+            onDragStart={(e) => {
+              e.dataTransfer.setData("text/plain", entry.path);
+              e.dataTransfer.setData("application/x-bonsai-file", entry.path);
+            }}
             onClick={() => {
               setSelected(entry.path);
               if (entry.isDir) {

@@ -9,6 +9,12 @@
   gap: var(--space-md);
 }
 
+.draft-config-card--drag-over {
+  outline: 2px dashed var(--blue);
+  outline-offset: -2px;
+  background: rgba(122, 162, 247, 0.05);
+}
+
 .draft-config-header {
   display: flex;
   align-items: center;

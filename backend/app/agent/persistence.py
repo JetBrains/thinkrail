@@ -117,6 +117,7 @@ def list_sessions(project_root: Path) -> list[dict[str, Any]]:
                 entry["config"] = data.get("config", {})
                 entry["systemPrompt"] = data.get("systemPrompt")
                 entry["sessionPrompt"] = data.get("sessionPrompt")
+                entry["filePaths"] = data.get("filePaths", [])
             result.append(entry)
         except Exception:
             logger.exception("Failed to read session file %s", path)

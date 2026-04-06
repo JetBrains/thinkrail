@@ -24,6 +24,7 @@ export interface SessionData {
   name: string;
   skillId?: string;
   specIds: string[];
+  filePaths?: string[];
   config: Record<string, unknown>;
   status: string;
   sessionId?: string;

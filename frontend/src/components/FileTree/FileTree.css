@@ -150,3 +150,11 @@
   padding: var(--space-lg);
   text-align: center;
 }
+
+/* ── Drag handle for file rows ── */
+.ft-row[draggable="true"] {
+  cursor: grab;
+}
+.ft-row[draggable="true"]:active {
+  cursor: grabbing;
+}

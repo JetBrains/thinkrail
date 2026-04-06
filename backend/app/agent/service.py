@@ -28,6 +28,36 @@ class AgentService:
         self._last_notify: dict[str, Callable] = {}
         self.board_service: Any = None   # Injected by server.py
         self.trash_service: Any = None  # Injected by server.py
+        self._restore_draft_sessions()
+
+    def _restore_draft_sessions(self) -> None:
+        """Restore draft sessions from disk into the tracker on startup."""
+        disk_sessions = list_sessions_from_disk(self._config.project_root)
+        for entry in disk_sessions:
+            if entry.get("status") != "draft":
+                continue
+            sid = entry.get("bonsaiSid", "")
+            if not sid or self._tracker.has_task(sid):
+                continue
+            try:
+                task = AgentTask(
+                    bonsai_sid=sid,
+                    name=entry.get("name", ""),
+                    status="draft",
+                    spec_ids=entry.get("specIds", []),
+                    file_paths=entry.get("filePaths", []),
+                    skill_id=entry.get("skillId"),
+                    session_prompt=entry.get("sessionPrompt"),
+                    config=AgentConfig(**entry.get("config", {})),
+                    meta_ticket_id=entry.get("metaTicketId"),
+                    system_prompt=entry.get("systemPrompt"),
+                    created=entry.get("createdAt", ""),
+                    updated=entry.get("updatedAt", ""),
+                )
+                self._tracker.add_task(task)
+                logger.info("Restored draft session %s (%s)", sid[:8], task.name)
+            except Exception:
+                logger.warning("Failed to restore draft session %s", sid, exc_info=True)
 
     def rebind_notify(self, notify: Callable) -> None:
         """Update the WebSocket callback for all running tasks.
@@ -48,6 +78,7 @@ class AgentService:
         session_prompt: str | None = None,
         name: str = "",
         meta_ticket_id: str | None = None,
+        file_paths: list[str] | None = None,
     ) -> AgentTask:
         """Create a draft session without starting the runner.
 
@@ -59,6 +90,8 @@ class AgentService:
         )
         task.status = "draft"
         task.meta_ticket_id = meta_ticket_id
+        if file_paths:
+            task.file_paths = file_paths
         self._attach_to_ticket(task)
         task.system_prompt = self._build_context_for(task)
         self._save_task(task)
@@ -73,6 +106,7 @@ class AgentService:
         session_prompt: str | None = ...,  # type: ignore[assignment]
         name: str | None = ...,  # type: ignore[assignment]
         meta_ticket_id: str | None = ...,  # type: ignore[assignment]
+        file_paths: list[str] | None = ...,  # type: ignore[assignment]
     ) -> str:
         """Update a draft session's config and rebuild its system prompt.
 
@@ -83,6 +117,8 @@ class AgentService:
             raise ValueError(f"Cannot update: session is '{task.status}', expected 'draft'")
         if spec_ids is not None:
             task.spec_ids = spec_ids
+        if file_paths is not ...:
+            task.file_paths = file_paths if file_paths is not None else []
         if skill_id is not ...:
             task.skill_id = skill_id
         if config is not None:
@@ -284,6 +320,7 @@ class AgentService:
             "skillId": task.skill_id,
             "sessionPrompt": task.session_prompt,
             "specIds": list(task.spec_ids),
+            "filePaths": list(task.file_paths),
             "config": task.config.model_dump(by_alias=True),
             "status": task.status,
             "sessionId": task.session_id,
@@ -340,6 +377,7 @@ class AgentService:
                 entry["config"] = task.config.model_dump(by_alias=True)
                 entry["systemPrompt"] = task.system_prompt
                 entry["sessionPrompt"] = task.session_prompt
+                entry["filePaths"] = list(task.file_paths)
             disk[task.bonsai_sid] = entry
         return list(disk.values())
 
@@ -666,6 +704,7 @@ class AgentService:
             config=task.config,
             spec_service=self._spec_service,
             plugin_dir=self._config.plugin_dir,
+            file_paths=task.file_paths,
         )
         ms = int((time.monotonic() - t0) * 1000)
         logger.info("[%s] build_context: %dms (%d chars)", task.bonsai_sid[:8], ms, len(ctx))
@@ -705,4 +744,5 @@ class AgentService:
             config=task.config,
             spec_service=self._spec_service,
             plugin_dir=self._config.plugin_dir,
+            file_paths=task.file_paths,
         )

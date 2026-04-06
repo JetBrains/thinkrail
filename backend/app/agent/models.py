@@ -116,6 +116,7 @@ class AgentTask(BaseModel):
     name: str = ""
     status: TaskStatus = "initializing"
     spec_ids: list[str] = Field(default_factory=list)
+    file_paths: list[str] = Field(default_factory=list)
     skill_id: str | None = None
     session_prompt: str | None = None
     config: AgentConfig = Field(default_factory=AgentConfig)

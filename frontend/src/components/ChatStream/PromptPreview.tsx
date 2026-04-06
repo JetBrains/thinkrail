@@ -1,8 +1,13 @@
-import { useState } from "react";
+import { useState, lazy, Suspense } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import type { PromptSection } from "@/types/session.ts";
+import { detectLanguage } from "@/components/FileViewer/languageMap.ts";
+import { useMonacoTheme } from "@/components/MarkdownEditor/useMonacoTheme.ts";
+import { useUiStore } from "@/store/uiStore.ts";
 import "./PromptPreview.css";
+
+const Editor = lazy(() => import("@monaco-editor/react"));
 
 interface PromptPreviewProps {
   systemPrompt: string;
@@ -13,13 +18,71 @@ const SECTION_COLORS: Record<string, string> = {
   general: "#6B57FF",
   task: "#087CFA",
   project: "#21D789",
+  files: "#56B6C2",
   specs: "#E8A336",
 };
+
+const IMAGE_EXTS = new Set(["png", "jpg", "jpeg", "gif", "svg", "webp", "ico", "bmp"]);
+
+function isImageFile(name: string): boolean {
+  const ext = name.split(".").pop()?.toLowerCase() ?? "";
+  return IMAGE_EXTS.has(ext);
+}
 
 function SectionContent({ content }: { content: string }) {
   return (
     <div className="prompt-section-content">
       <ReactMarkdown remarkPlugins={[remarkGfm]}>{content}</ReactMarkdown>
+    </div>
+  );
+}
+
+function FilePreviewContent({ name, preview, path }: { name: string; preview: string; path: string }) {
+  const monacoTheme = useMonacoTheme();
+  const projectPath = useUiStore((s) => s.projectPath);
+
+  if (isImageFile(name)) {
+    const project = projectPath ?? "";
+    return (
+      <div className="prompt-file-preview prompt-file-preview--image">
+        <img
+          src={`/api/file/raw?project=${encodeURIComponent(project)}&path=${encodeURIComponent(path)}`}
+          alt={name}
+          className="prompt-file-image"
+        />
+      </div>
+    );
+  }
+
+  if (!preview) {
+    return <div className="prompt-file-preview prompt-file-preview--empty">No preview available</div>;
+  }
+
+  const lineCount = preview.split("\n").length;
+  const height = Math.min(Math.max(lineCount * 19, 60), 300);
+
+  return (
+    <div className="prompt-file-preview" style={{ height }}>
+      <Suspense fallback={<pre className="prompt-file-fallback">{preview}</pre>}>
+        <Editor
+          value={preview}
+          language={detectLanguage(name)}
+          theme={monacoTheme}
+          height={height}
+          options={{
+            readOnly: true,
+            minimap: { enabled: false },
+            lineNumbers: "on",
+            scrollBeyondLastLine: false,
+            folding: false,
+            fontSize: 11,
+            renderLineHighlight: "none",
+            overviewRulerLanes: 0,
+            hideCursorInOverviewRuler: true,
+            scrollbar: { vertical: "hidden", horizontal: "auto" },
+          }}
+        />
+      </Suspense>
     </div>
   );
 }
@@ -103,9 +166,12 @@ export function PromptPreview({ systemPrompt, sections }: PromptPreviewProps) {
                     {s.key === "specs" && s.specDetails && (
                       <span className="prompt-section-count">({s.specDetails.length} files)</span>
                     )}
+                    {s.key === "files" && s.fileDetails && (
+                      <span className="prompt-section-count">({s.fileDetails.length} files)</span>
+                    )}
                     <span className="prompt-section-tokens">{s.tokens.toLocaleString()} tok</span>
                   </div>
-                  {isOpen && s.key !== "specs" && (
+                  {isOpen && s.key !== "specs" && s.key !== "files" && (
                     <SectionContent content={s.content} />
                   )}
                   {isOpen && s.key === "specs" && s.specDetails && (
@@ -122,6 +188,25 @@ export function PromptPreview({ systemPrompt, sections }: PromptPreviewProps) {
                               <span className="prompt-section-tokens">{spec.tokens.toLocaleString()} tok</span>
                             </div>
                             {specOpen && <SectionContent content={spec.content} />}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                  {isOpen && s.key === "files" && s.fileDetails && (
+                    <div className="prompt-spec-list">
+                      {s.fileDetails.map((file) => {
+                        const fileOpen = expandedSpecs.has(file.path);
+                        return (
+                          <div key={file.path} className="prompt-spec-entry">
+                            <div className="prompt-spec-header" onClick={() => toggleSpec(file.path)}>
+                              <span style={{ color: fileOpen ? "#56B6C2" : "var(--hint)" }}>
+                                {fileOpen ? "\u25BC" : "\u25B6"}
+                              </span>
+                              <span>{file.name}</span>
+                              <span className="prompt-section-tokens">{file.tokens.toLocaleString()} tok</span>
+                            </div>
+                            {fileOpen && <FilePreviewContent name={file.name} preview={file.preview} path={file.path} />}
                           </div>
                         );
                       })}

@@ -156,6 +156,40 @@
 }
 .prompt-spec-header:hover { color: var(--muted); }
 
+/* ── File preview in prompt ── */
+.prompt-file-preview {
+  margin: var(--space-xs) 0;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+}
+.prompt-file-preview--image {
+  height: auto;
+  padding: var(--space-sm);
+  background: var(--surface);
+  text-align: center;
+}
+.prompt-file-image {
+  max-width: 100%;
+  max-height: 300px;
+  border-radius: var(--radius-sm);
+}
+.prompt-file-preview--empty {
+  padding: var(--space-md);
+  color: var(--muted);
+  font-size: 11px;
+  font-style: italic;
+  height: auto;
+}
+.prompt-file-fallback {
+  font-size: 11px;
+  padding: var(--space-sm);
+  margin: 0;
+  color: var(--muted);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
 /* Scrollbar styling */
 .prompt-section-content::-webkit-scrollbar { width: 6px; }
 .prompt-section-content::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }

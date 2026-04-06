@@ -76,6 +76,11 @@ class Tracker:
     def has_task(self, bonsai_sid: str) -> bool:
         return bonsai_sid in self._tasks
 
+    def add_task(self, task: AgentTask) -> None:
+        """Add an existing task into the tracker (e.g., restoring from disk)."""
+        self._tasks[task.bonsai_sid] = task
+        self._queues[task.bonsai_sid] = asyncio.Queue()
+
     def list_tasks(self) -> list[AgentTask]:
         return list(self._tasks.values())
 

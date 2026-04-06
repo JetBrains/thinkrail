@@ -14,6 +14,7 @@ export interface CreateSpecParams {
 
 export interface AgentRunParams {
   specIds: string[];
+  filePaths?: string[];
   config: AgentConfig;
   skillId?: string;
   prompt?: string;

@@ -4,6 +4,7 @@ import type { AgentTask, AgentRunParams, AgentConfig } from "../types.ts";
 export interface DraftUpdateParams {
   bonsaiSid: string;
   specIds?: string[];
+  filePaths?: string[];
   skillId?: string | null;
   config?: AgentConfig;
   prompt?: string | null;
