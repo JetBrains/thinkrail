@@ -1,4 +1,7 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { extractToolHeader, cleanToolName } from "./toolHeaderExtractors.ts";
+import { ToolInputDetail } from "./ToolInputDetail.tsx";
+import { ToolOutputBody } from "./ToolOutputBody.tsx";
 
 const TOOL_ICONS: Record<string, string> = {
   Read: "\u{1F4D6}",
@@ -24,6 +27,7 @@ type CardState = "running" | "success" | "error";
 
 interface ToolCallCardProps {
   toolName: string;
+  rawInput?: Record<string, unknown>;
   toolInput?: string;
   output?: string;
   isError?: boolean;
@@ -33,6 +37,7 @@ interface ToolCallCardProps {
 
 export function ToolCallCard({
   toolName,
+  rawInput,
   toolInput,
   output,
   isError,
@@ -41,6 +46,11 @@ export function ToolCallCard({
 }: ToolCallCardProps) {
   const [expanded, setExpanded] = useState(false);
 
+  // Auto-expand when a tool call transitions to error state (live sessions)
+  useEffect(() => {
+    if (isError && state === "error") setExpanded(true);
+  }, [isError, state]);
+
   const borderColor =
     state === "running"
       ? "var(--blue)"
@@ -48,15 +58,17 @@ export function ToolCallCard({
         ? "var(--red)"
         : "var(--green)";
 
-  const statusText =
-    state === "running"
-      ? "running..."
-      : isError
-        ? "error"
-        : "done";
-
   const statusIcon =
     state === "running" ? "\u25CF" : isError ? "\u2715" : "\u2713";
+
+  // Clean MCP tool name prefix for display (keep raw for icon lookup)
+  const displayName = cleanToolName(toolName);
+
+  // Smart header extraction from raw input, or fall back to legacy string
+  const header = rawInput
+    ? extractToolHeader(displayName, rawInput, output, isError)
+    : null;
+  const summaryText = header?.summary ?? toolInput ?? "";
 
   return (
     <div className={`chat-tool${compact ? " chat-tool--compact" : ""}`} style={{ borderLeftColor: borderColor }}>
@@ -65,17 +77,28 @@ export function ToolCallCard({
         onClick={() => state !== "running" && setExpanded(!expanded)}
       >
         <span className="chat-tool-icon">{getToolIcon(toolName)}</span>
-        <span className="chat-tool-name">{toolName}</span>
-        {toolInput && (
-          <span className="chat-tool-input">{toolInput}</span>
+        <span className="chat-tool-name">{displayName}</span>
+        {summaryText && (
+          <span className="chat-tool-input">{summaryText}</span>
+        )}
+        {header?.badge && (
+          <span className="chat-tool-badge">{header.badge}</span>
         )}
         <span className="chat-tool-status" style={{ color: borderColor }}>
-          {statusIcon} {statusText}
+          {statusIcon} {state === "running" ? "running..." : isError ? "error" : "done"}
         </span>
       </div>
-      {expanded && output && (
+      {expanded && (
         <div className="chat-tool-body">
-          <pre>{output}</pre>
+          {rawInput && Object.keys(rawInput).filter(k => !k.startsWith("_")).length > 1 && (
+            <ToolInputDetail input={rawInput} />
+          )}
+          {output && (
+            <ToolOutputBody output={output} isError={isError} />
+          )}
+          {!rawInput && !output && toolInput && (
+            <pre>{toolInput}</pre>
+          )}
         </div>
       )}
     </div>

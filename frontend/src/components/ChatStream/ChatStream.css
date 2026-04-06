@@ -181,7 +181,7 @@
 .chat-tool-header:hover { background: var(--hover); }
 .chat-tool-icon { font-size: 14px; }
 .chat-tool-name { color: var(--cyan); font-weight: 600; }
-.chat-tool-input { color: var(--muted); font-size: 11px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 300px; }
+.chat-tool-input { color: var(--muted); font-size: 11px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; flex: 1 1 auto; }
 .chat-tool-status { margin-left: auto; font-size: 11px; white-space: nowrap; }
 .chat-tool-body {
   border-top: 1px solid var(--border);
@@ -191,6 +191,31 @@
   min-height: 40px;
 }
 .chat-tool-body pre { font-size: 11px; white-space: pre-wrap; word-break: break-all; color: var(--muted); margin: 0; }
+.chat-tool-badge { color: var(--muted); font-size: 10px; white-space: nowrap; }
+
+/* ── Structured Tool Input ── */
+.tool-section-label { color: var(--muted); font-size: 10px; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: var(--space-xs); }
+.tool-input-detail { margin-bottom: var(--space-sm); }
+.tool-input-entries { padding: 6px 10px; background: rgba(0, 0, 0, 0.12); border-radius: var(--radius-sm); }
+.tool-input-kv { display: flex; align-items: baseline; gap: 6px; font-size: 11px; line-height: 1.6; }
+.tool-input-key { color: var(--gold); flex-shrink: 0; }
+.tool-input-arrow { color: var(--muted); opacity: 0.4; flex-shrink: 0; }
+.tool-input-value { color: var(--green); word-break: break-word; }
+.tool-input-value--number { color: var(--purple); }
+.tool-input-value--bool { color: var(--blue); }
+.tool-input-value--nested { color: var(--muted); font-size: 10px; margin: 2px 0 0; padding: 4px 8px; background: rgba(0, 0, 0, 0.08); border-radius: var(--radius-sm); }
+.tool-input-toggle { background: none; border: none; color: var(--cyan); font-size: 10px; cursor: pointer; padding: 0 4px; text-decoration: underline; }
+
+/* ── Content-Aware Tool Output ── */
+.tool-output { font-size: 11px; white-space: pre-wrap; word-break: break-word; color: var(--muted); margin: 0; padding: 6px 10px; background: rgba(0, 0, 0, 0.12); border-radius: var(--radius-sm); }
+.tool-output--error { background: rgba(247, 84, 100, 0.06); border: 1px solid rgba(247, 84, 100, 0.18); color: var(--red); }
+.tool-output--json .json-key { color: var(--gold); }
+.tool-output--json .json-string { color: var(--green); }
+.tool-output--json .json-number { color: var(--purple); }
+.tool-output--json .json-bool { color: var(--blue); }
+.tool-output-error-tag { color: var(--red); }
+.tool-output-expand { display: block; width: 100%; text-align: center; padding: 6px; color: var(--cyan); font-size: 11px; cursor: pointer; background: none; border: none; border-top: 1px solid rgba(255, 255, 255, 0.05); margin-top: 2px; }
+.tool-output-expand:hover { text-decoration: underline; }
 
 /* ── Task Checklist (TodoWrite / TaskCreate / TaskUpdate) ── */
 .task-list { display: flex; flex-direction: column; gap: 4px; }

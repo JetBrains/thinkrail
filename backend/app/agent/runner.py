@@ -32,6 +32,25 @@ from app.agent.tracker import END_SIGNAL, Tracker
 logger = logging.getLogger(__name__)
 
 
+def _serialize_tool_content(content: Any) -> str:
+    """Serialize a ToolResultBlock.content to a clean string.
+
+    MCP tools return content as a list of content blocks
+    (e.g. [{'type': 'text', 'text': '...'}]).  Rather than calling str()
+    which produces Python repr with single quotes, extract the text
+    from text blocks and join them.
+    """
+    if isinstance(content, str):
+        return content
+    if isinstance(content, list):
+        parts = []
+        for item in content:
+            if isinstance(item, dict) and item.get("type") == "text":
+                parts.append(item.get("text", ""))
+        return "\n".join(parts) if parts else str(content)
+    return str(content) if content is not None else ""
+
+
 async def run(
     task: AgentTask,
     spec_context: str,
@@ -248,7 +267,7 @@ async def run(
                                         "sessionId": session_id,
                                         "toolUseId": block.tool_use_id,
                                         "toolName": "",
-                                        "output": block.content if isinstance(block.content, str) else str(block.content),
+                                        "output": _serialize_tool_content(block.content),
                                         "isError": block.is_error or False,
                                     }
                                     if agent_id:

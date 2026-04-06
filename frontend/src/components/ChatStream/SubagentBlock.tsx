@@ -98,7 +98,7 @@ export function SubagentBlock({
                 <ToolCallCard
                   key={`subagent-tool-${ci}`}
                   toolName={toolName}
-                  toolInput={extractToolInput(ev.payload.toolInput)}
+                  rawInput={(ev.payload.toolInput as Record<string, unknown>) ?? {}}
                   output={end?.output}
                   isError={end?.isError}
                   state={state}

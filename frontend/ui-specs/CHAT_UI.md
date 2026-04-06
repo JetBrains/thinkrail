@@ -161,10 +161,12 @@ interface AssistantMessageProps {
 ```typescript
 interface ToolCallCardProps {
   toolName: string;
-  toolInput?: string;
+  rawInput?: Record<string, unknown>;  // Full tool input object for smart rendering
+  toolInput?: string;                   // Legacy: pre-extracted string (backward compat)
   output?: string;
   isError?: boolean;
   state: "running" | "success" | "error";
+  compact?: boolean;
 }
 ```
 
@@ -179,22 +181,45 @@ interface ToolCallCardProps {
 | `success` | `false` | `var(--green)` | `✓` | `done` | `false` |
 | `error` | `true` | `var(--red)` | `✕` | `error` | `true` |
 
-**Header** (`.chat-tool-header`, always visible, clickable when not running):
+**Smart Header** (`.chat-tool-header`, always visible, clickable when not running):
 - `.chat-tool-icon`: emoji from `TOOL_ICONS` lookup
-- `.chat-tool-name`: `toolName`, `color: var(--cyan)`, `font-weight: 600`
-- `.chat-tool-input`: `toolInput` if provided, `color: var(--muted)`, 11px, truncated with `text-overflow: ellipsis`, max-width 300px
+- `.chat-tool-name`: `cleanToolName(toolName)` — strips `mcp__servername__` prefix for display (e.g., `mcp__bonsai-specs__registry_query` → `registry_query`), `color: var(--cyan)`, `font-weight: 600`
+- `.chat-tool-input`: smart summary from `extractToolHeader()` registry (see below), `color: var(--muted)`, 11px, truncated with `text-overflow: ellipsis`, `flex: 1 1 auto`
+- `.chat-tool-badge`: optional metadata badge (e.g. "4 lines", "3 files"), `color: var(--muted)`, 10px
 - `.chat-tool-status`: status icon + text, colored with `borderColor`, `margin-left: auto`
 
-**Body** (`.chat-tool-body`, toggle on header click):
-- Only rendered when `expanded && output`
-- `<pre>` containing the raw output string, 11px, `white-space: pre-wrap`, `color: var(--muted)`
-- `max-height: 120px`, `overflow-y: auto`
+**Header extraction** — `toolHeaderExtractors.ts` provides per-tool functions that extract a `{ summary, badge? }` from the raw input object + output:
+
+| Tool | Summary | Badge |
+|---|---|---|
+| `Bash` | `command` (truncated 100 chars) | output line count |
+| `Read` | `file_path` + line range if offset/limit present | output line count |
+| `Grep` | `/pattern/` in `path` | match count from output |
+| `Glob` | `pattern` in `path` | file count from output |
+| `Agent` | `subagent_type — description` | — |
+| `WebSearch` | `query` | — |
+| `WebFetch` | `url` (truncated 80 chars) | — |
+| `AskUserQuestion` | first question text | — |
+| Fallback | first string-valued field, or JSON.stringify first 60 chars | — |
+
+**Structured Body** (`.chat-tool-body`, toggle on header click):
+- Only rendered when `expanded`
+- **Input detail** (`<ToolInputDetail>`): shown when `rawInput` has >1 non-internal key. Renders key-value pairs with type-aware coloring:
+  - Keys: `var(--gold)`, strings: `var(--green)`, numbers: `var(--purple)`, booleans: `var(--blue)`
+  - Keys starting with `_` are skipped
+  - Long strings (>200 chars) truncated with "show full" toggle
+  - Nested objects rendered as indented `JSON.stringify`
+- **Output body** (`<ToolOutputBody>`): content-aware renderer:
+  - **JSON detection**: tries `JSON.parse` — if valid object/array, pretty-prints with colored syntax (keys: gold, strings: green, numbers: purple, booleans: blue) via simple regex coloring
+  - **Error styling**: `isError` flag → red-tinted background + border (`rgba(247,84,100,0.06)` bg, `rgba(247,84,100,0.18)` border)
+  - **Truncation**: outputs >30 lines show first 15 + clickable "Show all N lines" button
+  - **Plain text**: clean `<pre>` with `white-space: pre-wrap; word-break: break-word`
 - Header click does nothing when `state === "running"`
 
-**Input extraction** (in `ChatStream`, before passing to `ToolCallCard`):
-- if toolInput is a string → use as-is
-- if toolInput is an object → use first object value as string
-- otherwise → empty string ""
+**Data flow** (in `ChatStream` and `SubagentBlock`):
+- `rawInput` is passed as `(p.toolInput as Record<string, unknown>) ?? {}` — the full tool input object
+- The legacy `extractToolInput()` function remains exported for DiffCard Suspense fallback usage
+- `ToolCallCard` falls back to `toolInput` string prop if `rawInput` is not provided
 
 **Tool icon map:**
 
@@ -1179,9 +1204,23 @@ RPC server
 | `.chat-tool` | ToolCallCard root | `border-left: 3px solid {dynamic}; bg: var(--elevated); max-width: 90%` |
 | `.chat-tool-header` | ToolCallCard header | `flex; gap: sm; padding: sm md; cursor: pointer; font-size: 12px` |
 | `.chat-tool-name` | Tool name | `color: var(--cyan); font-weight: 600` |
-| `.chat-tool-input` | Tool input summary | `color: var(--muted); font-size: 11px; max-width: 300px` |
+| `.chat-tool-input` | Tool input summary | `color: var(--muted); font-size: 11px; flex: 1 1 auto; ellipsis` |
+| `.chat-tool-badge` | Header metadata badge | `color: var(--muted); font-size: 10px` |
 | `.chat-tool-status` | Tool status | `margin-left: auto; font-size: 11px` |
-| `.chat-tool-body` | Tool output | `border-top: 1px solid border; max-height: 120px; overflow-y: auto` |
+| `.chat-tool-body` | Tool output | `border-top: 1px solid border; overflow-y: auto; resize: vertical` |
+| `.tool-section-label` | "Input" / "Output" label | `color: var(--muted); font-size: 10px; uppercase` |
+| `.tool-input-detail` | Structured input container | key-value pairs with type coloring |
+| `.tool-input-key` | Input key name | `color: var(--gold)` |
+| `.tool-input-value` | Input string value | `color: var(--green)` |
+| `.tool-input-value--number` | Input number value | `color: var(--purple)` |
+| `.tool-input-value--bool` | Input bool/null value | `color: var(--blue)` |
+| `.tool-output` | Output pre block | `font-size: 11px; pre-wrap; bg: rgba(0,0,0,0.12)` |
+| `.tool-output--error` | Error output | `bg: rgba(red, 0.06); border: 1px solid rgba(red, 0.18)` |
+| `.tool-output--json .json-key` | JSON key | `color: var(--gold)` |
+| `.tool-output--json .json-string` | JSON string | `color: var(--green)` |
+| `.tool-output--json .json-number` | JSON number | `color: var(--purple)` |
+| `.tool-output--json .json-bool` | JSON bool/null | `color: var(--blue)` |
+| `.tool-output-expand` | Truncation expand button | `text-align: center; color: var(--cyan)` |
 | `.diff-card` | DiffCard root | `border-left: 3px solid {dynamic}; bg: var(--elevated); max-width: 90%; animation: slideUp` |
 | `.diff-card--compact` | DiffCard compact variant | `border-left-width: 2px; bg: transparent; max-width: 100%` |
 | `.diff-card-header` | DiffCard header | `flex; gap: sm; padding: sm md; cursor: pointer; font-size: 12px` |

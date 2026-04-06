@@ -304,7 +304,7 @@ export const ChatStream = forwardRef<ChatStreamHandle, ChatStreamProps>(function
               <ToolCallCard
                 key={k}
                 toolName={toolName}
-                toolInput={extractToolInput(p.toolInput)}
+                rawInput={(p.toolInput as Record<string, unknown>) ?? {}}
                 output={end?.output}
                 isError={end?.isError}
                 state={state}
