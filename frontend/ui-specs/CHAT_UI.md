@@ -894,31 +894,32 @@ type VisData =
 
 ---
 
-### `<SessionContextCard>`
+### `<DraftConfigCard>` — Read-Only Mode (Session Start)
 
-Rendered at the start of a session to display session configuration and context.
+At session start, `DraftConfigCard` is rendered in **read-only mode** to display the session's configuration and prompt preview. This replaces the former `SessionContextCard` component.
 
 ```typescript
-interface SessionContextCardProps {
-  skillId?: string;
-  specIds: string[];
-  model: string;
-  permissionMode: string;
-  betas: string[];
-  systemPrompt?: string;
+interface DraftConfigCardProps {
+  bonsaiSid: string;
+  readOnly?: boolean;
   onVisibilityChange?: (visible: boolean) => void;
 }
 ```
 
-- Root: `<div className="session-context-card">`
-- Uses `IntersectionObserver` on `cardRef` to track visibility and call `onVisibilityChange` — used by `StickyContextBar` to show/hide a condensed context bar when the card scrolls out of view
-- Conditionally renders sections:
-  1. **Skill info** (if `skillId`): icon, name, description from skill lookup
-  2. **Specs** (if `specIds` not empty): pills with spec titles from `useSpecStore()`
-  3. **Config** (always): model pill (`.session-context-pill--model`), permission mode, beta feature pills (`.session-context-pill--beta`)
-  4. **System prompt** (if provided): collapsible toggle (`.session-context-prompt-toggle`), pre-formatted body (`.session-context-prompt-body`)
+When `readOnly` is true, the component renders a display-only version of the draft card:
+- **Header:** Session name as plain text (`.draft-config-name`), no input field
+- **Skill row:** Read-only pill (no remove/change buttons)
+- **Specs row:** Read-only pills (no remove/add buttons)
+- **Ticket row:** Read-only pill (no remove/attach buttons)
+- **Config row:** Static pills showing model, permission mode, turns, effort, 1M context (no selects or interactive buttons)
+- **Prompt preview:** Full `<PromptPreview>` with structured sections, token bar chart, collapsible markdown — identical to draft view
+- **No actions row** (Start/Discard buttons hidden)
 
-**CSS classes:** `.session-context-card`, `.session-context-row`, `.session-context-label`, `.session-context-value`, `.session-context-pill`, `.session-context-desc`, `.session-context-prompt`
+Uses `IntersectionObserver` on `cardRef` to track visibility via `onVisibilityChange` — used by `StickyContextBar` to show/hide a condensed context bar when the card scrolls out of view.
+
+**Data source:** Reads all data from the session store by `bonsaiSid`. For `systemPrompt` and `promptSections`: available in-memory for sessions started from a draft; for restored sessions, `systemPrompt` is extracted from the persisted `sessionStart` event payload. `PromptPreview` falls back to markdown rendering of raw `systemPrompt` when structured `promptSections` are unavailable.
+
+**CSS classes:** `.draft-config-card--readonly` (modifier, removes margin), `.draft-config-name` (plain text session name), plus shared `.draft-config-*` classes from DraftConfigCard
 
 ---
 

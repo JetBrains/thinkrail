@@ -5,7 +5,6 @@ import { useSessionStore } from "@/store/sessionStore.ts";
 import { SystemMessage } from "./SystemMessage.tsx";
 import { AssistantMessage } from "./AssistantMessage.tsx";
 import { ToolCallCard } from "./ToolCallCard.tsx";
-import { SessionContextCard } from "./SessionContextCard.tsx";
 import { DraftConfigCard } from "./DraftConfigCard.tsx";
 import { VisualizationCard, VisErrorBoundary } from "./VisualizationCard.tsx";
 import { SubagentBlock } from "./SubagentBlock.tsx";
@@ -212,14 +211,10 @@ export const ChatStream = forwardRef<ChatStreamHandle, ChatStreamProps>(function
         switch (ev.eventType) {
           case "sessionStart":
             return (
-              <SessionContextCard
+              <DraftConfigCard
                 key={k}
-                skillId={session?.skillId ?? undefined}
-                specIds={session?.specIds ?? []}
-                model={(p.model as string) ?? session?.model ?? "agent"}
-                permissionMode={session?.permissionMode ?? "default"}
-                betas={session?.betas ?? []}
-                systemPrompt={session?.systemPrompt ?? (p.systemPrompt as string) ?? undefined}
+                bonsaiSid={session!.bonsaiSid}
+                readOnly
                 onVisibilityChange={onContextCardVisibility}
               />
             );

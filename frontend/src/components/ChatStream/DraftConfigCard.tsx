@@ -14,9 +14,11 @@ const TURN_OPTIONS = [5, 10, 20, 50, 100];
 
 interface DraftConfigCardProps {
   bonsaiSid: string;
+  readOnly?: boolean;
+  onVisibilityChange?: (visible: boolean) => void;
 }
 
-export function DraftConfigCard({ bonsaiSid }: DraftConfigCardProps) {
+export function DraftConfigCard({ bonsaiSid, readOnly, onVisibilityChange }: DraftConfigCardProps) {
   const session = useSessionStore((s) => s.sessions.get(bonsaiSid));
   const updateDraft = useSessionStore((s) => s.updateDraft);
   const startDraft = useSessionStore((s) => s.startDraft);
@@ -35,6 +37,18 @@ export function DraftConfigCard({ bonsaiSid }: DraftConfigCardProps) {
   const skillPickerRef = useRef<HTMLDivElement>(null);
   const specPickerRef = useRef<HTMLDivElement>(null);
   const ticketPickerRef = useRef<HTMLDivElement>(null);
+  const cardRef = useRef<HTMLDivElement>(null);
+
+  // IntersectionObserver to track visibility (used in readOnly mode for sticky header)
+  useEffect(() => {
+    if (!onVisibilityChange || !cardRef.current) return;
+    const observer = new IntersectionObserver(
+      ([entry]) => onVisibilityChange(entry.isIntersecting),
+      { threshold: 0.1 },
+    );
+    observer.observe(cardRef.current);
+    return () => observer.disconnect();
+  }, [onVisibilityChange]);
 
   // Sync name from session
   useEffect(() => {
@@ -92,7 +106,8 @@ export function DraftConfigCard({ bonsaiSid }: DraftConfigCardProps) {
     closeSession(bonsaiSid);
   }, [bonsaiSid, endSession, closeSession]);
 
-  if (!session || session.status !== "draft") return null;
+  if (!session) return null;
+  if (!readOnly && session.status !== "draft") return null;
 
   const skill = session.skillId ? SKILLS.find((s) => s.id === session.skillId) : null;
   const selectedSpecs = session.specIds
@@ -111,8 +126,81 @@ export function DraftConfigCard({ bonsaiSid }: DraftConfigCardProps) {
     effort: overrides.effort !== undefined ? overrides.effort : session.effort,
   });
 
+  // ── Read-only mode: display-only rendering (used at session start) ──
+  if (readOnly) {
+    return (
+      <div className="draft-config-card draft-config-card--readonly" ref={cardRef}>
+        <div className="draft-config-header">
+          <span className="draft-config-name">{session.name}</span>
+        </div>
+
+        {/* Skill */}
+        <div className="draft-config-row">
+          <span className="draft-config-label">Skill</span>
+          <div className="draft-config-value">
+            {skill ? (
+              <span className="draft-config-pill">
+                {skill.icon} {skill.name}
+              </span>
+            ) : (
+              <span className="draft-config-muted">none</span>
+            )}
+          </div>
+        </div>
+
+        {/* Specs */}
+        <div className="draft-config-row">
+          <span className="draft-config-label">Specs</span>
+          <div className="draft-config-value">
+            {selectedSpecs.length > 0
+              ? selectedSpecs.map((spec) => (
+                  <span key={spec!.id} className="draft-config-pill">
+                    {spec!.title}
+                  </span>
+                ))
+              : <span className="draft-config-muted">none</span>}
+          </div>
+        </div>
+
+        {/* Ticket */}
+        <div className="draft-config-row">
+          <span className="draft-config-label">Ticket</span>
+          <div className="draft-config-value">
+            {attachedTicket ? (
+              <span className="draft-config-pill">{attachedTicket.title}</span>
+            ) : (
+              <span className="draft-config-muted">none</span>
+            )}
+          </div>
+        </div>
+
+        {/* Config */}
+        <div className="draft-config-row">
+          <span className="draft-config-label">Config</span>
+          <div className="draft-config-value draft-config-value--wrap">
+            <span className="draft-config-pill draft-config-pill--model">
+              {modelDef?.label ?? session.model}
+            </span>
+            <span className="draft-config-pill">{session.permissionMode}</span>
+            <span className="draft-config-pill">{session.maxTurns} turns</span>
+            <span className="draft-config-pill">{session.effort ?? "auto"} effort</span>
+            {use1M && (
+              <span className="draft-config-pill draft-config-pill--beta">1M context</span>
+            )}
+          </div>
+        </div>
+
+        {/* System Prompt Preview */}
+        <PromptPreview
+          systemPrompt={session.systemPrompt ?? ""}
+          sections={session.promptSections}
+        />
+      </div>
+    );
+  }
+
   return (
-    <div className="draft-config-card">
+    <div className="draft-config-card" ref={cardRef}>
       <div className="draft-config-header">
         <input
           className="draft-config-name-input"

@@ -84,7 +84,7 @@ export interface AgentEvent {
 ### From `frontend/src/types/session.ts`
 
 ```typescript
-export type SessionStatus = "idle" | "running" | "done" | "error" | "interrupted";
+export type SessionStatus = "draft" | "initializing" | "idle" | "running" | "waiting" | "done" | "error" | "interrupted";
 
 export interface SessionMetrics {
   costUsd: number;
@@ -114,14 +114,20 @@ export interface Session {
   name: string;
   skillId: string | null;
   specIds: string[];
-  status: SessionStatus;
+  status: SessionStatus;          // includes "draft" | "initializing" | "waiting"
   model: string;
   permissionMode: string;
+  betas: string[];
+  effort: string | null;
+  maxTurns: number;
+  metaTicketId?: string | null;
   startedAt: number;
   events: AgentEvent[];
   metrics: SessionMetrics;
   pendingRequest: PendingRequest | null;
   answeredRequests: Map<string, unknown>;
+  systemPrompt?: string;           // full assembled prompt; restored from sessionStart event
+  promptSections?: PromptSection[] | null;  // structured sections (in-memory only, not persisted)
   restored?: boolean;
 }
 
@@ -218,7 +224,8 @@ interface SessionStore {
 - `sendMessage` optimistically appends `userMessage` event and sets status to `"running"`
 - `closeSession` calls `api.end()` if not done/error, removes from map, archives, switches to next session
 - `resolveRequest` calls `agent/respond` RPC, stores in `answeredRequests`, clears `pendingRequest`
-- `restoreSession` loads from backend, marks all question/approval events as answered with `{ historical: true }`, sets `status: "done"` and `restored: true`
+- `restoreSession` loads from backend, marks all question/approval events as answered with `{ historical: true }`, sets `status: "done"` and `restored: true`, extracts `systemPrompt` from the persisted `sessionStart` event payload
+- `loadActiveSessions` similarly extracts `systemPrompt` from the `sessionStart` event (or from `entry.systemPrompt` for drafts) when building Session objects from persistence
 - `onSuggestSession` stores suggestion params in `pendingRequest` as `{type: "suggestion", skill, specIds, name, reason, requestId}` and appends a `suggestSession` event
 - `onAgentEvent` is the generic handler for all streaming events; increments `toolCalls` on `toolCallEnd`, updates metrics on `turnComplete`
 - `onSessionError` with `subtype === "turn_error"` sets status to `"idle"` (recoverable); other subtypes set `"error"` (terminal)

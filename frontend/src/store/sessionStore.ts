@@ -746,6 +746,10 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
     const restoredBetas = (data.config?.betas as string[]) ?? [];
     const restoredCtx = reconstructContextUsage(events, restoredModel, restoredBetas);
     const diskMetrics = (data?.metrics ?? {}) as Record<string, unknown>;
+
+    // Restore system prompt from sessionStart event payload
+    const restoredPrompt = events.find((e) => e.eventType === "sessionStart")?.payload.systemPrompt as string | undefined;
+
     const session: Session = {
       bonsaiSid,
       name: data.name ?? bonsaiSid.slice(0, 8),
@@ -776,6 +780,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
       pendingRequest: null,
       answeredRequests: answered,
       restored: !isActive,
+      ...(restoredPrompt ? { systemPrompt: restoredPrompt } : {}),
     };
 
     set((s) => {
@@ -843,6 +848,11 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
         const entryBetas = (data?.config?.betas as string[]) ?? [];
         const restoredCtx = reconstructContextUsage(events, entryModel, entryBetas);
         const diskMetrics = (data?.metrics ?? {}) as Record<string, unknown>;
+
+        // Restore system prompt: from entry (drafts) or from sessionStart event payload
+        const restoredPrompt = entry.systemPrompt as string | undefined
+          ?? (events.find((e) => e.eventType === "sessionStart")?.payload.systemPrompt as string | undefined);
+
         next.set(entry.bonsaiSid, {
           bonsaiSid: entry.bonsaiSid,
           name: data?.name ?? entry.name ?? entry.bonsaiSid.slice(0, 8),
@@ -868,8 +878,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
           },
           pendingRequest: null,
           answeredRequests: buildAnsweredRequests(events, true),
-          // Restore system prompt for draft sessions
-          ...(entry.status === "draft" && entry.systemPrompt ? { systemPrompt: entry.systemPrompt } : {}),
+          ...(restoredPrompt ? { systemPrompt: restoredPrompt } : {}),
         });
       }
 

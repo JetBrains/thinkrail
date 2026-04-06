@@ -248,6 +248,26 @@
   color: var(--muted);
 }
 
+/* ── Read-only mode (session start) ── */
+.draft-config-card--readonly {
+  margin: 0;
+}
+.draft-config-name {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text);
+}
+
+/* ── pill model color in readonly ── */
+.draft-config-card--readonly .draft-config-pill--model {
+  background: rgba(8, 124, 250, 0.1);
+  color: var(--blue);
+}
+.draft-config-card--readonly .draft-config-pill--beta {
+  background: rgba(224, 175, 104, 0.1);
+  color: var(--gold);
+}
+
 /* Actions */
 .draft-config-actions {
   display: flex;
