@@ -268,6 +268,8 @@ def register_routes(app: FastAPI) -> None:
             _model_registries[key] = model_registry
             asyncio.create_task(model_registry.start_periodic_refresh())
 
+        agent_service.model_registry = model_registry
+
         bound_methods = _bind_methods(
             config, spec_service, agent_service, vis_service,
             board_service, model_registry, trash_service,

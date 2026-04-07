@@ -3,7 +3,7 @@ import { SKILLS } from "@/constants/skills.ts";
 import { useSpecStore } from "@/store/specStore.ts";
 import { useSessionStore } from "@/store/sessionStore.ts";
 import { useBoardStore } from "@/store/boardStore.ts";
-import { getModels, BETA_1M, getModelDef } from "@/utils/models.ts";
+import { getModels, getModelDef } from "@/utils/models.ts";
 import { SkillGrid } from "@/components/shared/SkillGrid.tsx";
 import { SpecSelector } from "@/components/shared/SpecSelector.tsx";
 import { TicketSelector } from "@/components/shared/TicketSelector.tsx";
@@ -120,7 +120,6 @@ export function DraftConfigCard({ bonsaiSid, readOnly, onVisibilityChange }: Dra
   const selectedSpecs = session.specIds
     .map((id) => specs.find((s) => s.id === id))
     .filter(Boolean);
-  const use1M = session.betas.includes(BETA_1M);
   const modelDef = getModelDef(session.model);
   const attachedTicket = session.metaTicketId ? tickets.get(session.metaTicketId) : null;
 
@@ -205,9 +204,6 @@ export function DraftConfigCard({ bonsaiSid, readOnly, onVisibilityChange }: Dra
             <span className="draft-config-pill">{session.permissionMode}</span>
             <span className="draft-config-pill">{session.maxTurns} turns</span>
             <span className="draft-config-pill">{session.effort ?? "auto"} effort</span>
-            {use1M && (
-              <span className="draft-config-pill draft-config-pill--beta">1M context</span>
-            )}
           </div>
         </div>
 
@@ -442,12 +438,7 @@ export function DraftConfigCard({ bonsaiSid, readOnly, onVisibilityChange }: Dra
               className="draft-config-select draft-config-select--model"
               value={session.model}
               onChange={(e) => {
-                const newModel = e.target.value;
-                const newDef = getModelDef(newModel);
-                const newBetas = !newDef?.supports1M
-                  ? session.betas.filter((b) => b !== BETA_1M)
-                  : session.betas;
-                debouncedUpdate({ config: buildConfig({ model: newModel, betas: newBetas }) });
+                debouncedUpdate({ config: buildConfig({ model: e.target.value }) });
               }}
             >
               <optgroup label="Current">
@@ -516,21 +507,6 @@ export function DraftConfigCard({ bonsaiSid, readOnly, onVisibilityChange }: Dra
             </span>
           </span>
 
-          {modelDef?.supports1M && (
-            <label className="draft-config-checkbox">
-              <input
-                type="checkbox"
-                checked={use1M}
-                onChange={(e) => {
-                  const newBetas = e.target.checked
-                    ? [...session.betas.filter((b) => b !== BETA_1M), BETA_1M]
-                    : session.betas.filter((b) => b !== BETA_1M);
-                  debouncedUpdate({ config: buildConfig({ betas: newBetas }) });
-                }}
-              />
-              1M context
-            </label>
-          )}
         </div>
       </div>
 

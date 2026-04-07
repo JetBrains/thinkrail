@@ -11,7 +11,7 @@ import type {
 } from "@/types/session.ts";
 import { getClient } from "@/api/index.ts";
 import { createAgentApi } from "@/api/methods/agents.ts";
-import { getContextWindowSize, BETA_1M, DEFAULT_MODEL } from "@/utils/models.ts";
+import { getContextWindowSize, DEFAULT_MODEL } from "@/utils/models.ts";
 import { useNotificationStore } from "./notificationStore.ts";
 import { getErrorMessage } from "@/utils/errors.ts";
 
@@ -147,10 +147,9 @@ function reconstructCost(events: AgentEvent[]): number {
  * Scans for turnComplete/interrupted events with usage data and
  * toolCallStart events for tool/file tracking.
  */
-function reconstructContextUsage(events: AgentEvent[], model: string, betas: string[] = []): ContextUsage {
+function reconstructContextUsage(events: AgentEvent[], model: string, _betas: string[] = []): ContextUsage {
   const cu = emptyContextUsage();
-  const use1M = betas.includes(BETA_1M);
-  cu.contextMax = getContextWindowSize(model, use1M);
+  cu.contextMax = getContextWindowSize(model);
   const toolUseIdToName = new Map<string, string>();
 
   for (const ev of events) {
@@ -249,8 +248,7 @@ function applyMetrics(
   const cacheRead = usage.cache_read_input_tokens ?? 0;
   const outputTokens = usage.output_tokens ?? 0;
   const totalContext = inputTokens + outputTokens;
-  const use1M = session.betas?.includes(BETA_1M) ?? false;
-  const contextMax = getContextWindowSize(session.model, use1M);
+  const contextMax = getContextWindowSize(session.model);
 
   const prevUsage = session.metrics.contextUsage;
   const turnUsage: TurnUsage = {
@@ -1111,8 +1109,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
       if (!session) return s;
       const newModel = (params.model as string) ?? session.model;
       const newBetas = (params.betas as string[]) ?? session.betas;
-      const use1M = newBetas.includes(BETA_1M);
-      const contextMax = getContextWindowSize(newModel, use1M);
+      const contextMax = getContextWindowSize(newModel);
       const next = new Map(s.sessions);
       next.set(bonsaiSid, {
         ...session,

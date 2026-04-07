@@ -70,21 +70,19 @@ function useDropdown() {
 
 interface SessionStatusLineProps {
   model: string;
-  betas: string[];
   permissionMode: string;
   effort: string | null;
   metrics: SessionMetrics;
   status: SessionStatus;
   projectCost: number;
   disabled?: boolean;
-  onChangeModel?: (model: string, betas: string[]) => void;
+  onChangeModel?: (model: string) => void;
   onChangePermissionMode?: (mode: string) => void;
   onChangeEffort?: (effort: string | null) => void;
 }
 
 export function SessionStatusLine({
   model,
-  betas,
   permissionMode,
   effort,
   metrics,
@@ -100,7 +98,7 @@ export function SessionStatusLine({
   const MODEL_OPTIONS = useMemo(() => buildModelOptions(), [dynamicModels]);
 
   const running = status === "running";
-  const activeKey = currentModelOptionKey(model, betas);
+  const activeKey = currentModelOptionKey(model);
   const activeOption = MODEL_OPTIONS.find((o) => o.key === activeKey);
   const { icon: statusIcon, label: statusLabel, cssClass: statusClass } = statusInfo(status);
   const modelDd = useDropdown();
@@ -136,7 +134,7 @@ export function SessionStatusLine({
                 key={o.key}
                 className={`ssl-dropdown-item${o.key === activeKey ? " ssl-dropdown-active" : ""}`}
                 onClick={() => {
-                  if (o.key !== activeKey) onChangeModel?.(o.modelId, o.betas);
+                  if (o.key !== activeKey) onChangeModel?.(o.modelId);
                   modelDd.close();
                 }}
               >
@@ -149,7 +147,7 @@ export function SessionStatusLine({
                 key={o.key}
                 className={`ssl-dropdown-item${o.key === activeKey ? " ssl-dropdown-active" : ""}`}
                 onClick={() => {
-                  if (o.key !== activeKey) onChangeModel?.(o.modelId, o.betas);
+                  if (o.key !== activeKey) onChangeModel?.(o.modelId);
                   modelDd.close();
                 }}
               >

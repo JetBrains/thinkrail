@@ -1,8 +1,8 @@
 """Model registry — fetches available models from the Anthropic API.
 
 Provides a cached, periodically refreshed list of Claude models with
-context window, 1M support, and pricing tier metadata.  Falls back to
-a hardcoded list when the API is unreachable.
+context window and pricing tier metadata.  Falls back to a hardcoded
+list when the API is unreachable.
 """
 
 from __future__ import annotations
@@ -12,7 +12,7 @@ import json
 import logging
 import os
 import time
-from dataclasses import asdict, dataclass, field
+from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any
 
@@ -28,14 +28,14 @@ CURRENT_MODELS: set[str] = {
 # ── Hardcoded fallback (used when API is unavailable + no cache) ──────────
 
 _FALLBACK: list[dict[str, Any]] = [
-    {"id": "claude-opus-4-6",   "label": "Opus 4.6",   "group": "current", "contextWindow": 200_000, "maxOutput": 128_000, "supports1M": True,  "pricingTier": "opus"},
-    {"id": "claude-sonnet-4-6", "label": "Sonnet 4.6", "group": "current", "contextWindow": 200_000, "maxOutput": 64_000,  "supports1M": True,  "pricingTier": "sonnet"},
-    {"id": "claude-haiku-4-5",  "label": "Haiku 4.5",  "group": "current", "contextWindow": 200_000, "maxOutput": 64_000,  "supports1M": False, "pricingTier": "haiku"},
-    {"id": "claude-opus-4-5",   "label": "Opus 4.5",   "group": "legacy",  "contextWindow": 200_000, "maxOutput": 64_000,  "supports1M": False, "pricingTier": "opus"},
-    {"id": "claude-opus-4-1",   "label": "Opus 4.1",   "group": "legacy",  "contextWindow": 200_000, "maxOutput": 64_000,  "supports1M": False, "pricingTier": "opus"},
-    {"id": "claude-opus-4-0",   "label": "Opus 4",     "group": "legacy",  "contextWindow": 200_000, "maxOutput": 64_000,  "supports1M": False, "pricingTier": "opus"},
-    {"id": "claude-sonnet-4-5", "label": "Sonnet 4.5", "group": "legacy",  "contextWindow": 200_000, "maxOutput": 64_000,  "supports1M": True,  "pricingTier": "sonnet"},
-    {"id": "claude-sonnet-4-0", "label": "Sonnet 4",   "group": "legacy",  "contextWindow": 200_000, "maxOutput": 64_000,  "supports1M": True,  "pricingTier": "sonnet"},
+    {"id": "claude-opus-4-6",   "label": "Opus 4.6",   "group": "current", "contextWindow": 1_000_000, "maxOutput": 128_000, "pricingTier": "opus"},
+    {"id": "claude-sonnet-4-6", "label": "Sonnet 4.6", "group": "current", "contextWindow": 1_000_000, "maxOutput": 64_000,  "pricingTier": "sonnet"},
+    {"id": "claude-haiku-4-5",  "label": "Haiku 4.5",  "group": "current", "contextWindow": 200_000,   "maxOutput": 64_000,  "pricingTier": "haiku"},
+    {"id": "claude-opus-4-5",   "label": "Opus 4.5",   "group": "legacy",  "contextWindow": 200_000,   "maxOutput": 64_000,  "pricingTier": "opus"},
+    {"id": "claude-opus-4-1",   "label": "Opus 4.1",   "group": "legacy",  "contextWindow": 200_000,   "maxOutput": 64_000,  "pricingTier": "opus"},
+    {"id": "claude-opus-4-0",   "label": "Opus 4",     "group": "legacy",  "contextWindow": 200_000,   "maxOutput": 64_000,  "pricingTier": "opus"},
+    {"id": "claude-sonnet-4-5", "label": "Sonnet 4.5", "group": "legacy",  "contextWindow": 1_000_000, "maxOutput": 64_000,  "pricingTier": "sonnet"},
+    {"id": "claude-sonnet-4-0", "label": "Sonnet 4",   "group": "legacy",  "contextWindow": 1_000_000, "maxOutput": 64_000,  "pricingTier": "sonnet"},
 ]
 
 
@@ -46,7 +46,6 @@ class ModelInfo:
     group: str  # "current" | "legacy"
     contextWindow: int
     maxOutput: int
-    supports1M: bool
     pricingTier: str  # "opus" | "sonnet" | "haiku"
 
 
@@ -64,14 +63,6 @@ def _derive_pricing_tier(model_id: str) -> str:
     return "sonnet"
 
 
-def _supports_1m(capabilities: dict[str, Any]) -> bool:
-    """Check if the model supports the 1M context window beta."""
-    try:
-        return capabilities.get("context_management", {}).get("compact_20260112", {}).get("supported", False)
-    except Exception:
-        return False
-
-
 def _parse_model(raw: Any) -> ModelInfo | None:
     """Convert an API model object to ModelInfo, or None if not a Claude chat model."""
     model_id: str = getattr(raw, "id", "") or ""
@@ -84,7 +75,6 @@ def _parse_model(raw: Any) -> ModelInfo | None:
     display_name: str = getattr(raw, "display_name", model_id) or model_id
     max_input: int = getattr(raw, "max_input_tokens", 200_000) or 200_000
     max_output: int = getattr(raw, "max_tokens", 64_000) or 64_000
-    caps: dict = getattr(raw, "capabilities", {}) or {}
 
     return ModelInfo(
         id=model_id,
@@ -92,7 +82,6 @@ def _parse_model(raw: Any) -> ModelInfo | None:
         group="current" if model_id in CURRENT_MODELS else "legacy",
         contextWindow=max_input,
         maxOutput=max_output,
-        supports1M=_supports_1m(caps),
         pricingTier=_derive_pricing_tier(model_id),
     )
 

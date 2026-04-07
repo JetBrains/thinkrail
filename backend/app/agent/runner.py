@@ -60,6 +60,7 @@ async def run(
     plugin_dir: Any = None,
     resume_session_id: str | None = None,
     config: Any = None,
+    model_registry: Any = None,
 ) -> AgentResult:
     """Execute a persistent conversational agent session.
 
@@ -138,6 +139,15 @@ async def run(
     def _on_cli_stderr(line: str) -> None:
         logger.debug("CLI stderr: %s", line)
 
+    # Auto-inject 1M context beta for models with >200K context window
+    betas = list(task.config.betas)
+    _1M_BETA = "context-1m-2025-08-07"
+    if _1M_BETA not in betas and model_registry:
+        for m in model_registry.get_models():
+            if m["id"] == task.config.model and m["contextWindow"] > 200_000:
+                betas.append(_1M_BETA)
+                break
+
     options = ClaudeAgentOptions(
         system_prompt=spec_context,
         model=task.config.model,
@@ -150,7 +160,7 @@ async def run(
         mcp_servers=MCP_SERVERS,
         resume=resume_session_id,
         stderr=_on_cli_stderr,
-        betas=task.config.betas,
+        betas=betas,
         effort=task.config.effort,
         hooks={
             "SubagentStart": [HookMatcher(hooks=[on_subagent_start])],

@@ -185,14 +185,13 @@ export function SessionPanel() {
           {!isDraft && (
             <SessionStatusLine
               model={activeSession.model}
-              betas={activeSession.betas ?? []}
               permissionMode={activeSession.permissionMode}
               effort={activeSession.effort ?? null}
               metrics={activeSession.metrics}
               status={status ?? "idle"}
               projectCost={projectCost}
               disabled={activeSession.restored || isDone}
-              onChangeModel={(m, betas) => updateConfig(activeSession.bonsaiSid, { model: m, betas })}
+              onChangeModel={(m) => updateConfig(activeSession.bonsaiSid, { model: m })}
               onChangePermissionMode={(m) => updateConfig(activeSession.bonsaiSid, { permissionMode: m })}
               onChangeEffort={async (e) => {
                 await updateConfig(activeSession.bonsaiSid, { effort: e });

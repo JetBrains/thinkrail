@@ -224,14 +224,13 @@ export function TicketSession({ ticket, embeddedSid, onSessionStarted }: TicketS
       {!isDraft && (
         <SessionStatusLine
           model={session.model}
-          betas={session.betas ?? []}
           permissionMode={session.permissionMode}
           effort={session.effort ?? null}
           metrics={session.metrics}
           status={status ?? "idle"}
           projectCost={projectCost}
           disabled={session.restored || isDone}
-          onChangeModel={(m, betas) => updateConfig(session.bonsaiSid, { model: m, betas })}
+          onChangeModel={(m) => updateConfig(session.bonsaiSid, { model: m })}
           onChangePermissionMode={(m) => updateConfig(session.bonsaiSid, { permissionMode: m })}
           onChangeEffort={async (e) => {
             await updateConfig(session.bonsaiSid, { effort: e });

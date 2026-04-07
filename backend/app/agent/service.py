@@ -26,9 +26,18 @@ class AgentService:
         self._tracker = Tracker()
         self._running_tasks: dict[str, asyncio.Task[Any]] = {}
         self._last_notify: dict[str, Callable] = {}
-        self.board_service: Any = None   # Injected by server.py
-        self.trash_service: Any = None  # Injected by server.py
+        self.board_service: Any = None     # Injected by server.py
+        self.trash_service: Any = None    # Injected by server.py
+        self.model_registry: Any = None   # Injected by server.py
         self._restore_draft_sessions()
+
+    def _get_context_max(self, model_id: str) -> int:
+        """Look up the context window for a model from the registry."""
+        if self.model_registry:
+            for m in self.model_registry.get_models():
+                if m["id"] == model_id:
+                    return m["contextWindow"]
+        return 200_000
 
     def _restore_draft_sessions(self) -> None:
         """Restore draft sessions from disk into the tracker on startup."""
@@ -338,7 +347,7 @@ class AgentService:
                 "costUsd": 0, "turns": 0, "toolCalls": 0,
                 "turnCostUsd": 0, "turnTurns": 0,
                 "durationMs": 0, "contextTokens": 0,
-                "contextMax": 200_000, "outputTokens": 0,
+                "contextMax": self._get_context_max(task.config.model), "outputTokens": 0,
             }
         # Preserve existing events from disk if we don't have new ones
         if events is not None:
@@ -516,7 +525,7 @@ class AgentService:
             "turnTurns": 0,
             "durationMs": _base_duration,
             "contextTokens": 0,
-            "contextMax": 200_000,
+            "contextMax": self._get_context_max(task.config.model),
             "outputTokens": 0,
         }
         _wall_start = time.monotonic()
@@ -575,7 +584,7 @@ class AgentService:
                         "turnCostUsd": params.get("turnCostUsd", 0),
                         "turnTurns": params.get("turn_turns", 0),
                         "contextTokens": ctx_tokens,
-                        "contextMax": 1_000_000 if "context-1m-2025-08-07" in task.config.betas else 200_000,
+                        "contextMax": self._get_context_max(task.config.model),
                         "outputTokens": usage.get("output_tokens", 0),
                     })
 
@@ -594,7 +603,7 @@ class AgentService:
         notify = _persisting_notify
 
         try:
-            await run(task, spec_context, notify, self._tracker, cwd=self._config.project_root, plugin_dir=self._config.plugin_dir, resume_session_id=resume_session_id, config=self._config)
+            await run(task, spec_context, notify, self._tracker, cwd=self._config.project_root, plugin_dir=self._config.plugin_dir, resume_session_id=resume_session_id, config=self._config, model_registry=self.model_registry)
             self._tracker.set_status(task.bonsai_sid, "done")
             self._save_task(task)
             self._tracker.remove_task(task.bonsai_sid)
