@@ -295,6 +295,8 @@
   padding: 0;
 }
 .status-sessions-btn:hover { text-decoration: underline; }
+.status-sessions-btn--bg { color: var(--gold); }
+.status-bg-count { font-weight: 500; }
 
 /* ── Background Sessions Indicator ── */
 .status-bg-sessions { position: relative; display: inline-block; }

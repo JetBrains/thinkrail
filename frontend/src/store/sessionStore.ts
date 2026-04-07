@@ -21,8 +21,8 @@ interface SessionStore {
   archivedSessions: ArchivedSession[];
   /** IDs of sessions explicitly ended by the user — ignore late-arriving events */
   closedIds: Set<string>;
-  /** Sessions with no open tab but still alive on the backend */
-  backgroundSessions: Map<string, Session>;
+  /** Which sessions have a visible tab in the tab bar */
+  openTabs: Set<string>;
   /** Sum of costUsd across all known sessions (in-memory + from backend list) */
   projectCost: number;
   /** Monotonically increasing counter for default "Session N" names */
@@ -67,8 +67,8 @@ interface SessionStore {
   switchSession: (bonsaiSid: string) => void;
   closeSession: (bonsaiSid: string) => void;
   endSession: (bonsaiSid: string) => Promise<void>;
-  restoreFromBackground: (bonsaiSid: string) => void;
-  endBackgroundSession: (bonsaiSid: string) => void;
+  /** Open a tab for a session (e.g., from background indicator dropdown) */
+  openTab: (bonsaiSid: string) => void;
   interruptSession: (bonsaiSid: string) => Promise<void>;
   resolveRequest: (
     bonsaiSid: string,
@@ -80,7 +80,7 @@ interface SessionStore {
   restartSession: (bonsaiSid: string) => Promise<void>;
 
   continueSession: (bonsaiSid: string) => Promise<void>;
-  restoreSession: (bonsaiSid: string) => Promise<void>;
+  restoreSession: (bonsaiSid: string, opts?: { noTab?: boolean }) => Promise<void>;
   loadActiveSessions: () => Promise<void>;
 
   /** Poll backend for actual status of sessions stuck in transient states */
@@ -455,12 +455,15 @@ function buildAnsweredRequests(
   return answered;
 }
 
+/** Tracks in-flight restoreSession fetches to prevent duplicate concurrent loads. */
+const _restoring = new Set<string>();
+
 export const useSessionStore = create<SessionStore>((set, get) => ({
   sessions: new Map(),
   activeSessionId: null,
   archivedSessions: [],
   closedIds: new Set(),
-  backgroundSessions: new Map(),
+  openTabs: new Set(),
   projectCost: 0,
   sessionCounter: 0,
 
@@ -517,10 +520,12 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
         answeredRequests: existing?.answeredRequests ?? new Map(),
         metaTicketId: metaTicketId ?? null,
       });
-      // Don't switch to this session if it's embedded in a meta-ticket
-      return metaTicketId
-        ? { sessions: next }
-        : { sessions: next, activeSessionId: bonsaiSid };
+      if (metaTicketId) {
+        return { sessions: next };
+      }
+      const tabs = new Set(s.openTabs);
+      tabs.add(bonsaiSid);
+      return { sessions: next, openTabs: tabs, activeSessionId: bonsaiSid };
     });
 
     return bonsaiSid;
@@ -560,9 +565,12 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
         metaTicketId: metaTicketId ?? null,
         systemPrompt,
       });
-      return metaTicketId
-        ? { sessions: next }
-        : { sessions: next, activeSessionId: bonsaiSid };
+      if (metaTicketId) {
+        return { sessions: next };
+      }
+      const tabs = new Set(s.openTabs);
+      tabs.add(bonsaiSid);
+      return { sessions: next, openTabs: tabs, activeSessionId: bonsaiSid };
     });
 
     return bonsaiSid;
@@ -707,28 +715,41 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
           pendingRequest: null,
           answeredRequests: answered,
         });
-        return { sessions: next, activeSessionId: bonsaiSid };
+        const tabs = new Set(s.openTabs);
+        tabs.add(bonsaiSid);
+        return { sessions: next, openTabs: tabs, activeSessionId: bonsaiSid };
       });
     } else {
-      // Session NOT in memory — restore it first
+      // Session NOT in memory — restore it first (with tab)
       await get().restoreSession(bonsaiSid);
       set((s) => {
         const session = s.sessions.get(bonsaiSid);
         if (!session) return s;
         const next = new Map(s.sessions);
         next.set(bonsaiSid, { ...session, status: "initializing", restored: undefined });
-        return { sessions: next };
+        const tabs = new Set(s.openTabs);
+        tabs.add(bonsaiSid);
+        return { sessions: next, openTabs: tabs };
       });
     }
   },
 
-  restoreSession: async (bonsaiSid) => {
-    // Already in memory — just switch
-    if (get().sessions.has(bonsaiSid)) {
-      set({ activeSessionId: bonsaiSid });
+  restoreSession: async (bonsaiSid, opts) => {
+    const noTab = opts?.noTab ?? false;
+    // Already in memory or already being restored — just open tab if needed
+    if (get().sessions.has(bonsaiSid) || _restoring.has(bonsaiSid)) {
+      if (!noTab) {
+        set((s) => {
+          const tabs = new Set(s.openTabs);
+          tabs.add(bonsaiSid);
+          return { openTabs: tabs, activeSessionId: bonsaiSid };
+        });
+      }
       return;
     }
-    // Load from backend
+    // Load from backend (guard against concurrent fetches)
+    _restoring.add(bonsaiSid);
+    try {
     const { createSessionApi } = await import("@/api/methods/sessions.ts");
     const api = createSessionApi(getClient());
     const data = await api.get(bonsaiSid);
@@ -799,8 +820,16 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
       next.set(bonsaiSid, session);
       const nextClosed = new Set(s.closedIds);
       nextClosed.delete(bonsaiSid);
-      return { sessions: next, activeSessionId: bonsaiSid, closedIds: nextClosed };
+      if (noTab) {
+        return { sessions: next, closedIds: nextClosed };
+      }
+      const tabs = new Set(s.openTabs);
+      tabs.add(bonsaiSid);
+      return { sessions: next, openTabs: tabs, activeSessionId: bonsaiSid, closedIds: nextClosed };
     });
+    } finally {
+      _restoring.delete(bonsaiSid);
+    }
   },
 
   unload: () => {
@@ -809,7 +838,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
       activeSessionId: null,
       archivedSessions: [],
       closedIds: new Set(),
-      backgroundSessions: new Map(),
+      openTabs: new Set(),
       projectCost: 0,
       sessionCounter: 0,
     });
@@ -916,8 +945,17 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
         autoActiveId = best?.bonsaiSid ?? null;
       }
 
+      // Open tabs for all loaded sessions (they had tabs before the refresh)
+      const tabs = new Set(s.openTabs);
+      for (const result of results) {
+        if (result.status === "fulfilled") {
+          tabs.add(result.value.entry.bonsaiSid);
+        }
+      }
+
       return {
         sessions: next,
+        openTabs: tabs,
         projectCost: totalProjectCost,
         activeSessionId: autoActiveId,
         sessionCounter: Math.max(s.sessionCounter, all.length),
@@ -989,41 +1027,40 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
   },
 
   closeSession: (bonsaiSid) => {
-    // Close the tab — live sessions move to background, terminal sessions get archived.
-    // No END_SIGNAL sent to backend.
+    // Close the tab. Live sessions stay in the store (background). No END_SIGNAL.
     set((s) => {
       const session = s.sessions.get(bonsaiSid);
       if (!session) return s;
 
-      const next = new Map(s.sessions);
-      next.delete(bonsaiSid);
+      const tabs = new Set(s.openTabs);
+      tabs.delete(bonsaiSid);
+
+      // Pick next active from remaining open tabs
       const nextActive =
         s.activeSessionId === bonsaiSid
-          ? (next.keys().next().value ?? null)
+          ? (Array.from(tabs).find((id) => s.sessions.has(id)) ?? null)
           : s.activeSessionId;
 
-      // Terminal sessions get archived
+      // Terminal sessions: remove from store and archive
       if (session.status === "done" || session.status === "error") {
+        const next = new Map(s.sessions);
+        next.delete(bonsaiSid);
         const nextClosed = new Set(s.closedIds);
         nextClosed.add(bonsaiSid);
         return {
           sessions: next,
+          openTabs: tabs,
           activeSessionId: nextActive,
           closedIds: nextClosed,
           archivedSessions: [
             ...s.archivedSessions,
             {
-              bonsaiSid: session.bonsaiSid,
-              name: session.name,
-              skillId: session.skillId,
-              specIds: session.specIds,
-              startedAt: session.startedAt,
-              endedAt: Date.now(),
+              bonsaiSid: session.bonsaiSid, name: session.name,
+              skillId: session.skillId, specIds: session.specIds,
+              startedAt: session.startedAt, endedAt: Date.now(),
               result: session.status === "done" ? "done" : "error",
-              costUsd: session.metrics.costUsd,
-              turns: session.metrics.turns,
-              durationMs: session.metrics.durationMs,
-              model: session.model,
+              costUsd: session.metrics.costUsd, turns: session.metrics.turns,
+              durationMs: session.metrics.durationMs, model: session.model,
               config: { model: session.model, maxTurns: session.maxTurns, permissionMode: session.permissionMode, streamText: true, betas: session.betas ?? [], effort: session.effort ?? null },
               events: session.events,
             },
@@ -1031,10 +1068,8 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
         };
       }
 
-      // Live sessions move to background (no END_SIGNAL, events keep flowing)
-      const bg = new Map(s.backgroundSessions);
-      bg.set(bonsaiSid, session);
-      return { sessions: next, backgroundSessions: bg, activeSessionId: nextActive };
+      // Live sessions: just remove from openTabs, stay in sessions map
+      return { openTabs: tabs, activeSessionId: nextActive };
     });
   },
 
@@ -1043,53 +1078,12 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
     await api.end(bonsaiSid);
   },
 
-  restoreFromBackground: (bonsaiSid) => {
+  openTab: (bonsaiSid) => {
     set((s) => {
-      const session = s.backgroundSessions.get(bonsaiSid);
-      if (!session) return s;
-      const bg = new Map(s.backgroundSessions);
-      bg.delete(bonsaiSid);
-      const next = new Map(s.sessions);
-      next.set(bonsaiSid, session);
-      return { sessions: next, backgroundSessions: bg, activeSessionId: bonsaiSid };
-    });
-  },
-
-  endBackgroundSession: (bonsaiSid) => {
-    const session = get().backgroundSessions.get(bonsaiSid);
-    if (!session) return;
-    // Send END_SIGNAL to backend
-    if (session.status !== "done" && session.status !== "error") {
-      const api = createAgentApi(getClient());
-      api.end(bonsaiSid).catch(() => {});
-    }
-    set((s) => {
-      const bg = new Map(s.backgroundSessions);
-      bg.delete(bonsaiSid);
-      const nextClosed = new Set(s.closedIds);
-      nextClosed.add(bonsaiSid);
-      return {
-        backgroundSessions: bg,
-        closedIds: nextClosed,
-        archivedSessions: [
-          ...s.archivedSessions,
-          {
-            bonsaiSid: session.bonsaiSid,
-            name: session.name,
-            skillId: session.skillId,
-            specIds: session.specIds,
-            startedAt: session.startedAt,
-            endedAt: Date.now(),
-            result: "done",
-            costUsd: session.metrics.costUsd,
-            turns: session.metrics.turns,
-            durationMs: session.metrics.durationMs,
-            model: session.model,
-            config: { model: session.model, maxTurns: session.maxTurns, permissionMode: session.permissionMode, streamText: true, betas: session.betas ?? [], effort: session.effort ?? null },
-            events: session.events,
-          },
-        ],
-      };
+      if (!s.sessions.has(bonsaiSid)) return s;
+      const tabs = new Set(s.openTabs);
+      tabs.add(bonsaiSid);
+      return { openTabs: tabs, activeSessionId: bonsaiSid };
     });
   },
 
@@ -1225,17 +1219,13 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
   onAgentEvent: (method, params) => {
     const bonsaiSid = params.bonsaiSid as string;
     set((s) => {
-      // Look up session from foreground or background
-      const isBg = !s.sessions.has(bonsaiSid) && s.backgroundSessions.has(bonsaiSid);
-      const sourceMap = isBg ? s.backgroundSessions : s.sessions;
-      const sessions = isBg ? sourceMap : appendEvent(s.sessions, bonsaiSid, method, params, s.closedIds);
-      const session = (isBg ? sourceMap : sessions).get(bonsaiSid);
+      const sessions = appendEvent(s.sessions, bonsaiSid, method, params, s.closedIds);
+      const session = sessions.get(bonsaiSid);
       let projectCost = s.projectCost;
       if (session) {
-        let updated: Session | null = null;
         if (method === "agent/ready") {
           if (session.status === "initializing") {
-            updated = { ...session, status: "idle" };
+            sessions.set(bonsaiSid, { ...session, status: "idle" });
           }
         } else if (method === "agent/costEstimate") {
           const est = params.estimatedCostUsd as number;
@@ -1246,7 +1236,8 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
           const contextTokens = turnIn + turnOut;
           const contextMax = getContextWindowSize(session.model);
 
-          updated = {
+          const next = new Map(sessions);
+          next.set(bonsaiSid, {
             ...session,
             metrics: {
               ...session.metrics,
@@ -1263,11 +1254,11 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
                 cacheCreationTokens: turnCacheWrite,
               },
             },
-          };
+          });
+          return { sessions: next, projectCost };
         } else if (method === "agent/turnComplete" || method === "agent/interrupted") {
-          const result = applyMetrics(session, params, "idle");
-          projectCost += result.costDelta;
-          updated = result.updated;
+          const { updated, costDelta } = applyMetrics(session, params, "idle");
+          projectCost += costDelta;
 
           if (method === "agent/interrupted" && session.pendingRequest) {
             const rid = session.pendingRequest.requestId;
@@ -1279,18 +1270,11 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
             });
             updated.answeredRequests = answered;
           }
-        }
 
-        if (updated) {
-          if (isBg) {
-            const bg = new Map(s.backgroundSessions);
-            bg.set(bonsaiSid, updated);
-            return { backgroundSessions: bg, projectCost };
-          }
           sessions.set(bonsaiSid, updated);
         }
       }
-      return isBg ? { projectCost } : { sessions, projectCost };
+      return { sessions, projectCost };
     });
 
     // Clean up notifications when interrupted during a pending request
@@ -1458,41 +1442,6 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
   onSessionDone: (params) => {
     const bonsaiSid = params.bonsaiSid as string;
     set((s) => {
-      const isBg = !s.sessions.has(bonsaiSid) && s.backgroundSessions.has(bonsaiSid);
-
-      if (isBg) {
-        // Background session completed — auto-archive and remove
-        const session = s.backgroundSessions.get(bonsaiSid);
-        const bg = new Map(s.backgroundSessions);
-        bg.delete(bonsaiSid);
-        const nextClosed = new Set(s.closedIds);
-        nextClosed.add(bonsaiSid);
-        let projectCost = s.projectCost;
-        if (session) {
-          const { updated, costDelta } = applyMetrics(session, params, "done");
-          projectCost += costDelta;
-          return {
-            backgroundSessions: bg,
-            closedIds: nextClosed,
-            projectCost,
-            archivedSessions: [
-              ...s.archivedSessions,
-              {
-                bonsaiSid: updated.bonsaiSid, name: updated.name,
-                skillId: updated.skillId, specIds: updated.specIds,
-                startedAt: updated.startedAt, endedAt: Date.now(),
-                result: "done", costUsd: updated.metrics.costUsd,
-                turns: updated.metrics.turns, durationMs: updated.metrics.durationMs,
-                model: updated.model,
-                config: { model: updated.model, maxTurns: updated.maxTurns, permissionMode: updated.permissionMode, streamText: true, betas: updated.betas ?? [], effort: updated.effort ?? null },
-                events: updated.events,
-              },
-            ],
-          };
-        }
-        return { backgroundSessions: bg, closedIds: nextClosed };
-      }
-
       const sessions = appendEvent(s.sessions, bonsaiSid, "agent/done", params, s.closedIds);
       const session = sessions.get(bonsaiSid);
       let projectCost = s.projectCost;
@@ -1510,40 +1459,6 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
     const subtype = params.subtype as string;
     const isRecoverable = subtype === "turn_error";
     set((s) => {
-      const isBg = !s.sessions.has(bonsaiSid) && s.backgroundSessions.has(bonsaiSid);
-
-      if (isBg) {
-        const session = s.backgroundSessions.get(bonsaiSid);
-        if (!session) return s;
-        const bg = new Map(s.backgroundSessions);
-        if (isRecoverable) {
-          bg.set(bonsaiSid, { ...session, status: "idle", pendingRequest: null });
-        } else {
-          // Terminal error — auto-archive
-          bg.delete(bonsaiSid);
-          const nextClosed = new Set(s.closedIds);
-          nextClosed.add(bonsaiSid);
-          return {
-            backgroundSessions: bg,
-            closedIds: nextClosed,
-            archivedSessions: [
-              ...s.archivedSessions,
-              {
-                bonsaiSid: session.bonsaiSid, name: session.name,
-                skillId: session.skillId, specIds: session.specIds,
-                startedAt: session.startedAt, endedAt: Date.now(),
-                result: "error", costUsd: session.metrics.costUsd,
-                turns: session.metrics.turns, durationMs: session.metrics.durationMs,
-                model: session.model,
-                config: { model: session.model, maxTurns: session.maxTurns, permissionMode: session.permissionMode, streamText: true, betas: session.betas ?? [], effort: session.effort ?? null },
-                events: session.events,
-              },
-            ],
-          };
-        }
-        return { backgroundSessions: bg };
-      }
-
       const sessions = appendEvent(s.sessions, bonsaiSid, "agent/error", params, s.closedIds);
       const session = sessions.get(bonsaiSid);
       if (session) {

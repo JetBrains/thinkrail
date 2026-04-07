@@ -28,20 +28,24 @@ interface StatusBarProps {
 export function StatusBar({ onOpenSessionManager }: StatusBarProps) {
   const specs = useSpecStore((s) => s.specs);
   const sessions = useSessionStore((s) => s.sessions);
-  const bgSessions = useSessionStore((s) => s.backgroundSessions);
-  const restoreFromBackground = useSessionStore((s) => s.restoreFromBackground);
-  const endBackgroundSession = useSessionStore((s) => s.endBackgroundSession);
+  const openTabsSet = useSessionStore((s) => s.openTabs);
+  const openTab = useSessionStore((s) => s.openTab);
+  const endSession = useSessionStore((s) => s.endSession);
   const pendingInputCount = useNotificationStore((s) => s.pendingInputCount);
   const dashboard = useVisStore((s) => s.dashboard);
-  const bgDd = useDropdown();
+  const dd = useDropdown();
 
   const total = specs.length;
   const done = specs.filter((s) => s.status === "done").length;
   const pending = specs.filter(
     (s) => s.status === "active" || s.status === "draft",
   ).length;
-  const sessionCount = sessions.size;
-  const bgCount = bgSessions.size;
+
+  const allLive = Array.from(sessions.values()).filter(
+    (s) => s.status !== "done" && s.status !== "error",
+  );
+  const bgSessions = allLive.filter((s) => !openTabsSet.has(s.bonsaiSid));
+  const bgCount = bgSessions.length;
 
   return (
     <footer className="status-bar">
@@ -58,48 +62,44 @@ export function StatusBar({ onOpenSessionManager }: StatusBarProps) {
           </>
         )}
         <span className="status-sep" />
-        <button className="status-sessions-btn" onClick={onOpenSessionManager}>
-          {sessionCount} session{sessionCount !== 1 ? "s" : ""}
-        </button>
+        <div className="status-bg-sessions" ref={dd.ref}>
+          <button
+            className={`status-sessions-btn${bgCount > 0 ? " status-sessions-btn--bg" : ""}`}
+            onClick={bgCount > 0 ? dd.toggle : onOpenSessionManager}
+          >
+            {allLive.length} session{allLive.length !== 1 ? "s" : ""}
+            {bgCount > 0 && <span className="status-bg-count"> ({bgCount} background)</span>}
+          </button>
+          {dd.open && bgCount > 0 && (
+            <div className="status-bg-dropdown">
+              {bgSessions.map((s) => (
+                <div key={s.bonsaiSid} className="status-bg-item">
+                  <button
+                    className="status-bg-restore"
+                    onClick={() => { openTab(s.bonsaiSid); dd.close(); }}
+                  >
+                    <span className={`status-bg-dot status-bg-${s.status}`} />
+                    {s.name || s.bonsaiSid.slice(0, 8)}
+                    <span className="status-bg-state">{s.status}</span>
+                  </button>
+                  <button
+                    className="status-bg-end"
+                    onClick={() => endSession(s.bonsaiSid)}
+                    title="End session"
+                  >
+                    &#10005;
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
         {pendingInputCount > 0 && (
           <>
             <span className="status-sep" />
             <span className="status-attention">
               {pendingInputCount} need attention
             </span>
-          </>
-        )}
-        {bgCount > 0 && (
-          <>
-            <span className="status-sep" />
-            <div className="status-bg-sessions" ref={bgDd.ref}>
-              <button className="status-bg-btn" onClick={bgDd.toggle}>
-                &#10227; {bgCount} background
-              </button>
-              {bgDd.open && (
-                <div className="status-bg-dropdown">
-                  {Array.from(bgSessions.values()).map((s) => (
-                    <div key={s.bonsaiSid} className="status-bg-item">
-                      <button
-                        className="status-bg-restore"
-                        onClick={() => { restoreFromBackground(s.bonsaiSid); bgDd.close(); }}
-                      >
-                        <span className={`status-bg-dot status-bg-${s.status}`} />
-                        {s.name || s.bonsaiSid.slice(0, 8)}
-                        <span className="status-bg-state">{s.status}</span>
-                      </button>
-                      <button
-                        className="status-bg-end"
-                        onClick={() => endBackgroundSession(s.bonsaiSid)}
-                        title="End session"
-                      >
-                        &#10005;
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
           </>
         )}
       </div>

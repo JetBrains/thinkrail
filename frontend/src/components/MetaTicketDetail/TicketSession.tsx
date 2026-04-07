@@ -71,7 +71,7 @@ export function TicketSession({ ticket, embeddedSid, onSessionStarted }: TicketS
   useEffect(() => {
     if (embeddedSid && !session && !restoring) {
       setRestoring(true);
-      restoreSession(embeddedSid)
+      restoreSession(embeddedSid, { noTab: true })
         .catch((e) => console.error("[TicketSession] Failed to restore:", e))
         .finally(() => setRestoring(false));
     }

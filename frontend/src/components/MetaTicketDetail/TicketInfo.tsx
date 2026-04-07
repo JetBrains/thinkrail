@@ -320,7 +320,7 @@ export function TicketInfo({ ticket, plan, onTicketUpdated, rightPanel, onSelect
                   className={`ticket-linked-item ticket-linked-item--clickable ${isSessionActive ? "ticket-linked-item--active" : ""}`}
                   onClick={async () => {
                     if (!live) {
-                      await restoreSession(sid);
+                      await restoreSession(sid, { noTab: true });
                     }
                     onSelectPanel({ type: "session", sessionId: sid });
                   }}

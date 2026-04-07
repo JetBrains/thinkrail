@@ -41,7 +41,8 @@ export function SessionPanel() {
   const [contextCardVisible, setContextCardVisible] = useState(true);
   const chatStreamRef = useRef<ChatStreamHandle>(null);
 
-  const sessionList = Array.from(sessions.values());
+  const openTabs = useSessionStore((s) => s.openTabs);
+  const sessionList = Array.from(sessions.values()).filter((s) => openTabs.has(s.bonsaiSid));
   const fileList = Array.from(openFiles.values());
   const activeSession = activeSessionId && !activeFilePath && !previewFilePath ? sessions.get(activeSessionId) : null;
   const activeFile = activeFilePath ? openFiles.get(activeFilePath) : null;
