@@ -53,6 +53,8 @@ class TestMethods:
             "board/discardDraft", "board/discardAllDrafts",
             "board/listPatches", "board/getPatchDiff", "board/revertPatch",
             "trash/list", "trash/purge", "trash/empty",
+            "settings/get", "settings/update", "settings/ensureFile",
+            "models/list", "models/refresh",
         }
         assert set(METHODS.keys()) == expected
 

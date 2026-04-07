@@ -59,6 +59,7 @@ graph TD
 |------|---------------|------------|
 | `config.py` | App configuration: project root discovery, directory paths, settings | pydantic |
 | `fileio.py` | File system operations: read, write, delete files; create directories | — |
+| `settings.py` | Project settings: load/save/ensure `.bonsai/settings.json` | pydantic, fileio |
 | `watcher.py` | Async file change watching: detect spec file and registry changes | watchfiles / watchdog |
 
 ## Public Interface
@@ -90,11 +91,20 @@ These methods are of the `AppConfig` model
 | `watch` | `async (paths: list[Path], callback: Callable) → WatchHandle` | Start watching paths for file changes |
 | `stop` | `async (handle: WatchHandle) → None` | Stop a file watch |
 
+### settings.py
+
+| Function | Signature | Description |
+|----------|-----------|-------------|
+| `load_settings` | `(project_root: Path) → ProjectSettings` | Read `.bonsai/settings.json`, returning defaults if missing |
+| `save_settings` | `(project_root: Path, data: dict) → ProjectSettings` | Validate and write settings |
+| `ensure_settings_file` | `(project_root: Path) → ProjectSettings` | Create settings file with defaults if it doesn't exist |
+
 ### Models
 
 | Model | Fields | Description |
 |-------|--------|-------------|
 | `AppConfig` | project_root, spec_dir, host, port | Application configuration (Pydantic) |
+| `ProjectSettings` | default_model, default_effort, model_refresh_interval_hours | User-configurable project settings (`.bonsai/settings.json`) |
 | `WatchHandle` | (opaque) | Handle to a running file watch |
 
 ### Output Contracts

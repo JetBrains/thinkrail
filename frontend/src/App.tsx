@@ -7,6 +7,7 @@ import { useSessionStore, startWatchdog, stopWatchdog } from "@/store/sessionSto
 import { useUiStore } from "@/store/uiStore.ts";
 import { useVisStore } from "@/store/visStore.ts";
 import { useBoardStore } from "@/store/boardStore.ts";
+import { useSettingsStore } from "@/store/settingsStore.ts";
 import { registerKeyboardShortcuts } from "@/utils/keyboard.ts";
 import { CommandPalette } from "@/components/CommandPalette/CommandPalette.tsx";
 import { ToastContainer } from "@/components/Notifications/ToastContainer.tsx";
@@ -41,6 +42,9 @@ function AppInner({ projectPath: _projectPath, onSwitchProject }: { projectPath:
       useVisStore.getState().fetchState();
       // Load board tickets
       useBoardStore.getState().fetchTickets();
+      // Load project settings and model list
+      useSettingsStore.getState().fetchSettings();
+      useSettingsStore.getState().fetchModels();
     } else if (connectionState === "connected" && wiredRef.current) {
       // ── Reconnect: WS recovered — sync session statuses immediately ──
       console.log("[Bonsai] Reconnected — syncing session statuses");

@@ -6,6 +6,7 @@ import { useUiStore } from "./uiStore.ts";
 import { useFileStore } from "./fileStore.ts";
 import { useVisStore } from "./visStore.ts";
 import { useBoardStore } from "./boardStore.ts";
+import { useSettingsStore } from "./settingsStore.ts";
 import type { Unsubscribe } from "@/api/types.ts";
 
 /**
@@ -57,6 +58,10 @@ export function wireEvents(client: RpcClient): Unsubscribe {
     client.on("file/didChange", (p) => {
       const { path } = p as { path: string };
       useFileStore.getState().onFileChanged(path);
+      // Reload settings when .bonsai/settings.json changes on disk
+      if (path === ".bonsai/settings.json") {
+        useSettingsStore.getState().fetchSettings();
+      }
     }),
   );
 

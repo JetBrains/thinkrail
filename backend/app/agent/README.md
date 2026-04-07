@@ -257,6 +257,8 @@ graph TD
 | `runner.py` | Claude Agent SDK integration: manage SDK client lifecycle, conversation loop (wait for message → query → stream events → repeat), map SDK events to notifications, wire MCP servers and hooks into SDK. Calls `set_tool_context()` before SDK client creation so handlers work in all permission modes. Accepts optional `resume_session_id` for `ClaudeAgentOptions.resume`. No tool-specific logic — delegates to `permissions.py` and `tools/`. | models, tracker, permissions, tools |
 | `tracker.py` | Session lifecycle (initializing/idle/running/waiting/done/error), message queue per session (`asyncio.Queue`), registry of in-flight `asyncio.Future` objects keyed by `requestId`, **interrupt flag** per session for notification routing | models |
 | `persistence.py` | Session persistence — split storage: metadata in `.json`, events in append-only `.events.jsonl`. Save/load/list/append/delete. See [PERSISTENCE.md](PERSISTENCE.md). | core/fileio |
+| `pricing.py` | Per-model token pricing and cost estimation. Tier-based (opus/sonnet/haiku). `estimate_cost()` used by runner for live cost streaming. | — |
+| `model_registry.py` | Model registry — fetches available Claude models from the Anthropic Models API. Caches to `.bonsai/cache/models.json`. Periodic refresh (configurable interval via project settings). Falls back to hardcoded list when API is unavailable. | anthropic SDK, core/settings |
 | `tools/` | Self-contained MCP tools package. Each tool is one file: schema + handler + MCP server + `intercept()`. Exports `MCP_SERVERS`, `INTERCEPTORS`, and `set_tool_context()`/`get_tool_context()` (contextvars for yolo mode). See [tools/README.md](tools/README.md). | claude-agent-sdk, tracker, models |
 
 ## Public Interface

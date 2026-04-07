@@ -3,7 +3,7 @@ import { SKILLS } from "@/constants/skills.ts";
 import { useSpecStore } from "@/store/specStore.ts";
 import { useSessionStore } from "@/store/sessionStore.ts";
 import { useBoardStore } from "@/store/boardStore.ts";
-import { MODELS, BETA_1M, getModelDef } from "@/utils/models.ts";
+import { getModels, BETA_1M, getModelDef } from "@/utils/models.ts";
 import { SkillGrid } from "@/components/shared/SkillGrid.tsx";
 import { SpecSelector } from "@/components/shared/SpecSelector.tsx";
 import { TicketSelector } from "@/components/shared/TicketSelector.tsx";
@@ -451,14 +451,14 @@ export function DraftConfigCard({ bonsaiSid, readOnly, onVisibilityChange }: Dra
               }}
             >
               <optgroup label="Current">
-                {MODELS.filter((m) => m.group === "current").map((m) => (
+                {getModels().filter((m) => m.group === "current").map((m) => (
                   <option key={m.id} value={m.id}>
                     {m.label}
                   </option>
                 ))}
               </optgroup>
               <optgroup label="Legacy">
-                {MODELS.filter((m) => m.group === "legacy").map((m) => (
+                {getModels().filter((m) => m.group === "legacy").map((m) => (
                   <option key={m.id} value={m.id}>
                     {m.label}
                   </option>

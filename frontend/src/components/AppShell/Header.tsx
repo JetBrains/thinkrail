@@ -1,7 +1,11 @@
 import { useUiStore } from "@/store/uiStore.ts";
 import { useSessionStore } from "@/store/sessionStore.ts";
+import { useSettingsStore } from "@/store/settingsStore.ts";
+import { useFileStore } from "@/store/fileStore.ts";
 import { modLabel } from "@/utils/platform.ts";
 import { ThemeSwitcher } from "./ThemeSwitcher.tsx";
+
+const SETTINGS_PATH = ".bonsai/settings.json";
 
 export function Header({ onSwitchProject }: { onSwitchProject: () => void }) {
   const toggleLeft = useUiStore((s) => s.toggleLeftPanel);
@@ -12,12 +16,20 @@ export function Header({ onSwitchProject }: { onSwitchProject: () => void }) {
     (s) => s.status === "running",
   );
 
+  const openSettings = async () => {
+    await useSettingsStore.getState().ensureFile();
+    await useFileStore.getState().openFile(SETTINGS_PATH);
+  };
+
   return (
     <header className="header-bar">
       <div className="header-left">
         <span className="header-logo">Bonsai</span>
         <button className="header-project-btn" onClick={onSwitchProject} title="Switch project">
           {useUiStore((s) => s.projectName)}
+        </button>
+        <button className="header-btn header-settings-btn" onClick={openSettings} title="Project settings">
+          &#9881;
         </button>
         {activeSessions.length > 0 && (
           <span className="header-sessions">

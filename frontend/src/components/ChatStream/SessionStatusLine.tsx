@@ -1,6 +1,7 @@
-import { useState, useRef, useEffect, useCallback } from "react";
+import { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import type { SessionMetrics, SessionStatus } from "@/types/session.ts";
 import { buildModelOptions, currentModelOptionKey } from "@/utils/models.ts";
+import { useSettingsStore } from "@/store/settingsStore.ts";
 
 const EFFORT_OPTIONS = [
   { value: null, label: "auto" },
@@ -21,7 +22,7 @@ const PERMISSION_MODES = [
   { value: "plan", label: "plan" },
 ];
 
-const MODEL_OPTIONS = buildModelOptions();
+// Computed inside component via useMemo to react to dynamic model updates.
 
 function displayMode(mode: string): string {
   return PERMISSION_MODES.find((m) => m.value === mode)?.label ?? mode;
@@ -94,6 +95,10 @@ export function SessionStatusLine({
   onChangePermissionMode,
   onChangeEffort,
 }: SessionStatusLineProps) {
+  // Subscribe to settings store so we re-render when dynamic models arrive.
+  const dynamicModels = useSettingsStore((s) => s.models);
+  const MODEL_OPTIONS = useMemo(() => buildModelOptions(), [dynamicModels]);
+
   const running = status === "running";
   const activeKey = currentModelOptionKey(model, betas);
   const activeOption = MODEL_OPTIONS.find((o) => o.key === activeKey);

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 from functools import partial
@@ -46,6 +47,14 @@ from app.rpc.methods.trash import (
     list_trashed,
     purge_trashed,
 )
+from app.rpc.methods.settings import (
+    ensure_settings,
+    get_settings,
+    list_models,
+    refresh_models,
+    update_settings,
+)
+from app.agent.model_registry import ModelRegistry
 from app.rpc.methods.vis import get_vis_state, recompute_vis
 from app.rpc.methods.board import (
     apply_all_drafts,
@@ -143,6 +152,11 @@ METHODS = {
     "trash/list": list_trashed,
     "trash/purge": purge_trashed,
     "trash/empty": empty_trash,
+    "settings/get": get_settings,
+    "settings/update": update_settings,
+    "settings/ensureFile": ensure_settings,
+    "models/list": list_models,
+    "models/refresh": refresh_models,
 }
 
 _active_ws: WebSocket | None = None
@@ -150,13 +164,16 @@ _active_watcher: WatchHandle | None = None
 _agent_services: dict[str, AgentService] = {}
 _vis_services: dict[str, VisualizationService] = {}
 _board_services: dict[str, BoardService] = {}
+_model_registries: dict[str, ModelRegistry] = {}
 
 
 def _bind_methods(
+    config: AppConfig,
     spec_service: SpecService,
     agent_service: AgentService,
     vis_service: VisualizationService,
     board_service: BoardService,
+    model_registry: ModelRegistry,
     trash_service: "TrashService | None" = None,
 ) -> dict:
     """Bind each handler in METHODS to its owning service via partial."""
@@ -170,6 +187,10 @@ def _bind_methods(
             bound[name] = partial(handler, board_service)
         elif name.startswith("trash/") and trash_service:
             bound[name] = partial(handler, trash_service)
+        elif name.startswith("settings/"):
+            bound[name] = partial(handler, config)
+        elif name.startswith("models/"):
+            bound[name] = partial(handler, model_registry)
         else:
             bound[name] = partial(handler, agent_service)
     return bound
@@ -234,7 +255,23 @@ def register_routes(app: FastAPI) -> None:
         # Make board service available to agent service for auto-linking
         agent_service.board_service = board_service
 
-        bound_methods = _bind_methods(spec_service, agent_service, vis_service, board_service, trash_service)
+        # Model registry — fetches available models from the Anthropic API
+        if key in _model_registries:
+            model_registry = _model_registries[key]
+        else:
+            from app.core.settings import load_settings
+            settings = load_settings(project_path)
+            model_registry = ModelRegistry(
+                project_root=project_path,
+                refresh_hours=settings.model_refresh_interval_hours,
+            )
+            _model_registries[key] = model_registry
+            asyncio.create_task(model_registry.start_periodic_refresh())
+
+        bound_methods = _bind_methods(
+            config, spec_service, agent_service, vis_service,
+            board_service, model_registry, trash_service,
+        )
 
         # Replace existing connection if any
         if _active_ws is not None:

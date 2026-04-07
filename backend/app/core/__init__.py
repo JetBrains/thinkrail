@@ -1,5 +1,11 @@
 from app.core.config import AppConfig, load_config
 from app.core.fileio import read_text, write_text, delete_file, ensure_dir
+from app.core.settings import (
+    ProjectSettings,
+    ensure_settings_file,
+    load_settings,
+    save_settings,
+)
 from app.core.watcher import watch, stop, WatchHandle
 
 __all__ = [
@@ -9,6 +15,10 @@ __all__ = [
     "write_text",
     "delete_file",
     "ensure_dir",
+    "ProjectSettings",
+    "load_settings",
+    "save_settings",
+    "ensure_settings_file",
     "watch",
     "stop",
     "WatchHandle",

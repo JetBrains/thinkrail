@@ -312,12 +312,11 @@ async def run(
                             task.config.model, turn_input, turn_output,
                             turn_cache_write_5m, turn_cache_write_1h, turn_cache_read,
                         )
-                        logger.info(
-                            "[%s] COST_DEBUG final: sdk=$%.4f est=$%.4f ratio=%.2f "
+                        logger.debug(
+                            "[%s] cost detail: sdk=$%.4f est=$%.4f "
                             "in=%d out=%d cw5m=%d cw1h=%d cr=%d turns=%d",
                             task.bonsai_sid[:8],
                             sdk_event.total_cost_usd or 0.0, final_est,
-                            (final_est / (sdk_event.total_cost_usd or 1.0)),
                             turn_input, turn_output,
                             turn_cache_write_5m, turn_cache_write_1h, turn_cache_read,
                             sdk_event.num_turns or 0,
