@@ -312,6 +312,11 @@ async def run(
                                 "sessionId": session_id,
                                 "estimatedTurnCostUsd": est,
                                 "estimatedCostUsd": total_cost + est,
+                                # Streaming token counts for live context panel
+                                "turnInputTokens": turn_input,
+                                "turnOutputTokens": turn_output,
+                                "turnCacheRead": turn_cache_read,
+                                "turnCacheWrite": turn_cache_write_5m + turn_cache_write_1h,
                             })
 
                     elif isinstance(sdk_event, ResultMessage):

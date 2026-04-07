@@ -1175,14 +1175,33 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
           }
         } else if (method === "agent/costEstimate") {
           const est = params.estimatedCostUsd as number;
-          if (typeof est === "number") {
-            const next = new Map(sessions);
-            next.set(bonsaiSid, {
-              ...session,
-              metrics: { ...session.metrics, costUsd: est },
-            });
-            return { sessions: next, projectCost };
-          }
+          const turnIn = (params.turnInputTokens as number) ?? 0;
+          const turnOut = (params.turnOutputTokens as number) ?? 0;
+          const turnCacheRead = (params.turnCacheRead as number) ?? 0;
+          const turnCacheWrite = (params.turnCacheWrite as number) ?? 0;
+          const contextTokens = turnIn + turnOut;
+          const contextMax = getContextWindowSize(session.model);
+
+          const next = new Map(sessions);
+          next.set(bonsaiSid, {
+            ...session,
+            metrics: {
+              ...session.metrics,
+              costUsd: typeof est === "number" ? est : session.metrics.costUsd,
+              contextTokens,
+              contextMax,
+              contextUsage: {
+                ...session.metrics.contextUsage,
+                contextMax,
+                contextTokens,
+                inputTokens: turnIn,
+                outputTokens: turnOut,
+                cacheReadTokens: turnCacheRead,
+                cacheCreationTokens: turnCacheWrite,
+              },
+            },
+          });
+          return { sessions: next, projectCost };
         } else if (method === "agent/turnComplete" || method === "agent/interrupted") {
           const { updated, costDelta } = applyMetrics(session, params, "idle");
           projectCost += costDelta;
