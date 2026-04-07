@@ -18,6 +18,37 @@ from app.spec.service import SpecService
 
 logger = logging.getLogger(__name__)
 
+# ── Token estimation ─────────────────────────────────────────────────────────
+
+def _estimate_tokens_heuristic(text: str) -> int:
+    """Fallback heuristic: ~6 chars per token for Claude's tokenizer."""
+    return len(text) // 6
+
+
+def _count_tokens_api(text: str, model: str) -> int | None:
+    """Count tokens using the Anthropic API (free endpoint). Returns None on failure."""
+    try:
+        import anthropic
+        client = anthropic.Anthropic()
+        result = client.messages.count_tokens(
+            model=model,
+            system=text,
+            messages=[{"role": "user", "content": "x"}],
+        )
+        # Subtract overhead from the dummy user message (~4 tokens)
+        return max(0, result.input_tokens - 4)
+    except Exception:
+        return None
+
+
+def _estimate_tokens(text: str, model: str | None = None) -> int:
+    """Estimate token count: uses API if model is provided, falls back to heuristic."""
+    if model:
+        result = _count_tokens_api(text, model)
+        if result is not None:
+            return result
+    return _estimate_tokens_heuristic(text)
+
 _FRONTMATTER_RE = re.compile(r"\A---\s*\n.*?\n---\s*\n", re.DOTALL)
 
 
@@ -222,7 +253,7 @@ def _build_spec_details(
                 "id": detail.id,
                 "title": detail.title,
                 "content": detail.content,
-                "tokens": len(detail.content) // 4,
+                "tokens": _estimate_tokens_heuristic(detail.content),
             })
         except Exception:
             pass
@@ -268,7 +299,7 @@ def _build_file_details(
             "path": p,
             "name": name,
             "preview": preview,
-            "tokens": len(preview) // 4,
+            "tokens": _estimate_tokens_heuristic(preview),
         })
     return details
 
@@ -360,10 +391,11 @@ def build_context_structured(
     Returns a dict with:
       - ``full``: the complete system prompt string
       - ``sections``: list of section dicts with key, label, content, tokens
-      - ``totalTokens``: estimated total tokens (chars // 4)
+      - ``totalTokens``: estimated total tokens
     """
     if plugin_dir is None:
         raise ValueError("plugin_dir is required")
+    model = config.model if config else None
 
     ordered: list[tuple[str, str]] = []
 
@@ -405,7 +437,7 @@ def build_context_structured(
             "key": key,
             "label": SECTION_LABELS.get(key, key),
             "content": content,
-            "tokens": len(content) // 4,
+            "tokens": _estimate_tokens(content, model),
         }
         if key == "specs":
             section["specDetails"] = _build_spec_details(spec_ids, spec_service)
@@ -416,5 +448,5 @@ def build_context_structured(
     return {
         "full": full,
         "sections": sections,
-        "totalTokens": len(full) // 4,
+        "totalTokens": sum(s["tokens"] for s in sections),
     }

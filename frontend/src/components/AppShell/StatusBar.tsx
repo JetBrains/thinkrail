@@ -1,7 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import { useSpecStore } from "@/store/specStore.ts";
 import { useSessionStore } from "@/store/sessionStore.ts";
-import { useNotificationStore } from "@/store/notificationStore.ts";
 import { useVisStore } from "@/store/visStore.ts";
 import { modLabel } from "@/utils/platform.ts";
 
@@ -31,9 +30,10 @@ export function StatusBar({ onOpenSessionManager }: StatusBarProps) {
   const openTabsSet = useSessionStore((s) => s.openTabs);
   const openTab = useSessionStore((s) => s.openTab);
   const endSession = useSessionStore((s) => s.endSession);
-  const pendingInputCount = useNotificationStore((s) => s.pendingInputCount);
+  const focusSession = useSessionStore((s) => s.focusSession);
   const dashboard = useVisStore((s) => s.dashboard);
   const dd = useDropdown();
+  const attnDd = useDropdown();
 
   const total = specs.length;
   const done = specs.filter((s) => s.status === "done").length;
@@ -46,6 +46,8 @@ export function StatusBar({ onOpenSessionManager }: StatusBarProps) {
   );
   const bgSessions = allLive.filter((s) => !openTabsSet.has(s.bonsaiSid));
   const bgCount = bgSessions.length;
+  const attnSessions = allLive.filter((s) => s.pendingRequest !== null);
+  const attnCount = attnSessions.length;
 
   return (
     <footer className="status-bar">
@@ -91,15 +93,43 @@ export function StatusBar({ onOpenSessionManager }: StatusBarProps) {
                   </button>
                 </div>
               ))}
+              <div className="status-bg-divider" />
+              <button
+                className="status-bg-manage"
+                onClick={() => { onOpenSessionManager(); dd.close(); }}
+              >
+                All sessions...
+              </button>
             </div>
           )}
         </div>
-        {pendingInputCount > 0 && (
+        {attnCount > 0 && (
           <>
             <span className="status-sep" />
-            <span className="status-attention">
-              {pendingInputCount} need attention
-            </span>
+            <div className="status-attn-wrap" ref={attnDd.ref}>
+              <button className="status-attn-btn" onClick={attnDd.toggle}>
+                {attnCount} need attention
+              </button>
+              {attnDd.open && (
+                <div className="status-attn-dropdown">
+                  {attnSessions.map((s) => (
+                    <button
+                      key={s.bonsaiSid}
+                      className="status-attn-item"
+                      onClick={() => { focusSession(s.bonsaiSid); attnDd.close(); }}
+                    >
+                      <span className={`status-bg-dot status-bg-${s.status}`} />
+                      <span className="status-attn-name">{s.name || s.bonsaiSid.slice(0, 8)}</span>
+                      <span className={`status-attn-badge status-attn-badge--${s.pendingRequest?.type ?? "question"}`}>
+                        {s.pendingRequest?.type === "approval" ? "A"
+                          : s.pendingRequest?.type === "suggestion" || s.pendingRequest?.type === "step-proposal" ? "S"
+                          : "Q"}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
           </>
         )}
       </div>

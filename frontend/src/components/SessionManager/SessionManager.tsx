@@ -67,17 +67,17 @@ export function SessionManager({ onClose }: { onClose?: () => void }) {
     [client, activeSessions, endSession, fetchSessions],
   );
 
+  const deleteSession = useSessionStore((s) => s.deleteSession);
   const handleDelete = useCallback(
     async (taskId: string) => {
       try {
-        const api = createSessionApi(client);
-        await api.delete(taskId);
+        await deleteSession(taskId);
         fetchSessions();
       } catch (e) {
         console.error("Failed to delete session:", e);
       }
     },
-    [client, fetchSessions],
+    [deleteSession, fetchSessions],
   );
 
   const handleOpen = useCallback(

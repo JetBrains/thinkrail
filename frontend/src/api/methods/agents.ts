@@ -18,13 +18,13 @@ export function createAgentApi(client: RpcClient) {
       client.request<{ bonsaiSid: string }>("agent/run", params),
 
     prepare: (params: AgentRunParams) =>
-      client.request<{ bonsaiSid: string; systemPrompt: string }>("agent/prepare", params),
+      client.request<{ bonsaiSid: string; systemPrompt: string; sections?: unknown[]; totalTokens?: number }>("agent/prepare", params),
 
     updateDraft: (params: DraftUpdateParams) =>
       client.request<{ systemPrompt: string; sections?: unknown[]; totalTokens?: number }>("agent/updateDraft", params),
 
     startDraft: (bonsaiSid: string, prompt?: string) =>
-      client.request<{ bonsaiSid: string }>("agent/startDraft", { bonsaiSid, ...(prompt ? { prompt } : {}) }),
+      client.request<{ bonsaiSid: string }>("agent/startDraft", { bonsaiSid, ...(prompt !== undefined ? { prompt } : {}) }),
 
     status: (bonsaiSid: string) =>
       client.request<AgentTask>("agent/status", { bonsaiSid }),

@@ -97,13 +97,6 @@ export function SessionPanel() {
     }
   }, [activeSessionId, activeSession, resolveRequest, sendMessage]);
 
-  const handleStartSession = useCallback(() => {
-    if (!activeSessionId || !activeSession) return;
-    if (activeSession.status === "initializing" || activeSession.status === "idle") {
-      sendMessage(activeSessionId, "start");
-    }
-  }, [activeSessionId, activeSession, sendMessage]);
-
   const activeTicketId = useBoardStore((s) => s.activeTicketId);
   const openTicket = useBoardStore((s) => s.openTicket);
 
@@ -141,9 +134,6 @@ export function SessionPanel() {
   const isDraft = status === "draft";
   const inputDisabled = isDone || isRunning || (hasPending && activeSession?.pendingRequest?.type === "approval");
   const showContinue = !inputDisabled && !canInterrupt && !isDraft && (activeSession?.events.length ?? 0) > 0;
-  const showStartSession = !inputDisabled && !canInterrupt && !isDraft
-    && (activeSession?.events.length ?? 0) === 0
-    && activeSession?.skillId != null;
 
   return (
     <>
@@ -217,9 +207,7 @@ export function SessionPanel() {
               onInterrupt={() => interruptSession(activeSession!.bonsaiSid)}
               showContinue={showContinue}
               onContinue={handleContinue}
-              showStartSession={showStartSession}
-              onStartSession={handleStartSession}
-              skillId={activeSession.skillId}
+              isDraft={isDraft}
             />
           )}
         </>

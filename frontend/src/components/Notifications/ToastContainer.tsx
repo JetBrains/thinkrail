@@ -13,7 +13,7 @@ const EVENT_COLORS: Record<string, string> = {
 export function ToastContainer() {
   const toasts = useNotificationStore((s) => s.toasts);
   const dismiss = useNotificationStore((s) => s.dismissToast);
-  const switchSession = useSessionStore((s) => s.switchSession);
+  const focusSession = useSessionStore((s) => s.focusSession);
 
   if (toasts.length === 0) return null;
 
@@ -25,7 +25,7 @@ export function ToastContainer() {
           className="toast"
           style={{ borderLeftColor: EVENT_COLORS[toast.eventType] ?? "var(--border)" }}
           onClick={() => {
-            if (toast.bonsaiSid) switchSession(toast.bonsaiSid);
+            if (toast.bonsaiSid) focusSession(toast.bonsaiSid);
             dismiss(toast.id);
           }}
         >

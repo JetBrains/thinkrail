@@ -194,6 +194,10 @@ async def run(
                 tracker.clear_turn_text(task.bonsai_sid)
                 turn_t0 = time.monotonic()
                 turn_input = turn_output = turn_cache_write_5m = turn_cache_write_1h = turn_cache_read = 0
+                # Per-iteration tracking — each API call within the turn
+                # gets its own entry.  The *last* iteration determines
+                # context-window occupancy; the *sum* drives cost estimation.
+                iterations: list[dict] = []
                 await client.query(message)
 
                 async for sdk_event in client.receive_response():
@@ -289,8 +293,11 @@ async def run(
                         etype = raw.get("type")
                         if etype == "message_start":
                             u = raw.get("message", {}).get("usage", {})
-                            turn_input += u.get("input_tokens", 0)
-                            turn_cache_read += u.get("cache_read_input_tokens", 0)
+                            call_input = u.get("input_tokens", 0)
+                            call_cache_read = u.get("cache_read_input_tokens", 0)
+                            call_cache_create = u.get("cache_creation_input_tokens", 0)
+                            turn_input += call_input
+                            turn_cache_read += call_cache_read
                             cc = u.get("cache_creation", {})
                             if cc:
                                 turn_cache_write_5m += cc.get("ephemeral_5m_input_tokens", 0)
@@ -298,25 +305,53 @@ async def run(
                             else:
                                 # Older API: no breakdown — treat all writes as 5m
                                 turn_cache_write_5m += u.get("cache_creation_input_tokens", 0)
+                            # Start a new iteration record for this API call
+                            iterations.append({
+                                "type": "message",
+                                "input_tokens": call_input,
+                                "output_tokens": 0,
+                                "cache_creation_input_tokens": call_cache_create,
+                                "cache_read_input_tokens": call_cache_read,
+                                "cache_creation": cc if cc else None,
+                            })
                         elif etype == "message_delta":
                             u = raw.get("usage", {})
-                            turn_output += u.get("output_tokens", 0)
+                            call_output = u.get("output_tokens", 0)
+                            turn_output += call_output
+                            if iterations:
+                                iterations[-1]["output_tokens"] = call_output
 
                         if etype in ("message_start", "message_delta"):
                             est = estimate_cost(
                                 task.config.model, turn_input, turn_output,
                                 turn_cache_write_5m, turn_cache_write_1h, turn_cache_read,
                             )
+                            # Context window = all tokens in the latest
+                            # API call (last iteration).
+                            _last_iter = iterations[-1] if iterations else {}
+                            _current_ctx = (
+                                _last_iter.get("input_tokens", 0)
+                                + _last_iter.get("cache_creation_input_tokens", 0)
+                                + _last_iter.get("cache_read_input_tokens", 0)
+                                + _last_iter.get("output_tokens", 0)
+                            )
                             await notify("agent/costEstimate", {
                                 "bonsaiSid": task.bonsai_sid,
                                 "sessionId": session_id,
                                 "estimatedTurnCostUsd": est,
                                 "estimatedCostUsd": total_cost + est,
-                                # Streaming token counts for live context panel
+                                # Cumulative turn totals (for cost display)
                                 "turnInputTokens": turn_input,
                                 "turnOutputTokens": turn_output,
                                 "turnCacheRead": turn_cache_read,
                                 "turnCacheWrite": turn_cache_write_5m + turn_cache_write_1h,
+                                # Context window from latest iteration
+                                "currentContextWindow": _current_ctx,
+                                # Latest iteration breakdown (for context display)
+                                "iterInputTokens": _last_iter.get("input_tokens", 0),
+                                "iterCacheRead": _last_iter.get("cache_read_input_tokens", 0),
+                                "iterCacheCreate": _last_iter.get("cache_creation_input_tokens", 0),
+                                "iterOutputTokens": _last_iter.get("output_tokens", 0),
                             })
 
                     elif isinstance(sdk_event, ResultMessage):
@@ -336,9 +371,12 @@ async def run(
                             turn_cache_write_5m, turn_cache_write_1h, turn_cache_read,
                             sdk_event.num_turns or 0,
                         )
-                        turn_cost = sdk_event.total_cost_usd or 0.0
-                        turn_turns = sdk_event.num_turns
-                        total_cost += turn_cost
+                        # total_cost_usd is CUMULATIVE — assign, derive per-turn delta
+                        sdk_cost = sdk_event.total_cost_usd or 0.0
+                        turn_cost = max(0.0, sdk_cost - total_cost)
+                        total_cost = sdk_cost
+                        # num_turns is PER-TURN — accumulate
+                        turn_turns = sdk_event.num_turns or 0
                         total_turns += turn_turns
                         duration_ms = int((time.monotonic() - start_time) * 1000)
 
@@ -347,21 +385,38 @@ async def run(
                         if interrupted:
                             tracker.clear_interrupted(task.bonsai_sid)
 
+                        # Context window = total tokens in the last API
+                        # call (last iteration), including cached tokens.
+                        _last = iterations[-1] if iterations else {}
+                        context_window = (
+                            _last.get("input_tokens", 0)
+                            + _last.get("cache_creation_input_tokens", 0)
+                            + _last.get("cache_read_input_tokens", 0)
+                            + _last.get("output_tokens", 0)
+                        )
+
+                        # Common fields for all turn-end events
+                        _turn_event = {
+                            "bonsaiSid": task.bonsai_sid,
+                            "sessionId": sdk_event.session_id or session_id,
+                            "turnCostUsd": turn_cost,
+                            "turn_turns": turn_turns,
+                            "costUsd": total_cost,
+                            "turns": total_turns,
+                            "durationMs": duration_ms,
+                            "usage": sdk_event.usage or {},
+                            "iterations": iterations,
+                            "contextWindow": context_window,
+                        }
+
                         if sdk_event.is_error and not interrupted:
                             # Send error notification but DON'T terminate the session.
                             # Go back to idle so the user can send another message.
                             await notify("agent/error", {
-                                "bonsaiSid": task.bonsai_sid,
-                                "sessionId": sdk_event.session_id or session_id,
+                                **_turn_event,
                                 "subtype": "turn_error",
                                 "errors": [sdk_event.result] if sdk_event.result else [],
                                 "result": sdk_event.result or "",
-                                "turnCostUsd": turn_cost,
-                                "turn_turns": turn_turns,
-                                "costUsd": total_cost,
-                                "turns": total_turns,
-                                "durationMs": duration_ms,
-                                "usage": sdk_event.usage or {},
                             })
                         elif interrupted:
                             # Interrupt path — emit interrupted, not turnComplete.
@@ -369,27 +424,11 @@ async def run(
                             # Close any subagents left open (SubagentStop hook may
                             # not fire when the SDK is interrupted mid-turn).
                             await _close_orphaned_subagents()
-                            await notify("agent/interrupted", {
-                                "bonsaiSid": task.bonsai_sid,
-                                "sessionId": sdk_event.session_id or session_id,
-                                "turnCostUsd": turn_cost,
-                                "turn_turns": turn_turns,
-                                "costUsd": total_cost,
-                                "turns": total_turns,
-                                "durationMs": duration_ms,
-                                "usage": sdk_event.usage or {},
-                            })
+                            await notify("agent/interrupted", _turn_event)
                         else:
                             await notify("agent/turnComplete", {
-                                "bonsaiSid": task.bonsai_sid,
-                                "sessionId": sdk_event.session_id or session_id,
+                                **_turn_event,
                                 "result": sdk_event.result or "",
-                                "turnCostUsd": turn_cost,
-                                "turn_turns": turn_turns,
-                                "costUsd": total_cost,
-                                "turns": total_turns,
-                                "durationMs": duration_ms,
-                                "usage": sdk_event.usage or {},
                             })
                         tracker.set_status(task.bonsai_sid, "idle")
                         break  # back to conversation loop, same client

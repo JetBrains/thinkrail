@@ -230,7 +230,7 @@ export function SessionStatusLine({
       {metrics.contextMax > 0 && (
         <>
           <span className="ssl-sep" />
-          <span className="ssl-context">
+          <span className="ssl-context" title={`${metrics.contextTokens.toLocaleString()} tokens (${(metrics.contextUsage.cacheReadTokens + metrics.contextUsage.cacheCreationTokens).toLocaleString()} cached)`}>
             {Math.round(metrics.contextTokens / 1000)}k/
             {Math.round(metrics.contextMax / 1000)}k
           </span>

@@ -94,7 +94,7 @@ export function PromptPreview({ systemPrompt, sections }: PromptPreviewProps) {
 
   const totalTokens = sections
     ? sections.reduce((sum, s) => sum + s.tokens, 0)
-    : Math.ceil((systemPrompt?.length ?? 0) / 4);
+    : Math.ceil((systemPrompt?.length ?? 0) / 6);
 
   const toggleSection = (key: string) => {
     setExpandedSections((prev) => {

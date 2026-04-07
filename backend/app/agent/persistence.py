@@ -110,6 +110,7 @@ def list_sessions(project_root: Path) -> list[dict[str, Any]]:
                 "createdAt": data.get("createdAt", ""),
                 "updatedAt": data.get("updatedAt", ""),
                 "active": status not in ("done", "error"),
+                "inTracker": False,
                 "metrics": data.get("metrics", {}),
             }
             # Include full config and system prompt for draft sessions

@@ -34,17 +34,30 @@ export interface ContextUsage {
   filesWritten: string[];
 }
 
+/** Token usage for a single API call within a turn. */
+export interface IterationUsage {
+  type: "message" | "compaction";
+  inputTokens: number;              // fresh (non-cached) input
+  outputTokens: number;
+  cacheCreationInputTokens: number;
+  cacheReadInputTokens: number;
+  cacheCreation?: { ephemeral5mInputTokens: number; ephemeral1hInputTokens: number };
+}
+
 export interface TurnUsage {
   turnIndex: number;
-  inputTokens: number;
-  outputTokens: number;
-  cacheCreationTokens: number;
-  cacheReadTokens: number;
-  totalContextTokens: number;
+  inputTokens: number;         // fresh input from last iteration
+  outputTokens: number;        // output from last iteration
+  cacheCreationTokens: number; // cache create from last iteration
+  cacheReadTokens: number;     // cache read from last iteration
+  totalContextTokens: number;  // last iteration total: input + cacheRead + cacheCreate + output
   costUsd: number;
   timestamp: number;
   sdkTurns: number;
+  iterations?: IterationUsage[];  // per-API-call breakdown within this turn
 }
+// All breakdown values come from the LAST iteration (the one with the fullest context).
+// Invariant: inputTokens + cacheReadTokens + cacheCreationTokens + outputTokens == totalContextTokens
 ```
 
 ---

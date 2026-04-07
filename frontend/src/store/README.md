@@ -86,6 +86,48 @@ export interface AgentEvent {
 ```typescript
 export type SessionStatus = "draft" | "initializing" | "idle" | "running" | "waiting" | "done" | "error" | "interrupted";
 
+/** Token usage for a single API call within a turn. */
+export interface IterationUsage {
+  type: "message" | "compaction";
+  inputTokens: number;         // fresh (non-cached) input
+  outputTokens: number;
+  cacheCreationInputTokens: number;
+  cacheReadInputTokens: number;
+  cacheCreation?: {
+    ephemeral5mInputTokens: number;
+    ephemeral1hInputTokens: number;
+  };
+}
+
+export interface TurnUsage {
+  turnIndex: number;
+  inputTokens: number;         // fresh input from last iteration
+  outputTokens: number;        // output from last iteration
+  cacheCreationTokens: number; // cache create from last iteration
+  cacheReadTokens: number;     // cache read from last iteration
+  totalContextTokens: number;  // last iteration total (= input + cacheRead + cacheCreate + output)
+  costUsd: number;
+  timestamp: number;
+  sdkTurns: number;            // SDK internal turns (tool-use loops)
+  iterations?: IterationUsage[];
+}
+
+export interface ContextUsage {
+  contextMax: number;
+  contextTokens: number;       // context window occupancy (from last iteration)
+  outputTokens: number;
+  cacheReadTokens: number;
+  cacheCreationTokens: number;
+  inputTokens: number;         // fresh input only (non-cached)
+  turnHistory: TurnUsage[];
+  runBoundaries: number[];     // indices where session resumed
+  toolCallCounts: Record<string, number>;
+  toolTokens: Record<string, { inputTokens: number; outputTokens: number }>;
+  filesRead: string[];
+  filesWritten: string[];
+}
+// Invariant: inputTokens + cacheReadTokens + cacheCreationTokens + outputTokens == contextTokens
+
 export interface SessionMetrics {
   costUsd: number;
   turns: number;
@@ -94,6 +136,7 @@ export interface SessionMetrics {
   contextMax: number;
   durationMs: number;
   filesChanged: Record<string, "created" | "modified" | "deleted">;
+  contextUsage: ContextUsage;
 }
 
 export interface PendingRequest {
@@ -232,7 +275,8 @@ interface SessionStore {
 - `restoreSession` loads from backend, marks all question/approval events as answered with `{ historical: true }`, sets `status: "done"` and `restored: true`, extracts `systemPrompt` from the persisted `sessionStart` event payload
 - `loadActiveSessions` similarly extracts `systemPrompt` from the `sessionStart` event (or from `entry.systemPrompt` for drafts) when building Session objects from persistence
 - `onSuggestSession` stores suggestion params in `pendingRequest` as `{type: "suggestion", skill, specIds, name, reason, requestId}` and appends a `suggestSession` event
-- `onAgentEvent` is the generic handler for all streaming events; increments `toolCalls` on `toolCallEnd`, updates metrics on `turnComplete`
+- `onAgentEvent` is the generic handler for all streaming events; increments `toolCalls` on `toolCallEnd`, updates metrics on `turnComplete`/`interrupted`. On `costEstimate` events, updates live context window from `currentContextWindow` and per-iteration breakdown (`iterInputTokens`, `iterCacheRead`, `iterCacheCreate`, `iterOutputTokens`) — not persisted, only for live UI display.
+- `onSessionDone` only updates cost, status, and duration — preserves context data from the last `turnComplete` (the `agent/done` event carries no usage data)
 - `onSessionError` with `subtype === "turn_error"` sets status to `"idle"` (recoverable); other subtypes set `"error"` (terminal)
 - `ensureSession()` internal helper creates placeholder if events arrive before `startSession()` resolves
 - `archivedSessions` is **not persisted** to localStorage — lost on page refresh
@@ -393,7 +437,9 @@ export function wireEvents(client: RpcClient): Unsubscribe
 
 ### Agent streaming → sessionStore.onAgentEvent
 
-`agent/textDelta`, `agent/toolCallStart`, `agent/toolCallEnd`, `agent/turnComplete`, `agent/interrupted`, `agent/subagentStart`, `agent/subagentEnd`, `agent/notification`, `agent/compact`, `agent/progress`, `agent/permissionDenied`, `agent/ready`
+`agent/textDelta`, `agent/toolCallStart`, `agent/toolCallEnd`, `agent/turnComplete`, `agent/interrupted`, `agent/subagentStart`, `agent/subagentEnd`, `agent/notification`, `agent/compact`, `agent/progress`, `agent/costEstimate`, `agent/permissionDenied`, `agent/ready`
+
+`agent/costEstimate` is ephemeral — not stored in the events array but updates live metrics (cost, context window, token breakdown) for real-time UI display.
 
 ### Agent lifecycle → individual handlers
 

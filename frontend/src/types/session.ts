@@ -2,17 +2,32 @@ import type { AgentConfig, AgentEvent, Question } from "./agent.ts";
 
 export type SessionStatus = "draft" | "initializing" | "idle" | "running" | "waiting" | "done" | "error" | "interrupted";
 
+/** Token usage for a single API call within a turn (one "iteration"). */
+export interface IterationUsage {
+  type: "message" | "compaction";
+  inputTokens: number;
+  outputTokens: number;
+  cacheCreationInputTokens: number;
+  cacheReadInputTokens: number;
+  cacheCreation?: {
+    ephemeral5mInputTokens: number;
+    ephemeral1hInputTokens: number;
+  };
+}
+
 export interface TurnUsage {
   turnIndex: number;
   inputTokens: number;
   outputTokens: number;
   cacheCreationTokens: number;
   cacheReadTokens: number;
-  totalContextTokens: number; // input + output (context window occupancy)
+  totalContextTokens: number; // last iteration: input + cache + output
   costUsd: number;
   timestamp: number;
   /** Number of SDK internal turns (tool-use loops) within this turnComplete. */
   sdkTurns: number;
+  /** Per-API-call token breakdown within this turn. */
+  iterations?: IterationUsage[];
 }
 
 export interface ContextUsage {

@@ -6,6 +6,7 @@ import type {
   SessionMetrics,
   ContextUsage,
   TurnUsage,
+  IterationUsage,
   ArchivedSession,
   PendingRequest,
 } from "@/types/session.ts";
@@ -13,6 +14,8 @@ import { getClient } from "@/api/index.ts";
 import { createAgentApi } from "@/api/methods/agents.ts";
 import { getContextWindowSize, DEFAULT_MODEL } from "@/utils/models.ts";
 import { useNotificationStore } from "./notificationStore.ts";
+import { useBoardStore } from "./boardStore.ts";
+import { useFileStore } from "./fileStore.ts";
 import { getErrorMessage } from "@/utils/errors.ts";
 
 interface SessionStore {
@@ -66,9 +69,13 @@ interface SessionStore {
   sendMessage: (bonsaiSid: string, text: string, isMarkdown?: boolean) => Promise<void>;
   switchSession: (bonsaiSid: string) => void;
   closeSession: (bonsaiSid: string) => void;
+  /** Delete/trash a session: calls backend API, closes tab, removes from store */
+  deleteSession: (bonsaiSid: string) => Promise<void>;
   endSession: (bonsaiSid: string) => Promise<void>;
   /** Open a tab for a session (e.g., from background indicator dropdown) */
   openTab: (bonsaiSid: string) => void;
+  /** Ticket-aware focus: opens tab, navigates to ticket if linked, clears conflicting state */
+  focusSession: (bonsaiSid: string) => void;
   interruptSession: (bonsaiSid: string) => Promise<void>;
   resolveRequest: (
     bonsaiSid: string,
@@ -167,17 +174,41 @@ function reconstructContextUsage(events: AgentEvent[], model: string, _betas: st
     // Accumulate turn usage from turnComplete/interrupted events
     if ((ev.eventType === "turnComplete" || ev.eventType === "interrupted") && p?.usage) {
       const usage = p.usage as Record<string, number>;
-      const inputTokens = usage.input_tokens ?? 0;
-      const cacheCreation = usage.cache_creation_input_tokens ?? 0;
-      const cacheRead = usage.cache_read_input_tokens ?? 0;
-      const outputTokens = usage.output_tokens ?? 0;
-      const totalContext = inputTokens + outputTokens;
+
+      // Per-iteration data (new events carry this array)
+      const rawIters = (p.iterations as Record<string, number>[]) ?? [];
+      const lastIter = rawIters.length > 0 ? rawIters[rawIters.length - 1] : null;
+
+      // All breakdown values from last iteration so they add up:
+      // inputTokens (fresh) + cacheRead + cacheCreate + output = contextTokens.
+      const inputTokens = lastIter ? (lastIter.input_tokens ?? 0) : (usage.input_tokens ?? 0);
+      const cacheCreation = lastIter ? (lastIter.cache_creation_input_tokens ?? 0) : (usage.cache_creation_input_tokens ?? 0);
+      const cacheRead = lastIter ? (lastIter.cache_read_input_tokens ?? 0) : (usage.cache_read_input_tokens ?? 0);
+      const outputTokens = lastIter ? (lastIter.output_tokens ?? 0) : (usage.output_tokens ?? 0);
+
+      const totalContext = (p.contextWindow as number) || (inputTokens + cacheCreation + cacheRead + outputTokens);
 
       cu.contextTokens = totalContext;
       cu.outputTokens = outputTokens;
       cu.inputTokens = inputTokens;
       cu.cacheReadTokens = cacheRead;
       cu.cacheCreationTokens = cacheCreation;
+
+      // Convert raw iterations to typed IterationUsage[]
+      const iterations: IterationUsage[] = rawIters.map((it) => {
+        const cc = (it as Record<string, unknown>).cache_creation as Record<string, number> | null | undefined;
+        return {
+          type: (it.type as unknown as string) === "compaction" ? "compaction" as const : "message" as const,
+          inputTokens: (it.input_tokens as number) ?? 0,
+          outputTokens: (it.output_tokens as number) ?? 0,
+          cacheCreationInputTokens: (it.cache_creation_input_tokens as number) ?? 0,
+          cacheReadInputTokens: (it.cache_read_input_tokens as number) ?? 0,
+          ...(cc ? { cacheCreation: {
+            ephemeral5mInputTokens: cc.ephemeral_5m_input_tokens ?? 0,
+            ephemeral1hInputTokens: cc.ephemeral_1h_input_tokens ?? 0,
+          } } : {}),
+        };
+      });
 
       cu.turnHistory.push({
         turnIndex: cu.turnHistory.length,
@@ -189,6 +220,7 @@ function reconstructContextUsage(events: AgentEvent[], model: string, _betas: st
         costUsd: (p.turnCostUsd as number) ?? 0,
         timestamp: 0, // not available from persisted events
         sdkTurns: (p.turn_turns as number) ?? 1,
+        iterations: iterations.length > 0 ? iterations : undefined,
       });
     }
 
@@ -247,12 +279,31 @@ function applyMetrics(
 
   // Parse the usage dict from the SDK (arrives on turnComplete/interrupted/done)
   const usage = (params.usage as Record<string, number> | undefined) ?? {};
-  const inputTokens = usage.input_tokens ?? 0;
-  const cacheCreation = usage.cache_creation_input_tokens ?? 0;
-  const cacheRead = usage.cache_read_input_tokens ?? 0;
-  const outputTokens = usage.output_tokens ?? 0;
-  const totalContext = inputTokens + outputTokens;
+
+  // Per-iteration data (new events carry this array)
+  const rawIters = (params.iterations as Record<string, number>[]) ?? [];
+  const lastIter = rawIters.length > 0 ? rawIters[rawIters.length - 1] : null;
+
+  // All breakdown values come from the LAST iteration so they add up
+  // correctly: inputTokens (fresh) + cacheRead + cacheCreate + output = contextTokens.
+  // For old events without iterations, fall back to SDK aggregate usage.
+  const inputTokens = lastIter ? (lastIter.input_tokens ?? 0) : (usage.input_tokens ?? 0);
+  const cacheCreation = lastIter ? (lastIter.cache_creation_input_tokens ?? 0) : (usage.cache_creation_input_tokens ?? 0);
+  const cacheRead = lastIter ? (lastIter.cache_read_input_tokens ?? 0) : (usage.cache_read_input_tokens ?? 0);
+  const outputTokens = lastIter ? (lastIter.output_tokens ?? 0) : (usage.output_tokens ?? 0);
+
+  // Context window = all tokens in the last API call.
+  const totalContext = (params.contextWindow as number) || (inputTokens + cacheCreation + cacheRead + outputTokens);
   const contextMax = getContextWindowSize(session.model);
+
+  // Convert raw iterations to typed IterationUsage[]
+  const iterations: IterationUsage[] = rawIters.map((it) => ({
+    type: (it.type as unknown as string) === "compaction" ? "compaction" as const : "message" as const,
+    inputTokens: (it.input_tokens as number) ?? 0,
+    outputTokens: (it.output_tokens as number) ?? 0,
+    cacheCreationInputTokens: (it.cache_creation_input_tokens as number) ?? 0,
+    cacheReadInputTokens: (it.cache_read_input_tokens as number) ?? 0,
+  }));
 
   const prevUsage = session.metrics.contextUsage;
   const turnUsage: TurnUsage = {
@@ -265,6 +316,7 @@ function applyMetrics(
     costUsd: (params.turnCostUsd as number) ?? 0,
     timestamp: Date.now(),
     sdkTurns: (params.turn_turns as number) ?? 1,
+    iterations: iterations.length > 0 ? iterations : undefined,
   };
 
   return {
@@ -533,7 +585,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
 
   createDraft: async ({ specIds, config, name, skillId, prompt, metaTicketId, filePaths }) => {
     const api = createAgentApi(getClient());
-    const { bonsaiSid, systemPrompt } = await api.prepare({
+    const { bonsaiSid, systemPrompt, sections } = await api.prepare({
       specIds,
       config,
       skillId: skillId ?? undefined,
@@ -564,6 +616,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
         answeredRequests: new Map(),
         metaTicketId: metaTicketId ?? null,
         systemPrompt,
+        promptSections: (sections as Session["promptSections"]) ?? null,
       });
       if (metaTicketId) {
         return { sessions: next };
@@ -619,10 +672,26 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
     set((s) => {
       const session = s.sessions.get(bonsaiSid);
       if (!session) return s;
+      // Seed context with system prompt tokens so the counter doesn't start at 0
+      const promptTokens = session.promptSections
+        ? session.promptSections.reduce((sum, sec) => sum + sec.tokens, 0)
+        : 0;
+      const contextMax = getContextWindowSize(session.model);
       const next = new Map(s.sessions);
       next.set(bonsaiSid, {
         ...session,
         status: "initializing",
+        metrics: {
+          ...session.metrics,
+          contextTokens: promptTokens,
+          contextMax,
+          contextUsage: {
+            ...session.metrics.contextUsage,
+            contextTokens: promptTokens,
+            contextMax,
+            inputTokens: promptTokens,
+          },
+        },
       });
       return { sessions: next };
     });
@@ -900,7 +969,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
           skillId: (data?.skillId as string) ?? entry.skillId ?? null,
           specIds: data?.specIds ?? entry.specIds ?? [],
           filePaths: (data?.filePaths as string[]) ?? [],
-          status: (entry.status as SessionStatus) ?? "idle",
+          status: entry.active && !entry.inTracker ? "interrupted" : ((entry.status as SessionStatus) ?? "idle"),
           model: entryModel,
           permissionMode: (data?.config?.permissionMode as string) ?? "default",
           betas: entryBetas,
@@ -1010,14 +1079,14 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
           // Task not found in backend tracker = session finished
           const session = get().sessions.get(bonsaiSid);
           if (!session) return;
-          if (session.status === "running" || session.status === "waiting") {
-            console.log(`[syncSessionStatuses] ${bonsaiSid}: task not found, marking done`);
+          if (session.status === "initializing" || session.status === "running" || session.status === "waiting") {
+            console.log(`[syncSessionStatuses] ${bonsaiSid}: task not found, marking interrupted`);
             set((s) => {
               const current = s.sessions.get(bonsaiSid);
               if (!current) return s;
-              if (current.status !== "running" && current.status !== "waiting") return s;
+              if (current.status !== "initializing" && current.status !== "running" && current.status !== "waiting") return s;
               const next = new Map(s.sessions);
-              next.set(bonsaiSid, { ...current, status: "done", pendingRequest: null });
+              next.set(bonsaiSid, { ...current, status: "interrupted", pendingRequest: null });
               return { sessions: next };
             });
           }
@@ -1073,6 +1142,22 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
     });
   },
 
+  deleteSession: async (bonsaiSid) => {
+    const { createSessionApi } = await import("@/api/methods/sessions.ts");
+    const api = createSessionApi(getClient());
+    await api.delete(bonsaiSid);
+    // Close tab (handles activeSessionId switching)
+    get().closeSession(bonsaiSid);
+    // Remove from sessions map and ignore late-arriving events
+    set((s) => {
+      const sessions = new Map(s.sessions);
+      sessions.delete(bonsaiSid);
+      const closedIds = new Set(s.closedIds);
+      closedIds.add(bonsaiSid);
+      return { sessions, closedIds };
+    });
+  },
+
   endSession: async (bonsaiSid) => {
     const api = createAgentApi(getClient());
     await api.end(bonsaiSid);
@@ -1081,6 +1166,25 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
   openTab: (bonsaiSid) => {
     set((s) => {
       if (!s.sessions.has(bonsaiSid)) return s;
+      const tabs = new Set(s.openTabs);
+      tabs.add(bonsaiSid);
+      return { openTabs: tabs, activeSessionId: bonsaiSid };
+    });
+  },
+
+  focusSession: (bonsaiSid) => {
+    const session = get().sessions.get(bonsaiSid);
+    if (!session) return;
+
+    useFileStore.setState({ activeFilePath: null, previewFilePath: null, previewFile: null });
+
+    if (session.metaTicketId) {
+      useBoardStore.getState().openTicket(session.metaTicketId);
+    } else {
+      useBoardStore.setState({ activeTicketId: null });
+    }
+
+    set((s) => {
       const tabs = new Set(s.openTabs);
       tabs.add(bonsaiSid);
       return { openTabs: tabs, activeSessionId: bonsaiSid };
@@ -1229,11 +1333,12 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
           }
         } else if (method === "agent/costEstimate") {
           const est = params.estimatedCostUsd as number;
-          const turnIn = (params.turnInputTokens as number) ?? 0;
-          const turnOut = (params.turnOutputTokens as number) ?? 0;
-          const turnCacheRead = (params.turnCacheRead as number) ?? 0;
-          const turnCacheWrite = (params.turnCacheWrite as number) ?? 0;
-          const contextTokens = turnIn + turnOut;
+          // Context from latest iteration (not cumulative turn totals)
+          const contextTokens = (params.currentContextWindow as number) ?? 0;
+          const iterInput = (params.iterInputTokens as number) ?? 0;
+          const iterCacheRead = (params.iterCacheRead as number) ?? 0;
+          const iterCacheCreate = (params.iterCacheCreate as number) ?? 0;
+          const iterOutput = (params.iterOutputTokens as number) ?? 0;
           const contextMax = getContextWindowSize(session.model);
 
           const next = new Map(sessions);
@@ -1248,10 +1353,10 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
                 ...session.metrics.contextUsage,
                 contextMax,
                 contextTokens,
-                inputTokens: turnIn,
-                outputTokens: turnOut,
-                cacheReadTokens: turnCacheRead,
-                cacheCreationTokens: turnCacheWrite,
+                inputTokens: iterInput,
+                cacheReadTokens: iterCacheRead,
+                cacheCreationTokens: iterCacheCreate,
+                outputTokens: iterOutput,
               },
             },
           });
@@ -1446,9 +1551,23 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
       const session = sessions.get(bonsaiSid);
       let projectCost = s.projectCost;
       if (session) {
-        const { updated, costDelta } = applyMetrics(session, params, "done");
+        // agent/done carries no usage/context data — only update
+        // cost, status, and duration.  Preserve context from the
+        // last turnComplete so the display doesn't blank out.
+        const newCost = (params.costUsd as number) ?? session.metrics.costUsd;
+        const costDelta = newCost - session.metrics.costUsd;
         projectCost += costDelta;
-        sessions.set(bonsaiSid, updated);
+        sessions.set(bonsaiSid, {
+          ...session,
+          status: "done",
+          pendingRequest: null,
+          metrics: {
+            ...session.metrics,
+            costUsd: newCost,
+            turns: (params.turns as number) ?? session.metrics.turns,
+            durationMs: (params.durationMs as number) ?? session.metrics.durationMs,
+          },
+        });
       }
       return { sessions, projectCost };
     });

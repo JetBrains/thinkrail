@@ -11,6 +11,8 @@ export interface SessionSummary {
   updatedAt: string;
   metrics?: Record<string, unknown>;
   active?: boolean;
+  /** Whether the session has a live runner in the backend tracker */
+  inTracker?: boolean;
   /** Present for draft sessions — full config object */
   config?: Record<string, unknown>;
   /** Present for draft sessions — assembled system prompt */

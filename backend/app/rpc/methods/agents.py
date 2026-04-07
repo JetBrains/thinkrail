@@ -110,7 +110,13 @@ async def prepare_agent(service: AgentService, **params: Any) -> dict:
         meta_ticket_id=params.get("metaTicketId"),
         file_paths=params.get("filePaths"),
     )
-    return {"bonsaiSid": task.bonsai_sid, "systemPrompt": task.system_prompt}
+    structured = service._build_context_structured_for(task)
+    return {
+        "bonsaiSid": task.bonsai_sid,
+        "systemPrompt": structured["full"],
+        "sections": structured["sections"],
+        "totalTokens": structured["totalTokens"],
+    }
 
 
 @_handle_errors

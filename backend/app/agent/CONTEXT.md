@@ -91,7 +91,7 @@ def build_context_structured(
 **Returns:** A dict with:
 - `full` (`str`) — the complete system prompt (same as `build_context` output)
 - `sections` (`list[dict]`) — each section with `key`, `label`, `content`, `tokens`. Specs section includes `specDetails` with per-spec breakdown.
-- `totalTokens` (`int`) — estimated total tokens (`len(full) // 4`)
+- `totalTokens` (`int`) — estimated total tokens (via Anthropic's `count_tokens` API when available, falls back to `len(text) // 6` heuristic)
 
 **Section keys:** `"general"`, `"task"`, `"project"`, `"specs"` — mapped to labels via `SECTION_LABELS` constant.
 

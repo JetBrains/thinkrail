@@ -261,9 +261,59 @@
   background: var(--border);
 }
 
-.status-attention {
+/* ── Attention Sessions Indicator ── */
+.status-attn-wrap { position: relative; display: inline-block; }
+.status-attn-btn {
+  border: none;
+  background: transparent;
   color: var(--gold);
+  font-family: var(--font);
+  font-size: 11px;
+  cursor: pointer;
+  padding: 0;
 }
+.status-attn-btn:hover { text-decoration: underline; }
+.status-attn-dropdown {
+  position: absolute;
+  bottom: 100%;
+  left: 0;
+  min-width: 220px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  box-shadow: 0 -2px 8px rgba(0,0,0,.25);
+  padding: 4px 0;
+  z-index: 100;
+  margin-bottom: 4px;
+}
+.status-attn-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  border: none;
+  background: transparent;
+  color: var(--fg);
+  font: inherit;
+  padding: 4px 8px;
+  cursor: pointer;
+  border-radius: 4px;
+  text-align: left;
+}
+.status-attn-item:hover { background: var(--hover); }
+.status-attn-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.status-attn-badge {
+  font-size: 0.75em;
+  font-weight: 600;
+  padding: 1px 5px;
+  border-radius: 3px;
+  color: var(--bg);
+}
+.status-attn-badge--question { background: var(--purple); }
+.status-attn-badge--approval { background: var(--gold); }
+.status-attn-badge--suggestion,
+.status-attn-badge--step-proposal,
+.status-attn-badge--description-suggestion { background: var(--blue); }
 
 /* ── Session Manager in center panel ── */
 .sm-tab-bar {
@@ -367,6 +417,25 @@
   font-size: 0.8em;
 }
 .status-bg-end:hover { background: var(--hover); color: var(--red); }
+.status-bg-divider {
+  height: 1px;
+  background: var(--border);
+  margin: 4px 0;
+}
+.status-bg-manage {
+  display: block;
+  width: 100%;
+  border: none;
+  background: transparent;
+  color: var(--hint);
+  font: inherit;
+  font-size: 0.85em;
+  padding: 4px 8px;
+  cursor: pointer;
+  text-align: center;
+  border-radius: 4px;
+}
+.status-bg-manage:hover { background: var(--hover); color: var(--fg); }
 
 .status-hint {
   color: var(--hint);

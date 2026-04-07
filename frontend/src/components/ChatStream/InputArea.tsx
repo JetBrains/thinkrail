@@ -17,9 +17,7 @@ interface InputAreaProps {
   onInterrupt?: () => void;
   showContinue?: boolean;
   onContinue?: () => void;
-  showStartSession?: boolean;
-  onStartSession?: () => void;
-  skillId?: string | null;
+  isDraft?: boolean;
 }
 
 const FORMAT_ACTIONS = [
@@ -35,7 +33,7 @@ const FORMAT_ACTIONS = [
   { label: "```", title: "Code block", prefix: "\n```\n", suffix: "\n```\n" },
 ];
 
-export function InputArea({ sessionId, disabled, placeholder, onSend, isRunning, canInterrupt, onInterrupt, showContinue, onContinue, showStartSession, onStartSession, skillId }: InputAreaProps) {
+export function InputArea({ sessionId, disabled, placeholder, onSend, isRunning, canInterrupt, onInterrupt, showContinue, onContinue, isDraft }: InputAreaProps) {
   const [text, setText] = useState(() => useInputDraftStore.getState().getDraft(sessionId));
   const [suggestions, setSuggestions] = useState<typeof SKILLS>([]);
   const [selectedIndex, setSelectedIndex] = useState(0);
@@ -106,7 +104,8 @@ export function InputArea({ sessionId, disabled, placeholder, onSend, isRunning,
 
   const handleSend = useCallback(() => {
     const trimmed = text.trim();
-    if (!trimmed || disabled) return;
+    if (disabled) return;
+    if (!trimmed && !isDraft) return;
     onSend(trimmed, true);
     setText("");
     useInputDraftStore.getState().clearDraft(sessionId);
@@ -122,7 +121,7 @@ export function InputArea({ sessionId, disabled, placeholder, onSend, isRunning,
       }
     }, 0);
     ref.current?.focus();
-  }, [text, disabled, onSend, sessionId, closeSuggestions]);
+  }, [text, disabled, isDraft, onSend, sessionId, closeSuggestions]);
 
   // -- Drag handle for panel resize --
   const handleDragStart = useCallback((e: React.MouseEvent) => {
@@ -471,11 +470,6 @@ export function InputArea({ sessionId, disabled, placeholder, onSend, isRunning,
             Continue
           </button>
         )}
-        {showStartSession && onStartSession && (
-          <button className="input-continue" onClick={onStartSession} title="Start the skill session">
-            {skillId ? `Start: ${SKILLS.find(s => s.id === skillId)?.name ?? "Session"}` : "Start"}
-          </button>
-        )}
         {canInterrupt && onInterrupt && (
           <button className="input-interrupt" onClick={onInterrupt}>{"\u25A0"}</button>
         )}
@@ -483,9 +477,9 @@ export function InputArea({ sessionId, disabled, placeholder, onSend, isRunning,
           <button
             className="input-send"
             onClick={handleSend}
-            disabled={disabled || !text.trim()}
+            disabled={disabled || (!isDraft && !text.trim())}
           >
-            Send
+            {isDraft ? "Start" : "Send"}
           </button>
         )}
       </div>

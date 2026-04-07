@@ -132,12 +132,6 @@ export function TicketSession({ ticket, embeddedSid, onSessionStarted }: TicketS
     }
   }, [embeddedSid, session, resolveRequest, sendMessage]);
 
-  const handleStartSession = useCallback(() => {
-    if (!embeddedSid || !session) return;
-    if (session.status === "initializing" || session.status === "idle") {
-      sendMessage(embeddedSid, "start");
-    }
-  }, [embeddedSid, session, sendMessage]);
 
   const handleResolve = useCallback(
     (requestId: string, response: unknown) => {
@@ -194,9 +188,6 @@ export function TicketSession({ ticket, embeddedSid, onSessionStarted }: TicketS
   const isDraft = status === "draft";
   const inputDisabled = isDone || isRunning || (hasPending && session.pendingRequest?.type === "approval");
   const showContinue = !inputDisabled && !canInterrupt && !isDraft && (session.events.length ?? 0) > 0;
-  const showStartSession = !inputDisabled && !canInterrupt && !isDraft
-    && (session.events.length ?? 0) === 0
-    && session.skillId != null;
 
   return (
     <div className="ticket-session">
@@ -256,9 +247,7 @@ export function TicketSession({ ticket, embeddedSid, onSessionStarted }: TicketS
           onInterrupt={() => interruptSession(session.bonsaiSid)}
           showContinue={showContinue}
           onContinue={handleContinue}
-          showStartSession={showStartSession}
-          onStartSession={handleStartSession}
-          skillId={session.skillId}
+          isDraft={isDraft}
         />
       )}
     </div>

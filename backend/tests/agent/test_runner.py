@@ -171,16 +171,16 @@ class TestRunHappyPath:
         result1.session_id = "s1"
         result1.result = "turn 1 done"
         result1.is_error = False
-        result1.num_turns = 2
-        result1.total_cost_usd = 0.03
+        result1.num_turns = 2             # per-turn: 2 SDK turns in this turn
+        result1.total_cost_usd = 0.03     # cumulative: $0.03 after turn 1
         result1.usage = {}
 
         result2 = MagicMock(spec=ResultMessage)
         result2.session_id = "s1"
         result2.result = "turn 2 done"
         result2.is_error = False
-        result2.num_turns = 1
-        result2.total_cost_usd = 0.02
+        result2.num_turns = 1             # per-turn: 1 SDK turn in this turn
+        result2.total_cost_usd = 0.05     # cumulative: $0.05 after turn 2
         result2.usage = {}
 
         mock_instance = AsyncMock()
@@ -544,16 +544,16 @@ class TestInterruptHandling:
         result1.session_id = "s1"
         result1.result = ""
         result1.is_error = False
-        result1.num_turns = 1
-        result1.total_cost_usd = 0.01
+        result1.num_turns = 1             # per-turn
+        result1.total_cost_usd = 0.01     # cumulative
         result1.usage = {}
 
         result2 = MagicMock(spec=ResultMessage)
         result2.session_id = "s1"
         result2.result = "completed"
         result2.is_error = False
-        result2.num_turns = 1
-        result2.total_cost_usd = 0.02
+        result2.num_turns = 1             # per-turn: 1 SDK turn in this turn
+        result2.total_cost_usd = 0.03     # cumulative: $0.03 total
         result2.usage = {}
 
         mock_instance = AsyncMock()
@@ -957,3 +957,179 @@ class TestSubagentHooks:
         assert len(tool_ends) == 1
         assert tool_ends[0].get("agentId") == "agent-X", \
             f"Subagent toolCallEnd should have agentId=agent-X, got {tool_ends[0]}"
+
+
+class TestIterationTracking:
+    """Context window is computed from the last iteration (API call), not the
+    cumulative turn totals."""
+
+    @patch("app.agent.runner.ClaudeSDKClient")
+    async def test_multi_iteration_context_window(self, MockClient: MagicMock) -> None:
+        """A turn with 3 API calls (tool-use loop) emits iterations array
+        and contextWindow based on the last iteration only."""
+        from claude_agent_sdk import ResultMessage, SystemMessage
+        from claude_agent_sdk.types import StreamEvent
+
+        sys_msg = MagicMock(spec=SystemMessage)
+        sys_msg.subtype = "init"
+        sys_msg.data = {"session_id": "s1"}
+
+        # Three iterations of message_start + message_delta
+        def _stream_event(raw: dict) -> StreamEvent:
+            ev = MagicMock(spec=StreamEvent)
+            ev.event = raw
+            return ev
+
+        iter1_start = _stream_event({
+            "type": "message_start",
+            "message": {"usage": {
+                "input_tokens": 5000,
+                "cache_read_input_tokens": 40000,
+                "cache_creation_input_tokens": 5000,
+            }},
+        })
+        iter1_delta = _stream_event({
+            "type": "message_delta",
+            "usage": {"output_tokens": 500},
+        })
+        iter2_start = _stream_event({
+            "type": "message_start",
+            "message": {"usage": {
+                "input_tokens": 6000,
+                "cache_read_input_tokens": 40000,
+                "cache_creation_input_tokens": 6000,
+            }},
+        })
+        iter2_delta = _stream_event({
+            "type": "message_delta",
+            "usage": {"output_tokens": 600},
+        })
+        iter3_start = _stream_event({
+            "type": "message_start",
+            "message": {"usage": {
+                "input_tokens": 7000,
+                "cache_read_input_tokens": 40000,
+                "cache_creation_input_tokens": 7000,
+            }},
+        })
+        iter3_delta = _stream_event({
+            "type": "message_delta",
+            "usage": {"output_tokens": 700},
+        })
+
+        result_msg = MagicMock(spec=ResultMessage)
+        result_msg.session_id = "s1"
+        result_msg.result = "done"
+        result_msg.is_error = False
+        result_msg.num_turns = 3
+        result_msg.total_cost_usd = 0.10
+        result_msg.usage = {
+            "input_tokens": 18000,
+            "output_tokens": 1800,
+            "cache_read_input_tokens": 120000,
+            "cache_creation_input_tokens": 18000,
+        }
+
+        _setup_mock_client(MockClient, [
+            sys_msg,
+            iter1_start, iter1_delta,
+            iter2_start, iter2_delta,
+            iter3_start, iter3_delta,
+            result_msg,
+        ])
+
+        tracker, task = _make_tracker_and_task()
+        notify = AsyncMock()
+        tracker.enqueue_message(task.bonsai_sid, "do stuff")
+        tracker.enqueue_end_signal(task.bonsai_sid)
+
+        await run(task, "context", notify, tracker)
+
+        # Find the turnComplete notification
+        turn_complete = None
+        for call in notify.call_args_list:
+            if call.args[0] == "agent/turnComplete":
+                turn_complete = call.args[1]
+                break
+        assert turn_complete is not None, "agent/turnComplete should have been emitted"
+
+        # iterations array should have 3 entries
+        iters = turn_complete["iterations"]
+        assert len(iters) == 3
+
+        # Each iteration has the correct token counts
+        assert iters[0]["input_tokens"] == 5000
+        assert iters[0]["cache_read_input_tokens"] == 40000
+        assert iters[0]["cache_creation_input_tokens"] == 5000
+        assert iters[0]["output_tokens"] == 500
+        assert iters[2]["input_tokens"] == 7000
+        assert iters[2]["output_tokens"] == 700
+
+        # contextWindow = last iteration total (NOT sum of all iterations)
+        # Last iter: 7000 + 40000 + 7000 + 700 = 54700
+        expected_ctx = 7000 + 40000 + 7000 + 700
+        assert turn_complete["contextWindow"] == expected_ctx
+
+        # Verify it's NOT the sum of all iterations
+        sum_all = sum(
+            it["input_tokens"] + it["cache_read_input_tokens"]
+            + it["cache_creation_input_tokens"] + it["output_tokens"]
+            for it in iters
+        )
+        assert sum_all > expected_ctx, "Sum of all iterations should exceed last-iteration context"
+
+    @patch("app.agent.runner.ClaudeSDKClient")
+    async def test_single_iteration_context_window(self, MockClient: MagicMock) -> None:
+        """A simple turn with one API call correctly computes contextWindow."""
+        from claude_agent_sdk import ResultMessage, SystemMessage
+        from claude_agent_sdk.types import StreamEvent
+
+        sys_msg = MagicMock(spec=SystemMessage)
+        sys_msg.subtype = "init"
+        sys_msg.data = {"session_id": "s1"}
+
+        def _stream_event(raw: dict) -> StreamEvent:
+            ev = MagicMock(spec=StreamEvent)
+            ev.event = raw
+            return ev
+
+        start = _stream_event({
+            "type": "message_start",
+            "message": {"usage": {
+                "input_tokens": 2000,
+                "cache_read_input_tokens": 10000,
+                "cache_creation_input_tokens": 3000,
+            }},
+        })
+        delta = _stream_event({
+            "type": "message_delta",
+            "usage": {"output_tokens": 400},
+        })
+
+        result_msg = MagicMock(spec=ResultMessage)
+        result_msg.session_id = "s1"
+        result_msg.result = "ok"
+        result_msg.is_error = False
+        result_msg.num_turns = 1
+        result_msg.total_cost_usd = 0.02
+        result_msg.usage = {"input_tokens": 2000, "output_tokens": 400}
+
+        _setup_mock_client(MockClient, [sys_msg, start, delta, result_msg])
+
+        tracker, task = _make_tracker_and_task()
+        notify = AsyncMock()
+        tracker.enqueue_message(task.bonsai_sid, "go")
+        tracker.enqueue_end_signal(task.bonsai_sid)
+
+        await run(task, "context", notify, tracker)
+
+        turn_complete = None
+        for call in notify.call_args_list:
+            if call.args[0] == "agent/turnComplete":
+                turn_complete = call.args[1]
+                break
+        assert turn_complete is not None
+
+        # contextWindow = 2000 + 10000 + 3000 + 400 = 15400
+        assert turn_complete["contextWindow"] == 15400
+        assert len(turn_complete["iterations"]) == 1

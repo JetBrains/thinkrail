@@ -167,7 +167,7 @@ class AgentService:
             raise ValueError(f"Cannot start: session is '{task.status}', expected 'draft'")
         self._tracker.set_status(bonsai_sid, "initializing")
         spec_context = task.system_prompt or self._build_context_for(task)
-        if prompt:
+        if prompt is not None:
             self._tracker.enqueue_message(bonsai_sid, prompt)
         bg_task = asyncio.create_task(
             self._run_background(task, spec_context, notify)
@@ -380,6 +380,7 @@ class AgentService:
                 "createdAt": task.created,
                 "updatedAt": task.updated,
                 "active": task.status not in ("done", "error"),
+                "inTracker": True,
                 "metrics": disk_entry.get("metrics", {}),
             }
             if task.status == "draft":
@@ -573,10 +574,22 @@ class AgentService:
                     _live_metrics["toolCalls"] += 1
 
                 if method in _FULL_METRICS:
-                    usage = params.get("usage", {})
-                    ctx_tokens = (
-                        usage.get("input_tokens", 0)
-                        + usage.get("output_tokens", 0)
+                    # Prefer pre-computed contextWindow from the runner
+                    # (last iteration: input + cache + output).  Fallback
+                    # uses the corrected formula on SDK-aggregated usage.
+                    ctx_tokens = params.get("contextWindow", 0)
+                    if not ctx_tokens:
+                        usage = params.get("usage", {})
+                        ctx_tokens = (
+                            usage.get("input_tokens", 0)
+                            + usage.get("cache_creation_input_tokens", 0)
+                            + usage.get("cache_read_input_tokens", 0)
+                            + usage.get("output_tokens", 0)
+                        )
+                    # Output tokens from last iteration (for metrics display)
+                    iters = params.get("iterations") or []
+                    last_out = iters[-1].get("output_tokens", 0) if iters else (
+                        params.get("usage", {}).get("output_tokens", 0)
                     )
                     _live_metrics.update({
                         "costUsd": _base_cost + params.get("costUsd", 0),
@@ -585,7 +598,7 @@ class AgentService:
                         "turnTurns": params.get("turn_turns", 0),
                         "contextTokens": ctx_tokens,
                         "contextMax": self._get_context_max(task.config.model),
-                        "outputTokens": usage.get("output_tokens", 0),
+                        "outputTokens": last_out,
                     })
 
                 update_session_metadata(self._config.project_root, task.bonsai_sid, {

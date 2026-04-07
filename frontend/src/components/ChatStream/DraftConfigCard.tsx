@@ -23,8 +23,7 @@ export function DraftConfigCard({ bonsaiSid, readOnly, onVisibilityChange }: Dra
   const session = useSessionStore((s) => s.sessions.get(bonsaiSid));
   const updateDraft = useSessionStore((s) => s.updateDraft);
   const startDraft = useSessionStore((s) => s.startDraft);
-  const closeSession = useSessionStore((s) => s.closeSession);
-  const endSession = useSessionStore((s) => s.endSession);
+  const deleteSession = useSessionStore((s) => s.deleteSession);
   const specs = useSpecStore((s) => s.specs);
   const tickets = useBoardStore((s) => s.tickets);
 
@@ -101,7 +100,7 @@ export function DraftConfigCard({ bonsaiSid, readOnly, onVisibilityChange }: Dra
   const handleStart = useCallback(async () => {
     setStarting(true);
     try {
-      await startDraft(bonsaiSid);
+      await startDraft(bonsaiSid, "");
     } catch (err) {
       console.error("[DraftConfigCard] start failed:", err);
       setStarting(false);
@@ -109,9 +108,8 @@ export function DraftConfigCard({ bonsaiSid, readOnly, onVisibilityChange }: Dra
   }, [bonsaiSid, startDraft]);
 
   const handleDiscard = useCallback(async () => {
-    await endSession(bonsaiSid);
-    closeSession(bonsaiSid);
-  }, [bonsaiSid, endSession, closeSession]);
+    await deleteSession(bonsaiSid);
+  }, [bonsaiSid, deleteSession]);
 
   if (!session) return null;
   if (!readOnly && session.status !== "draft") return null;
