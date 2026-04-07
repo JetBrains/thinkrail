@@ -19,8 +19,10 @@ interface SessionStore {
   sessions: Map<string, Session>;
   activeSessionId: string | null;
   archivedSessions: ArchivedSession[];
-  /** IDs of sessions explicitly closed by the user — ignore late-arriving events */
+  /** IDs of sessions explicitly ended by the user — ignore late-arriving events */
   closedIds: Set<string>;
+  /** Sessions with no open tab but still alive on the backend */
+  backgroundSessions: Map<string, Session>;
   /** Sum of costUsd across all known sessions (in-memory + from backend list) */
   projectCost: number;
   /** Monotonically increasing counter for default "Session N" names */
@@ -65,6 +67,8 @@ interface SessionStore {
   switchSession: (bonsaiSid: string) => void;
   closeSession: (bonsaiSid: string) => void;
   endSession: (bonsaiSid: string) => Promise<void>;
+  restoreFromBackground: (bonsaiSid: string) => void;
+  endBackgroundSession: (bonsaiSid: string) => void;
   interruptSession: (bonsaiSid: string) => Promise<void>;
   resolveRequest: (
     bonsaiSid: string,
@@ -456,6 +460,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
   activeSessionId: null,
   archivedSessions: [],
   closedIds: new Set(),
+  backgroundSessions: new Map(),
   projectCost: 0,
   sessionCounter: 0,
 
@@ -804,6 +809,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
       activeSessionId: null,
       archivedSessions: [],
       closedIds: new Set(),
+      backgroundSessions: new Map(),
       projectCost: 0,
       sessionCounter: 0,
     });
@@ -983,19 +989,28 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
   },
 
   closeSession: (bonsaiSid) => {
-    // Tell backend to gracefully close the session
-    const session = get().sessions.get(bonsaiSid);
-    if (session && session.status !== "done" && session.status !== "error") {
-      const api = createAgentApi(getClient());
-      api.end(bonsaiSid).catch(() => {});
-    }
+    // Close the tab — live sessions move to background, terminal sessions get archived.
+    // No END_SIGNAL sent to backend.
     set((s) => {
+      const session = s.sessions.get(bonsaiSid);
+      if (!session) return s;
+
       const next = new Map(s.sessions);
       next.delete(bonsaiSid);
-      const nextClosed = new Set(s.closedIds);
-      nextClosed.add(bonsaiSid);
-      const archived: ArchivedSession[] = session
-        ? [
+      const nextActive =
+        s.activeSessionId === bonsaiSid
+          ? (next.keys().next().value ?? null)
+          : s.activeSessionId;
+
+      // Terminal sessions get archived
+      if (session.status === "done" || session.status === "error") {
+        const nextClosed = new Set(s.closedIds);
+        nextClosed.add(bonsaiSid);
+        return {
+          sessions: next,
+          activeSessionId: nextActive,
+          closedIds: nextClosed,
+          archivedSessions: [
             ...s.archivedSessions,
             {
               bonsaiSid: session.bonsaiSid,
@@ -1012,24 +1027,70 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
               config: { model: session.model, maxTurns: session.maxTurns, permissionMode: session.permissionMode, streamText: true, betas: session.betas ?? [], effort: session.effort ?? null },
               events: session.events,
             },
-          ]
-        : s.archivedSessions;
-      const nextActive =
-        s.activeSessionId === bonsaiSid
-          ? (next.keys().next().value ?? null)
-          : s.activeSessionId;
-      return {
-        sessions: next,
-        archivedSessions: archived,
-        activeSessionId: nextActive,
-        closedIds: nextClosed,
-      };
+          ],
+        };
+      }
+
+      // Live sessions move to background (no END_SIGNAL, events keep flowing)
+      const bg = new Map(s.backgroundSessions);
+      bg.set(bonsaiSid, session);
+      return { sessions: next, backgroundSessions: bg, activeSessionId: nextActive };
     });
   },
 
   endSession: async (bonsaiSid) => {
     const api = createAgentApi(getClient());
     await api.end(bonsaiSid);
+  },
+
+  restoreFromBackground: (bonsaiSid) => {
+    set((s) => {
+      const session = s.backgroundSessions.get(bonsaiSid);
+      if (!session) return s;
+      const bg = new Map(s.backgroundSessions);
+      bg.delete(bonsaiSid);
+      const next = new Map(s.sessions);
+      next.set(bonsaiSid, session);
+      return { sessions: next, backgroundSessions: bg, activeSessionId: bonsaiSid };
+    });
+  },
+
+  endBackgroundSession: (bonsaiSid) => {
+    const session = get().backgroundSessions.get(bonsaiSid);
+    if (!session) return;
+    // Send END_SIGNAL to backend
+    if (session.status !== "done" && session.status !== "error") {
+      const api = createAgentApi(getClient());
+      api.end(bonsaiSid).catch(() => {});
+    }
+    set((s) => {
+      const bg = new Map(s.backgroundSessions);
+      bg.delete(bonsaiSid);
+      const nextClosed = new Set(s.closedIds);
+      nextClosed.add(bonsaiSid);
+      return {
+        backgroundSessions: bg,
+        closedIds: nextClosed,
+        archivedSessions: [
+          ...s.archivedSessions,
+          {
+            bonsaiSid: session.bonsaiSid,
+            name: session.name,
+            skillId: session.skillId,
+            specIds: session.specIds,
+            startedAt: session.startedAt,
+            endedAt: Date.now(),
+            result: "done",
+            costUsd: session.metrics.costUsd,
+            turns: session.metrics.turns,
+            durationMs: session.metrics.durationMs,
+            model: session.model,
+            config: { model: session.model, maxTurns: session.maxTurns, permissionMode: session.permissionMode, streamText: true, betas: session.betas ?? [], effort: session.effort ?? null },
+            events: session.events,
+          },
+        ],
+      };
+    });
   },
 
   interruptSession: async (bonsaiSid) => {
@@ -1164,14 +1225,17 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
   onAgentEvent: (method, params) => {
     const bonsaiSid = params.bonsaiSid as string;
     set((s) => {
-      const sessions = appendEvent(s.sessions, bonsaiSid, method, params, s.closedIds);
-      // Update session status for turn lifecycle events
-      const session = sessions.get(bonsaiSid);
+      // Look up session from foreground or background
+      const isBg = !s.sessions.has(bonsaiSid) && s.backgroundSessions.has(bonsaiSid);
+      const sourceMap = isBg ? s.backgroundSessions : s.sessions;
+      const sessions = isBg ? sourceMap : appendEvent(s.sessions, bonsaiSid, method, params, s.closedIds);
+      const session = (isBg ? sourceMap : sessions).get(bonsaiSid);
       let projectCost = s.projectCost;
       if (session) {
+        let updated: Session | null = null;
         if (method === "agent/ready") {
           if (session.status === "initializing") {
-            sessions.set(bonsaiSid, { ...session, status: "idle" });
+            updated = { ...session, status: "idle" };
           }
         } else if (method === "agent/costEstimate") {
           const est = params.estimatedCostUsd as number;
@@ -1182,8 +1246,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
           const contextTokens = turnIn + turnOut;
           const contextMax = getContextWindowSize(session.model);
 
-          const next = new Map(sessions);
-          next.set(bonsaiSid, {
+          updated = {
             ...session,
             metrics: {
               ...session.metrics,
@@ -1200,14 +1263,12 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
                 cacheCreationTokens: turnCacheWrite,
               },
             },
-          });
-          return { sessions: next, projectCost };
+          };
         } else if (method === "agent/turnComplete" || method === "agent/interrupted") {
-          const { updated, costDelta } = applyMetrics(session, params, "idle");
-          projectCost += costDelta;
+          const result = applyMetrics(session, params, "idle");
+          projectCost += result.costDelta;
+          updated = result.updated;
 
-          // If interrupted while a question/approval was pending, mark it as
-          // answered so the card collapses into its "interrupted" state.
           if (method === "agent/interrupted" && session.pendingRequest) {
             const rid = session.pendingRequest.requestId;
             const answered = new Map(updated.answeredRequests);
@@ -1218,11 +1279,18 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
             });
             updated.answeredRequests = answered;
           }
+        }
 
+        if (updated) {
+          if (isBg) {
+            const bg = new Map(s.backgroundSessions);
+            bg.set(bonsaiSid, updated);
+            return { backgroundSessions: bg, projectCost };
+          }
           sessions.set(bonsaiSid, updated);
         }
       }
-      return { sessions, projectCost };
+      return isBg ? { projectCost } : { sessions, projectCost };
     });
 
     // Clean up notifications when interrupted during a pending request
@@ -1390,13 +1458,42 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
   onSessionDone: (params) => {
     const bonsaiSid = params.bonsaiSid as string;
     set((s) => {
-      const sessions = appendEvent(
-        s.sessions,
-        bonsaiSid,
-        "agent/done",
-        params,
-        s.closedIds,
-      );
+      const isBg = !s.sessions.has(bonsaiSid) && s.backgroundSessions.has(bonsaiSid);
+
+      if (isBg) {
+        // Background session completed — auto-archive and remove
+        const session = s.backgroundSessions.get(bonsaiSid);
+        const bg = new Map(s.backgroundSessions);
+        bg.delete(bonsaiSid);
+        const nextClosed = new Set(s.closedIds);
+        nextClosed.add(bonsaiSid);
+        let projectCost = s.projectCost;
+        if (session) {
+          const { updated, costDelta } = applyMetrics(session, params, "done");
+          projectCost += costDelta;
+          return {
+            backgroundSessions: bg,
+            closedIds: nextClosed,
+            projectCost,
+            archivedSessions: [
+              ...s.archivedSessions,
+              {
+                bonsaiSid: updated.bonsaiSid, name: updated.name,
+                skillId: updated.skillId, specIds: updated.specIds,
+                startedAt: updated.startedAt, endedAt: Date.now(),
+                result: "done", costUsd: updated.metrics.costUsd,
+                turns: updated.metrics.turns, durationMs: updated.metrics.durationMs,
+                model: updated.model,
+                config: { model: updated.model, maxTurns: updated.maxTurns, permissionMode: updated.permissionMode, streamText: true, betas: updated.betas ?? [], effort: updated.effort ?? null },
+                events: updated.events,
+              },
+            ],
+          };
+        }
+        return { backgroundSessions: bg, closedIds: nextClosed };
+      }
+
+      const sessions = appendEvent(s.sessions, bonsaiSid, "agent/done", params, s.closedIds);
       const session = sessions.get(bonsaiSid);
       let projectCost = s.projectCost;
       if (session) {
@@ -1411,17 +1508,43 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
   onSessionError: (params) => {
     const bonsaiSid = params.bonsaiSid as string;
     const subtype = params.subtype as string;
-    // "turn_error" = recoverable (e.g. permissions timeout) — go back to idle
-    // "crash" or other = terminal error
     const isRecoverable = subtype === "turn_error";
     set((s) => {
-      const sessions = appendEvent(
-        s.sessions,
-        bonsaiSid,
-        "agent/error",
-        params,
-        s.closedIds,
-      );
+      const isBg = !s.sessions.has(bonsaiSid) && s.backgroundSessions.has(bonsaiSid);
+
+      if (isBg) {
+        const session = s.backgroundSessions.get(bonsaiSid);
+        if (!session) return s;
+        const bg = new Map(s.backgroundSessions);
+        if (isRecoverable) {
+          bg.set(bonsaiSid, { ...session, status: "idle", pendingRequest: null });
+        } else {
+          // Terminal error — auto-archive
+          bg.delete(bonsaiSid);
+          const nextClosed = new Set(s.closedIds);
+          nextClosed.add(bonsaiSid);
+          return {
+            backgroundSessions: bg,
+            closedIds: nextClosed,
+            archivedSessions: [
+              ...s.archivedSessions,
+              {
+                bonsaiSid: session.bonsaiSid, name: session.name,
+                skillId: session.skillId, specIds: session.specIds,
+                startedAt: session.startedAt, endedAt: Date.now(),
+                result: "error", costUsd: session.metrics.costUsd,
+                turns: session.metrics.turns, durationMs: session.metrics.durationMs,
+                model: session.model,
+                config: { model: session.model, maxTurns: session.maxTurns, permissionMode: session.permissionMode, streamText: true, betas: session.betas ?? [], effort: session.effort ?? null },
+                events: session.events,
+              },
+            ],
+          };
+        }
+        return { backgroundSessions: bg };
+      }
+
+      const sessions = appendEvent(s.sessions, bonsaiSid, "agent/error", params, s.closedIds);
       const session = sessions.get(bonsaiSid);
       if (session) {
         sessions.set(bonsaiSid, {

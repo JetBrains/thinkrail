@@ -79,6 +79,9 @@ interface SessionStatusLineProps {
   onChangeModel?: (model: string) => void;
   onChangePermissionMode?: (mode: string) => void;
   onChangeEffort?: (effort: string | null) => void;
+  onInterrupt?: () => void;
+  onEndSession?: () => void;
+  onBackground?: () => void;
 }
 
 export function SessionStatusLine({
@@ -92,6 +95,9 @@ export function SessionStatusLine({
   onChangeModel,
   onChangePermissionMode,
   onChangeEffort,
+  onInterrupt,
+  onEndSession,
+  onBackground,
 }: SessionStatusLineProps) {
   // Subscribe to settings store so we re-render when dynamic models arrive.
   const dynamicModels = useSettingsStore((s) => s.models);
@@ -101,9 +107,12 @@ export function SessionStatusLine({
   const activeKey = currentModelOptionKey(model);
   const activeOption = MODEL_OPTIONS.find((o) => o.key === activeKey);
   const { icon: statusIcon, label: statusLabel, cssClass: statusClass } = statusInfo(status);
+  const isTerminal = status === "done" || status === "error";
+  const canInterrupt = status === "running" || status === "waiting";
   const modelDd = useDropdown();
   const modeDd = useDropdown();
   const effortDd = useDropdown();
+  const statusDd = useDropdown();
 
   const contextPct =
     metrics.contextMax > 0
@@ -237,10 +246,31 @@ export function SessionStatusLine({
         </>
       )}
       <span className="ssl-sep" />
-      <span className={`ssl-status ssl-status-${statusClass}`}>
-        {(status === "initializing" || status === "running") && <span className="ssl-status-spinner" />}
-        {statusIcon} {statusLabel}
-      </span>
+      <div className="ssl-selector" ref={statusDd.ref}>
+        <button
+          className={`ssl-selector-btn ssl-status ssl-status-${statusClass}`}
+          onClick={() => !isTerminal && statusDd.toggle()}
+          disabled={isTerminal}
+        >
+          {(status === "initializing" || status === "running") && <span className="ssl-status-spinner" />}
+          {statusIcon} {statusLabel}
+        </button>
+        {statusDd.open && (
+          <div className="ssl-dropdown ssl-dropdown-right">
+            {canInterrupt && (
+              <button className="ssl-dropdown-item" onClick={() => { onInterrupt?.(); statusDd.close(); }}>
+                &#9632; Interrupt
+              </button>
+            )}
+            <button className="ssl-dropdown-item" onClick={() => { onEndSession?.(); statusDd.close(); }}>
+              &#9209; End session
+            </button>
+            <button className="ssl-dropdown-item" onClick={() => { onBackground?.(); statusDd.close(); }}>
+              &#8595; Background
+            </button>
+          </div>
+        )}
+      </div>
     </div>
   );
 }

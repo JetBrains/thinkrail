@@ -895,6 +895,7 @@
   padding: 4px 10px; cursor: pointer; text-align: left;
   white-space: nowrap;
 }
+.ssl-dropdown-right { left: auto; right: 0; }
 .ssl-dropdown-item:hover { background: var(--hover); color: var(--text); }
 .ssl-dropdown-active { color: var(--blue); }
 .ssl-dropdown-group { padding: var(--space-xs) var(--space-sm); font-size: 9px; text-transform: uppercase; letter-spacing: 0.5px; color: var(--hint); }

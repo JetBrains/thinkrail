@@ -296,6 +296,76 @@
 }
 .status-sessions-btn:hover { text-decoration: underline; }
 
+/* ── Background Sessions Indicator ── */
+.status-bg-sessions { position: relative; display: inline-block; }
+.status-bg-btn {
+  border: none;
+  background: transparent;
+  color: var(--gold);
+  font: inherit;
+  cursor: pointer;
+  padding: 0;
+}
+.status-bg-btn:hover { text-decoration: underline; }
+.status-bg-dropdown {
+  position: absolute;
+  bottom: 100%;
+  left: 0;
+  min-width: 220px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  box-shadow: 0 -2px 8px rgba(0,0,0,.25);
+  padding: 4px 0;
+  z-index: 100;
+  margin-bottom: 4px;
+}
+.status-bg-item {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0 4px;
+}
+.status-bg-restore {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  border: none;
+  background: transparent;
+  color: var(--fg);
+  font: inherit;
+  padding: 4px 6px;
+  cursor: pointer;
+  border-radius: 4px;
+  text-align: left;
+}
+.status-bg-restore:hover { background: var(--hover); }
+.status-bg-dot {
+  display: inline-block;
+  width: 6px; height: 6px;
+  border-radius: 50%;
+  background: var(--hint);
+}
+.status-bg-running { background: var(--green); }
+.status-bg-idle { background: var(--blue); }
+.status-bg-waiting { background: var(--gold); }
+.status-bg-state {
+  margin-left: auto;
+  color: var(--hint);
+  font-size: 0.85em;
+}
+.status-bg-end {
+  border: none;
+  background: transparent;
+  color: var(--hint);
+  cursor: pointer;
+  padding: 2px 4px;
+  border-radius: 3px;
+  font-size: 0.8em;
+}
+.status-bg-end:hover { background: var(--hover); color: var(--red); }
+
 .status-hint {
   color: var(--hint);
 }

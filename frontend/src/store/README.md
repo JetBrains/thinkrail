@@ -195,6 +195,7 @@ interface SessionStore {
   sessions: Map<string, Session>;
   activeSessionId: string | null;
   archivedSessions: ArchivedSession[];
+  backgroundSessions: Map<string, Session>;
 
   // User-initiated actions
   startSession: (params: { specIds, config, name, skillId?, filePaths? }) => Promise<string>;
@@ -203,6 +204,8 @@ interface SessionStore {
   closeSession: (bonsaiSid: string) => void;
   endSession: (bonsaiSid: string) => Promise<void>;
   interruptSession: (bonsaiSid: string) => Promise<void>;
+  restoreFromBackground: (bonsaiSid: string) => void;
+  endBackgroundSession: (bonsaiSid: string) => void;
   resolveRequest: (bonsaiSid: string, requestId: string, response: unknown) => void;
   updateConfig: (bonsaiSid: string, config: { model?, permissionMode? }) => Promise<void>;
   restoreSession: (bonsaiSid: string) => Promise<void>;
@@ -223,7 +226,10 @@ interface SessionStore {
 
 **Key behaviors:**
 - `sendMessage` optimistically appends `userMessage` event and sets status to `"running"`
-- `closeSession` calls `api.end()` if not done/error, removes from map, archives, switches to next session
+- `closeSession` moves live sessions to `backgroundSessions` (no END_SIGNAL). Terminal sessions (done/error) get archived. Events keep flowing to background sessions.
+- `endSession` sends END_SIGNAL to backend, terminates the session
+- `restoreFromBackground` moves a session back from background to an open tab
+- `endBackgroundSession` sends END_SIGNAL + archives + removes from background
 - `resolveRequest` calls `agent/respond` RPC, stores in `answeredRequests`, clears `pendingRequest`
 - `restoreSession` loads from backend, marks all question/approval events as answered with `{ historical: true }`, sets `status: "done"` and `restored: true`, extracts `systemPrompt` from the persisted `sessionStart` event payload
 - `loadActiveSessions` similarly extracts `systemPrompt` from the `sessionStart` event (or from `entry.systemPrompt` for drafts) when building Session objects from persistence

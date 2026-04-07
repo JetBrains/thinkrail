@@ -24,6 +24,7 @@ export function SessionPanel() {
   const resolveRequest = useSessionStore((s) => s.resolveRequest);
   const sendMessage = useSessionStore((s) => s.sendMessage);
   const interruptSession = useSessionStore((s) => s.interruptSession);
+  const endSession = useSessionStore((s) => s.endSession);
   const updateConfig = useSessionStore((s) => s.updateConfig);
   const restartSession = useSessionStore((s) => s.restartSession);
   const projectCost = useSessionStore((s) => s.projectCost);
@@ -193,14 +194,17 @@ export function SessionPanel() {
               disabled={activeSession.restored || isDone}
               onChangeModel={(m) => updateConfig(activeSession.bonsaiSid, { model: m })}
               onChangePermissionMode={(m) => updateConfig(activeSession.bonsaiSid, { permissionMode: m })}
+              onInterrupt={() => interruptSession(activeSession.bonsaiSid)}
+              onEndSession={() => endSession(activeSession.bonsaiSid)}
+              onBackground={() => closeSession(activeSession.bonsaiSid)}
               onChangeEffort={async (e) => {
                 await updateConfig(activeSession.bonsaiSid, { effort: e });
                 await restartSession(activeSession.bonsaiSid);
               }}
             />
           )}
-          {activeSession.restored ? (
-            <RestoredBar bonsaiSid={activeSession.bonsaiSid} />
+          {activeSession.restored || isDone ? (
+            <RestoredBar bonsaiSid={activeSession.bonsaiSid} ended={isDone && !activeSession.restored} />
           ) : (
             <InputArea
               sessionId={activeSession.bonsaiSid}
@@ -225,7 +229,7 @@ export function SessionPanel() {
   );
 }
 
-function RestoredBar({ bonsaiSid }: { bonsaiSid: string }) {
+function RestoredBar({ bonsaiSid, ended }: { bonsaiSid: string; ended?: boolean }) {
   const handleResume = useCallback(async () => {
     try {
       await useSessionStore.getState().continueSession(bonsaiSid);
@@ -243,7 +247,7 @@ function RestoredBar({ bonsaiSid }: { bonsaiSid: string }) {
   return (
     <div className="restored-bar">
       <span className="restored-bar-text">
-        This is a restored session (read-only)
+        {ended ? "Session ended" : "This is a restored session (read-only)"}
       </span>
       <button className="restored-bar-btn" onClick={handleResume}>
         Resume Session
