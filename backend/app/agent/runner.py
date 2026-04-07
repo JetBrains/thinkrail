@@ -183,7 +183,7 @@ async def run(
                 tracker.set_status(task.bonsai_sid, "running")
                 tracker.clear_turn_text(task.bonsai_sid)
                 turn_t0 = time.monotonic()
-                turn_input = turn_output = turn_cache_write = turn_cache_read = 0
+                turn_input = turn_output = turn_cache_write_5m = turn_cache_write_1h = turn_cache_read = 0
                 await client.query(message)
 
                 async for sdk_event in client.receive_response():
@@ -280,8 +280,14 @@ async def run(
                         if etype == "message_start":
                             u = raw.get("message", {}).get("usage", {})
                             turn_input += u.get("input_tokens", 0)
-                            turn_cache_write += u.get("cache_creation_input_tokens", 0)
                             turn_cache_read += u.get("cache_read_input_tokens", 0)
+                            cc = u.get("cache_creation", {})
+                            if cc:
+                                turn_cache_write_5m += cc.get("ephemeral_5m_input_tokens", 0)
+                                turn_cache_write_1h += cc.get("ephemeral_1h_input_tokens", 0)
+                            else:
+                                # Older API: no breakdown — treat all writes as 5m
+                                turn_cache_write_5m += u.get("cache_creation_input_tokens", 0)
                         elif etype == "message_delta":
                             u = raw.get("usage", {})
                             turn_output += u.get("output_tokens", 0)
@@ -289,7 +295,7 @@ async def run(
                         if etype in ("message_start", "message_delta"):
                             est = estimate_cost(
                                 task.config.model, turn_input, turn_output,
-                                turn_cache_write, turn_cache_read,
+                                turn_cache_write_5m, turn_cache_write_1h, turn_cache_read,
                             )
                             await notify("agent/costEstimate", {
                                 "bonsaiSid": task.bonsai_sid,
@@ -302,6 +308,20 @@ async def run(
                         turn_ms = int((time.monotonic() - turn_t0) * 1000)
                         logger.info("[%s] turn completed in %dms (cost=$%.4f)",
                                     task.bonsai_sid[:8], turn_ms, sdk_event.total_cost_usd or 0.0)
+                        final_est = estimate_cost(
+                            task.config.model, turn_input, turn_output,
+                            turn_cache_write_5m, turn_cache_write_1h, turn_cache_read,
+                        )
+                        logger.info(
+                            "[%s] COST_DEBUG final: sdk=$%.4f est=$%.4f ratio=%.2f "
+                            "in=%d out=%d cw5m=%d cw1h=%d cr=%d turns=%d",
+                            task.bonsai_sid[:8],
+                            sdk_event.total_cost_usd or 0.0, final_est,
+                            (final_est / (sdk_event.total_cost_usd or 1.0)),
+                            turn_input, turn_output,
+                            turn_cache_write_5m, turn_cache_write_1h, turn_cache_read,
+                            sdk_event.num_turns or 0,
+                        )
                         turn_cost = sdk_event.total_cost_usd or 0.0
                         turn_turns = sdk_event.num_turns
                         total_cost += turn_cost

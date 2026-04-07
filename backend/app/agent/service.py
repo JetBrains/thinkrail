@@ -544,6 +544,14 @@ class AgentService:
                 except Exception:
                     logger.exception("Failed to persist event %s for session %s", method, task.bonsai_sid)
 
+            # Adjust cost estimates to include base cost from previous runs,
+            # since the runner starts with total_cost=0 on each invocation.
+            if method == "agent/costEstimate" and _base_cost > 0:
+                params = {
+                    **params,
+                    "estimatedCostUsd": _base_cost + (params.get("estimatedCostUsd") or 0),
+                }
+
             # -- Incremental metrics persistence --
             # Skip only high-frequency events; all others update metrics on disk.
             _SKIP_METRICS = {"agent/textDelta", "agent/progress", "agent/costEstimate"}
