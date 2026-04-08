@@ -103,6 +103,7 @@ interface SessionStore {
   onSuggestSession: (params: Record<string, unknown>) => void;
   onSuggestDescription: (params: Record<string, unknown>) => void;
   onSuggestStep: (params: Record<string, unknown>) => void;
+  onRequestExpired: (params: Record<string, unknown>) => void;
   onSessionDone: (params: Record<string, unknown>) => void;
   onSessionError: (params: Record<string, unknown>) => void;
   onConfigChanged: (params: Record<string, unknown>) => void;
@@ -399,6 +400,15 @@ function appendEvent(
   const session = withSession.get(bonsaiSid);
   if (!session) return sessions;
 
+  // Defense-in-depth dedup: skip if an event with the same requestId already exists
+  const requestId = params.requestId as string | undefined;
+  if (requestId && (method === "agent/askUserQuestion" || method === "agent/confirmAction" || method === "agent/suggestSession" || method === "agent/suggestDescription")) {
+    const alreadyExists = session.events.some(
+      (ev) => (ev.payload.requestId as string) === requestId && ev.eventType === method.replace("agent/", ""),
+    );
+    if (alreadyExists) return sessions;
+  }
+
   const event: AgentEvent = {
     bonsaiSid,
     sessionId: (params.sessionId as string) ?? "",
@@ -487,11 +497,14 @@ function buildAnsweredRequests(
 ): Map<string, unknown> {
   const answered = new Map<string, unknown>();
 
-  // First pass: collect requestResolved events
+  // First pass: collect requestResolved and requestExpired events
   for (const ev of events) {
     if (ev.eventType === "requestResolved") {
       const rid = (ev.payload.requestId as string) ?? "";
       if (rid) answered.set(rid, ev.payload.response);
+    } else if (ev.eventType === "requestExpired") {
+      const rid = (ev.payload.requestId as string) ?? "";
+      if (rid) answered.set(rid, { expired: true, reason: ev.payload.reason });
     }
   }
 
@@ -1484,6 +1497,12 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
     const bonsaiSid = params.bonsaiSid as string;
     const requestId = params.requestId as string;
     set((s) => {
+      const session = s.sessions.get(bonsaiSid);
+      // Retry dedup: if same requestId as current pendingRequest, just refresh
+      // (don't append a duplicate event)
+      if (session?.pendingRequest?.requestId === requestId) {
+        return s;
+      }
       const sessions = appendEvent(
         s.sessions,
         bonsaiSid,
@@ -1491,10 +1510,10 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
         params,
         s.closedIds,
       );
-      const session = sessions.get(bonsaiSid);
-      if (session) {
+      const updated = sessions.get(bonsaiSid);
+      if (updated) {
         sessions.set(bonsaiSid, {
-          ...session,
+          ...updated,
           status: "waiting",
           pendingRequest: {
             requestId,
@@ -1511,6 +1530,11 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
     const bonsaiSid = params.bonsaiSid as string;
     const requestId = params.requestId as string;
     set((s) => {
+      const session = s.sessions.get(bonsaiSid);
+      // Retry dedup: if same requestId as current pendingRequest, just refresh
+      if (session?.pendingRequest?.requestId === requestId) {
+        return s;
+      }
       const sessions = appendEvent(
         s.sessions,
         bonsaiSid,
@@ -1518,10 +1542,10 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
         params,
         s.closedIds,
       );
-      const session = sessions.get(bonsaiSid);
-      if (session) {
+      const updated = sessions.get(bonsaiSid);
+      if (updated) {
         sessions.set(bonsaiSid, {
-          ...session,
+          ...updated,
           status: "waiting",
           pendingRequest: {
             requestId,
@@ -1620,6 +1644,35 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
             inputSpecIds: (params.inputSpecIds as string[]) ?? [],
             reason: params.reason as string,
           },
+        });
+      }
+      return { sessions };
+    });
+  },
+
+  onRequestExpired: (params) => {
+    const bonsaiSid = params.bonsaiSid as string;
+    const requestId = params.requestId as string;
+    set((s) => {
+      const sessions = appendEvent(
+        s.sessions,
+        bonsaiSid,
+        "agent/requestExpired",
+        params,
+        s.closedIds,
+      );
+      const session = sessions.get(bonsaiSid);
+      if (session) {
+        // Clear pendingRequest if it matches the expired request
+        const clearPending =
+          session.pendingRequest?.requestId === requestId;
+        // Mark as expired in answeredRequests
+        const answered = new Map(session.answeredRequests);
+        answered.set(requestId, { expired: true, reason: params.reason });
+        sessions.set(bonsaiSid, {
+          ...session,
+          pendingRequest: clearPending ? null : session.pendingRequest,
+          answeredRequests: answered,
         });
       }
       return { sessions };

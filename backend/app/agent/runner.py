@@ -4,7 +4,6 @@ import asyncio
 import logging
 import time
 from collections.abc import Callable
-from functools import partial
 from pathlib import Path
 from typing import Any
 
@@ -13,9 +12,12 @@ from claude_agent_sdk import (
     ClaudeAgentOptions,
     ClaudeSDKClient,
     HookMatcher,
+    PermissionResultAllow,
+    PermissionResultDeny,
     ResultMessage,
     SystemMessage,
     TextBlock,
+    ToolPermissionContext,
     ToolResultBlock,
     ToolUseBlock,
     UserMessage,
@@ -148,12 +150,24 @@ async def run(
                 betas.append(_1M_BETA)
                 break
 
+    _pending_tool_ids: list[str] = []
+
+    async def _can_use_tool(
+        tool_name: str, input_data: dict[str, Any], context: ToolPermissionContext
+    ) -> PermissionResultAllow | PermissionResultDeny:
+        _tool_use_id = _pending_tool_ids.pop(0) if _pending_tool_ids else None
+        return await can_use_tool(
+            tool_name, input_data, context,
+            tracker=tracker, notify=notify, task=task,
+            config=config, tool_use_id=_tool_use_id,
+        )
+
     options = ClaudeAgentOptions(
         system_prompt=spec_context,
         model=task.config.model,
         max_turns=task.config.max_turns,
         permission_mode=task.config.permission_mode,
-        can_use_tool=partial(can_use_tool, tracker=tracker, notify=notify, task=task, config=config),
+        can_use_tool=_can_use_tool,
         include_partial_messages=task.config.stream_text,
         cwd=str(cwd) if cwd else None,
         plugins=plugins,
@@ -264,6 +278,7 @@ async def run(
                                 if agent_id:
                                     tc_msg["agentId"] = agent_id
                                 await notify("agent/toolCallStart", tc_msg)
+                                _pending_tool_ids.append(block.id)
 
                     elif isinstance(sdk_event, UserMessage):
                         agent_id = _resolve_agent_id(sdk_event.parent_tool_use_id)

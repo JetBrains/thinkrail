@@ -25,6 +25,10 @@ class ProjectSettings(BaseModel, extra="allow"):
     default_effort: str = "high"
     model_refresh_interval_hours: int = 24
     event_view: str = "classic"
+    # User response timeout settings
+    user_respond_timeout: float = 300  # seconds; 0 = wait indefinitely
+    user_respond_timeout_behavior: str = "interrupt"  # "interrupt" | "deny" | "retry"
+    user_respond_retry_max_attempts: int = 3  # only used when behavior = "retry"
 
 
 def _settings_path(project_root: Path) -> Path:

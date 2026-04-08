@@ -6,9 +6,18 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
+from pathlib import Path
+
 from app.agent.models import AgentConfig, AgentResult, AgentTask
 from app.agent.runner import run
 from app.agent.tracker import Tracker
+from app.core.config import AppConfig
+
+
+def _test_config(tmp_path: Path | None = None) -> AppConfig:
+    """Create a minimal AppConfig for tests."""
+    root = tmp_path or Path("/tmp/bonsai-test")
+    return AppConfig(project_root=root, spec_dir=root / ".specs", plugin_dir=root / "plugins")
 
 
 def _setup_mock_client(MockClient: MagicMock, messages: list) -> AsyncMock:
@@ -291,7 +300,7 @@ class TestCanUseTool:
         tracker.enqueue_end_signal(task.bonsai_sid)
         notify = AsyncMock()
 
-        await run(task, "context", notify, tracker)
+        await run(task, "context", notify, tracker, config=_test_config())
 
         opts = captured["options"]
         assert opts.can_use_tool is not None
@@ -340,7 +349,7 @@ class TestCanUseTool:
         tracker.enqueue_message(task.bonsai_sid, "go")
         tracker.enqueue_end_signal(task.bonsai_sid)
 
-        await run(task, "context", AsyncMock(), tracker)
+        await run(task, "context", AsyncMock(), tracker, config=_test_config())
 
         opts = captured["options"]
         context = MagicMock()
@@ -380,7 +389,7 @@ class TestCanUseTool:
         tracker.enqueue_message(task.bonsai_sid, "go")
         tracker.enqueue_end_signal(task.bonsai_sid)
 
-        await run(task, "context", AsyncMock(), tracker)
+        await run(task, "context", AsyncMock(), tracker, config=_test_config())
 
         opts = captured["options"]
         context = MagicMock()

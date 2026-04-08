@@ -23,6 +23,7 @@ export type EventType =
   | "suggestSession"
   | "suggestDescription"
   | "requestResolved"
+  | "requestExpired"
   | "userMessage";
 
 export interface AgentConfig {

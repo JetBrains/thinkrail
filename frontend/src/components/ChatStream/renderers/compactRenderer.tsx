@@ -154,7 +154,10 @@ export const compactRenderers: ViewRenderers = {
     const isAnswered = ctx.answeredRequests.has(requestId);
     const savedResponse = ctx.answeredRequests.get(requestId) as Record<string, unknown> | undefined;
     const aInterrupted = savedResponse?.interrupt === true;
-    const decision = savedResponse?.behavior === "allow" ? "approve" as const : "deny" as const;
+    const aExpired = (savedResponse as Record<string, unknown> | undefined)?.expired === true;
+    const decision = aExpired
+      ? "deny" as const
+      : savedResponse?.behavior === "allow" ? "approve" as const : "deny" as const;
 
     // ExitPlanMode always gets its own card
     if ((p.toolName as string) === "ExitPlanMode") {
@@ -166,12 +169,14 @@ export const compactRenderers: ViewRenderers = {
           allowedPrompts={(toolInput?.allowedPrompts as Array<{ tool: "Bash"; prompt: string }>) ?? undefined}
           answered={isAnswered}
           decision={isAnswered ? decision : undefined}
-          interrupted={aInterrupted}
+          interrupted={aInterrupted || aExpired}
           onApprove={() => ctx.onResolveRequest(requestId, { behavior: "allow" })}
           rejectionReason={
-            isAnswered && decision === "deny" && !aInterrupted
-              ? (savedResponse?.rejectionReason as string) ?? undefined
-              : undefined
+            aExpired
+              ? "timed out"
+              : isAnswered && decision === "deny" && !aInterrupted
+                ? (savedResponse?.rejectionReason as string) ?? undefined
+                : undefined
           }
           onDeny={(reason?: string) => {
             ctx.onResolveRequest(requestId, {
@@ -201,7 +206,7 @@ export const compactRenderers: ViewRenderers = {
         description={(p.description as string) ?? undefined}
         answered={isAnswered}
         decision={isAnswered ? decision : undefined}
-        interrupted={aInterrupted}
+        interrupted={aInterrupted || aExpired}
         onApprove={() => ctx.onResolveRequest(requestId, { behavior: "allow" })}
         onDeny={() =>
           ctx.onResolveRequest(requestId, {
@@ -221,13 +226,15 @@ export const compactRenderers: ViewRenderers = {
     const isAnswered = ctx.answeredRequests.has(requestId);
     const savedAnswer = ctx.answeredRequests.get(requestId) as Record<string, unknown> | undefined;
     const qInterrupted = savedAnswer?.interrupt === true;
+    const qExpired = (savedAnswer as Record<string, unknown> | undefined)?.expired === true;
     return (
       <QuestionCard
         key={k}
         questions={questions as never}
         answered={isAnswered}
         interrupted={qInterrupted}
-        selectedAnswers={isAnswered ? (savedAnswer?.answers as Record<string, string>) : undefined}
+        expired={qExpired}
+        selectedAnswers={isAnswered && !qExpired ? (savedAnswer?.answers as Record<string, string>) : undefined}
         onSubmit={(response) => ctx.onResolveRequest(requestId, response)}
         requestId={requestId}
         compact
@@ -238,4 +245,5 @@ export const compactRenderers: ViewRenderers = {
   // suggestSession and suggestDescription fall back to classic (shared)
 
   requestResolved: () => null,
+  requestExpired: () => null,
 };

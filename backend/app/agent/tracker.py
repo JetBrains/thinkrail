@@ -136,6 +136,14 @@ class Tracker:
     def register_future(
         self, bonsai_sid: str, request_id: str, timeout_seconds: float = 300.0
     ) -> asyncio.Future[dict]:
+        """Register a Future for a pending user response.
+
+        Args:
+            timeout_seconds: Seconds before auto-deny.  ``0`` means wait
+                indefinitely (no timeout scheduled).  Re-registration with
+                the same *request_id* is safe — old timer closures reference
+                the old future object and become no-ops.
+        """
         self.get_task(bonsai_sid)  # validate task exists
         loop = asyncio.get_event_loop()
         future: asyncio.Future[dict] = loop.create_future()
@@ -143,13 +151,18 @@ class Tracker:
         task_futures = self._futures.setdefault(bonsai_sid, {})
         task_futures[request_id] = future
 
-        def _on_timeout() -> None:
-            if not future.done():
-                future.set_result({"behavior": "deny", "message": "Timed out waiting for user response", "interrupt": False})
-                task_futures.pop(request_id, None)
-                logger.warning("Future timed out for session %s request %s — auto-denied", bonsai_sid, request_id)
+        if timeout_seconds > 0:
+            def _on_timeout() -> None:
+                if not future.done():
+                    future.set_result({
+                        "behavior": "deny",
+                        "message": "Timed out waiting for user response",
+                        "timed_out": True,
+                    })
+                    task_futures.pop(request_id, None)
+                    logger.warning("Future timed out for session %s request %s — auto-denied", bonsai_sid, request_id)
 
-        loop.call_later(timeout_seconds, _on_timeout)
+            loop.call_later(timeout_seconds, _on_timeout)
         return future
 
     def resolve_future(self, bonsai_sid: str, request_id: str, response: dict) -> None:

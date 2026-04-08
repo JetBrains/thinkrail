@@ -225,38 +225,63 @@ export const ChatStream = forwardRef<ChatStreamHandle, ChatStreamProps>(function
   // ── Pre-scan: link confirmAction events to their toolCallStart ──
   const approvalByToolIndex = new Map<number, ApprovalInfo>();
   {
-    const pendingApprovals = new Map<string, { eventIndex: number; requestId: string; toolInput?: unknown; description?: string }>();
+    // Pass 1: collect confirmAction events, indexed by toolUseId (preferred) and toolName (fallback)
+    const approvalByToolUseId = new Map<string, { eventIndex: number; requestId: string; toolInput?: unknown; description?: string }>();
+    const approvalByToolName = new Map<string, { eventIndex: number; requestId: string; toolInput?: unknown; description?: string }[]>();
     for (let i = 0; i < events.length; i++) {
       const ev = events[i];
       if (ev.eventType === "confirmAction") {
         const toolName = (ev.payload.toolName as string) ?? "";
         if (toolName === "ExitPlanMode") continue;
-        pendingApprovals.set(toolName, {
+        const entry = {
           eventIndex: i,
           requestId: (ev.payload.requestId as string) ?? "",
           toolInput: ev.payload.toolInput,
           description: (ev.payload.description as string) ?? undefined,
-        });
-      }
-      if (ev.eventType === "toolCallStart") {
-        const toolName = (ev.payload.toolName as string) ?? "";
-        const pending = pendingApprovals.get(toolName);
-        if (pending) {
-          const requestId = pending.requestId;
-          const isAnswered = answeredRequests.has(requestId);
-          const savedResponse = answeredRequests.get(requestId) as Record<string, unknown> | undefined;
-          approvalByToolIndex.set(i, {
-            requestId,
-            answered: isAnswered,
-            decision: isAnswered
-              ? (savedResponse?.behavior === "allow" ? "approve" : "deny")
-              : undefined,
-            interrupted: savedResponse?.interrupt === true,
-            toolInput: pending.toolInput,
-            description: pending.description,
-          });
-          pendingApprovals.delete(toolName);
+        };
+        const toolUseId = (ev.payload.toolUseId as string) ?? "";
+        if (toolUseId) {
+          approvalByToolUseId.set(toolUseId, entry);
+        } else {
+          // Legacy events without toolUseId — fallback queue per toolName
+          const arr = approvalByToolName.get(toolName) ?? [];
+          arr.push(entry);
+          approvalByToolName.set(toolName, arr);
         }
+      }
+    }
+
+    // Pass 2: link toolCallStart events to their approval
+    for (let i = 0; i < events.length; i++) {
+      const ev = events[i];
+      if (ev.eventType !== "toolCallStart") continue;
+      const toolUseId = (ev.payload.toolUseId as string) ?? "";
+      const toolName = (ev.payload.toolName as string) ?? "";
+
+      // Prefer exact toolUseId match; fall back to toolName FIFO for legacy events
+      let pending = toolUseId ? approvalByToolUseId.get(toolUseId) : undefined;
+      if (!pending) {
+        const fallbackArr = approvalByToolName.get(toolName);
+        if (fallbackArr?.length) {
+          pending = fallbackArr.shift();
+          if (!fallbackArr.length) approvalByToolName.delete(toolName);
+        }
+      }
+
+      if (pending) {
+        const requestId = pending.requestId;
+        const isAnswered = answeredRequests.has(requestId);
+        const savedResponse = answeredRequests.get(requestId) as Record<string, unknown> | undefined;
+        approvalByToolIndex.set(i, {
+          requestId,
+          answered: isAnswered,
+          decision: isAnswered
+            ? (savedResponse?.behavior === "allow" ? "approve" : "deny")
+            : undefined,
+          interrupted: savedResponse?.interrupt === true,
+          toolInput: pending.toolInput,
+          description: pending.description,
+        });
       }
     }
   }

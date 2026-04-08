@@ -104,7 +104,7 @@ These methods are of the `AppConfig` model
 | Model | Fields | Description |
 |-------|--------|-------------|
 | `AppConfig` | project_root, spec_dir, host, port | Application configuration (Pydantic) |
-| `ProjectSettings` | default_model, default_effort, model_refresh_interval_hours | User-configurable project settings (`.bonsai/settings.json`) |
+| `ProjectSettings` | default_model, default_effort, model_refresh_interval_hours, event_view, user_respond_timeout, user_respond_timeout_behavior, user_respond_retry_max_attempts | User-configurable project settings (`.bonsai/settings.json`). Timeout settings control what happens when user doesn't respond to an `AskUserQuestion` or `confirmAction` within the configured period. |
 | `WatchHandle` | (opaque) | Handle to a running file watch |
 
 ### Output Contracts

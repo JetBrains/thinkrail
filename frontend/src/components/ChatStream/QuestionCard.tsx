@@ -10,6 +10,7 @@ interface QuestionCardProps {
   questions: Question[];
   answered: boolean;
   interrupted?: boolean;
+  expired?: boolean;
   selectedAnswers?: Record<string, string>;
   onSubmit: (response: Record<string, unknown>) => void;
   compact?: boolean;
@@ -20,6 +21,7 @@ export function QuestionCard({
   questions,
   answered,
   interrupted,
+  expired,
   selectedAnswers,
   onSubmit,
   compact = false,
@@ -190,6 +192,44 @@ export function QuestionCard({
     },
     [activeTab, questions.length, optionCount, highlighted, handleOptionClick, handleSubmit],
   );
+
+  // Expired state (timeout): compact single-line
+  if (compact && expired) {
+    const firstQ = questions[0];
+    return (
+      <div className="compact-log" style={{ borderLeftColor: "var(--comment)" }} data-question-request-id={requestId}>
+        <span className="compact-log-icon">{"\u23F1"}</span>
+        <span className="compact-log-name" style={{ color: "var(--comment)" }}>Question</span>
+        <span className="compact-log-detail" style={{ opacity: 0.6 }}>
+          {firstQ?.question ?? "Question"}
+          {questions.length > 1 ? ` (+${questions.length - 1} more)` : ""}
+        </span>
+        <span
+          className="compact-approval-badge"
+          style={{
+            background: "rgba(128, 128, 128, 0.12)",
+            color: "var(--comment)",
+          }}
+        >
+          timed out
+        </span>
+      </div>
+    );
+  }
+
+  // Expired state (timeout): classic
+  if (expired) {
+    return (
+      <div className="chat-question chat-question-answered" style={{ opacity: 0.6 }} data-question-request-id={requestId}>
+        <div className="chat-question-answered-header-row">
+          <span className="chat-question-header">AskUserQuestion</span>
+          <span className="chat-question-answered-done chat-question-answered-interrupted">
+            {"\u23F1"} timed out
+          </span>
+        </div>
+      </div>
+    );
+  }
 
   // Compact answered state: single log-line with answer badge
   if (compact && answered && (selectedAnswers || interrupted)) {

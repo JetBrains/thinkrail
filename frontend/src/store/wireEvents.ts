@@ -190,6 +190,14 @@ export function wireEvents(client: RpcClient): Unsubscribe {
     }),
   );
 
+  // ── Request expired (timeout) ──
+  unsubs.push(
+    client.on("agent/requestExpired", (p) => {
+      const params = p as Record<string, unknown>;
+      useSessionStore.getState().onRequestExpired(params);
+    }),
+  );
+
   unsubs.push(
     client.on("agent/suggestSession", (p) => {
       const params = p as Record<string, unknown>;

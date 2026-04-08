@@ -45,9 +45,11 @@ stateDiagram-v2
     running --> error : SDK error
 
     waiting --> running : user responds
+    waiting --> running : timeout (deny behavior)
+    waiting --> running : timeout retry
+    waiting --> idle : timeout (interrupt behavior)
     waiting --> idle : agent/interrupt
     waiting --> done : agent/end
-    waiting --> error : timeout/error
 ```
 
 | State | Description |
@@ -55,7 +57,7 @@ stateDiagram-v2
 | `initializing` | Session created, SDK client being set up. Messages sent during this phase are queued and processed once `idle` is reached. |
 | `idle` | Session open, SDK client ready, waiting for user message |
 | `running` | SDK turn in progress (processing user message) |
-| `waiting` | Suspended on a mid-turn interaction (question or tool approval) — runner awaits a Future. **Note:** The backend tracker stays in `running` during `waiting`; the `waiting` status is set only on the frontend (by `onAskQuestion`/`onConfirmAction`). |
+| `waiting` | Suspended on a mid-turn interaction (question or tool approval) — runner awaits a Future. The backend tracker transitions to `waiting` via `permissions._await_user_response()` and back to `running` when the future resolves (user answer, timeout, or retry). The frontend also sets `waiting` locally via `onAskQuestion`/`onConfirmAction`. |
 | `done` | Session ended gracefully |
 | `error` | Session ended due to error |
 
@@ -260,7 +262,7 @@ graph TD
 | `models.py` | Pydantic models: AgentTask, AgentConfig, AgentEvent, AgentResult, Question, QuestionOption, AskUserQuestionResponse, ToolApprovalResponse | — |
 | `context.py` | Context assembly pipeline: builds general instructions, loads skill instructions, project metadata, and spec content; composes system prompt. See [CONTEXT.md](CONTEXT.md). | models, spec/service |
 | `service.py` | Facade — start sessions, send messages, interrupt turns, end sessions, continue sessions (native resume), relay responses to pending futures | context, runner, tracker, core/config, spec/service |
-| `permissions.py` | Tool permission routing. `can_use_tool()` callback that routes MCP tools to auto-approve `intercept()` functions via `tools.INTERCEPTORS` (suffix match), handles AskUserQuestion interactively, and falls back to `agent/confirmAction` for unknown tools. Real MCP tool logic lives in handlers via `get_tool_context()`. | tools, tracker, models |
+| `permissions.py` | Tool permission routing. `can_use_tool()` callback that routes MCP tools to auto-approve `intercept()` functions via `tools.INTERCEPTORS` (suffix match), handles AskUserQuestion interactively, and falls back to `agent/confirmAction` for unknown tools. Accepts `tool_use_id` from the runner's FIFO queue to include in `confirmAction` notifications for precise frontend matching. Shared `_await_user_response()` helper implements configurable timeout behavior (interrupt/deny/retry) with same `request_id` reused across retry attempts; reads timeout settings from `ProjectSettings`. Emits `agent/requestExpired` on final timeout. Real MCP tool logic lives in handlers via `get_tool_context()`. | tools, tracker, models, core/settings |
 | `transcribe.py` | Audio transcription via OpenAI Whisper API. `transcribe(audio_base64, mime_type) -> str`. Lazy-imports `openai`; optional dependency for browsers without Web Speech API. See [TRANSCRIBE.md](TRANSCRIBE.md). | openai (optional) |
 | `runner.py` | Claude Agent SDK integration: manage SDK client lifecycle, conversation loop (wait for message → query → stream events → repeat), map SDK events to notifications, wire MCP servers and hooks into SDK. Calls `set_tool_context()` before SDK client creation so handlers work in all permission modes. Accepts optional `resume_session_id` for `ClaudeAgentOptions.resume`. Auto-injects `context-1m-2025-08-07` beta header for models with >200K context. Builds per-iteration token tracking from raw `StreamEvent` data — each API call within a turn gets its own entry; the last iteration determines context window occupancy while the sum drives cost estimation. Emits `contextWindow` (pre-computed total) and `iterations` (per-call breakdown) in turn events. **SDK field semantics:** `total_cost_usd` is cumulative (session total so far — assign, don't accumulate); `num_turns` is per-turn (SDK turns in this turn only — accumulate). No tool-specific logic — delegates to `permissions.py` and `tools/`. | models, tracker, permissions, tools, model_registry |
 | `tracker.py` | Session lifecycle (initializing/idle/running/waiting/done/error), message queue per session (`asyncio.Queue`), registry of in-flight `asyncio.Future` objects keyed by `requestId`, **interrupt flag** per session for notification routing | models |
