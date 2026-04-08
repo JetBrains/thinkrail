@@ -100,6 +100,7 @@ Both sides can send either. The server can initiate requests to the client (e.g.
 | `agent/done` | `{ bonsaiSid, sessionId, result, costUsd, turns, durationMs, usage }` | Session closed (via `agent/end` or terminal condition) |
 | `agent/error` | `{ bonsaiSid, sessionId, subtype, errors[], result, costUsd, turns, durationMs, usage }` | Session ended due to error |
 | `agent/permissionDenied` | `{ bonsaiSid, sessionId, toolName, toolInput }` | Tool blocked by permission policy |
+| `agent/statusChanged` | `{ bonsaiSid, status }` | Backend session status changed. Emitted by runner on `idle→running` and `running→idle` transitions. Frontend uses this as the authoritative status signal for non-first turns (since `agent/sessionStart` only fires once per runner). Added to `_SKIP_METRICS` — does not trigger metadata persistence. |
 
 #### Visualization Events
 
@@ -107,7 +108,7 @@ Both sides can send either. The server can initiate requests to the client (e.g.
 | --- | --- | --- |
 | `vis/stateChanged` | `DashboardState` | Dashboard state recomputed (triggered by file changes to `.md`/`.json` files or explicit `vis/recompute`) |
 
-> **SDK event mapping:** `agent/ready` ← `ClaudeSDKClient` context manager entered · `agent/sessionStart` ← `SDKSystemMessage` subtype `init` · `agent/textDelta` ← `SDKAssistantMessage` text block / `SDKPartialAssistantMessage` text_delta · `agent/toolCallStart` ← `SDKAssistantMessage` tool_use block · `agent/toolCallEnd` ← `SDKUserMessage` tool_result block · `agent/subagentStart` / `End` ← `SubagentStart` / `SubagentStop` hooks · `agent/notification` ← `Notification` hook · `agent/compact` ← `SDKCompactBoundaryMessage` · `agent/turnComplete` ← `SDKResultMessage` (turn ends, session stays open) · `agent/interrupted` ← `agent/interrupt` cancels current turn · `agent/done` ← session closed via `agent/end` · `agent/error` / `permissionDenied` ← `SDKResultMessage` error subtypes
+> **SDK event mapping:** `agent/ready` ← `ClaudeSDKClient` context manager entered · `agent/sessionStart` ← `SDKSystemMessage` subtype `init` · `agent/textDelta` ← `SDKAssistantMessage` text block / `SDKPartialAssistantMessage` text_delta · `agent/toolCallStart` ← `SDKAssistantMessage` tool_use block · `agent/toolCallEnd` ← `SDKUserMessage` tool_result block · `agent/subagentStart` / `End` ← `SubagentStart` / `SubagentStop` hooks · `agent/notification` ← `Notification` hook · `agent/compact` ← `SDKCompactBoundaryMessage` · `agent/turnComplete` ← `SDKResultMessage` (turn ends, session stays open) · `agent/interrupted` ← `agent/interrupt` cancels current turn · `agent/statusChanged` ← `tracker.set_status()` in runner (idle↔running) · `agent/done` ← session closed via `agent/end` · `agent/error` / `permissionDenied` ← `SDKResultMessage` error subtypes
 >
 > **Subagent event correlation:** The SDK provides `parent_tool_use_id` on `AssistantMessage` and `UserMessage` to identify which Task tool call produced each message. The runner builds a `tool_use_id → agent_id` mapping from `SubagentStart` hooks, then resolves `parent_tool_use_id` to `agentId` on outgoing `textDelta`, `toolCallStart`, and `toolCallEnd` notifications. This enables deterministic event grouping on the frontend.
 

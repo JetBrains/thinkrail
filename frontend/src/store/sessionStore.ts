@@ -388,8 +388,9 @@ function appendEvent(
   params: Record<string, unknown>,
   closedIds?: Set<string>,
 ): Map<string, Session> {
-  // Skip ephemeral events — costEstimate updates metrics directly, not stored in events
-  if (method === "agent/costEstimate") return sessions;
+  // Skip ephemeral events — costEstimate and statusChanged update state directly,
+  // not stored in events history.
+  if (method === "agent/costEstimate" || method === "agent/statusChanged") return sessions;
   // Don't create phantom sessions — only update sessions that already exist
   if (!sessions.has(bonsaiSid)) return sessions;
   if (closedIds?.has(bonsaiSid)) return sessions;
@@ -509,6 +510,9 @@ function buildAnsweredRequests(
 
 /** Tracks in-flight restoreSession fetches to prevent duplicate concurrent loads. */
 const _restoring = new Set<string>();
+
+/** Streaming events that imply the backend is running (belt-and-suspenders guard). */
+const _RUNNING_SIGNALS = new Set(["agent/textDelta", "agent/toolCallStart", "agent/costEstimate"]);
 
 export const useSessionStore = create<SessionStore>((set, get) => ({
   sessions: new Map(),
@@ -989,7 +993,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
           skillId: (data?.skillId as string) ?? entry.skillId ?? null,
           specIds: data?.specIds ?? entry.specIds ?? [],
           filePaths: (data?.filePaths as string[]) ?? [],
-          status: entry.active && !entry.inTracker ? "interrupted" : ((entry.status as SessionStatus) ?? "idle"),
+          status: entry.active && !entry.inTracker ? "done" : ((entry.status as SessionStatus) ?? "idle"),
           model: entryModel,
           permissionMode: (data?.config?.permissionMode as string) ?? "default",
           betas: entryBetas,
@@ -1095,20 +1099,30 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
               return { sessions: next };
             });
           }
-        } catch {
-          // Task not found in backend tracker = session finished
-          const session = get().sessions.get(bonsaiSid);
-          if (!session) return;
-          if (session.status === "initializing" || session.status === "running" || session.status === "waiting") {
-            console.log(`[syncSessionStatuses] ${bonsaiSid}: task not found, marking interrupted`);
-            set((s) => {
-              const current = s.sessions.get(bonsaiSid);
-              if (!current) return s;
-              if (current.status !== "initializing" && current.status !== "running" && current.status !== "waiting") return s;
-              const next = new Map(s.sessions);
-              next.set(bonsaiSid, { ...current, status: "interrupted", pendingRequest: null });
-              return { sessions: next };
-            });
+        } catch (err: unknown) {
+          // Distinguish JSON-RPC errors (task genuinely not found) from
+          // network/timeout errors (transient — leave status unchanged).
+          const isRpcError = err && typeof err === "object" && "code" in err;
+          if (isRpcError) {
+            const session = get().sessions.get(bonsaiSid);
+            if (!session) return;
+            // Grace period: don't mark as done if session entered initializing < 10s ago
+            // to avoid racing with continueSession (backend task not yet created).
+            const isRecent = session.status === "initializing" && (Date.now() - session.startedAt) < 10_000;
+            if (!isRecent && (session.status === "initializing" || session.status === "running" || session.status === "waiting")) {
+              console.log(`[syncSessionStatuses] ${bonsaiSid}: task not found, marking done`);
+              set((s) => {
+                const current = s.sessions.get(bonsaiSid);
+                if (!current) return s;
+                if (current.status !== "initializing" && current.status !== "running" && current.status !== "waiting") return s;
+                const next = new Map(s.sessions);
+                next.set(bonsaiSid, { ...current, status: "done", pendingRequest: null });
+                return { sessions: next };
+              });
+            }
+          } else {
+            // Network error — leave status unchanged, will retry on next poll
+            console.warn(`[syncSessionStatuses] ${bonsaiSid}: network error, skipping`, err);
           }
         }
       }),
@@ -1276,7 +1290,19 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
       const session = s.sessions.get(bonsaiSid);
       if (!session) return s;
       const next = new Map(s.sessions);
-      next.set(bonsaiSid, { ...session, status: "initializing" });
+      const cu = session.metrics.contextUsage;
+      next.set(bonsaiSid, {
+        ...session,
+        status: "initializing",
+        pendingRequest: null,
+        metrics: {
+          ...session.metrics,
+          contextUsage: {
+            ...cu,
+            runBoundaries: [...cu.runBoundaries, cu.turnHistory.length],
+          },
+        },
+      });
       return { sessions: next };
     });
   },
@@ -1342,11 +1368,24 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
 
   onAgentEvent: (method, params) => {
     const bonsaiSid = params.bonsaiSid as string;
+    // Capture before set() — applyMetrics clears pendingRequest inside the setter.
+    const hadPending = get().sessions.get(bonsaiSid)?.pendingRequest != null;
     set((s) => {
       const sessions = appendEvent(s.sessions, bonsaiSid, method, params, s.closedIds);
-      const session = sessions.get(bonsaiSid);
+      let session = sessions.get(bonsaiSid);
       let projectCost = s.projectCost;
       if (session) {
+        // Belt-and-suspenders: if we receive work events while idle, transition
+        // to running.  Catches the case where agent/statusChanged was missed
+        // (e.g. during a WebSocket reconnect).
+        if (session.status === "idle") {
+          if (_RUNNING_SIGNALS.has(method)) {
+            const updated = { ...session, status: "running" as SessionStatus };
+            sessions.set(bonsaiSid, updated);
+            session = updated;
+          }
+        }
+
         if (method === "agent/ready") {
           if (session.status === "initializing") {
             sessions.set(bonsaiSid, { ...session, status: "idle" });
@@ -1387,34 +1426,57 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
 
           if (method === "agent/interrupted" && session.pendingRequest) {
             const rid = session.pendingRequest.requestId;
-            const answered = new Map(updated.answeredRequests);
-            answered.set(rid, {
-              behavior: "deny",
-              message: "Interrupted",
-              interrupt: true,
-            });
-            updated.answeredRequests = answered;
+            // Only mark as denied if user has NOT already answered this request.
+            // Race: user clicks Approve (resolveRequest sets answeredRequests),
+            // then agent/interrupted arrives — don't clobber the user's answer.
+            if (!updated.answeredRequests.has(rid)) {
+              const answered = new Map(updated.answeredRequests);
+              answered.set(rid, {
+                behavior: "deny",
+                message: "Interrupted",
+                interrupt: true,
+              });
+              updated.answeredRequests = answered;
+            }
           }
 
           sessions.set(bonsaiSid, updated);
+        } else if (method === "agent/statusChanged") {
+          const newStatus = params.status as SessionStatus;
+          // Apply backend status unless frontend is in a frontend-only state
+          // ("waiting" is set locally by onAskQuestion/onConfirmAction) or a
+          // terminal state that should only change via onSessionDone/onSessionError.
+          if (
+            session.status !== newStatus &&
+            session.status !== "waiting" &&
+            session.status !== "done" &&
+            session.status !== "error"
+          ) {
+            sessions.set(bonsaiSid, { ...session, status: newStatus });
+          }
         }
       }
       return { sessions, projectCost };
     });
 
-    // Clean up notifications when interrupted during a pending request
+    // Clean up notifications when interrupted during a pending request.
+    // Only decrement if there was actually a pending request — otherwise
+    // the counter goes negative.  hadPending is captured before set() above
+    // because applyMetrics clears pendingRequest inside the setter.
     if (method === "agent/interrupted") {
-      const ns = useNotificationStore.getState();
-      ns.decrementPendingInput();
-      for (const t of ns.toasts) {
-        if (
-          t.bonsaiSid === bonsaiSid &&
-          (t.eventType === "question" || t.eventType === "approval" || t.eventType === "suggestion")
-        ) {
-          ns.dismissToast(t.id);
+      if (hadPending) {
+        const ns = useNotificationStore.getState();
+        ns.decrementPendingInput();
+        for (const t of ns.toasts) {
+          if (
+            t.bonsaiSid === bonsaiSid &&
+            (t.eventType === "question" || t.eventType === "approval" || t.eventType === "suggestion")
+          ) {
+            ns.dismissToast(t.id);
+          }
         }
+        ns.clearBadge(bonsaiSid);
       }
-      ns.clearBadge(bonsaiSid);
     }
   },
 
@@ -1635,7 +1697,7 @@ export function startWatchdog(): void {
     const sessions = useSessionStore.getState().sessions;
     let hasTransient = false;
     for (const session of sessions.values()) {
-      if (session.status === "running" || session.status === "waiting") {
+      if (session.status === "initializing" || session.status === "running" || session.status === "waiting") {
         hasTransient = true;
         break;
       }

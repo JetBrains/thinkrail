@@ -127,7 +127,7 @@ export function TicketSession({ ticket, embeddedSid, onSessionStarted }: TicketS
       resolveRequest(embeddedSid, session.pendingRequest.requestId, { text: "continue" });
       return;
     }
-    if (session.status === "initializing" || session.status === "idle" || session.status === "interrupted") {
+    if (session.status === "initializing" || session.status === "idle") {
       sendMessage(embeddedSid, "continue");
     }
   }, [embeddedSid, session, resolveRequest, sendMessage]);

@@ -55,9 +55,11 @@ stateDiagram-v2
 | `initializing` | Session created, SDK client being set up. Messages sent during this phase are queued and processed once `idle` is reached. |
 | `idle` | Session open, SDK client ready, waiting for user message |
 | `running` | SDK turn in progress (processing user message) |
-| `waiting` | Suspended on a mid-turn interaction (question or tool approval) — runner awaits a Future |
+| `waiting` | Suspended on a mid-turn interaction (question or tool approval) — runner awaits a Future. **Note:** The backend tracker stays in `running` during `waiting`; the `waiting` status is set only on the frontend (by `onAskQuestion`/`onConfirmAction`). |
 | `done` | Session ended gracefully |
 | `error` | Session ended due to error |
+
+**Status notifications:** The runner emits `agent/statusChanged` on every `idle→running` and `running→idle` transition. This is the frontend's authoritative signal for status changes after the first turn (since `agent/sessionStart` only fires once per runner lifetime). The `idle` statusChanged is redundant with `agent/turnComplete`/`agent/interrupted` but makes state synchronization explicit.
 
 ### Lifecycle Sequence
 
@@ -79,6 +81,7 @@ sequenceDiagram
         F->>B: agent/send {bonsaiSid, text}
         B->>S: query(text)
         Note over B: state: running
+        B-->>F: agent/statusChanged {status: running}
         S-->>B: streaming
         B-->>F: agent/textDelta
         S-->>B: ToolUseBlock
@@ -99,6 +102,7 @@ sequenceDiagram
 
         S-->>B: ResultMessage
         B-->>F: agent/turnComplete
+        B-->>F: agent/statusChanged {status: idle}
         Note over B: state: idle
     end
 
@@ -139,10 +143,14 @@ sequenceDiagram
     R->>R: check tracker.is_interrupted()
     R-->>F: agent/interrupted
     R->>R: tracker.clear_interrupted()
+    R->>R: tracker.set_status(idle)
+    R-->>F: agent/statusChanged {status: idle}
     Note over R: state: idle
 
     Note over F: user can send another message
     F->>Svc: agent/send {bonsaiSid, text}
+    R->>R: tracker.set_status(running)
+    R-->>F: agent/statusChanged {status: running}
     Note over R: same client, same context, state: running
 ```
 
@@ -359,6 +367,7 @@ These map 1-to-1 to the `agent/*` notification methods in the protocol:
 | `done` | Session closed (via `agent/end` or session-level termination) | `agent/done` | Implemented |
 | `error` | `SDKResultMessage` error subtypes / unhandled exception | `agent/error` | Implemented |
 | `permission_denied` | `SDKResultMessage.permission_denials` | `agent/permissionDenied` | TODO |
+| `status_changed` | `tracker.set_status()` in runner — emitted on `idle→running` and `running→idle` transitions | `agent/statusChanged` | Implemented. Payload: `{bonsaiSid, status}`. Frontend uses this as the authoritative status signal for non-first turns (since `agent/sessionStart` only fires once per runner). |
 
 ### Interactive Request/Response Flow
 

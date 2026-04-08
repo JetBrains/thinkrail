@@ -542,7 +542,7 @@ class AgentService:
                 except Exception:
                     pass  # WS dead — events still persisted below
             # Persist streaming events (skip overly frequent and ephemeral ones)
-            if method.startswith("agent/") and method not in ("agent/progress", "agent/costEstimate"):
+            if method.startswith("agent/") and method not in ("agent/progress", "agent/costEstimate", "agent/statusChanged"):
                 event_type = method.replace("agent/", "")
                 # Include requestId in persisted payload (notify injects it
                 # into the WebSocket message but not into the original params dict)
@@ -564,7 +564,7 @@ class AgentService:
 
             # -- Incremental metrics persistence --
             # Skip only high-frequency events; all others update metrics on disk.
-            _SKIP_METRICS = {"agent/textDelta", "agent/progress", "agent/costEstimate"}
+            _SKIP_METRICS = {"agent/textDelta", "agent/progress", "agent/costEstimate", "agent/statusChanged"}
             _FULL_METRICS = {"agent/turnComplete", "agent/done", "agent/interrupted"}
 
             if method not in _SKIP_METRICS:

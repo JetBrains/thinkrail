@@ -191,6 +191,10 @@ async def run(
                     break
 
                 tracker.set_status(task.bonsai_sid, "running")
+                await notify("agent/statusChanged", {
+                    "bonsaiSid": task.bonsai_sid,
+                    "status": "running",
+                })
                 tracker.clear_turn_text(task.bonsai_sid)
                 turn_t0 = time.monotonic()
                 turn_input = turn_output = turn_cache_write_5m = turn_cache_write_1h = turn_cache_read = 0
@@ -431,6 +435,10 @@ async def run(
                                 "result": sdk_event.result or "",
                             })
                         tracker.set_status(task.bonsai_sid, "idle")
+                        await notify("agent/statusChanged", {
+                            "bonsaiSid": task.bonsai_sid,
+                            "status": "idle",
+                        })
                         break  # back to conversation loop, same client
         finally:
             tracker.clear_client(task.bonsai_sid)

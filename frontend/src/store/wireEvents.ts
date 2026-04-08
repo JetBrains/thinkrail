@@ -80,6 +80,7 @@ export function wireEvents(client: RpcClient): Unsubscribe {
     "agent/costEstimate",
     "agent/permissionDenied",
     "agent/ready",
+    "agent/statusChanged",
   ];
   for (const method of agentMethods) {
     unsubs.push(

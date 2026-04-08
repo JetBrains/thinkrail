@@ -92,7 +92,7 @@ export function SessionPanel() {
       resolveRequest(activeSessionId, activeSession.pendingRequest.requestId, { text: "continue" });
       return;
     }
-    if (activeSession.status === "initializing" || activeSession.status === "idle" || activeSession.status === "interrupted") {
+    if (activeSession.status === "initializing" || activeSession.status === "idle") {
       sendMessage(activeSessionId, "continue");
     }
   }, [activeSessionId, activeSession, resolveRequest, sendMessage]);
