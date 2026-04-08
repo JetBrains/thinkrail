@@ -1,0 +1,241 @@
+import { lazy, Suspense } from "react";
+import type { AgentEvent } from "@/types/agent.ts";
+import { AssistantMessage } from "../AssistantMessage.tsx";
+import { ToolCallCard } from "../ToolCallCard.tsx";
+import { DraftConfigCard } from "../DraftConfigCard.tsx";
+import { VisualizationCard, VisErrorBoundary } from "../VisualizationCard.tsx";
+import { TaskCard } from "../TaskCard.tsx";
+import { QuestionCard } from "../QuestionCard.tsx";
+import { ApprovalCard } from "../ApprovalCard.tsx";
+import { PlanApprovalCard } from "../PlanApprovalCard.tsx";
+import { CompactToolLine } from "../CompactToolLine.tsx";
+import { CompactUserMessage } from "../CompactUserMessage.tsx";
+import { CompactSubagent } from "../CompactSubagent.tsx";
+import { extractToolInput } from "../ChatStream.tsx";
+import type { VisData } from "@/types/vis.ts";
+import type { ViewRenderers } from "./types.ts";
+
+const DIFF_TOOLS = new Set(["Edit", "Write", "NotebookEdit"]);
+const TASK_TOOLS = new Set(["TodoWrite", "TaskCreate", "TaskUpdate"]);
+const DiffCard = lazy(() => import("../DiffCard.tsx").then(m => ({ default: m.DiffCard })));
+
+/**
+ * Compact renderers — overrides for events that render differently in compact mode.
+ * Unspecified event types fall back to classicRenderers via the registry.
+ */
+export const compactRenderers: ViewRenderers = {
+  sessionStart: (_ev, _i, k, ctx) => (
+    <DraftConfigCard
+      key={k}
+      bonsaiSid={ctx.session!.bonsaiSid}
+      readOnly
+      onVisibilityChange={ctx.onContextCardVisibility}
+    />
+  ),
+
+  userMessage: (ev, _i, k) => (
+    <CompactUserMessage
+      key={k}
+      text={(ev.payload.text as string) ?? ""}
+    />
+  ),
+
+  textDelta: (ev, _i, k) => (
+    <AssistantMessage
+      key={k}
+      text={(ev.payload.text as string) ?? ""}
+      streaming={(ev.payload.streaming as boolean) ?? false}
+    />
+  ),
+
+  toolCallStart: (ev, i, k, ctx) => {
+    const p = ev.payload;
+    if ((p.toolName as string) === "AskUserQuestion") return null;
+
+    // Visualizations: collapsible in compact mode
+    if ((p.toolName as string)?.endsWith("bonsai_visualize")) {
+      const visInput = p.toolInput as VisData | undefined;
+      if (visInput && typeof visInput.data === "string") {
+        try {
+          visInput.data = JSON.parse(visInput.data);
+        } catch {
+          try {
+            const repaired = (visInput.data as unknown as string).replace(/\\"/g, '\\\\"');
+            visInput.data = JSON.parse(repaired);
+          } catch {
+            visInput.data = { _parseError: true } as any;
+          }
+        }
+      }
+      if (visInput) {
+        const visId = visInput.visId;
+        const isLatest = !visId || ctx.latestVisByVisId.get(visId) === i;
+        return (
+          <VisErrorBoundary key={k}>
+            <VisualizationCard data={visInput} collapsed={!isLatest} compactMode />
+          </VisErrorBoundary>
+        );
+      }
+    }
+
+    const toolName = (p.toolName as string) ?? "tool";
+    const toolUseId = (p.toolUseId as string) ?? "";
+    const end = ctx.toolStates.get(toolUseId);
+    const state = end?.finished ? (end.isError ? "error" as const : "success" as const) : "running" as const;
+
+    // Task tools render the same in both modes
+    if (TASK_TOOLS.has(toolName)) {
+      return (
+        <TaskCard
+          key={k}
+          toolName={toolName}
+          toolInput={(p.toolInput as Record<string, unknown>) ?? {}}
+          state={state}
+          isError={end?.isError}
+        />
+      );
+    }
+
+    // Diff tools: use compact ToolCallCard as fallback while loading
+    if (DIFF_TOOLS.has(toolName)) {
+      return (
+        <Suspense key={k} fallback={<ToolCallCard toolName={toolName} toolInput={extractToolInput(p.toolInput)} state="running" compact />}>
+          <DiffCard
+            toolName={toolName}
+            toolInput={(p.toolInput as Record<string, unknown>) ?? {}}
+            output={end?.output}
+            isError={end?.isError}
+            state={state}
+            compact
+          />
+        </Suspense>
+      );
+    }
+
+    // Compact log-line for all other tools
+    const approval = ctx.approvalByToolIndex.get(i);
+    return (
+      <CompactToolLine
+        key={k}
+        toolName={toolName}
+        rawInput={(p.toolInput as Record<string, unknown>) ?? {}}
+        output={end?.output}
+        isError={end?.isError}
+        state={state}
+        approval={approval}
+        onResolveRequest={approval ? ctx.onResolveRequest : undefined}
+      />
+    );
+  },
+
+  toolCallEnd: () => null,
+
+  subagentStart: (ev, i, k, ctx) => {
+    const cEvents = (ctx.subagentChildren.get(i) ?? []).map(idx => ctx.events[idx]);
+    return (
+      <CompactSubagent
+        key={k}
+        agentType={(ev.payload.agentType as string) ?? undefined}
+        finished={!ctx.activeSubagents.has(ev.payload.agentId as string)}
+        childEvents={cEvents}
+        toolStates={ctx.toolStates}
+      />
+    );
+  },
+
+  subagentEnd: () => null,
+
+  // In compact mode, confirmAction events that are linked to a tool call
+  // are suppressed (rendered as badge on the tool's CompactToolLine).
+  // Only unlinked confirmAction events (ExitPlanMode, or orphaned) render standalone.
+  confirmAction: (ev, _i, k, ctx) => {
+    const p = ev.payload;
+    const requestId = (p.requestId as string) ?? "";
+    const isAnswered = ctx.answeredRequests.has(requestId);
+    const savedResponse = ctx.answeredRequests.get(requestId) as Record<string, unknown> | undefined;
+    const aInterrupted = savedResponse?.interrupt === true;
+    const decision = savedResponse?.behavior === "allow" ? "approve" as const : "deny" as const;
+
+    // ExitPlanMode always gets its own card
+    if ((p.toolName as string) === "ExitPlanMode") {
+      const toolInput = p.toolInput as Record<string, unknown> | undefined;
+      return (
+        <PlanApprovalCard
+          key={k}
+          planContent={(toolInput?.plan as string) ?? undefined}
+          allowedPrompts={(toolInput?.allowedPrompts as Array<{ tool: "Bash"; prompt: string }>) ?? undefined}
+          answered={isAnswered}
+          decision={isAnswered ? decision : undefined}
+          interrupted={aInterrupted}
+          onApprove={() => ctx.onResolveRequest(requestId, { behavior: "allow" })}
+          rejectionReason={
+            isAnswered && decision === "deny" && !aInterrupted
+              ? (savedResponse?.rejectionReason as string) ?? undefined
+              : undefined
+          }
+          onDeny={(reason?: string) => {
+            ctx.onResolveRequest(requestId, {
+              behavior: "deny",
+              message: reason ? `Plan rejected: ${reason}` : "Plan rejected",
+              interrupt: false,
+              rejectionReason: reason ?? "",
+            });
+          }}
+        />
+      );
+    }
+
+    // Check if this approval was linked to a tool call in the pre-scan.
+    // If so, it's rendered as a badge on CompactToolLine — skip standalone card.
+    // We detect this by checking if any approvalByToolIndex entry has this requestId.
+    for (const approval of ctx.approvalByToolIndex.values()) {
+      if (approval.requestId === requestId) return null;
+    }
+
+    // Unlinked approval — render standalone card (same as classic)
+    return (
+      <ApprovalCard
+        key={k}
+        toolName={(p.toolName as string) ?? "action"}
+        toolInput={p.toolInput ?? undefined}
+        description={(p.description as string) ?? undefined}
+        answered={isAnswered}
+        decision={isAnswered ? decision : undefined}
+        interrupted={aInterrupted}
+        onApprove={() => ctx.onResolveRequest(requestId, { behavior: "allow" })}
+        onDeny={() =>
+          ctx.onResolveRequest(requestId, {
+            behavior: "deny",
+            message: "User denied",
+            interrupt: false,
+          })
+        }
+      />
+    );
+  },
+
+  // Compact answered question → log line; pending → same card as classic
+  askUserQuestion: (ev, _i, k, ctx) => {
+    const questions = (ev.payload.questions as AgentEvent["payload"][]) ?? [];
+    const requestId = (ev.payload.requestId as string) ?? "";
+    const isAnswered = ctx.answeredRequests.has(requestId);
+    const savedAnswer = ctx.answeredRequests.get(requestId) as Record<string, unknown> | undefined;
+    const qInterrupted = savedAnswer?.interrupt === true;
+    return (
+      <QuestionCard
+        key={k}
+        questions={questions as never}
+        answered={isAnswered}
+        interrupted={qInterrupted}
+        selectedAnswers={isAnswered ? (savedAnswer?.answers as Record<string, string>) : undefined}
+        onSubmit={(response) => ctx.onResolveRequest(requestId, response)}
+        requestId={requestId}
+        compact
+      />
+    );
+  },
+
+  // suggestSession and suggestDescription fall back to classic (shared)
+
+  requestResolved: () => null,
+};

@@ -24,6 +24,7 @@ class ProjectSettings(BaseModel, extra="allow"):
     default_model: str = "claude-opus-4-6"
     default_effort: str = "high"
     model_refresh_interval_hours: int = 24
+    event_view: str = "classic"
 
 
 def _settings_path(project_root: Path) -> Path:

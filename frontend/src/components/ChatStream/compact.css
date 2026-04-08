@@ -1,0 +1,379 @@
+/* ── Compact View Mode ─────────────────────────────────── */
+
+/* Container overrides */
+.chat-stream--compact {
+  gap: 0 !important;
+  padding: var(--space-xs) !important;
+}
+/* Strip vertical margins from direct children (gap between events) */
+.chat-stream--compact > * {
+  margin-top: 0 !important;
+  margin-bottom: 0 !important;
+}
+
+/* ── Log line (base for all compact tool events) ── */
+.compact-log-wrap {
+  width: 100%;
+}
+.compact-log {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 6px;
+  font-size: 11px;
+  border-left: 2px solid var(--green);
+  cursor: pointer;
+  border-radius: 2px;
+}
+.compact-log:hover {
+  background: var(--hover);
+}
+.compact-log-icon {
+  font-size: 11px;
+  flex-shrink: 0;
+}
+.compact-log-name {
+  color: var(--cyan);
+  font-weight: 600;
+  white-space: nowrap;
+}
+.compact-log-detail {
+  color: var(--muted);
+  font-size: 10px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 1;
+  min-width: 0;
+}
+.compact-log-status {
+  margin-left: auto;
+  font-size: 10px;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.compact-log-badge-info {
+  color: var(--muted);
+  font-size: 9px;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+/* Expanded body (reuses ToolInputDetail / ToolOutputBody) */
+.compact-log-body {
+  padding: 4px 6px 4px 12px;
+  border-left: 2px solid var(--border);
+  margin-left: 0;
+  font-size: 11px;
+}
+.compact-log-body pre {
+  font-size: 11px;
+  white-space: pre-wrap;
+  word-break: break-all;
+  color: var(--muted);
+  margin: 0;
+}
+
+/* ── Inline approval badge (answered) ── */
+.compact-approval-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 0 5px;
+  border-radius: 3px;
+  font-size: 9px;
+  font-weight: 600;
+  flex-shrink: 0;
+  margin-left: 4px;
+}
+.compact-approval-badge--approved {
+  background: rgba(158, 206, 106, 0.12);
+  color: var(--green);
+}
+.compact-approval-badge--denied {
+  background: rgba(247, 118, 142, 0.12);
+  color: var(--red);
+}
+
+/* ── Inline approval buttons (pending) ── */
+.compact-approval-pending {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: auto;
+  flex-shrink: 0;
+}
+.compact-btn {
+  padding: 1px 8px;
+  border-radius: 3px;
+  font-size: 10px;
+  font-weight: 600;
+  cursor: pointer;
+  border: 1px solid;
+  background: transparent;
+}
+.compact-btn--approve {
+  color: var(--green);
+  border-color: rgba(158, 206, 106, 0.3);
+  background: rgba(158, 206, 106, 0.1);
+}
+.compact-btn--approve:hover {
+  background: rgba(158, 206, 106, 0.2);
+}
+.compact-btn--deny {
+  color: var(--red);
+  border-color: rgba(247, 118, 142, 0.2);
+  background: rgba(247, 118, 142, 0.06);
+}
+.compact-btn--deny:hover {
+  background: rgba(247, 118, 142, 0.15);
+}
+
+/* ── Compact user message (right-aligned, single-line) ── */
+.compact-user {
+  display: flex;
+  justify-content: flex-end;
+  padding: 2px 6px;
+}
+.compact-user-bubble {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 10px;
+  background: rgba(122, 162, 247, 0.08);
+  border-radius: 4px;
+  border-right: 2px solid var(--blue);
+  max-width: 85%;
+  cursor: pointer;
+}
+.compact-user-bubble:hover {
+  background: rgba(122, 162, 247, 0.12);
+}
+.compact-user-label {
+  color: var(--blue);
+  font-size: 10px;
+  font-weight: 600;
+  flex-shrink: 0;
+}
+.compact-user-text {
+  font-size: 11px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.compact-user-bubble--expanded .compact-user-text {
+  white-space: normal;
+  word-break: break-word;
+}
+
+/* ── Compact subagent ── */
+.compact-subagent {
+  width: 100%;
+}
+.compact-subagent-header {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 6px;
+  font-size: 11px;
+  border-left: 2px solid var(--purple);
+  cursor: pointer;
+  border-radius: 2px;
+}
+.compact-subagent-header:hover {
+  background: var(--hover);
+}
+.compact-subagent-toggle {
+  color: var(--muted);
+  font-size: 10px;
+  flex-shrink: 0;
+}
+.compact-subagent-name {
+  color: var(--purple);
+  font-weight: 600;
+  white-space: nowrap;
+}
+.compact-subagent-detail {
+  color: var(--muted);
+  font-size: 10px;
+}
+.compact-subagent-body {
+  margin-left: 12px;
+  padding-left: 8px;
+  border-left: 1px solid rgba(187, 154, 247, 0.15);
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+.compact-subagent-body .compact-log {
+  font-size: 10px;
+  padding: 1px 4px;
+}
+.compact-subagent-body .compact-log-icon {
+  font-size: 10px;
+}
+.compact-subagent-body .compact-log-detail {
+  font-size: 9px;
+}
+.compact-subagent-body .compact-log-status {
+  font-size: 9px;
+}
+.compact-subagent-text {
+  font-size: 10px;
+  color: var(--muted);
+  padding: 2px 4px;
+}
+
+/* ── Compact mode: tighten ALL shared components ── */
+
+/* Remove max-width constraints — fill the stream */
+.chat-stream--compact .chat-assistant,
+.chat-stream--compact .chat-tool,
+.chat-stream--compact .chat-user-text {
+  max-width: 100% !important;
+}
+
+/* Kill slideUp animation in compact */
+.chat-stream--compact .chat-assistant,
+.chat-stream--compact .chat-tool,
+.chat-stream--compact .chat-user,
+.chat-stream--compact .chat-question,
+.chat-stream--compact .chat-approval,
+.chat-stream--compact .chat-subagent {
+  animation: none !important;
+}
+
+/* Assistant text */
+.chat-stream--compact .chat-assistant {
+  padding: 2px 6px !important;
+}
+
+/* System messages */
+.chat-stream--compact .chat-system {
+  padding: 1px 6px !important;
+  font-size: 10px !important;
+}
+
+/* Classic tool cards (fallback rendering in compact stream) */
+.chat-stream--compact .chat-tool {
+  border-radius: 2px !important;
+  background: transparent !important;
+}
+.chat-stream--compact .chat-tool-header {
+  padding: 2px 6px !important;
+  gap: 4px !important;
+  font-size: 11px !important;
+}
+.chat-stream--compact .chat-tool-body {
+  padding: 2px 6px !important;
+}
+
+/* Approval cards (pending in compact stream) */
+.chat-stream--compact .chat-approval {
+  padding: var(--space-sm) var(--space-md) !important;
+}
+
+/* Question cards (pending in compact stream) */
+.chat-stream--compact .chat-question {
+  padding: var(--space-sm) var(--space-md) !important;
+}
+
+/* Subagent blocks */
+.chat-stream--compact .chat-subagent {
+  margin-left: 0 !important;
+  padding-left: 8px !important;
+}
+.chat-stream--compact .chat-subagent-header {
+  padding: 2px 0 !important;
+  font-size: 11px !important;
+}
+
+/* Completion/error banners */
+.chat-stream--compact .chat-completion,
+.chat-stream--compact .chat-error-banner {
+  padding: var(--space-xs) var(--space-sm) !important;
+}
+
+/* Diff cards in compact */
+.chat-stream--compact .diff-card {
+  border-radius: 2px !important;
+}
+
+/* Task cards */
+.chat-stream--compact .task-list {
+  gap: 2px !important;
+}
+.chat-stream--compact .task-item {
+  font-size: 11px !important;
+}
+
+/* Vis cards in compact — tighter collapsed state, smaller expanded */
+.chat-stream--compact .vis-card {
+  max-width: 100% !important;
+  animation: none !important;
+}
+.chat-stream--compact .vis-card--collapsed {
+  padding: 2px 6px !important;
+  gap: 4px !important;
+  font-size: 11px !important;
+  border-left-width: 2px !important;
+  border-radius: 2px !important;
+  max-width: 100% !important;
+  opacity: 0.8 !important;
+}
+.chat-stream--compact .vis-card-header {
+  padding: var(--space-xs) var(--space-sm) !important;
+}
+.chat-stream--compact .vis-card-collapse-hint {
+  margin-left: auto;
+  color: var(--muted);
+  font-size: 10px;
+}
+
+/* ── Session Context Menu (used in both modes) ── */
+.session-ctx-menu {
+  position: fixed;
+  z-index: 1000;
+  min-width: 180px;
+  background: var(--elevated);
+  border: 1px solid var(--border2);
+  border-radius: var(--radius-sm);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
+  padding: 4px 0;
+  font-size: 12px;
+}
+.session-ctx-menu-sep {
+  height: 1px;
+  background: var(--border);
+  margin: 4px 0;
+}
+.session-ctx-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 6px 12px;
+  border: none;
+  background: transparent;
+  color: var(--text);
+  font-size: 12px;
+  font-family: inherit;
+  cursor: pointer;
+  text-align: left;
+}
+.session-ctx-menu-item:hover {
+  background: var(--hover);
+}
+.session-ctx-menu-item--disabled {
+  color: var(--muted);
+  cursor: default;
+}
+.session-ctx-menu-item--disabled:hover {
+  background: transparent;
+}
+.session-ctx-menu-icon {
+  font-size: 12px;
+  width: 16px;
+  text-align: center;
+  flex-shrink: 0;
+}

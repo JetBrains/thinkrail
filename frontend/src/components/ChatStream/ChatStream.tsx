@@ -1,62 +1,14 @@
-import { lazy, Suspense, useCallback, useEffect, useRef, useState, forwardRef, useImperativeHandle } from "react";
+import { useCallback, useEffect, useRef, useState, forwardRef, useImperativeHandle } from "react";
 import type { AgentEvent } from "@/types/agent.ts";
 import type { Session } from "@/types/session.ts";
-import { useSessionStore } from "@/store/sessionStore.ts";
-import { SystemMessage } from "./SystemMessage.tsx";
-import { AssistantMessage } from "./AssistantMessage.tsx";
-import { ToolCallCard } from "./ToolCallCard.tsx";
 import { DraftConfigCard } from "./DraftConfigCard.tsx";
-import { VisualizationCard, VisErrorBoundary } from "./VisualizationCard.tsx";
-import { SubagentBlock } from "./SubagentBlock.tsx";
-import { TaskCard } from "./TaskCard.tsx";
-import { QuestionCard } from "./QuestionCard.tsx";
-import { ApprovalCard } from "./ApprovalCard.tsx";
-import { PlanApprovalCard } from "./PlanApprovalCard.tsx";
-import SuggestionCard from "./SuggestionCard.tsx";
-import DescriptionSuggestionCard from "./DescriptionSuggestionCard.tsx";
-import { CompletionBanner } from "./CompletionBanner.tsx";
-import { ErrorBanner } from "./ErrorBanner.tsx";
-import { CompactMarker } from "./CompactMarker.tsx";
-import { ChatMarkdown } from "./ChatMarkdown.tsx";
-import type { VisData } from "@/types/vis.ts";
-
-const DIFF_TOOLS = new Set(["Edit", "Write", "NotebookEdit"]);
-const TASK_TOOLS = new Set(["TodoWrite", "TaskCreate", "TaskUpdate"]);
-const DiffCard = lazy(() => import("./DiffCard.tsx").then(m => ({ default: m.DiffCard })));
-
-/** User message bubble with optional markdown rendering and raw/rendered toggle. */
-function UserMessageBubble({ text, isMarkdown }: { text: string; isMarkdown: boolean }) {
-  const [showRaw, setShowRaw] = useState(false);
-
-  if (!isMarkdown) {
-    return (
-      <div className="chat-user">
-        <div className="chat-user-text">{text}</div>
-      </div>
-    );
-  }
-
-  return (
-    <div className="chat-user">
-      <div className="chat-user-bubble">
-        {showRaw ? (
-          <div className="chat-user-text">{text}</div>
-        ) : (
-          <div className="chat-user-text--md">
-            <ChatMarkdown content={text} />
-          </div>
-        )}
-        <button
-          className="chat-user-toggle"
-          onClick={() => setShowRaw((v) => !v)}
-          title={showRaw ? "Show rendered" : "Show raw"}
-        >
-          {showRaw ? "md" : "raw"}
-        </button>
-      </div>
-    </div>
-  );
-}
+import { useViewMode, type ViewMode } from "@/context/ViewModeContext.tsx";
+import { useSettingsStore } from "@/store/settingsStore.ts";
+import { useSessionStore } from "@/store/sessionStore.ts";
+import { renderEvent } from "./renderers/registry.ts";
+import { SessionContextMenu } from "./SessionContextMenu.tsx";
+import type { ApprovalInfo, EventRenderContext } from "./renderers/types.ts";
+import "./compact.css";
 
 /** Shared type for tool call end-state, used by SubagentBlock too. */
 export type ToolState = { output?: string; isError?: boolean; finished: boolean };
@@ -70,6 +22,42 @@ export function extractToolInput(raw: unknown): string {
     return str.includes("[object Object]") ? "" : str;
   }
   return "";
+}
+
+/** Walk up from a target element to find the nearest data-question-request-id. */
+function findQuestionRequestId(target: HTMLElement): string | null {
+  let el: HTMLElement | null = target;
+  while (el) {
+    const rid = el.dataset.questionRequestId;
+    if (rid) return rid;
+    el = el.parentElement;
+  }
+  return null;
+}
+
+/** Build a plain-text transcript from events. */
+function buildTranscript(events: AgentEvent[]): string {
+  const lines: string[] = [];
+  for (const ev of events) {
+    const p = ev.payload;
+    switch (ev.eventType) {
+      case "userMessage":
+        lines.push(`You: ${(p.text as string) ?? ""}`);
+        break;
+      case "textDelta":
+        lines.push((p.text as string) ?? "");
+        break;
+      case "toolCallStart": {
+        const name = (p.toolName as string) ?? "tool";
+        lines.push(`[${name}]`);
+        break;
+      }
+      case "notification":
+        lines.push(`> ${(p.message as string) ?? ""}`);
+        break;
+    }
+  }
+  return lines.filter(Boolean).join("\n");
 }
 
 export interface ChatStreamHandle {
@@ -95,6 +83,10 @@ export const ChatStream = forwardRef<ChatStreamHandle, ChatStreamProps>(function
 }, ref) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const autoScroll = useRef(true);
+  const viewMode = useViewMode();
+
+  // ── Context menu state ──
+  const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number; questionRequestId?: string } | null>(null);
 
   // Auto-scroll to bottom on new events
   useEffect(() => {
@@ -116,8 +108,55 @@ export const ChatStream = forwardRef<ChatStreamHandle, ChatStreamProps>(function
     },
   }));
 
-  // Pre-scan: index toolCallEnd results by toolUseId so that
-  // when rendering a toolCallStart we can show its output inline.
+  const handleContextMenu = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    const questionRequestId = findQuestionRequestId(e.target as HTMLElement) ?? undefined;
+    setCtxMenu({ x: e.clientX, y: e.clientY, questionRequestId });
+  }, []);
+
+  const handleSwitchViewMode = useCallback((mode: ViewMode) => {
+    useSettingsStore.getState().updateSettings({ event_view: mode });
+  }, []);
+
+  const handleExpandAll = useCallback(() => {
+    document.dispatchEvent(new CustomEvent("bonsai:expandAll"));
+  }, []);
+
+  const handleCollapseEvents = useCallback(() => {
+    document.dispatchEvent(new CustomEvent("bonsai:collapseEvents"));
+  }, []);
+
+  const handleCollapseAll = useCallback(() => {
+    document.dispatchEvent(new CustomEvent("bonsai:collapseAll"));
+  }, []);
+
+  const handleCopyTranscript = useCallback(() => {
+    const text = buildTranscript(events);
+    navigator.clipboard.writeText(text).catch(console.error);
+  }, [events]);
+
+  const handleReviseAnswer = useCallback(() => {
+    if (!ctxMenu?.questionRequestId || !session) return;
+    const requestId = ctxMenu.questionRequestId;
+    // Find the question event to get the question text
+    const qEvent = events.find(
+      (ev) => ev.eventType === "askUserQuestion" && (ev.payload.requestId as string) === requestId,
+    );
+    if (!qEvent) return;
+    const questions = (qEvent.payload.questions as Array<{ question: string }>) ?? [];
+    const savedAnswer = answeredRequests.get(requestId) as Record<string, unknown> | undefined;
+    const answers = (savedAnswer?.answers as Record<string, string>) ?? {};
+
+    // Build a revision message
+    const parts = questions.map((q) => {
+      const prev = answers[q.question];
+      return `- "${q.question}": was "${prev ?? "unknown"}"`;
+    });
+    const msg = `I'd like to revise my answer:\n${parts.join("\n")}\n\nPlease ask me again.`;
+    useSessionStore.getState().sendMessage(session.bonsaiSid, msg);
+  }, [ctxMenu, session, events, answeredRequests]);
+
+  // ── Pre-scan: index toolCallEnd results by toolUseId ──
   const toolStates = new Map<string, ToolState>();
   for (const ev of events) {
     if (ev.eventType === "toolCallEnd") {
@@ -130,9 +169,7 @@ export const ChatStream = forwardRef<ChatStreamHandle, ChatStreamProps>(function
     }
   }
 
-  // Pre-scan: track which subagents are still running (started but not ended).
-  // interrupted / turnComplete implicitly close all open subagents because
-  // the SDK's SubagentStop hook isn't guaranteed to fire on interrupt.
+  // ── Pre-scan: track which subagents are still running ──
   const activeSubagents = new Set<string>();
   for (const ev of events) {
     if (ev.eventType === "subagentStart")
@@ -143,7 +180,7 @@ export const ChatStream = forwardRef<ChatStreamHandle, ChatStreamProps>(function
       activeSubagents.clear();
   }
 
-  // Pre-scan: track latest bonsai_visualize event per visId for hybrid collapse.
+  // ── Pre-scan: track latest bonsai_visualize event per visId ──
   const latestVisByVisId = new Map<string, number>();
   for (let i = 0; i < events.length; i++) {
     const ev = events[i];
@@ -153,16 +190,10 @@ export const ChatStream = forwardRef<ChatStreamHandle, ChatStreamProps>(function
     }
   }
 
-  // Pre-scan: group child events under their parent subagentStart using
-  // explicit agentId from backend (resolved via SDK parent_tool_use_id).
-  const subagentChildren = new Map<number, number[]>(); // subagentStart idx → child idxs
-  const childIndices = new Set<number>();               // events to skip in render
+  // ── Pre-scan: group child events under their parent subagentStart ──
+  const subagentChildren = new Map<number, number[]>();
+  const childIndices = new Set<number>();
   {
-    // First pass: map agentId → subagentStart event index.
-    // Agent IDs are unique random strings, so the mapping persists across
-    // turn boundaries (interrupted / turnComplete) without collision risk.
-    // Previously this map was cleared on turn-end events, which broke
-    // subagent grouping when events were replayed after an interrupt.
     const agentStartIdx = new Map<string, number>();
     for (let i = 0; i < events.length; i++) {
       const ev = events[i];
@@ -172,22 +203,15 @@ export const ChatStream = forwardRef<ChatStreamHandle, ChatStreamProps>(function
         subagentChildren.set(i, []);
       }
     }
-
-    // Second pass: assign child events to their parent subagentStart via agentId
     for (let i = 0; i < events.length; i++) {
       const ev = events[i];
       if (ev.eventType === "subagentStart" || ev.eventType === "subagentEnd"
           || ev.eventType === "interrupted" || ev.eventType === "turnComplete")
         continue;
-
       const agentId = ev.payload.agentId as string | undefined;
       if (!agentId) continue;
-
       const parentIdx = agentStartIdx.get(agentId);
       if (parentIdx === undefined) continue;
-
-      // Hoist bonsai_visualize, askUserQuestion, confirmAction, and suggestSession
-      // to top level so they remain visible outside the collapsible SubagentBlock
       const isVis = ev.eventType === "toolCallStart" &&
         (ev.payload.toolName as string)?.endsWith("bonsai_visualize");
       const isInteraction = ev.eventType === "askUserQuestion" || ev.eventType === "confirmAction" || ev.eventType === "suggestSession" || ev.eventType === "suggestDescription";
@@ -198,381 +222,78 @@ export const ChatStream = forwardRef<ChatStreamHandle, ChatStreamProps>(function
     }
   }
 
+  // ── Pre-scan: link confirmAction events to their toolCallStart ──
+  const approvalByToolIndex = new Map<number, ApprovalInfo>();
+  {
+    const pendingApprovals = new Map<string, { eventIndex: number; requestId: string; toolInput?: unknown; description?: string }>();
+    for (let i = 0; i < events.length; i++) {
+      const ev = events[i];
+      if (ev.eventType === "confirmAction") {
+        const toolName = (ev.payload.toolName as string) ?? "";
+        if (toolName === "ExitPlanMode") continue;
+        pendingApprovals.set(toolName, {
+          eventIndex: i,
+          requestId: (ev.payload.requestId as string) ?? "",
+          toolInput: ev.payload.toolInput,
+          description: (ev.payload.description as string) ?? undefined,
+        });
+      }
+      if (ev.eventType === "toolCallStart") {
+        const toolName = (ev.payload.toolName as string) ?? "";
+        const pending = pendingApprovals.get(toolName);
+        if (pending) {
+          const requestId = pending.requestId;
+          const isAnswered = answeredRequests.has(requestId);
+          const savedResponse = answeredRequests.get(requestId) as Record<string, unknown> | undefined;
+          approvalByToolIndex.set(i, {
+            requestId,
+            answered: isAnswered,
+            decision: isAnswered
+              ? (savedResponse?.behavior === "allow" ? "approve" : "deny")
+              : undefined,
+            interrupted: savedResponse?.interrupt === true,
+            toolInput: pending.toolInput,
+            description: pending.description,
+          });
+          pendingApprovals.delete(toolName);
+        }
+      }
+    }
+  }
+
+  // ── Build render context ──
+  const ctx: EventRenderContext = {
+    toolStates,
+    activeSubagents,
+    subagentChildren,
+    latestVisByVisId,
+    approvalByToolIndex,
+    answeredRequests,
+    onResolveRequest,
+    session,
+    events,
+    onContextCardVisibility,
+    onApplyDescription,
+  };
+
+  const containerClass = viewMode === "compact"
+    ? "chat-stream chat-stream--compact"
+    : "chat-stream";
+
   return (
-    <div className="chat-stream" ref={scrollRef} onScroll={handleScroll}>
+    <div
+      className={containerClass}
+      ref={scrollRef}
+      onScroll={handleScroll}
+      onContextMenu={handleContextMenu}
+    >
       {session?.status === "draft" && (
         <DraftConfigCard bonsaiSid={session.bonsaiSid} />
       )}
       {events.map((ev, i) => {
-        // Skip events that are children of a subagent (rendered inside SubagentBlock)
         if (childIndices.has(i)) return null;
-        const p = ev.payload;
         const k = `${i}-${ev.eventType}`;
-        switch (ev.eventType) {
-          case "sessionStart":
-            return (
-              <DraftConfigCard
-                key={k}
-                bonsaiSid={session!.bonsaiSid}
-                readOnly
-                onVisibilityChange={onContextCardVisibility}
-              />
-            );
-
-          case "userMessage":
-            return (
-              <UserMessageBubble
-                key={k}
-                text={(p.text as string) ?? ""}
-                isMarkdown={(p.isMarkdown as boolean) ?? false}
-              />
-            );
-
-          case "textDelta":
-            return (
-              <AssistantMessage
-                key={k}
-                text={(p.text as string) ?? ""}
-                streaming={(p.streaming as boolean) ?? false}
-              />
-            );
-
-          case "toolCallStart": {
-            if ((p.toolName as string) === "AskUserQuestion") return null;
-            // MCP tools may be prefixed with server name (e.g. mcp__bonsai-vis__bonsai_visualize)
-            if ((p.toolName as string)?.endsWith("bonsai_visualize")) {
-              const visInput = p.toolInput as VisData | undefined;
-              // LLMs sometimes pass `data` as a JSON string instead of an object — auto-parse it
-              if (visInput && typeof visInput.data === "string") {
-                try {
-                  visInput.data = JSON.parse(visInput.data);
-                } catch {
-                  // Repair attempt: LLMs double-serializing often produce \\" instead
-                  // of \\\" inside nested strings — fix the escaping and retry.
-                  try {
-                    const repaired = (visInput.data as unknown as string).replace(/\\"/g, '\\\\"');
-                    visInput.data = JSON.parse(repaired);
-                  } catch {
-                    // Still failed — mark as parse error so the card shows an error
-                    // message instead of rendering blank content
-                    visInput.data = { _parseError: true } as any;
-                  }
-                }
-              }
-              if (visInput) {
-                const visId = visInput.visId;
-                const isLatest = !visId || latestVisByVisId.get(visId) === i;
-                return (
-                  <VisErrorBoundary key={k}>
-                    <VisualizationCard
-                      data={visInput}
-                      collapsed={!isLatest}
-                    />
-                  </VisErrorBoundary>
-                );
-              }
-            }
-            const toolName = (p.toolName as string) ?? "tool";
-            const toolUseId = (p.toolUseId as string) ?? "";
-            const end = toolStates.get(toolUseId);
-            const state = end?.finished ? (end.isError ? "error" as const : "success" as const) : "running" as const;
-            if (TASK_TOOLS.has(toolName)) {
-              return (
-                <TaskCard
-                  key={k}
-                  toolName={toolName}
-                  toolInput={(p.toolInput as Record<string, unknown>) ?? {}}
-                  state={state}
-                  isError={end?.isError}
-                />
-              );
-            }
-            if (DIFF_TOOLS.has(toolName)) {
-              return (
-                <Suspense key={k} fallback={<ToolCallCard toolName={toolName} toolInput={extractToolInput(p.toolInput)} state="running" />}>
-                  <DiffCard
-                    toolName={toolName}
-                    toolInput={(p.toolInput as Record<string, unknown>) ?? {}}
-                    output={end?.output}
-                    isError={end?.isError}
-                    state={state}
-                  />
-                </Suspense>
-              );
-            }
-            return (
-              <ToolCallCard
-                key={k}
-                toolName={toolName}
-                rawInput={(p.toolInput as Record<string, unknown>) ?? {}}
-                output={end?.output}
-                isError={end?.isError}
-                state={state}
-              />
-            );
-          }
-
-          case "toolCallEnd":
-            return null; // Handled by toolCallStart pairing
-
-          case "subagentStart": {
-            const cEvents = (subagentChildren.get(i) ?? []).map(idx => events[idx]);
-            return (
-              <SubagentBlock
-                key={k}
-                agentType={(p.agentType as string) ?? undefined}
-                finished={!activeSubagents.has(p.agentId as string)}
-                childEvents={cEvents}
-                toolStates={toolStates}
-              />
-            );
-          }
-
-          case "subagentEnd":
-            return null; // Handled by subagentStart
-
-          case "askUserQuestion": {
-            const questions = (p.questions as AgentEvent["payload"][]) ?? [];
-            const requestId = (p.requestId as string) ?? "";
-            const isAnswered = answeredRequests.has(requestId);
-            const savedAnswer = answeredRequests.get(requestId) as Record<string, unknown> | undefined;
-            const qInterrupted = savedAnswer?.interrupt === true;
-            return (
-              <QuestionCard
-                key={k}
-                questions={questions as never}
-                answered={isAnswered}
-                interrupted={qInterrupted}
-                selectedAnswers={isAnswered ? (savedAnswer?.answers as Record<string, string>) : undefined}
-                onSubmit={(response) => onResolveRequest(requestId, response)}
-              />
-            );
-          }
-
-          case "confirmAction": {
-            const requestId = (p.requestId as string) ?? "";
-            const isAnswered = answeredRequests.has(requestId);
-            const savedResponse = answeredRequests.get(requestId) as Record<string, unknown> | undefined;
-            const aInterrupted = savedResponse?.interrupt === true;
-            const decision = savedResponse?.behavior === "allow" ? "approve" as const : "deny" as const;
-
-            // ExitPlanMode gets a dedicated plan review card
-            if ((p.toolName as string) === "ExitPlanMode") {
-              const toolInput = p.toolInput as Record<string, unknown> | undefined;
-              return (
-                <PlanApprovalCard
-                  key={k}
-                  planContent={(toolInput?.plan as string) ?? undefined}
-                  allowedPrompts={(toolInput?.allowedPrompts as Array<{ tool: "Bash"; prompt: string }>) ?? undefined}
-                  answered={isAnswered}
-                  decision={isAnswered ? decision : undefined}
-                  interrupted={aInterrupted}
-                  onApprove={() =>
-                    onResolveRequest(requestId, { behavior: "allow" })
-                  }
-                  rejectionReason={
-                    isAnswered && decision === "deny" && !aInterrupted
-                      ? (savedResponse?.rejectionReason as string) ?? undefined
-                      : undefined
-                  }
-                  onDeny={(reason?: string) => {
-                    onResolveRequest(requestId, {
-                      behavior: "deny",
-                      message: reason
-                        ? `Plan rejected: ${reason}`
-                        : "Plan rejected",
-                      interrupt: false,
-                      rejectionReason: reason ?? "",
-                    });
-                  }}
-                />
-              );
-            }
-
-            return (
-              <ApprovalCard
-                key={k}
-                toolName={(p.toolName as string) ?? "action"}
-                toolInput={p.toolInput ?? undefined}
-                description={(p.description as string) ?? undefined}
-                answered={isAnswered}
-                decision={isAnswered ? decision : undefined}
-                interrupted={aInterrupted}
-                onApprove={() =>
-                  onResolveRequest(requestId, { behavior: "allow" })
-                }
-                onDeny={() =>
-                  onResolveRequest(requestId, {
-                    behavior: "deny",
-                    message: "User denied",
-                    interrupt: false,
-                  })
-                }
-              />
-            );
-          }
-
-          case "suggestSession": {
-            const requestId = (p.requestId as string) ?? "";
-            const isAnswered = answeredRequests.has(requestId);
-            const savedResponse = answeredRequests.get(requestId) as Record<string, unknown> | undefined;
-            const decision = savedResponse?.behavior === "allow" ? "approved" as const : "dismissed" as const;
-
-            return (
-              <SuggestionCard
-                key={k}
-                skill={(p.skill as string) ?? ""}
-                specIds={(p.specIds as string[]) ?? []}
-                name={(p.name as string) ?? ""}
-                reason={(p.reason as string) ?? ""}
-                prompt={(p.prompt as string) ?? undefined}
-                answered={isAnswered}
-                decision={isAnswered ? decision : undefined}
-                dismissReason={
-                  isAnswered && decision === "dismissed"
-                    ? (savedResponse?.dismissReason as string) ?? undefined
-                    : undefined
-                }
-                onApprove={async () => {
-                  onResolveRequest(requestId, { behavior: "allow" });
-                  // Create the suggested session and auto-switch to it
-                  const store = useSessionStore.getState();
-                  const currentSession = session;
-                  try {
-                    const newSid = await store.startSession({
-                      skillId: (p.skill as string) ?? undefined,
-                      specIds: (p.specIds as string[]) ?? [],
-                      prompt: (p.prompt as string) ?? undefined,
-                      name: (p.name as string) ?? "Suggested Session",
-                      config: {
-                        model: currentSession?.model ?? "sonnet",
-                        maxTurns: currentSession?.maxTurns ?? 50,
-                        permissionMode: currentSession?.permissionMode ?? "default",
-                        streamText: true,
-                        betas: currentSession?.betas ?? [],
-                        effort: currentSession?.effort ?? null,
-                      },
-                    });
-                    store.switchSession(newSid);
-                  } catch (err) {
-                    console.error("[SuggestionCard] Failed to start suggested session:", err);
-                  }
-                }}
-                onDismiss={(reason) =>
-                  onResolveRequest(requestId, {
-                    behavior: "deny",
-                    message: reason
-                      ? `Dismissed: ${reason}`
-                      : "Dismissed",
-                    dismissReason: reason ?? "",
-                  })
-                }
-              />
-            );
-          }
-
-          case "suggestDescription": {
-            const requestId = (p.requestId as string) ?? "";
-            const isAnswered = answeredRequests.has(requestId);
-            const savedResponse = answeredRequests.get(requestId) as Record<string, unknown> | undefined;
-            const decision = savedResponse?.behavior === "allow" ? "applied" as const : "dismissed" as const;
-            const descText = (p.description as string) ?? "";
-
-            return (
-              <DescriptionSuggestionCard
-                key={k}
-                description={descText}
-                section={(p.section as string) ?? undefined}
-                answered={isAnswered}
-                decision={isAnswered ? decision : undefined}
-                dismissReason={
-                  isAnswered && decision === "dismissed"
-                    ? (savedResponse?.dismissReason as string) ?? undefined
-                    : undefined
-                }
-                onApply={() => {
-                  onResolveRequest(requestId, { behavior: "allow" });
-                  onApplyDescription?.(descText);
-                }}
-                onDismiss={(reason) =>
-                  onResolveRequest(requestId, {
-                    behavior: "deny",
-                    message: reason
-                      ? `Dismissed: ${reason}`
-                      : "Dismissed",
-                    dismissReason: reason ?? "",
-                  })
-                }
-              />
-            );
-          }
-
-          case "turnComplete": {
-            return (
-              <SystemMessage
-                key={k}
-                text={`Turn complete \u2014 $${((p.turnCostUsd as number) ?? 0).toFixed(2)} \u00B7 ${(p.turn_turns as number) ?? 0} turns`}
-                variant="ok"
-              />
-            );
-          }
-
-          case "interrupted":
-            return (
-              <SystemMessage
-                key={k}
-                text="Turn interrupted"
-              />
-            );
-
-          case "done":
-            return (
-              <CompletionBanner
-                key={k}
-                costUsd={(p.costUsd as number) ?? undefined}
-                turns={(p.turns as number) ?? undefined}
-                durationMs={(p.durationMs as number) ?? undefined}
-              />
-            );
-
-          case "error":
-            return (
-              <ErrorBanner
-                key={k}
-                subtype={(p.subtype as string) ?? undefined}
-                errors={(p.errors as string[]) ?? undefined}
-              />
-            );
-
-          case "notification":
-            return (
-              <SystemMessage
-                key={k}
-                text={(p.message as string) ?? ""}
-              />
-            );
-
-          case "compact":
-            return (
-              <CompactMarker
-                key={k}
-                preTokens={(p.preTokens as number) ?? undefined}
-              />
-            );
-
-          case "permissionDenied":
-            return (
-              <div key={k} className="chat-banner chat-banner-warn">
-                Permission denied: {(p.toolName as string) ?? "action"}
-              </div>
-            );
-
-          case "requestResolved":
-            return null;
-
-          default:
-            return null;
-        }
+        return renderEvent(viewMode, ev, i, k, ctx);
       })}
 
       {!autoScroll.current && (
@@ -588,6 +309,25 @@ export const ChatStream = forwardRef<ChatStreamHandle, ChatStreamProps>(function
         >
           Jump to bottom
         </button>
+      )}
+
+      {ctxMenu && (
+        <SessionContextMenu
+          x={ctxMenu.x}
+          y={ctxMenu.y}
+          viewMode={viewMode}
+          onSwitchViewMode={handleSwitchViewMode}
+          onExpandAll={handleExpandAll}
+          onCollapseEvents={handleCollapseEvents}
+          onCollapseAll={handleCollapseAll}
+          onCopyTranscript={handleCopyTranscript}
+          onReviseAnswer={
+            ctxMenu.questionRequestId && answeredRequests.has(ctxMenu.questionRequestId)
+              ? handleReviseAnswer
+              : undefined
+          }
+          onClose={() => setCtxMenu(null)}
+        />
       )}
     </div>
   );

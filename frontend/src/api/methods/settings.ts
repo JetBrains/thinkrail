@@ -4,6 +4,7 @@ export interface ProjectSettings {
   default_model: string;
   default_effort: string;
   model_refresh_interval_hours: number;
+  event_view: string;
   [key: string]: unknown;
 }
 

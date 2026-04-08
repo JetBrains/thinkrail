@@ -9,7 +9,9 @@ import { ContextPanel } from "@/components/ContextPanel/ContextPanel.tsx";
 import { ResizeHandle } from "./ResizeHandle.tsx";
 import { SessionPanel } from "@/components/SessionPanel/SessionPanel.tsx";
 import { SessionManager } from "@/components/SessionManager/SessionManager.tsx";
+import { ViewModeProvider } from "@/context/ViewModeContext.tsx";
 import "@/components/ChatStream/ChatStream.css";
+import "@/components/ChatStream/compact.css";
 import "./AppShell.css";
 
 const LEFT_DEFAULT = 260;
@@ -69,18 +71,20 @@ export function AppShell({ onSwitchProject }: { onSwitchProject: () => void }) {
         )}
         <div className="center-panel">
           <Outlet />
-          {showSessionManager ? (
-            <>
-              <div className="sm-tab-bar">
-                <button className="sm-tab-back" onClick={handleCloseSessionManager}>
-                  {"\u2190"} Back to sessions
-                </button>
-              </div>
-              <SessionManager onClose={handleCloseSessionManager} />
-            </>
-          ) : (
-            <SessionPanel />
-          )}
+          <ViewModeProvider>
+            {showSessionManager ? (
+              <>
+                <div className="sm-tab-bar">
+                  <button className="sm-tab-back" onClick={handleCloseSessionManager}>
+                    {"\u2190"} Back to sessions
+                  </button>
+                </div>
+                <SessionManager onClose={handleCloseSessionManager} />
+              </>
+            ) : (
+              <SessionPanel />
+            )}
+          </ViewModeProvider>
         </div>
         {rightCollapsed ? (
           <button className="right-collapse-btn" onClick={toggleRight}

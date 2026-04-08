@@ -1,6 +1,6 @@
 # Chat UI Rendering — Sub-Specification
 
-> Parent: [CENTER_PANEL.md](CENTER_PANEL.md) | Status: **Active** | Created: 2026-02-27 | Updated: 2026-03-13
+> Parent: [CENTER_PANEL.md](CENTER_PANEL.md) | Status: **Active** | Created: 2026-02-27 | Updated: 2026-04-08
 
 ## Overview
 
@@ -1323,6 +1323,78 @@ RPC server
 | `blink` | `50% {opacity: 0}` | `.chat-cursor` |
 | `spin` | `to {transform: rotate(360deg)}` | `.chat-spinner`, `.ssl-status-spinner` |
 | `pulse` | (defined globally) | `.ssl-pulse`, `.session-tab-badge` |
+
+---
+
+## View Modes
+
+ChatStream supports multiple view modes, controlled by `event_view` in `.bonsai/settings.json`. The architecture uses a **renderer registry pattern**: pre-scan logic is shared, but each event type delegates to a view-specific renderer component.
+
+**Design:** [compact-event-view-design.md](../../docs/superpowers/specs/2026-04-08-compact-event-view-design.md) | **Task:** [feature_compact_event_view.md](../../current_tasks/frontend/feature_compact_event_view.md)
+
+### Architecture
+
+```
+ViewModeContext (React context, provided at SessionPanel level)
+  └── ChatStream.tsx
+      ├── Pre-scan (shared): toolStates, subagentChildren, approvalByToolIndex
+      └── renderEvent(mode, event, index, ctx)
+            └── viewRendererMap[mode][eventType] ?? viewRendererMap["classic"][eventType]
+```
+
+- **`context/ViewModeContext.tsx`** — `ViewMode` type union, context, `useViewMode()` hook
+- **`ChatStream/renderers/`** — renderer registry: `types.ts`, `classicRenderer.tsx`, `compactRenderer.tsx`, `registry.ts`
+- Classic fallback: unspecified event types in any mode fall back to classic rendering
+
+### Available Modes
+
+| Mode | Setting Value | Description |
+|------|---------------|-------------|
+| Classic | `"classic"` (default) | Current rendering — cards, full padding, separate approval events |
+| Compact | `"compact"` | Log-style lines, 2px padding, 1px gap, inlined approvals, right-aligned user messages |
+
+### Compact Mode Event Rendering
+
+| Event | Compact Rendering |
+|-------|-------------------|
+| `toolCallStart` (done) | `CompactToolLine`: icon + name + detail + optional approval badge + ✓/✗ |
+| `toolCallStart` (running) | Same, blue border, "running..." |
+| `confirmAction` (answered) | Suppressed — badge rendered on parent tool's `CompactToolLine` |
+| `confirmAction` (pending) | Full card (same as classic `ApprovalCard`) |
+| `askUserQuestion` (answered) | Log line: ❓ + "Question" + text + answer badge |
+| `askUserQuestion` (pending) | Full card (same as classic `QuestionCard`) |
+| `userMessage` | `CompactUserMessage`: right-aligned, "You" inline, single-line, click-to-expand |
+| `subagentStart` | Collapsible log header: toggle + ⚡ + type + tool count + status |
+| `subagentStart` (expanded) | Nested `CompactToolLine` at 10px font, indented with left border |
+| All others | Shared with classic (banners, vis, system messages, etc.) |
+
+### Approval-to-Tool Linking
+
+`confirmAction` events lack `toolUseId`. Pre-scan links them by **sequence + toolName**: when `confirmAction(toolName=X)` appears, it pairs with the next `toolCallStart(toolName=X)`.
+
+```typescript
+approvalByToolIndex: Map<number, ApprovalInfo>;  // toolCallStart event index → linked approval
+```
+
+---
+
+## Session Context Menu
+
+Right-click on the chat stream opens a `SessionContextMenu` component (fixed-position overlay at click coordinates).
+
+**Items:**
+
+| Item | Condition | Behavior |
+|------|-----------|----------|
+| Switch to [mode] view | Always | Toggles classic/compact via `settingsStore.updateSettings({ event_view })` |
+| Expand all | Always | Dispatches `bonsai:expandAll` CustomEvent on document |
+| Collapse all | Always | Dispatches `bonsai:collapseAll` CustomEvent on document |
+| Copy transcript | Always | Builds plain-text from events, writes to clipboard |
+| Revise answer | Right-click on answered QuestionCard | Sends user message asking agent to re-ask the question |
+
+**Expand/Collapse implementation:** `useExpandCollapse.ts` hook listens for `bonsai:expandAll` / `bonsai:collapseAll` on `document`. Used by ToolCallCard, SubagentBlock, CompactToolLine, CompactSubagent.
+
+**Question detection:** Answered QuestionCard renders `data-question-request-id={requestId}` on its root. `findQuestionRequestId()` walks up from click target to find it.
 
 ---
 

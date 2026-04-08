@@ -1,4 +1,5 @@
-import { lazy, Suspense, useState } from "react";
+import { lazy, Suspense, useState, useCallback } from "react";
+import { useExpandCollapse } from "./useExpandCollapse.ts";
 import type { AgentEvent } from "@/types/agent.ts";
 import type { VisData } from "@/types/vis.ts";
 import { ChatMarkdown } from "./ChatMarkdown.tsx";
@@ -41,11 +42,12 @@ export function SubagentBlock({
   toolStates,
 }: SubagentBlockProps) {
   const [expanded, setExpanded] = useState(false);
+  const expandRef = useExpandCollapse(useCallback((v: boolean) => setExpanded(v), []));
 
   const summary = buildSummary(childEvents);
 
   return (
-    <div className="chat-subagent">
+    <div ref={expandRef} className="chat-subagent">
       <div
         className="chat-subagent-header chat-subagent-header--clickable"
         onClick={() => setExpanded(!expanded)}

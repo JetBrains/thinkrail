@@ -698,10 +698,30 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
   },
 
   sendMessage: async (bonsaiSid, text, isMarkdown) => {
-    // If session is in draft status, auto-start it with this message
+    // If session is in draft status, auto-start it with this message.
+    // Start the session first (sessionStart event arrives via WebSocket during
+    // the RPC call), then add the userMessage so it appears after the config card.
     const session = get().sessions.get(bonsaiSid);
     if (session?.status === "draft") {
       await get().startDraft(bonsaiSid, text);
+      set((s) => {
+        const sess = s.sessions.get(bonsaiSid);
+        if (!sess) return s;
+        const next = new Map(s.sessions);
+        next.set(bonsaiSid, {
+          ...sess,
+          events: [
+            ...sess.events,
+            {
+              bonsaiSid,
+              sessionId: "",
+              eventType: "userMessage" as const,
+              payload: { text, isMarkdown: isMarkdown ?? false },
+            },
+          ],
+        });
+        return { sessions: next };
+      });
       return;
     }
 

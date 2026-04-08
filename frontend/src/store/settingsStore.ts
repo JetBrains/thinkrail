@@ -12,12 +12,13 @@ interface SettingsStore {
   refreshing: boolean;
 
   fetchSettings: () => Promise<void>;
+  updateSettings: (patch: Partial<ProjectSettings>) => Promise<void>;
   ensureFile: () => Promise<void>;
   fetchModels: () => Promise<void>;
   refreshModels: () => Promise<void>;
 }
 
-export const useSettingsStore = create<SettingsStore>((set) => ({
+export const useSettingsStore = create<SettingsStore>((set, get) => ({
   settings: null,
   models: null,
   refreshing: false,
@@ -29,6 +30,20 @@ export const useSettingsStore = create<SettingsStore>((set) => ({
       set({ settings });
     } catch (e) {
       console.error("Failed to fetch settings:", e);
+    }
+  },
+
+  updateSettings: async (patch) => {
+    const current = get().settings;
+    const merged = { ...current, ...patch } as ProjectSettings;
+    set({ settings: merged }); // optimistic update
+    try {
+      const api = createSettingsApi(getClient());
+      const saved = await api.update(merged);
+      set({ settings: saved });
+    } catch (e) {
+      console.error("Failed to update settings:", e);
+      set({ settings: current }); // rollback
     }
   },
 

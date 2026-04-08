@@ -2406,6 +2406,27 @@
       ],
       "created": "2026-03-28",
       "updated": "2026-03-28"
+    },
+    {
+      "id": "task-fe-compact-event-view",
+      "type": "task-spec",
+      "path": "current_tasks/frontend/feature_compact_event_view.md",
+      "title": "Compact Event View Mode",
+      "status": "active",
+      "covers": [
+        "frontend/src/components/ChatStream/",
+        "frontend/src/context/",
+        "backend/app/core/settings.py"
+      ],
+      "tags": [
+        "high",
+        "new-feature",
+        "frontend",
+        "ui",
+        "chat"
+      ],
+      "created": "2026-04-08",
+      "updated": "2026-04-08"
     }
   ],
   "links": [
@@ -3773,6 +3794,16 @@
       "from": "task-draft-session",
       "to": "draft-session-design",
       "type": "implements"
+    },
+    {
+      "from": "task-fe-compact-event-view",
+      "to": "chat-ui",
+      "type": "implements"
+    },
+    {
+      "from": "task-fe-compact-event-view",
+      "to": "design-doc",
+      "type": "parent"
     }
   ]
 }

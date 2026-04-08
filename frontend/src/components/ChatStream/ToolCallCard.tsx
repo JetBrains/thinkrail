@@ -1,7 +1,8 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { extractToolHeader, cleanToolName } from "./toolHeaderExtractors.ts";
 import { ToolInputDetail } from "./ToolInputDetail.tsx";
 import { ToolOutputBody } from "./ToolOutputBody.tsx";
+import { useExpandCollapse } from "./useExpandCollapse.ts";
 
 const TOOL_ICONS: Record<string, string> = {
   Read: "\u{1F4D6}",
@@ -45,6 +46,9 @@ export function ToolCallCard({
   compact = false,
 }: ToolCallCardProps) {
   const [expanded, setExpanded] = useState(false);
+  const expandRef = useExpandCollapse(useCallback((v: boolean) => {
+    if (state !== "running") setExpanded(v);
+  }, [state]));
 
   // Auto-expand when a tool call transitions to error state (live sessions)
   useEffect(() => {
@@ -71,7 +75,7 @@ export function ToolCallCard({
   const summaryText = header?.summary ?? toolInput ?? "";
 
   return (
-    <div className={`chat-tool${compact ? " chat-tool--compact" : ""}`} style={{ borderLeftColor: borderColor }}>
+    <div ref={expandRef} className={`chat-tool${compact ? " chat-tool--compact" : ""}`} style={{ borderLeftColor: borderColor }}>
       <div
         className="chat-tool-header"
         onClick={() => state !== "running" && setExpanded(!expanded)}

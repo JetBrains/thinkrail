@@ -12,6 +12,8 @@ interface QuestionCardProps {
   interrupted?: boolean;
   selectedAnswers?: Record<string, string>;
   onSubmit: (response: Record<string, unknown>) => void;
+  compact?: boolean;
+  requestId?: string;
 }
 
 export function QuestionCard({
@@ -20,6 +22,8 @@ export function QuestionCard({
   interrupted,
   selectedAnswers,
   onSubmit,
+  compact = false,
+  requestId,
 }: QuestionCardProps) {
   const [activeTab, setActiveTab] = useState(0);
   const [highlighted, setHighlighted] = useState<Record<number, number>>(() =>
@@ -187,10 +191,40 @@ export function QuestionCard({
     [activeTab, questions.length, optionCount, highlighted, handleOptionClick, handleSubmit],
   );
 
-  // Answered state
+  // Compact answered state: single log-line with answer badge
+  if (compact && answered && (selectedAnswers || interrupted)) {
+    const firstQ = questions[0];
+    const firstAnswer = selectedAnswers?.[firstQ?.question ?? ""];
+    const answerLabel = interrupted
+      ? "interrupted"
+      : firstAnswer
+        ? (firstAnswer.length > 40 ? firstAnswer.slice(0, 40) + "\u2026" : firstAnswer)
+        : "answered";
+    return (
+      <div className="compact-log" style={{ borderLeftColor: interrupted ? "var(--red)" : "var(--blue)" }} data-question-request-id={requestId}>
+        <span className="compact-log-icon">{"\u2753"}</span>
+        <span className="compact-log-name" style={{ color: "var(--blue)" }}>Question</span>
+        <span className="compact-log-detail">
+          {firstQ?.question ?? "Question"}
+          {questions.length > 1 ? ` (+${questions.length - 1} more)` : ""}
+        </span>
+        <span
+          className="compact-approval-badge"
+          style={{
+            background: interrupted ? "rgba(247, 118, 142, 0.12)" : "rgba(122, 162, 247, 0.12)",
+            color: interrupted ? "var(--red)" : "var(--blue)",
+          }}
+        >
+          {interrupted ? "\u2718" : ""} {answerLabel}
+        </span>
+      </div>
+    );
+  }
+
+  // Answered state (classic)
   if (answered && (selectedAnswers || interrupted)) {
     return (
-      <div className="chat-question chat-question-answered">
+      <div className="chat-question chat-question-answered" data-question-request-id={requestId}>
         <div className="chat-question-answered-header-row">
           <span className="chat-question-header">AskUserQuestion</span>
           <span className={`chat-question-answered-done${interrupted ? " chat-question-answered-interrupted" : ""}`}>

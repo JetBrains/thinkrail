@@ -1,4 +1,5 @@
 import { Component, useCallback, useEffect, useRef, useState } from "react";
+import { useExpandCollapse } from "./useExpandCollapse.ts";
 import type { ErrorInfo, ReactNode } from "react";
 import type {
   VisData,
@@ -406,10 +407,16 @@ export class VisErrorBoundary extends Component<
 interface VisualizationCardProps {
   data: VisData;
   collapsed?: boolean;
+  /** When true, the header is always clickable to toggle collapse (used in compact mode). */
+  compactMode?: boolean;
 }
 
-export function VisualizationCard({ data, collapsed = false }: VisualizationCardProps) {
+export function VisualizationCard({ data, collapsed = false, compactMode = false }: VisualizationCardProps) {
   const [isCollapsed, setIsCollapsed] = useState(collapsed);
+  const expandRef = useExpandCollapse(
+    useCallback((v: boolean) => setIsCollapsed(!v), []),
+    true, // isVisualization — ignores collapseEvents, only responds to expandAll/collapseAll
+  );
   const icon = VIS_ICONS[data?.type] ?? "\u{1F4CA}";
 
   if (!data?.type || !data?.data) {
@@ -436,6 +443,7 @@ export function VisualizationCard({ data, collapsed = false }: VisualizationCard
   if (isCollapsed) {
     return (
       <div
+        ref={expandRef}
         className={`vis-card vis-card--collapsed ${widthClass}`}
         onClick={() => setIsCollapsed(false)}
       >
@@ -448,11 +456,16 @@ export function VisualizationCard({ data, collapsed = false }: VisualizationCard
   }
 
   return (
-    <div className={`vis-card ${widthClass}`}>
-      <div className="vis-card-header" onClick={() => collapsed && setIsCollapsed(true)}>
+    <div ref={expandRef} className={`vis-card ${widthClass}`}>
+      <div
+        className="vis-card-header"
+        onClick={() => (collapsed || compactMode) && setIsCollapsed(true)}
+        style={{ cursor: (collapsed || compactMode) ? "pointer" : undefined }}
+      >
         <span className="vis-card-icon">{icon}</span>
         <span className="vis-card-title">{data.title ?? data.type}</span>
         <span className="vis-card-type">{data.type}</span>
+        {compactMode && <span className="vis-card-collapse-hint">{"\u25BC"}</span>}
       </div>
       <div
         className="vis-card-body"
