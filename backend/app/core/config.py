@@ -22,7 +22,7 @@ class ServerSettings(BaseSettings):
     )
 
     backend_port: int = 8080
-    backend_host: str = "127.0.0.1"
+    backend_host: str = "0.0.0.0"
 
 
 class AppConfig(BaseModel):

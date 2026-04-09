@@ -25,10 +25,12 @@ class TestLoadConfig:
         assert cfg.project_root == tmp_path
         assert cfg.bonsai_dir == tmp_path / ".bonsai"
 
-    def test_server_settings_reads_env(self) -> None:
-        srv = ServerSettings()
-        assert isinstance(srv.backend_port, int)
-        assert isinstance(srv.backend_host, str)
+    def test_server_settings_defaults(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.delenv("BACKEND_PORT", raising=False)
+        monkeypatch.delenv("BACKEND_HOST", raising=False)
+        srv = ServerSettings(_env_file=None)
+        assert srv.backend_port == 8080
+        assert srv.backend_host == "0.0.0.0"
 
     def test_discovers_root_when_not_given(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
         (tmp_path / ".bonsai").mkdir()
