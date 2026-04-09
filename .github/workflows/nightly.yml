@@ -10,6 +10,6 @@ jobs:
   build:
     uses: ./.github/workflows/build.yml
     with:
-      release_type: ${{ github.event_name == 'schedule' && 'nightly' || 'none' }}
-      tag_name: ${{ github.event_name == 'schedule' && 'nightly-latest' || '' }}
-      release_name: ${{ github.event_name == 'schedule' && 'Nightly Build' || '' }}
+      release_type: nightly
+      tag_name: nightly-latest
+      release_name: Nightly Build
