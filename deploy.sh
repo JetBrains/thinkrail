@@ -93,10 +93,13 @@ echo "Starting frontend on :$FRONTEND_PORT..."
 cd "$ROOT/frontend"
 npm run dev &
 
+LOCAL_IP=$(hostname -I 2>/dev/null | awk '{print $1}' || echo "unknown")
 echo ""
-echo "Backend:  http://localhost:$BACKEND_PORT"
 echo "Frontend: http://localhost:$FRONTEND_PORT"
+echo "          http://${LOCAL_IP}:$FRONTEND_PORT  (LAN)"
+echo "Backend:  http://localhost:$BACKEND_PORT"
 echo ""
+echo "For remote access, install Tailscale: https://tailscale.com/download"
 echo "Press Ctrl+C to stop."
 
 wait
