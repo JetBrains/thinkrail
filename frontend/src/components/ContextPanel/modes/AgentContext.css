@@ -8,17 +8,17 @@
   border-bottom: 1px solid var(--border);
   flex-shrink: 0;
 }
-.agent-context__pct { font-size: 16px; font-weight: 700; min-width: 42px; }
+.agent-context__pct { font-size: var(--font-xl); font-weight: 700; min-width: 42px; }
 .agent-context__pct-bar {
   flex: 1; height: 4px; background: var(--border); border-radius: 2px; overflow: hidden;
 }
 .agent-context__pct-fill { height: 100%; border-radius: 2px; transition: width 0.4s ease; }
-.agent-context__meta { font-size: 10px; color: var(--muted); white-space: nowrap; }
+.agent-context__meta { font-size: var(--font-sm); color: var(--muted); white-space: nowrap; }
 
 /* Token breakdown */
 .agent-context__breakdown { display: flex; flex-direction: column; gap: 3px; }
 .agent-context__breakdown-row {
-  display: flex; align-items: center; gap: var(--space-xs); font-size: 11px;
+  display: flex; align-items: center; gap: var(--space-xs); font-size: var(--font-md);
 }
 .agent-context__breakdown-dot {
   width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0;
@@ -42,11 +42,11 @@
 }
 .agent-context__turn-row {
   display: grid; grid-template-columns: 42px 1fr 1fr 50px;
-  gap: var(--space-xs); font-size: 10px; padding: 1px 0;
+  gap: var(--space-xs); font-size: var(--font-sm); padding: 1px 0;
   font-variant-numeric: tabular-nums;
 }
 .agent-context__turn-header {
-  color: var(--muted); font-weight: 600; font-size: 9px;
+  color: var(--muted); font-weight: 600; font-size: var(--font-sm);
   text-transform: uppercase; letter-spacing: 0.3px;
 }
 .agent-context__turn-row:not(.agent-context__turn-header):not(.agent-context__run-separator) { color: var(--text); }
@@ -56,15 +56,15 @@
 .agent-context__run-separator {
   display: flex; align-items: center; justify-content: center;
   padding: 3px 0; margin: 2px 0;
-  font-size: 9px; color: var(--muted); font-weight: 600;
+  font-size: var(--font-sm); color: var(--muted); font-weight: 600;
   letter-spacing: 0.3px;
   border-top: 1px dashed var(--border);
 }
 
 /* Turns summary (shown when SDK turns > exchanges) */
 .agent-context__turns-summary {
-  font-size: 9px; color: var(--hint); text-align: center;
-  padding: 4px 0 2px; border-top: 1px solid var(--border);
+  font-size: var(--font-sm); color: var(--hint); text-align: center;
+  padding: var(--space-xs) 0 2px; border-top: 1px solid var(--border);
   margin-top: 2px;
 }
 
@@ -75,11 +75,11 @@
 }
 .agent-context__tool-row {
   display: grid; grid-template-columns: 1fr 40px 56px 56px;
-  gap: var(--space-xs); font-size: 10px; padding: 1px 0;
+  gap: var(--space-xs); font-size: var(--font-sm); padding: 1px 0;
   font-variant-numeric: tabular-nums;
 }
 .agent-context__tool-header {
-  color: var(--muted); font-weight: 600; font-size: 9px;
+  color: var(--muted); font-weight: 600; font-size: var(--font-sm);
   text-transform: uppercase; letter-spacing: 0.3px;
 }
 .agent-context__tool-row:not(.agent-context__tool-header) { color: var(--text); }
@@ -90,21 +90,21 @@
 /* Files list */
 .agent-context__files { display: flex; flex-direction: column; gap: 1px; }
 .agent-context__file-label {
-  font-size: 9px; font-weight: 600; color: var(--muted); text-transform: uppercase;
+  font-size: var(--font-sm); font-weight: 600; color: var(--muted); text-transform: uppercase;
   margin-top: var(--space-xs); margin-bottom: 1px;
 }
 .agent-context__file-entry {
-  font-size: 10px; color: var(--cyan); overflow: hidden;
+  font-size: var(--font-sm); color: var(--cyan); overflow: hidden;
   text-overflow: ellipsis; white-space: nowrap; cursor: pointer;
   padding: 1px 0;
 }
 .agent-context__file-entry:hover { text-decoration: underline; }
-.agent-context__file-more { font-size: 10px; color: var(--hint); margin-top: 2px; }
+.agent-context__file-more { font-size: var(--font-sm); color: var(--hint); margin-top: 2px; }
 
 /* Cache stats */
 .agent-context__cache-row {
   display: flex; align-items: center; gap: var(--space-sm);
-  font-size: 11px; margin-bottom: 3px;
+  font-size: var(--font-md); margin-bottom: 3px;
 }
 .agent-context__cache-label { color: var(--muted); flex: 1; }
 .agent-context__cache-value { font-variant-numeric: tabular-nums; }
@@ -116,6 +116,6 @@
 
 /* Empty state */
 .agent-context__empty {
-  padding: var(--space-lg); font-size: 12px; color: var(--hint);
+  padding: var(--space-lg); font-size: var(--font-lg); color: var(--hint);
   text-align: center; font-style: italic;
 }

@@ -5,6 +5,7 @@ import { getClient } from "@/api/index.ts";
 import { createSpecApi } from "@/api/methods/specs.ts";
 import { createBoardApi } from "@/api/methods/board.ts";
 import { useMonacoTheme } from "@/components/MarkdownEditor/useMonacoTheme.ts";
+import { useFontSize } from "@/utils/fontScale.ts";
 import { MarkdownPreview } from "@/components/FileViewer/MarkdownPreview.tsx";
 import type { MetaTicket } from "@/types/board.ts";
 import type { SpecDetail } from "@/types/spec.ts";
@@ -76,6 +77,8 @@ export function TicketSpecView({ specId, specTitle, ticketId, ticket }: TicketSp
   const [selectedDiff, setSelectedDiff] = useState<number | null>(null);
   const [diffData, setDiffData] = useState<{ original: string; modified: string } | null>(null);
   const monacoTheme = useMonacoTheme();
+  const bodyFontSize = useFontSize("body");
+  const lgFontSize = useFontSize("lg");
 
   // Fetch spec content
   useEffect(() => {
@@ -221,7 +224,7 @@ export function TicketSpecView({ specId, specTitle, ticketId, ticket }: TicketSp
               minimap: { enabled: false },
               lineNumbers: "on",
               scrollBeyondLastLine: false,
-              fontSize: 13,
+              fontSize: bodyFontSize,
               fontFamily: "'JetBrains Mono', 'Fira Code', 'SF Mono', monospace",
               wordWrap: "on",
               automaticLayout: true,
@@ -264,7 +267,7 @@ export function TicketSpecView({ specId, specTitle, ticketId, ticket }: TicketSp
                         renderSideBySide: true,
                         minimap: { enabled: false },
                         scrollBeyondLastLine: false,
-                        fontSize: 12,
+                        fontSize: lgFontSize,
                         fontFamily: "'JetBrains Mono', 'Fira Code', 'SF Mono', monospace",
                         automaticLayout: true,
                       }}

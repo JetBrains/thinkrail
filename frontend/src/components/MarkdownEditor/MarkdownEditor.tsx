@@ -3,6 +3,7 @@ import Editor from "@monaco-editor/react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { useMonacoTheme } from "./useMonacoTheme.ts";
+import { useFontSize } from "@/utils/fontScale.ts";
 import "./MarkdownEditor.css";
 
 interface MarkdownEditorProps {
@@ -32,6 +33,7 @@ export function MarkdownEditor({
 }: MarkdownEditorProps) {
   const [mode, setMode] = useState<"edit" | "preview">(initialMode);
   const monacoTheme = useMonacoTheme();
+  const editorFontSize = useFontSize("body");
 
   return (
     <div className="markdown-editor">
@@ -62,7 +64,7 @@ export function MarkdownEditor({
               minimap: { enabled: minimap },
               lineNumbers,
               wordWrap: "on",
-              fontSize: 13,
+              fontSize: editorFontSize,
               fontFamily: "'JetBrains Mono', 'Fira Code', 'SF Mono', Menlo, Consolas, monospace",
               scrollBeyondLastLine: false,
               automaticLayout: true,

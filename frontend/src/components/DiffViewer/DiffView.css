@@ -7,6 +7,6 @@
   gap: var(--space-sm);
   color: var(--hint);
 }
-.diff-stub-icon { font-size: 32px; opacity: 0.5; }
-.diff-stub-title { font-size: 14px; font-weight: 500; }
-.diff-stub-text { font-size: 11px; text-align: center; line-height: 1.6; }
+.diff-stub-icon { font-size: calc(var(--font-base) * 2.46); opacity: 0.5; }
+.diff-stub-title { font-size: var(--font-lg2); font-weight: 500; }
+.diff-stub-text { font-size: var(--font-md); text-align: center; line-height: 1.6; }

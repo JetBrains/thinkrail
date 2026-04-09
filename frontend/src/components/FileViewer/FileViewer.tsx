@@ -2,6 +2,7 @@ import { useCallback, useState } from "react";
 import Editor from "@monaco-editor/react";
 import { useFileStore, type OpenFile } from "@/store/fileStore.ts";
 import { useMonacoTheme } from "@/components/MarkdownEditor/useMonacoTheme.ts";
+import { useFontSize } from "@/utils/fontScale.ts";
 import { detectLanguage, languageLabel } from "./languageMap.ts";
 import { EditDropdown } from "./EditDropdown.tsx";
 import { MarkdownPreview } from "./MarkdownPreview.tsx";
@@ -15,6 +16,7 @@ export function FileViewer({ file }: { file: OpenFile }) {
   const [showDropdown, setShowDropdown] = useState(false);
   const [copied, setCopied] = useState(false);
   const monacoTheme = useMonacoTheme();
+  const editorFontSize = useFontSize("body");
 
   const handleEditInPlace = useCallback(() => {
     setMode(file.path, "edit");
@@ -132,7 +134,7 @@ export function FileViewer({ file }: { file: OpenFile }) {
             minimap: { enabled: true },
             lineNumbers: "on",
             scrollBeyondLastLine: false,
-            fontSize: 13,
+            fontSize: editorFontSize,
             fontFamily: "'JetBrains Mono', 'Fira Code', 'SF Mono', monospace",
             renderLineHighlight: "all",
             bracketPairColorization: { enabled: true },

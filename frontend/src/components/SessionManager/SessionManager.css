@@ -12,7 +12,7 @@
 }
 
 .sm-title {
-  font-size: 14px;
+  font-size: var(--font-lg2);
   font-weight: 600;
   margin: 0;
 }
@@ -21,7 +21,7 @@
   border: none;
   background: transparent;
   color: var(--muted);
-  font-size: 16px;
+  font-size: var(--font-xl);
   cursor: pointer;
   padding: var(--space-xs);
   border-radius: var(--radius-sm);
@@ -30,7 +30,7 @@
 
 .sm-loading, .sm-empty {
   color: var(--hint);
-  font-size: 12px;
+  font-size: var(--font-lg);
   font-style: italic;
   text-align: center;
   padding: var(--space-xl);
@@ -39,7 +39,7 @@
 /* Groups */
 .sm-group { margin-bottom: var(--space-lg); }
 .sm-group-label {
-  font-size: 10px;
+  font-size: var(--font-sm);
   text-transform: uppercase;
   letter-spacing: 0.5px;
   color: var(--hint);
@@ -63,16 +63,16 @@
   display: flex;
   align-items: center;
   gap: var(--space-sm);
-  font-size: 12px;
+  font-size: var(--font-lg);
 }
 
 .sm-badge {
-  font-size: 9px;
+  font-size: var(--font-sm);
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.3px;
-  padding: 1px 6px;
-  border-radius: 3px;
+  padding: 1px var(--space-sm);
+  border-radius: var(--radius-sm);
   flex-shrink: 0;
 }
 .badge-initializing { background: var(--blue); color: #fff; }
@@ -91,14 +91,14 @@
 
 .sm-card-time {
   color: var(--hint);
-  font-size: 10px;
+  font-size: var(--font-sm);
   flex-shrink: 0;
 }
 
 .sm-card-meta {
   display: flex;
   gap: var(--space-sm);
-  font-size: 10px;
+  font-size: var(--font-sm);
   color: var(--muted);
   margin-top: 2px;
 }
@@ -116,7 +116,7 @@
   background: transparent;
   color: var(--muted);
   font-family: var(--font);
-  font-size: 11px;
+  font-size: var(--font-md);
   cursor: pointer;
   transition: all var(--transition-fast);
 }
@@ -142,7 +142,7 @@
 
 .sm-error {
   color: var(--red);
-  font-size: 12px;
+  font-size: var(--font-lg);
   padding: var(--space-sm) var(--space-md);
   background: rgba(247, 84, 100, 0.1);
   border-radius: var(--radius-sm);

@@ -193,7 +193,7 @@ export function TicketSession({ ticket, embeddedSid, onSessionStarted }: TicketS
     <div className="ticket-session">
       <div className="ticket-session-header">
         <span className="ticket-session-title">Session: {session.name}</span>
-        <span style={{ fontSize: 10, color: status === "running" ? "var(--blue)" : "var(--hint)" }}>
+        <span style={{ fontSize: "var(--font-sm)", color: status === "running" ? "var(--blue)" : "var(--hint)" }}>
           {status}
         </span>
       </div>

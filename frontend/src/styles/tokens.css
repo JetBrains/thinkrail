@@ -1,12 +1,22 @@
 /*
- * Bonsai Design Tokens — JetBrains-inspired
+ * Bonsai Design Tokens — Settings-Driven Scale
  *
- * Semantic CSS variables consumed by all components.
- * Values are set per-theme in theme-dark.css / theme-light.css.
- * Accent colors are shared across themes.
+ * All font sizes, spacing, and radii derive from --font-base via calc() ratios.
+ * --font-base is set by JS from .bonsai/settings.json (default: 13px).
+ *
+ * IMPORTANT: CSS custom properties resolve var() at definition, not at use.
+ * If you add/change a derived token here, you MUST also update the matching
+ * block in compact.css (.chat-stream--compact) so compact mode recalculates
+ * with its own --font-base.
+ *
+ * Accent colors are shared across themes; semantic colors set per-theme.
  */
 
 :root {
+  /* ── Base (set by JS from settings.json via applyFontScale()) ── */
+  --font-base: 13px;
+  --compact-font-base: 9px;
+
   /* ── Accent colors (JetBrains brand palette) ── */
   --blue: #3B74EE;
   --purple: #6B57FF;
@@ -15,22 +25,30 @@
   --gold: #E8A336;
   --cyan: #087CFA;
 
+  /* ── Font scale (ratios of --font-base) ── */
+  --font-xs:   calc(var(--font-base) * 0.69);
+  --font-sm:   calc(var(--font-base) * 0.77);
+  --font-md:   calc(var(--font-base) * 0.85);
+  --font-lg:   calc(var(--font-base) * 0.92);
+  --font-body: var(--font-base);
+  --font-lg2:  calc(var(--font-base) * 1.15);
+  --font-xl:   calc(var(--font-base) * 1.31);
+
   /* ── Typography ── */
   --font: "JetBrains Mono", "Fira Code", "SF Mono", "Cascadia Code", monospace;
-  --font-size: 13px;
   --line-height: 1.6;
 
-  /* ── Spacing ── */
-  --space-xs: 4px;
-  --space-sm: 8px;
-  --space-md: 12px;
-  --space-lg: 16px;
-  --space-xl: 24px;
+  /* ── Spacing scale (ratios of --font-base) ── */
+  --space-xs: calc(var(--font-base) * 0.31);
+  --space-sm: calc(var(--font-base) * 0.62);
+  --space-md: calc(var(--font-base) * 0.92);
+  --space-lg: calc(var(--font-base) * 1.23);
+  --space-xl: calc(var(--font-base) * 1.85);
 
-  /* ── Radii ── */
-  --radius-sm: 4px;
-  --radius-md: 6px;
-  --radius-lg: 8px;
+  /* ── Radii scale (ratios of --font-base) ── */
+  --radius-sm: calc(var(--font-base) * 0.31);
+  --radius-md: calc(var(--font-base) * 0.46);
+  --radius-lg: calc(var(--font-base) * 0.62);
 
   /* ── Transitions ── */
   --transition-fast: 120ms ease;

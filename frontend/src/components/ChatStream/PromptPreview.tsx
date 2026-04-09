@@ -4,6 +4,7 @@ import remarkGfm from "remark-gfm";
 import type { PromptSection } from "@/types/session.ts";
 import { detectLanguage } from "@/components/FileViewer/languageMap.ts";
 import { useMonacoTheme } from "@/components/MarkdownEditor/useMonacoTheme.ts";
+import { useFontSize } from "@/utils/fontScale.ts";
 import { useUiStore } from "@/store/uiStore.ts";
 import "./PromptPreview.css";
 
@@ -39,6 +40,7 @@ function SectionContent({ content }: { content: string }) {
 
 function FilePreviewContent({ name, preview, path }: { name: string; preview: string; path: string }) {
   const monacoTheme = useMonacoTheme();
+  const editorFontSize = useFontSize("md");
   const projectPath = useUiStore((s) => s.projectPath);
 
   if (isImageFile(name)) {
@@ -75,7 +77,7 @@ function FilePreviewContent({ name, preview, path }: { name: string; preview: st
             lineNumbers: "on",
             scrollBeyondLastLine: false,
             folding: false,
-            fontSize: 11,
+            fontSize: editorFontSize,
             renderLineHighlight: "none",
             overviewRulerLanes: 0,
             hideCursorInOverviewRuler: true,

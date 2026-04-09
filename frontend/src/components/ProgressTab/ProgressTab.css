@@ -5,7 +5,7 @@
 }
 
 .progress-section-header {
-  font-size: 10px;
+  font-size: var(--font-sm);
   text-transform: uppercase;
   letter-spacing: 0.5px;
   color: var(--hint);
@@ -23,19 +23,19 @@
   flex: 1;
   height: 6px;
   background: var(--border);
-  border-radius: 3px;
+  border-radius: var(--radius-sm);
   overflow: hidden;
 }
 
 .progress-bar-fill {
   height: 100%;
   background: var(--green);
-  border-radius: 3px;
+  border-radius: var(--radius-sm);
   transition: width 0.3s ease;
 }
 
 .progress-pct {
-  font-size: 12px;
+  font-size: var(--font-lg);
   color: var(--text);
   font-weight: 600;
   min-width: 32px;
@@ -45,7 +45,7 @@
 .progress-stats {
   display: flex;
   gap: var(--space-md);
-  font-size: 11px;
+  font-size: var(--font-md);
   color: var(--muted);
   margin-top: var(--space-xs);
 }
@@ -56,7 +56,7 @@
 
 .progress-empty {
   color: var(--hint);
-  font-size: 11px;
+  font-size: var(--font-md);
   font-style: italic;
 }
 
@@ -73,7 +73,7 @@
   display: flex;
   align-items: center;
   gap: var(--space-sm);
-  font-size: 12px;
+  font-size: var(--font-lg);
 }
 
 .session-card-dot {
@@ -91,19 +91,19 @@
 }
 
 .session-card-status {
-  font-size: 10px;
+  font-size: var(--font-sm);
   color: var(--hint);
 }
 
 .session-card-metrics {
-  font-size: 10px;
+  font-size: var(--font-sm);
   color: var(--muted);
   margin-top: var(--space-xs);
 }
 
 /* Cost */
 .cost-display {
-  font-size: 12px;
+  font-size: var(--font-lg);
   color: var(--text);
 }
 
@@ -120,17 +120,17 @@
   display: flex;
   align-items: center;
   gap: var(--space-sm);
-  font-size: 11px;
+  font-size: var(--font-md);
   padding: 2px 0;
 }
 
 .timeline-time {
   color: var(--hint);
-  font-size: 10px;
+  font-size: var(--font-sm);
   min-width: 40px;
 }
 
-.timeline-icon { font-size: 12px; }
+.timeline-icon { font-size: var(--font-lg); }
 
 .timeline-label {
   color: var(--muted);

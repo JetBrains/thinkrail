@@ -23,7 +23,7 @@
   border-bottom: 1px solid var(--border);
 }
 .draft-config-name-input {
-  font-size: 13px;
+  font-size: var(--font-body);
   font-weight: 500;
   color: var(--text);
   background: transparent;
@@ -47,8 +47,8 @@
   font-style: italic;
 }
 .draft-config-badge {
-  font-size: 10px;
-  padding: 1px 6px;
+  font-size: var(--font-sm);
+  padding: 1px var(--space-sm);
   border-radius: var(--radius-sm);
   background: rgba(232, 163, 54, 0.15);
   color: var(--gold);
@@ -56,7 +56,7 @@
   letter-spacing: 0.5px;
 }
 .draft-config-updating {
-  font-size: 10px;
+  font-size: var(--font-sm);
   color: var(--muted);
   margin-left: auto;
   font-style: italic;
@@ -70,7 +70,7 @@
 }
 .draft-config-label {
   color: var(--hint);
-  font-size: 10px;
+  font-size: var(--font-sm);
   text-transform: uppercase;
   letter-spacing: 0.5px;
   width: 44px;
@@ -88,16 +88,16 @@
 }
 .draft-config-muted {
   color: var(--muted);
-  font-size: 11px;
+  font-size: var(--font-md);
   font-style: italic;
 }
 
 .draft-config-pill {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
-  font-size: 11px;
-  padding: 2px 8px;
+  gap: var(--space-xs);
+  font-size: var(--font-md);
+  padding: 2px var(--space-sm);
   border-radius: var(--radius-sm);
   background: var(--surface);
 }
@@ -106,7 +106,7 @@
   border: none;
   color: var(--muted);
   cursor: pointer;
-  font-size: 12px;
+  font-size: var(--font-lg);
   padding: 0 2px;
   line-height: 1;
   opacity: 0.6;
@@ -121,8 +121,8 @@
   border: none;
   color: var(--blue);
   cursor: pointer;
-  font-size: 11px;
-  padding: 2px 6px;
+  font-size: var(--font-md);
+  padding: 2px var(--space-sm);
   border-radius: var(--radius-sm);
   font-family: inherit;
 }
@@ -131,7 +131,7 @@
 }
 .draft-config-action--dashed {
   border: 1px dashed var(--border);
-  padding: 2px 8px;
+  padding: 2px var(--space-sm);
   border-radius: var(--radius-sm);
 }
 .draft-config-action--dashed:hover {
@@ -157,19 +157,19 @@
 .draft-config-inline {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
+  gap: var(--space-xs);
 }
 .draft-config-hint {
   color: var(--muted);
-  font-size: 10px;
+  font-size: var(--font-sm);
 }
 .draft-config-select {
   background: var(--surface);
   color: var(--text);
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
-  padding: 2px 6px;
-  font-size: 11px;
+  padding: 2px var(--space-sm);
+  font-size: var(--font-md);
   font-family: inherit;
   cursor: pointer;
 }
@@ -187,9 +187,9 @@
   background: var(--surface);
   border: none;
   color: var(--text);
-  padding: 2px 8px;
+  padding: 2px var(--space-sm);
   border-radius: var(--radius-sm);
-  font-size: 10px;
+  font-size: var(--font-sm);
   font-family: inherit;
   cursor: pointer;
 }
@@ -204,8 +204,8 @@
 .draft-config-checkbox {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
-  font-size: 10px;
+  gap: var(--space-xs);
+  font-size: var(--font-sm);
   color: var(--muted);
   cursor: pointer;
 }
@@ -223,7 +223,7 @@
   border: none;
   color: var(--muted);
   cursor: pointer;
-  font-size: 12px;
+  font-size: var(--font-lg);
   padding: var(--space-xs) var(--space-sm);
   border-radius: var(--radius-sm);
   font-family: inherit;
@@ -233,7 +233,7 @@
   color: var(--text);
 }
 .draft-config-prompt-size {
-  font-size: 10px;
+  font-size: var(--font-sm);
   margin-left: var(--space-xs);
   opacity: 0.7;
 }
@@ -247,7 +247,7 @@
   background: var(--surface);
 }
 .draft-config-prompt-body pre {
-  font-size: 11px;
+  font-size: var(--font-md);
   white-space: pre-wrap;
   word-break: break-word;
   margin: 0;
@@ -259,7 +259,7 @@
   margin: 0;
 }
 .draft-config-name {
-  font-size: 13px;
+  font-size: var(--font-body);
   font-weight: 500;
   color: var(--text);
 }
@@ -288,7 +288,7 @@
   border: 1px solid var(--border);
   padding: var(--space-sm) var(--space-xl);
   border-radius: var(--radius-md);
-  font-size: 13px;
+  font-size: var(--font-body);
   font-family: inherit;
   cursor: pointer;
 }
@@ -301,7 +301,7 @@
   border: none;
   padding: var(--space-sm) var(--space-xl);
   border-radius: var(--radius-md);
-  font-size: 13px;
+  font-size: var(--font-body);
   font-family: inherit;
   cursor: pointer;
   font-weight: 500;

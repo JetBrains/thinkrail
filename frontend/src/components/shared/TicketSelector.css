@@ -7,7 +7,7 @@
   background: transparent;
   color: var(--text);
   font-family: var(--font);
-  font-size: 12px;
+  font-size: var(--font-lg);
   outline: none;
 }
 .ticket-selector-search::placeholder { color: var(--hint); }
@@ -16,18 +16,18 @@
   display: flex; justify-content: space-between; align-items: center;
   width: 100%; padding: var(--space-sm) var(--space-md);
   border: none; background: transparent;
-  color: var(--text); font-family: var(--font); font-size: 12px;
+  color: var(--text); font-family: var(--font); font-size: var(--font-lg);
   cursor: pointer; text-align: left;
 }
 .ticket-selector-item:hover { background: var(--hover); }
 .ticket-selector-item-selected { background: rgba(122, 162, 247, 0.07); }
 .ticket-selector-item-title { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .ticket-selector-item-meta { display: flex; gap: var(--space-xs); align-items: center; flex-shrink: 0; margin-left: var(--space-sm); }
-.ticket-selector-status { font-size: 10px; padding: 1px 4px; border-radius: 3px; background: var(--elevated); color: var(--hint); }
+.ticket-selector-status { font-size: var(--font-sm); padding: 1px var(--space-xs); border-radius: var(--radius-sm); background: var(--elevated); color: var(--hint); }
 .ticket-selector-status--idea { color: var(--hint); }
 .ticket-selector-status--specified { color: var(--blue); }
 .ticket-selector-status--planned { color: var(--green); }
 .ticket-selector-status--executing { color: var(--gold); }
 .ticket-selector-status--done { color: var(--muted); }
-.ticket-selector-type { font-size: 10px; color: var(--hint); }
-.ticket-selector-empty { padding: var(--space-md); color: var(--hint); font-size: 12px; text-align: center; }
+.ticket-selector-type { font-size: var(--font-sm); color: var(--hint); }
+.ticket-selector-empty { padding: var(--space-md); color: var(--hint); font-size: var(--font-lg); text-align: center; }

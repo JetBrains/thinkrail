@@ -19,27 +19,27 @@
   border: none; border-bottom: 1px solid var(--border);
   background: transparent;
   color: var(--text); font-family: var(--font);
-  font-size: 14px; outline: none;
+  font-size: var(--font-lg2); outline: none;
 }
 .palette-input::placeholder { color: var(--hint); }
 .palette-results { flex: 1; overflow-y: auto; padding: var(--space-xs) 0; }
-.palette-empty { padding: var(--space-lg); text-align: center; color: var(--hint); font-size: 12px; }
+.palette-empty { padding: var(--space-lg); text-align: center; color: var(--hint); font-size: var(--font-lg); }
 .palette-item {
   display: flex; align-items: center; justify-content: space-between;
   width: 100%; padding: var(--space-sm) var(--space-lg);
   border: none; background: transparent;
-  color: var(--text); font-family: var(--font); font-size: 12px;
+  color: var(--text); font-family: var(--font); font-size: var(--font-lg);
   cursor: pointer; text-align: left;
 }
 .palette-item:hover, .palette-item-selected { background: var(--hover); }
 .palette-item-badge {
-  font-size: 10px; color: var(--hint);
-  padding: 1px 6px; border: 1px solid var(--border);
-  border-radius: 3px;
+  font-size: var(--font-sm); color: var(--hint);
+  padding: 1px var(--space-sm); border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
 }
 .palette-footer {
   display: flex; gap: var(--space-lg);
   padding: var(--space-sm) var(--space-lg);
   border-top: 1px solid var(--border);
-  font-size: 10px; color: var(--hint);
+  font-size: var(--font-sm); color: var(--hint);
 }

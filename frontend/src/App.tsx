@@ -9,6 +9,7 @@ import { useVisStore } from "@/store/visStore.ts";
 import { useBoardStore } from "@/store/boardStore.ts";
 import { useSettingsStore } from "@/store/settingsStore.ts";
 import { registerKeyboardShortcuts } from "@/utils/keyboard.ts";
+import { applyFontScale } from "@/utils/fontScale.ts";
 import { CommandPalette } from "@/components/CommandPalette/CommandPalette.tsx";
 import { ToastContainer } from "@/components/Notifications/ToastContainer.tsx";
 import { AppRoutes } from "./routes.tsx";
@@ -78,6 +79,14 @@ function AppInner({ projectPath: _projectPath, onSwitchProject }: { projectPath:
     window.addEventListener("resize", onResize);
     return () => window.removeEventListener("resize", onResize);
   }, []);
+
+  // Apply font scale from settings (use separate primitive selectors to avoid infinite loop)
+  const fontSize = useSettingsStore((s) => s.settings?.font_size ?? 13);
+  const compactFontSize = useSettingsStore((s) => s.settings?.compact_font_size ?? 9);
+
+  useEffect(() => {
+    applyFontScale(fontSize, compactFontSize);
+  }, [fontSize, compactFontSize]);
 
   return (
     <BrowserRouter>

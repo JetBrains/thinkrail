@@ -1,17 +1,17 @@
 .covered-files__item {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--space-sm);
   width: 100%;
-  padding: 3px 8px;
+  padding: 3px var(--space-sm);
   border: none;
   background: none;
   color: var(--muted);
-  font-size: 11px;
+  font-size: var(--font-md);
   font-family: var(--font-mono);
   text-align: left;
   cursor: pointer;
-  border-radius: 3px;
+  border-radius: var(--radius-sm);
   transition: background 80ms;
 }
 
@@ -22,7 +22,7 @@
 
 .covered-files__icon {
   flex-shrink: 0;
-  font-size: 12px;
+  font-size: var(--font-lg);
 }
 
 .covered-files__path {

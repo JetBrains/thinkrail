@@ -21,7 +21,7 @@ function WorkflowSection({ steps }: { steps: WorkflowStep[] }) {
       <div className="vis-tab-heading">Workflow</div>
       {steps.map((step) => (
         <div key={step.id} className="vis-tab-workflow-step">
-          <span style={{ color: STEP_COLORS[step.status], fontSize: 11 }}>
+          <span style={{ color: STEP_COLORS[step.status], fontSize: "var(--font-md)" }}>
             {STEP_ICONS[step.status]}
           </span>
           <span

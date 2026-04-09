@@ -12,7 +12,7 @@
   background: color-mix(in srgb, var(--elevated) 40%, transparent);
   color: var(--text);
   font-family: var(--font);
-  font-size: 11px;
+  font-size: var(--font-md);
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.5px;
@@ -25,7 +25,7 @@
 }
 
 .collapsible-section__chevron {
-  font-size: 8px;
+  font-size: var(--font-sm);
   color: var(--muted);
   width: 12px;
   text-align: center;
@@ -38,18 +38,18 @@
 }
 
 .collapsible-section__count {
-  font-size: 10px;
+  font-size: var(--font-sm);
   font-weight: 600;
   color: var(--muted);
   background: var(--elevated);
-  padding: 1px 6px;
+  padding: 1px var(--space-sm);
   border-radius: var(--radius-sm);
   min-width: 18px;
   text-align: center;
 }
 
 .collapsible-section__summary {
-  font-size: 10px;
+  font-size: var(--font-sm);
   font-weight: 400;
   color: var(--hint);
   margin-left: auto;
@@ -60,7 +60,7 @@
 }
 
 .collapsible-section__expand {
-  font-size: 12px;
+  font-size: var(--font-lg);
   color: var(--hint);
   padding: 2px var(--space-xs);
   border-radius: var(--radius-sm);

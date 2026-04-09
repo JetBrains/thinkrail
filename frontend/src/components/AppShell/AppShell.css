@@ -58,7 +58,7 @@
   align-items: center;
   gap: var(--space-xs);
   color: var(--muted);
-  font-size: 12px;
+  font-size: var(--font-lg);
 }
 
 .session-dot {
@@ -87,7 +87,7 @@
   background: transparent;
   color: var(--muted);
   font-family: var(--font);
-  font-size: 12px;
+  font-size: var(--font-lg);
   cursor: pointer;
   transition: all var(--transition-fast);
 }
@@ -143,7 +143,7 @@
   background: transparent;
   color: var(--muted);
   font-family: var(--font);
-  font-size: 12px;
+  font-size: var(--font-lg);
   cursor: pointer;
   transition: all var(--transition-fast);
 }
@@ -198,7 +198,7 @@
   background: transparent;
   color: var(--hint);
   font-family: var(--font);
-  font-size: 11px;
+  font-size: var(--font-md);
   cursor: pointer;
   transition: all var(--transition-fast);
   text-transform: uppercase;
@@ -229,7 +229,7 @@
 
 .panel-placeholder {
   color: var(--hint);
-  font-size: 12px;
+  font-size: var(--font-lg);
   text-align: center;
   padding: var(--space-xl);
 }
@@ -243,7 +243,7 @@
   padding: 0 var(--space-lg);
   background: var(--panel);
   border-top: 1px solid var(--border);
-  font-size: 11px;
+  font-size: var(--font-md);
   color: var(--hint);
   flex-shrink: 0;
 }
@@ -268,7 +268,7 @@
   background: transparent;
   color: var(--gold);
   font-family: var(--font);
-  font-size: 11px;
+  font-size: var(--font-md);
   cursor: pointer;
   padding: 0;
 }
@@ -280,24 +280,24 @@
   min-width: 220px;
   background: var(--panel);
   border: 1px solid var(--border);
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   box-shadow: 0 -2px 8px rgba(0,0,0,.25);
-  padding: 4px 0;
+  padding: var(--space-xs) 0;
   z-index: 100;
-  margin-bottom: 4px;
+  margin-bottom: var(--space-xs);
 }
 .status-attn-item {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--space-sm);
   width: 100%;
   border: none;
   background: transparent;
   color: var(--fg);
   font: inherit;
-  padding: 4px 8px;
+  padding: var(--space-xs) var(--space-sm);
   cursor: pointer;
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
   text-align: left;
 }
 .status-attn-item:hover { background: var(--hover); }
@@ -305,8 +305,8 @@
 .status-attn-badge {
   font-size: 0.75em;
   font-weight: 600;
-  padding: 1px 5px;
-  border-radius: 3px;
+  padding: 1px var(--space-sm);
+  border-radius: var(--radius-sm);
   color: var(--bg);
 }
 .status-attn-badge--question { background: var(--purple); }
@@ -328,7 +328,7 @@
   background: transparent;
   color: var(--blue);
   font-family: var(--font);
-  font-size: 12px;
+  font-size: var(--font-lg);
   cursor: pointer;
   padding: var(--space-xs) var(--space-sm);
   border-radius: var(--radius-sm);
@@ -340,7 +340,7 @@
   background: transparent;
   color: var(--blue);
   font-family: var(--font);
-  font-size: 11px;
+  font-size: var(--font-md);
   cursor: pointer;
   padding: 0;
 }
@@ -366,30 +366,30 @@
   min-width: 220px;
   background: var(--panel);
   border: 1px solid var(--border);
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   box-shadow: 0 -2px 8px rgba(0,0,0,.25);
-  padding: 4px 0;
+  padding: var(--space-xs) 0;
   z-index: 100;
-  margin-bottom: 4px;
+  margin-bottom: var(--space-xs);
 }
 .status-bg-item {
   display: flex;
   align-items: center;
-  gap: 4px;
-  padding: 0 4px;
+  gap: var(--space-xs);
+  padding: 0 var(--space-xs);
 }
 .status-bg-restore {
   flex: 1;
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--space-sm);
   border: none;
   background: transparent;
   color: var(--fg);
   font: inherit;
-  padding: 4px 6px;
+  padding: var(--space-xs) var(--space-sm);
   cursor: pointer;
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
   text-align: left;
 }
 .status-bg-restore:hover { background: var(--hover); }
@@ -412,15 +412,15 @@
   background: transparent;
   color: var(--hint);
   cursor: pointer;
-  padding: 2px 4px;
-  border-radius: 3px;
+  padding: 2px var(--space-xs);
+  border-radius: var(--radius-sm);
   font-size: 0.8em;
 }
 .status-bg-end:hover { background: var(--hover); color: var(--red); }
 .status-bg-divider {
   height: 1px;
   background: var(--border);
-  margin: 4px 0;
+  margin: var(--space-xs) 0;
 }
 .status-bg-manage {
   display: block;
@@ -430,10 +430,10 @@
   color: var(--hint);
   font: inherit;
   font-size: 0.85em;
-  padding: 4px 8px;
+  padding: var(--space-xs) var(--space-sm);
   cursor: pointer;
   text-align: center;
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
 }
 .status-bg-manage:hover { background: var(--hover); color: var(--fg); }
 
@@ -451,7 +451,7 @@
   border-left: 1px solid var(--border);
   background: var(--panel);
   color: var(--hint);
-  font-size: 10px;
+  font-size: var(--font-sm);
   cursor: pointer;
   padding: 0;
   display: flex;

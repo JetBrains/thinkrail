@@ -32,14 +32,14 @@
   border: none;
   background: transparent;
   color: var(--hint);
-  font-size: 20px;
+  font-size: var(--font-xl);
   cursor: pointer;
   line-height: 1;
 }
 .picker-close:hover { color: var(--text); }
 
 .picker-logo {
-  font-size: 24px;
+  font-size: var(--font-xl);
   font-weight: 700;
   color: var(--purple);
   text-align: center;
@@ -49,7 +49,7 @@
 .picker-subtitle {
   text-align: center;
   color: var(--hint);
-  font-size: 12px;
+  font-size: var(--font-lg);
   margin-bottom: var(--space-xl);
 }
 
@@ -59,7 +59,7 @@
 
 .picker-label {
   display: block;
-  font-size: 10px;
+  font-size: var(--font-sm);
   text-transform: uppercase;
   letter-spacing: 0.5px;
   color: var(--hint);
@@ -135,7 +135,7 @@
   background: transparent;
   color: var(--text);
   font-family: var(--font);
-  font-size: 12px;
+  font-size: var(--font-lg);
   text-align: left;
   cursor: pointer;
   transition: background 60ms ease;
@@ -147,13 +147,13 @@
 }
 
 .picker-suggestion-icon {
-  font-size: 13px;
+  font-size: var(--font-body);
   flex-shrink: 0;
 }
 
 .picker-error {
   color: var(--red);
-  font-size: 12px;
+  font-size: var(--font-lg);
   margin-bottom: var(--space-md);
   padding: var(--space-sm) var(--space-md);
   background: rgba(247, 118, 142, 0.1);
@@ -174,7 +174,7 @@
   background: transparent;
   color: var(--muted);
   font-family: var(--font);
-  font-size: 12px;
+  font-size: var(--font-lg);
   cursor: pointer;
   transition: all var(--transition-fast);
 }
@@ -194,7 +194,7 @@
 }
 
 .picker-recents-label {
-  font-size: 10px;
+  font-size: var(--font-sm);
   text-transform: uppercase;
   letter-spacing: 0.5px;
   color: var(--hint);
@@ -218,13 +218,13 @@
 .picker-recent-item:hover { background: var(--hover); }
 
 .picker-recent-name {
-  font-size: 12px;
+  font-size: var(--font-lg);
   color: var(--text);
   font-weight: 500;
 }
 
 .picker-recent-path {
-  font-size: 10px;
+  font-size: var(--font-sm);
   color: var(--hint);
   overflow: hidden;
   text-overflow: ellipsis;

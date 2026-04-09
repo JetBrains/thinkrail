@@ -7,6 +7,6 @@
   gap: var(--space-sm);
   color: var(--hint);
 }
-.console-stub-icon { font-size: 32px; opacity: 0.5; }
-.console-stub-title { font-size: 14px; font-weight: 500; }
-.console-stub-text { font-size: 11px; text-align: center; line-height: 1.6; }
+.console-stub-icon { font-size: calc(var(--font-base) * 2.46); opacity: 0.5; }
+.console-stub-title { font-size: var(--font-lg2); font-weight: 500; }
+.console-stub-text { font-size: var(--font-md); text-align: center; line-height: 1.6; }

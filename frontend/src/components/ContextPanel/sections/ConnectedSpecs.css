@@ -7,7 +7,7 @@
 }
 
 .connected-group__label {
-  font-size: 10px;
+  font-size: var(--font-sm);
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.4px;
@@ -25,7 +25,7 @@
   background: transparent;
   color: var(--text);
   font-family: var(--font);
-  font-size: 12px;
+  font-size: var(--font-lg);
   line-height: 1.5;
   text-align: left;
   cursor: pointer;

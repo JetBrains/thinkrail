@@ -14,12 +14,12 @@
   background: transparent;
   color: var(--muted);
   font-family: var(--font);
-  font-size: 12px;
+  font-size: var(--font-lg);
   cursor: pointer;
   text-align: left;
 }
 .prompt-preview-toggle:hover { color: var(--text); }
-.prompt-preview-token-count { color: var(--hint); font-size: 11px; }
+.prompt-preview-token-count { color: var(--hint); font-size: var(--font-md); }
 
 /* ── Stacked bar ── */
 .prompt-bar {
@@ -43,8 +43,8 @@
   margin-bottom: var(--space-sm);
 }
 .prompt-legend-item {
-  font-size: 10px;
-  padding: 1px 6px;
+  font-size: var(--font-sm);
+  padding: 1px var(--space-sm);
   border-radius: 3px;
   cursor: pointer;
   transition: opacity var(--transition-fast);
@@ -67,7 +67,7 @@
   gap: var(--space-sm);
   padding: var(--space-xs) 0;
   cursor: pointer;
-  font-size: 12px;
+  font-size: var(--font-lg);
   font-family: var(--font);
   color: var(--text);
 }
@@ -81,19 +81,19 @@
 }
 
 .prompt-section-label { flex: 1; }
-.prompt-section-count { color: var(--hint); font-size: 10px; }
-.prompt-section-tokens { color: var(--hint); font-size: 10px; margin-left: auto; }
+.prompt-section-count { color: var(--hint); font-size: var(--font-sm); }
+.prompt-section-tokens { color: var(--hint); font-size: var(--font-sm); margin-left: auto; }
 
 /* ── Rendered markdown content ── */
 .prompt-section-content {
-  margin: 0 0 var(--space-sm) 12px;
+  margin: 0 0 var(--space-sm) var(--space-md);
   background: var(--panel);
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
   padding: var(--space-sm) var(--space-md);
   max-height: 200px;
   overflow-y: auto;
-  font-size: 12px;
+  font-size: var(--font-lg);
   line-height: 1.7;
   color: var(--text);
 }
@@ -138,7 +138,7 @@
 
 /* ── Spec sub-entries ── */
 .prompt-spec-list {
-  margin-left: 20px;
+  margin-left: var(--space-xl);
   margin-bottom: var(--space-sm);
 }
 .prompt-spec-entry {
@@ -150,7 +150,7 @@
   gap: var(--space-sm);
   padding: 3px 0;
   cursor: pointer;
-  font-size: 11px;
+  font-size: var(--font-md);
   font-family: var(--font);
   color: var(--text);
 }
@@ -177,12 +177,12 @@
 .prompt-file-preview--empty {
   padding: var(--space-md);
   color: var(--muted);
-  font-size: 11px;
+  font-size: var(--font-md);
   font-style: italic;
   height: auto;
 }
 .prompt-file-fallback {
-  font-size: 11px;
+  font-size: var(--font-md);
   padding: var(--space-sm);
   margin: 0;
   color: var(--muted);

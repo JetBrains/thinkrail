@@ -6,7 +6,7 @@
  */
 
 .st {
-  font-size: 12px;
+  font-size: var(--font-lg);
   line-height: 1;
   user-select: none;
 }
@@ -56,7 +56,7 @@
   width: 16px;
   flex-shrink: 0;
   text-align: center;
-  font-size: 10px;
+  font-size: var(--font-sm);
   color: var(--hint);
 }
 
@@ -69,7 +69,7 @@
   width: 18px;
   flex-shrink: 0;
   text-align: center;
-  font-size: 13px;
+  font-size: var(--font-body);
 }
 
 .st-icon-goal      { color: var(--gold); }
@@ -107,7 +107,7 @@
   flex-shrink: 0;
   width: 16px;
   text-align: center;
-  font-size: 10px;
+  font-size: var(--font-sm);
   font-family: var(--font-mono);
 }
 
@@ -120,10 +120,10 @@
 
 /* ── Task count pill ── */
 .st-task-pill {
-  font-size: 10px;
-  padding: 1px 7px;
-  border-radius: 8px;
-  margin-left: 6px;
+  font-size: var(--font-sm);
+  padding: 1px var(--space-sm);
+  border-radius: var(--radius-lg);
+  margin-left: var(--space-sm);
   flex-shrink: 0;
   cursor: pointer;
   user-select: none;
@@ -181,8 +181,8 @@
 .st-task-card {
   background: var(--bg);
   border: 1px solid var(--elevated);
-  border-radius: 6px;
-  margin: 2px 10px 4px;
+  border-radius: var(--radius-md);
+  margin: 2px var(--space-md) var(--space-xs);
   overflow: hidden;
 }
 
@@ -190,7 +190,7 @@
   display: flex;
   align-items: center;
   height: 24px;
-  padding: 0 10px;
+  padding: 0 var(--space-md);
   cursor: pointer;
   transition: background 80ms;
 }
@@ -204,22 +204,22 @@
 }
 
 .st-task-card-row .st-icon {
-  font-size: 11px;
+  font-size: var(--font-md);
   width: 16px;
 }
 
 .st-task-card-row .st-title {
-  font-size: 11px;
+  font-size: var(--font-md);
 }
 
 .st-task-card-row .st-badge {
-  font-size: 9px;
+  font-size: var(--font-sm);
 }
 
 /* ── Empty / loading states ── */
 .st-empty {
   color: var(--hint);
-  font-size: 12px;
+  font-size: var(--font-lg);
   padding: var(--space-lg);
   text-align: center;
 }
@@ -231,7 +231,7 @@
 /* ── Task dependency arrow ── */
 .st-task-dep-arrow {
   color: var(--hint);
-  font-size: 10px;
+  font-size: var(--font-sm);
   margin-right: 2px;
   flex-shrink: 0;
 }

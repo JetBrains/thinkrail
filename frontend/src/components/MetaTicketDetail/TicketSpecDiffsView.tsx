@@ -3,6 +3,7 @@ import { DiffEditor, type DiffOnMount } from "@monaco-editor/react";
 import { getClient } from "@/api/index.ts";
 import { createBoardApi } from "@/api/methods/board.ts";
 import { useMonacoTheme } from "@/components/MarkdownEditor/useMonacoTheme.ts";
+import { useFontSize } from "@/utils/fontScale.ts";
 import type { MetaTicket } from "@/types/board.ts";
 
 /**
@@ -68,6 +69,7 @@ export function TicketSpecDiffsView({ ticketId, ticket, onTicketUpdated }: Ticke
   const [diff, setDiff] = useState<DiffData | null>(null);
   const [loading, setLoading] = useState(true);
   const monacoTheme = useMonacoTheme();
+  const lgFontSize = useFontSize("lg");
 
   const fetchEntries = useCallback(async () => {
     const api = createBoardApi(getClient());
@@ -206,7 +208,7 @@ export function TicketSpecDiffsView({ ticketId, ticket, onTicketUpdated }: Ticke
                         renderSideBySide: true,
                         minimap: { enabled: false },
                         scrollBeyondLastLine: false,
-                        fontSize: 12,
+                        fontSize: lgFontSize,
                         fontFamily: "'JetBrains Mono', 'Fira Code', 'SF Mono', monospace",
                         automaticLayout: true,
                       }}
@@ -264,7 +266,7 @@ export function TicketSpecDiffsView({ ticketId, ticket, onTicketUpdated }: Ticke
                         renderSideBySide: true,
                         minimap: { enabled: false },
                         scrollBeyondLastLine: false,
-                        fontSize: 12,
+                        fontSize: lgFontSize,
                         fontFamily: "'JetBrains Mono', 'Fira Code', 'SF Mono', monospace",
                         automaticLayout: true,
                       }}

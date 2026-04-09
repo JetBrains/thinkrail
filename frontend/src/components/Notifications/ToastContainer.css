@@ -20,11 +20,11 @@
   animation: toastIn 0.25s ease-out;
 }
 .toast:hover { background: var(--hover); }
-.toast-message { font-size: 12px; color: var(--text); flex: 1; }
+.toast-message { font-size: var(--font-lg); color: var(--text); flex: 1; }
 .toast-dismiss {
   border: none; background: transparent;
   color: var(--hint); cursor: pointer;
-  font-size: 14px; margin-left: var(--space-sm);
+  font-size: var(--font-lg2); margin-left: var(--space-sm);
 }
 .toast-dismiss:hover { color: var(--text); }
 

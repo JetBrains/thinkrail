@@ -10,7 +10,7 @@
   border-radius: var(--radius-sm);
   background: var(--surface);
   color: var(--text);
-  font-size: 11px;
+  font-size: var(--font-md);
   font-family: inherit;
   outline: none;
   margin-bottom: var(--space-xs);
@@ -27,9 +27,9 @@
 .file-selector-item {
   display: flex;
   align-items: center;
-  gap: 4px;
-  padding: 3px 8px;
-  font-size: 11px;
+  gap: var(--space-xs);
+  padding: 3px var(--space-sm);
+  font-size: var(--font-md);
   cursor: pointer;
   border-radius: var(--radius-sm);
   color: var(--text);
@@ -43,7 +43,7 @@
 }
 
 .file-selector-arrow {
-  font-size: 10px;
+  font-size: var(--font-sm);
   width: 12px;
   color: var(--muted);
 }
@@ -57,13 +57,13 @@
 
 .file-selector-check {
   color: var(--blue);
-  font-size: 12px;
+  font-size: var(--font-lg);
   margin-left: auto;
 }
 
 .file-selector-empty {
   padding: var(--space-md);
   color: var(--muted);
-  font-size: 11px;
+  font-size: var(--font-md);
   text-align: center;
 }

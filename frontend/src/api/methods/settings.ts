@@ -5,6 +5,8 @@ export interface ProjectSettings {
   default_effort: string;
   model_refresh_interval_hours: number;
   event_view: string;
+  font_size: number;
+  compact_font_size: number;
   [key: string]: unknown;
 }
 

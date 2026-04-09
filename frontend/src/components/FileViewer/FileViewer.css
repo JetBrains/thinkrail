@@ -27,7 +27,7 @@
 }
 
 .fv-path {
-  font-size: 11px;
+  font-size: var(--font-md);
   color: var(--muted);
   overflow: hidden;
   text-overflow: ellipsis;
@@ -35,17 +35,17 @@
 }
 
 .fv-lang-badge {
-  font-size: 10px;
+  font-size: var(--font-sm);
   font-weight: 600;
   color: var(--blue);
   background: rgba(59, 116, 238, 0.1);
-  padding: 1px 6px;
-  border-radius: 3px;
+  padding: 1px var(--space-sm);
+  border-radius: var(--radius-sm);
   flex-shrink: 0;
 }
 
 .fv-meta {
-  font-size: 10px;
+  font-size: var(--font-sm);
   color: var(--hint);
   flex-shrink: 0;
 }
@@ -63,7 +63,7 @@
   background: transparent;
   color: var(--muted);
   font-family: var(--font);
-  font-size: 11px;
+  font-size: var(--font-md);
   cursor: pointer;
   transition: all var(--transition-fast);
 }
@@ -114,11 +114,11 @@
   width: 22px;
   height: 22px;
   border: none;
-  border-radius: 3px;
+  border-radius: var(--radius-sm);
   background: transparent;
   color: var(--text);
   font-family: var(--font);
-  font-size: 14px;
+  font-size: var(--font-lg2);
   cursor: pointer;
   display: flex;
   align-items: center;
@@ -128,7 +128,7 @@
 .md-zoom-btn:hover { background: var(--hover); }
 
 .md-zoom-level {
-  font-size: 10px;
+  font-size: var(--font-sm);
   color: var(--hint);
   min-width: 34px;
   text-align: center;
@@ -177,7 +177,7 @@
 .md-preview {
   padding: var(--space-lg) var(--space-xl);
   font-family: var(--font);
-  font-size: 13px;
+  font-size: var(--font-body);
   line-height: 1.7;
   color: var(--text);
   max-width: 100%;
@@ -204,8 +204,8 @@
   font-family: var(--font);
   background: var(--elevated);
   color: var(--cyan);
-  padding: 2px 5px;
-  border-radius: 3px;
+  padding: 2px var(--space-sm);
+  border-radius: var(--radius-sm);
   font-size: 0.9em;
 }
 
@@ -222,7 +222,7 @@
   background: transparent;
   padding: 0;
   color: var(--text);
-  font-size: 12px;
+  font-size: var(--font-lg);
   line-height: 1.6;
 }
 
@@ -251,7 +251,7 @@
   border: 1px solid var(--border);
   padding: var(--space-sm) var(--space-md);
   text-align: left;
-  font-size: 12px;
+  font-size: var(--font-lg);
 }
 
 .md-preview th {
@@ -306,7 +306,7 @@
 
 .md-mermaid-error-msg {
   color: var(--red);
-  font-size: 11px;
+  font-size: var(--font-md);
   margin-top: var(--space-sm);
 }
 
@@ -316,7 +316,7 @@
   justify-content: center;
   height: 100%;
   color: var(--hint);
-  font-size: 12px;
+  font-size: var(--font-lg);
 }
 
 /* ── Edit Dropdown ── */
@@ -341,7 +341,7 @@
   background: transparent;
   color: var(--text);
   font-family: var(--font);
-  font-size: 12px;
+  font-size: var(--font-lg);
   text-align: left;
   cursor: pointer;
   transition: background var(--transition-fast);

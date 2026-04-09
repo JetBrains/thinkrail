@@ -59,29 +59,51 @@ All colors are defined as CSS custom properties on `:root`. Components reference
 
 ### Typography Tokens
 
-| Token | Value |
-| --- | --- |
-| `--font` | `"JetBrains Mono", "Fira Code", "SF Mono", "Cascadia Code", monospace` |
-| `--font-size` | `13px` |
-| `--line-height` | `1.6` |
+| Token | Formula | Default (base=13px) |
+| --- | --- | --- |
+| `--font-base` | set by JS from `.bonsai/settings.json` | `13px` |
+| `--compact-font-base` | set by JS from `.bonsai/settings.json` | `9px` |
+| `--font-xs` | `calc(--font-base * 0.69)` | `9.0px` |
+| `--font-sm` | `calc(--font-base * 0.77)` | `10.0px` |
+| `--font-md` | `calc(--font-base * 0.85)` | `11.1px` |
+| `--font-lg` | `calc(--font-base * 0.92)` | `12.0px` |
+| `--font-body` | `var(--font-base)` | `13.0px` |
+| `--font-lg2` | `calc(--font-base * 1.15)` | `15.0px` |
+| `--font-xl` | `calc(--font-base * 1.31)` | `17.0px` |
+| `--font` | (static) | `"JetBrains Mono", "Fira Code", "SF Mono", "Cascadia Code", monospace` |
+| `--line-height` | (static) | `1.6` |
 
 ### Spacing Tokens
 
-| Token | Value |
-| --- | --- |
-| `--space-xs` | `4px` |
-| `--space-sm` | `8px` |
-| `--space-md` | `12px` |
-| `--space-lg` | `16px` |
-| `--space-xl` | `24px` |
+| Token | Formula | Default (base=13px) |
+| --- | --- | --- |
+| `--space-xs` | `calc(--font-base * 0.31)` | `4.0px` |
+| `--space-sm` | `calc(--font-base * 0.62)` | `8.0px` |
+| `--space-md` | `calc(--font-base * 0.92)` | `12.0px` |
+| `--space-lg` | `calc(--font-base * 1.23)` | `16.0px` |
+| `--space-xl` | `calc(--font-base * 1.85)` | `24.0px` |
 
 ### Border Radius Tokens
 
-| Token | Value |
-| --- | --- |
-| `--radius-sm` | `4px` |
-| `--radius-md` | `6px` |
-| `--radius-lg` | `8px` |
+| Token | Formula | Default (base=13px) |
+| --- | --- | --- |
+| `--radius-sm` | `calc(--font-base * 0.31)` | `4.0px` |
+| `--radius-md` | `calc(--font-base * 0.46)` | `6.0px` |
+| `--radius-lg` | `calc(--font-base * 0.62)` | `8.0px` |
+
+### Settings-Driven Font Scale
+
+All font, spacing, and radius tokens derive from `--font-base` via CSS `calc()` ratios. The base value is read from `.bonsai/settings.json` and applied to `:root` by `frontend/src/utils/fontScale.ts`.
+
+**Settings fields:**
+- `font_size` (default: 13) — base font size for normal view
+- `compact_font_size` (default: 9) — base font size for compact view
+
+**Compact mode:** `.chat-stream--compact` overrides `--font-base: var(--compact-font-base)`, causing all child tokens to recalculate.
+
+**Monaco editors:** Use the `useFontSize(step)` hook from `fontScale.ts` to get computed px values.
+
+**Live reload:** Changes to `.bonsai/settings.json` are detected by the file watcher and pushed to the frontend via `file/didChange` notification, which triggers a settings re-fetch and CSS update.
 
 ### Transition Tokens
 

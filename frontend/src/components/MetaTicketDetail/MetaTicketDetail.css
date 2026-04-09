@@ -52,13 +52,13 @@
 }
 
 .ticket-header-id {
-  font-size: 10px;
+  font-size: var(--font-sm);
   color: var(--hint);
   font-family: var(--font);
 }
 
 .ticket-header-title-input {
-  font-size: 14px;
+  font-size: var(--font-lg2);
   font-weight: 600;
   color: var(--text);
   line-height: 1.3;
@@ -90,7 +90,7 @@
   gap: var(--space-sm);
 }
 .ticket-header-prop-label {
-  font-size: 10px;
+  font-size: var(--font-sm);
   color: var(--hint);
   text-transform: uppercase;
   letter-spacing: 0.5px;
@@ -102,8 +102,8 @@
   -webkit-appearance: none;
   border: none;
   border-radius: var(--radius-sm);
-  padding: 2px 8px;
-  font-size: 11px;
+  padding: 2px var(--space-sm);
+  font-size: var(--font-md);
   font-family: var(--font);
   cursor: pointer;
   outline: none;
@@ -125,7 +125,7 @@
 .ticket-header-meta {
   display: flex;
   gap: var(--space-xs);
-  font-size: 10px;
+  font-size: var(--font-sm);
   color: var(--hint);
   margin-top: var(--space-xs);
 }
@@ -133,14 +133,14 @@
 .ticket-header-summary {
   display: flex;
   gap: var(--space-sm);
-  font-size: 10px;
+  font-size: var(--font-sm);
   color: var(--muted);
 }
 
 .ticket-header-summary span {
   background: var(--elevated);
-  padding: 1px 5px;
-  border-radius: 3px;
+  padding: 1px var(--space-sm);
+  border-radius: var(--radius-sm);
 }
 
 /* ── Progress + Action Bar (top of right panel) ── */
@@ -202,7 +202,7 @@
 }
 
 .ticket-progress-label {
-  font-size: 9px;
+  font-size: var(--font-sm);
   margin-left: 3px;
   margin-right: 2px;
   white-space: nowrap;
@@ -234,7 +234,7 @@
   border: none;
   border-radius: var(--radius-sm);
   padding: var(--space-xs) var(--space-md);
-  font-size: 11px;
+  font-size: var(--font-md);
   font-family: var(--font);
   cursor: pointer;
   white-space: nowrap;
@@ -254,7 +254,7 @@
   color: var(--muted);
   border-radius: var(--radius-sm);
   padding: var(--space-xs) var(--space-sm);
-  font-size: 11px;
+  font-size: var(--font-md);
   font-family: var(--font);
   cursor: pointer;
   white-space: nowrap;
@@ -287,7 +287,7 @@
   border: none;
   color: var(--text);
   padding: var(--space-sm) var(--space-md);
-  font-size: 12px;
+  font-size: var(--font-lg);
   font-family: var(--font);
   cursor: pointer;
 }
@@ -310,7 +310,7 @@
 }
 
 .ticket-section-title {
-  font-size: 10px;
+  font-size: var(--font-sm);
   text-transform: uppercase;
   letter-spacing: 0.5px;
   color: var(--hint);
@@ -336,9 +336,9 @@
   background: none;
   border: 1px solid var(--border);
   color: var(--muted);
-  border-radius: 3px;
-  padding: 1px 6px;
-  font-size: 10px;
+  border-radius: var(--radius-sm);
+  padding: 1px var(--space-sm);
+  font-size: var(--font-sm);
   font-family: var(--font);
   cursor: pointer;
 }
@@ -369,7 +369,7 @@
 }
 
 .ticket-description-preview-text {
-  font-size: 11px;
+  font-size: var(--font-md);
   color: var(--muted);
   line-height: 1.4;
   white-space: pre-wrap;
@@ -378,7 +378,7 @@
 .ticket-description-empty {
   color: var(--hint);
   font-style: italic;
-  font-size: 11px;
+  font-size: var(--font-md);
 }
 
 /* Description resize handle (bottom of preview) */
@@ -416,7 +416,7 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  font-size: 12px;
+  font-size: var(--font-lg);
   color: var(--text);
   border-bottom: 1px solid var(--border);
 }
@@ -442,14 +442,14 @@
 .ticket-linked-empty {
   padding: var(--space-md);
   color: var(--hint);
-  font-size: 11px;
+  font-size: var(--font-md);
   text-align: center;
 }
 
 .ticket-linked-status {
-  font-size: 10px;
-  padding: 1px 5px;
-  border-radius: 3px;
+  font-size: var(--font-sm);
+  padding: 1px var(--space-sm);
+  border-radius: var(--radius-sm);
   background: var(--elevated);
   color: var(--muted);
 }
@@ -498,7 +498,7 @@
 }
 
 .ticket-right-title {
-  font-size: 13px;
+  font-size: var(--font-body);
   font-weight: 500;
   color: var(--text);
 }
@@ -522,7 +522,7 @@
 /* ── Full description view (right panel) ── */
 .ticket-description-full {
   white-space: pre-wrap;
-  font-size: 13px;
+  font-size: var(--font-body);
   line-height: 1.6;
   color: var(--text);
   cursor: pointer;
@@ -534,7 +534,7 @@
   border-radius: var(--radius-md);
   padding: var(--space-md);
   color: var(--text);
-  font-size: 13px;
+  font-size: var(--font-body);
   font-family: var(--font);
   line-height: 1.6;
   width: 100%;
@@ -550,7 +550,7 @@
   justify-content: center;
   min-height: 200px;
   color: var(--hint);
-  font-size: 13px;
+  font-size: var(--font-body);
 }
 
 /* ── Plan view (right panel) ── */
@@ -576,18 +576,18 @@
 }
 
 .ticket-plan-step-icon {
-  font-size: 14px;
+  font-size: var(--font-lg2);
 }
 
 .ticket-plan-step-title {
   flex: 1;
-  font-size: 13px;
+  font-size: var(--font-body);
   font-weight: 500;
   color: var(--text);
 }
 
 .ticket-plan-step-meta {
-  font-size: 11px;
+  font-size: var(--font-md);
   color: var(--hint);
   margin-top: var(--space-xs);
   padding-left: var(--space-xl);
@@ -601,7 +601,7 @@
 .ticket-plan-criterion {
   display: flex;
   gap: var(--space-sm);
-  font-size: 12px;
+  font-size: var(--font-lg);
   color: var(--muted);
   line-height: 1.6;
 }
@@ -612,7 +612,7 @@
 }
 
 .ticket-plan-milestone-header {
-  font-size: 12px;
+  font-size: var(--font-lg);
   font-weight: 600;
   color: var(--muted);
   text-transform: uppercase;
@@ -631,7 +631,7 @@
 
 .ticket-plan-tab {
   padding: 2px var(--space-sm);
-  font-size: 11px;
+  font-size: var(--font-md);
   font-family: var(--font);
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
@@ -666,7 +666,7 @@
 }
 
 .ticket-plan-form-step-num {
-  font-size: 10px;
+  font-size: var(--font-sm);
   color: var(--hint);
   font-weight: 600;
   min-width: 20px;
@@ -680,7 +680,7 @@
   border-radius: var(--radius-sm);
   color: var(--text);
   font-family: var(--font);
-  font-size: 12px;
+  font-size: var(--font-lg);
   outline: none;
 }
 .ticket-plan-form-input:focus { border-color: var(--purple); }
@@ -690,8 +690,8 @@
   background: transparent;
   color: var(--hint);
   cursor: pointer;
-  font-size: 14px;
-  padding: 0 4px;
+  font-size: var(--font-lg2);
+  padding: 0 var(--space-xs);
 }
 .ticket-plan-form-remove:hover { color: var(--red); }
 
@@ -705,7 +705,7 @@
   display: flex;
   flex-direction: column;
   gap: 2px;
-  font-size: 10px;
+  font-size: var(--font-sm);
   color: var(--hint);
 }
 
@@ -716,7 +716,7 @@
   border-radius: var(--radius-sm);
   color: var(--text);
   font-family: var(--font);
-  font-size: 11px;
+  font-size: var(--font-md);
   outline: none;
   width: 140px;
 }
@@ -729,7 +729,7 @@
   border-radius: var(--radius-sm);
   color: var(--text);
   font-family: var(--font);
-  font-size: 11px;
+  font-size: var(--font-md);
   outline: none;
   resize: vertical;
   width: 100%;
@@ -738,7 +738,7 @@
 
 .ticket-plan-add-btn {
   padding: var(--space-xs) var(--space-md);
-  font-size: 11px;
+  font-size: var(--font-md);
   font-family: var(--font);
   border: 1px dashed var(--border);
   border-radius: var(--radius-sm);
@@ -759,7 +759,7 @@
 
 .ticket-plan-save-btn {
   padding: var(--space-xs) var(--space-lg);
-  font-size: 12px;
+  font-size: var(--font-lg);
   font-family: var(--font);
   border: none;
   border-radius: var(--radius-sm);
@@ -788,7 +788,7 @@
   border-radius: var(--radius-sm);
   color: var(--text);
   font-family: var(--font-mono, monospace);
-  font-size: 12px;
+  font-size: var(--font-lg);
   line-height: 1.6;
   outline: none;
   resize: none;
@@ -815,7 +815,7 @@
 }
 
 .ticket-session-title {
-  font-size: 13px;
+  font-size: var(--font-body);
   font-weight: 500;
   color: var(--text);
 }
@@ -828,7 +828,7 @@
   justify-content: center;
   gap: var(--space-md);
   color: var(--hint);
-  font-size: 12px;
+  font-size: var(--font-lg);
 }
 
 .ticket-session-start-btn {
@@ -837,7 +837,7 @@
   border: none;
   border-radius: var(--radius-sm);
   padding: var(--space-sm) var(--space-lg);
-  font-size: 12px;
+  font-size: var(--font-lg);
   font-family: var(--font);
   cursor: pointer;
 }
@@ -883,7 +883,7 @@
 }
 
 .ticket-describe-chat-title {
-  font-size: 11px;
+  font-size: var(--font-md);
   font-weight: 500;
   color: var(--muted);
   text-transform: uppercase;
@@ -891,7 +891,7 @@
 }
 
 .ticket-describe-chat-status {
-  font-size: 10px;
+  font-size: var(--font-sm);
 }
 
 .ticket-right-header-actions {
@@ -922,8 +922,8 @@
 }
 
 .spec-view-badge {
-  font-size: 10px;
-  padding: 2px 8px;
+  font-size: var(--font-sm);
+  padding: 2px var(--space-sm);
   border-radius: var(--radius-sm);
   background: var(--panel);
   color: var(--muted);
@@ -933,8 +933,8 @@
 .spec-view-badge--draft { color: var(--yellow); border-color: var(--yellow); }
 
 .spec-view-tag {
-  font-size: 10px;
-  padding: 2px 6px;
+  font-size: var(--font-sm);
+  padding: 2px var(--space-sm);
   border-radius: var(--radius-sm);
   background: var(--hover);
   color: var(--hint);
@@ -950,7 +950,7 @@
 
 .spec-view-tab {
   padding: var(--space-sm) var(--space-md);
-  font-size: 12px;
+  font-size: var(--font-lg);
   background: none;
   border: none;
   border-bottom: 2px solid transparent;
@@ -974,9 +974,9 @@
 }
 
 .spec-view-count {
-  font-size: 10px;
-  padding: 1px 6px;
-  border-radius: 8px;
+  font-size: var(--font-sm);
+  padding: 1px var(--space-sm);
+  border-radius: var(--radius-lg);
   background: var(--panel);
   color: var(--muted);
 }
@@ -984,7 +984,7 @@
 .spec-view-save {
   margin-left: auto;
   padding: var(--space-xs) var(--space-md);
-  font-size: 11px;
+  font-size: var(--font-md);
   background: var(--green);
   color: var(--bg);
   border: none;
@@ -1027,14 +1027,14 @@
   gap: var(--space-sm);
   padding: var(--space-sm) var(--space-md);
   cursor: pointer;
-  font-size: 12px;
+  font-size: var(--font-lg);
   transition: background var(--transition-fast);
 }
 .spec-diffs-entry:hover { background: var(--hover); }
 .spec-diffs-entry--active { background: var(--sel); }
 
 .spec-diffs-op {
-  font-size: 9px;
+  font-size: var(--font-sm);
   font-weight: 700;
   letter-spacing: 0.5px;
   min-width: 28px;
@@ -1049,7 +1049,7 @@
 }
 
 .spec-diffs-time {
-  font-size: 10px;
+  font-size: var(--font-sm);
   color: var(--hint);
 }
 
@@ -1058,8 +1058,8 @@
   background: transparent;
   color: var(--red);
   cursor: pointer;
-  font-size: 14px;
-  padding: 0 4px;
+  font-size: var(--font-lg2);
+  padding: 0 var(--space-xs);
   opacity: 0;
   transition: opacity var(--transition-fast);
 }
@@ -1077,13 +1077,13 @@
   align-items: center;
   justify-content: space-between;
   padding: var(--space-xs) var(--space-md);
-  font-size: 11px;
+  font-size: var(--font-md);
   color: var(--muted);
   border-bottom: 1px solid var(--border);
 }
 
 .spec-diffs-editor-op {
-  font-size: 10px;
+  font-size: var(--font-sm);
   color: var(--hint);
 }
 

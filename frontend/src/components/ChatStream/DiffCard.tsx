@@ -2,6 +2,7 @@ import { useState, useRef, useEffect, useCallback } from "react";
 import { DiffEditor, type DiffOnMount } from "@monaco-editor/react";
 import { detectLanguage, languageLabel } from "@/components/FileViewer/languageMap.ts";
 import { useMonacoTheme } from "@/components/MarkdownEditor/useMonacoTheme.ts";
+import { useFontSize } from "@/utils/fontScale.ts";
 import "./DiffCard.css";
 
 const TOOL_ICONS: Record<string, string> = {
@@ -111,6 +112,7 @@ export function DiffCard({
   const [editorHeight, setEditorHeight] = useState(compact ? 200 : 300);
   const editorContainerRef = useRef<HTMLDivElement>(null);
   const monacoTheme = useMonacoTheme();
+  const editorFontSize = useFontSize("lg", compact);
 
   const diffData = extractDiffData(toolName, toolInput);
 
@@ -194,7 +196,7 @@ export function DiffCard({
         <>
           {isLargeFile && !forceLoadLarge ? (
             <div className="diff-card-large-warning">
-              <p style={{ color: "var(--muted)", fontSize: 12, margin: "0 0 8px" }}>
+              <p style={{ color: "var(--muted)", fontSize: "var(--font-lg)", margin: "0 0 var(--space-sm)" }}>
                 Large file ({Math.round((original.length + modified.length) / 1024)}KB) — loading the diff editor may be slow.
               </p>
               <button onClick={() => setForceLoadLarge(true)}>Load diff anyway</button>
@@ -218,7 +220,7 @@ export function DiffCard({
                     renderSideBySide: true,
                     minimap: { enabled: false },
                     scrollBeyondLastLine: false,
-                    fontSize: 12,
+                    fontSize: editorFontSize,
                     fontFamily: "'JetBrains Mono', 'Fira Code', 'SF Mono', monospace",
                     lineNumbers: "on",
                     automaticLayout: true,

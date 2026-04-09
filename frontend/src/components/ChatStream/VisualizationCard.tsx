@@ -350,7 +350,7 @@ function Diagram({ data }: { data: DiagramData }) {
   // Neither format: show informative empty state
   return (
     <div className="vis-diagram">
-      <div style={{ color: "var(--hint)", fontSize: 11 }}>
+      <div style={{ color: "var(--hint)", fontSize: "var(--font-md)" }}>
         No diagram data
       </div>
     </div>
@@ -392,7 +392,7 @@ export class VisErrorBoundary extends Component<
             <span className="vis-card-icon">{"\u26A0"}</span>
             <span className="vis-card-title">Visualization Error</span>
           </div>
-          <div className="vis-card-body" style={{ fontSize: 11, color: "var(--red)" }}>
+          <div className="vis-card-body" style={{ fontSize: "var(--font-md)", color: "var(--red)" }}>
             {this.state.error}
           </div>
         </div>
@@ -426,7 +426,7 @@ export function VisualizationCard({ data, collapsed = false, compactMode = false
           <span className="vis-card-icon">{"\u26A0"}</span>
           <span className="vis-card-title">Visualization Error</span>
         </div>
-        <div className="vis-card-body" style={{ fontSize: 11, color: "var(--red)" }}>
+        <div className="vis-card-body" style={{ fontSize: "var(--font-md)", color: "var(--red)" }}>
           Invalid data: type={data?.type ?? "missing"}, data={typeof data?.data}
         </div>
       </div>
@@ -475,7 +475,7 @@ export function VisualizationCard({ data, collapsed = false, compactMode = false
         }}
       >
         {typeof data.data !== "object" || data.data === null || (data.data as unknown as { _parseError?: boolean })._parseError ? (
-          <div style={{ color: "var(--hint)", fontSize: 12, padding: "var(--space-sm)" }}>
+          <div style={{ color: "var(--hint)", fontSize: "var(--font-lg)", padding: "var(--space-sm)" }}>
             Visualization data could not be parsed — the model sent malformed input.
           </div>
         ) : (

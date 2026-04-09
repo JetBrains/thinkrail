@@ -6,7 +6,7 @@
  */
 
 .ft {
-  font-size: 12px;
+  font-size: var(--font-lg);
   line-height: 1;
   user-select: none;
 }
@@ -24,9 +24,9 @@
 .ft-toolbar-btn {
   background: none;
   border: 1px solid transparent;
-  border-radius: 3px;
+  border-radius: var(--radius-sm);
   color: var(--muted);
-  font-size: 13px;
+  font-size: var(--font-body);
   width: 20px;
   height: 18px;
   display: flex;
@@ -94,7 +94,7 @@
   width: 16px;
   flex-shrink: 0;
   text-align: center;
-  font-size: 10px;
+  font-size: var(--font-sm);
   color: var(--hint);
 }
 
@@ -107,7 +107,7 @@
   width: 16px;
   flex-shrink: 0;
   text-align: center;
-  font-size: 13px;
+  font-size: var(--font-body);
 }
 
 /* Icon colors by file type — IntelliJ-style */
@@ -146,7 +146,7 @@
 /* ── Empty state ── */
 .ft-empty {
   color: var(--hint);
-  font-size: 12px;
+  font-size: var(--font-lg);
   padding: var(--space-lg);
   text-align: center;
 }

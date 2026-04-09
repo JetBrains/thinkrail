@@ -321,7 +321,7 @@ function PlanRawTab({ ticketId, onSave }: {
   return (
     <div className="ticket-plan-content ticket-plan-raw">
       {error && (
-        <div style={{ color: "var(--red)", fontSize: 12, padding: "var(--space-sm) 0" }}>
+        <div style={{ color: "var(--red)", fontSize: "var(--font-lg)", padding: "var(--space-sm) 0" }}>
           {error}
         </div>
       )}

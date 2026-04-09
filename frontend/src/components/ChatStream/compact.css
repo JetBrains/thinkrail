@@ -1,5 +1,36 @@
 /* ── Compact View Mode ─────────────────────────────────── */
 
+/*
+ * Compact token override.
+ * CSS custom properties resolve var() at the element where they're defined,
+ * so descendants inherit the COMPUTED value, not the expression. We must
+ * redefine every derived token here so they resolve with the compact base.
+ */
+.chat-stream--compact {
+  --font-base: var(--compact-font-base);
+
+  /* Font scale */
+  --font-xs:   calc(var(--font-base) * 0.69);
+  --font-sm:   calc(var(--font-base) * 0.77);
+  --font-md:   calc(var(--font-base) * 0.85);
+  --font-lg:   calc(var(--font-base) * 0.92);
+  --font-body: var(--font-base);
+  --font-lg2:  calc(var(--font-base) * 1.15);
+  --font-xl:   calc(var(--font-base) * 1.31);
+
+  /* Spacing scale */
+  --space-xs: calc(var(--font-base) * 0.31);
+  --space-sm: calc(var(--font-base) * 0.62);
+  --space-md: calc(var(--font-base) * 0.92);
+  --space-lg: calc(var(--font-base) * 1.23);
+  --space-xl: calc(var(--font-base) * 1.85);
+
+  /* Radii scale */
+  --radius-sm: calc(var(--font-base) * 0.31);
+  --radius-md: calc(var(--font-base) * 0.46);
+  --radius-lg: calc(var(--font-base) * 0.62);
+}
+
 /* Container overrides */
 .chat-stream--compact {
   gap: 0 !important;
@@ -18,9 +49,9 @@
 .compact-log {
   display: flex;
   align-items: center;
-  gap: 4px;
-  padding: 2px 6px;
-  font-size: 11px;
+  gap: var(--space-xs);
+  padding: 0px 2px;
+  font-size: var(--font-body);
   border-left: 2px solid var(--green);
   cursor: pointer;
   border-radius: 2px;
@@ -29,7 +60,7 @@
   background: var(--hover);
 }
 .compact-log-icon {
-  font-size: 11px;
+  font-size: var(--font-body);
   flex-shrink: 0;
 }
 .compact-log-name {
@@ -39,7 +70,7 @@
 }
 .compact-log-detail {
   color: var(--muted);
-  font-size: 10px;
+  font-size: var(--font-body);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -48,26 +79,26 @@
 }
 .compact-log-status {
   margin-left: auto;
-  font-size: 10px;
+  font-size: var(--font-body);
   white-space: nowrap;
   flex-shrink: 0;
 }
 .compact-log-badge-info {
   color: var(--muted);
-  font-size: 9px;
+  font-size: var(--font-body);
   white-space: nowrap;
   flex-shrink: 0;
 }
 
 /* Expanded body (reuses ToolInputDetail / ToolOutputBody) */
 .compact-log-body {
-  padding: 4px 6px 4px 12px;
+  padding: var(--space-xs) var(--space-sm) var(--space-xs) var(--space-md);
   border-left: 2px solid var(--border);
   margin-left: 0;
-  font-size: 11px;
+  font-size: var(--font-body);
 }
 .compact-log-body pre {
-  font-size: 11px;
+  font-size: var(--font-body);
   white-space: pre-wrap;
   word-break: break-all;
   color: var(--muted);
@@ -78,13 +109,13 @@
 .compact-approval-badge {
   display: inline-flex;
   align-items: center;
-  gap: 3px;
+  gap: 2px;
   padding: 0 5px;
-  border-radius: 3px;
-  font-size: 9px;
+  border-radius: var(--radius-sm);
+  font-size: var(--font-sm);
   font-weight: 600;
   flex-shrink: 0;
-  margin-left: 4px;
+  margin-left: var(--space-xs);
 }
 .compact-approval-badge--approved {
   background: rgba(158, 206, 106, 0.12);
@@ -99,14 +130,14 @@
 .compact-approval-pending {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
+  gap: 1px;
   margin-left: auto;
   flex-shrink: 0;
 }
 .compact-btn {
   padding: 1px 8px;
-  border-radius: 3px;
-  font-size: 10px;
+  border-radius: var(--radius-sm);
+  font-size: var(--font-body);
   font-weight: 600;
   cursor: pointer;
   border: 1px solid;
@@ -138,10 +169,10 @@
 .compact-user-bubble {
   display: flex;
   align-items: center;
-  gap: 6px;
-  padding: 2px 10px;
+  gap: var(--space-sm);
+  padding: 2px var(--space-md);
   background: rgba(122, 162, 247, 0.08);
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
   border-right: 2px solid var(--blue);
   max-width: 85%;
   cursor: pointer;
@@ -151,12 +182,12 @@
 }
 .compact-user-label {
   color: var(--blue);
-  font-size: 10px;
+  font-size: var(--font-body);
   font-weight: 600;
   flex-shrink: 0;
 }
 .compact-user-text {
-  font-size: 11px;
+  font-size: var(--font-body);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -168,14 +199,17 @@
 
 /* ── Compact subagent ── */
 .compact-subagent {
-  width: 100%;
+  width: auto;
+  margin-left: var(--space-md);
+  padding-left: var(--space-sm);
+  border-left: 1px solid rgba(187, 154, 247, 0.25);
 }
 .compact-subagent-header {
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: var(--space-xs);
   padding: 2px 6px;
-  font-size: 11px;
+  font-size: var(--font-lg);
   border-left: 2px solid var(--purple);
   cursor: pointer;
   border-radius: 2px;
@@ -185,7 +219,7 @@
 }
 .compact-subagent-toggle {
   color: var(--muted);
-  font-size: 10px;
+  font-size: var(--font-body);
   flex-shrink: 0;
 }
 .compact-subagent-name {
@@ -195,33 +229,33 @@
 }
 .compact-subagent-detail {
   color: var(--muted);
-  font-size: 10px;
+  font-size: var(--font-body);
 }
 .compact-subagent-body {
-  margin-left: 12px;
-  padding-left: 8px;
+  margin-left: var(--space-lg);
+  padding-left: var(--space-sm);
   border-left: 1px solid rgba(187, 154, 247, 0.15);
   display: flex;
   flex-direction: column;
   gap: 1px;
 }
 .compact-subagent-body .compact-log {
-  font-size: 10px;
-  padding: 1px 4px;
+  font-size: var(--font-body);
+  padding: 1px var(--space-xs);
 }
 .compact-subagent-body .compact-log-icon {
-  font-size: 10px;
+  font-size: var(--font-body);
 }
 .compact-subagent-body .compact-log-detail {
-  font-size: 9px;
+  font-size: var(--font-sm);
 }
 .compact-subagent-body .compact-log-status {
-  font-size: 9px;
+  font-size: var(--font-sm);
 }
 .compact-subagent-text {
-  font-size: 10px;
+  font-size: var(--font-body);
   color: var(--muted);
-  padding: 2px 4px;
+  padding: 2px var(--space-xs);
 }
 
 /* ── Compact mode: tighten ALL shared components ── */
@@ -251,7 +285,6 @@
 /* System messages */
 .chat-stream--compact .chat-system {
   padding: 1px 6px !important;
-  font-size: 10px !important;
 }
 
 /* Classic tool cards (fallback rendering in compact stream) */
@@ -261,8 +294,7 @@
 }
 .chat-stream--compact .chat-tool-header {
   padding: 2px 6px !important;
-  gap: 4px !important;
-  font-size: 11px !important;
+  gap: var(--space-xs) !important;
 }
 .chat-stream--compact .chat-tool-body {
   padding: 2px 6px !important;
@@ -285,7 +317,6 @@
 }
 .chat-stream--compact .chat-subagent-header {
   padding: 2px 0 !important;
-  font-size: 11px !important;
 }
 
 /* Completion/error banners */
@@ -304,7 +335,6 @@
   gap: 2px !important;
 }
 .chat-stream--compact .task-item {
-  font-size: 11px !important;
 }
 
 /* Vis cards in compact — tighter collapsed state, smaller expanded */
@@ -314,8 +344,8 @@
 }
 .chat-stream--compact .vis-card--collapsed {
   padding: 2px 6px !important;
-  gap: 4px !important;
-  font-size: 11px !important;
+  gap: var(--space-xs) !important;
+  font-size: var(--font-body) !important;
   border-left-width: 2px !important;
   border-radius: 2px !important;
   max-width: 100% !important;
@@ -327,7 +357,7 @@
 .chat-stream--compact .vis-card-collapse-hint {
   margin-left: auto;
   color: var(--muted);
-  font-size: 10px;
+  font-size: var(--font-body);
 }
 
 /* ── Session Context Menu (used in both modes) ── */
@@ -339,24 +369,24 @@
   border: 1px solid var(--border2);
   border-radius: var(--radius-sm);
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
-  padding: 4px 0;
-  font-size: 12px;
+  padding: var(--space-xs) 0;
+  font-size: var(--font-body);
 }
 .session-ctx-menu-sep {
   height: 1px;
   background: var(--border);
-  margin: 4px 0;
+  margin: var(--space-xs) 0;
 }
 .session-ctx-menu-item {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--space-sm);
   width: 100%;
-  padding: 6px 12px;
+  padding: var(--space-sm) var(--space-md);
   border: none;
   background: transparent;
   color: var(--text);
-  font-size: 12px;
+  font-size: var(--font-body);
   font-family: inherit;
   cursor: pointer;
   text-align: left;
@@ -372,7 +402,7 @@
   background: transparent;
 }
 .session-ctx-menu-icon {
-  font-size: 12px;
+  font-size: var(--font-body);
   width: 16px;
   text-align: center;
   flex-shrink: 0;

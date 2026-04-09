@@ -25,6 +25,9 @@ class ProjectSettings(BaseModel, extra="allow"):
     default_effort: str = "high"
     model_refresh_interval_hours: int = 24
     event_view: str = "classic"
+    # Font scale settings
+    font_size: int = 13  # base font size in px (normal view)
+    compact_font_size: int = 9  # base font size in px (compact view)
     # User response timeout settings
     user_respond_timeout: float = 300  # seconds; 0 = wait indefinitely
     user_respond_timeout_behavior: str = "interrupt"  # "interrupt" | "deny" | "retry"

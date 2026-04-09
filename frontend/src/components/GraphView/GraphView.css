@@ -22,7 +22,7 @@
   gap: var(--space-xs);
   padding: var(--space-sm) var(--space-md);
   border-bottom: 1px solid var(--border);
-  font-size: 11px;
+  font-size: var(--font-md);
   flex-shrink: 0;
 }
 
@@ -31,9 +31,9 @@
   border-radius: var(--radius-sm);
   background: transparent;
   color: var(--muted);
-  font-size: 12px;
+  font-size: var(--font-lg);
   cursor: pointer;
-  padding: 2px 6px;
+  padding: 2px var(--space-sm);
   font-family: var(--font);
 }
 .graph-breadcrumb-back:hover { background: var(--hover); }
@@ -44,7 +44,7 @@
   color: var(--blue);
   cursor: pointer;
   font-family: var(--font);
-  font-size: 11px;
+  font-size: var(--font-md);
   padding: 0;
 }
 .graph-breadcrumb-item:hover { text-decoration: underline; }
@@ -74,14 +74,14 @@
   background: transparent;
   color: var(--text);
   font-family: var(--font);
-  font-size: 14px;
+  font-size: var(--font-lg2);
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
 }
 .graph-control-btn:hover { background: var(--hover); }
-.graph-control-zoom { font-size: 10px; color: var(--hint); min-width: 32px; text-align: center; }
+.graph-control-zoom { font-size: var(--font-sm); color: var(--hint); min-width: 32px; text-align: center; }
 
 /* ── Legend ── */
 .graph-legend {
@@ -90,7 +90,7 @@
   left: var(--space-md);
   display: flex;
   gap: var(--space-md);
-  font-size: 10px;
+  font-size: var(--font-sm);
   color: var(--hint);
 }
 
@@ -118,4 +118,4 @@
   align-items: center;
   justify-content: center;
 }
-.graph-empty-text { color: var(--hint); font-size: 12px; }
+.graph-empty-text { color: var(--hint); font-size: var(--font-lg); }

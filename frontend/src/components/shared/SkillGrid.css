@@ -1,6 +1,6 @@
 /* ── Skill Grid ── */
 .skill-grid { display: flex; flex-direction: column; gap: var(--space-md); }
-.skill-group-label { font-size: 10px; color: var(--hint); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: var(--space-xs); }
+.skill-group-label { font-size: var(--font-sm); color: var(--hint); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: var(--space-xs); }
 .skill-group-cards { display: flex; flex-wrap: wrap; gap: var(--space-sm); }
 .skill-card {
   display: flex; align-items: center; gap: var(--space-xs);
@@ -10,7 +10,7 @@
   background: transparent;
   color: var(--muted);
   font-family: var(--font);
-  font-size: 11px;
+  font-size: var(--font-md);
   cursor: pointer;
   transition: all var(--transition-fast);
 }
@@ -18,4 +18,4 @@
 .skill-card-selected { border-color: var(--blue); background: rgba(122, 162, 247, 0.07); color: var(--text); }
 .skill-card--irrelevant { opacity: 0.35; cursor: default; }
 .skill-card--irrelevant:hover { border-color: var(--border); color: var(--muted); }
-.skill-card-icon { font-size: 14px; }
+.skill-card-icon { font-size: var(--font-lg2); }
