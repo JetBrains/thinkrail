@@ -62,6 +62,13 @@ Both sides can send either. The server can initiate requests to the client (e.g.
 | `agent/transcribe`| `{ audioBase64: str, mimeType: str }`                                                        | `{ text: str }`     | Transcribe audio via OpenAI Whisper API (fallback for browsers without Web Speech API). See [TRANSCRIBE.md](../agent/TRANSCRIBE.md). |
 | `vis/state`       | `{}`                                                                                         | `DashboardState`    | Return the current dashboard state without recomputing. State is computed on WebSocket connect and after file changes. |
 | `vis/recompute`   | `{}`                                                                                         | `DashboardState`    | Force a dashboard recompute from registry, specs, and tasks on disk. Returns the new state and pushes `vis/stateChanged` notification. |
+| `trash/list`      | `{ type?: str }`                                                                             | `list[TrashedItem]` | List all trashed items, optionally filtered by type (`sessions`, `tickets`, `specs`, `plans`, `drafts`, `patches`) |
+| `trash/purge`     | `{ type: str, id: str }`                                                                     | `null`              | Permanently delete a specific trashed item |
+| `trash/empty`     | `{ type?: str }`                                                                             | `null`              | Permanently delete all trashed items, optionally filtered by type |
+| `trash/restoreSpec` | `{ specId: str }`                                                                          | `{ registryEntry, links }` | Restore a trashed spec: moves file back to original location and returns registry entry + links for caller to re-insert into registry |
+| `trash/restorePlan` | `{ ticketId: str }`                                                                        | `null`              | Restore a trashed plan file back to `.bonsai/plans/` |
+| `trash/restoreDraft` | `{ trashItemId: str }`                                                                    | `{ manifestEntry }` | Restore a trashed draft file and return its manifest entry for re-insertion |
+| `trash/restorePatches` | `{ ticketId: str }`                                                                     | `null`              | Restore trashed patches directory back to `.bonsai/spec-patches/` |
 
 ### Server → Client (notifications)
 
@@ -163,7 +170,8 @@ graph TD
           Specs["methods/specs.py"]
           Agents["methods/agents.py"]
           Vis["methods/vis.py"]
-          Agents ~~~ Specs ~~~ Vis
+          Trash["methods/trash.py"]
+          Agents ~~~ Specs ~~~ Vis ~~~ Trash
         end
         Server ---> Methods
         Server -- "Creates notify on connect" --> Notify["notifications.py<br/>make_notify(ws) → notify callable<br/>current_notify module-level ref"]
@@ -173,10 +181,12 @@ graph TD
     SpecSvc["spec/service<br/>Spec CRUD"]
     AgentSvc["agent/service<br/>Agent task management"]
     VisSvc["vis/service<br/>Dashboard state"]
+    TrashSvc["trash/service<br/>Soft-delete operations"]
 
     Specs ---> SpecSvc
     Agents ---> AgentSvc
     Vis ---> VisSvc
+    Trash ---> TrashSvc
 ```
 
 ```mermaid
@@ -207,7 +217,7 @@ graph TD
 
 **Responsibility:** WebSocket endpoint with per-connection project selection, connection management, JSON-RPC dispatch loop, per-connection watcher lifecycle.
 
-**Dependencies:** jsonrpcserver, methods/specs, methods/agents, methods/vis, notifications, core/watcher, core/config, spec/service, vis/service
+**Dependencies:** jsonrpcserver, methods/specs, methods/agents, methods/vis, methods/trash, notifications, core/watcher, core/config, spec/service, vis/service, trash/service
 
 | Export | Signature | Description |
 | --- | --- | --- |
@@ -279,6 +289,22 @@ async def notify(method: str, params: dict, request_id: str | None = None) -> No
 
 `respond_agent` routes to `agent/service.respond(bonsai_sid, request_id, response)`, which resolves the pending `asyncio.Future` in `tracker.py`.
 
+### methods/trash.py
+
+**Responsibility:** jsonrpcserver handlers for all `trash/*` methods.
+
+**Dependencies:** trash/service
+
+| Export | Signature | Description |
+| --- | --- | --- |
+| `list_trashed` | `(service, **params) → list[dict]` | Handler for `trash/list` |
+| `purge_trashed` | `(service, **params) → None` | Handler for `trash/purge` |
+| `empty_trash` | `(service, **params) → None` | Handler for `trash/empty` |
+| `restore_spec` | `(service, **params) → dict` | Handler for `trash/restoreSpec` — returns `{ registryEntry, links }` |
+| `restore_plan` | `(service, **params) → None` | Handler for `trash/restorePlan` |
+| `restore_draft` | `(service, **params) → dict` | Handler for `trash/restoreDraft` — returns `{ manifestEntry }` |
+| `restore_patches` | `(service, **params) → None` | Handler for `trash/restorePatches` |
+
 ### methods/vis.py
 
 **Responsibility:** jsonrpcserver handlers for all `vis/*` methods.
@@ -317,7 +343,7 @@ graph TD
 - On connect:
   1. Validate `project` param exists (close with 4001 if missing)
   2. Validate `<project>/.bonsai/registry.json` exists (close with 4002 if invalid)
-  3. Build per-connection `AppConfig`, `SpecService`, `AgentService`, `VisualizationService` scoped to the project
+  3. Build per-connection `AppConfig`, `SpecService`, `AgentService`, `VisualizationService`, `TrashService` scoped to the project. `TrashService` is injected into `SpecService`, `AgentService`, `BoardService`, and `SpecDraftService` via attribute assignment.
   4. Replace existing connection if any (close old WebSocket + stop old watcher)
   5. Create `notify = make_notify(ws)`, set `notifications.current_notify = notify`
   6. Start per-connection file watcher for the project directory
@@ -348,7 +374,7 @@ The file watcher is **per-connection**, scoped to the connected project director
 | Notify interface | Single `notify(method, params, request_id=None)` | Unified callable for notifications and server-initiated requests; decouples runner from WebSocket details |
 | Watcher lifecycle | Per-connection, scoped to project directory | Watcher starts when a client connects with a valid project, stops on disconnect. Each connection watches only its project. Replaces the old application-level approach. |
 | `current_notify` in `notifications.py` | Module-level mutable ref, set by `server.py` on connect/disconnect | Avoids circular import between `server.py` and `methods/agents.py`; `notifications.py` is the natural owner of active-connection state |
-| Methods organized by domain namespace | `methods/specs.py`, `methods/agents.py`, `methods/vis.py` | Each file mirrors its domain module; easy to locate handlers by method prefix |
+| Methods organized by domain namespace | `methods/specs.py`, `methods/agents.py`, `methods/vis.py`, `methods/trash.py` | Each file mirrors its domain module; easy to locate handlers by method prefix |
 | `METHODS` dict assembled in `server.py` | Explicit mapping from method name to handler | Avoids implicit global state from decorator-based registration; makes method set inspectable |
 | Per-connection project selection | `?project=` query param on WebSocket URL; services/watcher created per-connection | Allows the frontend to switch projects without restarting the backend; config + services are scoped to the validated project directory |
 | No RPC-layer models | Domain models serialized directly | Pydantic models in spec/ and agent/ serialize to JSON; no translation layer needed |
@@ -362,6 +388,7 @@ The file watcher is **per-connection**, scoped to the connected project director
 | `spec/service` | Spec CRUD operations; watcher postprocessing |
 | `agent/service` | Agent task management |
 | `vis/service` | Dashboard state computation and push notifications |
+| `trash/service` | Soft-delete operations for all `.bonsai/` data types |
 | `core/watcher` | File change detection |
 | `core/config` | Project root path for watcher |
 

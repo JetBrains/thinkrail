@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useUiStore } from "@/store/uiStore.ts";
 import { useSpecStore } from "@/store/specStore.ts";
 import { useSessionStore } from "@/store/sessionStore.ts";
+import { useTrashStore } from "@/store/trashStore.ts";
 import "./CommandPalette.css";
 
 interface PaletteItem {
@@ -37,6 +38,7 @@ export function CommandPalette() {
   const specs = useSpecStore((s) => s.specs);
   const sessions = useSessionStore((s) => s.sessions);
   const switchSession = useSessionStore((s) => s.switchSession);
+  const openTrash = useTrashStore((s) => s.open);
 
   const [query, setQuery] = useState("");
   const [selectedIndex, setSelectedIndex] = useState(0);
@@ -86,6 +88,7 @@ export function CommandPalette() {
     if (mode === "all" || mode === "actions") {
       const actions: PaletteItem[] = [
         { id: "action-new", title: "New session", category: "action", action: () => { createNewSession(); togglePalette(); } },
+        { id: "action-trash", title: "Open Trash", category: "action", action: () => { openTrash(); togglePalette(); } },
       ];
       for (const a of actions) {
         if (fuzzyMatch(a.title, cleanQuery) > 0) result.push(a);
@@ -93,7 +96,7 @@ export function CommandPalette() {
     }
 
     return result;
-  }, [specs, sessions, mode, cleanQuery, selectSpec, togglePalette, switchSession, createNewSession]);
+  }, [specs, sessions, mode, cleanQuery, selectSpec, togglePalette, switchSession, createNewSession, openTrash]);
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent) => {

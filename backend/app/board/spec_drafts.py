@@ -60,6 +60,7 @@ class SpecDraftService:
 
     def __init__(self, config: AppConfig) -> None:
         self._config = config
+        self.trash_service: Any = None  # Injected by server.py
 
     @property
     def _drafts_dir(self) -> Path:
@@ -321,21 +322,39 @@ class SpecDraftService:
         self.discard_all(ticket_id)
 
     def discard_draft(self, ticket_id: str, index: int) -> None:
-        """Discard a single draft entry."""
+        """Discard a single draft entry (soft-delete to trash if available)."""
         manifest = self._read_manifest(ticket_id)
         if index < 0 or index >= len(manifest.entries):
             raise IndexError(f"Draft index {index} out of range")
 
         entry = manifest.entries.pop(index)
-        self._write_manifest(ticket_id, manifest)
 
-        # Remove draft file
         draft_file = self._draft_file_path(ticket_id, entry.real_path)
-        if draft_file.is_file():
+        if self.trash_service:
+            entry_dict = entry.model_dump(by_alias=True)
+            self.trash_service.trash_draft(
+                ticket_id, index,
+                manifest_entry=entry_dict,
+                draft_file=draft_file if draft_file.is_file() else None,
+            )
+        elif draft_file.is_file():
             draft_file.unlink()
 
+        self._write_manifest(ticket_id, manifest)
+
     def discard_all(self, ticket_id: str) -> None:
-        """Discard all drafts — delete the entire shadow directory."""
+        """Discard all drafts (soft-delete each entry to trash if available)."""
+        if self.trash_service:
+            manifest = self._read_manifest(ticket_id)
+            for i in range(len(manifest.entries) - 1, -1, -1):
+                entry = manifest.entries[i]
+                draft_file = self._draft_file_path(ticket_id, entry.real_path)
+                entry_dict = entry.model_dump(by_alias=True)
+                self.trash_service.trash_draft(
+                    ticket_id, i,
+                    manifest_entry=entry_dict,
+                    draft_file=draft_file if draft_file.is_file() else None,
+                )
         ticket_dir = self._ticket_dir(ticket_id)
         if ticket_dir.is_dir():
             shutil.rmtree(ticket_dir)

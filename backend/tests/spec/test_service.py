@@ -7,6 +7,7 @@ import pytest
 
 from app.core.config import load_config
 from app.spec.service import SpecNotFoundError, SpecService, _extract_title, _generate_id
+from app.trash.service import TrashService
 
 
 def _setup_project(tmp_path: Path) -> SpecService:
@@ -136,6 +137,35 @@ class TestDeleteSpec:
         svc = _setup_project(tmp_path)
         with pytest.raises(SpecNotFoundError):
             svc.delete_spec("ghost")
+
+    def test_delete_uses_trash_when_injected(self, tmp_path: Path) -> None:
+        svc = _setup_project(tmp_path)
+        trash_svc = TrashService(project_root=tmp_path)
+        svc.trash_service = trash_svc
+
+        svc.delete_spec("mod-a")
+
+        # File moved to trash, not hard-deleted
+        assert not (tmp_path / "mod_a" / "README.md").exists()
+        trashed = trash_svc.list_trashed(item_type="specs")
+        assert len(trashed) == 1
+        assert trashed[0]["id"] == "mod-a"
+        assert trashed[0]["context"]["registryEntry"]["id"] == "mod-a"
+
+        # Registry entry removed
+        assert svc.list_specs() == []
+
+    def test_delete_hard_deletes_without_trash(self, tmp_path: Path) -> None:
+        svc = _setup_project(tmp_path)
+        # No trash_service injected (default)
+
+        svc.delete_spec("mod-a")
+
+        assert not (tmp_path / "mod_a" / "README.md").exists()
+        assert svc.list_specs() == []
+        # No trash dir should exist
+        trash_dir = tmp_path / ".bonsai" / "trash"
+        assert not trash_dir.exists()
 
 
 class TestGetGraph:

@@ -335,11 +335,11 @@ async def revert_patch(service: BoardService, **params: Any) -> dict:
 
     # Write the original content back
     if patch_record.operation == "created":
-        if spec_path.is_file():
-            spec_path.unlink()
         from app.spec.service import SpecService
         try:
-            SpecService(service._config).delete_spec(patch_record.spec_id)
+            svc = SpecService(service._config)
+            svc.trash_service = service.trash_service
+            svc.delete_spec(patch_record.spec_id)
         except Exception:
             pass
     else:

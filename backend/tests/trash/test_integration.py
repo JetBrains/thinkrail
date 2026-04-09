@@ -112,8 +112,8 @@ class TestSessionTrashIntegration:
 
         trash.trash_session("x")
         trash.trash_session("y")
-        trash.trash_ticket(t.id)
+        trash.trash_ticket(t.id)  # cascade also trashes the auto-created plan
 
-        assert len(trash.list_trashed()) == 3
+        assert len(trash.list_trashed()) == 4  # 2 sessions + 1 ticket + 1 cascaded plan
         trash.empty_trash()
         assert trash.list_trashed() == []

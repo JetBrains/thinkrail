@@ -11,6 +11,7 @@ import { useSettingsStore } from "@/store/settingsStore.ts";
 import { registerKeyboardShortcuts } from "@/utils/keyboard.ts";
 import { applyFontScale } from "@/utils/fontScale.ts";
 import { CommandPalette } from "@/components/CommandPalette/CommandPalette.tsx";
+import { TrashModal } from "@/components/TrashModal/TrashModal.tsx";
 import { ToastContainer } from "@/components/Notifications/ToastContainer.tsx";
 import { AppRoutes } from "./routes.tsx";
 
@@ -92,6 +93,7 @@ function AppInner({ projectPath: _projectPath, onSwitchProject }: { projectPath:
     <BrowserRouter>
       <AppRoutes onSwitchProject={onSwitchProject} />
       <CommandPalette />
+      <TrashModal />
       <ToastContainer />
     </BrowserRouter>
   );

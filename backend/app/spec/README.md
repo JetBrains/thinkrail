@@ -69,13 +69,15 @@ graph TD
 
 **Class:** `SpecService(config: AppConfig)`
 
+`trash_service` attribute (injected by `rpc/server.py`) enables soft-delete for `delete_spec`.
+
 | Method | Signature | Description |
 |--------|-----------|-------------|
 | `list_specs` | `() → list[SpecSummary]` | List all specs with metadata from registry |
 | `get_spec` | `(id: str) → SpecDetail` | Get full spec content + metadata |
 | `create_spec` | `(type: str, path: str, content: str?, id: str?) → SpecDetail` | Create spec file + registry entry. `title` is auto-derived from the first heading in content (or from path if no content). `id` is auto-generated if not provided, `status` defaults to `draft`. |
 | `update_spec` | `(id: str, content: str) → SpecDetail` | Update spec content on disk + registry |
-| `delete_spec` | `(id: str) → None` | Remove spec file + registry entry |
+| `delete_spec` | `(id: str) → None` | Soft-delete spec file via `trash_service` (with registry entry + links snapshot for full restore), then remove from registry. Falls back to hard-delete if no `trash_service` is injected. |
 | `get_graph` | `() → SpecGraph` | Return full hierarchy graph (nodes + edges) |
 
 ### Models
@@ -97,7 +99,7 @@ graph TD
 | `get_spec` | `SpecDetail` | Spec not found, file missing on disk |
 | `create_spec` | `SpecDetail` | Path conflict, invalid type |
 | `update_spec` | `SpecDetail` | Spec not found, validation failure |
-| `delete_spec` | `None` | Spec not found |
+| `delete_spec` | `None` | Spec not found. Spec file is moved to `.bonsai/trash/specs/{id}/` with a registry snapshot in `_trash.json` for future restore. |
 | `get_graph` | `SpecGraph` | Registry malformed |
 
 ## Design Decisions
@@ -115,6 +117,7 @@ graph TD
 |------------|-------|
 | `core/config` | Project root path, spec directory config |
 | `core/fileio` | File read/write/delete for spec files and registry |
+| `trash/service` | Soft-delete for spec files (injected via `trash_service` attribute) |
 | `pydantic` | Model validation and serialization |
 
 ## Known Limitations

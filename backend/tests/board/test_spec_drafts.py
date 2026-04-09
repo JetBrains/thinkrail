@@ -2,10 +2,12 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+from unittest.mock import MagicMock
 
 from app.board.service import BoardService
 from app.board.spec_drafts import SpecDraftService
 from app.core.config import load_config
+from app.trash.service import TrashService
 
 
 def _setup(tmp_path: Path) -> tuple[BoardService, SpecDraftService]:
@@ -102,3 +104,72 @@ class TestPatchGeneration:
 
         updated = board_svc.get_ticket(ticket.id)
         assert len(updated.spec_patches) == 2
+
+
+class TestDiscardDraftTrash:
+    def test_discard_draft_uses_trash(self, tmp_path: Path) -> None:
+        _, draft_svc = _setup(tmp_path)
+        trash_svc = TrashService(project_root=tmp_path)
+        draft_svc.trash_service = trash_svc
+
+        draft_svc.write_draft(
+            ticket_id="t1",
+            real_path="spec.md",
+            content="# Spec\n",
+            operation="create",
+        )
+
+        draft_svc.discard_draft("t1", 0)
+
+        # Draft file removed from drafts dir
+        draft_file = tmp_path / ".bonsai" / "spec-drafts" / "t1" / "spec.md"
+        assert not draft_file.exists()
+
+        # Draft should be in trash
+        trashed = trash_svc.list_trashed(item_type="drafts")
+        assert len(trashed) == 1
+        assert trashed[0]["id"] == "t1--0"
+
+    def test_discard_draft_hard_deletes_without_trash(self, tmp_path: Path) -> None:
+        _, draft_svc = _setup(tmp_path)
+        # No trash_service injected
+
+        draft_svc.write_draft(
+            ticket_id="t2",
+            real_path="spec.md",
+            content="# Spec\n",
+            operation="create",
+        )
+
+        draft_svc.discard_draft("t2", 0)
+
+        draft_file = tmp_path / ".bonsai" / "spec-drafts" / "t2" / "spec.md"
+        assert not draft_file.exists()
+
+
+class TestDiscardAllTrash:
+    def test_discard_all_uses_trash(self, tmp_path: Path) -> None:
+        _, draft_svc = _setup(tmp_path)
+        trash_svc = TrashService(project_root=tmp_path)
+        draft_svc.trash_service = trash_svc
+
+        draft_svc.write_draft(
+            ticket_id="t3",
+            real_path="a.md",
+            content="# A\n",
+            operation="create",
+        )
+        draft_svc.write_draft(
+            ticket_id="t3",
+            real_path="b.md",
+            content="# B\n",
+            operation="create",
+        )
+
+        draft_svc.discard_all("t3")
+
+        trashed = trash_svc.list_trashed(item_type="drafts")
+        assert len(trashed) == 2
+        ids = {t["id"] for t in trashed}
+        assert "t3--0" in ids
+        assert "t3--1" in ids

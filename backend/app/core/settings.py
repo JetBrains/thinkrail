@@ -32,6 +32,8 @@ class ProjectSettings(BaseModel, extra="allow"):
     user_respond_timeout: float = 300  # seconds; 0 = wait indefinitely
     user_respond_timeout_behavior: str = "interrupt"  # "interrupt" | "deny" | "retry"
     user_respond_retry_max_attempts: int = 3  # only used when behavior = "retry"
+    # Trash auto-purge
+    trash_retention_days: int = 30  # 0 or null to disable auto-purge
 
 
 def _settings_path(project_root: Path) -> Path:

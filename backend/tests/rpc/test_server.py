@@ -53,6 +53,7 @@ class TestMethods:
             "board/discardDraft", "board/discardAllDrafts",
             "board/listPatches", "board/getPatchDiff", "board/revertPatch",
             "trash/list", "trash/purge", "trash/empty",
+            "trash/restoreSpec", "trash/restorePlan", "trash/restoreDraft", "trash/restorePatches",
             "settings/get", "settings/update", "settings/ensureFile",
             "models/list", "models/refresh",
         }

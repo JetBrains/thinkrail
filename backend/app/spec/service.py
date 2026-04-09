@@ -3,6 +3,7 @@ from __future__ import annotations
 import re
 from datetime import date
 from pathlib import Path
+from typing import Any
 
 from app.core.config import AppConfig
 from app.core.fileio import delete_file, ensure_dir, read_text, write_text
@@ -47,6 +48,7 @@ class SpecService:
 
     def __init__(self, config: AppConfig) -> None:
         self._config = config
+        self.trash_service: Any = None  # Injected by server.py
 
     @property
     def _registry_path(self) -> Path:
@@ -182,9 +184,19 @@ class SpecService:
             raise SpecNotFoundError(f"Spec '{id}' not found")
 
         file_path = self._root / entry.path
-        delete_file(file_path)
+
+        if self.trash_service:
+            # Snapshot registry entry + related links for full restore
+            entry_dict = entry.model_dump() if hasattr(entry, "model_dump") else entry.__dict__
+            related_links = [
+                l.model_dump() if hasattr(l, "model_dump") else l.__dict__
+                for l in links if l.from_id == id or l.to_id == id
+            ]
+            self.trash_service.trash_spec(id, file_path, entry_dict, related_links)
+        else:
+            delete_file(file_path)
+
         entries = remove_entry(entries, id)
-        # Remove links referencing this spec
         links = [l for l in links if l.from_id != id and l.to_id != id]
         write_registry(self._registry_path, entries, links)
 

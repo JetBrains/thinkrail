@@ -46,6 +46,10 @@ from app.rpc.methods.trash import (
     empty_trash,
     list_trashed,
     purge_trashed,
+    restore_draft as trash_restore_draft,
+    restore_patches as trash_restore_patches,
+    restore_plan as trash_restore_plan,
+    restore_spec as trash_restore_spec,
 )
 from app.rpc.methods.settings import (
     ensure_settings,
@@ -152,6 +156,10 @@ METHODS = {
     "trash/list": list_trashed,
     "trash/purge": purge_trashed,
     "trash/empty": empty_trash,
+    "trash/restoreSpec": trash_restore_spec,
+    "trash/restorePlan": trash_restore_plan,
+    "trash/restoreDraft": trash_restore_draft,
+    "trash/restorePatches": trash_restore_patches,
     "settings/get": get_settings,
     "settings/update": update_settings,
     "settings/ensureFile": ensure_settings,
@@ -246,11 +254,13 @@ def register_routes(app: FastAPI) -> None:
             board_service = BoardService(config)
             _board_services[key] = board_service
 
-        # Trash service for soft-delete
+        # Trash service for soft-delete — inject into all services
         from app.trash.service import TrashService
         trash_service = TrashService(project_root=project_path)
         agent_service.trash_service = trash_service
         board_service.trash_service = trash_service
+        spec_service.trash_service = trash_service
+        board_service.spec_drafts.trash_service = trash_service
 
         # Make board service available to agent service for auto-linking
         agent_service.board_service = board_service

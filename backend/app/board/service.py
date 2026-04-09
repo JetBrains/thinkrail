@@ -131,9 +131,9 @@ class BoardService:
         if not path.is_file():
             raise TicketNotFoundError(f"Ticket '{id}' not found")
         if self.trash_service:
-            self.trash_service.trash_ticket(id)
+            self.trash_service.trash_ticket(id)  # cascades to plan, drafts, patches
         else:
-            _delete_file(path)
+            _delete_file(path)  # fallback for tests without trash wiring
 
     def reorder_ticket(
         self, id: str, status: MetaTicketStatus, order: int

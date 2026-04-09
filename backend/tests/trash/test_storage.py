@@ -124,3 +124,52 @@ class TestPurgeTrashed:
         trash_dir = tmp_path / ".bonsai" / "trash"
         with pytest.raises(FileNotFoundError):
             purge_trashed(trash_dir, "sessions", "nope")
+
+
+class TestContext:
+    def test_context_stored(self, tmp_path: Path) -> None:
+        sessions_dir = tmp_path / ".bonsai" / "sessions"
+        sessions_dir.mkdir(parents=True)
+        f = sessions_dir / "ctx-1.json"
+        f.write_text('{"name": "ctx"}')
+
+        trash_dir = tmp_path / ".bonsai" / "trash"
+        ctx = {"registryEntry": {"id": "mod-a"}, "links": [{"from": "mod-a"}]}
+        move_to_trash(
+            trash_dir, "sessions", "ctx-1", [f], str(sessions_dir), context=ctx,
+        )
+
+        sidecar = trash_dir / "sessions" / "ctx-1" / "_trash.json"
+        info = json.loads(sidecar.read_text())
+        assert info["context"] == ctx
+
+    def test_restore_returns_context(self, tmp_path: Path) -> None:
+        sessions_dir = tmp_path / ".bonsai" / "sessions"
+        sessions_dir.mkdir(parents=True)
+        f = sessions_dir / "ctx-2.json"
+        f.write_text('{"name": "ctx"}')
+
+        trash_dir = tmp_path / ".bonsai" / "trash"
+        ctx = {"registryEntry": {"id": "mod-b"}, "links": []}
+        move_to_trash(
+            trash_dir, "sessions", "ctx-2", [f], str(sessions_dir), context=ctx,
+        )
+
+        returned = restore_from_trash(trash_dir, "sessions", "ctx-2")
+        assert returned == ctx
+
+    def test_list_includes_context(self, tmp_path: Path) -> None:
+        sessions_dir = tmp_path / ".bonsai" / "sessions"
+        sessions_dir.mkdir(parents=True)
+        f = sessions_dir / "ctx-3.json"
+        f.write_text("{}")
+
+        trash_dir = tmp_path / ".bonsai" / "trash"
+        ctx = {"ticketId": "t-99"}
+        move_to_trash(
+            trash_dir, "sessions", "ctx-3", [f], str(sessions_dir), context=ctx,
+        )
+
+        items = list_trashed(trash_dir)
+        assert len(items) == 1
+        assert items[0]["context"] == ctx

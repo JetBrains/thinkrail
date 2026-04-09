@@ -147,6 +147,8 @@ def delete_session(project_root: Path, bonsai_sid: str) -> bool
 
 Delete a session from disk — removes both the `.json` metadata file and the `.events.jsonl` log. Returns `True` if any file was deleted, `False` if neither existed.
 
+> **Note:** In practice, `service.py` always uses `trash_service.trash_session()` (soft-delete to `.bonsai/trash/sessions/`) instead of calling this function directly. This hard-delete function remains as a fallback for cases where no `trash_service` is injected.
+
 ## File Organization
 
 | File | Responsibility | Depends On |

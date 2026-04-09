@@ -43,3 +43,30 @@ async def empty_trash(service: TrashService, **params: Any) -> None:
     """Permanently delete all trashed items."""
     item_type = params.get("type")
     service.empty_trash(item_type=item_type)
+
+
+@_handle_errors
+async def restore_spec(service: TrashService, **params: Any) -> dict:
+    """Restore a trashed spec (file + registry entry + links)."""
+    spec_id = params["specId"]
+    entry_dict, links_dicts = service.restore_spec(spec_id)
+    return {"registryEntry": entry_dict, "links": links_dicts}
+
+
+@_handle_errors
+async def restore_plan(service: TrashService, **params: Any) -> None:
+    """Restore a trashed plan."""
+    service.restore_plan(params["ticketId"])
+
+
+@_handle_errors
+async def restore_draft(service: TrashService, **params: Any) -> dict:
+    """Restore a trashed draft and return its manifest entry."""
+    manifest_entry = service.restore_draft(params["trashItemId"])
+    return {"manifestEntry": manifest_entry}
+
+
+@_handle_errors
+async def restore_patches(service: TrashService, **params: Any) -> None:
+    """Restore trashed patches for a ticket."""
+    service.restore_patches(params["ticketId"])

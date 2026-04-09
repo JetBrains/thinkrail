@@ -2,7 +2,7 @@
   "default_model": "claude-opus-4-6",
   "default_effort": "high",
   "model_refresh_interval_hours": 24,
-  "event_view": "classical",
+  "event_view": "compact",
   "font_size": 12,
   "compact_font_size": 10,
   "user_respond_timeout": 300.0,
