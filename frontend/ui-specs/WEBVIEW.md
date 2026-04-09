@@ -288,7 +288,7 @@ Always visible at the bottom. Shows:
 
 ### Session Manager
 
-Clicking "N sessions" in the status bar replaces the center panel content with the **Session Manager** — a list of all sessions (active + archived from `.specs/sessions/`).
+Clicking "N sessions" in the status bar replaces the center panel content with the **Session Manager** — a list of all sessions (active + archived from `.bonsai/sessions/`).
 
 **Grouped by status:** Active (idle/running) → Completed (done) → Errors
 
@@ -384,7 +384,7 @@ The following RPC methods and endpoints are referenced by frontend sub-specs but
 
 | Methods | Referenced By | Description |
 | --- | --- | --- |
-| `cost/summary`, `cost/setBudget`, `cost/reset` | [Progress Tracker](PROGRESS_TRACKER.md) §6 | Cost tracking and budget management. Requires `.specs/cost.json` persistence. |
+| `cost/summary`, `cost/setBudget`, `cost/reset` | [Progress Tracker](PROGRESS_TRACKER.md) §6 | Cost tracking and budget management. Requires `.bonsai/cost.json` persistence. |
 | `diff/mappings`, `diff/commit`, `diff/scan` | [Diff Viewer](DIFF_VIEWER.md) §3 | Spec-to-code mapping extraction from git history. Requires mapping file I/O. |
 | `/terminal/create`, `/terminal/{id}/ws`, `/terminal/{id}/resize`, `/terminal/{id}/kill` | [Console](../src/components/Console/README.md) §Backend Integration | Terminal process management via PTY. Separate WebSocket per terminal (not JSON-RPC). Requires new FastAPI router. |
 | `cost/didUpdate` (notification) | [Progress Tracker](PROGRESS_TRACKER.md) §6.4 | Server→client notification when cost data changes. |

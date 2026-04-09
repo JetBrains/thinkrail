@@ -54,7 +54,7 @@ frontend/
     styles/           # Global CSS, theming
     types/            # Shared TypeScript types
     utils/            # Utility functions
-.specs/
+.bonsai/
   registry.json       # Spec registry (all specs and links)
 current_tasks/        # Task specs organized by module (agent/, core/, frontend/, rpc/, spec/)
 ```

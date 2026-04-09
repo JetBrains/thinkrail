@@ -9,12 +9,12 @@ from app.trash.service import TrashService
 
 
 def _setup(tmp_path: Path) -> tuple[BoardService, TrashService]:
-    specs_dir = tmp_path / ".specs"
-    specs_dir.mkdir()
+    bonsai_dir = tmp_path / ".bonsai"
+    bonsai_dir.mkdir()
     reg = {"version": "2.0", "project": "test", "specs": [], "links": []}
-    (specs_dir / "registry.json").write_text(json.dumps(reg), encoding="utf-8")
+    (bonsai_dir / "registry.json").write_text(json.dumps(reg), encoding="utf-8")
 
-    sessions_dir = specs_dir / "sessions"
+    sessions_dir = bonsai_dir / "sessions"
     sessions_dir.mkdir()
 
     config = load_config(tmp_path)
@@ -28,7 +28,7 @@ class TestSessionTrashIntegration:
         board, trash = _setup(tmp_path)
 
         # Create session files
-        sessions_dir = tmp_path / ".specs" / "sessions"
+        sessions_dir = tmp_path / ".bonsai" / "sessions"
         (sessions_dir / "s1.json").write_text(json.dumps({
             "bonsaiSid": "s1", "name": "My Session", "status": "done",
             "specIds": [], "config": {}, "createdAt": "", "updatedAt": "",
@@ -91,7 +91,7 @@ class TestSessionTrashIntegration:
     def test_purge_after_trash(self, tmp_path: Path) -> None:
         board, trash = _setup(tmp_path)
 
-        sessions_dir = tmp_path / ".specs" / "sessions"
+        sessions_dir = tmp_path / ".bonsai" / "sessions"
         (sessions_dir / "gone.json").write_text('{"bonsaiSid": "gone"}')
 
         trash.trash_session("gone")
@@ -104,7 +104,7 @@ class TestSessionTrashIntegration:
     def test_empty_trash_clears_all(self, tmp_path: Path) -> None:
         board, trash = _setup(tmp_path)
 
-        sessions_dir = tmp_path / ".specs" / "sessions"
+        sessions_dir = tmp_path / ".bonsai" / "sessions"
         for sid in ["x", "y"]:
             (sessions_dir / f"{sid}.json").write_text("{}")
 

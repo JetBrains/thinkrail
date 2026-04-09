@@ -44,5 +44,5 @@ Design based on UX research: PatternFly (badges on tree nodes), Linear (hide zer
 **Priority:** High
 **Type:** Improvement
 **Spec:** [SpecTree README](../../frontend/src/components/SpecTree/README.md)
-**Mockup:** [tree-mockups.html](../../.specs/tree-mockups.html)
+**Mockup:** [tree-mockups.html](../../.bonsai/tree-mockups.html)
 **Started:** 2026-03-04

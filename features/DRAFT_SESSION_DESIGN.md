@@ -42,7 +42,7 @@ draft  →  initializing  →  idle / running / waiting  →  done / error
  prepare    startDraft (or agent/run for one-step)
 ```
 
-The `"draft"` status is added to `TaskStatus`. Draft tasks are persisted to `.specs/sessions/` just like other tasks, so they survive page refreshes.
+The `"draft"` status is added to `TaskStatus`. Draft tasks are persisted to `.bonsai/sessions/` just like other tasks, so they survive page refreshes.
 
 | Method | Transition | What Happens |
 |--------|-----------|--------------|
@@ -65,7 +65,7 @@ User clicks "Create Session" in NewSessionModal
       1. tracker.create_task() with status = "draft"
       2. _build_context_for(task) → assembles system prompt
       3. task.system_prompt = assembled prompt
-      4. _save_task(task) → persist to .specs/sessions/
+      4. _save_task(task) → persist to .bonsai/sessions/
   → Response: { bonsaiSid, systemPrompt }
   → Frontend: session added to store with status "draft" + systemPrompt
   → DraftConfigCard renders in ChatStream

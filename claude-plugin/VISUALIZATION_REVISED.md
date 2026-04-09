@@ -666,7 +666,7 @@ During migration, both systems run in parallel:
 **Changes:**
 1. Remove PostToolUse and SessionStart hooks for `compute-dashboard.py`
 2. Remove `compute-dashboard.py` and `dashboard-template.html`
-3. Remove generated files: `.specs/dashboard.json`, `.specs/dashboard.html`, `.specs/vendor/`
+3. Remove generated files: `.bonsai/dashboard.json`, `.bonsai/dashboard.html`, `.bonsai/vendor/`
 4. Update `VISUALIZATION.md` → point entirely to this document
 5. Clean up any remaining references
 

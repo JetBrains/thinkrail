@@ -30,7 +30,7 @@ class TrashService:
 
     def trash_session(self, bonsai_sid: str) -> None:
         """Move a session's files to trash."""
-        sessions_dir = self._project_root / ".specs" / "sessions"
+        sessions_dir = self._project_root / ".bonsai" / "sessions"
         meta = sessions_dir / f"{bonsai_sid}.json"
         events = sessions_dir / f"{bonsai_sid}.events.jsonl"
         source_files = [f for f in [meta, events] if f.is_file()]
@@ -40,7 +40,7 @@ class TrashService:
         move_to_trash(self._trash_dir, "sessions", bonsai_sid, source_files, str(sessions_dir))
 
     def restore_session(self, bonsai_sid: str) -> None:
-        """Restore a trashed session back to .specs/sessions/."""
+        """Restore a trashed session back to .bonsai/sessions/."""
         restore_from_trash(self._trash_dir, "sessions", bonsai_sid)
 
     # -- tickets ---------------------------------------------------------------

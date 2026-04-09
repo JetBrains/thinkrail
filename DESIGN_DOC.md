@@ -100,7 +100,7 @@ This mirrors the Language Server Protocol pattern exactly.
     │   agent/askUserQuestion  agent/confirmAction          │
     ▼                                                       ▼
   Browser                              ┌──── File Watcher ────┐
-                                       │  .specs/registry.json │
+                                       │  .bonsai/registry.json │
                                        │  spec files (*.md,    │
                                        │  *.json per registry) │
                                        └───────────────────────┘
@@ -162,7 +162,7 @@ graph TD
     Watcher -- "fires callback registered<br/>by rpc/server.py at startup" --> Router
     Router -- "spec files (*.md or *.json per registry)" --> SpecMod
     SpecMod -- "spec/did*" --> Notify
-    Router -- ".specs/registry.json" --> Notify
+    Router -- ".bonsai/registry.json" --> Notify
     Notify -- "spec/did* or registry/didUpdate" --> FE
     Router -. "source files" .-> Future
 ```
@@ -301,7 +301,7 @@ Specs are stored as files in the repository. The registry tracks metadata:
 - JSON specs store structured content as a JSON object
 - Content varies by type (goal, architecture, module, task)
 
-**Registry Entry (`.specs/registry.json`):**
+**Registry Entry (`.bonsai/registry.json`):**
 - `id` — unique identifier
 - `type` — goal-and-requirements | architecture-design | module-design | task-spec
 - `path` — relative file path
@@ -320,18 +320,18 @@ Specs are stored as files in the repository. The registry tracks metadata:
 
 **Style:** JSON-RPC 2.0 over WebSocket — true bidirectional (LSP-style)
 
-**Project selection:** The WebSocket URL includes a `project` query parameter specifying the project directory: `ws://host/ws?project=/path/to/dir`. The backend validates `.specs/registry.json` exists and creates per-connection services scoped to that project.
+**Project selection:** The WebSocket URL includes a `project` query parameter specifying the project directory: `ws://host/ws?project=/path/to/dir`. The backend validates `.bonsai/registry.json` exists and creates per-connection services scoped to that project.
 
 **REST endpoints** for project and file management:
 - `GET /api/project/validate?path=...` — check if path is a valid Bonsai project
-- `POST /api/project/init` — initialize `.specs/` in a new directory
+- `POST /api/project/init` — initialize `.bonsai/` in a new directory
 - `GET /api/project/files?path=...&show_hidden=false` — list project directory tree. Visibility is controlled by `.bonsaihide` (gitignore-style config in project root; `pathspec` library). Pass `show_hidden=true` to bypass `.bonsaihide` rules and return all files.
 - `GET /api/file/read?project=...&path=...` — read file contents
 - `POST /api/file/write` — write file contents `{ project, path, content }`
 - `GET /api/fs/list-dirs?base=...&prefix=...` — list subdirectories for path autocompletion (max 20, directories only)
 - `POST /api/file/open-external` — open file in editor `{ project, path, editor: "idea"|"code"|"vim"|"nvim"|"nano" }`. Terminal editors (vim, nvim, nano, vi) open in a terminal emulator window.
 
-**Session persistence:** Agent sessions are persisted to `.specs/sessions/{taskId}.json`. Events are saved as they stream. Completed/errored sessions survive backend restarts and page refreshes. The `session/continue` method replays old conversation history as context for a new SDK session.
+**Session persistence:** Agent sessions are persisted to `.bonsai/sessions/{taskId}.json`. Events are saved as they stream. Completed/errored sessions survive backend restarts and page refreshes. The `session/continue` method replays old conversation history as context for a new SDK session.
 
 Communication flows in three directions over a single WebSocket at `/ws?project=...`:
 - **Client → Server requests:** `spec/*` CRUD + graph, `agent/*` session management, `session/*` persistence (list, get, continue, delete)
@@ -347,7 +347,7 @@ Full protocol reference (method tables, params, message shapes): **[RPC Module s
 | Architecture pattern | Hybrid — layered top-level (frontend/backend) with modular domains inside backend | Clean separation between transport (RPC), domain logic (Spec, Agent), and infrastructure (Core). Each module has one responsibility. |
 | Communication protocol | JSON-RPC 2.0 over WebSocket | LSP-style true bidirectional messaging. Server can push notifications and initiate requests (e.g., agent questions). Single connection, simple framing. |
 | Spec storage | Files in the repo (Markdown or JSON) | Git-friendly, versionable alongside code. No external database. Developers can read/edit specs with any text editor. |
-| Registry as single JSON file | `.specs/registry.json` | Simplicity — one atomic file for all metadata. Easy to debug, version, and parse. Atomic writes prevent corruption. |
+| Registry as single JSON file | `.bonsai/registry.json` | Simplicity — one atomic file for all metadata. Easy to debug, version, and parse. Atomic writes prevent corruption. |
 | Graph visualization | Custom DOM + SVG (no library) | Layered view shows ≤15 nodes. D3/React Flow/Cytoscape add 80-170KB for no benefit at this scale. |
 | State management | Zustand (frontend) | 1KB, hook-based, no boilerplate. Stores split by domain for isolation. |
 | Agent SDK integration | Isolated in `runner.py` only | Single swap point for SDK versions. Service and tracker are SDK-agnostic. |

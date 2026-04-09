@@ -8,7 +8,7 @@ from app.trash.storage import move_to_trash, restore_from_trash, list_trashed, p
 
 class TestMoveToTrash:
     def test_moves_single_file(self, tmp_path: Path) -> None:
-        sessions_dir = tmp_path / ".specs" / "sessions"
+        sessions_dir = tmp_path / ".bonsai" / "sessions"
         sessions_dir.mkdir(parents=True)
         meta = sessions_dir / "sid-1.json"
         meta.write_text('{"name": "test"}')
@@ -34,7 +34,7 @@ class TestMoveToTrash:
         assert "trashedAt" in info
 
     def test_moves_multiple_files(self, tmp_path: Path) -> None:
-        sessions_dir = tmp_path / ".specs" / "sessions"
+        sessions_dir = tmp_path / ".bonsai" / "sessions"
         sessions_dir.mkdir(parents=True)
         meta = sessions_dir / "sid-2.json"
         events = sessions_dir / "sid-2.events.jsonl"
@@ -65,7 +65,7 @@ class TestMoveToTrash:
 
 class TestRestoreFromTrash:
     def test_restores_files(self, tmp_path: Path) -> None:
-        sessions_dir = tmp_path / ".specs" / "sessions"
+        sessions_dir = tmp_path / ".bonsai" / "sessions"
         sessions_dir.mkdir(parents=True)
         meta = sessions_dir / "sid-3.json"
         meta.write_text('{"name": "restore-me"}')
@@ -91,7 +91,7 @@ class TestListTrashed:
         assert list_trashed(trash_dir) == []
 
     def test_lists_items(self, tmp_path: Path) -> None:
-        sessions_dir = tmp_path / ".specs" / "sessions"
+        sessions_dir = tmp_path / ".bonsai" / "sessions"
         sessions_dir.mkdir(parents=True)
         trash_dir = tmp_path / ".bonsai" / "trash"
         for sid in ["a", "b"]:
@@ -109,7 +109,7 @@ class TestListTrashed:
 
 class TestPurgeTrashed:
     def test_purges(self, tmp_path: Path) -> None:
-        sessions_dir = tmp_path / ".specs" / "sessions"
+        sessions_dir = tmp_path / ".bonsai" / "sessions"
         sessions_dir.mkdir(parents=True)
         f = sessions_dir / "del-me.json"
         f.write_text("{}")

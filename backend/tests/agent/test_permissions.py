@@ -25,7 +25,7 @@ def _make_task(tracker: Tracker) -> AgentTask:
 def _config() -> AppConfig:
     return AppConfig(
         project_root=Path("/tmp/test"),
-        spec_dir=Path("/tmp/test/.specs"),
+        bonsai_dir=Path("/tmp/test/.bonsai"),
         plugin_dir=Path("/tmp/test/plugins"),
     )
 

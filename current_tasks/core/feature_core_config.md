@@ -19,21 +19,21 @@ The Core module is the foundational dependency for all backend modules. `config.
 
 | Function | Signature | Description |
 |----------|-----------|-------------|
-| `get_project_root` | `() → Path` | Discover project root (look for `.specs/` or `.git/`) |
-| `get_spec_dir` | `() → Path` | Return `<root>/.specs/` |
-| `get_registry_path` | `() → Path` | Return `<root>/.specs/registry.json` |
+| `get_project_root` | `() → Path` | Discover project root (look for `.bonsai/` or `.git/`) |
+| `get_bonsai_dir` | `() → Path` | Return `<root>/.bonsai/` |
+| `get_registry_path` | `() → Path` | Return `<root>/.bonsai/registry.json` |
 | `load_config` | `() → AppConfig` | Load and validate application settings |
 
 ### Models
 
-- **AppConfig** (Pydantic BaseModel) — fields: `project_root`, `spec_dir`, `host`, `port`
+- **AppConfig** (Pydantic BaseModel) — fields: `project_root`, `bonsai_dir`, `host`, `port`
 
 ## Plan
 
 1. Create `backend/app/core/__init__.py` with public exports
 2. Implement `AppConfig` Pydantic model in `config.py`
-3. Implement `get_project_root()` — walk up from cwd looking for `.specs/` or `.git/`
-4. Implement `get_spec_dir()` and `get_registry_path()` using `get_project_root()`
+3. Implement `get_project_root()` — walk up from cwd looking for `.bonsai/` or `.git/`
+4. Implement `get_bonsai_dir()` and `get_registry_path()` using `get_project_root()`
 5. Implement `load_config()` — construct AppConfig with discovered paths and defaults
 6. Write unit tests covering: root discovery, path construction, config validation
 

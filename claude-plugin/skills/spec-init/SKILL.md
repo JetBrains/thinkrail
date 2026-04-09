@@ -11,7 +11,7 @@ You are setting up a project for **specification-driven development**. This is t
 ## What You Will Create
 
 1. **Directory structure** for specifications
-2. **Spec registry** (`.specs/registry.json`) for tracking all specs
+2. **Spec registry** (`.bonsai/registry.json`) for tracking all specs
 3. **CLAUDE.md** with spec-driven development rules
 4. **Skeleton specifications** to get started
 
@@ -38,13 +38,13 @@ If `$ARGUMENTS` is provided, use it as project name. Otherwise auto-detect from 
 Create these directories (skip any that already exist):
 
 ```
-.specs/                    # Spec tracking and registry
+.bonsai/                    # Spec tracking and registry
 current_tasks/             # Active task specifications
 ```
 
 ### Step 3: Create the spec registry
 
-Create `.specs/registry.json` with this initial structure:
+Create `.bonsai/registry.json` with this initial structure:
 
 ```json
 {
@@ -129,7 +129,7 @@ Print a summary:
 Spec-driven development initialized for {project-name}!
 
 Created:
-  .specs/registry.json     - Specification registry
+  .bonsai/registry.json     - Specification registry
   .claude/CLAUDE.md        - Development rules
   {other files created}
 

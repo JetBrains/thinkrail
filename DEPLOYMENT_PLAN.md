@@ -209,7 +209,7 @@ def load_config(project_root: Path | None = None) -> AppConfig:
     root = project_root or _discover_root()
     return AppConfig(
         project_root=root,
-        spec_dir=root / ".specs",
+        bonsai_dir=root / ".bonsai",
         plugin_dir=_BONSAI_ROOT / "claude-plugin",
     )
 ```
@@ -231,7 +231,7 @@ def load_config(project_root: Path | None = None) -> AppConfig:
     root = project_root or _discover_root()
     return AppConfig(
         project_root=root,
-        spec_dir=root / ".specs",
+        bonsai_dir=root / ".bonsai",
         plugin_dir=_default_plugin_dir(),
     )
 ```

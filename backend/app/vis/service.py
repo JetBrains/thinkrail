@@ -44,7 +44,7 @@ CODE_EXTENSIONS = {
 }
 
 IGNORE_DIRS = {
-    "node_modules", ".venv", "__pycache__", "dist", ".git", ".specs",
+    "node_modules", ".venv", "__pycache__", "dist", ".git", ".bonsai",
     "vendor", ".idea", ".vscode", "current_tasks", ".claude", "claude-plugin",
 }
 

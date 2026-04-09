@@ -1,8 +1,8 @@
-"""Session persistence — saves/loads session data to .specs/sessions/.
+"""Session persistence — saves/loads session data to .bonsai/sessions/.
 
 Storage layout:
-  .specs/sessions/{bonsai_sid}.json        — metadata (small, rewritten on status change)
-  .specs/sessions/{bonsai_sid}.events.jsonl — append-only event log (one JSON object per line)
+  .bonsai/sessions/{bonsai_sid}.json        — metadata (small, rewritten on status change)
+  .bonsai/sessions/{bonsai_sid}.events.jsonl — append-only event log (one JSON object per line)
 """
 
 from __future__ import annotations
@@ -18,7 +18,7 @@ logger = logging.getLogger(__name__)
 
 
 def _sessions_dir(project_root: Path) -> Path:
-    d = project_root / ".specs" / "sessions"
+    d = project_root / ".bonsai" / "sessions"
     ensure_dir(d)
     return d
 
@@ -32,7 +32,7 @@ def _events_path(project_root: Path, bonsai_sid: str) -> Path:
 
 
 def save_session(project_root: Path, data: dict[str, Any]) -> None:
-    """Write session metadata to .specs/sessions/{bonsaiSid}.json.
+    """Write session metadata to .bonsai/sessions/{bonsaiSid}.json.
 
     Events in ``data`` are written to the separate ``.events.jsonl`` file
     (one JSON object per line) and stripped from the metadata file.

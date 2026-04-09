@@ -19,7 +19,7 @@ configuration (project root discovery, directory paths, settings), file system o
 (read, write, delete files and directories), and async filesystem watching.
 
 `watcher.py` watches the entire working directory and fires callbacks when files change.
-At this design stage, spec files (`*.md`, `*.json`), `.specs/*`, and `registry.json` are the primary
+At this design stage, spec files (`*.md`, `*.json`), `.bonsai/*`, and `registry.json` are the primary
 consumers of change events. Source code files will be added as consumers in later stages
 (e.g. coverage tracking, detecting agent-authored source changes).
 
@@ -48,7 +48,7 @@ graph TD
 
     Watcher -- "fires callback" --> RPCCb["rpc/server.py<br/>_on_file_change callback"]
     RPCCb -- "spec files (*.md or *.json)" --> SpecSvc["spec/service<br/>validate/postprocess → spec/did*"]
-    RPCCb -- ".specs/registry.json" --> Notify["rpc/notifications<br/>registry/didUpdate → frontend"]
+    RPCCb -- ".bonsai/registry.json" --> Notify["rpc/notifications<br/>registry/didUpdate → frontend"]
     SpecSvc --> Notify
     Watcher -. "source files (future)" .-> TBD["TBD"]
 ```
@@ -80,8 +80,8 @@ graph TD
 | Function            | Signature                    | Description                                    |
 |---------------------|------------------------------|------------------------------------------------|
 | `get_project_root`  | `AppConfig.() → Path`        | Discover and return the project root directory |
-| `get_spec_dir`      | `AppConfig.() → Path`        | Path to the `.specs/` directory                |
-| `get_registry_path` | `AppConfig.() → Path`        | Path to `.specs/registry.json`                 |
+| `get_bonsai_dir`    | `AppConfig.() → Path`        | Path to the `.bonsai/` directory               |
+| `get_registry_path` | `AppConfig.() → Path`        | Path to `.bonsai/registry.json`                |
 | `load_config`       | `(project_root) → AppConfig` | Load application settings (Pydantic model)     |
 
 ### fileio.py
@@ -112,7 +112,7 @@ graph TD
 
 | Model | Fields | Description |
 |-------|--------|-------------|
-| `AppConfig` | project_root, spec_dir, plugin_dir | Application configuration (Pydantic) |
+| `AppConfig` | project_root, bonsai_dir, plugin_dir | Application configuration (Pydantic) |
 | `ServerSettings` | backend_port, backend_host | Server bind settings (Pydantic BaseSettings, reads `.env` + env vars) |
 | `ProjectSettings` | default_model, default_effort, model_refresh_interval_hours, event_view, user_respond_timeout, user_respond_timeout_behavior, user_respond_retry_max_attempts | User-configurable project settings (`.bonsai/settings.json`). Timeout settings control what happens when user doesn't respond to an `AskUserQuestion` or `confirmAction` within the configured period. |
 | `WatchHandle` | (opaque) | Handle to a running file watch |

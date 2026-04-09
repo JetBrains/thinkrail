@@ -23,7 +23,7 @@ Add unit tests for all five public functions in `persistence.py`. Tests use a `t
 | `test_save_creates_metadata_file` | Saves data with taskId, verifies `{taskId}.json` exists and contains metadata without events key |
 | `test_save_strips_events_to_jsonl` | Saves data with `events` list, verifies events are written to `{taskId}.events.jsonl` (one per line) and not in `.json` |
 | `test_save_empty_task_id_noop` | Passes `data` with empty `taskId`, verifies no file is created |
-| `test_save_creates_sessions_dir` | Saves to a fresh `project_root`, verifies `.specs/sessions/` directory is created |
+| `test_save_creates_sessions_dir` | Saves to a fresh `project_root`, verifies `.bonsai/sessions/` directory is created |
 
 ### `load_session`
 

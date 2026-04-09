@@ -55,7 +55,7 @@ Both sides can send either. The server can initiate requests to the client (e.g.
 | `agent/interrupt` | `{ bonsaiSid: str }`                                                                            | `null`              | Cancel the current turn. Session stays `idle` and can accept new messages.                                                                                  |
 | `agent/end`       | `{ bonsaiSid: str }`                                                                            | `null`              | Gracefully close the session. Session enters `done` state.                                                                                                  |
 | `agent/respond`   | `{ bonsaiSid: str, requestId: str, response: AskUserQuestionResponse \| ToolApprovalResponse }` | `null`              | Respond to a pending server→client request. See [Agent Module models](../agent/README.md#interactive-requestresponse-models) for response type definitions. |
-| `session/list`    | `{}`                                                                                         | `list[SessionSummary]` | List all sessions (in-memory active + on-disk archived from `.specs/sessions/`) |
+| `session/list`    | `{}`                                                                                         | `list[SessionSummary]` | List all sessions (in-memory active + on-disk archived from `.bonsai/sessions/`) |
 | `session/get`     | `{ bonsaiSid: str }`                                                                            | `SessionData \| null`  | Get full session data including events from disk |
 | `session/continue`| `{ bonsaiSid: str }`                                                                            | `{ bonsaiSid: str }`   | Resume a session — reuses the same `bonsaiSid`, loads old conversation as context for a new SDK session |
 | `session/delete`  | `{ bonsaiSid: str }`                                                                            | `bool`              | Delete a session from disk |
@@ -185,7 +185,7 @@ title: "Watcher path (per-connection, scoped to project)"
 ---
 graph TD
     Connect["WebSocket connect<br/>/ws?project=path"]
-    Validate["Validate project path<br/>+ .specs/registry.json"]
+    Validate["Validate project path<br/>+ .bonsai/registry.json"]
     StartW["_start_watcher(config, service)"]
     Watch["core/watcher.watch(project_root, _on_file_change)"]
     Change["File change on disk"]
@@ -316,7 +316,7 @@ graph TD
 - WebSocket URL: `/ws?project=<path>` — the `project` query parameter specifies the project directory
 - On connect:
   1. Validate `project` param exists (close with 4001 if missing)
-  2. Validate `<project>/.specs/registry.json` exists (close with 4002 if invalid)
+  2. Validate `<project>/.bonsai/registry.json` exists (close with 4002 if invalid)
   3. Build per-connection `AppConfig`, `SpecService`, `AgentService`, `VisualizationService` scoped to the project
   4. Replace existing connection if any (close old WebSocket + stop old watcher)
   5. Create `notify = make_notify(ws)`, set `notifications.current_notify = notify`
@@ -333,7 +333,7 @@ The file watcher is **per-connection**, scoped to the connected project director
 2. `_start_watcher()` calls `core/watcher.watch([project_root], _on_file_change)`.
 3. On file change, `_on_file_change(changes)` runs:
    - Routes by file type:
-     - `.specs/registry.json` → send `registry/didUpdate` via `current_notify`
+     - `.bonsai/registry.json` → send `registry/didUpdate` via `current_notify`
      - Any path registered as a spec in the registry (`*.md` or `*.json` spec files) → send `spec/didChange`, `spec/didCreate`, or `spec/didDelete` via `current_notify`
      - `.bonsaihide` modified → send `files/treeChanged` (so the file tree re-fetches with updated visibility rules)
      - Any modified file → send `file/didChange` with relative path (so open editors can refresh)

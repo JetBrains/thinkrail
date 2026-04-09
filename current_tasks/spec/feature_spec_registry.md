@@ -1,6 +1,6 @@
 # Implement Spec registry.py
 
-> Read/write/validate `.specs/registry.json`
+> Read/write/validate `.bonsai/registry.json`
 
 **Status:** Done
 **Priority:** Critical
@@ -14,7 +14,7 @@
 
 ## Summary
 
-`registry.py` manages the `.specs/registry.json` file — the single source of truth for all spec metadata and relationships. It provides atomic writes to prevent corruption and schema validation on read to catch manual edit errors.
+`registry.py` manages the `.bonsai/registry.json` file — the single source of truth for all spec metadata and relationships. It provides atomic writes to prevent corruption and schema validation on read to catch manual edit errors.
 
 ## Public Interface
 

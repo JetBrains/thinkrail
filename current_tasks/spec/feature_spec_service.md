@@ -39,7 +39,7 @@
 - `spec/validator.py` (validate_spec, validate_links)
 - `spec/graph.py` (build_graph)
 - `spec/registry.py` (read_registry, write_registry, find_entry, add_entry, remove_entry)
-- `core/config` (get_project_root, get_spec_dir, get_registry_path)
+- `core/config` (get_project_root, get_bonsai_dir, get_registry_path)
 - `core/fileio` (write_text, delete_file, ensure_dir)
 
 ## Plan

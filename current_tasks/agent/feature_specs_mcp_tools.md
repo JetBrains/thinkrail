@@ -1,6 +1,6 @@
 # Implement Spec & Registry MCP Tools
 
-Implement the `bonsai-specs` MCP server with 7 tools that give the Claude agent structured, validated access to the spec registry and spec files. This replaces raw file I/O (Read/Edit on `.specs/registry.json`) with typed operations that enforce correctness and minimize token usage.
+Implement the `bonsai-specs` MCP server with 7 tools that give the Claude agent structured, validated access to the spec registry and spec files. This replaces raw file I/O (Read/Edit on `.bonsai/registry.json`) with typed operations that enforce correctness and minimize token usage.
 
 The design spec is at `backend/app/agent/tools/SPECS_TOOLS.md`. All tools are thin MCP wrappers delegating to the existing `SpecService` and `registry` modules — no new business logic in the spec module.
 

@@ -24,10 +24,10 @@ def _make_app() -> FastAPI:
 
 
 def _make_config(tmp_path: Path) -> AppConfig:
-    specs_dir = tmp_path / ".specs"
-    specs_dir.mkdir()
+    bonsai_dir = tmp_path / ".bonsai"
+    bonsai_dir.mkdir()
     registry = {"version": "2.0", "project": "test", "specs": [], "links": []}
-    (specs_dir / "registry.json").write_text(json.dumps(registry), encoding="utf-8")
+    (bonsai_dir / "registry.json").write_text(json.dumps(registry), encoding="utf-8")
     return load_config(tmp_path)
 
 
@@ -61,7 +61,7 @@ class TestMethods:
 
 class TestWebSocket:
     def test_connect_and_receive_response(self, tmp_path: Path) -> None:
-        _make_config(tmp_path)  # ensure .specs exists
+        _make_config(tmp_path)  # ensure .bonsai exists
         app = _make_app()
         client = TestClient(app)
 
@@ -185,8 +185,8 @@ class TestOnFileChange:
 
     @pytest.fixture
     def config(self, tmp_path: Path) -> AppConfig:
-        specs_dir = tmp_path / ".specs"
-        specs_dir.mkdir()
+        bonsai_dir = tmp_path / ".bonsai"
+        bonsai_dir.mkdir()
         registry = {
             "version": "2.0", "project": "test",
             "specs": [
@@ -199,7 +199,7 @@ class TestOnFileChange:
             ],
             "links": [],
         }
-        (specs_dir / "registry.json").write_text(json.dumps(registry), encoding="utf-8")
+        (bonsai_dir / "registry.json").write_text(json.dumps(registry), encoding="utf-8")
         (tmp_path / "mod_a").mkdir()
         (tmp_path / "mod_a" / "README.md").write_text("# Module A", encoding="utf-8")
         return load_config(tmp_path)

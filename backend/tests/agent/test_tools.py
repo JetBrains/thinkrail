@@ -23,13 +23,13 @@ from app.core.config import AppConfig
 
 def _make_config(tmp_path: Path) -> AppConfig:
     """Build an AppConfig rooted in a temp directory."""
-    spec_dir = tmp_path / ".specs"
-    spec_dir.mkdir()
+    bonsai_dir = tmp_path / ".bonsai"
+    bonsai_dir.mkdir()
     plugin_dir = tmp_path / "plugin"
     plugin_dir.mkdir()
     return AppConfig(
         project_root=tmp_path,
-        spec_dir=spec_dir,
+        bonsai_dir=bonsai_dir,
         plugin_dir=plugin_dir,
     )
 

@@ -22,6 +22,5 @@ __pycache__/
 .*
 
 # Exceptions — show these
-!.specs/
 !.bonsai/
 !.bonsaihide

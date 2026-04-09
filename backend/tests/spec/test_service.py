@@ -11,8 +11,8 @@ from app.spec.service import SpecNotFoundError, SpecService, _extract_title, _ge
 
 def _setup_project(tmp_path: Path) -> SpecService:
     """Create a minimal project with a registry and return a SpecService."""
-    specs_dir = tmp_path / ".specs"
-    specs_dir.mkdir()
+    bonsai_dir = tmp_path / ".bonsai"
+    bonsai_dir.mkdir()
     registry = {
         "version": "2.0",
         "project": "test",
@@ -33,7 +33,7 @@ def _setup_project(tmp_path: Path) -> SpecService:
             {"from": "mod-a", "to": "design-doc", "type": "parent"}
         ],
     }
-    (specs_dir / "registry.json").write_text(json.dumps(registry), encoding="utf-8")
+    (bonsai_dir / "registry.json").write_text(json.dumps(registry), encoding="utf-8")
 
     # Create the spec file on disk
     (tmp_path / "mod_a").mkdir()
@@ -52,10 +52,10 @@ class TestListSpecs:
         assert specs[0].title == "Module A"
 
     def test_empty_registry(self, tmp_path: Path) -> None:
-        specs_dir = tmp_path / ".specs"
-        specs_dir.mkdir()
+        bonsai_dir = tmp_path / ".bonsai"
+        bonsai_dir.mkdir()
         reg = {"version": "2.0", "project": "test", "specs": [], "links": []}
-        (specs_dir / "registry.json").write_text(json.dumps(reg), encoding="utf-8")
+        (bonsai_dir / "registry.json").write_text(json.dumps(reg), encoding="utf-8")
         svc = SpecService(load_config(tmp_path))
         assert svc.list_specs() == []
 

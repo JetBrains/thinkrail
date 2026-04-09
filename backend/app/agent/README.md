@@ -172,7 +172,7 @@ sequenceDiagram
     participant Svc as service.py
     participant R as runner.py
     participant SDK as Claude SDK (CLI)
-    participant Disk as .specs/sessions/
+    participant Disk as .bonsai/sessions/
 
     F->>Svc: session/continue {bonsaiSid}
     Svc->>Disk: load_session(bonsaiSid)

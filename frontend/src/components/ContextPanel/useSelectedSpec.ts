@@ -3,8 +3,8 @@ import { useSpecStore } from "@/store/specStore.ts";
 import type { RegistryEntry } from "@/types/spec.ts";
 
 function isSpecFile(path: string): boolean {
-  if (path.includes("/.specs/")) return true;
-  if (path.startsWith(".specs/")) return true;
+  if (path.includes("/.bonsai/")) return true;
+  if (path.startsWith(".bonsai/")) return true;
   const specs = useSpecStore.getState().specs;
   return specs.some((s) => path === s.path || path.endsWith(`/${s.path}`));
 }

@@ -17,7 +17,7 @@ from app.core.config import AppConfig
 def _test_config(tmp_path: Path | None = None) -> AppConfig:
     """Create a minimal AppConfig for tests."""
     root = tmp_path or Path("/tmp/bonsai-test")
-    return AppConfig(project_root=root, spec_dir=root / ".specs", plugin_dir=root / "plugins")
+    return AppConfig(project_root=root, bonsai_dir=root / ".bonsai", plugin_dir=root / "plugins")
 
 
 def _setup_mock_client(MockClient: MagicMock, messages: list) -> AsyncMock:

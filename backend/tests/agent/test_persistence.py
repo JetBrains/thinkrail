@@ -34,7 +34,7 @@ def _make_session_data(bonsai_sid: str = "task-1", **overrides) -> dict:
 class TestSaveSession:
     def test_creates_metadata_file(self, tmp_path: Path) -> None:
         save_session(tmp_path, _make_session_data())
-        meta = tmp_path / ".specs" / "sessions" / "task-1.json"
+        meta = tmp_path / ".bonsai" / "sessions" / "task-1.json"
         assert meta.is_file()
         data = json.loads(meta.read_text())
         assert data["bonsaiSid"] == "task-1"
@@ -47,10 +47,10 @@ class TestSaveSession:
         ]
         save_session(tmp_path, _make_session_data(events=events))
 
-        meta = tmp_path / ".specs" / "sessions" / "task-1.json"
+        meta = tmp_path / ".bonsai" / "sessions" / "task-1.json"
         assert "events" not in json.loads(meta.read_text())
 
-        evts = tmp_path / ".specs" / "sessions" / "task-1.events.jsonl"
+        evts = tmp_path / ".bonsai" / "sessions" / "task-1.events.jsonl"
         assert evts.is_file()
         lines = [l for l in evts.read_text().splitlines() if l.strip()]
         assert len(lines) == 2
@@ -58,17 +58,17 @@ class TestSaveSession:
 
     def test_empty_bonsai_sid_noop(self, tmp_path: Path) -> None:
         save_session(tmp_path, {"bonsaiSid": ""})
-        sessions_dir = tmp_path / ".specs" / "sessions"
+        sessions_dir = tmp_path / ".bonsai" / "sessions"
         assert not sessions_dir.exists() or not list(sessions_dir.iterdir())
 
     def test_creates_events_jsonl_without_events(self, tmp_path: Path) -> None:
         save_session(tmp_path, _make_session_data())
-        evts = tmp_path / ".specs" / "sessions" / "task-1.events.jsonl"
+        evts = tmp_path / ".bonsai" / "sessions" / "task-1.events.jsonl"
         assert evts.is_file()
         assert evts.read_text() == ""
 
     def test_creates_sessions_dir(self, tmp_path: Path) -> None:
-        sessions_dir = tmp_path / ".specs" / "sessions"
+        sessions_dir = tmp_path / ".bonsai" / "sessions"
         assert not sessions_dir.exists()
         save_session(tmp_path, _make_session_data())
         assert sessions_dir.is_dir()
@@ -85,7 +85,7 @@ class TestSaveSession:
             "updatedAt": "2026-01-01T00:00:00Z",
         }
         save_session(tmp_path, old_data)
-        meta = tmp_path / ".specs" / "sessions" / "old-task-1.json"
+        meta = tmp_path / ".bonsai" / "sessions" / "old-task-1.json"
         assert meta.is_file()
         data = json.loads(meta.read_text())
         assert data["bonsaiSid"] == "old-task-1"
@@ -114,14 +114,14 @@ class TestLoadSession:
         assert loaded["events"] == []
 
     def test_malformed_json_returns_none(self, tmp_path: Path) -> None:
-        sessions_dir = tmp_path / ".specs" / "sessions"
+        sessions_dir = tmp_path / ".bonsai" / "sessions"
         sessions_dir.mkdir(parents=True)
         (sessions_dir / "bad.json").write_text("{broken", encoding="utf-8")
         assert load_session(tmp_path, "bad") is None
 
     def test_backward_compat_loads_old_taskId_key(self, tmp_path: Path) -> None:
         """Files with old 'taskId' key should load with 'bonsaiSid'."""
-        sessions_dir = tmp_path / ".specs" / "sessions"
+        sessions_dir = tmp_path / ".bonsai" / "sessions"
         sessions_dir.mkdir(parents=True)
         old_meta = {"taskId": "old-1", "name": "old", "status": "done"}
         (sessions_dir / "old-1.json").write_text(json.dumps(old_meta))
@@ -167,7 +167,7 @@ class TestAppendEvent:
     def test_creates_jsonl_file(self, tmp_path: Path) -> None:
         save_session(tmp_path, _make_session_data())
         append_event(tmp_path, "task-1", {"eventType": "textDelta", "payload": {}})
-        evts = tmp_path / ".specs" / "sessions" / "task-1.events.jsonl"
+        evts = tmp_path / ".bonsai" / "sessions" / "task-1.events.jsonl"
         assert evts.is_file()
         lines = [l for l in evts.read_text().splitlines() if l.strip()]
         assert len(lines) == 1
@@ -176,7 +176,7 @@ class TestAppendEvent:
         save_session(tmp_path, _make_session_data())
         for i in range(3):
             append_event(tmp_path, "task-1", {"eventType": f"event_{i}", "payload": {}})
-        evts = tmp_path / ".specs" / "sessions" / "task-1.events.jsonl"
+        evts = tmp_path / ".bonsai" / "sessions" / "task-1.events.jsonl"
         lines = [l for l in evts.read_text().splitlines() if l.strip()]
         assert len(lines) == 3
         for i, line in enumerate(lines):
@@ -184,7 +184,7 @@ class TestAppendEvent:
 
     def test_does_not_touch_metadata(self, tmp_path: Path) -> None:
         save_session(tmp_path, _make_session_data())
-        meta = tmp_path / ".specs" / "sessions" / "task-1.json"
+        meta = tmp_path / ".bonsai" / "sessions" / "task-1.json"
         original = meta.read_text()
         append_event(tmp_path, "task-1", {"eventType": "textDelta", "payload": {}})
         assert meta.read_text() == original
@@ -192,7 +192,7 @@ class TestAppendEvent:
     def test_missing_session_noop(self, tmp_path: Path) -> None:
         # Should not raise or create any file
         append_event(tmp_path, "nonexistent", {"eventType": "x", "payload": {}})
-        sessions_dir = tmp_path / ".specs" / "sessions"
+        sessions_dir = tmp_path / ".bonsai" / "sessions"
         jsonl_files = list(sessions_dir.glob("*.events.jsonl")) if sessions_dir.exists() else []
         assert len(jsonl_files) == 0
 
@@ -204,8 +204,8 @@ class TestDeleteSession:
     def test_removes_both_files(self, tmp_path: Path) -> None:
         events = [{"eventType": "done", "payload": {}}]
         save_session(tmp_path, _make_session_data(events=events))
-        meta = tmp_path / ".specs" / "sessions" / "task-1.json"
-        evts = tmp_path / ".specs" / "sessions" / "task-1.events.jsonl"
+        meta = tmp_path / ".bonsai" / "sessions" / "task-1.json"
+        evts = tmp_path / ".bonsai" / "sessions" / "task-1.events.jsonl"
         assert meta.is_file() and evts.is_file()
         assert delete_session(tmp_path, "task-1") is True
         assert not meta.exists() and not evts.exists()
@@ -213,7 +213,7 @@ class TestDeleteSession:
     def test_metadata_only(self, tmp_path: Path) -> None:
         save_session(tmp_path, _make_session_data())
         assert delete_session(tmp_path, "task-1") is True
-        assert not (tmp_path / ".specs" / "sessions" / "task-1.json").exists()
+        assert not (tmp_path / ".bonsai" / "sessions" / "task-1.json").exists()
 
     def test_nonexistent_returns_false(self, tmp_path: Path) -> None:
         assert delete_session(tmp_path, "nope") is False

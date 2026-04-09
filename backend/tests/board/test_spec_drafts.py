@@ -9,10 +9,10 @@ from app.core.config import load_config
 
 
 def _setup(tmp_path: Path) -> tuple[BoardService, SpecDraftService]:
-    specs_dir = tmp_path / ".specs"
-    specs_dir.mkdir()
+    bonsai_dir = tmp_path / ".bonsai"
+    bonsai_dir.mkdir()
     reg = {"version": "2.0", "project": "test", "specs": [], "links": []}
-    (specs_dir / "registry.json").write_text(json.dumps(reg), encoding="utf-8")
+    (bonsai_dir / "registry.json").write_text(json.dumps(reg), encoding="utf-8")
     config = load_config(tmp_path)
     board_svc = BoardService(config)
     return board_svc, board_svc.spec_drafts

@@ -132,7 +132,7 @@ Level 5: /task-spec (implementation tasks)
 ```
 SpecDriven Plugin
 ├── CLAUDE.md                 # Enforces spec-driven behavior in Claude sessions
-├── Spec Registry             # .specs/registry.json — tracks all specs and connections
+├── Spec Registry             # .bonsai/registry.json — tracks all specs and connections
 ├── Foundation Skills (1)     # Goal and requirements combined
 ├── Creation Skills (4)       # Generate specifications interactively
 ├── Visualization Skills (2)  # Rich terminal visualizations and progress tracking
@@ -141,7 +141,7 @@ SpecDriven Plugin
 └── Patterns & Templates      # Proven specification patterns
 ```
 
-### Spec Registry (`.specs/registry.json`)
+### Spec Registry (`.bonsai/registry.json`)
 
 Central tracking for all specifications:
 - **Spec entries**: type, path, status (draft/active/stale/deprecated), timestamps
@@ -150,7 +150,7 @@ Central tracking for all specifications:
 - All creation skills auto-register specs and maintain links
 - Supports types: goal-and-requirements, architecture-design, module-design, submodule-design, task-spec
 
-### Progress Tracking (`.specs/.progress.yaml`)
+### Progress Tracking (`.bonsai/.progress.yaml`)
 
 Persistent workflow progress across sessions:
 - Current phase and step status
@@ -201,7 +201,7 @@ These skills enforce patterns proven in large-scale AI-generated projects:
 
 - **Goal first**: Define clear goals and requirements before design
 - **Specs before code**: Write specifications first, implement second
-- **Registry is truth**: All specs tracked in `.specs/registry.json` with links
+- **Registry is truth**: All specs tracked in `.bonsai/registry.json` with links
 - **Contract-first**: Document what a module DOES before how
 - **Exhaustive enumeration**: Every public type, variant, field documented
 - **Rationale-driven**: Every design decision includes the "why"

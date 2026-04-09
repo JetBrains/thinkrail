@@ -37,7 +37,7 @@ Mapping from JSON-RPC method names to handler coroutines. Assembled from `method
 
 ### `_on_file_change(path, change_type)`
 Watcher callback. Routes by file type:
-- `.specs/registry.json` → send `registry/didUpdate` via `current_notify`
+- `.bonsai/registry.json` → send `registry/didUpdate` via `current_notify`
 - Spec files (`*.md` or `*.json` per registry) → call `spec/service` to validate/postprocess → send `spec/didChange`, `spec/didCreate`, or `spec/didDelete` via `current_notify`
 - If `current_notify` is None: drop silently
 

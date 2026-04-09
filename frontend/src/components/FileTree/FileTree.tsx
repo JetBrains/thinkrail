@@ -17,7 +17,7 @@ interface FileEntry {
 function fileIcon(name: string, isDir: boolean): { icon: string; cls: string } {
   if (isDir) {
     // Special directories
-    if (name === ".specs") return { icon: "S", cls: "fi-specs" };
+    if (name === ".bonsai") return { icon: "S", cls: "fi-specs" };
     if (name === "src") return { icon: "S", cls: "fi-src" };
     if (name === "tests" || name === "test") return { icon: "T", cls: "fi-test" };
     return { icon: "", cls: "fi-dir" };

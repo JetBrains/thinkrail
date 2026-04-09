@@ -14,7 +14,7 @@ class Spec(BaseModel):
 
 
 class RegistryEntry(BaseModel):
-    """A single entry in ``.specs/registry.json``."""
+    """A single entry in ``.bonsai/registry.json``."""
 
     id: str
     type: str

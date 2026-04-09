@@ -16,7 +16,7 @@ Per the CONTEXT.md Cleanup Guide, the following patterns should be removed from 
 | Viz tool anti-patterns | "NEVER use Bash, echo, printf, or ANSI escape codes for visual output" | 13/14 skills |
 | Viz tool mandate | "Use `bonsai_visualize` tool for all structured visual output" | 13/14 skills |
 | AskUserQuestion mandate | "Use the `AskUserQuestion` tool for every design decision" | 7/14 skills |
-| Registry read instruction | "Read `.specs/registry.json`" as a prerequisite step | 6/14 skills |
+| Registry read instruction | "Read `.bonsai/registry.json`" as a prerequisite step | 6/14 skills |
 | Available vis types listing | "progress-tracker, summary-box, comparison, data-table, status-list, diagram" (as standalone reference) | 3/14 skills |
 
 **All 14 skills** have a dedicated `## IMPORTANT: Interaction Style` or `## IMPORTANT: Visualization Rules` section near the top that contains most of this boilerplate.
@@ -43,7 +43,7 @@ Each of the 14 skills has one of these sections near the top:
 
 ### 2. Remove inline registry-read instructions
 
-Some skills have "Read `.specs/registry.json`" as a standalone step in their workflow (not in the IMPORTANT section). This is now handled by General Instructions → Spec-Driven Workflow.
+Some skills have "Read `.bonsai/registry.json`" as a standalone step in their workflow (not in the IMPORTANT section). This is now handled by General Instructions → Spec-Driven Workflow.
 
 **Action:** Remove the standalone instruction. Keep any skill-specific registry *usage* (e.g., "check for overlapping tasks" in task-spec).
 

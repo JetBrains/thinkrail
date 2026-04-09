@@ -13,7 +13,7 @@
 
 ## Summary
 
-`watcher.py` detects file changes in the working directory and fires callbacks. Primary consumers are spec files (`*.md`, `*.json`), `.specs/*`, `registry.json`, and `.bonsaihide` (modification triggers `files/treeChanged` so the file tree re-fetches with updated visibility rules). The RPC module's `server.py` will register a callback to handle change events.
+`watcher.py` detects file changes in the working directory and fires callbacks. Primary consumers are spec files (`*.md`, `*.json`), `.bonsai/*`, `registry.json`, and `.bonsaihide` (modification triggers `files/treeChanged` so the file tree re-fetches with updated visibility rules). The RPC module's `server.py` will register a callback to handle change events.
 
 ## Public Interface
 

@@ -27,27 +27,27 @@ class ServerSettings(BaseSettings):
 
 class AppConfig(BaseModel):
     project_root: Path
-    spec_dir: Path
+    bonsai_dir: Path
     plugin_dir: Path
 
     def get_project_root(self) -> Path:
         """Return the project root directory."""
         return self.project_root
 
-    def get_spec_dir(self) -> Path:
-        """Return the path to the ``.specs/`` directory."""
-        return self.spec_dir
+    def get_bonsai_dir(self) -> Path:
+        """Return the path to the ``.bonsai/`` directory."""
+        return self.bonsai_dir
 
     def get_registry_path(self) -> Path:
-        """Return the path to ``.specs/registry.json``."""
-        return self.spec_dir / "registry.json"
+        """Return the path to ``.bonsai/registry.json``."""
+        return self.bonsai_dir / "registry.json"
 
 
 def _discover_root() -> Path:
-    """Walk upward from cwd looking for a ``.specs/`` directory."""
+    """Walk upward from cwd looking for a ``.bonsai/`` directory."""
     current = Path.cwd().resolve()
     for parent in [current, *current.parents]:
-        if (parent / ".specs").is_dir():
+        if (parent / ".bonsai").is_dir():
             return parent
     return current
 
@@ -57,6 +57,6 @@ def load_config(project_root: Path | None = None) -> AppConfig:
     root = project_root or _discover_root()
     return AppConfig(
         project_root=root,
-        spec_dir=root / ".specs",
+        bonsai_dir=root / ".bonsai",
         plugin_dir=_BONSAI_ROOT / "claude-plugin",
     )

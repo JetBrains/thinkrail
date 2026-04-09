@@ -5,8 +5,8 @@ import { useSpecStore } from "@/store/specStore.ts";
 export type ContextMode = "spec" | "agent" | "code" | "empty";
 
 function isSpecFile(path: string): boolean {
-  if (path.includes("/.specs/")) return true;
-  if (path.startsWith(".specs/")) return true;
+  if (path.includes("/.bonsai/")) return true;
+  if (path.startsWith(".bonsai/")) return true;
   const specs = useSpecStore.getState().specs;
   return specs.some((s) => path === s.path || path.endsWith(`/${s.path}`));
 }

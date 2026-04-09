@@ -12,7 +12,7 @@ The current `RightPanel.tsx` uses manual tabs (`Graph | Spec | Code | Diff | Con
    - Reads `sessionStore.activeSessionId`, `fileStore.activeFilePath`, `specStore.selectedSpecId`
    - Returns `ContextMode: 'spec' | 'agent' | 'code' | 'empty'`
    - Priority: active session > spec file > code file > selected spec > empty
-   - Add `isSpecFile(path: string)` helper — check if path matches a registry spec path or is inside `.specs/`
+   - Add `isSpecFile(path: string)` helper — check if path matches a registry spec path or is inside `.bonsai/`
 
 2. Create `CollapsibleSection.tsx` component in `frontend/src/components/ContextPanel/`
    - Props: `title`, `count?`, `defaultExpanded?`, `expandToCenter?`, `summary?`, `children`

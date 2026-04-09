@@ -214,10 +214,10 @@ def register_routes(app: FastAPI) -> None:
             return
 
         project_path = Path(project_param).expanduser().resolve()
-        if not (project_path / ".specs" / "registry.json").is_file():
+        if not (project_path / ".bonsai" / "registry.json").is_file():
             await websocket.close(
                 code=4002,
-                reason=f"Invalid project: {project_path} has no .specs/registry.json",
+                reason=f"Invalid project: {project_path} has no .bonsai/registry.json",
             )
             return
 

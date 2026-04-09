@@ -71,7 +71,6 @@ __pycache__/
 .*
 
 # Exceptions — show these
-!.specs/
 !.bonsai/
 !.bonsaihide
 """
@@ -113,7 +112,7 @@ def create_app() -> FastAPI:
     @app.get("/api/project/validate")
     async def validate_project(path: str = Query(...)):
         p = Path(path).expanduser().resolve()
-        has_specs = (p / ".specs" / "registry.json").is_file()
+        has_specs = (p / ".bonsai" / "registry.json").is_file()
         return {
             "valid": has_specs,
             "path": str(p),
@@ -125,9 +124,9 @@ def create_app() -> FastAPI:
     async def init_project(body: _InitBody):
         p = Path(body.path).expanduser().resolve()
         p.mkdir(parents=True, exist_ok=True)
-        specs_dir = p / ".specs"
-        specs_dir.mkdir(exist_ok=True)
-        registry = specs_dir / "registry.json"
+        bonsai_dir = p / ".bonsai"
+        bonsai_dir.mkdir(exist_ok=True)
+        registry = bonsai_dir / "registry.json"
         if not registry.exists():
             registry.write_text(
                 json.dumps(

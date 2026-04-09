@@ -14,7 +14,7 @@
 
 ## Purpose
 
-The Spec module is the core domain layer of Bonsai. It owns all spec file operations — parsing spec files from disk (Markdown or JSON), validating their structure, managing the registry (`.specs/registry.json`), and building the hierarchy graph that maps parent-child and cross-reference relationships. All spec CRUD flows through this module's service layer, which is the single source of truth for spec state.
+The Spec module is the core domain layer of Bonsai. It owns all spec file operations — parsing spec files from disk (Markdown or JSON), validating their structure, managing the registry (`.bonsai/registry.json`), and building the hierarchy graph that maps parent-child and cross-reference relationships. All spec CRUD flows through this module's service layer, which is the single source of truth for spec state.
 
 ## Internal Architecture
 
@@ -61,7 +61,7 @@ graph TD
 | `parser.py` | Parse spec files: Markdown or JSON | models, core/fileio |
 | `validator.py` | Validate spec structure, required fields, link integrity | models |
 | `graph.py` | Build in-memory hierarchy graph from registry entries + links | models |
-| `registry.py` | Read/write/validate `.specs/registry.json` — atomic writes, schema validation | models, core/fileio |
+| `registry.py` | Read/write/validate `.bonsai/registry.json` — atomic writes, schema validation | models, core/fileio |
 
 ## Public Interface
 
@@ -104,7 +104,7 @@ graph TD
 
 | Decision | Choice | Rationale |
 |----------|--------|-----------|
-| Registry storage | Single JSON file (`.specs/registry.json`) | Simplicity — easy to implement, debug, and version control as one atomic file |
+| Registry storage | Single JSON file (`.bonsai/registry.json`) | Simplicity — easy to implement, debug, and version control as one atomic file |
 | Spec format | Markdown or JSON | Human-readable and git-friendly; Markdown suits narrative specs, JSON suits structured data; both co-exist in the registry |
 | Graph storage | In-memory, rebuilt on changes | Simplicity — no persistence layer to maintain, graph is derived from registry which is the source of truth |
 | Internal pattern | Service facade | Simplicity — single entry point makes the module easy to test and reason about |

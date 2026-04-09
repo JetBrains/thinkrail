@@ -4,7 +4,7 @@
 
 ## Purpose
 
-Stateless session persistence — saves, loads, lists, and deletes agent session data under `.specs/sessions/`. Uses a split storage model: metadata in `.json` files, events in append-only `.events.jsonl` logs. Pure functions with no internal state. All functions take `project_root: Path` as first argument; the service layer owns serialization of domain models into the dict format that persistence writes to disk.
+Stateless session persistence — saves, loads, lists, and deletes agent session data under `.bonsai/sessions/`. Uses a split storage model: metadata in `.json` files, events in append-only `.events.jsonl` logs. Pure functions with no internal state. All functions take `project_root: Path` as first argument; the service layer owns serialization of domain models into the dict format that persistence writes to disk.
 
 ## Architecture
 
@@ -29,7 +29,7 @@ graph TD
         Delete["delete_session()"]
     end
 
-    subgraph Disk[".specs/sessions/"]
+    subgraph Disk[".bonsai/sessions/"]
         Meta["{bonsaiSid}.json<br/><i>metadata</i>"]
         Events["{bonsaiSid}.events.jsonl<br/><i>append-only log</i>"]
     end
@@ -58,7 +58,7 @@ graph TD
 
 ```
 {project_root}/
-  .specs/
+  .bonsai/
     sessions/
       {bonsaiSid}.json            ← metadata (small, rewritten on status change)
       {bonsaiSid}.events.jsonl    ← append-only event log (one JSON per line)
@@ -101,7 +101,7 @@ Each line is a self-contained JSON object. New events are appended with a single
 def save_session(project_root: Path, data: dict[str, Any]) -> None
 ```
 
-Write session metadata to `.specs/sessions/{bonsaiSid}.json`. If `data` contains an `"events"` key, those events are bulk-written to the `.events.jsonl` file (used during initial save). The events key is stripped from the metadata file. Silently returns if `data["bonsaiSid"]` is missing or empty. For backward compatibility, accepts `"taskId"` as a fallback key and migrates it to `"bonsaiSid"`.
+Write session metadata to `.bonsai/sessions/{bonsaiSid}.json`. If `data` contains an `"events"` key, those events are bulk-written to the `.events.jsonl` file (used during initial save). The events key is stripped from the metadata file. Silently returns if `data["bonsaiSid"]` is missing or empty. For backward compatibility, accepts `"taskId"` as a fallback key and migrates it to `"bonsaiSid"`.
 
 ### `load_session`
 

@@ -20,7 +20,7 @@
 
 ## Purpose
 
-A single MCP server (`bonsai-specs`) exposing 7 tools that give the Claude agent structured, validated access to the spec registry and spec files. Replaces raw file I/O (Read/Edit on `.specs/registry.json`) with typed operations that enforce correctness and minimize token usage.
+A single MCP server (`bonsai-specs`) exposing 7 tools that give the Claude agent structured, validated access to the spec registry and spec files. Replaces raw file I/O (Read/Edit on `.bonsai/registry.json`) with typed operations that enforce correctness and minimize token usage.
 
 **File:** `backend/app/agent/tools/specs.py`
 **MCP server name:** `bonsai-specs`

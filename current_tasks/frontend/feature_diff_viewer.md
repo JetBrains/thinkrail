@@ -9,7 +9,7 @@
 
 ## Summary
 
-The Diff Viewer is a right-panel tab showing spec changes alongside corresponding code changes in a side-by-side layout. Uses mapping files (`.specs/mappings.json`) to link spec sections to code patches, auto-extracted from git commits.
+The Diff Viewer is a right-panel tab showing spec changes alongside corresponding code changes in a side-by-side layout. Uses mapping files (`.bonsai/mappings.json`) to link spec sections to code patches, auto-extracted from git commits.
 
 ## Files to Create
 

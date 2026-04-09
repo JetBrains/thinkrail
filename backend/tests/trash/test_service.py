@@ -12,7 +12,7 @@ def _make_trash_service(tmp_path: Path) -> TrashService:
 
 class TestTrashSession:
     def test_moves_session_files(self, tmp_path: Path) -> None:
-        sessions_dir = tmp_path / ".specs" / "sessions"
+        sessions_dir = tmp_path / ".bonsai" / "sessions"
         sessions_dir.mkdir(parents=True)
         (sessions_dir / "s1.json").write_text('{"bonsaiSid": "s1", "name": "test"}')
         (sessions_dir / "s1.events.jsonl").write_text('{"e": 1}\n')
@@ -44,7 +44,7 @@ class TestTrashTicket:
 
 class TestRestoreSession:
     def test_restores_session(self, tmp_path: Path) -> None:
-        sessions_dir = tmp_path / ".specs" / "sessions"
+        sessions_dir = tmp_path / ".bonsai" / "sessions"
         sessions_dir.mkdir(parents=True)
         (sessions_dir / "s2.json").write_text('{"name": "hi"}')
 
@@ -75,7 +75,7 @@ class TestRestoreTicket:
 
 class TestListAndPurge:
     def test_list_all(self, tmp_path: Path) -> None:
-        sessions_dir = tmp_path / ".specs" / "sessions"
+        sessions_dir = tmp_path / ".bonsai" / "sessions"
         sessions_dir.mkdir(parents=True)
         (sessions_dir / "x.json").write_text("{}")
         tickets_dir = tmp_path / ".bonsai" / "meta-tickets"
@@ -92,7 +92,7 @@ class TestListAndPurge:
         assert types == {"sessions", "tickets"}
 
     def test_purge(self, tmp_path: Path) -> None:
-        sessions_dir = tmp_path / ".specs" / "sessions"
+        sessions_dir = tmp_path / ".bonsai" / "sessions"
         sessions_dir.mkdir(parents=True)
         (sessions_dir / "p.json").write_text("{}")
 
@@ -103,7 +103,7 @@ class TestListAndPurge:
         assert svc.list_trashed() == []
 
     def test_empty_trash(self, tmp_path: Path) -> None:
-        sessions_dir = tmp_path / ".specs" / "sessions"
+        sessions_dir = tmp_path / ".bonsai" / "sessions"
         sessions_dir.mkdir(parents=True)
         for sid in ["a", "b"]:
             (sessions_dir / f"{sid}.json").write_text("{}")
