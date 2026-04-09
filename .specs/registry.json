@@ -2427,6 +2427,24 @@
       ],
       "created": "2026-04-08",
       "updated": "2026-04-08"
+    },
+    {
+      "id": "module-packaging",
+      "type": "module-design",
+      "path": "packaging/README.md",
+      "title": "Packaging Module Design",
+      "status": "active",
+      "covers": [
+        "packaging/",
+        ".github/workflows/nightly.yml"
+      ],
+      "tags": [
+        "infrastructure",
+        "distribution",
+        "ci-cd"
+      ],
+      "created": "2026-04-09",
+      "updated": "2026-04-09"
     }
   ],
   "links": [
@@ -3804,6 +3822,16 @@
       "from": "task-fe-compact-event-view",
       "to": "design-doc",
       "type": "parent"
+    },
+    {
+      "from": "module-packaging",
+      "to": "design-doc",
+      "type": "parent"
+    },
+    {
+      "from": "module-packaging",
+      "to": "module-core",
+      "type": "depends-on"
     }
   ]
 }

@@ -1,12 +1,17 @@
 from __future__ import annotations
 
+import sys
 from pathlib import Path
 
 from pydantic import BaseModel
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-# Bonsai repo root: backend/app/core/config.py → ../../../ → bonsai/
-_BONSAI_ROOT = Path(__file__).resolve().parents[3]
+# Bonsai repo root: in dev mode, backend/app/core/config.py → ../../../ → bonsai/
+# In frozen (PyInstaller) mode, use the directory containing the executable.
+if getattr(sys, 'frozen', False):
+    _BONSAI_ROOT = Path(sys.executable).resolve().parent
+else:
+    _BONSAI_ROOT = Path(__file__).resolve().parents[3]
 
 
 class ServerSettings(BaseSettings):

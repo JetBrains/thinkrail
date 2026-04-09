@@ -57,7 +57,7 @@ graph TD
 
 | File | Responsibility | Depends On |
 |------|---------------|------------|
-| `config.py` | App configuration: project root discovery, directory paths, settings | pydantic |
+| `config.py` | App configuration: project root discovery, directory paths, server settings, frozen mode detection | pydantic, pydantic-settings |
 | `fileio.py` | File system operations: read, write, delete files; create directories | — |
 | `settings.py` | Project settings: load/save/ensure `.bonsai/settings.json` | pydantic, fileio |
 | `watcher.py` | Async file change watching: detect spec file and registry changes | watchfiles / watchdog |
@@ -66,7 +66,16 @@ graph TD
 
 ### config.py
 
-These methods are of the `AppConfig` model
+**Frozen mode detection:** `_BONSAI_ROOT` is computed differently depending on runtime mode. In development, it traverses `__file__` parents to find the repo root. In frozen mode (PyInstaller bundle, detected via `sys.frozen`), it uses `sys.executable` parent directory. This affects `.env` file loading — in packaged mode, `.env` is loaded from next to the executable.
+
+**`ServerSettings`** (Pydantic `BaseSettings`):
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `backend_port` | `int` | `8080` | Server port. Read from `.env` or `BACKEND_PORT` env var. |
+| `backend_host` | `str` | `"127.0.0.1"` | Bind address. Read from `.env` or `BACKEND_HOST` env var. |
+
+**`AppConfig` methods:**
 
 | Function            | Signature                    | Description                                    |
 |---------------------|------------------------------|------------------------------------------------|
@@ -103,7 +112,8 @@ These methods are of the `AppConfig` model
 
 | Model | Fields | Description |
 |-------|--------|-------------|
-| `AppConfig` | project_root, spec_dir, host, port | Application configuration (Pydantic) |
+| `AppConfig` | project_root, spec_dir, plugin_dir | Application configuration (Pydantic) |
+| `ServerSettings` | backend_port, backend_host | Server bind settings (Pydantic BaseSettings, reads `.env` + env vars) |
 | `ProjectSettings` | default_model, default_effort, model_refresh_interval_hours, event_view, user_respond_timeout, user_respond_timeout_behavior, user_respond_retry_max_attempts | User-configurable project settings (`.bonsai/settings.json`). Timeout settings control what happens when user doesn't respond to an `AskUserQuestion` or `confirmAction` within the configured period. |
 | `WatchHandle` | (opaque) | Handle to a running file watch |
 
@@ -124,12 +134,14 @@ These methods are of the `AppConfig` model
 | Registry handling in spec/, not core/ | spec/ owns the registry as domain state | Separation of concerns — registry is spec domain logic, not shared infrastructure |
 | Watcher as separate file from config | Async watching is a distinct infrastructure concern | Separation of concerns — config is synchronous project setup, watcher is async runtime |
 | No logging/error utilities | Use Python stdlib logging directly | Simplicity — add shared utilities only when a real pattern emerges |
+| Frozen mode in config.py | `sys.frozen` guard sets `_BONSAI_ROOT` to executable directory | Enables `.env` loading when running as PyInstaller bundle. Dev mode path calculation unchanged. |
 
 ## Dependencies
 
 | Dependency | Usage |
 |------------|-------|
 | `pydantic` | AppConfig model validation |
+| `pydantic-settings` | ServerSettings: `.env` file loading + env var fallback |
 | `watchfiles` | File system change detection |
 
 ## Known Limitations
@@ -143,4 +155,4 @@ None.
 ## Related Specs
 
 - **Parent:** [Architecture Design](../../../DESIGN_DOC.md)
-- **Consumers:** [Spec Module](../spec/README.md), [Agent Module](../agent/README.md), [RPC Module](../rpc/README.md)
+- **Consumers:** [Spec Module](../spec/README.md), [Agent Module](../agent/README.md), [RPC Module](../rpc/README.md), [Packaging Module](../../../packaging/README.md)

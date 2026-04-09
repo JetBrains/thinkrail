@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import logging
+import sys
 from contextlib import asynccontextmanager
 from collections.abc import AsyncIterator
 from pathlib import Path
@@ -10,9 +11,23 @@ import pathspec
 
 from fastapi import FastAPI, Query
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 from app.rpc.server import register_routes
+
+
+def _find_frontend_dist() -> Path | None:
+    """Locate the built frontend dist directory.
+
+    In frozen (PyInstaller) mode, frontend files are bundled as data.
+    In dev mode, check if a production build exists alongside the backend.
+    """
+    if getattr(sys, 'frozen', False):
+        dist = Path(getattr(sys, '_MEIPASS', '')) / "frontend_dist"
+    else:
+        dist = Path(__file__).resolve().parents[2] / "frontend" / "dist"
+    return dist if dist.is_dir() else None
 
 
 class _InitBody(BaseModel):
@@ -356,6 +371,12 @@ def create_app() -> FastAPI:
                 return {"error": str(e)}
         else:
             return {"error": "Native folder picker not supported on this platform"}
+
+    # Serve bundled frontend if available (production/packaged mode).
+    # Mounted last so /ws, /api/*, and other explicit routes take priority.
+    frontend_dist = _find_frontend_dist()
+    if frontend_dist:
+        app.mount("/", StaticFiles(directory=frontend_dist, html=True), name="frontend")
 
     return app
 

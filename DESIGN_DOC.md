@@ -203,7 +203,8 @@ backend/
 │   │   ├── models.py        # Dashboard dataclasses (DashboardState, WorkflowStep, etc.)
 │   │   └── service.py       # VisualizationService: compute dashboard state, push notifications
 │   └── core/                # Shared Core
-│       ├── config.py        # App configuration
+│       ├── config.py        # App configuration (frozen mode detection for packaging)
+│       ├── settings.py      # Project settings (.bonsai/settings.json)
 │       ├── fileio.py        # File system operations (read, write, delete files/dirs)
 │       └── watcher.py       # Async file change watching
 ├── tests/
@@ -213,6 +214,10 @@ backend/
 │   └── test_core/
 ├── pyproject.toml
 └── requirements.txt
+
+packaging/                   # Portable executable build infrastructure
+├── entry.py                 # Standalone entry point (CLI args, browser auto-open)
+└── bonsai.spec              # PyInstaller spec (onefile + onedir outputs)
 ```
 
 **Key Dependencies:**
@@ -232,6 +237,7 @@ backend/
 | Agent | [backend/app/agent/README.md](backend/app/agent/README.md) | Agent orchestration, Claude SDK integration, task lifecycle |
 | RPC | [backend/app/rpc/README.md](backend/app/rpc/README.md) | WebSocket endpoint, JSON-RPC dispatch, notifications |
 | Vis | [backend/app/vis/README.md](backend/app/vis/README.md) | Dashboard state computation: spec coverage, tasks, lint, recommendations |
+| Packaging | [packaging/README.md](packaging/README.md) | Portable executable build infrastructure: PyInstaller, CI/CD |
 | Frontend | [frontend/README.md](frontend/README.md) | React SPA, UI components, state management |
 
 **Feature Designs:**
@@ -352,18 +358,68 @@ Full protocol reference (method tables, params, message shapes): **[RPC Module s
 
 ## Deployment
 
-- Runs locally on developer machines
-- Backend: `uvicorn` serving FastAPI
-- Frontend: Dev server (Vite) or built static files served by FastAPI
-- Single command to start: `bonsai serve` or similar
-- No external database — file-based storage in the repo
+Bonsai runs locally on developer machines. No external database — all state is file-based in the repo.
+
+### Runtime Modes
+
+**Development mode** (two processes):
+- Backend: `uv run python -m app.main` (FastAPI + uvicorn on port 8080)
+- Frontend: `npm run dev` (Vite dev server on port 5173, proxies `/ws`, `/api/*` to backend)
+
+**Packaged mode** (single executable):
+- `./bonsai [--port 8080] [--host 127.0.0.1] [--no-browser]`
+- One process serves everything: FastAPI handles `/ws` and `/api/*` routes, built frontend is served as static files at `/` with SPA fallback (`html=True`)
+- Auto-opens browser on startup (unless `--no-browser`)
+
+### Packaging Architecture
+
+Bonsai is distributed as a portable executable via PyInstaller — no Python, Node.js, or other prerequisites required. The build bundles the Python 3.11 runtime, all backend dependencies (including native Rust/C extensions), and the pre-built frontend into a single binary.
+
+```
+Build pipeline:
+  npm run build → frontend/dist/ (static files, ~3.6 MB)
+  PyInstaller bundles: Python + backend deps + frontend/dist/ → executable
+
+Runtime (packaged):
+  ./bonsai --port 8080
+    ├── FastAPI/uvicorn
+    │     ├── /ws       → WebSocket RPC (existing)
+    │     ├── /api/*    → REST endpoints (existing)
+    │     └── /*        → bundled frontend/dist/ (StaticFiles mount)
+    └── Opens browser → http://localhost:8080
+```
+
+**Frozen mode detection:** `backend/app/core/config.py` checks `sys.frozen` to determine if running inside a PyInstaller bundle. In frozen mode, `_BONSAI_ROOT` points to the directory containing the executable (for `.env` loading) instead of traversing `__file__` parents. `backend/app/main.py` uses `sys._MEIPASS` to locate the bundled `frontend_dist/` data directory.
+
+**Frontend serving:** `main.py` mounts `StaticFiles(directory=frontend_dist, html=True)` as the last route in `create_app()`. Because explicit routes (`/ws`, `/api/*`) are registered first, they take priority. The static mount acts as a catch-all for the SPA.
+
+### API Key Configuration
+
+Follows `pydantic-settings` precedence: `.env` file next to the executable is loaded first, then `ANTHROPIC_API_KEY` environment variable as fallback. Users can use either method.
+
+### CI/CD: Nightly Builds
+
+GitHub Actions builds executables for Linux, macOS (ARM), and Windows on every push to `main`:
+
+1. **Matrix build** (`ubuntu-latest`, `macos-latest`, `windows-latest`): checkout → build frontend (`npm ci && npm run build`) → install backend + PyInstaller → build executable
+2. **Release job**: collects artifacts, creates/updates a rolling `nightly-latest` pre-release on GitHub
+
+Users download from a stable URL: `github.com/<org>/bonsai/releases/tag/nightly-latest`
+
+Build infrastructure lives in `packaging/` (see [packaging/README.md](packaging/README.md)) and `.github/workflows/nightly.yml`.
+
+### Platform Notes
+
+- **Linux**: `chmod +x` required after download. No signing issues.
+- **macOS**: Unsigned executables trigger Gatekeeper. Users run `xattr -d com.apple.quarantine bonsai-macos` on first use.
+- **Windows**: May trigger SmartScreen. Users click "More info" → "Run anyway".
 
 ## Open Questions
 
-- How to handle agent API key management securely?
-- Should the frontend be served by FastAPI (single process) or run separately?
 - How to handle concurrent agent tasks and resource limits?
 
 **Resolved:**
 - ~~Which graph visualization library?~~ → Custom DOM + SVG (no library needed for ≤15 nodes)
 - ~~JSON-RPC library?~~ → `jsonrpcserver` (see [rpc/README.md](backend/app/rpc/README.md))
+- ~~Should the frontend be served by FastAPI?~~ → Yes, in packaged mode. `main.py` mounts `StaticFiles` as a catch-all. Dev mode still uses Vite proxy.
+- ~~API key management?~~ → `.env` file next to executable (pydantic-settings) with `ANTHROPIC_API_KEY` env var as fallback. No secure vault needed for local dev tool.
