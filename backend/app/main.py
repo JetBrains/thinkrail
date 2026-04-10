@@ -133,7 +133,44 @@ def create_app() -> FastAPI:
     # Register WebSocket endpoint (per-connection project scoping)
     register_routes(app)
 
+    # ── REST: Health check ──
+
+    @app.get("/api/health")
+    async def health_check():
+        return {"status": "ok", "version": "1.0.0"}
+
     # ── REST: Project management ──
+
+    @app.get("/api/project/list")
+    async def list_projects(base: str = Query(default=""), max_depth: int = Query(default=4)):
+        """List directories containing .bonsai/registry.json.
+
+        Scans the home directory (up to max_depth levels deep) for Bonsai projects.
+        Optionally accepts a base directory to scan instead.
+        """
+        root = Path(base).expanduser().resolve() if base else Path.home()
+        projects: list[dict] = []
+
+        if not root.is_dir():
+            return {"projects": []}
+
+        def _scan(directory: Path, depth: int) -> None:
+            if depth > max_depth:
+                return
+            try:
+                children = sorted(directory.iterdir())
+            except PermissionError:
+                return
+            for child in children:
+                if not child.is_dir() or child.name.startswith("."):
+                    continue
+                if (child / ".bonsai" / "registry.json").is_file():
+                    projects.append({"path": str(child), "name": child.name})
+                else:
+                    _scan(child, depth + 1)
+
+        _scan(root, 1)
+        return {"projects": projects}
 
     @app.get("/api/project/validate")
     async def validate_project(path: str = Query(...)):
