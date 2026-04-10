@@ -38,6 +38,7 @@ class Tracker:
 
     def __init__(self) -> None:
         self._tasks: dict[str, AgentTask] = {}
+        self._pending_requests: dict[str, dict[str, Any]] = {}  # bonsai_sid → pending request params
         self._futures: dict[str, dict[str, asyncio.Future[dict]]] = {}
         self._queues: dict[str, asyncio.Queue[Any]] = {}
         self._clients: dict[str, Any] = {}
@@ -174,6 +175,17 @@ class Tracker:
         if not future.done():
             future.set_result(response)
 
+    # -- pending request tracking -----------------------------------------------
+
+    def set_pending_request(self, bonsai_sid: str, request: dict[str, Any]) -> None:
+        self._pending_requests[bonsai_sid] = request
+
+    def get_pending_request(self, bonsai_sid: str) -> dict[str, Any] | None:
+        return self._pending_requests.get(bonsai_sid)
+
+    def clear_pending_request(self, bonsai_sid: str) -> None:
+        self._pending_requests.pop(bonsai_sid, None)
+
     def remove_task(self, bonsai_sid: str) -> None:
         """Remove a completed task and all associated state."""
         self._tasks.pop(bonsai_sid, None)
@@ -182,6 +194,7 @@ class Tracker:
         self._clients.pop(bonsai_sid, None)
         self._interrupted.discard(bonsai_sid)
         self._turn_text.pop(bonsai_sid, None)
+        self._pending_requests.pop(bonsai_sid, None)
 
     def cancel_futures(self, bonsai_sid: str) -> None:
         task_futures = self._futures.pop(bonsai_sid, {})

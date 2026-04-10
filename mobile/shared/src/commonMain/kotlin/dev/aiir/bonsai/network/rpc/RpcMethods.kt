@@ -128,14 +128,14 @@ class RpcMethods(private val client: RpcClient) {
     suspend fun agentUpdateConfig(
         bonsaiSid: String,
         model: String? = null,
-        permissionMode: String? = null,
-        effort: String? = null,
+        permissionMode: PermissionMode? = null,
+        effort: Effort? = null,
     ): JsonObject {
         val params = buildJsonObject {
             put("bonsaiSid", bonsaiSid)
             model?.let { put("model", it) }
-            permissionMode?.let { put("permissionMode", it) }
-            effort?.let { put("effort", it) }
+            permissionMode?.let { put("permissionMode", BonsaiJson.encodeToJsonElement(PermissionMode.serializer(), it)) }
+            effort?.let { put("effort", BonsaiJson.encodeToJsonElement(Effort.serializer(), it)) }
         }
         return call("agent/updateConfig", params, JsonObject.serializer())
     }

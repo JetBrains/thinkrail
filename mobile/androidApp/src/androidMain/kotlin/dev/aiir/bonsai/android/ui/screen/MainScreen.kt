@@ -159,12 +159,16 @@ fun MainScreen(component: MainComponent) {
                     Tab.SESSIONS -> SessionListScreen(component = component.sessionListComponent)
                 }
 
-                // Detail overlay (session detail on top of tabs)
+                // Detail overlay (session detail or new session on top of tabs)
                 val detailSlot by component.detailSlot.subscribeAsState()
                 detailSlot.child?.instance?.let { instance ->
                     when (instance) {
                         is MainComponent.DetailChild.SessionDetail ->
                             SessionDetailScreen(component = instance.component)
+                        is MainComponent.DetailChild.NewSession ->
+                            NewSessionScreen(component = instance.component)
+                        is MainComponent.DetailChild.TicketDetail ->
+                            TicketDetailScreen(component = instance.component)
                     }
                 }
             }

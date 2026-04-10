@@ -4,7 +4,6 @@ agp = "8.7.3"
 compose-multiplatform = "1.8.0"
 ktor = "3.1.1"
 decompose = "3.2.2"
-mvikotlin = "4.2.0"
 koin = "4.0.2"
 kotlinx-serialization = "1.8.0"
 kotlinx-coroutines = "1.10.1"
@@ -23,11 +22,6 @@ ktor-serialization-kotlinx-json = { module = "io.ktor:ktor-serialization-kotlinx
 # Decompose
 decompose-core = { module = "com.arkivanov.decompose:decompose", version.ref = "decompose" }
 decompose-compose = { module = "com.arkivanov.decompose:extensions-compose", version.ref = "decompose" }
-
-# MVIKotlin
-mvikotlin-core = { module = "com.arkivanov.mvikotlin:mvikotlin", version.ref = "mvikotlin" }
-mvikotlin-main = { module = "com.arkivanov.mvikotlin:mvikotlin-main", version.ref = "mvikotlin" }
-mvikotlin-coroutines = { module = "com.arkivanov.mvikotlin:mvikotlin-extensions-coroutines", version.ref = "mvikotlin" }
 
 # Koin
 koin-core = { module = "io.insert-koin:koin-core", version.ref = "koin" }

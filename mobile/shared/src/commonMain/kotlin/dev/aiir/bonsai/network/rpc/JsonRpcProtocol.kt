@@ -1,9 +1,9 @@
 package dev.aiir.bonsai.network.rpc
 
-import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
 
 /**
  * JSON-RPC 2.0 protocol types for WebSocket communication with the Bonsai backend.
@@ -46,13 +46,15 @@ data class JsonRpcNotification(
 /**
  * Server-initiated request (has id field, expects response).
  * Used for agent/askUserQuestion, agent/confirmAction, etc.
+ * Note: id is JsonElement because the backend uses UUID strings for request IDs,
+ * while client-initiated requests use integer IDs.
  */
 @Serializable
 data class JsonRpcServerRequest(
     val jsonrpc: String = "2.0",
     val method: String,
     val params: JsonObject = JsonObject(emptyMap()),
-    val id: Int? = null,
+    val id: JsonElement? = null,
 )
 
 /**

@@ -50,11 +50,19 @@ async def _await_user_response(
         )
         if tracker.get_task(task.bonsai_sid).status != "waiting":
             tracker.set_status(task.bonsai_sid, "waiting")
+        # Store pending request so session/get can include it
+        request_type = "approval" if method == "agent/confirmAction" else "question"
+        tracker.set_pending_request(task.bonsai_sid, {
+            "requestId": request_id,
+            "type": request_type,
+            **{k: v for k, v in params.items() if k != "bonsaiSid"},
+        })
         await notify(method, {**params, "attempt": attempt}, request_id=request_id)
         response = await future
 
         if not response.get("timed_out"):
             # User answered (or explicitly denied) — restore running status
+            tracker.clear_pending_request(task.bonsai_sid)
             tracker.set_status(task.bonsai_sid, "running")
             return response, request_id
 
@@ -67,6 +75,7 @@ async def _await_user_response(
             continue
 
         # Final timeout: expire the request and restore running status
+        tracker.clear_pending_request(task.bonsai_sid)
         await notify("agent/requestExpired", {
             "bonsaiSid": task.bonsai_sid,
             "requestId": request_id,

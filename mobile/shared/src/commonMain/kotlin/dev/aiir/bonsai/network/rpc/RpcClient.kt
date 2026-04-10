@@ -96,11 +96,11 @@ class RpcClient(
         }
     }
 
-    suspend fun respond(id: Int, result: JsonElement) {
+    suspend fun respond(id: JsonElement, result: JsonElement) {
         val response = buildJsonObject {
-            put("jsonrpc", JsonPrimitive("2.0"))
+            put("jsonrpc", "2.0")
             put("result", result)
-            put("id", JsonPrimitive(id))
+            put("id", id)
         }
         session?.send(Frame.Text(response.toString()))
     }

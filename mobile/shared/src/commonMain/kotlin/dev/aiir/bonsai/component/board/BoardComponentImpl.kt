@@ -1,6 +1,7 @@
 package dev.aiir.bonsai.component.board
 
 import com.arkivanov.decompose.ComponentContext
+import com.arkivanov.essenty.lifecycle.doOnDestroy
 import dev.aiir.bonsai.network.rpc.RpcClient
 import dev.aiir.bonsai.network.rpc.RpcMethods
 import kotlinx.coroutines.*
@@ -21,6 +22,7 @@ class BoardComponentImpl(
     override val state: StateFlow<BoardState> = _state.asStateFlow()
 
     init {
+        lifecycle.doOnDestroy { scope.cancel() }
         loadTickets()
         observeNotifications()
     }

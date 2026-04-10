@@ -392,8 +392,18 @@ class AgentService:
         return list(disk.values())
 
     def get_session_data(self, bonsai_sid: str) -> dict | None:
-        """Get full session data (events included) from disk."""
-        return load_session(self._config.project_root, bonsai_sid)
+        """Get full session data (events included) from disk, overlaid with live tracker state."""
+        data = load_session(self._config.project_root, bonsai_sid)
+        if data is None:
+            return None
+        # Overlay in-memory tracker state (status, pending request) for active sessions
+        if self._tracker.has_task(bonsai_sid):
+            task = self._tracker.get_task(bonsai_sid)
+            data["status"] = task.status
+            pending = self._tracker.get_pending_request(bonsai_sid)
+            if pending is not None:
+                data["pendingRequest"] = pending
+        return data
 
     def trash_session(self, bonsai_sid: str) -> None:
         """Soft-delete a session: detach from tickets, move to trash."""

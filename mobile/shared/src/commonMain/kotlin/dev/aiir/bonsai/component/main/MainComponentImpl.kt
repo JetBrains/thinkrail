@@ -6,10 +6,11 @@ import com.arkivanov.decompose.router.slot.*
 import com.arkivanov.decompose.value.Value
 import dev.aiir.bonsai.component.board.BoardComponent
 import dev.aiir.bonsai.component.board.BoardComponentImpl
-import dev.aiir.bonsai.component.session.SessionDetailComponent
+import dev.aiir.bonsai.component.session.NewSessionComponentImpl
 import dev.aiir.bonsai.component.session.SessionDetailComponentImpl
 import dev.aiir.bonsai.component.session.SessionListComponent
 import dev.aiir.bonsai.component.session.SessionListComponentImpl
+import dev.aiir.bonsai.component.ticket.TicketDetailComponentImpl
 import dev.aiir.bonsai.data.model.ServerAddress
 import dev.aiir.bonsai.network.rpc.ConnectionState
 import dev.aiir.bonsai.network.rpc.RpcClient
@@ -38,7 +39,7 @@ class MainComponentImpl(
         componentContext = childContext("board"),
         rpcMethods = rpcMethods,
         rpcClient = rpcClient,
-        onTicketSelected = { ticketId -> /* TODO: open TicketDetailScreen */ },
+        onTicketSelected = { ticketId -> openTicketDetail(ticketId) },
     )
 
     override val sessionListComponent: SessionListComponent = SessionListComponentImpl(
@@ -46,6 +47,7 @@ class MainComponentImpl(
         rpcMethods = rpcMethods,
         rpcClient = rpcClient,
         onSessionSelected = { bonsaiSid -> openSessionDetail(bonsaiSid) },
+        onNewSessionRequested = { onNewSession() },
     )
 
     private val detailNavigation = SlotNavigation<DetailConfig>()
@@ -69,10 +71,34 @@ class MainComponentImpl(
                     onBack = { detailNavigation.dismiss() },
                 )
             )
+            is DetailConfig.NewSession -> MainComponent.DetailChild.NewSession(
+                NewSessionComponentImpl(
+                    componentContext = componentContext,
+                    rpcMethods = rpcMethods,
+                    onSessionStarted = { bonsaiSid ->
+                        // Dismiss new session screen and open the started session
+                        detailNavigation.dismiss()
+                        openSessionDetail(bonsaiSid)
+                    },
+                    onBack = { detailNavigation.dismiss() },
+                )
+            )
+            is DetailConfig.TicketDetail -> MainComponent.DetailChild.TicketDetail(
+                TicketDetailComponentImpl(
+                    componentContext = componentContext,
+                    ticketId = config.ticketId,
+                    rpcMethods = rpcMethods,
+                    onBack = { detailNavigation.dismiss() },
+                )
+            )
         }
 
     override fun onTabSelected(tab: Tab) {
         _activeTab.value = tab
+    }
+
+    override fun onNewSession() {
+        detailNavigation.activate(DetailConfig.NewSession)
     }
 
     override fun onDisconnect() {
@@ -84,9 +110,19 @@ class MainComponentImpl(
         detailNavigation.activate(DetailConfig.SessionDetail(bonsaiSid))
     }
 
+    private fun openTicketDetail(ticketId: String) {
+        detailNavigation.activate(DetailConfig.TicketDetail(ticketId))
+    }
+
     @Serializable
     private sealed class DetailConfig {
         @Serializable
         data class SessionDetail(val bonsaiSid: String) : DetailConfig()
+
+        @Serializable
+        data object NewSession : DetailConfig()
+
+        @Serializable
+        data class TicketDetail(val ticketId: String) : DetailConfig()
     }
 }

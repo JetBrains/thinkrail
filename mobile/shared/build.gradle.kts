@@ -25,11 +25,6 @@ kotlin {
             implementation(libs.decompose.core)
             implementation(libs.decompose.compose)
 
-            // MVIKotlin
-            implementation(libs.mvikotlin.core)
-            implementation(libs.mvikotlin.main)
-            implementation(libs.mvikotlin.coroutines)
-
             // Ktor
             implementation(libs.ktor.client.core)
             implementation(libs.ktor.client.websockets)

@@ -31,13 +31,43 @@ enum class EventType {
 }
 
 @Serializable
+enum class Effort {
+    @SerialName("low") LOW,
+    @SerialName("medium") MEDIUM,
+    @SerialName("high") HIGH,
+    @SerialName("max") MAX;
+
+    val displayLabel: String get() = when (this) {
+        LOW -> "low"
+        MEDIUM -> "med"
+        HIGH -> "high"
+        MAX -> "max"
+    }
+}
+
+@Serializable
+enum class PermissionMode {
+    @SerialName("default") DEFAULT,
+    @SerialName("auto") AUTO,
+    @SerialName("accept-edits") ACCEPT_EDITS,
+    @SerialName("yolo") YOLO;
+
+    val displayLabel: String get() = when (this) {
+        DEFAULT -> "default"
+        AUTO -> "auto"
+        ACCEPT_EDITS -> "accept edits"
+        YOLO -> "yolo"
+    }
+}
+
+@Serializable
 data class AgentConfig(
-    val model: String = "claude-sonnet-4-6",
+    val model: String = "",
     val maxTurns: Int = 50,
-    val permissionMode: String = "default",
+    val permissionMode: PermissionMode = PermissionMode.DEFAULT,
     val streamText: Boolean = true,
     val betas: List<String> = emptyList(),
-    val effort: String? = null,
+    val effort: Effort? = null,
 )
 
 @Serializable

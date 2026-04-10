@@ -14,6 +14,10 @@ interface SessionListComponent {
     fun onApprove(bonsaiSid: String, requestId: String)
     fun onDeny(bonsaiSid: String, requestId: String)
     fun onAnswerQuestion(bonsaiSid: String, requestId: String, answers: Map<String, String>)
+    fun onContinueSession(bonsaiSid: String)
+    fun onStopSession(bonsaiSid: String)
+    fun onEndSession(bonsaiSid: String)
+    fun onDeleteSession(bonsaiSid: String)
     fun onNewSession()
 }
 

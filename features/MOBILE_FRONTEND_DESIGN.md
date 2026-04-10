@@ -331,9 +331,9 @@ RootComponent
 - **Skill** — Dropdown selector (fetched from available skills)
 - **Specs** — Multi-select with chip display, searchable spec picker from registry
 - **Files** — Multi-select file paths, browsable file picker
-- **Model** — Dropdown (fetched from `models/list`)
-- **Permission Mode** — Chip selector: default | auto | yolo
-- **Effort** — Chip selector: low | medium | high
+- **Model** — Dropdown (fetched from `models/list`); defaults to first available model, not hardcoded
+- **Permission Mode** — Chip selector: default | auto | accept-edits | yolo
+- **Effort** — Chip selector: low | med | high | max | auto (`null` = auto per backend contract)
 - **Linked Ticket** — Optional dropdown to link to a board ticket
 - **Initial Prompt** — Multi-line text input
 
@@ -516,6 +516,15 @@ All existing WebSocket RPC methods and notification patterns are fully compatibl
 - Use **Foreground Service** with notification to maintain WebSocket connection when app is backgrounded
 - Service shows: "Connected to {project} on {address}"
 - Reconnect with exponential backoff: 1s, 2s, 4s, 8s, max 30s
+
+### Disconnect & Reconnect Behavior
+
+When the WebSocket connection drops mid-session:
+1. `ConnectionState` transitions to `Error` with message
+2. `RpcClient` auto-reconnects with exponential backoff (up to 30s)
+3. On reconnect, `SessionDetailComponent` re-fetches session via `session/get` to replay any missed events
+4. All pending RPC calls fail immediately with `RpcException` — callers show error in UI
+5. Subagent rendering is limited to **3 levels of nesting** in the UI to prevent deeply-nested layouts
 
 ### Push Notifications
 

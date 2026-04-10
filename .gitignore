@@ -51,6 +51,7 @@ mobile/shared/build/
 mobile/androidApp/build/
 mobile/local.properties
 mobile/.idea/
+mobile/.kotlin/
 mobile/gradle/wrapper/gradle-wrapper.jar
 
 # Logs
