@@ -72,8 +72,8 @@ graph TD
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
-| `backend_port` | `int` | `8080` | Server port. Read from `.env` or `BACKEND_PORT` env var. |
-| `backend_host` | `str` | `"127.0.0.1"` | Bind address. Read from `.env` or `BACKEND_HOST` env var. |
+| `backend_port` | `int` | `8000` | Server port. Read from `.env` or `BACKEND_PORT` env var. |
+| `backend_host` | `str` | `"0.0.0.0"` | Bind address. Read from `.env` or `BACKEND_HOST` env var. |
 
 **`AppConfig` methods:**
 

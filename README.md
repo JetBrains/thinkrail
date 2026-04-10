@@ -14,8 +14,8 @@ cd bonsai
 
 The script installs all dependencies, starts the backend and frontend, and opens:
 
-- **Frontend:** http://localhost:5173
-- **Backend:** http://localhost:8080
+- **Frontend:** http://localhost:3000
+- **Backend:** http://localhost:8000
 
 Press `Ctrl+C` to stop. Cleanup is automatic.
 
@@ -36,8 +36,8 @@ cp .env.example .env
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `BACKEND_HOST` | `0.0.0.0` | Backend bind address |
-| `BACKEND_PORT` | `8080` | Backend port |
-| `FRONTEND_PORT` | `5173` | Frontend port |
+| `BACKEND_PORT` | `8000` | Backend port |
+| `FRONTEND_PORT` | `3000` | Frontend port |
 
 ## Remote Access
 
@@ -49,13 +49,13 @@ Both servers bind to `0.0.0.0` by default, so Bonsai is reachable from other dev
 
 1. Install Tailscale on the host and the remote device
 2. Run `./deploy.sh` (or `./run.sh`)
-3. Open `http://<tailscale-ip>:5173` on the remote device
+3. Open `http://<tailscale-ip>:3000` on the remote device
 
-MagicDNS also works: `http://<hostname>:5173`.
+MagicDNS also works: `http://<hostname>:3000`.
 
 ### LAN
 
-Just open `http://<host-lan-ip>:5173` from any device on the same network. The LAN IP is shown in the startup output.
+Just open `http://<host-lan-ip>:3000` from any device on the same network. The LAN IP is shown in the startup output.
 
 ### Localhost only
 

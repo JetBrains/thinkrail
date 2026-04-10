@@ -363,11 +363,11 @@ Bonsai runs locally on developer machines. No external database — all state is
 ### Runtime Modes
 
 **Development mode** (two processes):
-- Backend: `uv run python -m app.main` (FastAPI + uvicorn on port 8080)
-- Frontend: `npm run dev` (Vite dev server on port 5173, proxies `/ws`, `/api/*` to backend)
+- Backend: `uv run python -m app.main` (FastAPI + uvicorn on port 8000)
+- Frontend: `npm run dev` (Vite dev server on port 3000, proxies `/ws`, `/api/*` to backend)
 
 **Packaged mode** (single executable):
-- `./bonsai [--port 8080] [--host 127.0.0.1] [--no-browser]`
+- `./bonsai [--port 8000] [--host 0.0.0.0] [--no-browser]`
 - One process serves everything: FastAPI handles `/ws` and `/api/*` routes, built frontend is served as static files at `/` with SPA fallback (`html=True`)
 - Auto-opens browser on startup (unless `--no-browser`)
 
@@ -381,12 +381,12 @@ Build pipeline:
   PyInstaller bundles: Python + backend deps + frontend/dist/ → executable
 
 Runtime (packaged):
-  ./bonsai --port 8080
+  ./bonsai --port 8000
     ├── FastAPI/uvicorn
     │     ├── /ws       → WebSocket RPC (existing)
     │     ├── /api/*    → REST endpoints (existing)
     │     └── /*        → bundled frontend/dist/ (StaticFiles mount)
-    └── Opens browser → http://localhost:8080
+    └── Opens browser → http://localhost:8000
 ```
 
 **Frozen mode detection:** `backend/app/core/config.py` checks `sys.frozen` to determine if running inside a PyInstaller bundle. In frozen mode, `_BONSAI_ROOT` points to the directory containing the executable (for `.env` loading) instead of traversing `__file__` parents. `backend/app/main.py` uses `sys._MEIPASS` to locate the bundled `frontend_dist/` data directory.

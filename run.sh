@@ -19,8 +19,8 @@ if [ -f "$ROOT/.env" ]; then
     set +a
 fi
 
-BACKEND_PORT="${BACKEND_PORT:-8080}"
-FRONTEND_PORT="${FRONTEND_PORT:-5173}"
+BACKEND_PORT="${BACKEND_PORT:-8000}"
+FRONTEND_PORT="${FRONTEND_PORT:-3000}"
 
 # ── Prerequisite checks ──
 if ! command -v uv &>/dev/null; then
@@ -50,6 +50,23 @@ cleanup() {
     echo "Done."
 }
 trap cleanup EXIT INT TERM
+
+# ── Check ports are free ──
+port_in_use() {
+    if command -v ss &>/dev/null; then
+        ss -tlnp 2>/dev/null | grep -q ":$1 "
+    elif command -v lsof &>/dev/null; then
+        lsof -iTCP:"$1" -sTCP:LISTEN -t &>/dev/null
+    else
+        return 1  # can't check, assume free
+    fi
+}
+for PORT in $BACKEND_PORT $FRONTEND_PORT; do
+    if port_in_use "$PORT"; then
+        echo "Error: port $PORT is already in use."
+        exit 1
+    fi
+done
 
 # ── Backend ──
 echo "Installing backend dependencies..."

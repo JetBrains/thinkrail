@@ -29,7 +29,7 @@ class TestLoadConfig:
         monkeypatch.delenv("BACKEND_PORT", raising=False)
         monkeypatch.delenv("BACKEND_HOST", raising=False)
         srv = ServerSettings(_env_file=None)
-        assert srv.backend_port == 8080
+        assert srv.backend_port == 8000
         assert srv.backend_host == "0.0.0.0"
 
     def test_discovers_root_when_not_given(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:

@@ -26,10 +26,10 @@ Bonsai runs two servers locally:
 
 | Component | Bind Address | Port | Role |
 |-----------|-------------|------|------|
-| FastAPI (uvicorn) | `127.0.0.1` | 8080 | Backend: WebSocket RPC, REST API, agent execution |
-| Vite dev server | `localhost` | 5173 | Frontend: React app, proxies `/ws` and `/terminal` to backend |
+| FastAPI (uvicorn) | `127.0.0.1` | 8000 | Backend: WebSocket RPC, REST API, agent execution |
+| Vite dev server | `localhost` | 3000 | Frontend: React app, proxies `/ws` and `/terminal` to backend |
 
-The browser connects to Vite on `:5173`, which proxies WebSocket and terminal traffic to FastAPI on `:8080`. REST API calls from the frontend go directly to `:8080` in dev mode.
+The browser connects to Vite on `:3000`, which proxies WebSocket and terminal traffic to FastAPI on `:8000`. REST API calls from the frontend go directly to `:8000` in dev mode.
 
 ### Why Remote Access Fails
 
@@ -37,19 +37,19 @@ Both servers bind to `127.0.0.1` (loopback). The OS kernel drops any packet arri
 
 ### Hardcoded `localhost` References
 
-Six locations in the codebase hardcode `localhost:8080`:
+Six locations in the codebase hardcode `localhost:8000`:
 
 | File | Line | Code |
 |------|------|------|
 | `backend/app/main.py` | 238 | `host="127.0.0.1"` |
 | `backend/app/core/config.py` | 12 | `host: str = "127.0.0.1"` |
-| `frontend/vite.config.ts` | 16, 21 | `target: "http://localhost:8080"` (proxy rules) |
-| `frontend/src/main.tsx` | 11 | `const BACKEND = import.meta.env.DEV ? "localhost:8080" : location.host` |
-| `frontend/src/store/fileStore.ts` | 4 | `const API_BASE = import.meta.env.DEV ? "http://localhost:8080" : ""` |
-| `frontend/src/components/FileTree/FileTree.tsx` | 6 | `const API_BASE = import.meta.env.DEV ? "http://localhost:8080" : ""` |
-| `frontend/src/components/ProjectPicker/ProjectPicker.tsx` | 5 | `const API_BASE = import.meta.env.DEV ? "http://localhost:8080" : ""` |
+| `frontend/vite.config.ts` | 16, 21 | `target: "http://localhost:8000"` (proxy rules) |
+| `frontend/src/main.tsx` | 11 | `const BACKEND = import.meta.env.DEV ? "localhost:8000" : location.host` |
+| `frontend/src/store/fileStore.ts` | 4 | `const API_BASE = import.meta.env.DEV ? "http://localhost:8000" : ""` |
+| `frontend/src/components/FileTree/FileTree.tsx` | 6 | `const API_BASE = import.meta.env.DEV ? "http://localhost:8000" : ""` |
+| `frontend/src/components/ProjectPicker/ProjectPicker.tsx` | 5 | `const API_BASE = import.meta.env.DEV ? "http://localhost:8000" : ""` |
 
-Note: The Vite proxy targets (`localhost:8080`) are correct and should **not** change — Vite runs on the same machine as FastAPI, so the proxy always connects locally. Only browser-facing URLs need fixing.
+Note: The Vite proxy targets (`localhost:8000`) are correct and should **not** change — Vite runs on the same machine as FastAPI, so the proxy always connects locally. Only browser-facing URLs need fixing.
 
 ---
 
@@ -61,15 +61,15 @@ Change server bindings from `127.0.0.1` to `0.0.0.0` so they listen on all inter
 
 ```
 ┌───────────── Host Machine ──────────────┐
-│  Vite :5173 (0.0.0.0)                  │
-│    └──proxy──► FastAPI :8080 (0.0.0.0)  │
+│  Vite :3000 (0.0.0.0)                  │
+│    └──proxy──► FastAPI :8000 (0.0.0.0)  │
 └─────────────────┬───────────────────────┘
                   │ LAN (192.168.x.x)
         ┌─────────┴─────────┐
         ▼                   ▼
    ┌─────────┐        ┌─────────┐
    │ Laptop  │        │ Phone   │
-   │ :5173   │        │ :5173   │
+   │ :3000   │        │ :3000   │
    └─────────┘        └─────────┘
 ```
 
@@ -78,12 +78,12 @@ Change server bindings from `127.0.0.1` to `0.0.0.0` so they listen on all inter
 
 ### Approach 2: SSH Tunnel (No Code Changes)
 
-Forward ports over SSH: `ssh -L 5173:localhost:5173 -L 8080:localhost:8080 user@host`
+Forward ports over SSH: `ssh -L 3000:localhost:3000 -L 8000:localhost:8000 user@host`
 
 ```
 ┌─── Host Machine ───┐          ┌──── Client ─────┐
-│ Vite    :5173      │◄═══SSH═══│ localhost:5173   │
-│ FastAPI :8080      │  tunnel  │ localhost:8080   │
+│ Vite    :3000      │◄═══SSH═══│ localhost:3000   │
+│ FastAPI :8000      │  tunnel  │ localhost:8000   │
 │ (127.0.0.1 both)  │          │ (forwarded)      │
 └────────────────────┘          └──────────────────┘
 ```
@@ -100,12 +100,12 @@ Place a reverse proxy in front of both servers, optionally with HTTPS via Let's 
 │                                                  │
 │  ┌──────────────────────────────┐                │
 │  │ Caddy/Nginx :443             │                │
-│  │  /ws, /terminal → :8080     │                │
-│  │  /*            → :5173      │                │
+│  │  /ws, /terminal → :8000     │                │
+│  │  /*            → :3000      │                │
 │  └──────────────────────────────┘                │
 │        │                  │                      │
 │        ▼                  ▼                      │
-│  FastAPI :8080      Vite :5173                   │
+│  FastAPI :8000      Vite :3000                   │
 │  (127.0.0.1)       (127.0.0.1)                   │
 └──────────────────────────────────────────────────┘
          ▲
@@ -118,10 +118,10 @@ Place a reverse proxy in front of both servers, optionally with HTTPS via Let's 
 Example Caddy config:
 ```
 bonsai.example.com {
-    handle /ws*    { reverse_proxy localhost:8080 }
-    handle /terminal* { reverse_proxy localhost:8080 }
-    handle /api/*  { reverse_proxy localhost:8080 }
-    handle        { reverse_proxy localhost:5173 }
+    handle /ws*    { reverse_proxy localhost:8000 }
+    handle /terminal* { reverse_proxy localhost:8000 }
+    handle /api/*  { reverse_proxy localhost:8000 }
+    handle        { reverse_proxy localhost:3000 }
 }
 ```
 
@@ -142,8 +142,8 @@ Install Tailscale on host and client devices. Access via Tailscale IP (`100.x.y.
     │ Host Machine  │  │ Client Device  │
     │ 100.x.y.z    │  │ 100.a.b.c     │
     │               │◄═══WireGuard════►│               │
-    │ Vite :5173    │  peer-to-peer    │ Browser       │
-    │ FastAPI :8080 │  encrypted       │ 100.x.y.z:5173│
+    │ Vite :3000    │  peer-to-peer    │ Browser       │
+    │ FastAPI :8000 │  encrypted       │ 100.x.y.z:3000│
     └───────────────┘                  └───────────────┘
 ```
 
@@ -156,7 +156,7 @@ Build frontend to static files (`npm run build`), serve from FastAPI. Single pro
 
 ```
 ┌──────── Host Machine ─────────┐
-│  FastAPI :8080                │
+│  FastAPI :8000                │
 │    /ws         → WebSocket    │
 │    /terminal   → WebSocket    │
 │    /api/*      → REST API     │
@@ -166,7 +166,7 @@ Build frontend to static files (`npm run build`), serve from FastAPI. Single pro
             │
        ┌────┴────┐
        │ Browser │
-       │ :8080   │
+       │ :8000   │
        └─────────┘
 ```
 
@@ -198,26 +198,26 @@ Build frontend to static files (`npm run build`), serve from FastAPI. Single pro
 - **Works from anywhere** — laptop, phone, different networks — as long as Tailscale is connected
 - **No port exposure** — nothing opens on the LAN or internet; only Tailscale network members can connect
 - **Minimal code changes** — same small changes as Approach 1, Tailscale handles the rest
-- **No domain required** — MagicDNS provides automatic hostnames (e.g., `my-machine:5173`)
+- **No domain required** — MagicDNS provides automatic hostnames (e.g., `my-machine:3000`)
 
 ### Key Design Insight: Route Through Vite Proxy
 
 The critical architectural decision is to **route all frontend-to-backend traffic through Vite's dev server proxy** rather than exposing the backend port directly to browsers:
 
-1. **Browser connects to one URL only** — Vite on `:5173`. No second port to remember or expose.
-2. **All `localhost:8080` hardcoding in frontend disappears** — replaced by relative URLs like `/api/file/read` and `/ws`.
-3. **Vite proxy target stays `localhost:8080`** — both servers run on the same machine, so the proxy always connects locally. Only the browser-facing side needs to be remote-accessible.
+1. **Browser connects to one URL only** — Vite on `:3000`. No second port to remember or expose.
+2. **All `localhost:8000` hardcoding in frontend disappears** — replaced by relative URLs like `/api/file/read` and `/ws`.
+3. **Vite proxy target stays `localhost:8000`** — both servers run on the same machine, so the proxy always connects locally. Only the browser-facing side needs to be remote-accessible.
 
-This means in practice, only port `5173` needs to be reachable from remote devices. Port `8080` can remain bound to `0.0.0.0` for flexibility but is not strictly required for browser access.
+This means in practice, only port `3000` needs to be reachable from remote devices. Port `8000` can remain bound to `0.0.0.0` for flexibility but is not strictly required for browser access.
 
 ```
 Browser (remote)                    Host Machine
 ────────────────                    ────────────
-GET /api/file/read ──────────────►  Vite :5173 (0.0.0.0)
+GET /api/file/read ──────────────►  Vite :3000 (0.0.0.0)
                                       │
-                                      │ proxy rule: /api/* → localhost:8080
+                                      │ proxy rule: /api/* → localhost:8000
                                       ▼
-                                    FastAPI :8080
+                                    FastAPI :8000
                                       │
                                       ▼
                                     Response flows back through proxy
@@ -267,7 +267,7 @@ def load_config(project_root: Path | None = None) -> AppConfig:
         bonsai_dir=root / ".bonsai",
         plugin_dir=_BONSAI_ROOT / "claude-plugin",
         host=os.environ.get("BONSAI_HOST", "0.0.0.0"),
-        port=int(os.environ.get("BONSAI_PORT", "8080")),
+        port=int(os.environ.get("BONSAI_PORT", "8000")),
     )
 ```
 
@@ -286,7 +286,7 @@ if __name__ == "__main__":
         "app.main:create_app",
         factory=True,
         host="127.0.0.1",
-        port=8080,
+        port=8000,
     )
 
 # After
@@ -322,7 +322,7 @@ Bind Vite to all interfaces and add a proxy rule for `/api` routes.
 ```typescript
 // Before
 server: {
-  port: 5173,
+  port: 3000,
   proxy: {
     "/ws": { ... },
     "/terminal": { ... },
@@ -331,28 +331,28 @@ server: {
 
 // After
 server: {
-  port: 5173,
+  port: 3000,
   host: "0.0.0.0",
   proxy: {
     "/ws": {
-      target: "http://localhost:8080",
+      target: "http://localhost:8000",
       ws: true,
       changeOrigin: true,
     },
     "/terminal": {
-      target: "http://localhost:8080",
+      target: "http://localhost:8000",
       ws: true,
       changeOrigin: true,
     },
     "/api": {
-      target: "http://localhost:8080",
+      target: "http://localhost:8000",
       changeOrigin: true,
     },
   },
 },
 ```
 
-Note: The proxy targets remain `localhost:8080` — this is correct because the proxy runs on the same machine as the backend. Adding the `/api` proxy rule means all frontend REST calls can use relative URLs.
+Note: The proxy targets remain `localhost:8000` — this is correct because the proxy runs on the same machine as the backend. Adding the `/api` proxy rule means all frontend REST calls can use relative URLs.
 
 ### File 5: `frontend/src/main.tsx`
 
@@ -360,7 +360,7 @@ Replace hardcoded backend address with relative URL through Vite proxy.
 
 ```typescript
 // Before (lines 11-12)
-const BACKEND = import.meta.env.DEV ? "localhost:8080" : location.host;
+const BACKEND = import.meta.env.DEV ? "localhost:8000" : location.host;
 const WS_PROTO = import.meta.env.DEV ? "ws:" : location.protocol === "https:" ? "wss:" : "ws:";
 
 // After
@@ -382,7 +382,7 @@ Remove the `API_BASE` constant and use relative URLs.
 
 ```typescript
 // Before (line 4)
-const API_BASE = import.meta.env.DEV ? "http://localhost:8080" : "";
+const API_BASE = import.meta.env.DEV ? "http://localhost:8000" : "";
 
 // After — delete the line entirely. All fetch calls become relative:
 // fetch(`${API_BASE}/api/file/read?...`)  →  fetch(`/api/file/read?...`)
@@ -396,7 +396,7 @@ Same pattern as File 6.
 
 ```typescript
 // Before (line 6)
-const API_BASE = import.meta.env.DEV ? "http://localhost:8080" : "";
+const API_BASE = import.meta.env.DEV ? "http://localhost:8000" : "";
 
 // After — delete the line, use relative URLs in all fetch calls
 ```
@@ -407,7 +407,7 @@ Same pattern as File 6.
 
 ```typescript
 // Before (line 5)
-const API_BASE = import.meta.env.DEV ? "http://localhost:8080" : "";
+const API_BASE = import.meta.env.DEV ? "http://localhost:8000" : "";
 
 // After — delete the line, use relative URLs in all fetch calls
 ```
@@ -418,14 +418,14 @@ Print helpful access information.
 
 ```bash
 # Before (lines 52-53)
-echo "Backend:  http://localhost:8080"
-echo "Frontend: http://localhost:5173"
+echo "Backend:  http://localhost:8000"
+echo "Frontend: http://localhost:3000"
 
 # After
 LOCAL_IP=$(hostname -I 2>/dev/null | awk '{print $1}' || echo "unknown")
-echo "Frontend: http://localhost:5173"
-echo "          http://${LOCAL_IP}:5173  (LAN)"
-echo "Backend:  http://localhost:8080"
+echo "Frontend: http://localhost:3000"
+echo "          http://${LOCAL_IP}:3000  (LAN)"
+echo "Backend:  http://localhost:8000"
 echo ""
 echo "For remote access, install Tailscale: https://tailscale.com/download"
 ```
@@ -439,7 +439,7 @@ echo "For remote access, install Tailscale: https://tailscale.com/download"
 ```
 ┌───────────────────── Host Machine ──────────────────────┐
 │                                                          │
-│  Browser ──► Vite :5173 ──proxy──► FastAPI :8080         │
+│  Browser ──► Vite :3000 ──proxy──► FastAPI :8000         │
 │              (127.0.0.1)           (127.0.0.1)           │
 │                                                          │
 │  ✓ Accessible from this machine only                     │
@@ -453,13 +453,13 @@ echo "For remote access, install Tailscale: https://tailscale.com/download"
 ```
 ┌───────────────────── Host Machine ──────────────────────┐
 │                                                          │
-│  Vite :5173 (0.0.0.0)                                   │
+│  Vite :3000 (0.0.0.0)                                   │
 │    ├── serves React app                                  │
-│    ├── proxies /ws       → localhost:8080                │
-│    ├── proxies /terminal → localhost:8080                │
-│    └── proxies /api/*    → localhost:8080                │
+│    ├── proxies /ws       → localhost:8000                │
+│    ├── proxies /terminal → localhost:8000                │
+│    └── proxies /api/*    → localhost:8000                │
 │                                                          │
-│  FastAPI :8080 (0.0.0.0)                                 │
+│  FastAPI :8000 (0.0.0.0)                                 │
 │    ├── WebSocket RPC                                     │
 │    ├── REST API (/api/*)                                 │
 │    └── Terminal WebSocket                                │
@@ -471,7 +471,7 @@ echo "For remote access, install Tailscale: https://tailscale.com/download"
            │             │             │
      ┌─────┴─────┐ ┌────┴─────┐ ┌────┴──────┐
      │ Laptop    │ │ Phone    │ │ Tablet    │
-     │ :5173 ✓  │ │ :5173 ✓ │ │ :5173 ✓  │
+     │ :3000 ✓  │ │ :3000 ✓ │ │ :3000 ✓  │
      │ HTTP only │ │ HTTP     │ │ HTTP      │
      └───────────┘ └──────────┘ └───────────┘
 ```
@@ -491,10 +491,10 @@ echo "For remote access, install Tailscale: https://tailscale.com/download"
 │  Tailscale IP: 100.64.x.y           │  │  Tailscale IP: 100.64.a.b│
 │  MagicDNS: my-machine               │  │                          │
 │                                      │  │  Browser                 │
-│  Vite :5173 (0.0.0.0)               │  │  http://100.64.x.y:5173  │
-│    └── proxies to FastAPI :8080      │  │  or                      │
-│                                      │  │  http://my-machine:5173  │
-│  FastAPI :8080 (0.0.0.0)            │  │                          │
+│  Vite :3000 (0.0.0.0)               │  │  http://100.64.x.y:3000  │
+│    └── proxies to FastAPI :8000      │  │  or                      │
+│                                      │  │  http://my-machine:3000  │
+│  FastAPI :8000 (0.0.0.0)            │  │                          │
 │                                      │  └──────────────────────────┘
 └──────────────────────────────────────┘
          ▲                    ▲
@@ -504,7 +504,7 @@ echo "For remote access, install Tailscale: https://tailscale.com/download"
          ▼                    ▼
 ┌─────── Laptop ───────┐  ┌─────── Phone ─────────┐
 │ 100.64.c.d           │  │ 100.64.e.f            │
-│ http://my-machine:5173│  │ http://my-machine:5173│
+│ http://my-machine:3000│  │ http://my-machine:3000│
 │ (encrypted tunnel)   │  │ (encrypted tunnel)    │
 └──────────────────────┘  └───────────────────────┘
 ```
@@ -565,21 +565,21 @@ After applying code changes, verify both servers bind to `0.0.0.0`:
 ./run.sh
 
 # In another terminal — check listening addresses
-ss -tlnp | grep -E ':(5173|8080)'
-# Expected: 0.0.0.0:5173 and 0.0.0.0:8080 (not 127.0.0.1)
+ss -tlnp | grep -E ':(3000|8000)'
+# Expected: 0.0.0.0:3000 and 0.0.0.0:8000 (not 127.0.0.1)
 ```
 
 ### Step 2: Local Access Still Works
 
 ```bash
 # Frontend serves React app
-curl -s http://localhost:5173/ | head -5
+curl -s http://localhost:3000/ | head -5
 
 # API proxy works through Vite
-curl -s http://localhost:5173/api/file/read?path=/tmp/test.txt
+curl -s http://localhost:3000/api/file/read?path=/tmp/test.txt
 
 # Direct backend access still works
-curl -s http://localhost:8080/api/file/read?path=/tmp/test.txt
+curl -s http://localhost:8000/api/file/read?path=/tmp/test.txt
 ```
 
 ### Step 3: LAN Access Works
@@ -591,16 +591,16 @@ From another device on the same network:
 hostname -I  # on host machine
 
 # From remote device
-curl http://192.168.x.x:5173/
+curl http://192.168.x.x:3000/
 # Should return the React app HTML
 ```
 
 ### Step 4: WebSocket Connects Remotely
 
-1. Open browser on remote device → `http://<host-ip>:5173`
+1. Open browser on remote device → `http://<host-ip>:3000`
 2. Open browser DevTools → Network tab → filter by "WS"
 3. Select a project in ProjectPicker
-4. Verify WebSocket connects to `ws://<host-ip>:5173/ws?project=...`
+4. Verify WebSocket connects to `ws://<host-ip>:3000/ws?project=...`
 5. Verify the connection stays open (no immediate close)
 
 ### Step 5: Frontend API Calls Work Remotely
@@ -609,7 +609,7 @@ curl http://192.168.x.x:5173/
 2. Verify ProjectPicker loads and lists directories (uses `/api/...` routes)
 3. Select a project → verify FileTree loads
 4. Open a file → verify file content loads
-5. Check browser console for any `localhost:8080` errors (there should be none)
+5. Check browser console for any `localhost:8000` errors (there should be none)
 
 ### Step 6: Tailscale Access (If Installed)
 
@@ -619,11 +619,11 @@ tailscale status
 # Note the Tailscale IP (100.x.y.z) and MagicDNS name
 
 # From any Tailscale-connected device
-curl http://100.x.y.z:5173/
-curl http://my-machine:5173/    # if MagicDNS is enabled
+curl http://100.x.y.z:3000/
+curl http://my-machine:3000/    # if MagicDNS is enabled
 
 # Open in browser
-# http://my-machine:5173
+# http://my-machine:3000
 ```
 
 ### Step 7: Run Tests
@@ -640,7 +640,7 @@ cd backend && uv run pytest tests/core/test_config.py -v
 BONSAI_HOST=127.0.0.1 ./run.sh
 
 # From another device — should be refused
-curl http://192.168.x.x:5173/   # connection refused ✓
+curl http://192.168.x.x:3000/   # connection refused ✓
 ```
 
 ## HOW TO
@@ -679,9 +679,9 @@ Go to https://login.tailscale.com/admin/dns and enable MagicDNS. This lets you u
 cd ~/projects/aiir/bonsai
 ./run.sh
 # You'll see output like:
-# Frontend: http://localhost:5173
-#          http://192.168.1.42:5173  (LAN)
-# Backend:  http://localhost:8080
+# Frontend: http://localhost:3000
+#          http://192.168.1.42:3000  (LAN)
+# Backend:  http://localhost:8000
 # For remote access, install Tailscale: https://tailscale.com/download
 # Press Ctrl+C to stop both.
 #
@@ -715,11 +715,11 @@ tailscale status
 
 Navigate to:
 
-`http://100.64.0.2:5173`
+`http://100.64.0.2:3000`
 
 Or with MagicDNS:
 
-`http://my-machine:5173`
+`http://my-machine:3000`
 
 That's it. ProjectPicker loads, you select a project, and everything works — file tree, editor, WebSocket, terminal.
 

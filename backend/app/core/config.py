@@ -21,7 +21,7 @@ class ServerSettings(BaseSettings):
         extra="ignore",
     )
 
-    backend_port: int = 8080
+    backend_port: int = 8000
     backend_host: str = "0.0.0.0"
 
 
