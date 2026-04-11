@@ -155,9 +155,22 @@ class TestListSessions:
         entry = result[0]
         expected_fields = {
             "bonsaiSid", "name", "skillId", "specIds", "status",
-            "model", "createdAt", "updatedAt", "active", "metrics",
+            "model", "createdAt", "updatedAt", "active", "inTracker", "metrics",
         }
         assert set(entry.keys()) == expected_fields
+
+    def test_list_stale_status_corrected(self, tmp_path: Path) -> None:
+        """Disk-only sessions with non-terminal status get forced to 'done'."""
+        save_session(tmp_path, _make_session_data(status="idle"))
+        result = list_sessions(tmp_path)
+        assert result[0]["status"] == "done"
+        assert result[0]["active"] is False
+
+    def test_list_draft_status_preserved(self, tmp_path: Path) -> None:
+        """Draft sessions keep their status even without a tracker entry."""
+        save_session(tmp_path, _make_session_data(status="draft"))
+        result = list_sessions(tmp_path)
+        assert result[0]["status"] == "draft"
 
 
 # -- append_event --------------------------------------------------------------

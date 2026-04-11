@@ -27,3 +27,10 @@ data class HealthResponse(
     val status: String,
     val version: String = "",
 )
+
+@Serializable
+data class RecentProject(
+    val path: String,
+    val name: String,
+    val lastOpened: Long = 0,
+)

@@ -115,53 +115,63 @@ fun MainScreen(component: MainComponent) {
     ) {
         Scaffold(
             topBar = {
-                TopAppBar(
-                    navigationIcon = {
-                        IconButton(onClick = { scope.launch { drawerState.open() } }) {
-                            Icon(Icons.Default.Menu, contentDescription = "Menu")
-                        }
-                    },
-                    title = {
-                        Text("\uD83C\uDF33 Bonsai", fontWeight = FontWeight.Bold, fontSize = 16.sp)
-                    },
-                    actions = {
-                        val connColor = if (connectionState is ConnectionState.Connected) BonsaiGreen else MaterialTheme.colorScheme.error
-                        Text(
-                            text = "\u25CF",
-                            color = connColor,
-                            fontSize = 12.sp,
-                            modifier = Modifier.padding(end = 16.dp),
-                        )
-                    },
-                )
-            },
-            bottomBar = {
-                NavigationBar {
-                    NavigationBarItem(
-                        selected = activeTab == Tab.BOARD,
-                        onClick = { component.onTabSelected(Tab.BOARD) },
-                        icon = { Text("\u25A6", fontSize = 18.sp) },
-                        label = { Text("Board", fontSize = 10.sp) },
-                    )
-                    NavigationBarItem(
-                        selected = activeTab == Tab.SESSIONS,
-                        onClick = { component.onTabSelected(Tab.SESSIONS) },
-                        icon = { Text("\uD83D\uDCAC", fontSize = 18.sp) },
-                        label = { Text("Sessions", fontSize = 10.sp) },
+                // Hide main top bar when a detail view is open (they have their own)
+                val detailSlotTop by component.detailSlot.subscribeAsState()
+                if (detailSlotTop.child == null) {
+                    TopAppBar(
+                        navigationIcon = {
+                            IconButton(onClick = { scope.launch { drawerState.open() } }) {
+                                Icon(Icons.Default.Menu, contentDescription = "Menu")
+                            }
+                        },
+                        title = {
+                            Text("\uD83C\uDF33 Bonsai", fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                        },
+                        actions = {
+                            val connColor = if (connectionState is ConnectionState.Connected) BonsaiGreen else MaterialTheme.colorScheme.error
+                            Text(
+                                text = "\u25CF",
+                                color = connColor,
+                                fontSize = 12.sp,
+                                modifier = Modifier.padding(end = 16.dp),
+                            )
+                        },
                     )
                 }
             },
+            bottomBar = {
+                // Hide bottom tabs when a detail view is open (session, new session, ticket)
+                val detailSlot by component.detailSlot.subscribeAsState()
+                if (detailSlot.child == null) {
+                    NavigationBar {
+                        NavigationBarItem(
+                            selected = activeTab == Tab.BOARD,
+                            onClick = { component.onTabSelected(Tab.BOARD) },
+                            icon = { Text("\u25A6", fontSize = 18.sp) },
+                            label = { Text("Board", fontSize = 10.sp) },
+                        )
+                        NavigationBarItem(
+                            selected = activeTab == Tab.SESSIONS,
+                            onClick = { component.onTabSelected(Tab.SESSIONS) },
+                            icon = { Text("\uD83D\uDCAC", fontSize = 18.sp) },
+                            label = { Text("Sessions", fontSize = 10.sp) },
+                        )
+                    }
+                }
+            },
         ) { padding ->
+            // Tab content gets Scaffold padding (top bar + bottom bar)
             Box(modifier = Modifier.padding(padding)) {
-                // Tab content
                 when (activeTab) {
                     Tab.BOARD -> BoardScreen(component = component.boardComponent)
                     Tab.SESSIONS -> SessionListScreen(component = component.sessionListComponent)
                 }
+            }
 
-                // Detail overlay (session detail or new session on top of tabs)
-                val detailSlot by component.detailSlot.subscribeAsState()
-                detailSlot.child?.instance?.let { instance ->
+            // Detail overlay fills entire screen (ignores Scaffold padding — has its own bars)
+            val detailSlot by component.detailSlot.subscribeAsState()
+            detailSlot.child?.instance?.let { instance ->
+                Box(modifier = Modifier.fillMaxSize()) {
                     when (instance) {
                         is MainComponent.DetailChild.SessionDetail ->
                             SessionDetailScreen(component = instance.component)

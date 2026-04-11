@@ -5,6 +5,8 @@ import com.arkivanov.essenty.lifecycle.doOnDestroy
 import dev.aiir.bonsai.data.model.AgentConfig
 import dev.aiir.bonsai.data.model.Effort
 import dev.aiir.bonsai.data.model.PermissionMode
+import dev.aiir.bonsai.data.model.PromptSection
+import dev.aiir.bonsai.data.serialization.BonsaiJson
 import dev.aiir.bonsai.network.rpc.RpcMethods
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -16,6 +18,8 @@ import kotlinx.serialization.json.jsonPrimitive
 class NewSessionComponentImpl(
     componentContext: ComponentContext,
     private val rpcMethods: RpcMethods,
+    private val restClient: dev.aiir.bonsai.network.rest.RestClient,
+    private val serverAddress: dev.aiir.bonsai.data.model.ServerAddress,
     private val onSessionStarted: (String) -> Unit,
     private val onBack: () -> Unit,
 ) : NewSessionComponent, ComponentContext by componentContext {
@@ -35,11 +39,18 @@ class NewSessionComponentImpl(
                 val models = rpcMethods.modelsList()
                 val specs = rpcMethods.specList()
                 val tickets = rpcMethods.boardList()
+                val skills = try { rpcMethods.skillsList() } catch (_: Exception) { emptyList() }
+                val files = try {
+                    restClient.listFiles(serverAddress.baseUrl, serverAddress.projectPath)
+                        .filter { !it.isDir }
+                } catch (_: Exception) { emptyList() }
                 _state.update {
                     it.copy(
                         availableModels = models,
                         availableSpecs = specs,
                         availableTickets = tickets,
+                        availableSkills = skills,
+                        availableFiles = files,
                         model = if (it.model.isEmpty()) models.firstOrNull()?.id ?: "" else it.model,
                     )
                 }
@@ -81,12 +92,22 @@ class NewSessionComponentImpl(
                 )
                 val bonsaiSid = result["bonsaiSid"]?.jsonPrimitive?.content ?: ""
                 val totalTokens = result["totalTokens"]?.jsonPrimitive?.content?.toIntOrNull() ?: 0
+                val sections = result["sections"]?.let {
+                    try {
+                        BonsaiJson.decodeFromJsonElement(
+                            kotlinx.serialization.builtins.ListSerializer(PromptSection.serializer()), it
+                        )
+                    } catch (_: Exception) { emptyList() }
+                } ?: emptyList()
+                val systemPrompt = result["systemPrompt"]?.jsonPrimitive?.content
 
                 _state.update {
                     it.copy(
                         step = NewSessionStep.PREVIEW,
                         draftBonsaiSid = bonsaiSid,
                         totalTokens = totalTokens,
+                        sections = sections,
+                        systemPrompt = systemPrompt,
                         isLoading = false,
                     )
                 }

@@ -3,6 +3,7 @@ package dev.aiir.bonsai.android.ui.screen
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -70,7 +71,7 @@ fun SessionDetailScreen(component: SessionDetailComponent) {
                             Text("·", fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                             // Tappable model name
                             Text(
-                                text = "${state.sessionModel.substringAfterLast("-")} ▼",
+                                text = "${state.sessionModelLabel.ifEmpty { state.sessionModel }} ▼",
                                 fontSize = 10.sp,
                                 color = BonsaiGreen,
                                 modifier = Modifier.clickable { /* TODO: show model picker */ },
@@ -97,7 +98,7 @@ fun SessionDetailScreen(component: SessionDetailComponent) {
             )
         },
         bottomBar = {
-            Column {
+            Column(modifier = Modifier.imePadding()) {
                 // Pending request card (approval, question, suggestion)
                 val pending = state.pendingRequest
                 if (state.isWaiting && pending != null) {
@@ -126,60 +127,72 @@ fun SessionDetailScreen(component: SessionDetailComponent) {
                     }
                 }
 
-                // Message input bar
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(8.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    OutlinedTextField(
-                        value = messageInput,
-                        onValueChange = { messageInput = it },
-                        placeholder = {
-                            Text(
-                                if (state.isWaiting) "Respond above first..." else "Message...",
-                                fontSize = 13.sp,
-                            )
-                        },
-                        enabled = state.canSendMessage,
-                        modifier = Modifier.weight(1f),
-                        shape = RoundedCornerShape(20.dp),
-                        maxLines = 3,
-                    )
-                    Spacer(modifier = Modifier.width(8.dp))
-                    if (state.isRunning) {
-                        IconButton(
-                            onClick = { component.interrupt() },
-                            modifier = Modifier
-                                .size(40.dp)
-                                .background(MaterialTheme.colorScheme.surfaceVariant, CircleShape),
-                        ) {
-                            Icon(Icons.Default.Close, contentDescription = "Interrupt", tint = StatusError)
-                        }
-                    } else {
-                        IconButton(
-                            onClick = {
-                                if (messageInput.isNotBlank()) {
-                                    component.sendMessage(messageInput)
-                                    messageInput = ""
-                                }
+                // Bottom bar: Continue button for terminal sessions, message input otherwise
+                if (state.isTerminal) {
+                    Button(
+                        onClick = { component.resumeSession() },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(8.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = BonsaiGreen),
+                    ) {
+                        Text("Continue Session")
+                    }
+                } else {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(8.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        OutlinedTextField(
+                            value = messageInput,
+                            onValueChange = { messageInput = it },
+                            placeholder = {
+                                Text(
+                                    if (state.isWaiting) "Respond above first..." else "Message...",
+                                    fontSize = 13.sp,
+                                )
                             },
-                            enabled = state.canSendMessage && messageInput.isNotBlank(),
-                            modifier = Modifier
-                                .size(40.dp)
-                                .background(
-                                    if (state.canSendMessage && messageInput.isNotBlank()) BonsaiGreen
-                                    else MaterialTheme.colorScheme.surfaceVariant,
-                                    CircleShape,
-                                ),
-                        ) {
-                            Icon(
-                                Icons.AutoMirrored.Filled.Send,
-                                contentDescription = "Send",
-                                tint = if (state.canSendMessage && messageInput.isNotBlank()) Color.White
-                                else MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
+                            enabled = state.canSendMessage,
+                            modifier = Modifier.weight(1f),
+                            shape = RoundedCornerShape(20.dp),
+                            maxLines = 3,
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        if (state.isRunning) {
+                            IconButton(
+                                onClick = { component.interrupt() },
+                                modifier = Modifier
+                                    .size(40.dp)
+                                    .background(MaterialTheme.colorScheme.surfaceVariant, CircleShape),
+                            ) {
+                                Icon(Icons.Default.Close, contentDescription = "Interrupt", tint = StatusError)
+                            }
+                        } else {
+                            IconButton(
+                                onClick = {
+                                    if (messageInput.isNotBlank()) {
+                                        component.sendMessage(messageInput)
+                                        messageInput = ""
+                                    }
+                                },
+                                enabled = state.canSendMessage && messageInput.isNotBlank(),
+                                modifier = Modifier
+                                    .size(40.dp)
+                                    .background(
+                                        if (state.canSendMessage && messageInput.isNotBlank()) BonsaiGreen
+                                        else MaterialTheme.colorScheme.surfaceVariant,
+                                        CircleShape,
+                                    ),
+                            ) {
+                                Icon(
+                                    Icons.AutoMirrored.Filled.Send,
+                                    contentDescription = "Send",
+                                    tint = if (state.canSendMessage && messageInput.isNotBlank()) Color.White
+                                    else MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                            }
                         }
                     }
                 }
@@ -372,6 +385,22 @@ private fun ChatItemView(
                 text = "\u26A0 Permission denied: ${item.toolName}",
                 color = StatusError,
                 backgroundColor = StatusError.copy(alpha = 0.1f),
+            )
+        }
+
+        is ChatItem.CompactMarker -> {
+            SystemPill(
+                text = "Context compacted" + if (item.summary.isNotEmpty()) ": ${item.summary}" else "",
+                color = StatusWaiting,
+                backgroundColor = StatusWaiting.copy(alpha = 0.1f),
+            )
+        }
+
+        is ChatItem.RequestExpired -> {
+            SystemPill(
+                text = "\u23F1 Expired: ${item.toolName}",
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                backgroundColor = MaterialTheme.colorScheme.surfaceVariant,
             )
         }
     }

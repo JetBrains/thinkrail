@@ -49,6 +49,7 @@ class SessionDetailComponentImpl(
                             events = session.events,
                             sessionStatus = session.status,
                             sessionModel = session.model,
+                            sessionModelLabel = deriveModelLabel(session.model),
                             sessionName = session.name.ifEmpty { bonsaiSid.take(8) },
                             costUsd = session.metrics.costUsd,
                             contextTokens = session.metrics.contextTokens,
@@ -78,11 +79,26 @@ class SessionDetailComponentImpl(
         scope.launch {
             rpcClient.notifications.collect { notification ->
                 val params = notification.params
-                val sid = params["bonsaiSid"]?.jsonPrimitive?.content ?: return@collect
+                val sid = params["bonsaiSid"]?.jsonPrimitive?.content
+                if (sid == null) {
+                    println("[SessionDetail] Dropped ${notification.method}: missing bonsaiSid in params")
+                    return@collect
+                }
                 if (sid != bonsaiSid) return@collect
 
+                // Pre-route ephemeral notifications (state updates, not chat events)
+                when (notification.method) {
+                    "agent/costEstimate" -> { handleCostEstimate(params); return@collect }
+                    "agent/statusChanged" -> { handleStatusChanged(params); return@collect }
+                    "agent/configChanged" -> { handleConfigChanged(params); return@collect }
+                }
+
                 val eventTypeName = notification.method.removePrefix("agent/")
-                val eventType = parseEventType(eventTypeName) ?: return@collect // skip unknown events
+                val eventType = parseEventType(eventTypeName)
+                if (eventType == null) {
+                    println("[SessionDetail] Dropped ${notification.method}: unknown event type '$eventTypeName'")
+                    return@collect
+                }
                 val event = AgentEvent(
                     bonsaiSid = sid,
                     eventType = eventType,
@@ -308,6 +324,14 @@ class SessionDetailComponentImpl(
         var assistantText = StringBuilder()
         var tcIdx = 0
 
+        // Pre-scan: find last done/error event index (only show full banner for the last one)
+        var lastDoneIndex = -1
+        var lastErrorIndex = -1
+        for ((i, event) in _state.value.events.withIndex()) {
+            if (event.eventType == EventType.DONE) lastDoneIndex = i
+            if (event.eventType == EventType.ERROR) lastErrorIndex = i
+        }
+
         // Pre-scan: find latest tool-call index per visId for collapse tracking
         val latestVisByVisId = mutableMapOf<String, Int>()
         var scanTcIdx = 0
@@ -325,7 +349,7 @@ class SessionDetailComponentImpl(
             }
         }
 
-        for (event in _state.value.events) {
+        for ((eventIndex, event) in _state.value.events.withIndex()) {
             val payload = event.payload
 
             when (event.eventType) {
@@ -444,13 +468,19 @@ class SessionDetailComponentImpl(
                         items.add(ChatItem.AssistantMessage(assistantText.toString()))
                         assistantText.clear()
                     }
-                    items.add(ChatItem.SessionDone(
-                        costUsd = _state.value.costUsd,
-                        turns = _state.value.turns,
-                        toolCalls = _state.value.toolStates.size,
-                        durationMs = _state.value.session?.metrics?.durationMs ?: 0,
-                        filesChanged = _state.value.session?.metrics?.filesChanged ?: emptyMap(),
-                    ))
+                    if (eventIndex == lastDoneIndex) {
+                        // Full banner with Resume button for the last done event only
+                        items.add(ChatItem.SessionDone(
+                            costUsd = _state.value.costUsd,
+                            turns = _state.value.turns,
+                            toolCalls = _state.value.toolStates.size,
+                            durationMs = _state.value.session?.metrics?.durationMs ?: 0,
+                            filesChanged = _state.value.session?.metrics?.filesChanged ?: emptyMap(),
+                        ))
+                    } else {
+                        // Earlier runs: simple marker, no Resume button
+                        items.add(ChatItem.Notification("Run ended"))
+                    }
                 }
 
                 EventType.ERROR -> {
@@ -461,7 +491,12 @@ class SessionDetailComponentImpl(
                     val msg = payload["message"]?.jsonPrimitive?.content
                         ?: payload["error"]?.jsonPrimitive?.content
                         ?: "Unknown error"
-                    items.add(ChatItem.SessionError(msg, _state.value.costUsd))
+                    if (eventIndex == lastErrorIndex && lastDoneIndex < eventIndex) {
+                        // Full banner only if this is the last terminal event
+                        items.add(ChatItem.SessionError(msg, _state.value.costUsd))
+                    } else {
+                        items.add(ChatItem.Notification("Error: $msg"))
+                    }
                 }
 
                 EventType.PERMISSION_DENIED -> {
@@ -469,7 +504,19 @@ class SessionDetailComponentImpl(
                     items.add(ChatItem.PermissionDenied(tool))
                 }
 
-                EventType.READY, EventType.COMPACT, EventType.REQUEST_RESOLVED, EventType.REQUEST_EXPIRED -> {
+                EventType.COMPACT -> {
+                    val summary = payload["summary"]?.jsonPrimitive?.content ?: ""
+                    items.add(ChatItem.CompactMarker(summary))
+                }
+
+                EventType.REQUEST_EXPIRED -> {
+                    val requestId = payload["requestId"]?.jsonPrimitive?.content ?: ""
+                    val toolName = _state.value.toolStates.values
+                        .firstOrNull { it.approvalRequestId == requestId }?.toolName ?: "request"
+                    items.add(ChatItem.RequestExpired(toolName = toolName))
+                }
+
+                EventType.READY, EventType.REQUEST_RESOLVED -> {
                     // No visual representation or handled elsewhere
                 }
             }
@@ -582,7 +629,7 @@ class SessionDetailComponentImpl(
         scope.launch {
             try {
                 rpcMethods.agentUpdateConfig(bonsaiSid, model = model)
-                _state.update { it.copy(sessionModel = model) }
+                _state.update { it.copy(sessionModel = model, sessionModelLabel = deriveModelLabel(model)) }
             } catch (e: Exception) { _state.update { it.copy(error = e.message) } }
         }
     }
@@ -625,6 +672,7 @@ class SessionDetailComponentImpl(
             "agent/confirmAction" -> PendingRequestType.APPROVAL
             "agent/suggestSession" -> PendingRequestType.SUGGESTION
             "agent/suggestDescription" -> PendingRequestType.DESCRIPTION_SUGGESTION
+            "agent/suggestStep" -> PendingRequestType.STEP_PROPOSAL
             else -> return null
         }
 
@@ -645,6 +693,13 @@ class SessionDetailComponentImpl(
             name = params["name"]?.jsonPrimitive?.content,
             reason = params["reason"]?.jsonPrimitive?.content,
             description = params["description"]?.jsonPrimitive?.content,
+            // Step proposal fields
+            ticketId = params["ticketId"]?.jsonPrimitive?.content,
+            stepNumber = params["stepNumber"]?.jsonPrimitive?.intOrNull,
+            stepTitle = params["stepTitle"]?.jsonPrimitive?.content,
+            inputSpecIds = params["inputSpecIds"]?.let {
+                try { BonsaiJson.decodeFromJsonElement<List<String>>(it) } catch (_: Exception) { null }
+            },
         )
     }
 
@@ -657,6 +712,55 @@ class SessionDetailComponentImpl(
             "Grep" -> input["pattern"]?.jsonPrimitive?.content ?: ""
             "Agent" -> input["description"]?.jsonPrimitive?.content ?: ""
             else -> ""
+        }
+    }
+
+    /** If the persisted status is stale (e.g., "idle" when events show "done"), fix it. */
+    private fun deriveModelLabel(modelId: String): String {
+        // "claude-opus-4-6" -> "Opus 4.6"
+        // "claude-sonnet-4-6" -> "Sonnet 4.6"
+        // "claude-haiku-4-5-20251001" -> "Haiku 4.5"
+        val base = modelId.removePrefix("claude-")
+        val parts = base.split("-")
+        if (parts.size >= 3) {
+            val family = parts[0].replaceFirstChar { it.uppercase() }
+            val version = parts.subList(1, 3).joinToString(".")
+            return "$family $version"
+        }
+        return modelId
+    }
+
+    // ── Ephemeral notification handlers (state updates, not chat events) ──
+
+    private fun handleCostEstimate(params: JsonObject) {
+        val cost = params["estimatedCostUsd"]?.jsonPrimitive?.doubleOrNull ?: return
+        val contextTokens = params["currentContextWindow"]?.jsonPrimitive?.longOrNull ?: 0
+        _state.update {
+            it.copy(
+                costUsd = cost,
+                contextTokens = contextTokens,
+            )
+        }
+    }
+
+    private fun handleStatusChanged(params: JsonObject) {
+        val statusStr = params["status"]?.jsonPrimitive?.content ?: return
+        val newStatus = try {
+            BonsaiJson.decodeFromString(SessionStatus.serializer(), "\"$statusStr\"")
+        } catch (_: Exception) { return }
+        // Guard: don't overwrite frontend-managed states
+        val current = _state.value.sessionStatus
+        if (current == SessionStatus.WAITING || current == SessionStatus.DONE || current == SessionStatus.ERROR) return
+        _state.update { it.copy(sessionStatus = newStatus) }
+    }
+
+    private fun handleConfigChanged(params: JsonObject) {
+        val model = params["model"]?.jsonPrimitive?.content
+        _state.update {
+            it.copy(
+                sessionModel = model ?: it.sessionModel,
+                sessionModelLabel = if (model != null) deriveModelLabel(model) else it.sessionModelLabel,
+            )
         }
     }
 }

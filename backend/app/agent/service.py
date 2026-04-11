@@ -403,6 +403,11 @@ class AgentService:
             pending = self._tracker.get_pending_request(bonsai_sid)
             if pending is not None:
                 data["pendingRequest"] = pending
+        else:
+            # Not in tracker — correct stale status (no live runner)
+            status = data.get("status", "done")
+            if status not in ("done", "error", "draft"):
+                data["status"] = "done"
         return data
 
     def trash_session(self, bonsai_sid: str) -> None:

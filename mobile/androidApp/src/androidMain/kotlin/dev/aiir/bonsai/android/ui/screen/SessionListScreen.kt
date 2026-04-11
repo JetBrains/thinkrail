@@ -18,6 +18,7 @@ import dev.aiir.bonsai.android.ui.theme.BonsaiGreen
 import dev.aiir.bonsai.android.ui.theme.StatusWaiting
 import dev.aiir.bonsai.component.session.SessionListComponent
 import dev.aiir.bonsai.component.session.SessionTab
+import dev.aiir.bonsai.data.model.SessionStatus
 
 @Composable
 fun SessionListScreen(component: SessionListComponent) {
@@ -77,6 +78,13 @@ fun SessionListScreen(component: SessionListComponent) {
                     verticalArrangement = Arrangement.spacedBy(6.dp),
                 ) {
                     items(sessions, key = { it.bonsaiSid }) { session ->
+                        val status = session.status
+                        val isTerminal = status in listOf(SessionStatus.DONE, SessionStatus.ERROR)
+                        val isActive = status in listOf(
+                            SessionStatus.RUNNING, SessionStatus.IDLE,
+                            SessionStatus.WAITING, SessionStatus.INITIALIZING,
+                            SessionStatus.INTERRUPTED,
+                        )
                         SessionCard(
                             session = session,
                             onClick = { component.onSessionTapped(session.bonsaiSid) },
@@ -86,6 +94,18 @@ fun SessionListScreen(component: SessionListComponent) {
                             onDeny = session.pendingRequest?.let {
                                 { component.onDeny(session.bonsaiSid, it.requestId) }
                             },
+                            onContinue = if (isTerminal || status == SessionStatus.INTERRUPTED) {
+                                { component.onContinueSession(session.bonsaiSid) }
+                            } else null,
+                            onStop = if (status == SessionStatus.RUNNING) {
+                                { component.onStopSession(session.bonsaiSid) }
+                            } else null,
+                            onEnd = if (isActive) {
+                                { component.onEndSession(session.bonsaiSid) }
+                            } else null,
+                            onDelete = if (isTerminal || status == SessionStatus.DRAFT) {
+                                { component.onDeleteSession(session.bonsaiSid) }
+                            } else null,
                         )
                     }
                 }

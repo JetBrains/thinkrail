@@ -75,6 +75,8 @@ class MainComponentImpl(
                 NewSessionComponentImpl(
                     componentContext = componentContext,
                     rpcMethods = rpcMethods,
+                    restClient = restClient,
+                    serverAddress = serverAddress,
                     onSessionStarted = { bonsaiSid ->
                         // Dismiss new session screen and open the started session
                         detailNavigation.dismiss()

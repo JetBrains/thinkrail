@@ -12,9 +12,11 @@ import com.arkivanov.decompose.extensions.compose.stack.animation.slide
 import com.arkivanov.decompose.extensions.compose.stack.animation.stackAnimation
 import dev.aiir.bonsai.android.ui.screen.ConnectScreen
 import dev.aiir.bonsai.android.ui.screen.MainScreen
+import dev.aiir.bonsai.android.ui.screen.ProjectPickerScreen
 import dev.aiir.bonsai.android.ui.theme.BonsaiTheme
 import dev.aiir.bonsai.component.root.RootComponent
 import dev.aiir.bonsai.component.root.RootComponentImpl
+import dev.aiir.bonsai.data.ConnectionStorage
 import dev.aiir.bonsai.network.connection.ConnectionManager
 import dev.aiir.bonsai.network.rest.RestClient
 import dev.aiir.bonsai.network.rpc.RpcClient
@@ -26,6 +28,7 @@ class MainActivity : ComponentActivity() {
     private val rpcMethods: RpcMethods by inject()
     private val restClient: RestClient by inject()
     private val connectionManager: ConnectionManager by inject()
+    private val connectionStorage: ConnectionStorage by inject()
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -38,6 +41,7 @@ class MainActivity : ComponentActivity() {
             rpcMethods = rpcMethods,
             restClient = restClient,
             connectionManager = connectionManager,
+            connectionStorage = connectionStorage,
         )
 
         setContent {
@@ -49,6 +53,7 @@ class MainActivity : ComponentActivity() {
                     ) { child ->
                         when (val instance = child.instance) {
                             is RootComponent.Child.Connect -> ConnectScreen(component = instance.component)
+                            is RootComponent.Child.ProjectPicker -> ProjectPickerScreen(component = instance.component)
                             is RootComponent.Child.Main -> MainScreen(component = instance.component)
                         }
                     }

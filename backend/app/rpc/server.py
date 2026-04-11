@@ -55,6 +55,7 @@ from app.rpc.methods.settings import (
     ensure_settings,
     get_settings,
     list_models,
+    list_skills,
     refresh_models,
     update_settings,
 )
@@ -165,6 +166,7 @@ METHODS = {
     "settings/ensureFile": ensure_settings,
     "models/list": list_models,
     "models/refresh": refresh_models,
+    "skills/list": list_skills,
 }
 
 _active_ws: WebSocket | None = None
@@ -196,6 +198,8 @@ def _bind_methods(
         elif name.startswith("trash/") and trash_service:
             bound[name] = partial(handler, trash_service)
         elif name.startswith("settings/"):
+            bound[name] = partial(handler, config)
+        elif name.startswith("skills/"):
             bound[name] = partial(handler, config)
         elif name.startswith("models/"):
             bound[name] = partial(handler, model_registry)

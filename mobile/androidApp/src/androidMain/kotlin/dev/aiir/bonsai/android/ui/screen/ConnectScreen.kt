@@ -15,7 +15,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import dev.aiir.bonsai.android.ui.theme.BonsaiGreen
 import dev.aiir.bonsai.component.connect.ConnectComponent
-import dev.aiir.bonsai.component.connect.ConnectState
 
 @Composable
 fun ConnectScreen(component: ConnectComponent) {
@@ -45,10 +44,10 @@ fun ConnectScreen(component: ConnectComponent) {
 
         Spacer(modifier = Modifier.height(32.dp))
 
-        // Recent connections
-        if (state.recentConnections.isNotEmpty()) {
+        // Recent servers
+        if (state.recentServers.isNotEmpty()) {
             Text(
-                text = "RECENT CONNECTIONS",
+                text = "RECENT SERVERS",
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.fillMaxWidth(),
@@ -58,11 +57,11 @@ fun ConnectScreen(component: ConnectComponent) {
                 modifier = Modifier.weight(1f, fill = false),
                 verticalArrangement = Arrangement.spacedBy(6.dp),
             ) {
-                items(state.recentConnections) { connection ->
+                items(state.recentServers) { server ->
                     OutlinedCard(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .clickable { component.onRecentConnectionSelected(connection) },
+                            .clickable { component.onRecentServerSelected(server) },
                         shape = RoundedCornerShape(8.dp),
                     ) {
                         Row(
@@ -71,15 +70,18 @@ fun ConnectScreen(component: ConnectComponent) {
                         ) {
                             Column(modifier = Modifier.weight(1f)) {
                                 Text(
-                                    text = connection.displayName.ifEmpty { connection.projectPath.substringAfterLast("/") },
+                                    text = "${server.host}:${server.port}",
                                     style = MaterialTheme.typography.bodyMedium,
                                     fontWeight = FontWeight.Bold,
                                 )
-                                Text(
-                                    text = "${connection.host}:${connection.port}",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                )
+                                if (server.lastConnected > 0) {
+                                    val ago = formatTimeAgo(server.lastConnected)
+                                    Text(
+                                        text = ago,
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    )
+                                }
                             }
                         }
                     }
@@ -102,19 +104,6 @@ fun ConnectScreen(component: ConnectComponent) {
             value = state.addressInput,
             onValueChange = { component.onAddressChanged(it) },
             placeholder = { Text("192.168.1.x:8000") },
-            modifier = Modifier.fillMaxWidth(),
-            singleLine = true,
-            shape = RoundedCornerShape(8.dp),
-        )
-
-        Spacer(modifier = Modifier.height(8.dp))
-
-        // Project path
-        OutlinedTextField(
-            value = state.projectPath,
-            onValueChange = { component.onProjectPathChanged(it) },
-            placeholder = { Text("/path/to/project") },
-            label = { Text("Project Path") },
             modifier = Modifier.fillMaxWidth(),
             singleLine = true,
             shape = RoundedCornerShape(8.dp),
@@ -161,5 +150,20 @@ fun ConnectScreen(component: ConnectComponent) {
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             textAlign = TextAlign.Center,
         )
+    }
+}
+
+private fun formatTimeAgo(timestamp: Long): String {
+    val now = System.currentTimeMillis()
+    val diff = now - timestamp
+    val minutes = diff / 60_000
+    val hours = minutes / 60
+    val days = hours / 24
+    return when {
+        minutes < 1 -> "just now"
+        minutes < 60 -> "${minutes}m ago"
+        hours < 24 -> "${hours}h ago"
+        days < 7 -> "${days}d ago"
+        else -> "${days / 7}w ago"
     }
 }

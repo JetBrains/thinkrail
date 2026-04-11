@@ -2,7 +2,6 @@ package dev.aiir.bonsai.component.session
 
 import com.arkivanov.decompose.ComponentContext
 import com.arkivanov.essenty.lifecycle.doOnDestroy
-import dev.aiir.bonsai.data.model.SessionStatus
 import dev.aiir.bonsai.network.rpc.RpcClient
 import dev.aiir.bonsai.network.rpc.RpcMethods
 import kotlinx.coroutines.*

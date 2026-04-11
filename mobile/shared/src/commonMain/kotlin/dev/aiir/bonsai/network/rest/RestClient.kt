@@ -2,6 +2,9 @@ package dev.aiir.bonsai.network.rest
 
 import dev.aiir.bonsai.data.model.HealthResponse
 import dev.aiir.bonsai.data.model.ProjectInfo
+import io.ktor.client.request.header
+import io.ktor.client.request.post
+import io.ktor.client.request.setBody
 import dev.aiir.bonsai.data.serialization.BonsaiJson
 import io.ktor.client.*
 import io.ktor.client.request.*
@@ -61,6 +64,39 @@ class RestClient(private val httpClient: HttpClient) {
         val body = response.bodyAsText()
         val json = BonsaiJson.parseToJsonElement(body).jsonObject
         return json["ok"]?.jsonPrimitive?.booleanOrNull == true
+    }
+    suspend fun listProjects(baseUrl: String, base: String = ""): List<ProjectInfo> {
+        val response = httpClient.get("$baseUrl/api/project/list") {
+            if (base.isNotEmpty()) parameter("base", base)
+            parameter("max_depth", 4)
+        }
+        val body = response.bodyAsText()
+        val json = BonsaiJson.parseToJsonElement(body).jsonObject
+        val projects = json["projects"]?.jsonArray ?: return emptyList()
+        return BonsaiJson.decodeFromJsonElement(
+            kotlinx.serialization.builtins.ListSerializer(ProjectInfo.serializer()),
+            projects,
+        )
+    }
+
+    suspend fun listDirs(baseUrl: String, base: String, prefix: String = ""): List<String> {
+        val response = httpClient.get("$baseUrl/api/fs/list-dirs") {
+            parameter("base", base)
+            parameter("prefix", prefix)
+        }
+        val body = response.bodyAsText()
+        val json = BonsaiJson.parseToJsonElement(body).jsonObject
+        val dirs = json["dirs"]?.jsonArray ?: return emptyList()
+        return dirs.map { it.jsonPrimitive.content }
+    }
+
+    suspend fun initProject(baseUrl: String, path: String): ProjectInfo {
+        val response = httpClient.post("$baseUrl/api/project/init") {
+            header("Content-Type", "application/json")
+            setBody("""{"path":"$path"}""")
+        }
+        val body = response.bodyAsText()
+        return BonsaiJson.decodeFromString(ProjectInfo.serializer(), body)
     }
 }
 

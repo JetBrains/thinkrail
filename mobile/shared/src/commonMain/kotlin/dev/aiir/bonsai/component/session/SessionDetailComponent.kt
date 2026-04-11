@@ -63,6 +63,8 @@ sealed class ChatItem {
     data class SessionError(val message: String, val costUsd: Double = 0.0) : ChatItem()
     data class SessionConfig(val config: AgentConfig, val specIds: List<String> = emptyList(), val filePaths: List<String> = emptyList(), val sections: List<PromptSection> = emptyList(), val totalTokens: Int = 0) : ChatItem()
     data class PermissionDenied(val toolName: String) : ChatItem()
+    data class CompactMarker(val summary: String = "") : ChatItem()
+    data class RequestExpired(val toolName: String = "", val requestType: String = "") : ChatItem()
 }
 
 data class SessionDetailState(
@@ -79,6 +81,7 @@ data class SessionDetailState(
     val turns: Int = 0,
     val sessionStatus: SessionStatus = SessionStatus.IDLE,
     val sessionModel: String = "",
+    val sessionModelLabel: String = "",
     val sessionName: String = "",
     val isLoading: Boolean = false,
     val error: String? = null,

@@ -182,6 +182,9 @@ class RpcMethods(private val client: RpcClient) {
     suspend fun modelsList(): List<ModelInfo> =
         callList("models/list", ModelInfo.serializer())
 
+    suspend fun skillsList(): List<SkillInfo> =
+        callList("skills/list", SkillInfo.serializer())
+
     // ── Helpers ──
 
     private suspend fun <T> call(

@@ -6,6 +6,7 @@ import dev.aiir.bonsai.data.model.ModelInfo
 import dev.aiir.bonsai.data.model.PermissionMode
 import dev.aiir.bonsai.data.model.PromptSection
 import dev.aiir.bonsai.data.model.RegistryEntry
+import dev.aiir.bonsai.data.model.SkillInfo
 import kotlinx.coroutines.flow.StateFlow
 
 interface NewSessionComponent {
@@ -49,6 +50,8 @@ data class NewSessionState(
     val availableModels: List<ModelInfo> = emptyList(),
     val availableSpecs: List<RegistryEntry> = emptyList(),
     val availableTickets: List<MetaTicketSummary> = emptyList(),
+    val availableSkills: List<SkillInfo> = emptyList(),
+    val availableFiles: List<dev.aiir.bonsai.network.rest.FileEntry> = emptyList(),
     // State
     val isLoading: Boolean = false,
     val error: String? = null,

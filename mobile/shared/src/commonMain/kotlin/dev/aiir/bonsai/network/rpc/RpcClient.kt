@@ -36,7 +36,7 @@ class RpcClient(
     private val _connectionState = MutableStateFlow<ConnectionState>(ConnectionState.Disconnected)
     val connectionState: StateFlow<ConnectionState> = _connectionState.asStateFlow()
 
-    private val _notifications = MutableSharedFlow<JsonRpcNotification>(extraBufferCapacity = 64)
+    private val _notifications = MutableSharedFlow<JsonRpcNotification>(extraBufferCapacity = 256)
     val notifications: SharedFlow<JsonRpcNotification> = _notifications.asSharedFlow()
 
     private val _serverRequests = MutableSharedFlow<JsonRpcServerRequest>(extraBufferCapacity = 16)

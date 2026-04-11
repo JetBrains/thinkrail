@@ -11,7 +11,7 @@ Make sessions in the Bonsai mobile app fully functional — matching the web fro
 ### Goals
 
 - **Real-time event streaming** via WebSocket notifications (no polling)
-- **16 event type renderers** covering all agent event types
+- **18 event type renderers** covering all agent event types
 - **Session creation flow** with full configuration + draft preview
 - **Interactive cards** for approvals, questions, and suggestions with compact resolved states
 - **Session lifecycle** — continue, restart, change model/effort mid-session
@@ -59,12 +59,51 @@ notification arrives → parse event type + payload → append to local events l
 3. On `agent/askUserQuestion`, `agent/confirmAction` → mark session as attention-needed
 4. Avoid reloading entire session list — update in-place
 
+### Event Reliability
+
+**Notification buffer:** `RpcClient` uses a `MutableSharedFlow` with `extraBufferCapacity = 256` to buffer notifications before collectors process them. This prevents event loss during rapid-fire scenarios (e.g., many textDelta events).
+
+**Debug logging:** Silent event drops (missing `bonsaiSid`, unknown event type) are logged with `println("[SessionDetail] Dropped ...")` to aid diagnosis of missed turn/session completion events.
+
+**Common drop scenarios:**
+- Missing `bonsaiSid` in notification payload → logged and skipped
+- Unknown event type name (e.g., backend sends new event type) → logged and skipped
+- Session ID mismatch (notification for different session) → silently filtered (expected behavior)
+
 ### Text Delta Accumulation
 
 Backend sends many small `textDelta` events. Accumulate them into a single assistant message bubble:
 - Track current assistant message text as a `StringBuilder`
 - Each `textDelta` appends to the builder
 - A new `userMessage`, `toolCallStart`, or `turnComplete` event flushes the builder into a completed message
+
+### Ephemeral Notification Handling
+
+Three backend notifications are **not** chat event types — they update session state in real-time without appearing in the event log. They must be intercepted in the notification handler **before** the `parseEventType()` call (which would drop them as unknown):
+
+| Notification | Purpose | State Updated |
+|-------------|---------|---------------|
+| `agent/costEstimate` | Real-time cost and context while agent is mid-turn | `costUsd` (total estimate, replaces), `contextTokens`, `contextMax` |
+| `agent/statusChanged` | Backend pushes status transitions (idle → running, etc.) | `sessionStatus` — guarded: skip if current is `WAITING`, `DONE`, or `ERROR` |
+| `agent/configChanged` | Model/effort changed (by another client or agent config update) | `sessionModel`, effort display |
+
+**`costEstimate` fields:** `estimatedCostUsd` (Double), `currentContextWindow` (Long), `iterInputTokens`, `iterCacheRead`, `iterCacheCreate`, `iterOutputTokens`
+
+**`statusChanged` guard logic:** Only apply the new status if the current session status is NOT `WAITING` (set locally by pending requests), `DONE`, or `ERROR` (terminal states managed by `agent/done` and `agent/error` events). This prevents backend race conditions from overwriting frontend-managed states.
+
+**`configChanged` fields:** `model` (String?), `effort` (String?), `permissionMode` (String?), `betas` (List<String>?)
+
+### Step Proposal Handling
+
+Orchestrator sessions can propose execution steps via `agent/suggestStep` server-initiated requests. These arrive with a JSON-RPC `id` and expect a response via `agent/respond`.
+
+Parsed in `parsePendingRequest()` as `PendingRequestType.STEP_PROPOSAL` with fields:
+- `ticketId` — the meta-ticket being executed
+- `stepNumber` — which step in the plan (1-indexed)
+- `stepTitle` — human-readable step description
+- `inputSpecIds` — specs relevant to this step
+
+Rendered via `SuggestionCard` in the bottomBar (same as session/description suggestions). Accept sends `{ "behavior": "allow" }`, dismiss sends `{ "behavior": "deny" }`.
 
 ---
 
@@ -80,6 +119,7 @@ Backend sends many small `textDelta` events. Accumulate them into a single assis
 
 **Line 1:** Session name (bold) + overflow menu (⋮)
 **Line 2:** Status dot + status text + model name (tappable ▼) + live cost + context percentage
+Model display uses `deriveModelLabel()` to convert model IDs (e.g. "claude-opus-4-6") to human-readable labels (e.g. "Opus 4.6"). Updated in real-time via `agent/configChanged` notification.
 **Line 3:** Thin context usage progress bar (green when <60%, orange 60-85%, red >85%)
 
 ### Model Tap → Context Menu
@@ -98,7 +138,7 @@ Tapping the model name opens a bottom sheet or popup menu:
 
 ---
 
-## 3. Event Renderers — 16 Types
+## 3. Event Renderers — 18 Types
 
 ### Render Pipeline
 
@@ -132,6 +172,8 @@ Pre-processing before render:
 | `done` | `CompletionBanner` | — | Green banner + metrics + Resume button |
 | `error` | `ErrorBanner` | — | Red banner + error message + Resume button |
 | `permissionDenied` | `WarningText` | — | `⚠ Permission denied: {toolName}` |
+| `compact` | `CompactMarkerPill` | — | Centered pill `Context compacted` (+ summary if present) |
+| `requestExpired` | `RequestExpiredPill` | — | Faded pill `⏱ Expired: {toolName}` |
 
 ### Tool Call Card Details
 
@@ -161,7 +203,7 @@ Pre-processing before render:
 - **Pending:** Full card in event stream — skill name, reason, Create Session / Dismiss buttons
 - **Resolved:** Collapses to single line: `✓ Session created: test-driven-development` or faded `Dismissed: suggestion`. Tap to expand.
 
-**Expired:** Single faded line: `⏱ Expired: Tool approval for Write`
+**Expired:** Rendered as a `RequestExpiredPill` in the chat stream — faded pill with `⏱ Expired: {toolName}`. Also marks the corresponding tool call's `approvalStatus` as `EXPIRED` in `toolStates`.
 
 ---
 
@@ -176,12 +218,12 @@ Header: `✕ New Session` + `Preview` button
 Fields:
 - **Name** — optional text input
 - **Prompt** — multi-line text (the initial message)
-- **Model** — dropdown from `models/list`
+- **Model** — dropdown from `models/list` — displays `ModelInfo.label` (e.g. "Opus 4.6"), stores `ModelInfo.id`
 - **Effort** — chips: `low | medium | high | max | auto`
 - **Permission Mode** — chips: `default | auto | accept edits | yolo`
-- **Skill** — dropdown (fetched from available skills)
+- **Skill** — dropdown from `skills/list` RPC — shows skill name + description, stores `skill.id`
 - **Specs** — multi-select chips with `+ Add` button → searchable spec picker (from `spec/list`)
-- **Files** — multi-select with `+ Add` button → file browser picker
+- **Files** — multi-select via searchable file picker dialog — fetches project files from `GET /api/project/files`, filters by search query, checkbox multi-select
 - **Linked Ticket** — optional dropdown from `board/list`
 
 **Step 2: Draft Preview**
@@ -218,13 +260,41 @@ Tap `Start` → calls `agent/startDraft(bonsaiSid, prompt)` → navigates to ses
 - Error message text
 - `Resume Session` button → same as above
 
-### Session List Actions (overflow menu ⋮ on each card)
+### Session Detail — Terminal State
 
-- **Open** — navigate to chat view
-- **Continue** — resume a done/error session
-- **Stop** — interrupt a running session
-- **End** — terminate the session
-- **Delete** — trash the session
+When the session is in a terminal state (DONE or ERROR), the bottom message input bar is replaced with a full-width "Continue Session" button. Tapping it calls `session/continue` → status goes to INITIALIZING → message input reappears.
+
+### Session List Actions
+
+Session cards support two interaction modes:
+
+**Inline actions (visible on card):**
+- **Approve/Deny** buttons — visible when session is waiting for tool approval
+- **Continue** button — visible on done/error sessions, calls `session/continue` RPC
+- **Tap card** — opens session detail view for any session
+
+**Long-press context menu (DropdownMenu):**
+
+Actions shown based on session status:
+
+| Status | Menu actions |
+|--------|-------------|
+| RUNNING | Interrupt, End Session |
+| IDLE / WAITING / INITIALIZING | End Session |
+| INTERRUPTED | Continue, End Session, Delete |
+| DONE / ERROR | Continue, Delete |
+| DRAFT | Delete |
+
+Calls the corresponding component methods: `onStopSession()` → `agent/interrupt`, `onEndSession()` → `agent/end`, `onDeleteSession()` → `session/delete`, `onContinueSession()` → `session/continue`.
+
+### Backend: Stale Session Status Correction
+
+Sessions persisted to disk may retain stale status ("idle", "interrupted") after a server restart when no live runner exists. Two backend fixes ensure all clients receive correct status:
+
+1. **`list_sessions()` in `persistence.py`:** Disk-only sessions with non-terminal, non-draft status are forced to "done"
+2. **`get_session_data()` in `service.py`:** Sessions not in the in-memory tracker with non-terminal, non-draft status are forced to "done"
+
+This eliminates the need for client-side `deriveStatusFromEvents()` workarounds.
 
 ### Mid-Session Model/Effort Change
 

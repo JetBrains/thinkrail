@@ -3,10 +3,10 @@ package dev.aiir.bonsai.component.root
 import com.arkivanov.decompose.ComponentContext
 import com.arkivanov.decompose.router.stack.*
 import com.arkivanov.decompose.value.Value
-import dev.aiir.bonsai.component.connect.ConnectComponent
 import dev.aiir.bonsai.component.connect.ConnectComponentImpl
-import dev.aiir.bonsai.component.main.MainComponent
 import dev.aiir.bonsai.component.main.MainComponentImpl
+import dev.aiir.bonsai.component.project.ProjectPickerComponentImpl
+import dev.aiir.bonsai.data.ConnectionStorage
 import dev.aiir.bonsai.data.model.ServerAddress
 import dev.aiir.bonsai.network.connection.ConnectionManager
 import dev.aiir.bonsai.network.rest.RestClient
@@ -20,6 +20,7 @@ class RootComponentImpl(
     private val rpcMethods: RpcMethods,
     private val restClient: RestClient,
     private val connectionManager: ConnectionManager,
+    private val connectionStorage: ConnectionStorage,
 ) : RootComponent, ComponentContext by componentContext {
 
     private val navigation = StackNavigation<Config>()
@@ -39,8 +40,24 @@ class RootComponentImpl(
                 ConnectComponentImpl(
                     componentContext = componentContext,
                     connectionManager = connectionManager,
+                    connectionStorage = connectionStorage,
+                    onServerConnected = { host, port ->
+                        navigation.push(Config.ProjectPicker(host, port))
+                    },
+                )
+            )
+            is Config.ProjectPicker -> RootComponent.Child.ProjectPicker(
+                ProjectPickerComponentImpl(
+                    componentContext = componentContext,
+                    host = config.host,
+                    port = config.port,
                     restClient = restClient,
-                    onConnected = { address -> onConnected(address) },
+                    connectionManager = connectionManager,
+                    connectionStorage = connectionStorage,
+                    onProjectSelected = { address ->
+                        navigation.replaceAll(Config.Main(address))
+                    },
+                    onDisconnect = { navigation.pop() },
                 )
             )
             is Config.Main -> RootComponent.Child.Main(
@@ -50,19 +67,21 @@ class RootComponentImpl(
                     rpcMethods = rpcMethods,
                     restClient = restClient,
                     serverAddress = config.address,
-                    onDisconnect = { navigation.replaceAll(Config.Connect) },
+                    onDisconnect = {
+                        connectionManager.disconnect()
+                        navigation.replaceAll(Config.Connect)
+                    },
                 )
             )
         }
-
-    private fun onConnected(address: ServerAddress) {
-        navigation.replaceAll(Config.Main(address))
-    }
 
     @Serializable
     private sealed class Config {
         @Serializable
         data object Connect : Config()
+
+        @Serializable
+        data class ProjectPicker(val host: String, val port: Int) : Config()
 
         @Serializable
         data class Main(val address: ServerAddress) : Config()

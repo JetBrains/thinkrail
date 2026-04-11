@@ -1,11 +1,12 @@
 package dev.aiir.bonsai.android.ui.component
 
 import androidx.compose.foundation.BorderStroke
-import androidx.compose.foundation.clickable
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
-import androidx.compose.runtime.Composable
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
@@ -15,12 +16,17 @@ import dev.aiir.bonsai.data.model.PendingRequestType
 import dev.aiir.bonsai.data.model.Session
 import dev.aiir.bonsai.data.model.SessionStatus
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun SessionCard(
     session: Session,
     onClick: () -> Unit,
     onApprove: (() -> Unit)? = null,
     onDeny: (() -> Unit)? = null,
+    onContinue: (() -> Unit)? = null,
+    onStop: (() -> Unit)? = null,
+    onEnd: (() -> Unit)? = null,
+    onDelete: (() -> Unit)? = null,
     modifier: Modifier = Modifier,
 ) {
     val isAttention = session.status == SessionStatus.WAITING && session.pendingRequest != null
@@ -40,8 +46,14 @@ fun SessionCard(
         else -> MaterialTheme.colorScheme.surfaceVariant
     }
 
+    val hasMenuActions = onStop != null || onEnd != null || onDelete != null || onContinue != null
+    var showMenu by remember { mutableStateOf(false) }
+
     Card(
-        modifier = modifier.fillMaxWidth().clickable(onClick = onClick),
+        modifier = modifier.fillMaxWidth().combinedClickable(
+            onClick = onClick,
+            onLongClick = { if (hasMenuActions) showMenu = true },
+        ),
         shape = RoundedCornerShape(8.dp),
         colors = CardDefaults.cardColors(containerColor = containerColor),
         border = BorderStroke(1.dp, borderColor.copy(alpha = 0.3f)),
@@ -108,6 +120,49 @@ fun SessionCard(
                     fontSize = 11.sp,
                     modifier = Modifier.padding(start = 16.dp),
                 )
+
+                // Continue button for finished sessions
+                val isTerminal = session.status in listOf(SessionStatus.DONE, SessionStatus.ERROR)
+                if (isTerminal && onContinue != null) {
+                    Spacer(modifier = Modifier.height(8.dp))
+                    OutlinedButton(
+                        onClick = onContinue,
+                        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 4.dp),
+                        modifier = Modifier.padding(start = 16.dp).height(32.dp),
+                        colors = ButtonDefaults.outlinedButtonColors(contentColor = BonsaiGreen),
+                        border = BorderStroke(1.dp, BonsaiGreen.copy(alpha = 0.5f)),
+                    ) {
+                        Text("Continue", fontSize = 12.sp)
+                    }
+                }
+            }
+
+            // Long-press context menu
+            DropdownMenu(expanded = showMenu, onDismissRequest = { showMenu = false }) {
+                if (onContinue != null) {
+                    DropdownMenuItem(
+                        text = { Text("Continue") },
+                        onClick = { showMenu = false; onContinue() },
+                    )
+                }
+                if (onStop != null) {
+                    DropdownMenuItem(
+                        text = { Text("Interrupt") },
+                        onClick = { showMenu = false; onStop() },
+                    )
+                }
+                if (onEnd != null) {
+                    DropdownMenuItem(
+                        text = { Text("End Session") },
+                        onClick = { showMenu = false; onEnd() },
+                    )
+                }
+                if (onDelete != null) {
+                    DropdownMenuItem(
+                        text = { Text("Delete", color = StatusError) },
+                        onClick = { showMenu = false; onDelete() },
+                    )
+                }
             }
         }
     }

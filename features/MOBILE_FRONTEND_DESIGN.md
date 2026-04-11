@@ -70,7 +70,7 @@ mobile/
             ConnectionState.kt        # Sealed class: Disconnected, Connecting, Connected, Error
         component/                     # Decompose components (navigation + logic)
           root/
-            RootComponent.kt          # Root: ConnectChild | MainChild
+            RootComponent.kt          # Root: ConnectChild | ProjectPickerChild | MainChild
             RootComponentImpl.kt
           connect/
             ConnectComponent.kt       # Server address entry, recent connections
@@ -157,7 +157,11 @@ mobile/
 ```
 RootComponent
 ├── ConnectChild → ConnectComponent
-│   (server address entry, QR scan, recent connections)
+│   (server address entry only + health check, recent servers persisted via SharedPreferences)
+│
+├── ProjectPickerChild → ProjectPickerComponent
+│   (project selection: recent projects, scanned list from /api/project/list, manual path with autocomplete from /api/fs/list-dirs)
+│   Recent servers (last 5) and recent projects per server (last 5) persisted via Android SharedPreferences.
 │
 └── MainChild → MainComponent
     │
@@ -183,9 +187,11 @@ RootComponent
 
 ### Navigation Pattern: Hybrid
 
-**Bottom tabs** (always visible):
+**Bottom tabs** (visible on list views, hidden when a detail view is open):
 - **Board** — Primary: ticket management
 - **Sessions** — Primary: agent interaction
+
+When a detail view is active (session detail, new session, ticket detail), the bottom tabs and main top bar are hidden — the detail screen provides its own navigation (back button + contextual header).
 
 **Navigation drawer** (hamburger ☰):
 - **Board** — Same as bottom tab (mirrored)

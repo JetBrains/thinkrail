@@ -19,6 +19,20 @@ class ConnectionManager(
     val connectionState: StateFlow<ConnectionState> = rpcClient.connectionState
 
     /**
+     * Check if a server is reachable via health check only — no WebSocket.
+     * Used as the first step before project selection.
+     */
+    suspend fun checkServer(baseUrl: String): Result<Unit> {
+        return try {
+            val health = restClient.healthCheck(baseUrl)
+            if (health.status == "ok") Result.success(Unit)
+            else Result.failure(Exception("Server health check failed: ${health.status}"))
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    /**
      * Connect to a Bonsai backend.
      * 1. Parse address
      * 2. Health check

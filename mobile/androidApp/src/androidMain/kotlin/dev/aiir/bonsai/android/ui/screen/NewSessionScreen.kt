@@ -87,8 +87,8 @@ private fun ConfigureForm(component: NewSessionComponent, state: dev.aiir.bonsai
     var showSpecPicker by remember { mutableStateOf(false) }
     var showTicketMenu by remember { mutableStateOf(false) }
     var showFileInput by remember { mutableStateOf(false) }
-    var filePathInput by remember { mutableStateOf("") }
-    var skillInput by remember { mutableStateOf(state.skillId ?: "") }
+    var fileSearchQuery by remember { mutableStateOf("") }
+    var showSkillMenu by remember { mutableStateOf(false) }
 
     // Name
     FormField("Name") {
@@ -124,14 +124,15 @@ private fun ConfigureForm(component: NewSessionComponent, state: dev.aiir.bonsai
                     shape = RoundedCornerShape(8.dp),
                 ) {
                     Row(modifier = Modifier.padding(10.dp)) {
-                        Text(state.model.substringAfterLast(":").substringAfterLast("-"), fontSize = 12.sp, modifier = Modifier.weight(1f))
+                        val selectedLabel = state.availableModels.find { it.id == state.model }?.label ?: state.model
+                        Text(selectedLabel, fontSize = 12.sp, modifier = Modifier.weight(1f))
                         Text("▼", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 10.sp)
                     }
                 }
                 DropdownMenu(expanded = showModelMenu, onDismissRequest = { showModelMenu = false }) {
                     state.availableModels.forEach { model ->
                         DropdownMenuItem(
-                            text = { Text(model.id.substringAfterLast(":").substringAfterLast("-"), fontSize = 12.sp) },
+                            text = { Text(model.label.ifEmpty { model.id }, fontSize = 12.sp) },
                             onClick = {
                                 component.onModelChanged(model.id)
                                 showModelMenu = false
@@ -168,19 +169,42 @@ private fun ConfigureForm(component: NewSessionComponent, state: dev.aiir.bonsai
         )
     }
 
-    // Skill (editable text field)
+    // Skill (dropdown picker)
     FormField("Skill") {
-        OutlinedTextField(
-            value = skillInput,
-            onValueChange = { value ->
-                skillInput = value
-                component.onSkillChanged(value.takeIf { it.isNotBlank() })
-            },
-            placeholder = { Text("e.g. brainstorming, debugging (optional)", fontSize = 11.sp) },
-            modifier = Modifier.fillMaxWidth(),
-            singleLine = true,
-            shape = RoundedCornerShape(8.dp),
-        )
+        Box {
+            OutlinedCard(
+                modifier = Modifier.fillMaxWidth().clickable { showSkillMenu = true },
+                shape = RoundedCornerShape(8.dp),
+            ) {
+                Row(modifier = Modifier.padding(10.dp)) {
+                    val skillName = state.availableSkills.find { it.id == state.skillId }?.name ?: "None"
+                    Text(
+                        skillName,
+                        fontSize = 12.sp,
+                        color = if (state.skillId != null) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.weight(1f),
+                    )
+                    Text("\u25BC", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 10.sp)
+                }
+            }
+            DropdownMenu(expanded = showSkillMenu, onDismissRequest = { showSkillMenu = false }) {
+                DropdownMenuItem(
+                    text = { Text("None", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant) },
+                    onClick = { component.onSkillChanged(null); showSkillMenu = false },
+                )
+                state.availableSkills.forEach { skill ->
+                    DropdownMenuItem(
+                        text = {
+                            Column {
+                                Text(skill.name, fontSize = 12.sp, maxLines = 1)
+                                Text(skill.description, fontSize = 9.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1)
+                            }
+                        },
+                        onClick = { component.onSkillChanged(skill.id); showSkillMenu = false },
+                    )
+                }
+            }
+        }
     }
 
     // Specs (with picker dialog)
@@ -277,30 +301,52 @@ private fun ConfigureForm(component: NewSessionComponent, state: dev.aiir.bonsai
         }
     }
 
-    // File path input dialog
+    // File picker dialog
     if (showFileInput) {
         AlertDialog(
-            onDismissRequest = { showFileInput = false },
-            title = { Text("Add File Path", fontSize = 14.sp) },
+            onDismissRequest = { showFileInput = false; fileSearchQuery = "" },
+            title = { Text("Select Files", fontSize = 14.sp) },
             text = {
-                OutlinedTextField(
-                    value = filePathInput,
-                    onValueChange = { filePathInput = it },
-                    placeholder = { Text("e.g. app/rpc/server.py", fontSize = 12.sp) },
-                    modifier = Modifier.fillMaxWidth(),
-                    singleLine = true,
-                )
-            },
-            confirmButton = {
-                TextButton(onClick = {
-                    if (filePathInput.isNotBlank()) {
-                        component.addFile(filePathInput)
-                        filePathInput = ""
+                Column {
+                    OutlinedTextField(
+                        value = fileSearchQuery,
+                        onValueChange = { fileSearchQuery = it },
+                        placeholder = { Text("Search files...", fontSize = 12.sp) },
+                        modifier = Modifier.fillMaxWidth(),
+                        singleLine = true,
+                        shape = RoundedCornerShape(8.dp),
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    val filtered = state.availableFiles.filter {
+                        fileSearchQuery.isBlank() || it.path.contains(fileSearchQuery, ignoreCase = true)
+                    }.take(100)
+                    Column(modifier = Modifier.heightIn(max = 300.dp).verticalScroll(rememberScrollState())) {
+                        if (state.availableFiles.isEmpty()) {
+                            Text("Loading files...", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        } else if (filtered.isEmpty()) {
+                            Text("No matching files", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                        filtered.forEach { file ->
+                            val isSelected = file.path in state.filePaths
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable {
+                                        if (isSelected) component.removeFile(file.path) else component.addFile(file.path)
+                                    }
+                                    .padding(vertical = 4.dp),
+                                verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
+                            ) {
+                                Checkbox(checked = isSelected, onCheckedChange = { checked ->
+                                    if (checked) component.addFile(file.path) else component.removeFile(file.path)
+                                })
+                                Text(file.path, fontSize = 11.sp, maxLines = 1, modifier = Modifier.padding(start = 4.dp))
+                            }
+                        }
                     }
-                    showFileInput = false
-                }) { Text("Add") }
+                }
             },
-            dismissButton = { TextButton(onClick = { showFileInput = false }) { Text("Cancel") } },
+            confirmButton = { TextButton(onClick = { showFileInput = false; fileSearchQuery = "" }) { Text("Done") } },
         )
     }
 
