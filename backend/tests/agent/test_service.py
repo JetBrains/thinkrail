@@ -47,8 +47,7 @@ class TestRunTask:
             "spec-1", "Test Spec", "# Content"
         )
 
-        notify = AsyncMock()
-        task = await service.run_task(["spec-1"], AgentConfig(), notify)
+        task = await service.run_task(["spec-1"], AgentConfig())
 
         assert task.status == "initializing"
         assert task.spec_ids == ["spec-1"]
@@ -72,7 +71,7 @@ class TestRunTask:
         service, _, spec_service = _make_service()
         spec_service.get_spec.return_value = _make_spec_detail("s1", "T", "C")
 
-        task = await service.run_task(["s1"], AgentConfig(), AsyncMock())
+        task = await service.run_task(["s1"], AgentConfig())
         # Task starts as pending — runner transitions to idle/running
         assert task.status == "initializing"
 
@@ -92,7 +91,7 @@ class TestRunTask:
         service, _, spec_service = _make_service()
         spec_service.get_spec.return_value = _make_spec_detail("s1", "T", "C")
 
-        task = await service.run_task(["s1"], AgentConfig(), AsyncMock())
+        task = await service.run_task(["s1"], AgentConfig())
         await asyncio.sleep(0.05)
 
         assert task.status == "error"

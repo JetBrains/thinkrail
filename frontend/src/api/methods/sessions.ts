@@ -51,6 +51,12 @@ export function createSessionApi(client: RpcClient) {
 
     delete: (bonsaiSid: string) =>
       client.request<boolean>("session/delete", { bonsaiSid }),
+
+    subscribe: (bonsaiSid: string) =>
+      client.request<void>("session/subscribe", { bonsaiSid }),
+
+    unsubscribe: (bonsaiSid: string) =>
+      client.request<void>("session/unsubscribe", { bonsaiSid }),
   };
 }
 

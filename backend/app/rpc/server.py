@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import uuid
 from functools import partial
 from pathlib import Path
 
@@ -10,7 +11,8 @@ from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from jsonrpcserver import async_dispatch
 from watchfiles import Change
 
-import app.rpc.notifications as notifications
+from app.rpc.bus import bus
+from app.rpc.connections import ClientConnection, current_conn_id
 from app.rpc.notifications import make_notify
 from app.rpc.methods.specs import (
     create_spec,
@@ -41,6 +43,8 @@ from app.rpc.methods.sessions import (
     list_all_sessions,
     restart_session,
     restore_session,
+    subscribe_session,
+    unsubscribe_session,
 )
 from app.rpc.methods.trash import (
     empty_trash,
@@ -125,6 +129,8 @@ METHODS = {
     "session/restart": restart_session,
     "session/delete": delete_session_data,
     "session/restore": restore_session,
+    "session/subscribe": subscribe_session,
+    "session/unsubscribe": unsubscribe_session,
     "vis/state": get_vis_state,
     "vis/recompute": recompute_vis,
     "board/list": list_tickets,
@@ -169,12 +175,15 @@ METHODS = {
     "skills/list": list_skills,
 }
 
-_active_ws: WebSocket | None = None
-_active_watcher: WatchHandle | None = None
+# Per-project service caches (survive WebSocket reconnects).
 _agent_services: dict[str, AgentService] = {}
 _vis_services: dict[str, VisualizationService] = {}
 _board_services: dict[str, BoardService] = {}
 _model_registries: dict[str, ModelRegistry] = {}
+
+# Per-project watcher with reference counting.
+# Maps project_path → (WatchHandle, active_connection_count)
+_project_watchers: dict[str, tuple[WatchHandle, int]] = {}
 
 
 def _bind_methods(
@@ -212,13 +221,11 @@ def register_routes(app: FastAPI) -> None:
     """Register the ``/ws`` WebSocket endpoint on the FastAPI app.
 
     Each connection specifies a project directory via the ``project``
-    query parameter. Services and watcher are created per-connection.
+    query parameter.  Multiple connections are supported simultaneously.
     """
 
     @app.websocket("/ws")
     async def ws_endpoint(websocket: WebSocket) -> None:
-        global _active_ws, _active_watcher
-
         # Read project path from query params
         project_param = websocket.query_params.get("project")
         if not project_param:
@@ -237,7 +244,7 @@ def register_routes(app: FastAPI) -> None:
         config = load_config(project_root=project_path)
         spec_service = SpecService(config)
 
-        # Reuse existing AgentService for this project so running tasks
+        # Reuse existing services for this project so running tasks
         # survive WebSocket reconnects (page refresh, network blip).
         key = str(project_path)
         if key in _agent_services:
@@ -289,67 +296,134 @@ def register_routes(app: FastAPI) -> None:
             board_service, model_registry, trash_service,
         )
 
-        # Replace existing connection if any
-        if _active_ws is not None:
-            try:
-                await _active_ws.close(code=4000, reason="replaced")
-            except Exception:
-                pass
-        if _active_watcher is not None:
-            try:
-                await stop(_active_watcher)
-            except Exception:
-                pass
-            _active_watcher = None
-
         await websocket.accept()
-        _active_ws = websocket
 
+        # Create connection and register with the EventBus
+        conn_id = uuid.uuid4().hex
         notify = make_notify(websocket)
-        notifications.current_notify = notify
+        conn = ClientConnection(
+            conn_id=conn_id,
+            user_id="anonymous",  # Phase 2 adds token auth
+            display_name="Anonymous",
+            ws=websocket,
+            notify=notify,
+            project_path=key,
+        )
+        bus.register(conn)
 
-        # Point all running tasks at the fresh WebSocket callback
-        agent_service.rebind_notify(notify)
+        # Start the sweep task if not already running
+        bus.start_sweep()
 
-        # Bind vis service to current WebSocket for file-change-driven updates.
+        project_topic = f"project:{key}"
+
+        # Notify existing clients BEFORE subscribing the new one,
+        # so the joining client doesn't receive its own join notification.
+        await bus.publish(project_topic, "connection/didJoin", {
+            "connId": conn_id,
+            "userId": conn.user_id,
+            "displayName": conn.display_name,
+        })
+
+        # Now subscribe the new connection to the project topic
+        bus.subscribe(conn_id, project_topic)
+
+        # Phase 1: auto-subscribe to all active session topics so every
+        # client receives events for every session.  Phase 3 will restrict
+        # this to explicit subscriptions.
+        for task in agent_service.list_tasks():
+            bus.subscribe(conn_id, f"session:{task.bonsai_sid}")
+
+        # Bind vis service to publish via bus for file-change-driven updates.
         # Initial state is fetched on-demand by the frontend via vis/state.
         async def _vis_notify(method: str, params: dict) -> None:
-            await notify(method, params)
+            await bus.publish(project_topic, method, params)
 
         vis_service.bind_notify(_vis_notify)
         vis_service.refresh()  # Compute state silently on connect (no push)
 
-        # Start per-connection file watcher
-        watcher_handle = await _start_watcher(config, spec_service, vis_service)
-        _active_watcher = watcher_handle
+        # Start or ref-count the per-project file watcher
+        await _acquire_watcher(key, config, spec_service, vis_service)
+
+        # Replay missed events if the client provides a last_seen timestamp
+        last_seen = websocket.query_params.get("last_seen")
+        if last_seen:
+            try:
+                since = float(last_seen)
+                await bus.replay(conn_id, project_topic, since)
+            except (ValueError, TypeError):
+                pass
 
         try:
             while True:
                 text = await websocket.receive_text()
-                response = await async_dispatch(
-                    text, methods=bound_methods
-                )
+                # Set connection context so RPC handlers know who's calling
+                token = current_conn_id.set(conn_id)
+                try:
+                    response = await async_dispatch(
+                        text, methods=bound_methods
+                    )
+                finally:
+                    current_conn_id.reset(token)
                 if response:
                     await websocket.send_text(response)
         except WebSocketDisconnect:
-            logger.info("WebSocket client disconnected")
+            logger.info("WebSocket client %s disconnected", conn_id[:8])
         finally:
-            if _active_ws is websocket:
-                notifications.current_notify = None
-                _active_ws = None
-            if _active_watcher is watcher_handle:
-                try:
-                    await stop(watcher_handle)
-                except Exception:
-                    pass
-                _active_watcher = None
+            # Notify other clients before unregistering
+            try:
+                await bus.publish(project_topic, "connection/didLeave", {
+                    "connId": conn_id,
+                    "userId": conn.user_id,
+                    "displayName": conn.display_name,
+                })
+            except Exception:
+                pass
+            bus.unregister(conn_id)
+            await _release_watcher(key)
+
+
+# -- Per-project watcher management -------------------------------------------
+
+async def _acquire_watcher(
+    project_key: str,
+    config: AppConfig,
+    spec_service: SpecService,
+    vis_service: VisualizationService,
+) -> None:
+    """Start or ref-count a per-project file watcher."""
+    if project_key in _project_watchers:
+        handle, count = _project_watchers[project_key]
+        _project_watchers[project_key] = (handle, count + 1)
+    else:
+        handle = await _start_watcher(project_key, config, spec_service, vis_service)
+        _project_watchers[project_key] = (handle, 1)
+
+
+async def _release_watcher(project_key: str) -> None:
+    """Decrement ref count and stop watcher when no connections remain."""
+    entry = _project_watchers.get(project_key)
+    if entry is None:
+        return
+    handle, count = entry
+    if count <= 1:
+        try:
+            await stop(handle)
+        except Exception:
+            pass
+        del _project_watchers[project_key]
+    else:
+        _project_watchers[project_key] = (handle, count - 1)
 
 
 async def _start_watcher(
-    config: AppConfig, service: SpecService, vis_service: VisualizationService
+    project_key: str,
+    config: AppConfig,
+    service: SpecService,
+    vis_service: VisualizationService,
 ) -> WatchHandle:
     """Start the filesystem watcher for a project directory."""
     registry_path = config.get_registry_path()
+    project_topic = f"project:{project_key}"
 
     _change_to_method = {
         Change.added: "spec/didCreate",
@@ -358,10 +432,6 @@ async def _start_watcher(
     }
 
     async def _on_file_change(changes: set[tuple[Change, str]]) -> None:
-        notify = notifications.current_notify
-        if notify is None:
-            return
-
         for change_type, path_str in changes:
             path = Path(path_str)
 
@@ -370,7 +440,7 @@ async def _start_watcher(
                     registry_content = json.loads(read_text(registry_path))
                 except Exception:
                     registry_content = {}
-                await notify("registry/didUpdate", {"registry": registry_content})
+                await bus.publish(project_topic, "registry/didUpdate", {"registry": registry_content})
             elif path.suffix in (".md", ".json"):
                 try:
                     summaries = service.list_specs()
@@ -388,7 +458,7 @@ async def _start_watcher(
                         params["path"] = summary.path
                     elif method == "spec/didChange":
                         params["changes"] = {}
-                    await notify(method, params)
+                    await bus.publish(project_topic, method, params)
                 elif change_type == Change.added and path.suffix == ".md":
                     spec_type = detect_spec_type(path.name)
                     if spec_type:
@@ -403,13 +473,13 @@ async def _start_watcher(
             for ct, p in changes
         )
         if bonsaihide_modified or any(ct in (Change.added, Change.deleted) for ct, _ in changes):
-            await notify("files/treeChanged", {})
+            await bus.publish(project_topic, "files/treeChanged", {})
 
         # Notify frontend about modified files so open editors can refresh
         for change_type, path_str in changes:
             if change_type == Change.modified:
                 rel = str(Path(path_str).relative_to(config.get_project_root()))
-                await notify("file/didChange", {"path": rel})
+                await bus.publish(project_topic, "file/didChange", {"path": rel})
 
         # Recompute dashboard on any .md/.json change (specs, tasks, registry)
         if any(Path(p).suffix in (".md", ".json") for _, p in changes):

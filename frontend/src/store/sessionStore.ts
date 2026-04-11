@@ -104,6 +104,9 @@ interface SessionStore {
   onSuggestDescription: (params: Record<string, unknown>) => void;
   onSuggestStep: (params: Record<string, unknown>) => void;
   onRequestExpired: (params: Record<string, unknown>) => void;
+  onRequestResolved: (params: Record<string, unknown>) => void;
+  onRemoteSessionCreated: (params: Record<string, unknown>) => void;
+  onRemoteUserMessage: (params: Record<string, unknown>) => void;
   onSessionDone: (params: Record<string, unknown>) => void;
   onSessionError: (params: Record<string, unknown>) => void;
   onConfigChanged: (params: Record<string, unknown>) => void;
@@ -320,11 +323,21 @@ function applyMetrics(
     iterations: iterations.length > 0 ? iterations : undefined,
   };
 
+  // If there's a pending request being cleared, mark it as answered
+  // so the event card renders correctly (especially in multi-client
+  // scenarios where turnComplete may arrive before requestResolved).
+  let answeredRequests = session.answeredRequests;
+  if (session.pendingRequest && !answeredRequests.has(session.pendingRequest.requestId)) {
+    answeredRequests = new Map(answeredRequests);
+    answeredRequests.set(session.pendingRequest.requestId, { implicitlyResolved: true });
+  }
+
   return {
     updated: {
       ...session,
       status,
       pendingRequest: null,
+      answeredRequests,
       metrics: {
         ...session.metrics,
         costUsd: newCost,
@@ -523,6 +536,23 @@ function buildAnsweredRequests(
 
 /** Tracks in-flight restoreSession fetches to prevent duplicate concurrent loads. */
 const _restoring = new Set<string>();
+
+/** Tracks which session topics this client is subscribed to (multi-client). */
+const _subscribed = new Set<string>();
+
+/** Subscribe to a session's event topic so this client receives live updates.
+ *  Safe to call multiple times — deduplicates via _subscribed set. */
+function _ensureSubscribed(bonsaiSid: string): void {
+  if (_subscribed.has(bonsaiSid)) return;
+  _subscribed.add(bonsaiSid);
+  import("@/api/methods/sessions.ts").then(({ createSessionApi }) => {
+    const api = createSessionApi(getClient());
+    api.subscribe(bonsaiSid).catch(() => {
+      // Connection not ready or session gone — will retry on next open
+      _subscribed.delete(bonsaiSid);
+    });
+  });
+}
 
 /** Streaming events that imply the backend is running (belt-and-suspenders guard). */
 const _RUNNING_SIGNALS = new Set(["agent/textDelta", "agent/toolCallStart", "agent/costEstimate"]);
@@ -797,7 +827,10 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
     }
   },
 
-  switchSession: (bonsaiSid) => set({ activeSessionId: bonsaiSid }),
+  switchSession: (bonsaiSid) => {
+    _ensureSubscribed(bonsaiSid);
+    set({ activeSessionId: bonsaiSid });
+  },
 
   continueSession: async (bonsaiSid) => {
     const { createSessionApi } = await import("@/api/methods/sessions.ts");
@@ -842,6 +875,8 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
 
   restoreSession: async (bonsaiSid, opts) => {
     const noTab = opts?.noTab ?? false;
+    // Subscribe to live events for this session (multi-client)
+    _ensureSubscribed(bonsaiSid);
     // Already in memory or already being restored — just open tab if needed
     if (get().sessions.has(bonsaiSid) || _restoring.has(bonsaiSid)) {
       if (!noTab) {
@@ -1676,6 +1711,113 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
         });
       }
       return { sessions };
+    });
+  },
+
+  onRequestResolved: (params) => {
+    const bonsaiSid = params.bonsaiSid as string;
+    const requestId = params.requestId as string;
+    // The backend forwards the original response object (with `behavior` field
+    // for approvals, `answers` for questions) so the renderer can determine
+    // the correct decision display.
+    const response = (params.response as Record<string, unknown>) ?? {};
+    set((s) => {
+      const sessions = new Map(s.sessions);
+      const session = sessions.get(bonsaiSid);
+      if (session) {
+        const clearPending =
+          session.pendingRequest?.requestId === requestId;
+        const answered = new Map(session.answeredRequests);
+        answered.set(requestId, { ...response, resolvedBy: params.resolvedBy });
+        sessions.set(bonsaiSid, {
+          ...session,
+          status: clearPending ? "running" : session.status,
+          pendingRequest: clearPending ? null : session.pendingRequest,
+          answeredRequests: answered,
+        });
+      }
+      return { sessions };
+    });
+    // Only decrement if we actually had this pending
+    const session = get().sessions.get(bonsaiSid);
+    if (!session?.pendingRequest || session.pendingRequest.requestId !== requestId) {
+      useNotificationStore.getState().decrementPendingInput();
+    }
+  },
+
+  onRemoteSessionCreated: (params) => {
+    const bonsaiSid = params.bonsaiSid as string;
+    set((s) => {
+      // If session already exists (created locally), update metadata
+      const existing = s.sessions.get(bonsaiSid);
+      const next = new Map(s.sessions);
+      const config = (params.config as Record<string, unknown>) ?? {};
+      const session: Session = existing
+        ? {
+            ...existing,
+            name: (params.name as string) || existing.name,
+            skillId: (params.skillId as string) ?? existing.skillId,
+            specIds: (params.specIds as string[]) ?? existing.specIds,
+            filePaths: (params.filePaths as string[]) ?? existing.filePaths,
+            model: (config.model as string) || existing.model,
+            permissionMode: (config.permissionMode as string) || existing.permissionMode,
+            betas: (config.betas as string[]) ?? existing.betas,
+            effort: (config.effort as string) ?? existing.effort,
+            maxTurns: (config.maxTurns as number) ?? existing.maxTurns,
+            status: (params.status as Session["status"]) ?? existing.status,
+          }
+        : {
+            bonsaiSid,
+            name: (params.name as string) || bonsaiSid.slice(0, 8),
+            skillId: (params.skillId as string) ?? null,
+            specIds: (params.specIds as string[]) ?? [],
+            filePaths: (params.filePaths as string[]) ?? [],
+            status: (params.status as Session["status"]) ?? "draft",
+            model: (config.model as string) || "",
+            permissionMode: (config.permissionMode as string) || "default",
+            betas: (config.betas as string[]) ?? [],
+            effort: (config.effort as string) ?? null,
+            maxTurns: (config.maxTurns as number) ?? 50,
+            startedAt: Date.now(),
+            events: [],
+            metrics: emptyMetrics(),
+            pendingRequest: null,
+            answeredRequests: new Map(),
+          };
+      next.set(bonsaiSid, session);
+      return { sessions: next };
+    });
+  },
+
+  onRemoteUserMessage: (params) => {
+    const bonsaiSid = params.bonsaiSid as string;
+    const text = params.text as string;
+    const isMarkdown = (params.isMarkdown as boolean) ?? false;
+    set((s) => {
+      const session = s.sessions.get(bonsaiSid);
+      if (!session) return s;
+      // Skip if we already have this message (sent by us optimistically)
+      const lastEvent = session.events[session.events.length - 1];
+      if (
+        lastEvent?.eventType === "userMessage" &&
+        (lastEvent.payload.text as string) === text
+      ) {
+        return s;
+      }
+      const next = new Map(s.sessions);
+      next.set(bonsaiSid, {
+        ...session,
+        events: [
+          ...session.events,
+          {
+            bonsaiSid,
+            sessionId: "",
+            eventType: "userMessage" as const,
+            payload: { text, isMarkdown },
+          },
+        ],
+      });
+      return { sessions: next };
     });
   },
 

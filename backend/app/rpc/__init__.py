@@ -1,8 +1,9 @@
-from app.rpc.notifications import current_notify, make_notify
+from app.rpc.bus import bus
+from app.rpc.notifications import make_notify
 from app.rpc.server import register_routes
 
 __all__ = [
-    "current_notify",
+    "bus",
     "make_notify",
     "register_routes",
 ]

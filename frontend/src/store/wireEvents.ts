@@ -99,6 +99,20 @@ export function wireEvents(client: RpcClient): Unsubscribe {
         .onSessionStart(p as Record<string, unknown>);
     }),
   );
+
+  // ── Multi-client sync notifications ──
+  unsubs.push(
+    client.on("session/didCreate", (p) => {
+      const params = p as Record<string, unknown>;
+      useSessionStore.getState().onRemoteSessionCreated(params);
+    }),
+  );
+  unsubs.push(
+    client.on("session/userMessage", (p) => {
+      const params = p as Record<string, unknown>;
+      useSessionStore.getState().onRemoteUserMessage(params);
+    }),
+  );
   unsubs.push(
     client.on("agent/done", (p) => {
       const params = p as Record<string, unknown>;
@@ -195,6 +209,14 @@ export function wireEvents(client: RpcClient): Unsubscribe {
     client.on("agent/requestExpired", (p) => {
       const params = p as Record<string, unknown>;
       useSessionStore.getState().onRequestExpired(params);
+    }),
+  );
+
+  // ── Request resolved by another client (multi-client) ──
+  unsubs.push(
+    client.on("agent/requestResolved", (p) => {
+      const params = p as Record<string, unknown>;
+      useSessionStore.getState().onRequestResolved(params);
     }),
   );
 

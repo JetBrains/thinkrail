@@ -6,7 +6,8 @@ from typing import Any
 
 from jsonrpcserver import JsonRpcError, Result, Success
 
-import app.rpc.notifications as notifications
+from app.rpc.bus import bus
+from app.rpc.connections import current_conn_id
 from app.agent.service import AgentService
 
 _INTERNAL_ERROR = -32603
@@ -31,6 +32,22 @@ def _handle_errors(func):  # type: ignore[type-arg]
     return wrapper
 
 
+def _auto_subscribe_all(bonsai_sid: str) -> None:
+    """Subscribe ALL connections on the same project to a session topic.
+
+    Phase 1: every client sees every session's events.
+    """
+    try:
+        conn_id = current_conn_id.get()
+        conn = bus.get_connection(conn_id)
+        if conn:
+            topic = f"session:{bonsai_sid}"
+            for c in bus.connections_for_project(conn.project_path):
+                bus.subscribe(c.conn_id, topic)
+    except LookupError:
+        pass
+
+
 @_handle_errors
 async def list_all_sessions(service: AgentService, **params: Any) -> list[dict]:
     """List all sessions (in-memory + on-disk)."""
@@ -46,20 +63,18 @@ async def get_session(service: AgentService, **params: Any) -> dict | None:
 @_handle_errors
 async def continue_session(service: AgentService, **params: Any) -> dict:
     """Continue a dead session — reuse same bonsai_sid with old conversation as context."""
-    notify = notifications.current_notify
-    if notify is None:
-        raise JsonRpcError(_INTERNAL_ERROR, "Internal error", "No active connection")
-    task = await service.continue_session(params["bonsaiSid"], notify)
+    bonsai_sid = params["bonsaiSid"]
+    _auto_subscribe_all(bonsai_sid)
+    task = await service.continue_session(bonsai_sid)
     return {"bonsaiSid": task.bonsai_sid}
 
 
 @_handle_errors
 async def restart_session(service: AgentService, **params: Any) -> dict:
     """End current session and resume with updated config."""
-    notify = notifications.current_notify
-    if notify is None:
-        raise JsonRpcError(_INTERNAL_ERROR, "Internal error", "No active connection")
-    task = await service.restart_session(params["bonsaiSid"], notify)
+    bonsai_sid = params["bonsaiSid"]
+    _auto_subscribe_all(bonsai_sid)
+    task = await service.restart_session(bonsai_sid)
     return {"bonsaiSid": task.bonsai_sid}
 
 
@@ -75,3 +90,23 @@ async def restore_session(service: AgentService, **params: Any) -> None:
     if not service.trash_service:
         raise JsonRpcError(_INTERNAL_ERROR, "Trash service not available")
     service.trash_service.restore_session(params["bonsaiSid"])
+
+
+# -- Subscription management --------------------------------------------------
+
+@_handle_errors
+async def subscribe_session(service: AgentService, **params: Any) -> None:
+    """Subscribe the calling connection to a session's event topic."""
+    bonsai_sid = params["bonsaiSid"]
+    _auto_subscribe_all(bonsai_sid)
+
+
+@_handle_errors
+async def unsubscribe_session(service: AgentService, **params: Any) -> None:
+    """Unsubscribe the calling connection from a session's event topic."""
+    bonsai_sid = params["bonsaiSid"]
+    try:
+        conn_id = current_conn_id.get()
+        bus.unsubscribe(conn_id, f"session:{bonsai_sid}")
+    except LookupError:
+        pass

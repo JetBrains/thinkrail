@@ -93,7 +93,7 @@ export class RpcClient {
         }
       };
 
-      ws.onclose = (event) => {
+      ws.onclose = () => {
         this.ws = null;
         this.rejectAllPending();
 
@@ -104,12 +104,6 @@ export class RpcClient {
         }
 
         if (this.manualDisconnect) {
-          this.setState("disconnected");
-          return;
-        }
-
-        // Code 4000 = replaced by another connection — don't reconnect
-        if (event.code === 4000) {
           this.setState("disconnected");
           return;
         }

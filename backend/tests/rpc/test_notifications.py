@@ -5,7 +5,7 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from app.rpc.notifications import make_notify, current_notify
+from app.rpc.notifications import make_notify
 
 
 @pytest.fixture
@@ -52,8 +52,3 @@ class TestMakeNotify:
         await notify("spec/didDelete", {"id": "b"})
 
         assert mock_ws.send_text.call_count == 2
-
-
-class TestCurrentNotify:
-    def test_initially_none(self) -> None:
-        assert current_notify is None
