@@ -1,6 +1,7 @@
 import { useUiStore } from "@/store/uiStore.ts";
 import { useSessionStore } from "@/store/sessionStore.ts";
 import { useSettingsStore } from "@/store/settingsStore.ts";
+import { useConnectionStore } from "@/store/connectionStore.ts";
 import { useFileStore } from "@/store/fileStore.ts";
 import { modLabel } from "@/utils/platform.ts";
 import { ThemeSwitcher } from "./ThemeSwitcher.tsx";
@@ -21,6 +22,8 @@ export function Header({ onSwitchProject }: { onSwitchProject: () => void }) {
     await useFileStore.getState().openFile(SETTINGS_PATH);
   };
 
+  const connectedClients = useConnectionStore((s) => s.clients);
+
   return (
     <header className="header-bar">
       <div className="header-left">
@@ -36,6 +39,14 @@ export function Header({ onSwitchProject }: { onSwitchProject: () => void }) {
             <span className="session-dot" />
             {activeSessions.length} session
             {activeSessions.length !== 1 ? "s" : ""}
+          </span>
+        )}
+        {connectedClients.length > 1 && (
+          <span
+            className="header-presence"
+            title={connectedClients.map((c) => c.displayName).join(", ")}
+          >
+            {connectedClients.length} connected
           </span>
         )}
       </div>

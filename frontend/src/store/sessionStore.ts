@@ -1765,6 +1765,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
             effort: (config.effort as string) ?? existing.effort,
             maxTurns: (config.maxTurns as number) ?? existing.maxTurns,
             status: (params.status as Session["status"]) ?? existing.status,
+            createdBy: (params.createdBy as string) ?? existing.createdBy,
           }
         : {
             bonsaiSid,
@@ -1783,6 +1784,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
             metrics: emptyMetrics(),
             pendingRequest: null,
             answeredRequests: new Map(),
+            createdBy: (params.createdBy as string) ?? undefined,
           };
       next.set(bonsaiSid, session);
       return { sessions: next };

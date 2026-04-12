@@ -58,6 +58,8 @@ class TestMethods:
             "settings/get", "settings/update", "settings/ensureFile",
             "models/list", "models/refresh",
             "skills/list",
+            "auth/createToken", "auth/listUsers",
+            "connection/list",
         }
         assert set(METHODS.keys()) == expected
 

@@ -11,6 +11,7 @@ from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from jsonrpcserver import async_dispatch
 from watchfiles import Change
 
+from app.rpc.auth import authenticate, ANONYMOUS
 from app.rpc.bus import bus
 from app.rpc.connections import ClientConnection, current_conn_id
 from app.rpc.notifications import make_notify
@@ -64,6 +65,7 @@ from app.rpc.methods.settings import (
     update_settings,
 )
 from app.agent.model_registry import ModelRegistry
+from app.rpc.methods.auth import create_token, list_connections, list_users
 from app.rpc.methods.vis import get_vis_state, recompute_vis
 from app.rpc.methods.board import (
     apply_all_drafts,
@@ -173,6 +175,9 @@ METHODS = {
     "models/list": list_models,
     "models/refresh": refresh_models,
     "skills/list": list_skills,
+    "auth/createToken": create_token,
+    "auth/listUsers": list_users,
+    "connection/list": list_connections,
 }
 
 # Per-project service caches (survive WebSocket reconnects).
@@ -212,6 +217,8 @@ def _bind_methods(
             bound[name] = partial(handler, config)
         elif name.startswith("models/"):
             bound[name] = partial(handler, model_registry)
+        elif name.startswith("auth/") or name.startswith("connection/"):
+            bound[name] = partial(handler, config)
         else:
             bound[name] = partial(handler, agent_service)
     return bound
@@ -237,6 +244,16 @@ def register_routes(app: FastAPI) -> None:
             await websocket.close(
                 code=4002,
                 reason=f"Invalid project: {project_path} has no .bonsai/registry.json",
+            )
+            return
+
+        # Authenticate via token (Phase 2)
+        token_param = websocket.query_params.get("token")
+        identity = authenticate(project_path, token_param)
+        if identity is None:
+            await websocket.close(
+                code=4003,
+                reason="Invalid or missing authentication token",
             )
             return
 
@@ -303,8 +320,8 @@ def register_routes(app: FastAPI) -> None:
         notify = make_notify(websocket)
         conn = ClientConnection(
             conn_id=conn_id,
-            user_id="anonymous",  # Phase 2 adds token auth
-            display_name="Anonymous",
+            user_id=identity.user_id,
+            display_name=identity.display_name,
             ws=websocket,
             notify=notify,
             project_path=key,

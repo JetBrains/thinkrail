@@ -2,6 +2,7 @@ import type { RpcClient } from "@/api/client.ts";
 import { useSpecStore } from "./specStore.ts";
 import { useSessionStore } from "./sessionStore.ts";
 import { useNotificationStore } from "./notificationStore.ts";
+import { useConnectionStore } from "./connectionStore.ts";
 import { useUiStore } from "./uiStore.ts";
 import { useFileStore } from "./fileStore.ts";
 import { useVisStore } from "./visStore.ts";
@@ -303,6 +304,28 @@ export function wireEvents(client: RpcClient): Unsubscribe {
       useVisStore.getState().onStateChanged(p as import("./visStore.ts").DashboardState);
     }),
   );
+
+  // ── Connection presence (multi-client) ──
+  unsubs.push(
+    client.on("connection/didJoin", (p) => {
+      const params = p as Record<string, unknown>;
+      useConnectionStore.getState().onClientJoin({
+        connId: params.connId as string,
+        userId: params.userId as string,
+        displayName: params.displayName as string,
+        connectedAt: Date.now(),
+      });
+    }),
+  );
+  unsubs.push(
+    client.on("connection/didLeave", (p) => {
+      const { connId } = p as { connId: string };
+      useConnectionStore.getState().onClientLeave(connId);
+    }),
+  );
+
+  // Fetch initial connection list after wiring
+  useConnectionStore.getState().fetchConnections();
 
   return () => unsubs.forEach((u) => u());
 }

@@ -101,6 +101,8 @@ export interface Session {
   answeredRequests: Map<string, unknown>;
   /** Associated meta-ticket ID (persists across session lifecycle) */
   metaTicketId?: string | null;
+  /** Who created this session (display name from auth identity) */
+  createdBy?: string;
   /** True if this session was loaded from disk (read-only, no live backend runner) */
   restored?: boolean;
   /** The system prompt sent to the agent at session start */

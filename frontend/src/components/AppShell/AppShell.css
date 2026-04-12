@@ -61,6 +61,13 @@
   font-size: var(--font-lg);
 }
 
+.header-presence {
+  color: var(--muted);
+  font-size: var(--font-sm);
+  cursor: default;
+  opacity: 0.8;
+}
+
 .session-dot {
   width: 6px;
   height: 6px;

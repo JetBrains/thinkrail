@@ -279,8 +279,7 @@ graph TD
 
 | Method | Signature | Description |
 |--------|-----------|-------------|
-| `rebind_notify` | `(notify: Callable) -> None` | Update the WebSocket callback for all running tasks. Called when a new WebSocket connects so in-flight runners stream to the fresh connection. |
-| `run_task` | `(spec_ids: list[str], config: AgentConfig, notify: Callable, skill_id: str \| None = None, session_prompt: str \| None = None, name: str = "") -> AgentTask` | Start a persistent agent session. Builds context from specs, skill, session prompt, and project metadata via `context.build_context()`, then launches the background runner. Task is created in `initializing` state and returned immediately. Transitions to `idle` once the SDK client is ready. |
+| `run_task` | `(spec_ids: list[str], config: AgentConfig, skill_id: str \| None = None, session_prompt: str \| None = None, name: str = "") -> AgentTask` | Start a persistent agent session. Builds context from specs, skill, session prompt, and project metadata via `context.build_context()`, then launches the background runner. The runner publishes events via the EventBus (`rpc/bus.py`). Task is created in `initializing` state and returned immediately. |
 | `send_message` | `(bonsai_sid: str, text: str, *, is_markdown: bool = False) -> None` | Send a user message to the session, triggering a new turn. Enqueues the message; runner picks it up and calls `client.query()`. Accepted during `initializing` (queued until SDK client is ready) and `idle`. |
 | `interrupt_task` | `(bonsai_sid: str) -> None` | Cancel the current turn non-destructively. Calls `tracker.interrupt_futures()` to resolve pending futures with deny+interrupt, then calls `client.interrupt()` on the stored SDK client. The runner stays alive, the client is preserved, and the session returns to `idle` — ready for new messages with full context intact. |
 | `end_session` | `(bonsai_sid: str) -> None` | Gracefully close the session and SDK client. Session enters `done` state. |
@@ -290,18 +289,23 @@ graph TD
 | `respond` | `(bonsai_sid: str, request_id: str, response: dict) -> None` | Resolve a pending `asyncio.Future` with the client's answer (for mid-turn interactions) |
 | `list_all_sessions` | `() -> list[dict]` | List all sessions: in-memory active + on-disk archived (metadata only) |
 | `get_session_data` | `(bonsai_sid: str) -> dict \| None` | Get full session data including events from disk |
-| `continue_session` | `async (bonsai_sid: str, notify: Callable) -> AgentTask` | **Resume a session using SDK native `--resume`.** Loads stored `sessionId` from disk, validates it exists, builds fresh spec context, then launches `_run_background` with `resume_session_id=old_session_id`. Raises `ValueError` if session not found or has no stored `sessionId`. |
+| `continue_session` | `async (bonsai_sid: str) -> AgentTask` | **Resume a session using SDK native `--resume`.** Loads stored `sessionId` from disk, validates it exists, builds fresh spec context, then launches `_run_background` with `resume_session_id=old_session_id`. Runner publishes via EventBus. Raises `ValueError` if session not found or has no stored `sessionId`. |
+| `restart_session` | `async (bonsai_sid: str) -> AgentTask` | End current session and resume with current (updated) config. |
 | `trash_session` | `(bonsai_sid: str) -> None` | Soft-delete: detach from all tickets via `BoardService.detach_session_from_all`, move files to `.bonsai/trash/` via `TrashService`, clean up in-memory tracker state. Falls back to hard-delete if no TrashService is available. |
+
+> **Multi-client note (2026-04-12):** The `notify: Callable` parameter and `rebind_notify()` method have been removed. The runner now publishes events via the EventBus singleton (`rpc/bus.py`), which routes to all subscribed WebSocket connections. This eliminates the need to pass or rebind callbacks on reconnect.
 
 ### Runner Interface
 
 **Function:** `run(task, spec_context, notify, tracker, cwd, plugin_dir, resume_session_id)`
 
+The `notify` parameter received by the runner is `_persisting_notify` — a wrapper created by `AgentService._run_background()` that publishes to the EventBus and persists events to disk.
+
 | Parameter | Type | Description |
 |-----------|------|-------------|
 | `task` | `AgentTask` | Session record |
 | `spec_context` | `str` | Assembled system prompt |
-| `notify` | `Callable` | WebSocket push callback |
+| `notify` | `Callable` | Wrapper that publishes to EventBus + persists to disk |
 | `tracker` | `Tracker` | State + queue + futures manager |
 | `cwd` | `Any \| None` | Working directory for SDK |
 | `plugin_dir` | `Any \| None` | Plugin directory for SDK |

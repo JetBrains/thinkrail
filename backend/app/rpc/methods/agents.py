@@ -90,10 +90,17 @@ async def send_message(service: AgentService, **params: Any) -> None:
     is_markdown = params.get("isMarkdown", False)
     await service.send_message(bonsai_sid, text, is_markdown=is_markdown)
     # Notify other clients about the user message so their chat streams update
+    try:
+        cid = current_conn_id.get()
+        c = bus.get_connection(cid)
+        sender = c.display_name if c else "Unknown"
+    except LookupError:
+        sender = "Unknown"
     await bus.publish_to_session(bonsai_sid, "session/userMessage", {
         "bonsaiSid": bonsai_sid,
         "text": text,
         "isMarkdown": is_markdown,
+        "sentBy": sender,
     })
 
 
@@ -167,6 +174,7 @@ async def prepare_agent(service: AgentService, **params: Any) -> dict:
                 "config": task.config.model_dump(by_alias=True),
                 "metaTicketId": task.meta_ticket_id,
                 "createdAt": task.created,
+                "createdBy": conn.display_name,
             })
     except LookupError:
         pass
@@ -230,6 +238,7 @@ async def start_draft(service: AgentService, **params: Any) -> dict:
                 "config": task.config.model_dump(by_alias=True),
                 "metaTicketId": task.meta_ticket_id,
                 "createdAt": task.created,
+                "createdBy": conn.display_name,
             })
     except LookupError:
         pass

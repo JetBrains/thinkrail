@@ -163,6 +163,7 @@ export function SessionPanel() {
               specCount={activeSession.specIds.length}
               model={activeSession.model}
               permissionMode={activeSession.permissionMode}
+              createdBy={activeSession.createdBy}
               onScrollToTop={() => chatStreamRef.current?.scrollToTop()}
             />
           )}
