@@ -5,6 +5,7 @@ interface StickyContextBarProps {
   specCount: number;
   model: string;
   permissionMode: string;
+  createdBy?: string;
   onScrollToTop: () => void;
 }
 
@@ -13,6 +14,7 @@ export function StickyContextBar({
   specCount,
   model,
   permissionMode,
+  createdBy,
   onScrollToTop,
 }: StickyContextBarProps) {
   const skill = skillId ? SKILLS.find((s) => s.id === skillId) : null;
@@ -22,6 +24,7 @@ export function StickyContextBar({
   if (specCount > 0) parts.push(`${specCount} spec${specCount !== 1 ? "s" : ""}`);
   parts.push(model);
   parts.push(permissionMode);
+  if (createdBy) parts.push(`by ${createdBy}`);
 
   return (
     <div className="sticky-context-bar" onClick={onScrollToTop}>

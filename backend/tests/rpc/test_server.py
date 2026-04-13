@@ -11,7 +11,7 @@ from starlette.websockets import WebSocketDisconnect
 from watchfiles import Change
 
 from app.core.config import AppConfig, load_config
-from app.rpc import notifications
+from app.rpc.bus import bus
 from app.rpc.server import METHODS, register_routes, _start_watcher
 from app.spec.service import SpecService
 from app.vis.service import VisualizationService
@@ -41,6 +41,7 @@ class TestMethods:
             "agent/interrupt", "agent/end", "agent/respond", "agent/updateConfig",
             "agent/transcribe",
             "session/list", "session/get", "session/continue", "session/restart", "session/delete", "session/restore",
+            "session/subscribe", "session/unsubscribe",
             "vis/state", "vis/recompute",
             "board/list", "board/get", "board/create", "board/update", "board/delete",
             "board/linkSpec", "board/unlinkSpec",
@@ -56,6 +57,9 @@ class TestMethods:
             "trash/restoreSpec", "trash/restorePlan", "trash/restoreDraft", "trash/restorePatches",
             "settings/get", "settings/update", "settings/ensureFile",
             "models/list", "models/refresh",
+            "skills/list",
+            "auth/createToken", "auth/listUsers",
+            "connection/list",
         }
         assert set(METHODS.keys()) == expected
 
@@ -79,15 +83,16 @@ class TestWebSocket:
             assert response["id"] == 1
             assert isinstance(response["result"], list)
 
-    def test_notification_sets_current_notify(self, tmp_path: Path) -> None:
+    def test_connection_registers_with_bus(self, tmp_path: Path) -> None:
         _make_config(tmp_path)
         app = _make_app()
         client = TestClient(app)
 
-        assert notifications.current_notify is None
+        initial_count = bus.connection_count
         with client.websocket_connect(f"/ws?project={tmp_path}"):
-            assert notifications.current_notify is not None
-        assert notifications.current_notify is None
+            assert bus.connection_count > initial_count
+        # Connection should be unregistered on disconnect
+        assert bus.connection_count == initial_count
 
     def test_missing_project_param_closes(self) -> None:
         app = _make_app()
@@ -166,13 +171,96 @@ class TestWebSocket:
             assert response["id"] == 99
 
 
+class TestMultiClientIntegration:
+    """Integration tests for multi-client WebSocket scenarios."""
+
+    def test_two_clients_both_register(self, tmp_path: Path) -> None:
+        """Two WebSocket clients to the same project both register with the bus."""
+        _make_config(tmp_path)
+        app = _make_app()
+        client = TestClient(app)
+
+        initial_count = bus.connection_count
+        with client.websocket_connect(f"/ws?project={tmp_path}"):
+            count_after_first = bus.connection_count
+            assert count_after_first >= initial_count + 1
+            with client.websocket_connect(f"/ws?project={tmp_path}"):
+                assert bus.connection_count >= count_after_first + 1
+
+    def test_two_clients_both_can_call_rpc(self, tmp_path: Path) -> None:
+        """Both connected clients can independently make RPC calls."""
+        _make_config(tmp_path)
+        app = _make_app()
+        client = TestClient(app)
+
+        def _call_and_get_response(ws, method: str, rpc_id: int) -> dict:
+            """Send RPC call and skip notifications until we get the response."""
+            ws.send_text(json.dumps({"jsonrpc": "2.0", "method": method, "params": {}, "id": rpc_id}))
+            while True:
+                msg = json.loads(ws.receive_text())
+                if "id" in msg and msg["id"] == rpc_id:
+                    return msg
+
+        with client.websocket_connect(f"/ws?project={tmp_path}") as ws1:
+            with client.websocket_connect(f"/ws?project={tmp_path}") as ws2:
+                resp2 = _call_and_get_response(ws2, "spec/list", 2)
+                assert isinstance(resp2["result"], list)
+
+                resp1 = _call_and_get_response(ws1, "spec/list", 1)
+                assert isinstance(resp1["result"], list)
+
+
+class TestAuthIntegration:
+    """Integration tests for WebSocket authentication."""
+
+    def test_valid_token_connects(self, tmp_path: Path) -> None:
+        """Valid token allows WebSocket connection."""
+        _make_config(tmp_path)
+        from app.rpc.auth import save_user
+        token = save_user(tmp_path, "alice", "Alice")
+
+        app = _make_app()
+        client = TestClient(app)
+        with client.websocket_connect(f"/ws?project={tmp_path}&token={token}") as ws:
+            ws.send_text(json.dumps({"jsonrpc": "2.0", "method": "spec/list", "params": {}, "id": 1}))
+            resp = json.loads(ws.receive_text())
+            assert resp["id"] == 1
+
+    def test_invalid_token_rejected(self, tmp_path: Path) -> None:
+        """Invalid token with allowAnonymous=False closes the WebSocket."""
+        _make_config(tmp_path)
+        users_data = {
+            "users": [{"id": "alice", "name": "Alice", "token": "bns_valid"}],
+            "allowAnonymous": False,
+        }
+        (tmp_path / ".bonsai" / "users.json").write_text(json.dumps(users_data))
+
+        app = _make_app()
+        client = TestClient(app)
+        with pytest.raises(Exception):
+            with client.websocket_connect(f"/ws?project={tmp_path}&token=bns_wrong"):
+                pass
+
+    def test_no_token_anonymous_disallowed_rejected(self, tmp_path: Path) -> None:
+        """No token with allowAnonymous=False closes the WebSocket."""
+        _make_config(tmp_path)
+        users_data = {"users": [], "allowAnonymous": False}
+        (tmp_path / ".bonsai" / "users.json").write_text(json.dumps(users_data))
+
+        app = _make_app()
+        client = TestClient(app)
+        with pytest.raises(Exception):
+            with client.websocket_connect(f"/ws?project={tmp_path}"):
+                pass
+
+
 class TestWatcher:
     async def test_start_watcher(self, tmp_path: Path) -> None:
         import asyncio
         config = _make_config(tmp_path)
         service = SpecService(config)
         vis_service = VisualizationService(config)
-        handle = await _start_watcher(config, service, vis_service)
+        handle = await _start_watcher(str(tmp_path), config, service, vis_service)
         assert handle is not None
         handle._task.cancel()
         try:
@@ -209,6 +297,7 @@ class TestOnFileChange:
     async def callback(self, config: AppConfig):
         """Start watcher, capture callback, then stop."""
         import asyncio
+        from app.rpc.server import _start_watcher
         captured = {}
 
         async def fake_watch(paths, cb):
@@ -218,8 +307,9 @@ class TestOnFileChange:
 
         service = SpecService(config)
         vis_service = VisualizationService(config)
+        project_key = str(config.get_project_root())
         with patch("app.rpc.server.watch", side_effect=fake_watch):
-            handle = await _start_watcher(config, service, vis_service)
+            handle = await _start_watcher(project_key, config, service, vis_service)
         yield captured["cb"]
         handle._task.cancel()
         try:
@@ -230,83 +320,68 @@ class TestOnFileChange:
     async def test_registry_change_sends_content(
         self, config: AppConfig, callback
     ) -> None:
-        mock_notify = AsyncMock()
-        notifications.current_notify = mock_notify
-        try:
+        with patch.object(bus, "publish", new_callable=AsyncMock) as mock_pub:
             registry_path = str(config.get_registry_path())
             await callback({(Change.modified, registry_path)})
 
-            calls = mock_notify.call_args_list
-            methods = [c[0][0] for c in calls]
+            methods = [c.kwargs.get("method") or c.args[1] for c in mock_pub.call_args_list]
             assert "registry/didUpdate" in methods
-            reg_call = next(c for c in calls if c[0][0] == "registry/didUpdate")
-            params = reg_call[0][1]
+            reg_call = next(c for c in mock_pub.call_args_list if (c.kwargs.get("method") or c.args[1]) == "registry/didUpdate")
+            params = reg_call.kwargs.get("params") or reg_call.args[2]
             assert "registry" in params
             assert params["registry"]["version"] == "2.0"
-            # Also sends file/didChange for editor refresh
             assert "file/didChange" in methods
-        finally:
-            notifications.current_notify = None
 
     async def test_spec_modified_sends_did_change(
         self, config: AppConfig, callback
     ) -> None:
-        mock_notify = AsyncMock()
-        notifications.current_notify = mock_notify
-        try:
+        with patch.object(bus, "publish", new_callable=AsyncMock) as mock_pub:
             spec_path = str(config.get_project_root() / "mod_a" / "README.md")
             await callback({(Change.modified, spec_path)})
 
-            calls = mock_notify.call_args_list
-            methods = [c[0][0] for c in calls]
+            methods = [c.kwargs.get("method") or c.args[1] for c in mock_pub.call_args_list]
             assert "spec/didChange" in methods
-            spec_call = next(c for c in calls if c[0][0] == "spec/didChange")
-            params = spec_call[0][1]
+            spec_call = next(c for c in mock_pub.call_args_list if (c.kwargs.get("method") or c.args[1]) == "spec/didChange")
+            params = spec_call.kwargs.get("params") or spec_call.args[2]
             assert params["id"] == "mod-a"
             assert "changes" in params
-            # Also sends file/didChange for editor refresh
             assert "file/didChange" in methods
-        finally:
-            notifications.current_notify = None
 
     async def test_spec_created_sends_did_create(
         self, config: AppConfig, callback
     ) -> None:
-        mock_notify = AsyncMock()
-        notifications.current_notify = mock_notify
-        try:
+        with patch.object(bus, "publish", new_callable=AsyncMock) as mock_pub:
             spec_path = str(config.get_project_root() / "mod_a" / "README.md")
             await callback({(Change.added, spec_path)})
 
-            calls = mock_notify.call_args_list
-            method, params = calls[0][0]
+            calls = mock_pub.call_args_list
+            first = calls[0]
+            method = first.kwargs.get("method") or first.args[1]
+            params = first.kwargs.get("params") or first.args[2]
             assert method == "spec/didCreate"
             assert params["id"] == "mod-a"
             assert params["path"] == "mod_a/README.md"
-        finally:
-            notifications.current_notify = None
 
     async def test_spec_deleted_sends_did_delete(
         self, config: AppConfig, callback
     ) -> None:
-        mock_notify = AsyncMock()
-        notifications.current_notify = mock_notify
-        try:
+        with patch.object(bus, "publish", new_callable=AsyncMock) as mock_pub:
             spec_path = str(config.get_project_root() / "mod_a" / "README.md")
             await callback({(Change.deleted, spec_path)})
 
-            calls = mock_notify.call_args_list
-            method, params = calls[0][0]
+            calls = mock_pub.call_args_list
+            first = calls[0]
+            method = first.kwargs.get("method") or first.args[1]
+            params = first.kwargs.get("params") or first.args[2]
             assert method == "spec/didDelete"
             assert params["id"] == "mod-a"
-        finally:
-            notifications.current_notify = None
 
-    async def test_no_notify_when_disconnected(
+    async def test_no_subscribers_does_not_crash(
         self, config: AppConfig, callback
     ) -> None:
-        notifications.current_notify = None
+        """Publishing with no subscribers should succeed silently."""
         spec_path = str(config.get_project_root() / "mod_a" / "README.md")
+        # No mock, no subscribers — should not raise
         await callback({(Change.modified, spec_path)})
 
     async def test_non_spec_file_ignored(
@@ -317,17 +392,11 @@ class TestOnFileChange:
         A generic ``file/didChange`` notification is still sent so that
         open editors in the frontend can refresh.
         """
-        mock_notify = AsyncMock()
-        notifications.current_notify = mock_notify
-        try:
+        with patch.object(bus, "publish", new_callable=AsyncMock) as mock_pub:
             random_path = str(config.get_project_root() / "some_file.py")
             await callback({(Change.modified, random_path)})
-            # Should only get a generic file/didChange, no spec/registry notifications
-            calls = mock_notify.call_args_list
-            methods = [c[0][0] for c in calls]
+            methods = [c.kwargs.get("method") or c.args[1] for c in mock_pub.call_args_list]
             assert "spec/didChange" not in methods
             assert "spec/didCreate" not in methods
             assert "spec/didDelete" not in methods
             assert "registry/didUpdate" not in methods
-        finally:
-            notifications.current_notify = None

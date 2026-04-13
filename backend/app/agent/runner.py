@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import os
 import time
 from collections.abc import Callable
 from pathlib import Path
@@ -162,6 +163,10 @@ async def run(
             config=config, tool_use_id=_tool_use_id,
         )
 
+    # Strip CLAUDECODE env var so the bundled CLI doesn't reject this as a nested session
+    # (happens when the backend runs inside a Claude Code terminal during development)
+    env_overrides = {k: "" for k in ("CLAUDECODE", "CLAUDE_CODE_EXECPATH") if k in os.environ}
+
     options = ClaudeAgentOptions(
         system_prompt=spec_context,
         model=task.config.model,
@@ -181,6 +186,7 @@ async def run(
             "SubagentStart": [HookMatcher(hooks=[on_subagent_start])],
             "SubagentStop": [HookMatcher(hooks=[on_subagent_stop])],
         },
+        **({"env": env_overrides} if env_overrides else {}),
     )
 
     session_id = ""

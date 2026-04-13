@@ -904,7 +904,7 @@ Command-line client for interacting with the ping-pong server.
 ## Configuration
 ```yaml
 # client-config.yml
-server_url: http://localhost:8080
+server_url: http://localhost:8000
 token_file: .auth-token
 ```
 ```
@@ -1223,7 +1223,7 @@ The visualization uses a **hooks-based approach** that automatically regenerates
    open bonsai/graph.html
 
    # Option 2: LiveServer (recommended - instant refresh)
-   npx live-server bonsai --port=8080 --entry-file=graph.html
+   npx live-server bonsai --port=8000 --entry-file=graph.html
    ```
 
 ### Features

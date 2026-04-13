@@ -99,7 +99,7 @@ jobs:
           3. Set your API key: \`export ANTHROPIC_API_KEY=sk-ant-...\`
           4. Run: \`./bonsai-linux\` (or \`./bonsai-macos\`, \`bonsai-windows.exe\`)
 
-          Bonsai will start and open your browser to http://localhost:8080
+          Bonsai will start and open your browser to http://localhost:8000
 
           **Options:** \`--port 9000\`, \`--no-browser\`, \`--host 0.0.0.0\`
           EOF

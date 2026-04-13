@@ -13,7 +13,7 @@ def main() -> None:
     parser = argparse.ArgumentParser(
         description="Bonsai - specification-driven development workspace",
     )
-    parser.add_argument("--port", type=int, default=8080, help="Server port (default: 8080)")
+    parser.add_argument("--port", type=int, default=8000, help="Server port (default: 8000)")
     parser.add_argument("--host", type=str, default="127.0.0.1", help="Bind address (default: 127.0.0.1)")
     parser.add_argument("--no-browser", action="store_true", help="Don't auto-open browser")
     args = parser.parse_args()

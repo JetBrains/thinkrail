@@ -72,7 +72,7 @@ This module has no runtime API. Its "interface" is the CLI of the produced execu
 bonsai [OPTIONS]
 
 Options:
-  --port PORT        Server port (default: 8080)
+  --port PORT        Server port (default: 8000)
   --host HOST        Bind address (default: 127.0.0.1)
   --no-browser       Don't auto-open browser on startup
 ```

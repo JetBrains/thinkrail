@@ -44,6 +44,16 @@ Thumbs.db
 # Superpowers brainstorming (generated mockups)
 .superpowers/
 
+# Mobile (Android/KMP)
+mobile/.gradle/
+mobile/build/
+mobile/shared/build/
+mobile/androidApp/build/
+mobile/local.properties
+mobile/.idea/
+mobile/.kotlin/
+mobile/gradle/wrapper/gradle-wrapper.jar
+
 # Logs
 *.log
 

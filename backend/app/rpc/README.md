@@ -1,6 +1,6 @@
 # RPC Module — Design Specification
 
-> Parent: [DESIGN_DOC.md](../../../DESIGN_DOC.md) | Status: **Active** | Created: 2026-02-26 | Updated: 2026-03-12
+> Parent: [DESIGN_DOC.md](../../../DESIGN_DOC.md) | Status: **Active** | Created: 2026-02-26 | Updated: 2026-04-12
 
 ## Table of Contents
 1. [Purpose](#purpose)
@@ -59,6 +59,8 @@ Both sides can send either. The server can initiate requests to the client (e.g.
 | `session/get`     | `{ bonsaiSid: str }`                                                                            | `SessionData \| null`  | Get full session data including events from disk |
 | `session/continue`| `{ bonsaiSid: str }`                                                                            | `{ bonsaiSid: str }`   | Resume a session — reuses the same `bonsaiSid`, loads old conversation as context for a new SDK session |
 | `session/delete`  | `{ bonsaiSid: str }`                                                                            | `bool`              | Delete a session from disk |
+| `session/subscribe` | `{ bonsaiSid: str }`                                                                          | `null`              | Subscribe calling connection to a session's event topic (multi-client) |
+| `session/unsubscribe` | `{ bonsaiSid: str }`                                                                        | `null`              | Unsubscribe calling connection from a session's event topic |
 | `agent/transcribe`| `{ audioBase64: str, mimeType: str }`                                                        | `{ text: str }`     | Transcribe audio via OpenAI Whisper API (fallback for browsers without Web Speech API). See [TRANSCRIBE.md](../agent/TRANSCRIBE.md). |
 | `vis/state`       | `{}`                                                                                         | `DashboardState`    | Return the current dashboard state without recomputing. State is computed on WebSocket connect and after file changes. |
 | `vis/recompute`   | `{}`                                                                                         | `DashboardState`    | Force a dashboard recompute from registry, specs, and tasks on disk. Returns the new state and pushes `vis/stateChanged` notification. |
@@ -109,6 +111,16 @@ Both sides can send either. The server can initiate requests to the client (e.g.
 | `agent/permissionDenied` | `{ bonsaiSid, sessionId, toolName, toolInput }` | Tool blocked by permission policy |
 | `agent/statusChanged` | `{ bonsaiSid, status }` | Backend session status changed. Emitted by runner on `idle→running` and `running→idle` transitions. Frontend uses this as the authoritative status signal for non-first turns (since `agent/sessionStart` only fires once per runner). Added to `_SKIP_METRICS` — does not trigger metadata persistence. |
 
+#### Multi-Client Sync Events
+
+| Method | Params | Description |
+| --- | --- | --- |
+| `session/didCreate` | `{ bonsaiSid, name, skillId, specIds, filePaths, status, config, metaTicketId, createdAt }` | A session was created or started — published to project topic so all clients see the new session with full metadata |
+| `session/userMessage` | `{ bonsaiSid, text, isMarkdown }` | A user sent a message from another client — append to chat stream |
+| `agent/requestResolved` | `{ bonsaiSid, requestId, resolvedBy, response }` | An interactive request (question/approval) was answered by another client — dismiss the pending card |
+| `connection/didJoin` | `{ connId, userId, displayName }` | A new client connected to the project |
+| `connection/didLeave` | `{ connId, userId, displayName }` | A client disconnected from the project |
+
 #### Visualization Events
 
 | Method | Params | Description |
@@ -151,31 +163,36 @@ Standard errors (-32700 parse error, -32601 method not found) are handled automa
 
 ## Internal Architecture
 
-**Pattern:** Three-layer — WebSocket transport + dispatch in `server.py`, domain-organized
-handlers in `methods/`, outgoing message factory in `notifications.py`.
+**Pattern:** Four-layer — WebSocket transport + dispatch in `server.py`, EventBus pub/sub in `bus.py`,
+domain-organized handlers in `methods/`, per-connection notify factory in `notifications.py`.
 
 ```mermaid
 ---
-title: RPC Module — Internal Architecture
+title: RPC Module — Internal Architecture (Multi-Client)
 ---
 graph TD
-    Browser["Browser<br/>(WebSocket /ws)"]
+    ClientA["Client A<br/>(Browser Tab)"]
+    ClientB["Client B<br/>(Browser / Mobile)"]
 
-    Browser --> Server
+    ClientA --> Server
+    ClientB --> Server
 
     subgraph RPCModule["RPC Module"]
-        Server["server.py<br/><i>FastAPI + jsonrpcserver</i><br/>JSON-RPC dispatch, connection mgmt,<br/>watcher startup + callback"]
+        Server["server.py<br/><i>FastAPI + jsonrpcserver</i><br/>connection registration,<br/>per-project watcher"]
+        Bus["bus.py<br/><i>EventBus</i><br/>pub/sub, ring buffers,<br/>replay, dead-conn sweep"]
+        Conns["connections.py<br/><i>ClientConnection</i><br/>conn_id, user_id, subscriptions"]
         subgraph Methods["Methods"]
           direction LR
           Specs["methods/specs.py"]
           Agents["methods/agents.py"]
+          Sessions["methods/sessions.py"]
           Vis["methods/vis.py"]
-          Trash["methods/trash.py"]
-          Agents ~~~ Specs ~~~ Vis ~~~ Trash
+          Agents ~~~ Specs ~~~ Sessions ~~~ Vis
         end
-        Server ---> Methods
-        Server -- "Creates notify on connect" --> Notify["notifications.py<br/>make_notify(ws) → notify callable<br/>current_notify module-level ref"]
-        Agents -- "Reads current_notify" --> Notify
+        Server -- "register / unregister" --> Bus
+        Server -- "creates" --> Conns
+        Methods -- "publish events" --> Bus
+        Bus -- "delivers to" --> Conns
     end
 
     SpecSvc["spec/service<br/>Spec CRUD"]
@@ -185,30 +202,29 @@ graph TD
 
     Specs ---> SpecSvc
     Agents ---> AgentSvc
+    Sessions ---> AgentSvc
     Vis ---> VisSvc
-    Trash ---> TrashSvc
 ```
 
 ```mermaid
 ---
-title: "Watcher path (per-connection, scoped to project)"
+title: "Watcher path (per-project, reference-counted)"
 ---
 graph TD
     Connect["WebSocket connect<br/>/ws?project=path"]
     Validate["Validate project path<br/>+ .bonsai/registry.json"]
-    StartW["_start_watcher(config, service)"]
+    Acquire["_acquire_watcher — ref count++"]
     Watch["core/watcher.watch(project_root, _on_file_change)"]
     Change["File change on disk"]
     Callback["_on_file_change callback"]
-    SpecPath["spec/service → current_notify → frontend"]
-    Dropped["notification dropped"]
-    StopW["Disconnect → stop(watcher_handle)"]
+    BusPub["bus.publish(project:path, ...)"]
+    Release["Disconnect → _release_watcher — ref count--"]
+    Stop["ref count == 0 → stop(watcher)"]
 
-    Connect --> Validate --> StartW --> Watch
-    Change --> Callback
-    Callback -- "spec file" --> SpecPath
-    Callback -- "no connection" --> Dropped
-    Watch -.- StopW
+    Connect --> Validate --> Acquire --> Watch
+    Change --> Callback --> BusPub
+    Watch -.- Release
+    Release -.- Stop
 ```
 
 ## File Organization & Public Interface
@@ -227,28 +243,56 @@ graph TD
 
 `_start_watcher` is a private helper that starts a filesystem watcher scoped to the connection's project directory. Called inside `ws_endpoint` after project validation; stopped on disconnect.
 
+### bus.py
+
+**Responsibility:** EventBus — central pub/sub for multi-client notification routing. All server→client notifications flow through the bus.
+
+**Dependencies:** connections.py
+
+| Export | Type / Signature | Description |
+| --- | --- | --- |
+| `bus` | `EventBus` | Module-level singleton instance. Import and use directly. |
+| `EventBus` | class | Pub/sub with per-topic ring buffers, replay, and dead-connection sweep. |
+| `Event` | dataclass | A single published event (topic, method, params, request_id, timestamp). |
+
+**Topics:**
+- `project:{path}` — file changes, spec updates, vis state, board changes
+- `session:{bonsai_sid}` — agent session events, interactive requests
+
+**Key methods:**
+- `register(conn)` / `unregister(conn_id)` — connection lifecycle
+- `subscribe(conn_id, topic)` / `unsubscribe(conn_id, topic)` — subscription management
+- `publish(topic, method, params, request_id=None)` — fan-out to subscribers
+- `publish_to_project(path, method, params)` / `publish_to_session(sid, method, params)` — convenience
+- `replay(conn_id, topic, since)` — replay buffered events on reconnect
+- `cleanup_topic(topic)` — remove topic buffer and subscriptions (e.g. session ended)
+- `start_sweep()` / `_sweep_dead()` — periodic removal of zombie connections
+
+### connections.py
+
+**Responsibility:** `ClientConnection` dataclass and `current_conn_id` context variable for identifying the calling connection in RPC handlers.
+
+**Dependencies:** notifications.py
+
+| Export | Type / Signature | Description |
+| --- | --- | --- |
+| `ClientConnection` | dataclass | Tracks conn_id, user_id, display_name, ws, project_path, subscriptions. |
+| `current_conn_id` | `ContextVar[str]` | Set by dispatch loop so RPC handlers know which connection is calling. |
+
 ### notifications.py
 
-**Responsibility:** `make_notify` factory + `current_notify` module-level variable — creates per-connection notify callable, holds reference to active callable.
+**Responsibility:** `make_notify` factory — creates per-connection notify callables used by the EventBus internally. The module-level `current_notify` singleton has been removed in favour of the EventBus pub/sub model.
 
 **Dependencies:** none
 
 | Export | Type / Signature | Description |
 | --- | --- | --- |
-| `make_notify` | `(websocket: WebSocket) → NotifyCallable` | Create a notify callable bound to the given WebSocket. Called by `server.py` on each new connection. |
-| `current_notify` | `NotifyCallable \| None` | Module-level variable holding the active notify callable. Set by `server.py` on connect, cleared on disconnect. |
+| `make_notify` | `(websocket: WebSocket) → NotifyCallable` | Create a notify callable bound to the given WebSocket. |
 
 **`NotifyCallable`** type alias:
 ```python
 NotifyCallable = Callable[[str, dict, str | None], Awaitable[None]]
 ```
-
-**Returned callable signature:**
-```python
-async def notify(method: str, params: dict, request_id: str | None = None) -> None
-```
-- `request_id=None` → send JSON-RPC **notification** (message has no `id` field)
-- `request_id` set → send JSON-RPC **request** (message includes `id` field; `request_id` value appears as both the JSON-RPC `id` and in `params.requestId` so the client can reference it in `agent/respond`)
 
 ### methods/specs.py
 
@@ -281,13 +325,13 @@ async def notify(method: str, params: dict, request_id: str | None = None) -> No
 | `end_session` | `(**params) → None` | Handler for `agent/end` |
 | `respond_agent` | `(**params) → None` | Handler for `agent/respond` |
 
-`run_agent` captures `current_notify` at call time (the active connection's notify callable), extracts the optional `skillId` param, and passes both to `agent/service.run_task`. Returns `{ bonsaiSid }` immediately. The agent session runs in the background; the runner enters a conversation loop waiting for messages. The `sessionId` arrives later via `agent/sessionStart` notification.
+`run_agent` calls `agent/service.run_task` (no `notify` parameter — the runner publishes via EventBus). Auto-subscribes all project connections to the new session topic. Returns `{ bonsaiSid }` immediately. The `sessionId` arrives later via `agent/sessionStart` notification.
 
-`send_message` routes to `agent/service.send_message(bonsai_sid, text)`, which enqueues the message. The runner picks it up and starts a new turn.
+`send_message` routes to `agent/service.send_message(bonsai_sid, text)`, which enqueues the message. Also publishes `session/userMessage` to the bus so other clients see the message in their chat stream.
 
 `end_session` routes to `agent/service.end_session(bonsai_sid)`, which sends a sentinel to the runner's message queue, causing it to close the SDK client and emit `agent/done`.
 
-`respond_agent` routes to `agent/service.respond(bonsai_sid, request_id, response)`, which resolves the pending `asyncio.Future` in `tracker.py`.
+`respond_agent` routes to `agent/service.respond(bonsai_sid, request_id, response)`, which resolves the pending `asyncio.Future` in `tracker.py`. Also publishes `agent/requestResolved` so other clients dismiss the pending approval card.
 
 ### methods/trash.py
 
@@ -338,45 +382,47 @@ graph TD
 
 ## Connection Management
 
-- Single active WebSocket connection at a time (single developer tool, localhost only)
-- WebSocket URL: `/ws?project=<path>` — the `project` query parameter specifies the project directory
+- **Multiple simultaneous WebSocket connections** — web browsers, mobile apps, multiple tabs
+- WebSocket URL: `/ws?project=<path>[&last_seen=<timestamp>]`
 - On connect:
   1. Validate `project` param exists (close with 4001 if missing)
   2. Validate `<project>/.bonsai/registry.json` exists (close with 4002 if invalid)
-  3. Build per-connection `AppConfig`, `SpecService`, `AgentService`, `VisualizationService`, `TrashService` scoped to the project. `TrashService` is injected into `SpecService`, `AgentService`, `BoardService`, and `SpecDraftService` via attribute assignment.
-  4. Replace existing connection if any (close old WebSocket + stop old watcher)
-  5. Create `notify = make_notify(ws)`, set `notifications.current_notify = notify`
-  6. Start per-connection file watcher for the project directory
-  7. Begin JSON-RPC dispatch loop
-- On disconnect / close: set `notifications.current_notify = None`, stop the file watcher
-- If a second client connects while one is already active, the new connection replaces the old one (previous connection and its watcher are closed)
+  3. Build per-connection `AppConfig`, `SpecService`. Reuse per-project `AgentService`, `VisualizationService`, `BoardService`, `ModelRegistry` (services survive reconnects).
+  4. Create `ClientConnection` with unique `conn_id`, register with EventBus
+  5. Publish `connection/didJoin` to existing project clients
+  6. Subscribe to project topic + all active session topics
+  7. Replay missed events if `last_seen` query param provided
+  8. Start or ref-count per-project file watcher
+  9. Begin JSON-RPC dispatch loop (sets `current_conn_id` context var per request)
+- On disconnect: publish `connection/didLeave`, unregister from EventBus (cleans up all subscriptions), release watcher ref count
 
 ## Watcher Integration
 
-The file watcher is **per-connection**, scoped to the connected project directory. It starts when a WebSocket client connects and stops when the client disconnects.
+The file watcher is **per-project, reference-counted**. It starts when the first client connects to a project and stops when the last client disconnects.
 
-1. Inside `ws_endpoint`, after project validation: `_start_watcher(config, spec_service)` is called.
+1. `_acquire_watcher(project_key, ...)` increments the ref count (or starts the watcher on first connection).
 2. `_start_watcher()` calls `core/watcher.watch([project_root], _on_file_change)`.
-3. On file change, `_on_file_change(changes)` runs:
-   - Routes by file type:
-     - `.bonsai/registry.json` → send `registry/didUpdate` via `current_notify`
-     - Any path registered as a spec in the registry (`*.md` or `*.json` spec files) → send `spec/didChange`, `spec/didCreate`, or `spec/didDelete` via `current_notify`
-     - `.bonsaihide` modified → send `files/treeChanged` (so the file tree re-fetches with updated visibility rules)
-     - Any modified file → send `file/didChange` with relative path (so open editors can refresh)
-   - If `notifications.current_notify is None`: notifications are dropped silently
-4. On disconnect, the watcher handle is stopped via `stop(watcher_handle)`.
+3. On file change, `_on_file_change(changes)` publishes events to the **project topic** via `bus.publish`:
+   - `.bonsai/registry.json` → `registry/didUpdate`
+   - Spec files → `spec/didChange`, `spec/didCreate`, or `spec/didDelete`
+   - `.bonsaihide` modified → `files/treeChanged`
+   - Any modified file → `file/didChange` with relative path
+4. `_release_watcher(project_key)` decrements the ref count. When it reaches 0, the watcher is stopped.
 
 ## Design Decisions
 
 | Decision | Choice | Rationale |
 |----------|--------|-----------|
 | JSON-RPC library | `jsonrpcserver` | Handles parse errors, method-not-found, and response formatting automatically; eliminates boilerplate in handlers |
-| Notify interface | Single `notify(method, params, request_id=None)` | Unified callable for notifications and server-initiated requests; decouples runner from WebSocket details |
-| Watcher lifecycle | Per-connection, scoped to project directory | Watcher starts when a client connects with a valid project, stops on disconnect. Each connection watches only its project. Replaces the old application-level approach. |
-| `current_notify` in `notifications.py` | Module-level mutable ref, set by `server.py` on connect/disconnect | Avoids circular import between `server.py` and `methods/agents.py`; `notifications.py` is the natural owner of active-connection state |
-| Methods organized by domain namespace | `methods/specs.py`, `methods/agents.py`, `methods/vis.py`, `methods/trash.py` | Each file mirrors its domain module; easy to locate handlers by method prefix |
-| `METHODS` dict assembled in `server.py` | Explicit mapping from method name to handler | Avoids implicit global state from decorator-based registration; makes method set inspectable |
-| Per-connection project selection | `?project=` query param on WebSocket URL; services/watcher created per-connection | Allows the frontend to switch projects without restarting the backend; config + services are scoped to the validated project directory |
+| EventBus pub/sub | Module-level singleton (`bus.py`) | All notifications flow through one bus. Services publish; bus routes to subscribers. Future-proof for adding push notifications, webhooks. |
+| Topic hierarchy | `project:{path}` + `session:{sid}` | Project-level events (files, specs) broadcast to all. Session events go to subscribers. Simple two-level model. |
+| Ring buffer replay | `deque(maxlen=200)` per topic | Handles reconnect gaps. Bounded memory. Events also persisted to `.events.jsonl` for full history. |
+| Connection identity | `current_conn_id` ContextVar | Set per-request in dispatch loop. RPC handlers access via `current_conn_id.get()` without changing signatures. |
+| Watcher lifecycle | Per-project, reference-counted | First connection starts watcher, last disconnection stops it. Shared across all connections to same project. |
+| Phase 1 broadcast-all | Auto-subscribe all clients to all sessions | Simplest multi-client model. Phase 3 will add per-client subscription filtering. |
+| First-responder-wins | `asyncio.Future.set_result()` once-only | No additional locking for interactive requests. Second responder gets `-32013` error. |
+| Methods organized by domain namespace | `methods/specs.py`, `methods/agents.py`, etc. | Each file mirrors its domain module; easy to locate handlers by method prefix |
+| Per-connection project selection | `?project=` query param on WebSocket URL | Allows the frontend to switch projects without restarting the backend |
 | No RPC-layer models | Domain models serialized directly | Pydantic models in spec/ and agent/ serialize to JSON; no translation layer needed |
 
 ## Dependencies
@@ -385,19 +431,23 @@ The file watcher is **per-connection**, scoped to the connected project director
 |------------|-------|
 | `fastapi` | WebSocket endpoint and app integration |
 | `jsonrpcserver` | JSON-RPC 2.0 message parsing and dispatch |
+| `rpc/bus` | EventBus singleton for pub/sub notification routing |
+| `rpc/connections` | ClientConnection dataclass, `current_conn_id` context variable |
+| `rpc/notifications` | `make_notify` factory for per-connection callables |
 | `spec/service` | Spec CRUD operations; watcher postprocessing |
-| `agent/service` | Agent task management |
+| `agent/service` | Agent task management (no longer takes `notify` parameter) |
 | `vis/service` | Dashboard state computation and push notifications |
 | `trash/service` | Soft-delete operations for all `.bonsai/` data types |
+| `board/service` | Ticket and plan management |
 | `core/watcher` | File change detection |
 | `core/config` | Project root path for watcher |
 
 ## Known Limitations
 
-- **No reconnect replay:** File changes that occur while no client is connected are not queued; they are dropped. A reconnecting client will not receive missed notifications.
-- **Single connection only:** No explicit rejection or queuing of concurrent clients; the second connection silently replaces the first.
-- **No authentication:** The WebSocket endpoint at `/ws` has no auth; assumes localhost-only access.
-- **Pending agent futures on disconnect:** If the client disconnects mid-agent-run, `notifications.current_notify` becomes `None`; outgoing agent events are dropped. Pending `asyncio.Future` objects in `tracker.py` will time out per the configured deadline.
+- **No authentication (Phase 2 pending):** The WebSocket endpoint at `/ws` has no auth. Any client on the network can connect. Phase 2 will add token-based auth via `.bonsai/users.json`.
+- **No per-client filtering (Phase 3 pending):** All connections receive all session events for the project (broadcast-all). Phase 3 will add explicit subscribe/unsubscribe per session per client.
+- **Ring buffer capacity:** Replay buffer holds 200 events per topic. Events older than that are lost from the buffer (still persisted to `.events.jsonl` on disk).
+- **Pending agent futures on disconnect:** If all clients disconnect mid-agent-run, agent events are published to the bus with no subscribers (silently dropped). Events are still persisted to disk. Pending `asyncio.Future` objects in `tracker.py` will time out per the configured deadline.
 
 ## Related Specs
 

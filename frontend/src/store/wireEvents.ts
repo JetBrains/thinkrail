@@ -2,6 +2,7 @@ import type { RpcClient } from "@/api/client.ts";
 import { useSpecStore } from "./specStore.ts";
 import { useSessionStore } from "./sessionStore.ts";
 import { useNotificationStore } from "./notificationStore.ts";
+import { useConnectionStore } from "./connectionStore.ts";
 import { useUiStore } from "./uiStore.ts";
 import { useFileStore } from "./fileStore.ts";
 import { useVisStore } from "./visStore.ts";
@@ -97,6 +98,34 @@ export function wireEvents(client: RpcClient): Unsubscribe {
       useSessionStore
         .getState()
         .onSessionStart(p as Record<string, unknown>);
+    }),
+  );
+
+  // ── Multi-client sync notifications ──
+  unsubs.push(
+    client.on("session/didCreate", (p) => {
+      const params = p as Record<string, unknown>;
+      useSessionStore.getState().onRemoteSessionCreated(params);
+    }),
+  );
+  unsubs.push(
+    client.on("session/userMessage", (p) => {
+      const params = p as Record<string, unknown>;
+      useSessionStore.getState().onRemoteUserMessage(params);
+    }),
+  );
+  unsubs.push(
+    client.on("session/didEnd", (p) => {
+      const params = p as Record<string, unknown>;
+      const bonsaiSid = params.bonsaiSid as string;
+      const status = params.status as string;
+      // Update session status in the store if it exists
+      const session = useSessionStore.getState().sessions.get(bonsaiSid);
+      if (session && session.status !== "done" && session.status !== "error") {
+        const sessions = new Map(useSessionStore.getState().sessions);
+        sessions.set(bonsaiSid, { ...session, status: status as typeof session.status });
+        useSessionStore.setState({ sessions });
+      }
     }),
   );
   unsubs.push(
@@ -198,6 +227,14 @@ export function wireEvents(client: RpcClient): Unsubscribe {
     }),
   );
 
+  // ── Request resolved by another client (multi-client) ──
+  unsubs.push(
+    client.on("agent/requestResolved", (p) => {
+      const params = p as Record<string, unknown>;
+      useSessionStore.getState().onRequestResolved(params);
+    }),
+  );
+
   unsubs.push(
     client.on("agent/suggestSession", (p) => {
       const params = p as Record<string, unknown>;
@@ -281,6 +318,28 @@ export function wireEvents(client: RpcClient): Unsubscribe {
       useVisStore.getState().onStateChanged(p as import("./visStore.ts").DashboardState);
     }),
   );
+
+  // ── Connection presence (multi-client) ──
+  unsubs.push(
+    client.on("connection/didJoin", (p) => {
+      const params = p as Record<string, unknown>;
+      useConnectionStore.getState().onClientJoin({
+        connId: params.connId as string,
+        userId: params.userId as string,
+        displayName: params.displayName as string,
+        connectedAt: Date.now(),
+      });
+    }),
+  );
+  unsubs.push(
+    client.on("connection/didLeave", (p) => {
+      const { connId } = p as { connId: string };
+      useConnectionStore.getState().onClientLeave(connId);
+    }),
+  );
+
+  // Fetch initial connection list after wiring
+  useConnectionStore.getState().fetchConnections();
 
   return () => unsubs.forEach((u) => u());
 }

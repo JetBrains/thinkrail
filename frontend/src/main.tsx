@@ -6,6 +6,7 @@ import { ProjectPicker } from "@/components/ProjectPicker/ProjectPicker.tsx";
 import { applyTheme, getThemePreference } from "./utils/theme.ts";
 import { useFileStore } from "@/store/fileStore.ts";
 import { useSessionStore } from "@/store/sessionStore.ts";
+import { useTokenStore } from "@/store/tokenStore.ts";
 import "./styles/global.css";
 
 applyTheme(getThemePreference());
@@ -33,12 +34,14 @@ function Root() {
     if (projectPath) setShowPicker(false);
   }, [projectPath]);
 
+  const token = useTokenStore((s) => s.token);
+
   // No project selected yet — full-screen picker (no close button)
   if (!projectPath) {
     return <ProjectPicker onSelect={handleSelect} />;
   }
 
-  const wsUrl = `${WS_PROTO}//${BACKEND}/ws?project=${encodeURIComponent(projectPath)}`;
+  const wsUrl = `${WS_PROTO}//${BACKEND}/ws?project=${encodeURIComponent(projectPath)}${token ? `&token=${encodeURIComponent(token)}` : ""}`;
 
   return (
     <RpcProvider url={wsUrl} key={projectPath}>

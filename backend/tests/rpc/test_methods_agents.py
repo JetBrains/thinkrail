@@ -8,7 +8,6 @@ from jsonrpcserver import JsonRpcError
 
 from app.agent.models import AgentTask
 from app.agent.tracker import FutureNotFoundError, TaskNotFoundError
-import app.rpc.notifications as notifications
 from app.rpc.methods.agents import (
     get_agent_status,
     interrupt_agent,
@@ -78,33 +77,18 @@ class TestRunAgent:
     async def test_returns_task_id(self, svc: MagicMock) -> None:
         task = AgentTask(bonsai_sid="t1")
         svc.run_task = AsyncMock(return_value=task)
-        notifications.current_notify = AsyncMock()
-        try:
-            result = _unwrap(await run_agent(
-                svc, specIds=["s1"], config={"model": "claude-sonnet-4-6"}
-            ))
-            assert result == {"bonsaiSid": "t1"}
-            svc.run_task.assert_called_once()
-            call_args = svc.run_task.call_args
-            assert call_args[0][0] == ["s1"]
-            assert call_args[0][2] is notifications.current_notify
-        finally:
-            notifications.current_notify = None
-
-    async def test_no_connection(self, svc: MagicMock) -> None:
-        notifications.current_notify = None
-        with pytest.raises(JsonRpcError) as exc_info:
-            await run_agent(svc, specIds=["s1"], config={})
-        assert exc_info.value.code == -32603
+        result = _unwrap(await run_agent(
+            svc, specIds=["s1"], config={"model": "claude-sonnet-4-6"}
+        ))
+        assert result == {"bonsaiSid": "t1"}
+        svc.run_task.assert_called_once()
+        call_args = svc.run_task.call_args
+        assert call_args[0][0] == ["s1"]
 
     async def test_missing_params(self, svc: MagicMock) -> None:
-        notifications.current_notify = AsyncMock()
-        try:
-            with pytest.raises(JsonRpcError) as exc_info:
-                await run_agent(svc)
-            assert exc_info.value.code == -32602
-        finally:
-            notifications.current_notify = None
+        with pytest.raises(JsonRpcError) as exc_info:
+            await run_agent(svc)
+        assert exc_info.value.code == -32602
 
 
 class TestInterruptAgent:

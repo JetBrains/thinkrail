@@ -100,6 +100,9 @@ def list_sessions(project_root: Path) -> list[dict[str, Any]]:
             # Backward compat: support both bonsaiSid and taskId
             sid = data.get("bonsaiSid") or data.get("taskId", "")
             status = data.get("status", "done")
+            # Disk-only sessions with non-terminal status have no live runner — mark as ended
+            if status not in ("done", "error", "draft"):
+                status = "done"
             entry: dict[str, Any] = {
                 "bonsaiSid": sid,
                 "name": data.get("name", ""),

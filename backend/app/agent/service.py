@@ -3,7 +3,6 @@ from __future__ import annotations
 import asyncio
 import logging
 import time
-from collections.abc import Callable
 from typing import Any
 
 from app.agent.context import build_context
@@ -25,7 +24,6 @@ class AgentService:
         self._spec_service = spec_service
         self._tracker = Tracker()
         self._running_tasks: dict[str, asyncio.Task[Any]] = {}
-        self._last_notify: dict[str, Callable] = {}
         self.board_service: Any = None     # Injected by server.py
         self.trash_service: Any = None    # Injected by server.py
         self.model_registry: Any = None   # Injected by server.py
@@ -68,14 +66,11 @@ class AgentService:
             except Exception:
                 logger.warning("Failed to restore draft session %s", sid, exc_info=True)
 
-    def rebind_notify(self, notify: Callable) -> None:
-        """Update the WebSocket callback for all running tasks.
-
-        Called when a new WebSocket connects so that in-flight runners
-        stream events to the fresh connection instead of a dead one.
-        """
-        for bonsai_sid in list(self._running_tasks):
-            self._last_notify[bonsai_sid] = notify
+    @staticmethod
+    def _get_bus():
+        """Lazy import to avoid circular dependency (agent → rpc → agent)."""
+        from app.rpc.bus import bus
+        return bus
 
     # -- public methods -------------------------------------------------------
 
@@ -155,7 +150,6 @@ class AgentService:
     async def start_draft(
         self,
         bonsai_sid: str,
-        notify: Callable,
         prompt: str | None = None,
     ) -> AgentTask:
         """Start a draft session — transitions to initializing and launches the runner.
@@ -170,7 +164,7 @@ class AgentService:
         if prompt is not None:
             self._tracker.enqueue_message(bonsai_sid, prompt)
         bg_task = asyncio.create_task(
-            self._run_background(task, spec_context, notify)
+            self._run_background(task, spec_context)
         )
         self._running_tasks[task.bonsai_sid] = bg_task
         self._save_task(task)
@@ -180,7 +174,6 @@ class AgentService:
         self,
         spec_ids: list[str],
         config: AgentConfig,
-        notify: Callable,
         skill_id: str | None = None,
         session_prompt: str | None = None,
         name: str = "",
@@ -199,7 +192,7 @@ class AgentService:
         self._attach_to_ticket(task)
         spec_context = self._build_context_for(task)
         bg_task = asyncio.create_task(
-            self._run_background(task, spec_context, notify)
+            self._run_background(task, spec_context)
         )
         self._running_tasks[task.bonsai_sid] = bg_task
         self._save_task(task)
@@ -299,7 +292,7 @@ class AgentService:
         self._save_task(task)
         return {"model": task.config.model, "permissionMode": task.config.permission_mode, "betas": task.config.betas, "effort": task.config.effort}
 
-    async def restart_session(self, bonsai_sid: str, notify: Callable) -> AgentTask:
+    async def restart_session(self, bonsai_sid: str) -> AgentTask:
         """End current session and resume with current (updated) config."""
         self._tracker.enqueue_end_signal(bonsai_sid)
         bg_task = self._running_tasks.get(bonsai_sid)
@@ -308,7 +301,7 @@ class AgentService:
                 await bg_task
             except Exception:
                 pass
-        return await self.continue_session(bonsai_sid, notify)
+        return await self.continue_session(bonsai_sid)
 
     async def respond(self, bonsai_sid: str, request_id: str, response: dict) -> None:
         self._tracker.resolve_future(bonsai_sid, request_id, response)
@@ -336,6 +329,7 @@ class AgentService:
             "metaTicketId": task.meta_ticket_id,
             "createdAt": task.created,
             "updatedAt": task.updated,
+            "createdBy": task.created_by,
         }
         if task.system_prompt is not None:
             data["systemPrompt"] = task.system_prompt
@@ -392,8 +386,23 @@ class AgentService:
         return list(disk.values())
 
     def get_session_data(self, bonsai_sid: str) -> dict | None:
-        """Get full session data (events included) from disk."""
-        return load_session(self._config.project_root, bonsai_sid)
+        """Get full session data (events included) from disk, overlaid with live tracker state."""
+        data = load_session(self._config.project_root, bonsai_sid)
+        if data is None:
+            return None
+        # Overlay in-memory tracker state (status, pending request) for active sessions
+        if self._tracker.has_task(bonsai_sid):
+            task = self._tracker.get_task(bonsai_sid)
+            data["status"] = task.status
+            pending = self._tracker.get_pending_request(bonsai_sid)
+            if pending is not None:
+                data["pendingRequest"] = pending
+        else:
+            # Not in tracker — correct stale status (no live runner)
+            status = data.get("status", "done")
+            if status not in ("done", "error", "draft"):
+                data["status"] = "done"
+        return data
 
     def trash_session(self, bonsai_sid: str) -> None:
         """Soft-delete a session: detach from tickets, move to trash."""
@@ -412,9 +421,7 @@ class AgentService:
             self._tracker.remove_task(bonsai_sid)
             self._running_tasks.pop(bonsai_sid, None)
 
-    async def continue_session(
-        self, bonsai_sid: str, notify: Callable
-    ) -> AgentTask:
+    async def continue_session(self, bonsai_sid: str) -> AgentTask:
         """Resume a session using the SDK's native --resume <sessionId>.
 
         Reuses the same bonsai_sid. The CLI restores full conversation
@@ -474,7 +481,7 @@ class AgentService:
         spec_context = self._build_context_for(task)
 
         bg_task = asyncio.create_task(
-            self._run_background(task, spec_context, notify,
+            self._run_background(task, spec_context,
                                  resume_session_id=old_session_id)
         )
         self._running_tasks[task.bonsai_sid] = bg_task
@@ -498,11 +505,8 @@ class AgentService:
         self,
         task: AgentTask,
         spec_context: str,
-        notify: Callable,
         resume_session_id: str | None = None,
     ) -> None:
-        self._last_notify[task.bonsai_sid] = notify
-
         # Base metrics from previous run (for cumulative tracking across resumes)
         _base_cost = 0.0
         _base_turns = 0
@@ -531,16 +535,13 @@ class AgentService:
         }
         _wall_start = time.monotonic()
 
-        # Wrap notify to read the *current* callback from _last_notify each
-        # time, so that rebind_notify() transparently redirects events to a
-        # new WebSocket without restarting the runner.
+        # Publish via EventBus and persist events to disk.
+        _bus = self._get_bus()
+
         async def _persisting_notify(method: str, params: dict, request_id: str | None = None) -> None:
-            current = self._last_notify.get(task.bonsai_sid)
-            if current:
-                try:
-                    await current(method, params, request_id)
-                except Exception:
-                    pass  # WS dead — events still persisted below
+            await _bus.publish_to_session(
+                task.bonsai_sid, method, params, request_id=request_id,
+            )
             # Persist streaming events (skip overly frequent and ephemeral ones)
             if method.startswith("agent/") and method not in ("agent/progress", "agent/costEstimate", "agent/statusChanged"):
                 event_type = method.replace("agent/", "")
@@ -644,7 +645,20 @@ class AgentService:
                 pass
         finally:
             self._running_tasks.pop(task.bonsai_sid, None)
-            self._last_notify.pop(task.bonsai_sid, None)
+            # Notify all project clients that the session ended
+            try:
+                await self._get_bus().publish_to_project(
+                    str(self._config.project_root),
+                    "session/didEnd",
+                    {
+                        "bonsaiSid": task.bonsai_sid,
+                        "status": task.status,
+                    },
+                )
+            except Exception:
+                pass
+            # Clean up the session topic now that the runner is done
+            self._get_bus().cleanup_topic(f"session:{task.bonsai_sid}")
             # Notify orchestrator if this was a step session
             await self._notify_orchestrator_on_step_complete(task)
 

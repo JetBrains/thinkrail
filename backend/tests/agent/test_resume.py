@@ -142,9 +142,8 @@ class TestContinueSession:
 
         service, config, spec_service = _make_service()
         spec_service.get_spec.return_value = _make_spec_detail("spec-1", "T", "C")
-        notify = AsyncMock()
 
-        task = await service.continue_session("sid-1", notify)
+        task = await service.continue_session("sid-1")
         assert task.bonsai_sid == "sid-1"
         assert task.status == "initializing"
 
@@ -173,7 +172,7 @@ class TestContinueSession:
         service, _, _ = _make_service()
 
         with pytest.raises(ValueError, match="no stored sessionId"):
-            await service.continue_session("sid-1", AsyncMock())
+            await service.continue_session("sid-1")
 
     @patch("app.agent.service.load_session")
     async def test_continue_session_not_found_raises(self, mock_load: MagicMock) -> None:
@@ -183,7 +182,7 @@ class TestContinueSession:
         service, _, _ = _make_service()
 
         with pytest.raises(ValueError, match="not found on disk"):
-            await service.continue_session("nonexistent", AsyncMock())
+            await service.continue_session("nonexistent")
 
     async def test_continue_already_running_raises(self) -> None:
         """If session is already running, raise ValueError."""
@@ -191,7 +190,7 @@ class TestContinueSession:
         service._running_tasks["sid-1"] = MagicMock()
 
         with pytest.raises(ValueError, match="already running"):
-            await service.continue_session("sid-1", AsyncMock())
+            await service.continue_session("sid-1")
 
     @patch("app.agent.service.load_session")
     async def test_continue_empty_session_id_raises(self, mock_load: MagicMock) -> None:
@@ -210,4 +209,4 @@ class TestContinueSession:
         service, _, _ = _make_service()
 
         with pytest.raises(ValueError, match="no stored sessionId"):
-            await service.continue_session("sid-1", AsyncMock())
+            await service.continue_session("sid-1")

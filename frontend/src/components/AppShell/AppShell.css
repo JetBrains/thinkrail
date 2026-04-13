@@ -61,6 +61,13 @@
   font-size: var(--font-lg);
 }
 
+.header-presence {
+  color: var(--muted);
+  font-size: var(--font-sm);
+  cursor: default;
+  opacity: 0.8;
+}
+
 .session-dot {
   width: 6px;
   height: 6px;
@@ -467,6 +474,103 @@
 .left-collapse-btn {
   border-left: none;
   border-right: 1px solid var(--border);
+}
+
+/* ── Token Dialog ── */
+.token-dialog-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+}
+
+.token-dialog {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: var(--space-xl);
+  width: 380px;
+  max-width: 90vw;
+}
+
+.token-dialog h3 {
+  color: var(--text);
+  font-size: var(--font-lg2);
+  margin-bottom: var(--space-sm);
+}
+
+.token-dialog-desc {
+  color: var(--muted);
+  font-size: var(--font-md);
+  margin-bottom: var(--space-lg);
+}
+
+.token-dialog-input {
+  width: 100%;
+  padding: var(--space-sm) var(--space-md);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font);
+  font-size: var(--font-md);
+  margin-bottom: var(--space-lg);
+  box-sizing: border-box;
+}
+
+.token-dialog-input:focus {
+  outline: none;
+  border-color: var(--blue);
+}
+
+.token-dialog-actions {
+  display: flex;
+  gap: var(--space-sm);
+  align-items: center;
+}
+
+.token-dialog-btn {
+  padding: var(--space-xs) var(--space-md);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--muted);
+  font-family: var(--font);
+  font-size: var(--font-md);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.token-dialog-btn:hover {
+  background: var(--hover);
+  color: var(--text);
+}
+
+.token-dialog-btn-primary {
+  background: var(--blue);
+  color: var(--bg);
+  border-color: var(--blue);
+}
+
+.token-dialog-btn-primary:hover {
+  opacity: 0.9;
+}
+
+.token-dialog-btn-danger {
+  color: var(--red);
+  border-color: var(--red);
+}
+
+.token-dialog-btn-danger:hover {
+  background: var(--red);
+  color: var(--bg);
+}
+
+.header-token-active {
+  color: var(--green);
 }
 
 /* ── Responsive ── */
