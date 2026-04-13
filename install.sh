@@ -10,4 +10,4 @@ git clone --branch stable "$REPO_URL" "$REPO_DIR"
 cd "$REPO_DIR"
 
 echo "Running deploy.sh..."
-bash deploy.sh
+bash run.sh --fresh
