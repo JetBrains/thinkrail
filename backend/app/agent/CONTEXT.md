@@ -322,7 +322,7 @@ This is a single-file submodule. No classes — just a pure function with helper
 |--------|---------------|
 | `_strip_frontmatter(text)` | Removes YAML frontmatter (between `---` delimiters) from a string |
 | `_parse_frontmatter(text)` | Extracts simple `key: value` YAML frontmatter into a dict without requiring PyYAML |
-| `_scan_skill_frontmatter(plugin_dir)` | Scans all `skills/*/SKILL.md`, parses YAML frontmatter, returns sorted list of `(name, description)` tuples |
+| `scan_skill_frontmatter(plugin_dir)` | Scans all `skills/*/SKILL.md`, parses YAML frontmatter, returns sorted list of skill dicts with `id`, `name`, `description`, and optional `icon`, `group`, `requires` |
 | `_build_general_instructions(plugin_dir)` | Composes the General Instructions section, including scanning skills/ for the available skills table |
 | `_load_skill(skill_id, plugin_dir)` | Reads SKILL.md, strips frontmatter, returns markdown body |
 | `_build_specs_section(spec_ids, spec_service)` | Loads specs by ID, formats as titled sections |

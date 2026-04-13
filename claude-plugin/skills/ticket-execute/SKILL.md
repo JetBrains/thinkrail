@@ -1,6 +1,9 @@
 ---
 name: ticket-execute
 description: Orchestrate execution of a meta-ticket's implementation plan. Reads the plan, proposes steps for execution, and tracks progress. Use when a ticket has a plan ready for execution.
+icon: "🚀"
+group: Ticket
+requires: ticket
 argument-hint: "[ticket-context]"
 ---
 

@@ -1,6 +1,8 @@
 ---
 name: spec-review
 description: Review and validate existing specifications against code. Use when the user wants to check if their specifications are accurate, complete, and follow best practices.
+icon: "🔍"
+group: Review
 argument-hint: "[spec-path-or-directory]"
 ---
 

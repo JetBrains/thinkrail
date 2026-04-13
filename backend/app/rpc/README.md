@@ -71,6 +71,40 @@ Both sides can send either. The server can initiate requests to the client (e.g.
 | `trash/restorePlan` | `{ ticketId: str }`                                                                        | `null`              | Restore a trashed plan file back to `.bonsai/plans/` |
 | `trash/restoreDraft` | `{ trashItemId: str }`                                                                    | `{ manifestEntry }` | Restore a trashed draft file and return its manifest entry for re-insertion |
 | `trash/restorePatches` | `{ ticketId: str }`                                                                     | `null`              | Restore trashed patches directory back to `.bonsai/spec-patches/` |
+| `board/list`      | `{}`                                                                                         | `list[TicketSummary]` | List all meta-tickets |
+| `board/get`       | `{ id: str }`                                                                                | `MetaTicket`        | Get full ticket with body, patches, links |
+| `board/create`    | `{ title: str, body?: str, type?: str }`                                                     | `MetaTicket`        | Create a new meta-ticket |
+| `board/update`    | `{ id: str, title?: str, body?: str, status?: str, type?: str }`                             | `MetaTicket`        | Update ticket fields |
+| `board/delete`    | `{ id: str }`                                                                                | `null`              | Delete a meta-ticket |
+| `board/reorder`   | `{ id: str, status: str, order: int }`                                                       | `MetaTicket`        | Move ticket to a status column at a position |
+| `board/linkSpec`  | `{ ticketId: str, specId: str }`                                                             | `MetaTicket`        | Link a spec to a ticket |
+| `board/unlinkSpec`| `{ ticketId: str, specId: str }`                                                             | `MetaTicket`        | Unlink a spec from a ticket |
+| `board/attachSession` | `{ ticketId: str, sessionId: str }`                                                      | `MetaTicket`        | Attach an agent session to a ticket |
+| `board/detachSession` | `{ ticketId: str, sessionId: str }`                                                      | `MetaTicket`        | Detach an agent session from a ticket |
+| `board/getPlan`   | `{ ticketId: str }`                                                                          | `Plan \| null`      | Get the plan for a ticket |
+| `board/createPlan`| `{ ticketId: str, title: str, steps: list, verification?: list }`                            | `Plan`              | Create a plan for a ticket |
+| `board/savePlan`  | `{ ticketId: str, plan: dict }`                                                              | `Plan`              | Save/update a plan |
+| `board/getPlanRaw`| `{ ticketId: str }`                                                                          | `{ content: str }`  | Get plan as raw markdown |
+| `board/savePlanRaw`| `{ ticketId: str, content: str }`                                                           | `Plan`              | Save plan from raw markdown |
+| `board/updateStep`| `{ ticketId: str, stepNumber: int, status: str, sessionId?: str }`                           | `Plan`              | Update a plan step's status |
+| `board/getNextStep`| `{ ticketId: str }`                                                                         | `Step \| null`      | Get the next actionable step |
+| `board/listDrafts`| `{ ticketId: str }`                                                                          | `list[DraftEntry]`  | List spec draft entries for a ticket |
+| `board/getDraftDiff`| `{ ticketId: str, index: int }`                                                             | `DraftDiff`         | Get diff for a specific draft |
+| `board/applyDraft`| `{ ticketId: str, index: int }`                                                              | `null`              | Apply a single draft to the registry |
+| `board/applyAllDrafts`| `{ ticketId: str }`                                                                       | `null`              | Apply all drafts for a ticket |
+| `board/discardDraft`| `{ ticketId: str, index: int }`                                                             | `null`              | Discard (trash) a single draft |
+| `board/discardAllDrafts`| `{ ticketId: str }`                                                                     | `null`              | Discard all drafts for a ticket |
+| `board/listPatches`| `{ ticketId: str }`                                                                         | `list[SpecPatch]`   | List applied spec patches for a ticket |
+| `board/getPatchDiff`| `{ ticketId: str, index: int }`                                                             | `PatchDiff`         | Get diff for an applied patch |
+| `board/revertPatch`| `{ ticketId: str, index: int }`                                                             | `MetaTicket`        | Revert an applied patch |
+| `board/setOrchestrator`| `{ ticketId: str, sessionId: str }`                                                     | `MetaTicket`        | Set the orchestrator session for a ticket |
+| `board/setPlanPath`| `{ ticketId: str, planPath: str }`                                                          | `MetaTicket`        | Set the plan file path on a ticket |
+| `settings/get`    | `{}`                                                                                         | `ProjectSettings`   | Get current project settings |
+| `settings/update` | `{ settings: dict }`                                                                         | `ProjectSettings`   | Validate and save settings |
+| `settings/ensureFile`| `{}`                                                                                       | `ProjectSettings`   | Create settings file with defaults if missing |
+| `models/list`     | `{}`                                                                                         | `list[ModelDef]`    | Get cached model list |
+| `models/refresh`  | `{}`                                                                                         | `list[ModelDef]`    | Refresh models from API |
+| `skills/list`     | `{}`                                                                                         | `list[SkillDef]`    | List available skills with icon, group, requires metadata |
 
 ### Server → Client (notifications)
 
@@ -386,7 +420,7 @@ graph TD
 - WebSocket URL: `/ws?project=<path>[&last_seen=<timestamp>]`
 - On connect:
   1. Validate `project` param exists (close with 4001 if missing)
-  2. Validate `<project>/.bonsai/registry.json` exists (close with 4002 if invalid)
+  2. Call `ensure_project(project_path)` to auto-create missing `.bonsai/` meta-files and subdirectories (close with 4002 on filesystem error)
   3. Build per-connection `AppConfig`, `SpecService`. Reuse per-project `AgentService`, `VisualizationService`, `BoardService`, `ModelRegistry` (services survive reconnects).
   4. Create `ClientConnection` with unique `conn_id`, register with EventBus
   5. Publish `connection/didJoin` to existing project clients

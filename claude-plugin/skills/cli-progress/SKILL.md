@@ -1,6 +1,8 @@
 ---
 name: cli-progress
 description: Show and track specification-driven development progress. Displays phase progress, milestone completion, and workflow status using bonsai_visualize. Use at the beginning of any phase or to check overall progress.
+icon: "📉"
+group: Visualization
 ---
 
 # CLI Progress Tracker

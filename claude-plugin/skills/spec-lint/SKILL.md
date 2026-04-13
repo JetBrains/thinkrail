@@ -1,6 +1,8 @@
 ---
 name: spec-lint
 description: Validate specification structure, links, completeness, and consistency. Use to check that specs follow templates and are internally consistent.
+icon: "📝"
+group: Review
 argument-hint: "[spec-path-or-directory]"
 ---
 

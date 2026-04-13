@@ -1,6 +1,8 @@
 ---
 name: task-spec
 description: Create an actionable task specification for a bug fix, feature implementation, or improvement. Use when the user wants to document a specific piece of work to be done.
+icon: "📋"
+group: Creation
 argument-hint: "[task-title]"
 ---
 

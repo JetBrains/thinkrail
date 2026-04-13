@@ -76,7 +76,6 @@ async def refresh_models(registry: ModelRegistry, **_params: Any) -> list[dict]:
 @_handle_errors
 async def list_skills(config: AppConfig, **_params: Any) -> list[dict]:
     """Return available skills by scanning plugin skill frontmatter."""
-    from app.agent.context import _scan_skill_frontmatter
+    from app.agent.context import scan_skill_frontmatter
 
-    skills = _scan_skill_frontmatter(config.plugin_dir)
-    return [{"id": name, "name": name, "description": desc} for name, desc in skills]
+    return scan_skill_frontmatter(config.plugin_dir)

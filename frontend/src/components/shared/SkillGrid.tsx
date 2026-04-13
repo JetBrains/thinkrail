@@ -1,4 +1,5 @@
-import { SKILLS, type Skill } from "@/constants/skills";
+import { type Skill } from "@/constants/skills";
+import { useSettingsStore } from "@/store/settingsStore.ts";
 import "./SkillGrid.css";
 
 interface SkillGridProps {
@@ -10,18 +11,21 @@ interface SkillGridProps {
 export type { Skill };
 
 export function SkillGrid({ selectedId, onSelect, context }: SkillGridProps) {
-  const groups = ["Foundation", "Creation", "Review", "Visualization", "Ticket"];
+  const skills = useSettingsStore((s) => s.skills);
+  const preferredOrder = ["Foundation", "Creation", "Review", "Visualization", "Ticket"];
+  const allGroups = new Set(skills.map((s) => s.group));
+  const groups = [...preferredOrder.filter((g) => allGroups.has(g)), ...[...allGroups].filter((g) => !preferredOrder.includes(g))];
 
   return (
     <div className="skill-grid">
       {groups.map((group) => {
-        const skills = SKILLS.filter((s) => s.group === group);
-        if (skills.length === 0) return null;
+        const groupSkills = skills.filter((s) => s.group === group);
+        if (groupSkills.length === 0) return null;
         return (
           <div key={group} className="skill-group">
             <div className="skill-group-label">{group}</div>
             <div className="skill-group-cards">
-              {skills.map((skill) => {
+              {groupSkills.map((skill) => {
                 const irrelevant = skill.requires === "ticket" && !context?.hasTicket;
                 return (
                   <button

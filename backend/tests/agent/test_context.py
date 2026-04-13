@@ -11,7 +11,7 @@ from app.agent.context import (
     _build_general_instructions,
     _build_specs_section,
     _parse_frontmatter,
-    _scan_skill_frontmatter,
+    scan_skill_frontmatter,
     build_context,
 )
 from app.agent.models import AgentConfig
@@ -33,10 +33,20 @@ def _make_spec_detail(id: str, title: str, content: str) -> SpecDetail:
     )
 
 
-def _write_skill_md(skill_dir: Path, name: str, description: str, body: str = "# Skill body") -> None:
+def _write_skill_md(
+    skill_dir: Path, name: str, description: str,
+    body: str = "# Skill body",
+    icon: str = "",
+    group: str = "",
+) -> None:
     """Create a SKILL.md file with frontmatter in the given skill directory."""
     skill_dir.mkdir(parents=True, exist_ok=True)
-    content = f"---\nname: {name}\ndescription: {description}\n---\n\n{body}\n"
+    lines = [f"name: {name}", f"description: {description}"]
+    if icon:
+        lines.append(f"icon: {icon}")
+    if group:
+        lines.append(f"group: {group}")
+    content = "---\n" + "\n".join(lines) + "\n---\n\n" + body + "\n"
     (skill_dir / "SKILL.md").write_text(content, encoding="utf-8")
 
 
@@ -81,7 +91,7 @@ class TestParseFrontmatter:
 
 
 # ---------------------------------------------------------------------------
-# _scan_skill_frontmatter
+# scan_skill_frontmatter
 # ---------------------------------------------------------------------------
 
 class TestScanSkillFrontmatter:
@@ -91,20 +101,26 @@ class TestScanSkillFrontmatter:
         _write_skill_md(skills_dir / "beta", "beta", "Beta skill")
         _write_skill_md(skills_dir / "gamma", "gamma", "Gamma skill")
 
-        result = _scan_skill_frontmatter(tmp_path)
+        result = scan_skill_frontmatter(tmp_path)
         assert len(result) == 3
-        assert result[0] == ("alpha", "Alpha skill")
-        assert result[1] == ("beta", "Beta skill")
-        assert result[2] == ("gamma", "Gamma skill")
+        assert result[0]["id"] == "alpha"
+        assert result[0]["name"] == "alpha"
+        assert result[0]["description"] == "Alpha skill"
+        assert result[1]["id"] == "beta"
+        assert result[1]["name"] == "beta"
+        assert result[1]["description"] == "Beta skill"
+        assert result[2]["id"] == "gamma"
+        assert result[2]["name"] == "gamma"
+        assert result[2]["description"] == "Gamma skill"
 
     def test_sorted_by_directory_name(self, tmp_path: Path) -> None:
         skills_dir = tmp_path / "skills"
         _write_skill_md(skills_dir / "zulu", "zulu", "Last")
         _write_skill_md(skills_dir / "alpha", "alpha", "First")
 
-        result = _scan_skill_frontmatter(tmp_path)
-        assert result[0][0] == "alpha"
-        assert result[1][0] == "zulu"
+        result = scan_skill_frontmatter(tmp_path)
+        assert result[0]["id"] == "alpha"
+        assert result[1]["id"] == "zulu"
 
     def test_skips_malformed_frontmatter(self, tmp_path: Path) -> None:
         skills_dir = tmp_path / "skills"
@@ -115,18 +131,35 @@ class TestScanSkillFrontmatter:
         bad_dir.mkdir(parents=True)
         (bad_dir / "SKILL.md").write_text("---\nname: bad\n---\n# No desc", encoding="utf-8")
 
-        result = _scan_skill_frontmatter(tmp_path)
+        result = scan_skill_frontmatter(tmp_path)
         assert len(result) == 1
-        assert result[0][0] == "good"
+        assert result[0]["id"] == "good"
 
     def test_missing_skills_dir(self, tmp_path: Path) -> None:
-        result = _scan_skill_frontmatter(tmp_path)
+        result = scan_skill_frontmatter(tmp_path)
         assert result == []
 
     def test_empty_skills_dir(self, tmp_path: Path) -> None:
         (tmp_path / "skills").mkdir()
-        result = _scan_skill_frontmatter(tmp_path)
+        result = scan_skill_frontmatter(tmp_path)
         assert result == []
+
+    def test_includes_icon_and_group(self, tmp_path: Path) -> None:
+        skills_dir = tmp_path / "skills"
+        _write_skill_md(skills_dir / "test", "test", "Test skill", icon="X", group="Foundation")
+
+        result = scan_skill_frontmatter(tmp_path)
+        assert len(result) == 1
+        assert result[0]["icon"] == "X"
+        assert result[0]["group"] == "Foundation"
+
+    def test_missing_icon_and_group_omitted(self, tmp_path: Path) -> None:
+        skills_dir = tmp_path / "skills"
+        _write_skill_md(skills_dir / "plain", "plain", "No extras")
+
+        result = scan_skill_frontmatter(tmp_path)
+        assert "icon" not in result[0]
+        assert "group" not in result[0]
 
 
 # ---------------------------------------------------------------------------

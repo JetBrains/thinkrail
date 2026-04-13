@@ -1,6 +1,8 @@
 ---
 name: architecture-design
 description: Create a system-wide architecture design document. Use when the user wants to document the overall system architecture, data flow, and design decisions for their project.
+icon: "🏛"
+group: Foundation
 argument-hint: "[project-name]"
 ---
 

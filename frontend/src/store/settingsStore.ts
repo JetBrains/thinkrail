@@ -2,6 +2,7 @@ import { create } from "zustand";
 import { getClient } from "@/api/index.ts";
 import { createSettingsApi, type ProjectSettings } from "@/api/methods/settings.ts";
 import { type ModelDef, setDynamicModels } from "@/utils/models.ts";
+import { type Skill, FALLBACK_SKILLS } from "@/constants/skills.ts";
 
 interface SettingsStore {
   /** Parsed project settings from .bonsai/settings.json */
@@ -10,6 +11,9 @@ interface SettingsStore {
   models: ModelDef[] | null;
   /** Whether a model refresh is in progress */
   refreshing: boolean;
+  /** Dynamic skills list from backend (falls back to FALLBACK_SKILLS) */
+  skills: Skill[];
+  fetchSkills: () => Promise<void>;
 
   fetchSettings: () => Promise<void>;
   updateSettings: (patch: Partial<ProjectSettings>) => Promise<void>;
@@ -22,6 +26,7 @@ export const useSettingsStore = create<SettingsStore>((set, get) => ({
   settings: null,
   models: null,
   refreshing: false,
+  skills: FALLBACK_SKILLS,
 
   fetchSettings: async () => {
     try {
@@ -82,6 +87,26 @@ export const useSettingsStore = create<SettingsStore>((set, get) => ({
       console.error("Failed to refresh models:", e);
     } finally {
       set({ refreshing: false });
+    }
+  },
+
+  fetchSkills: async () => {
+    try {
+      const api = createSettingsApi(getClient());
+      const raw = await api.listSkills();
+      if (raw && raw.length > 0) {
+        const skills: Skill[] = raw.map((s) => ({
+          id: s.id,
+          name: s.name,
+          description: s.description,
+          icon: s.icon ?? "",
+          group: s.group ?? "Other",
+          requires: s.requires as Skill["requires"],
+        }));
+        set({ skills });
+      }
+    } catch (e) {
+      console.debug("skills/list not available, using fallback:", e);
     }
   },
 }));

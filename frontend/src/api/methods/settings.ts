@@ -18,6 +18,15 @@ export function createSettingsApi(client: RpcClient) {
       client.request<ProjectSettings>("settings/update", { settings }),
 
     ensureFile: () => client.request<ProjectSettings>("settings/ensureFile"),
+
+    listSkills: () => client.request<Array<{
+      id: string;
+      name: string;
+      description: string;
+      icon?: string;
+      group?: string;
+      requires?: string;
+    }>>("skills/list"),
   };
 }
 

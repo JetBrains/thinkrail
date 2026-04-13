@@ -1,6 +1,9 @@
 ---
 name: ticket-describe
 description: Help formulate a structured meta-ticket description with What, Purpose, How, and Success Criteria sections. Use when a ticket needs a clear, well-structured description.
+icon: "✏️"
+group: Ticket
+requires: ticket
 argument-hint: "[ticket-title-or-context]"
 ---
 

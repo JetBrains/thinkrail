@@ -47,6 +47,7 @@ function AppInner({ projectPath: _projectPath, onSwitchProject }: { projectPath:
       // Load project settings and model list
       useSettingsStore.getState().fetchSettings();
       useSettingsStore.getState().fetchModels();
+      useSettingsStore.getState().fetchSkills();
     } else if (connectionState === "connected" && wiredRef.current) {
       // ── Reconnect: WS recovered — sync session statuses immediately ──
       console.log("[Bonsai] Reconnected — syncing session statuses");

@@ -1,6 +1,8 @@
 ---
 name: module-design
 description: Create a detailed module-level design specification (README.md for a major component). Use when the user wants to document a specific module's architecture, interfaces, and design.
+icon: "📦"
+group: Creation
 argument-hint: "[module-path]"
 ---
 

@@ -1,6 +1,9 @@
 ---
 name: ticket-plan
 description: Create an implementation plan for a meta-ticket. Reads linked specifications and produces an ordered plan with steps, dependencies, and success criteria. Use after specifications are complete.
+icon: "🗺️"
+group: Ticket
+requires: ticket
 argument-hint: "[ticket-context]"
 ---
 

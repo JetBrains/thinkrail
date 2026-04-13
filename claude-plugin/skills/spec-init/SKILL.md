@@ -1,6 +1,8 @@
 ---
 name: spec-init
 description: Initialize a project for specification-driven development. Creates directory structure, registry, CLAUDE.md, and skeleton specifications. Use at the start of any new or existing project.
+icon: "🔧"
+group: Review
 argument-hint: "[project-name]"
 ---
 

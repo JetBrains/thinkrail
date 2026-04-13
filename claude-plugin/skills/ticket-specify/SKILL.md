@@ -1,6 +1,9 @@
 ---
 name: ticket-specify
 description: Create or modify specifications for a meta-ticket. Analyzes the ticket description and helps produce spec documents that define what changes are needed. Use after the ticket has a clear description.
+icon: "🔍"
+group: Ticket
+requires: ticket
 argument-hint: "[ticket-context]"
 ---
 

@@ -86,17 +86,18 @@ def _parse_frontmatter(text: str) -> dict[str, str]:
     return result
 
 
-def _scan_skill_frontmatter(plugin_dir: Path) -> list[tuple[str, str]]:
+def scan_skill_frontmatter(plugin_dir: Path) -> list[dict[str, str]]:
     """Scan all skills/*/SKILL.md, parse YAML frontmatter.
 
-    Returns a sorted list of ``(name, description)`` tuples.
-    Gracefully skips files with malformed frontmatter.
+    Returns a sorted list of skill dicts with at minimum ``id``, ``name``,
+    and ``description``.  Additional frontmatter fields (``icon``, ``group``,
+    ``requires``) are included when present.
     """
     skills_dir = plugin_dir / "skills"
     if not skills_dir.is_dir():
         return []
 
-    results: list[tuple[str, str]] = []
+    results: list[dict[str, str]] = []
     for skill_md in sorted(skills_dir.glob("*/SKILL.md")):
         try:
             raw = skill_md.read_text(encoding="utf-8")
@@ -104,7 +105,15 @@ def _scan_skill_frontmatter(plugin_dir: Path) -> list[tuple[str, str]]:
             name = fm.get("name", "")
             description = fm.get("description", "")
             if name and description:
-                results.append((name, description))
+                entry: dict[str, str] = {
+                    "id": skill_md.parent.name,
+                    "name": name,
+                    "description": description,
+                }
+                for key in ("icon", "group", "requires"):
+                    if key in fm:
+                        entry[key] = fm[key]
+                results.append(entry)
             else:
                 logger.warning(
                     "Skipping %s: missing name or description in frontmatter",
@@ -196,9 +205,9 @@ The developer sees a card and can approve or dismiss. \
 Respect dismissals — do not re-suggest the same session. Limit to 1-3 per session."""
 
     # 5. Available Skills subsection (dynamically generated)
-    skills = _scan_skill_frontmatter(plugin_dir)
+    skills = scan_skill_frontmatter(plugin_dir)
     if skills:
-        rows = "\n".join(f"| {name} | {desc} |" for name, desc in skills)
+        rows = "\n".join(f"| {s['name']} | {s['description']} |" for s in skills)
         skills_table = f"""\
 ### Available Skills
 

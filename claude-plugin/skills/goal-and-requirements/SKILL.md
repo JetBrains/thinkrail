@@ -1,6 +1,8 @@
 ---
 name: goal-and-requirements
 description: Define and clarify a project or feature goal interactively. Creates a clear goal statement and description that guides all subsequent design and implementation. Use when starting a new project or feature.
+icon: "🎯"
+group: Foundation
 argument-hint: "[project-or-feature-description]"
 ---
 

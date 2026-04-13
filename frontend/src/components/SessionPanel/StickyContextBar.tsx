@@ -1,4 +1,4 @@
-import { SKILLS } from "@/constants/skills.ts";
+import { useSettingsStore } from "@/store/settingsStore.ts";
 
 interface StickyContextBarProps {
   skillId?: string;
@@ -17,7 +17,8 @@ export function StickyContextBar({
   createdBy,
   onScrollToTop,
 }: StickyContextBarProps) {
-  const skill = skillId ? SKILLS.find((s) => s.id === skillId) : null;
+  const skills = useSettingsStore((s) => s.skills);
+  const skill = skillId ? skills.find((s) => s.id === skillId) : null;
 
   const parts: string[] = [];
   if (skill) parts.push(`${skill.icon} ${skill.name}`);

@@ -23,10 +23,18 @@ frontend/src/store/
 ├── index.ts               # Re-exports all stores and wireEvents
 ├── specStore.ts           # Spec data, graph, registry
 ├── sessionStore.ts        # Active sessions, events, archived sessions
+├── boardStore.ts          # Meta-tickets, kanban board state
+├── settingsStore.ts       # Project settings, model list, dynamic skills list
 ├── uiStore.ts             # Panel visibility, active tabs, modal state
 ├── costStore.ts           # Cost tracking stub (backend not implemented)
 ├── notificationStore.ts   # Toast queue, tab badges, pending input count
 ├── fileStore.ts           # Open file tabs, preview tab, editor state
+├── trashStore.ts          # Soft-deleted items
+├── connectionStore.ts     # WebSocket connection state
+├── inputDraftStore.ts     # Per-session input text drafts
+├── messageHistoryStore.ts # Input message history (up/down arrow)
+├── tokenStore.ts          # Auth token management
+├── visStore.ts            # Visualization dashboard state
 └── wireEvents.ts          # RPC event → store action wiring
 ```
 
@@ -471,6 +479,37 @@ const { done, active, total } = useSpecStore(
   shallow
 );
 ```
+
+---
+
+## Cross-Store Validation: Stale Reference Detection
+
+Sessions and tickets store references to specs (`specIds`, `linkedSpecIds`), skills (`skillId`), and other sessions (`sessionIds`) as plain ID strings. These references can become stale when the referenced items are deleted.
+
+### Validation Utility (`frontend/src/utils/staleRefs.ts`)
+
+Pure functions for detecting stale references:
+- `findStaleSpecIds(specIds, liveSpecs)` — returns spec IDs not in the live registry
+- `isSkillValid(skillId, skills)` — checks against the dynamic skills list from `settingsStore`
+- `findStaleSessionIds(sessionIds, liveSids)` — returns session IDs not in live/archived sessions
+
+### Store Methods
+
+**sessionStore:**
+- `getStaleSessionRefs(bonsaiSid)` — returns `{ staleSpecIds, staleSkillId }` or `null`
+- `fixStaleSessionRefs(bonsaiSid)` — removes stale refs; persists via `updateDraft` for drafts
+
+**boardStore:**
+- `getStaleTicketRefs(ticketId)` — returns `{ staleSpecIds, staleSessionIds }` or `null`
+- `fixStaleTicketRefs(ticketId)` — removes stale refs; calls `unlinkSpec` API for specs
+
+### Dynamic Skills (`settingsStore.skills`)
+
+Skills are fetched from the backend via `skills/list` RPC on connect and stored in `settingsStore.skills`. The backend scans `claude-plugin/skills/*/SKILL.md` frontmatter for `id`, `name`, `description`, `icon`, `group`, and `requires` fields. `FALLBACK_SKILLS` from `frontend/src/constants/skills.ts` is used as the initial value and fallback if the RPC fails. All components (`SkillGrid`, `DraftConfigCard`, `InputArea`, `StickyContextBar`) read skills from the store instead of the constant.
+
+### UI Component: `StaleRefsBanner`
+
+`frontend/src/components/shared/StaleRefsBanner.tsx` renders a gold warning banner with a cleanup action button. Used in `DraftConfigCard` and `TicketInfo`.
 
 ---
 

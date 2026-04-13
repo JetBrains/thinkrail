@@ -1,6 +1,8 @@
 ---
 name: submodule-design
 description: Create a design specification for a sub-component within a module. Use for documenting specific algorithms, sub-systems, or focused components.
+icon: "📦"
+group: Creation
 argument-hint: "[submodule-path]"
 ---
 

@@ -1,6 +1,8 @@
 ---
 name: visualization
 description: Utility skill for generating rich visualizations using the bonsai_visualize MCP tool. Provides patterns for progress trackers, summary boxes, comparisons, data tables, status lists, and diagrams. Other skills reference this for consistent visual output.
+icon: "📊"
+group: Visualization
 ---
 
 # Visualization Toolkit

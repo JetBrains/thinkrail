@@ -1,6 +1,8 @@
 ---
 name: spec-from-code
 description: Reverse-engineer specifications from existing code. Analyzes directory structure, public APIs, data flow, and generates spec skeletons. Use when adding specs to an existing codebase.
+icon: "🔄"
+group: Creation
 argument-hint: "[path-to-analyze]"
 ---
 

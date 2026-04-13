@@ -1,6 +1,8 @@
 ---
 name: spec-next
 description: Suggest what to specify next based on current coverage, dependencies, and priority. Use when you're unsure what specification to create next.
+icon: "🧭"
+group: Review
 ---
 
 # Specification Workflow Orchestrator

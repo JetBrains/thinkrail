@@ -1,6 +1,8 @@
 ---
 name: spec-status
 description: Show specification coverage, health, and gaps for the current project. Use to check which modules have specs, which are stale, and what needs attention.
+icon: "📊"
+group: Review
 ---
 
 # Specification Status and Coverage Report

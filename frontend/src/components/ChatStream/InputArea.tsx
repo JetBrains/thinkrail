@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { SKILLS } from "@/constants/skills";
+import { useSettingsStore } from "@/store/settingsStore.ts";
+import type { Skill } from "@/constants/skills";
 import { useVoiceInput } from "@/hooks/useVoiceInput";
 import { useNotificationStore } from "@/store/notificationStore";
 import { useInputDraftStore } from "@/store/inputDraftStore";
@@ -34,8 +35,9 @@ const FORMAT_ACTIONS = [
 ];
 
 export function InputArea({ sessionId, disabled, placeholder, onSend, isRunning, canInterrupt, onInterrupt, showContinue, onContinue, isDraft }: InputAreaProps) {
+  const skills = useSettingsStore((s) => s.skills);
   const [text, setText] = useState(() => useInputDraftStore.getState().getDraft(sessionId));
-  const [suggestions, setSuggestions] = useState<typeof SKILLS>([]);
+  const [suggestions, setSuggestions] = useState<Skill[]>([]);
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [showHistory, setShowHistory] = useState(false);
   const [previewActive, setPreviewActive] = useState(false);
@@ -252,7 +254,7 @@ export function InputArea({ sessionId, disabled, placeholder, onSend, isRunning,
       setTextAndDraft(value);
       if (value.startsWith("/")) {
         const query = value.slice(1).toLowerCase();
-        const filtered = SKILLS.filter((s) => s.id.includes(query));
+        const filtered = skills.filter((s) => s.id.includes(query));
         setSuggestions(filtered);
         setSelectedIndex(0);
         setShowHistory(false);
@@ -260,7 +262,7 @@ export function InputArea({ sessionId, disabled, placeholder, onSend, isRunning,
         closeSuggestions();
       }
     },
-    [closeSuggestions, setTextAndDraft],
+    [closeSuggestions, setTextAndDraft, skills],
   );
 
   const handleHistorySelect = useCallback(
