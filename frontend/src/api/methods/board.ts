@@ -36,6 +36,9 @@ export function createBoardApi(client: RpcClient) {
     attachSession: (ticketId: string, sessionId: string) =>
       client.request<MetaTicket>("board/attachSession", { ticketId, sessionId }),
 
+    detachSession: (ticketId: string, sessionId: string) =>
+      client.request<MetaTicket>("board/detachSession", { ticketId, sessionId }),
+
     setPlanPath: (ticketId: string, planPath: string) =>
       client.request<MetaTicket>("board/setPlanPath", { ticketId, planPath }),
 

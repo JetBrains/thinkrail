@@ -17,6 +17,9 @@ import { useNotificationStore } from "./notificationStore.ts";
 import { useBoardStore } from "./boardStore.ts";
 import { useFileStore } from "./fileStore.ts";
 import { getErrorMessage } from "@/utils/errors.ts";
+import { useSpecStore } from "./specStore.ts";
+import { useSettingsStore } from "./settingsStore.ts";
+import { findStaleSpecIds, isSkillValid } from "@/utils/staleRefs.ts";
 
 interface SessionStore {
   sessions: Map<string, Session>;
@@ -76,6 +79,10 @@ interface SessionStore {
   openTab: (bonsaiSid: string) => void;
   /** Ticket-aware focus: opens tab, navigates to ticket if linked, clears conflicting state */
   focusSession: (bonsaiSid: string) => void;
+  /** Check if a session references specs or skills that no longer exist */
+  getStaleSessionRefs: (bonsaiSid: string) => { staleSpecIds: string[]; staleSkillId: boolean } | null;
+  /** Remove stale spec/skill references from a draft session */
+  fixStaleSessionRefs: (bonsaiSid: string) => Promise<void>;
   interruptSession: (bonsaiSid: string) => Promise<void>;
   resolveRequest: (
     bonsaiSid: string,
@@ -1271,6 +1278,47 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
       tabs.add(bonsaiSid);
       return { openTabs: tabs, activeSessionId: bonsaiSid };
     });
+  },
+
+  getStaleSessionRefs: (bonsaiSid) => {
+    const session = get().sessions.get(bonsaiSid);
+    if (!session) return null;
+
+    const specs = useSpecStore.getState().specs;
+    const staleSpecIds = findStaleSpecIds(session.specIds, specs);
+    const skills = useSettingsStore.getState().skills;
+    const staleSkillId = !isSkillValid(session.skillId, skills);
+
+    if (staleSpecIds.length === 0 && !staleSkillId) return null;
+    return { staleSpecIds, staleSkillId };
+  },
+
+  fixStaleSessionRefs: async (bonsaiSid) => {
+    const session = get().sessions.get(bonsaiSid);
+    if (!session) return;
+
+    const stale = get().getStaleSessionRefs(bonsaiSid);
+    if (!stale) return;
+
+    const changes: { specIds?: string[]; filePaths?: string[]; skillId?: string | null; config?: AgentConfig; prompt?: string | null; name?: string; metaTicketId?: string | null } = {};
+    if (stale.staleSpecIds.length > 0) {
+      changes.specIds = session.specIds.filter((id) => !stale.staleSpecIds.includes(id));
+    }
+    if (stale.staleSkillId) {
+      changes.skillId = null;
+    }
+
+    if (session.status === "draft") {
+      await get().updateDraft(bonsaiSid, changes);
+    } else {
+      // For non-draft sessions, update locally only (display fix)
+      const sessions = new Map(get().sessions);
+      const updated = { ...session };
+      if (changes.specIds) updated.specIds = changes.specIds;
+      if (changes.skillId === null) updated.skillId = null;
+      sessions.set(bonsaiSid, updated);
+      set({ sessions });
+    }
   },
 
   interruptSession: async (bonsaiSid) => {

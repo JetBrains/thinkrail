@@ -1,6 +1,6 @@
 import { useState, useCallback, useRef, useEffect } from "react";
-import { SKILLS } from "@/constants/skills.ts";
 import { useSpecStore } from "@/store/specStore.ts";
+import { useSettingsStore } from "@/store/settingsStore.ts";
 import { useSessionStore } from "@/store/sessionStore.ts";
 import { useBoardStore } from "@/store/boardStore.ts";
 import { getModels, getModelDef } from "@/utils/models.ts";
@@ -9,6 +9,7 @@ import { SpecSelector } from "@/components/shared/SpecSelector.tsx";
 import { TicketSelector } from "@/components/shared/TicketSelector.tsx";
 import { FileSelector } from "@/components/shared/FileSelector.tsx";
 import { PromptPreview } from "./PromptPreview.tsx";
+import { StaleRefsBanner } from "@/components/shared/StaleRefsBanner.tsx";
 import "./DraftConfigCard.css";
 
 const TURN_OPTIONS = [5, 10, 20, 50, 100];
@@ -24,8 +25,11 @@ export function DraftConfigCard({ bonsaiSid, readOnly, onVisibilityChange }: Dra
   const updateDraft = useSessionStore((s) => s.updateDraft);
   const startDraft = useSessionStore((s) => s.startDraft);
   const deleteSession = useSessionStore((s) => s.deleteSession);
+  const getStaleSessionRefs = useSessionStore((s) => s.getStaleSessionRefs);
+  const fixStaleSessionRefs = useSessionStore((s) => s.fixStaleSessionRefs);
   const specs = useSpecStore((s) => s.specs);
   const tickets = useBoardStore((s) => s.tickets);
+  const skills = useSettingsStore((s) => s.skills);
 
   const [editName, setEditName] = useState("");
   const [skillPickerOpen, setSkillPickerOpen] = useState(false);
@@ -114,7 +118,18 @@ export function DraftConfigCard({ bonsaiSid, readOnly, onVisibilityChange }: Dra
   if (!session) return null;
   if (!readOnly && session.status !== "draft") return null;
 
-  const skill = session.skillId ? SKILLS.find((s) => s.id === session.skillId) : null;
+  const skill = session.skillId ? skills.find((s) => s.id === session.skillId) : null;
+  const staleRefs = getStaleSessionRefs(bonsaiSid);
+  const staleMessage = staleRefs
+    ? [
+        staleRefs.staleSpecIds.length > 0
+          ? `${staleRefs.staleSpecIds.length} spec${staleRefs.staleSpecIds.length !== 1 ? "s" : ""} no longer exist${staleRefs.staleSpecIds.length !== 1 ? "" : "s"}`
+          : null,
+        staleRefs.staleSkillId ? "skill no longer exists" : null,
+      ]
+        .filter(Boolean)
+        .join("; ")
+    : null;
   const selectedSpecs = session.specIds
     .map((id) => specs.find((s) => s.id === id))
     .filter(Boolean);
@@ -137,6 +152,10 @@ export function DraftConfigCard({ bonsaiSid, readOnly, onVisibilityChange }: Dra
         <div className="draft-config-header">
           <span className="draft-config-name">{session.name}</span>
         </div>
+
+        {staleMessage && (
+          <StaleRefsBanner message={staleMessage} onFix={() => fixStaleSessionRefs(bonsaiSid)} />
+        )}
 
         {/* Skill */}
         <div className="draft-config-row">
@@ -248,6 +267,10 @@ export function DraftConfigCard({ bonsaiSid, readOnly, onVisibilityChange }: Dra
         <span className="draft-config-badge">draft</span>
         {updating && <span className="draft-config-updating">updating...</span>}
       </div>
+
+      {staleMessage && (
+        <StaleRefsBanner message={staleMessage} onFix={() => fixStaleSessionRefs(bonsaiSid)} />
+      )}
 
       {/* Skill Row */}
       <div className="draft-config-row" ref={skillPickerRef}>

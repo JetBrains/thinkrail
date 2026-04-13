@@ -1,0 +1,30 @@
+.stale-refs-banner {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  padding: var(--space-sm) var(--space-md);
+  background: color-mix(in srgb, var(--gold) 12%, transparent);
+  border: 1px solid color-mix(in srgb, var(--gold) 30%, transparent);
+  border-radius: var(--radius-md);
+  font-size: var(--font-md);
+  color: var(--gold);
+}
+
+.stale-refs-banner-text {
+  flex: 1;
+}
+
+.stale-refs-banner-action {
+  background: none;
+  border: none;
+  color: var(--gold);
+  cursor: pointer;
+  font-family: inherit;
+  font-size: var(--font-md);
+  text-decoration: underline;
+  padding: 0;
+}
+
+.stale-refs-banner-action:hover {
+  color: var(--text);
+}

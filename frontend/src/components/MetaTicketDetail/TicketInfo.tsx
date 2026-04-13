@@ -4,6 +4,7 @@ import type { RightPanelContent } from "./MetaTicketDetail.tsx";
 import { useSpecStore } from "@/store/specStore.ts";
 import { useBoardStore } from "@/store/boardStore.ts";
 import { useSessionStore } from "@/store/sessionStore.ts";
+import { StaleRefsBanner } from "@/components/shared/StaleRefsBanner.tsx";
 import { getClient } from "@/api/index.ts";
 import { createSessionApi } from "@/api/methods/sessions.ts";
 import { timeAgo } from "@/utils/format.ts";
@@ -54,6 +55,9 @@ export function TicketInfo({ ticket, plan, onTicketUpdated, rightPanel, onSelect
   const archivedSessions = useSessionStore((s) => s.archivedSessions);
   const restoreSession = useSessionStore((s) => s.restoreSession);
   const specs = useSpecStore((s) => s.specs);
+  const getStaleTicketRefs = useBoardStore((s) => s.getStaleTicketRefs);
+  const fixStaleTicketRefs = useBoardStore((s) => s.fixStaleTicketRefs);
+  const staleRefs = getStaleTicketRefs(ticket.id);
   const [descHeight, setDescHeight] = useState(140);
 
   // Fetch session names from backend so we always show names, even before sessions are restored
@@ -219,6 +223,13 @@ export function TicketInfo({ ticket, plan, onTicketUpdated, rightPanel, onSelect
         <div className="ticket-section-header">
           <span className="ticket-section-title">Specifications</span>
         </div>
+        {staleRefs && staleRefs.staleSpecIds.length > 0 && (
+          <StaleRefsBanner
+            message={`${staleRefs.staleSpecIds.length} linked spec${staleRefs.staleSpecIds.length !== 1 ? "s" : ""} no longer exist${staleRefs.staleSpecIds.length !== 1 ? "" : "s"}`}
+            onFix={() => fixStaleTicketRefs(ticket.id)}
+            actionLabel="Remove stale links"
+          />
+        )}
         <div className="ticket-linked-list">
           {linkedSpecs.length === 0 ? (
             <div className="ticket-linked-empty">No specs linked yet.</div>
@@ -300,6 +311,13 @@ export function TicketInfo({ ticket, plan, onTicketUpdated, rightPanel, onSelect
         <div className="ticket-section-header">
           <span className="ticket-section-title">Sessions</span>
         </div>
+        {staleRefs && staleRefs.staleSessionIds.length > 0 && (
+          <StaleRefsBanner
+            message={`${staleRefs.staleSessionIds.length} session${staleRefs.staleSessionIds.length !== 1 ? "s" : ""} no longer exist${staleRefs.staleSessionIds.length !== 1 ? "" : "s"}`}
+            onFix={() => fixStaleTicketRefs(ticket.id)}
+            actionLabel="Remove stale links"
+          />
+        )}
         <div className="ticket-linked-list">
           {(() => {
             const embeddedSid = rightPanel.type === "session" ? rightPanel.sessionId : null;

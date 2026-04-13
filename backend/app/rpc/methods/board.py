@@ -100,6 +100,12 @@ async def attach_session(service: BoardService, **params: Any) -> dict:
 
 
 @_handle_errors
+async def detach_session(service: BoardService, **params: Any) -> dict:
+    ticket = service.detach_session(params["ticketId"], params["sessionId"])
+    return ticket.model_dump(by_alias=True)
+
+
+@_handle_errors
 async def set_plan_path(service: BoardService, **params: Any) -> dict:
     ticket = service.set_plan_path(params["ticketId"], params["planPath"])
     return ticket.model_dump(by_alias=True)

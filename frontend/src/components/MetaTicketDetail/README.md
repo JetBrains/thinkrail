@@ -237,6 +237,7 @@ The execute session name starts with `"Execute:"` which triggers auto-detection 
 - ~~No milestone grouping in TicketPlanView~~ **Resolved:** TicketPlanView now renders milestones with headers and nested steps.
 - ~~No plan editing~~ **Resolved:** TicketPlanView has three tabs (View/Steps/Raw) for viewing and editing plans. Steps tab provides structured form editing; Raw tab uses MarkdownEditor for direct markdown access.
 - **Description edit is basic:** Plain textarea, no Markdown preview or rich text editing.
+- **Stale reference validation:** TicketInfo now shows `StaleRefsBanner` warnings when `linkedSpecIds` or `sessionIds` reference deleted items. Cleanup is available via `fixStaleTicketRefs()` in boardStore.
 
 ## Related Specs
 

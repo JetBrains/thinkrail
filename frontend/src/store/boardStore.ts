@@ -7,6 +7,9 @@ import type {
 } from "@/types/board.ts";
 import { getClient } from "@/api/index.ts";
 import { createBoardApi } from "@/api/methods/board.ts";
+import { useSpecStore } from "./specStore.ts";
+import { useSessionStore } from "./sessionStore.ts";
+import { findStaleSpecIds, findStaleSessionIds } from "@/utils/staleRefs.ts";
 
 interface BoardStore {
   tickets: Map<string, MetaTicketSummary>;
@@ -47,6 +50,10 @@ interface BoardStore {
   handleDidChange: (ticket: MetaTicketSummary) => void;
   handleDidCreate: (ticket: MetaTicketSummary) => void;
   handleDidDelete: (id: string) => void;
+  /** Check if a ticket references specs or sessions that no longer exist */
+  getStaleTicketRefs: (ticketId: string) => { staleSpecIds: string[]; staleSessionIds: string[] } | null;
+  /** Remove stale spec/session references from a ticket */
+  fixStaleTicketRefs: (ticketId: string) => Promise<void>;
 }
 
 export const useBoardStore = create<BoardStore>((set, get) => ({
@@ -150,4 +157,47 @@ export const useBoardStore = create<BoardStore>((set, get) => ({
       const activeTicketId = s.activeTicketId === id ? null : s.activeTicketId;
       return { tickets, openTicketIds, activeTicketId };
     }),
+
+  getStaleTicketRefs: (ticketId) => {
+    const ticket = get().tickets.get(ticketId);
+    if (!ticket) return null;
+
+    const specs = useSpecStore.getState().specs;
+    const staleSpecIds = findStaleSpecIds(ticket.linkedSpecIds, specs);
+
+    const sessionState = useSessionStore.getState();
+    const liveSids = new Set<string>();
+    for (const [sid] of sessionState.sessions) liveSids.add(sid);
+    for (const a of sessionState.archivedSessions) liveSids.add(a.bonsaiSid);
+    const staleSessionIds = findStaleSessionIds(ticket.sessionIds, liveSids);
+
+    if (staleSpecIds.length === 0 && staleSessionIds.length === 0) return null;
+    return { staleSpecIds, staleSessionIds };
+  },
+
+  fixStaleTicketRefs: async (ticketId) => {
+    const ticket = get().tickets.get(ticketId);
+    if (!ticket) return;
+
+    const stale = get().getStaleTicketRefs(ticketId);
+    if (!stale) return;
+
+    // Update locally first for immediate UI feedback
+    const tickets = new Map(get().tickets);
+    const updated = { ...ticket };
+    if (stale.staleSpecIds.length > 0) {
+      updated.linkedSpecIds = ticket.linkedSpecIds.filter((id) => !stale.staleSpecIds.includes(id));
+    }
+    if (stale.staleSessionIds.length > 0) {
+      updated.sessionIds = ticket.sessionIds.filter((id) => !stale.staleSessionIds.includes(id));
+    }
+    tickets.set(ticketId, updated);
+    set({ tickets });
+
+    const api = createBoardApi(getClient());
+    await Promise.allSettled([
+      ...stale.staleSpecIds.map((id) => api.unlinkSpec(ticketId, id)),
+      ...stale.staleSessionIds.map((id) => api.detachSession(ticketId, id)),
+    ]);
+  },
 }));
