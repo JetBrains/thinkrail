@@ -15,6 +15,9 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
+from app.core.config import get_data_dir
+from app.core.server_store import ServerStore
+from app.rpc.auth import authenticate_rest, UserIdentity
 from app.rpc.server import register_routes
 
 
@@ -91,8 +94,14 @@ def create_app() -> FastAPI:
     """Create and configure the Bonsai FastAPI application."""
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s — %(message)s")
 
+    # Server-wide store — shared across the entire app lifetime
+    server_store = ServerStore(get_data_dir())
+
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncIterator[None]:
+        # Open the server-wide SQLite store
+        await server_store.open()
+
         # Auto-purge: run once on startup, then hourly in the background
         purge_task: asyncio.Task[None] | None = None
 
@@ -119,6 +128,7 @@ def create_app() -> FastAPI:
         finally:
             if purge_task:
                 purge_task.cancel()
+            await server_store.close()
 
     app = FastAPI(title="Bonsai", lifespan=lifespan)
 
@@ -131,7 +141,74 @@ def create_app() -> FastAPI:
     )
 
     # Register WebSocket endpoint (per-connection project scoping)
-    register_routes(app)
+    register_routes(app, server_store=server_store)
+
+    # ── Helper: resolve token from REST request ──
+
+    async def _resolve_user(token: str | None) -> UserIdentity | None:
+        return await authenticate_rest(server_store, token)
+
+    # ── REST: User profile & preferences (pre-WebSocket) ──
+
+    @app.get("/api/user/profile")
+    async def get_user_profile(token: str = Query(...)):
+        identity = await _resolve_user(token)
+        if identity is None:
+            from fastapi.responses import JSONResponse
+            return JSONResponse(status_code=401, content={"error": "Invalid token"})
+        user = await server_store.get_user(identity.user_id)
+        return {
+            "userId": user.id if user else identity.user_id,
+            "displayName": user.display_name if user else identity.display_name,
+            "createdAt": user.created_at if user else None,
+        }
+
+    @app.get("/api/user/preferences")
+    async def get_user_preferences(token: str = Query(...)):
+        identity = await _resolve_user(token)
+        if identity is None:
+            from fastapi.responses import JSONResponse
+            return JSONResponse(status_code=401, content={"error": "Invalid token"})
+        prefs = await server_store.get_preferences(identity.user_id)
+        return prefs
+
+    @app.put("/api/user/preferences")
+    async def update_user_preferences(token: str = Query(...), patch: dict = {}):
+        identity = await _resolve_user(token)
+        if identity is None:
+            from fastapi.responses import JSONResponse
+            return JSONResponse(status_code=401, content={"error": "Invalid token"})
+        result = await server_store.update_preferences(identity.user_id, patch)
+        return result
+
+    @app.get("/api/user/recent-projects")
+    async def get_user_recent_projects(token: str = Query(...), limit: int = Query(default=10)):
+        identity = await _resolve_user(token)
+        if identity is None:
+            from fastapi.responses import JSONResponse
+            return JSONResponse(status_code=401, content={"error": "Invalid token"})
+        recents = await server_store.get_recent_projects(identity.user_id, limit=limit)
+        return [
+            {"path": r.project_path, "name": r.name, "lastOpened": r.last_opened}
+            for r in recents
+        ]
+
+    @app.get("/api/projects/known")
+    async def get_known_projects(token: str = Query(...)):
+        identity = await _resolve_user(token)
+        if identity is None:
+            from fastapi.responses import JSONResponse
+            return JSONResponse(status_code=401, content={"error": "Invalid token"})
+        projects = await server_store.list_projects()
+        return [
+            {
+                "path": p.path,
+                "name": p.name,
+                "registeredAt": p.registered_at,
+                "lastOpenedAt": p.last_opened_at,
+            }
+            for p in projects
+        ]
 
     # ── REST: Health check ──
 

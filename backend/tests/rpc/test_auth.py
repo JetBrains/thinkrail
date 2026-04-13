@@ -1,4 +1,4 @@
-"""Tests for token-based authentication."""
+"""Tests for token-based authentication (server-wide + per-project fallback)."""
 
 from __future__ import annotations
 
@@ -7,13 +7,13 @@ from pathlib import Path
 
 import pytest
 
+from app.core.server_store import ServerStore
 from app.rpc.auth import (
-    ANONYMOUS,
     UserIdentity,
     authenticate,
+    authenticate_rest,
     generate_token,
-    load_users,
-    save_user,
+    _load_project_users,
 )
 
 
@@ -21,6 +21,14 @@ def _write_users(tmp_path: Path, data: dict) -> None:
     bonsai = tmp_path / ".bonsai"
     bonsai.mkdir(exist_ok=True)
     (bonsai / "users.json").write_text(json.dumps(data), encoding="utf-8")
+
+
+@pytest.fixture
+async def store(tmp_path: Path):
+    s = ServerStore(tmp_path / "server")
+    await s.open()
+    yield s
+    await s.close()
 
 
 class TestGenerateToken:
@@ -38,11 +46,10 @@ class TestGenerateToken:
         assert len(tokens) == 100
 
 
-class TestLoadUsers:
-    def test_no_file_creates_default_and_returns_empty_allow_anon(self, tmp_path: Path) -> None:
-        token_map, allow_anon = load_users(tmp_path)
+class TestLoadProjectUsers:
+    def test_no_file_creates_default_and_returns_empty(self, tmp_path: Path) -> None:
+        token_map = _load_project_users(tmp_path)
         assert token_map == {}
-        assert allow_anon is True
         assert (tmp_path / ".bonsai" / "users.json").is_file()
 
     def test_loads_users(self, tmp_path: Path) -> None:
@@ -51,19 +58,11 @@ class TestLoadUsers:
                 {"id": "alice", "name": "Alice", "token": "bns_aaa"},
                 {"id": "bob", "name": "Bob", "token": "bns_bbb"},
             ],
-            "allowAnonymous": False,
         })
-        token_map, allow_anon = load_users(tmp_path)
+        token_map = _load_project_users(tmp_path)
         assert len(token_map) == 2
         assert token_map["bns_aaa"].user_id == "alice"
         assert token_map["bns_aaa"].display_name == "Alice"
-        assert token_map["bns_bbb"].user_id == "bob"
-        assert allow_anon is False
-
-    def test_defaults_allow_anonymous_true(self, tmp_path: Path) -> None:
-        _write_users(tmp_path, {"users": []})
-        _, allow_anon = load_users(tmp_path)
-        assert allow_anon is True
 
     def test_skips_entries_without_token_or_id(self, tmp_path: Path) -> None:
         _write_users(tmp_path, {
@@ -73,7 +72,7 @@ class TestLoadUsers:
                 {"id": "notoken", "name": "NoToken", "token": ""},
             ],
         })
-        token_map, _ = load_users(tmp_path)
+        token_map = _load_project_users(tmp_path)
         assert len(token_map) == 1
         assert "bns_v" in token_map
 
@@ -81,88 +80,75 @@ class TestLoadUsers:
         bonsai = tmp_path / ".bonsai"
         bonsai.mkdir()
         (bonsai / "users.json").write_text("not json", encoding="utf-8")
-        token_map, allow_anon = load_users(tmp_path)
+        token_map = _load_project_users(tmp_path)
         assert token_map == {}
-        assert allow_anon is True
 
 
 class TestAuthenticate:
-    def test_valid_token(self, tmp_path: Path) -> None:
-        _write_users(tmp_path, {
-            "users": [{"id": "danya", "name": "Danya", "token": "bns_secret"}],
-        })
-        identity = authenticate(tmp_path, "bns_secret")
+    async def test_server_wide_token(self, store: ServerStore, tmp_path: Path) -> None:
+        await store.create_user("danya", "Danya")
+        token = await store.create_token("danya")
+        identity = await authenticate(store, tmp_path, token)
         assert identity is not None
         assert identity.user_id == "danya"
         assert identity.display_name == "Danya"
 
-    def test_invalid_token_rejected(self, tmp_path: Path) -> None:
-        _write_users(tmp_path, {
-            "users": [{"id": "danya", "name": "Danya", "token": "bns_secret"}],
-        })
-        identity = authenticate(tmp_path, "bns_wrong")
+    async def test_invalid_token_rejected(self, store: ServerStore, tmp_path: Path) -> None:
+        identity = await authenticate(store, tmp_path, "bns_wrong")
         assert identity is None
 
-    def test_no_token_anonymous_allowed(self, tmp_path: Path) -> None:
-        _write_users(tmp_path, {"users": [], "allowAnonymous": True})
-        identity = authenticate(tmp_path, None)
-        assert identity is ANONYMOUS
-        assert identity.user_id == "anonymous"
-
-    def test_no_token_anonymous_disallowed(self, tmp_path: Path) -> None:
-        _write_users(tmp_path, {"users": [], "allowAnonymous": False})
-        identity = authenticate(tmp_path, None)
+    async def test_no_token_rejected(self, store: ServerStore, tmp_path: Path) -> None:
+        identity = await authenticate(store, tmp_path, None)
         assert identity is None
 
-    def test_no_users_file_allows_anonymous(self, tmp_path: Path) -> None:
-        identity = authenticate(tmp_path, None)
-        assert identity is ANONYMOUS
-
-    def test_no_users_file_rejects_token(self, tmp_path: Path) -> None:
-        # No users.json → empty token_map → token not found → rejected
-        identity = authenticate(tmp_path, "bns_whatever")
+    async def test_empty_token_rejected(self, store: ServerStore, tmp_path: Path) -> None:
+        identity = await authenticate(store, tmp_path, "")
         assert identity is None
 
-
-class TestSaveUser:
-    def test_creates_file(self, tmp_path: Path) -> None:
-        (tmp_path / ".bonsai").mkdir()
-        token = save_user(tmp_path, "alice", "Alice")
-        assert token.startswith("bns_")
-
-        data = json.loads((tmp_path / ".bonsai" / "users.json").read_text())
-        assert len(data["users"]) == 1
-        assert data["users"][0]["id"] == "alice"
-        assert data["users"][0]["token"] == token
-
-    def test_updates_existing_user(self, tmp_path: Path) -> None:
+    async def test_per_project_fallback_and_migration(self, store: ServerStore, tmp_path: Path) -> None:
+        """Token in project users.json should work and be migrated to server store."""
         _write_users(tmp_path, {
-            "users": [{"id": "alice", "name": "Alice", "token": "bns_old"}],
+            "users": [{"id": "alice", "name": "Alice", "token": "bns_projecttoken"}],
         })
-        token = save_user(tmp_path, "alice", "Alice Updated")
+        # Token not in server store yet
+        assert await store.resolve_token("bns_projecttoken") is None
 
-        data = json.loads((tmp_path / ".bonsai" / "users.json").read_text())
-        assert len(data["users"]) == 1
-        assert data["users"][0]["name"] == "Alice Updated"
-        assert data["users"][0]["token"] == token
+        identity = await authenticate(store, tmp_path, "bns_projecttoken")
+        assert identity is not None
+        assert identity.user_id == "alice"
 
-    def test_adds_to_existing_users(self, tmp_path: Path) -> None:
+        # Token should now be migrated to server store
+        assert await store.resolve_token("bns_projecttoken") == "alice"
+        user = await store.get_user("alice")
+        assert user is not None
+        assert user.display_name == "Alice"
+
+    async def test_server_token_takes_priority(self, store: ServerStore, tmp_path: Path) -> None:
+        """Server-wide token should resolve before checking project users.json."""
+        await store.create_user("server_alice", "Server Alice")
+        await store.register_token("bns_shared", "server_alice")
+
         _write_users(tmp_path, {
-            "users": [{"id": "alice", "name": "Alice", "token": "bns_aaa"}],
+            "users": [{"id": "project_alice", "name": "Project Alice", "token": "bns_shared"}],
         })
-        save_user(tmp_path, "bob", "Bob")
 
-        data = json.loads((tmp_path / ".bonsai" / "users.json").read_text())
-        assert len(data["users"]) == 2
+        identity = await authenticate(store, tmp_path, "bns_shared")
+        assert identity is not None
+        assert identity.user_id == "server_alice"  # server wins
 
-    def test_preserves_allow_anonymous(self, tmp_path: Path) -> None:
-        _write_users(tmp_path, {"users": [], "allowAnonymous": False})
-        save_user(tmp_path, "alice", "Alice")
 
-        data = json.loads((tmp_path / ".bonsai" / "users.json").read_text())
-        assert data["allowAnonymous"] is False
+class TestAuthenticateRest:
+    async def test_valid_token(self, store: ServerStore) -> None:
+        await store.create_user("bob", "Bob")
+        token = await store.create_token("bob")
+        identity = await authenticate_rest(store, token)
+        assert identity is not None
+        assert identity.user_id == "bob"
 
-    def test_custom_token(self, tmp_path: Path) -> None:
-        (tmp_path / ".bonsai").mkdir()
-        token = save_user(tmp_path, "alice", "Alice", token="bns_custom123")
-        assert token == "bns_custom123"
+    async def test_invalid_token(self, store: ServerStore) -> None:
+        identity = await authenticate_rest(store, "bns_invalid")
+        assert identity is None
+
+    async def test_no_token(self, store: ServerStore) -> None:
+        identity = await authenticate_rest(store, None)
+        assert identity is None

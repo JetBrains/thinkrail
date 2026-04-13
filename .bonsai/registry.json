@@ -2445,6 +2445,147 @@
       ],
       "created": "2026-04-09",
       "updated": "2026-04-09"
+    },
+    {
+      "id": "storage-architecture",
+      "type": "architecture-design",
+      "path": "docs/STORAGE_ARCHITECTURE.md",
+      "title": "Backend Storage Architecture",
+      "status": "active",
+      "covers": [
+        "backend/app/core/server_store.py",
+        "backend/app/rpc/auth.py"
+      ],
+      "tags": [
+        "architecture",
+        "storage",
+        "sqlite",
+        "auth"
+      ],
+      "created": "2026-04-14",
+      "updated": "2026-04-14"
+    },
+    {
+      "id": "module-server-store",
+      "type": "module-design",
+      "path": "backend/app/core/SERVER_STORE.md",
+      "title": "Server Store Module Design",
+      "status": "active",
+      "covers": [
+        "backend/app/core/server_store.py"
+      ],
+      "tags": [
+        "backend",
+        "storage",
+        "sqlite"
+      ],
+      "created": "2026-04-14",
+      "updated": "2026-04-14"
+    },
+    {
+      "id": "module-auth-migration",
+      "type": "module-design",
+      "path": "backend/app/rpc/AUTH_MIGRATION.md",
+      "title": "Server-Wide Auth Migration",
+      "status": "active",
+      "covers": [
+        "backend/app/rpc/auth.py"
+      ],
+      "tags": [
+        "backend",
+        "auth",
+        "migration"
+      ],
+      "created": "2026-04-14",
+      "updated": "2026-04-14"
+    },
+    {
+      "id": "module-user-api",
+      "type": "module-design",
+      "path": "backend/app/rpc/methods/USER_API.md",
+      "title": "User Preferences API",
+      "status": "active",
+      "covers": [
+        "backend/app/rpc/methods/user.py",
+        "frontend/src/api/methods/user.ts"
+      ],
+      "tags": [
+        "backend",
+        "frontend",
+        "api",
+        "preferences"
+      ],
+      "created": "2026-04-14",
+      "updated": "2026-04-14"
+    },
+    {
+      "id": "feature_login_screen",
+      "type": "task-spec",
+      "path": "current_tasks/frontend/feature_login_screen.md",
+      "title": "Implement Frontend Auth & Login Screen",
+      "status": "active",
+      "covers": [
+        "frontend/src/components/LoginScreen/"
+      ],
+      "tags": [
+        "frontend",
+        "auth",
+        "critical"
+      ],
+      "created": "2026-04-14",
+      "updated": "2026-04-14"
+    },
+    {
+      "id": "feature_preferences_sync",
+      "type": "task-spec",
+      "path": "current_tasks/frontend/feature_preferences_sync.md",
+      "title": "Implement Frontend Preferences Sync",
+      "status": "active",
+      "covers": [
+        "frontend/src/store/",
+        "frontend/src/components/ProjectPicker/"
+      ],
+      "tags": [
+        "frontend",
+        "preferences",
+        "high-priority"
+      ],
+      "created": "2026-04-14",
+      "updated": "2026-04-14"
+    },
+    {
+      "id": "feature_mobile_login",
+      "type": "task-spec",
+      "path": "current_tasks/mobile/feature_mobile_login.md",
+      "title": "Implement Mobile Auth & Login Screen",
+      "status": "active",
+      "covers": [
+        "mobile/shared/"
+      ],
+      "tags": [
+        "mobile",
+        "auth",
+        "critical"
+      ],
+      "created": "2026-04-14",
+      "updated": "2026-04-14"
+    },
+    {
+      "id": "feature_mobile_preferences_sync",
+      "type": "task-spec",
+      "path": "current_tasks/mobile/feature_mobile_preferences_sync.md",
+      "title": "Implement Mobile Preferences Sync",
+      "status": "active",
+      "covers": [
+        "mobile/shared/"
+      ],
+      "tags": [
+        "mobile",
+        "preferences",
+        "high-priority"
+      ],
+      "created": "2026-04-14",
+      "updated": "2026-04-14"
     }
   ],
   "links": [
@@ -3831,6 +3972,61 @@
     {
       "from": "module-packaging",
       "to": "module-core",
+      "type": "depends-on"
+    },
+    {
+      "from": "storage-architecture",
+      "to": "design-doc",
+      "type": "parent"
+    },
+    {
+      "from": "module-server-store",
+      "to": "storage-architecture",
+      "type": "parent"
+    },
+    {
+      "from": "module-auth-migration",
+      "to": "storage-architecture",
+      "type": "parent"
+    },
+    {
+      "from": "module-user-api",
+      "to": "storage-architecture",
+      "type": "parent"
+    },
+    {
+      "from": "feature_login_screen",
+      "to": "module-auth-migration",
+      "type": "depends-on"
+    },
+    {
+      "from": "feature_login_screen",
+      "to": "module-user-api",
+      "type": "depends-on"
+    },
+    {
+      "from": "feature_preferences_sync",
+      "to": "module-user-api",
+      "type": "depends-on"
+    },
+    {
+      "from": "feature_preferences_sync",
+      "to": "feature_login_screen",
+      "type": "depends-on"
+    },
+    {
+      "from": "feature_mobile_login",
+      "to": "module-auth-migration",
+      "type": "depends-on"
+    },
+    {
+      "from": "feature_mobile_login",
+      "to": "module-user-api",
+      "type": "depends-on"
+    },
+    {
+      "from": "feature_mobile_preferences_sync",
+      "to": "feature_mobile_login",
       "type": "depends-on"
     }
   ]

@@ -11,7 +11,7 @@ from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from jsonrpcserver import async_dispatch
 from watchfiles import Change
 
-from app.rpc.auth import authenticate, ANONYMOUS
+from app.rpc.auth import authenticate
 from app.rpc.bus import bus
 from app.rpc.connections import ClientConnection, current_conn_id
 from app.rpc.notifications import make_notify
@@ -66,6 +66,12 @@ from app.rpc.methods.settings import (
 )
 from app.agent.model_registry import ModelRegistry
 from app.rpc.methods.auth import create_token, list_connections, list_users
+from app.rpc.methods.user import (
+    get_preferences,
+    get_profile,
+    get_recent_projects,
+    update_preferences,
+)
 from app.rpc.methods.vis import get_vis_state, recompute_vis
 from app.rpc.methods.board import (
     apply_all_drafts,
@@ -181,6 +187,10 @@ METHODS = {
     "auth/createToken": create_token,
     "auth/listUsers": list_users,
     "connection/list": list_connections,
+    "user/getProfile": get_profile,
+    "user/getPreferences": get_preferences,
+    "user/updatePreferences": update_preferences,
+    "user/getRecentProjects": get_recent_projects,
 }
 
 # Per-project service caches (survive WebSocket reconnects).
@@ -202,6 +212,7 @@ def _bind_methods(
     board_service: BoardService,
     model_registry: ModelRegistry,
     trash_service: "TrashService | None" = None,
+    server_store: "ServerStore | None" = None,
 ) -> dict:
     """Bind each handler in METHODS to its owning service via partial."""
     bound = {}
@@ -221,21 +232,38 @@ def _bind_methods(
         elif name.startswith("models/"):
             bound[name] = partial(handler, model_registry)
         elif name.startswith("auth/") or name.startswith("connection/"):
-            bound[name] = partial(handler, config)
+            bound[name] = partial(handler, server_store)
+        elif name.startswith("user/") and server_store:
+            bound[name] = partial(handler, server_store)
         else:
             bound[name] = partial(handler, agent_service)
     return bound
 
 
-def register_routes(app: FastAPI) -> None:
+def register_routes(app: FastAPI, server_store: "ServerStore | None" = None) -> None:
     """Register the ``/ws`` WebSocket endpoint on the FastAPI app.
 
     Each connection specifies a project directory via the ``project``
     query parameter.  Multiple connections are supported simultaneously.
+
+    *server_store* is the server-wide SQLite store for auth and user
+    data.  When ``None`` (tests / legacy), a temporary in-memory store
+    is created.
     """
+    from app.core.server_store import ServerStore as _SS
+
+    _server_store = server_store
 
     @app.websocket("/ws")
     async def ws_endpoint(websocket: WebSocket) -> None:
+        nonlocal _server_store
+        # Lazy-init for test scenarios where no store was provided
+        if _server_store is None:
+            _server_store = _SS(Path.home() / ".bonsai")
+        # Ensure the store is open (idempotent if already open)
+        if _server_store._conn is None:
+            await _server_store.open()
+
         # Read project path from query params
         project_param = websocket.query_params.get("project")
         if not project_param:
@@ -252,15 +280,25 @@ def register_routes(app: FastAPI) -> None:
             )
             return
 
-        # Authenticate via token (Phase 2)
+        # Authenticate via token (two-tier: server-wide SQLite + project fallback)
         token_param = websocket.query_params.get("token")
-        identity = authenticate(project_path, token_param)
+        identity = await authenticate(_server_store, project_path, token_param)
         if identity is None:
             await websocket.close(
                 code=4003,
                 reason="Invalid or missing authentication token",
             )
             return
+
+        # Register project in server-wide store and track user's recent projects
+        project_name = project_path.name
+        try:
+            await _server_store.register_project(str(project_path), project_name)
+            await _server_store.update_project_last_opened(str(project_path))
+            if identity.user_id != "anonymous":
+                await _server_store.add_recent_project(identity.user_id, str(project_path))
+        except Exception:
+            logger.warning("Failed to update server store on connect", exc_info=True)
 
         # Build per-connection config and services
         config = load_config(project_root=project_path)
@@ -316,6 +354,7 @@ def register_routes(app: FastAPI) -> None:
         bound_methods = _bind_methods(
             config, spec_service, agent_service, vis_service,
             board_service, model_registry, trash_service,
+            server_store=_server_store,
         )
 
         await websocket.accept()

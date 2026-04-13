@@ -1,26 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { userRestApi, type RecentProject } from "@/api/methods/user.ts";
+import { useTokenStore } from "@/store/tokenStore.ts";
 import "./ProjectPicker.css";
-
-const STORAGE_KEY = "bonsai-recent-projects";
-interface RecentProject {
-  path: string;
-  name: string;
-  lastOpened: number;
-}
-
-function getRecents(): RecentProject[] {
-  try {
-    return JSON.parse(localStorage.getItem(STORAGE_KEY) ?? "[]");
-  } catch {
-    return [];
-  }
-}
-
-function addRecent(path: string, name: string) {
-  const recents = getRecents().filter((r) => r.path !== path);
-  recents.unshift({ path, name, lastOpened: Date.now() });
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(recents.slice(0, 10)));
-}
 
 interface ProjectPickerProps {
   onSelect: (path: string) => void;
@@ -31,7 +12,7 @@ export function ProjectPicker({ onSelect, onClose }: ProjectPickerProps) {
   const [path, setPath] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
-  const [recents] = useState(getRecents);
+  const [recents, setRecents] = useState<RecentProject[]>([]);
 
   // Autocomplete state
   const [suggestions, setSuggestions] = useState<string[]>([]);
@@ -39,11 +20,19 @@ export function ProjectPicker({ onSelect, onClose }: ProjectPickerProps) {
   const [showSuggestions, setShowSuggestions] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
-  // Auto-open last project on initial load
+  // Fetch recent projects from backend
   useEffect(() => {
-    if (!onClose && recents.length === 1) {
-      handleOpen(recents[0].path);
-    }
+    const token = useTokenStore.getState().token;
+    if (!token) return;
+    userRestApi.getRecentProjects(token).then((data) => {
+      setRecents(data);
+      // Auto-open if only one recent and this is the initial picker (no close button)
+      if (!onClose && data.length === 1) {
+        handleOpen(data[0].path);
+      }
+    }).catch(() => {
+      // Silently fall back to empty list
+    });
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -103,7 +92,6 @@ export function ProjectPicker({ onSelect, onClose }: ProjectPickerProps) {
           return;
         }
         if (validateData.valid) {
-          addRecent(validateData.path, validateData.name);
           onSelect(validateData.path);
           return;
         }
@@ -118,7 +106,6 @@ export function ProjectPicker({ onSelect, onClose }: ProjectPickerProps) {
           setError(initData.error);
           return;
         }
-        addRecent(initData.path, initData.name);
         onSelect(initData.path);
       } catch (e) {
         setError(`Cannot reach backend: ${(e as Error).message}`);

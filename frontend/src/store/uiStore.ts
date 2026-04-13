@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
+import { syncPref } from "./prefSync.ts";
 
 type LeftTab = "specs" | "files" | "progress";
 type Breakpoint = "desktop" | "laptop" | "below-min";
@@ -50,10 +51,21 @@ export const useUiStore = create<UiStore>()(
       fileTreeVersion: 0,
 
       toggleLeftPanel: () =>
-        set((s) => ({ leftPanelCollapsed: !s.leftPanelCollapsed })),
+        set((s) => {
+          const next = !s.leftPanelCollapsed;
+          syncPref({ leftPanelCollapsed: next });
+          return { leftPanelCollapsed: next };
+        }),
       toggleRightPanel: () =>
-        set((s) => ({ rightPanelCollapsed: !s.rightPanelCollapsed })),
-      setLeftTab: (tab) => set({ leftActiveTab: tab }),
+        set((s) => {
+          const next = !s.rightPanelCollapsed;
+          syncPref({ rightPanelCollapsed: next });
+          return { rightPanelCollapsed: next };
+        }),
+      setLeftTab: (tab) => {
+        syncPref({ leftActiveTab: tab });
+        set({ leftActiveTab: tab });
+      },
       togglePalette: () => set((s) => ({ paletteOpen: !s.paletteOpen })),
       updateViewport: (width) =>
         set({ viewportWidth: width, breakpoint: computeBreakpoint(width) }),

@@ -1,24 +1,24 @@
-"""RPC handlers for auth/* methods — user and token management."""
+"""RPC handlers for auth/* and connection/* methods — user and token management."""
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, TYPE_CHECKING
 
 from jsonrpcserver import JsonRpcError, Result, Success
 
-from app.core.config import AppConfig
-from app.rpc.auth import generate_token, load_users, save_user
 from app.rpc.bus import bus
-from app.rpc.connections import current_conn_id
+
+if TYPE_CHECKING:
+    from app.core.server_store import ServerStore
 
 _INVALID_PARAMS = -32602
 _INTERNAL_ERROR = -32603
 
 
 def _handle_errors(func):  # type: ignore[type-arg]
-    async def wrapper(config: AppConfig, **params: Any) -> Result:
+    async def wrapper(server_store: "ServerStore", **params: Any) -> Result:
         try:
-            return Success(await func(config, **params))
+            return Success(await func(server_store, **params))
         except (KeyError, TypeError) as exc:
             raise JsonRpcError(_INVALID_PARAMS, "Invalid params", str(exc))
         except JsonRpcError:
@@ -32,7 +32,7 @@ def _handle_errors(func):  # type: ignore[type-arg]
 
 
 @_handle_errors
-async def create_token(config: AppConfig, **params: Any) -> dict:
+async def create_token(server_store: "ServerStore", **params: Any) -> dict:
     """Create or update a user and return their token.
 
     Params: { userId: str, name?: str }
@@ -40,31 +40,41 @@ async def create_token(config: AppConfig, **params: Any) -> dict:
     """
     user_id = params["userId"]
     name = params.get("name", user_id)
-    token = save_user(config.project_root, user_id, name)
-    return {"userId": user_id, "name": name, "token": token}
+    user = await server_store.ensure_user(user_id, name)
+    token = await server_store.create_token(user_id)
+    return {"userId": user.id, "name": user.display_name, "token": token}
 
 
 @_handle_errors
-async def list_users(config: AppConfig, **params: Any) -> dict:
-    """List all users (without tokens) and the anonymous access setting.
+async def list_users(server_store: "ServerStore", **params: Any) -> dict:
+    """List all server-wide users (without tokens).
 
-    Returns: { users: [{ id, name }], allowAnonymous: bool }
+    Returns: { users: [{ id, name }] }
     """
-    token_map, allow_anonymous = load_users(config.project_root)
-    users = [
-        {"id": identity.user_id, "name": identity.display_name}
-        for identity in token_map.values()
-    ]
-    return {"users": users, "allowAnonymous": allow_anonymous}
+    users = await server_store.list_users()
+    return {
+        "users": [{"id": u.id, "name": u.display_name} for u in users],
+    }
 
 
 @_handle_errors
-async def list_connections(config: AppConfig, **params: Any) -> list[dict]:
+async def list_connections(server_store: "ServerStore", **params: Any) -> list[dict]:
     """List all currently connected clients for this project.
 
     Returns: [{ connId, userId, displayName, connectedAt }]
+
+    Note: uses the project from the calling connection's context,
+    resolved via the EventBus.
     """
-    connections = bus.connections_for_project(str(config.project_root))
+    from app.rpc.connections import current_conn_id as _ctx
+
+    conn_id = _ctx.get(None)
+    if conn_id is None:
+        return []
+    conn = bus._connections.get(conn_id)
+    if conn is None:
+        return []
+    connections = bus.connections_for_project(conn.project_path)
     return [
         {
             "connId": c.conn_id,

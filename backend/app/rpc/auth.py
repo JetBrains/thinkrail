@@ -1,16 +1,16 @@
 """Token-based authentication for multi-client WebSocket connections.
 
-Users are defined in ``.bonsai/users.json`` within each project directory.
-Tokens are simple shared secrets (``bns_`` prefix + random hex).
+Authentication is two-tier:
 
-Schema::
+1. **Server-wide** — tokens are resolved via the ``ServerStore`` SQLite
+   database at ``~/.bonsai/bonsai.db``.
+2. **Per-project fallback** — if a token is not found server-wide, the
+   legacy ``.bonsai/users.json`` in the project directory is checked.
+   A successful fallback hit lazily migrates the token to the server
+   store.
 
-    {
-      "users": [
-        { "id": "danya", "name": "Danya", "token": "bns_a8f3k2m9..." }
-      ],
-      "allowAnonymous": true
-    }
+Anonymous access is **not** supported — every connection must carry a
+valid token.
 """
 
 from __future__ import annotations
@@ -20,6 +20,10 @@ import logging
 import secrets
 from dataclasses import dataclass
 from pathlib import Path
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from app.core.server_store import ServerStore
 
 logger = logging.getLogger(__name__)
 
@@ -35,22 +39,16 @@ class UserIdentity:
     display_name: str
 
 
-# Sentinel for anonymous users.
-ANONYMOUS = UserIdentity(user_id="anonymous", display_name="Anonymous")
-
-
 def generate_token() -> str:
     """Generate a new random token with the ``bns_`` prefix."""
     return _TOKEN_PREFIX + secrets.token_hex(_TOKEN_BYTES)
 
 
-def load_users(project_root: Path) -> tuple[dict[str, UserIdentity], bool]:
-    """Load users from ``.bonsai/users.json``.
+def _load_project_users(project_root: Path) -> dict[str, UserIdentity]:
+    """Load the legacy per-project ``users.json`` token map.
 
-    Returns ``(token_map, allow_anonymous)`` where *token_map* maps
-    token strings to ``UserIdentity`` objects.
-
-    Creates the file with defaults if it does not exist.
+    Returns a mapping of token → ``UserIdentity``.  Used only as a
+    fallback during migration from per-project to server-wide auth.
     """
     from app.core.project import ensure_meta_file
 
@@ -59,15 +57,14 @@ def load_users(project_root: Path) -> tuple[dict[str, UserIdentity], bool]:
         raw = ensure_meta_file(bonsai_dir, "users.json")
     except (ValueError, OSError) as exc:
         logger.warning("Failed to ensure users.json: %s", exc)
-        return {}, True
+        return {}
 
     try:
         data = json.loads(raw)
     except json.JSONDecodeError as exc:
         logger.warning("Failed to parse users.json: %s", exc)
-        return {}, True
+        return {}
 
-    allow_anonymous = data.get("allowAnonymous", True)
     token_map: dict[str, UserIdentity] = {}
     for entry in data.get("users", []):
         token = entry.get("token", "")
@@ -76,66 +73,68 @@ def load_users(project_root: Path) -> tuple[dict[str, UserIdentity], bool]:
         if token and user_id:
             token_map[token] = UserIdentity(user_id=user_id, display_name=name)
 
-    return token_map, allow_anonymous
+    return token_map
 
 
-def authenticate(
-    project_root: Path, token: str | None
+async def authenticate(
+    server_store: ServerStore,
+    project_root: Path,
+    token: str | None,
 ) -> UserIdentity | None:
-    """Validate a token against the project's user list.
+    """Validate a token against the server-wide store (with per-project fallback).
 
-    Returns a ``UserIdentity`` on success, ``ANONYMOUS`` if no token
-    and anonymous access is allowed, or ``None`` if authentication fails
-    (invalid token, or no token and anonymous is disabled).
+    Returns a ``UserIdentity`` on success, or ``None`` if authentication
+    fails.  No anonymous access — a missing or invalid token always
+    returns ``None``.
     """
-    token_map, allow_anonymous = load_users(project_root)
-
-    if token:
-        identity = token_map.get(token)
-        if identity is not None:
-            return identity
-        # Token provided but invalid
+    if not token:
         return None
 
-    # No token provided
-    if allow_anonymous:
-        return ANONYMOUS
+    # 1. Server-wide lookup (SQLite)
+    user_id = await server_store.resolve_token(token)
+    if user_id is not None:
+        user = await server_store.get_user(user_id)
+        if user:
+            return UserIdentity(user_id=user.id, display_name=user.display_name)
 
-    # No token and anonymous not allowed
+    # 2. Per-project fallback (legacy users.json)
+    project_map = _load_project_users(project_root)
+    identity = project_map.get(token)
+    if identity is not None:
+        # Lazy-migrate to server-wide store
+        try:
+            await server_store.ensure_user(identity.user_id, identity.display_name)
+            await server_store.register_token(token, identity.user_id)
+            logger.info(
+                "Migrated token for user %r from project users.json to server store",
+                identity.user_id,
+            )
+        except Exception:
+            logger.warning("Failed to migrate token for %r", identity.user_id, exc_info=True)
+        return identity
+
+    # Invalid token
     return None
 
 
-def save_user(project_root: Path, user_id: str, name: str, token: str | None = None) -> str:
-    """Add or update a user in ``.bonsai/users.json``. Returns the token.
+async def authenticate_rest(
+    server_store: ServerStore,
+    token: str | None,
+) -> UserIdentity | None:
+    """Validate a token for REST endpoints (no per-project fallback).
 
-    If *token* is ``None``, a new one is generated. If a user with the
-    same *user_id* already exists, their name and token are updated.
+    Used by pre-WebSocket REST endpoints where no project context is
+    available (e.g. ``/api/user/profile``).
     """
-    if token is None:
-        token = generate_token()
+    if not token:
+        return None
 
-    users_path = project_root / ".bonsai" / "users.json"
-    if users_path.is_file():
-        try:
-            data = json.loads(users_path.read_text(encoding="utf-8"))
-        except (json.JSONDecodeError, OSError):
-            data = {"users": [], "allowAnonymous": True}
-    else:
-        data = {"users": [], "allowAnonymous": True}
+    user_id = await server_store.resolve_token(token)
+    if user_id is None:
+        return None
 
-    # Update existing or add new
-    users = data.get("users", [])
-    found = False
-    for entry in users:
-        if entry.get("id") == user_id:
-            entry["name"] = name
-            entry["token"] = token
-            found = True
-            break
-    if not found:
-        users.append({"id": user_id, "name": name, "token": token})
+    user = await server_store.get_user(user_id)
+    if not user:
+        return None
 
-    data["users"] = users
-    users_path.parent.mkdir(parents=True, exist_ok=True)
-    users_path.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
-    return token
+    return UserIdentity(user_id=user.id, display_name=user.display_name)

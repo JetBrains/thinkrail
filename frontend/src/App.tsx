@@ -2,6 +2,8 @@ import { useEffect, useRef } from "react";
 import { BrowserRouter } from "react-router-dom";
 import { useRpc, useConnectionState, setClient } from "@/api/index.ts";
 import { wireEvents } from "@/store/wireEvents.ts";
+import { applyTheme } from "./utils/theme.ts";
+import { setPrefSyncClient } from "@/store/prefSync.ts";
 import { useSpecStore } from "@/store/specStore.ts";
 import { useSessionStore, startWatchdog, stopWatchdog } from "@/store/sessionStore.ts";
 import { useUiStore } from "@/store/uiStore.ts";
@@ -28,6 +30,7 @@ function AppInner({ projectPath: _projectPath, onSwitchProject }: { projectPath:
       // ── Initial connect ──
       wiredRef.current = true;
       setClient(client);
+      setPrefSyncClient(client);
       wireCleanupRef.current?.();
       wireCleanupRef.current = wireEvents(client);
       useUiStore.getState().setProject(_projectPath);
@@ -48,6 +51,26 @@ function AppInner({ projectPath: _projectPath, onSwitchProject }: { projectPath:
       useSettingsStore.getState().fetchSettings();
       useSettingsStore.getState().fetchModels();
       useSettingsStore.getState().fetchSkills();
+      // Sync user preferences from server
+      client.request<Record<string, unknown>>("user/getPreferences").then((prefs) => {
+        if (prefs && typeof prefs === "object") {
+          const ui = useUiStore.getState();
+          if (typeof prefs.leftPanelCollapsed === "boolean" && prefs.leftPanelCollapsed !== ui.leftPanelCollapsed) {
+            useUiStore.setState({ leftPanelCollapsed: prefs.leftPanelCollapsed as boolean });
+          }
+          if (typeof prefs.rightPanelCollapsed === "boolean" && prefs.rightPanelCollapsed !== ui.rightPanelCollapsed) {
+            useUiStore.setState({ rightPanelCollapsed: prefs.rightPanelCollapsed as boolean });
+          }
+          if (typeof prefs.leftActiveTab === "string") {
+            useUiStore.setState({ leftActiveTab: prefs.leftActiveTab as "specs" | "files" | "progress" });
+          }
+          if (typeof prefs.theme === "string") {
+            applyTheme(prefs.theme as Parameters<typeof applyTheme>[0]);
+          }
+        }
+      }).catch(() => {
+        // Silently ignore — preferences are best-effort
+      });
     } else if (connectionState === "connected" && wiredRef.current) {
       // ── Reconnect: WS recovered — sync session statuses immediately ──
       console.log("[Bonsai] Reconnected — syncing session statuses");

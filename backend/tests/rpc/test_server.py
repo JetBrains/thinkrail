@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import json
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -11,21 +12,72 @@ from starlette.websockets import WebSocketDisconnect
 from watchfiles import Change
 
 from app.core.config import AppConfig, load_config
+from app.core.server_store import ServerStore
 from app.rpc.bus import bus
 from app.rpc.server import METHODS, register_routes, _start_watcher
 from app.spec.service import SpecService
 from app.vis.service import VisualizationService
 
+# Reusable test token for WebSocket auth.
+_TEST_TOKEN = "bns_test00000000000000000000"
 
-def _make_app() -> FastAPI:
+
+def _make_app(tmp_path: Path | None = None) -> FastAPI:
+    """Create a test app with a ServerStore pre-seeded with a test user/token.
+
+    Uses synchronous sqlite3 to set up test data, then hands the store
+    directory to ServerStore (which opens lazily in the WS handler).
+    """
+    import sqlite3
+
     app = FastAPI()
-    register_routes(app)
+    store_dir = (tmp_path or Path("/tmp")) / "_server_store"
+    store_dir.mkdir(parents=True, exist_ok=True)
+    db_path = store_dir / "bonsai.db"
+
+    # Pre-seed the database with a test user and token using sync sqlite3
+    conn = sqlite3.connect(str(db_path))
+    conn.execute("PRAGMA journal_mode = WAL")
+    conn.execute("PRAGMA foreign_keys = ON")
+    conn.executescript("""
+        CREATE TABLE IF NOT EXISTS _schema_version (version INTEGER PRIMARY KEY, applied_at TEXT NOT NULL);
+        CREATE TABLE IF NOT EXISTS server_config (key TEXT PRIMARY KEY, value TEXT NOT NULL, updated_at TEXT NOT NULL) WITHOUT ROWID;
+        CREATE TABLE IF NOT EXISTS users (id TEXT PRIMARY KEY, display_name TEXT NOT NULL, created_at TEXT NOT NULL, updated_at TEXT NOT NULL) WITHOUT ROWID;
+        CREATE TABLE IF NOT EXISTS tokens (token TEXT PRIMARY KEY, user_id TEXT NOT NULL REFERENCES users(id), created_at TEXT NOT NULL) WITHOUT ROWID;
+        CREATE TABLE IF NOT EXISTS projects (path TEXT PRIMARY KEY, name TEXT NOT NULL, registered_at TEXT NOT NULL, last_opened_at TEXT NOT NULL) WITHOUT ROWID;
+        CREATE TABLE IF NOT EXISTS user_preferences (user_id TEXT PRIMARY KEY REFERENCES users(id), prefs TEXT NOT NULL DEFAULT '{}', updated_at TEXT NOT NULL) WITHOUT ROWID;
+        CREATE TABLE IF NOT EXISTS user_recent_projects (user_id TEXT NOT NULL REFERENCES users(id), project_path TEXT NOT NULL REFERENCES projects(path), last_opened TEXT NOT NULL, PRIMARY KEY (user_id, project_path)) WITHOUT ROWID;
+        CREATE INDEX IF NOT EXISTS idx_tokens_user_id ON tokens(user_id);
+        CREATE INDEX IF NOT EXISTS idx_recent_projects_user_time ON user_recent_projects(user_id, last_opened DESC);
+    """)
+    conn.execute(
+        "INSERT OR IGNORE INTO users (id, display_name, created_at, updated_at) VALUES (?, ?, ?, ?)",
+        ("testuser", "Test User", "2026-01-01T00:00:00Z", "2026-01-01T00:00:00Z"),
+    )
+    conn.execute(
+        "INSERT OR IGNORE INTO tokens (token, user_id, created_at) VALUES (?, ?, ?)",
+        (_TEST_TOKEN, "testuser", "2026-01-01T00:00:00Z"),
+    )
+    conn.commit()
+    conn.close()
+
+    store = ServerStore(store_dir)
+    register_routes(app, server_store=store)
     return app
+
+
+def _ws_url(tmp_path: Path, token: str | None = None) -> str:
+    """Build WebSocket URL with project and optional token."""
+    t = token or _TEST_TOKEN
+    url = f"/ws?project={tmp_path}"
+    if t:
+        url += f"&token={t}"
+    return url
 
 
 def _make_config(tmp_path: Path) -> AppConfig:
     bonsai_dir = tmp_path / ".bonsai"
-    bonsai_dir.mkdir()
+    bonsai_dir.mkdir(exist_ok=True)
     registry = {"version": "2.0", "project": "test", "specs": [], "links": []}
     (bonsai_dir / "registry.json").write_text(json.dumps(registry), encoding="utf-8")
     return load_config(tmp_path)
@@ -60,6 +112,8 @@ class TestMethods:
             "skills/list",
             "auth/createToken", "auth/listUsers",
             "connection/list",
+            "user/getProfile", "user/getPreferences",
+            "user/updatePreferences", "user/getRecentProjects",
         }
         assert set(METHODS.keys()) == expected
 
@@ -67,10 +121,10 @@ class TestMethods:
 class TestWebSocket:
     def test_connect_and_receive_response(self, tmp_path: Path) -> None:
         _make_config(tmp_path)  # ensure .bonsai exists
-        app = _make_app()
+        app = _make_app(tmp_path)
         client = TestClient(app)
 
-        with client.websocket_connect(f"/ws?project={tmp_path}") as ws:
+        with client.websocket_connect(_ws_url(tmp_path)) as ws:
             request = {
                 "jsonrpc": "2.0",
                 "method": "spec/list",
@@ -85,17 +139,17 @@ class TestWebSocket:
 
     def test_connection_registers_with_bus(self, tmp_path: Path) -> None:
         _make_config(tmp_path)
-        app = _make_app()
+        app = _make_app(tmp_path)
         client = TestClient(app)
 
         initial_count = bus.connection_count
-        with client.websocket_connect(f"/ws?project={tmp_path}"):
+        with client.websocket_connect(_ws_url(tmp_path)):
             assert bus.connection_count > initial_count
         # Connection should be unregistered on disconnect
         assert bus.connection_count == initial_count
 
-    def test_missing_project_param_closes(self) -> None:
-        app = _make_app()
+    def test_missing_project_param_closes(self, tmp_path: Path) -> None:
+        app = _make_app(tmp_path)
         client = TestClient(app)
 
         with pytest.raises(Exception):
@@ -104,10 +158,10 @@ class TestWebSocket:
 
     def test_method_not_found_returns_error(self, tmp_path: Path) -> None:
         _make_config(tmp_path)
-        app = _make_app()
+        app = _make_app(tmp_path)
         client = TestClient(app)
 
-        with client.websocket_connect(f"/ws?project={tmp_path}") as ws:
+        with client.websocket_connect(_ws_url(tmp_path)) as ws:
             request = {
                 "jsonrpc": "2.0",
                 "method": "nonexistent/method",
@@ -121,10 +175,10 @@ class TestWebSocket:
 
     def test_invalid_json_returns_parse_error(self, tmp_path: Path) -> None:
         _make_config(tmp_path)
-        app = _make_app()
+        app = _make_app(tmp_path)
         client = TestClient(app)
 
-        with client.websocket_connect(f"/ws?project={tmp_path}") as ws:
+        with client.websocket_connect(_ws_url(tmp_path)) as ws:
             ws.send_text("not valid json{{{")
             response = json.loads(ws.receive_text())
             assert "error" in response
@@ -132,10 +186,10 @@ class TestWebSocket:
 
     def test_spec_get_not_found_returns_domain_error(self, tmp_path: Path) -> None:
         _make_config(tmp_path)
-        app = _make_app()
+        app = _make_app(tmp_path)
         client = TestClient(app)
 
-        with client.websocket_connect(f"/ws?project={tmp_path}") as ws:
+        with client.websocket_connect(_ws_url(tmp_path)) as ws:
             request = {
                 "jsonrpc": "2.0",
                 "method": "spec/get",
@@ -149,10 +203,10 @@ class TestWebSocket:
 
     def test_notification_no_response(self, tmp_path: Path) -> None:
         _make_config(tmp_path)
-        app = _make_app()
+        app = _make_app(tmp_path)
         client = TestClient(app)
 
-        with client.websocket_connect(f"/ws?project={tmp_path}") as ws:
+        with client.websocket_connect(_ws_url(tmp_path)) as ws:
             notification = {
                 "jsonrpc": "2.0",
                 "method": "spec/list",
@@ -177,20 +231,20 @@ class TestMultiClientIntegration:
     def test_two_clients_both_register(self, tmp_path: Path) -> None:
         """Two WebSocket clients to the same project both register with the bus."""
         _make_config(tmp_path)
-        app = _make_app()
+        app = _make_app(tmp_path)
         client = TestClient(app)
 
         initial_count = bus.connection_count
-        with client.websocket_connect(f"/ws?project={tmp_path}"):
+        with client.websocket_connect(_ws_url(tmp_path)):
             count_after_first = bus.connection_count
             assert count_after_first >= initial_count + 1
-            with client.websocket_connect(f"/ws?project={tmp_path}"):
+            with client.websocket_connect(_ws_url(tmp_path)):
                 assert bus.connection_count >= count_after_first + 1
 
     def test_two_clients_both_can_call_rpc(self, tmp_path: Path) -> None:
         """Both connected clients can independently make RPC calls."""
         _make_config(tmp_path)
-        app = _make_app()
+        app = _make_app(tmp_path)
         client = TestClient(app)
 
         def _call_and_get_response(ws, method: str, rpc_id: int) -> dict:
@@ -201,8 +255,8 @@ class TestMultiClientIntegration:
                 if "id" in msg and msg["id"] == rpc_id:
                     return msg
 
-        with client.websocket_connect(f"/ws?project={tmp_path}") as ws1:
-            with client.websocket_connect(f"/ws?project={tmp_path}") as ws2:
+        with client.websocket_connect(_ws_url(tmp_path)) as ws1:
+            with client.websocket_connect(_ws_url(tmp_path)) as ws2:
                 resp2 = _call_and_get_response(ws2, "spec/list", 2)
                 assert isinstance(resp2["result"], list)
 
@@ -214,40 +268,44 @@ class TestAuthIntegration:
     """Integration tests for WebSocket authentication."""
 
     def test_valid_token_connects(self, tmp_path: Path) -> None:
-        """Valid token allows WebSocket connection."""
+        """Valid server-wide token allows WebSocket connection."""
         _make_config(tmp_path)
-        from app.rpc.auth import save_user
-        token = save_user(tmp_path, "alice", "Alice")
-
-        app = _make_app()
+        app = _make_app(tmp_path)
         client = TestClient(app)
-        with client.websocket_connect(f"/ws?project={tmp_path}&token={token}") as ws:
+        # _make_app creates a test token; use it
+        with client.websocket_connect(_ws_url(tmp_path)) as ws:
+            ws.send_text(json.dumps({"jsonrpc": "2.0", "method": "spec/list", "params": {}, "id": 1}))
+            resp = json.loads(ws.receive_text())
+            assert resp["id"] == 1
+
+    def test_per_project_token_fallback(self, tmp_path: Path) -> None:
+        """Token in per-project users.json works via fallback migration."""
+        _make_config(tmp_path)
+        users_data = {
+            "users": [{"id": "alice", "name": "Alice", "token": "bns_projectonly"}],
+        }
+        (tmp_path / ".bonsai" / "users.json").write_text(json.dumps(users_data))
+
+        app = _make_app(tmp_path)
+        client = TestClient(app)
+        with client.websocket_connect(_ws_url(tmp_path, token="bns_projectonly")) as ws:
             ws.send_text(json.dumps({"jsonrpc": "2.0", "method": "spec/list", "params": {}, "id": 1}))
             resp = json.loads(ws.receive_text())
             assert resp["id"] == 1
 
     def test_invalid_token_rejected(self, tmp_path: Path) -> None:
-        """Invalid token with allowAnonymous=False closes the WebSocket."""
+        """Invalid token closes the WebSocket."""
         _make_config(tmp_path)
-        users_data = {
-            "users": [{"id": "alice", "name": "Alice", "token": "bns_valid"}],
-            "allowAnonymous": False,
-        }
-        (tmp_path / ".bonsai" / "users.json").write_text(json.dumps(users_data))
-
-        app = _make_app()
+        app = _make_app(tmp_path)
         client = TestClient(app)
         with pytest.raises(Exception):
-            with client.websocket_connect(f"/ws?project={tmp_path}&token=bns_wrong"):
+            with client.websocket_connect(_ws_url(tmp_path, token="bns_wrong")):
                 pass
 
-    def test_no_token_anonymous_disallowed_rejected(self, tmp_path: Path) -> None:
-        """No token with allowAnonymous=False closes the WebSocket."""
+    def test_no_token_rejected(self, tmp_path: Path) -> None:
+        """No token closes the WebSocket (no anonymous access)."""
         _make_config(tmp_path)
-        users_data = {"users": [], "allowAnonymous": False}
-        (tmp_path / ".bonsai" / "users.json").write_text(json.dumps(users_data))
-
-        app = _make_app()
+        app = _make_app(tmp_path)
         client = TestClient(app)
         with pytest.raises(Exception):
             with client.websocket_connect(f"/ws?project={tmp_path}"):
