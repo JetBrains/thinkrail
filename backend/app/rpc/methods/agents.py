@@ -79,6 +79,13 @@ async def run_agent(service: AgentService, **params: Any) -> dict:
         skill_id=skill_id, session_prompt=session_prompt, name=name,
         meta_ticket_id=meta_ticket_id,
     )
+    # Persist who created the session
+    try:
+        conn = bus.get_connection(current_conn_id.get())
+        if conn:
+            task.created_by = conn.display_name
+    except LookupError:
+        pass
     _auto_subscribe_all(task.bonsai_sid)
     return {"bonsaiSid": task.bonsai_sid}
 
@@ -159,11 +166,12 @@ async def prepare_agent(service: AgentService, **params: Any) -> dict:
         file_paths=params.get("filePaths"),
     )
     _auto_subscribe_all(task.bonsai_sid)
-    # Notify all project clients about the new session (multi-client sync)
+    # Persist who created the session + notify all project clients
     try:
         conn_id = current_conn_id.get()
         conn = bus.get_connection(conn_id)
         if conn:
+            task.created_by = conn.display_name
             await bus.publish_to_project(conn.project_path, "session/didCreate", {
                 "bonsaiSid": task.bonsai_sid,
                 "name": task.name or task.bonsai_sid[:8],

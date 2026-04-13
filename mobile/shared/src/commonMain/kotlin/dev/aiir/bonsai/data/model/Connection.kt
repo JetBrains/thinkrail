@@ -9,9 +9,13 @@ data class ServerAddress(
     val projectPath: String = "",
     val displayName: String = "",
     val lastConnected: Long = 0,
+    val token: String? = null,
 ) {
     val baseUrl: String get() = "http://$host:$port"
-    val wsUrl: String get() = "ws://$host:$port/ws?project=$projectPath"
+    val wsUrl: String get() = buildString {
+        append("ws://$host:$port/ws?project=$projectPath")
+        if (!token.isNullOrBlank()) append("&token=$token")
+    }
 }
 
 @Serializable

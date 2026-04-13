@@ -115,6 +115,20 @@ export function wireEvents(client: RpcClient): Unsubscribe {
     }),
   );
   unsubs.push(
+    client.on("session/didEnd", (p) => {
+      const params = p as Record<string, unknown>;
+      const bonsaiSid = params.bonsaiSid as string;
+      const status = params.status as string;
+      // Update session status in the store if it exists
+      const session = useSessionStore.getState().sessions.get(bonsaiSid);
+      if (session && session.status !== "done" && session.status !== "error") {
+        const sessions = new Map(useSessionStore.getState().sessions);
+        sessions.set(bonsaiSid, { ...session, status: status as typeof session.status });
+        useSessionStore.setState({ sessions });
+      }
+    }),
+  );
+  unsubs.push(
     client.on("agent/done", (p) => {
       const params = p as Record<string, unknown>;
       useSessionStore.getState().onSessionDone(params);

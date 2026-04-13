@@ -235,4 +235,4 @@ Response:
 
 - **Server restart orphans drafts:** If the backend server restarts, draft sessions exist on disk but the in-memory `Tracker` is empty. Calling `updateDraft` or `startDraft` will fail with `TaskNotFoundError`. The draft appears in the UI but cannot be updated or started — it can only be discarded. A future improvement could re-register drafts from disk on server startup.
 - **No draft cleanup:** Drafts older than 24h are not auto-cleaned. Stale drafts accumulate on disk until manually discarded.
-- **`run_task()` not refactored:** The plan called for `run_task()` to internally use `prepare_task()` + `start_draft()`. This was deferred — `run_task()` remains standalone with some duplicated logic. Both paths work correctly.
+- **`run_task()` not refactored:** The plan called for `run_task()` to internally use `prepare_task()` + `start_draft()`. This was deferred — `run_task()` remains standalone with some duplicated logic. Both paths work correctly. Note: `run_task()` no longer takes a `notify` parameter; all streaming events are routed through the EventBus (`bus.publish_to_session()`).

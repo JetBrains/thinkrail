@@ -30,9 +30,15 @@ class SessionDetailComponentImpl(
     private var toolCallIndex = 0
 
     init {
-        lifecycle.doOnDestroy { scope.cancel() }
+        lifecycle.doOnDestroy {
+            // Unsubscribe from session topic when leaving
+            scope.launch { try { rpcMethods.sessionUnsubscribe(bonsaiSid) } catch (_: Exception) {} }
+            scope.cancel()
+        }
         loadInitialSession()
         subscribeToEvents()
+        // Explicitly subscribe to this session's topic
+        scope.launch { try { rpcMethods.sessionSubscribe(bonsaiSid) } catch (_: Exception) {} }
     }
 
     // ── Load historical session data once ──

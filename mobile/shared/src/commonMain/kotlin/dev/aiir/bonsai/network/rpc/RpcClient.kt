@@ -51,12 +51,14 @@ class RpcClient(
     private var wsPort: Int = 8000
     private var wsPath: String = "/ws"
     private var wsProject: String = ""
+    private var wsToken: String? = null
     private var shouldReconnect = false
 
-    fun connect(host: String, port: Int, projectPath: String) {
+    fun connect(host: String, port: Int, projectPath: String, token: String? = null) {
         wsHost = host
         wsPort = port
         wsProject = projectPath
+        wsToken = token
         shouldReconnect = true
         connectionJob?.cancel()
         connectionJob = scope.launch {
@@ -137,6 +139,7 @@ class RpcClient(
             path = wsPath,
             request = {
                 url.parameters.append("project", wsProject)
+                wsToken?.let { url.parameters.append("token", it) }
             },
         ) {
             session = this

@@ -16,6 +16,7 @@ class ProjectPickerComponentImpl(
     componentContext: ComponentContext,
     private val host: String,
     private val port: Int,
+    private val token: String? = null,
     private val restClient: RestClient,
     private val connectionManager: ConnectionManager,
     private val connectionStorage: ConnectionStorage,
@@ -113,6 +114,7 @@ class ProjectPickerComponentImpl(
                     projectPath = info.path,
                     displayName = info.name,
                     lastConnected = System.currentTimeMillis(),
+                    token = token,
                 )
                 val result = connectionManager.connect(address)
                 result.fold(

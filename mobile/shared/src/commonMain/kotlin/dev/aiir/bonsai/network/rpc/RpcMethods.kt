@@ -163,6 +163,14 @@ class RpcMethods(private val client: RpcClient) {
         client.call("session/delete", buildParams("bonsaiSid" to bonsaiSid))
     }
 
+    suspend fun sessionSubscribe(bonsaiSid: String) {
+        client.call("session/subscribe", buildParams("bonsaiSid" to bonsaiSid))
+    }
+
+    suspend fun sessionUnsubscribe(bonsaiSid: String) {
+        client.call("session/unsubscribe", buildParams("bonsaiSid" to bonsaiSid))
+    }
+
     // ── Specs ──
 
     suspend fun specList(): List<RegistryEntry> =

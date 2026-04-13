@@ -41,8 +41,8 @@ class RootComponentImpl(
                     componentContext = componentContext,
                     connectionManager = connectionManager,
                     connectionStorage = connectionStorage,
-                    onServerConnected = { host, port ->
-                        navigation.push(Config.ProjectPicker(host, port))
+                    onServerConnected = { host, port, token ->
+                        navigation.push(Config.ProjectPicker(host, port, token))
                     },
                 )
             )
@@ -51,6 +51,7 @@ class RootComponentImpl(
                     componentContext = componentContext,
                     host = config.host,
                     port = config.port,
+                    token = config.token,
                     restClient = restClient,
                     connectionManager = connectionManager,
                     connectionStorage = connectionStorage,
@@ -81,7 +82,7 @@ class RootComponentImpl(
         data object Connect : Config()
 
         @Serializable
-        data class ProjectPicker(val host: String, val port: Int) : Config()
+        data class ProjectPicker(val host: String, val port: Int, val token: String? = null) : Config()
 
         @Serializable
         data class Main(val address: ServerAddress) : Config()

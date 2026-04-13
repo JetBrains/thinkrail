@@ -1,10 +1,13 @@
+import { useState } from "react";
 import { useUiStore } from "@/store/uiStore.ts";
 import { useSessionStore } from "@/store/sessionStore.ts";
 import { useSettingsStore } from "@/store/settingsStore.ts";
 import { useConnectionStore } from "@/store/connectionStore.ts";
+import { useTokenStore } from "@/store/tokenStore.ts";
 import { useFileStore } from "@/store/fileStore.ts";
 import { modLabel } from "@/utils/platform.ts";
 import { ThemeSwitcher } from "./ThemeSwitcher.tsx";
+import { TokenDialog } from "./TokenDialog.tsx";
 
 const SETTINGS_PATH = ".bonsai/settings.json";
 
@@ -23,8 +26,11 @@ export function Header({ onSwitchProject }: { onSwitchProject: () => void }) {
   };
 
   const connectedClients = useConnectionStore((s) => s.clients);
+  const hasToken = useTokenStore((s) => !!s.token);
+  const [tokenOpen, setTokenOpen] = useState(false);
 
   return (
+    <>
     <header className="header-bar">
       <div className="header-left">
         <span className="header-logo">Bonsai</span>
@@ -33,6 +39,13 @@ export function Header({ onSwitchProject }: { onSwitchProject: () => void }) {
         </button>
         <button className="header-btn header-settings-btn" onClick={openSettings} title="Project settings">
           &#9881;
+        </button>
+        <button
+          className={`header-btn${hasToken ? " header-token-active" : ""}`}
+          onClick={() => setTokenOpen(true)}
+          title={hasToken ? "Token configured" : "Set authentication token"}
+        >
+          &#128274;
         </button>
         {activeSessions.length > 0 && (
           <span className="header-sessions">
@@ -63,5 +76,7 @@ export function Header({ onSwitchProject }: { onSwitchProject: () => void }) {
         </button>
       </div>
     </header>
+    <TokenDialog open={tokenOpen} onClose={() => setTokenOpen(false)} />
+    </>
   );
 }

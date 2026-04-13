@@ -329,6 +329,7 @@ class AgentService:
             "metaTicketId": task.meta_ticket_id,
             "createdAt": task.created,
             "updatedAt": task.updated,
+            "createdBy": task.created_by,
         }
         if task.system_prompt is not None:
             data["systemPrompt"] = task.system_prompt
@@ -644,6 +645,18 @@ class AgentService:
                 pass
         finally:
             self._running_tasks.pop(task.bonsai_sid, None)
+            # Notify all project clients that the session ended
+            try:
+                await self._get_bus().publish_to_project(
+                    str(self._config.project_root),
+                    "session/didEnd",
+                    {
+                        "bonsaiSid": task.bonsai_sid,
+                        "status": task.status,
+                    },
+                )
+            except Exception:
+                pass
             # Clean up the session topic now that the runner is done
             self._get_bus().cleanup_topic(f"session:{task.bonsai_sid}")
             # Notify orchestrator if this was a step session

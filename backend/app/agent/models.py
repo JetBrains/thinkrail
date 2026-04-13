@@ -123,5 +123,6 @@ class AgentTask(BaseModel):
     session_id: str | None = None
     meta_ticket_id: str | None = None
     system_prompt: str | None = None
+    created_by: str | None = None
     created: str = Field(default_factory=lambda: datetime.now(UTC).isoformat())
     updated: str = Field(default_factory=lambda: datetime.now(UTC).isoformat())

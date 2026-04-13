@@ -171,6 +171,89 @@ class TestWebSocket:
             assert response["id"] == 99
 
 
+class TestMultiClientIntegration:
+    """Integration tests for multi-client WebSocket scenarios."""
+
+    def test_two_clients_both_register(self, tmp_path: Path) -> None:
+        """Two WebSocket clients to the same project both register with the bus."""
+        _make_config(tmp_path)
+        app = _make_app()
+        client = TestClient(app)
+
+        initial_count = bus.connection_count
+        with client.websocket_connect(f"/ws?project={tmp_path}"):
+            count_after_first = bus.connection_count
+            assert count_after_first >= initial_count + 1
+            with client.websocket_connect(f"/ws?project={tmp_path}"):
+                assert bus.connection_count >= count_after_first + 1
+
+    def test_two_clients_both_can_call_rpc(self, tmp_path: Path) -> None:
+        """Both connected clients can independently make RPC calls."""
+        _make_config(tmp_path)
+        app = _make_app()
+        client = TestClient(app)
+
+        def _call_and_get_response(ws, method: str, rpc_id: int) -> dict:
+            """Send RPC call and skip notifications until we get the response."""
+            ws.send_text(json.dumps({"jsonrpc": "2.0", "method": method, "params": {}, "id": rpc_id}))
+            while True:
+                msg = json.loads(ws.receive_text())
+                if "id" in msg and msg["id"] == rpc_id:
+                    return msg
+
+        with client.websocket_connect(f"/ws?project={tmp_path}") as ws1:
+            with client.websocket_connect(f"/ws?project={tmp_path}") as ws2:
+                resp2 = _call_and_get_response(ws2, "spec/list", 2)
+                assert isinstance(resp2["result"], list)
+
+                resp1 = _call_and_get_response(ws1, "spec/list", 1)
+                assert isinstance(resp1["result"], list)
+
+
+class TestAuthIntegration:
+    """Integration tests for WebSocket authentication."""
+
+    def test_valid_token_connects(self, tmp_path: Path) -> None:
+        """Valid token allows WebSocket connection."""
+        _make_config(tmp_path)
+        from app.rpc.auth import save_user
+        token = save_user(tmp_path, "alice", "Alice")
+
+        app = _make_app()
+        client = TestClient(app)
+        with client.websocket_connect(f"/ws?project={tmp_path}&token={token}") as ws:
+            ws.send_text(json.dumps({"jsonrpc": "2.0", "method": "spec/list", "params": {}, "id": 1}))
+            resp = json.loads(ws.receive_text())
+            assert resp["id"] == 1
+
+    def test_invalid_token_rejected(self, tmp_path: Path) -> None:
+        """Invalid token with allowAnonymous=False closes the WebSocket."""
+        _make_config(tmp_path)
+        users_data = {
+            "users": [{"id": "alice", "name": "Alice", "token": "bns_valid"}],
+            "allowAnonymous": False,
+        }
+        (tmp_path / ".bonsai" / "users.json").write_text(json.dumps(users_data))
+
+        app = _make_app()
+        client = TestClient(app)
+        with pytest.raises(Exception):
+            with client.websocket_connect(f"/ws?project={tmp_path}&token=bns_wrong"):
+                pass
+
+    def test_no_token_anonymous_disallowed_rejected(self, tmp_path: Path) -> None:
+        """No token with allowAnonymous=False closes the WebSocket."""
+        _make_config(tmp_path)
+        users_data = {"users": [], "allowAnonymous": False}
+        (tmp_path / ".bonsai" / "users.json").write_text(json.dumps(users_data))
+
+        app = _make_app()
+        client = TestClient(app)
+        with pytest.raises(Exception):
+            with client.websocket_connect(f"/ws?project={tmp_path}"):
+                pass
+
+
 class TestWatcher:
     async def test_start_watcher(self, tmp_path: Path) -> None:
         import asyncio

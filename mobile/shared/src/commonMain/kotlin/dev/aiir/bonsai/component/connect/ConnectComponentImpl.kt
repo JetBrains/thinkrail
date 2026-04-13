@@ -15,7 +15,7 @@ class ConnectComponentImpl(
     componentContext: ComponentContext,
     private val connectionManager: ConnectionManager,
     private val connectionStorage: ConnectionStorage,
-    private val onServerConnected: (host: String, port: Int) -> Unit,
+    private val onServerConnected: (host: String, port: Int, token: String?) -> Unit,
 ) : ConnectComponent, ComponentContext by componentContext {
 
     private val scope = CoroutineScope(Dispatchers.Main + SupervisorJob())
@@ -32,27 +32,35 @@ class ConnectComponentImpl(
         _state.update { it.copy(addressInput = address, error = null) }
     }
 
+    override fun onTokenChanged(token: String) {
+        _state.update { it.copy(tokenInput = token, error = null) }
+    }
+
     override fun onConnect() {
         if (_state.value.isConnecting) return
         val parsed = ConnectionManager.parseAddress(_state.value.addressInput)
-        doHealthCheck(parsed.host, parsed.port)
+        val token = _state.value.tokenInput.takeIf { it.isNotBlank() }
+        doHealthCheck(parsed.host, parsed.port, token)
     }
 
     override fun onRecentServerSelected(address: ServerAddress) {
-        _state.update { it.copy(addressInput = "${address.host}:${address.port}") }
-        doHealthCheck(address.host, address.port)
+        _state.update { it.copy(
+            addressInput = "${address.host}:${address.port}",
+            tokenInput = address.token ?: "",
+        ) }
+        doHealthCheck(address.host, address.port, address.token)
     }
 
-    private fun doHealthCheck(host: String, port: Int) {
+    private fun doHealthCheck(host: String, port: Int, token: String? = null) {
         _state.update { it.copy(isConnecting = true, error = null) }
         scope.launch {
             val baseUrl = "http://$host:$port"
             val result = connectionManager.checkServer(baseUrl)
             result.fold(
                 onSuccess = {
-                    connectionStorage.addRecentServer(host, port)
+                    connectionStorage.addRecentServer(host, port, token)
                     _state.update { it.copy(isConnecting = false) }
-                    onServerConnected(host, port)
+                    onServerConnected(host, port, token)
                 },
                 onFailure = { error ->
                     _state.update { it.copy(isConnecting = false, error = error.message ?: "Connection failed") }

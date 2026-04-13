@@ -109,6 +109,25 @@ fun ConnectScreen(component: ConnectComponent) {
             shape = RoundedCornerShape(8.dp),
         )
 
+        Spacer(modifier = Modifier.height(12.dp))
+
+        // Token input (optional)
+        Text(
+            text = "TOKEN (OPTIONAL)",
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.fillMaxWidth(),
+        )
+        Spacer(modifier = Modifier.height(4.dp))
+        OutlinedTextField(
+            value = state.tokenInput,
+            onValueChange = { component.onTokenChanged(it) },
+            placeholder = { Text("bns_...") },
+            modifier = Modifier.fillMaxWidth(),
+            singleLine = true,
+            shape = RoundedCornerShape(8.dp),
+        )
+
         Spacer(modifier = Modifier.height(16.dp))
 
         // Error

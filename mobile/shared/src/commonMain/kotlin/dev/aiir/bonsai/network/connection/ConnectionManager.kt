@@ -47,7 +47,7 @@ class ConnectionManager(
             }
 
             // Connect WebSocket and wait for it to actually connect
-            rpcClient.connect(address.host, address.port, address.projectPath)
+            rpcClient.connect(address.host, address.port, address.projectPath, address.token)
 
             // Wait up to 10s for Connected or Error state
             val state = withTimeout(10_000) {

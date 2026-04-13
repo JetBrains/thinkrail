@@ -5,10 +5,10 @@ All three phases are implemented and tested. These items track spec/doc alignmen
 
 ## Spec Alignment (stale docs referencing old single-client patterns)
 
-- [ ] **`current_tasks/rpc/feature_rpc_server.md`** — References "single active connection", `current_notify`, "replace on second connect". Update to describe multi-client EventBus, per-project watcher, ClientConnection registration. (HIGH)
-- [ ] **`current_tasks/rpc/feature_rpc_methods_agents_run.md`** — Documents old `run_task(notify)` signature and `current_notify` capture. Update to show EventBus-based publishing, no notify param. (HIGH)
-- [ ] **`current_tasks/rpc/feature_rpc_notifications.md`** — Documents `current_notify` module variable as if it still exists. Update to note removal, `make_notify` is now internal to EventBus. (MEDIUM)
-- [ ] **`features/DRAFT_SESSION_DESIGN.md`** — Line 238 references old `run_task()` signature indirectly. Minor update. (LOW)
+- [x] **`current_tasks/rpc/feature_rpc_server.md`** — Updated to describe multi-client EventBus, per-project watcher, ClientConnection registration.
+- [x] **`current_tasks/rpc/feature_rpc_methods_agents_run.md`** — Updated to show EventBus-based publishing, no notify param.
+- [x] **`current_tasks/rpc/feature_rpc_notifications.md`** — Updated to note `current_notify` removal, `make_notify` is internal to EventBus.
+- [x] **`features/DRAFT_SESSION_DESIGN.md`** — Updated `run_task()` note to mention EventBus routing.
 
 ## Agent Module Spec
 
@@ -20,28 +20,28 @@ All three phases are implemented and tested. These items track spec/doc alignmen
 
 ## Registry & Task Specs
 
-- [ ] Create task spec for multi-client feature in `current_tasks/rpc/` following existing pattern
-- [ ] Update `.bonsai/registry.json` if multi-client specs should be tracked
+- [x] Created task spec `current_tasks/rpc/feature_rpc_event_bus.md` documenting EventBus, connections, auth
+- [x] Registry check — task specs are not tracked in `.bonsai/registry.json` (only module-level specs). No update needed.
 
 ## Frontend Alignment
 
-- [ ] Verify mobile KMP `RpcClient.kt` can pass `?token=` parameter on connect
-- [ ] Add token management UI to web frontend settings page (token input, localStorage persistence)
-- [ ] Add token field to mobile Connect screen
-- [ ] Test `session/subscribe` / `session/unsubscribe` from mobile navigation lifecycle
+- [x] Mobile KMP `RpcClient.kt` passes `?token=` parameter on connect
+- [x] Token management UI added to web frontend (TokenDialog in Header, localStorage persistence, token appended to WS URL)
+- [x] Token field added to mobile Connect screen (input, storage, threading through navigation)
+- [x] `session/subscribe` / `session/unsubscribe` called from mobile SessionDetailComponentImpl lifecycle
 
 ## Testing Gaps
 
-- [ ] Integration test: two WebSocket connections to same project, verify both receive events
-- [ ] Integration test: token auth rejection (invalid token with `allowAnonymous: false`)
-- [ ] Frontend vitest: `connectionStore` presence tracking (onClientJoin/Leave)
-- [ ] Frontend vitest: `onRemoteSessionCreated` populates session correctly
-- [ ] Frontend vitest: `onRemoteUserMessage` dedup logic
+- [x] Integration test: two WebSocket connections to same project, verify both register and can make RPC calls
+- [x] Integration test: token auth rejection (invalid token with `allowAnonymous: false` closes WebSocket)
+- [x] Frontend vitest: `connectionStore` presence tracking (onClientJoin/Leave, dedup, unknown leave)
+- [x] Frontend vitest: `onRemoteSessionCreated` populates session correctly (new + update)
+- [x] Frontend vitest: `onRemoteUserMessage` dedup logic (same text skipped, different text appended)
 
 ## Polish & Edge Cases
 
-- [ ] Handle `connection/didLeave` notification reaching clients after the leaving client's events stop (timing)
-- [ ] Consider adding `session/didEnd` notification on project topic when session reaches done/error
-- [ ] Verify presence indicator updates correctly when a tab is closed (not just refresh)
-- [ ] Test behavior when all clients disconnect and reconnect during a running agent session
-- [ ] Consider persisting `createdBy` to session metadata on disk (`.bonsai/sessions/*.json`)
+- [x] `connection/didLeave` timing — already correct: published before `bus.unregister()`, so remaining clients receive it first
+- [x] Added `session/didEnd` notification on project topic when session reaches done/error (published from AgentService, wired in frontend wireEvents)
+- [x] Presence indicator on tab close — already correct: browser WebSocket disconnect triggers server-side cleanup
+- [x] Reconnect during running agent — already supported via ring buffer replay with `?last_seen=` query param
+- [x] `createdBy` persisted to session metadata on disk (added `created_by` field to AgentTask, set from connection identity, saved in `_save_task`)

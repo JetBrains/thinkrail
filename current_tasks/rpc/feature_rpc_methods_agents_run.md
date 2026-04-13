@@ -1,60 +1,59 @@
-# Implement RPC methods/agents.py: run_agent Handler
+# Implement RPC methods/agents.py: Agent Handlers
 
-> `run_agent` handler with notify capture and async launch
+> Agent handlers using EventBus for multi-client notification routing
 
 **Status:** Done
 **Priority:** High
 **Started:** 2026-03-02
-**Depends on:** `feature_rpc_methods_agents_basic` (file + error decorator exist)
-**Spec reference:** `backend/app/rpc/README.md` (lines 34, 205-219)
+**Updated:** 2026-04-12 (multi-client EventBus refactor)
+**Depends on:** `feature_rpc_methods_agents_basic`, `feature_rpc_event_bus`
+**Spec reference:** `backend/app/rpc/README.md`
 
-## Files to Modify
+## Files
 
 - `backend/app/rpc/methods/agents.py`
 
 ## Summary
 
-Add the `run_agent` handler to `methods/agents.py`. This is the most complex handler because it captures the current WebSocket notify callable at call time, passes it to `AgentService.run_task`, and returns immediately with the `taskId`. The actual agent run proceeds asynchronously in the background; streaming events are pushed to the client via the notify callable.
+Agent handlers in `methods/agents.py` manage session lifecycle via `AgentService`. All streaming events are routed through the **EventBus** — there is no `notify` parameter passed to service methods. The `current_conn_id` context variable identifies the calling client; `_auto_subscribe_all` ensures all project clients receive session events (Phase 1: broadcast-all).
 
-## Handler
+## Key Handlers
 
 | Handler | RPC Method | Params | Returns |
 |---------|------------|--------|---------|
-| `run_agent` | `agent/run` | `{ specIds: list[str], config: AgentConfig }` | `{ "taskId": task.id }` |
+| `run_agent` | `agent/run` | `{ specIds, config, skillId?, prompt?, name?, metaTicketId? }` | `{ "bonsaiSid": str }` |
+| `send_message` | `agent/send` | `{ bonsaiSid, text, isMarkdown? }` | `None` |
+| `respond_agent` | `agent/respond` | `{ bonsaiSid, requestId, response }` | `None` |
+| `prepare_agent` | `agent/prepare` | `{ specIds, config, skillId?, prompt?, name?, ... }` | `{ bonsaiSid, systemPrompt, sections, totalTokens }` |
+| `start_draft` | `agent/startDraft` | `{ bonsaiSid, prompt? }` | `{ "bonsaiSid": str }` |
 
-### Steps
+## Internal Components
 
-1. Import `notifications.current_notify`
-2. If `current_notify` is None, raise error (no active connection)
-3. Build `AgentConfig` from `params["config"]` dict
-4. Call `agent_service.run_task(spec_ids, config, current_notify)`
-5. Return `{ "taskId": task.id }`
+### `_auto_subscribe_all(bonsai_sid)`
+Subscribes all connections on the same project to `session:{bonsai_sid}`. Uses `current_conn_id` to find the calling connection's project, then iterates `bus.connections_for_project()`.
 
-### Error Paths
+### Multi-client sync notifications
+- `send_message` → publishes `session/userMessage` with `sentBy` to session topic
+- `respond_agent` → publishes `agent/requestResolved` with `resolvedBy` to session topic (first-responder-wins)
+- `prepare_agent` / `start_draft` → publishes `session/didCreate` to project topic
 
-- Missing `specIds`/`config` → `KeyError` → `-32602`
-- No active connection (`current_notify` is None) → `-32603`
+### `run_agent` flow
+1. Build `AgentConfig` from `params["config"]`
+2. Call `agent_service.run_task(spec_ids, config, ...)` — no notify param
+3. `_auto_subscribe_all(task.bonsai_sid)` subscribes all project clients
+4. Return `{"bonsaiSid": task.bonsai_sid}`
+5. Agent service publishes streaming events via `bus.publish_to_session()` internally
 
-## Plan
-
-1. Add `run_agent` handler to `backend/app/rpc/methods/agents.py`
-2. Import notifications module for `current_notify` access
-3. Validate `specIds` and `config` from params
-4. Construct `AgentConfig` from config dict (Pydantic handles validation)
-5. Capture `current_notify`, guard against None
-6. Call `agent_service.run_task(spec_ids, config, notify)` → `AgentTask`
-7. Return `{"taskId": task.id}`
-8. Write unit tests: mock AgentService + current_notify, test happy path and error cases (missing params, no connection)
-
-## Files
-
-| File | Action | Description |
-|------|--------|-------------|
-| `backend/app/rpc/methods/agents.py` | Modify | Add run_agent |
-| `backend/tests/rpc/test_methods_agents.py` | Modify | Add run_agent tests |
+### Error handling
+`_handle_errors` decorator maps domain exceptions to JSON-RPC error codes:
+- `TaskNotFoundError` → `-32011`
+- `FutureNotFoundError` → `-32012`
+- `KeyError`/`TypeError` → `-32602`
+- `JsonRpcError` → re-raise (e.g. `-32013` already-resolved)
+- Other → `-32603`
 
 ## Definition of Done
 
 - All unit tests pass
-- `run_agent` correctly captures and passes notify callable
-- Returns `taskId` immediately without blocking
+- Handlers route events through EventBus, not direct notify callables
+- Multi-client sync events published correctly
