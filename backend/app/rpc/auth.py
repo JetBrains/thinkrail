@@ -50,17 +50,21 @@ def load_users(project_root: Path) -> tuple[dict[str, UserIdentity], bool]:
     Returns ``(token_map, allow_anonymous)`` where *token_map* maps
     token strings to ``UserIdentity`` objects.
 
-    If the file doesn't exist, returns an empty map with
-    ``allow_anonymous=True`` (backward-compatible default).
+    Creates the file with defaults if it does not exist.
     """
-    users_path = project_root / ".bonsai" / "users.json"
-    if not users_path.is_file():
+    from app.core.project import ensure_meta_file
+
+    bonsai_dir = project_root / ".bonsai"
+    try:
+        raw = ensure_meta_file(bonsai_dir, "users.json")
+    except (ValueError, OSError) as exc:
+        logger.warning("Failed to ensure users.json: %s", exc)
         return {}, True
 
     try:
-        data = json.loads(users_path.read_text(encoding="utf-8"))
-    except (json.JSONDecodeError, OSError) as exc:
-        logger.warning("Failed to load %s: %s", users_path, exc)
+        data = json.loads(raw)
+    except json.JSONDecodeError as exc:
+        logger.warning("Failed to parse users.json: %s", exc)
         return {}, True
 
     allow_anonymous = data.get("allowAnonymous", True)

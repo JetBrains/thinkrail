@@ -71,6 +71,7 @@ from app.rpc.methods.board import (
     apply_all_drafts,
     apply_draft,
     attach_session as board_attach_session,
+    detach_session as board_detach_session,
     create_plan,
     create_ticket,
     delete_ticket,
@@ -100,6 +101,7 @@ from app.agent.service import AgentService
 from app.board.service import BoardService
 from app.core.config import AppConfig, load_config
 from app.core.fileio import read_text
+from app.core.project import ensure_project
 from app.core.watcher import WatchHandle, watch, stop
 from app.spec.service import SpecService, detect_spec_type
 from app.vis.service import VisualizationService
@@ -143,6 +145,7 @@ METHODS = {
     "board/linkSpec": board_link_spec,
     "board/unlinkSpec": board_unlink_spec,
     "board/attachSession": board_attach_session,
+    "board/detachSession": board_detach_session,
     "board/setPlanPath": board_set_plan_path,
     "board/setOrchestrator": board_set_orchestrator,
     "board/getPlan": get_plan,
@@ -240,10 +243,12 @@ def register_routes(app: FastAPI) -> None:
             return
 
         project_path = Path(project_param).expanduser().resolve()
-        if not (project_path / ".bonsai" / "registry.json").is_file():
+        try:
+            ensure_project(project_path)
+        except Exception:
             await websocket.close(
                 code=4002,
-                reason=f"Invalid project: {project_path} has no .bonsai/registry.json",
+                reason=f"Failed to initialize project at {project_path}",
             )
             return
 

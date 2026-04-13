@@ -40,9 +40,13 @@ class TestReadRegistry:
         assert len(links) == 1
         assert links[0].from_id == "a"
 
-    def test_missing_file_raises(self, tmp_path: Path) -> None:
-        with pytest.raises(FileNotFoundError):
-            read_registry(tmp_path / "nope.json")
+    def test_missing_file_creates_default(self, tmp_path: Path) -> None:
+        bonsai_dir = tmp_path / ".bonsai"
+        reg = bonsai_dir / "registry.json"
+        entries, links = read_registry(reg)
+        assert entries == []
+        assert links == []
+        assert reg.is_file()
 
     def test_malformed_json_raises(self, tmp_path: Path) -> None:
         reg = tmp_path / "registry.json"

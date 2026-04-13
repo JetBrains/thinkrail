@@ -7,13 +7,12 @@ settings or user-defined entries are not silently dropped.
 
 from __future__ import annotations
 
-import json
 from pathlib import Path
 from typing import Any
 
 from pydantic import BaseModel
 
-from app.core.fileio import read_text, write_text
+from app.core.fileio import write_text
 
 SETTINGS_REL_PATH = ".bonsai/settings.json"
 
@@ -41,12 +40,13 @@ def _settings_path(project_root: Path) -> Path:
 
 
 def load_settings(project_root: Path) -> ProjectSettings:
-    """Read settings from disk, returning defaults if the file is missing."""
-    path = _settings_path(project_root)
-    if not path.is_file():
-        return ProjectSettings()
+    """Read settings from disk, creating defaults if the file is missing."""
+    from app.core.project import ensure_meta_file
+
+    bonsai_dir = project_root / ".bonsai"
+    content = ensure_meta_file(bonsai_dir, "settings.json")
     try:
-        return ProjectSettings.model_validate_json(read_text(path))
+        return ProjectSettings.model_validate_json(content)
     except Exception:
         return ProjectSettings()
 
@@ -61,9 +61,4 @@ def save_settings(project_root: Path, data: dict[str, Any]) -> ProjectSettings:
 
 def ensure_settings_file(project_root: Path) -> ProjectSettings:
     """Create the settings file with defaults if it doesn't exist yet."""
-    path = _settings_path(project_root)
-    if path.is_file():
-        return load_settings(project_root)
-    settings = ProjectSettings()
-    write_text(path, settings.model_dump_json(indent=2) + "\n")
-    return settings
+    return load_settings(project_root)

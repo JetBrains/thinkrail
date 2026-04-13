@@ -5,7 +5,7 @@ import os
 import tempfile
 from pathlib import Path
 
-from app.core.fileio import read_text
+from app.core.project import ensure_meta_file
 from app.spec.models import Link, RegistryEntry
 
 
@@ -13,10 +13,10 @@ def read_registry(path: Path) -> tuple[list[RegistryEntry], list[Link]]:
     """Read and parse ``registry.json``.
 
     Returns (entries, links).
-    Raises ``FileNotFoundError`` if the file is missing.
+    Creates the file with empty defaults if it does not exist.
     Raises ``ValueError`` if the JSON is malformed or missing required keys.
     """
-    content = read_text(path)
+    content = ensure_meta_file(path.parent, "registry.json")
     try:
         data = json.loads(content)
     except json.JSONDecodeError as exc:

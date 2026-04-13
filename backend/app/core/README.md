@@ -59,7 +59,8 @@ graph TD
 |------|---------------|------------|
 | `config.py` | App configuration: project root discovery, directory paths, server settings, frozen mode detection | pydantic, pydantic-settings |
 | `fileio.py` | File system operations: read, write, delete files; create directories | — |
-| `settings.py` | Project settings: load/save/ensure `.bonsai/settings.json` | pydantic, fileio |
+| `project.py` | Lazy auto-creation of `.bonsai/` meta-files and subdirectories; ensures registry.json, settings.json, users.json exist with defaults on access | fileio, settings |
+| `settings.py` | Project settings: load/save/ensure `.bonsai/settings.json` | pydantic, project |
 | `watcher.py` | Async file change watching: detect spec file and registry changes | watchfiles / watchdog |
 
 ## Public Interface
@@ -100,13 +101,26 @@ graph TD
 | `watch` | `async (paths: list[Path], callback: Callable) → WatchHandle` | Start watching paths for file changes |
 | `stop` | `async (handle: WatchHandle) → None` | Stop a file watch |
 
+### project.py
+
+Lazy auto-creation of `.bonsai/` meta-files. Each known meta-file has a default-content factory. When code reads a meta-file via `ensure_meta_file()`, it is created with defaults if it doesn't exist on disk. `ensure_project()` is called at WebSocket connection time as a safety net.
+
+| Function | Signature | Description |
+|----------|-----------|-------------|
+| `ensure_meta_file` | `(bonsai_dir: Path, rel_path: str) → str` | Read meta-file if exists; create with defaults if missing. Returns file content. Raises `ValueError` for unknown files. |
+| `ensure_meta_dir` | `(bonsai_dir: Path, name: str) → Path` | Ensure `.bonsai/{name}/` directory exists. Returns path. |
+| `ensure_project` | `(project_root: Path) → None` | Ensure all known meta-files and subdirectories exist under `.bonsai/`. |
+
+Known meta-files: `registry.json`, `settings.json`, `users.json`.
+Known subdirectories: `sessions`, `trash`, `plans`, `meta-tickets`, `spec-drafts`, `spec-patches`.
+
 ### settings.py
 
 | Function | Signature | Description |
 |----------|-----------|-------------|
-| `load_settings` | `(project_root: Path) → ProjectSettings` | Read `.bonsai/settings.json`, returning defaults if missing |
+| `load_settings` | `(project_root: Path) → ProjectSettings` | Read `.bonsai/settings.json`, creating defaults if missing (via `ensure_meta_file`) |
 | `save_settings` | `(project_root: Path, data: dict) → ProjectSettings` | Validate and write settings |
-| `ensure_settings_file` | `(project_root: Path) → ProjectSettings` | Create settings file with defaults if it doesn't exist |
+| `ensure_settings_file` | `(project_root: Path) → ProjectSettings` | Delegates to `load_settings` (which now auto-creates) |
 
 ### Models
 

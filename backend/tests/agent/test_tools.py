@@ -109,13 +109,13 @@ class TestValidateSpecIds:
         assert result is not None
         assert "Unknown specIds: b" in result
 
-    def test_validate_spec_ids_registry_unavailable(self, tmp_path: Path) -> None:
-        """Non-existent registry → returns error containing 'registry unavailable'."""
+    def test_validate_spec_ids_missing_registry_creates_default(self, tmp_path: Path) -> None:
+        """Non-existent registry is auto-created; unknown IDs are reported."""
         from app.agent.tools.suggest_session import _validate_spec_ids
 
-        result = _validate_spec_ids(["x"], tmp_path / "no-such-registry.json")
+        result = _validate_spec_ids(["x"], tmp_path / ".bonsai" / "registry.json")
         assert result is not None
-        assert "registry unavailable" in result
+        assert "Unknown specIds: x" in result
 
 
 # ===========================================================================

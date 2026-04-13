@@ -39,10 +39,11 @@ class TestGenerateToken:
 
 
 class TestLoadUsers:
-    def test_no_file_returns_empty_allow_anon(self, tmp_path: Path) -> None:
+    def test_no_file_creates_default_and_returns_empty_allow_anon(self, tmp_path: Path) -> None:
         token_map, allow_anon = load_users(tmp_path)
         assert token_map == {}
         assert allow_anon is True
+        assert (tmp_path / ".bonsai" / "users.json").is_file()
 
     def test_loads_users(self, tmp_path: Path) -> None:
         _write_users(tmp_path, {
