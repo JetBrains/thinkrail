@@ -8,6 +8,7 @@ export interface Skill {
 }
 
 export const FALLBACK_SKILLS: Skill[] = [
+  { id: "new-project", icon: "\u{1F331}", name: "New Project", description: "Start a brand-new project from scratch", group: "Foundation" },
   { id: "goal-and-requirements", icon: "\u{1F3AF}", name: "Goal & Requirements", description: "Define project goal and requirements", group: "Foundation" },
   { id: "architecture-design", icon: "\u{1F3DB}", name: "Architecture", description: "Create system architecture document", group: "Foundation" },
   { id: "module-design", icon: "\u{1F4E6}", name: "Module Design", description: "Design a module-level specification", group: "Creation" },

@@ -452,6 +452,40 @@
 .chat-approval--approved { border-color: var(--green); }
 .chat-approval--denied { border-color: var(--red); }
 
+/* ── Confirm Statement Card ── */
+.chat-statement {
+  border: 2px solid var(--purple);
+  border-radius: var(--radius-md);
+  padding: var(--space-lg);
+  max-width: 90%;
+  background: var(--elevated);
+  animation: slideUp 0.22s ease-out;
+}
+.chat-statement--answered { opacity: 0.7; border-width: 1px; border-color: var(--border); }
+.chat-statement-label { font-size: 9px; text-transform: uppercase; font-weight: 700; color: var(--purple); letter-spacing: 0.5px; margin-bottom: var(--space-sm); }
+.chat-statement-header-row { display: flex; align-items: center; margin-bottom: var(--space-sm); }
+.chat-statement-header-row .chat-statement-label { margin-bottom: 0; }
+.chat-statement-done { margin-left: auto; font-size: 11px; color: var(--green); }
+.chat-statement-interrupted { color: var(--muted); }
+.chat-statement-approved-text { font-size: 12px; color: var(--text); white-space: pre-wrap; }
+.chat-statement-textarea {
+  width: 100%;
+  box-sizing: border-box;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text);
+  font-size: 12px;
+  font-family: inherit;
+  padding: var(--space-sm) var(--space-md);
+  resize: vertical;
+  outline: none;
+  margin-bottom: var(--space-md);
+}
+.chat-statement-textarea:focus { border-color: var(--purple); }
+.chat-statement-footer { display: flex; align-items: center; gap: var(--space-sm); }
+.chat-statement-hint { font-size: 11px; color: var(--hint); margin-right: auto; }
+
 .chat-approval-row {
   display: flex;
   align-items: center;

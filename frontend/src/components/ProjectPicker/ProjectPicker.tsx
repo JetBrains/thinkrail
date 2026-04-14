@@ -4,7 +4,7 @@ import { useTokenStore } from "@/store/tokenStore.ts";
 import "./ProjectPicker.css";
 
 interface ProjectPickerProps {
-  onSelect: (path: string) => void;
+  onSelect: (path: string, isNew?: boolean) => void;
   onClose?: () => void;
 }
 
@@ -95,7 +95,7 @@ export function ProjectPicker({ onSelect, onClose }: ProjectPickerProps) {
           return;
         }
         if (validateData.valid) {
-          onSelect(validateData.path);
+          onSelect(validateData.path, false);
           return;
         }
         // Not yet initialized — auto-init
@@ -109,7 +109,7 @@ export function ProjectPicker({ onSelect, onClose }: ProjectPickerProps) {
           setError(initData.error);
           return;
         }
-        onSelect(initData.path);
+        onSelect(initData.path, true);
       } catch (e) {
         setError(`Cannot reach backend: ${(e as Error).message}`);
       } finally {

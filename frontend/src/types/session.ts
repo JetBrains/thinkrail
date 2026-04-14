@@ -59,7 +59,7 @@ export interface SessionMetrics {
 
 export interface PendingRequest {
   requestId: string;
-  type: "question" | "approval" | "suggestion" | "description-suggestion" | "step-proposal";
+  type: "question" | "approval" | "suggestion" | "statement" | "description-suggestion" | "step-proposal";
   // Question fields
   questions?: Question[];
   // Approval fields
@@ -71,6 +71,8 @@ export interface PendingRequest {
   name?: string;
   reason?: string;
   prompt?: string;
+  // Statement fields
+  statement?: string;
   // Description suggestion fields
   description?: string;
   section?: string;

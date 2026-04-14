@@ -113,6 +113,27 @@ async def can_use_tool(
         if tool_name.endswith(suffix):
             return await intercept_fn(input_data, tracker, notify, task, config)
 
+    # Built-in: ConfirmStatement
+    if tool_name == "ConfirmStatement":
+        request_id = str(uuid4())
+        future = tracker.register_future(task.bonsai_sid, request_id)
+        await notify(
+            "agent/confirmStatement",
+            {"bonsaiSid": task.bonsai_sid, "statement": input_data.get("statement", "")},
+            request_id=request_id,
+        )
+        response = await future
+        if response.get("behavior") == "deny":
+            return PermissionResultDeny(
+                behavior="deny",
+                message=response.get("message", "Timed out"),
+                interrupt=response.get("interrupt", False),
+            )
+        return PermissionResultAllow(
+            behavior="allow",
+            updated_input={"statement": response.get("statement", input_data.get("statement", ""))},
+        )
+
     # Built-in: AskUserQuestion
     if tool_name == "AskUserQuestion":
         response, _request_id = await _await_user_response(

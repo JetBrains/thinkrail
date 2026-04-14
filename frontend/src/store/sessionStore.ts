@@ -107,6 +107,7 @@ interface SessionStore {
   onAgentEvent: (method: string, params: Record<string, unknown>) => void;
   onAskQuestion: (params: Record<string, unknown>) => void;
   onConfirmAction: (params: Record<string, unknown>) => void;
+  onConfirmStatement: (params: Record<string, unknown>) => void;
   onSuggestSession: (params: Record<string, unknown>) => void;
   onSuggestDescription: (params: Record<string, unknown>) => void;
   onSuggestStep: (params: Record<string, unknown>) => void;
@@ -531,7 +532,7 @@ function buildAnsweredRequests(
   // Second pass (non-active only): mark remaining unresolved requests as historical
   if (!isActive) {
     for (const ev of events) {
-      if (ev.eventType === "askUserQuestion" || ev.eventType === "confirmAction" || ev.eventType === "suggestSession" || ev.eventType === "suggestDescription") {
+      if (ev.eventType === "askUserQuestion" || ev.eventType === "confirmAction" || ev.eventType === "confirmStatement" || ev.eventType === "suggestSession" || ev.eventType === "suggestDescription") {
         const rid = (ev.payload.requestId as string) ?? "";
         if (rid && !answered.has(rid)) answered.set(rid, { historical: true });
       }
@@ -1638,6 +1639,39 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
             type: "approval",
             toolName: params.toolName as string,
             toolInput: params.toolInput as Record<string, unknown>,
+          },
+        });
+      }
+      return { sessions };
+    });
+  },
+
+  onConfirmStatement: (params) => {
+    const bonsaiSid = params.bonsaiSid as string;
+    const requestId = params.requestId as string;
+    set((s) => {
+      const existing = s.sessions.get(bonsaiSid);
+      if (existing?.events.some(
+        (e) => e.eventType === "confirmStatement" && (e.payload as Record<string, unknown>).requestId === requestId
+      )) {
+        return s;
+      }
+      const sessions = appendEvent(
+        s.sessions,
+        bonsaiSid,
+        "agent/confirmStatement",
+        params,
+        s.closedIds,
+      );
+      const session = sessions.get(bonsaiSid);
+      if (session) {
+        sessions.set(bonsaiSid, {
+          ...session,
+          status: "waiting",
+          pendingRequest: {
+            requestId,
+            type: "statement",
+            statement: params.statement as string,
           },
         });
       }

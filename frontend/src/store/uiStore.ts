@@ -9,6 +9,8 @@ interface UiStore {
   projectPath: string | null;
   projectName: string;
   setProject: (path: string) => void;
+  isNewProject: boolean;
+  setIsNewProject: (val: boolean) => void;
   leftPanelCollapsed: boolean;
   rightPanelCollapsed: boolean;
   leftDrawerOpen: boolean;
@@ -40,6 +42,8 @@ export const useUiStore = create<UiStore>()(
       projectName: "Project",
       setProject: (path: string) =>
         set({ projectPath: path, projectName: path.split("/").pop() ?? "Project" }),
+      isNewProject: false,
+      setIsNewProject: (val) => set({ isNewProject: val }),
       leftPanelCollapsed: false,
       rightPanelCollapsed: false,
       leftDrawerOpen: false,

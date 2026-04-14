@@ -9,6 +9,7 @@ import { userRestApi } from "@/api/methods/user.ts";
 import { applyTheme, getThemePreference } from "./utils/theme.ts";
 import { useFileStore } from "@/store/fileStore.ts";
 import { useSessionStore } from "@/store/sessionStore.ts";
+import { useUiStore } from "@/store/uiStore.ts";
 import { useTokenStore } from "@/store/tokenStore.ts";
 import "./styles/global.css";
 
@@ -67,9 +68,10 @@ function Root() {
     setAuthenticated(true);
   }, []);
 
-  const handleSelect = useCallback((path: string) => {
+  const handleSelect = useCallback((path: string, isNew?: boolean) => {
     useFileStore.getState().unload();
     useSessionStore.getState().unload();
+    useUiStore.getState().setIsNewProject(isNew ?? false);
     setProjectPath(path);
     setShowPicker(false);
   }, []);
