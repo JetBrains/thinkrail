@@ -188,12 +188,21 @@ class ServerStore:
     # -- migrations ---------------------------------------------------------
 
     async def _migrate_v1_to_v2(self) -> None:
-        """Add is_admin column to users table (idempotent)."""
+        """Add is_admin column to users table (idempotent).
+
+        Auto-promotes the first user (by creation time) to admin so that
+        pre-admin installations have at least one admin after migration.
+        """
         async with self._db.execute("PRAGMA table_info(users)") as cur:
             columns = {row[1] async for row in cur}
         if "is_admin" not in columns:
             await self._db.execute(
                 "ALTER TABLE users ADD COLUMN is_admin INTEGER NOT NULL DEFAULT 0"
+            )
+            # Auto-promote the earliest user to admin
+            await self._db.execute(
+                """UPDATE users SET is_admin = 1
+                   WHERE id = (SELECT id FROM users ORDER BY created_at ASC LIMIT 1)"""
             )
 
     # -- users --------------------------------------------------------------

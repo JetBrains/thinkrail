@@ -31,6 +31,23 @@ async def _create_user(user_id: str, display_name: str, *, is_admin: bool = Fals
         await store.close()
 
 
+async def _set_admin(user_id: str) -> None:
+    store = ServerStore(get_data_dir())
+    await store.open()
+    try:
+        user = await store.get_user(user_id)
+        if not user:
+            print(f"User {user_id!r} not found.")
+            sys.exit(1)
+        if user.is_admin:
+            print(f'User "{user.id}" is already an admin.')
+            return
+        await store.set_admin(user_id, True)
+        print(f'Granted admin to "{user.id}" ({user.display_name})')
+    finally:
+        await store.close()
+
+
 async def _list_users() -> None:
     store = ServerStore(get_data_dir())
     await store.open()
@@ -57,6 +74,10 @@ def main() -> None:
     cu.add_argument("--name", required=True, help="Display name (e.g. 'Danya')")
     cu.add_argument("--admin", action="store_true", help="Grant admin role")
 
+    # set-admin
+    sa = sub.add_parser("set-admin", help="Grant admin role to an existing user")
+    sa.add_argument("--id", required=True, help="User ID to promote")
+
     # list-users
     sub.add_parser("list-users", help="List all server users")
 
@@ -64,6 +85,8 @@ def main() -> None:
 
     if args.command == "create-user":
         asyncio.run(_create_user(args.id, args.name, is_admin=args.admin))
+    elif args.command == "set-admin":
+        asyncio.run(_set_admin(args.id))
     elif args.command == "list-users":
         asyncio.run(_list_users())
     else:

@@ -75,7 +75,7 @@ graph TD
 
 | Method | Signature | Description |
 |--------|-----------|-------------|
-| `open` | `async () -> None` | Open DB connection, set PRAGMAs, run migrations |
+| `open` | `async () -> None` | Open DB connection, set PRAGMAs, run migrations (v1→v2: adds `is_admin`, auto-promotes first user) |
 | `close` | `async () -> None` | Close DB connection |
 
 ### Users

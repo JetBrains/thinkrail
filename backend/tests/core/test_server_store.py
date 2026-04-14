@@ -314,10 +314,61 @@ class TestMigration:
         try:
             user = await store.get_user("alice")
             assert user is not None
-            assert user.is_admin is False  # default after migration
+            assert user.is_admin is True  # first user auto-promoted to admin
 
-            # Can create admin users after migration
-            admin = await store.create_user("boss", "Boss", is_admin=True)
-            assert admin.is_admin is True
+            # Can create non-admin users after migration
+            regular = await store.create_user("bob", "Bob")
+            assert regular.is_admin is False
+        finally:
+            await store.close()
+
+    async def test_v1_to_v2_multi_user_promotes_earliest(self, tmp_path: Path):
+        """With multiple v1 users, only the earliest (by created_at) becomes admin."""
+        db_path = tmp_path / "bonsai.db"
+        conn = sqlite3.connect(str(db_path))
+        conn.executescript("""
+            CREATE TABLE IF NOT EXISTS _schema_version (
+                version INTEGER PRIMARY KEY, applied_at TEXT NOT NULL
+            );
+            INSERT INTO _schema_version (version, applied_at) VALUES (1, '2026-01-01T00:00:00');
+
+            CREATE TABLE IF NOT EXISTS users (
+                id TEXT PRIMARY KEY, display_name TEXT NOT NULL,
+                created_at TEXT NOT NULL, updated_at TEXT NOT NULL
+            ) WITHOUT ROWID;
+            INSERT INTO users VALUES ('bob', 'Bob', '2026-01-02', '2026-01-02');
+            INSERT INTO users VALUES ('alice', 'Alice', '2026-01-01', '2026-01-01');
+
+            CREATE TABLE IF NOT EXISTS tokens (
+                token TEXT PRIMARY KEY, user_id TEXT NOT NULL REFERENCES users(id),
+                created_at TEXT NOT NULL
+            ) WITHOUT ROWID;
+            CREATE TABLE IF NOT EXISTS server_config (
+                key TEXT PRIMARY KEY, value TEXT NOT NULL, updated_at TEXT NOT NULL
+            ) WITHOUT ROWID;
+            CREATE TABLE IF NOT EXISTS projects (
+                path TEXT PRIMARY KEY, name TEXT NOT NULL,
+                registered_at TEXT NOT NULL, last_opened_at TEXT NOT NULL
+            ) WITHOUT ROWID;
+            CREATE TABLE IF NOT EXISTS user_preferences (
+                user_id TEXT PRIMARY KEY REFERENCES users(id),
+                prefs TEXT NOT NULL DEFAULT '{}', updated_at TEXT NOT NULL
+            ) WITHOUT ROWID;
+            CREATE TABLE IF NOT EXISTS user_recent_projects (
+                user_id TEXT NOT NULL REFERENCES users(id),
+                project_path TEXT NOT NULL REFERENCES projects(path),
+                last_opened TEXT NOT NULL,
+                PRIMARY KEY (user_id, project_path)
+            ) WITHOUT ROWID;
+        """)
+        conn.close()
+
+        store = ServerStore(tmp_path)
+        await store.open()
+        try:
+            alice = await store.get_user("alice")
+            bob = await store.get_user("bob")
+            assert alice is not None and alice.is_admin is True  # earliest
+            assert bob is not None and bob.is_admin is False  # not earliest
         finally:
             await store.close()

@@ -29,6 +29,11 @@ This outputs a `bns_` token. Enter it on the login screen at http://localhost:30
 
 Alternatively, on first launch with no users, the web UI shows a SetupScreen to create the first admin directly.
 
+To promote an existing user to admin:
+```bash
+cd backend && uv run python -m app.cli set-admin --id <user-id>
+```
+
 ## Dependency Management
 - **Backend:** `cd backend && uv add <package>` to add deps; `uv sync` to install
 - **Frontend:** `cd frontend && npm install <package>` to add deps; `npm install` to sync

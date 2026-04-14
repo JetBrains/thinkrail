@@ -13,9 +13,9 @@ export interface RpcClientOptions {
 const DEFAULT_OPTIONS: RpcClientOptions = {
   autoReconnect: true,
   maxReconnectAttempts: Infinity,
-  reconnectBackoff: [1000, 2000, 3000],
+  reconnectBackoff: [100, 500, 1000],
   requestTimeout: 30_000,
-  connectTimeout: 3000,
+  connectTimeout: 5000,
 };
 
 interface PendingRequest {

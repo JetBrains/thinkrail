@@ -155,7 +155,7 @@ CREATE INDEX IF NOT EXISTS idx_recent_projects_user_time
 
 Manual `CREATE TABLE IF NOT EXISTS` with `_schema_version` tracking. Graduate to Alembic when schema grows past ~8 tables or needs column alterations.
 
-**v1 → v2:** Added `is_admin INTEGER NOT NULL DEFAULT 0` to `users` table. Migration checks `PRAGMA table_info(users)` for idempotency before issuing `ALTER TABLE`.
+**v1 → v2:** Added `is_admin INTEGER NOT NULL DEFAULT 0` to `users` table. Migration checks `PRAGMA table_info(users)` for idempotency before issuing `ALTER TABLE`. The earliest user (by `created_at`) is auto-promoted to admin so pre-admin installations have at least one admin.
 
 ## ServerStore Module
 

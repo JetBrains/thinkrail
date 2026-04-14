@@ -33,7 +33,7 @@ CREATE TABLE IF NOT EXISTS users (
 ) WITHOUT ROWID;
 ```
 
-Migration from v1: `ALTER TABLE users ADD COLUMN is_admin INTEGER NOT NULL DEFAULT 0` (idempotent — checks `PRAGMA table_info` first).
+Migration from v1: `ALTER TABLE users ADD COLUMN is_admin INTEGER NOT NULL DEFAULT 0` (idempotent — checks `PRAGMA table_info` first). The earliest user (by `created_at`) is auto-promoted to admin during migration so that pre-admin installations have at least one admin.
 
 ## Bootstrap Flow
 
@@ -58,6 +58,17 @@ cd backend && uv run python -m app.cli create-user --id danya --name "Danya" --a
 # → Created user "danya" (Danya) [admin]
 # → Token: bns_a8f3k2m9...
 ```
+
+### Promoting existing users
+
+```bash
+cd backend && uv run python -m app.cli set-admin --id danya
+# → Granted admin to "danya" (Danya)
+```
+
+### Existing installations (v1→v2 migration)
+
+When the database migrates from schema v1 to v2, the earliest user (by `created_at`) is automatically promoted to admin. No manual action needed.
 
 ## REST Endpoints (no auth required)
 
@@ -86,6 +97,15 @@ Enforced in two places:
 - `admin/removeAdmin` — checks `admin_count() <= 1` before revoking admin
 
 SQLite's single-writer serialization ensures these check-then-act patterns are safe.
+
+## WebSocket Lifecycle on Project Switch
+
+When the user switches projects, the `RpcProvider` in `main.tsx` is remounted via `key={projectPath}`. The old provider's `useEffect` cleanup calls `client.disconnect()`, which:
+1. Closes the old WebSocket cleanly
+2. Cancels pending reconnection timers
+3. Rejects any pending RPC requests
+
+The new provider then creates a fresh `RpcClient` with the new project URL (including the same server-wide token) and connects.
 
 ## Frontend Components
 
@@ -118,7 +138,7 @@ checking → needsSetup? → SetupScreen
 | `backend/app/rpc/methods/admin.py` | Admin RPC handlers with `_require_admin()` guard |
 | `backend/app/rpc/auth.py` | `is_admin` in `UserIdentity` |
 | `backend/app/main.py` | Setup REST endpoints, `isAdmin` in profile response |
-| `backend/app/cli.py` | `--admin` flag on `create-user` |
+| `backend/app/cli.py` | `--admin` flag on `create-user`, `set-admin` command |
 | `frontend/src/components/SetupScreen/` | First-user bootstrap UI |
 | `frontend/src/components/AdminPanel/` | User management UI |
 | `frontend/src/api/methods/admin.ts` | Admin RPC wrappers |
@@ -133,6 +153,8 @@ checking → needsSetup? → SetupScreen
 | CLI retains `--admin` flag | Separate from UI bootstrap | Server deployments still need CLI bootstrapping |
 | Token shown once on creation | Not stored in UI | Security: tokens should be saved by the user immediately |
 | Admin button in Header | Not in settings | Visible and accessible, but only to admins |
+| Auto-promote on migration | First user becomes admin | Pre-admin installations need an admin without manual intervention |
+| Admin scope is server-wide | Not per-project | Simpler model; sufficient for current scale; extensible to per-project RBAC later |
 
 ## Related Specs
 

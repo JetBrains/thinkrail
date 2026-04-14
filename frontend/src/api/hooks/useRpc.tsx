@@ -48,15 +48,22 @@ export function RpcProvider({
 
   useEffect(() => {
     const client = clientRef.current!;
-    // Only connect if not already connected (handles StrictMode re-mount)
-    if (client.state === "disconnected" || client.state === "failed") {
-      client.connect().catch(() => {
-        // Connection failures handled by state machine (reconnect)
-      });
-    }
-    // Don't disconnect on cleanup — the client is shared via ref and
-    // survives StrictMode unmount/remount cycles.
-    // Disconnect only on actual page unload.
+
+    // Defer connect to a macrotask so StrictMode's synchronous
+    // unmount→remount cycle completes before any WebSocket is created.
+    // The cleanup cancels the timer if the component unmounts first.
+    const timer = setTimeout(() => {
+      if (client.state === "disconnected" || client.state === "failed") {
+        client.connect().catch(() => {
+          // Connection failures handled by state machine (reconnect)
+        });
+      }
+    }, 0);
+
+    return () => {
+      clearTimeout(timer);
+      client.disconnect();
+    };
   }, []);
 
   return (
