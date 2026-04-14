@@ -19,6 +19,16 @@ cd backend && uv run python -m app.main    # backend only
 cd frontend && npm run dev                  # frontend only
 ```
 
+## First-Time Setup
+
+Create the first admin user before accessing the web UI:
+```bash
+cd backend && uv run python -m app.cli create-user --id <your-id> --name "<Your Name>" --admin
+```
+This outputs a `bns_` token. Enter it on the login screen at http://localhost:3000.
+
+Alternatively, on first launch with no users, the web UI shows a SetupScreen to create the first admin directly.
+
 ## Dependency Management
 - **Backend:** `cd backend && uv add <package>` to add deps; `uv sync` to install
 - **Frontend:** `cd frontend && npm install <package>` to add deps; `npm install` to sync
@@ -40,16 +50,17 @@ cd frontend && npm run dev                  # frontend only
 backend/
   app/
     main.py           # FastAPI entry point (create_app factory)
-    core/             # Config, file I/O, watcher
+    cli.py            # Admin CLI (create-user, list-users)
+    core/             # Config, file I/O, watcher, server_store (SQLite)
     spec/             # Spec models, parser, validator, registry, graph, service
     agent/            # Agent models, tracker, runner, service, context, persistence
     rpc/              # WebSocket RPC server + JSON-RPC methods
-      methods/        # specs.py, agents.py
+      methods/        # specs.py, agents.py, admin.py, user.py, auth.py
   tests/              # pytest tests (mirrors app/ structure)
 frontend/
   src/
     api/              # WebSocket client, RPC hooks
-    components/       # React components (AppShell, ChatStream, GraphView, etc.)
+    components/       # React components (AppShell, LoginScreen, SetupScreen, AdminPanel, etc.)
     store/            # Zustand stores
     styles/           # Global CSS, theming
     types/            # Shared TypeScript types

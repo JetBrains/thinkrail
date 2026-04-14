@@ -3,6 +3,7 @@ import { createRoot } from "react-dom/client";
 import { RpcProvider } from "@/api/index.ts";
 import { App } from "./App.tsx";
 import { LoginScreen } from "@/components/LoginScreen/LoginScreen.tsx";
+import { SetupScreen } from "@/components/SetupScreen/SetupScreen.tsx";
 import { ProjectPicker } from "@/components/ProjectPicker/ProjectPicker.tsx";
 import { userRestApi } from "@/api/methods/user.ts";
 import { applyTheme, getThemePreference } from "./utils/theme.ts";
@@ -21,29 +22,46 @@ function Root() {
   const [showPicker, setShowPicker] = useState(true);
   const [authenticated, setAuthenticated] = useState(false);
   const [checkingAuth, setCheckingAuth] = useState(true);
+  const [needsSetup, setNeedsSetup] = useState(false);
 
   const token = useTokenStore((s) => s.token);
 
-  // On mount: validate existing token
+  // On mount: check setup status, then validate existing token
   useEffect(() => {
-    if (!token) {
-      setCheckingAuth(false);
-      return;
-    }
-    userRestApi.getProfile(token).then((profile) => {
-      if (profile) {
-        setAuthenticated(true);
-      } else {
-        // Stale token — clear it
-        useTokenStore.getState().setToken(null);
-      }
-      setCheckingAuth(false);
-    }).catch(() => {
-      // Server unreachable — still try to connect (token might be valid)
-      setAuthenticated(true);
-      setCheckingAuth(false);
-    });
+    fetch("/api/setup/status")
+      .then((r) => r.json())
+      .then((data) => {
+        if (data.needsSetup) {
+          setNeedsSetup(true);
+          setCheckingAuth(false);
+          return;
+        }
+        // Setup done — validate existing token
+        if (!token) {
+          setCheckingAuth(false);
+          return;
+        }
+        return userRestApi.getProfile(token).then((profile) => {
+          if (profile) {
+            useTokenStore.getState().setIsAdmin(profile.isAdmin);
+            setAuthenticated(true);
+          } else {
+            useTokenStore.getState().setToken(null);
+          }
+          setCheckingAuth(false);
+        });
+      })
+      .catch(() => {
+        // Server unreachable — try existing token
+        if (token) setAuthenticated(true);
+        setCheckingAuth(false);
+      });
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const handleSetupSuccess = useCallback(() => {
+    setNeedsSetup(false);
+    setAuthenticated(true);
+  }, []);
 
   const handleLoginSuccess = useCallback(() => {
     setAuthenticated(true);
@@ -67,6 +85,11 @@ function Root() {
 
   // Still checking stored token
   if (checkingAuth) return null;
+
+  // First-time setup — no users exist yet
+  if (needsSetup) {
+    return <SetupScreen onSuccess={handleSetupSuccess} />;
+  }
 
   // Not authenticated — show login screen
   if (!authenticated) {

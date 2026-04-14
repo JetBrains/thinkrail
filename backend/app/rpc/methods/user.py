@@ -56,6 +56,7 @@ async def get_profile(server_store: "ServerStore", **params: Any) -> dict:
     return {
         "userId": user.id,
         "displayName": user.display_name,
+        "isAdmin": user.is_admin,
         "createdAt": user.created_at,
     }
 

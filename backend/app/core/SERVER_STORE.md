@@ -43,10 +43,13 @@ graph TD
         URPC["rpc/methods/user.py"]
         REST["main.py (REST endpoints)"]
         CLI["app.cli (bootstrap)"]
+        ARPC["rpc/methods/admin.py"]
     end
 
     Auth --> Tokens
     Auth --> Users
+    ARPC --> Users
+    ARPC --> Tokens
     WS --> Projects
     WS --> Recents
     URPC --> Prefs
@@ -80,9 +83,13 @@ graph TD
 | Method | Signature | Description |
 |--------|-----------|-------------|
 | `get_user` | `async (user_id: str) -> User \| None` | Look up by ID |
-| `create_user` | `async (user_id: str, display_name: str) -> User` | Create new user |
+| `create_user` | `async (user_id: str, display_name: str, *, is_admin: bool = False) -> User` | Create new user |
 | `ensure_user` | `async (user_id: str, display_name: str) -> User` | Get or create |
 | `list_users` | `async () -> list[User]` | All users |
+| `user_count` | `async () -> int` | Total user count |
+| `admin_count` | `async () -> int` | Count of admin users |
+| `set_admin` | `async (user_id: str, is_admin: bool) -> None` | Set/revoke admin flag |
+| `delete_user` | `async (user_id: str) -> None` | Delete user + cascade (tokens, prefs, recents) |
 
 ### Tokens
 
@@ -120,12 +127,12 @@ graph TD
 
 | Model | Fields | Description |
 |-------|--------|-------------|
-| `User` | `id, display_name, created_at, updated_at` | Server-wide user identity |
+| `User` | `id, display_name, is_admin, created_at, updated_at` | Server-wide user identity |
 | `Token` | `token, user_id, created_at` | Auth token |
 | `KnownProject` | `path, name, registered_at, last_opened_at` | Registered project |
 | `RecentProject` | `project_path, name, last_opened` | User's recent project entry |
 
-Models are Pydantic `BaseModel` instances. `User` and `KnownProject` map 1:1 to DB rows.
+Models are Python `dataclass` instances. `User` and `KnownProject` map 1:1 to DB rows.
 
 ## Design Decisions
 
@@ -150,5 +157,5 @@ Models are Pydantic `BaseModel` instances. `User` and `KnownProject` map 1:1 to 
 
 - Single `aiosqlite` connection may bottleneck under very high read concurrency (>100 concurrent reads). Add connection pool if needed.
 - No token expiration — tokens live forever until revoked.
-- No user deletion — can revoke all tokens, but user row persists.
 - Schema migrations are manual — will need Alembic when schema grows.
+- At least one admin must exist — enforced by `admin_count()` checks in RPC layer, not at DB level.

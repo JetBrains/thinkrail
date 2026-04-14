@@ -2483,6 +2483,27 @@
       "updated": "2026-04-14"
     },
     {
+      "id": "feature-admin-system",
+      "type": "architecture-design",
+      "path": "features/ADMIN_SYSTEM_DESIGN.md",
+      "title": "Admin Role System",
+      "status": "active",
+      "covers": [
+        "backend/app/rpc/methods/admin.py",
+        "frontend/src/components/AdminPanel/AdminPanel.tsx",
+        "frontend/src/components/SetupScreen/SetupScreen.tsx",
+        "frontend/src/api/methods/admin.ts"
+      ],
+      "tags": [
+        "backend",
+        "frontend",
+        "admin",
+        "auth"
+      ],
+      "created": "2026-04-14",
+      "updated": "2026-04-14"
+    },
+    {
       "id": "module-auth-migration",
       "type": "module-design",
       "path": "backend/app/rpc/AUTH_MIGRATION.md",
@@ -3986,6 +4007,11 @@
     },
     {
       "from": "module-auth-migration",
+      "to": "storage-architecture",
+      "type": "parent"
+    },
+    {
+      "from": "feature-admin-system",
       "to": "storage-architecture",
       "type": "parent"
     },

@@ -3,6 +3,7 @@ import type { RpcClient } from "../client.ts";
 export interface UserProfile {
   userId: string;
   displayName: string;
+  isAdmin: boolean;
   createdAt: string | null;
 }
 

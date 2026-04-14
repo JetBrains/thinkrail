@@ -35,7 +35,7 @@ Used by LoginScreen and ProjectPicker before any WebSocket connection exists.
 
 | Endpoint | Method | Auth | Request | Response |
 |----------|--------|------|---------|----------|
-| `/api/user/profile` | GET | `?token=bns_xxx` | — | `{ userId, displayName, createdAt }` |
+| `/api/user/profile` | GET | `?token=bns_xxx` | — | `{ userId, displayName, isAdmin, createdAt }` |
 | `/api/user/preferences` | GET | `?token=bns_xxx` | — | `{ theme, soundEnabled, ... }` |
 | `/api/user/preferences` | PUT | `?token=bns_xxx` | `{ theme?: "...", ... }` | Updated prefs |
 | `/api/user/recent-projects` | GET | `?token=bns_xxx` | `?limit=10` | `[{ path, name, lastOpened }]` |
@@ -49,7 +49,7 @@ Used during active project sessions for real-time preference sync.
 
 | Method | Params | Response | Description |
 |--------|--------|----------|-------------|
-| `user/getProfile` | — | `{ userId, displayName, createdAt }` | Current user profile |
+| `user/getProfile` | — | `{ userId, displayName, isAdmin, createdAt }` | Current user profile |
 | `user/getPreferences` | — | `{ theme, soundEnabled, leftPanelCollapsed, ... }` | Full preference object |
 | `user/updatePreferences` | `{ patch: { ... } }` | Updated prefs object | Merge patch into existing |
 | `user/getRecentProjects` | `{ limit?: number }` | `[{ path, name, lastOpened }]` | User's recent projects |
@@ -73,13 +73,39 @@ Stored as JSON blob in `user_preferences.prefs`. Validated by Pydantic but schem
 
 `updatePreferences` uses **merge semantics**: only provided keys are updated, others are preserved.
 
+## Setup Endpoints (no auth required)
+
+Used on first launch before any users exist.
+
+| Endpoint | Method | Auth | Request | Response |
+|----------|--------|------|---------|----------|
+| `/api/setup/status` | GET | None | — | `{ needsSetup: bool }` |
+| `/api/setup` | POST | None | `{ userId, name }` | `{ userId, displayName, token }` |
+
+`POST /api/setup` returns 403 if any users already exist. The created user is always admin.
+
+## Admin RPC Methods (admin-only)
+
+All methods require `is_admin = true` on the calling user. Non-admins receive error `-32000`.
+
+| Method | Params | Response | Description |
+|--------|--------|----------|-------------|
+| `admin/listUsers` | — | `{ users: [...] }` | All users with admin + token count |
+| `admin/createUser` | `{ userId, name?, isAdmin? }` | `{ userId, name, token, isAdmin }` | Create user + token |
+| `admin/deleteUser` | `{ userId }` | `{ ok: true }` | Delete user (not last admin) |
+| `admin/setAdmin` | `{ userId }` | `{ ok: true }` | Grant admin |
+| `admin/removeAdmin` | `{ userId }` | `{ ok: true }` | Revoke admin (not last admin) |
+| `admin/revokeToken` | `{ token }` | `{ ok: true }` | Revoke specific token |
+
 ## File Organization
 
 | File | Responsibility |
 |------|---------------|
-| `backend/app/rpc/methods/user.py` | **NEW** — RPC method handlers (`user/*`) |
-| `backend/app/main.py` | REST endpoint handlers (added to existing routes) |
-| `frontend/src/api/methods/user.ts` | **NEW** — Frontend RPC wrappers |
+| `backend/app/rpc/methods/user.py` | RPC method handlers (`user/*`) |
+| `backend/app/rpc/methods/admin.py` | Admin RPC handlers (`admin/*`) |
+| `backend/app/main.py` | REST endpoint handlers (setup + user endpoints) |
+| `frontend/src/api/methods/user.ts` | Frontend user RPC wrappers |
+| `frontend/src/api/methods/admin.ts` | Frontend admin RPC wrappers |
 
 ## Design Decisions
 

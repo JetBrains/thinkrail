@@ -39,6 +39,35 @@ cp .env.example .env
 | `BACKEND_PORT` | `8000` | Backend port |
 | `FRONTEND_PORT` | `3000` | Frontend port |
 
+## Authentication & First-Time Setup
+
+Bonsai requires authentication. On first launch there are two setup paths:
+
+### Portable Executable
+
+Just run the executable — the browser opens automatically. Since no users exist yet, you'll see a **Setup Screen** where you enter a username and display name. This creates the first admin account and shows your access token. Save it.
+
+### Development (from source)
+
+Create the first admin user via CLI:
+
+```bash
+cd backend && uv run python -m app.cli create-user --id danya --name "Danya" --admin
+# → Token: bns_a8f3k2m9...
+```
+
+Then open http://localhost:3000 and enter the token on the login screen.
+
+### Managing Users
+
+Admin users can create and manage other users from the **Admin** button in the app header. Admins can:
+- Create new users (generates a token to share with them)
+- Grant or revoke admin rights
+- Delete users
+- Revoke individual tokens
+
+At least one admin must always exist.
+
 ## Remote Access
 
 Both servers bind to `0.0.0.0` by default, so Bonsai is reachable from other devices on your LAN. The startup script prints your LAN IP automatically.

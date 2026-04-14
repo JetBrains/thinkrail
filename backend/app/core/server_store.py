@@ -25,6 +25,7 @@ class User:
     display_name: str
     created_at: str
     updated_at: str
+    is_admin: bool = False
 
 
 @dataclass
@@ -53,7 +54,7 @@ class RecentProject:
 # Schema
 # ---------------------------------------------------------------------------
 
-_SCHEMA_VERSION = 1
+_SCHEMA_VERSION = 2
 
 _PRAGMAS = """
 PRAGMA journal_mode = WAL;
@@ -79,6 +80,7 @@ CREATE TABLE IF NOT EXISTS server_config (
 CREATE TABLE IF NOT EXISTS users (
     id           TEXT PRIMARY KEY,
     display_name TEXT NOT NULL,
+    is_admin     INTEGER NOT NULL DEFAULT 0,
     created_at   TEXT NOT NULL,
     updated_at   TEXT NOT NULL
 ) WITHOUT ROWID;
@@ -156,6 +158,10 @@ class ServerStore:
             row = await cur.fetchone()
             current = row[0] if row and row[0] else 0
 
+        # Run migrations
+        if current < 2:
+            await self._migrate_v1_to_v2()
+
         if current < _SCHEMA_VERSION:
             await self._conn.execute(
                 "INSERT OR REPLACE INTO _schema_version (version, applied_at) VALUES (?, ?)",
@@ -179,11 +185,22 @@ class ServerStore:
         assert self._conn is not None, "ServerStore not opened"
         return self._conn
 
+    # -- migrations ---------------------------------------------------------
+
+    async def _migrate_v1_to_v2(self) -> None:
+        """Add is_admin column to users table (idempotent)."""
+        async with self._db.execute("PRAGMA table_info(users)") as cur:
+            columns = {row[1] async for row in cur}
+        if "is_admin" not in columns:
+            await self._db.execute(
+                "ALTER TABLE users ADD COLUMN is_admin INTEGER NOT NULL DEFAULT 0"
+            )
+
     # -- users --------------------------------------------------------------
 
     async def get_user(self, user_id: str) -> User | None:
         async with self._db.execute(
-            "SELECT id, display_name, created_at, updated_at FROM users WHERE id = ?",
+            "SELECT id, display_name, is_admin, created_at, updated_at FROM users WHERE id = ?",
             (user_id,),
         ) as cur:
             row = await cur.fetchone()
@@ -194,16 +211,17 @@ class ServerStore:
                 display_name=row["display_name"],
                 created_at=row["created_at"],
                 updated_at=row["updated_at"],
+                is_admin=bool(row["is_admin"]),
             )
 
-    async def create_user(self, user_id: str, display_name: str) -> User:
+    async def create_user(self, user_id: str, display_name: str, *, is_admin: bool = False) -> User:
         now = _now()
         await self._db.execute(
-            "INSERT INTO users (id, display_name, created_at, updated_at) VALUES (?, ?, ?, ?)",
-            (user_id, display_name, now, now),
+            "INSERT INTO users (id, display_name, is_admin, created_at, updated_at) VALUES (?, ?, ?, ?, ?)",
+            (user_id, display_name, int(is_admin), now, now),
         )
         await self._db.commit()
-        return User(id=user_id, display_name=display_name, created_at=now, updated_at=now)
+        return User(id=user_id, display_name=display_name, created_at=now, updated_at=now, is_admin=is_admin)
 
     async def ensure_user(self, user_id: str, display_name: str) -> User:
         """Return existing user or create a new one."""
@@ -214,7 +232,7 @@ class ServerStore:
 
     async def list_users(self) -> list[User]:
         async with self._db.execute(
-            "SELECT id, display_name, created_at, updated_at FROM users ORDER BY id"
+            "SELECT id, display_name, is_admin, created_at, updated_at FROM users ORDER BY id"
         ) as cur:
             return [
                 User(
@@ -222,9 +240,44 @@ class ServerStore:
                     display_name=row["display_name"],
                     created_at=row["created_at"],
                     updated_at=row["updated_at"],
+                    is_admin=bool(row["is_admin"]),
                 )
                 async for row in cur
             ]
+
+    async def user_count(self) -> int:
+        """Return the total number of users."""
+        async with self._db.execute("SELECT COUNT(*) FROM users") as cur:
+            row = await cur.fetchone()
+            return row[0]
+
+    async def admin_count(self) -> int:
+        """Return the number of admin users."""
+        async with self._db.execute(
+            "SELECT COUNT(*) FROM users WHERE is_admin = 1"
+        ) as cur:
+            row = await cur.fetchone()
+            return row[0]
+
+    async def set_admin(self, user_id: str, is_admin: bool) -> None:
+        """Set or unset admin status for a user."""
+        await self._db.execute(
+            "UPDATE users SET is_admin = ?, updated_at = ? WHERE id = ?",
+            (int(is_admin), _now(), user_id),
+        )
+        await self._db.commit()
+
+    async def delete_user(self, user_id: str) -> None:
+        """Delete a user and all their tokens, preferences, and recent projects."""
+        await self._db.execute(
+            "DELETE FROM user_recent_projects WHERE user_id = ?", (user_id,)
+        )
+        await self._db.execute(
+            "DELETE FROM user_preferences WHERE user_id = ?", (user_id,)
+        )
+        await self._db.execute("DELETE FROM tokens WHERE user_id = ?", (user_id,))
+        await self._db.execute("DELETE FROM users WHERE id = ?", (user_id,))
+        await self._db.commit()
 
     # -- tokens -------------------------------------------------------------
 

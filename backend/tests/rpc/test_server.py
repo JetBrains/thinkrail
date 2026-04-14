@@ -112,6 +112,8 @@ class TestMethods:
             "skills/list",
             "auth/createToken", "auth/listUsers",
             "connection/list",
+            "admin/listUsers", "admin/createUser", "admin/deleteUser",
+            "admin/setAdmin", "admin/removeAdmin", "admin/revokeToken",
             "user/getProfile", "user/getPreferences",
             "user/updatePreferences", "user/getRecentProjects",
         }

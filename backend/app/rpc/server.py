@@ -66,6 +66,14 @@ from app.rpc.methods.settings import (
 )
 from app.agent.model_registry import ModelRegistry
 from app.rpc.methods.auth import create_token, list_connections, list_users
+from app.rpc.methods.admin import (
+    admin_create_user,
+    admin_delete_user,
+    admin_list_users,
+    admin_remove_admin,
+    admin_revoke_token,
+    admin_set_admin,
+)
 from app.rpc.methods.user import (
     get_preferences,
     get_profile,
@@ -187,6 +195,12 @@ METHODS = {
     "auth/createToken": create_token,
     "auth/listUsers": list_users,
     "connection/list": list_connections,
+    "admin/listUsers": admin_list_users,
+    "admin/createUser": admin_create_user,
+    "admin/deleteUser": admin_delete_user,
+    "admin/setAdmin": admin_set_admin,
+    "admin/removeAdmin": admin_remove_admin,
+    "admin/revokeToken": admin_revoke_token,
     "user/getProfile": get_profile,
     "user/getPreferences": get_preferences,
     "user/updatePreferences": update_preferences,
@@ -231,7 +245,7 @@ def _bind_methods(
             bound[name] = partial(handler, config)
         elif name.startswith("models/"):
             bound[name] = partial(handler, model_registry)
-        elif name.startswith("auth/") or name.startswith("connection/"):
+        elif name.startswith("auth/") or name.startswith("connection/") or name.startswith("admin/"):
             bound[name] = partial(handler, server_store)
         elif name.startswith("user/") and server_store:
             bound[name] = partial(handler, server_store)

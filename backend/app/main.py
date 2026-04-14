@@ -34,6 +34,11 @@ def _find_frontend_dist() -> Path | None:
     return dist if dist.is_dir() else None
 
 
+class _SetupBody(BaseModel):
+    userId: str
+    name: str
+
+
 class _InitBody(BaseModel):
     path: str
 
@@ -148,6 +153,24 @@ def create_app() -> FastAPI:
     async def _resolve_user(token: str | None) -> UserIdentity | None:
         return await authenticate_rest(server_store, token)
 
+    # ── REST: First-user bootstrap (no auth required) ──
+
+    @app.get("/api/setup/status")
+    async def setup_status():
+        count = await server_store.user_count()
+        return {"needsSetup": count == 0}
+
+    @app.post("/api/setup")
+    async def setup_first_user(body: _SetupBody):
+        from fastapi.responses import JSONResponse
+
+        count = await server_store.user_count()
+        if count > 0:
+            return JSONResponse(status_code=403, content={"error": "Setup already completed"})
+        user = await server_store.create_user(body.userId, body.name, is_admin=True)
+        token = await server_store.create_token(body.userId)
+        return {"userId": user.id, "displayName": user.display_name, "token": token}
+
     # ── REST: User profile & preferences (pre-WebSocket) ──
 
     @app.get("/api/user/profile")
@@ -160,6 +183,7 @@ def create_app() -> FastAPI:
         return {
             "userId": user.id if user else identity.user_id,
             "displayName": user.display_name if user else identity.display_name,
+            "isAdmin": user.is_admin if user else identity.is_admin,
             "createdAt": user.created_at if user else None,
         }
 

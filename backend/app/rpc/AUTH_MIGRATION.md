@@ -16,7 +16,7 @@ graph TD
     Auth --> SQLite["ServerStore.resolve_token()"]
     AuthREST --> SQLite
 
-    SQLite -->|found| Identity["UserIdentity(user_id, display_name)"]
+    SQLite -->|found| Identity["UserIdentity(user_id, display_name, is_admin)"]
     SQLite -->|not found| Fallback["Per-project users.json"]
 
     Fallback -->|found| Migrate["Lazy migrate to SQLite"]
@@ -62,10 +62,18 @@ graph TD
 
 ### Bootstrap (first-time setup)
 
+**Web UI (portable executable):** On first launch with zero users, frontend shows SetupScreen → `POST /api/setup` creates the first admin + token.
+
+**CLI (development / server):**
 ```bash
-cd backend && uv run python -m app.cli create-user --id danya --name "Danya"
-# Output: Created user "danya" with token bns_a8f3k2m9...
+cd backend && uv run python -m app.cli create-user --id danya --name "Danya" --admin
+# Output: Created user "danya" (Danya) [admin]
+# Token: bns_a8f3k2m9...
 ```
+
+### Admin Role
+
+`UserIdentity` includes `is_admin: bool` (default `False`). The `admin/*` RPC namespace requires `is_admin = True`. Per-project fallback users are always `is_admin = False`.
 
 ## Files to Modify
 
@@ -73,7 +81,8 @@ cd backend && uv run python -m app.cli create-user --id danya --name "Danya"
 |------|--------|
 | `backend/app/rpc/auth.py` | Add `server_store` param to `authenticate()`, two-tier lookup, remove `allowAnonymous` |
 | `backend/app/rpc/server.py` | Pass `server_store` to `authenticate()`, register project on connect |
-| `backend/app/main.py` | Add REST auth helper, CLI entry point for `create-user` |
+| `backend/app/main.py` | Add REST auth helper, setup endpoints, CLI entry point for `create-user` |
+| `backend/app/rpc/methods/admin.py` | **NEW** — Admin RPC handlers (`admin/*`) |
 
 ## Design Decisions
 

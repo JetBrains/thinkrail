@@ -1,5 +1,7 @@
 """Tests for ServerStore (SQLite-backed server-level storage)."""
 
+import sqlite3
+
 import pytest
 from pathlib import Path
 
@@ -21,10 +23,12 @@ class TestUsers:
         user = await store.create_user("alice", "Alice")
         assert user.id == "alice"
         assert user.display_name == "Alice"
+        assert user.is_admin is False
 
         fetched = await store.get_user("alice")
         assert fetched is not None
         assert fetched.display_name == "Alice"
+        assert fetched.is_admin is False
 
     async def test_get_nonexistent(self, store: ServerStore):
         assert await store.get_user("nobody") is None
@@ -191,3 +195,129 @@ class TestRecentProjects:
 
         assert len(await store.get_recent_projects("alice")) == 1
         assert len(await store.get_recent_projects("bob")) == 0
+
+
+# -- admin ------------------------------------------------------------------
+
+class TestAdmin:
+    async def test_create_user_default_not_admin(self, store: ServerStore):
+        user = await store.create_user("alice", "Alice")
+        assert user.is_admin is False
+
+    async def test_create_admin_user(self, store: ServerStore):
+        user = await store.create_user("admin1", "Admin", is_admin=True)
+        assert user.is_admin is True
+        fetched = await store.get_user("admin1")
+        assert fetched is not None
+        assert fetched.is_admin is True
+
+    async def test_set_admin(self, store: ServerStore):
+        await store.create_user("alice", "Alice")
+        await store.set_admin("alice", True)
+        user = await store.get_user("alice")
+        assert user is not None
+        assert user.is_admin is True
+
+        await store.set_admin("alice", False)
+        user = await store.get_user("alice")
+        assert user is not None
+        assert user.is_admin is False
+
+    async def test_user_count(self, store: ServerStore):
+        assert await store.user_count() == 0
+        await store.create_user("alice", "Alice")
+        assert await store.user_count() == 1
+        await store.create_user("bob", "Bob")
+        assert await store.user_count() == 2
+
+    async def test_admin_count(self, store: ServerStore):
+        assert await store.admin_count() == 0
+        await store.create_user("alice", "Alice", is_admin=True)
+        assert await store.admin_count() == 1
+        await store.create_user("bob", "Bob")
+        assert await store.admin_count() == 1
+        await store.set_admin("bob", True)
+        assert await store.admin_count() == 2
+
+    async def test_delete_user_cascades(self, store: ServerStore):
+        await store.create_user("alice", "Alice")
+        await store.create_token("alice")
+        await store.update_preferences("alice", {"theme": "dark"})
+        await store.register_project("/proj", "proj")
+        await store.add_recent_project("alice", "/proj")
+
+        await store.delete_user("alice")
+
+        assert await store.get_user("alice") is None
+        assert await store.list_tokens("alice") == []
+        assert await store.get_preferences("alice") == {}
+        assert await store.get_recent_projects("alice") == []
+
+    async def test_list_users_shows_admin(self, store: ServerStore):
+        await store.create_user("alice", "Alice", is_admin=True)
+        await store.create_user("bob", "Bob")
+        users = await store.list_users()
+        admin_map = {u.id: u.is_admin for u in users}
+        assert admin_map == {"alice": True, "bob": False}
+
+
+# -- migration v1 → v2 -----------------------------------------------------
+
+class TestMigration:
+    async def test_v1_to_v2_adds_is_admin(self, tmp_path: Path):
+        """Create a v1 database (no is_admin column), open via ServerStore, verify migration."""
+        db_path = tmp_path / "bonsai.db"
+        conn = sqlite3.connect(str(db_path))
+        conn.executescript("""
+            CREATE TABLE IF NOT EXISTS _schema_version (
+                version INTEGER PRIMARY KEY, applied_at TEXT NOT NULL
+            );
+            INSERT INTO _schema_version (version, applied_at) VALUES (1, '2026-01-01T00:00:00');
+
+            CREATE TABLE IF NOT EXISTS users (
+                id TEXT PRIMARY KEY, display_name TEXT NOT NULL,
+                created_at TEXT NOT NULL, updated_at TEXT NOT NULL
+            ) WITHOUT ROWID;
+            INSERT INTO users VALUES ('alice', 'Alice', '2026-01-01', '2026-01-01');
+
+            CREATE TABLE IF NOT EXISTS tokens (
+                token TEXT PRIMARY KEY, user_id TEXT NOT NULL REFERENCES users(id),
+                created_at TEXT NOT NULL
+            ) WITHOUT ROWID;
+
+            CREATE TABLE IF NOT EXISTS server_config (
+                key TEXT PRIMARY KEY, value TEXT NOT NULL, updated_at TEXT NOT NULL
+            ) WITHOUT ROWID;
+
+            CREATE TABLE IF NOT EXISTS projects (
+                path TEXT PRIMARY KEY, name TEXT NOT NULL,
+                registered_at TEXT NOT NULL, last_opened_at TEXT NOT NULL
+            ) WITHOUT ROWID;
+
+            CREATE TABLE IF NOT EXISTS user_preferences (
+                user_id TEXT PRIMARY KEY REFERENCES users(id),
+                prefs TEXT NOT NULL DEFAULT '{}', updated_at TEXT NOT NULL
+            ) WITHOUT ROWID;
+
+            CREATE TABLE IF NOT EXISTS user_recent_projects (
+                user_id TEXT NOT NULL REFERENCES users(id),
+                project_path TEXT NOT NULL REFERENCES projects(path),
+                last_opened TEXT NOT NULL,
+                PRIMARY KEY (user_id, project_path)
+            ) WITHOUT ROWID;
+        """)
+        conn.close()
+
+        # Now open via ServerStore — should migrate
+        store = ServerStore(tmp_path)
+        await store.open()
+        try:
+            user = await store.get_user("alice")
+            assert user is not None
+            assert user.is_admin is False  # default after migration
+
+            # Can create admin users after migration
+            admin = await store.create_user("boss", "Boss", is_admin=True)
+            assert admin.is_admin is True
+        finally:
+            await store.close()

@@ -113,6 +113,7 @@ CREATE TABLE IF NOT EXISTS server_config (
 CREATE TABLE IF NOT EXISTS users (
     id           TEXT PRIMARY KEY,  -- e.g. "danya"
     display_name TEXT NOT NULL,
+    is_admin     INTEGER NOT NULL DEFAULT 0,  -- 1 = admin
     created_at   TEXT NOT NULL,     -- ISO 8601
     updated_at   TEXT NOT NULL
 ) WITHOUT ROWID;
@@ -153,6 +154,8 @@ CREATE INDEX IF NOT EXISTS idx_recent_projects_user_time
 ### Schema Migrations
 
 Manual `CREATE TABLE IF NOT EXISTS` with `_schema_version` tracking. Graduate to Alembic when schema grows past ~8 tables or needs column alterations.
+
+**v1 → v2:** Added `is_admin INTEGER NOT NULL DEFAULT 0` to `users` table. Migration checks `PRAGMA table_info(users)` for idempotency before issuing `ALTER TABLE`.
 
 ## ServerStore Module
 
@@ -230,15 +233,37 @@ Server-wide SQLite (users + tokens tables). Per-project `users.json` deprecated.
 5. `allowAnonymous` removed — every connection requires a token
 6. Existing per-project `users.json` files are not deleted (backwards compat)
 
-### Bootstrap (chicken-and-egg)
+### Bootstrap
 
-CLI command to create the first user:
+Two paths for creating the first user:
+
+**Web UI (portable executable):** On first launch with zero users, the frontend shows a SetupScreen. The user enters their name and ID, which calls `POST /api/setup` to create the first admin account and generate a token.
+
+**CLI (development / server deployment):**
 ```bash
-cd backend && uv run python -m app.cli create-user --id danya --name "Danya"
-# → Created user "danya" with token bns_a8f3k2m9...
+cd backend && uv run python -m app.cli create-user --id danya --name "Danya" --admin
+# → Created user "danya" (Danya) [admin]
+# → Token: bns_a8f3k2m9...
 ```
 
+## Admin Role System
+
+See [ADMIN_SYSTEM_DESIGN.md](ADMIN_SYSTEM_DESIGN.md) for the full admin spec. Summary:
+
+- `is_admin` boolean flag on users (schema v2)
+- First user created via `POST /api/setup` or `--admin` CLI flag is admin
+- At least one admin must always exist (enforced on delete/revoke)
+- Admin-only RPC methods for user management (`admin/*` namespace)
+- Frontend: SetupScreen (first-user bootstrap), AdminPanel (user management)
+
 ## API Surface
+
+### REST Endpoints (setup, no auth)
+
+| Endpoint | Method | Auth | Description |
+|----------|--------|------|-------------|
+| `/api/setup/status` | GET | None | `{ needsSetup: bool }` — true when zero users exist |
+| `/api/setup` | POST | None | Create first admin user + token. 403 if users already exist. |
 
 ### REST Endpoints (pre-WebSocket)
 
@@ -246,7 +271,7 @@ Used by ProjectPicker/LoginScreen before any WebSocket connection exists.
 
 | Endpoint | Method | Auth | Description |
 |----------|--------|------|-------------|
-| `/api/user/profile` | GET | `?token=` | Get user profile |
+| `/api/user/profile` | GET | `?token=` | Get user profile (includes `isAdmin`) |
 | `/api/user/preferences` | GET | `?token=` | Get preferences |
 | `/api/user/preferences` | PUT | `?token=` | Update preferences (partial) |
 | `/api/user/recent-projects` | GET | `?token=` | Recent projects for user |
@@ -256,22 +281,41 @@ Used by ProjectPicker/LoginScreen before any WebSocket connection exists.
 
 | Method | Params | Response |
 |--------|--------|----------|
-| `user/getProfile` | — | `{ userId, displayName, createdAt }` |
+| `user/getProfile` | — | `{ userId, displayName, isAdmin, createdAt }` |
 | `user/getPreferences` | — | `{ theme, soundEnabled, ... }` |
 | `user/updatePreferences` | `{ patch: {...} }` | Updated prefs object |
 | `user/getRecentProjects` | `{ limit?: number }` | `[{ path, name, lastOpened }]` |
 
+### Admin RPC Methods (admin-only)
+
+| Method | Params | Response |
+|--------|--------|----------|
+| `admin/listUsers` | — | `{ users: [{ id, name, isAdmin, createdAt, tokenCount }] }` |
+| `admin/createUser` | `{ userId, name?, isAdmin? }` | `{ userId, name, token, isAdmin }` |
+| `admin/deleteUser` | `{ userId }` | `{ ok: true }` |
+| `admin/setAdmin` | `{ userId }` | `{ ok: true }` |
+| `admin/removeAdmin` | `{ userId }` | `{ ok: true }` |
+| `admin/revokeToken` | `{ token }` | `{ ok: true }` |
+
 ## Frontend Changes
+
+### New: SetupScreen
+
+Shown on first launch when no users exist (`GET /api/setup/status` → `needsSetup: true`). Creates first admin account via `POST /api/setup`, displays generated token.
 
 ### New: LoginScreen
 
-Shown before ProjectPicker when no valid token exists. Token entry + validate flow.
+Shown when users exist but no valid token is stored. Token entry + validate flow.
+
+### New: AdminPanel
+
+Modal dialog accessible from Header (admin-only). User management: create, delete, toggle admin, revoke tokens.
 
 ### Flow Change
 
 ```
 Before: App → ProjectPicker → WebSocket
-After:  App → LoginScreen (if no token) → ProjectPicker → WebSocket
+After:  App → SetupScreen (if first run) → LoginScreen (if no token) → ProjectPicker → WebSocket
 ```
 
 ### localStorage Migration
@@ -310,6 +354,8 @@ The Kotlin Multiplatform mobile app (`/mobile/`) needs corresponding changes:
 | Not PostgreSQL | — | Single-server deployment; SQLite avoids managing a DB server. Migrate later if needed. |
 | Data location | `~/.bonsai/bonsai.db` | Natural home dir convention; `BONSAI_DATA_DIR` override for containers |
 | No anonymous users | — | Simplifies model: every connection has a user, preferences always server-backed |
+| Admin as boolean | `is_admin` column | Simple, extensible to RBAC later; avoids premature role table |
+| First user is admin | `POST /api/setup` | Solves bootstrap for portable executables where CLI is unavailable |
 | Preferences as JSON blob | `user_preferences.prefs` | Avoids schema migration on every new preference; Pydantic validates in Python |
 | TEXT timestamps | ISO 8601 | Human-readable, consistent with existing `.bonsai/` JSON files, sufficient at this scale |
 | `WITHOUT ROWID` | All TEXT-PK tables | Saves space, better perf for text-keyed lookups |
@@ -318,6 +364,6 @@ The Kotlin Multiplatform mobile app (`/mobile/`) needs corresponding changes:
 
 ## Open Questions
 
-- Team/organization model (future): tables, access control, RBAC
+- Team/organization model (future): multi-role RBAC, groups, project-level permissions
 - Token expiration: should tokens expire? Currently they don't.
 - Multi-server migration path: when/if to introduce SQLAlchemy for Postgres portability

@@ -37,6 +37,7 @@ class UserIdentity:
 
     user_id: str
     display_name: str
+    is_admin: bool = False
 
 
 def generate_token() -> str:
@@ -95,7 +96,7 @@ async def authenticate(
     if user_id is not None:
         user = await server_store.get_user(user_id)
         if user:
-            return UserIdentity(user_id=user.id, display_name=user.display_name)
+            return UserIdentity(user_id=user.id, display_name=user.display_name, is_admin=user.is_admin)
 
     # 2. Per-project fallback (legacy users.json)
     project_map = _load_project_users(project_root)
@@ -137,4 +138,4 @@ async def authenticate_rest(
     if not user:
         return None
 
-    return UserIdentity(user_id=user.id, display_name=user.display_name)
+    return UserIdentity(user_id=user.id, display_name=user.display_name, is_admin=user.is_admin)

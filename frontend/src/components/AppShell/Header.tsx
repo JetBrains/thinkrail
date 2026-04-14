@@ -8,6 +8,7 @@ import { useFileStore } from "@/store/fileStore.ts";
 import { modLabel } from "@/utils/platform.ts";
 import { ThemeSwitcher } from "./ThemeSwitcher.tsx";
 import { TokenDialog } from "./TokenDialog.tsx";
+import { AdminPanel } from "@/components/AdminPanel/AdminPanel.tsx";
 
 const SETTINGS_PATH = ".bonsai/settings.json";
 
@@ -27,7 +28,9 @@ export function Header({ onSwitchProject }: { onSwitchProject: () => void }) {
 
   const connectedClients = useConnectionStore((s) => s.clients);
   const hasToken = useTokenStore((s) => !!s.token);
+  const isAdmin = useTokenStore((s) => s.isAdmin);
   const [tokenOpen, setTokenOpen] = useState(false);
+  const [adminOpen, setAdminOpen] = useState(false);
 
   return (
     <>
@@ -71,12 +74,18 @@ export function Header({ onSwitchProject }: { onSwitchProject: () => void }) {
           Context
         </button>
         <ThemeSwitcher />
+        {isAdmin && (
+          <button className="header-btn" onClick={() => setAdminOpen(true)} title="User management">
+            Admin
+          </button>
+        )}
         <button className="header-btn header-btn-primary" onClick={() => createNewSession()} title={`New session (${modLabel("T")})`}>
           + New
         </button>
       </div>
     </header>
     <TokenDialog open={tokenOpen} onClose={() => setTokenOpen(false)} />
+    <AdminPanel open={adminOpen} onClose={() => setAdminOpen(false)} />
     </>
   );
 }
