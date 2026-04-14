@@ -2,59 +2,24 @@ from __future__ import annotations
 
 from typing import Any
 
-from jsonrpcserver import JsonRpcError, Result, Success
+from jsonrpcserver import JsonRpcError
 
 from app.rpc.bus import bus
-from app.rpc.connections import current_conn_id
+from app.rpc.context import auto_subscribe_all, get_current_conn
+from app.rpc.errors import (
+    FUTURE_NOT_FOUND,
+    INTERNAL_ERROR,
+    TASK_NOT_FOUND,
+    rpc_handler,
+)
 from app.agent.models import AgentConfig
 from app.agent.service import AgentService
 from app.agent.tracker import FutureNotFoundError, TaskNotFoundError
 
-# Error codes per RPC spec
-_TASK_NOT_FOUND = -32011
-_FUTURE_NOT_FOUND = -32012
-_INVALID_PARAMS = -32602
-_INTERNAL_ERROR = -32603
-_ALREADY_RESOLVED = -32013
-
-
-def _handle_errors(func):  # type: ignore[type-arg]
-    """Decorator that maps agent domain exceptions to JSON-RPC errors."""
-
-    async def wrapper(service: AgentService, **params: Any) -> Result:
-        try:
-            return Success(await func(service, **params))
-        except TaskNotFoundError as exc:
-            raise JsonRpcError(_TASK_NOT_FOUND, "Agent task not found", str(exc))
-        except FutureNotFoundError as exc:
-            raise JsonRpcError(_FUTURE_NOT_FOUND, "No pending request", str(exc))
-        except (KeyError, TypeError) as exc:
-            raise JsonRpcError(_INVALID_PARAMS, "Invalid params", str(exc))
-        except JsonRpcError:
-            raise
-        except Exception as exc:
-            raise JsonRpcError(_INTERNAL_ERROR, "Internal error", str(exc))
-
-    wrapper.__name__ = func.__name__
-    wrapper.__qualname__ = func.__qualname__
-    return wrapper
-
-
-def _auto_subscribe_all(bonsai_sid: str) -> None:
-    """Subscribe ALL connections on the same project to a session topic.
-
-    Phase 1: every client sees every session's events.
-    Phase 3 will restrict to explicit per-client subscriptions.
-    """
-    try:
-        conn_id = current_conn_id.get()
-        conn = bus.get_connection(conn_id)
-        if conn:
-            topic = f"session:{bonsai_sid}"
-            for c in bus.connections_for_project(conn.project_path):
-                bus.subscribe(c.conn_id, topic)
-    except LookupError:
-        pass  # No connection context (e.g. internal call)
+_handle_errors = rpc_handler(
+    (TaskNotFoundError, TASK_NOT_FOUND, "Agent task not found"),
+    (FutureNotFoundError, FUTURE_NOT_FOUND, "No pending request"),
+)
 
 
 @_handle_errors
@@ -70,23 +35,17 @@ async def list_agents(service: AgentService, **params: Any) -> list[dict]:
 @_handle_errors
 async def run_agent(service: AgentService, **params: Any) -> dict:
     config = AgentConfig(**params["config"])
-    skill_id = params.get("skillId")
-    session_prompt = params.get("prompt")
-    name = params.get("name", "")
-    meta_ticket_id = params.get("metaTicketId")
     task = await service.run_task(
         params["specIds"], config,
-        skill_id=skill_id, session_prompt=session_prompt, name=name,
-        meta_ticket_id=meta_ticket_id,
+        skill_id=params.get("skillId"),
+        session_prompt=params.get("prompt"),
+        name=params.get("name", ""),
+        meta_ticket_id=params.get("metaTicketId"),
     )
-    # Persist who created the session
-    try:
-        conn = bus.get_connection(current_conn_id.get())
-        if conn:
-            task.created_by = conn.display_name
-    except LookupError:
-        pass
-    _auto_subscribe_all(task.bonsai_sid)
+    conn = get_current_conn()
+    if conn:
+        task.created_by = conn.display_name
+    auto_subscribe_all(task.bonsai_sid)
     return {"bonsaiSid": task.bonsai_sid}
 
 
@@ -96,13 +55,8 @@ async def send_message(service: AgentService, **params: Any) -> None:
     text = params["text"]
     is_markdown = params.get("isMarkdown", False)
     await service.send_message(bonsai_sid, text, is_markdown=is_markdown)
-    # Notify other clients about the user message so their chat streams update
-    try:
-        cid = current_conn_id.get()
-        c = bus.get_connection(cid)
-        sender = c.display_name if c else "Unknown"
-    except LookupError:
-        sender = "Unknown"
+    conn = get_current_conn()
+    sender = conn.display_name if conn else "Unknown"
     await bus.publish_to_session(bonsai_sid, "session/userMessage", {
         "bonsaiSid": bonsai_sid,
         "text": text,
@@ -127,13 +81,8 @@ async def respond_agent(service: AgentService, **params: Any) -> None:
     request_id = params["requestId"]
     response = params["response"]
     await service.respond(bonsai_sid, request_id, response)
-    # Notify other subscribers that this request was resolved
-    try:
-        conn_id = current_conn_id.get()
-        conn = bus.get_connection(conn_id)
-        resolved_by = conn.display_name if conn else "Unknown"
-    except LookupError:
-        resolved_by = "Unknown"
+    conn = get_current_conn()
+    resolved_by = conn.display_name if conn else "Unknown"
     await bus.publish_to_session(bonsai_sid, "agent/requestResolved", {
         "bonsaiSid": bonsai_sid,
         "requestId": request_id,
@@ -148,7 +97,7 @@ async def transcribe_audio(service: AgentService, **params: Any) -> dict:
     try:
         from app.agent.transcribe import transcribe
     except ImportError:
-        raise JsonRpcError(_INTERNAL_ERROR, "Transcription module unavailable")
+        raise JsonRpcError(INTERNAL_ERROR, "Transcription module unavailable")
     text = await transcribe(params["audioBase64"], params["mimeType"])
     return {"text": text}
 
@@ -165,27 +114,22 @@ async def prepare_agent(service: AgentService, **params: Any) -> dict:
         meta_ticket_id=params.get("metaTicketId"),
         file_paths=params.get("filePaths"),
     )
-    _auto_subscribe_all(task.bonsai_sid)
-    # Persist who created the session + notify all project clients
-    try:
-        conn_id = current_conn_id.get()
-        conn = bus.get_connection(conn_id)
-        if conn:
-            task.created_by = conn.display_name
-            await bus.publish_to_project(conn.project_path, "session/didCreate", {
-                "bonsaiSid": task.bonsai_sid,
-                "name": task.name or task.bonsai_sid[:8],
-                "skillId": task.skill_id,
-                "specIds": list(task.spec_ids),
-                "filePaths": list(task.file_paths),
-                "status": task.status,
-                "config": task.config.model_dump(by_alias=True),
-                "metaTicketId": task.meta_ticket_id,
-                "createdAt": task.created,
-                "createdBy": conn.display_name,
-            })
-    except LookupError:
-        pass
+    auto_subscribe_all(task.bonsai_sid)
+    conn = get_current_conn()
+    if conn:
+        task.created_by = conn.display_name
+        await bus.publish_to_project(conn.project_path, "session/didCreate", {
+            "bonsaiSid": task.bonsai_sid,
+            "name": task.name or task.bonsai_sid[:8],
+            "skillId": task.skill_id,
+            "specIds": list(task.spec_ids),
+            "filePaths": list(task.file_paths),
+            "status": task.status,
+            "config": task.config.model_dump(by_alias=True),
+            "metaTicketId": task.meta_ticket_id,
+            "createdAt": task.created,
+            "createdBy": conn.display_name,
+        })
     structured = service._build_context_structured_for(task)
     return {
         "bonsaiSid": task.bonsai_sid,
@@ -226,40 +170,34 @@ async def update_draft(service: AgentService, **params: Any) -> dict:
 async def start_draft(service: AgentService, **params: Any) -> dict:
     """Start a draft session — transitions to initializing and launches the runner."""
     bonsai_sid = params["bonsaiSid"]
-    _auto_subscribe_all(bonsai_sid)
-    task = await service.start_draft(
-        bonsai_sid,
-        prompt=params.get("prompt"),
-    )
-    # Publish full metadata so other clients have name, config, specs
-    try:
-        conn_id = current_conn_id.get()
-        conn = bus.get_connection(conn_id)
-        if conn:
-            await bus.publish_to_project(conn.project_path, "session/didCreate", {
-                "bonsaiSid": task.bonsai_sid,
-                "name": task.name or task.bonsai_sid[:8],
-                "skillId": task.skill_id,
-                "specIds": list(task.spec_ids),
-                "filePaths": list(task.file_paths),
-                "status": task.status,
-                "config": task.config.model_dump(by_alias=True),
-                "metaTicketId": task.meta_ticket_id,
-                "createdAt": task.created,
-                "createdBy": conn.display_name,
-            })
-    except LookupError:
-        pass
+    auto_subscribe_all(bonsai_sid)
+    task = await service.start_draft(bonsai_sid, prompt=params.get("prompt"))
+    conn = get_current_conn()
+    if conn:
+        await bus.publish_to_project(conn.project_path, "session/didCreate", {
+            "bonsaiSid": task.bonsai_sid,
+            "name": task.name or task.bonsai_sid[:8],
+            "skillId": task.skill_id,
+            "specIds": list(task.spec_ids),
+            "filePaths": list(task.file_paths),
+            "status": task.status,
+            "config": task.config.model_dump(by_alias=True),
+            "metaTicketId": task.meta_ticket_id,
+            "createdAt": task.created,
+            "createdBy": conn.display_name,
+        })
     return {"bonsaiSid": task.bonsai_sid}
 
 
 @_handle_errors
 async def update_config(service: AgentService, **params: Any) -> dict:
     bonsai_sid = params["bonsaiSid"]
-    model = params.get("model")
-    permission_mode = params.get("permissionMode")
-    betas = params.get("betas")
-    effort = params.get("effort")
-    result = await service.update_config(bonsai_sid, model=model, permission_mode=permission_mode, betas=betas, effort=effort)
+    result = await service.update_config(
+        bonsai_sid,
+        model=params.get("model"),
+        permission_mode=params.get("permissionMode"),
+        betas=params.get("betas"),
+        effort=params.get("effort"),
+    )
     await bus.publish_to_session(bonsai_sid, "agent/configChanged", {"bonsaiSid": bonsai_sid, **result})
     return result

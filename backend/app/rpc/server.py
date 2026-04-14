@@ -13,7 +13,8 @@ from watchfiles import Change
 
 from app.rpc.auth import authenticate
 from app.rpc.bus import bus
-from app.rpc.connections import ClientConnection, current_conn_id
+from app.rpc.connections import ClientConnection
+from app.rpc.context import current_conn_id
 from app.rpc.notifications import make_notify
 from app.rpc.methods.specs import (
     create_spec,

@@ -2,40 +2,15 @@ from __future__ import annotations
 
 from typing import Any
 
-from jsonrpcserver import JsonRpcError, Result, Success
-
+from app.rpc.errors import TICKET_NOT_FOUND, INVALID_TRANSITION, rpc_handler
 from app.board.plan import Milestone, Plan, PlanStep, SuccessCriterion
 from app.board.service import BoardService, TicketNotFoundError
 from app.board.state_machine import InvalidTransitionError
 
-_TICKET_NOT_FOUND = -32021
-_INVALID_TRANSITION = -32022
-_INVALID_PARAMS = -32602
-_INTERNAL_ERROR = -32603
-
-
-def _handle_errors(func):  # type: ignore[type-arg]
-    """Decorator that maps domain exceptions to JSON-RPC errors."""
-
-    async def wrapper(service: BoardService, **params: Any) -> Result:
-        try:
-            return Success(await func(service, **params))
-        except TicketNotFoundError as exc:
-            raise JsonRpcError(_TICKET_NOT_FOUND, "Ticket not found", str(exc))
-        except InvalidTransitionError as exc:
-            raise JsonRpcError(_INVALID_TRANSITION, "Invalid transition", str(exc))
-        except (KeyError, TypeError) as exc:
-            raise JsonRpcError(_INVALID_PARAMS, "Invalid params", str(exc))
-        except ValueError as exc:
-            raise JsonRpcError(_INVALID_PARAMS, "Validation error", str(exc))
-        except JsonRpcError:
-            raise
-        except Exception as exc:
-            raise JsonRpcError(_INTERNAL_ERROR, "Internal error", str(exc))
-
-    wrapper.__name__ = func.__name__
-    wrapper.__qualname__ = func.__qualname__
-    return wrapper
+_handle_errors = rpc_handler(
+    (TicketNotFoundError, TICKET_NOT_FOUND, "Ticket not found"),
+    (InvalidTransitionError, INVALID_TRANSITION, "Invalid transition"),
+)
 
 
 @_handle_errors
