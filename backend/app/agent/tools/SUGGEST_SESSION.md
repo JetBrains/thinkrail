@@ -1,6 +1,6 @@
 # SuggestSession — Backend Spec
 
-> Parent: [Tools Package](README.md) | Feature: [features/SUGGEST_SESSION.md](../../../../features/SUGGEST_SESSION.md) | Status: **Draft** | Created: 2026-03-07 | Updated: 2026-03-20
+> Parent: [Tools Package](README.md) | Feature: [.bonsai/design_docs/SUGGEST_SESSION.md](../../../../.bonsai/design_docs/SUGGEST_SESSION.md) | Status: **Draft** | Created: 2026-03-07 | Updated: 2026-03-20
 
 ## Purpose
 
@@ -8,7 +8,7 @@ Backend implementation of the SuggestSession proactive tool. Self-contained in `
 
 The handler performs **in-handler interaction** — validation, card notification, and Future-based suspension happen inside the tool handler via `get_tool_context()`, not through a `canUseTool` interceptor. This ensures the suggestion card is always shown regardless of permission mode, including `bypassPermissions` (yolo mode).
 
-See the [full feature spec](../../../../features/SUGGEST_SESSION.md) for protocol, frontend, and scenarios.
+See the [full feature spec](../../../../.bonsai/design_docs/SUGGEST_SESSION.md) for protocol, frontend, and scenarios.
 
 ## Wire Format
 

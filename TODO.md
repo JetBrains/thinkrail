@@ -8,7 +8,7 @@ All three phases are implemented and tested. These items track spec/doc alignmen
 - [x] **`.bonsai/implementation_tasks/rpc/feature_rpc_server.md`** — Updated to describe multi-client EventBus, per-project watcher, ClientConnection registration.
 - [x] **`.bonsai/implementation_tasks/rpc/feature_rpc_methods_agents_run.md`** — Updated to show EventBus-based publishing, no notify param.
 - [x] **`.bonsai/implementation_tasks/rpc/feature_rpc_notifications.md`** — Updated to note `current_notify` removal, `make_notify` is internal to EventBus.
-- [x] **`features/DRAFT_SESSION_DESIGN.md`** — Updated `run_task()` note to mention EventBus routing.
+- [x] **`.bonsai/design_docs/DRAFT_SESSION_DESIGN.md`** — Updated `run_task()` note to mention EventBus routing.
 
 ## Agent Module Spec
 

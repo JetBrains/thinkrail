@@ -201,13 +201,13 @@ This lets the agent update a progress tracker repeatedly without flooding the ch
 
 ## Backend
 
-Backend implementation is self-contained in the `tools/` package. See [backend/app/agent/tools/VISUALIZATION.md](../backend/app/agent/tools/VISUALIZATION.md) for the backend-only spec.
+Backend implementation is self-contained in the `tools/` package. See [backend/app/agent/tools/VISUALIZATION.md](../../backend/app/agent/tools/VISUALIZATION.md) for the backend-only spec.
 
 **Summary:** `visualization.py` defines `VIS_SCHEMA`, `vis_mcp_server`, and `intercept_visualize()` (auto-approve). The handler validates input via shared `_validate_vis_data()` and returns a short confirmation. `_vis_validation.py` provides the shared validation. `vis-server.py` provides the CLI fallback with Markdown rendering.
 
 ## Frontend
 
-Frontend implementation renders the cards in the ChatStream. See [frontend/ui-specs/VISUALIZATION_CARD.md](../frontend/ui-specs/VISUALIZATION_CARD.md) for the frontend-only spec.
+Frontend implementation renders the cards in the ChatStream. See [frontend/ui-specs/VISUALIZATION_CARD.md](../../frontend/ui-specs/VISUALIZATION_CARD.md) for the frontend-only spec.
 
 **Summary:** `VisualizationCard.tsx` is the main component with 6 sub-renderers, `VisErrorBoundary`, `CollapsedVisMarker`, `StatusIcon`, and Mermaid diagram support. `vis.ts` defines the TypeScript types as a discriminated union on `type`. `mermaid.ts` provides shared Mermaid initialization. `ChatStream.css` contains all `.vis-card*` classes. `MermaidDiagram` includes a popout button (`⧉`) that opens the rendered SVG in a new browser tab, and `resize: vertical` on diagram containers for user-adjustable height.
 
@@ -215,7 +215,7 @@ Frontend implementation renders the cards in the ChatStream. See [frontend/ui-sp
 
 The agent learns about `bonsai_visualize` through two channels:
 
-1. **General Instructions** (`context.py`) — Every session's system prompt includes a Visualization subsection with available types, when-to-use guidance, and anti-patterns (no Bash/ANSI/ASCII art). See [CONTEXT.md](../backend/app/agent/CONTEXT.md).
+1. **General Instructions** (`context.py`) — Every session's system prompt includes a Visualization subsection with available types, when-to-use guidance, and anti-patterns (no Bash/ANSI/ASCII art). See [CONTEXT.md](../../backend/app/agent/CONTEXT.md).
 
 2. **Skill SKILL.md files** — Individual skills may include visualization-specific templates (e.g., progress tracker JSON with the right "current" step for their workflow). General vis rules are now in General Instructions; skills only contain task-specific templates.
 
@@ -304,6 +304,6 @@ User sees a Mermaid diagram (any type — comparison, text, structured)
 ## Related Specs
 
 - **Parent:** [VISUALIZATION_DESIGN.md](VISUALIZATION_DESIGN.md) — architecture design doc
-- **Backend:** [backend/app/agent/tools/VISUALIZATION.md](../backend/app/agent/tools/VISUALIZATION.md)
-- **Frontend:** [frontend/ui-specs/VISUALIZATION_CARD.md](../frontend/ui-specs/VISUALIZATION_CARD.md)
-- **Context:** [backend/app/agent/CONTEXT.md](../backend/app/agent/CONTEXT.md) — General Instructions includes vis rules
+- **Backend:** [backend/app/agent/tools/VISUALIZATION.md](../../backend/app/agent/tools/VISUALIZATION.md)
+- **Frontend:** [frontend/ui-specs/VISUALIZATION_CARD.md](../../frontend/ui-specs/VISUALIZATION_CARD.md)
+- **Context:** [backend/app/agent/CONTEXT.md](../../backend/app/agent/CONTEXT.md) — General Instructions includes vis rules

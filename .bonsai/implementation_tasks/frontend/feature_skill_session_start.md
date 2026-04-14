@@ -5,7 +5,7 @@
 **Status:** Done
 **Priority:** Medium
 **Depends on:** —
-**Spec reference:** [features/SKILL_SESSION_START_DESIGN.md](../../features/SKILL_SESSION_START_DESIGN.md) | [frontend/ui-specs/SKILL_SESSION_START.md](../../frontend/ui-specs/SKILL_SESSION_START.md)
+**Spec reference:** [.bonsai/design_docs/SKILL_SESSION_START_DESIGN.md](../design_docs/SKILL_SESSION_START_DESIGN.md) | [frontend/ui-specs/SKILL_SESSION_START.md](../../frontend/ui-specs/SKILL_SESSION_START.md)
 
 ## Files Modified
 

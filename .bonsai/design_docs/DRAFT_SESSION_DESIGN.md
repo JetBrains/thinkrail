@@ -1,6 +1,6 @@
 # Draft Session (Pre-Start Config) — Feature Design
 
-> Parent: [DESIGN_DOC.md](../DESIGN_DOC.md) | Status: **Active** | Created: 2026-03-28
+> Parent: [DESIGN_DOC.md](../../DESIGN_DOC.md) | Status: **Active** | Created: 2026-03-28
 
 ## Table of Contents
 1. [Overview](#overview)

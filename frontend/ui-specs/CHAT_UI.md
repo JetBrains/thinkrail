@@ -788,7 +788,7 @@ interface InputAreaProps {
 
 Root: `<div className="input-area">` with `style={{ position: "relative" }}`
 
-See [Markdown Input Design](../../features/DUAL_MODE_INPUT_DESIGN.md) for full architecture.
+See [Markdown Input Design](../../.bonsai/design_docs/DUAL_MODE_INPUT_DESIGN.md) for full architecture.
 
 **Always-markdown input** — no text/markdown mode toggle. All messages are sent as markdown (`onSend(trimmed, true)`). The toolbar is always visible.
 
@@ -831,7 +831,7 @@ See [Markdown Input Design](../../features/DUAL_MODE_INPUT_DESIGN.md) for full a
 - On stop: awaits `voice.stopRecording()`, sets textarea text to transcript, auto-resizes
 - Speech API mode: `interimText` synced into textarea in real-time during recording
 - Disabled when `disabled || voice.isTranscribing`
-- Uses `useVoiceInput()` hook — see [Voice Input Design](../../features/VOICE_INPUT_DESIGN.md)
+- Uses `useVoiceInput()` hook — see [Voice Input Design](../../.bonsai/design_docs/VOICE_INPUT_DESIGN.md)
 
 **Send button** (`.input-send`):
 - Background: `var(--blue)`, label "Send"
@@ -874,7 +874,7 @@ inputDisabled = isDone || isRunning || (hasPending && (pendingRequest.type === "
 
 ### `<VisualizationCard>`
 
-Rendered for `toolCallStart` events where `toolName === "bonsai_visualize"`. See [Visualization Design](../../features/VISUALIZATION_DESIGN.md).
+Rendered for `toolCallStart` events where `toolName === "bonsai_visualize"`. See [Visualization Design](../../.bonsai/design_docs/VISUALIZATION_DESIGN.md).
 
 ```typescript
 // VisData is a discriminated union on `type`

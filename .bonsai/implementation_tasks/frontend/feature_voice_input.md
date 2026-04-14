@@ -25,5 +25,5 @@ Implement browser voice input with two transcription modes: Web Speech API (Chro
 
 ## Design Reference
 
-- Feature design: [features/VOICE_INPUT_DESIGN.md](../../features/VOICE_INPUT_DESIGN.md)
+- Feature design: [.bonsai/design_docs/VOICE_INPUT_DESIGN.md](../design_docs/VOICE_INPUT_DESIGN.md)
 - Backend submodule: [backend/app/agent/TRANSCRIBE.md](../../backend/app/agent/TRANSCRIBE.md)

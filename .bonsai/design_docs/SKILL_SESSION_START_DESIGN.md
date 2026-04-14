@@ -1,6 +1,6 @@
 # Skill Session Start — Architecture Design
 
-> Parent: [DESIGN_DOC.md](../DESIGN_DOC.md) | Status: **Active** | Created: 2026-03-11
+> Parent: [DESIGN_DOC.md](../../DESIGN_DOC.md) | Status: **Active** | Created: 2026-03-11
 
 ## Table of Contents
 1. [Overview](#overview)
@@ -87,4 +87,4 @@ These are mutually exclusive by construction: `events.length > 0` vs `events.len
 
 ## Frontend Spec
 
-Detailed frontend implementation spec: [frontend/ui-specs/SKILL_SESSION_START.md](../frontend/ui-specs/SKILL_SESSION_START.md)
+Detailed frontend implementation spec: [frontend/ui-specs/SKILL_SESSION_START.md](../../frontend/ui-specs/SKILL_SESSION_START.md)

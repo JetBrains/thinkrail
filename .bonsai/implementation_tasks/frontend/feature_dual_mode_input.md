@@ -36,4 +36,4 @@ Implement dual-mode (text + markdown) message input with formatting toolbar, Wri
 
 ## Design Reference
 
-- Feature design: [features/DUAL_MODE_INPUT_DESIGN.md](../../features/DUAL_MODE_INPUT_DESIGN.md)
+- Feature design: [.bonsai/design_docs/DUAL_MODE_INPUT_DESIGN.md](../design_docs/DUAL_MODE_INPUT_DESIGN.md)

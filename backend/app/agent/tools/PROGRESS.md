@@ -1,12 +1,12 @@
 # UpdateProgress — Backend Spec
 
-> Parent: [Tools Package](README.md) | Feature: [features/UPDATE_PROGRESS.md](../../../../features/UPDATE_PROGRESS.md) | Status: **Draft** | Created: 2026-03-07 | Updated: 2026-03-11
+> Parent: [Tools Package](README.md) | Feature: [.bonsai/design_docs/UPDATE_PROGRESS.md](../../../../.bonsai/design_docs/UPDATE_PROGRESS.md) | Status: **Draft** | Created: 2026-03-07 | Updated: 2026-03-11
 
 ## Purpose
 
 Backend implementation of the UpdateProgress proactive tool. Self-contained in `progress.py` following the [tools package pattern](README.md): schema + handler + MCP server + `intercept()` in one file.
 
-See the [full feature spec](../../../../features/UPDATE_PROGRESS.md) for protocol, frontend, and scenarios.
+See the [full feature spec](../../../../.bonsai/design_docs/UPDATE_PROGRESS.md) for protocol, frontend, and scenarios.
 
 ## Wire Format
 

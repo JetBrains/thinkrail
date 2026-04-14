@@ -1,6 +1,6 @@
 # Backend Storage Architecture
 
-> Parent: [Architecture Design](../DESIGN_DOC.md) | Status: **Active** | Created: 2026-04-13
+> Parent: [Architecture Design](../../DESIGN_DOC.md) | Status: **Active** | Created: 2026-04-13
 
 ## Table of Contents
 

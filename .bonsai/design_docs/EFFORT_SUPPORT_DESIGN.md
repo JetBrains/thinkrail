@@ -1,6 +1,6 @@
 # Effort Support — Feature Design
 
-> Parent: [DESIGN_DOC.md](../DESIGN_DOC.md) | Status: **Active** | Created: 2026-03-11
+> Parent: [DESIGN_DOC.md](../../DESIGN_DOC.md) | Status: **Active** | Created: 2026-03-11
 
 ## Table of Contents
 1. [Overview](#overview)

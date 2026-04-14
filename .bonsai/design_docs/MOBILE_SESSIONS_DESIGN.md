@@ -2,7 +2,7 @@
 
 **Status:** Draft
 **Date:** 2026-04-10
-**Depends on:** `features/MOBILE_FRONTEND_DESIGN.md` (base mobile app design)
+**Depends on:** `.bonsai/design_docs/MOBILE_FRONTEND_DESIGN.md` (base mobile app design)
 
 ## Overview
 

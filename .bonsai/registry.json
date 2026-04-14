@@ -1533,7 +1533,7 @@
     {
       "id": "proactive-agent-experience",
       "type": "goal-and-requirements",
-      "path": "features/PROACTIVE_AGENT_EXPERIENCE.md",
+      "path": ".bonsai/design_docs/PROACTIVE_AGENT_EXPERIENCE.md",
       "title": "Proactive Agent Experience",
       "status": "active",
       "covers": [
@@ -1554,7 +1554,7 @@
     {
       "id": "proactive-agent-design",
       "type": "architecture-design",
-      "path": "features/PROACTIVE_AGENT_EXPERIENCE_DESIGN.md",
+      "path": ".bonsai/design_docs/PROACTIVE_AGENT_EXPERIENCE_DESIGN.md",
       "title": "Proactive Agent Experience \u2014 Architecture Design",
       "status": "active",
       "covers": [
@@ -1609,7 +1609,7 @@
     {
       "id": "feature-suggest-session",
       "type": "submodule-design",
-      "path": "features/SUGGEST_SESSION.md",
+      "path": ".bonsai/design_docs/SUGGEST_SESSION.md",
       "title": "SuggestSession \u2014 Feature Spec",
       "status": "active",
       "covers": [
@@ -1630,7 +1630,7 @@
     {
       "id": "feature-update-progress",
       "type": "submodule-design",
-      "path": "features/UPDATE_PROGRESS.md",
+      "path": ".bonsai/design_docs/UPDATE_PROGRESS.md",
       "title": "UpdateProgress \u2014 Feature Spec",
       "status": "draft",
       "covers": [
@@ -1779,7 +1779,7 @@
     {
       "id": "visualization-design",
       "type": "architecture-design",
-      "path": "features/VISUALIZATION_DESIGN.md",
+      "path": ".bonsai/design_docs/VISUALIZATION_DESIGN.md",
       "title": "MCP Visualization \u2014 Architecture Design",
       "status": "active",
       "covers": [
@@ -1802,7 +1802,7 @@
     {
       "id": "voice-input-design",
       "type": "architecture-design",
-      "path": "features/VOICE_INPUT_DESIGN.md",
+      "path": ".bonsai/design_docs/VOICE_INPUT_DESIGN.md",
       "title": "Voice Input \u2014 Architecture Design",
       "status": "active",
       "covers": [
@@ -1821,7 +1821,7 @@
     {
       "id": "effort-support-design",
       "type": "submodule-design",
-      "path": "features/EFFORT_SUPPORT_DESIGN.md",
+      "path": ".bonsai/design_docs/EFFORT_SUPPORT_DESIGN.md",
       "title": "Effort Support \u2014 Feature Design",
       "status": "active",
       "covers": [
@@ -1948,7 +1948,7 @@
     {
       "id": "dual-mode-input-design",
       "type": "architecture-design",
-      "path": "features/DUAL_MODE_INPUT_DESIGN.md",
+      "path": ".bonsai/design_docs/DUAL_MODE_INPUT_DESIGN.md",
       "title": "Markdown Input with Split-Pane Preview \u2014 Architecture Design",
       "status": "active",
       "covers": [
@@ -2014,7 +2014,7 @@
     {
       "id": "skill-session-start-design",
       "type": "architecture-design",
-      "path": "features/SKILL_SESSION_START_DESIGN.md",
+      "path": ".bonsai/design_docs/SKILL_SESSION_START_DESIGN.md",
       "title": "Skill Session Start \u2014 Architecture Design",
       "status": "active",
       "covers": [
@@ -2073,7 +2073,7 @@
     {
       "id": "concurrency-orchestration",
       "type": "architecture-design",
-      "path": "features/CONCURRENCY_ORCHESTRATION_DESIGN.md",
+      "path": ".bonsai/design_docs/CONCURRENCY_ORCHESTRATION_DESIGN.md",
       "title": "Concurrency & Orchestration Design",
       "status": "active",
       "covers": [
@@ -2194,7 +2194,7 @@
     {
       "id": "feature-visualization",
       "type": "submodule-design",
-      "path": "features/VISUALIZATION.md",
+      "path": ".bonsai/design_docs/VISUALIZATION.md",
       "title": "MCP Visualization \u2014 Feature Spec",
       "status": "active",
       "covers": [
@@ -2366,7 +2366,7 @@
     {
       "id": "draft-session-design",
       "type": "submodule-design",
-      "path": "features/DRAFT_SESSION_DESIGN.md",
+      "path": ".bonsai/design_docs/DRAFT_SESSION_DESIGN.md",
       "title": "Draft Session (Pre-Start Config) \u2014 Feature Design",
       "status": "active",
       "covers": [
@@ -2485,7 +2485,7 @@
     {
       "id": "feature-admin-system",
       "type": "architecture-design",
-      "path": "features/ADMIN_SYSTEM_DESIGN.md",
+      "path": ".bonsai/design_docs/ADMIN_SYSTEM_DESIGN.md",
       "title": "Admin Role System",
       "status": "active",
       "covers": [

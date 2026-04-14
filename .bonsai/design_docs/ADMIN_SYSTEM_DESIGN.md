@@ -159,6 +159,6 @@ checking → needsSetup? → SetupScreen
 ## Related Specs
 
 - [Storage Architecture](STORAGE_ARCHITECTURE.md) — parent spec, SQLite schema
-- [Server Store](../backend/app/core/SERVER_STORE.md) — ServerStore admin methods
-- [Auth Migration](../backend/app/rpc/AUTH_MIGRATION.md) — auth flow with `is_admin`
-- [User API](../backend/app/rpc/methods/USER_API.md) — user profile includes `isAdmin`
+- [Server Store](../../backend/app/core/SERVER_STORE.md) — ServerStore admin methods
+- [Auth Migration](../../backend/app/rpc/AUTH_MIGRATION.md) — auth flow with `is_admin`
+- [User API](../../backend/app/rpc/methods/USER_API.md) — user profile includes `isAdmin`

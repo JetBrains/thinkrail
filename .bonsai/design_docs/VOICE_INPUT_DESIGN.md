@@ -1,6 +1,6 @@
 # Voice Input — Architecture Design
 
-> Parent: [DESIGN_DOC.md](../DESIGN_DOC.md) | Status: **Active** | Created: 2026-03-11
+> Parent: [DESIGN_DOC.md](../../DESIGN_DOC.md) | Status: **Active** | Created: 2026-03-11
 
 ## Table of Contents
 1. [Overview](#overview)
@@ -140,5 +140,5 @@ interface UseVoiceInputReturn {
 
 | Component | Spec | Description |
 |-----------|------|-------------|
-| Transcription backend | [TRANSCRIBE.md](../backend/app/agent/TRANSCRIBE.md) | `transcribe()` function — base64 audio → Whisper → text |
-| Frontend task | [feature_voice_input.md](../.bonsai/implementation_tasks/frontend/feature_voice_input.md) | useVoiceInput hook + InputArea mic button |
+| Transcription backend | [TRANSCRIBE.md](../../backend/app/agent/TRANSCRIBE.md) | `transcribe()` function — base64 audio → Whisper → text |
+| Frontend task | [feature_voice_input.md](../../.bonsai/implementation_tasks/frontend/feature_voice_input.md) | useVoiceInput hook + InputArea mic button |

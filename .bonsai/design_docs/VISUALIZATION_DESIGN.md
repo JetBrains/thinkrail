@@ -1,6 +1,6 @@
 # MCP Visualization — Architecture Design
 
-> Parent: [DESIGN_DOC.md](../DESIGN_DOC.md) | Status: **Active** | Created: 2026-03-11 | Updated: 2026-03-16
+> Parent: [DESIGN_DOC.md](../../DESIGN_DOC.md) | Status: **Active** | Created: 2026-03-11 | Updated: 2026-03-16
 
 ## Table of Contents
 1. [Overview](#overview)
@@ -183,8 +183,8 @@ They share no code. The vis/ dashboard is a pull/push state machine for spec met
 
 | Component | Spec | Description |
 |-----------|------|-------------|
-| End-to-end feature | [features/VISUALIZATION.md](VISUALIZATION.md) | Full feature spec: schema, types, validation, dual-server, scenarios |
-| Backend spec | [backend/app/agent/tools/VISUALIZATION.md](../backend/app/agent/tools/VISUALIZATION.md) | SDK handler, CLI server, shared validation |
-| Frontend spec | [frontend/ui-specs/VISUALIZATION_CARD.md](../frontend/ui-specs/VISUALIZATION_CARD.md) | VisualizationCard components, types, Mermaid, layout hints |
-| Vis dashboard module | [vis/README.md](../backend/app/vis/README.md) | Dashboard state computation (separate from MCP vis) |
-| Frontend task | [feature_visualization_card.md](../.bonsai/implementation_tasks/frontend/feature_visualization_card.md) | VisualizationCard + sub-renderers + types |
+| End-to-end feature | [.bonsai/design_docs/VISUALIZATION.md](VISUALIZATION.md) | Full feature spec: schema, types, validation, dual-server, scenarios |
+| Backend spec | [backend/app/agent/tools/VISUALIZATION.md](../../backend/app/agent/tools/VISUALIZATION.md) | SDK handler, CLI server, shared validation |
+| Frontend spec | [frontend/ui-specs/VISUALIZATION_CARD.md](../../frontend/ui-specs/VISUALIZATION_CARD.md) | VisualizationCard components, types, Mermaid, layout hints |
+| Vis dashboard module | [vis/README.md](../../backend/app/vis/README.md) | Dashboard state computation (separate from MCP vis) |
+| Frontend task | [feature_visualization_card.md](../../.bonsai/implementation_tasks/frontend/feature_visualization_card.md) | VisualizationCard + sub-renderers + types |

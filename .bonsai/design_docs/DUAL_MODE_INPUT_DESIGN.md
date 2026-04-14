@@ -1,6 +1,6 @@
 # Markdown Input with Split-Pane Preview — Architecture Design
 
-> Parent: [DESIGN_DOC.md](../DESIGN_DOC.md) | Status: **Active** | Created: 2026-03-11 | Updated: 2026-03-12
+> Parent: [DESIGN_DOC.md](../../DESIGN_DOC.md) | Status: **Active** | Created: 2026-03-11 | Updated: 2026-03-12
 
 ## Table of Contents
 1. [Overview](#overview)
@@ -179,5 +179,5 @@ What was kept: toolbar, format buttons, preview rendering, `previewActive` state
 
 | Component | Spec | Description |
 |-----------|------|-------------|
-| Original task | [feature_dual_mode_input.md](../.bonsai/implementation_tasks/frontend/feature_dual_mode_input.md) | Original dual-mode implementation (Done, superseded) |
-| Refactor task | [feature_split_pane_preview.md](../.bonsai/implementation_tasks/frontend/feature_split_pane_preview.md) | Remove text mode, add split-pane preview |
+| Original task | [feature_dual_mode_input.md](../../.bonsai/implementation_tasks/frontend/feature_dual_mode_input.md) | Original dual-mode implementation (Done, superseded) |
+| Refactor task | [feature_split_pane_preview.md](../../.bonsai/implementation_tasks/frontend/feature_split_pane_preview.md) | Remove text mode, add split-pane preview |

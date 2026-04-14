@@ -29,7 +29,7 @@ Simplify InputArea from dual-mode (text + markdown) to always-markdown. Replace 
 
 ## Design Reference
 
-- Feature design: [features/DUAL_MODE_INPUT_DESIGN.md](../../features/DUAL_MODE_INPUT_DESIGN.md)
+- Feature design: [.bonsai/design_docs/DUAL_MODE_INPUT_DESIGN.md](../design_docs/DUAL_MODE_INPUT_DESIGN.md)
 
 ## Supersedes
 

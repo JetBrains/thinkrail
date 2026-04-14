@@ -108,13 +108,13 @@ The agent calls `SuggestSession` with:
 
 ## Backend
 
-Backend implementation is self-contained in `backend/app/agent/tools/suggest_session.py`, following the [tools package pattern](../backend/app/agent/tools/README.md). See [backend/app/agent/tools/SUGGEST_SESSION.md](../backend/app/agent/tools/SUGGEST_SESSION.md) for the backend-only spec.
+Backend implementation is self-contained in `backend/app/agent/tools/suggest_session.py`, following the [tools package pattern](../../backend/app/agent/tools/README.md). See [backend/app/agent/tools/SUGGEST_SESSION.md](../../backend/app/agent/tools/SUGGEST_SESSION.md) for the backend-only spec.
 
 **Summary:** `suggest_session.py` defines the MCP tool schema, handler, `intercept_suggest_session()` (auto-approve), and MCP server. The interceptor is registered in `INTERCEPTORS` for `canUseTool` routing in non-yolo modes. All real logic runs in the handler via `get_tool_context()`: validates inputs (skill exists, specIds valid), creates a Future, sends `agent/suggestSession` request (including optional `prompt`), awaits response, and returns a text result (approve or dismiss message). When approved, the frontend calls `startSession()` with the suggested params including `prompt`, which is threaded through `service.run_task()` → `AgentTask.session_prompt` → `build_context()` as the session prompt.
 
 ## Frontend
 
-Frontend implementation is specified in [Chat UI — SuggestionCard](../frontend/ui-specs/CHAT_UI.md#suggestioncard) (component spec) and [State Management — onSuggestSession](../frontend/src/store/README.md#2-sessionstore) (store handler + wireEvents).
+Frontend implementation is specified in [Chat UI — SuggestionCard](../../frontend/ui-specs/CHAT_UI.md#suggestioncard) (component spec) and [State Management — onSuggestSession](../../frontend/src/store/README.md#2-sessionstore) (store handler + wireEvents).
 
 **Expected changes:**
 - `wireEvents.ts` — wire `agent/suggestSession` event
@@ -165,5 +165,5 @@ Developer: [approves] → session created
 ## Related Specs
 
 - **Parent:** [Proactive Agent Experience Design](PROACTIVE_AGENT_EXPERIENCE_DESIGN.md)
-- **Backend:** [backend/app/agent/tools/SUGGEST_SESSION.md](../backend/app/agent/tools/SUGGEST_SESSION.md)
+- **Backend:** [backend/app/agent/tools/SUGGEST_SESSION.md](../../backend/app/agent/tools/SUGGEST_SESSION.md)
 - **Pattern reference:** `AskUserQuestion` interception in `permissions.py`, tool package pattern in `tools/README.md`

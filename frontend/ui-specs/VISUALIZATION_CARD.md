@@ -1,6 +1,6 @@
 # Visualization Card — Frontend Spec
 
-> Parent: [Chat UI](CHAT_UI.md) | Feature: [features/VISUALIZATION.md](../../features/VISUALIZATION.md) | Status: **Active** | Created: 2026-03-16
+> Parent: [Chat UI](CHAT_UI.md) | Feature: [.bonsai/design_docs/VISUALIZATION.md](../../.bonsai/design_docs/VISUALIZATION.md) | Status: **Active** | Created: 2026-03-16
 
 ## Purpose
 
@@ -190,7 +190,7 @@ React class component wrapping each `VisualizationCard`. Catches render errors a
 ## Related Specs
 
 - **Parent:** [Chat UI](CHAT_UI.md)
-- **Feature:** [features/VISUALIZATION.md](../../features/VISUALIZATION.md)
+- **Feature:** [.bonsai/design_docs/VISUALIZATION.md](../../.bonsai/design_docs/VISUALIZATION.md)
 - **Types:** `types/vis.ts`
 - **Mermaid utils:** `utils/mermaid.ts`
 - **CSS:** `ChatStream.css` (`.vis-card*`, `.vis-collapsed-marker*` classes)

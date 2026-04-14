@@ -78,7 +78,7 @@ Progress events are persisted in `.events.jsonl` via `appendEvent` in the fronte
 
 ## Backend
 
-Backend implementation is scoped to `runner.py` and `models.py` in the agent module. See [backend/app/agent/tools/PROGRESS.md](../backend/app/agent/tools/PROGRESS.md) for the backend-only spec.
+Backend implementation is scoped to `runner.py` and `models.py` in the agent module. See [backend/app/agent/tools/PROGRESS.md](../../backend/app/agent/tools/PROGRESS.md) for the backend-only spec.
 
 **Summary:** New branch in `can_use_tool` that emits `agent/progressUpdate` notification and immediately returns `PermissionResultAllow`.
 
@@ -123,5 +123,5 @@ Agent: [calls UpdateProgress with findings]
 ## Related Specs
 
 - **Parent:** [Proactive Agent Experience Design](PROACTIVE_AGENT_EXPERIENCE_DESIGN.md)
-- **Backend:** [backend/app/agent/tools/PROGRESS.md](../backend/app/agent/tools/PROGRESS.md)
+- **Backend:** [backend/app/agent/tools/PROGRESS.md](../../backend/app/agent/tools/PROGRESS.md)
 - **Frontend:** ContextPanel AgentContext mode

@@ -297,5 +297,5 @@ No changes needed to runner.py, permissions.py, or service.py.
 
 - **Parent:** [Agent Module](../README.md)
 - **Tool specs:** [SuggestSession](SUGGEST_SESSION.md), [Visualization](VISUALIZATION.md), [UpdateProgress](PROGRESS.md), [Spec Tools](SPECS_TOOLS.md)
-- **Feature specs:** [Proactive Agent Experience](../../../../features/PROACTIVE_AGENT_EXPERIENCE_DESIGN.md)
+- **Feature specs:** [Proactive Agent Experience](../../../../.bonsai/design_docs/PROACTIVE_AGENT_EXPERIENCE_DESIGN.md)
 - **Consumer:** [agent/permissions.py](../permissions.py) (routes `INTERCEPTORS` + SDK built-ins), [agent/runner.py](../runner.py) (sets context + wires `MCP_SERVERS` into SDK)

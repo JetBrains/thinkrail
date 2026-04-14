@@ -1,6 +1,6 @@
 # Visualization — Backend Spec
 
-> Parent: [Tools Package](README.md) | Feature: [features/VISUALIZATION.md](../../../../features/VISUALIZATION.md) | Status: **Active** | Created: 2026-03-16
+> Parent: [Tools Package](README.md) | Feature: [.bonsai/design_docs/VISUALIZATION.md](../../../../.bonsai/design_docs/VISUALIZATION.md) | Status: **Active** | Created: 2026-03-16
 
 ## Purpose
 
@@ -12,7 +12,7 @@ Backend implementation of the `bonsai_visualize` MCP tool. Unlike most tools in 
 | `visualization.py` | `backend/app/agent/tools/` | In-process SDK handler (Bonsai web UI sessions) |
 | `vis-server.py` | `claude-plugin/tools/` | Standalone CLI MCP server (Claude Code sessions) |
 
-See the [full feature spec](../../../../features/VISUALIZATION.md) for protocol, frontend, and scenarios.
+See the [full feature spec](../../../../.bonsai/design_docs/VISUALIZATION.md) for protocol, frontend, and scenarios.
 
 ## _vis_validation.py
 

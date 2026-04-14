@@ -1,6 +1,6 @@
 # Proactive Agent Experience — Architecture Design
 
-> Parent: [DESIGN_DOC.md](../DESIGN_DOC.md) | Implements: [PROACTIVE_AGENT_EXPERIENCE.md](PROACTIVE_AGENT_EXPERIENCE.md) | Status: **Active** | Created: 2026-03-07 | Updated: 2026-03-11
+> Parent: [DESIGN_DOC.md](../../DESIGN_DOC.md) | Implements: [PROACTIVE_AGENT_EXPERIENCE.md](PROACTIVE_AGENT_EXPERIENCE.md) | Status: **Active** | Created: 2026-03-07 | Updated: 2026-03-11
 
 ## Table of Contents
 1. [Overview](#overview)
@@ -103,8 +103,8 @@ For tools that push info without needing a response (e.g., progress updates):
 
 | Category | Behavior | Example | Submodule Spec |
 |----------|----------|---------|----------------|
-| **Interactive** | Suspends agent, needs developer approval | SuggestSession | [SUGGEST_SESSION.md](../backend/app/agent/tools/SUGGEST_SESSION.md) |
-| **Passive** | Auto-approved, notification only | UpdateProgress | [PROGRESS.md](../backend/app/agent/tools/PROGRESS.md) |
+| **Interactive** | Suspends agent, needs developer approval | SuggestSession | [SUGGEST_SESSION.md](../../backend/app/agent/tools/SUGGEST_SESSION.md) |
+| **Passive** | Auto-approved, notification only | UpdateProgress | [PROGRESS.md](../../backend/app/agent/tools/PROGRESS.md) |
 
 Future proactive tools (e.g., PushContext, SuggestAction) would follow one of these two categories. The pattern is extensible — adding a new proactive tool only requires:
 1. A new tool file in `tools/` (schema + handler + MCP server + intercept)
@@ -114,7 +114,7 @@ Future proactive tools (e.g., PushContext, SuggestAction) would follow one of th
 
 ## Affected Areas
 
-**Backend:** Each proactive tool is self-contained in the `backend/app/agent/tools/` package (schema, handler, MCP server, and auto-approve intercept in one file). Permission routing dispatches `canUseTool` callbacks via the `INTERCEPTORS` registry. Tool handlers access session state via `get_tool_context()` (contextvars set by `runner.py`). See [Tools Package spec](../backend/app/agent/tools/README.md) for the implementation pattern.
+**Backend:** Each proactive tool is self-contained in the `backend/app/agent/tools/` package (schema, handler, MCP server, and auto-approve intercept in one file). Permission routing dispatches `canUseTool` callbacks via the `INTERCEPTORS` registry. Tool handlers access session state via `get_tool_context()` (contextvars set by `runner.py`). See [Tools Package spec](../../backend/app/agent/tools/README.md) for the implementation pattern.
 
 **Frontend:** Event wiring, store handlers, chat stream rendering, and context panel sections. Each tool needs a wire subscription, store handler, and UI component. See individual feature specs for file-level details.
 
@@ -170,7 +170,7 @@ Agent continues immediately (no waiting)
 
 ### Backend
 
-Each proactive tool lives in the `backend/app/agent/tools/` package as a self-contained file. The tools package exposes `MCP_SERVERS` (wired into the SDK), `INTERCEPTORS` (auto-approve routing in `permissions.py`), and `set_tool_context()`/`get_tool_context()` (contextvars for handler logic). See [Tools Package spec](../backend/app/agent/tools/README.md) for the pattern and file-level details.
+Each proactive tool lives in the `backend/app/agent/tools/` package as a self-contained file. The tools package exposes `MCP_SERVERS` (wired into the SDK), `INTERCEPTORS` (auto-approve routing in `permissions.py`), and `set_tool_context()`/`get_tool_context()` (contextvars for handler logic). See [Tools Package spec](../../backend/app/agent/tools/README.md) for the pattern and file-level details.
 
 `runner.py` calls `set_tool_context()` before SDK client creation. No changes to: `service.py`, `tracker.py`, `persistence.py`, `notifications.py`.
 
@@ -214,5 +214,5 @@ Each proactive tool has a **feature spec** (full end-to-end: protocol + backend 
 
 | Tool | Feature Spec | Backend Spec | Category |
 |------|-------------|-------------|----------|
-| SuggestSession | [features/SUGGEST_SESSION.md](SUGGEST_SESSION.md) | [backend/app/agent/tools/SUGGEST_SESSION.md](../backend/app/agent/tools/SUGGEST_SESSION.md) | Interactive |
-| UpdateProgress | [features/UPDATE_PROGRESS.md](UPDATE_PROGRESS.md) | [backend/app/agent/tools/PROGRESS.md](../backend/app/agent/tools/PROGRESS.md) | Passive |
+| SuggestSession | [.bonsai/design_docs/SUGGEST_SESSION.md](SUGGEST_SESSION.md) | [backend/app/agent/tools/SUGGEST_SESSION.md](../../backend/app/agent/tools/SUGGEST_SESSION.md) | Interactive |
+| UpdateProgress | [.bonsai/design_docs/UPDATE_PROGRESS.md](UPDATE_PROGRESS.md) | [backend/app/agent/tools/PROGRESS.md](../../backend/app/agent/tools/PROGRESS.md) | Passive |

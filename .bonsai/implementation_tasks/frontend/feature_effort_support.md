@@ -23,4 +23,4 @@ Add configurable reasoning effort level (null/low/medium/high/max) to agent sess
 
 ## Design Reference
 
-- Feature design: [features/EFFORT_SUPPORT_DESIGN.md](../../features/EFFORT_SUPPORT_DESIGN.md)
+- Feature design: [.bonsai/design_docs/EFFORT_SUPPORT_DESIGN.md](../design_docs/EFFORT_SUPPORT_DESIGN.md)

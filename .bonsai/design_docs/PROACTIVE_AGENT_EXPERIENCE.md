@@ -2,7 +2,7 @@
 * Category: improvement + new-feature
 * Priority: high
 
-> Parent: [GOAL&REQUIREMENTS.md](../GOAL&REQUIREMENTS.md) | Status: **Active** | Created: 2026-03-07
+> Parent: [GOAL&REQUIREMENTS.md](../../GOAL&REQUIREMENTS.md) | Status: **Active** | Created: 2026-03-07
 
 ## Goal
 

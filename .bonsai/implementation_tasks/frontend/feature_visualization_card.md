@@ -23,5 +23,5 @@ Implement VisualizationCard component for rendering structured visualizations in
 
 ## Design Reference
 
-- Feature design: [features/VISUALIZATION_DESIGN.md](../../features/VISUALIZATION_DESIGN.md)
+- Feature design: [.bonsai/design_docs/VISUALIZATION_DESIGN.md](../design_docs/VISUALIZATION_DESIGN.md)
 - Backend MCP tool: [backend/app/agent/visualization.py](../../backend/app/agent/visualization.py)

@@ -2,7 +2,7 @@
 
 **Status:** Done
 **Priority:** High
-**Spec reference:** `features/DRAFT_SESSION_DESIGN.md`
+**Spec reference:** `.bonsai/design_docs/DRAFT_SESSION_DESIGN.md`
 **Depends on:** —
 **Started:** 2026-03-28
 
