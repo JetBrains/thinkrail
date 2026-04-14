@@ -18,8 +18,9 @@ from fastapi.responses import FileResponse
 from pydantic import BaseModel
 
 from app.api.deps import valid_file_in_project
+from app.api.schemas import FileBrowseResponse, FileReadResponse, FileWriteResponse, OpenExternalResponse
 
-router = APIRouter(prefix="/api/file")
+router = APIRouter(prefix="/api/file", tags=["files"])
 
 _FilePair = Annotated[tuple[Path, Path], Depends(valid_file_in_project)]
 
@@ -36,24 +37,24 @@ class _OpenExternalBody(BaseModel):
     editor: str
 
 
-@router.get("/read")
-async def read_file(paths: _FilePair):
+@router.get("/read", response_model=FileReadResponse)
+async def read_file(paths: _FilePair) -> FileReadResponse:
     """Read a text file's contents. Path is relative to project root."""
     root, file_path = paths
     if not file_path.is_file():
-        return {"error": "File not found", "path": str(file_path.relative_to(root))}
+        raise HTTPException(status_code=404, detail="File not found")
     try:
         content = file_path.read_text(encoding="utf-8")
-        return {
-            "content": content,
-            "path": str(file_path.relative_to(root)),
-            "name": file_path.name,
-            "size": file_path.stat().st_size,
-        }
+        return FileReadResponse(
+            content=content,
+            path=str(file_path.relative_to(root)),
+            name=file_path.name,
+            size=file_path.stat().st_size,
+        )
     except UnicodeDecodeError:
-        return {"error": "Binary file — cannot display", "path": str(file_path.relative_to(root))}
+        raise HTTPException(status_code=415, detail="Binary file — cannot display")
     except Exception as e:
-        return {"error": str(e), "path": str(file_path.relative_to(root))}
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @router.get("/raw")
@@ -73,12 +74,12 @@ async def read_file_raw(project: str = Query(...), path: str = Query(...)):
         if not file_path.is_relative_to(root):
             raise HTTPException(status_code=400, detail="Path traversal detected")
     if not file_path.is_file():
-        return {"error": "File not found"}
+        raise HTTPException(status_code=404, detail="File not found")
     return FileResponse(file_path)
 
 
-@router.post("/browse")
-async def browse_files():
+@router.post("/browse", response_model=FileBrowseResponse)
+async def browse_files() -> FileBrowseResponse:
     """Open a native file dialog and return selected absolute paths."""
 
     def _pick() -> list[str]:
@@ -123,13 +124,13 @@ async def browse_files():
     try:
         loop = asyncio.get_running_loop()
         paths = await loop.run_in_executor(None, _pick)
-        return {"paths": paths}
+        return FileBrowseResponse(paths=paths)
     except Exception as exc:
-        return {"paths": [], "error": str(exc)}
+        return FileBrowseResponse(paths=[], error=str(exc))
 
 
-@router.post("/write")
-async def write_file(body: _WriteFileBody):
+@router.post("/write", response_model=FileWriteResponse)
+async def write_file(body: _WriteFileBody) -> FileWriteResponse:
     """Write content to a file. Path is relative to project root."""
     root = Path(body.project).expanduser().resolve()
     file_path = (root / body.path).resolve()
@@ -137,11 +138,11 @@ async def write_file(body: _WriteFileBody):
         raise HTTPException(status_code=400, detail="Path traversal detected")
     file_path.parent.mkdir(parents=True, exist_ok=True)
     file_path.write_text(body.content, encoding="utf-8")
-    return {"ok": True, "path": body.path}
+    return FileWriteResponse(path=body.path)
 
 
-@router.post("/open-external")
-async def open_external(body: _OpenExternalBody):
+@router.post("/open-external", response_model=OpenExternalResponse)
+async def open_external(body: _OpenExternalBody) -> OpenExternalResponse:
     """Open a file in an external editor."""
     root = Path(body.project).expanduser().resolve()
     file_path = (root / body.path).resolve()
@@ -172,13 +173,13 @@ async def open_external(body: _OpenExternalBody):
                     stdout=subprocess.DEVNULL,
                     stderr=subprocess.DEVNULL,
                 )
-                return {"ok": True, "terminal": term}
+                return OpenExternalResponse(terminal=term)
             except FileNotFoundError:
                 continue
-        return {"error": f"No terminal emulator found to run '{cmd}'"}
+        raise HTTPException(status_code=500, detail=f"No terminal emulator found to run '{cmd}'")
     else:
         try:
             subprocess.Popen([cmd, str(file_path)], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-            return {"ok": True}
+            return OpenExternalResponse()
         except FileNotFoundError:
-            return {"error": f"'{cmd}' not found in PATH"}
+            raise HTTPException(status_code=400, detail=f"'{cmd}' not found in PATH")

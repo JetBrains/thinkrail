@@ -104,11 +104,12 @@ export function ProjectPicker({ onSelect, onClose }: ProjectPickerProps) {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ path: target }),
         });
-        const initData = await initRes.json();
-        if (initData.error) {
-          setError(initData.error);
+        if (!initRes.ok) {
+          const body = await initRes.json().catch(() => ({}));
+          setError(body.detail ?? "Failed to initialize project");
           return;
         }
+        const initData = await initRes.json();
         onSelect(initData.path, true);
       } catch (e) {
         setError(`Cannot reach backend: ${(e as Error).message}`);
@@ -236,11 +237,12 @@ export function ProjectPicker({ onSelect, onClose }: ProjectPickerProps) {
                       headers: { "Content-Type": "application/json" },
                       body: JSON.stringify({ path: target }),
                     });
-                    const data = await res.json();
-                    if (data.error) {
-                      const msg = data.error.toLowerCase().includes("permission denied")
+                    if (!res.ok) {
+                      const body = await res.json().catch(() => ({}));
+                      const detail: string = body.detail ?? "Failed to create directory";
+                      const msg = detail.toLowerCase().includes("permission denied")
                         ? `Permission denied: cannot create "${target}". Check folder permissions or choose a different location.`
-                        : data.error;
+                        : detail;
                       setError(msg);
                       setDirNotFound(false);
                     } else {

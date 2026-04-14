@@ -1,0 +1,117 @@
+"""Pydantic response models for the REST API."""
+
+from __future__ import annotations
+
+from datetime import datetime
+
+from pydantic import BaseModel
+
+
+# ── Shared ───────────────────────────────────────────────────────────────────
+
+class OkResponse(BaseModel):
+    ok: bool = True
+
+
+# ── project.py ───────────────────────────────────────────────────────────────
+
+class HealthResponse(BaseModel):
+    status: str
+    version: str
+
+
+class ProjectInfo(BaseModel):
+    path: str
+    name: str
+
+
+class ProjectListResponse(BaseModel):
+    projects: list[ProjectInfo]
+
+
+class ProjectValidateResponse(BaseModel):
+    valid: bool
+    path: str
+    name: str
+    exists: bool
+
+
+class FileEntry(BaseModel):
+    path: str
+    name: str
+    isDir: bool
+    depth: int
+
+
+class ProjectFilesResponse(BaseModel):
+    entries: list[FileEntry]
+
+
+# ── files.py ─────────────────────────────────────────────────────────────────
+
+class FileReadResponse(BaseModel):
+    content: str
+    path: str
+    name: str
+    size: int
+
+
+class FileWriteResponse(BaseModel):
+    ok: bool = True
+    path: str
+
+
+class FileBrowseResponse(BaseModel):
+    paths: list[str]
+    error: str | None = None
+
+
+class OpenExternalResponse(BaseModel):
+    ok: bool = True
+    terminal: str | None = None
+    error: str | None = None
+
+
+# ── fs.py ────────────────────────────────────────────────────────────────────
+
+class DirListResponse(BaseModel):
+    dirs: list[str]
+
+
+class FolderPickResponse(BaseModel):
+    path: str | None = None
+    error: str | None = None
+
+
+# ── user.py ──────────────────────────────────────────────────────────────────
+
+class UserProfileResponse(BaseModel):
+    userId: str
+    displayName: str
+    isAdmin: bool
+    createdAt: datetime | None
+
+
+class RecentProjectResponse(BaseModel):
+    path: str
+    name: str
+    lastOpened: datetime | None
+
+
+class KnownProjectResponse(BaseModel):
+    path: str
+    name: str
+    registeredAt: datetime | None
+    lastOpenedAt: datetime | None
+
+
+# ── setup.py ─────────────────────────────────────────────────────────────────
+
+class SetupStatusResponse(BaseModel):
+    needsSetup: bool
+
+
+class SetupResponse(BaseModel):
+    userId: str
+    displayName: str
+    token: str
