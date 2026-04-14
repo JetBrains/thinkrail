@@ -313,6 +313,120 @@ def _build_file_details(
     return details
 
 
+_MAX_CONTEXT_CHARS = 4000
+
+
+def build_parent_context(
+    parent_sid: str,
+    subsession_type: "SubsessionType",
+    subsession_context: str | None,
+    project_root: Path,
+) -> str:
+    """Build system prompt section with parent conversation context."""
+    from app.agent.models import SubsessionType  # avoid circular import
+    from app.agent.persistence import load_events
+
+    events = load_events(project_root, parent_sid)
+    transcript = _extract_transcript(events)
+
+    if len(transcript) > _MAX_CONTEXT_CHARS:
+        transcript = _truncate_transcript(transcript, _MAX_CONTEXT_CHARS)
+
+    if subsession_type == SubsessionType.refinement:
+        role_text = (
+            "You are a message editor. Your ONLY job is to clean up the voice transcript "
+            "below into a well-formulated message.\n\n"
+            "CRITICAL: You MUST use the AskUserQuestion tool. "
+            "Do NOT write proposals as plain text. ALWAYS use the tool.\n\n"
+            "STEP 1 — PROPOSE VERSIONS:\n"
+            "Call AskUserQuestion with EXACTLY this structure:\n"
+            '- question: "Pick the best formulation to send to the parent session:"\n'
+            "- You MUST provide ALL of these options (2-3 versions + adjust):\n"
+            '  - Option A label: "Minimal cleanup"\n'
+            "    Option A description: the full cleaned-up text (grammar/spelling fixed, "
+            "filler removed, but preserving the original structure)\n"
+            '  - Option B label: "Concise & polished"\n'
+            "    Option B description: the full rewritten text (extract the core essence, "
+            "well-formulated, professional tone, shorter)\n"
+            '  - Option C label: "Adjust — let me describe what I want"\n'
+            "    Option C description: I'll provide feedback for a revision\n"
+            "- IMPORTANT: Options A and B descriptions must contain the COMPLETE message text, "
+            "not a summary of it. The user will send the chosen text to the parent.\n\n"
+            "STEP 2 — AFTER USER PICKS:\n"
+            "- If user picks Option A or B: respond with ONLY this exact text:\n"
+            '  "Returning to parent session with your message."\n'
+            "  The system will handle propagating the chosen text back.\n"
+            "- If user picks 'Adjust': ask what to change, "
+            "then call AskUserQuestion again with revised versions.\n\n"
+            "RULES:\n"
+            "- NEVER respond with plain text proposals. ALWAYS use AskUserQuestion.\n"
+            "- ALWAYS provide at least 2 different formulations (minimal + polished).\n"
+            "- Each option description must be the COMPLETE ready-to-send message.\n"
+            "- Do NOT add content the user didn't say. Do NOT explain edits."
+        )
+        purpose = "quickly clean up a voice transcript into a well-formulated message"
+    else:
+        role_text = (
+            "Discuss the topic thoroughly. When the user is satisfied, "
+            "propose a concise summary to bring back to the parent session."
+        )
+        purpose = "discuss a topic"
+
+    sections = [
+        f"## Parent Session Context\n\nYou are in a subsession branched from a parent conversation.\nThe user wants to {purpose} without polluting the main session."
+    ]
+    if transcript.strip():
+        sections.append(f"### Parent Conversation:\n{transcript}")
+    if subsession_context:
+        sections.append(f"### Focus:\n{subsession_context}")
+    sections.append(f"### Your Role:\n{role_text}")
+
+    return "\n\n".join(sections)
+
+
+def _extract_transcript(events: list[dict]) -> str:
+    """Extract user messages and assistant text from events into a transcript."""
+    turns: list[str] = []
+    current_assistant_text: list[str] = []
+
+    for ev in events:
+        event_type = ev.get("eventType", "")
+        payload = ev.get("payload", {})
+
+        if event_type == "userMessage":
+            if current_assistant_text:
+                turns.append("**Assistant:** " + "".join(current_assistant_text))
+                current_assistant_text = []
+            turns.append("**User:** " + payload.get("text", ""))
+        elif event_type == "textDelta":
+            current_assistant_text.append(payload.get("text", ""))
+        elif event_type == "turnComplete":
+            if current_assistant_text:
+                turns.append("**Assistant:** " + "".join(current_assistant_text))
+                current_assistant_text = []
+
+    if current_assistant_text:
+        turns.append("**Assistant:** " + "".join(current_assistant_text))
+
+    return "\n\n".join(turns)
+
+
+def _truncate_transcript(transcript: str, max_chars: int) -> str:
+    """Keep the most recent turns that fit within max_chars."""
+    parts = transcript.split("\n\n")
+    result: list[str] = []
+    total = 0
+    for part in reversed(parts):
+        if total + len(part) + 2 > max_chars and result:
+            break
+        result.append(part)
+        total += len(part) + 2
+    result.reverse()
+    if len(result) < len(parts):
+        return "[Earlier conversation truncated]\n\n" + "\n\n".join(result)
+    return "\n\n".join(result)
+
+
 SECTION_LABELS: dict[str, str] = {
     "general": "General Instructions",
     "task": "Skill / Task",

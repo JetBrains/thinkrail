@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime
+from enum import Enum
 from typing import Any, Literal
 from uuid import uuid4
 
@@ -16,6 +17,13 @@ def to_camel(name: str) -> str:
 _CAMEL_CONFIG = ConfigDict(alias_generator=to_camel, populate_by_name=True)
 
 TaskStatus = Literal["draft", "initializing", "idle", "running", "waiting", "done", "error"]
+
+
+class SubsessionType(str, Enum):
+    """Type of subsession — determines return flow behavior."""
+
+    discussion = "discussion"
+    refinement = "refinement"
 
 EventType = Literal[
     "session_start",
@@ -126,3 +134,8 @@ class AgentTask(BaseModel):
     created_by: str | None = None
     created: str = Field(default_factory=lambda: datetime.now(UTC).isoformat())
     updated: str = Field(default_factory=lambda: datetime.now(UTC).isoformat())
+    parent_bonsai_sid: str | None = None
+    subsession_type: SubsessionType | None = None
+    subsession_context: str | None = None
+    return_status: str | None = None
+    return_summary: str | None = None

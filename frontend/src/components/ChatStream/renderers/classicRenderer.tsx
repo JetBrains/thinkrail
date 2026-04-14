@@ -16,6 +16,7 @@ import DescriptionSuggestionCard from "../DescriptionSuggestionCard.tsx";
 import { CompletionBanner } from "../CompletionBanner.tsx";
 import { ErrorBanner } from "../ErrorBanner.tsx";
 import { CompactMarker } from "../CompactMarker.tsx";
+import { SubsessionResultCard } from "../SubsessionResultCard.tsx";
 import { ChatMarkdown } from "../ChatMarkdown.tsx";
 import { extractToolInput } from "../ChatStream.tsx";
 import type { VisData } from "@/types/vis.ts";
@@ -376,9 +377,20 @@ export const classicRenderers: ViewRenderers = {
     />
   ),
 
-  notification: (ev, _i, k) => (
-    <SystemMessage key={k} text={(ev.payload.message as string) ?? ""} />
-  ),
+  notification: (ev, _i, k) => {
+    const p = ev.payload as Record<string, unknown>;
+    if (p.type === "subsessionResult") {
+      return (
+        <SubsessionResultCard
+          key={k}
+          childName={p.childName as string}
+          subsessionType={p.subsessionType as "discussion" | "refinement"}
+          summary={p.summary as string}
+        />
+      );
+    }
+    return <SystemMessage key={k} text={(p.message as string) ?? ""} />;
+  },
 
   compact: (ev, _i, k) => (
     <CompactMarker

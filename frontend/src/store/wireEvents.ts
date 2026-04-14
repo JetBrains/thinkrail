@@ -294,6 +294,13 @@ export function wireEvents(client: RpcClient): Unsubscribe {
     }),
   );
 
+  // ── Subsession notifications ──
+  unsubs.push(
+    client.on("subsession/returned", (p) => {
+      useSessionStore.getState().onSubsessionReturned(p as Record<string, unknown>);
+    }),
+  );
+
   // ── Board notifications ──
   unsubs.push(
     client.on("board/didChange", (p) => {

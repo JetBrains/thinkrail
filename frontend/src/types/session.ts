@@ -109,6 +109,11 @@ export interface Session {
   systemPrompt?: string;
   /** Structured prompt sections for the preview UI */
   promptSections?: PromptSection[] | null;
+  parentBonsaiSid: string | null;
+  subsessionType: "discussion" | "refinement" | null;
+  subsessionContext: string | null;
+  returnStatus: "pending" | "approved" | "dismissed" | null;
+  returnSummary: string | null;
 }
 
 export interface PromptSection {

@@ -7,6 +7,8 @@ import { useSettingsStore } from "@/store/settingsStore.ts";
 import { useSessionStore } from "@/store/sessionStore.ts";
 import { renderEvent } from "./renderers/registry.ts";
 import { SessionContextMenu } from "./SessionContextMenu.tsx";
+import { SubsessionContextMenu } from "./SubsessionContextMenu.tsx";
+import { ReturnFlowCard } from "./ReturnFlowCard.tsx";
 import type { ApprovalInfo, EventRenderContext } from "./renderers/types.ts";
 import "./compact.css";
 
@@ -109,6 +111,9 @@ export const ChatStream = forwardRef<ChatStreamHandle, ChatStreamProps>(function
   }));
 
   const handleContextMenu = useCallback((e: React.MouseEvent) => {
+    // If there's selected text, let SubsessionContextMenu handle it instead
+    const selection = window.getSelection();
+    if (selection?.toString().trim()) return;
     e.preventDefault();
     const questionRequestId = findQuestionRequestId(e.target as HTMLElement) ?? undefined;
     setCtxMenu({ x: e.clientX, y: e.clientY, questionRequestId });
@@ -320,6 +325,31 @@ export const ChatStream = forwardRef<ChatStreamHandle, ChatStreamProps>(function
         const k = `${i}-${ev.eventType}`;
         return renderEvent(viewMode, ev, i, k, ctx);
       })}
+
+      {session?.returnStatus === "pending" && session?.returnSummary && (
+        <ReturnFlowCard
+          bonsaiSid={session.bonsaiSid}
+          subsessionType={session.subsessionType ?? "discussion"}
+          proposedSummary={session.returnSummary}
+          onApprove={(text) => {
+            import("@/store/sessionStore.ts").then(({ useSessionStore }) => {
+              useSessionStore.getState().approveReturn(session.bonsaiSid, text);
+            }).catch(console.error);
+          }}
+          onDismiss={() => {
+            import("@/store/sessionStore.ts").then(({ useSessionStore }) => {
+              useSessionStore.getState().dismissReturn(session.bonsaiSid);
+            }).catch(console.error);
+          }}
+          onRevise={(feedback) => {
+            import("@/store/sessionStore.ts").then(({ useSessionStore }) => {
+              useSessionStore.getState().reviseReturn(session.bonsaiSid, feedback);
+            }).catch(console.error);
+          }}
+        />
+      )}
+
+      <SubsessionContextMenu containerRef={scrollRef} sessionId={session?.bonsaiSid ?? ""} />
 
       {!autoScroll.current && (
         <button

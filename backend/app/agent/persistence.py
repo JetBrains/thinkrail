@@ -128,6 +128,22 @@ def list_sessions(project_root: Path) -> list[dict[str, Any]]:
     return result
 
 
+def load_events(project_root: Path, bonsai_sid: str) -> list[dict[str, Any]]:
+    """Load events from a session's .events.jsonl file."""
+    events_path = _events_path(project_root, bonsai_sid)
+    if not events_path.exists():
+        return []
+    events: list[dict[str, Any]] = []
+    for line in events_path.read_text(encoding="utf-8").splitlines():
+        line = line.strip()
+        if line:
+            try:
+                events.append(json.loads(line))
+            except json.JSONDecodeError:
+                continue
+    return events
+
+
 def append_event(project_root: Path, bonsai_sid: str, event: dict[str, Any]) -> None:
     """Append a single event to the session's .events.jsonl log. O(1) operation."""
     meta = _meta_path(project_root, bonsai_sid)
@@ -165,6 +181,24 @@ def update_session_metadata(
         write_text(path, json.dumps(meta, indent=2, default=str))
     except Exception:
         logger.debug("Failed to update metadata for %s", bonsai_sid)
+
+
+def list_children(project_root: Path, parent_bonsai_sid: str) -> list[dict[str, Any]]:
+    """List direct child subsessions of a parent session (metadata only)."""
+    sessions_dir = project_root / ".bonsai" / "sessions"
+    if not sessions_dir.is_dir():
+        return []
+    children = []
+    for fpath in sessions_dir.glob("*.json"):
+        if fpath.name.endswith(".events.jsonl"):
+            continue
+        try:
+            data = json.loads(fpath.read_text(encoding="utf-8"))
+        except (json.JSONDecodeError, OSError):
+            continue
+        if data.get("parentBonsaiSid") == parent_bonsai_sid:
+            children.append(data)
+    return children
 
 
 def delete_session(project_root: Path, bonsai_sid: str) -> bool:

@@ -80,6 +80,14 @@ from app.rpc.methods.user import (
     get_recent_projects,
     update_preferences,
 )
+from app.rpc.methods.subsessions import (
+    approve_summary as subsession_approve_summary,
+    create_subsession as subsession_create,
+    dismiss_summary as subsession_dismiss_summary,
+    list_children as subsession_list_children,
+    request_summary as subsession_request_summary,
+    revise_summary as subsession_revise_summary,
+)
 from app.rpc.methods.vis import get_vis_state, recompute_vis
 from app.rpc.methods.board import (
     apply_all_drafts,
@@ -149,6 +157,12 @@ METHODS = {
     "session/restore": restore_session,
     "session/subscribe": subscribe_session,
     "session/unsubscribe": unsubscribe_session,
+    "subsession/create": subsession_create,
+    "subsession/requestSummary": subsession_request_summary,
+    "subsession/approveSummary": subsession_approve_summary,
+    "subsession/dismissSummary": subsession_dismiss_summary,
+    "subsession/reviseSummary": subsession_revise_summary,
+    "subsession/listChildren": subsession_list_children,
     "vis/state": get_vis_state,
     "vis/recompute": recompute_vis,
     "board/list": list_tickets,

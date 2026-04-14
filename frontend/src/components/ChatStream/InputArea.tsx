@@ -104,12 +104,34 @@ export function InputArea({ sessionId, disabled, placeholder, onSend, isRunning,
     }, 0);
   }, [text, setTextAndDraft]);
 
+  const [isVoiceTranscript, setIsVoiceTranscript] = useState(false);
+
   const handleSend = useCallback(() => {
     const trimmed = text.trim();
     if (disabled) return;
     if (!trimmed && !isDraft) return;
+
+    // Intercept /discuss slash command
+    if (trimmed.startsWith("/discuss ") || trimmed === "/discuss") {
+      const topic = trimmed.slice("/discuss ".length).trim();
+      import("@/store/sessionStore.ts").then(({ useSessionStore }) => {
+        const store = useSessionStore.getState();
+        store.createSubsession(
+          sessionId,
+          "discussion",
+          topic || undefined,
+          topic ? `Discuss: ${topic.slice(0, 40)}` : "Discussion"
+        );
+      }).catch(console.error);
+      setText("");
+      useInputDraftStore.getState().clearDraft(sessionId);
+      closeSuggestions();
+      return;
+    }
+
     onSend(trimmed, true);
     setText("");
+    setIsVoiceTranscript(false);
     useInputDraftStore.getState().clearDraft(sessionId);
     closeSuggestions();
     setPreviewActive(false);
@@ -252,6 +274,7 @@ export function InputArea({ sessionId, disabled, placeholder, onSend, isRunning,
   const handleChange = useCallback(
     (value: string) => {
       setTextAndDraft(value);
+      setIsVoiceTranscript(false);
       if (value.startsWith("/")) {
         const query = value.slice(1).toLowerCase();
         const filtered = skills.filter((s) => s.id.includes(query));
@@ -326,6 +349,7 @@ export function InputArea({ sessionId, disabled, placeholder, onSend, isRunning,
       const transcript = await voice.stopRecording();
       if (transcript) {
         setTextAndDraft(transcript);
+        setIsVoiceTranscript(true);
         setTimeout(() => {
           const el = ref.current;
           if (el) {
@@ -464,6 +488,20 @@ export function InputArea({ sessionId, disabled, placeholder, onSend, isRunning,
           title={voice.isRecording ? "Stop recording" : "Start voice input"}
         >
           {voice.isTranscribing ? <span className="input-mic-spinner" /> : "\uD83C\uDF99"}
+        </button>
+      )}
+      {isVoiceTranscript && text.trim() && (
+        <button
+          className="chat-btn"
+          onClick={() => {
+            import("@/store/sessionStore.ts").then(({ useSessionStore }) => {
+              const store = useSessionStore.getState();
+              store.createSubsession(sessionId, "refinement", text.trim(), "Revise voice input");
+            }).catch(console.error);
+            setIsVoiceTranscript(false);
+          }}
+        >
+          Revise with agent
         </button>
       )}
       <div className="input-actions">

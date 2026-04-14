@@ -13,6 +13,7 @@ import type {
 import { getClient } from "@/api/index.ts";
 import { createAgentApi } from "@/api/methods/agents.ts";
 import { getContextWindowSize, DEFAULT_MODEL } from "@/utils/models.ts";
+import { useInputDraftStore } from "./inputDraftStore.ts";
 import { useNotificationStore } from "./notificationStore.ts";
 import { useBoardStore } from "./boardStore.ts";
 import { useFileStore } from "./fileStore.ts";
@@ -97,6 +98,12 @@ interface SessionStore {
   restoreSession: (bonsaiSid: string, opts?: { noTab?: boolean }) => Promise<void>;
   loadActiveSessions: () => Promise<void>;
 
+  // Subsession actions
+  createSubsession: (parentBonsaiSid: string, type: "discussion" | "refinement", context?: string, name?: string) => Promise<string>;
+  approveReturn: (bonsaiSid: string, text: string) => Promise<void>;
+  dismissReturn: (bonsaiSid: string) => Promise<void>;
+  reviseReturn: (bonsaiSid: string, feedback: string) => Promise<void>;
+
   /** Poll backend for actual status of sessions stuck in transient states */
   syncSessionStatuses: () => Promise<void>;
 
@@ -117,6 +124,7 @@ interface SessionStore {
   onSessionDone: (params: Record<string, unknown>) => void;
   onSessionError: (params: Record<string, unknown>) => void;
   onConfigChanged: (params: Record<string, unknown>) => void;
+  onSubsessionReturned: (params: Record<string, unknown>) => void;
 }
 
 function emptyContextUsage(): ContextUsage {
@@ -398,6 +406,11 @@ function ensureSession(
     metrics: emptyMetrics(),
     pendingRequest: null,
     answeredRequests: new Map(),
+    parentBonsaiSid: null,
+    subsessionType: null,
+    subsessionContext: null,
+    returnStatus: null,
+    returnSummary: null,
   });
   return next;
 }
@@ -625,6 +638,11 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
         pendingRequest: existing?.pendingRequest ?? null,
         answeredRequests: existing?.answeredRequests ?? new Map(),
         metaTicketId: metaTicketId ?? null,
+        parentBonsaiSid: null,
+        subsessionType: null,
+        subsessionContext: null,
+        returnStatus: null,
+        returnSummary: null,
       });
       if (metaTicketId) {
         return { sessions: next };
@@ -671,6 +689,11 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
         metaTicketId: metaTicketId ?? null,
         systemPrompt,
         promptSections: (sections as Session["promptSections"]) ?? null,
+        parentBonsaiSid: null,
+        subsessionType: null,
+        subsessionContext: null,
+        returnStatus: null,
+        returnSummary: null,
       });
       if (metaTicketId) {
         return { sessions: next };
@@ -961,6 +984,11 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
       answeredRequests: answered,
       restored: !isActive,
       ...(restoredPrompt ? { systemPrompt: restoredPrompt } : {}),
+      parentBonsaiSid: (data as unknown as Record<string, unknown>).parentBonsaiSid as string ?? null,
+      subsessionType: (data as unknown as Record<string, unknown>).subsessionType as Session["subsessionType"] ?? null,
+      subsessionContext: (data as unknown as Record<string, unknown>).subsessionContext as string ?? null,
+      returnStatus: (data as unknown as Record<string, unknown>).returnStatus as Session["returnStatus"] ?? null,
+      returnSummary: (data as unknown as Record<string, unknown>).returnSummary as string ?? null,
     };
 
     set((s) => {
@@ -1069,6 +1097,11 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
           pendingRequest: null,
           answeredRequests: buildAnsweredRequests(events, true),
           ...(restoredPrompt ? { systemPrompt: restoredPrompt } : {}),
+          parentBonsaiSid: (data as unknown as Record<string, unknown>)?.parentBonsaiSid as string ?? null,
+          subsessionType: (data as unknown as Record<string, unknown>)?.subsessionType as Session["subsessionType"] ?? null,
+          subsessionContext: (data as unknown as Record<string, unknown>)?.subsessionContext as string ?? null,
+          returnStatus: (data as unknown as Record<string, unknown>)?.returnStatus as Session["returnStatus"] ?? null,
+          returnSummary: (data as unknown as Record<string, unknown>)?.returnSummary as string ?? null,
         });
       }
 
@@ -1338,6 +1371,24 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
     api.respond(bonsaiSid, requestId, response).catch((err) => {
       console.error("Failed to send agent/respond:", err);
     });
+
+    // Refinement subsession: when user picks a version (not "Adjust"),
+    // automatically trigger return flow to propagate text to parent.
+    const session = get().sessions.get(bonsaiSid);
+    if (session?.subsessionType === "refinement" && session?.parentBonsaiSid) {
+      const r = response as { questions?: { options?: { label: string; description: string }[] }[]; answers?: Record<string, string> };
+      if (r.answers && r.questions) {
+        const firstAnswer = Object.values(r.answers)[0];
+        if (firstAnswer && !firstAnswer.toLowerCase().includes("adjust")) {
+          // Find the selected option's description (contains the full message text)
+          const question = r.questions[0];
+          const selectedOption = question?.options?.find((o: { label: string }) => o.label === firstAnswer);
+          if (selectedOption?.description) {
+            get().approveReturn(bonsaiSid, selectedOption.description);
+          }
+        }
+      }
+    }
 
     // Mark request as answered, clear pendingRequest, and restore running status.
     // The backend stays in "running" throughout the turn — only the frontend
@@ -1833,6 +1884,11 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
             pendingRequest: null,
             answeredRequests: new Map(),
             createdBy: (params.createdBy as string) ?? undefined,
+            parentBonsaiSid: (params.parentBonsaiSid as string) ?? null,
+            subsessionType: (params.subsessionType as Session["subsessionType"]) ?? null,
+            subsessionContext: (params.subsessionContext as string) ?? null,
+            returnStatus: null,
+            returnSummary: null,
           };
       next.set(bonsaiSid, session);
       return { sessions: next };
@@ -1916,6 +1972,159 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
       }
       return { sessions };
     });
+  },
+
+  // ── Subsession actions ──
+
+  createSubsession: async (parentBonsaiSid, type, context, name) => {
+    const { createSubsessionApi } = await import("@/api/methods/subsessions.ts");
+    const client = getClient();
+    const api = createSubsessionApi(client);
+
+    const { bonsaiSid } = await api.create({
+      parentBonsaiSid,
+      type,
+      context,
+      name: name ?? (type === "discussion" ? "Discussion" : "Refinement"),
+    });
+
+    // Load the created subsession from backend
+    const { createSessionApi } = await import("@/api/methods/sessions.ts");
+    const sessionApi = createSessionApi(client);
+    const data = await sessionApi.get(bonsaiSid);
+
+    if (data) {
+      // Check if this session has a live backend runner
+      const allSessions = await sessionApi.list();
+      const backendEntry = allSessions.find((s) => s.bonsaiSid === bonsaiSid);
+      const isActive = backendEntry?.active === true;
+
+      // Convert backend events to AgentEvent format
+      const events: AgentEvent[] = (data.events ?? []).map((ev: Record<string, unknown>) => ({
+        bonsaiSid,
+        sessionId: ((ev.payload as Record<string, unknown>)?.sessionId as string) ?? "",
+        eventType: ((ev.eventType as string) ?? "notification") as AgentEvent["eventType"],
+        payload: (ev.payload as Record<string, unknown>) ?? ev,
+      }));
+
+      const restoredCost = reconstructCost(events);
+      const restoredModel = (data.config?.model as string) ?? "";
+      const restoredBetas = (data.config?.betas as string[]) ?? [];
+      const restoredCtx = reconstructContextUsage(events, restoredModel, restoredBetas);
+      const diskMetrics = (data?.metrics ?? {}) as Record<string, unknown>;
+
+      const session: Session = {
+        bonsaiSid,
+        name: data.name ?? bonsaiSid.slice(0, 8),
+        skillId: (data.skillId as string) ?? null,
+        specIds: data.specIds ?? [],
+        filePaths: (data.filePaths as string[]) ?? [],
+        status: isActive
+          ? ((backendEntry?.status as SessionStatus) ?? "idle")
+          : "done",
+        model: restoredModel,
+        permissionMode: (data.config?.permissionMode as string) ?? "default",
+        betas: restoredBetas,
+        effort: (data.config?.effort as string) ?? null,
+        maxTurns: (data.config?.maxTurns as number) ?? 50,
+        startedAt: new Date(data.createdAt).getTime(),
+        events,
+        metrics: {
+          ...emptyMetrics(),
+          costUsd: restoredCost,
+          turns: typeof diskMetrics.turns === "number" ? diskMetrics.turns : 0,
+          toolCalls: typeof diskMetrics.toolCalls === "number" ? diskMetrics.toolCalls : 0,
+          durationMs: typeof diskMetrics.durationMs === "number" ? diskMetrics.durationMs : 0,
+          contextTokens: restoredCtx.contextTokens,
+          contextMax: restoredCtx.contextMax,
+          contextUsage: restoredCtx,
+        },
+        pendingRequest: null,
+        answeredRequests: new Map(),
+        restored: !isActive,
+        parentBonsaiSid: (data as unknown as Record<string, unknown>).parentBonsaiSid as string ?? parentBonsaiSid,
+        subsessionType: (data as unknown as Record<string, unknown>).subsessionType as Session["subsessionType"] ?? type,
+        subsessionContext: (data as unknown as Record<string, unknown>).subsessionContext as string ?? context ?? null,
+        returnStatus: (data as unknown as Record<string, unknown>).returnStatus as Session["returnStatus"] ?? null,
+        returnSummary: (data as unknown as Record<string, unknown>).returnSummary as string ?? null,
+      };
+
+      set((s) => {
+        const next = new Map(s.sessions);
+        next.set(bonsaiSid, session);
+        const tabs = new Set(s.openTabs);
+        tabs.add(bonsaiSid);
+        return { sessions: next, openTabs: tabs, activeSessionId: bonsaiSid };
+      });
+    }
+    return bonsaiSid;
+  },
+
+  approveReturn: async (bonsaiSid, text) => {
+    const { createSubsessionApi } = await import("@/api/methods/subsessions.ts");
+    const api = createSubsessionApi(getClient());
+    await api.approveSummary(bonsaiSid, text);
+    set((s) => {
+      const session = s.sessions.get(bonsaiSid);
+      if (!session) return s;
+      const next = new Map(s.sessions);
+      next.set(bonsaiSid, { ...session, returnStatus: "approved" as const, returnSummary: text });
+      return { sessions: next };
+    });
+  },
+
+  dismissReturn: async (bonsaiSid) => {
+    const { createSubsessionApi } = await import("@/api/methods/subsessions.ts");
+    const api = createSubsessionApi(getClient());
+    await api.dismissSummary(bonsaiSid);
+    set((s) => {
+      const session = s.sessions.get(bonsaiSid);
+      if (!session) return s;
+      const next = new Map(s.sessions);
+      next.set(bonsaiSid, { ...session, returnStatus: "dismissed" as const });
+      return { sessions: next };
+    });
+  },
+
+  reviseReturn: async (bonsaiSid, feedback) => {
+    const { createSubsessionApi } = await import("@/api/methods/subsessions.ts");
+    const api = createSubsessionApi(getClient());
+    await api.reviseSummary(bonsaiSid, feedback);
+  },
+
+  onSubsessionReturned: (params) => {
+    const p = params as Record<string, unknown>;
+    const parentSid = p.parentBonsaiSid as string;
+    const subsessionType = p.type as string;
+    const summary = p.summary as string;
+
+    if (subsessionType === "refinement") {
+      // Refinement: replace parent's input box text with revised message
+      useInputDraftStore.getState().setDraft(parentSid, summary);
+      // Switch to parent tab so user sees the revised text in the input box
+      set(() => ({ activeSessionId: parentSid }));
+    } else {
+      // Discussion: add result card to parent chat stream
+      set((s) => {
+        const parent = s.sessions.get(parentSid);
+        if (!parent) return s;
+        const next = new Map(s.sessions);
+        const event = {
+          bonsaiSid: parentSid,
+          sessionId: "",
+          eventType: "notification" as const,
+          payload: {
+            type: "subsessionResult",
+            childBonsaiSid: p.childBonsaiSid,
+            childName: p.childName ?? "Subsession",
+            subsessionType: p.type,
+            summary,
+          },
+        };
+        next.set(parentSid, { ...parent, events: [...parent.events, event] });
+        return { sessions: next };
+      });
+    }
   },
 
 }));

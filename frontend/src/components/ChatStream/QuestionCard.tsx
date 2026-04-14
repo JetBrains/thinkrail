@@ -353,6 +353,29 @@ export function QuestionCard({
               </>
             )}
           </div>
+
+          <div className="question-discuss-row">
+            <button
+              className="chat-btn"
+              onClick={() => {
+                const questionText = questions.map((qq) => qq.question).join("\n");
+                import("@/store/sessionStore.ts").then(({ useSessionStore }) => {
+                  const store = useSessionStore.getState();
+                  const activeId = store.activeSessionId;
+                  if (activeId) {
+                    store.createSubsession(
+                      activeId,
+                      "discussion",
+                      questionText,
+                      "Discuss: " + (questions[0]?.question ?? "").slice(0, 40)
+                    );
+                  }
+                }).catch(console.error);
+              }}
+            >
+              Discuss first
+            </button>
+          </div>
         </>
       )}
     </div>

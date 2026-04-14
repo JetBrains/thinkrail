@@ -3,10 +3,11 @@ from __future__ import annotations
 import asyncio
 import logging
 import time
+from datetime import UTC, datetime
 from typing import Any
 
 from app.agent.context import build_context
-from app.agent.models import AgentConfig, AgentTask
+from app.agent.models import AgentConfig, AgentTask, SubsessionType
 from app.agent.persistence import append_event, save_session, load_session, list_sessions as list_sessions_from_disk, delete_session as delete_session_from_disk, update_session_metadata
 from app.agent.runner import run
 from app.agent.tracker import Tracker
@@ -790,3 +791,89 @@ class AgentService:
             plugin_dir=self._config.plugin_dir,
             file_paths=task.file_paths,
         )
+
+    # -- subsession management --------------------------------------------------
+
+    def create_subsession(
+        self,
+        parent_bonsai_sid: str,
+        subsession_type: SubsessionType,
+        context: str | None = None,
+        name: str = "",
+    ) -> AgentTask:
+        """Create a draft subsession linked to a parent session."""
+        from app.agent.context import build_parent_context
+
+        # Validate parent exists (in tracker or on disk)
+        if self._tracker.has_task(parent_bonsai_sid):
+            parent = self._tracker.get_task(parent_bonsai_sid)
+            parent_spec_ids = parent.spec_ids
+            parent_config = parent.config
+        else:
+            parent_data = load_session(self._config.project_root, parent_bonsai_sid)
+            if parent_data is None:
+                raise ValueError(f"Parent session {parent_bonsai_sid!r} not found")
+            parent_spec_ids = parent_data.get("specIds", [])
+            parent_config = AgentConfig(**parent_data.get("config", {}))
+
+        task = self._tracker.create_task(
+            spec_ids=parent_spec_ids,
+            config=AgentConfig(**parent_config.model_dump()),
+            name=name,
+        )
+        task.parent_bonsai_sid = parent_bonsai_sid
+        task.subsession_type = subsession_type
+        task.subsession_context = context
+        task.status = "draft"
+
+        parent_context = build_parent_context(
+            parent_sid=parent_bonsai_sid,
+            subsession_type=subsession_type,
+            subsession_context=context,
+            project_root=self._config.project_root,
+        )
+        task.session_prompt = parent_context
+        task.system_prompt = self._build_context_for(task)
+
+        self._save_task(task)
+        return task
+
+    def request_summary(self, bonsai_sid: str) -> None:
+        """Ask the subsession agent to propose a return summary."""
+        task = self._tracker.get_task(bonsai_sid)
+        task.return_status = "pending"
+        task.updated = datetime.now(UTC).isoformat()
+        self._save_task(task)
+        if task.status in ("initializing", "idle"):
+            summary_prompt = (
+                "Please summarize the key conclusions from our discussion. "
+                "Write a concise summary that captures the decision, rationale, "
+                "and any action items. This will be sent back to the parent session."
+            )
+            self._tracker.enqueue_message(bonsai_sid, summary_prompt)
+
+    def approve_summary(self, bonsai_sid: str, text: str) -> None:
+        """Approve a return summary for the subsession."""
+        task = self._tracker.get_task(bonsai_sid)
+        task.return_status = "approved"
+        task.return_summary = text
+        task.updated = datetime.now(UTC).isoformat()
+        self._save_task(task)
+
+    def dismiss_summary(self, bonsai_sid: str) -> None:
+        """Dismiss the return flow without returning anything."""
+        task = self._tracker.get_task(bonsai_sid)
+        task.return_status = "dismissed"
+        task.return_summary = None
+        task.updated = datetime.now(UTC).isoformat()
+        self._save_task(task)
+
+    def revise_summary(self, bonsai_sid: str, feedback: str) -> None:
+        """Ask the subsession agent to rewrite the summary with feedback."""
+        task = self._tracker.get_task(bonsai_sid)
+        task.return_status = "pending"
+        task.updated = datetime.now(UTC).isoformat()
+        self._save_task(task)
+        if task.status in ("initializing", "idle"):
+            revision_prompt = f"Please revise the summary based on this feedback:\n\n{feedback}"
+            self._tracker.enqueue_message(bonsai_sid, revision_prompt)
