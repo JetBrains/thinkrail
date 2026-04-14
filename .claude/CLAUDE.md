@@ -72,11 +72,11 @@ frontend/
     utils/            # Utility functions
 .bonsai/
   registry.json       # Spec registry (all specs and links)
-current_tasks/        # Task specs organized by module (agent/, core/, frontend/, rpc/, spec/)
+.bonsai/implementation_tasks/  # Task specs organized by module (agent/, core/, frontend/, rpc/, spec/)
 ```
 
 ## Active Tasks
-See `current_tasks/` for work items. All 36 initial implementation tasks are done.
+See `.bonsai/implementation_tasks/` for work items. All 36 initial implementation tasks are done.
 
 ## Specifications & Spec-Driven Skills
 

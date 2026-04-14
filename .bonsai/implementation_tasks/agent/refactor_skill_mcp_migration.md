@@ -20,21 +20,21 @@ All 13 SKILL.md files in `claude-plugin/skills/` instruct the agent to read `.bo
 
 ### 1. Read-only skills (registry reads only, no writes)
 
-These skills only read the registry and spec/task files for data gathering. Replace all `Read .bonsai/registry.json` and `scan current_tasks/` instructions with the appropriate MCP tool.
+These skills only read the registry and spec/task files for data gathering. Replace all `Read .bonsai/registry.json` and `scan .bonsai/implementation_tasks/` instructions with the appropriate MCP tool.
 
 **cli-progress/SKILL.md**
-- Line 14: `Read .bonsai/registry.json and scan current_tasks/ to determine:` → Use `registry_query` to get specs by type/status and `spec_list` with `type: "task-spec"` for task counts
+- Line 14: `Read .bonsai/registry.json and scan .bonsai/implementation_tasks/ to determine:` → Use `registry_query` to get specs by type/status and `spec_list` with `type: "task-spec"` for task counts
 
 **spec-status/SKILL.md**
-- Line 14: `Read .bonsai/registry.json to get the list of specs...Then scan current_tasks/**/*.md for task statuses.` → Use `registry_query` for spec metadata and `spec_list` with `type: "task-spec"` for tasks
+- Line 14: `Read .bonsai/registry.json to get the list of specs...Then scan .bonsai/implementation_tasks/**/*.md for task statuses.` → Use `registry_query` for spec metadata and `spec_list` with `type: "task-spec"` for tasks
 - Line 74: `Read registry.json + task files` → Update Key Principles to reference MCP tools
 
 **spec-next/SKILL.md**
-- Line 14: `Read .bonsai/registry.json for specs (type, status, covers, paths). Scan current_tasks/**/*.md for task statuses. Identify coverage gaps by comparing registered covers entries against source directories.` → Use `registry_query` for specs with covers data and `spec_list` with `type: "task-spec"` for task statuses
+- Line 14: `Read .bonsai/registry.json for specs (type, status, covers, paths). Scan .bonsai/implementation_tasks/**/*.md for task statuses. Identify coverage gaps by comparing registered covers entries against source directories.` → Use `registry_query` for specs with covers data and `spec_list` with `type: "task-spec"` for task statuses
 
 **visualisation/SKILL.md**
-- Line 14: `read .bonsai/registry.json and current_tasks/ to gather data, then visualize` → Use `registry_query` and `spec_list` with `type: "task-spec"`
-- Lines 22-23: `Read .bonsai/registry.json and scan current_tasks/ for task status. Compute:` → Same replacement
+- Line 14: `read .bonsai/registry.json and .bonsai/implementation_tasks/ to gather data, then visualize` → Use `registry_query` and `spec_list` with `type: "task-spec"`
+- Lines 22-23: `Read .bonsai/registry.json and scan .bonsai/implementation_tasks/ for task status. Compute:` → Same replacement
 
 ### 2. Read + write skills (registry reads + registry writes after saving)
 
@@ -60,8 +60,8 @@ These skills read specs for context and update the registry after creating/savin
 
 **task-spec/SKILL.md**
 - Line 121: `Check for existing module specs — read them for context` → Use `spec_list` to enumerate, `spec_get` to read module specs for context
-- Line 122: `Check current_tasks/ for overlapping tasks` → Use `spec_list` with `type: "task-spec"` to find existing tasks
-- Line 90: `Generate current_tasks/{module_path}/{type}_{name}.md` → Use `spec_save` with `type: "task-spec"`, content, status, tags
+- Line 122: `Check .bonsai/implementation_tasks/ for overlapping tasks` → Use `spec_list` with `type: "task-spec"` to find existing tasks
+- Line 90: `Generate .bonsai/implementation_tasks/{module_path}/{type}_{name}.md` → Use `spec_save` with `type: "task-spec"`, content, status, tags
 - Lines 126-130: `After saving, update .bonsai/registry.json...` → Remove "add entry" (handled by `spec_save`). Use `registry_mutate` for `implements` and `depends-on` links
 
 **spec-init/SKILL.md**

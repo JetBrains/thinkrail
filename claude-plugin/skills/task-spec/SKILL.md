@@ -89,7 +89,7 @@ Use AskUserQuestion (multiSelect: true):
 
 ### Step 6: Generate the task spec
 
-Use `spec_save` to create the task spec at `current_tasks/{module_path}/{type}_{name}.md` with `type: "task-spec"`, `status: "active"`, `tags: ["{priority}", "{type}"]`:
+Use `spec_save` to create the task spec at `.bonsai/implementation_tasks/{module_path}/{type}_{name}.md` with `type: "task-spec"`, `status: "active"`, `tags: ["{priority}", "{type}"]`:
 ```markdown
 # {Action verb} {component}: {specific description}
 

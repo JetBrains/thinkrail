@@ -1330,7 +1330,7 @@ RPC server
 
 ChatStream supports multiple view modes, controlled by `event_view` in `.bonsai/settings.json`. The architecture uses a **renderer registry pattern**: pre-scan logic is shared, but each event type delegates to a view-specific renderer component.
 
-**Design:** [compact-event-view-design.md](../../docs/superpowers/specs/2026-04-08-compact-event-view-design.md) | **Task:** [feature_compact_event_view.md](../../current_tasks/frontend/feature_compact_event_view.md)
+**Design:** [compact-event-view-design.md](../../docs/superpowers/specs/2026-04-08-compact-event-view-design.md) | **Task:** [feature_compact_event_view.md](../../.bonsai/implementation_tasks/frontend/feature_compact_event_view.md)
 
 ### Architecture
 

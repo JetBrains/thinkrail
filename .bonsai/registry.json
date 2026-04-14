@@ -489,7 +489,7 @@
     {
       "id": "task-core-config",
       "type": "task-spec",
-      "path": "current_tasks/core/feature_core_config.md",
+      "path": ".bonsai/implementation_tasks/core/feature_core_config.md",
       "title": "Implement Core config.py",
       "status": "done",
       "covers": [
@@ -505,7 +505,7 @@
     {
       "id": "task-core-fileio",
       "type": "task-spec",
-      "path": "current_tasks/core/feature_core_fileio.md",
+      "path": ".bonsai/implementation_tasks/core/feature_core_fileio.md",
       "title": "Implement Core fileio.py",
       "status": "done",
       "covers": [
@@ -521,7 +521,7 @@
     {
       "id": "task-core-watcher",
       "type": "task-spec",
-      "path": "current_tasks/core/feature_core_watcher.md",
+      "path": ".bonsai/implementation_tasks/core/feature_core_watcher.md",
       "title": "Implement Core watcher.py",
       "status": "done",
       "covers": [
@@ -537,7 +537,7 @@
     {
       "id": "task-spec-models",
       "type": "task-spec",
-      "path": "current_tasks/spec/feature_spec_models.md",
+      "path": ".bonsai/implementation_tasks/spec/feature_spec_models.md",
       "title": "Implement Spec models.py",
       "status": "done",
       "covers": [
@@ -553,7 +553,7 @@
     {
       "id": "task-spec-parser",
       "type": "task-spec",
-      "path": "current_tasks/spec/feature_spec_parser.md",
+      "path": ".bonsai/implementation_tasks/spec/feature_spec_parser.md",
       "title": "Implement Spec parser.py",
       "status": "done",
       "covers": [
@@ -569,7 +569,7 @@
     {
       "id": "task-spec-validator",
       "type": "task-spec",
-      "path": "current_tasks/spec/feature_spec_validator.md",
+      "path": ".bonsai/implementation_tasks/spec/feature_spec_validator.md",
       "title": "Implement Spec validator.py",
       "status": "done",
       "covers": [
@@ -585,7 +585,7 @@
     {
       "id": "task-spec-registry",
       "type": "task-spec",
-      "path": "current_tasks/spec/feature_spec_registry.md",
+      "path": ".bonsai/implementation_tasks/spec/feature_spec_registry.md",
       "title": "Implement Spec registry.py",
       "status": "done",
       "covers": [
@@ -601,7 +601,7 @@
     {
       "id": "task-spec-graph",
       "type": "task-spec",
-      "path": "current_tasks/spec/feature_spec_graph.md",
+      "path": ".bonsai/implementation_tasks/spec/feature_spec_graph.md",
       "title": "Implement Spec graph.py",
       "status": "done",
       "covers": [
@@ -617,7 +617,7 @@
     {
       "id": "task-spec-service",
       "type": "task-spec",
-      "path": "current_tasks/spec/feature_spec_service.md",
+      "path": ".bonsai/implementation_tasks/spec/feature_spec_service.md",
       "title": "Implement Spec service.py",
       "status": "done",
       "covers": [
@@ -633,7 +633,7 @@
     {
       "id": "task-rpc-notifications",
       "type": "task-spec",
-      "path": "current_tasks/rpc/feature_rpc_notifications.md",
+      "path": ".bonsai/implementation_tasks/rpc/feature_rpc_notifications.md",
       "title": "Implement RPC notifications.py",
       "status": "done",
       "covers": [
@@ -649,7 +649,7 @@
     {
       "id": "task-rpc-methods-specs",
       "type": "task-spec",
-      "path": "current_tasks/rpc/feature_rpc_methods_specs.md",
+      "path": ".bonsai/implementation_tasks/rpc/feature_rpc_methods_specs.md",
       "title": "Implement RPC methods/specs.py",
       "status": "done",
       "covers": [
@@ -665,7 +665,7 @@
     {
       "id": "task-rpc-server",
       "type": "task-spec",
-      "path": "current_tasks/rpc/feature_rpc_server.md",
+      "path": ".bonsai/implementation_tasks/rpc/feature_rpc_server.md",
       "title": "Implement RPC server.py",
       "status": "done",
       "covers": [
@@ -681,7 +681,7 @@
     {
       "id": "task-agent-models",
       "type": "task-spec",
-      "path": "current_tasks/agent/feature_agent_models.md",
+      "path": ".bonsai/implementation_tasks/agent/feature_agent_models.md",
       "title": "Implement Agent models.py",
       "status": "done",
       "covers": [
@@ -697,7 +697,7 @@
     {
       "id": "task-agent-tracker",
       "type": "task-spec",
-      "path": "current_tasks/agent/feature_agent_tracker.md",
+      "path": ".bonsai/implementation_tasks/agent/feature_agent_tracker.md",
       "title": "Implement Agent tracker.py",
       "status": "done",
       "covers": [
@@ -713,7 +713,7 @@
     {
       "id": "task-agent-runner",
       "type": "task-spec",
-      "path": "current_tasks/agent/feature_agent_runner.md",
+      "path": ".bonsai/implementation_tasks/agent/feature_agent_runner.md",
       "title": "Implement Agent runner.py",
       "status": "done",
       "covers": [
@@ -729,7 +729,7 @@
     {
       "id": "task-agent-service",
       "type": "task-spec",
-      "path": "current_tasks/agent/feature_agent_service.md",
+      "path": ".bonsai/implementation_tasks/agent/feature_agent_service.md",
       "title": "Implement Agent service.py",
       "status": "done",
       "covers": [
@@ -745,7 +745,7 @@
     {
       "id": "task-rpc-methods-agents-basic",
       "type": "task-spec",
-      "path": "current_tasks/rpc/feature_rpc_methods_agents_basic.md",
+      "path": ".bonsai/implementation_tasks/rpc/feature_rpc_methods_agents_basic.md",
       "title": "Implement RPC methods/agents.py: basic handlers (status + list)",
       "status": "done",
       "covers": [
@@ -761,7 +761,7 @@
     {
       "id": "task-rpc-methods-agents-run",
       "type": "task-spec",
-      "path": "current_tasks/rpc/feature_rpc_methods_agents_run.md",
+      "path": ".bonsai/implementation_tasks/rpc/feature_rpc_methods_agents_run.md",
       "title": "Implement RPC methods/agents.py: run_agent handler",
       "status": "done",
       "covers": [
@@ -777,7 +777,7 @@
     {
       "id": "task-rpc-methods-agents-respond",
       "type": "task-spec",
-      "path": "current_tasks/rpc/feature_rpc_methods_agents_respond.md",
+      "path": ".bonsai/implementation_tasks/rpc/feature_rpc_methods_agents_respond.md",
       "title": "Implement RPC methods/agents.py: respond + interrupt handlers",
       "status": "done",
       "covers": [
@@ -793,7 +793,7 @@
     {
       "id": "task-rpc-server-agent-wiring",
       "type": "task-spec",
-      "path": "current_tasks/rpc/feature_rpc_server_agent_wiring.md",
+      "path": ".bonsai/implementation_tasks/rpc/feature_rpc_server_agent_wiring.md",
       "title": "Implement RPC server.py: wire agent handlers into METHODS",
       "status": "done",
       "covers": [
@@ -809,7 +809,7 @@
     {
       "id": "task-backend-main",
       "type": "task-spec",
-      "path": "current_tasks/rpc/feature_backend_main.md",
+      "path": ".bonsai/implementation_tasks/rpc/feature_backend_main.md",
       "title": "Implement Backend main.py",
       "status": "done",
       "covers": [
@@ -825,7 +825,7 @@
     {
       "id": "task-fe-project-setup",
       "type": "task-spec",
-      "path": "current_tasks/frontend/feature_project_setup.md",
+      "path": ".bonsai/implementation_tasks/frontend/feature_project_setup.md",
       "title": "Set Up Frontend Project",
       "status": "done",
       "covers": [
@@ -845,7 +845,7 @@
     {
       "id": "task-fe-api-client",
       "type": "task-spec",
-      "path": "current_tasks/frontend/feature_api_client.md",
+      "path": ".bonsai/implementation_tasks/frontend/feature_api_client.md",
       "title": "Implement API Client",
       "status": "done",
       "covers": [
@@ -862,7 +862,7 @@
     {
       "id": "task-fe-state-management",
       "type": "task-spec",
-      "path": "current_tasks/frontend/feature_state_management.md",
+      "path": ".bonsai/implementation_tasks/frontend/feature_state_management.md",
       "title": "Implement State Management",
       "status": "done",
       "covers": [
@@ -879,7 +879,7 @@
     {
       "id": "task-fe-app-shell",
       "type": "task-spec",
-      "path": "current_tasks/frontend/feature_app_shell.md",
+      "path": ".bonsai/implementation_tasks/frontend/feature_app_shell.md",
       "title": "Implement App Shell",
       "status": "done",
       "covers": [
@@ -897,7 +897,7 @@
     {
       "id": "task-fe-chat-ui",
       "type": "task-spec",
-      "path": "current_tasks/frontend/feature_chat_ui.md",
+      "path": ".bonsai/implementation_tasks/frontend/feature_chat_ui.md",
       "title": "Implement Chat UI",
       "status": "done",
       "covers": [
@@ -914,7 +914,7 @@
     {
       "id": "task-fe-graph-view",
       "type": "task-spec",
-      "path": "current_tasks/frontend/feature_graph_view.md",
+      "path": ".bonsai/implementation_tasks/frontend/feature_graph_view.md",
       "title": "Implement Graph View",
       "status": "done",
       "covers": [
@@ -931,7 +931,7 @@
     {
       "id": "task-fe-new-session-modal",
       "type": "task-spec",
-      "path": "current_tasks/frontend/feature_new_session_modal.md",
+      "path": ".bonsai/implementation_tasks/frontend/feature_new_session_modal.md",
       "title": "Implement New Session Modal",
       "status": "done",
       "covers": [
@@ -948,7 +948,7 @@
     {
       "id": "task-fe-command-palette",
       "type": "task-spec",
-      "path": "current_tasks/frontend/feature_command_palette.md",
+      "path": ".bonsai/implementation_tasks/frontend/feature_command_palette.md",
       "title": "Implement Command Palette",
       "status": "done",
       "covers": [
@@ -965,7 +965,7 @@
     {
       "id": "task-fe-notifications",
       "type": "task-spec",
-      "path": "current_tasks/frontend/feature_notifications.md",
+      "path": ".bonsai/implementation_tasks/frontend/feature_notifications.md",
       "title": "Implement Notification System",
       "status": "done",
       "covers": [
@@ -982,7 +982,7 @@
     {
       "id": "task-fe-console",
       "type": "task-spec",
-      "path": "current_tasks/frontend/feature_console.md",
+      "path": ".bonsai/implementation_tasks/frontend/feature_console.md",
       "title": "Implement Console",
       "status": "done",
       "covers": [
@@ -999,7 +999,7 @@
     {
       "id": "task-fe-diff-viewer",
       "type": "task-spec",
-      "path": "current_tasks/frontend/feature_diff_viewer.md",
+      "path": ".bonsai/implementation_tasks/frontend/feature_diff_viewer.md",
       "title": "Implement Diff Viewer",
       "status": "done",
       "covers": [
@@ -1016,7 +1016,7 @@
     {
       "id": "task-fe-progress-tracker",
       "type": "task-spec",
-      "path": "current_tasks/frontend/feature_progress_tracker.md",
+      "path": ".bonsai/implementation_tasks/frontend/feature_progress_tracker.md",
       "title": "Implement Progress Tracker",
       "status": "done",
       "covers": [
@@ -1033,7 +1033,7 @@
     {
       "id": "task-fe-session-history",
       "type": "task-spec",
-      "path": "current_tasks/frontend/feature_session_history.md",
+      "path": ".bonsai/implementation_tasks/frontend/feature_session_history.md",
       "title": "Implement Session History",
       "status": "done",
       "covers": [
@@ -1050,7 +1050,7 @@
     {
       "id": "task-session-models-tracker",
       "type": "task-spec",
-      "path": "current_tasks/agent/feature_session_models_tracker.md",
+      "path": ".bonsai/implementation_tasks/agent/feature_session_models_tracker.md",
       "title": "Update models.py and tracker.py for conversational sessions",
       "status": "done",
       "covers": [
@@ -1067,7 +1067,7 @@
     {
       "id": "task-session-runner",
       "type": "task-spec",
-      "path": "current_tasks/agent/feature_session_runner.md",
+      "path": ".bonsai/implementation_tasks/agent/feature_session_runner.md",
       "title": "Rewrite runner.py for conversational session loop",
       "status": "done",
       "covers": [
@@ -1083,7 +1083,7 @@
     {
       "id": "task-session-service",
       "type": "task-spec",
-      "path": "current_tasks/agent/feature_session_service.md",
+      "path": ".bonsai/implementation_tasks/agent/feature_session_service.md",
       "title": "Update service.py for conversational sessions",
       "status": "done",
       "covers": [
@@ -1099,7 +1099,7 @@
     {
       "id": "task-persistence-tests",
       "type": "task-spec",
-      "path": "current_tasks/agent/feature_persistence_tests.md",
+      "path": ".bonsai/implementation_tasks/agent/feature_persistence_tests.md",
       "title": "Unit tests for Agent persistence.py",
       "status": "done",
       "covers": [
@@ -1115,7 +1115,7 @@
     {
       "id": "task-agent-context",
       "type": "task-spec",
-      "path": "current_tasks/agent/feature_agent_context.md",
+      "path": ".bonsai/implementation_tasks/agent/feature_agent_context.md",
       "title": "Implement Agent context.py and wire skill_id",
       "status": "done",
       "covers": [
@@ -1134,7 +1134,7 @@
     {
       "id": "task-rpc-session-wiring",
       "type": "task-spec",
-      "path": "current_tasks/rpc/feature_rpc_session_wiring.md",
+      "path": ".bonsai/implementation_tasks/rpc/feature_rpc_session_wiring.md",
       "title": "Wire new agent session methods into RPC layer",
       "status": "done",
       "covers": [
@@ -1168,7 +1168,7 @@
     {
       "id": "task-spec-tree",
       "type": "task-spec",
-      "path": "current_tasks/frontend/feature_spec_tree.md",
+      "path": ".bonsai/implementation_tasks/frontend/feature_spec_tree.md",
       "title": "Implement SpecTree Component",
       "status": "done",
       "covers": [
@@ -1184,7 +1184,7 @@
     {
       "id": "task-spec-tree-badges",
       "type": "task-spec",
-      "path": "current_tasks/frontend/improvement_spec_tree_task_badges.md",
+      "path": ".bonsai/implementation_tasks/frontend/improvement_spec_tree_task_badges.md",
       "title": "Improve SpecTree: inline task count badges",
       "status": "done",
       "covers": [
@@ -1271,7 +1271,7 @@
     {
       "id": "task-context-panel-shared-infra",
       "type": "task-spec",
-      "path": "current_tasks/frontend/feature_context_panel_shared_infra.md",
+      "path": ".bonsai/implementation_tasks/frontend/feature_context_panel_shared_infra.md",
       "title": "Context Panel shared infrastructure: hooks and utils",
       "status": "done",
       "covers": [
@@ -1290,7 +1290,7 @@
     {
       "id": "task-context-panel-spec-sections",
       "type": "task-spec",
-      "path": "current_tasks/frontend/feature_context_panel_spec_sections.md",
+      "path": ".bonsai/implementation_tasks/frontend/feature_context_panel_spec_sections.md",
       "title": "Implement Spec Context sections: ConnectedSpecs, LinkedTasks, SpecHealth",
       "status": "done",
       "covers": [
@@ -1309,7 +1309,7 @@
     {
       "id": "task-context-panel-agent-sections",
       "type": "task-spec",
-      "path": "current_tasks/frontend/feature_context_panel_agent_sections.md",
+      "path": ".bonsai/implementation_tasks/frontend/feature_context_panel_agent_sections.md",
       "title": "Implement Agent Context sections: TaskSpecPreview, FilesModified, RelatedSpecs",
       "status": "done",
       "covers": [
@@ -1328,7 +1328,7 @@
     {
       "id": "task-refactor-agent-context-analytics",
       "type": "task-spec",
-      "path": "current_tasks/frontend/refactor_agent_context_usage_analytics.md",
+      "path": ".bonsai/implementation_tasks/frontend/refactor_agent_context_usage_analytics.md",
       "title": "Refactor Agent Context: Replace with Context Usage Analytics",
       "status": "done",
       "covers": [
@@ -1346,7 +1346,7 @@
     {
       "id": "task-context-panel-infrastructure",
       "type": "task-spec",
-      "path": "current_tasks/frontend/feature_context_panel_infrastructure.md",
+      "path": ".bonsai/implementation_tasks/frontend/feature_context_panel_infrastructure.md",
       "title": "Create Context Panel infrastructure: useContextMode + CollapsibleSection",
       "status": "done",
       "covers": [
@@ -1363,7 +1363,7 @@
     {
       "id": "task-context-panel-modes-sections",
       "type": "task-spec",
-      "path": "current_tasks/frontend/feature_context_panel_modes_sections.md",
+      "path": ".bonsai/implementation_tasks/frontend/feature_context_panel_modes_sections.md",
       "title": "Create Context Panel mode components and placeholder sections",
       "status": "done",
       "covers": [
@@ -1381,7 +1381,7 @@
     {
       "id": "task-context-panel-integration",
       "type": "task-spec",
-      "path": "current_tasks/frontend/feature_context_panel_integration.md",
+      "path": ".bonsai/implementation_tasks/frontend/feature_context_panel_integration.md",
       "title": "Replace RightPanel with ContextPanel and clean up store",
       "status": "done",
       "covers": [
@@ -1399,7 +1399,7 @@
     {
       "id": "task-preview-tab-store",
       "type": "task-spec",
-      "path": "current_tasks/frontend/feature_preview_tab_store.md",
+      "path": ".bonsai/implementation_tasks/frontend/feature_preview_tab_store.md",
       "title": "Add preview tab state to fileStore",
       "status": "done",
       "covers": [
@@ -1415,7 +1415,7 @@
     {
       "id": "task-preview-tab-ui",
       "type": "task-spec",
-      "path": "current_tasks/frontend/feature_preview_tab_ui.md",
+      "path": ".bonsai/implementation_tasks/frontend/feature_preview_tab_ui.md",
       "title": "Add preview tab rendering to SessionTabBar",
       "status": "done",
       "covers": [
@@ -1431,7 +1431,7 @@
     {
       "id": "task-preview-context-mode",
       "type": "task-spec",
-      "path": "current_tasks/frontend/feature_preview_context_mode.md",
+      "path": ".bonsai/implementation_tasks/frontend/feature_preview_context_mode.md",
       "title": "Update useContextMode to react to preview tabs",
       "status": "done",
       "covers": [
@@ -1447,7 +1447,7 @@
     {
       "id": "task-preview-tree-wiring",
       "type": "task-spec",
-      "path": "current_tasks/frontend/feature_preview_tree_wiring.md",
+      "path": ".bonsai/implementation_tasks/frontend/feature_preview_tree_wiring.md",
       "title": "Wire single-click preview in SpecTree and FileTree",
       "status": "done",
       "covers": [
@@ -1464,7 +1464,7 @@
     {
       "id": "task-plugin-wiring",
       "type": "task-spec",
-      "path": "current_tasks/agent/improvement_plugin_wiring.md",
+      "path": ".bonsai/implementation_tasks/agent/improvement_plugin_wiring.md",
       "title": "Wire claude-plugin into SDK client via ClaudeAgentOptions.plugins",
       "status": "done",
       "covers": [
@@ -1481,7 +1481,7 @@
     {
       "id": "feature-message-history",
       "type": "task-spec",
-      "path": "current_tasks/frontend/feature_message_history.md",
+      "path": ".bonsai/implementation_tasks/frontend/feature_message_history.md",
       "title": "Message History Navigation",
       "status": "active",
       "covers": [
@@ -1498,7 +1498,7 @@
     {
       "id": "task-native-resume",
       "type": "task-spec",
-      "path": "current_tasks/agent/improvement_native_resume.md",
+      "path": ".bonsai/implementation_tasks/agent/improvement_native_resume.md",
       "title": "Replace text-replay continue with SDK native resume",
       "status": "done",
       "covers": [
@@ -1515,7 +1515,7 @@
     {
       "id": "improvement-nondestructive-interrupt",
       "type": "task-spec",
-      "path": "current_tasks/agent/improvement_nondestructive_interrupt.md",
+      "path": ".bonsai/implementation_tasks/agent/improvement_nondestructive_interrupt.md",
       "title": "Replace destructive interrupt with SDK native client.interrupt()",
       "status": "done",
       "covers": [
@@ -1651,7 +1651,7 @@
     {
       "id": "improvement-chat-ui-task-folding",
       "type": "task-spec",
-      "path": "current_tasks/frontend/improvement_chat_ui_task_folding.md",
+      "path": ".bonsai/implementation_tasks/frontend/improvement_chat_ui_task_folding.md",
       "title": "Improve Chat UI: Nest subagent tool calls into foldable groups",
       "status": "done",
       "covers": [
@@ -1668,7 +1668,7 @@
     {
       "id": "task-suggest-session-runner",
       "type": "task-spec",
-      "path": "current_tasks/agent/feature_suggest_session_runner.md",
+      "path": ".bonsai/implementation_tasks/agent/feature_suggest_session_runner.md",
       "title": "Implement SuggestSession branch in runner.py can_use_tool",
       "status": "done",
       "covers": [
@@ -1686,7 +1686,7 @@
     {
       "id": "task-suggest-session-ui",
       "type": "task-spec",
-      "path": "current_tasks/frontend/feature_suggest_session_ui.md",
+      "path": ".bonsai/implementation_tasks/frontend/feature_suggest_session_ui.md",
       "title": "Implement SuggestSession frontend: wiring, store, SuggestionCard",
       "status": "done",
       "covers": [
@@ -1710,7 +1710,7 @@
     {
       "id": "task-suggest-session-tests",
       "type": "task-spec",
-      "path": "current_tasks/agent/feature_suggest_session_tests.md",
+      "path": ".bonsai/implementation_tasks/agent/feature_suggest_session_tests.md",
       "title": "Write tests for SuggestSession backend and tool interceptors",
       "status": "done",
       "covers": [
@@ -1727,7 +1727,7 @@
     {
       "id": "task-specs-mcp-tools",
       "type": "task-spec",
-      "path": "current_tasks/agent/feature_specs_mcp_tools.md",
+      "path": ".bonsai/implementation_tasks/agent/feature_specs_mcp_tools.md",
       "title": "Implement Spec & Registry MCP Tools",
       "status": "done",
       "covers": [
@@ -1743,7 +1743,7 @@
     {
       "id": "task-bugfix-subagent-attention",
       "type": "task-spec",
-      "path": "current_tasks/frontend/bugfix_subagent_attention_cards.md",
+      "path": ".bonsai/implementation_tasks/frontend/bugfix_subagent_attention_cards.md",
       "title": "Fix subagent attention cards not rendering in chat",
       "status": "done",
       "covers": [
@@ -1760,7 +1760,7 @@
     {
       "id": "task-fe-diff-card",
       "type": "task-spec",
-      "path": "current_tasks/frontend/feature_diff_card.md",
+      "path": ".bonsai/implementation_tasks/frontend/feature_diff_card.md",
       "title": "Implement DiffCard",
       "status": "done",
       "covers": [
@@ -1858,7 +1858,7 @@
     {
       "id": "task-voice-input",
       "type": "task-spec",
-      "path": "current_tasks/frontend/feature_voice_input.md",
+      "path": ".bonsai/implementation_tasks/frontend/feature_voice_input.md",
       "title": "Voice Input",
       "status": "done",
       "covers": [
@@ -1877,7 +1877,7 @@
     {
       "id": "task-effort-support",
       "type": "task-spec",
-      "path": "current_tasks/frontend/feature_effort_support.md",
+      "path": ".bonsai/implementation_tasks/frontend/feature_effort_support.md",
       "title": "Effort Support",
       "status": "done",
       "covers": [
@@ -1895,7 +1895,7 @@
     {
       "id": "task-visualization-card",
       "type": "task-spec",
-      "path": "current_tasks/frontend/feature_visualization_card.md",
+      "path": ".bonsai/implementation_tasks/frontend/feature_visualization_card.md",
       "title": "Visualization Card",
       "status": "done",
       "covers": [
@@ -1913,7 +1913,7 @@
     {
       "id": "task-resizable-boxes",
       "type": "task-spec",
-      "path": "current_tasks/frontend/feature_resizable_boxes.md",
+      "path": ".bonsai/implementation_tasks/frontend/feature_resizable_boxes.md",
       "title": "Resizable Session Boxes",
       "status": "done",
       "covers": [
@@ -1930,7 +1930,7 @@
     {
       "id": "task-continue-button",
       "type": "task-spec",
-      "path": "current_tasks/frontend/feature_continue_button.md",
+      "path": ".bonsai/implementation_tasks/frontend/feature_continue_button.md",
       "title": "Continue Button",
       "status": "done",
       "covers": [
@@ -1972,7 +1972,7 @@
     {
       "id": "task-dual-mode-input",
       "type": "task-spec",
-      "path": "current_tasks/frontend/feature_dual_mode_input.md",
+      "path": ".bonsai/implementation_tasks/frontend/feature_dual_mode_input.md",
       "title": "Dual-Mode Message Input",
       "status": "superseded",
       "covers": [
@@ -1996,7 +1996,7 @@
     {
       "id": "task-split-pane-preview",
       "type": "task-spec",
-      "path": "current_tasks/frontend/feature_split_pane_preview.md",
+      "path": ".bonsai/implementation_tasks/frontend/feature_split_pane_preview.md",
       "title": "Remove Text Mode, Add Split-Pane Preview to InputArea",
       "status": "done",
       "covers": [
@@ -2053,7 +2053,7 @@
     {
       "id": "task-skill-session-start",
       "type": "task-spec",
-      "path": "current_tasks/frontend/feature_skill_session_start.md",
+      "path": ".bonsai/implementation_tasks/frontend/feature_skill_session_start.md",
       "title": "Implement Start Session Button for Skill-Loaded Sessions",
       "status": "done",
       "covers": [
@@ -2094,7 +2094,7 @@
     {
       "id": "improvement-plan-approval-card",
       "type": "task-spec",
-      "path": "current_tasks/frontend/improvement_plan_approval_card.md",
+      "path": ".bonsai/implementation_tasks/frontend/improvement_plan_approval_card.md",
       "title": "Improve ExitPlanMode display: PlanApprovalCard",
       "status": "done",
       "covers": [
@@ -2110,7 +2110,7 @@
     {
       "id": "bugfix-plan-approval-content",
       "type": "task-spec",
-      "path": "current_tasks/frontend/bugfix_plan_approval_content.md",
+      "path": ".bonsai/implementation_tasks/frontend/bugfix_plan_approval_content.md",
       "title": "Fix PlanApprovalCard: shows random assistant text instead of actual plan",
       "status": "done",
       "covers": [
@@ -2128,7 +2128,7 @@
     {
       "id": "improvement-plan-rejection-reason",
       "type": "task-spec",
-      "path": "current_tasks/frontend/improvement_plan_rejection_reason.md",
+      "path": ".bonsai/implementation_tasks/frontend/improvement_plan_rejection_reason.md",
       "title": "Improve plan rejection: add reason text so agent can align",
       "status": "done",
       "covers": [
@@ -2146,7 +2146,7 @@
     {
       "id": "task-context-general-instructions",
       "type": "task-spec",
-      "path": "current_tasks/agent/improvement_context_general_instructions.md",
+      "path": ".bonsai/implementation_tasks/agent/improvement_context_general_instructions.md",
       "title": "Add General Instructions section to context.py",
       "status": "done",
       "covers": [
@@ -2162,7 +2162,7 @@
     {
       "id": "task-skill-boilerplate-cleanup",
       "type": "task-spec",
-      "path": "current_tasks/agent/refactor_skill_boilerplate_cleanup.md",
+      "path": ".bonsai/implementation_tasks/agent/refactor_skill_boilerplate_cleanup.md",
       "title": "Remove duplicated boilerplate from SKILL.md files",
       "status": "done",
       "covers": [
@@ -2178,7 +2178,7 @@
     {
       "id": "task-skill-mcp-migration",
       "type": "task-spec",
-      "path": "current_tasks/agent/refactor_skill_mcp_migration.md",
+      "path": ".bonsai/implementation_tasks/agent/refactor_skill_mcp_migration.md",
       "title": "Refactor skills: replace raw file I/O with bonsai-specs MCP tools",
       "status": "done",
       "covers": [
@@ -2216,7 +2216,7 @@
     {
       "id": "task-spec-save-content-optional",
       "type": "task-spec",
-      "path": "current_tasks/agent/improvement_spec_save_content_optional.md",
+      "path": ".bonsai/implementation_tasks/agent/improvement_spec_save_content_optional.md",
       "title": "Improve spec_save: make content optional for updates (registry-sync path)",
       "status": "done",
       "covers": [
@@ -2389,7 +2389,7 @@
     {
       "id": "task-draft-session",
       "type": "task-spec",
-      "path": "current_tasks/agent/feature_draft_session.md",
+      "path": ".bonsai/implementation_tasks/agent/feature_draft_session.md",
       "title": "Implement Draft Session (Pre-Start Config View)",
       "status": "done",
       "covers": [
@@ -2410,7 +2410,7 @@
     {
       "id": "task-fe-compact-event-view",
       "type": "task-spec",
-      "path": "current_tasks/frontend/feature_compact_event_view.md",
+      "path": ".bonsai/implementation_tasks/frontend/feature_compact_event_view.md",
       "title": "Compact Event View Mode",
       "status": "active",
       "covers": [
@@ -2542,7 +2542,7 @@
     {
       "id": "feature_login_screen",
       "type": "task-spec",
-      "path": "current_tasks/frontend/feature_login_screen.md",
+      "path": ".bonsai/implementation_tasks/frontend/feature_login_screen.md",
       "title": "Implement Frontend Auth & Login Screen",
       "status": "active",
       "covers": [
@@ -2559,7 +2559,7 @@
     {
       "id": "feature_preferences_sync",
       "type": "task-spec",
-      "path": "current_tasks/frontend/feature_preferences_sync.md",
+      "path": ".bonsai/implementation_tasks/frontend/feature_preferences_sync.md",
       "title": "Implement Frontend Preferences Sync",
       "status": "active",
       "covers": [
@@ -2577,7 +2577,7 @@
     {
       "id": "feature_mobile_login",
       "type": "task-spec",
-      "path": "current_tasks/mobile/feature_mobile_login.md",
+      "path": ".bonsai/implementation_tasks/mobile/feature_mobile_login.md",
       "title": "Implement Mobile Auth & Login Screen",
       "status": "active",
       "covers": [
@@ -2594,7 +2594,7 @@
     {
       "id": "feature_mobile_preferences_sync",
       "type": "task-spec",
-      "path": "current_tasks/mobile/feature_mobile_preferences_sync.md",
+      "path": ".bonsai/implementation_tasks/mobile/feature_mobile_preferences_sync.md",
       "title": "Implement Mobile Preferences Sync",
       "status": "active",
       "covers": [

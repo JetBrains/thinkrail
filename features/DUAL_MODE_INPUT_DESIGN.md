@@ -179,5 +179,5 @@ What was kept: toolbar, format buttons, preview rendering, `previewActive` state
 
 | Component | Spec | Description |
 |-----------|------|-------------|
-| Original task | [feature_dual_mode_input.md](../current_tasks/frontend/feature_dual_mode_input.md) | Original dual-mode implementation (Done, superseded) |
-| Refactor task | [feature_split_pane_preview.md](../current_tasks/frontend/feature_split_pane_preview.md) | Remove text mode, add split-pane preview |
+| Original task | [feature_dual_mode_input.md](../.bonsai/implementation_tasks/frontend/feature_dual_mode_input.md) | Original dual-mode implementation (Done, superseded) |
+| Refactor task | [feature_split_pane_preview.md](../.bonsai/implementation_tasks/frontend/feature_split_pane_preview.md) | Remove text mode, add split-pane preview |

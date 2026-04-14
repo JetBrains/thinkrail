@@ -40,8 +40,8 @@ If `$ARGUMENTS` is provided, use it as project name. Otherwise auto-detect from 
 Create these directories (skip any that already exist):
 
 ```
-.bonsai/                    # Spec tracking and registry
-current_tasks/             # Active task specifications
+.bonsai/                              # Spec tracking and registry
+.bonsai/implementation_tasks/         # Active task specifications
 ```
 
 ### Step 3: Create the spec registry
@@ -102,7 +102,7 @@ This project uses specification-driven development.
 {Brief description of the project and its main components}
 
 ## Active Tasks
-See current_tasks/ for active work items.
+See .bonsai/implementation_tasks/ for active work items.
 
 ## Specifications
 Run /spec-status to see specification coverage.

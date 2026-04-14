@@ -5,9 +5,9 @@ All three phases are implemented and tested. These items track spec/doc alignmen
 
 ## Spec Alignment (stale docs referencing old single-client patterns)
 
-- [x] **`current_tasks/rpc/feature_rpc_server.md`** — Updated to describe multi-client EventBus, per-project watcher, ClientConnection registration.
-- [x] **`current_tasks/rpc/feature_rpc_methods_agents_run.md`** — Updated to show EventBus-based publishing, no notify param.
-- [x] **`current_tasks/rpc/feature_rpc_notifications.md`** — Updated to note `current_notify` removal, `make_notify` is internal to EventBus.
+- [x] **`.bonsai/implementation_tasks/rpc/feature_rpc_server.md`** — Updated to describe multi-client EventBus, per-project watcher, ClientConnection registration.
+- [x] **`.bonsai/implementation_tasks/rpc/feature_rpc_methods_agents_run.md`** — Updated to show EventBus-based publishing, no notify param.
+- [x] **`.bonsai/implementation_tasks/rpc/feature_rpc_notifications.md`** — Updated to note `current_notify` removal, `make_notify` is internal to EventBus.
 - [x] **`features/DRAFT_SESSION_DESIGN.md`** — Updated `run_task()` note to mention EventBus routing.
 
 ## Agent Module Spec
@@ -20,7 +20,7 @@ All three phases are implemented and tested. These items track spec/doc alignmen
 
 ## Registry & Task Specs
 
-- [x] Created task spec `current_tasks/rpc/feature_rpc_event_bus.md` documenting EventBus, connections, auth
+- [x] Created task spec `.bonsai/implementation_tasks/rpc/feature_rpc_event_bus.md` documenting EventBus, connections, auth
 - [x] Registry check — task specs are not tracked in `.bonsai/registry.json` (only module-level specs). No update needed.
 
 ## Frontend Alignment

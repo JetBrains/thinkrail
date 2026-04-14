@@ -141,4 +141,4 @@ interface UseVoiceInputReturn {
 | Component | Spec | Description |
 |-----------|------|-------------|
 | Transcription backend | [TRANSCRIBE.md](../backend/app/agent/TRANSCRIBE.md) | `transcribe()` function — base64 audio → Whisper → text |
-| Frontend task | [feature_voice_input.md](../current_tasks/frontend/feature_voice_input.md) | useVoiceInput hook + InputArea mic button |
+| Frontend task | [feature_voice_input.md](../.bonsai/implementation_tasks/frontend/feature_voice_input.md) | useVoiceInput hook + InputArea mic button |

@@ -37,7 +37,7 @@ class TestRegistryEntry:
         entry = RegistryEntry(
             id="e2",
             type="task-spec",
-            path="current_tasks/fix.txt",
+            path=".bonsai/implementation_tasks/fix.txt",
             title="Fix bug",
             status="active",
             covers=["src/"],

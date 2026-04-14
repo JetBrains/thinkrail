@@ -47,7 +47,7 @@ graph TD
 3. `_compute_coverage()` — matches source dirs to spec `covers` fields
 4. `_compute_freshness()` — compares spec file mtime vs code file mtime
 5. `_run_lint()` — checks required sections and broken links
-6. `_parse_tasks()` — reads `current_tasks/**/*.md` for task status
+6. `_parse_tasks()` — reads `.bonsai/implementation_tasks/**/*.md` for task status
 7. `_compute_workflow_steps()` — derives workflow phase from spec types and task completion
 8. `_make_recommendations()` — generates actionable suggestions
 
@@ -85,7 +85,7 @@ graph TD
 | `spec_count` | `int` | Total specs in registry |
 | `active_count` | `int` | Specs with status "active" |
 | `stale_count` | `int` | Specs where code is newer than spec file |
-| `task_count` | `int` | Total tasks in `current_tasks/` |
+| `task_count` | `int` | Total tasks in `.bonsai/implementation_tasks/` |
 | `tasks_done` | `int` | Tasks with status "Done" |
 | `tasks_pending` | `int` | `task_count - tasks_done` |
 | `lint_errors` | `int` | Lint errors (missing files, broken links) |

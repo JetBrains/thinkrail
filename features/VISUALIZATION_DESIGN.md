@@ -187,4 +187,4 @@ They share no code. The vis/ dashboard is a pull/push state machine for spec met
 | Backend spec | [backend/app/agent/tools/VISUALIZATION.md](../backend/app/agent/tools/VISUALIZATION.md) | SDK handler, CLI server, shared validation |
 | Frontend spec | [frontend/ui-specs/VISUALIZATION_CARD.md](../frontend/ui-specs/VISUALIZATION_CARD.md) | VisualizationCard components, types, Mermaid, layout hints |
 | Vis dashboard module | [vis/README.md](../backend/app/vis/README.md) | Dashboard state computation (separate from MCP vis) |
-| Frontend task | [feature_visualization_card.md](../current_tasks/frontend/feature_visualization_card.md) | VisualizationCard + sub-renderers + types |
+| Frontend task | [feature_visualization_card.md](../.bonsai/implementation_tasks/frontend/feature_visualization_card.md) | VisualizationCard + sub-renderers + types |

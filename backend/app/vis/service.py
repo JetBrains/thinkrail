@@ -45,7 +45,7 @@ CODE_EXTENSIONS = {
 
 IGNORE_DIRS = {
     "node_modules", ".venv", "__pycache__", "dist", ".git", ".bonsai",
-    "vendor", ".idea", ".vscode", "current_tasks", ".claude", "claude-plugin",
+    "vendor", ".idea", ".vscode", ".claude", "claude-plugin",
 }
 
 STATUS_RE = re.compile(r"\*\*Status:\*\*\s*(\S+)", re.IGNORECASE)
@@ -320,13 +320,13 @@ class VisualizationService:
 
     def _parse_tasks(self) -> list[TaskEntry]:
         tasks: list[TaskEntry] = []
-        task_dir = self._root / "current_tasks"
+        task_dir = self._root / ".bonsai" / "implementation_tasks"
         if not task_dir.is_dir():
             return tasks
         pattern = str(task_dir / "**" / "*.md")
         for fpath in sorted(glob.glob(pattern, recursive=True)):
             rel = os.path.relpath(fpath, self._root)
-            parts = rel.replace("current_tasks" + os.sep, "").split(os.sep)
+            parts = rel.replace(os.path.join(".bonsai", "implementation_tasks") + os.sep, "").split(os.sep)
             module = parts[0] if len(parts) > 1 else "general"
             basename = os.path.splitext(os.path.basename(fpath))[0]
             try:
