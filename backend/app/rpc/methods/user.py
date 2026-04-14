@@ -21,7 +21,7 @@ def _get_caller_user_id() -> str | None:
     conn_id = current_conn_id.get(None)
     if conn_id is None:
         return None
-    conn = bus._connections.get(conn_id)
+    conn = bus.get_connection(conn_id)
     return conn.user_id if conn else None
 
 

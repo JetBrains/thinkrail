@@ -24,16 +24,13 @@ class ServerSettings(BaseSettings):
 
     backend_port: int = 8000
     backend_host: str = "0.0.0.0"
-    data_dir: str | None = None  # overrides ~/.bonsai/ for server-level storage
 
 
 def get_data_dir() -> Path:
     """Return the server-wide data directory for SQLite and global state.
 
-    Resolved from (in priority order):
-    1. ``BONSAI_DATA_DIR`` environment variable
-    2. ``data_dir`` in ``.env`` (via ServerSettings)
-    3. ``~/.bonsai/`` (default)
+    Set ``BONSAI_DATA_DIR`` environment variable (or in ``.env``) to
+    override the default ``~/.bonsai/``.
     """
     env = os.environ.get("BONSAI_DATA_DIR")
     if env:

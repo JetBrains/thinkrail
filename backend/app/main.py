@@ -173,12 +173,12 @@ def create_app() -> FastAPI:
         return prefs
 
     @app.put("/api/user/preferences")
-    async def update_user_preferences(token: str = Query(...), patch: dict = {}):
+    async def update_user_preferences(token: str = Query(...), patch: dict | None = None):
         identity = await _resolve_user(token)
         if identity is None:
             from fastapi.responses import JSONResponse
             return JSONResponse(status_code=401, content={"error": "Invalid token"})
-        result = await server_store.update_preferences(identity.user_id, patch)
+        result = await server_store.update_preferences(identity.user_id, patch or {})
         return result
 
     @app.get("/api/user/recent-projects")

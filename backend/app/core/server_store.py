@@ -170,6 +170,11 @@ class ServerStore:
             self._conn = None
 
     @property
+    def is_open(self) -> bool:
+        """Whether the database connection is open."""
+        return self._conn is not None
+
+    @property
     def _db(self) -> aiosqlite.Connection:
         assert self._conn is not None, "ServerStore not opened"
         return self._conn

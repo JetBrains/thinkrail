@@ -261,7 +261,7 @@ def register_routes(app: FastAPI, server_store: "ServerStore | None" = None) -> 
         if _server_store is None:
             _server_store = _SS(Path.home() / ".bonsai")
         # Ensure the store is open (idempotent if already open)
-        if _server_store._conn is None:
+        if not _server_store.is_open:
             await _server_store.open()
 
         # Read project path from query params
@@ -295,8 +295,7 @@ def register_routes(app: FastAPI, server_store: "ServerStore | None" = None) -> 
         try:
             await _server_store.register_project(str(project_path), project_name)
             await _server_store.update_project_last_opened(str(project_path))
-            if identity.user_id != "anonymous":
-                await _server_store.add_recent_project(identity.user_id, str(project_path))
+            await _server_store.add_recent_project(identity.user_id, str(project_path))
         except Exception:
             logger.warning("Failed to update server store on connect", exc_info=True)
 

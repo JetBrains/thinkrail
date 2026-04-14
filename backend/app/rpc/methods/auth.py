@@ -71,7 +71,7 @@ async def list_connections(server_store: "ServerStore", **params: Any) -> list[d
     conn_id = _ctx.get(None)
     if conn_id is None:
         return []
-    conn = bus._connections.get(conn_id)
+    conn = bus.get_connection(conn_id)
     if conn is None:
         return []
     connections = bus.connections_for_project(conn.project_path)
