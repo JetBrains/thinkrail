@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { useBoardStore } from "@/store/boardStore.ts";
 import type { MetaTicketType } from "@/types/board.ts";
+import { Modal } from "@/components/ui/index.ts";
 
 interface CreateTicketModalProps {
   open: boolean;
@@ -43,15 +44,9 @@ export function CreateTicketModal({ open, onClose }: CreateTicketModalProps) {
     [handleSubmit, onClose],
   );
 
-  if (!open) return null;
-
   return (
-    <div className="create-ticket-overlay" onClick={onClose}>
-      <div
-        className="create-ticket-modal"
-        onClick={(e) => e.stopPropagation()}
-        onKeyDown={handleKeyDown}
-      >
+    <Modal open={open} onClose={onClose}>
+      <div className="create-ticket-modal" onKeyDown={handleKeyDown}>
         <h3>New Meta-Ticket</h3>
 
         <div className="create-ticket-field">
@@ -95,6 +90,6 @@ export function CreateTicketModal({ open, onClose }: CreateTicketModalProps) {
           </button>
         </div>
       </div>
-    </div>
+    </Modal>
   );
 }

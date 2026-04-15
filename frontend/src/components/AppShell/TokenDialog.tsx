@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { useTokenStore } from "@/store/tokenStore.ts";
+import { Modal } from "@/components/ui/index.ts";
 
 interface TokenDialogProps {
   open: boolean;
@@ -37,15 +38,9 @@ export function TokenDialog({ open, onClose }: TokenDialogProps) {
     [handleSave, onClose],
   );
 
-  if (!open) return null;
-
   return (
-    <div className="token-dialog-overlay" onClick={onClose}>
-      <div
-        className="token-dialog"
-        onClick={(e) => e.stopPropagation()}
-        onKeyDown={handleKeyDown}
-      >
+    <Modal open={open} onClose={onClose}>
+      <div className="token-dialog" onKeyDown={handleKeyDown}>
         <h3>Authentication Token</h3>
         <p className="token-dialog-desc">
           Enter a token to authenticate with the Bonsai server. Leave empty for
@@ -72,6 +67,6 @@ export function TokenDialog({ open, onClose }: TokenDialogProps) {
           </button>
         </div>
       </div>
-    </div>
+    </Modal>
   );
 }

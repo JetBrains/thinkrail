@@ -3,6 +3,7 @@ import { useUiStore } from "@/store/uiStore.ts";
 import { useSpecStore } from "@/store/specStore.ts";
 import { useSessionStore } from "@/store/sessionStore.ts";
 import { useTrashStore } from "@/store/trashStore.ts";
+import { Modal } from "@/components/ui/index.ts";
 import "./CommandPalette.css";
 
 interface PaletteItem {
@@ -123,13 +124,11 @@ export function CommandPalette() {
     [items, selectedIndex, togglePalette, query],
   );
 
-  if (!open) return null;
-
   const BADGES: Record<string, string> = { spec: "spec", session: "session", action: "action" };
 
   return (
-    <div className="palette-backdrop" onClick={togglePalette}>
-      <div className="palette-container" onClick={(e) => e.stopPropagation()}>
+    <Modal open={open} onClose={togglePalette} align="top">
+      <div className="palette-container">
         <input
           ref={inputRef}
           className="palette-input"
@@ -161,6 +160,6 @@ export function CommandPalette() {
           <span>Esc close</span>
         </div>
       </div>
-    </div>
+    </Modal>
   );
 }

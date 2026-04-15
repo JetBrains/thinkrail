@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { useRpc } from "@/api/hooks/useRpc.tsx";
 import { createAdminApi } from "@/api/methods/admin.ts";
 import type { AdminUser } from "@/api/methods/admin.ts";
+import { Modal, CopyButton } from "@/components/ui/index.ts";
 import "./AdminPanel.css";
 
 interface AdminPanelProps {
@@ -20,7 +21,6 @@ export function AdminPanel({ open, onClose }: AdminPanelProps) {
   const [newName, setNewName] = useState("");
   const [newIsAdmin, setNewIsAdmin] = useState(false);
   const [createdToken, setCreatedToken] = useState<string | null>(null);
-  const [copied, setCopied] = useState(false);
   const [creating, setCreating] = useState(false);
 
   const api = createAdminApi(client);
@@ -103,23 +103,12 @@ export function AdminPanel({ open, onClose }: AdminPanelProps) {
     [client, fetchUsers], // eslint-disable-line react-hooks/exhaustive-deps
   );
 
-  const handleCopyToken = useCallback(() => {
-    if (createdToken) {
-      navigator.clipboard.writeText(createdToken);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    }
-  }, [createdToken]);
-
   const adminCount = users.filter((u) => u.isAdmin).length;
 
-  if (!open) return null;
-
   return (
-    <div className="token-dialog-overlay" onClick={onClose}>
+    <Modal open={open} onClose={onClose}>
       <div
         className="admin-panel"
-        onClick={(e) => e.stopPropagation()}
         onKeyDown={(e) => e.key === "Escape" && onClose()}
       >
         <div className="admin-panel-header">
@@ -173,13 +162,7 @@ export function AdminPanel({ open, onClose }: AdminPanelProps) {
         {createdToken && (
           <div className="admin-token-banner">
             <span className="admin-token-value">{createdToken}</span>
-            <button
-              className="token-dialog-btn"
-              onClick={handleCopyToken}
-              type="button"
-            >
-              {copied ? "Copied" : "Copy"}
-            </button>
+            <CopyButton className="token-dialog-btn" text={createdToken} />
             <button
               className="token-dialog-btn"
               onClick={() => setCreatedToken(null)}
@@ -238,6 +221,6 @@ export function AdminPanel({ open, onClose }: AdminPanelProps) {
           ))}
         </div>
       </div>
-    </div>
+    </Modal>
   );
 }

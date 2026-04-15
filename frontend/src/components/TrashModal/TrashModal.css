@@ -1,10 +1,3 @@
-.trash-backdrop {
-  position: fixed; inset: 0;
-  background: rgba(0, 0, 0, 0.4);
-  display: flex; justify-content: center;
-  padding-top: 10vh;
-  z-index: 1100;
-}
 .trash-container {
   width: 560px; max-height: 520px;
   background: var(--panel);

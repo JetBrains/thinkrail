@@ -1,6 +1,7 @@
 import { useCallback, useState } from "react";
 import { createFirstAdmin } from "@/services/setup.ts";
 import { useTokenStore } from "@/store/tokenStore.ts";
+import { CopyButton } from "@/components/ui/index.ts";
 import "./SetupScreen.css";
 
 interface SetupScreenProps {
@@ -13,7 +14,6 @@ export function SetupScreen({ onSuccess }: SetupScreenProps) {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [createdToken, setCreatedToken] = useState<string | null>(null);
-  const [copied, setCopied] = useState(false);
 
   const handleSubmit = useCallback(
     async (e?: React.FormEvent) => {
@@ -38,14 +38,6 @@ export function SetupScreen({ onSuccess }: SetupScreenProps) {
     [userId, name]
   );
 
-  const handleCopy = useCallback(() => {
-    if (createdToken) {
-      navigator.clipboard.writeText(createdToken);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    }
-  }, [createdToken]);
-
   if (createdToken) {
     return (
       <div className="login-container">
@@ -59,13 +51,7 @@ export function SetupScreen({ onSuccess }: SetupScreenProps) {
             </label>
             <div className="setup-token-display">
               <code className="setup-token-value">{createdToken}</code>
-              <button
-                className="setup-copy-btn"
-                onClick={handleCopy}
-                type="button"
-              >
-                {copied ? "Copied" : "Copy"}
-              </button>
+              <CopyButton className="setup-copy-btn" text={createdToken} />
             </div>
           </div>
 
