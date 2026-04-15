@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { getProjectFiles } from "@/services/project.ts";
 import { useUiStore } from "@/store/uiStore.ts";
 import "./FileSelector.css";
 
@@ -22,8 +23,7 @@ export function FileSelector({ selectedPaths, onToggle }: FileSelectorProps) {
 
   useEffect(() => {
     if (!projectPath) return;
-    fetch(`/api/project/files?path=${encodeURIComponent(projectPath)}`)
-      .then((r) => r.json())
+    getProjectFiles(projectPath)
       .then((data) => {
         const fetched: FileEntry[] = data.entries ?? [];
         setEntries(fetched);

@@ -5,7 +5,8 @@ import { App } from "./App.tsx";
 import { LoginScreen } from "@/components/LoginScreen/LoginScreen.tsx";
 import { SetupScreen } from "@/components/SetupScreen/SetupScreen.tsx";
 import { ProjectPicker } from "@/components/ProjectPicker/ProjectPicker.tsx";
-import { userRestApi } from "@/api/methods/user.ts";
+import { getSetupStatus } from "@/services/setup.ts";
+import { getUserProfile } from "@/services/user.ts";
 import { applyTheme, getThemePreference } from "./utils/theme.ts";
 import { useFileStore } from "@/store/fileStore.ts";
 import { useSessionStore } from "@/store/sessionStore.ts";
@@ -33,10 +34,9 @@ function Root() {
     // Fetch server info in parallel (best-effort)
     useServerInfoStore.getState().fetchInfo();
 
-    fetch("/api/setup/status")
-      .then((r) => r.json())
-      .then((data) => {
-        if (data.needsSetup) {
+    getSetupStatus()
+      .then((status) => {
+        if (status.needsSetup) {
           setNeedsSetup(true);
           setCheckingAuth(false);
           return;
@@ -46,7 +46,7 @@ function Root() {
           setCheckingAuth(false);
           return;
         }
-        return userRestApi.getProfile(token).then((profile) => {
+        return getUserProfile(token).then((profile) => {
           if (profile) {
             useTokenStore.getState().setIsAdmin(profile.isAdmin);
             setAuthenticated(true);

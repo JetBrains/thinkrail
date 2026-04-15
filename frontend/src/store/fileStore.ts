@@ -1,4 +1,5 @@
 import { create } from "zustand";
+import { readFile, writeFile, openExternal as openExternalFile } from "@/services/files.ts";
 import { useUiStore } from "./uiStore.ts";
 
 
@@ -54,14 +55,11 @@ export const useFileStore = create<FileStore>((set, get) => ({
     if (!project) return;
 
     try {
-      const res = await fetch(
-        `/api/file/read?project=${encodeURIComponent(project)}&path=${encodeURIComponent(path)}`,
-      );
-      if (!res.ok) {
-        console.error("Failed to read file:", res.status);
+      const data = await readFile(project, path);
+      if (!data) {
+        console.error("Failed to read file");
         return;
       }
-      const data = await res.json();
 
       const file: OpenFile = {
         path,
@@ -114,14 +112,11 @@ export const useFileStore = create<FileStore>((set, get) => ({
     if (!project) return;
 
     try {
-      const res = await fetch(
-        `/api/file/read?project=${encodeURIComponent(project)}&path=${encodeURIComponent(path)}`,
-      );
-      if (!res.ok) {
-        console.error("Failed to read file for preview:", res.status);
+      const data = await readFile(project, path);
+      if (!data) {
+        console.error("Failed to read file for preview");
         return;
       }
-      const data = await res.json();
 
       // Guard against stale response (user already clicked another file)
       if (get().previewFilePath !== path) return;
@@ -214,11 +209,7 @@ export const useFileStore = create<FileStore>((set, get) => ({
     });
 
     try {
-      await fetch(`/api/file/write`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ project, path, content: file.content }),
-      });
+      await writeFile(project, path, file.content);
 
       set((s) => {
         const f = s.openFiles.get(path);
@@ -247,11 +238,7 @@ export const useFileStore = create<FileStore>((set, get) => ({
     const project = getProjectPath();
     if (!project) return;
     try {
-      await fetch(`/api/file/open-external`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ project, path, editor }),
-      });
+      await openExternalFile(project, path, editor);
     } catch (e) {
       console.error("Failed to open external editor:", e);
     }
@@ -262,14 +249,12 @@ export const useFileStore = create<FileStore>((set, get) => ({
     const project = getProjectPath();
     if (!project) return;
 
-    const fetchUrl = `/api/file/read?project=${encodeURIComponent(project)}&path=${encodeURIComponent(path)}`;
-
     // Reload open file if not dirty
     const openFile = openFiles.get(path);
     if (openFile && !openFile.isDirty) {
-      fetch(fetchUrl)
-        .then((res) => (res.ok ? res.json() : Promise.reject(res.status)))
+      readFile(project, path)
         .then((data) => {
+          if (!data) return;
           set((s) => {
             const f = s.openFiles.get(path);
             if (!f || f.isDirty) return s;
@@ -283,10 +268,9 @@ export const useFileStore = create<FileStore>((set, get) => ({
 
     // Reload preview file
     if (previewFilePath === path && previewFile) {
-      fetch(fetchUrl)
-        .then((res) => (res.ok ? res.json() : Promise.reject(res.status)))
+      readFile(project, path)
         .then((data) => {
-          if (get().previewFilePath !== path) return;
+          if (!data || get().previewFilePath !== path) return;
           set((s) => {
             if (!s.previewFile || s.previewFilePath !== path) return s;
             return {

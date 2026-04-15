@@ -544,8 +544,6 @@ export interface components {
         _MkdirBody: {
             /** Path */
             path: string;
-            /** Path2 */
-            path2: string;
         };
         /** _OpenExternalBody */
         _OpenExternalBody: {
