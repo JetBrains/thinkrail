@@ -2,6 +2,10 @@ package dev.aiir.bonsai.network.rest
 
 import dev.aiir.bonsai.data.model.HealthResponse
 import dev.aiir.bonsai.data.model.ProjectInfo
+import dev.aiir.bonsai.data.model.ServerInfoResponse
+import dev.aiir.bonsai.data.model.SetupResponse
+import dev.aiir.bonsai.data.model.SetupStatusResponse
+import dev.aiir.bonsai.data.model.UserProfileResponse
 import io.ktor.client.request.header
 import io.ktor.client.request.post
 import io.ktor.client.request.setBody
@@ -97,6 +101,52 @@ class RestClient(private val httpClient: HttpClient) {
         }
         val body = response.bodyAsText()
         return BonsaiJson.decodeFromString(ProjectInfo.serializer(), body)
+    }
+
+    // ── Auth / setup endpoints ──────────────────────────────────────────────
+
+    suspend fun checkSetupStatus(baseUrl: String): SetupStatusResponse {
+        val response = httpClient.get("$baseUrl/api/setup/status")
+        val body = response.bodyAsText()
+        return BonsaiJson.decodeFromString(SetupStatusResponse.serializer(), body)
+    }
+
+    suspend fun setup(baseUrl: String, userId: String, name: String): SetupResponse {
+        val response = httpClient.post("$baseUrl/api/setup") {
+            header("Content-Type", "application/json")
+            setBody(BonsaiJson.encodeToString(
+                kotlinx.serialization.serializer(),
+                buildJsonObject {
+                    put("userId", userId)
+                    put("name", name)
+                },
+            ))
+        }
+        val body = response.bodyAsText()
+        return BonsaiJson.decodeFromString(SetupResponse.serializer(), body)
+    }
+
+    /**
+     * Validate a token via the REST profile endpoint.
+     * Returns the user profile on success, or null if the token is invalid.
+     */
+    suspend fun validateToken(baseUrl: String, token: String): UserProfileResponse? {
+        return try {
+            val response = httpClient.get("$baseUrl/api/user/profile") {
+                parameter("token", token)
+            }
+            if (response.status.value != 200) return null
+            val body = response.bodyAsText()
+            BonsaiJson.decodeFromString(UserProfileResponse.serializer(), body)
+        } catch (_: Exception) {
+            null
+        }
+    }
+
+    suspend fun getServerInfo(baseUrl: String): ServerInfoResponse {
+        val response = httpClient.get("$baseUrl/api/server-info")
+        val body = response.bodyAsText()
+        return BonsaiJson.decodeFromString(ServerInfoResponse.serializer(), body)
     }
 }
 

@@ -573,6 +573,66 @@
   color: var(--green);
 }
 
+/* ── Server Info Dialog ── */
+.server-info-section {
+  margin-bottom: var(--space-lg);
+}
+
+.server-info-label {
+  color: var(--muted);
+  font-size: var(--font-sm);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: var(--space-xs);
+}
+
+.server-info-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  margin-bottom: var(--space-xs);
+}
+
+.server-info-value {
+  color: var(--text);
+  font-size: var(--font-md);
+}
+
+.server-info-copy-btn {
+  padding: 2px var(--space-sm);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--muted);
+  font-family: var(--font);
+  font-size: var(--font-sm);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  white-space: nowrap;
+}
+
+.server-info-copy-btn:hover {
+  background: var(--hover);
+  color: var(--text);
+}
+
+.server-info-hint {
+  color: var(--muted);
+  font-size: var(--font-sm);
+  margin-top: var(--space-xs);
+}
+
+.server-info-hint a {
+  color: var(--blue);
+}
+
+.server-info-tailscale {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: var(--space-md);
+}
+
 /* ── Responsive ── */
 @media (max-width: 1023px) {
   .header-project,

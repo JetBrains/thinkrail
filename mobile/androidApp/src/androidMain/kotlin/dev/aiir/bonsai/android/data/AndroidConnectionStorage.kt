@@ -20,10 +20,10 @@ class AndroidConnectionStorage(context: Context) : ConnectionStorage {
         } catch (_: Exception) { emptyList() }
     }
 
-    override fun addRecentServer(host: String, port: Int, token: String?) {
+    override fun addRecentServer(host: String, port: Int, token: String?, connectionMode: String) {
         val existing = getRecentServers().toMutableList()
         existing.removeAll { it.host == host && it.port == port }
-        existing.add(0, ServerAddress(host = host, port = port, token = token, lastConnected = System.currentTimeMillis()))
+        existing.add(0, ServerAddress(host = host, port = port, token = token, connectionMode = connectionMode, lastConnected = System.currentTimeMillis()))
         val trimmed = existing.take(5)
         prefs.edit()
             .putString("recent_servers", BonsaiJson.encodeToString(ListSerializer(ServerAddress.serializer()), trimmed))

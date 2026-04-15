@@ -10,6 +10,7 @@ import com.arkivanov.decompose.defaultComponentContext
 import com.arkivanov.decompose.extensions.compose.stack.Children
 import com.arkivanov.decompose.extensions.compose.stack.animation.slide
 import com.arkivanov.decompose.extensions.compose.stack.animation.stackAnimation
+import dev.aiir.bonsai.android.ui.screen.AuthScreen
 import dev.aiir.bonsai.android.ui.screen.ConnectScreen
 import dev.aiir.bonsai.android.ui.screen.MainScreen
 import dev.aiir.bonsai.android.ui.screen.ProjectPickerScreen
@@ -53,6 +54,7 @@ class MainActivity : ComponentActivity() {
                     ) { child ->
                         when (val instance = child.instance) {
                             is RootComponent.Child.Connect -> ConnectScreen(component = instance.component)
+                            is RootComponent.Child.Auth -> AuthScreen(component = instance.component)
                             is RootComponent.Child.ProjectPicker -> ProjectPickerScreen(component = instance.component)
                             is RootComponent.Child.Main -> MainScreen(component = instance.component)
                         }

@@ -11,6 +11,7 @@ import { useFileStore } from "@/store/fileStore.ts";
 import { useSessionStore } from "@/store/sessionStore.ts";
 import { useUiStore } from "@/store/uiStore.ts";
 import { useTokenStore } from "@/store/tokenStore.ts";
+import { useServerInfoStore } from "@/store/serverInfoStore.ts";
 import "./styles/global.css";
 
 applyTheme(getThemePreference());
@@ -29,6 +30,9 @@ function Root() {
 
   // On mount: check setup status, then validate existing token
   useEffect(() => {
+    // Fetch server info in parallel (best-effort)
+    useServerInfoStore.getState().fetchInfo();
+
     fetch("/api/setup/status")
       .then((r) => r.json())
       .then((data) => {

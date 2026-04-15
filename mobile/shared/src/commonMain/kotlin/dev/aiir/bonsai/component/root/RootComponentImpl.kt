@@ -3,6 +3,7 @@ package dev.aiir.bonsai.component.root
 import com.arkivanov.decompose.ComponentContext
 import com.arkivanov.decompose.router.stack.*
 import com.arkivanov.decompose.value.Value
+import dev.aiir.bonsai.component.auth.AuthComponentImpl
 import dev.aiir.bonsai.component.connect.ConnectComponentImpl
 import dev.aiir.bonsai.component.main.MainComponentImpl
 import dev.aiir.bonsai.component.project.ProjectPickerComponentImpl
@@ -41,7 +42,21 @@ class RootComponentImpl(
                     componentContext = componentContext,
                     connectionManager = connectionManager,
                     connectionStorage = connectionStorage,
-                    onServerConnected = { host, port, token ->
+                    onServerConnected = { host, port, token, connectionMode ->
+                        navigation.push(Config.Auth(host, port, token, connectionMode))
+                    },
+                )
+            )
+            is Config.Auth -> RootComponent.Child.Auth(
+                AuthComponentImpl(
+                    componentContext = componentContext,
+                    host = config.host,
+                    port = config.port,
+                    storedToken = config.token,
+                    connectionMode = config.connectionMode,
+                    restClient = restClient,
+                    connectionStorage = connectionStorage,
+                    onAuthenticated = { host, port, token ->
                         navigation.push(Config.ProjectPicker(host, port, token))
                     },
                 )
@@ -82,7 +97,15 @@ class RootComponentImpl(
         data object Connect : Config()
 
         @Serializable
-        data class ProjectPicker(val host: String, val port: Int, val token: String? = null) : Config()
+        data class Auth(
+            val host: String,
+            val port: Int,
+            val token: String? = null,
+            val connectionMode: String = "local",
+        ) : Config()
+
+        @Serializable
+        data class ProjectPicker(val host: String, val port: Int, val token: String) : Config()
 
         @Serializable
         data class Main(val address: ServerAddress) : Config()

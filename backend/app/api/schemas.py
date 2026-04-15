@@ -115,3 +115,18 @@ class SetupResponse(BaseModel):
     userId: str
     displayName: str
     token: str
+
+
+# ── server_info.py ──────────────────────────────────────────────────────────
+
+class TailscaleInfoResponse(BaseModel):
+    ip: str | None = None
+    hostname: str | None = None
+    active: bool = False
+
+
+class ServerInfoResponse(BaseModel):
+    hostname: str
+    lanIps: list[str]
+    tailscale: TailscaleInfoResponse
+    version: str

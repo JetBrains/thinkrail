@@ -15,10 +15,12 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import dev.aiir.bonsai.android.ui.theme.BonsaiGreen
 import dev.aiir.bonsai.component.connect.ConnectComponent
+import dev.aiir.bonsai.component.connect.ConnectionMode
 
 @Composable
 fun ConnectScreen(component: ConnectComponent) {
     val state by component.state.collectAsState()
+    val selectedTab = if (state.mode == ConnectionMode.LOCAL) 0 else 1
 
     Column(
         modifier = Modifier
@@ -42,10 +44,125 @@ fun ConnectScreen(component: ConnectComponent) {
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
 
-        Spacer(modifier = Modifier.height(32.dp))
+        Spacer(modifier = Modifier.height(24.dp))
+
+        // Connection mode tabs
+        TabRow(
+            selectedTabIndex = selectedTab,
+            containerColor = MaterialTheme.colorScheme.surface,
+            contentColor = BonsaiGreen,
+        ) {
+            Tab(
+                selected = selectedTab == 0,
+                onClick = { component.onModeChanged(ConnectionMode.LOCAL) },
+                text = { Text("Local Network") },
+            )
+            Tab(
+                selected = selectedTab == 1,
+                onClick = { component.onModeChanged(ConnectionMode.TAILSCALE) },
+                text = {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text("Tailscale")
+                        if (state.isTailscaleActive) {
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Badge(containerColor = BonsaiGreen) {
+                                Text("VPN", style = MaterialTheme.typography.labelSmall)
+                            }
+                        }
+                    }
+                },
+            )
+        }
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        // Mode-specific input
+        when (state.mode) {
+            ConnectionMode.LOCAL -> {
+                Text(
+                    text = "SERVER ADDRESS",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                Spacer(modifier = Modifier.height(4.dp))
+                OutlinedTextField(
+                    value = state.addressInput,
+                    onValueChange = { component.onAddressChanged(it) },
+                    placeholder = { Text("192.168.1.x:8000") },
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true,
+                    shape = RoundedCornerShape(8.dp),
+                )
+            }
+            ConnectionMode.TAILSCALE -> {
+                Text(
+                    text = "MACHINE NAME",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                Spacer(modifier = Modifier.height(4.dp))
+                OutlinedTextField(
+                    value = state.tailscaleMachineInput,
+                    onValueChange = { component.onTailscaleMachineChanged(it) },
+                    placeholder = { Text("e.g. my-laptop") },
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true,
+                    shape = RoundedCornerShape(8.dp),
+                )
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                    text = "Enter your computer's Tailscale machine name.\nFind it by running tailscale status or check the Bonsai web UI.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            }
+        }
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        // Error
+        if (state.error != null) {
+            Text(
+                text = state.error!!,
+                color = MaterialTheme.colorScheme.error,
+                style = MaterialTheme.typography.bodySmall,
+                modifier = Modifier.fillMaxWidth(),
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+        }
+
+        // Connect button
+        val inputValid = when (state.mode) {
+            ConnectionMode.LOCAL -> state.addressInput.isNotBlank()
+            ConnectionMode.TAILSCALE -> state.tailscaleMachineInput.isNotBlank()
+        }
+        Button(
+            onClick = { component.onConnect() },
+            enabled = !state.isConnecting && inputValid,
+            modifier = Modifier.fillMaxWidth().height(48.dp),
+            shape = RoundedCornerShape(8.dp),
+            colors = ButtonDefaults.buttonColors(containerColor = BonsaiGreen),
+        ) {
+            if (state.isConnecting) {
+                CircularProgressIndicator(
+                    modifier = Modifier.size(20.dp),
+                    color = MaterialTheme.colorScheme.onPrimary,
+                    strokeWidth = 2.dp,
+                )
+            } else {
+                Text("Connect")
+            }
+        }
+
+        Spacer(modifier = Modifier.height(16.dp))
 
         // Recent servers
         if (state.recentServers.isNotEmpty()) {
+            HorizontalDivider()
+            Spacer(modifier = Modifier.height(12.dp))
             Text(
                 text = "RECENT SERVERS",
                 style = MaterialTheme.typography.labelSmall,
@@ -74,101 +191,43 @@ fun ConnectScreen(component: ConnectComponent) {
                                     style = MaterialTheme.typography.bodyMedium,
                                     fontWeight = FontWeight.Bold,
                                 )
-                                if (server.lastConnected > 0) {
-                                    val ago = formatTimeAgo(server.lastConnected)
-                                    Text(
-                                        text = ago,
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    )
+                                Row {
+                                    if (server.connectionMode == "tailscale") {
+                                        Text(
+                                            text = "Tailscale",
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = BonsaiGreen,
+                                        )
+                                        Spacer(modifier = Modifier.width(8.dp))
+                                    }
+                                    if (server.lastConnected > 0) {
+                                        Text(
+                                            text = formatTimeAgo(server.lastConnected),
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        )
+                                    }
                                 }
+                            }
+                            if (server.token != null) {
+                                Text(
+                                    text = "\uD83D\uDD11",
+                                    fontSize = 14.sp,
+                                )
                             }
                         }
                     }
                 }
             }
-            Spacer(modifier = Modifier.height(16.dp))
-            HorizontalDivider()
-            Spacer(modifier = Modifier.height(16.dp))
-        }
-
-        // Address input
-        Text(
-            text = "SERVER ADDRESS",
-            style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.fillMaxWidth(),
-        )
-        Spacer(modifier = Modifier.height(4.dp))
-        OutlinedTextField(
-            value = state.addressInput,
-            onValueChange = { component.onAddressChanged(it) },
-            placeholder = { Text("192.168.1.x:8000") },
-            modifier = Modifier.fillMaxWidth(),
-            singleLine = true,
-            shape = RoundedCornerShape(8.dp),
-        )
-
-        Spacer(modifier = Modifier.height(12.dp))
-
-        // Token input (optional)
-        Text(
-            text = "TOKEN (OPTIONAL)",
-            style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.fillMaxWidth(),
-        )
-        Spacer(modifier = Modifier.height(4.dp))
-        OutlinedTextField(
-            value = state.tokenInput,
-            onValueChange = { component.onTokenChanged(it) },
-            placeholder = { Text("bns_...") },
-            modifier = Modifier.fillMaxWidth(),
-            singleLine = true,
-            shape = RoundedCornerShape(8.dp),
-        )
-
-        Spacer(modifier = Modifier.height(16.dp))
-
-        // Error
-        if (state.error != null) {
+        } else {
+            Spacer(modifier = Modifier.weight(1f))
             Text(
-                text = state.error!!,
-                color = MaterialTheme.colorScheme.error,
+                text = "Run ./run.sh on your computer,\nthen enter its address above",
                 style = MaterialTheme.typography.bodySmall,
-                modifier = Modifier.fillMaxWidth(),
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                textAlign = TextAlign.Center,
             )
-            Spacer(modifier = Modifier.height(8.dp))
         }
-
-        // Connect button
-        Button(
-            onClick = { component.onConnect() },
-            enabled = !state.isConnecting && state.addressInput.isNotBlank(),
-            modifier = Modifier.fillMaxWidth().height(48.dp),
-            shape = RoundedCornerShape(8.dp),
-            colors = ButtonDefaults.buttonColors(containerColor = BonsaiGreen),
-        ) {
-            if (state.isConnecting) {
-                CircularProgressIndicator(
-                    modifier = Modifier.size(20.dp),
-                    color = MaterialTheme.colorScheme.onPrimary,
-                    strokeWidth = 2.dp,
-                )
-            } else {
-                Text("Connect")
-            }
-        }
-
-        Spacer(modifier = Modifier.height(16.dp))
-
-        // Help text
-        Text(
-            text = "Run ./run.sh on your computer,\nthen enter its IP address above",
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            textAlign = TextAlign.Center,
-        )
     }
 }
 

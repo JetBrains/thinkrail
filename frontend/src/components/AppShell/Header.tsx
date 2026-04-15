@@ -8,6 +8,7 @@ import { useFileStore } from "@/store/fileStore.ts";
 import { modLabel } from "@/utils/platform.ts";
 import { ThemeSwitcher } from "./ThemeSwitcher.tsx";
 import { TokenDialog } from "./TokenDialog.tsx";
+import { ServerInfoDialog } from "./ServerInfoDialog.tsx";
 import { AdminPanel } from "@/components/AdminPanel/AdminPanel.tsx";
 
 const SETTINGS_PATH = ".bonsai/settings.json";
@@ -30,6 +31,7 @@ export function Header({ onSwitchProject }: { onSwitchProject: () => void }) {
   const hasToken = useTokenStore((s) => !!s.token);
   const isAdmin = useTokenStore((s) => s.isAdmin);
   const [tokenOpen, setTokenOpen] = useState(false);
+  const [serverInfoOpen, setServerInfoOpen] = useState(false);
   const [adminOpen, setAdminOpen] = useState(false);
 
   return (
@@ -49,6 +51,13 @@ export function Header({ onSwitchProject }: { onSwitchProject: () => void }) {
           title={hasToken ? "Token configured" : "Set authentication token"}
         >
           &#128274;
+        </button>
+        <button
+          className="header-btn"
+          onClick={() => setServerInfoOpen(true)}
+          title="Server connection info"
+        >
+          &#127760;
         </button>
         {activeSessions.length > 0 && (
           <span className="header-sessions">
@@ -85,6 +94,7 @@ export function Header({ onSwitchProject }: { onSwitchProject: () => void }) {
       </div>
     </header>
     <TokenDialog open={tokenOpen} onClose={() => setTokenOpen(false)} />
+    <ServerInfoDialog open={serverInfoOpen} onClose={() => setServerInfoOpen(false)} />
     <AdminPanel open={adminOpen} onClose={() => setAdminOpen(false)} />
     </>
   );

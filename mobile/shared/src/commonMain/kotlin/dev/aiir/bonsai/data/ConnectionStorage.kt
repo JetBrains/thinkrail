@@ -9,7 +9,7 @@ import dev.aiir.bonsai.data.model.ServerAddress
  */
 interface ConnectionStorage {
     fun getRecentServers(): List<ServerAddress>
-    fun addRecentServer(host: String, port: Int, token: String? = null)
+    fun addRecentServer(host: String, port: Int, token: String? = null, connectionMode: String = "local")
     fun getRecentProjects(host: String, port: Int): List<RecentProject>
     fun addRecentProject(host: String, port: Int, path: String, name: String)
 }
