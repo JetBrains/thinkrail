@@ -8,7 +8,7 @@ Produces:
     dist/bonsai          (onefile executable)
     dist/bonsai-dir/     (directory bundle, faster startup)
 """
-from PyInstaller.utils.hooks import collect_submodules
+from PyInstaller.utils.hooks import collect_data_files, collect_submodules
 import os
 
 # -- Gather hidden imports for packages that use dynamic loading --
@@ -49,6 +49,8 @@ a = Analysis(
     binaries=[],
     datas=[
         (frontend_dist, 'frontend_dist'),
+        *collect_data_files('claude_agent_sdk'),   # includes _bundled/claude CLI
+        ('../claude-plugin', 'claude-plugin'),       # bonsai agent plugin
     ],
     hiddenimports=hiddenimports,
     hookspath=[],
