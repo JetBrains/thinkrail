@@ -29,10 +29,6 @@ export function ProjectPicker({ onSelect, onClose }: ProjectPickerProps) {
     if (!token) return;
     getRecentProjects(token).then((data) => {
       setRecents(data);
-      // Auto-open if only one recent and this is the initial picker (no close button)
-      if (!onClose && data.length === 1) {
-        handleOpen(data[0].path);
-      }
     }).catch(() => {
       // Silently fall back to empty list
     });

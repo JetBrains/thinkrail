@@ -1,5 +1,4 @@
 import { useEffect, useRef } from "react";
-import { BrowserRouter } from "react-router-dom";
 import { useRpc, useConnectionState, setClient } from "@/api/index.ts";
 import { wireEvents } from "@/store/wireEvents.ts";
 import { applyTheme } from "./utils/theme.ts";
@@ -114,12 +113,12 @@ function AppInner({ projectPath: _projectPath, onSwitchProject }: { projectPath:
   }, [fontSize, compactFontSize]);
 
   return (
-    <BrowserRouter>
+    <>
       <AppRoutes onSwitchProject={onSwitchProject} />
       <CommandPalette />
       <TrashModal />
       <ToastContainer />
-    </BrowserRouter>
+    </>
   );
 }
 
