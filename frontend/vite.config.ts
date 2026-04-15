@@ -1,6 +1,40 @@
-import { defineConfig, loadEnv } from "vite";
+import { defineConfig, loadEnv, type Plugin } from "vite";
 import react from "@vitejs/plugin-react";
 import path from "path";
+import { execSync } from "child_process";
+
+function openApiCodegen(): Plugin {
+  const schemaPath = path.resolve(__dirname, "openapi.json");
+  const outputPath = path.resolve(__dirname, "src/api/generated.ts");
+
+  function generate() {
+    try {
+      execSync(`npx openapi-typescript "${schemaPath}" -o "${outputPath}"`, {
+        cwd: __dirname,
+        stdio: "pipe",
+      });
+      console.log("[openapi] regenerated src/api/generated.ts");
+    } catch (e) {
+      console.error("[openapi] codegen failed:", e);
+    }
+  }
+
+  return {
+    name: "openapi-codegen",
+    configureServer(server) {
+      generate();
+      server.watcher.add(schemaPath);
+      server.watcher.on("change", (file) => {
+        if (file === schemaPath) {
+          generate();
+          // Invalidate generated module so HMR picks up the new types
+          const mod = server.moduleGraph.getModuleByUrl("/src/api/generated.ts");
+          if (mod) server.reloadModule(mod);
+        }
+      });
+    },
+  };
+}
 
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, path.resolve(__dirname, ".."), "");
@@ -8,7 +42,7 @@ export default defineConfig(({ mode }) => {
   const frontendPort = parseInt(env.FRONTEND_PORT ?? "3000", 10);
 
   return {
-    plugins: [react()],
+    plugins: [react(), openApiCodegen()],
     resolve: {
       alias: {
         "@": path.resolve(__dirname, "src"),
