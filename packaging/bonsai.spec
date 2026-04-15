@@ -29,6 +29,10 @@ hiddenimports = [
     *collect_submodules('claude_agent_sdk'),
     # httpx is needed by mcp (transitive dep of claude-agent-sdk)
     *collect_submodules('httpx'),
+    # mcp is used by claude-agent-sdk for tool registration
+    *collect_submodules('mcp'),
+    # anyio is used by claude-agent-sdk for subprocess management
+    *collect_submodules('anyio'),
     # watchfiles native component
     'watchfiles',
     'watchfiles._rust_notify',
