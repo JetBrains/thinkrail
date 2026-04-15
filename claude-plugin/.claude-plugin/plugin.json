@@ -16,7 +16,10 @@
     "workflow",
     "visualization",
     "requirements",
-    "progress-tracking"
+    "progress-tracking",
+    "brainstorm",
+    "brainstorming",
+    "design"
   ],
   "skills": "./skills/"
 }
