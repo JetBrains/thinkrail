@@ -2,38 +2,12 @@ from __future__ import annotations
 
 from typing import Any
 
-from jsonrpcserver import JsonRpcError, Success, Result
-
+from app.rpc.errors import SPEC_NOT_FOUND, rpc_handler
 from app.spec.service import SpecNotFoundError, SpecService
 
-# Error codes per RPC spec
-_SPEC_NOT_FOUND = -32001
-_REGISTRY_ERROR = -32002
-_VALIDATION_ERROR = -32003
-_INVALID_PARAMS = -32602
-_INTERNAL_ERROR = -32603
-
-
-def _handle_errors(func):  # type: ignore[type-arg]
-    """Decorator that maps domain exceptions to JSON-RPC errors."""
-
-    async def wrapper(service: SpecService, **params: Any) -> Result:
-        try:
-            return Success(await func(service, **params))
-        except SpecNotFoundError as exc:
-            raise JsonRpcError(_SPEC_NOT_FOUND, "Spec not found", str(exc))
-        except (KeyError, TypeError) as exc:
-            raise JsonRpcError(_INVALID_PARAMS, "Invalid params", str(exc))
-        except ValueError as exc:
-            raise JsonRpcError(_VALIDATION_ERROR, "Validation error", str(exc))
-        except JsonRpcError:
-            raise
-        except Exception as exc:
-            raise JsonRpcError(_INTERNAL_ERROR, "Internal error", str(exc))
-
-    wrapper.__name__ = func.__name__
-    wrapper.__qualname__ = func.__qualname__
-    return wrapper
+_handle_errors = rpc_handler(
+    (SpecNotFoundError, SPEC_NOT_FOUND, "Spec not found"),
+)
 
 
 @_handle_errors

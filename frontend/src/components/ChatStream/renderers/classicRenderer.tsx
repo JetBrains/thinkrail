@@ -10,6 +10,7 @@ import { SubagentBlock } from "../SubagentBlock.tsx";
 import { TaskCard } from "../TaskCard.tsx";
 import { QuestionCard } from "../QuestionCard.tsx";
 import { ApprovalCard } from "../ApprovalCard.tsx";
+import { ConfirmStatementCard } from "../ConfirmStatementCard.tsx";
 import { PlanApprovalCard } from "../PlanApprovalCard.tsx";
 import SuggestionCard from "../SuggestionCard.tsx";
 import DescriptionSuggestionCard from "../DescriptionSuggestionCard.tsx";
@@ -89,6 +90,7 @@ export const classicRenderers: ViewRenderers = {
   toolCallStart: (ev, i, k, ctx) => {
     const p = ev.payload;
     if ((p.toolName as string) === "AskUserQuestion") return null;
+    if ((p.toolName as string) === "ConfirmStatement") return null;
 
     if ((p.toolName as string)?.endsWith("bonsai_visualize")) {
       const visInput = p.toolInput as VisData | undefined;
@@ -254,6 +256,24 @@ export const classicRenderers: ViewRenderers = {
             interrupt: false,
           })
         }
+      />
+    );
+  },
+
+  confirmStatement: (ev, _i, k, ctx) => {
+    const p = ev.payload;
+    const requestId = (p.requestId as string) ?? "";
+    const isAnswered = ctx.answeredRequests.has(requestId);
+    const savedAnswer = ctx.answeredRequests.get(requestId) as Record<string, unknown> | undefined;
+    const sInterrupted = savedAnswer?.interrupt === true;
+    return (
+      <ConfirmStatementCard
+        key={k}
+        statement={(p.statement as string) ?? ""}
+        answered={isAnswered}
+        interrupted={sInterrupted}
+        approvedStatement={isAnswered ? (savedAnswer?.statement as string) : undefined}
+        onApprove={(text) => ctx.onResolveRequest(requestId, { statement: text })}
       />
     );
   },

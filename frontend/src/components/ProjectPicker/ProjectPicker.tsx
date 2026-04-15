@@ -4,13 +4,14 @@ import { useTokenStore } from "@/store/tokenStore.ts";
 import "./ProjectPicker.css";
 
 interface ProjectPickerProps {
-  onSelect: (path: string) => void;
+  onSelect: (path: string, isNew?: boolean) => void;
   onClose?: () => void;
 }
 
 export function ProjectPicker({ onSelect, onClose }: ProjectPickerProps) {
   const [path, setPath] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [dirNotFound, setDirNotFound] = useState(false);
   const [loading, setLoading] = useState(false);
   const [recents, setRecents] = useState<RecentProject[]>([]);
 
@@ -81,6 +82,7 @@ export function ProjectPicker({ onSelect, onClose }: ProjectPickerProps) {
       }
       setLoading(true);
       setError(null);
+      setDirNotFound(false);
       setShowSuggestions(false);
       try {
         const validateRes = await fetch(
@@ -89,10 +91,11 @@ export function ProjectPicker({ onSelect, onClose }: ProjectPickerProps) {
         const validateData = await validateRes.json();
         if (!validateData.exists) {
           setError(`Directory does not exist: ${target}`);
+          setDirNotFound(true);
           return;
         }
         if (validateData.valid) {
-          onSelect(validateData.path);
+          onSelect(validateData.path, false);
           return;
         }
         // Not yet initialized — auto-init
@@ -101,12 +104,13 @@ export function ProjectPicker({ onSelect, onClose }: ProjectPickerProps) {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ path: target }),
         });
-        const initData = await initRes.json();
-        if (initData.error) {
-          setError(initData.error);
+        if (!initRes.ok) {
+          const body = await initRes.json().catch(() => ({}));
+          setError(body.detail ?? "Failed to initialize project");
           return;
         }
-        onSelect(initData.path);
+        const initData = await initRes.json();
+        onSelect(initData.path, true);
       } catch (e) {
         setError(`Cannot reach backend: ${(e as Error).message}`);
       } finally {
@@ -170,6 +174,7 @@ export function ProjectPicker({ onSelect, onClose }: ProjectPickerProps) {
               onChange={(e) => {
                 setPath(e.target.value);
                 setError(null);
+                setDirNotFound(false);
               }}
               onKeyDown={handleKeyDown}
               onBlur={() => setTimeout(() => setShowSuggestions(false), 150)}
@@ -217,7 +222,46 @@ export function ProjectPicker({ onSelect, onClose }: ProjectPickerProps) {
           )}
         </div>
 
-        {error && <div className="picker-error">{error}</div>}
+        {error && (
+          <div className="picker-error">
+            {error}
+            {dirNotFound && (
+              <button
+                className="picker-create-btn"
+                onClick={async () => {
+                  const target = path.trim();
+                  setLoading(true);
+                  try {
+                    const res = await fetch("/api/fs/mkdir", {
+                      method: "POST",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({ path: target }),
+                    });
+                    if (!res.ok) {
+                      const body = await res.json().catch(() => ({}));
+                      const detail: string = body.detail ?? "Failed to create directory";
+                      const msg = detail.toLowerCase().includes("permission denied")
+                        ? `Permission denied: cannot create "${target}". Check folder permissions or choose a different location.`
+                        : detail;
+                      setError(msg);
+                      setDirNotFound(false);
+                    } else {
+                      setError(null);
+                      setDirNotFound(false);
+                      handleOpen(target);
+                    }
+                  } catch (e) {
+                    setError(`Cannot create directory: ${(e as Error).message}`);
+                  } finally {
+                    setLoading(false);
+                  }
+                }}
+              >
+                Create folder
+              </button>
+            )}
+          </div>
+        )}
 
         <div className="picker-actions">
           <button

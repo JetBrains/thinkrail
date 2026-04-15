@@ -44,6 +44,16 @@ export function QuestionCard({
 
   const containerRef = useRef<HTMLDivElement>(null);
   const otherInputRef = useRef<HTMLInputElement>(null);
+  const autoAdvanceTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Refs always hold the latest state so callbacks that fire asynchronously
+  // (e.g. the 150ms auto-advance timer) never read stale closures.
+  const selectedSingleRef = useRef(selectedSingle);
+  selectedSingleRef.current = selectedSingle;
+  const checkedItemsRef = useRef(checkedItems);
+  checkedItemsRef.current = checkedItems;
+  const otherTextRef = useRef(otherText);
+  otherTextRef.current = otherText;
 
   // Focus container on mount so keyboard works immediately
   useEffect(() => {
@@ -55,37 +65,42 @@ export function QuestionCard({
   const optionCount = (q?.options.length ?? 0) + 1; // +1 for "Other"
   const otherIndex = q?.options.length ?? 0;
 
+  // Always reads current state via refs — safe to call from stale closures.
   const getAnswerForQuestion = useCallback(
     (qIdx: number): string | null => {
       const question = questions[qIdx];
       if (question.multiSelect) {
-        const checked = checkedItems[qIdx];
+        const checked = checkedItemsRef.current[qIdx];
         if (!checked || checked.size === 0) return null;
         const labels: string[] = [];
         for (const idx of checked) {
           if (idx === question.options.length) {
-            labels.push(`Other: ${otherText[qIdx] || ""}`);
+            labels.push(`Other: ${otherTextRef.current[qIdx] || ""}`);
           } else {
             labels.push(question.options[idx].label);
           }
         }
         return labels.join(", ");
       } else {
-        const sel = selectedSingle[qIdx];
-        if (sel === null) return null;
+        const sel = selectedSingleRef.current[qIdx];
+        if (sel === null || sel === undefined) return null;
         if (sel === question.options.length) {
-          return `Other: ${otherText[qIdx] || ""}`;
+          return `Other: ${otherTextRef.current[qIdx] || ""}`;
         }
         return question.options[sel].label;
       }
     },
-    [questions, selectedSingle, checkedItems, otherText],
+    [questions],
   );
 
   const answeredIndices = new Set<number>();
   for (let i = 0; i < questions.length; i++) {
     if (getAnswerForQuestion(i) !== null) answeredIndices.add(i);
   }
+
+  // Keep a ref so advanceToNext always checks the latest answered state.
+  const answeredIndicesRef = useRef(answeredIndices);
+  answeredIndicesRef.current = answeredIndices;
 
   // Reset confirming when tab changes or answers change
   useEffect(() => setConfirmingSubmit(false), [activeTab, answeredIndices.size]);
@@ -100,24 +115,24 @@ export function QuestionCard({
   }, [questions, getAnswerForQuestion, onSubmit]);
 
   const handleSubmit = useCallback(() => {
-    if (answeredIndices.size < questions.length && !confirmingSubmit) {
+    if (answeredIndicesRef.current.size < questions.length && !confirmingSubmit) {
       setConfirmingSubmit(true);
       return;
     }
     submitAll();
-  }, [answeredIndices.size, questions.length, confirmingSubmit, submitAll]);
+  }, [questions.length, confirmingSubmit, submitAll]);
 
   const advanceToNext = useCallback(() => {
-    // Only auto-advance to the next unanswered question in multi-question flows.
-    // Never auto-submit — user must explicitly click Submit.
-    for (let offset = 1; offset < questions.length; offset++) {
+    for (let offset = 1; offset <= questions.length; offset++) {
       const next = (activeTab + offset) % questions.length;
-      if (!answeredIndices.has(next)) {
+      if (!answeredIndicesRef.current.has(next)) {
         setActiveTab(next);
         return;
       }
     }
-  }, [activeTab, questions.length, answeredIndices]);
+    // All answered — submit
+    submitAll();
+  }, [activeTab, questions.length, submitAll]);
 
   const handleOptionClick = useCallback(
     (index: number) => {
@@ -131,8 +146,13 @@ export function QuestionCard({
         });
       } else {
         setSelectedSingle((prev) => ({ ...prev, [activeTab]: index }));
-        // Auto-advance for single-select
-        setTimeout(() => advanceToNext(), 150);
+        // Cancel any pending auto-advance before scheduling a new one,
+        // so changing selection before the timer fires doesn't submit the old choice.
+        if (autoAdvanceTimer.current !== null) clearTimeout(autoAdvanceTimer.current);
+        autoAdvanceTimer.current = setTimeout(() => {
+          autoAdvanceTimer.current = null;
+          advanceToNext();
+        }, 150);
       }
       if (index === otherIndex) {
         setTimeout(() => otherInputRef.current?.focus(), 0);

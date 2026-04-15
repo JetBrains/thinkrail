@@ -1,42 +1,73 @@
 ---
 name: goal-and-requirements
-description: Define and clarify a project or feature goal interactively. Creates a clear goal statement and description that guides all subsequent design and implementation. Use when starting a new project or feature.
+description: Define goal and requirements for a feature, improvement, or change in an existing project. Analyzes the existing codebase first, then helps scope and document what needs to be built. Use when code already exists.
 icon: "🎯"
 group: Foundation
-argument-hint: "[project-or-feature-description]"
+argument-hint: "[describe what you want to build or change]"
 ---
 
-# Name & Goal & Idea Proposal & Requirements/Technology Selection
+# Goal & Requirements (Existing Project)
 
-You are creating a the **Foundational Specification** that guides all subsequent design and implementation work. Help the user articulate a clear, focused project/feature name, goal, description, technology stack, and requirements through interactive structured multi-choice decisions — never leave them staring at a blank page. If code exists, analyze it first to provide context-aware suggestions. Proactively suggest refined versions.
+You are adding a clear specification to an **existing codebase**. Before asking anything, read the code. Your first job is to understand what already exists — the stack, the structure, the conventions — so every question and suggestion you make is grounded in the actual project.
+
+**Principles:**
+- Read code before asking questions
+- Never ask about technology — the stack is already decided
+- One question per turn
+- Tailor every option to what you found in the code and what the user described
+- Draft early, refine with the user — a concrete proposal beats an open-ended question
+
+---
 
 ## Output
 
-Creates `GOAL&REQUIREMENTS.md` at the project root with structure (add more sections if needed):
+Creates or updates `GOAL&REQUIREMENTS.md` at the project root:
 
 ```markdown
-* Project\Feature name: [name]
-* Category: [new-project|new-feature|improvement|optimization|bug-fix|refactor]
-* Priority: [critical|high|medium|low]
+# [Feature / Change Name]
 
-## Goal
-  [Single clear statement of what the project aims to achieve]
+> [One-sentence goal]
 
-## Description
+## Context
 
-  [1-2 paragraph description of the project/feature]
+[What already exists that this builds on or changes. 2-3 sentences.]
 
-## Requirements / Technology stack
+## Problem
 
-  [Requirements, constraints, and Technology stack; No architecture yet]
+[What is broken, missing, or painful today. Who is affected.]
 
+## Scope
+
+### In this change
+- [capability or change]
+- [capability or change]
+
+### Out of scope
+- [explicitly excluded]
+
+## Requirements
+
+### Must have
+| # | Requirement | Rationale |
+|---|-------------|-----------|
+| 1 | ...         | ...       |
+
+### Nice to have
+| # | Requirement | Rationale |
+|---|-------------|-----------|
+| 1 | ...         | ...       |
+
+## Constraints
+
+[Technical constraints from the existing codebase, integrations that must be preserved, breaking changes that must be avoided]
 ```
 
-## Step-by-Step Guided Process For Goal and Description
+---
 
-### Step 1: Show Progress
+## Step 1 — Orient
 
-Show current workflow position by calling `bonsai_visualize` with type `progress-tracker`:
+Show workflow position via `bonsai_visualize` (type `progress-tracker`):
+
 ```json
 {
   "type": "progress-tracker",
@@ -45,499 +76,172 @@ Show current workflow position by calling `bonsai_visualize` with type `progress
   "data": {
     "steps": [
       {"label": "Goal & Requirements", "status": "current", "file": "GOAL&REQUIREMENTS.md"},
-      {"label": "Architecture", "status": "pending", "file": "DESIGN_DOC.md"},
-      {"label": "Module Specs", "status": "pending"},
-      {"label": "Task Specs", "status": "pending"},
-      {"label": "Implementation", "status": "pending"}
+      {"label": "Architecture",        "status": "pending", "file": "DESIGN_DOC.md"},
+      {"label": "Module Specs",        "status": "pending"},
+      {"label": "Task Specs",          "status": "pending"},
+      {"label": "Implementation",      "status": "pending"}
     ]
   }
 }
 ```
 
-### Step 2: Initial Input
+---
 
-If `$ARGUMENTS` is provided, use it as the initial description.
+## Step 2 — Analyze the codebase
 
-If code exists, analyze the project structure for context and check for `package.json`, `Cargo.toml`, `setup.py`, `go.mod`, or similar to auto-detect.
+**Do this before asking any questions.**
 
-### Sub-step 2.1: Analyze existing code (if any)
+Read:
+- `package.json` / `Cargo.toml` / `pyproject.toml` / `go.mod` — language, framework, dependencies
+- Directory structure — architecture pattern, module layout
+- Existing `GOAL&REQUIREMENTS.md`, `DESIGN_DOC.md`, `.specs/registry.json` if present
+- Any files directly relevant to what `$ARGUMENTS` describes
 
-If there's already a codebase:
-- Read `package.json`, `Cargo.toml`, `setup.py`, etc. for project metadata
-- Scan directory structure for main components
-- Look for existing test setup, CI config, Docker files
-- Extract dependency list
-- Pre-fill as much as possible — present findings and ask user to confirm/correct
+Build a mental model: what does this project do, what tech is it using, what conventions does it follow, what area would this change touch?
 
-### Sub-step 2.2: Ask for description (if none provided)
+Show findings via `bonsai_visualize` (type `summary-box`):
 
-Otherwise ask: "What is your project or feature about? Describe it briefly."
-
-Listen to user's description (can be rough/unstructured).
-
-### Step 3: Clarifying Questions
-
-Based on initial input, ask clarifying questions as multi-choice selections (use `AskUserQuestion`). Ask at least 2-3 questions to get: the main goal, kind of application/feature, target users, purpose.
-
-**Question 1 — Category:**
-- "New project" — Building something from scratch
-- "New feature" — Adding capability to existing project
-- "Improvement / optimization" — Making something better/faster
-- "Bug fix / correctness" — Something isn't working right
-- "Other: _____"
-
-**Question 2 — Type** (adapt based on category; multiSelect: true):
-- "CLI tool" — Command-line application
-- "Library/SDK" — Code others import and use
-- "Web application" — Server/frontend web app
-- "System/Infrastructure" — Low-level systems software
-- "API / Service" — Application programming interface
-- "Database" — Structured data storage
-- "Mobile app" — Mobile app for iOS/Android
-- "IoT device" — Hardware device that connects to the internet
-- "Other: _____"
-
-**Question 3 — Purpose:** (multiSelect: true)
-- "Production use"
-- "Prototype / MVP"
-- "Demonstration / learning"
-- "Research / experiment"
-- "Other: _____"
-
-**Question 4 — Target users:** (for new project/feature only; multiSelect: true)
-- "Developers (library users)" — Other programmers will use this as a dependency
-- "Developers (contributors)" — Other programmers will modify this code
-- "End users (non-technical)" — Non-technical users will interact with this
-- "System administrators"
-- "Internal team" — Used within your organization only
-- "Mixed audience"
-- "Other: _____"
-
-**Priority level:**
-- "Critical" — Urgent
-- "High" — Significant impact on correctness, performance, or usability
-- "Medium" — Notable improvement, can be scheduled
-- "Low" — Nice-to-have, do when time permits
-
-
-### Step 4: Draft Goal Statement
-
-Based on responses, draft a goal statement. Show it using `bonsai_visualize` with type `summary-box`:
 ```json
 {
   "type": "summary-box",
-  "title": "Proposed Goal",
-  "visId": "goal-draft",
+  "title": "Project Context",
+  "visId": "project-context",
   "data": {
     "sections": [
-      {"heading": "Goal", "items": [{"label": "Statement", "value": "[drafted goal]"}]},
-      {"heading": "Category", "items": [{"label": "Type", "value": "[category]"}]}
+      {"heading": "Stack",        "items": [{"label": "Language",   "value": "..."}, {"label": "Framework", "value": "..."}]},
+      {"heading": "Structure",    "items": [{"label": "Pattern",    "value": "..."}, {"label": "Key modules", "value": "..."}]},
+      {"heading": "Relevant area","items": [{"label": "Touch points","value": "..."}]}
     ]
   }
 }
 ```
 
-Use AskUserQuestion:
-- "Yes, perfect"
-- "Close, but needs refinement"
-- "No, let me rephrase"
+Use `AskUserQuestion` to confirm before proceeding:
+- "Yes, that's accurate"
+- "The relevant area is actually: _____"
+- "There's important context you missed: _____"
 
-If refinement needed:
-- Ask specific questions about what to adjust
-- Show 3-5 alternative phrasings as choices
-- Let user pick or combine
-- Repeat until goal is clear
+---
 
-### Step 5: Draft Description
+## Step 3 — Clarify the change
 
-Draft a 1-2 paragraph description. Show it using `bonsai_visualize` with type `summary-box`:
+Take `$ARGUMENTS` as the initial description. From it and your code analysis, infer the core intent. State your interpretation and confirm.
+
+**Pattern:**
+> "So you want to [specific change] in [specific area of the codebase], because [inferred reason]. The main users of this would be [inferred user]. Is that right?"
+
+Use `AskUserQuestion`:
+- "Yes, that's it"
+- "The scope is different: _____"
+- "The reason is actually: _____"
+- "The users affected are: _____"
+
+---
+
+## Step 4 — Define scope
+
+Propose what's in and what's out for this change. Ground it in the existing codebase — reference real modules, APIs, or data models.
+
+Show via `bonsai_visualize` (type `summary-box`, `visId: "change-scope"`):
+
 ```json
 {
   "type": "summary-box",
-  "title": "Proposed Description",
-  "visId": "description-draft",
+  "title": "Proposed Scope",
+  "visId": "change-scope",
   "data": {
     "sections": [
-      {"heading": "Description", "items": [{"label": "Text", "value": "[draft description]"}]},
-      {"heading": "Key Aspects", "items": [
-        {"label": "What", "value": "[what the project does]"},
-        {"label": "Why", "value": "[why it's needed]"},
-        {"label": "Who", "value": "[who will use it]"}
-      ]}
+      {
+        "heading": "In this change",
+        "items": [
+          {"label": "✓", "value": "[specific change referencing real code]"},
+          {"label": "✓", "value": "[another specific change]"}
+        ]
+      },
+      {
+        "heading": "Out of scope",
+        "items": [
+          {"label": "✗", "value": "[related thing that's tempting but separate]"}
+        ]
+      }
     ]
   }
 }
 ```
 
-Use AskUserQuestion:
-- "Yes, accurate"
-- "Needs more detail"
-- "Too verbose, simplify"
-- "Rewrite needed"
+Use `AskUserQuestion`:
+- "Scope is right"
+- "Add [something] to scope"
+- "Remove [something] from scope"
+- "Redefine"
 
-If refinement needed:
-- Ask specific questions about what to adjust
-- Show 3-5 alternative phrasings as choices
-- Let user pick or combine
-- Repeat until description is clear
+---
 
-## Step 6: Validation
+## Step 5 — Requirements
 
-Check:
-- Goal is one clear statement (not multiple goals)
-- Description is 1-2 paragraphs (not too brief, not too long)
-- Goal and description are consistent and do not contradict
-- Goal is specific enough to guide design
-- No unnecessary technical jargon
-- User explicitly confirmed
+Based on confirmed scope, derive must-have requirements. For each, propose 3–5 concrete requirements and ask the user to confirm or adjust.
 
-### Tips for Good Goals
+Show ongoing requirements state via `bonsai_visualize` (type `summary-box`, `visId: "requirements-summary"`). Update it after each confirmation.
 
-Share with users if they struggle:
+Group into:
+- **Must have** — the change doesn't ship without these
+- **Nice to have** — valuable but not blocking
+- **Constraints** — things from the existing codebase that must be preserved (API contracts, data formats, performance SLAs, etc.)
 
-**Good goals are:**
-- Specific: "Build a CLI calculator" not "Make a calculator"
-- Focused: One primary objective, not many
-- Measurable: Clear when it's achieved
-- User-oriented: Mentions who benefits
+---
 
-**Examples of refinement:**
-- Vague: "Create an app" -> Specific: "Create a mobile expense tracker for personal budgeting"
-- Too broad: "Build a platform for everything" -> Focused: "Build a blog platform with Markdown support"
+## Step 6 — Draft and confirm
 
-### Step 7: Visual Confirmation
+Draft the full `GOAL&REQUIREMENTS.md`. Show compact summary via `bonsai_visualize` (type `summary-box`, `visId: "goal-draft"`).
 
-Show the complete goal specification using `bonsai_visualize` with type `summary-box`:
-```json
-{
-  "type": "summary-box",
-  "title": "Goal Specification",
-  "visId": "goal-confirmation",
-  "data": {
-    "sections": [
-      {"heading": "Goal", "items": [{"label": "Statement", "value": "[goal statement]"}]},
-      {"heading": "Description", "items": [{"label": "Text", "value": "[description]"}]},
-      {"heading": "Metadata", "items": [
-        {"label": "Category", "value": "[category]"},
-        {"label": "Priority", "value": "[priority]"}
-      ]}
-    ]
-  }
-}
-```
-
-Use AskUserQuestion:
-- "Save to GOAL&REQUIREMENTS.md"
-- "Revise goal"
-- "Revise description"
+Use `AskUserQuestion`:
+- "Save it"
+- "Revise the scope"
+- "Revise the requirements"
+- "Revise the constraints"
 - "Start over"
 
-### Step 8: Project Name
+---
 
-Use AskUserQuestion and clarify the project/feature name; suggest 3—5 options.
+## Step 7 — Save
 
-**Question — What is the project/feature name:** (for new project/feature only) 
-- [suggested name 1] [brief explanation] — Suggest name and description
-- [suggested name 2] [brief explanation] — Suggest name and description 2
-- ...    — Suggest name and description 3, 4
-- "[suggested name 5] [brief explanation]" — Suggest name and description 5
-- "Other: _____" — User input name himself
-- "Provide more options" — generate list of suggested names and explanations, let user choose
+Use `spec_save` to write `GOAL&REQUIREMENTS.md` with `type: "goal-and-requirements"`, `status: "active"`.
 
-### Step 9: Save Output
+If there are related module specs already in the registry, use `registry_mutate` to add `references` links.
 
-1. Use `spec_save` to create `GOAL&REQUIREMENTS.md` with `type: "goal-and-requirements"`, `status: "active"`, `tags: ["{priority}", "{category}"]`. This atomically writes the file and adds the registry entry.
-2. Confirm: "Goal and description are saved to GOAL&REQUIREMENTS.md"
-3. Show file path as clickable link: `[GOAL&REQUIREMENTS.md](./GOAL&REQUIREMENTS.md)`
+Confirm: "Saved to `GOAL&REQUIREMENTS.md`."
 
-### Step 10: Registry Integration
+Update the progress tracker (`visId: "workflow-progress"`).
 
-If code exists and modules are detected, use `registry_mutate` to add `references` links to affected module specs.
+---
 
-### Step 11: Show Progress
+## Step 8 — What's next
 
-Show updated workflow position by calling `bonsai_visualize` with type `progress-tracker` (update the visId `workflow-progress` so the existing card refreshes):
-```json
-{
-  "type": "progress-tracker",
-  "title": "Specification-Driven Development",
-  "visId": "workflow-progress",
-  "data": {
-    "steps": [
-      {"label": "Goal & Requirements", "status": "current", "file": "GOAL&REQUIREMENTS.md",
-       "substeps": [
-         {"label": "Goal", "status": "done"},
-         {"label": "Requirements", "status": "current"}
-       ]},
-      {"label": "Architecture", "status": "pending", "file": "DESIGN_DOC.md"},
-      {"label": "Module Specs", "status": "pending"},
-      {"label": "Task Specs", "status": "pending"},
-      {"label": "Implementation", "status": "pending"}
-    ]
-  }
-}
-```
-
-## Example Output
-
-```markdown
-* Project\Feature name: TaskMan
-* Category: new-project
-* Priority: high
-
-## Goal
-
-Build a RESTful API for task management that supports CRUD operations with authentication and data persistence.
-
-## Description
-
-A production-ready REST API that enables users to create, read, update, and delete tasks through HTTP endpoints. The API includes JWT-based authentication, input validation, and PostgreSQL database integration. It is designed for integration with web and mobile front-end applications.
-
-## Requirements / Technology stack
-
-  [Requirements, constraints, and Technology stack; No architecture yet]
-
-```
-
-## Step-by-Step Guided Process For Specifying Requirements and Technology stack
-
-On this stage you are creating **Project Requirements** — the bridge between the project goal and technical implementation. Gather business, technical, and non-functional requirements interactively.
-
-Important:
-- Offer **3-5 choices** per question
-- Use web search if needed to examine solutions
-- If some requirements or constraints are clear from the context, explicitly notice it to user and offer to add them one-by-one
-
-### Output
-
-Update `GOAL&REQUIREMENTS.md` at the project root with:
-
-```markdown
-# Requirements 
-
-## Business Requirements
-
-| Requirement | Priority | Rationale |
-| --- | --- | --- |
-| [Description] | [critical|high|medium|low] | [Why this is needed] |
-... (more requirements)
-
-## Technical Requirements
-
-* technology_stack
-  | --- | --- |
-  | language | [Language] |
-  | framework | [Framework if any] |
-  | database | [Database if any] |
-  | other | [Other key technologies] | --- one by one
- ... (more)
-* constraints
-  | Constraint | Type |
-  | --- | --- |
-  | [Description] | [technical|time|resource|regulatory] |
-  ... (more constraints)
-* Non-functional
-  | Category | Requirement | Priority |
-  | --- | --- | --- |
-  | [performance|security|scalability|maintainability|usability|reliability|portability] | [Specific requirement] | [critical|high|medium|low] |
-  ...(more)
-
-```
-
-### VISUALIZATION
-
-During each step always show current state of requirements summary using `bonsai_visualize` with type `summary-box`. If some information is yet missing show `to be defined`. Use section `status` to highlight progress (`done`, `current`, `pending`, `skipped`):
-```json
-{
-  "type": "summary-box",
-  "title": "Requirements Summary",
-  "visId": "requirements-summary",
-  "data": {
-    "sections": [
-      {"heading": "Business Requirements", "status": "done", "items": [
-        {"label": "[HIGH]", "value": "Requirement 1"},
-        {"label": "[MED]", "value": "Requirement 2"},
-        {"label": "[LOW]", "value": "Requirement 3"}
-      ]},
-      {"heading": "Technology Stack", "status": "current", "items": [
-        {"label": "Language", "value": "[Language(s)]"},
-        {"label": "Frameworks", "value": "[Frameworks]"},
-        {"label": "Database", "value": "[Database]"},
-        {"label": "Build system", "value": "to be defined"}
-      ]},
-      {"heading": "Key Constraints", "status": "pending", "items": [
-        {"label": "1", "value": "[Constraint 1]"},
-        {"label": "2", "value": "[Constraint 2]"}
-      ]},
-      {"heading": "Non-Functional", "status": "pending", "items": [
-        {"label": "Performance", "value": "[Requirement]"},
-        {"label": "Security", "value": "[Requirement]"}
-      ]}
-    ]
-  }
-}
-```
-
-### Step 1: Business Requirements
-
-Ask: "Who are the stakeholders and what do they need?"
-
-Use AskUserQuestion (multiSelect: true):
-
-**Which types of requirements should we capture?**
-- "User/customer needs" — What end users need from the system
-- "Feature requirements" — Specific capabilities to implement
-- "Business constraints" — Budget, timeline, compliance needs
-- "Performance expectations" — Speed, throughput, capacity targets
-
-For each selected type, interactively gather 2-5 requirements.
-
-After gathering requirements, assign priorities via AskUserQuestion (multiSelect: true):
-
-**Which are HIGH priority requirements?**
-- "[requirement 1]"
-- "[requirement 2]"
-- ...
-
-**Which are MEDIUM priority? (remaining)**
-- "[requirement A]"
-- "[requirement B]"
-- ...
-
-(Remaining unselected are LOW priority)
-
-Show drafted requirements and confirm:
-
-Use AskUserQuestion:
-- "Yes, these look good"
-- "Add more requirements"
-- "Revise existing requirements"
-- "Change priorities"
-
-### Step 2: Technical Requirements — Technology Stack
-
-Use AskUserQuestion for each:
-
-**Programming Language?**
-- "Python"
-- "JavaScript/TypeScript"
-- "Go"
-- "Rust"
-- "Kotlin"
-- "C/C++"
-- "To be determined"
-- "Other: _____"
-
-**Framework/Libraries?** (suggest based on language and goal; multiSelect: true)
-- "[Suggested framework 1]"
-- "[Suggested framework 2]"
-- "No framework needed"
-- "To be determined"
-- "Other: _____"
-
-**Database?** (if applicable)
-- "PostgreSQL"
-- "SQLite"
-- "MongoDB"
-- "No database needed"
-- "To be determined"
-- "Other: _____"
-
-**Test setup**
-- "Unit tests" — `cargo test` / `npm test` / `pytest` (auto-detect from files)
-- "Unit + Integration tests" — Both unit and end-to-end tests
-- "No tests yet" — Testing not set up (note this in spec)
-- "Other: _____" — let user specify
-
-### Step 3: Technical Constraints
-
-Use AskUserQuestion (multiSelect: true):
-
-**Are there any constraints to consider?**
-- "Must run on specific platform (Windows/Linux/Mac)"
-- "Must integrate with existing systems"
-- "Limited development time"
-- "Security / compliance requirements"
-
-For each selected, drill down with specific questions.
-
-### Step 4: Non-Functional Requirements
-
-Use AskUserQuestion (multiSelect: true):
-
-**Which aspects are important for this project?**
-- "Performance (speed, latency, throughput)"
-- "Security (authentication, authorization, data protection)"
-- "Scalability (handling growth)"
-- "Maintainability (code quality, testing)"
-
-For each selected, ask for specific requirement:
-
-Use AskUserQuestion:
-- "[Suggested specific requirement 1]"
-- "[Suggested specific requirement 2]"
-- "[Suggested specific requirement 3]"
-
-### Step 5: Review and Validate
-
-Show complete requirements visualization (the VISUALIZATION pattern above, fully filled in).
-
-Use AskUserQuestion:
-- "Save to GOAL&REQUIREMENTS.md"
-- "Add more requirements"
-- "Revise existing requirements"
-- "Remove some requirements"
-- "Start over"
-
-### Step 6: Consistency Check
-
-Before saving, verify:
-1. Requirements align with goal and description from `GOAL&REQUIREMENTS.md`
-2. Technical choices support business requirements
-3. No contradictory requirements
-4. At least 2-3 high-priority business requirements exist
-
-If issues found, show them in plain markdown:
-
-> **Warning: Consistency Issues**
-> - [Issue 1]
-> - [Issue 2]
->
-> **Suggested resolutions:**
-
-Use AskUserQuestion:
-- "[Resolution option 1]"
-- "[Resolution option 2]"
-- "Proceed anyway"
-
-### Step 7: Update GOAL&REQUIREMENTS.md
-
-Using all gathered information, write (update) of GOAL&REQUIREMENTS.md following this template:
-
-```markdown
-
-[existing text]
-
-## Requirements
-
-[Requirements VISUALIZATION that you showed user as progress]
-
-[Detailed structured requirements list, if needed]
-```
-
-
-## After Completion
-
-Use `SuggestSession` to propose an `architecture-design` session, carrying forward the goal statement and top requirements as context. Include the goal spec ID in `specIds`.
+Use `SuggestSession` to propose the most logical next step based on what was specified — typically `architecture-design` or `task-spec` for smaller changes.
 
 Then use `AskUserQuestion`:
-- "/spec-status — Check overall specification coverage"
+- "Continue to Architecture Design — design the system before building"
+- "Start implementing — skip design and build now"
+- "Check spec coverage (`/spec-status`)"
 - "Done for now"
 
-## Key Principles
+If the user picks **"Start implementing"**, call `SuggestSession`:
 
-- **Goal first**: A clear goal guides everything else
-- **Brevity**: Keep goal and description concise and focused
-- **Clarity**: Ensure goal is unambiguous and measurable
-- **Visual**: Use `bonsai_visualize` for all structured displays (progress, summaries, confirmations)
-- **Interactive**: Every decision through multi-choice questions
+```json
+{
+  "skill": "task-spec",
+  "name": "Build v1",
+  "reason": "Implement the features from GOAL&REQUIREMENTS.md",
+  "prompt": "Read GOAL&REQUIREMENTS.md (and DESIGN_DOC.md / module README.md files if they exist). For each feature listed under 'In v1': 1) implement it following the specs, 2) run a spec alignment check — if discrepancies exist show them via bonsai_visualize summary-box titled 'Spec vs Code' then use AskUserQuestion (one at a time): 'Update spec to match code' / 'Update code to match spec' / 'Leave as-is'. Only move to the next feature after resolving all discrepancies."
+}
+```
+
+---
+
+## Anti-patterns
+
+- **Do not** ask about technology — read the code instead
+- **Do not** ask "is this a new project?" — that's what `new-project` skill is for
+- **Do not** ask about Priority as a standalone question — priority lives on individual requirements
+- **Do not** ask multiple questions in one turn
+- **Do not** offer generic options — reference the actual codebase in every suggestion

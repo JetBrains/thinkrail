@@ -1,5 +1,6 @@
 import { useCallback, useRef, useState } from "react";
 import { useSessionStore } from "@/store/sessionStore.ts";
+import { useUiStore } from "@/store/uiStore.ts";
 import { useNotificationStore } from "@/store/notificationStore.ts";
 import { getErrorMessage } from "@/utils/errors.ts";
 import { useFileStore } from "@/store/fileStore.ts";
@@ -15,6 +16,7 @@ import { useBoardStore } from "@/store/boardStore.ts";
 import { useMessageHistoryStore } from "@/store/messageHistoryStore";
 import { SessionTabBar } from "./SessionTabBar.tsx";
 import { StickyContextBar } from "./StickyContextBar.tsx";
+import { NewProjectScreen } from "./NewProjectScreen.tsx";
 
 export function SessionPanel() {
   const sessions = useSessionStore((s) => s.sessions);
@@ -41,17 +43,19 @@ export function SessionPanel() {
   const [contextCardVisible, setContextCardVisible] = useState(true);
   const chatStreamRef = useRef<ChatStreamHandle>(null);
 
+  const isNewProject = useUiStore((s) => s.isNewProject);
+
   const openTabs = useSessionStore((s) => s.openTabs);
   const sessionList = Array.from(sessions.values()).filter((s) => openTabs.has(s.bonsaiSid));
   const fileList = Array.from(openFiles.values());
   const activeSession = activeSessionId && !activeFilePath && !previewFilePath ? sessions.get(activeSessionId) : null;
+
   const activeFile = activeFilePath ? openFiles.get(activeFilePath) : null;
   const displayFile = activeFile ?? (previewFilePath ? previewFileObj : null);
 
   const handleSwitchSession = useCallback(
     (taskId: string) => {
       switchSession(taskId);
-      useFileStore.setState({ activeFilePath: null, previewFilePath: null, previewFile: null });
     },
     [switchSession],
   );
@@ -103,6 +107,30 @@ export function SessionPanel() {
   const handleOpenTicket = useCallback((ticketId: string) => {
     openTicket(ticketId);
   }, [openTicket]);
+
+  // New project: show goal-entry screen immediately, before any sessions exist.
+  // Yields to an active session once one starts.
+  if (isNewProject && !activeSession && fileList.length === 0) {
+    return (
+      <>
+        <SessionTabBar
+          sessions={sessionList}
+          activeSessionId={null}
+          onSwitchSession={handleSwitchSession}
+          onCloseSession={closeSession}
+          files={fileList}
+          activeFilePath={null}
+          onSwitchFile={handleSwitchFile}
+          onCloseFile={closeFile}
+          previewFile={null}
+          previewFilePath={null}
+          onClearPreview={clearPreview}
+          onPinPreview={pinPreview}
+        />
+        <NewProjectScreen />
+      </>
+    );
+  }
 
   // Determine what to show in the content area
   const showTicket = activeTicketId != null;

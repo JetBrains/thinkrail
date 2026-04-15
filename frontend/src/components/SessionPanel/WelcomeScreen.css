@@ -1,0 +1,207 @@
+.welcome-screen {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-xl);
+}
+
+.welcome-card {
+  width: 100%;
+  max-width: 540px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: var(--space-xl);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+}
+
+.welcome-title {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.welcome-name-input {
+  width: 100%;
+  background: transparent;
+  border: none;
+  border-bottom: 1px solid var(--border);
+  border-radius: 0;
+  padding: var(--space-xs) 0;
+  color: var(--text);
+  font-family: var(--font);
+  font-size: var(--font-size);
+  outline: none;
+  transition: border-color var(--transition-fast);
+}
+
+.welcome-name-input:focus {
+  border-bottom-color: var(--purple);
+}
+
+.welcome-name-input::placeholder {
+  color: var(--hint);
+}
+
+.welcome-textarea-wrap {
+  position: relative;
+}
+
+.welcome-textarea {
+  width: 100%;
+  background: var(--elevated);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: var(--space-md);
+  padding-bottom: 28px; /* room for mic button */
+  color: var(--text);
+  font-family: var(--font);
+  font-size: var(--font-size);
+  line-height: var(--line-height);
+  resize: vertical;
+  outline: none;
+  transition: border-color var(--transition-fast);
+}
+
+.welcome-textarea:focus {
+  border-color: var(--purple);
+}
+
+.welcome-textarea::placeholder {
+  color: var(--hint);
+}
+
+.welcome-mic {
+  position: absolute;
+  bottom: 7px;
+  right: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  background: transparent;
+  border: none;
+  border-radius: var(--radius-sm);
+  color: var(--hint);
+  cursor: pointer;
+  padding: 0;
+  transition: color var(--transition-fast), background var(--transition-fast);
+}
+
+.welcome-mic:hover:not(:disabled) {
+  color: var(--text);
+  background: var(--hover);
+}
+
+.welcome-mic--recording {
+  color: var(--red);
+  animation: welcome-mic-pulse 1.5s ease-in-out infinite;
+}
+
+.welcome-mic--transcribing {
+  color: var(--blue);
+  pointer-events: none;
+  opacity: 0.7;
+}
+
+@keyframes welcome-mic-pulse {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0.4; }
+}
+
+.welcome-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.welcome-hint {
+  font-size: 11px;
+  color: var(--hint);
+}
+
+.welcome-start-btn {
+  background: var(--purple);
+  color: #fff;
+  border: none;
+  border-radius: var(--radius-md);
+  padding: var(--space-sm) var(--space-lg);
+  font-family: var(--font);
+  font-size: var(--font-size);
+  font-weight: 600;
+  cursor: pointer;
+  transition: opacity var(--transition-fast);
+}
+
+.welcome-start-btn:hover:not(:disabled) {
+  opacity: 0.85;
+}
+
+.welcome-start-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+/* ── Session list ── */
+
+.welcome-sessions {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+  border-top: 1px solid var(--border);
+  padding-top: var(--space-md);
+  margin-top: var(--space-xs);
+}
+
+.welcome-sessions-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--hint);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  margin-bottom: var(--space-xs);
+}
+
+.welcome-session-item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  padding: var(--space-sm) var(--space-md);
+  background: transparent;
+  border: none;
+  border-radius: var(--radius-sm);
+  color: var(--text);
+  font-family: var(--font);
+  font-size: var(--font-size);
+  cursor: pointer;
+  text-align: left;
+  transition: background var(--transition-fast);
+}
+
+.welcome-session-item:hover {
+  background: var(--hover);
+}
+
+.welcome-session-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.welcome-session-name {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.welcome-session-status {
+  font-size: 11px;
+  color: var(--hint);
+  flex-shrink: 0;
+}

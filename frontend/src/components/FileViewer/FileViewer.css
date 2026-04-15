@@ -284,6 +284,7 @@
   margin-right: var(--space-xs);
 }
 
+
 /* Mermaid diagram inner container */
 .md-mermaid {
   padding: var(--space-lg);

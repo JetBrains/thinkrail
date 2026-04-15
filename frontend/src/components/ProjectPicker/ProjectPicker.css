@@ -158,6 +158,27 @@
   padding: var(--space-sm) var(--space-md);
   background: rgba(247, 118, 142, 0.1);
   border-radius: var(--radius-sm);
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  flex-wrap: wrap;
+}
+
+.picker-create-btn {
+  margin-left: auto;
+  padding: 2px 10px;
+  font-size: 12px;
+  border: 1px solid var(--red);
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--red);
+  cursor: pointer;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.picker-create-btn:hover {
+  background: rgba(247, 118, 142, 0.2);
 }
 
 .picker-actions {

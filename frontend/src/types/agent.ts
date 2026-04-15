@@ -20,6 +20,7 @@ export type EventType =
   | "ready"
   | "askUserQuestion"
   | "confirmAction"
+  | "confirmStatement"
   | "suggestSession"
   | "suggestDescription"
   | "requestResolved"

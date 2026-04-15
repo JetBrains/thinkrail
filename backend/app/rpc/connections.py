@@ -2,18 +2,15 @@
 
 from __future__ import annotations
 
-import contextvars
 from dataclasses import dataclass, field
 from time import time
 
 from starlette.websockets import WebSocket
 
+from app.rpc.context import current_conn_id  # re-exported for backward compat
 from app.rpc.notifications import NotifyCallable
 
-
-# Context variable set during RPC dispatch so handlers know which
-# connection is calling without changing every method signature.
-current_conn_id: contextvars.ContextVar[str] = contextvars.ContextVar("current_conn_id")
+__all__ = ["ClientConnection", "current_conn_id"]
 
 
 @dataclass

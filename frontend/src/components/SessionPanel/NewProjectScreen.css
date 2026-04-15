@@ -1,0 +1,73 @@
+.np-attach-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  flex-wrap: wrap;
+}
+
+.np-attach-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-xs);
+  padding: var(--space-xs) var(--space-sm);
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--hint);
+  font-family: var(--font);
+  font-size: 12px;
+  cursor: pointer;
+  transition: color var(--transition-fast), border-color var(--transition-fast);
+}
+
+.np-attach-btn:hover:not(:disabled) {
+  color: var(--text);
+  border-color: var(--text-subtle, var(--hint));
+}
+
+.np-attach-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.np-attached-file {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  color: var(--text);
+  background: var(--elevated);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 2px var(--space-sm);
+  max-width: 200px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.np-attached-remove {
+  background: none;
+  border: none;
+  color: var(--hint);
+  cursor: pointer;
+  font-size: 14px;
+  line-height: 1;
+  padding: 0 2px;
+  flex-shrink: 0;
+}
+
+.np-attached-remove:hover {
+  color: var(--red);
+}
+
+.welcome-name-input--error {
+  border-color: var(--red) !important;
+  outline: none;
+}
+
+.np-name-error {
+  font-size: 11px;
+  color: var(--red);
+  margin-top: -4px;
+}

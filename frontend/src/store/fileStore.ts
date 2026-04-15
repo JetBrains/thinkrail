@@ -57,12 +57,11 @@ export const useFileStore = create<FileStore>((set, get) => ({
       const res = await fetch(
         `/api/file/read?project=${encodeURIComponent(project)}&path=${encodeURIComponent(path)}`,
       );
-      const data = await res.json();
-
-      if (data.error) {
-        console.error("Failed to read file:", data.error);
+      if (!res.ok) {
+        console.error("Failed to read file:", res.status);
         return;
       }
+      const data = await res.json();
 
       const file: OpenFile = {
         path,
@@ -118,12 +117,11 @@ export const useFileStore = create<FileStore>((set, get) => ({
       const res = await fetch(
         `/api/file/read?project=${encodeURIComponent(project)}&path=${encodeURIComponent(path)}`,
       );
-      const data = await res.json();
-
-      if (data.error) {
-        console.error("Failed to read file for preview:", data.error);
+      if (!res.ok) {
+        console.error("Failed to read file for preview:", res.status);
         return;
       }
+      const data = await res.json();
 
       // Guard against stale response (user already clicked another file)
       if (get().previewFilePath !== path) return;
@@ -270,9 +268,8 @@ export const useFileStore = create<FileStore>((set, get) => ({
     const openFile = openFiles.get(path);
     if (openFile && !openFile.isDirty) {
       fetch(fetchUrl)
-        .then((res) => res.json())
+        .then((res) => (res.ok ? res.json() : Promise.reject(res.status)))
         .then((data) => {
-          if (data.error) return;
           set((s) => {
             const f = s.openFiles.get(path);
             if (!f || f.isDirty) return s;
@@ -287,9 +284,8 @@ export const useFileStore = create<FileStore>((set, get) => ({
     // Reload preview file
     if (previewFilePath === path && previewFile) {
       fetch(fetchUrl)
-        .then((res) => res.json())
+        .then((res) => (res.ok ? res.json() : Promise.reject(res.status)))
         .then((data) => {
-          if (data.error) return;
           if (get().previewFilePath !== path) return;
           set((s) => {
             if (!s.previewFile || s.previewFilePath !== path) return s;

@@ -2,6 +2,16 @@
 set -e
 
 ROOT="$(cd "$(dirname "$0")" && pwd)"
+VENV_DIR="$ROOT/backend/.venv"
+UV_TEMP_DIR=""  # set if we install uv temporarily
+FRESH=0
+
+for arg in "$@"; do
+    case "$arg" in
+        --fresh) FRESH=1 ;;
+        *) echo "Unknown argument: $arg"; exit 1 ;;
+    esac
+done
 
 # ── Ensure .env exists ──
 if [ ! -f "$ROOT/.env" ]; then
@@ -22,34 +32,40 @@ fi
 BACKEND_PORT="${BACKEND_PORT:-8000}"
 FRONTEND_PORT="${FRONTEND_PORT:-3000}"
 
-# ── Prerequisite checks ──
-if ! command -v uv &>/dev/null; then
-    echo "Error: 'uv' is not installed."
-    echo "Install it with:  curl -LsSf https://astral.sh/uv/install.sh | sh"
-    exit 1
-fi
-
-if ! command -v node &>/dev/null; then
-    echo "Error: 'node' is not installed."
-    echo "Install it from https://nodejs.org or via your package manager."
-    exit 1
-fi
-
-if ! command -v npm &>/dev/null; then
-    echo "Error: 'npm' is not installed."
-    echo "It should come with Node.js — see https://nodejs.org"
-    exit 1
-fi
-
+# ── Cleanup on exit ──
 cleanup() {
     trap - EXIT INT TERM
     echo ""
     echo "Shutting down..."
     kill 0 2>/dev/null
     wait 2>/dev/null
+
+    [ -n "$UV_TEMP_DIR" ] && rm -rf "$UV_TEMP_DIR"
+
     echo "Done."
 }
 trap cleanup EXIT INT TERM
+
+# ── Install uv if missing ──
+if ! command -v uv &>/dev/null; then
+    echo "uv not found — installing temporarily..."
+    UV_TEMP_DIR="$(mktemp -d)"
+    export INSTALLER_NO_MODIFY_PATH=1
+    curl -LsSf https://astral.sh/uv/install.sh | UV_INSTALL_DIR="$UV_TEMP_DIR" sh
+    export PATH="$UV_TEMP_DIR:$PATH"
+    echo "  uv installed at $UV_TEMP_DIR"
+fi
+
+# ── Check node / npm ──
+if ! command -v node &>/dev/null; then
+    echo "Error: 'node' is not installed. Install it from https://nodejs.org or via nvm."
+    exit 1
+fi
+
+if ! command -v npm &>/dev/null; then
+    echo "Error: 'npm' is not installed. It should come with Node.js."
+    exit 1
+fi
 
 # ── Check ports are free ──
 port_in_use() {
@@ -68,21 +84,32 @@ for PORT in $BACKEND_PORT $FRONTEND_PORT; do
     fi
 done
 
-# ── Backend ──
-echo "Installing backend dependencies..."
+# ── Python virtual environment ──
 cd "$ROOT/backend"
+if [ "$FRESH" = "1" ]; then
+    echo "Creating fresh Python virtual environment..."
+    rm -rf "$VENV_DIR"
+    uv venv "$VENV_DIR" --python 3.11
+elif [ ! -d "$VENV_DIR" ]; then
+    echo "No virtual environment found, creating..."
+    uv venv "$VENV_DIR" --python 3.11
+fi
 uv sync
-echo "Starting backend on :$BACKEND_PORT..."
-uv run python -m app.main &
-BACKEND_PID=$!
 
-# ── Frontend ──
+# ── Frontend dependencies ──
 echo "Installing frontend dependencies..."
 cd "$ROOT/frontend"
 npm install
+
+# ── Start backend ──
+echo "Starting backend on :$BACKEND_PORT..."
+cd "$ROOT/backend"
+uv run python -m app.main &
+
+# ── Start frontend ──
 echo "Starting frontend on :$FRONTEND_PORT..."
+cd "$ROOT/frontend"
 npm run dev &
-FRONTEND_PID=$!
 
 LOCAL_IP=$(hostname -I 2>/dev/null | awk '{print $1}' || echo "unknown")
 echo ""
@@ -91,6 +118,6 @@ echo "          http://${LOCAL_IP}:$FRONTEND_PORT  (LAN)"
 echo "Backend:  http://localhost:$BACKEND_PORT"
 echo ""
 echo "For remote access, install Tailscale: https://tailscale.com/download"
-echo "Press Ctrl+C to stop both."
+echo "Press Ctrl+C to stop."
 
 wait
