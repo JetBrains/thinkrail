@@ -34,6 +34,9 @@ export function createAgentApi(client: RpcClient) {
     send: (bonsaiSid: string, text: string, isMarkdown?: boolean) =>
       client.request<null>("agent/send", { bonsaiSid, text, ...(isMarkdown ? { isMarkdown } : {}) }),
 
+    retryLastMessage: (bonsaiSid: string) =>
+      client.request<{ ok: boolean }>("agent/retryLastMessage", { bonsaiSid }),
+
     end: (bonsaiSid: string) =>
       client.request<null>("agent/end", { bonsaiSid }),
 

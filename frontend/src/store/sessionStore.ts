@@ -95,6 +95,7 @@ interface SessionStore {
   restartSession: (bonsaiSid: string) => Promise<void>;
 
   continueSession: (bonsaiSid: string) => Promise<void>;
+  retryLastMessage: (bonsaiSid: string) => Promise<void>;
   restoreSession: (bonsaiSid: string, opts?: { noTab?: boolean }) => Promise<void>;
   loadActiveSessions: () => Promise<void>;
 
@@ -904,6 +905,15 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
         tabs.add(bonsaiSid);
         return { sessions: next, openTabs: tabs };
       });
+    }
+  },
+
+  retryLastMessage: async (bonsaiSid) => {
+    try {
+      const api = createAgentApi(getClient());
+      await api.retryLastMessage(bonsaiSid);
+    } catch (err) {
+      console.error("retryLastMessage failed:", err);
     }
   },
 
@@ -1996,7 +2006,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
   onSessionError: (params) => {
     const bonsaiSid = params.bonsaiSid as string;
     const subtype = params.subtype as string;
-    const isRecoverable = subtype === "turn_error";
+    const isRecoverable = subtype === "turn_error" || subtype === "context_overflow";
     set((s) => {
       const sessions = appendEvent(s.sessions, bonsaiSid, "agent/error", params, s.closedIds);
       const session = sessions.get(bonsaiSid);

@@ -7,7 +7,7 @@ from datetime import UTC, datetime
 from typing import Any
 
 from app.agent.context import build_context
-from app.agent.models import AgentConfig, AgentTask, SubsessionType
+from app.agent.models import AgentConfig, AgentTask, MessageTooLargeError, SubsessionType
 from app.agent.persistence import append_event, save_session, load_session, list_sessions as list_sessions_from_disk, delete_session as delete_session_from_disk, update_session_metadata
 from app.agent.runner import run
 from app.agent.tracker import Tracker
@@ -36,6 +36,11 @@ class AgentService:
             for m in self.model_registry.get_models():
                 if m["id"] == model_id:
                     return m["contextWindow"]
+        # Fallback to hardcoded list when registry is unavailable
+        from app.agent.model_registry import _FALLBACK
+        for m in _FALLBACK:
+            if m["id"] == model_id:
+                return m["contextWindow"]
         return 200_000
 
     def _restore_draft_sessions(self) -> None:
@@ -206,10 +211,23 @@ class AgentService:
             raise ValueError(
                 f"Cannot send message: session is '{task.status}', expected 'initializing' or 'idle'"
             )
+        # Estimate message size against remaining context budget
+        msg_tokens = len(text) // 6  # fast heuristic: ~6 chars per token
+        ctx_max = self._get_context_max(task.config.model)
+        current_ctx = self._tracker.get_context_tokens(bonsai_sid)
+        remaining = ctx_max - current_ctx if current_ctx > 0 else ctx_max
+        if remaining > 0 and msg_tokens > remaining * 0.8:
+            raise MessageTooLargeError(
+                f"Message is too large (~{msg_tokens:,} tokens). "
+                f"Remaining context: ~{remaining:,} tokens.",
+                msg_tokens=msg_tokens,
+                remaining_tokens=remaining,
+            )
         self._save_event(bonsai_sid, {
             "eventType": "userMessage",
             "payload": {"text": text, "isMarkdown": is_markdown},
         })
+        self._tracker.set_last_message(bonsai_sid, text)
         self._tracker.enqueue_message(bonsai_sid, text)
 
     async def interrupt_task(self, bonsai_sid: str) -> None:
@@ -263,6 +281,10 @@ class AgentService:
 
     def get_task(self, bonsai_sid: str) -> AgentTask:
         return self._tracker.get_task(bonsai_sid)
+
+    def get_last_message(self, bonsai_sid: str) -> str | None:
+        """Return the last user message sent to this session (for retry)."""
+        return self._tracker.get_last_message(bonsai_sid)
 
     def list_tasks(self) -> list[AgentTask]:
         return self._tracker.list_tasks()
@@ -558,11 +580,16 @@ class AgentService:
 
             # Adjust cost estimates to include base cost from previous runs,
             # since the runner starts with total_cost=0 on each invocation.
-            if method == "agent/costEstimate" and _base_cost > 0:
-                params = {
-                    **params,
-                    "estimatedCostUsd": _base_cost + (params.get("estimatedCostUsd") or 0),
-                }
+            if method == "agent/costEstimate":
+                # Track context token usage for message size validation
+                ctx_tokens = params.get("currentContextWindow", 0)
+                if ctx_tokens > 0:
+                    self._tracker.set_context_tokens(task.bonsai_sid, ctx_tokens)
+                if _base_cost > 0:
+                    params = {
+                        **params,
+                        "estimatedCostUsd": _base_cost + (params.get("estimatedCostUsd") or 0),
+                    }
 
             # -- Incremental metrics persistence --
             # Skip only high-frequency events; all others update metrics on disk.
@@ -593,15 +620,40 @@ class AgentService:
                     last_out = iters[-1].get("output_tokens", 0) if iters else (
                         params.get("usage", {}).get("output_tokens", 0)
                     )
+                    ctx_max = self._get_context_max(task.config.model)
                     _live_metrics.update({
                         "costUsd": _base_cost + params.get("costUsd", 0),
                         "turns": _base_turns + params.get("turns", 0),
                         "turnCostUsd": params.get("turnCostUsd", 0),
                         "turnTurns": params.get("turn_turns", 0),
                         "contextTokens": ctx_tokens,
-                        "contextMax": self._get_context_max(task.config.model),
+                        "contextMax": ctx_max,
                         "outputTokens": last_out,
                     })
+
+                    # Emit context usage warnings at 75% and 90%
+                    if ctx_max > 0 and ctx_tokens > 0:
+                        ratio = ctx_tokens / ctx_max
+                        if ratio > 0.9:
+                            await _bus.publish_to_session(
+                                task.bonsai_sid, "agent/contextWarning", {
+                                    "bonsaiSid": task.bonsai_sid,
+                                    "level": "critical",
+                                    "ratio": round(ratio, 3),
+                                    "contextTokens": ctx_tokens,
+                                    "contextMax": ctx_max,
+                                },
+                            )
+                        elif ratio > 0.75:
+                            await _bus.publish_to_session(
+                                task.bonsai_sid, "agent/contextWarning", {
+                                    "bonsaiSid": task.bonsai_sid,
+                                    "level": "warning",
+                                    "ratio": round(ratio, 3),
+                                    "contextTokens": ctx_tokens,
+                                    "contextMax": ctx_max,
+                                },
+                            )
 
                 update_session_metadata(self._config.project_root, task.bonsai_sid, {
                     "metrics": dict(_live_metrics),

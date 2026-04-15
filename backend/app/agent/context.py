@@ -427,6 +427,19 @@ def _truncate_transcript(transcript: str, max_chars: int) -> str:
     return "\n\n".join(result)
 
 
+def _get_model_context_max(model_id: str) -> int:
+    """Look up the context window for a model from the hardcoded fallback.
+
+    Used for budget estimation in contexts where the live model registry
+    is not available (e.g. context.py has no access to the service).
+    """
+    from app.agent.model_registry import _FALLBACK
+    for m in _FALLBACK:
+        if m["id"] == model_id:
+            return m["contextWindow"]
+    return 200_000
+
+
 SECTION_LABELS: dict[str, str] = {
     "general": "General Instructions",
     "task": "Skill / Task",
@@ -568,8 +581,27 @@ def build_context_structured(
             section["fileDetails"] = _build_file_details(file_paths or [], project_root)
         sections.append(section)
 
+    total_tokens = sum(s["tokens"] for s in sections)
+    context_max = _get_model_context_max(config.model) if config else 200_000
+    ratio = total_tokens / context_max if context_max > 0 else 0
+    warnings: list[str] = []
+    if ratio > 0.8:
+        warnings.append(
+            f"System prompt uses {int(ratio * 100)}% of context window "
+            f"({total_tokens:,} / {context_max:,} tokens). "
+            "Very limited room for conversation."
+        )
+    elif ratio > 0.4:
+        warnings.append(
+            f"System prompt uses {int(ratio * 100)}% of context window. "
+            "Consider removing some specs for longer conversations."
+        )
+
     return {
         "full": full,
         "sections": sections,
-        "totalTokens": sum(s["tokens"] for s in sections),
+        "totalTokens": total_tokens,
+        "contextMax": context_max,
+        "budgetRatio": round(ratio, 3),
+        "warnings": warnings,
     }

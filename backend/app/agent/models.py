@@ -101,6 +101,15 @@ class AgentEvent(BaseModel):
     payload: dict[str, Any] = Field(default_factory=dict)
 
 
+class MessageTooLargeError(Exception):
+    """Raised when a user message would consume too much of the remaining context."""
+
+    def __init__(self, message: str, *, msg_tokens: int, remaining_tokens: int) -> None:
+        super().__init__(message)
+        self.msg_tokens = msg_tokens
+        self.remaining_tokens = remaining_tokens
+
+
 class AgentResult(BaseModel):
     """Terminal success result from an agent run."""
 

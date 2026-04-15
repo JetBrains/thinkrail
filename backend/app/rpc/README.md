@@ -49,7 +49,8 @@ Both sides can send either. The server can initiate requests to the client (e.g.
 | `spec/delete`     | `{ id: str }`                                                                                | `null`              | Delete a spec                                                                                                                                               |
 | `spec/graph`      | `{}`                                                                                         | `SpecGraph`         | Get spec hierarchy graph                                                                                                                                    |
 | `agent/run`       | `{ specIds: list[str], config: AgentConfig, skillId?: str }`                                 | `{ bonsaiSid: str }`   | Start a persistent agent session with spec and optional skill context. If `skillId` is provided, the skill's instructions (from the Bonsai plugin's `SKILL.md`) are loaded and prepended to the system prompt. Session starts in `idle` state, ready for messages. `sessionId` arrives later via `agent/sessionStart` notification. See [Agent Context](../agent/CONTEXT.md). |
-| `agent/send`      | `{ bonsaiSid: str, text: str }`                                                                 | `null`              | Send a user message to the session, triggering a new turn. Session must be `idle`.                                                                          |
+| `agent/send`      | `{ bonsaiSid: str, text: str }`                                                                 | `null`              | Send a user message to the session, triggering a new turn. Session must be `idle`. Raises `-32014` (MessageTooLarge) if the message would consume >80% of remaining context. |
+| `agent/retryLastMessage` | `{ bonsaiSid: str }`                                                                      | `{ ok: bool }`      | Retry the last user message (e.g. after a `context_overflow` error). SDK may auto-compact on retry. |
 | `agent/status`    | `{ bonsaiSid: str }`                                                                            | `AgentTask`         | Get session status and metadata                                                                                                                             |
 | `agent/list`      | `{}`                                                                                         | `list[AgentTask]`   | List all agent sessions                                                                                                                                     |
 | `agent/interrupt` | `{ bonsaiSid: str }`                                                                            | `null`              | Cancel the current turn. Session stays `idle` and can accept new messages.                                                                                  |
@@ -141,7 +142,8 @@ Both sides can send either. The server can initiate requests to the client (e.g.
 | `agent/turnComplete` | `{ bonsaiSid, sessionId, result, costUsd, turns, durationMs, usage }` | Turn finished; session is `idle`, ready for next `agent/send` |
 | `agent/interrupted` | `{ bonsaiSid, sessionId }` | Current turn was cancelled via `agent/interrupt`; session is `idle`. Preceded by synthetic `agent/subagentEnd` for any subagents still open when the interrupt fired. |
 | `agent/done` | `{ bonsaiSid, sessionId, result, costUsd, turns, durationMs, usage }` | Session closed (via `agent/end` or terminal condition) |
-| `agent/error` | `{ bonsaiSid, sessionId, subtype, errors[], result, costUsd, turns, durationMs, usage }` | Session ended due to error |
+| `agent/error` | `{ bonsaiSid, sessionId, subtype, errors[], result, costUsd, turns, durationMs, usage }` | Turn error. `subtype` is `"context_overflow"` (prompt exceeded context window — recoverable, session stays idle) or `"turn_error"` (other errors). `subtype: "crash"` for fatal session errors. |
+| `agent/contextWarning` | `{ bonsaiSid, level, ratio, contextTokens, contextMax }` | Context usage warning. `level` is `"warning"` (75%) or `"critical"` (90%). Emitted after `turnComplete`/`error` events. |
 | `agent/permissionDenied` | `{ bonsaiSid, sessionId, toolName, toolInput }` | Tool blocked by permission policy |
 | `agent/statusChanged` | `{ bonsaiSid, status }` | Backend session status changed. Emitted by runner on `idle→running` and `running→idle` transitions. Frontend uses this as the authoritative status signal for non-first turns (since `agent/sessionStart` only fires once per runner). Added to `_SKIP_METRICS` — does not trigger metadata persistence. |
 
@@ -190,6 +192,7 @@ Domain exceptions raised inside handlers are mapped to JSON-RPC error responses:
 | `ValidationError` | -32003 | "Validation error" |
 | `AgentTaskNotFoundError` | -32011 | "Agent task not found" |
 | `FutureNotFoundError` | -32012 | "No pending request" |
+| `MessageTooLargeError` | -32014 | "Message too large" — data: `{message, msgTokens, remainingTokens}` |
 | `KeyError` / missing params | -32602 | "Invalid params" |
 | Any other exception | -32603 | "Internal error" |
 

@@ -112,6 +112,26 @@ async def run(
         })
         return {}
 
+    async def on_pre_compact(hook_input: Any, tool_use_id: str | None, context: Any) -> dict:
+        trigger = hook_input.get("trigger", "auto")
+        # Capture pre-compaction context size from the latest iteration
+        pre_tokens = 0
+        if iterations:
+            last = iterations[-1]
+            pre_tokens = (
+                last.get("input_tokens", 0)
+                + last.get("cache_creation_input_tokens", 0)
+                + last.get("cache_read_input_tokens", 0)
+                + last.get("output_tokens", 0)
+            )
+        await notify("agent/compact", {
+            "bonsaiSid": task.bonsai_sid,
+            "sessionId": session_id,
+            "trigger": trigger,
+            "preTokens": pre_tokens,
+        })
+        return {}
+
     def _resolve_agent_id(parent_tool_use_id: str | None) -> str | None:
         """Resolve SDK parent_tool_use_id to our agentId."""
         if parent_tool_use_id is None:
@@ -185,6 +205,7 @@ async def run(
         hooks={
             "SubagentStart": [HookMatcher(hooks=[on_subagent_start])],
             "SubagentStop": [HookMatcher(hooks=[on_subagent_stop])],
+            "PreCompact": [HookMatcher(hooks=[on_pre_compact])],
         },
         **({"env": env_overrides} if env_overrides else {}),
     )
@@ -438,11 +459,18 @@ async def run(
                         if sdk_event.is_error and not interrupted:
                             # Send error notification but DON'T terminate the session.
                             # Go back to idle so the user can send another message.
+                            error_text = sdk_event.result or ""
+                            _err_lower = error_text.lower()
+                            is_context_overflow = (
+                                "prompt is too long" in _err_lower
+                                or "prompt_too_long" in _err_lower
+                                or "context window" in _err_lower
+                            )
                             await notify("agent/error", {
                                 **_turn_event,
-                                "subtype": "turn_error",
-                                "errors": [sdk_event.result] if sdk_event.result else [],
-                                "result": sdk_event.result or "",
+                                "subtype": "context_overflow" if is_context_overflow else "turn_error",
+                                "errors": [error_text] if error_text else [],
+                                "result": error_text,
                             })
                         elif interrupted:
                             # Interrupt path — emit interrupted, not turnComplete.

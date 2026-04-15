@@ -151,16 +151,40 @@ export function wireEvents(client: RpcClient): Unsubscribe {
       const subtype = (params.subtype as string) ?? "";
       const errors = (params.errors as string[]) ?? [];
       const isCrash = subtype === "crash";
-      const detail = errors[0] || subtype || "unknown error";
+      const isContextOverflow = subtype === "context_overflow";
+      const detail = isContextOverflow
+        ? "Context window full"
+        : errors[0] || subtype || "unknown error";
       useNotificationStore.getState().addToast({
         bonsaiSid: params.bonsaiSid as string,
         eventType: "error",
-        message: isCrash ? `Session crashed: ${detail}` : `Session error: ${detail}`,
+        message: isCrash
+          ? `Session crashed: ${detail}`
+          : isContextOverflow
+            ? "Context window full — see chat for recovery options"
+            : `Session error: ${detail}`,
         persistent: isCrash,
       });
       useNotificationStore.getState().setBadge(params.bonsaiSid as string, {
         type: "error",
         pulsing: false,
+      });
+    }),
+  );
+
+  // ── Context warnings ──
+  unsubs.push(
+    client.on("agent/contextWarning", (p) => {
+      const params = p as Record<string, unknown>;
+      const level = params.level as string;
+      useNotificationStore.getState().addToast({
+        bonsaiSid: params.bonsaiSid as string,
+        eventType: "notification",
+        message:
+          level === "critical"
+            ? "Context 90% full \u2014 compaction will happen soon"
+            : "Context 75% full",
+        persistent: false,
       });
     }),
   );

@@ -112,6 +112,7 @@ class TestMethods:
             "trash/restoreSpec", "trash/restorePlan", "trash/restoreDraft", "trash/restorePatches",
             "settings/get", "settings/update", "settings/ensureFile",
             "models/list", "models/refresh",
+            "agent/retryLastMessage",
             "skills/list",
             "auth/createToken", "auth/listUsers",
             "connection/list",

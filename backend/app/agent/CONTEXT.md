@@ -380,9 +380,24 @@ def _build_context_for(self, task: AgentTask) -> str:
 
 The `prompt` field is optional. When provided, it becomes the `session_prompt` on the `AgentTask` and is placed inside the "Your Task" section of the system prompt, before the SKILL.md body. This field is also available via the `SuggestSession` tool's `prompt` parameter.
 
+## Context Budget Warnings
+
+`build_context_structured()` returns additional fields for context budget management:
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `contextMax` | `int` | Model's context window size (from `_FALLBACK` registry) |
+| `budgetRatio` | `float` | System prompt tokens / context window (0.0–1.0) |
+| `warnings` | `list[str]` | Human-readable warnings when budget exceeds thresholds |
+
+**Thresholds:**
+- `> 0.4` (40%): Warning — "System prompt uses X% of context window. Consider removing some specs."
+- `> 0.8` (80%): Critical — "Very limited room for conversation."
+
+These are surfaced in the `prepare_agent` and `update_draft` RPC responses so the frontend can display budget indicators in the draft config card.
+
 ## Known Limitations
 
-- **No context size management** — no token counting or truncation. If specs are large, the system prompt may exceed model context limits.
 - **Single plugin directory** — only one `plugin_dir` is supported. No merging from multiple plugin sources (e.g., project-local + global `~/.claude/skills/`).
 - **No dynamic context updates** — context is built once at session start. If specs or skill files change mid-session, the agent's context is stale until a new session is started.
 - **No SKILL.md validation** — assumes well-formed frontmatter. Malformed SKILL.md files may produce unexpected prompt content.

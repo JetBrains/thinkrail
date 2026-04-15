@@ -875,6 +875,18 @@
 .chat-banner-metrics { display: flex; gap: var(--space-md); color: var(--muted); font-size: var(--font-md); }
 .chat-banner-result { margin-top: var(--space-sm); color: var(--muted); }
 .chat-banner-errors { margin-top: var(--space-sm); padding-left: var(--space-lg); }
+.chat-banner-body { margin-top: var(--space-xs); color: var(--muted); font-size: var(--font-md); }
+.chat-banner-actions { display: flex; gap: var(--space-sm); margin-top: var(--space-md); }
+.chat-banner-btn {
+  padding: var(--space-xs) var(--space-md);
+  border-radius: var(--radius-sm);
+  border: 1px solid currentColor;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  font-size: var(--font-md);
+}
+.chat-banner-btn:hover { background: rgba(255, 255, 255, 0.05); }
 
 /* ── Compact Marker ── */
 .chat-compact {

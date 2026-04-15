@@ -251,6 +251,7 @@ interface SessionStore {
   // User-initiated actions
   startSession: (params: { specIds, config, name, skillId?, filePaths? }) => Promise<string>;
   sendMessage: (bonsaiSid: string, text: string) => Promise<void>;
+  retryLastMessage: (bonsaiSid: string) => Promise<void>;
   switchSession: (bonsaiSid: string) => void;
   closeSession: (bonsaiSid: string) => void;
   endSession: (bonsaiSid: string) => Promise<void>;
@@ -275,7 +276,8 @@ interface SessionStore {
 **Initial state:** `{ sessions: new Map(), activeSessionId: null, archivedSessions: [] }`
 
 **Key behaviors:**
-- `sendMessage` optimistically appends `userMessage` event and sets status to `"running"`
+- `sendMessage` optimistically appends `userMessage` event and sets status to `"running"`. Backend may reject with `-32014` (MessageTooLarge) if the message exceeds remaining context budget.
+- `retryLastMessage` calls `agent/retryLastMessage` RPC to resend the last message (used after `context_overflow` errors — SDK may auto-compact on retry)
 - `closeSession` removes from `openTabs` (no END_SIGNAL). Live sessions stay in `sessions` map as background. Terminal sessions (done/error) get archived.
 - `endSession` sends END_SIGNAL to backend, terminates the session
 - `openTab` adds a session to `openTabs` and activates it (e.g., from background indicator dropdown)
@@ -455,7 +457,8 @@ export function wireEvents(client: RpcClient): Unsubscribe
 |---|---|
 | `agent/sessionStart` | `sessionStore.onSessionStart(params)` |
 | `agent/done` | `sessionStore.onSessionDone(params)` + toast + badge |
-| `agent/error` | `sessionStore.onSessionError(params)` + toast + badge |
+| `agent/error` | `sessionStore.onSessionError(params)` + toast + badge. `subtype: "context_overflow"` is recoverable (session → idle). ErrorBanner shows Retry/Fresh Session buttons. |
+| `agent/contextWarning` | Toast notification: "Context 75% full" or "Context 90% full — compaction will happen soon" |
 | `agent/configChanged` | `sessionStore.onConfigChanged(params)` |
 | `agent/askUserQuestion` | `sessionStore.onAskQuestion(params)` + `incrementPendingInput` + persistent toast + badge |
 | `agent/confirmAction` | `sessionStore.onConfirmAction(params)` + `incrementPendingInput` + persistent toast + badge |

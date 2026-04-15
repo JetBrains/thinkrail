@@ -323,6 +323,18 @@ All models with multi-word fields use a `camelCase` alias generator (`to_camel` 
 | `AgentConfig` | model, max_turns/`maxTurns`, permission_mode/`permissionMode`, stream_text/`streamText`, betas, effort | Run configuration. `effort` is `str \| None` — null for auto, or `"low"`/`"medium"`/`"high"`/`"max"`. |
 | `AgentEvent` | bonsai_sid/`bonsaiSid`, session_id/`sessionId`, event_type/`eventType`, payload | Serializable event to send as notification |
 | `AgentResult` | bonsai_sid/`bonsaiSid`, session_id/`sessionId`, result, cost_usd/`costUsd`, turns, duration_ms/`durationMs`, usage | Turn result (sent with `turnComplete`) or final session result (sent with `done`) |
+| `MessageTooLargeError` | message, msg_tokens, remaining_tokens | Exception raised by `send_message()` when a user message would consume >80% of remaining context. Mapped to JSON-RPC error code `-32014`. |
+
+#### Tracker State
+
+The `Tracker` class manages session lifecycle and ancillary per-session state:
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `_last_messages` | `dict[str, str]` | Last user message per session (for retry after `context_overflow`) |
+| `_context_tokens` | `dict[str, int]` | Latest context token count per session (updated from `agent/costEstimate` events) |
+
+Both are cleaned up by `remove_task()`.
 
 #### Interactive Request/Response Models
 
@@ -368,10 +380,10 @@ These map 1-to-1 to the `agent/*` notification methods in the protocol:
 | `subagent_start` | `SubagentStart` hook | `agent/subagentStart` | Implemented. Includes `taskToolUseId` (the Task tool_use_id that spawned it) when available from the hook. Runner builds `tool_use_id → agent_id` mapping to resolve `parent_tool_use_id` on subsequent SDK messages into `agentId` on outgoing notifications. |
 | `subagent_end` | `SubagentStop` hook — also emitted synthetically for orphaned subagents before `agent/interrupted` | `agent/subagentEnd` | Implemented |
 | `notification` | `Notification` hook | `agent/notification` | TODO |
-| `compact` | `SDKCompactBoundaryMessage` | `agent/compact` | TODO |
+| `compact` | `PreCompact` hook | `agent/compact` | Implemented — `PreCompact` hook captures `trigger` and `preTokens` (context size before compaction). Frontend renders via `CompactMarker.tsx`. |
 | `progress` | Internal milestones | `agent/progress` | TODO |
 | `done` | Session closed (via `agent/end` or session-level termination) | `agent/done` | Implemented |
-| `error` | `SDKResultMessage` error subtypes / unhandled exception | `agent/error` | Implemented |
+| `error` | `SDKResultMessage` error subtypes / unhandled exception | `agent/error` | Implemented — classifies "Prompt is too long" errors as `subtype: "context_overflow"` (recoverable, session stays idle). Other errors use `subtype: "turn_error"`. |
 | `permission_denied` | `SDKResultMessage.permission_denials` | `agent/permissionDenied` | TODO |
 | `status_changed` | `tracker.set_status()` in runner — emitted on `idle→running` and `running→idle` transitions | `agent/statusChanged` | Implemented. Payload: `{bonsaiSid, status}`. Frontend uses this as the authoritative status signal for non-first turns (since `agent/sessionStart` only fires once per runner). |
 
@@ -515,6 +527,28 @@ await runner.run(
     plugin_dir=self._config.plugin_dir,
 )
 ```
+
+## Context Management
+
+The agent system has a three-layer approach to context window management: Prevention, Detection, Recovery.
+
+### Prevention
+
+- **System prompt budget warnings** — `build_context_structured()` computes `budgetRatio` (system prompt tokens / context window). Warnings emitted at 40% and 80% thresholds. Surfaced in `prepare_agent` and `update_draft` RPC responses.
+- **Message size estimation** — `send_message()` estimates incoming message tokens (heuristic: `len(text) / 6`). If the message would consume >80% of remaining context, raises `MessageTooLargeError` (RPC error code `-32014`).
+- **Context max fallback** — `_get_context_max()` uses `_FALLBACK` from `model_registry.py` when the live registry is unavailable, instead of defaulting to 200K for all models.
+
+### Detection
+
+- **SDK auto-compaction** — `PreCompact` hook wired in `runner.py`. Emits `agent/compact` with `{trigger, preTokens}`. Frontend renders via `CompactMarker.tsx`.
+- **Context usage warnings** — `_persisting_notify` emits `agent/contextWarning` at 75% (`"warning"`) and 90% (`"critical"`) context usage after `turnComplete`/`error` events.
+- **Error classification** — `ResultMessage.is_error` with "Prompt is too long" or "prompt_too_long" in the error text → `subtype: "context_overflow"` (recoverable). All other errors → `subtype: "turn_error"`.
+
+### Recovery
+
+- **Retry** — `agent/retryLastMessage` RPC resends the last user message (stored in `tracker._last_messages`). SDK may auto-compact on retry.
+- **Fresh session** — frontend offers "Start fresh session" via existing `continueSession` flow.
+- **ErrorBanner** — enhanced for `context_overflow` subtype: shows "Context window full" with Retry/Fresh buttons.
 
 ## TODO
 

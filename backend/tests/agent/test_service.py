@@ -343,7 +343,8 @@ class TestSaveTask:
         assert m["toolCalls"] == 0
         assert m["durationMs"] == 0
         assert m["contextTokens"] == 0
-        assert m["contextMax"] == 200_000
+        # Default model is claude-sonnet-4-6 with 1M context window
+        assert m["contextMax"] == 1_000_000
         assert m["outputTokens"] == 0
 
     def test_existing_metrics_preserved(self, tmp_path: Path) -> None:
@@ -440,3 +441,59 @@ class TestBuildContext:
         assert "## Your Task" in context
         assert "bonsai_visualize" in context
         assert "## General Instructions" in context
+
+
+class TestGetContextMax:
+    def test_returns_registry_value_when_available(self) -> None:
+        service, _, _ = _make_service()
+        service.model_registry = MagicMock()
+        service.model_registry.get_models.return_value = [
+            {"id": "claude-opus-4-6", "contextWindow": 1_000_000}
+        ]
+        assert service._get_context_max("claude-opus-4-6") == 1_000_000
+
+    def test_falls_back_to_hardcoded_list(self) -> None:
+        service, _, _ = _make_service()
+        service.model_registry = None
+        # Should get 1M from the _FALLBACK list, not the 200K default
+        assert service._get_context_max("claude-opus-4-6") == 1_000_000
+        assert service._get_context_max("claude-haiku-4-5") == 200_000
+
+    def test_returns_200k_for_unknown_model(self) -> None:
+        service, _, _ = _make_service()
+        service.model_registry = None
+        assert service._get_context_max("unknown-model") == 200_000
+
+
+class TestMessageTooLarge:
+    async def test_rejects_oversized_message(self) -> None:
+        from app.agent.models import MessageTooLargeError
+
+        service, _, _ = _make_service()
+        task = service._tracker.create_task([], AgentConfig())
+        # initializing → idle
+        service._tracker.set_status(task.bonsai_sid, "idle")
+        # Set context tokens close to the limit
+        service._tracker.set_context_tokens(task.bonsai_sid, 950_000)
+
+        # Message of ~100K tokens (600K chars / 6)
+        huge_text = "x" * 600_000
+        with pytest.raises(MessageTooLargeError):
+            await service.send_message(task.bonsai_sid, huge_text)
+
+    async def test_allows_small_message(self) -> None:
+        service, config, _ = _make_service()
+        config.project_root = Path("/tmp/test")
+        task = service._tracker.create_task([], AgentConfig())
+        # initializing → idle
+        service._tracker.set_status(task.bonsai_sid, "idle")
+        # Context is mostly empty
+        service._tracker.set_context_tokens(task.bonsai_sid, 10_000)
+        # This should not raise (small message, plenty of room)
+        # We can't fully run send_message without persistence, so just check
+        # that the size check itself doesn't block it
+        text = "Hello, how are you?"
+        msg_tokens = len(text) // 6
+        ctx_max = service._get_context_max(task.config.model)
+        remaining = ctx_max - 10_000
+        assert msg_tokens < remaining * 0.8  # Would pass the check

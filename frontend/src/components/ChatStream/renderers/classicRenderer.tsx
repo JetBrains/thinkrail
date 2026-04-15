@@ -389,11 +389,12 @@ export const classicRenderers: ViewRenderers = {
     />
   ),
 
-  error: (ev, _i, k) => (
+  error: (ev, _i, k, ctx) => (
     <ErrorBanner
       key={k}
       subtype={(ev.payload.subtype as string) ?? undefined}
       errors={(ev.payload.errors as string[]) ?? undefined}
+      bonsaiSid={ctx.session?.bonsaiSid}
     />
   ),
 
