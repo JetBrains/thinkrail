@@ -30,7 +30,10 @@ hiddenimports = [
     # httpx is needed by mcp (transitive dep of claude-agent-sdk)
     *collect_submodules('httpx'),
     # mcp is used by claude-agent-sdk for tool registration
-    *collect_submodules('mcp'),
+    # (avoid collect_submodules('mcp') — mcp.cli requires typer which is optional)
+    *collect_submodules('mcp.types'),
+    *collect_submodules('mcp.server'),
+    *collect_submodules('mcp.shared'),
     # anyio is used by claude-agent-sdk for subprocess management
     *collect_submodules('anyio'),
     # watchfiles native component
