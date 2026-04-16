@@ -31,14 +31,3 @@ Press `Ctrl+C` to stop. Cleanup is automatic.
 | `BACKEND_HOST` | `0.0.0.0` | Backend bind address |
 | `BACKEND_PORT` | `8000` | Backend port |
 | `FRONTEND_PORT` | `3000` | Frontend port |
-
-## Authentication & First-Time Setup
-
-### Development (from source)
-
-Create the first admin user via CLI:
-
-```bash
-cd backend && uv run python -m app.cli create-user --id bonsai --name "Bonsai" --admin
-# → Token: bns_a8f3k2m9...
-```
