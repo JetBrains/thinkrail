@@ -1,17 +1,8 @@
 import { create } from "zustand";
+import { getServerInfo } from "@/services/serverInfo.ts";
+import type { ServerInfo } from "@/services/serverInfo.ts";
 
-export interface TailscaleInfo {
-  ip: string | null;
-  hostname: string | null;
-  active: boolean;
-}
-
-export interface ServerInfo {
-  hostname: string;
-  lanIps: string[];
-  tailscale: TailscaleInfo;
-  version: string;
-}
+export type { ServerInfo };
 
 interface ServerInfoStore {
   info: ServerInfo | null;
@@ -23,9 +14,7 @@ export const useServerInfoStore = create<ServerInfoStore>((set) => ({
 
   fetchInfo: async () => {
     try {
-      const res = await fetch("/api/server-info");
-      if (!res.ok) return;
-      const data: ServerInfo = await res.json();
+      const data = await getServerInfo();
       set({ info: data });
     } catch {
       // Server info is best-effort

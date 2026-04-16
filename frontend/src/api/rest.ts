@@ -29,3 +29,5 @@ export type DirList          = components["schemas"]["DirListResponse"];
 export type FolderPick       = components["schemas"]["FolderPickResponse"];
 export type SetupStatus      = components["schemas"]["SetupStatusResponse"];
 export type SetupResult      = components["schemas"]["SetupResponse"];
+export type ServerInfo       = components["schemas"]["ServerInfoResponse"];
+export type TailscaleInfo    = components["schemas"]["TailscaleInfoResponse"];
