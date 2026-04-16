@@ -52,6 +52,10 @@ jobs:
         with:
           python-version: "3.11"
 
+      - uses: astral-sh/setup-uv@v4
+        with:
+          enable-cache: false
+
       - name: Build frontend
         run: cd frontend && npm ci && npm run build
 
