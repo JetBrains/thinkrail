@@ -1,4 +1,5 @@
 import { useState, lazy, Suspense } from "react";
+import { getFileRawUrl } from "@/services/files.ts";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import type { PromptSection } from "@/types/session.ts";
@@ -48,7 +49,7 @@ function FilePreviewContent({ name, preview, path }: { name: string; preview: st
     return (
       <div className="prompt-file-preview prompt-file-preview--image">
         <img
-          src={`/api/file/raw?project=${encodeURIComponent(project)}&path=${encodeURIComponent(path)}`}
+          src={getFileRawUrl(project, path)}
           alt={name}
           className="prompt-file-image"
         />

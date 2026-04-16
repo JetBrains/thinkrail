@@ -1,5 +1,5 @@
-import { useCallback, useState } from "react";
 import { useServerInfoStore } from "@/store/serverInfoStore.ts";
+import { Modal, CopyButton } from "@/components/ui/index.ts";
 
 interface ServerInfoDialogProps {
   open: boolean;
@@ -8,22 +8,11 @@ interface ServerInfoDialogProps {
 
 export function ServerInfoDialog({ open, onClose }: ServerInfoDialogProps) {
   const info = useServerInfoStore((s) => s.info);
-  const [copied, setCopied] = useState<string | null>(null);
-
-  const copyToClipboard = useCallback((text: string) => {
-    navigator.clipboard.writeText(text).then(() => {
-      setCopied(text);
-      setTimeout(() => setCopied(null), 2000);
-    });
-  }, []);
-
-  if (!open) return null;
 
   return (
-    <div className="token-dialog-overlay" onClick={onClose}>
+    <Modal open={open} onClose={onClose}>
       <div
         className="token-dialog"
-        onClick={(e) => e.stopPropagation()}
         onKeyDown={(e) => { if (e.key === "Escape") onClose(); }}
       >
         <h3>Server Info</h3>
@@ -43,12 +32,7 @@ export function ServerInfoDialog({ open, onClose }: ServerInfoDialogProps) {
                 {info.lanIps.map((ip) => (
                   <div key={ip} className="server-info-row">
                     <code className="server-info-value">{ip}:3000</code>
-                    <button
-                      className="server-info-copy-btn"
-                      onClick={() => copyToClipboard(`${ip}:3000`)}
-                    >
-                      {copied === `${ip}:3000` ? "Copied" : "Copy"}
-                    </button>
+                    <CopyButton className="server-info-copy-btn" text={`${ip}:3000`} />
                   </div>
                 ))}
               </div>
@@ -60,23 +44,13 @@ export function ServerInfoDialog({ open, onClose }: ServerInfoDialogProps) {
                 {info.tailscale.hostname && (
                   <div className="server-info-row">
                     <code className="server-info-value">{info.tailscale.hostname}</code>
-                    <button
-                      className="server-info-copy-btn"
-                      onClick={() => copyToClipboard(info.tailscale.hostname!)}
-                    >
-                      {copied === info.tailscale.hostname ? "Copied" : "Copy"}
-                    </button>
+                    <CopyButton className="server-info-copy-btn" text={info.tailscale.hostname} />
                   </div>
                 )}
                 {info.tailscale.ip && (
                   <div className="server-info-row">
                     <code className="server-info-value">{info.tailscale.ip}:3000</code>
-                    <button
-                      className="server-info-copy-btn"
-                      onClick={() => copyToClipboard(`${info.tailscale.ip}:3000`)}
-                    >
-                      {copied === `${info.tailscale.ip}:3000` ? "Copied" : "Copy"}
-                    </button>
+                    <CopyButton className="server-info-copy-btn" text={`${info.tailscale.ip}:3000`} />
                   </div>
                 )}
                 <p className="server-info-hint">
@@ -99,6 +73,6 @@ export function ServerInfoDialog({ open, onClose }: ServerInfoDialogProps) {
           <button className="token-dialog-btn" onClick={onClose}>Close</button>
         </div>
       </div>
-    </div>
+    </Modal>
   );
 }

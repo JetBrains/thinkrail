@@ -1,6 +1,7 @@
 import { useEffect, useMemo } from "react";
 import { useTrashStore } from "@/store/trashStore.ts";
 import { useSettingsStore } from "@/store/settingsStore.ts";
+import { Modal } from "@/components/ui/index.ts";
 import "./TrashModal.css";
 
 const TYPE_LABELS: Record<string, string> = {
@@ -103,11 +104,9 @@ export function TrashModal() {
     return () => document.removeEventListener("keydown", onKey);
   }, [isOpen, close]);
 
-  if (!isOpen) return null;
-
   return (
-    <div className="trash-backdrop" onClick={close}>
-      <div className="trash-container" onClick={(e) => e.stopPropagation()}>
+    <Modal open={isOpen} onClose={close} align="top">
+      <div className="trash-container">
         {/* Header */}
         <div className="trash-header">
           <div className="trash-header-left">
@@ -203,6 +202,6 @@ export function TrashModal() {
           <span style={{ marginLeft: "auto" }}>Esc close</span>
         </div>
       </div>
-    </div>
+    </Modal>
   );
 }

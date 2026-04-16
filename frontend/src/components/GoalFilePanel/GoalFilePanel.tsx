@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { readFile } from "@/services/files.ts";
 import { useUiStore } from "@/store/uiStore";
 import { useSessionStore } from "@/store/sessionStore";
 import { MarkdownPreview } from "@/components/FileViewer/MarkdownPreview";
@@ -16,12 +17,8 @@ export function GoalFilePanel() {
   const fetchFile = useCallback(async () => {
     if (!projectPath) return;
     try {
-      const res = await fetch(
-        `/api/file/read?project=${encodeURIComponent(projectPath)}&path=${encodeURIComponent(GOAL_FILE)}`,
-      );
-      if (!res.ok) return;
-      const data = await res.json();
-      if (data.content != null) setContent(data.content);
+      const data = await readFile(projectPath, GOAL_FILE);
+      if (data?.content != null) setContent(data.content);
     } catch {
       // file doesn't exist yet — keep showing placeholder
     }

@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { userRestApi, type RecentProject } from "@/api/methods/user.ts";
+import { getRecentProjects, type RecentProject } from "@/services/user.ts";
+import { validateProject, initProject } from "@/services/project.ts";
+import { listDirs, makeDirectory, browseFolder } from "@/services/fs.ts";
 import { useTokenStore } from "@/store/tokenStore.ts";
 import "./ProjectPicker.css";
 
@@ -25,12 +27,8 @@ export function ProjectPicker({ onSelect, onClose }: ProjectPickerProps) {
   useEffect(() => {
     const token = useTokenStore.getState().token;
     if (!token) return;
-    userRestApi.getRecentProjects(token).then((data) => {
+    getRecentProjects(token).then((data) => {
       setRecents(data);
-      // Auto-open if only one recent and this is the initial picker (no close button)
-      if (!onClose && data.length === 1) {
-        handleOpen(data[0].path);
-      }
     }).catch(() => {
       // Silently fall back to empty list
     });
@@ -49,11 +47,8 @@ export function ProjectPicker({ onSelect, onClose }: ProjectPickerProps) {
       const base = path.slice(0, lastSlash + 1);
       const prefix = path.slice(lastSlash + 1);
       try {
-        const res = await fetch(
-          `/api/fs/list-dirs?base=${encodeURIComponent(base)}&prefix=${encodeURIComponent(prefix)}`,
-        );
-        const data = await res.json();
-        const dirs: string[] = data.dirs ?? [];
+        const data = await listDirs(base, prefix);
+        const dirs = data.dirs ?? [];
         setSuggestions(dirs);
         setShowSuggestions(dirs.length > 0);
         setHighlightIdx(-1);
@@ -85,10 +80,7 @@ export function ProjectPicker({ onSelect, onClose }: ProjectPickerProps) {
       setDirNotFound(false);
       setShowSuggestions(false);
       try {
-        const validateRes = await fetch(
-          `/api/project/validate?path=${encodeURIComponent(target)}`,
-        );
-        const validateData = await validateRes.json();
+        const validateData = await validateProject(target);
         if (!validateData.exists) {
           setError(`Directory does not exist: ${target}`);
           setDirNotFound(true);
@@ -99,20 +91,10 @@ export function ProjectPicker({ onSelect, onClose }: ProjectPickerProps) {
           return;
         }
         // Not yet initialized — auto-init
-        const initRes = await fetch(`/api/project/init`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ path: target }),
-        });
-        if (!initRes.ok) {
-          const body = await initRes.json().catch(() => ({}));
-          setError(body.detail ?? "Failed to initialize project");
-          return;
-        }
-        const initData = await initRes.json();
+        const initData = await initProject(target);
         onSelect(initData.path, true);
       } catch (e) {
-        setError(`Cannot reach backend: ${(e as Error).message}`);
+        setError((e as Error).message ?? "Cannot reach backend");
       } finally {
         setLoading(false);
       }
@@ -188,9 +170,8 @@ export function ProjectPicker({ onSelect, onClose }: ProjectPickerProps) {
               title="Browse folders"
               onClick={async () => {
                 try {
-                  const res = await fetch(`/api/fs/browse`);
-                  const data = await res.json();
-                  if (data.path) {
+                  const data = await browseFolder();
+                  if (data?.path) {
                     setPath(data.path);
                     setError(null);
                     inputRef.current?.focus();
@@ -232,23 +213,18 @@ export function ProjectPicker({ onSelect, onClose }: ProjectPickerProps) {
                   const target = path.trim();
                   setLoading(true);
                   try {
-                    const res = await fetch("/api/fs/mkdir", {
-                      method: "POST",
-                      headers: { "Content-Type": "application/json" },
-                      body: JSON.stringify({ path: target }),
-                    });
-                    if (!res.ok) {
-                      const body = await res.json().catch(() => ({}));
-                      const detail: string = body.detail ?? "Failed to create directory";
+                    try {
+                      await makeDirectory(target);
+                      setError(null);
+                      setDirNotFound(false);
+                      handleOpen(target);
+                    } catch (mkErr) {
+                      const detail = (mkErr as Error).message ?? "Failed to create directory";
                       const msg = detail.toLowerCase().includes("permission denied")
                         ? `Permission denied: cannot create "${target}". Check folder permissions or choose a different location.`
                         : detail;
                       setError(msg);
                       setDirNotFound(false);
-                    } else {
-                      setError(null);
-                      setDirNotFound(false);
-                      handleOpen(target);
                     }
                   } catch (e) {
                     setError(`Cannot create directory: ${(e as Error).message}`);

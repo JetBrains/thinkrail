@@ -1,4 +1,5 @@
 import { useState, useCallback, useRef, useEffect } from "react";
+import { browseFiles } from "@/services/files.ts";
 import { useSpecStore } from "@/store/specStore.ts";
 import { useSettingsStore } from "@/store/settingsStore.ts";
 import { useSessionStore } from "@/store/sessionStore.ts";
@@ -419,9 +420,8 @@ export function DraftConfigCard({ bonsaiSid, readOnly, onVisibilityChange }: Dra
             className="draft-config-action draft-config-action--dashed"
             onClick={async () => {
               try {
-                const res = await fetch("/api/file/browse", { method: "POST" });
-                const data = await res.json();
-                const paths: string[] = data.paths ?? [];
+                const data = await browseFiles();
+                const paths = data.paths ?? [];
                 if (paths.length > 0) {
                   const merged = [...session.filePaths, ...paths.filter((p) => !session.filePaths.includes(p))];
                   debouncedUpdate({ filePaths: merged });

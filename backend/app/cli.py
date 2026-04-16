@@ -64,6 +64,19 @@ async def _list_users() -> None:
         await store.close()
 
 
+def _export_schema(output: str | None) -> None:
+    import json
+    from app.main import create_app
+
+    schema = json.dumps(create_app().openapi(), indent=2)
+    if output:
+        import pathlib
+        pathlib.Path(output).write_text(schema)
+        print(f"Schema written to {output}")
+    else:
+        print(schema)
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(prog="bonsai-cli", description="Bonsai server admin")
     sub = parser.add_subparsers(dest="command")
@@ -81,6 +94,10 @@ def main() -> None:
     # list-users
     sub.add_parser("list-users", help="List all server users")
 
+    # export-schema
+    es = sub.add_parser("export-schema", help="Export OpenAPI schema as JSON")
+    es.add_argument("-o", "--output", help="Write to file instead of stdout")
+
     args = parser.parse_args()
 
     if args.command == "create-user":
@@ -89,6 +106,8 @@ def main() -> None:
         asyncio.run(_set_admin(args.id))
     elif args.command == "list-users":
         asyncio.run(_list_users())
+    elif args.command == "export-schema":
+        _export_schema(args.output)
     else:
         parser.print_help()
         sys.exit(1)

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { getProjectFiles } from "@/services/project.ts";
 import { useUiStore } from "@/store/uiStore.ts";
 import { useFileStore } from "@/store/fileStore.ts";
 import "./FileTree.css";
@@ -123,10 +124,7 @@ export function FileTree() {
     if (!projectPath) return;
     setLoading(true);
     try {
-      let url = `/api/project/files?path=${encodeURIComponent(projectPath)}`;
-      if (showHidden) url += "&show_hidden=true";
-      const res = await fetch(url);
-      const data = await res.json();
+      const data = await getProjectFiles(projectPath, showHidden);
       const fetched: FileEntry[] = data.entries ?? [];
       setEntries(fetched);
       const persisted = readPersistedCollapsed(projectPath);

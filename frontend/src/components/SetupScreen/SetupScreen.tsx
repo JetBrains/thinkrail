@@ -1,5 +1,7 @@
 import { useCallback, useState } from "react";
+import { createFirstAdmin } from "@/services/setup.ts";
 import { useTokenStore } from "@/store/tokenStore.ts";
+import { CopyButton } from "@/components/ui/index.ts";
 import "./SetupScreen.css";
 
 interface SetupScreenProps {
@@ -12,7 +14,6 @@ export function SetupScreen({ onSuccess }: SetupScreenProps) {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [createdToken, setCreatedToken] = useState<string | null>(null);
-  const [copied, setCopied] = useState(false);
 
   const handleSubmit = useCallback(
     async (e?: React.FormEvent) => {
@@ -24,36 +25,18 @@ export function SetupScreen({ onSuccess }: SetupScreenProps) {
       setError(null);
       setLoading(true);
       try {
-        const res = await fetch("/api/setup", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ userId: uid, name: displayName }),
-        });
-        if (!res.ok) {
-          const data = await res.json().catch(() => ({}));
-          setError(data.error ?? "Setup failed");
-          return;
-        }
-        const data = await res.json();
-        setCreatedToken(data.token);
-        useTokenStore.getState().setToken(data.token);
+        const result = await createFirstAdmin(uid, displayName);
+        setCreatedToken(result.token);
+        useTokenStore.getState().setToken(result.token);
         useTokenStore.getState().setIsAdmin(true);
-      } catch {
-        setError("Could not reach the server");
+      } catch (e) {
+        setError((e as Error).message ?? "Could not reach the server");
       } finally {
         setLoading(false);
       }
     },
     [userId, name]
   );
-
-  const handleCopy = useCallback(() => {
-    if (createdToken) {
-      navigator.clipboard.writeText(createdToken);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    }
-  }, [createdToken]);
 
   if (createdToken) {
     return (
@@ -68,13 +51,7 @@ export function SetupScreen({ onSuccess }: SetupScreenProps) {
             </label>
             <div className="setup-token-display">
               <code className="setup-token-value">{createdToken}</code>
-              <button
-                className="setup-copy-btn"
-                onClick={handleCopy}
-                type="button"
-              >
-                {copied ? "Copied" : "Copy"}
-              </button>
+              <CopyButton className="setup-copy-btn" text={createdToken} />
             </div>
           </div>
 

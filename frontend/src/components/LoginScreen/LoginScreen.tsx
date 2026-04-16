@@ -1,5 +1,5 @@
 import { useCallback, useRef, useState } from "react";
-import { userRestApi } from "@/api/methods/user.ts";
+import { getUserProfile } from "@/services/user.ts";
 import { useTokenStore } from "@/store/tokenStore.ts";
 import "./LoginScreen.css";
 
@@ -22,7 +22,7 @@ export function LoginScreen({ onSuccess }: LoginScreenProps) {
       setError(null);
       setLoading(true);
       try {
-        const profile = await userRestApi.getProfile(token);
+        const profile = await getUserProfile(token);
         if (profile) {
           useTokenStore.getState().setToken(token);
           onSuccess();

@@ -17,6 +17,19 @@ from app.core.server_store import ServerStore
 from app.rpc.server import register_routes
 
 
+def _export_openapi_schema(app: FastAPI) -> None:
+    """Write openapi.json next to the frontend sources for code generation."""
+    import json
+    # Only write in development (not when bundled as a frozen executable)
+    if getattr(sys, 'frozen', False):
+        return
+    schema_path = Path(__file__).resolve().parents[2] / "frontend" / "openapi.json"
+    try:
+        schema_path.write_text(json.dumps(app.openapi(), indent=2))
+    except Exception:
+        logging.getLogger(__name__).debug("Could not write openapi.json", exc_info=True)
+
+
 def _find_frontend_dist() -> Path | None:
     if getattr(sys, 'frozen', False):
         dist = Path(getattr(sys, '_MEIPASS', '')) / "frontend_dist"
@@ -69,6 +82,8 @@ def create_app() -> FastAPI:
 
     setup_api(app, server_store)
     register_routes(app, server_store=server_store)
+
+    _export_openapi_schema(app)
 
     frontend_dist = _find_frontend_dist()
     if frontend_dist:
