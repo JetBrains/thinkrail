@@ -27,3 +27,13 @@ def test_extra_fields_preserved():
     s = ProjectSettings.model_validate({"font_size": 14, "custom_key": "hello"})
     assert s.font_size == 14
     assert s.model_dump()["custom_key"] == "hello"
+
+
+def test_voice_revise_mode_default():
+    assert ProjectSettings().voice_revise_mode == "auto"
+
+
+def test_voice_revise_mode_roundtrip():
+    for mode in ("auto", "subsession", "off"):
+        s = ProjectSettings(voice_revise_mode=mode)
+        assert ProjectSettings.model_validate(s.model_dump()).voice_revise_mode == mode

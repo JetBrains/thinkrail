@@ -92,6 +92,7 @@ class TestMethods:
             "agent/send", "agent/status", "agent/list",
             "agent/interrupt", "agent/end", "agent/respond", "agent/updateConfig",
             "agent/transcribe",
+            "agent/reviseTranscript",
             "session/list", "session/get", "session/continue", "session/restart", "session/delete", "session/restore",
             "session/subscribe", "session/unsubscribe",
             "subsession/create", "subsession/requestSummary",

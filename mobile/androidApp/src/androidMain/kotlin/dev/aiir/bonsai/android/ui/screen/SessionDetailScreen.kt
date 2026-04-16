@@ -9,23 +9,38 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Mic
+import androidx.compose.material.icons.filled.MicNone
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.core.content.ContextCompat
+import android.Manifest
+import android.content.pm.PackageManager
 import dev.aiir.bonsai.android.ui.component.*
 import dev.aiir.bonsai.android.ui.component.vis.*
 import dev.aiir.bonsai.android.ui.theme.*
 import dev.aiir.bonsai.component.session.*
 import dev.aiir.bonsai.data.model.*
+import dev.aiir.bonsai.voice.AndroidAudioRecorder
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -33,6 +48,55 @@ fun SessionDetailScreen(component: SessionDetailComponent) {
     val state by component.state.collectAsState()
     var messageInput by remember { mutableStateOf("") }
     val listState = rememberLazyListState()
+
+    // ── Voice input wiring (Android-only; uses MediaRecorder + backend pipeline) ──
+    val context = LocalContext.current
+    val recorder = remember { AndroidAudioRecorder(context) }
+    val voiceScope = remember { CoroutineScope(Dispatchers.Main + SupervisorJob()) }
+    var isRecording by remember { mutableStateOf(false) }
+    var pendingStart by remember { mutableStateOf(false) }
+
+    val micLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+        if (granted && pendingStart) {
+            pendingStart = false
+            voiceScope.launch {
+                runCatching { recorder.start() }.onSuccess { isRecording = true }
+            }
+        } else {
+            pendingStart = false
+        }
+    }
+
+    fun onMicClick() {
+        if (isRecording) {
+            isRecording = false
+            voiceScope.launch {
+                val audio = runCatching { recorder.stop() }.getOrNull()
+                if (audio != null && audio.base64.isNotEmpty()) {
+                    val result = component.onAudioRecorded(audio.base64, audio.mimeType)
+                    if (result.isNotBlank()) messageInput = result
+                }
+            }
+        } else {
+            val granted = ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) ==
+                PackageManager.PERMISSION_GRANTED
+            if (granted) {
+                voiceScope.launch {
+                    runCatching { recorder.start() }.onSuccess { isRecording = true }
+                }
+            } else {
+                pendingStart = true
+                micLauncher.launch(Manifest.permission.RECORD_AUDIO)
+            }
+        }
+    }
+
+    DisposableEffect(Unit) {
+        onDispose {
+            runCatching { recorder.cancel() }
+            voiceScope.cancel()
+        }
+    }
 
     // Auto-scroll to bottom on new items
     LaunchedEffect(state.chatItems.size) {
@@ -139,26 +203,94 @@ fun SessionDetailScreen(component: SessionDetailComponent) {
                         Text("Continue Session")
                     }
                 } else {
+                    Column(modifier = Modifier.fillMaxWidth()) {
+                        state.voiceError?.let { err ->
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 8.dp, vertical = 4.dp)
+                                    .background(MaterialTheme.colorScheme.errorContainer, RoundedCornerShape(8.dp))
+                                    .padding(8.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                Text(
+                                    text = err,
+                                    color = MaterialTheme.colorScheme.onErrorContainer,
+                                    fontSize = 12.sp,
+                                    modifier = Modifier.weight(1f),
+                                )
+                                if (state.rawTranscript != null) {
+                                    TextButton(onClick = {
+                                        voiceScope.launch {
+                                            val retried = component.retryRevise()
+                                            if (!retried.isNullOrBlank()) messageInput = retried
+                                        }
+                                    }) {
+                                        Icon(Icons.Default.Refresh, contentDescription = "Retry", modifier = Modifier.size(16.dp))
+                                        Spacer(Modifier.width(4.dp))
+                                        Text("Retry", fontSize = 12.sp)
+                                    }
+                                }
+                                IconButton(onClick = { component.dismissVoiceError() }, modifier = Modifier.size(28.dp)) {
+                                    Icon(Icons.Default.Close, contentDescription = "Dismiss", modifier = Modifier.size(16.dp))
+                                }
+                            }
+                        }
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
                             .padding(8.dp),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
+                        val voiceBusy = state.isTranscribing || state.isRevising
                         OutlinedTextField(
                             value = messageInput,
                             onValueChange = { messageInput = it },
                             placeholder = {
                                 Text(
-                                    if (state.isWaiting) "Respond above first..." else "Message...",
+                                    when {
+                                        state.isRevising -> "Revising..."
+                                        state.isTranscribing -> "Transcribing..."
+                                        isRecording -> "Recording..."
+                                        state.isWaiting -> "Respond above first..."
+                                        else -> "Message..."
+                                    },
                                     fontSize = 13.sp,
                                 )
                             },
-                            enabled = state.canSendMessage,
+                            enabled = state.canSendMessage && !voiceBusy,
                             modifier = Modifier.weight(1f),
                             shape = RoundedCornerShape(20.dp),
                             maxLines = 3,
                         )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        IconButton(
+                            onClick = { onMicClick() },
+                            enabled = state.canSendMessage && !voiceBusy,
+                            modifier = Modifier
+                                .size(40.dp)
+                                .background(
+                                    when {
+                                        isRecording -> MaterialTheme.colorScheme.errorContainer
+                                        voiceBusy -> MaterialTheme.colorScheme.surfaceVariant
+                                        else -> MaterialTheme.colorScheme.surfaceVariant
+                                    },
+                                    CircleShape,
+                                ),
+                        ) {
+                            if (voiceBusy) {
+                                CircularProgressIndicator(
+                                    strokeWidth = 2.dp,
+                                    modifier = Modifier.size(18.dp),
+                                )
+                            } else {
+                                Icon(
+                                    imageVector = if (isRecording) Icons.Default.Mic else Icons.Default.MicNone,
+                                    contentDescription = if (isRecording) "Stop recording" else "Start voice input",
+                                    tint = if (isRecording) StatusError else MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                            }
+                        }
                         Spacer(modifier = Modifier.width(8.dp))
                         if (state.isRunning) {
                             IconButton(
@@ -195,6 +327,7 @@ fun SessionDetailScreen(component: SessionDetailComponent) {
                             }
                         }
                     }
+                    }  // end Column (voice banner + input row)
                 }
             }
         },

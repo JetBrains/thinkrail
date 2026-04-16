@@ -22,10 +22,12 @@ export interface UseVoiceInputReturn {
   mode: VoiceMode;
   isRecording: boolean;
   isTranscribing: boolean;
+  isRevising: boolean;
   interimText: string;
   error: string | null;
   startRecording: () => void;
   stopRecording: () => Promise<string>;
+  reviseTranscript: (text: string) => Promise<string>;
 }
 
 export function useVoiceInput(): UseVoiceInputReturn {
@@ -33,6 +35,7 @@ export function useVoiceInput(): UseVoiceInputReturn {
   const [mode] = useState<VoiceMode>(detectMode);
   const [isRecording, setIsRecording] = useState(false);
   const [isTranscribing, setIsTranscribing] = useState(false);
+  const [isRevising, setIsRevising] = useState(false);
   const [interimText, setInterimText] = useState("");
   const [error, setError] = useState<string | null>(null);
 
@@ -250,14 +253,26 @@ export function useVoiceInput(): UseVoiceInputReturn {
     return Promise.resolve("");
   }, [mode, stopSpeechApi, stopMediaRecorder]);
 
+  const reviseTranscript = useCallback(async (text: string): Promise<string> => {
+    setIsRevising(true);
+    try {
+      const result = await client.request<{ text: string }>("agent/reviseTranscript", { text });
+      return result.text || text;
+    } finally {
+      setIsRevising(false);
+    }
+  }, [client]);
+
   return {
     isSupported: mode !== "unsupported",
     mode,
     isRecording,
     isTranscribing,
+    isRevising,
     interimText,
     error,
     startRecording,
     stopRecording,
+    reviseTranscript,
   };
 }

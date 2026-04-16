@@ -116,6 +116,14 @@ async def transcribe_audio(service: AgentService, **params: Any) -> dict:
 
 
 @_handle_errors
+async def revise_transcript_rpc(service: AgentService, **params: Any) -> dict:
+    """One-shot voice-transcript revise via the Anthropic API."""
+    from app.agent.revise import revise_transcript
+    text = await revise_transcript(params["text"], model=params.get("model"))
+    return {"text": text}
+
+
+@_handle_errors
 async def prepare_agent(service: AgentService, **params: Any) -> dict:
     """Create a draft session without starting it. Returns bonsaiSid + systemPrompt."""
     config = AgentConfig(**params["config"])

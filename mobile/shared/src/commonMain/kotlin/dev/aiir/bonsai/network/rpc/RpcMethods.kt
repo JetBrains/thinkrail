@@ -193,6 +193,28 @@ class RpcMethods(private val client: RpcClient) {
     suspend fun skillsList(): List<SkillInfo> =
         callList("skills/list", SkillInfo.serializer())
 
+    // ── Voice ──
+
+    suspend fun agentTranscribe(audioBase64: String, mimeType: String): String =
+        call(
+            "agent/transcribe",
+            buildJsonObject {
+                put("audioBase64", audioBase64)
+                put("mimeType", mimeType)
+            },
+            TextResult.serializer(),
+        ).text
+
+    suspend fun agentReviseTranscript(text: String, model: String? = null): String =
+        call(
+            "agent/reviseTranscript",
+            buildJsonObject {
+                put("text", text)
+                if (model != null) put("model", model)
+            },
+            TextResult.serializer(),
+        ).text
+
     // ── Helpers ──
 
     private suspend fun <T> call(

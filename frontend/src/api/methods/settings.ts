@@ -1,5 +1,7 @@
 import type { RpcClient } from "../client.ts";
 
+export type VoiceReviseMode = "auto" | "subsession" | "off";
+
 export interface ProjectSettings {
   default_model: string;
   default_effort: string;
@@ -7,6 +9,7 @@ export interface ProjectSettings {
   event_view: string;
   font_size: number;
   compact_font_size: number;
+  voice_revise_mode: VoiceReviseMode;
   [key: string]: unknown;
 }
 

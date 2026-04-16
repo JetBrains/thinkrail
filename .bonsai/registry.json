@@ -1808,15 +1808,20 @@
       "covers": [
         "frontend/src/hooks/useVoiceInput.ts",
         "backend/app/agent/transcribe.py",
-        "frontend/src/components/ChatStream/InputArea.tsx"
+        "backend/app/agent/revise.py",
+        "frontend/src/components/ChatStream/InputArea.tsx",
+        "mobile/shared/src/commonMain/kotlin/dev/aiir/bonsai/voice/AudioRecorder.kt",
+        "mobile/shared/src/androidMain/kotlin/dev/aiir/bonsai/voice/AudioRecorder.kt",
+        "mobile/androidApp/src/androidMain/kotlin/dev/aiir/bonsai/android/ui/screen/SessionDetailScreen.kt"
       ],
       "tags": [
         "feature",
         "voice",
-        "transcription"
+        "transcription",
+        "revise"
       ],
       "created": "2026-03-11",
-      "updated": "2026-03-11"
+      "updated": "2026-04-16"
     },
     {
       "id": "effort-support-design",
@@ -2607,6 +2612,90 @@
       ],
       "created": "2026-04-14",
       "updated": "2026-04-14"
+    },
+    {
+      "id": "submodule-revise",
+      "type": "submodule-design",
+      "path": "backend/app/agent/REVISE.md",
+      "title": "Transcript Revision \u2014 Submodule Design",
+      "status": "active",
+      "covers": [
+        "backend/app/agent/revise.py"
+      ],
+      "tags": [
+        "backend",
+        "agent-orchestration",
+        "voice",
+        "revise"
+      ],
+      "created": "2026-04-16",
+      "updated": "2026-04-16"
+    },
+    {
+      "id": "task-agent-revise-transcript",
+      "type": "task-spec",
+      "path": ".bonsai/implementation_tasks/agent/feature_revise_transcript.md",
+      "title": "Revise Transcript Backend",
+      "status": "pending",
+      "covers": [
+        "backend/app/agent/revise.py",
+        "backend/app/rpc/methods/agents.py",
+        "backend/app/core/settings.py"
+      ],
+      "tags": [
+        "medium",
+        "new-feature",
+        "backend",
+        "voice"
+      ],
+      "created": "2026-04-16",
+      "updated": "2026-04-16"
+    },
+    {
+      "id": "task-voice-auto-revise",
+      "type": "task-spec",
+      "path": ".bonsai/implementation_tasks/frontend/feature_voice_auto_revise.md",
+      "title": "Voice Auto-Revise (Web Frontend)",
+      "status": "pending",
+      "covers": [
+        "frontend/src/hooks/useVoiceInput.ts",
+        "frontend/src/components/ChatStream/InputArea.tsx",
+        "frontend/src/api/methods/settings.ts"
+      ],
+      "tags": [
+        "medium",
+        "new-feature",
+        "frontend",
+        "voice"
+      ],
+      "created": "2026-04-16",
+      "updated": "2026-04-16"
+    },
+    {
+      "id": "task-mobile-voice-input",
+      "type": "task-spec",
+      "path": ".bonsai/implementation_tasks/mobile/feature_mobile_voice_input.md",
+      "title": "Mobile Voice Input (Android MVP)",
+      "status": "pending",
+      "covers": [
+        "mobile/shared/src/commonMain/kotlin/dev/aiir/bonsai/voice/AudioRecorder.kt",
+        "mobile/shared/src/androidMain/kotlin/dev/aiir/bonsai/voice/AudioRecorder.kt",
+        "mobile/shared/src/commonMain/kotlin/dev/aiir/bonsai/network/rpc/RpcMethods.kt",
+        "mobile/shared/src/commonMain/kotlin/dev/aiir/bonsai/data/model/Settings.kt",
+        "mobile/shared/src/commonMain/kotlin/dev/aiir/bonsai/component/session/SessionDetailComponent.kt",
+        "mobile/shared/src/commonMain/kotlin/dev/aiir/bonsai/component/session/SessionDetailComponentImpl.kt",
+        "mobile/androidApp/src/androidMain/kotlin/dev/aiir/bonsai/android/ui/screen/SessionDetailScreen.kt",
+        "mobile/androidApp/src/androidMain/AndroidManifest.xml",
+        "mobile/androidApp/src/debug/AndroidManifest.xml"
+      ],
+      "tags": [
+        "medium",
+        "new-feature",
+        "mobile",
+        "voice"
+      ],
+      "created": "2026-04-16",
+      "updated": "2026-04-16"
     }
   ],
   "links": [
@@ -4053,6 +4142,46 @@
     {
       "from": "feature_mobile_preferences_sync",
       "to": "feature_mobile_login",
+      "type": "depends-on"
+    },
+    {
+      "from": "submodule-revise",
+      "to": "module-agent",
+      "type": "parent"
+    },
+    {
+      "from": "submodule-revise",
+      "to": "voice-input-design",
+      "type": "implements"
+    },
+    {
+      "from": "task-agent-revise-transcript",
+      "to": "submodule-revise",
+      "type": "implements"
+    },
+    {
+      "from": "task-agent-revise-transcript",
+      "to": "voice-input-design",
+      "type": "implements"
+    },
+    {
+      "from": "task-voice-auto-revise",
+      "to": "voice-input-design",
+      "type": "implements"
+    },
+    {
+      "from": "task-voice-auto-revise",
+      "to": "task-agent-revise-transcript",
+      "type": "depends-on"
+    },
+    {
+      "from": "task-mobile-voice-input",
+      "to": "voice-input-design",
+      "type": "implements"
+    },
+    {
+      "from": "task-mobile-voice-input",
+      "to": "task-agent-revise-transcript",
       "type": "depends-on"
     }
   ]

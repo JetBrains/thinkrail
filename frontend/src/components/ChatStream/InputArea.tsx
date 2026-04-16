@@ -5,6 +5,7 @@ import { useVoiceInput } from "@/hooks/useVoiceInput";
 import { useNotificationStore } from "@/store/notificationStore";
 import { useInputDraftStore } from "@/store/inputDraftStore";
 import { isMod, modLabel } from "@/utils/platform";
+import type { VoiceReviseMode } from "@/api/methods/settings.ts";
 import { ChatMarkdown } from "./ChatMarkdown";
 import { MessageHistory } from "./MessageHistory";
 
@@ -36,6 +37,8 @@ const FORMAT_ACTIONS = [
 
 export function InputArea({ sessionId, disabled, placeholder, onSend, isRunning, canInterrupt, onInterrupt, showContinue, onContinue, isDraft }: InputAreaProps) {
   const skills = useSettingsStore((s) => s.skills);
+  const voiceReviseMode: VoiceReviseMode =
+    (useSettingsStore((s) => s.settings?.voice_revise_mode) as VoiceReviseMode | undefined) ?? "auto";
   const [text, setText] = useState(() => useInputDraftStore.getState().getDraft(sessionId));
   const [suggestions, setSuggestions] = useState<Skill[]>([]);
   const [selectedIndex, setSelectedIndex] = useState(0);
@@ -105,6 +108,9 @@ export function InputArea({ sessionId, disabled, placeholder, onSend, isRunning,
   }, [text, setTextAndDraft]);
 
   const [isVoiceTranscript, setIsVoiceTranscript] = useState(false);
+  const [rawTranscript, setRawTranscript] = useState<string | null>(null);
+  const [reviseError, setReviseError] = useState<string | null>(null);
+  const [modeMenuOpen, setModeMenuOpen] = useState(false);
 
   const handleSend = useCallback(() => {
     const trimmed = text.trim();
@@ -344,27 +350,77 @@ export function InputArea({ sessionId, disabled, placeholder, onSend, isRunning,
     }
   }, [voice.mode, voice.isRecording, voice.interimText, setTextAndDraft]);
 
+  const resizeTextarea = useCallback(() => {
+    setTimeout(() => {
+      const el = ref.current;
+      if (el) {
+        el.focus();
+        if (!manualRef.current) {
+          el.style.height = "auto";
+          el.style.height = el.scrollHeight + "px";
+        }
+      }
+    }, 0);
+  }, []);
+
+  const runRevise = useCallback(async (raw: string): Promise<void> => {
+    try {
+      const revised = await voice.reviseTranscript(raw);
+      setTextAndDraft(revised);
+      setIsVoiceTranscript(true);
+      setReviseError(null);
+      resizeTextarea();
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      setTextAndDraft(raw);
+      setIsVoiceTranscript(true);
+      setReviseError(msg);
+      resizeTextarea();
+    }
+  }, [voice, setTextAndDraft, resizeTextarea]);
+
   const handleMicClick = useCallback(async () => {
     if (voice.isRecording) {
       const transcript = await voice.stopRecording();
-      if (transcript) {
+      if (!transcript) return;
+
+      if (voiceReviseMode === "subsession") {
         setTextAndDraft(transcript);
         setIsVoiceTranscript(true);
-        setTimeout(() => {
-          const el = ref.current;
-          if (el) {
-            el.focus();
-            if (!manualRef.current) {
-              el.style.height = "auto";
-              el.style.height = el.scrollHeight + "px";
-            }
-          }
-        }, 0);
+        setRawTranscript(null);
+        setReviseError(null);
+        import("@/store/sessionStore.ts").then(({ useSessionStore }) => {
+          useSessionStore.getState().createSubsession(
+            sessionId,
+            "refinement",
+            transcript,
+            "Revise voice input",
+          );
+        }).catch(console.error);
+        resizeTextarea();
+        return;
       }
+
+      if (voiceReviseMode === "off") {
+        setTextAndDraft(transcript);
+        setIsVoiceTranscript(true);
+        setRawTranscript(null);
+        setReviseError(null);
+        resizeTextarea();
+        return;
+      }
+
+      // mode === "auto"
+      setRawTranscript(transcript);
+      await runRevise(transcript);
     } else {
       voice.startRecording();
     }
-  }, [voice, setTextAndDraft]);
+  }, [voice, setTextAndDraft, voiceReviseMode, sessionId, runRevise, resizeTextarea]);
+
+  const handleReviseRetry = useCallback(() => {
+    if (rawTranscript) runRevise(rawTranscript);
+  }, [rawTranscript, runRevise]);
 
   // Handle Cmd/Ctrl+Enter in preview pane to send
   const handlePreviewKeyDown = useCallback(
@@ -390,6 +446,28 @@ export function InputArea({ sessionId, disabled, placeholder, onSend, isRunning,
       />
       {showHistory && (
         <MessageHistory onSelect={handleHistorySelect} onClose={handleHistoryClose} />
+      )}
+      {reviseError && (
+        <div className="input-revise-banner" role="alert">
+          <span className="input-revise-banner-text">
+            Auto-revise failed: {reviseError}
+          </span>
+          <button
+            className="input-revise-banner-retry"
+            onClick={handleReviseRetry}
+            disabled={!rawTranscript || voice.isRevising}
+          >
+            Retry
+          </button>
+          <button
+            className="input-revise-banner-close"
+            onClick={() => setReviseError(null)}
+            title="Dismiss"
+            aria-label="Dismiss"
+          >
+            {"\u00D7"}
+          </button>
+        </div>
       )}
       {suggestions.length > 0 && (
         <div className="input-autocomplete">
@@ -447,8 +525,8 @@ export function InputArea({ sessionId, disabled, placeholder, onSend, isRunning,
               handleInput();
             }}
             onKeyDown={handleKeyDown}
-            placeholder={voice.isTranscribing ? "Transcribing..." : placeholder}
-            disabled={disabled || voice.isTranscribing}
+            placeholder={voice.isRevising ? "Revising..." : voice.isTranscribing ? "Transcribing..." : placeholder}
+            disabled={disabled || voice.isTranscribing || voice.isRevising}
             rows={1}
           />
           {previewActive && (
@@ -481,14 +559,52 @@ export function InputArea({ sessionId, disabled, placeholder, onSend, isRunning,
         {"\u2191"}
       </button>
       {voice.isSupported && (
-        <button
-          className={`input-mic${voice.isRecording ? " input-mic-recording" : ""}${voice.isTranscribing ? " input-mic-transcribing" : ""}`}
-          onClick={handleMicClick}
-          disabled={disabled || voice.isTranscribing}
-          title={voice.isRecording ? "Stop recording" : "Start voice input"}
-        >
-          {voice.isTranscribing ? <span className="input-mic-spinner" /> : "\uD83C\uDF99"}
-        </button>
+        <div className="input-mic-group">
+          <button
+            className={`input-mic${voice.isRecording ? " input-mic-recording" : ""}${(voice.isTranscribing || voice.isRevising) ? " input-mic-transcribing" : ""}`}
+            onClick={handleMicClick}
+            disabled={disabled || voice.isTranscribing || voice.isRevising}
+            title={voice.isRecording ? "Stop recording" : "Start voice input"}
+          >
+            {(voice.isTranscribing || voice.isRevising) ? <span className="input-mic-spinner" /> : "\uD83C\uDF99"}
+          </button>
+          <button
+            className="input-mic-mode"
+            onClick={() => setModeMenuOpen((v) => !v)}
+            title={`Voice revise: ${voiceReviseMode}`}
+            aria-haspopup="menu"
+            aria-expanded={modeMenuOpen}
+          >
+            {"\u25BE"}
+          </button>
+          {modeMenuOpen && (
+            <div className="input-mic-mode-menu" role="menu">
+              {(["auto", "subsession", "off"] as const).map((m) => (
+                <button
+                  key={m}
+                  role="menuitemradio"
+                  aria-checked={voiceReviseMode === m}
+                  className={`input-mic-mode-item${voiceReviseMode === m ? " input-mic-mode-item--active" : ""}`}
+                  onClick={() => {
+                    useSettingsStore.getState().updateSettings({ voice_revise_mode: m });
+                    setModeMenuOpen(false);
+                  }}
+                >
+                  <span className="input-mic-mode-label">
+                    {m === "auto" ? "Auto-revise" : m === "subsession" ? "Refinement subsession" : "Raw transcript"}
+                  </span>
+                  <span className="input-mic-mode-desc">
+                    {m === "auto"
+                      ? "One-shot AI revise into the input"
+                      : m === "subsession"
+                      ? "Start a refinement subsession"
+                      : "Paste the transcript as-is"}
+                  </span>
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
       )}
       {isVoiceTranscript && text.trim() && (
         <button

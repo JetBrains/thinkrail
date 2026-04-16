@@ -18,6 +18,19 @@ interface SessionDetailComponent {
     fun changeModel(model: String)
     fun changeEffort(effort: Effort?)
     fun onBack()
+
+    /**
+     * Fed by the UI after a local audio recording completes.
+     * Runs transcribe → (optional) revise and returns the final text to
+     * place into the message input. Updates voice state flags along the way.
+     */
+    suspend fun onAudioRecorded(audioBase64: String, mimeType: String): String
+
+    /** Retry the revise step using the most recent raw transcript. */
+    suspend fun retryRevise(): String?
+
+    /** Dismiss the inline voice-error banner. */
+    fun dismissVoiceError()
 }
 
 /** Tracks the state of a single tool call through its lifecycle. */
@@ -85,6 +98,11 @@ data class SessionDetailState(
     val sessionName: String = "",
     val isLoading: Boolean = false,
     val error: String? = null,
+    // ── Voice input state ──
+    val isTranscribing: Boolean = false,
+    val isRevising: Boolean = false,
+    val voiceError: String? = null,
+    val rawTranscript: String? = null,
 ) {
     val contextPercent: Int get() = if (contextMax > 0) ((contextTokens * 100) / contextMax).toInt() else 0
     val canSendMessage: Boolean get() = sessionStatus in listOf(SessionStatus.IDLE, SessionStatus.INTERRUPTED)

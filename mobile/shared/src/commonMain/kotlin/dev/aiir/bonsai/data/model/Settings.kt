@@ -22,4 +22,10 @@ data class ProjectSettings(
     val defaultModel: String? = null,
     val permissionTimeout: Int? = null,
     val trashRetentionDays: Int? = null,
+    /** "auto" | "subsession" | "off" — null treated as "auto". */
+    val voiceReviseMode: String? = null,
 )
+
+/** Small shared envelope for RPC methods that return `{ text: string }`. */
+@Serializable
+data class TextResult(val text: String = "")

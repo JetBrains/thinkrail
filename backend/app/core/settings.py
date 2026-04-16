@@ -33,6 +33,8 @@ class ProjectSettings(BaseModel, extra="allow"):
     user_respond_retry_max_attempts: int = 3  # only used when behavior = "retry"
     # Trash auto-purge
     trash_retention_days: int = 30  # 0 or null to disable auto-purge
+    # Voice input revise behavior
+    voice_revise_mode: str = "auto"  # "auto" | "subsession" | "off"
 
 
 def _settings_path(project_root: Path) -> Path:

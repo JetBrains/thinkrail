@@ -650,6 +650,59 @@ class SessionDetailComponentImpl(
 
     override fun onBack() { onBack.invoke() }
 
+    // ── Voice input ──
+
+    private suspend fun resolveReviseMode(): String {
+        return try {
+            val settings = rpcMethods.settingsGet()
+            when (settings.voiceReviseMode) {
+                "off" -> "off"
+                else -> "auto"  // "auto" default; "subsession" degrades to "auto" on mobile (no subsession support yet)
+            }
+        } catch (_: Exception) {
+            "auto"
+        }
+    }
+
+    override suspend fun onAudioRecorded(audioBase64: String, mimeType: String): String {
+        _state.update { it.copy(isTranscribing = true, voiceError = null, rawTranscript = null) }
+        val transcript = try {
+            rpcMethods.agentTranscribe(audioBase64, mimeType)
+        } catch (e: Exception) {
+            _state.update { it.copy(isTranscribing = false, voiceError = "Transcribe failed: ${e.message}") }
+            return ""
+        }
+        _state.update { it.copy(isTranscribing = false, rawTranscript = transcript) }
+
+        if (transcript.isBlank()) return ""
+
+        val mode = resolveReviseMode()
+        if (mode == "off") return transcript
+
+        return runRevise(transcript)
+    }
+
+    override suspend fun retryRevise(): String? {
+        val raw = _state.value.rawTranscript ?: return null
+        return runRevise(raw)
+    }
+
+    override fun dismissVoiceError() {
+        _state.update { it.copy(voiceError = null) }
+    }
+
+    private suspend fun runRevise(raw: String): String {
+        _state.update { it.copy(isRevising = true, voiceError = null) }
+        return try {
+            val revised = rpcMethods.agentReviseTranscript(raw)
+            _state.update { it.copy(isRevising = false) }
+            revised.ifBlank { raw }
+        } catch (e: Exception) {
+            _state.update { it.copy(isRevising = false, voiceError = "Auto-revise failed: ${e.message}") }
+            raw
+        }
+    }
+
     // ── Helpers ──
 
     private fun markApproval(requestId: String, status: ApprovalStatus, label: String) {
