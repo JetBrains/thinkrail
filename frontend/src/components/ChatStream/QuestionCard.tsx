@@ -44,10 +44,9 @@ export function QuestionCard({
 
   const containerRef = useRef<HTMLDivElement>(null);
   const otherInputRef = useRef<HTMLInputElement>(null);
-  const autoAdvanceTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Refs always hold the latest state so callbacks that fire asynchronously
-  // (e.g. the 150ms auto-advance timer) never read stale closures.
+  // Refs always hold the latest state so the submitAll callback
+  // never reads stale closures.
   const selectedSingleRef = useRef(selectedSingle);
   selectedSingleRef.current = selectedSingle;
   const checkedItemsRef = useRef(checkedItems);
@@ -146,19 +145,12 @@ export function QuestionCard({
         });
       } else {
         setSelectedSingle((prev) => ({ ...prev, [activeTab]: index }));
-        // Cancel any pending auto-advance before scheduling a new one,
-        // so changing selection before the timer fires doesn't submit the old choice.
-        if (autoAdvanceTimer.current !== null) clearTimeout(autoAdvanceTimer.current);
-        autoAdvanceTimer.current = setTimeout(() => {
-          autoAdvanceTimer.current = null;
-          advanceToNext();
-        }, 150);
       }
       if (index === otherIndex) {
         setTimeout(() => otherInputRef.current?.focus(), 0);
       }
     },
-    [activeTab, isMulti, otherIndex, advanceToNext],
+    [activeTab, isMulti, otherIndex],
   );
 
   const handleKeyDown = useCallback(
