@@ -90,7 +90,13 @@ class RpcClient(
             session?.send(Frame.Text(json)) ?: throw IllegalStateException("Not connected")
             val response = withTimeout(30_000) { deferred.await() }
             if (response.error != null) {
-                throw RpcException(response.error.code, response.error.message)
+                val detail = response.error.data?.let { data ->
+                    when (data) {
+                        is JsonPrimitive -> data.contentOrNull
+                        else -> data.toString()
+                    }
+                }
+                throw RpcException(response.error.code, response.error.message, detail)
             }
             return response.result
         } finally {
@@ -184,10 +190,14 @@ class RpcClient(
     }
 
     private fun failAllPending(reason: String) {
-        val exception = RpcException(-1, reason)
+        val exception = RpcException(-1, reason, null)
         pendingRequests.values.forEach { it.completeExceptionally(exception) }
         pendingRequests.clear()
     }
 }
 
-class RpcException(val code: Int, override val message: String) : Exception(message)
+class RpcException(
+    val code: Int,
+    val serverMessage: String,
+    val data: String? = null,
+) : Exception(if (data.isNullOrBlank()) serverMessage else "$serverMessage: $data")

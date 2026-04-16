@@ -241,14 +241,35 @@ Mobile gains a mic button with the same one-shot-revise behavior. Because the mo
 does not yet support subsessions, mobile only honors `voice_revise_mode ∈ { "auto", "off" }`;
 the `"subsession"` value gracefully degrades to `"auto"` with a toast.
 
+**Android also uses two-mode progressive enhancement**, mirroring the web:
+
+```
+User taps mic
+  │
+  ├── speech-recognizer mode (primary — most modern devices)
+  │     android.speech.SpeechRecognizer → partial/final callbacks
+  │     Live interim text streams into the input field as the user speaks.
+  │     No backend round-trip. No API key required. Free.
+  │
+  └── media-recorder mode (fallback — devices without an installed recognizer)
+        MediaRecorder → base64 → RPC → Whisper → text
+        Requires OPENAI_API_KEY on the backend; otherwise the inline error
+        banner explains what to configure.
+```
+
+Selection: `SpeechRecognizer.isRecognitionAvailable(context)` is checked once per
+composition (`remember`); the result picks which capture object is instantiated and
+which path the mic button drives.
+
 | Layer | Change |
 |---|---|
-| `mobile/shared/.../voice/AudioRecorder.kt` | New `expect class` in `commonMain`; Android `actual` uses `MediaRecorder` (MPEG_4 / AAC) into cache-dir temp file → base64. |
-| `mobile/shared/.../network/rpc/RpcMethods.kt` | New typed wrappers `agentTranscribe(...)` and `agentReviseTranscript(...)`. |
-| `mobile/shared/.../data/model/Settings.kt` | New field `voiceReviseMode: String?`. |
-| `mobile/shared/.../component/session/SessionDetailComponent[Impl].kt` | New methods (`startVoiceInput`, `stopVoiceInput`, `retryRevise`) and state fields (`isRecording`, `isTranscribing`, `isRevising`, `voiceError`, `rawTranscript`). |
-| `mobile/androidApp/.../ui/screen/SessionDetailScreen.kt` | Mic `IconButton` in the bottom-bar `Row`; disabled states; dismissible failure banner above the input. |
-| `mobile/androidApp/.../AndroidManifest.xml` (both variants) | `<uses-permission android:name="android.permission.RECORD_AUDIO" />`; runtime prompt on first mic press. |
+| `mobile/androidApp/.../android/voice/SpeechRecognizerTranscriber.kt` | **New.** Wrapper over Android's `SpeechRecognizer` with `start(onPartial, onFinal, onError)` / `stop()` / `cancel()` and an `isAvailable(context)` static. Streams interim hypotheses, translates `ERROR_*` codes into user-visible messages. |
+| `mobile/shared/.../voice/AudioRecorder.kt` | `expect class` in `commonMain`; Android `actual` uses `MediaRecorder` (MPEG_4 / AAC) into cache-dir temp file → base64. **Kept as fallback only.** |
+| `mobile/shared/.../network/rpc/RpcMethods.kt` | Typed wrappers `agentTranscribe(...)` and `agentReviseTranscript(...)`. `agentTranscribe` is only used by the fallback path now. |
+| `mobile/shared/.../data/model/Settings.kt` | Field `voiceReviseMode: String?`. |
+| `mobile/shared/.../component/session/SessionDetailComponent[Impl].kt` | `onAudioRecorded(base64, mime)` (fallback path) + `onVoiceTranscript(raw)` (primary path; also reused by `onAudioRecorded` after transcription). `retryRevise`, `reportVoiceError`, `dismissVoiceError` unchanged. |
+| `mobile/androidApp/.../ui/screen/SessionDetailScreen.kt` | Mic `IconButton`; runtime branch on `SpeechRecognizer.isRecognitionAvailable`; live interim text into `messageInput`; dismissible failure banner above the input. |
+| `mobile/androidApp/.../AndroidManifest.xml` | `<uses-permission android:name="android.permission.RECORD_AUDIO" />`; runtime prompt on first mic press. Same permission covers both paths. |
 
 ### Security / privacy considerations (v2)
 

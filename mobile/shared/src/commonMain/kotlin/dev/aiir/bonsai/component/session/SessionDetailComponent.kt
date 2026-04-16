@@ -20,17 +20,28 @@ interface SessionDetailComponent {
     fun onBack()
 
     /**
-     * Fed by the UI after a local audio recording completes.
+     * Fed by the UI after a local audio recording completes (fallback path).
      * Runs transcribe → (optional) revise and returns the final text to
      * place into the message input. Updates voice state flags along the way.
      */
     suspend fun onAudioRecorded(audioBase64: String, mimeType: String): String
+
+    /**
+     * Fed by the UI when a transcript is already available (primary path,
+     * e.g. Android's on-device SpeechRecognizer). Runs the revise step
+     * according to `voice_revise_mode` and returns the final text to
+     * place into the message input.
+     */
+    suspend fun onVoiceTranscript(raw: String): String
 
     /** Retry the revise step using the most recent raw transcript. */
     suspend fun retryRevise(): String?
 
     /** Dismiss the inline voice-error banner. */
     fun dismissVoiceError()
+
+    /** Surface a voice-pipeline error into the banner (used by UI for recorder/permission errors). */
+    fun reportVoiceError(message: String)
 }
 
 /** Tracks the state of a single tool call through its lifecycle. */

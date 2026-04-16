@@ -623,11 +623,21 @@ class SessionDetailComponentImpl(
     }
 
     override fun resumeSession() {
+        println("[Bonsai/Session] resumeSession tapped for $bonsaiSid")
+        // Remember the terminal status so we can roll back if the RPC fails —
+        // and flip the UI OPTIMISTICALLY so the user gets immediate feedback
+        // even if the WS round-trip is slow or the next status event would
+        // otherwise be swallowed by the handleStatusChanged guard below.
+        val prev = _state.value.sessionStatus
+        _state.update { it.copy(sessionStatus = SessionStatus.INITIALIZING, error = null) }
         scope.launch {
             try {
                 rpcMethods.sessionContinue(bonsaiSid)
-                _state.update { it.copy(sessionStatus = SessionStatus.INITIALIZING) }
-            } catch (e: Exception) { _state.update { it.copy(error = e.message) } }
+                println("[Bonsai/Session] sessionContinue returned for $bonsaiSid")
+            } catch (e: Exception) {
+                println("[Bonsai/Session] sessionContinue failed: ${e.message}")
+                _state.update { it.copy(sessionStatus = prev, error = e.message) }
+            }
         }
     }
 
@@ -672,14 +682,16 @@ class SessionDetailComponentImpl(
             _state.update { it.copy(isTranscribing = false, voiceError = "Transcribe failed: ${e.message}") }
             return ""
         }
-        _state.update { it.copy(isTranscribing = false, rawTranscript = transcript) }
+        _state.update { it.copy(isTranscribing = false) }
+        return onVoiceTranscript(transcript)
+    }
 
-        if (transcript.isBlank()) return ""
-
+    override suspend fun onVoiceTranscript(raw: String): String {
+        if (raw.isBlank()) return ""
+        _state.update { it.copy(voiceError = null, rawTranscript = raw) }
         val mode = resolveReviseMode()
-        if (mode == "off") return transcript
-
-        return runRevise(transcript)
+        if (mode == "off") return raw
+        return runRevise(raw)
     }
 
     override suspend fun retryRevise(): String? {
@@ -689,6 +701,10 @@ class SessionDetailComponentImpl(
 
     override fun dismissVoiceError() {
         _state.update { it.copy(voiceError = null) }
+    }
+
+    override fun reportVoiceError(message: String) {
+        _state.update { it.copy(voiceError = message) }
     }
 
     private suspend fun runRevise(raw: String): String {
@@ -807,9 +823,14 @@ class SessionDetailComponentImpl(
         val newStatus = try {
             BonsaiJson.decodeFromString(SessionStatus.serializer(), "\"$statusStr\"")
         } catch (_: Exception) { return }
-        // Guard: don't overwrite frontend-managed states
         val current = _state.value.sessionStatus
-        if (current == SessionStatus.WAITING || current == SessionStatus.DONE || current == SessionStatus.ERROR) return
+        // Protect a pending user-input state: only the answer flow should clear WAITING.
+        if (current == SessionStatus.WAITING) return
+        // DONE/ERROR are terminal from the UI's POV, but a resume/restart re-opens them.
+        // Only accept a non-terminal event when exiting those states so stale "done" pings
+        // don't re-terminate a session the user just resumed.
+        if ((current == SessionStatus.DONE || current == SessionStatus.ERROR) &&
+            (newStatus == SessionStatus.DONE || newStatus == SessionStatus.ERROR)) return
         _state.update { it.copy(sessionStatus = newStatus) }
     }
 

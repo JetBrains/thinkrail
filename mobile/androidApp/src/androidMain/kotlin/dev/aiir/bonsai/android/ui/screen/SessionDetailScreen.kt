@@ -15,8 +15,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.Mic
-import androidx.compose.material.icons.filled.MicNone
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -30,11 +28,13 @@ import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
 import android.Manifest
 import android.content.pm.PackageManager
+import android.util.Log
 import dev.aiir.bonsai.android.ui.component.*
 import dev.aiir.bonsai.android.ui.component.vis.*
 import dev.aiir.bonsai.android.ui.theme.*
 import dev.aiir.bonsai.component.session.*
 import dev.aiir.bonsai.data.model.*
+import dev.aiir.bonsai.android.voice.SpeechRecognizerTranscriber
 import dev.aiir.bonsai.voice.AndroidAudioRecorder
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
@@ -49,30 +49,82 @@ fun SessionDetailScreen(component: SessionDetailComponent) {
     var messageInput by remember { mutableStateOf("") }
     val listState = rememberLazyListState()
 
-    // ── Voice input wiring (Android-only; uses MediaRecorder + backend pipeline) ──
+    // ── Voice input wiring ──
+    // Primary path: Android's on-device SpeechRecognizer (free, streams interim text).
+    // Fallback: MediaRecorder → backend Whisper, when no recognizer is installed.
     val context = LocalContext.current
-    val recorder = remember { AndroidAudioRecorder(context) }
+    val useSpeechRecognizer = remember { SpeechRecognizerTranscriber.isAvailable(context) }
+    val speechRecognizer = remember(useSpeechRecognizer) {
+        if (useSpeechRecognizer) SpeechRecognizerTranscriber(context) else null
+    }
+    val recorder = remember(useSpeechRecognizer) {
+        if (!useSpeechRecognizer) AndroidAudioRecorder(context) else null
+    }
     val voiceScope = remember { CoroutineScope(Dispatchers.Main + SupervisorJob()) }
     var isRecording by remember { mutableStateOf(false) }
     var pendingStart by remember { mutableStateOf(false) }
 
+    fun startCapture() {
+        if (useSpeechRecognizer) {
+            speechRecognizer!!.start(
+                onPartial = { partial -> messageInput = partial },
+                onFinal = { finalText ->
+                    isRecording = false
+                    voiceScope.launch {
+                        val result = component.onVoiceTranscript(finalText)
+                        if (result.isNotBlank()) messageInput = result
+                    }
+                },
+                onError = { msg ->
+                    isRecording = false
+                    component.reportVoiceError(msg)
+                },
+            )
+            isRecording = true
+        } else {
+            voiceScope.launch {
+                runCatching { recorder!!.start() }
+                    .onSuccess { isRecording = true }
+                    .onFailure { e ->
+                        Log.w("Bonsai/Voice", "recorder.start failed", e)
+                        component.reportVoiceError("Couldn't start recording: ${e.message ?: e::class.simpleName}")
+                    }
+            }
+        }
+    }
+
     val micLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
         if (granted && pendingStart) {
             pendingStart = false
-            voiceScope.launch {
-                runCatching { recorder.start() }.onSuccess { isRecording = true }
-            }
-        } else {
+            startCapture()
+        } else if (!granted) {
             pendingStart = false
+            component.reportVoiceError("Microphone permission denied")
         }
     }
 
     fun onMicClick() {
         if (isRecording) {
-            isRecording = false
-            voiceScope.launch {
-                val audio = runCatching { recorder.stop() }.getOrNull()
-                if (audio != null && audio.base64.isNotEmpty()) {
+            if (useSpeechRecognizer) {
+                // Ask the recognizer to flush; onFinal will set isRecording = false.
+                speechRecognizer!!.stop()
+            } else {
+                isRecording = false
+                voiceScope.launch {
+                    val audio = runCatching { recorder!!.stop() }
+                        .onFailure { e ->
+                            Log.w("Bonsai/Voice", "recorder.stop failed", e)
+                            component.reportVoiceError("Recording failed: ${e.message ?: e::class.simpleName}")
+                        }
+                        .getOrNull()
+                    if (audio == null) return@launch
+                    if (audio.base64.isEmpty()) {
+                        component.reportVoiceError(
+                            "No audio captured. On the emulator, enable mic under " +
+                                "Extended Controls → Microphone → Virtual microphone uses host audio input.",
+                        )
+                        return@launch
+                    }
                     val result = component.onAudioRecorded(audio.base64, audio.mimeType)
                     if (result.isNotBlank()) messageInput = result
                 }
@@ -81,9 +133,7 @@ fun SessionDetailScreen(component: SessionDetailComponent) {
             val granted = ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) ==
                 PackageManager.PERMISSION_GRANTED
             if (granted) {
-                voiceScope.launch {
-                    runCatching { recorder.start() }.onSuccess { isRecording = true }
-                }
+                startCapture()
             } else {
                 pendingStart = true
                 micLauncher.launch(Manifest.permission.RECORD_AUDIO)
@@ -93,7 +143,8 @@ fun SessionDetailScreen(component: SessionDetailComponent) {
 
     DisposableEffect(Unit) {
         onDispose {
-            runCatching { recorder.cancel() }
+            runCatching { speechRecognizer?.cancel() }
+            runCatching { recorder?.cancel() }
             voiceScope.cancel()
         }
     }
@@ -266,7 +317,7 @@ fun SessionDetailScreen(component: SessionDetailComponent) {
                         Spacer(modifier = Modifier.width(8.dp))
                         IconButton(
                             onClick = { onMicClick() },
-                            enabled = state.canSendMessage && !voiceBusy,
+                            enabled = !voiceBusy,
                             modifier = Modifier
                                 .size(40.dp)
                                 .background(
@@ -284,10 +335,10 @@ fun SessionDetailScreen(component: SessionDetailComponent) {
                                     modifier = Modifier.size(18.dp),
                                 )
                             } else {
-                                Icon(
-                                    imageVector = if (isRecording) Icons.Default.Mic else Icons.Default.MicNone,
-                                    contentDescription = if (isRecording) "Stop recording" else "Start voice input",
-                                    tint = if (isRecording) StatusError else MaterialTheme.colorScheme.onSurfaceVariant,
+                                Text(
+                                    text = "\uD83C\uDF99",
+                                    fontSize = 18.sp,
+                                    color = if (isRecording) StatusError else MaterialTheme.colorScheme.onSurfaceVariant,
                                 )
                             }
                         }
