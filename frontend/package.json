@@ -10,7 +10,7 @@
     "preview": "vite preview",
     "test": "vitest",
     "lint": "tsc --noEmit && eslint src/",
-    "generate:schema": "cd ../backend && uv run python -m app.cli export-schema -o ../frontend/openapi.json",
+    "generate:schema": "cd ../backend && ~/.local/bin/uv run python -m app.cli export-schema -o ../frontend/openapi.json",
     "generate:api": "openapi-typescript openapi.json -o src/api/generated.ts",
     "generate": "npm run generate:schema && npm run generate:api"
   },
