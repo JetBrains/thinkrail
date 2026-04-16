@@ -63,6 +63,7 @@ from app.rpc.methods.settings import (
     get_settings,
     list_models,
     list_skills,
+    models_status,
     refresh_models,
     update_settings,
 )
@@ -208,6 +209,7 @@ METHODS = {
     "settings/ensureFile": ensure_settings,
     "models/list": list_models,
     "models/refresh": refresh_models,
+    "models/status": models_status,
     "skills/list": list_skills,
     "auth/createToken": create_token,
     "auth/listUsers": list_users,

@@ -27,6 +27,7 @@ Thumbs.db
 .bonsai/.progress.json
 .claude/settings.local.json
 .bonsai/sessions
+.bonsai/cache/
 
 # Spec dashboard (generated)
 .bonsai/dashboard.html

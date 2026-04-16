@@ -111,7 +111,7 @@ class TestMethods:
             "trash/list", "trash/purge", "trash/empty",
             "trash/restoreSpec", "trash/restorePlan", "trash/restoreDraft", "trash/restorePatches",
             "settings/get", "settings/update", "settings/ensureFile",
-            "models/list", "models/refresh",
+            "models/list", "models/refresh", "models/status",
             "agent/retryLastMessage",
             "skills/list",
             "auth/createToken", "auth/listUsers",

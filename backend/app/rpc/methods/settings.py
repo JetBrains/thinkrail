@@ -70,6 +70,12 @@ async def refresh_models(registry: ModelRegistry, **_params: Any) -> list[dict]:
     return await registry.refresh()
 
 
+@_handle_errors
+async def models_status(registry: ModelRegistry, **_params: Any) -> dict:
+    """Return metadata about the current model list source and any fetch error."""
+    return registry.get_status()
+
+
 # ── Skills ───────────────────────────────────────────────────────────────
 
 

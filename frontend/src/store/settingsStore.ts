@@ -4,11 +4,21 @@ import { createSettingsApi, type ProjectSettings } from "@/api/methods/settings.
 import { type ModelDef, setDynamicModels } from "@/utils/models.ts";
 import { type Skill, FALLBACK_SKILLS } from "@/constants/skills.ts";
 
+export type ModelSource = "api" | "cache" | "fallback";
+
+export interface ModelStatus {
+  source: ModelSource;
+  error: string | null;
+  lastRefresh: number | null;
+}
+
 interface SettingsStore {
   /** Parsed project settings from .bonsai/settings.json */
   settings: ProjectSettings | null;
   /** Dynamic model list from backend (null = not yet loaded, use fallback) */
   models: ModelDef[] | null;
+  /** Where the current model list came from and any fetch error */
+  modelStatus: ModelStatus | null;
   /** Whether a model refresh is in progress */
   refreshing: boolean;
   /** Dynamic skills list from backend (falls back to FALLBACK_SKILLS) */
@@ -25,6 +35,7 @@ interface SettingsStore {
 export const useSettingsStore = create<SettingsStore>((set, get) => ({
   settings: null,
   models: null,
+  modelStatus: null,
   refreshing: false,
   skills: FALLBACK_SKILLS,
 
@@ -64,11 +75,15 @@ export const useSettingsStore = create<SettingsStore>((set, get) => ({
 
   fetchModels: async () => {
     try {
-      const res = await getClient().request<ModelDef[]>("models/list");
+      const [res, status] = await Promise.all([
+        getClient().request<ModelDef[]>("models/list"),
+        getClient().request<ModelStatus>("models/status").catch(() => null),
+      ]);
       if (res && res.length > 0) {
         set({ models: res });
         setDynamicModels(res);
       }
+      if (status) set({ modelStatus: status });
     } catch (e) {
       // Backend may not have models/list yet — silently fall back
       console.debug("models/list not available, using fallback:", e);
@@ -83,6 +98,8 @@ export const useSettingsStore = create<SettingsStore>((set, get) => ({
         set({ models: res });
         setDynamicModels(res);
       }
+      const status = await getClient().request<ModelStatus>("models/status").catch(() => null);
+      if (status) set({ modelStatus: status });
     } catch (e) {
       console.error("Failed to refresh models:", e);
     } finally {

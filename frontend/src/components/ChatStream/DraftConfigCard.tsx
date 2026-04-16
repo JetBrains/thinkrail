@@ -31,6 +31,7 @@ export function DraftConfigCard({ bonsaiSid, readOnly, onVisibilityChange }: Dra
   const specs = useSpecStore((s) => s.specs);
   const tickets = useBoardStore((s) => s.tickets);
   const skills = useSettingsStore((s) => s.skills);
+  const modelStatus = useSettingsStore((s) => s.modelStatus);
 
   const [editName, setEditName] = useState("");
   const [skillPickerOpen, setSkillPickerOpen] = useState(false);
@@ -477,6 +478,19 @@ export function DraftConfigCard({ bonsaiSid, readOnly, onVisibilityChange }: Dra
                 ))}
               </optgroup>
             </select>
+            {modelStatus && modelStatus.source !== "api" && (
+              <span
+                className="draft-config-hint"
+                style={{ color: "var(--gold)" }}
+                title={
+                  `Model list may be stale (source: ${modelStatus.source}).` +
+                  (modelStatus.error ? `\n\nReason: ${modelStatus.error}` : "") +
+                  "\n\nFix: set ANTHROPIC_API_KEY, or run `claude auth login` so Bonsai can reuse the managed key."
+                }
+              >
+                {"\u26A0"} stale
+              </span>
+            )}
           </span>
 
           <span className="draft-config-inline">
