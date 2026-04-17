@@ -165,10 +165,10 @@ function emptyMetrics(): SessionMetrics {
  */
 function reconstructCost(events: AgentEvent[]): number {
   for (let i = events.length - 1; i >= 0; i--) {
-    const p = events[i].payload;
-    const type = events[i].eventType;
-    if ((type === "turnComplete" || type === "done") && typeof p?.costUsd === "number") {
-      return p.costUsd;
+    const ev = events[i];
+    if (ev.eventType === "turnComplete" || ev.eventType === "done") {
+      const cost = ev.payload.costUsd;
+      if (typeof cost === "number") return cost;
     }
   }
   return 0;
@@ -185,29 +185,30 @@ function reconstructContextUsage(events: AgentEvent[], model: string, _betas: st
   const toolUseIdToName = new Map<string, string>();
 
   for (const ev of events) {
-    const p = ev.payload;
-
     // Record run boundaries from sessionStart events
     if (ev.eventType === "sessionStart") {
       cu.runBoundaries.push(cu.turnHistory.length);
     }
 
     // Accumulate turn usage from turnComplete/interrupted events
-    if ((ev.eventType === "turnComplete" || ev.eventType === "interrupted") && p?.usage) {
+    if (ev.eventType === "turnComplete" || ev.eventType === "interrupted") {
+      const p = ev.payload;
+      if (!p.usage) continue;
+      // usage and iterations use dict[str, Any] on the backend, so values are unknown.
       const usage = p.usage as Record<string, number>;
 
       // Per-iteration data (new events carry this array)
-      const rawIters = (p.iterations as Record<string, number>[]) ?? [];
+      const rawIters = (p.iterations ?? []) as Record<string, unknown>[];
       const lastIter = rawIters.length > 0 ? rawIters[rawIters.length - 1] : null;
 
       // All breakdown values from last iteration so they add up:
       // inputTokens (fresh) + cacheRead + cacheCreate + output = contextTokens.
-      const inputTokens = lastIter ? (lastIter.input_tokens ?? 0) : (usage.input_tokens ?? 0);
-      const cacheCreation = lastIter ? (lastIter.cache_creation_input_tokens ?? 0) : (usage.cache_creation_input_tokens ?? 0);
-      const cacheRead = lastIter ? (lastIter.cache_read_input_tokens ?? 0) : (usage.cache_read_input_tokens ?? 0);
-      const outputTokens = lastIter ? (lastIter.output_tokens ?? 0) : (usage.output_tokens ?? 0);
+      const inputTokens = lastIter ? ((lastIter.input_tokens as number) ?? 0) : (usage.input_tokens ?? 0);
+      const cacheCreation = lastIter ? ((lastIter.cache_creation_input_tokens as number) ?? 0) : (usage.cache_creation_input_tokens ?? 0);
+      const cacheRead = lastIter ? ((lastIter.cache_read_input_tokens as number) ?? 0) : (usage.cache_read_input_tokens ?? 0);
+      const outputTokens = lastIter ? ((lastIter.output_tokens as number) ?? 0) : (usage.output_tokens ?? 0);
 
-      const totalContext = (p.contextWindow as number) || (inputTokens + cacheCreation + cacheRead + outputTokens);
+      const totalContext = (p.contextWindow ?? 0) || (inputTokens + cacheCreation + cacheRead + outputTokens);
 
       cu.contextTokens = totalContext;
       cu.outputTokens = outputTokens;
@@ -217,9 +218,9 @@ function reconstructContextUsage(events: AgentEvent[], model: string, _betas: st
 
       // Convert raw iterations to typed IterationUsage[]
       const iterations: IterationUsage[] = rawIters.map((it) => {
-        const cc = (it as Record<string, unknown>).cache_creation as Record<string, number> | null | undefined;
+        const cc = it.cache_creation as Record<string, number> | null | undefined;
         return {
-          type: (it.type as unknown as string) === "compaction" ? "compaction" as const : "message" as const,
+          type: it.type === "compaction" ? "compaction" as const : "message" as const,
           inputTokens: (it.input_tokens as number) ?? 0,
           outputTokens: (it.output_tokens as number) ?? 0,
           cacheCreationInputTokens: (it.cache_creation_input_tokens as number) ?? 0,
@@ -238,22 +239,23 @@ function reconstructContextUsage(events: AgentEvent[], model: string, _betas: st
         cacheCreationTokens: cacheCreation,
         cacheReadTokens: cacheRead,
         totalContextTokens: totalContext,
-        costUsd: (p.turnCostUsd as number) ?? 0,
+        costUsd: p.turnCostUsd ?? 0,
         timestamp: 0, // not available from persisted events
-        sdkTurns: (p.turn_turns as number) ?? 1,
+        sdkTurns: p.turnTurns ?? 1,
         iterations: iterations.length > 0 ? iterations : undefined,
       });
     }
 
     // Track tool calls and files
-    if (ev.eventType === "toolCallStart" && p) {
-      const toolName = (p.toolName as string) ?? "";
-      const toolUseId = (p.toolUseId as string) ?? "";
+    if (ev.eventType === "toolCallStart") {
+      const p = ev.payload;
+      const toolName = p.toolName ?? "";
+      const toolUseId = p.toolUseId ?? "";
       cu.toolCallCounts[toolName] = (cu.toolCallCounts[toolName] ?? 0) + 1;
 
       if (toolUseId) toolUseIdToName.set(toolUseId, toolName);
 
-      const toolInput = (p.toolInput as Record<string, unknown>) ?? {};
+      const toolInput = (p.toolInput ?? {}) as Record<string, unknown>;
 
       // Estimate input tokens from serialized tool input (~4 chars per token)
       const inputEstimate = Math.ceil(JSON.stringify(toolInput).length / 4);
@@ -271,11 +273,12 @@ function reconstructContextUsage(events: AgentEvent[], model: string, _betas: st
     }
 
     // Track tool output tokens
-    if (ev.eventType === "toolCallEnd" && p) {
-      const toolUseId = (p.toolUseId as string) ?? "";
+    if (ev.eventType === "toolCallEnd") {
+      const p = ev.payload;
+      const toolUseId = p.toolUseId ?? "";
       const toolName = toolUseIdToName.get(toolUseId) ?? "";
       if (toolName) {
-        const output = (p.output as string) ?? "";
+        const output = p.output ?? "";
         const outputEstimate = Math.ceil(output.length / 4);
         if (!cu.toolTokens[toolName]) cu.toolTokens[toolName] = { inputTokens: 0, outputTokens: 0 };
         cu.toolTokens[toolName].outputTokens += outputEstimate;
@@ -439,17 +442,17 @@ function appendEvent(
   const requestId = params.requestId as string | undefined;
   if (requestId && (method === "agent/askUserQuestion" || method === "agent/confirmAction" || method === "agent/suggestSession" || method === "agent/suggestDescription")) {
     const alreadyExists = session.events.some(
-      (ev) => (ev.payload.requestId as string) === requestId && ev.eventType === method.replace("agent/", ""),
+      (ev) => (ev.payload as unknown as Record<string, unknown> | undefined)?.requestId === requestId && ev.eventType === method.replace("agent/", ""),
     );
     if (alreadyExists) return sessions;
   }
 
-  const event: AgentEvent = {
+  const event = {
     bonsaiSid,
     sessionId: (params.sessionId as string) ?? "",
     eventType: method.replace("agent/", "") as AgentEvent["eventType"],
     payload: params,
-  };
+  } as unknown as AgentEvent;
 
   const next = new Map(withSession);
   const metrics = { ...session.metrics };
@@ -535,7 +538,7 @@ function buildAnsweredRequests(
   // First pass: collect requestResolved and requestExpired events
   for (const ev of events) {
     if (ev.eventType === "requestResolved") {
-      const rid = (ev.payload.requestId as string) ?? "";
+      const rid = ev.payload.requestId ?? "";
       if (rid) answered.set(rid, ev.payload.response);
     } else if (ev.eventType === "requestExpired") {
       const rid = (ev.payload.requestId as string) ?? "";
@@ -952,7 +955,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
       sessionId: ((ev.payload as Record<string, unknown>)?.sessionId as string) ?? "",
       eventType: ((ev.eventType as string) ?? "notification") as AgentEvent["eventType"],
       payload: (ev.payload as Record<string, unknown>) ?? ev,
-    }));
+    } as unknown as AgentEvent));
 
     // Reconstruct answered requests from persisted events
     const answered = buildAnsweredRequests(events, isActive);
@@ -1072,7 +1075,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
           sessionId: ((ev.payload as Record<string, unknown>)?.sessionId as string) ?? "",
           eventType: ((ev.eventType as string) ?? "notification") as AgentEvent["eventType"],
           payload: (ev.payload as Record<string, unknown>) ?? ev,
-        }));
+        } as unknown as AgentEvent));
 
         const restoredCost = reconstructCost(events);
         const entryModel = (data?.config?.model as string) ?? entry.model ?? "";
@@ -1713,7 +1716,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
     set((s) => {
       const existing = s.sessions.get(bonsaiSid);
       if (existing?.events.some(
-        (e) => e.eventType === "confirmStatement" && (e.payload as Record<string, unknown>).requestId === requestId
+        (e) => e.eventType === "confirmStatement" && e.payload.requestId === requestId
       )) {
         return s;
       }
@@ -2052,7 +2055,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
         sessionId: ((ev.payload as Record<string, unknown>)?.sessionId as string) ?? "",
         eventType: ((ev.eventType as string) ?? "notification") as AgentEvent["eventType"],
         payload: (ev.payload as Record<string, unknown>) ?? ev,
-      }));
+      } as unknown as AgentEvent));
 
       const restoredCost = reconstructCost(events);
       const restoredModel = (data.config?.model as string) ?? "";

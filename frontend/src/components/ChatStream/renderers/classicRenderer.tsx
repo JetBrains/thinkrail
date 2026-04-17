@@ -1,5 +1,4 @@
 import { lazy, Suspense, useState } from "react";
-import type { AgentEvent } from "@/types/agent.ts";
 import { useSessionStore } from "@/store/sessionStore.ts";
 import { SystemMessage } from "../SystemMessage.tsx";
 import { AssistantMessage } from "../AssistantMessage.tsx";
@@ -74,25 +73,25 @@ export const classicRenderers: ViewRenderers = {
   userMessage: (ev, _i, k) => (
     <UserMessageBubble
       key={k}
-      text={(ev.payload.text as string) ?? ""}
-      isMarkdown={(ev.payload.isMarkdown as boolean) ?? false}
+      text={ev.payload.text}
+      isMarkdown={ev.payload.isMarkdown ?? false}
     />
   ),
 
   textDelta: (ev, _i, k) => (
     <AssistantMessage
       key={k}
-      text={(ev.payload.text as string) ?? ""}
-      streaming={(ev.payload.streaming as boolean) ?? false}
+      text={ev.payload.text}
+      streaming={false}
     />
   ),
 
   toolCallStart: (ev, i, k, ctx) => {
     const p = ev.payload;
-    if ((p.toolName as string) === "AskUserQuestion") return null;
-    if ((p.toolName as string) === "ConfirmStatement") return null;
+    if (p.toolName === "AskUserQuestion") return null;
+    if (p.toolName === "ConfirmStatement") return null;
 
-    if ((p.toolName as string)?.endsWith("bonsai_visualize")) {
+    if (p.toolName.endsWith("bonsai_visualize")) {
       const visInput = p.toolInput as VisData | undefined;
       if (visInput && typeof visInput.data === "string") {
         try {
@@ -117,8 +116,8 @@ export const classicRenderers: ViewRenderers = {
       }
     }
 
-    const toolName = (p.toolName as string) ?? "tool";
-    const toolUseId = (p.toolUseId as string) ?? "";
+    const toolName = p.toolName;
+    const toolUseId = p.toolUseId;
     const end = ctx.toolStates.get(toolUseId);
     const state = end?.finished ? (end.isError ? "error" as const : "success" as const) : "running" as const;
 
@@ -127,7 +126,7 @@ export const classicRenderers: ViewRenderers = {
         <TaskCard
           key={k}
           toolName={toolName}
-          toolInput={(p.toolInput as Record<string, unknown>) ?? {}}
+          toolInput={p.toolInput}
           state={state}
           isError={end?.isError}
         />
@@ -139,7 +138,7 @@ export const classicRenderers: ViewRenderers = {
         <Suspense key={k} fallback={<ToolCallCard toolName={toolName} toolInput={extractToolInput(p.toolInput)} state="running" />}>
           <DiffCard
             toolName={toolName}
-            toolInput={(p.toolInput as Record<string, unknown>) ?? {}}
+            toolInput={p.toolInput}
             output={end?.output}
             isError={end?.isError}
             state={state}
@@ -152,7 +151,7 @@ export const classicRenderers: ViewRenderers = {
       <ToolCallCard
         key={k}
         toolName={toolName}
-        rawInput={(p.toolInput as Record<string, unknown>) ?? {}}
+        rawInput={p.toolInput}
         output={end?.output}
         isError={end?.isError}
         state={state}
@@ -167,8 +166,8 @@ export const classicRenderers: ViewRenderers = {
     return (
       <SubagentBlock
         key={k}
-        agentType={(ev.payload.agentType as string) ?? undefined}
-        finished={!ctx.activeSubagents.has(ev.payload.agentId as string)}
+        agentType={ev.payload.agentType}
+        finished={!ctx.activeSubagents.has(ev.payload.agentId)}
         childEvents={cEvents}
         toolStates={ctx.toolStates}
       />
@@ -178,8 +177,8 @@ export const classicRenderers: ViewRenderers = {
   subagentEnd: () => null,
 
   askUserQuestion: (ev, _i, k, ctx) => {
-    const questions = (ev.payload.questions as AgentEvent["payload"][]) ?? [];
-    const requestId = (ev.payload.requestId as string) ?? "";
+    const questions = ev.payload.questions;
+    const requestId = ev.payload.requestId ?? "";
     const isAnswered = ctx.answeredRequests.has(requestId);
     const savedAnswer = ctx.answeredRequests.get(requestId) as Record<string, unknown> | undefined;
     const qInterrupted = savedAnswer?.interrupt === true;
@@ -200,7 +199,7 @@ export const classicRenderers: ViewRenderers = {
 
   confirmAction: (ev, _i, k, ctx) => {
     const p = ev.payload;
-    const requestId = (p.requestId as string) ?? "";
+    const requestId = p.requestId ?? "";
     const isAnswered = ctx.answeredRequests.has(requestId);
     const savedResponse = ctx.answeredRequests.get(requestId) as Record<string, unknown> | undefined;
     const aInterrupted = savedResponse?.interrupt === true;
@@ -209,7 +208,7 @@ export const classicRenderers: ViewRenderers = {
       ? "deny" as const
       : savedResponse?.behavior === "allow" ? "approve" as const : "deny" as const;
 
-    if ((p.toolName as string) === "ExitPlanMode") {
+    if (p.toolName === "ExitPlanMode") {
       const toolInput = p.toolInput as Record<string, unknown> | undefined;
       return (
         <PlanApprovalCard
@@ -242,9 +241,9 @@ export const classicRenderers: ViewRenderers = {
     return (
       <ApprovalCard
         key={k}
-        toolName={(p.toolName as string) ?? "action"}
+        toolName={p.toolName}
         toolInput={p.toolInput ?? undefined}
-        description={(p.description as string) ?? undefined}
+        description={p.description ?? undefined}
         answered={isAnswered}
         decision={isAnswered ? decision : undefined}
         interrupted={aInterrupted || aExpired}
@@ -262,14 +261,14 @@ export const classicRenderers: ViewRenderers = {
 
   confirmStatement: (ev, _i, k, ctx) => {
     const p = ev.payload;
-    const requestId = (p.requestId as string) ?? "";
+    const requestId = p.requestId ?? "";
     const isAnswered = ctx.answeredRequests.has(requestId);
     const savedAnswer = ctx.answeredRequests.get(requestId) as Record<string, unknown> | undefined;
     const sInterrupted = savedAnswer?.interrupt === true;
     return (
       <ConfirmStatementCard
         key={k}
-        statement={(p.statement as string) ?? ""}
+        statement={p.statement}
         answered={isAnswered}
         interrupted={sInterrupted}
         approvedStatement={isAnswered ? (savedAnswer?.statement as string) : undefined}
@@ -280,7 +279,7 @@ export const classicRenderers: ViewRenderers = {
 
   suggestSession: (ev, _i, k, ctx) => {
     const p = ev.payload;
-    const requestId = (p.requestId as string) ?? "";
+    const requestId = p.requestId ?? "";
     const isAnswered = ctx.answeredRequests.has(requestId);
     const savedResponse = ctx.answeredRequests.get(requestId) as Record<string, unknown> | undefined;
     const decision = savedResponse?.behavior === "allow" ? "approved" as const : "dismissed" as const;
@@ -288,11 +287,11 @@ export const classicRenderers: ViewRenderers = {
     return (
       <SuggestionCard
         key={k}
-        skill={(p.skill as string) ?? ""}
-        specIds={(p.specIds as string[]) ?? []}
-        name={(p.name as string) ?? ""}
-        reason={(p.reason as string) ?? ""}
-        prompt={(p.prompt as string) ?? undefined}
+        skill={p.skill ?? ""}
+        specIds={p.specIds ?? []}
+        name={p.name ?? ""}
+        reason={p.reason ?? ""}
+        prompt={p.prompt ?? undefined}
         answered={isAnswered}
         decision={isAnswered ? decision : undefined}
         dismissReason={
@@ -306,10 +305,10 @@ export const classicRenderers: ViewRenderers = {
           const currentSession = ctx.session;
           try {
             const newSid = await store.startSession({
-              skillId: (p.skill as string) ?? undefined,
-              specIds: (p.specIds as string[]) ?? [],
-              prompt: (p.prompt as string) ?? undefined,
-              name: (p.name as string) ?? "Suggested Session",
+              skillId: p.skill ?? undefined,
+              specIds: p.specIds ?? [],
+              prompt: p.prompt ?? undefined,
+              name: p.name ?? "Suggested Session",
               config: {
                 model: currentSession?.model ?? "sonnet",
                 maxTurns: currentSession?.maxTurns ?? 50,
@@ -337,17 +336,17 @@ export const classicRenderers: ViewRenderers = {
 
   suggestDescription: (ev, _i, k, ctx) => {
     const p = ev.payload;
-    const requestId = (p.requestId as string) ?? "";
+    const requestId = p.requestId ?? "";
     const isAnswered = ctx.answeredRequests.has(requestId);
     const savedResponse = ctx.answeredRequests.get(requestId) as Record<string, unknown> | undefined;
     const decision = savedResponse?.behavior === "allow" ? "applied" as const : "dismissed" as const;
-    const descText = (p.description as string) ?? "";
+    const descText = p.description;
 
     return (
       <DescriptionSuggestionCard
         key={k}
         description={descText}
-        section={(p.section as string) ?? undefined}
+        section={p.section || undefined}
         answered={isAnswered}
         decision={isAnswered ? decision : undefined}
         dismissReason={
@@ -373,7 +372,7 @@ export const classicRenderers: ViewRenderers = {
   turnComplete: (ev, _i, k) => (
     <SystemMessage
       key={k}
-      text={`Turn complete \u2014 $${((ev.payload.turnCostUsd as number) ?? 0).toFixed(2)} \u00B7 ${(ev.payload.turn_turns as number) ?? 0} turns`}
+      text={`Turn complete \u2014 $${(ev.payload.turnCostUsd ?? 0).toFixed(2)} \u00B7 ${ev.payload.turns ?? 0} turns`}
       variant="ok"
     />
   ),
@@ -383,23 +382,23 @@ export const classicRenderers: ViewRenderers = {
   done: (ev, _i, k) => (
     <CompletionBanner
       key={k}
-      costUsd={(ev.payload.costUsd as number) ?? undefined}
-      turns={(ev.payload.turns as number) ?? undefined}
-      durationMs={(ev.payload.durationMs as number) ?? undefined}
+      costUsd={ev.payload.costUsd}
+      turns={ev.payload.turns}
+      durationMs={ev.payload.durationMs}
     />
   ),
 
   error: (ev, _i, k, ctx) => (
     <ErrorBanner
       key={k}
-      subtype={(ev.payload.subtype as string) ?? undefined}
-      errors={(ev.payload.errors as string[]) ?? undefined}
+      subtype={ev.payload.subtype}
+      errors={ev.payload.errors}
       bonsaiSid={ctx.session?.bonsaiSid}
     />
   ),
 
   notification: (ev, _i, k) => {
-    const p = ev.payload as Record<string, unknown>;
+    const p = ev.payload;
     if (p.type === "subsessionResult") {
       return (
         <SubsessionResultCard
@@ -410,19 +409,19 @@ export const classicRenderers: ViewRenderers = {
         />
       );
     }
-    return <SystemMessage key={k} text={(p.message as string) ?? ""} />;
+    return <SystemMessage key={k} text={p.message ?? ""} />;
   },
 
   compact: (ev, _i, k) => (
     <CompactMarker
       key={k}
-      preTokens={(ev.payload.preTokens as number) ?? undefined}
+      preTokens={ev.payload.preTokens}
     />
   ),
 
   permissionDenied: (ev, _i, k) => (
     <div key={k} className="chat-banner chat-banner-warn">
-      Permission denied: {(ev.payload.toolName as string) ?? "action"}
+      Permission denied: {ev.payload.toolName ?? "action"}
     </div>
   ),
 

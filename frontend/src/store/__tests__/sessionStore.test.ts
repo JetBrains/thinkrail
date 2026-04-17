@@ -80,7 +80,7 @@ describe("sessionStore remote events", () => {
       const session = useSessionStore.getState().sessions.get("sid1");
       expect(session!.events).toHaveLength(1);
       expect(session!.events[0].eventType).toBe("userMessage");
-      expect(session!.events[0].payload.text).toBe("Hello from another client");
+      expect((session!.events[0].payload as { text?: string }).text).toBe("Hello from another client");
     });
 
     it("deduplicates messages with same text as last event", () => {

@@ -1,13 +1,21 @@
 from __future__ import annotations
 
+import json
+from pathlib import Path
+
+from pydantic import TypeAdapter
+
 from app.agent.models import (
     AgentConfig,
     AgentEvent,
     AgentResult,
     AgentTask,
+    AskUserQuestionPayload,
     AskUserQuestionResponse,
     Question,
     QuestionOption,
+    TextDeltaEvent,
+    TextDeltaPayload,
     ToolApprovalResponse,
 )
 
@@ -105,46 +113,52 @@ class TestAgentTask:
 
 class TestAgentEvent:
     def test_construction(self) -> None:
-        event = AgentEvent(
+        event = TextDeltaEvent(
             bonsai_sid="t1",
             session_id="s1",
-            event_type="text_delta",
-            payload={"text": "hello"},
+            event_type="textDelta",
+            payload=TextDeltaPayload(text="hello"),
         )
         assert event.bonsai_sid == "t1"
-        assert event.event_type == "text_delta"
-        assert event.payload == {"text": "hello"}
-
-    def test_default_payload(self) -> None:
-        event = AgentEvent(bonsai_sid="t1", session_id="s1", event_type="done")
-        assert event.payload == {}
-
-    def test_serialization(self) -> None:
-        event = AgentEvent(
-            bonsai_sid="t1",
-            session_id="s1",
-            event_type="session_start",
-            payload={"session_id": "s1"},
-        )
-        data = event.model_dump()
-        assert data["event_type"] == "session_start"
-        assert data["payload"]["session_id"] == "s1"
+        assert event.event_type == "textDelta"
+        assert event.payload.text == "hello"
 
     def test_wire_format_uses_camel_case(self) -> None:
-        event = AgentEvent(
+        event = TextDeltaEvent(
             bonsai_sid="t1",
             session_id="s1",
-            event_type="text_delta",
+            event_type="textDelta",
+            payload=TextDeltaPayload(text="hi"),
         )
         data = event.model_dump(by_alias=True)
         assert "bonsaiSid" in data
         assert "sessionId" in data
         assert "eventType" in data
         assert data["bonsaiSid"] == "t1"
-        assert data["eventType"] == "text_delta"
+        assert data["eventType"] == "textDelta"
+        assert data["payload"]["text"] == "hi"
         assert "bonsai_sid" not in data
         assert "session_id" not in data
         assert "event_type" not in data
+
+    def test_discriminated_union_validation(self) -> None:
+        ta = TypeAdapter(AgentEvent)
+        event = ta.validate_python({
+            "eventType": "askUserQuestion",
+            "bonsaiSid": "t1",
+            "payload": {
+                "questions": [{"question": "Q?", "header": "H", "options": []}],
+            },
+        })
+        assert event.event_type == "askUserQuestion"
+        assert event.payload.questions[0].question == "Q?"
+
+    def test_schema_has_discriminator(self) -> None:
+        ta = TypeAdapter(AgentEvent)
+        schema = ta.json_schema(by_alias=True)
+        assert "discriminator" in schema
+        assert schema["discriminator"]["propertyName"] == "eventType"
+        assert "textDelta" in schema["discriminator"]["mapping"]
 
 
 class TestAgentResult:
@@ -228,3 +242,28 @@ class TestInteractiveModels:
         data = resp.model_dump()
         restored = ToolApprovalResponse(**data)
         assert restored == resp
+
+
+class TestWsSchemaSync:
+    """ws-events.json must be kept in sync with models.py.
+
+    If this test fails, run:
+        cd frontend && npm run generate:ws-schema && npm run generate:ws-types
+    """
+
+    def test_ws_events_json_matches_models(self) -> None:
+        ws_events_path = (
+            Path(__file__).parent.parent.parent.parent / "frontend" / "ws-events.json"
+        )
+        assert ws_events_path.is_file(), (
+            f"ws-events.json not found at {ws_events_path}.\n"
+            "Run: cd frontend && npm run generate:ws-schema && npm run generate:ws-types"
+        )
+
+        committed = json.loads(ws_events_path.read_text())
+        current = TypeAdapter(AgentEvent).json_schema(by_alias=True)
+
+        assert current == committed, (
+            "ws-events.json is out of sync with app/agent/models.py.\n"
+            "Run: cd frontend && npm run generate:ws-schema && npm run generate:ws-types"
+        )

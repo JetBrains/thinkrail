@@ -1,0 +1,1480 @@
+{
+  "$defs": {
+    "AskUserQuestionEvent": {
+      "properties": {
+        "bonsaiSid": {
+          "title": "Bonsaisid",
+          "type": "string"
+        },
+        "sessionId": {
+          "default": "",
+          "title": "Sessionid",
+          "type": "string"
+        },
+        "eventType": {
+          "const": "askUserQuestion",
+          "title": "Eventtype",
+          "type": "string"
+        },
+        "payload": {
+          "$ref": "#/$defs/AskUserQuestionPayload"
+        }
+      },
+      "required": [
+        "bonsaiSid",
+        "eventType",
+        "payload"
+      ],
+      "title": "AskUserQuestionEvent",
+      "type": "object"
+    },
+    "AskUserQuestionPayload": {
+      "description": "Agent needs answers from the user.",
+      "properties": {
+        "questions": {
+          "items": {
+            "$ref": "#/$defs/Question"
+          },
+          "title": "Questions",
+          "type": "array"
+        },
+        "attempt": {
+          "default": 0,
+          "title": "Attempt",
+          "type": "integer"
+        },
+        "requestId": {
+          "default": "",
+          "title": "Requestid",
+          "type": "string"
+        }
+      },
+      "required": [
+        "questions"
+      ],
+      "title": "AskUserQuestionPayload",
+      "type": "object"
+    },
+    "CompactEvent": {
+      "properties": {
+        "bonsaiSid": {
+          "title": "Bonsaisid",
+          "type": "string"
+        },
+        "sessionId": {
+          "default": "",
+          "title": "Sessionid",
+          "type": "string"
+        },
+        "eventType": {
+          "const": "compact",
+          "title": "Eventtype",
+          "type": "string"
+        },
+        "payload": {
+          "$ref": "#/$defs/CompactPayload"
+        }
+      },
+      "required": [
+        "bonsaiSid",
+        "eventType",
+        "payload"
+      ],
+      "title": "CompactEvent",
+      "type": "object"
+    },
+    "CompactPayload": {
+      "description": "Context compaction happened.",
+      "properties": {
+        "trigger": {
+          "title": "Trigger",
+          "type": "string"
+        },
+        "preTokens": {
+          "default": 0,
+          "title": "Pretokens",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "trigger"
+      ],
+      "title": "CompactPayload",
+      "type": "object"
+    },
+    "ConfirmActionEvent": {
+      "properties": {
+        "bonsaiSid": {
+          "title": "Bonsaisid",
+          "type": "string"
+        },
+        "sessionId": {
+          "default": "",
+          "title": "Sessionid",
+          "type": "string"
+        },
+        "eventType": {
+          "const": "confirmAction",
+          "title": "Eventtype",
+          "type": "string"
+        },
+        "payload": {
+          "$ref": "#/$defs/ConfirmActionPayload"
+        }
+      },
+      "required": [
+        "bonsaiSid",
+        "eventType",
+        "payload"
+      ],
+      "title": "ConfirmActionEvent",
+      "type": "object"
+    },
+    "ConfirmActionPayload": {
+      "description": "Agent wants to use a tool and needs approval.",
+      "properties": {
+        "toolName": {
+          "title": "Toolname",
+          "type": "string"
+        },
+        "toolInput": {
+          "additionalProperties": true,
+          "title": "Toolinput",
+          "type": "object"
+        },
+        "toolUseId": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Tooluseid"
+        },
+        "attempt": {
+          "default": 0,
+          "title": "Attempt",
+          "type": "integer"
+        },
+        "requestId": {
+          "default": "",
+          "title": "Requestid",
+          "type": "string"
+        },
+        "description": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Description"
+        }
+      },
+      "required": [
+        "toolName"
+      ],
+      "title": "ConfirmActionPayload",
+      "type": "object"
+    },
+    "ConfirmStatementEvent": {
+      "properties": {
+        "bonsaiSid": {
+          "title": "Bonsaisid",
+          "type": "string"
+        },
+        "sessionId": {
+          "default": "",
+          "title": "Sessionid",
+          "type": "string"
+        },
+        "eventType": {
+          "const": "confirmStatement",
+          "title": "Eventtype",
+          "type": "string"
+        },
+        "payload": {
+          "$ref": "#/$defs/ConfirmStatementPayload"
+        }
+      },
+      "required": [
+        "bonsaiSid",
+        "eventType",
+        "payload"
+      ],
+      "title": "ConfirmStatementEvent",
+      "type": "object"
+    },
+    "ConfirmStatementPayload": {
+      "description": "Agent presents a statement for user confirmation.",
+      "properties": {
+        "statement": {
+          "title": "Statement",
+          "type": "string"
+        },
+        "requestId": {
+          "default": "",
+          "title": "Requestid",
+          "type": "string"
+        }
+      },
+      "required": [
+        "statement"
+      ],
+      "title": "ConfirmStatementPayload",
+      "type": "object"
+    },
+    "DoneEvent": {
+      "properties": {
+        "bonsaiSid": {
+          "title": "Bonsaisid",
+          "type": "string"
+        },
+        "sessionId": {
+          "default": "",
+          "title": "Sessionid",
+          "type": "string"
+        },
+        "eventType": {
+          "const": "done",
+          "title": "Eventtype",
+          "type": "string"
+        },
+        "payload": {
+          "$ref": "#/$defs/DonePayload"
+        }
+      },
+      "required": [
+        "bonsaiSid",
+        "eventType",
+        "payload"
+      ],
+      "title": "DoneEvent",
+      "type": "object"
+    },
+    "DonePayload": {
+      "description": "Session closed gracefully after END_SIGNAL.",
+      "properties": {
+        "result": {
+          "default": "",
+          "title": "Result",
+          "type": "string"
+        },
+        "costUsd": {
+          "default": 0.0,
+          "title": "Costusd",
+          "type": "number"
+        },
+        "turns": {
+          "default": 0,
+          "title": "Turns",
+          "type": "integer"
+        },
+        "durationMs": {
+          "default": 0,
+          "title": "Durationms",
+          "type": "integer"
+        },
+        "usage": {
+          "additionalProperties": true,
+          "title": "Usage",
+          "type": "object"
+        }
+      },
+      "title": "DonePayload",
+      "type": "object"
+    },
+    "ErrorEvent": {
+      "properties": {
+        "bonsaiSid": {
+          "title": "Bonsaisid",
+          "type": "string"
+        },
+        "sessionId": {
+          "default": "",
+          "title": "Sessionid",
+          "type": "string"
+        },
+        "eventType": {
+          "const": "error",
+          "title": "Eventtype",
+          "type": "string"
+        },
+        "payload": {
+          "$ref": "#/$defs/ErrorPayload"
+        }
+      },
+      "required": [
+        "bonsaiSid",
+        "eventType",
+        "payload"
+      ],
+      "title": "ErrorEvent",
+      "type": "object"
+    },
+    "ErrorPayload": {
+      "description": "Turn failed with an error.",
+      "properties": {
+        "turnCostUsd": {
+          "default": 0.0,
+          "title": "Turncostusd",
+          "type": "number"
+        },
+        "costUsd": {
+          "default": 0.0,
+          "title": "Costusd",
+          "type": "number"
+        },
+        "turns": {
+          "default": 0,
+          "title": "Turns",
+          "type": "integer"
+        },
+        "turnTurns": {
+          "default": 0,
+          "title": "Turnturns",
+          "type": "integer"
+        },
+        "durationMs": {
+          "default": 0,
+          "title": "Durationms",
+          "type": "integer"
+        },
+        "usage": {
+          "additionalProperties": true,
+          "title": "Usage",
+          "type": "object"
+        },
+        "iterations": {
+          "items": {
+            "additionalProperties": true,
+            "type": "object"
+          },
+          "title": "Iterations",
+          "type": "array"
+        },
+        "contextWindow": {
+          "default": 0,
+          "title": "Contextwindow",
+          "type": "integer"
+        },
+        "subtype": {
+          "default": "turn_error",
+          "title": "Subtype",
+          "type": "string"
+        },
+        "errors": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Errors",
+          "type": "array"
+        },
+        "result": {
+          "default": "",
+          "title": "Result",
+          "type": "string"
+        }
+      },
+      "title": "ErrorPayload",
+      "type": "object"
+    },
+    "InterruptedEvent": {
+      "properties": {
+        "bonsaiSid": {
+          "title": "Bonsaisid",
+          "type": "string"
+        },
+        "sessionId": {
+          "default": "",
+          "title": "Sessionid",
+          "type": "string"
+        },
+        "eventType": {
+          "const": "interrupted",
+          "title": "Eventtype",
+          "type": "string"
+        },
+        "payload": {
+          "$ref": "#/$defs/InterruptedPayload"
+        }
+      },
+      "required": [
+        "bonsaiSid",
+        "eventType",
+        "payload"
+      ],
+      "title": "InterruptedEvent",
+      "type": "object"
+    },
+    "InterruptedPayload": {
+      "description": "Turn was cancelled by the user.",
+      "properties": {
+        "turnCostUsd": {
+          "default": 0.0,
+          "title": "Turncostusd",
+          "type": "number"
+        },
+        "costUsd": {
+          "default": 0.0,
+          "title": "Costusd",
+          "type": "number"
+        },
+        "turns": {
+          "default": 0,
+          "title": "Turns",
+          "type": "integer"
+        },
+        "turnTurns": {
+          "default": 0,
+          "title": "Turnturns",
+          "type": "integer"
+        },
+        "durationMs": {
+          "default": 0,
+          "title": "Durationms",
+          "type": "integer"
+        },
+        "usage": {
+          "additionalProperties": true,
+          "title": "Usage",
+          "type": "object"
+        },
+        "iterations": {
+          "items": {
+            "additionalProperties": true,
+            "type": "object"
+          },
+          "title": "Iterations",
+          "type": "array"
+        },
+        "contextWindow": {
+          "default": 0,
+          "title": "Contextwindow",
+          "type": "integer"
+        }
+      },
+      "title": "InterruptedPayload",
+      "type": "object"
+    },
+    "NotificationEvent": {
+      "properties": {
+        "bonsaiSid": {
+          "title": "Bonsaisid",
+          "type": "string"
+        },
+        "sessionId": {
+          "default": "",
+          "title": "Sessionid",
+          "type": "string"
+        },
+        "eventType": {
+          "const": "notification",
+          "title": "Eventtype",
+          "type": "string"
+        },
+        "payload": {
+          "$ref": "#/$defs/NotificationPayload"
+        }
+      },
+      "required": [
+        "bonsaiSid",
+        "eventType",
+        "payload"
+      ],
+      "title": "NotificationEvent",
+      "type": "object"
+    },
+    "NotificationPayload": {
+      "additionalProperties": true,
+      "description": "A user-visible message from the agent.",
+      "properties": {
+        "message": {
+          "default": "",
+          "title": "Message",
+          "type": "string"
+        },
+        "type": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Type"
+        }
+      },
+      "title": "NotificationPayload",
+      "type": "object"
+    },
+    "PermissionDeniedEvent": {
+      "properties": {
+        "bonsaiSid": {
+          "title": "Bonsaisid",
+          "type": "string"
+        },
+        "sessionId": {
+          "default": "",
+          "title": "Sessionid",
+          "type": "string"
+        },
+        "eventType": {
+          "const": "permissionDenied",
+          "title": "Eventtype",
+          "type": "string"
+        },
+        "payload": {
+          "$ref": "#/$defs/PermissionDeniedPayload"
+        }
+      },
+      "required": [
+        "bonsaiSid",
+        "eventType",
+        "payload"
+      ],
+      "title": "PermissionDeniedEvent",
+      "type": "object"
+    },
+    "PermissionDeniedPayload": {
+      "additionalProperties": true,
+      "description": "A tool was blocked by the SDK.",
+      "properties": {
+        "toolName": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Toolname"
+        }
+      },
+      "title": "PermissionDeniedPayload",
+      "type": "object"
+    },
+    "ProgressEvent": {
+      "properties": {
+        "bonsaiSid": {
+          "title": "Bonsaisid",
+          "type": "string"
+        },
+        "sessionId": {
+          "default": "",
+          "title": "Sessionid",
+          "type": "string"
+        },
+        "eventType": {
+          "const": "progress",
+          "title": "Eventtype",
+          "type": "string"
+        },
+        "payload": {
+          "$ref": "#/$defs/ProgressPayload"
+        }
+      },
+      "required": [
+        "bonsaiSid",
+        "eventType",
+        "payload"
+      ],
+      "title": "ProgressEvent",
+      "type": "object"
+    },
+    "ProgressPayload": {
+      "description": "Ephemeral status message (not persisted).",
+      "properties": {
+        "message": {
+          "default": "",
+          "title": "Message",
+          "type": "string"
+        }
+      },
+      "title": "ProgressPayload",
+      "type": "object"
+    },
+    "Question": {
+      "description": "A single question with selectable options.",
+      "properties": {
+        "question": {
+          "title": "Question",
+          "type": "string"
+        },
+        "header": {
+          "title": "Header",
+          "type": "string"
+        },
+        "options": {
+          "items": {
+            "$ref": "#/$defs/QuestionOption"
+          },
+          "title": "Options",
+          "type": "array"
+        },
+        "multiSelect": {
+          "default": false,
+          "title": "Multiselect",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "question",
+        "header",
+        "options"
+      ],
+      "title": "Question",
+      "type": "object"
+    },
+    "QuestionOption": {
+      "description": "A selectable option within a question.",
+      "properties": {
+        "label": {
+          "title": "Label",
+          "type": "string"
+        },
+        "description": {
+          "title": "Description",
+          "type": "string"
+        }
+      },
+      "required": [
+        "label",
+        "description"
+      ],
+      "title": "QuestionOption",
+      "type": "object"
+    },
+    "ReadyEvent": {
+      "properties": {
+        "bonsaiSid": {
+          "title": "Bonsaisid",
+          "type": "string"
+        },
+        "sessionId": {
+          "default": "",
+          "title": "Sessionid",
+          "type": "string"
+        },
+        "eventType": {
+          "const": "ready",
+          "title": "Eventtype",
+          "type": "string"
+        },
+        "payload": {
+          "$ref": "#/$defs/ReadyPayload"
+        }
+      },
+      "required": [
+        "bonsaiSid",
+        "eventType"
+      ],
+      "title": "ReadyEvent",
+      "type": "object"
+    },
+    "ReadyPayload": {
+      "description": "Session is idle and waiting for input.",
+      "properties": {},
+      "title": "ReadyPayload",
+      "type": "object"
+    },
+    "RequestExpiredEvent": {
+      "properties": {
+        "bonsaiSid": {
+          "title": "Bonsaisid",
+          "type": "string"
+        },
+        "sessionId": {
+          "default": "",
+          "title": "Sessionid",
+          "type": "string"
+        },
+        "eventType": {
+          "const": "requestExpired",
+          "title": "Eventtype",
+          "type": "string"
+        },
+        "payload": {
+          "$ref": "#/$defs/RequestExpiredPayload"
+        }
+      },
+      "required": [
+        "bonsaiSid",
+        "eventType",
+        "payload"
+      ],
+      "title": "RequestExpiredEvent",
+      "type": "object"
+    },
+    "RequestExpiredPayload": {
+      "description": "Pending request timed out without a response.",
+      "properties": {
+        "requestId": {
+          "default": "",
+          "title": "Requestid",
+          "type": "string"
+        },
+        "reason": {
+          "default": "timeout",
+          "title": "Reason",
+          "type": "string"
+        }
+      },
+      "title": "RequestExpiredPayload",
+      "type": "object"
+    },
+    "RequestResolvedEvent": {
+      "properties": {
+        "bonsaiSid": {
+          "title": "Bonsaisid",
+          "type": "string"
+        },
+        "sessionId": {
+          "default": "",
+          "title": "Sessionid",
+          "type": "string"
+        },
+        "eventType": {
+          "const": "requestResolved",
+          "title": "Eventtype",
+          "type": "string"
+        },
+        "payload": {
+          "$ref": "#/$defs/RequestResolvedPayload"
+        }
+      },
+      "required": [
+        "bonsaiSid",
+        "eventType",
+        "payload"
+      ],
+      "title": "RequestResolvedEvent",
+      "type": "object"
+    },
+    "RequestResolvedPayload": {
+      "description": "User responded to a pending request.",
+      "properties": {
+        "requestId": {
+          "default": "",
+          "title": "Requestid",
+          "type": "string"
+        },
+        "response": {
+          "anyOf": [
+            {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Response"
+        }
+      },
+      "title": "RequestResolvedPayload",
+      "type": "object"
+    },
+    "SessionStartEvent": {
+      "properties": {
+        "bonsaiSid": {
+          "title": "Bonsaisid",
+          "type": "string"
+        },
+        "sessionId": {
+          "default": "",
+          "title": "Sessionid",
+          "type": "string"
+        },
+        "eventType": {
+          "const": "sessionStart",
+          "title": "Eventtype",
+          "type": "string"
+        },
+        "payload": {
+          "$ref": "#/$defs/SessionStartPayload"
+        }
+      },
+      "required": [
+        "bonsaiSid",
+        "eventType",
+        "payload"
+      ],
+      "title": "SessionStartEvent",
+      "type": "object"
+    },
+    "SessionStartPayload": {
+      "additionalProperties": true,
+      "description": "Emitted once when the SDK session initializes.",
+      "properties": {
+        "sessionId": {
+          "default": "",
+          "title": "Sessionid",
+          "type": "string"
+        },
+        "systemPrompt": {
+          "default": "",
+          "title": "Systemprompt",
+          "type": "string"
+        },
+        "inferenceBudgetTokens": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Inferencebudgettokens"
+        }
+      },
+      "title": "SessionStartPayload",
+      "type": "object"
+    },
+    "SubagentEndEvent": {
+      "properties": {
+        "bonsaiSid": {
+          "title": "Bonsaisid",
+          "type": "string"
+        },
+        "sessionId": {
+          "default": "",
+          "title": "Sessionid",
+          "type": "string"
+        },
+        "eventType": {
+          "const": "subagentEnd",
+          "title": "Eventtype",
+          "type": "string"
+        },
+        "payload": {
+          "$ref": "#/$defs/SubagentEndPayload"
+        }
+      },
+      "required": [
+        "bonsaiSid",
+        "eventType",
+        "payload"
+      ],
+      "title": "SubagentEndEvent",
+      "type": "object"
+    },
+    "SubagentEndPayload": {
+      "description": "Child agent finished.",
+      "properties": {
+        "agentId": {
+          "title": "Agentid",
+          "type": "string"
+        }
+      },
+      "required": [
+        "agentId"
+      ],
+      "title": "SubagentEndPayload",
+      "type": "object"
+    },
+    "SubagentStartEvent": {
+      "properties": {
+        "bonsaiSid": {
+          "title": "Bonsaisid",
+          "type": "string"
+        },
+        "sessionId": {
+          "default": "",
+          "title": "Sessionid",
+          "type": "string"
+        },
+        "eventType": {
+          "const": "subagentStart",
+          "title": "Eventtype",
+          "type": "string"
+        },
+        "payload": {
+          "$ref": "#/$defs/SubagentStartPayload"
+        }
+      },
+      "required": [
+        "bonsaiSid",
+        "eventType",
+        "payload"
+      ],
+      "title": "SubagentStartEvent",
+      "type": "object"
+    },
+    "SubagentStartPayload": {
+      "description": "A child agent was spawned.",
+      "properties": {
+        "agentId": {
+          "title": "Agentid",
+          "type": "string"
+        },
+        "agentType": {
+          "title": "Agenttype",
+          "type": "string"
+        }
+      },
+      "required": [
+        "agentId",
+        "agentType"
+      ],
+      "title": "SubagentStartPayload",
+      "type": "object"
+    },
+    "SuggestDescriptionEvent": {
+      "properties": {
+        "bonsaiSid": {
+          "title": "Bonsaisid",
+          "type": "string"
+        },
+        "sessionId": {
+          "default": "",
+          "title": "Sessionid",
+          "type": "string"
+        },
+        "eventType": {
+          "const": "suggestDescription",
+          "title": "Eventtype",
+          "type": "string"
+        },
+        "payload": {
+          "$ref": "#/$defs/SuggestDescriptionPayload"
+        }
+      },
+      "required": [
+        "bonsaiSid",
+        "eventType",
+        "payload"
+      ],
+      "title": "SuggestDescriptionEvent",
+      "type": "object"
+    },
+    "SuggestDescriptionPayload": {
+      "description": "Agent suggests a session description.",
+      "properties": {
+        "description": {
+          "title": "Description",
+          "type": "string"
+        },
+        "section": {
+          "default": "",
+          "title": "Section",
+          "type": "string"
+        },
+        "requestId": {
+          "default": "",
+          "title": "Requestid",
+          "type": "string"
+        }
+      },
+      "required": [
+        "description"
+      ],
+      "title": "SuggestDescriptionPayload",
+      "type": "object"
+    },
+    "SuggestSessionEvent": {
+      "properties": {
+        "bonsaiSid": {
+          "title": "Bonsaisid",
+          "type": "string"
+        },
+        "sessionId": {
+          "default": "",
+          "title": "Sessionid",
+          "type": "string"
+        },
+        "eventType": {
+          "const": "suggestSession",
+          "title": "Eventtype",
+          "type": "string"
+        },
+        "payload": {
+          "$ref": "#/$defs/SuggestSessionPayload"
+        }
+      },
+      "required": [
+        "bonsaiSid",
+        "eventType",
+        "payload"
+      ],
+      "title": "SuggestSessionEvent",
+      "type": "object"
+    },
+    "SuggestSessionPayload": {
+      "description": "Agent suggests creating a subsession.",
+      "properties": {
+        "skill": {
+          "default": "",
+          "title": "Skill",
+          "type": "string"
+        },
+        "specIds": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Specids",
+          "type": "array"
+        },
+        "name": {
+          "default": "",
+          "title": "Name",
+          "type": "string"
+        },
+        "reason": {
+          "default": "",
+          "title": "Reason",
+          "type": "string"
+        },
+        "prompt": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Prompt"
+        },
+        "requestId": {
+          "default": "",
+          "title": "Requestid",
+          "type": "string"
+        }
+      },
+      "title": "SuggestSessionPayload",
+      "type": "object"
+    },
+    "TextDeltaEvent": {
+      "properties": {
+        "bonsaiSid": {
+          "title": "Bonsaisid",
+          "type": "string"
+        },
+        "sessionId": {
+          "default": "",
+          "title": "Sessionid",
+          "type": "string"
+        },
+        "eventType": {
+          "const": "textDelta",
+          "title": "Eventtype",
+          "type": "string"
+        },
+        "payload": {
+          "$ref": "#/$defs/TextDeltaPayload"
+        }
+      },
+      "required": [
+        "bonsaiSid",
+        "eventType",
+        "payload"
+      ],
+      "title": "TextDeltaEvent",
+      "type": "object"
+    },
+    "TextDeltaPayload": {
+      "description": "A chunk of streamed assistant text.",
+      "properties": {
+        "text": {
+          "title": "Text",
+          "type": "string"
+        },
+        "agentId": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Agentid"
+        }
+      },
+      "required": [
+        "text"
+      ],
+      "title": "TextDeltaPayload",
+      "type": "object"
+    },
+    "ToolCallEndEvent": {
+      "properties": {
+        "bonsaiSid": {
+          "title": "Bonsaisid",
+          "type": "string"
+        },
+        "sessionId": {
+          "default": "",
+          "title": "Sessionid",
+          "type": "string"
+        },
+        "eventType": {
+          "const": "toolCallEnd",
+          "title": "Eventtype",
+          "type": "string"
+        },
+        "payload": {
+          "$ref": "#/$defs/ToolCallEndPayload"
+        }
+      },
+      "required": [
+        "bonsaiSid",
+        "eventType",
+        "payload"
+      ],
+      "title": "ToolCallEndEvent",
+      "type": "object"
+    },
+    "ToolCallEndPayload": {
+      "description": "Tool result returned to the agent.",
+      "properties": {
+        "toolUseId": {
+          "title": "Tooluseid",
+          "type": "string"
+        },
+        "toolName": {
+          "default": "",
+          "title": "Toolname",
+          "type": "string"
+        },
+        "output": {
+          "title": "Output",
+          "type": "string"
+        },
+        "isError": {
+          "default": false,
+          "title": "Iserror",
+          "type": "boolean"
+        },
+        "agentId": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Agentid"
+        }
+      },
+      "required": [
+        "toolUseId",
+        "output"
+      ],
+      "title": "ToolCallEndPayload",
+      "type": "object"
+    },
+    "ToolCallStartEvent": {
+      "properties": {
+        "bonsaiSid": {
+          "title": "Bonsaisid",
+          "type": "string"
+        },
+        "sessionId": {
+          "default": "",
+          "title": "Sessionid",
+          "type": "string"
+        },
+        "eventType": {
+          "const": "toolCallStart",
+          "title": "Eventtype",
+          "type": "string"
+        },
+        "payload": {
+          "$ref": "#/$defs/ToolCallStartPayload"
+        }
+      },
+      "required": [
+        "bonsaiSid",
+        "eventType",
+        "payload"
+      ],
+      "title": "ToolCallStartEvent",
+      "type": "object"
+    },
+    "ToolCallStartPayload": {
+      "description": "Agent invokes a tool.",
+      "properties": {
+        "toolUseId": {
+          "title": "Tooluseid",
+          "type": "string"
+        },
+        "toolName": {
+          "title": "Toolname",
+          "type": "string"
+        },
+        "toolInput": {
+          "additionalProperties": true,
+          "title": "Toolinput",
+          "type": "object"
+        },
+        "agentId": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Agentid"
+        }
+      },
+      "required": [
+        "toolUseId",
+        "toolName",
+        "toolInput"
+      ],
+      "title": "ToolCallStartPayload",
+      "type": "object"
+    },
+    "TurnCompleteEvent": {
+      "properties": {
+        "bonsaiSid": {
+          "title": "Bonsaisid",
+          "type": "string"
+        },
+        "sessionId": {
+          "default": "",
+          "title": "Sessionid",
+          "type": "string"
+        },
+        "eventType": {
+          "const": "turnComplete",
+          "title": "Eventtype",
+          "type": "string"
+        },
+        "payload": {
+          "$ref": "#/$defs/TurnCompletePayload"
+        }
+      },
+      "required": [
+        "bonsaiSid",
+        "eventType",
+        "payload"
+      ],
+      "title": "TurnCompleteEvent",
+      "type": "object"
+    },
+    "TurnCompletePayload": {
+      "description": "Agent completed a turn successfully.",
+      "properties": {
+        "turnCostUsd": {
+          "default": 0.0,
+          "title": "Turncostusd",
+          "type": "number"
+        },
+        "costUsd": {
+          "default": 0.0,
+          "title": "Costusd",
+          "type": "number"
+        },
+        "turns": {
+          "default": 0,
+          "title": "Turns",
+          "type": "integer"
+        },
+        "turnTurns": {
+          "default": 0,
+          "title": "Turnturns",
+          "type": "integer"
+        },
+        "durationMs": {
+          "default": 0,
+          "title": "Durationms",
+          "type": "integer"
+        },
+        "usage": {
+          "additionalProperties": true,
+          "title": "Usage",
+          "type": "object"
+        },
+        "iterations": {
+          "items": {
+            "additionalProperties": true,
+            "type": "object"
+          },
+          "title": "Iterations",
+          "type": "array"
+        },
+        "contextWindow": {
+          "default": 0,
+          "title": "Contextwindow",
+          "type": "integer"
+        },
+        "result": {
+          "default": "",
+          "title": "Result",
+          "type": "string"
+        }
+      },
+      "title": "TurnCompletePayload",
+      "type": "object"
+    },
+    "UserMessageEvent": {
+      "properties": {
+        "bonsaiSid": {
+          "title": "Bonsaisid",
+          "type": "string"
+        },
+        "sessionId": {
+          "default": "",
+          "title": "Sessionid",
+          "type": "string"
+        },
+        "eventType": {
+          "const": "userMessage",
+          "title": "Eventtype",
+          "type": "string"
+        },
+        "payload": {
+          "$ref": "#/$defs/UserMessagePayload"
+        }
+      },
+      "required": [
+        "bonsaiSid",
+        "eventType",
+        "payload"
+      ],
+      "title": "UserMessageEvent",
+      "type": "object"
+    },
+    "UserMessagePayload": {
+      "description": "Echoed user input, stored in the event log.",
+      "properties": {
+        "text": {
+          "title": "Text",
+          "type": "string"
+        },
+        "isMarkdown": {
+          "default": false,
+          "title": "Ismarkdown",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "text"
+      ],
+      "title": "UserMessagePayload",
+      "type": "object"
+    }
+  },
+  "discriminator": {
+    "mapping": {
+      "askUserQuestion": "#/$defs/AskUserQuestionEvent",
+      "compact": "#/$defs/CompactEvent",
+      "confirmAction": "#/$defs/ConfirmActionEvent",
+      "confirmStatement": "#/$defs/ConfirmStatementEvent",
+      "done": "#/$defs/DoneEvent",
+      "error": "#/$defs/ErrorEvent",
+      "interrupted": "#/$defs/InterruptedEvent",
+      "notification": "#/$defs/NotificationEvent",
+      "permissionDenied": "#/$defs/PermissionDeniedEvent",
+      "progress": "#/$defs/ProgressEvent",
+      "ready": "#/$defs/ReadyEvent",
+      "requestExpired": "#/$defs/RequestExpiredEvent",
+      "requestResolved": "#/$defs/RequestResolvedEvent",
+      "sessionStart": "#/$defs/SessionStartEvent",
+      "subagentEnd": "#/$defs/SubagentEndEvent",
+      "subagentStart": "#/$defs/SubagentStartEvent",
+      "suggestDescription": "#/$defs/SuggestDescriptionEvent",
+      "suggestSession": "#/$defs/SuggestSessionEvent",
+      "textDelta": "#/$defs/TextDeltaEvent",
+      "toolCallEnd": "#/$defs/ToolCallEndEvent",
+      "toolCallStart": "#/$defs/ToolCallStartEvent",
+      "turnComplete": "#/$defs/TurnCompleteEvent",
+      "userMessage": "#/$defs/UserMessageEvent"
+    },
+    "propertyName": "eventType"
+  },
+  "oneOf": [
+    {
+      "$ref": "#/$defs/SessionStartEvent"
+    },
+    {
+      "$ref": "#/$defs/TextDeltaEvent"
+    },
+    {
+      "$ref": "#/$defs/ToolCallStartEvent"
+    },
+    {
+      "$ref": "#/$defs/ToolCallEndEvent"
+    },
+    {
+      "$ref": "#/$defs/SubagentStartEvent"
+    },
+    {
+      "$ref": "#/$defs/SubagentEndEvent"
+    },
+    {
+      "$ref": "#/$defs/CompactEvent"
+    },
+    {
+      "$ref": "#/$defs/ProgressEvent"
+    },
+    {
+      "$ref": "#/$defs/NotificationEvent"
+    },
+    {
+      "$ref": "#/$defs/PermissionDeniedEvent"
+    },
+    {
+      "$ref": "#/$defs/ReadyEvent"
+    },
+    {
+      "$ref": "#/$defs/TurnCompleteEvent"
+    },
+    {
+      "$ref": "#/$defs/InterruptedEvent"
+    },
+    {
+      "$ref": "#/$defs/ErrorEvent"
+    },
+    {
+      "$ref": "#/$defs/DoneEvent"
+    },
+    {
+      "$ref": "#/$defs/AskUserQuestionEvent"
+    },
+    {
+      "$ref": "#/$defs/ConfirmActionEvent"
+    },
+    {
+      "$ref": "#/$defs/ConfirmStatementEvent"
+    },
+    {
+      "$ref": "#/$defs/SuggestSessionEvent"
+    },
+    {
+      "$ref": "#/$defs/SuggestDescriptionEvent"
+    },
+    {
+      "$ref": "#/$defs/RequestResolvedEvent"
+    },
+    {
+      "$ref": "#/$defs/RequestExpiredEvent"
+    },
+    {
+      "$ref": "#/$defs/UserMessageEvent"
+    }
+  ]
+}

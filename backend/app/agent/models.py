@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 from enum import Enum
-from typing import Any, Literal
+from typing import Annotated, Any, Literal, Union
 from uuid import uuid4
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -25,24 +25,8 @@ class SubsessionType(str, Enum):
     discussion = "discussion"
     refinement = "refinement"
 
-EventType = Literal[
-    "session_start",
-    "text_delta",
-    "tool_call_start",
-    "tool_call_end",
-    "turn_complete",
-    "interrupted",
-    "subagent_start",
-    "subagent_end",
-    "notification",
-    "compact",
-    "progress",
-    "done",
-    "error",
-    "permission_denied",
-    "ready",
-]
 
+# ─── Interaction request/response models ──────────────────────────────────────
 
 class AgentConfig(BaseModel):
     """Run configuration passed to the Claude Agent SDK."""
@@ -90,16 +74,393 @@ class ToolApprovalResponse(BaseModel):
     interrupt: bool = False
 
 
-class AgentEvent(BaseModel):
-    """Serializable event sent as a notification to the frontend."""
+# ─── Event payload models ──────────────────────────────────────────────────────
+
+class SessionStartPayload(BaseModel):
+    """Emitted once when the SDK session initializes."""
+
+    model_config = ConfigDict(extra="allow", alias_generator=to_camel, populate_by_name=True)
+
+    session_id: str = ""
+    system_prompt: str = ""
+    inference_budget_tokens: int | None = None
+
+
+class TextDeltaPayload(BaseModel):
+    """A chunk of streamed assistant text."""
+
+    model_config = _CAMEL_CONFIG
+
+    text: str
+    agent_id: str | None = None
+
+
+class ToolCallStartPayload(BaseModel):
+    """Agent invokes a tool."""
+
+    model_config = _CAMEL_CONFIG
+
+    tool_use_id: str
+    tool_name: str
+    tool_input: dict[str, Any]
+    agent_id: str | None = None
+
+
+class ToolCallEndPayload(BaseModel):
+    """Tool result returned to the agent."""
+
+    model_config = _CAMEL_CONFIG
+
+    tool_use_id: str
+    tool_name: str = ""
+    output: str
+    is_error: bool = False
+    agent_id: str | None = None
+
+
+class SubagentStartPayload(BaseModel):
+    """A child agent was spawned."""
+
+    model_config = _CAMEL_CONFIG
+
+    agent_id: str
+    agent_type: str
+
+
+class SubagentEndPayload(BaseModel):
+    """Child agent finished."""
+
+    model_config = _CAMEL_CONFIG
+
+    agent_id: str
+
+
+class CompactPayload(BaseModel):
+    """Context compaction happened."""
+
+    model_config = _CAMEL_CONFIG
+
+    trigger: str
+    pre_tokens: int = 0
+
+
+class ProgressPayload(BaseModel):
+    """Ephemeral status message (not persisted)."""
+
+    model_config = _CAMEL_CONFIG
+
+    message: str = ""
+
+
+class NotificationPayload(BaseModel):
+    """A user-visible message from the agent."""
+
+    model_config = ConfigDict(extra="allow", alias_generator=to_camel, populate_by_name=True)
+
+    message: str = ""
+    type: str | None = None
+
+
+class PermissionDeniedPayload(BaseModel):
+    """A tool was blocked by the SDK."""
+
+    model_config = ConfigDict(extra="allow", alias_generator=to_camel, populate_by_name=True)
+
+    tool_name: str | None = None
+
+
+class ReadyPayload(BaseModel):
+    """Session is idle and waiting for input."""
+
+
+class _TurnEndPayload(BaseModel):
+    """Shared fields for turn-ending events."""
+
+    model_config = _CAMEL_CONFIG
+
+    turn_cost_usd: float = 0.0
+    cost_usd: float = 0.0
+    turns: int = 0
+    turn_turns: int = 0
+    duration_ms: int = 0
+    usage: dict[str, Any] = Field(default_factory=dict)
+    iterations: list[dict[str, Any]] = Field(default_factory=list)
+    context_window: int = 0
+
+
+class TurnCompletePayload(_TurnEndPayload):
+    """Agent completed a turn successfully."""
+
+    result: str = ""
+
+
+class InterruptedPayload(_TurnEndPayload):
+    """Turn was cancelled by the user."""
+
+
+class ErrorPayload(_TurnEndPayload):
+    """Turn failed with an error."""
+
+    subtype: str = "turn_error"
+    errors: list[str] = Field(default_factory=list)
+    result: str = ""
+
+
+class DonePayload(BaseModel):
+    """Session closed gracefully after END_SIGNAL."""
+
+    model_config = _CAMEL_CONFIG
+
+    result: str = ""
+    cost_usd: float = 0.0
+    turns: int = 0
+    duration_ms: int = 0
+    usage: dict[str, Any] = Field(default_factory=dict)
+
+
+class AskUserQuestionPayload(BaseModel):
+    """Agent needs answers from the user."""
+
+    model_config = _CAMEL_CONFIG
+
+    questions: list[Question]
+    attempt: int = 0
+    request_id: str = ""
+
+
+class ConfirmActionPayload(BaseModel):
+    """Agent wants to use a tool and needs approval."""
+
+    model_config = _CAMEL_CONFIG
+
+    tool_name: str
+    tool_input: dict[str, Any] = Field(default_factory=dict)
+    tool_use_id: str | None = None
+    attempt: int = 0
+    request_id: str = ""
+    description: str | None = None
+
+
+class ConfirmStatementPayload(BaseModel):
+    """Agent presents a statement for user confirmation."""
+
+    model_config = _CAMEL_CONFIG
+
+    statement: str
+    request_id: str = ""
+
+
+class SuggestSessionPayload(BaseModel):
+    """Agent suggests creating a subsession."""
+
+    model_config = _CAMEL_CONFIG
+
+    skill: str = ""
+    spec_ids: list[str] = Field(default_factory=list)
+    name: str = ""
+    reason: str = ""
+    prompt: str | None = None
+    request_id: str = ""
+
+
+class SuggestDescriptionPayload(BaseModel):
+    """Agent suggests a session description."""
+
+    model_config = _CAMEL_CONFIG
+
+    description: str
+    section: str = ""
+    request_id: str = ""
+
+
+class RequestResolvedPayload(BaseModel):
+    """User responded to a pending request."""
+
+    model_config = _CAMEL_CONFIG
+
+    request_id: str = ""
+    response: dict[str, Any] | None = None
+
+
+class RequestExpiredPayload(BaseModel):
+    """Pending request timed out without a response."""
+
+    model_config = _CAMEL_CONFIG
+
+    request_id: str = ""
+    reason: str = "timeout"
+
+
+class UserMessagePayload(BaseModel):
+    """Echoed user input, stored in the event log."""
+
+    model_config = _CAMEL_CONFIG
+
+    text: str
+    is_markdown: bool = False
+
+
+# ─── Typed agent event models ──────────────────────────────────────────────────
+# Each variant has event_type: Literal["camelCase"] + a typed payload.
+# Used for schema generation — see AgentEvent union at the bottom.
+
+class _BaseEvent(BaseModel):
+    """Common envelope fields shared by every agent event."""
 
     model_config = _CAMEL_CONFIG
 
     bonsai_sid: str
-    session_id: str
-    event_type: EventType
-    payload: dict[str, Any] = Field(default_factory=dict)
+    session_id: str = ""
 
+
+class SessionStartEvent(_BaseEvent):
+    event_type: Literal["sessionStart"]
+    payload: SessionStartPayload
+
+
+class TextDeltaEvent(_BaseEvent):
+    event_type: Literal["textDelta"]
+    payload: TextDeltaPayload
+
+
+class ToolCallStartEvent(_BaseEvent):
+    event_type: Literal["toolCallStart"]
+    payload: ToolCallStartPayload
+
+
+class ToolCallEndEvent(_BaseEvent):
+    event_type: Literal["toolCallEnd"]
+    payload: ToolCallEndPayload
+
+
+class SubagentStartEvent(_BaseEvent):
+    event_type: Literal["subagentStart"]
+    payload: SubagentStartPayload
+
+
+class SubagentEndEvent(_BaseEvent):
+    event_type: Literal["subagentEnd"]
+    payload: SubagentEndPayload
+
+
+class CompactEvent(_BaseEvent):
+    event_type: Literal["compact"]
+    payload: CompactPayload
+
+
+class ProgressEvent(_BaseEvent):
+    event_type: Literal["progress"]
+    payload: ProgressPayload
+
+
+class NotificationEvent(_BaseEvent):
+    event_type: Literal["notification"]
+    payload: NotificationPayload
+
+
+class PermissionDeniedEvent(_BaseEvent):
+    event_type: Literal["permissionDenied"]
+    payload: PermissionDeniedPayload
+
+
+class ReadyEvent(_BaseEvent):
+    event_type: Literal["ready"]
+    payload: ReadyPayload = Field(default_factory=ReadyPayload)
+
+
+class TurnCompleteEvent(_BaseEvent):
+    event_type: Literal["turnComplete"]
+    payload: TurnCompletePayload
+
+
+class InterruptedEvent(_BaseEvent):
+    event_type: Literal["interrupted"]
+    payload: InterruptedPayload
+
+
+class ErrorEvent(_BaseEvent):
+    event_type: Literal["error"]
+    payload: ErrorPayload
+
+
+class DoneEvent(_BaseEvent):
+    event_type: Literal["done"]
+    payload: DonePayload
+
+
+class AskUserQuestionEvent(_BaseEvent):
+    event_type: Literal["askUserQuestion"]
+    payload: AskUserQuestionPayload
+
+
+class ConfirmActionEvent(_BaseEvent):
+    event_type: Literal["confirmAction"]
+    payload: ConfirmActionPayload
+
+
+class ConfirmStatementEvent(_BaseEvent):
+    event_type: Literal["confirmStatement"]
+    payload: ConfirmStatementPayload
+
+
+class SuggestSessionEvent(_BaseEvent):
+    event_type: Literal["suggestSession"]
+    payload: SuggestSessionPayload
+
+
+class SuggestDescriptionEvent(_BaseEvent):
+    event_type: Literal["suggestDescription"]
+    payload: SuggestDescriptionPayload
+
+
+class RequestResolvedEvent(_BaseEvent):
+    event_type: Literal["requestResolved"]
+    payload: RequestResolvedPayload
+
+
+class RequestExpiredEvent(_BaseEvent):
+    event_type: Literal["requestExpired"]
+    payload: RequestExpiredPayload
+
+
+class UserMessageEvent(_BaseEvent):
+    event_type: Literal["userMessage"]
+    payload: UserMessagePayload
+
+
+# Discriminated union — single source of truth for both runtime validation
+# and TypeScript type generation (via `uv run python -m app.cli export-ws-schema`).
+AgentEvent = Annotated[
+    Union[
+        SessionStartEvent,
+        TextDeltaEvent,
+        ToolCallStartEvent,
+        ToolCallEndEvent,
+        SubagentStartEvent,
+        SubagentEndEvent,
+        CompactEvent,
+        ProgressEvent,
+        NotificationEvent,
+        PermissionDeniedEvent,
+        ReadyEvent,
+        TurnCompleteEvent,
+        InterruptedEvent,
+        ErrorEvent,
+        DoneEvent,
+        AskUserQuestionEvent,
+        ConfirmActionEvent,
+        ConfirmStatementEvent,
+        SuggestSessionEvent,
+        SuggestDescriptionEvent,
+        RequestResolvedEvent,
+        RequestExpiredEvent,
+        UserMessageEvent,
+    ],
+    Field(discriminator="event_type"),
+]
+
+
+# ─── Other models ─────────────────────────────────────────────────────────────
 
 class MessageTooLargeError(Exception):
     """Raised when a user message would consume too much of the remaining context."""

@@ -77,6 +77,20 @@ def _export_schema(output: str | None) -> None:
         print(schema)
 
 
+def _export_ws_schema(output: str | None) -> None:
+    import json
+    from pydantic import TypeAdapter
+    from app.agent.models import AgentEvent
+
+    schema = json.dumps(TypeAdapter(AgentEvent).json_schema(by_alias=True), indent=2)
+    if output:
+        import pathlib
+        pathlib.Path(output).write_text(schema)
+        print(f"WS event schema written to {output}")
+    else:
+        print(schema)
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(prog="bonsai-cli", description="Bonsai server admin")
     sub = parser.add_subparsers(dest="command")
@@ -98,6 +112,10 @@ def main() -> None:
     es = sub.add_parser("export-schema", help="Export OpenAPI schema as JSON")
     es.add_argument("-o", "--output", help="Write to file instead of stdout")
 
+    # export-ws-schema
+    ews = sub.add_parser("export-ws-schema", help="Export WebSocket event JSON Schema")
+    ews.add_argument("-o", "--output", help="Write to file instead of stdout")
+
     args = parser.parse_args()
 
     if args.command == "create-user":
@@ -108,6 +126,8 @@ def main() -> None:
         asyncio.run(_list_users())
     elif args.command == "export-schema":
         _export_schema(args.output)
+    elif args.command == "export-ws-schema":
+        _export_ws_schema(args.output)
     else:
         parser.print_help()
         sys.exit(1)
