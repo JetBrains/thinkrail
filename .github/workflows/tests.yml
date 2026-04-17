@@ -1,0 +1,28 @@
+name: Python tests
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  test-python:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - uses: astral-sh/setup-uv@v4
+        with:
+          enable-cache: true
+
+      - name: UV sync
+        working-directory: backend
+        run: uv sync --all-groups
+
+      - name: Run tests
+        working-directory: backend
+        run: uv run pytest
