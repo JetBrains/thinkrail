@@ -8,5 +8,6 @@
   "user_respond_timeout": 300.0,
   "user_respond_timeout_behavior": "interrupt",
   "user_respond_retry_max_attempts": 3,
-  "trash_retention_days": 30
+  "trash_retention_days": 30,
+  "voice_revise_mode": "auto"
 }
