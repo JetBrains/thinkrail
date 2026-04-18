@@ -139,6 +139,14 @@ Note: if the request concerns a new or specific part of the project, do not wast
 * The product design document should cover the product perspective, including the goal, user stories, user requirements, product value, and product success criteria, among other aspects.
 * The technical design document should cover the architecture, components, data flow, testing, validation approaches and criteria, error handling, and other related technical and design aspects.
 
+### Technical Clarifying Questions
+
+Among other things, you MUST:
+
+* help the user define any missing parts of the technology stack, or the stack itself if it has not yet been defined;
+* propose different **architectural approaches and designs**, providing a thorough and well-reasoned comparison — always aiming to present at least three distinct approaches (and more where appropriate);
+* discuss testing approaches, as well as technical success and validation criteria.
+
 ### The principles of Decomposition, Transparency, and Simplicity.
 
 * Decompose any non-trivial requests or ideas; the smaller and simpler the parts, the easier they are to work with, reason about, and combine.
