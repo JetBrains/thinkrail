@@ -1,5 +1,4 @@
 import { lazy, Suspense } from "react";
-import type { AgentEvent } from "@/types/agent.ts";
 import { AssistantMessage } from "../AssistantMessage.tsx";
 import { ToolCallCard } from "../ToolCallCard.tsx";
 import { DraftConfigCard } from "../DraftConfigCard.tsx";
@@ -36,24 +35,24 @@ export const compactRenderers: ViewRenderers = {
   userMessage: (ev, _i, k) => (
     <CompactUserMessage
       key={k}
-      text={(ev.payload.text as string) ?? ""}
+      text={ev.payload.text}
     />
   ),
 
   textDelta: (ev, _i, k) => (
     <AssistantMessage
       key={k}
-      text={(ev.payload.text as string) ?? ""}
-      streaming={(ev.payload.streaming as boolean) ?? false}
+      text={ev.payload.text}
+      streaming={false}
     />
   ),
 
   toolCallStart: (ev, i, k, ctx) => {
     const p = ev.payload;
-    if ((p.toolName as string) === "AskUserQuestion") return null;
+    if (p.toolName === "AskUserQuestion") return null;
 
     // Visualizations: collapsible in compact mode
-    if ((p.toolName as string)?.endsWith("bonsai_visualize")) {
+    if (p.toolName.endsWith("bonsai_visualize")) {
       const visInput = p.toolInput as VisData | undefined;
       if (visInput && typeof visInput.data === "string") {
         try {
@@ -78,8 +77,8 @@ export const compactRenderers: ViewRenderers = {
       }
     }
 
-    const toolName = (p.toolName as string) ?? "tool";
-    const toolUseId = (p.toolUseId as string) ?? "";
+    const toolName = p.toolName;
+    const toolUseId = p.toolUseId;
     const end = ctx.toolStates.get(toolUseId);
     const state = end?.finished ? (end.isError ? "error" as const : "success" as const) : "running" as const;
 
@@ -89,7 +88,7 @@ export const compactRenderers: ViewRenderers = {
         <TaskCard
           key={k}
           toolName={toolName}
-          toolInput={(p.toolInput as Record<string, unknown>) ?? {}}
+          toolInput={p.toolInput}
           state={state}
           isError={end?.isError}
         />
@@ -102,7 +101,7 @@ export const compactRenderers: ViewRenderers = {
         <Suspense key={k} fallback={<ToolCallCard toolName={toolName} toolInput={extractToolInput(p.toolInput)} state="running" compact />}>
           <DiffCard
             toolName={toolName}
-            toolInput={(p.toolInput as Record<string, unknown>) ?? {}}
+            toolInput={p.toolInput}
             output={end?.output}
             isError={end?.isError}
             state={state}
@@ -118,7 +117,7 @@ export const compactRenderers: ViewRenderers = {
       <CompactToolLine
         key={k}
         toolName={toolName}
-        rawInput={(p.toolInput as Record<string, unknown>) ?? {}}
+        rawInput={p.toolInput}
         output={end?.output}
         isError={end?.isError}
         state={state}
@@ -135,8 +134,8 @@ export const compactRenderers: ViewRenderers = {
     return (
       <CompactSubagent
         key={k}
-        agentType={(ev.payload.agentType as string) ?? undefined}
-        finished={!ctx.activeSubagents.has(ev.payload.agentId as string)}
+        agentType={ev.payload.agentType}
+        finished={!ctx.activeSubagents.has(ev.payload.agentId)}
         childEvents={cEvents}
         toolStates={ctx.toolStates}
       />
@@ -150,7 +149,7 @@ export const compactRenderers: ViewRenderers = {
   // Only unlinked confirmAction events (ExitPlanMode, or orphaned) render standalone.
   confirmAction: (ev, _i, k, ctx) => {
     const p = ev.payload;
-    const requestId = (p.requestId as string) ?? "";
+    const requestId = p.requestId ?? "";
     const isAnswered = ctx.answeredRequests.has(requestId);
     const savedResponse = ctx.answeredRequests.get(requestId) as Record<string, unknown> | undefined;
     const aInterrupted = savedResponse?.interrupt === true;
@@ -160,7 +159,7 @@ export const compactRenderers: ViewRenderers = {
       : savedResponse?.behavior === "allow" ? "approve" as const : "deny" as const;
 
     // ExitPlanMode always gets its own card
-    if ((p.toolName as string) === "ExitPlanMode") {
+    if (p.toolName === "ExitPlanMode") {
       const toolInput = p.toolInput as Record<string, unknown> | undefined;
       return (
         <PlanApprovalCard
@@ -201,9 +200,9 @@ export const compactRenderers: ViewRenderers = {
     return (
       <ApprovalCard
         key={k}
-        toolName={(p.toolName as string) ?? "action"}
+        toolName={p.toolName}
         toolInput={p.toolInput ?? undefined}
-        description={(p.description as string) ?? undefined}
+        description={p.description ?? undefined}
         answered={isAnswered}
         decision={isAnswered ? decision : undefined}
         interrupted={aInterrupted || aExpired}
@@ -221,8 +220,8 @@ export const compactRenderers: ViewRenderers = {
 
   // Compact answered question → log line; pending → same card as classic
   askUserQuestion: (ev, _i, k, ctx) => {
-    const questions = (ev.payload.questions as AgentEvent["payload"][]) ?? [];
-    const requestId = (ev.payload.requestId as string) ?? "";
+    const questions = ev.payload.questions;
+    const requestId = ev.payload.requestId ?? "";
     const isAnswered = ctx.answeredRequests.has(requestId);
     const savedAnswer = ctx.answeredRequests.get(requestId) as Record<string, unknown> | undefined;
     const qInterrupted = savedAnswer?.interrupt === true;

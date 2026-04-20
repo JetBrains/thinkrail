@@ -625,7 +625,7 @@ class AgentService:
                         "costUsd": _base_cost + params.get("costUsd", 0),
                         "turns": _base_turns + params.get("turns", 0),
                         "turnCostUsd": params.get("turnCostUsd", 0),
-                        "turnTurns": params.get("turn_turns", 0),
+                        "turnTurns": params.get("turnTurns", 0),
                         "contextTokens": ctx_tokens,
                         "contextMax": ctx_max,
                         "outputTokens": last_out,

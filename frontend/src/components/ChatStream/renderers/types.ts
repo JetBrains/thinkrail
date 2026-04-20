@@ -36,5 +36,16 @@ export type EventRenderer = (
   ctx: EventRenderContext,
 ) => ReactNode | null;
 
-/** Partial map from event type to renderer — unspecified types fall back to classic. */
-export type ViewRenderers = Partial<Record<EventType, EventRenderer>>;
+/**
+ * Partial map from event type to renderer.
+ * Each renderer receives the specific event type for that key — TypeScript
+ * automatically narrows ev.payload inside the function body.
+ */
+export type ViewRenderers = {
+  [K in EventType]?: (
+    event: Extract<AgentEvent, { eventType: K }>,
+    index: number,
+    key: string,
+    ctx: EventRenderContext,
+  ) => ReactNode | null;
+};

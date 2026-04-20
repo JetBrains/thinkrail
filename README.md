@@ -31,3 +31,18 @@ Press `Ctrl+C` to stop. Cleanup is automatic.
 | `BACKEND_HOST` | `0.0.0.0` | Backend bind address |
 | `BACKEND_PORT` | `8000` | Backend port |
 | `FRONTEND_PORT` | `3000` | Frontend port |
+
+### Development
+
+#### WebSocket Type Generation
+
+The frontend TypeScript types for WebSocket events are auto-generated from the backend Pydantic models:
+
+```
+backend/app/agent/models.py  →  frontend/ws-events.json  →  frontend/src/types/ws-events.ts
+```
+
+**Regenerate after any change to `AgentEvent` or its payload models:**
+```bash
+cd frontend && npm run generate:ws-schema && npm run generate:ws-types
+```

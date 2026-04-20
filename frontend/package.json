@@ -12,7 +12,9 @@
     "lint": "tsc --noEmit && eslint src/",
     "generate:schema": "cd ../backend && uv run python -m app.cli export-schema -o ../frontend/openapi.json",
     "generate:api": "openapi-typescript openapi.json -o src/api/generated.ts",
-    "generate": "npm run generate:schema && npm run generate:api"
+    "generate:ws-schema": "cd ../backend && uv run python -m app.cli export-ws-schema -o ../frontend/ws-events.json",
+    "generate:ws-types": "json2ts -i ws-events.json -o src/types/ws-events.ts --no-additionalProperties",
+    "generate": "npm run generate:schema && npm run generate:api && npm run generate:ws-schema && npm run generate:ws-types"
   },
   "dependencies": {
     "@dnd-kit/abstract": "^0.3.2",
@@ -36,6 +38,7 @@
     "@vitejs/plugin-react": "^4.0.0",
     "eslint": "^9.0.0",
     "jsdom": "^29.0.0",
+    "json-schema-to-typescript": "^15.0.4",
     "openapi-typescript": "^7.13.0",
     "typescript": "^5.7.0",
     "vite": "^6.4.2",

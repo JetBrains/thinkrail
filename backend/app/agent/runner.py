@@ -447,7 +447,7 @@ async def run(
                             "bonsaiSid": task.bonsai_sid,
                             "sessionId": sdk_event.session_id or session_id,
                             "turnCostUsd": turn_cost,
-                            "turn_turns": turn_turns,
+                            "turnTurns": turn_turns,
                             "costUsd": total_cost,
                             "turns": total_turns,
                             "durationMs": duration_ms,

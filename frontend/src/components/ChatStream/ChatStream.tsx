@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState, forwardRef, useImperativeHandle } from "react";
-import type { AgentEvent } from "@/types/agent.ts";
+import type { AgentEvent, AskUserQuestionEvent } from "@/types/agent.ts";
 import type { Session } from "@/types/session.ts";
 import { DraftConfigCard } from "./DraftConfigCard.tsx";
 import { useViewMode, type ViewMode } from "@/context/ViewModeContext.tsx";
@@ -41,21 +41,18 @@ function findQuestionRequestId(target: HTMLElement): string | null {
 function buildTranscript(events: AgentEvent[]): string {
   const lines: string[] = [];
   for (const ev of events) {
-    const p = ev.payload;
     switch (ev.eventType) {
       case "userMessage":
-        lines.push(`You: ${(p.text as string) ?? ""}`);
+        lines.push(`You: ${ev.payload.text}`);
         break;
       case "textDelta":
-        lines.push((p.text as string) ?? "");
+        lines.push(ev.payload.text);
         break;
-      case "toolCallStart": {
-        const name = (p.toolName as string) ?? "tool";
-        lines.push(`[${name}]`);
+      case "toolCallStart":
+        lines.push(`[${ev.payload.toolName}]`);
         break;
-      }
       case "notification":
-        lines.push(`> ${(p.message as string) ?? ""}`);
+        lines.push(`> ${ev.payload.message ?? ""}`);
         break;
     }
   }
@@ -145,10 +142,13 @@ export const ChatStream = forwardRef<ChatStreamHandle, ChatStreamProps>(function
     const requestId = ctxMenu.questionRequestId;
     // Find the question event to get the question text
     const qEvent = events.find(
-      (ev) => ev.eventType === "askUserQuestion" && (ev.payload.requestId as string) === requestId,
+      (ev): ev is AskUserQuestionEvent => {
+        if (ev.eventType !== "askUserQuestion") return false;
+        return ev.payload.requestId === requestId;
+      },
     );
     if (!qEvent) return;
-    const questions = (qEvent.payload.questions as Array<{ question: string }>) ?? [];
+    const questions = qEvent.payload.questions;
     const savedAnswer = answeredRequests.get(requestId) as Record<string, unknown> | undefined;
     const answers = (savedAnswer?.answers as Record<string, string>) ?? {};
 
@@ -165,10 +165,9 @@ export const ChatStream = forwardRef<ChatStreamHandle, ChatStreamProps>(function
   const toolStates = new Map<string, ToolState>();
   for (const ev of events) {
     if (ev.eventType === "toolCallEnd") {
-      const id = (ev.payload.toolUseId as string) ?? "";
-      toolStates.set(id, {
-        output: (ev.payload.output as string) ?? "",
-        isError: (ev.payload.isError as boolean) ?? false,
+      toolStates.set(ev.payload.toolUseId, {
+        output: ev.payload.output,
+        isError: ev.payload.isError ?? false,
         finished: true,
       });
     }
@@ -178,9 +177,9 @@ export const ChatStream = forwardRef<ChatStreamHandle, ChatStreamProps>(function
   const activeSubagents = new Set<string>();
   for (const ev of events) {
     if (ev.eventType === "subagentStart")
-      activeSubagents.add(ev.payload.agentId as string);
+      activeSubagents.add(ev.payload.agentId);
     if (ev.eventType === "subagentEnd")
-      activeSubagents.delete(ev.payload.agentId as string);
+      activeSubagents.delete(ev.payload.agentId);
     if (ev.eventType === "interrupted" || ev.eventType === "turnComplete")
       activeSubagents.clear();
   }
@@ -189,8 +188,8 @@ export const ChatStream = forwardRef<ChatStreamHandle, ChatStreamProps>(function
   const latestVisByVisId = new Map<string, number>();
   for (let i = 0; i < events.length; i++) {
     const ev = events[i];
-    if (ev.eventType === "toolCallStart" && (ev.payload.toolName as string)?.endsWith("bonsai_visualize")) {
-      const visId = (ev.payload.toolInput as Record<string, unknown>)?.visId as string | undefined;
+    if (ev.eventType === "toolCallStart" && ev.payload.toolName.endsWith("bonsai_visualize")) {
+      const visId = ev.payload.toolInput.visId as string | undefined;
       if (visId) latestVisByVisId.set(visId, i);
     }
   }
@@ -203,8 +202,7 @@ export const ChatStream = forwardRef<ChatStreamHandle, ChatStreamProps>(function
     for (let i = 0; i < events.length; i++) {
       const ev = events[i];
       if (ev.eventType === "subagentStart") {
-        const aid = (ev.payload.agentId as string) ?? "";
-        agentStartIdx.set(aid, i);
+        agentStartIdx.set(ev.payload.agentId, i);
         subagentChildren.set(i, []);
       }
     }
@@ -213,12 +211,13 @@ export const ChatStream = forwardRef<ChatStreamHandle, ChatStreamProps>(function
       if (ev.eventType === "subagentStart" || ev.eventType === "subagentEnd"
           || ev.eventType === "interrupted" || ev.eventType === "turnComplete")
         continue;
-      const agentId = ev.payload.agentId as string | undefined;
+      // agentId is present on a subset of event types; ReadyEvent.payload is optional
+      const agentId = (ev.payload as { agentId?: string | null } | undefined)?.agentId;
       if (!agentId) continue;
       const parentIdx = agentStartIdx.get(agentId);
       if (parentIdx === undefined) continue;
       const isVis = ev.eventType === "toolCallStart" &&
-        (ev.payload.toolName as string)?.endsWith("bonsai_visualize");
+        ev.payload.toolName.endsWith("bonsai_visualize");
       const isInteraction = ev.eventType === "askUserQuestion" || ev.eventType === "confirmAction" || ev.eventType === "confirmStatement" || ev.eventType === "suggestSession" || ev.eventType === "suggestDescription";
       if (!isVis && !isInteraction) {
         subagentChildren.get(parentIdx)!.push(i);
@@ -236,15 +235,15 @@ export const ChatStream = forwardRef<ChatStreamHandle, ChatStreamProps>(function
     for (let i = 0; i < events.length; i++) {
       const ev = events[i];
       if (ev.eventType === "confirmAction") {
-        const toolName = (ev.payload.toolName as string) ?? "";
+        const toolName = ev.payload.toolName;
         if (toolName === "ExitPlanMode") continue;
         const entry = {
           eventIndex: i,
-          requestId: (ev.payload.requestId as string) ?? "",
+          requestId: ev.payload.requestId ?? "",
           toolInput: ev.payload.toolInput,
-          description: (ev.payload.description as string) ?? undefined,
+          description: ev.payload.description ?? undefined,
         };
-        const toolUseId = (ev.payload.toolUseId as string) ?? "";
+        const toolUseId = ev.payload.toolUseId ?? "";
         if (toolUseId) {
           approvalByToolUseId.set(toolUseId, entry);
         } else {
@@ -260,8 +259,8 @@ export const ChatStream = forwardRef<ChatStreamHandle, ChatStreamProps>(function
     for (let i = 0; i < events.length; i++) {
       const ev = events[i];
       if (ev.eventType !== "toolCallStart") continue;
-      const toolUseId = (ev.payload.toolUseId as string) ?? "";
-      const toolName = (ev.payload.toolName as string) ?? "";
+      const toolUseId = ev.payload.toolUseId;
+      const toolName = ev.payload.toolName;
 
       // Prefer exact toolUseId match; fall back to toolName FIFO for legacy events
       let pending = toolUseId ? approvalByToolUseId.get(toolUseId) : undefined;
