@@ -314,117 +314,117 @@ class _BaseEvent(BaseModel):
 
 
 class SessionStartEvent(_BaseEvent):
-    event_type: Literal["sessionStart"]
+    event_type: Literal["sessionStart"] = "sessionStart"
     payload: SessionStartPayload
 
 
 class TextDeltaEvent(_BaseEvent):
-    event_type: Literal["textDelta"]
+    event_type: Literal["textDelta"] = "textDelta"
     payload: TextDeltaPayload
 
 
 class ToolCallStartEvent(_BaseEvent):
-    event_type: Literal["toolCallStart"]
+    event_type: Literal["toolCallStart"] = "toolCallStart"
     payload: ToolCallStartPayload
 
 
 class ToolCallEndEvent(_BaseEvent):
-    event_type: Literal["toolCallEnd"]
+    event_type: Literal["toolCallEnd"] = "toolCallEnd"
     payload: ToolCallEndPayload
 
 
 class SubagentStartEvent(_BaseEvent):
-    event_type: Literal["subagentStart"]
+    event_type: Literal["subagentStart"] = "subagentStart"
     payload: SubagentStartPayload
 
 
 class SubagentEndEvent(_BaseEvent):
-    event_type: Literal["subagentEnd"]
+    event_type: Literal["subagentEnd"] = "subagentEnd"
     payload: SubagentEndPayload
 
 
 class CompactEvent(_BaseEvent):
-    event_type: Literal["compact"]
+    event_type: Literal["compact"] = "compact"
     payload: CompactPayload
 
 
 class ProgressEvent(_BaseEvent):
-    event_type: Literal["progress"]
+    event_type: Literal["progress"] = "progress"
     payload: ProgressPayload
 
 
 class NotificationEvent(_BaseEvent):
-    event_type: Literal["notification"]
+    event_type: Literal["notification"] = "notification"
     payload: NotificationPayload
 
 
 class PermissionDeniedEvent(_BaseEvent):
-    event_type: Literal["permissionDenied"]
+    event_type: Literal["permissionDenied"] = "permissionDenied"
     payload: PermissionDeniedPayload
 
 
 class ReadyEvent(_BaseEvent):
-    event_type: Literal["ready"]
+    event_type: Literal["ready"] = "ready"
     payload: ReadyPayload = Field(default_factory=ReadyPayload)
 
 
 class TurnCompleteEvent(_BaseEvent):
-    event_type: Literal["turnComplete"]
+    event_type: Literal["turnComplete"] = "turnComplete"
     payload: TurnCompletePayload
 
 
 class InterruptedEvent(_BaseEvent):
-    event_type: Literal["interrupted"]
+    event_type: Literal["interrupted"] = "interrupted"
     payload: InterruptedPayload
 
 
 class ErrorEvent(_BaseEvent):
-    event_type: Literal["error"]
+    event_type: Literal["error"] = "error"
     payload: ErrorPayload
 
 
 class DoneEvent(_BaseEvent):
-    event_type: Literal["done"]
+    event_type: Literal["done"] = "done"
     payload: DonePayload
 
 
 class AskUserQuestionEvent(_BaseEvent):
-    event_type: Literal["askUserQuestion"]
+    event_type: Literal["askUserQuestion"] = "askUserQuestion"
     payload: AskUserQuestionPayload
 
 
 class ConfirmActionEvent(_BaseEvent):
-    event_type: Literal["confirmAction"]
+    event_type: Literal["confirmAction"] = "confirmAction"
     payload: ConfirmActionPayload
 
 
 class ConfirmStatementEvent(_BaseEvent):
-    event_type: Literal["confirmStatement"]
+    event_type: Literal["confirmStatement"] = "confirmStatement"
     payload: ConfirmStatementPayload
 
 
 class SuggestSessionEvent(_BaseEvent):
-    event_type: Literal["suggestSession"]
+    event_type: Literal["suggestSession"] = "suggestSession"
     payload: SuggestSessionPayload
 
 
 class SuggestDescriptionEvent(_BaseEvent):
-    event_type: Literal["suggestDescription"]
+    event_type: Literal["suggestDescription"] = "suggestDescription"
     payload: SuggestDescriptionPayload
 
 
 class RequestResolvedEvent(_BaseEvent):
-    event_type: Literal["requestResolved"]
+    event_type: Literal["requestResolved"] = "requestResolved"
     payload: RequestResolvedPayload
 
 
 class RequestExpiredEvent(_BaseEvent):
-    event_type: Literal["requestExpired"]
+    event_type: Literal["requestExpired"] = "requestExpired"
     payload: RequestExpiredPayload
 
 
 class UserMessageEvent(_BaseEvent):
-    event_type: Literal["userMessage"]
+    event_type: Literal["userMessage"] = "userMessage"
     payload: UserMessagePayload
 
 

@@ -26,3 +26,10 @@ jobs:
       - name: Run tests
         working-directory: backend
         run: uv run pytest
+
+      - name: Check OpenAPI schema is up to date
+        working-directory: backend
+        run: |
+          uv run python -m app.cli export-schema -o ../frontend/openapi.json.new
+          diff ../frontend/openapi.json ../frontend/openapi.json.new || \
+            (echo "openapi.json is out of date — run: cd backend && uv run python -m app.cli export-schema -o ../frontend/openapi.json" && exit 1)
