@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import os
 import sys
 from pathlib import Path
@@ -38,6 +39,26 @@ def get_data_dir() -> Path:
     return Path.home() / ".bonsai"
 
 
+def get_index_path(project_root: Path) -> Path:
+    """Compute the ``index.db`` path for a project, outside the repo.
+
+    Returns a path under the server data directory::
+
+        ~/.bonsai/indexes/<sha256-of-project-root>[:16]/index.db
+
+    This follows the VS Code / Bazel pattern for per-project caches
+    stored in a central location, keyed by a hash of the project path.
+    The directory is created if it doesn't exist.
+    """
+    data_dir = get_data_dir()
+    project_hash = hashlib.sha256(
+        str(project_root.resolve()).encode()
+    ).hexdigest()[:16]
+    index_dir = data_dir / "indexes" / project_hash
+    index_dir.mkdir(parents=True, exist_ok=True)
+    return index_dir / "index.db"
+
+
 class AppConfig(BaseModel):
     project_root: Path
     bonsai_dir: Path
@@ -50,10 +71,6 @@ class AppConfig(BaseModel):
     def get_bonsai_dir(self) -> Path:
         """Return the path to the ``.bonsai/`` directory."""
         return self.bonsai_dir
-
-    def get_registry_path(self) -> Path:
-        """Return the path to ``.bonsai/registry.json``."""
-        return self.bonsai_dir / "registry.json"
 
 
 def _discover_root() -> Path:

@@ -2,13 +2,13 @@ from __future__ import annotations
 
 import pytest
 
-from app.spec.models import Link, RegistryEntry, Spec
+from app.spec.models import Link, Spec, SpecEntry
 from app.spec.validator import validate_links, validate_spec
 
 
-def _entry(**overrides) -> RegistryEntry:
+def _entry(**overrides) -> SpecEntry:
     defaults = dict(id="e1", type="module-design", path="a/README.md", title="Test")
-    return RegistryEntry(**(defaults | overrides))
+    return SpecEntry(**(defaults | overrides))
 
 
 def _spec(**overrides) -> Spec:

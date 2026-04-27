@@ -208,14 +208,14 @@ async def get_draft_diff(service: BoardService, **params: Any) -> dict:
 
 @_handle_errors
 async def apply_draft(service: BoardService, **params: Any) -> None:
-    service.spec_drafts.apply_draft(
+    await service.spec_drafts.apply_draft(
         params["ticketId"], params["index"], board_service=service,
     )
 
 
 @_handle_errors
 async def apply_all_drafts(service: BoardService, **params: Any) -> None:
-    service.spec_drafts.apply_all(params["ticketId"], board_service=service)
+    await service.spec_drafts.apply_all(params["ticketId"], board_service=service)
 
 
 @_handle_errors
@@ -315,19 +315,26 @@ async def revert_patch(service: BoardService, **params: Any) -> dict:
     original_content = "".join(original_lines)
 
     # Write the original content back
+    from app.spec.index import SpecIndex
+    from app.spec.service import SpecService
+
+    from app.core.config import get_index_path
+
+    db_path = get_index_path(service._config.get_project_root())
     if patch_record.operation == "created":
-        from app.spec.service import SpecService
         try:
-            svc = SpecService(service._config)
-            svc.trash_service = service.trash_service
-            svc.delete_spec(patch_record.spec_id)
+            async with SpecIndex(db_path) as idx:
+                svc = SpecService(service._config, index=idx)
+                svc.trash_service = service.trash_service
+                await svc.delete_spec(patch_record.spec_id)
         except Exception:
             pass
     else:
         _write(spec_path, original_content)
-        from app.spec.service import SpecService
         try:
-            SpecService(service._config).update_spec(patch_record.spec_id, original_content)
+            async with SpecIndex(db_path) as idx:
+                svc = SpecService(service._config, index=idx)
+                await svc.update_spec(patch_record.spec_id, original_content)
         except Exception:
             pass
 

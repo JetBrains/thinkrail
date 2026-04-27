@@ -23,16 +23,6 @@ from app.core.fileio import ensure_dir, read_text, write_text
 # content as a string.
 
 
-def _default_registry(bonsai_dir: Path) -> str:
-    data = {
-        "version": "2.0",
-        "project": bonsai_dir.parent.name,
-        "specs": [],
-        "links": [],
-    }
-    return json.dumps(data, indent=2) + "\n"
-
-
 def _default_settings(bonsai_dir: Path) -> str:
     # Lazy import to avoid circular dependency with settings.py
     from app.core.settings import ProjectSettings
@@ -46,7 +36,6 @@ def _default_users(bonsai_dir: Path) -> str:
 
 
 _DEFAULT_FACTORIES: dict[str, Callable[[Path], str]] = {
-    "registry.json": _default_registry,
     "settings.json": _default_settings,
     "users.json": _default_users,
 }

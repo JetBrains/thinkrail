@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import json
 from pathlib import Path
 
 import pytest
@@ -15,8 +14,6 @@ def _setup_board(tmp_path: Path) -> BoardService:
     """Create a minimal project and return a BoardService."""
     bonsai_dir = tmp_path / ".bonsai"
     bonsai_dir.mkdir()
-    reg = {"version": "2.0", "project": "test", "specs": [], "links": []}
-    (bonsai_dir / "registry.json").write_text(json.dumps(reg), encoding="utf-8")
     config = load_config(tmp_path)
     return BoardService(config)
 

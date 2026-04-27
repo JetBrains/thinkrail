@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
-from unittest.mock import MagicMock
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
@@ -172,7 +172,7 @@ class TestBuildGeneralInstructions:
         result = _build_general_instructions(tmp_path)
         assert result.startswith("## General Instructions")
 
-    def test_contains_all_five_subsections(self, tmp_path: Path) -> None:
+    def test_contains_all_six_subsections(self, tmp_path: Path) -> None:
         skills_dir = tmp_path / "skills"
         _write_skill_md(skills_dir / "test-skill", "test-skill", "A test skill")
 
@@ -181,6 +181,7 @@ class TestBuildGeneralInstructions:
         assert "### Interaction Style" in result
         assert "### Spec-Driven Workflow" in result
         assert "### Proactive Suggestions" in result
+        assert "### Frontmatter Format" in result
         assert "### Available Skills" in result
 
     def test_visualization_subsection_content(self, tmp_path: Path) -> None:
@@ -202,6 +203,33 @@ class TestBuildGeneralInstructions:
         assert "SuggestSession" in result
         assert "Respect dismissals" in result
 
+    def test_frontmatter_format_content(self, tmp_path: Path) -> None:
+        (tmp_path / "skills").mkdir()
+        result = _build_general_instructions(tmp_path)
+        # Required fields present
+        assert "`id`" in result
+        assert "`type`" in result
+        assert "goal-and-requirements" in result
+        # Optional fields present
+        assert "`status`" in result
+        assert "`parent`" in result
+        assert "`depends-on`" in result
+        assert "`covers`" in result
+        assert "`tags`" in result
+        # YAML example present
+        assert "id: module-auth" in result
+        assert "type: module-design" in result
+
+    def test_frontmatter_between_workflow_and_skills(self, tmp_path: Path) -> None:
+        skills_dir = tmp_path / "skills"
+        _write_skill_md(skills_dir / "test-skill", "test-skill", "A test skill")
+
+        result = _build_general_instructions(tmp_path)
+        workflow_pos = result.index("### Spec-Driven Workflow")
+        frontmatter_pos = result.index("### Frontmatter Format")
+        skills_pos = result.index("### Available Skills")
+        assert workflow_pos < frontmatter_pos < skills_pos
+
     def test_skills_table_populated(self, tmp_path: Path) -> None:
         skills_dir = tmp_path / "skills"
         _write_skill_md(skills_dir / "module-design", "module-design", "Design a module")
@@ -222,25 +250,25 @@ class TestBuildGeneralInstructions:
 # ---------------------------------------------------------------------------
 
 class TestBuildSpecsSection:
-    def test_single_spec(self) -> None:
-        spec_service = MagicMock()
+    async def test_single_spec(self) -> None:
+        spec_service = AsyncMock()
         spec_service.get_spec.return_value = _make_spec_detail(
             "mod-a", "Module A", "Content A"
         )
 
-        result = _build_specs_section(["mod-a"], spec_service)
+        result = await _build_specs_section(["mod-a"], spec_service)
         assert "## Specifications" in result
         assert "### Module A" in result
         assert "Content A" in result
 
-    def test_multiple_specs_separated_by_hr(self) -> None:
-        spec_service = MagicMock()
+    async def test_multiple_specs_separated_by_hr(self) -> None:
+        spec_service = AsyncMock()
         spec_service.get_spec.side_effect = [
             _make_spec_detail("a", "Spec A", "Body A"),
             _make_spec_detail("b", "Spec B", "Body B"),
         ]
 
-        result = _build_specs_section(["a", "b"], spec_service)
+        result = await _build_specs_section(["a", "b"], spec_service)
         assert "### Spec A" in result
         assert "### Spec B" in result
         assert "---" in result
@@ -262,9 +290,9 @@ class TestBuildContext:
         )
         return plugin
 
-    def test_requires_plugin_dir(self) -> None:
+    async def test_requires_plugin_dir(self) -> None:
         with pytest.raises(ValueError, match="plugin_dir is required"):
-            build_context(
+            await build_context(
                 spec_ids=[],
                 skill_id=None,
                 project_root=Path("/project"),
@@ -273,9 +301,9 @@ class TestBuildContext:
                 plugin_dir=None,
             )
 
-    def test_general_instructions_always_first(self, tmp_path: Path) -> None:
+    async def test_general_instructions_always_first(self, tmp_path: Path) -> None:
         plugin = self._make_plugin_dir(tmp_path)
-        result = build_context(
+        result = await build_context(
             spec_ids=[],
             skill_id=None,
             project_root=Path("/my/project"),
@@ -285,10 +313,10 @@ class TestBuildContext:
         )
         assert result.startswith("## General Instructions")
 
-    def test_freeform_session_has_general_and_project(self, tmp_path: Path) -> None:
+    async def test_freeform_session_has_general_and_project(self, tmp_path: Path) -> None:
         """Free-form session (no skill, no specs) includes General Instructions + Project."""
         plugin = self._make_plugin_dir(tmp_path)
-        result = build_context(
+        result = await build_context(
             spec_ids=[],
             skill_id=None,
             project_root=Path("/my/project"),
@@ -303,9 +331,9 @@ class TestBuildContext:
         assert "## Your Task" not in result
         assert "## Specifications" not in result
 
-    def test_skill_session_includes_skill_section(self, tmp_path: Path) -> None:
+    async def test_skill_session_includes_skill_section(self, tmp_path: Path) -> None:
         plugin = self._make_plugin_dir(tmp_path)
-        result = build_context(
+        result = await build_context(
             spec_ids=[],
             skill_id="test-skill",
             project_root=Path("/project"),
@@ -317,10 +345,10 @@ class TestBuildContext:
         assert 'You are running the "test-skill" skill.' in result
         assert "# Test skill" in result
 
-    def test_skill_not_found_raises(self, tmp_path: Path) -> None:
+    async def test_skill_not_found_raises(self, tmp_path: Path) -> None:
         plugin = self._make_plugin_dir(tmp_path)
         with pytest.raises(FileNotFoundError, match="nonexistent"):
-            build_context(
+            await build_context(
                 spec_ids=[],
                 skill_id="nonexistent",
                 project_root=Path("/project"),
@@ -329,14 +357,14 @@ class TestBuildContext:
                 plugin_dir=plugin,
             )
 
-    def test_specs_included_when_provided(self, tmp_path: Path) -> None:
+    async def test_specs_included_when_provided(self, tmp_path: Path) -> None:
         plugin = self._make_plugin_dir(tmp_path)
-        spec_service = MagicMock()
+        spec_service = AsyncMock()
         spec_service.get_spec.return_value = _make_spec_detail(
             "mod-a", "Module A", "Module A content"
         )
 
-        result = build_context(
+        result = await build_context(
             spec_ids=["mod-a"],
             skill_id=None,
             project_root=Path("/project"),
@@ -348,15 +376,15 @@ class TestBuildContext:
         assert "### Module A" in result
         assert "Module A content" in result
 
-    def test_section_ordering(self, tmp_path: Path) -> None:
+    async def test_section_ordering(self, tmp_path: Path) -> None:
         """Verify sections appear in the correct order: General → Skill → Project → Specs."""
         plugin = self._make_plugin_dir(tmp_path)
-        spec_service = MagicMock()
+        spec_service = AsyncMock()
         spec_service.get_spec.return_value = _make_spec_detail(
             "s1", "Spec One", "Body"
         )
 
-        result = build_context(
+        result = await build_context(
             spec_ids=["s1"],
             skill_id="test-skill",
             project_root=Path("/project"),
@@ -372,10 +400,10 @@ class TestBuildContext:
 
         assert gi_pos < task_pos < proj_pos < spec_pos
 
-    def test_no_vis_instructions_standalone(self, tmp_path: Path) -> None:
+    async def test_no_vis_instructions_standalone(self, tmp_path: Path) -> None:
         """The old standalone '## Visualization Tool' section should not appear."""
         plugin = self._make_plugin_dir(tmp_path)
-        result = build_context(
+        result = await build_context(
             spec_ids=[],
             skill_id=None,
             project_root=Path("/project"),
@@ -387,16 +415,16 @@ class TestBuildContext:
         # But visualization content IS present inside General Instructions
         assert "bonsai_visualize" in result
 
-    def test_full_session_all_sections(self, tmp_path: Path) -> None:
+    async def test_full_session_all_sections(self, tmp_path: Path) -> None:
         """Full session with skill + specs has all four sections."""
         plugin = self._make_plugin_dir(tmp_path)
-        spec_service = MagicMock()
+        spec_service = AsyncMock()
         spec_service.get_spec.side_effect = [
             _make_spec_detail("a", "Spec A", "Content A"),
             _make_spec_detail("b", "Spec B", "Content B"),
         ]
 
-        result = build_context(
+        result = await build_context(
             spec_ids=["a", "b"],
             skill_id="test-skill",
             project_root=Path("/project"),
@@ -412,10 +440,10 @@ class TestBuildContext:
         assert "### Spec A" in result
         assert "### Spec B" in result
 
-    def test_session_prompt_only_creates_task_section(self, tmp_path: Path) -> None:
+    async def test_session_prompt_only_creates_task_section(self, tmp_path: Path) -> None:
         """session_prompt without skill_id still creates a Your Task section."""
         plugin = self._make_plugin_dir(tmp_path)
-        result = build_context(
+        result = await build_context(
             spec_ids=[],
             skill_id=None,
             project_root=Path("/project"),
@@ -427,10 +455,10 @@ class TestBuildContext:
         assert "## Your Task" in result
         assert "Fix the login bug" in result
 
-    def test_session_prompt_with_skill(self, tmp_path: Path) -> None:
+    async def test_session_prompt_with_skill(self, tmp_path: Path) -> None:
         """session_prompt + skill_id places prompt between header and skill body."""
         plugin = self._make_plugin_dir(tmp_path)
-        result = build_context(
+        result = await build_context(
             spec_ids=[],
             skill_id="test-skill",
             project_root=Path("/project"),
@@ -448,10 +476,10 @@ class TestBuildContext:
         body_pos = result.index("# Test skill")
         assert prompt_pos < body_pos
 
-    def test_session_prompt_none_no_task_section(self, tmp_path: Path) -> None:
+    async def test_session_prompt_none_no_task_section(self, tmp_path: Path) -> None:
         """No skill and no session_prompt means no Your Task section."""
         plugin = self._make_plugin_dir(tmp_path)
-        result = build_context(
+        result = await build_context(
             spec_ids=[],
             skill_id=None,
             project_root=Path("/project"),

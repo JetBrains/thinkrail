@@ -1,8 +1,8 @@
 from app.spec.models import (
     Link,
-    RegistryEntry,
     Spec,
     SpecDetail,
+    SpecEntry,
     SpecGraph,
     SpecSummary,
 )
@@ -10,9 +10,9 @@ from app.spec.service import SpecNotFoundError, SpecService
 
 __all__ = [
     "Link",
-    "RegistryEntry",
     "Spec",
     "SpecDetail",
+    "SpecEntry",
     "SpecGraph",
     "SpecNotFoundError",
     "SpecService",

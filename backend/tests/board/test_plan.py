@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import json
 from pathlib import Path
 
 from app.board.plan import (
@@ -18,8 +17,6 @@ from app.core.config import load_config
 def _setup(tmp_path: Path) -> PlanService:
     bonsai_dir = tmp_path / ".bonsai"
     bonsai_dir.mkdir()
-    reg = {"version": "2.0", "project": "test", "specs": [], "links": []}
-    (bonsai_dir / "registry.json").write_text(json.dumps(reg), encoding="utf-8")
     return PlanService(load_config(tmp_path))
 
 

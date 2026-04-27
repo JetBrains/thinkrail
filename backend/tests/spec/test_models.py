@@ -4,9 +4,9 @@ import pytest
 
 from app.spec.models import (
     Link,
-    RegistryEntry,
     Spec,
     SpecDetail,
+    SpecEntry,
     SpecGraph,
     SpecSummary,
 )
@@ -25,16 +25,16 @@ class TestSpec:
         assert s.metadata == meta
 
 
-class TestRegistryEntry:
+class TestSpecEntry:
     def test_required_fields(self) -> None:
-        entry = RegistryEntry(id="e1", type="module-design", path="a/README.md", title="Test")
+        entry = SpecEntry(id="e1", type="module-design", path="a/README.md", title="Test")
         assert entry.id == "e1"
         assert entry.status == "draft"
         assert entry.covers == []
         assert entry.tags == []
 
     def test_all_fields(self) -> None:
-        entry = RegistryEntry(
+        entry = SpecEntry(
             id="e2",
             type="task-spec",
             path=".bonsai/implementation_tasks/fix.txt",
@@ -42,12 +42,9 @@ class TestRegistryEntry:
             status="active",
             covers=["src/"],
             tags=["critical"],
-            created="2026-01-01",
-            updated="2026-01-02",
         )
         assert entry.status == "active"
         assert entry.covers == ["src/"]
-        assert entry.created == "2026-01-01"
 
 
 class TestLink:
@@ -108,7 +105,8 @@ class TestSpecGraph:
         assert g.edges == []
 
     def test_graph_with_data(self) -> None:
-        entry = RegistryEntry(id="n1", type="module-design", path="a", title="N1")
+        from app.spec.models import SpecEntry
+        entry = SpecEntry(id="n1", type="module-design", path="a", title="N1")
         link = Link(from_id="n1", to_id="n2", type="parent")
         g = SpecGraph(nodes=[entry], edges=[link])
         assert len(g.nodes) == 1

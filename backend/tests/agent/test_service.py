@@ -26,6 +26,7 @@ def _make_spec_detail(id: str, title: str, content: str) -> SpecDetail:
 def _make_service() -> tuple[AgentService, MagicMock, MagicMock]:
     config = MagicMock()
     spec_service = MagicMock()
+    spec_service.get_spec = AsyncMock()
     service = AgentService(config, spec_service)
     return service, config, spec_service
 
@@ -375,17 +376,17 @@ class TestSaveTask:
 
 
 class TestBuildContext:
-    def test_builds_context_from_specs(self) -> None:
+    async def test_builds_context_from_specs(self) -> None:
         from pathlib import Path
         from app.agent.context import build_context
 
-        spec_service = MagicMock()
+        spec_service = AsyncMock()
         spec_service.get_spec.side_effect = [
             _make_spec_detail("s1", "First Spec", "Content one"),
             _make_spec_detail("s2", "Second Spec", "Content two"),
         ]
 
-        context = build_context(
+        context = await build_context(
             spec_ids=["s1", "s2"],
             skill_id=None,
             project_root=Path("/tmp/test-project"),
@@ -401,13 +402,13 @@ class TestBuildContext:
         assert "## Project" in context
         assert "/tmp/test-project" in context
 
-    def test_includes_vis_instructions_in_freeform_session(self) -> None:
+    async def test_includes_vis_instructions_in_freeform_session(self) -> None:
         from pathlib import Path
         from app.agent.context import build_context
 
-        spec_service = MagicMock()
+        spec_service = AsyncMock()
 
-        context = build_context(
+        context = await build_context(
             spec_ids=[],
             skill_id=None,
             project_root=Path("/tmp/test-project"),
@@ -420,17 +421,17 @@ class TestBuildContext:
         assert "## General Instructions" in context
         assert "### Visualization" in context
 
-    def test_includes_vis_instructions_in_skill_session(self) -> None:
+    async def test_includes_vis_instructions_in_skill_session(self) -> None:
         from pathlib import Path
         from unittest.mock import patch as mock_patch
         from app.agent.context import build_context
 
-        spec_service = MagicMock()
+        spec_service = AsyncMock()
 
         with mock_patch(
             "app.agent.context._load_skill", return_value="Do the thing."
         ):
-            context = build_context(
+            context = await build_context(
                 spec_ids=[],
                 skill_id="test-skill",
                 project_root=Path("/tmp/test-project"),

@@ -1,11 +1,11 @@
 from __future__ import annotations
 
-from app.spec.models import Link, RegistryEntry, SpecGraph
+from app.spec.models import Link, SpecEntry, SpecGraph
 from app.spec.graph import build_graph, get_children, get_dependencies, get_dependents
 
 
-def _entry(id: str) -> RegistryEntry:
-    return RegistryEntry(id=id, type="module-design", path=f"{id}/README.md", title=id.upper())
+def _entry(id: str) -> SpecEntry:
+    return SpecEntry(id=id, type="module-design", path=f"{id}/README.md", title=id.upper())
 
 
 def _link(from_id: str, to_id: str, type: str = "depends-on") -> Link:

@@ -226,7 +226,9 @@ class TestReplay:
         bus.subscribe("c1", "session:abc")
 
         await bus.publish("session:abc", "agent/textDelta", {"text": "old"})
+        await asyncio.sleep(0.002)  # ensure timestamp separation
         middle = time()
+        await asyncio.sleep(0.002)
         await bus.publish("session:abc", "agent/textDelta", {"text": "new"})
 
         conn.ws.send_text.reset_mock()

@@ -15,10 +15,10 @@ if TYPE_CHECKING:
 def valid_project_path(path: str = Query(...)) -> Path:
     """Resolve and validate a Bonsai project path.
 
-    Raises 400 if the directory does not contain ``.bonsai/registry.json``.
+    Raises 400 if the directory does not contain a ``.bonsai/`` directory.
     """
     p = Path(path).expanduser().resolve()
-    if not (p / ".bonsai" / "registry.json").is_file():
+    if not (p / ".bonsai").is_dir():
         raise HTTPException(status_code=400, detail=f"Not a valid Bonsai project: {path}")
     return p
 

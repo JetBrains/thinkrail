@@ -18,7 +18,7 @@ from app.agent.models import AgentTask
 from app.agent.tools._context import get_tool_context
 from app.agent.tracker import Tracker
 from app.core.config import AppConfig
-from app.spec.registry import find_entry, read_registry
+from app.spec.index import SpecIndex
 
 logger = logging.getLogger(__name__)
 
@@ -66,16 +66,21 @@ def _validate_skill(skill: str, plugin_dir: Path) -> str | None:
     return None
 
 
-def _validate_spec_ids(spec_ids: list[str], registry_path: Path) -> str | None:
-    """Return an error message if any specId is missing from the registry, else None."""
+async def _validate_spec_ids(spec_ids: list[str], project_root: Path) -> str | None:
+    """Return an error message if any specId is missing from the index, else None."""
     if not spec_ids:
         return None
+    from app.core.config import get_index_path
+
+    db_path = get_index_path(project_root)
+    if not db_path.exists():
+        return "Cannot validate specIds: index not found"
     try:
-        entries, _ = read_registry(registry_path)
-    except (FileNotFoundError, ValueError) as exc:
-        logger.warning("Failed to read registry for validation: %s", exc)
-        return f"Cannot validate specIds: registry unavailable ({exc})"
-    missing = [sid for sid in spec_ids if find_entry(entries, sid) is None]
+        async with SpecIndex(db_path) as index:
+            missing = [sid for sid in spec_ids if await index.get_spec(sid) is None]
+    except Exception as exc:
+        logger.warning("Failed to validate spec IDs via index: %s", exc)
+        return f"Cannot validate specIds: index unavailable ({exc})"
     if missing:
         return f"Unknown specIds: {', '.join(missing)}"
     return None
@@ -105,7 +110,7 @@ async def _suggest_session(args: dict) -> dict:
 
     spec_ids = args.get("specIds", [])
     if spec_ids:
-        spec_error = _validate_spec_ids(spec_ids, ctx.config.get_registry_path())
+        spec_error = await _validate_spec_ids(spec_ids, ctx.config.get_project_root())
         if spec_error:
             return _error(spec_error)
 

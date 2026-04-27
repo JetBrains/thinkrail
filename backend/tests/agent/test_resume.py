@@ -24,6 +24,7 @@ def _make_spec_detail(id: str, title: str, content: str) -> SpecDetail:
 def _make_service() -> tuple[AgentService, MagicMock, MagicMock]:
     config = MagicMock()
     spec_service = MagicMock()
+    spec_service.get_spec = AsyncMock()
     service = AgentService(config, spec_service)
     return service, config, spec_service
 

@@ -204,10 +204,11 @@ class SpecDraftService:
 
     # -- Apply / Discard --
 
-    def apply_draft(
+    async def apply_draft(
         self, ticket_id: str, index: int, *, board_service: Any = None,
     ) -> None:
-        """Apply a single draft entry to the real filesystem + registry."""
+        """Apply a single draft entry to the real filesystem + index."""
+        from app.spec.index import SpecIndex
         from app.spec.service import SpecService
 
         manifest = self._read_manifest(ticket_id)
@@ -215,7 +216,6 @@ class SpecDraftService:
             raise IndexError(f"Draft index {index} out of range")
 
         entry = manifest.entries[index]
-        svc = SpecService(self._config)
 
         # Read original content before applying
         original_content = ""
@@ -229,26 +229,33 @@ class SpecDraftService:
         if entry.operation != "delete":
             draft_content = self.read_draft(ticket_id, entry.real_path) or ""
 
-        # Apply to real filesystem (existing logic)
-        if entry.operation == "delete" and entry.registry_id:
-            svc.delete_spec(entry.registry_id)
-        elif entry.operation in ("create", "update"):
-            if not draft_content:
-                raise FileNotFoundError(f"Draft file not found for {entry.real_path}")
-            if entry.operation == "create":
-                svc.create_spec(
-                    entry.registry_type or "module-design",
-                    entry.real_path,
-                    draft_content,
-                    entry.registry_id or None,
-                )
-            else:
-                if entry.registry_id:
-                    svc.update_spec(entry.registry_id, draft_content)
+        # Apply to real filesystem via index-backed SpecService
+        from app.core.config import get_index_path
+
+        db_path = get_index_path(self._config.get_project_root())
+        async with SpecIndex(db_path) as idx:
+            svc = SpecService(self._config, index=idx)
+            svc.trash_service = self.trash_service
+
+            if entry.operation == "delete" and entry.registry_id:
+                await svc.delete_spec(entry.registry_id)
+            elif entry.operation in ("create", "update"):
+                if not draft_content:
+                    raise FileNotFoundError(f"Draft file not found for {entry.real_path}")
+                if entry.operation == "create":
+                    await svc.create_spec(
+                        entry.registry_type or "module-design",
+                        entry.real_path,
+                        draft_content,
+                        entry.registry_id or None,
+                    )
                 else:
-                    real = self._real_file_path(entry.real_path)
-                    ensure_dir(real.parent)
-                    write_text(real, draft_content)
+                    if entry.registry_id:
+                        await svc.update_spec(entry.registry_id, draft_content)
+                    else:
+                        real = self._real_file_path(entry.real_path)
+                        ensure_dir(real.parent)
+                        write_text(real, draft_content)
 
         # Generate patch file and record on ticket
         if board_service is not None:
@@ -314,11 +321,11 @@ class SpecDraftService:
         if entry.registry_id and entry.operation != "delete":
             board_service.link_spec(ticket_id, entry.registry_id)
 
-    def apply_all(self, ticket_id: str, *, board_service: Any = None) -> None:
+    async def apply_all(self, ticket_id: str, *, board_service: Any = None) -> None:
         """Apply all draft entries."""
         manifest = self._read_manifest(ticket_id)
         for _ in range(len(manifest.entries)):
-            self.apply_draft(ticket_id, 0, board_service=board_service)
+            await self.apply_draft(ticket_id, 0, board_service=board_service)
         self.discard_all(ticket_id)
 
     def discard_draft(self, ticket_id: str, index: int) -> None:

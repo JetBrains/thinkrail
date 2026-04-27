@@ -10,11 +10,15 @@ from __future__ import annotations
 
 import contextvars
 from dataclasses import dataclass
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from app.agent.models import AgentTask
 from app.agent.tracker import Tracker
 from app.core.config import AppConfig
+
+if TYPE_CHECKING:
+    from app.spec.coordinator import IndexCoordinator
+    from app.spec.service import SpecService
 
 
 @dataclass(frozen=True)
@@ -25,6 +29,8 @@ class ToolContext:
     notify: Any  # async callable: (method, params, *, request_id?) → None
     task: AgentTask
     config: AppConfig
+    spec_service: SpecService | None = None  # cached service from server (reuses index connection)
+    coordinator: IndexCoordinator | None = None  # serialized index mutations
 
 
 _tool_context: contextvars.ContextVar[ToolContext] = contextvars.ContextVar(
@@ -33,11 +39,19 @@ _tool_context: contextvars.ContextVar[ToolContext] = contextvars.ContextVar(
 
 
 def set_tool_context(
-    tracker: Tracker, notify: Any, task: AgentTask, config: AppConfig
+    tracker: Tracker,
+    notify: Any,
+    task: AgentTask,
+    config: AppConfig,
+    spec_service: SpecService | None = None,
+    coordinator: "IndexCoordinator | None" = None,
 ) -> contextvars.Token:
     """Set session context.  Called by runner.py before SDK operations."""
     return _tool_context.set(
-        ToolContext(tracker=tracker, notify=notify, task=task, config=config)
+        ToolContext(
+            tracker=tracker, notify=notify, task=task, config=config,
+            spec_service=spec_service, coordinator=coordinator,
+        )
     )
 
 

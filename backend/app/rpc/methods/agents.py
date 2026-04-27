@@ -127,7 +127,7 @@ async def revise_transcript_rpc(service: AgentService, **params: Any) -> dict:
 async def prepare_agent(service: AgentService, **params: Any) -> dict:
     """Create a draft session without starting it. Returns bonsaiSid + systemPrompt."""
     config = AgentConfig(**params["config"])
-    task = service.prepare_task(
+    task = await service.prepare_task(
         params["specIds"], config,
         skill_id=params.get("skillId"),
         session_prompt=params.get("prompt"),
@@ -151,7 +151,7 @@ async def prepare_agent(service: AgentService, **params: Any) -> dict:
             "createdAt": task.created,
             "createdBy": conn.display_name,
         })
-    structured = service._build_context_structured_for(task)
+    structured = await service._build_context_structured_for(task)
     return {
         "bonsaiSid": task.bonsai_sid,
         "systemPrompt": structured["full"],
@@ -182,7 +182,7 @@ async def update_draft(service: AgentService, **params: Any) -> dict:
         kwargs["meta_ticket_id"] = params["metaTicketId"]
     if "filePaths" in params:
         kwargs["file_paths"] = params["filePaths"]
-    structured = service.update_draft(bonsai_sid, **kwargs)
+    structured = await service.update_draft(bonsai_sid, **kwargs)
     return {
         "systemPrompt": structured["full"],
         "sections": structured["sections"],

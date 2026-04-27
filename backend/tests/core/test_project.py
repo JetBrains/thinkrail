@@ -16,16 +16,6 @@ from app.core.project import (
 
 
 class TestEnsureMetaFile:
-    def test_creates_registry_when_missing(self, tmp_path: Path) -> None:
-        bonsai_dir = tmp_path / ".bonsai"
-        content = ensure_meta_file(bonsai_dir, "registry.json")
-        data = json.loads(content)
-        assert data["version"] == "2.0"
-        assert data["project"] == tmp_path.name
-        assert data["specs"] == []
-        assert data["links"] == []
-        assert (bonsai_dir / "registry.json").is_file()
-
     def test_creates_settings_when_missing(self, tmp_path: Path) -> None:
         bonsai_dir = tmp_path / ".bonsai"
         content = ensure_meta_file(bonsai_dir, "settings.json")
@@ -44,9 +34,9 @@ class TestEnsureMetaFile:
     def test_returns_existing_content(self, tmp_path: Path) -> None:
         bonsai_dir = tmp_path / ".bonsai"
         bonsai_dir.mkdir()
-        existing = '{"version": "2.0", "project": "custom", "specs": [{"id": "x"}], "links": []}'
-        (bonsai_dir / "registry.json").write_text(existing, encoding="utf-8")
-        content = ensure_meta_file(bonsai_dir, "registry.json")
+        existing = '{"custom": true}'
+        (bonsai_dir / "settings.json").write_text(existing, encoding="utf-8")
+        content = ensure_meta_file(bonsai_dir, "settings.json")
         assert content == existing
 
     def test_never_overwrites_existing(self, tmp_path: Path) -> None:
@@ -62,21 +52,27 @@ class TestEnsureMetaFile:
         with pytest.raises(ValueError, match="Unknown meta-file"):
             ensure_meta_file(bonsai_dir, "unknown.json")
 
+    def test_registry_is_unknown(self, tmp_path: Path) -> None:
+        """registry.json is no longer a known meta-file."""
+        bonsai_dir = tmp_path / ".bonsai"
+        with pytest.raises(ValueError, match="Unknown meta-file"):
+            ensure_meta_file(bonsai_dir, "registry.json")
+
     def test_creates_parent_dirs(self, tmp_path: Path) -> None:
         bonsai_dir = tmp_path / "deep" / "nested" / ".bonsai"
-        content = ensure_meta_file(bonsai_dir, "registry.json")
-        assert (bonsai_dir / "registry.json").is_file()
-        assert json.loads(content)["version"] == "2.0"
+        content = ensure_meta_file(bonsai_dir, "settings.json")
+        assert (bonsai_dir / "settings.json").is_file()
+        assert json.loads(content)["default_model"]
 
     def test_deleted_file_gets_regenerated(self, tmp_path: Path) -> None:
         bonsai_dir = tmp_path / ".bonsai"
-        ensure_meta_file(bonsai_dir, "registry.json")
-        assert (bonsai_dir / "registry.json").is_file()
-        (bonsai_dir / "registry.json").unlink()
-        assert not (bonsai_dir / "registry.json").is_file()
-        content = ensure_meta_file(bonsai_dir, "registry.json")
-        assert (bonsai_dir / "registry.json").is_file()
-        assert json.loads(content)["specs"] == []
+        ensure_meta_file(bonsai_dir, "settings.json")
+        assert (bonsai_dir / "settings.json").is_file()
+        (bonsai_dir / "settings.json").unlink()
+        assert not (bonsai_dir / "settings.json").is_file()
+        content = ensure_meta_file(bonsai_dir, "settings.json")
+        assert (bonsai_dir / "settings.json").is_file()
+        assert "default_model" in json.loads(content)
 
 
 class TestEnsureMetaDir:
@@ -102,9 +98,10 @@ class TestEnsureProject:
     def test_creates_all_meta_files(self, tmp_path: Path) -> None:
         ensure_project(tmp_path)
         bonsai_dir = tmp_path / ".bonsai"
-        assert (bonsai_dir / "registry.json").is_file()
         assert (bonsai_dir / "settings.json").is_file()
         assert (bonsai_dir / "users.json").is_file()
+        # registry.json is no longer created
+        assert not (bonsai_dir / "registry.json").exists()
 
     def test_creates_all_subdirs(self, tmp_path: Path) -> None:
         ensure_project(tmp_path)
@@ -115,16 +112,8 @@ class TestEnsureProject:
     def test_idempotent_on_existing_project(self, tmp_path: Path) -> None:
         bonsai_dir = tmp_path / ".bonsai"
         bonsai_dir.mkdir()
-        custom_registry = '{"version": "2.0", "project": "mine", "specs": [{"id": "s1"}], "links": []}'
-        (bonsai_dir / "registry.json").write_text(custom_registry, encoding="utf-8")
+        custom_settings = '{"custom": true}'
+        (bonsai_dir / "settings.json").write_text(custom_settings, encoding="utf-8")
         ensure_project(tmp_path)
-        assert (bonsai_dir / "registry.json").read_text(encoding="utf-8") == custom_registry
-        assert (bonsai_dir / "settings.json").is_file()
+        assert (bonsai_dir / "settings.json").read_text(encoding="utf-8") == custom_settings
         assert (bonsai_dir / "users.json").is_file()
-
-    def test_registry_project_name_derived_from_dir(self, tmp_path: Path) -> None:
-        ensure_project(tmp_path)
-        data = json.loads(
-            (tmp_path / ".bonsai" / "registry.json").read_text(encoding="utf-8")
-        )
-        assert data["project"] == tmp_path.name

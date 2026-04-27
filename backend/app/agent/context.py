@@ -182,9 +182,9 @@ actions, always including "Done for now" as an option.
     spec_workflow = """\
 ### Spec-Driven Workflow
 
-- Use `spec_list` or `registry_query` at the start to understand project state and existing specs.
-- After creating or modifying any spec file, use `spec_save` and `registry_mutate` to \
-update the registry with the appropriate entry and links.
+- Use `spec_search` at the start to understand project state and existing specs.
+- After creating or modifying any spec file, use Write/Edit tools to update the spec file \
+with YAML frontmatter, and use `spec_delete` for removing specs with cross-file cleanup.
 - Respect the spec hierarchy: Goal > Architecture > Modules > Submodules > Tasks."""
 
     # 4. Proactive Suggestions subsection
@@ -204,7 +204,44 @@ Write a `reason` that explains *why* this follow-up matters now.
 The developer sees a card and can approve or dismiss. \
 Respect dismissals — do not re-suggest the same session. Limit to 1-3 per session."""
 
-    # 5. Available Skills subsection (dynamically generated)
+    # 5. Frontmatter Format subsection (reference card)
+    frontmatter = """\
+### Frontmatter Format
+
+Every spec file starts with YAML frontmatter between `---` delimiters. \
+The file watcher validates and indexes it automatically.
+
+```yaml
+---
+id: module-auth
+type: module-design
+status: active
+parent: design-doc
+depends-on:
+  - module-core
+covers:
+  - backend/app/auth/
+tags:
+  - backend
+---
+```
+
+**Required fields:**
+- `id` — unique identifier (e.g. `module-auth`, `task-fix-login`)
+- `type` — one of: goal-and-requirements, architecture-design, module-design, \
+submodule-design, task-spec
+
+**Optional fields:**
+- `status` — draft (default), active, stale, done, deprecated
+- `title` — display name (defaults to first `#` heading)
+- `parent` — spec ID of the parent
+- `depends-on` — list of spec IDs this depends on
+- `references` — list of spec IDs this references
+- `implements` — list of spec IDs this implements
+- `covers` — list of source paths documented
+- `tags` — list of labels"""
+
+    # 6. Available Skills subsection (dynamically generated)
     skills = scan_skill_frontmatter(plugin_dir)
     if skills:
         rows = "\n".join(f"| {s['name']} | {s['description']} |" for s in skills)
@@ -220,7 +257,7 @@ Respect dismissals — do not re-suggest the same session. Limit to 1-3 per sess
 
 No skills available."""
 
-    subsections = [vis, interaction, spec_workflow, proactive, skills_table]
+    subsections = [vis, interaction, spec_workflow, proactive, frontmatter, skills_table]
     body = "\n\n".join(subsections)
     return f"## General Instructions\n\n{body}"
 
@@ -236,28 +273,44 @@ def _load_skill(skill_id: str, plugin_dir: Path) -> str:
     return _strip_frontmatter(raw)
 
 
-def _build_specs_section(spec_ids: list[str], spec_service: SpecService) -> str:
-    """Load specs by ID, format as titled sections separated by ``---``."""
+async def _build_specs_section(spec_ids: list[str], spec_service: SpecService) -> str:
+    """Load specs by ID, format as titled sections separated by ``---``.
+
+    Gracefully skips specs that can't be loaded (not indexed yet, deleted,
+    or index still initialising) — mirrors ``_build_spec_details`` behaviour.
+    """
     spec_parts: list[str] = []
+    skipped: list[str] = []
     for sid in spec_ids:
-        detail = spec_service.get_spec(sid)
-        spec_parts.append(f"### {detail.title}\n\n{detail.content}")
+        try:
+            detail = await spec_service.get_spec(sid)
+            spec_parts.append(f"### {detail.title}\n\n{detail.content}")
+        except Exception:
+            logger.warning("Skipping spec '%s': not available in index", sid)
+            skipped.append(sid)
+    if not spec_parts and not skipped:
+        return ""
     specs_body = "\n\n---\n\n".join(spec_parts)
-    return (
+    header = (
         "## Specifications\n\n"
         "The following specifications provide context for this session.\n\n"
-        + specs_body
     )
+    if skipped:
+        header += (
+            f"**Note:** {len(skipped)} spec(s) could not be loaded "
+            f"({', '.join(skipped)}) — index may still be initialising.\n\n"
+        )
+    return header + specs_body
 
 
-def _build_spec_details(
+async def _build_spec_details(
     spec_ids: list[str], spec_service: SpecService,
 ) -> list[dict]:
     """Return per-spec metadata for the structured prompt view."""
     details: list[dict] = []
     for sid in spec_ids:
         try:
-            detail = spec_service.get_spec(sid)
+            detail = await spec_service.get_spec(sid)
             details.append({
                 "id": detail.id,
                 "title": detail.title,
@@ -449,7 +502,7 @@ SECTION_LABELS: dict[str, str] = {
 }
 
 
-def build_context(
+async def build_context(
     spec_ids: list[str],
     skill_id: str | None,
     project_root: Path,
@@ -507,12 +560,12 @@ def build_context(
 
     # 5. Specification content
     if spec_ids:
-        sections.append(_build_specs_section(spec_ids, spec_service))
+        sections.append(await _build_specs_section(spec_ids, spec_service))
 
     return "\n\n".join(sections)
 
 
-def build_context_structured(
+async def build_context_structured(
     spec_ids: list[str],
     skill_id: str | None,
     project_root: Path,
@@ -563,7 +616,7 @@ def build_context_structured(
 
     # 5. Specs
     if spec_ids:
-        ordered.append(("specs", _build_specs_section(spec_ids, spec_service)))
+        ordered.append(("specs", await _build_specs_section(spec_ids, spec_service)))
 
     full = "\n\n".join(content for _, content in ordered)
 
@@ -576,7 +629,7 @@ def build_context_structured(
             "tokens": _estimate_tokens(content, model),
         }
         if key == "specs":
-            section["specDetails"] = _build_spec_details(spec_ids, spec_service)
+            section["specDetails"] = await _build_spec_details(spec_ids, spec_service)
         if key == "files":
             section["fileDetails"] = _build_file_details(file_paths or [], project_root)
         sections.append(section)

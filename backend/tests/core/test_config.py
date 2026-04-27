@@ -13,9 +13,9 @@ class TestAppConfigMethods:
         cfg = load_config(tmp_path)
         assert cfg.get_bonsai_dir() == tmp_path / ".bonsai"
 
-    def test_get_registry_path(self, tmp_path: Path) -> None:
+    def test_get_bonsai_dir_returns_path(self, tmp_path: Path) -> None:
         cfg = load_config(tmp_path)
-        assert cfg.get_registry_path() == tmp_path / ".bonsai" / "registry.json"
+        assert cfg.get_bonsai_dir().name == ".bonsai"
 
 
 class TestLoadConfig:

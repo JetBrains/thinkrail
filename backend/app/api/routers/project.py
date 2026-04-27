@@ -2,10 +2,8 @@
 
 from __future__ import annotations
 
-import json
 from pathlib import Path
 
-import pathspec
 from fastapi import APIRouter, Query
 from pydantic import BaseModel
 
@@ -17,46 +15,9 @@ from app.api.schemas import (
     ProjectListResponse,
     ProjectValidateResponse,
 )
+from app.core.bonsaihide import load_bonsaihide
 
 router = APIRouter(tags=["project"])
-
-_BONSAIHIDE_DEFAULTS = """\
-# Build artifacts & dependencies
-node_modules/
-dist/
-build/
-target/
-.next/
-.nuxt/
-.vite/
-
-# Caches
-__pycache__/
-.mypy_cache/
-.pytest_cache/
-.ruff_cache/
-
-# Version control & tools
-.git/
-.claude/
-.venv/
-
-# All dotfiles hidden by default
-.*
-
-# Exceptions — show these
-!.bonsai/
-!.bonsaihide
-"""
-
-
-def _load_bonsaihide(root: Path) -> pathspec.PathSpec:
-    hide_file = root / ".bonsaihide"
-    try:
-        text = hide_file.read_text(encoding="utf-8")
-    except (FileNotFoundError, PermissionError):
-        text = _BONSAIHIDE_DEFAULTS
-    return pathspec.PathSpec.from_lines("gitwildmatch", text.splitlines())
 
 
 class _InitBody(BaseModel):
@@ -70,7 +31,7 @@ async def health_check() -> HealthResponse:
 
 @router.get("/api/project/list", response_model=ProjectListResponse)
 async def list_projects(base: str = Query(default=""), max_depth: int = Query(default=4)) -> ProjectListResponse:
-    """List directories containing .bonsai/registry.json."""
+    """List directories containing a .bonsai/ directory."""
     root = Path(base).expanduser().resolve() if base else Path.home()
     projects: list[ProjectInfo] = []
 
@@ -87,7 +48,7 @@ async def list_projects(base: str = Query(default=""), max_depth: int = Query(de
         for child in children:
             if not child.is_dir() or child.name.startswith("."):
                 continue
-            if (child / ".bonsai" / "registry.json").is_file():
+            if (child / ".bonsai").is_dir():
                 projects.append(ProjectInfo(path=str(child), name=child.name))
             else:
                 _scan(child, depth + 1)
@@ -99,7 +60,7 @@ async def list_projects(base: str = Query(default=""), max_depth: int = Query(de
 @router.get("/api/project/validate", response_model=ProjectValidateResponse)
 async def validate_project(path: str = Query(...)) -> ProjectValidateResponse:
     p = Path(path).expanduser().resolve()
-    has_specs = (p / ".bonsai" / "registry.json").is_file()
+    has_specs = (p / ".bonsai").is_dir()
     return ProjectValidateResponse(valid=has_specs, path=str(p), name=p.name, exists=p.is_dir())
 
 
@@ -109,19 +70,6 @@ async def init_project(body: _InitBody) -> ProjectInfo:
     p.mkdir(parents=True, exist_ok=True)
     bonsai_dir = p / ".bonsai"
     bonsai_dir.mkdir(exist_ok=True)
-    registry = bonsai_dir / "registry.json"
-    if not registry.exists():
-        registry.write_text(
-            json.dumps(
-                {
-                    "version": "2.0",
-                    "project": p.name,
-                    "specs": [],
-                    "links": [],
-                },
-                indent=2,
-            )
-        )
     return ProjectInfo(path=str(p), name=p.name)
 
 
@@ -136,7 +84,7 @@ async def list_files(
     if not root.is_dir():
         return ProjectFilesResponse(entries=[])
 
-    spec = _load_bonsaihide(root)
+    spec = load_bonsaihide(root)
     entries: list[FileEntry] = []
 
     def walk(dir_path: Path, depth: int) -> None:

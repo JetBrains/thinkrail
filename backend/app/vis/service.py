@@ -1,3 +1,9 @@
+"""Visualization service — computes live dashboard state for the Bonsai web UI.
+
+Reads spec data via ``SpecService`` (backed by the SQLite index) and
+combines it with filesystem scanning for coverage, freshness, and lint.
+"""
+
 from __future__ import annotations
 
 import datetime
@@ -6,12 +12,12 @@ import logging
 import os
 import re
 import time
-from collections.abc import Callable, Awaitable
+from collections.abc import Awaitable, Callable
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from app.core.config import AppConfig
-from app.spec.models import Link, RegistryEntry
-from app.spec.registry import read_registry
+from app.spec.models import Link, SpecEntry
 from app.vis.models import (
     CoverageEntry,
     DashboardState,
@@ -20,6 +26,9 @@ from app.vis.models import (
     TaskEntry,
     WorkflowStep,
 )
+
+if TYPE_CHECKING:
+    from app.spec.service import SpecService
 
 logger = logging.getLogger(__name__)
 
@@ -75,9 +84,12 @@ NotifyFn = Callable[[str, dict], Awaitable[None]]
 class VisualizationService:
     """Maintains live dashboard state for the Bonsai web UI."""
 
-    def __init__(self, config: AppConfig) -> None:
+    def __init__(
+        self, config: AppConfig, spec_service: SpecService | None = None,
+    ) -> None:
         self._config = config
         self._root = config.get_project_root()
+        self._spec_service = spec_service
         self._state = DashboardState()
         self._notify: NotifyFn | None = None
 
@@ -87,17 +99,19 @@ class VisualizationService:
     def get_state(self) -> DashboardState:
         return self._state
 
-    def refresh(self) -> None:
-        """Recompute state synchronously without pushing a notification."""
+    async def refresh(self) -> None:
+        """Recompute state without pushing a notification."""
         try:
-            self._state = self._compute()
+            entries, links = await self._fetch_spec_data()
+            self._state = self._compute(entries, links)
         except Exception:
             logger.exception("VisualizationService: refresh failed")
 
     async def recompute(self) -> DashboardState:
-        """Recompute dashboard from registry, files, tasks. Push update if bound."""
+        """Recompute dashboard from specs, files, tasks.  Push update if bound."""
         try:
-            self._state = self._compute()
+            entries, links = await self._fetch_spec_data()
+            self._state = self._compute(entries, links)
         except Exception:
             logger.exception("VisualizationService: recompute failed")
             return self._state
@@ -108,17 +122,21 @@ class VisualizationService:
                 logger.debug("vis/stateChanged notify failed (WS disconnected?)")
         return self._state
 
-    # ── Computation ──────────────────────────────────────────────────────────
+    # ── Data fetching (async I/O) ────────────────────────────────────────
 
-    def _read_registry(self) -> tuple[list[RegistryEntry], list[Link]]:
-        try:
-            return read_registry(self._config.get_registry_path())
-        except (FileNotFoundError, ValueError):
+    async def _fetch_spec_data(self) -> tuple[list[SpecEntry], list[Link]]:
+        """Fetch spec entries and links from SpecService via the index."""
+        if self._spec_service is None:
             return [], []
+        graph = await self._spec_service.get_graph()
+        return graph.nodes, graph.edges
 
-    def _compute(self) -> DashboardState:
+    # ── Computation (sync, CPU-bound) ────────────────────────────────────
+
+    def _compute(
+        self, entries: list[SpecEntry], links: list[Link],
+    ) -> DashboardState:
         start = time.monotonic()
-        entries, links = self._read_registry()
 
         # Coverage
         source_dirs = self._find_source_dirs()
@@ -205,11 +223,11 @@ class VisualizationService:
         return sorted(dirs)
 
     def _compute_coverage(
-        self, entries: list[RegistryEntry], source_dirs: list[str]
+        self, entries: list[SpecEntry], source_dirs: list[str],
     ) -> list[CoverageEntry]:
         result = []
         for src_dir in source_dirs:
-            matching: RegistryEntry | None = None
+            matching: SpecEntry | None = None
             for entry in entries:
                 for cover in entry.covers:
                     if src_dir.startswith(cover) or cover.startswith(src_dir):
@@ -230,7 +248,7 @@ class VisualizationService:
                 entry.freshness = freshness[entry.spec_id]
         return result
 
-    def _compute_freshness(self, entries: list[RegistryEntry]) -> dict[str, str]:
+    def _compute_freshness(self, entries: list[SpecEntry]) -> dict[str, str]:
         results: dict[str, str] = {}
         for entry in entries:
             if not entry.covers:
@@ -274,7 +292,7 @@ class VisualizationService:
         return best
 
     def _run_lint(
-        self, entries: list[RegistryEntry], links: list[Link]
+        self, entries: list[SpecEntry], links: list[Link],
     ) -> list[LintIssue]:
         issues: list[LintIssue] = []
         for entry in entries:
@@ -341,7 +359,7 @@ class VisualizationService:
         return tasks
 
     def _compute_workflow_steps(
-        self, done_types: set[str], tasks_done: int, task_count: int
+        self, done_types: set[str], tasks_done: int, task_count: int,
     ) -> list[WorkflowStep]:
         steps = []
         found_current = False

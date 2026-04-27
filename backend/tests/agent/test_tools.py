@@ -13,7 +13,20 @@ import pytest
 from app.agent.models import AgentConfig, AgentTask
 from app.agent.tools._context import set_tool_context
 from app.agent.tracker import Tracker
-from app.core.config import AppConfig
+from app.core.config import AppConfig, get_index_path
+
+
+# ---------------------------------------------------------------------------
+# Fixtures
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture(autouse=True)
+def _isolate_data_dir(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Route get_data_dir() to a temp directory so index paths stay isolated."""
+    data_dir = tmp_path / ".bonsai_server"
+    data_dir.mkdir()
+    monkeypatch.setattr("app.core.config.get_data_dir", lambda: data_dir)
 
 
 # ---------------------------------------------------------------------------
@@ -24,9 +37,9 @@ from app.core.config import AppConfig
 def _make_config(tmp_path: Path) -> AppConfig:
     """Build an AppConfig rooted in a temp directory."""
     bonsai_dir = tmp_path / ".bonsai"
-    bonsai_dir.mkdir()
+    bonsai_dir.mkdir(exist_ok=True)
     plugin_dir = tmp_path / "plugin"
-    plugin_dir.mkdir()
+    plugin_dir.mkdir(exist_ok=True)
     return AppConfig(
         project_root=tmp_path,
         bonsai_dir=bonsai_dir,
@@ -41,15 +54,23 @@ def _make_tracker_and_task() -> tuple[Tracker, AgentTask]:
     return tracker, task
 
 
-def _write_registry(path: Path, spec_ids: list[str]) -> None:
-    """Write a minimal registry.json with the given spec IDs."""
-    data = {
-        "version": "2.0",
-        "project": "test",
-        "specs": [{"id": sid, "type": "module", "path": f"/{sid}", "title": sid} for sid in spec_ids],
-        "links": [],
-    }
-    path.write_text(json.dumps(data), encoding="utf-8")
+async def _write_index(project_root: Path, spec_ids: list[str]) -> None:
+    """Write a minimal index.db with the given spec IDs.
+
+    Uses ``get_index_path`` to compute the external index path,
+    consistent with production code.
+    """
+    from app.spec.index import SpecIndex
+    from app.spec.models import SpecEntry
+
+    db_path = get_index_path(project_root)
+    async with SpecIndex(db_path) as index:
+        for sid in spec_ids:
+            entry = SpecEntry(
+                id=sid, type="module-design", path=f"/{sid}",
+                title=sid, status="active", content_hash="", indexed_at="",
+            )
+            await index.upsert_spec(entry)
 
 
 # ===========================================================================
@@ -82,40 +103,39 @@ class TestValidateSkill:
 
 
 class TestValidateSpecIds:
-    def test_validate_spec_ids_empty_list(self, tmp_path: Path) -> None:
+    async def test_validate_spec_ids_empty_list(self, tmp_path: Path) -> None:
         """Empty list → short-circuit, returns None."""
         from app.agent.tools.suggest_session import _validate_spec_ids
 
         # Path doesn't even need to exist — empty list short-circuits
-        assert _validate_spec_ids([], tmp_path / "registry.json") is None
+        assert await _validate_spec_ids([], tmp_path) is None
 
-    def test_validate_spec_ids_all_valid(self, tmp_path: Path) -> None:
-        """All IDs present in registry → returns None."""
+    async def test_validate_spec_ids_all_valid(self, tmp_path: Path) -> None:
+        """All IDs present in index → returns None."""
         from app.agent.tools.suggest_session import _validate_spec_ids
 
-        registry_path = tmp_path / "registry.json"
-        _write_registry(registry_path, ["a", "b"])
+        await _write_index(tmp_path, ["a", "b"])
+        assert await _validate_spec_ids(["a", "b"], tmp_path) is None
 
-        assert _validate_spec_ids(["a", "b"], registry_path) is None
-
-    def test_validate_spec_ids_some_missing(self, tmp_path: Path) -> None:
+    async def test_validate_spec_ids_some_missing(self, tmp_path: Path) -> None:
         """Some IDs missing → returns error naming the missing ones."""
         from app.agent.tools.suggest_session import _validate_spec_ids
 
-        registry_path = tmp_path / "registry.json"
-        _write_registry(registry_path, ["a"])
-
-        result = _validate_spec_ids(["a", "b"], registry_path)
+        await _write_index(tmp_path, ["a"])
+        result = await _validate_spec_ids(["a", "b"], tmp_path)
         assert result is not None
         assert "Unknown specIds: b" in result
 
-    def test_validate_spec_ids_missing_registry_creates_default(self, tmp_path: Path) -> None:
-        """Non-existent registry is auto-created; unknown IDs are reported."""
+    async def test_validate_spec_ids_missing_index(self, tmp_path: Path) -> None:
+        """Non-existent index → returns error."""
         from app.agent.tools.suggest_session import _validate_spec_ids
 
-        result = _validate_spec_ids(["x"], tmp_path / ".bonsai" / "registry.json")
+        # Use a fresh project root that has never had an index built
+        fake_project = tmp_path / "no_index_project"
+        fake_project.mkdir()
+        result = await _validate_spec_ids(["x"], fake_project)
         assert result is not None
-        assert "Unknown specIds: x" in result
+        assert "index not found" in result
 
 
 # ===========================================================================
@@ -132,7 +152,7 @@ class TestSuggestSessionInHandlerInteraction:
         skill_dir = config.plugin_dir / "skills" / "module-design"
         skill_dir.mkdir(parents=True)
         (skill_dir / "SKILL.md").write_text("# skill")
-        _write_registry(config.get_registry_path(), ["spec-a"])
+        await _write_index(config.get_project_root(), ["spec-a"])
 
         tracker, task = _make_tracker_and_task()
         tracker.set_status(task.bonsai_sid, "idle")
@@ -234,7 +254,7 @@ class TestSuggestSessionInHandlerInteraction:
         skill_dir = config.plugin_dir / "skills" / "module-design"
         skill_dir.mkdir(parents=True)
         (skill_dir / "SKILL.md").write_text("# skill")
-        _write_registry(config.get_registry_path(), ["a"])
+        await _write_index(config.get_project_root(), ["a"])
 
         tracker, task = _make_tracker_and_task()
         notify = AsyncMock()
@@ -258,31 +278,12 @@ class TestSuggestSessionInHandlerInteraction:
 
 
 # ===========================================================================
-# Spec & registry MCP tools — helpers
+# Spec MCP tools — helpers (3 tools: spec_search, spec_links, spec_delete)
 # ===========================================================================
 
 
-def _write_full_registry(
-    path: Path,
-    specs: list[dict[str, Any]] | None = None,
-    links: list[dict[str, Any]] | None = None,
-) -> None:
-    """Write a registry.json with full-featured entries."""
-    data = {
-        "version": "2.0",
-        "project": "test",
-        "specs": specs or [],
-        "links": links or [],
-    }
-    path.write_text(json.dumps(data, indent=2), encoding="utf-8")
-
-
 def _make_spec_args(args: dict[str, Any], config: AppConfig) -> dict[str, Any]:
-    """Set tool context for spec tool tests and return raw args.
-
-    Previously injected ``_config`` into args (simulating the interceptor).
-    Now sets tool context via contextvars — matching the new in-handler pattern.
-    """
+    """Set tool context for spec tool tests and return raw args."""
     tracker = Tracker()
     task = tracker.create_task(["spec-test"], AgentConfig())
     set_tool_context(tracker, AsyncMock(), task, config)
@@ -300,504 +301,120 @@ def _parse_result(result: dict) -> tuple[Any, bool]:
     return data, is_error
 
 
-def _setup_registry_with_specs(tmp_path: Path) -> AppConfig:
-    """Create a config with a populated registry and spec files on disk."""
+async def _setup_index_with_specs(tmp_path: Path) -> AppConfig:
+    """Create a config with frontmatter spec files and a SQLite index."""
+    from app.spec.frontmatter import serialize_frontmatter
+    from app.spec.index import SpecIndex
+
     config = _make_config(tmp_path)
     specs = [
         {
-            "id": "mod-a",
-            "type": "module-design",
-            "path": "modules/a/README.md",
-            "title": "Module A",
-            "status": "active",
-            "covers": ["modules/a/"],
-            "tags": ["backend"],
-            "created": "2026-01-01",
-            "updated": "2026-01-01",
+            "id": "mod-a", "type": "module-design",
+            "path": "modules/a/README.md", "title": "Module A",
+            "status": "active", "covers": ["modules/a/"], "tags": ["backend"],
         },
         {
-            "id": "mod-b",
-            "type": "module-design",
-            "path": "modules/b/README.md",
-            "title": "Module B",
-            "status": "draft",
-            "covers": ["modules/b/"],
-            "tags": ["frontend"],
-            "created": "2026-01-02",
-            "updated": "2026-01-02",
+            "id": "mod-b", "type": "module-design",
+            "path": "modules/b/README.md", "title": "Module B",
+            "status": "draft", "covers": ["modules/b/"], "tags": ["frontend"],
         },
         {
-            "id": "task-1",
-            "type": "task-spec",
-            "path": "tasks/task_1.md",
-            "title": "Task One",
-            "status": "active",
-            "covers": [],
-            "tags": ["high", "backend"],
-            "created": "2026-01-03",
-            "updated": "2026-01-03",
+            "id": "task-1", "type": "task-spec",
+            "path": "tasks/task_1.md", "title": "Task One",
+            "status": "active", "covers": [], "tags": ["high", "backend"],
         },
     ]
-    links = [
-        {"from": "mod-b", "to": "mod-a", "type": "depends-on"},
-        {"from": "task-1", "to": "mod-a", "type": "implements"},
-    ]
-    _write_full_registry(config.get_registry_path(), specs, links)
 
-    # Create spec files on disk
+    # Create spec files with frontmatter
     for spec in specs:
+        meta = {
+            "id": spec["id"], "type": spec["type"], "status": spec["status"],
+            "title": spec["title"],
+        }
+        if spec.get("covers"):
+            meta["covers"] = spec["covers"]
+        if spec.get("tags"):
+            meta["tags"] = spec["tags"]
+        # Add link fields for the known links
+        if spec["id"] == "mod-b":
+            meta["depends-on"] = ["mod-a"]
+        elif spec["id"] == "task-1":
+            meta["implements"] = ["mod-a"]
+
+        body = f"# {spec['title']}\n\nSpec content for {spec['id']}.\n"
+        content = serialize_frontmatter(meta, body)
         file_path = config.get_project_root() / spec["path"]
         file_path.parent.mkdir(parents=True, exist_ok=True)
-        file_path.write_text(f"# {spec['title']}\n\nSpec content for {spec['id']}.\n")
+        file_path.write_text(content, encoding="utf-8")
+
+    # Build index from disk (uses external path via get_index_path)
+    db_path = get_index_path(config.get_project_root())
+    async with SpecIndex(db_path) as index:
+        await index.rebuild(config.get_project_root())
 
     return config
 
 
 # ===========================================================================
-# spec_list — tests
+# spec_search — tests
 # ===========================================================================
 
 
-class TestSpecList:
-    async def test_list_all(self, tmp_path: Path) -> None:
+class TestSpecSearch:
+    async def test_search_all(self, tmp_path: Path) -> None:
         """No filters → returns all specs."""
-        from app.agent.tools.specs import _spec_list
+        from app.agent.tools.specs import _spec_search
 
-        config = _setup_registry_with_specs(tmp_path)
-        result = await _spec_list.handler(_make_spec_args({}, config))
+        config = await _setup_index_with_specs(tmp_path)
+        result = await _spec_search.handler(_make_spec_args({}, config))
         data, is_error = _parse_result(result)
-
         assert not is_error
         assert len(data) == 3
 
-    async def test_filter_by_type(self, tmp_path: Path) -> None:
-        """Filter by type → returns only matching specs."""
-        from app.agent.tools.specs import _spec_list
+    async def test_search_by_type(self, tmp_path: Path) -> None:
+        from app.agent.tools.specs import _spec_search
 
-        config = _setup_registry_with_specs(tmp_path)
-        result = await _spec_list.handler(
-            _make_spec_args({"type": "module-design"}, config)
-        )
+        config = await _setup_index_with_specs(tmp_path)
+        result = await _spec_search.handler(_make_spec_args({"type": "task-spec"}, config))
         data, is_error = _parse_result(result)
-
-        assert not is_error
-        assert len(data) == 2
-        assert all(s["type"] == "module-design" for s in data)
-
-    async def test_filter_by_status(self, tmp_path: Path) -> None:
-        """Filter by status → returns only matching specs."""
-        from app.agent.tools.specs import _spec_list
-
-        config = _setup_registry_with_specs(tmp_path)
-        result = await _spec_list.handler(
-            _make_spec_args({"status": "draft"}, config)
-        )
-        data, is_error = _parse_result(result)
-
         assert not is_error
         assert len(data) == 1
-        assert data[0]["id"] == "mod-b"
+        assert data[0]["id"] == "task-1"
 
-    async def test_filter_by_tag(self, tmp_path: Path) -> None:
-        """Filter by tag → returns entries that have the tag."""
-        from app.agent.tools.specs import _spec_list
+    async def test_search_by_status(self, tmp_path: Path) -> None:
+        from app.agent.tools.specs import _spec_search
 
-        config = _setup_registry_with_specs(tmp_path)
-        result = await _spec_list.handler(
-            _make_spec_args({"tag": "backend"}, config)
-        )
+        config = await _setup_index_with_specs(tmp_path)
+        result = await _spec_search.handler(_make_spec_args({"status": "active"}, config))
         data, is_error = _parse_result(result)
-
         assert not is_error
-        assert len(data) == 2  # mod-a + task-1
+        assert len(data) == 2
 
-    async def test_no_matches(self, tmp_path: Path) -> None:
-        """Filters that match nothing → empty list."""
-        from app.agent.tools.specs import _spec_list
+    async def test_search_by_tag(self, tmp_path: Path) -> None:
+        from app.agent.tools.specs import _spec_search
 
-        config = _setup_registry_with_specs(tmp_path)
-        result = await _spec_list.handler(
-            _make_spec_args({"status": "deprecated"}, config)
-        )
+        config = await _setup_index_with_specs(tmp_path)
+        result = await _spec_search.handler(_make_spec_args({"tag": "backend"}, config))
         data, is_error = _parse_result(result)
-
         assert not is_error
-        assert data == []
-
-
-# ===========================================================================
-# spec_get — tests
-# ===========================================================================
-
-
-class TestSpecGet:
-    async def test_get_valid_id(self, tmp_path: Path) -> None:
-        """Valid ID → returns full content + links."""
-        from app.agent.tools.specs import _spec_get
-
-        config = _setup_registry_with_specs(tmp_path)
-        result = await _spec_get.handler(_make_spec_args({"id": "mod-a"}, config))
-        data, is_error = _parse_result(result)
-
-        assert not is_error
-        assert data["id"] == "mod-a"
-        assert data["title"] == "Module A"
-        assert "Spec content" in data["content"]
-        # mod-a has 2 links (mod-b depends-on it, task-1 implements it)
-        assert len(data["links"]) == 2
-
-    async def test_get_missing_id(self, tmp_path: Path) -> None:
-        """Unknown ID → isError."""
-        from app.agent.tools.specs import _spec_get
-
-        config = _setup_registry_with_specs(tmp_path)
-        result = await _spec_get.handler(
-            _make_spec_args({"id": "nonexistent"}, config)
-        )
-        _, is_error = _parse_result(result)
-
-        assert is_error
-
-    async def test_get_missing_param(self, tmp_path: Path) -> None:
-        """No id param → isError."""
-        from app.agent.tools.specs import _spec_get
-
-        config = _setup_registry_with_specs(tmp_path)
-        result = await _spec_get.handler(_make_spec_args({}, config))
-        _, is_error = _parse_result(result)
-
-        assert is_error
-
-
-# ===========================================================================
-# spec_save — tests
-# ===========================================================================
-
-
-class TestSpecSave:
-    async def test_create_new_spec(self, tmp_path: Path) -> None:
-        """New path + type → creates file + registry entry."""
-        from app.agent.tools.specs import _spec_save
-
-        config = _setup_registry_with_specs(tmp_path)
-        result = await _spec_save.handler(
-            _make_spec_args(
-                {
-                    "path": "modules/c/README.md",
-                    "content": "# Module C\n\nNew module.\n",
-                    "type": "module-design",
-                    "status": "active",
-                    "covers": ["modules/c/"],
-                    "tags": ["backend"],
-                },
-                config,
-            )
-        )
-        data, is_error = _parse_result(result)
-
-        assert not is_error
-        assert data["title"] == "Module C"
-        assert data["type"] == "module-design"
-        # File exists on disk
-        assert (config.get_project_root() / "modules/c/README.md").exists()
-
-    async def test_update_existing_spec(self, tmp_path: Path) -> None:
-        """Existing path → updates content."""
-        from app.agent.tools.specs import _spec_save
-
-        config = _setup_registry_with_specs(tmp_path)
-        result = await _spec_save.handler(
-            _make_spec_args(
-                {
-                    "path": "modules/a/README.md",
-                    "content": "# Module A\n\nUpdated content.\n",
-                },
-                config,
-            )
-        )
-        data, is_error = _parse_result(result)
-
-        assert not is_error
-        assert "Updated content" in data["content"]
-
-    async def test_create_missing_type(self, tmp_path: Path) -> None:
-        """New path without type → isError."""
-        from app.agent.tools.specs import _spec_save
-
-        config = _setup_registry_with_specs(tmp_path)
-        result = await _spec_save.handler(
-            _make_spec_args(
-                {"path": "new/spec.md", "content": "# New\n"},
-                config,
-            )
-        )
-        _, is_error = _parse_result(result)
-
-        assert is_error
-
-    async def test_create_with_explicit_id(self, tmp_path: Path) -> None:
-        """Explicit ID → uses that ID instead of auto-generating."""
-        from app.agent.tools.specs import _spec_save
-
-        config = _setup_registry_with_specs(tmp_path)
-        result = await _spec_save.handler(
-            _make_spec_args(
-                {
-                    "path": "modules/d/README.md",
-                    "content": "# Module D\n\nWith explicit ID.\n",
-                    "type": "module-design",
-                    "id": "my-custom-id",
-                },
-                config,
-            )
-        )
-        data, is_error = _parse_result(result)
-
-        assert not is_error
-        assert data["id"] == "my-custom-id"
-
-    async def test_create_duplicate_id(self, tmp_path: Path) -> None:
-        """Duplicate ID → isError."""
-        from app.agent.tools.specs import _spec_save
-
-        config = _setup_registry_with_specs(tmp_path)
-        result = await _spec_save.handler(
-            _make_spec_args(
-                {
-                    "path": "somewhere/else.md",
-                    "content": "# Conflict\n",
-                    "type": "module-design",
-                    "id": "mod-a",  # already exists
-                },
-                config,
-            )
-        )
-        _, is_error = _parse_result(result)
-
-        assert is_error
-
-    async def test_update_with_metadata(self, tmp_path: Path) -> None:
-        """Update with status/covers/tags → metadata applied."""
-        from app.agent.tools.specs import _spec_save
-
-        config = _setup_registry_with_specs(tmp_path)
-        result = await _spec_save.handler(
-            _make_spec_args(
-                {
-                    "path": "modules/b/README.md",
-                    "content": "# Module B\n\nRefreshed.\n",
-                    "status": "active",
-                    "tags": ["frontend", "updated"],
-                },
-                config,
-            )
-        )
-        data, is_error = _parse_result(result)
-
-        assert not is_error
-        # Verify metadata was applied by re-reading the registry
-        from app.spec.registry import find_entry, read_registry
-
-        entries, _ = read_registry(config.get_registry_path())
-        entry = find_entry(entries, "mod-b")
-        assert entry is not None
-        assert entry.status == "active"
-        assert "updated" in entry.tags
-
-    # --- Registry-sync path (content omitted on updates) ---
-
-    async def test_update_without_content(self, tmp_path: Path) -> None:
-        """Existing path + no content → reads from disk, syncs registry metadata."""
-        from app.agent.tools.specs import _spec_save
-
-        config = _setup_registry_with_specs(tmp_path)
-        result = await _spec_save.handler(
-            _make_spec_args(
-                {
-                    "path": "modules/b/README.md",
-                    "status": "active",
-                    "tags": ["frontend", "synced"],
-                },
-                config,
-            )
-        )
-        data, is_error = _parse_result(result)
-
-        assert not is_error
-        # Content should come from the file on disk (not empty)
-        assert "Spec content for mod-b" in data["content"]
-        # Registry metadata should be updated
-        from app.spec.registry import find_entry, read_registry
-
-        entries, _ = read_registry(config.get_registry_path())
-        entry = find_entry(entries, "mod-b")
-        assert entry is not None
-        assert entry.status == "active"
-        assert "synced" in entry.tags
-        # File on disk should be unchanged (not rewritten)
-        file_content = (config.get_project_root() / "modules/b/README.md").read_text()
-        assert "Spec content for mod-b" in file_content
-
-    async def test_update_without_content_title_sync(self, tmp_path: Path) -> None:
-        """Edit file heading on disk, call spec_save without content → title re-derived."""
-        from app.agent.tools.specs import _spec_save
-
-        config = _setup_registry_with_specs(tmp_path)
-        # Simulate editing the file's heading via Edit tool
-        file_path = config.get_project_root() / "modules/a/README.md"
-        file_path.write_text("# Module A Revised\n\nUpdated heading.\n")
-
-        result = await _spec_save.handler(
-            _make_spec_args(
-                {"path": "modules/a/README.md"},
-                config,
-            )
-        )
-        data, is_error = _parse_result(result)
-
-        assert not is_error
-        assert data["title"] == "Module A Revised"
-        # Registry entry title should also be updated
-        from app.spec.registry import find_entry, read_registry
-
-        entries, _ = read_registry(config.get_registry_path())
-        entry = find_entry(entries, "mod-a")
-        assert entry is not None
-        assert entry.title == "Module A Revised"
-
-    async def test_create_without_content_fails(self, tmp_path: Path) -> None:
-        """New path + no content → isError (content required for creates)."""
-        from app.agent.tools.specs import _spec_save
-
-        config = _setup_registry_with_specs(tmp_path)
-        result = await _spec_save.handler(
-            _make_spec_args(
-                {
-                    "path": "modules/new/README.md",
-                    "type": "module-design",
-                },
-                config,
-            )
-        )
-        _, is_error = _parse_result(result)
-
-        assert is_error
-
-    async def test_update_without_content_missing_file(self, tmp_path: Path) -> None:
-        """Entry exists but file missing on disk → isError."""
-        from app.agent.tools.specs import _spec_save
-
-        config = _setup_registry_with_specs(tmp_path)
-        # Delete the file but keep the registry entry
-        file_path = config.get_project_root() / "modules/a/README.md"
-        file_path.unlink()
-
-        result = await _spec_save.handler(
-            _make_spec_args(
-                {"path": "modules/a/README.md", "status": "stale"},
-                config,
-            )
-        )
-        _, is_error = _parse_result(result)
-
-        assert is_error
-
-    # --- Title override ---
-
-    async def test_update_with_title_override(self, tmp_path: Path) -> None:
-        """Explicit title → overrides auto-derived heading in registry."""
-        from app.agent.tools.specs import _spec_save
-
-        config = _setup_registry_with_specs(tmp_path)
-        result = await _spec_save.handler(
-            _make_spec_args(
-                {
-                    "path": "modules/a/README.md",
-                    "content": "# Module A\n\nSame heading.\n",
-                    "title": "Custom Registry Title",
-                },
-                config,
-            )
-        )
-        data, is_error = _parse_result(result)
-
-        assert not is_error
-        # Registry title should use the override, not the heading
-        from app.spec.registry import find_entry, read_registry
-
-        entries, _ = read_registry(config.get_registry_path())
-        entry = find_entry(entries, "mod-a")
-        assert entry is not None
-        assert entry.title == "Custom Registry Title"
-
-    async def test_create_with_title_override(self, tmp_path: Path) -> None:
-        """New spec with explicit title → uses override instead of heading."""
-        from app.agent.tools.specs import _spec_save
-
-        config = _setup_registry_with_specs(tmp_path)
-        result = await _spec_save.handler(
-            _make_spec_args(
-                {
-                    "path": "modules/e/README.md",
-                    "content": "# Module E Heading\n\nContent.\n",
-                    "type": "module-design",
-                    "title": "My Custom Title",
-                },
-                config,
-            )
-        )
-        data, is_error = _parse_result(result)
-
-        assert not is_error
-        from app.spec.registry import find_entry, read_registry
-
-        entries, _ = read_registry(config.get_registry_path())
-        # ID is auto-generated from the heading, but title should be overridden
-        entry = next((e for e in entries if e.path == "modules/e/README.md"), None)
-        assert entry is not None
-        assert entry.title == "My Custom Title"
-
-
-# ===========================================================================
-# spec_delete — tests
-# ===========================================================================
-
-
-class TestSpecDelete:
-    async def test_delete_existing(self, tmp_path: Path) -> None:
-        """Delete valid ID → file removed, entry removed, links cleaned."""
-        from app.agent.tools.specs import _spec_delete
-
-        config = _setup_registry_with_specs(tmp_path)
-        result = await _spec_delete.handler(
-            _make_spec_args({"id": "mod-a"}, config)
-        )
-        data, is_error = _parse_result(result)
-
-        assert not is_error
-        assert "Deleted" in data
-        # File gone
-        assert not (config.get_project_root() / "modules/a/README.md").exists()
-        # Entry gone from registry
-        from app.spec.registry import find_entry, read_registry
-
-        entries, links = read_registry(config.get_registry_path())
-        assert find_entry(entries, "mod-a") is None
-        # Links referencing mod-a should be cleaned
-        mod_a_links = [l for l in links if l.from_id == "mod-a" or l.to_id == "mod-a"]
-        assert len(mod_a_links) == 0
-
-    async def test_delete_missing(self, tmp_path: Path) -> None:
-        """Unknown ID → isError."""
-        from app.agent.tools.specs import _spec_delete
-
-        config = _setup_registry_with_specs(tmp_path)
-        result = await _spec_delete.handler(
-            _make_spec_args({"id": "nonexistent"}, config)
-        )
-        _, is_error = _parse_result(result)
-
-        assert is_error
+        assert len(data) == 2
+        ids = {d["id"] for d in data}
+        assert "mod-a" in ids
+        assert "task-1" in ids
+
+    async def test_search_returns_expected_fields(self, tmp_path: Path) -> None:
+        from app.agent.tools.specs import _spec_search
+
+        config = await _setup_index_with_specs(tmp_path)
+        result = await _spec_search.handler(_make_spec_args({}, config))
+        data, _ = _parse_result(result)
+        entry = data[0]
+        assert "id" in entry
+        assert "path" in entry
+        assert "title" in entry
+        assert "type" in entry
+        assert "status" in entry
+        assert "tags" in entry
 
 
 # ===========================================================================
@@ -806,351 +423,145 @@ class TestSpecDelete:
 
 
 class TestSpecLinks:
-    async def test_links_for_single_id(self, tmp_path: Path) -> None:
-        """Get links for mod-a → returns 2 links + referenced nodes."""
+    async def test_links_all_for_spec(self, tmp_path: Path) -> None:
         from app.agent.tools.specs import _spec_links
 
-        config = _setup_registry_with_specs(tmp_path)
-        result = await _spec_links.handler(
-            _make_spec_args({"ids": ["mod-a"]}, config)
-        )
+        config = await _setup_index_with_specs(tmp_path)
+        result = await _spec_links.handler(_make_spec_args({"ids": ["mod-a"]}, config))
         data, is_error = _parse_result(result)
-
         assert not is_error
-        assert len(data["links"]) == 2
-        assert len(data["nodes"]) >= 2  # mod-a + at least one other
+        assert len(data["links"]) == 2  # mod-b→mod-a, task-1→mod-a
 
-    async def test_links_filter_by_type(self, tmp_path: Path) -> None:
-        """Filter by link_type → only matching links."""
+    async def test_links_missing_ids_returns_error(self, tmp_path: Path) -> None:
         from app.agent.tools.specs import _spec_links
 
-        config = _setup_registry_with_specs(tmp_path)
+        config = await _setup_index_with_specs(tmp_path)
+        result = await _spec_links.handler(_make_spec_args({"ids": []}, config))
+        _, is_error = _parse_result(result)
+        assert is_error
+
+    async def test_links_unknown_id_returns_error(self, tmp_path: Path) -> None:
+        from app.agent.tools.specs import _spec_links
+
+        config = await _setup_index_with_specs(tmp_path)
+        result = await _spec_links.handler(_make_spec_args({"ids": ["nonexistent"]}, config))
+        _, is_error = _parse_result(result)
+        assert is_error
+
+    async def test_links_with_type_filter(self, tmp_path: Path) -> None:
+        from app.agent.tools.specs import _spec_links
+
+        config = await _setup_index_with_specs(tmp_path)
         result = await _spec_links.handler(
             _make_spec_args({"ids": ["mod-a"], "link_type": "depends-on"}, config)
         )
         data, is_error = _parse_result(result)
-
         assert not is_error
         assert len(data["links"]) == 1
         assert data["links"][0]["type"] == "depends-on"
 
-    async def test_links_filter_direction_incoming(self, tmp_path: Path) -> None:
-        """direction=incoming for mod-a → links where mod-a is 'to'."""
+    async def test_links_returns_nodes(self, tmp_path: Path) -> None:
         from app.agent.tools.specs import _spec_links
 
-        config = _setup_registry_with_specs(tmp_path)
-        result = await _spec_links.handler(
-            _make_spec_args({"ids": ["mod-a"], "direction": "incoming"}, config)
-        )
-        data, is_error = _parse_result(result)
-
-        assert not is_error
-        # Both links have mod-a as target
-        for lnk in data["links"]:
-            assert lnk["to"] == "mod-a"
-
-    async def test_links_filter_direction_outgoing(self, tmp_path: Path) -> None:
-        """direction=outgoing for mod-b → links where mod-b is 'from'."""
-        from app.agent.tools.specs import _spec_links
-
-        config = _setup_registry_with_specs(tmp_path)
-        result = await _spec_links.handler(
-            _make_spec_args({"ids": ["mod-b"], "direction": "outgoing"}, config)
-        )
-        data, is_error = _parse_result(result)
-
-        assert not is_error
-        assert len(data["links"]) == 1
-        assert data["links"][0]["from"] == "mod-b"
-
-    async def test_links_unknown_id(self, tmp_path: Path) -> None:
-        """Unknown ID → isError."""
-        from app.agent.tools.specs import _spec_links
-
-        config = _setup_registry_with_specs(tmp_path)
-        result = await _spec_links.handler(
-            _make_spec_args({"ids": ["nonexistent"]}, config)
-        )
-        _, is_error = _parse_result(result)
-
-        assert is_error
-
-    async def test_links_multiple_ids(self, tmp_path: Path) -> None:
-        """Multiple IDs → union of their links."""
-        from app.agent.tools.specs import _spec_links
-
-        config = _setup_registry_with_specs(tmp_path)
-        result = await _spec_links.handler(
-            _make_spec_args({"ids": ["mod-a", "mod-b"]}, config)
-        )
-        data, is_error = _parse_result(result)
-
-        assert not is_error
-        assert len(data["links"]) == 2  # depends-on + implements
-
-
-# ===========================================================================
-# registry_query — tests
-# ===========================================================================
-
-
-class TestRegistryQuery:
-    async def test_query_all(self, tmp_path: Path) -> None:
-        """No filters → all entries."""
-        from app.agent.tools.specs import _registry_query
-
-        config = _setup_registry_with_specs(tmp_path)
-        result = await _registry_query.handler(_make_spec_args({}, config))
-        data, is_error = _parse_result(result)
-
-        assert not is_error
-        assert len(data["entries"]) == 3
-
-    async def test_query_by_type(self, tmp_path: Path) -> None:
-        """Filter by type."""
-        from app.agent.tools.specs import _registry_query
-
-        config = _setup_registry_with_specs(tmp_path)
-        result = await _registry_query.handler(
-            _make_spec_args({"type": "task-spec"}, config)
-        )
-        data, is_error = _parse_result(result)
-
-        assert not is_error
-        assert len(data["entries"]) == 1
-        assert data["entries"][0]["id"] == "task-1"
-
-    async def test_query_by_covers(self, tmp_path: Path) -> None:
-        """Filter by covers prefix."""
-        from app.agent.tools.specs import _registry_query
-
-        config = _setup_registry_with_specs(tmp_path)
-        result = await _registry_query.handler(
-            _make_spec_args({"covers": "modules/a/"}, config)
-        )
-        data, is_error = _parse_result(result)
-
-        assert not is_error
-        assert len(data["entries"]) == 1
-        assert data["entries"][0]["id"] == "mod-a"
-
-    async def test_query_by_ids(self, tmp_path: Path) -> None:
-        """Filter by specific IDs."""
-        from app.agent.tools.specs import _registry_query
-
-        config = _setup_registry_with_specs(tmp_path)
-        result = await _registry_query.handler(
-            _make_spec_args({"ids": ["mod-a", "task-1"]}, config)
-        )
-        data, is_error = _parse_result(result)
-
-        assert not is_error
-        assert len(data["entries"]) == 2
-
-    async def test_query_include_links(self, tmp_path: Path) -> None:
-        """include_links=true → links included in response."""
-        from app.agent.tools.specs import _registry_query
-
-        config = _setup_registry_with_specs(tmp_path)
-        result = await _registry_query.handler(
-            _make_spec_args({"ids": ["mod-a"], "include_links": True}, config)
-        )
-        data, is_error = _parse_result(result)
-
-        assert not is_error
-        assert "links" in data
-        assert len(data["links"]) == 2
-
-    async def test_query_no_links_by_default(self, tmp_path: Path) -> None:
-        """include_links not set → no links key in response."""
-        from app.agent.tools.specs import _registry_query
-
-        config = _setup_registry_with_specs(tmp_path)
-        result = await _registry_query.handler(_make_spec_args({}, config))
+        config = await _setup_index_with_specs(tmp_path)
+        result = await _spec_links.handler(_make_spec_args({"ids": ["mod-a"]}, config))
         data, _ = _parse_result(result)
-
-        assert "links" not in data
+        assert len(data["nodes"]) > 0
+        node_ids = {n["id"] for n in data["nodes"]}
+        assert "mod-a" in node_ids
 
 
 # ===========================================================================
-# registry_mutate — tests
+# spec_delete — tests
 # ===========================================================================
 
 
-class TestRegistryMutate:
-    async def test_add_entries_and_links(self, tmp_path: Path) -> None:
-        """Batch add → entries and links created, counts returned."""
-        from app.agent.tools.specs import _registry_mutate
+class TestSpecDelete:
+    async def test_delete_spec(self, tmp_path: Path) -> None:
+        from app.agent.tools.specs import _spec_delete
 
-        config = _setup_registry_with_specs(tmp_path)
-        result = await _registry_mutate.handler(
-            _make_spec_args(
-                {
-                    "add_entries": [
-                        {
-                            "id": "mod-c",
-                            "type": "module-design",
-                            "path": "modules/c/README.md",
-                            "title": "Module C",
-                        }
-                    ],
-                    "add_links": [
-                        {"from": "mod-c", "to": "mod-a", "type": "parent"},
-                    ],
-                },
-                config,
-            )
-        )
+        config = await _setup_index_with_specs(tmp_path)
+        result = await _spec_delete.handler(_make_spec_args({"id": "mod-b"}, config))
         data, is_error = _parse_result(result)
-
         assert not is_error
-        assert data["entries_added"] == 1
-        assert data["links_added"] == 1
+        assert "Deleted" in data
 
-        # Verify persisted
-        from app.spec.registry import find_entry, read_registry
+    async def test_delete_not_found(self, tmp_path: Path) -> None:
+        from app.agent.tools.specs import _spec_delete
 
-        entries, links = read_registry(config.get_registry_path())
-        assert find_entry(entries, "mod-c") is not None
-        parent_links = [l for l in links if l.from_id == "mod-c" and l.type == "parent"]
-        assert len(parent_links) == 1
-
-    async def test_remove_entries(self, tmp_path: Path) -> None:
-        """Remove entry → entry + its links cleaned."""
-        from app.agent.tools.specs import _registry_mutate
-
-        config = _setup_registry_with_specs(tmp_path)
-        result = await _registry_mutate.handler(
-            _make_spec_args({"remove_entries": ["mod-b"]}, config)
-        )
-        data, is_error = _parse_result(result)
-
-        assert not is_error
-        assert data["entries_removed"] == 1
-
-        from app.spec.registry import find_entry, read_registry
-
-        entries, links = read_registry(config.get_registry_path())
-        assert find_entry(entries, "mod-b") is None
-        # The depends-on link from mod-b should be gone
-        mod_b_links = [l for l in links if l.from_id == "mod-b" or l.to_id == "mod-b"]
-        assert len(mod_b_links) == 0
-
-    async def test_update_entries(self, tmp_path: Path) -> None:
-        """Update entry → only specified fields change."""
-        from app.agent.tools.specs import _registry_mutate
-
-        config = _setup_registry_with_specs(tmp_path)
-        result = await _registry_mutate.handler(
-            _make_spec_args(
-                {
-                    "update_entries": [
-                        {"id": "mod-a", "status": "stale", "tags": ["backend", "needs-review"]},
-                    ]
-                },
-                config,
-            )
-        )
-        data, is_error = _parse_result(result)
-
-        assert not is_error
-        assert data["entries_updated"] == 1
-
-        from app.spec.registry import find_entry, read_registry
-
-        entries, _ = read_registry(config.get_registry_path())
-        entry = find_entry(entries, "mod-a")
-        assert entry is not None
-        assert entry.status == "stale"
-        assert "needs-review" in entry.tags
-        # Path should be unchanged
-        assert entry.path == "modules/a/README.md"
-
-    async def test_validation_rejects_broken_links(self, tmp_path: Path) -> None:
-        """Adding a link to a nonexistent target → isError, nothing written."""
-        from app.agent.tools.specs import _registry_mutate
-
-        config = _setup_registry_with_specs(tmp_path)
-        result = await _registry_mutate.handler(
-            _make_spec_args(
-                {
-                    "add_links": [
-                        {"from": "mod-a", "to": "nonexistent", "type": "parent"},
-                    ],
-                },
-                config,
-            )
-        )
+        config = await _setup_index_with_specs(tmp_path)
+        result = await _spec_delete.handler(_make_spec_args({"id": "ghost"}, config))
         _, is_error = _parse_result(result)
-
         assert is_error
 
-        # Registry unchanged
-        from app.spec.registry import read_registry
+    async def test_delete_missing_id(self, tmp_path: Path) -> None:
+        from app.agent.tools.specs import _spec_delete
 
-        _, links = read_registry(config.get_registry_path())
-        assert len(links) == 2  # Original count
-
-    async def test_validation_rejects_self_link(self, tmp_path: Path) -> None:
-        """Self-link → isError."""
-        from app.agent.tools.specs import _registry_mutate
-
-        config = _setup_registry_with_specs(tmp_path)
-        result = await _registry_mutate.handler(
-            _make_spec_args(
-                {
-                    "add_links": [
-                        {"from": "mod-a", "to": "mod-a", "type": "parent"},
-                    ],
-                },
-                config,
-            )
-        )
+        config = await _setup_index_with_specs(tmp_path)
+        result = await _spec_delete.handler(_make_spec_args({"id": ""}, config))
         _, is_error = _parse_result(result)
-
         assert is_error
 
-    async def test_update_nonexistent_entry(self, tmp_path: Path) -> None:
-        """Updating a nonexistent entry → isError."""
-        from app.agent.tools.specs import _registry_mutate
 
-        config = _setup_registry_with_specs(tmp_path)
-        result = await _registry_mutate.handler(
-            _make_spec_args(
-                {"update_entries": [{"id": "ghost", "status": "active"}]},
-                config,
-            )
-        )
-        _, is_error = _parse_result(result)
+# ===========================================================================
+# _index_service caching — cached vs fallback path
+# ===========================================================================
 
-        assert is_error
 
-    async def test_remove_then_add_same_path(self, tmp_path: Path) -> None:
-        """Remove then add in same batch → no conflict (removals first)."""
-        from app.agent.tools.specs import _registry_mutate
+class TestIndexServiceCaching:
+    async def test_yields_cached_spec_service_when_set(self, tmp_path: Path) -> None:
+        """When ToolContext has spec_service, _index_service() yields it directly."""
+        from app.agent.tools.specs import _index_service
 
-        config = _setup_registry_with_specs(tmp_path)
-        result = await _registry_mutate.handler(
-            _make_spec_args(
-                {
-                    "remove_entries": ["mod-b"],
-                    "add_entries": [
-                        {
-                            "id": "mod-b-v2",
-                            "type": "module-design",
-                            "path": "modules/b/README.md",
-                            "title": "Module B v2",
-                        }
-                    ],
-                },
-                config,
-            )
-        )
-        data, is_error = _parse_result(result)
+        config = _make_config(tmp_path)
+        tracker, task = _make_tracker_and_task()
+        mock_service = MagicMock()  # stand-in for SpecService
+        set_tool_context(tracker, AsyncMock(), task, config, spec_service=mock_service)
 
-        assert not is_error
-        assert data["entries_removed"] == 1
-        assert data["entries_added"] == 1
+        async with _index_service() as svc:
+            assert svc is mock_service  # same object, no fresh connection
+
+    async def test_falls_back_to_fresh_connection_when_no_service(self, tmp_path: Path) -> None:
+        """When spec_service is None, _index_service() opens a fresh SpecIndex."""
+        from app.agent.tools.specs import _index_service
+
+        config = await _setup_index_with_specs(tmp_path)
+        _make_spec_args({}, config)  # sets context with spec_service=None
+
+        async with _index_service() as svc:
+            assert svc is not None
+            # Verify it can actually query (fresh connection works)
+            results = await svc.list_specs()
+            assert len(results) == 3  # from _setup_index_with_specs
+
+
+# ===========================================================================
+# Tool registration — verify 3 tools registered
+# ===========================================================================
+
+
+class TestToolRegistration:
+    def test_only_three_tools_registered(self) -> None:
+        from app.agent.tools.specs import _spec_delete, _spec_links, _spec_search, specs_mcp_server
+        # Verify server name and that all three tool handlers are callable
+        assert specs_mcp_server["name"] == "bonsai-specs"
+        assert all(hasattr(t, "handler") for t in [_spec_search, _spec_links, _spec_delete])
+
+    def test_old_tools_not_registered(self) -> None:
+        from app.agent.tools import INTERCEPTORS
+        old_names = {"spec_list", "spec_get", "spec_save", "registry_query", "registry_mutate"}
+        registered = set(INTERCEPTORS.keys())
+        assert old_names.isdisjoint(registered), f"Old tools still registered: {old_names & registered}"
+
+    def test_new_tools_registered(self) -> None:
+        from app.agent.tools import INTERCEPTORS
+        assert "spec_search" in INTERCEPTORS
+        assert "spec_links" in INTERCEPTORS
+        assert "spec_delete" in INTERCEPTORS
+
+
+# (Old spec tool tests for spec_list, spec_get, spec_save, registry_query,
+# registry_mutate removed — those tools no longer exist.)
 
 
 # ===========================================================================

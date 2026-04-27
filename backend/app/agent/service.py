@@ -28,6 +28,7 @@ class AgentService:
         self.board_service: Any = None     # Injected by server.py
         self.trash_service: Any = None    # Injected by server.py
         self.model_registry: Any = None   # Injected by server.py
+        self.coordinator: Any = None      # Injected by server.py (IndexCoordinator)
         self._restore_draft_sessions()
 
     def _get_context_max(self, model_id: str) -> int:
@@ -80,7 +81,7 @@ class AgentService:
 
     # -- public methods -------------------------------------------------------
 
-    def prepare_task(
+    async def prepare_task(
         self,
         spec_ids: list[str],
         config: AgentConfig,
@@ -103,11 +104,11 @@ class AgentService:
         if file_paths:
             task.file_paths = file_paths
         self._attach_to_ticket(task)
-        task.system_prompt = self._build_context_for(task)
+        task.system_prompt = await self._build_context_for(task)
         self._save_task(task)
         return task
 
-    def update_draft(
+    async def update_draft(
         self,
         bonsai_sid: str,
         spec_ids: list[str] | None = None,
@@ -147,10 +148,10 @@ class AgentService:
             task.meta_ticket_id = meta_ticket_id
             if meta_ticket_id:
                 self._attach_to_ticket(task)
-        task.system_prompt = self._build_context_for(task)
+        task.system_prompt = await self._build_context_for(task)
         self._save_task(task)
         # Build structured sections for the prompt preview
-        structured = self._build_context_structured_for(task)
+        structured = await self._build_context_structured_for(task)
         return structured
 
     async def start_draft(
@@ -166,7 +167,7 @@ class AgentService:
         if task.status != "draft":
             raise ValueError(f"Cannot start: session is '{task.status}', expected 'draft'")
         self._tracker.set_status(bonsai_sid, "initializing")
-        spec_context = task.system_prompt or self._build_context_for(task)
+        spec_context = task.system_prompt or await self._build_context_for(task)
         if prompt is not None:
             self._tracker.enqueue_message(bonsai_sid, prompt)
         bg_task = asyncio.create_task(
@@ -196,7 +197,7 @@ class AgentService:
         )
         task.meta_ticket_id = meta_ticket_id
         self._attach_to_ticket(task)
-        spec_context = self._build_context_for(task)
+        spec_context = await self._build_context_for(task)
         bg_task = asyncio.create_task(
             self._run_background(task, spec_context)
         )
@@ -501,7 +502,7 @@ class AgentService:
         save_session(self._config.project_root, metadata)
 
         # Build fresh spec context (no history replay — CLI restores context)
-        spec_context = self._build_context_for(task)
+        spec_context = await self._build_context_for(task)
 
         bg_task = asyncio.create_task(
             self._run_background(task, spec_context,
@@ -670,7 +671,7 @@ class AgentService:
         notify = _persisting_notify
 
         try:
-            await run(task, spec_context, notify, self._tracker, cwd=self._config.project_root, plugin_dir=self._config.plugin_dir, resume_session_id=resume_session_id, config=self._config, model_registry=self.model_registry)
+            await run(task, spec_context, notify, self._tracker, cwd=self._config.project_root, plugin_dir=self._config.plugin_dir, resume_session_id=resume_session_id, config=self._config, model_registry=self.model_registry, spec_service=self._spec_service, coordinator=self.coordinator)
             self._tracker.set_status(task.bonsai_sid, "done")
             self._save_task(task)
             self._tracker.remove_task(task.bonsai_sid)
@@ -744,7 +745,7 @@ class AgentService:
         except Exception:
             logger.debug("Failed to notify orchestrator for ticket %s", task.meta_ticket_id)
 
-    def _build_context_for(self, task: AgentTask) -> str:
+    async def _build_context_for(self, task: AgentTask) -> str:
         t0 = time.monotonic()
 
         # Inject plan content into session prompt for sessions linked to a ticket with a plan
@@ -793,7 +794,7 @@ class AgentService:
             except Exception:
                 logger.debug("Failed to inject ticket for %s", task.meta_ticket_id)
 
-        ctx = build_context(
+        ctx = await build_context(
             spec_ids=task.spec_ids,
             skill_id=task.skill_id,
             session_prompt=session_prompt,
@@ -807,7 +808,7 @@ class AgentService:
         logger.info("[%s] build_context: %dms (%d chars)", task.bonsai_sid[:8], ms, len(ctx))
         return ctx
 
-    def _build_context_structured_for(self, task: AgentTask) -> dict:
+    async def _build_context_structured_for(self, task: AgentTask) -> dict:
         """Build structured section data for the prompt preview UI."""
         from app.agent.context import build_context_structured
 
@@ -833,7 +834,7 @@ class AgentService:
                 except Exception:
                     pass
 
-        return build_context_structured(
+        return await build_context_structured(
             spec_ids=task.spec_ids,
             skill_id=task.skill_id,
             session_prompt=session_prompt,

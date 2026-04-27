@@ -157,7 +157,7 @@ class TestBuildParentContext:
         assert "some topic" in result
 
 
-from unittest.mock import MagicMock
+from unittest.mock import AsyncMock, MagicMock
 from app.agent.service import AgentService
 from app.agent.models import AgentConfig
 from app.core.config import AppConfig
@@ -166,7 +166,7 @@ from app.core.config import AppConfig
 def _make_service(tmp_path: Path) -> tuple[AgentService, MagicMock]:
     config = MagicMock(spec=AppConfig)
     config.project_root = tmp_path
-    config.get_registry_path.return_value = tmp_path / ".bonsai" / "registry.json"
+    config.get_bonsai_dir.return_value = tmp_path / ".bonsai"
     plugin_dir = tmp_path / "plugins"
     plugin_dir.mkdir(parents=True, exist_ok=True)
     config.plugin_dir = plugin_dir
@@ -174,7 +174,7 @@ def _make_service(tmp_path: Path) -> tuple[AgentService, MagicMock]:
     mock_spec = MagicMock()
     mock_spec.title = "Mock Spec"
     mock_spec.content = "Mock content"
-    spec_service.get_spec.return_value = mock_spec
+    spec_service.get_spec = AsyncMock(return_value=mock_spec)
 
     (tmp_path / ".bonsai" / "sessions").mkdir(parents=True, exist_ok=True)
 
@@ -183,9 +183,9 @@ def _make_service(tmp_path: Path) -> tuple[AgentService, MagicMock]:
 
 
 class TestCreateSubsession:
-    def test_creates_subsession_with_parent_link(self, tmp_path: Path) -> None:
+    async def test_creates_subsession_with_parent_link(self, tmp_path: Path) -> None:
         service, _ = _make_service(tmp_path)
-        parent = service.prepare_task([], AgentConfig(), name="Main session")
+        parent = await service.prepare_task([], AgentConfig(), name="Main session")
         sub = service.create_subsession(
             parent_bonsai_sid=parent.bonsai_sid,
             subsession_type=SubsessionType.discussion,
@@ -198,9 +198,9 @@ class TestCreateSubsession:
         assert sub.name == "Discuss auth"
         assert sub.status == "draft"
 
-    def test_inherits_parent_specs_and_config(self, tmp_path: Path) -> None:
+    async def test_inherits_parent_specs_and_config(self, tmp_path: Path) -> None:
         service, _ = _make_service(tmp_path)
-        parent = service.prepare_task(
+        parent = await service.prepare_task(
             ["spec-1", "spec-2"],
             AgentConfig(model="claude-opus-4-6"),
             name="Main",
@@ -222,9 +222,9 @@ class TestCreateSubsession:
 
 
 class TestReturnFlow:
-    def test_request_summary_sets_pending(self, tmp_path: Path) -> None:
+    async def test_request_summary_sets_pending(self, tmp_path: Path) -> None:
         service, _ = _make_service(tmp_path)
-        parent = service.prepare_task([], AgentConfig(), name="Main")
+        parent = await service.prepare_task([], AgentConfig(), name="Main")
         sub = service.create_subsession(
             parent_bonsai_sid=parent.bonsai_sid,
             subsession_type=SubsessionType.discussion,
@@ -234,9 +234,9 @@ class TestReturnFlow:
         service.request_summary(sub.bonsai_sid)
         assert sub.return_status == "pending"
 
-    def test_approve_summary_stores_text(self, tmp_path: Path) -> None:
+    async def test_approve_summary_stores_text(self, tmp_path: Path) -> None:
         service, _ = _make_service(tmp_path)
-        parent = service.prepare_task([], AgentConfig(), name="Main")
+        parent = await service.prepare_task([], AgentConfig(), name="Main")
         sub = service.create_subsession(
             parent_bonsai_sid=parent.bonsai_sid,
             subsession_type=SubsessionType.discussion,
@@ -245,9 +245,9 @@ class TestReturnFlow:
         assert sub.return_status == "approved"
         assert sub.return_summary == "Decision: use JWT"
 
-    def test_dismiss_summary_sets_dismissed(self, tmp_path: Path) -> None:
+    async def test_dismiss_summary_sets_dismissed(self, tmp_path: Path) -> None:
         service, _ = _make_service(tmp_path)
-        parent = service.prepare_task([], AgentConfig(), name="Main")
+        parent = await service.prepare_task([], AgentConfig(), name="Main")
         sub = service.create_subsession(
             parent_bonsai_sid=parent.bonsai_sid,
             subsession_type=SubsessionType.discussion,

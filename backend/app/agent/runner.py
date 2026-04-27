@@ -64,6 +64,8 @@ async def run(
     resume_session_id: str | None = None,
     config: Any = None,
     model_registry: Any = None,
+    spec_service: Any = None,
+    coordinator: Any = None,
 ) -> AgentResult:
     """Execute a persistent conversational agent session.
 
@@ -157,7 +159,7 @@ async def run(
     # can access session state (tracker, notify, task, config) via
     # get_tool_context().  This is critical for yolo mode where the CLI
     # bypasses canUseTool and invokes MCP tools directly.
-    set_tool_context(tracker, notify, task, config)
+    set_tool_context(tracker, notify, task, config, spec_service=spec_service, coordinator=coordinator)
 
     def _on_cli_stderr(line: str) -> None:
         logger.debug("CLI stderr: %s", line)

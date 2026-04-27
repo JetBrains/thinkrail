@@ -11,8 +11,6 @@ from app.trash.service import TrashService
 def _setup(tmp_path: Path) -> tuple[BoardService, TrashService]:
     bonsai_dir = tmp_path / ".bonsai"
     bonsai_dir.mkdir()
-    reg = {"version": "2.0", "project": "test", "specs": [], "links": []}
-    (bonsai_dir / "registry.json").write_text(json.dumps(reg), encoding="utf-8")
 
     sessions_dir = bonsai_dir / "sessions"
     sessions_dir.mkdir()

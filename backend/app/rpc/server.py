@@ -1,11 +1,15 @@
 from __future__ import annotations
 
 import asyncio
-import json
 import logging
+import threading
 import uuid
 from functools import partial
 from pathlib import Path
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from app.agent.model_registry import ModelRegistry
 
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from jsonrpcserver import async_dispatch
@@ -68,7 +72,6 @@ from app.rpc.methods.settings import (
     refresh_models,
     update_settings,
 )
-from app.agent.model_registry import ModelRegistry
 from app.rpc.methods.auth import create_token, list_connections, list_users
 from app.rpc.methods.admin import (
     admin_create_user,
@@ -123,13 +126,13 @@ from app.rpc.methods.board import (
     update_step,
     update_ticket,
 )
-from app.agent.service import AgentService
-from app.board.service import BoardService
 from app.core.config import AppConfig, load_config
-from app.core.fileio import read_text
 from app.core.project import ensure_project
-from app.core.watcher import WatchHandle, watch, stop
-from app.spec.service import SpecService, detect_spec_type
+from app.core.watcher import WatchHandle, watch
+from app.core.bonsaihide import load_bonsaihide
+from app.rpc.project_context import ProjectContext
+from app.spec.coordinator import FileChanged, IndexCoordinator
+from app.spec.service import SpecService
 from app.vis.service import VisualizationService
 
 logger = logging.getLogger(__name__)
@@ -228,15 +231,14 @@ METHODS = {
     "user/getRecentProjects": get_recent_projects,
 }
 
-# Per-project service caches (survive WebSocket reconnects).
-_agent_services: dict[str, AgentService] = {}
-_vis_services: dict[str, VisualizationService] = {}
-_board_services: dict[str, BoardService] = {}
-_model_registries: dict[str, ModelRegistry] = {}
+# Per-project service container (survives WebSocket reconnects).
+_projects: dict[str, ProjectContext] = {}
 
-# Per-project watcher with reference counting.
-# Maps project_path → (WatchHandle, active_connection_count)
-_project_watchers: dict[str, tuple[WatchHandle, int]] = {}
+# Guards _projects dict access.  threading.Lock (not asyncio.Lock) because
+# Starlette's TestClient runs each websocket_connect() on a separate event
+# loop — asyncio primitives deadlock across loops.  The lock is held only
+# for sync dict operations, never across an await.
+_projects_lock = threading.Lock()
 
 
 def _bind_methods(
@@ -334,66 +336,16 @@ def register_routes(app: FastAPI, server_store: "ServerStore | None" = None) -> 
         except Exception:
             logger.warning("Failed to update server store on connect", exc_info=True)
 
-        # Build per-connection config and services
-        config = load_config(project_root=project_path)
-        spec_service = SpecService(config)
-
-        # Reuse existing services for this project so running tasks
-        # survive WebSocket reconnects (page refresh, network blip).
-        key = str(project_path)
-        if key in _agent_services:
-            agent_service = _agent_services[key]
-        else:
-            agent_service = AgentService(config, spec_service)
-            _agent_services[key] = agent_service
-
-        if key in _vis_services:
-            vis_service = _vis_services[key]
-        else:
-            vis_service = VisualizationService(config)
-            _vis_services[key] = vis_service
-
-        if key in _board_services:
-            board_service = _board_services[key]
-        else:
-            board_service = BoardService(config)
-            _board_services[key] = board_service
-
-        # Trash service for soft-delete — inject into all services
-        from app.trash.service import TrashService
-        trash_service = TrashService(project_root=project_path)
-        agent_service.trash_service = trash_service
-        board_service.trash_service = trash_service
-        spec_service.trash_service = trash_service
-        board_service.spec_drafts.trash_service = trash_service
-
-        # Make board service available to agent service for auto-linking
-        agent_service.board_service = board_service
-
-        # Model registry — fetches available models from the Anthropic API
-        if key in _model_registries:
-            model_registry = _model_registries[key]
-        else:
-            from app.core.settings import load_settings
-            settings = load_settings(project_path)
-            model_registry = ModelRegistry(
-                project_root=project_path,
-                refresh_hours=settings.model_refresh_interval_hours,
-            )
-            _model_registries[key] = model_registry
-            asyncio.create_task(model_registry.start_periodic_refresh())
-
-        agent_service.model_registry = model_registry
-
-        bound_methods = _bind_methods(
-            config, spec_service, agent_service, vis_service,
-            board_service, model_registry, trash_service,
-            server_store=_server_store,
-        )
-
+        # Accept immediately — within frontend's 5s connectTimeout
         await websocket.accept()
 
-        # Create connection and register with the EventBus
+        # Build per-connection config and services
+        config = load_config(project_root=project_path)
+        key = str(project_path)
+
+        # Register connection with EventBus immediately after accept
+        # (before ctx.start() which does I/O).  Subscribing to topics
+        # happens later — register just makes the connection visible.
         conn_id = uuid.uuid4().hex
         notify = make_notify(websocket)
         conn = ClientConnection(
@@ -405,50 +357,92 @@ def register_routes(app: FastAPI, server_store: "ServerStore | None" = None) -> 
             project_path=key,
         )
         bus.register(conn)
-
-        # Start the sweep task if not already running
         bus.start_sweep()
 
+        # Reuse existing ProjectContext for this project so running tasks
+        # survive WebSocket reconnects (page refresh, network blip).
         project_topic = f"project:{key}"
-
-        # Notify existing clients BEFORE subscribing the new one,
-        # so the joining client doesn't receive its own join notification.
-        await bus.publish(project_topic, "connection/didJoin", {
-            "connId": conn_id,
-            "userId": conn.user_id,
-            "displayName": conn.display_name,
-        })
-
-        # Now subscribe the new connection to the project topic
-        bus.subscribe(conn_id, project_topic)
-
-        # Phase 1: auto-subscribe to all active session topics so every
-        # client receives events for every session.  Phase 3 will restrict
-        # this to explicit subscriptions.
-        for task in agent_service.list_tasks():
-            bus.subscribe(conn_id, f"session:{task.bonsai_sid}")
-
-        # Bind vis service to publish via bus for file-change-driven updates.
-        # Initial state is fetched on-demand by the frontend via vis/state.
-        async def _vis_notify(method: str, params: dict) -> None:
-            await bus.publish(project_topic, method, params)
-
-        vis_service.bind_notify(_vis_notify)
-        vis_service.refresh()  # Compute state silently on connect (no push)
-
-        # Start or ref-count the per-project file watcher
-        await _acquire_watcher(key, config, spec_service, vis_service)
-
-        # Replay missed events if the client provides a last_seen timestamp
-        last_seen = websocket.query_params.get("last_seen")
-        if last_seen:
-            try:
-                since = float(last_seen)
-                await bus.replay(conn_id, project_topic, since)
-            except (ValueError, TypeError):
-                pass
-
+        ctx: ProjectContext | None = None
         try:
+            # Sync-only dict guard — no await inside the lock.
+            with _projects_lock:
+                if key in _projects:
+                    ctx = _projects[key]
+                    ctx.connection_count += 1
+
+            # No existing context — create and start before storing.
+            # This ensures a failed start() never leaves a broken context
+            # in _projects for other connections to find.
+            if ctx is None:
+                async def _coordinator_notify(method: str, params: dict) -> None:
+                    await bus.publish(project_topic, method, params)
+
+                new_ctx = ProjectContext(
+                    key, project_path, config,
+                    notify_fn=_coordinator_notify,
+                    watcher_factory=_start_watcher,
+                )
+                await new_ctx.start()
+
+                # Store only after start() succeeds.  Re-check under lock
+                # in case another connection raced us.
+                with _projects_lock:
+                    if key in _projects:
+                        # Another connection created this project concurrently.
+                        # Discard ours, use theirs.
+                        ctx = _projects[key]
+                        ctx.connection_count += 1
+                        # Shut down our duplicate outside the lock.
+                        asyncio.create_task(new_ctx.shutdown())
+                    else:
+                        ctx = new_ctx
+                        _projects[key] = ctx
+                        ctx.connection_count += 1
+
+            bound_methods = _bind_methods(
+                config, ctx.spec_service, ctx.agent_service, ctx.vis_service,
+                ctx.board_service, ctx.model_registry, ctx.trash_service,
+                server_store=_server_store,
+            )
+
+            # Notify existing clients BEFORE subscribing the new one,
+            # so the joining client doesn't receive its own join notification.
+            await bus.publish(project_topic, "connection/didJoin", {
+                "connId": conn_id,
+                "userId": conn.user_id,
+                "displayName": conn.display_name,
+            })
+
+            # Now subscribe the new connection to the project topic
+            bus.subscribe(conn_id, project_topic)
+
+            # Phase 1: auto-subscribe to all active session topics so every
+            # client receives events for every session.  Phase 3 will restrict
+            # this to explicit subscriptions.
+            for task in ctx.agent_service.list_tasks():
+                bus.subscribe(conn_id, f"session:{task.bonsai_sid}")
+
+            # Bind vis service to publish via bus for file-change-driven updates.
+            # Initial state is fetched on-demand by the frontend via vis/state.
+            async def _vis_notify(method: str, params: dict) -> None:
+                await bus.publish(project_topic, method, params)
+
+            ctx.vis_service.bind_notify(_vis_notify)
+            asyncio.create_task(ctx.vis_service.refresh())  # Compute in background (no push)
+
+            # Start background services (coordinator, watcher, model registry).
+            # Idempotent — second connection's call is a no-op.
+            await ctx.start_services()
+
+            # Replay missed events if the client provides a last_seen timestamp
+            last_seen = websocket.query_params.get("last_seen")
+            if last_seen:
+                try:
+                    since = float(last_seen)
+                    await bus.replay(conn_id, project_topic, since)
+                except (ValueError, TypeError):
+                    pass
+
             while True:
                 text = await websocket.receive_text()
                 # Set connection context so RPC handlers know who's calling
@@ -474,40 +468,73 @@ def register_routes(app: FastAPI, server_store: "ServerStore | None" = None) -> 
             except Exception:
                 pass
             bus.unregister(conn_id)
-            await _release_watcher(key)
+            if ctx is not None:
+                with _projects_lock:
+                    ctx.connection_count -= 1
+                    should_shutdown = ctx.connection_count <= 0
+                    if should_shutdown:
+                        _projects.pop(key, None)
+                if should_shutdown:
+                    await ctx.shutdown()
 
 
-# -- Per-project watcher management -------------------------------------------
+# -- Watcher helpers -----------------------------------------------------------
 
-async def _acquire_watcher(
-    project_key: str,
-    config: AppConfig,
-    spec_service: SpecService,
-    vis_service: VisualizationService,
+async def _validate_frontmatter_and_notify(
+    path: Path, project_root: Path, project_topic: str,
 ) -> None:
-    """Start or ref-count a per-project file watcher."""
-    if project_key in _project_watchers:
-        handle, count = _project_watchers[project_key]
-        _project_watchers[project_key] = (handle, count + 1)
-    else:
-        handle = await _start_watcher(project_key, config, spec_service, vis_service)
-        _project_watchers[project_key] = (handle, 1)
+    """Parse frontmatter from a changed .md file and push validation errors.
 
+    Implements the watcher validation hook described in the design doc
+    (§Watcher Validation Hook).  Errors and warnings are sent as
+    ``spec/validationError`` notifications so agents get immediate feedback.
+    """
+    from app.spec.frontmatter import FrontmatterError, parse_frontmatter, validate_frontmatter
 
-async def _release_watcher(project_key: str) -> None:
-    """Decrement ref count and stop watcher when no connections remain."""
-    entry = _project_watchers.get(project_key)
-    if entry is None:
+    rel_path = str(path.relative_to(project_root))
+    try:
+        content = path.read_text(encoding="utf-8")
+    except OSError:
         return
-    handle, count = entry
-    if count <= 1:
-        try:
-            await stop(handle)
-        except Exception:
-            pass
-        del _project_watchers[project_key]
-    else:
-        _project_watchers[project_key] = (handle, count - 1)
+
+    try:
+        meta, _ = parse_frontmatter(content)
+    except FrontmatterError as exc:
+        await bus.publish(project_topic, "spec/validationError", {
+            "path": rel_path,
+            "errors": [{"field": "frontmatter", "message": str(exc), "severity": "error"}],
+            "warnings": [],
+        })
+        return
+
+    if not meta:
+        return  # No frontmatter — unmanaged document, no validation needed
+
+    errors_list: list[dict] = []
+    warnings_list: list[dict] = []
+
+    validation_errors = validate_frontmatter(meta)
+    for msg in validation_errors:
+        severity = "error" if ("Missing" in msg or "empty required" in msg) else "warning"
+        field_name = ""
+        if "'id'" in msg:
+            field_name = "id"
+        elif "'type'" in msg:
+            field_name = "type"
+        elif "'status'" in msg:
+            field_name = "status"
+        entry = {"field": field_name, "message": msg, "severity": severity}
+        if severity == "error":
+            errors_list.append(entry)
+        else:
+            warnings_list.append(entry)
+
+    if errors_list or warnings_list:
+        await bus.publish(project_topic, "spec/validationError", {
+            "path": rel_path,
+            "errors": errors_list,
+            "warnings": warnings_list,
+        })
 
 
 async def _start_watcher(
@@ -515,9 +542,9 @@ async def _start_watcher(
     config: AppConfig,
     service: SpecService,
     vis_service: VisualizationService,
+    coordinator: IndexCoordinator,
 ) -> WatchHandle:
     """Start the filesystem watcher for a project directory."""
-    registry_path = config.get_registry_path()
     project_topic = f"project:{project_key}"
 
     _change_to_method = {
@@ -527,22 +554,30 @@ async def _start_watcher(
     }
 
     async def _on_file_change(changes: set[tuple[Change, str]]) -> None:
+        project_root = config.get_project_root()
+
         for change_type, path_str in changes:
             path = Path(path_str)
 
-            if path == registry_path:
+            if path.suffix == ".md":
+                # Validate frontmatter on .md file changes (read-only, not a mutation)
+                if change_type in (Change.added, Change.modified):
+                    await _validate_frontmatter_and_notify(
+                        path, project_root, project_topic,
+                    )
+
+                # Emit FileChanged to coordinator — coordinator handles reindex + notification
+                deleted = (change_type == Change.deleted)
+                coordinator.emit(FileChanged(path=path, deleted=deleted))
+
+            elif path.suffix == ".json":
+                # .json files — use existing spec lookup for notifications
                 try:
-                    registry_content = json.loads(read_text(registry_path))
-                except Exception:
-                    registry_content = {}
-                await bus.publish(project_topic, "registry/didUpdate", {"registry": registry_content})
-            elif path.suffix in (".md", ".json"):
-                try:
-                    summaries = service.list_specs()
+                    summaries = await service.list_specs()
                 except Exception:
                     continue
                 spec_paths = {
-                    str(config.get_project_root() / s.path): s
+                    str(project_root / s.path): s
                     for s in summaries
                 }
                 summary = spec_paths.get(path_str)
@@ -554,20 +589,19 @@ async def _start_watcher(
                     elif method == "spec/didChange":
                         params["changes"] = {}
                     await bus.publish(project_topic, method, params)
-                elif change_type == Change.added and path.suffix == ".md":
-                    spec_type = detect_spec_type(path.name)
-                    if spec_type:
-                        rel = str(path.relative_to(config.get_project_root()))
-                        try:
-                            service.register_existing(rel, spec_type)
-                        except Exception:
-                            pass  # best-effort
 
+        # .bonsaihide change — debounced rebuild via coordinator
         bonsaihide_modified = any(
             ct == Change.modified and Path(p).name == ".bonsaihide"
             for ct, p in changes
         )
-        if bonsaihide_modified or any(ct in (Change.added, Change.deleted) for ct, _ in changes):
+        if bonsaihide_modified:
+            new_spec = load_bonsaihide(project_root)
+            coordinator.request_rebuild(bonsaihide_spec=new_spec, reason="bonsaihide changed")
+
+        if any(ct in (Change.added, Change.deleted) for ct, _ in changes):
+            await bus.publish(project_topic, "files/treeChanged", {})
+        elif bonsaihide_modified:
             await bus.publish(project_topic, "files/treeChanged", {})
 
         # Notify frontend about modified files so open editors can refresh
@@ -576,7 +610,7 @@ async def _start_watcher(
                 rel = str(Path(path_str).relative_to(config.get_project_root()))
                 await bus.publish(project_topic, "file/didChange", {"path": rel})
 
-        # Recompute dashboard on any .md/.json change (specs, tasks, registry)
+        # Recompute dashboard on any .md/.json change
         if any(Path(p).suffix in (".md", ".json") for _, p in changes):
             await vis_service.recompute()
 

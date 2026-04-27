@@ -1,31 +1,41 @@
+"""Spec service — facade for all spec operations.
+
+Single entry point called from RPC methods, the file watcher, and
+agent tools.  Backed by ``SpecIndex`` (SQLite) with YAML frontmatter
+as the source of truth for spec metadata.
+
+Design reference:
+    .bonsai/design_docs/FRONTMATTER_REGISTRY_DESIGN.md §Write Flow, §Read Flow
+"""
+
 from __future__ import annotations
 
+import hashlib
+import logging
 import re
-from datetime import date
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any
+
+logger = logging.getLogger(__name__)
 
 from app.core.config import AppConfig
 from app.core.fileio import delete_file, ensure_dir, read_text, write_text
+from app.trash.service import TrashService
+from app.spec.frontmatter import extract_links, parse_frontmatter, serialize_frontmatter
 from app.spec.graph import build_graph
+from app.spec.index import SpecIndex, extract_title
 from app.spec.models import (
+    Frontmatter,
     Link,
-    RegistryEntry,
-    Spec,
+    RECOGNIZED_TYPES,
     SpecDetail,
+    SpecEntry,
     SpecGraph,
     SpecSummary,
 )
-from app.spec.parser import parse_spec
-from app.spec.registry import (
-    add_entry,
-    find_entry,
-    read_registry,
-    remove_entry,
-    write_registry,
-)
-from app.spec.validator import RECOGNIZED_TYPES, validate_spec
 
+
+# ── Constants ────────────────────────────────────────────────────────────────
 
 SPEC_FILENAME_MAP: dict[str, str] = {
     "GOAL&REQUIREMENTS.md": "goal-and-requirements",
@@ -39,29 +49,63 @@ def detect_spec_type(filename: str) -> str | None:
     return SPEC_FILENAME_MAP.get(filename)
 
 
+# ── Exceptions ───────────────────────────────────────────────────────────────
+
+
 class SpecNotFoundError(Exception):
-    """Raised when a spec ID does not exist in the registry."""
+    """Raised when a spec ID does not exist."""
+
+
+class IndexNotReadyError(Exception):
+    """Raised when a write operation is attempted while the index is still initializing."""
+
+
+# ── SpecService ──────────────────────────────────────────────────────────────
 
 
 class SpecService:
-    """Facade — single entry point for all spec operations."""
+    """Facade — single entry point for all spec operations.
 
-    def __init__(self, config: AppConfig) -> None:
+    Requires a ``SpecIndex`` backed by the SQLite index.  All public
+    methods are ``async``.
+    """
+
+    def __init__(self, config: AppConfig, index: SpecIndex | None = None) -> None:
         self._config = config
-        self.trash_service: Any = None  # Injected by server.py
-
-    @property
-    def _registry_path(self) -> Path:
-        return self._config.get_registry_path()
+        self._index = index
+        self.trash_service: TrashService | None = None  # Injected by server.py
 
     @property
     def _root(self) -> Path:
         return self._config.get_project_root()
 
-    # -- public methods -------------------------------------------------------
+    @property
+    def has_index(self) -> bool:
+        """Whether the service has an index backend."""
+        return self._index is not None
 
-    def list_specs(self) -> list[SpecSummary]:
-        entries, _ = read_registry(self._registry_path)
+    # ── Readiness guards ────────────────────────────────────────────────
+
+    def _require_ready(self) -> None:
+        """Raise if the index is not yet initialized."""
+        if self._index is not None and not self._index.is_ready:
+            raise IndexNotReadyError("Index is still initializing")
+
+    # ── Public async methods ─────────────────────────────────────────────
+
+    async def list_specs(
+        self,
+        *,
+        type: str | None = None,
+        status: str | None = None,
+        tag: str | None = None,
+        covers: str | None = None,
+    ) -> list[SpecSummary]:
+        if self._index is not None and not self._index.is_ready:
+            return []
+        entries = await self._index.list_specs(
+            type=type, status=status, tag=tag, covers=covers,
+        )
         return [
             SpecSummary(
                 id=e.id,
@@ -71,22 +115,23 @@ class SpecService:
                 title=e.title,
                 tags=e.tags,
                 covers=e.covers,
-                created=e.created,
-                updated=e.updated,
             )
             for e in entries
         ]
 
-    def get_spec(self, id: str) -> SpecDetail:
-        entries, links = read_registry(self._registry_path)
-        entry = find_entry(entries, id)
+    async def get_spec(self, id: str) -> SpecDetail:
+        self._require_ready()
+        entry = await self._index.get_spec(id)
         if entry is None:
             raise SpecNotFoundError(f"Spec '{id}' not found")
 
         file_path = self._root / entry.path
-        spec = parse_spec(file_path)
+        content = read_text(file_path)
 
-        related = [l for l in links if l.from_id == id or l.to_id == id]
+        # Strip frontmatter from content for display
+        _, body = parse_frontmatter(content)
+
+        links = await self._index.get_links([id])
         return SpecDetail(
             id=entry.id,
             type=entry.type,
@@ -94,159 +139,169 @@ class SpecService:
             status=entry.status,
             title=entry.title,
             tags=entry.tags,
-            content=spec.content,
-            links=related,
+            content=body,
+            links=links,
         )
 
-    def create_spec(
-        self, type: str, path: str, content: str | None = None, id: str | None = None
+    async def create_spec(
+        self, type: str, path: str, content: str | None = None, id: str | None = None,
     ) -> SpecDetail:
+        self._require_ready()
         if type not in RECOGNIZED_TYPES:
             raise ValueError(f"Invalid spec type: '{type}'")
 
-        entries, links = read_registry(self._registry_path)
-
         # Check for path conflicts
-        if any(e.path == path for e in entries):
-            raise ValueError(f"Path conflict: '{path}' already exists in registry")
+        existing = await self._index.get_spec_by_path(path)
+        if existing is not None:
+            raise ValueError(f"Path conflict: '{path}' already exists")
 
-        file_path = self._root / path
-        file_content = content or ""
-
-        title = _extract_title(file_content, path)
+        body = content or ""
+        title = _extract_title(body, path)
         spec_id = id if id is not None else _generate_id(title)
 
-        # Avoid ID collision
-        if find_entry(entries, spec_id) is not None:
-            raise ValueError(f"Generated ID '{spec_id}' already exists")
+        # Check for ID conflicts
+        if await self._index.get_spec(spec_id) is not None:
+            raise ValueError(f"ID '{spec_id}' already exists")
 
-        today = date.today().isoformat()
-        entry = RegistryEntry(
-            id=spec_id,
-            type=type,
-            path=path,
-            title=title,
-            status="draft",
-            created=today,
-            updated=today,
-        )
+        # Build frontmatter via model and write file
+        fm = Frontmatter(id=spec_id, type=type, status="draft", title=title)
+        file_content = serialize_frontmatter(fm.to_ordered_dict(), body)
 
+        file_path = self._root / path
         ensure_dir(file_path.parent)
         write_text(file_path, file_content)
-        entries = add_entry(entries, entry)
-        write_registry(self._registry_path, entries, links)
+
+        # Upsert into index directly (don't wait for watcher)
+        now = datetime.now(UTC).isoformat()
+        c_hash = hashlib.sha256(file_content.encode("utf-8")).hexdigest()
+        entry = fm.to_spec_entry(path, c_hash, now)
+        await self._index.upsert_spec(entry)
 
         return SpecDetail(
-            id=entry.id,
-            type=entry.type,
-            path=entry.path,
-            status=entry.status,
-            title=entry.title,
-            tags=entry.tags,
-            content=file_content,
-            links=[],
+            id=spec_id, type=type, path=path, status="draft",
+            title=title, content=body, links=[],
         )
 
-    def update_spec(self, id: str, content: str) -> SpecDetail:
-        entries, links = read_registry(self._registry_path)
-        entry = find_entry(entries, id)
+    async def update_spec(self, id: str, content: str) -> SpecDetail:
+        self._require_ready()
+        entry = await self._index.get_spec(id)
         if entry is None:
             raise SpecNotFoundError(f"Spec '{id}' not found")
 
-        spec = Spec(type=entry.type, content=content)
-        errors = validate_spec(spec, entry)
-        if errors:
-            raise ValueError(f"Validation failed: {'; '.join(errors)}")
-
         file_path = self._root / entry.path
-        write_text(file_path, content)
+        existing_content = read_text(file_path)
+        meta, _ = parse_frontmatter(existing_content)
 
-        # Update the timestamp
-        entry.updated = date.today().isoformat()
-        write_registry(self._registry_path, entries, links)
+        # Re-serialize with existing frontmatter + new body
+        file_content = serialize_frontmatter(meta, content)
+        write_text(file_path, file_content)
 
-        related = [l for l in links if l.from_id == id or l.to_id == id]
+        # Upsert into index
+        now = datetime.now(UTC).isoformat()
+        c_hash = hashlib.sha256(file_content.encode("utf-8")).hexdigest()
+        updated_entry = SpecEntry(
+            id=entry.id, type=entry.type, path=entry.path,
+            title=entry.title, status=entry.status,
+            covers=entry.covers, tags=entry.tags, extras=entry.extras,
+            content_hash=c_hash, indexed_at=now,
+        )
+        # Re-extract links from frontmatter
+        raw_links = extract_links(meta)
+        link_models = [
+            Link(from_id=entry.id, to_id=target, type=ltype)
+            for ltype, target in raw_links
+        ]
+        await self._index.upsert_spec(updated_entry, link_models)
+
+        links = await self._index.get_links([id])
         return SpecDetail(
-            id=entry.id,
-            type=entry.type,
-            path=entry.path,
-            status=entry.status,
-            title=entry.title,
-            tags=entry.tags,
-            content=content,
-            links=related,
+            id=entry.id, type=entry.type, path=entry.path,
+            status=entry.status, title=entry.title, tags=entry.tags,
+            content=content, links=links,
         )
 
-    def delete_spec(self, id: str) -> None:
-        entries, links = read_registry(self._registry_path)
-        entry = find_entry(entries, id)
+    async def delete_spec(self, id: str) -> None:
+        self._require_ready()
+        entry = await self._index.get_spec(id)
         if entry is None:
             raise SpecNotFoundError(f"Spec '{id}' not found")
 
         file_path = self._root / entry.path
 
         if self.trash_service:
-            # Snapshot registry entry + related links for full restore
-            entry_dict = entry.model_dump() if hasattr(entry, "model_dump") else entry.__dict__
-            related_links = [
-                l.model_dump() if hasattr(l, "model_dump") else l.__dict__
-                for l in links if l.from_id == id or l.to_id == id
-            ]
+            entry_dict = entry.model_dump()
+            links = await self._index.get_links([id], direction="outgoing")
+            related_links = [lnk.model_dump(by_alias=True) for lnk in links]
             self.trash_service.trash_spec(id, file_path, entry_dict, related_links)
         else:
             delete_file(file_path)
 
-        entries = remove_entry(entries, id)
-        links = [l for l in links if l.from_id != id and l.to_id != id]
-        write_registry(self._registry_path, entries, links)
+        # Clean dangling references from other specs' frontmatter
+        await self._clean_dangling_refs(id)
 
-    def register_existing(self, path: str, type: str) -> RegistryEntry | None:
-        """Register an existing spec file that's not yet in the registry."""
-        entries, links = read_registry(self._registry_path)
-        if any(e.path == path for e in entries):
-            return None  # already registered
+        # Remove from index (CASCADE deletes outgoing links)
+        await self._index.remove_spec(id)
 
-        file_path = self._root / path
-        if not file_path.exists():
-            return None
+    async def get_graph(self) -> SpecGraph:
+        if self._index is not None and not self._index.is_ready:
+            return SpecGraph(nodes=[], edges=[], documents=[])
+        entries = await self._index.get_all_specs()
+        links = await self._index.get_all_links()
+        documents = await self._index.get_all_documents()
+        return build_graph(entries, links, documents)
 
-        content = read_text(file_path)
-        title = _extract_title(content, path)
-        spec_id = _generate_id(title)
+    async def get_links(
+        self,
+        ids: list[str],
+        *,
+        direction: str | None = None,
+        link_type: str | None = None,
+    ) -> list[Link]:
+        """Return links involving *ids*, with optional direction/type filtering."""
+        return await self._index.get_links(ids, direction=direction, link_type=link_type)
 
-        # Avoid ID collision
-        if find_entry(entries, spec_id) is not None:
-            return None
+    async def get_referencing_specs(self, target_id: str) -> list[SpecEntry]:
+        """Return specs whose outgoing links reference *target_id*."""
+        return await self._index.get_referencing_specs(target_id)
 
-        today = date.today().isoformat()
-        entry = RegistryEntry(
-            id=spec_id,
-            type=type,
-            path=path,
-            title=title,
-            status="active",
-            created=today,
-            updated=today,
-        )
-        entries = add_entry(entries, entry)
-        write_registry(self._registry_path, entries, links)
-        return entry
+    # ── Internal helpers ─────────────────────────────────────────────────
 
-    def get_graph(self) -> SpecGraph:
-        entries, links = read_registry(self._registry_path)
-        return build_graph(entries, links)
+    async def _clean_dangling_refs(self, deleted_id: str) -> None:
+        """Remove references to *deleted_id* from other specs' frontmatter."""
+
+        referencing = await self._index.get_referencing_specs(deleted_id)
+        for spec in referencing:
+            if spec.id == deleted_id:
+                continue
+            file_path = self._root / spec.path
+            try:
+                content = read_text(file_path)
+                meta, body = parse_frontmatter(content)
+                changed = False
+
+                for field in ("parent", "depends-on", "references", "implements"):
+                    value = meta.get(field)
+                    if value is None:
+                        continue
+                    if isinstance(value, str) and value == deleted_id:
+                        del meta[field]
+                        changed = True
+                    elif isinstance(value, list) and deleted_id in value:
+                        meta[field] = [v for v in value if v != deleted_id]
+                        if not meta[field]:
+                            del meta[field]
+                        changed = True
+
+                if changed:
+                    write_text(file_path, serialize_frontmatter(meta, body))
+            except Exception:
+                logger.debug("Failed to clean dangling ref from %s", spec.path, exc_info=True)
 
 
-# -- helpers ------------------------------------------------------------------
+# ── Helpers ──────────────────────────────────────────────────────────────────
 
 
-def _extract_title(content: str, path: str) -> str:
-    """Extract title from first Markdown heading, or derive from path."""
-    if content:
-        match = re.search(r"^#\s+(.+)$", content, re.MULTILINE)
-        if match:
-            return match.group(1).strip()
-    return Path(path).stem.replace("_", " ").replace("-", " ").title()
+_extract_title = extract_title  # backward-compatible alias
 
 
 def _generate_id(title: str) -> str:

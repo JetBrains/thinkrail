@@ -14,6 +14,7 @@ dependencies = [
     "pathspec>=1.0.4",
     "anthropic>=0.89.0",
     "aiosqlite>=0.22.1",
+    "aiofiles>=24.1",
 ]
 
 [project.optional-dependencies]
