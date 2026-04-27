@@ -1,3 +1,16 @@
+---
+id: task-voice-auto-revise
+type: task-spec
+status: draft
+title: Voice Auto-Revise (Web Frontend)
+implements:
+- voice-input-design
+depends-on:
+- task-revise-transcript
+tags:
+- voice
+- frontend
+---
 # Task: Voice Auto-Revise (Web Frontend)
 
 > Status: **Pending** | Created: 2026-04-16

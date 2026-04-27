@@ -1,3 +1,18 @@
+---
+id: task-spec-graph
+type: task-spec
+status: done
+title: Implement Spec graph.py
+depends-on:
+- task-spec-models
+implements:
+- module-spec
+covers:
+- backend/app/spec/graph.py
+tags:
+- critical
+- new-feature
+---
 # Implement Spec graph.py
 
 > Build in-memory hierarchy graph from registry

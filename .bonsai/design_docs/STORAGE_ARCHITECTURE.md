@@ -1,3 +1,18 @@
+---
+id: storage-architecture
+type: architecture-design
+status: active
+title: Backend Storage Architecture
+parent: design-doc
+covers:
+- backend/app/core/server_store.py
+- backend/app/rpc/auth.py
+tags:
+- architecture
+- storage
+- sqlite
+- auth
+---
 # Backend Storage Architecture
 
 > Parent: [Architecture Design](../../DESIGN_DOC.md) | Status: **Active** | Created: 2026-04-13
@@ -44,20 +59,20 @@ Introduces server-level and user-level persistent storage using SQLite, compleme
 
 ```mermaid
 graph TD
-    subgraph Server["Server Scope (~/.bonsai/bonsai.db)"]
+    subgraph Server["Server Scope (~/.bonsai/)"]
         SC["server_config"]
         U["users"]
         T["tokens"]
         P["projects"]
         UP["user_preferences"]
         URP["user_recent_projects"]
+        IDX["indexes/&lt;hash&gt;/index.db"]
     end
 
     subgraph Project["Project Scope (<project>/.bonsai/)"]
         S["sessions/"]
         MT["meta-tickets/"]
         PL["plans/"]
-        R["registry.json"]
         ST["settings.json"]
     end
 
@@ -65,12 +80,14 @@ graph TD
     U --> UP
     U --> URP
     P --> URP
+    P --> IDX
 ```
 
 | Scope | Location | Contains | Changed? |
 |-------|----------|----------|----------|
 | **Server** | `~/.bonsai/bonsai.db` (or `$BONSAI_DATA_DIR/bonsai.db`) | Users, tokens, known projects, preferences | **NEW** |
-| **Project** | `<project>/.bonsai/` | Sessions, specs, tickets, plans, registry | Unchanged |
+| **Server (indexes)** | `~/.bonsai/indexes/<hash>/index.db` | Per-project spec index (generated cache, rebuildable from frontmatter) | **NEW** |
+| **Project** | `<project>/.bonsai/` | Sessions, specs, tickets, plans | Unchanged |
 | **Client** | Browser localStorage | Auth token (cache), filetree collapse state | Reduced scope |
 
 ## SQLite Database

@@ -1,3 +1,19 @@
+---
+id: task-fe-new-session-modal
+type: task-spec
+status: done
+title: Implement New Session Modal
+depends-on:
+- task-fe-app-shell
+implements:
+- new-session-modal
+covers:
+- frontend/src/components/NewSessionModal/
+tags:
+- high
+- new-feature
+- frontend
+---
 # Implement New Session Modal
 
 > Session creation form with skill selection and spec context picker

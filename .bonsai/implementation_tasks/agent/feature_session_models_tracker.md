@@ -1,3 +1,20 @@
+---
+id: task-session-models-tracker
+type: task-spec
+status: done
+title: Update models.py and tracker.py for conversational sessions
+depends-on:
+- task-agent-models
+- task-agent-tracker
+implements:
+- module-agent
+covers:
+- backend/app/agent/models.py
+- backend/app/agent/tracker.py
+tags:
+- high
+- new-feature
+---
 # Update models.py and tracker.py for conversational sessions
 
 > Infrastructure changes: idle state, new event types, message queue

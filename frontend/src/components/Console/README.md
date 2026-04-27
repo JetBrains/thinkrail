@@ -1,3 +1,17 @@
+---
+id: console
+type: submodule-design
+status: active
+title: Console
+parent: frontend-module
+covers:
+- frontend/src/components/Console/
+tags:
+- frontend
+- ui
+- terminal
+- xterm
+---
 # Console — Sub-Specification
 
 > Parent: [Frontend Module](../../../README.md) | Status: **Active** | Created: 2026-03-02

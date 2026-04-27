@@ -1,3 +1,16 @@
+---
+id: task-core-fileio
+type: task-spec
+status: done
+title: Implement Core fileio.py
+implements:
+- module-core
+covers:
+- backend/app/core/fileio.py
+tags:
+- critical
+- new-feature
+---
 # Implement Core fileio.py
 
 > File read, write, delete, and directory operations

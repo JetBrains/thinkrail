@@ -1,3 +1,20 @@
+---
+id: feature_board_view
+type: submodule-design
+status: active
+title: Board View — Kanban UI
+parent: feature_board_module
+covers:
+- frontend/src/components/BoardView/
+- frontend/src/store/boardStore.ts
+- frontend/src/types/board.ts
+- frontend/src/api/methods/board.ts
+tags:
+- frontend
+- board
+- kanban
+- ui
+---
 # BoardView — Sub-Specification
 
 > Parent: [Frontend Module](../../../README.md) | Status: **Active** | Created: 2026-03-27

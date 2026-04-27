@@ -1,3 +1,17 @@
+---
+id: agent-progress
+type: submodule-design
+title: UpdateProgress — Backend Spec
+parent: module-agent
+implements:
+- feature-update-progress
+covers:
+- backend/app/agent/tools/progress.py
+tags:
+- backend
+- proactive
+- passive
+---
 # UpdateProgress — Backend Spec
 
 > Parent: [Tools Package](README.md) | Feature: [.bonsai/design_docs/UPDATE_PROGRESS.md](../../../../.bonsai/design_docs/UPDATE_PROGRESS.md) | Status: **Draft** | Created: 2026-03-07 | Updated: 2026-03-11

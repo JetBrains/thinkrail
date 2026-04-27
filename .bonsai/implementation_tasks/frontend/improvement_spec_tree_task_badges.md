@@ -1,3 +1,18 @@
+---
+id: task-spec-tree-badges
+type: task-spec
+status: done
+title: 'Improve SpecTree: inline task count badges'
+depends-on:
+- task-spec-tree
+implements:
+- spec-tree
+covers:
+- frontend/src/components/SpecTree/
+tags:
+- high
+- improvement
+---
 # Improve SpecTree: inline task count badges with progressive disclosure
 
 Task-spec nodes currently appear as flat orphans at the bottom of the spec tree because they use `implements` links (not `parent` links). With ~40 tasks, they dominate the tree and push important design specs off screen.

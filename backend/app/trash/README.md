@@ -1,3 +1,16 @@
+---
+id: module-trash
+type: module-design
+status: active
+title: Trash Module — Design Specification
+parent: design-doc
+covers:
+- backend/app/trash
+tags:
+- trash
+- soft-delete
+- recovery
+---
 # Trash Module — Design Specification
 
 > Parent: [DESIGN_DOC.md](../../../DESIGN_DOC.md) | Status: **Active** | Created: 2026-03-30 | Updated: 2026-04-09

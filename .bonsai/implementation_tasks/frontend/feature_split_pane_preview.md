@@ -1,3 +1,18 @@
+---
+id: task-split-pane-preview
+type: task-spec
+status: done
+title: Remove Text Mode, Add Split-Pane Preview to InputArea
+implements:
+- dual-mode-input-design
+covers:
+- frontend/src/components/ChatStream/InputArea.tsx
+- frontend/src/components/ChatStream/ChatStream.css
+tags:
+- small
+- refactor
+- frontend
+---
 # Task: Remove Text Mode, Add Split-Pane Preview to InputArea
 
 > Status: **Done** | Created: 2026-03-12

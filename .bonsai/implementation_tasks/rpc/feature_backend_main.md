@@ -1,3 +1,18 @@
+---
+id: task-backend-main
+type: task-spec
+status: done
+title: Implement Backend main.py
+depends-on:
+- task-rpc-server
+implements:
+- module-rpc
+covers:
+- backend/app/main.py
+tags:
+- critical
+- new-feature
+---
 # Implement Backend main.py
 
 > FastAPI app factory, lifespan, and application bootstrap

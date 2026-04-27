@@ -1,3 +1,18 @@
+---
+id: task-preview-tab-ui
+type: task-spec
+status: done
+title: Add preview tab rendering to SessionTabBar
+depends-on:
+- task-preview-tab-store
+implements:
+- ui-center-panel
+covers:
+- frontend/src/components/SessionPanel/
+tags:
+- high
+- new-feature
+---
 # Add preview tab rendering to SessionTabBar
 
 The tab bar needs to display the preview tab with italic styling, handle auto-close behavior, and allow pinning via double-click. This task adds the UI layer for preview tabs.

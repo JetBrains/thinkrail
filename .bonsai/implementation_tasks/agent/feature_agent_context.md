@@ -1,3 +1,20 @@
+---
+id: task-agent-context
+type: task-spec
+status: done
+title: Implement Agent context.py and wire skill_id
+implements:
+- agent-context
+- module-agent
+covers:
+- backend/app/agent/context.py
+- backend/app/agent/service.py
+- backend/app/rpc/methods/agents.py
+- backend/app/core/config.py
+tags:
+- high
+- new-feature
+---
 # Implement Agent context.py and wire skill_id through service + RPC
 
 **Status:** Done

@@ -1,3 +1,19 @@
+---
+id: task-suggest-session-runner
+type: task-spec
+status: done
+title: Implement SuggestSession branch in runner.py can_use_tool
+implements:
+- module-agent
+- feature-suggest-session
+covers:
+- backend/app/agent/tools/suggest_session.py
+- backend/app/agent/tools/__init__.py
+- backend/app/agent/permissions.py
+tags:
+- high
+- new-feature
+---
 # Implement SuggestSession branch in runner.py can_use_tool
 
 > Parent: [Agent Module](../../backend/app/agent/README.md) | Implements: [SuggestSession Backend Spec](../../backend/app/agent/tools/SUGGEST_SESSION.md) | Priority: **High** | Created: 2026-03-08

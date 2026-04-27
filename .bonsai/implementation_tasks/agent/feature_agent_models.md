@@ -1,3 +1,16 @@
+---
+id: task-agent-models
+type: task-spec
+status: done
+title: Implement Agent models.py
+implements:
+- module-agent
+covers:
+- backend/app/agent/models.py
+tags:
+- high
+- new-feature
+---
 # Implement Agent models.py
 
 > Pydantic models for agent tasks, events, and interactive flows

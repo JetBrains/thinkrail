@@ -1,3 +1,20 @@
+---
+id: agent-context
+type: submodule-design
+status: active
+title: Agent Context Assembly
+parent: module-agent
+depends-on:
+- module-spec
+- module-core
+covers:
+- backend/app/agent/context.py
+tags:
+- backend
+- agent-orchestration
+- context
+- prompt
+---
 # Agent Context — Submodule Specification
 
 > Parent: [Agent Module](README.md) | Status: **Active** | Created: 2026-03-03 | Updated: 2026-03-13
@@ -132,9 +149,9 @@ tables, do NOT approximate visualizations with markdown when the tool can do it 
 
 ### Spec-Driven Workflow
 
-- Use `spec_list` or `registry_query` at the start to understand project state and existing specs.
-- After creating or modifying any spec file, use `spec_save` and `registry_mutate` to
-  update the registry with the appropriate entry and links.
+- Use `spec_search` at the start to understand project state and existing specs.
+- After creating or modifying any spec file, write YAML frontmatter directly using Edit/Write tools.
+  Use `spec_delete` to remove specs when needed.
 - Respect the spec hierarchy: Goal > Architecture > Modules > Submodules > Tasks.
 
 ### Proactive Suggestions
@@ -240,8 +257,9 @@ The General Instructions section consolidates behavioral rules that were previou
 |------------|---------|-----------|
 | **Visualization** | `bonsai_visualize` tool reference, 6 available types, layout hints (`width`, `maxHeight`), 6 primary status values, when to use, anti-patterns (no Bash/ANSI/ASCII) | Previously copy-pasted into 13/14 skills. Without this, the model doesn't know `bonsai_visualize` exists. |
 | **Interaction Style** | Use `AskUserQuestion` for decisions, 2-4 choices, end with "What's next?" | Previously repeated in 13/14 skills. Ensures consistent interaction pattern. |
-| **Spec-Driven Workflow** | Use `spec_list`/`registry_query` at start, use `spec_save`/`registry_mutate` after saving, respect spec hierarchy | Previously in 10-11/14 skills. Grounds the agent in the spec-driven methodology. |
+| **Spec-Driven Workflow** | Use `spec_search` at start, write YAML frontmatter with Edit/Write tools after saving, use `spec_delete` to remove, respect spec hierarchy | Previously in 10-11/14 skills. Grounds the agent in the spec-driven methodology. |
 | **Proactive Suggestions** | `SuggestSession` triggers, key tips (`specIds`, `prompt`, `reason`), behavioral rules (respect dismissals, limit to 1-3) | Agents need to know the tool exists and when to use it proactively. Parameter details come from the tool schema. |
+| **Frontmatter Format** | YAML field reference (`id`, `type` required; `status`, `title`, `parent`, `depends-on`, `references`, `implements`, `covers`, `tags` optional), concrete YAML example with `---` delimiters, auto-indexing note | Previously duplicated across 8 spec-creating skills. Without this, free-form sessions don't know the schema. |
 | **Available Skills** | Compact table of skill name + description, dynamically generated | Enables the agent to recommend relevant next actions without hardcoding suggestions into each skill. |
 
 ### What is NOT in General Instructions
@@ -251,7 +269,7 @@ The General Instructions section consolidates behavioral rules that were previou
 | Code-first analysis ("read code first, present findings") | Only relevant for 7/14 skills (design/creation skills). Would confuse utility skills like `spec-status` or `registry-update`. |
 | Progress tracker JSON template | The specific step to highlight as "current" varies per skill. Skills own their progress display. |
 | Specific question trees and multi-choice options | Domain logic that defines the skill's workflow. |
-| Registry entry schema (type, links, covers) | Varies per skill type. General Instructions says "update the registry"; skills say *how*. |
+| Type-specific linking instructions (which `parent`/`implements`/`depends-on` to set) | Varies per spec type. General Instructions has the field reference; skills say *which* links to set (e.g., module-design → "set parent to architecture doc"). |
 
 ## Skill Resolution
 
@@ -301,10 +319,11 @@ With General Instructions now handling common behavioral rules, existing SKILL.m
 | "NEVER use Bash, echo, printf, or ANSI escape codes for visual output" | 13/14 skills | General Instructions → Visualization |
 | "Use `bonsai_visualize` tool for all structured visual output" | 13/14 skills | General Instructions → Visualization |
 | "Use the `AskUserQuestion` tool for every design decision" | 13/14 skills | General Instructions → Interaction Style |
-| "Use `spec_list`/`registry_query`" as a first step | 11/14 skills | General Instructions → Spec-Driven Workflow |
+| "Use `spec_search`" as a first step | 11/14 skills | General Instructions → Spec-Driven Workflow |
 | Available visualization types reference (progress-tracker, summary-box, etc.) | 13/14 skills | General Instructions → Visualization |
+| "## Frontmatter Format" field reference (required/optional fields) | 8 spec-creating skills | General Instructions → Frontmatter Format |
 
-Each skill should **keep**: its unique task logic, question trees, specific visualization templates (e.g., progress-tracker JSON with the right "current" step), registry entry specifics, and domain-specific instructions.
+Each skill should **keep**: its unique task logic, question trees, specific visualization templates (e.g., progress-tracker JSON with the right "current" step), type-specific linking instructions (Registry Integration), and domain-specific instructions.
 
 ## File Organization
 

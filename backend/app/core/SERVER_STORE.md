@@ -1,3 +1,16 @@
+---
+id: module-server-store
+type: module-design
+status: active
+title: Server Store Module Design
+parent: storage-architecture
+covers:
+- backend/app/core/server_store.py
+tags:
+- backend
+- storage
+- sqlite
+---
 # Server Store — Module Design
 
 > Parent: [Storage Architecture](../../../docs/STORAGE_ARCHITECTURE.md) | Status: **Active** | Created: 2026-04-13

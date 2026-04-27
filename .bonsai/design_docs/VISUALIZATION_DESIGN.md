@@ -1,3 +1,26 @@
+---
+id: visualization-design
+type: architecture-design
+status: active
+title: MCP Visualization — Architecture Design
+parent: design-doc
+depends-on:
+- module-agent
+references:
+- agent-context
+covers:
+- backend/app/agent/tools/visualization.py
+- backend/app/agent/tools/_vis_validation.py
+- claude-plugin/tools/vis-server.py
+- frontend/src/components/ChatStream/VisualizationCard.tsx
+- frontend/src/types/vis.ts
+- frontend/src/utils/mermaid.ts
+- frontend/src/utils/ZoomBar.tsx
+tags:
+- feature
+- visualization
+- mcp
+---
 # MCP Visualization — Architecture Design
 
 > Parent: [DESIGN_DOC.md](../../DESIGN_DOC.md) | Status: **Active** | Created: 2026-03-11 | Updated: 2026-03-16

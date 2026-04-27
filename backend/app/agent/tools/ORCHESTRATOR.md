@@ -1,3 +1,17 @@
+---
+id: feature_orchestrator
+type: submodule-design
+status: active
+title: Plan Orchestrator — Semi-Automatic Execution
+parent: feature_board_module
+covers:
+- backend/app/agent/tools/orchestrator.py
+tags:
+- backend
+- agent
+- orchestration
+- plan
+---
 # Orchestrator Tools — Sub-Specification
 
 > Parent: [Agent Tools](README.md) | Status: **Active** | Created: 2026-03-27
@@ -274,7 +288,7 @@ Four skills in `claude-plugin/skills/` map to the ticket lifecycle stages. Each 
 | Skill | Tools Used | Output |
 |-------|-----------|--------|
 | `ticket-describe` | File read, project analysis | Updates ticket body via description |
-| `ticket-specify` | `spec_save`, `registry_mutate` | Creates spec files + registry entries, auto-linked to ticket |
+| `ticket-specify` | `Write`/`Edit` tools (with frontmatter) | Creates spec files with frontmatter; watcher handles indexing automatically |
 | `ticket-plan` | `board/createPlan` (via spec tools or direct) | Creates `.bonsai/plans/{id}.md` |
 | `ticket-execute` | `suggest_step`, delegates to step sessions | Orchestrates full plan execution |
 

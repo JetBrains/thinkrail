@@ -1,3 +1,19 @@
+---
+id: state-management
+type: submodule-design
+status: active
+title: State Management
+parent: frontend-module
+depends-on:
+- api-client
+covers:
+- frontend/src/store/
+tags:
+- frontend
+- infrastructure
+- zustand
+- state
+---
 # State Management — Module Specification
 
 > Parent: [Frontend Module](../../README.md) | Status: **Active** | Created: 2026-03-02 | Updated: 2026-03-05
@@ -35,6 +51,8 @@ frontend/src/store/
 ├── messageHistoryStore.ts # Input message history (up/down arrow)
 ├── tokenStore.ts          # Auth token management
 ├── visStore.ts            # Visualization dashboard state
+├── prefSync.ts            # Preference sync helper (sends patches to backend)
+├── serverInfoStore.ts     # Server info (version, capabilities)
 └── wireEvents.ts          # RPC event → store action wiring
 ```
 
@@ -43,21 +61,26 @@ frontend/src/store/
 ## Store Architecture
 
 ```
-┌─────────────────────────────────────────────────┐
-│  React Components                                │
-│   useSpecStore()  useSessionStore()  useUiStore() │
-│   useNotificationStore()  useFileStore()          │
-│   useCostStore() (stub)                           │
-├─────────────────────────────────────────────────┤
-│  Zustand Stores (6 stores)                       │
-│    specStore  sessionStore  uiStore              │
-│    costStore  notificationStore  fileStore       │
-├─────────────────────────────────────────────────┤
-│  API Client (data source)                        │
-│    RPC responses → store actions                 │
-│    RPC events (via wireEvents) → store actions   │
-│    REST fetch (fileStore) → /api/file/*          │
-└─────────────────────────────────────────────────┘
+┌──────────────────────────────────────────────────────────┐
+│  React Components                                         │
+│   useSpecStore()  useSessionStore()  useUiStore()         │
+│   useNotificationStore()  useFileStore()  useBoardStore() │
+│   useSettingsStore()  useConnectionStore()  useVisStore() │
+├──────────────────────────────────────────────────────────┤
+│  Zustand Stores (14 stores)                               │
+│    specStore       sessionStore    uiStore                │
+│    boardStore      settingsStore   notificationStore      │
+│    fileStore       costStore       trashStore             │
+│    connectionStore visStore        tokenStore             │
+│    inputDraftStore messageHistoryStore                    │
+│    + serverInfoStore (server info)                        │
+│    + prefSync (helper, not a store)                       │
+├──────────────────────────────────────────────────────────┤
+│  API Client (data source)                                 │
+│    RPC responses → store actions                          │
+│    RPC events (via wireEvents) → store actions            │
+│    REST fetch (fileStore) → /api/file/*                   │
+└──────────────────────────────────────────────────────────┘
 ```
 
 ## Type Definitions
@@ -208,7 +231,7 @@ Spec data, graph, and registry cache. Plain Zustand, no middleware.
 
 ```typescript
 interface SpecStore {
-  specs: RegistryEntry[];
+  specs: SpecEntry[];
   graph: SpecGraph | null;
   specContent: Map<string, string>;
   loading: boolean;
@@ -224,7 +247,6 @@ interface SpecStore {
   onSpecChanged: (id: string) => void;
   onSpecCreated: (id: string, path: string) => void;
   onSpecDeleted: (id: string) => void;
-  onRegistryUpdated: () => void;
 }
 ```
 
@@ -266,10 +288,22 @@ interface SessionStore {
   onAgentEvent: (method: string, params) => void;
   onAskQuestion: (params) => void;
   onConfirmAction: (params) => void;
+  onConfirmStatement: (params) => void;
   onSuggestSession: (params: { bonsaiSid: string; skill: string; specIds: string[]; name: string; reason: string; requestId: string }) => void;
+  onSuggestDescription: (params) => void;
+  onSuggestStep: (params) => void;
   onSessionDone: (params) => void;
   onSessionError: (params) => void;
   onConfigChanged: (params) => void;
+  onRequestExpired: (params) => void;
+  onRequestResolved: (params) => void;
+
+  // Multi-client sync (called by wireEvents)
+  onRemoteSessionCreated: (params) => void;
+  onRemoteUserMessage: (params) => void;
+
+  // Subsession orchestration (called by wireEvents)
+  onSubsessionReturned: (params) => void;
 }
 ```
 
@@ -437,17 +471,19 @@ export function wireEvents(client: RpcClient): Unsubscribe
 | `spec/didChange` | `onSpecChanged(id)` |
 | `spec/didCreate` | `onSpecCreated(id, path)` |
 | `spec/didDelete` | `onSpecDeleted(id)` |
-| `registry/didUpdate` | `onRegistryUpdated()` |
+| `docs/didChange` | `fetchGraph()` — re-fetches graph including updated `documents` list |
+| `index/ready` | `fetchSpecs()` + `fetchGraph()` — background index init complete |
 
-### File notifications → fileStore
+### File notifications → fileStore + settingsStore
 
 | Event | Action |
 |---|---|
-| `file/didChange` | `onFileChanged(path)` |
+| `file/didChange` | `fileStore.onFileChanged(path)`. Also triggers `settingsStore.fetchSettings()` when path is `.bonsai/settings.json`. |
+| `files/treeChanged` | `uiStore.onFileTreeChanged()` |
 
 ### Agent streaming → sessionStore.onAgentEvent
 
-`agent/textDelta`, `agent/toolCallStart`, `agent/toolCallEnd`, `agent/turnComplete`, `agent/interrupted`, `agent/subagentStart`, `agent/subagentEnd`, `agent/notification`, `agent/compact`, `agent/progress`, `agent/costEstimate`, `agent/permissionDenied`, `agent/ready`
+`agent/textDelta`, `agent/toolCallStart`, `agent/toolCallEnd`, `agent/turnComplete`, `agent/interrupted`, `agent/subagentStart`, `agent/subagentEnd`, `agent/notification`, `agent/compact`, `agent/progress`, `agent/costEstimate`, `agent/permissionDenied`, `agent/ready`, `agent/statusChanged`
 
 `agent/costEstimate` is ephemeral — not stored in the events array but updates live metrics (cost, context window, token breakdown) for real-time UI display.
 
@@ -462,9 +498,49 @@ export function wireEvents(client: RpcClient): Unsubscribe
 | `agent/configChanged` | `sessionStore.onConfigChanged(params)` |
 | `agent/askUserQuestion` | `sessionStore.onAskQuestion(params)` + `incrementPendingInput` + persistent toast + badge |
 | `agent/confirmAction` | `sessionStore.onConfirmAction(params)` + `incrementPendingInput` + persistent toast + badge |
+| `agent/confirmStatement` | `sessionStore.onConfirmStatement(params)` + `incrementPendingInput` + persistent toast + badge |
 | `agent/suggestSession` | `sessionStore.onSuggestSession(params)` + `incrementPendingInput` + persistent toast + badge |
+| `agent/suggestDescription` | `sessionStore.onSuggestDescription(params)` + `incrementPendingInput` + toast + badge |
+| `agent/suggestStep` | `sessionStore.onSuggestStep(params)` + `incrementPendingInput` + toast + badge |
+| `agent/requestExpired` | `sessionStore.onRequestExpired(params)` — timeout on pending request |
+| `agent/requestResolved` | `sessionStore.onRequestResolved(params)` — resolved by another client |
 
 Questions, approvals, and suggestions arrive with a JSON-RPC `id` but are handled via `client.on()` (not `client.onRequest()`). Responses are sent via `agent/respond` RPC.
+
+### Multi-client sync → sessionStore
+
+| Event | Action |
+|---|---|
+| `session/didCreate` | `sessionStore.onRemoteSessionCreated(params)` |
+| `session/userMessage` | `sessionStore.onRemoteUserMessage(params)` |
+| `session/didEnd` | Updates session status if session exists and is not terminal |
+
+### Subsession notifications → sessionStore
+
+| Event | Action |
+|---|---|
+| `subsession/returned` | `sessionStore.onSubsessionReturned(params)` |
+
+### Board notifications → boardStore
+
+| Event | Action |
+|---|---|
+| `board/didChange` | `boardStore.handleDidChange(params)` |
+| `board/didCreate` | `boardStore.handleDidCreate(params)` |
+| `board/didDelete` | `boardStore.handleDidDelete(id)` |
+
+### Visualization → visStore
+
+| Event | Action |
+|---|---|
+| `vis/stateChanged` | `visStore.onStateChanged(params)` |
+
+### Connection presence → connectionStore
+
+| Event | Action |
+|---|---|
+| `connection/didJoin` | `connectionStore.onClientJoin(params)` |
+| `connection/didLeave` | `connectionStore.onClientLeave(connId)` |
 
 ---
 

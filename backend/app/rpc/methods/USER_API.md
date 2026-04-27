@@ -1,3 +1,18 @@
+---
+id: module-user-api
+type: module-design
+status: active
+title: User Preferences API
+parent: storage-architecture
+covers:
+- backend/app/rpc/methods/user.py
+- frontend/src/api/methods/user.ts
+tags:
+- backend
+- frontend
+- api
+- preferences
+---
 # User Preferences API — Module Design
 
 > Parent: [Storage Architecture](../../../../docs/STORAGE_ARCHITECTURE.md) | Status: **Active** | Created: 2026-04-13

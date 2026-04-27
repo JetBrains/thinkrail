@@ -1,3 +1,16 @@
+---
+id: task-rpc-notifications
+type: task-spec
+status: done
+title: Implement RPC notifications.py
+implements:
+- module-rpc
+covers:
+- backend/app/rpc/notifications.py
+tags:
+- high
+- new-feature
+---
 # Implement RPC notifications.py
 
 > `make_notify` factory for per-connection WebSocket callables

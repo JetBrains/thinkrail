@@ -1,3 +1,16 @@
+---
+id: task-spec-save-content-optional
+type: task-spec
+status: done
+title: 'Improve spec_save: make content optional for updates (registry-sync path)'
+implements:
+- agent-specs-tools
+covers:
+- backend/app/agent/tools/specs.py
+tags:
+- high
+- improvement
+---
 # Improve spec_save: make content optional for updates (registry-sync path)
 
 After editing a spec file with the Edit tool, agents currently must re-read the entire file and pass full content to `spec_save` just to sync the registry. This wastes tokens (~2-20KB per call) and creates an awkward 3-step workflow (Edit file → Read file → spec_save with full content). This improvement makes `content` optional on updates — when omitted, `spec_save` reads from disk and syncs the registry without rewriting the file.

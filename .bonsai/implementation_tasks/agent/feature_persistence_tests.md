@@ -1,3 +1,16 @@
+---
+id: task-persistence-tests
+type: task-spec
+status: done
+title: Unit tests for Agent persistence.py
+implements:
+- agent-persistence
+covers:
+- backend/tests/agent/test_persistence.py
+tags:
+- medium
+- tests
+---
 # Unit tests for Agent persistence.py
 
 > Test the split storage persistence layer (metadata .json + events .events.jsonl)

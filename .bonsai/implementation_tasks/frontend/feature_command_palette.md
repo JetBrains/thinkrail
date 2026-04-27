@@ -1,3 +1,19 @@
+---
+id: task-fe-command-palette
+type: task-spec
+status: done
+title: Implement Command Palette
+depends-on:
+- task-fe-app-shell
+implements:
+- command-palette
+covers:
+- frontend/src/components/CommandPalette/
+tags:
+- medium
+- new-feature
+- frontend
+---
 # Implement Command Palette
 
 > Fuzzy search across specs, sessions, files, and actions (Mod+K)

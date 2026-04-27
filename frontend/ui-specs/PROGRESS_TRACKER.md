@@ -1,3 +1,17 @@
+---
+id: progress-tracker
+type: submodule-design
+status: active
+title: Progress Tracker
+parent: webview
+covers:
+- frontend/src/components/ProgressTab/
+tags:
+- frontend
+- ui
+- progress
+- metrics
+---
 # Progress Tracker — Sub-Specification
 
 > Parent: [WEBVIEW.md](../WEBVIEW.md) §2.1 | Status: **Active** | Created: 2026-03-02

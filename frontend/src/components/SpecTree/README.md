@@ -1,3 +1,19 @@
+---
+id: spec-tree
+type: submodule-design
+status: active
+title: SpecTree Component
+parent: frontend-module
+depends-on:
+- state-management
+- api-client
+covers:
+- frontend/src/components/SpecTree/
+tags:
+- frontend
+- ui
+- component
+---
 # SpecTree — Component Specification
 
 > Parent: [Frontend Module](../../../README.md) | Status: **Active** | Created: 2026-03-04
@@ -64,7 +80,7 @@ frontend/src/components/SpecTree/
 ```typescript
 /** Flat tree node produced by buildTree() — excludes task-spec nodes */
 interface TreeNode {
-  id: string;          // spec ID (matches RegistryEntry.id)
+  id: string;          // spec ID (matches SpecEntry.id)
   title: string;       // display title
   type: string;        // "goal-and-requirements" | "architecture-design" | "module-design" | "submodule-design"
   status: string;      // "active" | "done" | "pending" | "stale" | "waiting"
@@ -79,6 +95,15 @@ interface TaskInfo {
   id: string;          // task spec ID
   title: string;       // task title
   status: string;      // "active" | "done" | etc.
+  path: string;        // file path (for preview loading)
+}
+
+/** Flat tree node for unmanaged document tree (produced by buildDocTree) */
+interface DocTreeNode {
+  path: string;       // full relative path (or collapsed display path for dirs)
+  name: string;       // display name (basename or collapsed dirname)
+  isDir: boolean;
+  depth: number;
 }
 ```
 
@@ -98,7 +123,7 @@ Transforms the spec graph into a sorted flat list:
 ```typescript
 export function buildTree(graph: SpecGraph): TreeNode[] {
   // Build adjacency: parentId → children[]
-  const childrenOf = new Map<string | null, RegistryEntry[]>();
+  const childrenOf = new Map<string | null, SpecEntry[]>();
   const parentOf = new Map<string, string>();
 
   for (const edge of graph.edges) {
@@ -179,6 +204,15 @@ Maps spec status to badge character:
 | `waiting` | ! | `st-badge-waiting` | orange |
 | (unknown) | · | `st-badge-unknown` | dimmed |
 
+### buildDocTree(documents: DocumentEntry[]): DocTreeNode[]
+
+Transforms a flat list of document paths into a depth-sorted tree with directory nodes:
+
+1. Extract unique directory paths from document paths
+2. Collapse empty intermediate directories (IntelliJ compact path style)
+3. Sort each level: directories first (alphabetical), then files (alphabetical)
+4. DFS flatten with depth values for indentation
+
 ## SpecTree.tsx
 
 ### Component Interface
@@ -197,6 +231,8 @@ No props — reads all data from Zustand stores:
 |-------|------|-------|-------------|
 | `collapsed` | `Set<string>` | local (useState) | Set of collapsed node IDs |
 | `expandedTasks` | `Set<string>` | local (useState) | Set of spec IDs with task card expanded |
+| `docsCollapsed` | `boolean` | local (useState) | Whether the unmanaged documents section is collapsed (default: `true`) |
+| `docDirCollapsed` | `Set<string>` | local (useState) | Set of collapsed directory paths in unmanaged doc tree |
 | `specs`, `graph`, `selectedSpecId` | from specStore | global (Zustand) | Reactive — re-renders on change |
 
 ### Render Pattern
@@ -253,7 +289,7 @@ const visible = useMemo(() => {
 | State | Display |
 |-------|---------|
 | `loading && !graph` | `<div className="st-empty">Loading specs...</div>` |
-| `graph && nodes.length === 0` | `<div className="st-empty">No specifications yet</div>` |
+| `graph && nodes.length === 0 && no documents` | `<div className="st-empty">No specifications yet</div>` |
 | `error` | `<div className="st-empty st-error">{error}</div>` |
 
 ### Live Updates
@@ -271,14 +307,7 @@ This means specs created/changed/deleted by the agent are reflected in the tree 
 
 ### Data Fetch on Mount
 
-On first render, SpecTree triggers `fetchSpecs()` and `fetchGraph()` if data is not already loaded:
-
-```tsx
-useEffect(() => {
-  if (specs.length === 0) fetchSpecs();
-  if (!graph) fetchGraph();
-}, [specs.length, graph, fetchSpecs, fetchGraph]);
-```
+SpecTree does **not** fetch data on mount. Initial data loading is handled by `App.tsx` after the WebSocket connects — SpecTree simply renders whatever is in the store and re-renders when it changes.
 
 ## Task Display
 
@@ -295,6 +324,23 @@ Each spec node shows a clickable pill badge after the title (hidden when 0 tasks
 ### Task Card
 
 When a pill is clicked, a visually distinct card (`st-task-card`) renders below the spec row. The card is separate from tree children — uses dark background, border, and `role="group"` for accessibility. Each task row shows icon, title, and status badge.
+
+## Unmanaged Documents Section
+
+Below the managed spec tree, SpecTree renders a collapsible section for unmanaged documents (`.md` files without frontmatter). These arrive via `graph.documents` (a `DocumentEntry[]` with `path` and `title`).
+
+**Layout:** A section header `📄 Unmanaged Documents ({count})` followed by a collapsible file tree built by `buildDocTree()`. Empty intermediate directories are collapsed (IntelliJ compact path style). Section collapsed by default.
+
+**Rendering rules:**
+- Document rows use muted/grey styling (`--hint` color), `📄` icon (`st-icon-default`)
+- Directory rows use `📁` icon, expand/collapse arrows, and `st-doc-dir` class
+- Click opens file in preview pane (same as managed specs)
+- Double-click pins preview
+- No status badges
+- CSS: `.st-doc-header` for the section header, `.st-doc-row` for file rows, `.st-doc-dir` for directory rows
+- Separate `docDirCollapsed: Set<string>` state from spec tree collapsed state
+
+**Promotion:** When a user adds valid frontmatter to a document, the watcher reclassifies it. It disappears from this section and appears in the managed spec tree.
 
 ## Styling
 
@@ -319,6 +365,7 @@ Follows the same visual language as FileTree:
 | Tasks as cards, not tree children | Separate visual treatment | Avoids conflating child specs with tasks. Cards are visually distinct (PatternFly/Telerik guidance). Chevron and pill are independent interactions. |
 | Hide zero-count pills | Not "0 tasks" | Reduces noise. Only show when actionable (Linear pattern). |
 | Done-only pills on hover | Not always visible | Progressive disclosure — completed tasks are secondary info (PatternFly). |
+| Doc tree via buildDocTree | Not FileTree reuse | Self-contained in SpecTree module. No FileTree refactoring risk. Reuses FileTree CSS classes for visual consistency without coupling to FileTree's store dependencies. |
 
 
 ## Known Limitations

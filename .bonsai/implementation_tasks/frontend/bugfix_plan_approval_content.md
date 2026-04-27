@@ -1,3 +1,21 @@
+---
+id: bugfix-plan-approval-content
+type: task-spec
+status: done
+title: 'Fix PlanApprovalCard: shows random assistant text instead of actual plan'
+depends-on:
+- improvement-plan-approval-card
+implements:
+- chat-ui
+- module-agent
+covers:
+- backend/app/agent/permissions.py
+- frontend/src/components/ChatStream/ChatStream.tsx
+- frontend/ui-specs/CHAT_UI.md
+tags:
+- high
+- bug-fix
+---
 # Fix PlanApprovalCard: shows random assistant text instead of actual plan
 
 The `PlanApprovalCard` was displaying wrong content when the agent called `ExitPlanMode`. Instead of showing the actual plan, it showed accumulated assistant text from the entire turn — exploration notes, reasoning, tool descriptions, etc.

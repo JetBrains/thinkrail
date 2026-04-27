@@ -1,3 +1,21 @@
+---
+id: task-draft-session
+type: task-spec
+status: done
+title: Implement Draft Session (Pre-Start Config View)
+implements:
+- draft-session-design
+covers:
+- backend/app/agent/service.py
+- backend/app/agent/models.py
+- backend/app/rpc/methods/agents.py
+- frontend/src/components/ChatStream/DraftConfigCard.tsx
+- frontend/src/store/sessionStore.ts
+tags:
+- high
+- new-feature
+- session
+---
 # Implement Draft Session (Pre-Start Config View)
 
 **Status:** Done

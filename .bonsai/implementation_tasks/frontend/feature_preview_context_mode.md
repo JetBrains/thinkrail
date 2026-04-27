@@ -1,3 +1,18 @@
+---
+id: task-preview-context-mode
+type: task-spec
+status: done
+title: Update useContextMode to react to preview tabs
+depends-on:
+- task-preview-tab-store
+implements:
+- ui-context-panel
+covers:
+- frontend/src/components/ContextPanel/useContextMode.ts
+tags:
+- high
+- new-feature
+---
 # Update useContextMode to react to preview tabs
 
 The context panel should update immediately when a preview tab opens. This requires `useContextMode` to read `previewFilePath` in addition to `activeFilePath`.

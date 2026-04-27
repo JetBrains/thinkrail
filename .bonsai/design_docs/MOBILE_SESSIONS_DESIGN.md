@@ -1,3 +1,15 @@
+---
+id: mobile-sessions-design
+type: architecture-design
+title: Mobile Sessions — Full Functionality Design Spec
+parent: mobile-frontend-design
+depends-on:
+- mobile-frontend-design
+tags:
+- mobile
+- sessions
+- streaming
+---
 # Mobile Sessions — Full Functionality Design Spec
 
 **Status:** Draft

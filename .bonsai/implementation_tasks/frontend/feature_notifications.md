@@ -1,3 +1,19 @@
+---
+id: task-fe-notifications
+type: task-spec
+status: done
+title: Implement Notification System
+depends-on:
+- task-fe-state-management
+implements:
+- notification-system
+covers:
+- frontend/src/components/Notifications/
+tags:
+- medium
+- new-feature
+- frontend
+---
 # Implement Notification System
 
 > Toast notifications, tab badges, and status bar alerts for background sessions

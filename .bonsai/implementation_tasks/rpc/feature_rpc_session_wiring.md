@@ -1,3 +1,19 @@
+---
+id: task-rpc-session-wiring
+type: task-spec
+status: done
+title: Wire new agent session methods into RPC layer
+depends-on:
+- task-session-service
+implements:
+- module-rpc
+covers:
+- backend/app/rpc/methods/agents.py
+- backend/app/rpc/server.py
+tags:
+- high
+- new-feature
+---
 # Wire new agent session methods into RPC layer
 
 > Add agent/send, agent/end handlers and METHODS entries

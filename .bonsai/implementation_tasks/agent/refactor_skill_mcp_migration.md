@@ -1,3 +1,18 @@
+---
+id: task-skill-mcp-migration
+type: task-spec
+status: done
+title: 'Refactor skills: replace raw file I/O with bonsai-specs MCP tools'
+depends-on:
+- task-specs-mcp-tools
+implements:
+- agent-specs-tools
+covers:
+- claude-plugin/skills/
+tags:
+- high
+- refactor
+---
 # Refactor skills: replace raw file I/O with bonsai-specs MCP tools
 
 All 13 SKILL.md files in `claude-plugin/skills/` instruct the agent to read `.bonsai/registry.json` via the Read tool, write registry entries via the Edit tool, read spec files via Read, and create new spec files via Write. These instructions must be updated to use the new `bonsai-specs` MCP tools (`spec_list`, `spec_get`, `spec_save`, `spec_links`, `registry_query`, `registry_mutate`) instead.

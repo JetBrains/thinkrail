@@ -1,3 +1,18 @@
+---
+id: task-mobile-voice-input
+type: task-spec
+status: draft
+title: Mobile Voice Input (Android MVP)
+implements:
+- voice-input-design
+depends-on:
+- task-revise-transcript
+- mobile-frontend-design
+tags:
+- voice
+- mobile
+- android
+---
 # Task: Mobile Voice Input (Android MVP)
 
 > Status: **Pending** | Created: 2026-04-16

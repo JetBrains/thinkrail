@@ -1,3 +1,21 @@
+---
+id: task-fe-diff-card
+type: task-spec
+status: done
+title: Implement DiffCard
+depends-on:
+- task-fe-chat-ui
+implements:
+- chat-ui
+covers:
+- frontend/src/components/ChatStream/DiffCard.tsx
+- frontend/src/components/ChatStream/DiffCard.css
+- backend/app/agent/runner.py
+tags:
+- medium
+- new-feature
+- frontend
+---
 # Implement DiffCard
 
 > Monaco DiffEditor-based component for Edit/Write/NotebookEdit tool calls

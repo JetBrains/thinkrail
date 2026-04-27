@@ -1,3 +1,26 @@
+---
+id: proactive-agent-design
+type: architecture-design
+status: active
+title: Proactive Agent Experience — Architecture Design
+parent: design-doc
+depends-on:
+- module-agent
+- module-rpc
+- frontend-module
+implements:
+- proactive-agent-experience
+covers:
+- backend/app/agent/tools/
+- backend/app/agent/permissions.py
+- frontend/src/components/ChatStream/
+- frontend/src/components/ContextPanel/
+- frontend/src/store/sessionStore.ts
+- frontend/src/store/wireEvents.ts
+tags:
+- architecture
+- agent-ux
+---
 # Proactive Agent Experience — Architecture Design
 
 > Parent: [DESIGN_DOC.md](../../DESIGN_DOC.md) | Implements: [PROACTIVE_AGENT_EXPERIENCE.md](PROACTIVE_AGENT_EXPERIENCE.md) | Status: **Active** | Created: 2026-03-07 | Updated: 2026-03-11

@@ -1,3 +1,20 @@
+---
+id: app-shell
+type: submodule-design
+status: active
+title: Component Tree & App Shell
+parent: webview
+depends-on:
+- state-management
+- api-client
+covers:
+- frontend/src/components/AppShell/
+tags:
+- frontend
+- ui
+- routing
+- layout
+---
 # Component Tree & App Shell — Module Specification
 
 > Parent: [WEBVIEW.md](WEBVIEW.md) | Status: **Active** | Created: 2026-03-02

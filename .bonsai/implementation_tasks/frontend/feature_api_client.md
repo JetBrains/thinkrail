@@ -1,3 +1,19 @@
+---
+id: task-fe-api-client
+type: task-spec
+status: done
+title: Implement API Client
+depends-on:
+- task-fe-project-setup
+implements:
+- api-client
+covers:
+- frontend/src/api/
+tags:
+- critical
+- new-feature
+- frontend
+---
 # Implement API Client
 
 > WebSocket connection, JSON-RPC 2.0 protocol, typed method wrappers, React hooks

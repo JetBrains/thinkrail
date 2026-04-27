@@ -1,3 +1,19 @@
+---
+id: task-preview-tree-wiring
+type: task-spec
+status: done
+title: Wire single-click preview in SpecTree and FileTree
+depends-on:
+- task-preview-tab-store
+implements:
+- ui-center-panel
+covers:
+- frontend/src/components/SpecTree/
+- frontend/src/components/FileTree/
+tags:
+- high
+- new-feature
+---
 # Wire single-click preview in SpecTree and FileTree
 
 Single-clicking a file in FileTree or a spec in SpecTree should open a preview tab. This task updates both tree components to call `previewFile()` on click.

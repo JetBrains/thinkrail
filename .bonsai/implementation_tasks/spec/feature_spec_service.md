@@ -1,3 +1,22 @@
+---
+id: task-spec-service
+type: task-spec
+status: done
+title: Implement Spec service.py
+depends-on:
+- task-spec-models
+- task-spec-parser
+- task-spec-validator
+- task-spec-registry
+- task-spec-graph
+implements:
+- module-spec
+covers:
+- backend/app/spec/service.py
+tags:
+- critical
+- new-feature
+---
 # Implement Spec service.py
 
 > Facade for all spec CRUD operations

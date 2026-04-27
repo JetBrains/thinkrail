@@ -1,3 +1,17 @@
+---
+id: notification-system
+type: submodule-design
+status: active
+title: Notification System
+parent: webview
+covers:
+- frontend/src/components/Notifications/
+tags:
+- frontend
+- ui
+- notifications
+- toasts
+---
 # Notification System — Sub-Specification
 
 > Parent: [WEBVIEW.md](../WEBVIEW.md) §3 | Status: **Active** | Created: 2026-03-02

@@ -1,3 +1,19 @@
+---
+id: frontend-module
+type: module-design
+status: active
+title: Frontend Module
+parent: design-doc
+depends-on:
+- goal-and-requirements
+covers:
+- frontend/
+tags:
+- frontend
+- module
+- react
+- typescript
+---
 # Frontend Module — Design Specification
 
 > Parent: [DESIGN_DOC.md](../DESIGN_DOC.md) | Status: **Active** | Created: 2026-03-02
@@ -68,7 +84,9 @@ The Frontend module is a React/TypeScript single-page application that provides 
 | `src/components/SpecView/` | Markdown renderer, edit mode, agent nudge | — (in WEBVIEW.md §4.2) |
 | `src/components/CodeView/` | Syntax-highlighted code viewer | — (in WEBVIEW.md §4.3) |
 | `src/styles/` | CSS custom properties, dark/light themes | [THEMING](ui-specs/THEMING.md) |
-| `src/types/` | Shared TypeScript interfaces (spec, agent, session, RPC) | — |
+| `src/types/` | Shared TypeScript interfaces (spec, agent, session, RPC). Includes **generated** `ws-events.ts` from backend Pydantic models. | — |
+| `src/api/generated.ts` | **Generated** — REST API TypeScript types from backend OpenAPI schema. DO NOT EDIT. | — |
+| `src/services/` | REST API clients (files, fs, project, serverInfo, setup, user) using generated types | — |
 | `src/utils/` | Formatting, markdown, keyboard shortcuts | — |
 
 ## Public Interface
@@ -88,8 +106,13 @@ The frontend exposes no programmatic API — it's an end-user web application. I
 
 | Command | Description |
 | --- | --- |
-| `npm run dev` | Start Vite dev server (port 3000, proxies /ws to backend) |
-| `npm run build` | Production build → `dist/` |
+| `npm run dev` | Start Vite dev server (port 3000, proxies /ws and /api to backend) |
+| `npm run build` | Production build → `dist/` (auto-runs `generate` via prebuild hook) |
+| `npm run generate` | Regenerate all TypeScript types from backend Pydantic models |
+| `npm run generate:schema` | Export OpenAPI schema from FastAPI → `openapi.json` |
+| `npm run generate:api` | `openapi.json` → `src/api/generated.ts` (via openapi-typescript) |
+| `npm run generate:ws-schema` | Export WS event JSON Schema → `ws-events.json` |
+| `npm run generate:ws-types` | `ws-events.json` → `src/types/ws-events.ts` (via json2ts) |
 | `npm run test` | Run Vitest |
 | `npm run lint` | TypeScript + ESLint check |
 
@@ -116,8 +139,9 @@ The frontend exposes no programmatic API — it's an end-user web application. I
 | `@xterm/xterm` + addons | ~105KB | Terminal emulator (lazy-loaded) |
 | `@monaco-editor/react` | ~2-5MB (lazy) | Code editor (VS Code engine, CDN-loaded) |
 | `react-markdown` + `remark-gfm` | ~15KB | Markdown preview rendering (GFM) |
+| `remark-frontmatter` | ~2KB | YAML frontmatter parsing for markdown preview (collapsible card) |
 | `mermaid` | ~200KB | Diagram rendering in markdown (flowcharts, sequence, class, etc.) |
-| **Total** | **~385KB** + Monaco (lazy) | |
+| **Total** | **~387KB** + Monaco (lazy) | |
 
 Dev dependencies: `vite`, `typescript`, `vitest`, `@testing-library/react`, `eslint`.
 

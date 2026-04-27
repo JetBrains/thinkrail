@@ -1,3 +1,15 @@
+---
+id: module-core
+type: module-design
+status: active
+title: Core Module Design
+parent: design-doc
+covers:
+- backend/app/core/
+tags:
+- backend
+- infrastructure
+---
 # Core Module — Design Specification
 
 > Parent: [DESIGN_DOC.md](../../../DESIGN_DOC.md) | Status: **Active** | Created: 2026-02-25
@@ -19,7 +31,7 @@ configuration (project root discovery, directory paths, settings), file system o
 (read, write, delete files and directories), and async filesystem watching.
 
 `watcher.py` watches the entire working directory and fires callbacks when files change.
-At this design stage, spec files (`*.md`, `*.json`), `.bonsai/*`, and `registry.json` are the primary
+At this design stage, spec files (`*.md`) and `.bonsai/*` config files are the primary
 consumers of change events. Source code files will be added as consumers in later stages
 (e.g. coverage tracking, detecting agent-authored source changes).
 
@@ -47,9 +59,8 @@ graph TD
     Watcher -.- RPC["Used by rpc/<br/>(callback registered by rpc/server.py)"]
 
     Watcher -- "fires callback" --> RPCCb["rpc/server.py<br/>_on_file_change callback"]
-    RPCCb -- "spec files (*.md or *.json)" --> SpecSvc["spec/service<br/>validate/postprocess → spec/did*"]
-    RPCCb -- ".bonsai/registry.json" --> Notify["rpc/notifications<br/>registry/didUpdate → frontend"]
-    SpecSvc --> Notify
+    RPCCb -- "spec files (*.md)" --> SpecSvc["spec/service<br/>validate/postprocess → spec/did*"]
+    SpecSvc --> Notify["rpc/notifications<br/>spec/did* → frontend"]
     Watcher -. "source files (future)" .-> TBD["TBD"]
 ```
 
@@ -59,9 +70,11 @@ graph TD
 |------|---------------|------------|
 | `config.py` | App configuration: project root discovery, directory paths, server settings, frozen mode detection | pydantic, pydantic-settings |
 | `fileio.py` | File system operations: read, write, delete files; create directories | — |
-| `project.py` | Lazy auto-creation of `.bonsai/` meta-files and subdirectories; ensures registry.json, settings.json, users.json exist with defaults on access | fileio, settings |
+| `project.py` | Lazy auto-creation of `.bonsai/` meta-files and subdirectories; ensures settings.json, users.json exist with defaults on access | fileio, settings |
 | `settings.py` | Project settings: load/save/ensure `.bonsai/settings.json` | pydantic, project |
-| `watcher.py` | Async file change watching: detect spec file and registry changes | watchfiles / watchdog |
+| `watcher.py` | Async file change watching: detect spec file and config changes | watchfiles / watchdog |
+| `server_store.py` | SQLite-backed user and token store for authentication (`bns_` tokens, admin flags) | aiosqlite |
+| `network_info.py` | LAN IP, hostname, and Tailscale status detection for mobile client discovery | — |
 
 ## Public Interface
 
@@ -82,7 +95,6 @@ graph TD
 |---------------------|------------------------------|------------------------------------------------|
 | `get_project_root`  | `AppConfig.() → Path`        | Discover and return the project root directory |
 | `get_bonsai_dir`    | `AppConfig.() → Path`        | Path to the `.bonsai/` directory               |
-| `get_registry_path` | `AppConfig.() → Path`        | Path to `.bonsai/registry.json`                |
 | `load_config`       | `(project_root) → AppConfig` | Load application settings (Pydantic model)     |
 
 ### fileio.py
@@ -111,7 +123,7 @@ Lazy auto-creation of `.bonsai/` meta-files. Each known meta-file has a default-
 | `ensure_meta_dir` | `(bonsai_dir: Path, name: str) → Path` | Ensure `.bonsai/{name}/` directory exists. Returns path. |
 | `ensure_project` | `(project_root: Path) → None` | Ensure all known meta-files and subdirectories exist under `.bonsai/`. |
 
-Known meta-files: `registry.json`, `settings.json`, `users.json`.
+Known meta-files: `settings.json`, `users.json`.
 Known subdirectories: `sessions`, `trash`, `plans`, `meta-tickets`, `spec-drafts`, `spec-patches`.
 
 ### settings.py

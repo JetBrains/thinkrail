@@ -1,3 +1,16 @@
+---
+id: agent-tools
+type: module-design
+status: active
+title: Agent Tools — Design Specification
+parent: module-agent
+covers:
+- backend/app/agent/tools/
+tags:
+- backend
+- agent-orchestration
+- mcp-tools
+---
 # Agent Tools — Design Specification
 
 > Parent: [Agent Module](../README.md) | Status: **Active** | Created: 2026-03-11 | Updated: 2026-03-20
@@ -40,12 +53,15 @@ The `tools/__init__.py` re-exports what the runner and permissions need:
 
 | File | Responsibility | Status |
 |------|---------------|--------|
-| `__init__.py` | Re-exports `MCP_SERVERS`, `INTERCEPTORS`, and context helpers from all tool files | Updated |
-| `_context.py` | **New** — `contextvars`-based session context: `set_tool_context()`, `get_tool_context()`, `ToolContext` dataclass | New |
-| `suggest_session.py` | SuggestSession proactive tool — in-handler interaction via context (validates, shows card, awaits response) | Updated |
-| `visualization.py` | bonsai_visualize display tool — agent renders structured visualizations in the UI | No change |
-| `specs.py` | Spec & registry MCP tools — 7 tools for spec CRUD, link queries, registry mutations | Updated (reads config from context) |
-| `_vis_validation.py` | Shared visualization validation — pure stdlib, imported by `visualization.py` and `vis-server.py` | No change |
+| `__init__.py` | Re-exports `MCP_SERVERS`, `INTERCEPTORS`, and context helpers from all tool files | Active |
+| `_context.py` | `contextvars`-based session context: `set_tool_context()`, `get_tool_context()`, `ToolContext` dataclass | Active |
+| `suggest_session.py` | SuggestSession proactive tool — in-handler interaction via context (validates, shows card, awaits response) | Active |
+| `visualization.py` | bonsai_visualize display tool — agent renders structured visualizations in the UI | Active |
+| `specs.py` | Spec MCP tools — 3 tools: `spec_search`, `spec_links`, `spec_delete` | Active |
+| `suggest_description.py` | SuggestDescription proactive tool — agent proposes meta-ticket descriptions | Active |
+| `orchestrator.py` | Orchestrator tool — proposes next plan step for ticket execution | Active |
+| `change_ticket_status.py` | ChangeTicketStatus tool — transitions meta-ticket status | Active |
+| `_vis_validation.py` | Shared visualization validation — pure stdlib, imported by `visualization.py` and `vis-server.py` | Active |
 | `progress.py` | UpdateProgress proactive tool — agent broadcasts phase/plan/status | Future |
 
 ## Public Interface
@@ -56,20 +72,29 @@ The `tools/__init__.py` re-exports what the runner and permissions need:
 from app.agent.tools._context import ToolContext, set_tool_context, get_tool_context
 from app.agent.tools.specs import intercept_specs, specs_mcp_server
 from app.agent.tools.suggest_session import intercept_suggest_session, suggest_session_mcp_server
+from app.agent.tools.suggest_description import intercept_suggest_description, suggest_description_mcp_server
 from app.agent.tools.visualization import intercept_visualize, vis_mcp_server
+from app.agent.tools.orchestrator import intercept_orchestrator, orchestrator_mcp_server
+from app.agent.tools.change_ticket_status import intercept_change_ticket_status, change_ticket_status_mcp_server
 
 MCP_SERVERS: dict[str, Any] = {
     "bonsai-vis": vis_mcp_server,
     "bonsai-proactive": suggest_session_mcp_server,
     "bonsai-specs": specs_mcp_server,
+    "bonsai-describe": suggest_description_mcp_server,
+    "bonsai-orchestrator": orchestrator_mcp_server,
+    "bonsai-ticket-status": change_ticket_status_mcp_server,
 }
 
 INTERCEPTORS: dict[str, InterceptFn] = {
     "bonsai_visualize": intercept_visualize,
     "SuggestSession": intercept_suggest_session,
-    "spec_list": intercept_specs,
-    "spec_get": intercept_specs,
-    # ... (all 7 spec tools → intercept_specs)
+    "SuggestDescription": intercept_suggest_description,
+    "suggest_step": intercept_orchestrator,
+    "ChangeTicketStatus": intercept_change_ticket_status,
+    "spec_search": intercept_specs,
+    "spec_links": intercept_specs,
+    "spec_delete": intercept_specs,
 }
 ```
 
@@ -82,11 +107,14 @@ from __future__ import annotations
 
 import contextvars
 from dataclasses import dataclass
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from app.agent.models import AgentTask
 from app.agent.tracker import Tracker
 from app.core.config import AppConfig
+
+if TYPE_CHECKING:
+    from app.spec.service import SpecService
 
 
 @dataclass(frozen=True)
@@ -96,14 +124,20 @@ class ToolContext:
     notify: Any          # async callable: (method, params, *, request_id?) → None
     task: AgentTask
     config: AppConfig
+    spec_service: SpecService | None = None  # cached service from server (reuses index connection)
 
 
 _tool_context: contextvars.ContextVar[ToolContext] = contextvars.ContextVar("tool_context")
 
 
-def set_tool_context(tracker: Tracker, notify: Any, task: AgentTask, config: AppConfig) -> contextvars.Token:
+def set_tool_context(
+    tracker: Tracker, notify: Any, task: AgentTask, config: AppConfig,
+    spec_service: SpecService | None = None,
+) -> contextvars.Token:
     """Set session context. Called by runner.py before SDK operations."""
-    return _tool_context.set(ToolContext(tracker=tracker, notify=notify, task=task, config=config))
+    return _tool_context.set(
+        ToolContext(tracker=tracker, notify=notify, task=task, config=config, spec_service=spec_service)
+    )
 
 
 def get_tool_context() -> ToolContext:
@@ -120,7 +154,7 @@ The previous architecture relied on `canUseTool` interceptors to inject session 
 | Tool | Old interceptor logic | Yolo mode failure |
 |------|----------------------|-------------------|
 | `SuggestSession` | Validate → Future → card → await response | No card shown, returns generic "Suggestion processed." |
-| `spec_*` (7 tools) | Inject `_config` into `updated_input` | `RuntimeError: Missing _config in tool args` |
+| `spec_*` (3 tools) | Inject `_config` into `updated_input` | `RuntimeError: Missing _config in tool args` |
 | `bonsai_visualize` | Auto-approve (no-op) | No impact (interceptor was a no-op) |
 
 With `contextvars`, tool handlers read session context directly — no dependency on the permission hook.
@@ -132,7 +166,8 @@ from app.agent.tools import MCP_SERVERS, set_tool_context
 from app.agent.permissions import can_use_tool
 
 # Set context BEFORE creating the SDK client
-ctx_token = set_tool_context(tracker, notify, task, config)
+# spec_service is threaded from AgentService → runner for index connection reuse
+ctx_token = set_tool_context(tracker, notify, task, config, spec_service=spec_service)
 
 options = ClaudeAgentOptions(
     ...
@@ -151,7 +186,7 @@ from app.agent.tools._context import get_tool_context
 @tool("SuggestSession", "...", SCHEMA)
 async def _suggest_session(args: dict) -> dict:
     ctx = get_tool_context()
-    # ctx.tracker, ctx.notify, ctx.task, ctx.config all available
+    # ctx.tracker, ctx.notify, ctx.task, ctx.config, ctx.spec_service all available
     ...
 ```
 
@@ -211,10 +246,10 @@ async def _suggest_session(args: dict) -> dict:
         if skill_error:
             return _error(skill_error)
 
-    # Validate specIds exist in registry
+    # Validate specIds exist in index
     spec_ids = args.get("specIds", [])
     if spec_ids:
-        spec_error = _validate_spec_ids(spec_ids, ctx.config.get_registry_path())
+        spec_error = await _validate_spec_ids(spec_ids, ctx.config.get_bonsai_dir())
         if spec_error:
             return _error(spec_error)
 
@@ -246,14 +281,14 @@ suggest_session_mcp_server = create_sdk_mcp_server(
 )
 ```
 
-### Example: specs.py (context for config)
+### Example: specs.py (cached SpecService via context)
 
 ```python
-@tool("spec_list", "...", SPEC_LIST_SCHEMA)
-async def _spec_list(args: dict) -> dict:
-    ctx = get_tool_context()
-    svc = SpecService(ctx.config)
-    # ... use svc directly, no _config injection needed
+@tool("spec_search", "...", SPEC_SEARCH_SCHEMA)
+async def _spec_search(args: dict) -> dict:
+    async with _index_service() as svc:
+        # _index_service() yields ctx.spec_service (cached) or opens fresh connection
+        results = await svc.list_specs(...)
 ```
 
 ## Output Contract
@@ -264,7 +299,10 @@ async def _spec_list(args: dict) -> dict:
 |-----|-------------|--------------|-------------|
 | `"bonsai-vis"` | `bonsai-vis` | `bonsai_visualize` | Display-only visualization rendering |
 | `"bonsai-proactive"` | `bonsai-proactive` | `SuggestSession` | Interactive session suggestion |
-| `"bonsai-specs"` | `bonsai-specs` | `spec_list`, `spec_get`, `spec_save`, `spec_delete`, `spec_links`, `registry_query`, `registry_mutate` | Spec CRUD and registry |
+| `"bonsai-specs"` | `bonsai-specs` | `spec_search`, `spec_links`, `spec_delete` | Spec search, link queries, and deletion |
+| `"bonsai-describe"` | `bonsai-describe` | `SuggestDescription` | Propose meta-ticket descriptions |
+| `"bonsai-orchestrator"` | `bonsai-orchestrator` | `suggest_step` | Propose next plan step for execution |
+| `"bonsai-ticket-status"` | `bonsai-ticket-status` | `ChangeTicketStatus` | Transition meta-ticket status |
 
 ## Adding a New Tool
 
@@ -296,6 +334,6 @@ No changes needed to runner.py, permissions.py, or service.py.
 ## Related Specs
 
 - **Parent:** [Agent Module](../README.md)
-- **Tool specs:** [SuggestSession](SUGGEST_SESSION.md), [Visualization](VISUALIZATION.md), [UpdateProgress](PROGRESS.md), [Spec Tools](SPECS_TOOLS.md)
+- **Tool specs:** [SuggestSession](SUGGEST_SESSION.md), [Visualization](VISUALIZATION.md), [UpdateProgress](PROGRESS.md), [Spec Tools](SPECS_TOOLS.md), [Orchestrator](ORCHESTRATOR.md)
 - **Feature specs:** [Proactive Agent Experience](../../../../.bonsai/design_docs/PROACTIVE_AGENT_EXPERIENCE_DESIGN.md)
 - **Consumer:** [agent/permissions.py](../permissions.py) (routes `INTERCEPTORS` + SDK built-ins), [agent/runner.py](../runner.py) (sets context + wires `MCP_SERVERS` into SDK)

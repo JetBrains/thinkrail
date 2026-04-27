@@ -1,3 +1,17 @@
+---
+id: theming
+type: submodule-design
+status: active
+title: Theming
+parent: webview
+covers:
+- frontend/src/styles/
+tags:
+- frontend
+- ui
+- theme
+- css
+---
 # Theming — Sub-Specification
 
 > Parent: [WEBVIEW.md](../WEBVIEW.md) §9 | Status: **Active** | Created: 2026-03-02

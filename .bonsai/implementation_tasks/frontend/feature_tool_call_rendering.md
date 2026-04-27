@@ -1,3 +1,16 @@
+---
+id: task-tool-call-rendering
+type: task-spec
+status: done
+title: Enhanced Tool Call Rendering
+parent: frontend-module
+implements:
+- chat-ui
+tags:
+- frontend
+- ui
+- tool-rendering
+---
 # Feature: Enhanced Tool Call Rendering
 
 > Status: **Planned** | Created: 2026-04-07 | Design: [tool-call-rendering-design.md](../../docs/superpowers/specs/2026-04-07-tool-call-rendering-design.md)

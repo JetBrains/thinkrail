@@ -1,3 +1,15 @@
+---
+id: improvement-chat-ui-task-folding
+type: task-spec
+status: done
+title: 'Improve Chat UI: Nest subagent tool calls into foldable groups'
+covers:
+- frontend/src/components/ChatStream/
+- backend/app/agent/runner.py
+tags:
+- high
+- improvement
+---
 # Improve Chat UI: Nest subagent tool calls into foldable groups
 
 Subagent tool calls currently render flat in the event stream, making multi-agent

@@ -1,3 +1,17 @@
+---
+id: feature_ticket_detail
+type: submodule-design
+status: active
+title: Meta-Ticket Detail View
+parent: feature_board_module
+covers:
+- frontend/src/components/MetaTicketDetail/
+tags:
+- frontend
+- board
+- ticket
+- ui
+---
 # MetaTicketDetail — Sub-Specification
 
 > Parent: [Frontend Module](../../../README.md) | Status: **Active** | Created: 2026-03-27

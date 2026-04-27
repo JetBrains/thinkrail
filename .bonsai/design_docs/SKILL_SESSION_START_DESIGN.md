@@ -1,3 +1,21 @@
+---
+id: skill-session-start-design
+type: architecture-design
+status: active
+title: Skill Session Start — Architecture Design
+parent: design-doc
+depends-on:
+- frontend-module
+- chat-ui
+covers:
+- frontend/src/components/SessionPanel/SessionPanel.tsx
+- frontend/src/components/ChatStream/InputArea.tsx
+tags:
+- architecture
+- frontend
+- session
+- skill
+---
 # Skill Session Start — Architecture Design
 
 > Parent: [DESIGN_DOC.md](../../DESIGN_DOC.md) | Status: **Active** | Created: 2026-03-11

@@ -1,3 +1,17 @@
+---
+id: markdown-editor
+type: submodule-design
+status: active
+title: MarkdownEditor — Component Specification
+parent: frontend-module
+covers:
+- frontend/src/components/MarkdownEditor
+tags:
+- frontend
+- markdown
+- editor
+- monaco
+---
 # MarkdownEditor — Component Specification
 
 > Parent: [Frontend Module](../../README.md) | Status: **Active** | Created: 2026-04-03
@@ -24,7 +38,7 @@ interface MarkdownEditorProps {
 ## Modes
 
 - **Edit**: Monaco editor with syntax highlighting, bracket matching, word wrap, smooth scrolling
-- **Preview**: Rendered markdown via `react-markdown` + `remark-gfm` (GFM tables, task lists, strikethrough)
+- **Preview**: Rendered markdown via `react-markdown` + `remark-gfm` + `remark-frontmatter` (GFM tables, task lists, strikethrough). YAML frontmatter rendered as collapsible `FrontmatterCard` with Monaco syntax highlighting.
 
 Toggle controlled by Edit/Preview tab buttons (hidden when `preview={false}`).
 
@@ -62,5 +76,6 @@ The `useMonacoTheme()` hook is also used directly by:
 |----------|-----------|
 | Global theme sync via MutationObserver | Single source of truth (`data-theme` attribute). No prop-drilling. All instances sync automatically. |
 | `react-markdown` for preview | Already installed. GFM support via `remark-gfm`. Consistent with rest of app. |
+| `remark-frontmatter` for YAML | Prevents frontmatter rendering as garbage. FrontmatterCard shows collapsible syntax-highlighted YAML. |
 | `height="100%"` requires flex parent chain | Monaco needs computed pixel heights. Parent containers must have `flex: 1; min-height: 0`. Documented in MarkdownEditor.css. |
 | `initialMode` prop (not controlled mode) | Component manages its own mode state. Avoids coupling parent to edit/preview toggle. |

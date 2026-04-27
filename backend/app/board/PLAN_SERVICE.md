@@ -1,3 +1,17 @@
+---
+id: feature_board_plan_service
+type: submodule-design
+status: active
+title: Plan Document Service
+parent: feature_board_module
+covers:
+- backend/app/board/plan.py
+tags:
+- backend
+- board
+- plan
+- orchestration
+---
 # PlanService — Sub-Specification
 
 > Parent: [Board Module](README.md) | Status: **Active** | Created: 2026-03-27

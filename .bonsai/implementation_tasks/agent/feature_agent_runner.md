@@ -1,3 +1,19 @@
+---
+id: task-agent-runner
+type: task-spec
+status: done
+title: Implement Agent runner.py
+depends-on:
+- task-agent-models
+- task-agent-tracker
+implements:
+- module-agent
+covers:
+- backend/app/agent/runner.py
+tags:
+- high
+- new-feature
+---
 # Implement Agent runner.py
 
 > Claude Agent SDK integration and event stream mapping

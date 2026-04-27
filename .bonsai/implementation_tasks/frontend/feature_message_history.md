@@ -1,3 +1,15 @@
+---
+id: feature-message-history
+type: task-spec
+status: active
+title: Message History Navigation
+covers:
+- frontend/src/store/messageHistoryStore.ts
+- frontend/src/components/ChatStream/MessageHistory.tsx
+tags:
+- frontend
+- ux
+---
 # Implement Message History Navigation
 
 > Global message history dropdown with Mod+R and button trigger for quick re-sending

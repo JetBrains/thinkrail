@@ -1,3 +1,13 @@
+---
+id: subsession-design
+type: architecture-design
+title: Subsessions — Architecture Design
+parent: design-doc
+tags:
+- subsessions
+- branching
+- agent
+---
 # Subsessions — Architecture Design
 
 > Parent: [DESIGN_DOC.md](../../DESIGN_DOC.md) | Status: **Draft** | Created: 2026-04-14

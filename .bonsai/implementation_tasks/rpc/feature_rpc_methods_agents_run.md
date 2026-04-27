@@ -1,3 +1,18 @@
+---
+id: task-rpc-methods-agents-run
+type: task-spec
+status: done
+title: 'Implement RPC methods/agents.py: run_agent handler'
+depends-on:
+- task-rpc-methods-agents-basic
+implements:
+- module-rpc
+covers:
+- backend/app/rpc/methods/agents.py
+tags:
+- high
+- new-feature
+---
 # Implement RPC methods/agents.py: Agent Handlers
 
 > Agent handlers using EventBus for multi-client notification routing

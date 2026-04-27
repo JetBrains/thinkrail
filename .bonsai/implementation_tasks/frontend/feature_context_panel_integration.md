@@ -1,3 +1,20 @@
+---
+id: task-context-panel-integration
+type: task-spec
+status: done
+title: Replace RightPanel with ContextPanel and clean up store
+depends-on:
+- task-context-panel-modes-sections
+implements:
+- ui-context-panel
+covers:
+- frontend/src/components/AppShell/RightPanel.tsx
+- frontend/src/store/uiStore.ts
+tags:
+- high
+- feature
+- frontend
+---
 # Replace RightPanel with ContextPanel and clean up store
 
 Swap the current tab-based `RightPanel.tsx` with the new `ContextPanel` component, and remove tab-related state from `uiStore` that is no longer needed.

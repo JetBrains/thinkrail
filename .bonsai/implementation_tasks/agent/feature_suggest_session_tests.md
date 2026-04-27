@@ -1,3 +1,20 @@
+---
+id: task-suggest-session-tests
+type: task-spec
+status: done
+title: Write tests for SuggestSession backend and tool interceptors
+depends-on:
+- task-suggest-session-runner
+implements:
+- module-agent
+- feature-suggest-session
+covers:
+- backend/tests/agent/test_tools.py
+tags:
+- high
+- new-feature
+- testing
+---
 # Write tests for SuggestSession backend and tool interceptors
 
 > Parent: [Agent Module](../../backend/app/agent/README.md) | Implements: [SuggestSession Backend Spec](../../backend/app/agent/tools/SUGGEST_SESSION.md) | Priority: **High** | Created: 2026-03-13

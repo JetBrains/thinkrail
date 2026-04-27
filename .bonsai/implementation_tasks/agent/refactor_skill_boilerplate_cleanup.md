@@ -1,3 +1,18 @@
+---
+id: task-skill-boilerplate-cleanup
+type: task-spec
+status: done
+title: Remove duplicated boilerplate from SKILL.md files
+depends-on:
+- task-context-general-instructions
+implements:
+- agent-context
+covers:
+- claude-plugin/skills/
+tags:
+- medium
+- refactor
+---
 # Remove duplicated boilerplate from SKILL.md files
 
 **Status:** Active

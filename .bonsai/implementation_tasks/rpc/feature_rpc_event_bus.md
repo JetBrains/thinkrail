@@ -1,3 +1,15 @@
+---
+id: task-rpc-event-bus
+type: task-spec
+status: done
+title: 'Implement RPC EventBus: Multi-Client Notification Routing'
+implements:
+- module-rpc
+tags:
+- rpc
+- event-bus
+- multi-client
+---
 # Implement RPC EventBus: Multi-Client Notification Routing
 
 > Central pub/sub with ring buffers, replay, dead-connection sweep

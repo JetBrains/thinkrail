@@ -1,3 +1,18 @@
+---
+id: task-continue-button
+type: task-spec
+status: done
+title: Continue Button
+depends-on:
+- module-agent
+covers:
+- frontend/src/components/ChatStream/InputArea.tsx
+- frontend/src/components/SessionPanel/SessionPanel.tsx
+tags:
+- medium
+- new-feature
+- frontend
+---
 # Task: Continue Button
 
 > Status: **Done** | Created: 2026-03-11

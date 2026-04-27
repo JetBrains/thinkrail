@@ -1,3 +1,16 @@
+---
+id: task-core-config
+type: task-spec
+status: done
+title: Implement Core config.py
+implements:
+- module-core
+covers:
+- backend/app/core/config.py
+tags:
+- critical
+- new-feature
+---
 # Implement Core config.py
 
 > Project root discovery, paths, and AppConfig model

@@ -1,3 +1,19 @@
+---
+id: session-history
+type: submodule-design
+status: active
+title: Session History & Persistence
+parent: webview
+depends-on:
+- chat-ui
+covers:
+- frontend/src/components/SessionHistory/
+tags:
+- frontend
+- ui
+- sessions
+- history
+---
 # Session History & Persistence — Sub-Specification
 
 > Parent: [WEBVIEW.md](../WEBVIEW.md) §3 | Status: **Active** | Created: 2026-03-02

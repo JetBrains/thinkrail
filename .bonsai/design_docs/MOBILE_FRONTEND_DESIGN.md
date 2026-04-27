@@ -1,3 +1,16 @@
+---
+id: mobile-frontend-design
+type: architecture-design
+title: Mobile Frontend Design Specification
+parent: design-doc
+covers:
+- mobile/shared
+- mobile/androidApp
+tags:
+- mobile
+- android
+- kmp
+---
 # Mobile Frontend Design Specification
 
 **Status:** Draft

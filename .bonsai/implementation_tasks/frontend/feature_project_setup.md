@@ -1,3 +1,20 @@
+---
+id: task-fe-project-setup
+type: task-spec
+status: done
+title: Set Up Frontend Project
+implements:
+- frontend-module
+covers:
+- frontend/package.json
+- frontend/src/styles/
+- frontend/src/types/
+- frontend/src/main.tsx
+tags:
+- critical
+- new-feature
+- frontend
+---
 # Set Up Frontend Project
 
 > Vite + React + TypeScript project scaffold, theming, and shared types

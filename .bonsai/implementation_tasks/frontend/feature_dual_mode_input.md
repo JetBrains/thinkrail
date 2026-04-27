@@ -1,6 +1,27 @@
+---
+id: task-dual-mode-input
+type: task-spec
+status: deprecated
+title: Dual-Mode Message Input
+implements:
+- dual-mode-input-design
+covers:
+- frontend/src/components/ChatStream/InputArea.tsx
+- frontend/src/components/ChatStream/ChatStream.tsx
+- frontend/src/components/ChatStream/ChatStream.css
+- frontend/src/components/SessionPanel/SessionPanel.tsx
+- frontend/src/store/sessionStore.ts
+- frontend/src/api/methods/agents.ts
+- backend/app/rpc/methods/agents.py
+- backend/app/agent/service.py
+tags:
+- medium
+- new-feature
+- frontend
+---
 # Task: Dual-Mode Message Input
 
-> Status: **Done (Superseded)** | Created: 2026-03-11 | Superseded: 2026-03-12
+> Status: **Deprecated** | Created: 2026-03-11 | Superseded: 2026-03-12
 
 ## Summary
 

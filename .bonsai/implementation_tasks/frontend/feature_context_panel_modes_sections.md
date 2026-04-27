@@ -1,3 +1,20 @@
+---
+id: task-context-panel-modes-sections
+type: task-spec
+status: done
+title: Create Context Panel mode components and placeholder sections
+depends-on:
+- task-context-panel-infrastructure
+implements:
+- ui-context-panel
+covers:
+- frontend/src/components/ContextPanel/modes/
+- frontend/src/components/ContextPanel/sections/
+tags:
+- high
+- feature
+- frontend
+---
 # Create Context Panel mode components and placeholder sections
 
 Build the 4 mode components and 13 section components for the Context Panel. Sections are placeholders with descriptive text showing what they will display — except `ConnectedSpecs` which embeds the existing `GraphView` component.

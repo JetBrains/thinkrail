@@ -1,3 +1,18 @@
+---
+id: task-session-runner
+type: task-spec
+status: done
+title: Rewrite runner.py for conversational session loop
+depends-on:
+- task-session-models-tracker
+implements:
+- module-agent
+covers:
+- backend/app/agent/runner.py
+tags:
+- high
+- new-feature
+---
 # Rewrite runner.py for conversational session loop
 
 > Core change: single query → persistent conversation loop

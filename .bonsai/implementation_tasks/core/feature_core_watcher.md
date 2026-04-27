@@ -1,3 +1,16 @@
+---
+id: task-core-watcher
+type: task-spec
+status: done
+title: Implement Core watcher.py
+implements:
+- module-core
+covers:
+- backend/app/core/watcher.py
+tags:
+- critical
+- new-feature
+---
 # Implement Core watcher.py
 
 > Async filesystem watching with callback dispatch

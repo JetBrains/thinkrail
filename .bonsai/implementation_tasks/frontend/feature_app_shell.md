@@ -1,3 +1,21 @@
+---
+id: task-fe-app-shell
+type: task-spec
+status: done
+title: Implement App Shell
+depends-on:
+- task-fe-state-management
+- task-fe-project-setup
+implements:
+- app-shell
+covers:
+- frontend/src/components/AppShell/
+- frontend/src/routes.tsx
+tags:
+- high
+- new-feature
+- frontend
+---
 # Implement App Shell
 
 > Three-panel layout, routing, header, status bar, responsive behavior

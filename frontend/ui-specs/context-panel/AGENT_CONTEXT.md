@@ -1,3 +1,16 @@
+---
+id: ui-context-panel-agent-mode
+type: submodule-design
+status: active
+title: Agent Context — Context Usage Analytics
+parent: ui-context-panel
+covers:
+- frontend/src/components/ContextPanel/modes/AgentContext.tsx
+- frontend/src/components/ContextPanel/modes/AgentContext.css
+tags:
+- frontend
+- ui-spec
+---
 # Agent Context — Context Usage Analytics
 
 > Parent: [CONTEXT_PANEL.md](../CONTEXT_PANEL.md) | Status: **Active** | Created: 2026-03-06 | Updated: 2026-03-12

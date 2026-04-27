@@ -1,3 +1,19 @@
+---
+id: task-fe-diff-viewer
+type: task-spec
+status: done
+title: Implement Diff Viewer
+depends-on:
+- task-fe-app-shell
+implements:
+- diff-viewer
+covers:
+- frontend/src/components/DiffViewer/
+tags:
+- low
+- new-feature
+- frontend
+---
 # Implement Diff Viewer
 
 > Spec-to-code side-by-side diff with mapping files and commit navigation

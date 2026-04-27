@@ -1,3 +1,18 @@
+---
+id: task-effort-support
+type: task-spec
+status: done
+title: Effort Support
+implements:
+- effort-support-design
+covers:
+- backend/app/agent/models.py
+- frontend/src/components/ChatStream/SessionStatusLine.tsx
+- backend/app/agent/service.py
+tags:
+- medium
+- new-feature
+---
 # Task: Effort Support
 
 > Status: **Done** | Created: 2026-03-11

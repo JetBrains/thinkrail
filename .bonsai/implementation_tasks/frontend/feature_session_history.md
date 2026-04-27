@@ -1,3 +1,19 @@
+---
+id: task-fe-session-history
+type: task-spec
+status: done
+title: Implement Session History
+depends-on:
+- task-fe-chat-ui
+implements:
+- session-history
+covers:
+- frontend/src/components/SessionHistory/
+tags:
+- low
+- new-feature
+- frontend
+---
 # Implement Session History
 
 > Archive completed sessions with read-only replay

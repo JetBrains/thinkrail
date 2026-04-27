@@ -1,3 +1,20 @@
+---
+id: task-agent-service
+type: task-spec
+status: done
+title: Implement Agent service.py
+depends-on:
+- task-agent-models
+- task-agent-tracker
+- task-agent-runner
+implements:
+- module-agent
+covers:
+- backend/app/agent/service.py
+tags:
+- high
+- new-feature
+---
 # Implement Agent service.py
 
 > Orchestration facade for agent task management

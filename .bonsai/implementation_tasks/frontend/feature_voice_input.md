@@ -1,3 +1,19 @@
+---
+id: task-voice-input
+type: task-spec
+status: done
+title: Voice Input
+implements:
+- voice-input-design
+covers:
+- frontend/src/hooks/useVoiceInput.ts
+- frontend/src/components/ChatStream/InputArea.tsx
+- backend/app/agent/transcribe.py
+tags:
+- medium
+- new-feature
+- frontend
+---
 # Task: Voice Input
 
 > Status: **Done** | Created: 2026-03-11

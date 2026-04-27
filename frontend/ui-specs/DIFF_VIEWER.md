@@ -1,3 +1,18 @@
+---
+id: diff-viewer
+type: submodule-design
+title: Diff Viewer
+parent: webview
+depends-on:
+- module-spec
+covers:
+- frontend/src/components/DiffViewer/
+tags:
+- frontend
+- ui
+- diff
+- git
+---
 # Diff Viewer — Sub-Specification
 
 > Parent: [WEBVIEW.md](../WEBVIEW.md) §4.4 | Status: **Draft** | Created: 2026-03-02

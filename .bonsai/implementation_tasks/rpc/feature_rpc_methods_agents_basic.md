@@ -1,3 +1,18 @@
+---
+id: task-rpc-methods-agents-basic
+type: task-spec
+status: done
+title: 'Implement RPC methods/agents.py: basic handlers (status + list)'
+depends-on:
+- task-rpc-methods-specs
+implements:
+- module-rpc
+covers:
+- backend/app/rpc/methods/agents.py
+tags:
+- high
+- new-feature
+---
 # Implement RPC methods/agents.py: Basic Handlers
 
 > `get_agent_status` and `list_agents` read handlers

@@ -1,3 +1,19 @@
+---
+id: task-rpc-server
+type: task-spec
+status: done
+title: Implement RPC server.py
+depends-on:
+- task-rpc-notifications
+- task-rpc-methods-specs
+implements:
+- module-rpc
+covers:
+- backend/app/rpc/server.py
+tags:
+- high
+- new-feature
+---
 # Implement RPC server.py
 
 > WebSocket endpoint, JSON-RPC dispatch, multi-client EventBus, watcher integration

@@ -1,3 +1,27 @@
+---
+id: task-suggest-session-ui
+type: task-spec
+status: done
+title: 'Implement SuggestSession frontend: wiring, store, SuggestionCard'
+depends-on:
+- task-suggest-session-runner
+implements:
+- chat-ui
+- feature-suggest-session
+covers:
+- frontend/src/store/wireEvents.ts
+- frontend/src/store/sessionStore.ts
+- frontend/src/components/ChatStream/SuggestionCard.tsx
+- frontend/src/components/ChatStream/ChatStream.tsx
+- frontend/src/components/ChatStream/ChatStream.css
+- frontend/src/types/agent.ts
+- frontend/src/types/session.ts
+- frontend/src/store/notificationStore.ts
+tags:
+- high
+- new-feature
+- frontend
+---
 # Implement SuggestSession frontend: wiring, store handler, and SuggestionCard
 
 > Parent: [Chat UI](../../frontend/ui-specs/CHAT_UI.md) | Implements: [SuggestSession Feature Spec](../design_docs/SUGGEST_SESSION.md) | Priority: **High** | Created: 2026-03-08

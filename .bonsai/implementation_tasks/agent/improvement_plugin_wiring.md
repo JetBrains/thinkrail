@@ -1,3 +1,17 @@
+---
+id: task-plugin-wiring
+type: task-spec
+status: done
+title: Wire claude-plugin into SDK client via ClaudeAgentOptions.plugins
+implements:
+- module-agent
+covers:
+- backend/app/agent/runner.py
+- backend/app/agent/service.py
+tags:
+- medium
+- improvement
+---
 # Wire claude-plugin into SDK client via ClaudeAgentOptions.plugins
 
 The Bonsai `claude-plugin/` is currently only used for context assembly — `context.py` reads SKILL.md files and injects them into the system prompt. The SDK client itself doesn't know the plugin exists, so native plugin features (hooks, custom commands, namespaced skill invocation) are unavailable at runtime.

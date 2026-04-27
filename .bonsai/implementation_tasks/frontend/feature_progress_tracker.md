@@ -1,3 +1,19 @@
+---
+id: task-fe-progress-tracker
+type: task-spec
+status: done
+title: Implement Progress Tracker
+depends-on:
+- task-fe-app-shell
+implements:
+- progress-tracker
+covers:
+- frontend/src/components/ProgressTab/
+tags:
+- medium
+- new-feature
+- frontend
+---
 # Implement Progress Tracker
 
 > Left panel dashboard: spec metrics, session tracker, activity timeline, cost

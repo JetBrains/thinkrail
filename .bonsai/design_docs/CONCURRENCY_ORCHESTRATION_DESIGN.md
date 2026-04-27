@@ -1,3 +1,26 @@
+---
+id: concurrency-orchestration
+type: architecture-design
+status: active
+title: Concurrency & Orchestration Design
+parent: design-doc
+depends-on:
+- module-rpc
+- frontend-module
+references:
+- module-agent
+- proactive-agent-design
+covers:
+- backend/app/coordinator/
+- backend/app/agent/
+- backend/app/rpc/
+- frontend/
+tags:
+- concurrency
+- orchestration
+- coordinator
+- multi-session
+---
 # Concurrency & Orchestration — Architecture Design
 
 > Parent: [DESIGN_DOC.md](../../DESIGN_DOC.md) | Status: **Active** | Created: 2026-03-10 | Updated: 2026-03-11
@@ -221,7 +244,7 @@ When the coordinator needs LLM reasoning, it builds a compact context containing
 
 ### How Specs Map to File Boundaries
 
-Each spec in `registry.json` has a `covers` field — a list of path globs relative to the
+Each spec's frontmatter has a `covers` field — a list of path globs relative to the
 project root. When a session starts with `spec_ids`, the coordinator unions their `covers`
 paths into an exclusive **write scope**.
 
@@ -497,7 +520,7 @@ A compact side panel showing coordination state at a glance:
 | Resource limits | None | Developer has full freedom. No session caps, no cost caps. Coordinator manages scopes and conflicts only. |
 | Parallel work trigger | Both explicit (user) and proactive (via SuggestSession) | User can manually start parallel sessions. Agents can also propose parallel work via existing proactive tool pattern. |
 | Backward compatibility | Coordinator activates only with concurrent sessions | Single-session usage is completely unaffected. Coordinator overhead is zero when not needed. |
-| Scope granularity | Both directory-level and file-level globs | Matches existing `covers` format in registry.json. No need to restrict — same matching logic for both. |
+| Scope granularity | Both directory-level and file-level globs | Matches existing `covers` format in spec frontmatter. No need to restrict — same matching logic for both. |
 | Lock lifetime | Turn-scoped only (no timeout) | Released when holding session's turn ends (status → idle). Crash recovery via disconnect detection. Simple and predictable. |
 | Cross-session dependencies | No auto-detection — workers ask when needed | Workers use `coordinator_query` tool to check for changes. No import graph analysis. Keep it simple. |
 | Session handoff | No explicit protocol — stale-context tools suffice | Workers pull updates via `coordinator_file_changes`. No special handoff notification needed. |
@@ -535,7 +558,7 @@ rules, evaluate local model for medium-complexity decisions, measure cost saving
 
 ## Resolved Questions
 
-1. ~~**Scope granularity:**~~ **Resolved** — Both directory-level and file-level globs are supported. This matches the existing `covers` field format in `registry.json`, which already contains both directory paths (`"backend/app/agent/"`) and file paths (`"backend/app/agent/runner.py"`). The scope matching logic handles both consistently.
+1. ~~**Scope granularity:**~~ **Resolved** — Both directory-level and file-level globs are supported. This matches the existing `covers` field format in spec frontmatter, which already contains both directory paths (`"backend/app/agent/"`) and file paths (`"backend/app/agent/runner.py"`). The scope matching logic handles both consistently.
 
 2. ~~**Lock timeout:**~~ **Resolved** — Turn-scoped only. Shared-zone locks are released when the holding session's turn ends (status → idle). Simple, predictable, no configuration needed. If a session crashes, the coordinator detects the disconnection and releases its locks. No timeout mechanism needed.
 

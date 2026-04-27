@@ -1,3 +1,19 @@
+---
+id: task-session-service
+type: task-spec
+status: done
+title: Update service.py for conversational sessions
+depends-on:
+- task-session-models-tracker
+- task-session-runner
+implements:
+- module-agent
+covers:
+- backend/app/agent/service.py
+tags:
+- high
+- new-feature
+---
 # Update service.py for conversational sessions
 
 > Facade changes: send_message, end_session, interrupt keeps session alive

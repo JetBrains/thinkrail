@@ -1,3 +1,18 @@
+---
+id: task-refactor-agent-context-analytics
+type: task-spec
+status: done
+title: 'Refactor Agent Context: Replace with Context Usage Analytics'
+implements:
+- ui-context-panel-agent-mode
+covers:
+- frontend/src/components/ContextPanel/modes/AgentContext.tsx
+- frontend/src/components/ContextPanel/modes/AgentContext.css
+tags:
+- high
+- refactor
+- frontend
+---
 # Refactor Agent Context: Replace with Context Usage Analytics
 
 > Implements: [AGENT_CONTEXT.md](../../frontend/ui-specs/context-panel/AGENT_CONTEXT.md)

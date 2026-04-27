@@ -1,3 +1,18 @@
+---
+id: improvement-nondestructive-interrupt
+type: task-spec
+status: done
+title: Replace destructive interrupt with SDK native client.interrupt()
+implements:
+- module-agent
+covers:
+- backend/app/agent/service.py
+- backend/app/agent/runner.py
+- backend/app/agent/tracker.py
+tags:
+- high
+- improvement
+---
 # Replace destructive interrupt with SDK native `client.interrupt()`
 
 Replace the current `bg.cancel()` + re-launch interrupt mechanism with the Claude Agent SDK's built-in `client.interrupt()`. This preserves the SDK client, conversation context, and runner loop — the user can continue the same session after interrupting without losing anything.

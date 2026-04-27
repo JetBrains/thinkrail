@@ -1,3 +1,19 @@
+---
+id: task-fe-graph-view
+type: task-spec
+status: done
+title: Implement Graph View
+depends-on:
+- task-fe-app-shell
+implements:
+- graph-interactions
+covers:
+- frontend/src/components/GraphView/
+tags:
+- high
+- new-feature
+- frontend
+---
 # Implement Graph View
 
 > Interactive spec hierarchy visualization with layered drill-down navigation

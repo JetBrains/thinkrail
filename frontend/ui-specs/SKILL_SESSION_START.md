@@ -1,3 +1,22 @@
+---
+id: ui-skill-session-start
+type: submodule-design
+status: active
+title: Skill Session Start Button — Frontend Spec
+parent: skill-session-start-design
+references:
+- chat-ui
+- ui-center-panel
+covers:
+- frontend/src/components/SessionPanel/SessionPanel.tsx
+- frontend/src/components/ChatStream/InputArea.tsx
+tags:
+- frontend
+- ui
+- session
+- skill
+- input
+---
 # Skill Session Start Button — Frontend Spec
 
 > Parent: [SKILL_SESSION_START_DESIGN.md](../../.bonsai/design_docs/SKILL_SESSION_START_DESIGN.md) | Status: **Active** | Created: 2026-03-11

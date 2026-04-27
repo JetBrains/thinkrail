@@ -1,3 +1,21 @@
+---
+id: voice-input-design
+type: architecture-design
+status: active
+title: Voice Input — Architecture Design
+parent: design-doc
+depends-on:
+- module-agent
+- module-rpc
+covers:
+- frontend/src/hooks/useVoiceInput.ts
+- backend/app/agent/transcribe.py
+- frontend/src/components/ChatStream/InputArea.tsx
+tags:
+- feature
+- voice
+- transcription
+---
 # Voice Input — Architecture Design
 
 > Parent: [DESIGN_DOC.md](../../DESIGN_DOC.md) | Status: **Active** | Created: 2026-03-11 | Updated: 2026-04-16

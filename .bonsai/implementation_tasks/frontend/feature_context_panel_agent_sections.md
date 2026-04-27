@@ -1,3 +1,21 @@
+---
+id: task-context-panel-agent-sections
+type: task-spec
+status: done
+title: 'Implement Agent Context sections: TaskSpecPreview, FilesModified, RelatedSpecs'
+depends-on:
+- task-context-panel-shared-infra
+implements:
+- ui-context-panel-agent-mode
+covers:
+- frontend/src/components/ContextPanel/sections/TaskSpecPreview.tsx
+- frontend/src/components/ContextPanel/sections/FilesModified.tsx
+- frontend/src/components/ContextPanel/sections/RelatedSpecs.tsx
+tags:
+- high
+- feature
+- frontend
+---
 # Task: Implement Agent Context Sections
 
 > Implements: [AGENT_CONTEXT.md](../../frontend/ui-specs/context-panel/AGENT_CONTEXT.md)

@@ -1,3 +1,19 @@
+---
+id: task-fe-chat-ui
+type: task-spec
+status: done
+title: Implement Chat UI
+depends-on:
+- task-fe-app-shell
+implements:
+- chat-ui
+covers:
+- frontend/src/components/ChatStream/
+tags:
+- high
+- new-feature
+- frontend
+---
 # Implement Chat UI
 
 > Agent event stream rendering with tool cards, questions, and streaming text

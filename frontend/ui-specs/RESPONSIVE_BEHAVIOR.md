@@ -1,3 +1,16 @@
+---
+id: responsive-behavior
+type: submodule-design
+title: Responsive Behavior
+parent: webview
+covers:
+- frontend/src/
+tags:
+- frontend
+- ui
+- responsive
+- layout
+---
 # Responsive Behavior — Sub-Specification
 
 > Parent: [WEBVIEW.md](../WEBVIEW.md) §9 | Status: **Draft** | Created: 2026-03-02

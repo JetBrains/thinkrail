@@ -1,3 +1,20 @@
+---
+id: task-rpc-server-agent-wiring
+type: task-spec
+status: done
+title: 'Implement RPC server.py: wire agent handlers into METHODS'
+depends-on:
+- task-rpc-methods-agents-basic
+- task-rpc-methods-agents-run
+- task-rpc-methods-agents-respond
+implements:
+- module-rpc
+covers:
+- backend/app/rpc/server.py
+tags:
+- high
+- new-feature
+---
 # Implement RPC server.py: Wire Agent Handlers
 
 > Wire agent handlers into METHODS dict

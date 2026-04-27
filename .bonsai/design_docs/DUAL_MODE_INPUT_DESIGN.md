@@ -1,3 +1,26 @@
+---
+id: dual-mode-input-design
+type: architecture-design
+status: active
+title: Markdown Input with Split-Pane Preview — Architecture Design
+parent: design-doc
+depends-on:
+- module-agent
+- module-rpc
+covers:
+- frontend/src/components/ChatStream/InputArea.tsx
+- frontend/src/components/ChatStream/ChatStream.tsx
+- frontend/src/components/ChatStream/ChatStream.css
+- frontend/src/store/sessionStore.ts
+- frontend/src/api/methods/agents.ts
+- backend/app/rpc/methods/agents.py
+- backend/app/agent/service.py
+tags:
+- feature
+- markdown
+- input
+- split-pane
+---
 # Markdown Input with Split-Pane Preview — Architecture Design
 
 > Parent: [DESIGN_DOC.md](../../DESIGN_DOC.md) | Status: **Active** | Created: 2026-03-11 | Updated: 2026-03-12

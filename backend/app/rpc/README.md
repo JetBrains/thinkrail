@@ -1,3 +1,19 @@
+---
+id: module-rpc
+type: module-design
+status: active
+title: RPC Module Design
+parent: design-doc
+depends-on:
+- module-spec
+- module-agent
+- module-core
+covers:
+- backend/app/rpc/
+tags:
+- backend
+- transport
+---
 # RPC Module — Design Specification
 
 > Parent: [DESIGN_DOC.md](../../../DESIGN_DOC.md) | Status: **Active** | Created: 2026-02-26 | Updated: 2026-04-12
@@ -116,7 +132,9 @@ Both sides can send either. The server can initiate requests to the client (e.g.
 | `spec/didChange` | `{ id: str, changes: object }` | Spec file changed on disk |
 | `spec/didCreate` | `{ id: str, path: str }` | New spec file detected |
 | `spec/didDelete` | `{ id: str }` | Spec file removed |
-| `registry/didUpdate` | `{ registry: object }` | registry.json changed |
+| `spec/indexRebuilt` | `{}` | Spec index rebuilt (frontmatter change detected) |
+| `docs/didChange` | `{}` | Unmanaged document added, changed, or removed — frontend re-fetches graph |
+| `index/ready` | `{}` | Index initialization complete — frontend should re-fetch specs and graph |
 
 #### File Notifications
 
@@ -188,10 +206,10 @@ Domain exceptions raised inside handlers are mapped to JSON-RPC error responses:
 | Exception | JSON-RPC Code | Message |
 | --- | --- | --- |
 | `SpecNotFoundError` | -32001 | "Spec not found" |
-| `RegistryError` | -32002 | "Registry error" |
 | `ValidationError` | -32003 | "Validation error" |
 | `AgentTaskNotFoundError` | -32011 | "Agent task not found" |
 | `FutureNotFoundError` | -32012 | "No pending request" |
+| `IndexNotReadyError` | -32015 | "Index is still initializing" |
 | `MessageTooLargeError` | -32014 | "Message too large" — data: `{message, msgTokens, remainingTokens}` |
 | `KeyError` / missing params | -32602 | "Invalid params" |
 | Any other exception | -32603 | "Internal error" |
@@ -249,7 +267,7 @@ title: "Watcher path (per-project, reference-counted)"
 ---
 graph TD
     Connect["WebSocket connect<br/>/ws?project=path"]
-    Validate["Validate project path<br/>+ .bonsai/registry.json"]
+    Validate["Validate project path<br/>+ .bonsai/ structure"]
     Acquire["_acquire_watcher — ref count++"]
     Watch["core/watcher.watch(project_root, _on_file_change)"]
     Change["File change on disk"]
@@ -397,6 +415,48 @@ NotifyCallable = Callable[[str, dict, str | None], Awaitable[None]]
 | `get_vis_state` | `(service, **params) → DashboardState` | Handler for `vis/state` — returns current state without recomputing |
 | `recompute_vis` | `(service, **params) → DashboardState` | Handler for `vis/recompute` — forces recompute and returns new state |
 
+### methods/board.py
+
+**Responsibility:** jsonrpcserver handlers for all `board/*` methods (meta-tickets, plans, drafts, patches).
+
+**Dependencies:** board/service
+
+### methods/sessions.py
+
+**Responsibility:** jsonrpcserver handlers for `session/*` methods (list, get, continue, delete, subscribe, unsubscribe).
+
+**Dependencies:** agent/service, agent/persistence
+
+### methods/settings.py
+
+**Responsibility:** jsonrpcserver handlers for `settings/*` and `models/*` and `skills/*` methods.
+
+**Dependencies:** core/settings, agent/model_registry
+
+### methods/admin.py
+
+**Responsibility:** jsonrpcserver handlers for admin operations.
+
+**Dependencies:** core/server_store
+
+### methods/auth.py
+
+**Responsibility:** jsonrpcserver handlers for authentication (token validation, user lookup).
+
+**Dependencies:** core/server_store
+
+### methods/user.py
+
+**Responsibility:** jsonrpcserver handlers for `user/*` methods (preferences, profile).
+
+**Dependencies:** core/server_store
+
+### methods/subsessions.py
+
+**Responsibility:** jsonrpcserver handlers for subsession (child agent session) management.
+
+**Dependencies:** agent/service
+
 ## JSON-RPC Dispatch
 
 ```mermaid
@@ -424,13 +484,15 @@ graph TD
 - On connect:
   1. Validate `project` param exists (close with 4001 if missing)
   2. Call `ensure_project(project_path)` to auto-create missing `.bonsai/` meta-files and subdirectories (close with 4002 on filesystem error)
-  3. Build per-connection `AppConfig`, `SpecService`. Reuse per-project `AgentService`, `VisualizationService`, `BoardService`, `ModelRegistry` (services survive reconnects).
-  4. Create `ClientConnection` with unique `conn_id`, register with EventBus
-  5. Publish `connection/didJoin` to existing project clients
-  6. Subscribe to project topic + all active session topics
-  7. Replay missed events if `last_seen` query param provided
-  8. Start or ref-count per-project file watcher
-  9. Begin JSON-RPC dispatch loop (sets `current_conn_id` context var per request)
+  3. Accept WebSocket connection (immediate — within frontend's 5s `connectTimeout`)
+  4. Build per-connection `AppConfig`, `SpecService`. Reuse or create per-project `SpecIndex` (guarded by per-project `asyncio.Lock`).
+  5. If index is new: start background `asyncio.Task` for `index.initialize()` → emit `index/ready` notification when complete.
+  6. Create `ClientConnection` with unique `conn_id`, register with EventBus
+  7. Publish `connection/didJoin` to existing project clients
+  8. Subscribe to project topic + all active session topics
+  9. Replay missed events if `last_seen` query param provided
+  10. Start or ref-count per-project file watcher (watcher callback guards `reindex_file()` with `index.is_ready` check to prevent race with background rebuild)
+  11. Begin JSON-RPC dispatch loop (sets `current_conn_id` context var per request)
 - On disconnect: publish `connection/didLeave`, unregister from EventBus (cleans up all subscriptions), release watcher ref count
 
 ## Watcher Integration
@@ -440,9 +502,13 @@ The file watcher is **per-project, reference-counted**. It starts when the first
 1. `_acquire_watcher(project_key, ...)` increments the ref count (or starts the watcher on first connection).
 2. `_start_watcher()` calls `core/watcher.watch([project_root], _on_file_change)`.
 3. On file change, `_on_file_change(changes)` publishes events to the **project topic** via `bus.publish`:
-   - `.bonsai/registry.json` → `registry/didUpdate`
-   - Spec files → `spec/didChange`, `spec/didCreate`, or `spec/didDelete`
-   - `.bonsaihide` modified → `files/treeChanged`
+   - Spec files (`.md`) → `spec/didChange`, `spec/didCreate`, or `spec/didDelete` (frontmatter parsed, index updated); unmanaged documents → `docs/didChange`
+   - `.bonsaihide` modified → `files/treeChanged` + background index rebuild with fresh patterns → `index/ready` when complete
+
+   **Guard:** `reindex_file()` is only called when `index.is_ready` is `True`. During background initialization, spec-related reindexing is skipped (the full rebuild catches all files). Non-spec events (`files/treeChanged`, `file/didChange`) fire normally.
+
+   When `.bonsaihide` is modified, the watcher reloads patterns from disk and launches a background `_rebuild_on_bonsaihide()` task that calls `index.rebuild()` with the new patterns, then emits `index/ready`. During rebuild, `is_ready` is `False`, preventing concurrent `reindex_file()` calls.
+
    - Any modified file → `file/didChange` with relative path
 4. `_release_watcher(project_key)` decrements the ref count. When it reaches 0, the watcher is stopped.
 
@@ -459,6 +525,8 @@ The file watcher is **per-project, reference-counted**. It starts when the first
 | Phase 1 broadcast-all | Auto-subscribe all clients to all sessions | Simplest multi-client model. Phase 3 will add per-client subscription filtering. |
 | First-responder-wins | `asyncio.Future.set_result()` once-only | No additional locking for interactive requests. Second responder gets `-32013` error. |
 | Methods organized by domain namespace | `methods/specs.py`, `methods/agents.py`, etc. | Each file mirrors its domain module; easy to locate handlers by method prefix |
+| WebSocket accept timing | Accept before index init | Prevents frontend 5s `connectTimeout` failure on first connect or schema upgrade. Spec RPCs return empty data until `index/ready`. |
+| Index init concurrency | Per-project `asyncio.Lock` on `_spec_indexes` | Prevents concurrent `rebuild()` when two connections arrive simultaneously. |
 | Per-connection project selection | `?project=` query param on WebSocket URL | Allows the frontend to switch projects without restarting the backend |
 | No RPC-layer models | Domain models serialized directly | Pydantic models in spec/ and agent/ serialize to JSON; no translation layer needed |
 
@@ -481,8 +549,8 @@ The file watcher is **per-project, reference-counted**. It starts when the first
 
 ## Known Limitations
 
-- **No authentication (Phase 2 pending):** The WebSocket endpoint at `/ws` has no auth. Any client on the network can connect. Phase 2 will add token-based auth via `.bonsai/users.json`.
-- **No per-client filtering (Phase 3 pending):** All connections receive all session events for the project (broadcast-all). Phase 3 will add explicit subscribe/unsubscribe per session per client.
+- **Authentication implemented:** Token-based auth (`bns_` tokens) via `.bonsai/users.json` and `server_store.py`. WebSocket connections and REST API requests require valid tokens. Admin CLI manages users.
+- **Broadcast-all for sessions:** All connections receive all session events for the project. Per-client session filtering is available via `session/subscribe` and `session/unsubscribe`.
 - **Ring buffer capacity:** Replay buffer holds 200 events per topic. Events older than that are lost from the buffer (still persisted to `.events.jsonl` on disk).
 - **Pending agent futures on disconnect:** If all clients disconnect mid-agent-run, agent events are published to the bus with no subscribers (silently dropped). Events are still persisted to disk. Pending `asyncio.Future` objects in `tracker.py` will time out per the configured deadline.
 

@@ -1,3 +1,17 @@
+---
+id: task-context-panel-infrastructure
+type: task-spec
+status: done
+title: 'Create Context Panel infrastructure: useContextMode + CollapsibleSection'
+implements:
+- ui-context-panel
+covers:
+- frontend/src/components/ContextPanel/
+tags:
+- high
+- feature
+- frontend
+---
 # Create Context Panel infrastructure: useContextMode hook and CollapsibleSection component
 
 The right panel is being redesigned from a tab-based interface to a context-aware sidebar (see [CONTEXT_PANEL.md](../../frontend/ui-specs/CONTEXT_PANEL.md)). This task creates the foundational pieces that all other Context Panel components depend on.

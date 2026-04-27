@@ -1,3 +1,18 @@
+---
+id: module-agent
+type: module-design
+status: active
+title: Agent Module Design
+parent: design-doc
+depends-on:
+- module-core
+- module-spec
+covers:
+- backend/app/agent/
+tags:
+- backend
+- agent-orchestration
+---
 # Agent Module — Design Specification
 
 > Parent: [DESIGN_DOC.md](../../../DESIGN_DOC.md) | Status: **Active** | Created: 2026-02-25 | Updated: 2026-03-16
@@ -269,7 +284,7 @@ graph TD
 | `persistence.py` | Session persistence — split storage: metadata in `.json`, events in append-only `.events.jsonl`. Save/load/list/append/delete. See [PERSISTENCE.md](PERSISTENCE.md). | core/fileio |
 | `pricing.py` | Per-model token pricing and cost estimation. Tier-based (opus/sonnet/haiku). `estimate_cost()` used by runner for live cost streaming. | — |
 | `model_registry.py` | Model registry — fetches available Claude models from the Anthropic Models API. Context windows come directly from `max_input_tokens`. Caches to `.bonsai/cache/models.json`. Periodic refresh (configurable interval via project settings). Falls back to hardcoded list when API is unavailable. Injected into `AgentService` for `contextMax` lookups. | anthropic SDK, core/settings |
-| `tools/` | Self-contained MCP tools package. Each tool is one file: schema + handler + MCP server + `intercept()`. Exports `MCP_SERVERS`, `INTERCEPTORS`, and `set_tool_context()`/`get_tool_context()` (contextvars for yolo mode). See [tools/README.md](tools/README.md). | claude-agent-sdk, tracker, models |
+| `tools/` | Self-contained MCP tools package. Each tool is one file: schema + handler + MCP server + `intercept()`. Spec tools (`spec_search`, `spec_links`, `spec_delete`) query the SQLite index and handle multi-file cleanup — agents use standard `Write`/`Edit` for spec file creation/editing. Exports `MCP_SERVERS`, `INTERCEPTORS`, and `set_tool_context()`/`get_tool_context()` (contextvars for yolo mode). See [tools/README.md](tools/README.md), [SPECS_TOOLS.md](tools/SPECS_TOOLS.md). | claude-agent-sdk, tracker, models |
 
 ## Public Interface
 

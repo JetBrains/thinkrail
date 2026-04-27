@@ -1,3 +1,19 @@
+---
+id: new-session-modal
+type: submodule-design
+status: active
+title: New Session Modal
+parent: webview
+depends-on:
+- module-agent
+covers:
+- frontend/src/components/NewSessionModal/
+tags:
+- frontend
+- ui
+- modal
+- session
+---
 # New Session Modal — Sub-Specification
 
 > Parent: [WEBVIEW.md](../WEBVIEW.md) §3 | Status: **Active** | Created: 2026-03-02 | Updated: 2026-03-05

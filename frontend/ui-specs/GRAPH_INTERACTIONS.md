@@ -1,3 +1,19 @@
+---
+id: graph-interactions
+type: submodule-design
+status: active
+title: Graph Interactions
+parent: webview
+depends-on:
+- module-spec
+covers:
+- frontend/src/components/GraphView/
+tags:
+- frontend
+- ui
+- graph
+- visualization
+---
 # Graph Interactions — Sub-Specification
 
 > Parent: [WEBVIEW.md](../WEBVIEW.md) §4.1 | Status: **Active** | Created: 2026-03-02 | Updated: 2026-03-05

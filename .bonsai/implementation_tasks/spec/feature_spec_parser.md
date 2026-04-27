@@ -1,3 +1,19 @@
+---
+id: task-spec-parser
+type: task-spec
+status: done
+title: Implement Spec parser.py
+depends-on:
+- task-spec-models
+- task-core-fileio
+implements:
+- module-spec
+covers:
+- backend/app/spec/parser.py
+tags:
+- critical
+- new-feature
+---
 # Implement Spec parser.py
 
 > Parse Markdown and JSON spec files from disk

@@ -1,3 +1,17 @@
+---
+id: task-context-general-instructions
+type: task-spec
+status: done
+title: Add General Instructions section to context.py
+implements:
+- agent-context
+- module-agent
+covers:
+- backend/app/agent/context.py
+tags:
+- high
+- improvement
+---
 # Add General Instructions section to context.py
 
 **Status:** Active

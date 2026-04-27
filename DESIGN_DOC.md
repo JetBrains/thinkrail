@@ -1,3 +1,16 @@
+---
+id: design-doc
+type: architecture-design
+status: active
+title: Bonsai Architecture Design
+depends-on:
+- goal-and-requirements
+covers:
+- backend/
+- frontend/
+tags:
+- architecture
+---
 # Bonsai — Architecture Design
 
 > Status: **Active** | Created: 2026-02-25
@@ -87,7 +100,7 @@ This mirrors the Language Server Protocol pattern exactly.
     │   agent/respond                                       │
     │                                                       │
     │  Server → Client (notifications, no response):        │
-    │   spec/did*  registry/didUpdate                       │
+    │   spec/did*                                           │
     │   agent/sessionStart  agent/textDelta                 │
     │   agent/toolCallStart  agent/toolCallEnd              │
     │   agent/subagentStart  agent/subagentEnd              │
@@ -100,9 +113,8 @@ This mirrors the Language Server Protocol pattern exactly.
     │   agent/askUserQuestion  agent/confirmAction          │
     ▼                                                       ▼
   Browser                              ┌──── File Watcher ────┐
-                                       │  .bonsai/registry.json │
-                                       │  spec files (*.md,    │
-                                       │  *.json per registry) │
+                                       │  spec files (*.md)    │
+                                       │  .bonsai/* config     │
                                        └───────────────────────┘
 ```
 
@@ -153,17 +165,16 @@ graph TD
     Change["Repo FS change<br/>(user edit / agent tool call / external tool)"]
     Watcher["Core (Watcher)<br/>watches working directory"]
     Router["rpc/server.py<br/>routes by file type"]
-    SpecMod["Spec Module<br/>validate, re-parse,<br/>update registry + graph"]
+    SpecMod["Spec Module<br/>validate, re-parse,<br/>update index + graph"]
     Notify["rpc/notifications"]
     FE["Frontend"]
     Future["source files (*.py, *.ts, …)<br/>[future: coverage, health]"]
 
     Change --> Watcher
     Watcher -- "fires callback registered<br/>by rpc/server.py at startup" --> Router
-    Router -- "spec files (*.md or *.json per registry)" --> SpecMod
+    Router -- "spec files (*.md)" --> SpecMod
     SpecMod -- "spec/did*" --> Notify
-    Router -- ".bonsai/registry.json" --> Notify
-    Notify -- "spec/did* or registry/didUpdate" --> FE
+    Notify -- "spec/did*" --> FE
     Router -. "source files" .-> Future
 ```
 
@@ -177,19 +188,27 @@ graph TD
 backend/
 ├── app/
 │   ├── main.py              # FastAPI app entry point
+│   ├── cli.py               # Admin CLI (create-user, list-users, set-admin)
+│   ├── api/                 # REST API Layer
+│   │   ├── deps.py          # Shared dependencies (auth, project resolution)
+│   │   ├── errors.py        # HTTP error handlers
+│   │   ├── schemas.py       # Request/response schemas
+│   │   └── routers/         # files.py, fs.py, project.py, server_info.py, setup.py, user.py
 │   ├── rpc/                 # JSON-RPC Layer
-│   │   ├── server.py        # WebSocket + JSON-RPC dispatcher (routes all 3 directions)
-│   │   ├── methods/
-│   │   │   ├── specs.py     # spec/* methods
-│   │   │   └── agents.py    # agent/* methods (incl. agent/respond)
-│   │   └── notifications.py # Server→client push (notifications + requests)
+│   │   ├── server.py        # WebSocket + JSON-RPC dispatcher
+│   │   ├── bus.py           # EventBus — pub/sub for multi-client notifications
+│   │   ├── connections.py   # ClientConnection dataclass, conn_id context var
+│   │   ├── notifications.py # Per-connection notify factory
+│   │   └── methods/         # specs, agents, sessions, board, trash, vis, settings, admin, auth, user, subsessions
 │   ├── spec/                # Spec Domain Module
-│   │   ├── models.py        # Spec, RegistryEntry, Link models
-│   │   ├── service.py       # CRUD operations
-│   │   ├── parser.py        # Spec file parsing (Markdown or JSON)
+│   │   ├── models.py        # Spec, SpecEntry, Link models
+│   │   ├── service.py       # CRUD operations (async, backed by SQLite index)
+│   │   ├── parser.py        # Spec file parsing (Markdown)
 │   │   ├── validator.py     # Spec validation
 │   │   ├── graph.py         # Hierarchy & graph building
-│   │   └── registry.py      # Registry read/write/validate (atomic writes)
+│   │   ├── frontmatter.py   # YAML frontmatter parsing and serialization
+│   │   ├── index.py         # SQLite index management (.bonsai/index.db)
+│   │   └── migrate.py       # Migration from legacy registry.json to frontmatter
 │   ├── agent/               # Agent Domain Module
 │   │   ├── models.py        # AgentTask, AgentEvent, AgentResult models
 │   │   ├── service.py       # Orchestration facade
@@ -197,8 +216,24 @@ backend/
 │   │   ├── tracker.py       # Task lifecycle + asyncio.Future map for pending requests
 │   │   ├── context.py       # Context assembly: skill instructions, project metadata, system prompt
 │   │   ├── persistence.py   # Session persistence: metadata JSON + events JSONL
+│   │   ├── permissions.py   # Tool approval routing (canUseTool hook)
+│   │   ├── credentials.py   # API key management
+│   │   ├── revise.py        # Voice transcript revision
+│   │   ├── transcribe.py    # Audio transcription via OpenAI Whisper (optional)
 │   │   ├── visualization.py # MCP visualization tool: 6 vis types rendered in ChatStream
-│   │   └── transcribe.py    # Audio transcription via OpenAI Whisper (optional)
+│   │   ├── model_registry.py # Available model enumeration and caching
+│   │   ├── pricing.py       # Token cost calculation
+│   │   └── tools/           # MCP tools: specs, suggest_session, suggest_description, visualization, orchestrator, change_ticket_status
+│   ├── board/               # Meta-Ticket & Plan Module
+│   │   ├── models.py        # MetaTicket, Plan, Step, SpecDraft models
+│   │   ├── service.py       # BoardService — CRUD, plan management, draft/patch operations
+│   │   ├── storage.py       # File-based storage (.bonsai/meta-tickets/, plans/)
+│   │   ├── plan.py          # Plan parsing and serialization
+│   │   ├── state_machine.py # Ticket status transitions (idea→described→specified→planned→executing→done)
+│   │   └── spec_drafts.py   # Spec draft management for tickets
+│   ├── trash/               # Soft-Delete Module
+│   │   ├── service.py       # TrashService — soft-delete, restore, purge, auto-cleanup
+│   │   └── storage.py       # Trash directory management (.bonsai/trash/)
 │   ├── vis/                 # Visualization Dashboard Module
 │   │   ├── models.py        # Dashboard dataclasses (DashboardState, WorkflowStep, etc.)
 │   │   └── service.py       # VisualizationService: compute dashboard state, push notifications
@@ -206,7 +241,10 @@ backend/
 │       ├── config.py        # App configuration (frozen mode detection for packaging)
 │       ├── settings.py      # Project settings (.bonsai/settings.json)
 │       ├── fileio.py        # File system operations (read, write, delete files/dirs)
-│       └── watcher.py       # Async file change watching
+│       ├── watcher.py       # Async file change watching
+│       ├── project.py       # .bonsai/ directory bootstrap and meta-file management
+│       ├── server_store.py  # SQLite-backed user/token store
+│       └── network_info.py  # LAN IP / hostname detection for mobile discovery
 ├── tests/
 │   ├── test_spec/
 │   ├── test_agent/
@@ -236,6 +274,9 @@ packaging/                   # Portable executable build infrastructure
 | Core | [backend/app/core/README.md](backend/app/core/README.md) | App configuration, file I/O, async file watcher |
 | Agent | [backend/app/agent/README.md](backend/app/agent/README.md) | Agent orchestration, Claude SDK integration, task lifecycle |
 | RPC | [backend/app/rpc/README.md](backend/app/rpc/README.md) | WebSocket endpoint, JSON-RPC dispatch, notifications |
+| Board | [backend/app/board/README.md](backend/app/board/README.md) | Meta-ticket and plan management, spec drafts/patches, status state machine |
+| Trash | [backend/app/trash/README.md](backend/app/trash/README.md) | Soft-delete service for sessions, specs, tickets, plans, drafts, patches |
+| API | backend/app/api/ | REST API layer: project validation/init, file ops, server info, user mgmt, setup |
 | Vis | [backend/app/vis/README.md](backend/app/vis/README.md) | Dashboard state computation: spec coverage, tasks, lint, recommendations |
 | Packaging | [packaging/README.md](packaging/README.md) | Portable executable build infrastructure: PyInstaller, CI/CD |
 | Frontend | [frontend/README.md](frontend/README.md) | React SPA, UI components, state management |
@@ -248,6 +289,12 @@ packaging/                   # Portable executable build infrastructure
 | MCP Visualization | [VISUALIZATION_DESIGN.md](.bonsai/design_docs/VISUALIZATION_DESIGN.md) | Structured visual output via MCP tool: 6 vis types rendered in ChatStream |
 | Voice Input | [VOICE_INPUT_DESIGN.md](.bonsai/design_docs/VOICE_INPUT_DESIGN.md) | Browser voice input: Web Speech API + MediaRecorder/Whisper fallback |
 | Effort Support | [EFFORT_SUPPORT_DESIGN.md](.bonsai/design_docs/EFFORT_SUPPORT_DESIGN.md) | Configurable reasoning effort level passed to Claude SDK |
+| Frontmatter + SQLite Index | [FRONTMATTER_REGISTRY_DESIGN.md](.bonsai/design_docs/FRONTMATTER_REGISTRY_DESIGN.md) | Replace registry.json with frontmatter in specs + SQLite index cache |
+| Dual Mode Input | [DUAL_MODE_INPUT_DESIGN.md](.bonsai/design_docs/DUAL_MODE_INPUT_DESIGN.md) | Text + voice input modes with revision pipeline |
+| Skill Session Start | [SKILL_SESSION_START_DESIGN.md](.bonsai/design_docs/SKILL_SESSION_START_DESIGN.md) | Session creation with skill context and spec pre-loading |
+| Concurrency Orchestration | [CONCURRENCY_ORCHESTRATION_DESIGN.md](.bonsai/design_docs/CONCURRENCY_ORCHESTRATION_DESIGN.md) | Multi-step plan execution with agent session orchestration |
+| Storage Architecture | [STORAGE_ARCHITECTURE.md](.bonsai/design_docs/STORAGE_ARCHITECTURE.md) | File-based storage layout for sessions, plans, tickets, trash |
+| Admin System | [ADMIN_SYSTEM_DESIGN.md](.bonsai/design_docs/ADMIN_SYSTEM_DESIGN.md) | Token-based auth, user management, admin CLI |
 
 ## Frontend (TypeScript/JavaScript)
 
@@ -265,18 +312,26 @@ frontend/
 │   │   ├── AppShell/        # Three-panel layout, header, status bar
 │   │   ├── ChatStream/      # Agent event rendering, streaming text
 │   │   ├── GraphView/       # Spec hierarchy visualization + health
-│   │   ├── NewSessionModal/ # Session creation form
+│   │   ├── BoardView/       # Kanban board for meta-tickets
+│   │   ├── MetaTicketDetail/ # Ticket detail panel with plans, drafts, patches
+│   │   ├── SessionManager/  # Session list and management
+│   │   ├── SpecTree/        # Spec tree sidebar with badges
+│   │   ├── FileTree/        # Project file browser
+│   │   ├── FileViewer/      # File content viewer with syntax highlighting
 │   │   ├── CommandPalette/  # Fuzzy search, action registry
-│   │   ├── Notifications/   # Toast queue, tab badges
-│   │   ├── DiffViewer/      # Spec + code side-by-side diff
-│   │   ├── ProgressTab/     # Spec metrics, session tracker
-│   │   ├── SessionHistory/  # Session archive, read-only replay
-│   │   └── Console/         # xterm.js terminal emulator
-│   ├── api/                 # WebSocket/JSON-RPC client
+│   │   ├── Console/         # xterm.js terminal emulator
+│   │   ├── MarkdownEditor/  # Spec content editing
+│   │   └── shared/          # Reusable UI primitives
+│   ├── api/                 # WebSocket/JSON-RPC client, hooks
+│   ├── services/            # REST API clients (files, fs, project, serverInfo, setup, user)
 │   ├── store/               # Zustand state management
+│   ├── hooks/               # Custom React hooks
+│   ├── context/             # React context providers
 │   ├── styles/              # CSS custom properties, theming
 │   ├── types/               # TypeScript type definitions
-│   └── utils/               # Shared utilities
+│   ├── utils/               # Shared utilities
+│   └── constants/           # Application constants
+├── ws-events.json           # WebSocket event JSON Schema (25 event types)
 ├── index.html
 ├── package.json
 ├── tsconfig.json
@@ -290,37 +345,32 @@ frontend/
 - xterm.js (terminal emulator, lazy-loaded)
 - Custom DOM + SVG graph (no heavy graph library — ≤15 nodes per layer)
 - Custom JSON-RPC client over WebSocket (~100 lines)
+- openapi-typescript (REST API type generation from OpenAPI schema)
+- json-schema-to-typescript (WebSocket event type generation from JSON Schema)
+
+### Type Generation Pipeline
+
+Frontend TypeScript types are **generated from backend Pydantic models** — the backend is the single source of truth for all API contracts.
+
+```
+Backend Pydantic Models
+  ├── api/schemas.py (REST)  ──→  cli.py export-schema  ──→  openapi.json  ──→  openapi-typescript  ──→  src/api/generated.ts
+  └── agent/models.py (WS)   ──→  cli.py export-ws-schema ──→  ws-events.json ──→  json2ts           ──→  src/types/ws-events.ts
+```
+
+`npm run generate` runs the full pipeline. It executes automatically as a `prebuild` hook during `npm run build`. Generated files have "DO NOT EDIT" headers. `main.py` also exports `openapi.json` on app startup for development convenience.
 
 ## Data Model
 
-Specs are stored as files in the repository. The registry tracks metadata:
+Specs are Markdown files with YAML frontmatter carrying all metadata (`id`, `type`, `status`, links, tags, covers). Frontmatter is the **sole source of truth**. A per-project SQLite cache (`.bonsai/index.db`, `.gitignored`) enables fast queries and graph traversal — always rebuildable from frontmatter. Plain `.md` files without frontmatter are auto-discovered as unmanaged documents.
 
-**Spec (file on disk):**
-- Markdown or JSON files in the repo
-- Markdown specs have informal free-form structure (headers, lists, tables, prose)
-- JSON specs store structured content as a JSON object
-- Content varies by type (goal, architecture, module, task)
-
-**Registry Entry (`.bonsai/registry.json`):**
-- `id` — unique identifier
-- `type` — goal-and-requirements | architecture-design | module-design | task-spec
-- `path` — relative file path
-- `title` — human-readable name
-- `status` — draft | active | stale | deprecated
-- `covers` — source paths this spec covers
-- `tags` — metadata labels
-- `created` — creation date (ISO 8601)
-- `updated` — last update date (ISO 8601)
-
-**Links (in registry):**
-- `from` / `to` — spec IDs
-- `type` — parent | child | depends-on | references | implements
+Full schema, index tables, discovery rules, and migration plan: **[Frontmatter + SQLite Index Design](.bonsai/design_docs/FRONTMATTER_REGISTRY_DESIGN.md)**
 
 ## API Design
 
 **Style:** JSON-RPC 2.0 over WebSocket — true bidirectional (LSP-style)
 
-**Project selection:** The WebSocket URL includes a `project` query parameter specifying the project directory: `ws://host/ws?project=/path/to/dir`. The backend validates `.bonsai/registry.json` exists and creates per-connection services scoped to that project.
+**Project selection:** The WebSocket URL includes a `project` query parameter specifying the project directory: `ws://host/ws?project=/path/to/dir`. The backend validates the project directory and creates per-connection services scoped to that project.
 
 **REST endpoints** for project and file management:
 - `GET /api/project/validate?path=...` — check if path is a valid Bonsai project
@@ -335,7 +385,7 @@ Specs are stored as files in the repository. The registry tracks metadata:
 
 Communication flows in three directions over a single WebSocket at `/ws?project=...`:
 - **Client → Server requests:** `spec/*` CRUD + graph, `agent/*` session management, `session/*` persistence (list, get, continue, delete)
-- **Server → Client notifications:** file watcher events (`spec/did*`, `registry/didUpdate`), agent streaming events (`agent/sessionStart`, `agent/textDelta`, `agent/toolCall*`, `agent/subagent*`, `agent/notification`, `agent/compact`, `agent/progress`, `agent/turnComplete`, `agent/interrupted`, `agent/done`, `agent/error`, `agent/permissionDenied`)
+- **Server → Client notifications:** file watcher events (`spec/did*`), agent streaming events (`agent/sessionStart`, `agent/textDelta`, `agent/toolCall*`, `agent/subagent*`, `agent/notification`, `agent/compact`, `agent/progress`, `agent/turnComplete`, `agent/interrupted`, `agent/done`, `agent/error`, `agent/permissionDenied`)
 - **Server → Client requests:** `agent/askUserQuestion`, `agent/confirmAction` — client responds via `agent/respond`
 
 Full protocol reference (method tables, params, message shapes): **[RPC Module spec](backend/app/rpc/README.md#methods)**
@@ -346,13 +396,14 @@ Full protocol reference (method tables, params, message shapes): **[RPC Module s
 |----------|--------|-----------|
 | Architecture pattern | Hybrid — layered top-level (frontend/backend) with modular domains inside backend | Clean separation between transport (RPC), domain logic (Spec, Agent), and infrastructure (Core). Each module has one responsibility. |
 | Communication protocol | JSON-RPC 2.0 over WebSocket | LSP-style true bidirectional messaging. Server can push notifications and initiate requests (e.g., agent questions). Single connection, simple framing. |
-| Spec storage | Files in the repo (Markdown or JSON) | Git-friendly, versionable alongside code. No external database. Developers can read/edit specs with any text editor. |
-| Registry as single JSON file | `.bonsai/registry.json` | Simplicity — one atomic file for all metadata. Easy to debug, version, and parse. Atomic writes prevent corruption. |
+| Spec storage | Markdown files with YAML frontmatter | Self-contained, git-friendly. Each file carries its own metadata. [Details](.bonsai/design_docs/FRONTMATTER_REGISTRY_DESIGN.md) |
+| Spec index | Per-project SQLite (`.bonsai/index.db`, `.gitignored`) | Generated cache for fast queries. Rebuildable from frontmatter. Replaces former `registry.json`. |
+| Agent MCP tools | 3 custom tools (`spec_search`, `spec_links`, `spec_delete`) | Only for operations standard file tools can't do. Agents use `Write`/`Edit`/`Read` for spec files. [Details](backend/app/agent/tools/SPECS_TOOLS.md) |
 | Graph visualization | Custom DOM + SVG (no library) | Layered view shows ≤15 nodes. D3/React Flow/Cytoscape add 80-170KB for no benefit at this scale. |
 | State management | Zustand (frontend) | 1KB, hook-based, no boilerplate. Stores split by domain for isolation. |
 | Agent SDK integration | Isolated in `runner.py` only | Single swap point for SDK versions. Service and tracker are SDK-agnostic. |
 | File change tracking | Filesystem watcher, not tool call interception | Ground truth — catches all file changes regardless of source (agent, user, external tool). Same validation pipeline for all changes. |
-| Single-user, localhost | No auth, no multi-user, no cloud | Simplicity first — Bonsai is a developer's local tool. Multi-user adds complexity with no current demand. |
+| Multi-client, localhost | Token-based auth (`bns_` tokens), `.bonsai/users.json`, admin CLI. Multiple browser/mobile clients share sessions via EventBus pub/sub. | Local-network tool supporting multiple devices (desktop + mobile). Auth prevents accidental unauthorized access on shared networks. |
 
 **Design Philosophy:** Start simple, add complexity only when proven necessary. Each module has one clear responsibility. The code should be small enough to read end-to-end. Prefer explicit wiring over implicit magic.
 

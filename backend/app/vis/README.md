@@ -1,3 +1,18 @@
+---
+id: module-vis
+type: module-design
+status: active
+title: Vis Module Design
+parent: design-doc
+depends-on:
+- module-core
+- module-spec
+covers:
+- backend/app/vis/
+tags:
+- backend
+- dashboard
+---
 # Vis Module — Design Specification
 
 > Parent: [DESIGN_DOC.md](../../../DESIGN_DOC.md) | Status: **Active** | Created: 2026-03-11
@@ -16,7 +31,7 @@
 
 ## Purpose
 
-The Vis module computes and maintains a live dashboard state for the Bonsai web UI. It aggregates data from the spec registry, source tree, task files, and lint checks into a single `DashboardState` that the frontend consumes to render the spec-driven development dashboard.
+The Vis module computes and maintains a live dashboard state for the Bonsai web UI. It aggregates data from the spec index (SQLite), source tree, task files, and lint checks into a single `DashboardState` that the frontend consumes to render the spec-driven development dashboard.
 
 The module operates in two modes:
 - **Pull:** Frontend requests current state via `vis/state` RPC — returns cached state without recomputing.
@@ -32,17 +47,17 @@ graph TD
     end
 
     Config["core/config<br/>AppConfig"]
-    Registry["spec/registry<br/>read_registry()"]
+    SpecSvc["spec/service<br/>SpecService (SQLite-backed)"]
     FS["Filesystem<br/>(source dirs, task files, spec files)"]
 
     Service --> Config
-    Service --> Registry
+    Service --> SpecSvc
     Service --> Models
     Service --> FS
 ```
 
 **Data flow:**
-1. `_read_registry()` — delegates to `spec.registry.read_registry()` via `AppConfig.get_registry_path()`
+1. `_read_specs()` — queries spec entries and links via `SpecService` (backed by SQLite index)
 2. `_find_source_dirs()` — walks project tree for code directories
 3. `_compute_coverage()` — matches source dirs to spec `covers` fields
 4. `_compute_freshness()` — compares spec file mtime vs code file mtime
@@ -56,7 +71,7 @@ graph TD
 | File | Responsibility | Depends On |
 |------|---------------|------------|
 | `models.py` | Dataclasses: `DashboardState`, `WorkflowStep`, `CoverageEntry`, `TaskEntry`, `LintIssue`, `Recommendation` | — |
-| `service.py` | `VisualizationService` — computation pipeline, state caching, push notifications | core/config, spec/registry, models |
+| `service.py` | `VisualizationService` — computation pipeline, state caching, push notifications | core/config, spec/service, spec/models, vis/models |
 
 ## Public Interface
 
@@ -82,7 +97,7 @@ graph TD
 | Field | Type | Description |
 |-------|------|-------------|
 | `coverage_pct` | `int` | Percentage of source directories covered by a spec |
-| `spec_count` | `int` | Total specs in registry |
+| `spec_count` | `int` | Total specs in index |
 | `active_count` | `int` | Specs with status "active" |
 | `stale_count` | `int` | Specs where code is newer than spec file |
 | `task_count` | `int` | Total tasks in `.bonsai/implementation_tasks/` |
@@ -132,7 +147,7 @@ For each spec with a non-empty `covers` list:
 
 Two categories:
 - **Structure checks:** For recognized spec types (`architecture-design`, `module-design`, `task-spec`, `goal-and-requirements`), verify required `##` sections exist in the spec file
-- **Link integrity:** Verify all link `from`/`to` IDs reference existing specs in the registry
+- **Link integrity:** Verify all link `from`/`to` IDs reference existing specs in the index
 
 ### Workflow Steps
 
@@ -143,8 +158,8 @@ Fixed 5-step workflow: Goal & Requirements → Architecture Design → Module Sp
 | Decision | Choice | Rationale |
 |----------|--------|-----------|
 | Dataclasses, not Pydantic | `DashboardState` and children are `@dataclass` with `asdict()` | Viz models are internal and never deserialized from JSON. Dataclasses are simpler and avoid Pydantic overhead for a read-only data structure. |
-| Delegate to spec/registry | `_read_registry()` calls `spec.registry.read_registry()` | Avoids duplicating JSON parsing and validation. Uses typed `RegistryEntry`/`Link` models rather than raw dicts. |
-| Accept AppConfig | Constructor takes `AppConfig`, not `Path` | Uses `config.get_registry_path()` for registry location. Follows the same pattern as `SpecService` and `AgentService`. |
+| Delegate to SpecService | Queries spec entries and links via `SpecService` (SQLite-backed) | Avoids duplicating index queries. Uses typed `SpecEntry`/`Link` models rather than raw dicts. |
+| Accept AppConfig | Constructor takes `AppConfig`, not `Path` | Uses config for project root and bonsai directory. Follows the same pattern as `SpecService` and `AgentService`. |
 | Synchronous compute | `_compute()` is sync; `recompute()` is async only for the notify call | File I/O is fast on local disk. No benefit from async file reads for small files (<4KB reads). |
 | Cached state | `get_state()` returns last computed state | Frontend can poll without triggering recomputation. Watcher-driven `recompute()` keeps state fresh. |
 | Push + pull | `vis/stateChanged` notification + `vis/state` RPC | Push keeps UI live; pull ensures fresh state on page load / reconnect. |
@@ -153,9 +168,9 @@ Fixed 5-step workflow: Goal & Requirements → Architecture Design → Module Sp
 
 | Dependency | Usage |
 |------------|-------|
-| `core/config` | `AppConfig` for project root and registry path |
-| `spec/registry` | `read_registry()` for typed registry access |
-| `spec/models` | `RegistryEntry`, `Link` model types |
+| `core/config` | `AppConfig` for project root and bonsai directory |
+| `spec/service` | `SpecService` for querying specs and links (SQLite-backed) |
+| `spec/models` | `SpecEntry`, `Link` model types |
 
 ## Known Limitations
 
@@ -167,5 +182,5 @@ Fixed 5-step workflow: Goal & Requirements → Architecture Design → Module Sp
 ## Related Specs
 
 - **Parent:** [Architecture Design](../../../DESIGN_DOC.md)
-- **Depends on:** [Core Config](../core/README.md) (for `AppConfig`), [Spec Module](../spec/README.md) (for registry access)
+- **Depends on:** [Core Config](../core/README.md) (for `AppConfig`), [Spec Module](../spec/README.md) (for spec index access)
 - **Consumed by:** [RPC Module](../rpc/README.md) (`methods/vis.py` handlers, `server.py` watcher integration)

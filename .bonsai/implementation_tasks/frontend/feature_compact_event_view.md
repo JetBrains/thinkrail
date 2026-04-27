@@ -1,3 +1,22 @@
+---
+id: task-fe-compact-event-view
+type: task-spec
+status: active
+title: Compact Event View Mode
+parent: design-doc
+implements:
+- chat-ui
+covers:
+- frontend/src/components/ChatStream/
+- frontend/src/context/
+- backend/app/core/settings.py
+tags:
+- high
+- new-feature
+- frontend
+- ui
+- chat
+---
 # Feature: Compact Event View Mode
 
 > Status: **Planned** | Created: 2026-04-08 | Design: [compact-event-view-design.md](../../docs/superpowers/specs/2026-04-08-compact-event-view-design.md)

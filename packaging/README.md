@@ -1,3 +1,19 @@
+---
+id: module-packaging
+type: module-design
+status: active
+title: Packaging Module Design
+parent: design-doc
+depends-on:
+- module-core
+covers:
+- packaging/
+- .github/workflows/nightly.yml
+tags:
+- infrastructure
+- distribution
+- ci-cd
+---
 # Packaging Module — Design Specification
 
 > Parent: [DESIGN_DOC.md](../DESIGN_DOC.md) | Status: **Active** | Created: 2026-04-09

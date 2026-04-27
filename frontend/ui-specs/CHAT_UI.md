@@ -1,3 +1,19 @@
+---
+id: chat-ui
+type: submodule-design
+status: active
+title: Chat UI Rendering
+parent: ui-center-panel
+depends-on:
+- module-rpc
+covers:
+- frontend/src/components/ChatStream/
+tags:
+- frontend
+- ui
+- chat
+- rendering
+---
 # Chat UI Rendering — Sub-Specification
 
 > Parent: [CENTER_PANEL.md](CENTER_PANEL.md) | Status: **Active** | Created: 2026-02-27 | Updated: 2026-04-08
@@ -139,7 +155,7 @@ interface AssistantMessageProps {
 - Root: `<div className="chat-assistant">` — `max-width: 90%`, `slideUp` entrance animation
 - Inner: renders text via `<ChatMarkdown>` component — full markdown rendering using `react-markdown` + `remark-gfm`
 - When `streaming=true`: renders `<span className="chat-cursor" />` — 7×14px block cursor, `blink` animation (1s step-end)
-- **Markdown rendering:** Implemented via `ChatMarkdown` component. Uses `react-markdown` with `remark-gfm` plugin for GitHub-Flavored Markdown (tables, strikethrough, task lists). Links render as `<ExternalLink>` component (opens in new tab). Code blocks render with syntax highlighting.
+- **Markdown rendering:** Implemented via `ChatMarkdown` component. Uses `react-markdown` with `remark-gfm` and `remark-frontmatter` plugins for GitHub-Flavored Markdown (tables, strikethrough, task lists). YAML frontmatter blocks render as collapsible `FrontmatterCard` (syntax-highlighted via Monaco). Links render as `<ExternalLink>` component (opens in new tab). Code blocks render with syntax highlighting.
 - Each `textDelta` event renders its own `<AssistantMessage>`. They are **not concatenated** — each event index gets its own component with no merge logic.
 - No author label ("Claude") is rendered. **[Planned]**
 

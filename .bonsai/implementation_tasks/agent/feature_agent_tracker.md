@@ -1,3 +1,18 @@
+---
+id: task-agent-tracker
+type: task-spec
+status: done
+title: Implement Agent tracker.py
+depends-on:
+- task-agent-models
+implements:
+- module-agent
+covers:
+- backend/app/agent/tracker.py
+tags:
+- high
+- new-feature
+---
 # Implement Agent tracker.py
 
 > Task lifecycle and asyncio.Future map for pending requests

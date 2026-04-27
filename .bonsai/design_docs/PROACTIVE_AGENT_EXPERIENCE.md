@@ -1,3 +1,24 @@
+---
+id: proactive-agent-experience
+type: goal-and-requirements
+status: active
+title: Proactive Agent Experience
+parent: goal-and-requirements
+depends-on:
+- module-agent
+- module-rpc
+- frontend-module
+covers:
+- backend/app/agent/
+- frontend/src/components/ContextPanel/
+- frontend/src/components/ChatStream/
+- claude-plugin/
+tags:
+- high
+- improvement
+- new-feature
+- agent-ux
+---
 * Project\Feature name: Proactive Agent Experience
 * Category: improvement + new-feature
 * Priority: high

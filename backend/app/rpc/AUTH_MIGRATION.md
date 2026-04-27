@@ -1,3 +1,16 @@
+---
+id: module-auth-migration
+type: module-design
+status: active
+title: Server-Wide Auth Migration
+parent: storage-architecture
+covers:
+- backend/app/rpc/auth.py
+tags:
+- backend
+- auth
+- migration
+---
 # Server-Wide Auth — Module Design
 
 > Parent: [Storage Architecture](../../../docs/STORAGE_ARCHITECTURE.md) | Status: **Active** | Created: 2026-04-13

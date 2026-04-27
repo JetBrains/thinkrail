@@ -1,3 +1,21 @@
+---
+id: improvement-plan-rejection-reason
+type: task-spec
+status: done
+title: 'Improve plan rejection: add reason text so agent can align'
+depends-on:
+- improvement-plan-approval-card
+- bugfix-plan-approval-content
+implements:
+- chat-ui
+covers:
+- frontend/src/components/ChatStream/PlanApprovalCard.tsx
+- frontend/src/components/ChatStream/ChatStream.tsx
+- frontend/src/components/ChatStream/ChatStream.css
+tags:
+- high
+- improvement
+---
 # Improve plan rejection: add reason text so agent can align
 
 When a user rejects a plan via PlanApprovalCard, the agent receives only `"Plan rejected"` — a hardcoded string with no context about what's wrong. The agent then blindly retries or drifts further without alignment. Users need to explain **why** they're rejecting so the agent can revise meaningfully.

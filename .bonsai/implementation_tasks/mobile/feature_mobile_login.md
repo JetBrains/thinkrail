@@ -1,3 +1,18 @@
+---
+id: feature_mobile_login
+type: task-spec
+status: active
+title: Implement Mobile Auth & Login Screen
+depends-on:
+- module-auth-migration
+- module-user-api
+covers:
+- mobile/shared/
+tags:
+- mobile
+- auth
+- critical
+---
 # Implement Mobile Auth & Login Screen
 
 > Mobile app must authenticate before accessing Bonsai, matching the web frontend's auth requirement.

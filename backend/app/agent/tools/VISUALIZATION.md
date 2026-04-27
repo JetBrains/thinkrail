@@ -1,3 +1,20 @@
+---
+id: agent-visualization
+type: submodule-design
+status: active
+title: Visualization — Backend Spec
+parent: module-agent
+implements:
+- feature-visualization
+covers:
+- backend/app/agent/tools/visualization.py
+- backend/app/agent/tools/_vis_validation.py
+- claude-plugin/tools/vis-server.py
+tags:
+- backend
+- visualization
+- mcp-tools
+---
 # Visualization — Backend Spec
 
 > Parent: [Tools Package](README.md) | Feature: [.bonsai/design_docs/VISUALIZATION.md](../../../../.bonsai/design_docs/VISUALIZATION.md) | Status: **Active** | Created: 2026-03-16

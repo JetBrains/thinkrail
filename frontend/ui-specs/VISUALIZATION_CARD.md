@@ -1,3 +1,23 @@
+---
+id: ui-visualization-card
+type: submodule-design
+status: active
+title: Visualization Card — Frontend Spec
+parent: chat-ui
+implements:
+- feature-visualization
+covers:
+- frontend/src/components/ChatStream/VisualizationCard.tsx
+- frontend/src/types/vis.ts
+- frontend/src/utils/mermaid.ts
+- frontend/src/utils/ZoomBar.tsx
+- frontend/src/components/ChatStream/__tests__/VisualizationCard.test.tsx
+- frontend/src/components/ChatStream/__tests__/toMermaidSyntax.test.ts
+tags:
+- frontend
+- visualization
+- ui
+---
 # Visualization Card — Frontend Spec
 
 > Parent: [Chat UI](CHAT_UI.md) | Feature: [.bonsai/design_docs/VISUALIZATION.md](../../.bonsai/design_docs/VISUALIZATION.md) | Status: **Active** | Created: 2026-03-16

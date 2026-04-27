@@ -1,3 +1,16 @@
+---
+id: ui-context-panel-code-mode
+type: submodule-design
+title: Code Context Sections Design
+parent: ui-context-panel
+covers:
+- frontend/src/components/ContextPanel/modes/CodeContext.tsx
+- frontend/src/components/ContextPanel/sections/CoveringSpecs.tsx
+- frontend/src/components/ContextPanel/sections/RelatedTasks.tsx
+tags:
+- frontend
+- ui-spec
+---
 # Code Context Sections — Sub-Module Design
 
 > Parent: [CONTEXT_PANEL.md](../CONTEXT_PANEL.md) | Status: **Draft** | Created: 2026-03-06

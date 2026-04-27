@@ -1,3 +1,27 @@
+---
+id: draft-session-design
+type: submodule-design
+status: active
+title: Draft Session (Pre-Start Config) — Feature Design
+parent: design-doc
+depends-on:
+- module-agent
+- module-rpc
+references:
+- skill-session-start-design
+covers:
+- backend/app/agent/service.py
+- backend/app/agent/models.py
+- backend/app/rpc/methods/agents.py
+- frontend/src/components/ChatStream/DraftConfigCard.tsx
+- frontend/src/store/sessionStore.ts
+- frontend/src/components/NewSessionModal/NewSessionModal.tsx
+tags:
+- feature
+- session
+- config
+- draft
+---
 # Draft Session (Pre-Start Config) — Feature Design
 
 > Parent: [DESIGN_DOC.md](../../DESIGN_DOC.md) | Status: **Active** | Created: 2026-03-28

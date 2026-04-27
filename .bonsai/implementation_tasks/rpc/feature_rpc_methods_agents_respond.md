@@ -1,3 +1,18 @@
+---
+id: task-rpc-methods-agents-respond
+type: task-spec
+status: done
+title: 'Implement RPC methods/agents.py: respond + interrupt handlers'
+depends-on:
+- task-rpc-methods-agents-basic
+implements:
+- module-rpc
+covers:
+- backend/app/rpc/methods/agents.py
+tags:
+- high
+- new-feature
+---
 # Implement RPC methods/agents.py: respond + interrupt Handlers
 
 > `respond_agent` and `interrupt_agent` handlers

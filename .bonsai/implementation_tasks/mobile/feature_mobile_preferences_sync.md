@@ -1,3 +1,17 @@
+---
+id: feature_mobile_preferences_sync
+type: task-spec
+status: active
+title: Implement Mobile Preferences Sync
+depends-on:
+- feature_mobile_login
+covers:
+- mobile/shared/
+tags:
+- mobile
+- preferences
+- high-priority
+---
 # Implement Mobile Preferences Sync
 
 > Mobile app should fetch user preferences and recent projects from the backend, consistent with the web frontend.

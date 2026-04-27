@@ -1,8 +1,23 @@
+---
+id: feature_login_screen
+type: task-spec
+status: active
+title: Implement Frontend Auth & Login Screen
+depends-on:
+- module-auth-migration
+- module-user-api
+covers:
+- frontend/src/components/LoginScreen/
+tags:
+- frontend
+- auth
+- critical
+---
 # Implement Frontend Auth & Login Screen
 
 > Users must authenticate before accessing Bonsai. The login screen is the first thing shown when no valid token exists.
 
-**Status:** Pending
+**Status:** Active
 **Priority:** Critical
 **Depends on:** Server-wide auth (AUTH_MIGRATION.md), User API (USER_API.md)
 **Spec reference:** [Storage Architecture](../../docs/STORAGE_ARCHITECTURE.md)

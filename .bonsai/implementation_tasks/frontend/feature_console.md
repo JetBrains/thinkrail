@@ -1,3 +1,19 @@
+---
+id: task-fe-console
+type: task-spec
+status: done
+title: Implement Console
+depends-on:
+- task-fe-app-shell
+implements:
+- console
+covers:
+- frontend/src/components/Console/
+tags:
+- medium
+- new-feature
+- frontend
+---
 # Implement Console
 
 > xterm.js terminal emulator with multiple tabs in the right panel

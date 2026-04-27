@@ -1,3 +1,19 @@
+---
+id: feature_preferences_sync
+type: task-spec
+status: active
+title: Implement Frontend Preferences Sync
+depends-on:
+- module-user-api
+- feature_login_screen
+covers:
+- frontend/src/store/
+- frontend/src/components/ProjectPicker/
+tags:
+- frontend
+- preferences
+- high-priority
+---
 # Implement Frontend Preferences Sync
 
 > Move user preferences from browser localStorage to backend storage, making them consistent across all browsers and devices.

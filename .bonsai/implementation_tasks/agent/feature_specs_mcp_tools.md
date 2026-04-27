@@ -1,3 +1,16 @@
+---
+id: task-specs-mcp-tools
+type: task-spec
+status: done
+title: Implement Spec & Registry MCP Tools
+implements:
+- agent-specs-tools
+covers:
+- backend/app/agent/tools/specs.py
+tags:
+- high
+- new-feature
+---
 # Implement Spec & Registry MCP Tools
 
 Implement the `bonsai-specs` MCP server with 7 tools that give the Claude agent structured, validated access to the spec registry and spec files. This replaces raw file I/O (Read/Edit on `.bonsai/registry.json`) with typed operations that enforce correctness and minimize token usage.

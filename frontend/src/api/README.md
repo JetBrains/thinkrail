@@ -1,3 +1,19 @@
+---
+id: api-client
+type: submodule-design
+status: active
+title: API Client
+parent: frontend-module
+depends-on:
+- module-rpc
+covers:
+- frontend/src/api/
+tags:
+- frontend
+- infrastructure
+- websocket
+- rpc
+---
 # API Client — Module Specification
 
 > Parent: [Frontend Module](../../README.md) | Status: **Active** | Created: 2026-03-02 | Updated: 2026-03-05
@@ -11,7 +27,7 @@ The API client is the frontend's communication layer with the backend. It manage
 ```
 ┌────────────────────────────────────────────────────────┐
 │  React Components                                       │
-│    useSpecs()  useSpec()  useGraph()  useSession()  ... │
+│    useConnectionState()  useSession()                   │
 ├────────────────────────────────────────────────────────┤
 │  RPC Method Layer (typed factory functions)             │
 │    createSpecApi()  createAgentApi()  createSessionApi()│
@@ -22,6 +38,9 @@ The API client is the frontend's communication layer with the backend. It manage
 │  WebSocket + JSON-RPC 2.0 protocol                      │
 └────────────────────────────────────────────────────────┘
 ```
+
+> **Note:** Spec data flows exclusively through `wireEvents.ts` → `specStore` (Zustand).
+> There are no React hooks for spec queries — components read from `useSpecStore()` selectors.
 
 ## File Organization
 
@@ -35,15 +54,18 @@ frontend/src/api/
 │   ├── index.ts         # Re-exports all method factories
 │   ├── specs.ts         # spec/* methods
 │   ├── agents.ts        # agent/* methods
-│   └── sessions.ts      # session/* methods
+│   ├── sessions.ts      # session/* methods
+│   ├── board.ts         # board/* methods (meta-tickets, kanban)
+│   ├── settings.ts      # settings/* methods (project config, models, skills)
+│   ├── admin.ts         # admin/* methods (user management)
+│   ├── user.ts          # user/* methods (preferences, auth)
+│   ├── trash.ts         # trash/* methods (soft-delete, restore)
+│   └── subsessions.ts   # subsession/* methods (sub-agent orchestration)
 └── hooks/
-    ├── useRpc.tsx        # RpcProvider, useRpc(), useConnectionState()
-    ├── useSpecs.ts       # useSpecs(), useSpec(), useGraph()
-    ├── useSession.ts     # useSession() — per-session live event stream
-    └── useCost.ts        # useCost() — stub
+    └── useRpc.tsx        # RpcProvider, useRpc(), useConnectionState()
 ```
 
-**Not implemented:** `methods/cost.ts`, `methods/diff.ts`, `methods/terminal.ts`, separate `hooks/useGraph.ts`
+**Not implemented:** `methods/cost.ts`, `methods/diff.ts`, `methods/terminal.ts`
 
 ## Singleton Accessor (index.ts)
 
@@ -116,7 +138,7 @@ class RpcClient {
 
 ```typescript
 createSpecApi(client: RpcClient) => {
-  list: () => Promise<RegistryEntry[]>;        // "spec/list"
+  list: () => Promise<SpecEntry[]>;        // "spec/list"
   get: (id: string) => Promise<SpecDetail>;    // "spec/get"
   create: (params) => Promise<SpecDetail>;     // "spec/create"
   update: (id, content) => Promise<SpecDetail>;// "spec/update"
@@ -170,7 +192,6 @@ class RpcConnectionError extends RpcError {}  // code: -32001
 | -32602 | Invalid request parameters |
 | -32603 | Server error |
 | -32001 | Spec not found |
-| -32002 | Registry error |
 | -32003 | Validation error |
 | -32011 | Agent task not found |
 | -32012 | No pending request |
@@ -187,35 +208,11 @@ function useConnectionState(): ConnectionState;
 
 `RpcProvider` creates client once via `useRef`, connects on mount. Does not disconnect on cleanup (long-lived).
 
-### useSpecs (hooks/useSpecs.ts)
-
-```typescript
-function useSpecs(): { specs, loading, error, refetch };
-function useSpec(id: string | null): { spec, loading, error };
-function useGraph(): { graph, loading, error, refetch };
-```
-
-- `useSpecs` and `useGraph` subscribe to `spec/didChange`, `spec/didCreate`, `spec/didDelete`, `registry/didUpdate` and re-fetch on any notification
-- `useSpec` fetches once per `id` change — no reactive update on spec changes
-
-### useSession (hooks/useSession.ts)
-
-```typescript
-function useSession(bonsaiSid: string | null): { events, status, metrics };
-```
-
-Subscribes to streaming `agent/*` events filtered by `bonsaiSid`. Does **not** handle `askUserQuestion`, `confirmAction`, `interrupted`, `turnComplete`, `configChanged` — those go through `wireEvents`.
-
-### useCost (hooks/useCost.ts) — Stub
-
-Returns `{ summary: null, loading: false }`. No RPC calls.
-
 ## Known Limitations
 
 - **Single connection** — close code 4000 signals server-side replacement
 - **No request queuing during reconnect** — requests fail immediately
 - **No message compression**
-- **`useSpec` has no live update** — fetches once, doesn't re-fetch on changes
 - **cost/*, diff/*, terminal/* not implemented**
 
 ## Related Specs

@@ -1,3 +1,17 @@
+---
+id: task-bugfix-subagent-attention
+type: task-spec
+status: done
+title: Fix subagent attention cards not rendering in chat
+implements:
+- chat-ui
+covers:
+- frontend/src/components/ChatStream/ChatStream.tsx
+tags:
+- critical
+- bug-fix
+- frontend
+---
 # Fix subagent attention cards not rendering in chat
 
 When a subagent triggers an action that requires user attention — tool approval

@@ -1,3 +1,18 @@
+---
+id: agent-suggest-session
+type: submodule-design
+status: active
+title: SuggestSession — Backend Spec
+parent: module-agent
+implements:
+- feature-suggest-session
+covers:
+- backend/app/agent/tools/suggest_session.py
+tags:
+- backend
+- proactive
+- interactive
+---
 # SuggestSession — Backend Spec
 
 > Parent: [Tools Package](README.md) | Feature: [.bonsai/design_docs/SUGGEST_SESSION.md](../../../../.bonsai/design_docs/SUGGEST_SESSION.md) | Status: **Draft** | Created: 2026-03-07 | Updated: 2026-03-20
@@ -49,7 +64,7 @@ Single file exports:
 **Handler logic (`_suggest_session`):**
 
 1. Read session context via `get_tool_context()` → `ctx`
-2. Validate `skill` exists in `ctx.config.plugin_dir` and `specIds` exist in registry
+2. Validate `skill` exists in `ctx.config.plugin_dir` and `specIds` exist in the SQLite index
 3. If validation fails: return `isError` MCP response with error message
 4. Create `asyncio.Future` via `ctx.tracker.register_future()`
 5. Send `agent/suggestSession` request via `ctx.notify()` with `request_id`
@@ -71,7 +86,7 @@ async def _suggest_session(args: dict) -> dict:
 
     spec_ids = args.get("specIds", [])
     if spec_ids:
-        spec_error = _validate_spec_ids(spec_ids, ctx.config.get_registry_path())
+        spec_error = await _validate_spec_ids(spec_ids, ctx.config.get_bonsai_dir())
         if spec_error:
             return {"content": [{"type": "text", "text": f"Error: {spec_error}"}], "isError": True}
 

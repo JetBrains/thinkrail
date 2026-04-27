@@ -1,3 +1,15 @@
+---
+id: ui-context-panel
+type: submodule-design
+status: active
+title: Context Panel UI Specification
+parent: webview
+covers:
+- frontend/src/components/AppShell/RightPanel.tsx
+tags:
+- frontend
+- ui-spec
+---
 # Context Panel — UI Specification
 
 > Parent: [WEBVIEW.md](WEBVIEW.md) | Status: **Active** | Created: 2026-03-04 | Updated: 2026-03-12

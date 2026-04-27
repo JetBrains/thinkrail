@@ -1,3 +1,18 @@
+---
+id: task-spec-validator
+type: task-spec
+status: done
+title: Implement Spec validator.py
+depends-on:
+- task-spec-models
+implements:
+- module-spec
+covers:
+- backend/app/spec/validator.py
+tags:
+- critical
+- new-feature
+---
 # Implement Spec validator.py
 
 > Validate spec structure, fields, and link integrity

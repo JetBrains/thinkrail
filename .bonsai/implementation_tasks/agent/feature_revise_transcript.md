@@ -1,3 +1,17 @@
+---
+id: task-revise-transcript
+type: task-spec
+status: draft
+title: Revise Transcript Backend
+implements:
+- module-agent
+depends-on:
+- agent-transcribe
+tags:
+- voice
+- transcript
+- backend
+---
 # Task: Revise Transcript Backend
 
 > Status: **Pending** | Created: 2026-04-16

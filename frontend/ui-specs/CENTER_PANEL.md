@@ -1,3 +1,18 @@
+---
+id: ui-center-panel
+type: submodule-design
+status: active
+title: Center Panel UI Specification
+parent: webview
+depends-on:
+- state-management
+covers:
+- frontend/src/components/SessionPanel/
+- frontend/src/components/FileViewer/
+tags:
+- frontend
+- ui-spec
+---
 # Center Panel — UI Specification
 
 > Parent: [WEBVIEW.md](WEBVIEW.md) | Status: **Active** | Created: 2026-03-05 | Updated: 2026-03-05
@@ -188,7 +203,7 @@ Options: Edit in place, Open in IntelliJ IDEA, Open in VS Code, Open in Vim.
 
 ### Content Rendering
 
-- **Markdown** (`*.md` in preview mode): `<MarkdownPreview>` with `react-markdown` + `remark-gfm` + Mermaid diagrams
+- **Markdown** (`*.md` in preview mode): `<MarkdownPreview>` with `react-markdown` + `remark-gfm` + `remark-frontmatter` + Mermaid diagrams. YAML frontmatter blocks are rendered as a collapsible `FrontmatterCard` (collapsed by default) with syntax-highlighted YAML via read-only Monaco.
 - **Code** (all other files, or markdown in edit mode): Monaco editor with `intellij-darcula` theme
 - **Monaco options:** minimap enabled, lineNumbers on, fontSize 13, JetBrains Mono font, `automaticLayout: true`
 
@@ -198,6 +213,7 @@ Options: Edit in place, Open in IntelliJ IDEA, Open in VS Code, Open in Vim.
 - Per-diagram zoom controls (30%–300%, shown on diagram hover)
 - Mermaid error handling (shows raw code + error message)
 - User-resizable diagram wrappers (`resize: both`)
+- Frontmatter card: collapsible header strip ("Frontmatter ▸/▾") with read-only Monaco YAML editor (max-height ~200px, scroll). Collapsed by default. Keyboard accessible (Enter/Space toggle).
 
 ---
 
@@ -320,6 +336,9 @@ Session tab switching clears file state; file tab switching clears preview.
 | `.md-preview` | Markdown content area |
 | `.md-zoom-bar` / `.md-zoom-btn` | Zoom controls |
 | `.md-mermaid-wrapper` | Resizable diagram container |
+| `.fm-card` | Frontmatter card container |
+| `.fm-card-header` | Collapsible header strip ("Frontmatter ▸/▾") |
+| `.fm-card-body` | Monaco editor wrapper (expanded state) |
 
 ---
 

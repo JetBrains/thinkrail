@@ -1,3 +1,21 @@
+---
+id: task-skill-session-start
+type: task-spec
+status: done
+title: Implement Start Session Button for Skill-Loaded Sessions
+implements:
+- skill-session-start-design
+- ui-skill-session-start
+covers:
+- frontend/src/components/SessionPanel/SessionPanel.tsx
+- frontend/src/components/ChatStream/InputArea.tsx
+tags:
+- medium
+- new-feature
+- frontend
+- session
+- skill
+---
 # Implement "Start the Session" Button for Skill-Loaded Sessions
 
 > One-click button to launch a skill when a session is created with a skill selected.

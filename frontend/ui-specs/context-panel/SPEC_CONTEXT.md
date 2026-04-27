@@ -1,3 +1,19 @@
+---
+id: ui-context-panel-spec-mode
+type: submodule-design
+status: active
+title: Spec Context Sections Design
+parent: ui-context-panel
+covers:
+- frontend/src/components/ContextPanel/modes/SpecContext.tsx
+- frontend/src/components/ContextPanel/sections/ConnectedSpecs.tsx
+- frontend/src/components/ContextPanel/sections/LinkedTasks.tsx
+- frontend/src/components/ContextPanel/sections/CoveredFiles.tsx
+- frontend/src/components/ContextPanel/sections/SpecHealth.tsx
+tags:
+- frontend
+- ui-spec
+---
 # Spec Context Sections — Sub-Module Design
 
 > Parent: [CONTEXT_PANEL.md](../CONTEXT_PANEL.md) | Status: **Active** | Created: 2026-03-06

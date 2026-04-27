@@ -1,3 +1,17 @@
+---
+id: feature_board_module
+type: module-design
+status: active
+title: Board Module — Meta-Ticket Lifecycle Engine
+parent: design-doc
+covers:
+- backend/app/board/
+tags:
+- backend
+- board
+- meta-ticket
+- orchestration
+---
 # Board Module — Design Specification
 
 > Parent: [DESIGN_DOC.md](../../../DESIGN_DOC.md) | Status: **Active** | Created: 2026-03-27
@@ -148,7 +162,7 @@ An MCP tool that allows agents to change a ticket's status. The agent proposes a
 
 **File:** `backend/app/agent/tools/record_spec_change.py`
 
-An MCP tool that agents call after each `spec_save` to record what changed. Creates a `SpecChange` entry and appends it to the ticket via `board_svc.add_spec_change()`. The `ticket-specify` skill is updated to call this tool after each spec save, capturing the spec_id, change_type (created/modified/deleted), a summary of what changed, and which sections were affected.
+An MCP tool that agents call after writing or editing a spec file to record what changed. Agents write spec files directly using standard Write/Edit tools with YAML frontmatter; the watcher validates and indexes automatically. This tool creates a `SpecChange` entry and appends it to the ticket via `board_svc.add_spec_change()`. The `ticket-specify` skill is updated to call this tool after each spec write, capturing the spec_id, change_type (created/modified/deleted), a summary of what changed, and which sections were affected.
 
 ### Output Contracts
 

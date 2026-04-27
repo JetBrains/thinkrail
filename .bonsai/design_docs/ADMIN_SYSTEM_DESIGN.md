@@ -1,3 +1,20 @@
+---
+id: feature-admin-system
+type: architecture-design
+status: active
+title: Admin Role System
+parent: storage-architecture
+covers:
+- backend/app/rpc/methods/admin.py
+- frontend/src/components/AdminPanel/AdminPanel.tsx
+- frontend/src/components/SetupScreen/SetupScreen.tsx
+- frontend/src/api/methods/admin.ts
+tags:
+- backend
+- frontend
+- admin
+- auth
+---
 # Admin Role System
 
 > Parent: [Storage Architecture](STORAGE_ARCHITECTURE.md) | Status: **Active** | Created: 2026-04-14

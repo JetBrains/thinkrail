@@ -1,3 +1,16 @@
+---
+id: task-preview-tab-store
+type: task-spec
+status: done
+title: Add preview tab state to fileStore
+implements:
+- ui-center-panel
+covers:
+- frontend/src/store/fileStore.ts
+tags:
+- high
+- new-feature
+---
 # Add preview tab state to fileStore
 
 Single-click browsing in SpecTree and FileTree should open an ephemeral "preview tab" in the center panel and update the context panel instantly. This task adds the store-level state and actions needed to support preview tabs.

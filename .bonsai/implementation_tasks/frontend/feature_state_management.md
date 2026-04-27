@@ -1,3 +1,19 @@
+---
+id: task-fe-state-management
+type: task-spec
+status: done
+title: Implement State Management
+depends-on:
+- task-fe-api-client
+implements:
+- state-management
+covers:
+- frontend/src/store/
+tags:
+- critical
+- new-feature
+- frontend
+---
 # Implement State Management
 
 > Zustand stores for specs, sessions, UI, cost, and notifications

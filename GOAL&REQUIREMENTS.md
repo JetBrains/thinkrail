@@ -1,3 +1,12 @@
+---
+id: goal-and-requirements
+type: goal-and-requirements
+status: active
+title: Bonsai Goal & Requirements
+tags:
+- high
+- new-project
+---
 * Project\Feature name: Bonsai
 * Category: new-project
 * Priority: high
@@ -32,7 +41,7 @@ Bonsai serves as both a spec management layer and an AI agent orchestrator. By m
 | Frontend language | TypeScript |
 | Frontend framework | React |
 | Communication protocol | JSON-RPC over WebSocket (LSP-inspired) |
-| File watching | watchfiles (registry.json, spec files) |
+| File watching | watchfiles (spec files, .bonsai/ config files) |
 | Data validation | Pydantic 2.0+ (models & serialization) |
 | ASGI server | uvicorn (serving FastAPI) |
 | JSON-RPC library | jsonrpcserver (JSON-RPC 2.0 protocol) |

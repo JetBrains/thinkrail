@@ -1,3 +1,24 @@
+---
+id: feature-visualization
+type: submodule-design
+status: active
+title: MCP Visualization — Feature Spec
+parent: visualization-design
+references:
+- agent-visualization
+- ui-visualization-card
+covers:
+- backend/app/agent/tools/visualization.py
+- backend/app/agent/tools/_vis_validation.py
+- claude-plugin/tools/vis-server.py
+- frontend/src/components/ChatStream/VisualizationCard.tsx
+- frontend/src/types/vis.ts
+- frontend/src/utils/mermaid.ts
+tags:
+- feature
+- visualization
+- mcp
+---
 # MCP Visualization — Feature Spec
 
 > Parent: [VISUALIZATION_DESIGN.md](VISUALIZATION_DESIGN.md) | Status: **Active** | Created: 2026-03-16

@@ -1,3 +1,18 @@
+---
+id: task-spec-tree
+type: task-spec
+status: done
+title: Implement SpecTree Component
+depends-on:
+- webview
+implements:
+- spec-tree
+covers:
+- frontend/src/components/SpecTree/
+tags:
+- high
+- new-feature
+---
 # Implement SpecTree: hierarchical spec tree view in left panel Specs tab
 
 The Specs tab in the left panel currently shows a placeholder. Users need to browse the project's specifications organized by hierarchy (goal → architecture → module → submodule → task) to understand project structure and navigate to specific specs.

@@ -1,3 +1,19 @@
+---
+id: task-visualization-card
+type: task-spec
+status: done
+title: Visualization Card
+implements:
+- visualization-design
+- ui-visualization-card
+covers:
+- frontend/src/components/ChatStream/VisualizationCard.tsx
+- frontend/src/types/vis.ts
+tags:
+- medium
+- new-feature
+- frontend
+---
 # Task: Visualization Card
 
 > Status: **Done** | Created: 2026-03-11

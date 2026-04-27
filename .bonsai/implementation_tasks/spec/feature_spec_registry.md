@@ -1,3 +1,19 @@
+---
+id: task-spec-registry
+type: task-spec
+status: done
+title: Implement Spec registry.py
+depends-on:
+- task-spec-models
+- task-core-fileio
+implements:
+- module-spec
+covers:
+- backend/app/spec/registry.py
+tags:
+- critical
+- new-feature
+---
 # Implement Spec registry.py
 
 > Read/write/validate `.bonsai/registry.json`

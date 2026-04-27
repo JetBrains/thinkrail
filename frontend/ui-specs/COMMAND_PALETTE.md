@@ -1,3 +1,17 @@
+---
+id: command-palette
+type: submodule-design
+status: active
+title: Command Palette
+parent: webview
+covers:
+- frontend/src/components/CommandPalette/
+tags:
+- frontend
+- ui
+- search
+- navigation
+---
 # Command Palette — Sub-Specification
 
 > Parent: [WEBVIEW.md](../WEBVIEW.md) §6 | Status: **Active** | Created: 2026-03-02

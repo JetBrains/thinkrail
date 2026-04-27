@@ -1,3 +1,17 @@
+---
+id: task-native-resume
+type: task-spec
+status: done
+title: Replace text-replay continue with SDK native resume
+implements:
+- module-agent
+covers:
+- backend/app/agent/runner.py
+- backend/app/agent/service.py
+tags:
+- high
+- improvement
+---
 # Replace text-replay continue with SDK native resume
 
 Replace the lossy text-replay `continue_session()` with the Claude Code SDK's native `--resume <sessionId>` feature. This eliminates truncated context, reduces input token waste, and gives resumed sessions full conversation fidelity.

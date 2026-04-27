@@ -1,3 +1,21 @@
+---
+id: task-context-panel-spec-sections
+type: task-spec
+status: done
+title: 'Implement Spec Context sections: ConnectedSpecs, LinkedTasks, SpecHealth'
+depends-on:
+- task-context-panel-shared-infra
+implements:
+- ui-context-panel-spec-mode
+covers:
+- frontend/src/components/ContextPanel/sections/ConnectedSpecs.tsx
+- frontend/src/components/ContextPanel/sections/LinkedTasks.tsx
+- frontend/src/components/ContextPanel/sections/SpecHealth.tsx
+tags:
+- high
+- feature
+- frontend
+---
 # Task: Implement Spec Context Sections
 
 > Implements: [SPEC_CONTEXT.md](../../frontend/ui-specs/context-panel/SPEC_CONTEXT.md)

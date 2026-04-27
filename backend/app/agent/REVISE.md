@@ -1,3 +1,16 @@
+---
+id: agent-revise
+type: submodule-design
+status: active
+title: Transcript Revision — Submodule Design
+parent: module-agent
+covers:
+- backend/app/agent/revise.py
+tags:
+- voice
+- transcript
+- revise
+---
 # Transcript Revision — Submodule Design
 
 > Parent: [README.md](README.md) | Status: **Active** | Created: 2026-04-16

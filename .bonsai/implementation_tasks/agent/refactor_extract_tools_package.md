@@ -1,3 +1,16 @@
+---
+id: task-extract-tools-package
+type: task-spec
+status: done
+title: Extract tools/ package and permissions.py from runner.py
+parent: module-agent
+implements:
+- agent-tools
+tags:
+- refactor
+- tools
+- backend
+---
 # Extract tools/ package and permissions.py from runner.py
 
 > Parent: [Agent Module](../../backend/app/agent/README.md) | Implements: [Agent Tools Package](../../backend/app/agent/tools/README.md) | Priority: **High** | Created: 2026-03-11

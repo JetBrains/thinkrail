@@ -1,3 +1,16 @@
+---
+id: webview
+type: module-design
+status: active
+title: Web View — UI Specification
+parent: frontend-module
+covers:
+- frontend/
+tags:
+- frontend
+- ui
+- webview
+---
 # Web View — UI Specification
 
 > Parent: [Frontend Module](../README.md) | Status: **Active** | Created: 2026-02-27

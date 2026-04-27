@@ -1,3 +1,17 @@
+---
+id: task-resizable-boxes
+type: task-spec
+status: done
+title: Resizable Session Boxes
+implements:
+- chat-ui
+covers:
+- frontend/src/components/ChatStream/ChatStream.css
+tags:
+- low
+- improvement
+- frontend
+---
 # Task: Resizable Session Boxes
 
 > Status: **Done** | Created: 2026-03-11

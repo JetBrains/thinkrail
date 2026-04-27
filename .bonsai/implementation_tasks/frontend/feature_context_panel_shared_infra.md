@@ -1,3 +1,20 @@
+---
+id: task-context-panel-shared-infra
+type: task-spec
+status: done
+title: 'Context Panel shared infrastructure: hooks and utils'
+implements:
+- ui-context-panel-spec-mode
+- ui-context-panel-agent-mode
+covers:
+- frontend/src/components/ContextPanel/useSelectedSpec.ts
+- frontend/src/components/ContextPanel/useActiveSession.ts
+- frontend/src/components/ContextPanel/utils.ts
+tags:
+- high
+- feature
+- frontend
+---
 # Task: Context Panel Shared Infrastructure
 
 > Implements: [SPEC_CONTEXT.md](../../frontend/ui-specs/context-panel/SPEC_CONTEXT.md), [AGENT_CONTEXT.md](../../frontend/ui-specs/context-panel/AGENT_CONTEXT.md)

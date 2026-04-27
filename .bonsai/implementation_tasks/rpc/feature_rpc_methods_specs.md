@@ -1,3 +1,18 @@
+---
+id: task-rpc-methods-specs
+type: task-spec
+status: done
+title: Implement RPC methods/specs.py
+depends-on:
+- task-rpc-notifications
+implements:
+- module-rpc
+covers:
+- backend/app/rpc/methods/specs.py
+tags:
+- high
+- new-feature
+---
 # Implement RPC methods/specs.py
 
 > JSON-RPC handlers for `spec/*` methods

@@ -1,3 +1,19 @@
+---
+id: improvement-plan-approval-card
+type: task-spec
+status: done
+title: 'Improve ExitPlanMode display: PlanApprovalCard'
+depends-on:
+- task-fe-chat-ui
+implements:
+- chat-ui
+- module-agent
+covers:
+- frontend/src/components/ChatStream/PlanApprovalCard.tsx
+tags:
+- medium
+- improvement
+---
 # Improve ExitPlanMode display: PlanApprovalCard
 
 > Replace raw JSON "Action requires approval" card with a dedicated plan review UI

@@ -1,3 +1,21 @@
+---
+id: feature-update-progress
+type: submodule-design
+title: UpdateProgress — Feature Spec
+parent: proactive-agent-design
+references:
+- agent-progress
+covers:
+- backend/app/agent/runner.py
+- frontend/src/components/ContextPanel/sections/ProgressSection.tsx
+- frontend/src/store/sessionStore.ts
+- frontend/src/store/wireEvents.ts
+tags:
+- feature
+- agent-ux
+- proactive
+- passive
+---
 # UpdateProgress — Feature Spec
 
 > Parent: [Proactive Agent Experience Design](PROACTIVE_AGENT_EXPERIENCE_DESIGN.md) | Status: **Draft** | Created: 2026-03-07

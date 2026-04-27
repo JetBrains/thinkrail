@@ -1,3 +1,19 @@
+---
+id: agent-persistence
+type: submodule-design
+status: active
+title: Agent Session Persistence
+parent: module-agent
+depends-on:
+- module-core
+covers:
+- backend/app/agent/persistence.py
+tags:
+- backend
+- agent-orchestration
+- persistence
+- sessions
+---
 # Agent Persistence — Submodule Specification
 
 > Parent: [Agent Module](README.md) | Status: **Active** | Created: 2026-03-03

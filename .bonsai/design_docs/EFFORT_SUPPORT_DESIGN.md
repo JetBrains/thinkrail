@@ -1,3 +1,20 @@
+---
+id: effort-support-design
+type: submodule-design
+status: active
+title: Effort Support — Feature Design
+parent: design-doc
+depends-on:
+- module-agent
+covers:
+- backend/app/agent/models.py
+- backend/app/agent/service.py
+- frontend/src/components/ChatStream/SessionStatusLine.tsx
+tags:
+- feature
+- effort
+- config
+---
 # Effort Support — Feature Design
 
 > Parent: [DESIGN_DOC.md](../../DESIGN_DOC.md) | Status: **Active** | Created: 2026-03-11

@@ -43,6 +43,70 @@ cd backend && uv run python -m app.cli set-admin --id <user-id>
 - **Frontend:** `cd frontend && npm test` (vitest)
 - **Frontend lint:** `cd frontend && npm run lint` (tsc --noEmit + eslint)
 
+## Code Generation (Backend → Frontend Types)
+
+Frontend TypeScript types are **generated from backend Pydantic models** — never hand-written. Two pipelines:
+
+1. **REST API types:** FastAPI OpenAPI schema → `openapi-typescript` → `src/api/generated.ts`
+2. **WebSocket event types:** Pydantic `AgentEvent` union → JSON Schema → `json-schema-to-typescript` → `src/types/ws-events.ts`
+
+```bash
+cd frontend && npm run generate     # regenerate all types
+```
+
+This runs automatically as a `prebuild` hook (`npm run build` triggers it). Individual steps:
+```bash
+npm run generate:schema     # export openapi.json from FastAPI
+npm run generate:api        # openapi.json → src/api/generated.ts
+npm run generate:ws-schema  # export ws-events.json from Pydantic models
+npm run generate:ws-types   # ws-events.json → src/types/ws-events.ts
+```
+
+Backend CLI equivalents: `uv run python -m app.cli export-schema` and `export-ws-schema`.
+
+**Rule:** When you change backend Pydantic models (api/schemas.py, agent/models.py), run `npm run generate` in frontend/ to keep types in sync. Generated files have "DO NOT EDIT" headers — never modify them directly.
+
+## Code Style — Python Backend
+
+Follow these conventions for all new Python code:
+
+### File Structure
+- `from __future__ import annotations` — **always** the first import
+- Module-level docstring: triple-quote description of what the file does
+- `logger = logging.getLogger(__name__)` when logging is needed
+- Section separators: `# ── Section name ────────────────────────` (Unicode box-drawing `─`)
+
+### Type Hints
+- Use modern syntax: `str | None` (not `Optional[str]`), `list[str]` (not `List[str]`)
+- Annotate all function signatures and return types
+- Use `Any` sparingly — prefer concrete types
+
+### Data Models
+- **`@dataclass`** for simple internal containers (no serialization needed)
+- **Pydantic `BaseModel`** for anything crossing API/storage boundaries
+- `Field(default_factory=list)` for mutable defaults in Pydantic models
+
+### Error Handling
+- Graceful fallback: try/except returning safe defaults — never crash on non-critical paths
+- `logger.debug("...", exc_info=True)` for suppressed exceptions
+- Domain-specific exceptions (e.g. `SpecNotFoundError`, `FrontmatterError`) — not bare `Exception`
+
+### Naming
+- Private helpers: `_prefixed` (module-level or in-class)
+- Public API: clear verb phrases (`list_specs`, `get_spec`, `parse_frontmatter`)
+- Constants: `UPPER_SNAKE_CASE`
+
+### Testing (pytest)
+- Class-based organization: `class TestParseFrontmatter:`, `class TestSpecIndex:`
+- Descriptive method names: `test_returns_empty_dict_for_no_frontmatter`
+- Use `unittest.mock.patch` with context managers; group with `with (...):` syntax
+- Async tests: `pytest-asyncio` with auto mode
+
+### Async
+- Use `async/await` for I/O-bound operations (file I/O via aiosqlite, network calls)
+- `aiosqlite` for SQLite access (consistent with `server_store.py`)
+- Don't mix sync and async — if a module is async, keep all its public methods async
+
 ## Spec-Driven Rules
 1. Check specs before implementing: read existing specs first
 2. Create specs before code: use /spec-init, /module-design, etc.
@@ -55,24 +119,36 @@ cd backend && uv run python -m app.cli set-admin --id <user-id>
 backend/
   app/
     main.py           # FastAPI entry point (create_app factory)
-    cli.py            # Admin CLI (create-user, list-users)
-    core/             # Config, file I/O, watcher, server_store (SQLite)
-    spec/             # Spec models, parser, validator, registry, graph, service
-    agent/            # Agent models, tracker, runner, service, context, persistence
+    cli.py            # Admin CLI (create-user, list-users, set-admin)
+    api/              # REST API layer (FastAPI routers)
+      routers/        # files.py, fs.py, project.py, server_info.py, setup.py, user.py
+    core/             # Config, file I/O, watcher, server_store (SQLite), project bootstrap, settings
+    spec/             # Spec models, parser, validator, frontmatter, index, graph, service
+    agent/            # Agent models, tracker, runner, service, context, persistence, credentials, revise, transcribe, permissions, pricing, model_registry, visualization
+      tools/          # MCP tools: specs.py, suggest_session.py, suggest_description.py, visualization.py, orchestrator.py, change_ticket_status.py
+    board/            # Meta-ticket and plan management (models, service, storage, plan, state_machine, spec_drafts)
     rpc/              # WebSocket RPC server + JSON-RPC methods
-      methods/        # specs.py, agents.py, admin.py, user.py, auth.py
+      methods/        # specs.py, agents.py, sessions.py, board.py, trash.py, vis.py, settings.py, admin.py, user.py, auth.py, subsessions.py
+    trash/            # Soft-delete service (service.py, storage.py)
+    vis/              # Visualization dashboard (models.py, service.py)
   tests/              # pytest tests (mirrors app/ structure)
 frontend/
   src/
     api/              # WebSocket client, RPC hooks
-    components/       # React components (AppShell, LoginScreen, SetupScreen, AdminPanel, etc.)
+    services/         # REST API clients (files, fs, project, serverInfo, setup, user)
+    components/       # React components (AppShell, ChatStream, GraphView, BoardView, MetaTicketDetail, etc.)
     store/            # Zustand stores
+    hooks/            # Custom React hooks
+    context/          # React context providers
     styles/           # Global CSS, theming
     types/            # Shared TypeScript types
     utils/            # Utility functions
-.bonsai/
-  registry.json       # Spec registry (all specs and links)
+    constants/        # App constants
+.bonsai/                        # Per-project config (committed to git)
+~/.bonsai/indexes/<hash>/
+  index.db            # SQLite spec index (generated, outside repo)
 .bonsai/implementation_tasks/  # Task specs organized by module (agent/, core/, frontend/, rpc/, spec/)
+.github/workflows/    # CI: tests.yml, build.yml, deploy.yml, nightly.yml
 ```
 
 ## Active Tasks

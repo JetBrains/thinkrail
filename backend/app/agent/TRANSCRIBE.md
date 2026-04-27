@@ -1,3 +1,19 @@
+---
+id: agent-transcribe
+type: submodule-design
+status: active
+title: Audio Transcription — Submodule Design
+parent: module-agent
+implements:
+- voice-input-design
+covers:
+- backend/app/agent/transcribe.py
+tags:
+- backend
+- agent-orchestration
+- voice
+- whisper
+---
 # Audio Transcription — Submodule Design
 
 > Parent: [README.md](README.md) | Status: **Active** | Created: 2026-03-11

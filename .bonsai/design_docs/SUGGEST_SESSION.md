@@ -1,3 +1,22 @@
+---
+id: feature-suggest-session
+type: submodule-design
+status: active
+title: SuggestSession — Feature Spec
+parent: proactive-agent-design
+references:
+- agent-suggest-session
+covers:
+- backend/app/agent/tools/suggest_session.py
+- frontend/src/components/ChatStream/SuggestionCard.tsx
+- frontend/src/store/sessionStore.ts
+- frontend/src/store/wireEvents.ts
+tags:
+- feature
+- agent-ux
+- proactive
+- interactive
+---
 # SuggestSession — Feature Spec
 
 > Parent: [Proactive Agent Experience Design](PROACTIVE_AGENT_EXPERIENCE_DESIGN.md) | Status: **Draft** | Created: 2026-03-07 | Updated: 2026-03-11

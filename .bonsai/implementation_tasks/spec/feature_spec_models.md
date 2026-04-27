@@ -1,3 +1,16 @@
+---
+id: task-spec-models
+type: task-spec
+status: done
+title: Implement Spec models.py
+implements:
+- module-spec
+covers:
+- backend/app/spec/models.py
+tags:
+- critical
+- new-feature
+---
 # Implement Spec models.py
 
 > Pydantic data models for the spec domain

@@ -1,3 +1,13 @@
+---
+id: context-management-design
+type: architecture-design
+status: active
+title: 'Context Management: Prevent & Recover from "Prompt is too long" Errors'
+parent: design-doc
+tags:
+- context-window
+- error-recovery
+---
 # Context Management: Prevent & Recover from "Prompt is too long" Errors
 
 ## Context
