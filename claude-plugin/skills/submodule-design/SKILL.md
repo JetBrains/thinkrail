@@ -12,7 +12,7 @@ You are creating a **Sub-Module Design Specification** (README.md for a sub-comp
 
 ## Prerequisites
 
-Use `spec_list` with `type: "module-design"` or `registry_query` with a `covers` filter to check if the parent module has a spec.
+Use `spec_search` with `type: "module-design"` or `spec_search` with a `covers` filter to check if the parent module has a spec.
 If not, use AskUserQuestion:
 - "Create parent module spec first (/module-design) (Recommended)"
 - "Skip, create sub-module spec directly"
@@ -61,7 +61,7 @@ For each non-obvious choice, use AskUserQuestion:
 
 ### Step 5: Generate the specification
 
-Use `spec_save` to create the sub-module README.md with `type: "submodule-design"`, `status: "active"`, `covers: ["{path}/"]`. Include:
+Use `Write` to create the sub-module README.md with YAML frontmatter (`type: "submodule-design"`, `status: "active"`, `covers: ["{path}/"]`). Include:
 - Title and purpose
 - Why this exists (from Step 2)
 - Algorithm/architecture description (from Step 3)
@@ -79,8 +79,8 @@ Use AskUserQuestion:
 
 ## Registry Integration
 
-The `spec_save` call already created the registry entry. Use `registry_mutate` to add links:
-1. Add `parent` link to parent module README
+Include `parent` and `depends-on` fields directly in the YAML frontmatter:
+1. Add `parent` field pointing to parent module README
 
 Use Edit to update the parent module's Module Index to include this sub-module.
 

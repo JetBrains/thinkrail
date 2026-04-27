@@ -13,7 +13,7 @@ You are generating a **specification status report** for the current project. Th
 
 ### Step 1: Gather data
 
-Use `registry_query` to get specs (with type, status, covers, paths). Use `spec_list` with `type: "task-spec"` for task statuses. Use file mtimes to determine freshness (compare spec mtime vs covered code mtime).
+Use `spec_search` to get specs (with type, status, covers, paths). Use `spec_search` with `type: "task-spec"` for task statuses. Use file mtimes to determine freshness (compare spec mtime vs covered code mtime).
 
 ### Step 2: Display using bonsai_visualize
 
@@ -73,7 +73,7 @@ Use AskUserQuestion:
 
 ## Key Principles
 
-- **Fast**: Use `registry_query` + `spec_list`, compute metrics directly
+- **Fast**: Use `spec_search`, compute metrics directly
 - **Actionable**: Every issue has a suggested action with explicit `/skill-name`
 - **Non-destructive**: Only reads and reports, never modifies code or specs
 - **Visual**: Always display results via `bonsai_visualize`, never ASCII art

@@ -564,7 +564,7 @@ The MCP tool checks for the Bonsai backend connection. If absent, it falls back 
 
 ### What compute-dashboard.py Currently Does
 
-1. Reads `registry.json`, `.progress.json`, task files, source tree
+1. Reads spec frontmatter (via SQLite index), task files, source tree
 2. Computes: coverage, freshness, lint, task status, graph, recommendations
 3. Outputs: stdout one-liner (for hooks), `dashboard.json`, `dashboard.html`
 4. Triggered by: PostToolUse hook (Edit|Write) and SessionStart hook

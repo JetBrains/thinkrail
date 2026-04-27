@@ -94,7 +94,7 @@ Show workflow position via `bonsai_visualize` (type `progress-tracker`):
 Read:
 - `package.json` / `Cargo.toml` / `pyproject.toml` / `go.mod` — language, framework, dependencies
 - Directory structure — architecture pattern, module layout
-- Existing `GOAL&REQUIREMENTS.md`, `DESIGN_DOC.md`, `.specs/registry.json` if present
+- Existing `GOAL&REQUIREMENTS.md`, `DESIGN_DOC.md`, `.bonsai/` spec files if present
 - Any files directly relevant to what `$ARGUMENTS` describes
 
 Build a mental model: what does this project do, what tech is it using, what conventions does it follow, what area would this change touch?
@@ -205,9 +205,9 @@ Use `AskUserQuestion`:
 
 ## Step 7 — Save
 
-Use `spec_save` to write `GOAL&REQUIREMENTS.md` with `type: "goal-and-requirements"`, `status: "active"`.
+Use `Write` to create `GOAL&REQUIREMENTS.md` with YAML frontmatter (`type: "goal-and-requirements"`, `status: "active"`).
 
-If there are related module specs already in the registry, use `registry_mutate` to add `references` links.
+If there are related module specs already in the registry, include `references` fields directly in the YAML frontmatter.
 
 Confirm: "Saved to `GOAL&REQUIREMENTS.md`."
 

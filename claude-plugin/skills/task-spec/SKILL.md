@@ -89,7 +89,7 @@ Use AskUserQuestion (multiSelect: true):
 
 ### Step 6: Generate the task spec
 
-Use `spec_save` to create the task spec at `.bonsai/implementation_tasks/{module_path}/{type}_{name}.md` with `type: "task-spec"`, `status: "active"`, `tags: ["{priority}", "{type}"]`:
+Use `Write` to create the task spec at `.bonsai/implementation_tasks/{module_path}/{type}_{name}.md` with YAML frontmatter (`type: "task-spec"`, `status: "active"`, `tags: ["{priority}", "{type}"]`):
 ```markdown
 # {Action verb} {component}: {specific description}
 
@@ -120,14 +120,14 @@ Use AskUserQuestion:
 
 ## Prerequisites
 
-Use `spec_list` to enumerate existing module specs, then `spec_get` to read them for context before asking questions.
-Use `spec_list` with `type: "task-spec"` to check for overlapping tasks.
+Use `spec_search` to enumerate existing module specs, then `Read` to read them for context before asking questions.
+Use `spec_search` with `type: "task-spec"` to check for overlapping tasks.
 
 ## Registry Integration
 
-The `spec_save` call already created the registry entry. Use `registry_mutate` to add links:
-1. Add `implements` link to affected module spec
-2. Add `depends-on` links if user specifies dependencies
+Include `parent` and `depends-on` fields directly in the YAML frontmatter:
+1. Add `implements` field pointing to affected module spec
+2. Add `depends-on` field listing dependencies if user specifies them
 
 ## After Completion
 

@@ -14,7 +14,7 @@ You are helping someone turn an idea into a clear, buildable specification. The 
 - Every option you offer must be specific to what they described, not generic placeholders
 - Propose a draft as early as possible — a concrete suggestion is always faster than an open question
 - MVP-first: the right v1 is smaller than the user thinks
-- **Write the file after every confirmed step** — `GOAL&REQUIREMENTS.md` should update live, not only at the end. Use `spec_save` after each step, leaving `[TBD]` for sections not yet discussed.
+- **Write the file after every confirmed step** — `GOAL&REQUIREMENTS.md` should update live, not only at the end. Use `Write` after each step, leaving `[TBD]` for sections not yet discussed.
 
 ---
 
@@ -151,7 +151,7 @@ From `$ARGUMENTS`, infer what the project is in one paragraph. Confirm with `Con
 { "statement": "[Your inferred one-paragraph overview]" }
 ```
 
-**After confirmation → write file immediately** using `spec_save` (Overview filled in, everything else `[TBD]`).
+**After confirmation → write file immediately** using `Write` (Overview filled in, everything else `[TBD]`).
 
 ### A2 — Problem
 
@@ -232,7 +232,7 @@ On revision → make the change and re-show the draft.
 
 ### A-Save & Next
 
-Use `spec_save` to finalize with `type: "goal-and-requirements"`, `status: "active"`.
+Use `Write` to finalize with YAML frontmatter (`type: "goal-and-requirements"`, `status: "active"`).
 
 Update progress tracker (`visId: "workflow-progress"`) — mark Goal & Scope as done.
 
@@ -264,7 +264,7 @@ From `$ARGUMENTS`, infer what the product is in one paragraph — what it does, 
 { "statement": "[One paragraph: what the product does, who uses it, what it replaces]" }
 ```
 
-**After confirmation → write file immediately** using `spec_save` (Overview filled in, everything else `[TBD]`).
+**After confirmation → write file immediately** using `Write` (Overview filled in, everything else `[TBD]`).
 
 ### B2 — Problem & Alternatives
 
@@ -438,7 +438,7 @@ On revision → make the change and re-show the draft.
 
 ### B-Save & Next
 
-Use `spec_save` to finalize with `type: "goal-and-requirements"`, `status: "active"`.
+Use `Write` to finalize with YAML frontmatter (`type: "goal-and-requirements"`, `status: "active"`).
 
 Update progress tracker — mark Goal & Scope as done.
 

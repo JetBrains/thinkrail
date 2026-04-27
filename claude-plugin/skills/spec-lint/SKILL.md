@@ -14,7 +14,7 @@ You are validating specifications for **structural quality, completeness, and co
 
 ### Step 1: Gather data
 
-Use `spec_list` for the full spec list. Use `spec_links` to get all links and validate that all `from`/`to` IDs reference existing specs. For each spec, use `spec_get` to read the content and check for required sections per type.
+Use `spec_search` for the full spec list. Use `spec_links` to get all links and validate that all `from`/`to` IDs reference existing specs. For each spec, use `Read` to read the content and check for required sections per type.
 
 ### Step 2: Display lint results using bonsai_visualize
 
@@ -40,7 +40,7 @@ If the user specified a path, filter the `lint[]` array to show only issues matc
 
 ### Step 3: Deep analysis (optional)
 
-For issues flagged above, use `spec_get` to read the specific spec file and understand the issue in context. Only read specs the lint report flags — don't scan everything.
+For issues flagged above, use `Read` to read the specific spec file and understand the issue in context. Only read specs the lint report flags — don't scan everything.
 
 ### What Gets Checked
 
@@ -60,10 +60,10 @@ The script checks:
 
 ### Step 4: Offer auto-fixes
 
-For fixable issues, use `registry_mutate` to:
-- Register unregistered specs (via `add_entries`)
-- Update stale registry entries (via `update_entries`)
-- Remove broken links from registry (via `remove_links`)
+For fixable issues, use `Edit` to update the frontmatter:
+- Add missing frontmatter fields to unregistered specs
+- Update stale frontmatter fields (e.g. status)
+- Remove broken link references from frontmatter
 
 ### Step 5: Offer next actions
 
@@ -79,5 +79,5 @@ Use AskUserQuestion:
 
 - **Errors vs Warnings**: Missing required sections = WARNING. Missing files/broken links = ERROR.
 - **Auto-fix safely**: Only offer to fix unambiguous issues (registry updates, not content)
-- **Fast**: Use `spec_list` + `spec_links` for overview; only use `spec_get` for deep analysis
+- **Fast**: Use `spec_search` + `spec_links` for overview; only use `Read` for deep analysis
 - **Actionable**: Every issue includes what to do about it

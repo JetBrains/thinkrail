@@ -13,7 +13,7 @@ You are setting up a project for **specification-driven development**. This is t
 ## What You Will Create
 
 1. **Directory structure** for specifications
-2. **Spec registry** (`.bonsai/registry.json`) for tracking all specs
+2. **Spec index** (YAML frontmatter in each spec file + SQLite cache, stored outside the repo)
 3. **CLAUDE.md** with spec-driven development rules
 4. **Skeleton specifications** to get started
 
@@ -44,44 +44,34 @@ Create these directories (skip any that already exist):
 .bonsai/implementation_tasks/         # Active task specifications
 ```
 
-### Step 3: Create the spec registry
+### Step 3: Understand the spec index
 
-Create `.bonsai/registry.json` with this initial structure:
+Bonsai uses **YAML frontmatter** in each spec file as the source of truth. A per-project SQLite cache (`~/.bonsai/indexes/<hash>/index.db`, stored outside the repo) is generated automatically from frontmatter by the file watcher. No manual registry file is needed.
 
-```json
-{
-  "version": "2.0",
-  "project": "{project-name}",
-  "specs": [],
-  "links": []
-}
+**Frontmatter example in a spec file:**
+```yaml
+---
+id: module-auth
+type: module-design
+status: draft
+covers:
+  - backend/app/auth/
+tags:
+  - backend
+  - security
+links:
+  - type: parent
+    target: design-doc
+---
 ```
 
-The registry schema:
-
-**Spec entry:**
-```json
-{
-  "id": "unique-id",
-  "type": "goal-and-requirements|architecture-design|module-design|submodule-design|task-spec",
-  "path": "relative/path/to/spec",
-  "title": "Human-readable title",
-  "status": "draft|active|stale|deprecated",
-  "created": "ISO-date",
-  "updated": "ISO-date",
-  "covers": ["src/path/covered/"],
-  "tags": []
-}
-```
-
-**Link entry:**
-```json
-{
-  "from": "spec-id",
-  "to": "spec-id",
-  "type": "parent|depends-on|references|implements"
-}
-```
+The frontmatter fields map to the spec index:
+- `id` — unique identifier
+- `type` — one of: goal-and-requirements, architecture-design, module-design, submodule-design, task-spec
+- `status` — draft, active, stale, done, deprecated
+- `covers` — list of source paths this spec covers
+- `tags` — classification tags
+- `links` — relationships (parent, depends-on, references, implements) with `target` spec IDs
 
 ### Step 4: Create CLAUDE.md
 
@@ -111,8 +101,8 @@ Run /spec-status to see specification coverage.
 ### Step 5: Create skeleton specifications
 
 **For new projects:**
-- Use `spec_save` to create a minimal `README.md` with `type: "goal-and-requirements"`, `status: "draft"` (ask user to fill in details later)
-- Use `spec_save` to create a minimal `DESIGN_DOC.md` skeleton with `type: "architecture-design"`, `status: "draft"` and TOC placeholders
+- Use `Write` to create a minimal `README.md` with YAML frontmatter (`type: "goal-and-requirements"`, `status: "draft"`) (ask user to fill in details later)
+- Use `Write` to create a minimal `DESIGN_DOC.md` skeleton with YAML frontmatter (`type: "architecture-design"`, `status: "draft"`) and TOC placeholders
 
 **For existing projects:**
 - Analyze the directory structure
@@ -122,7 +112,7 @@ Run /spec-status to see specification coverage.
 
 ### Step 6: Register initial specs
 
-The `spec_save` calls above already created the registry entries. Use `registry_mutate` to add any `parent` or `depends-on` links between the created specs.
+Include `parent` and `depends-on` fields directly in the YAML frontmatter of the created specs to establish links between them.
 
 ### Step 7: Report and suggest next steps
 
@@ -131,7 +121,7 @@ Print a summary:
 Spec-driven development initialized for {project-name}!
 
 Created:
-  .bonsai/registry.json     - Specification registry
+  .bonsai/                   - Project metadata directory
   .claude/CLAUDE.md        - Development rules
   {other files created}
 

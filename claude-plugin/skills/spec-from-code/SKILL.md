@@ -12,7 +12,7 @@ You are analyzing an existing codebase to **generate specification skeletons**. 
 
 ## Quick Context
 
-Before analyzing, use `registry_query` to get existing specs and their `covers` entries. Compare against source directories to identify coverage gaps.
+Before analyzing, use `spec_search` to get existing specs and their `covers` entries. Compare against source directories to identify coverage gaps.
 
 ## What You Will Generate
 
@@ -68,7 +68,7 @@ For each major directory/module:
 
 ### Step 4: Generate Architecture Design skeleton
 
-If analyzing the full project, use `spec_save` to create a `DESIGN_DOC.md` skeleton with `type: "architecture-design"`, `status: "draft"`:
+If analyzing the full project, use `Write` to create a `DESIGN_DOC.md` skeleton with YAML frontmatter (`type: "architecture-design"`, `status: "draft"`):
 
 ```markdown
 # {Project Name} Design Document
@@ -120,7 +120,7 @@ If analyzing the full project, use `spec_save` to create a `DESIGN_DOC.md` skele
 
 ### Step 5: Generate Module Design skeletons
 
-For each major module, use `spec_save` to create a README.md with `type: "module-design"`, `status: "draft"`, `covers: ["{module}/"]`:
+For each major module, use `Write` to create a README.md with YAML frontmatter (`type: "module-design"`, `status: "draft"`, `covers: ["{module}/"]`):
 
 ```markdown
 # {Module Name}
@@ -155,7 +155,7 @@ For each major module, use `spec_save` to create a README.md with `type: "module
 
 ### Step 6: Register links
 
-The `spec_save` calls above already created the registry entries with status `"draft"`. Use `registry_mutate` to add `parent` links between the generated specs (e.g., module specs → architecture doc).
+Include `parent` and `depends-on` fields directly in the YAML frontmatter of the generated specs (e.g., module specs have `parent` pointing to the architecture doc).
 
 ### Step 7: Report results
 

@@ -40,6 +40,6 @@ You are NOT implementing the steps yourself. You are coordinating:
 ## Available Tools
 
 - `suggest_step` — propose a plan step for execution (sends approval card to user)
-- `spec_list` / `spec_get` — check spec state
-- `registry_query` — verify implementation state
+- `spec_search` / `Read` — check spec state
+- `spec_search` — verify implementation state
 - `AskUserQuestion` — ask the user for decisions when the plan needs adjustment

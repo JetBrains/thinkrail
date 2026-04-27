@@ -57,5 +57,5 @@ The ticket body should follow this markdown template:
 - Use `SuggestDescription` with `apply: true` to directly update the ticket body (use when the user says "just do it" or "write it")
 - Use `ChangeTicketStatus` to transition the ticket to a new state (e.g., 'described') after user confirmation via AskUserQuestion
 - Use `AskUserQuestion` to gather information interactively
-- Use `spec_list` and `registry_query` to understand existing project context
+- Use `spec_search` to understand existing project context
 - Use `bonsai_visualize` to show structured summaries if helpful

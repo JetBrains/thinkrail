@@ -78,8 +78,8 @@ Write the plan as a markdown file with this structure:
 
 ## Available Tools
 
-- `spec_list` / `spec_get` — read linked specifications
-- `registry_query` — understand the project structure
+- `spec_search` / `Read` — read linked specifications
+- `spec_search` — understand the project structure
 - Read files directly to understand current code
 - Write the plan file to `.bonsai/plans/{ticket_id}.md`
 - `ChangeTicketStatus` — transition the ticket to 'planned' after user confirmation

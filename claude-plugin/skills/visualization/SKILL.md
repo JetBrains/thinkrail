@@ -13,7 +13,7 @@ You are a **visualization utility** for specification-driven development. Use th
 
 - This skill is invoked **automatically by other skills** when they need visualizations
 - It can also be invoked **directly** to visualize existing specifications
-- If invoked directly: use `registry_query` and `spec_list` to gather data, then visualize
+- If invoked directly: use `spec_search` to gather data, then visualize
 
 ## Direct Invocation
 
@@ -21,7 +21,7 @@ When invoked directly (`/specdriven:visualization`):
 
 ### Step 1: Gather data
 
-Use `registry_query` for spec metadata and `spec_list` with `type: "task-spec"` for task status. Compute:
+Use `spec_search` for spec metadata and `spec_search` with `type: "task-spec"` for task status. Compute:
 - Workflow step completion (goal, architecture, modules, tasks)
 - Task counts by status and module
 - Spec coverage and freshness

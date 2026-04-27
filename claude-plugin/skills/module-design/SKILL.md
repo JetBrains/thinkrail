@@ -34,7 +34,7 @@ When specifying a module, highlight the current module using `bonsai_visualize` 
 
 ## Prerequisites
 
-Use `spec_list` with `type: "architecture-design"` to check if a DESIGN_DOC.md exists. If it does, use `spec_get` to read it and verify it references this module.
+Use `spec_search` with `type: "architecture-design"` to check if a DESIGN_DOC.md exists. If it does, use `Read` to read it and verify it references this module.
 If not, use AskUserQuestion:
 - "Create architecture doc first (/architecture-design) (Recommended)"
 - "Skip, create module spec directly"
@@ -124,7 +124,7 @@ Before writing, show the module's architecture using `bonsai_visualize` with typ
 }
 ```
 
-Use `spec_save` to create the module README.md with `type: "module-design"`, `status: "active"`, `covers: ["{module}/"]`. Include:
+Use `Write` to create the module README.md with YAML frontmatter (`type: "module-design"`, `status: "active"`, `covers: ["{module}/"]`). Include:
 - Module purpose from Step 2
 - Architecture description from Step 3 (reference the bonsai_visualize diagram shown above; do NOT put ASCII art diagrams in the README — use plain text or mermaid if needed)
 - Public interface table from Step 4
@@ -143,9 +143,9 @@ Use AskUserQuestion:
 
 ## Registry Integration
 
-The `spec_save` call already created the registry entry. Use `registry_mutate` to add links:
-1. Add `parent` link to DESIGN_DOC.md
-2. Add `parent` links from sub-module READMEs to this module
+Include `parent` and `depends-on` fields directly in the YAML frontmatter:
+1. Add `parent` field pointing to DESIGN_DOC.md
+2. Add `parent` fields in sub-module READMEs pointing to this module
 
 If this module isn't listed in DESIGN_DOC.md, use Edit to update its Module Index.
 
