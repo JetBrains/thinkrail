@@ -1,4 +1,4 @@
-import type { SpecGraph, RegistryEntry } from "@/types/spec.ts";
+import type { DocumentEntry, SpecGraph, SpecEntry } from "@/types/spec.ts";
 
 export interface TreeNode {
   id: string;
@@ -33,7 +33,7 @@ const TYPE_RANK: Record<string, number> = {
  */
 export function buildTree(graph: SpecGraph): TreeNode[] {
   const parentOf = new Map<string, string>();
-  const childrenOf = new Map<string | null, RegistryEntry[]>();
+  const childrenOf = new Map<string | null, SpecEntry[]>();
 
   // Extract parent relationships from edges
   for (const edge of graph.edges) {
@@ -216,4 +216,126 @@ export function statusBadge(status: string): { badge: string; cls: string } {
     default:
       return { badge: "\u00B7", cls: "st-badge-unknown" };
   }
+}
+
+/* ── Document tree (unmanaged docs) ── */
+
+export interface DocTreeNode {
+  /** Full relative path (for files) or collapsed display path (for dirs). */
+  path: string;
+  /** Display name — basename for files, collapsed dirname for dirs. */
+  name: string;
+  isDir: boolean;
+  depth: number;
+}
+
+/**
+ * Transform a flat DocumentEntry[] into a depth-sorted tree with
+ * path-collapsing for empty intermediate directories (IntelliJ compact style).
+ *
+ * Pure function — no side effects, no store dependencies.
+ */
+export function buildDocTree(documents: DocumentEntry[]): DocTreeNode[] {
+  if (documents.length === 0) return [];
+
+  // 1. Collect all files and their parent directories
+  interface DirNode {
+    /** Display name after collapsing (may contain slashes). */
+    name: string;
+    /** Full path prefix for this dir (before collapsing). */
+    fullPath: string;
+    childDirs: Map<string, DirNode>;
+    files: { path: string; name: string }[];
+  }
+
+  const root: DirNode = { name: "", fullPath: "", childDirs: new Map(), files: [] };
+
+  for (const doc of documents) {
+    const parts = doc.path.split("/");
+    const fileName = parts.pop()!;
+    let current = root;
+
+    for (const part of parts) {
+      if (!current.childDirs.has(part)) {
+        const parentPath = current.fullPath ? current.fullPath + "/" + part : part;
+        current.childDirs.set(part, {
+          name: part,
+          fullPath: parentPath,
+          childDirs: new Map(),
+          files: [],
+        });
+      }
+      current = current.childDirs.get(part)!;
+    }
+
+    current.files.push({ path: doc.path, name: fileName });
+  }
+
+  // 2. Collapse empty intermediate directories
+  function collapse(node: DirNode): DirNode {
+    // First, recurse into children
+    const collapsedChildren = new Map<string, DirNode>();
+    for (const [key, child] of node.childDirs) {
+      collapsedChildren.set(key, collapse(child));
+    }
+    node.childDirs = collapsedChildren;
+
+    // If this dir has exactly one child dir and zero files, merge
+    if (node.childDirs.size === 1 && node.files.length === 0) {
+      const [, onlyChild] = [...node.childDirs.entries()][0];
+      return {
+        name: node.name ? node.name + "/" + onlyChild.name : onlyChild.name,
+        fullPath: onlyChild.fullPath,
+        childDirs: onlyChild.childDirs,
+        files: onlyChild.files,
+      };
+    }
+
+    return node;
+  }
+
+  // Collapse from root's children (root itself is virtual)
+  const collapsedRoot: DirNode = collapse(root);
+
+  // 3. DFS flatten — dirs first (alphabetical), then files (alphabetical)
+  const result: DocTreeNode[] = [];
+
+  function walk(node: DirNode, depth: number, isRoot: boolean) {
+    if (!isRoot) {
+      result.push({
+        path: node.fullPath,
+        name: node.name,
+        isDir: true,
+        depth,
+      });
+    }
+
+    const childDepth = isRoot ? depth : depth + 1;
+
+    // Sort child dirs alphabetically by display name
+    const sortedDirs = [...node.childDirs.values()].sort((a, b) =>
+      a.name.localeCompare(b.name),
+    );
+
+    // Sort files alphabetically
+    const sortedFiles = [...node.files].sort((a, b) =>
+      a.name.localeCompare(b.name),
+    );
+
+    for (const dir of sortedDirs) {
+      walk(dir, childDepth, false);
+    }
+
+    for (const file of sortedFiles) {
+      result.push({
+        path: file.path,
+        name: file.name,
+        isDir: false,
+        depth: childDepth,
+      });
+    }
+  }
+
+  walk(collapsedRoot, 0, true);
+  return result;
 }

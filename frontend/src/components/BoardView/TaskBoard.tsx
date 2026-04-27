@@ -1,6 +1,6 @@
 import { useMemo } from "react";
 import { useSpecStore } from "@/store/specStore.ts";
-import type { RegistryEntry } from "@/types/spec.ts";
+import type { SpecEntry } from "@/types/spec.ts";
 import { KanbanColumn } from "./KanbanColumn.tsx";
 import { TaskCard } from "./TaskCard.tsx";
 
@@ -26,7 +26,7 @@ export function TaskBoard() {
   );
 
   const grouped = useMemo(() => {
-    const map = new Map<string, RegistryEntry[]>();
+    const map = new Map<string, SpecEntry[]>();
     for (const col of COLUMNS) map.set(col.status, []);
     for (const t of taskSpecs) {
       const col = normalizeStatus(t.status);

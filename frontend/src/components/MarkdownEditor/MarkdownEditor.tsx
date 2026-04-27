@@ -2,7 +2,9 @@ import { useState } from "react";
 import Editor from "@monaco-editor/react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
+import remarkFrontmatter from "remark-frontmatter";
 import { useMonacoTheme } from "./useMonacoTheme.ts";
+import { FrontmatterCard, extractFrontmatter } from "@/components/FileViewer/FrontmatterCard";
 import { useFontSize } from "@/utils/fontScale.ts";
 import "./MarkdownEditor.css";
 
@@ -81,7 +83,10 @@ export function MarkdownEditor({
         </div>
       ) : (
         <div className="markdown-editor-preview">
-          <ReactMarkdown remarkPlugins={[remarkGfm]}>{value}</ReactMarkdown>
+          <FrontmatterCard value={extractFrontmatter(value) ?? undefined} />
+          <ReactMarkdown remarkPlugins={[remarkGfm, remarkFrontmatter]}>
+            {value}
+          </ReactMarkdown>
         </div>
       )}
     </div>

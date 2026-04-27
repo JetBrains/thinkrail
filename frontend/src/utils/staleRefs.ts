@@ -1,4 +1,4 @@
-import type { RegistryEntry } from "@/types/spec.ts";
+import type { SpecEntry } from "@/types/spec.ts";
 import type { Skill } from "@/constants/skills.ts";
 
 /**
@@ -6,7 +6,7 @@ import type { Skill } from "@/constants/skills.ts";
  */
 export function findStaleSpecIds(
   specIds: string[],
-  liveSpecs: RegistryEntry[],
+  liveSpecs: SpecEntry[],
 ): string[] {
   const liveIds = new Set(liveSpecs.map((s) => s.id));
   return specIds.filter((id) => !liveIds.has(id));

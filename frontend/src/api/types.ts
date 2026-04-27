@@ -1,4 +1,4 @@
-export type { SpecSummary, SpecDetail, SpecGraph, RegistryEntry, Link } from "@/types/spec.ts";
+export type { SpecSummary, SpecDetail, SpecGraph, SpecEntry, Link } from "@/types/spec.ts";
 export type { AgentTask, AgentConfig, AgentEvent, AgentResult } from "@/types/agent.ts";
 import type { AgentConfig } from "@/types/agent.ts";
 export type { ConnectionState } from "@/types/rpc.ts";

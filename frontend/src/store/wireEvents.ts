@@ -42,8 +42,16 @@ export function wireEvents(client: RpcClient): Unsubscribe {
     }),
   );
   unsubs.push(
-    client.on("registry/didUpdate", () => {
-      useSpecStore.getState().onRegistryUpdated();
+    client.on("docs/didChange", () => {
+      useSpecStore.getState().fetchGraph();
+    }),
+  );
+
+  // ── Index ready (background init complete) ──
+  unsubs.push(
+    client.on("index/ready", () => {
+      useSpecStore.getState().fetchSpecs();
+      useSpecStore.getState().fetchGraph();
     }),
   );
 

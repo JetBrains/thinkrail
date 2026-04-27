@@ -2,7 +2,7 @@ import { useMemo } from "react";
 import { CollapsibleSection } from "../CollapsibleSection.tsx";
 import { useSelectedSpec } from "../useSelectedSpec.ts";
 import { useSpecStore } from "@/store/specStore.ts";
-import type { RegistryEntry } from "@/types/spec.ts";
+import type { SpecEntry } from "@/types/spec.ts";
 import "./LinkedTasks.css";
 
 const STATUS_ORDER: Record<string, number> = { active: 0, draft: 1, done: 2, blocked: 3 };
@@ -13,7 +13,7 @@ export function LinkedTasks() {
   const specs = useSpecStore((s) => s.specs);
   const selectSpec = useSpecStore((s) => s.selectSpec);
 
-  const tasks = useMemo<RegistryEntry[]>(() => {
+  const tasks = useMemo<SpecEntry[]>(() => {
     if (!spec || !graph) return [];
     const specId = spec.id;
     const specMap = new Map(specs.map((s) => [s.id, s]));
@@ -24,7 +24,7 @@ export function LinkedTasks() {
 
     return taskIds
       .map((id) => specMap.get(id))
-      .filter((entry): entry is RegistryEntry => !!entry && entry.type.startsWith("task"))
+      .filter((entry): entry is SpecEntry => !!entry && entry.type.startsWith("task"))
       .sort((a, b) => (STATUS_ORDER[a.status] ?? 9) - (STATUS_ORDER[b.status] ?? 9));
   }, [spec, graph, specs]);
 

@@ -1,6 +1,6 @@
 /** Mirrors backend/app/spec/models.py — JSON wire format. */
 
-export interface RegistryEntry {
+export interface SpecEntry {
   id: string;
   type: string;
   path: string;
@@ -41,7 +41,13 @@ export interface SpecDetail {
   links: Link[];
 }
 
+export interface DocumentEntry {
+  path: string;
+  title: string;
+}
+
 export interface SpecGraph {
-  nodes: RegistryEntry[];
+  nodes: SpecEntry[];
   edges: Link[];
+  documents: DocumentEntry[];
 }

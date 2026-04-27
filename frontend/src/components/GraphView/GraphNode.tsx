@@ -1,4 +1,4 @@
-import type { RegistryEntry } from "@/types/spec.ts";
+import type { SpecEntry } from "@/types/spec.ts";
 import { NODE_WIDTH, NODE_HEIGHT } from "./graphLayout.ts";
 
 const TYPE_COLORS: Record<string, string> = {
@@ -26,7 +26,7 @@ const TYPE_ICONS: Record<string, string> = {
 };
 
 interface GraphNodeProps {
-  node: RegistryEntry;
+  node: SpecEntry;
   x: number;
   y: number;
   selected: boolean;

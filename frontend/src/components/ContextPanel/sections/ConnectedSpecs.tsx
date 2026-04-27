@@ -2,12 +2,12 @@ import { useMemo } from "react";
 import { CollapsibleSection } from "../CollapsibleSection.tsx";
 import { useSelectedSpec } from "../useSelectedSpec.ts";
 import { useSpecStore } from "@/store/specStore.ts";
-import type { RegistryEntry } from "@/types/spec.ts";
+import type { SpecEntry } from "@/types/spec.ts";
 import "./ConnectedSpecs.css";
 
 interface LinkGroup {
   label: string;
-  entries: RegistryEntry[];
+  entries: SpecEntry[];
 }
 
 const GROUP_ORDER = ["Parent", "Children", "Implements", "Depends on", "Depended by", "References", "Referenced by"];
@@ -21,7 +21,7 @@ export function ConnectedSpecs() {
     if (!spec || !graph) return [];
     const specId = spec.id;
     const nodeMap = new Map(graph.nodes.map((n) => [n.id, n]));
-    const grouped = new Map<string, RegistryEntry[]>();
+    const grouped = new Map<string, SpecEntry[]>();
 
     for (const edge of graph.edges) {
       let groupLabel: string;

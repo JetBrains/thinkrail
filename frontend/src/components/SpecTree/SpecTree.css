@@ -235,3 +235,86 @@
   margin-right: 2px;
   flex-shrink: 0;
 }
+
+/* ── Unmanaged documents section ── */
+.st-doc-header {
+  display: flex;
+  align-items: center;
+  height: 28px;
+  padding: var(--space-xs) var(--space-sm);
+  cursor: pointer;
+  color: var(--hint);
+  margin-top: var(--space-sm);
+  border-top: 1px solid var(--border);
+}
+
+.st-doc-header:hover {
+  background: var(--hover);
+}
+
+.st-doc-dir {
+  display: flex;
+  align-items: center;
+  height: 24px;
+  padding-right: var(--space-sm);
+  cursor: pointer;
+  color: var(--hint);
+  transition: background 60ms ease;
+}
+
+.st-doc-dir:hover {
+  background: var(--hover);
+}
+
+.st-doc-dir-arrow {
+  width: 16px;
+  flex-shrink: 0;
+  text-align: center;
+  font-size: var(--font-sm);
+  color: var(--hint);
+}
+
+.st-doc-dir-icon {
+  width: 18px;
+  flex-shrink: 0;
+  text-align: center;
+  font-size: var(--font-body);
+  color: var(--hint);
+}
+
+.st-doc-dir-name {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--muted);
+  margin-left: 2px;
+}
+
+.st-doc-row {
+  display: flex;
+  align-items: center;
+  height: 24px;
+  padding-right: var(--space-sm);
+  cursor: pointer;
+  color: var(--hint);
+}
+
+.st-doc-row:hover {
+  background: var(--hover);
+}
+
+.st-doc-row-icon {
+  width: 18px;
+  flex-shrink: 0;
+  text-align: center;
+  font-size: var(--font-body);
+}
+
+.st-doc-row-name {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  margin-left: 2px;
+}

@@ -1,7 +1,7 @@
-import type { RegistryEntry } from "@/types/spec.ts";
+import type { SpecEntry } from "@/types/spec.ts";
 
 interface TaskCardProps {
-  task: RegistryEntry;
+  task: SpecEntry;
 }
 
 export function TaskCard({ task }: TaskCardProps) {

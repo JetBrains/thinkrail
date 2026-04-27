@@ -2,7 +2,9 @@ import { useState, lazy, Suspense } from "react";
 import { getFileRawUrl } from "@/services/files.ts";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
+import remarkFrontmatter from "remark-frontmatter";
 import type { PromptSection } from "@/types/session.ts";
+import { FrontmatterCard, extractFrontmatter } from "@/components/FileViewer/FrontmatterCard";
 import { detectLanguage } from "@/components/FileViewer/languageMap.ts";
 import { useMonacoTheme } from "@/components/MarkdownEditor/useMonacoTheme.ts";
 import { useFontSize } from "@/utils/fontScale.ts";
@@ -32,9 +34,13 @@ function isImageFile(name: string): boolean {
 }
 
 function SectionContent({ content }: { content: string }) {
+  const frontmatter = extractFrontmatter(content);
   return (
     <div className="prompt-section-content">
-      <ReactMarkdown remarkPlugins={[remarkGfm]}>{content}</ReactMarkdown>
+      <FrontmatterCard value={frontmatter ?? undefined} />
+      <ReactMarkdown remarkPlugins={[remarkGfm, remarkFrontmatter]}>
+        {content}
+      </ReactMarkdown>
     </div>
   );
 }
@@ -225,7 +231,10 @@ export function PromptPreview({ systemPrompt, sections }: PromptPreviewProps) {
       {/* Fallback: flat prompt when no structured sections */}
       {expanded && (!sections || sections.length === 0) && systemPrompt && (
         <div className="prompt-section-content prompt-section-content--fallback">
-          <ReactMarkdown remarkPlugins={[remarkGfm]}>{systemPrompt}</ReactMarkdown>
+          <FrontmatterCard value={extractFrontmatter(systemPrompt) ?? undefined} />
+          <ReactMarkdown remarkPlugins={[remarkGfm, remarkFrontmatter]}>
+            {systemPrompt}
+          </ReactMarkdown>
         </div>
       )}
     </div>

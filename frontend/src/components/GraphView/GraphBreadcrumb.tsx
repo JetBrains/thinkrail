@@ -1,7 +1,7 @@
-import type { RegistryEntry } from "@/types/spec.ts";
+import type { SpecEntry } from "@/types/spec.ts";
 
 interface GraphBreadcrumbProps {
-  trail: RegistryEntry[];
+  trail: SpecEntry[];
   onNavigate: (nodeId: string | null) => void;
 }
 

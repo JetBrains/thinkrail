@@ -14,7 +14,6 @@ export function getClient(): RpcClientType {
 export { RpcError, RpcTimeoutError, RpcConnectionError, toRpcError } from "./errors.ts";
 export { createSpecApi, createAgentApi, type SpecApi, type AgentApi } from "./methods/index.ts";
 export { RpcProvider, useRpc, useConnectionState } from "./hooks/useRpc.tsx";
-export { useSpecs, useSpec, useGraph } from "./hooks/useSpecs.ts";
 export type {
   Unsubscribe,
   CreateSpecParams,

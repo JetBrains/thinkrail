@@ -133,7 +133,7 @@ export interface paths {
         };
         /**
          * List Projects
-         * @description List directories containing .bonsai/registry.json.
+         * @description List directories containing a .bonsai/ directory.
          */
         get: operations["list_projects_api_project_list_get"];
         put?: never;

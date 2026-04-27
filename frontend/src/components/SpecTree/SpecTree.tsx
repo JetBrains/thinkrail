@@ -2,6 +2,7 @@ import { useCallback, useMemo, useState } from "react";
 import { useSpecStore } from "@/store/specStore.ts";
 import { useFileStore } from "@/store/fileStore.ts";
 import {
+  buildDocTree,
   buildTree,
   buildTaskTree,
   getTasksForSpec,
@@ -22,6 +23,8 @@ export function SpecTree() {
 
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
   const [expandedTasks, setExpandedTasks] = useState<Set<string>>(new Set());
+  const [docsCollapsed, setDocsCollapsed] = useState(true);
+  const [docDirCollapsed, setDocDirCollapsed] = useState<Set<string>>(new Set());
 
   // Initial fetch is handled by App.tsx after WebSocket connects.
   // No useEffect needed here — the store updates trigger re-render.
@@ -34,6 +37,39 @@ export function SpecTree() {
     () => (graph ? getTasksForSpec(graph) : new Map<string, never[]>()),
     [graph],
   );
+
+  // Build doc tree from unmanaged documents
+  const docTree = useMemo(
+    () => (graph?.documents ? buildDocTree(graph.documents) : []),
+    [graph?.documents],
+  );
+
+  // Filter visible doc tree nodes — hide children of collapsed dirs
+  const visibleDocs = useMemo(() => {
+    return docTree.filter((node) => {
+      // Check if any ancestor dir is collapsed
+      const parts = node.path.split("/");
+      // Walk up the path to check all possible parent dirs
+      let prefix = "";
+      for (let i = 0; i < parts.length - 1; i++) {
+        prefix = prefix ? prefix + "/" + parts[i] : parts[i];
+        if (docDirCollapsed.has(prefix)) return false;
+      }
+      return true;
+    });
+  }, [docTree, docDirCollapsed]);
+
+  const toggleDocDir = useCallback((dirPath: string) => {
+    setDocDirCollapsed((prev) => {
+      const next = new Set(prev);
+      if (next.has(dirPath)) {
+        next.delete(dirPath);
+      } else {
+        next.add(dirPath);
+      }
+      return next;
+    });
+  }, []);
 
   // Filter visible nodes — hide children of collapsed ancestors
   const visible = useMemo(() => {
@@ -116,7 +152,7 @@ export function SpecTree() {
     return <div className="st-empty st-error">{error}</div>;
   }
 
-  if (graph && nodes.length === 0) {
+  if (graph && nodes.length === 0 && (!graph.documents || graph.documents.length === 0)) {
     return <div className="st-empty">No specifications yet</div>;
   }
 
@@ -239,6 +275,54 @@ export function SpecTree() {
           </div>
         );
       })}
+
+      {/* Unmanaged documents section */}
+      {graph?.documents && graph.documents.length > 0 && (
+        <>
+          <div
+            className="st-doc-header"
+            onClick={() => setDocsCollapsed(!docsCollapsed)}
+          >
+            <span className="st-arrow">
+              {docsCollapsed ? "\u25B8" : "\u25BE"}
+            </span>
+            <span className="st-icon st-icon-default">{"\uD83D\uDCC4"}</span>
+            <span className="st-title">
+              Unmanaged Documents ({graph.documents.length})
+            </span>
+          </div>
+          {!docsCollapsed &&
+            visibleDocs.map((node) =>
+              node.isDir ? (
+                <div
+                  key={`dir:${node.path}`}
+                  className="st-doc-dir"
+                  style={{ paddingLeft: node.depth * 20 + 4 }}
+                  onClick={() => toggleDocDir(node.path)}
+                  title={node.path}
+                >
+                  <span className="st-doc-dir-arrow">
+                    {docDirCollapsed.has(node.path) ? "\u25B8" : "\u25BE"}
+                  </span>
+                  <span className="st-doc-dir-icon">{"\uD83D\uDCC1"}</span>
+                  <span className="st-doc-dir-name">{node.name}</span>
+                </div>
+              ) : (
+                <div
+                  key={node.path}
+                  className="st-doc-row"
+                  style={{ paddingLeft: node.depth * 20 + 4 }}
+                  onClick={() => loadPreview(node.path)}
+                  onDoubleClick={() => handleDoubleClick(node.path)}
+                  title={node.path}
+                >
+                  <span className="st-doc-row-icon">{"\uD83D\uDCC4"}</span>
+                  <span className="st-doc-row-name">{node.name}</span>
+                </div>
+              ),
+            )}
+        </>
+      )}
     </div>
   );
 }

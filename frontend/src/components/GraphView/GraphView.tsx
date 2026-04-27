@@ -1,6 +1,6 @@
 import { useCallback, useMemo, useRef, useState } from "react";
 import { useSpecStore } from "@/store/specStore.ts";
-import type { RegistryEntry } from "@/types/spec.ts";
+import type { SpecEntry } from "@/types/spec.ts";
 import {
   computeLayer,
   fitToView,
@@ -39,7 +39,7 @@ export function GraphView() {
   }, [layer]);
 
   const handleNodeClick = useCallback(
-    (node: RegistryEntry) => {
+    (node: SpecEntry) => {
       if (!graph) return;
       const children = getStructuralChildren(graph, node.id);
       if (children.length > 0) {
@@ -52,7 +52,7 @@ export function GraphView() {
   );
 
   const handleNodeDoubleClick = useCallback(
-    (node: RegistryEntry) => {
+    (node: SpecEntry) => {
       selectSpec(node.id);
     },
     [selectSpec],

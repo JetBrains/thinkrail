@@ -1,9 +1,9 @@
 import type { RpcClient } from "../client.ts";
-import type { RegistryEntry, SpecDetail, SpecGraph, CreateSpecParams } from "../types.ts";
+import type { SpecEntry, SpecDetail, SpecGraph, CreateSpecParams } from "../types.ts";
 
 export function createSpecApi(client: RpcClient) {
   return {
-    list: () => client.request<RegistryEntry[]>("spec/list"),
+    list: () => client.request<SpecEntry[]>("spec/list"),
 
     get: (id: string) => client.request<SpecDetail>("spec/get", { id }),
 

@@ -1,4 +1,4 @@
-import type { RegistryEntry, Link, SpecGraph } from "@/types/spec.ts";
+import type { SpecEntry, Link, SpecGraph } from "@/types/spec.ts";
 
 export const NODE_WIDTH = 160;
 export const NODE_HEIGHT = 38;
@@ -7,16 +7,16 @@ export const V_GAP = 50;
 export const PADDING = 20;
 
 export interface NodePosition {
-  node: RegistryEntry;
+  node: SpecEntry;
   x: number;
   y: number;
 }
 
 export interface LayerView {
-  root: RegistryEntry | null;
-  children: RegistryEntry[];
+  root: SpecEntry | null;
+  children: SpecEntry[];
   intraEdges: Link[];
-  breadcrumb: RegistryEntry[];
+  breadcrumb: SpecEntry[];
 }
 
 export interface Transform {
@@ -37,7 +37,7 @@ function getRank(type: string): number {
   return TYPE_RANK[type] ?? 3;
 }
 
-export function findRoots(graph: SpecGraph): RegistryEntry[] {
+export function findRoots(graph: SpecGraph): SpecEntry[] {
   const hasParent = new Set<string>();
   for (const edge of graph.edges) {
     if (edge.type === "parent" || edge.type === "implements") {
@@ -50,7 +50,7 @@ export function findRoots(graph: SpecGraph): RegistryEntry[] {
 export function getStructuralChildren(
   graph: SpecGraph,
   parentId: string,
-): RegistryEntry[] {
+): SpecEntry[] {
   const childIds = new Set<string>();
   for (const edge of graph.edges) {
     if (
@@ -92,8 +92,8 @@ export function computeLayer(
 export function buildBreadcrumb(
   graph: SpecGraph,
   nodeId: string | null,
-): RegistryEntry[] {
-  const trail: RegistryEntry[] = [];
+): SpecEntry[] {
+  const trail: SpecEntry[] = [];
   let current = nodeId;
   while (current) {
     const node = graph.nodes.find((n) => n.id === current);
@@ -109,11 +109,11 @@ export function buildBreadcrumb(
 }
 
 export function layoutNodes(
-  nodes: RegistryEntry[],
+  nodes: SpecEntry[],
   canvasWidth: number,
 ): NodePosition[] {
   // Group by rank
-  const groups = new Map<number, RegistryEntry[]>();
+  const groups = new Map<number, SpecEntry[]>();
   for (const node of nodes) {
     const rank = getRank(node.type);
     const group = groups.get(rank) ?? [];

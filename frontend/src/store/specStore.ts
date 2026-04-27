@@ -1,10 +1,10 @@
 import { create } from "zustand";
-import type { RegistryEntry, SpecDetail, SpecGraph } from "@/types/spec.ts";
+import type { SpecEntry, SpecDetail, SpecGraph } from "@/types/spec.ts";
 import { getClient } from "@/api/index.ts";
 import { createSpecApi } from "@/api/methods/specs.ts";
 
 interface SpecStore {
-  specs: RegistryEntry[];
+  specs: SpecEntry[];
   graph: SpecGraph | null;
   specContent: Map<string, string>;
   loading: boolean;
@@ -18,7 +18,6 @@ interface SpecStore {
   onSpecChanged: (id: string) => void;
   onSpecCreated: (id: string, path: string) => void;
   onSpecDeleted: (id: string) => void;
-  onRegistryUpdated: () => void;
 }
 
 export const useSpecStore = create<SpecStore>((set, get) => ({
@@ -35,7 +34,7 @@ export const useSpecStore = create<SpecStore>((set, get) => ({
       const api = createSpecApi(getClient());
       const specs = await api.list();
       console.log("[specStore] Fetched", specs.length, "specs");
-      set({ specs: specs as RegistryEntry[], loading: false });
+      set({ specs: specs as SpecEntry[], loading: false });
     } catch (e) {
       console.error("[specStore] fetchSpecs error:", e);
       set({ error: (e as Error).message, loading: false });
@@ -88,8 +87,4 @@ export const useSpecStore = create<SpecStore>((set, get) => ({
     get().fetchGraph();
   },
 
-  onRegistryUpdated: () => {
-    get().fetchSpecs();
-    get().fetchGraph();
-  },
 }));

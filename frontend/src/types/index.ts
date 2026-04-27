@@ -1,5 +1,5 @@
 export type {
-  RegistryEntry,
+  SpecEntry,
   Link,
   SpecSummary,
   SpecDetail,

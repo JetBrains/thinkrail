@@ -1,4 +1,4 @@
-import type { RegistryEntry, Link } from "@/types/spec.ts";
+import type { SpecEntry, Link } from "@/types/spec.ts";
 import type { NodePosition, Transform } from "./graphLayout.ts";
 import { GraphNode } from "./GraphNode.tsx";
 import { EdgeLayer } from "./EdgeLayer.tsx";
@@ -8,8 +8,8 @@ interface GraphCanvasProps {
   edges: Link[];
   selectedId: string | null;
   transform: Transform;
-  onNodeClick: (node: RegistryEntry) => void;
-  onNodeDoubleClick: (node: RegistryEntry) => void;
+  onNodeClick: (node: SpecEntry) => void;
+  onNodeDoubleClick: (node: SpecEntry) => void;
 }
 
 export function GraphCanvas({
