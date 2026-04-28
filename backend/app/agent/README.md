@@ -392,7 +392,7 @@ These map 1-to-1 to the `agent/*` notification methods in the protocol:
 | `tool_call_end` | `SDKUserMessage` tool_result block | `agent/toolCallEnd` | Implemented. Includes `agentId` when from a subagent. |
 | `turn_complete` | `SDKResultMessage` (non-terminal, session stays open) | `agent/turnComplete` | Implemented |
 | `interrupted` | `agent/interrupt` cancels current turn | `agent/interrupted` | Implemented |
-| `subagent_start` | `SubagentStart` hook | `agent/subagentStart` | Implemented. Includes `taskToolUseId` (the Task tool_use_id that spawned it) when available from the hook. Runner builds `tool_use_id → agent_id` mapping to resolve `parent_tool_use_id` on subsequent SDK messages into `agentId` on outgoing notifications. |
+| `subagent_start` | `SubagentStart` hook | `agent/subagentStart` | Implemented. Runner correlates `Agent` tool calls (via `ToolUseBlock.id`) with `SubagentStart` hooks to build a `tool_use_id → agent_id` mapping, which resolves `parent_tool_use_id` on subsequent SDK messages into `agentId` on outgoing notifications. The SDK also emits `TaskStartedMessage` system messages with `tool_use_id` as a secondary correlation mechanism. |
 | `subagent_end` | `SubagentStop` hook — also emitted synthetically for orphaned subagents before `agent/interrupted` | `agent/subagentEnd` | Implemented |
 | `notification` | `Notification` hook | `agent/notification` | TODO |
 | `compact` | `PreCompact` hook | `agent/compact` | Implemented — `PreCompact` hook captures `trigger` and `preTokens` (context size before compaction). Frontend renders via `CompactMarker.tsx`. |

@@ -834,7 +834,7 @@ class TestSubagentHooks:
         # Main agent: Task tool call
         task_block = MagicMock(spec=ToolUseBlock)
         task_block.id = "toolu_task_1"
-        task_block.name = "Task"
+        task_block.name = "Agent"
         task_block.input = {"prompt": "explore", "subagent_type": "Explore", "description": "test"}
         main_msg = MagicMock(spec=AssistantMessage)
         main_msg.parent_tool_use_id = None
@@ -946,10 +946,10 @@ class TestSubagentHooks:
             if c.args[0] == "agent/toolCallEnd"
         ]
 
-        # Main agent's Task toolCallStart should NOT have agentId
-        task_starts = [t for t in tool_starts if t["toolName"] == "Task"]
-        assert len(task_starts) == 1
-        assert "agentId" not in task_starts[0], "Main agent Task call should not have agentId"
+        # Main agent's Agent toolCallStart should NOT have agentId
+        agent_starts = [t for t in tool_starts if t["toolName"] == "Agent"]
+        assert len(agent_starts) == 1
+        assert "agentId" not in agent_starts[0], "Main agent Agent call should not have agentId"
 
         # Subagent's textDelta should have agentId
         assert len(text_deltas) == 1

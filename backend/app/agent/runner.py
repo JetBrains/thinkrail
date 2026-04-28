@@ -85,17 +85,17 @@ async def run(
     # Maps parent_tool_use_id (from SDK messages) → agent_id so the
     # frontend can group events under the correct SubagentBlock.
     _parent_to_agent: dict[str, str] = {}
-    # Queue of Task ToolUseBlock.id values awaiting their SubagentStart hook.
-    # Each Task tool call triggers exactly one SubagentStart in order.
-    _pending_task_tool_ids: list[str] = []
+    # Queue of Agent ToolUseBlock.id values awaiting their SubagentStart hook.
+    # Each Agent tool call triggers exactly one SubagentStart in order.
+    _pending_agent_tool_ids: list[str] = []
 
     async def on_subagent_start(hook_input: Any, tool_use_id: str | None, context: Any) -> dict:
         agent_id = hook_input["agent_id"]
         _active_subagent_ids.add(agent_id)
-        # Correlate this subagent with its Task tool call so we can
+        # Correlate this subagent with its Agent tool call so we can
         # resolve parent_tool_use_id → agentId on subsequent messages.
-        if _pending_task_tool_ids:
-            parent_id = _pending_task_tool_ids.pop(0)
+        if _pending_agent_tool_ids:
+            parent_id = _pending_agent_tool_ids.pop(0)
             _parent_to_agent[parent_id] = agent_id
         await notify("agent/subagentStart", {
             "bonsaiSid": task.bonsai_sid,
@@ -149,7 +149,7 @@ async def run(
                 "agentId": orphan_id,
             })
         _active_subagent_ids.clear()
-        _pending_task_tool_ids.clear()
+        _pending_agent_tool_ids.clear()
 
     plugins = []
     if plugin_dir and Path(plugin_dir).is_dir():
@@ -280,8 +280,8 @@ async def run(
                             elif isinstance(block, ToolUseBlock):
                                 # Track Task tool calls so we can correlate
                                 # them with SubagentStart hooks.
-                                if block.name == "Task":
-                                    _pending_task_tool_ids.append(block.id)
+                                if block.name == "Agent":
+                                    _pending_agent_tool_ids.append(block.id)
                                 if block.name == "ExitPlanMode":
                                     _mode_change_tools[block.id] = "default"
                                 elif block.name == "EnterPlanMode":
