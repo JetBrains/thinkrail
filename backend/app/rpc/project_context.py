@@ -98,6 +98,7 @@ class ProjectContext:
         self._board_service: BoardService | None = None
         self._trash_service: TrashService | None = None
         self._model_registry: ModelRegistry | None = None
+        self._model_refresh_started: bool = False
 
     # ── Lazy service properties ───────────────────────────────────────────
 
@@ -216,7 +217,8 @@ class ProjectContext:
             )
 
         # Start model registry refresh (first call only)
-        if self._model_registry is None:
+        if not self._model_refresh_started:
+            self._model_refresh_started = True
             asyncio.create_task(self.model_registry.start_periodic_refresh())
 
     async def shutdown(self) -> None:
