@@ -172,3 +172,4 @@ Run `/spec-status` to see specification coverage.
 | `/module-design` | Create module-level design spec (README.md) |
 | `/submodule-design` | Create sub-component design spec |
 | `/task-spec` | Create actionable task spec for a bug/feature |
+| `/bug-fix` | Reactive bug-fix flow — edit existing specs (or bootstrap one) to capture the correct intent for an observed bug, then suggest a code-fix session |

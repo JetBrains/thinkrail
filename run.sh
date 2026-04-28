@@ -77,10 +77,34 @@ port_in_use() {
         return 1  # can't check, assume free
     fi
 }
-for PORT in $BACKEND_PORT $FRONTEND_PORT; do
-    if port_in_use "$PORT"; then
-        echo "Error: port $PORT is already in use."
-        exit 1
+# Probe up to +10 from $1; echo the first free port and return 0, else return 1.
+find_free_port() {
+    local start=$1
+    local max=$((start + 10))
+    local p
+    for ((p=start; p<=max; p++)); do
+        if ! port_in_use "$p"; then
+            echo "$p"
+            return 0
+        fi
+    done
+    return 1
+}
+# For each named port var, if its current value is busy, substitute the next
+# free port within +10 and warn; if the whole range is busy, exit non-zero.
+for VAR in BACKEND_PORT FRONTEND_PORT; do
+    requested=${!VAR}
+    if port_in_use "$requested"; then
+        if substitute=$(find_free_port "$requested"); then
+            if [ "$substitute" != "$requested" ]; then
+                echo "port $requested is in use; using $substitute instead"
+                printf -v "$VAR" '%s' "$substitute"
+                export "${VAR?}"
+            fi
+        else
+            echo "Error: ports $requested..$((requested + 10)) are all in use." >&2
+            exit 1
+        fi
     fi
 done
 

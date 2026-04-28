@@ -19,18 +19,25 @@ claude --plugin-dir ./plugin
 plugin/
 ├── .claude-plugin/
 │   └── plugin.json              # Plugin manifest (name, version, description)
-├── skills/                      # 13 skill definitions
+├── skills/                      # 20 skill definitions
 │   ├── goal-and-requirements/SKILL.md  # Goal + requirements (GOAL&REQUIREMENTS.md)
+│   ├── new-project/SKILL.md     # Brand-new project bootstrap
+│   ├── bonsai-brainstorm/SKILL.md  # Brainstorm new features end-to-end
 │   ├── architecture-design/SKILL.md
 │   ├── module-design/SKILL.md
 │   ├── submodule-design/SKILL.md
 │   ├── task-spec/SKILL.md
+│   ├── bug-fix/SKILL.md         # Reactive bug-fix flow (spec edit + code-fix hand-off)
 │   ├── spec-init/SKILL.md
 │   ├── spec-status/SKILL.md
 │   ├── spec-next/SKILL.md
 │   ├── spec-from-code/SKILL.md
 │   ├── spec-lint/SKILL.md
 │   ├── spec-review/SKILL.md
+│   ├── ticket-describe/SKILL.md
+│   ├── ticket-specify/SKILL.md
+│   ├── ticket-plan/SKILL.md
+│   ├── ticket-execute/SKILL.md
 │   ├── visualization/SKILL.md   # Terminal visualization toolkit
 │   └── cli-progress/SKILL.md   # CLI progress tracking
 ├── hooks/
@@ -40,11 +47,18 @@ plugin/
 
 ## Skills Overview
 
-### Foundation Skills (1 skill)
+### Foundation Skills (2 skills)
 
 | Skill | Command | Purpose |
 |-------|---------|---------|
 | Goal & Requirements | `/specdriven:goal-and-requirements` | Define project goal, requirements, and tech stack — creates GOAL&REQUIREMENTS.md |
+| New Project | `/specdriven:new-project` | Bootstrap a brand-new project: vision, MVP scope, success criteria, and technology stack |
+
+### Brainstorming (1 skill)
+
+| Skill | Command | Purpose |
+|-------|---------|---------|
+| Bonsai Brainstorm | `/specdriven:bonsai-brainstorm` | Translate user intent into product + technical design + spec diff for new features or behavioural changes |
 
 ### Specification Creation (4 skills)
 
@@ -72,6 +86,21 @@ plugin/
 | From Code | `/specdriven:spec-from-code` | Reverse-engineer spec skeletons from existing code |
 | Lint | `/specdriven:spec-lint` | Validate spec structure, links, completeness |
 | Review | `/specdriven:spec-review` | Deep review of spec accuracy against code |
+
+### Ticket Workflow (4 skills)
+
+| Skill | Command | Purpose |
+|-------|---------|---------|
+| Ticket Describe | `/specdriven:ticket-describe` | Help formulate a structured meta-ticket (What / Purpose / How / Success Criteria) |
+| Ticket Specify | `/specdriven:ticket-specify` | Create or modify specifications for a meta-ticket |
+| Ticket Plan | `/specdriven:ticket-plan` | Produce an ordered implementation plan from linked specs |
+| Ticket Execute | `/specdriven:ticket-execute` | Orchestrate execution of a meta-ticket's plan and track progress |
+
+### Bug & Triage (1 skill)
+
+| Skill | Command | Purpose |
+|-------|---------|---------|
+| Bug Fix | `/specdriven:bug-fix` | Reactive bug-fix flow — edit existing specs (or bootstrap one) to capture correct intent for an observed bug, then suggest a code-fix session |
 
 ## Workflow
 
@@ -133,10 +162,13 @@ Level 5: /task-spec (implementation tasks)
 SpecDriven Plugin
 ├── CLAUDE.md                 # Enforces spec-driven behavior in Claude sessions
 ├── Spec Index                 # YAML frontmatter in each spec + SQLite cache (outside repo)
-├── Foundation Skills (1)     # Goal and requirements combined
+├── Foundation Skills (2)     # Goal & requirements + new-project bootstrap
+├── Brainstorming (1)         # End-to-end design for new features
 ├── Creation Skills (4)       # Generate specifications interactively
 ├── Visualization Skills (2)  # Rich terminal visualizations and progress tracking
 ├── Workflow Skills (6)       # Manage, validate, and orchestrate specs
+├── Ticket Workflow (4)       # Describe / specify / plan / execute meta-tickets
+├── Bug & Triage (1)          # Reactive bug-fix with spec-first philosophy
 ├── Hooks                     # Automated reminders, progress tracking, and checks
 └── Patterns & Templates      # Proven specification patterns
 ```

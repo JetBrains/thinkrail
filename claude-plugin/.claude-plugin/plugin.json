@@ -1,7 +1,7 @@
 {
   "name": "specdriven",
-  "version": "2.1.0",
-  "description": "Specification-driven development plugin for Claude Code. Provides 13 skills for creating, tracking, validating, and orchestrating project specifications with structured visualizations.",
+  "version": "2.2.0",
+  "description": "Specification-driven development plugin for Claude Code. Provides 20 skills for creating, tracking, validating, and orchestrating project specifications, brainstorming, ticket workflows, and reactive bug fixes — with structured visualizations.",
   "author": {
     "name": "SpecDriven"
   },
@@ -19,7 +19,9 @@
     "progress-tracking",
     "brainstorm",
     "brainstorming",
-    "design"
+    "design",
+    "bug-fix",
+    "triage"
   ],
   "skills": "./skills/"
 }
