@@ -23,7 +23,8 @@
       },
       "required": [
         "bonsaiSid",
-        "payload"
+        "payload",
+        "eventType"
       ],
       "title": "AskUserQuestionEvent",
       "type": "object"
@@ -78,7 +79,8 @@
       },
       "required": [
         "bonsaiSid",
-        "payload"
+        "payload",
+        "eventType"
       ],
       "title": "CompactEvent",
       "type": "object"
@@ -125,7 +127,8 @@
       },
       "required": [
         "bonsaiSid",
-        "payload"
+        "payload",
+        "eventType"
       ],
       "title": "ConfirmActionEvent",
       "type": "object"
@@ -206,7 +209,8 @@
       },
       "required": [
         "bonsaiSid",
-        "payload"
+        "payload",
+        "eventType"
       ],
       "title": "ConfirmStatementEvent",
       "type": "object"
@@ -253,7 +257,8 @@
       },
       "required": [
         "bonsaiSid",
-        "payload"
+        "payload",
+        "eventType"
       ],
       "title": "DoneEvent",
       "type": "object"
@@ -313,7 +318,8 @@
       },
       "required": [
         "bonsaiSid",
-        "payload"
+        "payload",
+        "eventType"
       ],
       "title": "ErrorEvent",
       "type": "object"
@@ -408,7 +414,8 @@
       },
       "required": [
         "bonsaiSid",
-        "payload"
+        "payload",
+        "eventType"
       ],
       "title": "InterruptedEvent",
       "type": "object"
@@ -486,7 +493,8 @@
       },
       "required": [
         "bonsaiSid",
-        "payload"
+        "payload",
+        "eventType"
       ],
       "title": "NotificationEvent",
       "type": "object"
@@ -539,7 +547,8 @@
       },
       "required": [
         "bonsaiSid",
-        "payload"
+        "payload",
+        "eventType"
       ],
       "title": "PermissionDeniedEvent",
       "type": "object"
@@ -587,7 +596,8 @@
       },
       "required": [
         "bonsaiSid",
-        "payload"
+        "payload",
+        "eventType"
       ],
       "title": "ProgressEvent",
       "type": "object"
@@ -677,7 +687,8 @@
         }
       },
       "required": [
-        "bonsaiSid"
+        "bonsaiSid",
+        "eventType"
       ],
       "title": "ReadyEvent",
       "type": "object"
@@ -711,7 +722,8 @@
       },
       "required": [
         "bonsaiSid",
-        "payload"
+        "payload",
+        "eventType"
       ],
       "title": "RequestExpiredEvent",
       "type": "object"
@@ -756,7 +768,8 @@
       },
       "required": [
         "bonsaiSid",
-        "payload"
+        "payload",
+        "eventType"
       ],
       "title": "RequestResolvedEvent",
       "type": "object"
@@ -809,7 +822,8 @@
       },
       "required": [
         "bonsaiSid",
-        "payload"
+        "payload",
+        "eventType"
       ],
       "title": "SessionStartEvent",
       "type": "object"
@@ -867,7 +881,8 @@
       },
       "required": [
         "bonsaiSid",
-        "payload"
+        "payload",
+        "eventType"
       ],
       "title": "SubagentEndEvent",
       "type": "object"
@@ -909,7 +924,8 @@
       },
       "required": [
         "bonsaiSid",
-        "payload"
+        "payload",
+        "eventType"
       ],
       "title": "SubagentStartEvent",
       "type": "object"
@@ -956,7 +972,8 @@
       },
       "required": [
         "bonsaiSid",
-        "payload"
+        "payload",
+        "eventType"
       ],
       "title": "SuggestDescriptionEvent",
       "type": "object"
@@ -1008,7 +1025,8 @@
       },
       "required": [
         "bonsaiSid",
-        "payload"
+        "payload",
+        "eventType"
       ],
       "title": "SuggestSessionEvent",
       "type": "object"
@@ -1082,7 +1100,8 @@
       },
       "required": [
         "bonsaiSid",
-        "payload"
+        "payload",
+        "eventType"
       ],
       "title": "TextDeltaEvent",
       "type": "object"
@@ -1136,7 +1155,8 @@
       },
       "required": [
         "bonsaiSid",
-        "payload"
+        "payload",
+        "eventType"
       ],
       "title": "ToolCallEndEvent",
       "type": "object"
@@ -1205,7 +1225,8 @@
       },
       "required": [
         "bonsaiSid",
-        "payload"
+        "payload",
+        "eventType"
       ],
       "title": "ToolCallStartEvent",
       "type": "object"
@@ -1270,7 +1291,8 @@
       },
       "required": [
         "bonsaiSid",
-        "payload"
+        "payload",
+        "eventType"
       ],
       "title": "TurnCompleteEvent",
       "type": "object"
@@ -1353,7 +1375,8 @@
       },
       "required": [
         "bonsaiSid",
-        "payload"
+        "payload",
+        "eventType"
       ],
       "title": "UserMessageEvent",
       "type": "object"

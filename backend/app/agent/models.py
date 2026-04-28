@@ -460,6 +460,25 @@ AgentEvent = Annotated[
 ]
 
 
+def agent_event_json_schema() -> dict:
+    """Return the JSON-serialisable AgentEvent schema ready for codegen.
+
+    Pydantic omits fields with defaults from ``required``, but ``eventType``
+    is the discriminator and *must* be required in TypeScript for
+    ``Extract<>`` narrowing to work.  This helper applies that fix once so
+    callers (CLI export + sync test) don't duplicate the logic.
+    """
+    from pydantic import TypeAdapter
+
+    schema = TypeAdapter(AgentEvent).json_schema(by_alias=True)
+    for defn in (schema.get("$defs") or {}).values():
+        if "eventType" in defn.get("properties", {}):
+            req = defn.setdefault("required", [])
+            if "eventType" not in req:
+                req.append("eventType")
+    return schema
+
+
 # ─── Other models ─────────────────────────────────────────────────────────────
 
 class MessageTooLargeError(Exception):

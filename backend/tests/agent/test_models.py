@@ -17,6 +17,7 @@ from app.agent.models import (
     TextDeltaEvent,
     TextDeltaPayload,
     ToolApprovalResponse,
+    agent_event_json_schema,
 )
 
 
@@ -259,7 +260,7 @@ class TestWsSchemaSync:
         )
 
         committed = json.loads(ws_events_path.read_text())
-        current = TypeAdapter(AgentEvent).json_schema(by_alias=True)
+        current = agent_event_json_schema()
 
         assert current == committed, (
             "ws-events.json is out of sync with app/agent/models.py.\n"

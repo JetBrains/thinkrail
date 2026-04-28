@@ -192,7 +192,7 @@ export type Ismarkdown = boolean;
 export interface SessionStartEvent {
   bonsaiSid: Bonsaisid;
   sessionId?: Sessionid;
-  eventType?: Eventtype;
+  eventType: Eventtype;
   payload: SessionStartPayload;
 }
 /**
@@ -207,7 +207,7 @@ export interface SessionStartPayload {
 export interface TextDeltaEvent {
   bonsaiSid: Bonsaisid1;
   sessionId?: Sessionid2;
-  eventType?: Eventtype1;
+  eventType: Eventtype1;
   payload: TextDeltaPayload;
 }
 /**
@@ -220,7 +220,7 @@ export interface TextDeltaPayload {
 export interface ToolCallStartEvent {
   bonsaiSid: Bonsaisid2;
   sessionId?: Sessionid3;
-  eventType?: Eventtype2;
+  eventType: Eventtype2;
   payload: ToolCallStartPayload;
 }
 /**
@@ -238,7 +238,7 @@ export interface Toolinput {
 export interface ToolCallEndEvent {
   bonsaiSid: Bonsaisid3;
   sessionId?: Sessionid4;
-  eventType?: Eventtype3;
+  eventType: Eventtype3;
   payload: ToolCallEndPayload;
 }
 /**
@@ -254,7 +254,7 @@ export interface ToolCallEndPayload {
 export interface SubagentStartEvent {
   bonsaiSid: Bonsaisid4;
   sessionId?: Sessionid5;
-  eventType?: Eventtype4;
+  eventType: Eventtype4;
   payload: SubagentStartPayload;
 }
 /**
@@ -267,7 +267,7 @@ export interface SubagentStartPayload {
 export interface SubagentEndEvent {
   bonsaiSid: Bonsaisid5;
   sessionId?: Sessionid6;
-  eventType?: Eventtype5;
+  eventType: Eventtype5;
   payload: SubagentEndPayload;
 }
 /**
@@ -279,7 +279,7 @@ export interface SubagentEndPayload {
 export interface CompactEvent {
   bonsaiSid: Bonsaisid6;
   sessionId?: Sessionid7;
-  eventType?: Eventtype6;
+  eventType: Eventtype6;
   payload: CompactPayload;
 }
 /**
@@ -292,7 +292,7 @@ export interface CompactPayload {
 export interface ProgressEvent {
   bonsaiSid: Bonsaisid7;
   sessionId?: Sessionid8;
-  eventType?: Eventtype7;
+  eventType: Eventtype7;
   payload: ProgressPayload;
 }
 /**
@@ -304,7 +304,7 @@ export interface ProgressPayload {
 export interface NotificationEvent {
   bonsaiSid: Bonsaisid8;
   sessionId?: Sessionid9;
-  eventType?: Eventtype8;
+  eventType: Eventtype8;
   payload: NotificationPayload;
 }
 /**
@@ -318,7 +318,7 @@ export interface NotificationPayload {
 export interface PermissionDeniedEvent {
   bonsaiSid: Bonsaisid9;
   sessionId?: Sessionid10;
-  eventType?: Eventtype9;
+  eventType: Eventtype9;
   payload: PermissionDeniedPayload;
 }
 /**
@@ -331,7 +331,7 @@ export interface PermissionDeniedPayload {
 export interface ReadyEvent {
   bonsaiSid: Bonsaisid10;
   sessionId?: Sessionid11;
-  eventType?: Eventtype10;
+  eventType: Eventtype10;
   payload?: ReadyPayload;
 }
 /**
@@ -341,7 +341,7 @@ export interface ReadyPayload {}
 export interface TurnCompleteEvent {
   bonsaiSid: Bonsaisid11;
   sessionId?: Sessionid12;
-  eventType?: Eventtype11;
+  eventType: Eventtype11;
   payload: TurnCompletePayload;
 }
 /**
@@ -364,7 +364,7 @@ export interface Usage {
 export interface InterruptedEvent {
   bonsaiSid: Bonsaisid12;
   sessionId?: Sessionid13;
-  eventType?: Eventtype12;
+  eventType: Eventtype12;
   payload: InterruptedPayload;
 }
 /**
@@ -386,7 +386,7 @@ export interface Usage1 {
 export interface ErrorEvent {
   bonsaiSid: Bonsaisid13;
   sessionId?: Sessionid14;
-  eventType?: Eventtype13;
+  eventType: Eventtype13;
   payload: ErrorPayload;
 }
 /**
@@ -411,7 +411,7 @@ export interface Usage2 {
 export interface DoneEvent {
   bonsaiSid: Bonsaisid14;
   sessionId?: Sessionid15;
-  eventType?: Eventtype14;
+  eventType: Eventtype14;
   payload: DonePayload;
 }
 /**
@@ -430,7 +430,7 @@ export interface Usage3 {
 export interface AskUserQuestionEvent {
   bonsaiSid: Bonsaisid15;
   sessionId?: Sessionid16;
-  eventType?: Eventtype15;
+  eventType: Eventtype15;
   payload: AskUserQuestionPayload;
 }
 /**
@@ -460,7 +460,7 @@ export interface QuestionOption {
 export interface ConfirmActionEvent {
   bonsaiSid: Bonsaisid16;
   sessionId?: Sessionid17;
-  eventType?: Eventtype16;
+  eventType: Eventtype16;
   payload: ConfirmActionPayload;
 }
 /**
@@ -480,7 +480,7 @@ export interface Toolinput1 {
 export interface ConfirmStatementEvent {
   bonsaiSid: Bonsaisid17;
   sessionId?: Sessionid18;
-  eventType?: Eventtype17;
+  eventType: Eventtype17;
   payload: ConfirmStatementPayload;
 }
 /**
@@ -493,7 +493,7 @@ export interface ConfirmStatementPayload {
 export interface SuggestSessionEvent {
   bonsaiSid: Bonsaisid18;
   sessionId?: Sessionid19;
-  eventType?: Eventtype18;
+  eventType: Eventtype18;
   payload: SuggestSessionPayload;
 }
 /**
@@ -510,7 +510,7 @@ export interface SuggestSessionPayload {
 export interface SuggestDescriptionEvent {
   bonsaiSid: Bonsaisid19;
   sessionId?: Sessionid20;
-  eventType?: Eventtype19;
+  eventType: Eventtype19;
   payload: SuggestDescriptionPayload;
 }
 /**
@@ -524,7 +524,7 @@ export interface SuggestDescriptionPayload {
 export interface RequestResolvedEvent {
   bonsaiSid: Bonsaisid20;
   sessionId?: Sessionid21;
-  eventType?: Eventtype20;
+  eventType: Eventtype20;
   payload: RequestResolvedPayload;
 }
 /**
@@ -537,7 +537,7 @@ export interface RequestResolvedPayload {
 export interface RequestExpiredEvent {
   bonsaiSid: Bonsaisid21;
   sessionId?: Sessionid22;
-  eventType?: Eventtype21;
+  eventType: Eventtype21;
   payload: RequestExpiredPayload;
 }
 /**
@@ -550,7 +550,7 @@ export interface RequestExpiredPayload {
 export interface UserMessageEvent {
   bonsaiSid: Bonsaisid22;
   sessionId?: Sessionid23;
-  eventType?: Eventtype22;
+  eventType: Eventtype22;
   payload: UserMessagePayload;
 }
 /**

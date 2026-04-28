@@ -79,10 +79,9 @@ def _export_schema(output: str | None) -> None:
 
 def _export_ws_schema(output: str | None) -> None:
     import json
-    from pydantic import TypeAdapter
-    from app.agent.models import AgentEvent
+    from app.agent.models import agent_event_json_schema
 
-    schema = json.dumps(TypeAdapter(AgentEvent).json_schema(by_alias=True), indent=2)
+    schema = json.dumps(agent_event_json_schema(), indent=2)
     if output:
         import pathlib
         pathlib.Path(output).write_text(schema)
