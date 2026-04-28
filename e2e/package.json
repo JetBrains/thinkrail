@@ -1,0 +1,16 @@
+{
+  "name": "bonsai-e2e",
+  "private": true,
+  "version": "0.0.0",
+  "description": "End-to-end tests for Bonsai (Playwright)",
+  "scripts": {
+    "test": "playwright test",
+    "test:headed": "playwright test --headed",
+    "test:ui": "playwright test --ui",
+    "report": "playwright show-report"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.49.0",
+    "@types/node": "^22.10.0"
+  }
+}

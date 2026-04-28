@@ -118,7 +118,7 @@ requires-dist = [
     { name = "aiofiles", specifier = ">=24.1" },
     { name = "aiosqlite", specifier = ">=0.22.1" },
     { name = "anthropic", specifier = ">=0.89.0" },
-    { name = "claude-agent-sdk", specifier = ">=0.1" },
+    { name = "claude-agent-sdk", specifier = ">=0.1.68" },
     { name = "fastapi", specifier = ">=0.115" },
     { name = "httpx", marker = "extra == 'dev'", specifier = ">=0.27" },
     { name = "jsonrpcserver", specifier = ">=5.0" },
@@ -220,18 +220,20 @@ wheels = [
 
 [[package]]
 name = "claude-agent-sdk"
-version = "0.1.44"
+version = "0.1.68"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "anyio" },
     { name = "mcp" },
+    { name = "sniffio" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/30/40/5661e10daf69ee5c864f82a1888cc33c9378b2d7f7d11db3c2360aef3a30/claude_agent_sdk-0.1.44.tar.gz", hash = "sha256:8629436e7af367a1cbc81aa2a58a93aa68b8b2e4e14b0c5be5ac3627bd462c1b", size = 62439, upload-time = "2026-02-26T01:17:28.118Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/27/cb/a3e2250bba1d6e7a41e34f832dbb1427ec1391d59897189d429b2875952a/claude_agent_sdk-0.1.68.tar.gz", hash = "sha256:5f8c9e29f08852878ed8ba9f91cff0287d069002b9522497c3229a5bd3e483ac", size = 239251, upload-time = "2026-04-25T02:06:35.599Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/e9/1a/dcde83a6477bfdf8c5510fd84006cca763296e6bc5576e90cd89b97ec034/claude_agent_sdk-0.1.44-py3-none-macosx_11_0_arm64.whl", hash = "sha256:1dd976ad3efb673aefd5037dc75ee7926fb5033c4b9ab7382897ab647fed74e6", size = 55828889, upload-time = "2026-02-26T01:17:15.474Z" },
-    { url = "https://files.pythonhosted.org/packages/4b/33/3b161256956968e18c81e2b2650fed7d2a1144d51042ed6317848643e5d7/claude_agent_sdk-0.1.44-py3-none-manylinux_2_17_aarch64.whl", hash = "sha256:d35b38ca40fa28f50fa88705599a298ab30c121c56b53655025eeceb463ac399", size = 70795212, upload-time = "2026-02-26T01:17:18.873Z" },
-    { url = "https://files.pythonhosted.org/packages/17/cb/67af9796dad77a94dfe851138f5ffc9e2e0a14407ba55fea07462c1cc8e5/claude_agent_sdk-0.1.44-py3-none-manylinux_2_17_x86_64.whl", hash = "sha256:853c15501f71a913a6cc6b40dc0b24b9505166cad164206b8eab229889e670b8", size = 71424685, upload-time = "2026-02-26T01:17:22.345Z" },
-    { url = "https://files.pythonhosted.org/packages/46/cd/2d3806c791250a76de2c1be863fc01d420729ad61496253e3d3033464c72/claude_agent_sdk-0.1.44-py3-none-win_amd64.whl", hash = "sha256:597e2fcad372086f93e4f6a380d3088ec4dd9b9efce309c5281b52a256fd5d25", size = 73493771, upload-time = "2026-02-26T01:17:25.837Z" },
+    { url = "https://files.pythonhosted.org/packages/cf/84/347e9ecc4e293b6a0a80557a5527d0e0b28bfdd6c4ce9fac907436a606b9/claude_agent_sdk-0.1.68-py3-none-macosx_11_0_arm64.whl", hash = "sha256:4e5228ffeae2bfa195e2526c446b5a926a1f4015da35e3efd142f817cf2c6dfb", size = 63221614, upload-time = "2026-04-25T02:06:38.805Z" },
+    { url = "https://files.pythonhosted.org/packages/d0/18/e83cdf6c1e7025e735b546b83ff88fcb9762082e61b068a9e52c280caee6/claude_agent_sdk-0.1.68-py3-none-macosx_11_0_x86_64.whl", hash = "sha256:4aeb266002b7ca97167072cf04bc3098db5bc8d2daa08a6f84ed29f2d48e2545", size = 65187622, upload-time = "2026-04-25T02:06:42.245Z" },
+    { url = "https://files.pythonhosted.org/packages/aa/6c/70769392db3f8717afd48d0c2a5f1b8524f030ef42f203bac4f07f2ab443/claude_agent_sdk-0.1.68-py3-none-manylinux_2_17_aarch64.whl", hash = "sha256:2053151067347dd2b980f59632478f14b5323b627efb97fea41233e8bf891831", size = 76635725, upload-time = "2026-04-25T02:06:46.448Z" },
+    { url = "https://files.pythonhosted.org/packages/b9/61/4b6f08a5d92a8077e5a29af1ba69f04c9465082781061b9271e981092287/claude_agent_sdk-0.1.68-py3-none-manylinux_2_17_x86_64.whl", hash = "sha256:59c7873e39ac7aa572fae25466abc5c34abb3da64eaf60790ed9ddd6dd4759b7", size = 76613056, upload-time = "2026-04-25T02:06:50.427Z" },
+    { url = "https://files.pythonhosted.org/packages/8b/c1/3bd1f00529aa1b43f6f57d18ebe5272c3f4cec4bc25f543d78562639a932/claude_agent_sdk-0.1.68-py3-none-win_amd64.whl", hash = "sha256:6f06b744bf20a82d937a3ac705b26807f14936ec1b0c79349208e11a2e89413b", size = 78349055, upload-time = "2026-04-25T02:06:53.919Z" },
 ]
 
 [[package]]
