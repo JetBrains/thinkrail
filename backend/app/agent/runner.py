@@ -204,6 +204,7 @@ async def run(
         betas=betas,
         effort=task.config.effort,
         max_buffer_size=10 * 1024 * 1024,  # 10MB — default 1MB is too small for large tool results
+        extra_args={"allow-dangerously-skip-permissions": None},  # enable mid-session mode switching to bypassPermissions
         hooks={
             "SubagentStart": [HookMatcher(hooks=[on_subagent_start])],
             "SubagentStop": [HookMatcher(hooks=[on_subagent_stop])],

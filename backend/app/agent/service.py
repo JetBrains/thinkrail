@@ -304,11 +304,18 @@ class AgentService:
         if client is None:
             raise ValueError(f"No live client for session {bonsai_sid}")
         if model is not None:
+            logger.info("[%s] update_config: set_model(%s)", bonsai_sid[:8], model)
             await client.set_model(model)
             task.config.model = model
         if permission_mode is not None:
-            await client.set_permission_mode(permission_mode)
+            logger.info("[%s] update_config: set_permission_mode(%s)", bonsai_sid[:8], permission_mode)
+            try:
+                await client.set_permission_mode(permission_mode)
+            except Exception:
+                logger.exception("[%s] set_permission_mode(%s) FAILED", bonsai_sid[:8], permission_mode)
+                raise
             task.config.permission_mode = permission_mode
+            logger.info("[%s] update_config: permission_mode updated to %s", bonsai_sid[:8], permission_mode)
         if betas is not None:
             task.config.betas = betas
         if effort is not None:

@@ -471,11 +471,6 @@ def register_routes(app: FastAPI, server_store: "ServerStore | None" = None) -> 
             if ctx is not None:
                 with _projects_lock:
                     ctx.connection_count -= 1
-                    should_shutdown = ctx.connection_count <= 0
-                    if should_shutdown:
-                        _projects.pop(key, None)
-                if should_shutdown:
-                    await ctx.shutdown()
 
 
 # -- Watcher helpers -----------------------------------------------------------
