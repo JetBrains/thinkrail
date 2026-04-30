@@ -69,3 +69,7 @@ backend/app/agent/models.py  →  frontend/ws-events.json  →  frontend/src/typ
 ```bash
 cd frontend && npm run generate:ws-schema && npm run generate:ws-types
 ```
+
+#### End-to-End Tests
+
+Playwright specs that drive the real backend + frontend live in [`e2e/`](./e2e/README.md) — run `./run.sh` then `cd e2e && npm test`.

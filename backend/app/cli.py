@@ -31,6 +31,20 @@ async def _create_user(user_id: str, display_name: str, *, is_admin: bool = Fals
         await store.close()
 
 
+async def _delete_user(user_id: str) -> None:
+    store = ServerStore(get_data_dir())
+    await store.open()
+    try:
+        user = await store.get_user(user_id)
+        if not user:
+            print(f"User {user_id!r} not found.")
+            sys.exit(1)
+        await store.delete_user(user_id)
+        print(f'Deleted user "{user_id}"')
+    finally:
+        await store.close()
+
+
 async def _set_admin(user_id: str) -> None:
     store = ServerStore(get_data_dir())
     await store.open()
@@ -100,6 +114,10 @@ def main() -> None:
     cu.add_argument("--name", required=True, help="Display name (e.g. 'Danya')")
     cu.add_argument("--admin", action="store_true", help="Grant admin role")
 
+    # delete-user
+    du = sub.add_parser("delete-user", help="Delete a user and all associated data")
+    du.add_argument("--id", required=True, help="User ID to delete")
+
     # set-admin
     sa = sub.add_parser("set-admin", help="Grant admin role to an existing user")
     sa.add_argument("--id", required=True, help="User ID to promote")
@@ -119,6 +137,8 @@ def main() -> None:
 
     if args.command == "create-user":
         asyncio.run(_create_user(args.id, args.name, is_admin=args.admin))
+    elif args.command == "delete-user":
+        asyncio.run(_delete_user(args.id))
     elif args.command == "set-admin":
         asyncio.run(_set_admin(args.id))
     elif args.command == "list-users":

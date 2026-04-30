@@ -1,11 +1,34 @@
+---
+id: module-e2e
+type: module-design
+status: active
+title: E2E Tests
+parent: design-doc
+depends-on:
+  - frontend-module
+  - module-agent
+covers:
+  - e2e/
+tags:
+  - testing
+  - e2e
+  - playwright
+---
 # Bonsai e2e tests
 
-Playwright tests that drive the real backend + frontend in a browser.
+Playwright tests that drive the real backend + frontend in a browser. They lock
+in observable behavior (UI flows, WS/REST round-trips, persistence) so the
+upcoming Python→Bun backend rewrite has a regression net.
 
 ## Prerequisites
 
-- Bonsai is running locally (`./run.sh` from repo root) — backend on :8000, frontend on :3000.
-- Anthropic credentials are reachable to the backend (env `ANTHROPIC_API_KEY` or macOS Keychain entry created by `claude auth login`). The tests start real agent sessions, so a working API key is required.
+- Bonsai is running locally (`./run.sh` from repo root) — backend on :8000,
+  frontend on :3000. The `globalSetup.ts` hook hits `GET /api/server-info` and
+  fails fast if the backend is unreachable.
+- `ANTHROPIC_API_KEY` is set in the backend environment (or a Keychain entry
+  created by `claude auth login` exists). The session-lifecycle and per-model
+  specs make real Anthropic API calls. See "LLM specs" below for why.
+- Chromium is installed: `npx playwright install chromium`.
 
 ## Install
 
@@ -19,10 +42,11 @@ npx playwright install chromium
 
 ```bash
 cd e2e
-npm test                 # headless
-npm run test:headed      # with visible browser
-npm run test:ui          # Playwright UI mode
-npm run report           # open last HTML report
+npm test                   # full suite, headless
+npm test -- spec-tree      # subset by basename
+npm run test:headed        # full suite with visible browser
+npm run test:ui            # Playwright UI mode
+npm run report             # open last HTML report
 ```
 
 Override URLs if the app is not on the defaults:
@@ -33,10 +57,120 @@ BONSAI_BACKEND_URL=http://localhost:8000 \
 npm test
 ```
 
-## What's covered
+The suite runs sequentially (`fullyParallel: false`, `workers: 1`) and uses
+chromium only. There are no retries — each spec must be deterministic.
 
-- `tests/new-session-model.spec.ts` — starts a new agent session for each supported model (Opus 4.6, Opus 4.7, Sonnet 4.6, Haiku 4.5) and asserts no API error banner (`API Error`, `thinking.type.enabled`, etc.) appears. Originally added to lock in the Opus 4.7 regression where the bundled CLI sent `thinking.type=enabled` for a model that requires `thinking.type=adaptive`.
+## Layout
 
-## Fixtures
+```
+e2e/
+  globalSetup.ts        # fail-fast health check before any spec runs
+  playwright.config.ts  # serial chromium config
+  fixtures/
+    admin.ts            # `admin` fixture: creates a fresh user via `app.cli`
+    project.ts          # `tempProject` fixture: makes/cleans an `os.tmpdir()` dir
+    index.ts            # combined `test` export consumed by every spec
+  helpers/
+    login.ts            # loginAs, loginViaToken, loginAsExpectingError, openProject
+    session.ts          # startSessionWithModel, startSessionConnectivityCheck,
+                        #   waitForSessionActivity, waitForIdle, endSession
+    selectors.ts        # central CSS/role selectors for every screen
+    board.ts, specs.ts  # seed helpers that write `.bonsai/` state directly
+  tests/
+    *.spec.ts           # one spec per surface area
+```
 
-- `fixtures/admin.ts` — creates a fresh admin user via the backend CLI (`uv run python -m app.cli create-user`) and returns the `bns_` token. Each test run gets its own user so tests don't depend on global state.
+## Adding a new spec
+
+1. Create `tests/<feature>.spec.ts` and import from `../fixtures` (this gives
+   you `test`, `expect`, the `admin` fixture, and `tempProject`).
+2. Use the helpers in `helpers/` rather than raw selectors so churn is absorbed
+   in one place. Add new selectors to `helpers/selectors.ts`.
+3. Seed any `.bonsai/` state through the seed helpers (`seedProject`,
+   `seedTicket`, `seedDrafts`, `seedTrashedPlan`) — write to disk before
+   `openProject`. Avoid driving setup through real LLM calls when the goal is
+   to exercise the UI for that state.
+4. Smoke-style assertions only: page renders, primary action succeeds, obvious
+   negative path fails gracefully. Don't assert deep content.
+5. Run just your file: `npm test -- <feature>`. Then run the whole suite once
+   before committing.
+
+## LLM specs
+
+The following specs make real Anthropic API calls and tag themselves with
+`test.slow()`:
+
+- `tests/session-lifecycle.spec.ts`
+- `tests/session-history.spec.ts`
+- `tests/new-session-model.spec.ts`
+
+We keep real LLM calls (rather than mocking the SDK) because the rewrite
+has to preserve the exact behavior of the backend's agent runner — including
+the SDK error surface (`API Error`, `thinking.type.enabled`, etc.). A mocked
+session would not catch the regressions this suite is meant to lock in.
+
+If the full run becomes too long, split LLM specs into a separate command by
+adding to `package.json`:
+
+```json
+"test:llm": "playwright test session-lifecycle session-history new-session-model",
+"test:fast": "playwright test --grep-invert 'session-lifecycle|session-history|new-session-model'"
+```
+
+(Currently the full suite is fast enough that no split is in place.)
+
+## Coverage map
+
+Every component under `frontend/src/components/` is exercised by at least one
+spec — directly or transitively — except where noted as a documented gap.
+
+| Component | Primary spec(s) | Notes |
+|-----------|------------------|-------|
+| AdminPanel | `admin-panel.spec.ts` | List/create/revoke users; non-admin denial |
+| AppShell (Header, StatusBar, ThemeSwitcher, ServerInfoDialog, TokenDialog) | `app-shell.spec.ts` | Theme toggle, server info, token redaction |
+| AppShell/LeftPanel, ResizeHandle | `settings.spec.ts`, `_smoke.spec.ts` | Alt+B toggle persists; status bar visible |
+| BoardView (KanbanColumn, MetaTicketBoard/Card, CreateTicketModal, BoardCardContextMenu, TaskBoard/Card) | `board.spec.ts` | Create + move-via-context-menu + reload |
+| ChatStream (InputArea, AssistantMessage, ToolCallCard, ErrorBanner, SessionStatusLine, DiffCard, ApprovalCard, etc.) | `session-lifecycle.spec.ts`, `session-history.spec.ts`, `new-session-model.spec.ts` | Real LLM; tool-call card appears |
+| CommandPalette | `trash-and-palette.spec.ts` | Alt+K, action mode, spec-picker mode |
+| ContextPanel (modes, sections) | `vis.spec.ts` | Dashboard pin/unpin; auto-mode toggle. Other modes (spec/session) untested — documented gap |
+| DiffCard (chat) | `plan-and-drafts.spec.ts` | Draft-diff path live |
+| FileTree | `file-explorer.spec.ts` | Expand subdir, click leaf |
+| FileViewer | `file-explorer.spec.ts`, `spec-tree.spec.ts`, `settings.spec.ts` | Markdown + non-spec text + settings.json |
+| GoalFilePanel | (gap) | Renders only for goal-mode sessions; documented gap |
+| LoginScreen | `setup-and-auth.spec.ts` | Valid + invalid token paths |
+| MarkdownEditor | `spec-editor.spec.ts` | Edit body, save, preview updates |
+| MetaTicketDetail (TicketDescriptionView, TicketInfo, TicketProgressBar) | `meta-ticket.spec.ts`, `plan-and-drafts.spec.ts` | Edit description, link spec, plan/drafts |
+| Notifications/ToastContainer | (gap) | Specs assert against `ChatStream`'s `ErrorBanner`; the toast renderer itself has no spec — documented gap |
+| ProgressTab (ActivityTimeline) | `session-history.spec.ts` | History list item appears |
+| ProjectPicker | `project-picker.spec.ts`, `project-init.spec.ts`, `_smoke.spec.ts` | Recent list, autocomplete, invalid path |
+| SessionHistory | `session-history.spec.ts` | Continue reloads messages |
+| SessionManager | `session-history.spec.ts` | Modal opens, continue button |
+| SessionPanel (SessionTabBar, StickyContextBar, WelcomeScreen) | `session-lifecycle.spec.ts`, every spec that opens an empty project | Routing between welcome/session views |
+| SessionPanel/NewProjectScreen | `project-init.spec.ts` | First-time init flow |
+| SetupScreen | `setup-and-auth.spec.ts` | Mocked `/api/setup` to force `needsSetup=true` |
+| SpecTree | `spec-tree.spec.ts`, `spec-editor.spec.ts`, `trash-and-palette.spec.ts` | Tree expand, click, palette spec-picker |
+| TrashModal | `trash-and-palette.spec.ts` | Restore a seeded trashed plan |
+| `shared/`, `ui/` | (transitive) | Utility primitives — covered through every spec that renders them |
+
+### Documented gaps
+
+- **GoalFilePanel** — only renders for `isGoalSession=true` sessions; would
+  require a goal-mode session helper. Track in a follow-up if the rewrite
+  changes goal sessions.
+- **Notifications/ToastContainer** — specs assert against the `ChatStream`
+  `ErrorBanner`, not the global `ToastContainer`. The toast renderer (positive
+  *and* negative paths) has no e2e coverage. Low risk because the renderer is
+  a thin Zustand-driven list.
+
+## Project isolation
+
+Every spec uses the `tempProject` fixture (a fresh `os.tmpdir()/bonsai-e2e-*`
+directory) and seeds `.bonsai/` state on disk before driving the UI. No spec
+depends on the source repo's working state — the previous `REPO_ROOT`-pinned
+`new-session-model.spec.ts` was migrated to `tempProject` because leftover
+session state in the dev project produced flaky agent startup.
+
+Exceptions that don't open a project at all:
+
+- `setup-and-auth.spec.ts` — mocks `/api/setup/*` at the network layer to force
+  `needsSetup=true` without touching the live database; never opens a project.

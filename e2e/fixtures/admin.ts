@@ -20,11 +20,27 @@ function createAdminViaCli(id: string): string {
   return m[1];
 }
 
+export function deleteUserViaCli(id: string): void {
+  try {
+    execFileSync(
+      "uv",
+      ["run", "python", "-m", "app.cli", "delete-user", "--id", id],
+      { cwd: BACKEND_DIR, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] },
+    );
+  } catch {
+    // Best-effort — don't fail the test because of teardown.
+  }
+}
+
 export const test = base.extend<{ admin: AdminUser }>({
   admin: async ({}, use) => {
     const id = `e2e_${randomBytes(4).toString("hex")}`;
     const token = createAdminViaCli(id);
-    await use({ id, token });
+    try {
+      await use({ id, token });
+    } finally {
+      deleteUserViaCli(id);
+    }
   },
 });
 

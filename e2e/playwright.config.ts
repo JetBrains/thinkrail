@@ -5,11 +5,13 @@ const BACKEND_URL = process.env.BONSAI_BACKEND_URL ?? "http://localhost:8000";
 
 export default defineConfig({
   testDir: "./tests",
+  globalSetup: "./globalSetup.ts",
   timeout: 90_000,
   expect: { timeout: 15_000 },
   fullyParallel: false,
   workers: 1,
   retries: 0,
+  forbidOnly: !!process.env.CI,
   reporter: [["list"], ["html", { open: "never" }]],
   use: {
     baseURL: FRONTEND_URL,
