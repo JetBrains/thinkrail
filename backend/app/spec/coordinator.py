@@ -246,13 +246,18 @@ class IndexCoordinator:
                 _find_md_files, self._project_root, self._index._bonsaihide_spec
             )
 
+            # Track paths seen on disk so we can detect offline deletions
+            seen_paths: set[str] = set()
+
             for file_path in md_files:
+                rel_path = str(file_path.relative_to(self._project_root))
+                seen_paths.add(rel_path)
+
                 result = await self._index.reindex_file(
                     self._project_root, file_path
                 )
 
                 if result == "spec":
-                    rel_path = str(file_path.relative_to(self._project_root))
                     spec = await self._index.get_spec_by_path(rel_path)
                     if spec:
                         await self._notify(
@@ -260,6 +265,18 @@ class IndexCoordinator:
                         )
                 elif result == "document":
                     await self._notify("docs/didChange", {})
+
+            # Purge index entries for files deleted while server was down
+            indexed_paths = await self._index.get_all_indexed_paths()
+            stale_paths = indexed_paths - seen_paths
+            if stale_paths:
+                logger.info(
+                    "Differential scan: removing %d stale entries", len(stale_paths)
+                )
+                for stale_path in stale_paths:
+                    await self._index.remove_by_path(stale_path)
+                # Batch-notify after all removals
+                await self._notify("docs/didChange", {})
         except Exception:
             logger.exception("Differential scan failed")
 

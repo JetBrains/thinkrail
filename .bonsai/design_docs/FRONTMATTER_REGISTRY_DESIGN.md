@@ -220,4 +220,4 @@ The RPC method interfaces remain unchanged — only the internal implementation 
 | Rebuild atomicity | Single SQLite transaction | WAL readers see pre-rebuild data until commit. No partial state. |
 | Async file I/O | `aiofiles` + `asyncio.to_thread()` | Prevents event-loop blocking. Single new dependency. |
 | Readiness signaling | `asyncio.Event` | Properly awaitable. Non-blocking `is_set()` for backward compat. |
-| Cold-start catchup | Background differential scan | Serves existing data immediately. Hash comparison finds offline edits. |
+| Cold-start catchup | Background differential scan | Serves existing data immediately. Hash comparison finds offline edits. Purges index entries for files deleted while server was down. |

@@ -433,10 +433,10 @@ class TestDiffScan:
         spec_b = await index.get_spec("spec-b")
         assert spec_b is not None  # New file discovered
 
-    async def test_diff_scan_detects_deleted_files_on_next_rebuild(
+    async def test_diff_scan_purges_deleted_files(
         self, coordinator, index, tmp_path, notifications
     ):
-        """Diff scan processes existing files; deleted files remain until rebuild."""
+        """Diff scan removes index entries for files deleted while server was down."""
         # Create two specs and rebuild
         _write_spec_file(
             tmp_path,
@@ -467,26 +467,71 @@ class TestDiffScan:
         assert await index.get_spec("spec-a") is not None
         assert await index.get_spec("spec-b") is not None
 
-        # Delete spec-b from disk
+        # Delete spec-b from disk (simulates offline deletion)
         (tmp_path / "specs" / "b.md").unlink()
 
-        # Diff scan only processes files that exist on disk —
-        # it does NOT remove entries for deleted files.
+        notifications.clear()
+
+        # Diff scan should detect the deletion and purge the stale entry
         coordinator.emit(DiffScanRequested())
         await coordinator._queue.join()
 
         # spec-a still there
         assert await index.get_spec("spec-a") is not None
 
-        # spec-b is still in the index (diff scan doesn't reconcile deletions)
-        assert await index.get_spec("spec-b") is not None
+        # spec-b purged by diff scan
+        assert await index.get_spec("spec-b") is None
 
-        # A full rebuild removes it
-        coordinator.emit(RebuildRequested(reason="cleanup"))
+        # Notification emitted for the removal
+        methods = [n[0] for n in notifications]
+        assert "docs/didChange" in methods
+
+    async def test_diff_scan_purges_deleted_documents(
+        self, coordinator, index, tmp_path, notifications
+    ):
+        """Diff scan removes unmanaged document entries for files deleted offline."""
+        # Create a managed spec and an unmanaged doc, then rebuild
+        _write_spec_file(
+            tmp_path,
+            "specs/a.md",
+            """\
+            ---
+            id: spec-a
+            type: task-spec
+            ---
+            # Spec A
+            """,
+        )
+        _write_spec_file(
+            tmp_path,
+            "docs/notes.md",
+            "# Just some notes\n\nNo frontmatter here.",
+        )
+
+        coordinator.emit(RebuildRequested(reason="initial"))
         await coordinator._queue.join()
 
         assert await index.get_spec("spec-a") is not None
-        assert await index.get_spec("spec-b") is None  # Gone after rebuild
+        docs = await index.get_all_documents()
+        doc_paths = [d.path for d in docs]
+        assert "docs/notes.md" in doc_paths
+
+        # Delete the unmanaged doc from disk
+        (tmp_path / "docs" / "notes.md").unlink()
+
+        notifications.clear()
+
+        # Diff scan should purge the stale document entry
+        coordinator.emit(DiffScanRequested())
+        await coordinator._queue.join()
+
+        # Spec still there
+        assert await index.get_spec("spec-a") is not None
+
+        # Document purged
+        docs = await index.get_all_documents()
+        doc_paths = [d.path for d in docs]
+        assert "docs/notes.md" not in doc_paths
 
 
 # ── TestEventOrdering ────────────────────────────────────────────────────────

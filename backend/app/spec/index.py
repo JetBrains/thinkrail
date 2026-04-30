@@ -569,6 +569,21 @@ class SpecIndex:
                 async for row in cur
             ]
 
+    async def get_all_indexed_paths(self) -> set[str]:
+        """Return the set of all indexed paths (specs + documents).
+
+        Lightweight query — returns only path strings, not full entries.
+        Used by the differential scan to detect offline deletions.
+        """
+        paths: set[str] = set()
+        async with self._db.execute("SELECT path FROM specs") as cur:
+            async for row in cur:
+                paths.add(row["path"])
+        async with self._db.execute("SELECT path FROM documents") as cur:
+            async for row in cur:
+                paths.add(row["path"])
+        return paths
+
     async def get_referencing_specs(self, target_id: str) -> list[SpecEntry]:
         """Return specs whose outgoing links reference *target_id*."""
         async with self._db.execute(

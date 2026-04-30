@@ -136,8 +136,9 @@ Process:
 2. For each file, call `reindex_file()` which compares `content_hash` with stored value
 3. Files with matching hashes are skipped (no-op)
 4. Files with changed content are re-parsed and upserted, with individual notifications emitted
+5. After scanning all current files, query the index for all known paths (specs + documents). Remove any entry whose path was not seen during the walk — these are files deleted while the server was down. Emit `docs/didChange` and/or `spec/didChange` notifications for each removal.
 
-The index serves existing data immediately while the scan runs — the differential scan is non-blocking.
+The index serves existing data immediately while the scan runs — the differential scan is non-blocking. Step 5 ensures that offline deletions are detected: without it, stale entries for deleted files persist indefinitely until the next full rebuild.
 
 ---
 
