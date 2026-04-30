@@ -10,6 +10,21 @@ from pathlib import Path
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
+from starlette.exceptions import HTTPException as StarletteHTTPException
+
+
+class _SPAStaticFiles(StaticFiles):
+    """StaticFiles with SPA fallback: unknown non-API paths return index.html
+    so client-side routes (e.g. /login, /board/...) survive direct loads
+    and refreshes. Unknown paths under api/ keep their real 404."""
+
+    async def get_response(self, path, scope):
+        try:
+            return await super().get_response(path, scope)
+        except StarletteHTTPException as exc:
+            if exc.status_code == 404 and not path.startswith("api/"):
+                return await super().get_response("index.html", scope)
+            raise
 
 from app.api import setup as setup_api
 from app.core.config import get_data_dir
@@ -87,7 +102,7 @@ def create_app() -> FastAPI:
 
     frontend_dist = _find_frontend_dist()
     if frontend_dist:
-        app.mount("/", StaticFiles(directory=frontend_dist, html=True), name="frontend")
+        app.mount("/", _SPAStaticFiles(directory=frontend_dist, html=True), name="frontend")
 
     return app
 

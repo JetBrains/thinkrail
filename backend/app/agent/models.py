@@ -307,7 +307,11 @@ class UserMessagePayload(BaseModel):
 class _BaseEvent(BaseModel):
     """Common envelope fields shared by every agent event."""
 
-    model_config = _CAMEL_CONFIG
+    model_config = ConfigDict(
+        alias_generator=to_camel,
+        populate_by_name=True,
+        json_schema_serialization_defaults_required=True,
+    )
 
     bonsai_sid: str
     session_id: str = ""
@@ -463,20 +467,14 @@ AgentEvent = Annotated[
 def agent_event_json_schema() -> dict:
     """Return the JSON-serialisable AgentEvent schema ready for codegen.
 
-    Pydantic omits fields with defaults from ``required``, but ``eventType``
-    is the discriminator and *must* be required in TypeScript for
-    ``Extract<>`` narrowing to work.  This helper applies that fix once so
-    callers (CLI export + sync test) don't duplicate the logic.
+    ``_BaseEvent`` sets ``json_schema_serialization_defaults_required=True``
+    so Pydantic natively marks ``eventType`` (a defaulted Literal) as
+    required — no manual patching needed.  ``mode="serialization"`` emits
+    camelCase aliases.
     """
     from pydantic import TypeAdapter
 
-    schema = TypeAdapter(AgentEvent).json_schema(by_alias=True)
-    for defn in (schema.get("$defs") or {}).values():
-        if "eventType" in defn.get("properties", {}):
-            req = defn.setdefault("required", [])
-            if "eventType" not in req:
-                req.append("eventType")
-    return schema
+    return TypeAdapter(AgentEvent).json_schema(by_alias=True, mode="serialization")
 
 
 # ─── Other models ─────────────────────────────────────────────────────────────
