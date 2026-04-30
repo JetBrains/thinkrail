@@ -1,9 +1,9 @@
 """Tool context — session-scoped state for MCP tool handlers via contextvars.
 
-Runner sets context once before SDK client creation.  Tool handlers read it
-via ``get_tool_context()`` during execution.  This ensures tools work in all
-permission modes — including ``bypassPermissions`` (yolo mode) where the CLI
-skips the ``canUseTool`` hook entirely.
+The runtime sets context once before SDK client creation.  Tool handlers
+read it via ``get_tool_context()`` during execution.  This ensures tools
+work in all permission modes — including ``bypassPermissions`` (yolo
+mode) where the CLI skips the ``canUseTool`` hook entirely.
 """
 
 from __future__ import annotations
@@ -46,7 +46,7 @@ def set_tool_context(
     spec_service: SpecService | None = None,
     coordinator: "IndexCoordinator | None" = None,
 ) -> contextvars.Token:
-    """Set session context.  Called by runner.py before SDK operations."""
+    """Set session context.  Called by the runtime before SDK operations."""
     return _tool_context.set(
         ToolContext(
             tracker=tracker, notify=notify, task=task, config=config,

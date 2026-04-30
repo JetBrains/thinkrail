@@ -68,7 +68,7 @@ No suspension, no Future. The handler emits the notification and returns immedia
 
 ## No Other Backend Changes
 
-- `runner.py` — no changes (already calls `set_tool_context()` before SDK client creation)
+- `runtime/claude/runtime.py` — no changes (already calls `set_tool_context()` before SDK client creation)
 - `permissions.py` — no changes (routes via `INTERCEPTORS` registry)
 - `service.py` — no changes
 - `tracker.py` — no changes (no Future needed for passive tools)

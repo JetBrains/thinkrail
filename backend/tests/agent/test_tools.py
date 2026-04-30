@@ -11,6 +11,7 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 
 from app.agent.models import AgentConfig, AgentTask
+from app.agent.runtime.permissions import ToolPermissionResponse
 from app.agent.tools._context import set_tool_context
 from app.agent.tracker import Tracker
 from app.core.config import AppConfig, get_index_path
@@ -853,3 +854,94 @@ class TestVisServerSharedValidation:
                     assert mod._validate_vis_data is shared_validate
             finally:
                 sys.path.pop(0)
+
+
+# ===========================================================================
+# Interceptors return runtime-neutral ToolPermissionResponse — Task 7
+# ===========================================================================
+
+
+class TestInterceptorsReturnNeutralResponse:
+    """Each interceptor must auto-approve via ``ToolPermissionResponse``,
+    not Claude SDK ``PermissionResultAllow``. This is what makes the
+    runtime-neutral contract real — the dispatch in ``can_use_tool``
+    returns the interceptor result unchanged.
+    """
+
+    async def _invoke(
+        self, intercept_fn, tmp_path: Path,
+    ) -> ToolPermissionResponse:
+        config = _make_config(tmp_path)
+        tracker, task = _make_tracker_and_task()
+        notify = AsyncMock()
+        return await intercept_fn({}, tracker, notify, task, config)
+
+    async def test_intercept_specs_returns_neutral_allow(self, tmp_path: Path) -> None:
+        from app.agent.tools.specs import intercept_specs
+
+        result = await self._invoke(intercept_specs, tmp_path)
+        assert isinstance(result, ToolPermissionResponse)
+        assert result.behavior == "allow"
+
+    async def test_intercept_visualize_returns_neutral_allow(self, tmp_path: Path) -> None:
+        from app.agent.tools.visualization import intercept_visualize
+
+        result = await self._invoke(intercept_visualize, tmp_path)
+        assert isinstance(result, ToolPermissionResponse)
+        assert result.behavior == "allow"
+
+    async def test_intercept_suggest_session_returns_neutral_allow(self, tmp_path: Path) -> None:
+        from app.agent.tools.suggest_session import intercept_suggest_session
+
+        result = await self._invoke(intercept_suggest_session, tmp_path)
+        assert isinstance(result, ToolPermissionResponse)
+        assert result.behavior == "allow"
+
+    async def test_intercept_suggest_description_returns_neutral_allow(self, tmp_path: Path) -> None:
+        from app.agent.tools.suggest_description import intercept_suggest_description
+
+        result = await self._invoke(intercept_suggest_description, tmp_path)
+        assert isinstance(result, ToolPermissionResponse)
+        assert result.behavior == "allow"
+
+    async def test_intercept_orchestrator_returns_neutral_allow(self, tmp_path: Path) -> None:
+        from app.agent.tools.orchestrator import intercept_orchestrator
+
+        result = await self._invoke(intercept_orchestrator, tmp_path)
+        assert isinstance(result, ToolPermissionResponse)
+        assert result.behavior == "allow"
+
+    async def test_intercept_change_ticket_status_returns_neutral_allow(self, tmp_path: Path) -> None:
+        from app.agent.tools.change_ticket_status import intercept_change_ticket_status
+
+        result = await self._invoke(intercept_change_ticket_status, tmp_path)
+        assert isinstance(result, ToolPermissionResponse)
+        assert result.behavior == "allow"
+
+    def test_no_claude_sdk_permission_imports_in_tools_package(self) -> None:
+        """The whole point of Task 7: interceptor modules must not
+        reference Claude SDK permission types. Walk each module's AST
+        so doc-string mentions don't fool the check.
+        """
+        import ast
+
+        from app.agent.tools import (
+            change_ticket_status as ct_mod,
+            orchestrator as orch_mod,
+            specs as specs_mod,
+            suggest_description as sd_mod,
+            suggest_session as ss_mod,
+            visualization as vis_mod,
+        )
+
+        modules = [ct_mod, orch_mod, specs_mod, sd_mod, ss_mod, vis_mod]
+        forbidden = {"PermissionResultAllow", "PermissionResultDeny"}
+        for mod in modules:
+            tree = ast.parse(open(mod.__file__).read())
+            for node in ast.walk(tree):
+                if isinstance(node, ast.ImportFrom):
+                    for alias in node.names:
+                        assert alias.name not in forbidden, (
+                            f"{mod.__name__} still imports {alias.name} "
+                            f"from {node.module}"
+                        )

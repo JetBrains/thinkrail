@@ -83,7 +83,7 @@ stateDiagram-v2
 ```mermaid
 sequenceDiagram
     participant F as Frontend
-    participant B as Backend (runner.py)
+    participant B as Backend (runtime/claude/runtime.py)
     participant S as Claude SDK
 
     F->>B: agent/run {specIds, config}
@@ -144,7 +144,7 @@ sequenceDiagram
 sequenceDiagram
     participant F as Frontend
     participant Svc as service.py
-    participant R as runner.py
+    participant R as runtime/claude/runtime.py
     participant SDK as SDK Client
     participant CLI as Claude CLI
 
@@ -185,7 +185,7 @@ When a session ends (done/error) or the backend restarts, the frontend can resum
 sequenceDiagram
     participant F as Frontend
     participant Svc as service.py
-    participant R as runner.py
+    participant R as runtime/claude/runtime.py
     participant SDK as Claude SDK (CLI)
     participant Disk as .bonsai/sessions/
 
@@ -231,7 +231,7 @@ sequenceDiagram
 
 ## Internal Architecture
 
-**Pattern:** Service facade over collaborators — `context.py` (prompt assembly), `runner.py` (SDK loop), `tracker.py` (session state), `permissions.py` (tool routing), and `tools/` (self-contained MCP tools).
+**Pattern:** Service facade over collaborators — `context.py` (prompt assembly), `runtime/claude/runtime.py` (SDK loop, behind the `IAgentRuntime` contract), `tracker.py` (session state), `permissions.py` (tool routing), and `tools/` (self-contained MCP tools).
 
 ```mermaid
 ---
@@ -241,7 +241,7 @@ graph TD
     subgraph AgentModule["Agent Module"]
         Service["service.py<br/><i>Facade — single entry point</i>"]
         Context["context.py<br/><i>Context assembly pipeline</i>"]
-        Runner["runner.py<br/><i>SDK lifecycle + conversation loop</i>"]
+        Runner["runtime/claude/runtime.py<br/><i>SDK lifecycle + conversation loop</i>"]
         Permissions["permissions.py<br/><i>Tool permission routing</i>"]
         Tracker["tracker.py<br/><i>State management + message queue</i>"]
         subgraph Tools["tools/ package"]
@@ -279,7 +279,8 @@ graph TD
 | `service.py` | Facade — start sessions, send messages, interrupt turns, end sessions, continue sessions (native resume), relay responses to pending futures | context, runner, tracker, core/config, spec/service |
 | `permissions.py` | Tool permission routing. `can_use_tool()` callback that routes MCP tools to auto-approve `intercept()` functions via `tools.INTERCEPTORS` (suffix match), handles AskUserQuestion interactively, and falls back to `agent/confirmAction` for unknown tools. Accepts `tool_use_id` from the runner's FIFO queue to include in `confirmAction` notifications for precise frontend matching. Shared `_await_user_response()` helper implements configurable timeout behavior (interrupt/deny/retry) with same `request_id` reused across retry attempts; reads timeout settings from `ProjectSettings`. Emits `agent/requestExpired` on final timeout. Real MCP tool logic lives in handlers via `get_tool_context()`. | tools, tracker, models, core/settings |
 | `transcribe.py` | Audio transcription via OpenAI Whisper API. `transcribe(audio_base64, mime_type) -> str`. Lazy-imports `openai`; optional dependency for browsers without Web Speech API. See [TRANSCRIBE.md](TRANSCRIBE.md). | openai (optional) |
-| `runner.py` | Claude Agent SDK integration: manage SDK client lifecycle, conversation loop (wait for message → query → stream events → repeat), map SDK events to notifications, wire MCP servers and hooks into SDK. Calls `set_tool_context()` before SDK client creation so handlers work in all permission modes. Accepts optional `resume_session_id` for `ClaudeAgentOptions.resume`. Auto-injects `context-1m-2025-08-07` beta header for models with >200K context. Builds per-iteration token tracking from raw `StreamEvent` data — each API call within a turn gets its own entry; the last iteration determines context window occupancy while the sum drives cost estimation. Emits `contextWindow` (pre-computed total) and `iterations` (per-call breakdown) in turn events. **SDK field semantics:** `total_cost_usd` is cumulative (session total so far — assign, don't accumulate); `num_turns` is per-turn (SDK turns in this turn only — accumulate). No tool-specific logic — delegates to `permissions.py` and `tools/`. | models, tracker, permissions, tools, model_registry |
+| `runtime/` | Runtime-agnostic agent contract — `IAgentRuntime` Protocol, `RuntimeEvent`, `AgentEventHandler`, neutral permission types (`ToolPermissionRequest`/`Response`), `ToolCategory`. See [runtime/README.md](runtime/README.md). | models |
+| `runtime/claude/` | Claude Agent SDK runtime — `class ClaudeRuntime` (the conversation loop body, migrated verbatim from the legacy `runtime/claude/runtime.py`), `SubagentHooks` (per-session subagent / PreCompact correlation), `adapter` (event-shape builders that lock the wire format for cross-runtime parity). The only place under `runtime/` that imports `claude_agent_sdk`. Owns SDK client lifecycle, conversation loop (wait for message → query → stream events → repeat), MCP server wiring, 1M-context beta auto-injection (>200K context models), per-iteration token tracking. **SDK field semantics:** `total_cost_usd` is cumulative (assign, don't accumulate); `num_turns` is per-turn (accumulate). See [runtime/claude/README.md](runtime/claude/README.md). | runtime, models, tracker, permissions, tools, model_registry |
 | `tracker.py` | Session lifecycle (initializing/idle/running/waiting/done/error), message queue per session (`asyncio.Queue`), registry of in-flight `asyncio.Future` objects keyed by `requestId`, **interrupt flag** per session for notification routing | models |
 | `persistence.py` | Session persistence — split storage: metadata in `.json`, events in append-only `.events.jsonl`. Save/load/list/append/delete. See [PERSISTENCE.md](PERSISTENCE.md). | core/fileio |
 | `pricing.py` | Per-model token pricing and cost estimation. Tier-based (opus/sonnet/haiku). `estimate_cost()` used by runner for live cost streaming. | — |
@@ -308,23 +309,39 @@ graph TD
 | `restart_session` | `async (bonsai_sid: str) -> AgentTask` | End current session and resume with current (updated) config. |
 | `trash_session` | `(bonsai_sid: str) -> None` | Soft-delete: detach from all tickets via `BoardService.detach_session_from_all`, move files to `.bonsai/trash/` via `TrashService`, clean up in-memory tracker state. Falls back to hard-delete if no TrashService is available. |
 
-> **Multi-client note (2026-04-12):** The `notify: Callable` parameter and `rebind_notify()` method have been removed. The runner now publishes events via the EventBus singleton (`rpc/bus.py`), which routes to all subscribed WebSocket connections. This eliminates the need to pass or rebind callbacks on reconnect.
+> **Multi-client note (2026-04-12):** The `notify: Callable` parameter and `rebind_notify()` method have been removed. The runtime now publishes events via the EventBus singleton (`rpc/bus.py`), which routes to all subscribed WebSocket connections. This eliminates the need to pass or rebind callbacks on reconnect.
 
-### Runner Interface
+> **Runtime abstraction (2026-04-30):** The legacy `ClaudeRuntime.run_session()` function has been replaced by the `IAgentRuntime` contract. `AgentService` resolves a runtime per task (currently always `ClaudeRuntime`; plan 03 wires the registry lookup) and calls `runtime.run_session(task, exec_config, handler)`. The conversational loop body is unchanged — only the entry point moved.
 
-**Function:** `run(task, spec_context, notify, tracker, cwd, plugin_dir, resume_session_id)`
+### Runtime Abstraction
 
-The `notify` parameter received by the runner is `_persisting_notify` — a wrapper created by `AgentService._run_background()` that publishes to the EventBus and persists events to disk.
+The agent module no longer hardcodes the Claude SDK. `IAgentRuntime` (defined in [`runtime/types.py`](runtime/types.py)) is the contract every backend implements:
 
-| Parameter | Type | Description |
-|-----------|------|-------------|
-| `task` | `AgentTask` | Session record |
-| `spec_context` | `str` | Assembled system prompt |
-| `notify` | `Callable` | Wrapper that publishes to EventBus + persists to disk |
-| `tracker` | `Tracker` | State + queue + futures manager |
-| `cwd` | `Any \| None` | Working directory for SDK |
-| `plugin_dir` | `Any \| None` | Plugin directory for SDK |
-| `resume_session_id` | `str \| None` | **When set, passed to `ClaudeAgentOptions(resume=...)` to restore a previous CLI session.** Defaults to `None` (new session). |
+```python
+class IAgentRuntime(Protocol):
+    runtime_type: RuntimeType        # "claude" | "codex"
+    display_name: str
+    async def run_session(task, exec_config, handler) -> AgentResult: ...
+    async def interrupt(task, tracker) -> None: ...
+```
+
+`AgentService._run_background()` builds a `RuntimeExecutionConfig` from `task.config` + `cwd` + `system_prompt` + `resume_session_id`, wraps the existing `_persisting_notify` callable with `make_handler_from_notify(notify)`, and dispatches:
+
+```python
+runtime = self._make_runtime()  # plan 03 will swap this for RUNTIMES[task.config.runtime]
+await runtime.run_session(task, exec_config, handler)
+```
+
+| Type | Defined in | Role |
+|------|-----------|------|
+| `IAgentRuntime` | `runtime/types.py` | Runtime contract Protocol |
+| `RuntimeExecutionConfig` | `runtime/types.py` | Per-session execution config (working_directory, model, system_prompt, resume_session_id, betas, effort, max_turns, permission_mode, stream_text) |
+| `RuntimeEvent` | `runtime/events.py` | `(method, params, request_id?)` envelope — distinct from the persisted `AgentEvent` discriminated union in `models.py` |
+| `AgentEventHandler` | `runtime/events.py` | Protocol for the runtime → service callback surface |
+| `make_handler_from_notify` | `runtime/events.py` | Adapter from `_persisting_notify` to `AgentEventHandler` |
+| `ToolPermissionRequest` / `ToolPermissionResponse` | `runtime/permissions.py` | Runtime-neutral permission types — `permissions.can_use_tool` operates on these |
+
+For the cross-cutting design see [`.bonsai/design_docs/MULTI_RUNTIME_DESIGN.md`](../../../.bonsai/design_docs/MULTI_RUNTIME_DESIGN.md). The Claude implementation is documented at [`runtime/claude/README.md`](runtime/claude/README.md).
 
 ### Models
 
@@ -353,7 +370,7 @@ Both are cleaned up by `remove_task()`.
 
 #### Interactive Request/Response Models
 
-These types define the data exchanged during mid-turn interactions. Both `AskUserQuestion` and tool approvals flow through the SDK's `canUseTool` callback — our `runner.py` translates them into JSON-RPC requests/responses for the frontend.
+These types define the data exchanged during mid-turn interactions. Both `AskUserQuestion` and tool approvals flow through the SDK's `canUseTool` callback — `permissions.claude_can_use_tool_adapter` translates them into JSON-RPC requests/responses for the frontend.
 
 **Question types** (sent to frontend in `agent/askUserQuestion` params):
 
@@ -371,7 +388,7 @@ These types define the data exchanged during mid-turn interactions. Both `AskUse
 
 **SDK mapping:**
 
-The SDK uses a single `canUseTool` callback for both questions and tool approvals. `runner.py` distinguishes them by `tool_name`:
+The SDK uses a single `canUseTool` callback for both questions and tool approvals. `permissions.can_use_tool` distinguishes them by `tool_name`:
 
 | `tool_name` in `canUseTool` | Bonsai protocol method | Frontend response -> SDK return |
 |------------------------------|------------------------|-------------------------------|
@@ -404,7 +421,7 @@ These map 1-to-1 to the `agent/*` notification methods in the protocol:
 
 ### Interactive Request/Response Flow
 
-For mid-turn interactions where the agent needs user input, `runner.py` suspends the SDK generator and the frontend must respond via `agent/respond`:
+For mid-turn interactions where the agent needs user input, `runtime/claude/runtime.py` suspends the SDK generator and the frontend must respond via `agent/respond`:
 
 | Trigger | Server sends | Client responds with |
 |---------|-------------|----------------------|
@@ -423,20 +440,20 @@ For mid-turn interactions where the agent needs user input, `runner.py` suspends
 
 ### Tracker — Interrupt Primitives
 
-The tracker manages an **interrupt flag** per session, used to coordinate between `service.interrupt_task()` (which sets the flag) and `runner.py` (which checks and clears it when processing the resulting `ResultMessage`).
+The tracker manages an **interrupt flag** per session, used to coordinate between `service.interrupt_task()` (which sets the flag) and `runtime/claude/runtime.py` (which checks and clears it when processing the resulting `ResultMessage`).
 
 | Method | Signature | Description |
 |--------|-----------|-------------|
 | `set_interrupted` | `(bonsai_sid: str) -> None` | Set the interrupt flag for this session. Called by `service.interrupt_task()` before calling `client.interrupt()`. |
-| `is_interrupted` | `(bonsai_sid: str) -> bool` | Check whether the interrupt flag is set. Called by runner when processing `ResultMessage` to decide between emitting `agent/interrupted` vs `agent/turnComplete`. |
-| `clear_interrupted` | `(bonsai_sid: str) -> None` | Clear the interrupt flag after processing. Called by runner after emitting the `agent/interrupted` notification. |
+| `is_interrupted` | `(bonsai_sid: str) -> bool` | Check whether the interrupt flag is set. Called by the runtime when processing `ResultMessage` to decide between emitting `agent/interrupted` vs `agent/turnComplete`. |
+| `clear_interrupted` | `(bonsai_sid: str) -> None` | Clear the interrupt flag after processing. Called by the runtime after emitting the `agent/interrupted` notification. |
 | `interrupt_futures` | `(bonsai_sid: str) -> None` | Resolve all pending futures for this session with `{"behavior": "deny", "message": "Interrupted", "interrupt": true}`. Unlike `cancel_futures()` (which raises `CancelledError`), this produces a clean `PermissionResultDeny(interrupt=True)` that tells the SDK to stop the turn gracefully. |
 
 **Why resolve instead of cancel?** Cancelling a future raises `CancelledError` which propagates unpredictably through the SDK's `can_use_tool` callback. Resolving with `deny + interrupt=True` uses the SDK's intended mechanism — `PermissionResultDeny(interrupt=True)` tells the SDK to end the turn cleanly and emit a `ResultMessage`.
 
-### Conversation Loop (runner.py)
+### Conversation Loop (runtime/claude/runtime.py)
 
-The runner maintains a persistent SDK client and loops over user messages:
+`ClaudeRuntime.run_session` maintains a persistent SDK client and loops over user messages:
 
 ```python
 # Task starts in initializing — SDK client not yet ready
@@ -469,7 +486,7 @@ async with ClaudeSDKClient(options=options) as client:
     # Session closed -> emit agent/done
 ```
 
-**Message delivery:** `tracker.py` maintains an `asyncio.Queue` per session. `service.send_message()` pushes to the queue; `runner.py` pulls from it. `service.end_session()` pushes a sentinel `END_SIGNAL` to break the loop.
+**Message delivery:** `tracker.py` maintains an `asyncio.Queue` per session. `service.send_message()` pushes to the queue; `runtime/claude/runtime.py` pulls from it. `service.end_session()` pushes a sentinel `END_SIGNAL` to break the loop.
 
 **Interrupt handling:** When `service.interrupt_task()` calls `client.interrupt()`, the SDK sends a control request to the CLI and the `receive_response()` generator yields a final `ResultMessage`. The runner checks `tracker.is_interrupted()` to emit `agent/interrupted` instead of `agent/turnComplete`, then clears the flag and returns to idle — same client, same context, no re-launch.
 
@@ -493,7 +510,7 @@ The Bonsai `claude-plugin/` is wired into the Claude Agent SDK client as a **loc
 ### How It Works
 
 ```
-  context.py                          runner.py
+  context.py                          runtime/claude/runtime.py
   +--------------------+              +------------------------------+
   | Loads SKILL.md     |              | ClaudeAgentOptions(          |
   | into system        |              |   ...                        |
@@ -513,7 +530,7 @@ The Bonsai `claude-plugin/` is wired into the Claude Agent SDK client as a **loc
 
 ### Runner Changes
 
-`runner.run()` accepts an optional `plugin_dir: Path | None` parameter. When set and the path exists:
+`ClaudeRuntime.run_session()` accepts an optional `plugin_dir: Path | None` parameter. When set and the path exists:
 
 ```python
 plugins = []
@@ -530,17 +547,23 @@ When `plugin_dir` is `None` or the directory doesn't exist, `plugins` is an empt
 
 ### Service Changes
 
-`service.py` passes `self._config.plugin_dir` through to `runner.run()`:
+`service.py` builds a `RuntimeExecutionConfig` and passes it through to `ClaudeRuntime.run_session()`:
 
 ```python
-await runner.run(
-    task=task,
-    spec_context=context,
-    notify=notify,
-    tracker=self._tracker,
-    cwd=self._config.project_root,
-    plugin_dir=self._config.plugin_dir,
+exec_config = RuntimeExecutionConfig(
+    working_directory=str(self._config.project_root),
+    model=task.config.model,
+    system_prompt=spec_context,
+    resume_session_id=resume_session_id,
+    permission_mode=task.config.permission_mode,
+    max_turns=task.config.max_turns,
+    effort=task.config.effort,
+    betas=list(task.config.betas),
+    stream_text=task.config.stream_text,
 )
+handler = make_handler_from_notify(notify)
+runtime = self._make_runtime()  # plugin_dir / model_registry / etc. injected via constructor
+await runtime.run_session(task, exec_config, handler)
 ```
 
 ## Context Management
@@ -555,7 +578,7 @@ The agent system has a three-layer approach to context window management: Preven
 
 ### Detection
 
-- **SDK auto-compaction** — `PreCompact` hook wired in `runner.py`. Emits `agent/compact` with `{trigger, preTokens}`. Frontend renders via `CompactMarker.tsx`.
+- **SDK auto-compaction** — `PreCompact` hook wired in `runtime/claude/runtime.py`. Emits `agent/compact` with `{trigger, preTokens}`. Frontend renders via `CompactMarker.tsx`.
 - **Context usage warnings** — `_persisting_notify` emits `agent/contextWarning` at 75% (`"warning"`) and 90% (`"critical"`) context usage after `turnComplete`/`error` events.
 - **Error classification** — `ResultMessage.is_error` with "Prompt is too long" or "prompt_too_long" in the error text → `subtype: "context_overflow"` (recoverable). All other errors → `subtype: "turn_error"`.
 
@@ -576,14 +599,14 @@ The agent system has a three-layer approach to context window management: Preven
 | **`initializing` state** | Task starts in `initializing`; transitions to `idle` once `ClaudeSDKClient` context manager is entered and `set_client()` completes. Messages sent during `initializing` are queued (not rejected). `agent/end` is allowed to cancel before ready. | Frontend can distinguish "SDK still spinning up" from "ready for messages". Avoids a race where the frontend sends a message before the SDK client exists. Queuing (not rejecting) keeps the UX seamless — user can type immediately without waiting. |
 | Persistent session model | SDK client stays open across multiple turns; user sends messages via `agent/send` | Matches Claude Code chat experience; enables multi-turn conversation with accumulated context |
 | **Native resume for continue** | `continue_session` passes stored `sessionId` to `ClaudeAgentOptions(resume=...)` | Full conversation context restored by CLI natively. Eliminates lossy text replay (old approach truncated tool outputs to 500 chars, lost structured data, cost extra input tokens). |
-| **resume_session_id as runner param** | `runner.run()` accepts optional `resume_session_id: str \| None`; service decides when to pass it | Runner stays SDK-focused (just maps param to options). Service owns the "should we resume?" decision. Clean separation. |
+| **resume_session_id as runner param** | `ClaudeRuntime.run_session()` accepts optional `resume_session_id: str \| None`; service decides when to pass it | Runner stays SDK-focused (just maps param to options). Service owns the "should we resume?" decision. Clean separation. |
 | **No text replay fallback** | If stored session has no `sessionId`, raise `ValueError` instead of falling back to text replay | Simplicity. Text replay was lossy anyway. Old sessions without `sessionId` are rare and can be started fresh. |
 | Message queue for user input | `asyncio.Queue` per session in `tracker.py` | Clean producer-consumer pattern; `agent/send` pushes, runner pulls. Decouples RPC layer from runner timing. |
 | **Non-destructive interrupt** | `interrupt` calls `client.interrupt()` on the live SDK client; `end` pushes END_SIGNAL to close the session | Uses the SDK's built-in control protocol (`{"subtype": "interrupt"}`) to stop the current turn without destroying the client or conversation context. Previous approach (`bg.cancel()` + re-launch) was destructive — killed the runner, destroyed the SDK client, and lost all accumulated context. |
 | **Interrupt flag on tracker** | Tracker holds a per-session interrupt flag; runner checks it on ResultMessage | Cleanly routes `ResultMessage` to either `agent/interrupted` or `agent/turnComplete` notification without race conditions. Service sets the flag before calling `client.interrupt()`; runner clears it after emitting the notification. |
 | **Resolve futures, don't cancel** | `interrupt_futures()` resolves with `deny + interrupt=True` instead of `cancel()` | Cancelling a future raises `CancelledError` which propagates unpredictably. Resolving with `PermissionResultDeny(interrupt=True)` uses the SDK's intended mechanism to end the turn cleanly. |
 | `turnComplete` vs `done` | `turnComplete` fires after each turn; `done` fires once when session closes | Clear separation between turn-level and session-level events; frontend can distinguish "ready for next message" from "conversation over" |
-| SDK integration point | `runner.py` only | Single place to swap SDK versions or add a Python-side SDK wrapper; service and tracker are SDK-agnostic |
+| SDK integration point | `runtime/claude/runtime.py` only | Single place to swap SDK versions or add a Python-side SDK wrapper; service and tracker are SDK-agnostic |
 | Suspension pattern | `asyncio.Future` per `requestId` | Idiomatic async Python; futures can be awaited, cancelled, and inspected without threads |
 | Streaming text | `includePartialMessages: true` in SDK config | Required to emit `text_delta` events for live typewriter view; can be toggled via `AgentConfig.stream_text` |
 | Notify callback | Injected into runner at session start; supports both notifications (`request_id=None`) and server-initiated requests (`request_id` set) | Keeps the runner decoupled from WebSocket details; RPC layer owns the connection and callback creation |

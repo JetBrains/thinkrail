@@ -8,7 +8,6 @@ from app.agent.models import (
     QuestionOption,
     ToolApprovalResponse,
 )
-from app.agent.runner import run
 from app.agent.service import AgentService
 from app.agent.tracker import FutureNotFoundError, TaskNotFoundError, Tracker
 
@@ -25,5 +24,4 @@ __all__ = [
     "TaskNotFoundError",
     "ToolApprovalResponse",
     "Tracker",
-    "run",
 ]

@@ -166,7 +166,7 @@ SPEC_DELETE_SCHEMA = {
 
 ## Interception & Permissions
 
-All 3 tools are **auto-approved** with server-side validation. Same pattern as before — `intercept_specs()` returns `PermissionResultAllow` immediately.
+All 3 tools are **auto-approved** with server-side validation. Same pattern as before — `intercept_specs()` returns `ToolPermissionResponse(behavior="allow")` immediately.
 
 ```python
 INTERCEPTORS: dict[str, InterceptFn] = {

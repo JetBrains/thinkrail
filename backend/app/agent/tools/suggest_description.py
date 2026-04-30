@@ -14,9 +14,10 @@ import logging
 from typing import Any
 from uuid import uuid4
 
-from claude_agent_sdk import PermissionResultAllow, create_sdk_mcp_server, tool
+from claude_agent_sdk import create_sdk_mcp_server, tool
 
 from app.agent.models import AgentTask
+from app.agent.runtime.permissions import ToolPermissionResponse
 from app.agent.tools._context import get_tool_context
 from app.agent.tracker import Tracker
 from app.board.models import MetaTicketSummary
@@ -151,6 +152,6 @@ async def intercept_suggest_description(
     notify: Any,
     task: AgentTask,
     config: AppConfig,
-) -> PermissionResultAllow:
+) -> ToolPermissionResponse:
     """Auto-approve — interactive flow is handled inside the tool handler."""
-    return PermissionResultAllow(behavior="allow")
+    return ToolPermissionResponse(behavior="allow")

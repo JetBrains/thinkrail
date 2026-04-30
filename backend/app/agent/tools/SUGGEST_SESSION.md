@@ -129,7 +129,7 @@ No `canUseTool` hook involvement at any point.
 
 ## Related Backend Changes
 
-- `runner.py` — **updated**: calls `set_tool_context(tracker, notify, task, config)` before creating SDK client
+- `runtime/claude/runtime.py` — **updated**: calls `set_tool_context(tracker, notify, task, config)` before creating SDK client
 - `permissions.py` — routes `SuggestSession` via `INTERCEPTORS` → `intercept_suggest_session()` (auto-approve). Also handles `AskUserQuestion` interactively and default `agent/confirmAction` for unknown tools.
 - `tools/__init__.py` — **updated**: exports `intercept_suggest_session` in `INTERCEPTORS` and `set_tool_context` / `get_tool_context` from `_context.py`.
 - `tools/_context.py` — **new**: `ToolContext` dataclass + `contextvars` accessors

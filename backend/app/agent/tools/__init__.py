@@ -4,8 +4,7 @@ from __future__ import annotations
 
 from typing import Any, Callable, Coroutine
 
-from claude_agent_sdk import PermissionResultAllow, PermissionResultDeny
-
+from app.agent.runtime.permissions import ToolPermissionResponse
 from app.agent.tools._context import ToolContext, get_tool_context, set_tool_context
 from app.agent.tools.specs import intercept_specs, specs_mcp_server
 from app.agent.tools.suggest_description import (
@@ -24,7 +23,7 @@ from app.agent.tools.orchestrator import intercept_orchestrator, orchestrator_mc
 from app.agent.tools.visualization import intercept_visualize, vis_mcp_server
 
 # Type for intercept functions: (input_data, tracker, notify, task, config) -> result
-InterceptFn = Callable[..., Coroutine[Any, Any, PermissionResultAllow | PermissionResultDeny]]
+InterceptFn = Callable[..., Coroutine[Any, Any, ToolPermissionResponse]]
 
 MCP_SERVERS: dict[str, Any] = {
     "bonsai-vis": vis_mcp_server,

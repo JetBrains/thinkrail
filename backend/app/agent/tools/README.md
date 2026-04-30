@@ -47,7 +47,7 @@ The `tools/__init__.py` re-exports what the runner and permissions need:
 - `INTERCEPTORS` — dict of tool name suffix → intercept function (used by `permissions.py` for auto-approval)
 - `set_tool_context()` / `get_tool_context()` — from `_context.py` (set by runner, read by handlers)
 
-**Interceptors are simplified auto-approvals.** All real tool logic lives in the handler via `contextvars`. The interceptors just return `PermissionResultAllow` so tools aren't gated behind `agent/confirmAction` in non-yolo modes.
+**Interceptors are simplified auto-approvals.** All real tool logic lives in the handler via `contextvars`. The interceptors just return `ToolPermissionResponse(behavior="allow")` so tools aren't gated behind `agent/confirmAction` in non-yolo modes.
 
 ## File Organization
 
@@ -134,7 +134,7 @@ def set_tool_context(
     tracker: Tracker, notify: Any, task: AgentTask, config: AppConfig,
     spec_service: SpecService | None = None,
 ) -> contextvars.Token:
-    """Set session context. Called by runner.py before SDK operations."""
+    """Set session context. Called by `runtime/claude/runtime.py` before SDK operations."""
     return _tool_context.set(
         ToolContext(tracker=tracker, notify=notify, task=task, config=config, spec_service=spec_service)
     )
@@ -159,24 +159,24 @@ The previous architecture relied on `canUseTool` interceptors to inject session 
 
 With `contextvars`, tool handlers read session context directly — no dependency on the permission hook.
 
-### How runner.py sets context
+### How `ClaudeRuntime.run_session` sets context
 
 ```python
 from app.agent.tools import MCP_SERVERS, set_tool_context
-from app.agent.permissions import can_use_tool
+from app.agent.permissions import claude_can_use_tool_adapter
 
 # Set context BEFORE creating the SDK client
-# spec_service is threaded from AgentService → runner for index connection reuse
-ctx_token = set_tool_context(tracker, notify, task, config, spec_service=spec_service)
+# spec_service is threaded from AgentService → ClaudeRuntime for index connection reuse
+set_tool_context(tracker, notify, task, config, spec_service=spec_service)
 
 options = ClaudeAgentOptions(
     ...
-    can_use_tool=partial(can_use_tool, tracker=tracker, notify=notify, task=task, config=config),
+    can_use_tool=_can_use_tool,  # closure that delegates to claude_can_use_tool_adapter
     mcp_servers=MCP_SERVERS,
 )
 ```
 
-The `can_use_tool` hook still routes MCP tools through `INTERCEPTORS` for auto-approval, handles `AskUserQuestion` interactively, and falls back to `agent/confirmAction` for unknown tools.
+The `claude_can_use_tool_adapter` builds a `ToolPermissionRequest` from the SDK's `(tool_name, input_data, ToolPermissionContext)` triple, calls the runtime-neutral `can_use_tool` engine in `permissions.py`, and converts the `ToolPermissionResponse` back to `PermissionResultAllow | PermissionResultDeny`. The `INTERCEPTORS` registry still auto-approves MCP tools, mode-category filtering still applies, and `AskUserQuestion` / unknown tools still flow through `agent/askUserQuestion` / `agent/confirmAction`.
 
 ### How tool handlers read context
 
@@ -311,14 +311,14 @@ async def _spec_search(args: dict) -> dict:
 3. **Register** in `tools/__init__.py`: add to `MCP_SERVERS` and `INTERCEPTORS`
 4. **Done** — works in all permission modes automatically
 
-No changes needed to runner.py, permissions.py, or service.py.
+No changes needed to `runtime/claude/runtime.py`, `permissions.py`, or `service.py`.
 
 ## Key Design Decisions
 
 | Decision | Choice | Rationale |
 |----------|--------|-----------|
-| contextvars for handler logic | Tool handlers access context via `get_tool_context()` | Works in all permission modes. In yolo mode, the CLI bypasses `canUseTool` entirely — interceptors never fire. contextvars are set by the runner and available regardless of how the tool is invoked. |
-| INTERCEPTORS for auto-approval | Suffix-matched routing in permissions.py returns `PermissionResultAllow` | In non-yolo modes, `canUseTool` fires for all tools. Without interceptors, MCP tools would fall through to `agent/confirmAction` requiring manual approval. Interceptors auto-approve known MCP tools. |
+| contextvars for handler logic | Tool handlers access context via `get_tool_context()` | Works in all permission modes. In yolo mode, the CLI bypasses `canUseTool` entirely — interceptors never fire. contextvars are set by `ClaudeRuntime.run_session` and available regardless of how the tool is invoked. |
+| INTERCEPTORS for auto-approval | Suffix-matched routing in permissions.py returns `ToolPermissionResponse(behavior="allow")` | In non-yolo modes, `canUseTool` fires for all tools. Without interceptors, MCP tools would fall through to `agent/confirmAction` requiring manual approval. Interceptors auto-approve known MCP tools. |
 | One file per tool | Each tool is self-contained: schema + handler + server | Easy to find everything about a tool in one place. |
 | Frozen dataclass for ToolContext | `@dataclass(frozen=True)` | Prevents accidental mutation. Context is set once per session by the runner. |
 | In-handler interaction for interactive tools | Handler creates Future, sends notification, awaits response | Same async pattern as the old interceptor, but runs at tool execution time — not permission check time. Works regardless of CLI permission decisions. |
@@ -336,4 +336,4 @@ No changes needed to runner.py, permissions.py, or service.py.
 - **Parent:** [Agent Module](../README.md)
 - **Tool specs:** [SuggestSession](SUGGEST_SESSION.md), [Visualization](VISUALIZATION.md), [UpdateProgress](PROGRESS.md), [Spec Tools](SPECS_TOOLS.md), [Orchestrator](ORCHESTRATOR.md)
 - **Feature specs:** [Proactive Agent Experience](../../../../.bonsai/design_docs/PROACTIVE_AGENT_EXPERIENCE_DESIGN.md)
-- **Consumer:** [agent/permissions.py](../permissions.py) (routes `INTERCEPTORS` + SDK built-ins), [agent/runner.py](../runner.py) (sets context + wires `MCP_SERVERS` into SDK)
+- **Consumer:** [agent/permissions.py](../permissions.py) (routes `INTERCEPTORS` + SDK built-ins), [agent/runtime/claude/runtime.py](../runtime/claude/runtime.py) (sets context + wires `MCP_SERVERS` into SDK)

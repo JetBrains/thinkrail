@@ -9,9 +9,49 @@ import pytest
 from pathlib import Path
 
 from app.agent.models import AgentConfig, AgentResult, AgentTask
-from app.agent.runner import run
+from app.agent.runtime.claude import ClaudeRuntime
+from app.agent.runtime.events import make_handler_from_notify
+from app.agent.runtime.types import RuntimeExecutionConfig
 from app.agent.tracker import Tracker
 from app.core.config import AppConfig
+
+
+async def _run(
+    task: AgentTask,
+    spec_context: str,
+    notify: Any,
+    tracker: Tracker,
+    cwd: Any = None,
+    plugin_dir: Any = None,
+    resume_session_id: str | None = None,
+    config: Any = None,
+    model_registry: Any = None,
+    spec_service: Any = None,
+    coordinator: Any = None,
+) -> AgentResult:
+    """Test helper that builds the runtime, exec config, and handler from
+    the legacy ``run(...)`` argument shape. Keeps test bodies concise."""
+    runtime = ClaudeRuntime(
+        tracker=tracker,
+        app_config=config,
+        plugin_dir=plugin_dir,
+        model_registry=model_registry,
+        spec_service=spec_service,
+        coordinator=coordinator,
+    )
+    exec_config = RuntimeExecutionConfig(
+        working_directory=str(cwd) if cwd else "",
+        model=task.config.model,
+        system_prompt=spec_context,
+        resume_session_id=resume_session_id,
+        permission_mode=task.config.permission_mode,
+        max_turns=task.config.max_turns,
+        effort=task.config.effort,
+        betas=list(task.config.betas),
+        stream_text=task.config.stream_text,
+    )
+    handler = make_handler_from_notify(notify)
+    return await runtime.run_session(task, exec_config, handler)
 
 
 def _test_config(tmp_path: Path | None = None) -> AppConfig:
@@ -66,7 +106,7 @@ def _make_tracker_and_task() -> tuple[Tracker, AgentTask]:
 
 
 class TestRunHappyPath:
-    @patch("app.agent.runner.ClaudeSDKClient")
+    @patch("app.agent.runtime.claude.runtime.ClaudeSDKClient")
     async def test_single_turn_then_end(self, MockClient: MagicMock) -> None:
         """One message → full event sequence → turnComplete → end signal → done."""
         from claude_agent_sdk import (
@@ -122,9 +162,7 @@ class TestRunHappyPath:
         tracker.enqueue_message(task.bonsai_sid, "Do the thing")
         tracker.enqueue_end_signal(task.bonsai_sid)
 
-        print(f"[test_single_turn_then_end] starting run")
-        result = await run(task, "spec context here", notify, tracker)
-        print(f"[test_single_turn_then_end] run completed")
+        result = await _run(task, "spec context here", notify, tracker)
 
         assert isinstance(result, AgentResult)
         assert result.bonsai_sid == task.bonsai_sid
@@ -142,7 +180,7 @@ class TestRunHappyPath:
         # agent/done should NOT appear inside the turn
         assert method_calls.index("agent/turnComplete") < method_calls.index("agent/done")
 
-    @patch("app.agent.runner.ClaudeSDKClient")
+    @patch("app.agent.runtime.claude.runtime.ClaudeSDKClient")
     async def test_session_id_set_on_tracker(self, MockClient: MagicMock) -> None:
         from claude_agent_sdk import ResultMessage, SystemMessage
 
@@ -164,10 +202,10 @@ class TestRunHappyPath:
         tracker.enqueue_message(task.bonsai_sid, "hello")
         tracker.enqueue_end_signal(task.bonsai_sid)
 
-        await run(task, "context", AsyncMock(), tracker)
+        await _run(task, "context", AsyncMock(), tracker)
         assert tracker.get_task(task.bonsai_sid).session_id == "sess-42"
 
-    @patch("app.agent.runner.ClaudeSDKClient")
+    @patch("app.agent.runtime.claude.runtime.ClaudeSDKClient")
     async def test_multi_turn_accumulates_stats(self, MockClient: MagicMock) -> None:
         """Two turns → stats are accumulated across turns."""
         from claude_agent_sdk import ResultMessage, SystemMessage
@@ -222,7 +260,7 @@ class TestRunHappyPath:
         tracker.enqueue_end_signal(task.bonsai_sid)
 
         notify = AsyncMock()
-        result = await run(task, "context", notify, tracker)
+        result = await _run(task, "context", notify, tracker)
 
         assert result.turns == 3  # 2 + 1
         assert result.cost_usd == pytest.approx(0.05)  # 0.03 + 0.02
@@ -231,7 +269,7 @@ class TestRunHappyPath:
         assert method_calls.count("agent/turnComplete") == 2
         assert method_calls.count("agent/done") == 1
 
-    @patch("app.agent.runner.ClaudeSDKClient")
+    @patch("app.agent.runtime.claude.runtime.ClaudeSDKClient")
     async def test_immediate_end_signal(self, MockClient: MagicMock) -> None:
         """End signal with no messages → session closes immediately."""
         _setup_mock_client(MockClient, [])
@@ -240,16 +278,22 @@ class TestRunHappyPath:
         tracker.enqueue_end_signal(task.bonsai_sid)
         notify = AsyncMock()
 
-        result = await run(task, "context", notify, tracker)
+        result = await _run(task, "context", notify, tracker)
 
         assert result.turns == 0
         assert result.cost_usd == 0.0
         method_calls = [call.args[0] for call in notify.call_args_list]
         assert "agent/done" in method_calls
 
-    @patch("app.agent.runner.ClaudeSDKClient")
+    @patch("app.agent.runtime.claude.runtime.ClaudeSDKClient")
     async def test_state_transitions(self, MockClient: MagicMock) -> None:
-        """Verify state transitions: pending → idle → running → idle → done."""
+        """Verify state transitions: initializing → (silent idle) → running → idle.
+
+        The runtime silently sets idle on SDK ready (signaled via
+        ``agent/ready``), then transitions to running on each turn and
+        back to idle after turnComplete. The terminal "done" status is
+        set by the service layer, not the runtime.
+        """
         from claude_agent_sdk import ResultMessage
 
         result_msg = MagicMock(spec=ResultMessage)
@@ -268,16 +312,25 @@ class TestRunHappyPath:
         tracker.enqueue_message(task.bonsai_sid, "go")
         tracker.enqueue_end_signal(task.bonsai_sid)
 
-        await run(task, "context", AsyncMock(), tracker)
+        notify = AsyncMock()
+        await _run(task, "context", notify, tracker)
 
-        # After run completes, the task should be in idle (from turnComplete)
-        # then done is set by service layer, not runner — runner just emits done notification
-        # But the last set_status in the loop is "idle" after turnComplete
-        # The done transition happens when service calls set_status after run returns
+        assert task.status == "idle"
+        method_calls = [call.args[0] for call in notify.call_args_list]
+        assert "agent/ready" in method_calls
+        status_changes = [
+            call.args[1]["status"]
+            for call in notify.call_args_list
+            if call.args[0] == "agent/statusChanged"
+        ]
+        # running (turn start) → idle (turn complete). The initial idle
+        # transition on SDK ready is signaled via agent/ready, not via
+        # agent/statusChanged.
+        assert status_changes == ["running", "idle"]
 
 
 class TestCanUseTool:
-    @patch("app.agent.runner.ClaudeSDKClient")
+    @patch("app.agent.runtime.claude.runtime.ClaudeSDKClient")
     async def test_ask_user_question_callback(self, MockClient: MagicMock) -> None:
         from claude_agent_sdk import ResultMessage, SystemMessage
 
@@ -300,7 +353,7 @@ class TestCanUseTool:
         tracker.enqueue_end_signal(task.bonsai_sid)
         notify = AsyncMock()
 
-        await run(task, "context", notify, tracker, config=_test_config())
+        await _run(task, "context", notify, tracker, config=_test_config())
 
         opts = captured["options"]
         assert opts.can_use_tool is not None
@@ -327,7 +380,7 @@ class TestCanUseTool:
         assert result.updated_input is not None
         assert result.updated_input["answers"] == {"Q?": "A"}
 
-    @patch("app.agent.runner.ClaudeSDKClient")
+    @patch("app.agent.runtime.claude.runtime.ClaudeSDKClient")
     async def test_tool_approval_allow(self, MockClient: MagicMock) -> None:
         from claude_agent_sdk import ResultMessage, SystemMessage
 
@@ -349,7 +402,7 @@ class TestCanUseTool:
         tracker.enqueue_message(task.bonsai_sid, "go")
         tracker.enqueue_end_signal(task.bonsai_sid)
 
-        await run(task, "context", AsyncMock(), tracker, config=_test_config())
+        await _run(task, "context", AsyncMock(), tracker, config=_test_config())
 
         opts = captured["options"]
         context = MagicMock()
@@ -367,7 +420,7 @@ class TestCanUseTool:
         result = await opts.can_use_tool("Bash", {"command": "ls"}, context)
         assert result.behavior == "allow"
 
-    @patch("app.agent.runner.ClaudeSDKClient")
+    @patch("app.agent.runtime.claude.runtime.ClaudeSDKClient")
     async def test_tool_approval_deny(self, MockClient: MagicMock) -> None:
         from claude_agent_sdk import ResultMessage, SystemMessage
 
@@ -389,7 +442,7 @@ class TestCanUseTool:
         tracker.enqueue_message(task.bonsai_sid, "go")
         tracker.enqueue_end_signal(task.bonsai_sid)
 
-        await run(task, "context", AsyncMock(), tracker, config=_test_config())
+        await _run(task, "context", AsyncMock(), tracker, config=_test_config())
 
         opts = captured["options"]
         context = MagicMock()
@@ -400,9 +453,7 @@ class TestCanUseTool:
             await asyncio.sleep(0.01)
             for req_id in list(tracker._futures.get(task.bonsai_sid, {})):
                 tracker.resolve_future(
-                    task.bonsai_sid,
-                    req_id,
-                    {"behavior": "deny", "message": "Not allowed", "interrupt": True},
+                    task.bonsai_sid, req_id, {"behavior": "deny", "message": "Not allowed", "interrupt": True},
                 )
                 break
 
@@ -415,7 +466,7 @@ class TestCanUseTool:
 
 
 class TestPluginWiring:
-    @patch("app.agent.runner.ClaudeSDKClient")
+    @patch("app.agent.runtime.claude.runtime.ClaudeSDKClient")
     async def test_plugin_dir_wired_into_options(self, MockClient: MagicMock) -> None:
         """When plugin_dir exists, plugins list is populated."""
         from claude_agent_sdk import ResultMessage, SystemMessage
@@ -442,16 +493,14 @@ class TestPluginWiring:
 
         with tempfile.TemporaryDirectory() as tmpdir:
             plugin_dir = Path(tmpdir)
-            print(f"[test_plugin_dir_wired] running with plugin_dir={plugin_dir}")
-            await run(task, "context", AsyncMock(), tracker, plugin_dir=plugin_dir)
+            await _run(task, "context", AsyncMock(), tracker, plugin_dir=plugin_dir)
 
         opts = captured["options"]
-        print(f"[test_plugin_dir_wired] plugins={opts.plugins}")
         assert len(opts.plugins) == 1
         assert opts.plugins[0]["type"] == "local"
         assert opts.plugins[0]["path"] == str(plugin_dir)
 
-    @patch("app.agent.runner.ClaudeSDKClient")
+    @patch("app.agent.runtime.claude.runtime.ClaudeSDKClient")
     async def test_no_plugin_dir_empty_plugins(self, MockClient: MagicMock) -> None:
         """When plugin_dir is None, plugins list is empty."""
         from claude_agent_sdk import ResultMessage, SystemMessage
@@ -474,16 +523,14 @@ class TestPluginWiring:
         tracker.enqueue_message(task.bonsai_sid, "go")
         tracker.enqueue_end_signal(task.bonsai_sid)
 
-        print("[test_no_plugin_dir] running with plugin_dir=None")
-        await run(task, "context", AsyncMock(), tracker, plugin_dir=None)
+        await _run(task, "context", AsyncMock(), tracker, plugin_dir=None)
 
         opts = captured["options"]
-        print(f"[test_no_plugin_dir] plugins={opts.plugins}")
         assert opts.plugins == []
 
 
 class TestInterruptHandling:
-    @patch("app.agent.runner.ClaudeSDKClient")
+    @patch("app.agent.runtime.claude.runtime.ClaudeSDKClient")
     async def test_interrupt_emits_interrupted_not_turn_complete(self, MockClient: MagicMock) -> None:
         """When interrupt flag is set, ResultMessage emits agent/interrupted."""
         from claude_agent_sdk import ResultMessage, SystemMessage
@@ -506,11 +553,11 @@ class TestInterruptHandling:
         tracker.enqueue_message(task.bonsai_sid, "go")
         tracker.enqueue_end_signal(task.bonsai_sid)
 
-        # Set interrupt flag BEFORE the run processes ResultMessage
+        # Set interrupt flag BEFORE the runtime processes ResultMessage
         tracker.set_interrupted(task.bonsai_sid)
 
         notify = AsyncMock()
-        await run(task, "context", notify, tracker)
+        await _run(task, "context", notify, tracker)
 
         method_calls = [call.args[0] for call in notify.call_args_list]
         assert "agent/interrupted" in method_calls
@@ -518,7 +565,7 @@ class TestInterruptHandling:
         # Flag should be cleared after processing
         assert tracker.is_interrupted(task.bonsai_sid) is False
 
-    @patch("app.agent.runner.ClaudeSDKClient")
+    @patch("app.agent.runtime.claude.runtime.ClaudeSDKClient")
     async def test_normal_result_emits_turn_complete(self, MockClient: MagicMock) -> None:
         """Without interrupt flag, ResultMessage emits agent/turnComplete."""
         from claude_agent_sdk import ResultMessage
@@ -538,15 +585,15 @@ class TestInterruptHandling:
         tracker.enqueue_end_signal(task.bonsai_sid)
 
         notify = AsyncMock()
-        await run(task, "context", notify, tracker)
+        await _run(task, "context", notify, tracker)
 
         method_calls = [call.args[0] for call in notify.call_args_list]
         assert "agent/turnComplete" in method_calls
         assert "agent/interrupted" not in method_calls
 
-    @patch("app.agent.runner.ClaudeSDKClient")
+    @patch("app.agent.runtime.claude.runtime.ClaudeSDKClient")
     async def test_interrupted_result_returns_to_idle(self, MockClient: MagicMock) -> None:
-        """After interrupt, runner goes back to idle and can process next message."""
+        """After interrupt, runtime goes back to idle and can process next message."""
         from claude_agent_sdk import ResultMessage
 
         result1 = MagicMock(spec=ResultMessage)
@@ -598,7 +645,7 @@ class TestInterruptHandling:
         tracker.set_interrupted(task.bonsai_sid)
 
         notify = AsyncMock()
-        result = await run(task, "context", notify, tracker)
+        result = await _run(task, "context", notify, tracker)
 
         method_calls = [call.args[0] for call in notify.call_args_list]
         assert "agent/interrupted" in method_calls
@@ -609,7 +656,7 @@ class TestInterruptHandling:
         assert result.turns == 2
         assert result.cost_usd == pytest.approx(0.03)
 
-    @patch("app.agent.runner.ClaudeSDKClient")
+    @patch("app.agent.runtime.claude.runtime.ClaudeSDKClient")
     async def test_interrupt_error_result_treated_as_interrupt(self, MockClient: MagicMock) -> None:
         """If ResultMessage.is_error and interrupted flag set, emit interrupted not error."""
         from claude_agent_sdk import ResultMessage
@@ -630,7 +677,7 @@ class TestInterruptHandling:
         tracker.set_interrupted(task.bonsai_sid)
 
         notify = AsyncMock()
-        await run(task, "context", notify, tracker)
+        await _run(task, "context", notify, tracker)
 
         method_calls = [call.args[0] for call in notify.call_args_list]
         # Interrupted flag takes precedence over is_error
@@ -639,7 +686,7 @@ class TestInterruptHandling:
 
 
 class TestRunError:
-    @patch("app.agent.runner.ClaudeSDKClient")
+    @patch("app.agent.runtime.claude.runtime.ClaudeSDKClient")
     async def test_error_result(self, MockClient: MagicMock) -> None:
         from claude_agent_sdk import ResultMessage, SystemMessage
 
@@ -659,21 +706,18 @@ class TestRunError:
 
         tracker, task = _make_tracker_and_task()
         tracker.enqueue_message(task.bonsai_sid, "do something")
-        tracker.enqueue_end_signal(task.bonsai_sid)  # needed so runner doesn't hang after error recovery
+        tracker.enqueue_end_signal(task.bonsai_sid)  # needed so runtime doesn't hang after error recovery
         notify = AsyncMock()
 
-        print(f"[test_error_result] starting run for task {task.bonsai_sid}")
-        result = await run(task, "context", notify, tracker)
-        print(f"[test_error_result] run completed, result={result.result}")
+        await _run(task, "context", notify, tracker)
 
         method_calls = [call.args[0] for call in notify.call_args_list]
-        print(f"[test_error_result] notifications: {method_calls}")
         assert "agent/error" in method_calls
-        # After error, runner recovers to idle (not terminal error),
+        # After error, runtime recovers to idle (not terminal error),
         # then END_SIGNAL exits the loop gracefully
         assert tracker.get_task(task.bonsai_sid).status == "idle"
 
-    @patch("app.agent.runner.ClaudeSDKClient")
+    @patch("app.agent.runtime.claude.runtime.ClaudeSDKClient")
     async def test_sdk_exception_propagates(self, MockClient: MagicMock) -> None:
         mock_instance = AsyncMock()
         mock_instance.query = AsyncMock(side_effect=RuntimeError("SDK crash"))
@@ -684,14 +728,12 @@ class TestRunError:
         tracker, task = _make_tracker_and_task()
         tracker.enqueue_message(task.bonsai_sid, "go")
 
-        print(f"[test_sdk_exception_propagates] starting run, expecting RuntimeError")
         with pytest.raises(RuntimeError, match="SDK crash"):
-            await run(task, "context", AsyncMock(), tracker)
-        print(f"[test_sdk_exception_propagates] exception caught as expected")
+            await _run(task, "context", AsyncMock(), tracker)
 
 
 class TestSubagentHooks:
-    @patch("app.agent.runner.ClaudeSDKClient")
+    @patch("app.agent.runtime.claude.runtime.ClaudeSDKClient")
     async def test_subagent_hooks_registered(self, MockClient: MagicMock) -> None:
         """Verify SubagentStart and SubagentStop hooks are wired into options."""
         from claude_agent_sdk import ResultMessage, SystemMessage
@@ -714,7 +756,7 @@ class TestSubagentHooks:
         tracker.enqueue_message(task.bonsai_sid, "go")
         tracker.enqueue_end_signal(task.bonsai_sid)
 
-        await run(task, "context", AsyncMock(), tracker)
+        await _run(task, "context", AsyncMock(), tracker)
 
         opts = captured["options"]
         assert opts.hooks is not None
@@ -725,7 +767,7 @@ class TestSubagentHooks:
         assert len(opts.hooks["SubagentStart"][0].hooks) == 1
         assert len(opts.hooks["SubagentStop"][0].hooks) == 1
 
-    @patch("app.agent.runner.ClaudeSDKClient")
+    @patch("app.agent.runtime.claude.runtime.ClaudeSDKClient")
     async def test_subagent_start_emits_notification(self, MockClient: MagicMock) -> None:
         """SubagentStart hook emits agent/subagentStart notification."""
         from claude_agent_sdk import ResultMessage, SystemMessage
@@ -749,7 +791,7 @@ class TestSubagentHooks:
         tracker.enqueue_end_signal(task.bonsai_sid)
         notify = AsyncMock()
 
-        await run(task, "context", notify, tracker)
+        await _run(task, "context", notify, tracker)
 
         # Extract the hook callback and invoke it
         hook_fn = captured["options"].hooks["SubagentStart"][0].hooks[0]
@@ -770,7 +812,7 @@ class TestSubagentHooks:
         assert payload["agentType"] == "Explore"
         assert payload["bonsaiSid"] == task.bonsai_sid
 
-    @patch("app.agent.runner.ClaudeSDKClient")
+    @patch("app.agent.runtime.claude.runtime.ClaudeSDKClient")
     async def test_subagent_stop_emits_notification(self, MockClient: MagicMock) -> None:
         """SubagentStop hook emits agent/subagentEnd notification."""
         from claude_agent_sdk import ResultMessage, SystemMessage
@@ -794,7 +836,7 @@ class TestSubagentHooks:
         tracker.enqueue_end_signal(task.bonsai_sid)
         notify = AsyncMock()
 
-        await run(task, "context", notify, tracker)
+        await _run(task, "context", notify, tracker)
 
         # Extract the hook callback and invoke it
         hook_fn = captured["options"].hooks["SubagentStop"][0].hooks[0]
@@ -814,7 +856,7 @@ class TestSubagentHooks:
         assert payload["agentId"] == "agent-42"
         assert payload["bonsaiSid"] == task.bonsai_sid
 
-    @patch("app.agent.runner.ClaudeSDKClient")
+    @patch("app.agent.runtime.claude.runtime.ClaudeSDKClient")
     async def test_subagent_agent_id_mapping_end_to_end(self, MockClient: MagicMock) -> None:
         """Full integration: Task tool → SubagentStart hook → subagent messages get agentId."""
         from claude_agent_sdk import (
@@ -873,19 +915,13 @@ class TestSubagentHooks:
         result_msg.total_cost_usd = 0.0
         result_msg.usage = {}
 
-        # Key: we need SubagentStart to fire BETWEEN main_msg and sub_msg.
-        # We simulate this by injecting the hook call into the event stream.
-        hook_called = False
-
         async def events_with_hook():
             """Yield events, firing SubagentStart hook after Task tool call."""
-            nonlocal hook_called
             yield sys_msg
             yield main_msg
             # After Task tool is processed, the SDK fires SubagentStart.
             # We simulate by directly calling the hook before yielding
-            # subagent messages. The hook_fn won't exist yet, so we
-            # use a sentinel to trigger it.
+            # subagent messages.
             yield sub_msg      # These arrive after SubagentStart
             yield sub_msg2
             yield sub_user
@@ -930,7 +966,7 @@ class TestSubagentHooks:
 
         mock_instance.receive_response = events_with_hook_injection
 
-        await run(task, "context", notify, tracker)
+        await _run(task, "context", notify, tracker)
 
         # Collect notifications
         text_deltas = [
@@ -972,7 +1008,7 @@ class TestIterationTracking:
     """Context window is computed from the last iteration (API call), not the
     cumulative turn totals."""
 
-    @patch("app.agent.runner.ClaudeSDKClient")
+    @patch("app.agent.runtime.claude.runtime.ClaudeSDKClient")
     async def test_multi_iteration_context_window(self, MockClient: MagicMock) -> None:
         """A turn with 3 API calls (tool-use loop) emits iterations array
         and contextWindow based on the last iteration only."""
@@ -1052,7 +1088,7 @@ class TestIterationTracking:
         tracker.enqueue_message(task.bonsai_sid, "do stuff")
         tracker.enqueue_end_signal(task.bonsai_sid)
 
-        await run(task, "context", notify, tracker)
+        await _run(task, "context", notify, tracker)
 
         # Find the turnComplete notification
         turn_complete = None
@@ -1087,7 +1123,7 @@ class TestIterationTracking:
         )
         assert sum_all > expected_ctx, "Sum of all iterations should exceed last-iteration context"
 
-    @patch("app.agent.runner.ClaudeSDKClient")
+    @patch("app.agent.runtime.claude.runtime.ClaudeSDKClient")
     async def test_single_iteration_context_window(self, MockClient: MagicMock) -> None:
         """A simple turn with one API call correctly computes contextWindow."""
         from claude_agent_sdk import ResultMessage, SystemMessage
@@ -1130,7 +1166,7 @@ class TestIterationTracking:
         tracker.enqueue_message(task.bonsai_sid, "go")
         tracker.enqueue_end_signal(task.bonsai_sid)
 
-        await run(task, "context", notify, tracker)
+        await _run(task, "context", notify, tracker)
 
         turn_complete = None
         for call in notify.call_args_list:
@@ -1142,3 +1178,42 @@ class TestIterationTracking:
         # contextWindow = 2000 + 10000 + 3000 + 400 = 15400
         assert turn_complete["contextWindow"] == 15400
         assert len(turn_complete["iterations"]) == 1
+
+
+class TestClaudeRuntimeInterrupt:
+    """Direct unit tests for ``ClaudeRuntime.interrupt`` (plan 02 task 5).
+
+    The method is the public hook ``AgentService.interrupt_task`` calls after
+    setting bonsai-internal state (``set_interrupted`` / ``interrupt_futures``).
+    Tracker state changes still belong to the service layer — runtime.interrupt
+    only delivers the SDK-specific cancel.
+    """
+
+    async def test_calls_client_interrupt_when_present(self) -> None:
+        runtime = ClaudeRuntime()
+        tracker, task = _make_tracker_and_task()
+        mock_client = AsyncMock()
+        tracker.set_client(task.bonsai_sid, mock_client)
+
+        await runtime.interrupt(task, tracker)
+
+        mock_client.interrupt.assert_awaited_once()
+
+    async def test_noop_when_no_client(self) -> None:
+        runtime = ClaudeRuntime()
+        tracker, task = _make_tracker_and_task()
+        # No client registered for this sid
+
+        # Should not raise
+        await runtime.interrupt(task, tracker)
+
+    async def test_swallows_client_interrupt_exception(self) -> None:
+        runtime = ClaudeRuntime()
+        tracker, task = _make_tracker_and_task()
+        mock_client = AsyncMock()
+        mock_client.interrupt.side_effect = RuntimeError("client gone")
+        tracker.set_client(task.bonsai_sid, mock_client)
+
+        # Should not raise — disconnected clients are expected
+        await runtime.interrupt(task, tracker)
+        mock_client.interrupt.assert_awaited_once()

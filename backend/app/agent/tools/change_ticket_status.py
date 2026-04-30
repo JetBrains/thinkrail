@@ -10,9 +10,10 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from claude_agent_sdk import PermissionResultAllow, create_sdk_mcp_server, tool
+from claude_agent_sdk import create_sdk_mcp_server, tool
 
 from app.agent.models import AgentTask
+from app.agent.runtime.permissions import ToolPermissionResponse
 from app.agent.tools._context import get_tool_context
 from app.agent.tracker import Tracker
 from app.board.models import MetaTicketSummary
@@ -96,6 +97,6 @@ async def intercept_change_ticket_status(
     notify: Any,
     task: AgentTask,
     config: AppConfig,
-) -> PermissionResultAllow:
+) -> ToolPermissionResponse:
     """Auto-approve — the user already confirmed via AskUserQuestion."""
-    return PermissionResultAllow(behavior="allow")
+    return ToolPermissionResponse(behavior="allow")

@@ -9,7 +9,8 @@ from typing import Any
 from app.agent.context import build_context
 from app.agent.models import AgentConfig, AgentTask, MessageTooLargeError, SubsessionType
 from app.agent.persistence import append_event, save_session, load_session, list_sessions as list_sessions_from_disk, delete_session as delete_session_from_disk, update_session_metadata
-from app.agent.runner import run
+from app.agent.runtime import RuntimeExecutionConfig, make_handler_from_notify
+from app.agent.runtime.claude import ClaudeRuntime
 from app.agent.tracker import Tracker
 from app.core.config import AppConfig
 from app.spec.service import SpecService
@@ -234,16 +235,18 @@ class AgentService:
     async def interrupt_task(self, bonsai_sid: str) -> None:
         """Cancel the current turn non-destructively.
 
-        Uses the SDK's ``client.interrupt()`` control protocol to stop the
-        current generation while preserving the client, conversation context,
-        and runner loop.  The runner stays alive — no re-launch needed.
+        Delegates the runtime-specific cancel to the runtime's ``interrupt``
+        hook (Claude calls ``client.interrupt()``); ``set_interrupted`` and
+        ``interrupt_futures`` stay here because they are bonsai-internal
+        state, not runtime-internal. The runner stays alive — no re-launch
+        needed.
         """
         task = self._tracker.get_task(bonsai_sid)
         if task.status not in ("running", "waiting"):
             # Already idle/done — nothing to interrupt
             return
 
-        # 1. Set interrupt flag BEFORE calling client.interrupt() so the
+        # 1. Set interrupt flag BEFORE calling runtime.interrupt() so the
         #    runner knows to emit agent/interrupted instead of turnComplete.
         self._tracker.set_interrupted(bonsai_sid)
 
@@ -252,13 +255,10 @@ class AgentService:
         #    PermissionResultDeny(interrupt=True) through the SDK.
         self._tracker.interrupt_futures(bonsai_sid)
 
-        # 3. Interrupt the SDK turn (for running state).
-        client = self._tracker.get_client(bonsai_sid)
-        if client:
-            try:
-                await client.interrupt()
-            except Exception:
-                pass  # Client may already be disconnected
+        # 3. Delegate the runtime-specific cancel (plan 03 swaps this for a
+        #    registry lookup keyed on task.config.runtime).
+        runtime = self._make_runtime()
+        await runtime.interrupt(task, self._tracker)
 
     async def end_session(self, bonsai_sid: str) -> None:
         """Gracefully close the session."""
@@ -520,6 +520,21 @@ class AgentService:
 
     # -- helpers --------------------------------------------------------------
 
+    def _make_runtime(self) -> ClaudeRuntime:
+        """Build a ClaudeRuntime bound to this service's tracker + injected deps.
+
+        Plan 03 will swap this for a registry lookup keyed on
+        ``task.config.runtime``; for now Claude is the only implementation.
+        """
+        return ClaudeRuntime(
+            tracker=self._tracker,
+            app_config=self._config,
+            plugin_dir=self._config.plugin_dir,
+            model_registry=self.model_registry,
+            spec_service=self._spec_service,
+            coordinator=self.coordinator,
+        )
+
     def _attach_to_ticket(self, task: AgentTask) -> None:
         """Auto-attach session to meta-ticket and set orchestrator if applicable."""
         if not task.meta_ticket_id or not self.board_service:
@@ -611,7 +626,7 @@ class AgentService:
                     _live_metrics["toolCalls"] += 1
 
                 if method in _FULL_METRICS:
-                    # Prefer pre-computed contextWindow from the runner
+                    # Prefer pre-computed contextWindow from the runtime
                     # (last iteration: input + cache + output).  Fallback
                     # uses the corrected formula on SDK-aggregated usage.
                     ctx_tokens = params.get("contextWindow", 0)
@@ -677,8 +692,22 @@ class AgentService:
                     }, overwrite=False)
         notify = _persisting_notify
 
+        exec_config = RuntimeExecutionConfig(
+            working_directory=str(self._config.project_root),
+            model=task.config.model,
+            system_prompt=spec_context,
+            resume_session_id=resume_session_id,
+            permission_mode=task.config.permission_mode,
+            max_turns=task.config.max_turns,
+            effort=task.config.effort,
+            betas=list(task.config.betas),
+            stream_text=task.config.stream_text,
+        )
+        handler = make_handler_from_notify(notify)
+        runtime = self._make_runtime()
+
         try:
-            await run(task, spec_context, notify, self._tracker, cwd=self._config.project_root, plugin_dir=self._config.plugin_dir, resume_session_id=resume_session_id, config=self._config, model_registry=self.model_registry, spec_service=self._spec_service, coordinator=self.coordinator)
+            await runtime.run_session(task, exec_config, handler)
             self._tracker.set_status(task.bonsai_sid, "done")
             self._save_task(task)
             self._tracker.remove_task(task.bonsai_sid)

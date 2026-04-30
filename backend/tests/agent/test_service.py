@@ -32,16 +32,17 @@ def _make_service() -> tuple[AgentService, MagicMock, MagicMock]:
 
 
 class TestRunTask:
-    @patch("app.agent.service.run")
-    async def test_creates_task_and_launches_background(self, mock_run: AsyncMock) -> None:
-        mock_run.return_value = AgentResult(
+    @patch("app.agent.service.ClaudeRuntime")
+    async def test_creates_task_and_launches_background(self, MockRuntime: MagicMock) -> None:
+        run_session = AsyncMock(return_value=AgentResult(
             bonsai_sid="t1",
             session_id="s1",
             result="done",
             cost_usd=0.0,
             turns=1,
             duration_ms=100,
-        )
+        ))
+        MockRuntime.return_value.run_session = run_session
 
         service, _, spec_service = _make_service()
         spec_service.get_spec.return_value = _make_spec_detail(
@@ -56,10 +57,10 @@ class TestRunTask:
         # Wait for background task to complete
         await asyncio.sleep(0.05)
 
-        mock_run.assert_called_once()
+        run_session.assert_called_once()
 
-    @patch("app.agent.service.run")
-    async def test_run_task_returns_immediately(self, mock_run: AsyncMock) -> None:
+    @patch("app.agent.service.ClaudeRuntime")
+    async def test_run_task_returns_immediately(self, MockRuntime: MagicMock) -> None:
         async def slow_run(*args, **kwargs):
             await asyncio.sleep(0.5)
             return AgentResult(
@@ -67,7 +68,7 @@ class TestRunTask:
                 cost_usd=0.0, turns=1, duration_ms=500,
             )
 
-        mock_run.side_effect = slow_run
+        MockRuntime.return_value.run_session = AsyncMock(side_effect=slow_run)
 
         service, _, spec_service = _make_service()
         spec_service.get_spec.return_value = _make_spec_detail("s1", "T", "C")
@@ -85,9 +86,9 @@ class TestRunTask:
             except (asyncio.CancelledError, Exception):
                 pass
 
-    @patch("app.agent.service.run")
-    async def test_error_sets_status(self, mock_run: AsyncMock) -> None:
-        mock_run.side_effect = RuntimeError("boom")
+    @patch("app.agent.service.ClaudeRuntime")
+    async def test_error_sets_status(self, MockRuntime: MagicMock) -> None:
+        MockRuntime.return_value.run_session = AsyncMock(side_effect=RuntimeError("boom"))
 
         service, _, spec_service = _make_service()
         spec_service.get_spec.return_value = _make_spec_detail("s1", "T", "C")

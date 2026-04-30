@@ -3,15 +3,55 @@
 from __future__ import annotations
 
 import asyncio
+from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from app.agent.models import AgentConfig, AgentResult
-from app.agent.runner import run
+from app.agent.models import AgentConfig, AgentResult, AgentTask
+from app.agent.runtime.claude import ClaudeRuntime
+from app.agent.runtime.events import make_handler_from_notify
+from app.agent.runtime.types import RuntimeExecutionConfig
 from app.agent.service import AgentService
 from app.agent.tracker import Tracker
 from app.spec.models import SpecDetail
+
+
+async def run(
+    task: AgentTask,
+    spec_context: str,
+    notify: Any,
+    tracker: Tracker,
+    cwd: Any = None,
+    plugin_dir: Any = None,
+    resume_session_id: str | None = None,
+    config: Any = None,
+    model_registry: Any = None,
+    spec_service: Any = None,
+    coordinator: Any = None,
+) -> AgentResult:
+    """Test compat shim — see ``runtime/claude/test_runtime.py`` for the canonical version."""
+    runtime = ClaudeRuntime(
+        tracker=tracker,
+        app_config=config,
+        plugin_dir=plugin_dir,
+        model_registry=model_registry,
+        spec_service=spec_service,
+        coordinator=coordinator,
+    )
+    exec_config = RuntimeExecutionConfig(
+        working_directory=str(cwd) if cwd else "",
+        model=task.config.model,
+        system_prompt=spec_context,
+        resume_session_id=resume_session_id,
+        permission_mode=task.config.permission_mode,
+        max_turns=task.config.max_turns,
+        effort=task.config.effort,
+        betas=list(task.config.betas),
+        stream_text=task.config.stream_text,
+    )
+    handler = make_handler_from_notify(notify)
+    return await runtime.run_session(task, exec_config, handler)
 
 
 def _make_spec_detail(id: str, title: str, content: str) -> SpecDetail:
@@ -54,7 +94,7 @@ def _setup_capturing_client(MockClient: MagicMock, messages: list) -> dict:
 
 
 class TestRunnerResumeParam:
-    @patch("app.agent.runner.ClaudeSDKClient")
+    @patch("app.agent.runtime.claude.runtime.ClaudeSDKClient")
     async def test_resume_session_id_passed_to_options(self, MockClient: MagicMock) -> None:
         """When resume_session_id is set, ClaudeAgentOptions.resume gets the value."""
         from claude_agent_sdk import ResultMessage, SystemMessage
@@ -83,7 +123,7 @@ class TestRunnerResumeParam:
         opts = captured["options"]
         assert opts.resume == "old-sess-123"
 
-    @patch("app.agent.runner.ClaudeSDKClient")
+    @patch("app.agent.runtime.claude.runtime.ClaudeSDKClient")
     async def test_no_resume_by_default(self, MockClient: MagicMock) -> None:
         """When resume_session_id is not set, ClaudeAgentOptions.resume is None."""
         from claude_agent_sdk import ResultMessage, SystemMessage
@@ -117,13 +157,13 @@ class TestRunnerResumeParam:
 
 
 class TestContinueSession:
-    @patch("app.agent.service.run")
+    @patch("app.agent.service.ClaudeRuntime")
     @patch("app.agent.service.load_session")
     @patch("app.agent.service.save_session")
     async def test_continue_uses_native_resume(
-        self, mock_save: MagicMock, mock_load: MagicMock, mock_run: AsyncMock
+        self, mock_save: MagicMock, mock_load: MagicMock, MockRuntime: MagicMock
     ) -> None:
-        """continue_session passes stored sessionId to runner as resume_session_id."""
+        """continue_session passes stored sessionId to runtime as resume_session_id."""
         mock_load.return_value = {
             "bonsaiSid": "sid-1",
             "name": "test session",
@@ -136,10 +176,11 @@ class TestContinueSession:
             "updatedAt": "2026-03-07T00:00:00",
             "events": [],
         }
-        mock_run.return_value = AgentResult(
+        run_session = AsyncMock(return_value=AgentResult(
             bonsai_sid="sid-1", session_id="cli-session-new",
             result="done", cost_usd=0.0, turns=0, duration_ms=0,
-        )
+        ))
+        MockRuntime.return_value.run_session = run_session
 
         service, config, spec_service = _make_service()
         spec_service.get_spec.return_value = _make_spec_detail("spec-1", "T", "C")
@@ -151,10 +192,12 @@ class TestContinueSession:
         # Wait for background task
         await asyncio.sleep(0.05)
 
-        # Verify run was called with resume_session_id
-        mock_run.assert_called_once()
-        call_kwargs = mock_run.call_args
-        assert call_kwargs.kwargs.get("resume_session_id") == "cli-session-abc"
+        # Verify run_session was called with resume_session_id in exec_config
+        run_session.assert_called_once()
+        call_args = run_session.call_args
+        # run_session(task, exec_config, handler)
+        exec_config = call_args.args[1]
+        assert exec_config.resume_session_id == "cli-session-abc"
 
     @patch("app.agent.service.load_session")
     async def test_continue_missing_session_id_raises(self, mock_load: MagicMock) -> None:
