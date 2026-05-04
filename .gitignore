@@ -58,6 +58,9 @@ mobile/gradle/wrapper/gradle-wrapper.jar
 # Logs
 *.log
 
+# Playwright MCP scratch dir (browser snapshots/console logs from agent sessions)
+.playwright-mcp/
+
 docs/
 POST.md
 

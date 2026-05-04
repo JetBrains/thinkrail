@@ -8,17 +8,24 @@ from pathlib import Path
 from pydantic import BaseModel
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-# Bonsai repo root: in dev mode, backend/app/core/config.py → ../../../ → bonsai/
-# In frozen (PyInstaller) mode, use the directory containing the executable.
+# Two anchors are needed in frozen (PyInstaller) mode:
+#   * _BUNDLE_ROOT — bundled resources (claude-plugin/, frontend dist). Lives at
+#     sys._MEIPASS, which PyInstaller sets to the temp extraction dir (onefile)
+#     or _internal/ (directory bundle). Looking next to the launcher misses this.
+#   * _ENV_DIR — user-facing .env override. Stays next to the launcher so a user
+#     can drop a .env beside the binary to override defaults.
+# In dev mode both collapse to the repo root.
 if getattr(sys, 'frozen', False):
-    _BONSAI_ROOT = Path(sys.executable).resolve().parent
+    _BUNDLE_ROOT = Path(getattr(sys, '_MEIPASS', Path(sys.executable).resolve().parent))
+    _ENV_DIR = Path(sys.executable).resolve().parent
 else:
-    _BONSAI_ROOT = Path(__file__).resolve().parents[3]
+    _BUNDLE_ROOT = Path(__file__).resolve().parents[3]
+    _ENV_DIR = _BUNDLE_ROOT
 
 
 class ServerSettings(BaseSettings):
     model_config = SettingsConfigDict(
-        env_file=_BONSAI_ROOT / ".env",
+        env_file=_ENV_DIR / ".env",
         env_file_encoding="utf-8",
         extra="ignore",
     )
@@ -88,5 +95,5 @@ def load_config(project_root: Path | None = None) -> AppConfig:
     return AppConfig(
         project_root=root,
         bonsai_dir=root / ".bonsai",
-        plugin_dir=_BONSAI_ROOT / "claude-plugin",
+        plugin_dir=_BUNDLE_ROOT / "claude-plugin",
     )

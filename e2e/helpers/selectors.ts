@@ -44,6 +44,14 @@ export const newSession = {
   permissionSelect: "select.draft-config-select:not(.draft-config-select--model)",
   promptInputPlaceholder: /Type a message to start/,
   startButton: { role: "button", name: /Start Session/ } as const,
+  // Skill picker (DraftConfigCard's Skill row → SkillGrid in a popover).
+  skillRow: '.draft-config-row:has(.draft-config-label:text-is("Skill"))',
+  skillSelectButton:
+    '.draft-config-row:has(.draft-config-label:text-is("Skill")) .draft-config-action',
+  skillGrid: ".skill-grid",
+  skillCard: ".skill-card",
+  skillCardName: ".skill-card-name",
+  skillGroupLabel: ".skill-group-label",
 };
 
 export const sessionPanel = {

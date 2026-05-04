@@ -80,7 +80,10 @@ graph TD
 
 ### config.py
 
-**Frozen mode detection:** `_BONSAI_ROOT` is computed differently depending on runtime mode. In development, it traverses `__file__` parents to find the repo root. In frozen mode (PyInstaller bundle, detected via `sys.frozen`), it uses `sys.executable` parent directory. This affects `.env` file loading — in packaged mode, `.env` is loaded from next to the executable.
+**Frozen mode detection:** two anchors are computed depending on runtime mode. In development both collapse to the repo root. In frozen mode (PyInstaller bundle, detected via `sys.frozen`):
+
+- `_BUNDLE_ROOT` resolves to `sys._MEIPASS` — the bundle's resource root. Used to find packed assets (`claude-plugin/`, `frontend_dist/`). For directory-mode bundles this lives under `_internal/`; for onefile bundles it's a temp extraction dir.
+- `_ENV_DIR` resolves to `sys.executable`'s parent — next to the launcher. Used for `.env` lookup so users can override defaults by dropping a `.env` beside the binary.
 
 **`ServerSettings`** (Pydantic `BaseSettings`):
 
@@ -160,7 +163,7 @@ Known subdirectories: `sessions`, `trash`, `plans`, `meta-tickets`, `spec-drafts
 | Registry handling in spec/, not core/ | spec/ owns the registry as domain state | Separation of concerns — registry is spec domain logic, not shared infrastructure |
 | Watcher as separate file from config | Async watching is a distinct infrastructure concern | Separation of concerns — config is synchronous project setup, watcher is async runtime |
 | No logging/error utilities | Use Python stdlib logging directly | Simplicity — add shared utilities only when a real pattern emerges |
-| Frozen mode in config.py | `sys.frozen` guard sets `_BONSAI_ROOT` to executable directory | Enables `.env` loading when running as PyInstaller bundle. Dev mode path calculation unchanged. |
+| Frozen mode in config.py | `sys.frozen` guard sets `_BUNDLE_ROOT` to `sys._MEIPASS` and `_ENV_DIR` to `sys.executable`'s parent | Bundled resources (claude-plugin, frontend dist) live under `_MEIPASS` (`_internal/` for directory bundles, temp dir for onefile); `.env` is read next to the launcher so users can override defaults. Dev mode path calculation unchanged. |
 
 ## Dependencies
 
