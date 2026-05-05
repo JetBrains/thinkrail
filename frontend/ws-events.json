@@ -13,7 +13,6 @@
         },
         "eventType": {
           "const": "askUserQuestion",
-          "default": "askUserQuestion",
           "title": "Eventtype",
           "type": "string"
         },
@@ -70,7 +69,6 @@
         },
         "eventType": {
           "const": "compact",
-          "default": "compact",
           "title": "Eventtype",
           "type": "string"
         },
@@ -119,7 +117,6 @@
         },
         "eventType": {
           "const": "confirmAction",
-          "default": "confirmAction",
           "title": "Eventtype",
           "type": "string"
         },
@@ -189,55 +186,6 @@
       "title": "ConfirmActionPayload",
       "type": "object"
     },
-    "ConfirmStatementEvent": {
-      "properties": {
-        "bonsaiSid": {
-          "title": "Bonsaisid",
-          "type": "string"
-        },
-        "sessionId": {
-          "default": "",
-          "title": "Sessionid",
-          "type": "string"
-        },
-        "eventType": {
-          "const": "confirmStatement",
-          "default": "confirmStatement",
-          "title": "Eventtype",
-          "type": "string"
-        },
-        "payload": {
-          "$ref": "#/$defs/ConfirmStatementPayload"
-        }
-      },
-      "required": [
-        "bonsaiSid",
-        "sessionId",
-        "eventType",
-        "payload"
-      ],
-      "title": "ConfirmStatementEvent",
-      "type": "object"
-    },
-    "ConfirmStatementPayload": {
-      "description": "Agent presents a statement for user confirmation.",
-      "properties": {
-        "statement": {
-          "title": "Statement",
-          "type": "string"
-        },
-        "requestId": {
-          "default": "",
-          "title": "Requestid",
-          "type": "string"
-        }
-      },
-      "required": [
-        "statement"
-      ],
-      "title": "ConfirmStatementPayload",
-      "type": "object"
-    },
     "DoneEvent": {
       "properties": {
         "bonsaiSid": {
@@ -251,7 +199,6 @@
         },
         "eventType": {
           "const": "done",
-          "default": "done",
           "title": "Eventtype",
           "type": "string"
         },
@@ -313,7 +260,6 @@
         },
         "eventType": {
           "const": "error",
-          "default": "error",
           "title": "Eventtype",
           "type": "string"
         },
@@ -410,7 +356,6 @@
         },
         "eventType": {
           "const": "interrupted",
-          "default": "interrupted",
           "title": "Eventtype",
           "type": "string"
         },
@@ -490,7 +435,6 @@
         },
         "eventType": {
           "const": "notification",
-          "default": "notification",
           "title": "Eventtype",
           "type": "string"
         },
@@ -545,7 +489,6 @@
         },
         "eventType": {
           "const": "permissionDenied",
-          "default": "permissionDenied",
           "title": "Eventtype",
           "type": "string"
         },
@@ -595,7 +538,6 @@
         },
         "eventType": {
           "const": "progress",
-          "default": "progress",
           "title": "Eventtype",
           "type": "string"
         },
@@ -688,7 +630,6 @@
         },
         "eventType": {
           "const": "ready",
-          "default": "ready",
           "title": "Eventtype",
           "type": "string"
         },
@@ -724,7 +665,6 @@
         },
         "eventType": {
           "const": "requestExpired",
-          "default": "requestExpired",
           "title": "Eventtype",
           "type": "string"
         },
@@ -771,7 +711,6 @@
         },
         "eventType": {
           "const": "requestResolved",
-          "default": "requestResolved",
           "title": "Eventtype",
           "type": "string"
         },
@@ -826,7 +765,6 @@
         },
         "eventType": {
           "const": "sessionStart",
-          "default": "sessionStart",
           "title": "Eventtype",
           "type": "string"
         },
@@ -886,7 +824,6 @@
         },
         "eventType": {
           "const": "subagentEnd",
-          "default": "subagentEnd",
           "title": "Eventtype",
           "type": "string"
         },
@@ -930,7 +867,6 @@
         },
         "eventType": {
           "const": "subagentStart",
-          "default": "subagentStart",
           "title": "Eventtype",
           "type": "string"
         },
@@ -979,7 +915,6 @@
         },
         "eventType": {
           "const": "suggestDescription",
-          "default": "suggestDescription",
           "title": "Eventtype",
           "type": "string"
         },
@@ -1033,7 +968,6 @@
         },
         "eventType": {
           "const": "suggestSession",
-          "default": "suggestSession",
           "title": "Eventtype",
           "type": "string"
         },
@@ -1109,7 +1043,6 @@
         },
         "eventType": {
           "const": "textDelta",
-          "default": "textDelta",
           "title": "Eventtype",
           "type": "string"
         },
@@ -1165,7 +1098,6 @@
         },
         "eventType": {
           "const": "toolCallEnd",
-          "default": "toolCallEnd",
           "title": "Eventtype",
           "type": "string"
         },
@@ -1236,7 +1168,6 @@
         },
         "eventType": {
           "const": "toolCallStart",
-          "default": "toolCallStart",
           "title": "Eventtype",
           "type": "string"
         },
@@ -1303,7 +1234,6 @@
         },
         "eventType": {
           "const": "turnComplete",
-          "default": "turnComplete",
           "title": "Eventtype",
           "type": "string"
         },
@@ -1388,7 +1318,6 @@
         },
         "eventType": {
           "const": "userMessage",
-          "default": "userMessage",
           "title": "Eventtype",
           "type": "string"
         },
@@ -1430,7 +1359,6 @@
       "askUserQuestion": "#/$defs/AskUserQuestionEvent",
       "compact": "#/$defs/CompactEvent",
       "confirmAction": "#/$defs/ConfirmActionEvent",
-      "confirmStatement": "#/$defs/ConfirmStatementEvent",
       "done": "#/$defs/DoneEvent",
       "error": "#/$defs/ErrorEvent",
       "interrupted": "#/$defs/InterruptedEvent",
@@ -1504,9 +1432,6 @@
     },
     {
       "$ref": "#/$defs/ConfirmActionEvent"
-    },
-    {
-      "$ref": "#/$defs/ConfirmStatementEvent"
     },
     {
       "$ref": "#/$defs/SuggestSessionEvent"

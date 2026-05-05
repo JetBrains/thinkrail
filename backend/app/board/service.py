@@ -89,11 +89,11 @@ class BoardService:
         title: str,
         body: str = "",
         type: MetaTicketType = "feature",
+        status: MetaTicketStatus = "idea",
     ) -> MetaTicket:
-        # Set order to max+1 within the default "idea" column
         existing = _list_files(self._tickets_dir)
-        max_order = max((t.order for t in existing if t.status == "idea"), default=-1)
-        ticket = MetaTicket(title=title, body=body, type=type, order=max_order + 1)
+        max_order = max((t.order for t in existing if t.status == status), default=-1)
+        ticket = MetaTicket(title=title, body=body, type=type, status=status, order=max_order + 1)
         # Auto-create a skeleton plan (draft, no steps) so users can edit immediately
         self.plans.create_plan(ticket.id, title, steps=[], verification=[])
         ticket.plan_path = f"plans/{ticket.id}.md"

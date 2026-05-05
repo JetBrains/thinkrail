@@ -19,6 +19,10 @@ from app.agent.tools.change_ticket_status import (
     change_ticket_status_mcp_server,
     intercept_change_ticket_status,
 )
+from app.agent.tools.create_ticket import (
+    create_ticket_mcp_server,
+    intercept_create_board_ticket,
+)
 from app.agent.tools.orchestrator import intercept_orchestrator, orchestrator_mcp_server
 from app.agent.tools.visualization import intercept_visualize, vis_mcp_server
 
@@ -32,6 +36,7 @@ MCP_SERVERS: dict[str, Any] = {
     "bonsai-specs": specs_mcp_server,
     "bonsai-orchestrator": orchestrator_mcp_server,
     "bonsai-ticket-status": change_ticket_status_mcp_server,
+    "bonsai-create-ticket": create_ticket_mcp_server,
 }
 
 # canUseTool interceptors — keyed by tool name suffix.
@@ -48,6 +53,7 @@ INTERCEPTORS: dict[str, InterceptFn] = {
     "spec_delete": intercept_specs,
     "suggest_step": intercept_orchestrator,
     "ChangeTicketStatus": intercept_change_ticket_status,
+    "CreateBoardTicket": intercept_create_board_ticket,
 }
 
 __all__ = [

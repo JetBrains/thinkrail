@@ -1,0 +1,58 @@
+.graph-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.65);
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  animation: graph-modal-fade-in 120ms ease;
+}
+
+@keyframes graph-modal-fade-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+.graph-modal {
+  position: relative;
+  width: calc(100vw - 64px);
+  height: calc(100vh - 64px);
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.4);
+  animation: graph-modal-slide-in 150ms ease;
+}
+
+@keyframes graph-modal-slide-in {
+  from { transform: scale(0.97); opacity: 0; }
+  to   { transform: scale(1);    opacity: 1; }
+}
+
+.graph-modal-close {
+  position: absolute;
+  top: var(--space-sm);
+  right: var(--space-sm);
+  z-index: 10;
+  width: 28px;
+  height: 28px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--panel);
+  color: var(--muted);
+  font-size: 18px;
+  line-height: 1;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--font);
+}
+.graph-modal-close:hover {
+  background: var(--hover);
+  color: var(--text);
+}

@@ -1,10 +1,10 @@
 import { useState, useRef, useCallback, useEffect } from "react";
 import type { Question } from "@/types/agent.ts";
 import { isMod, modLabel } from "@/utils/platform.ts";
-import { AnsweredTable } from "./AnsweredTable.tsx";
 import { QuestionTabBar } from "./QuestionTabBar.tsx";
 import { QuestionOptionsPanel } from "./QuestionOptionsPanel.tsx";
 import { QuestionPreviewPanel } from "./QuestionPreviewPanel.tsx";
+import { ChatMarkdown } from "./ChatMarkdown.tsx";
 
 interface QuestionCardProps {
   questions: Question[];
@@ -44,6 +44,7 @@ export function QuestionCard({
 
   const containerRef = useRef<HTMLDivElement>(null);
   const otherInputRef = useRef<HTMLInputElement>(null);
+  const autoAdvanceTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Refs always hold the latest state so the submitAll callback
   // never reads stale closures.
@@ -58,6 +59,13 @@ export function QuestionCard({
   useEffect(() => {
     if (!answered) containerRef.current?.focus();
   }, [answered]);
+
+  // Clean up auto-advance timer on unmount
+  useEffect(() => {
+    return () => {
+      if (autoAdvanceTimer.current !== null) clearTimeout(autoAdvanceTimer.current);
+    };
+  }, []);
 
   const q = questions[activeTab];
   const isMulti = q?.multiSelect ?? false;
@@ -114,6 +122,7 @@ export function QuestionCard({
   }, [questions, getAnswerForQuestion, onSubmit]);
 
   const handleSubmit = useCallback(() => {
+    if (answeredIndicesRef.current.size === 0) return;
     if (answeredIndicesRef.current.size < questions.length && !confirmingSubmit) {
       setConfirmingSubmit(true);
       return;
@@ -129,9 +138,8 @@ export function QuestionCard({
         return;
       }
     }
-    // All answered — submit
-    submitAll();
-  }, [activeTab, questions.length, submitAll]);
+    // All answered — stay put, let user click Submit
+  }, [activeTab, questions.length]);
 
   const handleOptionClick = useCallback(
     (index: number) => {
@@ -148,6 +156,8 @@ export function QuestionCard({
       }
       if (index === otherIndex) {
         setTimeout(() => otherInputRef.current?.focus(), 0);
+      } else {
+        containerRef.current?.focus();
       }
     },
     [activeTab, isMulti, otherIndex],
@@ -273,19 +283,43 @@ export function QuestionCard({
     );
   }
 
-  // Answered state (classic)
+  // Answered state \u2014 one card per question (original card style) + user bubble per answer
   if (answered && (selectedAnswers || interrupted)) {
     return (
-      <div className="chat-question chat-question-answered" data-question-request-id={requestId}>
-        <div className="chat-question-answered-header-row">
-          <span className="chat-question-header">AskUserQuestion</span>
-          <span className={`chat-question-answered-done${interrupted ? " chat-question-answered-interrupted" : ""}`}>
-            {interrupted ? "\u2718 interrupted" : "\u2713 done"}
-          </span>
-        </div>
-        {!interrupted && selectedAnswers && (
-          <AnsweredTable questions={questions} answers={selectedAnswers} />
-        )}
+      <div className="chat-qa-answered-wrapper" data-question-request-id={requestId}>
+        {questions.map((q, i) => (
+          <div key={q.question} className="chat-qa-pair">
+            <div className="chat-question chat-question-answered chat-question-answered-mini">
+              <div className="chat-question-answered-header-row">
+                <span className="chat-question-header">AskUserQuestion</span>
+                {i === 0 && (
+                  <span className={`chat-question-answered-done${interrupted ? " chat-question-answered-interrupted" : ""}`}>
+                    {interrupted ? "\u2718 interrupted" : "\u2713 done"}
+                  </span>
+                )}
+              </div>
+              <div className="chat-question-answered-mini-text">
+                {q.header && q.question.includes("\n") ? (
+                  <>
+                    <div className="chat-question-answered-mini-label"><strong>{q.header}:</strong></div>
+                    <ChatMarkdown content={q.question} />
+                  </>
+                ) : (
+                  <ChatMarkdown content={q.header ? `**${q.header}:** ${q.question}` : q.question} />
+                )}
+              </div>
+            </div>
+            {!interrupted && selectedAnswers && (
+              <div className="chat-user">
+                <div className="chat-user-bubble">
+                  <div className="chat-user-text--md">
+                    <ChatMarkdown content={selectedAnswers[q.question] ?? ""} />
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        ))}
       </div>
     );
   }
@@ -316,7 +350,7 @@ export function QuestionCard({
       {q && (
         <>
           <div className="chat-question-header">{q.header}</div>
-          <div className="chat-question-text">{q.question}</div>
+          <div className="chat-question-text"><ChatMarkdown content={q.question} /></div>
 
           <div className="chat-question-body">
             <QuestionOptionsPanel
@@ -354,7 +388,11 @@ export function QuestionCard({
                     Next &rarr;
                   </button>
                 )}
-                <button className="chat-btn chat-btn-primary" onClick={handleSubmit}>
+                <button
+                  className="chat-btn chat-btn-primary"
+                  onClick={handleSubmit}
+                  disabled={answeredIndices.size === 0}
+                >
                   {questions.length === 1 ? "Submit" : "Submit all"}
                 </button>
                 <span>

@@ -1,8 +1,9 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { CollapsibleSection } from "../CollapsibleSection.tsx";
 import { useSelectedSpec } from "../useSelectedSpec.ts";
 import { useSpecStore } from "@/store/specStore.ts";
 import type { SpecEntry } from "@/types/spec.ts";
+import { GraphModal } from "@/components/GraphView/GraphModal.tsx";
 import "./ConnectedSpecs.css";
 
 interface LinkGroup {
@@ -16,6 +17,7 @@ export function ConnectedSpecs() {
   const spec = useSelectedSpec();
   const graph = useSpecStore((s) => s.graph);
   const selectSpec = useSpecStore((s) => s.selectSpec);
+  const [graphOpen, setGraphOpen] = useState(false);
 
   const groups = useMemo<LinkGroup[]>(() => {
     if (!spec || !graph) return [];
@@ -61,12 +63,12 @@ export function ConnectedSpecs() {
   const totalCount = groups.reduce((sum, g) => sum + g.entries.length, 0);
 
   return (
+    <>
+      {graphOpen && <GraphModal onClose={() => setGraphOpen(false)} />}
     <CollapsibleSection
       title="Connected Specs"
       count={totalCount || undefined}
-      expandToCenter={() => {
-        // TODO: open full GraphView in center panel
-      }}
+      expandToCenter={() => setGraphOpen(true)}
     >
       {groups.length === 0 ? (
         <div className="section-placeholder">No linked specs found</div>
@@ -89,5 +91,6 @@ export function ConnectedSpecs() {
         ))
       )}
     </CollapsibleSection>
+    </>
   );
 }

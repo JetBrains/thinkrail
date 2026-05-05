@@ -117,6 +117,7 @@ class TestAgentEvent:
         event = TextDeltaEvent(
             bonsai_sid="t1",
             session_id="s1",
+            event_type="textDelta",
             payload=TextDeltaPayload(text="hello"),
         )
         assert event.bonsai_sid == "t1"
@@ -127,6 +128,7 @@ class TestAgentEvent:
         event = TextDeltaEvent(
             bonsai_sid="t1",
             session_id="s1",
+            event_type="textDelta",
             payload=TextDeltaPayload(text="hi"),
         )
         data = event.model_dump(by_alias=True)

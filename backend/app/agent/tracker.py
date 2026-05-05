@@ -46,6 +46,7 @@ class Tracker:
         self._turn_text: dict[str, list[str]] = {}  # bonsai_sid → accumulated text blocks
         self._last_messages: dict[str, str] = {}  # bonsai_sid → last user message (for retry)
         self._context_tokens: dict[str, int] = {}  # bonsai_sid → latest context token count
+        self._approved_sigs: dict[str, set[str]] = {}  # bonsai_sid → remembered approvals
 
     # -- task lifecycle -------------------------------------------------------
 
@@ -89,6 +90,8 @@ class Tracker:
 
     def set_status(self, bonsai_sid: str, status: TaskStatus) -> None:
         task = self.get_task(bonsai_sid)
+        if task.status == status:
+            return
         allowed = _VALID_TRANSITIONS[task.status]
         if status not in allowed:
             raise ValueError(
@@ -187,6 +190,14 @@ class Tracker:
 
     def clear_pending_request(self, bonsai_sid: str) -> None:
         self._pending_requests.pop(bonsai_sid, None)
+
+    # -- remembered approvals -------------------------------------------------
+
+    def is_tool_approved(self, bonsai_sid: str, signature: str) -> bool:
+        return signature in self._approved_sigs.get(bonsai_sid, set())
+
+    def remember_approval(self, bonsai_sid: str, signature: str) -> None:
+        self._approved_sigs.setdefault(bonsai_sid, set()).add(signature)
 
     def remove_task(self, bonsai_sid: str) -> None:
         """Remove a completed task and all associated state."""

@@ -218,7 +218,7 @@ export const ChatStream = forwardRef<ChatStreamHandle, ChatStreamProps>(function
       if (parentIdx === undefined) continue;
       const isVis = ev.eventType === "toolCallStart" &&
         ev.payload.toolName.endsWith("bonsai_visualize");
-      const isInteraction = ev.eventType === "askUserQuestion" || ev.eventType === "confirmAction" || ev.eventType === "confirmStatement" || ev.eventType === "suggestSession" || ev.eventType === "suggestDescription";
+      const isInteraction = ev.eventType === "askUserQuestion" || ev.eventType === "confirmAction" || ev.eventType === "suggestSession" || ev.eventType === "suggestDescription";
       if (!isVis && !isInteraction) {
         subagentChildren.get(parentIdx)!.push(i);
         childIndices.add(i);

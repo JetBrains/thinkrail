@@ -84,7 +84,13 @@ export function DraftConfigCard({ bonsaiSid, readOnly, onVisibilityChange }: Dra
     return () => document.removeEventListener("mousedown", handleClick);
   }, [skillPickerOpen, specPickerOpen, ticketPickerOpen, filePickerOpen]);
 
-  // Debounced update helper
+  // Debounced update helper — clear pending timer on unmount
+  useEffect(() => {
+    return () => {
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+    };
+  }, []);
+
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const debouncedUpdate = useCallback(
     (changes: Parameters<typeof updateDraft>[1]) => {

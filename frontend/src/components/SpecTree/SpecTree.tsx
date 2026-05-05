@@ -1,6 +1,7 @@
 import { useCallback, useMemo, useState } from "react";
 import { useSpecStore } from "@/store/specStore.ts";
 import { useFileStore } from "@/store/fileStore.ts";
+import { GraphModal } from "@/components/GraphView/GraphModal.tsx";
 import {
   buildDocTree,
   buildTree,
@@ -20,6 +21,7 @@ export function SpecTree() {
   const openFile = useFileStore((s) => s.openFile);
   const loadPreview = useFileStore((s) => s.loadPreview);
   const pinPreview = useFileStore((s) => s.pinPreview);
+  const [graphOpen, setGraphOpen] = useState(false);
 
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
   const [expandedTasks, setExpandedTasks] = useState<Set<string>>(new Set());
@@ -158,6 +160,17 @@ export function SpecTree() {
 
   return (
     <div className="st">
+      {graphOpen && <GraphModal onClose={() => setGraphOpen(false)} />}
+      <div className="st-toolbar">
+        <button
+          className="st-graph-btn"
+          onClick={() => setGraphOpen(true)}
+          title="Open graph view"
+          disabled={!graph}
+        >
+          ⬡ Graph
+        </button>
+      </div>
       {visible.map((node) => {
         const isSelected = selectedSpecId === node.id;
         const isOpen = node.hasChildren && !collapsed.has(node.id);

@@ -1,4 +1,5 @@
 import { Component, useCallback, useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { useExpandCollapse } from "./useExpandCollapse.ts";
 import type { ErrorInfo, ReactNode } from "react";
 import type {
@@ -105,7 +106,11 @@ function SummaryBox({ data }: { data: SummaryBoxData }) {
             <div className="vis-summary-items">
               {(section.items ?? []).map((item, j) => (
                 <div key={j} className="vis-summary-item">
-                  <span className="vis-summary-item-label">{item.label}</span>
+                  {item.url ? (
+                    <a className="vis-summary-item-label vis-summary-item-link" href={item.url} target="_blank" rel="noopener noreferrer">{item.label}</a>
+                  ) : (
+                    <span className="vis-summary-item-label">{item.label}</span>
+                  )}
                   <span className="vis-summary-item-value">{item.value}</span>
                 </div>
               ))}
@@ -236,21 +241,12 @@ export function toMermaidSyntax(data: StructuredDiagramData): string {
   return lines.join("\n");
 }
 
-function buildPopoutHtml(svgHtml: string): string {
-  return `<!DOCTYPE html>
-<html><head><meta charset="utf-8"><title>Mermaid Diagram</title>
-<style>
-  html, body { margin: 0; height: 100%; background: #1e1f22; }
-  body { display: flex; justify-content: center; align-items: flex-start; padding: 24px; }
-  svg { max-width: 100%; height: auto; }
-</style></head>
-<body>${svgHtml}</body></html>`;
-}
-
 function MermaidDiagram({ syntax }: { syntax: string }) {
   const ref = useRef<HTMLDivElement>(null);
   const [error, setError] = useState<string | null>(null);
-  const [zoom, setZoom] = useState(1);
+  const [svgHtml, setSvgHtml] = useState<string | null>(null);
+  const [fullscreen, setFullscreen] = useState(false);
+  const [fsZoom, setFsZoom] = useState(1);
 
   useEffect(() => {
     ensureMermaid();
@@ -264,9 +260,10 @@ function MermaidDiagram({ syntax }: { syntax: string }) {
           ref.current.innerHTML = svg;
           const svgEl = ref.current.querySelector("svg");
           if (svgEl) {
-            svgEl.setAttribute("width", "100%");
-            svgEl.setAttribute("height", "100%");
+            svgEl.removeAttribute("width");
+            svgEl.removeAttribute("height");
           }
+          setSvgHtml(ref.current.innerHTML);
           setError(null);
         }
       })
@@ -277,18 +274,16 @@ function MermaidDiagram({ syntax }: { syntax: string }) {
     return () => { cancelled = true; };
   }, [syntax]);
 
-  const handlePopout = useCallback(() => {
-    const svgHtml = ref.current?.innerHTML;
-    if (!svgHtml) return;
-    const blob = new Blob([buildPopoutHtml(svgHtml)], { type: "text/html" });
-    const url = URL.createObjectURL(blob);
-    const win = window.open(url, "_blank");
-    if (win) {
-      setTimeout(() => URL.revokeObjectURL(url), 5000);
-    } else {
-      URL.revokeObjectURL(url);
-    }
-  }, []);
+  const handleExpand = useCallback(() => {
+    if (svgHtml) { setFsZoom(1); setFullscreen(true); }
+  }, [svgHtml]);
+
+  useEffect(() => {
+    if (!fullscreen) return;
+    const handler = (e: KeyboardEvent) => { if (e.key === "Escape") setFullscreen(false); };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, [fullscreen]);
 
   if (error) {
     return (
@@ -300,27 +295,38 @@ function MermaidDiagram({ syntax }: { syntax: string }) {
   }
 
   return (
-    <div className="vis-mermaid-wrapper">
-      <ZoomBar
-        zoom={zoom}
-        onZoomIn={() => setZoom((z) => Math.min(z + 0.15, 3))}
-        onZoomOut={() => setZoom((z) => Math.max(z - 0.15, 0.3))}
-        onReset={() => setZoom(1)}
-        onPopout={handlePopout}
-        className="vis-mermaid-zoom"
-      />
-      <div style={{ overflow: "auto", flex: 1 }}>
-        <div
-          ref={ref}
-          style={{
-            transform: `scale(${zoom})`,
-            transformOrigin: "top left",
-            width: "100%",
-            height: "100%",
-          }}
-        />
+    <>
+      {fullscreen && svgHtml && createPortal(
+        <div className="vis-fs-backdrop" onClick={() => setFullscreen(false)}>
+          <div className="vis-fs-modal" onClick={(e) => e.stopPropagation()}>
+            <ZoomBar
+              zoom={fsZoom}
+              onZoomIn={() => setFsZoom((z) => Math.min(z + 0.15, 4))}
+              onZoomOut={() => setFsZoom((z) => Math.max(z - 0.15, 0.2))}
+              onReset={() => setFsZoom(1)}
+              className="vis-fs-zoombar"
+            />
+            <button className="vis-fs-close" onClick={() => setFullscreen(false)} title="Close (Esc)">×</button>
+            <div className="vis-fs-scroll">
+              <div
+                className="vis-fs-svg"
+                style={{ zoom: fsZoom }}
+                dangerouslySetInnerHTML={{ __html: svgHtml }}
+              />
+            </div>
+          </div>
+        </div>,
+        document.body,
+      )}
+      <div
+        className="vis-mermaid-wrapper vis-mermaid-expandable"
+        onClick={handleExpand}
+        title="Click to expand"
+      >
+        <div ref={ref} className="vis-mermaid-inner" />
+        {svgHtml && <span className="vis-mermaid-expand-hint">⛶</span>}
       </div>
-    </div>
+    </>
   );
 }
 

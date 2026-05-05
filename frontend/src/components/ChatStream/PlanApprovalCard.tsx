@@ -145,6 +145,7 @@ export function PlanApprovalCard({
             autoFocus
             onKeyDown={(e) => {
               if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
+                e.preventDefault();
                 onDeny(reason.trim() || undefined);
               }
             }}

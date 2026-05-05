@@ -251,25 +251,6 @@ export function wireEvents(client: RpcClient): Unsubscribe {
     }),
   );
 
-  unsubs.push(
-    client.on("agent/confirmStatement", (p) => {
-      const params = p as Record<string, unknown>;
-      const bonsaiSid = params.bonsaiSid as string;
-      useSessionStore.getState().onConfirmStatement(params);
-      useNotificationStore.getState().incrementPendingInput();
-      useNotificationStore.getState().addToast({
-        bonsaiSid,
-        eventType: "question",
-        message: "Agent wants your confirmation",
-        persistent: true,
-      });
-      useNotificationStore.getState().setBadge(bonsaiSid, {
-        type: "question",
-        pulsing: true,
-      });
-    }),
-  );
-
   // ── Request expired (timeout) ──
   unsubs.push(
     client.on("agent/requestExpired", (p) => {
@@ -360,7 +341,8 @@ export function wireEvents(client: RpcClient): Unsubscribe {
   );
   unsubs.push(
     client.on("board/didCreate", (p) => {
-      useBoardStore.getState().handleDidCreate(p as import("@/types/board.ts").MetaTicketSummary);
+      const params = p as import("@/types/board.ts").MetaTicketSummary & { bonsaiSid?: string };
+      useBoardStore.getState().handleDidCreate(params);
     }),
   );
   unsubs.push(

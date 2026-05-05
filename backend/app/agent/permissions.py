@@ -87,6 +87,7 @@ _INTERCEPTOR_CATEGORIES: dict[str, ToolCategory] = {
     # the gate has to live here.
     "spec_delete": "edit",
     "ChangeTicketStatus": "edit",
+    "CreateBoardTicket": "edit",
 }
 
 
@@ -170,6 +171,24 @@ def evaluate_mode(
         return ToolPermissionResponse(
             behavior="deny", message=_PLAN_DENY_MESSAGE,
         )
+    return None
+
+
+def _approval_signature(tool_name: str, input_data: dict[str, Any]) -> str | None:
+    """Return a session-scoped remember-key for this tool call, or None."""
+    if tool_name in ("Write", "Edit", "MultiEdit"):
+        path = input_data.get("file_path", "")
+        return f"{tool_name}:{path}" if path else None
+    if tool_name == "WebFetch":
+        url = input_data.get("url", "")
+        try:
+            from urllib.parse import urlparse
+            domain = urlparse(url).netloc
+            return f"WebFetch:{domain}" if domain else None
+        except Exception:
+            return None
+    if tool_name == "WebSearch":
+        return "WebSearch"
     return None
 
 
@@ -279,27 +298,6 @@ async def can_use_tool(
     tool_name = request.tool_name
     input_data = request.input
 
-    # Built-in: ConfirmStatement
-    if tool_name == "ConfirmStatement":
-        request_id = str(uuid4())
-        future = tracker.register_future(task.bonsai_sid, request_id)
-        await notify(
-            "agent/confirmStatement",
-            {"bonsaiSid": task.bonsai_sid, "statement": input_data.get("statement", "")},
-            request_id=request_id,
-        )
-        response = await future
-        if response.get("behavior") == "deny":
-            return ToolPermissionResponse(
-                behavior="deny",
-                message=response.get("message", "Timed out"),
-                interrupt=response.get("interrupt", False),
-            )
-        return ToolPermissionResponse(
-            behavior="allow",
-            updated_input={"statement": response.get("statement", input_data.get("statement", ""))},
-        )
-
     # Built-in: AskUserQuestion
     if tool_name == "AskUserQuestion":
         response, _request_id = await _await_user_response(
@@ -345,7 +343,11 @@ async def can_use_tool(
         if tool_name.endswith(suffix):
             return await intercept_fn(input_data, tracker, notify, task, config)
 
-    # Default: generic tool approval
+    # Default: generic tool approval (with session-scoped remember)
+    sig = _approval_signature(tool_name, input_data)
+    if sig and tracker.is_tool_approved(task.bonsai_sid, sig):
+        return ToolPermissionResponse(behavior="allow")
+
     response, _request_id = await _await_user_response(
         tracker, notify, task, config,
         method="agent/confirmAction",
@@ -357,7 +359,6 @@ async def can_use_tool(
         },
     )
     if response is None:
-        # Timeout — interrupt or deny based on configured behavior
         settings = load_settings(config.project_root)
         return ToolPermissionResponse(
             behavior="deny",
@@ -365,6 +366,8 @@ async def can_use_tool(
             interrupt=settings.user_respond_timeout_behavior != "deny",
         )
     if response.get("behavior") == "allow":
+        if sig:
+            tracker.remember_approval(task.bonsai_sid, sig)
         return ToolPermissionResponse(behavior="allow")
     return ToolPermissionResponse(
         behavior="deny",

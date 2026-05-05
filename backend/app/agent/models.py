@@ -241,15 +241,6 @@ class ConfirmActionPayload(BaseModel):
     description: str | None = None
 
 
-class ConfirmStatementPayload(BaseModel):
-    """Agent presents a statement for user confirmation."""
-
-    model_config = _CAMEL_CONFIG
-
-    statement: str
-    request_id: str = ""
-
-
 class SuggestSessionPayload(BaseModel):
     """Agent suggests creating a subsession."""
 
@@ -318,117 +309,112 @@ class _BaseEvent(BaseModel):
 
 
 class SessionStartEvent(_BaseEvent):
-    event_type: Literal["sessionStart"] = "sessionStart"
+    event_type: Literal["sessionStart"]
     payload: SessionStartPayload
 
 
 class TextDeltaEvent(_BaseEvent):
-    event_type: Literal["textDelta"] = "textDelta"
+    event_type: Literal["textDelta"]
     payload: TextDeltaPayload
 
 
 class ToolCallStartEvent(_BaseEvent):
-    event_type: Literal["toolCallStart"] = "toolCallStart"
+    event_type: Literal["toolCallStart"]
     payload: ToolCallStartPayload
 
 
 class ToolCallEndEvent(_BaseEvent):
-    event_type: Literal["toolCallEnd"] = "toolCallEnd"
+    event_type: Literal["toolCallEnd"]
     payload: ToolCallEndPayload
 
 
 class SubagentStartEvent(_BaseEvent):
-    event_type: Literal["subagentStart"] = "subagentStart"
+    event_type: Literal["subagentStart"]
     payload: SubagentStartPayload
 
 
 class SubagentEndEvent(_BaseEvent):
-    event_type: Literal["subagentEnd"] = "subagentEnd"
+    event_type: Literal["subagentEnd"]
     payload: SubagentEndPayload
 
 
 class CompactEvent(_BaseEvent):
-    event_type: Literal["compact"] = "compact"
+    event_type: Literal["compact"]
     payload: CompactPayload
 
 
 class ProgressEvent(_BaseEvent):
-    event_type: Literal["progress"] = "progress"
+    event_type: Literal["progress"]
     payload: ProgressPayload
 
 
 class NotificationEvent(_BaseEvent):
-    event_type: Literal["notification"] = "notification"
+    event_type: Literal["notification"]
     payload: NotificationPayload
 
 
 class PermissionDeniedEvent(_BaseEvent):
-    event_type: Literal["permissionDenied"] = "permissionDenied"
+    event_type: Literal["permissionDenied"]
     payload: PermissionDeniedPayload
 
 
 class ReadyEvent(_BaseEvent):
-    event_type: Literal["ready"] = "ready"
+    event_type: Literal["ready"]
     payload: ReadyPayload = Field(default_factory=ReadyPayload)
 
 
 class TurnCompleteEvent(_BaseEvent):
-    event_type: Literal["turnComplete"] = "turnComplete"
+    event_type: Literal["turnComplete"]
     payload: TurnCompletePayload
 
 
 class InterruptedEvent(_BaseEvent):
-    event_type: Literal["interrupted"] = "interrupted"
+    event_type: Literal["interrupted"]
     payload: InterruptedPayload
 
 
 class ErrorEvent(_BaseEvent):
-    event_type: Literal["error"] = "error"
+    event_type: Literal["error"]
     payload: ErrorPayload
 
 
 class DoneEvent(_BaseEvent):
-    event_type: Literal["done"] = "done"
+    event_type: Literal["done"]
     payload: DonePayload
 
 
 class AskUserQuestionEvent(_BaseEvent):
-    event_type: Literal["askUserQuestion"] = "askUserQuestion"
+    event_type: Literal["askUserQuestion"]
     payload: AskUserQuestionPayload
 
 
 class ConfirmActionEvent(_BaseEvent):
-    event_type: Literal["confirmAction"] = "confirmAction"
+    event_type: Literal["confirmAction"]
     payload: ConfirmActionPayload
 
 
-class ConfirmStatementEvent(_BaseEvent):
-    event_type: Literal["confirmStatement"] = "confirmStatement"
-    payload: ConfirmStatementPayload
-
-
 class SuggestSessionEvent(_BaseEvent):
-    event_type: Literal["suggestSession"] = "suggestSession"
+    event_type: Literal["suggestSession"]
     payload: SuggestSessionPayload
 
 
 class SuggestDescriptionEvent(_BaseEvent):
-    event_type: Literal["suggestDescription"] = "suggestDescription"
+    event_type: Literal["suggestDescription"]
     payload: SuggestDescriptionPayload
 
 
 class RequestResolvedEvent(_BaseEvent):
-    event_type: Literal["requestResolved"] = "requestResolved"
+    event_type: Literal["requestResolved"]
     payload: RequestResolvedPayload
 
 
 class RequestExpiredEvent(_BaseEvent):
-    event_type: Literal["requestExpired"] = "requestExpired"
+    event_type: Literal["requestExpired"]
     payload: RequestExpiredPayload
 
 
 class UserMessageEvent(_BaseEvent):
-    event_type: Literal["userMessage"] = "userMessage"
+    event_type: Literal["userMessage"]
     payload: UserMessagePayload
 
 
@@ -453,7 +439,6 @@ AgentEvent = Annotated[
         DoneEvent,
         AskUserQuestionEvent,
         ConfirmActionEvent,
-        ConfirmStatementEvent,
         SuggestSessionEvent,
         SuggestDescriptionEvent,
         RequestResolvedEvent,

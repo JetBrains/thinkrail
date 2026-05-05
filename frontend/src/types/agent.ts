@@ -24,7 +24,6 @@ import type {
   DoneEvent,
   AskUserQuestionEvent,
   ConfirmActionEvent,
-  ConfirmStatementEvent,
   SuggestSessionEvent,
   SuggestDescriptionEvent,
   RequestResolvedEvent,
@@ -51,7 +50,6 @@ export type {
   DoneEvent,
   AskUserQuestionEvent,
   ConfirmActionEvent,
-  ConfirmStatementEvent,
   SuggestSessionEvent,
   SuggestDescriptionEvent,
   RequestResolvedEvent,
@@ -108,7 +106,6 @@ export type LifecycleEventType = (
 export type InteractionRequestEventType = (
   | AskUserQuestionEvent
   | ConfirmActionEvent
-  | ConfirmStatementEvent
   | SuggestSessionEvent
   | SuggestDescriptionEvent
 )["eventType"];

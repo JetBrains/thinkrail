@@ -34,7 +34,7 @@ export interface ProgressTrackerData {
 export interface SummarySection {
   heading: string;
   status?: VisStatus;
-  items: { label: string; value: string }[];
+  items: { label: string; value: string; url?: string }[];
 }
 
 export interface SummaryBoxData {

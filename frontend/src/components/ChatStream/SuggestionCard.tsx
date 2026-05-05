@@ -124,6 +124,7 @@ export default function SuggestionCard({
             autoFocus
             onKeyDown={(e) => {
               if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
+                e.preventDefault();
                 onDismiss(dismissText.trim() || undefined);
               }
               if (e.key === "Escape") {

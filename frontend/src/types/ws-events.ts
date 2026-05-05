@@ -23,7 +23,6 @@ export type WsEvents =
   | DoneEvent
   | AskUserQuestionEvent
   | ConfirmActionEvent
-  | ConfirmStatementEvent
   | SuggestSessionEvent
   | SuggestDescriptionEvent
   | RequestResolvedEvent
@@ -153,39 +152,34 @@ export type Requestid1 = string;
 export type Description1 = string | null;
 export type Bonsaisid17 = string;
 export type Sessionid18 = string;
-export type Eventtype17 = "confirmStatement";
-export type Statement = string;
-export type Requestid2 = string;
-export type Bonsaisid18 = string;
-export type Sessionid19 = string;
-export type Eventtype18 = "suggestSession";
+export type Eventtype17 = "suggestSession";
 export type Skill = string;
 export type Specids = string[];
 export type Name = string;
 export type Reason = string;
 export type Prompt = string | null;
+export type Requestid2 = string;
+export type Bonsaisid18 = string;
+export type Sessionid19 = string;
+export type Eventtype18 = "suggestDescription";
+export type Description2 = string;
+export type Section = string;
 export type Requestid3 = string;
 export type Bonsaisid19 = string;
 export type Sessionid20 = string;
-export type Eventtype19 = "suggestDescription";
-export type Description2 = string;
-export type Section = string;
+export type Eventtype19 = "requestResolved";
 export type Requestid4 = string;
-export type Bonsaisid20 = string;
-export type Sessionid21 = string;
-export type Eventtype20 = "requestResolved";
-export type Requestid5 = string;
 export type Response = {
   [k: string]: unknown;
 } | null;
+export type Bonsaisid20 = string;
+export type Sessionid21 = string;
+export type Eventtype20 = "requestExpired";
+export type Requestid5 = string;
+export type Reason1 = string;
 export type Bonsaisid21 = string;
 export type Sessionid22 = string;
-export type Eventtype21 = "requestExpired";
-export type Requestid6 = string;
-export type Reason1 = string;
-export type Bonsaisid22 = string;
-export type Sessionid23 = string;
-export type Eventtype22 = "userMessage";
+export type Eventtype21 = "userMessage";
 export type Text1 = string;
 export type Ismarkdown = boolean;
 
@@ -477,23 +471,10 @@ export interface ConfirmActionPayload {
 export interface Toolinput1 {
   [k: string]: unknown;
 }
-export interface ConfirmStatementEvent {
+export interface SuggestSessionEvent {
   bonsaiSid: Bonsaisid17;
   sessionId: Sessionid18;
   eventType: Eventtype17;
-  payload: ConfirmStatementPayload;
-}
-/**
- * Agent presents a statement for user confirmation.
- */
-export interface ConfirmStatementPayload {
-  statement: Statement;
-  requestId?: Requestid2;
-}
-export interface SuggestSessionEvent {
-  bonsaiSid: Bonsaisid18;
-  sessionId: Sessionid19;
-  eventType: Eventtype18;
   payload: SuggestSessionPayload;
 }
 /**
@@ -505,12 +486,12 @@ export interface SuggestSessionPayload {
   name?: Name;
   reason?: Reason;
   prompt?: Prompt;
-  requestId?: Requestid3;
+  requestId?: Requestid2;
 }
 export interface SuggestDescriptionEvent {
-  bonsaiSid: Bonsaisid19;
-  sessionId: Sessionid20;
-  eventType: Eventtype19;
+  bonsaiSid: Bonsaisid18;
+  sessionId: Sessionid19;
+  eventType: Eventtype18;
   payload: SuggestDescriptionPayload;
 }
 /**
@@ -519,38 +500,38 @@ export interface SuggestDescriptionEvent {
 export interface SuggestDescriptionPayload {
   description: Description2;
   section?: Section;
-  requestId?: Requestid4;
+  requestId?: Requestid3;
 }
 export interface RequestResolvedEvent {
-  bonsaiSid: Bonsaisid20;
-  sessionId: Sessionid21;
-  eventType: Eventtype20;
+  bonsaiSid: Bonsaisid19;
+  sessionId: Sessionid20;
+  eventType: Eventtype19;
   payload: RequestResolvedPayload;
 }
 /**
  * User responded to a pending request.
  */
 export interface RequestResolvedPayload {
-  requestId?: Requestid5;
+  requestId?: Requestid4;
   response?: Response;
 }
 export interface RequestExpiredEvent {
-  bonsaiSid: Bonsaisid21;
-  sessionId: Sessionid22;
-  eventType: Eventtype21;
+  bonsaiSid: Bonsaisid20;
+  sessionId: Sessionid21;
+  eventType: Eventtype20;
   payload: RequestExpiredPayload;
 }
 /**
  * Pending request timed out without a response.
  */
 export interface RequestExpiredPayload {
-  requestId?: Requestid6;
+  requestId?: Requestid5;
   reason?: Reason1;
 }
 export interface UserMessageEvent {
-  bonsaiSid: Bonsaisid22;
-  sessionId: Sessionid23;
-  eventType: Eventtype22;
+  bonsaiSid: Bonsaisid21;
+  sessionId: Sessionid22;
+  eventType: Eventtype21;
   payload: UserMessagePayload;
 }
 /**

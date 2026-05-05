@@ -11,6 +11,36 @@
   user-select: none;
 }
 
+/* ── Toolbar ── */
+.st-toolbar {
+  display: flex;
+  align-items: center;
+  padding: var(--space-xs) var(--space-sm);
+  border-bottom: 1px solid var(--border);
+}
+
+.st-graph-btn {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--hint);
+  font-family: var(--font);
+  font-size: var(--font-md);
+  cursor: pointer;
+  padding: 2px var(--space-sm);
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+}
+.st-graph-btn:hover:not(:disabled) {
+  background: var(--hover);
+  color: var(--text);
+}
+.st-graph-btn:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
 /* ── Row ── */
 .st-row {
   display: flex;

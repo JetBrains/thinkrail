@@ -369,33 +369,6 @@ class TestCanUseToolNeutral:
         assert isinstance(response, ToolPermissionResponse)
         assert response.behavior == "allow"
 
-    async def test_confirm_statement_allow(self) -> None:
-        tracker = Tracker()
-        task = _make_task(tracker)
-        notify = AsyncMock()
-
-        async def resolve_with_text():
-            await asyncio.sleep(0.02)
-            for req_id in list(tracker._futures.get(task.bonsai_sid, {})):
-                tracker.resolve_future(
-                    task.bonsai_sid,
-                    req_id,
-                    {"behavior": "allow", "statement": "edited"},
-                )
-                break
-
-        asyncio.get_event_loop().create_task(resolve_with_text())
-        req = ToolPermissionRequest(
-            tool_name="ConfirmStatement",
-            input={"statement": "original"},
-        )
-        response = await can_use_tool(
-            req, tracker=tracker, notify=notify, task=task, config=_config(),
-        )
-
-        assert response.behavior == "allow"
-        assert response.updated_input == {"statement": "edited"}
-
 
 class TestClaudeCanUseToolAdapter:
     """The Claude SDK <-> neutral shim. The adapter must build a
@@ -1099,37 +1072,3 @@ class TestInteractiveBuiltinsBypassModeFilter:
         assert response.updated_input is not None
         assert response.updated_input["answers"] == {"Q?": "A"}
 
-    @pytest.mark.parametrize("mode", ["plan", "acceptEdits", "bypassPermissions"])
-    async def test_confirm_statement_reaches_handler_in_any_mode(
-        self, mode: str,
-    ) -> None:
-        tracker = Tracker()
-        task = _make_task(tracker)
-        notify = AsyncMock()
-
-        async def resolve_with_text():
-            await asyncio.sleep(0.02)
-            for req_id in list(tracker._futures.get(task.bonsai_sid, {})):
-                tracker.resolve_future(
-                    task.bonsai_sid, req_id,
-                    {"behavior": "allow", "statement": "edited"},
-                )
-                break
-
-        asyncio.get_event_loop().create_task(resolve_with_text())
-        req = ToolPermissionRequest(
-            tool_name="ConfirmStatement",
-            input={"statement": "original"},
-            permission_mode=mode,
-        )
-        response = await can_use_tool(
-            req, tracker=tracker, notify=notify, task=task, config=_config(),
-        )
-
-        confirm_calls = [
-            c for c in notify.call_args_list
-            if c[0][0] == "agent/confirmStatement"
-        ]
-        assert len(confirm_calls) == 1
-        assert response.behavior == "allow"
-        assert response.updated_input == {"statement": "edited"}

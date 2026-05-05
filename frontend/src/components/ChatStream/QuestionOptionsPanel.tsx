@@ -48,7 +48,15 @@ export function QuestionOptionsPanel({
       {/* Other option */}
       <div
         className={`chat-question-option${highlightedIndex === otherIndex ? " chat-question-option-highlighted" : ""}${(isMulti ? checkedIndices.has(otherIndex) : selectedIndex === otherIndex) ? " chat-question-option-selected" : ""}`}
+        role="button"
+        tabIndex={0}
         onClick={() => onOptionClick(otherIndex)}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" || e.key === " ") {
+            e.preventDefault();
+            onOptionClick(otherIndex);
+          }
+        }}
       >
         <span className="chat-question-option-indicator">
           {isMulti
@@ -63,6 +71,7 @@ export function QuestionOptionsPanel({
           value={otherText}
           onChange={(e) => onOtherTextChange(e.target.value)}
           onClick={(e) => e.stopPropagation()}
+          onKeyDown={(e) => e.stopPropagation()}
           placeholder="Type your answer..."
         />
       </div>
