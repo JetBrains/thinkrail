@@ -1,5 +1,5 @@
 import { test, expect } from "../fixtures";
-import { loginAs, openProject } from "../helpers/login";
+import { openProject } from "../helpers/project";
 import {
   endSession,
   startSessionWithModel,
@@ -25,11 +25,9 @@ test.describe.configure({ mode: "serial" });
 test.describe("Session history", () => {
   test("completed session appears in history and can be continued", async ({
     page,
-    admin,
     tempProject,
   }) => {
     test.slow();
-    await loginAs(page, admin.token);
     await openProject(page, tempProject.path);
 
     // Run + end one session to populate history.

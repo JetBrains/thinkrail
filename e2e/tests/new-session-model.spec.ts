@@ -1,5 +1,5 @@
 import { test } from "../fixtures";
-import { loginAs, openProject } from "../helpers/login";
+import { openProject } from "../helpers/project";
 import {
   startSessionConnectivityCheck,
   waitForSessionActivity,
@@ -31,11 +31,9 @@ test.describe.configure({ mode: "serial" });
 for (const model of MODELS) {
   test(`new session with ${model.label} starts without API error`, async ({
     page,
-    admin,
     tempProject,
   }) => {
     test.slow();
-    await loginAs(page, admin.token);
     await openProject(page, tempProject.path);
 
     // Use the DraftConfigCard's "Start Session" button — connectivity-only.

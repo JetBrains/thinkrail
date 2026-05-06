@@ -10,7 +10,6 @@ in a single pass — called at WebSocket connection time as a safety net.
 
 from __future__ import annotations
 
-import json
 from pathlib import Path
 from typing import Callable
 
@@ -30,14 +29,8 @@ def _default_settings(bonsai_dir: Path) -> str:
     return ProjectSettings().model_dump_json(indent=2) + "\n"
 
 
-def _default_users(bonsai_dir: Path) -> str:
-    data = {"users": [], "allowAnonymous": True}
-    return json.dumps(data, indent=2) + "\n"
-
-
 _DEFAULT_FACTORIES: dict[str, Callable[[Path], str]] = {
     "settings.json": _default_settings,
-    "users.json": _default_users,
 }
 
 # Subdirectories that should exist under .bonsai/

@@ -57,7 +57,9 @@ function colorizeJson(json: string): (string | ReactNode)[] {
     },
   );
 
-  // Parse markers into JSX elements
+  // Parse markers into JSX elements. \x00 is used as a deliberate field
+  // separator that cannot appear in user content, so we skip the lint rule.
+  // eslint-disable-next-line no-control-regex
   const MARKER_RE = /\x00(KEY|STR|NUM|BOOL)(.*?)\x00END\1/g;
   let m: RegExpExecArray | null;
   while ((m = MARKER_RE.exec(withValues)) !== null) {

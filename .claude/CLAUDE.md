@@ -21,18 +21,7 @@ cd frontend && npm run dev                  # frontend only
 
 ## First-Time Setup
 
-Create the first admin user before accessing the web UI:
-```bash
-cd backend && uv run python -m app.cli create-user --id <your-id> --name "<Your Name>" --admin
-```
-This outputs a `bns_` token. Enter it on the login screen at http://localhost:3000.
-
-Alternatively, on first launch with no users, the web UI shows a SetupScreen to create the first admin directly.
-
-To promote an existing user to admin:
-```bash
-cd backend && uv run python -m app.cli set-admin --id <user-id>
-```
+There is no setup. Bonsai is single-user, localhost-only — no accounts, no tokens, no login screen. Run `./run.sh` (or `cd backend && uv run python -m app.main`) and open http://localhost:3000.
 
 ## Dependency Management
 - **Backend:** `cd backend && uv add <package>` to add deps; `uv sync` to install
@@ -104,7 +93,7 @@ Follow these conventions for all new Python code:
 
 ### Async
 - Use `async/await` for I/O-bound operations (file I/O via aiosqlite, network calls)
-- `aiosqlite` for SQLite access (consistent with `server_store.py`)
+- `aiosqlite` for SQLite access (consistent with `app_store.py`)
 - Don't mix sync and async — if a module is async, keep all its public methods async
 
 ## Spec-Driven Rules
@@ -119,23 +108,23 @@ Follow these conventions for all new Python code:
 backend/
   app/
     main.py           # FastAPI entry point (create_app factory)
-    cli.py            # Admin CLI (create-user, list-users, set-admin)
+    cli.py            # Schema export commands (export-schema, export-ws-schema)
     api/              # REST API layer (FastAPI routers)
-      routers/        # files.py, fs.py, project.py, server_info.py, setup.py, user.py
-    core/             # Config, file I/O, watcher, server_store (SQLite), project bootstrap, settings
+      routers/        # files.py, fs.py, project.py, projects_known.py, server_info.py
+    core/             # Config, file I/O, watcher, app_store (SQLite — projects + settings), project bootstrap, settings
     spec/             # Spec models, parser, validator, frontmatter, index, graph, service
     agent/            # Agent models, tracker, runner, service, context, persistence, credentials, revise, transcribe, permissions, pricing, model_registry, visualization
       tools/          # MCP tools: specs.py, suggest_session.py, suggest_description.py, visualization.py, orchestrator.py, change_ticket_status.py
     board/            # Meta-ticket and plan management (models, service, storage, plan, state_machine, spec_drafts)
     rpc/              # WebSocket RPC server + JSON-RPC methods
-      methods/        # specs.py, agents.py, sessions.py, board.py, trash.py, vis.py, settings.py, admin.py, user.py, auth.py, subsessions.py
+      methods/        # specs.py, agents.py, sessions.py, board.py, trash.py, vis.py, settings.py, subsessions.py
     trash/            # Soft-delete service (service.py, storage.py)
     vis/              # Visualization dashboard (models.py, service.py)
   tests/              # pytest tests (mirrors app/ structure)
 frontend/
   src/
     api/              # WebSocket client, RPC hooks
-    services/         # REST API clients (files, fs, project, serverInfo, setup, user)
+    services/         # REST API clients (files, fs, project, projects, serverInfo)
     components/       # React components (AppShell, ChatStream, GraphView, BoardView, MetaTicketDetail, etc.)
     store/            # Zustand stores
     hooks/            # Custom React hooks

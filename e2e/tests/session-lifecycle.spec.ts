@@ -1,5 +1,5 @@
 import { test, expect } from "../fixtures";
-import { loginAs, openProject } from "../helpers/login";
+import { openProject } from "../helpers/project";
 import {
   endSession,
   interruptSession,
@@ -21,11 +21,9 @@ test.describe.configure({ mode: "serial" });
 test.describe("Session lifecycle", () => {
   test("start, follow-up, end without error banner", async ({
     page,
-    admin,
     tempProject,
   }) => {
     test.slow();
-    await loginAs(page, admin.token);
     await openProject(page, tempProject.path);
 
     await startSessionWithModel(page, HAIKU, "Reply with just 'hi'.");
@@ -55,11 +53,9 @@ test.describe("Session lifecycle", () => {
 
   test("triggers a tool call (chat-tool card surfaces)", async ({
     page,
-    admin,
     tempProject,
   }) => {
     test.slow();
-    await loginAs(page, admin.token);
     await openProject(page, tempProject.path);
 
     // bypassPermissions lets the agent invoke shell tools without prompting,
@@ -80,11 +76,9 @@ test.describe("Session lifecycle", () => {
 
   test("interrupt mid-turn surfaces interrupted system message", async ({
     page,
-    admin,
     tempProject,
   }) => {
     test.slow();
-    await loginAs(page, admin.token);
     await openProject(page, tempProject.path);
 
     // A long-running prompt is essential: the InputArea's interrupt button

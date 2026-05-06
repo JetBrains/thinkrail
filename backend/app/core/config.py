@@ -31,7 +31,7 @@ class ServerSettings(BaseSettings):
     )
 
     backend_port: int = 8000
-    backend_host: str = "0.0.0.0"
+    backend_host: str = "127.0.0.1"
 
 
 def get_data_dir() -> Path:

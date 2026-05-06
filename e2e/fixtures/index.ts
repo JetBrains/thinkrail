@@ -1,13 +1,10 @@
 /**
- * Combined Playwright `test` fixture: admin user + temporary project directory.
+ * Shared Playwright `test` fixture for e2e specs.
  *
- * Spec files should import from this module instead of pulling individual fixtures
- * so each spec gets the same defaults.
+ * Currently only the `tempProject` fixture (a fresh `os.tmpdir()` project
+ * directory) is bundled here. Bonsai is single-user / localhost-only —
+ * there is no auth fixture, no admin user, no token.
  */
 
-import { mergeTests } from "@playwright/test";
-import { test as adminTest } from "./admin";
-import { test as projectTest } from "./project";
-
-export const test = mergeTests(adminTest, projectTest);
+export { test } from "./project";
 export { expect } from "@playwright/test";

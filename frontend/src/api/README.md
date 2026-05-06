@@ -57,8 +57,6 @@ frontend/src/api/
 │   ├── sessions.ts      # session/* methods
 │   ├── board.ts         # board/* methods (meta-tickets, kanban)
 │   ├── settings.ts      # settings/* methods (project config, models, skills)
-│   ├── admin.ts         # admin/* methods (user management)
-│   ├── user.ts          # user/* methods (preferences, auth)
 │   ├── trash.ts         # trash/* methods (soft-delete, restore)
 │   └── subsessions.ts   # subsession/* methods (sub-agent orchestration)
 └── hooks/

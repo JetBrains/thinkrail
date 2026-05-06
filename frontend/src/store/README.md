@@ -49,9 +49,7 @@ frontend/src/store/
 ├── connectionStore.ts     # WebSocket connection state
 ├── inputDraftStore.ts     # Per-session input text drafts
 ├── messageHistoryStore.ts # Input message history (up/down arrow)
-├── tokenStore.ts          # Auth token management
 ├── visStore.ts            # Visualization dashboard state
-├── prefSync.ts            # Preference sync helper (sends patches to backend)
 ├── serverInfoStore.ts     # Server info (version, capabilities)
 └── wireEvents.ts          # RPC event → store action wiring
 ```
@@ -67,14 +65,13 @@ frontend/src/store/
 │   useNotificationStore()  useFileStore()  useBoardStore() │
 │   useSettingsStore()  useConnectionStore()  useVisStore() │
 ├──────────────────────────────────────────────────────────┤
-│  Zustand Stores (14 stores)                               │
+│  Zustand Stores (13 stores)                               │
 │    specStore       sessionStore    uiStore                │
 │    boardStore      settingsStore   notificationStore      │
 │    fileStore       costStore       trashStore             │
-│    connectionStore visStore        tokenStore             │
+│    connectionStore visStore                               │
 │    inputDraftStore messageHistoryStore                    │
 │    + serverInfoStore (server info)                        │
-│    + prefSync (helper, not a store)                       │
 ├──────────────────────────────────────────────────────────┤
 │  API Client (data source)                                 │
 │    RPC responses → store actions                          │

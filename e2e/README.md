@@ -67,11 +67,10 @@ e2e/
   globalSetup.ts        # fail-fast health check before any spec runs
   playwright.config.ts  # serial chromium config
   fixtures/
-    admin.ts            # `admin` fixture: creates a fresh user via `app.cli`
     project.ts          # `tempProject` fixture: makes/cleans an `os.tmpdir()` dir
-    index.ts            # combined `test` export consumed by every spec
+    index.ts            # `test` export consumed by every spec
   helpers/
-    login.ts            # loginAs, loginViaToken, loginAsExpectingError, openProject
+    project.ts          # openProject(page, path)
     session.ts          # startSessionWithModel, startSessionConnectivityCheck,
                         #   waitForSessionActivity, waitForIdle, endSession
     selectors.ts        # central CSS/role selectors for every screen
@@ -80,10 +79,14 @@ e2e/
     *.spec.ts           # one spec per surface area
 ```
 
+Bonsai is single-user / localhost-only — there's no auth fixture, no admin
+user, no token. Every spec opens a fresh `tempProject` and goes straight to
+`openProject(page, tempProject.path)`.
+
 ## Adding a new spec
 
 1. Create `tests/<feature>.spec.ts` and import from `../fixtures` (this gives
-   you `test`, `expect`, the `admin` fixture, and `tempProject`).
+   you `test`, `expect`, and the `tempProject` fixture).
 2. Use the helpers in `helpers/` rather than raw selectors so churn is absorbed
    in one place. Add new selectors to `helpers/selectors.ts`.
 3. Seed any `.bonsai/` state through the seed helpers (`seedProject`,
@@ -126,8 +129,7 @@ spec — directly or transitively — except where noted as a documented gap.
 
 | Component | Primary spec(s) | Notes |
 |-----------|------------------|-------|
-| AdminPanel | `admin-panel.spec.ts` | List/create/revoke users; non-admin denial |
-| AppShell (Header, StatusBar, ThemeSwitcher, ServerInfoDialog, TokenDialog) | `app-shell.spec.ts` | Theme toggle, server info, token redaction |
+| AppShell (Header, StatusBar, ThemeSwitcher, ServerInfoDialog) | `app-shell.spec.ts` | Theme toggle, server info |
 | AppShell/LeftPanel, ResizeHandle | `settings.spec.ts`, `_smoke.spec.ts` | Alt+B toggle persists; status bar visible |
 | BoardView (KanbanColumn, MetaTicketBoard/Card, CreateTicketModal, BoardCardContextMenu, TaskBoard/Card) | `board.spec.ts` | Create + move-via-context-menu + reload |
 | ChatStream (InputArea, AssistantMessage, ToolCallCard, ErrorBanner, SessionStatusLine, DiffCard, ApprovalCard, etc.) | `session-lifecycle.spec.ts`, `session-history.spec.ts`, `new-session-model.spec.ts` | Real LLM; tool-call card appears |
@@ -137,7 +139,6 @@ spec — directly or transitively — except where noted as a documented gap.
 | FileTree | `file-explorer.spec.ts` | Expand subdir, click leaf |
 | FileViewer | `file-explorer.spec.ts`, `spec-tree.spec.ts`, `settings.spec.ts` | Markdown + non-spec text + settings.json |
 | GoalFilePanel | (gap) | Renders only for goal-mode sessions; documented gap |
-| LoginScreen | `setup-and-auth.spec.ts` | Valid + invalid token paths |
 | MarkdownEditor | `spec-editor.spec.ts` | Edit body, save, preview updates |
 | MetaTicketDetail (TicketDescriptionView, TicketInfo, TicketProgressBar) | `meta-ticket.spec.ts`, `plan-and-drafts.spec.ts` | Edit description, link spec, plan/drafts |
 | Notifications/ToastContainer | (gap) | Specs assert against `ChatStream`'s `ErrorBanner`; the toast renderer itself has no spec — documented gap |
@@ -147,7 +148,6 @@ spec — directly or transitively — except where noted as a documented gap.
 | SessionManager | `session-history.spec.ts` | Modal opens, continue button |
 | SessionPanel (SessionTabBar, StickyContextBar, WelcomeScreen) | `session-lifecycle.spec.ts`, every spec that opens an empty project | Routing between welcome/session views |
 | SessionPanel/NewProjectScreen | `project-init.spec.ts` | First-time init flow |
-| SetupScreen | `setup-and-auth.spec.ts` | Mocked `/api/setup` to force `needsSetup=true` |
 | SpecTree | `spec-tree.spec.ts`, `spec-editor.spec.ts`, `trash-and-palette.spec.ts` | Tree expand, click, palette spec-picker |
 | TrashModal | `trash-and-palette.spec.ts` | Restore a seeded trashed plan |
 | `shared/`, `ui/` | (transitive) | Utility primitives — covered through every spec that renders them |
@@ -169,8 +169,3 @@ directory) and seeds `.bonsai/` state on disk before driving the UI. No spec
 depends on the source repo's working state — the previous `REPO_ROOT`-pinned
 `new-session-model.spec.ts` was migrated to `tempProject` because leftover
 session state in the dev project produced flaky agent startup.
-
-Exceptions that don't open a project at all:
-
-- `setup-and-auth.spec.ts` — mocks `/api/setup/*` at the network layer to force
-  `needsSetup=true` without touching the live database; never opens a project.

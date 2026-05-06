@@ -378,9 +378,6 @@ export function wireEvents(client: RpcClient): Unsubscribe {
     }),
   );
 
-  // Fetch initial connection list after wiring
-  useConnectionStore.getState().fetchConnections();
-
   return () => unsubs.forEach((u) => u());
 }
 

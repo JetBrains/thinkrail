@@ -168,7 +168,7 @@ class SpecIndex:
     ``~/.bonsai/indexes/<project-hash>/index.db``.  Use
     :func:`app.core.config.get_index_path` to compute the path.
 
-    Follows the same lifecycle pattern as :class:`ServerStore`:
+    Follows the same lifecycle pattern as :class:`AppStore`:
     ``open()`` → use → ``close()``, or use as an async context manager.
     """
 

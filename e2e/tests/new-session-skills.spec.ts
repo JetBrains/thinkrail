@@ -1,7 +1,7 @@
 import { readdirSync, statSync } from "node:fs";
 import { resolve } from "node:path";
 import { test, expect } from "../fixtures";
-import { loginAs, openProject } from "../helpers/login";
+import { openProject } from "../helpers/project";
 import { newSession } from "../helpers/selectors";
 
 /**
@@ -30,7 +30,6 @@ function expectedSkillIds(): string[] {
 
 test("new-session skill picker renders every plugin skill", async ({
   page,
-  admin,
   tempProject,
 }) => {
   const expected = expectedSkillIds();
@@ -39,7 +38,6 @@ test("new-session skill picker renders every plugin skill", async ({
     "expected at least one skill directory under claude-plugin/skills/",
   ).toBeGreaterThan(0);
 
-  await loginAs(page, admin.token);
   await openProject(page, tempProject.path);
 
   await page.locator(newSession.newButton).click();

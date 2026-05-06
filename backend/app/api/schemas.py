@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-from datetime import datetime
-
 from pydantic import BaseModel
 
 
@@ -81,40 +79,6 @@ class DirListResponse(BaseModel):
 class FolderPickResponse(BaseModel):
     path: str | None = None
     error: str | None = None
-
-
-# ── user.py ──────────────────────────────────────────────────────────────────
-
-class UserProfileResponse(BaseModel):
-    userId: str
-    displayName: str
-    isAdmin: bool
-    createdAt: datetime | None
-
-
-class RecentProjectResponse(BaseModel):
-    path: str
-    name: str
-    lastOpened: datetime | None
-
-
-class KnownProjectResponse(BaseModel):
-    path: str
-    name: str
-    registeredAt: datetime | None
-    lastOpenedAt: datetime | None
-
-
-# ── setup.py ─────────────────────────────────────────────────────────────────
-
-class SetupStatusResponse(BaseModel):
-    needsSetup: bool
-
-
-class SetupResponse(BaseModel):
-    userId: str
-    displayName: str
-    token: str
 
 
 # ── server_info.py ──────────────────────────────────────────────────────────

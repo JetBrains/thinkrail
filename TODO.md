@@ -3,6 +3,8 @@
 Post-implementation alignment items from the multi-client EventBus refactor (2026-04-12).
 All three phases are implemented and tested. These items track spec/doc alignment and polish.
 
+> **Historical note (2026-05-04):** Several items below describe the token-based auth layer (`bonsai_token`, `TokenDialog`, mobile `?token=` parameter, token-rejection tests). That entire layer was **removed** by the auth-removal cleanup (`mt_a939c33a`). The checked-off items are kept as a log of what was once built; do not implement against them.
+
 ## Spec Alignment (stale docs referencing old single-client patterns)
 
 - [x] **`.bonsai/implementation_tasks/rpc/feature_rpc_server.md`** — Updated to describe multi-client EventBus, per-project watcher, ClientConnection registration.

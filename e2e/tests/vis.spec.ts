@@ -1,5 +1,5 @@
 import { test, expect } from "../fixtures";
-import { loginAs, openProject } from "../helpers/login";
+import { openProject } from "../helpers/project";
 import { buildSpec, seedProject } from "../helpers/specs";
 import { contextPanel, visTab } from "../helpers/selectors";
 
@@ -12,7 +12,6 @@ import { contextPanel, visTab } from "../helpers/selectors";
 test.describe("Visualization dashboard", () => {
   test("toggles the dashboard pin and renders coverage", async ({
     page,
-    admin,
     tempProject,
   }) => {
     // Seed a single spec so the vis service has something non-empty to compute
@@ -182,7 +181,6 @@ test.describe("Visualization dashboard", () => {
       ws.on("framereceived", onReceived);
     });
 
-    await loginAs(page, admin.token);
     await openProject(page, tempProject.path);
 
     // The right-side ContextPanel exposes a chart-icon button that pins the

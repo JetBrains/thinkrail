@@ -23,14 +23,6 @@ class TestEnsureMetaFile:
         assert "default_model" in data
         assert (bonsai_dir / "settings.json").is_file()
 
-    def test_creates_users_when_missing(self, tmp_path: Path) -> None:
-        bonsai_dir = tmp_path / ".bonsai"
-        content = ensure_meta_file(bonsai_dir, "users.json")
-        data = json.loads(content)
-        assert data["users"] == []
-        assert data["allowAnonymous"] is True
-        assert (bonsai_dir / "users.json").is_file()
-
     def test_returns_existing_content(self, tmp_path: Path) -> None:
         bonsai_dir = tmp_path / ".bonsai"
         bonsai_dir.mkdir()
@@ -99,8 +91,7 @@ class TestEnsureProject:
         ensure_project(tmp_path)
         bonsai_dir = tmp_path / ".bonsai"
         assert (bonsai_dir / "settings.json").is_file()
-        assert (bonsai_dir / "users.json").is_file()
-        # registry.json is no longer created
+        # Legacy meta-files are no longer created (single-user model)
         assert not (bonsai_dir / "registry.json").exists()
 
     def test_creates_all_subdirs(self, tmp_path: Path) -> None:
@@ -116,4 +107,3 @@ class TestEnsureProject:
         (bonsai_dir / "settings.json").write_text(custom_settings, encoding="utf-8")
         ensure_project(tmp_path)
         assert (bonsai_dir / "settings.json").read_text(encoding="utf-8") == custom_settings
-        assert (bonsai_dir / "users.json").is_file()

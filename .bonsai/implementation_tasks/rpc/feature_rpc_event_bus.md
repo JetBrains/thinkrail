@@ -71,11 +71,8 @@ Dataclass tracking a single WebSocket connection:
 ### `current_conn_id` context var
 Set during RPC dispatch in `server.py` so handlers can identify the calling connection without changing method signatures.
 
-### Authentication (`auth.py`)
-- `generate_token()` — creates `bns_*` tokens
-- `load_users(project_path)` — reads `.bonsai/users.json`
-- `authenticate(project_path, token)` — returns `Identity` or `None`
-- `ANONYMOUS` sentinel for unauthenticated access (when `allowAnonymous: true` or no users file)
+### Authentication
+*Removed by the auth-removal cleanup (`mt_a939c33a`). Bonsai is single-user, localhost-only — there is no `auth.py`, no token generation, no per-project users file. `ClientConnection.user_id` / `display_name` are hardcoded to `"local"` / `"Local"` so the bus's `connection/didJoin` / `connection/didLeave` events still carry stable identifiers across multi-tab UX.*
 
 ## Multi-Client Sync Events
 

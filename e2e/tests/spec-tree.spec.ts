@@ -1,5 +1,5 @@
 import { test, expect } from "../fixtures";
-import { loginAs, openProject } from "../helpers/login";
+import { openProject } from "../helpers/project";
 import { buildSpec, seedProject } from "../helpers/specs";
 import { fileViewer, specTree } from "../helpers/selectors";
 
@@ -11,7 +11,6 @@ import { fileViewer, specTree } from "../helpers/selectors";
 test.describe("SpecTree", () => {
   test("renders seeded specs and previews one on click", async ({
     page,
-    admin,
     tempProject,
   }) => {
     seedProject(tempProject.path, [
@@ -38,7 +37,6 @@ test.describe("SpecTree", () => {
       },
     ]);
 
-    await loginAs(page, admin.token);
     await openProject(page, tempProject.path);
 
     // Tree lists the seeded specs (poll — the index rebuilds asynchronously
@@ -66,14 +64,12 @@ test.describe("SpecTree", () => {
 
   test("empty project shows the empty-state placeholder", async ({
     page,
-    admin,
     tempProject,
   }) => {
     // Seed a `.bonsai/` so the picker accepts it as a valid project, but
     // no spec files yet.
     seedProject(tempProject.path, []);
 
-    await loginAs(page, admin.token);
     await openProject(page, tempProject.path);
 
     await expect(page.locator(specTree.empty)).toBeVisible({ timeout: 30_000 });

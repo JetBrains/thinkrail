@@ -27,9 +27,9 @@ Defines the SQLite index schema, rebuild/recovery strategy, and the IndexCoordin
 
 **File:** `~/.bonsai/indexes/<project-hash>/index.db` (outside the project repo, in the server data directory)
 
-**Library:** `aiosqlite` (consistent with existing `server_store.py`)
+**Library:** `aiosqlite` (consistent with existing `app_store.py`)
 
-**PRAGMAs** (same as server store):
+**PRAGMAs** (same as app store):
 ```sql
 PRAGMA journal_mode = WAL;
 PRAGMA synchronous = NORMAL;

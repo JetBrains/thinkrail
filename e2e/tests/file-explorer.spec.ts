@@ -1,7 +1,7 @@
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { test, expect } from "../fixtures";
-import { loginAs, openProject } from "../helpers/login";
+import { openProject } from "../helpers/project";
 import { seedProject } from "../helpers/specs";
 import { fileTree, fileViewer, leftPanel } from "../helpers/selectors";
 
@@ -18,7 +18,6 @@ import { fileTree, fileViewer, leftPanel } from "../helpers/selectors";
 test.describe("FileTree + FileViewer", () => {
   test("renders seeded files and previews a non-spec file via REST", async ({
     page,
-    admin,
     tempProject,
   }) => {
     seedProject(tempProject.path, []);
@@ -35,7 +34,6 @@ test.describe("FileTree + FileViewer", () => {
       "utf8",
     );
 
-    await loginAs(page, admin.token);
     await openProject(page, tempProject.path);
 
     // Switch to the Files tab in the left panel.
@@ -66,7 +64,6 @@ test.describe("FileTree + FileViewer", () => {
 
   test("collapse-all hides expanded directories", async ({
     page,
-    admin,
     tempProject,
   }) => {
     seedProject(tempProject.path, []);
@@ -77,7 +74,6 @@ test.describe("FileTree + FileViewer", () => {
       "utf8",
     );
 
-    await loginAs(page, admin.token);
     await openProject(page, tempProject.path);
 
     await page.locator(leftPanel.filesTab).click();

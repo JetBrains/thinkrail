@@ -1,12 +1,11 @@
 /**
  * Tracks connected clients for presence indicators (multi-client).
  *
- * Populated by connection/didJoin and connection/didLeave notifications,
- * with initial state fetched via connection/list RPC on connect.
+ * Populated entirely by connection/didJoin and connection/didLeave
+ * notifications — there is no connection/list RPC in the single-user model.
  */
 
 import { create } from "zustand";
-import { getClient } from "@/api/index.ts";
 
 export interface ConnectedClient {
   connId: string;
@@ -17,8 +16,6 @@ export interface ConnectedClient {
 
 interface ConnectionStore {
   clients: ConnectedClient[];
-  /** Fetch the current connection list from the backend. */
-  fetchConnections: () => Promise<void>;
   /** Handle a new client joining. */
   onClientJoin: (client: ConnectedClient) => void;
   /** Handle a client leaving. */
@@ -27,15 +24,6 @@ interface ConnectionStore {
 
 export const useConnectionStore = create<ConnectionStore>((set) => ({
   clients: [],
-
-  fetchConnections: async () => {
-    try {
-      const result = await getClient().request<ConnectedClient[]>("connection/list");
-      set({ clients: result });
-    } catch {
-      // Connection not ready yet — will be populated by events
-    }
-  },
 
   onClientJoin: (client) => {
     set((s) => {

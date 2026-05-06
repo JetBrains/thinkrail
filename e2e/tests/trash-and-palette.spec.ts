@@ -1,7 +1,7 @@
 import { existsSync } from "node:fs";
 import { join } from "node:path";
 import { test, expect } from "../fixtures";
-import { loginAs, openProject } from "../helpers/login";
+import { openProject } from "../helpers/project";
 import { seedTrashedPlan } from "../helpers/board";
 import { buildSpec, seedProject } from "../helpers/specs";
 import { palette, specTree, trashModal } from "../helpers/selectors";
@@ -17,14 +17,12 @@ import { palette, specTree, trashModal } from "../helpers/selectors";
 test.describe("CommandPalette + TrashModal", () => {
   test("Alt+K opens palette and 'Open Trash' restores a trashed plan", async ({
     page,
-    admin,
     tempProject,
   }) => {
     seedProject(tempProject.path, []);
     const ticketId = "mt_trashed01";
     seedTrashedPlan(tempProject.path, { ticketId });
 
-    await loginAs(page, admin.token);
     await openProject(page, tempProject.path);
 
     // The app's `isMod` is `e.altKey` on non-Mac (and Playwright's Chromium
@@ -69,7 +67,6 @@ test.describe("CommandPalette + TrashModal", () => {
 
   test("Alt+K palette navigates to a seeded spec", async ({
     page,
-    admin,
     tempProject,
   }) => {
     seedProject(tempProject.path, [
@@ -85,7 +82,6 @@ test.describe("CommandPalette + TrashModal", () => {
       },
     ]);
 
-    await loginAs(page, admin.token);
     await openProject(page, tempProject.path);
 
     // Wait for the spec to be indexed before opening the palette — the

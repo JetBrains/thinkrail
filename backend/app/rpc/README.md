@@ -331,7 +331,7 @@ graph TD
 
 | Export | Type / Signature | Description |
 | --- | --- | --- |
-| `ClientConnection` | dataclass | Tracks conn_id, user_id, display_name, ws, project_path, subscriptions. |
+| `ClientConnection` | dataclass | Tracks conn_id, user_id, display_name, ws, project_path, subscriptions. In single-user mode `user_id` is fixed to `"local"` and `display_name` to `"Local"` — kept on the dataclass to give multi-tab `connection/didJoin` / `didLeave` events stable identifiers. |
 | `current_conn_id` | `ContextVar[str]` | Set by dispatch loop so RPC handlers know which connection is calling. |
 
 ### notifications.py
@@ -433,24 +433,6 @@ NotifyCallable = Callable[[str, dict, str | None], Awaitable[None]]
 
 **Dependencies:** core/settings, agent/model_registry
 
-### methods/admin.py
-
-**Responsibility:** jsonrpcserver handlers for admin operations.
-
-**Dependencies:** core/server_store
-
-### methods/auth.py
-
-**Responsibility:** jsonrpcserver handlers for authentication (token validation, user lookup).
-
-**Dependencies:** core/server_store
-
-### methods/user.py
-
-**Responsibility:** jsonrpcserver handlers for `user/*` methods (preferences, profile).
-
-**Dependencies:** core/server_store
-
 ### methods/subsessions.py
 
 **Responsibility:** jsonrpcserver handlers for subsession (child agent session) management.
@@ -549,7 +531,7 @@ The file watcher is **per-project, reference-counted**. It starts when the first
 
 ## Known Limitations
 
-- **Authentication implemented:** Token-based auth (`bns_` tokens) via `.bonsai/users.json` and `server_store.py`. WebSocket connections and REST API requests require valid tokens. Admin CLI manages users.
+- **No authentication:** Bonsai is single-user and localhost-only. The WebSocket handshake accepts a `?project=<path>` query without any token check. There is no concept of users, tokens, or admin roles. (See [Storage Architecture](../../../.bonsai/design_docs/STORAGE_ARCHITECTURE.md) for the rationale.)
 - **Broadcast-all for sessions:** All connections receive all session events for the project. Per-client session filtering is available via `session/subscribe` and `session/unsubscribe`.
 - **Ring buffer capacity:** Replay buffer holds 200 events per topic. Events older than that are lost from the buffer (still persisted to `.events.jsonl` on disk).
 - **Pending agent futures on disconnect:** If all clients disconnect mid-agent-run, agent events are published to the bus with no subscribers (silently dropped). Events are still persisted to disk. Pending `asyncio.Future` objects in `tracker.py` will time out per the configured deadline.

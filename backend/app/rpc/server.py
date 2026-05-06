@@ -15,7 +15,6 @@ from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from jsonrpcserver import async_dispatch
 from watchfiles import Change
 
-from app.rpc.auth import authenticate
 from app.rpc.bus import bus
 from app.rpc.connections import ClientConnection
 from app.rpc.context import current_conn_id
@@ -71,21 +70,6 @@ from app.rpc.methods.settings import (
     models_status,
     refresh_models,
     update_settings,
-)
-from app.rpc.methods.auth import create_token, list_connections, list_users
-from app.rpc.methods.admin import (
-    admin_create_user,
-    admin_delete_user,
-    admin_list_users,
-    admin_remove_admin,
-    admin_revoke_token,
-    admin_set_admin,
-)
-from app.rpc.methods.user import (
-    get_preferences,
-    get_profile,
-    get_recent_projects,
-    update_preferences,
 )
 from app.rpc.methods.subsessions import (
     approve_summary as subsession_approve_summary,
@@ -216,19 +200,6 @@ METHODS = {
     "models/refresh": refresh_models,
     "models/status": models_status,
     "skills/list": list_skills,
-    "auth/createToken": create_token,
-    "auth/listUsers": list_users,
-    "connection/list": list_connections,
-    "admin/listUsers": admin_list_users,
-    "admin/createUser": admin_create_user,
-    "admin/deleteUser": admin_delete_user,
-    "admin/setAdmin": admin_set_admin,
-    "admin/removeAdmin": admin_remove_admin,
-    "admin/revokeToken": admin_revoke_token,
-    "user/getProfile": get_profile,
-    "user/getPreferences": get_preferences,
-    "user/updatePreferences": update_preferences,
-    "user/getRecentProjects": get_recent_projects,
 }
 
 # Per-project service container (survives WebSocket reconnects).
@@ -249,7 +220,6 @@ def _bind_methods(
     board_service: BoardService,
     model_registry: ModelRegistry,
     trash_service: "TrashService | None" = None,
-    server_store: "ServerStore | None" = None,
 ) -> dict:
     """Bind each handler in METHODS to its owning service via partial."""
     bound = {}
@@ -268,38 +238,34 @@ def _bind_methods(
             bound[name] = partial(handler, config)
         elif name.startswith("models/"):
             bound[name] = partial(handler, model_registry)
-        elif name.startswith("auth/") or name.startswith("connection/") or name.startswith("admin/"):
-            bound[name] = partial(handler, server_store)
-        elif name.startswith("user/") and server_store:
-            bound[name] = partial(handler, server_store)
         else:
             bound[name] = partial(handler, agent_service)
     return bound
 
 
-def register_routes(app: FastAPI, server_store: "ServerStore | None" = None) -> None:
+def register_routes(app: FastAPI, app_store: "AppStore | None" = None) -> None:
     """Register the ``/ws`` WebSocket endpoint on the FastAPI app.
 
     Each connection specifies a project directory via the ``project``
     query parameter.  Multiple connections are supported simultaneously.
 
-    *server_store* is the server-wide SQLite store for auth and user
-    data.  When ``None`` (tests / legacy), a temporary in-memory store
-    is created.
+    *app_store* is the app-wide SQLite store used to track known
+    projects.  When ``None`` (tests / legacy), a temporary store is
+    created lazily inside ``~/.bonsai``.
     """
-    from app.core.server_store import ServerStore as _SS
+    from app.core.app_store import AppStore as _AS
 
-    _server_store = server_store
+    _app_store = app_store
 
     @app.websocket("/ws")
     async def ws_endpoint(websocket: WebSocket) -> None:
-        nonlocal _server_store
+        nonlocal _app_store
         # Lazy-init for test scenarios where no store was provided
-        if _server_store is None:
-            _server_store = _SS(Path.home() / ".bonsai")
+        if _app_store is None:
+            _app_store = _AS(Path.home() / ".bonsai")
         # Ensure the store is open (idempotent if already open)
-        if not _server_store.is_open:
-            await _server_store.open()
+        if not _app_store.is_open:
+            await _app_store.open()
 
         # Read project path from query params
         project_param = websocket.query_params.get("project")
@@ -317,24 +283,12 @@ def register_routes(app: FastAPI, server_store: "ServerStore | None" = None) -> 
             )
             return
 
-        # Authenticate via token (two-tier: server-wide SQLite + project fallback)
-        token_param = websocket.query_params.get("token")
-        identity = await authenticate(_server_store, project_path, token_param)
-        if identity is None:
-            await websocket.close(
-                code=4003,
-                reason="Invalid or missing authentication token",
-            )
-            return
-
-        # Register project in server-wide store and track user's recent projects
+        # Register project in app-wide store (single-user model — no auth)
         project_name = project_path.name
         try:
-            await _server_store.register_project(str(project_path), project_name)
-            await _server_store.update_project_last_opened(str(project_path))
-            await _server_store.add_recent_project(identity.user_id, str(project_path))
+            await _app_store.register_project(str(project_path), project_name)
         except Exception:
-            logger.warning("Failed to update server store on connect", exc_info=True)
+            logger.warning("Failed to update app store on connect", exc_info=True)
 
         # Accept immediately — within frontend's 5s connectTimeout
         await websocket.accept()
@@ -350,8 +304,8 @@ def register_routes(app: FastAPI, server_store: "ServerStore | None" = None) -> 
         notify = make_notify(websocket)
         conn = ClientConnection(
             conn_id=conn_id,
-            user_id=identity.user_id,
-            display_name=identity.display_name,
+            user_id="local",
+            display_name="Local",
             ws=websocket,
             notify=notify,
             project_path=key,
@@ -402,7 +356,6 @@ def register_routes(app: FastAPI, server_store: "ServerStore | None" = None) -> 
             bound_methods = _bind_methods(
                 config, ctx.spec_service, ctx.agent_service, ctx.vis_service,
                 ctx.board_service, ctx.model_registry, ctx.trash_service,
-                server_store=_server_store,
             )
 
             # Notify existing clients BEFORE subscribing the new one,

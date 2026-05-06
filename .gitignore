@@ -68,4 +68,4 @@ docs/
 POST.md
 
 .bonsai/trash/
-.bonsai/users.json
+/.claude/scheduled_tasks.lock

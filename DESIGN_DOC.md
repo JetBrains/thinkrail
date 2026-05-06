@@ -188,18 +188,18 @@ graph TD
 backend/
 ├── app/
 │   ├── main.py              # FastAPI app entry point
-│   ├── cli.py               # Admin CLI (create-user, list-users, set-admin)
+│   ├── cli.py               # Schema export CLI (export-schema, export-ws-schema)
 │   ├── api/                 # REST API Layer
-│   │   ├── deps.py          # Shared dependencies (auth, project resolution)
+│   │   ├── deps.py          # Shared dependencies (project resolution, AppStore access)
 │   │   ├── errors.py        # HTTP error handlers
 │   │   ├── schemas.py       # Request/response schemas
-│   │   └── routers/         # files.py, fs.py, project.py, server_info.py, setup.py, user.py
+│   │   └── routers/         # files.py, fs.py, project.py, projects_known.py, server_info.py
 │   ├── rpc/                 # JSON-RPC Layer
 │   │   ├── server.py        # WebSocket + JSON-RPC dispatcher
 │   │   ├── bus.py           # EventBus — pub/sub for multi-client notifications
 │   │   ├── connections.py   # ClientConnection dataclass, conn_id context var
 │   │   ├── notifications.py # Per-connection notify factory
-│   │   └── methods/         # specs, agents, sessions, board, trash, vis, settings, admin, auth, user, subsessions
+│   │   └── methods/         # specs, agents, sessions, board, trash, vis, settings, subsessions
 │   ├── spec/                # Spec Domain Module
 │   │   ├── models.py        # Spec, SpecEntry, Link models
 │   │   ├── service.py       # CRUD operations (async, backed by SQLite index)
@@ -243,7 +243,7 @@ backend/
 │       ├── fileio.py        # File system operations (read, write, delete files/dirs)
 │       ├── watcher.py       # Async file change watching
 │       ├── project.py       # .bonsai/ directory bootstrap and meta-file management
-│       ├── server_store.py  # SQLite-backed user/token store
+│       ├── app_store.py     # SQLite-backed known-projects registry and app-level settings
 │       └── network_info.py  # LAN IP / hostname detection for mobile discovery
 ├── tests/
 │   ├── test_spec/
@@ -276,7 +276,7 @@ packaging/                   # Portable executable build infrastructure
 | RPC | [backend/app/rpc/README.md](backend/app/rpc/README.md) | WebSocket endpoint, JSON-RPC dispatch, notifications |
 | Board | [backend/app/board/README.md](backend/app/board/README.md) | Meta-ticket and plan management, spec drafts/patches, status state machine |
 | Trash | [backend/app/trash/README.md](backend/app/trash/README.md) | Soft-delete service for sessions, specs, tickets, plans, drafts, patches |
-| API | backend/app/api/ | REST API layer: project validation/init, file ops, server info, user mgmt, setup |
+| API | backend/app/api/ | REST API layer: project validation/init, file ops, server info, known-projects registry |
 | Vis | [backend/app/vis/README.md](backend/app/vis/README.md) | Dashboard state computation: spec coverage, tasks, lint, recommendations |
 | Packaging | [packaging/README.md](packaging/README.md) | Portable executable build infrastructure: PyInstaller, CI/CD |
 | Frontend | [frontend/README.md](frontend/README.md) | React SPA, UI components, state management |
@@ -294,7 +294,6 @@ packaging/                   # Portable executable build infrastructure
 | Skill Session Start | [SKILL_SESSION_START_DESIGN.md](.bonsai/design_docs/SKILL_SESSION_START_DESIGN.md) | Session creation with skill context and spec pre-loading |
 | Concurrency Orchestration | [CONCURRENCY_ORCHESTRATION_DESIGN.md](.bonsai/design_docs/CONCURRENCY_ORCHESTRATION_DESIGN.md) | Multi-step plan execution with agent session orchestration |
 | Storage Architecture | [STORAGE_ARCHITECTURE.md](.bonsai/design_docs/STORAGE_ARCHITECTURE.md) | File-based storage layout for sessions, plans, tickets, trash |
-| Admin System | [ADMIN_SYSTEM_DESIGN.md](.bonsai/design_docs/ADMIN_SYSTEM_DESIGN.md) | Token-based auth, user management, admin CLI |
 
 ## Frontend (TypeScript/JavaScript)
 
@@ -403,7 +402,7 @@ Full protocol reference (method tables, params, message shapes): **[RPC Module s
 | State management | Zustand (frontend) | 1KB, hook-based, no boilerplate. Stores split by domain for isolation. |
 | Agent SDK integration | Isolated in `runner.py` only | Single swap point for SDK versions. Service and tracker are SDK-agnostic. |
 | File change tracking | Filesystem watcher, not tool call interception | Ground truth — catches all file changes regardless of source (agent, user, external tool). Same validation pipeline for all changes. |
-| Multi-client, localhost | Token-based auth (`bns_` tokens), `.bonsai/users.json`, admin CLI. Multiple browser/mobile clients share sessions via EventBus pub/sub. | Local-network tool supporting multiple devices (desktop + mobile). Auth prevents accidental unauthorized access on shared networks. |
+| Single-user, localhost | No authentication; tokenless WebSocket and REST. Multi-tab UX is supported (a single user opening multiple browser tabs) via EventBus pub/sub, but there are no accounts, tokens, or admin roles. | `GOAL&REQUIREMENTS.md` constraint: localhost-only single-user developer tool. See [Storage Architecture](.bonsai/design_docs/STORAGE_ARCHITECTURE.md). |
 
 **Design Philosophy:** Start simple, add complexity only when proven necessary. Each module has one clear responsibility. The code should be small enough to read end-to-end. Prefer explicit wiring over implicit magic.
 

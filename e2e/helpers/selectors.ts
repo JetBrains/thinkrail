@@ -5,12 +5,6 @@
  * instead of chasing it across every spec.
  */
 
-export const loginScreen = {
-  tokenInput: 'input[placeholder="bns_..."]',
-  submitButton: { role: "button", name: "Login" } as const,
-  errorMessage: ".login-error",
-};
-
 export const projectPicker = {
   pathInput: 'input[placeholder="/home/user/my-project"]',
   openButton: { role: "button", name: "Open Project" } as const,
@@ -83,43 +77,12 @@ export const statusBar = {
   sessionsButton: "button.status-sessions-btn",
 };
 
-export const setupScreen = {
-  userIdInput: 'input[placeholder="User ID (e.g. danya)"]',
-  nameInput: 'input[placeholder="Display name"]',
-  submitButton: { role: "button", name: /Create Admin/ } as const,
-  successSubtitle: /Admin account created/,
-  tokenValue: ".setup-token-value",
-  continueButton: { role: "button", name: "Continue" } as const,
-};
-
 export const header = {
   themeButton: 'button.header-btn[title="Switch theme"]',
   themeOption: ".theme-option",
   serverInfoButton: 'button.header-btn[title="Server connection info"]',
-  tokenButton: ".header-btn.header-token-active, button.header-btn[title*='token']",
-  adminButton: { role: "button", name: "Admin" } as const,
   newButton: { role: "button", name: /\+ New/ } as const,
   settingsButton: 'button.header-settings-btn',
-};
-
-export const adminPanel = {
-  panel: ".admin-panel",
-  userIdInput: 'input.admin-input[placeholder="User ID"]',
-  nameInput: 'input.admin-input[placeholder="Display name"]',
-  adminCheckbox: '.admin-checkbox-label input[type="checkbox"]',
-  createButton: { role: "button", name: "Create" } as const,
-  tokenBanner: ".admin-token-banner",
-  tokenValue: ".admin-token-value",
-  userRow: ".admin-user-row",
-  userId: ".admin-user-id",
-  deleteButton: { role: "button", name: "Delete" } as const,
-  errorMessage: ".admin-error",
-};
-
-export const tokenDialog = {
-  input: ".token-dialog-input",
-  saveButton: { role: "button", name: "Save" } as const,
-  cancelButton: { role: "button", name: "Cancel" } as const,
 };
 
 export const serverInfoDialog = {

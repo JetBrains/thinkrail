@@ -86,7 +86,7 @@ The Frontend module is a React/TypeScript single-page application that provides 
 | `src/styles/` | CSS custom properties, dark/light themes | [THEMING](ui-specs/THEMING.md) |
 | `src/types/` | Shared TypeScript interfaces (spec, agent, session, RPC). Includes **generated** `ws-events.ts` from backend Pydantic models. | — |
 | `src/api/generated.ts` | **Generated** — REST API TypeScript types from backend OpenAPI schema. DO NOT EDIT. | — |
-| `src/services/` | REST API clients (files, fs, project, serverInfo, setup, user) using generated types | — |
+| `src/services/` | REST API clients (files, fs, project, projects, serverInfo) using generated types. `services/projects.ts` exposes the tokenless `/api/projects/known` GET/POST/DELETE for the project picker. | — |
 | `src/utils/` | Formatting, markdown, keyboard shortcuts | — |
 
 ## Public Interface

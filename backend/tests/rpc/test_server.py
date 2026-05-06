@@ -12,68 +12,32 @@ from starlette.websockets import WebSocketDisconnect
 from watchfiles import Change
 
 from app.core.config import AppConfig, load_config
-from app.core.server_store import ServerStore
+from app.core.app_store import AppStore
 from app.rpc.bus import bus
 from app.rpc.server import METHODS, register_routes, _start_watcher
 from app.spec.coordinator import IndexCoordinator
 from app.spec.service import SpecService
 from app.vis.service import VisualizationService
 
-# Reusable test token for WebSocket auth.
-_TEST_TOKEN = "bns_test00000000000000000000"
 
+def _make_app(tmp_path: Path) -> FastAPI:
+    """Create a test app with a fresh tokenless AppStore.
 
-def _make_app(tmp_path: Path | None = None) -> FastAPI:
-    """Create a test app with a ServerStore pre-seeded with a test user/token.
-
-    Uses synchronous sqlite3 to set up test data, then hands the store
-    directory to ServerStore (which opens lazily in the WS handler).
+    Bonsai is single-user / localhost-only — no users, tokens, or
+    handshake auth.  The store is opened lazily inside the WS handler.
     """
-    import sqlite3
-
     app = FastAPI()
-    store_dir = (tmp_path or Path("/tmp")) / "_server_store"
+    store_dir = tmp_path / "_app_store"
     store_dir.mkdir(parents=True, exist_ok=True)
-    db_path = store_dir / "bonsai.db"
 
-    # Pre-seed the database with a test user and token using sync sqlite3
-    conn = sqlite3.connect(str(db_path))
-    conn.execute("PRAGMA journal_mode = WAL")
-    conn.execute("PRAGMA foreign_keys = ON")
-    conn.executescript("""
-        CREATE TABLE IF NOT EXISTS _schema_version (version INTEGER PRIMARY KEY, applied_at TEXT NOT NULL);
-        CREATE TABLE IF NOT EXISTS server_config (key TEXT PRIMARY KEY, value TEXT NOT NULL, updated_at TEXT NOT NULL) WITHOUT ROWID;
-        CREATE TABLE IF NOT EXISTS users (id TEXT PRIMARY KEY, display_name TEXT NOT NULL, created_at TEXT NOT NULL, updated_at TEXT NOT NULL) WITHOUT ROWID;
-        CREATE TABLE IF NOT EXISTS tokens (token TEXT PRIMARY KEY, user_id TEXT NOT NULL REFERENCES users(id), created_at TEXT NOT NULL) WITHOUT ROWID;
-        CREATE TABLE IF NOT EXISTS projects (path TEXT PRIMARY KEY, name TEXT NOT NULL, registered_at TEXT NOT NULL, last_opened_at TEXT NOT NULL) WITHOUT ROWID;
-        CREATE TABLE IF NOT EXISTS user_preferences (user_id TEXT PRIMARY KEY REFERENCES users(id), prefs TEXT NOT NULL DEFAULT '{}', updated_at TEXT NOT NULL) WITHOUT ROWID;
-        CREATE TABLE IF NOT EXISTS user_recent_projects (user_id TEXT NOT NULL REFERENCES users(id), project_path TEXT NOT NULL REFERENCES projects(path), last_opened TEXT NOT NULL, PRIMARY KEY (user_id, project_path)) WITHOUT ROWID;
-        CREATE INDEX IF NOT EXISTS idx_tokens_user_id ON tokens(user_id);
-        CREATE INDEX IF NOT EXISTS idx_recent_projects_user_time ON user_recent_projects(user_id, last_opened DESC);
-    """)
-    conn.execute(
-        "INSERT OR IGNORE INTO users (id, display_name, created_at, updated_at) VALUES (?, ?, ?, ?)",
-        ("testuser", "Test User", "2026-01-01T00:00:00Z", "2026-01-01T00:00:00Z"),
-    )
-    conn.execute(
-        "INSERT OR IGNORE INTO tokens (token, user_id, created_at) VALUES (?, ?, ?)",
-        (_TEST_TOKEN, "testuser", "2026-01-01T00:00:00Z"),
-    )
-    conn.commit()
-    conn.close()
-
-    store = ServerStore(store_dir)
-    register_routes(app, server_store=store)
+    store = AppStore(store_dir)
+    register_routes(app, app_store=store)
     return app
 
 
-def _ws_url(tmp_path: Path, token: str | None = None) -> str:
-    """Build WebSocket URL with project and optional token."""
-    t = token or _TEST_TOKEN
-    url = f"/ws?project={tmp_path}"
-    if t:
-        url += f"&token={t}"
-    return url
+def _ws_url(tmp_path: Path) -> str:
+    """Build the tokenless WebSocket URL for a project directory."""
+    return f"/ws?project={tmp_path}"
 
 
 def _make_config(tmp_path: Path) -> AppConfig:
@@ -139,12 +103,6 @@ class TestMethods:
             "models/list", "models/refresh", "models/status",
             "agent/retryLastMessage",
             "skills/list",
-            "auth/createToken", "auth/listUsers",
-            "connection/list",
-            "admin/listUsers", "admin/createUser", "admin/deleteUser",
-            "admin/setAdmin", "admin/removeAdmin", "admin/revokeToken",
-            "user/getProfile", "user/getPreferences",
-            "user/updatePreferences", "user/getRecentProjects",
         }
         assert set(METHODS.keys()) == expected
 
@@ -172,13 +130,46 @@ class TestWebSocket:
         # Connection should be unregistered on disconnect
         assert bus.connection_count == initial_count
 
-    def test_missing_project_param_closes(self, tmp_path: Path) -> None:
+    def test_handshake_accepts_tokenless_connection(self, tmp_path: Path) -> None:
+        """The handshake must complete without any ``?token=`` query param."""
+        _make_config(tmp_path)
         app = _make_app(tmp_path)
         client = TestClient(app)
 
-        with pytest.raises(Exception):
+        url = _ws_url(tmp_path)
+        # Sanity check: the URL we're about to send carries no token.
+        assert "token=" not in url
+
+        with client.websocket_connect(url) as ws:
+            response = _send_and_receive(ws, "spec/list", 1)
+            assert response["id"] == 1
+            assert isinstance(response["result"], list)
+
+    def test_missing_project_closes_4001(self, tmp_path: Path) -> None:
+        """Connecting without a ``?project=`` query param closes 4001."""
+        app = _make_app(tmp_path)
+        client = TestClient(app)
+
+        with pytest.raises(WebSocketDisconnect) as excinfo:
             with client.websocket_connect("/ws"):
                 pass
+        assert excinfo.value.code == 4001
+
+    def test_nonexistent_project_closes_4002(self, tmp_path: Path) -> None:
+        """A project path that cannot be initialised closes 4002."""
+        app = _make_app(tmp_path)
+        client = TestClient(app)
+
+        # Use a path that does not exist and cannot be created (under a
+        # non-existent parent that ensure_project would refuse to walk).
+        bad = tmp_path / "definitely_does_not_exist" / "deep" / "subdir"
+        # Force ensure_project to raise by passing a path that isn't a
+        # directory (a file masquerading as the project root).
+        with patch("app.rpc.server.ensure_project", side_effect=RuntimeError("nope")):
+            with pytest.raises(WebSocketDisconnect) as excinfo:
+                with client.websocket_connect(f"/ws?project={bad}"):
+                    pass
+        assert excinfo.value.code == 4002
 
     def test_method_not_found_returns_error(self, tmp_path: Path) -> None:
         _make_config(tmp_path)
@@ -266,51 +257,19 @@ class TestMultiClientIntegration:
                 resp1 = _send_and_receive(ws1, "spec/list", 1)
                 assert isinstance(resp1["result"], list)
 
-
-class TestAuthIntegration:
-    """Integration tests for WebSocket authentication."""
-
-    def test_valid_token_connects(self, tmp_path: Path) -> None:
-        """Valid server-wide token allows WebSocket connection."""
+    def test_clients_get_local_user_identity(self, tmp_path: Path) -> None:
+        """In the single-user model every connection is identified as 'local'."""
         _make_config(tmp_path)
         app = _make_app(tmp_path)
         client = TestClient(app)
-        # _make_app creates a test token; use it
-        with client.websocket_connect(_ws_url(tmp_path)) as ws:
-            resp = _send_and_receive(ws, "spec/list", 1)
-            assert resp["id"] == 1
 
-    def test_per_project_token_fallback(self, tmp_path: Path) -> None:
-        """Token in per-project users.json works via fallback migration."""
-        _make_config(tmp_path)
-        users_data = {
-            "users": [{"id": "alice", "name": "Alice", "token": "bns_projectonly"}],
-        }
-        (tmp_path / ".bonsai" / "users.json").write_text(json.dumps(users_data))
-
-        app = _make_app(tmp_path)
-        client = TestClient(app)
-        with client.websocket_connect(_ws_url(tmp_path, token="bns_projectonly")) as ws:
-            resp = _send_and_receive(ws, "spec/list", 1)
-            assert resp["id"] == 1
-
-    def test_invalid_token_rejected(self, tmp_path: Path) -> None:
-        """Invalid token closes the WebSocket."""
-        _make_config(tmp_path)
-        app = _make_app(tmp_path)
-        client = TestClient(app)
-        with pytest.raises(Exception):
-            with client.websocket_connect(_ws_url(tmp_path, token="bns_wrong")):
-                pass
-
-    def test_no_token_rejected(self, tmp_path: Path) -> None:
-        """No token closes the WebSocket (no anonymous access)."""
-        _make_config(tmp_path)
-        app = _make_app(tmp_path)
-        client = TestClient(app)
-        with pytest.raises(Exception):
-            with client.websocket_connect(f"/ws?project={tmp_path}"):
-                pass
+        with client.websocket_connect(_ws_url(tmp_path)):
+            # Inspect the bus directly — every registered connection
+            # carries the fixed single-user identity.
+            connections = list(bus._connections.values())  # noqa: SLF001
+            assert connections, "expected at least one connection registered"
+            assert all(c.user_id == "local" for c in connections)
+            assert all(c.display_name == "Local" for c in connections)
 
 
 class TestWatcher:

@@ -1,8 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { getRecentProjects, type RecentProject } from "@/services/user.ts";
 import { validateProject, initProject } from "@/services/project.ts";
 import { listDirs, makeDirectory, browseFolder } from "@/services/fs.ts";
-import { useTokenStore } from "@/store/tokenStore.ts";
+import {
+  getKnownProjects,
+  registerKnownProject,
+  type KnownProject,
+} from "@/services/projects.ts";
 import "./ProjectPicker.css";
 
 interface ProjectPickerProps {
@@ -15,7 +18,7 @@ export function ProjectPicker({ onSelect, onClose }: ProjectPickerProps) {
   const [error, setError] = useState<string | null>(null);
   const [dirNotFound, setDirNotFound] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [recents, setRecents] = useState<RecentProject[]>([]);
+  const [recents, setRecents] = useState<KnownProject[]>([]);
 
   // Autocomplete state
   const [suggestions, setSuggestions] = useState<string[]>([]);
@@ -23,16 +26,10 @@ export function ProjectPicker({ onSelect, onClose }: ProjectPickerProps) {
   const [showSuggestions, setShowSuggestions] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
-  // Fetch recent projects from backend
   useEffect(() => {
-    const token = useTokenStore.getState().token;
-    if (!token) return;
-    getRecentProjects(token).then((data) => {
-      setRecents(data);
-    }).catch(() => {
-      // Silently fall back to empty list
-    });
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    getKnownProjects()
+      .then(setRecents)
+      .catch(() => setRecents([]));
   }, []);
 
   // Debounced autocomplete fetch
@@ -87,11 +84,18 @@ export function ProjectPicker({ onSelect, onClose }: ProjectPickerProps) {
           return;
         }
         if (validateData.valid) {
+          const basename =
+            validateData.path.split("/").filter(Boolean).pop() ??
+            validateData.path;
+          registerKnownProject(validateData.path, basename).catch(() => {});
           onSelect(validateData.path, false);
           return;
         }
         // Not yet initialized — auto-init
         const initData = await initProject(target);
+        const basename =
+          initData.path.split("/").filter(Boolean).pop() ?? initData.path;
+        registerKnownProject(initData.path, basename).catch(() => {});
         onSelect(initData.path, true);
       } catch (e) {
         setError((e as Error).message ?? "Cannot reach backend");

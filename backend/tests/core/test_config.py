@@ -30,7 +30,7 @@ class TestLoadConfig:
         monkeypatch.delenv("BACKEND_HOST", raising=False)
         srv = ServerSettings(_env_file=None)
         assert srv.backend_port == 8000
-        assert srv.backend_host == "0.0.0.0"
+        assert srv.backend_host == "127.0.0.1"
 
     def test_discovers_root_when_not_given(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
         (tmp_path / ".bonsai").mkdir()

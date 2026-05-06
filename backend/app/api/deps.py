@@ -3,13 +3,12 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Annotated, TYPE_CHECKING
+from typing import TYPE_CHECKING
 
-from fastapi import Depends, HTTPException, Query, Request
+from fastapi import HTTPException, Query, Request
 
 if TYPE_CHECKING:
-    from app.core.server_store import ServerStore
-    from app.rpc.auth import UserIdentity
+    from app.core.app_store import AppStore
 
 
 def valid_project_path(path: str = Query(...)) -> Path:
@@ -40,19 +39,6 @@ def valid_file_in_project(
     return root, resolved
 
 
-def get_server_store(request: Request) -> "ServerStore":
-    """Return the server-wide ``ServerStore`` from ``app.state``."""
-    return request.app.state.server_store
-
-
-async def get_identity(
-    store: Annotated["ServerStore", Depends(get_server_store)],
-    token: str = Query(...),
-) -> "UserIdentity":
-    """Resolve a bearer token to a ``UserIdentity``, raising 401 if invalid."""
-    from app.rpc.auth import authenticate_rest
-
-    identity = await authenticate_rest(store, token)
-    if identity is None:
-        raise HTTPException(status_code=401, detail="Invalid token")
-    return identity
+def get_app_store(request: Request) -> "AppStore":
+    """Return the app-wide ``AppStore`` from ``app.state``."""
+    return request.app.state.app_store

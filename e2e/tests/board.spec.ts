@@ -1,7 +1,7 @@
 import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import { test, expect } from "../fixtures";
-import { loginAs, openProject } from "../helpers/login";
+import { openProject } from "../helpers/project";
 import { seedProject } from "../helpers/specs";
 import { boardView, createTicketModal } from "../helpers/selectors";
 
@@ -15,12 +15,10 @@ import { boardView, createTicketModal } from "../helpers/selectors";
 test.describe("BoardView", () => {
   test("create ticket, move via context menu, persists across reload", async ({
     page,
-    admin,
     tempProject,
   }) => {
     seedProject(tempProject.path, []);
 
-    await loginAs(page, admin.token);
     await openProject(page, tempProject.path);
 
     await expect(page.locator(boardView.root)).toBeVisible();
@@ -84,12 +82,10 @@ test.describe("BoardView", () => {
 
   test("create modal closes via Cancel without persisting", async ({
     page,
-    admin,
     tempProject,
   }) => {
     seedProject(tempProject.path, []);
 
-    await loginAs(page, admin.token);
     await openProject(page, tempProject.path);
 
     await page.locator(boardView.newButton).first().click();

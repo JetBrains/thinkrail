@@ -42,7 +42,7 @@ tags:
 ## Internal Components
 
 ### METHODS dict
-Mapping from JSON-RPC method names to handler coroutines. Includes `spec/*`, `agent/*`, `session/*`, `vis/*`, `board/*`, `trash/*`, `settings/*`, `models/*`, `skills/*`, `auth/*`, and `connection/*` handlers.
+Mapping from JSON-RPC method names to handler coroutines. Includes `spec/*`, `agent/*`, `session/*`, `vis/*`, `board/*`, `trash/*`, `settings/*`, `models/*`, and `skills/*` handlers. (`auth/*`, `admin/*`, `user/*`, `connection/list` namespaces were removed by the auth-removal cleanup `mt_a939c33a`.)
 
 ### Per-project caches
 - `_agent_services` / `_vis_services` / `_board_services` / `_model_registries` — keyed by project path, survive WebSocket reconnects
@@ -50,8 +50,8 @@ Mapping from JSON-RPC method names to handler coroutines. Includes `spec/*`, `ag
 
 ### WebSocket Handler (`ws_endpoint`)
 - **On connect:**
-  1. Validate `?project=` query param, check `.bonsai/registry.json` exists
-  2. Authenticate via `?token=` query param using `auth.authenticate()`; close with 4003 if invalid
+  1. Validate `?project=` query param, ensure project structure (`ensure_project`)
+  2. *(No auth — single-user, localhost-only after `mt_a939c33a`. The connection is accepted as long as the project path is valid.)*
   3. Load/reuse per-project services (`AgentService`, `VisService`, `BoardService`, `ModelRegistry`)
   4. Accept WebSocket, create `ClientConnection` with `uuid4` conn_id
   5. Register connection with `bus.register(conn)`, start sweep task

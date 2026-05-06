@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { test, expect } from "../fixtures";
-import { loginAs, openProject } from "../helpers/login";
+import { openProject } from "../helpers/project";
 import { buildSpec, seedProject } from "../helpers/specs";
 import { fileViewer, specTree } from "../helpers/selectors";
 
@@ -18,7 +18,6 @@ import { fileViewer, specTree } from "../helpers/selectors";
 test.describe("Spec editor", () => {
   test("edit body via Monaco, save, preview reflects the change", async ({
     page,
-    admin,
     tempProject,
   }) => {
     const relPath = "specs/storage-module.md";
@@ -35,7 +34,6 @@ test.describe("Spec editor", () => {
       },
     ]);
 
-    await loginAs(page, admin.token);
     await openProject(page, tempProject.path);
 
     // Open the spec.
@@ -75,7 +73,6 @@ test.describe("Spec editor", () => {
 
   test("invalid frontmatter falls back to Unmanaged Documents", async ({
     page,
-    admin,
     tempProject,
   }) => {
     // Spec file with a YAML block that's missing required fields ("id", "type")
@@ -85,7 +82,6 @@ test.describe("Spec editor", () => {
       { relPath: "specs/broken.md", content: broken },
     ]);
 
-    await loginAs(page, admin.token);
     await openProject(page, tempProject.path);
 
     // The "Unmanaged Documents" header appears in the SpecTree because the

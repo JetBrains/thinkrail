@@ -123,14 +123,12 @@ echo ""
 if [ -n "$INSTALLED" ]; then
     if [ "$ON_PATH" = "1" ]; then
         echo "Run with:  bonsai            (auto-opens browser at http://127.0.0.1:8000)"
-        echo "First run: bonsai --init-admin <id> \"<Your Name>\""
     else
         echo "NOTE: $DEST_DIR is not on your PATH."
         echo "      Add it to your shell profile, e.g.:"
         echo "          echo 'export PATH=\"$DEST_DIR:\$PATH\"' >> ~/.zshrc && exec zsh"
         echo "      Or run the binary directly:"
         echo "          $INSTALLED"
-        echo "      First run: $INSTALLED --init-admin <id> \"<Your Name>\""
     fi
 else
     echo "Run with:  $BINARY"

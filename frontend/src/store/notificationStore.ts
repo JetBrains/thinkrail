@@ -1,6 +1,5 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
-import { syncPref } from "./prefSync.ts";
 
 interface Toast {
   id: string;
@@ -83,11 +82,7 @@ export const useNotificationStore = create<NotificationStore>()(
           pendingInputCount: Math.max(0, s.pendingInputCount - 1),
         })),
 
-      toggleSound: () => set((s) => {
-        const next = !s.soundEnabled;
-        syncPref({ soundEnabled: next });
-        return { soundEnabled: next };
-      }),
+      toggleSound: () => set((s) => ({ soundEnabled: !s.soundEnabled })),
     }),
     {
       name: "bonsai-notification-sound",

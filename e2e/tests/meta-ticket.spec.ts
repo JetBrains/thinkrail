@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { test, expect } from "../fixtures";
-import { loginAs, openProject } from "../helpers/login";
+import { openProject } from "../helpers/project";
 import { seedTicket } from "../helpers/board";
 import { buildSpec, seedProject } from "../helpers/specs";
 import { boardView, ticketDetail } from "../helpers/selectors";
@@ -16,7 +16,6 @@ import { boardView, ticketDetail } from "../helpers/selectors";
 test.describe("MetaTicketDetail", () => {
   test("renders ticket, edits description, reflects state in progress bar", async ({
     page,
-    admin,
     tempProject,
   }) => {
     // Seed a spec so the linked-specs list shows a real entry.
@@ -41,7 +40,6 @@ test.describe("MetaTicketDetail", () => {
       sessionIds: ["bs_seed1234"],
     });
 
-    await loginAs(page, admin.token);
     await openProject(page, tempProject.path);
 
     // BoardView renders first; click the seeded card to open the detail view.
@@ -125,7 +123,6 @@ test.describe("MetaTicketDetail", () => {
 
   test("status change in sidebar updates progress bar primary action", async ({
     page,
-    admin,
     tempProject,
   }) => {
     seedProject(tempProject.path, []);
@@ -135,7 +132,6 @@ test.describe("MetaTicketDetail", () => {
       status: "idea",
     });
 
-    await loginAs(page, admin.token);
     await openProject(page, tempProject.path);
 
     await page.locator(boardView.ticketCard, { hasText: "Cycle ticket" }).click();

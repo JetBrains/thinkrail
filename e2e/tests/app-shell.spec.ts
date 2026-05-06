@@ -1,14 +1,13 @@
 import { test, expect } from "../fixtures";
-import { loginAs, openProject } from "../helpers/login";
-import { appShell, header, serverInfoDialog, tokenDialog } from "../helpers/selectors";
+import { openProject } from "../helpers/project";
+import { appShell, header, serverInfoDialog } from "../helpers/selectors";
 
 /**
- * AppShell smoke: theme switcher, Server Info dialog, Token dialog, status bar.
+ * AppShell smoke: theme switcher, Server Info dialog, status bar.
  */
 
 test.describe("AppShell chrome", () => {
-  test.beforeEach(async ({ page, admin, tempProject }) => {
-    await loginAs(page, admin.token);
+  test.beforeEach(async ({ page, tempProject }) => {
     await openProject(page, tempProject.path);
   });
 
@@ -44,22 +43,5 @@ test.describe("AppShell chrome", () => {
     // Close it
     await page.getByRole("button", { name: "Close" }).click();
     await expect(page.getByRole("heading", { name: "Server Info" })).toHaveCount(0);
-  });
-
-  test("Token dialog masks the stored token (type=password)", async ({ page, admin }) => {
-    // The lock-icon button has different titles depending on token presence;
-    // when logged in, it's "Token configured" with the .header-token-active class.
-    await page.locator("button.header-token-active").click();
-    await expect(page.getByRole("heading", { name: "Authentication Token" })).toBeVisible();
-
-    const input = page.locator(tokenDialog.input);
-    await expect(input).toHaveAttribute("type", "password");
-    // Sanity: input pre-loaded with the current token (the value is still the
-    // real token in the DOM, but visually masked by type=password).
-    await expect(input).toHaveValue(admin.token);
-
-    // Cancel — must NOT trigger the page reload that Save/Clear do.
-    await page.getByRole(tokenDialog.cancelButton.role, { name: tokenDialog.cancelButton.name }).click();
-    await expect(page.getByRole("heading", { name: "Authentication Token" })).toHaveCount(0);
   });
 });

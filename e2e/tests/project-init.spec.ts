@@ -1,7 +1,6 @@
 import { existsSync } from "node:fs";
 import { join } from "node:path";
 import { test, expect } from "../fixtures";
-import { loginAs } from "../helpers/login";
 import { appShell, projectPicker } from "../helpers/selectors";
 
 /**
@@ -21,13 +20,12 @@ import { appShell, projectPicker } from "../helpers/selectors";
 
 test("opening a fresh temp directory auto-inits the project and shows NewProjectScreen", async ({
   page,
-  admin,
   tempProject,
 }) => {
   // Sanity: the temp dir exists but has no .bonsai/ yet.
   expect(existsSync(join(tempProject.path, ".bonsai"))).toBe(false);
 
-  await loginAs(page, admin.token);
+  await page.goto("/");
 
   // Open the not-yet-initialized project. We don't use the openProject helper
   // here because we want to assert the new-project screen specifically — the
@@ -55,10 +53,9 @@ test("opening a fresh temp directory auto-inits the project and shows NewProject
 
 test("NewProjectScreen rejects an empty project name", async ({
   page,
-  admin,
   tempProject,
 }) => {
-  await loginAs(page, admin.token);
+  await page.goto("/");
 
   const pathInput = page.locator(projectPicker.pathInput);
   await pathInput.fill(tempProject.path);

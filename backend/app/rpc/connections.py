@@ -18,10 +18,10 @@ class ClientConnection:
     """Tracks a single WebSocket connection and its subscriptions."""
 
     conn_id: str
-    user_id: str  # from token lookup, or "anonymous"
-    display_name: str
     ws: WebSocket
     notify: NotifyCallable
     project_path: str
+    user_id: str = "local"  # fixed in single-user mode
+    display_name: str = "Local"  # fixed in single-user mode
     connected_at: float = field(default_factory=time)
     subscriptions: set[str] = field(default_factory=set)

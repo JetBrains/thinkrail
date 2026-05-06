@@ -1,5 +1,5 @@
 {
-  "default_model": "claude-opus-4-6",
+  "default_model": "claude-opus-4-7",
   "default_effort": "high",
   "model_refresh_interval_hours": 24,
   "event_view": "classic",

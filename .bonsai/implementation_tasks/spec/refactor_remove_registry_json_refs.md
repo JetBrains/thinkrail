@@ -91,7 +91,7 @@ These test files create `registry.json` only to set up a "valid project". Since 
 This file tests `ensure_meta_file()` and `ensure_project()` — the functions being changed. Required updates:
 
 - **Remove** `test_creates_registry_when_missing` — registry.json is no longer a known meta-file
-- **Remove** `test_reads_existing_file` registry references — update to test settings.json or users.json instead
+- **Remove** `test_reads_existing_file` registry references — update to test settings.json instead
 - **Remove** `test_creates_parent_dirs` registry.json check — use settings.json instead
 - **Remove** `test_deleted_file_gets_regenerated` registry.json check — use settings.json instead
 - **Update** `test_creates_all_meta_files` — remove `registry.json` assertion

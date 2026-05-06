@@ -46,10 +46,6 @@ export function applyTheme(preference: ThemePreference): void {
     html.setAttribute("data-theme", preference);
   }
   localStorage.setItem(STORAGE_KEY, preference);
-  // Sync to backend (lazy import to avoid circular deps)
-  import("../store/prefSync.ts").then(({ syncPref }) => {
-    syncPref({ theme: preference });
-  }).catch(() => {});
 }
 
 export function getEffectiveColorScheme(preference: ThemePreference): "dark" | "light" {

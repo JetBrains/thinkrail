@@ -4,92 +4,6 @@
  */
 
 export interface paths {
-    "/api/setup/status": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Setup Status */
-        get: operations["setup_status_api_setup_status_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/setup": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Setup First User */
-        post: operations["setup_first_user_api_setup_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/user/profile": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Get User Profile */
-        get: operations["get_user_profile_api_user_profile_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/user/preferences": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Get User Preferences */
-        get: operations["get_user_preferences_api_user_preferences_get"];
-        /** Update User Preferences */
-        put: operations["update_user_preferences_api_user_preferences_put"];
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/user/recent-projects": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Get User Recent Projects */
-        get: operations["get_user_recent_projects_api_user_recent_projects_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/projects/known": {
         parameters: {
             query?: never;
@@ -97,11 +11,22 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Get Known Projects */
-        get: operations["get_known_projects_api_projects_known_get"];
+        /**
+         * List Known Projects
+         * @description Return all known projects, ordered by ``last_opened_at`` DESC.
+         */
+        get: operations["list_known_projects_api_projects_known_get"];
         put?: never;
-        post?: never;
-        delete?: never;
+        /**
+         * Register Known Project
+         * @description Register or update a project (idempotent upsert).
+         */
+        post: operations["register_known_project_api_projects_known_post"];
+        /**
+         * Remove Known Project
+         * @description Remove a project from the registry by ``path``.
+         */
+        delete: operations["remove_known_project_api_projects_known_delete"];
         options?: never;
         head?: never;
         patch?: never;
@@ -452,10 +377,10 @@ export interface components {
             path: string;
             /** Name */
             name: string;
-            /** Registeredat */
-            registeredAt: string | null;
-            /** Lastopenedat */
-            lastOpenedAt: string | null;
+            /** Registered At */
+            registered_at: string;
+            /** Last Opened At */
+            last_opened_at: string;
         };
         /** OkResponse */
         OkResponse: {
@@ -505,15 +430,6 @@ export interface components {
             /** Exists */
             exists: boolean;
         };
-        /** RecentProjectResponse */
-        RecentProjectResponse: {
-            /** Path */
-            path: string;
-            /** Name */
-            name: string;
-            /** Lastopened */
-            lastOpened: string | null;
-        };
         /** ServerInfoResponse */
         ServerInfoResponse: {
             /** Hostname */
@@ -523,20 +439,6 @@ export interface components {
             tailscale: components["schemas"]["TailscaleInfoResponse"];
             /** Version */
             version: string;
-        };
-        /** SetupResponse */
-        SetupResponse: {
-            /** Userid */
-            userId: string;
-            /** Displayname */
-            displayName: string;
-            /** Token */
-            token: string;
-        };
-        /** SetupStatusResponse */
-        SetupStatusResponse: {
-            /** Needssetup */
-            needsSetup: boolean;
         };
         /** TailscaleInfoResponse */
         TailscaleInfoResponse: {
@@ -549,17 +451,6 @@ export interface components {
              * @default false
              */
             active: boolean;
-        };
-        /** UserProfileResponse */
-        UserProfileResponse: {
-            /** Userid */
-            userId: string;
-            /** Displayname */
-            displayName: string;
-            /** Isadmin */
-            isAdmin: boolean;
-            /** Createdat */
-            createdAt: string | null;
         };
         /** ValidationError */
         ValidationError: {
@@ -584,6 +475,14 @@ export interface components {
             /** Path */
             path: string;
         };
+        /** _OkResponse */
+        _OkResponse: {
+            /**
+             * Ok
+             * @default true
+             */
+            ok: boolean;
+        };
         /** _OpenExternalBody */
         _OpenExternalBody: {
             /** Project */
@@ -593,10 +492,10 @@ export interface components {
             /** Editor */
             editor: string;
         };
-        /** _SetupBody */
-        _SetupBody: {
-            /** Userid */
-            userId: string;
+        /** _RegisterBody */
+        _RegisterBody: {
+            /** Path */
+            path: string;
             /** Name */
             name: string;
         };
@@ -618,195 +517,9 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
-    setup_status_api_setup_status_get: {
+    list_known_projects_api_projects_known_get: {
         parameters: {
             query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["SetupStatusResponse"];
-                };
-            };
-        };
-    };
-    setup_first_user_api_setup_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["_SetupBody"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["SetupResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    get_user_profile_api_user_profile_get: {
-        parameters: {
-            query: {
-                token: string;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["UserProfileResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    get_user_preferences_api_user_preferences_get: {
-        parameters: {
-            query: {
-                token: string;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    update_user_preferences_api_user_preferences_put: {
-        parameters: {
-            query: {
-                token: string;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: {
-            content: {
-                "application/json": {
-                    [key: string]: unknown;
-                } | null;
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    get_user_recent_projects_api_user_recent_projects_get: {
-        parameters: {
-            query: {
-                limit?: number;
-                token: string;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["RecentProjectResponse"][];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    get_known_projects_api_projects_known_get: {
-        parameters: {
-            query: {
-                token: string;
-            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -820,6 +533,61 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["KnownProjectResponse"][];
+                };
+            };
+        };
+    };
+    register_known_project_api_projects_known_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["_RegisterBody"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["_OkResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    remove_known_project_api_projects_known_delete: {
+        parameters: {
+            query: {
+                path: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["_OkResponse"];
                 };
             };
             /** @description Validation Error */

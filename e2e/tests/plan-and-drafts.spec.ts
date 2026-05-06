@@ -1,7 +1,7 @@
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { test, expect } from "../fixtures";
-import { loginAs, openProject } from "../helpers/login";
+import { openProject } from "../helpers/project";
 import { seedDrafts, seedTicket } from "../helpers/board";
 import { buildSpec, seedProject } from "../helpers/specs";
 import { boardView, specDiffs, ticketDetail } from "../helpers/selectors";
@@ -15,7 +15,6 @@ import { boardView, specDiffs, ticketDetail } from "../helpers/selectors";
 test.describe("TicketPlanView", () => {
   test("Steps tab adds a step and Save Plan persists it", async ({
     page,
-    admin,
     tempProject,
   }) => {
     seedProject(tempProject.path, []);
@@ -25,7 +24,6 @@ test.describe("TicketPlanView", () => {
       status: "specified",
     });
 
-    await loginAs(page, admin.token);
     await openProject(page, tempProject.path);
 
     await page.locator(boardView.ticketCard, { hasText: "Plan target" }).click();
@@ -80,7 +78,6 @@ test.describe("TicketPlanView", () => {
 test.describe("Spec drafts (Spec Diffs panel)", () => {
   test("lists drafts, applies one, discards another, surfaces patches", async ({
     page,
-    admin,
     tempProject,
   }) => {
     // Seed the project with a spec that exists, so an "update" draft has a
@@ -136,7 +133,6 @@ test.describe("Spec drafts (Spec Diffs panel)", () => {
       },
     ]);
 
-    await loginAs(page, admin.token);
     await openProject(page, tempProject.path);
 
     await page

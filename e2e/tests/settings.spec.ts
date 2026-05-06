@@ -1,37 +1,33 @@
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { test, expect } from "../fixtures";
-import { loginAs, openProject } from "../helpers/login";
+import { openProject } from "../helpers/project";
 import { seedProject } from "../helpers/specs";
 import { fileViewer, header } from "../helpers/selectors";
 
 /**
- * Project settings + user preferences smoke.
+ * Project settings smoke.
  *
- * - The header gear button opens `.bonsai/settings.json` in the FileViewer.
- *   The settings file's defaults match the backend `ProjectSettings` model.
- * - User preferences (left panel collapsed, etc.) sync through
- *   `user/updatePreferences` and are restored on next page load.
+ * The header gear button opens `.bonsai/settings.json` in the FileViewer.
+ * The settings file's defaults match the backend `ProjectSettings` model.
  *
  * Editing the settings JSON via the Monaco editor is fiddly under Playwright,
  * so we exercise persistence by writing the file directly on disk and
  * verifying the backend serves the updated value.
+ *
+ * Bonsai is single-user / localhost-only — there's no per-user preferences
+ * sync, no `/api/user/*` endpoints, no token. Per-project UI state (theme,
+ * panel collapse, font size, message history) lives in the frontend's
+ * `bonsai-*` localStorage keys.
  */
-
-// Settings specs hit the auth-protected `/api/user/profile` endpoint twice
-// (once on initial login, once after reload), and that endpoint can be slow
-// on a heavily-loaded dev backend — give them extra headroom.
-test.describe.configure({ timeout: 180_000 });
 
 test.describe("Project settings", () => {
   test("gear button opens settings.json with default fields visible", async ({
     page,
-    admin,
     tempProject,
   }) => {
     seedProject(tempProject.path, []);
 
-    await loginAs(page, admin.token);
     await openProject(page, tempProject.path);
 
     await page.locator(header.settingsButton).click();
@@ -69,7 +65,6 @@ test.describe("Project settings", () => {
 
   test("settings.json edits on disk are picked up after reload", async ({
     page,
-    admin,
     tempProject,
   }) => {
     seedProject(tempProject.path, []);
@@ -96,7 +91,6 @@ test.describe("Project settings", () => {
       "utf8",
     );
 
-    await loginAs(page, admin.token);
     await openProject(page, tempProject.path);
 
     // Open the file via the gear and assert the seeded values render.
@@ -110,109 +104,28 @@ test.describe("Project settings", () => {
   });
 });
 
-test.describe("User preferences", () => {
-  test("collapsed left panel persists across reload", async ({
+test.describe("UI preferences", () => {
+  test("collapsed left panel persists across reload via localStorage", async ({
     page,
-    admin,
     tempProject,
   }) => {
     seedProject(tempProject.path, []);
 
-    // Set up a WS-frame matcher BEFORE navigating so we catch the WS that
-    // login/openProject opens. `syncPref` fires `user/updatePreferences` as
-    // a best-effort, fire-and-forget JSON-RPC request — we capture the
-    // outgoing request id and resolve when its response lands. A fixed sleep
-    // here is racy on a loaded backend.
-    //
-    // Filter on the patch *content*, not just the method: `App.tsx` calls
-    // `applyTheme()` during initial preference hydration, which echoes a
-    // `syncPref({ theme })` over the same RPC. If that hydration lands after
-    // we arm, an unrelated theme echo would otherwise resolve `updatePrefsAck`
-    // before the `Alt+b` left-panel patch commits, reopening the reload race.
-    let armed = false;
-    const pendingIds = new Set<number>();
-    let resolveAck: () => void = () => {};
-    const updatePrefsAck = new Promise<void>((resolve) => {
-      resolveAck = resolve;
-    });
-    const decode = (data: { payload: string | Buffer }): string =>
-      typeof data.payload === "string" ? data.payload : data.payload.toString("utf8");
-    page.on("websocket", (ws) => {
-      ws.on("framesent", (data) => {
-        if (!armed) return;
-        try {
-          const msg = JSON.parse(decode(data));
-          if (
-            msg.method === "user/updatePreferences" &&
-            typeof msg.id === "number" &&
-            msg.params &&
-            typeof msg.params === "object" &&
-            msg.params.patch &&
-            typeof msg.params.patch === "object" &&
-            "leftPanelCollapsed" in msg.params.patch
-          ) {
-            pendingIds.add(msg.id);
-          }
-        } catch {
-          // not a JSON-RPC frame
-        }
-      });
-      ws.on("framereceived", (data) => {
-        try {
-          const msg = JSON.parse(decode(data));
-          if (
-            typeof msg.id === "number" &&
-            pendingIds.has(msg.id) &&
-            (msg.result !== undefined || msg.error !== undefined)
-          ) {
-            resolveAck();
-          }
-        } catch {
-          // not a JSON-RPC frame
-        }
-      });
-    });
-
-    await loginAs(page, admin.token);
     await openProject(page, tempProject.path);
 
     // The LeftPanel is part of `.layout` and is visible by default. Toggle
-    // it off via the keyboard shortcut (Cmd/Ctrl + B).
+    // it off via the keyboard shortcut (Alt+B).
     const leftPanelLocator = page.locator(".left-panel");
     await expect(leftPanelLocator).toBeVisible();
 
-    armed = true;
     await page.keyboard.press("Alt+b");
     await expect(leftPanelLocator).toHaveCount(0);
 
-    // Wait for the actual `user/updatePreferences` response — a fire-and-
-    // forget sleep can let the reload below beat the backend commit on a
-    // loaded box.
-    await Promise.race([
-      updatePrefsAck,
-      new Promise<void>((_, reject) =>
-        setTimeout(
-          () => reject(new Error("user/updatePreferences ack not seen within 30s")),
-          30_000,
-        ),
-      ),
-    ]);
-
-    // Wipe the Zustand persist key so the post-reload `leftPanelCollapsed`
-    // value can ONLY come from the backend `user/getPreferences` round-trip.
-    // Without this, the assertion below would pass purely from local hydration
-    // (uiStore persists `leftPanelCollapsed` to localStorage under
-    // "bonsai-ui"), masking a broken backend pref endpoint.
-    await page.evaluate(() => {
-      localStorage.removeItem("bonsai-ui");
-    });
-
+    // Per-user prefs are not server-synced (Bonsai is single-user / localhost-
+    // only). The UI store persists `leftPanelCollapsed` to localStorage under
+    // "bonsai-ui"; that's the source of truth across reloads.
     await page.reload();
     await expect(page.locator(".status-bar")).toBeVisible({ timeout: 60_000 });
-    // After reload + cleared persist cache, the LeftPanel renders briefly
-    // (default state is uncollapsed). Once the WS connects and
-    // `user/getPreferences` returns the saved `leftPanelCollapsed: true`,
-    // the panel is hidden again — proves the backend round-trip.
     await expect(page.locator(".left-panel")).toHaveCount(0, { timeout: 30_000 });
 
     // Toggle it back on so the next reload doesn't carry over to other tests.

@@ -28,7 +28,7 @@ class _SPAStaticFiles(StaticFiles):
 
 from app.api import setup as setup_api
 from app.core.config import get_data_dir
-from app.core.server_store import ServerStore
+from app.core.app_store import AppStore
 from app.rpc.server import register_routes
 
 
@@ -57,11 +57,11 @@ def create_app() -> FastAPI:
     """Create and configure the Bonsai FastAPI application."""
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s — %(message)s")
 
-    server_store = ServerStore(get_data_dir())
+    app_store = AppStore(get_data_dir())
 
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncIterator[None]:
-        await server_store.open()
+        await app_store.open()
 
         async def _purge_loop() -> None:
             from app.core.config import load_config
@@ -84,7 +84,7 @@ def create_app() -> FastAPI:
             yield
         finally:
             purge_task.cancel()
-            await server_store.close()
+            await app_store.close()
 
     app = FastAPI(title="Bonsai", lifespan=lifespan)
 
@@ -95,8 +95,8 @@ def create_app() -> FastAPI:
         allow_headers=["*"],
     )
 
-    setup_api(app, server_store)
-    register_routes(app, server_store=server_store)
+    setup_api(app, app_store)
+    register_routes(app, app_store=app_store)
 
     _export_openapi_schema(app)
 

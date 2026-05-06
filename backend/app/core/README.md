@@ -70,10 +70,10 @@ graph TD
 |------|---------------|------------|
 | `config.py` | App configuration: project root discovery, directory paths, server settings, frozen mode detection | pydantic, pydantic-settings |
 | `fileio.py` | File system operations: read, write, delete files; create directories | — |
-| `project.py` | Lazy auto-creation of `.bonsai/` meta-files and subdirectories; ensures settings.json, users.json exist with defaults on access | fileio, settings |
+| `project.py` | Lazy auto-creation of `.bonsai/` meta-files and subdirectories; ensures settings.json exists with defaults on access | fileio, settings |
 | `settings.py` | Project settings: load/save/ensure `.bonsai/settings.json` | pydantic, project |
 | `watcher.py` | Async file change watching: detect spec file and config changes | watchfiles / watchdog |
-| `server_store.py` | SQLite-backed user and token store for authentication (`bns_` tokens, admin flags) | aiosqlite |
+| `app_store.py` | SQLite-backed registry of known projects + app-wide key/value `settings`. Single-user; no users, tokens, or per-user data. See [APP_STORE.md](APP_STORE.md). | aiosqlite |
 | `network_info.py` | LAN IP, hostname, and Tailscale status detection for mobile client discovery | — |
 
 ## Public Interface
@@ -126,7 +126,7 @@ Lazy auto-creation of `.bonsai/` meta-files. Each known meta-file has a default-
 | `ensure_meta_dir` | `(bonsai_dir: Path, name: str) → Path` | Ensure `.bonsai/{name}/` directory exists. Returns path. |
 | `ensure_project` | `(project_root: Path) → None` | Ensure all known meta-files and subdirectories exist under `.bonsai/`. |
 
-Known meta-files: `settings.json`, `users.json`.
+Known meta-files: `settings.json`.
 Known subdirectories: `sessions`, `trash`, `plans`, `meta-tickets`, `spec-drafts`, `spec-patches`.
 
 ### settings.py
