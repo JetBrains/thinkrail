@@ -45,6 +45,9 @@ Thumbs.db
 # Superpowers brainstorming (generated mockups)
 .superpowers/
 
+# Zenflow worktree task scratch
+.zenflow/
+
 # Mobile (Android/KMP)
 mobile/.gradle/
 mobile/build/
