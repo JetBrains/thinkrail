@@ -1,0 +1,1193 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>H2: Inline Sections — Bonsai Ticket View</title>
+<link rel="stylesheet" href="shared/base.css">
+<link rel="stylesheet" href="shared/sidebar.css">
+<style>
+  /* ── H2-specific animation ──────────────────────────────────── */
+  @keyframes sectionExpand { from { opacity: 0; max-height: 0; } to { opacity: 1; max-height: 2000px; } }
+
+  /* ── Document area (replaces conversation) ──────────────────── */
+  .document-area {
+    flex: 1; display: flex; flex-direction: column; overflow: hidden;
+    transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+  .doc-scroll {
+    flex: 1; overflow-y: auto; padding: 20px 16px;
+    scroll-behavior: smooth;
+  }
+  .doc-inner {
+    max-width: 700px; margin: 0 auto;
+    transition: max-width 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+  body.split-mode .doc-inner { max-width: none; }
+  body.split-mode .document-area { flex: 0 0 auto; width: 35%; }
+
+  /* ── Phase headers (document section separators) ────────────── */
+  .phase-header {
+    display: flex; align-items: center; gap: 10px; padding: 16px 0 8px;
+    animation: fadeIn 0.35s ease both;
+  }
+  .phase-header::before, .phase-header::after {
+    content: ''; flex: 1; height: 1px; background: var(--border);
+  }
+  .phase-header .ph-label {
+    font-size: 10px; font-weight: 700; text-transform: uppercase;
+    letter-spacing: 0.1em; color: var(--text-dim); white-space: nowrap;
+  }
+  .phase-header:first-child { padding-top: 0; }
+
+  /* ── Collapsible sections ───────────────────────────────────── */
+  .section {
+    border: 1px solid var(--border); border-radius: var(--r);
+    margin: 8px 0; overflow: hidden;
+    transition: all 0.3s ease;
+    animation: fadeIn 0.35s ease both;
+  }
+  .section.expanded { border-color: var(--accent-sub); }
+  .section.active { border-left: 3px solid var(--accent); }
+  .section.done { opacity: 0.85; }
+  .section.pending { opacity: 0.5; }
+
+  .section-header {
+    display: flex; align-items: center; gap: 8px;
+    padding: 10px 14px; cursor: pointer;
+    transition: background 0.15s;
+    user-select: none;
+  }
+  .section-header:hover { background: var(--hover); }
+  .section-toggle { font-size: 10px; color: var(--text-dim); width: 12px; flex-shrink: 0; }
+  .section-icon { font-size: 12px; flex-shrink: 0; }
+  .section-title { font-size: 13px; font-weight: 600; color: var(--text); flex-shrink: 0; }
+  .section-status { font-size: 11px; flex-shrink: 0; margin-left: 4px; }
+  .section-status.status-done { color: var(--green); font-weight: 700; }
+  .section-status.status-active { color: var(--accent); }
+  .section-status.status-pending { color: var(--text-dim); opacity: 0.5; }
+  .section-meta {
+    font-size: 11px; color: var(--text-dim); margin-left: auto;
+    font-family: var(--mono); white-space: nowrap;
+  }
+
+  .section-summary {
+    padding: 4px 14px 10px 34px;
+    font-size: 12px; color: var(--text-dim); line-height: 1.5;
+  }
+
+  .section-body {
+    padding: 0 14px 14px;
+    overflow: hidden;
+    transition: max-height 0.4s ease, opacity 0.3s ease;
+  }
+  .section-body > * + * { margin-top: 10px; }
+
+  .section.collapsed .section-body { display: none; }
+  .section.collapsed .section-summary { display: block; }
+  .section.expanded .section-summary { display: none; }
+  .section.pending .section-summary { display: block; }
+  .section.pending .section-body { display: none; }
+
+  /* ── Nested subsections ─────────────────────────────────────── */
+  .nested-section {
+    border: 1px solid var(--border); border-radius: 6px;
+    margin: 8px 0 8px 12px; overflow: hidden;
+    animation: fadeIn 0.3s ease both;
+  }
+  .nested-section.done { opacity: 0.85; border-color: var(--border); }
+  .nested-section .section-header { padding: 7px 10px; }
+  .nested-section .section-title { font-size: 12px; }
+  .nested-section .section-meta { font-size: 10px; }
+  .nested-section .section-body { padding: 0 10px 10px; }
+  .nested-section .section-summary { padding: 3px 10px 7px 28px; font-size: 11px; }
+
+  /* ── Per-section input bar ──────────────────────────────────── */
+  .section-input {
+    display: flex; gap: 8px; align-items: center;
+    padding: 8px 0 0;
+    border-top: 1px solid var(--border);
+    margin-top: 10px;
+  }
+  .section-input input {
+    flex: 1; padding: 7px 12px; border-radius: 6px; font-size: 12px;
+    border: 1px solid var(--border); background: var(--elevated);
+    color: var(--text); font-family: inherit; outline: none;
+    transition: border-color 0.15s;
+  }
+  .section-input input:focus { border-color: var(--accent); }
+  .section-input input::placeholder { color: var(--text-dim); }
+  .section-input-btn {
+    padding: 7px 14px; border-radius: 6px; font-size: 11px; font-weight: 600;
+    cursor: pointer; border: none; background: var(--accent); color: #fff;
+    font-family: inherit; transition: all 0.15s; flex-shrink: 0;
+  }
+  .section-input-btn:hover { filter: brightness(1.1); }
+
+  /* ── H2 message size overrides ──────────────────────────────── */
+  .msg { padding: 6px 0 6px 14px; font-size: 13px; }
+  .msg code { font-size: 11px; padding: 2px 5px; }
+
+  /* ── H2 typing indicator size overrides ─────────────────────── */
+  .typing-indicator { padding: 6px 0 6px 14px; height: 30px; }
+  .typing-indicator .dot { width: 5px; height: 5px; }
+
+  /* ── H2 decision card size overrides ────────────────────────── */
+  .decision-card.resolved { padding: 6px 14px; }
+  .dc-label { font-size: 9px; padding: 6px 12px 0; }
+  .dc-q { font-size: 12px; padding: 4px 12px; }
+  .dc-opts { padding: 4px 12px 8px; gap: 6px; }
+  .dc-opt { padding: 5px 12px; font-size: 11px; }
+  .dc-hint { font-size: 10px; padding: 0 12px 8px; }
+  .dc-resolved { font-size: 12px; }
+
+  /* ── H2 artifact card size overrides ────────────────────────── */
+  .artifact-card .card-peek-hint { top: 8px; right: 10px; }
+  .ac-header { padding: 8px 12px; font-size: 10px; }
+  .ac-body { padding: 10px 12px; font-size: 12px; line-height: 1.6; }
+
+  /* ── H2 sidebar width override ──────────────────────────────── */
+  .sidebar { width: 200px; min-width: 200px; }
+
+  /* ── H2 sidebar item styling ────────────────────────────────── */
+  .sidebar-item {
+    gap: 6px; padding: 5px 14px 5px 22px; font-size: 11px;
+  }
+  .sidebar-item.done { color: var(--text-dim); }
+  .sidebar-item.done .item-status { color: var(--green); }
+  .sidebar-item .item-icon { font-size: 10px; width: 14px; }
+  .sidebar-item .item-status {
+    margin-left: auto; font-size: 10px; flex-shrink: 0;
+    transition: all 0.2s;
+  }
+  .sidebar-item .item-status.status-done { color: var(--green); }
+  .sidebar-item .item-status.status-active { color: var(--accent); }
+  .sidebar-item .item-status.status-pending { color: var(--text-dim); opacity: 0.4; }
+
+  /* H2 collapsed sidebar item overrides */
+  .sidebar.collapsed .sidebar-item .item-status {
+    position: absolute; right: 3px; top: 2px; font-size: 8px;
+  }
+  .sidebar.collapsed .sidebar-item { padding: 5px 0; }
+
+  /* H2 collapsed sidebar group header override */
+  .sidebar.collapsed .sidebar-group-header span:not(.group-icon) {
+    display: none;
+  }
+
+  /* H2 collapsed group header tooltip */
+  .sidebar.collapsed .sidebar-group-header[title]:hover::after {
+    content: attr(title);
+    position: absolute; left: 48px; top: 50%; transform: translateY(-50%);
+    background: var(--elevated); color: var(--text);
+    padding: 4px 10px; border-radius: 4px; font-size: 11px;
+    border: 1px solid var(--border); white-space: nowrap;
+    z-index: 100; pointer-events: none;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+  }
+</style>
+</head>
+<body>
+
+<a href="index.html" class="back-link">&larr; All Models</a>
+<span class="model-tag">H2: Inline Sections</span>
+
+<!-- Controls bar -->
+<div class="controls">
+  <button class="ctrl-btn" id="playBtn" onclick="togglePlay()">&#9654; Play</button>
+  <button class="ctrl-btn" onclick="resetFlow()">&#10227; Reset</button>
+  <span class="step-counter">Step <span id="stepNum">0</span> / <span id="stepTotal">0</span></span>
+  <div class="progress-track"><div class="progress-fill" id="progressFill"></div></div>
+  <span class="kbd-hint"><kbd>Space</kbd> play &nbsp;<kbd>&rarr;</kbd> step &nbsp;<kbd>Esc</kbd> reset/close &nbsp;<kbd>B</kbd> sidebar</span>
+</div>
+
+<!-- Status bar -->
+<div class="status-bar">
+  <span class="ticket-id">AUTH-42</span>
+  <div class="sb-sep"></div>
+  <span class="ticket-title">Add user authentication</span>
+  <div class="sb-spacer"></div>
+  <div class="phase-dots">
+    <div class="phase-dot" id="pd-D"><span class="dot pending"></span><span class="check">&#10003;</span><span class="label">Describe</span></div>
+    <span class="phase-sep">&rsaquo;</span>
+    <div class="phase-dot" id="pd-S"><span class="dot pending"></span><span class="check">&#10003;</span><span class="label">Specify</span></div>
+    <span class="phase-sep">&rsaquo;</span>
+    <div class="phase-dot" id="pd-P"><span class="dot pending"></span><span class="check">&#10003;</span><span class="label">Plan</span></div>
+    <span class="phase-sep">&rsaquo;</span>
+    <div class="phase-dot" id="pd-E"><span class="dot pending"></span><span class="check">&#10003;</span><span class="label">Execute</span></div>
+    <span class="phase-sep">&rsaquo;</span>
+    <div class="phase-dot" id="pd-V"><span class="dot pending"></span><span class="check">&#10003;</span><span class="label">Verify</span></div>
+  </div>
+</div>
+
+<!-- Main area -->
+<div class="main-area">
+
+  <!-- LEFT SIDEBAR -->
+  <div class="sidebar" id="sidebar">
+    <div class="sidebar-scroll" id="sidebarScroll">
+      <div class="sidebar-group" id="sg-describe">
+        <div class="sidebar-group-header" onclick="toggleSidebarGroup('describe')" title="Describe">
+          <span class="group-toggle" id="gt-describe">&#9662;</span>
+          <span class="group-icon">&#128203;</span>
+          <span>Describe</span>
+        </div>
+        <div class="sidebar-group-items" id="gi-describe"></div>
+      </div>
+      <div class="sidebar-group" id="sg-specify">
+        <div class="sidebar-group-header" onclick="toggleSidebarGroup('specify')" title="Specify">
+          <span class="group-toggle" id="gt-specify">&#9662;</span>
+          <span class="group-icon">&#128196;</span>
+          <span>Specify</span>
+        </div>
+        <div class="sidebar-group-items" id="gi-specify"></div>
+      </div>
+      <div class="sidebar-group" id="sg-plan">
+        <div class="sidebar-group-header" onclick="toggleSidebarGroup('plan')" title="Plan">
+          <span class="group-toggle" id="gt-plan">&#9662;</span>
+          <span class="group-icon">&#128230;</span>
+          <span>Plan</span>
+        </div>
+        <div class="sidebar-group-items" id="gi-plan"></div>
+      </div>
+      <div class="sidebar-group" id="sg-execute">
+        <div class="sidebar-group-header" onclick="toggleSidebarGroup('execute')" title="Execute">
+          <span class="group-toggle" id="gt-execute">&#9662;</span>
+          <span class="group-icon">&#9889;</span>
+          <span>Execute</span>
+        </div>
+        <div class="sidebar-group-items" id="gi-execute"></div>
+      </div>
+      <div class="sidebar-group" id="sg-verify">
+        <div class="sidebar-group-header" onclick="toggleSidebarGroup('verify')" title="Verify">
+          <span class="group-toggle" id="gt-verify">&#9662;</span>
+          <span class="group-icon">&#10003;</span>
+          <span>Verify</span>
+        </div>
+        <div class="sidebar-group-items" id="gi-verify"></div>
+      </div>
+    </div>
+    <div class="sidebar-toggle" onclick="toggleSidebarCollapse()">
+      <span class="toggle-icon">&#9664;</span>
+      <span class="toggle-label">Collapse</span>
+    </div>
+  </div>
+
+  <!-- SCROLLABLE DOCUMENT (sections live here) -->
+  <div class="document-area">
+    <div class="doc-scroll" id="docScroll">
+      <div class="doc-inner" id="docInner"></div>
+    </div>
+  </div>
+
+  <!-- ARTIFACT PANEL (right side) -->
+  <div class="artifact-panel" id="artifactPanel">
+    <div class="ap-header" id="apHeader">
+      <span class="ap-badge new" id="apBadge">NEW</span>
+      <span class="ap-path" id="apPath">auth/README.md</span>
+      <span class="ap-stats" id="apStats"><span class="stat-add">+47</span></span>
+      <button class="ap-close" id="apClose" onclick="closePeek()">&times; Close</button>
+    </div>
+    <div class="ap-body" id="apBody"></div>
+    <div class="ap-actions" id="apActions">
+      <button class="btn-request" onclick="requestChanges()">Request Changes</button>
+      <button class="btn-approve" id="approveBtn" onclick="handleApprove()">Approve &#10003;</button>
+    </div>
+  </div>
+</div>
+
+<!-- Shared data -->
+<script src="shared/data.js"></script>
+
+<script>
+// ── H2 Section definitions ───────────────────────────────────────
+var SECTION_DEFS = [
+  { id: 'build-desc',    phase: 'describe', icon: '\u{1F4CB}', title: 'Build Description', group: 'describe' },
+  { id: 'product-design',phase: 'describe', icon: '\u{1F4CB}', title: 'Product Design',    group: 'describe' },
+  { id: 'review-auth',   phase: 'specify',  icon: '\u{1F4C4}', title: 'Review auth/README', group: 'specify' },
+  { id: 'review-dd',     phase: 'specify',  icon: '\u{1F4C4}', title: 'Review DESIGN_DOC',  group: 'specify' },
+  { id: 'review-core',   phase: 'specify',  icon: '\u{1F4C4}', title: 'Review core/README', group: 'specify' },
+  { id: 'build-plan',    phase: 'plan',     icon: '\u{1F4E6}', title: 'Build Plan',         group: 'plan' },
+  { id: 'exec-steps',    phase: 'execute',  icon: '⚡',    title: 'Execute Steps 1-6',  group: 'execute' },
+  { id: 'run-checks',    phase: 'verify',   icon: '✓',    title: 'Run Checks',         group: 'verify' }
+];
+
+// ── H2 SCRIPT ────────────────────────────────────────────────────
+window.SCRIPT = [
+  // --- DESCRIBE PHASE ---
+  { id: 1,  type: 'phase-header', phase: 'D', label: 'DESCRIBE' },
+  { id: 2,  type: 'open-section', sectionId: 'build-desc' },
+  { id: 3,  type: 'section-msg', sectionId: 'build-desc', role: 'agent', text: 'What would you like to work on?' },
+  { id: 4,  type: 'section-msg', sectionId: 'build-desc', role: 'user', text: 'Add user authentication to the Bonsai workspace', interactive: true, placeholder: 'Add user authentication to the Bonsai workspace' },
+  { id: 5,  type: 'section-msg', sectionId: 'build-desc', role: 'agent', text: "Got it -- an auth module. Let me ask a few scoping questions." },
+  { id: 6,  type: 'section-decision', sectionId: 'build-desc', question: 'What kind of authentication?', options: ['Token-based', 'OAuth/SSO', 'Simple password'], recommended: 0, hint: 'Extends your existing bns_ token system.' },
+  { id: 7,  type: 'section-msg', sectionId: 'build-desc', role: 'agent', text: "Token-based -- aligns well with <code>bns_</code> pattern. User roles?" },
+  { id: 8,  type: 'section-decision', sectionId: 'build-desc', question: 'User roles?', options: ['Admin + User + Viewer', 'Admin + User', 'Custom roles'], recommended: 0, hint: 'Three tiers gives good granularity without complexity.' },
+  { id: 9,  type: 'section-msg', sectionId: 'build-desc', role: 'agent', text: "Three-tier roles. Here's the formalized description:" },
+  { id: 10, type: 'section-artifact', sectionId: 'build-desc', header: 'Ticket Description', body: '<strong>What:</strong> Add JWT-based user auth with signup, login, session management, and RBAC.<br><strong>Purpose:</strong> Multi-user Bonsai access with role boundaries.<br><strong>Success:</strong> Users sign up, log in, receive JWT, access per role.' },
+  { id: 11, type: 'section-decision', sectionId: 'build-desc', question: 'Proceed with this description?', options: ['Yes, looks good', 'Needs changes'], recommended: 0 },
+  { id: 12, type: 'complete-section', sectionId: 'build-desc', summary: 'Scoped: token-based auth, 3-tier roles, JWT tokens.', duration: '2min' },
+
+  // Product Design section
+  { id: 13, type: 'open-section', sectionId: 'product-design' },
+  { id: 14, type: 'section-msg', sectionId: 'product-design', role: 'agent', text: "Building the product design, section by section." },
+  { id: 15, type: 'section-typing', sectionId: 'product-design', duration: 1000 },
+  { id: 16, type: 'section-msg', sectionId: 'product-design', role: 'agent', text: "Starting with the <strong>Goal</strong>:" },
+  { id: 17, type: 'open-artifact', sectionId: 'product-design', docSection: 'goal' },
+  { id: 18, type: 'section-decision', sectionId: 'product-design', question: 'Goal section', options: ['Looks good, continue', 'Needs revision'], recommended: 0 },
+  { id: 19, type: 'section-msg', sectionId: 'product-design', role: 'agent', text: "Good. Adding <strong>User Stories</strong>..." },
+  { id: 20, type: 'section-typing', sectionId: 'product-design', duration: 600 },
+  { id: 21, type: 'update-artifact', docSection: 'stories' },
+  { id: 22, type: 'section-decision', sectionId: 'product-design', question: 'User stories', options: ['Cover it', 'Add more', 'Revise'], recommended: 0 },
+  { id: 23, type: 'section-msg', sectionId: 'product-design', role: 'agent', text: "Adding <strong>Roles &amp; Permissions</strong> matrix..." },
+  { id: 24, type: 'section-typing', sectionId: 'product-design', duration: 500 },
+  { id: 25, type: 'update-artifact', docSection: 'roles' },
+  { id: 26, type: 'section-decision', sectionId: 'product-design', question: 'Roles & permissions', options: ['Good as is', 'Adjust'], recommended: 0 },
+  { id: 27, type: 'section-msg', sectionId: 'product-design', role: 'agent', text: "Adding <strong>Success Criteria</strong> and <strong>Out of Scope</strong>..." },
+  { id: 28, type: 'section-typing', sectionId: 'product-design', duration: 400 },
+  { id: 29, type: 'update-artifact', docSection: 'full' },
+  { id: 30, type: 'section-msg', sectionId: 'product-design', role: 'agent', text: "Product design complete. Review and approve." },
+  { id: 31, type: 'approve-doc' },
+  { id: 32, type: 'close-artifact' },
+  { id: 33, type: 'complete-section', sectionId: 'product-design', summary: 'Built 5-section doc: goal, stories, roles, criteria, scope. Approved.', duration: '4min' },
+
+  // --- SPECIFY PHASE ---
+  { id: 34, type: 'phase-header', phase: 'S', label: 'SPECIFY' },
+  { id: 35, type: 'open-section', sectionId: 'review-auth' },
+  { id: 36, type: 'section-msg', sectionId: 'review-auth', role: 'agent', text: "Starting with <code>auth/README.md</code> -- the new module design spec." },
+  { id: 37, type: 'open-diff', sectionId: 'review-auth', diffIdx: 0 },
+  { id: 38, type: 'section-decision', sectionId: 'review-auth', question: 'JWT or session-based auth?', options: ['JWT tokens', 'Session-based', 'Hybrid'], recommended: 0, hint: 'Your bns_ token pattern aligns well with JWT.' },
+  { id: 39, type: 'section-msg', sectionId: 'review-auth', role: 'agent', text: "Updated the authentication strategy." },
+  { id: 40, type: 'open-nested', sectionId: 'review-auth', nestedId: 'jwt-research', icon: '\u{1F52C}', title: 'JWT Research' },
+  { id: 41, type: 'nested-msg', sectionId: 'review-auth', nestedId: 'jwt-research', role: 'agent', text: 'Researching token lifetimes and refresh patterns...' },
+  { id: 42, type: 'nested-msg', sectionId: 'review-auth', nestedId: 'jwt-research', role: 'agent', text: 'Recommendation: access 15min, refresh 7d. Refresh rotation on each use.' },
+  { id: 43, type: 'complete-nested', sectionId: 'review-auth', nestedId: 'jwt-research', summary: 'Access 15min, refresh 7d. Rotation strategy.' },
+  { id: 44, type: 'section-msg', sectionId: 'review-auth', role: 'agent', text: "Research applied. Viewer role with read-only access -- keep it?" },
+  { id: 45, type: 'section-decision', sectionId: 'review-auth', question: 'Keep the viewer role?', options: ['Yes, keep', 'Remove it'], recommended: 0 },
+  { id: 46, type: 'section-msg', sectionId: 'review-auth', role: 'agent', text: "Good. Approve the diff when ready." },
+  { id: 47, type: 'approve-diff', diffIdx: 0 },
+  { id: 48, type: 'complete-section', sectionId: 'review-auth', summary: 'JWT strategy confirmed. Viewer role kept. Approved.', duration: '3min' },
+  { id: 49, type: 'close-artifact' },
+
+  { id: 50, type: 'open-section', sectionId: 'review-dd' },
+  { id: 51, type: 'section-msg', sectionId: 'review-dd', role: 'agent', text: "Added auth module to architecture overview in <code>DESIGN_DOC.md</code>." },
+  { id: 52, type: 'open-diff', sectionId: 'review-dd', diffIdx: 1 },
+  { id: 53, type: 'section-msg', sectionId: 'review-dd', role: 'agent', text: "Auth integration flow and route protection documented." },
+  { id: 54, type: 'approve-diff', diffIdx: 1 },
+  { id: 55, type: 'complete-section', sectionId: 'review-dd', summary: 'Architecture updated with auth module. Approved.', duration: '1min' },
+  { id: 56, type: 'close-artifact' },
+
+  { id: 57, type: 'open-section', sectionId: 'review-core' },
+  { id: 58, type: 'section-msg', sectionId: 'review-core', role: 'agent', text: "Updated <code>core/README.md</code> with new auth dependencies." },
+  { id: 59, type: 'open-diff', sectionId: 'review-core', diffIdx: 2 },
+  { id: 60, type: 'section-msg', sectionId: 'review-core', role: 'agent', text: "New tables and deps added to core config." },
+  { id: 61, type: 'approve-diff', diffIdx: 2 },
+  { id: 62, type: 'complete-section', sectionId: 'review-core', summary: 'Core deps updated for auth module. Approved.', duration: '1min' },
+  { id: 63, type: 'close-artifact' },
+  { id: 64, type: 'all-approved' },
+
+  // --- PLAN PHASE ---
+  { id: 65, type: 'phase-header', phase: 'P', label: 'PLAN' },
+  { id: 66, type: 'open-section', sectionId: 'build-plan' },
+  { id: 67, type: 'section-msg', sectionId: 'build-plan', role: 'agent', text: "All specs approved. Let's build the implementation plan." },
+  { id: 68, type: 'section-decision', sectionId: 'build-plan', question: 'Plan structure?', options: ['Layer by layer', 'Feature by feature', 'Test-driven'], recommended: 0, hint: 'Build the foundation first, then layer on features.' },
+  { id: 69, type: 'section-msg', sectionId: 'build-plan', role: 'agent', text: "Layer by layer. How many milestones?" },
+  { id: 70, type: 'section-decision', sectionId: 'build-plan', question: 'Milestones?', options: ['2 (core + admin)', 'Single milestone', '3 milestones'], recommended: 0 },
+  { id: 71, type: 'section-msg', sectionId: 'build-plan', role: 'agent', text: "Building the plan..." },
+  { id: 72, type: 'section-typing', sectionId: 'build-plan', duration: 1000 },
+  { id: 73, type: 'open-plan' },
+  { id: 74, type: 'section-msg', sectionId: 'build-plan', role: 'agent', text: "6 steps across 2 milestones. Review the plan." },
+  { id: 75, type: 'section-decision', sectionId: 'build-plan', question: 'Ready to execute?', options: ['Execute this plan', 'Adjust order', 'Add detail'], recommended: 0 },
+  { id: 76, type: 'complete-section', sectionId: 'build-plan', summary: '2 milestones, 6 steps. Layer-by-layer execution plan.', duration: '2min' },
+  { id: 77, type: 'close-artifact' },
+
+  // --- EXECUTE PHASE ---
+  { id: 78, type: 'phase-header', phase: 'E', label: 'EXECUTE' },
+  { id: 79, type: 'open-section', sectionId: 'exec-steps' },
+  { id: 80, type: 'section-msg', sectionId: 'exec-steps', role: 'agent', text: "Starting execution..." },
+  { id: 81, type: 'open-exec' },
+  { id: 82, type: 'exec-progress', sectionId: 'exec-steps' },
+  { id: 83, type: 'section-msg', sectionId: 'exec-steps', role: 'agent', text: "All 6 steps complete." },
+  { id: 84, type: 'close-artifact' },
+  { id: 85, type: 'complete-section', sectionId: 'exec-steps', summary: '6/6 steps complete. Models, storage, service, middleware, API, tests.', duration: '5min' },
+
+  // --- VERIFY PHASE ---
+  { id: 86, type: 'phase-header', phase: 'V', label: 'VERIFY' },
+  { id: 87, type: 'open-section', sectionId: 'run-checks' },
+  { id: 88, type: 'section-msg', sectionId: 'run-checks', role: 'agent', text: "Running verification..." },
+  { id: 89, type: 'section-typing', sectionId: 'run-checks', duration: 800 },
+  { id: 90, type: 'section-msg', sectionId: 'run-checks', role: 'agent', text: "All checks passed -- tests green, types valid, lint clean." },
+  { id: 91, type: 'complete-section', sectionId: 'run-checks', summary: 'All checks passed. Ticket complete.', duration: '1min' },
+  { id: 92, type: 'complete' }
+];
+</script>
+
+<!-- Shared engine (provides play/pause, keyboard base, utility functions) -->
+<script src="shared/engine.js"></script>
+<!-- Shared sidebar (provides toggleSidebarGroup, toggleSidebarCollapse) -->
+<script src="shared/sidebar.js"></script>
+
+<script>
+// ============================================================
+// H2: Section-based overrides
+// ============================================================
+
+// ── H2 State ─────────────────────────────────────────────────────
+var sectionEls = {};
+var sidebarItemEls = {};
+var activeSectionId = null;
+
+// ── DOM refs ─────────────────────────────────────────────────────
+var docInner = document.getElementById('docInner');
+var docScroll = document.getElementById('docScroll');
+
+// ── Scroll ───────────────────────────────────────────────────────
+function scrollDoc() {
+  requestAnimationFrame(function() {
+    docScroll.scrollTop = docScroll.scrollHeight;
+  });
+}
+
+// ── H2 Sidebar (uses own item-status pattern, not sidebar.js) ───
+
+function h2AddSidebarItem(sectionId) {
+  var def = SECTION_DEFS.find(function(s) { return s.id === sectionId; });
+  if (!def || sidebarItemEls[sectionId]) return;
+  var container = document.getElementById('gi-' + def.group);
+  if (!container) return;
+
+  var item = document.createElement('div');
+  item.className = 'sidebar-item';
+  item.dataset.section = sectionId;
+  item.title = def.title;
+  item.innerHTML = '<span class="item-icon">' + def.icon + '</span>' +
+    '<span class="item-label">' + def.title + '</span>' +
+    '<span class="item-status status-pending">○</span>';
+  item.onclick = function() { scrollToSection(sectionId); };
+  container.appendChild(item);
+  sidebarItemEls[sectionId] = item;
+}
+
+function h2SetSidebarStatus(sectionId, status) {
+  var el = sidebarItemEls[sectionId];
+  if (!el) return;
+  var statusEl = el.querySelector('.item-status');
+  el.classList.remove('active', 'done');
+  if (status === 'active') {
+    el.classList.add('active');
+    if (statusEl) { statusEl.textContent = '●'; statusEl.className = 'item-status status-active'; }
+  } else if (status === 'done') {
+    el.classList.add('done');
+    if (statusEl) { statusEl.textContent = '✓'; statusEl.className = 'item-status status-done'; }
+  } else {
+    if (statusEl) { statusEl.textContent = '○'; statusEl.className = 'item-status status-pending'; }
+  }
+}
+
+function setActiveSidebar(sectionId) {
+  Object.keys(sidebarItemEls).forEach(function(k) {
+    if (sidebarItemEls[k] && !sidebarItemEls[k].classList.contains('done')) {
+      sidebarItemEls[k].classList.remove('active');
+    }
+  });
+  if (sectionId && sidebarItemEls[sectionId]) {
+    sidebarItemEls[sectionId].classList.add('active');
+  }
+}
+
+function scrollToSection(sectionId) {
+  var el = sectionEls[sectionId];
+  if (!el) return;
+  if (el.classList.contains('collapsed')) {
+    el.classList.remove('collapsed');
+    el.classList.add('expanded');
+  }
+  el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+// ── Sections ─────────────────────────────────────────────────────
+
+function createSection(sectionId) {
+  var def = SECTION_DEFS.find(function(s) { return s.id === sectionId; });
+  if (!def || sectionEls[sectionId]) return;
+
+  h2AddSidebarItem(sectionId);
+  h2SetSidebarStatus(sectionId, 'active');
+  setActiveSidebar(sectionId);
+  activeSectionId = sectionId;
+
+  var section = document.createElement('div');
+  section.className = 'section expanded active';
+  section.id = 'sec-' + sectionId;
+  section.innerHTML =
+    '<div class="section-header" onclick="toggleSection(\'' + sectionId + '\')">' +
+      '<span class="section-toggle">▾</span>' +
+      '<span class="section-icon">' + def.icon + '</span>' +
+      '<span class="section-title">' + def.title + '</span>' +
+      '<span class="section-status status-active">●</span>' +
+      '<span class="section-meta" id="sec-meta-' + sectionId + '">active</span>' +
+    '</div>' +
+    '<div class="section-summary" id="sec-summary-' + sectionId + '"></div>' +
+    '<div class="section-body" id="sec-body-' + sectionId + '"></div>';
+
+  docInner.appendChild(section);
+  sectionEls[sectionId] = section;
+
+  Object.keys(sectionEls).forEach(function(k) {
+    if (k !== sectionId) sectionEls[k].classList.remove('active');
+  });
+
+  scrollDoc();
+}
+
+function completeSection(sectionId, summary, duration) {
+  var section = sectionEls[sectionId];
+  if (!section) return;
+
+  section.classList.remove('expanded', 'active');
+  section.classList.add('collapsed', 'done');
+
+  var statusEl = section.querySelector('.section-status');
+  if (statusEl) { statusEl.textContent = '✓'; statusEl.className = 'section-status status-done'; }
+  var metaEl = document.getElementById('sec-meta-' + sectionId);
+  if (metaEl) metaEl.textContent = duration || '';
+  var toggleEl = section.querySelector('.section-toggle');
+  if (toggleEl) toggleEl.innerHTML = '▸';
+
+  var summaryEl = document.getElementById('sec-summary-' + sectionId);
+  if (summaryEl) summaryEl.textContent = summary || '';
+
+  var inputBar = section.querySelector('.section-input');
+  if (inputBar) inputBar.remove();
+
+  h2SetSidebarStatus(sectionId, 'done');
+  activeSectionId = null;
+}
+
+function toggleSection(sectionId) {
+  var section = sectionEls[sectionId];
+  if (!section) return;
+
+  if (section.classList.contains('expanded')) {
+    section.classList.remove('expanded');
+    section.classList.add('collapsed');
+    var toggleEl = section.querySelector('.section-toggle');
+    if (toggleEl) toggleEl.innerHTML = '▸';
+  } else {
+    section.classList.remove('collapsed');
+    section.classList.add('expanded');
+    var toggleEl2 = section.querySelector('.section-toggle');
+    if (toggleEl2) toggleEl2.innerHTML = '▾';
+    setTimeout(function() {
+      section.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }, 100);
+  }
+}
+
+function getSectionBody(sectionId) {
+  return document.getElementById('sec-body-' + sectionId);
+}
+
+// ── Messages inside sections ─────────────────────────────────────
+
+function addSectionMsg(sectionId, role, text) {
+  var body = getSectionBody(sectionId);
+  if (!body) return;
+  var div = document.createElement('div');
+  div.className = 'msg ' + role + ' fade-in';
+  div.innerHTML = text;
+  body.appendChild(div);
+  scrollDoc();
+}
+
+function addSectionTyping(sectionId) {
+  var body = getSectionBody(sectionId);
+  if (!body) return;
+  var div = document.createElement('div');
+  div.className = 'typing-indicator fade-in';
+  div.id = 'typing-' + sectionId;
+  div.innerHTML = '<span class="dot"></span><span class="dot"></span><span class="dot"></span>';
+  body.appendChild(div);
+  scrollDoc();
+}
+
+function removeSectionTyping(sectionId) {
+  var el = document.getElementById('typing-' + sectionId);
+  if (el) el.remove();
+}
+
+function addSectionDecision(sectionId, step) {
+  var body = getSectionBody(sectionId);
+  if (!body) return;
+  var div = document.createElement('div');
+  div.className = 'decision-card fade-in';
+  div.id = 'dc-' + step.id;
+
+  var optsHtml = '';
+  step.options.forEach(function(opt, i) {
+    var rec = i === step.recommended ? ' recommended' : '';
+    optsHtml += '<button class="dc-opt' + rec + '" onclick="handleDecision(' + step.id + ', ' + i + ', \'' + opt.replace(/'/g, "\\'") + '\')">' + opt + '</button>';
+  });
+  var hintHtml = step.hint ? '<div class="dc-hint">' + step.hint + '</div>' : '';
+
+  div.innerHTML =
+    '<div class="dc-label">DECISION</div>' +
+    '<div class="dc-q">' + step.question + '</div>' +
+    '<div class="dc-opts">' + optsHtml + '</div>' +
+    hintHtml;
+  body.appendChild(div);
+  scrollDoc();
+}
+
+function addSectionArtifactCard(sectionId, step) {
+  var body = getSectionBody(sectionId);
+  if (!body) return;
+  var div = document.createElement('div');
+  div.className = 'artifact-card fade-in';
+  div.innerHTML =
+    '<div class="ac-header">' + step.header + '</div>' +
+    '<div class="ac-body">' + step.body + '</div>' +
+    '<span class="card-peek-hint">Click to review</span>';
+  body.appendChild(div);
+  scrollDoc();
+}
+
+// ── Nested subsections ───────────────────────────────────────────
+
+function openNestedSection(sectionId, nestedId, icon, title) {
+  var body = getSectionBody(sectionId);
+  if (!body) return;
+
+  var nested = document.createElement('div');
+  nested.className = 'nested-section';
+  nested.id = 'nested-' + nestedId;
+  nested.innerHTML =
+    '<div class="section-header">' +
+      '<span class="section-toggle">▾</span>' +
+      '<span class="section-icon">' + icon + '</span>' +
+      '<span class="section-title">' + title + '</span>' +
+      '<span class="section-status status-active">●</span>' +
+      '<span class="section-meta" id="nested-meta-' + nestedId + '">active</span>' +
+    '</div>' +
+    '<div class="section-summary" id="nested-summary-' + nestedId + '" style="display:none"></div>' +
+    '<div class="section-body" id="nested-body-' + nestedId + '"></div>';
+  body.appendChild(nested);
+  scrollDoc();
+}
+
+function addNestedMsg(nestedId, role, text) {
+  var body = document.getElementById('nested-body-' + nestedId);
+  if (!body) return;
+  var div = document.createElement('div');
+  div.className = 'msg ' + role + ' fade-in';
+  div.innerHTML = text;
+  body.appendChild(div);
+  scrollDoc();
+}
+
+function completeNested(nestedId, summary) {
+  var nested = document.getElementById('nested-' + nestedId);
+  if (!nested) return;
+  nested.classList.add('done');
+  var statusEl = nested.querySelector('.section-status');
+  if (statusEl) { statusEl.textContent = '✓'; statusEl.className = 'section-status status-done'; }
+  var metaEl = document.getElementById('nested-meta-' + nestedId);
+  if (metaEl) metaEl.textContent = '1min';
+  var summaryEl = document.getElementById('nested-summary-' + nestedId);
+  if (summaryEl) { summaryEl.textContent = summary; summaryEl.style.display = ''; }
+  var body = document.getElementById('nested-body-' + nestedId);
+  if (body) body.style.display = 'none';
+  var toggleEl = nested.querySelector('.section-toggle');
+  if (toggleEl) toggleEl.innerHTML = '▸';
+}
+
+// ── Phase header in document ─────────────────────────────────────
+
+function addPhaseHeader(label) {
+  var div = document.createElement('div');
+  div.className = 'phase-header fade-in';
+  div.innerHTML = '<span class="ph-label">' + label + '</span>';
+  docInner.appendChild(div);
+  scrollDoc();
+}
+
+// ── Artifact panel (H2-specific: diff, doc, plan, exec) ──────────
+
+function openDiffPanel(diffIdx) {
+  currentArtifact = diffIdx;
+  var d = DIFFS[diffIdx];
+  var count = approvedArtifacts.filter(Boolean).length;
+  document.body.classList.add('split-mode');
+  document.getElementById('apHeader').innerHTML =
+    '<span class="ap-badge spec">SPEC</span>' +
+    '<span class="ap-path">' + d.path + '</span>' +
+    '<span class="ap-stats">' + d.stats + ' &middot; ' + count + '/3 approved</span>';
+  document.getElementById('apBody').innerHTML = '<div class="diff-view">' + d.content + '</div>';
+  document.getElementById('apActions').innerHTML = approvedArtifacts[diffIdx]
+    ? '<span style="font-size:13px;color:var(--green);font-weight:600;padding:0 8px;">✓ Approved</span>'
+    : '<button class="btn-request" onclick="requestChanges()">Request Changes</button><button class="btn-approve" onclick="handleApprove()">Approve ✓</button>';
+}
+
+function openDocPanel(section) {
+  document.body.classList.add('split-mode');
+  document.getElementById('apHeader').innerHTML =
+    '<span class="ap-badge doc">DOC</span>' +
+    '<span class="ap-path">product-design.md</span>' +
+    '<span class="ap-stats">Building...</span>';
+  document.getElementById('apBody').innerHTML = DOC_SECTIONS[section];
+  document.getElementById('apActions').innerHTML = '';
+}
+
+function updateDocPanel(section) {
+  document.getElementById('apBody').innerHTML = DOC_SECTIONS[section];
+  if (section === 'full') {
+    document.getElementById('apActions').innerHTML =
+      '<button class="btn-request" onclick="requestChanges()">Request Changes</button>' +
+      '<button class="btn-approve" id="approveDocBtn" onclick="handleApproveDoc()">Approve Product Design ✓</button>';
+    var statsEl = document.getElementById('apStats');
+    if (statsEl) statsEl.textContent = '';
+  }
+  var body = document.getElementById('apBody');
+  if (body) body.scrollTop = body.scrollHeight;
+}
+
+function autoApproveDiff(idx) {
+  approvedArtifacts[idx] = true;
+  var d = DIFFS[idx];
+  var count = approvedArtifacts.filter(Boolean).length;
+  document.getElementById('apHeader').innerHTML =
+    '<span class="ap-badge spec">SPEC</span>' +
+    '<span class="ap-path">' + d.path + '</span>' +
+    '<span class="ap-stats">' + d.stats + ' &middot; ' + count + '/3 approved</span>';
+  document.getElementById('apActions').innerHTML =
+    '<span style="font-size:13px;color:var(--green);font-weight:600;padding:0 8px;">✓ Approved</span>';
+}
+
+// Peek mode for sidebar clicks
+function peekArtifact(key) {
+  if (document.body.classList.contains('split-mode') && !peekMode) {
+    peekSavedState = {
+      header: document.getElementById('apHeader').innerHTML,
+      body: document.getElementById('apBody').innerHTML,
+      actions: document.getElementById('apActions').innerHTML
+    };
+  }
+  peekMode = true;
+  document.body.classList.add('split-mode', 'peek-mode');
+
+  var closeBtn = '<button class="ap-close" onclick="closePeek()" style="display:inline-flex;align-items:center;gap:4px;margin-left:auto;cursor:pointer;font-size:12px;color:var(--text-dim);background:none;border:1px solid var(--border);border-radius:4px;padding:4px 12px;font-family:inherit">&larr; Back to flow</button>';
+
+  if (key === 'description') {
+    document.getElementById('apHeader').innerHTML = '<span class="ap-badge doc">DOC</span><span class="ap-path">Ticket Description</span><span class="ap-stats"></span><button class="ap-close" id="apClose" onclick="closePeek()">&times; Close</button>';
+    document.getElementById('apBody').innerHTML = '<div class="doc-preview"><h1>Ticket: Add user authentication</h1><h2>What</h2><p>Add JWT-based user authentication with signup, login, session management, and role-based access control.</p><h2>Purpose</h2><p>Enable multi-user access to Bonsai workspaces with permission boundaries.</p></div>';
+    document.getElementById('apActions').innerHTML = closeBtn;
+  } else if (key === 'product-design') {
+    document.getElementById('apHeader').innerHTML = '<span class="ap-badge doc">DOC</span><span class="ap-path">product-design.md</span><span class="ap-stats"></span><button class="ap-close" id="apClose" onclick="closePeek()">&times; Close</button>';
+    document.getElementById('apBody').innerHTML = DOC_SECTIONS.full;
+    document.getElementById('apActions').innerHTML = closeBtn;
+  } else if (key === 'plan') {
+    document.getElementById('apHeader').innerHTML = '<span class="ap-badge new">PLAN</span><span class="ap-path">Implementation Plan</span><span class="ap-stats">2 milestones &middot; 6 steps</span><button class="ap-close" id="apClose" onclick="closePeek()">&times; Close</button>';
+    document.getElementById('apBody').innerHTML = buildStepsHTML('plan');
+    document.getElementById('apActions').innerHTML = closeBtn;
+  }
+}
+
+// ── H2 Execution animation (routes messages to section) ──────────
+
+function h2RunExecAnimation(sectionId, callback) {
+  execAnimationRunning = true;
+  var stepIdx = 0;
+  var msgIdx = 0;
+
+  function runNextExecStep() {
+    if (stepIdx >= EXEC_STEPS.length) {
+      execAnimationRunning = false;
+      var counter = document.getElementById('execCounter');
+      if (counter) counter.textContent = '6/6 complete';
+      if (callback) callback();
+      return;
+    }
+    var stepEl = document.getElementById('sr-' + stepIdx);
+    if (stepEl) {
+      stepEl.className = 'step-row running';
+      stepEl.querySelector('.step-icon').textContent = '●';
+    }
+    var codeHeader = document.getElementById('codePreviewHeader');
+    if (codeHeader) {
+      codeHeader.innerHTML = '<span class="cph-file">' + EXEC_STEPS[stepIdx].file + '</span>';
+    }
+    var codeBody = document.getElementById('codePreviewBody');
+    if (codeBody) {
+      codeBody.innerHTML = '';
+      var snippet = EXEC_CODE_SNIPPETS[stepIdx];
+      var lineIdx = 0;
+
+      function addNextLine() {
+        if (lineIdx >= snippet.length) {
+          setTimeout(function() {
+            if (stepEl) {
+              stepEl.className = 'step-row done';
+              stepEl.querySelector('.step-icon').textContent = '✓';
+            }
+            var counter = document.getElementById('execCounter');
+            if (counter) counter.textContent = (stepIdx + 1) + '/6 complete';
+            if (msgIdx < EXEC_MESSAGES.length) {
+              addSectionMsg(sectionId, 'agent', EXEC_MESSAGES[msgIdx]);
+              msgIdx++;
+            }
+            if (msgIdx < EXEC_MESSAGES.length) {
+              setTimeout(function() {
+                addSectionMsg(sectionId, 'agent', EXEC_MESSAGES[msgIdx]);
+                msgIdx++;
+                stepIdx++;
+                setTimeout(runNextExecStep, 200);
+              }, 200);
+            } else {
+              stepIdx++;
+              setTimeout(runNextExecStep, 200);
+            }
+          }, 250);
+          return;
+        }
+        var line = snippet[lineIdx];
+        var lineEl = document.createElement('div');
+        if (line.t === 'hunk') {
+          lineEl.className = 'diff-hunk-header';
+          lineEl.textContent = line.v;
+        } else {
+          lineEl.className = 'diff-line add';
+          lineEl.style.animationDelay = (lineIdx * 0.03) + 's';
+          lineEl.innerHTML = '<span class="ln">' + line.ln + '</span>' + escapeHtml(line.v);
+        }
+        codeBody.appendChild(lineEl);
+        codeBody.scrollTop = codeBody.scrollHeight;
+        lineIdx++;
+        setTimeout(addNextLine, 50 + Math.random() * 30);
+      }
+      addNextLine();
+    } else {
+      stepIdx++;
+      setTimeout(runNextExecStep, 400);
+    }
+  }
+
+  if (EXEC_MESSAGES.length > 0) {
+    addSectionMsg(sectionId, 'agent', EXEC_MESSAGES[msgIdx]);
+    msgIdx++;
+  }
+  setTimeout(runNextExecStep, 300);
+}
+
+// ── All-approved flash ───────────────────────────────────────────
+
+function h2ShowAllApproved() {
+  var panel = document.getElementById('artifactPanel');
+  var flash = document.createElement('div');
+  flash.className = 'all-approved-flash';
+  flash.textContent = 'All specs approved ✔';
+  panel.style.position = 'relative';
+  panel.appendChild(flash);
+  setTimeout(function() { flash.remove(); }, 1400);
+}
+
+// ── Override engine.js: executeStep ──────────────────────────────
+
+executeStep = function(step) {
+  if (stepNumEl) stepNumEl.textContent = currentStep + 1;
+  if (progressFill && window.SCRIPT) {
+    var pct = ((currentStep + 1) / window.SCRIPT.length) * 100;
+    progressFill.style.width = pct + '%';
+  }
+
+  switch (step.type) {
+    case 'phase-header':
+      setPhaseActive(step.phase);
+      addPhaseHeader(step.label);
+      break;
+    case 'open-section':
+      createSection(step.sectionId);
+      break;
+    case 'section-msg':
+      if (step.role === 'agent') removeSectionTyping(step.sectionId);
+      addSectionMsg(step.sectionId, step.role, step.text);
+      break;
+    case 'section-typing':
+      addSectionTyping(step.sectionId);
+      break;
+    case 'section-decision':
+      addSectionDecision(step.sectionId, step);
+      break;
+    case 'section-artifact':
+      addSectionArtifactCard(step.sectionId, step);
+      break;
+    case 'complete-section':
+      completeSection(step.sectionId, step.summary, step.duration);
+      break;
+    case 'open-artifact':
+      openDocPanel(step.docSection);
+      break;
+    case 'update-artifact':
+      updateDocPanel(step.docSection);
+      break;
+    case 'close-artifact':
+      closeArtifactPanel();
+      break;
+    case 'approve-doc':
+      break;
+    case 'approve-diff':
+      break;
+    case 'open-diff':
+      openDiffPanel(step.diffIdx);
+      break;
+    case 'open-plan':
+      openPlanPanel();
+      break;
+    case 'open-exec':
+      openExecPanel();
+      break;
+    case 'exec-progress':
+      return;
+    case 'all-approved':
+      h2ShowAllApproved();
+      break;
+    case 'open-nested':
+      openNestedSection(step.sectionId, step.nestedId, step.icon, step.title);
+      break;
+    case 'nested-msg':
+      addNestedMsg(step.nestedId, step.role, step.text);
+      break;
+    case 'complete-nested':
+      completeNested(step.nestedId, step.summary);
+      break;
+    case 'complete':
+      completeAllPhases();
+      pause();
+      break;
+  }
+};
+
+// ── Override engine.js: advanceAutoPlay ───────────────────────────
+
+advanceAutoPlay = function() {
+  if (!playing || currentStep >= window.SCRIPT.length) { pause(); return; }
+
+  var step = window.SCRIPT[currentStep];
+  executeStep(step);
+  currentStep++;
+
+  var delay;
+  if (step.type === 'section-typing') {
+    delay = step.duration;
+  } else if (step.type === 'section-decision') {
+    delay = 1600;
+    var stepId = step.id;
+    var recOpt = step.options[step.recommended];
+    setTimeout(function() {
+      if (playing) resolveDecisionCard(stepId, recOpt);
+    }, 1300);
+  } else if (step.type === 'approve-doc') {
+    delay = 1000;
+    setTimeout(function() { if (playing) autoApproveDoc(); }, 700);
+  } else if (step.type === 'approve-diff') {
+    delay = 1000;
+    var diffIdx = step.diffIdx;
+    setTimeout(function() { if (playing) autoApproveDiff(diffIdx); }, 700);
+  } else if (step.type === 'open-artifact' || step.type === 'update-artifact' || step.type === 'open-diff') {
+    delay = 600;
+  } else if (step.type === 'close-artifact') {
+    delay = 400;
+  } else if (step.type === 'all-approved') {
+    delay = 1400;
+  } else if (step.type === 'exec-progress') {
+    h2RunExecAnimation(step.sectionId, function() {
+      if (playing) stepTimer = setTimeout(advanceAutoPlay, 500);
+    });
+    return;
+  } else if (step.type === 'complete') {
+    return;
+  } else if (step.type === 'section-msg' && step.interactive) {
+    delay = 800;
+  } else if (step.type === 'open-plan' || step.type === 'open-exec') {
+    delay = 600;
+  } else {
+    delay = 900;
+  }
+
+  stepTimer = setTimeout(advanceAutoPlay, delay);
+};
+
+// ── Override engine.js: advanceInteractive ───────────────────────
+
+advanceInteractive = function() {
+  if (currentStep >= window.SCRIPT.length) return;
+
+  var step = window.SCRIPT[currentStep];
+
+  // Interactive user input
+  if (step.type === 'section-msg' && step.interactive && !playing) {
+    executeStep(step);
+    currentStep++;
+    setTimeout(function() { advanceInteractive(); }, 400);
+    return;
+  }
+
+  // Decision: wait for click
+  if (step.type === 'section-decision' && !playing) {
+    executeStep(step);
+    currentStep++;
+    waitingForInteraction = true;
+    return;
+  }
+
+  // Approve diff: wait for click
+  if (step.type === 'approve-diff' && !playing) {
+    if (approvedArtifacts[step.diffIdx]) {
+      currentStep++;
+      setTimeout(function() { advanceInteractive(); }, 200);
+      return;
+    }
+    waitingForInteraction = true;
+    currentStep++;
+    return;
+  }
+
+  // Approve doc: wait for click
+  if (step.type === 'approve-doc' && !playing) {
+    if (productDesignApproved) {
+      currentStep++;
+      setTimeout(function() { advanceInteractive(); }, 200);
+      return;
+    }
+    waitingForInteraction = true;
+    currentStep++;
+    return;
+  }
+
+  executeStep(step);
+  currentStep++;
+
+  if (step.type === 'section-typing') {
+    setTimeout(function() { advanceInteractive(); }, step.duration);
+  } else if (step.type === 'exec-progress') {
+    h2RunExecAnimation(step.sectionId, function() {
+      setTimeout(function() { advanceInteractive(); }, 500);
+    });
+    return;
+  } else if (step.type === 'all-approved') {
+    setTimeout(function() { advanceInteractive(); }, 1200);
+  } else if (step.type === 'close-artifact') {
+    setTimeout(function() { advanceInteractive(); }, 300);
+  } else if (step.type === 'open-artifact' || step.type === 'update-artifact' || step.type === 'open-diff') {
+    setTimeout(function() { advanceInteractive(); }, 400);
+  } else if (step.type === 'open-plan' || step.type === 'open-exec') {
+    setTimeout(function() { advanceInteractive(); }, 500);
+  } else if (step.type === 'complete') {
+    // Done
+  } else {
+    setTimeout(function() { advanceInteractive(); }, 600);
+  }
+};
+
+// ── Override engine.js: handleApprove (H2 updates header inline) ─
+
+handleApprove = function() {
+  approvedArtifacts[currentArtifact] = true;
+  var d = DIFFS[currentArtifact];
+  var count = approvedArtifacts.filter(Boolean).length;
+  document.getElementById('apHeader').innerHTML =
+    '<span class="ap-badge spec">SPEC</span>' +
+    '<span class="ap-path">' + d.path + '</span>' +
+    '<span class="ap-stats">' + d.stats + ' &middot; ' + count + '/3 approved</span>';
+  document.getElementById('apActions').innerHTML =
+    '<span style="font-size:13px;color:var(--green);font-weight:600;padding:0 8px;">✓ Approved</span>';
+  waitingForInteraction = false;
+  if (!playing) {
+    setTimeout(function() { advanceInteractive(); }, 400);
+  }
+};
+
+// ── Override engine.js: stepForward ──────────────────────────────
+
+stepForward = function() {
+  if (playing) return;
+
+  if (peekMode) {
+    closePeek();
+    return;
+  }
+
+  if (waitingForInteraction) {
+    var step = window.SCRIPT[currentStep - 1] || window.SCRIPT[currentStep];
+    if (step && step.type === 'section-decision') {
+      resolveDecisionCard(step.id, step.options[step.recommended]);
+      waitingForInteraction = false;
+      setTimeout(function() { advanceInteractive(); }, 200);
+    } else if (step && step.type === 'approve-diff') {
+      handleApprove();
+    } else if (step && step.type === 'approve-doc') {
+      handleApproveDoc();
+    }
+    return;
+  }
+  advanceInteractive();
+};
+
+// ── Override engine.js: resetFlow ────────────────────────────────
+
+resetFlow = function() {
+  pause();
+  currentStep = 0;
+  approvedArtifacts = [false, false, false];
+  currentArtifact = 0;
+  waitingForInteraction = false;
+  currentPhase = null;
+  peekMode = false;
+  peekSavedState = null;
+  productDesignApproved = false;
+  execAnimationRunning = false;
+  sectionEls = {};
+  sidebarItemEls = {};
+  activeSectionId = null;
+
+  docInner.innerHTML = '';
+  closeArtifactPanel();
+  if (stepNumEl) stepNumEl.textContent = '0';
+  if (progressFill) progressFill.style.width = '0%';
+
+  // Reset sidebar
+  ['describe', 'specify', 'plan', 'execute', 'verify'].forEach(function(g) {
+    var items = document.getElementById('gi-' + g);
+    var toggle = document.getElementById('gt-' + g);
+    if (items) { items.innerHTML = ''; items.classList.remove('collapsed'); }
+    if (toggle) toggle.classList.remove('collapsed');
+  });
+
+  // Reset phase dots
+  ['D', 'S', 'P', 'E', 'V'].forEach(function(ph) {
+    var el = document.getElementById('pd-' + ph);
+    if (!el) return;
+    el.classList.remove('is-done', 'is-active');
+    var dot = el.querySelector('.dot');
+    var label = el.querySelector('.label');
+    if (dot) dot.className = 'dot pending';
+    if (label) label.className = 'label';
+  });
+
+  document.getElementById('apActions').innerHTML =
+    '<button class="btn-request" onclick="requestChanges()">Request Changes</button>' +
+    '<button class="btn-approve" onclick="handleApprove()">Approve ✓</button>';
+
+  setTimeout(function() { advanceInteractive(); }, 300);
+};
+
+// ── Extra keyboard shortcut: B for sidebar ───────────────────────
+document.addEventListener('keydown', function(e) {
+  if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+  if (e.code === 'KeyB') {
+    e.preventDefault();
+    toggleSidebarCollapse();
+  }
+});
+</script>
+</body>
+</html>

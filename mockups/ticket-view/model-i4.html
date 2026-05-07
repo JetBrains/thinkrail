@@ -1,0 +1,586 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>I4: Dual-Pane Parallel — Bonsai Ticket View</title>
+<link rel="stylesheet" href="shared/base.css">
+<link rel="stylesheet" href="shared/sidebar.css">
+<style>
+  /* ── I4: 3-column layout (sidebar | main chat | workspace) ───── */
+  .main-area { display: flex; overflow: hidden; }
+  .conversation { flex: 1; display: flex; flex-direction: column; overflow: hidden; transition: none; }
+  body.split-mode .conversation { width: auto; flex: 1; }
+
+  /* ── Permanent right workspace ─────────────────────────────── */
+  .workspace { width: 50%; min-width: 50%; background: var(--bg); border-left: 1px solid var(--border); display: flex; flex-direction: column; flex-shrink: 0; }
+  .workspace-tabs { display: flex; align-items: center; gap: 0; background: var(--surface); border-bottom: 1px solid var(--border); padding: 0 8px; height: 36px; overflow-x: auto; flex-shrink: 0; }
+  .ws-tab { display: flex; align-items: center; gap: 5px; padding: 6px 12px; font-size: 11px; color: var(--text-dim); cursor: pointer; border-bottom: 2px solid transparent; white-space: nowrap; transition: all 0.15s; }
+  .ws-tab:hover { color: var(--text-sec); background: var(--hover); }
+  .ws-tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+  .ws-tab .tab-close { font-size: 10px; margin-left: 4px; opacity: 0; cursor: pointer; width: 14px; height: 14px; border-radius: 3px; display: flex; align-items: center; justify-content: center; transition: opacity 0.15s; }
+  .ws-tab:hover .tab-close { opacity: 0.5; }
+  .ws-tab .tab-close:hover { opacity: 1; background: var(--hover); }
+  .ws-tab .tab-badge { font-size: 9px; padding: 1px 5px; border-radius: 3px; font-weight: 600; margin-left: 2px; }
+  .ws-tab .tab-badge.done { background: var(--green-sub); color: var(--green); }
+  .workspace-content { flex: 1; overflow: hidden; display: flex; flex-direction: column; }
+
+  /* ── Subsession in workspace ────────────────────────────────── */
+  .ws-subsession { flex: 1; display: flex; flex-direction: column; }
+  .ws-subsession .ws-conv { flex: 1; overflow-y: auto; padding: 16px; }
+  .ws-subsession .ws-conv > * + * { margin-top: 12px; }
+  .ws-subsession .ws-input { padding: 10px 16px; border-top: 1px solid var(--border); display: flex; gap: 6px; }
+  .ws-subsession .ws-input input { flex: 1; padding: 7px 12px; border-radius: 6px; font-size: 12px; border: 1px solid var(--border); background: var(--elevated); color: var(--text); outline: none; font-family: inherit; transition: border-color 0.15s; }
+  .ws-subsession .ws-input input:focus { border-color: var(--accent); }
+  .ws-subsession .ws-input input::placeholder { color: var(--text-dim); }
+  .ws-subsession .ws-input button { padding: 7px 14px; border-radius: 6px; font-size: 11px; font-weight: 600; cursor: pointer; border: none; background: var(--accent); color: #fff; font-family: inherit; }
+
+  /* ── Ticket overview in workspace ───────────────────────────── */
+  .ws-overview { padding: 20px; overflow-y: auto; flex: 1; }
+  .overview-section { margin-bottom: 20px; }
+  .overview-title { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-dim); margin-bottom: 10px; }
+  .overview-item { display: flex; align-items: center; gap: 8px; padding: 6px 0; font-size: 12px; color: var(--text-sec); }
+  .overview-item .ov-icon { width: 18px; text-align: center; flex-shrink: 0; font-size: 11px; }
+  .overview-item .ov-icon.done { color: var(--green); }
+  .overview-item .ov-icon.active { color: var(--accent); }
+  .overview-item .ov-icon.pending { color: var(--text-dim); opacity: 0.4; }
+  .overview-item .ov-label { flex: 1; }
+  .overview-item .ov-meta { font-size: 10px; color: var(--text-dim); font-family: var(--mono); padding: 2px 6px; background: var(--elevated); border-radius: 3px; }
+  .overview-item .ov-meta.active-ov { color: var(--accent); background: var(--accent-sub); }
+  .overview-desc { padding: 12px; border-radius: var(--r); background: var(--surface); border: 1px solid var(--border); font-size: 12px; color: var(--text-sec); line-height: 1.6; }
+  .overview-desc strong { color: var(--text); }
+  .overview-phase-bar { display: flex; gap: 3px; height: 6px; border-radius: 3px; overflow: hidden; background: var(--elevated); }
+  .overview-phase-segment { flex: 1; border-radius: 3px; transition: background 0.3s; }
+  .overview-phase-segment.done { background: var(--green); }
+  .overview-phase-segment.active { background: var(--accent); animation: progressPulse 1.5s infinite; }
+  .overview-phase-segment.pending { background: var(--border); }
+
+  /* ── Artifact view in workspace ─────────────────────────────── */
+  .ws-artifact { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+  .ws-artifact-header { padding: 12px 16px; border-bottom: 1px solid var(--border); background: var(--surface); display: flex; align-items: center; gap: 10px; min-height: 44px; flex-shrink: 0; }
+  .ws-artifact-body { flex: 1; overflow-y: auto; }
+  .ws-artifact-actions { padding: 10px 16px; border-top: 1px solid var(--border); background: var(--surface); display: flex; gap: 8px; flex-shrink: 0; }
+
+  /* ── Focus indicator ────────────────────────────────────────── */
+  .pane-focused .input-bar { border-top-color: var(--accent); }
+  .pane-focused .ws-input { border-top-color: var(--accent); }
+  .pane-unfocused .input-bar, .pane-unfocused .ws-input { opacity: 0.5; }
+
+  /* ── Subsession suggestion card ─────────────────────────────── */
+  .subsession-card { border: 1px solid var(--border); border-radius: var(--r); background: var(--surface); overflow: hidden; animation: fadeIn 0.35s ease both; }
+  .sub-card-header { padding: 8px 14px; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: var(--purple); background: var(--elevated); border-bottom: 1px solid var(--border); }
+  .sub-card-body { padding: 10px 14px; font-size: 12px; color: var(--text-sec); line-height: 1.6; }
+  .sub-card-actions { padding: 6px 14px 10px; display: flex; gap: 8px; }
+  .sub-card-btn { padding: 5px 12px; border-radius: 6px; font-size: 11px; font-weight: 500; cursor: pointer; border: 1px solid var(--accent); background: transparent; color: var(--accent); transition: all 0.15s; font-family: inherit; }
+  .sub-card-btn:hover { background: var(--accent-sub); }
+  .sub-card-btn.primary { background: var(--accent); color: #fff; border-color: var(--accent); }
+
+  /* ── Notification in main chat ──────────────────────────────── */
+  .notify-msg { padding: 6px 12px; font-size: 11px; color: var(--text-dim); border-left: 2px solid var(--border); font-style: italic; animation: fadeIn 0.35s ease both; }
+  .notify-msg.success { border-left-color: var(--green); color: var(--green); }
+
+  /* ── Hide default artifact panel ────────────────────────────── */
+  .artifact-panel { display: none !important; }
+
+  /* ── Steps/code preview inside workspace ────────────────────── */
+  .ws-steps-panel { display: flex; flex-direction: column; height: 100%; }
+  .ws-steps-list { padding: 14px 16px; overflow-y: auto; flex: 1; }
+  .ws-code-preview { border-top: 1px solid var(--border); display: flex; flex-direction: column; height: 45%; flex-shrink: 0; }
+  .ws-code-preview-header { padding: 8px 16px; font-size: 12px; color: var(--text-dim); border-bottom: 1px solid var(--border); font-family: var(--mono); background: var(--elevated); flex-shrink: 0; }
+  .ws-code-preview-header .cph-file { color: var(--accent); font-weight: 600; }
+  .ws-code-preview-body { font-family: var(--mono); font-size: 12px; line-height: 1.7; flex: 1; overflow-y: auto; }
+  .ws-code-preview-body .diff-line { animation: codeLineIn 0.2s ease both; }
+</style>
+</head>
+<body>
+
+<a href="index.html" class="back-link">&larr; All Models</a>
+<span class="model-tag">I4: Dual-Pane</span>
+
+<!-- Controls -->
+<div class="controls">
+  <button class="ctrl-btn" id="playBtn" onclick="togglePlay()">&#9654; Play</button>
+  <button class="ctrl-btn" onclick="resetFlow()">&#10227; Reset</button>
+  <span class="step-counter">Step <span id="stepNum">0</span> / <span id="stepTotal">0</span></span>
+  <div class="progress-track"><div class="progress-fill" id="progressFill"></div></div>
+  <span class="kbd-hint"><kbd>Space</kbd> play <kbd>&rarr;</kbd> step <kbd>Esc</kbd> reset <kbd>B</kbd> sidebar <kbd>Tab</kbd> ws-tab</span>
+</div>
+
+<!-- Status bar -->
+<div class="status-bar">
+  <span class="ticket-id">AUTH-42</span><div class="sb-sep"></div>
+  <span class="ticket-title">Add user authentication</span><div class="sb-spacer"></div>
+  <div class="phase-dots">
+    <div class="phase-dot" id="pd-D"><span class="dot pending"></span><span class="check">&#10003;</span><span class="label">Describe</span></div><span class="phase-sep">&rsaquo;</span>
+    <div class="phase-dot" id="pd-S"><span class="dot pending"></span><span class="check">&#10003;</span><span class="label">Specify</span></div><span class="phase-sep">&rsaquo;</span>
+    <div class="phase-dot" id="pd-P"><span class="dot pending"></span><span class="check">&#10003;</span><span class="label">Plan</span></div><span class="phase-sep">&rsaquo;</span>
+    <div class="phase-dot" id="pd-E"><span class="dot pending"></span><span class="check">&#10003;</span><span class="label">Execute</span></div><span class="phase-sep">&rsaquo;</span>
+    <div class="phase-dot" id="pd-V"><span class="dot pending"></span><span class="check">&#10003;</span><span class="label">Verify</span></div>
+  </div>
+</div>
+
+<!-- Main area: sidebar + main chat + workspace -->
+<div class="main-area">
+  <!-- Sidebar -->
+  <div class="sidebar" id="sidebar">
+    <div class="sidebar-scroll">
+      <div class="sidebar-group"><div class="sidebar-group-header" onclick="toggleSidebarGroup('ticket')"><span class="group-toggle" id="gt-ticket">&#9662;</span><span>Ticket</span></div><div class="sidebar-group-items" id="gi-ticket"></div></div>
+      <div class="sidebar-group"><div class="sidebar-group-header" onclick="toggleSidebarGroup('specs')"><span class="group-toggle" id="gt-specs">&#9662;</span><span>Specs</span></div><div class="sidebar-group-items" id="gi-specs"></div></div>
+      <div class="sidebar-group"><div class="sidebar-group-header" onclick="toggleSidebarGroup('plan')"><span class="group-toggle" id="gt-plan">&#9662;</span><span>Plan</span></div><div class="sidebar-group-items" id="gi-plan"></div></div>
+    </div>
+    <div class="sidebar-toggle" onclick="toggleSidebarCollapse()"><span class="toggle-icon">&#9664;</span><span class="toggle-label">Collapse</span></div>
+  </div>
+
+  <!-- Main Chat (always visible, left) -->
+  <div class="conversation pane-focused" id="mainPane" onclick="focusPane('main')">
+    <div class="conv-scroll" id="convScroll"><div class="conv-inner" id="convInner"></div></div>
+    <div class="input-bar">
+      <input type="text" id="userInput" placeholder="Type a message..." onkeydown="handleInputKey(event)" onfocus="focusPane('main')">
+      <button class="send-btn" id="sendBtn" onclick="handleSend()" disabled>Send</button>
+    </div>
+  </div>
+
+  <!-- Workspace (always visible, right) -->
+  <div class="workspace" id="workspace">
+    <div class="workspace-tabs" id="wsTabs"></div>
+    <div class="workspace-content" id="wsContent"></div>
+  </div>
+</div>
+
+<!-- Hidden artifact panel (engine expects it) -->
+<div class="artifact-panel" id="artifactPanel"><div class="ap-header" id="apHeader"></div><div class="ap-body" id="apBody"></div><div class="ap-actions" id="apActions"></div></div>
+
+<script src="shared/data.js"></script>
+<script>
+// ── I4: SUBSESSIONS registry ──────────────────────────────────────
+window.SUBSESSIONS = [
+  { key: 'desc',           phase: 'ticket', label: 'Description',       icon: '&#x1F4CB;' },
+  { key: 'product-design', phase: 'ticket', label: 'Product Design',    icon: '&#x1F4CB;' },
+  { key: 'auth-readme',    phase: 'specs',  label: 'auth/README',       icon: '&#x1F4C4;' },
+  { key: 'jwt-research',   phase: 'specs',  label: 'JWT Research',      icon: '&#x1F52C;', parent: 'auth-readme' },
+  { key: 'design-doc',     phase: 'specs',  label: 'DESIGN_DOC',        icon: '&#x1F4C4;' },
+  { key: 'core-readme',    phase: 'specs',  label: 'core/README',       icon: '&#x1F4C4;' },
+  { key: 'impl-plan',      phase: 'plan',   label: 'Impl. Plan',        icon: '&#x1F4E6;' }
+];
+
+// ── I4: State ─────────────────────────────────────────────────────
+var wsTabs = [], activeTabId = null, focusedPane = 'main';
+var wsContentCache = {}, pendingSub = null, activeSubTabId = null;
+
+// ── I4: SCRIPT ────────────────────────────────────────────────────
+window.SCRIPT = [
+  // DESCRIBE
+  { id:1,  type:'agent',      text:'What would you like to work on?', phase:'D' },
+  { id:2,  type:'ws-init' },
+  { id:3,  type:'user',       text:'Add user authentication to the Bonsai workspace', interactive:true, placeholder:'Add user authentication to the Bonsai workspace' },
+  { id:4,  type:'agent',      text:"Got it &mdash; an auth module. Let me ask a scoping question." },
+  { id:5,  type:'decision',   question:'What kind of authentication?', options:['Token-based &#9733;','OAuth/SSO','Simple password'], recommended:0, hint:'Extends your existing bns_ token system.' },
+  { id:6,  type:'agent',      text:"Token-based &mdash; aligns with your <code>bns_</code> pattern." },
+  { id:7,  type:'sidebar-add', key:'desc', status:'active' },
+  { id:8,  type:'artifact-card', header:'Ticket Description', body:'<strong>What:</strong> Add JWT-based user authentication.<br><strong>Purpose:</strong> Enable multi-user access with role-based permissions.' },
+  { id:9,  type:'ws-update-overview' },
+  { id:10, type:'sidebar-done', key:'desc', duration:'2min' },
+  // Product Design
+  { id:11, type:'agent',      text:"Let me build a product design document. Opening in workspace..." },
+  { id:12, type:'sidebar-add', key:'product-design', status:'active' },
+  { id:13, type:'ws-open-doc', section:'goal' },
+  { id:14, type:'typing',     duration:1000 },
+  { id:15, type:'agent',      text:"Goal section drafted. Building user stories..." },
+  { id:16, type:'ws-update-doc', section:'stories' },
+  { id:17, type:'typing',     duration:800 },
+  { id:18, type:'agent',      text:"Adding roles &amp; permissions matrix..." },
+  { id:19, type:'ws-update-doc', section:'roles' },
+  { id:20, type:'typing',     duration:600 },
+  { id:21, type:'agent',      text:"Completing with success criteria and out of scope." },
+  { id:22, type:'ws-update-doc', section:'full' },
+  { id:23, type:'agent',      text:"Product design document is ready for review in the workspace." },
+  { id:24, type:'approve-doc' },
+  { id:25, type:'sidebar-done', key:'product-design', duration:'4min' },
+  // SPECIFY
+  { id:26, type:'phase',      phase:'S', label:'SPECIFY' },
+  { id:27, type:'agent',      text:'Creating specification diffs...' },
+  { id:28, type:'typing',     duration:1500 },
+  { id:29, type:'sidebar-add', key:'auth-readme', status:'active' },
+  { id:30, type:'ws-open-artifact', artifact:0, label:'auth/README', icon:'&#x1F4C4;' },
+  { id:31, type:'agent',      text:'Review <code>auth/README.md</code> in the workspace. <span class="arrow-hint">&rarr;</span>' },
+  { id:32, type:'decision',   question:'JWT or session-based auth?', options:['JWT tokens &#9733;','Session-based','Hybrid'], recommended:0, hint:'Your bns_ token pattern aligns well with JWT.' },
+  { id:33, type:'agent',      text:'Updated the auth strategy to JWT.' },
+  // Subsession: JWT Research
+  { id:34, type:'ws-suggest-sub', subId:'jwt-research', label:'JWT Research', icon:'&#x1F52C;', reason:'Research JWT token best practices for your use case.' },
+  { id:35, type:'ws-accept-sub' },
+  { id:36, type:'sidebar-add', key:'jwt-research', status:'active' },
+  { id:37, type:'ws-sub-msg',  role:'agent', text:'Researching JWT token best practices...' },
+  { id:38, type:'ws-sub-typing', duration:800 },
+  { id:39, type:'ws-sub-msg',  role:'agent', text:'JWT with short-lived access tokens (15min) + long-lived refresh tokens (7d) is the standard. Your <code>bns_at_</code> and <code>bns_rt_</code> prefixes make tokens easily identifiable.' },
+  { id:40, type:'ws-sub-complete' },
+  { id:41, type:'sidebar-done', key:'jwt-research', duration:'1min' },
+  { id:42, type:'notify',     text:'Subsession "JWT Research" complete. Summary added to main chat.' },
+  { id:43, type:'agent',      text:'Research confirms JWT approach. Findings are in the workspace.' },
+  { id:44, type:'ws-focus-tab', tabId:'auth/README' },
+  { id:45, type:'decision',   question:"I added a viewer role with read-only access. Keep it?", options:['Yes, keep &#9733;','Remove it'], recommended:0 },
+  { id:46, type:'agent',      text:'Good. Approve the spec in the workspace when ready.' },
+  { id:47, type:'approve',    artifact:0 },
+  { id:48, type:'sidebar-done', key:'auth-readme', duration:'3min' },
+  // DESIGN_DOC
+  { id:49, type:'sidebar-add', key:'design-doc', status:'active' },
+  { id:50, type:'ws-open-artifact', artifact:1, label:'DESIGN_DOC', icon:'&#x1F4C4;' },
+  { id:51, type:'agent',      text:'Added auth module to <code>DESIGN_DOC.md</code>.' },
+  { id:52, type:'approve',    artifact:1 },
+  { id:53, type:'sidebar-done', key:'design-doc', duration:'1min' },
+  // core/README
+  { id:54, type:'sidebar-add', key:'core-readme', status:'active' },
+  { id:55, type:'ws-open-artifact', artifact:2, label:'core/README', icon:'&#x1F4C4;' },
+  { id:56, type:'agent',      text:"Updated <code>core/README.md</code> to reflect auth dependency." },
+  { id:57, type:'approve',    artifact:2 },
+  { id:58, type:'sidebar-done', key:'core-readme', duration:'1min' },
+  { id:59, type:'all-approved' },
+  // PLAN
+  { id:60, type:'phase',      phase:'P', label:'PLAN' },
+  { id:61, type:'agent',      text:'All specs approved. Building implementation plan...' },
+  { id:62, type:'typing',     duration:1200 },
+  { id:63, type:'sidebar-add', key:'impl-plan', status:'active' },
+  { id:64, type:'ws-open-plan' },
+  { id:65, type:'agent',      text:"Implementation plan ready &mdash; 2 milestones, 6 steps." },
+  { id:66, type:'decision',   question:'Ready to execute?', options:['Execute this plan &#9733;','Adjust order'], recommended:0 },
+  { id:67, type:'sidebar-done', key:'impl-plan', duration:'3min' },
+  // EXECUTE
+  { id:68, type:'phase',      phase:'E', label:'EXECUTE' },
+  { id:69, type:'agent',      text:'Plan approved. Starting execution...' },
+  { id:70, type:'ws-open-exec' },
+  { id:71, type:'exec-progress' },
+  { id:72, type:'agent',      text:'All steps complete.' },
+  // VERIFY
+  { id:73, type:'phase',      phase:'V', label:'VERIFY' },
+  { id:74, type:'agent',      text:'Running verification checks...' },
+  { id:75, type:'typing',     duration:1000 },
+  { id:76, type:'agent',      text:'&#10004; All checks passed &mdash; tests green, types valid, lint clean.' },
+  { id:77, type:'ws-show-final-overview' },
+  { id:78, type:'agent',      text:'&#10004; Ticket complete! All phases finished.' },
+  { id:79, type:'complete' }
+];
+</script>
+<script src="shared/engine.js"></script>
+<script src="shared/sidebar.js"></script>
+<script>
+// ── I4: Workspace Tab Management ──────────────────────────────────
+
+function addWsTab(id, label, icon, type) {
+  if (wsTabs.find(function(t) { return t.id === id; })) { activateWsTab(id); return; }
+  wsTabs.push({ id: id, label: label, icon: icon, type: type, complete: false });
+  activateWsTab(id);
+}
+function activateWsTab(id) { activeTabId = id; renderWsTabs(); }
+function closeWsTab(id) {
+  wsTabs = wsTabs.filter(function(t) { return t.id !== id; });
+  if (activeTabId === id) activeTabId = wsTabs.length > 0 ? wsTabs[wsTabs.length - 1].id : null;
+  renderWsTabs(); renderActiveTabContent();
+}
+function markWsTabComplete(id) {
+  var tab = wsTabs.find(function(t) { return t.id === id; });
+  if (tab) tab.complete = true;
+  renderWsTabs();
+}
+function cycleWsTab() {
+  if (wsTabs.length <= 1) return;
+  var idx = wsTabs.findIndex(function(t) { return t.id === activeTabId; });
+  activateWsTab(wsTabs[(idx + 1) % wsTabs.length].id);
+  renderActiveTabContent();
+}
+function renderWsTabs() {
+  var el = document.getElementById('wsTabs'); if (!el) return;
+  el.innerHTML = wsTabs.map(function(t) {
+    var badge = t.complete ? '<span class="tab-badge done">&#10003;</span>' : '';
+    return '<div class="ws-tab' + (t.id === activeTabId ? ' active' : '') + '" onclick="handleWsTabClick(\'' + t.id.replace(/'/g,"\\'") + '\')">' +
+      '<span>' + t.icon + '</span><span>' + t.label + '</span>' + badge +
+      '<span class="tab-close" onclick="event.stopPropagation();closeWsTab(\'' + t.id.replace(/'/g,"\\'") + '\')">&times;</span></div>';
+  }).join('');
+}
+function handleWsTabClick(id) { if (activeTabId !== id) { activateWsTab(id); renderActiveTabContent(); } }
+
+function setWsContent(id, html) { wsContentCache[id] = html; if (activeTabId === id) document.getElementById('wsContent').innerHTML = html; }
+function renderActiveTabContent() {
+  var el = document.getElementById('wsContent'); if (!el) return;
+  el.innerHTML = activeTabId && wsContentCache[activeTabId] ? wsContentCache[activeTabId] : '<div class="ws-overview" style="display:flex;align-items:center;justify-content:center;color:var(--text-dim);font-size:13px;">No content selected</div>';
+}
+
+// ── I4: Overview Tab ──────────────────────────────────────────────
+
+function buildOverviewHTML() {
+  var phases = [{id:'D',l:'Describe'},{id:'S',l:'Specify'},{id:'P',l:'Plan'},{id:'E',l:'Execute'},{id:'V',l:'Verify'}];
+  var aIdx = phases.findIndex(function(p) { return p.id === currentPhase; });
+  var segs = phases.map(function(p,i) { return '<div class="overview-phase-segment ' + (i<aIdx?'done':i===aIdx?'active':'pending') + '"></div>'; }).join('');
+  var arts = [
+    {i:'&#x1F4CB;',l:'Description',k:'desc'},{i:'&#x1F4CB;',l:'Product Design',k:'product-design'},
+    {i:'&#x1F4C4;',l:'auth/README.md',k:'auth-readme'},{i:'&#x1F4C4;',l:'DESIGN_DOC.md',k:'design-doc'},
+    {i:'&#x1F4C4;',l:'core/README.md',k:'core-readme'},{i:'&#x1F4E6;',l:'Implementation Plan',k:'impl-plan'}
+  ];
+  var items = arts.map(function(a) {
+    var s = sidebarItems[a.k] ? sidebarItems[a.k].status : 'pending';
+    var ic = s==='done'?'done':s==='active'?'active':'pending';
+    var sym = s==='done'?'&#10003;':s==='active'?'&#9679;':'&#9675;';
+    var meta = s==='done'||s==='active' ? '<span class="ov-meta'+(s==='active'?' active-ov':'')+'">'+s+'</span>' : '';
+    return '<div class="overview-item"><span class="ov-icon '+ic+'">'+sym+'</span><span class="ov-label">'+a.l+'</span>'+meta+'</div>';
+  }).join('');
+  return '<div class="ws-overview"><div class="overview-section"><div class="overview-title">Phase Progress</div><div class="overview-phase-bar">'+segs+'</div></div>' +
+    '<div class="overview-section"><div class="overview-title">Ticket</div><div class="overview-desc"><strong>AUTH-42:</strong> Add user authentication<br>JWT-based auth with signup, login, session management, and RBAC.</div></div>' +
+    '<div class="overview-section"><div class="overview-title">Artifacts</div>'+items+'</div></div>';
+}
+function refreshOverview() { wsContentCache['overview'] = buildOverviewHTML(); if (activeTabId==='overview') renderActiveTabContent(); }
+
+// ── I4: Artifact Tab ──────────────────────────────────────────────
+
+function openArtifactInWs(idx, label, icon) {
+  var d = DIFFS[idx]; if (!d) return;
+  var cnt = approvedArtifacts.filter(Boolean).length;
+  var acts = approvedArtifacts[idx]
+    ? '<span style="font-size:13px;color:var(--green);font-weight:600">&#10003; Approved</span>'
+    : '<button class="btn-request" onclick="requestChanges()">Request Changes</button><button class="btn-approve" onclick="wsApprove('+idx+')">Approve &#10003;</button>';
+  setWsContent(label, '<div class="ws-artifact"><div class="ws-artifact-header"><span class="ap-badge '+d.badgeClass+'">'+d.badge+'</span><span class="ap-path">'+d.path+'</span><span class="ap-stats">'+d.stats+' &middot; '+cnt+'/3 approved</span></div><div class="ws-artifact-body"><div class="diff-view">'+d.content+'</div></div><div class="ws-artifact-actions">'+acts+'</div></div>');
+  addWsTab(label, label, icon, 'artifact');
+  var tab = wsTabs.find(function(t){return t.id===label;}); if(tab) tab.artifactIdx = idx;
+  renderActiveTabContent();
+}
+function wsApprove(idx) {
+  approvedArtifacts[idx] = true;
+  var tab = wsTabs.find(function(t){return t.artifactIdx===idx;});
+  if(tab){ openArtifactInWs(idx,tab.label,tab.icon); markWsTabComplete(tab.id); }
+  refreshOverview(); waitingForInteraction = false;
+  if(!playing) setTimeout(function(){ advanceInteractive(); }, 400);
+}
+
+// ── I4: Doc Tab ───────────────────────────────────────────────────
+
+function openDocInWs(section) {
+  addWsTab('Product Design','Product Design','&#x1F4CB;','doc');
+  updateDocInWs(section);
+}
+function updateDocInWs(section) {
+  var acts = section==='full' ? '<button class="btn-request" onclick="requestChanges()">Request Changes</button><button class="btn-approve" onclick="wsApproveDoc()">Approve &#10003;</button>' : '';
+  setWsContent('Product Design', '<div class="ws-artifact"><div class="ws-artifact-header"><span class="ap-badge doc">DOC</span><span class="ap-path">product-design.md</span><span class="ap-stats">'+(section==='full'?'Complete':'Building...')+'</span></div><div class="ws-artifact-body">'+DOC_SECTIONS[section]+'</div><div class="ws-artifact-actions">'+acts+'</div></div>');
+  renderActiveTabContent();
+}
+function wsApproveDoc() {
+  productDesignApproved = true; markWsTabComplete('Product Design');
+  setWsContent('Product Design','<div class="ws-artifact"><div class="ws-artifact-header"><span class="ap-badge doc">DOC</span><span class="ap-path">product-design.md</span><span class="ap-stats">Approved</span></div><div class="ws-artifact-body">'+DOC_SECTIONS.full+'</div><div class="ws-artifact-actions"><span style="font-size:13px;color:var(--green);font-weight:600">&#10003; Approved</span></div></div>');
+  renderActiveTabContent(); refreshOverview(); waitingForInteraction = false;
+  if(!playing) setTimeout(function(){ advanceInteractive(); }, 400);
+}
+
+// ── I4: Subsession Tab ────────────────────────────────────────────
+
+function openSubInWs(subId, label, icon) {
+  activeSubTabId = label;
+  addWsTab(label, label, icon, 'subsession');
+  setWsContent(label, '<div class="ws-subsession"><div class="ws-conv" id="wsSubConv-'+subId+'"></div><div class="ws-input"><input type="text" placeholder="Reply to subsession..." onfocus="focusPane(\'workspace\')"><button>Send</button></div></div>');
+  renderActiveTabContent(); focusPane('workspace');
+}
+function addSubMsg(subId, role, text) {
+  var el = document.getElementById('wsSubConv-'+subId); if(!el) return;
+  var m = document.createElement('div'); m.className = 'msg '+role+' fade-in';
+  if(role==='agent') m.innerHTML=text; else m.textContent=text;
+  el.appendChild(m); el.scrollTop = el.scrollHeight;
+  wsContentCache[activeSubTabId] = document.getElementById('wsContent').innerHTML;
+}
+function addSubTyping(subId) {
+  var el = document.getElementById('wsSubConv-'+subId); if(!el) return;
+  var d = document.createElement('div'); d.className='typing-indicator fade-in'; d.id='wsTyping-'+subId;
+  d.innerHTML='<span class="dot"></span><span class="dot"></span><span class="dot"></span>';
+  el.appendChild(d); el.scrollTop = el.scrollHeight;
+}
+function removeSubTyping(subId) { var el=document.getElementById('wsTyping-'+subId); if(el)el.remove(); }
+function completeSubsession(label) {
+  markWsTabComplete(label); focusPane('main');
+  var d = document.createElement('div'); d.className='notify-msg success fade-in';
+  d.innerHTML='&#10003; Subsession "'+label+'" complete';
+  if(convInner) convInner.appendChild(d); scrollConv();
+}
+
+// ── I4: Plan/Exec in workspace ────────────────────────────────────
+
+function buildWsSteps(mode) {
+  var state = mode==='exec'?'pending':'ready';
+  var h = '<div class="ws-steps-panel"><div class="ws-steps-list"><div class="steps-milestone">Milestone 1: Core Auth</div>';
+  EXEC_STEPS.slice(0,4).forEach(function(s,i){ h+='<div class="step-row '+state+'" id="sr-'+i+'"><span class="step-icon">'+(i+1)+'</span><span class="step-name">'+s.name+'</span><span class="step-file">'+s.file+'</span></div>'; });
+  h+='<div class="steps-milestone">Milestone 2: API &amp; Admin</div>';
+  EXEC_STEPS.slice(4).forEach(function(s,i){ var x=i+4; h+='<div class="step-row '+state+'" id="sr-'+x+'"><span class="step-icon">'+(x+1)+'</span><span class="step-name">'+s.name+'</span><span class="step-file">'+s.file+'</span></div>'; });
+  h+='</div>';
+  if(mode==='exec') h+='<div class="ws-code-preview"><div class="ws-code-preview-header" id="codePreviewHeader"><span class="cph-file">Waiting...</span></div><div class="ws-code-preview-body" id="codePreviewBody"></div></div>';
+  return h+'</div>';
+}
+function openPlanInWs() { addWsTab('Plan','Implementation Plan','&#x1F4E6;','plan'); setWsContent('Plan',buildWsSteps('plan')); renderActiveTabContent(); }
+function openExecInWs() {
+  setWsContent('Plan',buildWsSteps('exec')); renderActiveTabContent();
+  var tab = wsTabs.find(function(t){return t.id==='Plan';}); if(tab){ tab.label='Executing...'; tab.icon='&#9889;'; renderWsTabs(); }
+}
+
+// ── I4: Focus Management ──────────────────────────────────────────
+
+function focusPane(pane) {
+  focusedPane = pane;
+  var m = document.getElementById('mainPane'), w = document.getElementById('workspace');
+  if(!m||!w) return;
+  m.classList.toggle('pane-focused', pane==='main'); m.classList.toggle('pane-unfocused', pane!=='main');
+  w.classList.toggle('pane-focused', pane==='workspace'); w.classList.toggle('pane-unfocused', pane!=='workspace');
+}
+
+// ── I4: Subsession suggestion card ────────────────────────────────
+
+function addSubSuggestion(subId, label, icon, reason) {
+  pendingSub = { subId:subId, label:label, icon:icon, reason:reason };
+  var d = document.createElement('div'); d.className='subsession-card fade-in'; d.id='subSuggest-'+subId;
+  d.innerHTML='<div class="sub-card-header">&#x1F52C; Subsession Suggestion</div><div class="sub-card-body"><strong>'+label+'</strong><br>'+reason+'</div><div class="sub-card-actions"><button class="sub-card-btn primary" onclick="acceptSub()">Open in workspace &rarr;</button><button class="sub-card-btn" onclick="declineSub()">Skip</button></div>';
+  if(convInner) convInner.appendChild(d); scrollConv();
+}
+function acceptSub() {
+  if(!pendingSub) return;
+  var c = document.getElementById('subSuggest-'+pendingSub.subId);
+  if(c) c.innerHTML='<div class="sub-card-header" style="color:var(--green)">&#10003; Opened in workspace</div><div class="sub-card-body" style="padding:6px 14px;font-size:11px;color:var(--text-dim)">'+pendingSub.label+'</div>';
+  openSubInWs(pendingSub.subId, pendingSub.label, pendingSub.icon);
+  pendingSub = null; waitingForInteraction = false;
+  if(!playing) setTimeout(function(){ advanceInteractive(); }, 400);
+}
+function declineSub() {
+  if(!pendingSub) return;
+  var c = document.getElementById('subSuggest-'+pendingSub.subId);
+  if(c) c.innerHTML='<div class="sub-card-header" style="color:var(--text-dim)">Skipped</div>';
+  pendingSub = null; waitingForInteraction = false;
+  if(!playing) setTimeout(function(){ advanceInteractive(); }, 400);
+}
+
+// ── Sidebar click -> workspace tab ────────────────────────────────
+
+window.onSidebarNavigate = function(key) {
+  var map = { desc:'overview', 'product-design':'Product Design', 'auth-readme':'auth/README', 'jwt-research':'JWT Research', 'design-doc':'DESIGN_DOC', 'core-readme':'core/README', 'impl-plan':'Plan' };
+  var tabId = map[key]; if(tabId && wsTabs.find(function(t){return t.id===tabId;})) { activateWsTab(tabId); renderActiveTabContent(); }
+};
+
+// ── Override: executeStep ─────────────────────────────────────────
+
+var _engineExec = executeStep;
+executeStep = function(step) {
+  if(stepNumEl) stepNumEl.textContent = currentStep+1;
+  if(progressFill && SCRIPT) progressFill.style.width = ((currentStep+1)/SCRIPT.length*100)+'%';
+
+  switch(step.type) {
+    case 'ws-init': addWsTab('overview','Overview','&#x1F4CA;','overview'); wsContentCache['overview']=buildOverviewHTML(); renderActiveTabContent(); break;
+    case 'ws-update-overview': case 'ws-show-final-overview': refreshOverview(); if(step.type==='ws-show-final-overview'){activateWsTab('overview');renderActiveTabContent();} break;
+    case 'ws-open-doc': openDocInWs(step.section); break;
+    case 'ws-update-doc': updateDocInWs(step.section); break;
+    case 'ws-open-artifact': openArtifactInWs(step.artifact, step.label, step.icon); break;
+    case 'ws-suggest-sub': addSubSuggestion(step.subId, step.label, step.icon, step.reason); break;
+    case 'ws-accept-sub': if(playing && pendingSub) acceptSub(); break;
+    case 'ws-sub-msg': removeSubTyping(step.subId||'jwt-research'); addSubMsg(step.subId||'jwt-research', step.role, step.text); break;
+    case 'ws-sub-typing': addSubTyping(step.subId||'jwt-research'); break;
+    case 'ws-sub-complete': removeSubTyping('jwt-research'); completeSubsession('JWT Research'); break;
+    case 'ws-focus-tab': activateWsTab(step.tabId); renderActiveTabContent(); focusPane('main'); break;
+    case 'ws-open-plan': openPlanInWs(); break;
+    case 'ws-open-exec': openExecInWs(); break;
+    case 'sidebar-add': addSidebarItem(step.key); if(step.status==='active') setSidebarStatus(step.key,'active'); refreshOverview(); break;
+    case 'sidebar-done': setSidebarStatus(step.key,'done',step.duration); refreshOverview(); break;
+    case 'notify': var d=document.createElement('div'); d.className='notify-msg fade-in'; d.innerHTML=step.text; if(convInner)convInner.appendChild(d); scrollConv(); break;
+    case 'approve': break; // handled by workspace buttons
+    case 'complete': completeAllPhases(); refreshOverview(); pause(); break;
+    default: _engineExec(step); break;
+  }
+};
+
+// ── Override: advanceAutoPlay ──────────────────────────────────────
+
+advanceAutoPlay = function() {
+  if(!playing || currentStep >= SCRIPT.length) { pause(); return; }
+  var step = SCRIPT[currentStep]; executeStep(step); currentStep++;
+  var delay;
+  var artLabels = ['auth/README','DESIGN_DOC','core/README'], artIcons = ['&#x1F4C4;','&#x1F4C4;','&#x1F4C4;'];
+
+  if(step.type==='typing') delay = step.duration;
+  else if(step.type==='decision') {
+    delay = 1800; var sid=step.id, rec=step.options[step.recommended];
+    setTimeout(function(){ if(playing) resolveDecisionCard(sid, rec.replace(/\s*&#9733;/,'').replace(/\s*★/,'')); }, 1500);
+  }
+  else if(step.type==='approve') {
+    delay = 1200; var ai=step.artifact;
+    setTimeout(function(){ if(playing){ approvedArtifacts[ai]=true; openArtifactInWs(ai,artLabels[ai],artIcons[ai]); markWsTabComplete(artLabels[ai]); refreshOverview(); }}, 900);
+  }
+  else if(step.type==='approve-doc') { delay=1200; setTimeout(function(){ if(playing) wsApproveDoc(); }, 900); }
+  else if(step.type==='ws-suggest-sub') { delay=1500; setTimeout(function(){ if(playing&&pendingSub) acceptSub(); }, 1200); }
+  else if(step.type==='ws-sub-typing') { delay=step.duration||800; setTimeout(function(){ if(playing) removeSubTyping(step.subId||'jwt-research'); }, (step.duration||800)-100); }
+  else if(step.type==='all-approved') delay = 1500;
+  else if(step.type==='exec-progress') {
+    runExecAnimation(function(){ if(playing){ var t=wsTabs.find(function(t){return t.id==='Plan';}); if(t){t.label='Complete';t.icon='&#10003;';markWsTabComplete('Plan');} stepTimer=setTimeout(advanceAutoPlay,600); } });
+    return;
+  }
+  else if(step.type==='complete') return;
+  else if(step.type==='user') delay = 800;
+  else if(step.type==='phase') delay = 800;
+  else if(step.type==='ws-init'||step.type==='sidebar-add'||step.type==='sidebar-done') delay = 400;
+  else delay = 600;
+
+  stepTimer = setTimeout(advanceAutoPlay, delay);
+};
+
+// ── Override: advanceInteractive ──────────────────────────────────
+
+advanceInteractive = function() {
+  if(currentStep >= SCRIPT.length) return;
+  var step = SCRIPT[currentStep];
+
+  // Wait states
+  if(step.type==='user' && step.interactive && !playing) {
+    currentStep++; waitingForInteraction=true;
+    if(userInput){userInput.value='';userInput.placeholder=step.placeholder||'Type a message...';userInput.focus();}
+    focusPane('main'); if(sendBtn)sendBtn.disabled=false; return;
+  }
+  if(step.type==='decision' && !playing) { executeStep(step); currentStep++; waitingForInteraction=true; return; }
+  if(step.type==='approve' && !playing) {
+    if(step.artifact!==undefined && approvedArtifacts[step.artifact]) { currentStep++; setTimeout(function(){advanceInteractive();},200); return; }
+    waitingForInteraction=true; currentStep++; return;
+  }
+  if(step.type==='approve-doc' && !playing) {
+    if(productDesignApproved) { currentStep++; setTimeout(function(){advanceInteractive();},200); return; }
+    waitingForInteraction=true; currentStep++; return;
+  }
+  if(step.type==='ws-suggest-sub' && !playing) { executeStep(step); currentStep++; waitingForInteraction=true; return; }
+
+  executeStep(step); currentStep++;
+
+  // Delays
+  if(step.type==='typing') setTimeout(function(){advanceInteractive();}, step.duration);
+  else if(step.type==='ws-sub-typing') setTimeout(function(){ removeSubTyping(step.subId||'jwt-research'); advanceInteractive(); }, step.duration||800);
+  else if(step.type==='exec-progress') {
+    runExecAnimation(function(){ var t=wsTabs.find(function(t){return t.id==='Plan';}); if(t){t.label='Complete';t.icon='&#10003;';markWsTabComplete('Plan');} setTimeout(function(){advanceInteractive();},600); });
+  }
+  else if(step.type==='all-approved') setTimeout(function(){advanceInteractive();},1200);
+  else if(step.type==='complete') {} // done
+  else if(step.type.indexOf('ws-')===0||step.type.indexOf('sidebar')===0) setTimeout(function(){advanceInteractive();},400);
+  else setTimeout(function(){advanceInteractive();},600);
+};
+
+// ── Override: resetFlow ───────────────────────────────────────────
+
+resetFlow = function() {
+  pause(); currentStep=0; approvedArtifacts=[false,false,false]; currentArtifact=0;
+  waitingForInteraction=false; currentPhase=null; peekMode=false; peekSavedState=null;
+  productDesignApproved=false; execAnimationRunning=false;
+  wsTabs=[]; activeTabId=null; wsContentCache={}; pendingSub=null; activeSubTabId=null; focusedPane='main';
+  sidebarItems={};
+  if(convInner)convInner.innerHTML='';
+  if(stepNumEl)stepNumEl.textContent='0'; if(progressFill)progressFill.style.width='0%';
+  if(userInput){userInput.value='';userInput.placeholder='Type a message...';} if(sendBtn)sendBtn.disabled=true;
+  var tb=document.getElementById('wsTabs'); if(tb)tb.innerHTML='';
+  var wc=document.getElementById('wsContent'); if(wc)wc.innerHTML='';
+  ['ticket','specs','plan'].forEach(function(g){ var i=document.getElementById('gi-'+g),t=document.getElementById('gt-'+g); if(i){i.innerHTML='';i.classList.remove('collapsed');} if(t)t.classList.remove('collapsed'); });
+  ['D','S','P','E','V'].forEach(function(ph){ var el=document.getElementById('pd-'+ph); if(!el)return; el.classList.remove('is-done','is-active'); var d=el.querySelector('.dot'),l=el.querySelector('.label'); if(d)d.className='dot pending'; if(l)l.className='label'; });
+  focusPane('main');
+  setTimeout(function(){advanceInteractive();},300);
+};
+
+// ── Extra keyboard: B sidebar, Tab cycle ws tabs ──────────────────
+
+document.addEventListener('keydown', function(e) {
+  if((userInput && e.target===userInput) || (e.target && e.target.tagName==='INPUT')) return;
+  if(e.code==='KeyB') { e.preventDefault(); toggleSidebarCollapse(); }
+  else if(e.code==='Tab') { e.preventDefault(); cycleWsTab(); renderActiveTabContent(); }
+});
+</script>
+</body>
+</html>

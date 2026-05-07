@@ -1,0 +1,297 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>C: Animated Card Collapse</title>
+<style>
+  :root {
+    --bg: #0e1117; --surface: #161b22; --border: #2d333b;
+    --text: #e6edf3; --text-sec: #8b949e; --green: #3fb950;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { background: var(--bg); color: var(--text); font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; font-size: 14px; line-height: 1.5; }
+
+  .title-bar {
+    background: var(--surface); border-bottom: 1px solid var(--border);
+    padding: 10px 20px; display: flex; align-items: center; justify-content: space-between;
+  }
+  .title-bar h1 { font-size: 15px; font-weight: 600; color: var(--text-sec); }
+  .reset-btn {
+    background: var(--border); color: var(--text); border: none; border-radius: 6px;
+    padding: 5px 14px; cursor: pointer; font-size: 13px;
+  }
+  .reset-btn:hover { background: #3d434b; }
+
+  .chat { max-width: 680px; margin: 24px auto; padding: 0 16px; }
+
+  /* Chat messages */
+  .msg {
+    margin-bottom: 14px; opacity: 0; transform: translateY(8px);
+    transition: opacity 0.3s, transform 0.3s;
+  }
+  .msg.visible { opacity: 1; transform: translateY(0); }
+  .msg .role { font-size: 12px; font-weight: 600; color: var(--text-sec); margin-bottom: 3px; }
+  .msg .bubble {
+    background: var(--surface); border: 1px solid var(--border); border-radius: 8px;
+    padding: 10px 14px; color: var(--text); font-size: 14px;
+  }
+
+  /* Subsession wrapper -- the key element */
+  .subsession-wrap {
+    margin-bottom: 14px; border-radius: 10px; position: relative;
+    /* Animated border that fades in */
+    outline: 2px solid transparent; outline-offset: 2px;
+    transition: outline-color 0.25s ease, max-height 0.6s ease, padding 0.4s ease;
+    overflow: hidden;
+  }
+
+  /* Phase 1: border appears */
+  .subsession-wrap.phase-border {
+    outline-color: var(--border);
+  }
+
+  /* Phase 2: content compresses */
+  .subsession-wrap .subsession-content {
+    transition: max-height 0.5s ease, opacity 0.4s ease, transform 0.4s ease;
+    max-height: 600px; opacity: 1; transform: scaleY(1); transform-origin: top;
+    overflow: hidden;
+  }
+  .subsession-wrap.phase-compress .subsession-content {
+    max-height: 0; opacity: 0; transform: scaleY(0.3);
+  }
+
+  /* Phase 3: card summary appears */
+  .subsession-wrap .card-summary {
+    opacity: 0; max-height: 0; overflow: hidden;
+    transition: opacity 0.3s ease 0.1s, max-height 0.4s ease;
+    padding: 0 14px;
+  }
+  .subsession-wrap.phase-card .card-summary {
+    opacity: 1; max-height: 200px; padding: 12px 14px;
+  }
+
+  /* Final collapsed card styling */
+  .subsession-wrap.phase-card {
+    outline-color: transparent; outline-offset: 0;
+    background: var(--surface);
+    border-left: 3px solid var(--green);
+    border-radius: 8px;
+  }
+
+  .card-summary .card-header {
+    color: var(--green); font-weight: 600; font-size: 14px; margin-bottom: 6px;
+  }
+  .card-summary .card-body { color: var(--text-sec); font-size: 13px; line-height: 1.5; }
+  .card-summary .card-toggle {
+    color: #539bf5; font-size: 12px; cursor: pointer; margin-top: 8px;
+    display: inline-block;
+  }
+  .card-summary .card-toggle:hover { text-decoration: underline; }
+
+  /* Divider for subsession enter */
+  .subsession-divider {
+    display: flex; align-items: center; gap: 10px; margin: 10px 0 12px;
+    color: var(--text-sec); font-size: 12px; font-weight: 500;
+  }
+  .subsession-divider::before, .subsession-divider::after {
+    content: ''; flex: 1; height: 1px; background: var(--border);
+  }
+
+  /* Inner subsession messages have slightly different styling */
+  .sub-msg { margin-bottom: 10px; opacity: 0; transform: translateY(6px); transition: opacity 0.3s, transform 0.3s; }
+  .sub-msg.visible { opacity: 1; transform: translateY(0); }
+  .sub-msg .role { font-size: 11px; font-weight: 600; color: var(--text-sec); margin-bottom: 2px; }
+  .sub-msg .bubble {
+    background: rgba(22, 27, 34, 0.7); border: 1px solid var(--border);
+    border-radius: 6px; padding: 8px 12px; font-size: 13px;
+  }
+
+  /* Decision resolved indicator */
+  .decision-resolved {
+    display: inline-flex; align-items: center; gap: 4px;
+    background: rgba(63, 185, 80, 0.12); color: var(--green);
+    border-radius: 4px; padding: 2px 8px; font-size: 11px; font-weight: 600;
+    margin-top: 6px;
+  }
+
+  /* Expanded card state (click to expand) */
+  .subsession-wrap.expanded {
+    background: var(--surface); border-left: 3px solid var(--green); border-radius: 8px;
+  }
+  .subsession-wrap.expanded .subsession-content {
+    max-height: 600px; opacity: 1; transform: scaleY(1);
+  }
+  .subsession-wrap.expanded .card-summary {
+    opacity: 1; max-height: 200px; padding: 0 14px 12px;
+  }
+  .subsession-wrap.expanded .card-summary .card-body { display: none; }
+</style>
+</head>
+<body>
+
+<div class="title-bar">
+  <h1>C: Animated Card Collapse</h1>
+  <button class="reset-btn" onclick="resetDemo()">Reset</button>
+</div>
+
+<div class="chat" id="chat">
+
+  <!-- Pre-subsession messages -->
+  <div class="msg" id="m1">
+    <div class="role">You</div>
+    <div class="bubble">Let's build the product design for the new dashboard feature.</div>
+  </div>
+
+  <div class="msg" id="m2">
+    <div class="role">Agent</div>
+    <div class="bubble">I'll start a focused session to work through the product design. This will cover layout, key components, and interaction patterns.</div>
+  </div>
+
+  <!-- Subsession wrapper -->
+  <div class="subsession-wrap" id="subsession">
+    <div class="subsession-content" id="subContent">
+      <div class="subsession-divider" id="subDivider" style="opacity:0; transition: opacity 0.4s;">
+        &#9472;&#9472; &#128203; Build Product Design &#9472;&#9472;
+      </div>
+
+      <div class="sub-msg" id="s1">
+        <div class="role">Design Agent</div>
+        <div class="bubble">Analyzing existing dashboard patterns. The current layout uses a 3-column grid with fixed sidebar navigation.</div>
+      </div>
+
+      <div class="sub-msg" id="s2">
+        <div class="role">Design Agent</div>
+        <div class="bubble">Proposing layout: responsive 2-panel design. Left panel for navigation tree, right panel for content area with tab support.</div>
+      </div>
+
+      <div class="sub-msg" id="s3">
+        <div class="role">Design Agent</div>
+        <div class="bubble">
+          Decision point: should we use a collapsible sidebar or a persistent mini-nav?
+          <div class="decision-resolved" id="decision" style="display:none;">&#10003; Auto-resolved: collapsible sidebar (matches existing patterns)</div>
+        </div>
+      </div>
+
+      <div class="sub-msg" id="s4">
+        <div class="role">Design Agent</div>
+        <div class="bubble">Final design spec ready. Includes responsive breakpoints at 768px and 1200px, dark/light theme tokens, and component hierarchy.</div>
+      </div>
+    </div>
+
+    <!-- Card summary (hidden until collapse) -->
+    <div class="card-summary">
+      <div class="card-header">&#10003; &#128203; Product Design &mdash; approved</div>
+      <div class="card-body">Responsive 2-panel layout with collapsible sidebar. Breakpoints at 768px/1200px. Dark/light theme tokens defined. Component hierarchy documented.</div>
+      <div class="card-toggle" id="toggleBtn" onclick="toggleExpand()">[Show history]</div>
+    </div>
+  </div>
+
+  <!-- Post-subsession message -->
+  <div class="msg" id="m3">
+    <div class="role">Agent</div>
+    <div class="bubble">Product design is complete. The spec has been saved. Ready to move on to implementation planning.</div>
+  </div>
+</div>
+
+<script>
+  var timers = [];
+
+  function schedule(fn, ms) {
+    timers.push(setTimeout(fn, ms));
+  }
+
+  function show(id) {
+    var el = document.getElementById(id);
+    if (el) el.classList.add("visible");
+  }
+
+  function runSequence() {
+    var wrap = document.getElementById("subsession");
+    var divider = document.getElementById("subDivider");
+    var decision = document.getElementById("decision");
+    var toggleBtn = document.getElementById("toggleBtn");
+
+    // 1. First chat messages
+    schedule(function() { show("m1"); }, 400);
+    schedule(function() { show("m2"); }, 1200);
+
+    // 2. Subsession divider appears
+    schedule(function() { divider.style.opacity = "1"; }, 2200);
+
+    // 3. Subsession messages appear one by one
+    schedule(function() { show("s1"); }, 3000);
+    schedule(function() { show("s2"); }, 4000);
+    schedule(function() { show("s3"); }, 5000);
+
+    // 4. Decision auto-resolves
+    schedule(function() { decision.style.display = "inline-flex"; }, 5800);
+
+    // 5. Final subsession message
+    schedule(function() { show("s4"); }, 6600);
+
+    // 6. THE COLLAPSE -- multi-stage animation
+    // Phase 1 (0-0.2s relative): Border fades in around content
+    schedule(function() { wrap.classList.add("phase-border"); }, 7800);
+
+    // Phase 2 (0.2-0.5s relative): Content compresses
+    schedule(function() { wrap.classList.add("phase-compress"); }, 8000);
+
+    // Phase 3 (0.5-0.8s relative): Card form emerges, summary fades in
+    schedule(function() {
+      wrap.classList.remove("phase-border");
+      wrap.classList.add("phase-card");
+    }, 8500);
+
+    // 7. Post-subsession message
+    schedule(function() { show("m3"); }, 9500);
+  }
+
+  function toggleExpand() {
+    var wrap = document.getElementById("subsession");
+    var btn = document.getElementById("toggleBtn");
+    if (wrap.classList.contains("expanded")) {
+      wrap.classList.remove("expanded");
+      wrap.classList.add("phase-compress");
+      btn.textContent = "[Show history]";
+    } else {
+      wrap.classList.remove("phase-compress");
+      wrap.classList.add("expanded");
+      btn.textContent = "[Hide history]";
+    }
+  }
+
+  function resetDemo() {
+    timers.forEach(function(t) { clearTimeout(t); });
+    timers = [];
+
+    // Reset all message visibility
+    var msgs = document.querySelectorAll(".msg, .sub-msg");
+    msgs.forEach(function(el) { el.classList.remove("visible"); });
+
+    // Reset subsession
+    var wrap = document.getElementById("subsession");
+    wrap.classList.remove("phase-border", "phase-compress", "phase-card", "expanded");
+
+    // Reset divider
+    document.getElementById("subDivider").style.opacity = "0";
+
+    // Reset decision
+    document.getElementById("decision").style.display = "none";
+
+    // Reset toggle text
+    document.getElementById("toggleBtn").textContent = "[Show history]";
+
+    // Reset post message
+    document.getElementById("m3").classList.remove("visible");
+
+    // Re-run after brief pause
+    schedule(function() { runSequence(); }, 300);
+  }
+
+  // Auto-start
+  runSequence();
+</script>
+
+</body>
+</html>

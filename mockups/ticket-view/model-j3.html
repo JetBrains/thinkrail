@@ -1,0 +1,1125 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>J3: Tiling Workspace &#8212; Bonsai Ticket View</title>
+<link rel="stylesheet" href="shared/base.css">
+<link rel="stylesheet" href="shared/sidebar.css">
+<style>
+/* ── J3: Tiling workspace layout ──────────────────────────────── */
+.main-area { display: flex; overflow: hidden; }
+
+/* Override default conversation/artifact-panel — we use .workspace instead */
+.artifact-panel { display: none !important; }
+.conversation { flex: 1; display: flex; flex-direction: column; overflow: hidden; transition: none; }
+
+/* ── Workspace: the tiling area (pane-1 + pane-2) ─────────────── */
+.workspace {
+  flex: 1; display: flex; overflow: hidden;
+}
+.pane {
+  display: flex; flex-direction: column; overflow: hidden;
+  transition: flex 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.pane-1 { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+.pane-2 {
+  flex: 0; width: 0; border-left: 0 solid var(--border);
+  overflow: hidden;
+  transition: flex 0.3s cubic-bezier(0.4, 0, 0.2, 1),
+              width 0.3s cubic-bezier(0.4, 0, 0.2, 1),
+              border-left-width 0.3s cubic-bezier(0.4, 0, 0.2, 1),
+              opacity 0.3s ease;
+  opacity: 0;
+}
+.workspace.split .pane-1 { flex: 0 0 45%; }
+.workspace.split .pane-2 {
+  flex: 0 0 55%; width: 55%;
+  border-left: 1px solid var(--border);
+  opacity: 1;
+}
+
+/* ── Pane headers ─────────────────────────────────────────────── */
+.pane-header {
+  height: 30px; min-height: 30px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  display: flex; align-items: center; padding: 0 12px;
+  font-size: 11px; color: var(--text-dim);
+  flex-shrink: 0;
+}
+.pane-header .pane-title { font-weight: 500; }
+.pane-header .pane-title .pane-title-icon { margin-right: 5px; }
+.pane-header .pane-close {
+  margin-left: auto; cursor: pointer; font-size: 13px;
+  width: 20px; height: 20px; display: flex; align-items: center;
+  justify-content: center; border-radius: 4px;
+  color: var(--text-dim); transition: all 0.15s;
+}
+.pane-header .pane-close:hover { background: var(--hover); color: var(--text); }
+
+/* ── Pane body ────────────────────────────────────────────────── */
+.pane-body { flex: 1; overflow-y: auto; }
+
+/* ── Pane 1: conversation ─────────────────────────────────────── */
+.pane-1 .conv-scroll { flex: 1; overflow-y: auto; padding: 24px 20px; scroll-behavior: smooth; }
+.pane-1 .conv-inner { max-width: 700px; margin: 0 auto; transition: max-width 0.3s; }
+.workspace.split .pane-1 .conv-inner { max-width: none; }
+.pane-1 .conv-inner > * + * { margin-top: 16px; }
+
+/* ── Pane 2: artifact/content area ────────────────────────────── */
+.pane-2-content { flex: 1; overflow-y: auto; }
+.pane-2-actions {
+  padding: 10px 16px; border-top: 1px solid var(--border);
+  background: var(--surface); display: flex; gap: 8px;
+  flex-shrink: 0;
+}
+
+/* ── Inline subsession blocks (J1/J2 style) ──────────────────── */
+.inline-sub {
+  border: 1px solid var(--border-bright); border-radius: var(--r);
+  background: var(--surface); overflow: hidden;
+  animation: fadeIn 0.35s ease both; margin: 12px 0;
+}
+.inline-sub.collapsed {
+  border-color: var(--border); background: transparent; padding: 8px 14px;
+}
+.is-header {
+  padding: 8px 14px; display: flex; align-items: center; gap: 8px;
+  border-bottom: 1px solid var(--border); background: var(--elevated);
+  font-size: 12px;
+}
+.is-icon { flex-shrink: 0; }
+.is-title { font-weight: 600; color: var(--text); flex: 1; }
+.is-status { font-size: 10px; color: var(--accent); font-family: var(--mono); }
+.is-body { padding: 10px 14px; font-size: 13px; color: var(--text-sec); line-height: 1.7; }
+.is-body .msg { padding: 4px 0 4px 12px; font-size: 13px; }
+.is-body .typing-indicator { padding: 4px 0 4px 12px; }
+.is-footer {
+  padding: 6px 14px; border-top: 1px solid var(--border);
+  display: flex; gap: 8px; align-items: center;
+}
+.is-complete-btn {
+  font-size: 11px; color: var(--text-dim); cursor: pointer;
+  padding: 4px 10px; border-radius: 4px; border: 1px solid var(--border);
+  background: transparent; font-family: inherit; transition: all 0.15s;
+  margin-left: auto;
+}
+.is-complete-btn:hover { border-color: var(--green); color: var(--green); }
+
+/* collapsed summary */
+.is-collapsed-summary {
+  font-size: 13px; color: var(--text-sec);
+  display: flex; align-items: center; gap: 8px;
+}
+.is-collapsed-summary .is-check { color: var(--green); font-weight: 700; }
+.is-collapsed-summary .is-dur {
+  font-size: 10px; color: var(--text-dim); font-family: var(--mono); margin-left: auto;
+}
+
+/* ── Suggestion card ──────────────────────────────────────────── */
+.suggestion-card {
+  border: 1px dashed var(--accent); border-radius: var(--r);
+  background: var(--accent-sub); padding: 10px 14px;
+  animation: fadeIn 0.35s ease both; margin: 8px 0;
+}
+.sug-header {
+  font-size: 10px; font-weight: 700; text-transform: uppercase;
+  letter-spacing: 0.06em; color: var(--accent); margin-bottom: 6px;
+}
+.sug-body { font-size: 13px; color: var(--text-sec); line-height: 1.5; }
+.sug-body strong { color: var(--text); }
+.sug-actions { margin-top: 8px; display: flex; gap: 8px; }
+.sug-btn {
+  padding: 5px 14px; border-radius: 6px; font-size: 12px; font-weight: 500;
+  cursor: pointer; border: 1px solid var(--border); background: var(--elevated);
+  color: var(--text-sec); transition: all 0.15s; font-family: inherit;
+}
+.sug-btn:hover { border-color: var(--accent); color: var(--text); }
+.sug-btn.primary { border-color: var(--accent); color: var(--accent); background: var(--accent-sub); }
+.sug-btn.primary:hover { background: rgba(88,166,255,0.2); }
+
+/* ── Notification message ─────────────────────────────────────── */
+.notify-msg {
+  padding: 6px 12px; font-size: 11px; color: var(--text-dim);
+  border-left: 2px solid var(--border); font-style: italic;
+  animation: fadeIn 0.35s ease both;
+}
+.notify-msg.success { border-left-color: var(--green); color: var(--green); }
+
+/* ── Recommendation card (inside subsessions) ─────────────────── */
+.rec-card {
+  border: 1px solid var(--green); border-radius: var(--r);
+  background: var(--green-sub); padding: 10px 14px;
+  margin: 6px 0; animation: fadeIn 0.35s ease both;
+}
+.rec-card-title {
+  font-size: 10px; font-weight: 700; text-transform: uppercase;
+  letter-spacing: 0.06em; color: var(--green); margin-bottom: 6px;
+}
+.rec-card-row { font-size: 12px; color: var(--text); line-height: 1.6; padding-left: 6px; }
+.rec-card-row strong { color: var(--green); }
+
+/* ── Steps panel (plan/exec inside pane-2) ────────────────────── */
+.p2-steps-panel { display: flex; flex-direction: column; height: 100%; }
+.p2-steps-list { padding: 14px 16px; overflow-y: auto; flex: 1; }
+.p2-code-preview {
+  border-top: 1px solid var(--border); display: flex;
+  flex-direction: column; height: 45%; flex-shrink: 0;
+}
+.p2-code-preview-header {
+  padding: 8px 16px; font-size: 12px; color: var(--text-dim);
+  border-bottom: 1px solid var(--border); font-family: var(--mono);
+  background: var(--elevated); flex-shrink: 0;
+}
+.p2-code-preview-header .cph-file { color: var(--accent); font-weight: 600; }
+.p2-code-preview-body {
+  font-family: var(--mono); font-size: 12px; line-height: 1.7;
+  flex: 1; overflow-y: auto;
+}
+.p2-code-preview-body .diff-line { animation: codeLineIn 0.2s ease both; }
+
+/* ── Retro card ───────────────────────────────────────────────── */
+.retro-card {
+  border: 1px solid var(--green); border-radius: var(--r);
+  background: var(--green-sub); overflow: hidden;
+  animation: fadeIn 0.35s ease both; margin: 8px 0;
+}
+.retro-header {
+  padding: 8px 14px; font-size: 10px; font-weight: 700;
+  text-transform: uppercase; letter-spacing: 0.06em;
+  color: var(--green); background: rgba(63,185,80,0.08);
+  border-bottom: 1px solid rgba(63,185,80,0.2);
+}
+.retro-body { padding: 10px 14px; font-size: 12px; color: var(--text-sec); line-height: 1.7; }
+.retro-body strong { color: var(--text); }
+.retro-row { display: flex; align-items: baseline; gap: 6px; margin: 3px 0; }
+.retro-row .retro-icon { flex-shrink: 0; font-size: 11px; }
+</style>
+</head>
+<body>
+
+<a href="index.html" class="back-link">&larr; All Models</a>
+<span class="model-tag">J3: Tiling</span>
+
+<!-- Controls -->
+<div class="controls">
+  <button class="ctrl-btn" id="playBtn" onclick="togglePlay()">&#9654; Play</button>
+  <button class="ctrl-btn" onclick="resetFlow()">&#10227; Reset</button>
+  <span class="step-counter">Step <span id="stepNum">0</span> / <span id="stepTotal">0</span></span>
+  <div class="progress-track"><div class="progress-fill" id="progressFill"></div></div>
+  <span class="kbd-hint"><kbd>Space</kbd> play <kbd>&#8594;</kbd> step <kbd>Esc</kbd> reset <kbd>B</kbd> sidebar <kbd>]</kbd> pane</span>
+</div>
+
+<!-- Status bar -->
+<div class="status-bar">
+  <span class="ticket-id">AUTH-42</span><div class="sb-sep"></div>
+  <span class="ticket-title">Add user authentication</span><div class="sb-spacer"></div>
+  <div class="phase-dots">
+    <div class="phase-dot" id="pd-D"><span class="dot pending"></span><span class="check">&#10003;</span><span class="label">Describe</span></div><span class="phase-sep">&#8250;</span>
+    <div class="phase-dot" id="pd-S"><span class="dot pending"></span><span class="check">&#10003;</span><span class="label">Specify</span></div><span class="phase-sep">&#8250;</span>
+    <div class="phase-dot" id="pd-P"><span class="dot pending"></span><span class="check">&#10003;</span><span class="label">Plan</span></div><span class="phase-sep">&#8250;</span>
+    <div class="phase-dot" id="pd-E"><span class="dot pending"></span><span class="check">&#10003;</span><span class="label">Execute</span></div><span class="phase-sep">&#8250;</span>
+    <div class="phase-dot" id="pd-V"><span class="dot pending"></span><span class="check">&#10003;</span><span class="label">Verify</span></div>
+  </div>
+</div>
+
+<!-- Main area: sidebar + workspace (pane-1 + pane-2) -->
+<div class="main-area">
+  <!-- Sidebar: THE ONLY navigation -->
+  <div class="sidebar" id="sidebar">
+    <div class="sidebar-scroll">
+      <div class="sidebar-group">
+        <div class="sidebar-group-header" onclick="toggleSidebarGroup('ticket')"><span class="group-toggle" id="gt-ticket">&#9662;</span><span>Ticket</span></div>
+        <div class="sidebar-group-items" id="gi-ticket"></div>
+      </div>
+      <div class="sidebar-group">
+        <div class="sidebar-group-header" onclick="toggleSidebarGroup('specs')"><span class="group-toggle" id="gt-specs">&#9662;</span><span>Specs</span></div>
+        <div class="sidebar-group-items" id="gi-specs"></div>
+      </div>
+      <div class="sidebar-group">
+        <div class="sidebar-group-header" onclick="toggleSidebarGroup('plan')"><span class="group-toggle" id="gt-plan">&#9662;</span><span>Plan</span></div>
+        <div class="sidebar-group-items" id="gi-plan"></div>
+      </div>
+    </div>
+    <div class="sidebar-toggle" onclick="toggleSidebarCollapse()"><span class="toggle-icon">&#9664;</span><span class="toggle-label">Collapse</span></div>
+  </div>
+
+  <!-- Workspace: tiling area -->
+  <div class="workspace" id="workspace">
+    <!-- Pane 1: conversation (always visible) -->
+    <div class="pane pane-1" id="pane1">
+      <div class="pane-header" id="pane1Header">
+        <span class="pane-title">Main Conversation</span>
+      </div>
+      <div class="conv-scroll" id="convScroll">
+        <div class="conv-inner" id="convInner"></div>
+      </div>
+      <div class="input-bar">
+        <input type="text" id="userInput" placeholder="Type a message..." onkeydown="handleInputKey(event)">
+        <button class="send-btn" id="sendBtn" onclick="handleSend()" disabled>Send</button>
+      </div>
+    </div>
+
+    <!-- Pane 2: artifact content (hidden until opened) -->
+    <div class="pane pane-2" id="pane2">
+      <div class="pane-header" id="pane2Header">
+        <span class="pane-title" id="pane2Title"></span>
+        <span class="pane-close" id="pane2Close" onclick="closePane2()">&times;</span>
+      </div>
+      <div class="pane-body pane-2-content" id="pane2Body"></div>
+      <div class="pane-2-actions" id="pane2Actions"></div>
+    </div>
+  </div>
+</div>
+
+<!-- Hidden artifact panel (engine expects these IDs) -->
+<div class="artifact-panel" id="artifactPanel"><div class="ap-header" id="apHeader"></div><div class="ap-body" id="apBody"></div><div class="ap-actions" id="apActions"></div></div>
+
+<script src="shared/data.js"></script>
+<script>
+// ── J3: SUBSESSIONS registry ─────────────────────────────────────
+window.SUBSESSIONS = [
+  { key: 'desc',           phase: 'ticket', label: 'Description',       icon: '\u{1F4CB}' },
+  { key: 'product-design', phase: 'ticket', label: 'Product Design',    icon: '\u{1F4CB}' },
+  { key: 'auth-readme',    phase: 'specs',  label: 'auth/README',       icon: '\u{1F4C4}' },
+  { key: 'jwt-research',   phase: 'specs',  label: 'JWT Research',      icon: '\u{1F52C}', parent: 'auth-readme' },
+  { key: 'session-strat',  phase: 'specs',  label: 'Session Strategy',  icon: '\u{1F52C}', parent: 'auth-readme' },
+  { key: 'design-doc',     phase: 'specs',  label: 'DESIGN_DOC',        icon: '\u{1F4C4}' },
+  { key: 'core-readme',    phase: 'specs',  label: 'core/README',       icon: '\u{1F4C4}' },
+  { key: 'impl-plan',      phase: 'plan',   label: 'Impl. Plan',        icon: '\u{1F4E6}' }
+];
+
+// ── J3: State ────────────────────────────────────────────────────
+var pane2Open = false;
+var pane2ContentKey = null;  // tracks what sidebar item is showing in pane-2
+var pane2Cache = {};         // key -> {title, body, actions}
+var inlineSubEls = {};
+var activeInlineSub = null;
+
+// ── J3: SCRIPT ───────────────────────────────────────────────────
+window.SCRIPT = [
+  // ── DESCRIBE ───────────────────────────────────────────────────
+  { id:1,  type:'agent',       text:'What would you like to work on?', phase:'D' },
+  { id:2,  type:'user',        text:'Add user authentication to the Bonsai workspace', interactive:true, placeholder:'Add user authentication to the Bonsai workspace' },
+  { id:3,  type:'agent',       text:'Got it — an auth module. Let me ask a few scoping questions.' },
+  { id:4,  type:'decision',    question:'What kind of authentication?', options:['Token-based ★','OAuth/SSO','Simple password'], recommended:0, hint:'Extends your existing bns_ token system.' },
+  { id:5,  type:'agent',       text:'Token-based — aligns perfectly with your <code>bns_</code> pattern.' },
+
+  // Build description (subsession inline)
+  { id:6,  type:'sidebar-add', key:'desc', status:'active' },
+  { id:7,  type:'open-inline-sub', key:'desc' },
+  { id:8,  type:'sub-msg',     key:'desc', role:'agent', text:'Building the ticket description from your input...' },
+  { id:9,  type:'sub-typing',  key:'desc', duration:800 },
+  { id:10, type:'sub-msg',     key:'desc', role:'agent', text:'<strong>What:</strong> Add JWT-based user authentication with role-based access control.<br><strong>Purpose:</strong> Enable multi-user access with Admin, User, and Viewer roles.<br><strong>Strategy:</strong> Token-based auth extending the existing <code>bns_</code> prefix convention.' },
+  { id:11, type:'close-inline-sub', key:'desc', summary:'JWT auth with RBAC', duration:'2min' },
+  { id:12, type:'sidebar-done', key:'desc', duration:'2min' },
+
+  // Product Design (subsession inline + artifact in pane-2)
+  { id:13, type:'sidebar-add', key:'product-design', status:'active' },
+  { id:14, type:'open-inline-sub', key:'product-design' },
+  { id:15, type:'sub-msg',     key:'product-design', role:'agent', text:'Building a product design document...' },
+  { id:16, type:'sub-typing',  key:'product-design', duration:800 },
+  { id:17, type:'pane2-doc',   section:'goal' },
+  { id:18, type:'sub-msg',     key:'product-design', role:'agent', text:'Goal section drafted. Adding user stories...' },
+  { id:19, type:'sub-typing',  key:'product-design', duration:600 },
+  { id:20, type:'pane2-doc',   section:'stories' },
+  { id:21, type:'sub-msg',     key:'product-design', role:'agent', text:'Adding roles & permissions matrix...' },
+  { id:22, type:'sub-typing',  key:'product-design', duration:600 },
+  { id:23, type:'pane2-doc',   section:'roles' },
+  { id:24, type:'sub-msg',     key:'product-design', role:'agent', text:'Completing with success criteria. Review in the right pane.' },
+  { id:25, type:'pane2-doc',   section:'full' },
+  { id:26, type:'approve-doc' },
+  { id:27, type:'close-inline-sub', key:'product-design', summary:'Product design approved', duration:'4min' },
+  { id:28, type:'sidebar-done', key:'product-design', duration:'4min' },
+
+  // ── SPECIFY ────────────────────────────────────────────────────
+  { id:29, type:'phase',       phase:'S', label:'SPECIFY' },
+  { id:30, type:'agent',       text:'Product design approved. Creating specification diffs...' },
+  { id:31, type:'typing',      duration:1500 },
+
+  // auth/README subsession
+  { id:32, type:'sidebar-add', key:'auth-readme', status:'active' },
+  { id:33, type:'open-inline-sub', key:'auth-readme' },
+  { id:34, type:'pane2-artifact', artifact:0, sidebarKey:'auth-readme' },
+  { id:35, type:'sub-msg',     key:'auth-readme', role:'agent', text:'Created <code>auth/README.md</code> — review the spec diff in the right pane.' },
+  { id:36, type:'decision',    question:'JWT or session-based auth?', options:['JWT tokens ★','Session-based','Hybrid'], recommended:0, hint:'Your bns_ token pattern aligns well with JWT.' },
+  { id:37, type:'sub-msg',     key:'auth-readme', role:'agent', text:'Updated to JWT strategy. I noticed a question about token lifetimes — suggesting research.' },
+
+  // JWT Research (nested subsession)
+  { id:38, type:'suggest-sub', key:'jwt-research', reason:'Research JWT token lifetimes and best practices for SaaS tools.' },
+  { id:39, type:'sidebar-add', key:'jwt-research', status:'active' },
+  { id:40, type:'open-inline-sub', key:'jwt-research' },
+  { id:41, type:'sub-msg',     key:'jwt-research', role:'agent', text:'Researching JWT best practices for SaaS tools...' },
+  { id:42, type:'sub-typing',  key:'jwt-research', duration:1000 },
+  { id:43, type:'sub-msg',     key:'jwt-research', role:'agent', text:'Industry standards for SaaS:<br>• Access tokens: 15min–1hr<br>• Refresh tokens: 7–30 days<br>• Token rotation on refresh is recommended' },
+  { id:44, type:'sub-rec',     key:'jwt-research', title:'Recommendation', rows:['<strong>Access token:</strong> 15 minutes','<strong>Refresh token:</strong> 7 days','<strong>Rotation:</strong> Yes, on each refresh'] },
+  { id:45, type:'sub-msg',     key:'jwt-research', role:'agent', text:'Recommended lifetimes applied to spec. Completing research.' },
+  { id:46, type:'close-inline-sub', key:'jwt-research', summary:'JWT: access 15min, refresh 7d, rotation on use', duration:'1min' },
+  { id:47, type:'sidebar-done', key:'jwt-research', duration:'1min' },
+  { id:48, type:'notify',      text:'Subsession "JWT Research" complete. Findings applied to auth/README spec.' },
+
+  // Session Strategy (another nested subsession)
+  { id:49, type:'sub-msg',     key:'auth-readme', role:'agent', text:'One more question about session management...' },
+  { id:50, type:'suggest-sub', key:'session-strat', reason:'Decide between stateful sessions (DB) or stateless (JWT-only) for refresh tokens.' },
+  { id:51, type:'sidebar-add', key:'session-strat', status:'active' },
+  { id:52, type:'open-inline-sub', key:'session-strat' },
+  { id:53, type:'sub-msg',     key:'session-strat', role:'agent', text:'Comparing session approaches...' },
+  { id:54, type:'sub-typing',  key:'session-strat', duration:800 },
+  { id:55, type:'sub-msg',     key:'session-strat', role:'agent', text:'<strong>Stateful (DB-backed):</strong> Revocable sessions, audit trail, logout works immediately.<br><strong>Stateless (JWT-only):</strong> Simpler, but can\'t revoke tokens before expiry.' },
+  { id:56, type:'sub-decision', key:'session-strat', question:'Session approach?', options:['DB-backed sessions ★','Stateless JWT'], recommended:0 },
+  { id:57, type:'close-inline-sub', key:'session-strat', summary:'DB-backed sessions chosen for revocability', duration:'1min' },
+  { id:58, type:'sidebar-done', key:'session-strat', duration:'1min' },
+  { id:59, type:'notify',      text:'Subsession "Session Strategy" complete. Spec updated with DB-backed sessions.' },
+
+  // Back to auth/README — viewer role question
+  { id:60, type:'sub-msg',     key:'auth-readme', role:'agent', text:'I added a viewer role with read-only access. Want to keep it?' },
+  { id:61, type:'decision',    question:'Keep the viewer role?', options:['Yes, keep ★','Remove it'], recommended:0 },
+  { id:62, type:'sub-msg',     key:'auth-readme', role:'agent', text:'Good. Three roles: Admin, User, Viewer. Approve the spec when ready.' },
+  { id:63, type:'approve',     artifact:0 },
+  { id:64, type:'close-inline-sub', key:'auth-readme', summary:'auth/README approved with JWT + RBAC', duration:'5min' },
+  { id:65, type:'sidebar-done', key:'auth-readme', duration:'5min' },
+
+  // DESIGN_DOC
+  { id:66, type:'sidebar-add', key:'design-doc', status:'active' },
+  { id:67, type:'open-inline-sub', key:'design-doc' },
+  { id:68, type:'pane2-artifact', artifact:1, sidebarKey:'design-doc' },
+  { id:69, type:'sub-msg',     key:'design-doc', role:'agent', text:'Added auth module to architecture overview in <code>DESIGN_DOC.md</code>.' },
+  { id:70, type:'approve',     artifact:1 },
+  { id:71, type:'close-inline-sub', key:'design-doc', summary:'DESIGN_DOC updated with auth module', duration:'1min' },
+  { id:72, type:'sidebar-done', key:'design-doc', duration:'1min' },
+
+  // core/README
+  { id:73, type:'sidebar-add', key:'core-readme', status:'active' },
+  { id:74, type:'open-inline-sub', key:'core-readme' },
+  { id:75, type:'pane2-artifact', artifact:2, sidebarKey:'core-readme' },
+  { id:76, type:'sub-msg',     key:'core-readme', role:'agent', text:'Updated <code>core/README.md</code> with new auth dependencies.' },
+  { id:77, type:'approve',     artifact:2 },
+  { id:78, type:'close-inline-sub', key:'core-readme', summary:'core/README updated', duration:'1min' },
+  { id:79, type:'sidebar-done', key:'core-readme', duration:'1min' },
+  { id:80, type:'all-approved' },
+  { id:81, type:'pane2-close' },
+
+  // ── PLAN ───────────────────────────────────────────────────────
+  { id:82, type:'phase',       phase:'P', label:'PLAN' },
+  { id:83, type:'agent',       text:'All specs approved. Building implementation plan...' },
+  { id:84, type:'typing',      duration:1200 },
+  { id:85, type:'sidebar-add', key:'impl-plan', status:'active' },
+  { id:86, type:'pane2-plan' },
+  { id:87, type:'agent',       text:'Implementation plan ready — 2 milestones, 6 steps. Review in the right pane.' },
+  { id:88, type:'decision',    question:'Ready to execute?', options:['Execute this plan ★','Adjust order'], recommended:0 },
+  { id:89, type:'sidebar-done', key:'impl-plan', duration:'3min' },
+
+  // ── EXECUTE ────────────────────────────────────────────────────
+  { id:90, type:'phase',       phase:'E', label:'EXECUTE' },
+  { id:91, type:'agent',       text:'Plan approved. Starting execution...' },
+  { id:92, type:'pane2-exec' },
+  { id:93, type:'exec-progress' },
+  { id:94, type:'agent',       text:'All 6 steps complete.' },
+  { id:95, type:'pane2-close' },
+
+  // ── VERIFY ─────────────────────────────────────────────────────
+  { id:96,  type:'phase',      phase:'V', label:'VERIFY' },
+  { id:97,  type:'agent',      text:'Running verification checks...' },
+  { id:98,  type:'typing',     duration:1000 },
+  { id:99,  type:'agent',      text:'✔ All checks passed — tests green, types valid, lint clean.' },
+  { id:100, type:'retro' },
+  { id:101, type:'agent',      text:'✔ Ticket complete! All phases finished.' },
+  { id:102, type:'complete' }
+];
+</script>
+<script src="shared/engine.js"></script>
+<script src="shared/sidebar.js"></script>
+<script>
+// ═══════════════════════════════════════════════════════════════════
+// J3: Tiling Workspace — All experiment-specific logic
+// ═══════════════════════════════════════════════════════════════════
+
+// ── Pane 2 management ────────────────────────────────────────────
+
+function openPane2(key, title, bodyHtml, actionsHtml) {
+  pane2Open = true;
+  pane2ContentKey = key;
+  var ws = document.getElementById('workspace');
+  if (ws) ws.classList.add('split');
+  var titleEl = document.getElementById('pane2Title');
+  if (titleEl) titleEl.innerHTML = title;
+  var bodyEl = document.getElementById('pane2Body');
+  if (bodyEl) bodyEl.innerHTML = bodyHtml;
+  var actEl = document.getElementById('pane2Actions');
+  if (actEl) actEl.innerHTML = actionsHtml || '';
+  // Cache
+  pane2Cache[key] = { title: title, body: bodyHtml, actions: actionsHtml || '' };
+  // Highlight sidebar
+  setActiveSidebarItem(key);
+  updatePane1Header();
+}
+
+function closePane2() {
+  pane2Open = false;
+  pane2ContentKey = null;
+  var ws = document.getElementById('workspace');
+  if (ws) ws.classList.remove('split');
+  setActiveSidebarItem(null);
+  updatePane1Header();
+}
+
+function togglePane2() {
+  if (pane2Open) closePane2();
+  else if (pane2ContentKey && pane2Cache[pane2ContentKey]) {
+    var c = pane2Cache[pane2ContentKey];
+    openPane2(pane2ContentKey, c.title, c.body, c.actions);
+  }
+}
+
+function updatePane1Header() {
+  var el = document.getElementById('pane1Header');
+  if (!el) return;
+  var title = 'Main Conversation';
+  if (activeInlineSub) {
+    var def = SUBSESSIONS.find(function(s) { return s.key === activeInlineSub; });
+    if (def) title = def.icon + ' ' + def.label;
+  }
+  el.innerHTML = '<span class="pane-title">' + title + '</span>';
+}
+
+// ── Pane 2: show artifact ────────────────────────────────────────
+
+function showArtifactInPane2(idx, sidebarKey) {
+  var d = DIFFS[idx]; if (!d) return;
+  var cnt = approvedArtifacts.filter(Boolean).length;
+  var acts = approvedArtifacts[idx]
+    ? '<span style="font-size:13px;color:var(--green);font-weight:600">✓ Approved</span>'
+    : '<button class="btn-request" onclick="requestChanges()">Request Changes</button><button class="btn-approve" onclick="pane2Approve(' + idx + ',\'' + sidebarKey + '\')">Approve ✓</button>';
+  var title = '<span class="pane-title-icon">\u{1F4C4}</span>' + d.path;
+  var stats = '<span style="font-size:11px;color:var(--text-dim);margin-left:8px">' + d.stats + ' · ' + cnt + '/3 approved</span>';
+  var header = '<span class="ap-badge ' + d.badgeClass + '">' + d.badge + '</span> ' + title + stats;
+  openPane2(sidebarKey, header, '<div class="diff-view">' + d.content + '</div>', acts);
+}
+
+function pane2Approve(idx, sidebarKey) {
+  approvedArtifacts[idx] = true;
+  showArtifactInPane2(idx, sidebarKey);
+  waitingForInteraction = false;
+  if (!playing) setTimeout(function() { advanceInteractive(); }, 400);
+}
+
+// ── Pane 2: show doc ─────────────────────────────────────────────
+
+function showDocInPane2(section) {
+  var complete = section === 'full';
+  var acts = complete
+    ? '<button class="btn-request" onclick="requestChanges()">Request Changes</button><button class="btn-approve" id="approveDocBtnP2" onclick="pane2ApproveDoc()">Approve Product Design ✓</button>'
+    : '';
+  var title = '\u{1F4CB} product-design.md';
+  var stats = complete ? '' : '<span style="font-size:11px;color:var(--text-dim);margin-left:8px">Building...</span>';
+  openPane2('product-design', '<span class="ap-badge doc">DOC</span> ' + title + stats, DOC_SECTIONS[section], acts);
+}
+
+function pane2ApproveDoc() {
+  productDesignApproved = true;
+  var btn = document.getElementById('approveDocBtnP2');
+  if (btn) {
+    btn.textContent = 'Approved ✔';
+    btn.style.background = 'var(--green-sub)';
+    btn.style.color = 'var(--green)';
+    btn.style.pointerEvents = 'none';
+  }
+  waitingForInteraction = false;
+  if (!playing) setTimeout(function() { advanceInteractive(); }, 400);
+}
+
+// ── Pane 2: show plan ────────────────────────────────────────────
+
+function showPlanInPane2() {
+  var html = buildP2Steps('plan');
+  openPane2('impl-plan', '<span class="ap-badge new">PLAN</span> Implementation Plan <span style="font-size:11px;color:var(--text-dim);margin-left:8px">2 milestones · 6 steps</span>', html, '<button class="btn-execute" onclick="handlePlanExecute()">Execute this plan</button>');
+}
+
+function showExecInPane2() {
+  var html = buildP2Steps('exec');
+  openPane2('impl-plan', '<span class="ap-badge exec">EXEC</span> Executing Plan <span style="font-size:11px;color:var(--text-dim);margin-left:8px" id="execCounter">0/6 complete</span>', html, '');
+}
+
+function buildP2Steps(mode) {
+  var state = mode === 'exec' ? 'pending' : 'ready';
+  var h = '<div class="p2-steps-panel"><div class="p2-steps-list">';
+  h += '<div class="steps-milestone">Milestone 1: Core Auth</div>';
+  EXEC_STEPS.slice(0, 4).forEach(function(s, i) {
+    h += '<div class="step-row ' + state + '" id="sr-' + i + '"><span class="step-icon">' + (i + 1) + '</span><span class="step-name">' + s.name + '</span><span class="step-file">' + s.file + '</span></div>';
+  });
+  h += '<div class="steps-milestone">Milestone 2: API &amp; Admin</div>';
+  EXEC_STEPS.slice(4).forEach(function(s, i) {
+    var idx = i + 4;
+    h += '<div class="step-row ' + state + '" id="sr-' + idx + '"><span class="step-icon">' + (idx + 1) + '</span><span class="step-name">' + s.name + '</span><span class="step-file">' + s.file + '</span></div>';
+  });
+  h += '</div>';
+  if (mode === 'exec') {
+    h += '<div class="p2-code-preview"><div class="p2-code-preview-header" id="codePreviewHeader"><span class="cph-file">Waiting...</span></div><div class="p2-code-preview-body" id="codePreviewBody"></div></div>';
+  }
+  h += '</div>';
+  return h;
+}
+
+// ── Inline subsession management ─────────────────────────────────
+
+function openInlineSub(key) {
+  var def = SUBSESSIONS.find(function(s) { return s.key === key; });
+  if (!def) return;
+  activeInlineSub = key;
+  updatePane1Header();
+
+  var c = document.createElement('div');
+  c.className = 'inline-sub fade-in';
+  c.id = 'isub-' + key;
+  c.innerHTML =
+    '<div class="is-header">' +
+      '<span class="is-icon">' + def.icon + '</span>' +
+      '<span class="is-title">' + def.label + '</span>' +
+      '<span class="is-status">active</span>' +
+    '</div>' +
+    '<div class="is-body" id="isub-body-' + key + '"></div>' +
+    '<div class="is-footer" id="isub-footer-' + key + '">' +
+      '<button class="is-complete-btn" onclick="manualCompleteInlineSub(\'' + key + '\')">Complete</button>' +
+    '</div>';
+  convInner.appendChild(c);
+  inlineSubEls[key] = c;
+  scrollConv();
+}
+
+function addSubMsg(key, role, text) {
+  var b = document.getElementById('isub-body-' + key);
+  if (!b) return;
+  var d = document.createElement('div');
+  d.className = 'msg ' + role + ' fade-in';
+  if (role === 'agent') d.innerHTML = text;
+  else d.textContent = text;
+  b.appendChild(d);
+  scrollConv();
+}
+
+function addSubTyping(key) {
+  var b = document.getElementById('isub-body-' + key);
+  if (!b) return;
+  var d = document.createElement('div');
+  d.className = 'typing-indicator fade-in';
+  d.id = 'sub-typing-' + key;
+  d.innerHTML = '<span class="dot"></span><span class="dot"></span><span class="dot"></span>';
+  b.appendChild(d);
+  scrollConv();
+}
+
+function removeSubTyping(key) {
+  var e = document.getElementById('sub-typing-' + key);
+  if (e) e.remove();
+}
+
+function addSubRec(key, title, rows) {
+  var b = document.getElementById('isub-body-' + key);
+  if (!b) return;
+  var d = document.createElement('div');
+  d.className = 'rec-card fade-in';
+  d.innerHTML = '<div class="rec-card-title">' + title + '</div>' +
+    rows.map(function(r) { return '<div class="rec-card-row">' + r + '</div>'; }).join('');
+  b.appendChild(d);
+  scrollConv();
+}
+
+function addSubDecision(key, question, options, recommended) {
+  var b = document.getElementById('isub-body-' + key);
+  if (!b) return;
+  var dcId = 'sdc-' + key;
+  var d = document.createElement('div');
+  d.className = 'decision-card fade-in';
+  d.id = dcId;
+  var optsHtml = '';
+  options.forEach(function(opt, i) {
+    var rec = i === recommended ? ' recommended' : '';
+    optsHtml += '<button class="dc-opt' + rec + '" onclick="resolveSubDecision(\'' + key + '\',' + i + ',\'' + opt.replace(/'/g, "\\'") + '\')">' + opt + '</button>';
+  });
+  d.innerHTML = '<div class="dc-label">DECISION</div><div class="dc-q">' + question + '</div><div class="dc-opts">' + optsHtml + '</div>';
+  b.appendChild(d);
+  scrollConv();
+}
+
+function resolveSubDecision(key, idx, label) {
+  var el = document.getElementById('sdc-' + key);
+  if (el) {
+    el.className = 'decision-card resolved';
+    el.innerHTML = '<span class="dc-resolved">✓ ' + label.replace(/\s*[★]/g, '') + '</span>';
+  }
+  waitingForInteraction = false;
+  if (!playing) setTimeout(function() { advanceInteractive(); }, 400);
+}
+
+function collapseInlineSub(key, summary, duration) {
+  var el = document.getElementById('isub-' + key);
+  if (!el) return;
+  var def = SUBSESSIONS.find(function(s) { return s.key === key; });
+  el.className = 'inline-sub collapsed';
+  el.innerHTML =
+    '<div class="is-collapsed-summary">' +
+      '<span class="is-check">✓</span>' +
+      '<span class="is-icon">' + (def ? def.icon : '') + '</span>' +
+      '<span>' + (def ? def.label : key) + ': ' + summary + '</span>' +
+      (duration ? '<span class="is-dur">' + duration + '</span>' : '') +
+    '</div>';
+  if (activeInlineSub === key) {
+    activeInlineSub = null;
+    updatePane1Header();
+  }
+}
+
+function manualCompleteInlineSub(key) {
+  collapseInlineSub(key, 'Completed.', '');
+  waitingForInteraction = false;
+  if (!playing) setTimeout(function() { advanceInteractive(); }, 400);
+}
+
+// ── Suggestion card ──────────────────────────────────────────────
+
+function addSuggestionCard(key, reason) {
+  var def = SUBSESSIONS.find(function(s) { return s.key === key; });
+  if (!def) return;
+  var d = document.createElement('div');
+  d.className = 'suggestion-card fade-in';
+  d.id = 'sug-' + key;
+  d.innerHTML =
+    '<div class="sug-header">SUGGESTED SUBSESSION</div>' +
+    '<div class="sug-body"><strong>' + def.icon + ' ' + def.label + '</strong><br>' + reason + '</div>' +
+    '<div class="sug-actions">' +
+      '<button class="sug-btn primary" onclick="acceptSuggestion(\'' + key + '\')">Accept</button>' +
+      '<button class="sug-btn" onclick="dismissSuggestion(\'' + key + '\')">Skip</button>' +
+    '</div>';
+  convInner.appendChild(d);
+  scrollConv();
+}
+
+function acceptSuggestion(key) {
+  var s = document.getElementById('sug-' + key);
+  if (s) {
+    s.innerHTML = '<div class="sug-header" style="color:var(--green)">✓ Accepted</div>' +
+      '<div class="sug-body" style="padding:4px 14px;font-size:11px;color:var(--text-dim)">' +
+      (SUBSESSIONS.find(function(ss){return ss.key===key;}) || {}).label + '</div>';
+    s.style.borderStyle = 'solid';
+    s.style.borderColor = 'var(--green)';
+    s.style.background = 'var(--green-sub)';
+  }
+  waitingForInteraction = false;
+  if (!playing) setTimeout(function() { advanceInteractive(); }, 200);
+}
+
+function dismissSuggestion(key) {
+  var s = document.getElementById('sug-' + key);
+  if (s) {
+    s.innerHTML = '<span style="font-size:12px;color:var(--text-dim)">Subsession skipped.</span>';
+    s.className = 'suggestion-card';
+    s.style.borderStyle = 'solid';
+    s.style.borderColor = 'var(--border)';
+    s.style.background = 'transparent';
+  }
+  waitingForInteraction = false;
+  if (!playing) setTimeout(function() { advanceInteractive(); }, 200);
+}
+
+// ── Retro card ───────────────────────────────────────────────────
+
+function showRetro() {
+  var d = document.createElement('div');
+  d.className = 'retro-card fade-in';
+  d.innerHTML =
+    '<div class="retro-header">RETROSPECTIVE</div>' +
+    '<div class="retro-body">' +
+      '<div class="retro-row"><span class="retro-icon">\u{1F4CB}</span><strong>Artifacts:</strong> 3 specs approved, 1 product design</div>' +
+      '<div class="retro-row"><span class="retro-icon">\u{1F52C}</span><strong>Research:</strong> 2 subsessions (JWT lifetimes, session strategy)</div>' +
+      '<div class="retro-row"><span class="retro-icon">\u{2699}️</span><strong>Execution:</strong> 6 steps across 2 milestones</div>' +
+      '<div class="retro-row"><span class="retro-icon">⏱️</span><strong>Decisions:</strong> Token-based auth, JWT, DB-backed sessions, viewer role kept</div>' +
+    '</div>';
+  convInner.appendChild(d);
+  scrollConv();
+}
+
+// ── Sidebar click -> toggle pane 2 ───────────────────────────────
+
+window.onSidebarNavigate = function(key) {
+  // If clicking the same item that's already shown, toggle pane 2
+  if (pane2Open && pane2ContentKey === key) {
+    closePane2();
+    return;
+  }
+
+  // If we have cached content for this key, show it
+  if (pane2Cache[key]) {
+    var c = pane2Cache[key];
+    openPane2(key, c.title, c.body, c.actions);
+    return;
+  }
+
+  // Map sidebar key to artifact index for spec artifacts
+  var artMap = { 'auth-readme': 0, 'design-doc': 1, 'core-readme': 2 };
+  if (artMap[key] !== undefined) {
+    showArtifactInPane2(artMap[key], key);
+    return;
+  }
+
+  // Product design
+  if (key === 'product-design') {
+    showDocInPane2(productDesignApproved ? 'full' : 'goal');
+    return;
+  }
+};
+
+// ── Override: executeStep ─────────────────────────────────────────
+
+var _engineExec = executeStep;
+executeStep = function(step) {
+  if (stepNumEl) stepNumEl.textContent = currentStep + 1;
+  if (progressFill && SCRIPT) progressFill.style.width = ((currentStep + 1) / SCRIPT.length * 100) + '%';
+
+  switch (step.type) {
+    case 'sidebar-add':
+      addSidebarItem(step.key);
+      if (step.status === 'active') setSidebarStatus(step.key, 'active');
+      break;
+
+    case 'sidebar-done':
+      setSidebarStatus(step.key, 'done', step.duration);
+      break;
+
+    case 'open-inline-sub':
+      openInlineSub(step.key);
+      break;
+
+    case 'close-inline-sub':
+      removeSubTyping(step.key);
+      collapseInlineSub(step.key, step.summary || 'Completed.', step.duration);
+      break;
+
+    case 'sub-msg':
+      removeSubTyping(step.key);
+      addSubMsg(step.key, step.role, step.text);
+      break;
+
+    case 'sub-typing':
+      addSubTyping(step.key);
+      break;
+
+    case 'sub-rec':
+      addSubRec(step.key, step.title, step.rows);
+      break;
+
+    case 'sub-decision':
+      addSubDecision(step.key, step.question, step.options, step.recommended);
+      break;
+
+    case 'suggest-sub':
+      addSuggestionCard(step.key, step.reason);
+      break;
+
+    case 'pane2-artifact':
+      showArtifactInPane2(step.artifact, step.sidebarKey);
+      break;
+
+    case 'pane2-doc':
+      showDocInPane2(step.section);
+      break;
+
+    case 'pane2-plan':
+      showPlanInPane2();
+      break;
+
+    case 'pane2-exec':
+      showExecInPane2();
+      break;
+
+    case 'pane2-close':
+      closePane2();
+      break;
+
+    case 'notify':
+      var n = document.createElement('div');
+      n.className = 'notify-msg success fade-in';
+      n.innerHTML = '✓ ' + step.text;
+      if (convInner) convInner.appendChild(n);
+      scrollConv();
+      break;
+
+    case 'retro':
+      showRetro();
+      break;
+
+    case 'approve':
+      // handled by pane 2 approve buttons
+      break;
+
+    case 'complete':
+      completeAllPhases();
+      pause();
+      break;
+
+    default:
+      _engineExec(step);
+      break;
+  }
+};
+
+// ── Override: advanceAutoPlay ─────────────────────────────────────
+
+advanceAutoPlay = function() {
+  if (!playing || currentStep >= SCRIPT.length) { pause(); return; }
+  var step = SCRIPT[currentStep];
+  executeStep(step);
+  currentStep++;
+
+  var delay;
+  var clean = function(s) { return s.replace(/\s*[★]/g, ''); };
+
+  switch (step.type) {
+    case 'typing':
+      delay = step.duration;
+      break;
+
+    case 'decision':
+      delay = 1800;
+      var sid = step.id, rec = step.options[step.recommended];
+      setTimeout(function() { if (playing) resolveDecisionCard(sid, clean(rec)); }, 1500);
+      break;
+
+    case 'sub-decision':
+      delay = 1800;
+      var sdKey = step.key, sdRec = step.options[step.recommended];
+      setTimeout(function() { if (playing) resolveSubDecision(sdKey, step.recommended, sdRec); }, 1500);
+      break;
+
+    case 'approve':
+      delay = 1200;
+      var ai = step.artifact;
+      var artKeyMap = { 0: 'auth-readme', 1: 'design-doc', 2: 'core-readme' };
+      var artKey = artKeyMap[ai];
+      setTimeout(function() {
+        if (playing) {
+          approvedArtifacts[ai] = true;
+          if (pane2Open && pane2ContentKey === artKey) showArtifactInPane2(ai, artKey);
+        }
+      }, 900);
+      break;
+
+    case 'approve-doc':
+      delay = 1200;
+      setTimeout(function() { if (playing) pane2ApproveDoc(); }, 900);
+      break;
+
+    case 'suggest-sub':
+      delay = 1800;
+      var sugKey = step.key;
+      setTimeout(function() { if (playing) acceptSuggestion(sugKey); }, 1500);
+      break;
+
+    case 'sub-typing':
+      delay = step.duration || 800;
+      var stKey = step.key;
+      setTimeout(function() { if (playing) removeSubTyping(stKey); }, delay - 100);
+      break;
+
+    case 'exec-progress':
+      runExecAnimation(function() {
+        if (playing) stepTimer = setTimeout(advanceAutoPlay, 600);
+      });
+      return;
+
+    case 'all-approved':
+      delay = 1500;
+      break;
+
+    case 'complete':
+      return;
+
+    case 'user': case 'phase':
+      delay = 800;
+      break;
+
+    case 'sidebar-add': case 'sidebar-done':
+    case 'open-inline-sub': case 'close-inline-sub':
+    case 'pane2-artifact': case 'pane2-doc':
+    case 'pane2-plan': case 'pane2-exec': case 'pane2-close':
+    case 'notify': case 'retro':
+      delay = 500;
+      break;
+
+    case 'sub-msg': case 'sub-rec':
+      delay = 700;
+      break;
+
+    default:
+      delay = 600;
+      break;
+  }
+
+  stepTimer = setTimeout(advanceAutoPlay, delay);
+};
+
+// ── Override: advanceInteractive ──────────────────────────────────
+
+advanceInteractive = function() {
+  if (currentStep >= SCRIPT.length) return;
+  var step = SCRIPT[currentStep];
+
+  // Wait-for-interaction types (interactive mode only)
+  if (!playing) {
+    if (step.type === 'user' && step.interactive) {
+      currentStep++;
+      waitingForInteraction = true;
+      if (userInput) { userInput.value = ''; userInput.placeholder = step.placeholder || 'Type a message...'; userInput.focus(); }
+      if (sendBtn) sendBtn.disabled = false;
+      return;
+    }
+    if (step.type === 'decision') {
+      executeStep(step); currentStep++; waitingForInteraction = true; return;
+    }
+    if (step.type === 'sub-decision') {
+      executeStep(step); currentStep++; waitingForInteraction = true; return;
+    }
+    if (step.type === 'suggest-sub') {
+      executeStep(step); currentStep++; waitingForInteraction = true; return;
+    }
+    if (step.type === 'approve') {
+      if (step.artifact !== undefined && approvedArtifacts[step.artifact]) {
+        currentStep++; setTimeout(function() { advanceInteractive(); }, 200); return;
+      }
+      waitingForInteraction = true; currentStep++; return;
+    }
+    if (step.type === 'approve-doc') {
+      if (productDesignApproved) {
+        currentStep++; setTimeout(function() { advanceInteractive(); }, 200); return;
+      }
+      waitingForInteraction = true; currentStep++; return;
+    }
+  }
+
+  executeStep(step);
+  currentStep++;
+
+  // Delays
+  var d;
+  switch (step.type) {
+    case 'typing':           d = step.duration; break;
+    case 'sub-typing':
+      d = step.duration || 800;
+      var stk = step.key;
+      setTimeout(function() { removeSubTyping(stk); }, d - 50);
+      break;
+    case 'exec-progress':
+      runExecAnimation(function() {
+        setTimeout(function() { advanceInteractive(); }, 600);
+      });
+      return;
+    case 'all-approved':     d = 1200; break;
+    case 'complete':         return;
+    case 'sidebar-add':
+    case 'sidebar-done':
+    case 'pane2-close':      d = 300; break;
+    case 'open-inline-sub':
+    case 'close-inline-sub': d = 500; break;
+    case 'pane2-artifact':
+    case 'pane2-doc':
+    case 'pane2-plan':
+    case 'pane2-exec':       d = 400; break;
+    case 'sub-msg':
+    case 'sub-rec':          d = 600; break;
+    case 'notify':           d = 500; break;
+    case 'retro':            d = 800; break;
+    default:                 d = 600; break;
+  }
+  setTimeout(function() { advanceInteractive(); }, d);
+};
+
+// ── Override: stepForward ────────────────────────────────────────
+
+var _engineStepForward = stepForward;
+stepForward = function() {
+  if (playing) return;
+  if (waitingForInteraction) {
+    var ps = SCRIPT[currentStep - 1] || SCRIPT[currentStep];
+    if (ps && ps.type === 'sub-decision') {
+      resolveSubDecision(ps.key, ps.recommended, ps.options[ps.recommended]);
+      return;
+    }
+    if (ps && ps.type === 'suggest-sub') {
+      acceptSuggestion(ps.key);
+      return;
+    }
+  }
+  _engineStepForward();
+};
+
+// ── Override: resetFlow ──────────────────────────────────────────
+
+resetFlow = function() {
+  pause();
+  currentStep = 0;
+  approvedArtifacts = [false, false, false];
+  currentArtifact = 0;
+  waitingForInteraction = false;
+  currentPhase = null;
+  peekMode = false;
+  peekSavedState = null;
+  productDesignApproved = false;
+  execAnimationRunning = false;
+
+  // J3 state
+  pane2Open = false;
+  pane2ContentKey = null;
+  pane2Cache = {};
+  inlineSubEls = {};
+  activeInlineSub = null;
+  sidebarItems = {};
+
+  // Reset DOM
+  if (convInner) convInner.innerHTML = '';
+  closePane2();
+  if (stepNumEl) stepNumEl.textContent = '0';
+  if (progressFill) progressFill.style.width = '0%';
+  if (userInput) { userInput.value = ''; userInput.placeholder = 'Type a message...'; }
+  if (sendBtn) sendBtn.disabled = true;
+
+  // Reset sidebar groups
+  ['ticket', 'specs', 'plan'].forEach(function(g) {
+    var i = document.getElementById('gi-' + g);
+    var t = document.getElementById('gt-' + g);
+    if (i) { i.innerHTML = ''; i.classList.remove('collapsed'); }
+    if (t) t.classList.remove('collapsed');
+  });
+
+  // Reset phase dots
+  ['D', 'S', 'P', 'E', 'V'].forEach(function(ph) {
+    var el = document.getElementById('pd-' + ph);
+    if (!el) return;
+    el.classList.remove('is-done', 'is-active');
+    var d = el.querySelector('.dot'), l = el.querySelector('.label');
+    if (d) d.className = 'dot pending';
+    if (l) l.className = 'label';
+  });
+
+  // Reset pane 1 header
+  updatePane1Header();
+
+  setTimeout(function() { advanceInteractive(); }, 300);
+};
+
+// ── Keyboard: B sidebar, ] toggle pane 2 ─────────────────────────
+
+document.addEventListener('keydown', function(e) {
+  if (userInput && e.target === userInput) return;
+  if (e.target && e.target.tagName === 'INPUT') return;
+
+  if (e.code === 'KeyB') {
+    e.preventDefault();
+    toggleSidebarCollapse();
+  } else if (e.code === 'BracketRight') {
+    e.preventDefault();
+    togglePane2();
+  }
+});
+</script>
+</body>
+</html>

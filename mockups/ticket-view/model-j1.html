@@ -1,0 +1,692 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>J1: Seamless Subsessions — Bonsai Ticket View</title>
+<link rel="stylesheet" href="shared/base.css">
+<link rel="stylesheet" href="shared/sidebar.css">
+<style>
+/* ── Ticket summary in sidebar ────────────────────────────── */
+
+.sidebar-summary {
+  padding: 12px 14px; border-bottom: 1px solid var(--border);
+}
+.sidebar-summary .ss-id {
+  font-family: var(--mono); font-size: 11px; color: var(--accent);
+  background: var(--accent-sub); padding: 2px 6px; border-radius: 3px; font-weight: 600;
+}
+.sidebar-summary .ss-title {
+  font-size: 12px; font-weight: 600; color: var(--text); margin-top: 6px;
+  line-height: 1.4;
+}
+.sidebar-summary .ss-meta {
+  font-size: 10px; color: var(--text-dim); margin-top: 4px;
+  display: flex; gap: 8px; align-items: center;
+}
+.sidebar-summary .ss-badge {
+  font-size: 9px; font-weight: 700; text-transform: uppercase;
+  padding: 1px 5px; border-radius: 3px; letter-spacing: 0.04em;
+}
+.sidebar-summary .ss-badge.feature { background: var(--purple-sub); color: var(--purple); }
+.sidebar-summary .ss-badge.phase-badge { background: var(--accent-sub); color: var(--accent); }
+
+.sidebar.collapsed .sidebar-summary { padding: 8px 0; text-align: center; }
+.sidebar.collapsed .sidebar-summary .ss-title,
+.sidebar.collapsed .sidebar-summary .ss-meta { display: none; }
+
+/* ── Subsession enter divider ─────────────────────────────── */
+
+.ss-enter {
+  display: flex; align-items: center; gap: 8px;
+  padding: 4px 0; margin: 12px 0 8px; font-size: 12px; color: var(--text-dim);
+  animation: fadeIn 0.35s ease both;
+}
+.ss-enter::before, .ss-enter::after {
+  content: ''; flex: 1; height: 1px; background: var(--border);
+}
+.ss-enter .ss-icon { font-size: 12px; }
+.ss-enter .ss-name { font-weight: 600; }
+
+/* ── Subsession exit divider ──────────────────────────────── */
+
+.ss-exit {
+  display: flex; align-items: center; gap: 8px;
+  padding: 4px 0; margin: 8px 0 12px; font-size: 12px; color: var(--green);
+  cursor: pointer; animation: fadeIn 0.35s ease both;
+}
+.ss-exit::before, .ss-exit::after {
+  content: ''; flex: 1; height: 1px; background: var(--green); opacity: 0.3;
+}
+.ss-exit:hover { color: var(--accent); }
+.ss-exit .expand-hint { font-size: 10px; color: var(--text-dim); margin-left: 4px; }
+
+/* ── Expanded subsession history (retro) ──────────────────── */
+
+.ss-history {
+  display: none; margin: 0 0 12px 16px; padding: 8px 12px;
+  border-left: 2px solid var(--border); font-size: 12px; color: var(--text-dim);
+  animation: fadeIn 0.25s ease both;
+}
+.ss-history.visible { display: block; }
+.ss-history .msg { font-size: 12px; padding: 4px 0 4px 10px; }
+
+/* ── Quick-create buttons after agent messages ────────────── */
+
+.quick-create {
+  display: flex; gap: 6px; margin-top: 4px; padding-left: 14px;
+  animation: fadeIn 0.35s ease both;
+}
+.quick-create-btn {
+  font-size: 10px; color: var(--text-dim); padding: 3px 8px;
+  border: 1px solid transparent; border-radius: 4px;
+  cursor: pointer; background: none; transition: all 0.15s;
+  display: flex; align-items: center; gap: 3px;
+  font-family: inherit;
+}
+.quick-create-btn:hover {
+  color: var(--accent); border-color: var(--accent-sub); background: var(--accent-sub);
+}
+
+/* ── Breadcrumb bar ───────────────────────────────────────── */
+
+.breadcrumb {
+  height: 28px; background: var(--surface); border-bottom: 1px solid var(--border);
+  display: flex; align-items: center; padding: 0 20px; gap: 4px;
+  font-size: 12px; flex-shrink: 0;
+}
+.bc-item { color: var(--text-dim); cursor: pointer; transition: color 0.15s; }
+.bc-item:hover { color: var(--accent); }
+.bc-item.current { color: var(--text); font-weight: 500; cursor: default; }
+.bc-sep { color: var(--text-dim); opacity: 0.4; font-size: 10px; }
+
+/* ── Artifact action buttons (subsession creators) ────────── */
+
+.ap-subsession-actions {
+  padding: 8px 16px 12px; border-top: 1px solid var(--border);
+  display: flex; gap: 6px; background: var(--surface);
+}
+.ap-ss-btn {
+  font-size: 10px; color: var(--text-dim); padding: 4px 10px;
+  border: 1px solid var(--border); border-radius: 4px;
+  cursor: pointer; background: none; transition: all 0.15s;
+  display: flex; align-items: center; gap: 3px;
+  font-family: inherit;
+}
+.ap-ss-btn:hover {
+  color: var(--accent); border-color: var(--accent-sub); background: var(--accent-sub);
+}
+
+/* ── Split mode adjustment for sidebar ────────────────────── */
+
+body.split-mode .conversation { flex: 0 0 auto; width: 35%; }
+</style>
+</head>
+<body>
+
+<a href="index.html" class="back-link">← All Models</a>
+<span class="model-tag">J1: Seamless</span>
+
+<!-- Controls bar -->
+<div class="controls">
+  <button class="ctrl-btn" id="playBtn" onclick="togglePlay()">▶ Play</button>
+  <button class="ctrl-btn" onclick="resetFlow()">⟳ Reset</button>
+  <span class="step-counter">Step <span id="stepNum">0</span> / <span id="stepTotal">0</span></span>
+  <div class="progress-track"><div class="progress-fill" id="progressFill"></div></div>
+  <span class="kbd-hint"><kbd>Space</kbd> play <kbd>→</kbd> step <kbd>B</kbd> sidebar <kbd>Esc</kbd> reset</span>
+</div>
+
+<!-- Status bar -->
+<div class="status-bar">
+  <span class="ticket-id">AUTH-42</span>
+  <div class="sb-sep"></div>
+  <span class="ticket-title">Add user authentication</span>
+  <div class="sb-spacer"></div>
+  <div class="phase-dots">
+    <div class="phase-dot" id="pd-D"><span class="dot pending"></span><span class="check">✓</span><span class="label">Describe</span></div>
+    <span class="phase-sep">›</span>
+    <div class="phase-dot" id="pd-S"><span class="dot pending"></span><span class="check">✓</span><span class="label">Specify</span></div>
+    <span class="phase-sep">›</span>
+    <div class="phase-dot" id="pd-P"><span class="dot pending"></span><span class="check">✓</span><span class="label">Plan</span></div>
+    <span class="phase-sep">›</span>
+    <div class="phase-dot" id="pd-E"><span class="dot pending"></span><span class="check">✓</span><span class="label">Execute</span></div>
+    <span class="phase-sep">›</span>
+    <div class="phase-dot" id="pd-V"><span class="dot pending"></span><span class="check">✓</span><span class="label">Verify</span></div>
+  </div>
+</div>
+
+<!-- Breadcrumb -->
+<div class="breadcrumb" id="breadcrumb">
+  <span class="bc-item current" id="bc-main">AUTH-42</span>
+</div>
+
+<!-- Main area -->
+<div class="main-area">
+  <!-- Left sidebar: Artifacts -->
+  <div class="sidebar" id="sidebar">
+    <div class="sidebar-summary" id="sidebarSummary">
+      <span class="ss-id">AUTH-42</span>
+      <div class="ss-title">Add user authentication</div>
+      <div class="ss-meta">
+        <span class="ss-badge feature">Feature</span>
+        <span class="ss-badge phase-badge" id="sidebarPhase">Describe</span>
+      </div>
+    </div>
+    <div class="sidebar-scroll">
+      <div class="sidebar-group">
+        <div class="sidebar-group-header" onclick="toggleSidebarGroup('ticket')">
+          <span class="group-toggle" id="gt-ticket">▾</span>
+          <span>Ticket</span>
+        </div>
+        <div class="sidebar-group-items" id="gi-ticket"></div>
+      </div>
+      <div class="sidebar-group">
+        <div class="sidebar-group-header" onclick="toggleSidebarGroup('specs')">
+          <span class="group-toggle" id="gt-specs">▾</span>
+          <span>Specs</span>
+        </div>
+        <div class="sidebar-group-items" id="gi-specs"></div>
+      </div>
+      <div class="sidebar-group">
+        <div class="sidebar-group-header" onclick="toggleSidebarGroup('plan')">
+          <span class="group-toggle" id="gt-plan">▾</span>
+          <span>Plan</span>
+        </div>
+        <div class="sidebar-group-items" id="gi-plan"></div>
+      </div>
+    </div>
+    <div class="sidebar-toggle" onclick="toggleSidebarCollapse()">
+      <span class="toggle-icon">◀</span>
+      <span class="toggle-label">Collapse</span>
+    </div>
+  </div>
+
+  <!-- Conversation panel -->
+  <div class="conversation">
+    <div class="conv-scroll" id="convScroll">
+      <div class="conv-inner" id="convInner"></div>
+    </div>
+    <div class="input-bar">
+      <input type="text" id="userInput" placeholder="Type a message..." onkeydown="handleInputKey(event)">
+      <button class="send-btn" id="sendBtn" onclick="handleSend()" disabled>Send</button>
+    </div>
+  </div>
+
+  <!-- Artifact panel (right side) -->
+  <div class="artifact-panel" id="artifactPanel">
+    <div class="ap-header" id="apHeader">
+      <span class="ap-badge new" id="apBadge">NEW</span>
+      <span class="ap-path" id="apPath"></span>
+      <span class="ap-stats" id="apStats"></span>
+      <button class="ap-close" onclick="closePeek()">× Close</button>
+    </div>
+    <div class="ap-body" id="apBody"></div>
+    <div class="ap-actions" id="apActions">
+      <button class="btn-request" onclick="requestChanges()">Request Changes</button>
+      <button class="btn-approve" id="approveBtn" onclick="handleApprove()">Approve ✓</button>
+    </div>
+  </div>
+</div>
+
+<!-- Shared scripts -->
+<script src="shared/data.js"></script>
+<script>
+// ── J1-specific state ─────────────────────────────────────────
+
+var breadcrumbStack = ['AUTH-42'];
+var expandedHistories = {};
+
+// ── Sidebar phase label updater ───────────────────────────────
+
+function updateSidebarPhase(label) {
+  var el = document.getElementById('sidebarPhase');
+  if (el) el.textContent = label;
+}
+
+// ── Breadcrumb management ─────────────────────────────────────
+
+function updateBreadcrumb() {
+  var bc = document.getElementById('breadcrumb');
+  if (!bc) return;
+  var html = '';
+  breadcrumbStack.forEach(function(item, i) {
+    if (i > 0) html += '<span class="bc-sep">›</span>';
+    var isCurrent = (i === breadcrumbStack.length - 1);
+    html += '<span class="bc-item' + (isCurrent ? ' current' : '') + '"' +
+      (!isCurrent ? ' onclick="popBreadcrumbTo(' + i + ')"' : '') +
+      '>' + item + '</span>';
+  });
+  bc.innerHTML = html;
+}
+
+function pushBreadcrumb(label) {
+  breadcrumbStack.push(label);
+  updateBreadcrumb();
+}
+
+function popBreadcrumb() {
+  if (breadcrumbStack.length > 1) breadcrumbStack.pop();
+  updateBreadcrumb();
+}
+
+function popBreadcrumbTo(idx) {
+  breadcrumbStack = breadcrumbStack.slice(0, idx + 1);
+  updateBreadcrumb();
+}
+
+// ── Subsession enter divider ──────────────────────────────────
+
+function addSubsessionEnter(icon, name) {
+  var div = document.createElement('div');
+  div.className = 'ss-enter fade-in';
+  div.innerHTML = '<span class="ss-icon">' + icon + '</span> <span class="ss-name">' + name + '</span>';
+  if (convInner) convInner.appendChild(div);
+  pushBreadcrumb(icon + ' ' + name);
+  scrollConv();
+}
+
+// ── Subsession exit divider ───────────────────────────────────
+
+function addSubsessionExit(icon, name, summary, historyId) {
+  var div = document.createElement('div');
+  div.className = 'ss-exit fade-in';
+  div.id = 'ss-exit-' + historyId;
+  div.innerHTML = '✓ ' + icon + ' ' + name + ' · ' + summary +
+    '<span class="expand-hint">(click to expand)</span>';
+  div.onclick = function() { toggleHistory(historyId); };
+  if (convInner) convInner.appendChild(div);
+
+  // Add hidden history block
+  var hist = document.createElement('div');
+  hist.className = 'ss-history';
+  hist.id = 'ss-history-' + historyId;
+  hist.innerHTML = expandedHistories[historyId] || '';
+  if (convInner) convInner.appendChild(hist);
+
+  popBreadcrumb();
+  scrollConv();
+}
+
+function toggleHistory(historyId) {
+  var el = document.getElementById('ss-history-' + historyId);
+  if (el) el.classList.toggle('visible');
+}
+
+// ── Quick-create buttons ──────────────────────────────────────
+
+function addQuickCreate() {
+  var div = document.createElement('div');
+  div.className = 'quick-create fade-in';
+  div.innerHTML =
+    '<button class="quick-create-btn" onclick="handleQuickCreate(\'discuss\')">💬 Discuss this</button>' +
+    '<button class="quick-create-btn" onclick="handleQuickCreate(\'research\')">🔬 Research</button>';
+  if (convInner) convInner.appendChild(div);
+  scrollConv();
+}
+
+function handleQuickCreate(type) {
+  // In mockup, just flash a message
+  addAgentMsg('(User-initiated ' + type + ' subsession would open here.)');
+}
+
+// ── Sidebar navigation handler ────────────────────────────────
+
+window.onSidebarNavigate = function(key) {
+  var artifactMap = {
+    'description': { type: 'card' },
+    'product-design': { type: 'doc' },
+    'auth-readme': { type: 'diff', idx: 0 },
+    'design-doc': { type: 'diff', idx: 1 },
+    'core-readme': { type: 'diff', idx: 2 },
+    'impl-plan': { type: 'plan' }
+  };
+  var art = artifactMap[key];
+  if (!art) return;
+
+  if (document.body.classList.contains('split-mode') && !peekMode) {
+    peekSavedState = {
+      header: document.getElementById('apHeader').innerHTML,
+      body: document.getElementById('apBody').innerHTML,
+      actions: document.getElementById('apActions').innerHTML
+    };
+  }
+  peekMode = true;
+  document.body.classList.add('split-mode', 'peek-mode');
+  setActiveSidebarItem(key);
+
+  var headerEl = document.getElementById('apHeader');
+  var bodyEl = document.getElementById('apBody');
+  var actionsEl = document.getElementById('apActions');
+  var closeBtn = '<button class="ap-close" onclick="closePeek()" style="display:inline-flex">← Back to flow</button>';
+
+  if (art.type === 'card') {
+    headerEl.innerHTML = '<span class="ap-badge doc">DOC</span><span class="ap-path">Ticket Description</span><span class="ap-stats"></span>' + closeBtn;
+    bodyEl.innerHTML = '<div class="doc-preview"><h1>Ticket: Add user authentication</h1><h2>What</h2><p>Add JWT-based user authentication with signup, login, session management, and role-based access control.</p><h2>Purpose</h2><p>Enable multi-user access to Bonsai workspaces with permission boundaries between admin, regular, and viewer roles.</p><h2>Success Criteria</h2><ul><li>Users can sign up, log in, receive a JWT token</li><li>Access resources according to their role</li><li>Admin can manage users and permissions</li></ul></div>';
+    actionsEl.innerHTML = closeBtn;
+  } else if (art.type === 'doc') {
+    headerEl.innerHTML = '<span class="ap-badge doc">DOC</span><span class="ap-path">product-design.md</span><span class="ap-stats"></span>' + closeBtn;
+    bodyEl.innerHTML = DOC_SECTIONS.full;
+    actionsEl.innerHTML = closeBtn;
+  } else if (art.type === 'diff') {
+    var d = DIFFS[art.idx];
+    headerEl.innerHTML = '<span class="ap-badge ' + d.badgeClass + '">' + d.badge + '</span><span class="ap-path">' + d.path + '</span><span class="ap-stats">' + d.stats + '</span>' + closeBtn;
+    bodyEl.innerHTML = '<div class="diff-view">' + d.content + '</div>';
+    actionsEl.innerHTML = closeBtn;
+  } else if (art.type === 'plan') {
+    headerEl.innerHTML = '<span class="ap-badge new">PLAN</span><span class="ap-path">Implementation Plan</span><span class="ap-stats">2 milestones · 6 steps</span>' + closeBtn;
+    bodyEl.innerHTML = buildStepsHTML('plan');
+    actionsEl.innerHTML = closeBtn;
+  }
+};
+
+// ── Custom step handler ───────────────────────────────────────
+
+window.onStepExecute = function(step) {
+  if (step.type === 'ss-enter') {
+    addSubsessionEnter(step.icon, step.name);
+  } else if (step.type === 'ss-exit') {
+    addSubsessionExit(step.icon, step.name, step.summary, step.historyId);
+  } else if (step.type === 'quick-create') {
+    addQuickCreate();
+  } else if (step.type === 'sidebar-add') {
+    addSidebarItem(step.key, step.group, step.label, step.icon);
+  } else if (step.type === 'sidebar-status') {
+    setSidebarStatus(step.key, step.status, step.duration);
+  } else if (step.type === 'sidebar-phase') {
+    updateSidebarPhase(step.label);
+  } else if (step.type === 'breadcrumb-push') {
+    pushBreadcrumb(step.label);
+  } else if (step.type === 'breadcrumb-pop') {
+    popBreadcrumb();
+  }
+};
+
+// ── Reset handler ─────────────────────────────────────────────
+
+window.onReset = function() {
+  breadcrumbStack = ['AUTH-42'];
+  expandedHistories = {};
+  updateBreadcrumb();
+
+  sidebarItems = {};
+  var groups = ['ticket', 'specs', 'plan'];
+  groups.forEach(function(g) {
+    var el = document.getElementById('gi-' + g);
+    if (el) el.innerHTML = '';
+  });
+  updateSidebarPhase('Describe');
+
+  sidebarCollapsed = false;
+  var sidebar = document.getElementById('sidebar');
+  if (sidebar) sidebar.classList.remove('collapsed');
+};
+
+// ── Subsession history content ────────────────────────────────
+
+expandedHistories['build-desc'] =
+  '<div class="msg" style="border-left:2px solid var(--accent);padding:4px 0 4px 10px">What kind of authentication?</div>' +
+  '<div class="msg" style="border-left:2px solid var(--purple);padding:4px 0 4px 10px;font-weight:500">Token-based, extending our bns_ prefix.</div>' +
+  '<div class="msg" style="border-left:2px solid var(--accent);padding:4px 0 4px 10px">User roles?</div>' +
+  '<div class="msg" style="border-left:2px solid var(--purple);padding:4px 0 4px 10px;font-weight:500">Admin + User + Viewer.</div>';
+
+expandedHistories['build-pd'] =
+  '<div class="msg" style="border-left:2px solid var(--accent);padding:4px 0 4px 10px">Starting with Goal section...</div>' +
+  '<div class="msg" style="border-left:2px solid var(--accent);padding:4px 0 4px 10px">Adding User Stories...</div>' +
+  '<div class="msg" style="border-left:2px solid var(--accent);padding:4px 0 4px 10px">Adding Roles & Permissions matrix...</div>' +
+  '<div class="msg" style="border-left:2px solid var(--accent);padding:4px 0 4px 10px">Adding Success Criteria and Out of Scope...</div>';
+
+expandedHistories['review-auth'] =
+  '<div class="msg" style="border-left:2px solid var(--accent);padding:4px 0 4px 10px">Reviewing auth/README.md diff...</div>' +
+  '<div class="msg" style="border-left:2px solid var(--accent);padding:4px 0 4px 10px">JWT strategy selected. Viewer role kept.</div>' +
+  '<div class="msg" style="border-left:2px solid var(--green);padding:4px 0 4px 10px;color:var(--green)">Approved auth/README.md</div>';
+
+expandedHistories['jwt-research'] =
+  '<div class="msg" style="border-left:2px solid var(--accent);padding:4px 0 4px 10px">Researching JWT best practices...</div>' +
+  '<div class="msg" style="border-left:2px solid var(--accent);padding:4px 0 4px 10px">Industry standard: Access 1hr, Refresh 30d</div>' +
+  '<div class="msg" style="border-left:2px solid var(--accent);padding:4px 0 4px 10px">Recommended: rotation on refresh use</div>';
+
+expandedHistories['review-design'] =
+  '<div class="msg" style="border-left:2px solid var(--accent);padding:4px 0 4px 10px">Auth module added to architecture overview.</div>' +
+  '<div class="msg" style="border-left:2px solid var(--green);padding:4px 0 4px 10px;color:var(--green)">Approved DESIGN_DOC.md</div>';
+
+expandedHistories['review-core'] =
+  '<div class="msg" style="border-left:2px solid var(--accent);padding:4px 0 4px 10px">Updated dependencies for auth module.</div>' +
+  '<div class="msg" style="border-left:2px solid var(--green);padding:4px 0 4px 10px;color:var(--green)">Approved core/README.md</div>';
+
+expandedHistories['build-plan'] =
+  '<div class="msg" style="border-left:2px solid var(--accent);padding:4px 0 4px 10px">Layer-by-layer structure, 2 milestones.</div>' +
+  '<div class="msg" style="border-left:2px solid var(--accent);padding:4px 0 4px 10px">6 steps across Core Auth + API & Admin.</div>';
+
+expandedHistories['execute-steps'] =
+  '<div class="msg" style="border-left:2px solid var(--accent);padding:4px 0 4px 10px">Created models.py, storage.py, service.py...</div>' +
+  '<div class="msg" style="border-left:2px solid var(--accent);padding:4px 0 4px 10px">Created middleware.py, routers/auth.py, tests...</div>' +
+  '<div class="msg" style="border-left:2px solid var(--green);padding:4px 0 4px 10px;color:var(--green)">All 6 steps complete.</div>';
+
+// ── SCRIPT ────────────────────────────────────────────────────
+
+window.SCRIPT = [
+  // ── DESCRIBE phase ──────────────────────────────────────────
+
+  { id: 1,  type: 'sidebar-phase', label: 'Describe' },
+  { id: 2,  type: 'agent', text: 'Welcome! I\'m ready to help you build <strong>AUTH-42</strong>. What would you like to work on?', phase: 'D' },
+  { id: 3,  type: 'user',  text: 'Add user authentication to the Bonsai workspace', interactive: true, placeholder: 'Add user authentication to the Bonsai workspace' },
+  { id: 4,  type: 'agent', text: 'Got it — an auth module. Let me build a structured description with you.' },
+
+  // ── Subsession 1: Build Description ─────────────────────────
+  { id: 5,  type: 'ss-enter', icon: '📋', name: 'Build Description' },
+  { id: 6,  type: 'sidebar-add', key: 'description', group: 'ticket', label: 'Description', icon: '📋' },
+  { id: 7,  type: 'sidebar-status', key: 'description', status: 'active' },
+  { id: 8,  type: 'agent', text: 'First, what kind of authentication do you need?' },
+  { id: 9,  type: 'decision', question: 'Authentication type?', options: ['Token-based (JWT) ★', 'OAuth/SSO', 'Simple password'], recommended: 0, hint: 'Extends your existing bns_ token system.' },
+  { id: 10, type: 'agent', text: 'Token-based — great, aligns with your existing <code>bns_</code> prefix. What about user roles?' },
+  { id: 11, type: 'decision', question: 'User roles?', options: ['Admin + User + Viewer ★', 'Admin + User', 'Custom roles'], recommended: 0, hint: 'Three tiers gives good granularity without complexity.' },
+  { id: 12, type: 'agent', text: 'Three-tier roles. Here\'s the formalized description:' },
+  { id: 13, type: 'artifact-card', header: 'Ticket Description', body: '<strong>What:</strong> Add JWT-based user authentication with signup, login, session management, and role-based access control.<br><br><strong>Purpose:</strong> Enable multi-user access to Bonsai workspaces with permission boundaries between admin, regular, and viewer roles.' },
+  { id: 14, type: 'decision', question: 'Does this capture your intent?', options: ['Yes, looks good ★', 'Needs changes'], recommended: 0 },
+  { id: 15, type: 'sidebar-status', key: 'description', status: 'done' },
+  { id: 16, type: 'ss-exit', icon: '📋', name: 'Build Description', summary: 'JWT auth + 3-tier roles', historyId: 'build-desc' },
+
+  // ── Subsession 2: Product Design ────────────────────────────
+  { id: 17, type: 'agent', text: 'Description locked. Now let\'s build the product design document.' },
+  { id: 18, type: 'ss-enter', icon: '📋', name: 'Build Product Design' },
+  { id: 19, type: 'sidebar-add', key: 'product-design', group: 'ticket', label: 'Product Design', icon: '📋' },
+  { id: 20, type: 'sidebar-status', key: 'product-design', status: 'active' },
+  { id: 21, type: 'typing', duration: 1200 },
+  { id: 22, type: 'agent', text: 'Starting with the <strong>Goal</strong> section:' },
+  { id: 23, type: 'layout', action: 'open-doc-section', section: 'goal' },
+  { id: 24, type: 'decision', question: 'Goal section', options: ['Looks good, continue ★', 'Needs revision'], recommended: 0 },
+  { id: 25, type: 'agent', text: 'Adding <strong>User Stories</strong>...' },
+  { id: 26, type: 'typing', duration: 800 },
+  { id: 27, type: 'layout', action: 'update-doc', section: 'stories' },
+  { id: 28, type: 'agent', text: 'Four user stories covering the main journeys. Cover everything?' },
+  { id: 29, type: 'decision', question: 'User stories', options: ['Yes, these cover it ★', 'Add more', 'Revise'], recommended: 0 },
+  { id: 30, type: 'agent', text: 'Adding <strong>Roles & Permissions</strong> matrix...' },
+  { id: 31, type: 'typing', duration: 600 },
+  { id: 32, type: 'layout', action: 'update-doc', section: 'roles' },
+  { id: 33, type: 'agent', text: 'Three tiers: Admin (full), User (read/write), Viewer (read-only).' },
+  { id: 34, type: 'decision', question: 'Roles & permissions', options: ['Good as is ★', 'Adjust permissions'], recommended: 0 },
+  { id: 35, type: 'agent', text: 'Adding <strong>Success Criteria</strong> and <strong>Out of Scope</strong>...' },
+  { id: 36, type: 'typing', duration: 500 },
+  { id: 37, type: 'layout', action: 'update-doc', section: 'full' },
+  { id: 38, type: 'agent', text: 'Product design is complete. Review the full document and approve when ready.' },
+  { id: 39, type: 'approve-doc' },
+  { id: 40, type: 'layout', action: 'close' },
+  { id: 41, type: 'sidebar-status', key: 'product-design', status: 'done' },
+  { id: 42, type: 'ss-exit', icon: '📋', name: 'Build Product Design', summary: '4 stories, 3 roles, success criteria defined', historyId: 'build-pd' },
+
+  // ── SPECIFY phase ───────────────────────────────────────────
+  { id: 43, type: 'agent', text: 'Product design approved ✔ Moving to specification.' },
+  { id: 44, type: 'phase', phase: 'S', label: 'SPECIFY' },
+  { id: 45, type: 'sidebar-phase', label: 'Specify' },
+  { id: 46, type: 'agent', text: 'Creating 3 spec diffs. Let\'s review each one.' },
+  { id: 47, type: 'typing', duration: 1500 },
+  { id: 48, type: 'sidebar-add', key: 'auth-readme', group: 'specs', label: 'auth/README', icon: '📄' },
+  { id: 49, type: 'sidebar-add', key: 'design-doc',  group: 'specs', label: 'DESIGN_DOC',  icon: '📄' },
+  { id: 50, type: 'sidebar-add', key: 'core-readme', group: 'specs', label: 'core/README', icon: '📄' },
+
+  // ── Subsession 3: Review auth/README ────────────────────────
+  { id: 51, type: 'ss-enter', icon: '📄', name: 'Review auth/README' },
+  { id: 52, type: 'layout', action: 'open', artifact: 0 },
+  { id: 53, type: 'sidebar-status', key: 'auth-readme', status: 'active' },
+  { id: 54, type: 'agent', text: 'Reviewing <code>auth/README.md</code> — the new module design spec. Check the diff in the panel.' },
+  { id: 55, type: 'quick-create' },
+  { id: 56, type: 'decision', question: 'JWT or session-based auth in the spec?', options: ['JWT tokens ★', 'Session-based', 'Hybrid'], recommended: 0, hint: 'Your bns_ token pattern aligns well with JWT.' },
+  { id: 57, type: 'agent', text: 'JWT strategy confirmed. The spec mentions token expiry — we should research best practices.' },
+
+  // ── Subsession 3.1: JWT Research (NESTED) ───────────────────
+  { id: 58, type: 'ss-enter', icon: '🔬', name: 'JWT Research' },
+  { id: 59, type: 'agent', text: 'Researching JWT best practices for workspace tools...' },
+  { id: 60, type: 'typing', duration: 1000 },
+  { id: 61, type: 'agent', text: 'Industry standard for SaaS tools:<br>• <strong>Access tokens:</strong> 1 hour<br>• <strong>Refresh tokens:</strong> 30 days<br>• <strong>Rotation on refresh use</strong>' },
+  { id: 62, type: 'artifact-card', header: 'Recommendation', body: '<strong>Token Strategy:</strong> Access: 1hr · Refresh: 30d · Rotation on use<br><strong>Rationale:</strong> Balances security with UX for developer workspace tools.' },
+  { id: 63, type: 'decision', question: 'Accept this token strategy?', options: ['Accept recommendation ★', 'Shorter access (15m)', 'Custom values'], recommended: 0 },
+  { id: 64, type: 'ss-exit', icon: '🔬', name: 'JWT Research', summary: 'Access: 1hr, Refresh: 30d', historyId: 'jwt-research' },
+  // ── Back in auth/README review ──────────────────────────────
+  { id: 65, type: 'agent', text: 'Applied token strategy to the spec. Auth strategy section updated.' },
+  { id: 66, type: 'decision', question: 'Keep the viewer role with read-only access?', options: ['Yes, keep it ★', 'Remove it'], recommended: 0 },
+  { id: 67, type: 'agent', text: 'Good. Review the full diff and approve when ready.' },
+  { id: 68, type: 'approve', artifact: 0 },
+  { id: 69, type: 'sidebar-status', key: 'auth-readme', status: 'done' },
+  { id: 70, type: 'ss-exit', icon: '📄', name: 'Review auth/README', summary: 'JWT + 3 roles, approved', historyId: 'review-auth' },
+
+  // ── Subsession 4: Review DESIGN_DOC ─────────────────────────
+  { id: 71, type: 'ss-enter', icon: '📄', name: 'Review DESIGN_DOC' },
+  { id: 72, type: 'switch-artifact', artifact: 1 },
+  { id: 73, type: 'sidebar-status', key: 'design-doc', status: 'active' },
+  { id: 74, type: 'agent', text: 'Next: <code>DESIGN_DOC.md</code> — added auth module to the architecture overview.' },
+  { id: 75, type: 'agent', text: 'Small change — adds auth integration section to the existing doc.' },
+  { id: 76, type: 'approve', artifact: 1 },
+  { id: 77, type: 'sidebar-status', key: 'design-doc', status: 'done' },
+  { id: 78, type: 'ss-exit', icon: '📄', name: 'Review DESIGN_DOC', summary: 'Auth integration added, approved', historyId: 'review-design' },
+
+  // ── Subsession 5: Review core/README ────────────────────────
+  { id: 79, type: 'ss-enter', icon: '📄', name: 'Review core/README' },
+  { id: 80, type: 'switch-artifact', artifact: 2 },
+  { id: 81, type: 'sidebar-status', key: 'core-readme', status: 'active' },
+  { id: 82, type: 'agent', text: 'Last one: <code>core/README.md</code> — updated dependencies and storage tables.' },
+  { id: 83, type: 'approve', artifact: 2 },
+  { id: 84, type: 'sidebar-status', key: 'core-readme', status: 'done' },
+  { id: 85, type: 'ss-exit', icon: '📄', name: 'Review core/README', summary: 'Dependencies updated, approved', historyId: 'review-core' },
+
+  { id: 86, type: 'all-approved' },
+  { id: 87, type: 'layout', action: 'close' },
+  { id: 88, type: 'agent', text: 'All specs approved! ✔ Moving to planning.' },
+
+  // ── PLAN phase ──────────────────────────────────────────────
+  { id: 89, type: 'phase', phase: 'P', label: 'PLAN' },
+  { id: 90, type: 'sidebar-phase', label: 'Plan' },
+
+  // ── Subsession 6: Build Plan ────────────────────────────────
+  { id: 91, type: 'ss-enter', icon: '📦', name: 'Build Plan' },
+  { id: 92, type: 'sidebar-add', key: 'impl-plan', group: 'plan', label: 'Implementation', icon: '📦' },
+  { id: 93, type: 'sidebar-status', key: 'impl-plan', status: 'active' },
+  { id: 94, type: 'agent', text: 'Let\'s structure the implementation plan. How should we organize it?' },
+  { id: 95, type: 'decision', question: 'Plan structure?', options: ['Layer by layer ★', 'Feature by feature', 'Test-driven'], recommended: 0, hint: 'Build the foundation first, then layer on features.' },
+  { id: 96, type: 'agent', text: 'Layer by layer — solid foundation approach. How many milestones?' },
+  { id: 97, type: 'decision', question: 'Milestones?', options: ['2 (core + admin) ★', 'Single milestone', '3 milestones'], recommended: 0 },
+  { id: 98, type: 'agent', text: 'Building the plan with 2 milestones and 6 steps...' },
+  { id: 99, type: 'typing', duration: 1200 },
+  { id: 100, type: 'agent', text: 'Here\'s the implementation plan:' },
+  { id: 101, type: 'layout', action: 'open-plan' },
+  { id: 102, type: 'agent', text: 'Review the steps — anything to adjust?' },
+  { id: 103, type: 'quick-create' },
+  { id: 104, type: 'decision', question: 'Ready to execute?', options: ['Execute this plan ★', 'Adjust order', 'Add detail'], recommended: 0 },
+  { id: 105, type: 'sidebar-status', key: 'impl-plan', status: 'done' },
+  { id: 106, type: 'ss-exit', icon: '📦', name: 'Build Plan', summary: '2 milestones, 6 steps', historyId: 'build-plan' },
+
+  // ── EXECUTE phase ───────────────────────────────────────────
+  { id: 107, type: 'phase', phase: 'E', label: 'EXECUTE' },
+  { id: 108, type: 'sidebar-phase', label: 'Execute' },
+  { id: 109, type: 'layout', action: 'close' },
+
+  // ── Subsession 7: Execute Steps ─────────────────────────────
+  { id: 110, type: 'ss-enter', icon: '⚡', name: 'Execute Steps' },
+  { id: 111, type: 'agent', text: 'Starting execution of all 6 steps...' },
+  { id: 112, type: 'layout', action: 'open-exec' },
+  { id: 113, type: 'exec-progress' },
+  { id: 114, type: 'agent', text: 'All 6 steps complete. Code written, tests pass.' },
+  { id: 115, type: 'layout', action: 'close' },
+  { id: 116, type: 'ss-exit', icon: '⚡', name: 'Execute Steps', summary: '6/6 complete, all tests pass', historyId: 'execute-steps' },
+
+  // ── VERIFY phase ────────────────────────────────────────────
+  { id: 117, type: 'phase', phase: 'V', label: 'VERIFY' },
+  { id: 118, type: 'sidebar-phase', label: 'Verify' },
+  { id: 119, type: 'agent', text: 'Running verification suite...' },
+  { id: 120, type: 'typing', duration: 1000 },
+  { id: 121, type: 'agent', text: '✔ <strong>All checks passed</strong> — tests green, types valid, lint clean. Ticket complete!' },
+  { id: 122, type: 'complete' }
+];
+</script>
+<script src="shared/engine.js"></script>
+<script src="shared/sidebar.js"></script>
+<script>
+// ── B key for sidebar toggle ──────────────────────────────────
+
+document.addEventListener('keydown', function(e) {
+  if (userInput && e.target === userInput) return;
+  if (e.code === 'KeyB') {
+    e.preventDefault();
+    toggleSidebarCollapse();
+  }
+});
+
+// ── Patch engine for J1 step types ────────────────────────────
+
+(function() {
+  var origAdvanceAutoPlay = window.advanceAutoPlay;
+  window.advanceAutoPlay = function() {
+    if (!playing || !window.SCRIPT || currentStep >= window.SCRIPT.length) { pause(); return; }
+    var step = window.SCRIPT[currentStep];
+
+    if (step.type === 'ss-enter' || step.type === 'ss-exit' || step.type === 'quick-create') {
+      executeStep(step);
+      currentStep++;
+      stepTimer = setTimeout(advanceAutoPlay, step.type === 'ss-enter' ? 600 : step.type === 'ss-exit' ? 800 : 400);
+      return;
+    }
+    if (step.type === 'sidebar-add' || step.type === 'sidebar-status' || step.type === 'sidebar-phase') {
+      executeStep(step);
+      currentStep++;
+      stepTimer = setTimeout(advanceAutoPlay, 300);
+      return;
+    }
+    if (step.type === 'breadcrumb-push' || step.type === 'breadcrumb-pop') {
+      executeStep(step);
+      currentStep++;
+      stepTimer = setTimeout(advanceAutoPlay, 200);
+      return;
+    }
+
+    origAdvanceAutoPlay();
+  };
+
+  var origAdvanceInteractive = window.advanceInteractive;
+  window.advanceInteractive = function() {
+    if (!window.SCRIPT || currentStep >= window.SCRIPT.length) return;
+    var step = window.SCRIPT[currentStep];
+
+    if (step.type === 'ss-enter' || step.type === 'ss-exit' || step.type === 'quick-create') {
+      executeStep(step);
+      currentStep++;
+      setTimeout(function() { advanceInteractive(); }, step.type === 'ss-enter' ? 400 : step.type === 'ss-exit' ? 500 : 300);
+      return;
+    }
+    if (step.type === 'sidebar-add' || step.type === 'sidebar-status' || step.type === 'sidebar-phase') {
+      executeStep(step);
+      currentStep++;
+      setTimeout(function() { advanceInteractive(); }, 200);
+      return;
+    }
+    if (step.type === 'breadcrumb-push' || step.type === 'breadcrumb-pop') {
+      executeStep(step);
+      currentStep++;
+      setTimeout(function() { advanceInteractive(); }, 150);
+      return;
+    }
+
+    origAdvanceInteractive();
+  };
+})();
+</script>
+</body>
+</html>

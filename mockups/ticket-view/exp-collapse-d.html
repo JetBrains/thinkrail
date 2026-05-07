@@ -1,0 +1,265 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>D: Section with Footer</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg: #0e1117; --surface: #161b22; --border: #2d333b;
+    --text: #e6edf3; --text-sec: #8b949e; --text-dim: #656d76;
+    --accent: #58a6ff; --green: #3fb950; --yellow: #d29922;
+  }
+
+  body {
+    background: var(--bg); color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+    font-size: 14px; line-height: 1.5;
+  }
+
+  /* ── Title bar ── */
+  .title-bar {
+    background: var(--surface); border-bottom: 1px solid var(--border);
+    padding: 10px 20px; display: flex; align-items: center; gap: 12px;
+    font-size: 13px; font-weight: 600; color: var(--text-sec);
+  }
+  .title-bar .label { color: var(--yellow); }
+  .reset-btn {
+    margin-left: auto; background: var(--border); border: none; color: var(--text-sec);
+    padding: 4px 12px; border-radius: 6px; cursor: pointer; font-size: 12px;
+  }
+  .reset-btn:hover { background: #3d444d; color: var(--text); }
+
+  /* ── Chat container ── */
+  .chat { max-width: 640px; margin: 24px auto; padding: 0 20px; }
+
+  /* ── Regular messages ── */
+  .msg {
+    padding: 8px 0; opacity: 0; transform: translateY(6px);
+    transition: opacity 0.3s, transform 0.3s;
+  }
+  .msg.visible { opacity: 1; transform: translateY(0); }
+  .msg .role {
+    font-size: 11px; font-weight: 600; text-transform: uppercase;
+    letter-spacing: 0.5px; color: var(--text-dim); margin-bottom: 2px;
+  }
+  .msg .role.agent { color: var(--accent); }
+  .msg .body { color: var(--text-sec); font-size: 13px; }
+
+  /* ── Section (subsession) ── */
+  .section {
+    margin: 12px 0; opacity: 0; transform: translateY(6px);
+    transition: opacity 0.3s, transform 0.3s;
+  }
+  .section.visible { opacity: 1; transform: translateY(0); }
+
+  .section-header {
+    display: flex; align-items: center; gap: 8px;
+    font-size: 13px; font-weight: 600; color: var(--text);
+    padding: 6px 0 6px 12px;
+    border-left: 2px solid var(--yellow);
+    cursor: pointer; user-select: none;
+    position: relative;
+  }
+  .section-header .corner { color: var(--yellow); font-family: monospace; font-size: 14px; }
+  .section-header .icon { font-size: 13px; }
+  .section-header .result-inline {
+    margin-left: auto; font-size: 12px; font-weight: 400;
+    color: var(--text-sec); opacity: 0; transition: opacity 0.35s;
+  }
+  .section-header .result-inline.show { opacity: 1; }
+  .section-header .result-inline .check { color: var(--green); }
+
+  /* Content area between header and footer */
+  .section-content {
+    border-left: 2px solid var(--yellow);
+    padding-left: 16px; margin-left: 0;
+    max-height: 600px; overflow: hidden;
+    transition: max-height 0.4s ease, opacity 0.35s ease, padding 0.4s ease;
+    opacity: 1; padding-top: 4px; padding-bottom: 4px;
+  }
+  .section-content.collapsed {
+    max-height: 0; opacity: 0; padding-top: 0; padding-bottom: 0;
+  }
+
+  .section-content .msg { padding: 4px 0; }
+  .section-content .msg .body { font-size: 12px; }
+
+  /* Decision inside section */
+  .decision {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 6px; padding: 6px 10px; margin: 4px 0;
+    font-size: 12px; color: var(--text-sec);
+    opacity: 0; transform: translateY(4px);
+    transition: opacity 0.3s, transform 0.3s;
+  }
+  .decision.visible { opacity: 1; transform: translateY(0); }
+  .decision .dec-label { color: var(--yellow); font-weight: 600; font-size: 11px; }
+  .decision .auto-tag {
+    font-size: 10px; color: var(--green); margin-left: 8px;
+    font-weight: 600; text-transform: uppercase;
+  }
+
+  /* Section footer */
+  .section-footer {
+    display: flex; align-items: center; gap: 8px;
+    font-size: 12px; color: var(--text-sec);
+    padding: 6px 0 6px 12px;
+    border-left: 2px solid var(--yellow);
+    opacity: 0; transition: opacity 0.3s;
+  }
+  .section-footer.visible { opacity: 1; }
+  .section-footer .corner { color: var(--yellow); font-family: monospace; font-size: 14px; }
+  .section-footer .check { color: var(--green); font-weight: 600; }
+
+  /* When collapsed, footer border shortens (sits right under header) */
+  .section.collapsed-state .section-footer {
+    border-left: 2px solid var(--yellow);
+  }
+</style>
+</head>
+<body>
+
+<div class="title-bar">
+  <span class="label">D:</span> Section with Footer
+  <button class="reset-btn" onclick="resetDemo()">Reset</button>
+</div>
+
+<div class="chat" id="chat"></div>
+
+<script>
+var timeouts = [];
+
+function clearTimeouts() {
+  for (var i = 0; i < timeouts.length; i++) {
+    clearTimeout(timeouts[i]);
+  }
+  timeouts = [];
+}
+
+function delay(fn, ms) {
+  timeouts.push(setTimeout(fn, ms));
+}
+
+function addMsg(role, text) {
+  var chat = document.getElementById("chat");
+  var el = document.createElement("div");
+  el.className = "msg";
+  var roleClass = role === "Agent" ? "role agent" : "role";
+  el.innerHTML = '<div class="' + roleClass + '">' + role + '</div><div class="body">' + text + '</div>';
+  chat.appendChild(el);
+  requestAnimationFrame(function() { el.classList.add("visible"); });
+  return el;
+}
+
+function createSection() {
+  var chat = document.getElementById("chat");
+  var section = document.createElement("div");
+  section.className = "section";
+  section.id = "subsession";
+
+  section.innerHTML =
+    '<div class="section-header" id="sec-header" onclick="toggleSection()">' +
+      '<span class="corner">&#9484;</span>' +
+      '<span class="icon">&#128203;</span>' +
+      '<span>Build Product Design</span>' +
+      '<span class="result-inline" id="header-result"><span class="check">&#10003;</span> approved &middot; 5 msgs</span>' +
+    '</div>' +
+    '<div class="section-content" id="sec-content"></div>' +
+    '<div class="section-footer" id="sec-footer">' +
+      '<span class="corner">&#9492;</span>' +
+      '<span class="check">&#10003;</span>' +
+      '<span>Product Design &mdash; approved</span>' +
+    '</div>';
+
+  chat.appendChild(section);
+  requestAnimationFrame(function() { section.classList.add("visible"); });
+  return section;
+}
+
+function addSectionMsg(role, text) {
+  var container = document.getElementById("sec-content");
+  var el = document.createElement("div");
+  el.className = "msg";
+  var roleClass = role === "Agent" ? "role agent" : "role";
+  el.innerHTML = '<div class="' + roleClass + '">' + role + '</div><div class="body">' + text + '</div>';
+  container.appendChild(el);
+  requestAnimationFrame(function() { el.classList.add("visible"); });
+  return el;
+}
+
+function addDecision(label, outcome) {
+  var container = document.getElementById("sec-content");
+  var el = document.createElement("div");
+  el.className = "decision";
+  el.innerHTML =
+    '<span class="dec-label">' + label + '</span>' +
+    '<span class="auto-tag">auto-resolved</span>' +
+    '<div style="margin-top:2px; color: var(--text-dim);">' + outcome + '</div>';
+  container.appendChild(el);
+  requestAnimationFrame(function() { el.classList.add("visible"); });
+  return el;
+}
+
+function showFooter() {
+  document.getElementById("sec-footer").classList.add("visible");
+}
+
+function collapseSection() {
+  var content = document.getElementById("sec-content");
+  var headerResult = document.getElementById("header-result");
+  content.classList.add("collapsed");
+  headerResult.classList.add("show");
+}
+
+function toggleSection() {
+  var content = document.getElementById("sec-content");
+  var headerResult = document.getElementById("header-result");
+  if (content.classList.contains("collapsed")) {
+    content.classList.remove("collapsed");
+    headerResult.classList.remove("show");
+  } else {
+    content.classList.add("collapsed");
+    headerResult.classList.add("show");
+  }
+}
+
+function runSequence() {
+  var t = 0;
+
+  // Step 1: Regular chat messages
+  delay(function() { addMsg("User", "Let's build the product design for the dashboard feature."); }, t += 400);
+  delay(function() { addMsg("Agent", "I'll start a focused subsession to handle the product design work."); }, t += 900);
+
+  // Step 2: Subsession enters
+  delay(function() { createSection(); }, t += 1000);
+
+  // Step 3: Messages inside the section
+  delay(function() { addSectionMsg("Agent", "Analyzing requirements for dashboard layout and component hierarchy."); }, t += 800);
+  delay(function() { addSectionMsg("Agent", "Drafted wireframe with 3-column grid. Primary metrics top, charts middle, activity feed right."); }, t += 1000);
+  delay(function() { addDecision("Layout approach", "Approved: responsive 3-column grid with breakpoints at 768px and 1200px"); }, t += 900);
+  delay(function() { addSectionMsg("Agent", "Component specs written. Color tokens mapped to design system. Ready for review."); }, t += 1000);
+  delay(function() { addSectionMsg("Agent", "Final design document complete with all specifications and assets."); }, t += 800);
+
+  // Step 4: Footer appears
+  delay(function() { showFooter(); }, t += 1000);
+
+  // Step 5: Collapse after a beat
+  delay(function() { collapseSection(); }, t += 1200);
+
+  // Step 6: New message below
+  delay(function() { addMsg("Agent", "Product design is approved. Moving on to implementation planning."); }, t += 800);
+}
+
+function resetDemo() {
+  clearTimeouts();
+  document.getElementById("chat").innerHTML = "";
+  runSequence();
+}
+
+runSequence();
+</script>
+</body>
+</html>

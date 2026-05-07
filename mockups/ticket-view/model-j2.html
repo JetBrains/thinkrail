@@ -1,0 +1,839 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>J2: Structured Subsessions &#8212; Bonsai Ticket View</title>
+<link rel="stylesheet" href="shared/base.css">
+<link rel="stylesheet" href="shared/sidebar.css">
+<style>
+/* ── J2: Structured subsession blocks ─────────────────────── */
+
+.ss-block {
+  border: 1px solid var(--border); border-radius: var(--r);
+  margin: 10px 0; overflow: hidden;
+  transition: all 0.3s;
+  animation: fadeIn 0.35s ease both;
+}
+.ss-block.active { border-left: 3px solid var(--accent); }
+.ss-block.done { border-color: var(--green-sub); }
+
+.ss-block-header {
+  display: flex; align-items: center; gap: 8px;
+  padding: 8px 14px; background: var(--elevated);
+  border-bottom: 1px solid var(--border);
+  font-size: 12px; cursor: pointer;
+}
+.ss-block-header .ss-icon { font-size: 12px; }
+.ss-block-header .ss-title { font-weight: 600; color: var(--text); }
+.ss-block-header .ss-status { margin-left: auto; font-size: 10px; text-transform: uppercase; letter-spacing: 0.05em; }
+.ss-block-header .ss-status.active { color: var(--accent); }
+.ss-block-header .ss-status.done { color: var(--green); }
+.ss-block-header .ss-expand { font-size: 10px; color: var(--text-dim); margin-left: 4px; }
+.ss-block-header .ss-summary { flex: 1; color: var(--text-dim); font-size: 11px; margin-left: 8px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+.ss-block-body {
+  padding: 10px 14px; max-height: 2000px;
+  transition: max-height 0.3s, padding 0.3s;
+}
+.ss-block.collapsed .ss-block-body {
+  max-height: 0; padding: 0 14px; overflow: hidden;
+}
+.ss-block-body .msg { font-size: 13px; padding: 5px 0 5px 12px; }
+.ss-block-body .msg.agent { border-left-color: var(--accent); background: rgba(88,166,255,0.03); }
+
+/* Nested subsession (indented within parent) */
+.ss-block .ss-block { margin: 8px 0 8px 8px; }
+
+/* ── Subsession result card (inside block) ────────────────── */
+
+.ss-result {
+  border: 1px solid var(--border); border-radius: 6px;
+  background: var(--surface); margin: 8px 0; padding: 10px 14px;
+  font-size: 12px; color: var(--text-sec); line-height: 1.5;
+}
+.ss-result strong { color: var(--text); }
+
+/* ── Subsession action buttons (inside block) ─────────────── */
+
+.ss-actions {
+  display: flex; gap: 8px; margin-top: 8px; padding-top: 8px;
+  border-top: 1px solid var(--border);
+}
+.ss-action-btn {
+  padding: 5px 12px; border-radius: 6px; font-size: 11px; font-weight: 500;
+  cursor: pointer; border: 1px solid var(--border); background: var(--elevated);
+  color: var(--text-sec); transition: all 0.15s; font-family: inherit;
+}
+.ss-action-btn:hover { border-color: var(--accent); color: var(--accent); }
+.ss-action-btn.primary {
+  border-color: var(--accent); color: var(--accent); background: var(--accent-sub);
+}
+.ss-action-btn.primary:hover { background: rgba(88,166,255,0.2); }
+
+/* ── Quick-create buttons ─────────────────────────────────── */
+
+.quick-create {
+  display: flex; gap: 6px; margin-top: 6px;
+  animation: fadeIn 0.35s ease both;
+}
+.qc-btn {
+  padding: 4px 10px; border-radius: 6px; font-size: 10px; font-weight: 500;
+  cursor: pointer; border: 1px dashed var(--border); background: transparent;
+  color: var(--text-dim); transition: all 0.15s; font-family: inherit;
+}
+.qc-btn:hover { border-color: var(--accent); color: var(--accent); border-style: solid; }
+
+/* ── Breadcrumb ───────────────────────────────────────────── */
+
+.breadcrumb {
+  padding: 6px 14px; font-size: 11px; color: var(--text-dim);
+  background: var(--elevated); border-bottom: 1px solid var(--border);
+  display: none; align-items: center; gap: 6px;
+  flex-shrink: 0;
+}
+.breadcrumb.visible { display: flex; }
+.breadcrumb .bc-item { color: var(--text-dim); cursor: pointer; transition: color 0.15s; }
+.breadcrumb .bc-item:hover { color: var(--accent); }
+.breadcrumb .bc-item.current { color: var(--accent); font-weight: 600; }
+.breadcrumb .bc-sep { color: var(--text-dim); opacity: 0.4; font-size: 10px; }
+
+/* ── Notify message ───────────────────────────────────────── */
+
+.notify-msg {
+  padding: 6px 12px; font-size: 11px; color: var(--text-dim);
+  border-left: 2px solid var(--border); font-style: italic;
+  animation: fadeIn 0.35s ease both;
+}
+.notify-msg.success { border-left-color: var(--green); color: var(--green); }
+</style>
+</head>
+<body>
+
+<a href="index.html" class="back-link">&larr; All Models</a>
+<span class="model-tag">J2: Structured</span>
+
+<!-- Controls -->
+<div class="controls">
+  <button class="ctrl-btn" id="playBtn" onclick="togglePlay()">&#9654; Play</button>
+  <button class="ctrl-btn" onclick="resetFlow()">&#10227; Reset</button>
+  <span class="step-counter">Step <span id="stepNum">0</span> / <span id="stepTotal">0</span></span>
+  <div class="progress-track"><div class="progress-fill" id="progressFill"></div></div>
+  <span class="kbd-hint"><kbd>Space</kbd> play <kbd>&rarr;</kbd> step <kbd>Esc</kbd> reset <kbd>B</kbd> sidebar</span>
+</div>
+
+<!-- Status bar -->
+<div class="status-bar">
+  <span class="ticket-id">AUTH-42</span><div class="sb-sep"></div>
+  <span class="ticket-title">Add user authentication</span><div class="sb-spacer"></div>
+  <div class="phase-dots">
+    <div class="phase-dot" id="pd-D"><span class="dot pending"></span><span class="check">&#10003;</span><span class="label">Describe</span></div><span class="phase-sep">&rsaquo;</span>
+    <div class="phase-dot" id="pd-S"><span class="dot pending"></span><span class="check">&#10003;</span><span class="label">Specify</span></div><span class="phase-sep">&rsaquo;</span>
+    <div class="phase-dot" id="pd-P"><span class="dot pending"></span><span class="check">&#10003;</span><span class="label">Plan</span></div><span class="phase-sep">&rsaquo;</span>
+    <div class="phase-dot" id="pd-E"><span class="dot pending"></span><span class="check">&#10003;</span><span class="label">Execute</span></div><span class="phase-sep">&rsaquo;</span>
+    <div class="phase-dot" id="pd-V"><span class="dot pending"></span><span class="check">&#10003;</span><span class="label">Verify</span></div>
+  </div>
+</div>
+
+<!-- Breadcrumb (shown during nested subsessions) -->
+<div class="breadcrumb" id="breadcrumb"></div>
+
+<!-- Main area -->
+<div class="main-area">
+  <!-- Sidebar (artifact summary) -->
+  <div class="sidebar" id="sidebar">
+    <div class="sidebar-scroll">
+      <div class="sidebar-group">
+        <div class="sidebar-group-header" onclick="toggleSidebarGroup('ticket')"><span class="group-toggle" id="gt-ticket">&#9662;</span><span>Ticket</span></div>
+        <div class="sidebar-group-items" id="gi-ticket"></div>
+      </div>
+      <div class="sidebar-group">
+        <div class="sidebar-group-header" onclick="toggleSidebarGroup('specs')"><span class="group-toggle" id="gt-specs">&#9662;</span><span>Specs</span></div>
+        <div class="sidebar-group-items" id="gi-specs"></div>
+      </div>
+      <div class="sidebar-group">
+        <div class="sidebar-group-header" onclick="toggleSidebarGroup('plan')"><span class="group-toggle" id="gt-plan">&#9662;</span><span>Plan</span></div>
+        <div class="sidebar-group-items" id="gi-plan"></div>
+      </div>
+    </div>
+    <div class="sidebar-toggle" onclick="toggleSidebarCollapse()"><span class="toggle-icon">&#9664;</span><span class="toggle-label">Collapse</span></div>
+  </div>
+
+  <!-- Conversation -->
+  <div class="conversation">
+    <div class="conv-scroll" id="convScroll">
+      <div class="conv-inner" id="convInner"></div>
+    </div>
+    <div class="input-bar">
+      <input type="text" id="userInput" placeholder="Type a message..." onkeydown="handleInputKey(event)">
+      <button class="send-btn" id="sendBtn" onclick="handleSend()" disabled>Send</button>
+    </div>
+  </div>
+
+  <!-- Artifact panel (used for side panel peek) -->
+  <div class="artifact-panel" id="artifactPanel">
+    <div class="ap-header" id="apHeader">
+      <span class="ap-badge new" id="apBadge">NEW</span>
+      <span class="ap-path" id="apPath"></span>
+      <span class="ap-stats" id="apStats"></span>
+      <button class="ap-close" onclick="closePeek()">&#215; Close</button>
+    </div>
+    <div class="ap-body" id="apBody"></div>
+    <div class="ap-actions" id="apActions">
+      <button class="btn-request" onclick="requestChanges()">Request Changes</button>
+      <button class="btn-approve" id="approveBtn" onclick="handleApprove()">Approve &#10003;</button>
+    </div>
+  </div>
+</div>
+
+<!-- Shared scripts -->
+<script src="shared/data.js"></script>
+<script>
+// ── J2: Subsession registry ──────────────────────────────────────
+window.SUBSESSIONS = [
+  { key:'desc',           phase:'ticket', label:'Build Description',   icon:'📋' },
+  { key:'product-design', phase:'ticket', label:'Product Design',      icon:'📋' },
+  { key:'auth-readme',    phase:'specs',  label:'Review auth/README',  icon:'📄' },
+  { key:'jwt-research',   phase:'specs',  label:'JWT Research',        icon:'🔬', parent:'auth-readme' },
+  { key:'design-doc',     phase:'specs',  label:'Review DESIGN_DOC',   icon:'📄' },
+  { key:'core-readme',    phase:'specs',  label:'Review core/README',  icon:'📄' },
+  { key:'impl-plan',      phase:'plan',   label:'Build Plan',          icon:'📦' },
+  { key:'exec-steps',     phase:'plan',   label:'Execute Steps',       icon:'⚡' }
+];
+
+// ── J2: State ────────────────────────────────────────────────────
+var activeSSBlocks = {};   // key -> { el, parentKey }
+var breadcrumbStack = [];  // [{key, label}]
+var ssCounter = 0;
+
+// ── J2: SCRIPT ───────────────────────────────────────────────────
+window.SCRIPT = [
+  // ── DESCRIBE ───────────────────────────────────────────────────
+  { id:1,  type:'agent',       text:'What would you like to work on?', phase:'D' },
+  { id:2,  type:'user',        text:'Add user authentication to the Bonsai workspace', interactive:true, placeholder:'Add user authentication to the Bonsai workspace' },
+  { id:3,  type:'agent',       text:"Got it — an auth module. Let me ask a scoping question." },
+  { id:4,  type:'decision',    question:'What kind of authentication?', options:['Token-based ★','OAuth/SSO','Simple password'], recommended:0, hint:'Extends your existing bns_ token system.' },
+  { id:5,  type:'agent',       text:"Token-based — aligns with your <code>bns_</code> pattern." },
+
+  // Subsession: Build Description
+  { id:6,  type:'sidebar-add', key:'desc', status:'active' },
+  { id:7,  type:'ss-enter',    key:'desc' },
+  { id:8,  type:'ss-msg',      key:'desc', role:'agent', text:'Building ticket description from your input...' },
+  { id:9,  type:'ss-typing',   key:'desc', duration:800 },
+  { id:10, type:'ss-msg',      key:'desc', role:'agent', text:'<strong>What:</strong> Add JWT-based user authentication with signup, login, session management, and role-based access control.<br><strong>Purpose:</strong> Enable secure multi-user access to the Bonsai workspace.' },
+  { id:11, type:'ss-result',   key:'desc', html:'<strong>AUTH-42:</strong> JWT-based auth with RBAC for multi-user workspace access.' },
+  { id:12, type:'ss-done',     key:'desc', summary:'JWT auth with RBAC' },
+  { id:13, type:'sidebar-done', key:'desc', duration:'1min' },
+  { id:14, type:'quick-create', buttons:['Discuss scope','Research alternatives'] },
+
+  // Subsession: Product Design
+  { id:15, type:'agent',       text:'Building product design document...' },
+  { id:16, type:'sidebar-add', key:'product-design', status:'active' },
+  { id:17, type:'ss-enter',    key:'product-design' },
+  { id:18, type:'ss-msg',      key:'product-design', role:'agent', text:'Drafting product design: goal, user stories, roles matrix...' },
+  { id:19, type:'ss-typing',   key:'product-design', duration:1000 },
+  { id:20, type:'ss-msg',      key:'product-design', role:'agent', text:'<strong>Goal:</strong> Secure multi-user access with role-based permissions.<br><strong>Stories:</strong> signup, login, admin management, viewer read-only.<br><strong>Roles:</strong> Admin (full), User (read/write), Viewer (read-only).' },
+  { id:21, type:'ss-result',   key:'product-design', html:'<strong>Product Design:</strong> 4 user stories · 3 roles · Success criteria defined · OAuth/SSO deferred to v2.' },
+  { id:22, type:'ss-actions',  key:'product-design', actions:[{label:'Accept',primary:true},{label:'Adjust'}] },
+  { id:23, type:'ss-accept',   key:'product-design' },
+  { id:24, type:'ss-done',     key:'product-design', summary:'4 stories · 3 roles · v1 scoped' },
+  { id:25, type:'sidebar-done', key:'product-design', duration:'3min' },
+
+  // ── SPECIFY ────────────────────────────────────────────────────
+  { id:26, type:'phase',       phase:'S', label:'SPECIFY' },
+  { id:27, type:'agent',       text:'Creating specification diffs for 3 files...' },
+  { id:28, type:'typing',      duration:1200 },
+
+  // Subsession: auth/README review (with nested JWT Research)
+  { id:29, type:'sidebar-add', key:'auth-readme', status:'active' },
+  { id:30, type:'ss-enter',    key:'auth-readme' },
+  { id:31, type:'ss-msg',      key:'auth-readme', role:'agent', text:'Created <code>auth/README.md</code> — module design spec. <span class="arrow-hint">→ click to review in side panel</span>' },
+  { id:32, type:'ss-artifact', key:'auth-readme', artifact:0 },
+  { id:33, type:'ss-msg',      key:'auth-readme', role:'agent', text:'Key decisions: JWT-based tokens, 3 roles (Admin/User/Viewer), <code>bns_at_</code> and <code>bns_rt_</code> prefix convention.' },
+  { id:34, type:'decision',    question:'JWT token lifetime strategy?', options:['Short access (15min) + refresh (7d) ★','Long-lived (24hr)','Session-only'], recommended:0, hint:'Industry standard for SaaS.' },
+
+  // Nested subsession: JWT Research
+  { id:35, type:'agent',       text:'Let me research JWT best practices for your use case...' },
+  { id:36, type:'sidebar-add', key:'jwt-research', status:'active' },
+  { id:37, type:'ss-enter',    key:'jwt-research', parent:'auth-readme' },
+  { id:38, type:'breadcrumb',  stack:['auth/README','JWT Research'] },
+  { id:39, type:'ss-msg',      key:'jwt-research', role:'agent', text:'Researching JWT best practices for SaaS auth...' },
+  { id:40, type:'ss-typing',   key:'jwt-research', duration:900 },
+  { id:41, type:'ss-msg',      key:'jwt-research', role:'agent', text:'Industry standard for SaaS: access tokens 15min–60min, refresh tokens 7–30 days. Your <code>bns_at_</code> / <code>bns_rt_</code> prefix makes tokens easily identifiable in logs.' },
+  { id:42, type:'ss-result',   key:'jwt-research', html:'<strong>Recommendation:</strong> Access: 15min · Refresh: 7d · bns_ prefix convention retained.' },
+  { id:43, type:'ss-actions',  key:'jwt-research', actions:[{label:'Accept',primary:true},{label:'Adjust lifetimes'}] },
+  { id:44, type:'ss-accept',   key:'jwt-research' },
+  { id:45, type:'ss-done',     key:'jwt-research', summary:'Access: 15min, Refresh: 7d' },
+  { id:46, type:'sidebar-done', key:'jwt-research', duration:'1min' },
+  { id:47, type:'breadcrumb',  stack:['auth/README'] },
+
+  // Back to auth-readme
+  { id:48, type:'ss-msg',      key:'auth-readme', role:'agent', text:'JWT research confirms 15min/7d strategy. Updated the spec.' },
+  { id:49, type:'decision',    question:'Viewer role with read-only access — keep it?', options:['Yes, keep ★','Remove it','Make it invite-only'], recommended:0 },
+  { id:50, type:'ss-msg',      key:'auth-readme', role:'agent', text:'Good. Spec is ready for approval.' },
+  { id:51, type:'approve',     artifact:0 },
+  { id:52, type:'ss-done',     key:'auth-readme', summary:'JWT auth · 3 roles · Approved' },
+  { id:53, type:'sidebar-done', key:'auth-readme', duration:'4min' },
+  { id:54, type:'breadcrumb',  stack:[] },
+
+  // Subsession: DESIGN_DOC review
+  { id:55, type:'sidebar-add', key:'design-doc', status:'active' },
+  { id:56, type:'ss-enter',    key:'design-doc' },
+  { id:57, type:'ss-msg',      key:'design-doc', role:'agent', text:'Added auth module to <code>DESIGN_DOC.md</code> — module list and integration flow.' },
+  { id:58, type:'ss-artifact', key:'design-doc', artifact:1 },
+  { id:59, type:'ss-msg',      key:'design-doc', role:'agent', text:'Changes: +auth/ module listed, +auth integration diagram, data flow unchanged.' },
+  { id:60, type:'approve',     artifact:1 },
+  { id:61, type:'ss-done',     key:'design-doc', summary:'+12 lines · Approved' },
+  { id:62, type:'sidebar-done', key:'design-doc', duration:'1min' },
+
+  // Subsession: core/README review
+  { id:63, type:'sidebar-add', key:'core-readme', status:'active' },
+  { id:64, type:'ss-enter',    key:'core-readme' },
+  { id:65, type:'ss-msg',      key:'core-readme', role:'agent', text:'Updated <code>core/README.md</code> — added auth dependencies and new tables.' },
+  { id:66, type:'ss-artifact', key:'core-readme', artifact:2 },
+  { id:67, type:'approve',     artifact:2 },
+  { id:68, type:'ss-done',     key:'core-readme', summary:'+6 lines · Approved' },
+  { id:69, type:'sidebar-done', key:'core-readme', duration:'1min' },
+  { id:70, type:'all-approved' },
+
+  // ── PLAN ───────────────────────────────────────────────────────
+  { id:71, type:'phase',       phase:'P', label:'PLAN' },
+  { id:72, type:'agent',       text:'All specs approved. Building implementation plan...' },
+  { id:73, type:'typing',      duration:1200 },
+
+  // Subsession: Build Plan
+  { id:74, type:'sidebar-add', key:'impl-plan', status:'active' },
+  { id:75, type:'ss-enter',    key:'impl-plan' },
+  { id:76, type:'ss-msg',      key:'impl-plan', role:'agent', text:'Implementation plan: 2 milestones, 6 steps.' },
+  { id:77, type:'ss-result',   key:'impl-plan', html:'<strong>Milestone 1:</strong> Core Auth — models, storage, service, middleware<br><strong>Milestone 2:</strong> API &amp; Admin — endpoints, tests' },
+  { id:78, type:'layout',      action:'open-plan' },
+  { id:79, type:'ss-actions',  key:'impl-plan', actions:[{label:'Execute this plan',primary:true},{label:'Adjust order'}] },
+  { id:80, type:'ss-accept',   key:'impl-plan' },
+  { id:81, type:'ss-done',     key:'impl-plan', summary:'2 milestones · 6 steps' },
+  { id:82, type:'sidebar-done', key:'impl-plan', duration:'2min' },
+
+  // ── EXECUTE ────────────────────────────────────────────────────
+  { id:83, type:'phase',       phase:'E', label:'EXECUTE' },
+  { id:84, type:'agent',       text:'Plan approved. Starting execution...' },
+  { id:85, type:'sidebar-add', key:'exec-steps', status:'active' },
+  { id:86, type:'layout',      action:'close' },
+  { id:87, type:'layout',      action:'open-exec' },
+  { id:88, type:'exec-progress' },
+  { id:89, type:'agent',       text:'All 6 steps complete.' },
+  { id:90, type:'layout',      action:'close' },
+  { id:91, type:'sidebar-done', key:'exec-steps', duration:'5min' },
+
+  // ── VERIFY ─────────────────────────────────────────────────────
+  { id:92, type:'phase',       phase:'V', label:'VERIFY' },
+  { id:93, type:'agent',       text:'Running verification checks...' },
+  { id:94, type:'typing',      duration:1000 },
+  { id:95, type:'agent',       text:'✔ All checks passed — tests green, types valid, lint clean.' },
+  { id:96, type:'agent',       text:'✔ Ticket <strong>AUTH-42</strong> complete! All phases finished.' },
+  { id:97, type:'complete' }
+];
+</script>
+<script src="shared/engine.js"></script>
+<script src="shared/sidebar.js"></script>
+<script>
+// ── J2: Subsession Block Management ──────────────────────────────
+
+function createSSBlock(key) {
+  var def = null;
+  if (window.SUBSESSIONS) {
+    def = window.SUBSESSIONS.find(function(s) { return s.key === key; });
+  }
+  if (!def) return null;
+
+  var block = document.createElement('div');
+  block.className = 'ss-block active';
+  block.id = 'ssb-' + key;
+
+  var header = document.createElement('div');
+  header.className = 'ss-block-header';
+  header.onclick = function() { toggleSSBlock(key); };
+  header.innerHTML =
+    '<span class="ss-icon">' + (def.icon || '●') + '</span>' +
+    '<span class="ss-title">' + def.label + '</span>' +
+    '<span class="ss-summary" id="ss-summary-' + key + '"></span>' +
+    '<span class="ss-status active" id="ss-status-' + key + '">ACTIVE</span>' +
+    '<span class="ss-expand" id="ss-expand-' + key + '"></span>';
+
+  var body = document.createElement('div');
+  body.className = 'ss-block-body';
+  body.id = 'ss-body-' + key;
+
+  block.appendChild(header);
+  block.appendChild(body);
+
+  return block;
+}
+
+function addSSBlockMsg(key, role, text) {
+  var body = document.getElementById('ss-body-' + key);
+  if (!body) return;
+  var msg = document.createElement('div');
+  msg.className = 'msg ' + role + ' fade-in';
+  if (role === 'agent') msg.innerHTML = text;
+  else msg.textContent = text;
+  body.appendChild(msg);
+  scrollConv();
+}
+
+function addSSTyping(key) {
+  var body = document.getElementById('ss-body-' + key);
+  if (!body) return;
+  var d = document.createElement('div');
+  d.className = 'typing-indicator fade-in';
+  d.id = 'ssTyping-' + key;
+  d.innerHTML = '<span class="dot"></span><span class="dot"></span><span class="dot"></span>';
+  body.appendChild(d);
+  scrollConv();
+}
+
+function removeSSTyping(key) {
+  var el = document.getElementById('ssTyping-' + key);
+  if (el) el.remove();
+}
+
+function addSSResult(key, html) {
+  var body = document.getElementById('ss-body-' + key);
+  if (!body) return;
+  var r = document.createElement('div');
+  r.className = 'ss-result fade-in';
+  r.innerHTML = html;
+  body.appendChild(r);
+  scrollConv();
+}
+
+function addSSActions(key, actions) {
+  var body = document.getElementById('ss-body-' + key);
+  if (!body) return;
+  var wrap = document.createElement('div');
+  wrap.className = 'ss-actions fade-in';
+  wrap.id = 'ssActions-' + key;
+  actions.forEach(function(a) {
+    var btn = document.createElement('button');
+    btn.className = 'ss-action-btn' + (a.primary ? ' primary' : '');
+    btn.textContent = a.label;
+    btn.onclick = function() { handleSSAction(key, a.label); };
+    wrap.appendChild(btn);
+  });
+  body.appendChild(wrap);
+  scrollConv();
+}
+
+function handleSSAction(key, label) {
+  var acts = document.getElementById('ssActions-' + key);
+  if (acts) {
+    acts.innerHTML = '<span style="font-size:11px;color:var(--green);font-weight:500;">✓ ' + label + '</span>';
+  }
+  waitingForInteraction = false;
+  if (!playing) setTimeout(function() { advanceInteractive(); }, 400);
+}
+
+function completeSSBlock(key, summary) {
+  var block = document.getElementById('ssb-' + key);
+  if (!block) return;
+  block.classList.remove('active');
+  block.classList.add('done', 'collapsed');
+
+  var status = document.getElementById('ss-status-' + key);
+  if (status) { status.textContent = '✓ DONE'; status.className = 'ss-status done'; }
+
+  var sumEl = document.getElementById('ss-summary-' + key);
+  if (sumEl && summary) sumEl.textContent = summary;
+
+  var expand = document.getElementById('ss-expand-' + key);
+  if (expand) expand.textContent = '▸';
+}
+
+function toggleSSBlock(key) {
+  var block = document.getElementById('ssb-' + key);
+  if (!block) return;
+  if (block.classList.contains('active')) return; // Don't collapse active
+  block.classList.toggle('collapsed');
+  var expand = document.getElementById('ss-expand-' + key);
+  if (expand) {
+    expand.textContent = block.classList.contains('collapsed') ? '▸' : '▾';
+  }
+}
+
+function addSSArtifactLink(key, artifactIdx) {
+  var body = document.getElementById('ss-body-' + key);
+  if (!body) return;
+  var d = DIFFS[artifactIdx];
+  if (!d) return;
+  var card = document.createElement('div');
+  card.className = 'artifact-card fade-in';
+  card.style.margin = '8px 0';
+  card.innerHTML =
+    '<div class="ac-header">' + d.badge + ' — ' + d.path + '</div>' +
+    '<div class="ac-body" style="font-size:12px;">Click to review in side panel →</div>' +
+    '<span class="card-peek-hint">Click to review →</span>';
+  card.onclick = function() { peekArtifact(artifactIdx); };
+  body.appendChild(card);
+  scrollConv();
+}
+
+function peekArtifact(idx) {
+  var d = DIFFS[idx];
+  if (!d) return;
+
+  peekMode = true;
+  peekSavedState = null;
+
+  document.body.classList.add('split-mode', 'peek-mode');
+
+  var headerEl = document.getElementById('apHeader');
+  if (headerEl) {
+    var cnt = approvedArtifacts.filter(Boolean).length;
+    headerEl.innerHTML =
+      '<span class="ap-badge ' + d.badgeClass + '">' + d.badge + '</span>' +
+      '<span class="ap-path">' + d.path + '</span>' +
+      '<span class="ap-stats">' + d.stats + ' · ' + cnt + '/3 approved</span>' +
+      '<button class="ap-close" onclick="closePeek()">&#215; Close</button>';
+  }
+  var bodyEl = document.getElementById('apBody');
+  if (bodyEl) bodyEl.innerHTML = '<div class="diff-view">' + d.content + '</div>';
+
+  var actionsEl = document.getElementById('apActions');
+  if (actionsEl) {
+    currentArtifact = idx;
+    actionsEl.innerHTML = approvedArtifacts[idx]
+      ? '<span style="font-size:13px;color:var(--green);font-weight:600;">✓ Approved</span>'
+      : '<button class="btn-request" onclick="requestChanges()">Request Changes</button><button class="btn-approve" onclick="handleApprove()">Approve ✓</button>';
+  }
+}
+
+// ── J2: Breadcrumb ───────────────────────────────────────────────
+
+function updateBreadcrumb(stack) {
+  breadcrumbStack = stack || [];
+  var el = document.getElementById('breadcrumb');
+  if (!el) return;
+  if (breadcrumbStack.length === 0) {
+    el.classList.remove('visible');
+    return;
+  }
+  el.classList.add('visible');
+  var items = ['<span class="bc-item" onclick="handleBreadcrumbClick(-1)">Main</span>'];
+  breadcrumbStack.forEach(function(name, i) {
+    var isCurrent = i === breadcrumbStack.length - 1;
+    items.push('<span class="bc-sep">›</span>');
+    items.push('<span class="bc-item' + (isCurrent ? ' current' : '') + '">' + name + '</span>');
+  });
+  el.innerHTML = items.join('');
+}
+
+function handleBreadcrumbClick(idx) {
+  // Breadcrumb navigation is visual in mockup
+}
+
+// ── J2: Quick-create buttons ─────────────────────────────────────
+
+function addQuickCreate(buttons) {
+  var wrap = document.createElement('div');
+  wrap.className = 'quick-create fade-in';
+  buttons.forEach(function(label) {
+    var btn = document.createElement('button');
+    btn.className = 'qc-btn';
+    btn.textContent = '+ ' + label;
+    btn.onclick = function() { btn.textContent = '✓ ' + label; btn.style.color = 'var(--green)'; btn.style.borderColor = 'var(--green-sub)'; };
+    wrap.appendChild(btn);
+  });
+  if (convInner) convInner.appendChild(wrap);
+  scrollConv();
+}
+
+// ── J2: Override step execution ──────────────────────────────────
+
+window.onStepExecute = function(step) {
+  switch (step.type) {
+    case 'ss-enter':
+      var parentKey = step.parent || null;
+      var block = createSSBlock(step.key);
+      if (!block) break;
+
+      if (parentKey && document.getElementById('ss-body-' + parentKey)) {
+        // Nest inside parent subsession body
+        document.getElementById('ss-body-' + parentKey).appendChild(block);
+      } else {
+        if (convInner) convInner.appendChild(block);
+      }
+      activeSSBlocks[step.key] = { el: block, parentKey: parentKey };
+      scrollConv();
+      break;
+
+    case 'ss-msg':
+      removeSSTyping(step.key);
+      addSSBlockMsg(step.key, step.role, step.text);
+      break;
+
+    case 'ss-typing':
+      addSSTyping(step.key);
+      break;
+
+    case 'ss-result':
+      addSSResult(step.key, step.html);
+      break;
+
+    case 'ss-actions':
+      addSSActions(step.key, step.actions);
+      break;
+
+    case 'ss-accept':
+      var acts = document.getElementById('ssActions-' + step.key);
+      if (acts) {
+        acts.innerHTML = '<span style="font-size:11px;color:var(--green);font-weight:500;">✓ Accepted</span>';
+      }
+      break;
+
+    case 'ss-done':
+      completeSSBlock(step.key, step.summary);
+      break;
+
+    case 'ss-artifact':
+      addSSArtifactLink(step.key, step.artifact);
+      break;
+
+    case 'breadcrumb':
+      updateBreadcrumb(step.stack);
+      break;
+
+    case 'quick-create':
+      addQuickCreate(step.buttons);
+      break;
+
+    case 'sidebar-add':
+      addSidebarItem(step.key);
+      if (step.status === 'active') setSidebarStatus(step.key, 'active');
+      break;
+
+    case 'sidebar-done':
+      setSidebarStatus(step.key, 'done', step.duration);
+      break;
+
+    case 'notify':
+      var n = document.createElement('div');
+      n.className = 'notify-msg fade-in';
+      n.innerHTML = step.text;
+      if (convInner) convInner.appendChild(n);
+      scrollConv();
+      break;
+  }
+};
+
+// ── J2: Override advanceAutoPlay ──────────────────────────────────
+
+var _origAutoPlay = advanceAutoPlay;
+advanceAutoPlay = function() {
+  if (!playing || currentStep >= SCRIPT.length) { pause(); return; }
+
+  var step = SCRIPT[currentStep];
+  executeStep(step);
+  currentStep++;
+
+  var delay;
+
+  if (step.type === 'typing') {
+    delay = step.duration;
+  } else if (step.type === 'ss-typing') {
+    delay = step.duration || 800;
+    var ssKey = step.key;
+    setTimeout(function() { if (playing) removeSSTyping(ssKey); }, (step.duration || 800) - 100);
+  } else if (step.type === 'decision') {
+    delay = 1800;
+    var sid = step.id, rec = step.options[step.recommended];
+    setTimeout(function() {
+      if (playing) resolveDecisionCard(sid, rec.replace(/\s*★/, ''));
+    }, 1500);
+  } else if (step.type === 'approve') {
+    delay = 1200;
+    var ai = step.artifact;
+    setTimeout(function() { if (playing) autoApprove(ai); }, 900);
+  } else if (step.type === 'approve-doc') {
+    delay = 1200;
+    setTimeout(function() { if (playing) autoApproveDoc(); }, 900);
+  } else if (step.type === 'ss-actions') {
+    delay = 1500;
+    var actionKey = step.key;
+    setTimeout(function() {
+      if (playing) {
+        var acts = document.getElementById('ssActions-' + actionKey);
+        if (acts) acts.innerHTML = '<span style="font-size:11px;color:var(--green);font-weight:500;">✓ Accepted</span>';
+      }
+    }, 1200);
+  } else if (step.type === 'all-approved') {
+    delay = 1500;
+  } else if (step.type === 'exec-progress') {
+    runExecAnimation(function() {
+      if (playing) stepTimer = setTimeout(advanceAutoPlay, 600);
+    });
+    return;
+  } else if (step.type === 'complete') {
+    return;
+  } else if (step.type === 'user') {
+    delay = 800;
+  } else if (step.type === 'phase') {
+    delay = 800;
+  } else if (step.type === 'layout') {
+    delay = 700;
+  } else if (step.type === 'switch-artifact') {
+    delay = 500;
+  } else if (step.type.indexOf('ss-') === 0 || step.type.indexOf('sidebar') === 0 || step.type === 'breadcrumb' || step.type === 'quick-create' || step.type === 'notify') {
+    delay = 500;
+  } else {
+    delay = 600;
+  }
+
+  stepTimer = setTimeout(advanceAutoPlay, delay);
+};
+
+// ── J2: Override advanceInteractive ──────────────────────────────
+
+advanceInteractive = function() {
+  if (currentStep >= SCRIPT.length) return;
+  var step = SCRIPT[currentStep];
+
+  // Wait states
+  if (step.type === 'user' && step.interactive && !playing) {
+    currentStep++;
+    waitingForInteraction = true;
+    if (userInput) { userInput.value = ''; userInput.placeholder = step.placeholder || 'Type a message...'; userInput.focus(); }
+    if (sendBtn) sendBtn.disabled = false;
+    return;
+  }
+  if (step.type === 'decision' && !playing) {
+    executeStep(step); currentStep++; waitingForInteraction = true; return;
+  }
+  if (step.type === 'approve' && !playing) {
+    if (step.artifact !== undefined && approvedArtifacts[step.artifact]) {
+      currentStep++; setTimeout(function() { advanceInteractive(); }, 200); return;
+    }
+    waitingForInteraction = true; currentStep++; return;
+  }
+  if (step.type === 'approve-doc' && !playing) {
+    if (productDesignApproved) {
+      currentStep++; setTimeout(function() { advanceInteractive(); }, 200); return;
+    }
+    waitingForInteraction = true; currentStep++; return;
+  }
+  if (step.type === 'ss-actions' && !playing) {
+    executeStep(step); currentStep++; waitingForInteraction = true; return;
+  }
+
+  executeStep(step);
+  currentStep++;
+
+  // Delays
+  if (step.type === 'typing') {
+    setTimeout(function() { advanceInteractive(); }, step.duration);
+  } else if (step.type === 'ss-typing') {
+    var tKey = step.key;
+    setTimeout(function() { removeSSTyping(tKey); advanceInteractive(); }, step.duration || 800);
+  } else if (step.type === 'exec-progress') {
+    runExecAnimation(function() {
+      setTimeout(function() { advanceInteractive(); }, 600);
+    });
+  } else if (step.type === 'all-approved') {
+    setTimeout(function() { advanceInteractive(); }, 1200);
+  } else if (step.type === 'layout') {
+    setTimeout(function() { advanceInteractive(); }, 500);
+  } else if (step.type === 'switch-artifact') {
+    setTimeout(function() { advanceInteractive(); }, 400);
+  } else if (step.type === 'complete') {
+    // Done
+  } else if (step.type.indexOf('ss-') === 0 || step.type.indexOf('sidebar') === 0 || step.type === 'breadcrumb' || step.type === 'quick-create' || step.type === 'notify') {
+    setTimeout(function() { advanceInteractive(); }, 400);
+  } else {
+    setTimeout(function() { advanceInteractive(); }, 600);
+  }
+};
+
+// ── J2: Override resetFlow ───────────────────────────────────────
+
+var _origReset = resetFlow;
+resetFlow = function() {
+  pause();
+  currentStep = 0;
+  approvedArtifacts = [false, false, false];
+  currentArtifact = 0;
+  waitingForInteraction = false;
+  currentPhase = null;
+  peekMode = false;
+  peekSavedState = null;
+  productDesignApproved = false;
+  execAnimationRunning = false;
+  activeSSBlocks = {};
+  breadcrumbStack = [];
+  ssCounter = 0;
+  sidebarItems = {};
+
+  if (convInner) convInner.innerHTML = '';
+  closeArtifactPanel();
+  if (stepNumEl) stepNumEl.textContent = '0';
+  if (progressFill) progressFill.style.width = '0%';
+  if (userInput) { userInput.value = ''; userInput.placeholder = 'Type a message...'; }
+  if (sendBtn) sendBtn.disabled = true;
+
+  // Reset breadcrumb
+  updateBreadcrumb([]);
+
+  // Reset phase dots
+  ['D','S','P','E','V'].forEach(function(ph) {
+    var el = document.getElementById('pd-' + ph);
+    if (!el) return;
+    el.classList.remove('is-done', 'is-active');
+    var dot = el.querySelector('.dot');
+    var label = el.querySelector('.label');
+    if (dot) dot.className = 'dot pending';
+    if (label) label.className = 'label';
+  });
+
+  // Reset sidebar groups
+  ['ticket','specs','plan'].forEach(function(g) {
+    var items = document.getElementById('gi-' + g);
+    var toggle = document.getElementById('gt-' + g);
+    if (items) { items.innerHTML = ''; items.classList.remove('collapsed'); }
+    if (toggle) toggle.classList.remove('collapsed');
+  });
+
+  // Reset artifact panel actions
+  var actionsEl = document.getElementById('apActions');
+  if (actionsEl) {
+    actionsEl.innerHTML =
+      '<button class="btn-request" onclick="requestChanges()">Request Changes</button>' +
+      '<button class="btn-approve" id="approveBtn" onclick="handleApprove()">Approve ✓</button>';
+  }
+
+  setTimeout(function() { advanceInteractive(); }, 300);
+};
+
+// ── J2: Sidebar navigation -> scroll to block ───────────────────
+
+window.onSidebarNavigate = function(key) {
+  var block = document.getElementById('ssb-' + key);
+  if (block) {
+    // If collapsed, expand it
+    if (block.classList.contains('collapsed')) {
+      block.classList.remove('collapsed');
+      var expand = document.getElementById('ss-expand-' + key);
+      if (expand) expand.textContent = '▾';
+    }
+    block.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }
+};
+
+// ── J2: Extra keyboard shortcut: B for sidebar ──────────────────
+
+document.addEventListener('keydown', function(e) {
+  if (userInput && e.target === userInput) return;
+  if (e.target && e.target.tagName === 'INPUT') return;
+  if (e.code === 'KeyB') {
+    e.preventDefault();
+    toggleSidebarCollapse();
+  }
+});
+</script>
+</body>
+</html>

@@ -1,0 +1,295 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Exp A: Folded Section Collapse</title>
+<style>
+  :root {
+    --bg: #0e1117;
+    --surface: #161b22;
+    --elevated: #1c2129;
+    --border: #2d333b;
+    --text: #e6edf3;
+    --text-sec: #8b949e;
+    --text-dim: #656d76;
+    --accent: #58a6ff;
+    --green: #3fb950;
+    --yellow: #d29922;
+    --purple: #bc8cff;
+    --mono: 'SF Mono','Cascadia Code','Fira Code',monospace;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    background: var(--bg); color: var(--text); min-height: 100vh;
+    display: flex; flex-direction: column; align-items: center;
+  }
+
+  /* ── Title bar ── */
+  .title-bar {
+    position: sticky; top: 0; z-index: 10;
+    width: 100%; max-width: 720px;
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 14px 20px; background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    font-family: var(--mono); font-size: 13px; color: var(--text-sec);
+  }
+  .title-bar span { font-weight: 600; color: var(--text); font-size: 14px; }
+  .reset-btn {
+    background: transparent; border: 1px solid var(--border); color: var(--text-sec);
+    padding: 4px 12px; border-radius: 6px; cursor: pointer; font-size: 12px;
+    font-family: var(--mono); transition: all 0.2s;
+  }
+  .reset-btn:hover { border-color: var(--accent); color: var(--accent); }
+
+  /* ── Chat container ── */
+  .chat { width: 100%; max-width: 720px; padding: 20px; }
+
+  /* ── Messages ── */
+  .msg {
+    padding: 10px 16px; margin-bottom: 10px; border-radius: 6px;
+    font-size: 14px; line-height: 1.6; opacity: 0;
+    transform: translateY(8px);
+    transition: opacity 0.3s ease, transform 0.3s ease;
+    background: var(--surface);
+  }
+  .msg.visible { opacity: 1; transform: translateY(0); }
+  .msg.agent { border-left: 3px solid var(--accent); }
+  .msg.user { border-left: 3px solid var(--purple); }
+  .msg .author {
+    font-size: 11px; font-family: var(--mono); margin-bottom: 4px;
+    text-transform: uppercase; letter-spacing: 0.5px;
+  }
+  .msg.agent .author { color: var(--accent); }
+  .msg.user .author { color: var(--purple); }
+
+  /* ── Subsession divider ── */
+  .divider {
+    display: flex; align-items: center; gap: 10px;
+    margin: 16px 0; cursor: default; user-select: none;
+    opacity: 0; transition: opacity 0.3s ease;
+  }
+  .divider.visible { opacity: 1; }
+  .divider.clickable { cursor: pointer; }
+  .divider.clickable:hover .divider-label { color: var(--accent); }
+  .divider::before, .divider::after {
+    content: ''; flex: 1; height: 1px; background: var(--border);
+  }
+  .divider-label {
+    display: flex; align-items: center; gap: 6px;
+    font-family: var(--mono); font-size: 12px; color: var(--text-sec);
+    white-space: nowrap; transition: color 0.2s;
+  }
+  .divider-summary {
+    display: flex; align-items: center; gap: 8px;
+    font-family: var(--mono); font-size: 11px;
+    color: var(--text-dim); opacity: 0;
+    transition: opacity 0.35s ease 0.1s;
+  }
+  .divider.collapsed .divider-summary { opacity: 1; }
+  .divider-summary .result { color: var(--green); }
+  .divider-summary .count { color: var(--text-dim); }
+  .divider-expand {
+    font-size: 11px; color: var(--text-dim);
+    transition: transform 0.3s ease;
+    display: inline-block;
+  }
+  .divider.collapsed .divider-expand { transform: rotate(0deg); }
+  .divider.expanded .divider-expand { transform: rotate(90deg); }
+
+  /* ── Subsession content wrapper ── */
+  .subsession-content {
+    overflow: hidden;
+    transition: max-height 0.4s ease, opacity 0.3s ease;
+  }
+  .subsession-content.collapsed {
+    max-height: 0 !important; opacity: 0;
+  }
+
+  /* ── Decision card ── */
+  .decision {
+    margin: 10px 0; padding: 12px 16px; border-radius: 6px;
+    background: var(--elevated); border: 1px solid var(--border);
+    font-size: 13px; opacity: 0; transform: translateY(8px);
+    transition: opacity 0.3s ease, transform 0.3s ease;
+  }
+  .decision.visible { opacity: 1; transform: translateY(0); }
+  .decision .decision-title {
+    font-family: var(--mono); font-size: 11px; color: var(--yellow);
+    text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 6px;
+  }
+  .decision .decision-body { color: var(--text-sec); line-height: 1.5; }
+  .decision .decision-resolve {
+    margin-top: 8px; font-family: var(--mono); font-size: 12px;
+    color: var(--green); opacity: 0; transition: opacity 0.3s ease;
+  }
+  .decision .decision-resolve.visible { opacity: 1; }
+</style>
+</head>
+<body>
+
+<div class="title-bar">
+  <span>A: Folded Section</span>
+  <button class="reset-btn" onclick="resetDemo()">Reset</button>
+</div>
+
+<div class="chat" id="chat"></div>
+
+<script>
+var timers = [];
+var chatEl = document.getElementById("chat");
+
+function clearTimers() {
+  timers.forEach(function(t) { clearTimeout(t); });
+  timers = [];
+}
+
+function delay(ms) {
+  return new Promise(function(resolve) {
+    timers.push(setTimeout(resolve, ms));
+  });
+}
+
+function addMsg(cls, author, text) {
+  var el = document.createElement("div");
+  el.className = "msg " + cls;
+  el.innerHTML = '<div class="author">' + author + '</div>' + text;
+  chatEl.appendChild(el);
+  void el.offsetHeight;
+  el.classList.add("visible");
+  return el;
+}
+
+function addDivider(icon, label) {
+  var el = document.createElement("div");
+  el.className = "divider";
+  el.innerHTML =
+    '<span class="divider-label">' + icon + " " + label + '</span>' +
+    '<span class="divider-summary">' +
+      '<span class="result"></span>' +
+      '<span class="count"></span>' +
+      '<span class="divider-expand"></span>' +
+    '</span>';
+  chatEl.appendChild(el);
+  void el.offsetHeight;
+  el.classList.add("visible");
+  return el;
+}
+
+function addDecision(title, body) {
+  var el = document.createElement("div");
+  el.className = "decision";
+  el.innerHTML =
+    '<div class="decision-title">' + title + '</div>' +
+    '<div class="decision-body">' + body + '</div>' +
+    '<div class="decision-resolve"></div>';
+  chatEl.appendChild(el);
+  void el.offsetHeight;
+  el.classList.add("visible");
+  return el;
+}
+
+function wrapSubsessionContent(elements) {
+  var wrapper = document.createElement("div");
+  wrapper.className = "subsession-content";
+  var parent = elements[0].parentNode;
+  parent.insertBefore(wrapper, elements[0]);
+  elements.forEach(function(el) { wrapper.appendChild(el); });
+  // Set explicit max-height for transition
+  wrapper.style.maxHeight = wrapper.scrollHeight + "px";
+  return wrapper;
+}
+
+function collapseSubsession(dividerEl, wrapper, resultText, msgCount) {
+  // Start the collapse
+  wrapper.style.maxHeight = wrapper.scrollHeight + "px";
+  void wrapper.offsetHeight;
+  wrapper.classList.add("collapsed");
+
+  // Update divider with summary
+  dividerEl.classList.add("collapsed", "clickable");
+  var summary = dividerEl.querySelector(".divider-summary");
+  summary.querySelector(".result").textContent = resultText;
+  summary.querySelector(".count").textContent = msgCount + " msgs";
+  summary.querySelector(".divider-expand").textContent = "▸";
+
+  // Toggle on click
+  dividerEl.addEventListener("click", function() {
+    var isCollapsed = wrapper.classList.contains("collapsed");
+    if (isCollapsed) {
+      wrapper.classList.remove("collapsed");
+      wrapper.style.maxHeight = wrapper.scrollHeight + "px";
+      dividerEl.classList.remove("collapsed");
+      dividerEl.classList.add("expanded");
+    } else {
+      wrapper.style.maxHeight = wrapper.scrollHeight + "px";
+      void wrapper.offsetHeight;
+      wrapper.classList.add("collapsed");
+      dividerEl.classList.remove("expanded");
+      dividerEl.classList.add("collapsed");
+    }
+  });
+}
+
+async function runDemo() {
+  // Phase 1: Regular chat messages
+  addMsg("user", "You", "What auth method should we use for the API?");
+  await delay(900);
+
+  addMsg("agent", "Agent", "I recommend JWT with refresh tokens. It pairs well with our stateless backend and lets us add OAuth providers later without rearchitecting.");
+  await delay(1100);
+
+  addMsg("user", "You", "Sounds good. Can you build out the product design for the auth module?");
+  await delay(1200);
+
+  // Phase 2: Subsession enters
+  var divider = addDivider("📋", "Build Product Design");
+  await delay(700);
+
+  // Phase 3: Subsession messages
+  var sub1 = addMsg("agent", "Agent · subsession", "Analyzing the auth requirements. The module needs login, token refresh, logout, and role-based access control.");
+  await delay(900);
+
+  var sub2 = addMsg("agent", "Agent · subsession", "Drafting the data model: User, Session, RefreshToken tables with proper foreign keys and indexes.");
+  await delay(800);
+
+  var dec = addDecision("Decision: Token Expiry Strategy", "Short-lived access tokens (15 min) with long-lived refresh tokens (7 days). Rotate refresh tokens on each use to limit replay window.");
+  await delay(1000);
+
+  // Auto-resolve the decision
+  var resolveEl = dec.querySelector(".decision-resolve");
+  resolveEl.textContent = "✓ Approved automatically";
+  resolveEl.classList.add("visible");
+  await delay(800);
+
+  var sub3 = addMsg("agent", "Agent · subsession", "Design complete. Created spec with 4 endpoints: POST /auth/login, POST /auth/refresh, POST /auth/logout, GET /auth/me.");
+  await delay(600);
+
+  var sub4 = addMsg("agent", "Agent · subsession", "Added rate limiting notes: 5 login attempts per minute per IP, exponential backoff on failures.");
+  await delay(1200);
+
+  // Phase 4: Collapse
+  var subsessionEls = [sub1, sub2, dec, sub3, sub4];
+  var wrapper = wrapSubsessionContent(subsessionEls);
+  await delay(100);
+  collapseSubsession(divider, wrapper, "✓ approved", 5);
+  await delay(1000);
+
+  // Phase 5: Continue after collapse
+  addMsg("agent", "Agent", "Moving to the specify phase. I will create task specs for each auth endpoint based on the product design.");
+  await delay(900);
+
+  addMsg("user", "You", "Great, prioritize the login and refresh endpoints first.");
+}
+
+function resetDemo() {
+  clearTimers();
+  chatEl.innerHTML = "";
+  runDemo();
+}
+
+runDemo();
+</script>
+</body>
+</html>

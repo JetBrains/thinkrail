@@ -1,0 +1,414 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CD: Scope Section — Collapse Experiment</title>
+<style>
+:root {
+  --bg: #0e1117; --surface: #161b22; --elevated: #1c2129;
+  --border: #2d333b; --border-bright: #3d444d;
+  --text: #e6edf3; --text-sec: #8b949e; --text-dim: #656d76;
+  --accent: #58a6ff; --accent-sub: #1f3a5f;
+  --green: #3fb950; --green-sub: #1a3a2a;
+  --yellow: #d29922; --purple: #bc8cff; --purple-sub: #2a1f3d;
+  --mono: 'SF Mono','Cascadia Code','Consolas',monospace;
+  /* Scope line: code-editor indent guide style — barely visible */
+  --scope: #2d333b;
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+  background: var(--bg); color: var(--text);
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  height: 100vh; display: flex; flex-direction: column;
+}
+
+/* ── Title bar ──────────────────────────────────────────── */
+.title-bar {
+  height: 40px; background: var(--surface); border-bottom: 1px solid var(--border);
+  display: flex; align-items: center; padding: 0 20px; gap: 12px; flex-shrink: 0;
+}
+.title-bar h1 { font-size: 13px; font-weight: 600; color: var(--purple); }
+.title-bar .tag { font-size: 10px; background: var(--purple-sub); color: var(--purple);
+  padding: 2px 8px; border-radius: 100px; font-weight: 600; }
+.reset-btn {
+  margin-left: auto; font-size: 11px; padding: 4px 12px; border-radius: 5px;
+  border: 1px solid var(--border); background: var(--elevated); color: var(--text-sec);
+  cursor: pointer; font-family: inherit;
+}
+.reset-btn:hover { border-color: var(--accent); color: var(--accent); }
+
+/* ── Chat area ──────────────────────────────────────────── */
+.chat { flex: 1; overflow-y: auto; padding: 24px 20px; }
+.chat-inner { max-width: 660px; margin: 0 auto; }
+.chat-inner > * + * { margin-top: 14px; }
+
+/* ── Messages (chat style) ──────────────────────────────── */
+.msg {
+  font-size: 14px; line-height: 1.6;
+  border-radius: 8px; padding: 8px 12px;
+  max-width: 85%;
+  opacity: 0; transform: translateY(6px);
+  animation: fadeIn 0.35s ease forwards;
+}
+.msg.agent {
+  color: var(--text-sec); background: var(--surface);
+  align-self: flex-start;
+}
+.msg.user {
+  color: var(--text); background: var(--elevated);
+  border: 1px solid var(--border);
+  align-self: flex-start;
+}
+.msg.user::before {
+  content: ''; display: inline-block;
+  width: 5px; height: 5px; border-radius: 50%;
+  background: var(--purple); margin-right: 8px;
+  vertical-align: middle; flex-shrink: 0;
+}
+.msg strong { color: var(--text); font-weight: 600; }
+
+/* ── Decision (inline resolved) ─────────────────────────── */
+.decision-resolved {
+  font-size: 13px; color: var(--green); font-weight: 500;
+  padding: 6px 12px; border-radius: 6px;
+  background: var(--green-sub);
+  opacity: 0; animation: fadeIn 0.35s ease forwards;
+}
+
+/* ── Subsession section ─────────────────────────────────── */
+
+/* The entire subsession is wrapped in .ss-section */
+.ss-section {
+  position: relative;
+  padding-left: 14px; /* space for scope line */
+  opacity: 0; animation: fadeIn 0.35s ease forwards;
+}
+
+/* Scope line: code-editor indent guide — always subtle */
+.ss-section::before {
+  content: '';
+  position: absolute; left: 0; top: 0; bottom: 0;
+  width: 1px;
+  background: var(--scope);
+}
+
+/* ── Section header (always visible) ────────────────────── */
+.ss-header {
+  display: flex; align-items: center; gap: 6px;
+  font-size: 13px; color: var(--text-sec);
+  padding: 4px 0; cursor: default;
+  transition: color 0.2s;
+}
+.ss-header .ss-icon { font-size: 12px; }
+.ss-header .ss-name { font-weight: 600; color: var(--text); }
+.ss-section.finished .ss-header .ss-name { color: var(--text-sec); }
+
+/* Result badge on header (hidden until finished) */
+.ss-header .ss-result {
+  margin-left: auto; font-size: 11px; color: var(--green); font-weight: 500;
+  opacity: 0; transition: opacity 0.4s 0.1s;
+  display: flex; align-items: center; gap: 4px;
+}
+.ss-section.finished .ss-header .ss-result { opacity: 1; }
+
+/* ── Section body (the messages) ────────────────────────── */
+.ss-body {
+  overflow: hidden;
+  transition: max-height 0.5s cubic-bezier(0.4, 0, 0.2, 1),
+              opacity 0.3s ease;
+}
+.ss-body > * + * { margin-top: 12px; }
+
+/* When collapsed: body folds up */
+.ss-section.collapsed .ss-body {
+  max-height: 0 !important;
+  opacity: 0;
+  pointer-events: none;
+}
+
+/* ── Output summary (appears when finished, below body) ── */
+.ss-output {
+  padding: 8px 0; font-size: 12px; line-height: 1.7;
+  color: var(--text-sec);
+  border-top: 1px solid var(--border);
+  margin-top: 8px;
+  opacity: 0; max-height: 0; overflow: hidden;
+  transition: opacity 0.4s 0.2s, max-height 0.5s 0.1s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.ss-section.finished .ss-output {
+  opacity: 1; max-height: 200px;
+}
+.ss-output .out-label {
+  font-size: 10px; font-weight: 600; text-transform: uppercase;
+  letter-spacing: 0.05em; color: var(--green); margin-bottom: 4px;
+  display: flex; align-items: center; gap: 4px;
+}
+.ss-output .out-line { color: var(--text-dim); }
+.ss-output .out-line strong { color: var(--text-sec); font-weight: 500; }
+
+/* ── Toggle hint (show/hide history) ────────────────────── */
+.ss-toggle {
+  font-size: 11px; color: var(--text-dim); cursor: pointer;
+  padding: 4px 0; margin-top: 6px;
+  transition: color 0.15s;
+  user-select: none;
+  opacity: 0; transition: opacity 0.3s 0.4s;
+}
+.ss-section.finished .ss-toggle { opacity: 1; }
+.ss-toggle:hover { color: var(--accent); }
+.ss-toggle .arrow {
+  display: inline-block; transition: transform 0.2s;
+  font-size: 10px; margin-right: 4px;
+}
+.ss-section.collapsed .ss-toggle .arrow { transform: rotate(-90deg); }
+
+/* ── Collapse trigger: click header when finished ────────── */
+.ss-section.finished .ss-header { cursor: pointer; }
+.ss-section.finished .ss-header:hover .ss-name { color: var(--accent); }
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+</style>
+</head>
+<body>
+
+<div class="title-bar">
+  <span class="tag">CD</span>
+  <h1>Scope Section — hybrid C+D</h1>
+  <button class="reset-btn" onclick="resetDemo()">Reset</button>
+</div>
+
+<div class="chat" id="chat">
+  <div class="chat-inner" id="chatInner"></div>
+</div>
+
+<script>
+var chatInner = document.getElementById('chatInner');
+var timers = [];
+
+function t(fn, ms) {
+  var id = setTimeout(fn, ms);
+  timers.push(id);
+  return id;
+}
+
+function addMsg(cls, text) {
+  var d = document.createElement('div');
+  d.className = 'msg ' + cls;
+  d.innerHTML = text;
+  chatInner.appendChild(d);
+  scrollBottom();
+  return d;
+}
+
+function addDecisionResolved(text) {
+  var d = document.createElement('div');
+  d.className = 'decision-resolved';
+  d.textContent = '✓ ' + text;
+  return d;
+}
+
+function scrollBottom() {
+  var chat = document.getElementById('chat');
+  requestAnimationFrame(function() { chat.scrollTop = chat.scrollHeight; });
+}
+
+// ── Build a subsession section ──────────────────────────────
+
+function createSubsession(icon, name) {
+  var section = document.createElement('div');
+  section.className = 'ss-section active';
+
+  // Header
+  var header = document.createElement('div');
+  header.className = 'ss-header';
+  header.innerHTML =
+    '<span class="ss-icon">' + icon + '</span>' +
+    '<span class="ss-name">' + name + '</span>' +
+    '<span class="ss-result">✓ completed</span>';
+  section.appendChild(header);
+
+  // Body (messages go here)
+  var body = document.createElement('div');
+  body.className = 'ss-body';
+  section.appendChild(body);
+
+  // Output summary (hidden until finished)
+  var output = document.createElement('div');
+  output.className = 'ss-output';
+  section.appendChild(output);
+
+  // Toggle
+  var toggle = document.createElement('div');
+  toggle.className = 'ss-toggle';
+  toggle.innerHTML = '<span class="arrow">▾</span>Show full history · <span class="msg-count">0</span> messages';
+  section.appendChild(toggle);
+
+  // Click handlers
+  header.onclick = function() {
+    if (!section.classList.contains('finished')) return;
+    toggleSection(section);
+  };
+  toggle.onclick = function() {
+    toggleSection(section);
+  };
+
+  chatInner.appendChild(section);
+  scrollBottom();
+
+  return { section: section, body: body, output: output, toggle: toggle, msgCount: 0 };
+}
+
+function addSSMsg(ss, cls, text) {
+  var d = document.createElement('div');
+  d.className = 'msg ' + cls;
+  d.innerHTML = text;
+  ss.body.appendChild(d);
+  ss.msgCount++;
+  ss.toggle.querySelector('.msg-count').textContent = ss.msgCount;
+  // Set body max-height for transition (generous)
+  ss.body.style.maxHeight = ss.body.scrollHeight + 200 + 'px';
+  scrollBottom();
+  return d;
+}
+
+function addSSDecision(ss, text) {
+  var d = addDecisionResolved(text);
+  ss.body.appendChild(d);
+  ss.msgCount++;
+  ss.toggle.querySelector('.msg-count').textContent = ss.msgCount;
+  ss.body.style.maxHeight = ss.body.scrollHeight + 200 + 'px';
+  scrollBottom();
+}
+
+function finishSubsession(ss, resultText, outputHtml) {
+  // Set result badge
+  ss.section.querySelector('.ss-result').innerHTML = '✓ ' + resultText;
+
+  // Set output content
+  ss.output.innerHTML = outputHtml;
+
+  // Transition: active -> finished
+  ss.section.classList.remove('active');
+  ss.section.classList.add('finished');
+
+  // After a beat, collapse
+  t(function() {
+    // Capture current height for smooth animation
+    ss.body.style.maxHeight = ss.body.scrollHeight + 'px';
+    // Force reflow
+    ss.body.offsetHeight;
+    // Collapse
+    ss.section.classList.add('collapsed');
+    scrollBottom();
+  }, 800);
+}
+
+function toggleSection(section) {
+  if (section.classList.contains('collapsed')) {
+    // Expand: set max-height to content height
+    var body = section.querySelector('.ss-body');
+    section.classList.remove('collapsed');
+    body.style.maxHeight = body.scrollHeight + 200 + 'px';
+  } else {
+    // Collapse
+    var body = section.querySelector('.ss-body');
+    body.style.maxHeight = body.scrollHeight + 'px';
+    body.offsetHeight; // reflow
+    section.classList.add('collapsed');
+  }
+}
+
+// ── Demo sequence ───────────────────────────────────────────
+
+function runDemo() {
+  var delay = 0;
+  function at(ms) { delay += ms; return delay; }
+
+  // Pre-subsession chat
+  t(function() {
+    addMsg('agent', 'What kind of authentication fits your stack?');
+  }, at(300));
+
+  t(function() {
+    addMsg('user', 'JWT-based, with role tiers.');
+  }, at(800));
+
+  t(function() {
+    addMsg('agent', 'Good choice. I\'ll build the product design now — section by section.');
+  }, at(1000));
+
+  // Subsession enters
+  var ss;
+  t(function() {
+    ss = createSubsession('📋', 'Build Product Design');
+  }, at(600));
+
+  // Messages inside subsession
+  t(function() {
+    addSSMsg(ss, 'agent', 'Starting with the <strong>Goal</strong> section: Enable secure multi-user access with role-based permissions.');
+  }, at(800));
+
+  t(function() {
+    addSSMsg(ss, 'agent', 'Does this goal capture your intent?');
+  }, at(700));
+
+  t(function() {
+    addSSDecision(ss, 'Goal section approved');
+  }, at(1000));
+
+  t(function() {
+    addSSMsg(ss, 'agent', 'Adding <strong>User Stories</strong> — signup, login, admin management, viewer access.');
+  }, at(800));
+
+  t(function() {
+    addSSMsg(ss, 'agent', 'Adding <strong>Roles & Permissions</strong> matrix: Admin, User, Viewer.');
+  }, at(700));
+
+  t(function() {
+    addSSDecision(ss, 'Roles matrix approved');
+  }, at(900));
+
+  t(function() {
+    addSSMsg(ss, 'agent', 'Final sections: <strong>Success Criteria</strong> and <strong>Out of Scope</strong> for v1.');
+  }, at(700));
+
+  t(function() {
+    addSSMsg(ss, 'agent', 'Product design is complete. Approved!');
+  }, at(800));
+
+  // Finish subsession
+  t(function() {
+    finishSubsession(ss, 'approved',
+      '<div class="out-label">✓ Output</div>' +
+      '<div class="out-line"><strong>Artifact:</strong> product-design.md</div>' +
+      '<div class="out-line"><strong>Sections:</strong> Goal, User Stories, Roles & Permissions, Success Criteria, Scope</div>' +
+      '<div class="out-line"><strong>Decisions:</strong> JWT auth confirmed, 3-tier roles (Admin/User/Viewer)</div>'
+    );
+  }, at(600));
+
+  // Post-subsession messages
+  t(function() {
+    addMsg('agent', 'Now I\'ll generate spec diffs from the product design. Three files to review.');
+  }, at(2000));
+
+  t(function() {
+    addMsg('agent', 'First up: <strong>auth/README.md</strong> — the new module design spec.');
+  }, at(1000));
+}
+
+function resetDemo() {
+  timers.forEach(clearTimeout);
+  timers = [];
+  chatInner.innerHTML = '';
+  runDemo();
+}
+
+runDemo();
+</script>
+</body>
+</html>
