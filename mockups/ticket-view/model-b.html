@@ -1,0 +1,2291 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Model B — Inline Wizard Chat</title>
+<style>
+  :root {
+    --bg-base: #0e1117;
+    --bg-surface: #161b22;
+    --bg-elevated: #1c2129;
+    --bg-hover: #242b35;
+    --bg-inset: #0d1117;
+    --border: #2d333b;
+    --border-bright: #3d444d;
+    --text-primary: #e6edf3;
+    --text-secondary: #8b949e;
+    --text-muted: #656d76;
+    --accent: #58a6ff;
+    --accent-subtle: #1f3a5f;
+    --green: #3fb950;
+    --green-subtle: #1a3a2a;
+    --yellow: #d29922;
+    --yellow-subtle: #3d2e00;
+    --purple: #bc8cff;
+    --purple-subtle: #2a1f3d;
+    --red: #f85149;
+    --red-subtle: #3d1418;
+    --radius: 8px;
+    --radius-lg: 12px;
+    --mono: 'SF Mono', 'Cascadia Code', 'Consolas', monospace;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: var(--bg-base);
+    color: var(--text-primary);
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans', Helvetica, Arial, sans-serif;
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  /* ── Back link ───────────────────────────────── */
+  .back-link {
+    position: fixed;
+    top: 12px;
+    right: 16px;
+    z-index: 200;
+    font-size: 12px;
+    color: var(--text-muted);
+    text-decoration: none;
+    padding: 4px 10px;
+    border-radius: 4px;
+    background: var(--bg-elevated);
+    border: 1px solid var(--border);
+    transition: color 0.15s, border-color 0.15s;
+  }
+  .back-link:hover { color: var(--accent); border-color: var(--accent); }
+
+  /* ── Header ──────────────────────────────────── */
+  .header {
+    height: 52px;
+    min-height: 52px;
+    background: var(--bg-surface);
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    padding: 0 20px;
+    gap: 12px;
+    flex-shrink: 0;
+    z-index: 10;
+  }
+  .ticket-type {
+    font-size: 11px;
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-weight: 600;
+    background: var(--purple-subtle);
+    color: var(--purple);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+  }
+  .ticket-id {
+    font-size: 13px;
+    font-weight: 700;
+    font-family: var(--mono);
+    color: var(--accent);
+  }
+  .ticket-title {
+    font-size: 15px;
+    font-weight: 600;
+    color: var(--text-primary);
+  }
+  .header-spacer { flex: 1; }
+  .model-tag {
+    font-size: 10px;
+    font-weight: 600;
+    color: var(--accent);
+    background: var(--accent-subtle);
+    padding: 3px 8px;
+    border-radius: 100px;
+  }
+
+  /* ── Chat container (scrolling area) ─────────── */
+  .chat-scroll {
+    flex: 1;
+    overflow-y: auto;
+    padding: 0 0 16px 0;
+  }
+  .chat-scroll::-webkit-scrollbar { width: 6px; }
+  .chat-scroll::-webkit-scrollbar-track { background: transparent; }
+  .chat-scroll::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+  .chat-scroll::-webkit-scrollbar-thumb:hover { background: var(--border-bright); }
+
+  .chat-inner {
+    max-width: 780px;
+    margin: 0 auto;
+    padding: 0 24px;
+  }
+
+  /* ── Phase section headers ───────────────────── */
+  .phase-header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin: 28px 0 20px 0;
+    cursor: default;
+    user-select: none;
+  }
+  .phase-header.collapsible { cursor: pointer; }
+  .phase-header.collapsible:hover .phase-name { color: var(--accent); }
+
+  .phase-rule-left {
+    height: 2px;
+    width: 8px;
+    flex-shrink: 0;
+  }
+  .phase-name {
+    font-size: 13px;
+    font-weight: 700;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    white-space: nowrap;
+    transition: color 0.15s;
+  }
+  .phase-rule-right {
+    flex: 1;
+    height: 2px;
+  }
+  .phase-status {
+    font-size: 12px;
+    font-weight: 600;
+    white-space: nowrap;
+    padding: 3px 10px;
+    border-radius: 100px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .phase-collapse-icon {
+    font-size: 10px;
+    transition: transform 0.2s;
+    margin-left: 4px;
+    color: var(--text-muted);
+  }
+  .phase-header.collapsible .phase-collapse-icon { display: inline; }
+
+  /* Phase states */
+  .phase-header.done .phase-rule-left,
+  .phase-header.done .phase-rule-right { background: var(--green); opacity: 0.4; }
+  .phase-header.done .phase-name { color: var(--green); }
+  .phase-header.done .phase-status { background: var(--green-subtle); color: var(--green); }
+
+  .phase-header.active .phase-rule-left,
+  .phase-header.active .phase-rule-right { background: var(--yellow); opacity: 0.5; }
+  .phase-header.active .phase-name { color: var(--yellow); }
+  .phase-header.active .phase-status { background: var(--yellow-subtle); color: var(--yellow); }
+
+  .phase-header.locked .phase-rule-left,
+  .phase-header.locked .phase-rule-right { background: var(--text-muted); opacity: 0.2; }
+  .phase-header.locked .phase-name { color: var(--text-muted); opacity: 0.5; }
+  .phase-header.locked .phase-status { background: var(--bg-elevated); color: var(--text-muted); border: 1px solid var(--border); opacity: 0.5; }
+
+  /* Phase active dot */
+  .active-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--yellow);
+    animation: pulse 2s ease-in-out infinite;
+    flex-shrink: 0;
+  }
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }
+
+  /* Phase body */
+  .phase-body {
+    overflow: hidden;
+    transition: max-height 0.4s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.3s ease;
+    max-height: 5000px;
+    opacity: 1;
+  }
+  .phase-body.collapsed {
+    max-height: 0 !important;
+    opacity: 0;
+    margin: 0;
+  }
+
+  /* Locked phase body */
+  .phase-body.locked-body {
+    padding: 12px 0;
+  }
+  .locked-message {
+    font-size: 13px;
+    color: var(--text-muted);
+    opacity: 0.5;
+    font-style: italic;
+  }
+
+  /* ── Agent messages ──────────────────────────── */
+  .msg-agent {
+    margin-bottom: 16px;
+    animation: msgIn 0.3s ease;
+  }
+  @keyframes msgIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+  .msg-agent p {
+    font-size: 14px;
+    line-height: 1.7;
+    color: var(--text-secondary);
+  }
+  .msg-agent p code {
+    font-family: var(--mono);
+    font-size: 12px;
+    background: var(--bg-elevated);
+    padding: 2px 6px;
+    border-radius: 4px;
+    color: var(--accent);
+  }
+
+  /* ── User messages ───────────────────────────── */
+  .msg-user {
+    margin-bottom: 16px;
+    display: flex;
+    justify-content: flex-end;
+    animation: msgIn 0.3s ease;
+  }
+  .msg-user-bubble {
+    font-size: 14px;
+    line-height: 1.6;
+    color: var(--text-primary);
+    padding: 10px 16px;
+    background: var(--accent-subtle);
+    border: 1px solid rgba(88,166,255,0.25);
+    border-radius: var(--radius-lg) var(--radius-lg) 4px var(--radius-lg);
+    max-width: 70%;
+  }
+
+  /* ── Formalized description card ─────────────── */
+  .formalized-card {
+    margin: 16px 0;
+    background: var(--bg-surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    padding: 16px 20px;
+    animation: msgIn 0.3s ease;
+  }
+  .formalized-card .fc-row {
+    margin-bottom: 10px;
+  }
+  .formalized-card .fc-row:last-child { margin-bottom: 0; }
+  .fc-label {
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--text-muted);
+    margin-bottom: 4px;
+  }
+  .fc-value {
+    font-size: 13px;
+    line-height: 1.6;
+    color: var(--text-secondary);
+  }
+
+  /* ── Artifact cards ──────────────────────────── */
+  .artifact-card {
+    margin: 16px 0;
+    background: var(--bg-surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    overflow: hidden;
+    animation: msgIn 0.3s ease;
+    transition: border-color 0.2s;
+  }
+  .artifact-card.approved-card {
+    border-color: rgba(63,185,80,0.35);
+  }
+  .artifact-card-header {
+    display: flex;
+    align-items: center;
+    padding: 12px 16px;
+    gap: 10px;
+    background: var(--bg-elevated);
+    border-bottom: 1px solid var(--border);
+  }
+  .artifact-filename {
+    font-size: 13px;
+    font-weight: 600;
+    font-family: var(--mono);
+    color: var(--text-primary);
+  }
+  .artifact-op {
+    font-size: 10px;
+    padding: 2px 7px;
+    border-radius: 100px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+  }
+  .artifact-op.new { background: var(--green-subtle); color: var(--green); }
+  .artifact-op.mod { background: var(--yellow-subtle); color: var(--yellow); }
+  .artifact-stats {
+    font-size: 11px;
+    font-family: var(--mono);
+    color: var(--green);
+  }
+  .artifact-header-spacer { flex: 1; }
+  .artifact-actions {
+    display: flex;
+    gap: 6px;
+    align-items: center;
+  }
+  .review-btn, .approve-inline-btn {
+    padding: 5px 12px;
+    border-radius: 6px;
+    font-size: 11px;
+    font-weight: 600;
+    cursor: pointer;
+    border: none;
+    transition: all 0.15s;
+    white-space: nowrap;
+  }
+  .review-btn {
+    background: var(--bg-surface);
+    color: var(--text-secondary);
+    border: 1px solid var(--border-bright);
+  }
+  .review-btn:hover { border-color: var(--accent); color: var(--accent); }
+  .approve-inline-btn {
+    background: var(--green);
+    color: #fff;
+  }
+  .approve-inline-btn:hover { opacity: 0.85; }
+  .approve-inline-btn.is-approved {
+    background: var(--green-subtle);
+    color: var(--green);
+    cursor: default;
+    pointer-events: none;
+  }
+  .artifact-desc {
+    padding: 10px 16px;
+    font-size: 13px;
+    color: var(--text-secondary);
+    line-height: 1.5;
+  }
+  .artifact-approved-badge {
+    display: none;
+    align-items: center;
+    gap: 5px;
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--green);
+  }
+  .artifact-card.approved-card .artifact-approved-badge { display: flex; }
+
+  /* ── Inline diff expand ──────────────────────── */
+  .diff-expand {
+    max-height: 0;
+    overflow: hidden;
+    transition: max-height 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+    border-top: none;
+  }
+  .diff-expand.open {
+    max-height: 600px;
+    overflow-y: auto;
+    border-top: 1px solid var(--border);
+  }
+  .diff-expand::-webkit-scrollbar { width: 4px; }
+  .diff-expand::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+  .diff-hunk-header {
+    padding: 6px 16px 6px 56px;
+    background: var(--accent-subtle);
+    color: var(--accent);
+    font-family: var(--mono);
+    font-size: 11px;
+    font-weight: 600;
+    border-bottom: 1px solid var(--border);
+  }
+  .diff-line {
+    padding: 1px 16px 1px 56px;
+    font-family: var(--mono);
+    font-size: 12px;
+    line-height: 1.75;
+    white-space: pre;
+    position: relative;
+    min-height: 22px;
+  }
+  .diff-line .ln {
+    position: absolute;
+    left: 0;
+    width: 46px;
+    text-align: right;
+    padding-right: 10px;
+    color: var(--text-muted);
+    opacity: 0.4;
+    user-select: none;
+  }
+  .diff-line.add { background: rgba(63,185,80,0.08); color: var(--green); }
+  .diff-line.del { background: rgba(248,81,73,0.08); color: var(--red); }
+  .diff-line.ctx { color: var(--text-secondary); }
+
+  .diff-collapse-btn {
+    display: block;
+    width: 100%;
+    padding: 6px;
+    background: var(--bg-elevated);
+    border: none;
+    border-top: 1px solid var(--border);
+    color: var(--text-muted);
+    font-size: 11px;
+    cursor: pointer;
+    text-align: center;
+    transition: color 0.15s;
+  }
+  .diff-collapse-btn:hover { color: var(--accent); }
+
+  /* ── Decision cards ──────────────────────────── */
+  .decision-card {
+    margin: 16px 0;
+    background: var(--bg-surface);
+    border: 1px solid rgba(88,166,255,0.25);
+    border-left: 3px solid var(--accent);
+    border-radius: var(--radius-lg);
+    padding: 16px 20px;
+    animation: msgIn 0.3s ease;
+    transition: all 0.3s;
+  }
+  .decision-card.resolved {
+    border-color: rgba(63,185,80,0.25);
+    border-left-color: var(--green);
+    background: var(--green-subtle);
+    padding: 10px 16px;
+  }
+  .decision-label {
+    font-size: 10px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--accent);
+    margin-bottom: 8px;
+  }
+  .decision-card.resolved .decision-label { display: none; }
+  .decision-question {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text-primary);
+    margin-bottom: 12px;
+    line-height: 1.5;
+  }
+  .decision-card.resolved .decision-question {
+    font-size: 13px;
+    font-weight: 500;
+    margin-bottom: 0;
+    color: var(--green);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .decision-options {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    margin-bottom: 8px;
+  }
+  .decision-card.resolved .decision-options { display: none; }
+  .dec-option {
+    padding: 8px 16px;
+    border-radius: var(--radius);
+    font-size: 12px;
+    font-weight: 500;
+    cursor: pointer;
+    border: 1px solid var(--border-bright);
+    background: var(--bg-elevated);
+    color: var(--text-primary);
+    transition: all 0.15s;
+  }
+  .dec-option:hover { border-color: var(--accent); background: var(--accent-subtle); color: var(--accent); }
+  .dec-option.recommended {
+    border-color: rgba(88,166,255,0.4);
+    background: var(--accent-subtle);
+    color: var(--accent);
+  }
+  .dec-option.recommended::after { content: ' \2605'; font-size: 10px; }
+  .decision-hint {
+    font-size: 12px;
+    color: var(--text-muted);
+    line-height: 1.5;
+  }
+  .decision-card.resolved .decision-hint { display: none; }
+
+  /* ── Progress bar ────────────────────────────── */
+  .progress-bar-container {
+    margin: 16px 0;
+    background: var(--bg-surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    padding: 14px 20px;
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    animation: msgIn 0.3s ease;
+  }
+  .progress-label {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text-secondary);
+    white-space: nowrap;
+    min-width: 130px;
+  }
+  .progress-track {
+    flex: 1;
+    height: 6px;
+    background: var(--bg-elevated);
+    border-radius: 3px;
+    overflow: hidden;
+  }
+  .progress-fill {
+    height: 100%;
+    border-radius: 3px;
+    transition: width 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+  .progress-fill.green { background: var(--green); }
+  .progress-fill.yellow { background: var(--yellow); }
+  .progress-fill.accent { background: var(--accent); }
+  .progress-text {
+    font-size: 12px;
+    font-family: var(--mono);
+    color: var(--text-muted);
+    white-space: nowrap;
+  }
+  .approve-all-btn {
+    padding: 6px 14px;
+    border-radius: 6px;
+    font-size: 11px;
+    font-weight: 600;
+    cursor: pointer;
+    border: 1px solid rgba(63,185,80,0.4);
+    background: var(--green-subtle);
+    color: var(--green);
+    white-space: nowrap;
+    transition: all 0.15s;
+  }
+  .approve-all-btn:hover { background: var(--green); color: #fff; border-color: var(--green); }
+  .approve-all-btn:disabled { opacity: 0.4; cursor: default; pointer-events: none; }
+
+  /* ── Plan step cards ─────────────────────────── */
+  .plan-step {
+    margin: 10px 0;
+    background: var(--bg-surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    padding: 14px 18px;
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    animation: msgIn 0.3s ease;
+    transition: border-color 0.2s, background 0.2s;
+  }
+  .plan-step.step-done { border-color: rgba(63,185,80,0.3); }
+  .plan-step.step-running { border-color: rgba(210,153,34,0.3); }
+  .plan-step-num {
+    width: 30px;
+    height: 30px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 12px;
+    font-weight: 700;
+    flex-shrink: 0;
+  }
+  .plan-step-num.pending-num { background: var(--bg-elevated); color: var(--text-muted); border: 1px solid var(--border); }
+  .plan-step-num.running-num { background: var(--yellow-subtle); color: var(--yellow); animation: pulse 2s ease-in-out infinite; }
+  .plan-step-num.done-num { background: var(--green-subtle); color: var(--green); }
+  .plan-step-info { flex: 1; }
+  .plan-step-title {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text-primary);
+    margin-bottom: 2px;
+  }
+  .plan-step-desc {
+    font-size: 12px;
+    color: var(--text-muted);
+    line-height: 1.5;
+  }
+  .plan-step-desc code {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--accent);
+    background: var(--accent-subtle);
+    padding: 1px 5px;
+    border-radius: 3px;
+  }
+  .plan-step-actions { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+  .exec-step-btn {
+    padding: 5px 14px;
+    border-radius: 6px;
+    font-size: 11px;
+    font-weight: 600;
+    cursor: pointer;
+    border: 1px solid var(--border-bright);
+    background: var(--bg-elevated);
+    color: var(--text-secondary);
+    transition: all 0.15s;
+  }
+  .exec-step-btn:hover { border-color: var(--accent); color: var(--accent); background: var(--accent-subtle); }
+  .exec-step-btn:disabled { opacity: 0.35; cursor: default; pointer-events: none; }
+  .step-status-badge {
+    font-size: 11px;
+    font-weight: 500;
+    padding: 3px 10px;
+    border-radius: 100px;
+    white-space: nowrap;
+  }
+  .step-status-badge.badge-pending { background: var(--bg-elevated); color: var(--text-muted); border: 1px solid var(--border); }
+  .step-status-badge.badge-running { background: var(--yellow-subtle); color: var(--yellow); }
+  .step-status-badge.badge-done { background: var(--green-subtle); color: var(--green); }
+
+  .execute-all-wrap {
+    margin: 16px 0;
+    display: flex;
+    justify-content: flex-end;
+  }
+  .execute-all-btn {
+    padding: 8px 22px;
+    border-radius: var(--radius);
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    border: none;
+    background: var(--accent);
+    color: #fff;
+    transition: all 0.2s;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .execute-all-btn:hover { opacity: 0.85; }
+  .execute-all-btn:disabled { opacity: 0.4; cursor: default; }
+
+  /* ── Streaming dots ──────────────────────────── */
+  .streaming-dots {
+    display: inline-flex;
+    gap: 3px;
+    vertical-align: middle;
+    margin-left: 4px;
+  }
+  .streaming-dots span {
+    width: 4px;
+    height: 4px;
+    border-radius: 50%;
+    background: var(--accent);
+    animation: dotBounce 1.4s ease-in-out infinite;
+  }
+  .streaming-dots span:nth-child(2) { animation-delay: 0.2s; }
+  .streaming-dots span:nth-child(3) { animation-delay: 0.4s; }
+  @keyframes dotBounce { 0%,80%,100%{opacity:0.3;transform:scale(0.8)} 40%{opacity:1;transform:scale(1)} }
+
+  /* ── Chat input bar (sticky bottom) ──────────── */
+  .input-bar {
+    flex-shrink: 0;
+    background: var(--bg-surface);
+    border-top: 1px solid var(--border);
+    padding: 12px 20px;
+  }
+  .input-bar-inner {
+    max-width: 780px;
+    margin: 0 auto;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .input-wrap {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    background: var(--bg-elevated);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 0 14px;
+    height: 42px;
+    transition: border-color 0.15s;
+  }
+  .input-wrap:focus-within { border-color: var(--accent); }
+  .input-wrap input {
+    flex: 1;
+    background: none;
+    border: none;
+    color: var(--text-primary);
+    font-size: 14px;
+    font-family: inherit;
+    outline: none;
+    height: 100%;
+  }
+  .input-wrap input::placeholder { color: var(--text-muted); }
+  .send-btn {
+    width: 42px;
+    height: 42px;
+    border-radius: var(--radius);
+    background: var(--accent);
+    border: none;
+    color: white;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    transition: opacity 0.15s;
+  }
+  .send-btn:hover { opacity: 0.85; }
+  .send-btn svg { width: 14px; height: 14px; }
+
+  /* ── Toast ─────────────────────────────────── */
+  .toast {
+    position: fixed;
+    bottom: 80px;
+    left: 50%;
+    transform: translateX(-50%) translateY(20px);
+    background: var(--bg-elevated);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 10px 20px;
+    font-size: 13px;
+    color: var(--text-primary);
+    z-index: 300;
+    transition: transform 0.3s ease, opacity 0.3s ease;
+    opacity: 0;
+    pointer-events: none;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.5);
+    white-space: nowrap;
+  }
+  .toast.show { transform: translateX(-50%) translateY(0); opacity: 1; }
+  .toast .t-icon { font-size: 15px; }
+  .toast.success { border-color: var(--green); }
+  .toast.success .t-icon { color: var(--green); }
+  .toast.info { border-color: var(--accent); }
+  .toast.info .t-icon { color: var(--accent); }
+
+  /* ── Status bar (sticky, below header) ───── */
+  .status-bar {
+    height: 40px;
+    min-height: 40px;
+    background: var(--bg-surface);
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    padding: 0 20px;
+    gap: 14px;
+    flex-shrink: 0;
+    position: sticky;
+    top: 0;
+    z-index: 9;
+    font-size: 12px;
+  }
+  .sb-phases {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .sb-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 3px 10px;
+    border-radius: 100px;
+    font-size: 11px;
+    font-weight: 600;
+    white-space: nowrap;
+    transition: all 0.3s;
+  }
+  .sb-pill.sb-done {
+    background: var(--green-subtle);
+    color: var(--green);
+  }
+  .sb-pill.sb-active {
+    background: var(--yellow-subtle);
+    color: var(--yellow);
+  }
+  .sb-pill.sb-locked {
+    background: var(--bg-elevated);
+    color: var(--text-muted);
+    opacity: 0.5;
+  }
+  .sb-pill .sb-icon {
+    font-size: 10px;
+  }
+  .sb-divider {
+    width: 1px;
+    height: 18px;
+    background: var(--border-bright);
+    flex-shrink: 0;
+  }
+  .sb-artifacts {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .sb-artifact-item {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 11px;
+    font-family: var(--mono);
+    color: var(--text-secondary);
+    white-space: nowrap;
+  }
+  .sb-dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    flex-shrink: 0;
+    transition: background 0.3s;
+  }
+  .sb-dot.dot-approved { background: var(--green); }
+  .sb-dot.dot-pending { background: var(--yellow); }
+  .sb-dot.dot-hidden { background: var(--text-muted); opacity: 0.3; }
+  .sb-title {
+    font-size: 12px;
+    color: var(--text-muted);
+    font-style: italic;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    min-width: 0;
+    flex: 1;
+  }
+
+  /* ── Changed files (shown after step completion) ── */
+  .changed-files {
+    margin-top: 8px;
+    padding-left: 44px;
+  }
+  .changed-files-toggle {
+    font-size: 12px;
+    color: var(--text-muted);
+    cursor: pointer;
+    background: none;
+    border: none;
+    font-family: inherit;
+    padding: 2px 0;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    transition: color 0.15s;
+  }
+  .changed-files-toggle:hover { color: var(--accent); }
+  .changed-files-toggle .cf-arrow {
+    font-size: 9px;
+    transition: transform 0.2s;
+    display: inline-block;
+  }
+  .changed-files-toggle .cf-arrow.open { transform: rotate(90deg); }
+  .changed-files-list {
+    margin-top: 4px;
+    padding-left: 8px;
+    overflow: hidden;
+    max-height: 0;
+    transition: max-height 0.3s ease;
+  }
+  .changed-files-list.open {
+    max-height: 500px;
+  }
+  .changed-file-item {
+    font-family: var(--mono);
+    font-size: 11px;
+    line-height: 1.8;
+    color: var(--text-secondary);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .changed-file-item .cf-op {
+    font-weight: 700;
+    width: 12px;
+    text-align: center;
+    flex-shrink: 0;
+  }
+  .changed-file-item .cf-op.cf-add { color: var(--green); }
+  .changed-file-item .cf-op.cf-mod { color: var(--yellow); }
+
+  /* ── Artifact sidebar/drawer ──────────────── */
+  .artifact-sidebar-toggle {
+    position: fixed;
+    left: 0;
+    top: 50%;
+    transform: translateY(-50%);
+    z-index: 100;
+    background: var(--bg-elevated);
+    border: 1px solid var(--border);
+    border-left: none;
+    border-radius: 0 8px 8px 0;
+    padding: 10px 8px;
+    cursor: pointer;
+    color: var(--text-secondary);
+    font-size: 11px;
+    font-weight: 600;
+    writing-mode: vertical-rl;
+    text-orientation: mixed;
+    letter-spacing: 0.08em;
+    transition: all 0.2s;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .artifact-sidebar-toggle:hover {
+    background: var(--accent-subtle);
+    color: var(--accent);
+    border-color: var(--accent);
+  }
+  .artifact-sidebar-toggle .sidebar-badge {
+    writing-mode: horizontal-tb;
+    background: var(--yellow-subtle);
+    color: var(--yellow);
+    font-size: 10px;
+    font-weight: 700;
+    padding: 2px 6px;
+    border-radius: 100px;
+    line-height: 1;
+  }
+  .artifact-sidebar-toggle .sidebar-badge.all-approved {
+    background: var(--green-subtle);
+    color: var(--green);
+  }
+
+  .artifact-sidebar {
+    position: fixed;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    width: 240px;
+    background: var(--bg-surface);
+    border-right: 1px solid var(--border);
+    z-index: 150;
+    transform: translateX(-100%);
+    transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    display: flex;
+    flex-direction: column;
+    box-shadow: 4px 0 24px rgba(0,0,0,0.3);
+  }
+  .artifact-sidebar.open {
+    transform: translateX(0);
+  }
+  .artifact-sidebar-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 14px 16px;
+    border-bottom: 1px solid var(--border);
+    flex-shrink: 0;
+  }
+  .artifact-sidebar-header h3 {
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--text-primary);
+    letter-spacing: 0.04em;
+  }
+  .artifact-sidebar-close {
+    background: none;
+    border: none;
+    color: var(--text-muted);
+    font-size: 16px;
+    cursor: pointer;
+    padding: 2px 6px;
+    border-radius: 4px;
+    transition: color 0.15s, background 0.15s;
+  }
+  .artifact-sidebar-close:hover {
+    color: var(--text-primary);
+    background: var(--bg-hover);
+  }
+  .artifact-sidebar-body {
+    flex: 1;
+    overflow-y: auto;
+    padding: 12px 0;
+  }
+  .artifact-sidebar-body::-webkit-scrollbar { width: 4px; }
+  .artifact-sidebar-body::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+  .sidebar-phase-label {
+    font-size: 10px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--text-muted);
+    padding: 8px 16px 4px;
+  }
+  .sidebar-artifact-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 16px;
+    cursor: pointer;
+    transition: background 0.15s;
+    border-left: 3px solid transparent;
+  }
+  .sidebar-artifact-item:hover {
+    background: var(--bg-hover);
+  }
+  .sidebar-artifact-item.sa-approved {
+    border-left-color: var(--green);
+  }
+  .sidebar-artifact-item.sa-pending {
+    border-left-color: var(--yellow);
+  }
+  .sidebar-artifact-item.sa-hidden {
+    opacity: 0.4;
+    pointer-events: none;
+  }
+  .sidebar-artifact-name {
+    font-size: 12px;
+    font-family: var(--mono);
+    color: var(--text-secondary);
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .sidebar-artifact-status {
+    font-size: 10px;
+    font-weight: 600;
+    padding: 2px 7px;
+    border-radius: 100px;
+    white-space: nowrap;
+    flex-shrink: 0;
+  }
+  .sidebar-artifact-status.sa-badge-approved {
+    background: var(--green-subtle);
+    color: var(--green);
+  }
+  .sidebar-artifact-status.sa-badge-pending {
+    background: var(--yellow-subtle);
+    color: var(--yellow);
+  }
+  .sidebar-artifact-status.sa-badge-hidden {
+    background: var(--bg-elevated);
+    color: var(--text-muted);
+  }
+  .sidebar-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.4);
+    z-index: 140;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.3s;
+  }
+  .sidebar-overlay.visible {
+    opacity: 1;
+    pointer-events: auto;
+  }
+
+  /* ── Enhanced artifact cards ─────────────── */
+  .artifact-card {
+    border-left: 4px solid var(--text-muted);
+  }
+  .artifact-card.approved-card {
+    border-left-color: var(--green);
+  }
+  .artifact-card.pending-card {
+    border-left-color: var(--yellow);
+  }
+  .artifact-card-header {
+    padding: 14px 18px;
+  }
+  .artifact-diff-preview {
+    padding: 0 18px 12px;
+    font-family: var(--mono);
+    font-size: 11px;
+    line-height: 1.6;
+    color: var(--text-muted);
+    border-top: 1px solid var(--border);
+    margin-top: 0;
+    padding-top: 8px;
+    background: var(--bg-inset);
+    max-height: 80px;
+    overflow: hidden;
+    position: relative;
+    cursor: pointer;
+    transition: background 0.15s;
+  }
+  .artifact-diff-preview:hover {
+    background: var(--bg-elevated);
+  }
+  .artifact-diff-preview .preview-line {
+    white-space: pre;
+    line-height: 1.6;
+  }
+  .artifact-diff-preview .preview-line.p-add {
+    color: var(--green);
+  }
+  .artifact-diff-preview .preview-line.p-del {
+    color: var(--red);
+  }
+  .artifact-diff-preview .preview-line.p-ctx {
+    color: var(--text-muted);
+    opacity: 0.5;
+  }
+  .artifact-diff-preview .preview-fade {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 30px;
+    background: linear-gradient(transparent, var(--bg-inset));
+    pointer-events: none;
+  }
+  .artifact-diff-preview:hover .preview-fade {
+    background: linear-gradient(transparent, var(--bg-elevated));
+  }
+  .artifact-diff-preview .preview-click-hint {
+    position: absolute;
+    bottom: 4px;
+    right: 12px;
+    font-size: 10px;
+    color: var(--accent);
+    opacity: 0;
+    transition: opacity 0.15s;
+  }
+  .artifact-diff-preview:hover .preview-click-hint {
+    opacity: 1;
+  }
+
+  /* ── Code diffs for plan step changed files ── */
+  .changed-file-item {
+    cursor: pointer;
+    padding: 2px 4px;
+    border-radius: 4px;
+    transition: background 0.15s;
+  }
+  .changed-file-item:hover {
+    background: var(--bg-hover);
+  }
+  .changed-file-item .cf-expand-hint {
+    font-size: 10px;
+    color: var(--text-muted);
+    margin-left: auto;
+    opacity: 0;
+    transition: opacity 0.15s;
+  }
+  .changed-file-item:hover .cf-expand-hint {
+    opacity: 1;
+  }
+  .file-code-diff {
+    margin: 4px 0 8px 18px;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    overflow: hidden;
+    animation: msgIn 0.3s ease;
+  }
+  .file-code-diff .diff-hunk-header {
+    padding: 4px 12px 4px 40px;
+    font-size: 10px;
+  }
+  .file-code-diff .diff-line {
+    padding: 0px 12px 0px 40px;
+    font-size: 11px;
+    line-height: 1.7;
+    min-height: 19px;
+  }
+  .file-code-diff .diff-line .ln {
+    width: 32px;
+  }
+
+  /* ── Verification section ────────────────── */
+  .verify-section {
+    margin: 20px 0;
+    animation: msgIn 0.3s ease;
+  }
+  .verify-header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 12px;
+  }
+  .verify-header .vr-left,
+  .verify-header .vr-right {
+    height: 2px;
+    background: var(--purple);
+    opacity: 0.4;
+  }
+  .verify-header .vr-left { width: 8px; flex-shrink: 0; }
+  .verify-header .vr-right { flex: 1; }
+  .verify-header .vr-label {
+    font-size: 13px;
+    font-weight: 700;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--purple);
+    white-space: nowrap;
+  }
+  .verify-header .vr-optional {
+    font-size: 11px;
+    font-weight: 400;
+    color: var(--text-muted);
+    font-style: italic;
+    letter-spacing: normal;
+    text-transform: none;
+  }
+  .verify-card {
+    background: var(--bg-surface);
+    border: 1px solid var(--border);
+    border-left: 3px solid var(--purple);
+    border-radius: var(--radius-lg);
+    padding: 16px 20px;
+    transition: all 0.3s;
+  }
+  .verify-card.verify-done {
+    border-left-color: var(--green);
+    border-color: rgba(63,185,80,0.3);
+  }
+  .verify-card-inner {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+  .verify-btn {
+    padding: 8px 18px;
+    border-radius: var(--radius);
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    border: 1px solid var(--purple);
+    background: var(--purple-subtle);
+    color: var(--purple);
+    transition: all 0.15s;
+    white-space: nowrap;
+  }
+  .verify-btn:hover {
+    background: var(--purple);
+    color: #fff;
+  }
+  .verify-desc {
+    font-size: 13px;
+    color: var(--text-secondary);
+    line-height: 1.5;
+  }
+  .verify-running {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 13px;
+    color: var(--purple);
+    font-weight: 500;
+  }
+  .verify-result {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 13px;
+    color: var(--green);
+    font-weight: 600;
+  }
+
+  /* ── Misc ──────────────────────────────────── */
+  .resolved-marker {
+    color: var(--green);
+    font-weight: 600;
+  }
+  .section-gap { height: 4px; }
+</style>
+</head>
+<body>
+
+<a href="index.html" class="back-link">&larr; All Models</a>
+
+<!-- ── Header ─────────────────────────────── -->
+<div class="header">
+  <span class="ticket-type">Feature</span>
+  <span class="ticket-id">AUTH-42</span>
+  <span class="ticket-title">Add user authentication</span>
+  <div class="header-spacer"></div>
+  <span class="model-tag">Model B: Inline Wizard Chat</span>
+</div>
+
+<!-- ── Status bar ─────────────────────────── -->
+<div class="status-bar" id="statusBar">
+  <!-- Populated by renderStatusBar() -->
+</div>
+
+<!-- ── Scrolling chat area ────────────────── -->
+<div class="chat-scroll" id="chatScroll">
+  <!-- Sharing info banner -->
+  <div style="max-width:780px; margin:16px auto 0; padding:0 24px;">
+    <div style="display:flex; align-items:center; gap:8px; padding:8px 14px; background:var(--accent-subtle); border:1px solid rgba(88,166,255,0.2); border-radius:var(--radius); font-size:12px; color:var(--text-secondary); line-height:1.5;">
+      <span style="font-size:14px; flex-shrink:0;">&#128274;</span>
+      <span>Artifacts in this ticket are <strong style="color:var(--text-primary);">shareable</strong>. Session conversation is <strong style="color:var(--text-primary);">private</strong>.</span>
+    </div>
+  </div>
+  <div class="chat-inner" id="chatInner">
+    <!-- Content injected by JS -->
+  </div>
+</div>
+
+<!-- ── Input bar ──────────────────────────── -->
+<div class="input-bar">
+  <div class="input-bar-inner">
+    <div class="input-wrap">
+      <input type="text" id="chatInput" placeholder="Type a message..." onkeydown="if(event.key==='Enter')sendMessage()">
+    </div>
+    <button class="send-btn" onclick="sendMessage()">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+    </button>
+  </div>
+</div>
+
+<!-- Toast -->
+<div class="toast" id="toast"><span class="t-icon"></span><span class="t-msg"></span></div>
+
+<script>
+// ═══════════════════════════════════════════════════════════════════════
+// State
+// ═══════════════════════════════════════════════════════════════════════
+const state = {
+  phases: {
+    describe: 'done',
+    specify: 'active',
+    plan: 'locked',
+  },
+  collapsed: { describe: false },
+  approved: new Set(),
+  diffOpen: {},
+  decisionResolved: false,
+  sidebarOpen: false,
+  fileDiffOpen: {},        // key: "stepId-fileIndex"
+  verifyState: 'idle',    // idle | running | done
+  planSteps: [
+    { id: 1, title: 'Create auth module skeleton', desc: 'Set up <code>models.py</code>, <code>service.py</code>, <code>storage.py</code>, <code>middleware.py</code>.', specs: 'auth/README.md', status: 'pending',
+      changedFiles: [
+        { op: '+', path: 'backend/app/auth/__init__.py' },
+        { op: '+', path: 'backend/app/auth/models.py' },
+        { op: '+', path: 'backend/app/auth/service.py' },
+        { op: '+', path: 'backend/app/auth/storage.py' },
+        { op: '+', path: 'backend/app/auth/middleware.py' },
+      ] },
+    { id: 2, title: 'Implement user storage', desc: 'SQLite tables via <code>aiosqlite</code>. Password hashing with bcrypt.', specs: 'auth/README.md, core/README.md', status: 'pending',
+      changedFiles: [
+        { op: '~', path: 'backend/app/auth/storage.py' },
+        { op: '~', path: 'backend/app/core/server_store.py' },
+        { op: '+', path: 'backend/tests/test_auth_storage.py' },
+      ] },
+    { id: 3, title: 'Implement JWT token service', desc: 'Token generation, validation, refresh. Compatible with <code>bns_</code> tokens.', specs: 'auth/README.md', status: 'pending',
+      changedFiles: [
+        { op: '~', path: 'backend/app/auth/service.py' },
+        { op: '+', path: 'backend/app/auth/tokens.py' },
+        { op: '+', path: 'backend/tests/test_auth_tokens.py' },
+      ] },
+    { id: 4, title: 'Add RBAC middleware', desc: 'Role-based access control. <code>@require_role("admin")</code> decorator.', specs: 'auth/README.md, DESIGN_DOC.md', status: 'pending',
+      changedFiles: [
+        { op: '~', path: 'backend/app/auth/middleware.py' },
+        { op: '+', path: 'backend/app/auth/decorators.py' },
+        { op: '~', path: 'backend/app/api/routers/user.py' },
+        { op: '+', path: 'backend/tests/test_auth_rbac.py' },
+      ] },
+    { id: 5, title: 'Frontend login flow + route guards', desc: 'Login/signup pages, token storage, Zustand auth store, route guards.', specs: 'DESIGN_DOC.md', status: 'pending',
+      changedFiles: [
+        { op: '+', path: 'frontend/src/components/LoginPage.tsx' },
+        { op: '+', path: 'frontend/src/components/SignupPage.tsx' },
+        { op: '+', path: 'frontend/src/store/authStore.ts' },
+        { op: '+', path: 'frontend/src/hooks/useRequireAuth.ts' },
+        { op: '~', path: 'frontend/src/App.tsx' },
+      ] },
+  ],
+  planVisible: false,
+  changedFilesOpen: {},
+  _toastTimer: null,
+};
+
+const SPEC_DIFFS = ['auth-readme', 'design-doc', 'core-readme'];
+
+// Diff data for each artifact
+const diffData = {
+  'auth-readme': {
+    filename: 'auth/README.md', op: 'NEW', opClass: 'new', stats: '+47 lines',
+    desc: 'New module spec for authentication. Covers purpose, architecture, data model, and dependencies.',
+    lines: [
+      { type: 'hunk', text: '@@ auth/README.md -- New File @@' },
+      { type: 'add', ln: 1, text: '# Auth Module' },
+      { type: 'add', ln: 2, text: '' },
+      { type: 'add', ln: 3, text: '## Purpose' },
+      { type: 'add', ln: 4, text: 'User authentication and authorization for Bonsai.' },
+      { type: 'add', ln: 5, text: 'Handles signup, login, token management, RBAC.' },
+      { type: 'add', ln: 6, text: '' },
+      { type: 'add', ln: 7, text: '## Auth Strategy' },
+      { type: 'add', ln: 8, text: 'JWT tokens with refresh rotation.' },
+      { type: 'add', ln: 9, text: 'Compatible with existing bns_ token flow.' },
+      { type: 'add', ln: 10, text: '' },
+      { type: 'add', ln: 11, text: '## Data Model' },
+      { type: 'add', ln: 12, text: '- users table: id, email, password_hash, role, created_at' },
+      { type: 'add', ln: 13, text: '- sessions table: id, user_id, token, expires_at' },
+      { type: 'add', ln: 14, text: '' },
+      { type: 'add', ln: 15, text: '## Public API' },
+      { type: 'add', ln: 16, text: '- signup(email, password) -> User' },
+      { type: 'add', ln: 17, text: '- login(email, password) -> TokenPair' },
+      { type: 'add', ln: 18, text: '- refresh(token) -> TokenPair' },
+      { type: 'add', ln: 19, text: '- validate(token) -> User | None' },
+      { type: 'add', ln: 20, text: '' },
+      { type: 'add', ln: 21, text: '## Dependencies' },
+      { type: 'add', ln: 22, text: '- core/server_store.py (SQLite access)' },
+      { type: 'add', ln: 23, text: '- PyJWT for token handling' },
+      { type: 'add', ln: 24, text: '- bcrypt for password hashing' },
+    ],
+  },
+  'design-doc': {
+    filename: 'DESIGN_DOC.md', op: 'MOD', opClass: 'mod', stats: '+12 -2',
+    desc: 'Added auth module to architecture overview.',
+    lines: [
+      { type: 'hunk', text: '@@ -42,6 +42,16 @@ Architecture Overview @@' },
+      { type: 'ctx', ln: 42, text: '## Security' },
+      { type: 'ctx', ln: 43, text: '' },
+      { type: 'del', ln: 44, text: 'Authentication: bns_ tokens (static)' },
+      { type: 'del', ln: 45, text: 'Authorization: none' },
+      { type: 'add', ln: 44, text: '### Authentication' },
+      { type: 'add', ln: 45, text: 'JWT-based with refresh token rotation.' },
+      { type: 'add', ln: 46, text: 'Backward-compatible with bns_ static tokens.' },
+      { type: 'add', ln: 47, text: '' },
+      { type: 'add', ln: 48, text: '### Authorization' },
+      { type: 'add', ln: 49, text: 'Role-based access control (RBAC):' },
+      { type: 'add', ln: 50, text: '- admin: full access' },
+      { type: 'add', ln: 51, text: '- user: read/write own resources' },
+      { type: 'add', ln: 52, text: '' },
+      { type: 'add', ln: 53, text: '### Session Management' },
+      { type: 'add', ln: 54, text: 'Token refresh via /api/auth/refresh endpoint.' },
+      { type: 'add', ln: 55, text: '15min access token, 7d refresh token.' },
+      { type: 'ctx', ln: 56, text: '' },
+      { type: 'ctx', ln: 57, text: '## Data Storage' },
+    ],
+  },
+  'core-readme': {
+    filename: 'core/README.md', op: 'MOD', opClass: 'mod', stats: '+8 -1',
+    desc: 'Updated dependencies section for auth consumer.',
+    lines: [
+      { type: 'hunk', text: '@@ -18,3 +18,10 @@ Core Module @@' },
+      { type: 'ctx', ln: 18, text: '## server_store.py' },
+      { type: 'ctx', ln: 19, text: 'SQLite persistence via aiosqlite.' },
+      { type: 'del', ln: 20, text: 'Tables: projects, specs, sessions' },
+      { type: 'add', ln: 20, text: 'Tables: projects, specs, sessions, users, auth_sessions' },
+      { type: 'add', ln: 21, text: '' },
+      { type: 'add', ln: 22, text: '### Auth Integration' },
+      { type: 'add', ln: 23, text: '- users table managed by auth module' },
+      { type: 'add', ln: 24, text: '- auth_sessions for refresh tokens' },
+      { type: 'add', ln: 25, text: '- Migration: add_auth_tables()' },
+      { type: 'add', ln: 26, text: '- Backward compat: bns_ tokens still work' },
+      { type: 'add', ln: 27, text: '  via legacy_token_check() fallback' },
+    ],
+  },
+};
+
+// Mock code diffs for plan step changed files
+const fileDiffData = {
+  // Step 1 files
+  '1-0': { hunk: '@@ backend/app/auth/__init__.py -- New File @@', lines: [
+    { type: 'add', ln: 1, text: '"""Authentication module for Bonsai."""' },
+    { type: 'add', ln: 2, text: 'from __future__ import annotations' },
+    { type: 'add', ln: 3, text: '' },
+    { type: 'add', ln: 4, text: 'from .service import AuthService' },
+    { type: 'add', ln: 5, text: 'from .models import User, TokenPair' },
+    { type: 'add', ln: 6, text: '' },
+    { type: 'add', ln: 7, text: '__all__ = ["AuthService", "User", "TokenPair"]' },
+  ]},
+  '1-1': { hunk: '@@ backend/app/auth/models.py -- New File @@', lines: [
+    { type: 'add', ln: 1,  text: '"""Auth data models."""' },
+    { type: 'add', ln: 2,  text: 'from __future__ import annotations' },
+    { type: 'add', ln: 3,  text: '' },
+    { type: 'add', ln: 4,  text: 'from dataclasses import dataclass, field' },
+    { type: 'add', ln: 5,  text: 'from datetime import datetime' },
+    { type: 'add', ln: 6,  text: '' },
+    { type: 'add', ln: 7,  text: '@dataclass' },
+    { type: 'add', ln: 8,  text: 'class User:' },
+    { type: 'add', ln: 9,  text: '    id: str' },
+    { type: 'add', ln: 10, text: '    email: str' },
+    { type: 'add', ln: 11, text: '    password_hash: str' },
+    { type: 'add', ln: 12, text: '    role: str = "user"' },
+    { type: 'add', ln: 13, text: '    created_at: datetime = field(default_factory=datetime.utcnow)' },
+    { type: 'add', ln: 14, text: '' },
+    { type: 'add', ln: 15, text: '@dataclass' },
+    { type: 'add', ln: 16, text: 'class TokenPair:' },
+    { type: 'add', ln: 17, text: '    access_token: str' },
+    { type: 'add', ln: 18, text: '    refresh_token: str' },
+    { type: 'add', ln: 19, text: '    expires_in: int = 900  # 15 min' },
+  ]},
+  '1-2': { hunk: '@@ backend/app/auth/service.py -- New File @@', lines: [
+    { type: 'add', ln: 1,  text: '"""Auth service: signup, login, token management."""' },
+    { type: 'add', ln: 2,  text: 'from __future__ import annotations' },
+    { type: 'add', ln: 3,  text: '' },
+    { type: 'add', ln: 4,  text: 'import logging' },
+    { type: 'add', ln: 5,  text: 'from .models import User, TokenPair' },
+    { type: 'add', ln: 6,  text: 'from .storage import AuthStorage' },
+    { type: 'add', ln: 7,  text: '' },
+    { type: 'add', ln: 8,  text: 'logger = logging.getLogger(__name__)' },
+    { type: 'add', ln: 9,  text: '' },
+    { type: 'add', ln: 10, text: 'class AuthService:' },
+    { type: 'add', ln: 11, text: '    """Handles authentication logic."""' },
+    { type: 'add', ln: 12, text: '' },
+    { type: 'add', ln: 13, text: '    def __init__(self, storage: AuthStorage) -> None:' },
+    { type: 'add', ln: 14, text: '        self._storage = storage' },
+  ]},
+  '1-3': { hunk: '@@ backend/app/auth/storage.py -- New File @@', lines: [
+    { type: 'add', ln: 1,  text: '"""Auth SQLite storage layer."""' },
+    { type: 'add', ln: 2,  text: 'from __future__ import annotations' },
+    { type: 'add', ln: 3,  text: '' },
+    { type: 'add', ln: 4,  text: 'import aiosqlite' },
+    { type: 'add', ln: 5,  text: '' },
+    { type: 'add', ln: 6,  text: 'class AuthStorage:' },
+    { type: 'add', ln: 7,  text: '    """SQLite persistence for auth data."""' },
+    { type: 'add', ln: 8,  text: '' },
+    { type: 'add', ln: 9,  text: '    async def init_tables(self, db: aiosqlite.Connection) -> None:' },
+    { type: 'add', ln: 10, text: '        await db.execute("""' },
+    { type: 'add', ln: 11, text: '            CREATE TABLE IF NOT EXISTS users (' },
+    { type: 'add', ln: 12, text: '                id TEXT PRIMARY KEY,' },
+    { type: 'add', ln: 13, text: '                email TEXT UNIQUE NOT NULL,' },
+    { type: 'add', ln: 14, text: '                password_hash TEXT NOT NULL,' },
+    { type: 'add', ln: 15, text: '                role TEXT DEFAULT \'user\',' },
+    { type: 'add', ln: 16, text: '                created_at TEXT' },
+    { type: 'add', ln: 17, text: '            )' },
+    { type: 'add', ln: 18, text: '        """)' },
+  ]},
+  '1-4': { hunk: '@@ backend/app/auth/middleware.py -- New File @@', lines: [
+    { type: 'add', ln: 1,  text: '"""Auth middleware for FastAPI."""' },
+    { type: 'add', ln: 2,  text: 'from __future__ import annotations' },
+    { type: 'add', ln: 3,  text: '' },
+    { type: 'add', ln: 4,  text: 'from fastapi import Request, HTTPException' },
+    { type: 'add', ln: 5,  text: 'from starlette.middleware.base import BaseHTTPMiddleware' },
+    { type: 'add', ln: 6,  text: '' },
+    { type: 'add', ln: 7,  text: 'class AuthMiddleware(BaseHTTPMiddleware):' },
+    { type: 'add', ln: 8,  text: '    """Validates JWT tokens on protected routes."""' },
+    { type: 'add', ln: 9,  text: '' },
+    { type: 'add', ln: 10, text: '    async def dispatch(self, request: Request, call_next):' },
+    { type: 'add', ln: 11, text: '        # Token validation logic here' },
+    { type: 'add', ln: 12, text: '        return await call_next(request)' },
+  ]},
+  // Step 2 files
+  '2-0': { hunk: '@@ backend/app/auth/storage.py -- Modified @@', lines: [
+    { type: 'ctx', ln: 9,  text: '    async def init_tables(self, db: aiosqlite.Connection) -> None:' },
+    { type: 'add', ln: 10, text: '    async def create_user(self, user: User) -> User:' },
+    { type: 'add', ln: 11, text: '        """Insert a new user record."""' },
+    { type: 'add', ln: 12, text: '        await self._db.execute(' },
+    { type: 'add', ln: 13, text: '            "INSERT INTO users (id, email, password_hash, role) VALUES (?, ?, ?, ?)",' },
+    { type: 'add', ln: 14, text: '            (user.id, user.email, user.password_hash, user.role),' },
+    { type: 'add', ln: 15, text: '        )' },
+    { type: 'add', ln: 16, text: '        await self._db.commit()' },
+    { type: 'add', ln: 17, text: '        return user' },
+    { type: 'add', ln: 18, text: '' },
+    { type: 'add', ln: 19, text: '    async def get_by_email(self, email: str) -> User | None:' },
+    { type: 'add', ln: 20, text: '        """Fetch user by email."""' },
+    { type: 'add', ln: 21, text: '        row = await self._db.execute_fetchone(' },
+    { type: 'add', ln: 22, text: '            "SELECT * FROM users WHERE email = ?", (email,)' },
+    { type: 'add', ln: 23, text: '        )' },
+    { type: 'add', ln: 24, text: '        return User(**row) if row else None' },
+  ]},
+  // Step 3 files
+  '3-1': { hunk: '@@ backend/app/auth/tokens.py -- New File @@', lines: [
+    { type: 'add', ln: 1,  text: '"""JWT token generation and validation."""' },
+    { type: 'add', ln: 2,  text: 'from __future__ import annotations' },
+    { type: 'add', ln: 3,  text: '' },
+    { type: 'add', ln: 4,  text: 'import jwt' },
+    { type: 'add', ln: 5,  text: 'from datetime import datetime, timedelta' },
+    { type: 'add', ln: 6,  text: '' },
+    { type: 'add', ln: 7,  text: 'ACCESS_TOKEN_TTL = timedelta(minutes=15)' },
+    { type: 'add', ln: 8,  text: 'REFRESH_TOKEN_TTL = timedelta(days=7)' },
+    { type: 'add', ln: 9,  text: '' },
+    { type: 'add', ln: 10, text: 'def create_access_token(user_id: str, secret: str) -> str:' },
+    { type: 'add', ln: 11, text: '    payload = {' },
+    { type: 'add', ln: 12, text: '        "sub": user_id,' },
+    { type: 'add', ln: 13, text: '        "exp": datetime.utcnow() + ACCESS_TOKEN_TTL,' },
+    { type: 'add', ln: 14, text: '        "type": "access",' },
+    { type: 'add', ln: 15, text: '    }' },
+    { type: 'add', ln: 16, text: '    return jwt.encode(payload, secret, algorithm="HS256")' },
+  ]},
+  // Step 5 files
+  '5-0': { hunk: '@@ frontend/src/components/LoginPage.tsx -- New File @@', lines: [
+    { type: 'add', ln: 1,  text: 'import React, { useState } from "react";' },
+    { type: 'add', ln: 2,  text: 'import { useAuthStore } from "../store/authStore";' },
+    { type: 'add', ln: 3,  text: '' },
+    { type: 'add', ln: 4,  text: 'export function LoginPage() {' },
+    { type: 'add', ln: 5,  text: '  const [email, setEmail] = useState("");' },
+    { type: 'add', ln: 6,  text: '  const [password, setPassword] = useState("");' },
+    { type: 'add', ln: 7,  text: '  const { login } = useAuthStore();' },
+    { type: 'add', ln: 8,  text: '' },
+    { type: 'add', ln: 9,  text: '  const handleSubmit = async (e: React.FormEvent) => {' },
+    { type: 'add', ln: 10, text: '    e.preventDefault();' },
+    { type: 'add', ln: 11, text: '    await login(email, password);' },
+    { type: 'add', ln: 12, text: '  };' },
+    { type: 'add', ln: 13, text: '' },
+    { type: 'add', ln: 14, text: '  return (' },
+    { type: 'add', ln: 15, text: '    <form onSubmit={handleSubmit}>' },
+    { type: 'add', ln: 16, text: '      <input value={email} onChange={e => setEmail(e.target.value)} />' },
+    { type: 'add', ln: 17, text: '      <input type="password" value={password} onChange={e => setPassword(e.target.value)} />' },
+    { type: 'add', ln: 18, text: '      <button type="submit">Log In</button>' },
+    { type: 'add', ln: 19, text: '    </form>' },
+    { type: 'add', ln: 20, text: '  );' },
+    { type: 'add', ln: 21, text: '}' },
+  ]},
+  '5-2': { hunk: '@@ frontend/src/store/authStore.ts -- New File @@', lines: [
+    { type: 'add', ln: 1,  text: 'import { create } from "zustand";' },
+    { type: 'add', ln: 2,  text: '' },
+    { type: 'add', ln: 3,  text: 'interface AuthState {' },
+    { type: 'add', ln: 4,  text: '  token: string | null;' },
+    { type: 'add', ln: 5,  text: '  user: { id: string; email: string; role: string } | null;' },
+    { type: 'add', ln: 6,  text: '  login: (email: string, password: string) => Promise<void>;' },
+    { type: 'add', ln: 7,  text: '  logout: () => void;' },
+    { type: 'add', ln: 8,  text: '}' },
+    { type: 'add', ln: 9,  text: '' },
+    { type: 'add', ln: 10, text: 'export const useAuthStore = create<AuthState>((set) => ({' },
+    { type: 'add', ln: 11, text: '  token: null,' },
+    { type: 'add', ln: 12, text: '  user: null,' },
+    { type: 'add', ln: 13, text: '  login: async (email, password) => {' },
+    { type: 'add', ln: 14, text: '    const res = await fetch("/api/auth/login", {' },
+    { type: 'add', ln: 15, text: '      method: "POST",' },
+    { type: 'add', ln: 16, text: '      body: JSON.stringify({ email, password }),' },
+    { type: 'add', ln: 17, text: '    });' },
+    { type: 'add', ln: 18, text: '    const data = await res.json();' },
+    { type: 'add', ln: 19, text: '    set({ token: data.access_token, user: data.user });' },
+    { type: 'add', ln: 20, text: '  },' },
+    { type: 'add', ln: 21, text: '  logout: () => set({ token: null, user: null }),' },
+    { type: 'add', ln: 22, text: '}));' },
+  ]},
+};
+
+// ═══════════════════════════════════════════════════════════════════════
+// Render
+// ═══════════════════════════════════════════════════════════════════════
+function render() {
+  const el = document.getElementById('chatInner');
+  let html = '';
+
+  // ── DESCRIBE phase ──────────────────────────
+  html += renderPhaseHeader('describe', 'Describe');
+  html += `<div class="phase-body${state.collapsed.describe ? ' collapsed' : ''}" id="body-describe">`;
+  html += agentMsg('We need to add user authentication to the API. Users should be able to sign up, log in, and have their sessions managed.');
+  html += `<div class="formalized-card">
+    <div class="fc-row"><div class="fc-label">What</div><div class="fc-value">Add user auth with signup, login, RBAC</div></div>
+    <div class="fc-row"><div class="fc-label">Purpose</div><div class="fc-value">Secure multi-user access</div></div>
+    <div class="fc-row"><div class="fc-label">Success Criteria</div><div class="fc-value">Users can register, authenticate, roles work</div></div>
+  </div>`;
+  html += `</div>`;
+
+  // ── SPECIFY phase ───────────────────────────
+  html += renderPhaseHeader('specify', 'Specify');
+  html += `<div class="phase-body" id="body-specify">`;
+
+  html += agentMsg('I\'ve analyzed your codebase and found existing auth patterns in <code>core/server_store.py</code>. Creating the specifications now...');
+
+  // Artifact: auth/README.md
+  html += renderArtifact('auth-readme');
+
+  // Decision card
+  html += renderDecision();
+
+  // After decision is resolved, show the confirmation and more artifacts
+  if (state.decisionResolved) {
+    html += agentMsg('<span class="resolved-marker">&#10003; Decided: JWT tokens.</span> Updated auth strategy section.');
+    html += renderArtifact('design-doc');
+    html += renderArtifact('core-readme');
+  }
+
+  // Progress bar
+  html += renderSpecifyProgress();
+
+  html += `</div>`;
+
+  // ── PLAN phase (merged Plan + Execute) ──────
+  html += renderPhaseHeader('plan', 'Plan');
+  html += `<div class="phase-body${state.phases.plan === 'locked' ? ' locked-body' : ''}" id="body-plan">`;
+  if (state.phases.plan === 'locked') {
+    html += `<div class="locked-message">Approve all specs to unlock the planning phase.</div>`;
+  } else {
+    html += renderPlanContent();
+  }
+  html += `</div>`;
+
+  el.innerHTML = html;
+
+  // Render status bar (sidebar removed per design feedback)
+  renderStatusBar();
+}
+
+function renderPhaseHeader(id, name) {
+  const status = state.phases[id];
+  const isCollapsible = status === 'done';
+  const isCollapsed = state.collapsed[id] || false;
+  let statusHtml = '';
+  let statusClass = status;
+
+  if (status === 'done') {
+    statusHtml = `<span class="phase-status">&#10003; Done</span>`;
+    if (isCollapsible) {
+      statusHtml += `<span class="phase-collapse-icon">${isCollapsed ? '&#9654;' : '&#9660;'}</span>`;
+    }
+  } else if (status === 'active') {
+    statusHtml = `<span class="phase-status"><span class="active-dot"></span> In Progress</span>`;
+  } else {
+    statusHtml = `<span class="phase-status">(locked)</span>`;
+  }
+
+  const clickHandler = isCollapsible ? ` onclick="toggleCollapse('${id}')"` : '';
+  const collapsibleClass = isCollapsible ? ' collapsible' : '';
+
+  return `<div class="phase-header ${statusClass}${collapsibleClass}" id="header-${id}"${clickHandler}>
+    <span class="phase-rule-left"></span>
+    <span class="phase-name">${name}</span>
+    <span class="phase-rule-right"></span>
+    ${statusHtml}
+  </div>`;
+}
+
+function agentMsg(html) {
+  return `<div class="msg-agent"><p>${html}</p></div>`;
+}
+
+function userMsg(text) {
+  return `<div class="msg-user"><div class="msg-user-bubble">${escHtml(text)}</div></div>`;
+}
+
+function renderArtifact(id) {
+  const d = diffData[id];
+  const isApproved = state.approved.has(id);
+  const isDiffOpen = state.diffOpen[id] || false;
+  const approvedClass = isApproved ? ' approved-card' : ' pending-card';
+
+  let actionsHtml = '';
+  if (isApproved) {
+    actionsHtml = `<span class="artifact-approved-badge" style="display:flex">&#10003; Approved</span>`;
+  } else {
+    const reviewLabel = isDiffOpen ? 'Hide diff' : 'Review';
+    actionsHtml = `<button class="review-btn" onclick="toggleDiff('${id}')">${reviewLabel}</button>
+      <button class="approve-inline-btn" onclick="approveArtifact('${id}')">Approve</button>`;
+  }
+
+  // Full diff (when expanded)
+  let diffHtml = '';
+  if (isDiffOpen) {
+    diffHtml = `<div class="diff-expand open">`;
+    d.lines.forEach(line => {
+      if (line.type === 'hunk') {
+        diffHtml += `<div class="diff-hunk-header">${escHtml(line.text)}</div>`;
+      } else {
+        const cls = line.type === 'add' ? 'add' : line.type === 'del' ? 'del' : 'ctx';
+        const prefix = line.type === 'add' ? '+' : line.type === 'del' ? '-' : ' ';
+        diffHtml += `<div class="diff-line ${cls}"><span class="ln">${line.ln}</span>${prefix}${escHtml(line.text)}</div>`;
+      }
+    });
+    diffHtml += `<button class="diff-collapse-btn" onclick="toggleDiff('${id}')">Collapse diff</button>`;
+    diffHtml += `</div>`;
+  }
+
+  // Diff preview (first few lines, shown when diff is NOT open)
+  let previewHtml = '';
+  if (!isDiffOpen) {
+    const previewLines = d.lines.filter(l => l.type !== 'hunk').slice(0, 4);
+    if (previewLines.length > 0) {
+      previewHtml = `<div class="artifact-diff-preview" onclick="toggleDiff('${id}')">`;
+      previewLines.forEach(line => {
+        const cls = line.type === 'add' ? 'p-add' : line.type === 'del' ? 'p-del' : 'p-ctx';
+        const prefix = line.type === 'add' ? '+' : line.type === 'del' ? '-' : ' ';
+        previewHtml += `<div class="preview-line ${cls}">${prefix} ${escHtml(line.text)}</div>`;
+      });
+      previewHtml += `<div class="preview-fade"></div>`;
+      previewHtml += `<span class="preview-click-hint">Click to expand</span>`;
+      previewHtml += `</div>`;
+    }
+  }
+
+  return `<div class="artifact-card${approvedClass}" id="artifact-${id}">
+    <div class="artifact-card-header">
+      <span class="artifact-filename">${d.filename}</span>
+      <span class="artifact-op ${d.opClass}">${d.op}</span>
+      <span class="artifact-stats">${d.stats}</span>
+      <span class="artifact-header-spacer"></span>
+      <div class="artifact-actions">${actionsHtml}</div>
+    </div>
+    <div class="artifact-desc">${d.desc}</div>
+    ${previewHtml}
+    ${diffHtml}
+  </div>`;
+}
+
+function renderDecision() {
+  if (state.decisionResolved) {
+    return `<div class="decision-card resolved">
+      <div class="decision-question">&#10003; Decided: JWT tokens. Your bns_ token pattern aligns with JWT.</div>
+    </div>`;
+  }
+
+  return `<div class="decision-card" id="decisionCard">
+    <div class="decision-label">Decision needed</div>
+    <div class="decision-question">Should we use JWT or session-based auth?</div>
+    <div class="decision-options">
+      <button class="dec-option recommended" onclick="resolveDecision('jwt')">JWT tokens</button>
+      <button class="dec-option" onclick="resolveDecision('session')">Session-based</button>
+      <button class="dec-option" onclick="resolveDecision('hybrid')">Hybrid</button>
+    </div>
+    <div class="decision-hint">Your <code>bns_</code> token pattern aligns with JWT.</div>
+  </div>`;
+}
+
+function renderSpecifyProgress() {
+  const total = SPEC_DIFFS.length;
+  const approvedCount = state.approved.size;
+  // Only count diffs that are visible (auth-readme is always visible; others only after decision)
+  const visibleDiffs = state.decisionResolved ? total : 1;
+  const pct = visibleDiffs > 0 ? Math.round((approvedCount / total) * 100) : 0;
+  const allDone = approvedCount === total;
+
+  let approveAllHtml = '';
+  if (state.decisionResolved && !allDone) {
+    const remaining = total - approvedCount;
+    approveAllHtml = `<button class="approve-all-btn" onclick="approveAllRemaining()">Approve All Remaining (${remaining})</button>`;
+  }
+
+  return `<div class="progress-bar-container">
+    <span class="progress-label">Specify Progress:</span>
+    <div class="progress-track"><div class="progress-fill green" style="width:${pct}%"></div></div>
+    <span class="progress-text">${approvedCount}/${total} approved</span>
+    ${approveAllHtml}
+  </div>`;
+}
+
+function renderPlanContent() {
+  let html = '';
+  const anyExecuted = state.planSteps.some(s => s.status === 'done' || s.status === 'running');
+  const allDone = state.planSteps.every(s => s.status === 'done');
+  const anyRunning = state.planSteps.some(s => s.status === 'running');
+
+  if (anyExecuted) {
+    html += agentMsg('Executing the implementation plan. Steps complete as the agent works through each one.');
+  } else {
+    html += agentMsg('I\'ve created an implementation plan based on the approved specs. Approve to start execution.');
+  }
+
+  state.planSteps.forEach(step => {
+    const numClass = step.status === 'done' ? 'done-num' : step.status === 'running' ? 'running-num' : 'pending-num';
+    const cardClass = step.status === 'done' ? ' step-done' : step.status === 'running' ? ' step-running' : '';
+    const numContent = step.status === 'done' ? '&#10003;' : step.id;
+
+    let badgeClass = 'badge-pending';
+    let badgeText = 'Pending';
+    if (step.status === 'done') { badgeClass = 'badge-done'; badgeText = 'Done'; }
+    if (step.status === 'running') { badgeClass = 'badge-running'; badgeText = 'Running'; }
+
+    let actionsHtml = `<span class="step-status-badge ${badgeClass}">${badgeText}</span>`;
+    if (step.status === 'pending' && !anyRunning) {
+      actionsHtml += `<button class="exec-step-btn" onclick="executeStep(${step.id})">Execute &#9654;</button>`;
+    }
+    if (step.status === 'running') {
+      actionsHtml += `<span class="streaming-dots"><span></span><span></span><span></span></span>`;
+    }
+
+    // Changed files section for completed steps
+    let changedFilesHtml = '';
+    if (step.status === 'done' && step.changedFiles && step.changedFiles.length > 0) {
+      const isOpen = state.changedFilesOpen[step.id] || false;
+      changedFilesHtml = `<div class="changed-files">
+        <button class="changed-files-toggle" onclick="toggleChangedFiles(${step.id})">
+          <span class="cf-arrow${isOpen ? ' open' : ''}">&#9654;</span>
+          Changed files (${step.changedFiles.length})
+        </button>
+        <div class="changed-files-list${isOpen ? ' open' : ''}">`;
+      step.changedFiles.forEach((f, fi) => {
+        const opClass = f.op === '+' ? 'cf-add' : 'cf-mod';
+        const diffKey = step.id + '-' + fi;
+        const hasDiff = !!fileDiffData[diffKey];
+        const isDiffOpen = state.fileDiffOpen[diffKey] || false;
+        const clickAttr = hasDiff ? ` onclick="toggleFileDiff('${diffKey}')"` : '';
+        changedFilesHtml += `<div class="changed-file-item"${clickAttr}><span class="cf-op ${opClass}">${f.op === '+' ? '+' : '~'}</span>${f.path}`;
+        if (hasDiff) {
+          changedFilesHtml += `<span class="cf-expand-hint">${isDiffOpen ? 'hide' : 'diff'}</span>`;
+        }
+        changedFilesHtml += `</div>`;
+        // Inline code diff
+        if (isDiffOpen && hasDiff) {
+          const fd = fileDiffData[diffKey];
+          changedFilesHtml += `<div class="file-code-diff">`;
+          changedFilesHtml += `<div class="diff-hunk-header">${escHtml(fd.hunk)}</div>`;
+          fd.lines.forEach(line => {
+            const cls = line.type === 'add' ? 'add' : line.type === 'del' ? 'del' : 'ctx';
+            const prefix = line.type === 'add' ? '+' : line.type === 'del' ? '-' : ' ';
+            changedFilesHtml += `<div class="diff-line ${cls}"><span class="ln">${line.ln}</span>${prefix}${escHtml(line.text)}</div>`;
+          });
+          changedFilesHtml += `</div>`;
+        }
+      });
+      changedFilesHtml += `</div></div>`;
+    }
+
+    html += `<div class="plan-step${cardClass}" id="plan-step-${step.id}">
+      <span class="plan-step-num ${numClass}">${numContent}</span>
+      <div class="plan-step-info">
+        <div class="plan-step-title">Step ${step.id}: ${step.title}${step.status === 'done' ? ' <span style="color:var(--text-muted);font-weight:400;font-size:12px;">── &#10003; Done</span>' : ''}</div>
+        <div class="plan-step-desc">${step.desc} <span style="color:var(--text-muted);font-size:11px;">Specs: ${step.specs}</span></div>
+        ${changedFilesHtml}
+      </div>
+      <div class="plan-step-actions">${actionsHtml}</div>
+    </div>`;
+  });
+
+  if (!allDone) {
+    html += `<div class="execute-all-wrap">
+      <button class="execute-all-btn" onclick="executeAllSteps()"${anyRunning ? ' disabled' : ''}>Execute All &#9654;</button>
+    </div>`;
+  }
+
+  // Progress
+  const doneCount = state.planSteps.filter(s => s.status === 'done').length;
+  const total = state.planSteps.length;
+  const pct = Math.round((doneCount / total) * 100);
+  const fillClass = allDone ? 'green' : 'yellow';
+  html += `<div class="progress-bar-container">
+    <span class="progress-label">Plan Progress:</span>
+    <div class="progress-track"><div class="progress-fill ${fillClass}" style="width:${pct}%"></div></div>
+    <span class="progress-text">${doneCount}/${total} steps</span>
+  </div>`;
+
+  // Verification section (shown after all steps are done)
+  if (allDone) {
+    html += renderVerifySection();
+  }
+
+  return html;
+}
+
+function renderVerifySection() {
+  let innerHtml = '';
+  if (state.verifyState === 'idle') {
+    innerHtml = `<div class="verify-card-inner">
+      <button class="verify-btn" onclick="runVerification()">Run spec-review</button>
+      <span class="verify-desc">Verify that specs match the implementation.</span>
+    </div>`;
+  } else if (state.verifyState === 'running') {
+    innerHtml = `<div class="verify-card-inner">
+      <span class="verify-running">Running spec-review<span class="streaming-dots"><span></span><span></span><span></span></span></span>
+    </div>`;
+  } else {
+    innerHtml = `<div class="verify-card-inner">
+      <span class="verify-result">&#10003; All specs aligned with implementation.</span>
+    </div>`;
+  }
+
+  const cardClass = state.verifyState === 'done' ? ' verify-done' : '';
+
+  return `<div class="verify-section">
+    <div class="verify-header">
+      <span class="vr-left"></span>
+      <span class="vr-label">Verify <span class="vr-optional">(optional)</span></span>
+      <span class="vr-right"></span>
+    </div>
+    <div class="verify-card${cardClass}">
+      ${innerHtml}
+    </div>
+  </div>`;
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// Interactions
+// ═══════════════════════════════════════════════════════════════════════
+
+// Sidebar removed per design feedback (status bar is sufficient for artifact navigation)
+
+function toggleFileDiff(key) {
+  state.fileDiffOpen[key] = !state.fileDiffOpen[key];
+  render();
+}
+
+function runVerification() {
+  state.verifyState = 'running';
+  render();
+  showToast('Running spec-review...', 'info');
+
+  setTimeout(() => {
+    state.verifyState = 'done';
+    render();
+    showToast('Verification complete: all specs aligned.', 'success');
+    renderStatusBar();
+  }, 2500);
+}
+
+function renderStatusBar() {
+  const bar = document.getElementById('statusBar');
+  if (!bar) return;
+
+  const phaseConfig = [
+    { id: 'describe', label: 'Describe' },
+    { id: 'specify', label: 'Specify' },
+    { id: 'plan', label: 'Plan' },
+  ];
+
+  // Phase pills
+  let pillsHtml = '';
+  phaseConfig.forEach(p => {
+    const status = state.phases[p.id];
+    let icon = '';
+    let pillClass = '';
+    let extra = '';
+
+    if (status === 'done') {
+      icon = '&#10003;';
+      pillClass = 'sb-done';
+    } else if (status === 'active') {
+      icon = '&#9679;';
+      pillClass = 'sb-active';
+      // Add progress info for active phases
+      if (p.id === 'specify') {
+        const total = SPEC_DIFFS.length;
+        const done = state.approved.size;
+        extra = `: ${done}/${total}`;
+      } else if (p.id === 'plan') {
+        const total = state.planSteps.length;
+        const done = state.planSteps.filter(s => s.status === 'done').length;
+        extra = `: ${done}/${total}`;
+      }
+    } else {
+      icon = '&#9675;';
+      pillClass = 'sb-locked';
+    }
+
+    pillsHtml += `<span class="sb-pill ${pillClass}"><span class="sb-icon">${icon}</span>${p.label}${extra}</span>`;
+  });
+
+  // Artifact status dots
+  const artifactNames = {
+    'auth-readme': 'auth',
+    'design-doc': 'DOC',
+    'core-readme': 'core',
+  };
+  let artifactsHtml = '';
+  SPEC_DIFFS.forEach(id => {
+    const isApproved = state.approved.has(id);
+    const isVisible = id === 'auth-readme' || state.decisionResolved;
+    let dotClass = 'dot-hidden';
+    if (isVisible && isApproved) dotClass = 'dot-approved';
+    else if (isVisible && !isApproved) dotClass = 'dot-pending';
+    artifactsHtml += `<span class="sb-artifact-item"><span class="sb-dot ${dotClass}"></span>${artifactNames[id]}</span>`;
+  });
+
+  // Plan step progress (if plan is active or done)
+  let planProgressHtml = '';
+  if (state.phases.plan === 'active' || state.phases.plan === 'done') {
+    const planDone = state.planSteps.filter(s => s.status === 'done').length;
+    const planTotal = state.planSteps.length;
+    const planRunning = state.planSteps.filter(s => s.status === 'running').length;
+    let stepText = `${planDone}/${planTotal} steps`;
+    if (planRunning > 0) stepText += ` (${planRunning} running)`;
+    planProgressHtml = `<span class="sb-divider"></span>
+      <span class="sb-artifact-item" style="gap:6px;">
+        <span style="font-size:10px;color:var(--text-muted);">Plan:</span>
+        <span style="font-family:var(--mono);font-size:11px;color:${planDone === planTotal ? 'var(--green)' : 'var(--yellow)'};">${stepText}</span>
+      </span>`;
+  }
+
+  // Verification status
+  let verifyHtml = '';
+  if (state.verifyState === 'running') {
+    verifyHtml = `<span class="sb-divider"></span>
+      <span class="sb-pill sb-active" style="font-size:10px;"><span class="sb-icon">&#9679;</span>Verifying</span>`;
+  } else if (state.verifyState === 'done') {
+    verifyHtml = `<span class="sb-divider"></span>
+      <span class="sb-pill sb-done" style="font-size:10px;"><span class="sb-icon">&#10003;</span>Verified</span>`;
+  }
+
+  // Brief title
+  const titleText = '"Add user authentication"';
+
+  bar.innerHTML = `
+    <div class="sb-phases">${pillsHtml}</div>
+    ${planProgressHtml}
+    ${verifyHtml}
+    <span class="sb-divider"></span>
+    <span class="sb-title">${titleText}</span>
+  `;
+}
+
+function toggleChangedFiles(stepId) {
+  state.changedFilesOpen[stepId] = !state.changedFilesOpen[stepId];
+  render();
+}
+
+function toggleCollapse(phaseId) {
+  state.collapsed[phaseId] = !state.collapsed[phaseId];
+  render();
+}
+
+function toggleDiff(artifactId) {
+  state.diffOpen[artifactId] = !state.diffOpen[artifactId];
+  render();
+  // Scroll the artifact into view
+  setTimeout(() => {
+    const el = document.getElementById('artifact-' + artifactId);
+    if (el) el.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  }, 50);
+}
+
+function approveArtifact(id) {
+  state.approved.add(id);
+  state.diffOpen[id] = false;
+  showToast('Approved: ' + diffData[id].filename, 'success');
+  checkAllApproved();
+  render();
+  scrollToBottom();
+}
+
+function approveAllRemaining() {
+  SPEC_DIFFS.forEach(id => state.approved.add(id));
+  Object.keys(state.diffOpen).forEach(k => state.diffOpen[k] = false);
+  showToast('All specs approved!', 'success');
+  checkAllApproved();
+  render();
+  scrollToBottom();
+}
+
+function checkAllApproved() {
+  if (SPEC_DIFFS.every(id => state.approved.has(id))) {
+    // Transition specify to done, plan to active (merged plan+execute)
+    state.phases.specify = 'done';
+    state.phases.plan = 'active';
+    state.planVisible = true;
+
+    setTimeout(() => {
+      render();
+      scrollToBottom();
+      showToast('All specs approved! Plan phase unlocked.', 'success');
+    }, 400);
+  }
+}
+
+function resolveDecision(choice) {
+  state.decisionResolved = true;
+  showToast('Decided: JWT tokens. Specs updated.', 'success');
+  render();
+  scrollToBottom();
+}
+
+function executeStep(stepId) {
+  const step = state.planSteps.find(s => s.id === stepId);
+  if (!step || step.status !== 'pending') return;
+
+  step.status = 'running';
+  render();
+  showToast('Executing: ' + step.title, 'info');
+
+  setTimeout(() => {
+    step.status = 'done';
+    state.changedFilesOpen[step.id] = true; // Auto-expand changed files
+    render();
+    showToast('Completed: ' + step.title, 'success');
+    scrollToBottom();
+
+    // Check if all done
+    if (state.planSteps.every(s => s.status === 'done')) {
+      state.phases.plan = 'done';
+      render();
+      setTimeout(() => showToast('All steps completed! Ticket is done.', 'success'), 500);
+    }
+  }, 1500 + Math.random() * 1000);
+}
+
+function executeAllSteps() {
+  const pending = state.planSteps.filter(s => s.status === 'pending');
+  if (pending.length === 0) return;
+
+  render();
+
+  let delay = 0;
+  pending.forEach((step, i) => {
+    setTimeout(() => {
+      step.status = 'running';
+      render();
+      scrollToBottom();
+    }, delay);
+
+    delay += 800;
+
+    setTimeout(() => {
+      step.status = 'done';
+      state.changedFilesOpen[step.id] = true; // Auto-expand changed files
+      render();
+      scrollToBottom();
+      showToast('Completed: ' + step.title, 'success');
+
+      if (state.planSteps.every(s => s.status === 'done')) {
+        state.phases.plan = 'done';
+        render();
+        scrollToBottom();
+        setTimeout(() => showToast('All steps completed! Ticket is done.', 'success'), 500);
+      }
+    }, delay + 1200);
+
+    delay += 1800;
+  });
+}
+
+function sendMessage() {
+  const input = document.getElementById('chatInput');
+  const text = input.value.trim();
+  if (!text) return;
+  input.value = '';
+
+  // Find the active phase body and inject the user message
+  const activePhase = Object.keys(state.phases).find(p => state.phases[p] === 'active');
+  if (!activePhase) return;
+
+  // We'll inject directly into the DOM for responsiveness
+  const body = document.getElementById('body-' + activePhase);
+  if (!body) return;
+
+  const userDiv = document.createElement('div');
+  userDiv.className = 'msg-user';
+  userDiv.innerHTML = `<div class="msg-user-bubble">${escHtml(text)}</div>`;
+  body.appendChild(userDiv);
+  scrollToBottom();
+
+  // Simulated agent response
+  setTimeout(() => {
+    const responses = [
+      'Good point. I\'ll incorporate that into the spec and update the diff.',
+      'Noted. Let me revise the relevant section.',
+      'That aligns with the existing patterns in <code>core/</code>. Updating now.',
+      'Makes sense. I\'ll adjust the integration points accordingly.',
+      'Great question. The auth module handles that in the <code>middleware.py</code> layer.',
+    ];
+    const agentDiv = document.createElement('div');
+    agentDiv.className = 'msg-agent';
+    agentDiv.innerHTML = `<p>${responses[Math.floor(Math.random() * responses.length)]}</p>`;
+    body.appendChild(agentDiv);
+    scrollToBottom();
+  }, 600 + Math.random() * 600);
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// Utilities
+// ═══════════════════════════════════════════════════════════════════════
+
+function scrollToBottom() {
+  const sc = document.getElementById('chatScroll');
+  setTimeout(() => { sc.scrollTop = sc.scrollHeight; }, 50);
+}
+
+function showToast(msg, type) {
+  const toast = document.getElementById('toast');
+  toast.className = 'toast ' + type;
+  const icon = type === 'success' ? '&#10003;' : 'i';
+  toast.querySelector('.t-icon').innerHTML = icon;
+  toast.querySelector('.t-msg').textContent = msg;
+  toast.classList.add('show');
+  clearTimeout(state._toastTimer);
+  state._toastTimer = setTimeout(() => toast.classList.remove('show'), 3000);
+}
+
+function escHtml(text) {
+  const d = document.createElement('div');
+  d.textContent = text;
+  return d.innerHTML;
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// Init
+// ═══════════════════════════════════════════════════════════════════════
+render();
+
+// Smooth entry: auto-scroll to the Specify phase header after a beat
+setTimeout(() => {
+  const specHeader = document.getElementById('header-specify');
+  if (specHeader) specHeader.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}, 600);
+</script>
+</body>
+</html>

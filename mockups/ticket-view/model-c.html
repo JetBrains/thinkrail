@@ -1,0 +1,1845 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Model C — Top-Down Phases: Focused &amp; Clean</title>
+<style>
+  :root {
+    --bg-base: #0e1117;
+    --bg-surface: #161b22;
+    --bg-elevated: #1c2129;
+    --bg-hover: #242b35;
+    --bg-inset: #0d1117;
+    --border: #2d333b;
+    --border-bright: #3d444d;
+    --text-primary: #e6edf3;
+    --text-secondary: #8b949e;
+    --text-muted: #656d76;
+    --accent: #58a6ff;
+    --accent-subtle: #1f3a5f;
+    --green: #3fb950;
+    --green-subtle: #1a3a2a;
+    --yellow: #d29922;
+    --yellow-subtle: #3d2e00;
+    --purple: #bc8cff;
+    --purple-subtle: #2a1f3d;
+    --red: #f85149;
+    --red-subtle: #3d1418;
+    --orange: #db6d28;
+    --orange-subtle: #3d2200;
+    --radius: 8px;
+    --radius-lg: 12px;
+    --mono: 'SF Mono', 'Cascadia Code', 'Consolas', monospace;
+    --transition: 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: var(--bg-base);
+    color: var(--text-primary);
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans', Helvetica, Arial, sans-serif;
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  /* ── Back link ───────────────────────────────── */
+  .back-link {
+    position: fixed;
+    top: 12px;
+    right: 16px;
+    z-index: 500;
+    font-size: 12px;
+    color: var(--text-muted);
+    text-decoration: none;
+    padding: 4px 10px;
+    border-radius: 4px;
+    background: var(--bg-elevated);
+    border: 1px solid var(--border);
+    transition: color 0.15s, border-color 0.15s;
+  }
+  .back-link:hover { color: var(--accent); border-color: var(--accent); }
+
+  /* ── Animations ──────────────────────────────── */
+  @keyframes fadeIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
+  @keyframes slideUp { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }
+  @keyframes shrinkOut {
+    from { max-height: 80px; opacity: 1; margin-bottom: 8px; }
+    to { max-height: 0; opacity: 0; margin-bottom: 0; padding: 0; border-width: 0; }
+  }
+
+  /* ── Header ──────────────────────────────────── */
+  .header {
+    height: 52px;
+    min-height: 52px;
+    background: var(--bg-surface);
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    padding: 0 20px;
+    gap: 12px;
+    flex-shrink: 0;
+    z-index: 10;
+  }
+  .ticket-id {
+    font-size: 13px;
+    font-weight: 700;
+    font-family: var(--mono);
+    color: var(--accent);
+  }
+  .ticket-title {
+    font-size: 15px;
+    font-weight: 600;
+    color: var(--text-primary);
+  }
+  .header-sep { color: var(--text-muted); font-size: 14px; }
+  .header-spacer { flex: 1; }
+  .model-tag {
+    font-size: 10px;
+    font-weight: 600;
+    color: var(--accent);
+    background: var(--accent-subtle);
+    padding: 3px 8px;
+    border-radius: 100px;
+    letter-spacing: 0.04em;
+  }
+
+  /* ── Phase Tabs ──────────────────────────────── */
+  .phase-tabs {
+    display: flex;
+    align-items: center;
+    gap: 0;
+    padding: 0 20px;
+    background: var(--bg-surface);
+    border-bottom: 1px solid var(--border);
+    flex-shrink: 0;
+    height: 42px;
+  }
+  .phase-tab {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    padding: 10px 20px;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text-muted);
+    cursor: pointer;
+    border-bottom: 2px solid transparent;
+    transition: color 0.15s, border-color 0.15s, background 0.15s;
+    user-select: none;
+    white-space: nowrap;
+    position: relative;
+    top: 1px;
+  }
+  .phase-tab:hover:not(.locked) { color: var(--text-secondary); background: var(--bg-hover); }
+  .phase-tab.active { color: var(--text-primary); border-bottom-color: var(--accent); }
+  .phase-tab.done { color: var(--green); }
+  .phase-tab.active.done { color: var(--green); border-bottom-color: var(--green); }
+  .phase-tab.locked { opacity: 0.4; cursor: default; }
+  .phase-tab-icon {
+    font-size: 11px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 16px;
+    height: 16px;
+  }
+  .phase-tab-icon.done { color: var(--green); }
+  .phase-tab-icon.active { color: var(--yellow); }
+  .phase-tab-icon.pending { color: var(--text-muted); }
+  .phase-tab-progress {
+    font-size: 10px;
+    color: var(--text-muted);
+    font-family: var(--mono);
+    margin-left: 2px;
+  }
+
+  /* ── Full-width content area ─────────────────── */
+  .content-area {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    min-height: 0;
+    position: relative;
+  }
+
+  .phase-content {
+    flex: 1;
+    overflow-y: auto;
+    padding: 0;
+    animation: fadeIn 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+    min-height: 0;
+  }
+  .phase-content::-webkit-scrollbar { width: 5px; }
+  .phase-content::-webkit-scrollbar-track { background: transparent; }
+  .phase-content::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+
+  /* ── Describe phase ──────────────────────────── */
+  .describe-content {
+    padding: 24px 20px;
+    max-width: 800px;
+  }
+  .describe-field { margin-bottom: 24px; }
+  .describe-label {
+    font-size: 10px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--text-muted);
+    margin-bottom: 6px;
+  }
+  .describe-value {
+    font-size: 15px;
+    line-height: 1.65;
+    color: var(--text-secondary);
+  }
+  .describe-completed {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+    color: var(--green);
+    background: var(--green-subtle);
+    padding: 6px 14px;
+    border-radius: 100px;
+    margin-top: 8px;
+    font-weight: 600;
+  }
+
+  /* ── Specify phase — Diff viewer (full width) ── */
+  .diff-viewer-full {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    min-height: 0;
+  }
+  .diff-toolbar {
+    padding: 10px 20px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-shrink: 0;
+    background: var(--bg-elevated);
+  }
+  .diff-path {
+    font-size: 12px;
+    font-family: var(--mono);
+    color: var(--text-muted);
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .diff-op-badge {
+    font-size: 10px;
+    padding: 2px 8px;
+    border-radius: 100px;
+    font-weight: 600;
+    text-transform: uppercase;
+  }
+  .diff-op-badge.new { background: var(--green-subtle); color: var(--green); }
+  .diff-op-badge.modified { background: var(--yellow-subtle); color: var(--yellow); }
+  .diff-stats {
+    font-size: 11px;
+    font-family: var(--mono);
+    display: flex;
+    gap: 6px;
+  }
+  .diff-stats .add { color: var(--green); }
+  .diff-stats .del { color: var(--red); }
+
+  .diff-actions-inline {
+    display: flex;
+    gap: 8px;
+    margin-left: 12px;
+  }
+
+  .diff-content {
+    flex: 1;
+    overflow-y: auto;
+    background: var(--bg-inset);
+    position: relative;
+  }
+  .diff-content::-webkit-scrollbar { width: 5px; }
+  .diff-content::-webkit-scrollbar-track { background: transparent; }
+  .diff-content::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+
+  .diff-line {
+    padding: 1px 20px 1px 60px;
+    font-family: var(--mono);
+    font-size: 12px;
+    line-height: 1.75;
+    white-space: pre;
+    position: relative;
+    min-height: 22px;
+  }
+  .diff-line .ln {
+    position: absolute;
+    left: 0;
+    width: 50px;
+    text-align: right;
+    padding-right: 10px;
+    color: var(--text-muted);
+    opacity: 0.4;
+    user-select: none;
+  }
+  .diff-line.add { background: rgba(63,185,80,0.08); color: var(--green); }
+  .diff-line.del { background: rgba(248,81,73,0.08); color: var(--red); }
+  .diff-line.ctx { color: var(--text-muted); }
+  .diff-line.hunk { background: var(--accent-subtle); color: var(--accent); font-weight: 600; }
+
+  .approved-overlay {
+    position: absolute;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: rgba(63,185,80,0.06);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 5;
+    pointer-events: none;
+  }
+  .approved-stamp {
+    color: var(--green);
+    font-size: 20px;
+    font-weight: 700;
+    border: 3px solid var(--green);
+    padding: 8px 24px;
+    border-radius: 8px;
+    transform: rotate(-8deg);
+    opacity: 0.5;
+    letter-spacing: 0.1em;
+  }
+
+  /* ── Inline decision card (within diff) ──────── */
+  .inline-decision {
+    margin: 8px 20px 8px 60px;
+    background: var(--bg-elevated);
+    border: 1px solid var(--accent-subtle);
+    border-left: 3px solid var(--accent);
+    border-radius: var(--radius);
+    padding: 10px 14px;
+    animation: slideUp 0.25s ease;
+    transition: all 0.4s ease;
+    overflow: hidden;
+  }
+  .inline-decision.resolved {
+    border-left-color: var(--green);
+    border-color: var(--green-subtle);
+    background: var(--green-subtle);
+  }
+  .inline-decision.collapsing {
+    animation: shrinkOut 0.6s ease forwards;
+    animation-delay: 1.5s;
+  }
+  .inline-decision-label {
+    font-size: 8px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--accent);
+    margin-bottom: 4px;
+  }
+  .inline-decision.resolved .inline-decision-label { color: var(--green); }
+  .inline-decision-text {
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--text-primary);
+    margin-bottom: 8px;
+    line-height: 1.4;
+  }
+  .inline-decision-opts { display: flex; gap: 6px; flex-wrap: wrap; }
+  .decision-btn {
+    padding: 5px 12px;
+    border-radius: 5px;
+    font-size: 11px;
+    font-weight: 500;
+    cursor: pointer;
+    border: 1px solid var(--border-bright);
+    background: var(--bg-surface);
+    color: var(--text-primary);
+    transition: all 0.15s;
+  }
+  .decision-btn:hover { border-color: var(--accent); background: var(--accent-subtle); }
+  .decision-btn.rec { border-color: var(--accent); background: var(--accent-subtle); color: var(--accent); }
+  .decision-btn.selected { border-color: var(--green); background: var(--green-subtle); color: var(--green); pointer-events: none; }
+  .inline-decision-resolved {
+    font-size: 11px;
+    color: var(--green);
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    font-weight: 600;
+  }
+
+  /* ── Agent note (inline info card) ───────────── */
+  .agent-note {
+    margin: 10px 20px;
+    padding: 10px 14px;
+    background: var(--bg-elevated);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    font-size: 12px;
+    color: var(--text-secondary);
+    line-height: 1.5;
+    animation: slideUp 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+  .agent-note-icon {
+    color: var(--accent);
+    font-size: 14px;
+    flex-shrink: 0;
+    margin-top: 1px;
+  }
+  .agent-note code {
+    font-family: var(--mono);
+    font-size: 11px;
+    background: var(--bg-inset);
+    padding: 1px 4px;
+    border-radius: 3px;
+    color: var(--accent);
+  }
+
+  /* ── Diff selector strip ─────────────────────── */
+  .diff-selector {
+    display: flex;
+    align-items: center;
+    gap: 3px;
+    padding: 8px 20px;
+    border-top: 1px solid var(--border);
+    background: var(--bg-surface);
+    flex-shrink: 0;
+    overflow-x: auto;
+  }
+  .diff-selector::-webkit-scrollbar { height: 0; }
+  .diff-selector-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 5px 12px;
+    border-radius: 5px;
+    font-size: 11px;
+    font-weight: 500;
+    color: var(--text-muted);
+    cursor: pointer;
+    white-space: nowrap;
+    transition: all 0.15s;
+    border: 1px solid transparent;
+  }
+  .diff-selector-item:hover {
+    color: var(--text-secondary);
+    background: var(--bg-hover);
+  }
+  .diff-selector-item.active {
+    color: var(--accent);
+    background: var(--accent-subtle);
+    border-color: rgba(88,166,255,0.2);
+  }
+  .diff-selector-dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+  .diff-selector-dot.draft { background: var(--yellow); }
+  .diff-selector-dot.reviewing { background: var(--accent); }
+  .diff-selector-dot.pending { background: var(--text-muted); }
+  .diff-selector-dot.approved { background: var(--green); }
+  .diff-selector-progress {
+    margin-left: auto;
+    font-size: 10px;
+    color: var(--text-muted);
+    font-family: var(--mono);
+    white-space: nowrap;
+    padding-left: 12px;
+  }
+
+  /* Action buttons */
+  .action-btn {
+    padding: 5px 14px;
+    border-radius: 5px;
+    font-size: 11px;
+    font-weight: 600;
+    cursor: pointer;
+    border: none;
+    transition: all 0.15s;
+  }
+  .action-btn.primary { background: var(--green); color: #fff; }
+  .action-btn.primary:hover { opacity: 0.85; }
+  .action-btn.secondary {
+    background: transparent;
+    color: var(--text-secondary);
+    border: 1px solid var(--border);
+  }
+  .action-btn.secondary:hover { border-color: var(--text-muted); }
+  .action-btn.approved-btn {
+    background: var(--green-subtle);
+    color: var(--green);
+    border: 1px solid var(--green-subtle);
+    cursor: default;
+  }
+
+  /* ── Plan phase ──────────────────────────────── */
+  .plan-content {
+    padding: 24px 20px;
+    max-width: 900px;
+  }
+  .plan-step {
+    background: var(--bg-elevated);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    margin-bottom: 8px;
+    overflow: hidden;
+    transition: border-color 0.15s;
+  }
+  .plan-step:hover { border-color: var(--border-bright); }
+  .plan-step.running { border-color: var(--yellow); }
+  .plan-step.done { border-color: var(--green); }
+
+  .plan-step-header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 16px;
+    cursor: pointer;
+  }
+  .plan-num {
+    width: 26px;
+    height: 26px;
+    border-radius: 50%;
+    background: var(--bg-surface);
+    border: 1.5px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--text-muted);
+    flex-shrink: 0;
+  }
+  .plan-step.done .plan-num { background: var(--green-subtle); border-color: var(--green); color: var(--green); }
+  .plan-step.running .plan-num { background: var(--yellow-subtle); border-color: var(--yellow); color: var(--yellow); animation: pulse 2s ease-in-out infinite; }
+
+  .plan-info { flex: 1; min-width: 0; }
+  .plan-title { font-size: 13px; font-weight: 600; margin-bottom: 2px; }
+  .plan-desc { font-size: 11px; color: var(--text-muted); line-height: 1.4; }
+
+  .plan-status-badge {
+    font-size: 10px;
+    font-weight: 600;
+    padding: 3px 10px;
+    border-radius: 100px;
+    white-space: nowrap;
+    flex-shrink: 0;
+  }
+  .plan-status-badge.done { background: var(--green-subtle); color: var(--green); }
+  .plan-status-badge.running { background: var(--yellow-subtle); color: var(--yellow); }
+  .plan-status-badge.pending { background: var(--bg-surface); color: var(--text-muted); border: 1px solid var(--border); }
+
+  .plan-execute-btn {
+    padding: 5px 14px;
+    border-radius: 5px;
+    font-size: 11px;
+    font-weight: 600;
+    cursor: pointer;
+    border: 1px solid var(--border);
+    background: var(--bg-surface);
+    color: var(--text-secondary);
+    transition: all 0.15s;
+    flex-shrink: 0;
+    white-space: nowrap;
+  }
+  .plan-execute-btn:hover { border-color: var(--accent); color: var(--accent); background: var(--accent-subtle); }
+
+  .plan-step-files {
+    padding: 0 16px 12px 54px;
+    display: none;
+  }
+  .plan-step.expanded .plan-step-files { display: block; }
+  .plan-file-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 4px 0;
+    font-size: 11px;
+    font-family: var(--mono);
+    color: var(--text-muted);
+  }
+  .plan-file-row .file-icon { color: var(--green); font-size: 10px; }
+  .plan-file-view-btn {
+    font-size: 10px;
+    color: var(--accent);
+    cursor: pointer;
+    margin-left: auto;
+    padding: 2px 8px;
+    border-radius: 3px;
+    border: 1px solid transparent;
+    background: none;
+    transition: all 0.15s;
+  }
+  .plan-file-view-btn:hover { border-color: var(--accent); background: var(--accent-subtle); }
+
+  .plan-execute-all {
+    margin-top: 16px;
+    width: 100%;
+    padding: 10px 16px;
+    border-radius: 6px;
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    border: 1px solid var(--accent);
+    background: var(--accent-subtle);
+    color: var(--accent);
+    transition: all 0.15s;
+  }
+  .plan-execute-all:hover { background: rgba(88,166,255,0.2); }
+
+  /* ── Breadcrumb (for drill-in views) ─────────── */
+  .breadcrumb {
+    padding: 10px 20px;
+    border-bottom: 1px solid var(--border);
+    background: var(--bg-surface);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+    flex-shrink: 0;
+  }
+  .breadcrumb-link {
+    color: var(--accent);
+    cursor: pointer;
+    text-decoration: none;
+    transition: opacity 0.15s;
+  }
+  .breadcrumb-link:hover { opacity: 0.8; }
+  .breadcrumb-sep { color: var(--text-muted); }
+  .breadcrumb-current { color: var(--text-secondary); font-weight: 500; }
+
+  /* ── Verify phase ────────────────────────────── */
+  .verify-content {
+    padding: 24px 20px;
+    max-width: 700px;
+  }
+  .verify-card {
+    background: var(--bg-elevated);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    padding: 24px;
+    text-align: center;
+  }
+  .verify-icon {
+    font-size: 32px;
+    margin-bottom: 12px;
+  }
+  .verify-title {
+    font-size: 16px;
+    font-weight: 600;
+    margin-bottom: 8px;
+  }
+  .verify-desc {
+    font-size: 13px;
+    color: var(--text-secondary);
+    line-height: 1.6;
+    margin-bottom: 20px;
+  }
+  .verify-btn {
+    padding: 10px 28px;
+    border-radius: 6px;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    border: none;
+    background: var(--accent);
+    color: #fff;
+    transition: opacity 0.15s;
+  }
+  .verify-btn:hover { opacity: 0.85; }
+  .verify-btn.running { background: var(--yellow); cursor: default; }
+  .verify-results {
+    margin-top: 20px;
+    text-align: left;
+  }
+  .verify-result-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 0;
+    font-size: 13px;
+    border-bottom: 1px solid var(--border);
+  }
+  .verify-result-row:last-child { border-bottom: none; }
+  .verify-result-icon { font-size: 14px; flex-shrink: 0; }
+  .verify-result-icon.pass { color: var(--green); }
+  .verify-result-icon.warn { color: var(--yellow); }
+
+  /* ── Chat drawer (bottom slide-up) ───────────── */
+  .chat-toggle {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    z-index: 100;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 10px 0;
+    background: var(--bg-surface);
+    border-top: 1px solid var(--border);
+    cursor: pointer;
+    transition: background 0.15s, border-color 0.15s;
+  }
+  .chat-toggle:hover {
+    background: var(--bg-elevated);
+    border-top-color: var(--accent);
+  }
+  .chat-toggle-label {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text-primary);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .chat-toggle-dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: var(--green);
+  }
+  .chat-toggle-chevron {
+    font-size: 12px;
+    color: var(--text-muted);
+    transition: transform 0.3s ease;
+  }
+  .chat-toggle.open .chat-toggle-chevron { transform: rotate(180deg); }
+
+  .chat-drawer {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    z-index: 99;
+    height: 42%;
+    background: var(--bg-surface);
+    border-top: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    transform: translateY(100%);
+    transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    box-shadow: 0 -8px 32px rgba(0,0,0,0.5);
+  }
+  .chat-drawer.open {
+    transform: translateY(0);
+  }
+
+  .chat-drawer-header {
+    padding: 10px 20px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-shrink: 0;
+    background: var(--bg-elevated);
+  }
+  .chat-drawer-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--green);
+  }
+  .chat-drawer-title {
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+  }
+  .chat-drawer-phase {
+    margin-left: auto;
+    font-size: 10px;
+    color: var(--text-muted);
+  }
+  .chat-drawer-close {
+    margin-left: 8px;
+    width: 20px;
+    height: 20px;
+    border-radius: 4px;
+    border: none;
+    background: transparent;
+    color: var(--text-muted);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 14px;
+    transition: color 0.15s, background 0.15s;
+  }
+  .chat-drawer-close:hover { color: var(--text-primary); background: var(--bg-hover); }
+
+  .chat-messages {
+    flex: 1;
+    overflow-y: auto;
+    padding: 12px 0;
+  }
+  .chat-messages::-webkit-scrollbar { width: 4px; }
+  .chat-messages::-webkit-scrollbar-track { background: transparent; }
+  .chat-messages::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+
+  .chat-msg {
+    padding: 4px 20px;
+    animation: slideUp 0.15s ease;
+  }
+  .chat-msg.agent {
+    border-left: 2px solid rgba(88,166,255,0.25);
+    margin-left: 18px;
+    padding-left: 14px;
+  }
+  .chat-msg.user { text-align: right; }
+  .chat-msg-text {
+    font-size: 12px;
+    line-height: 1.55;
+    color: var(--text-secondary);
+  }
+  .chat-msg.user .chat-msg-text {
+    display: inline-block;
+    background: var(--accent-subtle);
+    padding: 5px 12px;
+    border-radius: 8px 8px 2px 8px;
+    color: var(--text-primary);
+    text-align: left;
+    font-size: 12px;
+  }
+  .chat-msg-text code {
+    font-family: var(--mono);
+    font-size: 11px;
+    background: var(--bg-inset);
+    padding: 1px 4px;
+    border-radius: 3px;
+    color: var(--accent);
+  }
+
+  .chat-tool {
+    margin: 3px 20px;
+    padding: 3px 8px;
+    background: var(--bg-elevated);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    font-size: 9px;
+    color: var(--text-muted);
+    font-family: var(--mono);
+    display: inline-block;
+  }
+
+  .chat-input {
+    padding: 10px 16px;
+    border-top: 1px solid var(--border);
+    flex-shrink: 0;
+  }
+  .chat-input-wrap {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background: var(--bg-elevated);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 7px 10px;
+    transition: border-color 0.15s;
+  }
+  .chat-input-wrap:focus-within { border-color: var(--accent); }
+  .chat-input-field {
+    flex: 1;
+    background: none;
+    border: none;
+    color: var(--text-primary);
+    font-size: 13px;
+    font-family: inherit;
+    outline: none;
+    min-width: 0;
+  }
+  .chat-input-field::placeholder { color: var(--text-muted); }
+  .chat-send-btn {
+    width: 26px;
+    height: 26px;
+    border-radius: 6px;
+    background: var(--accent);
+    border: none;
+    color: white;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    transition: opacity 0.15s;
+  }
+  .chat-send-btn:hover { opacity: 0.85; }
+  .chat-send-btn svg { width: 11px; height: 11px; }
+
+  /* ── Toast ──────────────────────────────────── */
+  .toast {
+    position: fixed;
+    bottom: 56px;
+    left: 50%;
+    transform: translateX(-50%) translateY(80px);
+    background: var(--bg-elevated);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 10px 20px;
+    font-size: 13px;
+    color: var(--text-primary);
+    z-index: 400;
+    transition: transform 0.3s ease, opacity 0.3s ease;
+    opacity: 0;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+    pointer-events: none;
+  }
+  .toast.show { transform: translateX(-50%) translateY(0); opacity: 1; }
+  .toast.success { border-color: var(--green); }
+  .toast .t-icon { font-size: 16px; }
+  .toast.success .t-icon { color: var(--green); }
+
+  /* ── Doc content view ────────────────────────── */
+  .doc-view {
+    padding: 24px 20px;
+    max-width: 800px;
+  }
+  .doc-view h3 {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text-primary);
+    margin: 16px 0 6px;
+  }
+  .doc-view h3:first-child { margin-top: 0; }
+  .doc-view p { font-size: 13px; line-height: 1.6; color: var(--text-secondary); margin: 4px 0; }
+  .doc-view code {
+    font-family: var(--mono);
+    font-size: 12px;
+    background: var(--bg-inset);
+    padding: 1px 4px;
+    border-radius: 3px;
+    color: var(--accent);
+  }
+  .doc-view ul { padding-left: 18px; margin: 4px 0; font-size: 13px; color: var(--text-secondary); line-height: 1.6; }
+  .doc-view em { color: var(--yellow); }
+
+  /* ── Execution progress ──────────────────────── */
+  .exec-progress {
+    margin-top: 16px;
+    padding: 14px 16px;
+    background: var(--bg-elevated);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+  }
+  .exec-progress-label {
+    font-size: 10px;
+    font-weight: 700;
+    color: var(--text-muted);
+    margin-bottom: 8px;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+  }
+  .exec-progress-bar {
+    height: 4px;
+    background: var(--bg-inset);
+    border-radius: 3px;
+    overflow: hidden;
+  }
+  .exec-progress-fill {
+    height: 100%;
+    background: var(--green);
+    border-radius: 3px;
+    transition: width 0.5s ease;
+  }
+  .exec-progress-text {
+    font-size: 11px;
+    color: var(--text-muted);
+    margin-top: 6px;
+    text-align: right;
+  }
+
+  /* Bottom padding so content doesn't hide behind chat toggle */
+  .phase-content { padding-bottom: 48px; }
+</style>
+</head>
+<body>
+
+<a href="index.html" class="back-link">&larr; All Models</a>
+
+<div class="header">
+  <span class="ticket-id">AUTH-42</span>
+  <span class="header-sep">/</span>
+  <span class="ticket-title">Add user authentication</span>
+  <span class="header-spacer"></span>
+  <span class="model-tag">Model C &mdash; Top-Down Phases</span>
+</div>
+
+<div class="phase-tabs" id="phaseTabs"></div>
+
+<div class="content-area" id="contentArea"></div>
+
+<!-- Chat toggle (always at bottom) -->
+<div class="chat-toggle" id="chatToggle" onclick="toggleChat()">
+  <span class="chat-toggle-label">
+    <span class="chat-toggle-dot"></span>
+    Chat
+    <span class="chat-toggle-chevron">&#9650;</span>
+  </span>
+</div>
+
+<!-- Chat drawer -->
+<div class="chat-drawer" id="chatDrawer">
+  <div class="chat-drawer-header">
+    <span class="chat-drawer-dot"></span>
+    <span class="chat-drawer-title">Chat</span>
+    <span class="chat-drawer-phase" id="chatPhaseLabel"></span>
+    <button class="chat-drawer-close" onclick="toggleChat()">&times;</button>
+  </div>
+  <div class="chat-messages" id="chatMessages"></div>
+  <div class="chat-input">
+    <div class="chat-input-wrap">
+      <input class="chat-input-field" id="chatInput" placeholder="Reply..." onkeydown="if(event.key==='Enter')sendChat()">
+      <button class="chat-send-btn" onclick="sendChat()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg></button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"><span class="t-icon"></span><span class="t-msg"></span></div>
+
+<script>
+// ── Data ──────────────────────────────────────────────────────
+
+var phases = [
+  { id: 'describe', name: 'Describe', status: 'done' },
+  { id: 'specify',  name: 'Specify',  status: 'active', progress: null },
+  { id: 'plan',     name: 'Plan',     status: 'pending' },
+  { id: 'verify',   name: 'Verify',   status: 'pending' }
+];
+
+var specDiffs = [
+  {
+    id: 'design-doc',
+    title: 'design-doc.md',
+    type: 'doc',
+    badge: 'draft',
+    path: '.bonsai/auth-system/design-doc.md',
+    html: '<h3>1. Purpose</h3><p>Auth module for the Bonsai workspace. Extends existing token-based system with proper signup/login flows and RBAC.</p><h3>2. Architecture</h3><p>Layered pattern:</p><ul><li><code>auth/models.py</code> &mdash; Pydantic models</li><li><code>auth/service.py</code> &mdash; Business logic</li><li><code>auth/storage.py</code> &mdash; SQLite via aiosqlite</li><li><code>auth/middleware.py</code> &mdash; FastAPI auth dependencies</li></ul><h3>3. Auth Strategy</h3><p><em>[Pending your decision on JWT vs session-based]</em></p><h3>4. Data Model</h3><p>password_hash, role (admin|user|viewer), timestamps, is_active</p>'
+  },
+  {
+    id: 'auth-readme',
+    title: 'auth/README.md',
+    type: 'diff',
+    badge: 'reviewing',
+    path: 'backend/app/auth/README.md',
+    op: 'new', add: 47, del: 0,
+    hasQuestion: true,
+    question: {
+      id: 'jwt-decision',
+      text: 'JWT or session-based?',
+      opts: ['JWT tokens', 'Session-based', 'Hybrid'],
+      recIdx: 0
+    },
+    diff: [
+      { type: 'hunk', text: '@@ -0,0 +1,47 @@' },
+      { type: 'add', ln: '1', text: '+# Auth Module — Design Specification' },
+      { type: 'add', ln: '2', text: '+' },
+      { type: 'add', ln: '3', text: '+> Status: **Draft** | Parent: DESIGN_DOC.md' },
+      { type: 'add', ln: '5', text: '+## Purpose' },
+      { type: 'add', ln: '7', text: '+User authentication, authorization, and session management' },
+      { type: 'add', ln: '8', text: '+for the Bonsai workspace.' },
+      { type: 'add', ln: '10', text: '+## Architecture' },
+      { type: 'add', ln: '12', text: '+```' },
+      { type: 'add', ln: '13', text: '+auth/' },
+      { type: 'add', ln: '14', text: '+  models.py       # Pydantic: User, Session, Role' },
+      { type: 'add', ln: '15', text: '+  service.py      # Business logic' },
+      { type: 'add', ln: '16', text: '+  storage.py      # SQLite via aiosqlite' },
+      { type: 'add', ln: '17', text: '+  middleware.py   # FastAPI auth dependencies' },
+      { type: 'add', ln: '18', text: '+```' },
+      { type: 'add', ln: '20', text: '+## Authentication Strategy', marker: 'strategy' },
+      { type: 'add', ln: '22', text: '+[Pending: JWT vs session-based decision]', marker: 'pending-decision' },
+      { type: 'add', ln: '24', text: '+## Data Model' },
+      { type: 'add', ln: '26', text: '+- `password_hash` — bcrypt' },
+      { type: 'add', ln: '27', text: '+- `role` — admin | user | viewer' },
+      { type: 'add', ln: '28', text: '+- `created_at`, `last_login`' },
+      { type: 'add', ln: '29', text: '+- `is_active` — soft disable' }
+    ]
+  },
+  {
+    id: 'design-doc-diff',
+    title: 'DESIGN_DOC.md',
+    type: 'diff',
+    badge: 'pending',
+    path: '.bonsai/DESIGN_DOC.md',
+    op: 'modified', add: 12, del: 2,
+    diff: [
+      { type: 'hunk', text: '@@ -45,6 +45,18 @@' },
+      { type: 'ctx', ln: '45', text: ' ## Module Overview' },
+      { type: 'ctx', ln: '46', text: ' ' },
+      { type: 'del', ln: '47', text: '-| Module | Purpose |' },
+      { type: 'add', ln: '47', text: '+| Module | Purpose | Status |' },
+      { type: 'ctx', ln: '48', text: ' | core | Config, file I/O, watcher | Active |' },
+      { type: 'add', ln: '49', text: '+| auth | User authentication, RBAC | Draft |' },
+      { type: 'ctx', ln: '50', text: ' | spec | Spec parser, validator | Active |' },
+      { type: 'ctx', ln: '51', text: ' ' },
+      { type: 'add', ln: '52', text: '+### Auth Module' },
+      { type: 'add', ln: '53', text: '+' },
+      { type: 'add', ln: '54', text: '+New module providing user authentication and' },
+      { type: 'add', ln: '55', text: '+role-based access control. See [auth/README.md]' },
+      { type: 'add', ln: '56', text: '+for detailed specification.' }
+    ]
+  },
+  {
+    id: 'core-readme',
+    title: 'core/README.md',
+    type: 'diff',
+    badge: 'pending',
+    path: 'backend/app/core/README.md',
+    op: 'modified', add: 5, del: 1,
+    diff: [
+      { type: 'hunk', text: '@@ -32,6 +32,10 @@' },
+      { type: 'ctx', ln: '32', text: ' ## Dependencies' },
+      { type: 'ctx', ln: '33', text: ' ' },
+      { type: 'del', ln: '34', text: '-- No external module dependencies' },
+      { type: 'add', ln: '34', text: '+### Consumed by' },
+      { type: 'add', ln: '35', text: '+' },
+      { type: 'add', ln: '36', text: '+- `auth/` — uses `server_store` for user persistence' },
+      { type: 'add', ln: '37', text: '+- `agent/` — uses config and file I/O' },
+      { type: 'add', ln: '38', text: '+- `spec/` — uses file watcher and config' }
+    ]
+  }
+];
+
+var planSteps = [
+  { title: 'Create auth module skeleton', desc: 'Set up models.py, service.py, storage.py, middleware.py', status: 'pending',
+    files: ['backend/app/auth/__init__.py', 'backend/app/auth/models.py', 'backend/app/auth/service.py', 'backend/app/auth/storage.py'] },
+  { title: 'Implement user storage', desc: 'SQLite table creation, CRUD operations via aiosqlite', status: 'pending',
+    files: ['backend/app/auth/storage.py', 'backend/app/core/server_store.py'] },
+  { title: 'Implement JWT token service', desc: 'Token generation, validation, refresh flow', status: 'pending',
+    files: ['backend/app/auth/service.py', 'backend/app/auth/models.py'] },
+  { title: 'Add signup/login RPC methods', desc: 'WebSocket RPC handlers for authentication flows', status: 'pending',
+    files: ['backend/app/rpc/methods/auth.py', 'backend/app/rpc/server.py'] },
+  { title: 'Frontend login/signup UI', desc: 'Login screen, signup form, session token management', status: 'pending',
+    files: ['frontend/src/components/LoginScreen.tsx', 'frontend/src/components/SignupForm.tsx', 'frontend/src/store/auth.ts'] },
+  { title: 'Integration tests', desc: 'End-to-end auth flow tests with pytest-asyncio', status: 'pending',
+    files: ['backend/tests/test_auth_service.py', 'backend/tests/test_auth_rpc.py'] }
+];
+
+// Fake diff data for viewing files from plan steps
+var fileDiffs = {
+  'backend/app/auth/__init__.py': {
+    op: 'new', add: 3, del: 0,
+    lines: [
+      { type: 'hunk', text: '@@ -0,0 +1,3 @@' },
+      { type: 'add', ln: '1', text: '+from __future__ import annotations' },
+      { type: 'add', ln: '2', text: '+' },
+      { type: 'add', ln: '3', text: '+"""Auth module — user authentication and RBAC."""' }
+    ]
+  },
+  'backend/app/auth/models.py': {
+    op: 'new', add: 25, del: 0,
+    lines: [
+      { type: 'hunk', text: '@@ -0,0 +1,25 @@' },
+      { type: 'add', ln: '1', text: '+from __future__ import annotations' },
+      { type: 'add', ln: '2', text: '+' },
+      { type: 'add', ln: '3', text: '+from pydantic import BaseModel, Field' },
+      { type: 'add', ln: '4', text: '+' },
+      { type: 'add', ln: '5', text: '+' },
+      { type: 'add', ln: '6', text: '+class User(BaseModel):' },
+      { type: 'add', ln: '7', text: '+    id: str' },
+      { type: 'add', ln: '8', text: '+    name: str' },
+      { type: 'add', ln: '9', text: '+    email: str | None = None' },
+      { type: 'add', ln: '10', text: '+    password_hash: str' },
+      { type: 'add', ln: '11', text: '+    role: str = "user"' },
+      { type: 'add', ln: '12', text: '+    is_active: bool = True' },
+      { type: 'add', ln: '13', text: '+    created_at: str = ""' },
+      { type: 'add', ln: '14', text: '+    last_login: str | None = None' }
+    ]
+  },
+  'backend/app/auth/service.py': {
+    op: 'new', add: 18, del: 0,
+    lines: [
+      { type: 'hunk', text: '@@ -0,0 +1,18 @@' },
+      { type: 'add', ln: '1', text: '+from __future__ import annotations' },
+      { type: 'add', ln: '2', text: '+' },
+      { type: 'add', ln: '3', text: '+import logging' },
+      { type: 'add', ln: '4', text: '+from .models import User' },
+      { type: 'add', ln: '5', text: '+from .storage import AuthStorage' },
+      { type: 'add', ln: '6', text: '+' },
+      { type: 'add', ln: '7', text: '+logger = logging.getLogger(__name__)' },
+      { type: 'add', ln: '8', text: '+' },
+      { type: 'add', ln: '9', text: '+class AuthService:' },
+      { type: 'add', ln: '10', text: '+    def __init__(self, storage: AuthStorage):' },
+      { type: 'add', ln: '11', text: '+        self._storage = storage' }
+    ]
+  },
+  'backend/app/auth/storage.py': {
+    op: 'new', add: 22, del: 0,
+    lines: [
+      { type: 'hunk', text: '@@ -0,0 +1,22 @@' },
+      { type: 'add', ln: '1', text: '+from __future__ import annotations' },
+      { type: 'add', ln: '2', text: '+' },
+      { type: 'add', ln: '3', text: '+import aiosqlite' },
+      { type: 'add', ln: '4', text: '+import logging' },
+      { type: 'add', ln: '5', text: '+' },
+      { type: 'add', ln: '6', text: '+logger = logging.getLogger(__name__)' },
+      { type: 'add', ln: '7', text: '+' },
+      { type: 'add', ln: '8', text: '+class AuthStorage:' },
+      { type: 'add', ln: '9', text: '+    """SQLite-backed user storage."""' },
+      { type: 'add', ln: '10', text: '+' },
+      { type: 'add', ln: '11', text: '+    async def create_user(self, user):' },
+      { type: 'add', ln: '12', text: '+        ...' }
+    ]
+  }
+};
+
+// ── State ──────────────────────────────────────────────────────
+
+var activePhase = 'specify';
+var selectedDiffIdx = 1; // auth/README.md
+var approvedSet = {};
+var answeredDecisions = {};
+var chatOpen = false;
+var expandedPlanSteps = {};
+var drillView = null; // null or { stepIdx, filePath }
+var verifyState = 'idle'; // idle, running, done
+
+// Per-phase chat logs
+var chatLogs = {
+  describe: [
+    { r: 'agent', t: 'I\'ve reviewed your ticket and structured the description into What / Purpose / Success Criteria.' },
+    { r: 'agent', t: 'Description is complete. You can move to the <strong>Specify</strong> phase.' }
+  ],
+  specify: [
+    { r: 'tool', t: 'spec_search — scanned backend/app/core/ for patterns' },
+    { r: 'agent', t: 'Analyzed your codebase and the existing <code>server_store</code> patterns. Created initial specifications for AUTH-42.' },
+    { r: 'agent', t: 'I need one decision before completing the auth strategy section. Check the inline card in <code>auth/README.md</code>.' }
+  ],
+  plan: [
+    { r: 'agent', t: 'All specifications approved. Generated a 6-step implementation plan based on the approved specs.' },
+    { r: 'agent', t: 'Execute steps individually or use <strong>Execute All</strong> for sequential execution.' }
+  ],
+  verify: [
+    { r: 'agent', t: 'Implementation complete. Run verification to ensure specs match the implementation.' }
+  ]
+};
+
+// ── Helpers ────────────────────────────────────────────────────
+
+function esc(s) {
+  return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+function approvedCount() {
+  var c = 0;
+  specDiffs.forEach(function(d) { if (d.type === 'diff' && approvedSet[d.id]) c++; });
+  return c;
+}
+function totalDiffs() {
+  var c = 0;
+  specDiffs.forEach(function(d) { if (d.type === 'diff') c++; });
+  return c;
+}
+
+function showToast(msg, type) {
+  var toast = document.getElementById('toast');
+  toast.querySelector('.t-icon').textContent = type === 'success' ? '✓' : 'ℹ';
+  toast.querySelector('.t-msg').textContent = msg;
+  toast.className = 'toast show' + (type === 'success' ? ' success' : '');
+  setTimeout(function() { toast.className = 'toast'; }, 3000);
+}
+
+// ── Render: Phase Tabs ────────────────────────────────────────
+
+function renderPhaseTabs() {
+  var container = document.getElementById('phaseTabs');
+  container.innerHTML = phases.map(function(p) {
+    var isActive = activePhase === p.id;
+    var cls = 'phase-tab';
+    if (isActive) cls += ' active';
+    if (p.status === 'done') cls += ' done';
+    if (p.status === 'pending') cls += ' locked';
+
+    var iconCls = p.status === 'done' ? 'done' : (p.status === 'active' ? 'active' : 'pending');
+    var icon = p.status === 'done' ? '✓' : (p.status === 'active' ? '●' : '○');
+    var onclick = p.status === 'pending' ? '' : ' onclick="switchPhase(\'' + p.id + '\')"';
+
+    var h = '<div class="' + cls + '"' + onclick + '>';
+    h += '<span class="phase-tab-icon ' + iconCls + '">' + icon + '</span>';
+    h += '<span>' + esc(p.name) + '</span>';
+
+    // Show progress for specify
+    if (p.id === 'specify' && (p.status === 'active' || p.status === 'done')) {
+      h += '<span class="phase-tab-progress">' + approvedCount() + '/' + totalDiffs() + '</span>';
+    }
+    // Show progress for plan
+    if (p.id === 'plan' && (p.status === 'active' || p.status === 'done')) {
+      var done = planSteps.filter(function(s) { return s.status === 'done'; }).length;
+      h += '<span class="phase-tab-progress">' + done + '/' + planSteps.length + '</span>';
+    }
+
+    if (p.status === 'pending') h += '<span style="font-size:10px;margin-left:2px;color:var(--text-muted);">&#128274;</span>';
+    h += '</div>';
+    return h;
+  }).join('');
+}
+
+// ── Render: Describe Phase ────────────────────────────────────
+
+function renderDescribe() {
+  var h = '<div class="describe-content">';
+  h += '<div class="describe-field"><div class="describe-label">What</div>';
+  h += '<div class="describe-value">Add user authentication with signup, login, session management, and RBAC supporting admin and regular user roles.</div></div>';
+  h += '<div class="describe-field"><div class="describe-label">Purpose</div>';
+  h += '<div class="describe-value">Enable secure multi-user access to the Bonsai workspace with appropriate permission boundaries.</div></div>';
+  h += '<div class="describe-field"><div class="describe-label">Success Criteria</div>';
+  h += '<div class="describe-value">Users can sign up, log in, and have persistent sessions. Admin users can manage others. Regular users have restricted access. All endpoints enforce RBAC.</div></div>';
+  h += '<div class="describe-completed"><span>✓</span> Description complete</div>';
+  h += '</div>';
+  return h;
+}
+
+// ── Render: Diff Lines (with inline decision cards) ───────────
+
+function renderDiffLines(diffArr, question) {
+  var h = '';
+  var decisionInserted = false;
+
+  diffArr.forEach(function(d) {
+    if (d.type === 'hunk') {
+      h += '<div class="diff-line hunk">' + esc(d.text) + '</div>';
+      return;
+    }
+    var lnHtml = d.ln ? '<span class="ln">' + d.ln + '</span>' : '';
+    h += '<div class="diff-line ' + d.type + '">' + lnHtml + esc(d.text) + '</div>';
+
+    // Insert decision card after the pending-decision line
+    if (d.marker === 'pending-decision' && question && !decisionInserted) {
+      decisionInserted = true;
+      var qid = question.id;
+      if (answeredDecisions[qid]) {
+        h += '<div class="inline-decision resolved collapsing">';
+        h += '<div class="inline-decision-resolved"><span>✓</span> ' + esc(answeredDecisions[qid]) + '</div>';
+        h += '</div>';
+      } else {
+        h += '<div class="inline-decision" id="decision-' + qid + '">';
+        h += '<div class="inline-decision-label">Decision Required</div>';
+        h += '<div class="inline-decision-text">' + esc(question.text) + '</div>';
+        h += '<div class="inline-decision-opts">';
+        question.opts.forEach(function(o, i) {
+          h += '<button class="decision-btn' + (i === question.recIdx ? ' rec' : '') + '" onclick="answerDecision(\'' + qid + '\',' + i + ')">';
+          h += esc(o) + (i === question.recIdx ? ' ★' : '') + '</button>';
+        });
+        h += '</div></div>';
+      }
+    }
+  });
+  return h;
+}
+
+// ── Render: Specify Phase ─────────────────────────────────────
+
+function renderSpecify() {
+  var sel = specDiffs[selectedDiffIdx];
+  var isApproved = approvedSet[sel.id];
+
+  var h = '<div class="diff-viewer-full">';
+
+  if (sel.type === 'diff') {
+    // Toolbar with path, badge, stats, and approve/changes buttons
+    h += '<div class="diff-toolbar">';
+    h += '<span class="diff-path">' + esc(sel.path) + '</span>';
+    h += '<span class="diff-op-badge ' + sel.op + '">' + sel.op + '</span>';
+    h += '<span class="diff-stats"><span class="add">+' + sel.add + '</span>';
+    if (sel.del > 0) h += ' <span class="del">-' + sel.del + '</span>';
+    h += '</span>';
+    h += '<div class="diff-actions-inline">';
+    if (!isApproved) {
+      h += '<button class="action-btn secondary" onclick="requestChanges(\'' + sel.id + '\')">Request Changes</button>';
+      h += '<button class="action-btn primary" onclick="approveDiff(\'' + sel.id + '\')">Approve</button>';
+    } else {
+      h += '<button class="action-btn approved-btn">✓ Approved</button>';
+    }
+    h += '</div>';
+    h += '</div>';
+
+    // Diff content
+    h += '<div class="diff-content">';
+    h += renderDiffLines(sel.diff, sel.question || null);
+    if (isApproved) {
+      h += '<div class="approved-overlay"><div class="approved-stamp">APPROVED</div></div>';
+    }
+    h += '</div>';
+
+  } else if (sel.type === 'doc') {
+    h += '<div class="diff-toolbar">';
+    h += '<span class="diff-path">' + esc(sel.path) + '</span>';
+    h += '<span class="diff-op-badge" style="background:var(--yellow-subtle);color:var(--yellow);">' + sel.badge + '</span>';
+    h += '</div>';
+    h += '<div class="doc-view" style="flex:1;overflow-y:auto;">' + sel.html + '</div>';
+  }
+
+  // Agent note
+  h += '<div class="agent-note">';
+  h += '<span class="agent-note-icon">ℹ</span>';
+  h += '<span>Created following the layered pattern from <code>server_store.py</code>. Auth module mirrors core module structure.</span>';
+  h += '</div>';
+
+  // Diff selector strip
+  h += '<div class="diff-selector">';
+  specDiffs.forEach(function(d, i) {
+    var active = i === selectedDiffIdx;
+    var isApp = approvedSet[d.id];
+    var dotCls = isApp ? 'approved' : d.badge;
+    h += '<div class="diff-selector-item' + (active ? ' active' : '') + '" onclick="selectDiff(' + i + ')">';
+    h += '<span class="diff-selector-dot ' + dotCls + '"></span>';
+    h += esc(d.title);
+    h += '</div>';
+  });
+  h += '<span class="diff-selector-progress">' + approvedCount() + '/' + totalDiffs() + ' approved</span>';
+  h += '</div>';
+
+  h += '</div>';
+  return h;
+}
+
+// ── Render: Plan Phase ────────────────────────────────────────
+
+function renderPlan() {
+  // Check for drill-in view
+  if (drillView) {
+    return renderPlanDrill();
+  }
+
+  var doneCount = planSteps.filter(function(s) { return s.status === 'done'; }).length;
+
+  var h = '<div class="plan-content">';
+  planSteps.forEach(function(s, i) {
+    var cls = 'plan-step';
+    if (s.status === 'done') cls += ' done';
+    if (s.status === 'running') cls += ' running';
+    if (expandedPlanSteps[i]) cls += ' expanded';
+
+    h += '<div class="' + cls + '">';
+    h += '<div class="plan-step-header" onclick="togglePlanStep(' + i + ')">';
+    h += '<div class="plan-num">' + (s.status === 'done' ? '✓' : (i + 1)) + '</div>';
+    h += '<div class="plan-info">';
+    h += '<div class="plan-title">' + esc(s.title) + '</div>';
+    h += '<div class="plan-desc">' + esc(s.desc) + '</div>';
+    h += '</div>';
+
+    // Status badge
+    if (s.status === 'done') {
+      h += '<span class="plan-status-badge done">✓ Done</span>';
+    } else if (s.status === 'running') {
+      h += '<span class="plan-status-badge running">Running...</span>';
+    } else {
+      h += '<button class="plan-execute-btn" onclick="event.stopPropagation();executePlanStep(' + i + ')">Execute</button>';
+    }
+    h += '</div>'; // header
+
+    // Expanded files list
+    h += '<div class="plan-step-files">';
+    if (s.files) {
+      s.files.forEach(function(f) {
+        h += '<div class="plan-file-row">';
+        h += '<span class="file-icon">' + (s.status === 'done' ? '+' : '○') + '</span>';
+        h += '<span>' + esc(f) + '</span>';
+        if (s.status === 'done') {
+          h += '<button class="plan-file-view-btn" onclick="event.stopPropagation();viewFileDiff(' + i + ',\'' + esc(f) + '\')">View Diff</button>';
+        }
+        h += '</div>';
+      });
+    }
+    h += '</div>';
+
+    h += '</div>'; // plan-step
+  });
+
+  // Execute All
+  var allDone = planSteps.every(function(s) { return s.status === 'done'; });
+  var anyRunning = planSteps.some(function(s) { return s.status === 'running'; });
+  if (!allDone) {
+    h += '<button class="plan-execute-all" onclick="executeAllPlanSteps()"' + (anyRunning ? ' disabled style="opacity:0.5;cursor:default;"' : '') + '>Execute All</button>';
+  }
+
+  // Progress bar
+  if (doneCount > 0 || anyRunning) {
+    var pct = (doneCount / planSteps.length * 100).toFixed(0);
+    h += '<div class="exec-progress">';
+    h += '<div class="exec-progress-label">Execution Progress</div>';
+    h += '<div class="exec-progress-bar"><div class="exec-progress-fill" style="width:' + pct + '%"></div></div>';
+    h += '<div class="exec-progress-text">' + doneCount + '/' + planSteps.length + ' steps complete</div>';
+    h += '</div>';
+  }
+
+  h += '</div>';
+  return h;
+}
+
+// ── Render: Plan Drill-in (View Diff from changed file) ──────
+
+function renderPlanDrill() {
+  var step = planSteps[drillView.stepIdx];
+  var file = drillView.filePath;
+  var fd = fileDiffs[file];
+
+  var h = '';
+
+  // Breadcrumb
+  h += '<div class="breadcrumb">';
+  h += '<span class="breadcrumb-link" onclick="drillView=null;render();">← Back to Plan</span>';
+  h += '<span class="breadcrumb-sep">›</span>';
+  h += '<span class="breadcrumb-current">Step ' + (drillView.stepIdx + 1) + '</span>';
+  h += '<span class="breadcrumb-sep">›</span>';
+  h += '<span class="breadcrumb-current">' + esc(file.split('/').pop()) + '</span>';
+  h += '</div>';
+
+  if (fd) {
+    h += '<div class="diff-viewer-full" style="flex:1;">';
+    h += '<div class="diff-toolbar">';
+    h += '<span class="diff-path">' + esc(file) + '</span>';
+    h += '<span class="diff-op-badge ' + fd.op + '">' + fd.op + '</span>';
+    h += '<span class="diff-stats"><span class="add">+' + fd.add + '</span>';
+    if (fd.del > 0) h += ' <span class="del">-' + fd.del + '</span>';
+    h += '</span>';
+    h += '</div>';
+    h += '<div class="diff-content">';
+    fd.lines.forEach(function(d) {
+      if (d.type === 'hunk') {
+        h += '<div class="diff-line hunk">' + esc(d.text) + '</div>';
+        return;
+      }
+      var lnHtml = d.ln ? '<span class="ln">' + d.ln + '</span>' : '';
+      h += '<div class="diff-line ' + d.type + '">' + lnHtml + esc(d.text) + '</div>';
+    });
+    h += '</div>';
+    h += '</div>';
+  } else {
+    h += '<div style="padding:40px;color:var(--text-muted);font-size:13px;">No diff data for this file.</div>';
+  }
+
+  return h;
+}
+
+// ── Render: Verify Phase ──────────────────────────────────────
+
+function renderVerify() {
+  var h = '<div class="verify-content">';
+  h += '<div class="verify-card">';
+
+  if (verifyState === 'idle') {
+    h += '<div class="verify-icon">🔍</div>';
+    h += '<div class="verify-title">Verify Implementation</div>';
+    h += '<div class="verify-desc">Run <code style="font-family:var(--mono);font-size:12px;background:var(--bg-inset);padding:1px 4px;border-radius:3px;color:var(--accent);">spec-review</code> to verify that specifications match the implementation.</div>';
+    h += '<button class="verify-btn" onclick="runVerification()">Run Verification</button>';
+  } else if (verifyState === 'running') {
+    h += '<div class="verify-icon" style="animation:pulse 1.5s ease-in-out infinite;">🔍</div>';
+    h += '<div class="verify-title">Verifying...</div>';
+    h += '<div class="verify-desc">Comparing specs against implementation...</div>';
+    h += '<button class="verify-btn running">Running...</button>';
+  } else if (verifyState === 'done') {
+    h += '<div class="verify-icon">✅</div>';
+    h += '<div class="verify-title">Verification Complete</div>';
+    h += '<div class="verify-desc">All specifications are aligned with the implementation.</div>';
+    h += '<div class="verify-results">';
+    h += '<div class="verify-result-row"><span class="verify-result-icon pass">✓</span> auth/README.md matches implementation</div>';
+    h += '<div class="verify-result-row"><span class="verify-result-icon pass">✓</span> DESIGN_DOC.md module table is accurate</div>';
+    h += '<div class="verify-result-row"><span class="verify-result-icon pass">✓</span> core/README.md dependencies correct</div>';
+    h += '<div class="verify-result-row"><span class="verify-result-icon warn">⚠</span> Consider adding API endpoint docs to auth/README.md</div>';
+    h += '</div>';
+  }
+
+  h += '</div></div>';
+  return h;
+}
+
+// ── Render: Chat Messages ─────────────────────────────────────
+
+function renderChatMessages() {
+  var log = chatLogs[activePhase] || [];
+  var container = document.getElementById('chatMessages');
+  var h = '';
+
+  log.forEach(function(msg) {
+    if (msg.r === 'tool') {
+      h += '<div class="chat-tool">' + esc(msg.t) + '</div>';
+    } else if (msg.r === 'agent') {
+      h += '<div class="chat-msg agent"><div class="chat-msg-text">' + msg.t + '</div></div>';
+    } else if (msg.r === 'user') {
+      h += '<div class="chat-msg user"><div class="chat-msg-text">' + esc(msg.t) + '</div></div>';
+    }
+  });
+
+  container.innerHTML = h;
+  container.scrollTop = container.scrollHeight;
+}
+
+// ── Full Render ───────────────────────────────────────────────
+
+function render() {
+  renderPhaseTabs();
+
+  var area = document.getElementById('contentArea');
+  var h = '<div class="phase-content">';
+
+  if (activePhase === 'describe') {
+    h += renderDescribe();
+  } else if (activePhase === 'specify') {
+    h += renderSpecify();
+  } else if (activePhase === 'plan') {
+    h += renderPlan();
+  } else if (activePhase === 'verify') {
+    h += renderVerify();
+  }
+
+  h += '</div>';
+  area.innerHTML = h;
+
+  // Update chat
+  document.getElementById('chatPhaseLabel').textContent = activePhase.charAt(0).toUpperCase() + activePhase.slice(1) + ' phase';
+  renderChatMessages();
+}
+
+// ── Interactions ──────────────────────────────────────────────
+
+function switchPhase(phaseId) {
+  if (activePhase === phaseId) return;
+  var phase = phases.find(function(p) { return p.id === phaseId; });
+  if (phase.status === 'pending') return;
+  activePhase = phaseId;
+  drillView = null;
+  render();
+}
+
+function selectDiff(idx) {
+  selectedDiffIdx = idx;
+  render();
+}
+
+function toggleChat() {
+  chatOpen = !chatOpen;
+  var drawer = document.getElementById('chatDrawer');
+  var toggle = document.getElementById('chatToggle');
+  if (chatOpen) {
+    drawer.classList.add('open');
+    toggle.classList.add('open');
+    setTimeout(function() {
+      var inp = document.getElementById('chatInput');
+      if (inp) inp.focus();
+      var msgs = document.getElementById('chatMessages');
+      if (msgs) msgs.scrollTop = msgs.scrollHeight;
+    }, 350);
+  } else {
+    drawer.classList.remove('open');
+    toggle.classList.remove('open');
+  }
+}
+
+function answerDecision(qid, idx) {
+  if (answeredDecisions[qid]) return;
+
+  // Find the question data
+  var question = null;
+  specDiffs.forEach(function(d) {
+    if (d.question && d.question.id === qid) question = d.question;
+  });
+  if (!question) return;
+
+  var answer = question.opts[idx];
+  answeredDecisions[qid] = answer;
+
+  // Update diff data
+  specDiffs.forEach(function(d) {
+    if (d.diff) {
+      d.diff.forEach(function(line) {
+        if (line.marker === 'strategy') line.text = '+## Authentication Strategy — JWT';
+        if (line.marker === 'pending-decision') line.text = '+JWT-based authentication with access/refresh token pairs';
+      });
+    }
+  });
+
+  // Add to chat
+  var log = chatLogs.specify;
+  log.push({ r: 'user', t: 'Let\'s go with ' + answer + '.' });
+
+  render();
+  showToast('Decision recorded — spec updated', 'success');
+
+  setTimeout(function() {
+    var responses = [
+      'JWT aligns with your existing <code>bns_</code> token pattern. Updated section 3 with JWT strategy — access tokens (15min TTL) + refresh tokens (7d).',
+      'Updated the spec to use server-side sessions with secure cookies.',
+      'Specified JWT for API access and secure session cookies for browser UI.'
+    ];
+    log.push({ r: 'agent', t: responses[idx] || 'Spec updated.' });
+    renderChatMessages();
+  }, 800);
+}
+
+function approveDiff(diffId) {
+  approvedSet[diffId] = true;
+  var diff = specDiffs.find(function(d) { return d.id === diffId; });
+  showToast(diff.title + ' approved', 'success');
+
+  var log = chatLogs.specify;
+  log.push({ r: 'agent', t: 'Approved <code>' + esc(diff.title) + '</code>.' });
+
+  // Auto-advance to next unapproved diff
+  var nextIdx = -1;
+  for (var i = 0; i < specDiffs.length; i++) {
+    if (specDiffs[i].type === 'diff' && !approvedSet[specDiffs[i].id]) {
+      nextIdx = i;
+      break;
+    }
+  }
+  if (nextIdx >= 0) {
+    setTimeout(function() {
+      selectedDiffIdx = nextIdx;
+      log.push({ r: 'agent', t: 'Moving to next: <code>' + esc(specDiffs[nextIdx].title) + '</code>' });
+      render();
+    }, 400);
+  } else {
+    // All diffs approved -> unlock Plan
+    setTimeout(function() {
+      phases[1].status = 'done';
+      phases[2].status = 'active';
+      activePhase = 'plan';
+      log.push({ r: 'agent', t: 'All specifications approved! Moving to <strong>Plan</strong> phase.' });
+      render();
+      showToast('All specs approved — Plan phase unlocked', 'success');
+    }, 700);
+  }
+
+  render();
+}
+
+function requestChanges(diffId) {
+  var diff = specDiffs.find(function(d) { return d.id === diffId; });
+  var log = chatLogs.specify;
+  log.push({ r: 'agent', t: 'I\'ll revise <code>' + esc(diff.title) + '</code>. What would you like me to change?' });
+
+  // Open chat drawer to show the conversation
+  if (!chatOpen) toggleChat();
+  renderChatMessages();
+  showToast('Describe changes in chat', '');
+  setTimeout(function() {
+    var inp = document.getElementById('chatInput');
+    if (inp) inp.focus();
+  }, 400);
+}
+
+function sendChat() {
+  var inp = document.getElementById('chatInput');
+  if (!inp) return;
+  var text = inp.value.trim();
+  if (!text) return;
+  inp.value = '';
+
+  var log = chatLogs[activePhase];
+  log.push({ r: 'user', t: text });
+  renderChatMessages();
+
+  setTimeout(function() {
+    var responses = [
+      'Got it, I\'ll update the spec accordingly.',
+      'That makes sense. Revising the relevant section now.',
+      'Good point! Incorporating that feedback.',
+      'Understood. Updating the specification.'
+    ];
+    log.push({ r: 'agent', t: responses[Math.floor(Math.random() * responses.length)] });
+    renderChatMessages();
+  }, 600 + Math.random() * 800);
+}
+
+function togglePlanStep(idx) {
+  expandedPlanSteps[idx] = !expandedPlanSteps[idx];
+  render();
+}
+
+function viewFileDiff(stepIdx, filePath) {
+  drillView = { stepIdx: stepIdx, filePath: filePath };
+  render();
+}
+
+function executePlanStep(idx) {
+  if (planSteps[idx].status !== 'pending') return;
+  planSteps[idx].status = 'running';
+  expandedPlanSteps[idx] = false;
+
+  var log = chatLogs.plan;
+  log.push({ r: 'agent', t: 'Executing step ' + (idx + 1) + ': <strong>' + esc(planSteps[idx].title) + '</strong>...' });
+  render();
+  if (chatOpen) renderChatMessages();
+
+  setTimeout(function() {
+    planSteps[idx].status = 'done';
+    expandedPlanSteps[idx] = true;
+    log.push({ r: 'agent', t: 'Step ' + (idx + 1) + ' complete: ' + esc(planSteps[idx].title) });
+    render();
+    if (chatOpen) renderChatMessages();
+    showToast(planSteps[idx].title + ' — complete', 'success');
+
+    if (planSteps.every(function(s) { return s.status === 'done'; })) {
+      setTimeout(function() {
+        phases[2].status = 'done';
+        phases[3].status = 'active';
+        log.push({ r: 'agent', t: 'All steps complete! <strong>Verify</strong> phase is now available.' });
+        render();
+        if (chatOpen) renderChatMessages();
+        showToast('All steps complete — Verify phase unlocked', 'success');
+      }, 500);
+    }
+  }, 1500);
+}
+
+function executeAllPlanSteps() {
+  var pending = [];
+  planSteps.forEach(function(s, i) {
+    if (s.status === 'pending') pending.push(i);
+  });
+  if (pending.length === 0) return;
+
+  chatLogs.plan.push({ r: 'agent', t: 'Executing all remaining steps sequentially...' });
+  render();
+  if (chatOpen) renderChatMessages();
+
+  function runNext(arr, pos) {
+    if (pos >= arr.length) return;
+    executePlanStep(arr[pos]);
+    setTimeout(function() { runNext(arr, pos + 1); }, 2000);
+  }
+  runNext(pending, 0);
+}
+
+function runVerification() {
+  if (verifyState !== 'idle') return;
+  verifyState = 'running';
+  var log = chatLogs.verify;
+  log.push({ r: 'agent', t: 'Running spec-review verification...' });
+  render();
+  if (chatOpen) renderChatMessages();
+
+  setTimeout(function() {
+    verifyState = 'done';
+    phases[3].status = 'done';
+    log.push({ r: 'agent', t: 'Verification complete. 3 checks passed, 1 suggestion.' });
+    render();
+    if (chatOpen) renderChatMessages();
+    showToast('Verification complete — specs aligned', 'success');
+  }, 2000);
+}
+
+// ── Initial render ────────────────────────────────────────────
+render();
+</script>
+</body>
+</html>

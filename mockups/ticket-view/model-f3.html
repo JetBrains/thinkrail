@@ -1,0 +1,678 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Model F3 — Focus Shift</title>
+<style>
+  :root {
+    --bg: #0e1117; --surface: #161b22; --elevated: #1c2129; --hover: #242b35; --inset: #0d1117;
+    --border: #2d333b; --border-bright: #3d444d;
+    --text: #e6edf3; --text-sec: #8b949e; --text-dim: #656d76;
+    --accent: #58a6ff; --accent-sub: #1f3a5f;
+    --green: #3fb950; --green-sub: #1a3a2a;
+    --yellow: #d29922; --yellow-sub: #3d2e00;
+    --purple: #bc8cff; --purple-sub: #2a1f3d;
+    --red: #f85149; --red-sub: #3d1418;
+    --r: 8px; --rl: 12px;
+    --mono: 'SF Mono','Cascadia Code','Consolas',monospace;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { background: var(--bg); color: var(--text); font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans', Helvetica, Arial, sans-serif; height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
+
+  /* ── Top bar ──────────────────────────────────── */
+  .top-bar { height: 44px; min-height: 44px; background: var(--surface); border-bottom: 1px solid var(--border); display: flex; align-items: center; padding: 0 20px; gap: 12px; }
+  .top-bar .ticket-id { font-family: var(--mono); font-size: 12px; color: var(--accent); background: var(--accent-sub); padding: 2px 8px; border-radius: 4px; font-weight: 600; }
+  .top-bar .ticket-title { font-size: 13px; font-weight: 600; color: var(--text); }
+  .top-bar .sep { width: 1px; height: 18px; background: var(--border); }
+  .phase-chips { display: flex; gap: 6px; }
+  .phase-chip { font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 100px; cursor: default; }
+  .phase-chip.done { background: var(--green-sub); color: var(--green); }
+  .phase-chip.active { background: var(--yellow-sub); color: var(--yellow); }
+  .phase-chip.pending { background: var(--elevated); color: var(--text-dim); border: 1px solid var(--border); }
+  .top-right { margin-left: auto; display: flex; align-items: center; gap: 12px; }
+  .back-link { font-size: 12px; color: var(--text-sec); text-decoration: none; transition: color 0.15s; }
+  .back-link:hover { color: var(--text); }
+  .model-tag { font-size: 10px; font-weight: 600; color: var(--purple); background: var(--purple-sub); padding: 3px 8px; border-radius: 100px; }
+
+  /* ── Review indicator (shown in split mode) ──── */
+  .review-indicator { display: none; align-items: center; gap: 8px; }
+  .review-indicator .review-label { font-size: 12px; color: var(--text-sec); }
+  .review-indicator .review-file { font-size: 12px; font-family: var(--mono); color: var(--accent); }
+  .back-to-conv { font-size: 12px; color: var(--text-sec); cursor: pointer; padding: 3px 10px; border-radius: 6px; border: 1px solid var(--border); background: none; transition: all 0.15s; }
+  .back-to-conv:hover { color: var(--text); border-color: var(--border-bright); }
+  body.split-mode .review-indicator { display: flex; }
+  body.split-mode .default-header { display: none; }
+
+  .default-header { display: flex; align-items: center; gap: 12px; }
+
+  /* ── Main area (flex container for split) ─────── */
+  .main-area { flex: 1; display: flex; overflow: hidden; position: relative; }
+
+  /* ── Artifact panel (left, hidden by default) ─── */
+  .artifact-panel { width: 0; min-width: 0; overflow: hidden; background: var(--bg); border-right: 1px solid var(--border); display: flex; flex-direction: column; transition: width 0.35s cubic-bezier(0.4, 0, 0.2, 1), min-width 0.35s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.25s ease; opacity: 0; }
+  body.split-mode .artifact-panel { width: 60%; min-width: 60%; opacity: 1; }
+
+  .artifact-header { padding: 12px 16px; border-bottom: 1px solid var(--border); background: var(--surface); display: flex; align-items: center; gap: 10px; }
+  .artifact-badge { font-size: 10px; font-weight: 700; text-transform: uppercase; padding: 2px 7px; border-radius: 4px; letter-spacing: 0.5px; }
+  .artifact-badge.new { background: var(--green-sub); color: var(--green); }
+  .artifact-badge.modified { background: var(--yellow-sub); color: var(--yellow); }
+  .artifact-path { font-size: 13px; font-family: var(--mono); color: var(--text); font-weight: 500; }
+  .artifact-stats { font-size: 11px; color: var(--text-dim); margin-left: auto; }
+  .stat-add { color: var(--green); }
+  .stat-del { color: var(--red); }
+
+  .artifact-body { flex: 1; overflow-y: auto; padding: 0; }
+  .diff-view { font-family: var(--mono); font-size: 12px; line-height: 1.7; }
+  .diff-hunk { padding: 4px 0; }
+  .diff-hunk-header { color: var(--purple); background: var(--purple-sub); padding: 4px 16px; font-size: 11px; border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); }
+  .diff-line { padding: 0 16px; white-space: pre-wrap; }
+  .diff-line.add { background: rgba(63, 185, 80, 0.08); color: var(--green); }
+  .diff-line.del { background: rgba(248, 81, 73, 0.08); color: var(--red); }
+  .diff-line.ctx { color: var(--text-dim); }
+  .diff-line .ln { display: inline-block; width: 32px; color: var(--text-dim); text-align: right; margin-right: 12px; user-select: none; opacity: 0.5; }
+
+  .artifact-actions { padding: 12px 16px; border-top: 1px solid var(--border); background: var(--surface); display: flex; gap: 8px; }
+  .btn-request { padding: 7px 16px; border-radius: 6px; font-size: 12px; font-weight: 500; cursor: pointer; border: 1px solid var(--border); background: transparent; color: var(--text-sec); transition: all 0.15s; }
+  .btn-request:hover { border-color: var(--border-bright); color: var(--text); }
+  .btn-approve { padding: 7px 16px; border-radius: 6px; font-size: 12px; font-weight: 600; cursor: pointer; border: none; background: var(--green); color: #fff; transition: all 0.15s; }
+  .btn-approve:hover { opacity: 0.85; }
+  .btn-approve.approved { background: var(--green-sub); color: var(--green); pointer-events: none; }
+
+  .artifact-nav { padding: 8px 16px; border-top: 1px solid var(--border); background: var(--surface); display: flex; align-items: center; gap: 6px; }
+  .nav-tab { font-size: 11px; font-family: var(--mono); padding: 4px 10px; border-radius: 4px; cursor: pointer; color: var(--text-dim); background: transparent; border: 1px solid transparent; transition: all 0.15s; }
+  .nav-tab:hover { color: var(--text-sec); background: var(--hover); }
+  .nav-tab.active { color: var(--accent); background: var(--accent-sub); border-color: transparent; }
+  .nav-tab.tab-approved { color: var(--green); }
+  .nav-counter { margin-left: auto; font-size: 11px; color: var(--text-dim); }
+
+  /* ── Conversation panel (right or full-width) ─── */
+  .conversation { flex: 1; display: flex; flex-direction: column; overflow: hidden; transition: all 0.35s cubic-bezier(0.4, 0, 0.2, 1); }
+
+  .conv-scroll { flex: 1; overflow-y: auto; padding: 20px; }
+  .conv-scroll > * + * { margin-top: 14px; }
+
+  /* ── Agent notes ──────────────────────────────── */
+  .note { display: flex; gap: 10px; padding: 10px 14px; border-radius: var(--r); background: var(--surface); border: 1px solid var(--border); }
+  .note-icon { font-size: 14px; flex-shrink: 0; line-height: 1.5; }
+  .note-text { font-size: 13px; color: var(--text-sec); line-height: 1.5; }
+  .note-text strong { color: var(--text); font-weight: 600; }
+
+  /* ── Artifact reference cards ─────────────────── */
+  .artifact-ref { border: 1px solid var(--border); border-radius: var(--r); background: var(--surface); cursor: pointer; transition: all 0.2s; overflow: hidden; }
+  .artifact-ref:hover { border-color: var(--accent); background: var(--elevated); }
+  .artifact-ref.ref-approved { border-color: var(--green); opacity: 0.7; cursor: default; }
+  .artifact-ref.ref-approved:hover { background: var(--surface); }
+  .ref-header { display: flex; align-items: center; gap: 10px; padding: 10px 14px; }
+  .ref-badge { font-size: 10px; font-weight: 700; text-transform: uppercase; padding: 2px 7px; border-radius: 4px; letter-spacing: 0.5px; }
+  .ref-badge.new { background: var(--green-sub); color: var(--green); }
+  .ref-badge.modified { background: var(--yellow-sub); color: var(--yellow); }
+  .ref-path { font-size: 12px; font-family: var(--mono); color: var(--text); }
+  .ref-stats { font-size: 11px; color: var(--text-dim); margin-left: auto; }
+  .ref-action { padding: 6px 14px; background: var(--elevated); border-top: 1px solid var(--border); font-size: 11px; color: var(--accent); display: flex; align-items: center; gap: 4px; }
+  .ref-action-approved { color: var(--green); }
+
+  /* ── Decision cards ───────────────────────────── */
+  .decision-card { border: 1px solid var(--border-bright); border-radius: var(--r); background: var(--surface); overflow: hidden; }
+  .decision-card.collapsed { opacity: 0.6; }
+  .decision-header { padding: 10px 14px; font-size: 13px; font-weight: 600; color: var(--text); border-bottom: 1px solid var(--border); background: var(--elevated); }
+  .decision-body { padding: 10px 14px; }
+  .decision-q { font-size: 13px; color: var(--text-sec); margin-bottom: 10px; line-height: 1.5; }
+  .decision-options { display: flex; gap: 8px; flex-wrap: wrap; }
+  .decision-opt { padding: 6px 14px; border-radius: 6px; font-size: 12px; font-weight: 500; cursor: pointer; border: 1px solid var(--border); background: transparent; color: var(--text-sec); transition: all 0.15s; }
+  .decision-opt:hover { border-color: var(--accent); color: var(--text); }
+  .decision-opt.recommended { border-color: var(--accent); color: var(--accent); background: var(--accent-sub); }
+  .decision-opt.selected { border-color: var(--green); color: var(--green); background: var(--green-sub); pointer-events: none; }
+  .decision-resolved { font-size: 12px; color: var(--green); padding: 10px 14px; display: flex; align-items: center; gap: 6px; }
+
+  /* ── Plan section ─────────────────────────────── */
+  .plan-section { border: 1px solid var(--border); border-radius: var(--r); background: var(--surface); overflow: hidden; }
+  .plan-header { padding: 10px 14px; font-size: 13px; font-weight: 600; border-bottom: 1px solid var(--border); background: var(--elevated); display: flex; align-items: center; gap: 8px; }
+  .plan-badge { font-size: 10px; font-weight: 700; padding: 2px 7px; border-radius: 4px; background: var(--accent-sub); color: var(--accent); }
+  .plan-steps { padding: 8px 0; }
+  .plan-step { padding: 7px 14px; font-size: 12px; display: flex; align-items: flex-start; gap: 10px; line-height: 1.5; }
+  .plan-step-num { font-family: var(--mono); font-size: 11px; color: var(--text-dim); width: 20px; flex-shrink: 0; text-align: right; }
+  .plan-step-text { color: var(--text-sec); }
+  .plan-step-text strong { color: var(--text); font-weight: 500; }
+
+  /* ── Input bar ────────────────────────────────── */
+  .input-bar { padding: 12px 20px; border-top: 1px solid var(--border); background: var(--surface); display: flex; gap: 8px; align-items: center; }
+  body.split-mode .input-bar.global-input { display: none; }
+  .input-bar .input-field { flex: 1; padding: 8px 14px; border-radius: var(--r); border: 1px solid var(--border); background: var(--elevated); color: var(--text); font-size: 13px; outline: none; transition: border-color 0.15s; }
+  .input-bar .input-field:focus { border-color: var(--accent); }
+  .input-bar .send-btn { padding: 8px 16px; border-radius: var(--r); border: none; background: var(--accent); color: #fff; font-size: 12px; font-weight: 600; cursor: pointer; transition: opacity 0.15s; }
+  .input-bar .send-btn:hover { opacity: 0.85; }
+
+  /* ── Toast ─────────────────────────────────────── */
+  .toast { position: fixed; bottom: 80px; left: 50%; transform: translateX(-50%) translateY(20px); background: var(--green-sub); color: var(--green); border: 1px solid var(--green); padding: 8px 20px; border-radius: var(--r); font-size: 12px; font-weight: 600; opacity: 0; transition: all 0.3s ease; pointer-events: none; z-index: 100; }
+  .toast.visible { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+  /* ── Scrollbar ─────────────────────────────────── */
+  ::-webkit-scrollbar { width: 6px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+  ::-webkit-scrollbar-thumb:hover { background: var(--border-bright); }
+</style>
+</head>
+<body>
+
+<!-- ── Status Bar ────────────────────────────────── -->
+<div class="top-bar">
+  <div class="default-header">
+    <span class="ticket-id">AUTH-42</span>
+    <span class="sep"></span>
+    <span class="ticket-title">Add user authentication</span>
+    <span class="sep"></span>
+    <div class="phase-chips">
+      <span class="phase-chip done">D&#10003;</span>
+      <span class="phase-chip active">S&#9679;</span>
+      <span class="phase-chip pending">P&#9675;</span>
+    </div>
+  </div>
+  <div class="review-indicator">
+    <span class="ticket-id">AUTH-42</span>
+    <span class="sep"></span>
+    <span class="review-label">Reviewing:</span>
+    <span class="review-file" id="reviewFileName">auth/README.md</span>
+    <span class="sep"></span>
+    <button class="back-to-conv" onclick="exitSplit()">&#8592; Back to conversation</button>
+  </div>
+  <div class="top-right">
+    <span class="model-tag">F3: Focus Shift</span>
+    <a href="index.html" class="back-link">&#8592; All Models</a>
+  </div>
+</div>
+
+<!-- ── Main Area ─────────────────────────────────── -->
+<div class="main-area">
+
+  <!-- Artifact Panel (hidden by default, shown in split) -->
+  <div class="artifact-panel" id="artifactPanel">
+    <div class="artifact-header" id="artifactHeader">
+      <span class="artifact-badge new" id="artifactBadge">NEW</span>
+      <span class="artifact-path" id="artifactPath">backend/app/auth/README.md</span>
+      <span class="artifact-stats" id="artifactStats"><span class="stat-add">+47 lines</span></span>
+    </div>
+    <div class="artifact-body" id="artifactBody">
+      <!-- Diff content injected by JS -->
+    </div>
+    <div class="artifact-actions">
+      <button class="btn-request">Request Changes</button>
+      <button class="btn-approve" id="btnApprove" onclick="approveArtifact()">Approve &#10003;</button>
+    </div>
+    <div class="artifact-nav" id="artifactNav">
+      <!-- Nav tabs injected by JS -->
+    </div>
+  </div>
+
+  <!-- Conversation Panel -->
+  <div class="conversation">
+    <div class="conv-scroll" id="convScroll">
+
+      <div class="note">
+        <span class="note-icon">&#8505;</span>
+        <span class="note-text">Analyzing ticket <strong>AUTH-42</strong> requirements. Auth system with signup, login, session management, and RBAC.</span>
+      </div>
+
+      <div class="note">
+        <span class="note-icon">&#8505;</span>
+        <span class="note-text">Created <strong>3 spec diffs</strong> for the auth module. Review each to proceed.</span>
+      </div>
+
+      <!-- Artifact Reference Cards -->
+      <div class="artifact-ref" id="ref-0" onclick="enterFocus(0)">
+        <div class="ref-header">
+          <span class="ref-badge new">NEW</span>
+          <span class="ref-path">backend/app/auth/README.md</span>
+          <span class="ref-stats">+47 lines</span>
+        </div>
+        <div class="ref-action">Click to review &#8594;</div>
+      </div>
+
+      <div class="artifact-ref" id="ref-1" onclick="enterFocus(1)">
+        <div class="ref-header">
+          <span class="ref-badge modified">MOD</span>
+          <span class="ref-path">backend/DESIGN_DOC.md</span>
+          <span class="ref-stats">+12 -2</span>
+        </div>
+        <div class="ref-action">Click to review &#8594;</div>
+      </div>
+
+      <div class="artifact-ref" id="ref-2" onclick="enterFocus(2)">
+        <div class="ref-header">
+          <span class="ref-badge modified">MOD</span>
+          <span class="ref-path">backend/app/core/README.md</span>
+          <span class="ref-stats">+5 -1</span>
+        </div>
+        <div class="ref-action">Click to review &#8594;</div>
+      </div>
+
+      <!-- Decision Card 1 -->
+      <div class="decision-card" id="decision-0">
+        <div class="decision-header">Decision Required</div>
+        <div class="decision-body">
+          <div class="decision-q">Should we use JWT or session-based auth?</div>
+          <div class="decision-options">
+            <button class="decision-opt recommended" onclick="resolveDecision(0, this, 'JWT tokens')">JWT tokens &#9733;</button>
+            <button class="decision-opt" onclick="resolveDecision(0, this, 'Session-based')">Session-based</button>
+            <button class="decision-opt" onclick="resolveDecision(0, this, 'Hybrid')">Hybrid</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="note">
+        <span class="note-icon">&#8505;</span>
+        <span class="note-text">Strategy section will be updated once the auth approach is decided.</span>
+      </div>
+
+      <!-- Decision Card 2 -->
+      <div class="decision-card" id="decision-1">
+        <div class="decision-header">Decision Required</div>
+        <div class="decision-body">
+          <div class="decision-q">Include a <strong>viewer</strong> role (read-only access) in the initial RBAC model?</div>
+          <div class="decision-options">
+            <button class="decision-opt recommended" onclick="resolveDecision(1, this, 'Yes, include viewer')">Yes, include viewer &#9733;</button>
+            <button class="decision-opt" onclick="resolveDecision(1, this, 'No, only admin + user')">No, only admin + user</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Plan section (hidden until all approved) -->
+      <div class="plan-section" id="planSection" style="display:none;">
+        <div class="plan-header">
+          <span class="plan-badge">PLAN</span>
+          Implementation Plan (6 steps)
+        </div>
+        <div class="plan-steps">
+          <div class="plan-step"><span class="plan-step-num">1</span><span class="plan-step-text">Create <strong>auth/models.py</strong> with User, Session, Role Pydantic models</span></div>
+          <div class="plan-step"><span class="plan-step-num">2</span><span class="plan-step-text">Implement <strong>auth/storage.py</strong> with aiosqlite user + session persistence</span></div>
+          <div class="plan-step"><span class="plan-step-num">3</span><span class="plan-step-text">Build <strong>auth/service.py</strong> with signup, login, verify, logout logic</span></div>
+          <div class="plan-step"><span class="plan-step-num">4</span><span class="plan-step-text">Add <strong>auth/middleware.py</strong> FastAPI dependency for route protection</span></div>
+          <div class="plan-step"><span class="plan-step-num">5</span><span class="plan-step-text">Wire auth routes in <strong>api/routers/auth.py</strong> (POST /signup, POST /login, etc.)</span></div>
+          <div class="plan-step"><span class="plan-step-num">6</span><span class="plan-step-text">Update <strong>DESIGN_DOC.md</strong> and <strong>core/README.md</strong> cross-references</span></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Input Bar (inside conversation, used in split mode) -->
+    <div class="input-bar split-input" id="splitInput" style="display:none;">
+      <input class="input-field" placeholder="Type a message..." onkeydown="handleKey(event)">
+      <button class="send-btn" onclick="sendMsg(this)">Send</button>
+    </div>
+  </div>
+</div>
+
+<!-- Input Bar (global, used in full-width mode) -->
+<div class="input-bar global-input">
+  <input class="input-field" placeholder="Type a message..." onkeydown="handleKey(event)">
+  <button class="send-btn" onclick="sendMsg(this)">Send</button>
+</div>
+
+<!-- Toast -->
+<div class="toast" id="toast"></div>
+
+<script>
+// ── Artifact Data ──────────────────────────────────
+const artifacts = [
+  {
+    id: 'auth-readme',
+    badge: 'NEW', badgeClass: 'new',
+    path: 'backend/app/auth/README.md',
+    shortPath: 'auth/README.md',
+    stats: '<span class="stat-add">+47 lines</span>',
+    navLabel: 'auth/README',
+    approved: false,
+    diff: `@@ -0,0 +1,47 @@
++# Auth Module — Design Spec
++
++## Purpose
++User authentication, authorization, and session
++management for the Bonsai platform.
++
++## Architecture
++auth/
++  models.py    # Pydantic models (User, Session, Role)
++  service.py   # Business logic (signup, login, verify)
++  storage.py   # SQLite persistence (aiosqlite)
++  middleware.py # FastAPI auth dependency
++
++## Authentication Strategy
++<span id="strategyLine">JWT-based auth with short-lived access tokens</span>
++and refresh token rotation. Tokens stored in
++httpOnly cookies for XSS protection.
++
++## Data Model
++User:
++  id          — uuid4, primary key
++  email       — unique, indexed
++  password_hash — bcrypt, 12 rounds
++  role        — admin | user | viewer
++  created_at  — UTC timestamp
++  last_login  — UTC timestamp | null
++
++Session:
++  id          — uuid4
++  user_id     — foreign key → User
++  token_hash  — sha256 of refresh token
++  expires_at  — UTC timestamp
++  created_at  — UTC timestamp
++
++## RBAC
++Roles: admin, user, viewer
++  admin  — full access, user management
++  user   — read/write own resources
++  viewer — read-only access
++
++## Dependencies
++- bcrypt (password hashing)
++- PyJWT (token generation/validation)
++- aiosqlite (async SQLite)
++
++## Cross-references
++- DESIGN_DOC.md § Authentication
++- core/README.md § Middleware`
+  },
+  {
+    id: 'design-doc',
+    badge: 'MOD', badgeClass: 'modified',
+    path: 'backend/DESIGN_DOC.md',
+    shortPath: 'DESIGN_DOC.md',
+    stats: '<span class="stat-add">+12</span> <span class="stat-del">-2</span>',
+    navLabel: 'DESIGN_DOC',
+    approved: false,
+    diff: `@@ -45,8 +45,20 @@
+ ## System Components
+
+-Backend is organized into spec, agent, board, and core modules.
+-See individual module READMEs for details.
++Backend is organized into spec, agent, board, core,
++and auth modules. See individual module READMEs.
++
++## Authentication
++JWT-based authentication with role-based access
++control (RBAC). Three roles: admin, user, viewer.
++
++Auth flow:
++  1. POST /api/auth/signup  — create account
++  2. POST /api/auth/login   — get access + refresh
++  3. GET  /api/auth/me      — current user info
++  4. POST /api/auth/refresh — rotate tokens
++  5. POST /api/auth/logout  — revoke session
++
++See auth/README.md for implementation details.`
+  },
+  {
+    id: 'core-readme',
+    badge: 'MOD', badgeClass: 'modified',
+    path: 'backend/app/core/README.md',
+    shortPath: 'core/README.md',
+    stats: '<span class="stat-add">+5</span> <span class="stat-del">-1</span>',
+    navLabel: 'core/',
+    approved: false,
+    diff: `@@ -12,7 +12,11 @@
+ ## Middleware
+
+-Currently no authentication middleware is configured.
++Authentication middleware is provided by the auth
++module. Import \`require_auth\` from
++\`auth.middleware\` to protect routes:
++
++  app.include_router(router, dependencies=[Depends(require_auth)])
++
+ ## Configuration
+ Config is loaded from environment variables via`
+  }
+];
+
+let currentArtifact = -1;
+let approvedCount = 0;
+
+// ── Enter Focus (Split Mode) ──────────────────────
+function enterFocus(index) {
+  if (artifacts[index].approved) return;
+  currentArtifact = index;
+  document.body.classList.add('split-mode');
+  document.getElementById('splitInput').style.display = 'flex';
+  renderArtifact(index);
+  renderNav();
+}
+
+// ── Exit Split Mode ───────────────────────────────
+function exitSplit() {
+  document.body.classList.remove('split-mode');
+  document.getElementById('splitInput').style.display = 'none';
+  currentArtifact = -1;
+}
+
+// ── Render Artifact Diff ──────────────────────────
+function renderArtifact(index) {
+  const a = artifacts[index];
+  document.getElementById('reviewFileName').textContent = a.shortPath;
+  document.getElementById('artifactBadge').textContent = a.badge;
+  document.getElementById('artifactBadge').className = 'artifact-badge ' + a.badgeClass;
+  document.getElementById('artifactPath').textContent = a.path;
+  document.getElementById('artifactStats').innerHTML = a.stats;
+
+  const btn = document.getElementById('btnApprove');
+  if (a.approved) {
+    btn.textContent = 'Approved ✓';
+    btn.classList.add('approved');
+  } else {
+    btn.textContent = 'Approve ✓';
+    btn.classList.remove('approved');
+  }
+
+  const lines = a.diff.split('\n');
+  let html = '<div class="diff-view">';
+  let lineNum = 0;
+  lines.forEach(line => {
+    if (line.startsWith('@@')) {
+      html += '<div class="diff-hunk-header">' + escHtml(line) + '</div>';
+      lineNum = 0;
+    } else if (line.startsWith('+')) {
+      lineNum++;
+      html += '<div class="diff-line add"><span class="ln">' + lineNum + '</span>' + escHtml(line) + '</div>';
+    } else if (line.startsWith('-')) {
+      html += '<div class="diff-line del"><span class="ln"></span>' + escHtml(line) + '</div>';
+    } else {
+      lineNum++;
+      html += '<div class="diff-line ctx"><span class="ln">' + lineNum + '</span>' + escHtml(line) + '</div>';
+    }
+  });
+  html += '</div>';
+  document.getElementById('artifactBody').innerHTML = html;
+  document.getElementById('artifactBody').scrollTop = 0;
+}
+
+// ── Render Nav Tabs ───────────────────────────────
+function renderNav() {
+  const nav = document.getElementById('artifactNav');
+  let html = '';
+  artifacts.forEach((a, i) => {
+    const cls = (i === currentArtifact ? ' active' : '') + (a.approved ? ' tab-approved' : '');
+    const label = a.approved ? a.navLabel + ' ✓' : a.navLabel;
+    html += '<span class="nav-tab' + cls + '" onclick="switchArtifact(' + i + ')">' + label + '</span>';
+  });
+  html += '<span class="nav-counter">' + (currentArtifact + 1) + '/' + artifacts.length + '</span>';
+  nav.innerHTML = html;
+}
+
+// ── Switch Artifact ───────────────────────────────
+function switchArtifact(index) {
+  currentArtifact = index;
+  renderArtifact(index);
+  renderNav();
+}
+
+// ── Approve Artifact ──────────────────────────────
+function approveArtifact() {
+  if (currentArtifact < 0) return;
+  const a = artifacts[currentArtifact];
+  if (a.approved) return;
+  a.approved = true;
+  approvedCount++;
+
+  // Update reference card in conversation
+  const ref = document.getElementById('ref-' + currentArtifact);
+  ref.classList.add('ref-approved');
+  ref.querySelector('.ref-action').innerHTML = '<span class="ref-action-approved">✓ Approved</span>';
+  ref.onclick = null;
+
+  // Add note to conversation
+  addConvNote(a.shortPath + ' approved ✓');
+
+  // Show toast
+  showToast(a.shortPath + ' approved');
+
+  // Update button
+  const btn = document.getElementById('btnApprove');
+  btn.textContent = 'Approved ✓';
+  btn.classList.add('approved');
+  renderNav();
+
+  // Advance or exit
+  if (approvedCount === artifacts.length) {
+    // All done — exit split, show plan
+    setTimeout(() => {
+      exitSplit();
+      addConvNote('All 3 spec diffs approved. Generating implementation plan.');
+      setTimeout(() => {
+        document.getElementById('planSection').style.display = 'block';
+        scrollConvBottom();
+        // Update phase chips
+        const chips = document.querySelectorAll('.phase-chip');
+        chips[1].className = 'phase-chip done';
+        chips[1].textContent = 'S✓';
+        chips[2].className = 'phase-chip active';
+        chips[2].textContent = 'P●';
+      }, 400);
+    }, 600);
+  } else {
+    // Advance to next unapproved
+    setTimeout(() => {
+      const next = findNextUnapproved();
+      if (next >= 0) {
+        switchArtifact(next);
+        renderNav();
+      }
+    }, 500);
+  }
+}
+
+function findNextUnapproved() {
+  for (let i = 0; i < artifacts.length; i++) {
+    if (!artifacts[i].approved) return i;
+  }
+  return -1;
+}
+
+// ── Resolve Decision ──────────────────────────────
+function resolveDecision(idx, btn, choice) {
+  const card = document.getElementById('decision-' + idx);
+  // Mark chosen
+  card.querySelectorAll('.decision-opt').forEach(b => {
+    b.classList.remove('recommended');
+    b.classList.remove('selected');
+  });
+  btn.classList.add('selected');
+
+  // Collapse after a moment
+  setTimeout(() => {
+    card.classList.add('collapsed');
+    card.querySelector('.decision-body').innerHTML =
+      '<div class="decision-resolved">✓ Resolved: ' + choice + '</div>';
+  }, 300);
+
+  // If JWT decision, update the strategy line in diff
+  if (idx === 0 && choice === 'JWT tokens') {
+    addConvNote('Auth strategy confirmed: JWT tokens with refresh rotation.');
+  } else if (idx === 0 && choice === 'Session-based') {
+    addConvNote('Auth strategy updated to session-based. Diff will reflect this.');
+    // Update the diff content for artifact 0
+    artifacts[0].diff = artifacts[0].diff.replace(
+      'JWT-based auth with short-lived access tokens',
+      'Session-based auth with server-side sessions'
+    );
+    if (currentArtifact === 0) renderArtifact(0);
+  } else if (idx === 0 && choice === 'Hybrid') {
+    addConvNote('Auth strategy updated to hybrid (JWT + sessions). Diff will reflect this.');
+    artifacts[0].diff = artifacts[0].diff.replace(
+      'JWT-based auth with short-lived access tokens',
+      'Hybrid auth: JWT for API, sessions for web UI'
+    );
+    if (currentArtifact === 0) renderArtifact(0);
+  } else if (idx === 1) {
+    addConvNote('RBAC decision resolved: ' + choice + '.');
+  }
+
+  scrollConvBottom();
+}
+
+// ── Add Conversation Note ─────────────────────────
+function addConvNote(text) {
+  const scroll = document.getElementById('convScroll');
+  const div = document.createElement('div');
+  div.className = 'note';
+  div.innerHTML = '<span class="note-icon">&#8505;</span><span class="note-text">' + text + '</span>';
+  scroll.appendChild(div);
+  scrollConvBottom();
+}
+
+// ── Send Message ──────────────────────────────────
+function sendMsg(btn) {
+  const input = btn.previousElementSibling;
+  const text = input.value.trim();
+  if (!text) return;
+  input.value = '';
+  addConvNote('You: ' + escHtml(text));
+  setTimeout(() => {
+    addConvNote('Acknowledged. I will incorporate that into the spec.');
+  }, 400);
+}
+
+function handleKey(e) {
+  if (e.key === 'Enter' && !e.shiftKey) {
+    e.preventDefault();
+    sendMsg(e.target.nextElementSibling);
+  }
+}
+
+// ── Toast ─────────────────────────────────────────
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('visible');
+  setTimeout(() => t.classList.remove('visible'), 2000);
+}
+
+// ── Scroll Conversation ───────────────────────────
+function scrollConvBottom() {
+  const s = document.getElementById('convScroll');
+  setTimeout(() => { s.scrollTop = s.scrollHeight; }, 50);
+}
+
+// ── Escape HTML ───────────────────────────────────
+function escHtml(str) {
+  return str.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+// ── Keyboard Shortcuts ────────────────────────────
+document.addEventListener('keydown', (e) => {
+  if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+  if (e.key === 'Escape' && document.body.classList.contains('split-mode')) {
+    exitSplit();
+  }
+  if (document.body.classList.contains('split-mode')) {
+    if (e.key === 'ArrowLeft') {
+      const prev = currentArtifact - 1;
+      if (prev >= 0) switchArtifact(prev);
+    }
+    if (e.key === 'ArrowRight') {
+      const next = currentArtifact + 1;
+      if (next < artifacts.length) switchArtifact(next);
+    }
+  }
+});
+</script>
+</body>
+</html>

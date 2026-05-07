@@ -1,0 +1,3134 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Model A — Adaptive Split: Tree + Content + Chat</title>
+<style>
+  :root {
+    --bg-base: #0e1117;
+    --bg-surface: #161b22;
+    --bg-elevated: #1c2129;
+    --bg-hover: #242b35;
+    --bg-inset: #0d1117;
+    --border: #2d333b;
+    --border-bright: #3d444d;
+    --text-primary: #e6edf3;
+    --text-secondary: #8b949e;
+    --text-muted: #656d76;
+    --accent: #58a6ff;
+    --accent-subtle: #1f3a5f;
+    --green: #3fb950;
+    --green-subtle: #1a3a2a;
+    --yellow: #d29922;
+    --yellow-subtle: #3d2e00;
+    --purple: #bc8cff;
+    --purple-subtle: #2a1f3d;
+    --red: #f85149;
+    --red-subtle: #3d1418;
+    --radius: 8px;
+    --radius-lg: 12px;
+    --mono: 'SF Mono', 'Cascadia Code', 'Consolas', monospace;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: var(--bg-base);
+    color: var(--text-primary);
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans', Helvetica, Arial, sans-serif;
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  /* ── Back link ───────────────────────────────── */
+  .back-link {
+    position: fixed;
+    top: 12px;
+    right: 16px;
+    z-index: 200;
+    font-size: 12px;
+    color: var(--text-muted);
+    text-decoration: none;
+    padding: 4px 10px;
+    border-radius: 4px;
+    background: var(--bg-elevated);
+    border: 1px solid var(--border);
+    transition: color 0.15s, border-color 0.15s;
+  }
+  .back-link:hover { color: var(--accent); border-color: var(--accent); }
+
+  /* ── Header ──────────────────────────────────── */
+  .header {
+    height: 52px;
+    min-height: 52px;
+    background: var(--bg-surface);
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    padding: 0 20px;
+    gap: 12px;
+    flex-shrink: 0;
+    z-index: 10;
+  }
+  .ticket-id {
+    font-size: 13px;
+    font-weight: 700;
+    font-family: var(--mono);
+    color: var(--accent);
+  }
+  .ticket-title {
+    font-size: 15px;
+    font-weight: 600;
+    color: var(--text-primary);
+  }
+  .header-sep {
+    color: var(--text-muted);
+    font-size: 14px;
+  }
+  .header-spacer { flex: 1; }
+
+  .phase-pills { display: flex; align-items: center; gap: 3px; }
+  .pill {
+    font-size: 11px;
+    font-weight: 500;
+    padding: 4px 10px;
+    border-radius: 100px;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    transition: all 0.3s;
+    white-space: nowrap;
+  }
+  .pill.done { background: var(--green-subtle); color: var(--green); }
+  .pill.active { background: var(--yellow-subtle); color: var(--yellow); }
+  .pill.pending { background: var(--bg-elevated); color: var(--text-muted); border: 1px solid var(--border); }
+  .pill-dot { width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; }
+  .pill.done .pill-dot { background: var(--green); }
+  .pill.active .pill-dot { background: var(--yellow); animation: pulse 2s ease-in-out infinite; }
+  .pill.pending .pill-dot { background: var(--text-muted); }
+  .pill-arrow { color: var(--text-muted); font-size: 10px; margin: 0 2px; }
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }
+
+  .model-tag {
+    font-size: 10px;
+    font-weight: 600;
+    color: var(--accent);
+    background: var(--accent-subtle);
+    padding: 3px 8px;
+    border-radius: 100px;
+    margin-left: 8px;
+  }
+
+  .mode-indicator {
+    font-size: 10px;
+    font-weight: 600;
+    padding: 3px 10px;
+    border-radius: 100px;
+    transition: all 0.3s;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+  }
+  .mode-indicator.chat-mode {
+    background: var(--accent-subtle);
+    color: var(--accent);
+  }
+  .mode-indicator.review-mode {
+    background: var(--purple-subtle);
+    color: var(--purple);
+  }
+
+  /* ── Main Layout Container ───────────────────── */
+  .main-layout {
+    flex: 1;
+    display: flex;
+    overflow: hidden;
+    min-height: 0;
+  }
+
+  /* ── Tree Panel ──────────────────────────────── */
+  .tree-panel {
+    width: 220px;
+    min-width: 220px;
+    background: var(--bg-surface);
+    border-right: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    flex-shrink: 0;
+  }
+  .tree-scroll {
+    flex: 1;
+    overflow-y: auto;
+    padding: 10px 0;
+  }
+  .tree-scroll::-webkit-scrollbar { width: 4px; }
+  .tree-scroll::-webkit-scrollbar-track { background: transparent; }
+  .tree-scroll::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+
+  .tree-phase-group {
+    margin-bottom: 4px;
+  }
+  .tree-phase-header {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    padding: 6px 14px;
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--text-muted);
+    cursor: pointer;
+    transition: color 0.15s, background 0.15s;
+    user-select: none;
+  }
+  .tree-phase-header:hover {
+    color: var(--text-secondary);
+    background: var(--bg-hover);
+  }
+  .tree-phase-icon {
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 8px;
+    font-weight: 700;
+    flex-shrink: 0;
+  }
+  .tree-phase-icon.done { background: var(--green-subtle); color: var(--green); border: 1.5px solid var(--green); }
+  .tree-phase-icon.active { background: var(--yellow-subtle); color: var(--yellow); border: 1.5px solid var(--yellow); }
+  .tree-phase-icon.pending { background: var(--bg-elevated); color: var(--text-muted); border: 1.5px solid var(--border-bright); }
+
+  .tree-phase-count {
+    font-size: 10px;
+    font-weight: 500;
+    color: var(--text-muted);
+    margin-left: auto;
+  }
+
+  .tree-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 5px 14px 5px 32px;
+    font-size: 12px;
+    font-family: var(--mono);
+    color: var(--text-secondary);
+    cursor: pointer;
+    transition: all 0.2s ease;
+    border-left: 2px solid transparent;
+    position: relative;
+  }
+  .tree-item:hover {
+    background: var(--bg-hover);
+    color: var(--text-primary);
+  }
+  .tree-item.selected {
+    background: var(--accent-subtle);
+    color: var(--accent);
+    border-left-color: var(--accent);
+  }
+  .tree-item.approved-item::after {
+    content: none;
+  }
+
+  .tree-item-op {
+    font-size: 9px;
+    font-weight: 700;
+    width: 12px;
+    text-align: center;
+    flex-shrink: 0;
+  }
+  .tree-item-op.new { color: var(--green); }
+  .tree-item-op.mod { color: var(--yellow); }
+
+  .tree-item-name {
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .tree-item-status {
+    font-size: 10px;
+    font-weight: 600;
+    flex-shrink: 0;
+  }
+  .tree-item-status.approved { color: var(--green); }
+  .tree-item-status.pending { color: var(--text-muted); }
+  .tree-item-status.reviewing { color: var(--yellow); }
+
+  /* ── Content Area (everything right of the tree) ── */
+  .content-area {
+    flex: 1;
+    display: flex;
+    overflow: hidden;
+    min-width: 0;
+    position: relative;
+  }
+
+  /* ── Chat Panel ──────────────────────────────── */
+  .chat-panel {
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    min-width: 0;
+    transition: flex 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+  .chat-panel.chat-mode {
+    flex: 1;
+  }
+  .chat-panel.review-mode {
+    flex: 0 0 320px;
+    min-width: 320px;
+    border-left: 1px solid var(--border);
+  }
+
+  .chat-scroll {
+    flex: 1;
+    overflow-y: auto;
+    overflow-x: hidden;
+    padding: 20px;
+  }
+  .chat-scroll::-webkit-scrollbar { width: 5px; }
+  .chat-scroll::-webkit-scrollbar-track { background: transparent; }
+  .chat-scroll::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+
+  .chat-messages {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    transition: max-width 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+  .chat-mode .chat-messages {
+    max-width: 680px;
+    margin: 0 auto;
+  }
+  .review-mode .chat-messages {
+    max-width: none;
+  }
+
+  .chat-msg {
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+    animation: msgFadeIn 0.25s ease;
+  }
+  @keyframes msgFadeIn {
+    from { opacity: 0; transform: translateY(6px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  /* Agent message */
+  .chat-msg.is-agent .chat-msg-body {
+    font-size: 14px;
+    line-height: 1.65;
+    color: var(--text-secondary);
+    border-left: 2px solid var(--accent-subtle);
+    padding: 8px 0 8px 14px;
+  }
+  .review-mode .chat-msg.is-agent .chat-msg-body {
+    font-size: 13px;
+    line-height: 1.55;
+    padding: 6px 0 6px 10px;
+  }
+  .chat-msg.is-agent .chat-msg-body code {
+    font-family: var(--mono);
+    font-size: 12px;
+    background: var(--bg-inset);
+    padding: 1px 5px;
+    border-radius: 3px;
+    color: var(--accent);
+  }
+  .review-mode .chat-msg.is-agent .chat-msg-body code {
+    font-size: 11px;
+  }
+
+  /* User message */
+  .chat-msg.is-user {
+    align-items: flex-end;
+  }
+  .chat-msg.is-user .chat-msg-body {
+    font-size: 14px;
+    line-height: 1.6;
+    color: var(--text-primary);
+    background: var(--bg-elevated);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 10px 14px;
+    max-width: 80%;
+  }
+  .review-mode .chat-msg.is-user .chat-msg-body {
+    font-size: 13px;
+    padding: 8px 12px;
+  }
+
+  /* Artifact reference card in chat */
+  .chat-artifact-ref {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 14px;
+    background: var(--bg-surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    cursor: pointer;
+    transition: border-color 0.15s;
+    margin: 2px 0;
+  }
+  .chat-artifact-ref:hover { border-color: var(--accent); }
+  .chat-artifact-ref-icon {
+    font-size: 14px;
+    width: 28px;
+    height: 28px;
+    border-radius: 5px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+  }
+  .chat-artifact-ref-icon.new { background: var(--green-subtle); color: var(--green); }
+  .chat-artifact-ref-icon.mod { background: var(--yellow-subtle); color: var(--yellow); }
+  .chat-artifact-ref-name {
+    font-size: 12px;
+    font-family: var(--mono);
+    font-weight: 600;
+    color: var(--text-primary);
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .chat-artifact-ref-op {
+    font-size: 9px;
+    font-weight: 600;
+    padding: 1px 5px;
+    border-radius: 3px;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    flex-shrink: 0;
+  }
+  .chat-artifact-ref-op.new { background: var(--green-subtle); color: var(--green); }
+  .chat-artifact-ref-op.mod { background: var(--yellow-subtle); color: var(--yellow); }
+  .chat-artifact-ref-stats {
+    font-size: 11px;
+    font-family: var(--mono);
+    color: var(--text-muted);
+    flex-shrink: 0;
+  }
+  .chat-artifact-ref-stats .add { color: var(--green); }
+  .chat-artifact-ref-stats .del { color: var(--red); }
+  .chat-artifact-ref-review {
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--accent);
+    background: var(--accent-subtle);
+    padding: 3px 10px;
+    border-radius: 100px;
+    flex-shrink: 0;
+    border: 1px solid transparent;
+    transition: border-color 0.15s;
+  }
+  .chat-artifact-ref:hover .chat-artifact-ref-review {
+    border-color: var(--accent);
+  }
+
+  /* Decision card */
+  .decision-card {
+    background: var(--bg-surface);
+    border: 1px solid var(--accent);
+    border-radius: var(--radius);
+    padding: 14px 16px;
+    margin: 2px 0;
+    transition: all 0.3s;
+  }
+  .decision-card.resolved {
+    border-color: var(--border);
+    padding: 8px 16px;
+  }
+  .decision-question {
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--text-primary);
+    margin-bottom: 10px;
+  }
+  .review-mode .decision-question {
+    font-size: 13px;
+    margin-bottom: 8px;
+  }
+  .decision-options {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    margin-bottom: 8px;
+  }
+  .decision-btn {
+    padding: 6px 14px;
+    border-radius: 6px;
+    font-size: 12px;
+    font-weight: 500;
+    cursor: pointer;
+    border: 1px solid var(--border-bright);
+    background: var(--bg-elevated);
+    color: var(--text-primary);
+    transition: all 0.15s;
+  }
+  .review-mode .decision-btn {
+    padding: 5px 10px;
+    font-size: 11px;
+  }
+  .decision-btn:hover { border-color: var(--accent); background: var(--accent-subtle); }
+  .decision-btn.rec {
+    border-color: var(--accent);
+    background: var(--accent-subtle);
+    color: var(--accent);
+  }
+  .decision-btn.rec::after {
+    content: ' \2605';
+    font-size: 10px;
+  }
+  .decision-btn.selected {
+    border-color: var(--green);
+    background: var(--green-subtle);
+    color: var(--green);
+    pointer-events: none;
+  }
+  .decision-btn.dimmed {
+    opacity: 0.3;
+    pointer-events: none;
+  }
+  .decision-hint {
+    font-size: 12px;
+    color: var(--text-muted);
+    line-height: 1.5;
+  }
+  .decision-hint code {
+    font-family: var(--mono);
+    font-size: 11px;
+    background: var(--bg-inset);
+    padding: 1px 4px;
+    border-radius: 3px;
+    color: var(--accent);
+  }
+  .decision-resolved {
+    font-size: 13px;
+    color: var(--text-muted);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .decision-resolved-check {
+    color: var(--green);
+    font-weight: 700;
+  }
+
+  /* ── Chat Input ──────────────────────────────── */
+  .chat-input-area {
+    padding: 10px 16px 14px;
+    background: var(--bg-base);
+    border-top: 1px solid var(--border);
+    flex-shrink: 0;
+  }
+  .chat-input-row {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+  }
+  .chat-mode .chat-input-row {
+    max-width: 680px;
+    margin: 0 auto;
+  }
+  .chat-input {
+    flex: 1;
+    height: 38px;
+    background: var(--bg-surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 0 12px;
+    color: var(--text-primary);
+    font-size: 13px;
+    font-family: inherit;
+    outline: none;
+    transition: border-color 0.15s;
+    min-width: 0;
+  }
+  .chat-input:focus { border-color: var(--accent); }
+  .chat-input::placeholder { color: var(--text-muted); }
+  .chat-send-btn {
+    width: 38px;
+    height: 38px;
+    border-radius: var(--radius);
+    background: var(--accent);
+    border: none;
+    color: white;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    transition: opacity 0.15s;
+  }
+  .chat-send-btn:hover { opacity: 0.85; }
+  .chat-send-btn svg { width: 14px; height: 14px; }
+
+  /* ── Artifact Panel (center, Review Mode only) ── */
+  .artifact-panel {
+    flex: 0;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    background: var(--bg-base);
+    transition: flex 0.4s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.3s;
+    opacity: 0;
+  }
+  .artifact-panel.visible {
+    flex: 1;
+    opacity: 1;
+  }
+
+  .artifact-toolbar {
+    display: flex;
+    align-items: center;
+    padding: 10px 20px;
+    gap: 10px;
+    background: var(--bg-surface);
+    border-bottom: 1px solid var(--border);
+    flex-shrink: 0;
+    min-height: 46px;
+  }
+  .artifact-filename {
+    font-size: 14px;
+    font-weight: 600;
+    font-family: var(--mono);
+    color: var(--text-primary);
+  }
+  .artifact-op {
+    font-size: 10px;
+    font-weight: 600;
+    padding: 2px 8px;
+    border-radius: 100px;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+  }
+  .artifact-op.new { background: var(--green-subtle); color: var(--green); }
+  .artifact-op.mod { background: var(--yellow-subtle); color: var(--yellow); }
+  .artifact-stats {
+    font-size: 12px;
+    font-family: var(--mono);
+    color: var(--text-muted);
+  }
+  .artifact-stats .add { color: var(--green); }
+  .artifact-stats .del { color: var(--red); }
+  .artifact-toolbar-spacer { flex: 1; }
+
+  .artifact-btn {
+    padding: 5px 14px;
+    border-radius: 6px;
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    border: none;
+    transition: all 0.15s;
+    white-space: nowrap;
+  }
+  .artifact-btn.approve {
+    background: var(--green);
+    color: #fff;
+  }
+  .artifact-btn.approve:hover { opacity: 0.85; }
+  .artifact-btn.approve:disabled {
+    background: var(--bg-hover);
+    color: var(--text-muted);
+    cursor: default;
+    opacity: 0.5;
+  }
+  .artifact-btn.approve.approved {
+    background: var(--green-subtle);
+    color: var(--green);
+    cursor: default;
+    pointer-events: none;
+  }
+  .artifact-btn.changes {
+    border: 1px solid var(--border-bright);
+    background: var(--bg-elevated);
+    color: var(--text-secondary);
+  }
+  .artifact-btn.changes:hover { border-color: var(--red); color: var(--red); }
+  .artifact-btn.back-chat {
+    border: 1px solid var(--border-bright);
+    background: var(--bg-elevated);
+    color: var(--text-secondary);
+    display: flex;
+    align-items: center;
+    gap: 4px;
+  }
+  .artifact-btn.back-chat:hover { border-color: var(--accent); color: var(--accent); }
+
+  /* Approved banner */
+  .artifact-approved-banner {
+    padding: 6px 20px;
+    background: var(--green-subtle);
+    border-bottom: 1px solid rgba(63,185,80,0.25);
+    display: none;
+    align-items: center;
+    gap: 8px;
+    font-size: 12px;
+    color: var(--green);
+    font-weight: 500;
+    flex-shrink: 0;
+  }
+  .artifact-approved-banner.visible { display: flex; }
+
+  /* Diff content area */
+  .artifact-diff-area {
+    flex: 1;
+    overflow-y: auto;
+    overflow-x: hidden;
+    background: var(--bg-inset);
+  }
+  .artifact-diff-area::-webkit-scrollbar { width: 5px; }
+  .artifact-diff-area::-webkit-scrollbar-track { background: transparent; }
+  .artifact-diff-area::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+
+  /* Diff lines */
+  .diff-hunk-header {
+    padding: 4px 20px 4px 68px;
+    background: var(--accent-subtle);
+    color: var(--accent);
+    font-family: var(--mono);
+    font-size: 11px;
+    font-weight: 600;
+    border-bottom: 1px solid var(--border);
+  }
+  .diff-line {
+    padding: 0px 20px 0px 68px;
+    font-family: var(--mono);
+    font-size: 12px;
+    line-height: 1.7;
+    white-space: pre;
+    position: relative;
+    min-height: 20px;
+  }
+  .diff-line .ln {
+    position: absolute;
+    left: 0;
+    width: 58px;
+    text-align: right;
+    padding-right: 10px;
+    color: var(--text-muted);
+    opacity: 0.4;
+    user-select: none;
+  }
+  .diff-line.add { background: rgba(63,185,80,0.08); color: var(--green); }
+  .diff-line.del { background: rgba(248,81,73,0.08); color: var(--red); }
+  .diff-line.ctx { color: var(--text-secondary); }
+  .diff-line.updated-flash { background: rgba(63,185,80,0.25); transition: background 2s ease; }
+
+  /* Annotation in diff */
+  .diff-annotation {
+    margin: 6px 16px 6px 68px;
+    padding: 10px 12px;
+    background: var(--bg-elevated);
+    border: 1px solid var(--accent);
+    border-left: 3px solid var(--accent);
+    border-radius: var(--radius);
+    transition: opacity 0.4s, max-height 0.4s, margin 0.4s, padding 0.4s;
+    overflow: hidden;
+  }
+  .diff-annotation.hiding {
+    opacity: 0;
+    max-height: 0;
+    margin: 0 16px 0 68px;
+    padding: 0 12px;
+    border-width: 0;
+  }
+  .diff-annotation-label {
+    font-size: 10px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--accent);
+    margin-bottom: 4px;
+  }
+  .diff-annotation-text {
+    font-size: 12px;
+    color: var(--text-primary);
+    line-height: 1.5;
+    margin-bottom: 6px;
+  }
+  .diff-annotation-text code {
+    font-family: var(--mono);
+    font-size: 11px;
+    background: var(--bg-inset);
+    padding: 1px 4px;
+    border-radius: 3px;
+    color: var(--accent);
+  }
+  .diff-annotation-options { display: flex; gap: 6px; flex-wrap: wrap; }
+  .diff-annotation-btn {
+    padding: 4px 10px;
+    border-radius: 6px;
+    font-size: 11px;
+    font-weight: 500;
+    cursor: pointer;
+    border: 1px solid var(--border-bright);
+    background: var(--bg-surface);
+    color: var(--text-primary);
+    transition: all 0.15s;
+  }
+  .diff-annotation-btn:hover { border-color: var(--accent); background: var(--accent-subtle); }
+  .diff-annotation-btn.rec {
+    border-color: var(--accent);
+    background: var(--accent-subtle);
+    color: var(--accent);
+  }
+
+  /* ── Plan View ───────────────────────────────── */
+  .plan-content {
+    padding: 16px 20px;
+  }
+  .plan-step {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    padding: 10px 14px;
+    border-radius: var(--radius);
+    margin-bottom: 4px;
+    transition: background 0.15s;
+  }
+  .plan-step:hover { background: var(--bg-hover); }
+  .plan-step-num {
+    width: 26px;
+    height: 26px;
+    border-radius: 50%;
+    background: var(--bg-elevated);
+    border: 1.5px solid var(--border-bright);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--text-muted);
+    flex-shrink: 0;
+  }
+  .plan-step-info { flex: 1; }
+  .plan-step-title {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text-primary);
+    margin-bottom: 2px;
+  }
+  .plan-step-desc {
+    font-size: 12px;
+    color: var(--text-muted);
+    line-height: 1.4;
+  }
+  .plan-step-exec {
+    padding: 5px 12px;
+    border-radius: 6px;
+    font-size: 11px;
+    font-weight: 600;
+    cursor: pointer;
+    border: 1px solid var(--green);
+    background: var(--green-subtle);
+    color: var(--green);
+    transition: all 0.15s;
+    white-space: nowrap;
+    flex-shrink: 0;
+    align-self: center;
+  }
+  .plan-step-exec:hover { background: var(--green); color: #fff; }
+  .plan-step-exec:disabled {
+    opacity: 0.4;
+    pointer-events: none;
+  }
+
+  .plan-step-num.executing {
+    border-color: var(--yellow);
+    color: var(--yellow);
+    animation: pulse 1.5s ease-in-out infinite;
+  }
+  .plan-step-num.done {
+    border-color: var(--green);
+    background: var(--green-subtle);
+    color: var(--green);
+  }
+
+  .execute-all-bar {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 14px;
+    margin-bottom: 8px;
+    background: var(--bg-surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+  }
+  .execute-all-btn {
+    padding: 7px 18px;
+    border-radius: 6px;
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    border: 1px solid var(--green);
+    background: var(--green);
+    color: #fff;
+    transition: all 0.15s;
+    white-space: nowrap;
+    flex-shrink: 0;
+  }
+  .execute-all-btn:hover { opacity: 0.85; }
+  .execute-all-btn:disabled {
+    opacity: 0.4;
+    cursor: default;
+  }
+  .execute-all-progress {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 12px;
+    color: var(--text-muted);
+  }
+  .execute-all-progress-bar {
+    flex: 1;
+    height: 4px;
+    background: var(--bg-hover);
+    border-radius: 2px;
+    overflow: hidden;
+  }
+  .execute-all-progress-fill {
+    height: 100%;
+    width: 0%;
+    background: var(--green);
+    border-radius: 2px;
+    transition: width 0.4s ease;
+  }
+
+  /* ── Document view (for description) ─────────── */
+  .doc-content {
+    padding: 24px 32px;
+    font-size: 14px;
+    line-height: 1.7;
+    color: var(--text-secondary);
+  }
+  .doc-content h2 {
+    font-size: 18px;
+    font-weight: 600;
+    color: var(--text-primary);
+    margin: 24px 0 10px 0;
+  }
+  .doc-content h2:first-child { margin-top: 0; }
+  .doc-content p {
+    margin-bottom: 10px;
+  }
+  .doc-content .doc-field {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 6px;
+  }
+  .doc-content .doc-label {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    min-width: 80px;
+  }
+  .doc-content .doc-value {
+    color: var(--text-primary);
+  }
+
+  /* ── Toast ───────────────────────────────────── */
+  .toast {
+    position: fixed;
+    bottom: 80px;
+    left: 50%;
+    transform: translateX(-50%) translateY(20px);
+    background: var(--bg-elevated);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 10px 20px;
+    font-size: 13px;
+    color: var(--text-primary);
+    z-index: 300;
+    transition: transform 0.3s ease, opacity 0.3s ease;
+    opacity: 0;
+    pointer-events: none;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.5);
+    white-space: nowrap;
+  }
+  .toast.show { transform: translateX(-50%) translateY(0); opacity: 1; }
+  .toast .t-icon { font-size: 16px; }
+  .toast.success { border-color: var(--green); }
+  .toast.success .t-icon { color: var(--green); }
+  .toast.info { border-color: var(--accent); }
+  .toast.info .t-icon { color: var(--accent); }
+
+  /* ── Ticket Summary Card ────────────────────── */
+  .ticket-summary {
+    margin: 10px 10px 6px;
+    padding: 10px 12px;
+    background: var(--bg-elevated);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+  .ticket-summary-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .ticket-summary-badge {
+    font-size: 9px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    padding: 2px 6px;
+    border-radius: 3px;
+    background: var(--purple-subtle);
+    color: var(--purple);
+    flex-shrink: 0;
+  }
+  .ticket-summary-title {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text-primary);
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .ticket-summary-meta {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 11px;
+    color: var(--text-muted);
+  }
+  .ticket-summary-phase {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+  }
+  .ticket-summary-phase-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--yellow);
+    animation: pulse 2s ease-in-out infinite;
+  }
+  .ticket-summary-phase-label {
+    color: var(--yellow);
+    font-weight: 600;
+  }
+  .ticket-summary-progress {
+    color: var(--text-muted);
+  }
+
+  /* ── Chat Panel Header ─────────────────────── */
+  .chat-panel-header {
+    display: flex;
+    align-items: center;
+    padding: 8px 16px;
+    background: var(--bg-surface);
+    border-bottom: 1px solid var(--border);
+    flex-shrink: 0;
+    min-height: 38px;
+    transition: opacity 0.3s;
+  }
+  .chat-mode .chat-panel-header {
+    display: none;
+  }
+  .chat-panel-header-label {
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--text-muted);
+  }
+
+  /* ── Tree item review-highlighted state ────── */
+  .tree-item.review-highlight {
+    background: var(--purple-subtle);
+    color: var(--purple);
+    border-left-color: var(--purple);
+    opacity: 1;
+  }
+
+  /* ── Approved tree item: green check, dimmed ── */
+  .tree-item.approved-item {
+    color: var(--text-muted);
+    opacity: 0.75;
+  }
+  .tree-item.approved-item:hover {
+    opacity: 1;
+  }
+  .tree-item.approved-item .tree-item-status.approved {
+    color: var(--green);
+    font-size: 11px;
+  }
+
+  /* ── Plan step changed files ───────────────── */
+  .plan-step-files {
+    margin-top: 6px;
+    padding: 0;
+  }
+  .plan-step-files-toggle {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 11px;
+    color: var(--text-muted);
+    cursor: pointer;
+    padding: 2px 0;
+    user-select: none;
+    transition: color 0.15s;
+  }
+  .plan-step-files-toggle:hover {
+    color: var(--text-secondary);
+  }
+  .plan-step-files-toggle .chevron {
+    font-size: 8px;
+    transition: transform 0.2s;
+  }
+  .plan-step-files-toggle.open .chevron {
+    transform: rotate(90deg);
+  }
+  .plan-step-files-list {
+    display: none;
+    margin-top: 4px;
+    padding-left: 2px;
+    font-family: var(--mono);
+    font-size: 11px;
+    line-height: 1.7;
+  }
+  .plan-step-files-list.visible {
+    display: block;
+  }
+  .plan-step-file {
+    color: var(--text-muted);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    cursor: pointer;
+    padding: 1px 4px;
+    border-radius: 3px;
+    margin: 0 -4px;
+    transition: background 0.15s, color 0.15s;
+  }
+  .plan-step-file:hover {
+    background: var(--bg-hover);
+    color: var(--text-primary);
+  }
+  .plan-step-file .file-op {
+    font-weight: 700;
+    width: 10px;
+    text-align: center;
+    flex-shrink: 0;
+  }
+  .plan-step-file .file-op.add { color: var(--green); }
+  .plan-step-file .file-op.mod { color: var(--yellow); }
+
+  /* ── Plan step status label (Done/Running) ─── */
+  .plan-step-status-label {
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--green);
+    white-space: nowrap;
+    flex-shrink: 0;
+    align-self: center;
+    display: none;
+  }
+  .plan-step-status-label.visible {
+    display: inline;
+  }
+  .plan-step-status-label.running {
+    color: var(--yellow);
+  }
+
+  /* ── Plan tree step items ────────────────────── */
+  .tree-plan-step {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 5px 14px 5px 32px;
+    font-size: 12px;
+    color: var(--text-secondary);
+    cursor: pointer;
+    transition: all 0.2s ease;
+    border-left: 2px solid transparent;
+    position: relative;
+  }
+  .tree-plan-step:hover {
+    background: var(--bg-hover);
+    color: var(--text-primary);
+  }
+  .tree-plan-step.selected {
+    background: var(--accent-subtle);
+    color: var(--accent);
+    border-left-color: var(--accent);
+  }
+  .tree-plan-step.review-highlight {
+    background: var(--purple-subtle);
+    color: var(--purple);
+    border-left-color: var(--purple);
+  }
+  .tree-plan-step-num {
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 9px;
+    font-weight: 700;
+    flex-shrink: 0;
+    border: 1.5px solid var(--border-bright);
+    color: var(--text-muted);
+    background: var(--bg-elevated);
+  }
+  .tree-plan-step-num.done {
+    border-color: var(--green);
+    background: var(--green-subtle);
+    color: var(--green);
+  }
+  .tree-plan-step-num.executing {
+    border-color: var(--yellow);
+    color: var(--yellow);
+    animation: pulse 1.5s ease-in-out infinite;
+  }
+  .tree-plan-step-name {
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 11px;
+  }
+  .tree-plan-step-status {
+    font-size: 10px;
+    flex-shrink: 0;
+    color: var(--text-muted);
+  }
+  .tree-plan-step-status.done { color: var(--green); }
+
+  /* ── Tree file sub-items under plan steps ───── */
+  .tree-plan-file {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    padding: 2px 14px 2px 48px;
+    font-size: 10px;
+    font-family: var(--mono);
+    color: var(--text-muted);
+    cursor: pointer;
+    transition: all 0.15s ease;
+    border-left: 2px solid transparent;
+  }
+  .tree-plan-file:hover {
+    background: var(--bg-hover);
+    color: var(--text-primary);
+  }
+  .tree-plan-file.selected {
+    background: var(--accent-subtle);
+    color: var(--accent);
+    border-left-color: var(--accent);
+  }
+  .tree-plan-file.review-highlight {
+    background: var(--purple-subtle);
+    color: var(--purple);
+    border-left-color: var(--purple);
+  }
+  .tree-plan-file-op {
+    font-weight: 700;
+    width: 10px;
+    text-align: center;
+    flex-shrink: 0;
+  }
+  .tree-plan-file-op.add { color: var(--green); }
+  .tree-plan-file-op.mod { color: var(--yellow); }
+  .tree-plan-file-name {
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  /* ── Tree step and file animation ──────────── */
+  @keyframes treeItemSlideIn {
+    from { opacity: 0; transform: translateX(-10px); }
+    to { opacity: 1; transform: translateX(0); }
+  }
+  .tree-plan-step.animate-in,
+  .tree-plan-file.animate-in {
+    animation: treeItemSlideIn 0.3s ease forwards;
+  }
+
+  /* ── Verify phase ──────────────────────────── */
+  .tree-verify-btn {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 5px 14px 5px 32px;
+    font-size: 11px;
+    color: var(--accent);
+    cursor: pointer;
+    transition: all 0.15s ease;
+    border-left: 2px solid transparent;
+    font-weight: 500;
+  }
+  .tree-verify-btn:hover {
+    background: var(--bg-hover);
+    color: var(--text-primary);
+  }
+  .tree-verify-btn.selected {
+    background: var(--accent-subtle);
+    border-left-color: var(--accent);
+  }
+  .verify-icon {
+    font-size: 12px;
+  }
+
+  /* ── Verification view ─────────────────────── */
+  .verify-content {
+    padding: 32px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    flex: 1;
+    gap: 16px;
+  }
+  .verify-spinner {
+    width: 40px;
+    height: 40px;
+    border: 3px solid var(--border);
+    border-top-color: var(--accent);
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .verify-label {
+    font-size: 14px;
+    color: var(--text-secondary);
+  }
+  .verify-result {
+    display: none;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+  }
+  .verify-result.visible {
+    display: flex;
+  }
+  .verify-check {
+    width: 48px;
+    height: 48px;
+    border-radius: 50%;
+    background: var(--green-subtle);
+    border: 2px solid var(--green);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 24px;
+    color: var(--green);
+  }
+  .verify-result-text {
+    font-size: 14px;
+    color: var(--green);
+    font-weight: 600;
+  }
+  .verify-result-detail {
+    font-size: 12px;
+    color: var(--text-muted);
+    text-align: center;
+    line-height: 1.6;
+  }
+
+  /* ── Next action card (approval flow) ────────── */
+  .next-action-card {
+    background: var(--accent-subtle);
+    border: 1px solid rgba(88,166,255,0.35);
+    border-left: 4px solid var(--accent);
+    border-radius: var(--radius);
+    padding: 12px 16px;
+    margin: 8px 0;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    animation: msgFadeIn 0.25s ease;
+  }
+  .next-action-card .na-arrow {
+    font-size: 18px;
+    color: var(--accent);
+    flex-shrink: 0;
+    font-weight: 700;
+  }
+  .next-action-card .na-text {
+    flex: 1;
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--text-primary);
+    line-height: 1.4;
+  }
+  .next-action-card .na-text code {
+    font-family: var(--mono);
+    font-size: 12px;
+    background: var(--bg-inset);
+    padding: 1px 5px;
+    border-radius: 3px;
+    color: var(--accent);
+  }
+  .next-action-card .na-btn {
+    padding: 7px 16px;
+    border-radius: 6px;
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    border: 1px solid var(--accent);
+    background: var(--accent);
+    color: #fff;
+    transition: opacity 0.15s;
+    white-space: nowrap;
+    flex-shrink: 0;
+  }
+  .next-action-card .na-btn:hover { opacity: 0.85; }
+
+  /* ── Hidden utility ─────────────────────────── */
+  .hidden { display: none !important; }
+</style>
+</head>
+<body>
+
+<a href="index.html" class="back-link">&larr; All Models</a>
+
+<!-- ── Header ──────────────────────────────────── -->
+<div class="header">
+  <span class="ticket-id">AUTH-42</span>
+  <span class="ticket-title">"Add user authentication"</span>
+  <span class="header-sep">--</span>
+  <span style="font-size:13px; color:var(--text-secondary);">Phase:</span>
+  <div class="phase-pills" id="phasePills">
+    <span class="pill done" data-phase="describe"><span class="pill-dot"></span> Describe</span>
+    <span class="pill-arrow">&#8250;</span>
+    <span class="pill active" data-phase="specify"><span class="pill-dot"></span> Specifying</span>
+    <span class="pill-arrow">&#8250;</span>
+    <span class="pill pending" data-phase="plan"><span class="pill-dot"></span> Plan</span>
+  </div>
+  <div class="header-spacer"></div>
+  <span class="mode-indicator chat-mode" id="modeIndicator">Chat Mode</span>
+  <span class="model-tag">Model A</span>
+</div>
+
+<!-- ── Main Layout ─────────────────────────────── -->
+<div class="main-layout">
+
+  <!-- ── Tree Panel ──────────────────────────────── -->
+  <div class="tree-panel">
+    <!-- Ticket summary card -->
+    <div class="ticket-summary" id="ticketSummary">
+      <div class="ticket-summary-row">
+        <span class="ticket-summary-badge">Feature</span>
+        <span class="ticket-summary-title">Add user auth</span>
+      </div>
+      <div class="ticket-summary-meta">
+        <span class="ticket-summary-phase">
+          <span class="ticket-summary-phase-dot" id="summaryPhaseDot"></span>
+          <span class="ticket-summary-phase-label" id="summaryPhaseLabel">Specifying</span>
+        </span>
+        <span class="ticket-summary-progress" id="summaryProgress">0/4 approved</span>
+      </div>
+    </div>
+
+    <div class="tree-scroll">
+
+      <!-- Describe phase -->
+      <div class="tree-phase-group">
+        <div class="tree-phase-header" onclick="exitReviewMode()">
+          <span class="tree-phase-icon done">&#10003;</span>
+          <span>Describe</span>
+        </div>
+        <div class="tree-item approved-item" data-artifact="description" onclick="enterReviewMode('description')">
+          <span class="tree-item-op">&nbsp;</span>
+          <span class="tree-item-name">Description</span>
+          <span class="tree-item-status approved">&#10003;</span>
+        </div>
+      </div>
+
+      <!-- Specify phase -->
+      <div class="tree-phase-group">
+        <div class="tree-phase-header" onclick="exitReviewMode()">
+          <span class="tree-phase-icon active">&#9679;</span>
+          <span>Specify</span>
+          <span class="tree-phase-count" id="specifyCount">0/4 approved</span>
+        </div>
+        <div class="tree-item" data-artifact="design-doc" onclick="enterReviewMode('design-doc')">
+          <span class="tree-item-op mod">~</span>
+          <span class="tree-item-name">design-doc.md</span>
+          <span class="tree-item-status pending" id="treeStatus-design-doc">&#9675;</span>
+        </div>
+        <div class="tree-item" data-artifact="auth-readme" onclick="enterReviewMode('auth-readme')">
+          <span class="tree-item-op new">+</span>
+          <span class="tree-item-name">auth/README.md</span>
+          <span class="tree-item-status reviewing" id="treeStatus-auth-readme">&#9679;</span>
+        </div>
+        <div class="tree-item" data-artifact="design-doc-arch" onclick="enterReviewMode('design-doc-arch')">
+          <span class="tree-item-op mod">~</span>
+          <span class="tree-item-name">DESIGN_DOC.md</span>
+          <span class="tree-item-status pending" id="treeStatus-design-doc-arch">&#9675;</span>
+        </div>
+        <div class="tree-item" data-artifact="core-readme" onclick="enterReviewMode('core-readme')">
+          <span class="tree-item-op mod">~</span>
+          <span class="tree-item-name">core/README.md</span>
+          <span class="tree-item-status pending" id="treeStatus-core-readme">&#9675;</span>
+        </div>
+      </div>
+
+      <!-- Plan phase (includes execution) -->
+      <div class="tree-phase-group" id="planPhaseGroup">
+        <div class="tree-phase-header" onclick="exitReviewMode()">
+          <span class="tree-phase-icon pending" id="planPhaseIcon">&#9675;</span>
+          <span>Plan</span>
+          <span class="tree-phase-count" id="planCount" style="display:none;">0/6 done</span>
+        </div>
+        <div id="planPendingHint" style="padding: 4px 14px 4px 32px; font-size: 11px; color: var(--text-muted); font-style: italic;">
+          (pending specs approval)
+        </div>
+        <!-- Plan steps appear here dynamically -->
+        <div id="planTreeSteps"></div>
+      </div>
+
+      <!-- Verify phase (optional, shown after all plan steps done) -->
+      <div class="tree-phase-group hidden" id="verifyPhaseGroup">
+        <div class="tree-phase-header">
+          <span class="tree-phase-icon pending" id="verifyPhaseIcon">&#9675;</span>
+          <span>Verify</span>
+          <span style="font-size:9px; color:var(--text-muted); margin-left:auto; font-style:italic;">optional</span>
+        </div>
+        <div class="tree-verify-btn" id="verifyBtn" onclick="runVerification()">
+          <span class="verify-icon">&#9654;</span>
+          <span>Run spec-review</span>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- Ticket comment input -->
+    <div style="padding: 8px 12px; border-top: 1px solid var(--border); flex-shrink: 0; background: var(--bg-surface);">
+      <textarea style="width: 100%; min-height: 48px; max-height: 80px; resize: vertical; background: var(--bg-elevated); border: 1px solid var(--border); border-radius: var(--radius); padding: 6px 10px; color: var(--text-primary); font-size: 11px; font-family: inherit; outline: none; transition: border-color 0.15s;" placeholder="Comment on this ticket..." onfocus="this.style.borderColor='var(--accent)'" onblur="this.style.borderColor='var(--border)'" onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();if(this.value.trim()){showToast('Ticket comment saved','success');this.value='';}}"></textarea>
+    </div>
+  </div>
+
+  <!-- ── Content Area ─────────────────────────── -->
+  <div class="content-area" id="contentArea">
+
+    <!-- ── Artifact Panel (center, hidden in chat mode) ── -->
+    <div class="artifact-panel" id="artifactPanel">
+
+      <!-- description doc view -->
+      <div class="artifact-view" id="view-description" style="display:none; flex-direction:column; flex:1; overflow:hidden;">
+        <div class="artifact-toolbar">
+          <span class="artifact-filename">Description</span>
+          <span class="artifact-op" style="background:var(--green-subtle); color:var(--green);">DONE</span>
+          <div class="artifact-toolbar-spacer"></div>
+          <button class="artifact-btn back-chat" onclick="exitReviewMode()">&#8592; Chat</button>
+        </div>
+        <div class="artifact-diff-area">
+          <div class="doc-content">
+            <h2>Add user authentication</h2>
+            <div class="doc-field">
+              <span class="doc-label">What</span>
+              <span class="doc-value">Implement user authentication, authorization, and session management for the Bonsai workspace.</span>
+            </div>
+            <div class="doc-field">
+              <span class="doc-label">Why</span>
+              <span class="doc-value">Currently anyone with access to the server can perform any action. Need to protect sensitive operations and support multi-user workspaces.</span>
+            </div>
+            <div class="doc-field">
+              <span class="doc-label">Success</span>
+              <span class="doc-value">Users can sign up, log in, and are restricted to actions allowed by their role (admin/user/viewer).</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- auth/README.md diff view -->
+      <div class="artifact-view" id="view-auth-readme" style="display:none; flex-direction:column; flex:1; overflow:hidden;">
+        <div class="artifact-toolbar">
+          <span class="artifact-filename">auth/README.md</span>
+          <span class="artifact-op new">NEW</span>
+          <span class="artifact-stats"><span class="add">+47</span> lines</span>
+          <div class="artifact-toolbar-spacer"></div>
+          <button class="artifact-btn changes" onclick="requestChanges()">Request Changes</button>
+          <button class="artifact-btn approve" id="approveBtn-auth-readme" onclick="approveArtifact('auth-readme')">Approve</button>
+          <button class="artifact-btn back-chat" onclick="exitReviewMode()">&#8592; Chat</button>
+        </div>
+        <div class="artifact-approved-banner" id="approvedBanner-auth-readme"><span style="font-size:14px;">&#10003;</span> Approved</div>
+        <div class="artifact-diff-area">
+          <div class="diff-hunk-header">@@ -0,0 +1,47 @@</div>
+          <div class="diff-line add"><span class="ln">1</span>+# Auth Module -- Design Specification</div>
+          <div class="diff-line add"><span class="ln">2</span>+</div>
+          <div class="diff-line add"><span class="ln">3</span>+> Status: **Draft** | Parent: DESIGN_DOC.md</div>
+          <div class="diff-line add"><span class="ln">4</span>+</div>
+          <div class="diff-line add"><span class="ln">5</span>+## Purpose</div>
+          <div class="diff-line add"><span class="ln">6</span>+</div>
+          <div class="diff-line add"><span class="ln">7</span>+User authentication, authorization, and session management</div>
+          <div class="diff-line add"><span class="ln">8</span>+for the Bonsai workspace.</div>
+          <div class="diff-line add"><span class="ln">9</span>+</div>
+          <div class="diff-line add"><span class="ln">10</span>+## Architecture</div>
+          <div class="diff-line add"><span class="ln">11</span>+</div>
+          <div class="diff-line add"><span class="ln">12</span>+```</div>
+          <div class="diff-line add"><span class="ln">13</span>+auth/</div>
+          <div class="diff-line add"><span class="ln">14</span>+  models.py       # Pydantic: User, Session, Role</div>
+          <div class="diff-line add"><span class="ln">15</span>+  service.py      # Business logic</div>
+          <div class="diff-line add"><span class="ln">16</span>+  storage.py      # SQLite via aiosqlite</div>
+          <div class="diff-line add"><span class="ln">17</span>+  middleware.py   # FastAPI auth dependencies</div>
+          <div class="diff-line add"><span class="ln">18</span>+```</div>
+          <div class="diff-line add"><span class="ln">19</span>+</div>
+          <div class="diff-line add"><span class="ln">20</span>+## Authentication Strategy</div>
+          <div class="diff-line add"><span class="ln">21</span>+</div>
+
+          <!-- Annotation: pending decision -->
+          <div class="diff-annotation" id="diffAnnotation1">
+            <div class="diff-annotation-label">Pending decision</div>
+            <div class="diff-annotation-text">JWT vs session-based auth? Your <code>bns_</code> token pattern aligns with JWT.</div>
+            <div class="diff-annotation-options">
+              <button class="diff-annotation-btn rec" onclick="answerDecision('jwt', true)">JWT (recommended)</button>
+              <button class="diff-annotation-btn" onclick="answerDecision('session', true)">Session-based</button>
+              <button class="diff-annotation-btn" onclick="answerDecision('hybrid', true)">Hybrid</button>
+            </div>
+          </div>
+
+          <div class="diff-line add" id="authStrategyLine"><span class="ln">22</span>+[Pending: JWT vs session-based]</div>
+          <div class="diff-line add"><span class="ln">23</span>+</div>
+          <div class="diff-line add"><span class="ln">24</span>+## Data Model</div>
+          <div class="diff-line add"><span class="ln">25</span>+</div>
+          <div class="diff-line add"><span class="ln">26</span>+- `password_hash` -- bcrypt</div>
+          <div class="diff-line add"><span class="ln">27</span>+- `role` -- admin | user | viewer</div>
+          <div class="diff-line add"><span class="ln">28</span>+- `created_at`, `last_login`</div>
+          <div class="diff-line add"><span class="ln">29</span>+- `is_active` -- soft disable</div>
+          <div class="diff-line add"><span class="ln">30</span>+</div>
+          <div class="diff-line add"><span class="ln">31</span>+## Roles</div>
+          <div class="diff-line add"><span class="ln">32</span>+</div>
+          <div class="diff-line add"><span class="ln">33</span>+| Role   | Permissions                           |</div>
+          <div class="diff-line add"><span class="ln">34</span>+|--------|---------------------------------------|</div>
+          <div class="diff-line add"><span class="ln">35</span>+| admin  | Full access, user management          |</div>
+          <div class="diff-line add"><span class="ln">36</span>+| user   | Read/write own projects, agent access |</div>
+          <div class="diff-line add"><span class="ln">37</span>+| viewer | Read-only access to specs and board   |</div>
+          <div class="diff-line add"><span class="ln">38</span>+</div>
+          <div class="diff-line add"><span class="ln">39</span>+## Integration Points</div>
+          <div class="diff-line add"><span class="ln">40</span>+</div>
+          <div class="diff-line add"><span class="ln">41</span>+- `core/server_store.py` -- user table storage</div>
+          <div class="diff-line add"><span class="ln">42</span>+- `rpc/methods/auth.py` -- login/signup RPC handlers</div>
+          <div class="diff-line add"><span class="ln">43</span>+- `api/routers/user.py` -- REST endpoints for user mgmt</div>
+          <div class="diff-line add"><span class="ln">44</span>+- `agent/permissions.py` -- role-based agent access</div>
+          <div class="diff-line add"><span class="ln">45</span>+</div>
+          <div class="diff-line add"><span class="ln">46</span>+## Dependencies</div>
+          <div class="diff-line add"><span class="ln">47</span>+</div>
+          <div class="diff-line add"><span class="ln">48</span>+- PyJWT, bcrypt, python-multipart</div>
+        </div>
+      </div>
+
+      <!-- design-doc.md diff view -->
+      <div class="artifact-view" id="view-design-doc" style="display:none; flex-direction:column; flex:1; overflow:hidden;">
+        <div class="artifact-toolbar">
+          <span class="artifact-filename">design-doc.md</span>
+          <span class="artifact-op mod">MOD</span>
+          <span class="artifact-stats"><span class="add">+8</span> <span class="del">-3</span></span>
+          <div class="artifact-toolbar-spacer"></div>
+          <button class="artifact-btn changes" onclick="requestChanges()">Request Changes</button>
+          <button class="artifact-btn approve" id="approveBtn-design-doc" onclick="approveArtifact('design-doc')">Approve</button>
+          <button class="artifact-btn back-chat" onclick="exitReviewMode()">&#8592; Chat</button>
+        </div>
+        <div class="artifact-approved-banner" id="approvedBanner-design-doc"><span style="font-size:14px;">&#10003;</span> Approved</div>
+        <div class="artifact-diff-area">
+          <div class="diff-hunk-header">@@ -12,8 +12,13 @@</div>
+          <div class="diff-line ctx"><span class="ln">12</span> # Bonsai -- High-Level Design Document</div>
+          <div class="diff-line ctx"><span class="ln">13</span> </div>
+          <div class="diff-line del"><span class="ln">14</span>-## Modules: core, spec, agent, board, rpc</div>
+          <div class="diff-line add"><span class="ln">14</span>+## Modules: core, spec, agent, board, rpc, auth</div>
+          <div class="diff-line ctx"><span class="ln">15</span> </div>
+          <div class="diff-line add"><span class="ln">16</span>+### Auth Module (NEW)</div>
+          <div class="diff-line add"><span class="ln">17</span>+</div>
+          <div class="diff-line add"><span class="ln">18</span>+Provides user authentication, session management, and</div>
+          <div class="diff-line add"><span class="ln">19</span>+role-based access control. See auth/README.md for detail.</div>
+          <div class="diff-line add"><span class="ln">20</span>+</div>
+          <div class="diff-line ctx"><span class="ln">21</span> ## Cross-Cutting Concerns</div>
+          <div class="diff-line ctx"><span class="ln">22</span> </div>
+          <div class="diff-line del"><span class="ln">23</span>-- Logging via stdlib `logging`</div>
+          <div class="diff-line del"><span class="ln">24</span>-- Config via `core/config.py`</div>
+          <div class="diff-line add"><span class="ln">23</span>+- Logging via stdlib `logging`</div>
+          <div class="diff-line add"><span class="ln">24</span>+- Config via `core/config.py`</div>
+          <div class="diff-line add"><span class="ln">25</span>+- Authentication via `auth/middleware.py`</div>
+        </div>
+      </div>
+
+      <!-- DESIGN_DOC.md diff view -->
+      <div class="artifact-view" id="view-design-doc-arch" style="display:none; flex-direction:column; flex:1; overflow:hidden;">
+        <div class="artifact-toolbar">
+          <span class="artifact-filename">DESIGN_DOC.md</span>
+          <span class="artifact-op mod">MOD</span>
+          <span class="artifact-stats"><span class="add">+12</span> <span class="del">-2</span></span>
+          <div class="artifact-toolbar-spacer"></div>
+          <button class="artifact-btn changes" onclick="requestChanges()">Request Changes</button>
+          <button class="artifact-btn approve" id="approveBtn-design-doc-arch" onclick="approveArtifact('design-doc-arch')">Approve</button>
+          <button class="artifact-btn back-chat" onclick="exitReviewMode()">&#8592; Chat</button>
+        </div>
+        <div class="artifact-approved-banner" id="approvedBanner-design-doc-arch"><span style="font-size:14px;">&#10003;</span> Approved</div>
+        <div class="artifact-diff-area">
+          <div class="diff-hunk-header">@@ -45,6 +45,18 @@</div>
+          <div class="diff-line ctx"><span class="ln">45</span> ## Module Overview</div>
+          <div class="diff-line ctx"><span class="ln">46</span> </div>
+          <div class="diff-line del"><span class="ln">47</span>-| Module | Purpose |</div>
+          <div class="diff-line add"><span class="ln">47</span>+| Module | Purpose | Status |</div>
+          <div class="diff-line ctx"><span class="ln">48</span> | core | Config, file I/O, watcher | Active |</div>
+          <div class="diff-line add"><span class="ln">49</span>+| auth | User authentication, RBAC | Draft |</div>
+          <div class="diff-line ctx"><span class="ln">50</span> | spec | Spec parser, validator | Active |</div>
+          <div class="diff-line del"><span class="ln">51</span>-| agent | Agent runner, tools | Active |</div>
+          <div class="diff-line add"><span class="ln">51</span>+| agent | Agent runner, tools | Active |</div>
+          <div class="diff-line ctx"><span class="ln">52</span> </div>
+          <div class="diff-line add"><span class="ln">53</span>+### Auth Module</div>
+          <div class="diff-line add"><span class="ln">54</span>+</div>
+          <div class="diff-line add"><span class="ln">55</span>+New module providing user authentication and</div>
+          <div class="diff-line add"><span class="ln">56</span>+role-based access control. See [auth/README.md]</div>
+          <div class="diff-line add"><span class="ln">57</span>+for detailed specification.</div>
+          <div class="diff-line add"><span class="ln">58</span>+</div>
+          <div class="diff-line add"><span class="ln">59</span>+Key decisions:</div>
+          <div class="diff-line add"><span class="ln">60</span>+- Authentication strategy: TBD (see auth/README)</div>
+          <div class="diff-line add"><span class="ln">61</span>+- Storage: reuses core/server_store SQLite</div>
+          <div class="diff-line add"><span class="ln">62</span>+- Three roles: admin, user, viewer</div>
+        </div>
+      </div>
+
+      <!-- core/README.md diff view -->
+      <div class="artifact-view" id="view-core-readme" style="display:none; flex-direction:column; flex:1; overflow:hidden;">
+        <div class="artifact-toolbar">
+          <span class="artifact-filename">core/README.md</span>
+          <span class="artifact-op mod">MOD</span>
+          <span class="artifact-stats"><span class="add">+5</span> <span class="del">-1</span></span>
+          <div class="artifact-toolbar-spacer"></div>
+          <button class="artifact-btn changes" onclick="requestChanges()">Request Changes</button>
+          <button class="artifact-btn approve" id="approveBtn-core-readme" onclick="approveArtifact('core-readme')">Approve</button>
+          <button class="artifact-btn back-chat" onclick="exitReviewMode()">&#8592; Chat</button>
+        </div>
+        <div class="artifact-approved-banner" id="approvedBanner-core-readme"><span style="font-size:14px;">&#10003;</span> Approved</div>
+        <div class="artifact-diff-area">
+          <div class="diff-hunk-header">@@ -32,6 +32,10 @@</div>
+          <div class="diff-line ctx"><span class="ln">32</span> ## Dependencies</div>
+          <div class="diff-line ctx"><span class="ln">33</span> </div>
+          <div class="diff-line del"><span class="ln">34</span>-- No external module dependencies</div>
+          <div class="diff-line add"><span class="ln">34</span>+### Consumed by</div>
+          <div class="diff-line add"><span class="ln">35</span>+</div>
+          <div class="diff-line add"><span class="ln">36</span>+- `auth/` -- uses `server_store` for user persistence</div>
+          <div class="diff-line add"><span class="ln">37</span>+- `agent/` -- uses config and file I/O</div>
+          <div class="diff-line add"><span class="ln">38</span>+- `spec/` -- uses file watcher and config</div>
+        </div>
+      </div>
+
+      <!-- Verification view -->
+      <div class="artifact-view" id="view-verify" style="display:none; flex-direction:column; flex:1; overflow:hidden;">
+        <div class="artifact-toolbar">
+          <span class="artifact-filename">Verification</span>
+          <span class="artifact-op" style="background:var(--green-subtle); color:var(--green);">VERIFY</span>
+          <div class="artifact-toolbar-spacer"></div>
+          <button class="artifact-btn back-chat" onclick="exitReviewMode()">&#8592; Chat</button>
+        </div>
+        <div class="artifact-diff-area">
+          <div class="verify-content" id="verifyContent">
+            <div class="verify-spinner" id="verifySpinner"></div>
+            <div class="verify-label" id="verifyLabel">Running spec-review...</div>
+            <div class="verify-result" id="verifyResult">
+              <div class="verify-check">&#10003;</div>
+              <div class="verify-result-text">All specs aligned with implementation.</div>
+              <div class="verify-result-detail">
+                Checked 4 spec files against 6 implementation steps.<br>
+                No discrepancies found. All module boundaries respected.<br>
+                Auth module follows existing patterns in core/.
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Code diff views for plan step files (generated mock diffs) -->
+      <div class="artifact-view" id="view-step-file" style="display:none; flex-direction:column; flex:1; overflow:hidden;">
+        <div class="artifact-toolbar">
+          <span class="artifact-filename" id="stepFileViewName">file.py</span>
+          <span class="artifact-op new" id="stepFileViewOp">NEW</span>
+          <span class="artifact-stats" id="stepFileViewStats"><span class="add">+25</span></span>
+          <div class="artifact-toolbar-spacer"></div>
+          <button class="artifact-btn back-chat" onclick="exitReviewMode()">&#8592; Chat</button>
+        </div>
+        <div class="artifact-diff-area" id="stepFileDiffArea">
+          <!-- Diff content injected dynamically -->
+        </div>
+      </div>
+
+      <!-- Plan view — shows execution controls + file diffs only (step list/nav is in the tree) -->
+      <div class="artifact-view" id="view-plan" style="display:none; flex-direction:column; flex:1; overflow:hidden;">
+        <div class="artifact-toolbar">
+          <span class="artifact-filename">Implementation Plan</span>
+          <span class="artifact-op" style="background:var(--purple-subtle); color:var(--purple);">PLAN</span>
+          <span class="artifact-stats" style="color:var(--text-secondary);">6 steps</span>
+          <div class="artifact-toolbar-spacer"></div>
+          <button class="execute-all-btn" id="executeAllBtn" onclick="executeAllPlanSteps()" style="margin-right:8px;">Execute All</button>
+          <div class="execute-all-progress" id="executeAllProgress" style="display:none;">
+            <div class="execute-all-progress-bar"><div class="execute-all-progress-fill" id="executeAllFill"></div></div>
+            <span id="executeAllLabel">0/6</span>
+          </div>
+          <button class="artifact-btn back-chat" onclick="exitReviewMode()">&#8592; Chat</button>
+        </div>
+        <div class="artifact-diff-area">
+          <div style="padding: 40px 32px; text-align: center; color: var(--text-muted); font-size: 14px; line-height: 1.7;">
+            <div style="font-size: 28px; margin-bottom: 12px; opacity: 0.5;">&#128269;</div>
+            <div style="font-weight: 600; color: var(--text-secondary); margin-bottom: 6px;">Select a step from the tree</div>
+            <div>Click a plan step or file in the left tree to view its code diff here.<br>
+            Use <strong>Execute All</strong> above to run all steps, or execute them individually from the tree.</div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- ── Chat Panel ──────────────────────────── -->
+    <div class="chat-panel chat-mode" id="chatPanel">
+      <div class="chat-panel-header">
+        <span class="chat-panel-header-label">Conversation</span>
+      </div>
+      <div class="chat-scroll" id="chatScroll">
+        <div class="chat-messages" id="chatMessages">
+
+          <!-- Agent message -->
+          <div class="chat-msg is-agent">
+            <div class="chat-msg-body">I've analyzed your codebase and found existing auth patterns in <code>core/server_store.py</code>. The current <code>bns_</code> token system provides a good foundation. I'm creating the auth module specification now.</div>
+          </div>
+
+          <!-- Compact artifact reference -->
+          <div class="chat-msg is-agent">
+            <div class="chat-artifact-ref" onclick="enterReviewMode('auth-readme')">
+              <div class="chat-artifact-ref-icon new">+</div>
+              <span class="chat-artifact-ref-name">auth/README.md</span>
+              <span class="chat-artifact-ref-op new">NEW</span>
+              <span class="chat-artifact-ref-stats"><span class="add">+47</span></span>
+              <span class="chat-artifact-ref-review">Review</span>
+            </div>
+          </div>
+
+          <!-- Agent message -->
+          <div class="chat-msg is-agent">
+            <div class="chat-msg-body">I also updated the existing design documents to reference the new auth module:</div>
+          </div>
+
+          <!-- More artifact refs -->
+          <div class="chat-msg is-agent">
+            <div class="chat-artifact-ref" onclick="enterReviewMode('design-doc')">
+              <div class="chat-artifact-ref-icon mod">~</div>
+              <span class="chat-artifact-ref-name">design-doc.md</span>
+              <span class="chat-artifact-ref-op mod">MOD</span>
+              <span class="chat-artifact-ref-stats"><span class="add">+8</span> <span class="del">-3</span></span>
+              <span class="chat-artifact-ref-review">Review</span>
+            </div>
+          </div>
+          <div class="chat-msg is-agent">
+            <div class="chat-artifact-ref" onclick="enterReviewMode('design-doc-arch')">
+              <div class="chat-artifact-ref-icon mod">~</div>
+              <span class="chat-artifact-ref-name">DESIGN_DOC.md</span>
+              <span class="chat-artifact-ref-op mod">MOD</span>
+              <span class="chat-artifact-ref-stats"><span class="add">+12</span> <span class="del">-2</span></span>
+              <span class="chat-artifact-ref-review">Review</span>
+            </div>
+          </div>
+          <div class="chat-msg is-agent">
+            <div class="chat-artifact-ref" onclick="enterReviewMode('core-readme')">
+              <div class="chat-artifact-ref-icon mod">~</div>
+              <span class="chat-artifact-ref-name">core/README.md</span>
+              <span class="chat-artifact-ref-op mod">MOD</span>
+              <span class="chat-artifact-ref-stats"><span class="add">+5</span> <span class="del">-1</span></span>
+              <span class="chat-artifact-ref-review">Review</span>
+            </div>
+          </div>
+
+          <!-- Agent message with decision prompt -->
+          <div class="chat-msg is-agent">
+            <div class="chat-msg-body">I need a decision on the auth strategy before completing the specification:</div>
+          </div>
+
+          <!-- Decision Card -->
+          <div class="chat-msg is-agent">
+            <div class="decision-card" id="decisionCard1">
+              <div class="decision-question">Should we use JWT or session-based auth?</div>
+              <div class="decision-options" id="decisionOptions1">
+                <button class="decision-btn rec" onclick="answerDecision('jwt')">JWT tokens</button>
+                <button class="decision-btn" onclick="answerDecision('session')">Session-based</button>
+                <button class="decision-btn" onclick="answerDecision('hybrid')">Hybrid</button>
+              </div>
+              <div class="decision-hint">Your <code>bns_</code> token pattern aligns with JWT.</div>
+            </div>
+          </div>
+
+          <!-- Next Action Card (guides user to the next artifact that needs attention) -->
+          <div class="chat-msg is-agent" id="nextActionContainer">
+            <div class="next-action-card" id="nextActionCard">
+              <span class="na-arrow">&rarr;</span>
+              <span class="na-text" id="nextActionText"><code>auth/README.md</code> needs review &mdash; contains a pending decision on auth strategy</span>
+              <button class="na-btn" id="nextActionBtn" onclick="goToNextAction()">Review &amp; Approve</button>
+            </div>
+          </div>
+
+        </div>
+      </div>
+
+      <!-- Chat Input -->
+      <div class="chat-input-area">
+        <div class="chat-input-row">
+          <input class="chat-input" id="chatInput" placeholder="Type a message..." onkeydown="if(event.key==='Enter')sendMessage()">
+          <button class="chat-send-btn" onclick="sendMessage()">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+          </button>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- Toast -->
+<div class="toast" id="toast"><span class="t-icon"></span><span class="t-msg"></span></div>
+
+<script>
+  // ── State ──────────────────────────────────────
+  const state = {
+    mode: 'chat',             // 'chat' or 'review'
+    currentArtifact: null,    // which artifact is in review
+    currentStepFile: null,    // { step, file, op } when viewing a step file diff
+    approved: new Set(),
+    decisionAnswered: false,
+    allApproved: false,
+    planShown: false,
+    verificationRun: false,
+    artifacts: ['design-doc', 'auth-readme', 'design-doc-arch', 'core-readme'],
+    artifactNames: {
+      'description': 'Description',
+      'design-doc': 'design-doc.md',
+      'auth-readme': 'auth/README.md',
+      'design-doc-arch': 'DESIGN_DOC.md',
+      'core-readme': 'core/README.md',
+      'plan': 'Implementation Plan',
+      'verify': 'Verification',
+      'step-file': 'File Diff',
+    },
+    _toastTimer: null,
+    _chatScrollTop: 0,
+  };
+
+  // ── Plan steps data ──────────────────────────
+  const planStepsData = [
+    { num: 1, title: 'Create auth skeleton', files: [
+      { name: 'backend/app/auth/__init__.py', op: 'add' },
+      { name: 'backend/app/auth/models.py', op: 'add' },
+      { name: 'backend/app/auth/service.py', op: 'add' },
+      { name: 'backend/app/auth/storage.py', op: 'add' },
+    ]},
+    { num: 2, title: 'Implement storage', files: [
+      { name: 'backend/app/auth/storage.py', op: 'mod' },
+      { name: 'backend/app/auth/migrations/001_users.py', op: 'add' },
+      { name: 'backend/app/core/server_store.py', op: 'mod' },
+    ]},
+    { num: 3, title: 'JWT token service', files: [
+      { name: 'backend/app/auth/service.py', op: 'mod' },
+      { name: 'backend/app/auth/tokens.py', op: 'add' },
+    ]},
+    { num: 4, title: 'Auth middleware', files: [
+      { name: 'backend/app/auth/middleware.py', op: 'add' },
+      { name: 'backend/app/main.py', op: 'mod' },
+    ]},
+    { num: 5, title: 'Signup/login RPC', files: [
+      { name: 'backend/app/rpc/methods/auth.py', op: 'add' },
+      { name: 'backend/app/rpc/server.py', op: 'mod' },
+    ]},
+    { num: 6, title: 'Integration tests', files: [
+      { name: 'backend/app/agent/permissions.py', op: 'mod' },
+      { name: 'backend/app/board/service.py', op: 'mod' },
+      { name: 'backend/app/spec/service.py', op: 'mod' },
+    ]},
+  ];
+
+  // ── Mock code diffs for each file ──────────────
+  const mockDiffs = {
+    'backend/app/auth/__init__.py': {
+      hunk: '@@ -0,0 +1,8 @@',
+      lines: [
+        ['+', '1', 'from __future__ import annotations'],
+        ['+', '2', '"""Auth module -- authentication, authorization, session management."""'],
+        ['+', '3', ''],
+        ['+', '4', 'from app.auth.models import User, Session, Role'],
+        ['+', '5', 'from app.auth.service import AuthService'],
+        ['+', '6', 'from app.auth.storage import AuthStorage'],
+        ['+', '7', ''],
+        ['+', '8', '__all__ = ["User", "Session", "Role", "AuthService", "AuthStorage"]'],
+      ],
+      stats: '+8',
+    },
+    'backend/app/auth/models.py': {
+      hunk: '@@ -0,0 +1,25 @@',
+      lines: [
+        ['+', '1', 'from __future__ import annotations'],
+        ['+', '2', '"""Pydantic models for auth domain."""'],
+        ['+', '3', ''],
+        ['+', '4', 'from enum import Enum'],
+        ['+', '5', 'from pydantic import BaseModel, Field'],
+        ['+', '6', ''],
+        ['+', '7', ''],
+        ['+', '8', 'class Role(str, Enum):'],
+        ['+', '9', '    admin = "admin"'],
+        ['+', '10', '    user = "user"'],
+        ['+', '11', '    viewer = "viewer"'],
+        ['+', '12', ''],
+        ['+', '13', ''],
+        ['+', '14', 'class User(BaseModel):'],
+        ['+', '15', '    id: str'],
+        ['+', '16', '    name: str'],
+        ['+', '17', '    email: str | None = None'],
+        ['+', '18', '    password_hash: str'],
+        ['+', '19', '    role: Role = Role.user'],
+        ['+', '20', '    is_active: bool = True'],
+        ['+', '21', ''],
+        ['+', '22', ''],
+        ['+', '23', 'class Session(BaseModel):'],
+        ['+', '24', '    token: str'],
+        ['+', '25', '    user_id: str'],
+      ],
+      stats: '+25',
+    },
+    'backend/app/auth/service.py': {
+      hunk: '@@ -0,0 +1,22 @@',
+      lines: [
+        ['+', '1', 'from __future__ import annotations'],
+        ['+', '2', '"""Auth business logic -- signup, login, token management."""'],
+        ['+', '3', ''],
+        ['+', '4', 'import logging'],
+        ['+', '5', 'from app.auth.models import User, Role'],
+        ['+', '6', 'from app.auth.storage import AuthStorage'],
+        ['+', '7', ''],
+        ['+', '8', 'logger = logging.getLogger(__name__)'],
+        ['+', '9', ''],
+        ['+', '10', ''],
+        ['+', '11', 'class AuthService:'],
+        ['+', '12', '    """Coordinates authentication operations."""'],
+        ['+', '13', ''],
+        ['+', '14', '    def __init__(self, storage: AuthStorage) -> None:'],
+        ['+', '15', '        self._storage = storage'],
+        ['+', '16', ''],
+        ['+', '17', '    async def signup(self, name: str, email: str, password: str) -> User:'],
+        ['+', '18', '        logger.info("Creating user: %s", email)'],
+        ['+', '19', '        # TODO: hash password, create user in storage'],
+        ['+', '20', '        ...'],
+        ['+', '21', ''],
+        ['+', '22', '    async def login(self, email: str, password: str) -> str:'],
+      ],
+      stats: '+22',
+    },
+    'backend/app/auth/storage.py': {
+      hunk: '@@ -0,0 +1,18 @@',
+      lines: [
+        ['+', '1', 'from __future__ import annotations'],
+        ['+', '2', '"""SQLite storage for auth domain via aiosqlite."""'],
+        ['+', '3', ''],
+        ['+', '4', 'import aiosqlite'],
+        ['+', '5', 'import logging'],
+        ['+', '6', ''],
+        ['+', '7', 'logger = logging.getLogger(__name__)'],
+        ['+', '8', ''],
+        ['+', '9', ''],
+        ['+', '10', 'class AuthStorage:'],
+        ['+', '11', '    """Persists users and sessions to SQLite."""'],
+        ['+', '12', ''],
+        ['+', '13', '    def __init__(self, db_path: str) -> None:'],
+        ['+', '14', '        self._db_path = db_path'],
+        ['+', '15', ''],
+        ['+', '16', '    async def create_user(self, user_id: str, name: str, pw_hash: str) -> None:'],
+        ['+', '17', '        async with aiosqlite.connect(self._db_path) as db:'],
+        ['+', '18', '            await db.execute("INSERT INTO users ...", (user_id, name, pw_hash))'],
+      ],
+      stats: '+18',
+    },
+    'backend/app/auth/migrations/001_users.py': {
+      hunk: '@@ -0,0 +1,16 @@',
+      lines: [
+        ['+', '1', 'from __future__ import annotations'],
+        ['+', '2', '"""Migration: create users and sessions tables."""'],
+        ['+', '3', ''],
+        ['+', '4', 'SQL = """'],
+        ['+', '5', 'CREATE TABLE IF NOT EXISTS users ('],
+        ['+', '6', '    id TEXT PRIMARY KEY,'],
+        ['+', '7', '    name TEXT NOT NULL,'],
+        ['+', '8', '    email TEXT UNIQUE,'],
+        ['+', '9', '    password_hash TEXT NOT NULL,'],
+        ['+', '10', '    role TEXT DEFAULT \'user\','],
+        ['+', '11', '    is_active INTEGER DEFAULT 1,'],
+        ['+', '12', '    created_at TEXT DEFAULT CURRENT_TIMESTAMP'],
+        ['+', '13', ');'],
+        ['+', '14', ''],
+        ['+', '15', 'CREATE INDEX idx_users_email ON users(email);'],
+        ['+', '16', '"""'],
+      ],
+      stats: '+16',
+    },
+    'backend/app/core/server_store.py': {
+      hunk: '@@ -45,6 +45,14 @@',
+      lines: [
+        [' ', '45', '    async def init_db(self) -> None:'],
+        [' ', '46', '        """Initialize database tables."""'],
+        ['-', '47', '        # Only project and settings tables'],
+        ['+', '47', '        # Project, settings, and auth tables'],
+        ['+', '48', '        await self._run_auth_migrations()'],
+        [' ', '49', ''],
+        ['+', '50', '    async def _run_auth_migrations(self) -> None:'],
+        ['+', '51', '        """Run auth module migration scripts."""'],
+        ['+', '52', '        from app.auth.migrations import 001_users'],
+        ['+', '53', '        async with aiosqlite.connect(self._db_path) as db:'],
+        ['+', '54', '            await db.executescript(001_users.SQL)'],
+      ],
+      stats: '+6 -1',
+    },
+    'backend/app/auth/tokens.py': {
+      hunk: '@@ -0,0 +1,20 @@',
+      lines: [
+        ['+', '1', 'from __future__ import annotations'],
+        ['+', '2', '"""JWT token creation and validation."""'],
+        ['+', '3', ''],
+        ['+', '4', 'import jwt'],
+        ['+', '5', 'from datetime import datetime, timedelta'],
+        ['+', '6', ''],
+        ['+', '7', 'ACCESS_TTL = timedelta(minutes=15)'],
+        ['+', '8', 'REFRESH_TTL = timedelta(days=7)'],
+        ['+', '9', ''],
+        ['+', '10', ''],
+        ['+', '11', 'def create_access_token(user_id: str, secret: str) -> str:'],
+        ['+', '12', '    payload = {'],
+        ['+', '13', '        "sub": user_id,'],
+        ['+', '14', '        "exp": datetime.utcnow() + ACCESS_TTL,'],
+        ['+', '15', '        "type": "access",'],
+        ['+', '16', '    }'],
+        ['+', '17', '    return jwt.encode(payload, secret, algorithm="HS256")'],
+        ['+', '18', ''],
+        ['+', '19', ''],
+        ['+', '20', 'def create_refresh_token(user_id: str, secret: str) -> str:'],
+      ],
+      stats: '+20',
+    },
+    'backend/app/auth/middleware.py': {
+      hunk: '@@ -0,0 +1,22 @@',
+      lines: [
+        ['+', '1', 'from __future__ import annotations'],
+        ['+', '2', '"""FastAPI auth dependencies -- token validation + role checks."""'],
+        ['+', '3', ''],
+        ['+', '4', 'from fastapi import Depends, HTTPException, status'],
+        ['+', '5', 'from fastapi.security import HTTPBearer'],
+        ['+', '6', ''],
+        ['+', '7', 'from app.auth.tokens import decode_token'],
+        ['+', '8', 'from app.auth.models import Role'],
+        ['+', '9', ''],
+        ['+', '10', 'bearer = HTTPBearer()'],
+        ['+', '11', ''],
+        ['+', '12', ''],
+        ['+', '13', 'async def get_current_user(token=Depends(bearer)):'],
+        ['+', '14', '    payload = decode_token(token.credentials)'],
+        ['+', '15', '    if not payload:'],
+        ['+', '16', '        raise HTTPException(status.HTTP_401_UNAUTHORIZED)'],
+        ['+', '17', '    return payload'],
+        ['+', '18', ''],
+        ['+', '19', ''],
+        ['+', '20', 'def require_role(*roles: Role):'],
+        ['+', '21', '    """Dependency factory for role-based access."""'],
+        ['+', '22', '    ...'],
+      ],
+      stats: '+22',
+    },
+    'backend/app/main.py': {
+      hunk: '@@ -8,6 +8,12 @@',
+      lines: [
+        [' ', '8', 'from fastapi import FastAPI'],
+        [' ', '9', ''],
+        ['+', '10', 'from app.auth.middleware import get_current_user'],
+        ['+', '11', ''],
+        [' ', '12', ''],
+        [' ', '13', 'def create_app() -> FastAPI:'],
+        [' ', '14', '    app = FastAPI(title="Bonsai")'],
+        ['-', '15', '    # TODO: add auth middleware'],
+        ['+', '15', '    app.dependency_overrides[get_current_user] = get_current_user'],
+        [' ', '16', '    return app'],
+      ],
+      stats: '+3 -1',
+    },
+    'backend/app/rpc/methods/auth.py': {
+      hunk: '@@ -0,0 +1,18 @@',
+      lines: [
+        ['+', '1', 'from __future__ import annotations'],
+        ['+', '2', '"""WebSocket RPC handlers for auth operations."""'],
+        ['+', '3', ''],
+        ['+', '4', 'from app.auth.service import AuthService'],
+        ['+', '5', ''],
+        ['+', '6', ''],
+        ['+', '7', 'async def rpc_signup(params: dict, ctx) -> dict:'],
+        ['+', '8', '    svc: AuthService = ctx.auth_service'],
+        ['+', '9', '    user = await svc.signup('],
+        ['+', '10', '        name=params["name"],'],
+        ['+', '11', '        email=params["email"],'],
+        ['+', '12', '        password=params["password"],'],
+        ['+', '13', '    )'],
+        ['+', '14', '    return {"user_id": user.id, "token": user.token}'],
+        ['+', '15', ''],
+        ['+', '16', ''],
+        ['+', '17', 'async def rpc_login(params: dict, ctx) -> dict:'],
+        ['+', '18', '    svc: AuthService = ctx.auth_service'],
+      ],
+      stats: '+18',
+    },
+    'backend/app/rpc/server.py': {
+      hunk: '@@ -22,6 +22,10 @@',
+      lines: [
+        [' ', '22', '    # Register RPC method handlers'],
+        [' ', '23', '    from app.rpc.methods import specs, agents, sessions'],
+        ['+', '24', '    from app.rpc.methods import auth as auth_methods'],
+        [' ', '25', ''],
+        [' ', '26', '    registry = {'],
+        [' ', '27', '        "specs.list": specs.rpc_list,'],
+        ['+', '28', '        "auth.signup": auth_methods.rpc_signup,'],
+        ['+', '29', '        "auth.login": auth_methods.rpc_login,'],
+        [' ', '30', '    }'],
+      ],
+      stats: '+3',
+    },
+    'backend/app/agent/permissions.py': {
+      hunk: '@@ -5,8 +5,15 @@',
+      lines: [
+        [' ', '5', 'from __future__ import annotations'],
+        [' ', '6', ''],
+        ['-', '7', '# TODO: implement role-based access'],
+        ['+', '7', 'from app.auth.models import Role'],
+        ['+', '8', ''],
+        ['+', '9', ''],
+        ['+', '10', 'def check_agent_access(user_role: Role) -> bool:'],
+        ['+', '11', '    """Check if user role permits agent operations."""'],
+        ['+', '12', '    return user_role in (Role.admin, Role.user)'],
+        ['+', '13', ''],
+        ['+', '14', ''],
+        ['+', '15', 'def check_admin_access(user_role: Role) -> bool:'],
+        ['+', '16', '    return user_role == Role.admin'],
+      ],
+      stats: '+9 -1',
+    },
+    'backend/app/board/service.py': {
+      hunk: '@@ -12,6 +12,12 @@',
+      lines: [
+        [' ', '12', 'from app.board.models import Ticket, TicketStatus'],
+        ['+', '13', 'from app.auth.models import Role'],
+        [' ', '14', ''],
+        [' ', '15', ''],
+        [' ', '16', 'class BoardService:'],
+        ['+', '17', ''],
+        ['+', '18', '    def _check_permission(self, user_role: Role, action: str) -> bool:'],
+        ['+', '19', '        if action in ("create", "update", "delete"):'],
+        ['+', '20', '            return user_role in (Role.admin, Role.user)'],
+        ['+', '21', '        return True  # viewers can read'],
+      ],
+      stats: '+5',
+    },
+    'backend/app/spec/service.py': {
+      hunk: '@@ -8,6 +8,12 @@',
+      lines: [
+        [' ', '8', 'from app.spec.models import Spec, SpecStatus'],
+        ['+', '9', 'from app.auth.models import Role'],
+        [' ', '10', ''],
+        ['+', '11', ''],
+        ['+', '12', 'def can_edit_spec(user_role: Role) -> bool:'],
+        ['+', '13', '    """Only admin and user roles can edit specs."""'],
+        ['+', '14', '    return user_role in (Role.admin, Role.user)'],
+        [' ', '15', ''],
+        [' ', '16', ''],
+        [' ', '17', 'class SpecService:'],
+      ],
+      stats: '+4',
+    },
+  };
+
+  // ── Enter Review Mode ─────────────────────────
+  function enterReviewMode(artifactId) {
+    // If already reviewing this artifact (and not a step-file which can change), do nothing
+    if (state.mode === 'review' && state.currentArtifact === artifactId && artifactId !== 'step-file') return;
+
+    // Save chat scroll position
+    const chatScroll = document.getElementById('chatScroll');
+    state._chatScrollTop = chatScroll.scrollTop;
+
+    // Hide previously shown artifact view
+    if (state.currentArtifact) {
+      const prevView = document.getElementById('view-' + state.currentArtifact);
+      if (prevView) prevView.style.display = 'none';
+    }
+
+    // Show new artifact view
+    const view = document.getElementById('view-' + artifactId);
+    if (view) view.style.display = 'flex';
+
+    // Show artifact panel
+    const panel = document.getElementById('artifactPanel');
+    panel.classList.add('visible');
+
+    // Transition chat panel to review mode
+    const chatPanel = document.getElementById('chatPanel');
+    chatPanel.classList.remove('chat-mode');
+    chatPanel.classList.add('review-mode');
+
+    // Update tree selection (clear all types of tree items)
+    document.querySelectorAll('.tree-item').forEach(item => {
+      const isTarget = item.dataset.artifact === artifactId;
+      item.classList.toggle('selected', isTarget);
+      item.classList.toggle('review-highlight', isTarget);
+    });
+    // Clear plan step and file selections
+    document.querySelectorAll('.tree-plan-step, .tree-plan-file, .tree-verify-btn').forEach(item => {
+      item.classList.remove('selected', 'review-highlight');
+    });
+
+    // Update mode indicator
+    const indicator = document.getElementById('modeIndicator');
+    indicator.className = 'mode-indicator review-mode';
+    indicator.textContent = 'Review Mode';
+
+    state.mode = 'review';
+    state.currentArtifact = artifactId;
+
+    // Restore chat scroll position after transition
+    requestAnimationFrame(() => {
+      chatScroll.scrollTop = state._chatScrollTop;
+    });
+  }
+
+  // ── Exit Review Mode (back to Chat Mode) ──────
+  function exitReviewMode() {
+    if (state.mode === 'chat') return;
+
+    // Save chat scroll position
+    const chatScroll = document.getElementById('chatScroll');
+    state._chatScrollTop = chatScroll.scrollTop;
+
+    // Hide current artifact view
+    if (state.currentArtifact) {
+      const view = document.getElementById('view-' + state.currentArtifact);
+      if (view) view.style.display = 'none';
+    }
+
+    // Hide artifact panel
+    const panel = document.getElementById('artifactPanel');
+    panel.classList.remove('visible');
+
+    // Transition chat panel to chat mode
+    const chatPanel = document.getElementById('chatPanel');
+    chatPanel.classList.remove('review-mode');
+    chatPanel.classList.add('chat-mode');
+
+    // Clear tree selection and review highlight
+    document.querySelectorAll('.tree-item, .tree-plan-step, .tree-plan-file, .tree-verify-btn').forEach(item => {
+      item.classList.remove('selected');
+      item.classList.remove('review-highlight');
+    });
+
+    // Update mode indicator
+    const indicator = document.getElementById('modeIndicator');
+    indicator.className = 'mode-indicator chat-mode';
+    indicator.textContent = 'Chat Mode';
+
+    state.mode = 'chat';
+    state.currentArtifact = null;
+
+    // Restore chat scroll position after transition
+    requestAnimationFrame(() => {
+      chatScroll.scrollTop = state._chatScrollTop;
+    });
+  }
+
+  // ── Answer Decision ───────────────────────────
+  function answerDecision(answer, fromDiff) {
+    if (state.decisionAnswered) return;
+    state.decisionAnswered = true;
+
+    const labels = { jwt: 'JWT tokens', session: 'Session-based', hybrid: 'Hybrid approach' };
+
+    // Update chat decision card
+    const card = document.getElementById('decisionCard1');
+    const options = document.getElementById('decisionOptions1');
+    options.querySelectorAll('.decision-btn').forEach(b => {
+      const text = b.textContent.toLowerCase();
+      if (text.includes(answer === 'jwt' ? 'jwt' : answer === 'session' ? 'session' : 'hybrid')) {
+        b.classList.add('selected');
+        b.classList.remove('rec');
+      } else {
+        b.classList.add('dimmed');
+        b.classList.remove('rec');
+      }
+    });
+
+    // Hide the hint
+    card.querySelector('.decision-hint').style.display = 'none';
+
+    // Collapse decision card after a moment
+    setTimeout(() => {
+      card.classList.add('resolved');
+      card.innerHTML = '<div class="decision-resolved"><span class="decision-resolved-check">&#10003;</span> Decided: <strong>' + labels[answer] + '</strong></div>';
+    }, 800);
+
+    // Hide annotation in diff
+    const annotation = document.getElementById('diffAnnotation1');
+    if (annotation) {
+      annotation.classList.add('hiding');
+      setTimeout(() => { annotation.style.display = 'none'; }, 500);
+    }
+
+    // Update the diff line
+    const strategyLine = document.getElementById('authStrategyLine');
+    if (strategyLine) {
+      const texts = {
+        jwt: '+JWT-based authentication with access/refresh token pairs',
+        session: '+Server-side session authentication with secure cookies',
+        hybrid: '+Hybrid: JWT for API, sessions for browser UI',
+      };
+      strategyLine.innerHTML = '<span class="ln">22</span>' + texts[answer];
+      strategyLine.classList.add('updated-flash');
+      setTimeout(() => strategyLine.classList.remove('updated-flash'), 2500);
+    }
+
+    // If answered from diff annotation, also add user message in chat
+    if (fromDiff) {
+      addUserMsg("Let's go with " + labels[answer] + '.');
+    }
+
+    // Agent response
+    setTimeout(() => {
+      const responses = {
+        jwt: 'Updated the auth strategy to JWT -- access tokens (15min TTL) + refresh tokens (7d). This aligns with your existing <code>bns_</code> token infrastructure.',
+        session: 'Updated the spec to use server-side sessions with secure cookies. Added <code>session_store.py</code> to the architecture.',
+        hybrid: 'Specified JWT for API access and secure session cookies for browser UI. Updated auth/README.md with the dual-auth strategy.',
+      };
+      addAgentMsg(responses[answer]);
+      showToast('Auth strategy resolved', 'success');
+
+      // Update tree status for auth-readme
+      const treeStatus = document.getElementById('treeStatus-auth-readme');
+      if (treeStatus) {
+        treeStatus.className = 'tree-item-status reviewing';
+        treeStatus.innerHTML = '&#9679;';
+      }
+
+      // Update the next action card now that decision is resolved
+      updateNextAction();
+    }, fromDiff ? 400 : 700);
+  }
+
+  // ── Next Action Card ──────────────────────────
+  function goToNextAction() {
+    // Find next artifact that needs attention
+    const nextPending = state.artifacts.find(a => !state.approved.has(a));
+    if (nextPending) {
+      enterReviewMode(nextPending);
+    }
+  }
+
+  function updateNextAction() {
+    const card = document.getElementById('nextActionCard');
+    const container = document.getElementById('nextActionContainer');
+    const textEl = document.getElementById('nextActionText');
+    const btnEl = document.getElementById('nextActionBtn');
+    if (!card || !container) return;
+
+    // Find next artifact that needs attention
+    const nextPending = state.artifacts.find(a => !state.approved.has(a));
+    if (!nextPending) {
+      // All approved - hide next action
+      container.style.display = 'none';
+      return;
+    }
+
+    container.style.display = '';
+    const name = state.artifactNames[nextPending] || nextPending;
+
+    // Check if it has an unresolved decision
+    if (nextPending === 'auth-readme' && !state.decisionAnswered) {
+      textEl.innerHTML = '<code>' + escapeHtml(name) + '</code> needs review &mdash; contains a pending decision on auth strategy';
+    } else {
+      textEl.innerHTML = '<code>' + escapeHtml(name) + '</code> needs review';
+    }
+  }
+
+  // ── Approve Artifact ──────────────────────────
+  function approveArtifact(id) {
+    if (state.approved.has(id)) return;
+    state.approved.add(id);
+
+    // Update approve button
+    const btn = document.getElementById('approveBtn-' + id);
+    if (btn) {
+      btn.classList.add('approved');
+      btn.textContent = 'Approved';
+      btn.disabled = true;
+    }
+
+    // Show approved banner
+    const banner = document.getElementById('approvedBanner-' + id);
+    if (banner) banner.classList.add('visible');
+
+    // Update tree status
+    const treeStatus = document.getElementById('treeStatus-' + id);
+    if (treeStatus) {
+      treeStatus.className = 'tree-item-status approved';
+      treeStatus.innerHTML = '&#10003;';
+    }
+
+    // Update tree item styling
+    const treeItem = document.querySelector('.tree-item[data-artifact="' + id + '"]');
+    if (treeItem) treeItem.classList.add('approved-item');
+
+    // Update specify count
+    updateSpecifyCount();
+
+    const name = state.artifactNames[id] || id;
+    addAgentMsg('<code>' + escapeHtml(name) + '</code> approved.');
+    showToast(name + ' approved', 'success');
+
+    // Update next action card
+    updateNextAction();
+
+    // Auto-advance to next pending artifact (stay in review mode)
+    const nextPending = state.artifacts.find(a => !state.approved.has(a));
+    if (nextPending) {
+      setTimeout(() => {
+        enterReviewMode(nextPending);
+      }, 600);
+    }
+
+    // Check if all approved
+    checkAllApproved();
+  }
+
+  function updateSpecifyCount() {
+    const count = state.artifacts.filter(a => state.approved.has(a)).length;
+    const el = document.getElementById('specifyCount');
+    if (el) el.textContent = count + '/' + state.artifacts.length + ' approved';
+    // Update ticket summary progress
+    const summaryProgress = document.getElementById('summaryProgress');
+    if (summaryProgress) summaryProgress.textContent = count + '/' + state.artifacts.length + ' approved';
+  }
+
+  function checkAllApproved() {
+    const allApproved = state.artifacts.every(a => state.approved.has(a));
+    if (allApproved && !state.allApproved) {
+      state.allApproved = true;
+
+      setTimeout(() => {
+        // Update phase pills
+        const specPill = document.querySelector('[data-phase="specify"]');
+        specPill.className = 'pill done';
+        specPill.innerHTML = '<span class="pill-dot"></span> Specify';
+        specPill.querySelector('.pill-dot').style.animation = 'none';
+
+        const planPill = document.querySelector('[data-phase="plan"]');
+        planPill.className = 'pill active';
+        planPill.innerHTML = '<span class="pill-dot"></span> Plan';
+
+        // Update tree phase icons
+        const specifyHeaders = document.querySelectorAll('.tree-phase-icon.active');
+        specifyHeaders.forEach(icon => {
+          icon.className = 'tree-phase-icon done';
+          icon.innerHTML = '&#10003;';
+        });
+
+        // Update plan phase icon
+        const planPhaseIcon = document.getElementById('planPhaseIcon');
+        if (planPhaseIcon) {
+          planPhaseIcon.className = 'tree-phase-icon active';
+          planPhaseIcon.innerHTML = '&#9679;';
+        }
+
+        // Hide the pending hint
+        const planPendingHint = document.getElementById('planPendingHint');
+        if (planPendingHint) planPendingHint.style.display = 'none';
+
+        // Show plan count
+        const planCount = document.getElementById('planCount');
+        if (planCount) planCount.style.display = '';
+
+        // Update ticket summary to Plan phase
+        const summaryPhaseLabel = document.getElementById('summaryPhaseLabel');
+        if (summaryPhaseLabel) summaryPhaseLabel.textContent = 'Planning';
+        const summaryProgress = document.getElementById('summaryProgress');
+        if (summaryProgress) summaryProgress.textContent = '0/6 steps done';
+        const summaryPhaseDot = document.getElementById('summaryPhaseDot');
+        if (summaryPhaseDot) {
+          summaryPhaseDot.style.background = 'var(--purple)';
+        }
+
+        // Exit review mode first, show the plan message in chat
+        exitReviewMode();
+
+        // Agent message
+        addAgentMsg("All specs approved. Here's the implementation plan:");
+
+        // Show plan steps in the tree one by one with animation
+        setTimeout(() => {
+          renderPlanStepsInTree();
+
+          addAgentMsg("Plan is ready -- 6 steps. Click any step in the tree to see details, or review the full plan below.");
+
+          // Add plan reference card in chat
+          const msgs = document.getElementById('chatMessages');
+          const el = document.createElement('div');
+          el.className = 'chat-msg is-agent';
+          el.innerHTML = '<div class="chat-artifact-ref" onclick="enterReviewMode(\'plan\')">' +
+            '<div class="chat-artifact-ref-icon" style="background:var(--purple-subtle); color:var(--purple);">&#9632;</div>' +
+            '<span class="chat-artifact-ref-name">Implementation Plan</span>' +
+            '<span class="chat-artifact-ref-op" style="background:var(--purple-subtle); color:var(--purple);">PLAN</span>' +
+            '<span class="chat-artifact-ref-stats" style="color:var(--text-secondary);">6 steps</span>' +
+            '<span class="chat-artifact-ref-review">Review</span>' +
+            '</div>';
+          msgs.appendChild(el);
+          scrollChatDown();
+
+          state.planShown = true;
+          showToast('Plan generated -- ready for execution', 'info');
+        }, 1200);
+      }, 800);
+    }
+  }
+
+  // ── Request Changes ───────────────────────────
+  function requestChanges() {
+    const name = state.artifactNames[state.currentArtifact] || state.currentArtifact;
+    showToast('Requesting changes...', 'info');
+    addAgentMsg("I'll revise this diff. What would you like changed?");
+    const input = document.getElementById('chatInput');
+    input.placeholder = 'Describe changes for ' + name + '...';
+    input.focus();
+  }
+
+  // ── Execute Plan Step ─────────────────────────
+  function executePlanStep(num) {
+    const steps = document.querySelectorAll('.plan-step');
+    const step = steps[num - 1];
+    if (!step) return;
+
+    const numEl = step.querySelector('.plan-step-num');
+    const execBtn = step.querySelector('.plan-step-exec');
+
+    // Already done or executing
+    if (numEl.classList.contains('done') || numEl.classList.contains('executing')) return;
+
+    numEl.classList.add('executing');
+    if (execBtn) { execBtn.disabled = true; execBtn.textContent = 'Running...'; }
+
+    // Show running status label
+    const label = document.getElementById('stepLabel-' + num);
+    if (label) {
+      label.textContent = 'Running...';
+      label.className = 'plan-step-status-label visible running';
+    }
+
+    showToast('Starting step ' + num + '...', 'info');
+    addAgentMsg('Executing step ' + num + "... I'll update you when it's done.");
+
+    // Mark tree step as executing
+    markTreeStepExecuting(num);
+
+    setTimeout(() => {
+      numEl.classList.remove('executing');
+      numEl.classList.add('done');
+      numEl.innerHTML = '&#10003;';
+      if (execBtn) { execBtn.style.display = 'none'; }
+
+      // Show done status label
+      if (label) {
+        label.textContent = 'Done';
+        label.className = 'plan-step-status-label visible';
+      }
+
+      // Show changed files
+      const filesEl = document.getElementById('stepFiles-' + num);
+      if (filesEl) {
+        filesEl.style.display = '';
+        // Auto-expand for first completed step
+        const toggle = filesEl.querySelector('.plan-step-files-toggle');
+        const list = document.getElementById('stepFilesList-' + num);
+        if (toggle && list) {
+          toggle.classList.add('open');
+          list.classList.add('visible');
+        }
+      }
+
+      // Update tree step to done and show file sub-items
+      markTreeStepDone(num);
+
+      addAgentMsg('Step ' + num + ' completed.');
+
+      // Update the Execute All progress if it is running
+      updateExecuteAllProgress();
+    }, 1200 + Math.random() * 600);
+  }
+
+  function updateExecuteAllProgress() {
+    const doneCount = document.querySelectorAll('.plan-step-num.done').length;
+    const total = document.querySelectorAll('.plan-step').length;
+    const fill = document.getElementById('executeAllFill');
+    const label = document.getElementById('executeAllLabel');
+    if (fill) fill.style.width = (doneCount / total * 100) + '%';
+    if (label) label.textContent = doneCount + '/' + total;
+
+    // Update plan count in tree
+    const planCount = document.getElementById('planCount');
+    if (planCount) planCount.textContent = doneCount + '/' + total + ' done';
+
+    // Update ticket summary progress
+    const summaryProgress = document.getElementById('summaryProgress');
+    if (summaryProgress) summaryProgress.textContent = doneCount + '/' + total + ' steps done';
+
+    if (doneCount === total) {
+      showToast('All steps executed!', 'success');
+      addAgentMsg('All implementation steps have been executed successfully. You can optionally run verification to check spec alignment.');
+      // Mark Plan phase as done
+      const planPill = document.querySelector('[data-phase="plan"]');
+      if (planPill) {
+        planPill.className = 'pill done';
+        planPill.innerHTML = '<span class="pill-dot"></span> Plan';
+      }
+      // Update plan tree phase icon to done
+      const planPhaseIcon = document.getElementById('planPhaseIcon');
+      if (planPhaseIcon) {
+        planPhaseIcon.className = 'tree-phase-icon done';
+        planPhaseIcon.innerHTML = '&#10003;';
+      }
+      const btn = document.getElementById('executeAllBtn');
+      if (btn) { btn.disabled = true; btn.textContent = 'All Done'; }
+      // Update ticket summary
+      const summaryPhaseLabel = document.getElementById('summaryPhaseLabel');
+      if (summaryPhaseLabel) {
+        summaryPhaseLabel.textContent = 'Verifying';
+        summaryPhaseLabel.style.color = 'var(--accent)';
+      }
+      const summaryPhaseDot = document.getElementById('summaryPhaseDot');
+      if (summaryPhaseDot) {
+        summaryPhaseDot.style.background = 'var(--accent)';
+      }
+      if (summaryProgress) summaryProgress.textContent = 'All steps done';
+
+      // Show the Verify phase in the tree
+      const verifyGroup = document.getElementById('verifyPhaseGroup');
+      if (verifyGroup) {
+        verifyGroup.classList.remove('hidden');
+        verifyGroup.style.animation = 'treeItemSlideIn 0.3s ease forwards';
+      }
+    }
+  }
+
+  // ── Execute All Plan Steps ────────────────────
+  function executeAllPlanSteps() {
+    const steps = document.querySelectorAll('.plan-step');
+    const total = steps.length;
+    const btn = document.getElementById('executeAllBtn');
+    const progressArea = document.getElementById('executeAllProgress');
+
+    btn.disabled = true;
+    btn.textContent = 'Executing...';
+    if (progressArea) progressArea.style.display = 'flex';
+
+    // Disable all individual execute buttons
+    steps.forEach(s => {
+      const eb = s.querySelector('.plan-step-exec');
+      if (eb && !s.querySelector('.plan-step-num').classList.contains('done')) {
+        eb.disabled = true;
+      }
+    });
+
+    let i = 0;
+    function runNext() {
+      // Find next step that isn't already done
+      while (i < total && steps[i].querySelector('.plan-step-num').classList.contains('done')) {
+        i++;
+      }
+      if (i >= total) {
+        // All already done
+        updateExecuteAllProgress();
+        return;
+      }
+      const stepNum = i + 1;
+      const step = steps[i];
+      const numEl = step.querySelector('.plan-step-num');
+      const execBtn = step.querySelector('.plan-step-exec');
+
+      numEl.classList.add('executing');
+      if (execBtn) execBtn.textContent = 'Running...';
+
+      // Show running status label
+      const statusLabel = document.getElementById('stepLabel-' + stepNum);
+      if (statusLabel) {
+        statusLabel.textContent = 'Running...';
+        statusLabel.className = 'plan-step-status-label visible running';
+      }
+
+      // Mark tree step as executing
+      markTreeStepExecuting(stepNum);
+
+      showToast('Executing step ' + stepNum + '...', 'info');
+
+      setTimeout(() => {
+        numEl.classList.remove('executing');
+        numEl.classList.add('done');
+        numEl.innerHTML = '&#10003;';
+        if (execBtn) execBtn.style.display = 'none';
+
+        // Show done status label
+        if (statusLabel) {
+          statusLabel.textContent = 'Done';
+          statusLabel.className = 'plan-step-status-label visible';
+        }
+
+        // Show changed files (collapsed for batch execution)
+        const filesEl = document.getElementById('stepFiles-' + stepNum);
+        if (filesEl) filesEl.style.display = '';
+
+        // Update tree step to done and show file sub-items
+        markTreeStepDone(stepNum);
+
+        updateExecuteAllProgress();
+
+        i++;
+        if (i < total) {
+          runNext();
+        }
+      }, 800 + Math.random() * 400);
+    }
+    runNext();
+  }
+
+  // ── Toggle Step Files ────────────────────────
+  function toggleStepFiles(num) {
+    const toggle = document.querySelector('#stepFiles-' + num + ' .plan-step-files-toggle');
+    const list = document.getElementById('stepFilesList-' + num);
+    if (toggle && list) {
+      toggle.classList.toggle('open');
+      list.classList.toggle('visible');
+    }
+  }
+
+  // ── Send Message ──────────────────────────────
+  function sendMessage() {
+    const input = document.getElementById('chatInput');
+    const text = input.value.trim();
+    if (!text) return;
+    input.value = '';
+    input.placeholder = 'Type a message...';
+
+    addUserMsg(text);
+
+    // Check for decision keywords
+    const lower = text.toLowerCase();
+    if (!state.decisionAnswered) {
+      if (lower.includes('jwt')) { answerDecision('jwt'); return; }
+      if (lower.includes('session')) { answerDecision('session'); return; }
+      if (lower.includes('hybrid')) { answerDecision('hybrid'); return; }
+    }
+
+    // Generic agent response
+    setTimeout(() => {
+      const responses = [
+        'Good point. I\'ll incorporate that into the spec and update the diff.',
+        'That makes sense given the existing patterns in <code>core/</code>. Adjusting the spec now.',
+        'Got it. I\'ve updated the relevant section -- check the artifact view.',
+        'Understood. The specification now reflects that requirement.',
+        'Interesting -- that aligns with the RPC patterns in <code>rpc/methods/</code>. Weaving it in.',
+      ];
+      addAgentMsg(responses[Math.floor(Math.random() * responses.length)]);
+    }, 500 + Math.random() * 500);
+  }
+
+  // ── Chat Helpers ──────────────────────────────
+  function addAgentMsg(html) {
+    const msgs = document.getElementById('chatMessages');
+    const el = document.createElement('div');
+    el.className = 'chat-msg is-agent';
+    el.innerHTML = '<div class="chat-msg-body">' + html + '</div>';
+    msgs.appendChild(el);
+    scrollChatDown();
+  }
+
+  function addUserMsg(text) {
+    const msgs = document.getElementById('chatMessages');
+    const el = document.createElement('div');
+    el.className = 'chat-msg is-user';
+    el.innerHTML = '<div class="chat-msg-body">' + escapeHtml(text) + '</div>';
+    msgs.appendChild(el);
+    scrollChatDown();
+  }
+
+  function scrollChatDown() {
+    const scroll = document.getElementById('chatScroll');
+    setTimeout(() => { scroll.scrollTop = scroll.scrollHeight; }, 50);
+  }
+
+  // ── Keyboard shortcut ─────────────────────────
+  document.addEventListener('keydown', function(e) {
+    if (e.key === 'Escape' && state.mode === 'review') {
+      exitReviewMode();
+    }
+  });
+
+  // ── Toast ─────────────────────────────────────
+  function showToast(msg, type) {
+    const toast = document.getElementById('toast');
+    toast.querySelector('.t-icon').innerHTML = type === 'success' ? '&#10003;' : '&#8505;';
+    toast.querySelector('.t-msg').textContent = msg;
+    toast.className = 'toast show ' + (type || '');
+    clearTimeout(state._toastTimer);
+    state._toastTimer = setTimeout(() => { toast.className = 'toast'; }, 3000);
+  }
+
+  // ── Render Plan Steps in Tree ─────────────────
+  function renderPlanStepsInTree() {
+    const container = document.getElementById('planTreeSteps');
+    if (!container) return;
+    container.innerHTML = '';
+
+    planStepsData.forEach((step, idx) => {
+      const el = document.createElement('div');
+      el.className = 'tree-plan-step animate-in';
+      el.id = 'treePlanStep-' + step.num;
+      el.style.animationDelay = (idx * 80) + 'ms';
+      el.style.opacity = '0';
+      el.onclick = function() { enterReviewModeForStep(step.num); };
+      el.innerHTML =
+        '<span class="tree-plan-step-num" id="treeStepNum-' + step.num + '">' + step.num + '</span>' +
+        '<span class="tree-plan-step-name">' + escapeHtml(step.title) + '</span>' +
+        '<span class="tree-plan-step-status" id="treeStepStatus-' + step.num + '">&#9675;</span>';
+      container.appendChild(el);
+    });
+  }
+
+  // ── Enter Review Mode for a Plan Step ────────
+  function enterReviewModeForStep(num) {
+    enterReviewMode('plan');
+    // Highlight the step in the tree
+    document.querySelectorAll('.tree-plan-step, .tree-plan-file, .tree-item').forEach(el => {
+      el.classList.remove('selected', 'review-highlight');
+    });
+    const stepEl = document.getElementById('treePlanStep-' + num);
+    if (stepEl) {
+      stepEl.classList.add('selected', 'review-highlight');
+    }
+    // Scroll the plan view to the step
+    const planStep = document.querySelector('.plan-step[data-step="' + num + '"]');
+    if (planStep) {
+      setTimeout(() => {
+        planStep.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        planStep.style.background = 'var(--bg-hover)';
+        setTimeout(() => { planStep.style.background = ''; }, 1500);
+      }, 400);
+    }
+  }
+
+  // ── Mark Tree Step as Executing ──────────────
+  function markTreeStepExecuting(num) {
+    const numEl = document.getElementById('treeStepNum-' + num);
+    if (numEl) {
+      numEl.classList.add('executing');
+    }
+    const statusEl = document.getElementById('treeStepStatus-' + num);
+    if (statusEl) {
+      statusEl.innerHTML = '&#9679;';
+      statusEl.style.color = 'var(--yellow)';
+    }
+  }
+
+  // ── Mark Tree Step as Done + Show File Sub-items ──
+  function markTreeStepDone(num) {
+    const numEl = document.getElementById('treeStepNum-' + num);
+    if (numEl) {
+      numEl.classList.remove('executing');
+      numEl.classList.add('done');
+      numEl.innerHTML = '&#10003;';
+    }
+    const statusEl = document.getElementById('treeStepStatus-' + num);
+    if (statusEl) {
+      statusEl.innerHTML = '&#10003;';
+      statusEl.className = 'tree-plan-step-status done';
+      statusEl.style.color = '';
+    }
+    // Add file sub-items under this step in the tree
+    const stepData = planStepsData.find(s => s.num === num);
+    if (!stepData) return;
+    const stepEl = document.getElementById('treePlanStep-' + num);
+    if (!stepEl) return;
+    // Insert files after the step element
+    let insertAfter = stepEl;
+    stepData.files.forEach((file, idx) => {
+      const fileEl = document.createElement('div');
+      fileEl.className = 'tree-plan-file animate-in';
+      fileEl.style.animationDelay = (idx * 50) + 'ms';
+      fileEl.style.opacity = '0';
+      const shortName = file.name.split('/').pop();
+      const opSymbol = file.op === 'add' ? '+' : '~';
+      fileEl.onclick = function() { viewStepFile(num, file.name, file.op); };
+      fileEl.innerHTML =
+        '<span class="tree-plan-file-op ' + file.op + '">' + opSymbol + '</span>' +
+        '<span class="tree-plan-file-name">' + escapeHtml(shortName) + '</span>';
+      fileEl.title = file.name;
+      insertAfter.parentNode.insertBefore(fileEl, insertAfter.nextSibling);
+      insertAfter = fileEl;
+    });
+  }
+
+  // ── View a Step File Diff ────────────────────
+  function viewStepFile(stepNum, fileName, op) {
+    state.currentStepFile = { step: stepNum, file: fileName, op: op };
+
+    // Set up the step-file view
+    const nameEl = document.getElementById('stepFileViewName');
+    const opEl = document.getElementById('stepFileViewOp');
+    const statsEl = document.getElementById('stepFileViewStats');
+    const diffArea = document.getElementById('stepFileDiffArea');
+
+    if (nameEl) nameEl.textContent = fileName;
+    if (opEl) {
+      opEl.textContent = op === 'add' ? 'NEW' : 'MOD';
+      opEl.className = 'artifact-op ' + (op === 'add' ? 'new' : 'mod');
+    }
+
+    const diff = mockDiffs[fileName];
+    if (diff && statsEl) {
+      statsEl.innerHTML = diff.stats.split(' ').map(s => {
+        if (s.startsWith('+')) return '<span class="add">' + s + '</span>';
+        if (s.startsWith('-')) return '<span class="del">' + s + '</span>';
+        return s;
+      }).join(' ');
+    }
+
+    // Render diff lines
+    if (diff && diffArea) {
+      let html = '<div class="diff-hunk-header">' + escapeHtml(diff.hunk) + '</div>';
+      diff.lines.forEach(line => {
+        const type = line[0];
+        const ln = line[1];
+        const text = line[2];
+        let cls = 'ctx';
+        let prefix = ' ';
+        if (type === '+') { cls = 'add'; prefix = '+'; }
+        else if (type === '-') { cls = 'del'; prefix = '-'; }
+        html += '<div class="diff-line ' + cls + '"><span class="ln">' + ln + '</span>' + prefix + escapeHtml(text) + '</div>';
+      });
+      diffArea.innerHTML = html;
+    } else if (diffArea) {
+      diffArea.innerHTML = '<div style="padding:32px; color:var(--text-muted); font-size:13px; text-align:center;">No diff available for this file.</div>';
+    }
+
+    // Enter review mode showing step-file view
+    enterReviewMode('step-file');
+
+    // Highlight the correct file in the tree
+    document.querySelectorAll('.tree-plan-step, .tree-plan-file, .tree-item, .tree-verify-btn').forEach(el => {
+      el.classList.remove('selected', 'review-highlight');
+    });
+    // Find the matching tree-plan-file by title attribute
+    document.querySelectorAll('.tree-plan-file').forEach(el => {
+      if (el.title === fileName) {
+        el.classList.add('selected', 'review-highlight');
+      }
+    });
+  }
+
+  // ── Run Verification ─────────────────────────
+  function runVerification() {
+    if (state.verificationRun) {
+      // Already run, just show the view
+      enterReviewMode('verify');
+      document.querySelectorAll('.tree-plan-step, .tree-plan-file, .tree-item, .tree-verify-btn').forEach(el => {
+        el.classList.remove('selected', 'review-highlight');
+      });
+      document.getElementById('verifyBtn').classList.add('selected');
+      return;
+    }
+
+    state.verificationRun = true;
+
+    // Enter review mode showing verify view
+    enterReviewMode('verify');
+    document.querySelectorAll('.tree-plan-step, .tree-plan-file, .tree-item, .tree-verify-btn').forEach(el => {
+      el.classList.remove('selected', 'review-highlight');
+    });
+    document.getElementById('verifyBtn').classList.add('selected');
+
+    // Reset verify view
+    const spinner = document.getElementById('verifySpinner');
+    const label = document.getElementById('verifyLabel');
+    const result = document.getElementById('verifyResult');
+    spinner.style.display = '';
+    label.style.display = '';
+    result.classList.remove('visible');
+
+    addAgentMsg('Running spec-review to verify implementation alignment...');
+
+    // Simulate verification
+    setTimeout(() => {
+      spinner.style.display = 'none';
+      label.style.display = 'none';
+      result.classList.add('visible');
+
+      // Update verify phase icon
+      const verifyIcon = document.getElementById('verifyPhaseIcon');
+      if (verifyIcon) {
+        verifyIcon.className = 'tree-phase-icon done';
+        verifyIcon.innerHTML = '&#10003;';
+      }
+
+      // Update verify button text
+      const verifyBtnEl = document.getElementById('verifyBtn');
+      if (verifyBtnEl) {
+        verifyBtnEl.innerHTML = '<span class="verify-icon" style="color:var(--green);">&#10003;</span> <span>Verified</span>';
+      }
+
+      // Update ticket summary
+      const summaryPhaseLabel = document.getElementById('summaryPhaseLabel');
+      if (summaryPhaseLabel) {
+        summaryPhaseLabel.textContent = 'Complete';
+        summaryPhaseLabel.style.color = 'var(--green)';
+      }
+      const summaryPhaseDot = document.getElementById('summaryPhaseDot');
+      if (summaryPhaseDot) {
+        summaryPhaseDot.style.background = 'var(--green)';
+        summaryPhaseDot.style.animation = 'none';
+      }
+      const summaryProgress = document.getElementById('summaryProgress');
+      if (summaryProgress) summaryProgress.textContent = 'Verified';
+
+      addAgentMsg('All specs aligned with implementation. No discrepancies found.');
+      showToast('Verification passed', 'success');
+    }, 2500);
+  }
+
+  // ── Helpers ───────────────────────────────────
+  function escapeHtml(str) {
+    const div = document.createElement('div');
+    div.textContent = str;
+    return div.innerHTML;
+  }
+</script>
+</body>
+</html>

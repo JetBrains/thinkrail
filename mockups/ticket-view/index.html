@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Bonsai Ticket View — v5 Experiments</title>
+<style>
+  :root { --bg-base: #0e1117; --bg-surface: #161b22; --bg-elevated: #1c2129; --border: #2d333b; --text-primary: #e6edf3; --text-secondary: #8b949e; --text-muted: #656d76; --accent: #58a6ff; --accent-dim: #1f3a5f; --green: #3fb950; --green-dim: #1a3a2a; --yellow: #d29922; --yellow-dim: #3d2e00; --purple: #bc8cff; --purple-dim: #2a1f3d; --radius: 8px; --radius-lg: 12px; }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { background: var(--bg-base); color: var(--text-primary); font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif; min-height: 100vh; display: flex; flex-direction: column; align-items: center; padding: 48px 24px; }
+  h1 { font-size: 32px; font-weight: 600; letter-spacing: -0.02em; margin-bottom: 8px; }
+  .subtitle { color: var(--text-secondary); font-size: 15px; margin-bottom: 12px; text-align: center; max-width: 700px; line-height: 1.6; }
+  .ideas { display: flex; gap: 10px; margin-bottom: 32px; flex-wrap: wrap; justify-content: center; }
+  .ideas span { font-size: 12px; padding: 5px 12px; border-radius: 100px; background: var(--accent-dim); border: 1px solid rgba(88,166,255,0.2); color: var(--accent); }
+  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; max-width: 1000px; width: 100%; }
+  a.card { background: var(--bg-surface); border: 1px solid var(--border); border-radius: var(--radius-lg); overflow: hidden; transition: border-color 0.2s, transform 0.2s; text-decoration: none; color: inherit; }
+  a.card:hover { border-color: var(--accent); transform: translateY(-2px); }
+  .card-body { padding: 24px; }
+  .card-label { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.08em; color: var(--accent); margin-bottom: 6px; }
+  .card-title { font-size: 20px; font-weight: 600; margin-bottom: 8px; }
+  .card-desc { font-size: 14px; color: var(--text-secondary); line-height: 1.6; margin-bottom: 10px; }
+  .card-key { font-size: 12px; color: var(--yellow); padding: 8px 12px; background: var(--yellow-dim); border-radius: 6px; line-height: 1.4; }
+  .archive-link { margin-top: 32px; font-size: 13px; color: var(--text-muted); }
+  .archive-link a { color: var(--accent); text-decoration: none; }
+</style>
+</head>
+<body>
+<h1>Bonsai Ticket View — v6</h1>
+<p class="subtitle">Phase-Adaptive (Option C): Conversation is the backbone. Layout adapts to what each phase needs. Simple tickets = one smooth chat. Complex tickets = zoom out to phase-specific views.</p>
+<div class="ideas">
+  <span>Conversation backbone</span>
+  <span>Layout adapts per phase</span>
+  <span>No duplication</span>
+  <span>Free backtracking</span>
+  <span>Agent notes (not chat bubbles)</span>
+  <span>Decision cards</span>
+</div>
+
+<h2 style="font-size: 18px; color: var(--text-primary); margin-bottom: 16px;">v7 Experiments — Subsessions, Sidebar, Advanced Mode</h2>
+<p style="font-size: 13px; color: var(--text-muted); margin-bottom: 16px;">Each mockup changes 1-2 variables from the v6 base. Compare to isolate what works.</p>
+
+<div class="grid">
+  <a href="model-g1.html" class="card" style="border-color: var(--yellow); background: linear-gradient(135deg, var(--bg-surface), var(--yellow-dim));">
+    <div class="card-body">
+      <div class="card-label" style="color: var(--yellow);">G1: Inline Subsessions</div>
+      <div class="card-title">Subsessions Expand Within Conversation</div>
+      <p class="card-desc">When a focused task is needed (research, design discussion), a bordered subsession block opens inline in the conversation with its own input. Main chat dims. Collapses to summary when done. Tests: subsession model only.</p>
+      <div class="card-key">TESTS: Inline subsession UX · Agent-suggested + user-initiated · Research &amp; planning types · Collapse to summary</div>
+    </div>
+  </a>
+
+  <a href="model-g4.html" class="card" style="border-color: var(--yellow); background: linear-gradient(135deg, var(--bg-surface), var(--yellow-dim));">
+    <div class="card-body">
+      <div class="card-label" style="color: var(--yellow);">G4: Panel Subsessions</div>
+      <div class="card-title">Subsessions Take Over the Right Panel</div>
+      <p class="card-desc">When a subsession starts, the right panel becomes a focused workspace (replaces artifact view). Own conversation, own input. Main chat dims. Trail strip disabled during subsession. Panel restored on completion. Tests: panel-based subsession model.</p>
+      <div class="card-key">TESTS: Panel takeover UX · Distinct subsession header · Trail strip lockout · State save/restore</div>
+    </div>
+  </a>
+
+  <a href="model-g2.html" class="card" style="border-color: var(--accent); background: linear-gradient(135deg, var(--bg-surface), var(--accent-dim));">
+    <div class="card-body">
+      <div class="card-label">G2: Left Sidebar</div>
+      <div class="card-title">Artifacts in a Collapsible Left Tree</div>
+      <p class="card-desc">Trail strip replaced by a persistent left sidebar (220px / 44px collapsed). Artifacts shown as a tree: Ticket → Specs → Plan with status indicators. Subsession items shown as tree nodes. Press B to collapse. Tests: artifact position only.</p>
+      <div class="card-key">TESTS: Left sidebar vs top trail strip · Tree hierarchy · Collapse to icons · 3-column layout in review</div>
+    </div>
+  </a>
+
+  <a href="model-g3.html" class="card" style="border-color: var(--purple); background: linear-gradient(135deg, var(--bg-surface), var(--purple-dim));">
+    <div class="card-body">
+      <div class="card-label" style="color: var(--purple);">G3: Advanced Mode</div>
+      <div class="card-title">Standard / Advanced Toggle for Power Users</div>
+      <p class="card-desc">Toggle in status bar switches between Standard (= flow-v2) and Advanced (adds: session metadata, token count, artifact timestamps, subsession indicators, phase detail popovers on hover). Same layout — only information density changes. Press A to toggle. Tests: advanced mode only.</p>
+      <div class="card-key">TESTS: Info density toggle · Metadata bar · Subsession indicators · Phase popovers · Zero layout change between modes</div>
+    </div>
+  </a>
+</div>
+
+<h2 style="font-size: 18px; color: var(--text-primary); margin: 32px 0 16px;">v6 Base — Interactive Flow</h2>
+
+<div class="grid" style="grid-template-columns: 1fr; margin-bottom: 16px;">
+  <a href="model-flow-v2.html" class="card" style="border-color: var(--green); background: linear-gradient(135deg, var(--bg-surface), var(--green-dim));">
+    <div class="card-body">
+      <div class="card-label" style="color: var(--green);">Flow v2 — Base for v7 experiments</div>
+      <div class="card-title">Full D-S-P-E Journey — Interactive Walkthrough</div>
+      <p class="card-desc">The validated base. Conversation backbone, side-by-side artifact review, iterative product design, unified plan/execute, artifact categories, trail strip navigation. All v7 experiments build on this.</p>
+      <div class="card-key" style="background: var(--green-dim); color: var(--green);">Iterative doc building · Artifact categories · Side-by-side review · Unified plan/exec · Backtracking · Space/→/Esc controls</div>
+    </div>
+  </a>
+</div>
+<div class="grid" style="grid-template-columns: 1fr; margin-bottom: 32px; opacity: 0.6;">
+  <a href="model-flow.html" class="card">
+    <div class="card-body">
+      <div class="card-label">Flow v1</div>
+      <div class="card-title">Basic Flow Walkthrough (reference)</div>
+      <p class="card-desc">Original flow demo without backtracking, product doc, or execution view. Kept for comparison.</p>
+    </div>
+  </a>
+</div>
+
+<h2 style="font-size: 18px; color: var(--text-primary); margin-bottom: 16px;">Phase-Adaptive Explorations (v6)</h2>
+<p style="font-size: 13px; color: var(--text-muted); margin-bottom: 16px;">Three interpretations of "where do artifacts live relative to the conversation?"</p>
+
+<div class="grid" style="grid-template-columns: 1fr;">
+  <a href="model-f1.html" class="card" style="border-color: var(--accent); background: linear-gradient(135deg, var(--bg-surface), var(--accent-dim));">
+    <div class="card-body">
+      <div class="card-label">F1: Living Header</div>
+      <div class="card-title">Artifacts Above, Conversation Below</div>
+      <p class="card-desc">Two-zone layout: a "living header" at the top evolves per phase (collapsed summary for Describe, diff viewer for Specify, plan steps for Plan). The conversation always fills the rest below. Header can be collapsed for pure chat feel. Directly implements: "artifacts on top of chat or as heading of chat".</p>
+      <div class="card-key" style="background: var(--accent-dim); color: var(--accent);">KEY: Header grows/shrinks organically. Collapse it → pure Claude Code chat. Expand it → phase-specific artifact workspace above the conversation.</div>
+    </div>
+  </a>
+</div>
+
+<div class="grid" style="margin-top: 16px;">
+  <a href="model-f2.html" class="card">
+    <div class="card-body">
+      <div class="card-label">F2: Inline Journal</div>
+      <div class="card-title">One Scrolling Stream</div>
+      <p class="card-desc">Everything in a single vertical timeline — like Claude Code or a notebook. Artifacts appear as rich blocks in the conversation flow. Phase transitions are subtle dividers. A floating TOC minimap appears in the right margin for navigation. Closest to "one chat in Claude Code" for simple tickets.</p>
+      <div class="card-key">KEY: Simplest mental model. One scroll, one timeline. Diffs are rich blocks inline. TOC floats for navigation when content grows.</div>
+    </div>
+  </a>
+
+  <a href="model-f3.html" class="card">
+    <div class="card-body">
+      <div class="card-label">F3: Focus Shift</div>
+      <div class="card-title">Temporary Split for Review</div>
+      <p class="card-desc">Default is full-width conversation. When an artifact needs focused attention (reviewing a diff), the layout SPLITS: artifact 60% left, conversation 40% right. When done (approve/dismiss), layout returns to full-width. The split is contextual, not permanent — triggered by clicking "review" on artifact reference cards.</p>
+      <div class="card-key">KEY: No permanent panels. Split is temporary and contextual. Best for Specify phase where diffs need proper screen real estate.</div>
+    </div>
+  </a>
+</div>
+
+<h2 style="font-size: 16px; color: var(--text-muted); margin: 32px 0 16px;">Previous Iterations (v5)</h2>
+
+<div class="grid">
+  <a href="model-best.html" class="card" style="opacity: 0.7;">
+    <div class="card-body">
+      <div class="card-label" style="color: var(--green);">The Best (v5)</div>
+      <div class="card-title">Flow-Guided Ticket View</div>
+      <p class="card-desc">Progress bar + Next Action banner + full-width content. Good elements but "Next Action" felt too prescribed.</p>
+    </div>
+  </a>
+
+  <a href="model-e.html" class="card" style="opacity: 0.7;">
+    <div class="card-body">
+      <div class="card-label">Model E</div>
+      <div class="card-title">Artifact-as-Page + Minimap</div>
+      <p class="card-desc">Breadcrumb navigation + minimap dots. Avatars in diffs were rejected.</p>
+    </div>
+  </a>
+
+  <a href="model-b.html" class="card" style="opacity: 0.7;">
+    <div class="card-body">
+      <div class="card-label">Model B</div>
+      <div class="card-title">Inline Wizard Chat</div>
+      <p class="card-desc">Chat IS the wizard. Phase sections as dividers. Good for fast track.</p>
+    </div>
+  </a>
+
+  <a href="model-a.html" class="card" style="opacity: 0.7;">
+    <div class="card-body">
+      <div class="card-label">Model A</div>
+      <div class="card-title">Adaptive Split: Tree + Content + Chat</div>
+      <p class="card-desc">Left tree + adaptive layout. Permanent right chat panel was rejected.</p>
+    </div>
+  </a>
+</div>
+
+<p class="archive-link">Design insights: <a href="../../.bonsai/frontend-refactor-flows-ui/DESIGN-INSIGHTS.md">DESIGN-INSIGHTS.md</a></p>
+</body>
+</html>

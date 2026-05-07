@@ -1,0 +1,2509 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Model D — Smart Columns: Focus + Collapse</title>
+<style>
+  :root {
+    --bg-base: #0e1117;
+    --bg-surface: #161b22;
+    --bg-elevated: #1c2129;
+    --bg-hover: #242b35;
+    --bg-inset: #0d1117;
+    --border: #2d333b;
+    --border-bright: #3d444d;
+    --text-primary: #e6edf3;
+    --text-secondary: #8b949e;
+    --text-muted: #656d76;
+    --accent: #58a6ff;
+    --accent-subtle: #1f3a5f;
+    --green: #3fb950;
+    --green-subtle: #1a3a2a;
+    --yellow: #d29922;
+    --yellow-subtle: #3d2e00;
+    --purple: #bc8cff;
+    --purple-subtle: #2a1f3d;
+    --red: #f85149;
+    --red-subtle: #3d1418;
+    --orange: #db6d28;
+    --orange-subtle: #3d2200;
+    --radius: 8px;
+    --radius-lg: 12px;
+    --mono: 'SF Mono', 'Cascadia Code', 'Consolas', monospace;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: var(--bg-base);
+    color: var(--text-primary);
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans', Helvetica, Arial, sans-serif;
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  /* ── Back link ───────────────────────────────── */
+  .back-link {
+    position: fixed;
+    top: 12px;
+    right: 16px;
+    z-index: 200;
+    font-size: 12px;
+    color: var(--text-muted);
+    text-decoration: none;
+    padding: 4px 10px;
+    border-radius: 4px;
+    background: var(--bg-elevated);
+    border: 1px solid var(--border);
+    transition: color 0.15s, border-color 0.15s;
+  }
+  .back-link:hover { color: var(--accent); border-color: var(--accent); }
+
+  /* ── Header ──────────────────────────────────── */
+  .header {
+    height: 52px;
+    min-height: 52px;
+    background: var(--bg-surface);
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    padding: 0 20px;
+    gap: 12px;
+    flex-shrink: 0;
+    z-index: 10;
+  }
+  .ticket-id {
+    font-size: 13px;
+    font-weight: 700;
+    font-family: var(--mono);
+    color: var(--accent);
+  }
+  .ticket-title {
+    font-size: 15px;
+    font-weight: 600;
+    color: var(--text-primary);
+  }
+  .header-sep {
+    color: var(--text-muted);
+    font-size: 14px;
+  }
+  .header-spacer { flex: 1; }
+  .model-tag {
+    font-size: 10px;
+    font-weight: 600;
+    color: var(--accent);
+    background: var(--accent-subtle);
+    padding: 3px 8px;
+    border-radius: 100px;
+    letter-spacing: 0.04em;
+  }
+
+  /* ── Animations ──────────────────────────────── */
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }
+  @keyframes fadeIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
+  @keyframes slideInRight { from { opacity: 0; transform: translateX(16px); } to { opacity: 1; transform: translateX(0); } }
+  @keyframes bounce { 0%,80%,100%{opacity:0.3;transform:scale(0.8)}40%{opacity:1;transform:scale(1)} }
+
+  /* ── Columns container ──────────────────────── */
+  .columns {
+    flex: 1;
+    display: flex;
+    padding: 12px;
+    gap: 8px;
+    overflow: hidden;
+    min-height: 0;
+  }
+
+  /* ── Column ─────────────────────────────────── */
+  .col {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    background: var(--bg-surface);
+    border-radius: var(--radius-lg);
+    border: 1px solid var(--border);
+    overflow: hidden;
+    transition: flex 0.35s cubic-bezier(0.4, 0, 0.2, 1),
+                border-color 0.35s ease,
+                min-width 0.35s cubic-bezier(0.4, 0, 0.2, 1),
+                max-width 0.35s cubic-bezier(0.4, 0, 0.2, 1),
+                opacity 0.35s ease;
+  }
+
+  /* Default: equal columns */
+  .col { flex: 1; }
+
+  /* Focused column takes ~70% */
+  .col.focused {
+    flex: 8;
+    border-color: var(--accent);
+  }
+
+  /* Collapsed columns: narrow strips */
+  .col.collapsed {
+    flex: 0 0 48px;
+    min-width: 48px;
+    max-width: 48px;
+    cursor: pointer;
+  }
+  .col.collapsed:hover {
+    border-color: var(--border-bright);
+    background: var(--bg-hover);
+  }
+
+  /* Phase status adjustments */
+  .col.phase-pending { opacity: 0.55; }
+  .col.collapsed.phase-pending { opacity: 0.35; }
+  .col.focused.phase-pending { opacity: 0.7; }
+
+  /* ── Collapsed column interior ──────────────── */
+  .col-collapsed-inner {
+    display: none;
+    flex-direction: column;
+    align-items: center;
+    padding: 14px 0;
+    gap: 12px;
+    height: 100%;
+  }
+  .col.collapsed .col-collapsed-inner { display: flex; }
+  .col.collapsed .col-focused-inner { display: none; }
+
+  .col-vert-label {
+    writing-mode: vertical-rl;
+    text-orientation: mixed;
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    white-space: nowrap;
+    user-select: none;
+  }
+  .phase-done .col-vert-label { color: var(--green); }
+  .phase-active .col-vert-label { color: var(--yellow); }
+  .phase-pending .col-vert-label { color: var(--text-muted); }
+
+  .col-status-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+  .phase-done .col-status-dot { background: var(--green); }
+  .phase-active .col-status-dot { background: var(--yellow); animation: pulse 2s ease-in-out infinite; }
+  .phase-pending .col-status-dot { background: var(--text-muted); }
+
+  .col-artifact-dots {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+    margin-top: auto;
+  }
+  .artifact-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    transition: transform 0.15s ease;
+  }
+  .artifact-dot:hover { transform: scale(1.4); }
+  .artifact-dot.status-done { background: var(--green); }
+  .artifact-dot.status-reviewing { background: var(--accent); }
+  .artifact-dot.status-draft { background: var(--yellow); }
+  .artifact-dot.status-pending { background: var(--text-muted); }
+  .artifact-dot.status-approved { background: var(--green); opacity: 0.7; }
+  .artifact-dot.has-question { background: var(--accent); box-shadow: 0 0 6px rgba(88,166,255,0.4); }
+
+  /* ── Focused column interior ────────────────── */
+  .col-focused-inner {
+    display: none;
+    flex-direction: column;
+    flex: 1;
+    min-height: 0;
+    overflow: hidden;
+  }
+  .col.focused .col-focused-inner { display: flex; }
+  .col.focused .col-collapsed-inner { display: none; }
+
+  /* Default (no focus) — show a simple compact view */
+  .col-default-inner {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    min-height: 0;
+    overflow: hidden;
+  }
+  .col.focused .col-default-inner { display: none; }
+  .col.collapsed .col-default-inner { display: none; }
+
+  /* ── Focused header bar ─────────────────────── */
+  .focused-header {
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-shrink: 0;
+    background: var(--bg-elevated);
+  }
+  .focused-phase-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+  .phase-done .focused-phase-dot { background: var(--green); }
+  .phase-active .focused-phase-dot { background: var(--yellow); animation: pulse 2s ease-in-out infinite; }
+  .phase-pending .focused-phase-dot { background: var(--text-muted); }
+
+  .focused-phase-name {
+    font-size: 14px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+  }
+  .phase-done .focused-phase-name { color: var(--green); }
+  .phase-active .focused-phase-name { color: var(--yellow); }
+  .phase-pending .focused-phase-name { color: var(--text-muted); }
+
+  .focused-status-label {
+    font-size: 11px;
+    color: var(--text-muted);
+    margin-left: auto;
+  }
+
+  /* ── Default column header (when none focused) ── */
+  .default-col-header {
+    padding: 10px 14px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-shrink: 0;
+    cursor: pointer;
+  }
+  .default-col-header:hover { background: var(--bg-hover); }
+  .default-col-name {
+    font-size: 13px;
+    font-weight: 600;
+  }
+  .phase-done .default-col-name { color: var(--green); }
+  .phase-active .default-col-name { color: var(--yellow); }
+  .phase-pending .default-col-name { color: var(--text-muted); }
+  .default-col-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+  .phase-done .default-col-dot { background: var(--green); }
+  .phase-active .default-col-dot { background: var(--yellow); animation: pulse 2s ease-in-out infinite; }
+  .phase-pending .default-col-dot { background: var(--text-muted); }
+  .default-col-count {
+    font-size: 10px;
+    padding: 1px 6px;
+    border-radius: 100px;
+    background: var(--bg-elevated);
+    color: var(--text-muted);
+    margin-left: auto;
+    flex-shrink: 0;
+  }
+  .default-col-body {
+    flex: 1;
+    overflow-y: auto;
+    padding: 10px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+  .default-col-body::-webkit-scrollbar { width: 4px; }
+  .default-col-body::-webkit-scrollbar-track { background: transparent; }
+  .default-col-body::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+  /* ── Mini cards (default view) ──────────────── */
+  .mini-card {
+    background: var(--bg-elevated);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 8px 10px;
+    font-size: 11px;
+    cursor: pointer;
+    transition: border-color 0.15s, background 0.15s;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .mini-card:hover { border-color: var(--border-bright); background: var(--bg-hover); }
+  .mini-card-icon {
+    width: 20px;
+    height: 20px;
+    border-radius: 4px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 10px;
+    font-weight: 700;
+    flex-shrink: 0;
+  }
+  .mini-card-icon.desc { background: var(--accent-subtle); color: var(--accent); }
+  .mini-card-icon.doc { background: var(--green-subtle); color: var(--green); }
+  .mini-card-icon.new { background: var(--green-subtle); color: var(--green); }
+  .mini-card-icon.mod { background: var(--yellow-subtle); color: var(--yellow); }
+  .mini-card-icon.plan { background: var(--purple-subtle); color: var(--purple); }
+  .mini-card-icon.exec { background: var(--orange-subtle); color: var(--orange); }
+  .mini-card-name {
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-weight: 500;
+  }
+  .mini-card-badge {
+    font-size: 9px;
+    padding: 2px 6px;
+    border-radius: 100px;
+    font-weight: 600;
+    text-transform: uppercase;
+    flex-shrink: 0;
+  }
+  .mini-card-badge.done { background: var(--green-subtle); color: var(--green); }
+  .mini-card-badge.draft { background: var(--yellow-subtle); color: var(--yellow); }
+  .mini-card-badge.reviewing { background: var(--accent-subtle); color: var(--accent); }
+  .mini-card-badge.pending { background: var(--bg-surface); color: var(--text-muted); border: 1px solid var(--border); }
+  .mini-card-badge.approved { background: var(--green-subtle); color: var(--green); }
+
+  .pending-placeholder {
+    text-align: center;
+    color: var(--text-muted);
+    font-size: 11px;
+    font-style: italic;
+    padding: 20px 8px;
+  }
+
+  /* ── DESCRIBE phase (focused) ───────────────── */
+  .describe-content {
+    flex: 1;
+    overflow-y: auto;
+    padding: 20px 24px;
+    animation: fadeIn 0.3s ease;
+  }
+  .describe-content::-webkit-scrollbar { width: 5px; }
+  .describe-content::-webkit-scrollbar-track { background: transparent; }
+  .describe-content::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+  .describe-field {
+    margin-bottom: 16px;
+  }
+  .describe-label {
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--text-muted);
+    margin-bottom: 4px;
+  }
+  .describe-value {
+    font-size: 14px;
+    line-height: 1.6;
+    color: var(--text-secondary);
+  }
+  .describe-completed {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 11px;
+    color: var(--green);
+    background: var(--green-subtle);
+    padding: 4px 10px;
+    border-radius: 100px;
+    margin-top: 8px;
+  }
+
+  /* ── SPECIFY phase (focused) ────────────────── */
+  .specify-layout {
+    flex: 1;
+    display: flex;
+    min-height: 0;
+    overflow: hidden;
+    animation: fadeIn 0.3s ease;
+  }
+
+  /* Diff list sidebar */
+  .diff-list {
+    width: 220px;
+    min-width: 220px;
+    border-right: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    background: var(--bg-surface);
+    flex-shrink: 0;
+  }
+  .diff-list-header {
+    padding: 10px 12px;
+    border-bottom: 1px solid var(--border);
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+  .diff-list-items {
+    flex: 1;
+    overflow-y: auto;
+    padding: 6px;
+  }
+  .diff-list-items::-webkit-scrollbar { width: 3px; }
+  .diff-list-items::-webkit-scrollbar-track { background: transparent; }
+  .diff-list-items::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+  .diff-item {
+    padding: 8px 10px;
+    border-radius: 6px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    transition: background 0.15s;
+    margin-bottom: 2px;
+  }
+  .diff-item:hover { background: var(--bg-hover); }
+  .diff-item.active { background: var(--accent-subtle); }
+  .diff-item-icon {
+    width: 18px;
+    height: 18px;
+    border-radius: 3px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 9px;
+    font-weight: 700;
+    flex-shrink: 0;
+  }
+  .diff-item-icon.new { background: var(--green-subtle); color: var(--green); }
+  .diff-item-icon.mod { background: var(--yellow-subtle); color: var(--yellow); }
+  .diff-item-icon.doc { background: var(--green-subtle); color: var(--green); }
+  .diff-item-info {
+    flex: 1;
+    min-width: 0;
+  }
+  .diff-item-name {
+    font-size: 12px;
+    font-weight: 500;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .diff-item-badge {
+    font-size: 9px;
+    font-weight: 600;
+    text-transform: uppercase;
+    padding: 1px 5px;
+    border-radius: 100px;
+  }
+  .diff-item-badge.draft { background: var(--yellow-subtle); color: var(--yellow); }
+  .diff-item-badge.reviewing { background: var(--accent-subtle); color: var(--accent); }
+  .diff-item-badge.pending { color: var(--text-muted); }
+  .diff-item-badge.approved { background: var(--green-subtle); color: var(--green); }
+
+  .diff-item-question {
+    font-size: 9px;
+    color: var(--accent);
+    display: flex;
+    align-items: center;
+    gap: 3px;
+    margin-top: 2px;
+  }
+
+  .diff-list-progress {
+    padding: 10px 12px;
+    border-top: 1px solid var(--border);
+    font-size: 11px;
+    color: var(--text-muted);
+    flex-shrink: 0;
+  }
+  .progress-bar {
+    height: 3px;
+    background: var(--bg-elevated);
+    border-radius: 2px;
+    margin-top: 6px;
+    overflow: hidden;
+  }
+  .progress-fill {
+    height: 100%;
+    background: var(--green);
+    border-radius: 2px;
+    transition: width 0.4s ease;
+  }
+
+  /* Diff viewer area */
+  .diff-viewer {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    overflow: hidden;
+  }
+  .diff-viewer-toolbar {
+    padding: 8px 14px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-shrink: 0;
+    background: var(--bg-surface);
+  }
+  .diff-viewer-path {
+    font-size: 12px;
+    font-family: var(--mono);
+    color: var(--text-muted);
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .diff-viewer-op {
+    font-size: 10px;
+    padding: 2px 7px;
+    border-radius: 100px;
+    font-weight: 600;
+    text-transform: uppercase;
+  }
+  .diff-viewer-op.new { background: var(--green-subtle); color: var(--green); }
+  .diff-viewer-op.modified { background: var(--yellow-subtle); color: var(--yellow); }
+  .diff-viewer-stats {
+    font-size: 11px;
+    font-family: var(--mono);
+    display: flex;
+    gap: 6px;
+  }
+  .diff-viewer-stats .add { color: var(--green); }
+  .diff-viewer-stats .del { color: var(--red); }
+
+  .diff-viewer-content {
+    flex: 1;
+    overflow-y: auto;
+    background: var(--bg-inset);
+    position: relative;
+  }
+  .diff-viewer-content::-webkit-scrollbar { width: 5px; }
+  .diff-viewer-content::-webkit-scrollbar-track { background: transparent; }
+  .diff-viewer-content::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+
+  .diff-line {
+    padding: 1px 14px 1px 52px;
+    font-family: var(--mono);
+    font-size: 12px;
+    line-height: 1.7;
+    white-space: pre;
+    position: relative;
+    min-height: 22px;
+  }
+  .diff-line .ln {
+    position: absolute;
+    left: 0;
+    width: 44px;
+    text-align: right;
+    padding-right: 8px;
+    color: var(--text-muted);
+    opacity: 0.5;
+    user-select: none;
+  }
+  .diff-line.add { background: rgba(63,185,80,0.1); color: var(--green); }
+  .diff-line.del { background: rgba(248,81,73,0.1); color: var(--red); }
+  .diff-line.ctx { color: var(--text-muted); }
+  .diff-line.hunk { background: var(--accent-subtle); color: var(--accent); font-weight: 600; }
+  .diff-line.highlight { background: rgba(88,166,255,0.08); }
+
+  .approved-overlay {
+    position: absolute;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: rgba(63,185,80,0.08);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 5;
+    pointer-events: none;
+  }
+  .approved-stamp {
+    color: var(--green);
+    font-size: 18px;
+    font-weight: 700;
+    border: 3px solid var(--green);
+    padding: 6px 20px;
+    border-radius: 8px;
+    transform: rotate(-8deg);
+    opacity: 0.6;
+  }
+
+  /* Action buttons (used in bottom bar) */
+  .action-btn {
+    padding: 5px 14px;
+    border-radius: 5px;
+    font-size: 11px;
+    font-weight: 600;
+    cursor: pointer;
+    border: none;
+    transition: all 0.15s;
+    white-space: nowrap;
+    flex-shrink: 0;
+  }
+  .action-btn.primary { background: var(--green); color: #fff; }
+  .action-btn.primary:hover { opacity: 0.85; }
+  .action-btn.secondary {
+    background: transparent;
+    color: var(--text-secondary);
+    border: 1px solid var(--border);
+  }
+  .action-btn.secondary:hover { border-color: var(--text-muted); }
+
+  /* Description content in diff viewer area (for design-doc) */
+  .doc-content {
+    flex: 1;
+    overflow-y: auto;
+    padding: 20px;
+  }
+  .doc-content::-webkit-scrollbar { width: 5px; }
+  .doc-content::-webkit-scrollbar-track { background: transparent; }
+  .doc-content::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+  .doc-content h3 {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text-primary);
+    margin: 14px 0 4px;
+  }
+  .doc-content h3:first-child { margin-top: 0; }
+  .doc-content p { font-size: 13px; line-height: 1.6; color: var(--text-secondary); margin: 4px 0; }
+  .doc-content code {
+    font-family: var(--mono);
+    font-size: 12px;
+    background: var(--bg-inset);
+    padding: 1px 4px;
+    border-radius: 3px;
+    color: var(--accent);
+  }
+  .doc-content ul { padding-left: 18px; margin: 4px 0; font-size: 13px; color: var(--text-secondary); line-height: 1.6; }
+  .doc-content em { color: var(--yellow); }
+
+  /* ── Inline agent notes ──────────────────────── */
+  .inline-notes {
+    flex-shrink: 0;
+    padding: 8px 14px 0;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    animation: fadeIn 0.2s ease;
+  }
+
+  /* Info note — PROMINENT informational card */
+  .agent-note {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    padding: 12px 14px;
+    background: rgba(31, 58, 95, 0.25);
+    border: 1px solid rgba(88,166,255,0.2);
+    border-left: 3px solid var(--accent);
+    border-radius: 6px;
+    font-size: 12px;
+    line-height: 1.6;
+    color: var(--text-secondary);
+    animation: fadeIn 0.3s ease;
+  }
+  .agent-note.note-question {
+    background: rgba(61, 46, 0, 0.25);
+    border-color: rgba(210,153,34,0.3);
+    border-left-color: var(--yellow);
+  }
+  .agent-note code {
+    font-family: var(--mono);
+    font-size: 11px;
+    background: var(--bg-inset);
+    padding: 1px 4px;
+    border-radius: 3px;
+    color: var(--accent);
+  }
+  .agent-note-icon {
+    flex-shrink: 0;
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 12px;
+    font-weight: 700;
+  }
+  .agent-note-icon.info {
+    background: var(--accent-subtle);
+    color: var(--accent);
+  }
+  .agent-note-icon.status {
+    background: var(--green-subtle);
+    color: var(--green);
+  }
+  .agent-note-icon.tool {
+    background: var(--bg-surface);
+    color: var(--text-muted);
+    font-size: 10px;
+    border-radius: 3px;
+    font-family: var(--mono);
+  }
+  .agent-note-text {
+    flex: 1;
+    min-width: 0;
+  }
+
+  /* Decision card — contextual inline */
+  .decision-card {
+    margin: 0;
+    background: var(--bg-elevated);
+    border: 1px solid var(--accent-subtle);
+    border-left: 3px solid var(--accent);
+    border-radius: var(--radius);
+    padding: 10px 12px;
+    animation: fadeIn 0.3s ease;
+    transition: opacity 0.3s, max-height 0.4s ease, padding 0.3s ease;
+    overflow: hidden;
+  }
+  .decision-card.resolved {
+    border-left-color: var(--green);
+    border-color: var(--green-subtle);
+    padding: 6px 12px;
+    opacity: 0.7;
+  }
+  .decision-label {
+    font-size: 9px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--accent);
+    margin-bottom: 4px;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+  }
+  .decision-label-icon {
+    font-size: 11px;
+  }
+  .decision-text {
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--text-primary);
+    margin-bottom: 8px;
+    line-height: 1.4;
+  }
+  .decision-opts { display: flex; gap: 5px; flex-wrap: wrap; }
+  .decision-btn {
+    padding: 5px 10px;
+    border-radius: 5px;
+    font-size: 11px;
+    font-weight: 500;
+    cursor: pointer;
+    border: 1px solid var(--border-bright);
+    background: var(--bg-surface);
+    color: var(--text-primary);
+    transition: all 0.15s;
+  }
+  .decision-btn:hover { border-color: var(--accent); background: var(--accent-subtle); }
+  .decision-btn.rec { border-color: var(--accent); background: var(--accent-subtle); color: var(--accent); }
+  .decision-btn.selected { border-color: var(--green); background: var(--green-subtle); color: var(--green); }
+  .decision-hint {
+    margin-top: 6px;
+    font-size: 10px;
+    color: var(--text-muted);
+    line-height: 1.4;
+  }
+  .decision-hint code {
+    font-family: var(--mono);
+    font-size: 10px;
+    background: var(--bg-inset);
+    padding: 1px 3px;
+    border-radius: 3px;
+    color: var(--accent);
+  }
+  .decision-answered {
+    font-size: 11px;
+    color: var(--green);
+    display: flex;
+    align-items: center;
+    gap: 4px;
+  }
+
+  /* ── Bottom bar (note input + actions) ────────── */
+  .bottom-bar {
+    border-top: 1px solid var(--border);
+    flex-shrink: 0;
+    background: var(--bg-elevated);
+    padding: 8px 14px;
+  }
+  .bottom-input-wrap {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .bottom-bar-sep {
+    width: 1px;
+    height: 22px;
+    background: var(--border);
+    flex-shrink: 0;
+    margin: 0 4px;
+  }
+  .bottom-approved-label {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--green);
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    white-space: nowrap;
+    flex-shrink: 0;
+  }
+  .note-input {
+    flex: 1;
+    min-width: 0;
+    background: var(--bg-inset);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    color: var(--text-primary);
+    font-size: 11px;
+    font-family: inherit;
+    outline: none;
+    padding: 5px 10px;
+  }
+  .note-input:focus { border-color: var(--accent); }
+  .note-input::placeholder { color: var(--text-muted); }
+
+  /* ── PLAN phase (focused) ───────────────────── */
+  .plan-content {
+    flex: 1;
+    overflow-y: auto;
+    padding: 16px 20px;
+    animation: fadeIn 0.3s ease;
+  }
+  .plan-content::-webkit-scrollbar { width: 5px; }
+  .plan-content::-webkit-scrollbar-track { background: transparent; }
+  .plan-content::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+
+  .plan-step {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    padding: 14px 16px;
+    background: var(--bg-elevated);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    margin-bottom: 8px;
+    transition: border-color 0.15s;
+  }
+  .plan-step:hover { border-color: var(--border-bright); }
+  .plan-step.running { border-color: var(--yellow); }
+  .plan-step.done { border-color: var(--green); opacity: 0.85; }
+
+  .plan-num {
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    background: var(--bg-surface);
+    border: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--text-muted);
+    flex-shrink: 0;
+  }
+  .plan-step.done .plan-num { background: var(--green-subtle); border-color: var(--green); color: var(--green); }
+  .plan-step.running .plan-num { background: var(--yellow-subtle); border-color: var(--yellow); color: var(--yellow); animation: pulse 2s ease-in-out infinite; }
+
+  .plan-info { flex: 1; }
+  .plan-title { font-size: 13px; font-weight: 600; margin-bottom: 3px; }
+  .plan-desc { font-size: 12px; color: var(--text-muted); line-height: 1.4; }
+
+  .plan-status-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--text-muted);
+    flex-shrink: 0;
+    margin-top: 8px;
+  }
+  .plan-step.done .plan-status-dot { background: var(--green); }
+  .plan-step.running .plan-status-dot { background: var(--yellow); animation: pulse 2s ease-in-out infinite; }
+
+  .plan-execute-btn {
+    padding: 5px 12px;
+    border-radius: 5px;
+    font-size: 11px;
+    font-weight: 600;
+    cursor: pointer;
+    border: 1px solid var(--border);
+    background: var(--bg-surface);
+    color: var(--text-secondary);
+    transition: all 0.15s;
+    flex-shrink: 0;
+    white-space: nowrap;
+    margin-top: 2px;
+  }
+  .plan-execute-btn:hover { border-color: var(--accent); color: var(--accent); background: var(--accent-subtle); }
+  .plan-step.done .plan-execute-btn { display: none; }
+  .plan-step.running .plan-execute-btn { border-color: var(--yellow); color: var(--yellow); background: var(--yellow-subtle); cursor: default; }
+
+  /* Execute All button */
+  .plan-execute-all-wrap {
+    padding: 12px 20px 4px;
+    flex-shrink: 0;
+    animation: fadeIn 0.3s ease;
+  }
+  .plan-execute-all-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    width: 100%;
+    padding: 10px 20px;
+    border-radius: var(--radius);
+    font-size: 14px;
+    font-weight: 700;
+    cursor: pointer;
+    border: 2px solid var(--green);
+    background: var(--green-subtle);
+    color: var(--green);
+    transition: all 0.2s ease;
+    letter-spacing: 0.02em;
+  }
+  .plan-execute-all-btn:hover { background: var(--green); color: #fff; }
+  .plan-execute-all-btn:active { transform: scale(0.98); }
+  .plan-execute-all-btn:disabled {
+    opacity: 0.4;
+    cursor: default;
+    background: var(--bg-surface);
+    border-color: var(--border);
+    color: var(--text-muted);
+  }
+  .plan-execute-all-btn:disabled:hover {
+    background: var(--bg-surface);
+    color: var(--text-muted);
+  }
+  .plan-execute-all-btn .btn-icon { font-size: 16px; }
+
+  .plan-execute-all-progress {
+    margin-top: 8px;
+    font-size: 12px;
+    color: var(--yellow);
+    font-weight: 600;
+    text-align: center;
+    min-height: 18px;
+    animation: fadeIn 0.2s ease;
+  }
+
+  /* ── Plan: changed files & tags ──────────────── */
+  .plan-done-tag {
+    font-size: 10px;
+    font-weight: 600;
+    color: var(--green);
+    margin-left: 6px;
+  }
+  .plan-running-tag {
+    font-size: 10px;
+    font-weight: 600;
+    color: var(--yellow);
+    margin-left: 6px;
+    animation: pulse 2s ease-in-out infinite;
+  }
+  .plan-changed-files {
+    margin-top: 8px;
+  }
+  .plan-changed-toggle {
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--text-secondary);
+    cursor: pointer;
+    user-select: none;
+    padding: 3px 0;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+  }
+  .plan-changed-toggle:hover {
+    color: var(--accent);
+  }
+  .plan-changed-arrow {
+    font-size: 9px;
+    width: 12px;
+    display: inline-block;
+    text-align: center;
+    flex-shrink: 0;
+  }
+  .plan-changed-list {
+    margin-top: 4px;
+    padding-left: 16px;
+    animation: fadeIn 0.2s ease;
+  }
+  .plan-changed-item {
+    font-size: 11px;
+    font-family: var(--mono);
+    line-height: 1.7;
+    color: var(--text-muted);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .plan-changed-item.file-added { color: var(--green); }
+  .plan-changed-item.file-modified { color: var(--yellow); }
+  .plan-changed-op {
+    width: 12px;
+    text-align: center;
+    font-weight: 700;
+    flex-shrink: 0;
+  }
+
+  .plan-progress-wrap {
+    padding: 0 20px 8px;
+    flex-shrink: 0;
+  }
+  .plan-progress-label {
+    font-size: 11px;
+    color: var(--text-muted);
+    margin-bottom: 4px;
+  }
+
+  /* ── Plan: clickable file links ────────────────── */
+  .plan-changed-item.clickable {
+    cursor: pointer;
+    border-radius: 3px;
+    padding: 1px 4px;
+    margin: -1px -4px;
+    transition: background 0.15s, color 0.15s;
+  }
+  .plan-changed-item.clickable:hover {
+    background: var(--accent-subtle);
+    color: var(--accent) !important;
+  }
+
+  /* ── Plan: inline diff viewer ──────────────────── */
+  .plan-diff-viewer {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    overflow: hidden;
+    animation: fadeIn 0.3s ease;
+  }
+  .plan-diff-back {
+    padding: 8px 14px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-shrink: 0;
+    background: var(--bg-elevated);
+  }
+  .plan-diff-back-btn {
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--accent);
+    cursor: pointer;
+    background: none;
+    border: 1px solid var(--border);
+    border-radius: 5px;
+    padding: 3px 10px;
+    transition: all 0.15s;
+  }
+  .plan-diff-back-btn:hover { background: var(--accent-subtle); border-color: var(--accent); }
+  .plan-diff-back-step {
+    font-size: 11px;
+    color: var(--text-muted);
+  }
+  .plan-diff-toolbar {
+    padding: 8px 14px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-shrink: 0;
+    background: var(--bg-surface);
+  }
+  .plan-diff-path {
+    font-size: 12px;
+    font-family: var(--mono);
+    color: var(--text-muted);
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .plan-diff-op {
+    font-size: 10px;
+    padding: 2px 7px;
+    border-radius: 100px;
+    font-weight: 600;
+    text-transform: uppercase;
+  }
+  .plan-diff-op.new { background: var(--green-subtle); color: var(--green); }
+  .plan-diff-op.modified { background: var(--yellow-subtle); color: var(--yellow); }
+  .plan-diff-content {
+    flex: 1;
+    overflow-y: auto;
+    background: var(--bg-inset);
+  }
+  .plan-diff-content::-webkit-scrollbar { width: 5px; }
+  .plan-diff-content::-webkit-scrollbar-track { background: transparent; }
+  .plan-diff-content::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+
+  /* ── Plan: verification card ───────────────────── */
+  .verification-card {
+    margin: 12px 20px 16px;
+    background: var(--bg-elevated);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 14px 16px;
+    animation: fadeIn 0.3s ease;
+  }
+  .verification-card-header {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text-primary);
+    margin-bottom: 6px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .verification-card-header .v-label {
+    font-size: 9px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--text-muted);
+    background: var(--bg-surface);
+    padding: 2px 6px;
+    border-radius: 100px;
+    border: 1px solid var(--border);
+  }
+  .verification-card-desc {
+    font-size: 12px;
+    color: var(--text-secondary);
+    line-height: 1.5;
+    margin-bottom: 10px;
+  }
+  .verification-btn {
+    padding: 6px 14px;
+    border-radius: 5px;
+    font-size: 11px;
+    font-weight: 600;
+    cursor: pointer;
+    border: 1px solid var(--accent);
+    background: var(--accent-subtle);
+    color: var(--accent);
+    transition: all 0.15s;
+  }
+  .verification-btn:hover { background: var(--accent); color: #fff; }
+  .verification-btn:disabled { opacity: 0.5; cursor: default; }
+  .verification-result {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--green);
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    animation: fadeIn 0.3s ease;
+  }
+
+  /* ── Plan: inline agent note within plan ────────── */
+  .plan-agent-note {
+    margin: -2px 0 8px 36px;
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    padding: 10px 12px;
+    background: rgba(31, 58, 95, 0.25);
+    border: 1px solid rgba(88,166,255,0.2);
+    border-left: 3px solid var(--accent);
+    border-radius: 6px;
+    font-size: 12px;
+    line-height: 1.5;
+    color: var(--text-secondary);
+    animation: fadeIn 0.3s ease;
+  }
+  .plan-agent-note code {
+    font-family: var(--mono);
+    font-size: 10px;
+    background: var(--bg-inset);
+    padding: 1px 3px;
+    border-radius: 3px;
+    color: var(--accent);
+  }
+
+  /* ── Ticket notes section ─────────────────────── */
+  .ticket-notes {
+    border-top: 1px solid var(--border);
+    padding: 10px 14px;
+    flex-shrink: 0;
+    background: var(--bg-elevated);
+  }
+  .ticket-notes-label {
+    font-size: 10px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--text-muted);
+    margin-bottom: 6px;
+  }
+  .ticket-notes-input {
+    width: 100%;
+    min-height: 36px;
+    max-height: 64px;
+    resize: vertical;
+    background: var(--bg-inset);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    color: var(--text-primary);
+    font-size: 11px;
+    font-family: inherit;
+    outline: none;
+    padding: 6px 10px;
+    transition: border-color 0.15s;
+  }
+  .ticket-notes-input:focus { border-color: var(--accent); }
+  .ticket-notes-input::placeholder { color: var(--text-muted); }
+
+  .ticket-note-card {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    padding: 8px 10px;
+    background: var(--bg-surface);
+    border: 1px solid var(--border);
+    border-left: 3px solid var(--purple);
+    border-radius: 6px;
+    margin-bottom: 6px;
+    font-size: 11px;
+    color: var(--text-secondary);
+    line-height: 1.5;
+    animation: fadeIn 0.3s ease;
+  }
+  .ticket-note-card .note-author {
+    font-weight: 600;
+    color: var(--text-primary);
+    flex-shrink: 0;
+  }
+
+  /* ── Toast ──────────────────────────────────── */
+  .toast {
+    position: fixed;
+    bottom: 24px;
+    left: 50%;
+    transform: translateX(-50%) translateY(80px);
+    background: var(--bg-elevated);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 10px 20px;
+    font-size: 13px;
+    color: var(--text-primary);
+    z-index: 300;
+    transition: transform 0.3s ease, opacity 0.3s ease;
+    opacity: 0;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+    pointer-events: none;
+  }
+  .toast.show { transform: translateX(-50%) translateY(0); opacity: 1; }
+  .toast.success { border-color: var(--green); }
+  .toast .t-icon { font-size: 16px; }
+  .toast.success .t-icon { color: var(--green); }
+</style>
+</head>
+<body>
+
+<a href="index.html" class="back-link">&larr; All Models</a>
+
+<div class="header">
+  <span class="ticket-id">AUTH-42</span>
+  <span class="header-sep">/</span>
+  <span class="ticket-title">Add user authentication</span>
+  <span class="header-spacer"></span>
+  <span class="model-tag">Model D &mdash; Smart Columns</span>
+</div>
+
+<div class="columns" id="columns"></div>
+
+<div class="toast" id="toast"><span class="t-icon"></span><span class="t-msg"></span></div>
+
+<script>
+// ── Data ──────────────────────────────────────────────────────
+
+const phases = [
+  { id: 'describe', name: 'Describe',  status: 'done' },
+  { id: 'specify',  name: 'Specify',   status: 'active' },
+  { id: 'plan',     name: 'Plan',      status: 'pending' }
+];
+
+const specDiffs = [
+  {
+    id: 'design-doc',
+    title: 'design-doc.md',
+    type: 'doc',
+    iconCls: 'doc', iconChar: 'D',
+    badge: 'draft',
+    path: '.bonsai/auth-system/design-doc.md',
+    html: '<h3>1. Purpose</h3><p>Auth module for the Bonsai workspace. Extends existing token-based system with proper signup/login flows and RBAC.</p><h3>2. Architecture</h3><p>Layered pattern:</p><ul><li><code>auth/models.py</code> &mdash; Pydantic models</li><li><code>auth/service.py</code> &mdash; Business logic</li><li><code>auth/storage.py</code> &mdash; SQLite via aiosqlite</li><li><code>auth/middleware.py</code> &mdash; FastAPI dependencies</li></ul><h3>3. Auth Strategy</h3><p><em>[Pending your decision on JWT vs session-based]</em></p><h3>4. Data Model</h3><p>password_hash, role (admin|user|viewer), timestamps, is_active</p>'
+  },
+  {
+    id: 'auth-readme',
+    title: 'auth/README.md',
+    type: 'diff',
+    iconCls: 'new', iconChar: '+',
+    badge: 'reviewing',
+    path: 'backend/app/auth/README.md',
+    op: 'new', add: 47, del: 0,
+    hasQuestion: true,
+    question: {
+      text: 'Should we use JWT or session-based auth?',
+      opts: ['JWT tokens', 'Session-based', 'Hybrid'],
+      recIdx: 0,
+      hint: 'Your existing <code>bns_</code> token pattern aligns with JWT. Section 3 is blocked on this.'
+    },
+    diff: [
+      { type: 'hunk', text: '@@ -0,0 +1,47 @@' },
+      { type: 'add', ln: '1', text: '+# Auth Module — Design Specification' },
+      { type: 'add', ln: '2', text: '+' },
+      { type: 'add', ln: '3', text: '+> Status: **Draft** | Parent: DESIGN_DOC.md' },
+      { type: 'add', ln: '5', text: '+## Purpose' },
+      { type: 'add', ln: '7', text: '+User authentication, authorization, and session management' },
+      { type: 'add', ln: '8', text: '+for the Bonsai workspace.' },
+      { type: 'add', ln: '10', text: '+## Architecture' },
+      { type: 'add', ln: '12', text: '+```' },
+      { type: 'add', ln: '13', text: '+auth/' },
+      { type: 'add', ln: '14', text: '+  models.py       # Pydantic: User, Session, Role' },
+      { type: 'add', ln: '15', text: '+  service.py      # Business logic' },
+      { type: 'add', ln: '16', text: '+  storage.py      # SQLite via aiosqlite' },
+      { type: 'add', ln: '17', text: '+  middleware.py   # FastAPI auth dependencies' },
+      { type: 'add', ln: '18', text: '+```' },
+      { type: 'add', ln: '20', text: '+## Authentication Strategy', id: 'strat-line' },
+      { type: 'add', ln: '22', text: '+[Pending: JWT vs session-based decision]' },
+      { type: 'add', ln: '24', text: '+## Data Model' },
+      { type: 'add', ln: '26', text: '+- `password_hash` — bcrypt' },
+      { type: 'add', ln: '27', text: '+- `role` — admin | user | viewer' },
+      { type: 'add', ln: '28', text: '+- `created_at`, `last_login`' },
+      { type: 'add', ln: '29', text: '+- `is_active` — soft disable' }
+    ],
+    msgs: [
+      { r: 'tool', t: 'spec_search — scanned backend/app/core/ for auth patterns' },
+      { r: 'tool', t: 'read_file — backend/app/api/routers/user.py' },
+      { r: 'agent', t: 'Created Auth module spec based on patterns in <code>core/server_store.py</code>. Before I can complete section 3, I need a decision:' }
+    ]
+  },
+  {
+    id: 'design-doc-diff',
+    title: 'DESIGN_DOC.md',
+    type: 'diff',
+    iconCls: 'mod', iconChar: '~',
+    badge: 'pending',
+    path: '.bonsai/DESIGN_DOC.md',
+    op: 'modified', add: 12, del: 2,
+    diff: [
+      { type: 'hunk', text: '@@ -45,6 +45,18 @@' },
+      { type: 'ctx', ln: '45', text: ' ## Module Overview' },
+      { type: 'ctx', ln: '46', text: ' ' },
+      { type: 'del', ln: '47', text: '-| Module | Purpose |' },
+      { type: 'add', ln: '47', text: '+| Module | Purpose | Status |' },
+      { type: 'ctx', ln: '48', text: ' | core | Config, file I/O, watcher | Active |' },
+      { type: 'add', ln: '49', text: '+| auth | User authentication, RBAC | Draft |' },
+      { type: 'ctx', ln: '50', text: ' | spec | Spec parser, validator | Active |' },
+      { type: 'ctx', ln: '51', text: ' ' },
+      { type: 'add', ln: '52', text: '+### Auth Module' },
+      { type: 'add', ln: '53', text: '+' },
+      { type: 'add', ln: '54', text: '+New module providing user authentication and' },
+      { type: 'add', ln: '55', text: '+role-based access control. See [auth/README.md]' },
+      { type: 'add', ln: '56', text: '+for detailed specification.' }
+    ],
+    msgs: [
+      { r: 'agent', t: 'Added auth module to the architecture overview in DESIGN_DOC.md. Minimal change — adds the module to the table and a brief description section.' }
+    ]
+  },
+  {
+    id: 'core-readme',
+    title: 'core/README.md',
+    type: 'diff',
+    iconCls: 'mod', iconChar: '~',
+    badge: 'pending',
+    path: 'backend/app/core/README.md',
+    op: 'modified', add: 5, del: 1,
+    diff: [
+      { type: 'hunk', text: '@@ -32,6 +32,10 @@' },
+      { type: 'ctx', ln: '32', text: ' ## Dependencies' },
+      { type: 'ctx', ln: '33', text: ' ' },
+      { type: 'del', ln: '34', text: '-- No external module dependencies' },
+      { type: 'add', ln: '34', text: '+### Consumed by' },
+      { type: 'add', ln: '35', text: '+' },
+      { type: 'add', ln: '36', text: '+- `auth/` — uses `server_store` for user persistence' },
+      { type: 'add', ln: '37', text: '+- `agent/` — uses config and file I/O' },
+      { type: 'add', ln: '38', text: '+- `spec/` — uses file watcher and config' }
+    ],
+    msgs: [
+      { r: 'agent', t: 'Updated core/README.md to document that auth depends on <code>server_store</code>. Also documented existing consumers.' }
+    ]
+  }
+];
+
+const planSteps = [
+  { title: 'Create auth module skeleton', desc: 'Set up models.py, service.py, storage.py', status: 'pending',
+    changedFiles: [
+      { op: '+', path: 'backend/app/auth/__init__.py' },
+      { op: '+', path: 'backend/app/auth/models.py' },
+      { op: '+', path: 'backend/app/auth/service.py' },
+      { op: '+', path: 'backend/app/auth/storage.py' }
+    ] },
+  { title: 'Implement user storage', desc: 'SQLite table creation, CRUD via aiosqlite', status: 'pending',
+    changedFiles: [
+      { op: '~', path: 'backend/app/auth/storage.py' },
+      { op: '~', path: 'backend/app/auth/models.py' },
+      { op: '+', path: 'backend/tests/test_auth_storage.py' }
+    ] },
+  { title: 'Implement JWT token service', desc: 'Token generation, validation, refresh flow', status: 'pending',
+    changedFiles: [
+      { op: '+', path: 'backend/app/auth/tokens.py' },
+      { op: '~', path: 'backend/app/auth/service.py' },
+      { op: '+', path: 'backend/tests/test_auth_tokens.py' }
+    ] },
+  { title: 'Add signup/login RPC methods', desc: 'WebSocket RPC handlers for auth flows', status: 'pending',
+    changedFiles: [
+      { op: '+', path: 'backend/app/rpc/methods/auth.py' },
+      { op: '~', path: 'backend/app/rpc/server.py' }
+    ] },
+  { title: 'Frontend login/signup UI', desc: 'Login screen, signup form, token management', status: 'pending',
+    changedFiles: [
+      { op: '+', path: 'frontend/src/components/LoginScreen.tsx' },
+      { op: '+', path: 'frontend/src/components/SignupForm.tsx' },
+      { op: '~', path: 'frontend/src/store/authStore.ts' },
+      { op: '~', path: 'frontend/src/App.tsx' }
+    ] },
+  { title: 'Integration tests', desc: 'End-to-end auth flow tests with pytest', status: 'pending',
+    changedFiles: [
+      { op: '+', path: 'backend/tests/test_auth_e2e.py' },
+      { op: '+', path: 'backend/tests/conftest_auth.py' }
+    ] }
+];
+
+// ── Mock code diffs for plan step files ──────────────────────────
+
+const planFileDiffs = {
+  'backend/app/auth/__init__.py': {
+    op: 'new',
+    lines: [
+      { type: 'hunk', text: '@@ -0,0 +1,5 @@' },
+      { type: 'add', ln: '1', text: '+"""Auth module for Bonsai workspace."""' },
+      { type: 'add', ln: '2', text: '+from __future__ import annotations' },
+      { type: 'add', ln: '3', text: '+' },
+      { type: 'add', ln: '4', text: '+__all__ = ["models", "service", "storage"]' }
+    ]
+  },
+  'backend/app/auth/models.py': {
+    op: 'new',
+    lines: [
+      { type: 'hunk', text: '@@ -0,0 +1,18 @@' },
+      { type: 'add', ln: '1', text: '+from __future__ import annotations' },
+      { type: 'add', ln: '2', text: '+' },
+      { type: 'add', ln: '3', text: '+from pydantic import BaseModel, Field' },
+      { type: 'add', ln: '4', text: '+from datetime import datetime' },
+      { type: 'add', ln: '5', text: '+' },
+      { type: 'add', ln: '6', text: '+' },
+      { type: 'add', ln: '7', text: '+class User(BaseModel):' },
+      { type: 'add', ln: '8', text: '+    """User account model."""' },
+      { type: 'add', ln: '9', text: '+    id: str' },
+      { type: 'add', ln: '10', text: '+    name: str' },
+      { type: 'add', ln: '11', text: '+    password_hash: str' },
+      { type: 'add', ln: '12', text: '+    role: str = "user"' },
+      { type: 'add', ln: '13', text: '+    is_active: bool = True' },
+      { type: 'add', ln: '14', text: '+    created_at: datetime = Field(default_factory=datetime.utcnow)' },
+      { type: 'add', ln: '15', text: '+    last_login: datetime | None = None' },
+      { type: 'add', ln: '16', text: '+' },
+      { type: 'add', ln: '17', text: '+' },
+      { type: 'add', ln: '18', text: '+class Role(BaseModel):' },
+      { type: 'add', ln: '19', text: '+    """Role enum: admin, user, viewer."""' },
+      { type: 'add', ln: '20', text: '+    ADMIN: str = "admin"' },
+      { type: 'add', ln: '21', text: '+    USER: str = "user"' },
+      { type: 'add', ln: '22', text: '+    VIEWER: str = "viewer"' }
+    ]
+  },
+  'backend/app/auth/service.py': {
+    op: 'new',
+    lines: [
+      { type: 'hunk', text: '@@ -0,0 +1,16 @@' },
+      { type: 'add', ln: '1', text: '+from __future__ import annotations' },
+      { type: 'add', ln: '2', text: '+' },
+      { type: 'add', ln: '3', text: '+import logging' },
+      { type: 'add', ln: '4', text: '+from .models import User' },
+      { type: 'add', ln: '5', text: '+from .storage import AuthStorage' },
+      { type: 'add', ln: '6', text: '+' },
+      { type: 'add', ln: '7', text: '+logger = logging.getLogger(__name__)' },
+      { type: 'add', ln: '8', text: '+' },
+      { type: 'add', ln: '9', text: '+' },
+      { type: 'add', ln: '10', text: '+class AuthService:' },
+      { type: 'add', ln: '11', text: '+    """Business logic for auth operations."""' },
+      { type: 'add', ln: '12', text: '+' },
+      { type: 'add', ln: '13', text: '+    def __init__(self, storage: AuthStorage) -> None:' },
+      { type: 'add', ln: '14', text: '+        self._storage = storage' },
+      { type: 'add', ln: '15', text: '+' },
+      { type: 'add', ln: '16', text: '+    async def create_user(self, name: str, password: str, role: str = "user") -> User:' },
+      { type: 'add', ln: '17', text: '+        """Create a new user with hashed password."""' },
+      { type: 'add', ln: '18', text: '+        ...' }
+    ]
+  },
+  'backend/app/auth/storage.py': {
+    op: 'new',
+    lines: [
+      { type: 'hunk', text: '@@ -0,0 +1,14 @@' },
+      { type: 'add', ln: '1', text: '+from __future__ import annotations' },
+      { type: 'add', ln: '2', text: '+' },
+      { type: 'add', ln: '3', text: '+import aiosqlite' },
+      { type: 'add', ln: '4', text: '+import logging' },
+      { type: 'add', ln: '5', text: '+' },
+      { type: 'add', ln: '6', text: '+logger = logging.getLogger(__name__)' },
+      { type: 'add', ln: '7', text: '+' },
+      { type: 'add', ln: '8', text: '+' },
+      { type: 'add', ln: '9', text: '+class AuthStorage:' },
+      { type: 'add', ln: '10', text: '+    """SQLite persistence for auth data."""' },
+      { type: 'add', ln: '11', text: '+' },
+      { type: 'add', ln: '12', text: '+    async def init_tables(self, db: aiosqlite.Connection) -> None:' },
+      { type: 'add', ln: '13', text: '+        """Create users table if not exists."""' },
+      { type: 'add', ln: '14', text: '+        ...' }
+    ]
+  },
+  'backend/tests/test_auth_storage.py': {
+    op: 'new',
+    lines: [
+      { type: 'hunk', text: '@@ -0,0 +1,15 @@' },
+      { type: 'add', ln: '1', text: '+from __future__ import annotations' },
+      { type: 'add', ln: '2', text: '+' },
+      { type: 'add', ln: '3', text: '+import pytest' },
+      { type: 'add', ln: '4', text: '+from app.auth.storage import AuthStorage' },
+      { type: 'add', ln: '5', text: '+' },
+      { type: 'add', ln: '6', text: '+' },
+      { type: 'add', ln: '7', text: '+class TestAuthStorage:' },
+      { type: 'add', ln: '8', text: '+    async def test_create_and_get_user(self, db):' },
+      { type: 'add', ln: '9', text: '+        storage = AuthStorage()' },
+      { type: 'add', ln: '10', text: '+        await storage.init_tables(db)' },
+      { type: 'add', ln: '11', text: '+        user = await storage.create("alice", "hashed_pw")' },
+      { type: 'add', ln: '12', text: '+        assert user.name == "alice"' },
+      { type: 'add', ln: '13', text: '+' },
+      { type: 'add', ln: '14', text: '+    async def test_get_nonexistent_returns_none(self, db):' },
+      { type: 'add', ln: '15', text: '+        ...' }
+    ]
+  },
+  'backend/app/auth/tokens.py': {
+    op: 'new',
+    lines: [
+      { type: 'hunk', text: '@@ -0,0 +1,18 @@' },
+      { type: 'add', ln: '1', text: '+from __future__ import annotations' },
+      { type: 'add', ln: '2', text: '+' },
+      { type: 'add', ln: '3', text: '+import jwt' },
+      { type: 'add', ln: '4', text: '+from datetime import datetime, timedelta' },
+      { type: 'add', ln: '5', text: '+' },
+      { type: 'add', ln: '6', text: '+ACCESS_TOKEN_TTL = timedelta(minutes=15)' },
+      { type: 'add', ln: '7', text: '+REFRESH_TOKEN_TTL = timedelta(days=7)' },
+      { type: 'add', ln: '8', text: '+' },
+      { type: 'add', ln: '9', text: '+' },
+      { type: 'add', ln: '10', text: '+def create_access_token(user_id: str, secret: str) -> str:' },
+      { type: 'add', ln: '11', text: '+    """Generate a short-lived JWT access token."""' },
+      { type: 'add', ln: '12', text: '+    payload = {' },
+      { type: 'add', ln: '13', text: '+        "sub": user_id,' },
+      { type: 'add', ln: '14', text: '+        "exp": datetime.utcnow() + ACCESS_TOKEN_TTL,' },
+      { type: 'add', ln: '15', text: '+        "type": "access",' },
+      { type: 'add', ln: '16', text: '+    }' },
+      { type: 'add', ln: '17', text: '+    return jwt.encode(payload, secret, algorithm="HS256")' }
+    ]
+  },
+  'backend/tests/test_auth_tokens.py': {
+    op: 'new',
+    lines: [
+      { type: 'hunk', text: '@@ -0,0 +1,12 @@' },
+      { type: 'add', ln: '1', text: '+from __future__ import annotations' },
+      { type: 'add', ln: '2', text: '+' },
+      { type: 'add', ln: '3', text: '+import pytest' },
+      { type: 'add', ln: '4', text: '+from app.auth.tokens import create_access_token' },
+      { type: 'add', ln: '5', text: '+' },
+      { type: 'add', ln: '6', text: '+' },
+      { type: 'add', ln: '7', text: '+class TestTokens:' },
+      { type: 'add', ln: '8', text: '+    def test_create_access_token_returns_string(self):' },
+      { type: 'add', ln: '9', text: '+        token = create_access_token("user-1", "secret")' },
+      { type: 'add', ln: '10', text: '+        assert isinstance(token, str)' },
+      { type: 'add', ln: '11', text: '+        assert len(token) > 20' }
+    ]
+  },
+  'backend/app/rpc/methods/auth.py': {
+    op: 'new',
+    lines: [
+      { type: 'hunk', text: '@@ -0,0 +1,16 @@' },
+      { type: 'add', ln: '1', text: '+from __future__ import annotations' },
+      { type: 'add', ln: '2', text: '+' },
+      { type: 'add', ln: '3', text: '+import logging' },
+      { type: 'add', ln: '4', text: '+from app.auth.service import AuthService' },
+      { type: 'add', ln: '5', text: '+' },
+      { type: 'add', ln: '6', text: '+logger = logging.getLogger(__name__)' },
+      { type: 'add', ln: '7', text: '+' },
+      { type: 'add', ln: '8', text: '+' },
+      { type: 'add', ln: '9', text: '+async def rpc_signup(params: dict, ctx) -> dict:' },
+      { type: 'add', ln: '10', text: '+    """Handle user signup via WebSocket RPC."""' },
+      { type: 'add', ln: '11', text: '+    service: AuthService = ctx.auth_service' },
+      { type: 'add', ln: '12', text: '+    user = await service.create_user(' },
+      { type: 'add', ln: '13', text: '+        name=params["name"],' },
+      { type: 'add', ln: '14', text: '+        password=params["password"],' },
+      { type: 'add', ln: '15', text: '+    )' },
+      { type: 'add', ln: '16', text: '+    return {"user_id": user.id, "token": ...}' }
+    ]
+  },
+  'backend/app/rpc/server.py': {
+    op: 'modified',
+    lines: [
+      { type: 'hunk', text: '@@ -12,6 +12,8 @@' },
+      { type: 'ctx', ln: '12', text: ' from .methods import specs, agents, sessions' },
+      { type: 'add', ln: '13', text: '+from .methods import auth as auth_methods' },
+      { type: 'ctx', ln: '14', text: '' },
+      { type: 'ctx', ln: '15', text: ' METHOD_MAP = {' },
+      { type: 'ctx', ln: '16', text: '     "spec.list": specs.rpc_list,' },
+      { type: 'add', ln: '17', text: '+    "auth.signup": auth_methods.rpc_signup,' },
+      { type: 'add', ln: '18', text: '+    "auth.login": auth_methods.rpc_login,' },
+      { type: 'ctx', ln: '19', text: ' }' }
+    ]
+  },
+  'frontend/src/components/LoginScreen.tsx': {
+    op: 'new',
+    lines: [
+      { type: 'hunk', text: '@@ -0,0 +1,18 @@' },
+      { type: 'add', ln: '1', text: '+import React, { useState } from "react";' },
+      { type: 'add', ln: '2', text: '+import { useAuthStore } from "../store/authStore";' },
+      { type: 'add', ln: '3', text: '+' },
+      { type: 'add', ln: '4', text: '+export function LoginScreen() {' },
+      { type: 'add', ln: '5', text: '+  const [email, setEmail] = useState("");' },
+      { type: 'add', ln: '6', text: '+  const [password, setPassword] = useState("");' },
+      { type: 'add', ln: '7', text: '+  const login = useAuthStore((s) => s.login);' },
+      { type: 'add', ln: '8', text: '+' },
+      { type: 'add', ln: '9', text: '+  return (' },
+      { type: 'add', ln: '10', text: '+    <div className="login-screen">' },
+      { type: 'add', ln: '11', text: '+      <h2>Sign in to Bonsai</h2>' },
+      { type: 'add', ln: '12', text: '+      <input value={email} onChange={...} />' },
+      { type: 'add', ln: '13', text: '+      <input type="password" value={password} />' },
+      { type: 'add', ln: '14', text: '+      <button onClick={() => login(email, password)}>' },
+      { type: 'add', ln: '15', text: '+        Sign In' },
+      { type: 'add', ln: '16', text: '+      </button>' },
+      { type: 'add', ln: '17', text: '+    </div>' },
+      { type: 'add', ln: '18', text: '+  );' },
+      { type: 'add', ln: '19', text: '+}' }
+    ]
+  },
+  'frontend/src/components/SignupForm.tsx': {
+    op: 'new',
+    lines: [
+      { type: 'hunk', text: '@@ -0,0 +1,14 @@' },
+      { type: 'add', ln: '1', text: '+import React, { useState } from "react";' },
+      { type: 'add', ln: '2', text: '+' },
+      { type: 'add', ln: '3', text: '+export function SignupForm() {' },
+      { type: 'add', ln: '4', text: '+  const [name, setName] = useState("");' },
+      { type: 'add', ln: '5', text: '+  const [password, setPassword] = useState("");' },
+      { type: 'add', ln: '6', text: '+' },
+      { type: 'add', ln: '7', text: '+  return (' },
+      { type: 'add', ln: '8', text: '+    <div className="signup-form">' },
+      { type: 'add', ln: '9', text: '+      <h2>Create Account</h2>' },
+      { type: 'add', ln: '10', text: '+      <input placeholder="Name" />' },
+      { type: 'add', ln: '11', text: '+      <input type="password" placeholder="Password" />' },
+      { type: 'add', ln: '12', text: '+      <button>Sign Up</button>' },
+      { type: 'add', ln: '13', text: '+    </div>' },
+      { type: 'add', ln: '14', text: '+  );' },
+      { type: 'add', ln: '15', text: '+}' }
+    ]
+  },
+  'frontend/src/store/authStore.ts': {
+    op: 'modified',
+    lines: [
+      { type: 'hunk', text: '@@ -3,6 +3,14 @@' },
+      { type: 'ctx', ln: '3', text: ' import { create } from "zustand";' },
+      { type: 'ctx', ln: '4', text: '' },
+      { type: 'ctx', ln: '5', text: ' interface AuthState {' },
+      { type: 'add', ln: '6', text: '+  token: string | null;' },
+      { type: 'add', ln: '7', text: '+  user: { id: string; name: string; role: string } | null;' },
+      { type: 'add', ln: '8', text: '+  login: (email: string, pw: string) => Promise<void>;' },
+      { type: 'add', ln: '9', text: '+  logout: () => void;' },
+      { type: 'ctx', ln: '10', text: ' }' }
+    ]
+  },
+  'frontend/src/App.tsx': {
+    op: 'modified',
+    lines: [
+      { type: 'hunk', text: '@@ -1,8 +1,12 @@' },
+      { type: 'ctx', ln: '1', text: ' import React from "react";' },
+      { type: 'add', ln: '2', text: '+import { useAuthStore } from "./store/authStore";' },
+      { type: 'add', ln: '3', text: '+import { LoginScreen } from "./components/LoginScreen";' },
+      { type: 'ctx', ln: '4', text: '' },
+      { type: 'ctx', ln: '5', text: ' function App() {' },
+      { type: 'add', ln: '6', text: '+  const user = useAuthStore((s) => s.user);' },
+      { type: 'add', ln: '7', text: '+  if (!user) return <LoginScreen />;' },
+      { type: 'ctx', ln: '8', text: '   return <AppShell />;' },
+      { type: 'ctx', ln: '9', text: ' }' }
+    ]
+  },
+  'backend/tests/test_auth_e2e.py': {
+    op: 'new',
+    lines: [
+      { type: 'hunk', text: '@@ -0,0 +1,15 @@' },
+      { type: 'add', ln: '1', text: '+from __future__ import annotations' },
+      { type: 'add', ln: '2', text: '+' },
+      { type: 'add', ln: '3', text: '+import pytest' },
+      { type: 'add', ln: '4', text: '+from httpx import AsyncClient' },
+      { type: 'add', ln: '5', text: '+' },
+      { type: 'add', ln: '6', text: '+' },
+      { type: 'add', ln: '7', text: '+class TestAuthE2E:' },
+      { type: 'add', ln: '8', text: '+    async def test_signup_then_login(self, client: AsyncClient):' },
+      { type: 'add', ln: '9', text: '+        resp = await client.post("/rpc", json={' },
+      { type: 'add', ln: '10', text: '+            "method": "auth.signup",' },
+      { type: 'add', ln: '11', text: '+            "params": {"name": "bob", "password": "secret"}' },
+      { type: 'add', ln: '12', text: '+        })' },
+      { type: 'add', ln: '13', text: '+        assert resp.status_code == 200' },
+      { type: 'add', ln: '14', text: '+        data = resp.json()' },
+      { type: 'add', ln: '15', text: '+        assert "token" in data["result"]' }
+    ]
+  },
+  'backend/tests/conftest_auth.py': {
+    op: 'new',
+    lines: [
+      { type: 'hunk', text: '@@ -0,0 +1,12 @@' },
+      { type: 'add', ln: '1', text: '+from __future__ import annotations' },
+      { type: 'add', ln: '2', text: '+' },
+      { type: 'add', ln: '3', text: '+import pytest' },
+      { type: 'add', ln: '4', text: '+import aiosqlite' },
+      { type: 'add', ln: '5', text: '+' },
+      { type: 'add', ln: '6', text: '+' },
+      { type: 'add', ln: '7', text: '+@pytest.fixture' },
+      { type: 'add', ln: '8', text: '+async def auth_db(tmp_path):' },
+      { type: 'add', ln: '9', text: '+    """Provide a fresh SQLite DB for auth tests."""' },
+      { type: 'add', ln: '10', text: '+    db_path = tmp_path / "test_auth.db"' },
+      { type: 'add', ln: '11', text: '+    async with aiosqlite.connect(str(db_path)) as db:' },
+      { type: 'add', ln: '12', text: '+        yield db' }
+    ]
+  }
+};
+
+// Agent notes for plan steps (shown after step completes)
+const planStepNotes = {
+  0: 'Created following layered pattern from <code>core/server_store.py</code>',
+  1: 'Used aiosqlite consistent with existing <code>server_store.py</code> patterns',
+  2: 'JWT tokens with 15min access / 7d refresh TTLs per your decision',
+  3: 'Registered <code>auth.signup</code> and <code>auth.login</code> RPC methods',
+  4: 'Added auth guard to App.tsx root — unauthenticated users see LoginScreen',
+  5: 'E2E tests cover signup-then-login flow with real SQLite'
+};
+
+// ── State ──────────────────────────────────────────────────────
+
+let focusedPhase = 'specify';   // Initially Specify is focused
+let selectedDiffIdx = 1;        // auth-readme selected in diff list
+let approvedSet = new Set();
+let answeredMap = {};            // diffId -> answer text
+let executeAllInProgress = false;
+let executeAllProgressMsg = '';
+let expandedFiles = {};           // stepIdx -> bool (whether changed files are expanded)
+let planDiffView = null;          // { stepIdx, filePath } or null — when viewing a code diff in the plan
+let verificationState = 'idle';   // 'idle' | 'running' | 'done'
+let ticketNotes = [];              // Array of { author, text } for ticket-level notes
+
+// ── Helpers ────────────────────────────────────────────────────
+
+function esc(s) {
+  return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+function getPhaseStatus(id) {
+  return phases.find(p => p.id === id).status;
+}
+
+function approvedCount() {
+  return specDiffs.filter(d => d.type === 'diff' && approvedSet.has(d.id)).length;
+}
+function totalDiffs() {
+  return specDiffs.filter(d => d.type === 'diff').length;
+}
+
+function showToast(msg, type) {
+  const toast = document.getElementById('toast');
+  toast.querySelector('.t-icon').textContent = type === 'success' ? '✓' : 'ℹ';
+  toast.querySelector('.t-msg').textContent = msg;
+  toast.className = 'toast show' + (type === 'success' ? ' success' : '');
+  setTimeout(() => { toast.className = 'toast'; }, 3000);
+}
+
+// ── Render: Collapsed column ───────────────────────────────────
+
+function renderCollapsedColumn(phase) {
+  const items = (phase.id === 'specify') ? specDiffs : [];
+  let h = '';
+  h += '<div class="col-collapsed-inner">';
+  h += '<div class="col-status-dot"></div>';
+  h += `<div class="col-vert-label">${phase.name}</div>`;
+  h += '<div class="col-artifact-dots">';
+  if (phase.id === 'describe') {
+    h += '<div class="artifact-dot status-done" title="Description (done)"></div>';
+  } else if (phase.id === 'specify') {
+    items.forEach(d => {
+      const isApproved = approvedSet.has(d.id);
+      const hasQ = d.hasQuestion && !answeredMap[d.id] && !isApproved;
+      let cls = 'artifact-dot';
+      if (isApproved) cls += ' status-approved';
+      else if (hasQ) cls += ' has-question';
+      else if (d.badge === 'reviewing') cls += ' status-reviewing';
+      else if (d.badge === 'draft') cls += ' status-draft';
+      else cls += ' status-pending';
+      h += `<div class="${cls}" title="${esc(d.title)}"></div>`;
+    });
+  } else if (phase.id === 'plan' && phase.status !== 'pending') {
+    planSteps.forEach(s => {
+      h += `<div class="artifact-dot status-${s.status === 'done' ? 'done' : 'pending'}" title="${esc(s.title)}"></div>`;
+    });
+  }
+  h += '</div>';
+  h += '</div>';
+  return h;
+}
+
+// ── Render: Default column (no column focused) ─────────────────
+
+function renderDefaultColumn(phase) {
+  let h = '';
+  const items = (phase.id === 'specify') ? specDiffs : [];
+  const count = phase.id === 'describe' ? 1 : phase.id === 'specify' ? items.length : planSteps.length;
+
+  h += '<div class="col-default-inner">';
+  h += `<div class="default-col-header" onclick="focusPhase('${phase.id}')">`;
+  h += '<div class="default-col-dot"></div>';
+  h += `<span class="default-col-name">${phase.name}</span>`;
+  if (phase.status !== 'pending') h += `<span class="default-col-count">${count}</span>`;
+  h += '</div>';
+  h += '<div class="default-col-body">';
+
+  if (phase.id === 'describe') {
+    h += '<div class="mini-card" onclick="focusPhase(\'describe\')">';
+    h += '<div class="mini-card-icon desc">D</div>';
+    h += '<span class="mini-card-name">Ticket Description</span>';
+    h += '<span class="mini-card-badge done">done</span>';
+    h += '</div>';
+  } else if (phase.id === 'specify') {
+    items.forEach((d, i) => {
+      const isApproved = approvedSet.has(d.id);
+      const badge = isApproved ? 'approved' : d.badge;
+      h += `<div class="mini-card" onclick="focusPhase('specify'); selectedDiffIdx=${i}; render();">`;
+      h += `<div class="mini-card-icon ${d.iconCls}">${d.iconChar}</div>`;
+      h += `<span class="mini-card-name">${esc(d.title)}</span>`;
+      h += `<span class="mini-card-badge ${badge}">${badge}</span>`;
+      h += '</div>';
+    });
+  } else if (phase.status === 'pending') {
+    h += '<div class="pending-placeholder">Waiting for previous phases</div>';
+  } else if (phase.id === 'plan') {
+    planSteps.forEach(s => {
+      h += '<div class="mini-card">';
+      h += '<div class="mini-card-icon plan">P</div>';
+      h += `<span class="mini-card-name">${esc(s.title)}</span>`;
+      h += '</div>';
+    });
+  }
+
+  h += '</div>';
+  h += '</div>';
+  return h;
+}
+
+// ── Render: Focused column content ─────────────────────────────
+
+function renderFocusedDescribe() {
+  let h = '<div class="describe-content">';
+  h += '<div class="describe-field"><div class="describe-label">What</div>';
+  h += '<div class="describe-value">Add user authentication with signup, login, session management, and RBAC supporting admin and regular user roles.</div></div>';
+  h += '<div class="describe-field"><div class="describe-label">Purpose</div>';
+  h += '<div class="describe-value">Enable secure multi-user access to the Bonsai workspace with appropriate permission boundaries.</div></div>';
+  h += '<div class="describe-field"><div class="describe-label">Success Criteria</div>';
+  h += '<div class="describe-value">Users can sign up, log in, and have persistent sessions. Admin users can manage others. Regular users have restricted access. All endpoints enforce RBAC.</div></div>';
+  h += '<div class="describe-completed"><span>✓</span> Description complete</div>';
+  h += '</div>';
+  return h;
+}
+
+function renderDiffLines(diffArr) {
+  return diffArr.map(d => {
+    if (d.type === 'hunk') return `<div class="diff-line hunk">${esc(d.text)}</div>`;
+    const lnHtml = d.ln ? `<span class="ln">${d.ln}</span>` : '';
+    return `<div class="diff-line ${d.type}">${lnHtml}${esc(d.text)}</div>`;
+  }).join('');
+}
+
+function renderFocusedSpecify() {
+  const sel = specDiffs[selectedDiffIdx];
+  const isApproved = approvedSet.has(sel.id);
+
+  let h = '<div class="specify-layout">';
+
+  // Left: diff list
+  h += '<div class="diff-list">';
+  h += '<div class="diff-list-header">Spec Diffs</div>';
+  h += '<div class="diff-list-items">';
+  specDiffs.forEach((d, i) => {
+    const active = i === selectedDiffIdx;
+    const diffApproved = approvedSet.has(d.id);
+    const badge = diffApproved ? 'approved' : d.badge;
+    const hasQ = d.hasQuestion && !answeredMap[d.id] && !diffApproved;
+    h += `<div class="diff-item${active ? ' active' : ''}" onclick="selectedDiffIdx=${i}; render();">`;
+    h += `<div class="diff-item-icon ${d.iconCls}">${d.iconChar}</div>`;
+    h += '<div class="diff-item-info">';
+    h += `<div class="diff-item-name">${esc(d.title)}</div>`;
+    if (hasQ) h += '<div class="diff-item-question">? Decision needed</div>';
+    h += '</div>';
+    h += `<span class="diff-item-badge ${badge}">${badge}</span>`;
+    h += '</div>';
+  });
+  h += '</div>'; // diff-list-items
+
+  // Progress
+  const ac = approvedCount();
+  const td = totalDiffs();
+  h += '<div class="diff-list-progress">';
+  h += `Progress: ${ac}/${td} approved`;
+  h += `<div class="progress-bar"><div class="progress-fill" style="width:${td ? (ac/td*100) : 0}%"></div></div>`;
+  h += '</div>';
+
+  h += '</div>'; // diff-list
+
+  // Right: diff viewer + bottom bar area (column fills remaining space)
+  h += '<div class="diff-viewer">';
+  if (sel.type === 'diff') {
+    h += '<div class="diff-viewer-toolbar">';
+    h += `<span class="diff-viewer-path">${esc(sel.path)}</span>`;
+    h += `<span class="diff-viewer-op ${sel.op}">${sel.op}</span>`;
+    h += `<span class="diff-viewer-stats"><span class="add">+${sel.add}</span><span class="del">${sel.del > 0 ? '-' + sel.del : ''}</span></span>`;
+    h += '</div>';
+    h += '<div class="diff-viewer-content">';
+    h += renderDiffLines(sel.diff);
+    if (isApproved) {
+      h += '<div class="approved-overlay"><div class="approved-stamp">APPROVED</div></div>';
+    }
+    h += '</div>';
+  } else {
+    // Doc-type content
+    h += '<div class="diff-viewer-toolbar">';
+    h += `<span class="diff-viewer-path">${esc(sel.path)}</span>`;
+    h += `<span class="diff-item-badge ${sel.badge}">${sel.badge}</span>`;
+    h += '</div>';
+    h += `<div class="doc-content">${sel.html}</div>`;
+  }
+
+  // Inline agent notes and decision cards (contextual, not chat)
+  h += renderInlineNotes(sel);
+
+  // Bottom bar: action buttons + note input
+  h += renderBottomBar(sel, isApproved);
+
+  h += '</div>'; // diff-viewer
+  h += '</div>'; // specify-layout
+  return h;
+}
+
+function renderInlineNotes(sel) {
+  const msgs = sel.msgs || [];
+  const isApproved = approvedSet.has(sel.id);
+
+  let h = '<div class="inline-notes">';
+
+  // Render agent notes and tool use as subtle cards
+  msgs.forEach(m => {
+    if (m.r === 'tool') {
+      h += '<div class="agent-note">';
+      h += '<div class="agent-note-icon tool">&gt;</div>';
+      h += `<div class="agent-note-text">${esc(m.t)}</div>`;
+      h += '</div>';
+    } else if (m.r === 'agent') {
+      h += '<div class="agent-note">';
+      h += '<div class="agent-note-icon info">i</div>';
+      h += `<div class="agent-note-text">${m.t}</div>`;
+      h += '</div>';
+    } else if (m.r === 'status') {
+      h += '<div class="agent-note">';
+      h += '<div class="agent-note-icon status">&#10003;</div>';
+      h += `<div class="agent-note-text">${m.t}</div>`;
+      h += '</div>';
+    }
+  });
+
+  // Decision card — contextual, prominent with question styling
+  if (sel.hasQuestion && !answeredMap[sel.id] && !isApproved) {
+    h += '<div class="decision-card">';
+    h += '<div class="decision-label"><span class="decision-label-icon">?</span> Design Decision</div>';
+    h += `<div class="decision-text">${sel.question.text}</div>`;
+    h += '<div class="decision-opts">';
+    sel.question.opts.forEach((o, i) => {
+      h += `<button class="decision-btn${i === sel.question.recIdx ? ' rec' : ''}" onclick="answerDecision('${sel.id}',${i})">${esc(o)}${i === sel.question.recIdx ? ' ★' : ''}</button>`;
+    });
+    h += '</div>';
+    h += `<div class="decision-hint">${sel.question.hint}</div>`;
+    h += '</div>';
+  } else if (answeredMap[sel.id]) {
+    h += '<div class="decision-card resolved">';
+    h += `<div class="decision-answered"><span>&#10003;</span> ${esc(answeredMap[sel.id])}</div>`;
+    h += '</div>';
+  }
+
+  h += '</div>';
+  return h;
+}
+
+function renderBottomBar(sel, isApproved) {
+  let h = '<div class="bottom-bar">';
+  h += '<div class="bottom-input-wrap">';
+
+  // Action buttons first
+  if (sel.type === 'diff' && !isApproved) {
+    h += `<button class="action-btn primary" onclick="approveDiff('${sel.id}')">Approve</button>`;
+    h += `<button class="action-btn secondary" onclick="requestChanges('${sel.id}')">Request Changes</button>`;
+    h += '<span class="bottom-bar-sep"></span>';
+  } else if (isApproved) {
+    h += '<span class="bottom-approved-label"><span>&#10003;</span> Approved</span>';
+    h += '<span class="bottom-bar-sep"></span>';
+  }
+
+  // Simple note input (not a full chat)
+  h += `<input class="note-input" placeholder="Add a note..." onkeydown="if(event.key==='Enter'){addNote(this.value);this.value='';}" />`;
+
+  h += '</div>';
+  h += '</div>';
+  return h;
+}
+
+function renderFocusedPlan() {
+  // If viewing a file diff, show the diff viewer instead
+  if (planDiffView) {
+    return renderPlanDiffView();
+  }
+
+  const allDone = planSteps.every(s => s.status === 'done');
+  const anyRunning = planSteps.some(s => s.status === 'running');
+  const total = planSteps.length;
+
+  let h = '';
+
+  // Execute All button at top
+  h += '<div class="plan-execute-all-wrap">';
+  if (allDone) {
+    h += '<button class="plan-execute-all-btn" disabled><span class="btn-icon">&#10003;</span> All Steps Complete</button>';
+  } else if (anyRunning || executeAllInProgress) {
+    h += '<button class="plan-execute-all-btn" disabled><span class="btn-icon">&#8635;</span> Executing...</button>';
+  } else {
+    h += `<button class="plan-execute-all-btn" onclick="executeAllPlanSteps()"><span class="btn-icon">&#9654;</span> Execute All (${total} steps)</button>`;
+  }
+  h += `<div class="plan-execute-all-progress" id="execute-all-progress">${executeAllProgressMsg}</div>`;
+  h += '</div>';
+
+  // Overall progress bar
+  const doneCount = planSteps.filter(s => s.status === 'done').length;
+  const totalSteps = planSteps.length;
+  if (doneCount > 0) {
+    h += '<div class="plan-progress-wrap">';
+    h += `<div class="plan-progress-label">${doneCount}/${totalSteps} steps complete</div>`;
+    h += `<div class="progress-bar"><div class="progress-fill" style="width:${(doneCount/totalSteps*100)}%"></div></div>`;
+    h += '</div>';
+  }
+
+  h += '<div class="plan-content">';
+  planSteps.forEach((s, i) => {
+    const cls = s.status === 'done' ? ' done' : s.status === 'running' ? ' running' : '';
+    h += `<div class="plan-step${cls}">`;
+    h += `<div class="plan-num">${s.status === 'done' ? '&#10003;' : (i + 1)}</div>`;
+    h += '<div class="plan-info">';
+    h += `<div class="plan-title">${esc(s.title)}${s.status === 'done' ? ' <span class="plan-done-tag">Done</span>' : s.status === 'running' ? ' <span class="plan-running-tag">Running...</span>' : ''}</div>`;
+    h += `<div class="plan-desc">${esc(s.desc)}</div>`;
+    // Changed files for done steps — now CLICKABLE
+    if (s.status === 'done' && s.changedFiles && s.changedFiles.length > 0) {
+      const isExpanded = expandedFiles[i];
+      h += `<div class="plan-changed-files">`;
+      h += `<div class="plan-changed-toggle" onclick="event.stopPropagation(); toggleFiles(${i})">`;
+      h += `<span class="plan-changed-arrow">${isExpanded ? '&#9660;' : '&#9654;'}</span> Changed files (${s.changedFiles.length}):`;
+      h += '</div>';
+      if (isExpanded) {
+        h += '<div class="plan-changed-list">';
+        s.changedFiles.forEach(f => {
+          const opCls = f.op === '+' ? 'file-added' : 'file-modified';
+          const hasCodeDiff = planFileDiffs[f.path];
+          if (hasCodeDiff) {
+            h += `<div class="plan-changed-item ${opCls} clickable" onclick="event.stopPropagation(); openPlanDiff(${i}, '${esc(f.path)}')"><span class="plan-changed-op">${f.op}</span> ${esc(f.path)}</div>`;
+          } else {
+            h += `<div class="plan-changed-item ${opCls}"><span class="plan-changed-op">${f.op}</span> ${esc(f.path)}</div>`;
+          }
+        });
+        h += '</div>';
+      }
+      h += '</div>';
+    }
+    h += '</div>';
+    const btnLabel = s.status === 'running' ? 'Running...' : s.status === 'done' ? '' : 'Execute &#9654;';
+    if (s.status !== 'done') {
+      h += `<button class="plan-execute-btn" onclick="executePlanStep(${i})"${executeAllInProgress ? ' disabled' : ''}>${btnLabel}</button>`;
+    }
+    h += '</div>';
+
+    // Inline agent note after done step
+    if (s.status === 'done' && planStepNotes[i]) {
+      h += `<div class="plan-agent-note"><span style="flex-shrink:0;color:var(--accent);">i</span> ${planStepNotes[i]}</div>`;
+    }
+  });
+
+  // Verification card — appears when all steps are done
+  if (allDone) {
+    h += renderVerificationCard();
+  }
+
+  h += '</div>';
+  return h;
+}
+
+function renderPlanDiffView() {
+  const { stepIdx, filePath } = planDiffView;
+  const step = planSteps[stepIdx];
+  const fileDiff = planFileDiffs[filePath];
+  if (!fileDiff) { planDiffView = null; return renderFocusedPlan(); }
+
+  const fileEntry = step.changedFiles.find(f => f.path === filePath);
+  const opLabel = fileEntry && fileEntry.op === '+' ? 'new' : 'modified';
+
+  let h = '<div class="plan-diff-viewer">';
+
+  // Back button + context
+  h += '<div class="plan-diff-back">';
+  h += '<button class="plan-diff-back-btn" onclick="closePlanDiff()">&larr; Back to steps</button>';
+  h += `<span class="plan-diff-back-step">Step ${stepIdx + 1}: ${esc(step.title)}</span>`;
+  h += '</div>';
+
+  // File toolbar
+  h += '<div class="plan-diff-toolbar">';
+  h += `<span class="plan-diff-path">${esc(filePath)}</span>`;
+  h += `<span class="plan-diff-op ${opLabel}">${opLabel}</span>`;
+  h += '</div>';
+
+  // Diff content
+  h += '<div class="plan-diff-content">';
+  h += renderDiffLines(fileDiff.lines);
+  h += '</div>';
+
+  // Agent note below the diff
+  if (planStepNotes[stepIdx]) {
+    h += '<div class="inline-notes" style="padding-bottom:10px;">';
+    h += '<div class="agent-note">';
+    h += '<div class="agent-note-icon info">i</div>';
+    h += `<div class="agent-note-text">${planStepNotes[stepIdx]}</div>`;
+    h += '</div>';
+    h += '</div>';
+  }
+
+  h += '</div>';
+  return h;
+}
+
+function renderVerificationCard() {
+  let h = '<div class="verification-card">';
+  h += '<div class="verification-card-header">';
+  h += '<span class="v-label">optional</span>';
+  h += 'Verification';
+  h += '</div>';
+
+  if (verificationState === 'idle') {
+    h += '<div class="verification-card-desc">Run spec-review to verify specs match code.</div>';
+    h += '<button class="verification-btn" onclick="runVerification()">Run Verification</button>';
+  } else if (verificationState === 'running') {
+    h += '<div class="verification-card-desc" style="color:var(--yellow);">Verifying...</div>';
+    h += '<button class="verification-btn" disabled>Running...</button>';
+  } else {
+    h += '<div class="verification-result"><span>&#10003;</span> All specs aligned.</div>';
+  }
+
+  h += '</div>';
+  return h;
+}
+
+function renderFocusedContent(phaseId) {
+  let h = '<div class="col-focused-inner">';
+  // Header
+  h += '<div class="focused-header">';
+  h += '<div class="focused-phase-dot"></div>';
+  h += `<span class="focused-phase-name">${phases.find(p => p.id === phaseId).name}</span>`;
+
+  // Status label
+  const status = getPhaseStatus(phaseId);
+  if (status === 'done') h += '<span class="focused-status-label">Completed</span>';
+  else if (status === 'active') h += '<span class="focused-status-label">In Progress</span>';
+  else h += '<span class="focused-status-label">Pending</span>';
+
+  h += '</div>';
+
+  // Phase-specific content
+  if (phaseId === 'describe') h += renderFocusedDescribe();
+  else if (phaseId === 'specify') h += renderFocusedSpecify();
+  else if (phaseId === 'plan') h += renderFocusedPlan();
+
+  // Ticket notes section — always present at the bottom of focused column
+  h += renderTicketNotes();
+
+  h += '</div>';
+  return h;
+}
+
+function renderTicketNotes() {
+  let h = '<div class="ticket-notes">';
+  h += '<div class="ticket-notes-label">Ticket Notes</div>';
+
+  // Show existing notes
+  ticketNotes.forEach(n => {
+    h += `<div class="ticket-note-card"><span class="note-author">${esc(n.author)}:</span> ${esc(n.text)}</div>`;
+  });
+
+  // Input for adding new notes
+  h += `<textarea class="ticket-notes-input" placeholder="Add a note about this ticket..." onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();addTicketNote(this.value);this.value='';}"></textarea>`;
+  h += '</div>';
+  return h;
+}
+
+function addTicketNote(text) {
+  if (!text || !text.trim()) return;
+  ticketNotes.push({ author: 'You', text: text.trim() });
+  render();
+  showToast('Ticket note added', 'success');
+}
+
+// ── Main render ────────────────────────────────────────────────
+
+function render() {
+  const container = document.getElementById('columns');
+
+  container.innerHTML = phases.map(p => {
+    const isFocused = focusedPhase === p.id;
+    const isCollapsed = focusedPhase && focusedPhase !== p.id;
+
+    const classes = ['col', 'phase-' + p.status];
+    if (isFocused) classes.push('focused');
+    if (isCollapsed) classes.push('collapsed');
+
+    let h = `<div class="${classes.join(' ')}" id="col-${p.id}"${isCollapsed ? ` onclick="focusPhase('${p.id}')"` : ''}>`;
+
+    // Always render collapsed interior (hidden via CSS when not collapsed)
+    h += renderCollapsedColumn(p);
+
+    // Focused content
+    if (isFocused) {
+      h += renderFocusedContent(p.id);
+    }
+
+    // Default (no phase focused) - not used currently but kept for completeness
+    if (!focusedPhase) {
+      h += renderDefaultColumn(p);
+    }
+
+    h += '</div>';
+    return h;
+  }).join('');
+
+  // No post-render focus management needed
+}
+
+// ── Interactions ───────────────────────────────────────────────
+
+function focusPhase(phaseId) {
+  if (focusedPhase === phaseId) return; // already focused
+  focusedPhase = phaseId;
+  planDiffView = null;
+  render();
+}
+
+function answerDecision(diffId, idx) {
+  const diff = specDiffs.find(d => d.id === diffId);
+  if (!diff || !diff.question) return;
+
+  const answer = diff.question.opts[idx];
+  answeredMap[diffId] = answer;
+
+  // Update the diff line
+  if (diffId === 'auth-readme') {
+    const stratLine = diff.diff.find(d => d.id === 'strat-line');
+    if (stratLine) {
+      stratLine.text = '+## Authentication Strategy — JWT';
+    }
+    const pendingLine = diff.diff.find(d => d.text.includes('[Pending'));
+    if (pendingLine) {
+      pendingLine.text = '+JWT-based authentication with access/refresh token pairs';
+    }
+  }
+
+  render();
+  showToast('Decision recorded — spec updated', 'success');
+
+  // Agent status note appears after a short delay
+  setTimeout(() => {
+    const responses = {
+      0: 'Updated section 3 with JWT strategy — access tokens (15min TTL) + refresh tokens (7d).',
+      1: 'Updated the spec to use server-side sessions with secure cookies.',
+      2: 'Specified JWT for API access and secure session cookies for browser UI.'
+    };
+    diff.msgs.push({ r: 'status', t: responses[idx] || 'Spec updated.' });
+    render();
+  }, 800);
+}
+
+function addNote(text) {
+  if (!text || !text.trim()) return;
+  const sel = specDiffs[selectedDiffIdx];
+  if (!sel) return;
+  // Notes are not chat — just store and show a toast
+  showToast('Note added: "' + text.trim().substring(0, 40) + (text.trim().length > 40 ? '...' : '') + '"', 'success');
+}
+
+function openPlanDiff(stepIdx, filePath) {
+  planDiffView = { stepIdx, filePath };
+  render();
+}
+
+function closePlanDiff() {
+  planDiffView = null;
+  render();
+}
+
+function runVerification() {
+  verificationState = 'running';
+  render();
+  setTimeout(() => {
+    verificationState = 'done';
+    render();
+    showToast('Verification complete — all specs aligned', 'success');
+  }, 1800);
+}
+
+function approveDiff(diffId) {
+  approvedSet.add(diffId);
+  showToast(specDiffs.find(d => d.id === diffId).title + ' approved', 'success');
+
+  // Auto-advance to next unapproved diff
+  const nextIdx = specDiffs.findIndex(d => d.type === 'diff' && !approvedSet.has(d.id));
+  if (nextIdx >= 0) {
+    setTimeout(() => {
+      selectedDiffIdx = nextIdx;
+      render();
+    }, 300);
+  } else {
+    // All diffs approved! Transition to Plan phase
+    setTimeout(() => {
+      phases[1].status = 'done';   // Specify done
+      phases[2].status = 'active'; // Plan active
+      focusedPhase = 'plan';
+      render();
+      showToast('All specs approved! Moving to Plan phase...', 'success');
+    }, 600);
+  }
+
+  render();
+}
+
+function requestChanges(diffId) {
+  const diff = specDiffs.find(d => d.id === diffId);
+  diff.msgs.push({ r: 'agent', t: 'Ready to revise this spec. Add a note below describing what to change.' });
+  render();
+  showToast('Request changes — add a note describing what to change', '');
+}
+
+function toggleFiles(idx) {
+  expandedFiles[idx] = !expandedFiles[idx];
+  render();
+}
+
+function executePlanStep(idx) {
+  if (planSteps[idx].status !== 'pending') return;
+  planSteps[idx].status = 'running';
+  render();
+  showToast('Executing: ' + planSteps[idx].title, 'success');
+
+  // Simulate completion
+  setTimeout(() => {
+    planSteps[idx].status = 'done';
+    expandedFiles[idx] = true;  // Auto-expand changed files on completion
+    render();
+    showToast(planSteps[idx].title + ' — complete', 'success');
+
+    // Check if all done
+    if (!executeAllInProgress && planSteps.every(s => s.status === 'done')) {
+      setTimeout(() => {
+        phases[2].status = 'done';
+        render();
+        showToast('All plan steps executed!', 'success');
+      }, 500);
+    }
+  }, 1500);
+}
+
+function executeAllPlanSteps() {
+  if (executeAllInProgress) return;
+  if (planSteps.every(s => s.status === 'done')) return;
+
+  executeAllInProgress = true;
+  const total = planSteps.length;
+  const pendingIndices = [];
+
+  // Collect all non-done steps in order
+  planSteps.forEach((s, i) => {
+    if (s.status !== 'done') pendingIndices.push(i);
+  });
+
+  if (pendingIndices.length === 0) {
+    executeAllInProgress = false;
+    return;
+  }
+
+  let step = 0;
+
+  function processNext() {
+    if (step >= pendingIndices.length) {
+      // All steps finished
+      executeAllInProgress = false;
+      executeAllProgressMsg = '';
+      showToast('All steps executed!', 'success');
+
+      setTimeout(() => {
+        phases[2].status = 'done';
+        render();
+      }, 500);
+      return;
+    }
+
+    const idx = pendingIndices[step];
+    const stepNum = step + 1;
+    const totalPending = pendingIndices.length;
+
+    // Mark as executing (yellow/running)
+    planSteps[idx].status = 'running';
+    executeAllProgressMsg = `Executing step ${stepNum} of ${totalPending}...`;
+    render();
+
+    // After delay, mark as done and move to next
+    setTimeout(() => {
+      planSteps[idx].status = 'done';
+      expandedFiles[idx] = true;
+      render();
+      step++;
+
+      // Small pause before starting next step
+      setTimeout(processNext, 200);
+    }, 400);
+  }
+
+  processNext();
+}
+
+// ── Initial render ─────────────────────────────────────────────
+render();
+</script>
+</body>
+</html>

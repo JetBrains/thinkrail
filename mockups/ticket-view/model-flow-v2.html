@@ -1,0 +1,1895 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Full Flow Walkthrough v2 — Bonsai Ticket View</title>
+<style>
+  :root {
+    --bg: #0e1117; --surface: #161b22; --elevated: #1c2129; --hover: #242b35; --inset: #0d1117;
+    --border: #2d333b; --border-bright: #3d444d;
+    --text: #e6edf3; --text-sec: #8b949e; --text-dim: #656d76;
+    --accent: #58a6ff; --accent-sub: #1f3a5f;
+    --green: #3fb950; --green-sub: #1a3a2a;
+    --yellow: #d29922; --yellow-sub: #3d2e00;
+    --purple: #bc8cff; --purple-sub: #2a1f3d;
+    --red: #f85149; --red-sub: #3d1418;
+    --r: 8px; --rl: 12px;
+    --mono: 'SF Mono','Cascadia Code','Consolas',monospace;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: var(--bg); color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans', Helvetica, Arial, sans-serif;
+    height: 100vh; display: flex; flex-direction: column; overflow: hidden;
+  }
+
+  /* -- Back link + model tag -- */
+  .back-link {
+    position: fixed; top: 8px; right: 16px; z-index: 500;
+    font-size: 12px; color: var(--text-dim); text-decoration: none;
+    padding: 4px 12px; border-radius: 6px;
+    background: var(--elevated); border: 1px solid var(--border);
+    transition: all 0.15s;
+  }
+  .back-link:hover { color: var(--accent); border-color: var(--accent); }
+  .model-tag {
+    position: fixed; top: 8px; right: 140px; z-index: 500;
+    font-size: 10px; font-weight: 600; color: var(--purple);
+    background: var(--purple-sub); padding: 4px 10px; border-radius: 100px;
+  }
+
+  /* -- Animations -- */
+  @keyframes fadeIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
+  @keyframes dotPulse { 0%,80%,100%{ opacity:0.3; transform:scale(0.8); } 40%{ opacity:1; transform:scale(1); } }
+  @keyframes checkPop { 0%{transform:scale(0)} 60%{transform:scale(1.3)} 100%{transform:scale(1)} }
+  @keyframes slideInRight { from { transform: translateX(20px); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+  @keyframes progressPulse { 0%,100%{opacity:1} 50%{opacity:0.6} }
+  @keyframes progressStripe { 0% { background-position: 0 0; } 100% { background-position: 20px 0; } }
+  @keyframes codeLineIn { from { opacity: 0; transform: translateX(-4px); } to { opacity: 1; transform: translateX(0); } }
+  .fade-in { animation: fadeIn 0.35s ease both; }
+
+  /* -- Controls bar -- */
+  .controls {
+    height: 36px; min-height: 36px;
+    background: var(--surface); border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; padding: 0 20px; gap: 12px;
+    flex-shrink: 0; z-index: 20;
+  }
+  .ctrl-btn {
+    padding: 3px 14px; border-radius: 6px; font-size: 12px; font-weight: 600;
+    cursor: pointer; border: 1px solid var(--border); background: var(--elevated);
+    color: var(--text-sec); transition: all 0.15s; font-family: inherit;
+  }
+  .ctrl-btn:hover { border-color: var(--accent); color: var(--accent); }
+  .ctrl-btn.playing { background: var(--accent-sub); border-color: var(--accent); color: var(--accent); }
+  .step-counter { font-size: 12px; color: var(--text-dim); font-family: var(--mono); }
+  .progress-track {
+    flex: 1; max-width: 300px; height: 4px; background: var(--elevated);
+    border-radius: 2px; overflow: hidden;
+  }
+  .progress-fill {
+    height: 100%; width: 0%; background: var(--accent);
+    border-radius: 2px; transition: width 0.3s ease;
+  }
+  .kbd-hint { font-size: 10px; color: var(--text-dim); margin-left: auto; }
+  .kbd-hint kbd {
+    display: inline-block; padding: 1px 5px; border-radius: 3px; font-family: var(--mono);
+    background: var(--elevated); border: 1px solid var(--border); font-size: 10px;
+  }
+
+  /* -- Status bar -- */
+  .status-bar {
+    height: 40px; min-height: 40px;
+    background: var(--surface); border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; padding: 0 20px; gap: 12px;
+    flex-shrink: 0;
+  }
+  .ticket-id {
+    font-family: var(--mono); font-size: 12px; color: var(--accent);
+    background: var(--accent-sub); padding: 2px 8px; border-radius: 4px; font-weight: 600;
+  }
+  .sb-sep { width: 1px; height: 18px; background: var(--border); }
+  .ticket-title { font-size: 13px; font-weight: 600; color: var(--text); }
+  .sb-spacer { flex: 1; }
+  .phase-dots { display: flex; gap: 4px; align-items: center; }
+  .phase-dot {
+    font-size: 12px; font-weight: 500; display: flex; align-items: center; gap: 5px;
+    padding: 4px 10px; border-radius: 6px; cursor: default;
+    border: 1px solid transparent;
+    transition: all 0.3s ease;
+  }
+  .phase-dot .dot {
+    display: inline-block; width: 7px; height: 7px; border-radius: 50%;
+    transition: all 0.3s ease; flex-shrink: 0;
+  }
+  .phase-dot .dot.pending { background: var(--text-dim); opacity: 0.35; }
+  .phase-dot .dot.active { background: var(--accent); box-shadow: 0 0 6px rgba(88,166,255,0.4); }
+  .phase-dot .dot.done { background: var(--green); }
+  .phase-dot .label { font-size: 11px; color: var(--text-dim); transition: color 0.3s; }
+  .phase-dot .label.active { color: var(--accent); font-weight: 600; }
+  .phase-dot .label.done { color: var(--green); }
+  .phase-dot.is-active { background: var(--accent-sub); border-color: rgba(88,166,255,0.2); }
+  .phase-dot .check {
+    display: none; color: var(--green); font-size: 11px; font-weight: 700;
+  }
+  .phase-dot.is-done .dot { display: none; }
+  .phase-dot.is-done .check { display: inline; animation: checkPop 0.3s ease; }
+  .phase-sep { color: var(--text-dim); opacity: 0.3; font-size: 10px; margin: 0 2px; }
+
+  /* -- Artifact trail strip -- */
+  .trail-strip {
+    height: 0; min-height: 0; opacity: 0; overflow: hidden;
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    display: flex; align-items: center;
+    padding: 0 20px; gap: 6px;
+    overflow-x: auto;
+    transition: height 0.35s cubic-bezier(0.4,0,0.2,1),
+                min-height 0.35s cubic-bezier(0.4,0,0.2,1),
+                opacity 0.35s ease;
+    flex-shrink: 0;
+  }
+  .trail-strip.visible { height: 36px; min-height: 36px; opacity: 1; overflow-x: auto; }
+  .trail-strip::-webkit-scrollbar { height: 3px; }
+  .trail-sep {
+    font-size: 9px; color: var(--text-dim); opacity: 0.4; margin: 0 4px;
+    align-self: center;
+  }
+  .trail-label {
+    font-size: 9px; font-weight: 700; text-transform: uppercase;
+    letter-spacing: 0.06em; color: var(--text-dim); opacity: 0.6;
+    white-space: nowrap; align-self: center; margin-right: 2px;
+  }
+  .trail-chip {
+    font-size: 11px; padding: 3px 10px; border-radius: 6px;
+    background: var(--elevated); border: 1px solid var(--border);
+    color: var(--text-sec); cursor: pointer; white-space: nowrap;
+    display: flex; align-items: center; gap: 5px;
+    transition: all 0.15s; border-left: 2px solid var(--border);
+    animation: fadeIn 0.3s ease both;
+  }
+  .trail-chip:hover { border-color: var(--accent); color: var(--text); border-left-color: var(--accent); }
+  .trail-chip.active { border-color: var(--accent); background: var(--accent-sub); color: var(--accent); border-left-color: var(--accent); }
+  .trail-chip.approved { color: var(--green); border-left-color: var(--green); }
+  .trail-chip.approved::after { content: ' \2713'; font-size: 10px; }
+  /* Artifact categories */
+  .trail-chip.cat-ticket { border-left-color: var(--purple); }
+  .trail-chip.cat-ticket:hover { border-left-color: var(--purple); }
+  .trail-chip.cat-ticket.approved { border-left-color: var(--green); }
+  .trail-chip.cat-spec { border-left-color: var(--yellow); }
+  .trail-chip.cat-spec:hover { border-left-color: var(--yellow); }
+  .trail-chip.cat-spec.approved { border-left-color: var(--green); }
+  .trail-chip.cat-plan { border-left-color: var(--accent); }
+  .trail-chip .chip-icon { font-size: 10px; opacity: 0.7; }
+
+  /* -- Main area -- */
+  .main-area { flex: 1; display: flex; overflow: hidden; position: relative; }
+
+  /* -- Conversation panel -- */
+  .conversation {
+    flex: 1; display: flex; flex-direction: column; overflow: hidden;
+    transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+  .conv-scroll {
+    flex: 1; overflow-y: auto; padding: 24px 20px;
+    scroll-behavior: smooth;
+  }
+  .conv-inner {
+    max-width: 650px; margin: 0 auto;
+    transition: max-width 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+  body.split-mode .conv-inner { max-width: none; }
+  .conv-inner > * + * { margin-top: 16px; }
+
+  /* -- Messages -- */
+  .msg {
+    padding: 8px 0 8px 16px; font-size: 14px; line-height: 1.6;
+    animation: fadeIn 0.35s ease both;
+  }
+  .msg.agent { border-left: 2px solid var(--accent); color: var(--text-sec); }
+  .msg.user { border-left: 2px solid var(--purple); color: var(--text); font-weight: 500; }
+  .msg strong { color: var(--text); font-weight: 600; }
+  .msg code { font-family: var(--mono); font-size: 12px; background: var(--elevated); padding: 2px 6px; border-radius: 4px; }
+  .msg .arrow-hint { color: var(--accent); font-size: 13px; }
+
+  /* -- Typing indicator -- */
+  .typing-indicator {
+    padding: 8px 0 8px 16px; border-left: 2px solid var(--accent);
+    display: flex; gap: 4px; align-items: center; height: 34px;
+    animation: fadeIn 0.2s ease both;
+  }
+  .typing-indicator .dot {
+    width: 6px; height: 6px; border-radius: 50%; background: var(--text-dim);
+    animation: dotPulse 1.4s ease-in-out infinite;
+  }
+  .typing-indicator .dot:nth-child(2) { animation-delay: 0.2s; }
+  .typing-indicator .dot:nth-child(3) { animation-delay: 0.4s; }
+
+  /* -- Decision cards -- */
+  .decision-card {
+    border: 1px solid var(--border-bright); border-radius: var(--r);
+    background: var(--surface); overflow: hidden;
+    animation: fadeIn 0.35s ease both;
+  }
+  .decision-card.resolved {
+    border-color: var(--border); background: transparent;
+    padding: 8px 16px;
+  }
+  .dc-label {
+    font-size: 10px; font-weight: 700; text-transform: uppercase;
+    letter-spacing: 0.08em; color: var(--yellow); padding: 8px 14px 0;
+  }
+  .dc-q { font-size: 13px; color: var(--text); padding: 6px 14px; font-weight: 500; }
+  .dc-opts { padding: 4px 14px 10px; display: flex; gap: 8px; flex-wrap: wrap; }
+  .dc-opt {
+    padding: 6px 14px; border-radius: 6px; font-size: 12px; font-weight: 500;
+    cursor: pointer; border: 1px solid var(--border); background: var(--elevated);
+    color: var(--text-sec); transition: all 0.15s; font-family: inherit;
+  }
+  .dc-opt:hover { border-color: var(--accent); color: var(--text); background: var(--hover); }
+  .dc-opt.recommended {
+    border-color: var(--accent); color: var(--accent); background: var(--accent-sub);
+  }
+  .dc-opt.recommended:hover { background: rgba(88,166,255,0.2); }
+  .dc-hint {
+    font-size: 11px; color: var(--text-dim); padding: 0 14px 10px;
+    font-style: italic;
+  }
+  .dc-resolved { font-size: 13px; color: var(--green); font-weight: 500; }
+
+  /* -- Inline artifact card (clickable) -- */
+  .artifact-card {
+    border: 1px solid var(--border); border-radius: var(--r);
+    background: var(--surface); overflow: hidden;
+    animation: fadeIn 0.35s ease both;
+    cursor: pointer;
+    transition: border-color 0.15s, box-shadow 0.15s;
+    position: relative;
+  }
+  .artifact-card:hover { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent-sub); }
+  .artifact-card .card-peek-hint {
+    position: absolute; top: 10px; right: 12px;
+    font-size: 10px; color: var(--accent); opacity: 0;
+    transition: opacity 0.15s;
+    pointer-events: none;
+  }
+  .artifact-card:hover .card-peek-hint { opacity: 1; }
+  .ac-header {
+    font-size: 11px; font-weight: 700; text-transform: uppercase;
+    letter-spacing: 0.06em; color: var(--accent);
+    padding: 10px 14px; background: var(--elevated);
+    border-bottom: 1px solid var(--border);
+  }
+  .ac-body {
+    padding: 14px; font-size: 13px; color: var(--text-sec); line-height: 1.7;
+  }
+  .ac-body strong { color: var(--text); }
+
+  /* -- Progress card -- */
+  .progress-card {
+    border: 1px solid var(--border); border-radius: var(--r);
+    background: var(--surface); overflow: hidden; padding: 14px;
+    animation: fadeIn 0.35s ease both;
+  }
+  .pc-step {
+    font-size: 13px; line-height: 1.8; font-family: var(--mono);
+    display: flex; align-items: center; gap: 8px;
+  }
+  .pc-step.done { color: var(--green); }
+  .pc-step.running { color: var(--accent); }
+  .pc-step.running .pc-icon { animation: progressPulse 1.2s infinite; }
+  .pc-step.pending { color: var(--text-dim); }
+  .pc-icon { width: 16px; text-align: center; flex-shrink: 0; }
+
+  /* -- Artifact panel (right side) -- */
+  .artifact-panel {
+    width: 0; min-width: 0; overflow: hidden;
+    background: var(--bg); border-left: 1px solid var(--border);
+    display: flex; flex-direction: column;
+    transition: width 0.4s cubic-bezier(0.4, 0, 0.2, 1),
+                min-width 0.4s cubic-bezier(0.4, 0, 0.2, 1),
+                opacity 0.3s ease;
+    opacity: 0;
+  }
+  body.split-mode .artifact-panel { width: 55%; min-width: 55%; opacity: 1; }
+  body.split-mode .conversation { flex: 0 0 45%; }
+
+  .ap-header {
+    padding: 12px 16px; border-bottom: 1px solid var(--border);
+    background: var(--surface); display: flex; align-items: center; gap: 10px;
+    min-height: 48px;
+  }
+  .ap-badge {
+    font-size: 10px; font-weight: 700; text-transform: uppercase;
+    padding: 2px 7px; border-radius: 4px; letter-spacing: 0.5px;
+  }
+  .ap-badge.new { background: var(--green-sub); color: var(--green); }
+  .ap-badge.modified { background: var(--yellow-sub); color: var(--yellow); }
+  .ap-badge.doc { background: var(--purple-sub); color: var(--purple); }
+  .ap-badge.spec { background: var(--yellow-sub); color: var(--yellow); }
+  .ap-badge.exec { background: var(--accent-sub); color: var(--accent); }
+  .ap-path { font-size: 13px; font-family: var(--mono); color: var(--text); font-weight: 500; }
+  .ap-stats { font-size: 11px; color: var(--text-dim); margin-left: auto; }
+  .ap-stats .stat-add { color: var(--green); }
+  .ap-stats .stat-del { color: var(--red); }
+
+  /* -- Close/back button for peek mode -- */
+  .ap-close {
+    margin-left: auto; cursor: pointer; font-size: 14px;
+    color: var(--text-dim); background: none; border: 1px solid var(--border);
+    border-radius: 4px; padding: 2px 8px; font-family: inherit;
+    transition: all 0.15s; display: none;
+  }
+  .ap-close:hover { color: var(--text); border-color: var(--border-bright); }
+  body.peek-mode .ap-close { display: inline-flex; align-items: center; gap: 4px; }
+
+  .ap-body { flex: 1; overflow-y: auto; }
+
+  /* -- Diff view -- */
+  .diff-view { font-family: var(--mono); font-size: 12px; line-height: 1.7; }
+  .diff-hunk-header {
+    color: var(--purple); background: var(--purple-sub);
+    padding: 4px 16px; font-size: 11px;
+    border-top: 1px solid var(--border); border-bottom: 1px solid var(--border);
+  }
+  .diff-line { padding: 0 16px; white-space: pre-wrap; }
+  .diff-line.add { background: rgba(63,185,80,0.08); color: var(--green); }
+  .diff-line.del { background: rgba(248,81,73,0.08); color: var(--red); }
+  .diff-line.ctx { color: var(--text-dim); }
+  .diff-line .ln {
+    display: inline-block; width: 32px; color: var(--text-dim);
+    text-align: right; margin-right: 12px; user-select: none; opacity: 0.5;
+  }
+
+  /* -- Document preview (product design) -- */
+  .doc-preview {
+    padding: 24px; color: var(--text-sec); font-size: 14px; line-height: 1.7;
+  }
+  .doc-preview h1 { font-size: 18px; font-weight: 600; color: var(--text); margin-bottom: 12px; }
+  .doc-preview h2 { font-size: 15px; font-weight: 600; color: var(--text); margin: 20px 0 8px; }
+  .doc-preview p { margin: 6px 0; }
+  .doc-preview ol, .doc-preview ul { padding-left: 20px; margin: 6px 0; }
+  .doc-preview li { margin: 3px 0; }
+  .doc-preview table { width: 100%; border-collapse: collapse; margin: 8px 0; }
+  .doc-preview th, .doc-preview td { padding: 6px 12px; border: 1px solid var(--border); font-size: 13px; text-align: left; }
+  .doc-preview th { background: var(--elevated); font-weight: 600; color: var(--text); }
+  .doc-preview code { font-family: var(--mono); font-size: 13px; background: var(--inset); padding: 1px 4px; border-radius: 3px; }
+
+  /* -- Document building hint -- */
+  .doc-building-hint {
+    margin-top: 16px; padding: 8px 12px; border-radius: 6px;
+    background: var(--accent-sub); border: 1px dashed var(--accent);
+    color: var(--accent); font-size: 11px; font-style: italic;
+  }
+
+  /* -- Steps panel (shared Plan + Execute view) -- */
+  .steps-panel { display: flex; flex-direction: column; height: 100%; }
+  .steps-list { padding: 14px 16px; overflow-y: auto; }
+  .steps-milestone {
+    font-size: 10px; font-weight: 700; text-transform: uppercase;
+    letter-spacing: 0.08em; color: var(--accent); margin: 16px 0 6px;
+    padding-left: 2px;
+  }
+  .steps-milestone:first-child { margin-top: 0; }
+  .step-row {
+    display: flex; align-items: center; gap: 10px;
+    padding: 7px 10px; font-size: 13px; border-radius: 6px;
+    transition: all 0.2s; border: 1px solid transparent;
+  }
+  .step-row:hover { background: var(--hover); }
+  .step-row .step-icon {
+    width: 22px; height: 22px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 11px; flex-shrink: 0; transition: all 0.3s;
+    border: 1.5px solid var(--border); color: var(--text-dim);
+    background: var(--elevated);
+  }
+  .step-row .step-num { font-size: 11px; color: var(--text-dim); font-family: var(--mono); min-width: 16px; }
+  .step-row .step-name { flex: 1; color: var(--text-sec); }
+  .step-row .step-file { font-family: var(--mono); font-size: 10px; color: var(--text-dim); padding: 2px 8px; background: var(--elevated); border-radius: 4px; border: 1px solid var(--border); }
+  /* Step states */
+  .step-row.ready .step-icon { color: var(--text-dim); font-size: 10px; }
+  .step-row.running { background: var(--accent-sub); border-color: rgba(88,166,255,0.2); }
+  .step-row.running .step-icon { border-color: var(--accent); color: var(--accent); background: var(--accent-sub); animation: progressPulse 1.5s infinite; }
+  .step-row.running .step-name { color: var(--accent); font-weight: 600; }
+  .step-row.running .step-file { border-color: rgba(88,166,255,0.2); color: var(--accent); }
+  .step-row.done .step-icon { border-color: var(--green); color: var(--green); background: var(--green-sub); }
+  .step-row.done .step-name { color: var(--text-dim); text-decoration: line-through; text-decoration-color: var(--border); }
+  .step-row.done .step-file { opacity: 0.5; }
+
+  /* Code preview (below steps, visible during exec) */
+  .code-preview { flex: 1; overflow: hidden; border-top: 1px solid var(--border); display: none; flex-direction: column; }
+  .code-preview.visible { display: flex; }
+  .code-preview-header {
+    padding: 8px 16px; font-size: 12px; color: var(--text-dim);
+    border-bottom: 1px solid var(--border); font-family: var(--mono);
+    display: flex; align-items: center; gap: 8px;
+    background: var(--elevated); flex-shrink: 0;
+  }
+  .code-preview-header .cph-file { color: var(--accent); font-weight: 600; }
+  .code-preview-body {
+    font-family: var(--mono); font-size: 12px; line-height: 1.7;
+    padding: 0; flex: 1; overflow-y: auto;
+  }
+  .code-preview-body .diff-line { animation: codeLineIn 0.2s ease both; }
+
+  /* -- Artifact actions -- */
+  .ap-actions {
+    padding: 12px 16px; border-top: 1px solid var(--border);
+    background: var(--surface); display: flex; gap: 8px;
+  }
+  .btn-request {
+    padding: 7px 16px; border-radius: 6px; font-size: 12px; font-weight: 500;
+    cursor: pointer; border: 1px solid var(--border); background: transparent;
+    color: var(--text-sec); transition: all 0.15s; font-family: inherit;
+  }
+  .btn-request:hover { border-color: var(--border-bright); color: var(--text); }
+  .btn-approve {
+    padding: 7px 16px; border-radius: 6px; font-size: 12px; font-weight: 600;
+    cursor: pointer; border: none; background: var(--green); color: #fff;
+    transition: all 0.15s; font-family: inherit;
+  }
+  .btn-approve:hover { filter: brightness(1.1); }
+  .btn-execute {
+    padding: 7px 20px; border-radius: 6px; font-size: 12px; font-weight: 600;
+    cursor: pointer; border: none; background: var(--accent); color: #fff;
+    transition: all 0.15s; font-family: inherit;
+  }
+  .btn-execute:hover { filter: brightness(1.1); }
+
+  /* -- Artifact nav strip -- */
+  .ap-nav {
+    padding: 8px 16px; border-top: 1px solid var(--border);
+    background: var(--surface); display: flex; align-items: center; gap: 4px;
+  }
+  .nav-tab {
+    font-size: 11px; font-family: var(--mono); padding: 5px 12px;
+    border-radius: 6px; cursor: pointer; color: var(--text-dim);
+    background: transparent; border: 1px solid transparent;
+    transition: all 0.15s;
+    display: flex; align-items: center; gap: 6px;
+  }
+  .nav-tab::before {
+    content: ''; display: inline-block; width: 6px; height: 6px;
+    border-radius: 50%; background: var(--text-dim); opacity: 0.4;
+    flex-shrink: 0; transition: all 0.2s;
+  }
+  .nav-tab:hover { color: var(--text-sec); background: var(--hover); border-color: var(--border); }
+  .nav-tab.active { color: var(--accent); background: var(--accent-sub); border-color: rgba(88,166,255,0.25); }
+  .nav-tab.active::before { background: var(--accent); opacity: 1; box-shadow: 0 0 4px rgba(88,166,255,0.4); }
+  .nav-tab.approved { color: var(--green); }
+  .nav-tab.approved::before { background: var(--green); opacity: 1; }
+  .nav-counter { margin-left: auto; font-size: 11px; color: var(--text-dim); }
+
+  /* -- Input bar -- */
+  .input-bar {
+    padding: 10px 20px; border-top: 1px solid var(--border);
+    background: var(--surface); display: flex; gap: 8px; align-items: center;
+    flex-shrink: 0;
+  }
+  .input-bar input {
+    flex: 1; padding: 8px 14px; border-radius: 6px; font-size: 13px;
+    border: 1px solid var(--border); background: var(--elevated);
+    color: var(--text); font-family: inherit; outline: none;
+    transition: border-color 0.15s;
+  }
+  .input-bar input:focus { border-color: var(--accent); }
+  .input-bar input::placeholder { color: var(--text-dim); }
+  .send-btn {
+    padding: 8px 16px; border-radius: 6px; font-size: 12px; font-weight: 600;
+    cursor: pointer; border: none; background: var(--accent); color: #fff;
+    font-family: inherit; transition: all 0.15s;
+  }
+  .send-btn:hover { filter: brightness(1.1); }
+  .send-btn:disabled { opacity: 0.4; cursor: default; filter: none; }
+
+  /* -- All-approved overlay -- */
+  .all-approved-flash {
+    position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+    font-size: 18px; font-weight: 700; color: var(--green);
+    background: var(--green-sub); padding: 14px 28px; border-radius: var(--rl);
+    border: 1px solid var(--green); pointer-events: none;
+    animation: fadeIn 0.3s ease both;
+    z-index: 100;
+  }
+
+  /* -- Phase divider -- */
+  .phase-divider {
+    display: flex; align-items: center; gap: 12px; padding: 8px 0;
+    animation: fadeIn 0.35s ease both;
+  }
+  .phase-divider::before, .phase-divider::after {
+    content: ''; flex: 1; height: 1px; background: var(--border);
+  }
+  .phase-divider .pd-label {
+    font-size: 10px; font-weight: 700; text-transform: uppercase;
+    letter-spacing: 0.1em; color: var(--text-dim); white-space: nowrap;
+  }
+
+  /* -- Scrollbar -- */
+  ::-webkit-scrollbar { width: 6px; height: 4px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+  ::-webkit-scrollbar-thumb:hover { background: var(--border-bright); }
+</style>
+</head>
+<body>
+
+<a href="index.html" class="back-link">&larr; All Models</a>
+<span class="model-tag">Flow v2</span>
+
+<!-- Controls bar -->
+<div class="controls">
+  <button class="ctrl-btn" id="playBtn" onclick="togglePlay()">&#9654; Play</button>
+  <button class="ctrl-btn" onclick="resetFlow()">&#10227; Reset</button>
+  <span class="step-counter">Step <span id="stepNum">0</span> / <span id="stepTotal">0</span></span>
+  <div class="progress-track"><div class="progress-fill" id="progressFill"></div></div>
+  <span class="kbd-hint"><kbd>Space</kbd> play &nbsp;<kbd>&rarr;</kbd> step &nbsp;<kbd>Esc</kbd> reset/close</span>
+</div>
+
+<!-- Status bar -->
+<div class="status-bar">
+  <span class="ticket-id">AUTH-42</span>
+  <div class="sb-sep"></div>
+  <span class="ticket-title" id="ticketTitle">Add user authentication</span>
+  <div class="sb-spacer"></div>
+  <div class="phase-dots">
+    <div class="phase-dot" id="pd-D"><span class="dot pending"></span><span class="check">&#10003;</span><span class="label">Describe</span></div>
+    <span class="phase-sep">›</span>
+    <div class="phase-dot" id="pd-S"><span class="dot pending"></span><span class="check">&#10003;</span><span class="label">Specify</span></div>
+    <span class="phase-sep">›</span>
+    <div class="phase-dot" id="pd-P"><span class="dot pending"></span><span class="check">&#10003;</span><span class="label">Plan</span></div>
+    <span class="phase-sep">›</span>
+    <div class="phase-dot" id="pd-E"><span class="dot pending"></span><span class="check">&#10003;</span><span class="label">Execute</span></div>
+  </div>
+</div>
+
+<!-- Artifact trail strip -->
+<div class="trail-strip" id="trailStrip"></div>
+
+<!-- Main area -->
+<div class="main-area">
+  <!-- Conversation panel -->
+  <div class="conversation">
+    <div class="conv-scroll" id="convScroll">
+      <div class="conv-inner" id="convInner"></div>
+    </div>
+    <div class="input-bar">
+      <input type="text" id="userInput" placeholder="Type a message..." onkeydown="handleInputKey(event)">
+      <button class="send-btn" id="sendBtn" onclick="handleSend()" disabled>Send</button>
+    </div>
+  </div>
+
+  <!-- Artifact panel (right side) -->
+  <div class="artifact-panel" id="artifactPanel">
+    <div class="ap-header" id="apHeader">
+      <span class="ap-badge new" id="apBadge">NEW</span>
+      <span class="ap-path" id="apPath">auth/README.md</span>
+      <span class="ap-stats" id="apStats"><span class="stat-add">+47</span></span>
+      <button class="ap-close" id="apClose" onclick="closePeek()">&times; Close</button>
+    </div>
+    <div class="ap-body" id="apBody"></div>
+    <div class="ap-actions" id="apActions">
+      <button class="btn-request" onclick="requestChanges()">Request Changes</button>
+      <button class="btn-approve" id="approveBtn" onclick="handleApprove()">Approve &#10003;</button>
+    </div>
+    <div class="ap-nav" id="apNav" style="display:none"></div>
+  </div>
+</div>
+
+<script>
+// -- Script definition --
+
+const SCRIPT = [
+  // PHASE: DESCRIBE (steps 1-10: scoping questions + description)
+  { id: 1,  type: 'agent',    text: 'What would you like to work on?', phase: 'D' },
+  { id: 2,  type: 'user',     text: 'Add user authentication to the Bonsai workspace', interactive: true, placeholder: 'Add user authentication to the Bonsai workspace' },
+  { id: 3,  type: 'agent',    text: "Got it — an auth module. Let me ask a few scoping questions so I understand what you're after." },
+  { id: 4,  type: 'decision', question: 'What kind of authentication?', options: ['Token-based ★', 'OAuth/SSO', 'Simple password'], recommended: 0, hint: 'Extends your existing bns_ token system.' },
+  { id: 5,  type: 'agent',    text: "Token-based — that aligns well with your existing <code>bns_</code> pattern. What about user roles?" },
+  { id: 6,  type: 'decision', question: 'User roles?', options: ['Admin + User + Viewer ★', 'Admin + User', 'Custom roles'], recommended: 0, hint: 'Three tiers gives good granularity without complexity.' },
+  { id: 7,  type: 'agent',    text: "Three-tier roles. Here's the formalized description:" },
+  { id: 8,  type: 'artifact-card', header: 'Ticket Description', body: '<strong>What:</strong> Add JWT-based user authentication with signup, login, session management, and role-based access control.<br><br><strong>Purpose:</strong> Enable multi-user access to Bonsai workspaces with permission boundaries between admin, regular, and viewer roles.<br><br><strong>Success:</strong> Users can sign up, log in, receive a JWT token, and access resources according to their role. Admin can manage users and permissions.', artifactKey: 'description' },
+  { id: 9,  type: 'agent',    text: 'Does this capture your intent?' },
+  { id: 10, type: 'decision', question: 'Proceed with this description?', options: ['Yes, looks good ★', 'Needs changes'], recommended: 0 },
+
+  // Product design - iterative section by section
+  { id: 11, type: 'agent',    text: "Let's build the product design document, section by section." },
+  { id: 12, type: 'typing',   duration: 1200 },
+  { id: 13, type: 'agent',    text: "Starting with the <strong>Goal</strong>:" },
+  { id: 14, type: 'layout',   action: 'open-doc-section', section: 'goal' },
+  { id: 15, type: 'agent',    text: "Does this capture what you're building?" },
+  { id: 16, type: 'decision', question: 'Goal section', options: ['Looks good, continue ★', 'Needs revision'], recommended: 0 },
+  { id: 17, type: 'agent',    text: "Good. Adding <strong>User Stories</strong>..." },
+  { id: 18, type: 'typing',   duration: 800 },
+  { id: 19, type: 'layout',   action: 'update-doc', section: 'stories' },
+  { id: 20, type: 'agent',    text: "Four stories covering the main user journeys. Cover everything?" },
+  { id: 21, type: 'decision', question: 'User stories', options: ['Yes, these cover it ★', 'Add more', 'Revise'], recommended: 0 },
+  { id: 22, type: 'agent',    text: "Adding <strong>Roles & Permissions</strong> matrix..." },
+  { id: 23, type: 'typing',   duration: 600 },
+  { id: 24, type: 'layout',   action: 'update-doc', section: 'roles' },
+  { id: 25, type: 'agent',    text: "Three tiers: Admin (full), User (read/write), Viewer (read-only). Adjust?" },
+  { id: 26, type: 'decision', question: 'Roles & permissions', options: ['Good as is ★', 'Adjust permissions'], recommended: 0 },
+  { id: 27, type: 'agent',    text: "Adding <strong>Success Criteria</strong> and <strong>Out of Scope</strong>..." },
+  { id: 28, type: 'typing',   duration: 500 },
+  { id: 29, type: 'layout',   action: 'update-doc', section: 'full' },
+  { id: 30, type: 'agent',    text: "Product design is complete. Review the full document and approve." },
+  { id: 31, type: 'approve-doc' },
+  { id: 32, type: 'layout',   action: 'close' },
+  { id: 33, type: 'agent',    text: "Product design approved ✓ Moving to specification." },
+
+  // PHASE: SPECIFY (steps 34-51)
+  { id: 34, type: 'phase',    phase: 'S', label: 'SPECIFY' },
+  { id: 35, type: 'agent',    text: 'Creating specification diffs...' },
+  { id: 36, type: 'typing',   duration: 1500 },
+  { id: 37, type: 'agent',    text: "Created 3 spec diffs. Let's review them one at a time." },
+  { id: 38, type: 'layout',   action: 'open', artifact: 0 },
+  { id: 39, type: 'agent',    text: "Starting with <code>auth/README.md</code> — this is the new module design spec." },
+  { id: 40, type: 'decision', question: 'JWT or session-based auth?', options: ['JWT tokens ★', 'Session-based', 'Hybrid'], recommended: 0, hint: 'Your bns_ token pattern aligns well with JWT.' },
+  { id: 41, type: 'agent',    text: 'Updated the authentication strategy. <span class="arrow-hint">→</span>' },
+  { id: 42, type: 'decision', question: "I added a viewer role with read-only access. Keep it?", options: ['Yes, keep ★', 'Remove it'], recommended: 0 },
+  { id: 43, type: 'agent',    text: 'Good. Review the full diff and approve when ready.' },
+  { id: 44, type: 'approve',  artifact: 0 },
+  { id: 45, type: 'switch-artifact', artifact: 1 },
+  { id: 46, type: 'agent',    text: 'Next: added the auth module to the architecture overview in <code>DESIGN_DOC.md</code>.' },
+  { id: 47, type: 'approve',  artifact: 1 },
+  { id: 48, type: 'switch-artifact', artifact: 2 },
+  { id: 49, type: 'agent',    text: "Last one — updated <code>core/README.md</code> to reflect the new auth dependency." },
+  { id: 50, type: 'approve',  artifact: 2 },
+  { id: 51, type: 'all-approved' },
+
+  // PHASE: PLAN (steps 52-64)
+  { id: 52, type: 'layout',   action: 'close' },
+  { id: 53, type: 'agent',    text: "All specs approved. ✔ Let's build the implementation plan." },
+  { id: 54, type: 'phase',    phase: 'P', label: 'PLAN' },
+  { id: 55, type: 'agent',    text: 'How would you like to organize the implementation?' },
+  { id: 56, type: 'decision', question: 'Plan structure?', options: ['Layer by layer ★', 'Feature by feature', 'Test-driven'], recommended: 0, hint: 'Build the foundation first, then layer on features.' },
+  { id: 57, type: 'agent',    text: 'Layer by layer — solid foundation first. How many milestones?' },
+  { id: 58, type: 'decision', question: 'Milestones?', options: ['2 (core + admin) ★', 'Single milestone', '3 milestones'], recommended: 0 },
+  { id: 59, type: 'agent',    text: 'Building the plan...' },
+  { id: 60, type: 'typing',   duration: 1200 },
+  { id: 61, type: 'agent',    text: "Here's the implementation plan:" },
+  { id: 62, type: 'layout',   action: 'open-plan' },
+  { id: 63, type: 'agent',    text: 'Review the steps. Anything to adjust?' },
+  { id: 64, type: 'decision', question: 'Ready to execute?', options: ['Execute this plan ★', 'Adjust order', 'Add detail'], recommended: 0 },
+
+  // PHASE: EXECUTE (steps 65-71)
+  { id: 65, type: 'phase',    phase: 'E', label: 'EXECUTE' },
+  { id: 66, type: 'layout',   action: 'close' },
+  { id: 67, type: 'agent',    text: 'Starting execution...' },
+  { id: 68, type: 'layout',   action: 'open-exec' },
+  { id: 69, type: 'exec-progress' },
+  { id: 70, type: 'agent',    text: 'All 6 steps complete.' },
+  { id: 71, type: 'layout',   action: 'close' },
+
+  // PHASE: VERIFY (steps 72-75)
+  { id: 72, type: 'agent',    text: 'Running verification...' },
+  { id: 73, type: 'typing',   duration: 1000 },
+  { id: 74, type: 'agent',    text: '✔ All checks passed — tests green, types valid, lint clean. Ticket complete!' },
+  { id: 75, type: 'complete' }
+];
+
+// -- Diff data --
+
+const DIFFS = [
+  {
+    badge: 'NEW', badgeClass: 'new',
+    path: 'auth/README.md', stats: '<span class="stat-add">+47</span>',
+    content: `<div class="diff-hunk-header">@@ -0,0 +1,47 @@</div>
+<div class="diff-line add"><span class="ln">1</span>+# Auth Module — Design Spec</div>
+<div class="diff-line add"><span class="ln">2</span>+</div>
+<div class="diff-line add"><span class="ln">3</span>+## Purpose</div>
+<div class="diff-line add"><span class="ln">4</span>+User authentication, authorization, and session</div>
+<div class="diff-line add"><span class="ln">5</span>+management for Bonsai workspaces.</div>
+<div class="diff-line add"><span class="ln">6</span>+</div>
+<div class="diff-line add"><span class="ln">7</span>+## Architecture</div>
+<div class="diff-line add"><span class="ln">8</span>+\`\`\`</div>
+<div class="diff-line add"><span class="ln">9</span>+auth/</div>
+<div class="diff-line add"><span class="ln">10</span>+  models.py    # Pydantic: User, Token, Role</div>
+<div class="diff-line add"><span class="ln">11</span>+  service.py   # Business logic + JWT ops</div>
+<div class="diff-line add"><span class="ln">12</span>+  storage.py   # SQLite via aiosqlite</div>
+<div class="diff-line add"><span class="ln">13</span>+  middleware.py # FastAPI auth dependency</div>
+<div class="diff-line add"><span class="ln">14</span>+\`\`\`</div>
+<div class="diff-line add"><span class="ln">15</span>+</div>
+<div class="diff-line add"><span class="ln">16</span>+## Auth Strategy</div>
+<div class="diff-line add"><span class="ln">17</span>+JWT-based authentication with refresh tokens.</div>
+<div class="diff-line add"><span class="ln">18</span>+Access tokens expire after 15 minutes.</div>
+<div class="diff-line add"><span class="ln">19</span>+Refresh tokens expire after 7 days.</div>
+<div class="diff-line add"><span class="ln">20</span>+</div>
+<div class="diff-line add"><span class="ln">21</span>+## Roles</div>
+<div class="diff-line add"><span class="ln">22</span>+- **Admin**: Full access, user management</div>
+<div class="diff-line add"><span class="ln">23</span>+- **User**: Read/write specs, run agents</div>
+<div class="diff-line add"><span class="ln">24</span>+- **Viewer**: Read-only access to specs</div>
+<div class="diff-line add"><span class="ln">25</span>+</div>
+<div class="diff-line add"><span class="ln">26</span>+## API Endpoints</div>
+<div class="diff-line add"><span class="ln">27</span>+POST /auth/signup    # Create account</div>
+<div class="diff-line add"><span class="ln">28</span>+POST /auth/login     # Get JWT tokens</div>
+<div class="diff-line add"><span class="ln">29</span>+POST /auth/refresh   # Refresh access token</div>
+<div class="diff-line add"><span class="ln">30</span>+POST /auth/logout    # Invalidate session</div>
+<div class="diff-line add"><span class="ln">31</span>+GET  /auth/me        # Current user info</div>
+<div class="diff-line add"><span class="ln">32</span>+</div>
+<div class="diff-line add"><span class="ln">33</span>+## Token Format</div>
+<div class="diff-line add"><span class="ln">34</span>+Extends bns_ prefix convention:</div>
+<div class="diff-line add"><span class="ln">35</span>+- Access:  bns_at_&lt;jwt_payload&gt;</div>
+<div class="diff-line add"><span class="ln">36</span>+- Refresh: bns_rt_&lt;opaque_id&gt;</div>
+<div class="diff-line add"><span class="ln">37</span>+</div>
+<div class="diff-line add"><span class="ln">38</span>+## Storage Schema</div>
+<div class="diff-line add"><span class="ln">39</span>+users: id, email, password_hash, role,</div>
+<div class="diff-line add"><span class="ln">40</span>+       created_at, last_login</div>
+<div class="diff-line add"><span class="ln">41</span>+sessions: id, user_id, refresh_token,</div>
+<div class="diff-line add"><span class="ln">42</span>+          expires_at, revoked</div>
+<div class="diff-line add"><span class="ln">43</span>+</div>
+<div class="diff-line add"><span class="ln">44</span>+## Dependencies</div>
+<div class="diff-line add"><span class="ln">45</span>+- python-jose (JWT encoding)</div>
+<div class="diff-line add"><span class="ln">46</span>+- passlib[bcrypt] (password hashing)</div>
+<div class="diff-line add"><span class="ln">47</span>+- aiosqlite (async storage)</div>`
+  },
+  {
+    badge: 'MODIFIED', badgeClass: 'modified',
+    path: 'DESIGN_DOC.md', stats: '<span class="stat-add">+12</span> <span class="stat-del">-2</span>',
+    content: `<div class="diff-hunk-header">@@ -14,7 +14,19 @@ ## Module Overview</div>
+<div class="diff-line ctx"><span class="ln">14</span> ### Existing Modules</div>
+<div class="diff-line ctx"><span class="ln">15</span> - core/ — Config, file I/O, watcher</div>
+<div class="diff-line ctx"><span class="ln">16</span> - spec/ — Spec models, parser, validator</div>
+<div class="diff-line del"><span class="ln">17</span>-- agent/ — Agent runner, context, tools</div>
+<div class="diff-line add"><span class="ln">17</span>+- agent/ — Agent runner, context, tools</div>
+<div class="diff-line add"><span class="ln">18</span>+- auth/ — Authentication &amp; authorization</div>
+<div class="diff-line ctx"><span class="ln">19</span> </div>
+<div class="diff-line del"><span class="ln">20</span>-### Data Flow</div>
+<div class="diff-line add"><span class="ln">20</span>+### Auth Integration</div>
+<div class="diff-line add"><span class="ln">21</span>+\`\`\`</div>
+<div class="diff-line add"><span class="ln">22</span>+Request → auth/middleware → router</div>
+<div class="diff-line add"><span class="ln">23</span>+         │</div>
+<div class="diff-line add"><span class="ln">24</span>+         └─ JWT verify → role check</div>
+<div class="diff-line add"><span class="ln">25</span>+\`\`\`</div>
+<div class="diff-line add"><span class="ln">26</span>+All API routes require auth except:</div>
+<div class="diff-line add"><span class="ln">27</span>+- POST /auth/signup, /auth/login</div>
+<div class="diff-line add"><span class="ln">28</span>+- GET /health</div>
+<div class="diff-line add"><span class="ln">29</span>+</div>
+<div class="diff-line add"><span class="ln">30</span>+### Data Flow</div>
+<div class="diff-line ctx"><span class="ln">31</span> Client → FastAPI → Service → Storage</div>`
+  },
+  {
+    badge: 'MODIFIED', badgeClass: 'modified',
+    path: 'core/README.md', stats: '<span class="stat-add">+6</span> <span class="stat-del">-1</span>',
+    content: `<div class="diff-hunk-header">@@ -8,6 +8,11 @@ ## Dependencies</div>
+<div class="diff-line ctx"><span class="ln">8</span> - aiosqlite</div>
+<div class="diff-line ctx"><span class="ln">9</span> - watchfiles</div>
+<div class="diff-line del"><span class="ln">10</span>-- pydantic</div>
+<div class="diff-line add"><span class="ln">10</span>+- pydantic</div>
+<div class="diff-line add"><span class="ln">11</span>+- python-jose (via auth module)</div>
+<div class="diff-line add"><span class="ln">12</span>+- passlib[bcrypt] (via auth module)</div>
+<div class="diff-line ctx"><span class="ln">13</span> </div>
+<div class="diff-line ctx"><span class="ln">14</span> ## Configuration</div>
+<div class="diff-line ctx"><span class="ln">15</span> Settings loaded from .bonsai/config.toml</div>
+<div class="diff-hunk-header">@@ -22,3 +27,5 @@ ## Server Store</div>
+<div class="diff-line ctx"><span class="ln">27</span> SQLite database for runtime state.</div>
+<div class="diff-line ctx"><span class="ln">28</span> Tables: users, sessions, settings</div>
+<div class="diff-line add"><span class="ln">29</span>+New tables from auth module:</div>
+<div class="diff-line add"><span class="ln">30</span>+  auth_users, auth_sessions, auth_roles</div>`
+  }
+];
+
+// -- Product design document sections (iterative build) --
+
+const DOC_SECTIONS = {
+  goal: `<div class="doc-preview">
+    <h1>Product Design: User Authentication</h1>
+    <h2>Goal</h2>
+    <p>Enable secure multi-user access to the Bonsai workspace with role-based permissions.</p>
+    <div class="doc-building-hint">Building document...</div>
+  </div>`,
+
+  stories: `<div class="doc-preview">
+    <h1>Product Design: User Authentication</h1>
+    <h2>Goal</h2>
+    <p>Enable secure multi-user access to the Bonsai workspace with role-based permissions.</p>
+    <h2>User Stories</h2>
+    <ol>
+      <li>As a new user, I can sign up with a username and password</li>
+      <li>As a returning user, I can log in and have my session persisted</li>
+      <li>As an admin, I can manage users (create, deactivate, change roles)</li>
+      <li>As a viewer, I can browse specs and tickets in read-only mode</li>
+    </ol>
+    <div class="doc-building-hint">Building document...</div>
+  </div>`,
+
+  roles: `<div class="doc-preview">
+    <h1>Product Design: User Authentication</h1>
+    <h2>Goal</h2>
+    <p>Enable secure multi-user access to the Bonsai workspace with role-based permissions.</p>
+    <h2>User Stories</h2>
+    <ol>
+      <li>As a new user, I can sign up with a username and password</li>
+      <li>As a returning user, I can log in and have my session persisted</li>
+      <li>As an admin, I can manage users (create, deactivate, change roles)</li>
+      <li>As a viewer, I can browse specs and tickets in read-only mode</li>
+    </ol>
+    <h2>Roles &amp; Permissions</h2>
+    <table>
+      <thead><tr><th>Role</th><th>Read</th><th>Write</th><th>Admin</th></tr></thead>
+      <tbody>
+        <tr><td>Admin</td><td>✓</td><td>✓</td><td>✓</td></tr>
+        <tr><td>User</td><td>✓</td><td>✓</td><td>✗</td></tr>
+        <tr><td>Viewer</td><td>✓</td><td>✗</td><td>✗</td></tr>
+      </tbody>
+    </table>
+    <div class="doc-building-hint">Building document...</div>
+  </div>`,
+
+  full: `<div class="doc-preview">
+    <h1>Product Design: User Authentication</h1>
+    <h2>Goal</h2>
+    <p>Enable secure multi-user access to the Bonsai workspace with role-based permissions.</p>
+    <h2>User Stories</h2>
+    <ol>
+      <li>As a new user, I can sign up with a username and password</li>
+      <li>As a returning user, I can log in and have my session persisted</li>
+      <li>As an admin, I can manage users (create, deactivate, change roles)</li>
+      <li>As a viewer, I can browse specs and tickets in read-only mode</li>
+    </ol>
+    <h2>Roles &amp; Permissions</h2>
+    <table>
+      <thead><tr><th>Role</th><th>Read</th><th>Write</th><th>Admin</th></tr></thead>
+      <tbody>
+        <tr><td>Admin</td><td>✓</td><td>✓</td><td>✓</td></tr>
+        <tr><td>User</td><td>✓</td><td>✓</td><td>✗</td></tr>
+        <tr><td>Viewer</td><td>✓</td><td>✗</td><td>✗</td></tr>
+      </tbody>
+    </table>
+    <h2>Success Criteria</h2>
+    <ul>
+      <li>Users can sign up, log in, and maintain sessions</li>
+      <li>Token-based auth extends existing <code>bns_</code> prefix system</li>
+      <li>RBAC enforces permission boundaries on all API endpoints</li>
+      <li>Admin users can manage other users via CLI and API</li>
+    </ul>
+    <h2>Out of Scope (v1)</h2>
+    <ul>
+      <li>OAuth/SSO integration</li>
+      <li>Two-factor authentication</li>
+      <li>Password recovery flow</li>
+    </ul>
+  </div>`
+};
+
+function buildStepsHTML(mode) {
+  // mode: 'plan' (all ready) or 'exec' (all pending, will animate)
+  const state = mode === 'exec' ? 'pending' : 'ready';
+  const icon = mode === 'exec' ? '○' : '○';
+  let html = '<div class="steps-panel"><div class="steps-list">';
+  html += '<div class="steps-milestone">Milestone 1: Core Auth</div>';
+  EXEC_STEPS.slice(0, 4).forEach((s, i) => {
+    html += `<div class="step-row ${state}" id="sr-${i}"><span class="step-icon">${i + 1}</span><span class="step-name">${s.name}</span><span class="step-file">${s.file}</span></div>`;
+  });
+  html += '<div class="steps-milestone">Milestone 2: API &amp; Admin</div>';
+  EXEC_STEPS.slice(4).forEach((s, i) => {
+    const idx = i + 4;
+    html += `<div class="step-row ${state}" id="sr-${idx}"><span class="step-icon">${idx + 1}</span><span class="step-name">${s.name}</span><span class="step-file">${s.file}</span></div>`;
+  });
+  html += '</div>';
+  // Code preview area (hidden by default, shown during exec)
+  html += '<div class="code-preview" id="codePreview"><div class="code-preview-header" id="codePreviewHeader"><span class="cph-file">Waiting...</span></div><div class="code-preview-body" id="codePreviewBody"></div></div>';
+  html += '</div>';
+  return html;
+}
+
+const EXEC_STEPS = [
+  { name: 'Create auth models',      file: 'models.py' },
+  { name: 'Implement storage layer',  file: 'storage.py' },
+  { name: 'Build auth service',       file: 'service.py' },
+  { name: 'Add auth middleware',      file: 'middleware.py' },
+  { name: 'Create API endpoints',     file: 'routers/auth.py' },
+  { name: 'Write tests',             file: 'tests/test_auth.py' }
+];
+
+// Helper: build snippet from hunk header + array of code lines
+function mkSnippet(hunk, lines) {
+  return [{ t: 'hunk', v: hunk }].concat(lines.map((v, i) => ({ t: 'add', ln: i + 1, v: '+' + v })));
+}
+const EXEC_CODE_SNIPPETS = [
+  mkSnippet('@@ -0,0 +1,25 @@', ['from __future__ import annotations', '"""Auth models for user, token, and role."""', '', 'from enum import Enum', 'from pydantic import BaseModel, Field', '', 'class Role(str, Enum):', '    ADMIN = "admin"', '    USER = "user"', '    VIEWER = "viewer"', '', 'class User(BaseModel):', '    id: str', '    email: str', '    role: Role = Role.USER']),
+  mkSnippet('@@ -0,0 +1,22 @@', ['from __future__ import annotations', '"""Auth storage layer."""', '', 'import aiosqlite', '', 'class AuthStorage:', '    def __init__(self, db: aiosqlite.Connection):', '        self._db = db', '', '    async def create_tables(self) -> None:', '        await self._db.execute("""', '            CREATE TABLE IF NOT EXISTS auth_users (', '                id TEXT PRIMARY KEY,', '                email TEXT UNIQUE NOT NULL', '            )""")']),
+  mkSnippet('@@ -0,0 +1,20 @@', ['from __future__ import annotations', '"""Auth service — business logic + JWT ops."""', '', 'from jose import jwt', 'from passlib.hash import bcrypt', '', 'class AuthService:', '    def __init__(self, storage, secret):', '        self._storage = storage', '        self._secret = secret', '', '    async def signup(self, email, pw):', '        hashed = bcrypt.hash(pw)', '        user = await self._storage.create_user(', '            email=email, password_hash=hashed', '        )', '        return self._issue_tokens(user)']),
+  mkSnippet('@@ -0,0 +1,18 @@', ['from __future__ import annotations', '"""FastAPI auth dependency."""', '', 'from fastapi import Depends, HTTPException', 'from fastapi.security import HTTPBearer', '', 'bearer = HTTPBearer()', '', 'async def require_auth(token=Depends(bearer)):', '    payload = verify_token(token.credentials)', '    if not payload:', '        raise HTTPException(401, "Invalid token")', '    return payload']),
+  mkSnippet('@@ -0,0 +1,16 @@', ['from __future__ import annotations', '"""Auth API endpoints."""', '', 'from fastapi import APIRouter, Depends', '', 'router = APIRouter(prefix="/auth", tags=["auth"])', '', '@router.post("/signup")', 'async def signup(req: SignupRequest):', '    return await auth_service.signup(req.email, req.password)', '', '@router.post("/login")', 'async def login(req: LoginRequest):', '    return await auth_service.login(req.email, req.password)']),
+  mkSnippet('@@ -0,0 +1,14 @@', ['from __future__ import annotations', '"""Tests for auth module."""', '', 'import pytest', '', 'class TestAuthService:', '    async def test_signup_creates_user(self):', '        result = await service.signup("a@b.c", "pw")', '        assert result.access_token.startswith("bns_at_")', '', '    async def test_login_returns_tokens(self):', '        result = await service.login("a@b.c", "pw")', '        assert result.refresh_token.startswith("bns_rt_")'])
+];
+
+const EXEC_MESSAGES = [
+  'Starting step 1: Create auth models...',
+  'Step 1 complete. Created models.py with User, Session, Role.',
+  'Starting step 2: Implement storage layer...',
+  'Step 2 complete. Created storage.py with SQLite schema.',
+  'Starting step 3: Build auth service...',
+  'Step 3 complete. Created service.py with JWT + bcrypt logic.',
+  'Starting step 4: Add auth middleware...',
+  'Step 4 complete. Created middleware.py with FastAPI dependency.',
+  'Starting step 5: Create API endpoints...',
+  'Step 5 complete. Created routers/auth.py with signup, login, refresh.',
+  'Starting step 6: Write tests...',
+  'Step 6 complete. Created test_auth.py with 12 test cases.'
+];
+
+// -- Trail chip registry --
+// Each artifact that can appear in the trail strip
+const TRAIL_ARTIFACTS = [
+  { key: 'description',    label: 'Description',     type: 'card', cat: 'ticket' },
+  { key: 'product-design', label: 'Product Design',   type: 'doc',  cat: 'ticket' },
+  { key: 'auth-readme',    label: 'auth/README',      type: 'diff', diffIdx: 0, cat: 'spec' },
+  { key: 'design-doc',     label: 'DESIGN_DOC',       type: 'diff', diffIdx: 1, cat: 'spec' },
+  { key: 'core-readme',    label: 'core/README',      type: 'diff', diffIdx: 2, cat: 'spec' },
+  { key: 'plan',           label: 'Plan',             type: 'plan', cat: 'plan' }
+];
+
+// -- State --
+
+let currentStep = 0;
+let playing = false;
+let stepTimer = null;
+let approvedArtifacts = [false, false, false];
+let currentArtifact = 0;
+let waitingForInteraction = false;
+let currentPhase = null;
+let peekMode = false;
+let peekSavedState = null;
+let productDesignApproved = false;
+let trailChips = {}; // key -> { status: 'pending'|'reviewing'|'approved', el: DOM }
+let activeTrailKey = null;
+let execAnimationRunning = false;
+
+const convInner = document.getElementById('convInner');
+const convScroll = document.getElementById('convScroll');
+const stepNumEl = document.getElementById('stepNum');
+const stepTotalEl = document.getElementById('stepTotal');
+const progressFill = document.getElementById('progressFill');
+const playBtn = document.getElementById('playBtn');
+const userInput = document.getElementById('userInput');
+const sendBtn = document.getElementById('sendBtn');
+const trailStrip = document.getElementById('trailStrip');
+
+stepTotalEl.textContent = SCRIPT.length;
+
+// -- Trail strip management --
+
+function showTrailStrip() {
+  trailStrip.classList.add('visible');
+}
+
+function addTrailChip(key) {
+  const def = TRAIL_ARTIFACTS.find(a => a.key === key);
+  if (!def || trailChips[key]) return;
+  showTrailStrip();
+
+  // Add category label if this is the first chip in a new category
+  const existingCats = Object.keys(trailChips).map(k => TRAIL_ARTIFACTS.find(a => a.key === k)).filter(Boolean).map(a => a.cat);
+  if (!existingCats.includes(def.cat)) {
+    if (existingCats.length > 0) {
+      const sep = document.createElement('span');
+      sep.className = 'trail-sep';
+      sep.textContent = '│';
+      trailStrip.appendChild(sep);
+    }
+    const label = document.createElement('span');
+    label.className = 'trail-label';
+    label.textContent = def.cat === 'ticket' ? 'Ticket' : def.cat === 'spec' ? 'Specs' : 'Plan';
+    label.dataset.cat = def.cat;
+    trailStrip.appendChild(label);
+  }
+
+  const icons = { ticket: '📋', spec: '📄', plan: '📦' };
+  const chip = document.createElement('span');
+  chip.className = 'trail-chip cat-' + def.cat;
+  chip.dataset.key = key;
+  chip.innerHTML = `<span class="chip-icon">${icons[def.cat] || '📄'}</span>${def.label}`;
+  chip.onclick = () => peekArtifact(key);
+  trailStrip.appendChild(chip);
+  trailChips[key] = { status: 'pending', el: chip };
+}
+
+function setTrailStatus(key, status) {
+  const chip = trailChips[key];
+  if (!chip) return;
+  chip.status = status;
+  chip.el.classList.remove('active', 'approved');
+  if (status === 'reviewing') chip.el.classList.add('active');
+  if (status === 'approved') chip.el.classList.add('approved');
+}
+
+function setActiveTrailChip(key) {
+  activeTrailKey = key;
+  Object.keys(trailChips).forEach(k => {
+    if (trailChips[k].status !== 'approved') {
+      trailChips[k].el.classList.remove('active');
+    }
+  });
+  if (key && trailChips[key]) {
+    trailChips[key].el.classList.add('active');
+  }
+}
+
+// -- Peek mode (backtracking) --
+
+const PEEK_BACK_BTN = '<button class="ap-close" onclick="closePeek()" style="display:inline-flex;align-items:center;gap:4px;margin-left:auto;cursor:pointer;font-size:12px;color:var(--text-dim);background:none;border:1px solid var(--border);border-radius:4px;padding:4px 12px;font-family:inherit">← Back to flow</button>';
+const PEEK_CLOSE_BTN = '<button class="ap-close" id="apClose" onclick="closePeek()">× Close</button>';
+
+function setPeekPanel(badge, badgeClass, path, stats, bodyHtml) {
+  document.getElementById('apHeader').innerHTML = `<span class="ap-badge ${badgeClass}" id="apBadge">${badge}</span><span class="ap-path" id="apPath">${path}</span><span class="ap-stats" id="apStats">${stats}</span>${PEEK_CLOSE_BTN}`;
+  document.getElementById('apBody').innerHTML = bodyHtml;
+  document.getElementById('apActions').innerHTML = PEEK_BACK_BTN;
+}
+
+function peekArtifact(key) {
+  const def = TRAIL_ARTIFACTS.find(a => a.key === key);
+  if (!def) return;
+  if (document.body.classList.contains('split-mode') && !peekMode) {
+    peekSavedState = { header: document.getElementById('apHeader').innerHTML, body: document.getElementById('apBody').innerHTML, actions: document.getElementById('apActions').innerHTML, navDisplay: document.getElementById('apNav').style.display };
+  }
+  peekMode = true;
+  document.body.classList.add('split-mode', 'peek-mode');
+  document.getElementById('apNav').style.display = 'none';
+  setActiveTrailChip(key);
+
+  if (def.type === 'card') {
+    setPeekPanel('DOC', 'doc', 'Ticket Description', '', '<div class="doc-preview"><h1>Ticket: Add user authentication</h1><h2>What</h2><p>Add JWT-based user authentication with signup, login, session management, and role-based access control.</p><h2>Purpose</h2><p>Enable multi-user access to Bonsai workspaces with permission boundaries between admin, regular, and viewer roles.</p><h2>Success Criteria</h2><ul><li>Users can sign up, log in, receive a JWT token</li><li>Access resources according to their role</li><li>Admin can manage users and permissions</li></ul></div>');
+  } else if (def.type === 'doc') {
+    setPeekPanel('DOC', 'doc', 'product-design.md', '', DOC_SECTIONS.full);
+  } else if (def.type === 'diff') {
+    const d = DIFFS[def.diffIdx];
+    setPeekPanel(d.badge, d.badgeClass, d.path, d.stats, '<div class="diff-view">' + d.content + '</div>');
+  } else if (def.type === 'plan') {
+    setPeekPanel('PLAN', 'new', 'Implementation Plan', '2 milestones · 6 steps', buildStepsHTML('plan'));
+  }
+}
+
+function closePeek() {
+  peekMode = false;
+  document.body.classList.remove('peek-mode');
+  setActiveTrailChip(null);
+
+  if (peekSavedState) {
+    document.getElementById('apHeader').innerHTML = peekSavedState.header;
+    document.getElementById('apBody').innerHTML = peekSavedState.body;
+    document.getElementById('apActions').innerHTML = peekSavedState.actions;
+    document.getElementById('apNav').style.display = peekSavedState.navDisplay;
+    peekSavedState = null;
+  } else {
+    document.body.classList.remove('split-mode');
+    document.getElementById('apNav').style.display = '';
+  }
+}
+
+// -- Phase management --
+
+function setPhaseActive(p) {
+  currentPhase = p;
+  const phases = ['D', 'S', 'P', 'E'];
+  phases.forEach(ph => {
+    const el = document.getElementById('pd-' + ph);
+    const dot = el.querySelector('.dot');
+    const label = el.querySelector('.label');
+    const idx = phases.indexOf(ph);
+    const activeIdx = phases.indexOf(p);
+
+    el.classList.remove('is-done', 'is-active');
+    if (idx < activeIdx) {
+      el.classList.add('is-done');
+      dot.className = 'dot done';
+      label.className = 'label done';
+    } else if (idx === activeIdx) {
+      el.classList.add('is-active');
+      dot.className = 'dot active';
+      label.className = 'label active';
+    } else {
+      dot.className = 'dot pending';
+      label.className = 'label';
+    }
+  });
+}
+
+function completeAllPhases() {
+  ['D', 'S', 'P', 'E'].forEach(ph => {
+    const el = document.getElementById('pd-' + ph);
+    el.classList.add('is-done');
+    el.querySelector('.dot').className = 'dot done';
+    el.querySelector('.label').className = 'label done';
+  });
+}
+
+// -- Artifact panel management --
+
+function openArtifactPanel(artifactIndex) {
+  currentArtifact = artifactIndex;
+  renderArtifact(artifactIndex);
+  document.body.classList.add('split-mode');
+  // Update trail
+  const keys = ['auth-readme', 'design-doc', 'core-readme'];
+  setActiveTrailChip(keys[artifactIndex]);
+  setTrailStatus(keys[artifactIndex], 'reviewing');
+}
+
+function openDocSection(section) {
+  document.body.classList.add('split-mode');
+  addTrailChip('product-design');
+  setTrailStatus('product-design', 'reviewing');
+  setActiveTrailChip('product-design');
+  // Preserve element IDs so renderArtifact can find them later
+  document.getElementById('apHeader').innerHTML = `
+    <span class="ap-badge doc" id="apBadge">DOC</span>
+    <span class="ap-path" id="apPath">product-design.md</span>
+    <span class="ap-stats" id="apStats">Building...</span>`;
+  document.getElementById('apBody').innerHTML = DOC_SECTIONS[section];
+  document.getElementById('apActions').innerHTML = '';
+  document.getElementById('apNav').style.display = 'none';
+}
+
+function updateDocContent(section) {
+  document.getElementById('apBody').innerHTML = DOC_SECTIONS[section];
+  if (section === 'full') {
+    document.getElementById('apActions').innerHTML = `
+      <button class="btn-request" onclick="requestChanges()">Request Changes</button>
+      <button class="btn-approve" id="approveDocBtn" onclick="handleApproveDoc()">Approve Product Design ✓</button>`;
+    var statsEl = document.getElementById('apStats');
+    if (statsEl) statsEl.textContent = '';
+  }
+  var body = document.getElementById('apBody');
+  if (body) body.scrollTop = body.scrollHeight;
+}
+
+function openPlanPanel() {
+  document.body.classList.add('split-mode');
+  addTrailChip('plan');
+  setTrailStatus('plan', 'reviewing');
+  setActiveTrailChip('plan');
+  document.getElementById('apHeader').innerHTML = `
+    <span class="ap-badge new" id="apBadge">PLAN</span>
+    <span class="ap-path" id="apPath">Implementation Plan</span>
+    <span class="ap-stats" id="apStats">2 milestones · 6 steps</span>`;
+  document.getElementById('apBody').innerHTML = buildStepsHTML('plan');
+  document.getElementById('apActions').innerHTML = `
+    <button class="btn-execute" onclick="handlePlanExecute()">Execute this plan</button>`;
+  document.getElementById('apNav').style.display = 'none';
+}
+
+function openExecPanel() {
+  // Reuse the same steps panel but switch to exec mode
+  document.body.classList.add('split-mode');
+  document.getElementById('apHeader').innerHTML = `
+    <span class="ap-badge exec" id="apBadge">EXEC</span>
+    <span class="ap-path" id="apPath">Executing Plan</span>
+    <span class="ap-stats" id="apStats"><span id="execCounter">0/6 complete</span></span>`;
+  document.getElementById('apBody').innerHTML = buildStepsHTML('exec');
+  document.getElementById('apActions').innerHTML = '';
+  document.getElementById('apNav').style.display = 'none';
+  // Show code preview area
+  var cp = document.getElementById('codePreview');
+  if (cp) cp.classList.add('visible');
+}
+
+function closeArtifactPanel() {
+  document.body.classList.remove('split-mode', 'peek-mode');
+  peekMode = false;
+  peekSavedState = null;
+  setActiveTrailChip(null);
+  document.getElementById('apNav').style.display = '';
+}
+
+function renderArtifact(idx) {
+  const d = DIFFS[idx];
+  var count = approvedArtifacts.filter(Boolean).length;
+  document.getElementById('apHeader').innerHTML = `
+    <span class="ap-badge spec" id="apBadge">SPEC</span>
+    <span class="ap-path" id="apPath">${d.path}</span>
+    <span class="ap-stats" id="apStats">${d.stats} · ${count}/3 approved</span>`;
+  document.getElementById('apBody').innerHTML = '<div class="diff-view">' + d.content + '</div>';
+
+  document.getElementById('apActions').innerHTML = approvedArtifacts[idx]
+    ? '<span style="font-size:13px;color:var(--green);font-weight:600;padding:0 8px;">✓ Approved</span>'
+    : '<button class="btn-request" onclick="requestChanges()">Request Changes</button><button class="btn-approve" id="approveBtn" onclick="handleApprove()">Approve ✓</button>';
+}
+
+function switchArtifact(idx) {
+  currentArtifact = idx;
+  renderArtifact(idx);
+  const keys = ['auth-readme', 'design-doc', 'core-readme'];
+  setActiveTrailChip(keys[idx]);
+}
+
+function updateNavCounter() {
+  // Counter now shown in artifact panel header via renderArtifact
+}
+
+// -- Message rendering --
+
+function addAgentMsg(text) {
+  const div = document.createElement('div');
+  div.className = 'msg agent fade-in';
+  div.innerHTML = text;
+  convInner.appendChild(div);
+  scrollConv();
+}
+
+function addUserMsg(text) {
+  const div = document.createElement('div');
+  div.className = 'msg user fade-in';
+  div.textContent = text;
+  convInner.appendChild(div);
+  scrollConv();
+}
+
+function addTypingIndicator() {
+  const div = document.createElement('div');
+  div.className = 'typing-indicator fade-in';
+  div.id = 'typingIndicator';
+  div.innerHTML = '<span class="dot"></span><span class="dot"></span><span class="dot"></span>';
+  convInner.appendChild(div);
+  scrollConv();
+}
+
+function removeTypingIndicator() {
+  const el = document.getElementById('typingIndicator');
+  if (el) el.remove();
+}
+
+function addDecisionCard(step) {
+  const div = document.createElement('div');
+  div.className = 'decision-card fade-in';
+  div.id = 'dc-' + step.id;
+
+  let optsHtml = '';
+  step.options.forEach((opt, i) => {
+    const rec = i === step.recommended ? ' recommended' : '';
+    optsHtml += `<button class="dc-opt${rec}" onclick="handleDecision(${step.id}, ${i}, '${opt.replace(/'/g, "\\'")}')">${opt}</button>`;
+  });
+
+  let hintHtml = step.hint ? `<div class="dc-hint">${step.hint}</div>` : '';
+
+  div.innerHTML = `
+    <div class="dc-label">DECISION</div>
+    <div class="dc-q">${step.question}</div>
+    <div class="dc-opts">${optsHtml}</div>
+    ${hintHtml}`;
+  convInner.appendChild(div);
+  scrollConv();
+}
+
+function resolveDecisionCard(id, label) {
+  const el = document.getElementById('dc-' + id);
+  if (el) {
+    el.className = 'decision-card resolved';
+    el.innerHTML = `<span class="dc-resolved">✓ ${label}</span>`;
+  }
+}
+
+function addArtifactCard(step) {
+  const div = document.createElement('div');
+  div.className = 'artifact-card fade-in';
+  const artifactKey = step.artifactKey || null;
+  if (artifactKey) {
+    div.dataset.artifactKey = artifactKey;
+    div.onclick = () => peekArtifact(artifactKey);
+  }
+  div.innerHTML = `
+    <div class="ac-header">${step.header}</div>
+    <div class="ac-body">${step.body}</div>
+    <span class="card-peek-hint">Click to review →</span>`;
+  convInner.appendChild(div);
+  scrollConv();
+
+  // Add to trail
+  if (artifactKey) {
+    addTrailChip(artifactKey);
+    setTrailStatus(artifactKey, 'approved');
+  }
+}
+
+function addProgressCard(steps) {
+  const div = document.createElement('div');
+  div.className = 'progress-card fade-in';
+  div.id = 'progressCard';
+  let html = '';
+  steps.forEach((s, i) => {
+    html += `<div class="pc-step pending" id="pc-step-${i}"><span class="pc-icon">○</span>${s}</div>`;
+  });
+  div.innerHTML = html;
+  convInner.appendChild(div);
+  scrollConv();
+  animateProgress(steps);
+}
+
+function animateProgress(steps) {
+  let i = 0;
+  function nextStep() {
+    if (i >= steps.length) {
+      if (!waitingForInteraction) advanceSoon(600);
+      return;
+    }
+    const el = document.getElementById('pc-step-' + i);
+    el.className = 'pc-step running';
+    el.querySelector('.pc-icon').textContent = '●';
+    scrollConv();
+
+    setTimeout(() => {
+      el.className = 'pc-step done';
+      el.querySelector('.pc-icon').textContent = '✓';
+      i++;
+      nextStep();
+    }, 500 + Math.random() * 300);
+  }
+  nextStep();
+}
+
+function addPhaseDivider(label) {
+  const div = document.createElement('div');
+  div.className = 'phase-divider fade-in';
+  div.innerHTML = `<span class="pd-label">${label}</span>`;
+  convInner.appendChild(div);
+  scrollConv();
+}
+
+function scrollConv() {
+  requestAnimationFrame(() => {
+    convScroll.scrollTop = convScroll.scrollHeight;
+  });
+}
+
+// -- Execution animation (side-by-side) --
+
+function runExecAnimation(callback) {
+  execAnimationRunning = true;
+  let stepIdx = 0;
+  let msgIdx = 0;
+
+  function runNextExecStep() {
+    if (stepIdx >= EXEC_STEPS.length) {
+      execAnimationRunning = false;
+      var counter = document.getElementById('execCounter');
+      if (counter) counter.textContent = '6/6 complete';
+      if (callback) callback();
+      return;
+    }
+
+    // Set current step to running (unified step-row)
+    var stepEl = document.getElementById('sr-' + stepIdx);
+    if (stepEl) {
+      stepEl.className = 'step-row running';
+      stepEl.querySelector('.step-icon').textContent = '●';
+    }
+
+    // Update code preview header
+    var codeHeader = document.getElementById('codePreviewHeader');
+    if (codeHeader) {
+      codeHeader.innerHTML = '<span class="cph-file">' + EXEC_STEPS[stepIdx].file + '</span>';
+    }
+
+    // Animate code lines in preview
+    var codeBody = document.getElementById('codePreviewBody');
+    if (codeBody) {
+      codeBody.innerHTML = '';
+      var snippet = EXEC_CODE_SNIPPETS[stepIdx];
+      var lineIdx = 0;
+
+      function addNextLine() {
+        if (lineIdx >= snippet.length) {
+          setTimeout(function() {
+            if (stepEl) {
+              stepEl.className = 'step-row done';
+              stepEl.querySelector('.step-icon').textContent = '✓';
+            }
+            var counter = document.getElementById('execCounter');
+            if (counter) counter.textContent = (stepIdx + 1) + '/6 complete';
+            if (msgIdx < EXEC_MESSAGES.length) {
+              addAgentMsg(EXEC_MESSAGES[msgIdx]);
+              msgIdx++;
+            }
+            if (msgIdx < EXEC_MESSAGES.length) {
+              setTimeout(function() {
+                addAgentMsg(EXEC_MESSAGES[msgIdx]);
+                msgIdx++;
+                stepIdx++;
+                setTimeout(runNextExecStep, 200);
+              }, 250);
+            } else {
+              stepIdx++;
+              setTimeout(runNextExecStep, 200);
+            }
+          }, 300);
+          return;
+        }
+        var line = snippet[lineIdx];
+        var lineEl = document.createElement('div');
+        if (line.t === 'hunk') {
+          lineEl.className = 'diff-hunk-header';
+          lineEl.textContent = line.v;
+        } else {
+          lineEl.className = 'diff-line add';
+          lineEl.style.animationDelay = (lineIdx * 0.03) + 's';
+          lineEl.innerHTML = '<span class="ln">' + line.ln + '</span>' + escapeHtml(line.v);
+        }
+        codeBody.appendChild(lineEl);
+        codeBody.scrollTop = codeBody.scrollHeight;
+        lineIdx++;
+        setTimeout(addNextLine, 60 + Math.random() * 40);
+      }
+      addNextLine();
+    } else {
+      stepIdx++;
+      setTimeout(runNextExecStep, 500);
+    }
+  }
+
+  if (EXEC_MESSAGES.length > 0) {
+    addAgentMsg(EXEC_MESSAGES[msgIdx]);
+    msgIdx++;
+  }
+  setTimeout(runNextExecStep, 400);
+}
+
+function escapeHtml(text) {
+  const div = document.createElement('div');
+  div.textContent = text;
+  return div.innerHTML;
+}
+
+// -- Step execution --
+
+function executeStep(step) {
+  stepNumEl.textContent = currentStep + 1;
+  const pct = ((currentStep + 1) / SCRIPT.length) * 100;
+  progressFill.style.width = pct + '%';
+
+  switch (step.type) {
+    case 'agent':
+      removeTypingIndicator();
+      addAgentMsg(step.text);
+      if (step.phase) setPhaseActive(step.phase);
+      break;
+
+    case 'user':
+      addUserMsg(step.text);
+      break;
+
+    case 'typing':
+      addTypingIndicator();
+      break;
+
+    case 'decision':
+      addDecisionCard(step);
+      break;
+
+    case 'artifact-card':
+      addArtifactCard(step);
+      break;
+
+    case 'phase':
+      setPhaseActive(step.phase);
+      addPhaseDivider(step.label);
+      break;
+
+    case 'layout':
+      if (step.action === 'open-doc-section') openDocSection(step.section);
+      else if (step.action === 'update-doc') updateDocContent(step.section);
+      else if (step.action === 'open') {
+        openArtifactPanel(step.artifact);
+        addTrailChip(['auth-readme', 'design-doc', 'core-readme'][step.artifact]);
+      }
+      else if (step.action === 'open-plan') openPlanPanel();
+      else if (step.action === 'open-exec') openExecPanel();
+      else if (step.action === 'close') closeArtifactPanel();
+      break;
+
+    case 'approve':
+      // In auto-play, auto-approve. In interactive, wait.
+      break;
+
+    case 'approve-doc':
+      // In auto-play, auto-approve. In interactive, wait.
+      break;
+
+    case 'switch-artifact':
+      switchArtifact(step.artifact);
+      addTrailChip(['auth-readme', 'design-doc', 'core-readme'][step.artifact]);
+      setTrailStatus(['auth-readme', 'design-doc', 'core-readme'][step.artifact], 'reviewing');
+      break;
+
+    case 'all-approved':
+      showAllApproved();
+      break;
+
+    case 'progress':
+      addProgressCard(step.steps);
+      return;
+
+    case 'exec-progress':
+      // Handled separately
+      return;
+
+    case 'complete':
+      completeAllPhases();
+      pause();
+      break;
+  }
+}
+
+// -- Auto-play --
+
+function togglePlay() {
+  if (playing) pause();
+  else play();
+}
+
+function play() {
+  playing = true;
+  waitingForInteraction = false;
+  updatePlayBtn();
+  advanceAutoPlay();
+}
+
+function pause() {
+  playing = false;
+  clearTimeout(stepTimer);
+  updatePlayBtn();
+}
+
+function updatePlayBtn() {
+  playBtn.textContent = playing ? '❚❚ Pause' : '▶ Play';
+  playBtn.className = playing ? 'ctrl-btn playing' : 'ctrl-btn';
+}
+
+function advanceAutoPlay() {
+  if (!playing || currentStep >= SCRIPT.length) { pause(); return; }
+
+  const step = SCRIPT[currentStep];
+  executeStep(step);
+  currentStep++;
+
+  let delay;
+  if (step.type === 'typing') {
+    delay = step.duration;
+  } else if (step.type === 'decision') {
+    delay = 1800;
+    setTimeout(() => {
+      if (playing) {
+        resolveDecisionCard(step.id, step.options[step.recommended].replace(/\s*★/, ''));
+      }
+    }, 1500);
+  } else if (step.type === 'approve') {
+    delay = 1200;
+    setTimeout(() => {
+      if (playing) autoApprove(step.artifact);
+    }, 900);
+  } else if (step.type === 'approve-doc') {
+    delay = 1200;
+    setTimeout(() => {
+      if (playing) autoApproveDoc();
+    }, 900);
+  } else if (step.type === 'layout') {
+    delay = 700;
+  } else if (step.type === 'switch-artifact') {
+    delay = 500;
+  } else if (step.type === 'all-approved') {
+    delay = 1500;
+  } else if (step.type === 'progress') {
+    delay = 4500;
+  } else if (step.type === 'exec-progress') {
+    // Run exec animation, then advance
+    runExecAnimation(() => {
+      if (playing) {
+        stepTimer = setTimeout(advanceAutoPlay, 600);
+      }
+    });
+    return;
+  } else if (step.type === 'complete') {
+    return;
+  } else if (step.type === 'user') {
+    delay = 800;
+  } else {
+    delay = 1200;
+  }
+
+  stepTimer = setTimeout(advanceAutoPlay, delay);
+}
+
+function autoApprove(idx) {
+  approvedArtifacts[idx] = true;
+  if (currentArtifact === idx) renderArtifact(idx);
+  updateNavCounter();
+  const keys = ['auth-readme', 'design-doc', 'core-readme'];
+  setTrailStatus(keys[idx], 'approved');
+}
+
+function autoApproveDoc() {
+  productDesignApproved = true;
+  setTrailStatus('product-design', 'approved');
+  const btn = document.getElementById('approveDocBtn');
+  if (btn) {
+    btn.textContent = 'Approved ✔';
+    btn.style.background = 'var(--green-sub)';
+    btn.style.color = 'var(--green)';
+    btn.style.pointerEvents = 'none';
+  }
+}
+
+function showAllApproved() {
+  const panel = document.getElementById('artifactPanel');
+  const flash = document.createElement('div');
+  flash.className = 'all-approved-flash';
+  flash.textContent = 'All specs approved ✔';
+  panel.style.position = 'relative';
+  panel.appendChild(flash);
+  setTimeout(() => flash.remove(), 1400);
+}
+
+// -- Interactive mode --
+
+function advanceInteractive() {
+  if (currentStep >= SCRIPT.length) return;
+
+  const step = SCRIPT[currentStep];
+
+  // Bug 1 fix: increment currentStep BEFORE setting waitingForInteraction
+  if (step.type === 'user' && step.interactive && !playing) {
+    currentStep++;
+    waitingForInteraction = true;
+    userInput.value = '';
+    userInput.placeholder = step.placeholder || 'Type a message...';
+    userInput.focus();
+    sendBtn.disabled = false;
+    return;
+  }
+
+  if (step.type === 'decision' && !playing) {
+    executeStep(step);
+    currentStep++;
+    waitingForInteraction = true;
+    return;
+  }
+
+  // Bug 2 fix: auto-skip approve if artifact already approved
+  if (step.type === 'approve' && !playing) {
+    if (step.artifact !== undefined && approvedArtifacts[step.artifact]) {
+      currentStep++;
+      setTimeout(() => advanceInteractive(), 200);
+      return;
+    }
+    waitingForInteraction = true;
+    currentStep++;
+    return;
+  }
+
+  // Bug 2 fix: auto-skip approve-doc if already approved
+  if (step.type === 'approve-doc' && !playing) {
+    if (productDesignApproved) {
+      currentStep++;
+      setTimeout(() => advanceInteractive(), 200);
+      return;
+    }
+    waitingForInteraction = true;
+    currentStep++;
+    return;
+  }
+
+  executeStep(step);
+  currentStep++;
+
+  if (step.type === 'typing') {
+    setTimeout(() => advanceInteractive(), step.duration);
+  } else if (step.type === 'progress') {
+    setTimeout(() => advanceInteractive(), 4500);
+  } else if (step.type === 'exec-progress') {
+    runExecAnimation(() => {
+      setTimeout(() => advanceInteractive(), 600);
+    });
+    return;
+  } else if (step.type === 'all-approved') {
+    setTimeout(() => advanceInteractive(), 1200);
+  } else if (step.type === 'layout') {
+    setTimeout(() => advanceInteractive(), 500);
+  } else if (step.type === 'switch-artifact') {
+    setTimeout(() => advanceInteractive(), 400);
+  } else if (step.type === 'complete') {
+    // Done
+  } else {
+    setTimeout(() => advanceInteractive(), 600);
+  }
+}
+
+function advanceSoon(delay) {
+  setTimeout(() => {
+    if (!playing && !waitingForInteraction) advanceInteractive();
+  }, delay || 600);
+}
+
+// Start interactive mode on load
+setTimeout(() => advanceInteractive(), 300);
+
+// -- User interactions --
+
+function handleDecision(id, choiceIdx, label) {
+  const cleanLabel = label.replace(/\s*★/, '');
+  resolveDecisionCard(id, cleanLabel);
+  waitingForInteraction = false;
+
+  if (playing) return;
+  setTimeout(() => advanceInteractive(), 400);
+}
+
+function handleApprove() {
+  approvedArtifacts[currentArtifact] = true;
+  renderArtifact(currentArtifact);
+  updateNavCounter();
+  const keys = ['auth-readme', 'design-doc', 'core-readme'];
+  setTrailStatus(keys[currentArtifact], 'approved');
+  waitingForInteraction = false;
+
+  if (!playing) {
+    setTimeout(() => advanceInteractive(), 400);
+  }
+}
+
+function handleApproveDoc() {
+  productDesignApproved = true;
+  setTrailStatus('product-design', 'approved');
+  const btn = document.getElementById('approveDocBtn');
+  if (btn) {
+    btn.textContent = 'Approved ✔';
+    btn.style.background = 'var(--green-sub)';
+    btn.style.color = 'var(--green)';
+    btn.style.pointerEvents = 'none';
+  }
+  waitingForInteraction = false;
+
+  if (!playing) {
+    setTimeout(() => advanceInteractive(), 400);
+  }
+}
+
+function handlePlanExecute() {
+  waitingForInteraction = false;
+  setTrailStatus('plan', 'approved');
+  if (!playing) {
+    // Find the last unresolved decision card and resolve it
+    const unresolved = document.querySelectorAll('.decision-card:not(.resolved)');
+    unresolved.forEach(dc => {
+      dc.className = 'decision-card resolved';
+      dc.innerHTML = '<span class="dc-resolved">✓ Execute this plan</span>';
+    });
+    setTimeout(() => advanceInteractive(), 400);
+  }
+}
+
+function requestChanges() {
+  const btn = document.querySelector('.btn-request');
+  btn.textContent = 'Not in mockup';
+  setTimeout(() => { btn.textContent = 'Request Changes'; }, 1000);
+}
+
+function handleSend() {
+  const text = userInput.value.trim();
+  if (!text) return;
+  addUserMsg(text);
+  userInput.value = '';
+  userInput.placeholder = 'Type a message...';
+  sendBtn.disabled = true;
+  waitingForInteraction = false;
+
+  if (!playing) {
+    setTimeout(() => advanceInteractive(), 400);
+  }
+}
+
+function handleInputKey(e) {
+  if (e.key === 'Enter' && !e.shiftKey) {
+    e.preventDefault();
+    if (waitingForInteraction && userInput.value.trim()) {
+      handleSend();
+    }
+  }
+}
+
+userInput.addEventListener('input', () => {
+  sendBtn.disabled = !userInput.value.trim();
+});
+
+// -- Reset --
+
+function resetFlow() {
+  pause();
+  currentStep = 0;
+  approvedArtifacts = [false, false, false];
+  currentArtifact = 0;
+  waitingForInteraction = false;
+  currentPhase = null;
+  peekMode = false;
+  peekSavedState = null;
+  productDesignApproved = false;
+  trailChips = {};
+  activeTrailKey = null;
+  execAnimationRunning = false;
+
+  convInner.innerHTML = '';
+  closeArtifactPanel();
+  stepNumEl.textContent = '0';
+  progressFill.style.width = '0%';
+  userInput.value = '';
+  userInput.placeholder = 'Type a message...';
+  sendBtn.disabled = true;
+
+  // Reset trail strip
+  trailStrip.innerHTML = '';
+  trailStrip.classList.remove('visible');
+
+  // Reset phase dots
+  ['D', 'S', 'P', 'E'].forEach(ph => {
+    const el = document.getElementById('pd-' + ph);
+    el.classList.remove('is-done');
+    el.querySelector('.dot').className = 'dot pending';
+    el.querySelector('.label').className = 'label';
+  });
+
+  // Reset artifact panel to diff mode
+  document.getElementById('apActions').innerHTML = `
+    <button class="btn-request" onclick="requestChanges()">Request Changes</button>
+    <button class="btn-approve" id="approveBtn" onclick="handleApprove()">Approve ✓</button>`;
+  document.getElementById('apNav').style.display = '';
+
+  setTimeout(() => advanceInteractive(), 300);
+}
+
+// -- Step forward (manual) --
+
+function stepForward() {
+  if (playing) return;
+
+  // If in peek mode, close it first
+  if (peekMode) {
+    closePeek();
+    return;
+  }
+
+  if (waitingForInteraction) {
+    const step = SCRIPT[currentStep - 1] || SCRIPT[currentStep];
+    if (step && step.type === 'decision') {
+      resolveDecisionCard(step.id, step.options[step.recommended].replace(/\s*★/, ''));
+      waitingForInteraction = false;
+      setTimeout(() => advanceInteractive(), 200);
+    } else if (step && step.type === 'approve') {
+      handleApprove();
+    } else if (step && step.type === 'approve-doc') {
+      handleApproveDoc();
+    } else if (step && step.type === 'user' && step.interactive) {
+      addUserMsg(step.placeholder || step.text);
+      userInput.value = '';
+      sendBtn.disabled = true;
+      waitingForInteraction = false;
+      setTimeout(() => advanceInteractive(), 200);
+    }
+    return;
+  }
+  advanceInteractive();
+}
+
+// -- Keyboard shortcuts --
+
+document.addEventListener('keydown', (e) => {
+  if (e.target === userInput) return;
+
+  if (e.code === 'Space') {
+    e.preventDefault();
+    togglePlay();
+  } else if (e.code === 'Escape') {
+    e.preventDefault();
+    if (peekMode) {
+      closePeek();
+    } else {
+      resetFlow();
+    }
+  } else if (e.code === 'ArrowRight') {
+    e.preventDefault();
+    stepForward();
+  }
+});
+</script>
+</body>
+</html>
