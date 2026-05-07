@@ -30,12 +30,15 @@ jobs:
           - os: ubuntu-latest
             artifact_name: bonsai-linux
             binary_name: bonsai
+            dir_artifact_name: bonsai-dir-linux
           - os: macos-latest
             artifact_name: bonsai-macos
             binary_name: bonsai
+            dir_artifact_name: bonsai-dir-macos
           - os: windows-latest
             artifact_name: bonsai-windows
             binary_name: bonsai.exe
+            dir_artifact_name: bonsai-dir-windows
 
     runs-on: ${{ matrix.os }}
 
@@ -65,19 +68,87 @@ jobs:
       - name: Build executable
         run: cd packaging && pyinstaller bonsai.spec --noconfirm --distpath dist --workpath build
 
-      - name: Rename artifact
+      - name: Rename single-file binary
         shell: bash
         run: |
           mv packaging/dist/${{ matrix.binary_name }} packaging/dist/${{ matrix.artifact_name }}${{ matrix.os == 'windows-latest' && '.exe' || '' }}
 
-      - uses: actions/upload-artifact@v4
+      - name: Upload single-file binary
+        uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.artifact_name }}
           path: packaging/dist/${{ matrix.artifact_name }}*
 
+      - name: Upload directory bundle (consumed by electron job)
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.dir_artifact_name }}
+          path: packaging/dist/bonsai-dir/
+
+  electron:
+    needs: build
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            dir_artifact_name: bonsai-dir-linux
+            installer_artifact_name: bonsai-electron-linux
+          - os: macos-latest
+            dir_artifact_name: bonsai-dir-macos
+            installer_artifact_name: bonsai-electron-macos
+          - os: windows-latest
+            dir_artifact_name: bonsai-dir-windows
+            installer_artifact_name: bonsai-electron-windows
+
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: electron/package-lock.json
+
+      - name: Download backend bundle
+        uses: actions/download-artifact@v4
+        with:
+          name: ${{ matrix.dir_artifact_name }}
+          path: electron/resources/backend
+
+      - name: Restore executable bit on backend (Linux/macOS)
+        if: runner.os != 'Windows'
+        run: chmod +x electron/resources/backend/bonsai
+
+      - name: Install Electron dependencies
+        run: cd electron && npm install
+
+      - name: Build Electron app
+        run: cd electron && npm run build
+
+      - name: Package Electron app
+        env:
+          # electron-builder uses GH_TOKEN to publish; we attach via release job instead
+          GH_TOKEN: ""
+        run: cd electron && npx electron-builder --publish=never
+
+      - name: Upload installer + auto-update metadata
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.installer_artifact_name }}
+          path: |
+            electron/dist/*.dmg
+            electron/dist/*.zip
+            electron/dist/*.AppImage
+            electron/dist/*.exe
+            electron/dist/*.blockmap
+            electron/dist/*.yml
+
   release:
     if: inputs.release_type != 'none'
-    needs: build
+    needs: [build, electron]
     runs-on: ubuntu-latest
 
     steps:
@@ -85,27 +156,36 @@ jobs:
         with:
           path: artifacts
 
-      - name: Collect binaries
+      - name: Collect release files
+        shell: bash
         run: |
           mkdir -p release
           cp artifacts/bonsai-linux/bonsai-linux release/
           cp artifacts/bonsai-macos/bonsai-macos release/
           cp artifacts/bonsai-windows/bonsai-windows.exe release/
+          # Electron installers + electron-updater metadata (latest.yml, *.blockmap, etc.)
+          cp -v artifacts/bonsai-electron-linux/* release/ 2>/dev/null || true
+          cp -v artifacts/bonsai-electron-macos/* release/ 2>/dev/null || true
+          cp -v artifacts/bonsai-electron-windows/* release/ 2>/dev/null || true
+          ls -la release/
 
       - name: Compose release body
         run: |
           cat <<EOF > release-body.md
           ${{ inputs.release_name }} from the \`${{ github.ref_name }}\` branch.
 
-          **How to use:**
-          1. Download the file for your OS below
-          2. Make it executable: \`chmod +x bonsai-linux\` (Linux/macOS)
-          3. Set your API key: \`export ANTHROPIC_API_KEY=sk-ant-...\`
-          4. Run: \`./bonsai-linux\` (or \`./bonsai-macos\`, \`bonsai-windows.exe\`)
+          ## End-user installers (recommended)
+          - macOS: \`Bonsai-*.dmg\`
+          - Linux: \`Bonsai-*.AppImage\`
+          - Windows: \`Bonsai Setup *.exe\`
 
-          Bonsai will start and open your browser to http://localhost:8000
+          ## Standalone CLI executables (developers / debugging)
+          1. Download \`bonsai-linux\`, \`bonsai-macos\`, or \`bonsai-windows.exe\`
+          2. \`chmod +x bonsai-linux\` (Linux/macOS)
+          3. \`export ANTHROPIC_API_KEY=sk-ant-...\`
+          4. Run: \`./bonsai-linux\` (opens browser at http://localhost:8000)
 
-          **Options:** \`--port 9000\`, \`--no-browser\`, \`--host 0.0.0.0\`
+          **CLI options:** \`--port 9000\`, \`--no-browser\`, \`--host 0.0.0.0\`
           EOF
 
       - name: Create release
@@ -117,6 +197,4 @@ jobs:
           generate_release_notes: ${{ inputs.release_type == 'stable' }}
           body_path: release-body.md
           files: |
-            release/bonsai-linux
-            release/bonsai-macos
-            release/bonsai-windows.exe
+            release/*

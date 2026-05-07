@@ -169,3 +169,153 @@ directory) and seeds `.bonsai/` state on disk before driving the UI. No spec
 depends on the source repo's working state — the previous `REPO_ROOT`-pinned
 `new-session-model.spec.ts` was migrated to `tempProject` because leftover
 session state in the dev project produced flaky agent startup.
+
+## Electron e2e
+
+A second test surface lives under `e2e/electron/`. It drives the **real Electron
+desktop app** — the same `BrowserWindow` end users get, with the production
+PyInstaller backend spawned as a child process — using Playwright's
+[`_electron` API](https://playwright.dev/docs/api/class-electron). The web
+suite covers `localhost:3000`/`:8000` (Vite + dev backend); the Electron
+suite covers the `BrowserWindow` shell, the spawned PyInstaller bundle, free-
+port pick (9100–9199), single-instance lock, and the `before-quit` SIGTERM →
+SIGKILL shutdown path.
+
+### Layout
+
+```
+e2e/electron/
+  playwright.config.ts        # electron-only Playwright config (separate from the web one)
+  globalSetup.ts              # auto-build: PyInstaller bundle + electron tsc compile
+  fixtures/
+    electronApp.ts            # `electronApp` + `tempProject` fixtures
+    index.ts                  # re-exports `test`, `expect`, types
+  helpers/
+    openProject.ts            # ProjectPicker → AppShell, mirrors helpers/project.ts
+  tests/
+    _smoke.spec.ts            # first spec — launch + open project + status bar
+```
+
+CSS / role selectors are reused unchanged from `e2e/helpers/selectors.ts` —
+the same React SPA renders inside the BrowserWindow as in the dev server.
+
+### How auto-build works
+
+The Electron suite has its own `globalSetup.ts` that runs once before any
+spec. It guarantees two artifacts exist:
+
+1. `packaging/dist/bonsai-dir/bonsai`  — the PyInstaller backend bundle
+2. `electron/dist-electron/main.js`     — the compiled Electron main process
+
+Build behavior is controlled by environment variables:
+
+| Env | Behavior |
+|-----|----------|
+| _(default)_ | Build whichever artifact is missing. Reuse what's already there. |
+| `BONSAI_E2E_REBUILD=1` | Force a fresh `build_and_install.sh --no-install` and `tsc`. |
+| `BONSAI_E2E_SKIP_BUILD=1` | Skip both checks; assume bundles are pre-staged (CI sets this after downloading the `bonsai-dir-*` artifact). |
+
+A clean build is ~50 s on Apple Silicon (PyInstaller analysis dominates).
+Subsequent runs reuse the cached bundle and complete in ~5 s — the only fresh
+work is the per-test Electron launch.
+
+### How a single test runs
+
+```
+electron.launch (per test)
+  args: [<repo>/electron, --user-data-dir=<tmp>]
+  env:  BONSAI_BACKEND_DIR=<repo>/packaging/dist/bonsai-dir
+        + inherited PATH, HOME, etc.
+
+  ├── Electron main (electron/dist-electron/main.js)
+  │     ├── pick free port in 9100–9199
+  │     ├── spawn bonsai-dir/bonsai --port <p> --no-browser
+  │     ├── TCP-poll → ready
+  │     └── BrowserWindow.loadURL → SPA renders
+  └── firstWindow() → Playwright Page handle
+
+[test body uses `window.locator(...)` etc.]
+
+electronApp.close() (test teardown)
+  ├── before-quit → SIGTERM child, 5 s grace, SIGKILL fallback
+  └── userData dir removed
+```
+
+`--user-data-dir=<tmp>` keeps each test's AppStore SQLite isolated — no
+recents-list pollution between specs and no interference with the developer's
+real `~/.bonsai/`.
+
+### Run
+
+```bash
+cd e2e
+npm install                        # one-time, includes @playwright/test
+npm run test:electron              # default — auto-builds if needed
+npm run test:all                   # web suite + electron suite
+
+# Force a fresh PyInstaller + tsc rebuild before running
+BONSAI_E2E_REBUILD=1 npm run test:electron
+
+# Reuse a pre-staged bundle (CI)
+BONSAI_E2E_SKIP_BUILD=1 npm run test:electron
+
+npm run report:electron            # open the electron HTML report
+```
+
+Note: `npm run test:electron` does **not** require `./run.sh` to be running —
+the spawned PyInstaller backend is the test's own backend. (Contrast: the
+web suite's `globalSetup.ts` requires the dev backend on `:8000` and fails
+fast if it isn't there.)
+
+### Adding a new electron spec
+
+1. Create `electron/tests/<feature>.spec.ts`. Import:
+   ```ts
+   import { test, expect } from "../fixtures";
+   import { openProject } from "../helpers/openProject";
+   import { appShell, projectPicker, /* ... */ } from "../../helpers/selectors";
+   ```
+2. Use the fixtures: `test('...', async ({ electronApp, tempProject }) => { ... })`.
+3. Drive interactions through `electronApp.window` (a Playwright `Page`). All
+   normal Playwright APIs work: `locator`, `getByRole`, `keyboard`, `screenshot`.
+4. Reuse the central selectors — don't hand-write CSS in specs.
+5. Don't use the web `helpers/project.ts` `openProject` — it talks to
+   `localhost:3000` and would never resolve here. The Electron equivalent is
+   `electron/helpers/openProject.ts`.
+6. Each test gets a fresh Electron process and a fresh `userData` dir, so no
+   teardown beyond the temp project is needed.
+
+### What this surface validates that the web suite cannot
+
+| Concern | Web suite | Electron suite |
+|---------|-----------|----------------|
+| PyInstaller bundle boots, serves API | — | ✓ |
+| Free-port selection (9100–9199) | — | ✓ |
+| `BrowserWindow` sandbox + contextIsolation | — | ✓ (renderer config exercised) |
+| Single-instance lock | — | (covered by future spec) |
+| `before-quit` SIGTERM → SIGKILL | — | ✓ (every test teardown) |
+| Backend-crash dialog | — | (covered by future spec) |
+| Shell-env import (Finder-launch credential resolution) | — | ✓ (`session-start-from-shell-env.spec.ts`) |
+| `<dataDir>/.env` dotenv fallback | — | ✓ (`session-start-from-data-dir-env.spec.ts`) |
+| React UI flows | ✓ | ✓ (transitive) |
+| Real LLM / tool calls | ✓ | (deferred — same backend, no value to duplicate) |
+
+### Why a separate Playwright config
+
+The two suites have incompatible `globalSetup` requirements:
+
+- Web suite: backend must already be running on `:8000`. Fail fast if not.
+- Electron suite: backend must NOT be on `:8000` from outside; the test
+  spawns its own on a port in 9100–9199.
+
+A shared `globalSetup` would have to branch on which project is running and
+conditionally probe vs. build. Two configs is simpler — and `npm run test:all`
+runs them sequentially.
+
+### CI
+
+The same `electron` matrix in `.github/workflows/build.yml` that produces
+installers is the natural place to wire this up: download the
+`bonsai-dir-<os>` artifact, set `BONSAI_E2E_SKIP_BUILD=1`, run
+`npm run test:electron`. Not enabled in CI yet — track in a follow-up if the
+suite grows beyond the smoke spec.

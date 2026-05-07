@@ -163,4 +163,5 @@ cd packaging && pyinstaller bonsai.spec --noconfirm --distpath dist --workpath b
 - **Parent:** [Architecture Design](../DESIGN_DOC.md) (Deployment section)
 - **Depends on:** [Core Module](../backend/app/core/README.md) (frozen mode detection in `config.py`)
 - **Depends on:** [Frontend](../frontend/README.md) (build output: `frontend/dist/`)
+- **Used by:** [Electron Module](../electron/README.md) — the `bonsai-dir/` directory bundle is the runtime backend inside the desktop app
 - **Related:** `.github/workflows/nightly.yml` (CI/CD workflow)

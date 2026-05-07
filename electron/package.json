@@ -1,0 +1,76 @@
+{
+  "name": "bonsai-electron",
+  "productName": "Bonsai",
+  "version": "0.1.0",
+  "description": "Bonsai desktop app (Electron shell around the Python backend)",
+  "private": true,
+  "main": "dist-electron/main.js",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "start": "npm run build && electron .",
+    "dev": "npm run build && BONSAI_BACKEND_DIR=../packaging/dist/bonsai-dir electron .",
+    "stage:backend": "node scripts/stage-backend.js",
+    "package": "npm run build && npm run stage:backend && electron-builder",
+    "package:mac": "npm run build && npm run stage:backend && electron-builder --mac",
+    "package:linux": "npm run build && npm run stage:backend && electron-builder --linux",
+    "package:win": "npm run build && npm run stage:backend && electron-builder --win"
+  },
+  "dependencies": {
+    "electron-updater": "^6.3.9"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "electron": "^33.2.0",
+    "electron-builder": "^25.1.8",
+    "typescript": "^5.7.0"
+  },
+  "build": {
+    "appId": "dev.bonsai.app",
+    "productName": "Bonsai",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "dist-electron/**/*",
+      "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": "resources/backend",
+        "to": "backend",
+        "filter": ["**/*"]
+      }
+    ],
+    "asar": true,
+    "mac": {
+      "category": "public.app-category.developer-tools",
+      "identity": null,
+      "target": [
+        { "target": "dmg", "arch": ["arm64", "x64"] },
+        { "target": "zip", "arch": ["arm64", "x64"] }
+      ]
+    },
+    "linux": {
+      "category": "Development",
+      "target": [
+        { "target": "AppImage", "arch": ["x64"] }
+      ]
+    },
+    "win": {
+      "target": [
+        { "target": "nsis", "arch": ["x64"] }
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true
+    },
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "JetBrains",
+        "repo": "bonsai"
+      }
+    ]
+  }
+}

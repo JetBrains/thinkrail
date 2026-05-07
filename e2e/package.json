@@ -7,7 +7,10 @@
     "test": "playwright test",
     "test:headed": "playwright test --headed",
     "test:ui": "playwright test --ui",
-    "report": "playwright show-report"
+    "test:electron": "playwright test --config electron/playwright.config.ts",
+    "test:all": "npm test && npm run test:electron",
+    "report": "playwright show-report",
+    "report:electron": "playwright show-report ../playwright-report-electron"
   },
   "devDependencies": {
     "@playwright/test": "^1.49.0",

@@ -39,6 +39,7 @@ done
 
 cleanup() {
     [ -n "$UV_TEMP_DIR" ] && rm -rf "$UV_TEMP_DIR"
+    return 0
 }
 trap cleanup EXIT
 
@@ -124,9 +125,9 @@ if [ -n "$INSTALLED" ]; then
     if [ "$ON_PATH" = "1" ]; then
         echo "Run with:  bonsai            (auto-opens browser at http://127.0.0.1:8000)"
     else
-        echo "NOTE: $DEST_DIR is not on your PATH."
+        echo "NOTE: $BIN_DIR is not on your PATH."
         echo "      Add it to your shell profile, e.g.:"
-        echo "          echo 'export PATH=\"$DEST_DIR:\$PATH\"' >> ~/.zshrc && exec zsh"
+        echo "          echo 'export PATH=\"$BIN_DIR:\$PATH\"' >> ~/.zshrc && exec zsh"
         echo "      Or run the binary directly:"
         echo "          $INSTALLED"
     fi
