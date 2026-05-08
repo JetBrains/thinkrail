@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>A1 · Welcome</title>
+<link rel="stylesheet" href="shared.css">
+<style>
+  /* Welcome-only adjustments */
+  .recent-list { max-width:560px; margin:24px auto 0; display:flex; flex-direction:column; gap:6px; }
+  .recent-item {
+    display:flex; gap:12px; align-items:center;
+    padding:10px 12px; border-radius:8px;
+    background:var(--surface); border:1px solid var(--border);
+    text-decoration:none; color:var(--ink);
+  }
+  .recent-item:hover { border-color:var(--primary); text-decoration:none; }
+  .recent-item .leaf-mini { width:18px; height:18px; color:var(--green-500); flex-shrink:0; }
+  .recent-item .info { flex:1; min-width:0; text-align:left; }
+  .recent-item .info .n { font-size:13px; font-weight:600; color:var(--ink); }
+  .recent-item .info .p { font-family:ui-monospace,Menlo,monospace; font-size:11px; color:var(--muted); margin-top:2px; }
+  .recent-item .meta { display:flex; gap:6px; align-items:center; }
+  .door-cta { padding:14px 22px; min-width:220px; flex-direction:column; gap:4px; align-items:flex-start; height:auto; }
+  .door-cta .h { font-size:14px; font-weight:600; }
+  .door-cta .s { font-size:11.5px; color:var(--muted); font-weight:400; }
+  .door-cta.primary .s { color:rgba(255,255,255,.78); }
+</style>
+</head>
+<body>
+<div class="page">
+  <div class="screen-meta">
+    <div class="title"><span class="crumbs">A1 · Welcome / first launch</span></div>
+    <div class="actions">
+      <a class="btn ghost sm" href="index.html">← Index</a>
+    </div>
+  </div>
+
+  <div class="app">
+    <div class="welcome">
+      <div class="hero">
+        <svg class="tree-art" viewBox="0 0 100 110" fill="none">
+          <path d="M50 100 V60" stroke="#78350f" stroke-width="6" stroke-linecap="round"/>
+          <path d="M50 70 Q35 65 30 50" stroke="#78350f" stroke-width="3" stroke-linecap="round"/>
+          <path d="M50 65 Q65 60 70 45" stroke="#78350f" stroke-width="3" stroke-linecap="round"/>
+          <ellipse cx="50" cy="35" rx="28" ry="22" fill="#22c55e"/>
+          <ellipse cx="30" cy="48" rx="14" ry="10" fill="#16a34a"/>
+          <ellipse cx="72" cy="42" rx="14" ry="11" fill="#15803d"/>
+          <rect x="32" y="100" width="36" height="6" rx="2" fill="#78350f"/>
+        </svg>
+        <h1>Welcome to Bonsai</h1>
+        <p class="tagline">Spec-driven development for AI agents. Grow software with intent — one ticket at a time.</p>
+        <div class="ctas">
+          <a class="btn primary lg door-cta" href="new-project-form.html">
+            <span class="h">+ Start a new project</span>
+            <span class="s">Idea → Goal &amp; Requirements doc</span>
+          </a>
+          <a class="btn lg door-cta" href="existing-detect.html">
+            <span class="h">↗ Open an existing project</span>
+            <span class="s">Bonsai will investigate the code with you</span>
+          </a>
+        </div>
+      </div>
+
+      <div class="recent-list">
+        <div style="display:flex; align-items:center; gap:10px; margin:34px 0 8px;">
+          <h4 style="margin:0; font-size:11px; letter-spacing:.08em; text-transform:uppercase; color:var(--muted);">Recent</h4>
+          <div style="flex:1; height:1px; background:var(--border);"></div>
+        </div>
+        <a class="recent-item" href="#">
+          <svg class="leaf-mini" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22V11"/><path d="M5 11c0-4 3-7 7-7s7 3 7 7c0 4-3 7-7 7s-7-3-7-7Z"/></svg>
+          <div class="info">
+            <div class="n">bonsai</div>
+            <div class="p">~/projects/jetbrains-bonsai</div>
+          </div>
+          <div class="meta">
+            <span class="pill executing"><span class="dot"></span> 2 active</span>
+            <span class="pill"><span class="dot"></span> 18 specs</span>
+          </div>
+        </a>
+        <a class="recent-item" href="#">
+          <svg class="leaf-mini" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22V11"/><path d="M5 11c0-4 3-7 7-7s7 3 7 7c0 4-3 7-7 7s-7-3-7-7Z"/></svg>
+          <div class="info">
+            <div class="n">payments-api</div>
+            <div class="p">~/projects/payments-api</div>
+          </div>
+          <div class="meta">
+            <span class="pill"><span class="dot"></span> idle</span>
+            <span class="pill"><span class="dot"></span> 9 specs</span>
+          </div>
+        </a>
+        <a class="recent-item" href="#">
+          <svg class="leaf-mini" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22V11"/><path d="M5 11c0-4 3-7 7-7s7 3 7 7c0 4-3 7-7 7s-7-3-7-7Z"/></svg>
+          <div class="info">
+            <div class="n">rookery</div>
+            <div class="p">~/projects/rookery</div>
+          </div>
+          <div class="meta">
+            <span class="pill described"><span class="dot"></span> 1 ticket</span>
+            <span class="pill"><span class="dot"></span> 4 specs</span>
+          </div>
+        </a>
+        <p class="recent-line" style="margin-top:14px; text-align:center;">
+          Or paste a path to open something not in this list →
+        </p>
+      </div>
+    </div>
+  </div>
+</div>
+</body>
+</html>

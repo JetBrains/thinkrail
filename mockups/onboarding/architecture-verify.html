@@ -1,0 +1,255 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>B3.6 · Architecture — verify before saving</title>
+<link rel="stylesheet" href="shared.css">
+</head>
+<body>
+<div class="page">
+  <div class="screen-meta">
+    <div class="title"><span class="crumbs">B3.6 · Architecture · verify before saving</span></div>
+    <div class="actions">
+      <a class="btn ghost sm" href="architecture-design.html">← back to chat</a>
+      <a class="btn ghost sm" href="board.html">next →</a>
+      <a class="btn ghost sm" href="index.html">Index</a>
+    </div>
+  </div>
+
+  <div class="app">
+    <div class="app-top">
+      <div class="dots"><span class="dot r"></span><span class="dot y"></span><span class="dot g"></span></div>
+      <div class="proj">
+        <svg class="leaf" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22V11"/><path d="M5 11c0-4 3-7 7-7s7 3 7 7c0 4-3 7-7 7s-7-3-7-7Z"/></svg>
+        rookery
+      </div>
+      <span class="path">~/projects/rookery</span>
+      <div class="spacer"></div>
+      <span class="pill executing"><span class="dot"></span> Verify before save</span>
+    </div>
+
+    <div class="stepper">
+      <div class="step done"><span class="num">✓</span> Describe</div>
+      <span class="arrow">→</span>
+      <div class="step done"><span class="num">✓</span> Guided session</div>
+      <span class="arrow">→</span>
+      <div class="step done"><span class="num">✓</span> G&amp;R</div>
+      <span class="arrow">→</span>
+      <div class="step done"><span class="num">✓</span> Architecture chat</div>
+      <span class="arrow">→</span>
+      <div class="step active"><span class="num">5</span> Verify</div>
+      <span class="arrow">→</span>
+      <div class="step"><span class="num">6</span> Board</div>
+    </div>
+
+    <!-- Banner — what's about to happen -->
+    <div style="padding:14px 28px; background:linear-gradient(90deg,var(--amber-bg),transparent); border-bottom:1px solid var(--border); display:flex; gap:10px; align-items:center;">
+      <span style="font-size:18px;">📋</span>
+      <div style="font-size:12.5px; color:var(--ink); flex:1;">
+        <b>Last review before files land on disk.</b> Below is the full <code>DESIGN_DOC.md</code> + the 4 module files I'll create. Edit any section inline, or use the actions on the right.
+      </div>
+      <span style="font-size:11.5px; color:var(--muted);">nothing saved yet</span>
+    </div>
+
+    <div class="verify-layout">
+
+      <!-- ─────────── LEFT: full doc ─────────── -->
+      <div class="verify-doc gr-doc">
+        <div class="frontmatter" style="margin-bottom:10px; align-items:center;">
+          <span class="pill"><span class="dot"></span> architecture-design</span>
+          <span class="pill executing"><span class="dot"></span> draft · awaiting save</span>
+          <span style="color:var(--muted); font-size:11.5px;">.bonsai/DESIGN_DOC.md</span>
+          <span class="right" style="margin-left:auto;">
+            <span class="editable-hint">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+              Click any section to edit
+            </span>
+          </span>
+        </div>
+
+        <h1>rookery · architecture</h1>
+        <blockquote>Mobile-first React Native client with offline-first SQLite, syncing to a small FastAPI/Postgres backend.</blockquote>
+
+        <!-- Stack -->
+        <div class="gr-section">
+          <span class="pencil"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></span>
+          <h2>Stack</h2>
+          <ul>
+            <li><b>Client:</b> React Native (Expo), TypeScript.</li>
+            <li><b>On-device storage:</b> SQLite (expo-sqlite).</li>
+            <li><b>Backend:</b> FastAPI on Python 3.11, async.</li>
+            <li><b>Server storage:</b> Postgres + Alembic migrations.</li>
+            <li><b>Media:</b> CDN-fronted blob store; thumbnails on-device.</li>
+          </ul>
+        </div>
+
+        <!-- High-level diagram -->
+        <div class="gr-section">
+          <span class="pencil"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></span>
+          <h2>High-level architecture</h2>
+
+          <div class="arch-diagram">
+            <div class="row">
+              <div class="arch-box app">
+                <div class="name">rookery (RN app)</div>
+                <div class="desc">React Native · Expo · TypeScript</div>
+              </div>
+            </div>
+            <div class="arch-arrow down"></div>
+            <div class="row">
+              <div class="arch-box">
+                <div class="name">capture</div>
+                <div class="desc">one-tap log · photo · location · species guess</div>
+              </div>
+              <div class="arch-arrow right">→</div>
+              <div class="arch-box">
+                <div class="name">sync</div>
+                <div class="desc">offline queue · conflict resolution · backend sync</div>
+              </div>
+              <div class="arch-arrow right">→</div>
+              <div class="arch-box">
+                <div class="name">lifelist</div>
+                <div class="desc">chronological log · map · life-list count</div>
+              </div>
+            </div>
+            <div class="arch-arrow down"></div>
+            <div class="row">
+              <div class="arch-box store">
+                <div class="name">SQLite (local-first)</div>
+                <div class="desc">durable on-device store · always available</div>
+              </div>
+            </div>
+            <div class="arch-arrow down"><span class="lbl">replicated when online</span></div>
+            <div class="row">
+              <div class="arch-box backend">
+                <div class="name">FastAPI · Postgres</div>
+                <div class="desc">durable sync target · auth · media URLs</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Modules (with boundaries) -->
+        <div class="gr-section">
+          <span class="pencil"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></span>
+          <h2>Modules</h2>
+
+          <h3><code>capture</code></h3>
+          <p>Owns the act of recording a sighting. Single entry point, no UI navigation logic.</p>
+          <ul>
+            <li>Public surface: <code>captureSighting(input) → Sighting</code></li>
+            <li>Depends on: <code>sync.queue()</code>, device camera/GPS APIs</li>
+          </ul>
+
+          <h3><code>sync</code></h3>
+          <p>Owns the offline queue and reconciliation with the backend. Eventually consistent.</p>
+          <ul>
+            <li>Public surface: <code>queue(item)</code>, <code>flush()</code>, <code>reconcile()</code></li>
+            <li>Depends on: <code>SQLite</code>, FastAPI <code>/v1/sightings</code></li>
+          </ul>
+
+          <h3><code>lifelist</code></h3>
+          <p>Owns the read side: chronological feed, map view, life-list count. Read-only against SQLite.</p>
+          <ul>
+            <li>Public surface: <code>useLifelist()</code>, <code>useMap()</code>, <code>useCount()</code></li>
+            <li>Depends on: <code>SQLite</code> (read-only)</li>
+          </ul>
+        </div>
+
+        <!-- Data flow -->
+        <div class="gr-section">
+          <span class="pencil"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></span>
+          <h2>Data flow</h2>
+          <ol>
+            <li>User taps <i>Log</i> → <code>capture.captureSighting()</code> writes a <code>Sighting</code> row to SQLite immediately.</li>
+            <li><code>sync.queue()</code> appends to the outbox table.</li>
+            <li>When online, <code>sync.flush()</code> POSTs queued items to FastAPI; on success, marks them synced.</li>
+            <li><code>lifelist</code> reads from SQLite — sees both synced and unsynced rows transparently.</li>
+          </ol>
+        </div>
+
+        <!-- Design principles -->
+        <div class="gr-section">
+          <span class="pencil"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></span>
+          <h2>Design principles</h2>
+          <ul>
+            <li><b>Local-first.</b> SQLite is source of truth on-device; the backend is a sync target, not a critical path.</li>
+            <li><b>Separation of concerns.</b> <code>capture</code> only writes; <code>lifelist</code> only reads; <code>sync</code> bridges them.</li>
+            <li><b>Explicit over implicit.</b> Sighting unsynced state is a visible flag in the row, not a hidden detail.</li>
+          </ul>
+        </div>
+
+        <!-- Decision log (linked to G&R) -->
+        <div class="gr-section">
+          <span class="pencil"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></span>
+          <h2>Decision log</h2>
+          <table>
+            <thead><tr><th>#</th><th>Decision</th><th>Rationale</th></tr></thead>
+            <tbody>
+              <tr><td>1</td><td>SQLite over IndexedDB</td><td>Native, durable, no quota games. RN has stable bindings.</td></tr>
+              <tr><td>2</td><td>3 modules, no shared <code>ui/</code></td><td>UI is small; keep components co-located with their owner module.</td></tr>
+              <tr><td>3</td><td>Outbox pattern for sync</td><td>Required by offline-first goal in G&amp;R · matches existing "log offline, sync later" UX.</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- ─────────── RIGHT: review panel (sticky) ─────────── -->
+      <aside class="verify-side">
+        <h4>Will create on save</h4>
+        <div class="verify-tree">
+<span class="root">.bonsai/</span>
+├── GOAL&amp;REQUIREMENTS.md  <span class="dim"># existing · unchanged</span>
+├── <span class="new">DESIGN_DOC.md</span>          <span class="dim"># this doc</span>
+└── specs/
+    ├── <span class="new">capture/README.md</span>   <span class="dim"># module spec stub</span>
+    ├── <span class="new">sync/README.md</span>      <span class="dim"># module spec stub</span>
+    └── <span class="new">lifelist/README.md</span>  <span class="dim"># module spec stub</span>
+        </div>
+
+        <div class="stat-grid" style="margin-top:10px;">
+          <div class="stat"><span class="ic">+</span><div><b>4</b> new files</div></div>
+          <div class="stat"><span class="ic">·</span><div><b>1.8</b> KB doc</div></div>
+        </div>
+
+        <h4>Module stubs include</h4>
+        <div style="font-size:12px; color:var(--ink-2); line-height:1.7;">
+          <div>· Mini design (1 paragraph)</div>
+          <div>· Functional reqs from G&amp;R</div>
+          <div>· Public surface (signatures)</div>
+          <div>· Testing notes</div>
+          <div>· <code>parent</code> link → <code>DESIGN_DOC.md</code></div>
+        </div>
+
+        <h4>Sanity checks</h4>
+        <div style="font-size:12px; color:var(--ink-2); line-height:1.85;">
+          <div><span style="color:var(--green-500);">✓</span> No file overwrites</div>
+          <div><span style="color:var(--green-500);">✓</span> All G&amp;R requirements addressed</div>
+          <div><span style="color:var(--green-500);">✓</span> No circular module deps</div>
+          <div><span style="color:var(--green-500);">✓</span> Stack matches G&amp;R constraints</div>
+        </div>
+
+        <div class="verify-actions">
+          <a class="btn primary lg" href="board.html">
+            <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:16px;height:16px;"><polyline points="20 6 9 17 4 12"/></svg>
+            Save &amp; continue → board
+          </a>
+          <a class="btn" href="architecture-design.html" style="justify-content:center;">
+            <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px;"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+            Edit a section
+          </a>
+          <a class="btn ghost" href="architecture-design.html" style="justify-content:center;">
+            ↺ Start over
+          </a>
+        </div>
+
+        <div style="margin-top:12px; padding:8px 10px; border-radius:7px; background:var(--surface-2); border:1px solid var(--border); font-size:11px; color:var(--muted); line-height:1.5;">
+          <b style="color:var(--ink-2);">Next:</b> after save, Bonsai will offer to run <code>module-design</code> sessions for each module to flesh out the stubs.
+        </div>
+      </aside>
+    </div>
+  </div>
+</div>
+</body>
+</html>

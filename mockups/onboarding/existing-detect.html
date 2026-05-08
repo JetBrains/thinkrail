@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>C1 · Existing project — what we'll read</title>
+<link rel="stylesheet" href="shared.css">
+</head>
+<body>
+<div class="page">
+  <div class="screen-meta">
+    <div class="title"><span class="crumbs">C1 · Existing project · what we'll read</span></div>
+    <div class="actions">
+      <a class="btn ghost sm" href="welcome.html">← back</a>
+      <a class="btn ghost sm" href="existing-investigation.html">next →</a>
+      <a class="btn ghost sm" href="index.html">Index</a>
+    </div>
+  </div>
+
+  <div class="app">
+    <div class="app-top">
+      <div class="dots"><span class="dot r"></span><span class="dot y"></span><span class="dot g"></span></div>
+      <div class="proj">
+        <svg class="leaf" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22V11"/><path d="M5 11c0-4 3-7 7-7s7 3 7 7c0 4-3 7-7 7s-7-3-7-7Z"/></svg>
+        payments-api
+      </div>
+      <span class="path">~/projects/payments-api</span>
+      <div class="spacer"></div>
+      <span class="pill"><span class="dot"></span> No <code>.bonsai/</code> yet</span>
+    </div>
+
+    <div class="stepper">
+      <div class="step active"><span class="num">1</span> What we'll read</div>
+      <span class="arrow">→</span>
+      <div class="step"><span class="num">2</span> Investigation</div>
+      <span class="arrow">→</span>
+      <div class="step"><span class="num">3</span> Clarify</div>
+      <span class="arrow">→</span>
+      <div class="step"><span class="num">4</span> Goal &amp; Requirements doc</div>
+    </div>
+
+    <div class="detected">
+      <h2>Let's get Bonsai grafted into <b>payments-api</b>.</h2>
+      <p class="lead">
+        I did a quick scan to find the high-signal files. Below is what I'd like to read first to figure out what this
+        project actually is. You can deselect anything, or point me somewhere else.
+      </p>
+
+      <div class="row-eq">
+        <!-- Left column: files -->
+        <div>
+          <div class="section-h">
+            <h3>Files I found</h3>
+            <div class="right">8 files · 23 KB</div>
+          </div>
+
+          <div class="file-row">
+            <div class="ic">📘</div>
+            <div class="info">
+              <div class="n">README.md</div>
+              <div class="d">Project overview · 7.2 KB</div>
+            </div>
+            <span class="pill done"><span class="dot"></span> high signal</span>
+            <input type="checkbox" checked>
+          </div>
+
+          <div class="file-row">
+            <div class="ic">🤖</div>
+            <div class="info">
+              <div class="n">CLAUDE.md</div>
+              <div class="d">Existing agent guidance · 4.0 KB</div>
+            </div>
+            <span class="pill done"><span class="dot"></span> high signal</span>
+            <input type="checkbox" checked>
+          </div>
+
+          <div class="file-row">
+            <div class="ic">🤖</div>
+            <div class="info">
+              <div class="n">AGENTS.md</div>
+              <div class="d">Agent recipes · 2.8 KB</div>
+            </div>
+            <span class="pill done"><span class="dot"></span> high signal</span>
+            <input type="checkbox" checked>
+          </div>
+
+          <div class="file-row">
+            <div class="ic">📦</div>
+            <div class="info">
+              <div class="n">pyproject.toml</div>
+              <div class="d">Stack &amp; deps — Python, FastAPI, stripe, paypalrestsdk · 1.4 KB</div>
+            </div>
+            <input type="checkbox" checked>
+          </div>
+
+          <div class="file-row">
+            <div class="ic">🗂</div>
+            <div class="info">
+              <div class="n">app/<span class="muted">·</span>__init__.py + 4 module dirs</div>
+              <div class="d">providers/ · router/ · webhooks/ · ledger/</div>
+            </div>
+            <input type="checkbox" checked>
+          </div>
+
+          <div class="file-row">
+            <div class="ic">🧪</div>
+            <div class="info">
+              <div class="n">tests/</div>
+              <div class="d">62 test files · pytest config in <code>pyproject.toml</code></div>
+            </div>
+            <input type="checkbox" checked>
+          </div>
+
+          <div class="file-row">
+            <div class="ic">📜</div>
+            <div class="info">
+              <div class="n">CHANGELOG.md</div>
+              <div class="d">Recent changes — useful for "where is this heading" · 3.8 KB</div>
+            </div>
+            <input type="checkbox" checked>
+          </div>
+
+          <div class="file-row missing">
+            <div class="ic">+</div>
+            <div class="info"><div class="n" style="font-weight:400; color:var(--muted);">Add another file (docs, ADRs, design notes…)</div></div>
+          </div>
+        </div>
+
+        <!-- Right column: what we'll produce -->
+        <div>
+          <div class="section-h">
+            <h3>What I'll do with this</h3>
+            <div class="right">3 outputs</div>
+          </div>
+
+          <div class="doc-card">
+            <div class="doc-title">🌿 Walk the repo, read the high-signal files.</div>
+            <div class="doc-body">
+              I'll read top-down: README → CLAUDE → entry points → modules. I'll skim every module's public surface but
+              not every file. You'll see what I'm reading live on the next screen.
+            </div>
+          </div>
+
+          <div class="doc-card">
+            <div class="doc-title">💬 Ask 2–4 clarifying questions.</div>
+            <div class="doc-body">
+              Code shows the <i>what</i>; the <i>why</i> usually isn't in the repo. I'll ask only where the code is
+              ambiguous about intent — not things I can read.
+            </div>
+          </div>
+
+          <div class="doc-card" style="border-color:var(--green-300); background:linear-gradient(180deg,var(--green-50),var(--surface));">
+            <div class="doc-title">📄 Draft GOAL&amp;REQUIREMENTS.md</div>
+            <div class="doc-body">
+              Same end state as a new project — but reverse-engineered. Goal, problem, audience, scope, requirements,
+              constraints, all written from what's already in the code, then refined with your answers.
+            </div>
+            <div class="doc-meta">
+              <span class="file-pill">.bonsai/GOAL&amp;REQUIREMENTS.md</span>
+            </div>
+          </div>
+
+          <div style="font-size:11.5px; color:var(--muted); margin-top:14px; line-height:1.6;">
+            <b>Note.</b> I won't write to your code or to <code>.bonsai/</code> until you accept the draft on the last
+            step. Reading only.
+          </div>
+        </div>
+      </div>
+
+      <div class="row-actions" style="display:flex; gap:8px; justify-content:flex-end; margin-top:22px; align-items:center;">
+        <span class="hint" style="flex:1; font-size:12px; color:var(--muted);">
+          ✓ 7 of 8 selected · estimated 30–60s of reading
+        </span>
+        <a class="btn" href="welcome.html">Cancel</a>
+        <a class="btn primary" href="existing-investigation.html">
+          Start investigation
+          <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M5 12h14M13 5l7 7-7 7"/></svg>
+        </a>
+      </div>
+    </div>
+  </div>
+</div>
+</body>
+</html>
