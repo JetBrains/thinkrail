@@ -283,30 +283,23 @@ export function QuestionCard({
     );
   }
 
-  // Answered state \u2014 one card per question (original card style) + user bubble per answer
+  // Answered state \u2014 render as ordinary Bonsai/You message bubbles so
+  // the resolved Q&A flows naturally with the rest of the dialog.  Only
+  // the pending (unanswered) state shows the structured options card.
   if (answered && (selectedAnswers || interrupted)) {
+    const questionMd = (q: Question) =>
+      q.header ? `**${q.header}:** ${q.question}` : q.question;
     return (
       <div className="chat-qa-answered-wrapper" data-question-request-id={requestId}>
-        {questions.map((q, i) => (
+        {questions.map((q) => (
           <div key={q.question} className="chat-qa-pair">
-            <div className="chat-question chat-question-answered chat-question-answered-mini">
-              <div className="chat-question-answered-header-row">
-                <span className="chat-question-header">AskUserQuestion</span>
-                {i === 0 && (
-                  <span className={`chat-question-answered-done${interrupted ? " chat-question-answered-interrupted" : ""}`}>
-                    {interrupted ? "\u2718 interrupted" : "\u2713 done"}
-                  </span>
-                )}
-              </div>
-              <div className="chat-question-answered-mini-text">
-                {q.header && q.question.includes("\n") ? (
-                  <>
-                    <div className="chat-question-answered-mini-label"><strong>{q.header}:</strong></div>
-                    <ChatMarkdown content={q.question} />
-                  </>
-                ) : (
-                  <ChatMarkdown content={q.header ? `**${q.header}:** ${q.question}` : q.question} />
-                )}
+            <div className="chat-assistant">
+              <div className="msg-avatar msg-avatar-assistant" aria-hidden="true">B</div>
+              <div className="msg-content">
+                <div className="msg-who">Bonsai</div>
+                <div className="msg-bubble msg-bubble-assistant">
+                  <ChatMarkdown content={questionMd(q)} />
+                </div>
               </div>
             </div>
             {!interrupted && selectedAnswers && (
@@ -320,6 +313,9 @@ export function QuestionCard({
                   </div>
                 </div>
               </div>
+            )}
+            {interrupted && (
+              <div className="chat-qa-interrupted">\u2718 interrupted</div>
             )}
           </div>
         ))}
