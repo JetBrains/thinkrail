@@ -83,13 +83,23 @@ def _write_cache(latest: str, url: str) -> None:
         logger.debug("update check: failed to write cache", exc_info=True)
 
 
+def _auth_headers() -> dict[str, str]:
+    """GitHub API request headers, optionally with a bearer token from the env."""
+    headers = {"Accept": "application/vnd.github+json"}
+    token = os.environ.get("GH_TOKEN") or os.environ.get("GITHUB_TOKEN")
+    if token:
+        headers["Authorization"] = f"Bearer {token}"
+    return headers
+
+
 def _fetch_latest() -> tuple[str, str] | None:
     """Return (version_without_v, release_url) for the latest release on the current channel."""
+    headers = _auth_headers()
     if CHANNEL == "stable":
         url = f"{GITHUB_API}/releases/latest"
         try:
             with urllib.request.urlopen(
-                urllib.request.Request(url, headers={"Accept": "application/vnd.github+json"}),
+                urllib.request.Request(url, headers=headers),
                 timeout=HTTP_TIMEOUT,
             ) as r:
                 data = json.load(r)
@@ -103,7 +113,7 @@ def _fetch_latest() -> tuple[str, str] | None:
     url = f"{GITHUB_API}/releases?per_page=20"
     try:
         with urllib.request.urlopen(
-            urllib.request.Request(url, headers={"Accept": "application/vnd.github+json"}),
+            urllib.request.Request(url, headers=headers),
             timeout=HTTP_TIMEOUT,
         ) as r:
             releases = json.load(r)

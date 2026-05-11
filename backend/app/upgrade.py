@@ -37,6 +37,23 @@ def _validate_prefix(prefix: str) -> bool:
     return Path(prefix).is_absolute()
 
 
+def _discover_token() -> str | None:
+    """Find a GitHub token: env vars first, then `gh auth token` if available."""
+    for env_key in ("GH_TOKEN", "GITHUB_TOKEN"):
+        token = os.environ.get(env_key)
+        if token:
+            return token
+    try:
+        result = subprocess.run(
+            ["gh", "auth", "token"], capture_output=True, text=True, timeout=5,
+        )
+        if result.returncode == 0:
+            return (result.stdout or "").strip() or None
+    except (FileNotFoundError, subprocess.TimeoutExpired):
+        pass
+    return None
+
+
 def run_upgrade(channel: str | None = None, version: str = "latest") -> int:
     if platform.system() == "Windows":
         print(
@@ -66,10 +83,14 @@ def run_upgrade(channel: str | None = None, version: str = "latest") -> int:
 
     print(f"Upgrading Bonsai (current: {VERSION}, channel: {resolved_channel}) ...")
 
+    token = _discover_token()
+    curl_cmd = ["curl", "-fsSL"]
+    if token:
+        curl_cmd += ["-H", f"Authorization: Bearer {token}"]
+    curl_cmd.append(INSTALL_SCRIPT_URL)
+
     try:
-        script = subprocess.check_output(
-            ["curl", "-fsSL", INSTALL_SCRIPT_URL], timeout=30,
-        )
+        script = subprocess.check_output(curl_cmd, timeout=30)
     except FileNotFoundError:
         print("error: curl not found; cannot fetch installer", file=sys.stderr)
         return 1
@@ -84,8 +105,12 @@ def run_upgrade(channel: str | None = None, version: str = "latest") -> int:
     if version != "latest":
         args += ["--version", version]
 
+    env = os.environ.copy()
+    if token and not env.get("GH_TOKEN") and not env.get("GITHUB_TOKEN"):
+        env["GH_TOKEN"] = token
+
     try:
-        return subprocess.run(args, input=script).returncode
+        return subprocess.run(args, input=script, env=env).returncode
     except FileNotFoundError:
         print("error: bash not found; cannot run installer", file=sys.stderr)
         return 1

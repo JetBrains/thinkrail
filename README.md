@@ -6,7 +6,15 @@ Specification-driven development workspace. Hierarchical, interconnected specs l
 
 ### For end users
 
-Install with a single command:
+Install with a single command (works while the repo is internal — uses your `gh` auth):
+
+```bash
+TOKEN=$(gh auth token)
+curl -fsSL -H "Authorization: Bearer $TOKEN" https://raw.githubusercontent.com/JetBrains/bonsai/main/install.sh \
+  | GH_TOKEN="$TOKEN" bash -s -- --channel nightly
+```
+
+Once the repo is public, the plain form will work for everyone:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/JetBrains/bonsai/main/install.sh | bash
@@ -16,10 +24,13 @@ Options:
 
 ```bash
 # Nightly channel
-curl -fsSL https://raw.githubusercontent.com/JetBrains/bonsai/main/install.sh | bash -s -- --channel nightly
+... | bash -s -- --channel nightly
 
 # Specific version
-curl -fsSL https://raw.githubusercontent.com/JetBrains/bonsai/main/install.sh | bash -s -- --version 0.2.0
+... | bash -s -- --version 0.2.0
+
+# Custom install prefix
+... | bash -s -- --prefix ~/.local
 ```
 
 The installer detects your OS and architecture, downloads the matching binary from the [latest release](../../releases/latest), verifies the SHA256 checksum, and installs to `~/.local/bin/bonsai`. Add `~/.local/bin` to your `PATH` if it isn't already.
