@@ -1,0 +1,58 @@
+name: Release
+
+on:
+  workflow_call:
+    inputs:
+      version:
+        description: "Version to release (e.g. 0.2.0 or 0.2.0-nightly.5)"
+        required: true
+        type: string
+      channel:
+        description: "Release channel: nightly or stable"
+        required: true
+        type: string
+      prev_tag:
+        description: "Previous tag of the same channel, for release-notes diff (empty if none)"
+        required: false
+        type: string
+        default: ""
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    uses: ./.github/workflows/_build.yml
+    with:
+      version: ${{ inputs.version }}
+      channel: ${{ inputs.channel }}
+    secrets: inherit
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          merge-multiple: true
+
+      - uses: ./.github/actions/make-checksums
+        with:
+          directory: artifacts
+
+      - name: Create GitHub release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ inputs.version }}
+          name: >-
+            ${{ inputs.channel == 'nightly'
+                && format('Nightly {0}', inputs.version)
+                || format('v{0}', inputs.version) }}
+          prerelease: ${{ inputs.channel == 'nightly' }}
+          generate_release_notes: true
+          previous_tag: ${{ inputs.prev_tag }}
+          files: artifacts/*
+          fail_on_unmatched_files: true

@@ -1,0 +1,29 @@
+name: Setup toolchain
+description: Installs Python + uv + Node with caching. Used by build and release jobs.
+
+inputs:
+  python-version:
+    description: Python version to install
+    required: false
+    default: "3.11"
+  node-version:
+    description: Node version to install
+    required: false
+    default: "20"
+
+runs:
+  using: composite
+  steps:
+    - uses: actions/setup-python@v5
+      with:
+        python-version: ${{ inputs.python-version }}
+
+    - uses: astral-sh/setup-uv@v4
+      with:
+        enable-cache: true
+
+    - uses: actions/setup-node@v4
+      with:
+        node-version: ${{ inputs.node-version }}
+        cache: npm
+        cache-dependency-path: frontend/package-lock.json

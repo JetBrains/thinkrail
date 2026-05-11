@@ -1,38 +1,36 @@
 # Bonsai
 
-**Stable version available on the [`stable`](../../tree/stable) branch.**
-
 Specification-driven development workspace. Hierarchical, interconnected specs live in the repo alongside code — helping developers align AI coding agents through structured project context.
 
 ## Quick Start
 
-### For end users — desktop app
+### For end users
 
-Download the installer for your OS from the [latest release](../../releases/latest):
+Install with a single command:
 
-| OS | File |
-|----|------|
-| macOS | `Bonsai-<version>-arm64.dmg` (Apple Silicon) or `Bonsai-<version>-x64.dmg` (Intel) |
-| Linux | `Bonsai-<version>.AppImage` |
-| Windows | `Bonsai Setup <version>.exe` |
+```bash
+curl -fsSL https://raw.githubusercontent.com/JetBrains/bonsai/main/install.sh | bash
+```
 
-The app is unsigned, so on first launch:
-- **macOS:** right-click the app → Open (Gatekeeper warns once).
-- **Windows:** SmartScreen will warn — click "More info" → "Run anyway".
+Options:
 
-Auto-update from GitHub releases is enabled on Linux and Windows. macOS auto-update is disabled until the app is signed; re-download to upgrade.
+```bash
+# Nightly channel
+curl -fsSL https://raw.githubusercontent.com/JetBrains/bonsai/main/install.sh | bash -s -- --channel nightly
 
-**Anthropic API key.** The desktop app spawns its backend on launch and needs an Anthropic key. Two paths, in order of convenience:
+# Specific version
+curl -fsSL https://raw.githubusercontent.com/JetBrains/bonsai/main/install.sh | bash -s -- --version 0.2.0
+```
 
-1. **Shell rc export** (recommended). If you already have `export ANTHROPIC_API_KEY=sk-ant-...` in `~/.zshrc`, `~/.bash_profile`, or `~/.config/fish/config.fish`, you're done — the desktop app spawns your login shell at startup and imports its env, so a Finder/dock launch sees the same key your terminal does. Same trick VS Code, Hyper, and GitHub Desktop use.
-2. **Per-app dotenv** (fallback). For users on shells we can't import (tcsh, nushell), or anyone who wants the key scoped to Bonsai instead of system-wide:
+The installer detects your OS and architecture, downloads the matching binary from the [latest release](../../releases/latest), verifies the SHA256 checksum, and installs to `~/.local/bin/bonsai`. Add `~/.local/bin` to your `PATH` if it isn't already.
 
-   ```bash
-   mkdir -p ~/.bonsai
-   echo "ANTHROPIC_API_KEY=sk-ant-..." > ~/.bonsai/.env
-   ```
+Supported platforms: Linux x64/arm64, macOS x64/arm64, Windows x64.
 
-If neither path supplies a key, sessions fail on the first turn with `Not logged in · Please run /login`. Set `BONSAI_NO_SHELL_ENV=1` to disable the shell-env import (e.g. if a slow `~/.zshrc` makes startup feel sluggish).
+Once installed, run `bonsai` to start. To update later: `bonsai upgrade` (Linux/macOS; on Windows, re-run the installer command above).
+
+> **macOS first-launch:** binaries are not yet code-signed. macOS will show a Gatekeeper warning the first time you run `bonsai`. Either right-click the binary → **Open**, or run `xattr -d com.apple.quarantine ~/.local/bin/bonsai` once.
+
+**Authentication.** Bonsai drives Claude Code under the hood, so Claude Code needs to be authenticated.
 
 ### For developers
 
@@ -52,10 +50,9 @@ Press `Ctrl+C` to stop. Cleanup is automatic.
 
 ```bash
 ./build_and_install.sh         # standalone CLI executable (PyInstaller)
-./electron/scripts/build.sh    # Electron installer for the current OS
 ```
 
-See [`packaging/README.md`](packaging/README.md) and [`electron/README.md`](electron/README.md) for details.
+See [`packaging/README.md`](packaging/README.md) for details.
 
 ### Prerequisites
 

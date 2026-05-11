@@ -10,6 +10,7 @@ from fastapi import APIRouter
 
 from app.api.schemas import ServerInfoResponse, TailscaleInfoResponse
 from app.core.network_info import get_server_network_info
+from app.version import VERSION
 
 router = APIRouter(tags=["server"])
 
@@ -25,5 +26,5 @@ async def server_info() -> ServerInfoResponse:
             hostname=info.tailscale.hostname,
             active=info.tailscale.active,
         ),
-        version="1.0.0",
+        version=VERSION,
     )

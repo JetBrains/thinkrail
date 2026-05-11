@@ -110,6 +110,10 @@ def create_app() -> FastAPI:
 if __name__ == "__main__":
     import uvicorn
     from app.core.config import ServerSettings
+    from app.version import check_in_background, print_banner
+
+    print_banner()
+    check_in_background()
 
     srv = ServerSettings()
     uvicorn.run(

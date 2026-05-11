@@ -16,6 +16,7 @@ from app.api.schemas import (
     ProjectValidateResponse,
 )
 from app.core.bonsaihide import load_bonsaihide
+from app.version import VERSION
 
 router = APIRouter(tags=["project"])
 
@@ -26,7 +27,7 @@ class _InitBody(BaseModel):
 
 @router.get("/api/health", response_model=HealthResponse)
 async def health_check() -> HealthResponse:
-    return HealthResponse(status="ok", version="1.0.0")
+    return HealthResponse(status="ok", version=VERSION)
 
 
 @router.get("/api/project/list", response_model=ProjectListResponse)

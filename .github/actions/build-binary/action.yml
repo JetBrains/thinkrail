@@ -1,0 +1,65 @@
+name: Build Bonsai binary
+description: Builds the frontend, injects version metadata, and runs PyInstaller. Output at packaging/dist/<artifact-name>.
+
+inputs:
+  version:
+    description: "Version to bake into the binary (e.g. 0.2.0-nightly.5)"
+    required: true
+  channel:
+    description: "Release channel: nightly, stable, or dev"
+    required: true
+  artifact-name:
+    description: "Final artifact filename (e.g. bonsai-linux-x64 or bonsai-windows-x64.exe)"
+    required: true
+
+outputs:
+  artifact-path:
+    description: "Path to the renamed binary"
+    value: ${{ steps.rename.outputs.path }}
+
+runs:
+  using: composite
+  steps:
+    - name: Build frontend
+      shell: bash
+      run: cd frontend && npm ci && npm run build
+
+    - name: Inject version metadata
+      shell: bash
+      env:
+        VERSION: ${{ inputs.version }}
+        CHANNEL: ${{ inputs.channel }}
+      run: |
+        commit=$(git rev-parse --short HEAD)
+        cat > backend/app/_version.py <<EOF
+        # Generated at build time. Do not edit.
+        __version__ = "${VERSION}"
+        __channel__ = "${CHANNEL}"
+        __commit__ = "${commit}"
+        EOF
+        echo "Wrote backend/app/_version.py:"
+        cat backend/app/_version.py
+
+    - name: Install backend + PyInstaller
+      shell: bash
+      run: pip install ./backend pyinstaller
+
+    - name: Run PyInstaller
+      shell: bash
+      run: cd packaging && pyinstaller bonsai.spec --noconfirm --distpath dist --workpath build
+
+    - id: rename
+      name: Rename artifact
+      shell: bash
+      env:
+        ARTIFACT_NAME: ${{ inputs.artifact-name }}
+      run: |
+        if [ "$RUNNER_OS" = "Windows" ]; then
+          src="packaging/dist/bonsai.exe"
+        else
+          src="packaging/dist/bonsai"
+        fi
+        dst="packaging/dist/${ARTIFACT_NAME}"
+        mv "$src" "$dst"
+        echo "path=$dst" >> "$GITHUB_OUTPUT"
+        echo "Renamed $src -> $dst"

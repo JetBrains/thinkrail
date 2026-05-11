@@ -1,0 +1,80 @@
+name: Build binaries
+
+on:
+  workflow_call:
+    inputs:
+      version:
+        description: "Version to bake into binaries (e.g. 0.2.0-nightly.5)"
+        required: true
+        type: string
+      channel:
+        description: "Release channel: nightly, stable, or dev"
+        required: true
+        type: string
+    # Uncomment once Apple Developer secrets are provisioned, together with
+    # the "Sign and notarize (macOS)" step below.
+    # secrets:
+    #   MACOS_CERT_P12:
+    #     required: false
+    #   MACOS_CERT_PASSWORD:
+    #     required: false
+    #   MACOS_SIGNING_IDENTITY:
+    #     required: false
+    #   MACOS_NOTARIZE_API_KEY:
+    #     required: false
+    #   MACOS_NOTARIZE_API_KEY_ID:
+    #     required: false
+    #   MACOS_NOTARIZE_API_ISSUER:
+    #     required: false
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            artifact_name: bonsai-linux-x64
+          - os: ubuntu-24.04-arm
+            artifact_name: bonsai-linux-arm64
+          - os: macos-13
+            artifact_name: bonsai-macos-x64
+          - os: macos-14
+            artifact_name: bonsai-macos-arm64
+          - os: windows-latest
+            artifact_name: bonsai-windows-x64.exe
+
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: ./.github/actions/setup-toolchain
+
+      - id: build
+        uses: ./.github/actions/build-binary
+        with:
+          version: ${{ inputs.version }}
+          channel: ${{ inputs.channel }}
+          artifact-name: ${{ matrix.artifact_name }}
+
+      # Uncomment once Apple Developer secrets are provisioned, together with
+      # the `secrets:` block at the top of this workflow. Until then, macOS
+      # users will see a Gatekeeper warning on first launch (covered in README).
+      # - name: Sign and notarize (macOS)
+      #   if: runner.os == 'macOS' && inputs.channel != 'dev'
+      #   uses: ./.github/actions/macos-sign-notarize
+      #   with:
+      #     binary-path: ${{ steps.build.outputs.artifact-path }}
+      #     signing-identity: ${{ secrets.MACOS_SIGNING_IDENTITY }}
+      #     cert-p12: ${{ secrets.MACOS_CERT_P12 }}
+      #     cert-password: ${{ secrets.MACOS_CERT_PASSWORD }}
+      #     notarize-api-key: ${{ secrets.MACOS_NOTARIZE_API_KEY }}
+      #     notarize-api-key-id: ${{ secrets.MACOS_NOTARIZE_API_KEY_ID }}
+      #     notarize-api-issuer: ${{ secrets.MACOS_NOTARIZE_API_ISSUER }}
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact_name }}
+          path: ${{ steps.build.outputs.artifact-path }}
+          retention-days: 7

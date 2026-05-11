@@ -1,0 +1,25 @@
+name: Make checksums
+description: Writes a SHA256SUMS file listing every regular file in the given directory.
+
+inputs:
+  directory:
+    description: Directory containing the files to hash
+    required: true
+
+runs:
+  using: composite
+  steps:
+    - name: Compute SHA256SUMS
+      shell: bash
+      env:
+        DIR: ${{ inputs.directory }}
+      run: |
+        cd "$DIR"
+        rm -f SHA256SUMS
+        find . -maxdepth 1 -type f ! -name SHA256SUMS -print0 \
+          | sort -z \
+          | xargs -0 shasum -a 256 \
+          | sed 's| \./| |' \
+          > SHA256SUMS
+        echo "Wrote $DIR/SHA256SUMS:"
+        cat SHA256SUMS

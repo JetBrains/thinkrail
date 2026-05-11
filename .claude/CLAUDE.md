@@ -137,7 +137,7 @@ frontend/
 ~/.bonsai/indexes/<hash>/
   index.db            # SQLite spec index (generated, outside repo)
 .bonsai/implementation_tasks/  # Task specs organized by module (agent/, core/, frontend/, rpc/, spec/)
-.github/workflows/    # CI: tests.yml, build.yml, deploy.yml, nightly.yml
+.github/workflows/    # CI: tests.yml, nightly.yml, stable.yml, _build.yml, _release.yml
 ```
 
 ## Active Tasks
