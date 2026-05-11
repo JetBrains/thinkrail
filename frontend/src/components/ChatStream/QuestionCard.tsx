@@ -311,9 +311,12 @@ export function QuestionCard({
             </div>
             {!interrupted && selectedAnswers && (
               <div className="chat-user">
-                <div className="chat-user-bubble">
-                  <div className="chat-user-text--md">
-                    <ChatMarkdown content={selectedAnswers[q.question] ?? ""} />
+                <div className="msg-content">
+                  <div className="msg-who">You</div>
+                  <div className="msg-bubble msg-bubble-user">
+                    <div className="chat-user-text--md">
+                      <ChatMarkdown content={selectedAnswers[q.question] ?? ""} />
+                    </div>
                   </div>
                 </div>
               </div>

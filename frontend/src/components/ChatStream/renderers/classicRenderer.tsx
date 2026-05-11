@@ -29,31 +29,28 @@ const DiffCard = lazy(() => import("../DiffCard.tsx").then(m => ({ default: m.Di
 function UserMessageBubble({ text, isMarkdown }: { text: string; isMarkdown: boolean }) {
   const [showRaw, setShowRaw] = useState(false);
 
-  if (!isMarkdown) {
-    return (
-      <div className="chat-user">
-        <div className="chat-user-text">{text}</div>
-      </div>
-    );
-  }
-
   return (
     <div className="chat-user">
-      <div className="chat-user-bubble">
-        {showRaw ? (
-          <div className="chat-user-text">{text}</div>
-        ) : (
-          <div className="chat-user-text--md">
-            <ChatMarkdown content={text} />
-          </div>
-        )}
-        <button
-          className="chat-user-toggle"
-          onClick={() => setShowRaw((v) => !v)}
-          title={showRaw ? "Show rendered" : "Show raw"}
-        >
-          {showRaw ? "md" : "raw"}
-        </button>
+      <div className="msg-content">
+        <div className="msg-who">You</div>
+        <div className="msg-bubble msg-bubble-user">
+          {!isMarkdown || showRaw ? (
+            <div className="chat-user-text">{text}</div>
+          ) : (
+            <div className="chat-user-text--md">
+              <ChatMarkdown content={text} />
+            </div>
+          )}
+          {isMarkdown && (
+            <button
+              className="chat-user-toggle"
+              onClick={() => setShowRaw((v) => !v)}
+              title={showRaw ? "Show rendered" : "Show raw"}
+            >
+              {showRaw ? "md" : "raw"}
+            </button>
+          )}
+        </div>
       </div>
     </div>
   );

@@ -23,3 +23,11 @@
 
   color-scheme: dark;
 }
+
+/* Darcula-only: user bubble switches from purple to dark green
+   (#499C54 — JetBrains IDE git/diff "added" tone).  Applies only when
+   Darcula is explicitly selected — System fallback keeps the default. */
+[data-theme="dark"] {
+  --bubble-user-bg: rgba(73, 156, 84, 0.16);
+  --bubble-user-border: rgba(73, 156, 84, 0.45);
+}

@@ -53,4 +53,8 @@
   /* ── Transitions ── */
   --transition-fast: 120ms ease;
   --transition-normal: 200ms ease;
+
+  /* ── Chat user-bubble (overridable per theme) ── */
+  --bubble-user-bg: rgba(107, 87, 255, 0.12);
+  --bubble-user-border: rgba(107, 87, 255, 0.35);
 }
