@@ -30,7 +30,7 @@ def test_extra_fields_preserved():
 
 
 def test_voice_revise_mode_default():
-    assert ProjectSettings().voice_revise_mode == "auto"
+    assert ProjectSettings().voice_revise_mode == "off"
 
 
 def test_voice_revise_mode_roundtrip():

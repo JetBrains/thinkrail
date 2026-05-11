@@ -35,7 +35,7 @@ class ProjectSettings(BaseModel, extra="allow"):
     # Trash auto-purge
     trash_retention_days: int = 30  # 0 or null to disable auto-purge
     # Voice input revise behavior
-    voice_revise_mode: str = "auto"  # "auto" | "subsession" | "off"
+    voice_revise_mode: str = "off"  # "auto" | "subsession" | "off"
 
 
 def _settings_path(project_root: Path) -> Path:

@@ -27,6 +27,9 @@ export interface UseVoiceInputReturn {
   error: string | null;
   startRecording: () => void;
   stopRecording: () => Promise<string>;
+  /** Abort the active recording WITHOUT producing a transcript. Used when
+   *  the user starts typing during dictation. */
+  cancelRecording: () => void;
   reviseTranscript: (text: string) => Promise<string>;
 }
 
@@ -83,6 +86,9 @@ export function useVoiceInput(): UseVoiceInputReturn {
     recognition.lang = "en-US";
     recognitionRef.current = recognition;
     finalTextRef.current = "";
+    // Reset stale interim from a previous recording session — otherwise it
+    // briefly leaks into the consumer's UI when a new session starts.
+    setInterimText("");
 
     recognition.onresult = (event: SpeechRecognitionEvent) => {
       let interim = "";
@@ -253,6 +259,38 @@ export function useVoiceInput(): UseVoiceInputReturn {
     return Promise.resolve("");
   }, [mode, stopSpeechApi, stopMediaRecorder]);
 
+  const cancelRecording = useCallback(() => {
+    // Tear down without producing a transcript. Detach handlers BEFORE
+    // aborting so any in-flight onresult/onend/onstop events from the
+    // browser are silently ignored.
+    if (mode === "speech-api" && recognitionRef.current) {
+      const rec = recognitionRef.current;
+      rec.onresult = null;
+      rec.onerror = null;
+      rec.onend = null;
+      try { rec.abort(); } catch { /* already stopped */ }
+      recognitionRef.current = null;
+      stopResolveRef.current?.("");
+      stopResolveRef.current = null;
+    } else if (mode === "media-recorder" && recorderRef.current) {
+      const rec = recorderRef.current;
+      rec.ondataavailable = null;
+      rec.onstop = null;
+      try { if (rec.state === "recording") rec.stop(); } catch { /* ignore */ }
+      recorderRef.current = null;
+      streamRef.current?.getTracks().forEach((t) => t.stop());
+      streamRef.current = null;
+      chunksRef.current = [];
+    }
+    if (timerRef.current) {
+      clearTimeout(timerRef.current);
+      timerRef.current = null;
+    }
+    finalTextRef.current = "";
+    setInterimText("");
+    setIsRecording(false);
+  }, [mode]);
+
   const reviseTranscript = useCallback(async (text: string): Promise<string> => {
     setIsRevising(true);
     try {
@@ -273,6 +311,7 @@ export function useVoiceInput(): UseVoiceInputReturn {
     error,
     startRecording,
     stopRecording,
+    cancelRecording,
     reviseTranscript,
   };
 }

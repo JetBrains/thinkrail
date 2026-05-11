@@ -66,8 +66,10 @@ const IconPlay = () => (
 export function InputArea({ sessionId, disabled, placeholder, onSend, isRunning, canInterrupt, onInterrupt, showContinue, onContinue, isDraft, actionPortalTarget }: InputAreaProps) {
   const skills = useSettingsStore((s) => s.skills);
   const voiceReviseMode: VoiceReviseMode =
-    (useSettingsStore((s) => s.settings?.voice_revise_mode) as VoiceReviseMode | undefined) ?? "auto";
-  const [text, setText] = useState(() => useInputDraftStore.getState().getDraft(sessionId));
+    (useSettingsStore((s) => s.settings?.voice_revise_mode) as VoiceReviseMode | undefined) ?? "off";
+  // Single source of truth: textarea value is driven by the draft store
+  // (keyed by sessionId so drafts persist across session switches).
+  const text = useInputDraftStore((s) => s.drafts.get(sessionId) ?? "");
   const [suggestions, setSuggestions] = useState<Skill[]>([]);
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [showHistory, setShowHistory] = useState(false);
@@ -82,10 +84,12 @@ export function InputArea({ sessionId, disabled, placeholder, onSend, isRunning,
   const sessionIdRef = useRef(sessionId);
   useEffect(() => { sessionIdRef.current = sessionId; }, [sessionId]);
 
-  /** Set local text state AND sync the draft store in one call. */
   const setTextAndDraft = useCallback((value: string) => {
-    setText(value);
     useInputDraftStore.getState().setDraft(sessionIdRef.current, value);
+  }, []);
+
+  const clearTextAndDraft = useCallback(() => {
+    useInputDraftStore.getState().clearDraft(sessionIdRef.current);
   }, []);
 
   const isManual = panelHeight !== null;
@@ -99,11 +103,6 @@ export function InputArea({ sessionId, disabled, placeholder, onSend, isRunning,
       ref.current.style.height = "";
     }
   }, [isManual]);
-
-  // Sync local state when sessionId changes (e.g. switching between sessions)
-  useEffect(() => {
-    setText(useInputDraftStore.getState().getDraft(sessionId));
-  }, [sessionId]);
 
   const closeSuggestions = useCallback(() => {
     setSuggestions([]);
@@ -140,6 +139,47 @@ export function InputArea({ sessionId, disabled, placeholder, onSend, isRunning,
   const [reviseError, setReviseError] = useState<string | null>(null);
   const [modeMenuOpen, setModeMenuOpen] = useState(false);
   const moreMenuRef = useRef<HTMLDivElement>(null);
+  const historyPopupRef = useRef<HTMLDivElement>(null);
+  const historyTriggerRef = useRef<HTMLButtonElement>(null);
+  // Captured at the moment recording starts. Voice transcript is inserted
+  // at this caret position (and replaces the selection, if any), matching
+  // standard dictation behaviour (iOS / macOS / Google Docs).
+  const voiceCaretRef = useRef<{ before: string; after: string } | null>(null);
+
+  // Auto-resize textarea to fit content. Skipped in manual (drag-resized) mode.
+  const autosize = useCallback(() => {
+    const el = ref.current;
+    if (!el || manualRef.current) return;
+    el.style.height = "auto";
+    el.style.height = el.scrollHeight + "px";
+  }, []);
+
+  /** Stream voice text into the textarea at the captured caret position,
+   *  without committing (no caret move, no Revise-with-agent affordance).
+   *  Used for live Speech-API interim updates. */
+  const streamVoiceText = useCallback((s: string) => {
+    const c = voiceCaretRef.current;
+    setTextAndDraft(c ? c.before + s + c.after : s);
+    setTimeout(autosize, 0);
+  }, [setTextAndDraft, autosize]);
+
+  /** Commit final voice text: insert at caret, move caret to end of insert,
+   *  enable the Revise-with-agent affordance, refit textarea. */
+  const commitVoiceText = useCallback((s: string) => {
+    const c = voiceCaretRef.current;
+    setTextAndDraft(c ? c.before + s + c.after : s);
+    setIsVoiceTranscript(true);
+    setTimeout(() => {
+      const el = ref.current;
+      if (!el) return;
+      el.focus();
+      if (c) {
+        const pos = c.before.length + s.length;
+        try { el.setSelectionRange(pos, pos); } catch { /* ignore */ }
+      }
+      autosize();
+    }, 0);
+  }, [setTextAndDraft, autosize]);
 
   useEffect(() => {
     if (!modeMenuOpen) return;
@@ -156,6 +196,20 @@ export function InputArea({ sessionId, disabled, placeholder, onSend, isRunning,
       document.removeEventListener("keydown", onKeyDown);
     };
   }, [modeMenuOpen]);
+
+  // Close message-history popup on outside click. (Escape is handled inside
+  // MessageHistory itself.)
+  useEffect(() => {
+    if (!showHistory) return;
+    const onPointerDown = (e: PointerEvent) => {
+      const target = e.target as Node;
+      if (historyPopupRef.current?.contains(target)) return;
+      if (historyTriggerRef.current?.contains(target)) return;
+      setShowHistory(false);
+    };
+    document.addEventListener("pointerdown", onPointerDown);
+    return () => document.removeEventListener("pointerdown", onPointerDown);
+  }, [showHistory]);
 
   const handleSend = useCallback(() => {
     const trimmed = text.trim();
@@ -174,29 +228,20 @@ export function InputArea({ sessionId, disabled, placeholder, onSend, isRunning,
           topic ? `Discuss: ${topic.slice(0, 40)}` : "Discussion"
         );
       }).catch(console.error);
-      setText("");
-      useInputDraftStore.getState().clearDraft(sessionId);
+      clearTextAndDraft();
       closeSuggestions();
       return;
     }
 
     onSend(trimmed, true);
-    setText("");
+    clearTextAndDraft();
     setIsVoiceTranscript(false);
-    useInputDraftStore.getState().clearDraft(sessionId);
     closeSuggestions();
     setPreviewActive(false);
     setPanelHeight(null);
-    // Reset textarea height after clearing text
-    setTimeout(() => {
-      const el = ref.current;
-      if (el) {
-        el.style.height = "auto";
-        el.style.height = el.scrollHeight + "px";
-      }
-    }, 0);
+    setTimeout(autosize, 0);
     ref.current?.focus();
-  }, [text, disabled, isDraft, onSend, sessionId, closeSuggestions]);
+  }, [text, disabled, isDraft, onSend, sessionId, closeSuggestions, clearTextAndDraft, autosize]);
 
   // -- Drag handle for panel resize --
   const handleDragStart = useCallback((e: React.MouseEvent) => {
@@ -226,14 +271,8 @@ export function InputArea({ sessionId, disabled, placeholder, onSend, isRunning,
   // Double-click the handle to reset to auto-size
   const handleDragDoubleClick = useCallback(() => {
     setPanelHeight(null);
-    setTimeout(() => {
-      const el = ref.current;
-      if (el) {
-        el.style.height = "auto";
-        el.style.height = el.scrollHeight + "px";
-      }
-    }, 0);
-  }, []);
+    setTimeout(autosize, 0);
+  }, [autosize]);
 
   // -- Horizontal split-pane drag handler --
   const handleSplitDragStart = useCallback((e: React.MouseEvent) => {
@@ -324,6 +363,10 @@ export function InputArea({ sessionId, disabled, placeholder, onSend, isRunning,
 
   const handleChange = useCallback(
     (value: string) => {
+      // Typing during dictation aborts the recording — standard behaviour
+      // for dictation UIs. Otherwise live interim would race the keystroke
+      // and overwrite what the user just typed.
+      if (voice.isRecording) voice.cancelRecording();
       setTextAndDraft(value);
       setIsVoiceTranscript(false);
       if (value.startsWith("/")) {
@@ -336,7 +379,7 @@ export function InputArea({ sessionId, disabled, placeholder, onSend, isRunning,
         closeSuggestions();
       }
     },
-    [closeSuggestions, setTextAndDraft, skills],
+    [closeSuggestions, setTextAndDraft, skills, voice],
   );
 
   const handleHistorySelect = useCallback(
@@ -344,30 +387,16 @@ export function InputArea({ sessionId, disabled, placeholder, onSend, isRunning,
       setTextAndDraft(msg);
       setShowHistory(false);
       setTimeout(() => {
-        const el = ref.current;
-        if (el) {
-          el.focus();
-          if (!manualRef.current) {
-            el.style.height = "auto";
-            el.style.height = el.scrollHeight + "px";
-          }
-        }
+        ref.current?.focus();
+        autosize();
       }, 0);
     },
-    [setTextAndDraft],
+    [setTextAndDraft, autosize],
   );
 
   const handleHistoryClose = useCallback(() => {
     setShowHistory(false);
     ref.current?.focus();
-  }, []);
-
-  const handleInput = useCallback(() => {
-    if (manualRef.current) return; // In manual mode, flex layout handles sizing
-    const el = ref.current;
-    if (!el) return;
-    el.style.height = "auto";
-    el.style.height = el.scrollHeight + "px";
   }, []);
 
   // Show voice input errors as toasts
@@ -381,87 +410,64 @@ export function InputArea({ sessionId, disabled, placeholder, onSend, isRunning,
     }
   }, [voice.error]);
 
-  // Sync interim text from Web Speech API into textarea
+  // Stream Web Speech API interim text at the captured caret position
+  // (between voiceCaretRef's `before` and `after`) instead of replacing
+  // the whole textarea — matches standard dictation behaviour.
   useEffect(() => {
     if (voice.mode === "speech-api" && voice.isRecording && voice.interimText) {
-      setTextAndDraft(voice.interimText);
-      setTimeout(() => {
-        const el = ref.current;
-        if (el && !manualRef.current) {
-          el.style.height = "auto";
-          el.style.height = el.scrollHeight + "px";
-        }
-      }, 0);
+      streamVoiceText(voice.interimText);
     }
-  }, [voice.mode, voice.isRecording, voice.interimText, setTextAndDraft]);
-
-  const resizeTextarea = useCallback(() => {
-    setTimeout(() => {
-      const el = ref.current;
-      if (el) {
-        el.focus();
-        if (!manualRef.current) {
-          el.style.height = "auto";
-          el.style.height = el.scrollHeight + "px";
-        }
-      }
-    }, 0);
-  }, []);
+  }, [voice.mode, voice.isRecording, voice.interimText, streamVoiceText]);
 
   const runRevise = useCallback(async (raw: string): Promise<void> => {
     try {
       const revised = await voice.reviseTranscript(raw);
-      setTextAndDraft(revised);
-      setIsVoiceTranscript(true);
+      commitVoiceText(revised);
       setReviseError(null);
-      resizeTextarea();
     } catch (e) {
-      const msg = e instanceof Error ? e.message : String(e);
-      setTextAndDraft(raw);
-      setIsVoiceTranscript(true);
-      setReviseError(msg);
-      resizeTextarea();
+      commitVoiceText(raw);
+      setReviseError(e instanceof Error ? e.message : String(e));
     }
-  }, [voice, setTextAndDraft, resizeTextarea]);
+  }, [voice, commitVoiceText]);
+
+  const startVoiceRecording = useCallback(() => {
+    const el = ref.current;
+    const start = el?.selectionStart ?? text.length;
+    const end = el?.selectionEnd ?? text.length;
+    voiceCaretRef.current = { before: text.slice(0, start), after: text.slice(end) };
+    setRawTranscript(null);
+    setReviseError(null);
+    voice.startRecording();
+  }, [voice, text]);
 
   const handleMicClick = useCallback(async () => {
-    if (voice.isRecording) {
-      const transcript = await voice.stopRecording();
-      if (!transcript) return;
+    if (!voice.isRecording) {
+      startVoiceRecording();
+      return;
+    }
 
-      if (voiceReviseMode === "subsession") {
-        setTextAndDraft(transcript);
-        setIsVoiceTranscript(true);
-        setRawTranscript(null);
-        setReviseError(null);
-        import("@/store/sessionStore.ts").then(({ useSessionStore }) => {
-          useSessionStore.getState().createSubsession(
-            sessionId,
-            "refinement",
-            transcript,
-            "Revise voice input",
-          );
-        }).catch(console.error);
-        resizeTextarea();
-        return;
-      }
+    const transcript = await voice.stopRecording();
+    if (!transcript) return;
 
-      if (voiceReviseMode === "off") {
-        setTextAndDraft(transcript);
-        setIsVoiceTranscript(true);
-        setRawTranscript(null);
-        setReviseError(null);
-        resizeTextarea();
-        return;
-      }
-
-      // mode === "auto"
+    if (voiceReviseMode === "auto") {
       setRawTranscript(transcript);
       await runRevise(transcript);
-    } else {
-      voice.startRecording();
+      return;
     }
-  }, [voice, setTextAndDraft, voiceReviseMode, sessionId, runRevise, resizeTextarea]);
+
+    commitVoiceText(transcript);
+
+    if (voiceReviseMode === "subsession") {
+      import("@/store/sessionStore.ts").then(({ useSessionStore }) => {
+        useSessionStore.getState().createSubsession(
+          sessionId,
+          "refinement",
+          transcript,
+          "Revise voice input",
+        );
+      }).catch(console.error);
+    }
+  }, [voice, voiceReviseMode, sessionId, runRevise, commitVoiceText, startVoiceRecording]);
 
   const handleReviseRetry = useCallback(() => {
     if (rawTranscript) runRevise(rawTranscript);
@@ -490,7 +496,9 @@ export function InputArea({ sessionId, disabled, placeholder, onSend, isRunning,
         onDoubleClick={handleDragDoubleClick}
       />
       {showHistory && (
-        <MessageHistory onSelect={handleHistorySelect} onClose={handleHistoryClose} />
+        <div ref={historyPopupRef}>
+          <MessageHistory onSelect={handleHistorySelect} onClose={handleHistoryClose} />
+        </div>
       )}
       {reviseError && (
         <div className="input-revise-banner" role="alert">
@@ -542,7 +550,7 @@ export function InputArea({ sessionId, disabled, placeholder, onSend, isRunning,
             value={text}
             onChange={(e) => {
               handleChange(e.target.value);
-              handleInput();
+              autosize();
             }}
             onKeyDown={handleKeyDown}
             placeholder={voice.isRevising ? "Revising..." : voice.isTranscribing ? "Transcribing..." : placeholder}
@@ -569,6 +577,7 @@ export function InputArea({ sessionId, disabled, placeholder, onSend, isRunning,
         </div>
       </div>
       <button
+        ref={historyTriggerRef}
         className="input-icon-btn"
         onClick={() => {
           closeSuggestions();
