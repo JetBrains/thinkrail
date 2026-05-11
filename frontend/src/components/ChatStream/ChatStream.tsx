@@ -6,6 +6,8 @@ import { useViewMode, type ViewMode } from "@/context/ViewModeContext.tsx";
 import { useSettingsStore } from "@/store/settingsStore.ts";
 import { useSessionStore } from "@/store/sessionStore.ts";
 import { renderEvent } from "./renderers/registry.ts";
+import { EVENT_CATEGORIES } from "./renderers/categories.ts";
+import { useUiStore } from "@/store/uiStore.ts";
 import { SessionContextMenu } from "./SessionContextMenu.tsx";
 import { SubsessionContextMenu } from "./SubsessionContextMenu.tsx";
 import { ReturnFlowCard } from "./ReturnFlowCard.tsx";
@@ -83,6 +85,7 @@ export const ChatStream = forwardRef<ChatStreamHandle, ChatStreamProps>(function
   const scrollRef = useRef<HTMLDivElement>(null);
   const autoScroll = useRef(true);
   const viewMode = useViewMode();
+  const categoryVisibility = useUiStore((s) => s.chatCategoryVisibility);
 
   // ── Context menu state ──
   const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number; questionRequestId?: string } | null>(null);
@@ -321,6 +324,18 @@ export const ChatStream = forwardRef<ChatStreamHandle, ChatStreamProps>(function
       )}
       {events.map((ev, i) => {
         if (childIndices.has(i)) return null;
+        // Filter by user's category toggles in SessionStatusLine —
+        // except: pending interaction requests (confirmAction, etc.)
+        // stay visible regardless of category, because the user has
+        // to answer before the agent can continue.  Once answered,
+        // they follow the category rule and disappear in dialog mode.
+        const category = EVENT_CATEGORIES[ev.eventType];
+        if (category && !categoryVisibility[category]) {
+          const payload = ev.payload as { requestId?: string } | undefined;
+          const reqId = payload?.requestId;
+          const isPendingInteraction = reqId != null && !answeredRequests.has(reqId);
+          if (!isPendingInteraction) return null;
+        }
         const k = `${i}-${ev.eventType}`;
         return renderEvent(viewMode, ev, i, k, ctx);
       })}

@@ -2,6 +2,14 @@ import { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import type { SessionMetrics, SessionStatus } from "@/types/session.ts";
 import { buildModelOptions, currentModelOptionKey } from "@/utils/models.ts";
 import { useSettingsStore } from "@/store/settingsStore.ts";
+import { useUiStore } from "@/store/uiStore.ts";
+import type { EventCategory } from "./renderers/categories.ts";
+
+const CATEGORY_LABELS: Record<EventCategory, string> = {
+  dialog: "dialog",
+  tools: "tools",
+  system: "system",
+};
 
 const EFFORT_OPTIONS = [
   { value: null, label: "auto" },
@@ -120,6 +128,8 @@ export function SessionStatusLine({
   const modeDd = useDropdown();
   const effortDd = useDropdown();
   const statusDd = useDropdown();
+  const categoryVisibility = useUiStore((s) => s.chatCategoryVisibility);
+  const toggleCategory = useUiStore((s) => s.toggleChatCategory);
 
   const contextPct =
     metrics.contextMax > 0
@@ -231,6 +241,19 @@ export function SessionStatusLine({
           </div>
         )}
       </div>
+      <span className="ssl-sep" />
+      <span className="ssl-view-chips" title="Click each to show/hide chat content by category">
+        {(Object.keys(CATEGORY_LABELS) as EventCategory[]).map((cat) => (
+          <button
+            key={cat}
+            className={`ssl-chip${categoryVisibility[cat] ? " ssl-chip-on" : " ssl-chip-off"}`}
+            onClick={() => toggleCategory(cat)}
+            title={categoryVisibility[cat] ? `Hide ${cat}` : `Show ${cat}`}
+          >
+            {CATEGORY_LABELS[cat]}
+          </button>
+        ))}
+      </span>
       <span className="ssl-sep" />
       <span className={`ssl-cost${(status === "running" || status === "waiting") ? " ssl-cost-active" : ""}`}>
         {(status === "running" || status === "waiting") ? `~$${metrics.costUsd.toFixed(2)}` : `$${metrics.costUsd.toFixed(2)}`} | ${projectCost.toFixed(2)}

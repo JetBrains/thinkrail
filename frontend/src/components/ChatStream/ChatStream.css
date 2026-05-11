@@ -963,6 +963,16 @@
 }
 .ssl-selector-btn:hover:not(:disabled) { background: var(--hover); color: var(--text); }
 .ssl-selector-disabled { opacity: 0.5; cursor: not-allowed; }
+.ssl-view-chips { display: inline-flex; gap: 2px; align-items: center; }
+.ssl-chip {
+  background: transparent; border: 1px solid var(--border);
+  color: var(--muted); font-family: var(--font); font-size: var(--font-md);
+  padding: 0 6px; line-height: 16px; border-radius: 10px;
+  cursor: pointer;
+}
+.ssl-chip-on  { background: var(--hover); color: var(--text); border-color: var(--text); }
+.ssl-chip-off { opacity: 0.55; text-decoration: line-through; }
+.ssl-chip:hover { color: var(--text); }
 .ssl-dropdown {
   position: absolute; bottom: 100%; left: 0;
   margin-bottom: 4px;

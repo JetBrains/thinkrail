@@ -1,9 +1,12 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
+import type { EventCategory } from "@/components/ChatStream/renderers/categories.ts";
 
 type LeftTab = "specs" | "files" | "progress";
 type Breakpoint = "desktop" | "laptop" | "below-min";
 export type ProjectState = "initialized" | "new" | "existing";
+
+export type ChatCategoryVisibility = Record<EventCategory, boolean>;
 
 /**
  * Resolve what to do with sessions for a given project state.
@@ -41,6 +44,9 @@ interface UiStore {
   breakpoint: Breakpoint;
   fileTreeVersion: number;
 
+  chatCategoryVisibility: ChatCategoryVisibility;
+  toggleChatCategory: (category: EventCategory) => void;
+
   toggleLeftPanel: () => void;
   toggleRightPanel: () => void;
   setLeftTab: (tab: LeftTab) => void;
@@ -74,6 +80,15 @@ export const useUiStore = create<UiStore>()(
       breakpoint: "desktop" as Breakpoint,
       fileTreeVersion: 0,
 
+      chatCategoryVisibility: { dialog: true, tools: true, system: true },
+      toggleChatCategory: (category) =>
+        set((s) => ({
+          chatCategoryVisibility: {
+            ...s.chatCategoryVisibility,
+            [category]: !s.chatCategoryVisibility[category],
+          },
+        })),
+
       toggleLeftPanel: () =>
         set((s) => ({ leftPanelCollapsed: !s.leftPanelCollapsed })),
       toggleRightPanel: () =>
@@ -91,6 +106,7 @@ export const useUiStore = create<UiStore>()(
         leftPanelCollapsed: state.leftPanelCollapsed,
         rightPanelCollapsed: state.rightPanelCollapsed,
         leftActiveTab: state.leftActiveTab,
+        chatCategoryVisibility: state.chatCategoryVisibility,
       }),
     },
   ),
