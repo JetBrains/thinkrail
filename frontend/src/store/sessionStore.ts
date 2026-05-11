@@ -1122,6 +1122,10 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
           },
           pendingRequest: null,
           answeredRequests: buildAnsweredRequests(events, true),
+          // Disk-only sessions have no live runner — surface the
+          // RestoredBar with its "Resume" button (which calls
+          // session/continue) instead of the regular input area.
+          restored: !entry.inTracker,
           ...(restoredPrompt ? { systemPrompt: restoredPrompt } : {}),
           parentBonsaiSid: (data as unknown as Record<string, unknown>)?.parentBonsaiSid as string ?? null,
           subsessionType: (data as unknown as Record<string, unknown>)?.subsessionType as Session["subsessionType"] ?? null,
