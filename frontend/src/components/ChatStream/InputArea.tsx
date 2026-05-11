@@ -139,6 +139,23 @@ export function InputArea({ sessionId, disabled, placeholder, onSend, isRunning,
   const [rawTranscript, setRawTranscript] = useState<string | null>(null);
   const [reviseError, setReviseError] = useState<string | null>(null);
   const [modeMenuOpen, setModeMenuOpen] = useState(false);
+  const moreMenuRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!modeMenuOpen) return;
+    const onPointerDown = (e: PointerEvent) => {
+      if (!moreMenuRef.current?.contains(e.target as Node)) setModeMenuOpen(false);
+    };
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setModeMenuOpen(false);
+    };
+    document.addEventListener("pointerdown", onPointerDown);
+    document.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.removeEventListener("pointerdown", onPointerDown);
+      document.removeEventListener("keydown", onKeyDown);
+    };
+  }, [modeMenuOpen]);
 
   const handleSend = useCallback(() => {
     const trimmed = text.trim();
@@ -573,7 +590,7 @@ export function InputArea({ sessionId, disabled, placeholder, onSend, isRunning,
           {(voice.isTranscribing || voice.isRevising) ? <span className="input-mic-spinner" /> : <IconMic />}
         </button>
       )}
-      <div className="input-more-wrap">
+      <div className="input-more-wrap" ref={moreMenuRef}>
         <button
           className="input-icon-btn"
           onClick={() => setModeMenuOpen((v) => !v)}
@@ -602,23 +619,23 @@ export function InputArea({ sessionId, disabled, placeholder, onSend, isRunning,
             {voice.isSupported && (
               <>
                 <div className="input-more-group">Voice revise</div>
-                {(["auto", "subsession", "off"] as const).map((m) => (
-                  <button
-                    key={m}
-                    role="menuitemradio"
-                    aria-checked={voiceReviseMode === m}
-                    className={`input-more-item${voiceReviseMode === m ? " input-more-item--active" : ""}`}
-                    onClick={() => {
-                      useSettingsStore.getState().updateSettings({ voice_revise_mode: m });
-                      setModeMenuOpen(false);
-                    }}
-                  >
-                    <span className="input-more-check">{voiceReviseMode === m ? "\u2713" : ""}</span>
-                    <span className="input-more-label">
-                      {m === "auto" ? "Auto-revise" : m === "subsession" ? "Refinement subsession" : "Raw transcript"}
-                    </span>
-                  </button>
-                ))}
+                <div className="input-more-chips">
+                  {(["auto", "subsession", "off"] as const).map((m) => {
+                    const active = voiceReviseMode === m;
+                    const label = m === "auto" ? "Auto-revise" : m === "subsession" ? "Refinement subsession" : "Raw transcript";
+                    return (
+                      <button
+                        key={m}
+                        role="menuitemradio"
+                        aria-checked={active}
+                        className={`input-more-chip${active ? " input-more-chip-on" : " input-more-chip-off"}`}
+                        onClick={() => useSettingsStore.getState().updateSettings({ voice_revise_mode: m })}
+                      >
+                        {label}
+                      </button>
+                    );
+                  })}
+                </div>
               </>
             )}
           </div>

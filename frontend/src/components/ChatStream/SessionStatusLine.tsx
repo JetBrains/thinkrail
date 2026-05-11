@@ -140,19 +140,23 @@ interface ChipGroupProps<T> {
   isActive: (value: T) => boolean;
   onSelect: (value: T) => void;
   disabled?: boolean;
+  /** Strike-through inactive chips. Use for toggleable visibility groups
+   *  ("hidden" semantics); leave off for single-select switchers. */
+  strikeOff?: boolean;
 }
 
-function ChipGroup<T extends string | null>({ label, items, isActive, onSelect, disabled }: ChipGroupProps<T>) {
+function ChipGroup<T extends string | null>({ label, items, isActive, onSelect, disabled, strikeOff }: ChipGroupProps<T>) {
   return (
     <>
       <div className="ssl-more-group">{label}</div>
       <div className="ssl-more-chips">
         {items.map((item) => {
           const active = isActive(item.value);
+          const offClass = strikeOff ? " ssl-chip-off ssl-chip-off-strike" : " ssl-chip-off";
           return (
             <button
               key={String(item.value ?? "_null")}
-              className={`ssl-chip${active ? " ssl-chip-on" : " ssl-chip-off"}`}
+              className={`ssl-chip${active ? " ssl-chip-on" : offClass}`}
               disabled={disabled}
               onClick={() => onSelect(item.value)}
             >
@@ -394,6 +398,7 @@ export function SessionStatusLine({
                 items={(Object.keys(CATEGORY_LABELS) as EventCategory[]).map((c) => ({ value: c, label: CATEGORY_LABELS[c] }))}
                 isActive={(v) => categoryVisibility[v]}
                 onSelect={toggleCategory}
+                strikeOff
               />
             </section>
 
