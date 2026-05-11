@@ -14,15 +14,15 @@ inputs:
 runs:
   using: composite
   steps:
-    - uses: actions/setup-python@v5
+    - uses: actions/setup-python@v6
       with:
         python-version: ${{ inputs.python-version }}
 
-    - uses: astral-sh/setup-uv@v4
+    - uses: astral-sh/setup-uv@v8.1.0
       with:
         enable-cache: true
 
-    - uses: actions/setup-node@v4
+    - uses: actions/setup-node@v6
       with:
         node-version: ${{ inputs.node-version }}
         cache: npm
