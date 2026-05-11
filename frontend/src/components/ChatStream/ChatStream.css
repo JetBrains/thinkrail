@@ -988,7 +988,6 @@
 .session-status-line {
   display: flex; align-items: center; gap: var(--space-sm);
   padding: var(--space-xs) var(--space-lg);
-  border-top: 1px solid var(--border);
   font-size: var(--font-md);
   color: var(--hint);
   flex-shrink: 0;
@@ -1009,6 +1008,7 @@
   transition: opacity var(--transition-fast);
 }
 .ssl-selector-btn:hover .ssl-chevron { opacity: 0.85; }
+.ssl-status-icon { vertical-align: -2px; margin-right: 2px; opacity: 0.85; }
 .ssl-selector-disabled { opacity: 0.5; cursor: not-allowed; }
 .ssl-chip {
   background: transparent; border: 1px solid var(--border);
@@ -1052,12 +1052,16 @@
   display: inline-flex;
   gap: 6px;
 }
-.ssl-action-slot .input-send,
-.ssl-action-slot .input-continue,
-.ssl-action-slot .input-interrupt {
+/* Send (text-button) is the only one that needs compacting in SSL —
+   Continue and Stop are already square icon buttons. */
+.ssl-action-slot .input-send {
   padding: 2px 10px;
   font-size: var(--font-md);
   line-height: 1.5;
+}
+.ssl-action-slot .input-continue,
+.ssl-action-slot .input-interrupt {
+  width: 24px; height: 24px;
 }
 
 /* ── More-options popover: shadcn-style card with 2 compact columns.
@@ -1352,9 +1356,20 @@
 .input-area {
   display: flex; align-items: flex-end; gap: var(--space-sm);
   padding: var(--space-md) var(--space-lg);
-  border-top: 1px solid var(--border);
   flex-shrink: 0;
   position: relative;
+}
+
+/* Bottom composer card — wraps SessionStatusLine + InputArea as a single
+   rounded panel separated from the chat above.  No `overflow: hidden`
+   here because dropdowns inside the SSL (model/permission/status) pop
+   *above* the bar and would get clipped. */
+.session-bottom {
+  margin: var(--space-sm) var(--space-md) var(--space-md);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--panel);
+  flex-shrink: 0;
 }
 .input-area--manual {
   align-items: stretch;
@@ -1424,17 +1439,23 @@
 }
 .input-send:disabled { opacity: 0.4; cursor: not-allowed; }
 .input-send:hover:not(:disabled) { opacity: 0.9; }
+/* Stop button — square icon button with subtle destructive tone.
+   Avoids the harsh solid-red look that fights with the surrounding chrome. */
 .input-interrupt {
-  padding: var(--space-xs) var(--space-md);
-  border: none;
-  border-radius: var(--radius-sm);
-  background: var(--red);
-  color: var(--bg);
-  font-size: var(--font-md);
+  width: 28px; height: 28px;
+  display: inline-flex; align-items: center; justify-content: center;
+  border: 1px solid rgba(247, 84, 100, 0.45);
+  border-radius: 8px;
+  background: rgba(247, 84, 100, 0.12);
+  color: var(--red);
   cursor: pointer;
   flex-shrink: 0;
+  transition: background var(--transition-fast), border-color var(--transition-fast);
 }
-.input-interrupt:hover { opacity: 0.9; }
+.input-interrupt:hover {
+  background: rgba(247, 84, 100, 0.2);
+  border-color: var(--red);
+}
 .input-actions {
   display: flex;
   flex-direction: column;
@@ -1442,23 +1463,22 @@
   gap: var(--space-xs);
   flex-shrink: 0;
 }
+/* Continue button — square play-icon button.  Pairs with .input-interrupt
+   (red stop) as their counterpart in the same place. */
 .input-continue {
-  padding: 2px var(--space-sm);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  background: transparent;
-  color: var(--muted);
-  font-family: var(--font);
-  font-size: var(--font-sm);
+  width: 28px; height: 28px;
+  display: inline-flex; align-items: center; justify-content: center;
+  border: 1px solid rgba(33, 215, 137, 0.45);
+  border-radius: 8px;
+  background: rgba(33, 215, 137, 0.12);
+  color: var(--green);
   cursor: pointer;
   flex-shrink: 0;
-  transition: all var(--transition-fast);
-  white-space: nowrap;
+  transition: background var(--transition-fast), border-color var(--transition-fast);
 }
 .input-continue:hover {
-  background: var(--hover);
-  color: var(--text);
-  border-color: var(--border2);
+  background: rgba(33, 215, 137, 0.2);
+  border-color: var(--green);
 }
 
 /* ── Markdown Editor Wrapper ── */

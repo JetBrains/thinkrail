@@ -207,44 +207,46 @@ export function SessionPanel() {
             session={activeSession}
             onContextCardVisibility={setContextCardVisible}
           />
-          {!isDraft && (
-            <SessionStatusLine
-              model={activeSession.model}
-              permissionMode={activeSession.permissionMode}
-              effort={activeSession.effort ?? null}
-              metrics={activeSession.metrics}
-              status={status ?? "idle"}
-              projectCost={projectCost}
-              disabled={activeSession.restored || isDone}
-              actionSlotRef={setActionSlot}
-              onChangeModel={(m) => updateConfig(activeSession.bonsaiSid, { model: m })}
-              onChangePermissionMode={(m) => updateConfig(activeSession.bonsaiSid, { permissionMode: m })}
-              onInterrupt={() => interruptSession(activeSession.bonsaiSid)}
-              onEndSession={() => endSession(activeSession.bonsaiSid)}
-              onBackground={() => closeSession(activeSession.bonsaiSid)}
-              onChangeEffort={async (e) => {
-                await updateConfig(activeSession.bonsaiSid, { effort: e });
-                await restartSession(activeSession.bonsaiSid);
-              }}
-            />
-          )}
-          {activeSession.restored || isDone ? (
-            <RestoredBar bonsaiSid={activeSession.bonsaiSid} ended={isDone && !activeSession.restored} />
-          ) : (
-            <InputArea
-              sessionId={activeSession.bonsaiSid}
-              disabled={inputDisabled}
-              placeholder={placeholder}
-              onSend={handleSend}
-              isRunning={isRunning}
-              canInterrupt={canInterrupt}
-              onInterrupt={() => interruptSession(activeSession!.bonsaiSid)}
-              showContinue={showContinue}
-              onContinue={handleContinue}
-              isDraft={isDraft}
-              actionPortalTarget={actionSlot}
-            />
-          )}
+          <div className="session-bottom">
+            {!isDraft && (
+              <SessionStatusLine
+                model={activeSession.model}
+                permissionMode={activeSession.permissionMode}
+                effort={activeSession.effort ?? null}
+                metrics={activeSession.metrics}
+                status={status ?? "idle"}
+                projectCost={projectCost}
+                disabled={activeSession.restored || isDone}
+                actionSlotRef={setActionSlot}
+                onChangeModel={(m) => updateConfig(activeSession.bonsaiSid, { model: m })}
+                onChangePermissionMode={(m) => updateConfig(activeSession.bonsaiSid, { permissionMode: m })}
+                onInterrupt={() => interruptSession(activeSession.bonsaiSid)}
+                onEndSession={() => endSession(activeSession.bonsaiSid)}
+                onBackground={() => closeSession(activeSession.bonsaiSid)}
+                onChangeEffort={async (e) => {
+                  await updateConfig(activeSession.bonsaiSid, { effort: e });
+                  await restartSession(activeSession.bonsaiSid);
+                }}
+              />
+            )}
+            {activeSession.restored || isDone ? (
+              <RestoredBar bonsaiSid={activeSession.bonsaiSid} ended={isDone && !activeSession.restored} />
+            ) : (
+              <InputArea
+                sessionId={activeSession.bonsaiSid}
+                disabled={inputDisabled}
+                placeholder={placeholder}
+                onSend={handleSend}
+                isRunning={isRunning}
+                canInterrupt={canInterrupt}
+                onInterrupt={() => interruptSession(activeSession!.bonsaiSid)}
+                showContinue={showContinue}
+                onContinue={handleContinue}
+                isDraft={isDraft}
+                actionPortalTarget={actionSlot}
+              />
+            )}
+          </div>
         </>
       ) : (
         <BoardView onOpenTicket={handleOpenTicket} />

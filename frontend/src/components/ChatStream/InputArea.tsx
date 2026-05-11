@@ -54,7 +54,12 @@ const IconMore = () => (
 );
 const IconStop = () => (
   <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-    <rect x="6" y="6" width="12" height="12" rx="1" />
+    <rect x="5" y="5" width="14" height="14" rx="2" />
+  </svg>
+);
+const IconPlay = () => (
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+    <path d="M7 5v14l12-7-12-7z" />
   </svg>
 );
 
@@ -638,8 +643,13 @@ export function InputArea({ sessionId, disabled, placeholder, onSend, isRunning,
       {actionPortalTarget && createPortal(
         <div className="input-actions">
           {showContinue && onContinue && (
-            <button className="input-continue" onClick={onContinue} title="Continue without a message">
-              Continue
+            <button
+              className="input-continue"
+              onClick={onContinue}
+              title="Continue without a message"
+              aria-label="Continue"
+            >
+              <IconPlay />
             </button>
           )}
           {canInterrupt && onInterrupt && (

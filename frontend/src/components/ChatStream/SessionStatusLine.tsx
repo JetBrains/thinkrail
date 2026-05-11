@@ -30,18 +30,32 @@ const PERMISSION_MODES = [
   { value: "plan", label: "plan" },
 ] as const;
 
-interface StatusInfo { icon: string; label: string; cssClass: string }
+interface StatusInfo { icon: ReactNode; label: string; cssClass: string }
+
+/** Small lucide-style hourglass — minimal line art, theme-aware. */
+const IconHourglass = () => (
+  <svg
+    className="ssl-status-icon"
+    width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+    strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"
+  >
+    <path d="M5 22h14" />
+    <path d="M5 2h14" />
+    <path d="M17 22v-4.172a2 2 0 0 0-.586-1.414L12 12l-4.414 4.414A2 2 0 0 0 7 17.828V22" />
+    <path d="M7 2v4.172a2 2 0 0 0 .586 1.414L12 12l4.414-4.414A2 2 0 0 0 17 6.172V2" />
+  </svg>
+);
 
 function statusInfo(status: SessionStatus): StatusInfo {
   switch (status) {
-    case "draft":        return { icon: "✏", label: "draft", cssClass: "idle" };
-    case "initializing": return { icon: "⏳", label: "initializing", cssClass: "initializing" };
-    case "running":      return { icon: "",  label: "running", cssClass: "running" };
-    case "waiting":      return { icon: "⏳", label: "waiting", cssClass: "waiting" };
-    case "idle":         return { icon: "💤", label: "idle", cssClass: "idle" };
-    case "interrupted":  return { icon: "⏸", label: "interrupted", cssClass: "interrupted" };
+    case "draft":        return { icon: "✏",            label: "draft", cssClass: "idle" };
+    case "initializing": return { icon: <IconHourglass />, label: "initializing", cssClass: "initializing" };
+    case "running":      return { icon: "",              label: "running", cssClass: "running" };
+    case "waiting":      return { icon: <IconHourglass />, label: "waiting", cssClass: "waiting" };
+    case "idle":         return { icon: "💤",            label: "idle", cssClass: "idle" };
+    case "interrupted":  return { icon: "⏸",            label: "interrupted", cssClass: "interrupted" };
     case "done":
-    case "error":        return { icon: "⏹", label: "ended", cssClass: "ended" };
+    case "error":        return { icon: "⏹",            label: "ended", cssClass: "ended" };
   }
 }
 
