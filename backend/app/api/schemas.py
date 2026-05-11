@@ -2,7 +2,12 @@
 
 from __future__ import annotations
 
+from typing import Literal
+
 from pydantic import BaseModel
+
+
+ProjectState = Literal["initialized", "new", "existing"]
 
 
 # ── Shared ───────────────────────────────────────────────────────────────────
@@ -28,7 +33,7 @@ class ProjectListResponse(BaseModel):
 
 
 class ProjectValidateResponse(BaseModel):
-    valid: bool
+    state: ProjectState
     path: str
     name: str
     exists: bool

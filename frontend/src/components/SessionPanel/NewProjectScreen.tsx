@@ -14,7 +14,7 @@ export function NewProjectScreen() {
   const [attachedFile, setAttachedFile] = useState<{ name: string; content: string } | null>(null);
   const [nameError, setNameError] = useState(false);
   const startSession = useSessionStore((s) => s.startSession);
-  const setIsNewProject = useUiStore((s) => s.setIsNewProject);
+  const setProjectState = useUiStore((s) => s.setProjectState);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const voice = useVoiceInput();
@@ -69,7 +69,9 @@ export function NewProjectScreen() {
     if (!text && !attachedFile) return;
     if (submitting) return;
     setSubmitting(true);
-    setIsNewProject(false);
+    // Optimistically leave the new-project screen — first message kicks
+    // off the agent which materializes .bonsai/ on its first persist.
+    setProjectState("initialized");
 
     const parts: string[] = [];
     parts.push(`Project name: ${name}`);
@@ -97,10 +99,10 @@ export function NewProjectScreen() {
       // and triggers the agent to start the new-project skill flow.
       await useSessionStore.getState().sendMessage(bonsaiSid, prompt);
     } catch {
-      setIsNewProject(true);
+      setProjectState("new");
       setSubmitting(false);
     }
-  }, [input, sessionName, attachedFile, submitting, startSession, setIsNewProject]);
+  }, [input, sessionName, attachedFile, submitting, startSession, setProjectState]);
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent<HTMLTextAreaElement>) => {

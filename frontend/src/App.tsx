@@ -3,12 +3,13 @@ import { useRpc, useConnectionState, setClient } from "@/api/index.ts";
 import { wireEvents } from "@/store/wireEvents.ts";
 import { useSpecStore } from "@/store/specStore.ts";
 import { useSessionStore, startWatchdog, stopWatchdog } from "@/store/sessionStore.ts";
-import { useUiStore } from "@/store/uiStore.ts";
+import { useUiStore, sessionLoadStrategy } from "@/store/uiStore.ts";
 import { useVisStore } from "@/store/visStore.ts";
 import { useBoardStore } from "@/store/boardStore.ts";
 import { useSettingsStore } from "@/store/settingsStore.ts";
 import { registerKeyboardShortcuts } from "@/utils/keyboard.ts";
 import { applyFontScale } from "@/utils/fontScale.ts";
+import { validateProject } from "@/services/project.ts";
 import { CommandPalette } from "@/components/CommandPalette/CommandPalette.tsx";
 import { TrashModal } from "@/components/TrashModal/TrashModal.tsx";
 import { ToastContainer } from "@/components/Notifications/ToastContainer.tsx";
@@ -30,15 +31,24 @@ function AppInner({ projectPath: _projectPath, onSwitchProject }: { projectPath:
       wireCleanupRef.current?.();
       wireCleanupRef.current = wireEvents(client);
       useUiStore.getState().setProject(_projectPath);
+      // Session loading is gated on project state: state="new" defers
+      // to the welcome screen; state="initialized" also recovers the
+      // most recent disk session (backend-restart case).
+      validateProject(_projectPath)
+        .catch(() => ({ state: "initialized" as const }))
+        .then((d) => {
+          useUiStore.getState().setProjectState(d.state);
+          const opts = sessionLoadStrategy(d.state);
+          if (!opts) return;
+          useSessionStore.getState()
+            .loadActiveSessions(opts)
+            .catch((err) => console.warn("[Bonsai] Failed to load sessions:", err));
+        });
       console.log("[Bonsai] Fetching specs...");
       useSpecStore.getState().fetchSpecs().then(() => {
         console.log("[Bonsai] Specs loaded:", useSpecStore.getState().specs.length);
       });
       useSpecStore.getState().fetchGraph();
-      // Restore sessions that have live backend runners (survives page refresh)
-      useSessionStore.getState().loadActiveSessions().catch((err) => {
-        console.warn("[Bonsai] Failed to load active sessions:", err);
-      });
       // Load vis dashboard for StatusBar one-liner and VisTab
       useVisStore.getState().fetchState();
       // Load board tickets

@@ -39,10 +39,12 @@ export function Root() {
   }, []);
 
   const handleSelect = useCallback(
-    (path: string, isNew?: boolean) => {
+    (path: string) => {
       useFileStore.getState().unload();
       useSessionStore.getState().unload();
-      useUiStore.getState().setIsNewProject(isNew ?? false);
+      // projectState is fetched from the server on workspace mount
+      // (see App.tsx) — picker no longer needs to guess.
+      useUiStore.getState().setProjectState(null);
       localStorage.setItem(LAST_PROJECT_KEY, path);
       navigate(`/${pathToSlug(path)}/workspace`, { state: { projectPath: path } });
     },

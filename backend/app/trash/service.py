@@ -9,6 +9,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
+from app.core.config import BONSAI_DIRNAME
 from app.trash.storage import (
     list_trashed as _list_trashed,
     move_to_trash,
@@ -28,13 +29,13 @@ class TrashService:
 
     def __init__(self, project_root: Path) -> None:
         self._project_root = project_root
-        self._trash_dir = project_root / ".bonsai" / "trash"
+        self._trash_dir = project_root / BONSAI_DIRNAME / "trash"
 
     # -- sessions --------------------------------------------------------------
 
     def trash_session(self, bonsai_sid: str) -> None:
         """Move a session's files to trash."""
-        sessions_dir = self._project_root / ".bonsai" / "sessions"
+        sessions_dir = self._project_root / BONSAI_DIRNAME / "sessions"
         meta = sessions_dir / f"{bonsai_sid}.json"
         events = sessions_dir / f"{bonsai_sid}.events.jsonl"
         source_files = [f for f in [meta, events] if f.is_file()]
@@ -68,13 +69,13 @@ class TrashService:
 
         if cascade:
             # Cascade: plan
-            plan_file = self._project_root / ".bonsai" / "plans" / f"{ticket_id}.md"
+            plan_file = self._project_root / BONSAI_DIRNAME / "plans" / f"{ticket_id}.md"
             if plan_file.is_file():
                 self.trash_plan(ticket_id)
                 cascaded.append(f"plans/{ticket_id}")
 
             # Cascade: drafts (each entry individually)
-            drafts_dir = self._project_root / ".bonsai" / "spec-drafts" / ticket_id
+            drafts_dir = self._project_root / BONSAI_DIRNAME / "spec-drafts" / ticket_id
             manifest_path = drafts_dir / "manifest.json"
             if manifest_path.is_file():
                 raw = json.loads(manifest_path.read_text(encoding="utf-8"))
@@ -93,12 +94,12 @@ class TrashService:
                     shutil.rmtree(drafts_dir)
 
             # Cascade: patches
-            patches_dir = self._project_root / ".bonsai" / "spec-patches" / ticket_id
+            patches_dir = self._project_root / BONSAI_DIRNAME / "spec-patches" / ticket_id
             if patches_dir.is_dir():
                 self.trash_patches(ticket_id)
                 cascaded.append(f"patches/{ticket_id}")
 
-        tickets_dir = self._project_root / ".bonsai" / "meta-tickets"
+        tickets_dir = self._project_root / BONSAI_DIRNAME / "meta-tickets"
         ticket_file = tickets_dir / f"{ticket_id}.json"
         source_files = [f for f in [ticket_file] if f.is_file()]
         if not source_files:
@@ -151,7 +152,7 @@ class TrashService:
 
     def trash_plan(self, ticket_id: str) -> None:
         """Move .bonsai/plans/{ticket_id}.md to trash."""
-        plans_dir = self._project_root / ".bonsai" / "plans"
+        plans_dir = self._project_root / BONSAI_DIRNAME / "plans"
         plan_file = plans_dir / f"{ticket_id}.md"
         source_files = [plan_file] if plan_file.is_file() else []
         if not source_files:
@@ -182,7 +183,7 @@ class TrashService:
         """
         item_id = f"{ticket_id}--{draft_index}"
         source_files = [draft_file] if draft_file and draft_file.is_file() else []
-        original_dir = str(self._project_root / ".bonsai" / "spec-drafts" / ticket_id)
+        original_dir = str(self._project_root / BONSAI_DIRNAME / "spec-drafts" / ticket_id)
         move_to_trash(
             self._trash_dir, "drafts", item_id, source_files, original_dir,
             context={"ticketId": ticket_id, "manifestEntry": manifest_entry},
@@ -197,7 +198,7 @@ class TrashService:
 
     def trash_patches(self, ticket_id: str) -> None:
         """Move all .bonsai/spec-patches/{ticket_id}/ to trash."""
-        patches_dir = self._project_root / ".bonsai" / "spec-patches" / ticket_id
+        patches_dir = self._project_root / BONSAI_DIRNAME / "spec-patches" / ticket_id
         if not patches_dir.is_dir():
             logger.debug("No patches dir found for %s — skipping trash", ticket_id)
             return

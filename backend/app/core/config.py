@@ -14,6 +14,11 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 # shell script use the same fallback window.
 PORT_PROBE_RANGE = 10
 
+# Name of the per-project meta directory (also reused as the server-wide
+# data dir name under ``~/``).  Single source of truth — every join like
+# ``project_root / ".bonsai" / ...`` should reference this constant.
+BONSAI_DIRNAME = ".bonsai"
+
 # Two anchors are needed in frozen (PyInstaller) mode:
 #   * _BUNDLE_ROOT — bundled resources (claude-plugin/, frontend dist). Lives at
 #     sys._MEIPASS, which PyInstaller sets to the temp extraction dir (onefile)
@@ -80,7 +85,7 @@ def get_data_dir() -> Path:
     env = os.environ.get("BONSAI_DATA_DIR")
     if env:
         return Path(env).expanduser().resolve()
-    return Path.home() / ".bonsai"
+    return Path.home() / BONSAI_DIRNAME
 
 
 def get_index_path(project_root: Path) -> Path:
@@ -121,7 +126,7 @@ def _discover_root() -> Path:
     """Walk upward from cwd looking for a ``.bonsai/`` directory."""
     current = Path.cwd().resolve()
     for parent in [current, *current.parents]:
-        if (parent / ".bonsai").is_dir():
+        if (parent / BONSAI_DIRNAME).is_dir():
             return parent
     return current
 
@@ -131,6 +136,6 @@ def load_config(project_root: Path | None = None) -> AppConfig:
     root = project_root or _discover_root()
     return AppConfig(
         project_root=root,
-        bonsai_dir=root / ".bonsai",
+        bonsai_dir=root / BONSAI_DIRNAME,
         plugin_dir=_BUNDLE_ROOT / "claude-plugin",
     )

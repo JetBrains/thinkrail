@@ -3,13 +3,34 @@ import { persist } from "zustand/middleware";
 
 type LeftTab = "specs" | "files" | "progress";
 type Breakpoint = "desktop" | "laptop" | "below-min";
+export type ProjectState = "initialized" | "new" | "existing";
+
+/**
+ * Resolve what to do with sessions for a given project state.
+ * Returns `null` when the welcome screen handles the workspace (state="new").
+ *
+ * Exhaustive switch — TypeScript will flag the call site if a new
+ * ProjectState value is added without updating this strategy.
+ */
+export function sessionLoadStrategy(
+  state: ProjectState,
+): { includeRecentDiskSession: boolean } | null {
+  switch (state) {
+    case "new":
+      return null;
+    case "initialized":
+      return { includeRecentDiskSession: true };
+    case "existing":
+      return { includeRecentDiskSession: false };
+  }
+}
 
 interface UiStore {
   projectPath: string | null;
   projectName: string;
   setProject: (path: string) => void;
-  isNewProject: boolean;
-  setIsNewProject: (val: boolean) => void;
+  projectState: ProjectState | null;
+  setProjectState: (state: ProjectState | null) => void;
   leftPanelCollapsed: boolean;
   rightPanelCollapsed: boolean;
   leftDrawerOpen: boolean;
@@ -41,8 +62,8 @@ export const useUiStore = create<UiStore>()(
       projectName: "Project",
       setProject: (path: string) =>
         set({ projectPath: path, projectName: path.split("/").pop() ?? "Project" }),
-      isNewProject: false,
-      setIsNewProject: (val) => set({ isNewProject: val }),
+      projectState: null,
+      setProjectState: (state) => set({ projectState: state }),
       leftPanelCollapsed: false,
       rightPanelCollapsed: false,
       leftDrawerOpen: false,

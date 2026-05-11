@@ -41,7 +41,7 @@ vi.mock("@/store/sessionStore.ts", () => ({
   useSessionStore: { getState: () => ({ unload: vi.fn() }) },
 }));
 vi.mock("@/store/uiStore.ts", () => ({
-  useUiStore: { getState: () => ({ setIsNewProject: vi.fn() }) },
+  useUiStore: { getState: () => ({ setProjectState: vi.fn() }) },
 }));
 
 // Import Root after the mocks are registered. Root.tsx has no module-level

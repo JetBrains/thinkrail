@@ -11,17 +11,6 @@ if TYPE_CHECKING:
     from app.core.app_store import AppStore
 
 
-def valid_project_path(path: str = Query(...)) -> Path:
-    """Resolve and validate a Bonsai project path.
-
-    Raises 400 if the directory does not contain a ``.bonsai/`` directory.
-    """
-    p = Path(path).expanduser().resolve()
-    if not (p / ".bonsai").is_dir():
-        raise HTTPException(status_code=400, detail=f"Not a valid Bonsai project: {path}")
-    return p
-
-
 def valid_file_in_project(
     project: str = Query(...),
     path: str = Query(...),

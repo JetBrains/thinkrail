@@ -86,23 +86,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/project/init": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Init Project */
-        post: operations["init_project_api_project_init_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/project/files": {
         parameters: {
             query?: never;
@@ -421,8 +404,11 @@ export interface components {
         };
         /** ProjectValidateResponse */
         ProjectValidateResponse: {
-            /** Valid */
-            valid: boolean;
+            /**
+             * State
+             * @enum {string}
+             */
+            state: "initialized" | "new" | "existing";
             /** Path */
             path: string;
             /** Name */
@@ -464,11 +450,6 @@ export interface components {
             input?: unknown;
             /** Context */
             ctx?: Record<string, never>;
-        };
-        /** _InitBody */
-        _InitBody: {
-            /** Path */
-            path: string;
         };
         /** _MkdirBody */
         _MkdirBody: {
@@ -671,39 +652,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ProjectValidateResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    init_project_api_project_init_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["_InitBody"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ProjectInfo"];
                 };
             };
             /** @description Validation Error */

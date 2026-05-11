@@ -1,15 +1,14 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { validateProject, initProject } from "@/services/project.ts";
+import { validateProject } from "@/services/project.ts";
 import { listDirs, makeDirectory, browseFolder } from "@/services/fs.ts";
 import {
   getKnownProjects,
-  registerKnownProject,
   type KnownProject,
 } from "@/services/projects.ts";
 import "./ProjectPicker.css";
 
 interface ProjectPickerProps {
-  onSelect: (path: string, isNew?: boolean) => void;
+  onSelect: (path: string) => void;
   onClose?: () => void;
 }
 
@@ -83,20 +82,10 @@ export function ProjectPicker({ onSelect, onClose }: ProjectPickerProps) {
           setDirNotFound(true);
           return;
         }
-        if (validateData.valid) {
-          const basename =
-            validateData.path.split("/").filter(Boolean).pop() ??
-            validateData.path;
-          registerKnownProject(validateData.path, basename).catch(() => {});
-          onSelect(validateData.path, false);
-          return;
-        }
-        // Not yet initialized — auto-init
-        const initData = await initProject(target);
-        const basename =
-          initData.path.split("/").filter(Boolean).pop() ?? initData.path;
-        registerKnownProject(initData.path, basename).catch(() => {});
-        onSelect(initData.path, true);
+        // Backend will register the project in known-projects on first
+        // write (when .bonsai/ is materialized).  Empty/pre-init folders
+        // shouldn't pollute the recent list.
+        onSelect(validateData.path);
       } catch (e) {
         setError((e as Error).message ?? "Cannot reach backend");
       } finally {

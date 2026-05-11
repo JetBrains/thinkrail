@@ -5,7 +5,6 @@ from __future__ import annotations
 from pathlib import Path
 
 from fastapi import APIRouter, Query
-from pydantic import BaseModel
 
 from app.api.schemas import (
     FileEntry,
@@ -13,16 +12,51 @@ from app.api.schemas import (
     ProjectFilesResponse,
     ProjectInfo,
     ProjectListResponse,
+    ProjectState,
     ProjectValidateResponse,
 )
 from app.core.bonsaihide import load_bonsaihide
 from app.version import VERSION
+from app.core.config import BONSAI_DIRNAME
+from app.spec.service import SPEC_FILENAME_MAP
 
 router = APIRouter(tags=["project"])
 
 
-class _InitBody(BaseModel):
-    path: str
+# Deliverables of the spec-driven flows.  Reuses SPEC_FILENAME_MAP to
+# stay in sync with what the agent's spec_save tool actually writes.
+_SPEC_MARKERS: frozenset[str] = frozenset(SPEC_FILENAME_MAP)
+
+
+def _has_spec_deliverable(non_dot_children: list[Path]) -> bool:
+    """True if any spec marker exists at project root with non-empty content."""
+    for child in non_dot_children:
+        if child.name not in _SPEC_MARKERS or not child.is_file():
+            continue
+        try:
+            if child.stat().st_size > 0:
+                return True
+        except OSError:
+            continue
+    return False
+
+
+def _detect_project_state(p: Path) -> ProjectState:
+    """Classify a directory:
+      - ``initialized``: a spec deliverable exists — restore session
+      - ``new``: empty workspace — show welcome
+      - ``existing``: has user files but no spec — normal workspace
+
+    Falls back to ``existing`` on permission errors — safer than pushing
+    the user into the new-project flow on an unreadable directory.
+    """
+    try:
+        non_dot = [c for c in p.iterdir() if not c.name.startswith(".")]
+    except OSError:
+        return "existing"
+    if not non_dot:
+        return "new"
+    return "initialized" if _has_spec_deliverable(non_dot) else "existing"
 
 
 @router.get("/api/health", response_model=HealthResponse)
@@ -49,7 +83,7 @@ async def list_projects(base: str = Query(default=""), max_depth: int = Query(de
         for child in children:
             if not child.is_dir() or child.name.startswith("."):
                 continue
-            if (child / ".bonsai").is_dir():
+            if (child / BONSAI_DIRNAME).is_dir():
                 projects.append(ProjectInfo(path=str(child), name=child.name))
             else:
                 _scan(child, depth + 1)
@@ -61,17 +95,9 @@ async def list_projects(base: str = Query(default=""), max_depth: int = Query(de
 @router.get("/api/project/validate", response_model=ProjectValidateResponse)
 async def validate_project(path: str = Query(...)) -> ProjectValidateResponse:
     p = Path(path).expanduser().resolve()
-    has_specs = (p / ".bonsai").is_dir()
-    return ProjectValidateResponse(valid=has_specs, path=str(p), name=p.name, exists=p.is_dir())
-
-
-@router.post("/api/project/init", response_model=ProjectInfo)
-async def init_project(body: _InitBody) -> ProjectInfo:
-    p = Path(body.path).expanduser().resolve()
-    p.mkdir(parents=True, exist_ok=True)
-    bonsai_dir = p / ".bonsai"
-    bonsai_dir.mkdir(exist_ok=True)
-    return ProjectInfo(path=str(p), name=p.name)
+    exists = p.is_dir()
+    state = _detect_project_state(p) if exists else "new"
+    return ProjectValidateResponse(state=state, path=str(p), name=p.name, exists=exists)
 
 
 @router.get("/api/project/files", response_model=ProjectFilesResponse)

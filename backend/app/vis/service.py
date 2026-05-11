@@ -16,7 +16,7 @@ from collections.abc import Awaitable, Callable
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from app.core.config import AppConfig
+from app.core.config import AppConfig, BONSAI_DIRNAME
 from app.spec.models import Link, SpecEntry
 from app.vis.models import (
     CoverageEntry,
@@ -53,7 +53,7 @@ CODE_EXTENSIONS = {
 }
 
 IGNORE_DIRS = {
-    "node_modules", ".venv", "__pycache__", "dist", ".git", ".bonsai",
+    "node_modules", ".venv", "__pycache__", "dist", ".git", BONSAI_DIRNAME,
     "vendor", ".idea", ".vscode", ".claude", "claude-plugin",
 }
 
@@ -338,13 +338,13 @@ class VisualizationService:
 
     def _parse_tasks(self) -> list[TaskEntry]:
         tasks: list[TaskEntry] = []
-        task_dir = self._root / ".bonsai" / "implementation_tasks"
+        task_dir = self._root / BONSAI_DIRNAME / "implementation_tasks"
         if not task_dir.is_dir():
             return tasks
         pattern = str(task_dir / "**" / "*.md")
         for fpath in sorted(glob.glob(pattern, recursive=True)):
             rel = os.path.relpath(fpath, self._root)
-            parts = rel.replace(os.path.join(".bonsai", "implementation_tasks") + os.sep, "").split(os.sep)
+            parts = rel.replace(os.path.join(BONSAI_DIRNAME, "implementation_tasks") + os.sep, "").split(os.sep)
             module = parts[0] if len(parts) > 1 else "general"
             basename = os.path.splitext(os.path.basename(fpath))[0]
             try:

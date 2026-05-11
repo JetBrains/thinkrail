@@ -8,10 +8,8 @@ from pathlib import Path
 import pytest
 
 from app.core.project import (
-    BONSAI_SUBDIRS,
     ensure_meta_dir,
     ensure_meta_file,
-    ensure_project,
 )
 
 
@@ -84,26 +82,3 @@ class TestEnsureMetaDir:
         bonsai_dir = tmp_path / ".bonsai"
         p = ensure_meta_dir(bonsai_dir, "trash")
         assert p == bonsai_dir / "trash"
-
-
-class TestEnsureProject:
-    def test_creates_all_meta_files(self, tmp_path: Path) -> None:
-        ensure_project(tmp_path)
-        bonsai_dir = tmp_path / ".bonsai"
-        assert (bonsai_dir / "settings.json").is_file()
-        # Legacy meta-files are no longer created (single-user model)
-        assert not (bonsai_dir / "registry.json").exists()
-
-    def test_creates_all_subdirs(self, tmp_path: Path) -> None:
-        ensure_project(tmp_path)
-        bonsai_dir = tmp_path / ".bonsai"
-        for name in BONSAI_SUBDIRS:
-            assert (bonsai_dir / name).is_dir(), f"{name} dir not created"
-
-    def test_idempotent_on_existing_project(self, tmp_path: Path) -> None:
-        bonsai_dir = tmp_path / ".bonsai"
-        bonsai_dir.mkdir()
-        custom_settings = '{"custom": true}'
-        (bonsai_dir / "settings.json").write_text(custom_settings, encoding="utf-8")
-        ensure_project(tmp_path)
-        assert (bonsai_dir / "settings.json").read_text(encoding="utf-8") == custom_settings

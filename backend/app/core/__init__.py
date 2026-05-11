@@ -1,6 +1,6 @@
 from app.core.config import AppConfig, load_config, get_data_dir
 from app.core.fileio import read_text, write_text, delete_file, ensure_dir
-from app.core.project import ensure_meta_dir, ensure_meta_file, ensure_project
+from app.core.project import ensure_meta_dir, ensure_meta_file
 from app.core.app_store import AppStore
 from app.core.settings import (
     ProjectSettings,
@@ -20,7 +20,6 @@ __all__ = [
     "ensure_dir",
     "ensure_meta_dir",
     "ensure_meta_file",
-    "ensure_project",
     "AppStore",
     "ProjectSettings",
     "load_settings",

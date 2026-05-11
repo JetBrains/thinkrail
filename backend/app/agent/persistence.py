@@ -12,15 +12,20 @@ import logging
 from pathlib import Path
 from typing import Any
 
+from app.core.config import BONSAI_DIRNAME
 from app.core.fileio import delete_file, ensure_dir, read_text, write_text
 
 logger = logging.getLogger(__name__)
 
 
 def _sessions_dir(project_root: Path) -> Path:
-    d = project_root / ".bonsai" / "sessions"
-    ensure_dir(d)
-    return d
+    """Return the sessions directory path without creating it.
+
+    Writers should call :func:`ensure_dir` (or rely on :func:`write_text`,
+    which creates parents) before writing.  Readers must guard against
+    a missing directory.
+    """
+    return project_root / BONSAI_DIRNAME / "sessions"
 
 
 def _meta_path(project_root: Path, bonsai_sid: str) -> Path:
@@ -29,6 +34,19 @@ def _meta_path(project_root: Path, bonsai_sid: str) -> Path:
 
 def _events_path(project_root: Path, bonsai_sid: str) -> Path:
     return _sessions_dir(project_root) / f"{bonsai_sid}.events.jsonl"
+
+
+def has_persisted_sessions(project_root: Path) -> bool:
+    """Cheap check: does this project have at least one persisted session?
+
+    Used by the WS handler to decide whether the project is "real" enough
+    to add to the recent-projects list — folders with only background
+    artifacts (model cache, etc.) shouldn't pollute it.
+    """
+    sessions_dir = _sessions_dir(project_root)
+    if not sessions_dir.is_dir():
+        return False
+    return any(sessions_dir.glob("*.json"))
 
 
 def save_session(project_root: Path, data: dict[str, Any]) -> None:
@@ -93,6 +111,8 @@ def load_session(project_root: Path, bonsai_sid: str) -> dict[str, Any] | None:
 def list_sessions(project_root: Path) -> list[dict[str, Any]]:
     """List all sessions from disk (metadata only — no events loaded)."""
     sessions_dir = _sessions_dir(project_root)
+    if not sessions_dir.is_dir():
+        return []
     result: list[dict[str, Any]] = []
     for path in sorted(sessions_dir.glob("*.json"), key=lambda p: p.stat().st_mtime, reverse=True):
         try:
@@ -100,9 +120,13 @@ def list_sessions(project_root: Path) -> list[dict[str, Any]]:
             # Backward compat: support both bonsaiSid and taskId
             sid = data.get("bonsaiSid") or data.get("taskId", "")
             status = data.get("status", "done")
-            # Disk-only sessions with non-terminal status have no live runner — mark as ended
+            # Disk-only sessions with non-terminal status have no live
+            # runner.  "interrupted" reflects reality (runner was killed,
+            # e.g., by backend restart) and lets the UI keep flow-specific
+            # affordances (goal layout, GoalFilePanel) — unlike "done",
+            # which the UI treats as a fully-finished session.
             if status not in ("done", "error", "draft"):
-                status = "done"
+                status = "interrupted"
             entry: dict[str, Any] = {
                 "bonsaiSid": sid,
                 "name": data.get("name", ""),
@@ -112,7 +136,9 @@ def list_sessions(project_root: Path) -> list[dict[str, Any]]:
                 "model": data.get("config", {}).get("model", ""),
                 "createdAt": data.get("createdAt", ""),
                 "updatedAt": data.get("updatedAt", ""),
-                "active": status not in ("done", "error"),
+                # "interrupted" means no live runner → not active for
+                # scheduling, but the UI can still surface it.
+                "active": status not in ("done", "error", "interrupted"),
                 "inTracker": False,
                 "metrics": data.get("metrics", {}),
             }
@@ -151,6 +177,7 @@ def append_event(project_root: Path, bonsai_sid: str, event: dict[str, Any]) -> 
         return
     evts = _events_path(project_root, bonsai_sid)
     try:
+        ensure_dir(evts.parent)
         with evts.open("a", encoding="utf-8") as f:
             f.write(json.dumps(event, default=str) + "\n")
     except Exception:
@@ -185,7 +212,7 @@ def update_session_metadata(
 
 def list_children(project_root: Path, parent_bonsai_sid: str) -> list[dict[str, Any]]:
     """List direct child subsessions of a parent session (metadata only)."""
-    sessions_dir = project_root / ".bonsai" / "sessions"
+    sessions_dir = project_root / BONSAI_DIRNAME / "sessions"
     if not sessions_dir.is_dir():
         return []
     children = []

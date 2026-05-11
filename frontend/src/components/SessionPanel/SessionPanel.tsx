@@ -43,7 +43,7 @@ export function SessionPanel() {
   const [contextCardVisible, setContextCardVisible] = useState(true);
   const chatStreamRef = useRef<ChatStreamHandle>(null);
 
-  const isNewProject = useUiStore((s) => s.isNewProject);
+  const projectState = useUiStore((s) => s.projectState);
 
   const openTabs = useSessionStore((s) => s.openTabs);
   const sessionList = Array.from(sessions.values()).filter((s) => openTabs.has(s.bonsaiSid));
@@ -110,7 +110,7 @@ export function SessionPanel() {
 
   // New project: show goal-entry screen immediately, before any sessions exist.
   // Yields to an active session once one starts.
-  if (isNewProject && !activeSession && fileList.length === 0) {
+  if (projectState === "new" && !activeSession && fileList.length === 0) {
     return (
       <>
         <SessionTabBar

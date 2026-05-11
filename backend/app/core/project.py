@@ -4,8 +4,10 @@ Every known meta-file has a default-content factory.  When any code path
 reads a meta-file via :func:`ensure_meta_file`, the file is created with
 sensible defaults if it does not yet exist on disk.
 
-:func:`ensure_project` creates *all* known meta-files and subdirectories
-in a single pass — called at WebSocket connection time as a safety net.
+The ``.bonsai/`` directory itself is never created eagerly — it appears
+on disk only when a writer calls :func:`ensure_meta_file` or
+:func:`ensure_meta_dir` for the first time.  Empty / pre-init project
+folders stay clean until the user actually starts working.
 """
 
 from __future__ import annotations
@@ -32,17 +34,6 @@ def _default_settings(bonsai_dir: Path) -> str:
 _DEFAULT_FACTORIES: dict[str, Callable[[Path], str]] = {
     "settings.json": _default_settings,
 }
-
-# Subdirectories that should exist under .bonsai/
-BONSAI_SUBDIRS: tuple[str, ...] = (
-    "sessions",
-    "trash",
-    "plans",
-    "meta-tickets",
-    "spec-drafts",
-    "spec-patches",
-)
-
 
 # ---------------------------------------------------------------------------
 # Public API
@@ -73,16 +64,3 @@ def ensure_meta_dir(bonsai_dir: Path, name: str) -> Path:
     dir_path = bonsai_dir / name
     ensure_dir(dir_path)
     return dir_path
-
-
-def ensure_project(project_root: Path) -> None:
-    """Ensure all known meta-files and subdirectories exist under ``.bonsai/``.
-
-    Safe to call on an already-initialised project — existing files are
-    never overwritten.
-    """
-    bonsai_dir = project_root / ".bonsai"
-    for rel_path in _DEFAULT_FACTORIES:
-        ensure_meta_file(bonsai_dir, rel_path)
-    for name in BONSAI_SUBDIRS:
-        ensure_meta_dir(bonsai_dir, name)

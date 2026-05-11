@@ -110,3 +110,16 @@ class TestRegistryStatus:
         assert status["source"] == "fallback"
         assert status["error"] is not None
         assert "api key" in status["error"].lower()
+
+
+class TestSaveCacheLazyBonsai:
+    def test_save_cache_skips_when_bonsai_missing(self, tmp_path: Path) -> None:
+        reg = ModelRegistry(project_root=tmp_path)
+        reg._save_cache([{"id": "claude-x"}])
+        assert not (tmp_path / ".bonsai").exists()
+
+    def test_save_cache_writes_when_bonsai_exists(self, tmp_path: Path) -> None:
+        (tmp_path / ".bonsai").mkdir()
+        reg = ModelRegistry(project_root=tmp_path)
+        reg._save_cache([{"id": "claude-x"}])
+        assert (tmp_path / ".bonsai" / "cache" / "models.json").is_file()

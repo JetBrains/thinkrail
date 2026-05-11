@@ -6,6 +6,7 @@ from app.rpc.errors import TICKET_NOT_FOUND, INVALID_TRANSITION, rpc_handler
 from app.board.plan import Milestone, Plan, PlanStep, SuccessCriterion
 from app.board.service import BoardService, TicketNotFoundError
 from app.board.state_machine import InvalidTransitionError
+from app.core.config import BONSAI_DIRNAME
 
 _handle_errors = rpc_handler(
     (TicketNotFoundError, TICKET_NOT_FOUND, "Ticket not found"),
@@ -246,7 +247,7 @@ async def get_patch_diff(service: BoardService, **params: Any) -> dict:
         raise IndexError(f"Patch index {index} out of range")
 
     patch_record = ticket.spec_patches[index]
-    patch_path = service._config.get_project_root() / ".bonsai" / patch_record.patch_path
+    patch_path = service._config.get_project_root() / BONSAI_DIRNAME / patch_record.patch_path
 
     if not patch_path.is_file():
         return {
@@ -296,7 +297,7 @@ async def revert_patch(service: BoardService, **params: Any) -> dict:
     current_content = _read(spec_path) if spec_path.is_file() else ""
 
     # Read the original from the patch
-    patch_path = service._config.get_project_root() / ".bonsai" / patch_record.patch_path
+    patch_path = service._config.get_project_root() / BONSAI_DIRNAME / patch_record.patch_path
     if not patch_path.is_file():
         raise FileNotFoundError(f"Patch file not found: {patch_record.patch_path}")
 
@@ -352,7 +353,7 @@ async def revert_patch(service: BoardService, **params: Any) -> dict:
         fromfile=f"a/{patch_record.spec_path}",
         tofile=f"b/{patch_record.spec_path}",
     )
-    rev_path = service._config.get_project_root() / ".bonsai" / rev_rel
+    rev_path = service._config.get_project_root() / BONSAI_DIRNAME / rev_rel
     ensure_dir(rev_path.parent)
     _write(rev_path, "".join(rev_diff))
 

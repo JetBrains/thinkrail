@@ -97,7 +97,7 @@ interface SessionStore {
   continueSession: (bonsaiSid: string) => Promise<void>;
   retryLastMessage: (bonsaiSid: string) => Promise<void>;
   restoreSession: (bonsaiSid: string, opts?: { noTab?: boolean }) => Promise<void>;
-  loadActiveSessions: () => Promise<void>;
+  loadActiveSessions: (opts?: { includeRecentDiskSession?: boolean }) => Promise<void>;
 
   // Subsession actions
   createSubsession: (parentBonsaiSid: string, type: "discussion" | "refinement", context?: string, name?: string) => Promise<string>;
@@ -1036,7 +1036,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
     });
   },
 
-  loadActiveSessions: async () => {
+  loadActiveSessions: async ({ includeRecentDiskSession = false } = {}) => {
     const { createSessionApi } = await import("@/api/methods/sessions.ts");
     const api = createSessionApi(getClient());
     const all = await api.list();
@@ -1052,6 +1052,16 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
     // Filter to active sessions not already in memory
     const currentSessions = get().sessions;
     const toLoad = all.filter((e) => e.active && !currentSessions.has(e.bonsaiSid));
+
+    // Backend-restart recovery: if no live runners but the project has
+    // produced a deliverable (state=initialized), load the most recent
+    // session from disk so the user sees the conversation history.
+    // Backend sorts list_sessions by mtime descending, so the first
+    // entry is the freshest.
+    if (includeRecentDiskSession && toLoad.length === 0) {
+      const recent = all.find((e) => !currentSessions.has(e.bonsaiSid));
+      if (recent) toLoad.push(recent);
+    }
 
     // Fetch full data (with events) for each session in parallel
     const results = await Promise.allSettled(
@@ -1130,16 +1140,22 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
       }
 
       // Auto-activate the most relevant session if none is active yet:
-      // prefer running → then most recently started active session.
-      const currentActiveId = s.activeSessionId;
-      let autoActiveId: string | null = currentActiveId;
-      if (!currentActiveId) {
+      // running → most recently started active → recovered disk session
+      // (fallback for backend-restart when no live runners exist).
+      let autoActiveId: string | null = s.activeSessionId;
+      if (!autoActiveId) {
         const activeCandidates = all.filter((e) => e.active);
-        const running = activeCandidates.find((e) => e.status === "running");
-        const best = running ?? activeCandidates.sort(
-          (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
-        )[0];
+        const best = activeCandidates.find((e) => e.status === "running")
+          ?? activeCandidates.sort(
+            (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+          )[0];
         autoActiveId = best?.bonsaiSid ?? null;
+        if (!autoActiveId && includeRecentDiskSession) {
+          const loaded = results.find((r) => r.status === "fulfilled");
+          if (loaded?.status === "fulfilled") {
+            autoActiveId = loaded.value.entry.bonsaiSid;
+          }
+        }
       }
 
       // Open tabs for all loaded sessions (they had tabs before the refresh)

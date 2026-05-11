@@ -14,7 +14,7 @@ from typing import Literal
 from pydantic import BaseModel, Field
 
 from app.board.models import _CAMEL_CONFIG, _to_camel
-from app.core.config import AppConfig
+from app.core.config import AppConfig, BONSAI_DIRNAME
 from app.core.fileio import ensure_dir, read_text, write_text
 
 
@@ -302,7 +302,7 @@ class PlanService:
 
     @property
     def _plans_dir(self) -> Path:
-        return self._config.get_project_root() / ".bonsai" / "plans"
+        return self._config.get_project_root() / BONSAI_DIRNAME / "plans"
 
     def _plan_path(self, ticket_id: str) -> Path:
         return self._plans_dir / f"{ticket_id}.md"

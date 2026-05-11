@@ -8,20 +8,16 @@ import { join } from "node:path";
 
 // Mock the projects service before importing ProjectPicker.
 const getKnownProjectsMock = vi.hoisted(() => vi.fn());
-const registerKnownProjectMock = vi.hoisted(() => vi.fn());
 
 vi.mock("@/services/projects.ts", () => ({
   getKnownProjects: getKnownProjectsMock,
-  registerKnownProject: registerKnownProjectMock,
 }));
 
 // Mock the project service used by handleOpen.
 const validateProjectMock = vi.hoisted(() => vi.fn());
-const initProjectMock = vi.hoisted(() => vi.fn());
 
 vi.mock("@/services/project.ts", () => ({
   validateProject: validateProjectMock,
-  initProject: initProjectMock,
 }));
 
 // Mock fs service so the autocomplete effect doesn't hit the network.
@@ -36,11 +32,8 @@ import { ProjectPicker } from "../ProjectPicker.tsx";
 describe("ProjectPicker", () => {
   beforeEach(() => {
     getKnownProjectsMock.mockReset();
-    registerKnownProjectMock.mockReset();
     validateProjectMock.mockReset();
-    initProjectMock.mockReset();
     getKnownProjectsMock.mockResolvedValue([]);
-    registerKnownProjectMock.mockResolvedValue(undefined);
   });
 
   afterEach(() => {
@@ -87,7 +80,7 @@ describe("ProjectPicker", () => {
       },
     ]);
     validateProjectMock.mockResolvedValue({
-      valid: true,
+      state: "initialized",
       exists: true,
       path: "/tmp/alpha",
       name: "alpha",
@@ -101,10 +94,9 @@ describe("ProjectPicker", () => {
     expect(row).not.toBeNull();
     fireEvent.click(row);
     await waitFor(() => {
-      expect(onSelect).toHaveBeenCalledWith("/tmp/alpha", false);
+      expect(onSelect).toHaveBeenCalledWith("/tmp/alpha");
     });
     expect(validateProjectMock).toHaveBeenCalledWith("/tmp/alpha");
-    expect(initProjectMock).not.toHaveBeenCalled();
   });
 
   it("useTokenStore is never imported in ProjectPicker.tsx", () => {

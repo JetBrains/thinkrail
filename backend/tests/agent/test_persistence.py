@@ -4,6 +4,7 @@ from pathlib import Path
 from app.agent.persistence import (
     append_event,
     delete_session,
+    has_persisted_sessions,
     list_sessions,
     load_session,
     save_session,
@@ -160,10 +161,13 @@ class TestListSessions:
         assert set(entry.keys()) == expected_fields
 
     def test_list_stale_status_corrected(self, tmp_path: Path) -> None:
-        """Disk-only sessions with non-terminal status get forced to 'done'."""
+        """Disk-only sessions with non-terminal status get forced to
+        'interrupted' — the runner is gone (e.g., backend restart) but
+        the UI should still treat the session as recoverable, not as a
+        finished one."""
         save_session(tmp_path, _make_session_data(status="idle"))
         result = list_sessions(tmp_path)
-        assert result[0]["status"] == "done"
+        assert result[0]["status"] == "interrupted"
         assert result[0]["active"] is False
 
     def test_list_draft_status_preserved(self, tmp_path: Path) -> None:
@@ -307,3 +311,17 @@ class TestRoundTrip:
         assert loaded["events"][1]["payload"]["text"] == "a"
         assert loaded["events"][2]["payload"]["text"] == "b"
         assert loaded["events"][3]["eventType"] == "done"
+
+
+class TestHasPersistedSessions:
+    def test_missing_dir_is_false(self, tmp_path: Path) -> None:
+        assert has_persisted_sessions(tmp_path) is False
+
+    def test_empty_sessions_dir_is_false(self, tmp_path: Path) -> None:
+        (tmp_path / ".bonsai" / "sessions").mkdir(parents=True)
+        assert has_persisted_sessions(tmp_path) is False
+
+    def test_with_session_file_is_true(self, tmp_path: Path) -> None:
+        save_session(tmp_path, _make_session_data())
+        assert has_persisted_sessions(tmp_path) is True
+

@@ -110,8 +110,8 @@ from app.rpc.methods.board import (
     update_step,
     update_ticket,
 )
-from app.core.config import AppConfig, load_config
-from app.core.project import ensure_project
+from app.agent.persistence import has_persisted_sessions
+from app.core.config import AppConfig, BONSAI_DIRNAME, load_config
 from app.core.watcher import WatchHandle, watch
 from app.core.bonsaihide import load_bonsaihide
 from app.rpc.project_context import ProjectContext
@@ -262,7 +262,7 @@ def register_routes(app: FastAPI, app_store: "AppStore | None" = None) -> None:
         nonlocal _app_store
         # Lazy-init for test scenarios where no store was provided
         if _app_store is None:
-            _app_store = _AS(Path.home() / ".bonsai")
+            _app_store = _AS(Path.home() / BONSAI_DIRNAME)
         # Ensure the store is open (idempotent if already open)
         if not _app_store.is_open:
             await _app_store.open()
@@ -274,21 +274,22 @@ def register_routes(app: FastAPI, app_store: "AppStore | None" = None) -> None:
             return
 
         project_path = Path(project_param).expanduser().resolve()
-        try:
-            ensure_project(project_path)
-        except Exception:
+        if not project_path.is_dir():
             await websocket.close(
                 code=4002,
-                reason=f"Failed to initialize project at {project_path}",
+                reason=f"Project directory does not exist: {project_path}",
             )
             return
 
-        # Register project in app-wide store (single-user model — no auth)
+        # Recent-projects list is keyed on real work, not folder access.
+        # Background artifacts (model cache, etc.) don't count.
         project_name = project_path.name
-        try:
-            await _app_store.register_project(str(project_path), project_name)
-        except Exception:
-            logger.warning("Failed to update app store on connect", exc_info=True)
+        project_registered = has_persisted_sessions(project_path)
+        if project_registered:
+            try:
+                await _app_store.register_project(str(project_path), project_name)
+            except Exception:
+                logger.warning("Failed to update app store on connect", exc_info=True)
 
         # Accept immediately — within frontend's 5s connectTimeout
         await websocket.accept()
@@ -408,6 +409,14 @@ def register_routes(app: FastAPI, app_store: "AppStore | None" = None) -> None:
                     current_conn_id.reset(token)
                 if response:
                     await websocket.send_text(response)
+                # Lazy registration: surface the project in the recent
+                # list once a handler has persisted its first session.
+                if not project_registered and has_persisted_sessions(project_path):
+                    try:
+                        await _app_store.register_project(str(project_path), project_name)
+                        project_registered = True
+                    except Exception:
+                        logger.warning("Failed to register project after first session", exc_info=True)
         except WebSocketDisconnect:
             logger.info("WebSocket client %s disconnected", conn_id[:8])
         finally:

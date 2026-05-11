@@ -156,19 +156,14 @@ class TestWebSocket:
         assert excinfo.value.code == 4001
 
     def test_nonexistent_project_closes_4002(self, tmp_path: Path) -> None:
-        """A project path that cannot be initialised closes 4002."""
+        """A path that doesn't resolve to a directory closes with 4002."""
         app = _make_app(tmp_path)
         client = TestClient(app)
 
-        # Use a path that does not exist and cannot be created (under a
-        # non-existent parent that ensure_project would refuse to walk).
         bad = tmp_path / "definitely_does_not_exist" / "deep" / "subdir"
-        # Force ensure_project to raise by passing a path that isn't a
-        # directory (a file masquerading as the project root).
-        with patch("app.rpc.server.ensure_project", side_effect=RuntimeError("nope")):
-            with pytest.raises(WebSocketDisconnect) as excinfo:
-                with client.websocket_connect(f"/ws?project={bad}"):
-                    pass
+        with pytest.raises(WebSocketDisconnect) as excinfo:
+            with client.websocket_connect(f"/ws?project={bad}"):
+                pass
         assert excinfo.value.code == 4002
 
     def test_method_not_found_returns_error(self, tmp_path: Path) -> None:

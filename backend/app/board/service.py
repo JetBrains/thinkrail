@@ -15,7 +15,7 @@ from app.board.storage import (
     ticket_path,
     write_ticket,
 )
-from app.core.config import AppConfig
+from app.core.config import AppConfig, BONSAI_DIRNAME
 
 
 class TicketNotFoundError(Exception):
@@ -33,11 +33,11 @@ class BoardService:
 
     @property
     def _tickets_dir(self) -> Path:
-        return self._config.get_project_root() / ".bonsai" / "meta-tickets"
+        return self._config.get_project_root() / BONSAI_DIRNAME / "meta-tickets"
 
     @property
     def _plans_dir(self) -> Path:
-        return self._config.get_project_root() / ".bonsai" / "plans"
+        return self._config.get_project_root() / BONSAI_DIRNAME / "plans"
 
     # -- queries ---------------------------------------------------------------
 

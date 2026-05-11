@@ -30,6 +30,7 @@ import pathspec
 
 from pydantic import ValidationError
 
+from app.core.config import BONSAI_DIRNAME
 from app.spec.frontmatter import _LIST_LINK_FIELDS, parse_frontmatter
 from app.spec.models import DocumentEntry, Frontmatter, Link, SpecEntry
 
@@ -42,13 +43,10 @@ SCHEMA_VERSION = "3"  # bumped: forces rebuild to apply built-in skip paths
 
 # .bonsai/ subdirectories that are Bonsai infrastructure — never meaningful as
 # unmanaged documents.  Checked as path prefixes during _find_md_files().
-BONSAI_INTERNAL_SKIP = frozenset((
-    ".bonsai/trash/",
-    ".bonsai/cache/",
-    ".bonsai/sessions/",
-    ".bonsai/plans/",
-    ".bonsai/design_docs/plans/",
-))
+BONSAI_INTERNAL_SKIP = frozenset(
+    f"{BONSAI_DIRNAME}/{sub}/"
+    for sub in ("trash", "cache", "sessions", "plans", "design_docs/plans")
+)
 
 _PRAGMAS = """\
 PRAGMA journal_mode = WAL;
@@ -767,7 +765,7 @@ def _find_md_files(
     for file_path in project_root.rglob("*.md"):
         # Skip hidden directories and known non-content dirs
         parts = file_path.relative_to(project_root).parts
-        if any(p.startswith(".") and p != ".bonsai" for p in parts):
+        if any(p.startswith(".") and p != BONSAI_DIRNAME for p in parts):
             continue
         if any(p in skip_dirs for p in parts):
             continue

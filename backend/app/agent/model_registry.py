@@ -22,6 +22,8 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any
 
+from app.core.config import BONSAI_DIRNAME
+
 from .credentials import resolve_anthropic_api_key
 
 logger = logging.getLogger(__name__)
@@ -159,7 +161,7 @@ class ModelRegistry:
         self._last_error: str | None = None
         self._source: str = "fallback"  # "api" | "cache" | "fallback"
         self._refresh_task: asyncio.Task[None] | None = None
-        self._cache_path = project_root / ".bonsai" / "cache" / "models.json"
+        self._cache_path = project_root / BONSAI_DIRNAME / "cache" / "models.json"
 
     # ── Public API ────────────────────────────────────────────────────
 
@@ -262,6 +264,12 @@ class ModelRegistry:
         return None
 
     def _save_cache(self, data: list[dict[str, Any]]) -> None:
+        # Never materialize .bonsai/ just for a background model refresh —
+        # the project folder must stay clean until the user starts a
+        # session (which creates .bonsai/sessions/ via append_event).
+        bonsai_dir = self._project_root / BONSAI_DIRNAME
+        if not bonsai_dir.is_dir():
+            return
         try:
             self._cache_path.parent.mkdir(parents=True, exist_ok=True)
             self._cache_path.write_text(json.dumps(data, indent=2), encoding="utf-8")

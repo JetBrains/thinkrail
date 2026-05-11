@@ -16,7 +16,7 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from app.core.config import AppConfig
+from app.core.config import AppConfig, BONSAI_DIRNAME
 from app.core.fileio import ensure_dir, read_text, write_text
 
 
@@ -64,7 +64,7 @@ class SpecDraftService:
 
     @property
     def _drafts_dir(self) -> Path:
-        return self._config.get_project_root() / ".bonsai" / "spec-drafts"
+        return self._config.get_project_root() / BONSAI_DIRNAME / "spec-drafts"
 
     def _ticket_dir(self, ticket_id: str) -> Path:
         return self._drafts_dir / ticket_id
@@ -301,7 +301,7 @@ class SpecDraftService:
         patch_content = "".join(diff)
 
         # Write patch file
-        patch_path = self._config.get_project_root() / ".bonsai" / patch_rel
+        patch_path = self._config.get_project_root() / BONSAI_DIRNAME / patch_rel
         ensure_dir(patch_path.parent)
         write_text(patch_path, patch_content)
 

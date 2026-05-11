@@ -12,9 +12,10 @@ from typing import Any
 
 from pydantic import BaseModel
 
+from app.core.config import BONSAI_DIRNAME
 from app.core.fileio import write_text
 
-SETTINGS_REL_PATH = ".bonsai/settings.json"
+SETTINGS_REL_PATH = f"{BONSAI_DIRNAME}/settings.json"
 
 
 class ProjectSettings(BaseModel, extra="allow"):
@@ -42,13 +43,16 @@ def _settings_path(project_root: Path) -> Path:
 
 
 def load_settings(project_root: Path) -> ProjectSettings:
-    """Read settings from disk, creating defaults if the file is missing."""
-    from app.core.project import ensure_meta_file
+    """Return settings from disk, or defaults if the file is missing.
 
-    bonsai_dir = project_root / ".bonsai"
-    content = ensure_meta_file(bonsai_dir, "settings.json")
+    Read-only — never creates ``.bonsai/settings.json``.  Use
+    :func:`ensure_settings_file` or :func:`save_settings` to materialize.
+    """
+    path = _settings_path(project_root)
+    if not path.is_file():
+        return ProjectSettings()
     try:
-        return ProjectSettings.model_validate_json(content)
+        return ProjectSettings.model_validate_json(path.read_text(encoding="utf-8"))
     except Exception:
         return ProjectSettings()
 
@@ -63,4 +67,11 @@ def save_settings(project_root: Path, data: dict[str, Any]) -> ProjectSettings:
 
 def ensure_settings_file(project_root: Path) -> ProjectSettings:
     """Create the settings file with defaults if it doesn't exist yet."""
-    return load_settings(project_root)
+    from app.core.project import ensure_meta_file
+
+    bonsai_dir = project_root / BONSAI_DIRNAME
+    content = ensure_meta_file(bonsai_dir, "settings.json")
+    try:
+        return ProjectSettings.model_validate_json(content)
+    except Exception:
+        return ProjectSettings()
