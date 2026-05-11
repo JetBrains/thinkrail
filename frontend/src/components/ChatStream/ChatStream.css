@@ -997,8 +997,14 @@
   padding: 1px 4px; border-radius: var(--radius-sm);
 }
 .ssl-selector-btn:hover:not(:disabled) { background: var(--hover); color: var(--text); }
+.ssl-chevron {
+  margin-left: 4px;
+  opacity: 0.5;
+  vertical-align: -1px;
+  transition: opacity var(--transition-fast);
+}
+.ssl-selector-btn:hover .ssl-chevron { opacity: 0.85; }
 .ssl-selector-disabled { opacity: 0.5; cursor: not-allowed; }
-.ssl-view-chips { display: inline-flex; gap: 2px; align-items: center; }
 .ssl-chip {
   background: transparent; border: 1px solid var(--border);
   color: var(--muted); font-family: var(--font); font-size: var(--font-md);
@@ -1027,6 +1033,101 @@
 .ssl-dropdown-item:hover { background: var(--hover); color: var(--text); }
 .ssl-dropdown-active { color: var(--blue); }
 .ssl-dropdown-group { padding: var(--space-xs) var(--space-sm); font-size: var(--font-sm); text-transform: uppercase; letter-spacing: 0.5px; color: var(--hint); }
+.ssl-more-btn { padding: 0 6px; line-height: 1; font-size: var(--font-lg2); }
+.ssl-status-wrap { margin-left: auto; }
+
+/* Slot in SessionStatusLine where InputArea portals its action buttons
+   (Continue / Start / Stop / Send) so they sit right of the status. */
+.ssl-action-slot {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.ssl-action-slot .input-actions {
+  display: inline-flex;
+  gap: 6px;
+}
+.ssl-action-slot .input-send,
+.ssl-action-slot .input-continue,
+.ssl-action-slot .input-interrupt {
+  padding: 2px 10px;
+  font-size: var(--font-md);
+  line-height: 1.5;
+}
+
+/* ── More-options popover: shadcn-style card with 2 compact columns.
+   Rendered via React Portal at body level (ancestors have overflow:hidden
+   which would otherwise clip an absolutely-positioned popover). ── */
+.ssl-more-popover {
+  display: flex;
+  background: var(--panel);
+  border: 1px solid var(--border2, var(--border));
+  border-radius: 10px;
+  box-shadow:
+    0 12px 32px rgba(0, 0, 0, 0.32),
+    0 2px 6px rgba(0, 0, 0, 0.12);
+  width: 320px;
+  overflow: hidden;
+  animation: sslPopIn 140ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+.ssl-more-popover--portal {
+  /* `bottom` / `left` are set inline from the trigger's bounding rect —
+     popover sits *above* the trigger without any transform tricks
+     (transforms would clash with the scale-in animation below). */
+  position: fixed;
+  z-index: 9999;
+  transform-origin: bottom right;
+}
+@keyframes sslPopIn {
+  from { opacity: 0; transform: translateY(4px) scale(0.96); }
+  to   { opacity: 1; transform: translateY(0)   scale(1); }
+}
+.ssl-more-col {
+  flex: 1;
+  padding: 10px 12px;
+  min-width: 0;
+  display: flex; flex-direction: column;
+  gap: 4px;
+}
+.ssl-more-col-info {
+  border-left: 1px solid var(--border);
+  background: linear-gradient(180deg, transparent, rgba(255,255,255,0.015));
+}
+.ssl-more-col-title {
+  font-size: var(--font-sm);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--hint);
+  font-weight: 600;
+  margin-bottom: 6px;
+}
+.ssl-more-group {
+  font-size: var(--font-xs);
+  color: var(--muted);
+  margin-top: 8px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.ssl-more-group:first-of-type { margin-top: 2px; }
+.ssl-more-chips {
+  display: flex; flex-wrap: wrap; gap: 3px;
+  margin-top: 2px;
+}
+.ssl-more-stat-row {
+  display: flex; align-items: baseline; gap: 6px;
+  margin-top: 2px;
+}
+.ssl-more-stat-val {
+  font-size: var(--font-md);
+  color: var(--text);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+.ssl-more-stat-val .ssl-pulse { margin-right: 4px; }
+.ssl-more-stat-sub {
+  font-size: var(--font-xs);
+  color: var(--hint);
+}
 .ssl-cost-active { opacity: 0.75; }
 .ssl-pulse { display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: var(--green); animation: pulse 2s infinite; margin-right: 4px; }
 .ssl-context-bar {
@@ -1115,127 +1216,92 @@
   padding: var(--space-lg) var(--space-md); text-align: center;
   color: var(--hint); font-size: var(--font-lg);
 }
-.input-history-btn {
-  padding: var(--space-xs) var(--space-sm);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
+/* ── Ghost icon button (history, mic, more) ── */
+.input-icon-btn {
+  width: 32px; height: 32px;
+  display: inline-flex; align-items: center; justify-content: center;
+  border: 1px solid transparent;
+  border-radius: 8px;
   background: transparent;
   color: var(--muted);
-  font-family: var(--font);
-  font-size: var(--font-lg2);
   cursor: pointer;
   flex-shrink: 0;
-  line-height: 1;
-}
-.input-history-btn:hover { background: var(--hover); color: var(--text); }
-
-/* ── Mic Button ── */
-.input-mic {
-  padding: var(--space-xs) var(--space-sm);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  background: transparent;
-  color: var(--muted);
-  font-family: var(--font);
-  font-size: var(--font-lg2);
-  cursor: pointer;
-  flex-shrink: 0;
-  line-height: 1;
   position: relative;
+  transition: background var(--transition-fast), color var(--transition-fast), border-color var(--transition-fast);
 }
-.input-mic:hover { background: var(--hover); color: var(--text); }
-.input-mic-recording {
+.input-icon-btn:hover:not(:disabled) {
+  background: var(--hover);
+  color: var(--text);
+}
+.input-icon-btn:disabled { opacity: 0.45; cursor: not-allowed; }
+.input-icon-btn--recording {
   color: var(--red);
-  border-color: var(--red);
+  border-color: rgba(247, 84, 100, 0.4);
+  background: rgba(247, 84, 100, 0.08);
 }
-.input-mic-recording::after {
+.input-icon-btn--recording::after {
   content: "";
-  position: absolute;
-  top: 2px;
-  right: 2px;
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
+  position: absolute; top: 4px; right: 4px;
+  width: 6px; height: 6px; border-radius: 50%;
   background: var(--red);
   animation: pulse 2s infinite;
 }
-.input-mic-transcribing {
+.input-icon-btn--busy {
   color: var(--blue);
-  border-color: var(--blue);
-  pointer-events: none;
-  opacity: 0.7;
+  pointer-events: none; opacity: 0.7;
 }
 .input-mic-spinner {
   display: inline-block;
-  width: 12px;
-  height: 12px;
+  width: 14px; height: 14px;
   border: 1.5px solid var(--border);
   border-top-color: var(--blue);
   border-radius: 50%;
   animation: spin 0.8s linear infinite;
-  vertical-align: middle;
 }
 
-/* ── Mic mode selector ── */
-.input-mic-group {
-  position: relative;
-  display: inline-flex;
-  align-items: stretch;
-  flex-shrink: 0;
-}
-.input-mic-group .input-mic {
-  border-top-right-radius: 0;
-  border-bottom-right-radius: 0;
-  border-right: none;
-}
-.input-mic-mode {
-  padding: var(--space-xs) 4px;
-  border: 1px solid var(--border);
-  border-top-left-radius: 0;
-  border-bottom-left-radius: 0;
-  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
-  background: transparent;
-  color: var(--muted);
-  font-family: var(--font);
-  font-size: var(--font-sm);
-  cursor: pointer;
-  line-height: 1;
-}
-.input-mic-mode:hover { background: var(--hover); color: var(--text); }
-.input-mic-mode-menu {
+/* ── More options menu ── */
+.input-more-wrap { position: relative; display: inline-flex; flex-shrink: 0; }
+.input-more-menu {
   position: absolute;
-  bottom: calc(100% + 4px);
+  bottom: calc(100% + 6px);
   right: 0;
   min-width: 220px;
-  padding: var(--space-xs);
+  padding: 4px;
   border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  background: var(--bg);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  border-radius: 8px;
+  background: var(--panel);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.18);
   z-index: 20;
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
+  display: flex; flex-direction: column;
 }
-.input-mic-mode-item {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 2px;
-  padding: var(--space-xs) var(--space-sm);
-  border: none;
-  background: transparent;
+.input-more-group {
+  padding: 6px 10px 2px;
+  font-size: var(--font-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--hint);
+}
+.input-more-item {
+  display: flex; align-items: center; gap: 8px;
+  padding: 6px 10px;
+  border: none; background: transparent;
   color: var(--text);
   font-family: var(--font);
-  font-size: var(--font-sm);
+  font-size: var(--font-md);
   text-align: left;
   cursor: pointer;
-  border-radius: var(--radius-xs);
+  border-radius: 6px;
 }
-.input-mic-mode-item:hover { background: var(--hover); }
-.input-mic-mode-item--active { background: var(--hover); color: var(--purple); }
-.input-mic-mode-label { font-weight: 500; }
-.input-mic-mode-desc { font-size: var(--font-xs); color: var(--muted); }
+.input-more-item:hover { background: var(--hover); }
+.input-more-item--active { color: var(--purple); }
+.input-more-check {
+  display: inline-block;
+  width: 14px;
+  color: var(--purple);
+  font-weight: 700;
+  text-align: center;
+}
+.input-more-label { flex: 1; }
 
 /* ── Revise failure banner ── */
 .input-revise-banner {
@@ -1288,8 +1354,8 @@
 .input-area--manual {
   align-items: stretch;
 }
-.input-area--manual .input-history-btn,
-.input-area--manual .input-mic,
+.input-area--manual .input-icon-btn,
+.input-area--manual .input-more-wrap,
 .input-area--manual .input-actions {
   align-self: flex-end;
 }
@@ -1399,50 +1465,6 @@
 }
 
 /* ── Markdown Toolbar ── */
-.input-md-toolbar {
-  display: flex;
-  align-items: center;
-  gap: 2px;
-  padding: 3px var(--space-sm);
-  border: 1px solid var(--border);
-  border-bottom: none;
-  border-radius: var(--radius-sm) var(--radius-sm) 0 0;
-  background: var(--elevated);
-}
-.input-md-tab {
-  padding: 2px var(--space-sm);
-  font-size: var(--font-md);
-  font-weight: 500;
-  color: var(--muted);
-  background: transparent;
-  border: none;
-  border-bottom: 2px solid transparent;
-  cursor: pointer;
-  font-family: var(--font);
-  transition: all var(--transition-fast);
-}
-.input-md-tab:hover { color: var(--text); }
-.input-md-tab--active { font-weight: 700; color: var(--text); border-bottom-color: var(--cyan); }
-.input-md-sep {
-  width: 1px;
-  height: 14px;
-  background: var(--border);
-  margin: 0 4px;
-  flex-shrink: 0;
-}
-.input-md-fmt {
-  padding: 2px var(--space-sm);
-  border: none;
-  border-radius: var(--radius-sm);
-  background: transparent;
-  color: var(--hint);
-  font-family: var(--font);
-  font-size: var(--font-md);
-  cursor: pointer;
-  line-height: 1;
-}
-.input-md-fmt:hover { background: var(--hover); color: var(--text); }
-
 /* ── Markdown Preview Pane (split-pane right side) ── */
 .input-preview {
   flex: 1;
@@ -1491,13 +1513,10 @@
   background: var(--cyan);
 }
 
-/* ── Textarea in markdown mode ── */
-.input-textarea--md {
-  border-radius: 0 0 var(--radius-sm) var(--radius-sm);
-  border-top: none;
-}
+/* ── Textarea in markdown mode (no toolbar — keep full radius) ── */
+.input-textarea--md { border-radius: var(--radius-sm); }
 .input-textarea--split {
-  border-radius: 0 0 0 var(--radius-sm);
+  border-radius: var(--radius-sm) 0 0 var(--radius-sm);
 }
 
 /* ── Editor wrapper in manual resize mode ── */

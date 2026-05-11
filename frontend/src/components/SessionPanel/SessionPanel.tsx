@@ -42,6 +42,10 @@ export function SessionPanel() {
 
   const [contextCardVisible, setContextCardVisible] = useState(true);
   const chatStreamRef = useRef<ChatStreamHandle>(null);
+  // Shared portal target: SessionStatusLine exposes a slot ref; InputArea
+  // portals its action buttons (Continue / Start / Stop / Send) there so
+  // they appear right of the session status indicator.
+  const [actionSlot, setActionSlot] = useState<HTMLSpanElement | null>(null);
 
   const projectState = useUiStore((s) => s.projectState);
 
@@ -212,6 +216,7 @@ export function SessionPanel() {
               status={status ?? "idle"}
               projectCost={projectCost}
               disabled={activeSession.restored || isDone}
+              actionSlotRef={setActionSlot}
               onChangeModel={(m) => updateConfig(activeSession.bonsaiSid, { model: m })}
               onChangePermissionMode={(m) => updateConfig(activeSession.bonsaiSid, { permissionMode: m })}
               onInterrupt={() => interruptSession(activeSession.bonsaiSid)}
@@ -237,6 +242,7 @@ export function SessionPanel() {
               showContinue={showContinue}
               onContinue={handleContinue}
               isDraft={isDraft}
+              actionPortalTarget={actionSlot}
             />
           )}
         </>

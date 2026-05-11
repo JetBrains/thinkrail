@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { useSettingsStore } from "@/store/settingsStore.ts";
 import type { Skill } from "@/constants/skills";
 import { useVoiceInput } from "@/hooks/useVoiceInput";
@@ -20,22 +21,44 @@ interface InputAreaProps {
   showContinue?: boolean;
   onContinue?: () => void;
   isDraft?: boolean;
+  /** Session-lifecycle buttons (Continue / Start / Stop) portal into
+   *  this slot inside SessionStatusLine.  Send stays here next to the
+   *  textarea \u2014 it acts on the *message*, not the session. */
+  actionPortalTarget?: HTMLElement | null;
 }
 
-const FORMAT_ACTIONS = [
-  { label: "B", title: `Bold (${modLabel("B")})`, prefix: "**", suffix: "**" },
-  { label: "I", title: `Italic (${modLabel("I")})`, prefix: "*", suffix: "*" },
-  { label: "</>", title: "Inline code", prefix: "`", suffix: "`" },
-  { label: "\uD83D\uDD17", title: `Link (${modLabel("K")})`, prefix: "[", suffix: "](url)" },
-  { label: "H", title: "Heading", prefix: "\n## ", suffix: "" },
-  { label: "\u2022", title: "Bullet list", prefix: "\n- ", suffix: "" },
-  { label: "1.", title: "Numbered list", prefix: "\n1. ", suffix: "" },
-  { label: "\u275D", title: "Blockquote", prefix: "\n> ", suffix: "" },
-  { label: "\u2014", title: "Horizontal rule", prefix: "\n---\n", suffix: "" },
-  { label: "```", title: "Code block", prefix: "\n```\n", suffix: "\n```\n" },
-];
+// Inline SVG icons (lucide-style, MIT-licensed open-source set).
+const IconMic = () => (
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+    strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z" />
+    <path d="M19 10v2a7 7 0 0 1-14 0v-2" />
+    <line x1="12" x2="12" y1="19" y2="22" />
+  </svg>
+);
+const IconHistory = () => (
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+    strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <path d="M3 12a9 9 0 1 0 3-7.7" />
+    <path d="M3 4v5h5" />
+    <path d="M12 7v5l3 2" />
+  </svg>
+);
+const IconMore = () => (
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+    strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <circle cx="5" cy="12" r="1" />
+    <circle cx="12" cy="12" r="1" />
+    <circle cx="19" cy="12" r="1" />
+  </svg>
+);
+const IconStop = () => (
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+    <rect x="6" y="6" width="12" height="12" rx="1" />
+  </svg>
+);
 
-export function InputArea({ sessionId, disabled, placeholder, onSend, isRunning, canInterrupt, onInterrupt, showContinue, onContinue, isDraft }: InputAreaProps) {
+export function InputArea({ sessionId, disabled, placeholder, onSend, isRunning, canInterrupt, onInterrupt, showContinue, onContinue, isDraft, actionPortalTarget }: InputAreaProps) {
   const skills = useSettingsStore((s) => s.skills);
   const voiceReviseMode: VoiceReviseMode =
     (useSettingsStore((s) => s.settings?.voice_revise_mode) as VoiceReviseMode | undefined) ?? "auto";
@@ -489,31 +512,6 @@ export function InputArea({ sessionId, disabled, placeholder, onSend, isRunning,
         </div>
       )}
       <div className={`input-editor-wrapper${isManual ? " input-editor-wrapper--fill" : ""}`}>
-        <div className="input-md-toolbar">
-          <button
-            className={`input-md-tab${previewActive ? " input-md-tab--active" : ""}`}
-            onClick={() => {
-              setPreviewActive((v) => !v);
-              if (previewActive) setTimeout(() => ref.current?.focus(), 0);
-            }}
-          >
-            Preview
-          </button>
-          <span className="input-md-sep" />
-          {FORMAT_ACTIONS.map((action) => (
-            <button
-              key={action.label}
-              className="input-md-fmt"
-              title={action.title}
-              onMouseDown={(e) => {
-                e.preventDefault();
-                insertFormat(action.prefix, action.suffix);
-              }}
-            >
-              {action.label}
-            </button>
-          ))}
-        </div>
         <div className="input-split-pane" ref={splitPaneRef}>
           <textarea
             ref={ref}
@@ -549,63 +547,78 @@ export function InputArea({ sessionId, disabled, placeholder, onSend, isRunning,
         </div>
       </div>
       <button
-        className="input-history-btn"
+        className="input-icon-btn"
         onClick={() => {
           closeSuggestions();
           setShowHistory((v) => !v);
         }}
         title={`Message history (${modLabel("R")})`}
+        aria-label="Message history"
       >
-        {"\u2191"}
+        <IconHistory />
       </button>
       {voice.isSupported && (
-        <div className="input-mic-group">
-          <button
-            className={`input-mic${voice.isRecording ? " input-mic-recording" : ""}${(voice.isTranscribing || voice.isRevising) ? " input-mic-transcribing" : ""}`}
-            onClick={handleMicClick}
-            disabled={disabled || voice.isTranscribing || voice.isRevising}
-            title={voice.isRecording ? "Stop recording" : "Start voice input"}
-          >
-            {(voice.isTranscribing || voice.isRevising) ? <span className="input-mic-spinner" /> : "\uD83C\uDF99"}
-          </button>
-          <button
-            className="input-mic-mode"
-            onClick={() => setModeMenuOpen((v) => !v)}
-            title={`Voice revise: ${voiceReviseMode}`}
-            aria-haspopup="menu"
-            aria-expanded={modeMenuOpen}
-          >
-            {"\u25BE"}
-          </button>
-          {modeMenuOpen && (
-            <div className="input-mic-mode-menu" role="menu">
-              {(["auto", "subsession", "off"] as const).map((m) => (
-                <button
-                  key={m}
-                  role="menuitemradio"
-                  aria-checked={voiceReviseMode === m}
-                  className={`input-mic-mode-item${voiceReviseMode === m ? " input-mic-mode-item--active" : ""}`}
-                  onClick={() => {
-                    useSettingsStore.getState().updateSettings({ voice_revise_mode: m });
-                    setModeMenuOpen(false);
-                  }}
-                >
-                  <span className="input-mic-mode-label">
-                    {m === "auto" ? "Auto-revise" : m === "subsession" ? "Refinement subsession" : "Raw transcript"}
-                  </span>
-                  <span className="input-mic-mode-desc">
-                    {m === "auto"
-                      ? "One-shot AI revise into the input"
-                      : m === "subsession"
-                      ? "Start a refinement subsession"
-                      : "Paste the transcript as-is"}
-                  </span>
-                </button>
-              ))}
-            </div>
-          )}
-        </div>
+        <button
+          className={`input-icon-btn${voice.isRecording ? " input-icon-btn--recording" : ""}${(voice.isTranscribing || voice.isRevising) ? " input-icon-btn--busy" : ""}`}
+          onClick={handleMicClick}
+          disabled={disabled || voice.isTranscribing || voice.isRevising}
+          title={voice.isRecording ? "Stop recording" : "Start voice input"}
+          aria-label={voice.isRecording ? "Stop recording" : "Start voice input"}
+        >
+          {(voice.isTranscribing || voice.isRevising) ? <span className="input-mic-spinner" /> : <IconMic />}
+        </button>
       )}
+      <div className="input-more-wrap">
+        <button
+          className="input-icon-btn"
+          onClick={() => setModeMenuOpen((v) => !v)}
+          title="More options"
+          aria-label="More options"
+          aria-haspopup="menu"
+          aria-expanded={modeMenuOpen}
+        >
+          <IconMore />
+        </button>
+        {modeMenuOpen && (
+          <div className="input-more-menu" role="menu">
+            <button
+              role="menuitemcheckbox"
+              aria-checked={previewActive}
+              className={`input-more-item${previewActive ? " input-more-item--active" : ""}`}
+              onClick={() => {
+                setPreviewActive((v) => !v);
+                setModeMenuOpen(false);
+                if (previewActive) setTimeout(() => ref.current?.focus(), 0);
+              }}
+            >
+              <span className="input-more-check">{previewActive ? "\u2713" : ""}</span>
+              <span className="input-more-label">Markdown preview</span>
+            </button>
+            {voice.isSupported && (
+              <>
+                <div className="input-more-group">Voice revise</div>
+                {(["auto", "subsession", "off"] as const).map((m) => (
+                  <button
+                    key={m}
+                    role="menuitemradio"
+                    aria-checked={voiceReviseMode === m}
+                    className={`input-more-item${voiceReviseMode === m ? " input-more-item--active" : ""}`}
+                    onClick={() => {
+                      useSettingsStore.getState().updateSettings({ voice_revise_mode: m });
+                      setModeMenuOpen(false);
+                    }}
+                  >
+                    <span className="input-more-check">{voiceReviseMode === m ? "\u2713" : ""}</span>
+                    <span className="input-more-label">
+                      {m === "auto" ? "Auto-revise" : m === "subsession" ? "Refinement subsession" : "Raw transcript"}
+                    </span>
+                  </button>
+                ))}
+              </>
+            )}
+          </div>
+        )}
+      </div>
       {isVoiceTranscript && text.trim() && (
         <button
           className="chat-btn"
@@ -620,25 +633,43 @@ export function InputArea({ sessionId, disabled, placeholder, onSend, isRunning,
           Revise with agent
         </button>
       )}
-      <div className="input-actions">
-        {showContinue && onContinue && (
-          <button className="input-continue" onClick={onContinue} title="Continue without a message">
-            Continue
-          </button>
-        )}
-        {canInterrupt && onInterrupt && (
-          <button className="input-interrupt" onClick={onInterrupt}>{"\u25A0"}</button>
-        )}
-        {!(isRunning && onInterrupt) && (
+      {/* Session-lifecycle actions (Continue / Start / Stop) — portal
+          into the status line.  Send stays here next to the textarea. */}
+      {actionPortalTarget && createPortal(
+        <div className="input-actions">
+          {showContinue && onContinue && (
+            <button className="input-continue" onClick={onContinue} title="Continue without a message">
+              Continue
+            </button>
+          )}
+          {canInterrupt && onInterrupt && (
+            <button className="input-interrupt" onClick={onInterrupt} aria-label="Stop">
+              <IconStop />
+            </button>
+          )}
+          {isDraft && (
+            <button
+              className="input-send"
+              onClick={handleSend}
+              disabled={disabled}
+            >
+              Start
+            </button>
+          )}
+        </div>,
+        actionPortalTarget,
+      )}
+      {!isDraft && !(isRunning && onInterrupt) && (
+        <div className="input-actions">
           <button
             className="input-send"
             onClick={handleSend}
-            disabled={disabled || (!isDraft && !text.trim())}
+            disabled={disabled || !text.trim()}
           >
-            {isDraft ? "Start" : "Send"}
+            Send
           </button>
-        )}
-      </div>
+        </div>
+      )}
     </div>
   );
 }
