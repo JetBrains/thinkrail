@@ -451,24 +451,6 @@ groups:
 
 Call all `CreateBoardTicket`s before proceeding.
 
-Then show next-step options:
-
-Use `AskUserQuestion`:
-- `"Continue to Architecture Design"`
-- `"Start building straight away"`
-- `"Done for now"`
-
-If **"Start building straight away"**, call `SuggestSession`:
-
-```json
-{
-  "skill": "task-spec",
-  "name": "Build it",
-  "reason": "Implement the features from GOAL&REQUIREMENTS.md",
-  "prompt": "Read GOAL&REQUIREMENTS.md. For each feature under 'V1 Features': 1) implement it, 2) run a spec alignment check after each feature — if discrepancies exist show them via bonsai_visualize summary-box titled 'Spec vs Code' then use AskUserQuestion (one at a time): 'Update spec to match code' / 'Update code to match spec' / 'Leave as-is'. Only move to the next feature after resolving all discrepancies."
-}
-```
-
 ---
 
 ## Branch B: Public Product
@@ -802,23 +784,5 @@ groups:
 
 Call all `CreateBoardTicket`s before proceeding.
 
-Then show next-step options:
-
 Use `SuggestSession` to propose `architecture-design`, passing the spec ID in `specIds`.
-
-Then use `AskUserQuestion`:
-- `"Continue to Architecture Design — design the system before building"`
-- `"Start building v1 — jump straight to implementation"`
-- `"Done for now"`
-
-If **"Start building v1"**, call `SuggestSession`:
-
-```json
-{
-  "skill": "task-spec",
-  "name": "Build v1",
-  "reason": "Implement the features selected in GOAL&REQUIREMENTS.md",
-  "prompt": "Read GOAL&REQUIREMENTS.md (and DESIGN_DOC.md / module README.md files if they exist). For each feature listed under 'In v1': 1) implement it following the specs, 2) run a spec alignment check — if discrepancies exist show them via bonsai_visualize summary-box titled 'Spec vs Code' then use AskUserQuestion (one at a time): 'Update spec to match code' / 'Update code to match spec' / 'Leave as-is'. Only move to the next feature after resolving all discrepancies."
-}
-```
 
