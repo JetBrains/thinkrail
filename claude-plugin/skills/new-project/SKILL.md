@@ -10,13 +10,14 @@ You are helping someone turn an idea into a clear, buildable specification. The 
 
 **Principles:**
 - Work from what you already know from `$ARGUMENTS` — never ask what was already said
+- **Pre-filled document fast-path** — if `$ARGUMENTS` already contains a structured document (multiple markdown headings matching spec sections, or a clearly written brief covering several sections), parse it and treat those sections as **already confirmed**. Save them immediately via `spec_save`. Never re-ask the user to confirm content they wrote themselves. Only enter steps for sections that are genuinely missing **and** required by the inferred `depth`/`audience`. The only post-parse interaction is the alternatives research question — one yes/no, nothing else.
 - One question per turn, never a list
 - Every option you offer must be specific to what they described, not generic placeholders
 - Propose a draft as early as possible — a concrete suggestion is always faster than an open question
 - MVP-first: the right v1 is smaller than the user thinks
 - **Write the file after every confirmed step** — `GOAL&REQUIREMENTS.md` grows section by section. Call `spec_save` after each confirmed step, writing **only the sections confirmed so far**. Never pre-fill unconfirmed sections with `[TBD]` — if a section hasn't been discussed yet, it simply doesn't exist in the file yet.
 - **Routing is inferred, not asked** — determine personal vs. public from `$ARGUMENTS` + Overview + Problem; ask only if genuinely ambiguous
-- **Every section is conditional** — before entering any section, ask: is this still needed given everything confirmed so far? Check the working model AND the confirmed document content (Overview, Problem, previous answers). Skip sections where the answer is already evident; pre-fill and confirm where it's partially known. Don't ask what the document already answers.
+- **Every section is conditional** — before entering any section, check three things in order: (1) is it already pre-filled from `$ARGUMENTS` (Step 0.5)? → skip, already saved. (2) is the answer already evident from the working model or confirmed content? → skip or pre-fill+confirm. (3) is it required at all given `depth`/`audience`? → skip if not. Only ask what's both missing and required.
 - **Answers compound** — every confirmed answer updates the working model and reduces what still needs to be asked
 - **Confirming inferred statements via `AskUserQuestion`** — when you've inferred a statement (Overview, Problem, Goals, etc.), show it as the question text with two options: "Looks right" and "Edit: _____". Treat the response as a signal:
   - "Looks right" → model is accurate, continue as-is
@@ -150,6 +151,46 @@ If `$ARGUMENTS` is empty or too vague to extract anything meaningful, ask:
 
 ---
 
+## Step 0.5 — Parse pre-filled document
+
+**Run this immediately after Step 0, before any visualization or question.**
+
+Scan `$ARGUMENTS` for structured content. A pre-filled document is signaled by **two or more** of:
+- Markdown headings (`#`, `##`) naming spec sections (Overview, Problem, Goals, Features, MVP, Users, Tech, etc.)
+- A multi-paragraph brief explicitly covering several of those topics in prose
+- Explicit labels like "Problem:", "Users:", "MVP:" inline
+
+If detected, **parse and map** each block to the corresponding spec section. Build a `prefilled` set on the working model:
+
+```
+prefilled: {
+  overview?:      string
+  problem?:       string
+  target_users?:  string
+  jtbd?:          string
+  user_story?:    string
+  goals?:         string[]
+  success?:       string[]
+  v1_features?:   string[]
+  out_of_v1?:     string[]
+  tech?:          string
+  alternatives?:  string[]
+  nfr?:           string[]
+}
+```
+
+**Then immediately:**
+1. Decide routing (Branch A or B) from the same signals as Step 4 — do not ask.
+2. Call `spec_save` once with all parsed sections, formatted into the appropriate template (Personal Project Spec or PRD).
+3. Show the progress tracker (Step 1) so the user sees where they are.
+4. **Skip every step whose section is in `prefilled`.** Do not re-confirm parsed content. Walk only the steps for sections that are (a) missing from `prefilled` AND (b) required by the inferred `depth`/`audience` (apply the existing "skip if light/standard" rules).
+5. For each remaining required-but-missing section, proceed as normal (infer → confirm → save).
+6. **Alternatives research is the one exception**: always offer it, but as a single yes/no — see Step A-OSS / B-Context-1b notes below.
+
+**If nothing meaningful was parsed** (vague one-liner, no structure): proceed with the normal flow starting at Step 1.
+
+---
+
 ## Step 1 — Orient
 
 Show workflow position via `bonsai_visualize` (type `progress-tracker`):
@@ -175,6 +216,8 @@ Show workflow position via `bonsai_visualize` (type `progress-tracker`):
 
 ## Step 2 — Overview
 
+**Skip if `prefilled.overview` is set** — it was already saved in Step 0.5. Move to Step 3.
+
 From `$ARGUMENTS` and your working model, write the Overview according to `depth`:
 
 - `light` — one sentence: what it does
@@ -198,6 +241,8 @@ options:
 ---
 
 ## Step 3 — Problem
+
+**Skip if `prefilled.problem` is set** — already saved in Step 0.5. Move to Step 4.
 
 **Before proceeding, check if this section is still needed:**
 - If `depth = light` AND the confirmed Overview already implies the pain (e.g., "a quick tool to do X I currently do manually") → skip entirely. Derive a one-line problem statement from the Overview, write it silently with `spec_save`, move to Step 4.
@@ -290,6 +335,8 @@ AskUserQuestion:
 
 ### A3 — Features
 
+**Skip if `prefilled.v1_features` is set** — already saved in Step 0.5. Move to A5.
+
 Think through the full domain before writing the question. Identify all logical feature groups (typically 2–4 for a personal tool). Each feature is a user-visible capability — not an implementation detail.
 
 Send **all groups in one `AskUserQuestion`** call (`multiSelect: true` per group). Every feature is its own option — never bundle.
@@ -303,7 +350,7 @@ If `urgency = high` OR `scope_signal = large` OR total selected is large:
 
 ### A5 — Tech (conditional)
 
-**Skip if** `tech` is known. State inline: "I'll use [X] — let me know if that changes."
+**Skip if `prefilled.tech` is set OR** `tech` is known. State inline: "I'll use [X] — let me know if that changes."
 
 **Step 1 — Platform (skip if already clear from context)**
 
@@ -347,7 +394,21 @@ Always add:
 
 **Always run this step — never skip, regardless of `depth`.**
 
-Now that the stack is known, use `WebSearch` to find popular open-source repositories that already solve this problem (search GitHub using the confirmed tech). Pick the top 2–3 results by stars/activity and briefly note what each does.
+**Fast-path when document was pre-filled (Step 0.5):** ask one question first, before any search:
+
+```
+AskUserQuestion:
+  header: "Alternatives"
+  question: "Do you want me to research open-source alternatives and add them to the spec?"
+  options:
+    - "Yes — research and add"
+    - "No — skip"
+```
+
+- "No" → move on (A-Draft or directly to A-Save if everything else is pre-filled).
+- "Yes" → run the search/visualize/save flow below, then call `spec_save` to add **Alternatives Considered**. No further confirmation question.
+
+**Otherwise** (normal flow): use `WebSearch` to find popular open-source repositories that already solve this problem (search GitHub using the confirmed tech). Pick the top 2–3 results by stars/activity and briefly note what each does.
 
 Show results via `bonsai_visualize` (type `summary-box`, title "Similar open-source projects"), one entry per repo — always include `url` to the GitHub repo:
 ```json
@@ -466,6 +527,8 @@ Call all `CreateBoardTicket`s before proceeding.
 
 ### B-Context — Users, JTBD, Story
 
+**Skip the gather/confirm flow for any of Target Users / JTBD / User Story that are already in `prefilled`** — they were saved in Step 0.5. If all three are pre-filled, skip directly to Step 1b (alternatives research). Only run the gather/confirm flow for the ones that are missing.
+
 Target Users, Jobs to Be Done, and Key User Story describe the same thing from different angles. Ask once to gather all the information, then confirm **one block at a time** — each section gets its own `AskUserQuestion` confirmation before moving to the next.
 
 **Step 1 — Gather (one question or pre-fill):**
@@ -484,6 +547,22 @@ Synthesize from the answer (or working model):
 - **Key User Story** — the scenario expanded to 3–5 sentences
 
 **Step 1b — Research alternatives (always, don't wait for the user to provide them):**
+
+**Fast-path when document was pre-filled (Step 0.5):** ask one question first, before searching:
+
+```
+AskUserQuestion:
+  header: "Alternatives"
+  question: "Do you want me to research competing products and add them to the spec?"
+  options:
+    - "Yes — research and add"
+    - "No — skip"
+```
+
+- "No" → move on. If `prefilled.alternatives` already exists, save it as-is; otherwise leave the section out.
+- "Yes" → run the flow below, then call `spec_save` to add **Alternatives Considered**. No further confirmation question.
+
+**Otherwise** (normal flow):
 
 Use `WebSearch` to find real competing products in this space. For each result that looks relevant, use `WebFetch` to understand what it does.
 
@@ -536,6 +615,8 @@ urgency:       set to high if they mentioned a deadline or client context
 
 ### B-Success
 
+**Skip if `prefilled.success` is set** — already saved in Step 0.5. Move to B-Goals.
+
 **If `creator_is_user` was already set in Step 4 (routing), skip the question below and go directly to the matching branch.**
 
 **If `depth = light` or `depth = standard`** → always go to **B-Success-Done** (binary conditions are enough; skip quantified metrics).
@@ -587,6 +668,8 @@ scope_signal: upgrade to large if they listed many unrelated conditions
 
 ### B-Goals
 
+**Skip if `prefilled.goals` is set** — already saved in Step 0.5. Move to B-Scope.
+
 **Skip entirely if `depth = light`.** Move straight to B-Scope.
 
 **Infer first, confirm — don't ask open-ended.**
@@ -611,6 +694,8 @@ Reject vague inline: "'Better UX' isn't a goal — 'Reduce time to first result 
 ---
 
 ### B-Scope — v1
+
+**Skip if `prefilled.v1_features` is set** — already saved in Step 0.5. Move to B-NFR.
 
 **This step comes after B-Success — don't start scope selection before success criteria are confirmed.**
 
@@ -647,6 +732,8 @@ Out-of-v1 as plain bullets.
 
 ### B-NFR (conditional)
 
+**Skip if `prefilled.nfr` is set** — already saved in Step 0.5. Move to B-Tech.
+
 **Skip if `depth = light` or `depth = standard`.** Only surface for `depth = full` projects.
 
 **Skip automatically if:** domain is a CLI tool, read-only dashboard, or a simple personal utility shared publicly. Move on without asking.
@@ -659,7 +746,7 @@ Otherwise use `AskUserQuestion` with `multiSelect: true`. Options tailored to th
 
 ### B-Tech (conditional)
 
-**Skip if** `tech` is known. State inline: "I'll use [X] — let me know if you want to discuss alternatives."
+**Skip if `prefilled.tech` is set OR** `tech` is known. State inline: "I'll use [X] — let me know if you want to discuss alternatives."
 
 **Step 1 — Platform (skip if already clear from context)**
 
