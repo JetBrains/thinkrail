@@ -1,5 +1,4 @@
-import { useCallback, useState } from "react";
-import { Outlet } from "react-router-dom";
+import { useCallback, useState, type ReactNode } from "react";
 import { useUiStore } from "@/store/uiStore.ts";
 import { useSessionStore } from "@/store/sessionStore.ts";
 import { useFileStore } from "@/store/fileStore.ts";
@@ -22,43 +21,63 @@ import "@/components/ChatStream/ChatStream.css";
 import "@/components/ChatStream/compact.css";
 import "./AppShell.css";
 
+// Panel sizing
 const LEFT_DEFAULT = 260;
 const RIGHT_DEFAULT = 380;
+const LEFT_MIN = 140;
+const RIGHT_MIN = 200;
+const LEFT_COLLAPSE_THRESHOLD = 100;
+const RIGHT_COLLAPSE_THRESHOLD = 150;
+const CENTER_MIN = 300;
+const COLLAPSED_STRIP_W = 20;
+const RESIZE_HANDLE_W = 4;
+
+function Shell({
+  onSwitchProject,
+  children,
+}: {
+  onSwitchProject: () => void;
+  children: ReactNode;
+}) {
+  return (
+    <div className="app-shell">
+      <Header onSwitchProject={onSwitchProject} />
+      {children}
+    </div>
+  );
+}
 
 export function AppShell({ onSwitchProject }: { onSwitchProject: () => void }) {
   const projectState = useUiStore((s) => s.projectState);
   const centerView = useUiStore((s) => s.centerView);
-  const sessionsMap = useSessionStore((s) => s.sessions);
-  const activeSessionIdAll = useSessionStore((s) => s.activeSessionId);
-  const openFilesMap = useFileStore((s) => s.openFiles);
-  const activeTicketId = useBoardStore((s) => s.activeTicketId);
-  const openTicket = useBoardStore((s) => s.openTicket);
-  const handleOpenTicket = useCallback(
-    (ticketId: string) => openTicket(ticketId),
-    [openTicket],
-  );
-  const isNewProjectMode =
-    projectState === "new" &&
-    !(activeSessionIdAll && sessionsMap.get(activeSessionIdAll)) &&
-    openFilesMap.size === 0;
-
   const leftCollapsed = useUiStore((s) => s.leftPanelCollapsed);
   const rightCollapsed = useUiStore((s) => s.rightPanelCollapsed);
   const toggleLeft = useUiStore((s) => s.toggleLeftPanel);
   const toggleRight = useUiStore((s) => s.toggleRightPanel);
 
-  const [leftWidth, setLeftWidth] = useState(LEFT_DEFAULT);
-  const [rightWidth, setRightWidth] = useState(RIGHT_DEFAULT);
-  const [showSessionManager, setShowSessionManager] = useState(false);
-
-  const activeSessionId = useSessionStore((s) => s.activeSessionId);
   const sessions = useSessionStore((s) => s.sessions);
+  const activeSessionId = useSessionStore((s) => s.activeSessionId);
+  const openFilesMap = useFileStore((s) => s.openFiles);
+  const activeTicketId = useBoardStore((s) => s.activeTicketId);
+  const openTicket = useBoardStore((s) => s.openTicket);
+
   const activeSession = activeSessionId ? sessions.get(activeSessionId) : null;
+  const isNewProjectMode =
+    projectState === "new" && !activeSession && openFilesMap.size === 0;
   const isGoalSession =
     (activeSession?.skillId === "new-project" ||
      activeSession?.skillId === "goal-and-requirements") &&
     activeSession.status !== "done" &&
     activeSession.status !== "error";
+
+  const handleOpenTicket = useCallback(
+    (ticketId: string) => openTicket(ticketId),
+    [openTicket],
+  );
+
+  const [leftWidth, setLeftWidth] = useState(LEFT_DEFAULT);
+  const [rightWidth, setRightWidth] = useState(RIGHT_DEFAULT);
+  const [showSessionManager, setShowSessionManager] = useState(false);
 
   const handleOpenSessionManager = useCallback(() => {
     setShowSessionManager(true);
@@ -69,14 +88,14 @@ export function AppShell({ onSwitchProject }: { onSwitchProject: () => void }) {
   }, []);
 
   const handleLeftResize = useCallback((w: number) => {
-    const rightSpace = rightCollapsed ? 20 : rightWidth + 4;
-    const maxLeft = window.innerWidth - rightSpace - 300 - 4;
+    const rightSpace = rightCollapsed ? COLLAPSED_STRIP_W : rightWidth + RESIZE_HANDLE_W;
+    const maxLeft = window.innerWidth - rightSpace - CENTER_MIN - RESIZE_HANDLE_W;
     setLeftWidth(Math.min(w, maxLeft));
   }, [rightCollapsed, rightWidth]);
 
   const handleRightResize = useCallback((w: number) => {
-    const leftSpace = leftCollapsed ? 20 : leftWidth + 4;
-    const maxRight = window.innerWidth - leftSpace - 300 - 4;
+    const leftSpace = leftCollapsed ? COLLAPSED_STRIP_W : leftWidth + RESIZE_HANDLE_W;
+    const maxRight = window.innerWidth - leftSpace - CENTER_MIN - RESIZE_HANDLE_W;
     setRightWidth(Math.min(w, maxRight));
   }, [leftCollapsed, leftWidth]);
 
@@ -85,10 +104,9 @@ export function AppShell({ onSwitchProject }: { onSwitchProject: () => void }) {
   // new-project flow.
   if (projectState === null) {
     return (
-      <div className="app-shell">
-        <Header onSwitchProject={onSwitchProject} />
+      <Shell onSwitchProject={onSwitchProject}>
         <div className="app-shell-loading">Loading…</div>
-      </div>
+      </Shell>
     );
   }
 
@@ -98,19 +116,17 @@ export function AppShell({ onSwitchProject }: { onSwitchProject: () => void }) {
   // the center, regardless of the active session.
   if (centerView === "sessions" && isNewProjectMode) {
     return (
-      <div className="app-shell">
-        <Header onSwitchProject={onSwitchProject} />
+      <Shell onSwitchProject={onSwitchProject}>
         <div className="np-fullscreen">
           <NewProjectScreen />
         </div>
-      </div>
+      </Shell>
     );
   }
 
   if (centerView === "sessions" && isGoalSession) {
     return (
-      <div className="app-shell">
-        <Header onSwitchProject={onSwitchProject} />
+      <Shell onSwitchProject={onSwitchProject}>
         <NewProjectStepper currentStep={2} />
         <div className="layout layout-goal">
           <div className="goal-chat">
@@ -122,13 +138,12 @@ export function AppShell({ onSwitchProject }: { onSwitchProject: () => void }) {
             <GoalFilePanel />
           </div>
         </div>
-      </div>
+      </Shell>
     );
   }
 
   return (
-    <div className="app-shell">
-      <Header onSwitchProject={onSwitchProject} />
+    <Shell onSwitchProject={onSwitchProject}>
       <div className="layout">
         {leftCollapsed ? (
           <button className="left-collapse-btn" onClick={toggleLeft}
@@ -143,19 +158,18 @@ export function AppShell({ onSwitchProject }: { onSwitchProject: () => void }) {
               panelWidth={leftWidth}
               onResize={handleLeftResize}
               onCollapse={toggleLeft}
-              min={140}
-              collapseThreshold={100}
+              min={LEFT_MIN}
+              collapseThreshold={LEFT_COLLAPSE_THRESHOLD}
             />
           </>
         )}
         <div className="center-panel">
-          <Outlet />
           <ViewModeProvider>
             {showSessionManager ? (
               <>
                 <div className="sm-tab-bar">
                   <button className="sm-tab-back" onClick={handleCloseSessionManager}>
-                    {"\u2190"} Back to sessions
+                    {"←"} Back to sessions
                   </button>
                 </div>
                 <SessionManager onClose={handleCloseSessionManager} />
@@ -181,8 +195,8 @@ export function AppShell({ onSwitchProject }: { onSwitchProject: () => void }) {
               panelWidth={rightWidth}
               onResize={handleRightResize}
               onCollapse={toggleRight}
-              min={200}
-              collapseThreshold={150}
+              min={RIGHT_MIN}
+              collapseThreshold={RIGHT_COLLAPSE_THRESHOLD}
             />
             <div style={{ width: rightWidth, height: "100%", overflow: "hidden" }}>
               <ContextPanel />
@@ -191,6 +205,6 @@ export function AppShell({ onSwitchProject }: { onSwitchProject: () => void }) {
         )}
       </div>
       <StatusBar onOpenSessionManager={handleOpenSessionManager} />
-    </div>
+    </Shell>
   );
 }

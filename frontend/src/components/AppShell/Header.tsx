@@ -7,6 +7,7 @@ import { modLabel } from "@/utils/platform.ts";
 import { SettingsModal } from "./SettingsModal.tsx";
 
 export function Header({ onSwitchProject }: { onSwitchProject: () => void }) {
+  const projectName = useUiStore((s) => s.projectName);
   const centerView = useUiStore((s) => s.centerView);
   const setCenterView = useUiStore((s) => s.setCenterView);
   const createNewSession = useSessionStore((s) => s.createNewSession);
@@ -35,7 +36,7 @@ export function Header({ onSwitchProject }: { onSwitchProject: () => void }) {
       <div className="header-left">
         <span className="header-logo">Bonsai</span>
         <button className="header-project-btn" onClick={onSwitchProject} title="Switch project">
-          {useUiStore((s) => s.projectName)}
+          {projectName}
         </button>
         <div className="header-view-switcher" role="tablist" aria-label="Center view">
           <button

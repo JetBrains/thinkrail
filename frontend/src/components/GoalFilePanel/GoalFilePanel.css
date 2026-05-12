@@ -21,10 +21,6 @@
   align-self: center;
 }
 
-.goal-file-panel-header > .collapse-btn:first-child {
-  margin-left: calc(-1 * var(--space-md));
-}
-
 .goal-file-panel-title {
   font-size: 12px;
   font-weight: 600;
