@@ -6,7 +6,7 @@ import { useViewMode, type ViewMode } from "@/context/ViewModeContext.tsx";
 import { useSettingsStore } from "@/store/settingsStore.ts";
 import { useSessionStore } from "@/store/sessionStore.ts";
 import { renderEvent } from "./renderers/registry.ts";
-import { EVENT_CATEGORIES } from "./renderers/categories.ts";
+import { getEventCategory } from "./renderers/categories.ts";
 import { useUiStore } from "@/store/uiStore.ts";
 import { SessionContextMenu } from "./SessionContextMenu.tsx";
 import { SubsessionContextMenu } from "./SubsessionContextMenu.tsx";
@@ -329,7 +329,7 @@ export const ChatStream = forwardRef<ChatStreamHandle, ChatStreamProps>(function
         // stay visible regardless of category, because the user has
         // to answer before the agent can continue.  Once answered,
         // they follow the category rule and disappear in dialog mode.
-        const category = EVENT_CATEGORIES[ev.eventType];
+        const category = getEventCategory(ev);
         if (category && !categoryVisibility[category]) {
           const payload = ev.payload as { requestId?: string } | undefined;
           const reqId = payload?.requestId;

@@ -1,4 +1,4 @@
-import type { EventType } from "@/types/agent.ts";
+import type { AgentEvent, EventType } from "@/types/agent.ts";
 
 /**
  * Visibility categories for chat events.  Drives the show/hide toggles
@@ -7,8 +7,8 @@ import type { EventType } from "@/types/agent.ts";
  */
 export type EventCategory = "dialog" | "tools" | "system";
 
-/** Default classification for every known event type. */
-export const EVENT_CATEGORIES: Record<EventType, EventCategory> = {
+/** Default classification by event type. */
+const BASE_CATEGORIES: Record<EventType, EventCategory> = {
   // Dialog — what the user and agent actually say to each other,
   // plus errors (they break the conversation — too critical to hide).
   userMessage: "dialog",
@@ -20,8 +20,7 @@ export const EVENT_CATEGORIES: Record<EventType, EventCategory> = {
   error: "dialog",
 
   // Tools — agent's mechanical work: config (model, system prompt),
-  // tool calls, sub-agents, visualizations.  Hide for a pure
-  // conversation view.
+  // tool calls, sub-agents.  Hide for a pure conversation view.
   sessionStart: "tools",
   toolCallStart: "tools",
   toolCallEnd: "tools",
@@ -42,3 +41,19 @@ export const EVENT_CATEGORIES: Record<EventType, EventCategory> = {
   requestResolved: "system",
   requestExpired: "system",
 };
+
+/**
+ * Classify an event for the dialog/tools/system visibility toggles.
+ *
+ * Mostly a lookup by eventType, but tool calls need payload inspection:
+ * `bonsai_visualize` renders artifacts (comparisons like "Architecture
+ * Approaches", diagrams) that are part of the conversation, so they
+ * stay visible in dialog-only mode.
+ */
+export function getEventCategory(event: AgentEvent): EventCategory {
+  if (event.eventType === "toolCallStart" || event.eventType === "toolCallEnd") {
+    const toolName = event.payload.toolName;
+    if (toolName && toolName.endsWith("bonsai_visualize")) return "dialog";
+  }
+  return BASE_CATEGORIES[event.eventType];
+}

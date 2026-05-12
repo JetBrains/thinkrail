@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import { ChatMarkdown } from "./ChatMarkdown.tsx";
 
 interface AssistantMessageProps {
@@ -5,17 +6,31 @@ interface AssistantMessageProps {
   streaming?: boolean;
 }
 
-export function AssistantMessage({ text, streaming }: AssistantMessageProps) {
+export function BonsaiMessage({
+  children,
+  contentClassName,
+}: {
+  children: ReactNode;
+  contentClassName?: string;
+}) {
   return (
     <div className="chat-assistant">
       <div className="msg-avatar msg-avatar-assistant" aria-hidden="true">B</div>
-      <div className="msg-content">
+      <div className={`msg-content ${contentClassName ?? ""}`}>
         <div className="msg-who">Bonsai</div>
         <div className="msg-bubble msg-bubble-assistant">
-          <ChatMarkdown content={text} />
-          {streaming && <span className="chat-cursor" />}
+          {children}
         </div>
       </div>
     </div>
+  );
+}
+
+export function AssistantMessage({ text, streaming }: AssistantMessageProps) {
+  return (
+    <BonsaiMessage>
+      <ChatMarkdown content={text} />
+      {streaming && <span className="chat-cursor" />}
+    </BonsaiMessage>
   );
 }

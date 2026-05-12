@@ -45,6 +45,11 @@
   display: flex; flex-direction: column; gap: 4px;
 }
 .chat-user .msg-content { align-items: flex-end; }
+/* Visualization cards need more room than a text message; let them
+   take the available chat width minus the avatar gutter. */
+.msg-content--vis { max-width: calc(100% - 36px); }
+.msg-content--vis .msg-bubble { padding: var(--space-sm); }
+.msg-content--vis .vis-card { max-width: 100%; }
 
 .msg-who {
   font-size: 11px;

@@ -1,5 +1,5 @@
 import { lazy, Suspense } from "react";
-import { AssistantMessage } from "../AssistantMessage.tsx";
+import { AssistantMessage, BonsaiMessage } from "../AssistantMessage.tsx";
 import { ToolCallCard } from "../ToolCallCard.tsx";
 import { DraftConfigCard } from "../DraftConfigCard.tsx";
 import { VisualizationCard, VisErrorBoundary } from "../VisualizationCard.tsx";
@@ -70,9 +70,11 @@ export const compactRenderers: ViewRenderers = {
         const visId = visInput.visId;
         const isLatest = !visId || ctx.latestVisByVisId.get(visId) === i;
         return (
-          <VisErrorBoundary key={k}>
-            <VisualizationCard data={visInput} collapsed={!isLatest} compactMode />
-          </VisErrorBoundary>
+          <BonsaiMessage key={k} contentClassName="msg-content--vis">
+            <VisErrorBoundary>
+              <VisualizationCard data={visInput} collapsed={!isLatest} compactMode />
+            </VisErrorBoundary>
+          </BonsaiMessage>
         );
       }
     }
