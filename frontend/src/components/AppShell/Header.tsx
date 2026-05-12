@@ -1,33 +1,33 @@
 import { useState } from "react";
 import { useUiStore } from "@/store/uiStore.ts";
 import { useSessionStore } from "@/store/sessionStore.ts";
-import { useSettingsStore } from "@/store/settingsStore.ts";
+import { useBoardStore } from "@/store/boardStore.ts";
 import { useConnectionStore } from "@/store/connectionStore.ts";
-import { useFileStore } from "@/store/fileStore.ts";
 import { modLabel } from "@/utils/platform.ts";
-import { ThemeSwitcher } from "./ThemeSwitcher.tsx";
-import { ServerInfoDialog } from "./ServerInfoDialog.tsx";
-import { UserSettingsDialog } from "./UserSettingsDialog.tsx";
-
-const SETTINGS_PATH = ".bonsai/settings.json";
+import { SettingsModal } from "./SettingsModal.tsx";
 
 export function Header({ onSwitchProject }: { onSwitchProject: () => void }) {
-  const toggleLeft = useUiStore((s) => s.toggleLeftPanel);
-  const toggleRight = useUiStore((s) => s.toggleRightPanel);
+  const centerView = useUiStore((s) => s.centerView);
+  const setCenterView = useUiStore((s) => s.setCenterView);
   const createNewSession = useSessionStore((s) => s.createNewSession);
   const sessions = useSessionStore((s) => s.sessions);
   const activeSessions = Array.from(sessions.values()).filter(
     (s) => s.status === "running",
   );
+  const tickets = useBoardStore((s) => s.tickets);
+  const ticketCount = tickets.size;
 
-  const openSettings = async () => {
-    await useSettingsStore.getState().ensureFile();
-    await useFileStore.getState().openFile(SETTINGS_PATH);
+  const handleSelectBoard = () => {
+    setCenterView("board");
+  };
+
+  const handleSelectSessions = () => {
+    setCenterView("sessions");
+    useBoardStore.setState({ activeTicketId: null });
   };
 
   const connectedClients = useConnectionStore((s) => s.clients);
-  const [serverInfoOpen, setServerInfoOpen] = useState(false);
-  const [userSettingsOpen, setUserSettingsOpen] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
 
   return (
     <>
@@ -37,30 +37,35 @@ export function Header({ onSwitchProject }: { onSwitchProject: () => void }) {
         <button className="header-project-btn" onClick={onSwitchProject} title="Switch project">
           {useUiStore((s) => s.projectName)}
         </button>
-        <button
-          className="header-btn header-user-settings-btn"
-          onClick={() => setUserSettingsOpen(true)}
-          title="User settings (session defaults)"
-        >
-          &#128100;
-        </button>
-        <button className="header-btn header-settings-btn" onClick={openSettings} title="Project settings">
-          &#9881;
-        </button>
-        <button
-          className="header-btn"
-          onClick={() => setServerInfoOpen(true)}
-          title="Server connection info"
-        >
-          &#127760;
-        </button>
-        {activeSessions.length > 0 && (
-          <span className="header-sessions">
-            <span className="session-dot" />
-            {activeSessions.length} session
-            {activeSessions.length !== 1 ? "s" : ""}
-          </span>
-        )}
+        <div className="header-view-switcher" role="tablist" aria-label="Center view">
+          <button
+            type="button"
+            role="tab"
+            aria-selected={centerView === "board"}
+            className={`header-view-btn${centerView === "board" ? " header-view-btn--active" : ""}`}
+            onClick={handleSelectBoard}
+            title="Show board"
+          >
+            Board
+            {ticketCount > 0 && <span className="header-view-count">{ticketCount}</span>}
+          </button>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={centerView === "sessions"}
+            className={`header-view-btn${centerView === "sessions" ? " header-view-btn--active" : ""}`}
+            onClick={handleSelectSessions}
+            title="Show sessions"
+          >
+            Sessions
+            {activeSessions.length > 0 && (
+              <span className="header-view-count header-view-count--live">
+                <span className="session-dot" />
+                {activeSessions.length}
+              </span>
+            )}
+          </button>
+        </div>
         {connectedClients.length > 1 && (
           <span
             className="header-presence"
@@ -71,20 +76,23 @@ export function Header({ onSwitchProject }: { onSwitchProject: () => void }) {
         )}
       </div>
       <div className="header-right">
-        <button className="header-btn" onClick={() => toggleLeft()} title={`Toggle tree (${modLabel("B")})`}>
-          Tree
-        </button>
-        <button className="header-btn" onClick={() => toggleRight()} title={`Toggle context panel (${modLabel("J")})`}>
-          Context
-        </button>
-        <ThemeSwitcher />
         <button className="header-btn header-btn-primary" onClick={() => createNewSession()} title={`New session (${modLabel("T")})`}>
           + New
         </button>
+        <button
+          className="header-settings-btn"
+          onClick={() => setSettingsOpen(true)}
+          title="Settings"
+          aria-label="Settings"
+        >
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <circle cx="12" cy="12" r="3" />
+            <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
+          </svg>
+        </button>
       </div>
     </header>
-    <ServerInfoDialog open={serverInfoOpen} onClose={() => setServerInfoOpen(false)} />
-    <UserSettingsDialog open={userSettingsOpen} onClose={() => setUserSettingsOpen(false)} />
+    <SettingsModal open={settingsOpen} onClose={() => setSettingsOpen(false)} />
     </>
   );
 }

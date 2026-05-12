@@ -14,6 +14,9 @@ import { SessionManager } from "@/components/SessionManager/SessionManager.tsx";
 import { GoalFilePanel } from "@/components/GoalFilePanel/GoalFilePanel.tsx";
 import { NewProjectScreen } from "@/components/SessionPanel/NewProjectScreen.tsx";
 import { NewProjectStepper } from "@/components/SessionPanel/NewProjectStepper.tsx";
+import { BoardView } from "@/components/BoardView/BoardView.tsx";
+import { MetaTicketDetail } from "@/components/MetaTicketDetail/MetaTicketDetail.tsx";
+import { useBoardStore } from "@/store/boardStore.ts";
 import { ViewModeProvider } from "@/context/ViewModeContext.tsx";
 import "@/components/ChatStream/ChatStream.css";
 import "@/components/ChatStream/compact.css";
@@ -24,9 +27,16 @@ const RIGHT_DEFAULT = 380;
 
 export function AppShell({ onSwitchProject }: { onSwitchProject: () => void }) {
   const projectState = useUiStore((s) => s.projectState);
+  const centerView = useUiStore((s) => s.centerView);
   const sessionsMap = useSessionStore((s) => s.sessions);
   const activeSessionIdAll = useSessionStore((s) => s.activeSessionId);
   const openFilesMap = useFileStore((s) => s.openFiles);
+  const activeTicketId = useBoardStore((s) => s.activeTicketId);
+  const openTicket = useBoardStore((s) => s.openTicket);
+  const handleOpenTicket = useCallback(
+    (ticketId: string) => openTicket(ticketId),
+    [openTicket],
+  );
   const isNewProjectMode =
     projectState === "new" &&
     !(activeSessionIdAll && sessionsMap.get(activeSessionIdAll)) &&
@@ -70,7 +80,23 @@ export function AppShell({ onSwitchProject }: { onSwitchProject: () => void }) {
     setRightWidth(Math.min(w, maxRight));
   }, [leftCollapsed, leftWidth]);
 
-  if (isNewProjectMode) {
+  // Project state is async — show a loader until validateProject resolves
+  // so we don't briefly flash the wrong layout before switching to the
+  // new-project flow.
+  if (projectState === null) {
+    return (
+      <div className="app-shell">
+        <Header onSwitchProject={onSwitchProject} />
+        <div className="app-shell-loading">Loading…</div>
+      </div>
+    );
+  }
+
+  // Special flows (new-project form, guided goal session) take over the
+  // whole window — but only when the user is on Sessions view. Switching
+  // to Board always shows the regular workspace layout with the kanban in
+  // the center, regardless of the active session.
+  if (centerView === "sessions" && isNewProjectMode) {
     return (
       <div className="app-shell">
         <Header onSwitchProject={onSwitchProject} />
@@ -81,7 +107,7 @@ export function AppShell({ onSwitchProject }: { onSwitchProject: () => void }) {
     );
   }
 
-  if (isGoalSession) {
+  if (centerView === "sessions" && isGoalSession) {
     return (
       <div className="app-shell">
         <Header onSwitchProject={onSwitchProject} />
@@ -89,7 +115,7 @@ export function AppShell({ onSwitchProject }: { onSwitchProject: () => void }) {
         <div className="layout layout-goal">
           <div className="goal-chat">
             <ViewModeProvider>
-              <SessionPanel />
+              <SessionPanel hideTabBar />
             </ViewModeProvider>
           </div>
           <div className="goal-doc">
@@ -106,7 +132,7 @@ export function AppShell({ onSwitchProject }: { onSwitchProject: () => void }) {
       <div className="layout">
         {leftCollapsed ? (
           <button className="left-collapse-btn" onClick={toggleLeft}
-            title={`Open left panel (${modLabel("B")})`}>&#9654;</button>
+            title={`Open left panel (${modLabel("B")})`}>&#9658;</button>
         ) : (
           <>
             <div style={{ width: leftWidth, height: "100%", overflow: "hidden" }}>
@@ -134,6 +160,12 @@ export function AppShell({ onSwitchProject }: { onSwitchProject: () => void }) {
                 </div>
                 <SessionManager onClose={handleCloseSessionManager} />
               </>
+            ) : centerView === "board" ? (
+              activeTicketId ? (
+                <MetaTicketDetail ticketId={activeTicketId} />
+              ) : (
+                <BoardView onOpenTicket={handleOpenTicket} />
+              )
             ) : (
               <SessionPanel />
             )}
@@ -153,7 +185,7 @@ export function AppShell({ onSwitchProject }: { onSwitchProject: () => void }) {
               collapseThreshold={150}
             />
             <div style={{ width: rightWidth, height: "100%", overflow: "hidden" }}>
-              {isGoalSession ? <GoalFilePanel /> : <ContextPanel />}
+              <ContextPanel />
             </div>
           </>
         )}

@@ -5,6 +5,7 @@ import type { EventCategory } from "@/components/ChatStream/renderers/categories
 type LeftTab = "specs" | "files" | "progress";
 type Breakpoint = "desktop" | "laptop" | "below-min";
 export type ProjectState = "initialized" | "new" | "existing";
+export type CenterView = "board" | "sessions";
 
 export type ChatCategoryVisibility = Record<EventCategory, boolean>;
 
@@ -46,6 +47,9 @@ interface UiStore {
 
   chatCategoryVisibility: ChatCategoryVisibility;
   toggleChatCategory: (category: EventCategory) => void;
+
+  centerView: CenterView;
+  setCenterView: (view: CenterView) => void;
 
   toggleLeftPanel: () => void;
   toggleRightPanel: () => void;
@@ -89,6 +93,9 @@ export const useUiStore = create<UiStore>()(
           },
         })),
 
+      centerView: "sessions" as CenterView,
+      setCenterView: (view) => set({ centerView: view }),
+
       toggleLeftPanel: () =>
         set((s) => ({ leftPanelCollapsed: !s.leftPanelCollapsed })),
       toggleRightPanel: () =>
@@ -107,6 +114,7 @@ export const useUiStore = create<UiStore>()(
         rightPanelCollapsed: state.rightPanelCollapsed,
         leftActiveTab: state.leftActiveTab,
         chatCategoryVisibility: state.chatCategoryVisibility,
+        centerView: state.centerView,
       }),
     },
   ),

@@ -9,14 +9,12 @@ import type { ChatStreamHandle } from "@/components/ChatStream/ChatStream.tsx";
 import { SessionStatusLine } from "@/components/ChatStream/SessionStatusLine.tsx";
 import { InputArea } from "@/components/ChatStream/InputArea.tsx";
 import { FileViewer } from "@/components/FileViewer/FileViewer.tsx";
-import { BoardView } from "@/components/BoardView/BoardView.tsx";
-import { MetaTicketDetail } from "@/components/MetaTicketDetail/MetaTicketDetail.tsx";
-import { useBoardStore } from "@/store/boardStore.ts";
 import { useMessageHistoryStore } from "@/store/messageHistoryStore";
 import { SessionTabBar } from "./SessionTabBar.tsx";
 import { StickyContextBar } from "./StickyContextBar.tsx";
+import "./SessionPanel.css";
 
-export function SessionPanel() {
+export function SessionPanel({ hideTabBar = false }: { hideTabBar?: boolean } = {}) {
   const sessions = useSessionStore((s) => s.sessions);
   const activeSessionId = useSessionStore((s) => s.activeSessionId);
   const switchSession = useSessionStore((s) => s.switchSession);
@@ -101,19 +99,11 @@ export function SessionPanel() {
     }
   }, [activeSessionId, activeSession, resolveRequest, sendMessage]);
 
-  const activeTicketId = useBoardStore((s) => s.activeTicketId);
-  const openTicket = useBoardStore((s) => s.openTicket);
-
-  const handleOpenTicket = useCallback((ticketId: string) => {
-    openTicket(ticketId);
-  }, [openTicket]);
-
-  // New project goal-entry screen is hoisted to AppShell so it occupies the
-  // full window (no left panel, no right panel, no Board tab).
+  // Board mode and new-project goal-entry screen are hoisted to AppShell so
+  // they occupy the full window. SessionPanel only renders for centerView === "sessions".
   // Determine what to show in the content area
-  const showTicket = activeTicketId != null;
-  const showFile = !showTicket && displayFile != null;
-  const showSession = !showTicket && activeSession != null && !showFile;
+  const showFile = displayFile != null;
+  const showSession = activeSession != null && !showFile;
 
   const status = activeSession?.status as SessionStatus | undefined;
   const hasPending = activeSession?.pendingRequest != null;
@@ -143,23 +133,23 @@ export function SessionPanel() {
 
   return (
     <>
-      <SessionTabBar
-        sessions={sessionList}
-        activeSessionId={!showTicket && !showFile ? activeSessionId : null}
-        onSwitchSession={handleSwitchSession}
-        onCloseSession={closeSession}
-        files={fileList}
-        activeFilePath={!showTicket ? activeFilePath : null}
-        onSwitchFile={handleSwitchFile}
-        onCloseFile={closeFile}
-        previewFile={previewFileObj}
-        previewFilePath={!showTicket ? previewFilePath : null}
-        onClearPreview={clearPreview}
-        onPinPreview={pinPreview}
-      />
-      {showTicket && activeTicketId ? (
-        <MetaTicketDetail ticketId={activeTicketId} />
-      ) : showFile && displayFile ? (
+      {!hideTabBar && (
+        <SessionTabBar
+          sessions={sessionList}
+          activeSessionId={!showFile ? activeSessionId : null}
+          onSwitchSession={handleSwitchSession}
+          onCloseSession={closeSession}
+          files={fileList}
+          activeFilePath={activeFilePath}
+          onSwitchFile={handleSwitchFile}
+          onCloseFile={closeFile}
+          previewFile={previewFileObj}
+          previewFilePath={previewFilePath}
+          onClearPreview={clearPreview}
+          onPinPreview={pinPreview}
+        />
+      )}
+      {showFile && displayFile ? (
         <FileViewer file={displayFile} />
       ) : showSession && activeSession ? (
         <>
@@ -223,7 +213,12 @@ export function SessionPanel() {
           </div>
         </>
       ) : (
-        <BoardView onOpenTicket={handleOpenTicket} />
+        <div className="session-empty">
+          <div className="session-empty-title">No active session</div>
+          <div className="session-empty-hint">
+            Press <span className="session-empty-kbd">⌘T</span> or click <b>+ New</b> in the header to start a session.
+          </div>
+        </div>
       )}
     </>
   );
