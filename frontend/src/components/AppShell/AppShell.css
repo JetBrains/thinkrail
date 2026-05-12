@@ -114,56 +114,18 @@
   opacity: 0.9;
 }
 
-/* ── Theme Switcher ── */
-.theme-switcher {
-  position: relative;
-}
-
-.theme-btn {
-  display: flex;
+.header-settings-btn {
+  display: inline-flex;
   align-items: center;
   justify-content: center;
-  padding: var(--space-xs) var(--space-sm);
-}
-
-.theme-dropdown {
-  position: absolute;
-  top: 100%;
-  right: 0;
-  margin-top: var(--space-xs);
-  min-width: 180px;
-  background: var(--panel);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
-  z-index: 100;
-  padding: var(--space-xs) 0;
-}
-
-.theme-option {
-  display: flex;
-  align-items: center;
-  gap: var(--space-sm);
-  width: 100%;
-  padding: var(--space-xs) var(--space-md);
-  border: none;
+  padding: 0;
   background: transparent;
+  border: none;
   color: var(--muted);
-  font-family: var(--font);
-  font-size: var(--font-lg);
   cursor: pointer;
-  transition: all var(--transition-fast);
+  transition: color var(--transition-fast);
 }
-
-.theme-option:hover {
-  background: var(--hover);
-  color: var(--text);
-}
-
-.theme-option-active {
-  color: var(--text);
-  background: var(--elevated);
-}
+.header-settings-btn:hover { color: var(--text); }
 
 /* ── Panels ── */
 .left-panel,
