@@ -1829,9 +1829,9 @@
   animation: vis-fs-scale 150ms ease;
 }
 @keyframes vis-fs-scale { from { transform: scale(0.97); opacity: 0; } to { transform: scale(1); opacity: 1; } }
-.vis-fs-scroll { flex: 1; overflow: auto; padding: var(--space-xl); display: flex; align-items: flex-start; justify-content: center; }
-.vis-fs-svg { width: 100%; }
-.vis-fs-svg svg { width: 100% !important; height: auto !important; }
+.vis-fs-scroll { flex: 1; overflow: auto; padding: var(--space-xl); display: flex; align-items: safe center; justify-content: safe center; }
+.vis-fs-svg { width: 100%; max-width: 1400px; margin: 0 auto; }
+.vis-fs-svg svg { width: 100% !important; height: auto !important; display: block; margin: 0 auto; }
 .vis-fs-zoombar { position: absolute; bottom: var(--space-md); left: 50%; transform: translateX(-50%); z-index: 5; }
 .vis-fs-close {
   position: absolute;

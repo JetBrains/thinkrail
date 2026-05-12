@@ -263,7 +263,7 @@ function MermaidDiagram({ syntax }: { syntax: string }) {
             svgEl.removeAttribute("width");
             svgEl.removeAttribute("height");
           }
-          setSvgHtml(ref.current.innerHTML);
+          setSvgHtml(svg);
           setError(null);
         }
       })
