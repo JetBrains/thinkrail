@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useState } from "react";
 import { Outlet } from "react-router-dom";
 import { useUiStore } from "@/store/uiStore.ts";
 import { useSessionStore } from "@/store/sessionStore.ts";
@@ -13,6 +13,7 @@ import { SessionPanel } from "@/components/SessionPanel/SessionPanel.tsx";
 import { SessionManager } from "@/components/SessionManager/SessionManager.tsx";
 import { GoalFilePanel } from "@/components/GoalFilePanel/GoalFilePanel.tsx";
 import { NewProjectScreen } from "@/components/SessionPanel/NewProjectScreen.tsx";
+import { NewProjectStepper } from "@/components/SessionPanel/NewProjectStepper.tsx";
 import { ViewModeProvider } from "@/context/ViewModeContext.tsx";
 import "@/components/ChatStream/ChatStream.css";
 import "@/components/ChatStream/compact.css";
@@ -49,23 +50,6 @@ export function AppShell({ onSwitchProject }: { onSwitchProject: () => void }) {
     activeSession.status !== "done" &&
     activeSession.status !== "error";
 
-  // When goal session starts: collapse left panel + widen right panel.
-  // When it ends: restore previous state.
-  const prevLeftCollapsed = useRef(leftCollapsed);
-  const prevRightWidth = useRef(rightWidth);
-  useEffect(() => {
-    if (isGoalSession) {
-      prevLeftCollapsed.current = leftCollapsed;
-      prevRightWidth.current = rightWidth;
-      if (!leftCollapsed) toggleLeft();
-      setRightWidth(Math.floor(window.innerWidth * 0.5));
-    } else {
-      if (leftCollapsed !== prevLeftCollapsed.current) toggleLeft();
-      setRightWidth(prevRightWidth.current);
-    }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isGoalSession]);
-
   const handleOpenSessionManager = useCallback(() => {
     setShowSessionManager(true);
   }, []);
@@ -92,6 +76,25 @@ export function AppShell({ onSwitchProject }: { onSwitchProject: () => void }) {
         <Header onSwitchProject={onSwitchProject} />
         <div className="np-fullscreen">
           <NewProjectScreen />
+        </div>
+      </div>
+    );
+  }
+
+  if (isGoalSession) {
+    return (
+      <div className="app-shell">
+        <Header onSwitchProject={onSwitchProject} />
+        <NewProjectStepper currentStep={2} />
+        <div className="layout layout-goal">
+          <div className="goal-chat">
+            <ViewModeProvider>
+              <SessionPanel />
+            </ViewModeProvider>
+          </div>
+          <div className="goal-doc">
+            <GoalFilePanel />
+          </div>
         </div>
       </div>
     );

@@ -200,6 +200,31 @@
   background: var(--bg);
 }
 
+/* ── Goal-session layout (guided session, 45/55) ──────────────── */
+.layout-goal {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.goal-chat {
+  flex: 0 0 45%;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border-right: 1px solid var(--border);
+  background: var(--bg);
+}
+
+.goal-doc {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  background: var(--panel);
+}
+
 /* ── Panel Tabs ── */
 .panel-tabs {
   display: flex;

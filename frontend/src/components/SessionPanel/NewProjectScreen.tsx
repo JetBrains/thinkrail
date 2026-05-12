@@ -5,6 +5,7 @@ import { useUiStore } from "@/store/uiStore";
 import { useNotificationStore } from "@/store/notificationStore";
 import { useVoiceInput } from "@/hooks/useVoiceInput";
 import { DEFAULT_MODEL } from "@/utils/models";
+import { NewProjectStepper } from "./NewProjectStepper.tsx";
 import "./NewProjectScreen.css";
 
 export function NewProjectScreen() {
@@ -112,22 +113,7 @@ export function NewProjectScreen() {
 
   return (
     <div className="np-screen">
-        <div className="np-stepper">
-          <div className="np-step np-step-active">
-            <span className="np-step-num">1</span>
-            <span className="np-step-label">Describe</span>
-          </div>
-          <span className="np-step-arrow">→</span>
-          <div className="np-step">
-            <span className="np-step-num">2</span>
-            <span className="np-step-label">Guided session</span>
-          </div>
-          <span className="np-step-arrow">→</span>
-          <div className="np-step">
-            <span className="np-step-num">3</span>
-            <span className="np-step-label">Goal &amp; Requirements doc</span>
-          </div>
-        </div>
+        <NewProjectStepper currentStep={1} />
 
         <div className="np-form">
           <h2 className="np-h2">What are your project goals?</h2>
