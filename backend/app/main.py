@@ -109,16 +109,24 @@ def create_app() -> FastAPI:
 
 if __name__ == "__main__":
     import uvicorn
-    from app.core.config import ServerSettings
+    from app.core.config import ServerSettings, find_free_port
     from app.version import check_in_background, print_banner
 
     print_banner()
     check_in_background()
 
     srv = ServerSettings()
+    try:
+        port = find_free_port(srv.backend_port, host=srv.backend_host)
+    except OSError as exc:
+        print(f"Error: {exc}", file=sys.stderr)
+        sys.exit(1)
+    if port != srv.backend_port:
+        print(f"Port {srv.backend_port} is in use; using {port} instead.", file=sys.stderr)
+
     uvicorn.run(
         "app.main:create_app",
         factory=True,
         host=srv.backend_host,
-        port=srv.backend_port,
+        port=port,
     )

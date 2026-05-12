@@ -2,11 +2,17 @@ from __future__ import annotations
 
 import hashlib
 import os
+import socket
 import sys
 from pathlib import Path
 
 from pydantic import BaseModel
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+# Probe up to +PORT_PROBE_RANGE from the requested port when it's busy. Matches
+# the developer-facing run.sh preflight so the standalone binary and the dev
+# shell script use the same fallback window.
+PORT_PROBE_RANGE = 10
 
 # Two anchors are needed in frozen (PyInstaller) mode:
 #   * _BUNDLE_ROOT — bundled resources (claude-plugin/, frontend dist). Lives at
@@ -32,6 +38,37 @@ class ServerSettings(BaseSettings):
 
     backend_port: int = 8000
     backend_host: str = "127.0.0.1"
+
+
+def find_free_port(
+    start: int,
+    host: str = "127.0.0.1",
+    probe_range: int = PORT_PROBE_RANGE,
+) -> int:
+    """Return the first bindable TCP port in ``[start, start + probe_range]``.
+
+    Raises ``OSError`` if every port in the range is occupied. There is a
+    small TOCTOU window between probing and the caller's subsequent bind —
+    acceptable here because the only failure mode is uvicorn raising on
+    startup, which is the existing pre-fix behaviour.
+    """
+    last_err: OSError | None = None
+    for port in range(start, start + probe_range + 1):
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+            # Match uvicorn's bind semantics: it sets reuse_address=True on
+            # POSIX. Without this, a port lingering in TIME_WAIT would look
+            # busy to us but bindable to uvicorn, advancing the port number
+            # for no reason on fast restarts.
+            sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+            try:
+                sock.bind((host, port))
+            except OSError as exc:
+                last_err = exc
+                continue
+            return port
+    raise OSError(
+        f"No free port between {start} and {start + probe_range} on {host}"
+    ) from last_err
 
 
 def get_data_dir() -> Path:

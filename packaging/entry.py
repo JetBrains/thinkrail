@@ -25,8 +25,18 @@ def _run_server(argv: list[str]) -> int:
     print_banner()
     check_in_background()
 
+    from app.core.config import find_free_port
+
+    try:
+        port = find_free_port(args.port, host=args.host)
+    except OSError as exc:
+        print(f"Error: {exc}", file=sys.stderr)
+        return 1
+    if port != args.port:
+        print(f"Port {args.port} is in use; using {port} instead.", file=sys.stderr)
+
     browse_host = "127.0.0.1" if args.host == "0.0.0.0" else args.host
-    url = f"http://{browse_host}:{args.port}"
+    url = f"http://{browse_host}:{port}"
     print(f"Starting Bonsai on {url}")
     print("Open the URL in your browser to pick a project.")
 
@@ -37,7 +47,7 @@ def _run_server(argv: list[str]) -> int:
         "app.main:create_app",
         factory=True,
         host=args.host,
-        port=args.port,
+        port=port,
     )
     return 0
 

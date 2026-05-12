@@ -100,6 +100,12 @@ graph TD
 | `get_bonsai_dir`    | `AppConfig.() → Path`        | Path to the `.bonsai/` directory               |
 | `load_config`       | `(project_root) → AppConfig` | Load application settings (Pydantic model)     |
 
+**Port preflight:**
+
+| Function | Signature | Description |
+|----------|-----------|-------------|
+| `find_free_port` | `(start: int, host: str = "127.0.0.1", probe_range: int = 10) → int` | Return the first bindable port in `[start, start+probe_range]`. Raises `OSError` if all are taken. Used by the standalone binary (`packaging/entry.py`) and the dev `__main__` so that a busy default port (8000) silently falls back to the next free port instead of failing. Matches `run.sh`'s preflight window. |
+
 ### fileio.py
 
 | Function | Signature | Description |
