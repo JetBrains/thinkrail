@@ -18,8 +18,8 @@ export function ProjectPicker({ onSelect, onClose }: ProjectPickerProps) {
   const [dirNotFound, setDirNotFound] = useState(false);
   const [loading, setLoading] = useState(false);
   const [recents, setRecents] = useState<KnownProject[]>([]);
+  const [showPasteInput, setShowPasteInput] = useState(false);
 
-  // Autocomplete state
   const [suggestions, setSuggestions] = useState<string[]>([]);
   const [highlightIdx, setHighlightIdx] = useState(-1);
   const [showSuggestions, setShowSuggestions] = useState(false);
@@ -31,7 +31,6 @@ export function ProjectPicker({ onSelect, onClose }: ProjectPickerProps) {
       .catch(() => setRecents([]));
   }, []);
 
-  // Debounced autocomplete fetch
   useEffect(() => {
     if (!path || !path.includes("/")) {
       setSuggestions([]);
@@ -82,9 +81,6 @@ export function ProjectPicker({ onSelect, onClose }: ProjectPickerProps) {
           setDirNotFound(true);
           return;
         }
-        // Backend will register the project in known-projects on first
-        // write (when .bonsai/ is materialized).  Empty/pre-init folders
-        // shouldn't pollute the recent list.
         onSelect(validateData.path);
       } catch (e) {
         setError((e as Error).message ?? "Cannot reach backend");
@@ -94,6 +90,17 @@ export function ProjectPicker({ onSelect, onClose }: ProjectPickerProps) {
     },
     [path, onSelect],
   );
+
+  const openBrowse = useCallback(async () => {
+    try {
+      const data = await browseFolder();
+      if (data?.path) {
+        await handleOpen(data.path);
+      }
+    } catch {
+      // user cancelled or backend unreachable; stay on welcome
+    }
+  }, [handleOpen]);
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
@@ -130,71 +137,146 @@ export function ProjectPicker({ onSelect, onClose }: ProjectPickerProps) {
 
   return (
     <div className={`picker-container ${onClose ? "picker-modal" : ""}`} onClick={onClose}>
-      <div className="picker-card" onClick={(e) => e.stopPropagation()}>
+      <div className="picker-welcome" onClick={(e) => e.stopPropagation()}>
         {onClose && (
-          <button className="picker-close" onClick={onClose}>{"\u00D7"}</button>
+          <button className="picker-close" onClick={onClose}>{"×"}</button>
         )}
-        <div className="picker-logo">Bonsai</div>
-        <div className="picker-subtitle">
-          Specification-driven development workspace
-        </div>
 
-        <div className="picker-field" style={{ position: "relative" }}>
-          <label className="picker-label">Project Directory</label>
-          <div className="picker-input-wrap">
-            <input
-              ref={inputRef}
-              className="picker-input"
-              value={path}
-              onChange={(e) => {
-                setPath(e.target.value);
-                setError(null);
-                setDirNotFound(false);
-              }}
-              onKeyDown={handleKeyDown}
-              onBlur={() => setTimeout(() => setShowSuggestions(false), 150)}
-              onFocus={() => { if (suggestions.length > 0) setShowSuggestions(true); }}
-              placeholder="/home/user/my-project"
-              autoFocus
-              autoComplete="off"
-            />
+        <div className="picker-hero">
+          <svg className="picker-tree" viewBox="0 0 100 110" fill="none" aria-hidden="true">
+            <path d="M50 100 V60" stroke="#78350f" strokeWidth="6" strokeLinecap="round"/>
+            <path d="M50 70 Q35 65 30 50" stroke="#78350f" strokeWidth="3" strokeLinecap="round"/>
+            <path d="M50 65 Q65 60 70 45" stroke="#78350f" strokeWidth="3" strokeLinecap="round"/>
+            <ellipse cx="50" cy="35" rx="28" ry="22" fill="#22c55e"/>
+            <ellipse cx="30" cy="48" rx="14" ry="10" fill="#16a34a"/>
+            <ellipse cx="72" cy="42" rx="14" ry="11" fill="#15803d"/>
+            <rect x="32" y="100" width="36" height="6" rx="2" fill="#78350f"/>
+          </svg>
+          <h1 className="picker-h1">Welcome to Bonsai</h1>
+          <p className="picker-tagline">
+            Spec-driven development for AI agents. Grow software with intent — one ticket at a time.
+          </p>
+
+          <div className="picker-ctas">
             <button
-              className="picker-browse-btn"
-              title="Browse folders"
-              onClick={async () => {
-                try {
-                  const data = await browseFolder();
-                  if (data?.path) {
-                    setPath(data.path);
-                    setError(null);
-                    inputRef.current?.focus();
-                  }
-                } catch {
-                  // ignore
-                }
-              }}
+              className="picker-cta picker-cta-primary"
+              onClick={openBrowse}
+              disabled={loading}
             >
-              <svg width="14" height="14" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
-                <path d="M1.5 3.5C1.5 2.948 1.948 2.5 2.5 2.5H6.086C6.351 2.5 6.605 2.605 6.793 2.793L7.707 3.707C7.895 3.895 8.149 4 8.414 4H13.5C14.052 4 14.5 4.448 14.5 5V12.5C14.5 13.052 14.052 13.5 13.5 13.5H2.5C1.948 13.5 1.5 13.052 1.5 12.5V3.5Z" stroke="currentColor" strokeWidth="1.3" strokeLinejoin="round"/>
-              </svg>
+              <span className="picker-cta-h">+ Start a new project</span>
+              <span className="picker-cta-s">Idea → Goal &amp; Requirements doc</span>
+            </button>
+            <button
+              className="picker-cta"
+              onClick={openBrowse}
+              disabled={loading}
+            >
+              <span className="picker-cta-h">↗ Open an existing project</span>
+              <span className="picker-cta-s">Bonsai will investigate the code with you</span>
             </button>
           </div>
-          {showSuggestions && suggestions.length > 0 && (
-            <div className="picker-suggestions">
-              {suggestions.map((dir, i) => (
+        </div>
+
+        {recents.length > 0 && (
+          <div className="picker-recents">
+            <div className="picker-recents-head">
+              <h4 className="picker-recents-label">Recent</h4>
+              <div className="picker-recents-rule" />
+            </div>
+            <div className="picker-recents-list">
+              {recents.map((r) => (
                 <button
-                  key={dir}
-                  className={`picker-suggestion ${i === highlightIdx ? "picker-suggestion-active" : ""}`}
-                  onMouseDown={() => acceptSuggestion(dir)}
-                  onMouseEnter={() => setHighlightIdx(i)}
+                  key={r.path}
+                  className="picker-recent-item"
+                  onClick={() => handleOpen(r.path)}
                 >
-                  <span className="picker-suggestion-icon">{"\u{1F4C1}"}</span>
-                  {dir}
+                  <svg className="picker-leaf" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M12 22V11"/>
+                    <path d="M5 11c0-4 3-7 7-7s7 3 7 7c0 4-3 7-7 7s-7-3-7-7Z"/>
+                  </svg>
+                  <div className="picker-recent-info">
+                    <div className="picker-recent-name">{r.name}</div>
+                    <div className="picker-recent-path">{r.path}</div>
+                  </div>
                 </button>
               ))}
             </div>
-          )}
-        </div>
+          </div>
+        )}
+
+        {!showPasteInput ? (
+          <button
+            className="picker-paste-toggle"
+            onClick={() => {
+              setShowPasteInput(true);
+              setTimeout(() => inputRef.current?.focus(), 0);
+            }}
+          >
+            Or paste a path to open something not in this list →
+          </button>
+        ) : (
+          <div className="picker-paste-field">
+            <div className="picker-input-wrap">
+              <input
+                ref={inputRef}
+                className="picker-input"
+                value={path}
+                onChange={(e) => {
+                  setPath(e.target.value);
+                  setError(null);
+                  setDirNotFound(false);
+                }}
+                onKeyDown={handleKeyDown}
+                onBlur={() => setTimeout(() => setShowSuggestions(false), 150)}
+                onFocus={() => { if (suggestions.length > 0) setShowSuggestions(true); }}
+                placeholder="/home/user/my-project"
+                autoComplete="off"
+              />
+              <button
+                className="picker-browse-btn"
+                title="Browse folders"
+                onClick={async () => {
+                  try {
+                    const data = await browseFolder();
+                    if (data?.path) {
+                      setPath(data.path);
+                      setError(null);
+                      inputRef.current?.focus();
+                    }
+                  } catch {
+                    // ignore
+                  }
+                }}
+              >
+                <svg width="14" height="14" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+                  <path d="M1.5 3.5C1.5 2.948 1.948 2.5 2.5 2.5H6.086C6.351 2.5 6.605 2.605 6.793 2.793L7.707 3.707C7.895 3.895 8.149 4 8.414 4H13.5C14.052 4 14.5 4.448 14.5 5V12.5C14.5 13.052 14.052 13.5 13.5 13.5H2.5C1.948 13.5 1.5 13.052 1.5 12.5V3.5Z" stroke="currentColor" strokeWidth="1.3" strokeLinejoin="round"/>
+                </svg>
+              </button>
+              {showSuggestions && suggestions.length > 0 && (
+                <div className="picker-suggestions">
+                  {suggestions.map((dir, i) => (
+                    <button
+                      key={dir}
+                      className={`picker-suggestion ${i === highlightIdx ? "picker-suggestion-active" : ""}`}
+                      onMouseDown={() => acceptSuggestion(dir)}
+                      onMouseEnter={() => setHighlightIdx(i)}
+                    >
+                      <span className="picker-suggestion-icon">{"\u{1F4C1}"}</span>
+                      {dir}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+            <button
+              className="picker-paste-open"
+              onClick={() => handleOpen()}
+              disabled={loading || !path.trim()}
+            >
+              {loading ? "Loading…" : "Open"}
+            </button>
+          </div>
+        )}
 
         {error && (
           <div className="picker-error">
@@ -229,32 +311,6 @@ export function ProjectPicker({ onSelect, onClose }: ProjectPickerProps) {
                 Create folder
               </button>
             )}
-          </div>
-        )}
-
-        <div className="picker-actions">
-          <button
-            className="picker-btn picker-btn-primary"
-            onClick={() => handleOpen()}
-            disabled={loading || !path.trim()}
-          >
-            {loading ? "Loading..." : "Open Project"}
-          </button>
-        </div>
-
-        {recents.length > 0 && (
-          <div className="picker-recents">
-            <div className="picker-recents-label">Recent Projects</div>
-            {recents.map((r) => (
-              <button
-                key={r.path}
-                className="picker-recent-item"
-                onClick={() => handleOpen(r.path)}
-              >
-                <span className="picker-recent-name">{r.name}</span>
-                <span className="picker-recent-path">{r.path}</span>
-              </button>
-            ))}
           </div>
         )}
       </div>
