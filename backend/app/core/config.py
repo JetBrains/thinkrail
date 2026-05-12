@@ -19,6 +19,31 @@ PORT_PROBE_RANGE = 10
 # ``project_root / ".bonsai" / ...`` should reference this constant.
 BONSAI_DIRNAME = ".bonsai"
 
+# Subdirectories under ``project_root / .bonsai / ...``.  Use these instead
+# of string literals so that any future rename happens in one place.
+SESSIONS_DIR = "sessions"
+PLANS_DIR = "plans"
+META_TICKETS_DIR = "meta-tickets"
+SPEC_DRAFTS_DIR = "spec-drafts"
+SPEC_PATCHES_DIR = "spec-patches"
+TRASH_DIR = "trash"
+CACHE_DIR = "cache"
+IMPLEMENTATION_TASKS_DIR = "implementation_tasks"
+DESIGN_DOCS_DIR = "design_docs"
+
+# Subdirectory under the server-wide data dir (``~/.bonsai/indexes/...``).
+INDEXES_DIR = "indexes"
+
+# Well-known filenames inside ``.bonsai/`` (or its subdirectories).
+SETTINGS_FILE = "settings.json"
+INDEX_DB_FILE = "index.db"
+APP_DB_FILE = "bonsai.db"
+MODELS_CACHE_FILE = "models.json"
+# Manifest tracking spec-draft entries inside ``spec-drafts/<ticket>/``.
+MANIFEST_FILE = "manifest.json"
+# Sidecar written next to each trashed item describing the original location.
+TRASH_SIDECAR_FILE = "_trash.json"
+
 # Two anchors are needed in frozen (PyInstaller) mode:
 #   * _BUNDLE_ROOT — bundled resources (claude-plugin/, frontend dist). Lives at
 #     sys._MEIPASS, which PyInstaller sets to the temp extraction dir (onefile)
@@ -103,9 +128,9 @@ def get_index_path(project_root: Path) -> Path:
     project_hash = hashlib.sha256(
         str(project_root.resolve()).encode()
     ).hexdigest()[:16]
-    index_dir = data_dir / "indexes" / project_hash
+    index_dir = data_dir / INDEXES_DIR / project_hash
     index_dir.mkdir(parents=True, exist_ok=True)
-    return index_dir / "index.db"
+    return index_dir / INDEX_DB_FILE
 
 
 class AppConfig(BaseModel):

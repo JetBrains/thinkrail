@@ -15,7 +15,7 @@ from app.board.storage import (
     ticket_path,
     write_ticket,
 )
-from app.core.config import AppConfig, BONSAI_DIRNAME
+from app.core.config import AppConfig, BONSAI_DIRNAME, META_TICKETS_DIR, PLANS_DIR
 
 
 class TicketNotFoundError(Exception):
@@ -33,11 +33,11 @@ class BoardService:
 
     @property
     def _tickets_dir(self) -> Path:
-        return self._config.get_project_root() / BONSAI_DIRNAME / "meta-tickets"
+        return self._config.get_project_root() / BONSAI_DIRNAME / META_TICKETS_DIR
 
     @property
     def _plans_dir(self) -> Path:
-        return self._config.get_project_root() / BONSAI_DIRNAME / "plans"
+        return self._config.get_project_root() / BONSAI_DIRNAME / PLANS_DIR
 
     # -- queries ---------------------------------------------------------------
 
@@ -47,7 +47,7 @@ class BoardService:
         for t in tickets:
             # Auto-detect plan file
             if t.plan_path is None and self.plans.plan_exists(t.id):
-                t.plan_path = f"plans/{t.id}.md"
+                t.plan_path = f"{PLANS_DIR}/{t.id}.md"
                 if t.status == "specified":
                     t.status = "planned"
                 t.updated = datetime.now(UTC).isoformat()
@@ -75,7 +75,7 @@ class BoardService:
             raise TicketNotFoundError(f"Ticket '{id}' not found") from None
         # Auto-detect plan file if planPath is not set
         if ticket.plan_path is None and self.plans.plan_exists(id):
-            ticket.plan_path = f"plans/{id}.md"
+            ticket.plan_path = f"{PLANS_DIR}/{id}.md"
             if ticket.status == "specified":
                 ticket.status = "planned"
             ticket.updated = datetime.now(UTC).isoformat()
@@ -96,7 +96,7 @@ class BoardService:
         ticket = MetaTicket(title=title, body=body, type=type, status=status, order=max_order + 1)
         # Auto-create a skeleton plan (draft, no steps) so users can edit immediately
         self.plans.create_plan(ticket.id, title, steps=[], verification=[])
-        ticket.plan_path = f"plans/{ticket.id}.md"
+        ticket.plan_path = f"{PLANS_DIR}/{ticket.id}.md"
         write_ticket(ticket_path(self._tickets_dir, ticket.id), ticket)
         return ticket
 

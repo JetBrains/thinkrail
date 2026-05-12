@@ -12,10 +12,10 @@ from typing import Any
 
 from pydantic import BaseModel
 
-from app.core.config import BONSAI_DIRNAME
+from app.core.config import BONSAI_DIRNAME, SETTINGS_FILE
 from app.core.fileio import write_text
 
-SETTINGS_REL_PATH = f"{BONSAI_DIRNAME}/settings.json"
+SETTINGS_REL_PATH = f"{BONSAI_DIRNAME}/{SETTINGS_FILE}"
 
 
 class ProjectSettings(BaseModel, extra="allow"):
@@ -70,7 +70,7 @@ def ensure_settings_file(project_root: Path) -> ProjectSettings:
     from app.core.project import ensure_meta_file
 
     bonsai_dir = project_root / BONSAI_DIRNAME
-    content = ensure_meta_file(bonsai_dir, "settings.json")
+    content = ensure_meta_file(bonsai_dir, SETTINGS_FILE)
     try:
         return ProjectSettings.model_validate_json(content)
     except Exception:

@@ -12,7 +12,7 @@ import logging
 from pathlib import Path
 from typing import Any
 
-from app.core.config import BONSAI_DIRNAME
+from app.core.config import BONSAI_DIRNAME, SESSIONS_DIR
 from app.core.fileio import delete_file, ensure_dir, read_text, write_text
 
 logger = logging.getLogger(__name__)
@@ -25,7 +25,7 @@ def _sessions_dir(project_root: Path) -> Path:
     which creates parents) before writing.  Readers must guard against
     a missing directory.
     """
-    return project_root / BONSAI_DIRNAME / "sessions"
+    return project_root / BONSAI_DIRNAME / SESSIONS_DIR
 
 
 def _meta_path(project_root: Path, bonsai_sid: str) -> Path:
@@ -212,7 +212,7 @@ def update_session_metadata(
 
 def list_children(project_root: Path, parent_bonsai_sid: str) -> list[dict[str, Any]]:
     """List direct child subsessions of a parent session (metadata only)."""
-    sessions_dir = project_root / BONSAI_DIRNAME / "sessions"
+    sessions_dir = project_root / BONSAI_DIRNAME / SESSIONS_DIR
     if not sessions_dir.is_dir():
         return []
     children = []

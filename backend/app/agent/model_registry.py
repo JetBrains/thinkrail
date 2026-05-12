@@ -22,7 +22,7 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any
 
-from app.core.config import BONSAI_DIRNAME
+from app.core.config import BONSAI_DIRNAME, CACHE_DIR, MODELS_CACHE_FILE
 
 from .credentials import resolve_anthropic_api_key
 
@@ -161,7 +161,7 @@ class ModelRegistry:
         self._last_error: str | None = None
         self._source: str = "fallback"  # "api" | "cache" | "fallback"
         self._refresh_task: asyncio.Task[None] | None = None
-        self._cache_path = project_root / BONSAI_DIRNAME / "cache" / "models.json"
+        self._cache_path = project_root / BONSAI_DIRNAME / CACHE_DIR / MODELS_CACHE_FILE
 
     # ── Public API ────────────────────────────────────────────────────
 

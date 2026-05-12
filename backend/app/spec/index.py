@@ -30,7 +30,14 @@ import pathspec
 
 from pydantic import ValidationError
 
-from app.core.config import BONSAI_DIRNAME
+from app.core.config import (
+    BONSAI_DIRNAME,
+    CACHE_DIR,
+    DESIGN_DOCS_DIR,
+    PLANS_DIR,
+    SESSIONS_DIR,
+    TRASH_DIR,
+)
 from app.spec.frontmatter import _LIST_LINK_FIELDS, parse_frontmatter
 from app.spec.models import DocumentEntry, Frontmatter, Link, SpecEntry
 
@@ -45,7 +52,13 @@ SCHEMA_VERSION = "3"  # bumped: forces rebuild to apply built-in skip paths
 # unmanaged documents.  Checked as path prefixes during _find_md_files().
 BONSAI_INTERNAL_SKIP = frozenset(
     f"{BONSAI_DIRNAME}/{sub}/"
-    for sub in ("trash", "cache", "sessions", "plans", "design_docs/plans")
+    for sub in (
+        TRASH_DIR,
+        CACHE_DIR,
+        SESSIONS_DIR,
+        PLANS_DIR,
+        f"{DESIGN_DOCS_DIR}/{PLANS_DIR}",
+    )
 )
 
 _PRAGMAS = """\

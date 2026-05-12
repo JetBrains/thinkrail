@@ -12,19 +12,26 @@ import json
 import shutil
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
+
+from app.core.config import TRASH_SIDECAR_FILE
+
+# Discriminator identifying which kind of resource is being trashed.  These
+# values become the first path component under ``.bonsai/trash/`` and steer
+# the type-specific restore logic on the way back.
+TrashItemType = Literal["sessions", "tickets", "plans", "drafts", "patches", "specs"]
 
 
 def move_to_trash(
     trash_dir: Path,
-    item_type: str,
+    item_type: TrashItemType,
     item_id: str,
     source_files: list[Path],
     original_dir: str,
     *,
     context: dict[str, Any] | None = None,
 ) -> None:
-    """Move files into trash and write a _trash.json sidecar."""
+    """Move files into trash and write a sidecar."""
     dest = trash_dir / item_type / item_id
     dest.mkdir(parents=True, exist_ok=True)
 
@@ -38,20 +45,20 @@ def move_to_trash(
         "type": item_type,
         "context": context or {},
     }
-    sidecar = dest / "_trash.json"
+    sidecar = dest / TRASH_SIDECAR_FILE
     sidecar.write_text(json.dumps(meta, indent=2), encoding="utf-8")
 
 
 def restore_from_trash(
-    trash_dir: Path, item_type: str, item_id: str,
+    trash_dir: Path, item_type: TrashItemType, item_id: str,
 ) -> dict[str, Any]:
     """Restore trashed files to their original directory.
 
-    Returns the ``context`` dict from ``_trash.json`` so callers can
-    perform type-specific restoration (e.g. re-inserting registry entries).
+    Returns the ``context`` dict from the sidecar so callers can perform
+    type-specific restoration (e.g. re-inserting registry entries).
     """
     src_dir = trash_dir / item_type / item_id
-    sidecar = src_dir / "_trash.json"
+    sidecar = src_dir / TRASH_SIDECAR_FILE
     if not sidecar.is_file():
         raise FileNotFoundError(f"Trashed item not found: {item_type}/{item_id}")
 
@@ -60,7 +67,7 @@ def restore_from_trash(
     original.mkdir(parents=True, exist_ok=True)
 
     for f in src_dir.iterdir():
-        if f.name == "_trash.json":
+        if f.name == TRASH_SIDECAR_FILE:
             continue
         shutil.move(str(f), str(original / f.name))
 
@@ -68,12 +75,12 @@ def restore_from_trash(
     return info.get("context", {})
 
 
-def _extract_display(item_type: str, item_dir: Path) -> dict[str, Any]:
+def _extract_display(item_type: TrashItemType, item_dir: Path) -> dict[str, Any]:
     """Peek into trashed data files to extract display-friendly metadata."""
     result: dict[str, Any] = {}
     try:
-        # Find the first .json file that isn't _trash.json
-        data_files = [f for f in item_dir.iterdir() if f.suffix == ".json" and f.name != "_trash.json"]
+        # Find the first .json file that isn't the trash sidecar
+        data_files = [f for f in item_dir.iterdir() if f.suffix == ".json" and f.name != TRASH_SIDECAR_FILE]
         if not data_files:
             return result
         data = json.loads(data_files[0].read_text(encoding="utf-8"))
@@ -94,7 +101,7 @@ def _extract_display(item_type: str, item_dir: Path) -> dict[str, Any]:
     return result
 
 
-def list_trashed(trash_dir: Path, item_type: str | None = None) -> list[dict]:
+def list_trashed(trash_dir: Path, item_type: TrashItemType | None = None) -> list[dict]:
     """List trashed items. If item_type is given, filter to that type only."""
     results: list[dict] = []
     if not trash_dir.is_dir():
@@ -105,7 +112,7 @@ def list_trashed(trash_dir: Path, item_type: str | None = None) -> list[dict]:
         if not type_dir.is_dir():
             continue
         for item_dir in sorted(type_dir.iterdir()):
-            sidecar = item_dir / "_trash.json"
+            sidecar = item_dir / TRASH_SIDECAR_FILE
             if not sidecar.is_file():
                 continue
             info = json.loads(sidecar.read_text(encoding="utf-8"))
@@ -123,7 +130,7 @@ def list_trashed(trash_dir: Path, item_type: str | None = None) -> list[dict]:
     return results
 
 
-def purge_trashed(trash_dir: Path, item_type: str, item_id: str) -> None:
+def purge_trashed(trash_dir: Path, item_type: TrashItemType, item_id: str) -> None:
     """Permanently delete a trashed item."""
     item_dir = trash_dir / item_type / item_id
     if not item_dir.is_dir():

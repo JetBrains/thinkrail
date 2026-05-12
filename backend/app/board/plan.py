@@ -14,7 +14,7 @@ from typing import Literal
 from pydantic import BaseModel, Field
 
 from app.board.models import _CAMEL_CONFIG, _to_camel
-from app.core.config import AppConfig, BONSAI_DIRNAME
+from app.core.config import AppConfig, BONSAI_DIRNAME, PLANS_DIR
 from app.core.fileio import ensure_dir, read_text, write_text
 
 
@@ -302,7 +302,7 @@ class PlanService:
 
     @property
     def _plans_dir(self) -> Path:
-        return self._config.get_project_root() / BONSAI_DIRNAME / "plans"
+        return self._config.get_project_root() / BONSAI_DIRNAME / PLANS_DIR
 
     def _plan_path(self, ticket_id: str) -> Path:
         return self._plans_dir / f"{ticket_id}.md"
@@ -322,7 +322,7 @@ class PlanService:
         content = _render_plan(plan)
         ensure_dir(path.parent)
         write_text(path, content)
-        return f"plans/{ticket_id}.md"
+        return f"{PLANS_DIR}/{ticket_id}.md"
 
     def create_plan(self, ticket_id: str, title: str, steps: list[PlanStep],
                     verification: list[SuccessCriterion] | None = None) -> Plan:

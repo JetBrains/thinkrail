@@ -9,8 +9,18 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-from app.core.config import BONSAI_DIRNAME
+from app.core.config import (
+    BONSAI_DIRNAME,
+    MANIFEST_FILE,
+    META_TICKETS_DIR,
+    PLANS_DIR,
+    SESSIONS_DIR,
+    SPEC_DRAFTS_DIR,
+    SPEC_PATCHES_DIR,
+    TRASH_DIR,
+)
 from app.trash.storage import (
+    TrashItemType,
     list_trashed as _list_trashed,
     move_to_trash,
     purge_trashed,
@@ -29,13 +39,13 @@ class TrashService:
 
     def __init__(self, project_root: Path) -> None:
         self._project_root = project_root
-        self._trash_dir = project_root / BONSAI_DIRNAME / "trash"
+        self._trash_dir = project_root / BONSAI_DIRNAME / TRASH_DIR
 
     # -- sessions --------------------------------------------------------------
 
     def trash_session(self, bonsai_sid: str) -> None:
         """Move a session's files to trash."""
-        sessions_dir = self._project_root / BONSAI_DIRNAME / "sessions"
+        sessions_dir = self._project_root / BONSAI_DIRNAME / SESSIONS_DIR
         meta = sessions_dir / f"{bonsai_sid}.json"
         events = sessions_dir / f"{bonsai_sid}.events.jsonl"
         source_files = [f for f in [meta, events] if f.is_file()]
@@ -69,14 +79,14 @@ class TrashService:
 
         if cascade:
             # Cascade: plan
-            plan_file = self._project_root / BONSAI_DIRNAME / "plans" / f"{ticket_id}.md"
+            plan_file = self._project_root / BONSAI_DIRNAME / PLANS_DIR / f"{ticket_id}.md"
             if plan_file.is_file():
                 self.trash_plan(ticket_id)
                 cascaded.append(f"plans/{ticket_id}")
 
             # Cascade: drafts (each entry individually)
-            drafts_dir = self._project_root / BONSAI_DIRNAME / "spec-drafts" / ticket_id
-            manifest_path = drafts_dir / "manifest.json"
+            drafts_dir = self._project_root / BONSAI_DIRNAME / SPEC_DRAFTS_DIR / ticket_id
+            manifest_path = drafts_dir / MANIFEST_FILE
             if manifest_path.is_file():
                 raw = json.loads(manifest_path.read_text(encoding="utf-8"))
                 entries = raw.get("entries", [])
@@ -94,12 +104,12 @@ class TrashService:
                     shutil.rmtree(drafts_dir)
 
             # Cascade: patches
-            patches_dir = self._project_root / BONSAI_DIRNAME / "spec-patches" / ticket_id
+            patches_dir = self._project_root / BONSAI_DIRNAME / SPEC_PATCHES_DIR / ticket_id
             if patches_dir.is_dir():
                 self.trash_patches(ticket_id)
                 cascaded.append(f"patches/{ticket_id}")
 
-        tickets_dir = self._project_root / BONSAI_DIRNAME / "meta-tickets"
+        tickets_dir = self._project_root / BONSAI_DIRNAME / META_TICKETS_DIR
         ticket_file = tickets_dir / f"{ticket_id}.json"
         source_files = [f for f in [ticket_file] if f.is_file()]
         if not source_files:
@@ -152,7 +162,7 @@ class TrashService:
 
     def trash_plan(self, ticket_id: str) -> None:
         """Move .bonsai/plans/{ticket_id}.md to trash."""
-        plans_dir = self._project_root / BONSAI_DIRNAME / "plans"
+        plans_dir = self._project_root / BONSAI_DIRNAME / PLANS_DIR
         plan_file = plans_dir / f"{ticket_id}.md"
         source_files = [plan_file] if plan_file.is_file() else []
         if not source_files:
@@ -183,7 +193,7 @@ class TrashService:
         """
         item_id = f"{ticket_id}--{draft_index}"
         source_files = [draft_file] if draft_file and draft_file.is_file() else []
-        original_dir = str(self._project_root / BONSAI_DIRNAME / "spec-drafts" / ticket_id)
+        original_dir = str(self._project_root / BONSAI_DIRNAME / SPEC_DRAFTS_DIR / ticket_id)
         move_to_trash(
             self._trash_dir, "drafts", item_id, source_files, original_dir,
             context={"ticketId": ticket_id, "manifestEntry": manifest_entry},
@@ -198,7 +208,7 @@ class TrashService:
 
     def trash_patches(self, ticket_id: str) -> None:
         """Move all .bonsai/spec-patches/{ticket_id}/ to trash."""
-        patches_dir = self._project_root / BONSAI_DIRNAME / "spec-patches" / ticket_id
+        patches_dir = self._project_root / BONSAI_DIRNAME / SPEC_PATCHES_DIR / ticket_id
         if not patches_dir.is_dir():
             logger.debug("No patches dir found for %s — skipping trash", ticket_id)
             return
@@ -217,15 +227,15 @@ class TrashService:
 
     # -- generic operations ----------------------------------------------------
 
-    def list_trashed(self, item_type: str | None = None) -> list[dict]:
+    def list_trashed(self, item_type: TrashItemType | None = None) -> list[dict]:
         """List all trashed items, optionally filtered by type."""
         return _list_trashed(self._trash_dir, item_type=item_type)
 
-    def purge(self, item_type: str, item_id: str) -> None:
+    def purge(self, item_type: TrashItemType, item_id: str) -> None:
         """Permanently delete a trashed item."""
         purge_trashed(self._trash_dir, item_type, item_id)
 
-    def empty_trash(self, item_type: str | None = None) -> None:
+    def empty_trash(self, item_type: TrashItemType | None = None) -> None:
         """Permanently delete all trashed items, optionally filtered by type."""
         for item in _list_trashed(self._trash_dir, item_type=item_type):
             purge_trashed(self._trash_dir, item["type"], item["id"])

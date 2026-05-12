@@ -16,7 +16,13 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from app.core.config import AppConfig, BONSAI_DIRNAME
+from app.core.config import (
+    AppConfig,
+    BONSAI_DIRNAME,
+    MANIFEST_FILE,
+    SPEC_DRAFTS_DIR,
+    SPEC_PATCHES_DIR,
+)
 from app.core.fileio import ensure_dir, read_text, write_text
 
 
@@ -64,13 +70,13 @@ class SpecDraftService:
 
     @property
     def _drafts_dir(self) -> Path:
-        return self._config.get_project_root() / BONSAI_DIRNAME / "spec-drafts"
+        return self._config.get_project_root() / BONSAI_DIRNAME / SPEC_DRAFTS_DIR
 
     def _ticket_dir(self, ticket_id: str) -> Path:
         return self._drafts_dir / ticket_id
 
     def _manifest_path(self, ticket_id: str) -> Path:
-        return self._ticket_dir(ticket_id) / "manifest.json"
+        return self._ticket_dir(ticket_id) / MANIFEST_FILE
 
     def _draft_file_path(self, ticket_id: str, real_path: str) -> Path:
         return self._ticket_dir(ticket_id) / real_path
@@ -288,7 +294,7 @@ class SpecDraftService:
         timestamp = datetime.now(UTC).strftime("%Y%m%d%H%M%S")
         spec_id = entry.registry_id or entry.real_path.replace("/", "-")
         patch_filename = f"{spec_id}-{timestamp}.patch"
-        patch_rel = f"spec-patches/{ticket_id}/{patch_filename}"
+        patch_rel = f"{SPEC_PATCHES_DIR}/{ticket_id}/{patch_filename}"
 
         # Compute unified diff
         original_lines = original.splitlines(keepends=True)

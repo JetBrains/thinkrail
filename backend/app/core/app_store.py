@@ -17,6 +17,8 @@ from pathlib import Path
 
 import aiosqlite
 
+from app.core.config import APP_DB_FILE
+
 logger = logging.getLogger(__name__)
 
 # ── Models ─────────────────────────────────────────────────────────────
@@ -77,7 +79,7 @@ class AppStore:
 
     def __init__(self, data_dir: Path) -> None:
         self._data_dir = data_dir
-        self._db_path = data_dir / "bonsai.db"
+        self._db_path = data_dir / APP_DB_FILE
         self._conn: aiosqlite.Connection | None = None
 
     # ── lifecycle ──────────────────────────────────────────────────────

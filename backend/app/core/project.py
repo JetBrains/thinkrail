@@ -15,6 +15,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Callable
 
+from app.core.config import SETTINGS_FILE
 from app.core.fileio import ensure_dir, read_text, write_text
 
 # ---------------------------------------------------------------------------
@@ -32,7 +33,7 @@ def _default_settings(bonsai_dir: Path) -> str:
 
 
 _DEFAULT_FACTORIES: dict[str, Callable[[Path], str]] = {
-    "settings.json": _default_settings,
+    SETTINGS_FILE: _default_settings,
 }
 
 # ---------------------------------------------------------------------------
