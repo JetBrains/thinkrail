@@ -192,6 +192,14 @@
   color: var(--hint);
 }
 
+.np-fullscreen {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+  background: var(--bg);
+}
+
 /* ── Panel Tabs ── */
 .panel-tabs {
   display: flex;

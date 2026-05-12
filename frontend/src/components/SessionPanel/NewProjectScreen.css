@@ -1,33 +1,213 @@
+/* ── Screen container ─────────────────────────────────────────── */
+.np-screen {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+  background: var(--bg);
+}
+
+/* ── Stepper ──────────────────────────────────────────────────── */
+.np-stepper {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 18px 22px;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg);
+  flex-wrap: wrap;
+}
+
+.np-step {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--hint);
+}
+
+.np-step-num {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: var(--elevated);
+  border: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--muted);
+}
+
+.np-step-active {
+  color: var(--text);
+}
+.np-step-active .np-step-num {
+  background: var(--purple);
+  border-color: var(--purple);
+  color: #fff;
+}
+
+.np-step-arrow {
+  color: var(--border);
+  font-size: 12px;
+}
+
+/* ── Form ─────────────────────────────────────────────────────── */
+.np-form {
+  max-width: 640px;
+  margin: 0 auto;
+  padding: 30px;
+}
+
+.np-h2 {
+  margin: 0 0 6px;
+  font-size: 22px;
+  font-weight: 600;
+  color: var(--text);
+  letter-spacing: -0.3px;
+}
+
+.np-lead {
+  color: var(--hint);
+  margin: 0 0 24px;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.np-field {
+  margin-bottom: 14px;
+}
+
+.np-label {
+  font-size: 11px;
+  color: var(--hint);
+  margin-bottom: 5px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.np-input {
+  width: 100%;
+  padding: 10px 12px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--elevated);
+  color: var(--text);
+  font: inherit;
+  font-family: var(--font);
+  font-size: var(--font-size);
+  outline: none;
+  transition: border-color 150ms ease;
+}
+.np-input:focus { border-color: var(--purple); }
+.np-input::placeholder { color: var(--hint); }
+.np-input--error { border-color: var(--red) !important; }
+
+.np-name-error {
+  font-size: 11px;
+  color: var(--red);
+  margin-top: 4px;
+}
+
+/* ── Textarea + mic ───────────────────────────────────────────── */
+.np-textarea-wrap {
+  position: relative;
+}
+
+.np-textarea {
+  width: 100%;
+  padding: 10px 12px;
+  padding-bottom: 32px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--elevated);
+  color: var(--text);
+  font: inherit;
+  font-family: var(--font);
+  font-size: var(--font-size);
+  line-height: var(--line-height);
+  resize: vertical;
+  min-height: 110px;
+  outline: none;
+  transition: border-color 150ms ease;
+}
+.np-textarea:focus { border-color: var(--purple); }
+.np-textarea::placeholder { color: var(--hint); }
+
+.np-mic {
+  position: absolute;
+  bottom: 8px;
+  right: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  background: transparent;
+  border: none;
+  border-radius: var(--radius-sm);
+  color: var(--hint);
+  cursor: pointer;
+  padding: 0;
+  transition: color 150ms ease, background 150ms ease;
+}
+.np-mic:hover:not(:disabled) {
+  color: var(--text);
+  background: var(--hover);
+}
+.np-mic--recording {
+  color: var(--red);
+  animation: np-mic-pulse 1.5s ease-in-out infinite;
+}
+.np-mic--transcribing {
+  color: var(--blue);
+  pointer-events: none;
+  opacity: 0.7;
+}
+@keyframes np-mic-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+
+/* ── Attach row ───────────────────────────────────────────────── */
 .np-attach-row {
   display: flex;
   align-items: center;
-  gap: var(--space-sm);
+  gap: 8px;
+  margin-top: 8px;
   flex-wrap: wrap;
 }
 
 .np-attach-btn {
   display: inline-flex;
   align-items: center;
-  gap: var(--space-xs);
-  padding: var(--space-xs) var(--space-sm);
-  background: transparent;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  color: var(--hint);
-  font-family: var(--font);
+  gap: 6px;
+  padding: 6px 10px;
   font-size: 12px;
+  border-radius: 7px;
+  background: var(--elevated);
+  border: 1px solid var(--border);
+  color: var(--muted);
+  font-family: var(--font);
   cursor: pointer;
-  transition: color var(--transition-fast), border-color var(--transition-fast);
+  transition: color 150ms ease, border-color 150ms ease;
 }
-
 .np-attach-btn:hover:not(:disabled) {
   color: var(--text);
-  border-color: var(--text-subtle, var(--hint));
+  border-color: var(--purple);
 }
-
 .np-attach-btn:disabled {
   opacity: 0.4;
   cursor: not-allowed;
+}
+
+.np-hint {
+  font-size: 11.5px;
+  color: var(--hint);
 }
 
 .np-attached-file {
@@ -40,7 +220,7 @@
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
   padding: 2px var(--space-sm);
-  max-width: 200px;
+  max-width: 240px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -56,18 +236,61 @@
   padding: 0 2px;
   flex-shrink: 0;
 }
+.np-attached-remove:hover { color: var(--red); }
 
-.np-attached-remove:hover {
-  color: var(--red);
+/* ── Actions row ──────────────────────────────────────────────── */
+.np-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 18px;
 }
 
-.welcome-name-input--error {
-  border-color: var(--red) !important;
-  outline: none;
+.np-actions-buttons {
+  display: flex;
+  gap: 8px;
 }
 
-.np-name-error {
+.np-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 14px;
+  border-radius: 8px;
+  font-size: 13px;
+  border: 1px solid var(--border);
+  background: var(--elevated);
+  color: var(--text);
+  font-family: var(--font);
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 150ms ease, border-color 150ms ease;
+}
+.np-btn:hover:not(:disabled) { background: var(--hover); }
+.np-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+.np-btn-primary {
+  background: var(--purple);
+  color: #fff;
+  border-color: var(--purple);
+  box-shadow: 0 1px 0 rgba(0, 0, 0, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.15);
+}
+.np-btn-primary:hover:not(:disabled) { filter: brightness(1.1); }
+
+.np-btn-icon {
+  width: 14px;
+  height: 14px;
+  flex-shrink: 0;
+}
+
+.np-kbd {
+  display: inline-block;
+  font-family: var(--font);
   font-size: 11px;
-  color: var(--red);
-  margin-top: -4px;
+  padding: 1px 6px;
+  border-radius: 5px;
+  background: var(--elevated);
+  border: 1px solid var(--border);
+  color: var(--muted);
 }

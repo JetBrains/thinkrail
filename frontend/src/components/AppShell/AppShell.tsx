@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { Outlet } from "react-router-dom";
 import { useUiStore } from "@/store/uiStore.ts";
 import { useSessionStore } from "@/store/sessionStore.ts";
+import { useFileStore } from "@/store/fileStore.ts";
 import { modLabel } from "@/utils/platform.ts";
 import { Header } from "./Header.tsx";
 import { StatusBar } from "./StatusBar.tsx";
@@ -11,6 +12,7 @@ import { ResizeHandle } from "./ResizeHandle.tsx";
 import { SessionPanel } from "@/components/SessionPanel/SessionPanel.tsx";
 import { SessionManager } from "@/components/SessionManager/SessionManager.tsx";
 import { GoalFilePanel } from "@/components/GoalFilePanel/GoalFilePanel.tsx";
+import { NewProjectScreen } from "@/components/SessionPanel/NewProjectScreen.tsx";
 import { ViewModeProvider } from "@/context/ViewModeContext.tsx";
 import "@/components/ChatStream/ChatStream.css";
 import "@/components/ChatStream/compact.css";
@@ -20,6 +22,15 @@ const LEFT_DEFAULT = 260;
 const RIGHT_DEFAULT = 380;
 
 export function AppShell({ onSwitchProject }: { onSwitchProject: () => void }) {
+  const projectState = useUiStore((s) => s.projectState);
+  const sessionsMap = useSessionStore((s) => s.sessions);
+  const activeSessionIdAll = useSessionStore((s) => s.activeSessionId);
+  const openFilesMap = useFileStore((s) => s.openFiles);
+  const isNewProjectMode =
+    projectState === "new" &&
+    !(activeSessionIdAll && sessionsMap.get(activeSessionIdAll)) &&
+    openFilesMap.size === 0;
+
   const leftCollapsed = useUiStore((s) => s.leftPanelCollapsed);
   const rightCollapsed = useUiStore((s) => s.rightPanelCollapsed);
   const toggleLeft = useUiStore((s) => s.toggleLeftPanel);
@@ -74,6 +85,17 @@ export function AppShell({ onSwitchProject }: { onSwitchProject: () => void }) {
     const maxRight = window.innerWidth - leftSpace - 300 - 4;
     setRightWidth(Math.min(w, maxRight));
   }, [leftCollapsed, leftWidth]);
+
+  if (isNewProjectMode) {
+    return (
+      <div className="app-shell">
+        <Header onSwitchProject={onSwitchProject} />
+        <div className="np-fullscreen">
+          <NewProjectScreen />
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="app-shell">

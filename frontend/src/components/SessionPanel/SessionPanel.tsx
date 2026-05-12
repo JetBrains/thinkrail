@@ -1,6 +1,5 @@
 import { useCallback, useRef, useState } from "react";
 import { useSessionStore } from "@/store/sessionStore.ts";
-import { useUiStore } from "@/store/uiStore.ts";
 import { useNotificationStore } from "@/store/notificationStore.ts";
 import { getErrorMessage } from "@/utils/errors.ts";
 import { useFileStore } from "@/store/fileStore.ts";
@@ -16,7 +15,6 @@ import { useBoardStore } from "@/store/boardStore.ts";
 import { useMessageHistoryStore } from "@/store/messageHistoryStore";
 import { SessionTabBar } from "./SessionTabBar.tsx";
 import { StickyContextBar } from "./StickyContextBar.tsx";
-import { NewProjectScreen } from "./NewProjectScreen.tsx";
 
 export function SessionPanel() {
   const sessions = useSessionStore((s) => s.sessions);
@@ -46,8 +44,6 @@ export function SessionPanel() {
   // portals its action buttons (Continue / Start / Stop / Send) there so
   // they appear right of the session status indicator.
   const [actionSlot, setActionSlot] = useState<HTMLSpanElement | null>(null);
-
-  const projectState = useUiStore((s) => s.projectState);
 
   const openTabs = useSessionStore((s) => s.openTabs);
   const sessionList = Array.from(sessions.values()).filter((s) => openTabs.has(s.bonsaiSid));
@@ -112,30 +108,8 @@ export function SessionPanel() {
     openTicket(ticketId);
   }, [openTicket]);
 
-  // New project: show goal-entry screen immediately, before any sessions exist.
-  // Yields to an active session once one starts.
-  if (projectState === "new" && !activeSession && fileList.length === 0) {
-    return (
-      <>
-        <SessionTabBar
-          sessions={sessionList}
-          activeSessionId={null}
-          onSwitchSession={handleSwitchSession}
-          onCloseSession={closeSession}
-          files={fileList}
-          activeFilePath={null}
-          onSwitchFile={handleSwitchFile}
-          onCloseFile={closeFile}
-          previewFile={null}
-          previewFilePath={null}
-          onClearPreview={clearPreview}
-          onPinPreview={pinPreview}
-        />
-        <NewProjectScreen />
-      </>
-    );
-  }
-
+  // New project goal-entry screen is hoisted to AppShell so it occupies the
+  // full window (no left panel, no right panel, no Board tab).
   // Determine what to show in the content area
   const showTicket = activeTicketId != null;
   const showFile = !showTicket && displayFile != null;
