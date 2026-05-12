@@ -7,11 +7,22 @@
 
 .goal-file-panel-header {
   display: flex;
-  align-items: center;
+  align-items: stretch;
   gap: var(--space-sm);
-  padding: var(--space-sm) var(--space-md);
+  padding: 0 var(--space-md);
+  min-height: calc(var(--font-base) * 2.4);
   border-bottom: 1px solid var(--border);
   flex-shrink: 0;
+}
+
+.goal-file-panel-header > .goal-file-panel-title,
+.goal-file-panel-header > .goal-file-panel-badge,
+.goal-file-panel-header > .goal-file-panel-reset {
+  align-self: center;
+}
+
+.goal-file-panel-header > .collapse-btn:first-child {
+  margin-left: calc(-1 * var(--space-md));
 }
 
 .goal-file-panel-title {

@@ -228,8 +228,35 @@
 /* ── Panel Tabs ── */
 .panel-tabs {
   display: flex;
+  align-items: stretch;
   border-bottom: 1px solid var(--border);
   flex-shrink: 0;
+}
+
+/* Shared inline collapse-button used in panel headers/tabs */
+.collapse-btn {
+  align-self: stretch;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 var(--space-sm);
+  background: transparent;
+  border: none;
+  color: var(--hint);
+  font-size: var(--font-md);
+  line-height: 1;
+  font-variant-emoji: text;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+.collapse-btn:hover {
+  color: var(--text);
+  background: var(--hover);
+}
+
+/* Positional modifier: push to the right of a flex row */
+.collapse-btn--push-right {
+  margin-left: auto;
 }
 
 .panel-tab {
@@ -491,11 +518,12 @@
   border-left: 1px solid var(--border);
   background: var(--panel);
   color: var(--hint);
-  font-size: var(--font-sm);
+  font-size: var(--font-md);
+  font-variant-emoji: text;
   cursor: pointer;
-  padding: 0;
+  padding: 10px 0 0;
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: center;
   transition: all var(--transition-fast);
 }

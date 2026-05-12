@@ -5,6 +5,8 @@ import { SpecContext } from "./modes/SpecContext.tsx";
 import { AgentContext } from "./modes/AgentContext.tsx";
 import { CodeContext } from "./modes/CodeContext.tsx";
 import { VisTab } from "./modes/VisTab.tsx";
+import { useUiStore } from "@/store/uiStore.ts";
+import { modLabel } from "@/utils/platform.ts";
 import "./ContextPanel.css";
 
 const MODE_CONFIG: Record<ContextMode, { icon: string; label: string }> = {
@@ -40,6 +42,7 @@ export function ContextPanel() {
   const [pin, setPin] = useState<PinMode>("none");
   const config = headerConfig(pin, autoMode);
   const showLabel = pin !== "none" || autoMode !== "empty";
+  const toggleRightPanel = useUiStore((s) => s.toggleRightPanel);
 
   const togglePin = (mode: PinMode) =>
     setPin((prev) => (prev === mode ? "none" : mode));
@@ -47,6 +50,14 @@ export function ContextPanel() {
   return (
     <div className="context-panel">
       <div className="context-panel__header">
+        <button
+          className="collapse-btn"
+          onClick={toggleRightPanel}
+          title={`Hide panel (${modLabel("J")})`}
+          aria-label="Hide panel"
+        >
+          &#9658;
+        </button>
         {showLabel && (
           <>
             <span className="context-panel__mode-icon">{config.icon}</span>

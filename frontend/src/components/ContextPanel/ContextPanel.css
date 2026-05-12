@@ -8,12 +8,23 @@
 
 .context-panel__header {
   display: flex;
-  align-items: center;
+  align-items: stretch;
   gap: var(--space-sm);
-  padding: var(--space-sm) var(--space-md);
+  padding: 0 var(--space-md);
+  min-height: calc(var(--font-base) * 2.4);
   border-bottom: 1px solid var(--border);
   flex-shrink: 0;
   background: color-mix(in srgb, var(--elevated) 30%, transparent);
+}
+
+.context-panel__header > .context-panel__mode-icon,
+.context-panel__header > .context-panel__mode-label,
+.context-panel__header > .context-panel__dash-btn {
+  align-self: center;
+}
+
+.context-panel__header > .collapse-btn:first-child {
+  margin-left: calc(-1 * var(--space-md));
 }
 
 .context-panel__mode-icon {

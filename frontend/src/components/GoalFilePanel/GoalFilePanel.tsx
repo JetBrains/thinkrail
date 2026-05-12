@@ -3,12 +3,14 @@ import { readFile } from "@/services/files.ts";
 import { useUiStore } from "@/store/uiStore";
 import { useSessionStore } from "@/store/sessionStore";
 import { MarkdownPreview } from "@/components/FileViewer/MarkdownPreview";
+import { modLabel } from "@/utils/platform.ts";
 import "./GoalFilePanel.css";
 
 const GOAL_FILE = "GOAL&REQUIREMENTS.md";
 
 export function GoalFilePanel() {
   const projectPath = useUiStore((s) => s.projectPath);
+  const toggleRightPanel = useUiStore((s) => s.toggleRightPanel);
   const [content, setContent] = useState<string | null>(null);
   const activeSessionId = useSessionStore((s) => s.activeSessionId);
   const sessions = useSessionStore((s) => s.sessions);
@@ -40,6 +42,14 @@ export function GoalFilePanel() {
   return (
     <div className="goal-file-panel">
       <div className="goal-file-panel-header">
+        <button
+          className="collapse-btn"
+          onClick={toggleRightPanel}
+          title={`Hide panel (${modLabel("J")})`}
+          aria-label="Hide panel"
+        >
+          &#9658;
+        </button>
         <span className="goal-file-panel-title">{GOAL_FILE}</span>
         {activeSession?.status === "running" && (
           <span className="goal-file-panel-badge">
