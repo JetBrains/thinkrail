@@ -439,7 +439,7 @@ function appendEvent(
 
   // Defense-in-depth dedup: skip if an event with the same requestId already exists
   const requestId = params.requestId as string | undefined;
-  if (requestId && (method === "agent/askUserQuestion" || method === "agent/confirmAction" || method === "agent/suggestSession" || method === "agent/suggestDescription")) {
+  if (requestId && (method === "agent/askUserQuestion" || method === "agent/confirmAction" || method === "agent/suggestSession" || method === "agent/suggestDescription" || method === "agent/suggestStep")) {
     const alreadyExists = session.events.some(
       (ev) => (ev.payload as unknown as Record<string, unknown> | undefined)?.requestId === requestId && ev.eventType === method.replace("agent/", ""),
     );
@@ -548,7 +548,7 @@ function buildAnsweredRequests(
   // Second pass (non-active only): mark remaining unresolved requests as historical
   if (!isActive) {
     for (const ev of events) {
-      if (ev.eventType === "askUserQuestion" || ev.eventType === "confirmAction" || ev.eventType === "suggestSession" || ev.eventType === "suggestDescription") {
+      if (ev.eventType === "askUserQuestion" || ev.eventType === "confirmAction" || ev.eventType === "suggestSession" || ev.eventType === "suggestDescription" || ev.eventType === "suggestStep") {
         const rid = (ev.payload.requestId as string) ?? "";
         if (rid && !answered.has(rid)) answered.set(rid, { historical: true });
       }

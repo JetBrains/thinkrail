@@ -25,6 +25,7 @@ export type WsEvents =
   | ConfirmActionEvent
   | SuggestSessionEvent
   | SuggestDescriptionEvent
+  | SuggestStepEvent
   | RequestResolvedEvent
   | RequestExpiredEvent
   | UserMessageEvent;
@@ -167,19 +168,30 @@ export type Section = string;
 export type Requestid3 = string;
 export type Bonsaisid19 = string;
 export type Sessionid20 = string;
-export type Eventtype19 = "requestResolved";
+export type Eventtype19 = "suggestStep";
+export type Ticketid = string;
+export type Stepnumber = number;
+export type Steptitle = string;
+export type Skill1 = string;
+export type Inputspecids = string[];
+export type Agentinstructions = string;
+export type Reason1 = string;
 export type Requestid4 = string;
+export type Bonsaisid20 = string;
+export type Sessionid21 = string;
+export type Eventtype20 = "requestResolved";
+export type Requestid5 = string;
 export type Response = {
   [k: string]: unknown;
 } | null;
-export type Bonsaisid20 = string;
-export type Sessionid21 = string;
-export type Eventtype20 = "requestExpired";
-export type Requestid5 = string;
-export type Reason1 = string;
 export type Bonsaisid21 = string;
 export type Sessionid22 = string;
-export type Eventtype21 = "userMessage";
+export type Eventtype21 = "requestExpired";
+export type Requestid6 = string;
+export type Reason2 = string;
+export type Bonsaisid22 = string;
+export type Sessionid23 = string;
+export type Eventtype22 = "userMessage";
 export type Text1 = string;
 export type Ismarkdown = boolean;
 
@@ -502,36 +514,55 @@ export interface SuggestDescriptionPayload {
   section?: Section;
   requestId?: Requestid3;
 }
-export interface RequestResolvedEvent {
+export interface SuggestStepEvent {
   bonsaiSid: Bonsaisid19;
   sessionId: Sessionid20;
   eventType: Eventtype19;
+  payload: SuggestStepPayload;
+}
+/**
+ * Orchestrator proposes the next plan step for execution.
+ */
+export interface SuggestStepPayload {
+  ticketId?: Ticketid;
+  stepNumber?: Stepnumber;
+  stepTitle?: Steptitle;
+  skill?: Skill1;
+  inputSpecIds?: Inputspecids;
+  agentInstructions?: Agentinstructions;
+  reason?: Reason1;
+  requestId?: Requestid4;
+}
+export interface RequestResolvedEvent {
+  bonsaiSid: Bonsaisid20;
+  sessionId: Sessionid21;
+  eventType: Eventtype20;
   payload: RequestResolvedPayload;
 }
 /**
  * User responded to a pending request.
  */
 export interface RequestResolvedPayload {
-  requestId?: Requestid4;
+  requestId?: Requestid5;
   response?: Response;
 }
 export interface RequestExpiredEvent {
-  bonsaiSid: Bonsaisid20;
-  sessionId: Sessionid21;
-  eventType: Eventtype20;
+  bonsaiSid: Bonsaisid21;
+  sessionId: Sessionid22;
+  eventType: Eventtype21;
   payload: RequestExpiredPayload;
 }
 /**
  * Pending request timed out without a response.
  */
 export interface RequestExpiredPayload {
-  requestId?: Requestid5;
-  reason?: Reason1;
+  requestId?: Requestid6;
+  reason?: Reason2;
 }
 export interface UserMessageEvent {
-  bonsaiSid: Bonsaisid21;
-  sessionId: Sessionid22;
-  eventType: Eventtype21;
+  bonsaiSid: Bonsaisid22;
+  sessionId: Sessionid23;
+  eventType: Eventtype22;
   payload: UserMessagePayload;
 }
 /**

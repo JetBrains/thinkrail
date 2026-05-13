@@ -12,6 +12,7 @@ import { ApprovalCard } from "../ApprovalCard.tsx";
 import { PlanApprovalCard } from "../PlanApprovalCard.tsx";
 import SuggestionCard from "../SuggestionCard.tsx";
 import DescriptionSuggestionCard from "../DescriptionSuggestionCard.tsx";
+import StepProposalCard from "../StepProposalCard.tsx";
 import { CompletionBanner } from "../CompletionBanner.tsx";
 import { ErrorBanner } from "../ErrorBanner.tsx";
 import { CompactMarker } from "../CompactMarker.tsx";
@@ -334,6 +335,76 @@ export const classicRenderers: ViewRenderers = {
         onApply={() => {
           ctx.onResolveRequest(requestId, { behavior: "allow" });
           ctx.onApplyDescription?.(descText);
+        }}
+        onDismiss={(reason) =>
+          ctx.onResolveRequest(requestId, {
+            behavior: "deny",
+            message: reason ? `Dismissed: ${reason}` : "Dismissed",
+            dismissReason: reason ?? "",
+          })
+        }
+      />
+    );
+  },
+
+  suggestStep: (ev, _i, k, ctx) => {
+    const p = ev.payload;
+    const requestId = p.requestId ?? "";
+    const isAnswered = ctx.answeredRequests.has(requestId);
+    const savedResponse = ctx.answeredRequests.get(requestId) as Record<string, unknown> | undefined;
+    const decision = savedResponse?.behavior === "allow" ? "approved" as const : "dismissed" as const;
+
+    return (
+      <StepProposalCard
+        key={k}
+        ticketId={p.ticketId ?? ""}
+        stepNumber={p.stepNumber ?? 0}
+        stepTitle={p.stepTitle ?? ""}
+        skill={p.skill ?? ""}
+        inputSpecIds={p.inputSpecIds ?? []}
+        reason={p.reason ?? ""}
+        answered={isAnswered}
+        decision={isAnswered ? decision : undefined}
+        dismissReason={
+          isAnswered && decision === "dismissed"
+            ? (savedResponse?.dismissReason as string) ?? undefined
+            : undefined
+        }
+        onApprove={async () => {
+          ctx.onResolveRequest(requestId, { behavior: "allow" });
+          const store = useSessionStore.getState();
+          const currentSession = ctx.session;
+          // The plan model uses `skill: "default"` as the sentinel for
+          // "no specific skill" — pass undefined so the backend doesn't
+          // try to load a skills/default/SKILL.md that never exists.
+          const skillId = p.skill && p.skill !== "default" ? p.skill : undefined;
+          try {
+            const newSid = await store.startSession({
+              skillId,
+              specIds: p.inputSpecIds ?? [],
+              name: `Step ${p.stepNumber ?? "?"}: ${p.stepTitle ?? ""}`.trim(),
+              metaTicketId: p.ticketId ?? undefined,
+              config: {
+                model: currentSession?.model ?? "sonnet",
+                maxTurns: currentSession?.maxTurns ?? 50,
+                permissionMode: currentSession?.permissionMode ?? "default",
+                streamText: true,
+                betas: currentSession?.betas ?? [],
+                effort: currentSession?.effort ?? null,
+              },
+            });
+            store.switchSession(newSid);
+            // startSession leaves the runtime idle (the `prompt` arg
+            // would only enrich the system context); the agent doesn't
+            // act until a user message arrives.  Send the step's
+            // agent_instructions as the first message so the new
+            // session actually starts executing the step.
+            if (p.agentInstructions) {
+              await store.sendMessage(newSid, p.agentInstructions);
+            }
+          } catch (err) {
+            console.error("[StepProposalCard] Failed to start step session:", err);
+          }
         }}
         onDismiss={(reason) =>
           ctx.onResolveRequest(requestId, {

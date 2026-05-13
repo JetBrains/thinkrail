@@ -26,6 +26,7 @@ import type {
   ConfirmActionEvent,
   SuggestSessionEvent,
   SuggestDescriptionEvent,
+  SuggestStepEvent,
   RequestResolvedEvent,
   RequestExpiredEvent,
   UserMessageEvent,
@@ -52,6 +53,7 @@ export type {
   ConfirmActionEvent,
   SuggestSessionEvent,
   SuggestDescriptionEvent,
+  SuggestStepEvent,
   RequestResolvedEvent,
   RequestExpiredEvent,
   UserMessageEvent,
@@ -70,6 +72,7 @@ export type {
   AskUserQuestionPayload,
   ConfirmActionPayload,
   SuggestSessionPayload,
+  SuggestStepPayload,
   UserMessagePayload,
   QuestionOption,
 } from "./ws-events.ts";
@@ -108,6 +111,7 @@ export type InteractionRequestEventType = (
   | ConfirmActionEvent
   | SuggestSessionEvent
   | SuggestDescriptionEvent
+  | SuggestStepEvent
 )["eventType"];
 
 /** Resolution of a pending interaction request. */

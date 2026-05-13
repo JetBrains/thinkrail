@@ -264,6 +264,21 @@ class SuggestDescriptionPayload(BaseModel):
     request_id: str = ""
 
 
+class SuggestStepPayload(BaseModel):
+    """Orchestrator proposes the next plan step for execution."""
+
+    model_config = _CAMEL_CONFIG
+
+    ticket_id: str = ""
+    step_number: int = 0
+    step_title: str = ""
+    skill: str = ""
+    input_spec_ids: list[str] = Field(default_factory=list)
+    agent_instructions: str = ""
+    reason: str = ""
+    request_id: str = ""
+
+
 class RequestResolvedPayload(BaseModel):
     """User responded to a pending request."""
 
@@ -403,6 +418,11 @@ class SuggestDescriptionEvent(_BaseEvent):
     payload: SuggestDescriptionPayload
 
 
+class SuggestStepEvent(_BaseEvent):
+    event_type: Literal["suggestStep"]
+    payload: SuggestStepPayload
+
+
 class RequestResolvedEvent(_BaseEvent):
     event_type: Literal["requestResolved"]
     payload: RequestResolvedPayload
@@ -441,6 +461,7 @@ AgentEvent = Annotated[
         ConfirmActionEvent,
         SuggestSessionEvent,
         SuggestDescriptionEvent,
+        SuggestStepEvent,
         RequestResolvedEvent,
         RequestExpiredEvent,
         UserMessageEvent,

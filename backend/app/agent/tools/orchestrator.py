@@ -98,6 +98,7 @@ async def _suggest_step(args: dict) -> dict:
         "stepTitle": step.title,
         "skill": step.skill,
         "inputSpecIds": step.input_spec_ids,
+        "agentInstructions": step.agent_instructions,
         "reason": args.get("reason", ""),
     }
 

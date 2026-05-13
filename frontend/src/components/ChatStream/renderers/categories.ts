@@ -16,6 +16,7 @@ export const EVENT_CATEGORIES: Record<EventType, EventCategory> = {
   askUserQuestion: "dialog",
   suggestSession: "dialog",
   suggestDescription: "dialog",
+  suggestStep: "dialog",
   error: "dialog",
 
   // Tools — agent's mechanical work: config (model, system prompt),

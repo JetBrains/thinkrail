@@ -1030,6 +1030,84 @@
       "title": "SuggestSessionPayload",
       "type": "object"
     },
+    "SuggestStepEvent": {
+      "properties": {
+        "bonsaiSid": {
+          "title": "Bonsaisid",
+          "type": "string"
+        },
+        "sessionId": {
+          "default": "",
+          "title": "Sessionid",
+          "type": "string"
+        },
+        "eventType": {
+          "const": "suggestStep",
+          "title": "Eventtype",
+          "type": "string"
+        },
+        "payload": {
+          "$ref": "#/$defs/SuggestStepPayload"
+        }
+      },
+      "required": [
+        "bonsaiSid",
+        "sessionId",
+        "eventType",
+        "payload"
+      ],
+      "title": "SuggestStepEvent",
+      "type": "object"
+    },
+    "SuggestStepPayload": {
+      "description": "Orchestrator proposes the next plan step for execution.",
+      "properties": {
+        "ticketId": {
+          "default": "",
+          "title": "Ticketid",
+          "type": "string"
+        },
+        "stepNumber": {
+          "default": 0,
+          "title": "Stepnumber",
+          "type": "integer"
+        },
+        "stepTitle": {
+          "default": "",
+          "title": "Steptitle",
+          "type": "string"
+        },
+        "skill": {
+          "default": "",
+          "title": "Skill",
+          "type": "string"
+        },
+        "inputSpecIds": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Inputspecids",
+          "type": "array"
+        },
+        "agentInstructions": {
+          "default": "",
+          "title": "Agentinstructions",
+          "type": "string"
+        },
+        "reason": {
+          "default": "",
+          "title": "Reason",
+          "type": "string"
+        },
+        "requestId": {
+          "default": "",
+          "title": "Requestid",
+          "type": "string"
+        }
+      },
+      "title": "SuggestStepPayload",
+      "type": "object"
+    },
     "TextDeltaEvent": {
       "properties": {
         "bonsaiSid": {
@@ -1373,6 +1451,7 @@
       "subagentStart": "#/$defs/SubagentStartEvent",
       "suggestDescription": "#/$defs/SuggestDescriptionEvent",
       "suggestSession": "#/$defs/SuggestSessionEvent",
+      "suggestStep": "#/$defs/SuggestStepEvent",
       "textDelta": "#/$defs/TextDeltaEvent",
       "toolCallEnd": "#/$defs/ToolCallEndEvent",
       "toolCallStart": "#/$defs/ToolCallStartEvent",
@@ -1438,6 +1517,9 @@
     },
     {
       "$ref": "#/$defs/SuggestDescriptionEvent"
+    },
+    {
+      "$ref": "#/$defs/SuggestStepEvent"
     },
     {
       "$ref": "#/$defs/RequestResolvedEvent"

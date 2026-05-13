@@ -784,7 +784,14 @@ class AgentService:
     async def _build_context_for(self, task: AgentTask) -> str:
         t0 = time.monotonic()
 
-        # Inject plan content into session prompt for sessions linked to a ticket with a plan
+        # Inject plan content into session prompt for sessions linked to a
+        # ticket with a plan. The framing depends on the session's role:
+        # - ticket-plan → "Existing Plan" (the planning session refines it)
+        # - ticket-execute → "As the orchestrator" (drives suggest_step)
+        # - any other skill (or none — e.g. step sessions started by
+        #   approving a suggest_step card) → plain "Plan (for reference)"
+        #   so the step session doesn't get told to act as an orchestrator
+        #   and re-emit suggest_step itself.
         session_prompt = task.session_prompt
         if task.meta_ticket_id and self.board_service:
             try:
@@ -801,12 +808,20 @@ class AgentService:
                             "Write the updated plan back to the same file.\n\n"
                             f"{plan_text}"
                         )
-                    else:
+                    elif task.skill_id == "ticket-execute":
                         plan_section = (
                             "## Implementation Plan\n\n"
                             "The following plan is associated with this ticket. "
                             "As the orchestrator, read the plan, identify the next unblocked step, "
                             "and call `suggest_step` to propose it for execution.\n\n"
+                            f"{plan_text}"
+                        )
+                    else:
+                        plan_section = (
+                            "## Plan (for reference)\n\n"
+                            "The following plan is associated with this ticket. "
+                            "Use it as context for your work; do not act as the "
+                            "orchestrator (do not call `suggest_step`).\n\n"
                             f"{plan_text}"
                         )
                     session_prompt = (
