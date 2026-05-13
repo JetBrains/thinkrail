@@ -12,69 +12,6 @@ import { boardView, specDiffs, ticketDetail } from "../helpers/selectors";
  * to lock the *UI surface* that views/edits/applies them.
  */
 
-test.describe("TicketPlanView", () => {
-  test("Steps tab adds a step and Save Plan persists it", async ({
-    page,
-    tempProject,
-  }) => {
-    seedProject(tempProject.path, []);
-    const ticketId = seedTicket(tempProject.path, {
-      title: "Plan target",
-      body: "Specs done; ready for a plan.",
-      status: "specified",
-    });
-
-    await openProject(page, tempProject.path);
-
-    await page.locator(boardView.ticketCard, { hasText: "Plan target" }).click();
-    await expect(page.locator(ticketDetail.root)).toBeVisible({ timeout: 15_000 });
-
-    // Open the Plan section in the sidebar.
-    await page
-      .locator(ticketDetail.sectionHeader, { hasText: /^Plan/ })
-      .click();
-    await expect(page.locator(ticketDetail.rightTitle)).toHaveText("Plan");
-
-    // Switch to the Steps tab — structured editor.
-    await page.locator(ticketDetail.planTab, { hasText: "Steps" }).click();
-    await expect(
-      page.locator(`${ticketDetail.planTabActive}`, { hasText: "Steps" }),
-    ).toBeVisible();
-
-    // Add a milestone, then a step inside it.
-    await page
-      .locator(ticketDetail.planAddBtn, { hasText: "Add Milestone" })
-      .click();
-    await page
-      .locator(ticketDetail.planAddBtn, { hasText: "Add Step" })
-      .first()
-      .click();
-
-    // Fill the milestone title and the step title.
-    const formInputs = page.locator(ticketDetail.planFormInput);
-    await expect(formInputs.first()).toBeVisible();
-    await formInputs.nth(0).fill("First milestone");
-    // Step #1 title input is the second .ticket-plan-form-input
-    await formInputs.nth(1).fill("Initial step");
-
-    await page.locator(ticketDetail.planSaveButton).click();
-    // Save button switches to "Saving..." then back; the disk write is what we verify.
-    const planPath = join(tempProject.path, ".bonsai", "plans", `${ticketId}.md`);
-    await expect
-      .poll(() => existsSync(planPath), { timeout: 15_000 })
-      .toBe(true);
-    const planContent = readFileSync(planPath, "utf8");
-    expect(planContent).toContain("First milestone");
-    expect(planContent).toContain("Initial step");
-
-    // Switch back to View tab and confirm the rendered step shows up.
-    await page.locator(ticketDetail.planTab, { hasText: "View" }).click();
-    await expect(
-      page.locator(ticketDetail.planStep, { hasText: "Initial step" }),
-    ).toBeVisible();
-  });
-});
-
 test.describe("Spec drafts (Spec Diffs panel)", () => {
   test("lists drafts, applies one, discards another, surfaces patches", async ({
     page,

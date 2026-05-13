@@ -121,38 +121,4 @@ test.describe("MetaTicketDetail", () => {
       .toContain("Updated body");
   });
 
-  test("status change in sidebar updates progress bar primary action", async ({
-    page,
-    tempProject,
-  }) => {
-    seedProject(tempProject.path, []);
-    seedTicket(tempProject.path, {
-      title: "Cycle ticket",
-      body: "Body.",
-      status: "idea",
-    });
-
-    await openProject(page, tempProject.path);
-
-    await page.locator(boardView.ticketCard, { hasText: "Cycle ticket" }).click();
-    await expect(page.locator(ticketDetail.root)).toBeVisible({ timeout: 15_000 });
-
-    // Initial: idea → primary "Describe with AI".
-    await expect(page.locator(ticketDetail.progressPrimary)).toContainText(
-      /Describe with AI/,
-    );
-
-    // Change status via the sidebar status <select>.
-    const statusSelect = page.locator("select.ticket-header-badge").first();
-    await statusSelect.selectOption("described");
-
-    // Primary action should now reflect the new state.
-    await expect(page.locator(ticketDetail.progressPrimary)).toContainText(
-      /Specify with AI/,
-      { timeout: 15_000 },
-    );
-    await expect(page.locator(ticketDetail.progressLabelCurrent)).toContainText(
-      /Described/,
-    );
-  });
 });

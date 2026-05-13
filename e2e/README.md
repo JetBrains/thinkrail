@@ -22,13 +22,15 @@ upcoming Python→Bun backend rewrite has a regression net.
 
 ## Prerequisites
 
-- Bonsai is running locally (`./run.sh` from repo root) — backend on :8000,
-  frontend on :3000. The `globalSetup.ts` hook hits `GET /api/server-info` and
-  fails fast if the backend is unreachable.
 - `ANTHROPIC_API_KEY` is set in the backend environment (or a Keychain entry
   created by `claude auth login` exists). The session-lifecycle and per-model
   specs make real Anthropic API calls. See "LLM specs" below for why.
 - Chromium is installed: `npx playwright install chromium`.
+
+The suite is self-starting: `playwright.config.ts` declares a `webServer` that
+spawns the full Bonsai stack (`./run.sh` from the repo root) on dynamically-
+picked free ports, then tears it down at the end of the run. You do **not**
+need a separately-running `./run.sh` — but see below if you want to reuse one.
 
 ## Install
 
@@ -42,20 +44,23 @@ npx playwright install chromium
 
 ```bash
 cd e2e
-npm test                   # full suite, headless
+npm test                   # full suite, headless (starts Bonsai automatically)
 npm test -- spec-tree      # subset by basename
 npm run test:headed        # full suite with visible browser
 npm run test:ui            # Playwright UI mode
 npm run report             # open last HTML report
 ```
 
-Override URLs if the app is not on the defaults:
+Each `npm test` invocation:
 
-```bash
-BONSAI_FRONTEND_URL=http://localhost:3000 \
-BONSAI_BACKEND_URL=http://localhost:8000 \
-npm test
-```
+1. Picks two free TCP ports (one for backend, one for frontend).
+2. Spawns `./run.sh` from the repo root with `BACKEND_PORT` / `FRONTEND_PORT`
+   in its environment, and waits for the frontend URL to respond.
+3. Tears the stack down via SIGTERM (Playwright → `run.sh`'s EXIT trap →
+   `kill 0` → backend + frontend) when the suite finishes or aborts.
+
+The first run pays the `uv sync` + `npm install` cost from `./run.sh`; the
+webServer timeout is 5 min to absorb that. Subsequent runs reuse caches.
 
 The suite runs sequentially (`fullyParallel: false`, `workers: 1`) and uses
 chromium only. There are no retries — each spec must be deterministic.

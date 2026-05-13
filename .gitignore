@@ -69,3 +69,4 @@ POST.md
 
 .bonsai/trash/
 /.claude/scheduled_tasks.lock
+/backend/.claude/scheduled_tasks.lock

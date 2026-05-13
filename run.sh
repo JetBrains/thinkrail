@@ -21,12 +21,18 @@ if [ ! -f "$ROOT/.env" ]; then
     fi
 fi
 
-# ── Load .env ──
+# ── Load .env (existing env vars win) ──
+# Read each KEY=VALUE line and only export when the variable is unset, so a
+# wrapping process (e.g. the Playwright e2e webServer) can inject
+# BACKEND_PORT/FRONTEND_PORT without being clobbered by the file.
 if [ -f "$ROOT/.env" ]; then
-    set -a
-    # shellcheck source=/dev/null
-    source "$ROOT/.env"
-    set +a
+    while IFS='=' read -r key value || [ -n "$key" ]; do
+        [[ -z "$key" || "$key" =~ ^[[:space:]]*# ]] && continue
+        key="${key//[[:space:]]/}"
+        if [ -z "${!key+x}" ]; then
+            export "$key=$value"
+        fi
+    done < "$ROOT/.env"
 fi
 
 BACKEND_PORT="${BACKEND_PORT:-8000}"

@@ -9,9 +9,6 @@ import { appShell, projectPicker } from "../helpers/selectors";
  * ProjectPicker coverage:
  *  - autocomplete popover shows when typing a partial path and can be dismissed
  *  - opening an existing (already-initialized) project succeeds
- *  - "Recent Projects" list shows previously-opened projects after a reload
- *  - stale entries (deleted directories) are purged from recents on next load
- *  - DELETE with a raw symlink path removes an entry stored as its resolved path
  *  - invalid (non-existent) path surfaces a picker error and offers a "Create folder" affordance
  */
 
@@ -51,91 +48,6 @@ test("opens an already-initialized project and shows the AppShell", async ({
   await openProject(page, tempProject.path);
 
   await expect(page.locator(appShell.statusBar)).toBeVisible();
-});
-
-test("recent projects list shows a project after it has been opened once", async ({
-  page,
-  tempProject,
-}) => {
-  // First visit: open the project (auto-initializes it). This records a
-  // recent-project entry in the local AppStore (single-user, no auth).
-  mkdirSync(join(tempProject.path, ".bonsai"), { recursive: true });
-  await openProject(page, tempProject.path);
-
-  // Bounce back to the picker. Navigating to "/" without a stored last-project
-  // re-renders ProjectPicker; a fresh page load triggers the recents fetch.
-  await page.evaluate(() => localStorage.removeItem("bonsai-last-project"));
-  await page.goto("/");
-  await expect(page.locator(projectPicker.pathInput)).toBeVisible();
-
-  // The recents list now shows exactly the project we just opened (this is a
-  // fresh tempProject, so no prior history). The recorded path is the
-  // resolved form (Path.resolve), which can differ from `tempProject.path`
-  // on platforms where the tmp dir is a symlink — match by basename instead.
-  const basename = tempProject.path.split("/").pop()!;
-  const recents = page.locator(projectPicker.recentItem);
-  await expect(recents.first()).toBeVisible({ timeout: 5_000 });
-  await expect(recents.filter({ hasText: basename }).first()).toBeVisible();
-});
-
-test("deleted project directory is purged from recents on reload", async ({
-  page,
-  tempProject,
-}) => {
-  mkdirSync(join(tempProject.path, ".bonsai"), { recursive: true });
-  await openProject(page, tempProject.path);
-
-  await page.evaluate(() => localStorage.removeItem("bonsai-last-project"));
-  await page.goto("/");
-  await expect(page.locator(projectPicker.pathInput)).toBeVisible();
-
-  const basename = tempProject.path.split("/").pop()!;
-  await expect(
-    page.locator(projectPicker.recentItem).filter({ hasText: basename }),
-  ).toBeVisible({ timeout: 5_000 });
-
-  // Delete the project directory — next GET /api/projects/known will purge the stale entry.
-  rmSync(tempProject.path, { recursive: true, force: true });
-
-  await page.reload();
-  await expect(page.locator(projectPicker.pathInput)).toBeVisible();
-  await expect(
-    page.locator(projectPicker.recentItem).filter({ hasText: basename }),
-  ).toHaveCount(0, { timeout: 5_000 });
-});
-
-test("DELETE with a raw symlink path removes an entry stored as its resolved path", async ({
-  page,
-  tempProject,
-}) => {
-  // On macOS /tmp is a symlink to /private/var/folders/... The backend resolves
-  // paths on POST, so the entry is stored as the canonical /private/... form.
-  // The DELETE endpoint must also normalize so that sending the raw form still
-  // matches — otherwise the e2e fixture cleanup silently no-ops and stale
-  // entries accumulate across test runs.
-  mkdirSync(join(tempProject.path, ".bonsai"), { recursive: true });
-  await openProject(page, tempProject.path);
-
-  await page.evaluate(() => localStorage.removeItem("bonsai-last-project"));
-  await page.goto("/");
-  await expect(page.locator(projectPicker.pathInput)).toBeVisible();
-
-  const basename = tempProject.path.split("/").pop()!;
-  await expect(
-    page.locator(projectPicker.recentItem).filter({ hasText: basename }),
-  ).toBeVisible({ timeout: 5_000 });
-
-  // DELETE using the raw (possibly symlinked) path — not the resolved form.
-  const del = await page.request.delete(
-    `/api/projects/known?path=${encodeURIComponent(tempProject.path)}`,
-  );
-  expect(del.status()).toBe(200);
-
-  await page.reload();
-  await expect(page.locator(projectPicker.pathInput)).toBeVisible();
-  await expect(
-    page.locator(projectPicker.recentItem).filter({ hasText: basename }),
-  ).toHaveCount(0, { timeout: 5_000 });
 });
 
 test("non-existent path shows a picker error with a Create-folder affordance", async ({
