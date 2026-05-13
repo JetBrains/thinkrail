@@ -19,15 +19,19 @@ from app.agent.runtime.types import (
 class TestRuntimeExecutionConfig:
     def test_requires_working_directory(self):
         with pytest.raises(ValidationError):
-            RuntimeExecutionConfig()  # type: ignore[call-arg]
+            RuntimeExecutionConfig(model="claude-opus-4-7")  # type: ignore[call-arg]
+
+    def test_requires_model(self):
+        # ``model`` is required: the neutral type doesn't carry a provider-
+        # specific default — the caller (a runtime) picks the value.
+        with pytest.raises(ValidationError):
+            RuntimeExecutionConfig(working_directory="/tmp/proj")  # type: ignore[call-arg]
 
     def test_defaults_match_contract(self):
-        cfg = RuntimeExecutionConfig(working_directory="/tmp/proj")
-        assert cfg.model == "claude-sonnet-4-6"
+        cfg = RuntimeExecutionConfig(working_directory="/tmp/proj", model="claude-opus-4-7")
         assert cfg.max_turns == 50
         assert cfg.permission_mode == "default"
         assert cfg.stream_text is True
-        assert cfg.betas == []
         assert cfg.effort is None
         assert cfg.system_prompt is None
         assert cfg.resume_session_id is None
@@ -38,7 +42,6 @@ class TestRuntimeExecutionConfig:
             model="claude-opus-4-7",
             system_prompt="be concise",
             resume_session_id="sess-123",
-            betas=["beta-1"],
             effort="high",
             max_turns=10,
             permission_mode="acceptEdits",
@@ -50,7 +53,6 @@ class TestRuntimeExecutionConfig:
             "model": "claude-opus-4-7",
             "systemPrompt": "be concise",
             "resumeSessionId": "sess-123",
-            "betas": ["beta-1"],
             "effort": "high",
             "maxTurns": 10,
             "permissionMode": "acceptEdits",
@@ -62,6 +64,7 @@ class TestRuntimeExecutionConfig:
     def test_validate_from_camel_case_keys(self):
         cfg = RuntimeExecutionConfig.model_validate({
             "workingDirectory": "/tmp/proj",
+            "model": "claude-opus-4-7",
             "maxTurns": 7,
         })
         assert cfg.working_directory == "/tmp/proj"
@@ -73,6 +76,12 @@ class TestIAgentRuntimeProtocol:
         class Dummy:
             runtime_type: RuntimeType = "claude"
             display_name: str = "Claude (test)"
+
+            def list_models(self):
+                return []
+
+            def get_context_window(self, model_id):
+                return 200_000
 
             async def run_session(self, task, exec_config, handler):  # noqa: D401
                 return AgentResult(

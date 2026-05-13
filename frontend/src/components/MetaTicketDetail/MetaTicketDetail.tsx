@@ -121,7 +121,6 @@ export function MetaTicketDetail({ ticketId }: MetaTicketDetailProps) {
         maxTurns: isExecute ? 100 : 50,
         permissionMode: "default",
         streamText: true,
-        betas: [],
         effort: null,
       },
       name: isExecute ? `Execute: ${ticket.title}` : `${skillId.replace("ticket-", "")}: ${ticket.title}`,

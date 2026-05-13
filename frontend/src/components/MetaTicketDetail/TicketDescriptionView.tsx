@@ -71,7 +71,6 @@ export function TicketDescriptionView({ ticket, onTicketUpdated }: TicketDescrip
           maxTurns: 50,
           permissionMode: "default",
           streamText: true,
-          betas: [],
           effort: null,
         },
         name: `Describe: ${ticket.title}`,

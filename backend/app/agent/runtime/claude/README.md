@@ -14,27 +14,30 @@ tags:
 ---
 # `app.agent.runtime.claude` — Claude SDK Runtime
 
-> Parent: [Runtime Abstraction](../README.md) | Status: **Active** | Created: 2026-04-29
+> Parent: [Runtime Abstraction](../README.md) | Status: **Active** | Created: 2026-04-29 | Last updated: 2026-05-13 (harness-abstraction PR 1)
 
 ## Overview
 
 `runtime/claude/` implements `IAgentRuntime` for the Claude Agent SDK.
 It owns the conversational loop, drives the SDK client, maps SDK
-messages onto bonsai's unified event stream, and runs the per-session
-subagent / PreCompact correlation logic.
+messages onto bonsai's unified event stream, manages the Claude model
+catalog + Anthropic API credentials, and runs the per-session subagent
+/ PreCompact correlation logic.
 
 The body of `run_session` was migrated verbatim from the legacy
-`app/agent/runner.py` in plan 02; the module is the *only* place under
-`runtime/` that imports from `claude_agent_sdk`.
+`app/agent/runner.py`; the module is the only place under `runtime/`
+that imports from `claude_agent_sdk` or `anthropic`.
 
 ## File organisation
 
 | File | Responsibility |
 |------|----------------|
 | `__init__.py` | Re-exports `ClaudeRuntime` |
-| `runtime.py` | `class ClaudeRuntime` — IAgentRuntime impl. Owns SDK lifecycle, conversation loop, tool-result serialization, cost-iteration tracking, mode-change tracking, 1M-context beta auto-injection |
+| `runtime.py` | `class ClaudeRuntime` — IAgentRuntime impl. Owns SDK lifecycle, conversation loop, tool-result serialization, cost-iteration tracking, mode-change tracking |
+| `models.py` | `class ClaudeModelRegistry` — Anthropic models fetch, on-disk cache (`.bonsai/cache/models.json`), 3-entry static fallback, lazy one-shot refresh on first `list_models()` call. Projects internal `_ClaudeRow` rows to neutral `ModelInfo` |
+| `credentials.py` | `resolve_anthropic_api_key()` — env var `ANTHROPIC_API_KEY` first, then macOS Keychain (Claude Code's managed key). Private to this directory |
 | `hooks.py` | `class SubagentHooks` — per-session subagent / PreCompact correlation (Task-tool ↔ SubagentStart) |
-| `adapter.py` | Pure event-shape builders — `agent/toolCallStart` / `agent/toolCallEnd` param construction. Boundary plan 05's diff-parity tests enforce against |
+| `adapter.py` | Pure event-shape builders — `agent/toolCallStart` / `agent/toolCallEnd` param construction. Boundary the Codex adapter's diff-parity tests will enforce against |
 
 ## Public interface
 
@@ -42,21 +45,26 @@ The body of `run_session` was migrated verbatim from the legacy
 from app.agent.runtime.claude import ClaudeRuntime
 
 runtime = ClaudeRuntime(
+    app_config=...,           # required
     tracker=...,
-    app_config=...,
     plugin_dir=...,
-    model_registry=...,
     spec_service=...,
     coordinator=...,
 )
+models = runtime.list_models()                           # list[ModelInfo]
+ctx = runtime.get_context_window("claude-opus-4-7")      # int
 result = await runtime.run_session(task, exec_config, handler)
 await runtime.interrupt(task, tracker)
 ```
 
 - `runtime_type = "claude"`, `display_name = "Claude Code"` (class
   attrs).
-- Constructor takes shared dependencies; `AgentService` builds one
-  instance per service lifetime via `_make_runtime()`.
+- `app_config` is required (the runtime builds its `ClaudeModelRegistry`
+  rooted at `app_config.project_root`). No `model_registry` parameter —
+  the registry is owned internally.
+- Constructor takes shared dependencies; `ProjectContext.runtime_registry`
+  builds one instance per project and registers it. The `AgentService`
+  retrieves it via `runtime_registry.get(task.config.runtime)`.
 
 ## Conversational loop
 
@@ -113,32 +121,51 @@ on interrupt. The runtime's interrupted branch calls
 `hooks.close_orphaned_subagents()` to emit synthetic `subagentEnd`
 events for everything still in `_active_subagent_ids`.
 
+## Model catalog — lazy refresh
+
+`ClaudeModelRegistry` keeps the model list current without any
+protocol-level lifecycle:
+
+- First call to `list_models()` schedules a one-shot
+  `asyncio.create_task(refresh_models())` if no refresh has run yet.
+  The task handle is stored on the registry so it isn't GC'd; an
+  `add_done_callback` logs any exception.
+- The first call itself returns immediately with whatever the registry
+  already has (cache or fallback). Subsequent calls see the fresh list
+  once the background refresh completes.
+- The internal projection (`tuple[ModelInfo, ...]` + id-keyed index) is
+  cached and invalidated only when `refresh_models` mutates the rows,
+  so per-event hot paths like `_get_context_max` don't rebuild Pydantic
+  objects per call.
+- No periodic refresh loop. The fallback list contains the current Opus
+  4.7 / Sonnet 4.6 / Haiku 4.5, which is good enough until the
+  background refresh upgrades to whatever Anthropic currently returns.
+- `get_context_window(model_id)` consults the projected id-index;
+  returns `DEFAULT_CONTEXT_WINDOW` (200K) for unknown ids.
+
 ## Special-case behaviours preserved from legacy `runner.py`
 
-These six behaviours were called out in plan 02's Risks section and
-must remain intact:
+These behaviours were called out in plan 02's Risks section and must
+remain intact:
 
-1. **1M-context beta auto-injection** (`runtime.py:155-162`) —
-   `context-1m-2025-08-07` is appended to `betas` for any model with
-   `contextWindow > 200_000`.
-2. **`CLAUDECODE` env stripping** (`runtime.py:178`) — when bonsai runs
-   inside a Claude Code terminal during development, the SDK's bundled
-   CLI rejects nested sessions. Strip `CLAUDECODE` and
-   `CLAUDE_CODE_EXECPATH` before spawning.
-3. **Per-iteration cost tracking** — each API call within a turn gets
+1. **`CLAUDECODE` env stripping** — when bonsai runs inside a Claude
+   Code terminal during development, the SDK's bundled CLI rejects
+   nested sessions. Strip `CLAUDECODE` and `CLAUDE_CODE_EXECPATH`
+   before spawning.
+2. **Per-iteration cost tracking** — each API call within a turn gets
    its own `iterations[]` entry. Last iteration's `total_tokens`
    determines context-window occupancy; sum across iterations drives
    cost estimation.
-4. **`ExitPlanMode` / `EnterPlanMode` mode-change tracking** — when the
+3. **`ExitPlanMode` / `EnterPlanMode` mode-change tracking** — when the
    model invokes one of these tools, capture the requested new mode in
    `_mode_change_tools` (keyed by tool_use_id) so the runtime can emit
    a `agent/permissionModeChanged` after the SDK's
    `permission_mode_changed` event arrives.
-5. **`_previousContent` injection for `Write` tool** — the SDK's `Write`
+4. **`_previousContent` injection for `Write` tool** — the SDK's `Write`
    tool input lacks the file's previous content; runtime reads it from
    disk and injects it into the tool input before approval so the
    diff-rendering UI has both sides.
-6. **MCP `_serialize_tool_content`** (`runtime.py:53`) — MCP tool
+5. **MCP `_serialize_tool_content`** (`runtime.py:53`) — MCP tool
    results arrive as `[{type: "text", text: "..."}]` lists; serializer
    joins the text blocks rather than calling `str()` (which produces
    Python repr with single quotes — bad for the chat UI).
@@ -204,15 +231,22 @@ No `cancel_event`, no polling.
 
 `runtime/claude/` imports from:
 
-- `claude_agent_sdk` — SDK proper (only here)
+- `claude_agent_sdk` — SDK proper (only `runtime.py`)
+- `anthropic` — Models API client (only `models.py`)
 - `app.agent.{models, permissions, pricing, tools, tracker}`
 - `app.agent.runtime.{events, types}`
 - `app.core.config` — for `AppConfig` typing
 - stdlib
 
-The SDK leak is contained to this directory. Verified by:
+Inside `runtime/`, SDK and provider imports are contained to this
+directory:
 
 ```
-grep -r claude_agent_sdk backend/app/agent/runtime/
-# only matches: backend/app/agent/runtime/claude/runtime.py
+grep -r 'claude_agent_sdk\|^import anthropic\|^from anthropic' backend/app/agent/runtime/
+# only matches under backend/app/agent/runtime/claude/
 ```
+
+Note: SDK imports remain in shared code outside `runtime/` (in
+`permissions.py`, `tools/*.py`, `service.update_config`, `context.py`,
+`revise.py`). Those are explicitly scoped to harness-abstraction PR 2
+and PR 3 — see `harness_refactoring.md` for the per-leak migration plan.

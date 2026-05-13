@@ -23,18 +23,64 @@ def _make_spec_detail(id: str, title: str, content: str) -> SpecDetail:
     )
 
 
+def _install_mock_runtime(service: AgentService) -> MagicMock:
+    """Install a mock IAgentRuntime under runtime_type='claude' on ``service``.
+
+    The mock's ``interrupt`` mirrors ``ClaudeRuntime.interrupt`` — it pulls
+    the SDK client off the tracker and calls ``client.interrupt()`` — so
+    integration tests asserting on the stored client still hold.
+    """
+    from app.agent.runtime import RuntimeRegistry
+
+    from app.agent.runtime import ModelInfo
+
+    async def _interrupt(task, tracker):
+        client = tracker.get_client(task.bonsai_sid)
+        if client is not None:
+            await client.interrupt()
+
+    default_models = [
+        ModelInfo(
+            id="claude-sonnet-4-6",
+            label="Sonnet 4.6",
+            group="current",
+            context_window=1_000_000,
+            max_output=64_000,
+            pricing_tier="sonnet",
+        ),
+    ]
+
+    runtime = MagicMock()
+    runtime.runtime_type = "claude"
+    runtime.display_name = "Claude (test)"
+    runtime.run_session = AsyncMock()
+    runtime.interrupt = AsyncMock(side_effect=_interrupt)
+    runtime.list_models = MagicMock(return_value=default_models)
+    runtime.get_context_window = MagicMock(
+        side_effect=lambda mid: next(
+            (m.context_window for m in default_models if m.id == mid), 200_000
+        )
+    )
+    reg = RuntimeRegistry()
+    reg.register(runtime)
+    service.runtime_registry = reg
+    return runtime
+
+
 def _make_service() -> tuple[AgentService, MagicMock, MagicMock]:
     config = MagicMock()
     spec_service = MagicMock()
     spec_service.get_spec = AsyncMock()
     service = AgentService(config, spec_service)
+    _install_mock_runtime(service)
     return service, config, spec_service
 
 
 class TestRunTask:
-    @patch("app.agent.service.ClaudeRuntime")
-    async def test_creates_task_and_launches_background(self, MockRuntime: MagicMock) -> None:
-        run_session = AsyncMock(return_value=AgentResult(
+    async def test_creates_task_and_launches_background(self) -> None:
+        service, _, spec_service = _make_service()
+        runtime = service.runtime_registry.get("claude")
+        runtime.run_session = AsyncMock(return_value=AgentResult(
             bonsai_sid="t1",
             session_id="s1",
             result="done",
@@ -42,9 +88,6 @@ class TestRunTask:
             turns=1,
             duration_ms=100,
         ))
-        MockRuntime.return_value.run_session = run_session
-
-        service, _, spec_service = _make_service()
         spec_service.get_spec.return_value = _make_spec_detail(
             "spec-1", "Test Spec", "# Content"
         )
@@ -57,10 +100,9 @@ class TestRunTask:
         # Wait for background task to complete
         await asyncio.sleep(0.05)
 
-        run_session.assert_called_once()
+        runtime.run_session.assert_called_once()
 
-    @patch("app.agent.service.ClaudeRuntime")
-    async def test_run_task_returns_immediately(self, MockRuntime: MagicMock) -> None:
+    async def test_run_task_returns_immediately(self) -> None:
         async def slow_run(*args, **kwargs):
             await asyncio.sleep(0.5)
             return AgentResult(
@@ -68,9 +110,9 @@ class TestRunTask:
                 cost_usd=0.0, turns=1, duration_ms=500,
             )
 
-        MockRuntime.return_value.run_session = AsyncMock(side_effect=slow_run)
-
         service, _, spec_service = _make_service()
+        runtime = service.runtime_registry.get("claude")
+        runtime.run_session = AsyncMock(side_effect=slow_run)
         spec_service.get_spec.return_value = _make_spec_detail("s1", "T", "C")
 
         task = await service.run_task(["s1"], AgentConfig())
@@ -86,11 +128,10 @@ class TestRunTask:
             except (asyncio.CancelledError, Exception):
                 pass
 
-    @patch("app.agent.service.ClaudeRuntime")
-    async def test_error_sets_status(self, MockRuntime: MagicMock) -> None:
-        MockRuntime.return_value.run_session = AsyncMock(side_effect=RuntimeError("boom"))
-
+    async def test_error_sets_status(self) -> None:
         service, _, spec_service = _make_service()
+        runtime = service.runtime_registry.get("claude")
+        runtime.run_session = AsyncMock(side_effect=RuntimeError("boom"))
         spec_service.get_spec.return_value = _make_spec_detail("s1", "T", "C")
 
         task = await service.run_task(["s1"], AgentConfig())
@@ -328,10 +369,31 @@ class TestInterruptTask:
 class TestSaveTask:
     def test_new_session_gets_zeroed_metrics(self, tmp_path: Path) -> None:
         """_save_task produces zeroed metrics for a brand-new session (no disk data)."""
+        from app.agent.runtime import ModelInfo, RuntimeRegistry
+
         config = MagicMock()
         config.project_root = tmp_path
         spec_service = MagicMock()
         service = AgentService(config, spec_service)
+
+        # Install a runtime that knows about the default model so _get_context_max
+        # resolves the 1M window instead of the no-registry default of 200K.
+        runtime = MagicMock()
+        runtime.runtime_type = "claude"
+        runtime.get_context_window = MagicMock(return_value=1_000_000)
+        runtime.list_models.return_value = [
+            ModelInfo(
+                id="claude-sonnet-4-6",
+                label="Sonnet 4.6",
+                group="current",
+                context_window=1_000_000,
+                max_output=64_000,
+                pricing_tier="sonnet",
+            ),
+        ]
+        reg = RuntimeRegistry()
+        reg.register(runtime)
+        service.runtime_registry = reg
 
         task = service._tracker.create_task(["s1"], AgentConfig())
         service._save_task(task)
@@ -446,25 +508,74 @@ class TestBuildContext:
 
 
 class TestGetContextMax:
-    def test_returns_registry_value_when_available(self) -> None:
-        service, _, _ = _make_service()
-        service.model_registry = MagicMock()
-        service.model_registry.get_models.return_value = [
-            {"id": "claude-opus-4-6", "contextWindow": 1_000_000}
-        ]
-        assert service._get_context_max("claude-opus-4-6") == 1_000_000
+    """``_get_context_max`` delegates to the task's runtime, no fallback knowledge in services."""
 
-    def test_falls_back_to_hardcoded_list(self) -> None:
-        service, _, _ = _make_service()
-        service.model_registry = None
-        # Should get 1M from the _FALLBACK list, not the 200K default
-        assert service._get_context_max("claude-opus-4-6") == 1_000_000
-        assert service._get_context_max("claude-haiku-4-5") == 200_000
+    def _make_registry(self, context_for: dict[str, int]):
+        from app.agent.runtime import RuntimeRegistry
 
-    def test_returns_200k_for_unknown_model(self) -> None:
+        runtime = MagicMock()
+        runtime.runtime_type = "claude"
+        runtime.get_context_window = MagicMock(
+            side_effect=lambda mid: context_for.get(mid, 200_000)
+        )
+        reg = RuntimeRegistry()
+        reg.register(runtime)
+        return reg
+
+    def test_returns_runtime_value_when_available(self) -> None:
         service, _, _ = _make_service()
-        service.model_registry = None
-        assert service._get_context_max("unknown-model") == 200_000
+        service.runtime_registry = self._make_registry({"claude-opus-4-7": 1_000_000})
+        task = service._tracker.create_task([], AgentConfig(model="claude-opus-4-7"))
+        assert service._get_context_max(task) == 1_000_000
+
+    def test_returns_200k_when_registry_missing(self) -> None:
+        service, _, _ = _make_service()
+        service.runtime_registry = None
+        task = service._tracker.create_task([], AgentConfig(model="claude-opus-4-7"))
+        assert service._get_context_max(task) == 200_000
+
+    def test_runtime_owns_unknown_model_fallback(self) -> None:
+        service, _, _ = _make_service()
+        # Runtime returns 200K for unknown ids — service trusts it, no second-guessing.
+        service.runtime_registry = self._make_registry({"claude-opus-4-7": 1_000_000})
+        task = service._tracker.create_task([], AgentConfig(model="unknown-model"))
+        assert service._get_context_max(task) == 200_000
+
+    def test_unknown_runtime_does_not_raise_returns_default(self) -> None:
+        """Persisted sessions with an unregistered runtime must not crash
+        non-RPC callers (``_save_task`` / ``_run_background`` metrics)."""
+        from app.agent.runtime import DEFAULT_CONTEXT_WINDOW
+
+        service, _, _ = _make_service()
+        # Registry has Claude only; task asks for Codex.
+        task = service._tracker.create_task(
+            [], AgentConfig(runtime="codex", model="gpt-5"),
+        )
+        assert service._get_context_max(task) == DEFAULT_CONTEXT_WINDOW
+
+
+class TestInterruptTaskRollback:
+    async def test_clears_interrupt_flag_when_runtime_missing(self) -> None:
+        """If the runtime can't be resolved, the SDK will never produce a
+        ResultMessage to clear the interrupted flag — service must roll back
+        so the session isn't wedged."""
+        from app.agent.runtime import RuntimeRegistry
+
+        service, _, _ = _make_service()
+        # Empty registry → UnknownRuntimeError on lookup
+        service.runtime_registry = RuntimeRegistry()
+
+        task = service._tracker.create_task(
+            [], AgentConfig(runtime="claude"),  # Literal-valid but not registered
+        )
+        service._tracker.set_status(task.bonsai_sid, "idle")
+        service._tracker.set_status(task.bonsai_sid, "running")
+
+        await service.interrupt_task(task.bonsai_sid)
+
+        # Flag must be cleared so the next ResultMessage doesn't trigger
+        # a spurious agent/interrupted event.
+        assert service._tracker.is_interrupted(task.bonsai_sid) is False
 
 
 class TestMessageTooLarge:
@@ -496,6 +607,6 @@ class TestMessageTooLarge:
         # that the size check itself doesn't block it
         text = "Hello, how are you?"
         msg_tokens = len(text) // 6
-        ctx_max = service._get_context_max(task.config.model)
+        ctx_max = service._get_context_max(task)
         remaining = ctx_max - 10_000
         assert msg_tokens < remaining * 0.8  # Would pass the check

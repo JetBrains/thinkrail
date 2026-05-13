@@ -31,7 +31,6 @@ export function DraftConfigCard({ bonsaiSid, readOnly, onVisibilityChange }: Dra
   const specs = useSpecStore((s) => s.specs);
   const tickets = useBoardStore((s) => s.tickets);
   const skills = useSettingsStore((s) => s.skills);
-  const modelStatus = useSettingsStore((s) => s.modelStatus);
 
   const [editName, setEditName] = useState("");
   const [skillPickerOpen, setSkillPickerOpen] = useState(false);
@@ -144,12 +143,11 @@ export function DraftConfigCard({ bonsaiSid, readOnly, onVisibilityChange }: Dra
   const modelDef = getModelDef(session.model);
   const attachedTicket = session.metaTicketId ? tickets.get(session.metaTicketId) : null;
 
-  const buildConfig = (overrides: Partial<{ model: string; maxTurns: number; permissionMode: string; betas: string[]; effort: string | null }>) => ({
+  const buildConfig = (overrides: Partial<{ model: string; maxTurns: number; permissionMode: string; effort: string | null }>) => ({
     model: overrides.model ?? session.model,
     maxTurns: overrides.maxTurns ?? session.maxTurns,
     permissionMode: overrides.permissionMode ?? session.permissionMode,
     streamText: true,
-    betas: overrides.betas ?? session.betas,
     effort: overrides.effort !== undefined ? overrides.effort : session.effort,
   });
 
@@ -484,19 +482,6 @@ export function DraftConfigCard({ bonsaiSid, readOnly, onVisibilityChange }: Dra
                 ))}
               </optgroup>
             </select>
-            {modelStatus && modelStatus.source !== "api" && (
-              <span
-                className="draft-config-hint"
-                style={{ color: "var(--gold)" }}
-                title={
-                  `Model list may be stale (source: ${modelStatus.source}).` +
-                  (modelStatus.error ? `\n\nReason: ${modelStatus.error}` : "") +
-                  "\n\nFix: set ANTHROPIC_API_KEY, or run `claude auth login` so Bonsai can reuse the managed key."
-                }
-              >
-                {"\u26A0"} stale
-              </span>
-            )}
           </span>
 
           <span className="draft-config-inline">

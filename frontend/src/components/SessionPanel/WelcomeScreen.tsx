@@ -72,7 +72,6 @@ export function WelcomeScreen({ sessions, onSwitchSession }: WelcomeScreenProps)
           maxTurns: 50,
           permissionMode: "default",
           streamText: true,
-          betas: [],
           effort: null,
         },
         name: sessionName.trim() || text.slice(0, 60),

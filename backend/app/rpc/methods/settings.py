@@ -6,13 +6,13 @@ from typing import Any
 
 from jsonrpcserver import JsonRpcError, Result, Success
 
+from app.agent.runtime import ModelInfo, RuntimeRegistry
 from app.core.config import AppConfig
 from app.core.settings import (
     ensure_settings_file,
     load_settings,
     save_settings,
 )
-from app.agent.model_registry import ModelRegistry
 
 _INTERNAL_ERROR = -32603
 _INVALID_PARAMS = -32602
@@ -58,22 +58,46 @@ async def ensure_settings(config: AppConfig, **_params: Any) -> dict:
 # ── Models ────────────────────────────────────────────────────────────────
 
 
-@_handle_errors
-async def list_models(registry: ModelRegistry, **_params: Any) -> list[dict]:
-    """Return the current model list."""
-    return registry.get_models()
+def _model_to_dict(model: ModelInfo) -> dict:
+    """Project a neutral ``ModelInfo`` into the wire shape.
+
+    No per-model ``runtime`` field — the runtime is carried by the
+    enclosing group, not duplicated on every entry.
+    """
+    return model.model_dump(by_alias=True)
 
 
 @_handle_errors
-async def refresh_models(registry: ModelRegistry, **_params: Any) -> list[dict]:
-    """Trigger a model refresh and return updated list."""
-    return await registry.refresh()
+async def list_models(registry: RuntimeRegistry, **_params: Any) -> dict:
+    """Return the current model list grouped by runtime.
 
+    Each runtime decides internally whether to refresh on first call,
+    serve from cache, or use a static list — callers never see those
+    semantics.
 
-@_handle_errors
-async def models_status(registry: ModelRegistry, **_params: Any) -> dict:
-    """Return metadata about the current model list source and any fetch error."""
-    return registry.get_status()
+    Shape::
+
+        {
+          "runtimes": [
+            {
+              "runtimeType": "claude",
+              "displayName": "Claude Code",
+              "models": [ { id, label, group, contextWindow, ... }, ... ]
+            },
+            ...
+          ]
+        }
+    """
+    return {
+        "runtimes": [
+            {
+                "runtimeType": runtime.runtime_type,
+                "displayName": runtime.display_name,
+                "models": [_model_to_dict(m) for m in runtime.list_models()],
+            }
+            for runtime in registry.all()
+        ],
+    }
 
 
 # ── Skills ───────────────────────────────────────────────────────────────

@@ -25,7 +25,6 @@ async def _run(
     plugin_dir: Any = None,
     resume_session_id: str | None = None,
     config: Any = None,
-    model_registry: Any = None,
     spec_service: Any = None,
     coordinator: Any = None,
 ) -> AgentResult:
@@ -33,9 +32,8 @@ async def _run(
     the legacy ``run(...)`` argument shape. Keeps test bodies concise."""
     runtime = ClaudeRuntime(
         tracker=tracker,
-        app_config=config,
+        app_config=config if config is not None else _test_config(),
         plugin_dir=plugin_dir,
-        model_registry=model_registry,
         spec_service=spec_service,
         coordinator=coordinator,
     )
@@ -47,7 +45,6 @@ async def _run(
         permission_mode=task.config.permission_mode,
         max_turns=task.config.max_turns,
         effort=task.config.effort,
-        betas=list(task.config.betas),
         stream_text=task.config.stream_text,
     )
     handler = make_handler_from_notify(notify)
@@ -1190,7 +1187,7 @@ class TestClaudeRuntimeInterrupt:
     """
 
     async def test_calls_client_interrupt_when_present(self) -> None:
-        runtime = ClaudeRuntime()
+        runtime = ClaudeRuntime(app_config=_test_config())
         tracker, task = _make_tracker_and_task()
         mock_client = AsyncMock()
         tracker.set_client(task.bonsai_sid, mock_client)
@@ -1200,7 +1197,7 @@ class TestClaudeRuntimeInterrupt:
         mock_client.interrupt.assert_awaited_once()
 
     async def test_noop_when_no_client(self) -> None:
-        runtime = ClaudeRuntime()
+        runtime = ClaudeRuntime(app_config=_test_config())
         tracker, task = _make_tracker_and_task()
         # No client registered for this sid
 
@@ -1208,7 +1205,7 @@ class TestClaudeRuntimeInterrupt:
         await runtime.interrupt(task, tracker)
 
     async def test_swallows_client_interrupt_exception(self) -> None:
-        runtime = ClaudeRuntime()
+        runtime = ClaudeRuntime(app_config=_test_config())
         tracker, task = _make_tracker_and_task()
         mock_client = AsyncMock()
         mock_client.interrupt.side_effect = RuntimeError("client gone")

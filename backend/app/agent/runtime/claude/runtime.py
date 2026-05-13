@@ -41,8 +41,9 @@ from app.agent.runtime.claude.adapter import (
     build_tool_call_start_params,
 )
 from app.agent.runtime.claude.hooks import SubagentHooks
+from app.agent.runtime.claude.models import ClaudeModelRegistry
 from app.agent.runtime.events import RuntimeEvent
-from app.agent.runtime.types import RuntimeType
+from app.agent.runtime.types import ModelInfo, RuntimeType
 from app.agent.tools import MCP_SERVERS
 from app.agent.tools._context import set_tool_context
 from app.agent.tracker import END_SIGNAL, Tracker
@@ -91,19 +92,29 @@ class ClaudeRuntime:
     def __init__(
         self,
         *,
+        app_config: AppConfig,
         tracker: Tracker | None = None,
-        app_config: AppConfig | None = None,
         plugin_dir: Path | None = None,
-        model_registry: Any = None,
         spec_service: Any = None,
         coordinator: Any = None,
     ) -> None:
         self.tracker = tracker
         self.app_config = app_config
         self.plugin_dir = plugin_dir
-        self.model_registry = model_registry
         self.spec_service = spec_service
         self.coordinator = coordinator
+        # The Claude runtime owns its own model registry. ``IAgentRuntime``
+        # exposes only the public surface (``list_models`` etc.); the
+        # registry instance is private to this class.
+        self._models = ClaudeModelRegistry(project_root=app_config.project_root)
+
+    # ── IAgentRuntime: model surface ─────────────────────────────────────
+
+    def list_models(self) -> list[ModelInfo]:
+        return self._models.list_models()
+
+    def get_context_window(self, model_id: str) -> int:
+        return self._models.get_context_window(model_id)
 
     async def run_session(
         self,
@@ -121,7 +132,6 @@ class ClaudeRuntime:
         if tracker is None:
             raise RuntimeError("ClaudeRuntime.run_session requires a tracker")
         plugin_dir = self.plugin_dir
-        model_registry = self.model_registry
         spec_service = self.spec_service
         coordinator = self.coordinator
         config = self.app_config
@@ -157,15 +167,6 @@ class ClaudeRuntime:
         def _on_cli_stderr(line: str) -> None:
             logger.debug("CLI stderr: %s", line)
 
-        # Auto-inject 1M context beta for models with >200K context window
-        betas = list(task.config.betas)
-        _1M_BETA = "context-1m-2025-08-07"
-        if _1M_BETA not in betas and model_registry:
-            for m in model_registry.get_models():
-                if m["id"] == task.config.model and m["contextWindow"] > 200_000:
-                    betas.append(_1M_BETA)
-                    break
-
         _pending_tool_ids: list[str] = []
 
         async def _can_use_tool(
@@ -194,7 +195,6 @@ class ClaudeRuntime:
             mcp_servers=MCP_SERVERS,
             resume=resume_session_id,
             stderr=_on_cli_stderr,
-            betas=betas,
             effort=task.config.effort,
             max_buffer_size=10 * 1024 * 1024,  # 10MB — default 1MB is too small for large tool results
             extra_args={"allow-dangerously-skip-permissions": None},  # enable mid-session mode switching to bypassPermissions

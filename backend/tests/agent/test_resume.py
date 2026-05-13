@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+from pathlib import Path
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -26,16 +27,20 @@ async def run(
     plugin_dir: Any = None,
     resume_session_id: str | None = None,
     config: Any = None,
-    model_registry: Any = None,
     spec_service: Any = None,
     coordinator: Any = None,
 ) -> AgentResult:
     """Test compat shim — see ``runtime/claude/test_runtime.py`` for the canonical version."""
+    if config is None:
+        # ClaudeRuntime requires a real AppConfig now (it builds its own model
+        # registry against ``project_root``). Provide a minimal stub.
+        from app.core.config import AppConfig
+        root = Path("/tmp/bonsai-test")
+        config = AppConfig(project_root=root, bonsai_dir=root / ".bonsai", plugin_dir=root / "plugins")
     runtime = ClaudeRuntime(
         tracker=tracker,
         app_config=config,
         plugin_dir=plugin_dir,
-        model_registry=model_registry,
         spec_service=spec_service,
         coordinator=coordinator,
     )
@@ -47,7 +52,6 @@ async def run(
         permission_mode=task.config.permission_mode,
         max_turns=task.config.max_turns,
         effort=task.config.effort,
-        betas=list(task.config.betas),
         stream_text=task.config.stream_text,
     )
     handler = make_handler_from_notify(notify)
@@ -62,10 +66,25 @@ def _make_spec_detail(id: str, title: str, content: str) -> SpecDetail:
 
 
 def _make_service() -> tuple[AgentService, MagicMock, MagicMock]:
+    from app.agent.runtime import RuntimeRegistry
+
     config = MagicMock()
     spec_service = MagicMock()
     spec_service.get_spec = AsyncMock()
     service = AgentService(config, spec_service)
+
+    # Install mock runtime so service._get_runtime(task) resolves under
+    # runtime_type="claude" (the default on AgentConfig).
+    runtime = MagicMock()
+    runtime.runtime_type = "claude"
+    runtime.display_name = "Claude (test)"
+    runtime.run_session = AsyncMock()
+    runtime.interrupt = AsyncMock()
+    runtime.list_models = MagicMock(return_value=[])
+    runtime.get_context_window = MagicMock(return_value=1_000_000)
+    reg = RuntimeRegistry()
+    reg.register(runtime)
+    service.runtime_registry = reg
     return service, config, spec_service
 
 
@@ -157,11 +176,10 @@ class TestRunnerResumeParam:
 
 
 class TestContinueSession:
-    @patch("app.agent.service.ClaudeRuntime")
     @patch("app.agent.service.load_session")
     @patch("app.agent.service.save_session")
     async def test_continue_uses_native_resume(
-        self, mock_save: MagicMock, mock_load: MagicMock, MockRuntime: MagicMock
+        self, mock_save: MagicMock, mock_load: MagicMock,
     ) -> None:
         """continue_session passes stored sessionId to runtime as resume_session_id."""
         mock_load.return_value = {
@@ -176,13 +194,13 @@ class TestContinueSession:
             "updatedAt": "2026-03-07T00:00:00",
             "events": [],
         }
-        run_session = AsyncMock(return_value=AgentResult(
+
+        service, config, spec_service = _make_service()
+        runtime = service.runtime_registry.get("claude")
+        runtime.run_session = AsyncMock(return_value=AgentResult(
             bonsai_sid="sid-1", session_id="cli-session-new",
             result="done", cost_usd=0.0, turns=0, duration_ms=0,
         ))
-        MockRuntime.return_value.run_session = run_session
-
-        service, config, spec_service = _make_service()
         spec_service.get_spec.return_value = _make_spec_detail("spec-1", "T", "C")
 
         task = await service.continue_session("sid-1")
@@ -193,8 +211,8 @@ class TestContinueSession:
         await asyncio.sleep(0.05)
 
         # Verify run_session was called with resume_session_id in exec_config
-        run_session.assert_called_once()
-        call_args = run_session.call_args
+        runtime.run_session.assert_called_once()
+        call_args = runtime.run_session.call_args
         # run_session(task, exec_config, handler)
         exec_config = call_args.args[1]
         assert exec_config.resume_session_id == "cli-session-abc"

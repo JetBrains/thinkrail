@@ -9,8 +9,14 @@ from typing import Any
 from app.agent.context import build_context
 from app.agent.models import AgentConfig, AgentTask, MessageTooLargeError, SubsessionType
 from app.agent.persistence import append_event, save_session, load_session, list_sessions as list_sessions_from_disk, delete_session as delete_session_from_disk, update_session_metadata
-from app.agent.runtime import RuntimeExecutionConfig, make_handler_from_notify
-from app.agent.runtime.claude import ClaudeRuntime
+from app.agent.runtime import (
+    DEFAULT_CONTEXT_WINDOW,
+    IAgentRuntime,
+    RuntimeExecutionConfig,
+    RuntimeRegistry,
+    UnknownRuntimeError,
+    make_handler_from_notify,
+)
 from app.agent.tracker import Tracker
 from app.core.config import AppConfig
 from app.spec.service import SpecService
@@ -21,29 +27,47 @@ logger = logging.getLogger(__name__)
 class AgentService:
     """Facade — single entry point for agent session management."""
 
-    def __init__(self, config: AppConfig, spec_service: SpecService) -> None:
+    def __init__(
+        self,
+        config: AppConfig,
+        spec_service: SpecService,
+        *,
+        tracker: Tracker | None = None,
+    ) -> None:
         self._config = config
         self._spec_service = spec_service
-        self._tracker = Tracker()
+        # Tracker is project-scoped: ``ProjectContext`` owns one and shares it
+        # with both the agent service and every runtime instance, so a single
+        # tracker is the source of truth for per-session state.
+        self._tracker = tracker if tracker is not None else Tracker()
         self._running_tasks: dict[str, asyncio.Task[Any]] = {}
         self.board_service: Any = None     # Injected by server.py
         self.trash_service: Any = None    # Injected by server.py
-        self.model_registry: Any = None   # Injected by server.py
+        self.runtime_registry: RuntimeRegistry | None = None  # Injected by server.py
         self.coordinator: Any = None      # Injected by server.py (IndexCoordinator)
         self._restore_draft_sessions()
 
-    def _get_context_max(self, model_id: str) -> int:
-        """Look up the context window for a model from the registry."""
-        if self.model_registry:
-            for m in self.model_registry.get_models():
-                if m["id"] == model_id:
-                    return m["contextWindow"]
-        # Fallback to hardcoded list when registry is unavailable
-        from app.agent.model_registry import _FALLBACK
-        for m in _FALLBACK:
-            if m["id"] == model_id:
-                return m["contextWindow"]
-        return 200_000
+    def _get_context_max(self, task: AgentTask) -> int:
+        """Ask ``task``'s runtime for the context window of its configured model.
+
+        The runtime owns the lookup, including any fallback for ids it
+        doesn't recognise — services must not maintain their own
+        model→window tables. When the registry isn't wired (test bootstrap)
+        or the persisted ``task.config.runtime`` no longer maps to a
+        registered runtime, fall back to the neutral default so non-RPC
+        callers (``_save_task``, ``_run_background`` metrics) don't crash.
+        """
+        if self.runtime_registry is None:
+            return DEFAULT_CONTEXT_WINDOW
+        try:
+            runtime = self.runtime_registry.get(task.config.runtime)
+        except UnknownRuntimeError:
+            logger.warning(
+                "[%s] Unknown runtime %r for context-window lookup; using default",
+                task.bonsai_sid[:8], task.config.runtime,
+            )
+            return DEFAULT_CONTEXT_WINDOW
+        return runtime.get_context_window(task.config.model)
 
     def _restore_draft_sessions(self) -> None:
         """Restore draft sessions from disk into the tracker on startup."""
@@ -215,7 +239,7 @@ class AgentService:
             )
         # Estimate message size against remaining context budget
         msg_tokens = len(text) // 6  # fast heuristic: ~6 chars per token
-        ctx_max = self._get_context_max(task.config.model)
+        ctx_max = self._get_context_max(task)
         current_ctx = self._tracker.get_context_tokens(bonsai_sid)
         remaining = ctx_max - current_ctx if current_ctx > 0 else ctx_max
         if remaining > 0 and msg_tokens > remaining * 0.8:
@@ -255,9 +279,20 @@ class AgentService:
         #    PermissionResultDeny(interrupt=True) through the SDK.
         self._tracker.interrupt_futures(bonsai_sid)
 
-        # 3. Delegate the runtime-specific cancel (plan 03 swaps this for a
-        #    registry lookup keyed on task.config.runtime).
-        runtime = self._make_runtime()
+        # 3. Delegate the runtime-specific cancel via the registry. If the
+        #    runtime can't be resolved (registry not wired, unknown runtime
+        #    in config), the SDK will never produce a ResultMessage to clear
+        #    the interrupted flag — roll back the tracker state before
+        #    returning so the session isn't wedged into "interrupted" forever.
+        try:
+            runtime = self._get_runtime(task)
+        except UnknownRuntimeError as exc:
+            self._tracker.clear_interrupted(bonsai_sid)
+            logger.warning(
+                "[%s] interrupt: runtime %r not registered: %s",
+                bonsai_sid[:8], task.config.runtime, exc,
+            )
+            return
         await runtime.interrupt(task, self._tracker)
 
     async def end_session(self, bonsai_sid: str) -> None:
@@ -295,7 +330,6 @@ class AgentService:
         bonsai_sid: str,
         model: str | None = None,
         permission_mode: str | None = None,
-        betas: list[str] | None = None,
         effort: str | None = None,
     ) -> dict:
         """Update model and/or permission mode on a live session."""
@@ -316,12 +350,10 @@ class AgentService:
                 raise
             task.config.permission_mode = permission_mode
             logger.info("[%s] update_config: permission_mode updated to %s", bonsai_sid[:8], permission_mode)
-        if betas is not None:
-            task.config.betas = betas
         if effort is not None:
             task.config.effort = effort
         self._save_task(task)
-        return {"model": task.config.model, "permissionMode": task.config.permission_mode, "betas": task.config.betas, "effort": task.config.effort}
+        return {"model": task.config.model, "permissionMode": task.config.permission_mode, "effort": task.config.effort}
 
     async def restart_session(self, bonsai_sid: str) -> AgentTask:
         """End current session and resume with current (updated) config."""
@@ -372,7 +404,7 @@ class AgentService:
                 "costUsd": 0, "turns": 0, "toolCalls": 0,
                 "turnCostUsd": 0, "turnTurns": 0,
                 "durationMs": 0, "contextTokens": 0,
-                "contextMax": self._get_context_max(task.config.model), "outputTokens": 0,
+                "contextMax": self._get_context_max(task), "outputTokens": 0,
             }
         # Preserve existing events from disk if we don't have new ones
         if events is not None:
@@ -520,20 +552,16 @@ class AgentService:
 
     # -- helpers --------------------------------------------------------------
 
-    def _make_runtime(self) -> ClaudeRuntime:
-        """Build a ClaudeRuntime bound to this service's tracker + injected deps.
+    def _get_runtime(self, task: AgentTask) -> IAgentRuntime:
+        """Look up the runtime for ``task.config.runtime`` in the registry.
 
-        Plan 03 will swap this for a registry lookup keyed on
-        ``task.config.runtime``; for now Claude is the only implementation.
+        Per-runtime dependencies (tracker, spec service, coordinator) are
+        wired at construction time by ``ProjectContext`` — this method is
+        a pure registry lookup so the protocol surface stays minimal.
         """
-        return ClaudeRuntime(
-            tracker=self._tracker,
-            app_config=self._config,
-            plugin_dir=self._config.plugin_dir,
-            model_registry=self.model_registry,
-            spec_service=self._spec_service,
-            coordinator=self.coordinator,
-        )
+        if self.runtime_registry is None:
+            raise RuntimeError("AgentService.runtime_registry not wired")
+        return self.runtime_registry.get(task.config.runtime)
 
     def _attach_to_ticket(self, task: AgentTask) -> None:
         """Auto-attach session to meta-ticket and set orchestrator if applicable."""
@@ -576,7 +604,7 @@ class AgentService:
             "turnTurns": 0,
             "durationMs": _base_duration,
             "contextTokens": 0,
-            "contextMax": self._get_context_max(task.config.model),
+            "contextMax": self._get_context_max(task),
             "outputTokens": 0,
         }
         _wall_start = time.monotonic()
@@ -643,7 +671,7 @@ class AgentService:
                     last_out = iters[-1].get("output_tokens", 0) if iters else (
                         params.get("usage", {}).get("output_tokens", 0)
                     )
-                    ctx_max = self._get_context_max(task.config.model)
+                    ctx_max = self._get_context_max(task)
                     _live_metrics.update({
                         "costUsd": _base_cost + params.get("costUsd", 0),
                         "turns": _base_turns + params.get("turns", 0),
@@ -700,11 +728,10 @@ class AgentService:
             permission_mode=task.config.permission_mode,
             max_turns=task.config.max_turns,
             effort=task.config.effort,
-            betas=list(task.config.betas),
             stream_text=task.config.stream_text,
         )
         handler = make_handler_from_notify(notify)
-        runtime = self._make_runtime()
+        runtime = self._get_runtime(task)
 
         try:
             await runtime.run_session(task, exec_config, handler)
@@ -892,6 +919,7 @@ class AgentService:
             project_root=self._config.project_root,
             config=task.config,
             spec_service=self._spec_service,
+            context_max=self._get_context_max(task),
             plugin_dir=self._config.plugin_dir,
             file_paths=task.file_paths,
         )

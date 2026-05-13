@@ -60,24 +60,33 @@ Prevention → Detection → Recovery
 
 ## Layer 1: Prevention
 
-### 1a. Fix `_get_context_max()` fallback
+### 1a. `_get_context_max()` delegates to the runtime
 
 **File:** `backend/app/agent/service.py` — `_get_context_max()`
 
-Use `_FALLBACK` from `model_registry.py` instead of hardcoding 200K:
+Shipped state after harness-abstraction PR 1: the service asks the
+task's runtime instead of carrying a model→window table. The runtime
+owns the lookup including any fallback for ids it doesn't recognise;
+the service falls back to a neutral `DEFAULT_CONTEXT_WINDOW` (200K)
+only when the registry isn't wired or the runtime key in the persisted
+config no longer matches a registered runtime.
 
 ```python
-def _get_context_max(self, model_id: str) -> int:
-    if self.model_registry:
-        for m in self.model_registry.get_models():
-            if m["id"] == model_id:
-                return m["contextWindow"]
-    from app.agent.model_registry import _FALLBACK
-    for m in _FALLBACK:
-        if m["id"] == model_id:
-            return m["contextWindow"]
-    return 200_000
+def _get_context_max(self, task: AgentTask) -> int:
+    if self.runtime_registry is None:
+        return DEFAULT_CONTEXT_WINDOW
+    try:
+        runtime = self.runtime_registry.get(task.config.runtime)
+    except UnknownRuntimeError:
+        logger.warning("[%s] Unknown runtime %r; using default",
+                       task.bonsai_sid[:8], task.config.runtime)
+        return DEFAULT_CONTEXT_WINDOW
+    return runtime.get_context_window(task.config.model)
 ```
+
+The Claude runtime's `ClaudeModelRegistry` carries the actual
+window-per-model knowledge (live API list + on-disk cache + small
+hardcoded fallback). See `backend/app/agent/runtime/claude/models.py`.
 
 ### 1b. System prompt budget warnings in `build_context_structured()`
 

@@ -92,7 +92,6 @@ export interface Session {
   status: SessionStatus;
   model: string;
   permissionMode: string;
-  betas: string[];
   effort: string | null;
   maxTurns: number;
   startedAt: number;

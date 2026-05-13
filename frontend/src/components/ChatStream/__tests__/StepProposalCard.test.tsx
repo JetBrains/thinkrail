@@ -87,7 +87,6 @@ describe("classicRenderers.suggestStep approve flow", () => {
       model: "claude-opus-4-7",
       maxTurns: 100,
       permissionMode: "bypassPermissions",
-      betas: ["context-1m-2025-08-07"],
       effort: "max",
     };
     return {

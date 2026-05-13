@@ -12,15 +12,16 @@ Design reference:
 
 from __future__ import annotations
 
-import asyncio
 import logging
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Awaitable, Callable
 
 import pathspec
 
-from app.agent.model_registry import ModelRegistry
+from app.agent.runtime import RuntimeRegistry
+from app.agent.runtime.claude import ClaudeRuntime
 from app.agent.service import AgentService
+from app.agent.tracker import Tracker
 from app.board.service import BoardService
 from app.core.bonsaihide import load_bonsaihide
 from app.core.config import AppConfig, get_index_path
@@ -97,8 +98,8 @@ class ProjectContext:
         self._vis_service: VisualizationService | None = None
         self._board_service: BoardService | None = None
         self._trash_service: TrashService | None = None
-        self._model_registry: ModelRegistry | None = None
-        self._model_refresh_started: bool = False
+        self._runtime_registry: RuntimeRegistry | None = None
+        self._tracker: Tracker | None = None
 
     # ── Lazy service properties ───────────────────────────────────────────
 
@@ -121,14 +122,21 @@ class ProjectContext:
         return self._spec_service
 
     @property
+    def tracker(self) -> Tracker:
+        """Project-scoped session tracker, shared with every runtime."""
+        if self._tracker is None:
+            self._tracker = Tracker()
+        return self._tracker
+
+    @property
     def agent_service(self) -> AgentService:
-        """Agent service — wires coordinator, trash, board, model_registry."""
+        """Agent service — wires coordinator, trash, board, runtime_registry."""
         if self._agent_service is None:
-            svc = AgentService(self.config, self.spec_service)
+            svc = AgentService(self.config, self.spec_service, tracker=self.tracker)
             svc.coordinator = self.coordinator
             svc.trash_service = self.trash_service
             svc.board_service = self.board_service
-            svc.model_registry = self.model_registry
+            svc.runtime_registry = self.runtime_registry
             self._agent_service = svc
         return self._agent_service
 
@@ -152,17 +160,27 @@ class ProjectContext:
         return self._board_service
 
     @property
-    def model_registry(self) -> ModelRegistry:
-        """Model registry — created on first access, periodic refresh NOT started."""
-        if self._model_registry is None:
-            from app.core.settings import load_settings
+    def runtime_registry(self) -> RuntimeRegistry:
+        """Runtime registry — created on first access.
 
-            settings = load_settings(self.project_root)
-            self._model_registry = ModelRegistry(
-                project_root=self.project_root,
-                refresh_hours=settings.model_refresh_interval_hours,
+        Runtimes are constructed once here with all of their dependencies
+        wired in (tracker, spec service, coordinator). Runtimes are
+        protocol-stateless; any per-runtime warmup (e.g. Claude model-list
+        refresh) is lazy and triggered internally on first use.
+        """
+        if self._runtime_registry is None:
+            reg = RuntimeRegistry()
+            reg.register(
+                ClaudeRuntime(
+                    app_config=self.config,
+                    plugin_dir=self.config.plugin_dir,
+                    tracker=self.tracker,
+                    spec_service=self.spec_service,
+                    coordinator=self.coordinator,
+                )
             )
-        return self._model_registry
+            self._runtime_registry = reg
+        return self._runtime_registry
 
     # ── Lifecycle ─────────────────────────────────────────────────────────
 
@@ -216,10 +234,9 @@ class ProjectContext:
                 self.vis_service, self.coordinator,
             )
 
-        # Start model registry refresh (first call only)
-        if not self._model_refresh_started:
-            self._model_refresh_started = True
-            asyncio.create_task(self.model_registry.start_periodic_refresh())
+        # No runtime-level startup handshake — runtimes are protocol-stateless.
+        # Any per-runtime warmup (e.g. Claude model-list refresh) is the
+        # runtime's internal concern, triggered lazily on first use.
 
     async def shutdown(self) -> None:
         """Stop watcher, coordinator, close index. Reverse order of start().
@@ -252,9 +269,4 @@ class ProjectContext:
         except Exception:
             logger.debug("Error closing index", exc_info=True)
 
-        # 4. Cancel model registry refresh task
-        if self._model_registry is not None:
-            try:
-                self._model_registry.stop()
-            except Exception:
-                logger.debug("Error stopping model registry", exc_info=True)
+        # No runtime-level shutdown — runtimes are protocol-stateless.

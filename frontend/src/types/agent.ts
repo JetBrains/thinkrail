@@ -138,7 +138,6 @@ export interface AgentConfig {
   maxTurns: number;
   permissionMode: string;
   streamText: boolean;
-  betas: string[];
   effort: string | null;
 }
 

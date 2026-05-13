@@ -4,23 +4,26 @@ import { createSettingsApi, type ProjectSettings } from "@/api/methods/settings.
 import { type ModelDef, setDynamicModels } from "@/utils/models.ts";
 import { type Skill, FALLBACK_SKILLS } from "@/constants/skills.ts";
 
-export type ModelSource = "api" | "cache" | "fallback";
+/** Models grouped by their owning runtime — the wire shape of `models/list`. */
+export interface RuntimeModels {
+  runtimeType: string;
+  displayName: string;
+  models: ModelDef[];
+}
 
-export interface ModelStatus {
-  source: ModelSource;
-  error: string | null;
-  lastRefresh: number | null;
+interface ListModelsResponse {
+  runtimes: RuntimeModels[];
 }
 
 interface SettingsStore {
   /** Parsed project settings from .bonsai/settings.json */
   settings: ProjectSettings | null;
-  /** Dynamic model list from backend (null = not yet loaded, use fallback) */
+  /** Models grouped by runtime (the canonical shape). */
+  runtimes: RuntimeModels[] | null;
+  /** Flat model list — derived from ``runtimes`` for callers that don't care
+   * about the runtime grouping (current picker code). Updated whenever
+   * ``runtimes`` changes. */
   models: ModelDef[] | null;
-  /** Where the current model list came from and any fetch error */
-  modelStatus: ModelStatus | null;
-  /** Whether a model refresh is in progress */
-  refreshing: boolean;
   /** Dynamic skills list from backend (falls back to FALLBACK_SKILLS) */
   skills: Skill[];
   fetchSkills: () => Promise<void>;
@@ -29,14 +32,12 @@ interface SettingsStore {
   updateSettings: (patch: Partial<ProjectSettings>) => Promise<void>;
   ensureFile: () => Promise<void>;
   fetchModels: () => Promise<void>;
-  refreshModels: () => Promise<void>;
 }
 
 export const useSettingsStore = create<SettingsStore>((set, get) => ({
   settings: null,
+  runtimes: null,
   models: null,
-  modelStatus: null,
-  refreshing: false,
   skills: FALLBACK_SKILLS,
 
   fetchSettings: async () => {
@@ -75,35 +76,18 @@ export const useSettingsStore = create<SettingsStore>((set, get) => ({
 
   fetchModels: async () => {
     try {
-      const [res, status] = await Promise.all([
-        getClient().request<ModelDef[]>("models/list"),
-        getClient().request<ModelStatus>("models/status").catch(() => null),
-      ]);
-      if (res && res.length > 0) {
-        set({ models: res });
-        setDynamicModels(res);
+      const res = await getClient().request<ListModelsResponse>("models/list");
+      const runtimes = res?.runtimes ?? [];
+      const flat = runtimes.flatMap((r) => r.models);
+      if (flat.length > 0) {
+        set({ runtimes, models: flat });
+        setDynamicModels(flat);
       }
-      if (status) set({ modelStatus: status });
     } catch (e) {
-      // Backend may not have models/list yet — silently fall back
+      // Backend may not have models/list yet — silently fall back.
+      // Each runtime owns its own refresh strategy internally; callers
+      // don't see freshness metadata or trigger manual refreshes.
       console.debug("models/list not available, using fallback:", e);
-    }
-  },
-
-  refreshModels: async () => {
-    set({ refreshing: true });
-    try {
-      const res = await getClient().request<ModelDef[]>("models/refresh");
-      if (res && res.length > 0) {
-        set({ models: res });
-        setDynamicModels(res);
-      }
-      const status = await getClient().request<ModelStatus>("models/status").catch(() => null);
-      if (status) set({ modelStatus: status });
-    } catch (e) {
-      console.error("Failed to refresh models:", e);
-    } finally {
-      set({ refreshing: false });
     }
   },
 

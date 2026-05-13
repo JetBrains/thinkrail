@@ -11,9 +11,11 @@ from app.rpc.errors import (
     INTERNAL_ERROR,
     MESSAGE_TOO_LARGE,
     TASK_NOT_FOUND,
+    UNKNOWN_RUNTIME,
     rpc_handler,
 )
 from app.agent.models import AgentConfig, MessageTooLargeError
+from app.agent.runtime import UnknownRuntimeError
 from app.agent.service import AgentService
 from app.agent.tracker import FutureNotFoundError, TaskNotFoundError
 
@@ -21,6 +23,7 @@ _handle_errors = rpc_handler(
     (TaskNotFoundError, TASK_NOT_FOUND, "Agent task not found"),
     (FutureNotFoundError, FUTURE_NOT_FOUND, "No pending request"),
     (MessageTooLargeError, MESSAGE_TOO_LARGE, "Message too large"),
+    (UnknownRuntimeError, UNKNOWN_RUNTIME, "Unknown runtime"),
 )
 
 
@@ -228,7 +231,6 @@ async def update_config(service: AgentService, **params: Any) -> dict:
         bonsai_sid,
         model=params.get("model"),
         permission_mode=params.get("permissionMode"),
-        betas=params.get("betas"),
         effort=params.get("effort"),
     )
     await bus.publish_to_session(bonsai_sid, "agent/configChanged", {

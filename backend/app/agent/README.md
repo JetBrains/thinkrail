@@ -279,13 +279,12 @@ graph TD
 | `service.py` | Facade — start sessions, send messages, interrupt turns, end sessions, continue sessions (native resume), relay responses to pending futures | context, runner, tracker, core/config, spec/service |
 | `permissions.py` | Tool permission routing. `can_use_tool()` callback that routes MCP tools to auto-approve `intercept()` functions via `tools.INTERCEPTORS` (suffix match), handles AskUserQuestion interactively, and falls back to `agent/confirmAction` for unknown tools. Accepts `tool_use_id` from the runner's FIFO queue to include in `confirmAction` notifications for precise frontend matching. Shared `_await_user_response()` helper implements configurable timeout behavior (interrupt/deny/retry) with same `request_id` reused across retry attempts; reads timeout settings from `ProjectSettings`. Emits `agent/requestExpired` on final timeout. Real MCP tool logic lives in handlers via `get_tool_context()`. | tools, tracker, models, core/settings |
 | `transcribe.py` | Audio transcription via OpenAI Whisper API. `transcribe(audio_base64, mime_type) -> str`. Lazy-imports `openai`; optional dependency for browsers without Web Speech API. See [TRANSCRIBE.md](TRANSCRIBE.md). | openai (optional) |
-| `runtime/` | Runtime-agnostic agent contract — `IAgentRuntime` Protocol, `RuntimeEvent`, `AgentEventHandler`, neutral permission types (`ToolPermissionRequest`/`Response`), `ToolCategory`. See [runtime/README.md](runtime/README.md). | models |
-| `runtime/claude/` | Claude Agent SDK runtime — `class ClaudeRuntime` (the conversation loop body, migrated verbatim from the legacy `runtime/claude/runtime.py`), `SubagentHooks` (per-session subagent / PreCompact correlation), `adapter` (event-shape builders that lock the wire format for cross-runtime parity). The only place under `runtime/` that imports `claude_agent_sdk`. Owns SDK client lifecycle, conversation loop (wait for message → query → stream events → repeat), MCP server wiring, 1M-context beta auto-injection (>200K context models), per-iteration token tracking. **SDK field semantics:** `total_cost_usd` is cumulative (assign, don't accumulate); `num_turns` is per-turn (accumulate). See [runtime/claude/README.md](runtime/claude/README.md). | runtime, models, tracker, permissions, tools, model_registry |
-| `tracker.py` | Session lifecycle (initializing/idle/running/waiting/done/error), message queue per session (`asyncio.Queue`), registry of in-flight `asyncio.Future` objects keyed by `requestId`, **interrupt flag** per session for notification routing | models |
+| `runtime/` | Runtime-agnostic agent contract — `IAgentRuntime` Protocol, `RuntimeRegistry`, neutral `ModelInfo` + capability constants, `RuntimeEvent`, `AgentEventHandler`, neutral permission types (`ToolPermissionRequest`/`Response`), `ToolCategory`. See [runtime/README.md](runtime/README.md). | models |
+| `runtime/claude/` | Claude Agent SDK runtime — `class ClaudeRuntime` (conversational loop), `ClaudeModelRegistry` (Anthropic models fetch + cache + 3-entry fallback, lazy one-shot refresh), `credentials.py` (Anthropic API key resolution from env / macOS Keychain), `SubagentHooks` (per-session subagent / PreCompact correlation), `adapter` (event-shape builders). The only place under `runtime/` that imports `claude_agent_sdk` or `anthropic`. Owns SDK client lifecycle, MCP server wiring, per-iteration token tracking. **SDK field semantics:** `total_cost_usd` is cumulative (assign, don't accumulate); `num_turns` is per-turn (accumulate). See [runtime/claude/README.md](runtime/claude/README.md). | runtime, models, tracker, permissions, tools |
+| `tracker.py` | Session lifecycle (initializing/idle/running/waiting/done/error), message queue per session (`asyncio.Queue`), registry of in-flight `asyncio.Future` objects keyed by `requestId`, **interrupt flag** per session for notification routing. Project-scoped — owned by `ProjectContext`, shared with `AgentService` and every runtime instance | models |
 | `persistence.py` | Session persistence — split storage: metadata in `.json`, events in append-only `.events.jsonl`. Save/load/list/append/delete. See [PERSISTENCE.md](PERSISTENCE.md). | core/fileio |
 | `pricing.py` | Per-model token pricing and cost estimation. Tier-based (opus/sonnet/haiku). `estimate_cost()` used by runner for live cost streaming. | — |
-| `model_registry.py` | Model registry — fetches available Claude models from the Anthropic Models API. Context windows come directly from `max_input_tokens`. Caches to `.bonsai/cache/models.json`. Periodic refresh (configurable interval via project settings). Falls back to hardcoded list when API is unavailable. Injected into `AgentService` for `contextMax` lookups. | anthropic SDK, core/settings |
-| `tools/` | Self-contained MCP tools package. Each tool is one file: schema + handler + MCP server + `intercept()`. Spec tools (`spec_search`, `spec_links`, `spec_delete`) query the SQLite index and handle multi-file cleanup — agents use standard `Write`/`Edit` for spec file creation/editing. Exports `MCP_SERVERS`, `INTERCEPTORS`, and `set_tool_context()`/`get_tool_context()` (contextvars for yolo mode). See [tools/README.md](tools/README.md), [SPECS_TOOLS.md](tools/SPECS_TOOLS.md). | claude-agent-sdk, tracker, models |
+| `tools/` | Self-contained MCP tools package. Each tool is one file: schema + handler + MCP server + `intercept()`. Spec tools (`spec_search`, `spec_links`, `spec_delete`) query the SQLite index and handle multi-file cleanup — agents use standard `Write`/`Edit` for spec file creation/editing. Exports `MCP_SERVERS`, `INTERCEPTORS`, and `set_tool_context()`/`get_tool_context()` (contextvars for yolo mode). See [tools/README.md](tools/README.md), [SPECS_TOOLS.md](tools/SPECS_TOOLS.md). Harness-abstraction PR 3 will replace this with a unified `BonsaiTool` registry + per-runtime adapter. | claude-agent-sdk, tracker, models |
 
 ## Public Interface
 
@@ -299,7 +298,7 @@ graph TD
 | `send_message` | `(bonsai_sid: str, text: str, *, is_markdown: bool = False) -> None` | Send a user message to the session, triggering a new turn. Enqueues the message; runner picks it up and calls `client.query()`. Accepted during `initializing` (queued until SDK client is ready) and `idle`. |
 | `interrupt_task` | `(bonsai_sid: str) -> None` | Cancel the current turn non-destructively. Calls `tracker.interrupt_futures()` to resolve pending futures with deny+interrupt, then calls `client.interrupt()` on the stored SDK client. The runner stays alive, the client is preserved, and the session returns to `idle` — ready for new messages with full context intact. |
 | `end_session` | `(bonsai_sid: str) -> None` | Gracefully close the session and SDK client. Session enters `done` state. |
-| `update_config` | `(bonsai_sid: str, model: str \| None = None, permission_mode: str \| None = None, betas: list[str] \| None = None, effort: str \| None = None) -> dict` | Update config on a live session. Model and permissionMode go through SDK methods; betas and effort are stored in task.config and take effect on next turn. |
+| `update_config` | `(bonsai_sid: str, model: str \| None = None, permission_mode: str \| None = None, effort: str \| None = None) -> dict` | Update config on a live session. Model and permissionMode go through the SDK client directly today; effort is stored on `task.config` and takes effect on the next turn. Harness-abstraction PR 2 will route these through `IAgentRuntime.update_running_session` instead of touching the SDK client from the service layer. |
 | `get_task` | `(bonsai_sid: str) -> AgentTask` | Get current session status and metadata |
 | `list_tasks` | `() -> list[AgentTask]` | List all sessions (initializing, idle, running, waiting, done, error) |
 | `respond` | `(bonsai_sid: str, request_id: str, response: dict) -> None` | Resolve a pending `asyncio.Future` with the client's answer (for mid-turn interactions) |
@@ -311,7 +310,7 @@ graph TD
 
 > **Multi-client note (2026-04-12):** The `notify: Callable` parameter and `rebind_notify()` method have been removed. The runtime now publishes events via the EventBus singleton (`rpc/bus.py`), which routes to all subscribed WebSocket connections. This eliminates the need to pass or rebind callbacks on reconnect.
 
-> **Runtime abstraction (2026-04-30):** The legacy `ClaudeRuntime.run_session()` function has been replaced by the `IAgentRuntime` contract. `AgentService` resolves a runtime per task (currently always `ClaudeRuntime`; plan 03 wires the registry lookup) and calls `runtime.run_session(task, exec_config, handler)`. The conversational loop body is unchanged — only the entry point moved.
+> **Runtime abstraction (2026-05-13, harness-abstraction PR 1):** `AgentService._get_runtime(task)` is a one-line `runtime_registry.get(task.config.runtime)` lookup. `AgentConfig.runtime` (defaults to `"claude"`) selects the runtime per session. The runtime is constructed once per `ProjectContext` with all dependencies wired in (tracker, spec service, coordinator, app config). `_get_context_max(task)` delegates to `runtime.get_context_window(task.config.model)` — services no longer carry model→window tables. See [runtime/README.md](runtime/README.md) and `.bonsai/design_docs/MULTI_RUNTIME_DESIGN.md`.
 
 ### Runtime Abstraction
 
@@ -321,25 +320,31 @@ The agent module no longer hardcodes the Claude SDK. `IAgentRuntime` (defined in
 class IAgentRuntime(Protocol):
     runtime_type: RuntimeType        # "claude" | "codex"
     display_name: str
+    def list_models(self) -> list[ModelInfo]: ...
+    def get_context_window(self, model_id: str) -> int: ...
     async def run_session(task, exec_config, handler) -> AgentResult: ...
     async def interrupt(task, tracker) -> None: ...
 ```
 
-`AgentService._run_background()` builds a `RuntimeExecutionConfig` from `task.config` + `cwd` + `system_prompt` + `resume_session_id`, wraps the existing `_persisting_notify` callable with `make_handler_from_notify(notify)`, and dispatches:
+`AgentService._run_background()` builds a `RuntimeExecutionConfig` from `task.config` + `cwd` + `system_prompt` + `resume_session_id`, wraps `_persisting_notify` with `make_handler_from_notify(notify)`, and dispatches via the registry:
 
 ```python
-runtime = self._make_runtime()  # plan 03 will swap this for RUNTIMES[task.config.runtime]
+runtime = self._get_runtime(task)  # registry lookup keyed on task.config.runtime
 await runtime.run_session(task, exec_config, handler)
 ```
 
 | Type | Defined in | Role |
 |------|-----------|------|
 | `IAgentRuntime` | `runtime/types.py` | Runtime contract Protocol |
-| `RuntimeExecutionConfig` | `runtime/types.py` | Per-session execution config (working_directory, model, system_prompt, resume_session_id, betas, effort, max_turns, permission_mode, stream_text) |
+| `RuntimeRegistry` | `runtime/registry.py` | Lookup table from `RuntimeType` to live runtime instance. Constructed once in `ProjectContext`; `AgentService` consumes via `runtime_registry.get(...)` |
+| `ModelInfo` | `runtime/types.py` | Neutral frozen Pydantic — `id, label, group, context_window, max_output, pricing_tier` |
+| `DEFAULT_CONTEXT_WINDOW` | `runtime/types.py` | Neutral context-window floor (200K) for unknown model ids |
+| `RuntimeExecutionConfig` | `runtime/types.py` | Per-session execution config (working_directory, model, system_prompt, resume_session_id, effort, max_turns, permission_mode, stream_text) — `model` is required, no Claude-specific defaults |
 | `RuntimeEvent` | `runtime/events.py` | `(method, params, request_id?)` envelope — distinct from the persisted `AgentEvent` discriminated union in `models.py` |
 | `AgentEventHandler` | `runtime/events.py` | Protocol for the runtime → service callback surface |
 | `make_handler_from_notify` | `runtime/events.py` | Adapter from `_persisting_notify` to `AgentEventHandler` |
 | `ToolPermissionRequest` / `ToolPermissionResponse` | `runtime/permissions.py` | Runtime-neutral permission types — `permissions.can_use_tool` operates on these |
+| `UnknownRuntimeError` / `DuplicateRuntimeError` | `runtime/registry.py` | Domain exceptions; RPC translates `UnknownRuntimeError` → `UNKNOWN_RUNTIME (-32031)` |
 
 For the cross-cutting design see [`.bonsai/design_docs/MULTI_RUNTIME_DESIGN.md`](../../../.bonsai/design_docs/MULTI_RUNTIME_DESIGN.md). The Claude implementation is documented at [`runtime/claude/README.md`](runtime/claude/README.md).
 
@@ -352,7 +357,7 @@ All models with multi-word fields use a `camelCase` alias generator (`to_camel` 
 | Model | Fields (Python / JSON wire) | Description |
 |-------|--------|-------------|
 | `AgentTask` | bonsai_sid/`bonsaiSid`, name, status, spec_ids/`specIds`, skill_id/`skillId`?, session_prompt/`sessionPrompt`?, config, session_id/`sessionId`?, created, updated | Session record. `status` is one of: `initializing`, `idle`, `running`, `waiting`, `done`, `error`. `skill_id` references the selected skill (if any). `session_prompt` holds custom instructions passed via `agent/run` or `SuggestSession`. |
-| `AgentConfig` | model, max_turns/`maxTurns`, permission_mode/`permissionMode`, stream_text/`streamText`, betas, effort | Run configuration. `effort` is `str \| None` — null for auto, or `"low"`/`"medium"`/`"high"`/`"max"`. |
+| `AgentConfig` | runtime, model, max_turns/`maxTurns`, permission_mode/`permissionMode`, stream_text/`streamText`, effort | Run configuration. `runtime: RuntimeType` (defaults to `"claude"`) selects which `IAgentRuntime` handles the session. `effort` is `str \| None` — null for auto, or `"low"`/`"medium"`/`"high"`/`"max"`. `extra="ignore"` so persisted session files that still carry the removed `betas` field round-trip cleanly. |
 | `AgentEvent` | bonsai_sid/`bonsaiSid`, session_id/`sessionId`, event_type/`eventType`, payload | Serializable event to send as notification |
 | `AgentResult` | bonsai_sid/`bonsaiSid`, session_id/`sessionId`, result, cost_usd/`costUsd`, turns, duration_ms/`durationMs`, usage | Turn result (sent with `turnComplete`) or final session result (sent with `done`) |
 | `MessageTooLargeError` | message, msg_tokens, remaining_tokens | Exception raised by `send_message()` when a user message would consume >80% of remaining context. Mapped to JSON-RPC error code `-32014`. |
@@ -558,11 +563,10 @@ exec_config = RuntimeExecutionConfig(
     permission_mode=task.config.permission_mode,
     max_turns=task.config.max_turns,
     effort=task.config.effort,
-    betas=list(task.config.betas),
     stream_text=task.config.stream_text,
 )
 handler = make_handler_from_notify(notify)
-runtime = self._make_runtime()  # plugin_dir / model_registry / etc. injected via constructor
+runtime = self._get_runtime(task)  # registry.get(task.config.runtime); deps wired in ProjectContext
 await runtime.run_session(task, exec_config, handler)
 ```
 
@@ -574,7 +578,7 @@ The agent system has a three-layer approach to context window management: Preven
 
 - **System prompt budget warnings** — `build_context_structured()` computes `budgetRatio` (system prompt tokens / context window). Warnings emitted at 40% and 80% thresholds. Surfaced in `prepare_agent` and `update_draft` RPC responses.
 - **Message size estimation** — `send_message()` estimates incoming message tokens (heuristic: `len(text) / 6`). If the message would consume >80% of remaining context, raises `MessageTooLargeError` (RPC error code `-32014`).
-- **Context max fallback** — `_get_context_max()` uses `_FALLBACK` from `model_registry.py` when the live registry is unavailable, instead of defaulting to 200K for all models.
+- **Context max via runtime** — `_get_context_max(task)` delegates to `runtime.get_context_window(task.config.model)`. The runtime owns its own model→window lookup (and any fallback for ids it doesn't recognise). If the registry isn't wired or the runtime is unknown, the service returns the neutral `DEFAULT_CONTEXT_WINDOW` (200K).
 
 ### Detection
 

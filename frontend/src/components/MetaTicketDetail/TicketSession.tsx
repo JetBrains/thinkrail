@@ -89,7 +89,6 @@ export function TicketSession({ ticket, embeddedSid, onSessionStarted }: TicketS
           maxTurns: isExecute ? 100 : 50,
           permissionMode: "default",
           streamText: true,
-          betas: [],
           effort: null,
         },
         name: isExecute

@@ -18,6 +18,12 @@ _CAMEL_CONFIG = ConfigDict(alias_generator=to_camel, populate_by_name=True)
 
 TaskStatus = Literal["draft", "initializing", "idle", "running", "waiting", "done", "error"]
 
+# Declared here (rather than in app.agent.runtime.types) because ``AgentConfig``
+# embeds it, and ``runtime.types`` already imports from this module. The
+# canonical export lives in ``app.agent.runtime`` for consumers; this is the
+# definitional site.
+RuntimeType = Literal["claude", "codex"]
+
 
 class SubsessionType(str, Enum):
     """Type of subsession — determines return flow behavior."""
@@ -29,15 +35,21 @@ class SubsessionType(str, Enum):
 # ─── Interaction request/response models ──────────────────────────────────────
 
 class AgentConfig(BaseModel):
-    """Run configuration passed to the Claude Agent SDK."""
+    """User-facing run configuration. Persisted per session."""
 
-    model_config = _CAMEL_CONFIG
+    # ``extra="ignore"`` so older session files round-trip without raising
+    # if they carry fields that have since been removed from this model.
+    model_config = ConfigDict(
+        alias_generator=to_camel,
+        populate_by_name=True,
+        extra="ignore",
+    )
 
+    runtime: RuntimeType = "claude"
     model: str = "claude-sonnet-4-6"
     max_turns: int = 50
     permission_mode: str = "default"
     stream_text: bool = True
-    betas: list[str] = Field(default_factory=list)
     effort: str | None = None
 
 

@@ -235,7 +235,6 @@ export function SessionStatusLine({
 }: SessionStatusLineProps) {
   // ── Settings store ──
   const dynamicModels = useSettingsStore((s) => s.models);
-  const modelStatus = useSettingsStore((s) => s.modelStatus);
   const MODEL_OPTIONS = useMemo(() => buildModelOptions(), [dynamicModels]);
   const categoryVisibility = useUiStore((s) => s.chatCategoryVisibility);
   const toggleCategory = useUiStore((s) => s.toggleChatCategory);
@@ -248,12 +247,6 @@ export function SessionStatusLine({
 
   const activeKey = currentModelOptionKey(model);
   const activeOption = MODEL_OPTIONS.find((o) => o.key === activeKey);
-  const modelsStale = modelStatus !== null && modelStatus.source !== "api";
-  const modelsStaleTitle = modelsStale
-    ? `Model list may be stale (source: ${modelStatus!.source}).` +
-      (modelStatus!.error ? `\n\nReason: ${modelStatus!.error}` : "") +
-      "\n\nFix: set ANTHROPIC_API_KEY, or run `claude auth login` so Bonsai can reuse the managed key."
-    : undefined;
 
   // ── Dropdowns (model, permission, status) ──
   const modelDd = useDropdown();
@@ -296,12 +289,8 @@ export function SessionStatusLine({
           className={`ssl-selector-btn${disabled ? " ssl-selector-disabled" : ""}`}
           onClick={() => !disabled && modelDd.toggle()}
           disabled={disabled}
-          title={modelsStaleTitle}
         >
           {activeOption?.label ?? model}
-          {modelsStale && (
-            <span style={{ color: "var(--gold)", marginLeft: "var(--space-xs)" }}>⚠</span>
-          )}
           <ChevronDown />
         </button>
         {modelDd.open && (

@@ -89,7 +89,6 @@ export function NewProjectScreen() {
           maxTurns: 50,
           permissionMode: "default",
           streamText: true,
-          betas: [],
           effort: null,
         },
         name,

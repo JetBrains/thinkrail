@@ -9,7 +9,7 @@ spawning a refinement subsession.
 
 from __future__ import annotations
 
-from .credentials import resolve_anthropic_api_key
+from .runtime.claude.credentials import resolve_anthropic_api_key
 
 DEFAULT_MODEL = "claude-haiku-4-5"
 MAX_TOKENS = 2048

@@ -4,7 +4,7 @@ type: architecture-design
 status: active
 title: Multi-Runtime Agent Architecture
 covers:
-- backend/app/agent/runtime.
+- backend/app/agent/runtime/
 - backend/app/agent/permissions.py
 - backend/app/agent/service.py
 tags:
@@ -15,7 +15,7 @@ tags:
 ---
 # Multi-Runtime Agent Architecture
 
-> Status: **In progress** | Created: 2026-04-29
+> Status: **In progress** | Created: 2026-04-29 | Last updated: 2026-05-13 (after harness-abstraction PR 1)
 
 ## Overview
 
@@ -27,6 +27,19 @@ exposes a session-based protocol behind the same interface.
 This doc describes the end state and the reasoning behind the
 architectural choices. Read it for *why* the architecture is shaped the
 way it is.
+
+## Current status (2026-05-13)
+
+| Layer | State |
+|-------|-------|
+| `IAgentRuntime` contract + `RuntimeRegistry` | ✅ Shipped (harness-abstraction PR 1) |
+| Runtime-owned model catalog + capability flags | ✅ Shipped (harness-abstraction PR 1) |
+| `AgentConfig.runtime` field + per-runtime dispatch | ✅ Shipped (harness-abstraction PR 1) |
+| Permission engine neutralization | ⏳ Planned — harness-abstraction PR 2 (still uses Claude-shaped mode names) |
+| Unified `BonsaiTool` registry | ⏳ Planned — harness-abstraction PR 3 |
+| `service.update_config` via `IAgentRuntime` | ⏳ Planned — harness-abstraction PR 2 |
+| `revise.py` / `context.py` tokenizer behind runtime | ⏳ Planned — harness-abstraction PR 3 |
+| Codex runtime | ⏳ Pending (`runtime/codex/`) — unblocks after PR 2 + PR 3 |
 
 ## Goals
 
@@ -56,15 +69,19 @@ way it is.
 ## Architecture overview
 
 ```
-┌─────────────────────────────────────────────────────┐
-│  AgentService                                        │
-│  - prepare_task / start_draft / interrupt_task       │
-│  - resolves runtime via RUNTIMES[task.config.runtime]│
-└──────────────────┬──────────────────────────────────┘
+┌──────────────────────────────────────────────────────────────┐
+│  AgentService                                                 │
+│  - prepare_task / start_draft / interrupt_task                │
+│  - _get_runtime(task) → self.runtime_registry.get(            │
+│                            task.config.runtime)               │
+│  - _get_context_max(task) → runtime.get_context_window(...)   │
+└──────────────────┬───────────────────────────────────────────┘
                    │ runtime.run_session(task, exec_config, handler)
                    ▼
        ┌───────────────────────┐
        │  IAgentRuntime        │  Protocol — runtime contract
+       │  - list_models        │
+       │  - get_context_window │
        │  - run_session        │
        │  - interrupt          │
        └───────┬───────────────┘
@@ -90,6 +107,9 @@ class IAgentRuntime(Protocol):
     runtime_type: RuntimeType        # "claude" | "codex"
     display_name: str
 
+    def list_models(self) -> list[ModelInfo]: ...
+    def get_context_window(self, model_id: str) -> int: ...
+
     async def run_session(
         self,
         task: AgentTask,
@@ -100,13 +120,62 @@ class IAgentRuntime(Protocol):
     async def interrupt(self, task: AgentTask, tracker: Tracker) -> None: ...
 ```
 
-- One instance per `AgentService` (instances are stateful re: shared
-  deps but stateless re: per-session data — tracker, hooks etc. are
-  built per call).
+- A runtime is the declaration that "this kind of agent is supported."
+  Protocol is intentionally minimal — six surfaces total.
+- **Protocol-stateless.** No `startup` / `shutdown` handshake. Any
+  per-runtime warmup (lazy model-list refresh, credential resolution)
+  is the implementation's private concern, triggered on first use.
+- One instance per `ProjectContext`, constructed with all dependencies
+  wired in (tracker, spec service, coordinator, app config). Re-used
+  across every session that runtime handles.
 - `run_session` owns the conversational loop: `tracker.get_next_message`
   → query → stream events → repeat. Exits on `END_SIGNAL`.
 - `interrupt` is the cancellation hook. No `cancel_event`, no polling.
   Each runtime decides what "interrupt the current turn" means.
+- `list_models` returns the runtime's current best view. How the runtime
+  sources it (static list, lazy fetch, periodic refresh, remote API) is
+  invisible to callers. There is no `refresh_models` or `models_status`
+  on the protocol — those leak caching strategy.
+- `get_context_window(model_id)` returns the context-window size for
+  the runtime's own models, falling back to a neutral
+  `DEFAULT_CONTEXT_WINDOW` for unknown ids. Services consult the runtime
+  rather than maintaining their own model→window tables.
+
+### `RuntimeRegistry`
+
+`backend/app/agent/runtime/registry.py` — lookup table from
+`RuntimeType` to live `IAgentRuntime` instance.
+
+```python
+class RuntimeRegistry:
+    def register(self, runtime: IAgentRuntime) -> None: ...
+    def get(self, runtime_type: RuntimeType) -> IAgentRuntime: ...
+    def has(self, runtime_type: RuntimeType) -> bool: ...
+    def all(self) -> list[IAgentRuntime]: ...   # sorted by runtime_type
+```
+
+Domain exceptions: `RuntimeRegistryError`, `DuplicateRuntimeError`,
+`UnknownRuntimeError`. The RPC layer translates `UnknownRuntimeError` to
+`UNKNOWN_RUNTIME (-32031)` so a client sending an unregistered runtime
+key gets a clean domain error instead of an opaque `INTERNAL_ERROR`.
+
+`ProjectContext.runtime_registry` lazy property constructs and registers
+the available runtimes once per project. No `start_all` / `stop_all` —
+the registry just holds the instances.
+
+### `ModelInfo`
+
+```python
+class ModelInfo(BaseModel):           # frozen
+    id: str
+    label: str
+    group: str                         # "current" | "legacy"
+    context_window: int
+    max_output: int
+    pricing_tier: str
+
+DEFAULT_CONTEXT_WINDOW = 200_000             # neutral floor
+```
 
 ### `RuntimeEvent` and `AgentEventHandler`
 
@@ -155,6 +224,13 @@ class ToolPermissionResponse(BaseModel):
 translating its native shape to/from these.
 
 ## Permission flow
+
+> **Mode names today are still Claude-SDK-shaped (`bypassPermissions` /
+> `acceptEdits` / `plan` / `default`).** Harness-abstraction PR 2 will
+> rekey them to neutral names (`bypass` / `accept_edits` / `auto` /
+> `plan` / `default`) and add a per-runtime translation layer at the
+> `runtime/<name>/permissions_adapter.py` boundary. The table below is
+> the *current* shipped behaviour.
 
 1. Runtime intercepts a tool call → builds `ToolPermissionRequest` (with
    the *current* `permission_mode` from `task.config`).
@@ -249,14 +325,31 @@ interval). The callback design has zero latency and zero extra code.
 
 ## Runtime selection
 
-- `AgentConfig.runtime: Literal["claude", "codex"] = "claude"`. Default
-  keeps existing on-disk sessions backward-compat.
-- `AgentService._launch_runner` resolves
-  `RUNTIMES[task.config.runtime]`. Unknown runtime → service rejects at
-  draft creation, not at start.
-- Frontend `RuntimePicker` fetches `runtime/list` on app start. Codex is
-  `available: false` until binary discovery / install / login wiring is
-  in place.
+- `AgentConfig.runtime: RuntimeType = "claude"`. Default keeps existing
+  on-disk sessions backward-compat. `RuntimeType` is `Literal["claude",
+  "codex"]` — declared in `app/agent/models.py` to break a circular
+  import with `runtime/types.py`, re-exported via `runtime/__init__.py`.
+- `AgentService._get_runtime(task)` is a one-line registry lookup:
+  `self.runtime_registry.get(task.config.runtime)`. Unknown runtime
+  raises `UnknownRuntimeError` → RPC layer surfaces `UNKNOWN_RUNTIME`.
+- Frontend model picker hydrates from the `models/list` RPC, which now
+  returns models grouped by runtime:
+
+  ```json
+  {
+    "runtimes": [
+      {
+        "runtimeType": "claude",
+        "displayName": "Claude Code",
+        "models": [ { "id": "...", "label": "...", "group": "current", ... }, ... ]
+      }
+    ]
+  }
+  ```
+
+  `displayName` ships from the runtime — frontends don't hardcode a
+  `runtime_type → display_name` mapping. Sorted by `runtime_type` for
+  deterministic rendering.
 
 ## Design choices
 
@@ -274,24 +367,39 @@ interval). The callback design has zero latency and zero extra code.
 ```
 backend/app/agent/
   runtime/
-    __init__.py            # public exports
-    types.py               # IAgentRuntime, RuntimeExecutionConfig, RuntimeType
+    __init__.py            # public exports — incl. RuntimeRegistry, ModelInfo
+    types.py               # IAgentRuntime, RuntimeExecutionConfig, ModelInfo, DEFAULT_CONTEXT_WINDOW
+    registry.py            # RuntimeRegistry + RuntimeRegistryError / DuplicateRuntimeError / UnknownRuntimeError
     events.py              # RuntimeEvent, AgentEventHandler, make_handler_from_notify
-    permissions.py         # ToolPermissionRequest/Response, ToolCategory
+    permissions.py         # ToolPermissionRequest/Response, ToolCategory  (engine lives one level up)
     claude/
       __init__.py          # exports ClaudeRuntime
       runtime.py           # ClaudeRuntime — IAgentRuntime impl
+      models.py            # ClaudeModelRegistry (lazy refresh, _FALLBACK, neutral ModelInfo projection)
+      credentials.py       # resolve_anthropic_api_key (env + macOS Keychain)
       hooks.py             # SubagentHooks (subagent / PreCompact correlation)
       adapter.py           # event-shape builders
-  permissions.py           # can_use_tool engine, claude_can_use_tool_adapter
+  permissions.py           # can_use_tool engine, claude_can_use_tool_adapter (PR 2: latter moves under runtime/claude/)
   service.py               # AgentService — wires runtime to tasks
-  tools/                   # bonsai MCP tools (interceptors)
+  tools/                   # bonsai MCP tools (interceptors; PR 3: unified BonsaiTool registry)
 ```
 
 ## Acceptance / health
 
-- Backend test suite green (`uv run pytest`).
+Current:
+
+- Backend test suite green (`uv run pytest` — 1020+).
 - Zero `from app.agent.runner` imports remain.
-- Zero `claude_agent_sdk` imports outside `runtime/claude/`.
-- All `PermissionResultAllow|Deny` references contained to
-  `claude_can_use_tool_adapter`.
+- Provider SDK imports under `runtime/claude/` confined to:
+  - `runtime/claude/runtime.py` (claude_agent_sdk)
+  - `runtime/claude/models.py` (anthropic, models endpoint)
+
+Out-of-directory SDK imports the project explicitly tracks (slated for
+PR 2 / PR 3 — see `harness_refactoring.md`):
+
+- `app/agent/permissions.py` (claude_agent_sdk) → PR 2
+- `app/agent/tools/*.py` (claude_agent_sdk) → PR 3
+- `app/agent/service.py:update_config` (`client.set_model` /
+  `client.set_permission_mode` direct calls) → PR 2
+- `app/agent/context.py` (anthropic tokenizer fallback) → PR 3
+- `app/agent/revise.py` (anthropic) → PR 3

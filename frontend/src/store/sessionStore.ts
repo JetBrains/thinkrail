@@ -91,7 +91,7 @@ interface SessionStore {
     response: unknown,
   ) => void;
 
-  updateConfig: (bonsaiSid: string, config: { model?: string; permissionMode?: string; betas?: string[]; effort?: string | null }) => Promise<void>;
+  updateConfig: (bonsaiSid: string, config: { model?: string; permissionMode?: string; effort?: string | null }) => Promise<void>;
   restartSession: (bonsaiSid: string) => Promise<void>;
 
   continueSession: (bonsaiSid: string) => Promise<void>;
@@ -178,7 +178,7 @@ function reconstructCost(events: AgentEvent[]): number {
  * Scans for turnComplete/interrupted events with usage data and
  * toolCallStart events for tool/file tracking.
  */
-function reconstructContextUsage(events: AgentEvent[], model: string, _betas: string[] = []): ContextUsage {
+function reconstructContextUsage(events: AgentEvent[], model: string): ContextUsage {
   const cu = emptyContextUsage();
   cu.contextMax = getContextWindowSize(model);
   const toolUseIdToName = new Map<string, string>();
@@ -402,7 +402,6 @@ function ensureSession(
     status: "initializing",
     model: "",
     permissionMode: "default",
-    betas: [],
     effort: null,
     maxTurns: 50,
     startedAt: Date.now(),
@@ -602,7 +601,6 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
         maxTurns: 50,
         permissionMode: "default",
         streamText: true,
-        betas: [],
         effort: null,
       },
       name,
@@ -633,7 +631,6 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
         status: resolvedStatus,
         model: config.model,
         permissionMode: config.permissionMode,
-        betas: config.betas ?? [],
         effort: config.effort ?? null,
         maxTurns: config.maxTurns,
         startedAt: Date.now(),
@@ -685,7 +682,6 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
         status: "draft",
         model: config.model,
         permissionMode: config.permissionMode,
-        betas: config.betas ?? [],
         effort: config.effort ?? null,
         maxTurns: config.maxTurns,
         startedAt: Date.now(),
@@ -733,7 +729,6 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
         ...(changes.config ? {
           model: changes.config.model,
           permissionMode: changes.config.permissionMode,
-          betas: changes.config.betas ?? [],
           effort: changes.config.effort ?? null,
           maxTurns: changes.config.maxTurns,
         } : {}),
@@ -961,8 +956,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
 
     const restoredCost = reconstructCost(events);
     const restoredModel = (data.config?.model as string) ?? "";
-    const restoredBetas = (data.config?.betas as string[]) ?? [];
-    const restoredCtx = reconstructContextUsage(events, restoredModel, restoredBetas);
+    const restoredCtx = reconstructContextUsage(events, restoredModel);
     const diskMetrics = (data?.metrics ?? {}) as Record<string, unknown>;
 
     // Restore system prompt from sessionStart event payload
@@ -981,7 +975,6 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
         : "done",
       model: restoredModel,
       permissionMode: (data.config?.permissionMode as string) ?? "default",
-      betas: restoredBetas,
       effort: (data.config?.effort as string) ?? null,
       maxTurns: (data.config?.maxTurns as number) ?? 50,
       startedAt: new Date(data.createdAt).getTime(),
@@ -1088,8 +1081,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
 
         const restoredCost = reconstructCost(events);
         const entryModel = (data?.config?.model as string) ?? entry.model ?? "";
-        const entryBetas = (data?.config?.betas as string[]) ?? [];
-        const restoredCtx = reconstructContextUsage(events, entryModel, entryBetas);
+        const restoredCtx = reconstructContextUsage(events, entryModel);
         const diskMetrics = (data?.metrics ?? {}) as Record<string, unknown>;
 
         // Restore system prompt: from entry (drafts) or from sessionStart event payload
@@ -1105,7 +1097,6 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
           status: entry.active && !entry.inTracker ? "done" : ((entry.status as SessionStatus) ?? "idle"),
           model: entryModel,
           permissionMode: (data?.config?.permissionMode as string) ?? "default",
-          betas: entryBetas,
           effort: (data?.config?.effort as string) ?? null,
           maxTurns: (data?.config?.maxTurns as number) ?? 50,
           startedAt: new Date(entry.createdAt).getTime(),
@@ -1288,7 +1279,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
               result: session.status === "done" ? "done" : "error",
               costUsd: session.metrics.costUsd, turns: session.metrics.turns,
               durationMs: session.metrics.durationMs, model: session.model,
-              config: { model: session.model, maxTurns: session.maxTurns, permissionMode: session.permissionMode, streamText: true, betas: session.betas ?? [], effort: session.effort ?? null },
+              config: { model: session.model, maxTurns: session.maxTurns, permissionMode: session.permissionMode, streamText: true, effort: session.effort ?? null },
               events: session.events,
             },
           ],
@@ -1496,14 +1487,12 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
       const session = s.sessions.get(bonsaiSid);
       if (!session) return s;
       const newModel = (params.model as string) ?? session.model;
-      const newBetas = (params.betas as string[]) ?? session.betas;
       const contextMax = getContextWindowSize(newModel);
       const next = new Map(s.sessions);
       next.set(bonsaiSid, {
         ...session,
         model: newModel,
         permissionMode: (params.permissionMode as string) ?? session.permissionMode,
-        betas: newBetas,
         effort: (params.effort as string | null) ?? session.effort,
         metrics: {
           ...session.metrics,
@@ -1896,7 +1885,6 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
             filePaths: (params.filePaths as string[]) ?? existing.filePaths,
             model: (config.model as string) || existing.model,
             permissionMode: (config.permissionMode as string) || existing.permissionMode,
-            betas: (config.betas as string[]) ?? existing.betas,
             effort: (config.effort as string) ?? existing.effort,
             maxTurns: (config.maxTurns as number) ?? existing.maxTurns,
             status: (params.status as Session["status"]) ?? existing.status,
@@ -1911,7 +1899,6 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
             status: (params.status as Session["status"]) ?? "draft",
             model: (config.model as string) || "",
             permissionMode: (config.permissionMode as string) || "default",
-            betas: (config.betas as string[]) ?? [],
             effort: (config.effort as string) ?? null,
             maxTurns: (config.maxTurns as number) ?? 50,
             startedAt: Date.now(),
@@ -2045,8 +2032,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
 
       const restoredCost = reconstructCost(events);
       const restoredModel = (data.config?.model as string) ?? "";
-      const restoredBetas = (data.config?.betas as string[]) ?? [];
-      const restoredCtx = reconstructContextUsage(events, restoredModel, restoredBetas);
+      const restoredCtx = reconstructContextUsage(events, restoredModel);
       const diskMetrics = (data?.metrics ?? {}) as Record<string, unknown>;
 
       const session: Session = {
@@ -2060,7 +2046,6 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
           : "done",
         model: restoredModel,
         permissionMode: (data.config?.permissionMode as string) ?? "default",
-        betas: restoredBetas,
         effort: (data.config?.effort as string) ?? null,
         maxTurns: (data.config?.maxTurns as number) ?? 50,
         startedAt: new Date(data.createdAt).getTime(),

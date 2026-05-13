@@ -292,7 +292,6 @@ export const classicRenderers: ViewRenderers = {
                 maxTurns: currentSession?.maxTurns ?? 50,
                 permissionMode: currentSession?.permissionMode ?? "default",
                 streamText: true,
-                betas: currentSession?.betas ?? [],
                 effort: currentSession?.effort ?? null,
               },
             });
@@ -389,7 +388,6 @@ export const classicRenderers: ViewRenderers = {
                 maxTurns: currentSession?.maxTurns ?? 50,
                 permissionMode: currentSession?.permissionMode ?? "default",
                 streamText: true,
-                betas: currentSession?.betas ?? [],
                 effort: currentSession?.effort ?? null,
               },
             });

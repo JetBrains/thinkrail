@@ -1,11 +1,11 @@
-"""Tests for app.agent.credentials — resolving an Anthropic API key."""
+"""Tests for app.agent.runtime.claude.credentials — resolving an Anthropic API key."""
 
 from __future__ import annotations
 
 import subprocess
 from unittest.mock import patch
 
-from app.agent import credentials
+from app.agent.runtime.claude import credentials
 
 
 class TestEnvVar:

@@ -57,7 +57,7 @@ class TestBasicLifecycle:
         _ = ctx.trash_service
         _ = ctx.board_service
         _ = ctx.vis_service
-        _ = ctx.model_registry
+        _ = ctx.runtime_registry
 
         await ctx.shutdown()
 
@@ -186,7 +186,7 @@ class TestLazyServiceCaching:
             ctx.vis_service,
             ctx.board_service,
             ctx.trash_service,
-            ctx.model_registry,
+            ctx.runtime_registry,
         ]
         # All are distinct objects
         ids = [id(s) for s in services]
@@ -222,11 +222,11 @@ class TestCrossInjection:
 
         await ctx.shutdown()
 
-    async def test_agent_service_has_model_registry(self, tmp_path: Path) -> None:
+    async def test_agent_service_has_runtime_registry(self, tmp_path: Path) -> None:
         ctx = _make_ctx(tmp_path)
         await ctx.start()
 
-        assert ctx.agent_service.model_registry is ctx.model_registry
+        assert ctx.agent_service.runtime_registry is ctx.runtime_registry
 
         await ctx.shutdown()
 

@@ -1,4 +1,4 @@
-"""Tests for app.agent.model_registry — classification and status reporting."""
+"""Tests for app.agent.runtime.claude.models — classification and status."""
 
 from __future__ import annotations
 
@@ -7,22 +7,22 @@ from unittest.mock import patch
 
 import pytest
 
-from app.agent.model_registry import (
-    ModelInfo,
-    ModelRegistry,
+from app.agent.runtime.claude.models import (
+    ClaudeModelRegistry,
+    _ClaudeRow,
     _classify_current,
     _parse_version,
 )
 
 
-def _mi(model_id: str) -> ModelInfo:
-    return ModelInfo(
+def _row(model_id: str, context_window: int = 200_000) -> _ClaudeRow:
+    return _ClaudeRow(
         id=model_id,
         label=model_id,
         group="legacy",
-        contextWindow=200_000,
-        maxOutput=64_000,
-        pricingTier="sonnet",
+        context_window=context_window,
+        max_output=64_000,
+        pricing_tier="sonnet",
     )
 
 
@@ -34,7 +34,6 @@ class TestParseVersion:
         assert _parse_version("claude-opus-4-5-20251101") == (4, 5)
 
     def test_date_only_suffix_means_zero_minor(self) -> None:
-        # "claude-opus-4-20250514" is Opus 4.0 (original release), not Opus 4.20250514.
         assert _parse_version("claude-opus-4-20250514") == (4, 0)
 
     def test_no_version_returns_none(self) -> None:
@@ -43,10 +42,7 @@ class TestParseVersion:
 
 class TestClassifyCurrent:
     def test_highest_version_per_family_wins(self) -> None:
-        # Mirrors the actual shape of what the Anthropic API returns today:
-        # a mix of plain "-X-Y", dated "-X-Y-YYYYMMDD", and legacy
-        # ".0"-release "-X-YYYYMMDD" ids.
-        models = [_mi(x) for x in [
+        models = [_row(x) for x in [
             "claude-opus-4-6",
             "claude-opus-4-7",
             "claude-opus-4-5-20251101",
@@ -67,34 +63,32 @@ class TestClassifyCurrent:
         ]
 
     def test_single_model_per_family(self) -> None:
-        models = [_mi("claude-opus-4-7")]
+        models = [_row("claude-opus-4-7")]
         _classify_current(models)
         assert models[0].group == "current"
 
     def test_dated_variant_does_not_beat_undated(self) -> None:
-        models = [_mi("claude-opus-4-5"), _mi("claude-opus-4-5-20251101")]
+        models = [_row("claude-opus-4-5"), _row("claude-opus-4-5-20251101")]
         _classify_current(models)
-        # Both parse to (4, 5) — first one encountered wins as current.
         currents = [m for m in models if m.group == "current"]
         assert len(currents) == 1
 
     def test_unknown_family_stays_legacy(self) -> None:
-        models = [_mi("claude-something-4-7")]
+        models = [_row("claude-something-4-7")]
         _classify_current(models)
         assert models[0].group == "legacy"
 
     def test_missing_version_stays_legacy(self) -> None:
-        models = [_mi("claude-opus-latest")]
+        models = [_row("claude-opus-latest")]
         _classify_current(models)
         assert models[0].group == "legacy"
 
 
 class TestRegistryStatus:
     def test_initial_status_is_fallback(self, tmp_path: Path) -> None:
-        reg = ModelRegistry(project_root=tmp_path)
-        # Trigger get_models to populate _source from the fallback branch.
-        reg.get_models()
-        status = reg.get_status()
+        reg = ClaudeModelRegistry(project_root=tmp_path)
+        reg.list_models()
+        status = reg.models_status()
         assert status["source"] == "fallback"
         assert status["error"] is None
         assert status["lastRefresh"] is None
@@ -102,11 +96,11 @@ class TestRegistryStatus:
     @pytest.mark.asyncio
     async def test_refresh_without_credential_records_error(self, tmp_path: Path, monkeypatch) -> None:
         monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
-        with patch("app.agent.model_registry.resolve_anthropic_api_key", return_value=None):
-            reg = ModelRegistry(project_root=tmp_path)
-            await reg.refresh()
+        with patch("app.agent.runtime.claude.models.resolve_anthropic_api_key", return_value=None):
+            reg = ClaudeModelRegistry(project_root=tmp_path)
+            await reg.refresh_models()
 
-        status = reg.get_status()
+        status = reg.models_status()
         assert status["source"] == "fallback"
         assert status["error"] is not None
         assert "api key" in status["error"].lower()
@@ -114,12 +108,12 @@ class TestRegistryStatus:
 
 class TestSaveCacheLazyBonsai:
     def test_save_cache_skips_when_bonsai_missing(self, tmp_path: Path) -> None:
-        reg = ModelRegistry(project_root=tmp_path)
+        reg = ClaudeModelRegistry(project_root=tmp_path)
         reg._save_cache([{"id": "claude-x"}])
         assert not (tmp_path / ".bonsai").exists()
 
     def test_save_cache_writes_when_bonsai_exists(self, tmp_path: Path) -> None:
         (tmp_path / ".bonsai").mkdir()
-        reg = ModelRegistry(project_root=tmp_path)
+        reg = ClaudeModelRegistry(project_root=tmp_path)
         reg._save_cache([{"id": "claude-x"}])
         assert (tmp_path / ".bonsai" / "cache" / "models.json").is_file()

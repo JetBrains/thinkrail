@@ -480,19 +480,6 @@ def _truncate_transcript(transcript: str, max_chars: int) -> str:
     return "\n\n".join(result)
 
 
-def _get_model_context_max(model_id: str) -> int:
-    """Look up the context window for a model from the hardcoded fallback.
-
-    Used for budget estimation in contexts where the live model registry
-    is not available (e.g. context.py has no access to the service).
-    """
-    from app.agent.model_registry import _FALLBACK
-    for m in _FALLBACK:
-        if m["id"] == model_id:
-            return m["contextWindow"]
-    return 200_000
-
-
 SECTION_LABELS: dict[str, str] = {
     "general": "General Instructions",
     "task": "Skill / Task",
@@ -571,6 +558,7 @@ async def build_context_structured(
     project_root: Path,
     config: AgentConfig,
     spec_service: SpecService,
+    context_max: int,
     plugin_dir: Path | None = None,
     session_prompt: str | None = None,
     file_paths: list[str] | None = None,
@@ -635,7 +623,6 @@ async def build_context_structured(
         sections.append(section)
 
     total_tokens = sum(s["tokens"] for s in sections)
-    context_max = _get_model_context_max(config.model) if config else 200_000
     ratio = total_tokens / context_max if context_max > 0 else 0
     warnings: list[str] = []
     if ratio > 0.8:

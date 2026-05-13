@@ -9,7 +9,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from app.agent.model_registry import ModelRegistry
+    from app.agent.runtime import RuntimeRegistry
 
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from jsonrpcserver import async_dispatch
@@ -67,8 +67,6 @@ from app.rpc.methods.settings import (
     get_settings,
     list_models,
     list_skills,
-    models_status,
-    refresh_models,
     update_settings,
 )
 from app.rpc.methods.subsessions import (
@@ -197,8 +195,6 @@ METHODS = {
     "settings/update": update_settings,
     "settings/ensureFile": ensure_settings,
     "models/list": list_models,
-    "models/refresh": refresh_models,
-    "models/status": models_status,
     "skills/list": list_skills,
 }
 
@@ -218,7 +214,7 @@ def _bind_methods(
     agent_service: AgentService,
     vis_service: VisualizationService,
     board_service: BoardService,
-    model_registry: ModelRegistry,
+    runtime_registry: "RuntimeRegistry",
     trash_service: "TrashService | None" = None,
 ) -> dict:
     """Bind each handler in METHODS to its owning service via partial."""
@@ -237,7 +233,7 @@ def _bind_methods(
         elif name.startswith("skills/"):
             bound[name] = partial(handler, config)
         elif name.startswith("models/"):
-            bound[name] = partial(handler, model_registry)
+            bound[name] = partial(handler, runtime_registry)
         else:
             bound[name] = partial(handler, agent_service)
     return bound
@@ -356,7 +352,7 @@ def register_routes(app: FastAPI, app_store: "AppStore | None" = None) -> None:
 
             bound_methods = _bind_methods(
                 config, ctx.spec_service, ctx.agent_service, ctx.vis_service,
-                ctx.board_service, ctx.model_registry, ctx.trash_service,
+                ctx.board_service, ctx.runtime_registry, ctx.trash_service,
             )
 
             # Notify existing clients BEFORE subscribing the new one,
