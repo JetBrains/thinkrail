@@ -3,7 +3,7 @@ import type { MetaTicket } from "@/types/board.ts";
 import type { SessionStatus } from "@/types/session.ts";
 import { useBoardStore } from "@/store/boardStore.ts";
 import { useSessionStore } from "@/store/sessionStore.ts";
-import { DEFAULT_MODEL } from "@/utils/models.ts";
+import { buildDefaultSessionConfig } from "@/utils/sessionConfig.ts";
 import { ChatStream } from "@/components/ChatStream/ChatStream.tsx";
 import { InputArea } from "@/components/ChatStream/InputArea.tsx";
 import { MarkdownEditor } from "@/components/MarkdownEditor/MarkdownEditor.tsx";
@@ -66,13 +66,7 @@ export function TicketDescriptionView({ ticket, onTicketUpdated }: TicketDescrip
     try {
       const sid = await createDraft({
         specIds: [],
-        config: {
-          model: DEFAULT_MODEL,
-          maxTurns: 50,
-          permissionMode: "default",
-          streamText: true,
-          effort: null,
-        },
+        config: await buildDefaultSessionConfig(),
         name: `Describe: ${ticket.title}`,
         skillId: "ticket-describe",
         metaTicketId: ticket.id,

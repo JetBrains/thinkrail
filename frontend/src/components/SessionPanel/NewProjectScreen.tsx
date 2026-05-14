@@ -3,7 +3,7 @@ import { useSessionStore } from "@/store/sessionStore";
 import { useUiStore } from "@/store/uiStore";
 import { useNotificationStore } from "@/store/notificationStore";
 import { useVoiceInput } from "@/hooks/useVoiceInput";
-import { DEFAULT_MODEL } from "@/utils/models";
+import { buildDefaultSessionConfig } from "@/utils/sessionConfig";
 import "./WelcomeScreen.css";
 import "./NewProjectScreen.css";
 
@@ -84,13 +84,7 @@ export function NewProjectScreen() {
     try {
       const bonsaiSid = await startSession({
         specIds: [],
-        config: {
-          model: DEFAULT_MODEL,
-          maxTurns: 50,
-          permissionMode: "default",
-          streamText: true,
-          effort: null,
-        },
+        config: await buildDefaultSessionConfig(),
         name,
         skillId: "new-project",
       });

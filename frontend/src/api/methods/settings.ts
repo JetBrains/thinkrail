@@ -3,8 +3,6 @@ import type { RpcClient } from "../client.ts";
 export type VoiceReviseMode = "auto" | "subsession" | "off";
 
 export interface ProjectSettings {
-  default_model: string;
-  default_effort: string;
   model_refresh_interval_hours: number;
   event_view: string;
   font_size: number;

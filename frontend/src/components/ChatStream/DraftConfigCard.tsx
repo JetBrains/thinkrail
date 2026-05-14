@@ -4,7 +4,7 @@ import { useSpecStore } from "@/store/specStore.ts";
 import { useSettingsStore } from "@/store/settingsStore.ts";
 import { useSessionStore } from "@/store/sessionStore.ts";
 import { useBoardStore } from "@/store/boardStore.ts";
-import { getModels, getModelDef } from "@/utils/models.ts";
+import { PERMISSION_MODES } from "@/utils/sessionConfig.ts";
 import { SkillGrid } from "@/components/shared/SkillGrid.tsx";
 import { SpecSelector } from "@/components/shared/SpecSelector.tsx";
 import { TicketSelector } from "@/components/shared/TicketSelector.tsx";
@@ -31,6 +31,7 @@ export function DraftConfigCard({ bonsaiSid, readOnly, onVisibilityChange }: Dra
   const specs = useSpecStore((s) => s.specs);
   const tickets = useBoardStore((s) => s.tickets);
   const skills = useSettingsStore((s) => s.skills);
+  const models = useSettingsStore((s) => s.models) ?? [];
 
   const [editName, setEditName] = useState("");
   const [skillPickerOpen, setSkillPickerOpen] = useState(false);
@@ -140,7 +141,9 @@ export function DraftConfigCard({ bonsaiSid, readOnly, onVisibilityChange }: Dra
   const selectedSpecs = session.specIds
     .map((id) => specs.find((s) => s.id === id))
     .filter(Boolean);
-  const modelDef = getModelDef(session.model);
+  const currentModels = models.filter((m) => m.group === "current");
+  const legacyModels = models.filter((m) => m.group === "legacy");
+  const modelDef = models.find((m) => m.id === session.model);
   const attachedTicket = session.metaTicketId ? tickets.get(session.metaTicketId) : null;
 
   const buildConfig = (overrides: Partial<{ model: string; maxTurns: number; permissionMode: string; effort: string | null }>) => ({
@@ -467,20 +470,27 @@ export function DraftConfigCard({ bonsaiSid, readOnly, onVisibilityChange }: Dra
                 debouncedUpdate({ config: buildConfig({ model: e.target.value }) });
               }}
             >
-              <optgroup label="Current">
-                {getModels().filter((m) => m.group === "current").map((m) => (
-                  <option key={m.id} value={m.id}>
-                    {m.label}
-                  </option>
-                ))}
-              </optgroup>
-              <optgroup label="Legacy">
-                {getModels().filter((m) => m.group === "legacy").map((m) => (
-                  <option key={m.id} value={m.id}>
-                    {m.label}
-                  </option>
-                ))}
-              </optgroup>
+              {!modelDef && (
+                <option value={session.model}>{session.model}</option>
+              )}
+              {currentModels.length > 0 && (
+                <optgroup label="Current">
+                  {currentModels.map((m) => (
+                    <option key={m.id} value={m.id}>
+                      {m.label}
+                    </option>
+                  ))}
+                </optgroup>
+              )}
+              {legacyModels.length > 0 && (
+                <optgroup label="Legacy">
+                  {legacyModels.map((m) => (
+                    <option key={m.id} value={m.id}>
+                      {m.label}
+                    </option>
+                  ))}
+                </optgroup>
+              )}
             </select>
           </span>
 
@@ -493,7 +503,7 @@ export function DraftConfigCard({ bonsaiSid, readOnly, onVisibilityChange }: Dra
                 debouncedUpdate({ config: buildConfig({ permissionMode: e.target.value }) })
               }
             >
-              {["default", "acceptEdits", "bypassPermissions", "plan"].map(
+              {PERMISSION_MODES.map(
                 (m) => (
                   <option key={m} value={m}>
                     {m}

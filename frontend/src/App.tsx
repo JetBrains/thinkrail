@@ -53,8 +53,10 @@ function AppInner({ projectPath: _projectPath, onSwitchProject }: { projectPath:
       useVisStore.getState().fetchState();
       // Load board tickets
       useBoardStore.getState().fetchTickets();
-      // Load project settings and model list
+      // Load project settings, user-scoped session defaults, model list,
+      // and skills.
       useSettingsStore.getState().fetchSettings();
+      useSettingsStore.getState().fetchSessionDefaults();
       useSettingsStore.getState().fetchModels();
       useSettingsStore.getState().fetchSkills();
     } else if (connectionState === "connected" && wiredRef.current) {

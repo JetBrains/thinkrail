@@ -80,6 +80,10 @@ e2e/
                         #   waitForSessionActivity, waitForIdle, endSession
     selectors.ts        # central CSS/role selectors for every screen
     board.ts, specs.ts  # seed helpers that write `.bonsai/` state directly
+    appSettings.ts      # seedSessionDefaults / getSessionDefaults — direct
+                        #   JSON-RPC client for the app-scope `appSettings/*`
+                        #   methods (used to pre-load user-scoped session
+                        #   defaults before opening the UI)
   tests/
     *.spec.ts           # one spec per surface area
 ```

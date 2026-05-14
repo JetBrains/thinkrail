@@ -100,6 +100,7 @@ class TestMethods:
             "trash/list", "trash/purge", "trash/empty",
             "trash/restoreSpec", "trash/restorePlan", "trash/restoreDraft", "trash/restorePatches",
             "settings/get", "settings/update", "settings/ensureFile",
+            "appSettings/getSessionDefaults", "appSettings/setSessionDefaults",
             "models/list",
             "agent/retryLastMessage",
             "skills/list",

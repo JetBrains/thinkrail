@@ -235,7 +235,7 @@ export function SessionStatusLine({
 }: SessionStatusLineProps) {
   // ── Settings store ──
   const dynamicModels = useSettingsStore((s) => s.models);
-  const MODEL_OPTIONS = useMemo(() => buildModelOptions(), [dynamicModels]);
+  const MODEL_OPTIONS = useMemo(() => buildModelOptions(dynamicModels ?? []), [dynamicModels]);
   const categoryVisibility = useUiStore((s) => s.chatCategoryVisibility);
   const toggleCategory = useUiStore((s) => s.toggleChatCategory);
 

@@ -64,9 +64,11 @@ from app.rpc.methods.trash import (
 )
 from app.rpc.methods.settings import (
     ensure_settings,
+    get_session_defaults,
     get_settings,
     list_models,
     list_skills,
+    set_session_defaults,
     update_settings,
 )
 from app.rpc.methods.subsessions import (
@@ -194,6 +196,8 @@ METHODS = {
     "settings/get": get_settings,
     "settings/update": update_settings,
     "settings/ensureFile": ensure_settings,
+    "appSettings/getSessionDefaults": get_session_defaults,
+    "appSettings/setSessionDefaults": set_session_defaults,
     "models/list": list_models,
     "skills/list": list_skills,
 }
@@ -215,6 +219,7 @@ def _bind_methods(
     vis_service: VisualizationService,
     board_service: BoardService,
     runtime_registry: "RuntimeRegistry",
+    app_store: "AppStore",
     trash_service: "TrashService | None" = None,
 ) -> dict:
     """Bind each handler in METHODS to its owning service via partial."""
@@ -228,6 +233,8 @@ def _bind_methods(
             bound[name] = partial(handler, board_service)
         elif name.startswith("trash/") and trash_service:
             bound[name] = partial(handler, trash_service)
+        elif name.startswith("appSettings/"):
+            bound[name] = partial(handler, app_store)
         elif name.startswith("settings/"):
             bound[name] = partial(handler, config)
         elif name.startswith("skills/"):
@@ -352,7 +359,8 @@ def register_routes(app: FastAPI, app_store: "AppStore | None" = None) -> None:
 
             bound_methods = _bind_methods(
                 config, ctx.spec_service, ctx.agent_service, ctx.vis_service,
-                ctx.board_service, ctx.runtime_registry, ctx.trash_service,
+                ctx.board_service, ctx.runtime_registry, _app_store,
+                ctx.trash_service,
             )
 
             # Notify existing clients BEFORE subscribing the new one,

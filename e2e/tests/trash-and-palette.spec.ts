@@ -4,7 +4,7 @@ import { test, expect } from "../fixtures";
 import { openProject } from "../helpers/project";
 import { seedTrashedPlan } from "../helpers/board";
 import { buildSpec, seedProject } from "../helpers/specs";
-import { palette, specTree, trashModal } from "../helpers/selectors";
+import { header, palette, specTree, trashModal } from "../helpers/selectors";
 
 /**
  * CommandPalette + TrashModal smoke. Alt+K opens the palette under Playwright's
@@ -28,6 +28,10 @@ test.describe("CommandPalette + TrashModal", () => {
     // The app's `isMod` is `e.altKey` on non-Mac (and Playwright's Chromium
     // reports as non-Mac regardless of the host OS — the status bar shows
     // "Alt+K Search"). So trigger the palette with Alt+k.
+    //
+    // Empty projects auto-focus the welcome textarea; global shortcuts are
+    // intentionally ignored while text input is focused.
+    await page.locator(header.logo).click();
     await page.keyboard.press("Alt+k");
     await expect(page.locator(palette.container)).toBeVisible();
 

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { MetaTicket } from "@/types/board.ts";
 import { useSessionStore } from "@/store/sessionStore.ts";
-import { DEFAULT_MODEL } from "@/utils/models.ts";
+import { buildDefaultSessionConfig } from "@/utils/sessionConfig.ts";
 import { ChatStream } from "@/components/ChatStream/ChatStream.tsx";
 import type { ChatStreamHandle } from "@/components/ChatStream/ChatStream.tsx";
 import { InputArea } from "@/components/ChatStream/InputArea.tsx";
@@ -82,15 +82,10 @@ export function TicketSession({ ticket, embeddedSid, onSessionStarted }: TicketS
     setStarting(true);
     try {
       const isExecute = phase.skillId === "ticket-execute";
+      const baseConfig = await buildDefaultSessionConfig();
       const sid = await startSession({
         specIds: isExecute ? ticket.linkedSpecIds : [],
-        config: {
-          model: DEFAULT_MODEL,
-          maxTurns: isExecute ? 100 : 50,
-          permissionMode: "default",
-          streamText: true,
-          effort: null,
-        },
+        config: isExecute ? { ...baseConfig, maxTurns: 100 } : baseConfig,
         name: isExecute
           ? `Execute: ${ticket.title}`
           : `${phase.label}: ${ticket.title}`,

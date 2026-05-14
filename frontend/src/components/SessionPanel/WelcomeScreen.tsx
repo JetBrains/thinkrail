@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useSessionStore } from "@/store/sessionStore";
 import { useNotificationStore } from "@/store/notificationStore";
 import { useVoiceInput } from "@/hooks/useVoiceInput";
-import { DEFAULT_MODEL } from "@/utils/models";
+import { buildDefaultSessionConfig } from "@/utils/sessionConfig";
 import type { Session } from "@/types/session";
 import { modLabel } from "@/utils/platform";
 import "./WelcomeScreen.css";
@@ -67,13 +67,7 @@ export function WelcomeScreen({ sessions, onSwitchSession }: WelcomeScreenProps)
     try {
       await startSession({
         specIds: [],
-        config: {
-          model: DEFAULT_MODEL,
-          maxTurns: 50,
-          permissionMode: "default",
-          streamText: true,
-          effort: null,
-        },
+        config: await buildDefaultSessionConfig(),
         name: sessionName.trim() || text.slice(0, 60),
         prompt: text,
       });

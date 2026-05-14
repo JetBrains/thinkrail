@@ -1,13 +1,20 @@
-"""RPC handlers for settings/* and models/* methods."""
+"""RPC handlers for settings/*, appSettings/*, and models/* methods."""
 
 from __future__ import annotations
 
 from typing import Any
 
 from jsonrpcserver import JsonRpcError, Result, Success
+from pydantic import ValidationError
 
 from app.agent.runtime import ModelInfo, RuntimeRegistry
+from app.core.app_store import AppStore
 from app.core.config import AppConfig
+from app.core.session_defaults import (
+    SessionDefaults,
+    load_session_defaults,
+    save_session_defaults,
+)
 from app.core.settings import (
     ensure_settings_file,
     load_settings,
@@ -22,7 +29,7 @@ def _handle_errors(func):  # type: ignore[type-arg]
     async def wrapper(first_arg: Any, **params: Any) -> Result:
         try:
             return Success(await func(first_arg, **params))
-        except (KeyError, TypeError, ValueError) as exc:
+        except (KeyError, TypeError, ValueError, ValidationError) as exc:
             raise JsonRpcError(_INVALID_PARAMS, "Invalid params", str(exc))
         except JsonRpcError:
             raise
@@ -53,6 +60,27 @@ async def ensure_settings(config: AppConfig, **_params: Any) -> dict:
     """Create settings file with defaults if missing, return settings."""
     settings = ensure_settings_file(config.project_root)
     return settings.model_dump()
+
+
+# ── App Settings (user-scope, app-wide) ───────────────────────────────────
+
+
+@_handle_errors
+async def get_session_defaults(app_store: AppStore, **_params: Any) -> dict:
+    """Return the user's session-creation defaults.
+
+    Falls back to cold-start defaults when the AppStore key is absent.
+    """
+    cfg = await load_session_defaults(app_store)
+    return cfg.model_dump(by_alias=True)
+
+
+@_handle_errors
+async def set_session_defaults(app_store: AppStore, **params: Any) -> dict:
+    """Validate and persist the user's session-creation defaults."""
+    cfg = SessionDefaults.model_validate(params)
+    await save_session_defaults(app_store, cfg)
+    return cfg.model_dump(by_alias=True)
 
 
 # ── Models ────────────────────────────────────────────────────────────────

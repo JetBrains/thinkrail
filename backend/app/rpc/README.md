@@ -119,6 +119,8 @@ Both sides can send either. The server can initiate requests to the client (e.g.
 | `settings/get`    | `{}`                                                                                         | `ProjectSettings`   | Get current project settings |
 | `settings/update` | `{ settings: dict }`                                                                         | `ProjectSettings`   | Validate and save settings |
 | `settings/ensureFile`| `{}`                                                                                       | `ProjectSettings`   | Create settings file with defaults if missing |
+| `appSettings/getSessionDefaults` | `{}`                                                                          | `SessionDefaults`   | Get the user-scoped session-creation defaults (AppStore-backed). Cold-start values returned when the AppStore key is absent. |
+| `appSettings/setSessionDefaults` | `{ model, permissionMode, effort, maxTurns }`                                  | `SessionDefaults`   | Persist the user-scoped session-creation defaults. |
 | `models/list`     | `{}`                                                                                         | `list[ModelDef]`    | Get cached model list |
 | `models/refresh`  | `{}`                                                                                         | `list[ModelDef]`    | Refresh models from API |
 | `skills/list`     | `{}`                                                                                         | `list[SkillDef]`    | List available skills with icon, group, requires metadata |
@@ -429,9 +431,9 @@ NotifyCallable = Callable[[str, dict, str | None], Awaitable[None]]
 
 ### methods/settings.py
 
-**Responsibility:** jsonrpcserver handlers for `settings/*` and `models/*` and `skills/*` methods.
+**Responsibility:** jsonrpcserver handlers for `settings/*`, `appSettings/*`, `models/*`, and `skills/*` methods.
 
-**Dependencies:** core/settings, agent/model_registry
+**Dependencies:** core/settings (project-scoped), core/session_defaults (user-scoped, AppStore-backed), core/app_store (the SQLite handle that backs `appSettings/*`), agent/runtime (RuntimeRegistry — owns the per-runtime model list and its hardcoded fallback)
 
 ### methods/subsessions.py
 

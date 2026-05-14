@@ -50,12 +50,15 @@ test.describe("Project settings", () => {
       .poll(() => existsSync(settingsPath), { timeout: 15_000 })
       .toBe(true);
 
-    // Default values must include `default_model` and `default_effort`.
+    // Default values cover the project-scoped settings that remain in
+    // ProjectSettings. Session-creation defaults (model / effort /
+    // permission_mode / max_turns) live elsewhere — they're user-scoped
+    // in the AppStore — so they intentionally do *not* appear here.
     const raw = readFileSync(settingsPath, "utf8");
     const parsed = JSON.parse(raw) as Record<string, unknown>;
-    expect(parsed).toHaveProperty("default_model");
-    expect(parsed).toHaveProperty("default_effort");
     expect(parsed).toHaveProperty("font_size");
+    expect(parsed).toHaveProperty("voice_revise_mode");
+    expect(parsed).not.toHaveProperty("default_model");
 
     // Monaco renders the JSON content too.
     await expect(page.locator(fileViewer.monacoViewLines).first()).toBeVisible({
@@ -69,8 +72,9 @@ test.describe("Project settings", () => {
   }) => {
     seedProject(tempProject.path, []);
 
-    // Pre-seed an explicit non-default settings file before opening the
-    // project, so the backend's `settings/get` returns the custom value.
+    // Pre-seed a non-default project-scoped settings file. Session
+    // defaults aren't in this file anymore (user-scope, AppStore-backed) —
+    // use a project-scoped field to verify load + render.
     const settingsPath = join(
       tempProject.path,
       ".bonsai",
@@ -80,10 +84,9 @@ test.describe("Project settings", () => {
       settingsPath,
       JSON.stringify(
         {
-          default_model: "claude-haiku-4-5",
-          default_effort: "low",
           font_size: 17,
           compact_font_size: 11,
+          voice_revise_mode: "auto",
         },
         null,
         2,
@@ -97,10 +100,10 @@ test.describe("Project settings", () => {
     await page.locator(header.settingsButton).click();
     await expect(page.locator(fileViewer.root)).toBeVisible({ timeout: 30_000 });
     const monacoText = page.locator(`${fileViewer.root} .monaco-editor`);
-    await expect(monacoText).toContainText("claude-haiku-4-5", {
+    await expect(monacoText).toContainText("\"font_size\": 17", {
       timeout: 30_000,
     });
-    await expect(monacoText).toContainText("\"font_size\": 17");
+    await expect(monacoText).toContainText("\"voice_revise_mode\": \"auto\"");
   });
 });
 
@@ -118,6 +121,9 @@ test.describe("UI preferences", () => {
     const leftPanelLocator = page.locator(".left-panel");
     await expect(leftPanelLocator).toBeVisible();
 
+    // Empty projects auto-focus the welcome textarea; global shortcuts are
+    // intentionally ignored while text input is focused.
+    await page.locator(header.logo).click();
     await page.keyboard.press("Alt+b");
     await expect(leftPanelLocator).toHaveCount(0);
 
@@ -129,6 +135,7 @@ test.describe("UI preferences", () => {
     await expect(page.locator(".left-panel")).toHaveCount(0, { timeout: 30_000 });
 
     // Toggle it back on so the next reload doesn't carry over to other tests.
+    await page.locator(header.logo).click();
     await page.keyboard.press("Alt+b");
     await expect(page.locator(".left-panel")).toBeVisible({ timeout: 15_000 });
   });

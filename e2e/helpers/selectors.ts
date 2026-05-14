@@ -78,6 +78,7 @@ export const statusBar = {
 };
 
 export const header = {
+  logo: ".header-logo",
   themeButton: 'button.header-btn[title="Switch theme"]',
   themeOption: ".theme-option",
   serverInfoButton: 'button.header-btn[title="Server connection info"]',

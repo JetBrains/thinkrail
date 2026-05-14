@@ -12,7 +12,8 @@ import type {
 } from "@/types/session.ts";
 import { getClient } from "@/api/index.ts";
 import { createAgentApi } from "@/api/methods/agents.ts";
-import { getContextWindowSize, DEFAULT_MODEL } from "@/utils/models.ts";
+import { getContextWindowSize } from "@/utils/models.ts";
+import { buildDefaultSessionConfig } from "@/utils/sessionConfig.ts";
 import { useInputDraftStore } from "./inputDraftStore.ts";
 import { useNotificationStore } from "./notificationStore.ts";
 import { useBoardStore } from "./boardStore.ts";
@@ -596,13 +597,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
     const name = prefill?.name ?? `Session ${counter}`;
     const bonsaiSid = await state.createDraft({
       specIds: prefill?.specIds ?? [],
-      config: {
-        model: DEFAULT_MODEL,
-        maxTurns: 50,
-        permissionMode: "default",
-        streamText: true,
-        effort: null,
-      },
+      config: await buildDefaultSessionConfig(),
       name,
       skillId: prefill?.skillId,
       metaTicketId: prefill?.metaTicketId,

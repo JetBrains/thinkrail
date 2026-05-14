@@ -3,7 +3,7 @@ import { getClient } from "@/api/index.ts";
 import { createBoardApi } from "@/api/methods/board.ts";
 import { useSessionStore } from "@/store/sessionStore.ts";
 import { useBoardStore } from "@/store/boardStore.ts";
-import { DEFAULT_MODEL } from "@/utils/models.ts";
+import { buildDefaultSessionConfig } from "@/utils/sessionConfig.ts";
 import type { MetaTicket } from "@/types/board.ts";
 import { TicketInfo } from "./TicketInfo.tsx";
 import { TicketSession } from "./TicketSession.tsx";
@@ -114,15 +114,10 @@ export function MetaTicketDetail({ ticketId }: MetaTicketDetailProps) {
   const handleStartSession = useCallback(async (skillId: string) => {
     if (!ticket) return;
     const isExecute = skillId === "ticket-execute";
+    const baseConfig = await buildDefaultSessionConfig();
     const sid = await createDraft({
       specIds: isExecute ? ticket.linkedSpecIds : [],
-      config: {
-        model: DEFAULT_MODEL,
-        maxTurns: isExecute ? 100 : 50,
-        permissionMode: "default",
-        streamText: true,
-        effort: null,
-      },
+      config: isExecute ? { ...baseConfig, maxTurns: 100 } : baseConfig,
       name: isExecute ? `Execute: ${ticket.title}` : `${skillId.replace("ticket-", "")}: ${ticket.title}`,
       skillId,
       metaTicketId: ticket.id,

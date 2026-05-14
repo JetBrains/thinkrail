@@ -16,12 +16,12 @@ import {
  * project + new draft, so a temp dir is the right scope.
  */
 
-// Only models present in the static FALLBACK list are reliably testable —
-// the dynamic Anthropic-API list is fetched lazily and on a fresh page
-// boot may not arrive before the test selects the option. Opus 4.7 lives
-// only in the dynamic list, so it's intentionally not covered here.
+// Cover the three "current" models the backend ships as its hardcoded
+// fallback (`runtime/claude/models.py:_FALLBACK`). The picker is wired
+// straight to the backend's `models/list`, so this set is what's
+// guaranteed-renderable even if the live Anthropic API is unreachable.
 const MODELS = [
-  { label: "Opus 4.6" },
+  { label: "Opus 4.7" },
   { label: "Sonnet 4.6" },
   { label: "Haiku 4.5" },
 ] as const;

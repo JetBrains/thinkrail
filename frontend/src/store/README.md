@@ -583,6 +583,18 @@ Pure functions for detecting stale references:
 
 Skills are fetched from the backend via `skills/list` RPC on connect and stored in `settingsStore.skills`. The backend scans `claude-plugin/skills/*/SKILL.md` frontmatter for `id`, `name`, `description`, `icon`, `group`, and `requires` fields. `FALLBACK_SKILLS` from `frontend/src/constants/skills.ts` is used as the initial value and fallback if the RPC fails. All components (`SkillGrid`, `DraftConfigCard`, `InputArea`, `StickyContextBar`) read skills from the store instead of the constant.
 
+### Dynamic Models (`settingsStore.models`)
+
+The model list is fetched from the backend via `models/list` on connect and pushed into `models.ts:setDynamicModels`. There is no frontend fallback — the backend owns the hardcoded fallback (`runtime/claude/models.py:_FALLBACK`) for when the Anthropic API is unreachable. While the initial `models/list` is in flight, `getModels()` returns `[]`; React pickers subscribe to `settingsStore.models` and keep the selected model visible until the backend list arrives. `getContextWindowSize` has its own 200k default that covers session-creation reads in that window.
+
+### Session Defaults (`settingsStore.sessionDefaults` → `buildDefaultSessionConfig`)
+
+Session-creation defaults are **user-scoped**, not project-scoped — they live in the AppStore (`~/.bonsai/bonsai.db`) and travel with the user across every project. The frontend fetches them via `appSettings/getSessionDefaults` on connect and writes via `appSettings/setSessionDefaults` from the "User settings" header dialog.
+
+`frontend/src/utils/sessionConfig.ts` exposes `async buildDefaultSessionConfig()` — every new-session entry point (`sessionStore.createNewSession`, `WelcomeScreen`, `NewProjectScreen`, `MetaTicketDetail`, `TicketSession`, `TicketDescriptionView`) calls it to build the draft's `AgentConfig`. The helper reads from `settingsStore.sessionDefaults` and awaits the initial fetch if the store hasn't received it yet, so the values the user picked in the settings dialog take effect on the very next draft, with no race against a rapid `+ New` click. There is no frontend fallback: if the fetch ultimately resolves to `null` (backend unreachable) the helper throws, surfacing the failure to the caller's existing error path instead of silently substituting hardcoded constants. Cold-start values (`claude-opus-4-7`, `"default"` permission mode, `null` effort, `50` max turns) live in the backend (`app/core/session_defaults.py`).
+
+The valid permission-mode set is exported from `sessionConfig.ts` as `PERMISSION_MODES`; both the DraftConfigCard dropdown and the User Settings dialog read from that single source rather than inlining literals.
+
 ### UI Component: `StaleRefsBanner`
 
 `frontend/src/components/shared/StaleRefsBanner.tsx` renders a gold warning banner with a cleanup action button. Used in `DraftConfigCard` and `TicketInfo`.

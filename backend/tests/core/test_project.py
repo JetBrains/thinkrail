@@ -18,7 +18,11 @@ class TestEnsureMetaFile:
         bonsai_dir = tmp_path / ".bonsai"
         content = ensure_meta_file(bonsai_dir, "settings.json")
         data = json.loads(content)
-        assert "default_model" in data
+        # ProjectSettings should hydrate with at least one known key. The
+        # specific keys are project-scoped settings (font sizing, voice
+        # revise mode, etc.) — session-creation defaults moved to the
+        # user-scoped ``session_defaults`` AppStore record.
+        assert "font_size" in data
         assert (bonsai_dir / "settings.json").is_file()
 
     def test_returns_existing_content(self, tmp_path: Path) -> None:
@@ -52,7 +56,7 @@ class TestEnsureMetaFile:
         bonsai_dir = tmp_path / "deep" / "nested" / ".bonsai"
         content = ensure_meta_file(bonsai_dir, "settings.json")
         assert (bonsai_dir / "settings.json").is_file()
-        assert json.loads(content)["default_model"]
+        assert json.loads(content)["font_size"]
 
     def test_deleted_file_gets_regenerated(self, tmp_path: Path) -> None:
         bonsai_dir = tmp_path / ".bonsai"
@@ -62,7 +66,7 @@ class TestEnsureMetaFile:
         assert not (bonsai_dir / "settings.json").is_file()
         content = ensure_meta_file(bonsai_dir, "settings.json")
         assert (bonsai_dir / "settings.json").is_file()
-        assert "default_model" in json.loads(content)
+        assert "font_size" in json.loads(content)
 
 
 class TestEnsureMetaDir:

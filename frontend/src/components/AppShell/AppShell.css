@@ -498,6 +498,16 @@
   margin-bottom: var(--space-lg);
 }
 
+.token-dialog-error {
+  margin: var(--space-md) 0;
+  padding: var(--space-sm) var(--space-md);
+  border: 1px solid rgba(247, 84, 100, 0.35);
+  border-radius: var(--radius-sm);
+  background: rgba(247, 84, 100, 0.08);
+  color: var(--red);
+  font-size: var(--font-sm);
+}
+
 .token-dialog-input {
   width: 100%;
   padding: var(--space-sm) var(--space-md);
@@ -539,6 +549,14 @@
   color: var(--text);
 }
 
+.token-dialog-btn:disabled,
+.token-dialog-btn:disabled:hover {
+  cursor: not-allowed;
+  opacity: 0.45;
+  background: transparent;
+  color: var(--muted);
+}
+
 .token-dialog-btn-primary {
   background: var(--blue);
   color: var(--bg);
@@ -549,6 +567,13 @@
   opacity: 0.9;
 }
 
+.token-dialog-btn-primary:disabled,
+.token-dialog-btn-primary:disabled:hover {
+  background: var(--blue);
+  color: var(--bg);
+  border-color: var(--blue);
+}
+
 .token-dialog-btn-danger {
   color: var(--red);
   border-color: var(--red);
@@ -557,6 +582,23 @@
 .token-dialog-btn-danger:hover {
   background: var(--red);
   color: var(--bg);
+}
+
+.user-settings-dialog {
+  min-width: 380px;
+}
+
+.user-settings-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 10px 0;
+}
+
+.user-settings-label {
+  flex: 0 0 130px;
+  font-size: var(--font-sm);
+  color: var(--hint);
 }
 
 .header-token-active {

@@ -7,6 +7,7 @@ import { useFileStore } from "@/store/fileStore.ts";
 import { modLabel } from "@/utils/platform.ts";
 import { ThemeSwitcher } from "./ThemeSwitcher.tsx";
 import { ServerInfoDialog } from "./ServerInfoDialog.tsx";
+import { UserSettingsDialog } from "./UserSettingsDialog.tsx";
 
 const SETTINGS_PATH = ".bonsai/settings.json";
 
@@ -26,6 +27,7 @@ export function Header({ onSwitchProject }: { onSwitchProject: () => void }) {
 
   const connectedClients = useConnectionStore((s) => s.clients);
   const [serverInfoOpen, setServerInfoOpen] = useState(false);
+  const [userSettingsOpen, setUserSettingsOpen] = useState(false);
 
   return (
     <>
@@ -34,6 +36,13 @@ export function Header({ onSwitchProject }: { onSwitchProject: () => void }) {
         <span className="header-logo">Bonsai</span>
         <button className="header-project-btn" onClick={onSwitchProject} title="Switch project">
           {useUiStore((s) => s.projectName)}
+        </button>
+        <button
+          className="header-btn header-user-settings-btn"
+          onClick={() => setUserSettingsOpen(true)}
+          title="User settings (session defaults)"
+        >
+          &#128100;
         </button>
         <button className="header-btn header-settings-btn" onClick={openSettings} title="Project settings">
           &#9881;
@@ -75,6 +84,7 @@ export function Header({ onSwitchProject }: { onSwitchProject: () => void }) {
       </div>
     </header>
     <ServerInfoDialog open={serverInfoOpen} onClose={() => setServerInfoOpen(false)} />
+    <UserSettingsDialog open={userSettingsOpen} onClose={() => setUserSettingsOpen(false)} />
     </>
   );
 }
