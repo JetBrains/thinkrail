@@ -87,6 +87,11 @@ _INTERCEPTOR_CATEGORIES: dict[str, ToolCategory] = {
     "spec_delete": "edit",
     "ChangeTicketStatus": "edit",
     "CreateBoardTicket": "edit",
+    # SessionFinalize only attaches metadata to the current task — no
+    # filesystem writes — but it's an intentional "I'm done" signal, so
+    # gate it the same as other mutating tools and rely on the runtime
+    # interceptor for auto-approval.
+    "SessionFinalize": "edit",
 }
 
 
@@ -173,6 +178,40 @@ def evaluate_mode(
     return None
 
 
+def _reject_spec_in_bonsai(input_data: dict[str, Any]) -> ToolPermissionResponse | None:
+    """Deny Write/Edit on spec marker files placed under ``.bonsai/``.
+
+    Spec deliverables (``GOAL&REQUIREMENTS.md``, ``DESIGN_DOC.md``, …)
+    must live at the project root. Agents occasionally try to save them
+    inside ``.bonsai/`` because operational artifacts live there — this
+    interceptor catches that mistake and tells the agent to retry at
+    root. Returns ``None`` (allow downstream handling) when the path is
+    safe.
+    """
+    # Late import — keeps the permission module free of spec-service deps.
+    from app.spec.service import SPEC_FILENAME_MAP
+
+    path = str(input_data.get("file_path", "")).strip()
+    if not path:
+        return None
+    # Normalise leading slashes / ./ etc. for the prefix check.
+    norm = path.lstrip("./").lstrip("/")
+    if not norm.startswith(".bonsai/"):
+        return None
+    basename = norm.rsplit("/", 1)[-1]
+    if basename not in SPEC_FILENAME_MAP:
+        return None
+    return ToolPermissionResponse(
+        behavior="deny",
+        message=(
+            f"Refusing to save spec marker `{basename}` inside `.bonsai/`. "
+            f"Spec deliverables are top-level project files — retry with "
+            f"`file_path: {basename}` (project root)."
+        ),
+        interrupt=False,
+    )
+
+
 def _approval_signature(tool_name: str, input_data: dict[str, Any]) -> str | None:
     """Return a session-scoped remember-key for this tool call, or None."""
     if tool_name in ("Write", "Edit", "MultiEdit"):
@@ -254,6 +293,16 @@ async def can_use_tool(
     """
     tool_name = request.tool_name
     input_data = request.input
+
+    # Spec markers (GOAL&REQUIREMENTS.md, DESIGN_DOC.md, …) are top-level
+    # project deliverables and must live at the project root — never
+    # inside `.bonsai/`, which is reserved for operational artifacts.
+    # Reject any Write/Edit/MultiEdit that targets a spec marker under
+    # `.bonsai/`, with a message that nudges the agent to retry at root.
+    if tool_name in ("Write", "Edit", "MultiEdit"):
+        denial = _reject_spec_in_bonsai(input_data)
+        if denial is not None:
+            return denial
 
     # Built-in: AskUserQuestion
     if tool_name == "AskUserQuestion":

@@ -495,6 +495,14 @@ class ClaudeRuntime:
 
         # Session closed gracefully (END_SIGNAL received)
         duration_ms = int((time.monotonic() - start_time) * 1000)
+        # Include outcome in the done payload so the frontend transitions
+        # atomically — otherwise there's a race where status flips to "done"
+        # before the separate session/didUpdate notification carrying the
+        # outcome is processed, and the UI briefly shows a "session ended"
+        # state with no next-step contract.
+        outcome_payload = (
+            task.outcome.model_dump(by_alias=True) if task.outcome is not None else None
+        )
         await handler.on_event(RuntimeEvent(method="agent/done", params={
             "bonsaiSid": task.bonsai_sid,
             "sessionId": session_id,
@@ -503,6 +511,7 @@ class ClaudeRuntime:
             "turns": total_turns,
             "durationMs": duration_ms,
             "usage": {},
+            "outcome": outcome_payload,
         }))
 
         return AgentResult(

@@ -24,6 +24,10 @@ from app.agent.tools.create_ticket import (
     intercept_create_board_ticket,
 )
 from app.agent.tools.orchestrator import intercept_orchestrator, orchestrator_mcp_server
+from app.agent.tools.session_outcome import (
+    intercept_session_finalize,
+    session_outcome_mcp_server,
+)
 from app.agent.tools.visualization import intercept_visualize, vis_mcp_server
 
 # Type for intercept functions: (input_data, tracker, notify, task, config) -> result
@@ -37,6 +41,7 @@ MCP_SERVERS: dict[str, Any] = {
     "bonsai-orchestrator": orchestrator_mcp_server,
     "bonsai-ticket-status": change_ticket_status_mcp_server,
     "bonsai-create-ticket": create_ticket_mcp_server,
+    "bonsai-session-outcome": session_outcome_mcp_server,
 }
 
 # canUseTool interceptors — keyed by tool name suffix.
@@ -54,6 +59,7 @@ INTERCEPTORS: dict[str, InterceptFn] = {
     "suggest_step": intercept_orchestrator,
     "ChangeTicketStatus": intercept_change_ticket_status,
     "CreateBoardTicket": intercept_create_board_ticket,
+    "SessionFinalize": intercept_session_finalize,
 }
 
 __all__ = [

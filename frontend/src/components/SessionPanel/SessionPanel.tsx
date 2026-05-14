@@ -14,7 +14,15 @@ import { SessionTabBar } from "./SessionTabBar.tsx";
 import { StickyContextBar } from "./StickyContextBar.tsx";
 import "./SessionPanel.css";
 
-export function SessionPanel({ hideTabBar = false }: { hideTabBar?: boolean } = {}) {
+export function SessionPanel({
+  hideTabBar = false,
+  hideStickyBar = false,
+  hideContextCard = false,
+}: {
+  hideTabBar?: boolean;
+  hideStickyBar?: boolean;
+  hideContextCard?: boolean;
+} = {}) {
   const sessions = useSessionStore((s) => s.sessions);
   const activeSessionId = useSessionStore((s) => s.activeSessionId);
   const switchSession = useSessionStore((s) => s.switchSession);
@@ -153,7 +161,7 @@ export function SessionPanel({ hideTabBar = false }: { hideTabBar?: boolean } = 
         <FileViewer file={displayFile} />
       ) : showSession && activeSession ? (
         <>
-          {!contextCardVisible && activeSession.events.length > 0 && (
+          {!hideStickyBar && !contextCardVisible && activeSession.events.length > 0 && (
             <StickyContextBar
               skillId={activeSession.skillId ?? undefined}
               specCount={activeSession.specIds.length}
@@ -165,34 +173,41 @@ export function SessionPanel({ hideTabBar = false }: { hideTabBar?: boolean } = 
           )}
           <ChatStream
             ref={chatStreamRef}
-            events={activeSession.events}
+            events={
+              hideContextCard
+                ? activeSession.events.filter((e) => e.eventType !== "sessionStart")
+                : activeSession.events
+            }
             answeredRequests={activeSession.answeredRequests}
             onResolveRequest={handleResolve}
             session={activeSession}
             onContextCardVisibility={setContextCardVisible}
           />
           <div className="session-bottom">
-            {!isDraft && (
-              <SessionStatusLine
-                model={activeSession.model}
-                permissionMode={activeSession.permissionMode}
-                effort={activeSession.effort ?? null}
-                metrics={activeSession.metrics}
-                status={status ?? "idle"}
-                projectCost={projectCost}
-                disabled={activeSession.restored || isDone}
-                actionSlotRef={setActionSlot}
-                onChangeModel={(m) => updateConfig(activeSession.bonsaiSid, { model: m })}
-                onChangePermissionMode={(m) => updateConfig(activeSession.bonsaiSid, { permissionMode: m })}
-                onInterrupt={() => interruptSession(activeSession.bonsaiSid)}
-                onEndSession={() => endSession(activeSession.bonsaiSid)}
-                onBackground={() => closeSession(activeSession.bonsaiSid)}
-                onChangeEffort={async (e) => {
-                  await updateConfig(activeSession.bonsaiSid, { effort: e });
-                  await restartSession(activeSession.bonsaiSid);
-                }}
-              />
-            )}
+            {/* Render the status line in every session state — including
+                "draft" — so the model picker, permission mode, effort and
+                the Start/Stop/Continue action slot are present regardless
+                of how the session was started. Keeps the wizard chat and
+                the regular session window visually 1:1. */}
+            <SessionStatusLine
+              model={activeSession.model}
+              permissionMode={activeSession.permissionMode}
+              effort={activeSession.effort ?? null}
+              metrics={activeSession.metrics}
+              status={status ?? "idle"}
+              projectCost={projectCost}
+              disabled={activeSession.restored || isDone}
+              actionSlotRef={setActionSlot}
+              onChangeModel={(m) => updateConfig(activeSession.bonsaiSid, { model: m })}
+              onChangePermissionMode={(m) => updateConfig(activeSession.bonsaiSid, { permissionMode: m })}
+              onInterrupt={() => interruptSession(activeSession.bonsaiSid)}
+              onEndSession={() => endSession(activeSession.bonsaiSid)}
+              onBackground={() => closeSession(activeSession.bonsaiSid)}
+              onChangeEffort={async (e) => {
+                await updateConfig(activeSession.bonsaiSid, { effort: e });
+                await restartSession(activeSession.bonsaiSid);
+              }}
+            />
             {activeSession.restored || isDone ? (
               <RestoredBar bonsaiSid={activeSession.bonsaiSid} ended={isDone && !activeSession.restored} />
             ) : (

@@ -51,6 +51,19 @@ interface UiStore {
   centerView: CenterView;
   setCenterView: (view: CenterView) => void;
 
+  /** Per-project last-active session ID. Persisted so a page reload
+   *  picks up where the user left off instead of auto-selecting an
+   *  unrelated session by mtime. */
+  lastActiveSessions: Record<string, string>;
+  rememberActiveSession: (projectPath: string, bonsaiSid: string | null) => void;
+
+  /** bonsaiSids whose wizard done-screen the user has explicitly
+   *  dismissed (e.g. clicked "Open workspace"). Persisted so reactivating
+   *  the session doesn't drag the user back into the done-screen — they
+   *  said they're done with the flow globally. */
+  dismissedWizardOutcomes: string[];
+  dismissWizardOutcome: (bonsaiSid: string) => void;
+
   toggleLeftPanel: () => void;
   toggleRightPanel: () => void;
   setLeftTab: (tab: LeftTab) => void;
@@ -96,6 +109,24 @@ export const useUiStore = create<UiStore>()(
       centerView: "sessions" as CenterView,
       setCenterView: (view) => set({ centerView: view }),
 
+      lastActiveSessions: {} as Record<string, string>,
+      rememberActiveSession: (projectPath, bonsaiSid) =>
+        set((s) => {
+          if (!projectPath) return s;
+          const next = { ...s.lastActiveSessions };
+          if (bonsaiSid) next[projectPath] = bonsaiSid;
+          else delete next[projectPath];
+          return { lastActiveSessions: next };
+        }),
+
+      dismissedWizardOutcomes: [] as string[],
+      dismissWizardOutcome: (bonsaiSid) =>
+        set((s) =>
+          s.dismissedWizardOutcomes.includes(bonsaiSid)
+            ? s
+            : { dismissedWizardOutcomes: [...s.dismissedWizardOutcomes, bonsaiSid] },
+        ),
+
       toggleLeftPanel: () =>
         set((s) => ({ leftPanelCollapsed: !s.leftPanelCollapsed })),
       toggleRightPanel: () =>
@@ -115,6 +146,8 @@ export const useUiStore = create<UiStore>()(
         leftActiveTab: state.leftActiveTab,
         chatCategoryVisibility: state.chatCategoryVisibility,
         centerView: state.centerView,
+        lastActiveSessions: state.lastActiveSessions,
+        dismissedWizardOutcomes: state.dismissedWizardOutcomes,
       }),
     },
   ),

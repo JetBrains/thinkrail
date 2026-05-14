@@ -205,11 +205,11 @@ Use `AskUserQuestion`:
 
 ## Step 7 — Save
 
-Use `Write` to create `GOAL&REQUIREMENTS.md` with YAML frontmatter (`type: "goal-and-requirements"`, `status: "active"`).
+Use `Write` to create `GOAL&REQUIREMENTS.md` with YAML frontmatter (`type: "goal-and-requirements"`, `status: "done"`).
 
 If there are related module specs already in the registry, include `references` fields directly in the YAML frontmatter.
 
-Confirm: "Saved to `GOAL&REQUIREMENTS.md`."
+**STOP HERE.** Do not proceed to ticket creation or downstream sessions — the UI surfaces explicit buttons ("Create tickets" / "Start architecture session" / "Skip → Board") on the done-screen, and the user drives the next step from there. Send a brief confirmation message ("Saved to `GOAL&REQUIREMENTS.md`.") and end your turn.
 
 Update the progress tracker (`visId: "workflow-progress"`).
 

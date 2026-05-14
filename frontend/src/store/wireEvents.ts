@@ -74,6 +74,14 @@ export function wireEvents(client: RpcClient): Unsubscribe {
     }),
   );
 
+  // ── Session metadata updates (outcome, etc.) ──
+  unsubs.push(
+    client.on("session/didUpdate", (p) => {
+      const { task } = p as { task: Record<string, unknown> };
+      useSessionStore.getState().onSessionMetadataUpdate(task);
+    }),
+  );
+
   // ── Agent streaming notifications ──
   const agentMethods = [
     "agent/textDelta",

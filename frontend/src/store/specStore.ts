@@ -68,6 +68,10 @@ export const useSpecStore = create<SpecStore>((set, get) => ({
     const next = new Map(get().specContent);
     next.delete(id);
     set({ specContent: next });
+    // Refetch the index so frontmatter changes (status, type) propagate —
+    // otherwise consumers checking spec.status see a stale value after the
+    // agent edits the frontmatter (e.g. status: active → done).
+    get().fetchSpecs();
     get().fetchGraph();
   },
 

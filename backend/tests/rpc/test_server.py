@@ -82,7 +82,7 @@ class TestMethods:
             "agent/transcribe",
             "agent/reviseTranscript",
             "session/list", "session/get", "session/continue", "session/restart", "session/delete", "session/restore",
-            "session/subscribe", "session/unsubscribe",
+            "session/subscribe", "session/unsubscribe", "session/patchOutcomeAction",
             "subsession/create", "subsession/requestSummary",
             "subsession/approveSummary", "subsession/dismissSummary",
             "subsession/reviseSummary", "subsession/listChildren",

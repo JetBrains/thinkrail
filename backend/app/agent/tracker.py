@@ -7,7 +7,7 @@ from typing import Any
 
 logger = logging.getLogger(__name__)
 
-from app.agent.models import AgentConfig, AgentTask, TaskStatus
+from app.agent.models import AgentConfig, AgentTask, SessionOutcome, TaskStatus
 
 _END_SIGNAL = object()
 """Sentinel pushed by ``enqueue_end_signal`` to close the conversation loop."""
@@ -104,6 +104,46 @@ class Tracker:
         task = self.get_task(bonsai_sid)
         task.session_id = session_id
         task.updated = datetime.now(UTC).isoformat()
+
+    def set_outcome(self, bonsai_sid: str, outcome: SessionOutcome) -> AgentTask:
+        """Attach the skill's done-screen contract to the task."""
+        task = self.get_task(bonsai_sid)
+        task.outcome = outcome
+        task.updated = datetime.now(UTC).isoformat()
+        return task
+
+    # Fields the frontend is allowed to mutate via `session/patchOutcomeAction`.
+    # Anything else (notably ``type``, ``id``, and ``skill_id``) would
+    # corrupt the action — ``type`` is the discriminator and ``id`` is the
+    # idempotency key — so we silently drop those keys before applying.
+    _PATCHABLE_ACTION_FIELDS: frozenset[str] = frozenset({"state", "title", "body"})
+
+    def patch_outcome_action(
+        self, bonsai_sid: str, action_id: str, patch: dict[str, Any]
+    ) -> AgentTask:
+        """Apply a partial update to one action inside the outcome.
+
+        Used by the frontend after a user executes a queued action — e.g.
+        when 'Add to board' completes, the action moves to state='applied'.
+        Only fields in :pyattr:`_PATCHABLE_ACTION_FIELDS` are honoured;
+        anything else is dropped. Silent no-op if the outcome or action
+        is missing.
+        """
+        task = self.get_task(bonsai_sid)
+        if task.outcome is None:
+            return task
+        safe_patch = {
+            k: v for k, v in patch.items() if k in self._PATCHABLE_ACTION_FIELDS
+        }
+        if not safe_patch:
+            return task
+        for i, action in enumerate(task.outcome.actions):
+            if action.id == action_id:
+                updated = action.model_copy(update=safe_patch)
+                task.outcome.actions[i] = updated
+                task.updated = datetime.now(UTC).isoformat()
+                break
+        return task
 
     # -- live SDK client reference --------------------------------------------
 

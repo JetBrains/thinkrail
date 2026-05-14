@@ -401,6 +401,8 @@ class AgentService:
         }
         if task.system_prompt is not None:
             data["systemPrompt"] = task.system_prompt
+        if task.outcome is not None:
+            data["outcome"] = task.outcome.model_dump(by_alias=True)
         # Preserve metrics from disk (written by update_session_metadata)
         if existing and existing.get("metrics"):
             data["metrics"] = existing["metrics"]
@@ -444,6 +446,11 @@ class AgentService:
                 "active": task.status not in ("done", "error"),
                 "inTracker": True,
                 "metrics": disk_entry.get("metrics", {}),
+                "outcome": (
+                    task.outcome.model_dump(by_alias=True)
+                    if task.outcome is not None
+                    else disk_entry.get("outcome")
+                ),
             }
             if task.status == "draft":
                 entry["config"] = task.config.model_dump(by_alias=True)
@@ -462,6 +469,8 @@ class AgentService:
         if self._tracker.has_task(bonsai_sid):
             task = self._tracker.get_task(bonsai_sid)
             data["status"] = task.status
+            if task.outcome is not None:
+                data["outcome"] = task.outcome.model_dump(by_alias=True)
             pending = self._tracker.get_pending_request(bonsai_sid)
             if pending is not None:
                 data["pendingRequest"] = pending
@@ -471,6 +480,24 @@ class AgentService:
             if status not in ("done", "error", "draft"):
                 data["status"] = "done"
         return data
+
+    def patch_outcome_action(
+        self, bonsai_sid: str, action_id: str, patch: dict[str, Any]
+    ) -> dict | None:
+        """Apply a partial update to one outcome action and persist it.
+
+        Called by the frontend after the user executes a queued action
+        (e.g. clicking 'Add to board' on a CreateTicketAction → mark it
+        applied so the button stays in the 'added' state across reloads).
+
+        Returns the updated task as a dict, or None if the session is
+        not in the tracker.
+        """
+        if not self._tracker.has_task(bonsai_sid):
+            return None
+        task = self._tracker.patch_outcome_action(bonsai_sid, action_id, patch)
+        self._save_task(task)
+        return task.model_dump(by_alias=True)
 
     def trash_session(self, bonsai_sid: str) -> None:
         """Soft-delete a session: detach from tickets, move to trash."""

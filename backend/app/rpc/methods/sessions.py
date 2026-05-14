@@ -70,3 +70,17 @@ async def unsubscribe_session(service: AgentService, **params: Any) -> None:
     conn = get_current_conn()
     if conn:
         bus.unsubscribe(conn.conn_id, f"session:{params['bonsaiSid']}")
+
+
+@_handle_errors
+async def patch_outcome_action(service: AgentService, **params: Any) -> dict | None:
+    """Mark a queued outcome action as applied (or update other fields).
+
+    Used by the frontend after the user executes a queued action — e.g.
+    when 'Add to board' completes, the action's state moves to 'applied'
+    so the button stays in the 'added' state across reloads.
+    """
+    bonsai_sid = params["bonsaiSid"]
+    action_id = params["actionId"]
+    patch = params.get("patch", {})
+    return service.patch_outcome_action(bonsai_sid, action_id, patch)

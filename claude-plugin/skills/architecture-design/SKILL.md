@@ -10,6 +10,8 @@ argument-hint: "[project-name]"
 
 You are helping the user create an **Architecture Design Document** (DESIGN_DOC.md). Guide them through structured questions — auto-detect as much as possible from existing code. Read the codebase first, present your analysis and ask the user to confirm/correct — not start from scratch. The user should finalize an architecture doc in ~5-7 multi-choice decisions.
 
+**File location:** save `DESIGN_DOC.md` at the **project root**, never inside `.bonsai/`. `.bonsai/` holds operational artifacts (plans, tickets, sessions) — top-level deliverables (GOAL&REQUIREMENTS.md, DESIGN_DOC.md, README.md) live at the project root alongside the user's code.
+
 ## Step-by-Step Guided Process
 
 ### Step 0: Show Progress
@@ -191,9 +193,41 @@ Include `parent` and `depends-on` fields directly in the YAML frontmatter of rel
 
 ## After Completion
 
-Use `Read` to read the DESIGN_DOC.md module list and use `SuggestSession` to propose a `module-design` session for each major module (up to 3, prioritized by dependency order). Include the architecture spec ID (and goal spec ID if it exists) in `specIds`. Carry forward each module's path and key responsibilities in the `prompt`.
+Call `SessionFinalize` with the done-screen contract — this also closes
+the session. Do **not** call `SuggestSession` or open an `AskUserQuestion`
+at the end: the user picks the next step from the buttons rendered on
+the done-screen.
 
-Then use `AskUserQuestion`:
-- "/spec-from-code — Generate module spec skeletons from code"
-- "/spec-status — Check specification coverage"
-- "Done for now"
+Read the module list from DESIGN_DOC.md and pre-queue one `create_ticket`
+action per major module (up to 6) — the user can then plant tickets
+individually or in bulk from the done screen.
+
+```json
+{
+  "summary": "Architecture finalized. Doc saved to DESIGN_DOC.md.",
+  "artifacts": [
+    { "path": "DESIGN_DOC.md", "openOnDone": true }
+  ],
+  "actions": [
+    {
+      "type": "navigate",
+      "id": "open-board",
+      "title": "Continue → Open workspace",
+      "description": "Land on the board to plan module specs and start work.",
+      "target": "board"
+    },
+    // For each major module discovered in DESIGN_DOC.md:
+    {
+      "type": "create_ticket",
+      "id": "module-spec-<slug>",
+      "title": "Spec <module name>",
+      "body": "Define the module's interface, responsibilities, and dependencies (auto-suggested from the architecture doc).",
+      "state": "pending"
+    }
+    // ...repeat per module
+  ]
+}
+```
+
+After `SessionFinalize`, send a brief confirmation ("Architecture
+finalized.") and end your turn.

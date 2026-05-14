@@ -76,6 +76,19 @@
   overflow: auto;
 }
 
+/* Bottom action row for sections with a Save button (Session Defaults). */
+.settings-section__actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--space-sm);
+  margin-top: var(--space-md);
+}
+.settings-section__saved {
+  font-size: var(--font-md);
+  color: var(--green);
+}
+
 .settings-themes {
   display: flex;
   flex-direction: column;

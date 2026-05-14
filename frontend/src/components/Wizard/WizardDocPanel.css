@@ -1,11 +1,11 @@
-.goal-file-panel {
+.wiz-doc-panel {
   display: flex;
   flex-direction: column;
   height: 100%;
   overflow: hidden;
 }
 
-.goal-file-panel-header {
+.wiz-doc-panel-header {
   display: flex;
   align-items: stretch;
   gap: var(--space-sm);
@@ -15,48 +15,35 @@
   flex-shrink: 0;
 }
 
-.goal-file-panel-header > .goal-file-panel-title,
-.goal-file-panel-header > .goal-file-panel-badge,
-.goal-file-panel-header > .goal-file-panel-reset {
+.wiz-doc-panel-header > .wiz-doc-panel-title,
+.wiz-doc-panel-header > .wiz-doc-panel-badge {
   align-self: center;
 }
 
-.goal-file-panel-title {
+.wiz-doc-panel-title {
   font-size: 12px;
   font-weight: 600;
   color: var(--text);
   font-family: var(--font-mono, monospace);
 }
 
-.goal-file-panel-reset {
-  font-size: 11px;
-  color: var(--muted);
-  background: none;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  padding: 2px 8px;
-  cursor: pointer;
-  flex-shrink: 0;
-}
-.goal-file-panel-reset:hover { color: var(--red); border-color: var(--red); }
-
-.goal-file-panel-badge {
+.wiz-doc-panel-badge {
   font-size: 11px;
   color: var(--hint);
-  animation: goal-pulse 1.5s ease-in-out infinite;
+  animation: wiz-doc-pulse 1.5s ease-in-out infinite;
 }
 
-@keyframes goal-pulse {
+@keyframes wiz-doc-pulse {
   0%, 100% { opacity: 1; }
   50%       { opacity: 0.4; }
 }
 
-.goal-file-panel-body {
+.wiz-doc-panel-body {
   flex: 1;
   overflow-y: auto;
 }
 
-.goal-file-panel-empty {
+.wiz-doc-panel-empty {
   padding: var(--space-xl);
   font-size: 12px;
   color: var(--hint);

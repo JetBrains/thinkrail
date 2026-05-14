@@ -83,6 +83,50 @@ export interface PendingRequest {
   inputSpecIds?: string[];
 }
 
+// ── Session outcome — done-screen contract from the agent ───────────────
+// Mirrors backend/app/agent/models.py: OutcomeArtifact, OutcomeAction (union),
+// SessionOutcome. Update both ends together.
+
+export interface OutcomeArtifact {
+  path: string;
+  label?: string | null;
+  openOnDone?: boolean;
+}
+
+export interface CreateTicketAction {
+  type: "create_ticket";
+  id: string;
+  title: string;
+  body?: string | null;
+  state: "pending" | "applied";
+}
+
+export interface StartSessionAction {
+  type: "start_session";
+  id: string;
+  title: string;
+  description?: string | null;
+  skillId: string;
+  prompt?: string | null;
+  primary?: boolean;
+}
+
+export interface NavigateAction {
+  type: "navigate";
+  id: string;
+  title: string;
+  description?: string | null;
+  target: "board" | "specs" | "graph" | "files";
+}
+
+export type OutcomeAction = CreateTicketAction | StartSessionAction | NavigateAction;
+
+export interface SessionOutcome {
+  summary?: string | null;
+  artifacts: OutcomeArtifact[];
+  actions: OutcomeAction[];
+}
+
 export interface Session {
   bonsaiSid: string;
   name: string;
@@ -115,6 +159,8 @@ export interface Session {
   subsessionContext: string | null;
   returnStatus: "pending" | "approved" | "dismissed" | null;
   returnSummary: string | null;
+  /** Done-screen contract emitted by the skill via SessionFinalize tool */
+  outcome?: SessionOutcome | null;
 }
 
 export interface PromptSection {

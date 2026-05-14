@@ -228,6 +228,10 @@ class DonePayload(BaseModel):
     turns: int = 0
     duration_ms: int = 0
     usage: dict[str, Any] = Field(default_factory=dict)
+    # Same shape as ``AgentTask.outcome``. Bundling it here makes the
+    # session-end + outcome transition atomic on the wire — the frontend
+    # never sees ``status=done`` without the next-step contract.
+    outcome: "SessionOutcome | None" = None
 
 
 class AskUserQuestionPayload(BaseModel):
@@ -520,6 +524,85 @@ class AgentResult(BaseModel):
     usage: dict[str, Any] = Field(default_factory=dict)
 
 
+# ─── Session outcome ──────────────────────────────────────────────────────────
+# A skill emits an outcome at finalization. The frontend renders the outcome on
+# the done screen as a banner + artifact previews + a row of action buttons.
+# Adding new action types is intentionally cheap: add a new BaseModel below,
+# include it in the OutcomeAction union, and teach the frontend dispatcher.
+
+
+class OutcomeArtifact(BaseModel):
+    """A file produced or finalized by the session — opened on the done screen."""
+
+    model_config = _CAMEL_CONFIG
+
+    path: str
+    label: str | None = None
+    open_on_done: bool = True
+
+
+class CreateTicketAction(BaseModel):
+    """Queued ticket creation. Rendered as an 'Add to board' button.
+
+    `state="pending"` until the user clicks; `state="applied"` once the ticket
+    has been created on the board.
+    """
+
+    model_config = _CAMEL_CONFIG
+
+    type: Literal["create_ticket"] = "create_ticket"
+    id: str
+    title: str
+    body: str | None = None
+    state: Literal["pending", "applied"] = "pending"
+
+
+class StartSessionAction(BaseModel):
+    """Recommended follow-up session. Rendered as a primary/secondary CTA."""
+
+    model_config = _CAMEL_CONFIG
+
+    type: Literal["start_session"] = "start_session"
+    id: str
+    title: str
+    description: str | None = None
+    skill_id: str
+    prompt: str | None = None
+    primary: bool = False
+
+
+class NavigateAction(BaseModel):
+    """UI navigation only — no agent or tool call."""
+
+    model_config = _CAMEL_CONFIG
+
+    type: Literal["navigate"] = "navigate"
+    id: str
+    title: str
+    description: str | None = None
+    target: Literal["board", "specs", "graph", "files"]
+
+
+OutcomeAction = Annotated[
+    Union[CreateTicketAction, StartSessionAction, NavigateAction],
+    Field(discriminator="type"),
+]
+
+
+class SessionOutcome(BaseModel):
+    """What to show on the done screen of a session.
+
+    Built up by the agent via `session_finalize` (and optionally `session_queue_action`).
+    Persisted on the AgentTask so it survives reloads.
+    """
+
+    model_config = _CAMEL_CONFIG
+
+    summary: str | None = None
+    artifacts: list[OutcomeArtifact] = Field(default_factory=list)
+    actions: list[OutcomeAction] = Field(default_factory=list)
+
+
 class AgentTask(BaseModel):
     """Task record tracking an agent run."""
 
@@ -544,3 +627,10 @@ class AgentTask(BaseModel):
     subsession_context: str | None = None
     return_status: str | None = None
     return_summary: str | None = None
+    outcome: SessionOutcome | None = None
+
+
+# Resolve forward refs for models that mention SessionOutcome before it was
+# declared (DonePayload is defined earlier in the file because it is part of
+# the agent event hierarchy).
+DonePayload.model_rebuild()

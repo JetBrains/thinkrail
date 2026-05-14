@@ -131,13 +131,36 @@ export type Result2 = string;
 export type Costusd3 = number;
 export type Turns3 = number;
 export type Durationms3 = number;
+export type Summary = string | null;
+export type Path = string;
+export type Label = string | null;
+export type Openondone = boolean;
+export type Artifacts = OutcomeArtifact[];
+export type Type1 = "create_ticket";
+export type Id = string;
+export type Title = string;
+export type Body = string | null;
+export type State = "pending" | "applied";
+export type Type2 = "start_session";
+export type Id1 = string;
+export type Title1 = string;
+export type Description = string | null;
+export type Skillid = string;
+export type Prompt = string | null;
+export type Primary = boolean;
+export type Type3 = "navigate";
+export type Id2 = string;
+export type Title2 = string;
+export type Description1 = string | null;
+export type Target = "board" | "specs" | "graph" | "files";
+export type Actions = (CreateTicketAction | StartSessionAction | NavigateAction)[];
 export type Bonsaisid15 = string;
 export type Sessionid16 = string;
 export type Eventtype15 = "askUserQuestion";
 export type Question1 = string;
 export type Header = string;
-export type Label = string;
-export type Description = string;
+export type Label1 = string;
+export type Description2 = string;
 export type Options = QuestionOption[];
 export type Multiselect = boolean;
 export type Questions = Question[];
@@ -150,7 +173,7 @@ export type Toolname3 = string;
 export type Tooluseid2 = string | null;
 export type Attempt1 = number;
 export type Requestid1 = string;
-export type Description1 = string | null;
+export type Description3 = string | null;
 export type Bonsaisid17 = string;
 export type Sessionid18 = string;
 export type Eventtype17 = "suggestSession";
@@ -158,12 +181,12 @@ export type Skill = string;
 export type Specids = string[];
 export type Name = string;
 export type Reason = string;
-export type Prompt = string | null;
+export type Prompt1 = string | null;
 export type Requestid2 = string;
 export type Bonsaisid18 = string;
 export type Sessionid19 = string;
 export type Eventtype18 = "suggestDescription";
-export type Description2 = string;
+export type Description4 = string;
 export type Section = string;
 export type Requestid3 = string;
 export type Bonsaisid19 = string;
@@ -429,9 +452,64 @@ export interface DonePayload {
   turns?: Turns3;
   durationMs?: Durationms3;
   usage?: Usage3;
+  outcome?: SessionOutcome | null;
 }
 export interface Usage3 {
   [k: string]: unknown;
+}
+/**
+ * What to show on the done screen of a session.
+ *
+ * Built up by the agent via `session_finalize` (and optionally `session_queue_action`).
+ * Persisted on the AgentTask so it survives reloads.
+ */
+export interface SessionOutcome {
+  summary?: Summary;
+  artifacts?: Artifacts;
+  actions?: Actions;
+}
+/**
+ * A file produced or finalized by the session — opened on the done screen.
+ */
+export interface OutcomeArtifact {
+  path: Path;
+  label?: Label;
+  openOnDone?: Openondone;
+}
+/**
+ * Queued ticket creation. Rendered as an 'Add to board' button.
+ *
+ * `state="pending"` until the user clicks; `state="applied"` once the ticket
+ * has been created on the board.
+ */
+export interface CreateTicketAction {
+  type?: Type1;
+  id: Id;
+  title: Title;
+  body?: Body;
+  state?: State;
+}
+/**
+ * Recommended follow-up session. Rendered as a primary/secondary CTA.
+ */
+export interface StartSessionAction {
+  type?: Type2;
+  id: Id1;
+  title: Title1;
+  description?: Description;
+  skillId: Skillid;
+  prompt?: Prompt;
+  primary?: Primary;
+}
+/**
+ * UI navigation only — no agent or tool call.
+ */
+export interface NavigateAction {
+  type?: Type3;
+  id: Id2;
+  title: Title2;
+  description?: Description1;
+  target: Target;
 }
 export interface AskUserQuestionEvent {
   bonsaiSid: Bonsaisid15;
@@ -460,8 +538,8 @@ export interface Question {
  * A selectable option within a question.
  */
 export interface QuestionOption {
-  label: Label;
-  description: Description;
+  label: Label1;
+  description: Description2;
 }
 export interface ConfirmActionEvent {
   bonsaiSid: Bonsaisid16;
@@ -478,7 +556,7 @@ export interface ConfirmActionPayload {
   toolUseId?: Tooluseid2;
   attempt?: Attempt1;
   requestId?: Requestid1;
-  description?: Description1;
+  description?: Description3;
 }
 export interface Toolinput1 {
   [k: string]: unknown;
@@ -497,7 +575,7 @@ export interface SuggestSessionPayload {
   specIds?: Specids;
   name?: Name;
   reason?: Reason;
-  prompt?: Prompt;
+  prompt?: Prompt1;
   requestId?: Requestid2;
 }
 export interface SuggestDescriptionEvent {
@@ -510,7 +588,7 @@ export interface SuggestDescriptionEvent {
  * Agent suggests a session description.
  */
 export interface SuggestDescriptionPayload {
-  description: Description2;
+  description: Description4;
   section?: Section;
   requestId?: Requestid3;
 }

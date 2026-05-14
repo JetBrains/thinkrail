@@ -10,9 +10,14 @@ import { ContextPanel } from "@/components/ContextPanel/ContextPanel.tsx";
 import { ResizeHandle } from "./ResizeHandle.tsx";
 import { SessionPanel } from "@/components/SessionPanel/SessionPanel.tsx";
 import { SessionManager } from "@/components/SessionManager/SessionManager.tsx";
-import { GoalFilePanel } from "@/components/GoalFilePanel/GoalFilePanel.tsx";
-import { NewProjectScreen } from "@/components/SessionPanel/NewProjectScreen.tsx";
-import { NewProjectStepper } from "@/components/SessionPanel/NewProjectStepper.tsx";
+import {
+  NewProjectForm,
+  WizardStepper,
+  WizardDocPanel,
+  WizardDonePanel,
+  getWizardConfig,
+  isWizardSkill,
+} from "@/components/Wizard";
 import { BoardView } from "@/components/BoardView/BoardView.tsx";
 import { MetaTicketDetail } from "@/components/MetaTicketDetail/MetaTicketDetail.tsx";
 import { useBoardStore } from "@/store/boardStore.ts";
@@ -64,11 +69,40 @@ export function AppShell({ onSwitchProject }: { onSwitchProject: () => void }) {
   const activeSession = activeSessionId ? sessions.get(activeSessionId) : null;
   const isNewProjectMode =
     projectState === "new" && !activeSession && openFilesMap.size === 0;
-  const isGoalSession =
-    (activeSession?.skillId === "new-project" ||
-     activeSession?.skillId === "goal-and-requirements") &&
-    activeSession.status !== "done" &&
-    activeSession.status !== "error";
+
+  // ── Wizard skill resolution ────────────────────────────────────────────
+  // A wizard skill is one that gets the chat+doc guided layout: stepper
+  // on top, chat on the left, live doc preview on the right. Add new
+  // wizard skills in components/Wizard/registry.ts — no AppShell changes needed.
+  const wizardConfig = getWizardConfig(
+    activeSession?.skillId,
+    activeSession?.status,
+  );
+  const skillIsWizard = isWizardSkill(activeSession?.skillId);
+
+  // ── Outcome-driven done screen ──────────────────────────────────────────
+  // A skill emits an outcome via the SessionFinalize MCP tool. When the
+  // session ends, we show a generic done panel rendered from the outcome
+  // contract — no skill-specific hardcoding here. The user can dismiss
+  // the done-screen (e.g. via "Open workspace") to drop back into the
+  // regular session UX; that dismissal is persisted per bonsaiSid.
+  const dismissedWizardOutcomes = useUiStore((s) => s.dismissedWizardOutcomes);
+  const outcome = activeSession?.outcome ?? null;
+  const isOutcomeDone =
+    outcome != null &&
+    !!activeSessionId &&
+    (activeSession?.status === "done" || activeSession?.status === "error") &&
+    !dismissedWizardOutcomes.includes(activeSessionId);
+
+  // ── Wizard takeover (while running) ────────────────────────────────────
+  // While the agent is still working — regardless of whether the spec has
+  // been finalized — show the chat+doc split layout. The transition out is
+  // tied to the session's own lifecycle (status → done/error), not to
+  // side effects like the spec status flipping.
+  const isWizardSession =
+    skillIsWizard &&
+    activeSession?.status !== "done" &&
+    activeSession?.status !== "error";
 
   const handleOpenTicket = useCallback(
     (ticketId: string) => openTicket(ticketId),
@@ -110,32 +144,45 @@ export function AppShell({ onSwitchProject }: { onSwitchProject: () => void }) {
     );
   }
 
-  // Special flows (new-project form, guided goal session) take over the
-  // whole window — but only when the user is on Sessions view. Switching
-  // to Board always shows the regular workspace layout with the kanban in
-  // the center, regardless of the active session.
-  if (centerView === "sessions" && isNewProjectMode) {
+  // New-project mode is a fresh-folder onboarding takeover: no sessions, no
+  // files, no tickets to show on a board — so it overrides centerView and
+  // always renders fullscreen, regardless of which tab was last active.
+  if (isNewProjectMode) {
     return (
       <Shell onSwitchProject={onSwitchProject}>
         <div className="np-fullscreen">
-          <NewProjectScreen />
+          <NewProjectForm />
         </div>
       </Shell>
     );
   }
 
-  if (centerView === "sessions" && isGoalSession) {
+  // Wizard takeovers (running + done) only apply when the user is on the
+  // Sessions tab. Clicking Board in the header is an opt-out path.
+
+  // Outcome-driven done screen — wizardConfig drives the stepper so each
+  // skill shows the right phase as "done" once it finishes.
+  if (centerView === "sessions" && isOutcomeDone && activeSession && outcome) {
     return (
       <Shell onSwitchProject={onSwitchProject}>
-        <NewProjectStepper currentStep={2} />
+        {wizardConfig && <WizardStepper steps={wizardConfig.steps} />}
+        <WizardDonePanel session={activeSession} outcome={outcome} />
+      </Shell>
+    );
+  }
+
+  if (centerView === "sessions" && isWizardSession && activeSessionId && wizardConfig) {
+    return (
+      <Shell onSwitchProject={onSwitchProject}>
+        <WizardStepper steps={wizardConfig.steps} />
         <div className="layout layout-goal">
           <div className="goal-chat">
             <ViewModeProvider>
-              <SessionPanel hideTabBar />
+              <SessionPanel hideTabBar hideStickyBar hideContextCard />
             </ViewModeProvider>
           </div>
           <div className="goal-doc">
-            <GoalFilePanel />
+            <WizardDocPanel filePath={wizardConfig.artifactPath} />
           </div>
         </div>
       </Shell>

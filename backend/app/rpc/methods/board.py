@@ -30,6 +30,7 @@ async def create_ticket(service: BoardService, **params: Any) -> dict:
         title=params["title"],
         body=params.get("body", ""),
         type=params.get("type", "feature"),
+        status=params.get("status", "idea"),
     )
     return ticket.model_dump(by_alias=True)
 

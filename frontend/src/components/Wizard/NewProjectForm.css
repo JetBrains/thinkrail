@@ -1,5 +1,5 @@
 /* ── Screen container ─────────────────────────────────────────── */
-.np-screen {
+.np-form-screen {
   flex: 1;
   display: flex;
   flex-direction: column;
@@ -14,7 +14,7 @@
   padding: 30px;
 }
 
-.np-h2 {
+.np-form-h2 {
   margin: 0 0 6px;
   font-size: 22px;
   font-weight: 600;
@@ -22,18 +22,18 @@
   letter-spacing: -0.3px;
 }
 
-.np-lead {
+.np-form-lead {
   color: var(--hint);
   margin: 0 0 24px;
   font-size: 13px;
   line-height: 1.5;
 }
 
-.np-field {
+.np-form-field {
   margin-bottom: 14px;
 }
 
-.np-label {
+.np-form-label {
   font-size: 11px;
   color: var(--hint);
   margin-bottom: 5px;
@@ -42,7 +42,7 @@
   text-transform: uppercase;
 }
 
-.np-input {
+.np-form-input {
   width: 100%;
   padding: 10px 12px;
   border-radius: 8px;
@@ -55,22 +55,22 @@
   outline: none;
   transition: border-color 150ms ease;
 }
-.np-input:focus { border-color: var(--purple); }
-.np-input::placeholder { color: var(--hint); }
-.np-input--error { border-color: var(--red) !important; }
+.np-form-input:focus { border-color: var(--purple); }
+.np-form-input::placeholder { color: var(--hint); }
+.np-form-input--error { border-color: var(--red) !important; }
 
-.np-name-error {
+.np-form-name-error {
   font-size: 11px;
   color: var(--red);
   margin-top: 4px;
 }
 
 /* ── Textarea + mic ───────────────────────────────────────────── */
-.np-textarea-wrap {
+.np-form-textarea-wrap {
   position: relative;
 }
 
-.np-textarea {
+.np-form-textarea {
   width: 100%;
   padding: 10px 12px;
   padding-bottom: 32px;
@@ -87,10 +87,10 @@
   outline: none;
   transition: border-color 150ms ease;
 }
-.np-textarea:focus { border-color: var(--purple); }
-.np-textarea::placeholder { color: var(--hint); }
+.np-form-textarea:focus { border-color: var(--purple); }
+.np-form-textarea::placeholder { color: var(--hint); }
 
-.np-mic {
+.np-form-mic {
   position: absolute;
   bottom: 8px;
   right: 8px;
@@ -107,26 +107,26 @@
   padding: 0;
   transition: color 150ms ease, background 150ms ease;
 }
-.np-mic:hover:not(:disabled) {
+.np-form-mic:hover:not(:disabled) {
   color: var(--text);
   background: var(--hover);
 }
-.np-mic--recording {
+.np-form-mic--recording {
   color: var(--red);
-  animation: np-mic-pulse 1.5s ease-in-out infinite;
+  animation: np-form-mic-pulse 1.5s ease-in-out infinite;
 }
-.np-mic--transcribing {
+.np-form-mic--transcribing {
   color: var(--blue);
   pointer-events: none;
   opacity: 0.7;
 }
-@keyframes np-mic-pulse {
+@keyframes np-form-mic-pulse {
   0%, 100% { opacity: 1; }
   50% { opacity: 0.4; }
 }
 
 /* ── Attach row ───────────────────────────────────────────────── */
-.np-attach-row {
+.np-form-attach-row {
   display: flex;
   align-items: center;
   gap: 8px;
@@ -134,7 +134,7 @@
   flex-wrap: wrap;
 }
 
-.np-attach-btn {
+.np-form-attach-btn {
   display: inline-flex;
   align-items: center;
   gap: 6px;
@@ -148,21 +148,21 @@
   cursor: pointer;
   transition: color 150ms ease, border-color 150ms ease;
 }
-.np-attach-btn:hover:not(:disabled) {
+.np-form-attach-btn:hover:not(:disabled) {
   color: var(--text);
   border-color: var(--purple);
 }
-.np-attach-btn:disabled {
+.np-form-attach-btn:disabled {
   opacity: 0.4;
   cursor: not-allowed;
 }
 
-.np-hint {
+.np-form-hint {
   font-size: 11.5px;
   color: var(--hint);
 }
 
-.np-attached-file {
+.np-form-attached-file {
   display: inline-flex;
   align-items: center;
   gap: 4px;
@@ -178,7 +178,7 @@
   white-space: nowrap;
 }
 
-.np-attached-remove {
+.np-form-attached-remove {
   background: none;
   border: none;
   color: var(--hint);
@@ -188,10 +188,10 @@
   padding: 0 2px;
   flex-shrink: 0;
 }
-.np-attached-remove:hover { color: var(--red); }
+.np-form-attached-remove:hover { color: var(--red); }
 
 /* ── Actions row ──────────────────────────────────────────────── */
-.np-actions {
+.np-form-actions {
   display: flex;
   gap: 8px;
   justify-content: space-between;
@@ -199,12 +199,12 @@
   margin-top: 18px;
 }
 
-.np-actions-buttons {
+.np-form-actions-buttons {
   display: flex;
   gap: 8px;
 }
 
-.np-btn {
+.np-form-btn {
   display: inline-flex;
   align-items: center;
   gap: 6px;
@@ -219,24 +219,24 @@
   cursor: pointer;
   transition: background 150ms ease, border-color 150ms ease;
 }
-.np-btn:hover:not(:disabled) { background: var(--hover); }
-.np-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+.np-form-btn:hover:not(:disabled) { background: var(--hover); }
+.np-form-btn:disabled { opacity: 0.4; cursor: not-allowed; }
 
-.np-btn-primary {
+.np-form-btn-primary {
   background: var(--purple);
   color: #fff;
   border-color: var(--purple);
   box-shadow: 0 1px 0 rgba(0, 0, 0, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.15);
 }
-.np-btn-primary:hover:not(:disabled) { filter: brightness(1.1); }
+.np-form-btn-primary:hover:not(:disabled) { filter: brightness(1.1); }
 
-.np-btn-icon {
+.np-form-btn-icon {
   width: 14px;
   height: 14px;
   flex-shrink: 0;
 }
 
-.np-kbd {
+.np-form-kbd {
   display: inline-block;
   font-family: var(--font);
   font-size: 11px;

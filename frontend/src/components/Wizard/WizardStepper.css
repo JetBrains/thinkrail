@@ -1,4 +1,4 @@
-.nps-stepper {
+.wiz-stepper {
   display: flex;
   align-items: center;
   justify-content: center;
@@ -10,13 +10,13 @@
   flex-shrink: 0;
 }
 
-.nps-step-row {
+.wiz-step-row {
   display: flex;
   align-items: center;
   gap: 6px;
 }
 
-.nps-step {
+.wiz-step {
   display: flex;
   align-items: center;
   gap: 6px;
@@ -24,7 +24,7 @@
   color: var(--hint);
 }
 
-.nps-step-num {
+.wiz-step-num {
   width: 22px;
   height: 22px;
   border-radius: 50%;
@@ -38,25 +38,25 @@
   color: var(--muted);
 }
 
-.nps-step-active {
+.wiz-step-active {
   color: var(--text);
 }
-.nps-step-active .nps-step-num {
+.wiz-step-active .wiz-step-num {
   background: var(--purple);
   border-color: var(--purple);
   color: #fff;
 }
 
-.nps-step-done {
+.wiz-step-done {
   color: var(--text);
 }
-.nps-step-done .nps-step-num {
+.wiz-step-done .wiz-step-num {
   background: rgba(33, 215, 137, 0.16);
   border-color: rgba(33, 215, 137, 0.32);
   color: var(--green);
 }
 
-.nps-step-arrow {
+.wiz-step-arrow {
   color: var(--border);
   font-size: 12px;
 }

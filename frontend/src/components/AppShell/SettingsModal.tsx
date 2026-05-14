@@ -1,9 +1,12 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Modal, CopyButton } from "@/components/ui/index.ts";
 import { useServerInfoStore } from "@/store/serverInfoStore.ts";
 import { useSettingsStore } from "@/store/settingsStore.ts";
 import { useUiStore } from "@/store/uiStore.ts";
 import { readFile } from "@/services/files.ts";
+import { getErrorMessage } from "@/utils/errors.ts";
+import { PERMISSION_MODES } from "@/utils/sessionConfig.ts";
+import type { SessionDefaults } from "@/api/methods/appSettings.ts";
 import {
   type ThemePreference,
   THEMES,
@@ -14,10 +17,11 @@ import "./SettingsModal.css";
 
 const SETTINGS_PATH = ".bonsai/settings.json";
 
-type Section = "themes" | "server" | "settings";
+type Section = "themes" | "defaults" | "server" | "settings";
 
 const SECTIONS: { id: Section; label: string }[] = [
   { id: "themes", label: "Themes" },
+  { id: "defaults", label: "Session Defaults" },
   { id: "server", label: "Server Info" },
   { id: "settings", label: "Settings" },
 ];
@@ -50,6 +54,7 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
         </nav>
         <div className="settings-modal__content">
           {section === "themes" && <ThemesSection />}
+          {section === "defaults" && <SessionDefaultsSection visible={section === "defaults"} />}
           {section === "server" && <ServerSection />}
           {section === "settings" && <SettingsSection />}
         </div>
@@ -148,6 +153,190 @@ function ServerSection() {
           )}
         </>
       )}
+    </div>
+  );
+}
+
+const EFFORT_OPTIONS = [null, "low", "medium", "high", "max"] as const;
+const TURN_OPTIONS = [5, 10, 20, 50, 100] as const;
+
+/**
+ * User-scope session defaults — model, permission mode, effort, max turns.
+ * Persisted via ``appSettings/*`` RPCs in the AppStore, so the values follow
+ * the user across every project (unlike ``.bonsai/settings.json`` which is
+ * project-scoped). Rendered inline as a `Settings` section instead of its
+ * own dialog so the top-bar gear is a single entry point to everything.
+ */
+function SessionDefaultsSection({ visible }: { visible: boolean }) {
+  const sessionDefaults = useSettingsStore((s) => s.sessionDefaults);
+  const fetchSessionDefaults = useSettingsStore((s) => s.fetchSessionDefaults);
+  const updateSessionDefaults = useSettingsStore((s) => s.updateSessionDefaults);
+  const models = useSettingsStore((s) => s.models) ?? [];
+
+  const [draft, setDraft] = useState<SessionDefaults | null>(sessionDefaults);
+  const [saveError, setSaveError] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [savedAt, setSavedAt] = useState<number | null>(null);
+  const wasVisibleRef = useRef(false);
+
+  // Seed local draft when the user opens this section; mirror late-arriving
+  // store values into the draft so the picker doesn't show stale fields if
+  // the initial fetch hadn't landed when the modal was first mounted.
+  useEffect(() => {
+    if (!visible) {
+      wasVisibleRef.current = false;
+      return;
+    }
+    if (!wasVisibleRef.current) {
+      wasVisibleRef.current = true;
+      setSaveError(null);
+      setSavedAt(null);
+      setDraft(sessionDefaults);
+      if (sessionDefaults === null) {
+        fetchSessionDefaults();
+      }
+      return;
+    }
+    if (draft === null && sessionDefaults !== null) {
+      setDraft(sessionDefaults);
+    }
+  }, [visible, sessionDefaults, draft, fetchSessionDefaults]);
+
+  if (!draft && !sessionDefaults) {
+    return (
+      <div className="settings-section">
+        <h3 className="settings-section__title">Session Defaults</h3>
+        <p className="settings-section__hint">Loading…</p>
+      </div>
+    );
+  }
+
+  const value = draft ?? sessionDefaults!;
+  const dirty =
+    sessionDefaults !== null &&
+    (value.model !== sessionDefaults.model ||
+      value.effort !== sessionDefaults.effort ||
+      value.permissionMode !== sessionDefaults.permissionMode ||
+      value.maxTurns !== sessionDefaults.maxTurns);
+
+  const setDraftValue = (next: SessionDefaults) => {
+    setSaveError(null);
+    setSavedAt(null);
+    setDraft(next);
+  };
+
+  const handleSave = async () => {
+    setSaving(true);
+    setSaveError(null);
+    try {
+      await updateSessionDefaults(value);
+      setSavedAt(Date.now());
+    } catch (err) {
+      setSaveError(`Failed to save settings: ${getErrorMessage(err)}`);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const current = models.filter((m) => m.group === "current");
+  const legacy = models.filter((m) => m.group === "legacy");
+  const selectedModel = models.find((m) => m.id === value.model);
+
+  return (
+    <div className="settings-section">
+      <h3 className="settings-section__title">Session Defaults</h3>
+      <p className="settings-section__hint">
+        Applied to every new session you start, across all projects. Stored
+        on this machine — does not affect teammates.
+      </p>
+
+      <div className="user-settings-row">
+        <label className="user-settings-label">Model</label>
+        <select
+          className="draft-config-select draft-config-select--model"
+          value={value.model}
+          onChange={(e) => setDraftValue({ ...value, model: e.target.value })}
+        >
+          {!selectedModel && <option value={value.model}>{value.model}</option>}
+          {current.length > 0 && (
+            <optgroup label="Current">
+              {current.map((m) => (
+                <option key={m.id} value={m.id}>{m.label}</option>
+              ))}
+            </optgroup>
+          )}
+          {legacy.length > 0 && (
+            <optgroup label="Legacy">
+              {legacy.map((m) => (
+                <option key={m.id} value={m.id}>{m.label}</option>
+              ))}
+            </optgroup>
+          )}
+        </select>
+      </div>
+
+      <div className="user-settings-row">
+        <label className="user-settings-label">Permission mode</label>
+        <select
+          className="draft-config-select"
+          value={value.permissionMode}
+          onChange={(e) => setDraftValue({ ...value, permissionMode: e.target.value })}
+        >
+          {PERMISSION_MODES.map((m) => (
+            <option key={m} value={m}>{m}</option>
+          ))}
+        </select>
+      </div>
+
+      <div className="user-settings-row">
+        <label className="user-settings-label">Effort</label>
+        <span className="draft-config-pills">
+          {EFFORT_OPTIONS.map((e) => (
+            <button
+              key={e ?? "auto"}
+              type="button"
+              className={`draft-config-effort-pill ${value.effort === e ? "draft-config-effort-pill--active" : ""}`}
+              onClick={() => setDraftValue({ ...value, effort: e })}
+            >
+              {e ?? "auto"}
+            </button>
+          ))}
+        </span>
+      </div>
+
+      <div className="user-settings-row">
+        <label className="user-settings-label">Max turns</label>
+        <span className="draft-config-pills">
+          {TURN_OPTIONS.map((t) => (
+            <button
+              key={t}
+              type="button"
+              className={`draft-config-effort-pill ${value.maxTurns === t ? "draft-config-effort-pill--active" : ""}`}
+              onClick={() => setDraftValue({ ...value, maxTurns: t })}
+            >
+              {t}
+            </button>
+          ))}
+        </span>
+      </div>
+
+      {saveError && (
+        <div className="token-dialog-error" role="alert">{saveError}</div>
+      )}
+
+      <div className="settings-section__actions">
+        {savedAt && !dirty && (
+          <span className="settings-section__saved">Saved ✓</span>
+        )}
+        <button
+          className="token-dialog-btn token-dialog-btn-primary"
+          onClick={handleSave}
+          disabled={!dirty || saving}
+          title={!dirty ? "No changes to save" : "Save settings"}
+        >
+          {saving ? "Saving…" : "Save"}
+        </button>
+      </div>
     </div>
   );
 }

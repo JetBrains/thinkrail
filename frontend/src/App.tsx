@@ -84,6 +84,23 @@ function AppInner({ projectPath: _projectPath, onSwitchProject }: { projectPath:
   // Global keyboard shortcuts
   useEffect(() => registerKeyboardShortcuts(), []);
 
+  // Remember which session was active per project so a page reload picks
+  // up where the user left off — instead of auto-selecting an unrelated
+  // session by mtime.
+  useEffect(() => {
+    let prev = useSessionStore.getState().activeSessionId;
+    const unsub = useSessionStore.subscribe((state) => {
+      const next = state.activeSessionId;
+      if (next === prev) return;
+      prev = next;
+      const projectPath = useUiStore.getState().projectPath;
+      if (projectPath) {
+        useUiStore.getState().rememberActiveSession(projectPath, next);
+      }
+    });
+    return unsub;
+  }, []);
+
   // Viewport resize tracking
   useEffect(() => {
     const onResize = () =>

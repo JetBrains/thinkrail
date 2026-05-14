@@ -18,6 +18,7 @@ import { useInputDraftStore } from "./inputDraftStore.ts";
 import { useNotificationStore } from "./notificationStore.ts";
 import { useBoardStore } from "./boardStore.ts";
 import { useFileStore } from "./fileStore.ts";
+import { useUiStore } from "./uiStore.ts";
 import { getErrorMessage } from "@/utils/errors.ts";
 import { useSpecStore } from "./specStore.ts";
 import { useSettingsStore } from "./settingsStore.ts";
@@ -125,6 +126,15 @@ interface SessionStore {
   onRemoteUserMessage: (params: Record<string, unknown>) => void;
   onSessionDone: (params: Record<string, unknown>) => void;
   onSessionError: (params: Record<string, unknown>) => void;
+  /** Merge a snapshot of session metadata pushed from the backend (e.g. when
+   *  the agent calls SessionFinalize and sets the outcome). */
+  onSessionMetadataUpdate: (task: Record<string, unknown>) => void;
+  /** Update one action inside the active session outcome and persist via RPC. */
+  patchOutcomeAction: (
+    bonsaiSid: string,
+    actionId: string,
+    patch: Record<string, unknown>,
+  ) => Promise<void>;
   onConfigChanged: (params: Record<string, unknown>) => void;
   onSubsessionReturned: (params: Record<string, unknown>) => void;
 }
@@ -415,6 +425,7 @@ function ensureSession(
     subsessionContext: null,
     returnStatus: null,
     returnSummary: null,
+    outcome: null,
   });
   return next;
 }
@@ -993,6 +1004,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
       subsessionContext: (data as unknown as Record<string, unknown>).subsessionContext as string ?? null,
       returnStatus: (data as unknown as Record<string, unknown>).returnStatus as Session["returnStatus"] ?? null,
       returnSummary: (data as unknown as Record<string, unknown>).returnSummary as string ?? null,
+      outcome: ((data as unknown as Record<string, unknown>).outcome as Session["outcome"]) ?? null,
     };
 
     set((s) => {
@@ -1118,6 +1130,9 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
           subsessionContext: (data as unknown as Record<string, unknown>)?.subsessionContext as string ?? null,
           returnStatus: (data as unknown as Record<string, unknown>)?.returnStatus as Session["returnStatus"] ?? null,
           returnSummary: (data as unknown as Record<string, unknown>)?.returnSummary as string ?? null,
+          outcome: ((data as unknown as Record<string, unknown>)?.outcome
+            ?? (entry as unknown as Record<string, unknown>)?.outcome
+            ?? null) as Session["outcome"],
         });
       }
 
@@ -1129,10 +1144,25 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
         }
       }
 
-      // Auto-activate the most relevant session if none is active yet:
-      // running → most recently started active → recovered disk session
-      // (fallback for backend-restart when no live runners exist).
+      // Auto-activate the most relevant session if none is active yet.
+      // Priority:
+      //   1. Already-active in store (no-op after first load).
+      //   2. Remembered last-active for this project (page-reload recall).
+      //   3. Running session.
+      //   4. Most recently started active session.
+      //   5. Most recently updated disk session (only when caller opts in).
       let autoActiveId: string | null = s.activeSessionId;
+      if (!autoActiveId) {
+        const projectPath = useUiStore.getState().projectPath;
+        const remembered = projectPath
+          ? useUiStore.getState().lastActiveSessions[projectPath]
+          : undefined;
+        // Only accept the remembered ID if the session still exists in the
+        // list — otherwise it's stale (session deleted or moved).
+        if (remembered && all.some((e) => e.bonsaiSid === remembered)) {
+          autoActiveId = remembered;
+        }
+      }
       if (!autoActiveId) {
         const activeCandidates = all.filter((e) => e.active);
         const best = activeCandidates.find((e) => e.status === "running")
@@ -1531,6 +1561,45 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
       });
       return { sessions: next };
     });
+  },
+
+  onSessionMetadataUpdate: (task) => {
+    const bonsaiSid = task.bonsaiSid as string | undefined;
+    if (!bonsaiSid) return;
+    set((s) => {
+      const existing = s.sessions.get(bonsaiSid);
+      if (!existing) return s;
+      const outcome = (task.outcome as Session["outcome"]) ?? null;
+      const next = new Map(s.sessions);
+      next.set(bonsaiSid, { ...existing, outcome });
+      return { sessions: next };
+    });
+  },
+
+  patchOutcomeAction: async (bonsaiSid, actionId, patch) => {
+    // Optimistic update for instant feedback
+    set((s) => {
+      const existing = s.sessions.get(bonsaiSid);
+      if (!existing?.outcome) return s;
+      const nextActions = existing.outcome.actions.map((a) =>
+        a.id === actionId ? ({ ...a, ...patch } as typeof a) : a,
+      );
+      const next = new Map(s.sessions);
+      next.set(bonsaiSid, {
+        ...existing,
+        outcome: { ...existing.outcome, actions: nextActions },
+      });
+      return { sessions: next };
+    });
+    try {
+      await getClient().request("session/patchOutcomeAction", {
+        bonsaiSid,
+        actionId,
+        patch,
+      });
+    } catch (e) {
+      console.error("[sessionStore] patchOutcomeAction failed:", e);
+    }
   },
 
   onAgentEvent: (method, params) => {
@@ -1958,6 +2027,10 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
         const newCost = (params.costUsd as number) ?? session.metrics.costUsd;
         const costDelta = newCost - session.metrics.costUsd;
         projectCost += costDelta;
+        // Outcome is bundled into agent/done so the status flip and the
+        // next-step contract land in the same render cycle — no flash
+        // of a "session ended" view between the two notifications.
+        const payloadOutcome = (params.outcome as Session["outcome"]) ?? null;
         sessions.set(bonsaiSid, {
           ...session,
           status: "done",
@@ -1968,6 +2041,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
             turns: (params.turns as number) ?? session.metrics.turns,
             durationMs: (params.durationMs as number) ?? session.metrics.durationMs,
           },
+          outcome: payloadOutcome ?? session.outcome ?? null,
         });
       }
       return { sessions, projectCost };
@@ -2063,6 +2137,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
         subsessionContext: (data as unknown as Record<string, unknown>).subsessionContext as string ?? context ?? null,
         returnStatus: (data as unknown as Record<string, unknown>).returnStatus as Session["returnStatus"] ?? null,
         returnSummary: (data as unknown as Record<string, unknown>).returnSummary as string ?? null,
+        outcome: ((data as unknown as Record<string, unknown>).outcome as Session["outcome"]) ?? null,
       };
 
       set((s) => {

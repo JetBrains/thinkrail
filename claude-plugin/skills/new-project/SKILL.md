@@ -8,6 +8,22 @@ argument-hint: "[describe your idea]"
 
 You are helping someone turn an idea into a clear, buildable specification. The folder is empty — there is no code yet, no decisions made. Your job is to help them think clearly and quickly arrive at a focused scope.
 
+> ## ⚠️ Critical: file path
+>
+> **Every** `Write`/`Edit`/`spec_save` call in this skill MUST use the path
+> `GOAL&REQUIREMENTS.md` — relative to the project root, with **no
+> directory prefix**.
+>
+> - ✅ `GOAL&REQUIREMENTS.md`
+> - ❌ `.bonsai/GOAL&REQUIREMENTS.md`
+> - ❌ `docs/GOAL&REQUIREMENTS.md`
+>
+> `.bonsai/` is reserved for operational artifacts (plans, tickets,
+> sessions). The goal-and-requirements spec is a top-level project
+> deliverable — it sits next to `README.md`, `DESIGN_DOC.md`, and the
+> user's source code. Saving it anywhere else breaks the project-state
+> detector and the live doc panel.
+
 **Principles:**
 - Work from what you already know from `$ARGUMENTS` — never ask what was already said
 - **Pre-filled document fast-path** — if `$ARGUMENTS` already contains a structured document (multiple markdown headings matching spec sections, or a clearly written brief covering several sections), parse it and treat those sections as **already confirmed**. Save them immediately via `spec_save`. Never re-ask the user to confirm content they wrote themselves. Only enter steps for sections that are genuinely missing **and** required by the inferred `depth`/`audience`. The only post-parse interaction is the alternatives research question — one yes/no, nothing else.
@@ -458,7 +474,49 @@ Use `AskUserQuestion`:
 
 ### A-Save & Next
 
-Use `spec_save` to finalize with `type: "goal-and-requirements"`, `status: "active"`.
+Use `spec_save` to finalize with `type: "goal-and-requirements"`, `status: "done"`.
+
+Then call `SessionFinalize` to declare the done-screen contract. The user
+drives the next step from the buttons it renders — do **not** call
+`CreateBoardTicket` yourself in this session.
+
+```json
+{
+  "summary": "Project planted. Doc saved to GOAL&REQUIREMENTS.md.",
+  "artifacts": [
+    { "path": "GOAL&REQUIREMENTS.md", "openOnDone": true }
+  ],
+  "actions": [
+    {
+      "type": "start_session",
+      "id": "next-architecture",
+      "title": "Continue → Architecture",
+      "description": "Sketch the stack & modules in a DESIGN_DOC.md before tickets start running.",
+      "skillId": "architecture-design",
+      "primary": true
+    },
+    {
+      "type": "navigate",
+      "id": "skip-to-board",
+      "title": "Skip → Open workspace",
+      "description": "Architecture can wait. Land on the board now.",
+      "target": "board"
+    },
+    // For each V1 feature, add one create_ticket action. The user clicks
+    // 'Add to board' per item or 'Add all remaining' for bulk.
+    {
+      "type": "create_ticket",
+      "id": "v1-feat-<slug>",
+      "title": "<feature name>",
+      "body": "<one-line rationale>",
+      "state": "pending"
+    }
+    // ...repeat per V1 feature
+  ]
+}
+```
+
+After `SessionFinalize`, send a brief confirmation ("Spec saved.") and end your turn.
 
 Update progress tracker via `bonsai_visualize` — mark Goal & Scope as **done**:
 
@@ -481,36 +539,11 @@ Update progress tracker via `bonsai_visualize` — mark Goal & Scope as **done**
 
 ### A-Board — Add tasks to board
 
-Read `GOAL&REQUIREMENTS.md`.
-
-**If no alternatives are named in the spec:**
-
-Ask with `AskUserQuestion`:
-```
-header: "Add to board"
-question: "Add V1 features to the board?"
-options:
-  - "Yes"
-  - "No"
-```
-If "Yes" → call `CreateBoardTicket` for every feature from "V1 Features" — feature name as `title`, its description as `body`.
-
-**If alternatives are present:**
-
-Ask with `AskUserQuestion` (`multiSelect: true` per group):
-```
-header: "Add to board"
-question: "What should I add to the board?"
-groups:
-  - heading: "V1 Features"
-    options: ["All V1 features"]
-  - heading: "Research"
-    options: ["Research [Alternative A]", "Research [Alternative B]", ...]
-```
-- "All V1 features" → call `CreateBoardTicket` for every feature from "V1 Features"
-- Each research option → call `CreateBoardTicket` with title "Research [Alternative]" and body describing what to investigate
-
-Call all `CreateBoardTicket`s before proceeding.
+Board ticket creation is now part of the `SessionFinalize` outcome (see
+A-Save above). Include one `create_ticket` action per V1 feature plus one
+per research alternative; do not call `CreateBoardTicket` directly. The
+UI renders an "Add to board" button per item so the user reviews each
+ticket before it's planted.
 
 ---
 
@@ -817,7 +850,20 @@ On revision → make the change and re-show the draft.
 
 ### B-Save & Next
 
-Use `spec_save` to finalize with `type: "goal-and-requirements"`, `status: "active"`.
+Use `spec_save` to finalize with `type: "goal-and-requirements"`, `status: "done"`.
+
+Then call `SessionFinalize` to declare the done-screen contract. Same
+shape as A-Save above:
+
+- `summary`: short banner about the saved spec.
+- `artifacts`: include `GOAL&REQUIREMENTS.md` (at project root, **not** under `.bonsai/`) with `openOnDone: true`.
+- `actions`: at minimum a primary `start_session` for `architecture-design`,
+  a `navigate` to `board` as the skip path, plus one `create_ticket` per
+  V1 feature (use the rationale as `body`) and one `create_ticket` per
+  named alternative ("Research <Alternative>"). All in `state: "pending"`.
+
+Do **not** call `CreateBoardTicket` directly — the user reviews and
+applies each queued ticket from the done screen.
 
 Update progress tracker via `bonsai_visualize` — mark Goal & Scope as **done**:
 
@@ -840,36 +886,10 @@ Update progress tracker via `bonsai_visualize` — mark Goal & Scope as **done**
 
 ### B-Board — Add tasks to board
 
-Read `GOAL&REQUIREMENTS.md`.
-
-**If no alternatives are named in "Alternatives Considered":**
-
-Ask with `AskUserQuestion`:
-```
-header: "Add to board"
-question: "Add V1 features to the board?"
-options:
-  - "Yes"
-  - "No"
-```
-If "Yes" → call `CreateBoardTicket` for every feature from "MVP Scope → In v1" — feature name as `title`, rationale (the `— *why*` part) as `body`.
-
-**If alternatives are present:**
-
-Ask with `AskUserQuestion` (`multiSelect: true` per group):
-```
-header: "Add to board"
-question: "What should I add to the board?"
-groups:
-  - heading: "V1 Features"
-    options: ["All V1 features"]
-  - heading: "Research"
-    options: ["Research [Alternative A]", "Research [Alternative B]", ...]
-```
-- "All V1 features" → call `CreateBoardTicket` for every feature from "MVP Scope → In v1"
-- Each research option → call `CreateBoardTicket` with title "Research [Alternative]" and body describing the gap to investigate
-
-Call all `CreateBoardTicket`s before proceeding.
-
-Use `SuggestSession` to propose `architecture-design`, passing the spec ID in `specIds`.
+Board ticket creation is now part of the `SessionFinalize` outcome (see
+B-Save above). Include one `create_ticket` action per V1 feature plus
+one per named alternative ("Research <Alternative>"); do not call
+`CreateBoardTicket` or `SuggestSession` directly. The UI renders an
+"Add to board" button per item so the user reviews each ticket and a
+primary CTA for the architecture follow-up.
 

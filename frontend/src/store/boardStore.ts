@@ -25,6 +25,7 @@ interface BoardStore {
     title: string,
     body?: string,
     type?: MetaTicketType,
+    status?: MetaTicketStatus,
   ) => Promise<MetaTicket>;
   updateTicket: (
     id: string,
@@ -79,9 +80,9 @@ export const useBoardStore = create<BoardStore>((set, get) => ({
     }
   },
 
-  createTicket: async (title, body, type) => {
+  createTicket: async (title, body, type, status) => {
     const api = createBoardApi(getClient());
-    const ticket = await api.create(title, body, type);
+    const ticket = await api.create(title, body, type, status);
     const tickets = new Map(get().tickets);
     tickets.set(ticket.id, ticket);
     set({ tickets });

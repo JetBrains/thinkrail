@@ -186,6 +186,52 @@
       "title": "ConfirmActionPayload",
       "type": "object"
     },
+    "CreateTicketAction": {
+      "description": "Queued ticket creation. Rendered as an 'Add to board' button.\n\n`state=\"pending\"` until the user clicks; `state=\"applied\"` once the ticket\nhas been created on the board.",
+      "properties": {
+        "type": {
+          "const": "create_ticket",
+          "default": "create_ticket",
+          "title": "Type",
+          "type": "string"
+        },
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "title": {
+          "title": "Title",
+          "type": "string"
+        },
+        "body": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Body"
+        },
+        "state": {
+          "default": "pending",
+          "enum": [
+            "pending",
+            "applied"
+          ],
+          "title": "State",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "title"
+      ],
+      "title": "CreateTicketAction",
+      "type": "object"
+    },
     "DoneEvent": {
       "properties": {
         "bonsaiSid": {
@@ -242,6 +288,17 @@
           "additionalProperties": true,
           "title": "Usage",
           "type": "object"
+        },
+        "outcome": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SessionOutcome"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
         }
       },
       "title": "DonePayload",
@@ -422,6 +479,54 @@
       "title": "InterruptedPayload",
       "type": "object"
     },
+    "NavigateAction": {
+      "description": "UI navigation only \u2014 no agent or tool call.",
+      "properties": {
+        "type": {
+          "const": "navigate",
+          "default": "navigate",
+          "title": "Type",
+          "type": "string"
+        },
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "title": {
+          "title": "Title",
+          "type": "string"
+        },
+        "description": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Description"
+        },
+        "target": {
+          "enum": [
+            "board",
+            "specs",
+            "graph",
+            "files"
+          ],
+          "title": "Target",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "title",
+        "target"
+      ],
+      "title": "NavigateAction",
+      "type": "object"
+    },
     "NotificationEvent": {
       "properties": {
         "bonsaiSid": {
@@ -474,6 +579,37 @@
         }
       },
       "title": "NotificationPayload",
+      "type": "object"
+    },
+    "OutcomeArtifact": {
+      "description": "A file produced or finalized by the session \u2014 opened on the done screen.",
+      "properties": {
+        "path": {
+          "title": "Path",
+          "type": "string"
+        },
+        "label": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Label"
+        },
+        "openOnDone": {
+          "default": true,
+          "title": "Openondone",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "path"
+      ],
+      "title": "OutcomeArtifact",
       "type": "object"
     },
     "PermissionDeniedEvent": {
@@ -752,6 +888,57 @@
       "title": "RequestResolvedPayload",
       "type": "object"
     },
+    "SessionOutcome": {
+      "description": "What to show on the done screen of a session.\n\nBuilt up by the agent via `session_finalize` (and optionally `session_queue_action`).\nPersisted on the AgentTask so it survives reloads.",
+      "properties": {
+        "summary": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Summary"
+        },
+        "artifacts": {
+          "items": {
+            "$ref": "#/$defs/OutcomeArtifact"
+          },
+          "title": "Artifacts",
+          "type": "array"
+        },
+        "actions": {
+          "items": {
+            "discriminator": {
+              "mapping": {
+                "create_ticket": "#/$defs/CreateTicketAction",
+                "navigate": "#/$defs/NavigateAction",
+                "start_session": "#/$defs/StartSessionAction"
+              },
+              "propertyName": "type"
+            },
+            "oneOf": [
+              {
+                "$ref": "#/$defs/CreateTicketAction"
+              },
+              {
+                "$ref": "#/$defs/StartSessionAction"
+              },
+              {
+                "$ref": "#/$defs/NavigateAction"
+              }
+            ]
+          },
+          "title": "Actions",
+          "type": "array"
+        }
+      },
+      "title": "SessionOutcome",
+      "type": "object"
+    },
     "SessionStartEvent": {
       "properties": {
         "bonsaiSid": {
@@ -809,6 +996,65 @@
         }
       },
       "title": "SessionStartPayload",
+      "type": "object"
+    },
+    "StartSessionAction": {
+      "description": "Recommended follow-up session. Rendered as a primary/secondary CTA.",
+      "properties": {
+        "type": {
+          "const": "start_session",
+          "default": "start_session",
+          "title": "Type",
+          "type": "string"
+        },
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "title": {
+          "title": "Title",
+          "type": "string"
+        },
+        "description": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Description"
+        },
+        "skillId": {
+          "title": "Skillid",
+          "type": "string"
+        },
+        "prompt": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Prompt"
+        },
+        "primary": {
+          "default": false,
+          "title": "Primary",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "id",
+        "title",
+        "skillId"
+      ],
+      "title": "StartSessionAction",
       "type": "object"
     },
     "SubagentEndEvent": {

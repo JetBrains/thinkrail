@@ -10,8 +10,13 @@ export function createBoardApi(client: RpcClient) {
     get: (id: string) =>
       client.request<MetaTicket>("board/get", { id }),
 
-    create: (title: string, body?: string, type?: MetaTicketType) =>
-      client.request<MetaTicket>("board/create", { title, body, type }),
+    create: (
+      title: string,
+      body?: string,
+      type?: MetaTicketType,
+      status?: MetaTicketStatus,
+    ) =>
+      client.request<MetaTicket>("board/create", { title, body, type, status }),
 
     update: (id: string, updates: {
       title?: string;

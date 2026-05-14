@@ -41,11 +41,51 @@ def _has_spec_deliverable(non_dot_children: list[Path]) -> bool:
     return False
 
 
+def _bonsai_has_meaningful_state(p: Path) -> bool:
+    """True if the project's ``.bonsai/`` dir already holds real work —
+    a finalized spec, a board ticket, or a plan.
+
+    The agent writes most artifacts inside ``.bonsai/`` rather than the
+    project root (spec, tickets, plans, sessions). Only ``meta-tickets``,
+    ``plans``, and the spec markers count as "real" — a bare ``sessions``
+    directory can be left behind by a draft that never produced anything.
+    """
+    bonsai_dir = p / BONSAI_DIRNAME
+    if not bonsai_dir.is_dir():
+        return False
+    try:
+        # A finalized spec written inside `.bonsai/`.
+        for marker in _SPEC_MARKERS:
+            f = bonsai_dir / marker
+            if f.is_file():
+                try:
+                    if f.stat().st_size > 0:
+                        return True
+                except OSError:
+                    continue
+        # Any committed meta-ticket.
+        mt_dir = bonsai_dir / "meta-tickets"
+        if mt_dir.is_dir() and any(mt_dir.glob("*.json")):
+            return True
+        # Any saved plan.
+        plans_dir = bonsai_dir / "plans"
+        if plans_dir.is_dir() and any(plans_dir.iterdir()):
+            return True
+    except OSError:
+        return False
+    return False
+
+
 def _detect_project_state(p: Path) -> ProjectState:
     """Classify a directory:
       - ``initialized``: a spec deliverable exists — restore session
       - ``new``: empty workspace — show welcome
       - ``existing``: has user files but no spec — normal workspace
+
+    A spec deliverable can live at the project root OR inside
+    ``.bonsai/`` (where the agent typically writes it). Tickets and
+    plans inside ``.bonsai/`` also count — once the user has board
+    state, the project is no longer "new" even if no spec was saved.
 
     Falls back to ``existing`` on permission errors — safer than pushing
     the user into the new-project flow on an unreadable directory.
@@ -54,9 +94,9 @@ def _detect_project_state(p: Path) -> ProjectState:
         non_dot = [c for c in p.iterdir() if not c.name.startswith(".")]
     except OSError:
         return "existing"
-    if not non_dot:
-        return "new"
-    return "initialized" if _has_spec_deliverable(non_dot) else "existing"
+    if _has_spec_deliverable(non_dot) or _bonsai_has_meaningful_state(p):
+        return "initialized"
+    return "new" if not non_dot else "existing"
 
 
 @router.get("/api/health", response_model=HealthResponse)
