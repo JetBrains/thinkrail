@@ -171,6 +171,16 @@ export function WizardDonePanel({ session, outcome }: WizardDonePanelProps) {
     [busyActionId, createTicket, patchOutcomeAction, session.bonsaiSid],
   );
 
+  const [expandedTickets, setExpandedTickets] = useState<Set<string>>(new Set());
+  const toggleTicketBody = useCallback((id: string) => {
+    setExpandedTickets((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }, []);
+
   const pendingTickets = tickets.filter((t) => t.state !== "applied");
   const handleAddAll = useCallback(async () => {
     if (busyActionId || pendingTickets.length === 0) return;
@@ -266,63 +276,80 @@ export function WizardDonePanel({ session, outcome }: WizardDonePanelProps) {
         </div>
       )}
 
-      {tickets.length > 0 && (
-        <div className="wiz-done-tickets">
-          <div className="wiz-done-tickets-head">
-            <span className="wiz-done-tickets-title">Suggested tickets</span>
-            <span className="wiz-done-tickets-counter">
-              <b>{tickets.filter((t) => t.state === "applied").length}</b> of {tickets.length} added to board
-            </span>
-            {pendingTickets.length > 0 && (
-              <button
-                type="button"
-                className="wiz-done-add-all-btn"
-                onClick={handleAddAll}
-                disabled={busyActionId !== null}
-              >
-                + Add all {pendingTickets.length} remaining
-              </button>
-            )}
+      <div className={`wiz-done-main${firstArtifact && tickets.length > 0 ? " wiz-done-main--split" : ""}`}>
+        {firstArtifact && (
+          <div className="wiz-done-doc">
+            <div className="wiz-done-doc-head">
+              <span className="wiz-done-doc-pill">{firstArtifact.path.replace(/^\.bonsai\//, "")}</span>
+              {firstArtifact.label && <span className="wiz-done-doc-label">{firstArtifact.label}</span>}
+            </div>
+            <div className="wiz-done-doc-body">
+              {docContent == null ? (
+                <p className="wiz-done-doc-loading">Loading…</p>
+              ) : docContent === "" ? (
+                <p className="wiz-done-doc-loading">No content yet.</p>
+              ) : (
+                <MarkdownPreview content={docContent} />
+              )}
+            </div>
           </div>
-          <ul className="wiz-done-tickets-list">
-            {tickets.map((t) => (
-              <li key={t.id} className="wiz-done-tickets-li">
-                <span className="wiz-done-tickets-bullet" aria-hidden="true">•</span>
-                <span className="wiz-done-tickets-text">
-                  <b>{t.title}</b>
-                  {t.body && <span className="wiz-done-tickets-body"> — {t.body}</span>}
-                </span>
+        )}
+
+        {tickets.length > 0 && (
+          <div className="wiz-done-tickets">
+            <div className="wiz-done-tickets-head">
+              <span className="wiz-done-tickets-title">Suggested tickets</span>
+              <span className="wiz-done-tickets-counter">
+                <b>{tickets.filter((t) => t.state === "applied").length}</b> of {tickets.length} added
+              </span>
+              {pendingTickets.length > 0 && (
                 <button
                   type="button"
-                  className={`wiz-done-add-btn${t.state === "applied" ? " wiz-done-add-btn--added" : ""}`}
-                  onClick={() => handleAddTicket(t)}
-                  disabled={busyActionId !== null || t.state === "applied"}
+                  className="wiz-done-add-all-btn"
+                  onClick={handleAddAll}
+                  disabled={busyActionId !== null}
                 >
-                  {t.state === "applied" ? "✓ Added" : "+ Add to board"}
+                  + Add all {pendingTickets.length}
                 </button>
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
-
-      {firstArtifact && (
-        <div className="wiz-done-doc">
-          <div className="wiz-done-doc-head">
-            <span className="wiz-done-doc-pill">{firstArtifact.path.replace(/^\.bonsai\//, "")}</span>
-            {firstArtifact.label && <span className="wiz-done-doc-label">{firstArtifact.label}</span>}
+              )}
+            </div>
+            <ul className="wiz-done-tickets-list">
+              {tickets.map((t) => {
+                const hasBody = !!t.body;
+                const expanded = expandedTickets.has(t.id);
+                return (
+                  <li key={t.id} className="wiz-done-tickets-li">
+                    <div className="wiz-done-tickets-row">
+                      <button
+                        type="button"
+                        className={`wiz-done-tickets-toggle${expanded ? " wiz-done-tickets-toggle--open" : ""}${hasBody ? "" : " wiz-done-tickets-toggle--empty"}`}
+                        onClick={() => hasBody && toggleTicketBody(t.id)}
+                        disabled={!hasBody}
+                        aria-expanded={expanded}
+                        aria-label={hasBody ? (expanded ? "Collapse description" : "Expand description") : undefined}
+                      >
+                        {hasBody ? "▸" : "•"}
+                      </button>
+                      <span className="wiz-done-tickets-text">{t.title}</span>
+                      <button
+                        type="button"
+                        className={`wiz-done-add-btn${t.state === "applied" ? " wiz-done-add-btn--added" : ""}`}
+                        onClick={() => handleAddTicket(t)}
+                        disabled={busyActionId !== null || t.state === "applied"}
+                      >
+                        {t.state === "applied" ? "✓ Added" : "+ Add"}
+                      </button>
+                    </div>
+                    {expanded && hasBody && (
+                      <div className="wiz-done-tickets-body-expanded">{t.body}</div>
+                    )}
+                  </li>
+                );
+              })}
+            </ul>
           </div>
-          <div className="wiz-done-doc-body">
-            {docContent == null ? (
-              <p className="wiz-done-doc-loading">Loading…</p>
-            ) : docContent === "" ? (
-              <p className="wiz-done-doc-loading">No content yet.</p>
-            ) : (
-              <MarkdownPreview content={docContent} />
-            )}
-          </div>
-        </div>
-      )}
+        )}
+      </div>
     </div>
   );
 }

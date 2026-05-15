@@ -4,7 +4,6 @@
   justify-content: center;
   gap: 6px;
   padding: 18px 22px;
-  border-bottom: 1px solid var(--border);
   background: var(--bg);
   flex-wrap: wrap;
   flex-shrink: 0;
