@@ -1,0 +1,92 @@
+.dd {
+  position: relative;
+  display: inline-block;
+}
+
+/* Base trigger styles use :where() to keep specificity at 0 — every consumer
+   passes a className (e.g. `draft-config-select--model`, `ticket-header-badge--bug`)
+   that owns the trigger's color/background/border. Single-class overrides win
+   automatically regardless of CSS load order. */
+:where(.dd-trigger) {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-xs);
+  background: transparent;
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 2px var(--space-sm);
+  font-family: var(--font);
+  font-size: var(--font-md);
+  line-height: 1.4;
+  cursor: pointer;
+  transition: opacity var(--transition-fast), filter var(--transition-fast);
+}
+:where(.dd-trigger):hover:not(:disabled) {
+  filter: brightness(1.15);
+}
+:where(.dd-trigger):disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.dd-trigger-label {
+  white-space: nowrap;
+}
+
+.dd-chevron {
+  flex-shrink: 0;
+  opacity: 0.6;
+  transition: opacity var(--transition-fast);
+}
+.dd-trigger:hover .dd-chevron {
+  opacity: 0.9;
+}
+
+.dd-menu {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 2px 0;
+  min-width: 100%;
+  max-height: 320px;
+  overflow-y: auto;
+  z-index: 100;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+}
+.dd-menu--right {
+  left: auto;
+  right: 0;
+}
+
+.dd-item {
+  display: block;
+  width: 100%;
+  background: transparent;
+  border: none;
+  color: var(--muted);
+  font-family: var(--font);
+  font-size: var(--font-md);
+  padding: var(--space-xs) var(--space-md);
+  cursor: pointer;
+  text-align: left;
+  white-space: nowrap;
+}
+.dd-item:hover {
+  background: var(--hover);
+  color: var(--text);
+}
+.dd-item-active {
+  color: var(--blue);
+}
+
+.dd-group {
+  padding: var(--space-xs) var(--space-sm);
+  font-size: var(--font-sm);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--hint);
+}
