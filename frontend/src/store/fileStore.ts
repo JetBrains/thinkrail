@@ -38,6 +38,16 @@ function getProjectPath(): string {
   return useUiStore.getState().projectPath ?? "";
 }
 
+// Opening / previewing a file means showing it as a tab in SessionPanel,
+// which only renders when centerView === "sessions". If the user is on the
+// Board view when they click a file (Specs/Files tree, ContextPanel, etc.),
+// the file silently becomes active but nothing changes on screen. Switch
+// view so the tab is actually visible.
+function ensureSessionsView(): void {
+  const ui = useUiStore.getState();
+  if (ui.centerView !== "sessions") ui.setCenterView("sessions");
+}
+
 export const useFileStore = create<FileStore>((set, get) => ({
   openFiles: new Map(),
   activeFilePath: null,
@@ -45,6 +55,7 @@ export const useFileStore = create<FileStore>((set, get) => ({
   previewFile: null,
 
   openFile: async (path) => {
+    ensureSessionsView();
     // Already open — just activate
     if (get().openFiles.has(path)) {
       set({ activeFilePath: path });
@@ -93,9 +104,13 @@ export const useFileStore = create<FileStore>((set, get) => ({
     });
   },
 
-  activateFile: (path) => set({ activeFilePath: path, previewFilePath: null, previewFile: null }),
+  activateFile: (path) => {
+    ensureSessionsView();
+    set({ activeFilePath: path, previewFilePath: null, previewFile: null });
+  },
 
   loadPreview: async (path) => {
+    ensureSessionsView();
     // If already pinned, just activate it
     if (get().openFiles.has(path)) {
       get().activateFile(path);
