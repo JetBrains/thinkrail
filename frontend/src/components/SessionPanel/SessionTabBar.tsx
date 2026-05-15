@@ -3,6 +3,8 @@ import type { Session } from "@/types/session.ts";
 import type { OpenFile } from "@/store/fileStore.ts";
 import { useBoardStore } from "@/store/boardStore.ts";
 import { useFileStore } from "@/store/fileStore.ts";
+import { useSessionStore } from "@/store/sessionStore.ts";
+import { modLabel } from "@/utils/platform.ts";
 
 interface SessionTabBarProps {
   sessions: Session[];
@@ -90,6 +92,7 @@ export function SessionTabBar({
   onPinPreview,
 }: SessionTabBarProps) {
   const activeTicketId = useBoardStore((s) => s.activeTicketId);
+  const createNewSession = useSessionStore((s) => s.createNewSession);
 
   const hasPreviewTab = previewFilePath != null && !files.some((f) => f.path === previewFilePath);
   const previewIsActive = hasPreviewTab && !activeFilePath;
@@ -203,6 +206,14 @@ export function SessionTabBar({
         </div>
       )}
 
+      <div className="session-tabs-spacer" />
+      <button
+        className="session-tabs-new-btn"
+        onClick={() => createNewSession()}
+        title={`New session (${modLabel("T")})`}
+      >
+        + New
+      </button>
     </div>
   );
 }

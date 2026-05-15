@@ -314,7 +314,7 @@ export function SessionPanel({
         <div className="session-empty">
           <div className="session-empty-title">No active session</div>
           <div className="session-empty-hint">
-            Press <span className="session-empty-kbd">⌘T</span> or click <b>+ New</b> above to start a session.
+            Press <span className="session-empty-kbd">⌘T</span> or click <b>+ New</b> in the tab bar to start a session.
           </div>
         </div>
       )}

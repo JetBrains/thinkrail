@@ -1671,6 +1671,29 @@
   font-style: italic;
 }
 
+.session-tabs-spacer {
+  flex: 1 1 auto;
+  min-width: var(--space-sm);
+}
+.session-tabs-new-btn {
+  align-self: center;
+  margin: 0 var(--space-sm);
+  padding: var(--space-xs) var(--space-md);
+  border: 1px solid var(--blue);
+  border-radius: var(--radius-sm);
+  background: var(--blue);
+  color: var(--bg);
+  font-family: var(--font);
+  font-size: var(--font-lg);
+  cursor: pointer;
+  transition: opacity var(--transition-fast);
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+.session-tabs-new-btn:hover {
+  opacity: 0.9;
+}
+
 /* ── Ticket Tab Context Menu ── */
 .ticket-ctx-menu {
   position: fixed;
