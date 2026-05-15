@@ -33,7 +33,9 @@ Options:
 ... | bash -s -- --prefix ~/.local
 ```
 
-The installer detects your OS and architecture, downloads the matching binary from the [latest release](../../releases/latest), verifies the SHA256 checksum, and installs to `~/.local/bin/bonsai`. Add `~/.local/bin` to your `PATH` if it isn't already.
+The installer detects your OS and architecture, downloads the matching binary from the [latest release](../../releases/latest), verifies the SHA256 checksum, and installs to `~/.local/bin/bonsai`. If `~/.local/bin` isn't on your `PATH`, the installer appends it to your shell's rc file (`~/.bashrc`, `~/.bash_profile`, `~/.zshrc`, or `~/.config/fish/conf.d/bonsai.fish` depending on `$SHELL`) — open a new terminal or `source` the file to pick it up. Re-running with a different `--prefix` rewrites the existing entry rather than stacking a second one. Pass `--no-modify-path` to opt out.
+
+`--prefix` accepts letters, digits, and `_` `-` `.` `/` `~` and spaces; values containing other characters (e.g. `$`, backticks, `;`) are rejected so they can't be smuggled into the rc file as executable shell.
 
 Supported platforms: Linux x64/arm64, macOS x64/arm64, Windows x64.
 

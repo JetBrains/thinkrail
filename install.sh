@@ -17,6 +17,8 @@
 #   --channel stable|nightly   (default: stable)
 #   --version X.Y.Z|latest     (default: latest)
 #   --prefix DIR               (default: ~/.local; binary lands at <prefix>/bin/bonsai)
+#                              Allowed chars: A-Z a-z 0-9 _ - . / ~ and space.
+#   --no-modify-path           don't touch shell rc files; just print PATH advice
 #
 # After install: run `bonsai`. To update later: `bonsai upgrade`.
 
@@ -26,6 +28,7 @@ REPO="${BONSAI_REPO:-JetBrains/bonsai}"
 CHANNEL="stable"
 VERSION="latest"
 PREFIX="${HOME}/.local"
+MODIFY_PATH=1
 
 usage() {
     cat >&2 <<'EOF'
@@ -39,6 +42,8 @@ Options:
   --channel stable|nightly   (default: stable)
   --version X.Y.Z|latest     (default: latest)
   --prefix DIR               (default: ~/.local; binary lands at <prefix>/bin/bonsai)
+                             Allowed chars: A-Z a-z 0-9 _ - . / ~ and space.
+  --no-modify-path           don't touch shell rc files; just print PATH advice
 
 Auth (private repo): set GH_TOKEN, GITHUB_TOKEN, or have `gh` authenticated.
 
@@ -49,13 +54,14 @@ EOF
 
 while [ $# -gt 0 ]; do
     case "$1" in
-        --channel)   CHANNEL="$2";       shift 2 ;;
-        --channel=*) CHANNEL="${1#*=}";  shift ;;
-        --version)   VERSION="$2";       shift 2 ;;
-        --version=*) VERSION="${1#*=}";  shift ;;
-        --prefix)    PREFIX="$2";        shift 2 ;;
-        --prefix=*)  PREFIX="${1#*=}";   shift ;;
-        -h|--help)   usage 0 ;;
+        --channel)         CHANNEL="$2";       shift 2 ;;
+        --channel=*)       CHANNEL="${1#*=}";  shift ;;
+        --version)         VERSION="$2";       shift 2 ;;
+        --version=*)       VERSION="${1#*=}";  shift ;;
+        --prefix)          PREFIX="$2";        shift 2 ;;
+        --prefix=*)        PREFIX="${1#*=}";   shift ;;
+        --no-modify-path)  MODIFY_PATH=0;      shift ;;
+        -h|--help)         usage 0 ;;
         *) echo "Unknown arg: $1" >&2; usage 1 ;;
     esac
 done
@@ -63,6 +69,22 @@ done
 case "$CHANNEL" in
     stable|nightly) ;;
     *) echo "Invalid channel: $CHANNEL (expected: stable or nightly)" >&2; exit 1 ;;
+esac
+
+# ── Validate PREFIX ───────────────────────────────────────────────────────
+# PREFIX is interpolated into shell rc files later (the PATH block we append
+# uses double-quoted command syntax). A prefix containing $(...), backticks,
+# ;, |, etc. would execute on every new terminal once written into the rc
+# file. Constrain to a conservative allow-list: letters, digits, and
+# '_' '-' '.' '/' '~' and space. Spaces are kept because legitimate macOS
+# paths contain them.
+case "${PREFIX:-}" in
+    "")
+        echo "Error: --prefix must not be empty" >&2; exit 1 ;;
+    *[!-A-Za-z0-9_./~\ ]*)
+        echo "Error: --prefix contains characters that are unsafe to write into shell rc files." >&2
+        echo "Allowed: letters, digits, and '_' '-' '.' '/' '~' space." >&2
+        exit 1 ;;
 esac
 
 # ── Token discovery ───────────────────────────────────────────────────────
@@ -228,9 +250,122 @@ EOF
 
 echo
 echo "Bonsai ${TAG#v} ($CHANNEL) installed."
+
+# ── PATH setup ────────────────────────────────────────────────────────────
+# If $BIN_DIR is already on PATH there's nothing to do. Otherwise try to
+# append it to the user's shell rc file (idempotent via a marker block).
+# Falls back to printing instructions when:
+#   - --no-modify-path was passed
+#   - running on Windows (use the Windows env tools instead)
+#   - the shell is unknown / unsupported
+#   - writing to the rc file fails
+PATH_NEEDS_MANUAL_ADD=0
 case ":$PATH:" in
-    *":$BIN_DIR:"*) ;;
-    *) echo "Add to PATH:    export PATH=\"\$PATH:$BIN_DIR\"" ;;
+    *":$BIN_DIR:"*)
+        # Already on PATH — nothing to do.
+        ;;
+    *)
+        if [ "$MODIFY_PATH" -eq 0 ] || [ "$OS" = "windows" ]; then
+            PATH_NEEDS_MANUAL_ADD=1
+        else
+            # Detect shell. $SHELL is the login shell, which is what the user
+            # will get on the next terminal — exactly what we want to update.
+            shell_name=$(basename "${SHELL:-}")
+            rc_file=""
+            rc_line=""
+            case "$shell_name" in
+                bash)
+                    # macOS bash reads ~/.bash_profile for login shells; Linux
+                    # bash reads ~/.bashrc for interactive non-login. Pick the
+                    # one that exists, defaulting to ~/.bashrc on Linux and
+                    # ~/.bash_profile on macOS.
+                    if [ "$OS" = "macos" ]; then
+                        rc_file="$HOME/.bash_profile"
+                    else
+                        rc_file="$HOME/.bashrc"
+                    fi
+                    rc_line="export PATH=\"\$PATH:$BIN_DIR\""
+                    ;;
+                zsh)
+                    rc_file="${ZDOTDIR:-$HOME}/.zshrc"
+                    rc_line="export PATH=\"\$PATH:$BIN_DIR\""
+                    ;;
+                fish)
+                    rc_file="$HOME/.config/fish/conf.d/bonsai.fish"
+                    # Single-quote the path so spaces (allowed by the prefix
+                    # validator) don't get split into multiple fish arguments.
+                    rc_line="fish_add_path '$BIN_DIR'"
+                    ;;
+                *)
+                    PATH_NEEDS_MANUAL_ADD=1
+                    ;;
+            esac
+
+            if [ -n "$rc_file" ]; then
+                marker_begin="# >>> bonsai PATH >>>"
+                marker_end="# <<< bonsai PATH <<<"
+                # If the desired rc_line already lives between our markers,
+                # there's nothing to do. Otherwise strip any existing marker
+                # block (so reinstalling with a different --prefix doesn't
+                # leave the old PATH entry active) and append a fresh block.
+                if [ -f "$rc_file" ] \
+                    && awk -v begin="$marker_begin" -v end="$marker_end" -v target="$rc_line" '
+                        $0 == begin { in_block = 1; next }
+                        $0 == end { in_block = 0; next }
+                        in_block && $0 == target { found = 1; exit }
+                        END { exit found ? 0 : 1 }
+                    ' "$rc_file" 2>/dev/null; then
+                    echo "PATH:           already configured in $rc_file"
+                else
+                    had_stale_block=0
+                    if [ -f "$rc_file" ] && grep -Fq "$marker_begin" "$rc_file" 2>/dev/null; then
+                        had_stale_block=1
+                    fi
+                    mkdir -p "$(dirname "$rc_file")" 2>/dev/null || true
+                    # Write to a sibling temp file then mv into place so we
+                    # never leave a half-written rc file behind. mktemp next
+                    # to the target keeps the mv on the same filesystem
+                    # (atomic).
+                    tmp_rc=$(mktemp "${rc_file}.XXXXXX" 2>/dev/null) || tmp_rc=""
+                    wrote_ok=0
+                    if [ -n "$tmp_rc" ]; then
+                        if {
+                            if [ -f "$rc_file" ]; then
+                                awk -v begin="$marker_begin" -v end="$marker_end" '
+                                    $0 == begin { skip = 1; next }
+                                    $0 == end && skip { skip = 0; next }
+                                    !skip { print }
+                                ' "$rc_file"
+                            fi
+                            printf '\n%s\n%s\n%s\n' \
+                                "$marker_begin" \
+                                "$rc_line" \
+                                "$marker_end"
+                        } > "$tmp_rc" 2>/dev/null && mv "$tmp_rc" "$rc_file" 2>/dev/null; then
+                            wrote_ok=1
+                        fi
+                    fi
+                    if [ "$wrote_ok" -eq 1 ]; then
+                        if [ "$had_stale_block" -eq 1 ]; then
+                            echo "PATH:           updated $rc_file to point at $BIN_DIR"
+                        else
+                            echo "PATH:           added $BIN_DIR to $rc_file"
+                        fi
+                        echo "                start a new shell or run: source $rc_file"
+                    else
+                        if [ -n "$tmp_rc" ]; then rm -f "$tmp_rc"; fi
+                        echo "PATH:           could not write to $rc_file" >&2
+                        PATH_NEEDS_MANUAL_ADD=1
+                    fi
+                fi
+            fi
+        fi
+        ;;
 esac
+
+if [ "$PATH_NEEDS_MANUAL_ADD" -eq 1 ]; then
+    echo "Add to PATH:    export PATH=\"\$PATH:$BIN_DIR\""
+fi
+
 echo "Run:            bonsai"
 echo "Upgrade later:  bonsai upgrade"
