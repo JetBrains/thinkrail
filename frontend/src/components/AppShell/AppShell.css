@@ -28,10 +28,11 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  height: 44px;
+  height: 56px;
   padding: 0 var(--space-lg);
-  background: var(--panel);
-  border-bottom: 1px solid var(--border);
+  background: var(--elevated);
+  border-bottom-left-radius: var(--radius-md);
+  border-bottom-right-radius: var(--radius-md);
   flex-shrink: 0;
 }
 
@@ -44,6 +45,7 @@
 .header-logo {
   font-weight: 600;
   color: var(--purple);
+  font-size: var(--font-lg2);
 }
 
 .header-project {
@@ -55,9 +57,9 @@
   background: transparent;
   color: var(--muted);
   font-family: var(--font);
-  font-size: var(--font-size);
+  font-size: var(--font-lg2);
   cursor: pointer;
-  padding: 2px var(--space-sm);
+  padding: 4px var(--space-sm);
   border-radius: var(--radius-sm);
   transition: all var(--transition-fast);
 }
@@ -73,34 +75,32 @@
 
 .header-view-switcher {
   display: inline-flex;
-  align-items: center;
-  padding: 2px;
-  background: var(--elevated);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  margin-left: var(--space-sm);
+  align-items: stretch;
+  align-self: stretch;
+  gap: var(--space-md);
+  margin-left: var(--space-md);
 }
 
 .header-view-btn {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  padding: 3px 10px;
-  font-size: var(--font-sm);
+  padding: 0 2px;
+  font-size: var(--font-lg);
   font-weight: 500;
   font-family: var(--font);
   color: var(--muted);
   background: transparent;
   border: 0;
-  border-radius: 4px;
+  border-bottom: 2px solid transparent;
+  border-radius: 0;
   cursor: pointer;
-  transition: background 150ms ease, color 150ms ease;
+  transition: color 150ms ease, border-color 150ms ease;
 }
 .header-view-btn:hover { color: var(--text); }
 .header-view-btn--active {
-  background: var(--panel);
   color: var(--text);
-  box-shadow: 0 1px 0 rgba(0, 0, 0, 0.25);
+  border-bottom-color: var(--purple);
 }
 
 .header-view-count {
