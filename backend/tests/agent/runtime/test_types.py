@@ -195,6 +195,9 @@ class TestIAgentRuntimeProtocol:
         class Dummy:
             runtime_type: RuntimeType = "claude"
             display_name: str = "Claude (test)"
+            guidance_file: str | None = "CLAUDE.md"
+            init_command: str | None = "claude init"
+            guidance_template: str | None = "# stub"
 
             def capabilities(self):
                 return RuntimeCapabilities(
@@ -238,5 +241,18 @@ class TestIAgentRuntimeProtocol:
         hints = get_type_hints(IAgentRuntime, include_extras=True)
         assert "runtime_type" in hints
         assert "display_name" in hints
+        assert "guidance_file" in hints
+        assert "init_command" in hints
+        assert "guidance_template" in hints
         assert inspect.iscoroutinefunction(IAgentRuntime.run_session)
         assert inspect.iscoroutinefunction(IAgentRuntime.interrupt)
+
+    def test_claude_runtime_declares_guidance_metadata(self):
+        # Claude declares its repo-root convention so the onboarding scanner
+        # doesn't have to hardcode it.
+        from app.agent.runtime.claude.runtime import ClaudeRuntime
+
+        assert ClaudeRuntime.guidance_file == "CLAUDE.md"
+        assert ClaudeRuntime.init_command == "claude init"
+        assert ClaudeRuntime.guidance_template is not None
+        assert "Claude Code" in ClaudeRuntime.guidance_template

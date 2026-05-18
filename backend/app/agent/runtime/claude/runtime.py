@@ -144,6 +144,37 @@ class ClaudeRuntime:
 
     runtime_type: RuntimeType = "claude"
     display_name: str = "Claude Code"
+    guidance_file: str | None = "CLAUDE.md"
+    init_command: str | None = "claude init"
+    # Starter content written when the user clicks "Init agent" from
+    # onboarding. The real ``claude init`` analyses the repo and fills
+    # this in — the template just bootstraps the file so the agent has
+    # somewhere to write to and points the user at the proper command.
+    guidance_template: str | None = (
+        "# Project context for Claude Code\n"
+        "\n"
+        "<!--\n"
+        "  This file was bootstrapped by Bonsai. Run `claude init` (or open\n"
+        "  Claude Code and use the `/init` slash command) to have Claude\n"
+        "  analyse this repository and populate the sections below.\n"
+        "-->\n"
+        "\n"
+        "## Overview\n"
+        "\n"
+        "<what this project is, in one paragraph>\n"
+        "\n"
+        "## Stack\n"
+        "\n"
+        "<languages, frameworks, key dependencies>\n"
+        "\n"
+        "## How to run\n"
+        "\n"
+        "<commands to start the project>\n"
+        "\n"
+        "## Conventions\n"
+        "\n"
+        "<naming, layout, tests, anything an agent should respect>\n"
+    )
 
     def __init__(
         self,

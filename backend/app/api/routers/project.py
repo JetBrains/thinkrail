@@ -4,16 +4,23 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, HTTPException, Query
 
+from app.agent.available_runtimes import AVAILABLE_RUNTIME_CLASSES
 from app.api.schemas import (
     FileEntry,
     HealthResponse,
+    InitEngineRequest,
+    InitEngineResponse,
     ProjectFilesResponse,
     ProjectInfo,
     ProjectListResponse,
+    ProjectScanResponse,
     ProjectState,
     ProjectValidateResponse,
+    ScanEngineGuidance,
+    ScanFile,
+    ScanFolder,
 )
 from app.core.bonsaihide import load_bonsaihide
 from app.version import VERSION
@@ -138,6 +145,176 @@ async def validate_project(path: str = Query(...)) -> ProjectValidateResponse:
     exists = p.is_dir()
     state = _detect_project_state(p) if exists else "new"
     return ProjectValidateResponse(state=state, path=str(p), name=p.name, exists=exists)
+
+
+# ── Project scan (onboarding) ────────────────────────────────────────────────
+
+# Files matched case-insensitively against the project root for the
+# onboarding ``what we'll read`` screen. Engine-specific guidance files
+# (CLAUDE.md, AGENTS.md, etc.) live on the runtime classes — keep them
+# out of this list so the scanner doesn't duplicate engine knowledge.
+_IMPORTANT_FILE_PATTERNS: tuple[tuple[str, str], ...] = (
+    ("readme", "Project overview"),
+    ("pyproject.toml", "Python project & dependencies"),
+    ("package.json", "Node project & dependencies"),
+    ("cargo.toml", "Rust project & dependencies"),
+    ("go.mod", "Go module"),
+    ("changelog", "Recent changes"),
+    ("license", "License"),
+    ("licence", "License"),
+    ("dockerfile", "Container build"),
+    ("docker-compose", "Container orchestration"),
+)
+
+# ``_safe_entry_count`` stops here so a generated ``src/`` of 100k files
+# doesn't make the onboarding scan walk the world.
+_ENTRY_COUNT_CAP = 500
+
+
+def _describe_important_file(name: str) -> str | None:
+    lower = name.lower()
+    stem = lower.rsplit(".", 1)[0]
+    for pattern, description in _IMPORTANT_FILE_PATTERNS:
+        if lower == pattern or stem == pattern or lower.startswith(pattern + "."):
+            return description
+    return None
+
+
+def _safe_file_size(path: Path) -> int:
+    try:
+        return path.stat().st_size
+    except OSError:
+        return 0
+
+
+def _safe_entry_count(directory: Path) -> int:
+    try:
+        count = 0
+        for _ in directory.iterdir():
+            count += 1
+            if count >= _ENTRY_COUNT_CAP:
+                break
+        return count
+    except OSError:
+        return 0
+
+
+@router.get("/api/project/scan", response_model=ProjectScanResponse)
+async def scan_project(path: str = Query(...)) -> ProjectScanResponse:
+    """Inspect the project root for onboarding.
+
+    Returns three groups: important files (README, pyproject.toml, …),
+    top-level folders, and a guidance-file probe for each registered
+    agent engine (e.g. ``CLAUDE.md`` for Claude). Engine metadata comes
+    from the runtime classes themselves — see
+    ``AVAILABLE_RUNTIME_CLASSES``.
+    """
+    root = Path(path).expanduser().resolve()
+    if not root.is_dir():
+        return ProjectScanResponse(important_files=[], top_folders=[], engine_guidance=[])
+
+    spec = load_bonsaihide(root)
+
+    important_files: list[ScanFile] = []
+    top_folders: list[ScanFolder] = []
+
+    try:
+        children = sorted(root.iterdir(), key=lambda p: p.name.lower())
+    except OSError:
+        children = []
+
+    for child in children:
+        rel = child.name
+        is_dir = child.is_dir()
+        if spec.match_file(rel + "/" if is_dir else rel):
+            continue
+        if is_dir:
+            # ``.bonsai/`` is exempted by bonsaihide's default ignore set
+            # but we don't want it as an onboarding folder either.
+            if rel.startswith("."):
+                continue
+            top_folders.append(
+                ScanFolder(name=rel, entry_count=_safe_entry_count(child))
+            )
+        else:
+            description = _describe_important_file(rel)
+            if description is None:
+                continue
+            important_files.append(
+                ScanFile(
+                    name=rel,
+                    size=_safe_file_size(child),
+                    description=description,
+                )
+            )
+
+    engine_guidance: list[ScanEngineGuidance] = []
+    for runtime_cls in AVAILABLE_RUNTIME_CLASSES:
+        guidance_file = getattr(runtime_cls, "guidance_file", None)
+        if not guidance_file:
+            continue
+        engine_guidance.append(
+            ScanEngineGuidance(
+                engine=runtime_cls.runtime_type,
+                display_name=runtime_cls.display_name,
+                file=guidance_file,
+                found=(root / guidance_file).is_file(),
+                init_command=getattr(runtime_cls, "init_command", None),
+            )
+        )
+
+    return ProjectScanResponse(
+        important_files=important_files,
+        top_folders=top_folders,
+        engine_guidance=engine_guidance,
+    )
+
+
+def _find_runtime_class(engine: str) -> type:
+    for cls in AVAILABLE_RUNTIME_CLASSES:
+        if cls.runtime_type == engine:
+            return cls
+    raise HTTPException(status_code=404, detail=f"Unknown engine: {engine}")
+
+
+@router.post("/api/project/init-engine", response_model=InitEngineResponse)
+async def init_engine(req: InitEngineRequest) -> InitEngineResponse:
+    """Bootstrap an engine's guidance file (e.g. CLAUDE.md) for a project.
+
+    Writes the runtime's ``guidance_template`` to ``path/<guidance_file>``
+    when the file is missing. Idempotent — if the file already exists,
+    leaves it alone and reports ``created=false``. Engine metadata
+    (filename + template) comes from the runtime class itself, so adding
+    a new engine doesn't touch this endpoint.
+    """
+    root = Path(req.path).expanduser().resolve()
+    if not root.is_dir():
+        raise HTTPException(status_code=404, detail=f"Directory not found: {root}")
+
+    runtime_cls = _find_runtime_class(req.engine)
+    guidance_file = getattr(runtime_cls, "guidance_file", None)
+    template = getattr(runtime_cls, "guidance_template", None)
+    init_command = getattr(runtime_cls, "init_command", None)
+
+    if not guidance_file:
+        raise HTTPException(status_code=422, detail=f"{req.engine} has no guidance file")
+    if not template:
+        raise HTTPException(status_code=422, detail=f"{req.engine} has no guidance template")
+
+    target = root / guidance_file
+    try:
+        with target.open("x", encoding="utf-8") as fh:
+            fh.write(template)
+    except FileExistsError:
+        return InitEngineResponse(
+            ok=True, created=False, file=guidance_file, init_command=init_command
+        )
+    except OSError as exc:
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+
+    return InitEngineResponse(
+        ok=True, created=True, file=guidance_file, init_command=init_command
+    )
 
 
 @router.get("/api/project/files", response_model=ProjectFilesResponse)

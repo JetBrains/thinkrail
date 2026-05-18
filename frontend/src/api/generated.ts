@@ -86,6 +86,58 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/project/scan": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Scan Project
+         * @description Inspect the project root for onboarding.
+         *
+         *     Returns three groups: important files (README, pyproject.toml, …),
+         *     top-level folders, and a guidance-file probe for each registered
+         *     agent engine (e.g. ``CLAUDE.md`` for Claude). Engine metadata comes
+         *     from the runtime classes themselves — see
+         *     ``AVAILABLE_RUNTIME_CLASSES``.
+         */
+        get: operations["scan_project_api_project_scan_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/project/init-engine": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Init Engine
+         * @description Bootstrap an engine's guidance file (e.g. CLAUDE.md) for a project.
+         *
+         *     Writes the runtime's ``guidance_template`` to ``path/<guidance_file>``
+         *     when the file is missing. Idempotent — if the file already exists,
+         *     leaves it alone and reports ``created=false``. Engine metadata
+         *     (filename + template) comes from the runtime class itself, so adding
+         *     a new engine doesn't touch this endpoint.
+         */
+        post: operations["init_engine_api_project_init_engine_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/project/files": {
         parameters: {
             query?: never;
@@ -354,6 +406,33 @@ export interface components {
             /** Version */
             version: string;
         };
+        /**
+         * InitEngineRequest
+         * @description Body of ``POST /api/project/init-engine``.
+         */
+        InitEngineRequest: {
+            /** Engine */
+            engine: string;
+            /** Path */
+            path: string;
+        };
+        /**
+         * InitEngineResponse
+         * @description Result of writing an engine's guidance template.
+         */
+        InitEngineResponse: {
+            /**
+             * Ok
+             * @default true
+             */
+            ok: boolean;
+            /** Created */
+            created: boolean;
+            /** File */
+            file: string;
+            /** Init Command */
+            init_command?: string | null;
+        };
         /** KnownProjectResponse */
         KnownProjectResponse: {
             /** Path */
@@ -402,6 +481,15 @@ export interface components {
             /** Projects */
             projects: components["schemas"]["ProjectInfo"][];
         };
+        /** ProjectScanResponse */
+        ProjectScanResponse: {
+            /** Important Files */
+            important_files: components["schemas"]["ScanFile"][];
+            /** Top Folders */
+            top_folders: components["schemas"]["ScanFolder"][];
+            /** Engine Guidance */
+            engine_guidance: components["schemas"]["ScanEngineGuidance"][];
+        };
         /** ProjectValidateResponse */
         ProjectValidateResponse: {
             /**
@@ -415,6 +503,49 @@ export interface components {
             name: string;
             /** Exists */
             exists: boolean;
+        };
+        /**
+         * ScanEngineGuidance
+         * @description Per-engine guidance-file probe result.
+         *
+         *     Each ``IAgentRuntime`` declares the repo-root file it expects to
+         *     read (e.g. ``CLAUDE.md``) and the shell command that creates it.
+         *     The onboarding scanner reports whether that file is present so the
+         *     UI can prompt the user to run the init command if not.
+         */
+        ScanEngineGuidance: {
+            /** Engine */
+            engine: string;
+            /** Display Name */
+            display_name: string;
+            /** File */
+            file: string;
+            /** Found */
+            found: boolean;
+            /** Init Command */
+            init_command?: string | null;
+        };
+        /**
+         * ScanFile
+         * @description A high-signal file found at the project root.
+         */
+        ScanFile: {
+            /** Name */
+            name: string;
+            /** Size */
+            size: number;
+            /** Description */
+            description: string;
+        };
+        /**
+         * ScanFolder
+         * @description A top-level directory inside the project root.
+         */
+        ScanFolder: {
+            /** Name */
+            name: string;
+            /** Entry Count */
+            entry_count: number;
         };
         /** ServerInfoResponse */
         ServerInfoResponse: {
@@ -652,6 +783,70 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ProjectValidateResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    scan_project_api_project_scan_get: {
+        parameters: {
+            query: {
+                path: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProjectScanResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    init_engine_api_project_init_engine_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["InitEngineRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InitEngineResponse"];
                 };
             };
             /** @description Validation Error */

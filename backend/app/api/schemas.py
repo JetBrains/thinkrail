@@ -50,6 +50,62 @@ class ProjectFilesResponse(BaseModel):
     entries: list[FileEntry]
 
 
+# ── project scan (onboarding) ────────────────────────────────────────────────
+
+class ScanFile(BaseModel):
+    """A high-signal file found at the project root."""
+
+    name: str
+    size: int
+    description: str
+
+
+class ScanFolder(BaseModel):
+    """A top-level directory inside the project root."""
+
+    name: str
+    entry_count: int
+
+
+class ScanEngineGuidance(BaseModel):
+    """Per-engine guidance-file probe result.
+
+    Each ``IAgentRuntime`` declares the repo-root file it expects to
+    read (e.g. ``CLAUDE.md``) and the shell command that creates it.
+    The onboarding scanner reports whether that file is present so the
+    UI can prompt the user to run the init command if not.
+    """
+
+    engine: str
+    display_name: str
+    file: str
+    found: bool
+    init_command: str | None = None
+
+
+class ProjectScanResponse(BaseModel):
+    important_files: list[ScanFile]
+    top_folders: list[ScanFolder]
+    engine_guidance: list[ScanEngineGuidance]
+
+
+class InitEngineRequest(BaseModel):
+    """Body of ``POST /api/project/init-engine``."""
+
+    engine: str
+    path: str
+
+
+class InitEngineResponse(BaseModel):
+    """Result of writing an engine's guidance template."""
+
+    ok: bool = True
+    # ``False`` when the file already existed and we left it alone.
+    created: bool
+    file: str
+    init_command: str | None = None
+
+
 # ── files.py ─────────────────────────────────────────────────────────────────
 
 class FileReadResponse(BaseModel):

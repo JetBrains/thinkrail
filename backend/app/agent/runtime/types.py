@@ -157,6 +157,16 @@ class IAgentRuntime(Protocol):
     runtime_type: RuntimeType
     display_name: str
 
+    # Engine-specific onboarding metadata. Each runtime declares the
+    # repo-root file it expects to read for project context (e.g.
+    # ``CLAUDE.md`` for Claude Code, ``AGENTS.md`` for Codex), the
+    # shell command that refreshes it, and a starter template the UI
+    # writes when the user clicks "Init agent" from the onboarding
+    # screen. ``None`` means the runtime opts out of that capability.
+    guidance_file: str | None
+    init_command: str | None
+    guidance_template: str | None
+
     def capabilities(self) -> RuntimeCapabilities:
         """Return what this runtime accepts for the user-tunable fields.
 
