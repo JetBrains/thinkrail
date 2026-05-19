@@ -8,22 +8,6 @@ argument-hint: "[describe your idea]"
 
 You are helping someone turn an idea into a clear, buildable specification. The folder is empty — there is no code yet, no decisions made. Your job is to help them think clearly and quickly arrive at a focused scope.
 
-> ## ⚠️ Critical: file path
->
-> **Every** `Write`/`Edit`/`spec_save` call in this skill MUST use the path
-> `GOAL&REQUIREMENTS.md` — relative to the project root, with **no
-> directory prefix**.
->
-> - ✅ `GOAL&REQUIREMENTS.md`
-> - ❌ `.bonsai/GOAL&REQUIREMENTS.md`
-> - ❌ `docs/GOAL&REQUIREMENTS.md`
->
-> `.bonsai/` is reserved for operational artifacts (plans, tickets,
-> sessions). The goal-and-requirements spec is a top-level project
-> deliverable — it sits next to `README.md`, `DESIGN_DOC.md`, and the
-> user's source code. Saving it anywhere else breaks the project-state
-> detector and the live doc panel.
-
 **Principles:**
 - Work from what you already know from `$ARGUMENTS` — never ask what was already said
 - **Pre-filled document fast-path** — if `$ARGUMENTS` already contains a structured document (multiple markdown headings matching spec sections, or a clearly written brief covering several sections), parse it and treat those sections as **already confirmed**. Save them immediately via `spec_save`. Never re-ask the user to confirm content they wrote themselves. Only enter steps for sections that are genuinely missing **and** required by the inferred `depth`/`audience`. The only post-parse interaction is the alternatives research question — one yes/no, nothing else.
@@ -40,6 +24,7 @@ You are helping someone turn an idea into a clear, buildable specification. The 
   - Free-text edit (one fact changed) → update that field only; don't re-evaluate routing or other inferences
   - Substantial rewrite → re-evaluate all working model fields derived from that section before continuing
   - Rejection ("no, that's wrong") → discard the inference entirely, ask an open question instead
+- **Tickets and follow-up sessions go through `SessionFinalize`** — queue them as `create_ticket` and `start_session` actions on the done-screen. Never call `CreateBoardTicket` or `SuggestSession` directly from this skill.
 
 ---
 
@@ -477,8 +462,7 @@ Use `AskUserQuestion`:
 Use `spec_save` to finalize with `type: "goal-and-requirements"`, `status: "done"`.
 
 Then call `SessionFinalize` to declare the done-screen contract. The user
-drives the next step from the buttons it renders — do **not** call
-`CreateBoardTicket` yourself in this session.
+drives the next step from the buttons it renders.
 
 ```json
 {
@@ -536,14 +520,6 @@ Update progress tracker via `bonsai_visualize` — mark Goal & Scope as **done**
   }
 }
 ```
-
-### A-Board — Add tasks to board
-
-Board ticket creation is now part of the `SessionFinalize` outcome (see
-A-Save above). Include one `create_ticket` action per V1 feature plus one
-per research alternative; do not call `CreateBoardTicket` directly. The
-UI renders an "Add to board" button per item so the user reviews each
-ticket before it's planted.
 
 ---
 
@@ -862,8 +838,7 @@ shape as A-Save above:
   V1 feature (use the rationale as `body`) and one `create_ticket` per
   named alternative ("Research <Alternative>"). All in `state: "pending"`.
 
-Do **not** call `CreateBoardTicket` directly — the user reviews and
-applies each queued ticket from the done screen.
+The user applies each queued ticket from the done screen.
 
 Update progress tracker via `bonsai_visualize` — mark Goal & Scope as **done**:
 
@@ -883,13 +858,4 @@ Update progress tracker via `bonsai_visualize` — mark Goal & Scope as **done**
   }
 }
 ```
-
-### B-Board — Add tasks to board
-
-Board ticket creation is now part of the `SessionFinalize` outcome (see
-B-Save above). Include one `create_ticket` action per V1 feature plus
-one per named alternative ("Research <Alternative>"); do not call
-`CreateBoardTicket` or `SuggestSession` directly. The UI renders an
-"Add to board" button per item so the user reviews each ticket and a
-primary CTA for the architecture follow-up.
 
