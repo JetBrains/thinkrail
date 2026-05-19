@@ -30,13 +30,6 @@ __pycache__/
 .git/
 .claude/
 .venv/
-
-# All dotfiles hidden by default
-.*
-
-# Exceptions — show these
-!.bonsai/
-!.bonsaihide
 """
 
 
