@@ -23,6 +23,7 @@ export function NewProjectForm() {
   const [nameError, setNameError] = useState(false);
   const startSession = useSessionStore((s) => s.startSession);
   const setProjectState = useUiStore((s) => s.setProjectState);
+  const setCenterView = useUiStore((s) => s.setCenterView);
   const navigate = useNavigate();
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -79,6 +80,7 @@ export function NewProjectForm() {
     if (submitting) return;
     setSubmitting(true);
     setProjectState("initialized");
+    setCenterView("sessions");
 
     const parts: string[] = [];
     parts.push(`Project name: ${name}`);
@@ -100,7 +102,7 @@ export function NewProjectForm() {
       setProjectState("new");
       setSubmitting(false);
     }
-  }, [input, sessionName, attachedFile, submitting, startSession, setProjectState]);
+  }, [input, sessionName, attachedFile, submitting, startSession, setProjectState, setCenterView]);
 
   const handleCancel = useCallback(() => {
     navigate("/");
