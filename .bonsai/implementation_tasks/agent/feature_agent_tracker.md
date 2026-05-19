@@ -47,7 +47,7 @@ tags:
 
 | Function | Signature | Description |
 |----------|-----------|-------------|
-| `register_future` | `(task_id, request_id, timeout_seconds) → asyncio.Future` | Create and store a Future for a pending request. Schedule timeout cancellation |
+| `register_future` | `(task_id, request_id) → asyncio.Future` | Create and store a Future for a pending request. Awaited indefinitely until `resolve_future` or `cancel_futures`. |
 | `resolve_future` | `(task_id, request_id, response) → None` | Resolve the Future with the given response dict. Raise if no pending future found |
 | `cancel_futures` | `(task_id) → None` | Cancel all pending futures for a task (used on interrupt/error) |
 
@@ -58,10 +58,10 @@ tags:
 3. Implement `get_task`, `list_tasks`
 4. Implement `set_status` — validate transitions, update timestamp
 5. Implement `set_session_id`
-6. Implement `register_future` — create Future, store, schedule timeout via `asyncio.get_event_loop().call_later`
+6. Implement `register_future` — create Future, store; no timer (futures wait indefinitely)
 7. Implement `resolve_future` — pop Future, `set_result`
 8. Implement `cancel_futures` — cancel all Futures for a task
-9. Write unit tests — lifecycle transitions, future resolution, timeout, cancellation
+9. Write unit tests — lifecycle transitions, future resolution, cancellation
 
 ## Files
 

@@ -211,59 +211,37 @@ class TestFutureManagement:
         assert f1.cancelled()
         assert f2.cancelled()
 
-    async def test_timeout_auto_denies_future(self) -> None:
+    async def test_future_waits_until_resolved(self) -> None:
+        """Futures wait indefinitely — no timeout."""
         tracker = Tracker()
         task = tracker.create_task(["s1"], AgentConfig())
-        future = tracker.register_future(task.bonsai_sid, "req-1", timeout_seconds=0.05)
+        future = tracker.register_future(task.bonsai_sid, "req-1")
         await asyncio.sleep(0.1)
-        assert future.done()
-        result = future.result()
-        assert result["behavior"] == "deny"
-        assert "Timed out" in result["message"]
-        assert result["timed_out"] is True
-
-    async def test_timeout_sets_timed_out_flag(self) -> None:
-        """Timeout result includes timed_out=True for caller to distinguish from user deny."""
-        tracker = Tracker()
-        task = tracker.create_task(["s1"], AgentConfig())
-        future = tracker.register_future(task.bonsai_sid, "req-1", timeout_seconds=0.05)
-        await asyncio.sleep(0.1)
-        result = future.result()
-        assert result.get("timed_out") is True
-
-    async def test_resolve_before_timeout(self) -> None:
-        tracker = Tracker()
-        task = tracker.create_task(["s1"], AgentConfig())
-        future = tracker.register_future(task.bonsai_sid, "req-1", timeout_seconds=5.0)
+        assert not future.done()  # still waiting
         tracker.resolve_future(task.bonsai_sid, "req-1", {"ok": True})
         result = await future
         assert result == {"ok": True}
 
-    async def test_infinite_wait_no_timeout(self) -> None:
-        """timeout_seconds=0 means no timeout is scheduled — future waits indefinitely."""
+    async def test_resolve_future_returns_value(self) -> None:
         tracker = Tracker()
         task = tracker.create_task(["s1"], AgentConfig())
-        future = tracker.register_future(task.bonsai_sid, "req-1", timeout_seconds=0)
-        await asyncio.sleep(0.1)
-        assert not future.done()  # still waiting, no timeout
-        # Clean up: resolve manually
+        future = tracker.register_future(task.bonsai_sid, "req-1")
         tracker.resolve_future(task.bonsai_sid, "req-1", {"ok": True})
         result = await future
         assert result == {"ok": True}
 
     async def test_reregister_same_request_id(self) -> None:
-        """Re-registering a consumed request_id creates a fresh future (retry support)."""
+        """Re-registering a consumed request_id creates a fresh future."""
         tracker = Tracker()
         task = tracker.create_task(["s1"], AgentConfig())
 
-        # First registration + timeout
-        f1 = tracker.register_future(task.bonsai_sid, "req-1", timeout_seconds=0.05)
-        await asyncio.sleep(0.1)
-        assert f1.done()
-        assert f1.result()["timed_out"] is True
+        # First registration + resolve
+        f1 = tracker.register_future(task.bonsai_sid, "req-1")
+        tracker.resolve_future(task.bonsai_sid, "req-1", {"answer": "first"})
+        assert (await f1) == {"answer": "first"}
 
         # Re-register same request_id
-        f2 = tracker.register_future(task.bonsai_sid, "req-1", timeout_seconds=5.0)
+        f2 = tracker.register_future(task.bonsai_sid, "req-1")
         assert not f2.done()  # fresh future, not the old one
 
         # Resolve the new one

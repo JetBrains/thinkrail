@@ -307,6 +307,11 @@ class AgentService:
                 self._save_task(task)
                 self._tracker.remove_task(bonsai_sid)
                 return
+            # If the runner is blocked awaiting a user response, the end
+            # signal we enqueue below would never be picked up. Resolve
+            # any pending futures with deny+interrupt so the tool callback
+            # returns and the runner can drain the queue.
+            self._tracker.interrupt_futures(bonsai_sid)
             self._tracker.enqueue_end_signal(bonsai_sid)
         except Exception:
             # Task not in memory (e.g. backend restarted) — update on disk only

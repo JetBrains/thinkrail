@@ -61,7 +61,7 @@ notification arrives → parse event type + payload → append to local events l
      - `turnComplete` → update metrics (cost, turns, context tokens)
      - `done`/`error` → update session status
      - `askUserQuestion`/`confirmAction` → set `pendingRequest`
-     - `requestResolved`/`requestExpired` → clear `pendingRequest`
+     - `requestResolved` → clear `pendingRequest`
 4. Subscribe to `rpcClient.serverRequests` for approval/question requests (these have `id` and expect a response)
 
 **SessionListComponentImpl changes:**
@@ -185,7 +185,6 @@ Pre-processing before render:
 | `error` | `ErrorBanner` | — | Red banner + error message + Resume button |
 | `permissionDenied` | `WarningText` | — | `⚠ Permission denied: {toolName}` |
 | `compact` | `CompactMarkerPill` | — | Centered pill `Context compacted` (+ summary if present) |
-| `requestExpired` | `RequestExpiredPill` | — | Faded pill `⏱ Expired: {toolName}` |
 
 ### Tool Call Card Details
 
@@ -214,8 +213,6 @@ Pre-processing before render:
 **Suggestion Card:**
 - **Pending:** Full card in event stream — skill name, reason, Create Session / Dismiss buttons
 - **Resolved:** Collapses to single line: `✓ Session created: test-driven-development` or faded `Dismissed: suggestion`. Tap to expand.
-
-**Expired:** Rendered as a `RequestExpiredPill` in the chat stream — faded pill with `⏱ Expired: {toolName}`. Also marks the corresponding tool call's `approvalStatus` as `EXPIRED` in `toolStates`.
 
 ---
 

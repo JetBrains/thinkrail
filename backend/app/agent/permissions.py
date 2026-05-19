@@ -21,7 +21,6 @@ from app.agent.runtime.permissions import (
 from app.agent.tools import INTERCEPTORS
 from app.agent.tracker import Tracker
 from app.core.config import AppConfig
-from app.core.settings import load_settings
 
 logger = logging.getLogger(__name__)
 
@@ -199,69 +198,27 @@ async def _await_user_response(
     config: AppConfig,
     method: str,
     params: dict[str, Any],
-) -> tuple[dict | None, str]:
-    """Block until the user responds or the timeout policy resolves.
+) -> tuple[dict, str]:
+    """Block until the user responds. No timeout — wait indefinitely.
 
-    Implements configurable timeout behavior (interrupt / deny / retry)
-    with the same ``request_id`` reused across retry attempts so the
-    frontend sees a single pending request, not duplicates.
-
-    Returns ``(response_dict, request_id)``.  *response_dict* is ``None``
-    when the final timeout fires (caller should deny).
+    Returns ``(response_dict, request_id)``.
     """
-    settings = load_settings(config.project_root)
-    timeout = settings.user_respond_timeout  # 0 = infinite
-    behavior = settings.user_respond_timeout_behavior
-    max_retries = settings.user_respond_retry_max_attempts if behavior == "retry" else 0
-
     request_id = str(uuid4())
-    max_loops = max_retries + 1
-
-    for attempt in range(max_loops):
-        future = tracker.register_future(
-            task.bonsai_sid,
-            request_id,
-            timeout_seconds=float(timeout) if timeout > 0 else 0.0,
-        )
-        if tracker.get_task(task.bonsai_sid).status != "waiting":
-            tracker.set_status(task.bonsai_sid, "waiting")
-        # Store pending request so session/get can include it
-        request_type = "approval" if method == "agent/confirmAction" else "question"
-        tracker.set_pending_request(task.bonsai_sid, {
-            "requestId": request_id,
-            "type": request_type,
-            **{k: v for k, v in params.items() if k != "bonsaiSid"},
-        })
-        await notify(method, {**params, "attempt": attempt}, request_id=request_id)
-        response = await future
-
-        if not response.get("timed_out"):
-            # User answered (or explicitly denied) — restore running status
-            tracker.clear_pending_request(task.bonsai_sid)
-            tracker.set_status(task.bonsai_sid, "running")
-            return response, request_id
-
-        # Timed out — retry if configured, otherwise finish
-        if behavior == "retry" and attempt < max_retries:
-            logger.info(
-                "Retrying user response for session %s request %s (attempt %d/%d)",
-                task.bonsai_sid[:8], request_id[:8], attempt + 1, max_retries,
-            )
-            continue
-
-        # Final timeout: expire the request and restore running status
-        tracker.clear_pending_request(task.bonsai_sid)
-        await notify("agent/requestExpired", {
-            "bonsaiSid": task.bonsai_sid,
-            "requestId": request_id,
-            "reason": "timeout",
-        })
-        tracker.set_status(task.bonsai_sid, "running")
-        return None, request_id
-
-    # Safety net (should not reach here)
+    future = tracker.register_future(task.bonsai_sid, request_id)
+    if tracker.get_task(task.bonsai_sid).status != "waiting":
+        tracker.set_status(task.bonsai_sid, "waiting")
+    # Store pending request so session/get can include it
+    request_type = "approval" if method == "agent/confirmAction" else "question"
+    tracker.set_pending_request(task.bonsai_sid, {
+        "requestId": request_id,
+        "type": request_type,
+        **{k: v for k, v in params.items() if k != "bonsaiSid"},
+    })
+    await notify(method, {**params}, request_id=request_id)
+    response = await future
+    tracker.clear_pending_request(task.bonsai_sid)
     tracker.set_status(task.bonsai_sid, "running")
-    return None, request_id
+    return response, request_id
 
 
 async def can_use_tool(
@@ -305,14 +262,6 @@ async def can_use_tool(
             method="agent/askUserQuestion",
             params={"bonsaiSid": task.bonsai_sid, "questions": input_data.get("questions", [])},
         )
-        if response is None:
-            # Timeout — interrupt or deny based on configured behavior
-            settings = load_settings(config.project_root)
-            return ToolPermissionResponse(
-                behavior="deny",
-                message="Timed out waiting for user response",
-                interrupt=settings.user_respond_timeout_behavior != "deny",
-            )
         if response.get("behavior") == "deny":
             return ToolPermissionResponse(
                 behavior="deny",
@@ -358,13 +307,6 @@ async def can_use_tool(
             "toolUseId": request.tool_use_id,
         },
     )
-    if response is None:
-        settings = load_settings(config.project_root)
-        return ToolPermissionResponse(
-            behavior="deny",
-            message="Timed out waiting for user response",
-            interrupt=settings.user_respond_timeout_behavior != "deny",
-        )
     if response.get("behavior") == "allow":
         if sig:
             tracker.remember_approval(task.bonsai_sid, sig)

@@ -251,7 +251,7 @@ translating its native shape to/from these.
    - INTERCEPTORS dispatch — bonsai's MCP tools auto-approve in their
      fast path (mode filter runs *before* this so plan mode can still
      deny mutating tools like `spec_delete` / `ChangeTicketStatus`).
-   - Default — `agent/confirmAction` user prompt with timeout policy.
+   - Default — `agent/confirmAction` user prompt; waits indefinitely for the user's response.
 3. Response returned as `ToolPermissionResponse`. Each runtime maps it
    back to its native shape:
    - **Claude:** `claude_can_use_tool_adapter` returns

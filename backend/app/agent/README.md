@@ -60,9 +60,6 @@ stateDiagram-v2
     running --> error : SDK error
 
     waiting --> running : user responds
-    waiting --> running : timeout (deny behavior)
-    waiting --> running : timeout retry
-    waiting --> idle : timeout (interrupt behavior)
     waiting --> idle : agent/interrupt
     waiting --> done : agent/end
 ```
@@ -72,7 +69,7 @@ stateDiagram-v2
 | `initializing` | Session created, SDK client being set up. Messages sent during this phase are queued and processed once `idle` is reached. |
 | `idle` | Session open, SDK client ready, waiting for user message |
 | `running` | SDK turn in progress (processing user message) |
-| `waiting` | Suspended on a mid-turn interaction (question or tool approval) — runner awaits a Future. The backend tracker transitions to `waiting` via `permissions._await_user_response()` and back to `running` when the future resolves (user answer, timeout, or retry). The frontend also sets `waiting` locally via `onAskQuestion`/`onConfirmAction`. |
+| `waiting` | Suspended on a mid-turn interaction (question or tool approval) — runner awaits a Future indefinitely. The backend tracker transitions to `waiting` via `permissions._await_user_response()` and back to `running` when the future resolves on the user's reply. The frontend also sets `waiting` locally via `onAskQuestion`/`onConfirmAction`. |
 | `done` | Session ended gracefully |
 | `error` | Session ended due to error |
 
@@ -277,7 +274,7 @@ graph TD
 | `models.py` | Pydantic models: AgentTask, AgentConfig, AgentEvent, AgentResult, Question, QuestionOption, AskUserQuestionResponse, ToolApprovalResponse | — |
 | `context.py` | Context assembly pipeline: builds general instructions, loads skill instructions, project metadata, and spec content; composes system prompt. See [CONTEXT.md](CONTEXT.md). | models, spec/service |
 | `service.py` | Facade — start sessions, send messages, interrupt turns, end sessions, continue sessions (native resume), relay responses to pending futures | context, runner, tracker, core/config, spec/service |
-| `permissions.py` | Tool permission routing. `can_use_tool()` callback that routes MCP tools to auto-approve `intercept()` functions via `tools.INTERCEPTORS` (suffix match), handles AskUserQuestion interactively, and falls back to `agent/confirmAction` for unknown tools. Accepts `tool_use_id` from the runner's FIFO queue to include in `confirmAction` notifications for precise frontend matching. Shared `_await_user_response()` helper implements configurable timeout behavior (interrupt/deny/retry) with same `request_id` reused across retry attempts; reads timeout settings from `ProjectSettings`. Emits `agent/requestExpired` on final timeout. Real MCP tool logic lives in handlers via `get_tool_context()`. | tools, tracker, models, core/settings |
+| `permissions.py` | Tool permission routing. `can_use_tool()` callback that routes MCP tools to auto-approve `intercept()` functions via `tools.INTERCEPTORS` (suffix match), handles AskUserQuestion interactively, and falls back to `agent/confirmAction` for unknown tools. Accepts `tool_use_id` from the runner's FIFO queue to include in `confirmAction` notifications for precise frontend matching. Shared `_await_user_response()` helper registers a Future and awaits the user's reply indefinitely — no timeout. Real MCP tool logic lives in handlers via `get_tool_context()`. | tools, tracker, models |
 | `transcribe.py` | Audio transcription via OpenAI Whisper API. `transcribe(audio_base64, mime_type) -> str`. Lazy-imports `openai`; optional dependency for browsers without Web Speech API. See [TRANSCRIBE.md](TRANSCRIBE.md). | openai (optional) |
 | `runtime/` | Runtime-agnostic agent contract — `IAgentRuntime` Protocol, `RuntimeRegistry`, neutral `ModelInfo` + capability constants, `RuntimeEvent`, `AgentEventHandler`, neutral permission types (`ToolPermissionRequest`/`Response`), `ToolCategory`. See [runtime/README.md](runtime/README.md). | models |
 | `runtime/claude/` | Claude Agent SDK runtime — `class ClaudeRuntime` (conversational loop), `ClaudeModelRegistry` (Anthropic models fetch + cache + 3-entry fallback, lazy one-shot refresh), `credentials.py` (Anthropic API key resolution from env / macOS Keychain), `SubagentHooks` (per-session subagent / PreCompact correlation), `adapter` (event-shape builders). The only place under `runtime/` that imports `claude_agent_sdk` or `anthropic`. Owns SDK client lifecycle, MCP server wiring, per-iteration token tracking. **SDK field semantics:** `total_cost_usd` is cumulative (assign, don't accumulate); `num_turns` is per-turn (accumulate). See [runtime/claude/README.md](runtime/claude/README.md). | runtime, models, tracker, permissions, tools |

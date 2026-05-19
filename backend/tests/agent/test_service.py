@@ -188,6 +188,24 @@ class TestEndSession:
         # Should not raise
         await service.end_session(task.bonsai_sid)
 
+    async def test_end_session_resolves_pending_futures(self) -> None:
+        """A waiting session must have its futures resolved so the runner
+        can pick up the end signal — otherwise it stays blocked in the
+        tool callback forever."""
+        service, _, _ = _make_service()
+        task = service._tracker.create_task(["s1"], AgentConfig())
+        service._tracker.set_status(task.bonsai_sid, "idle")
+        service._tracker.set_status(task.bonsai_sid, "running")
+        service._tracker.set_status(task.bonsai_sid, "waiting")
+        future = service._tracker.register_future(task.bonsai_sid, "req-1")
+
+        await service.end_session(task.bonsai_sid)
+
+        assert future.done()
+        result = future.result()
+        assert result["behavior"] == "deny"
+        assert result["interrupt"] is True
+
 
 class TestGetAndListTasks:
     def test_get_task(self) -> None:

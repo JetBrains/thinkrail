@@ -26,10 +26,6 @@ class ProjectSettings(BaseModel, extra="allow"):
     # Font scale settings
     font_size: int = 13  # base font size in px (normal view)
     compact_font_size: int = 9  # base font size in px (compact view)
-    # User response timeout settings
-    user_respond_timeout: float = 300  # seconds; 0 = wait indefinitely
-    user_respond_timeout_behavior: str = "interrupt"  # "interrupt" | "deny" | "retry"
-    user_respond_retry_max_attempts: int = 3  # only used when behavior = "retry"
     # Trash auto-purge
     trash_retention_days: int = 30  # 0 or null to disable auto-purge
     # Voice input revise behavior
