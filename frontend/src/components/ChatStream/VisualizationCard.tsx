@@ -233,7 +233,7 @@ export function toMermaidSyntax(data: StructuredDiagramData): string {
   for (const edge of data.edges) {
     if (edge.label) {
       const escaped = edge.label.replace(/"/g, "#quot;");
-      lines.push(`  ${edge.from} -->|${escaped}| ${edge.to}`);
+      lines.push(`  ${edge.from} -->|"${escaped}"| ${edge.to}`);
     } else {
       lines.push(`  ${edge.from} --> ${edge.to}`);
     }

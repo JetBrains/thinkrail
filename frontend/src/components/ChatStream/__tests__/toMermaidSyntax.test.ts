@@ -16,7 +16,20 @@ describe("toMermaidSyntax", () => {
     expect(result).toContain("graph TD");
     expect(result).toContain('a["Module A"]');
     expect(result).toContain('b["Module B"]');
-    expect(result).toContain("a -->|calls| b");
+    expect(result).toContain('a -->|"calls"| b');
+  });
+
+  it("quotes edge labels so special chars like () don't break the parser", () => {
+    const data: StructuredDiagramData = {
+      nodes: [
+        { id: "api", label: "API" },
+        { id: "session", label: "Session" },
+      ],
+      edges: [{ from: "api", to: "session", label: "Depends()" }],
+    };
+
+    const result = toMermaidSyntax(data);
+    expect(result).toContain('api -->|"Depends()"| session');
   });
 
   it("uses graph LR for left-to-right layout", () => {
