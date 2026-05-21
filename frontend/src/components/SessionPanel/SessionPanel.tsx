@@ -3,6 +3,7 @@ import { useSessionStore } from "@/store/sessionStore.ts";
 import { useNotificationStore } from "@/store/notificationStore.ts";
 import { getErrorMessage } from "@/utils/errors.ts";
 import { useFileStore } from "@/store/fileStore.ts";
+import { modLabel } from "@/utils/platform.ts";
 import type { SessionStatus } from "@/types/session.ts";
 import { ChatStream } from "@/components/ChatStream/ChatStream.tsx";
 import type { ChatStreamHandle } from "@/components/ChatStream/ChatStream.tsx";
@@ -34,6 +35,7 @@ export function SessionPanel({
   const updateConfig = useSessionStore((s) => s.updateConfig);
   const restartSession = useSessionStore((s) => s.restartSession);
   const projectCost = useSessionStore((s) => s.projectCost);
+  const createNewSession = useSessionStore((s) => s.createNewSession);
 
   const openFiles = useFileStore((s) => s.openFiles);
   const activeFilePath = useFileStore((s) => s.activeFilePath);
@@ -142,20 +144,29 @@ export function SessionPanel({
   return (
     <>
       {!hideTabBar && (
-        <SessionTabBar
-          sessions={sessionList}
-          activeSessionId={!showFile ? activeSessionId : null}
-          onSwitchSession={handleSwitchSession}
-          onCloseSession={closeSession}
-          files={fileList}
-          activeFilePath={activeFilePath}
-          onSwitchFile={handleSwitchFile}
-          onCloseFile={closeFile}
-          previewFile={previewFileObj}
-          previewFilePath={previewFilePath}
-          onClearPreview={clearPreview}
-          onPinPreview={pinPreview}
-        />
+        <div className="session-tabs-row">
+          <SessionTabBar
+            sessions={sessionList}
+            activeSessionId={!showFile ? activeSessionId : null}
+            onSwitchSession={handleSwitchSession}
+            onCloseSession={closeSession}
+            files={fileList}
+            activeFilePath={activeFilePath}
+            onSwitchFile={handleSwitchFile}
+            onCloseFile={closeFile}
+            previewFile={previewFileObj}
+            previewFilePath={previewFilePath}
+            onClearPreview={clearPreview}
+            onPinPreview={pinPreview}
+          />
+          <button
+            className="session-new-btn"
+            onClick={() => createNewSession()}
+            title={`New session (${modLabel("T")})`}
+          >
+            + New
+          </button>
+        </div>
       )}
       {showFile && displayFile ? (
         <FileViewer file={displayFile} />
@@ -231,7 +242,7 @@ export function SessionPanel({
         <div className="session-empty">
           <div className="session-empty-title">No active session</div>
           <div className="session-empty-hint">
-            Press <span className="session-empty-kbd">⌘T</span> or click <b>+ New</b> in the header to start a session.
+            Press <span className="session-empty-kbd">⌘T</span> or click <b>+ New</b> above to start a session.
           </div>
         </div>
       )}

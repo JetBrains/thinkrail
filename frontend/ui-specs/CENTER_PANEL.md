@@ -42,7 +42,9 @@ The center panel is the primary workspace in the three-panel layout. It hosts a 
 
 ```
 <SessionPanel>                       components/SessionPanel/SessionPanel.tsx
-  <SessionTabBar />                  components/SessionPanel/SessionTabBar.tsx
+  <div.session-tabs-row>             flex row: tabs (overflow-x: auto) + "+ New" button
+    <SessionTabBar />                components/SessionPanel/SessionTabBar.tsx
+    <button.session-new-btn>         createNewSession()  (Mod+T)
   {showFile}
     <FileViewer file={displayFile} />  components/FileViewer/FileViewer.tsx
   {showSession}
@@ -92,6 +94,11 @@ interface SessionTabBarProps {
 - Alert badge (`.session-tab-badge`): `Q` for question, `A` for approval, pulse animation
 - Close button (`.session-tab-close`): hidden by default, visible on hover
 - Active: `.session-tab-active` → purple bottom border
+- When `activeSessionId` changes, `SessionTabBar` scrolls the active tab into view via `scrollIntoView({ inline: "nearest", block: "nearest" })`. The effect is suppressed when a file or board ticket is active.
+
+### "+ New" Button
+
+A `button.session-new-btn` sibling of `<SessionTabBar>` inside `.session-tabs-row`. Fixed to the right edge (does not participate in the tabs' horizontal scroll). Calls `sessionStore.createNewSession()` — which also routes the user to the Sessions center view if they were elsewhere. Keyboard equivalent: `Mod+T`.
 
 ### Separator
 

@@ -85,17 +85,18 @@ All three panels have **flexible width**, resizable via drag handles between the
 
 ```
 ┌─────────────────────────────────────────────────────────────────────┐
-│ 🌿 Bonsai │ Project: <name> │ ● N sessions │    [◀ Tree] [+ New]  │
+│ 🌿 Bonsai │ Project: <name> │ [Board] [Sessions] │         [⚙]   │
 └─────────────────────────────────────────────────────────────────────┘
 ```
 
 | Element | Description |
 | --- | --- |
 | Logo | "🌿 Bonsai" branding |
-| Project name | Current project root name |
-| Session indicator | Count of active agent sessions, pulsing dot |
-| `◀ Tree` button | Toggle left panel visibility (`Mod+B`) |
-| `+ New Session` button | Opens new session modal (`Mod+T`) |
+| Project name | Current project root name; click to switch project |
+| Board / Sessions tabs | Center view switcher; Sessions tab shows live count of running sessions |
+| Settings (`⚙`) | Opens the settings modal |
+
+The "+ New session" button does **not** live in the header — it sits inside the Sessions view's tab bar (see §3). `Mod+T` is the global shortcut and auto-routes to the Sessions view before creating the draft.
 
 ## 2. Left Panel — Navigation & Progress
 
@@ -237,7 +238,8 @@ Files modified across all active sessions:
 The primary workspace area. Hosts a tab bar with session tabs and file tabs, renders Claude agent sessions via the Chat UI, and displays files via the File Viewer. Supports ephemeral preview tabs triggered by single-clicking items in the left panel trees.
 
 Key features:
-- **Session tabs** — each tab is an agent session with status dots and alert badges
+- **Session tabs** — each tab is an agent session with status dots and alert badges. The newly-active tab is auto-scrolled into view when `activeSessionId` changes.
+- **`+ New` button** — sits at the right end of the tab bar (outside the scrollable area); creates a draft session and focuses it. Equivalent to `Mod+T`.
 - **File tabs** — opened files with dirty indicators, separated from sessions by divider
 - **Preview tabs** — ephemeral italic-titled tabs from single-click browsing, auto-close on navigation
 - **Background alerts** — tab badges + toast notifications for sessions needing attention

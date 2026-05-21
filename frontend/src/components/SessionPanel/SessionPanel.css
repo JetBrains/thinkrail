@@ -34,3 +34,35 @@
   color: var(--muted);
   margin: 0 2px;
 }
+
+.session-tabs-row {
+  display: flex;
+  align-items: stretch;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+.session-tabs-row > .session-tabs {
+  flex: 1;
+  min-width: 0;
+  border-bottom: none;
+}
+
+.session-new-btn {
+  flex-shrink: 0;
+  align-self: center;
+  margin: 0 var(--space-sm);
+  background: var(--blue);
+  color: var(--bg);
+  border: 1px solid var(--blue);
+  border-radius: var(--radius-sm);
+  padding: var(--space-xs) var(--space-md);
+  font-family: var(--font);
+  font-size: var(--font-lg);
+  cursor: pointer;
+  transition: opacity var(--transition-fast);
+}
+
+.session-new-btn:hover {
+  opacity: 0.9;
+}

@@ -114,7 +114,7 @@ At < 1024px, the header adapts:
 - Logo text shortens: "🌿 Bonsai" → "🌿"
 - Project name hidden
 - Session count pill hidden
-- Only essential buttons: `☰` (left), `+ New`, `☰` (right)
+- Only essential buttons: `☰` (left), `☰` (right), `⚙` (settings). The `+ New` session button is reached inside the Sessions view, not from the header.
 
 ## Status Bar Adaptation
 

@@ -1,3 +1,4 @@
+import { useEffect, useRef } from "react";
 import type { Session } from "@/types/session.ts";
 import type { OpenFile } from "@/store/fileStore.ts";
 import { useBoardStore } from "@/store/boardStore.ts";
@@ -93,6 +94,12 @@ export function SessionTabBar({
   const hasPreviewTab = previewFilePath != null && !files.some((f) => f.path === previewFilePath);
   const previewIsActive = hasPreviewTab && !activeFilePath;
 
+  const activeTabRef = useRef<HTMLDivElement | null>(null);
+  useEffect(() => {
+    if (activeSessionId == null || activeFilePath != null || activeTicketId) return;
+    activeTabRef.current?.scrollIntoView({ inline: "nearest", block: "nearest" });
+  }, [activeSessionId, activeFilePath, activeTicketId]);
+
   const handleSwitchSession = (sid: string) => {
     useFileStore.setState({ activeFilePath: null, previewFilePath: null, previewFile: null });
     onSwitchSession(sid);
@@ -113,10 +120,12 @@ export function SessionTabBar({
           (child) => child.parentBonsaiSid === s.bonsaiSid &&
           child.status !== "done" && child.status !== "error"
         );
+        const isActive = s.bonsaiSid === activeSessionId && !activeTicketId && !activeFilePath && !previewFilePath;
         return (
           <div
             key={`s-${s.bonsaiSid}`}
-            className={`session-tab ${s.bonsaiSid === activeSessionId && !activeTicketId && !activeFilePath && !previewFilePath ? "session-tab-active" : ""}`}
+            ref={isActive ? activeTabRef : undefined}
+            className={`session-tab ${isActive ? "session-tab-active" : ""}`}
             style={{ opacity: hasActiveChild ? 0.5 : 1 }}
             onClick={() => handleSwitchSession(s.bonsaiSid)}
           >

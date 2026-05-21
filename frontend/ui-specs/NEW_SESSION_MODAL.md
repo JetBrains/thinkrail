@@ -23,8 +23,8 @@ tags:
 The New Session Modal is the entry point for starting Claude agent sessions. Users select a skill, optionally pick specs as context, and configure the session. On submit, it calls `agent/run` via `sessionStore.startSession()` and switches focus to the new session tab.
 
 **Triggers:**
-- `+ New Session` button in the header bar
-- `Mod+T` keyboard shortcut (globally registered)
+- `+ New` button at the right end of the Sessions view tab bar
+- `Mod+T` keyboard shortcut (globally registered; auto-routes to the Sessions view before creating the draft)
 - Command palette "New session" action
 - `openModal(prefill?)` called from context menus — **[Planned]**
 

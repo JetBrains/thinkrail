@@ -613,6 +613,10 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
       skillId: prefill?.skillId,
       metaTicketId: prefill?.metaTicketId,
     });
+    if (!prefill?.metaTicketId) {
+      useUiStore.getState().setCenterView("sessions");
+      useBoardStore.setState({ activeTicketId: null });
+    }
     return bonsaiSid;
   },
 

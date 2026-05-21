@@ -3,14 +3,12 @@ import { useUiStore } from "@/store/uiStore.ts";
 import { useSessionStore } from "@/store/sessionStore.ts";
 import { useBoardStore } from "@/store/boardStore.ts";
 import { useConnectionStore } from "@/store/connectionStore.ts";
-import { modLabel } from "@/utils/platform.ts";
 import { SettingsModal } from "./SettingsModal.tsx";
 
 export function Header({ onSwitchProject }: { onSwitchProject: () => void }) {
   const projectName = useUiStore((s) => s.projectName);
   const centerView = useUiStore((s) => s.centerView);
   const setCenterView = useUiStore((s) => s.setCenterView);
-  const createNewSession = useSessionStore((s) => s.createNewSession);
   const sessions = useSessionStore((s) => s.sessions);
   const activeSessions = Array.from(sessions.values()).filter(
     (s) => s.status === "running",
@@ -77,9 +75,6 @@ export function Header({ onSwitchProject }: { onSwitchProject: () => void }) {
         )}
       </div>
       <div className="header-right">
-        <button className="header-btn header-btn-primary" onClick={() => createNewSession()} title={`New session (${modLabel("T")})`}>
-          + New
-        </button>
         <button
           className="header-settings-btn"
           onClick={() => setSettingsOpen(true)}

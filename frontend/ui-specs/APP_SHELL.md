@@ -325,11 +325,10 @@ function Header({ onSwitchProject }: { onSwitchProject: () => void }) {
   // Left side:
   //   - Logo text "Bonsai" (purple, font-weight 600)
   //   - Project button (calls onSwitchProject, shows projectName from uiStore)
-  //   - Active session count with pulsing green dot (hidden when 0)
+  //   - Board / Sessions view-switcher tablist
+  //   - Multi-client presence indicator (hidden when only one client connected)
   // Right side:
-  //   - "Tree" button   -> toggleLeftPanel()   (Mod+B)
-  //   - "Context" button -> toggleRightPanel()  (Mod+J)
-  //   - "+ New" button   -> openModal()          (Mod+T, primary style)
+  //   - Settings gear -> opens SettingsModal
 }
 ```
 
