@@ -57,7 +57,7 @@ Agent (LLM)
       (intercepted by canUseTool)
 ```
 
-The developer manually creates sessions via `NewSessionModal`, manually checks the context panel, and manually decides what to do next. The agent has no way to suggest follow-up work or push structured information outside the chat stream.
+The developer manually creates sessions via the `+ New` button in the Sessions tab bar, manually checks the context panel, and manually decides what to do next. The agent has no way to suggest follow-up work or push structured information outside the chat stream.
 
 ## High-Level Design
 

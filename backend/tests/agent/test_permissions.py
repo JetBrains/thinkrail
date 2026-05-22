@@ -459,6 +459,7 @@ class TestCategorize:
             "Edit", "Write", "MultiEdit", "NotebookEdit",
             "Bash", "BashOutput", "KillShell",
             "ExitPlanMode", "EnterPlanMode", "Agent", "TodoWrite",
+            "TaskCreate", "TaskUpdate", "TaskGet", "TaskList",
         }
         missing = expected_built_ins - set(_TOOL_CATEGORIES)
         assert not missing, f"Expected built-in tools missing from _TOOL_CATEGORIES: {missing}"
@@ -690,7 +691,10 @@ class TestCanUseToolModeFiltering:
 
     @pytest.mark.parametrize(
         "tool_name",
-        ["ExitPlanMode", "EnterPlanMode", "Agent", "TodoWrite"],
+        [
+            "ExitPlanMode", "EnterPlanMode", "Agent", "TodoWrite",
+            "TaskCreate", "TaskUpdate", "TaskGet", "TaskList",
+        ],
     )
     async def test_plan_mode_allows_control_flow_tools(
         self, tool_name: str,

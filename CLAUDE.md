@@ -96,6 +96,25 @@ Follow these conventions for all new Python code:
 - `aiosqlite` for SQLite access (consistent with `app_store.py`)
 - Don't mix sync and async — if a module is async, keep all its public methods async
 
+## Code Style — Comments (Python and TypeScript)
+
+**Default to no comments.** Names, types, tests, commits, and PR descriptions carry the context. A comment earns its place only when removing it would leave a future reader confused — and even then, write the minimum.
+
+**Do NOT write:**
+- Narration of *what* the code does — well-named identifiers already say it.
+- History or migration notes ("previously this did X", "the old code path…", "this used to live in Y", "now that Z was folded into…"). Git log and PRs are the place for that.
+- Version references ("since SDK 0.2.82", "after PR #98"). They rot.
+- Comparison to the previous behavior to explain the current one. The current code stands on its own.
+- Redundant restatement of the function/class/parameter name in prose.
+- Justifications for routine choices that any reader would make the same way.
+
+**You MAY write a comment when:**
+- A hidden constraint, invariant, or external-system quirk would surprise a careful reader (e.g. "ProjectPicker's CTAs trigger a native folder dialog Playwright can't drive — recents list is the only DOM path").
+- A workaround references a specific upstream bug or limitation that isn't obvious from the call site.
+- A non-obvious focus/timing/DOM gotcha is load-bearing for the code to work.
+
+If the comment describes *the current state* of the system and a reader couldn't infer it from names + types, it's fair game. If it describes *how we got here*, delete it.
+
 ## Spec-Driven Rules
 1. Check specs before implementing: read existing specs first
 2. Create specs before code: use /spec-init, /module-design, etc.

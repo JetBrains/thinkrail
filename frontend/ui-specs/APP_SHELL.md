@@ -99,7 +99,10 @@ frontend/
 │   │   │   ├── Header.tsx
 │   │   │   ├── StatusBar.tsx
 │   │   │   ├── LeftPanel.tsx
+│   │   │   ├── PanelCollapseButton.tsx
 │   │   │   ├── ResizeHandle.tsx
+│   │   │   ├── SettingsModal.tsx     # Themes / Session Defaults / Server Info / Settings tabs
+│   │   │   ├── SettingsModal.css
 │   │   │   └── AppShell.css
 │   │   │
 │   │   ├── ContextPanel/      # Context-aware right sidebar (see CONTEXT_PANEL.md)
@@ -108,11 +111,10 @@ frontend/
 │   │   ├── FileViewer/        # File viewer with Monaco + markdown preview
 │   │   ├── DiffViewer/        # (see DIFF_VIEWER.md)
 │   │   ├── Console/           # (see CONSOLE.md)
-│   │   ├── NewSessionModal/   # (see NEW_SESSION_MODAL.md)
 │   │   ├── CommandPalette/    # (see COMMAND_PALETTE.md)
 │   │   ├── Notifications/     # Toast notifications (ToastContainer)
 │   │   ├── SessionHistory/    # (see SESSION_HISTORY.md)
-│   │   ├── SessionPanel/      # Session tab bar + active session display
+│   │   ├── SessionPanel/      # Session tab bar + active session display, + New button (see CENTER_PANEL.md)
 │   │   ├── SessionManager/    # Full session management view
 │   │   ├── FileTree/          # File tree navigation
 │   │   ├── SpecTree/          # Spec tree navigation
@@ -159,7 +161,6 @@ frontend/
               </Route>
             </Routes>
           </AppRoutes>
-          <NewSessionModal />           {/* global, rendered via portal */}
           <CommandPalette />            {/* global, rendered via portal */}
           <ToastContainer />            {/* global, fixed position */}
         </BrowserRouter>
@@ -328,9 +329,22 @@ function Header({ onSwitchProject }: { onSwitchProject: () => void }) {
   //   - Board / Sessions view-switcher tablist
   //   - Multi-client presence indicator (hidden when only one client connected)
   // Right side:
-  //   - Settings gear -> opens SettingsModal
+  //   - `.header-settings-btn` gear icon -> opens <SettingsModal />
 }
 ```
+
+The gear button is the only right-side affordance. It opens `SettingsModal`,
+which has four nav tabs:
+
+| Tab | Renders | Source of truth |
+|-----|---------|-----------------|
+| Themes | `THEMES` from `utils/theme.ts`, applies via `applyTheme()` | `localStorage` |
+| Session Defaults | Model / permission mode / effort / max-turns form | AppStore (`session_defaults`) via RPC |
+| Server Info | Hostname, version, port; "copy URL" affordances | `serverInfoStore` |
+| Settings | Inline editor for `.bonsai/settings.json` | Project file |
+
+Theme switching, server info, and session-default editing all live inside this
+modal — there are no standalone header buttons for them.
 
 ### StatusBar Component
 

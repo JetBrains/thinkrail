@@ -14,8 +14,8 @@ covers:
 - backend/app/agent/models.py
 - backend/app/rpc/methods/agents.py
 - frontend/src/components/ChatStream/DraftConfigCard.tsx
+- frontend/src/components/SessionPanel/SessionPanel.tsx
 - frontend/src/store/sessionStore.ts
-- frontend/src/components/NewSessionModal/NewSessionModal.tsx
 tags:
 - feature
 - session
@@ -43,20 +43,16 @@ When a session is created in Bonsai, the system prompt — assembled from specs,
 
 This feature introduces a **draft session** concept with a two-phase backend lifecycle: first **prepare** (creates the task, builds the system prompt, persists to disk — but does not start the runner), then **start** (launches the SDK session). Between those steps, the user sees an editable config card (`DraftConfigCard`) with a live system prompt preview and can adjust specs, skill, model, permissions, effort, and betas before committing.
 
-## Current State
+## Background (motivation for the draft phase)
 
-```
-NewSessionModal (pick skill, specs, model, etc.)
-  → "Start Session" → agent/run RPC
-  → Backend: create task + build context + start runner (all in one step)
-  → sessionStart event arrives
-  → SessionContextCard renders (read-only) showing what was included
-```
+Before draft sessions, picking config and starting a session was a single step
+via the legacy `NewSessionModal` → `agent/run` RPC. Problems with that flow:
 
-**Problems:**
-- System prompt is invisible until after the session starts
+- System prompt was invisible until after the session started
 - No way to review or adjust the assembled context before committing API cost
-- Config set in the modal is locked — changing specs or skill requires creating a new session
+- Config set in the modal was locked — changing specs or skill required a new session
+
+The draft phase below addresses all three.
 
 ## Two-Phase Session Lifecycle
 
@@ -82,8 +78,8 @@ The `agent/run` method is unchanged — it remains the one-step shortcut for flo
 ### Creating a Draft
 
 ```
-User clicks "Create Session" in NewSessionModal
-  → sessionStore.createDraft()
+User clicks "+ New" in the Sessions tab bar (`SessionPanel`)
+  → sessionStore.createNewSession() → createDraft()
   → RPC: agent/prepare { specIds, config, skillId, name, ... }
   → AgentService.prepare_task():
       1. tracker.create_task() with status = "draft"
@@ -148,7 +144,7 @@ The `DraftConfigCard` is a stacked card rendered at the top of `ChatStream` when
 **Key behaviors:**
 - Each config change triggers `updateDraft()` with a 300ms debounce
 - Subtle "updating..." indicator during prompt rebuild
-- `SkillGrid` and `SpecSelector` reused from `NewSessionModal` as popovers
+- `SkillGrid` and `SpecSelector` (`components/shared/`) used as popovers
 - CSS uses Bonsai design tokens (`--space-*`, `--radius-*`, `--border`, etc.)
 - Gold left-border to distinguish from the purple `SessionContextCard`
 
@@ -179,8 +175,7 @@ The `DraftConfigCard` is a stacked card rendered at the top of `ChatStream` when
 | `components/ChatStream/PromptPreview.css` | **New** — bar, legend, section, spec entry, rendered markdown styles. |
 | `components/ChatStream/ChatStream.tsx` | Render `DraftConfigCard` when `session.status === "draft"`. |
 | `components/ChatStream/SessionStatusLine.tsx` | Add `"draft"` case to `statusInfo()` switch. |
-| `components/NewSessionModal/NewSessionModal.tsx` | Change button from "Start Session" to "Create Session". Call `createDraft()` instead of `startSession()`. |
-| `components/SessionPanel/SessionPanel.tsx` | Add `"draft"` to `handleSend` status guard. Hide `SessionStatusLine` for drafts. Hide Start button for drafts. Draft-specific placeholder text. |
+| `components/SessionPanel/SessionPanel.tsx` | `+ New` button calls `sessionStore.createNewSession()` → `createDraft()`. Add `"draft"` to `handleSend` status guard. Hide `SessionStatusLine` for drafts. Hide Start button for drafts. Draft-specific placeholder text. |
 | `components/SessionPanel/SessionTabBar.tsx` | Gold `--gold` dot color for `"draft"` status in tab bar. |
 
 ## Wire Format

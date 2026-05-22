@@ -40,7 +40,7 @@ The Frontend module is a React/TypeScript single-page application that provides 
 ```
 ┌──────────────────────────────────────────────────────────┐
 │  Presentation Layer (React Components)                    │
-│    AppShell · ChatStream · GraphView · NewSessionModal    │
+│    AppShell · ChatStream · GraphView · SessionPanel       │
 │    CommandPalette · Notifications · DiffViewer · Console  │
 │    ProgressTab · SessionHistory · SpecView · CodeView     │
 ├──────────────────────────────────────────────────────────┤
@@ -70,7 +70,7 @@ The Frontend module is a React/TypeScript single-page application that provides 
 | `src/components/AppShell/` | Three-panel layout, header, status bar, resize handles | [APP_SHELL](ui-specs/APP_SHELL.md) |
 | `src/components/ChatStream/` | Agent event rendering, streaming text, tool cards, SuggestionCard for session suggestions | [CHAT_UI](ui-specs/CHAT_UI.md) |
 | `src/components/GraphView/` | Spec hierarchy graph, layered drill-down, breadcrumb | [GRAPH_INTERACTIONS](ui-specs/GRAPH_INTERACTIONS.md) |
-| `src/components/NewSessionModal/` | Session creation form, skill grid, spec selector | [NEW_SESSION_MODAL](ui-specs/NEW_SESSION_MODAL.md) |
+| `src/components/SessionPanel/` | Session tab bar, "+ New" draft button, draft config card, active session display | [CENTER_PANEL](ui-specs/CENTER_PANEL.md) |
 | `src/components/CommandPalette/` | Fuzzy search, prefix modes, action registry | [COMMAND_PALETTE](ui-specs/COMMAND_PALETTE.md) |
 | `src/components/Notifications/` | Toast queue, tab badges, status bar alerts | [NOTIFICATION_SYSTEM](ui-specs/NOTIFICATION_SYSTEM.md) |
 | `src/components/DiffViewer/` | Spec+code side-by-side diff, mapping files | [DIFF_VIEWER](ui-specs/DIFF_VIEWER.md) |
@@ -170,7 +170,7 @@ Dev dependencies: `vite`, `typescript`, `vitest`, `@testing-library/react`, `esl
 | Web View (top-level UI) | [ui-specs/WEBVIEW.md](ui-specs/WEBVIEW.md) | Three-panel layout, all views, keyboard shortcuts |
 | Chat UI Rendering | [ui-specs/CHAT_UI.md](ui-specs/CHAT_UI.md) | Agent event → component mapping, streaming |
 | Graph Interactions | [ui-specs/GRAPH_INTERACTIONS.md](ui-specs/GRAPH_INTERACTIONS.md) | Layered drill-down, layout, edges |
-| New Session Modal | [ui-specs/NEW_SESSION_MODAL.md](ui-specs/NEW_SESSION_MODAL.md) | Skill grid, spec selector, config |
+| Center Panel | [ui-specs/CENTER_PANEL.md](ui-specs/CENTER_PANEL.md) | Tab bar, "+ New" draft, session/file viewer |
 | Command Palette | [ui-specs/COMMAND_PALETTE.md](ui-specs/COMMAND_PALETTE.md) | Fuzzy search, prefix modes |
 | Notification System | [ui-specs/NOTIFICATION_SYSTEM.md](ui-specs/NOTIFICATION_SYSTEM.md) | Toasts, badges, sound |
 | Diff Viewer | [ui-specs/DIFF_VIEWER.md](ui-specs/DIFF_VIEWER.md) | Spec-to-code mapping, side-by-side |

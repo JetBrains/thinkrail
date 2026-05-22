@@ -138,7 +138,7 @@ spec — directly or transitively — except where noted as a documented gap.
 
 | Component | Primary spec(s) | Notes |
 |-----------|------------------|-------|
-| AppShell (Header, StatusBar, ThemeSwitcher, ServerInfoDialog) | `app-shell.spec.ts` | Theme toggle, server info |
+| AppShell (Header, StatusBar, SettingsModal) | `app-shell.spec.ts`, `user-settings-dialog.spec.ts` | Status bar visible; SettingsModal nav tabs + Session Defaults round-trip |
 | AppShell/LeftPanel, ResizeHandle | `settings.spec.ts`, `_smoke.spec.ts` | Alt+B toggle persists; status bar visible |
 | BoardView (KanbanColumn, MetaTicketBoard/Card, CreateTicketModal, BoardCardContextMenu, TaskBoard/Card) | `board.spec.ts` | Create + move-via-context-menu + reload |
 | ChatStream (InputArea, AssistantMessage, ToolCallCard, ErrorBanner, SessionStatusLine, DiffCard, ApprovalCard, etc.) | `session-lifecycle.spec.ts`, `session-history.spec.ts`, `new-session-model.spec.ts` | Real LLM; tool-call card appears |

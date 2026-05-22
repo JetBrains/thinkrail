@@ -50,6 +50,7 @@ export const compactRenderers: ViewRenderers = {
   toolCallStart: (ev, i, k, ctx) => {
     const p = ev.payload;
     if (p.toolName === "AskUserQuestion") return null;
+    if (p.toolName === "TaskGet" || p.toolName === "TaskList") return null;
 
     // Visualizations: collapsible in compact mode
     if (p.toolName.endsWith("bonsai_visualize")) {
@@ -86,6 +87,20 @@ export const compactRenderers: ViewRenderers = {
 
     // Task tools render the same in both modes
     if (TASK_TOOLS.has(toolName)) {
+      const isTaskFamily = toolName === "TaskCreate" || toolName === "TaskUpdate";
+      if (isTaskFamily) {
+        if (ctx.taskCollectionAnchor !== i) return null;
+        return (
+          <TaskCard
+            key={k}
+            toolName={toolName}
+            toolInput={p.toolInput}
+            state={state}
+            isError={end?.isError}
+            tasks={ctx.taskCollection}
+          />
+        );
+      }
       return (
         <TaskCard
           key={k}

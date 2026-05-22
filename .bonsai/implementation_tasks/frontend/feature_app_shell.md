@@ -33,7 +33,7 @@ The App Shell is the root layout component: a three-panel workspace (left nav, c
 
 - `frontend/src/routes.tsx` — React Router v7 route definitions: `/workspace`, `/workspace/spec/:specId`, `/workspace/session/:taskId`, `/workspace/graph`
 - `frontend/src/components/AppShell/AppShell.tsx` — three-panel container with resize handles
-- `frontend/src/components/AppShell/Header.tsx` — logo, project name, session count, toggle/new buttons
+- `frontend/src/components/AppShell/Header.tsx` — logo, project name, Board/Sessions view-switcher, multi-client presence, settings gear (opens `SettingsModal`)
 - `frontend/src/components/AppShell/StatusBar.tsx` — spec counts, keyboard hints, attention indicator
 - `frontend/src/components/AppShell/ResizeHandle.tsx` — drag handle with snap-to-collapse behavior
 - `frontend/src/components/AppShell/LeftPanel.tsx` — tab container (Specs, Requirements, Files, Progress)

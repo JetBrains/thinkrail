@@ -1,3 +1,5 @@
+import type { TaskItem } from "./renderers/types.ts";
+
 type CardState = "running" | "success" | "error";
 
 interface TaskCardProps {
@@ -5,6 +7,7 @@ interface TaskCardProps {
   toolInput: Record<string, unknown>;
   state: CardState;
   isError?: boolean;
+  tasks?: TaskItem[];
 }
 
 interface TodoItem {
@@ -41,7 +44,56 @@ function statusColor(status?: string): string {
   }
 }
 
-export function TaskCard({ toolName, toolInput, state, isError }: TaskCardProps) {
+interface ChecklistItem {
+  id?: string;
+  label: string;
+  status?: string;
+}
+
+function ChecklistCard({
+  items,
+  borderColor,
+  stateIcon,
+}: {
+  items: ChecklistItem[];
+  borderColor: string;
+  stateIcon: string;
+}) {
+  const doneCount = items.filter((t) => t.status === "completed").length;
+  return (
+    <div className="chat-tool" style={{ borderLeftColor: borderColor }}>
+      <div className="chat-tool-header">
+        <span className="chat-tool-icon">{"☑"}</span>
+        <span className="chat-tool-name">Tasks</span>
+        <span className="chat-tool-input">
+          {items.length > 0 ? `${doneCount} of ${items.length} done` : ""}
+        </span>
+        <span className="chat-tool-status" style={{ color: borderColor }}>
+          {stateIcon}
+        </span>
+      </div>
+      {items.length > 0 && (
+        <div className="chat-tool-body" style={{ resize: "none", minHeight: "auto" }}>
+          <div className="task-list">
+            {items.map((item, i) => {
+              const s = statusIcon(item.status);
+              return (
+                <div key={item.id ?? i} className={`task-item ${s.className}`}>
+                  <span className="task-status-icon" style={{ color: statusColor(item.status) }}>
+                    {s.icon}
+                  </span>
+                  <span>{item.label}</span>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+export function TaskCard({ toolName, toolInput, state, isError, tasks }: TaskCardProps) {
   const borderColor =
     state === "running"
       ? "var(--blue)"
@@ -50,79 +102,25 @@ export function TaskCard({ toolName, toolInput, state, isError }: TaskCardProps)
         : "var(--green)";
 
   const stateIcon =
-    state === "running" ? "\u25CF" : isError ? "\u2715" : "\u2713";
+    state === "running" ? "●" : isError ? "✕" : "✓";
 
   if (toolName === "TodoWrite") {
     const todos = parseTodos(toolInput);
-    const doneCount = todos.filter((t) => t.status === "completed").length;
-    return (
-      <div className="chat-tool" style={{ borderLeftColor: borderColor }}>
-        <div className="chat-tool-header">
-          <span className="chat-tool-icon">{"\u2611"}</span>
-          <span className="chat-tool-name">Tasks</span>
-          <span className="chat-tool-input">
-            {todos.length > 0 ? `${doneCount} of ${todos.length} done` : ""}
-          </span>
-          <span className="chat-tool-status" style={{ color: borderColor }}>
-            {stateIcon}
-          </span>
-        </div>
-        {todos.length > 0 && (
-          <div className="chat-tool-body" style={{ resize: "none", minHeight: "auto" }}>
-            <div className="task-list">
-              {todos.map((todo, i) => {
-                const s = statusIcon(todo.status);
-                return (
-                  <div key={todo.id ?? i} className={`task-item ${s.className}`}>
-                    <span className="task-status-icon" style={{ color: statusColor(todo.status) }}>
-                      {s.icon}
-                    </span>
-                    <span>{todo.content ?? ""}</span>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        )}
-      </div>
-    );
+    const items: ChecklistItem[] = todos.map((t) => ({
+      id: t.id,
+      label: t.content ?? "",
+      status: t.status,
+    }));
+    return <ChecklistCard items={items} borderColor={borderColor} stateIcon={stateIcon} />;
   }
 
-  if (toolName === "TaskCreate") {
-    const subject = (toolInput.subject as string) ?? "";
-    return (
-      <div className="chat-tool" style={{ borderLeftColor: borderColor }}>
-        <div className="chat-tool-header">
-          <span className="chat-tool-icon">{"\u2611"}</span>
-          <span className="chat-tool-name">Task Created</span>
-          {subject && <span className="chat-tool-input">{subject}</span>}
-          <span className="chat-tool-status" style={{ color: borderColor }}>
-            {stateIcon}
-          </span>
-        </div>
-      </div>
-    );
-  }
-
-  if (toolName === "TaskUpdate") {
-    const taskId = (toolInput.taskId as string) ?? "";
-    const newStatus = (toolInput.status as string) ?? "";
-    return (
-      <div className="chat-tool" style={{ borderLeftColor: borderColor }}>
-        <div className="chat-tool-header">
-          <span className="chat-tool-icon">{"\u2611"}</span>
-          <span className="chat-tool-name">Task #{taskId}</span>
-          {newStatus && (
-            <span className="chat-tool-input" style={{ color: statusColor(newStatus) }}>
-              {statusIcon(newStatus).icon} {newStatus.replace("_", " ")}
-            </span>
-          )}
-          <span className="chat-tool-status" style={{ color: borderColor }}>
-            {stateIcon}
-          </span>
-        </div>
-      </div>
-    );
+  if (tasks) {
+    const items: ChecklistItem[] = tasks.map((t) => ({
+      id: t.id,
+      label: t.status === "in_progress" && t.activeForm ? t.activeForm : (t.subject ?? ""),
+      status: t.status,
+    }));
+    return <ChecklistCard items={items} borderColor={borderColor} stateIcon={stateIcon} />;
   }
 
   return null;

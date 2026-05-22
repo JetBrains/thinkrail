@@ -53,13 +53,17 @@ _TOOL_CATEGORIES: dict[str, ToolCategory] = {
     # so they are allowed in plan mode. ``ExitPlanMode`` in particular
     # MUST be allowed in plan mode (it is the SDK's mechanism for
     # leaving plan mode); auto-denying it would make plan mode a
-    # one-way trap. ``Agent`` (subagent dispatch) and ``TodoWrite``
-    # (internal todo tracking) likewise do not modify the workspace —
-    # any tool calls a subagent makes are checked individually.
+    # one-way trap. Subagent dispatch and task-tracking tools likewise
+    # do not modify the workspace — any tool calls a subagent makes are
+    # checked individually.
     "ExitPlanMode": "read",
     "EnterPlanMode": "read",
     "Agent": "read",
     "TodoWrite": "read",
+    "TaskCreate": "read",
+    "TaskUpdate": "read",
+    "TaskGet": "read",
+    "TaskList": "read",
 }
 
 # Per-interceptor semantic categories for Bonsai's own MCP tools. Keyed

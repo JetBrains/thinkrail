@@ -246,7 +246,7 @@ Key features:
 - **File Viewer** — Monaco editor (code) or rendered markdown (`.md` files) with edit support
 
 > **Chat UI details:** [CHAT_UI.md](CHAT_UI.md) — event rendering, message types, streaming, interactive cards
-> **New Session Modal:** [NEW_SESSION_MODAL.md](NEW_SESSION_MODAL.md)
+> **Center panel + "+ New" draft flow:** [CENTER_PANEL.md](CENTER_PANEL.md)
 
 ## 4. Right Panel — Context Panel
 
@@ -415,4 +415,4 @@ The following RPC methods and endpoints are referenced by frontend sub-specs but
 
 - **Parent:** [Frontend Module](../README.md)
 - **Depends on:** [Goal & Requirements](../../GOAL&REQUIREMENTS.md)
-- **Sub-specs:** [Chat UI](CHAT_UI.md), [Graph](GRAPH_INTERACTIONS.md), [Context Panel](CONTEXT_PANEL.md), [Modal](NEW_SESSION_MODAL.md), [Palette](COMMAND_PALETTE.md), [Notifications](NOTIFICATION_SYSTEM.md), [Diff](DIFF_VIEWER.md), [Progress](PROGRESS_TRACKER.md), [History](SESSION_HISTORY.md), [App Shell](APP_SHELL.md), [Theming](THEMING.md), [Responsive](RESPONSIVE_BEHAVIOR.md)
+- **Sub-specs:** [Chat UI](CHAT_UI.md), [Graph](GRAPH_INTERACTIONS.md), [Context Panel](CONTEXT_PANEL.md), [Center Panel](CENTER_PANEL.md), [Palette](COMMAND_PALETTE.md), [Notifications](NOTIFICATION_SYSTEM.md), [Diff](DIFF_VIEWER.md), [Progress](PROGRESS_TRACKER.md), [History](SESSION_HISTORY.md), [App Shell](APP_SHELL.md), [Theming](THEMING.md), [Responsive](RESPONSIVE_BEHAVIOR.md)

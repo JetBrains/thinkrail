@@ -72,6 +72,10 @@ test.describe("Spec drafts (Spec Diffs panel)", () => {
 
     await openProject(page, tempProject.path);
 
+    // Tab selection is persisted to localStorage, so previous tests can leave
+    // uiStore on either Sessions or Board. Force Board explicitly.
+    await page.getByRole("tab", { name: "Board" }).click();
+
     await page
       .locator(boardView.ticketCard, { hasText: "Spec draft holder" })
       .click();

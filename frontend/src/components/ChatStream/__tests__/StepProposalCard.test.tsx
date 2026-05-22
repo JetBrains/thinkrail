@@ -95,6 +95,8 @@ describe("classicRenderers.suggestStep approve flow", () => {
       subagentChildren: new Map(),
       latestVisByVisId: new Map(),
       approvalByToolIndex: new Map(),
+      taskCollectionAnchor: null,
+      taskCollection: [],
       answeredRequests: new Map(),
       onResolveRequest: vi.fn(),
       session: currentSession as Session,

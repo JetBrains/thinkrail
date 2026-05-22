@@ -387,5 +387,5 @@ Session tab switching clears file state; file tab switching clears preview.
 
 - **Parent:** [WEBVIEW.md](WEBVIEW.md)
 - **Child:** [CHAT_UI.md](CHAT_UI.md)
-- **Related:** [CONTEXT_PANEL.md](CONTEXT_PANEL.md), [APP_SHELL.md](APP_SHELL.md), [NEW_SESSION_MODAL.md](NEW_SESSION_MODAL.md), [SESSION_HISTORY.md](SESSION_HISTORY.md)
+- **Related:** [CONTEXT_PANEL.md](CONTEXT_PANEL.md), [APP_SHELL.md](APP_SHELL.md), [SESSION_HISTORY.md](SESSION_HISTORY.md), [DRAFT_SESSION_DESIGN.md](../../.bonsai/design_docs/DRAFT_SESSION_DESIGN.md)
 - **Depends on:** `store/sessionStore.ts`, `store/fileStore.ts`, `store/uiStore.ts`

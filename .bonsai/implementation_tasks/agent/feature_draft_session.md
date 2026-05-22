@@ -24,7 +24,7 @@ tags:
 **Depends on:** —
 **Started:** 2026-03-28
 
-Add a two-phase session lifecycle so users can review and adjust the assembled system prompt before starting a session. The `NewSessionModal` creates a "draft" session, which displays an editable config card (`DraftConfigCard`) with live system prompt preview. The user can adjust specs, skill, model, permissions, effort, and betas, then start the session.
+Add a two-phase session lifecycle so users can review and adjust the assembled system prompt before starting a session. Clicking `+ New` in the Sessions tab bar creates a "draft" session, which displays an editable config card (`DraftConfigCard`) with live system prompt preview. The user can adjust specs, skill, model, permissions, effort, and betas, then start the session.
 
 ## Plan
 

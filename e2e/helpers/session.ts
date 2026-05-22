@@ -107,12 +107,8 @@ export async function startSessionWithModel(
     await expect(permSelect).toHaveValue(opts.permissionMode, { timeout: 30_000 });
   }
 
-  await page.getByPlaceholder(newSession.promptInputPlaceholder).fill(prompt);
-  // The InputArea's send button (text "Start" while the session is a draft)
-  // actually flows the typed prompt through to the first agent turn. The
-  // DraftConfigCard's "▶ Start Session" button also starts the session, but
-  // with an empty user message — useful for connectivity smoke tests, not for
-  // tests that depend on the agent acting on the prompt.
+  const textarea = page.getByPlaceholder(newSession.promptInputPlaceholder);
+  await textarea.fill(prompt);
   await page.locator("button.input-send").click();
 }
 

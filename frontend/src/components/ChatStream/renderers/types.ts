@@ -13,6 +13,13 @@ export interface ApprovalInfo {
   description?: string;
 }
 
+export interface TaskItem {
+  id: string;
+  subject?: string;
+  activeForm?: string;
+  status: "pending" | "in_progress" | "completed";
+}
+
 /** Shared context passed to every event renderer function. */
 export interface EventRenderContext {
   toolStates: Map<string, ToolState>;
@@ -20,6 +27,10 @@ export interface EventRenderContext {
   subagentChildren: Map<number, number[]>;
   latestVisByVisId: Map<string, number>;
   approvalByToolIndex: Map<number, ApprovalInfo>;
+  // Anchor index where the single consolidated Task* card renders; other
+  // Task* events at later indices are suppressed by the renderers.
+  taskCollectionAnchor: number | null;
+  taskCollection: TaskItem[];
   answeredRequests: Map<string, unknown>;
   onResolveRequest: (requestId: string, response: unknown) => void;
   session?: Session;

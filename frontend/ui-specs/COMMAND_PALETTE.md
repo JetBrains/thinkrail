@@ -201,4 +201,4 @@ Planned animations (not yet built):
 
 - **Parent:** [Web View](WEBVIEW.md) §6
 - **Depends on:** [API Client](../src/api/README.md) (spec data via specStore), [State Management](../src/store/README.md) (session list, palette open state)
-- **Related:** [New Session Modal](NEW_SESSION_MODAL.md) (action: "New session")
+- **Related:** [Center Panel](CENTER_PANEL.md) (action: "New session" — creates a draft via `sessionStore.createNewSession()`)

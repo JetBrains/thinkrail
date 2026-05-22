@@ -29,8 +29,7 @@ export const chatStream = {
 };
 
 export const newSession = {
-  // Header "+ New" button (spawn a draft session).
-  newButton: "button.header-btn-primary:has-text('+ New')",
+  newButton: "button.session-new-btn",
   // Draft form widgets.
   modelSelect: "select.draft-config-select--model",
   // The perms <select> shares `.draft-config-select` with the model picker but

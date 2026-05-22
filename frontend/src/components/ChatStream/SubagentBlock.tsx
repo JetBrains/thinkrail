@@ -68,6 +68,7 @@ export function SubagentBlock({
             if (ev.eventType === "toolCallStart") {
               const toolName = (ev.payload.toolName as string) ?? "tool";
               if (toolName === "AskUserQuestion") return null;
+              if (toolName === "TaskGet" || toolName === "TaskList") return null;
               // Render bonsai_visualize as VisualizationCard (mirrors ChatStream.tsx)
               if (toolName.endsWith("bonsai_visualize")) {
                 const visInput = ev.payload.toolInput as VisData | undefined;

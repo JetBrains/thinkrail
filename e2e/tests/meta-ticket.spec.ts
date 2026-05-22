@@ -42,7 +42,10 @@ test.describe("MetaTicketDetail", () => {
 
     await openProject(page, tempProject.path);
 
-    // BoardView renders first; click the seeded card to open the detail view.
+    // Tab selection is persisted to localStorage, so previous tests can leave
+    // uiStore on either Sessions or Board. Force Board explicitly.
+    await page.getByRole("tab", { name: "Board" }).click();
+
     const card = page.locator(boardView.ticketCard, { hasText: "Implement widget" });
     await expect(card).toBeVisible({ timeout: 15_000 });
     await card.click();
