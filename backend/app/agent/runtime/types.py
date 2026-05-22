@@ -1,4 +1,4 @@
-"""Runtime contract types — IAgentRuntime, RuntimeType, RuntimeExecutionConfig, ModelInfo."""
+"""Runtime contract types — IAgentRuntime, RuntimeType, RuntimeExecutionConfig, ModelInfo, RuntimeSkillInfo."""
 
 from __future__ import annotations
 
@@ -36,6 +36,20 @@ class ModelInfo(BaseModel):
     context_window: int
     max_output: int
     pricing_tier: str  # "opus" | "sonnet" | "haiku" | runtime-specific tier
+
+
+class RuntimeSkillInfo(BaseModel):
+    """Skill exposed by a runtime, surfaced as an autocomplete suggestion.
+
+    Each runtime answers its own list via ``IAgentRuntime.list_skills``.
+    """
+
+    model_config = ConfigDict(alias_generator=to_camel, populate_by_name=True, frozen=True)
+
+    id: str  # e.g. "review", "specdriven:ticket-specify"
+    name: str  # human-readable name (defaults to id)
+    description: str  # short one-liner
+    source: str  # "user" | "project" | "plugin" | "command" | "builtin"
 
 
 class RuntimeExecutionConfig(BaseModel):
@@ -90,6 +104,16 @@ class IAgentRuntime(Protocol):
         on first call, or sourced from a remote registry is entirely the
         runtime's business — callers don't see refresh semantics or
         freshness metadata.
+        """
+        ...
+
+    def list_skills(self) -> list[RuntimeSkillInfo]:
+        """Return the runtime's current best view of its available skills.
+
+        Whether the list is static, periodically refreshed, lazily fetched
+        on first call, or sourced from on-disk roots is entirely the
+        runtime's business — callers don't see refresh semantics or
+        freshness metadata. Runtimes with no skill surface return ``[]``.
         """
         ...
 

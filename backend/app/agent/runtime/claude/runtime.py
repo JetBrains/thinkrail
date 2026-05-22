@@ -42,8 +42,9 @@ from app.agent.runtime.claude.adapter import (
 )
 from app.agent.runtime.claude.hooks import SubagentHooks
 from app.agent.runtime.claude.models import ClaudeModelRegistry
+from app.agent.runtime.claude.skills import ClaudeSkillRegistry
 from app.agent.runtime.events import RuntimeEvent
-from app.agent.runtime.types import ModelInfo, RuntimeType
+from app.agent.runtime.types import ModelInfo, RuntimeSkillInfo, RuntimeType
 from app.agent.tools import MCP_SERVERS
 from app.agent.tools._context import set_tool_context
 from app.agent.tracker import END_SIGNAL, Tracker
@@ -103,10 +104,12 @@ class ClaudeRuntime:
         self.plugin_dir = plugin_dir
         self.spec_service = spec_service
         self.coordinator = coordinator
-        # The Claude runtime owns its own model registry. ``IAgentRuntime``
-        # exposes only the public surface (``list_models`` etc.); the
-        # registry instance is private to this class.
+        # The Claude runtime owns its own model + skill registries.
+        # ``IAgentRuntime`` exposes only the public surface
+        # (``list_models``, ``list_skills`` etc.); the registry instances
+        # are private to this class.
         self._models = ClaudeModelRegistry(project_root=app_config.project_root)
+        self._skills = ClaudeSkillRegistry(project_root=app_config.project_root)
 
     # ── IAgentRuntime: model surface ─────────────────────────────────────
 
@@ -115,6 +118,11 @@ class ClaudeRuntime:
 
     def get_context_window(self, model_id: str) -> int:
         return self._models.get_context_window(model_id)
+
+    # ── IAgentRuntime: skill surface ─────────────────────────────────────
+
+    def list_skills(self) -> list[RuntimeSkillInfo]:
+        return self._skills.list_skills()
 
     async def run_session(
         self,

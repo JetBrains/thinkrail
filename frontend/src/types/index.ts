@@ -17,6 +17,8 @@ export type {
   AgentEvent,
   AgentResult,
   AgentTask,
+  RuntimeType,
+  RuntimeSkillInfo,
 } from "./agent.ts";
 
 export type {

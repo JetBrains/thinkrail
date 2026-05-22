@@ -123,7 +123,8 @@ Both sides can send either. The server can initiate requests to the client (e.g.
 | `appSettings/setSessionDefaults` | `{ model, permissionMode, effort, maxTurns }`                                  | `SessionDefaults`   | Persist the user-scoped session-creation defaults. |
 | `models/list`     | `{}`                                                                                         | `list[ModelDef]`    | Get cached model list |
 | `models/refresh`  | `{}`                                                                                         | `list[ModelDef]`    | Refresh models from API |
-| `skills/list`     | `{}`                                                                                         | `list[SkillDef]`    | List available skills with icon, group, requires metadata |
+| `skills/list`     | `{}`                                                                                         | `list[SkillDef]`    | List available **Bonsai-bundled** skills with icon, group, requires metadata (scans `claude-plugin/skills/`) |
+| `skills/listRuntime` | `{ runtime: str }`                                                                        | `list[RuntimeSkillInfo]` | List skills exposed by the **active runtime** — Claude Code user/project/plugin skills, custom commands, built-ins. Each entry has `id`, `name`, `description`, `source` (`"user" \| "project" \| "plugin" \| "command" \| "builtin"`). Powers the chat composer's slash autocomplete alongside `skills/list`. Returns `-32031` if `runtime` is not registered. Frontend treats failure/empty result as "no runtime section" (silent fallback — no error toast). |
 
 ### Server → Client (notifications)
 
@@ -213,6 +214,7 @@ Domain exceptions raised inside handlers are mapped to JSON-RPC error responses:
 | `FutureNotFoundError` | -32012 | "No pending request" |
 | `IndexNotReadyError` | -32015 | "Index is still initializing" |
 | `MessageTooLargeError` | -32014 | "Message too large" — data: `{message, msgTokens, remainingTokens}` |
+| `UnknownRuntimeError` | -32031 | "Unknown runtime" — raised by `RuntimeRegistry.get(name)` and surfaced by `agent/run`, `skills/listRuntime`, `models/list` etc. when the requested runtime is not registered |
 | `KeyError` / missing params | -32602 | "Invalid params" |
 | Any other exception | -32603 | "Internal error" |
 

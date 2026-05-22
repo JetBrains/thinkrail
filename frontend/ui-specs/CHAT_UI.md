@@ -809,14 +809,56 @@ See [Markdown Input Design](../../.bonsai/design_docs/DUAL_MODE_INPUT_DESIGN.md)
 **Always-markdown input** — no text/markdown mode toggle. All messages are sent as markdown (`onSend(trimmed, true)`). The toolbar is always visible.
 
 **Skill autocomplete:**
-- Triggered when text starts with `/`
-- Filters `SKILLS` array by `id.includes(query)` (case-insensitive)
-- Dropdown (`.input-autocomplete`): appears above input (`bottom: 100%`), max-height 240px
-- Each item (`.input-autocomplete-item`): icon + `/{skill.id}` (cyan) + description (hint, 11px)
-- Keyboard: ArrowUp/ArrowDown to move, Tab/Enter to insert, Escape to dismiss
-- Active item: `.input-autocomplete-active`
-- On select: inserts `/{id} ` into textarea and focuses
-- `onMouseDown` (not `onClick`) used on items to prevent textarea blur
+
+State and behaviour live in the `useSlashAutocomplete` hook
+(`frontend/src/hooks/useSlashAutocomplete.ts`). `<InputArea>` only
+renders the popup and forwards textarea + caret state into the hook.
+
+- **Trigger rule (mid-input):** a `/` is *active* iff the preceding
+  character is whitespace, newline, or the start of the textarea. The
+  popup opens whenever the caret sits inside the contiguous
+  non-whitespace run that starts with an active `/`. Trigger fires
+  anywhere in the textarea — not just at position 0. A `/` inside a
+  URL or word (no whitespace before it) does **not** open the popup.
+- **Query token:** the run from the active `/` up to (but excluding)
+  the next whitespace/newline or end-of-text. Filter query is
+  `token.slice(1).toLowerCase()`; matches are `id.includes(query)`
+  (case-insensitive substring; empty query matches all).
+- **Two sources, two sections:**
+  1. **"Bonsai"** — bundled skills from the `useSettingsStore` `skills`
+     map (populated by `skills/list`). Always rendered first.
+  2. **Active runtime's `displayName`** (e.g. **"Claude Code"**) —
+     skills from `useSettingsStore.runtimeSkills.get(runtime)`,
+     populated lazily by `loadRuntimeSkills(runtime)` on session mount
+     (calls `skills/listRuntime`).
+  Section headers are non-selectable separator rows.
+- **Dedup:** runtime entries whose `id` collides with any Bonsai skill
+  id are hidden from the runtime section (Bonsai wins). Per-section
+  fields use the same item markup (icon + `/{id}` cyan + description
+  hint).
+- **Silent fallback:** if `skills/listRuntime` fails, returns `[]`, or
+  the active runtime has no skill surface, the runtime section is
+  omitted entirely — no toast, no inline warning. The popup still
+  shows the Bonsai section.
+- **Dropdown (`.input-autocomplete`):** appears above input
+  (`bottom: 100%`), max-height 240px.
+- **Each item (`.input-autocomplete-item`):** icon + `/{skill.id}`
+  (cyan) + description (hint, 11px). Section headers use a separate
+  non-interactive class.
+- **Keyboard:** ArrowUp/ArrowDown move across the flat order (Bonsai
+  entries first, then runtime entries), wrapping at the ends. Tab/Enter
+  accept the highlighted suggestion. Escape closes.
+- **Active item:** `.input-autocomplete-active`.
+- **On select / insert-at-caret:** the active `/`-token (from its
+  start through the end of the non-whitespace run) is replaced with
+  ``/{id} ``. Caret is placed right after the trailing space. Text
+  before and after the token is preserved.
+- **Close conditions:** caret moves out of the query token (text edit,
+  click outside, Escape) or an item is selected.
+- `onMouseDown` (not `onClick`) used on items to prevent textarea blur.
+
+Full algorithm + data shapes: see
+[Runtime Skills Autocomplete design](../../.bonsai/runtime-skills-autocomplete/design-doc.md).
 
 **Markdown toolbar** (`.input-md-toolbar`, always visible):
 - Preview toggle button (`.input-md-tab`): toggles side-by-side split-pane preview. Highlighted (`.input-md-tab--active`) when active.

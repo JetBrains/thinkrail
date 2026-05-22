@@ -1,12 +1,17 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useSettingsStore } from "@/store/settingsStore.ts";
-import type { Skill } from "@/constants/skills";
+import { useSessionStore } from "@/store/sessionStore.ts";
 import { useVoiceInput } from "@/hooks/useVoiceInput";
+import {
+  extractSlashToken,
+  useSlashAutocomplete,
+} from "@/hooks/useSlashAutocomplete.ts";
 import { useNotificationStore } from "@/store/notificationStore";
 import { useInputDraftStore } from "@/store/inputDraftStore";
 import { isMod, modLabel } from "@/utils/platform";
 import type { VoiceReviseMode } from "@/api/methods/settings.ts";
+import type { RuntimeType } from "@/types/agent.ts";
 import { ChatMarkdown } from "./ChatMarkdown";
 import { MessageHistory } from "./MessageHistory";
 
@@ -64,14 +69,26 @@ const IconPlay = () => (
 );
 
 export function InputArea({ sessionId, disabled, placeholder, onSend, isRunning, canInterrupt, onInterrupt, showContinue, onContinue, isDraft, actionPortalTarget }: InputAreaProps) {
-  const skills = useSettingsStore((s) => s.skills);
   const voiceReviseMode: VoiceReviseMode =
     (useSettingsStore((s) => s.settings?.voice_revise_mode) as VoiceReviseMode | undefined) ?? "off";
+  // Derive the active runtime from the session's model via the runtime
+  // registry — there's no `session.runtime` field today, so we look up
+  // whichever runtime owns the selected model id.  Falls back to "claude"
+  // (the only registered runtime today) so the autocomplete still works
+  // for drafts that haven't picked a model yet.
+  const sessionModel = useSessionStore((s) => s.sessions.get(sessionId)?.model);
+  const runtimesMeta = useSettingsStore((s) => s.runtimes);
+  const sessionRuntime: RuntimeType | undefined = useMemo(() => {
+    if (!sessionModel || !runtimesMeta) return undefined;
+    const hit = runtimesMeta.find((r) => r.models.some((m) => m.id === sessionModel));
+    return (hit?.runtimeType as RuntimeType | undefined);
+  }, [sessionModel, runtimesMeta]);
+  const effectiveRuntime: RuntimeType = sessionRuntime ?? "claude";
+  const loadRuntimeSkills = useSettingsStore((s) => s.loadRuntimeSkills);
   // Single source of truth: textarea value is driven by the draft store
   // (keyed by sessionId so drafts persist across session switches).
   const text = useInputDraftStore((s) => s.drafts.get(sessionId) ?? "");
-  const [suggestions, setSuggestions] = useState<Skill[]>([]);
-  const [selectedIndex, setSelectedIndex] = useState(0);
+  const [caret, setCaret] = useState(0);
   const [showHistory, setShowHistory] = useState(false);
   const [previewActive, setPreviewActive] = useState(false);
   const [splitRatio, setSplitRatio] = useState(0.5);
@@ -83,6 +100,13 @@ export function InputArea({ sessionId, disabled, placeholder, onSend, isRunning,
   const voice = useVoiceInput();
   const sessionIdRef = useRef(sessionId);
   useEffect(() => { sessionIdRef.current = sessionId; }, [sessionId]);
+
+  // Refresh the runtime skill cache on session/runtime change.  Silent on
+  // failure (the store action only logs to console.debug — see design doc
+  // §6.5) so the popup gracefully falls back to a Bonsai-only list.
+  useEffect(() => {
+    loadRuntimeSkills(effectiveRuntime);
+  }, [effectiveRuntime, loadRuntimeSkills]);
 
   const setTextAndDraft = useCallback((value: string) => {
     useInputDraftStore.getState().setDraft(sessionIdRef.current, value);
@@ -104,19 +128,49 @@ export function InputArea({ sessionId, disabled, placeholder, onSend, isRunning,
     }
   }, [isManual]);
 
-  const closeSuggestions = useCallback(() => {
-    setSuggestions([]);
-    setSelectedIndex(0);
-  }, []);
-
-  const insertSkill = useCallback(
-    (id: string) => {
-      setTextAndDraft(`/${id} `);
-      closeSuggestions();
-      ref.current?.focus();
+  // Apply the autocomplete hook's chosen insertion (start/end describe the
+  // active /token; replacement is "/<id> ").  Splice it into the textarea
+  // text, then move the caret right after the trailing space.  Per design
+  // doc §6.4 we keep text *before* the token (`text.slice(0, start)`) and
+  // *after* (`text.slice(end)`) intact.
+  const applyInsert = useCallback(
+    ({
+      start,
+      end,
+      replacement,
+      caretAfter,
+    }: {
+      start: number;
+      end: number;
+      replacement: string;
+      caretAfter: number;
+    }) => {
+      const next = text.slice(0, start) + replacement + text.slice(end);
+      setTextAndDraft(next);
+      // Defer caret placement until after React commits the new value.
+      queueMicrotask(() => {
+        const el = ref.current;
+        if (!el) return;
+        el.focus();
+        try {
+          el.setSelectionRange(caretAfter, caretAfter);
+        } catch {
+          /* setSelectionRange can throw on detached nodes — ignore */
+        }
+        setCaret(caretAfter);
+      });
     },
-    [closeSuggestions, setTextAndDraft],
+    [text, setTextAndDraft],
   );
+
+  const autocomplete = useSlashAutocomplete({
+    text,
+    caret,
+    runtime: effectiveRuntime,
+    onInsert: applyInsert,
+  });
+
+  const closeSuggestions = autocomplete.close;
 
   const insertFormat = useCallback((prefix: string, suffix: string) => {
     const el = ref.current;
@@ -301,7 +355,8 @@ export function InputArea({ sessionId, disabled, placeholder, onSend, isRunning,
     (e: React.KeyboardEvent) => {
       const mod = isMod(e);
 
-      // Mod+Enter always sends
+      // Mod+Enter always sends — wins over autocomplete's Enter→accept so
+      // users can submit even when the popup happens to be open.
       if (mod && e.key === "Enter") {
         e.preventDefault();
         handleSend();
@@ -335,30 +390,20 @@ export function InputArea({ sessionId, disabled, placeholder, onSend, isRunning,
         return;
       }
 
-      // Escape closes history popup
-      if (e.key === "Escape" && showHistory) {
+      // Escape closes history popup (only when autocomplete isn't claiming
+      // Escape for itself — the hook handles Escape when its popup is open).
+      if (e.key === "Escape" && showHistory && autocomplete.groups.length === 0) {
         e.preventDefault();
         setShowHistory(false);
         return;
       }
 
-      if (suggestions.length === 0) return;
-
-      if (e.key === "ArrowDown") {
-        e.preventDefault();
-        setSelectedIndex((i) => (i + 1) % suggestions.length);
-      } else if (e.key === "ArrowUp") {
-        e.preventDefault();
-        setSelectedIndex((i) => (i - 1 + suggestions.length) % suggestions.length);
-      } else if (e.key === "Tab" || e.key === "Enter") {
-        e.preventDefault();
-        insertSkill(suggestions[selectedIndex].id);
-      } else if (e.key === "Escape") {
-        e.preventDefault();
-        closeSuggestions();
-      }
+      // Delegate ArrowUp/Down/Tab/Enter/Escape navigation + accept to the
+      // autocomplete hook.  Returns `true` only when the popup was open and
+      // the key was consumed.
+      if (autocomplete.onKeyDown(e)) return;
     },
-    [handleSend, suggestions, selectedIndex, insertSkill, closeSuggestions, showHistory, insertFormat],
+    [handleSend, autocomplete, closeSuggestions, showHistory, insertFormat],
   );
 
   const handleChange = useCallback(
@@ -369,18 +414,31 @@ export function InputArea({ sessionId, disabled, placeholder, onSend, isRunning,
       if (voice.isRecording) voice.cancelRecording();
       setTextAndDraft(value);
       setIsVoiceTranscript(false);
-      if (value.startsWith("/")) {
-        const query = value.slice(1).toLowerCase();
-        const filtered = skills.filter((s) => s.id.includes(query));
-        setSuggestions(filtered);
-        setSelectedIndex(0);
-        setShowHistory(false);
-      } else {
-        closeSuggestions();
-      }
+      // Autocomplete state is driven by the hook via the (text, caret)
+      // props — no inline filtering needed here.  Caret state is updated
+      // in the textarea's onSelect/onClick/onKeyUp handlers below.
     },
-    [closeSuggestions, setTextAndDraft, skills, voice],
+    [setTextAndDraft, voice],
   );
+
+  // Close the message-history popup when the autocomplete opens, so we
+  // never stack the two over each other.  Replaces the inline
+  // `setShowHistory(false)` call that used to live in `handleChange`.
+  useEffect(() => {
+    if (autocomplete.groups.length > 0 && showHistory) {
+      setShowHistory(false);
+    }
+  }, [autocomplete.groups.length, showHistory]);
+
+  // Keep the hook's caret state aligned with the textarea.  `onSelect`
+  // fires on every caret move (keyboard, mouse, programmatic), so it's
+  // the primary signal — the other two are belt-and-braces for engines
+  // that don't dispatch `select` on every click.
+  const updateCaret = useCallback(() => {
+    const el = ref.current;
+    if (!el) return;
+    setCaret(el.selectionStart ?? 0);
+  }, []);
 
   const handleHistorySelect = useCallback(
     (msg: string) => {
@@ -522,23 +580,71 @@ export function InputArea({ sessionId, disabled, placeholder, onSend, isRunning,
           </button>
         </div>
       )}
-      {suggestions.length > 0 && (
-        <div className="input-autocomplete">
-          {suggestions.map((skill, i) => (
-            <button
-              key={skill.id}
-              ref={i === selectedIndex ? (el) => el?.scrollIntoView({ block: "nearest" }) : undefined}
-              className={`input-autocomplete-item ${i === selectedIndex ? "input-autocomplete-active" : ""}`}
-              onMouseDown={(e) => {
-                e.preventDefault();
-                insertSkill(skill.id);
-              }}
-            >
-              <span className="input-autocomplete-icon">{skill.icon}</span>
-              <span className="input-autocomplete-name">/{skill.id}</span>
-              <span className="input-autocomplete-desc">{skill.description}</span>
-            </button>
-          ))}
+      {autocomplete.groups.length > 0 && (
+        <div className="input-autocomplete" role="listbox" aria-label="Slash command suggestions">
+          {autocomplete.groups.map((group, gi) => {
+            // Flat-index offset for items rendered in earlier groups —
+            // keyboard nav and `selectedIndex` are flat across both
+            // sections (design doc §6.3).
+            const offset = autocomplete.groups
+              .slice(0, gi)
+              .reduce((n, g) => n + g.items.length, 0);
+            return (
+              <div key={group.label} className="input-autocomplete-group">
+                <div
+                  className="input-autocomplete-section-header"
+                  role="presentation"
+                >
+                  {group.label}
+                </div>
+                {group.items.map((skill, i) => {
+                  const flatIndex = offset + i;
+                  const active = flatIndex === autocomplete.selectedIndex;
+                  return (
+                    <button
+                      key={`${group.label}-${skill.id}`}
+                      role="option"
+                      aria-selected={active}
+                      ref={
+                        active
+                          ? (el) => {
+                              // jsdom does not implement scrollIntoView —
+                              // guard so unit tests don't crash.
+                              if (el && typeof el.scrollIntoView === "function") {
+                                el.scrollIntoView({ block: "nearest" });
+                              }
+                            }
+                          : undefined
+                      }
+                      className={`input-autocomplete-item ${active ? "input-autocomplete-active" : ""}`}
+                      onMouseDown={(e) => {
+                        // Prevent the textarea from losing focus (which
+                        // would close the popup via the caret leaving the
+                        // /token range before `onClick` fires).
+                        e.preventDefault();
+                        const token = extractSlashToken(text, caret);
+                        if (!token) return;
+                        const replacement = `/${skill.id} `;
+                        applyInsert({
+                          start: token.start,
+                          end: token.end,
+                          replacement,
+                          caretAfter: token.start + replacement.length,
+                        });
+                        autocomplete.close();
+                      }}
+                    >
+                      {skill.icon && (
+                        <span className="input-autocomplete-icon">{skill.icon}</span>
+                      )}
+                      <span className="input-autocomplete-name">/{skill.id}</span>
+                      <span className="input-autocomplete-desc">{skill.description}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            );
+          })}
         </div>
       )}
       <div className={`input-editor-wrapper${isManual ? " input-editor-wrapper--fill" : ""}`}>
@@ -550,8 +656,15 @@ export function InputArea({ sessionId, disabled, placeholder, onSend, isRunning,
             value={text}
             onChange={(e) => {
               handleChange(e.target.value);
+              // Snap caret to the new selectionStart synchronously so the
+              // autocomplete hook can recompute the active /token on the
+              // same render.
+              setCaret(e.target.selectionStart ?? 0);
               autosize();
             }}
+            onSelect={updateCaret}
+            onClick={updateCaret}
+            onKeyUp={updateCaret}
             onKeyDown={handleKeyDown}
             placeholder={voice.isRevising ? "Revising..." : voice.isTranscribing ? "Transcribing..." : placeholder}
             disabled={disabled || voice.isTranscribing || voice.isRevising}

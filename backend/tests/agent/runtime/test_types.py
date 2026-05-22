@@ -12,6 +12,7 @@ from app.agent.models import AgentResult, AgentTask
 from app.agent.runtime.types import (
     IAgentRuntime,
     RuntimeExecutionConfig,
+    RuntimeSkillInfo,
     RuntimeType,
 )
 
@@ -71,6 +72,39 @@ class TestRuntimeExecutionConfig:
         assert cfg.max_turns == 7
 
 
+class TestRuntimeSkillInfo:
+    def test_requires_all_fields(self):
+        with pytest.raises(ValidationError):
+            RuntimeSkillInfo(id="review", name="Review", description="desc")  # type: ignore[call-arg]
+
+    def test_round_trip_with_camel_case_aliases(self):
+        info = RuntimeSkillInfo(
+            id="specdriven:ticket-specify",
+            name="Ticket Specify",
+            description="Create or modify specifications for a meta-ticket.",
+            source="plugin",
+        )
+        dumped = info.model_dump(by_alias=True)
+        assert dumped == {
+            "id": "specdriven:ticket-specify",
+            "name": "Ticket Specify",
+            "description": "Create or modify specifications for a meta-ticket.",
+            "source": "plugin",
+        }
+        restored = RuntimeSkillInfo.model_validate(dumped)
+        assert restored == info
+
+    def test_is_frozen(self):
+        info = RuntimeSkillInfo(
+            id="review",
+            name="Review",
+            description="Review a pull request.",
+            source="builtin",
+        )
+        with pytest.raises(ValidationError):
+            info.id = "other"  # type: ignore[misc]
+
+
 class TestIAgentRuntimeProtocol:
     def test_minimal_implementation_is_recognized(self):
         class Dummy:
@@ -78,6 +112,9 @@ class TestIAgentRuntimeProtocol:
             display_name: str = "Claude (test)"
 
             def list_models(self):
+                return []
+
+            def list_skills(self):
                 return []
 
             def get_context_window(self, model_id):

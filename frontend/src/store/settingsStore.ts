@@ -4,6 +4,7 @@ import { createSettingsApi, type ProjectSettings } from "@/api/methods/settings.
 import { createAppSettingsApi, type SessionDefaults } from "@/api/methods/appSettings.ts";
 import { type ModelDef, setDynamicModels } from "@/utils/models.ts";
 import { type Skill, FALLBACK_SKILLS } from "@/constants/skills.ts";
+import type { RuntimeSkillInfo, RuntimeType } from "@/types/agent.ts";
 
 /** Models grouped by their owning runtime — the wire shape of `models/list`. */
 export interface RuntimeModels {
@@ -30,6 +31,20 @@ interface SettingsStore {
   /** Dynamic skills list from backend (falls back to FALLBACK_SKILLS) */
   skills: Skill[];
   fetchSkills: () => Promise<void>;
+  /**
+   * Per-runtime cache of skills exposed by `IAgentRuntime.list_skills()`
+   * (e.g. Claude Code plugin/command skills). Populated by
+   * `loadRuntimeSkills`; defaults to an empty Map so consumers like
+   * `useSlashAutocomplete` can safely read it before the action runs.
+   */
+  runtimeSkills: Map<RuntimeType, RuntimeSkillInfo[]>;
+  /**
+   * Fetch runtime skills for ``runtime`` via ``skills/listRuntime`` and
+   * cache them on the store. Silent on failure — logs to ``console.debug``
+   * and leaves the cache entry untouched, so the autocomplete popup
+   * gracefully falls back to a Bonsai-only list (design doc §6.5, §7).
+   */
+  loadRuntimeSkills: (runtime: RuntimeType) => Promise<void>;
 
   fetchSettings: () => Promise<void>;
   updateSettings: (patch: Partial<ProjectSettings>) => Promise<void>;
@@ -45,6 +60,7 @@ export const useSettingsStore = create<SettingsStore>((set, get) => ({
   runtimes: null,
   models: null,
   skills: FALLBACK_SKILLS,
+  runtimeSkills: new Map(),
 
   fetchSettings: async () => {
     try {
@@ -141,6 +157,21 @@ export const useSettingsStore = create<SettingsStore>((set, get) => ({
       }
     } catch (e) {
       console.debug("skills/list not available, using fallback:", e);
+    }
+  },
+
+  loadRuntimeSkills: async (runtime) => {
+    try {
+      const api = createSettingsApi(getClient());
+      const list = await api.listRuntimeSkills(runtime);
+      // Replace the Map (not mutate) so zustand selectors re-fire.
+      const next = new Map(get().runtimeSkills);
+      next.set(runtime, list ?? []);
+      set({ runtimeSkills: next });
+    } catch (e) {
+      // Silent fallback per design doc §6.5 / §7 — the popup omits the
+      // runtime section without an error toast or inline warning.
+      console.debug("skills/listRuntime not available, omitting runtime section:", e);
     }
   },
 }));

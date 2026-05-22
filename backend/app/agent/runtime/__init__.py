@@ -28,6 +28,7 @@ from app.agent.runtime.types import (
     IAgentRuntime,
     ModelInfo,
     RuntimeExecutionConfig,
+    RuntimeSkillInfo,
     RuntimeType,
 )
 
@@ -41,6 +42,7 @@ __all__ = [
     "RuntimeExecutionConfig",
     "RuntimeRegistry",
     "RuntimeRegistryError",
+    "RuntimeSkillInfo",
     "RuntimeType",
     "ToolCategory",
     "ToolPermissionRequest",

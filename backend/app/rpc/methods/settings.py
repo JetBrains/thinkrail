@@ -7,7 +7,7 @@ from typing import Any
 from jsonrpcserver import JsonRpcError, Result, Success
 from pydantic import ValidationError
 
-from app.agent.runtime import ModelInfo, RuntimeRegistry
+from app.agent.runtime import ModelInfo, RuntimeRegistry, UnknownRuntimeError
 from app.core.app_store import AppStore
 from app.core.config import AppConfig
 from app.core.session_defaults import (
@@ -20,9 +20,19 @@ from app.core.settings import (
     load_settings,
     save_settings,
 )
+from app.rpc.errors import UNKNOWN_RUNTIME, rpc_handler
 
 _INTERNAL_ERROR = -32603
 _INVALID_PARAMS = -32602
+
+# Decorator with the standard ``rpc_handler`` mappings plus the
+# ``UnknownRuntimeError → UNKNOWN_RUNTIME (-32031)`` translation needed by
+# ``list_runtime_skills``. Kept separate from the module-level
+# ``_handle_errors`` so the other handlers in this file retain their
+# established ``ValueError → INVALID_PARAMS`` behaviour.
+_handle_errors_with_runtime = rpc_handler(
+    (UnknownRuntimeError, UNKNOWN_RUNTIME, "Unknown runtime"),
+)
 
 
 def _handle_errors(func):  # type: ignore[type-arg]
@@ -137,3 +147,24 @@ async def list_skills(config: AppConfig, **_params: Any) -> list[dict]:
     from app.agent.context import scan_skill_frontmatter
 
     return scan_skill_frontmatter(config.plugin_dir)
+
+
+@_handle_errors_with_runtime
+async def list_runtime_skills(
+    registry: RuntimeRegistry, runtime: str, **_params: Any,
+) -> list[dict]:
+    """Return the named runtime's skill list as wire-shape dicts.
+
+    ``UnknownRuntimeError`` from ``registry.get(runtime)`` is translated
+    to RPC error code ``UNKNOWN_RUNTIME`` (-32031) by the decorator, so a
+    request for an unregistered runtime (e.g. ``"codex"`` before its
+    runtime ships) surfaces as a clean domain error rather than an
+    opaque internal error.
+
+    Each entry uses the camelCase keys produced by
+    ``RuntimeSkillInfo.model_dump(by_alias=True)`` — ``id``, ``name``,
+    ``description``, ``source`` (all single-word so the casing is
+    identical to the Python field names).
+    """
+    rt = registry.get(runtime)  # type: ignore[arg-type]
+    return [s.model_dump(by_alias=True) for s in rt.list_skills()]

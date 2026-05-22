@@ -39,9 +39,10 @@ lazily on first use.
 
 | Symbol | Defined in | Purpose |
 |--------|-----------|---------|
-| `IAgentRuntime` | `types.py` | Protocol every runtime implements. Class attrs `runtime_type`, `display_name`. Methods: `list_models`, `get_context_window`, `run_session`, `interrupt` |
+| `IAgentRuntime` | `types.py` | Protocol every runtime implements. Class attrs `runtime_type`, `display_name`. Methods: `list_models`, `list_skills`, `get_context_window`, `run_session`, `interrupt` |
 | `RuntimeType` | `types.py` (re-exported from `app.agent.models`) | `Literal["claude", "codex"]` — declared in `models.py` to break a circular import |
 | `ModelInfo` | `types.py` | Neutral frozen Pydantic model — `id, label, group, context_window, max_output, pricing_tier` |
+| `RuntimeSkillInfo` | `types.py` | Neutral frozen Pydantic model — `id, name, description, source`. Describes a slash-command-style skill exposed by the runtime (e.g. Claude Code user/project/plugin skills, custom commands, built-ins). Surfaced in the chat composer's slash autocomplete via `skills/listRuntime`. |
 | `DEFAULT_CONTEXT_WINDOW` | `types.py` | `200_000` — neutral floor for unknown ids |
 | `RuntimeExecutionConfig` | `types.py` | Per-session execution config — `working_directory`, `model` (required), `system_prompt`, `resume_session_id`, `effort`, `max_turns`, `permission_mode`, `stream_text`. Derived from `AgentConfig` + task context inside `AgentService` |
 | `RuntimeRegistry` | `registry.py` | Lookup table. `register / get / has / all`. Domain exceptions `RuntimeRegistryError`, `DuplicateRuntimeError`, `UnknownRuntimeError` |
@@ -102,6 +103,31 @@ free to pick a different strategy.
 knows, falling back to `DEFAULT_CONTEXT_WINDOW` for unknown ids.
 `AgentService._get_context_max(task)` is a one-line delegation; the
 service never maintains its own model→window table.
+
+## Skill surface
+
+Each runtime also owns the list of slash-command-style **skills** it
+exposes — Claude Code's user/project/plugin skills, custom commands,
+built-ins like `/review`/`/init`/`/security-review`, etc. These power
+the chat composer's slash autocomplete (alongside Bonsai's bundled
+skills). One method on the protocol:
+
+```python
+def list_skills(self) -> list[RuntimeSkillInfo]: ...
+```
+
+`RuntimeSkillInfo` carries `id`, `name`, `description`, and `source`
+(`"user" | "project" | "plugin" | "command" | "builtin"`). Sourcing
+strategy is the runtime's internal concern — the Claude implementation
+scans on-disk roots with a `(root_dir, root_dir_mtime)` cache; future
+runtimes are free to pick a different strategy. Runtimes with no skill
+surface (e.g. Codex when first registered) return `[]`.
+
+No default is added to the Protocol — Protocols have no implementation
+bodies. Each implementation declares its own `list_skills`.
+
+Exposed to the frontend via the `skills/listRuntime` RPC method (see
+[RPC module](../../rpc/README.md#methods)).
 
 ## Naming distinction — `RuntimeEvent` vs `AgentEvent`
 

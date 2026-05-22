@@ -68,6 +68,7 @@ from app.rpc.methods.settings import (
     get_session_defaults,
     get_settings,
     list_models,
+    list_runtime_skills,
     list_skills,
     set_session_defaults,
     update_settings,
@@ -202,6 +203,7 @@ METHODS = {
     "appSettings/setSessionDefaults": set_session_defaults,
     "models/list": list_models,
     "skills/list": list_skills,
+    "skills/listRuntime": list_runtime_skills,
 }
 
 # Per-project service container (survives WebSocket reconnects).
@@ -239,6 +241,11 @@ def _bind_methods(
             bound[name] = partial(handler, app_store)
         elif name.startswith("settings/"):
             bound[name] = partial(handler, config)
+        elif name == "skills/listRuntime":
+            # Runtime skill discovery is dispatched by ``RuntimeRegistry``,
+            # not the project config — keep this branch *before* the
+            # ``skills/`` prefix fallback so the right service is injected.
+            bound[name] = partial(handler, runtime_registry)
         elif name.startswith("skills/"):
             bound[name] = partial(handler, config)
         elif name.startswith("models/"):

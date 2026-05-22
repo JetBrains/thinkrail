@@ -33,8 +33,9 @@ that imports from `claude_agent_sdk` or `anthropic`.
 | File | Responsibility |
 |------|----------------|
 | `__init__.py` | Re-exports `ClaudeRuntime` |
-| `runtime.py` | `class ClaudeRuntime` — IAgentRuntime impl. Owns SDK lifecycle, conversation loop, tool-result serialization, cost-iteration tracking, mode-change tracking |
+| `runtime.py` | `class ClaudeRuntime` — IAgentRuntime impl. Owns SDK lifecycle, conversation loop, tool-result serialization, cost-iteration tracking, mode-change tracking. Delegates `list_models()` to `ClaudeModelRegistry` and `list_skills()` to `ClaudeSkillRegistry` |
 | `models.py` | `class ClaudeModelRegistry` — Anthropic models fetch, on-disk cache (`.bonsai/cache/models.json`), 3-entry static fallback, lazy one-shot refresh on first `list_models()` call. Projects internal `_ClaudeRow` rows to neutral `ModelInfo` |
+| `skills.py` | `class ClaudeSkillRegistry` — multi-source skill discovery (user / project / plugin / command / builtin) with first-wins dedup and a process-lifetime mtime cache. See [Skill catalog](#skill-catalog--multi-source-scan) |
 | `credentials.py` | `resolve_anthropic_api_key()` — env var `ANTHROPIC_API_KEY` first, then macOS Keychain (Claude Code's managed key). Private to this directory |
 | `hooks.py` | `class SubagentHooks` — per-session subagent / PreCompact correlation (Task-tool ↔ SubagentStart) |
 | `adapter.py` | Pure event-shape builders — `agent/toolCallStart` / `agent/toolCallEnd` param construction. Boundary the Codex adapter's diff-parity tests will enforce against |
@@ -143,6 +144,58 @@ protocol-level lifecycle:
 - `get_context_window(model_id)` consults the projected id-index;
   returns `DEFAULT_CONTEXT_WINDOW` (200K) for unknown ids.
 
+## Skill catalog — multi-source scan
+
+`ClaudeRuntime.list_skills()` exposes the slash-command-style skills
+the user can invoke from inside a Claude Code session — so the chat
+composer can surface them in its slash autocomplete alongside Bonsai's
+bundled skills.  The runtime is a thin one-line delegate; all discovery
+logic lives in `ClaudeSkillRegistry` (`skills.py`), mirroring the
+`ClaudeModelRegistry` split.
+
+**Scan order (first-wins dedup by `id`):**
+
+| Order | Root path | `source` | `id` derivation |
+|---|---|---|---|
+| 1 | `~/.claude/skills/*/SKILL.md` | `user` | directory name |
+| 2 | `<project_root>/.claude/skills/*/SKILL.md` | `project` | directory name |
+| 3 | `~/.claude/plugins/marketplaces/*/plugins/*/skills/*/SKILL.md` | `plugin` | `<plugin>:<skill-dir>` (namespaced) |
+| 4 | `~/.claude/commands/*.md` | `command` | filename stem |
+| 5 | Static built-in list (`init`, `review`, `security-review`, …) | `builtin` | id literal |
+
+Project root comes from `app_config.project_root` (the same `AppConfig`
+the runtime is constructed with). Frontmatter (`name`,
+`description`) is parsed via the existing `_parse_frontmatter` helper
+extracted from `app/agent/context.py` — no duplicate parser.
+
+**Caching strategy.** Process-lifetime cache keyed by
+`(root_dir, root_dir_mtime)`. Each call stats every root; if any
+root's mtime differs from the cached snapshot, the cache is dropped and
+the affected roots are re-scanned. mtime stat is cheap enough that the
+cache effectively eliminates SKILL.md parsing in steady state. No
+periodic refresh, no protocol-level lifecycle — same philosophy as the
+model catalog.
+
+**Robustness.**
+
+- Missing roots (e.g. no `~/.claude/`) → skipped silently.
+- Malformed `SKILL.md` → `logger.warning(..., exc_info=True)`, skipped
+  (mirrors the existing pattern in `scan_skill_frontmatter`).
+- Any unexpected error in `list_skills` itself → caught, returns `[]`.
+  Drives the frontend's "Bonsai-only silent fallback" UX rule (the
+  runtime section just disappears, no toast).
+
+**Why dedup is first-wins.** User-scoped overrides take precedence so a
+developer can locally shadow a plugin- or built-in-supplied skill by
+dropping a `SKILL.md` into `~/.claude/skills/<id>/`. Project-scoped
+beats plugin/built-in for the same reason. The frontend additionally
+dedups runtime skills whose `id` collides with a Bonsai bundled skill
+(Bonsai wins) — see [Runtime Skills Autocomplete design](../../../../.bonsai/runtime-skills-autocomplete/design-doc.md).
+
+**Wire surface.** Exposed via the `skills/listRuntime` RPC method in
+`backend/app/rpc/methods/settings.py`; see
+[RPC module — methods](../../../rpc/README.md#methods).
+
 ## Special-case behaviours preserved from legacy `runner.py`
 
 These behaviours were called out in plan 02's Risks section and must
@@ -224,6 +277,8 @@ No `cancel_event`, no polling.
 | Path | What it covers |
 |------|----------------|
 | `backend/tests/agent/runtime/claude/test_runtime.py` | Full `run_session` lifecycle — turn complete, interrupt, multi-turn, tool approval round-trip, cost tracking, plan-mode toggle, all six preserved special-case behaviours |
+| `backend/tests/agent/runtime/claude/test_skills.py` | `TestListSkills` — fixture-tree scan per source kind (user/project/plugin/command/builtin), first-wins dedup ordering, mtime cache hit + invalidation, missing-root silent skip, malformed-SKILL.md logs + skips without raising |
+| `backend/tests/agent/runtime/claude/test_models.py` | `ClaudeModelRegistry` — version parsing, current-vs-legacy classification, projection cache invalidation, on-disk cache round-trip |
 | `backend/tests/agent/runtime/claude/test_hooks.py` | `SubagentHooks` correlation — Task-tool / SubagentStart ordering, orphan close on interrupt, `parent_to_agent` mapping |
 | `backend/tests/agent/runtime/claude/test_adapter.py` (post-extraction) | Event-shape builder unit tests; locks the `agent/toolCallStart` / `agent/toolCallEnd` payload shape so plan 05's Codex adapter can mirror it |
 

@@ -59,6 +59,16 @@ export const sessionPanel = {
   messagePlaceholder: /Message Claude/,
 };
 
+export const inputAutocomplete = {
+  // The grouped suggestion popup rendered above the textarea when a `/token`
+  // is active under the caret.
+  popup: ".input-autocomplete",
+  group: ".input-autocomplete-group",
+  sectionHeader: ".input-autocomplete-section-header",
+  item: ".input-autocomplete-item",
+  active: ".input-autocomplete-active",
+};
+
 export const sessionManager = {
   panel: ".session-manager",
   card: ".sm-card",

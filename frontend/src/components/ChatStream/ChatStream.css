@@ -1196,6 +1196,24 @@
 .input-autocomplete-name { color: var(--cyan); font-weight: 600; white-space: nowrap; }
 .input-autocomplete-desc { color: var(--hint); font-size: var(--font-md); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
+/* Grouped sections inside the autocomplete popup — non-selectable label
+   above each run of items (Bonsai, then the active runtime). */
+.input-autocomplete-group + .input-autocomplete-group {
+  border-top: 1px solid var(--border);
+  margin-top: 2px;
+  padding-top: 2px;
+}
+.input-autocomplete-section-header {
+  padding: var(--space-xs) var(--space-md) 2px;
+  color: var(--hint);
+  font-size: var(--font-sm);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  pointer-events: none;
+  user-select: none;
+}
+
 /* ── Message History Popup ── */
 .input-history {
   position: absolute; bottom: 100%; left: 0; right: 0;

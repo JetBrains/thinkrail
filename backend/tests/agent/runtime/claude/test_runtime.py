@@ -1214,3 +1214,8 @@ class TestClaudeRuntimeInterrupt:
         # Should not raise — disconnected clients are expected
         await runtime.interrupt(task, tracker)
         mock_client.interrupt.assert_awaited_once()
+
+
+# ``TestListSkills`` was moved to ``test_skills.py`` by the Step 8 refactor
+# (skill discovery now lives in ``ClaudeSkillRegistry``).
+

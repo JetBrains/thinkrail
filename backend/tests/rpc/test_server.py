@@ -104,6 +104,7 @@ class TestMethods:
             "models/list",
             "agent/retryLastMessage",
             "skills/list",
+            "skills/listRuntime",
         }
         assert set(METHODS.keys()) == expected
 

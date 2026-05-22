@@ -133,6 +133,22 @@ export type EventType =
 
 // ─── Other models ─────────────────────────────────────────────────────────────
 
+/** Mirrors backend `app.agent.models.RuntimeType` (`Literal["claude", "codex"]`). */
+export type RuntimeType = "claude" | "codex";
+
+/**
+ * Wire shape of a runtime-exposed skill (autocomplete suggestion).
+ * Mirrors backend `app.agent.runtime.types.RuntimeSkillInfo` — camelCase
+ * keys via `alias_generator=to_camel`.
+ */
+export interface RuntimeSkillInfo {
+  id: string;
+  name: string;
+  description: string;
+  /** "user" | "project" | "plugin" | "command" | "builtin" */
+  source: string;
+}
+
 export interface AgentConfig {
   model: string;
   maxTurns: number;
