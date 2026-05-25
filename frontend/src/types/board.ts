@@ -1,14 +1,22 @@
 /** Mirrors backend/app/board/models.py — JSON wire format (camelCase). */
 
-export type MetaTicketStatus =
-  | "idea"
-  | "described"
-  | "specified"
-  | "planned"
-  | "executing"
-  | "done";
+export const META_TICKET_STATUSES = [
+  "idea",
+  "described",
+  "specified",
+  "planned",
+  "executing",
+  "done",
+] as const;
+export type MetaTicketStatus = (typeof META_TICKET_STATUSES)[number];
 
-export type MetaTicketType = "feature" | "bug" | "idea" | "improvement";
+export const META_TICKET_TYPES = [
+  "feature",
+  "bug",
+  "idea",
+  "improvement",
+] as const;
+export type MetaTicketType = (typeof META_TICKET_TYPES)[number];
 
 export interface SpecPatch {
   specId: string;

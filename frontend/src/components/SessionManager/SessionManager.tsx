@@ -3,93 +3,116 @@ import { useRpc } from "@/api/hooks/useRpc.tsx";
 import { createSessionApi, type SessionSummary } from "@/api/methods/sessions.ts";
 import { createAgentApi } from "@/api/methods/agents.ts";
 import { useSessionStore } from "@/store/sessionStore.ts";
+import { useUiStore } from "@/store/uiStore.ts";
 import { getErrorMessage } from "@/utils/errors.ts";
 import { timeAgo } from "@/utils/format.ts";
 import { getStatusStyle } from "@/utils/status.ts";
 import { modLabel } from "@/utils/platform.ts";
 import "./SessionManager.css";
 
-export function SessionManager({ onClose }: { onClose?: () => void }) {
+export function SessionManager() {
   const client = useRpc();
+  const projectPath = useUiStore((s) => s.projectPath);
+  const focusSessions = useUiStore((s) => s.focusSessions);
+  const switchSession = useSessionStore((s) => s.switchSession);
+  const restoreSession = useSessionStore((s) => s.restoreSession);
+  const endSession = useSessionStore((s) => s.endSession);
+  const deleteSession = useSessionStore((s) => s.deleteSession);
+
   const [sessions, setSessions] = useState<SessionSummary[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const switchSession = useSessionStore((s) => s.switchSession);
-  const activeSessions = useSessionStore((s) => s.sessions);
-  const restoreSession = useSessionStore((s) => s.restoreSession);
-  const endSession = useSessionStore((s) => s.endSession);
 
-  const fetchSessions = useCallback(async () => {
+  useEffect(() => {
+    let cancelled = false;
     setLoading(true);
     setError(null);
+    (async () => {
+      try {
+        const list = await createSessionApi(client).list();
+        if (!cancelled) setSessions(list);
+      } catch (e) {
+        if (!cancelled) {
+          setError(`Failed to load sessions: ${getErrorMessage(e)}`);
+        }
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [client, projectPath]);
+
+  const refresh = useCallback(async () => {
     try {
-      const api = createSessionApi(client);
-      const list = await api.list();
+      const list = await createSessionApi(client).list();
       setSessions(list);
+      setError(null);
     } catch (e) {
-      setError(`Failed to load sessions: ${(e as Error).message}`);
-    } finally {
-      setLoading(false);
+      setError(`Failed to load sessions: ${getErrorMessage(e)}`);
     }
   }, [client]);
 
-  useEffect(() => {
-    fetchSessions();
-  }, [fetchSessions]);
-
   const handleContinue = useCallback(
     async (taskId: string) => {
+      focusSessions();
       try {
         await useSessionStore.getState().continueSession(taskId);
-        onClose?.();
       } catch (e) {
         console.error("Failed to continue session:", e);
         setError(`Failed to resume session: ${getErrorMessage(e)}`);
       }
     },
-    [onClose],
+    [focusSessions],
   );
 
   const handleStop = useCallback(
     async (taskId: string) => {
       try {
-        const api = createAgentApi(client);
-        await api.end(taskId);
-        // Also end it in the local store if present
-        if (activeSessions.has(taskId)) {
+        await createAgentApi(client).end(taskId);
+        if (useSessionStore.getState().sessions.has(taskId)) {
           try { await endSession(taskId); } catch { /* ignore */ }
         }
-        fetchSessions();
+        setSessions((prev) =>
+          prev.map((s) =>
+            s.bonsaiSid === taskId ? { ...s, status: "done" as const } : s,
+          ),
+        );
       } catch (e) {
         console.error("Failed to stop session:", e);
       }
     },
-    [client, activeSessions, endSession, fetchSessions],
+    [client, endSession],
   );
 
-  const deleteSession = useSessionStore((s) => s.deleteSession);
   const handleDelete = useCallback(
     async (taskId: string) => {
       try {
         await deleteSession(taskId);
-        fetchSessions();
+        setSessions((prev) => prev.filter((s) => s.bonsaiSid !== taskId));
       } catch (e) {
         console.error("Failed to delete session:", e);
       }
     },
-    [deleteSession, fetchSessions],
+    [deleteSession],
   );
 
   const handleOpen = useCallback(
     async (taskId: string) => {
-      if (activeSessions.has(taskId)) {
-        switchSession(taskId);
-      } else {
-        await restoreSession(taskId);
+      focusSessions();
+      try {
+        if (useSessionStore.getState().sessions.has(taskId)) {
+          switchSession(taskId);
+        } else {
+          await restoreSession(taskId);
+        }
+      } catch (e) {
+        console.error("Failed to open session:", e);
+        setError(`Failed to open session: ${getErrorMessage(e)}`);
       }
-      onClose?.();
     },
-    [activeSessions, switchSession, restoreSession, onClose],
+    [focusSessions, switchSession, restoreSession],
   );
 
   if (loading) {
@@ -105,48 +128,49 @@ export function SessionManager({ onClose }: { onClose?: () => void }) {
   return (
     <div className="session-manager">
       <div className="sm-header">
-        <h3 className="sm-title">Sessions</h3>
-        <button className="sm-refresh" onClick={fetchSessions} title="Refresh">
+        <button className="sm-refresh" onClick={refresh} title="Refresh sessions">
           {"\u21BB"}
         </button>
       </div>
 
-      {error && <div className="sm-error">{error}</div>}
+      <div className="sm-content">
+        {error && <div className="sm-error">{error}</div>}
 
-      {sessions.length === 0 && !error && (
-        <div className="sm-empty">No sessions yet. Create one with {modLabel("T")}.</div>
-      )}
+        {sessions.length === 0 && !error && (
+          <div className="sm-empty">No sessions yet. Create one with {modLabel("T")}.</div>
+        )}
 
-      {active.length > 0 && (
-        <SessionGroup
-          label="Active"
-          sessions={active}
-          onOpen={handleOpen}
-          onStop={handleStop}
-          onContinue={handleContinue}
-          onDelete={handleDelete}
-        />
-      )}
-      {completed.length > 0 && (
-        <SessionGroup
-          label="Completed"
-          sessions={completed}
-          onOpen={handleOpen}
-          onStop={handleStop}
-          onContinue={handleContinue}
-          onDelete={handleDelete}
-        />
-      )}
-      {errored.length > 0 && (
-        <SessionGroup
-          label="Errors"
-          sessions={errored}
-          onOpen={handleOpen}
-          onStop={handleStop}
-          onContinue={handleContinue}
-          onDelete={handleDelete}
-        />
-      )}
+        {active.length > 0 && (
+          <SessionGroup
+            label="Active"
+            sessions={active}
+            onOpen={handleOpen}
+            onStop={handleStop}
+            onContinue={handleContinue}
+            onDelete={handleDelete}
+          />
+        )}
+        {completed.length > 0 && (
+          <SessionGroup
+            label="Completed"
+            sessions={completed}
+            onOpen={handleOpen}
+            onStop={handleStop}
+            onContinue={handleContinue}
+            onDelete={handleDelete}
+          />
+        )}
+        {errored.length > 0 && (
+          <SessionGroup
+            label="Errors"
+            sessions={errored}
+            onOpen={handleOpen}
+            onStop={handleStop}
+            onContinue={handleContinue}
+            onDelete={handleDelete}
+          />
+        )}
+      </div>
     </div>
   );
 }

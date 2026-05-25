@@ -1,5 +1,9 @@
 import { useCallback, useMemo, useState } from "react";
-import type { MetaTicket, MetaTicketStatus } from "@/types/board.ts";
+import {
+  META_TICKET_STATUSES,
+  type MetaTicket,
+  type MetaTicketStatus,
+} from "@/types/board.ts";
 import type { RightPanelContent } from "./MetaTicketDetail.tsx";
 import { useSessionStore } from "@/store/sessionStore.ts";
 
@@ -9,22 +13,13 @@ interface TicketProgressBarProps {
   onSelectPanel: (panel: RightPanelContent) => void;
 }
 
-const STATES: { key: MetaTicketStatus; label: string }[] = [
-  { key: "idea", label: "Idea" },
-  { key: "described", label: "Described" },
-  { key: "specified", label: "Specified" },
-  { key: "planned", label: "Planned" },
-  { key: "executing", label: "Executing" },
-  { key: "done", label: "Done" },
-];
-
-const STATE_ORDER: Record<MetaTicketStatus, number> = {
-  idea: 0,
-  described: 1,
-  specified: 2,
-  planned: 3,
-  executing: 4,
-  done: 5,
+const STATUS_LABELS: Record<MetaTicketStatus, string> = {
+  idea: "Idea",
+  described: "Described",
+  specified: "Specified",
+  planned: "Planned",
+  executing: "Executing",
+  done: "Done",
 };
 
 interface Action {
@@ -36,7 +31,7 @@ export function TicketProgressBar({ ticket, onStartSession, onSelectPanel }: Tic
   const liveSessions = useSessionStore((s) => s.sessions);
   const [moreOpen, setMoreOpen] = useState(false);
 
-  const currentIndex = STATE_ORDER[ticket.status] ?? 0;
+  const currentIndex = Math.max(0, META_TICKET_STATUSES.indexOf(ticket.status));
 
   // Compute primary + secondary actions — purely state-driven
   const { primary, secondary } = useMemo(() => {
@@ -97,16 +92,16 @@ export function TicketProgressBar({ ticket, onStartSession, onSelectPanel }: Tic
     <div className="ticket-progress-bar">
       {/* State pipeline */}
       <div className="ticket-progress-pipeline">
-        {STATES.map((state, i) => {
+        {META_TICKET_STATUSES.map((status, i) => {
           const isPast = i < currentIndex;
           const isCurrent = i === currentIndex;
           const cls = isPast ? "past" : isCurrent ? "current" : "future";
           return (
-            <div key={state.key} className="ticket-progress-step">
+            <div key={status} className="ticket-progress-step">
               {i > 0 && <div className={`ticket-progress-line ticket-progress-line--${isPast || isCurrent ? "done" : "pending"}`} />}
               <div className={`ticket-progress-dot ticket-progress-dot--${cls}`} />
               <span className={`ticket-progress-label ticket-progress-label--${cls}`}>
-                {state.label}
+                {STATUS_LABELS[status]}
               </span>
             </div>
           );

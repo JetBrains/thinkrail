@@ -113,12 +113,10 @@ frontend/
 │   │   ├── Console/           # (see CONSOLE.md)
 │   │   ├── CommandPalette/    # (see COMMAND_PALETTE.md)
 │   │   ├── Notifications/     # Toast notifications (ToastContainer)
-│   │   ├── SessionHistory/    # (see SESSION_HISTORY.md)
 │   │   ├── SessionPanel/      # Session tab bar + active session display, + New button (see CENTER_PANEL.md)
-│   │   ├── SessionManager/    # Full session management view
+│   │   ├── SessionManager/    # Full session management view (rendered in the LeftPanel "Sessions" tab)
 │   │   ├── FileTree/          # File tree navigation
 │   │   ├── SpecTree/          # Spec tree navigation
-│   │   ├── ProgressTab/       # Progress tracking + activity timeline
 │   │   └── ProjectPicker/     # Project selection modal
 │   │
 │   ├── styles/                # (see THEMING.md)
@@ -225,14 +223,20 @@ const LEFT_DEFAULT = 260;
 const RIGHT_DEFAULT = 380;
 
 function AppShell({ onSwitchProject }: { onSwitchProject: () => void }) {
+  const centerView = useUiStore((s) => s.centerView);
   const leftCollapsed = useUiStore((s) => s.leftPanelCollapsed);
   const rightCollapsed = useUiStore((s) => s.rightPanelCollapsed);
   const toggleLeft = useUiStore((s) => s.toggleLeftPanel);
   const toggleRight = useUiStore((s) => s.toggleRightPanel);
+  const setLeftTab = useUiStore((s) => s.setLeftTab);
 
   const [leftWidth, setLeftWidth] = useState(LEFT_DEFAULT);   // 260px default
   const [rightWidth, setRightWidth] = useState(RIGHT_DEFAULT); // 380px default
-  const [showSessionManager, setShowSessionManager] = useState(false);
+
+  const handleOpenSessionManager = useCallback(() => {
+    setLeftTab("sessions");
+    if (leftCollapsed) toggleLeft();
+  }, [setLeftTab, leftCollapsed, toggleLeft]);
 
   return (
     <div className="app-shell">
@@ -257,12 +261,7 @@ function AppShell({ onSwitchProject }: { onSwitchProject: () => void }) {
           </>
         )}
         <div className="center-panel">
-          <Outlet />
-          {showSessionManager ? (
-            <SessionManager onClose={handleCloseSessionManager} />
-          ) : (
-            <SessionPanel />
-          )}
+          {centerView === "board" ? <BoardView /> : <SessionPanel />}
         </div>
         {rightCollapsed ? (
           <button className="right-collapse-btn" onClick={toggleRight}
@@ -360,16 +359,16 @@ function StatusBar({ onOpenSessionManager }: StatusBarProps) {
 }
 ```
 
-Clicking the session count in the status bar triggers `onOpenSessionManager`, which toggles the center panel between `SessionPanel` and `SessionManager`.
+Clicking the session count in the status bar triggers `onOpenSessionManager`, which sets `leftActiveTab = "sessions"` and uncollapses the left panel if needed. The full `SessionManager` view lives inside the left panel's Sessions tab — see [WEBVIEW.md §2.1](WEBVIEW.md#21-sessions-tab).
 
-### SessionPanel / SessionManager Toggling
+### Center View Switching
 
-The center panel below `<Outlet />` switches between two views:
+The center panel renders one of two views, driven by `uiStore.centerView`:
 
-- **SessionPanel** (default): Shows the session tab bar and active chat stream
-- **SessionManager**: Full session management view with a "Back to sessions" button
+- **`"board"`**: `<BoardView />` (or `<MetaTicketDetail />` when a ticket is open)
+- **`"sessions"`** (default): `<SessionPanel />` — session tab bar + active chat stream
 
-The toggle state is local to AppShell (`showSessionManager` via `useState`). The `StatusBar` session count button opens the manager; the back button in the manager header closes it.
+The header's `Board` / `Sessions` tablist switches between them. `Sessions` uses `uiStore.focusSessions()` so the sidebar Sessions tab also focuses; `Board` uses the plain `setCenterView` so the sidebar stays where it is.
 
 ## Bootstrap Sequence
 

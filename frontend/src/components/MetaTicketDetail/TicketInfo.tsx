@@ -1,5 +1,11 @@
 import { useCallback, useEffect, useState } from "react";
-import type { MetaTicket, MetaTicketStatus, MetaTicketType } from "@/types/board.ts";
+import {
+  META_TICKET_STATUSES,
+  META_TICKET_TYPES,
+  type MetaTicket,
+  type MetaTicketStatus,
+  type MetaTicketType,
+} from "@/types/board.ts";
 import type { RightPanelContent } from "./MetaTicketDetail.tsx";
 import { useSpecStore } from "@/store/specStore.ts";
 import { useBoardStore } from "@/store/boardStore.ts";
@@ -23,14 +29,6 @@ interface TicketInfoProps {
   rightPanel: RightPanelContent;
   onSelectPanel: (panel: RightPanelContent) => void;
 }
-
-const STATUS_OPTIONS: MetaTicketStatus[] = [
-  "idea", "described", "specified", "planned", "executing", "done",
-];
-
-const TYPE_OPTIONS: MetaTicketType[] = [
-  "feature", "bug", "idea", "improvement",
-];
 
 function stepStatusIcon(status: string): string {
   switch (status) {
@@ -160,7 +158,7 @@ export function TicketInfo({ ticket, plan, onTicketUpdated, rightPanel, onSelect
               value={ticket.status}
               onChange={handleStatusChange}
             >
-              {STATUS_OPTIONS.map((s) => (
+              {META_TICKET_STATUSES.map((s) => (
                 <option key={s} value={s}>{s}</option>
               ))}
             </select>
@@ -172,7 +170,7 @@ export function TicketInfo({ ticket, plan, onTicketUpdated, rightPanel, onSelect
               value={ticket.type}
               onChange={handleTypeChange}
             >
-              {TYPE_OPTIONS.map((t) => (
+              {META_TICKET_TYPES.map((t) => (
                 <option key={t} value={t}>{t}</option>
               ))}
             </select>

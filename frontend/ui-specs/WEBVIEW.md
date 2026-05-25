@@ -32,7 +32,7 @@ tags:
 
 ## Overview
 
-The Bonsai web view is a three-panel workspace for specification-driven development with AI agents. The center panel hosts Claude agent sessions (custom Chat UI) and file views, while the right panel is a context-aware sidebar that auto-switches between spec context, agent context, and code context based on what's active in the center (showing an empty welcome state when nothing is selected). The left panel combines navigation (spec tree, files) with a spec-driven progress tracker.
+The Bonsai web view is a three-panel workspace for specification-driven development with AI agents. The center panel hosts Claude agent sessions (custom Chat UI) and file views, while the right panel is a context-aware sidebar that auto-switches between spec context, agent context, and code context based on what's active in the center (showing an empty welcome state when nothing is selected). The left panel hosts three tabs — spec tree, file tree, and the session manager.
 
 ## Architecture
 
@@ -98,7 +98,7 @@ All three panels have **flexible width**, resizable via drag handles between the
 
 The "+ New session" button does **not** live in the header — it sits inside the Sessions view's tab bar (see §3). `Mod+T` is the global shortcut and auto-routes to the Sessions view before creating the draft.
 
-## 2. Left Panel — Navigation & Progress
+## 2. Left Panel — Navigation
 
 Toggle visibility: `Mod+B`
 
@@ -108,7 +108,7 @@ Toggle visibility: `Mod+B`
 | --- | --- |
 | **Specs** | Hierarchical tree of specifications grouped by type (goal → architecture → module → submodule → task). Each node shows icon, title, and status badge (✓ done, ● active, ○ pending, ! waiting, ~ stale). |
 | **Files** | Folder tree of the project repository. Visibility is controlled by `.bonsaihide` (gitignore-style config file in project root; `!` prefix for exceptions, last-match-wins). Toolbar has Collapse All, Expand All, and a Show Hidden toggle (👁) that temporarily bypasses `.bonsaihide` rules. Toggle state is persisted per-project in `localStorage`. |
-| **Progress** | Spec-driven progress dashboard — the primary way to track project state and session activity. See §2.1. |
+| **Sessions** | Full session list for the current project (`SessionManager`). See §2.1. |
 
 ### Behavior
 
@@ -117,119 +117,15 @@ Toggle visibility: `Mod+B`
 - Double-clicking a spec opens it in the Spec view tab on the right panel
 - Tree nodes are expandable/collapsible
 
-### 2.1 Progress Tab — Spec-Driven Progress Tracker
+### 2.1 Sessions Tab
 
-The Progress tab is the unified project health and session activity dashboard. It combines spec-driven metrics, live session tracking, and file change monitoring into a single view.
+The Sessions tab renders the full `SessionManager` view: all sessions for the current project grouped by status (Active / Completed / Errors), with Switch-to / Stop per active card and Continue / Delete per completed/errored card. A refresh affordance (`↻`) sits in the top-right.
 
-#### Spec-Driven Progress
+The tab is coupled to a set of explicit "show me the Sessions UI" affordances. Other flows that incidentally flip the center view to Sessions deliberately do not steal sidebar focus:
 
-The top section shows overall project state from the specification perspective:
-
-```
-┌─────────────────────────────────────┐
-│  SPEC PROGRESS              67%    │
-│  ████████████░░░░░░░         8/12  │
-│                                     │
-│  ✓ 2 done  ● 4 active  ○ 5 pending│
-│  ~ 0 stale                         │
-│                                     │
-│  REQUIREMENTS               50%    │
-│  ██████████░░░░░░░░░░        2/4   │
-│                                     │
-│  COVERAGE                   67%    │
-│  8 of 12 source paths covered      │
-└─────────────────────────────────────┘
-```
-
-| Metric | Description |
-| --- | --- |
-| Spec progress | Percentage of specs in "done" status vs total. Progress bar. |
-| Spec status breakdown | Count by status: done / active / pending / stale |
-| Requirements progress | Requirements with coverage vs total. Progress bar. |
-| Source coverage | Percentage of source paths covered by at least one spec |
-
-#### Active Session Tracker
-
-Shows the state of all running agent sessions:
-
-```
-┌─────────────────────────────────────┐
-│  ACTIVE SESSIONS                    │
-│                                     │
-│  ● module-design         ▸ running  │
-│    Step: Writing models.py          │
-│    3 files · $0.08 · 2m 14s        │
-│    ▸ models.py ▸ service.py (new)   │
-│                                     │
-│  ✓ architecture          ▸ done     │
-│    $0.12 · 8 turns · 45s           │
-└─────────────────────────────────────┘
-```
-
-For each session:
-
-| Field | Description |
-| --- | --- |
-| Name + status | Session name with running/done/error indicator |
-| Current step | What the agent is doing right now (derived from latest `agent/toolCallStart` or `agent/textDelta`) |
-| Metrics | Files touched, cost so far, elapsed time |
-| File changes | List of files created/modified by this session (clickable → opens diff) |
-
-#### Activity Timeline
-
-A compact vertical timeline of recent agent actions across all sessions:
-
-```
-┌─────────────────────────────────────┐
-│  ACTIVITY                           │
-│                                     │
-│  14:23  ✏️  Write models.py         │
-│  14:22  📖  Read README.md          │
-│  14:22  🔍  Grep "BaseModel"        │
-│  14:21  ⚡  Subagent: Explore       │
-│  14:21  📖  Read spec/README.md     │
-│  14:20  🚀  Session started         │
-└─────────────────────────────────────┘
-```
-
-- Each entry: timestamp + icon + brief description
-- Clickable → scrolls chat to that event
-- Color-coded by action type
-- Auto-scrolls as new events arrive
-
-#### Live File Changes
-
-Files modified across all active sessions:
-
-```
-┌─────────────────────────────────────┐
-│  FILES CHANGED              3 files │
-│                                     │
-│  + backend/app/spec/models.py       │
-│  + backend/app/spec/service.py      │
-│  ~ backend/app/spec/README.md       │
-└─────────────────────────────────────┘
-```
-
-- `+` = created, `~` = modified, `-` = deleted
-- Clicking a file → opens Diff view in the right panel for that file
-- Badge count shown on the Progress tab label
-
-#### Cost & Token Budget
-
-```
-┌─────────────────────────────────────┐
-│  SESSION COST                       │
-│  $0.20 total  ·  18.4k tokens      │
-│                                     │
-│  Budget: $5.00           4% used    │
-│  ██░░░░░░░░░░░░░░░░░░░░            │
-└─────────────────────────────────────┘
-```
-
-- Running total cost and token count across all sessions
-- Optional budget limit (configurable)
-- Warning indicator when approaching budget (>80%)
+- **Header `Sessions` tab** and **footer "n sessions" button** focus this tab (and the footer button also uncollapses the left panel if it was hidden).
+- **Clicking a session card** auto-switches the center view to Sessions and opens (or activates) that session's tab — so cards work as a navigation entry-point even from Board view.
+- `Mod+T` (new session) and the wizard's "open sessions" navigation flip the center view to Sessions but leave the sidebar tab as-is, so users mid-flow (typing into a draft, finishing a wizard) don't have their sidebar context yanked.
 
 ## 3. Center Panel
 
@@ -297,22 +193,11 @@ The following views from the old tab-based right panel are now handled different
 
 Always visible at the bottom. Shows:
 - Spec counts (total, done, pending)
-- **"N sessions"** — clickable link that opens the Session Manager in the center panel
+- **"N sessions"** — clickable button that focuses the sidebar Sessions tab (uncollapsing the left panel if needed). When background sessions exist, a chevron next to it toggles a dropdown listing them.
 - Attention indicator when sessions need user input
 - Keyboard shortcut hints
 
-### Session Manager
-
-Clicking "N sessions" in the status bar replaces the center panel content with the **Session Manager** — a list of all sessions (active + archived from `.bonsai/sessions/`).
-
-**Grouped by status:** Active (idle/running) → Completed (done) → Errors
-
-**Per session card:** name, status badge, model, created time, cost/turns
-
-**Actions:**
-- **Active sessions:** "Switch to" → returns to that session tab
-- **Completed/Error sessions:** "Continue" → creates new SDK session with old conversation replayed as context (via `session/continue` RPC), "Delete" → removes from disk
-- **"Back to sessions"** button → returns to normal tab view
+The session list itself lives in the sidebar Sessions tab — see §2.1.
 
 ## 6. Command Palette
 
@@ -384,11 +269,9 @@ The following areas require their own detailed specs as the design matures:
 | **Chat UI Rendering** | Detailed rendering rules for each agent event type, streaming behavior, markdown rendering, syntax highlighting | How tool cards expand/collapse, animation timings, error states |
 | **Graph Interactions** | Layout algorithm, edge routing, node positioning, zoom/pan behavior, animation, force-directed vs hierarchical layout | Library choice (D3, React Flow, Cytoscape) |
 | **Diff Viewer** | Spec-to-code correlation logic, commit navigation, inline vs side-by-side, change grouping | How to match spec sections to code files |
-| **Progress Tracker** | Data sources for each metric, update frequency, budget configuration, alert thresholds | Backend API additions needed for cost/token tracking |
 | **New Session Modal** | Skill registry integration, spec selector UI, session configuration options | Validation rules, default values |
 | ~~**Console**~~ | ~~Terminal emulator~~ | Removed from UI for now — not core to spec-driven workflow |
 | **Command Palette** | Fuzzy search algorithm, indexing strategy, action registry, keyboard navigation | Performance with large projects |
-| **Session History & Persistence** | Storage format, retention policy, read-only replay mode, future disk persistence | Backend API additions for session archival |
 | **Notification System** | Toast queue management, priority ordering, sound configuration, persistence rules | Interaction with OS-level notifications |
 | **Theming** | Color scheme, dark/light mode, customization | CSS variable system, user preferences |
 | **Responsive Behavior** | Panel collapse rules at narrow widths, mobile considerations | Breakpoints, touch interactions |
@@ -399,10 +282,8 @@ The following RPC methods and endpoints are referenced by frontend sub-specs but
 
 | Methods | Referenced By | Description |
 | --- | --- | --- |
-| `cost/summary`, `cost/setBudget`, `cost/reset` | [Progress Tracker](PROGRESS_TRACKER.md) §6 | Cost tracking and budget management. Requires `.bonsai/cost.json` persistence. |
 | `diff/mappings`, `diff/commit`, `diff/scan` | [Diff Viewer](DIFF_VIEWER.md) §3 | Spec-to-code mapping extraction from git history. Requires mapping file I/O. |
 | `/terminal/create`, `/terminal/{id}/ws`, `/terminal/{id}/resize`, `/terminal/{id}/kill` | [Console](../src/components/Console/README.md) §Backend Integration | Terminal process management via PTY. Separate WebSocket per terminal (not JSON-RPC). Requires new FastAPI router. |
-| `cost/didUpdate` (notification) | [Progress Tracker](PROGRESS_TRACKER.md) §6.4 | Server→client notification when cost data changes. |
 
 ## Known Limitations
 
@@ -415,4 +296,4 @@ The following RPC methods and endpoints are referenced by frontend sub-specs but
 
 - **Parent:** [Frontend Module](../README.md)
 - **Depends on:** [Goal & Requirements](../../GOAL&REQUIREMENTS.md)
-- **Sub-specs:** [Chat UI](CHAT_UI.md), [Graph](GRAPH_INTERACTIONS.md), [Context Panel](CONTEXT_PANEL.md), [Center Panel](CENTER_PANEL.md), [Palette](COMMAND_PALETTE.md), [Notifications](NOTIFICATION_SYSTEM.md), [Diff](DIFF_VIEWER.md), [Progress](PROGRESS_TRACKER.md), [History](SESSION_HISTORY.md), [App Shell](APP_SHELL.md), [Theming](THEMING.md), [Responsive](RESPONSIVE_BEHAVIOR.md)
+- **Sub-specs:** [Chat UI](CHAT_UI.md), [Graph](GRAPH_INTERACTIONS.md), [Context Panel](CONTEXT_PANEL.md), [Center Panel](CENTER_PANEL.md), [Palette](COMMAND_PALETTE.md), [Notifications](NOTIFICATION_SYSTEM.md), [Diff](DIFF_VIEWER.md), [App Shell](APP_SHELL.md), [Theming](THEMING.md), [Responsive](RESPONSIVE_BEHAVIOR.md)

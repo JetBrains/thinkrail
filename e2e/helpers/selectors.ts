@@ -77,11 +77,6 @@ export const sessionManager = {
   deleteBtn: "button.sm-btn-delete",
 };
 
-export const progressTab = {
-  tabButton: { role: "button", name: "Progress" } as const,
-  historyItem: ".session-history .history-item",
-};
-
 export const statusBar = {
   sessionsButton: "button.status-sessions-btn",
 };
@@ -93,6 +88,9 @@ export const header = {
   serverInfoButton: 'button.header-btn[title="Server connection info"]',
   newButton: { role: "button", name: /\+ New/ } as const,
   settingsButton: 'button.header-settings-btn',
+  // Center view switcher — drives uiStore.centerView ("board" | "sessions").
+  boardTab: { role: "tab", name: /^Board( \d+)?$/ } as const,
+  sessionsTab: { role: "tab", name: /^Sessions( \d+)?$/ } as const,
 };
 
 export const serverInfoDialog = {
@@ -183,7 +181,7 @@ export const leftPanel = {
   panelTabActive: ".panel-tab-active",
   filesTab: "button.panel-tab:has-text('Files')",
   specsTab: "button.panel-tab:has-text('Specs')",
-  progressTab: "button.panel-tab:has-text('Progress')",
+  sessionsTab: "button.panel-tab:has-text('Sessions')",
 };
 
 export const fileTree = {

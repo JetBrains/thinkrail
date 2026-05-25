@@ -42,7 +42,7 @@ The Frontend module is a React/TypeScript single-page application that provides 
 │  Presentation Layer (React Components)                    │
 │    AppShell · ChatStream · GraphView · SessionPanel       │
 │    CommandPalette · Notifications · DiffViewer · Console  │
-│    ProgressTab · SessionHistory · SpecView · CodeView     │
+│    SessionManager · SpecView · CodeView                   │
 ├──────────────────────────────────────────────────────────┤
 │  State Layer (Zustand)                                    │
 │    specStore · sessionStore · uiStore                     │
@@ -74,8 +74,6 @@ The Frontend module is a React/TypeScript single-page application that provides 
 | `src/components/CommandPalette/` | Fuzzy search, prefix modes, action registry | [COMMAND_PALETTE](ui-specs/COMMAND_PALETTE.md) |
 | `src/components/Notifications/` | Toast queue, tab badges, status bar alerts | [NOTIFICATION_SYSTEM](ui-specs/NOTIFICATION_SYSTEM.md) |
 | `src/components/DiffViewer/` | Spec+code side-by-side diff, mapping files | [DIFF_VIEWER](ui-specs/DIFF_VIEWER.md) |
-| `src/components/ProgressTab/` | Spec metrics, session tracker, activity timeline, cost | [PROGRESS_TRACKER](ui-specs/PROGRESS_TRACKER.md) |
-| `src/components/SessionHistory/` | Session archive, read-only replay | [SESSION_HISTORY](ui-specs/SESSION_HISTORY.md) |
 | `src/components/Console/` | xterm.js terminal emulator, multiple tabs | [CONSOLE](src/components/Console/README.md) |
 | `src/components/FileViewer/` | Monaco Editor-based file viewer/editor with IntelliJ Darcula theme, preview/edit modes, Edit dropdown (IDE / in-place) | — |
 | `src/components/FileTree/` | IntelliJ-style project file tree with indent guides, collapsible dirs, double-click to open | — |
@@ -174,8 +172,6 @@ Dev dependencies: `vite`, `typescript`, `vitest`, `@testing-library/react`, `esl
 | Command Palette | [ui-specs/COMMAND_PALETTE.md](ui-specs/COMMAND_PALETTE.md) | Fuzzy search, prefix modes |
 | Notification System | [ui-specs/NOTIFICATION_SYSTEM.md](ui-specs/NOTIFICATION_SYSTEM.md) | Toasts, badges, sound |
 | Diff Viewer | [ui-specs/DIFF_VIEWER.md](ui-specs/DIFF_VIEWER.md) | Spec-to-code mapping, side-by-side |
-| Progress Tracker | [ui-specs/PROGRESS_TRACKER.md](ui-specs/PROGRESS_TRACKER.md) | Metrics, cost, activity timeline |
-| Session History | [ui-specs/SESSION_HISTORY.md](ui-specs/SESSION_HISTORY.md) | Archive, replay, persistence |
 | Theming | [ui-specs/THEMING.md](ui-specs/THEMING.md) | CSS variables, dark/light mode |
 | Responsive Behavior | [ui-specs/RESPONSIVE_BEHAVIOR.md](ui-specs/RESPONSIVE_BEHAVIOR.md) | Breakpoints, panel collapse |
 | App Shell | [ui-specs/APP_SHELL.md](ui-specs/APP_SHELL.md) | Component tree, routing, bootstrap |

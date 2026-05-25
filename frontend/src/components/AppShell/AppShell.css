@@ -317,13 +317,8 @@
 
 .panel-content-compact {
   padding: 0;
-}
-
-.panel-placeholder {
-  color: var(--hint);
-  font-size: var(--font-lg);
-  text-align: center;
-  padding: var(--space-xl);
+  display: flex;
+  flex-direction: column;
 }
 
 /* ── Status Bar ── */
@@ -407,26 +402,6 @@
 .status-attn-badge--step-proposal,
 .status-attn-badge--description-suggestion { background: var(--blue); }
 
-/* ── Session Manager in center panel ── */
-.sm-tab-bar {
-  display: flex;
-  align-items: center;
-  border-bottom: 1px solid var(--border);
-  padding: var(--space-sm) var(--space-md);
-  flex-shrink: 0;
-}
-.sm-tab-back {
-  border: none;
-  background: transparent;
-  color: var(--blue);
-  font-family: var(--font);
-  font-size: var(--font-lg);
-  cursor: pointer;
-  padding: var(--space-xs) var(--space-sm);
-  border-radius: var(--radius-sm);
-}
-.sm-tab-back:hover { background: var(--hover); }
-
 .status-sessions-btn {
   border: none;
   background: transparent;
@@ -440,8 +415,24 @@
 .status-sessions-btn--bg { color: var(--gold); }
 .status-bg-count { font-weight: 500; }
 
+.status-sessions-bg-chevron {
+  border: none;
+  background: transparent;
+  color: var(--gold);
+  font-family: var(--font);
+  font-size: var(--font-md);
+  cursor: pointer;
+  padding: 0;
+  margin-left: var(--space-xs);
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+}
+.status-sessions-bg-chevron:hover { text-decoration: underline; }
+.status-sessions-bg-arrow { font-size: 0.8em; line-height: 1; }
+
 /* ── Background Sessions Indicator ── */
-.status-bg-sessions { position: relative; display: inline-block; }
+.status-bg-sessions { position: relative; display: inline-flex; align-items: center; }
 .status-bg-btn {
   border: none;
   background: transparent;

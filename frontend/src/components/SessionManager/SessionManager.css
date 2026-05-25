@@ -1,27 +1,29 @@
 .session-manager {
+  display: flex;
+  flex-direction: column;
   flex: 1;
-  overflow-y: auto;
-  padding: var(--space-lg);
+  min-height: 0;
 }
 
 .sm-header {
   display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: var(--space-lg);
+  justify-content: flex-end;
+  flex-shrink: 0;
+  padding: var(--space-xs) var(--space-xs) 0 var(--space-md);
 }
 
-.sm-title {
-  font-size: var(--font-lg2);
-  font-weight: 600;
-  margin: 0;
+.sm-content {
+  flex: 1;
+  overflow-y: auto;
+  padding: 0 var(--space-md) var(--space-md);
 }
 
 .sm-refresh {
   border: none;
   background: transparent;
-  color: var(--muted);
-  font-size: var(--font-xl);
+  color: var(--hint);
+  font-size: var(--font-lg);
+  line-height: 1;
   cursor: pointer;
   padding: var(--space-xs);
   border-radius: var(--radius-sm);

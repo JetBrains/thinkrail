@@ -297,4 +297,3 @@ interface DiffState {
 
 - **Parent:** [Web View](WEBVIEW.md) §4.4
 - **Depends on:** [Spec Module](../../backend/app/spec/README.md) (covers field, spec content), [API Client](../src/api/README.md) (diff/* methods)
-- **Related:** [Progress Tracker](PROGRESS_TRACKER.md) (file changes list links to diff)

@@ -113,7 +113,6 @@ The following specs make real Anthropic API calls and tag themselves with
 `test.slow()`:
 
 - `tests/session-lifecycle.spec.ts`
-- `tests/session-history.spec.ts`
 - `tests/new-session-model.spec.ts`
 
 We keep real LLM calls (rather than mocking the SDK) because the rewrite
@@ -125,8 +124,8 @@ If the full run becomes too long, split LLM specs into a separate command by
 adding to `package.json`:
 
 ```json
-"test:llm": "playwright test session-lifecycle session-history new-session-model",
-"test:fast": "playwright test --grep-invert 'session-lifecycle|session-history|new-session-model'"
+"test:llm": "playwright test session-lifecycle new-session-model",
+"test:fast": "playwright test --grep-invert 'session-lifecycle|new-session-model'"
 ```
 
 (Currently the full suite is fast enough that no split is in place.)
@@ -141,7 +140,7 @@ spec — directly or transitively — except where noted as a documented gap.
 | AppShell (Header, StatusBar, SettingsModal) | `app-shell.spec.ts`, `user-settings-dialog.spec.ts` | Status bar visible; SettingsModal nav tabs + Session Defaults round-trip |
 | AppShell/LeftPanel, ResizeHandle | `settings.spec.ts`, `_smoke.spec.ts` | Alt+B toggle persists; status bar visible |
 | BoardView (KanbanColumn, MetaTicketBoard/Card, CreateTicketModal, BoardCardContextMenu, TaskBoard/Card) | `board.spec.ts` | Create + move-via-context-menu + reload |
-| ChatStream (InputArea, AssistantMessage, ToolCallCard, ErrorBanner, SessionStatusLine, DiffCard, ApprovalCard, etc.) | `session-lifecycle.spec.ts`, `session-history.spec.ts`, `new-session-model.spec.ts` | Real LLM; tool-call card appears |
+| ChatStream (InputArea, AssistantMessage, ToolCallCard, ErrorBanner, SessionStatusLine, DiffCard, ApprovalCard, etc.) | `session-lifecycle.spec.ts`, `new-session-model.spec.ts` | Real LLM; tool-call card appears |
 | CommandPalette | `trash-and-palette.spec.ts` | Alt+K, action mode, spec-picker mode |
 | ContextPanel (modes, sections) | `vis.spec.ts` | Dashboard pin/unpin; auto-mode toggle. Other modes (spec/session) untested — documented gap |
 | DiffCard (chat) | `plan-and-drafts.spec.ts` | Draft-diff path live |
@@ -151,10 +150,8 @@ spec — directly or transitively — except where noted as a documented gap.
 | MarkdownEditor | `spec-editor.spec.ts` | Edit body, save, preview updates |
 | MetaTicketDetail (TicketDescriptionView, TicketInfo, TicketProgressBar) | `meta-ticket.spec.ts`, `plan-and-drafts.spec.ts` | Edit description, link spec, plan/drafts |
 | Notifications/ToastContainer | (gap) | Specs assert against `ChatStream`'s `ErrorBanner`; the toast renderer itself has no spec — documented gap |
-| ProgressTab (ActivityTimeline) | `session-history.spec.ts` | History list item appears |
 | ProjectPicker | `project-picker.spec.ts`, `project-init.spec.ts`, `_smoke.spec.ts` | Recent list, autocomplete, invalid path |
-| SessionHistory | `session-history.spec.ts` | Continue reloads messages |
-| SessionManager | `session-history.spec.ts` | Modal opens, continue button |
+| SessionManager (sidebar Sessions tab, card click, footer button) | `sidebar-sessions.spec.ts` | Renders 3 tabs; footer focuses Sessions + uncollapses; view↔sidebar coupling; card click from Board |
 | SessionPanel (SessionTabBar, StickyContextBar, WelcomeScreen) | `session-lifecycle.spec.ts`, every spec that opens an empty project | Routing between welcome/session views |
 | SessionPanel/NewProjectScreen | `project-init.spec.ts` | First-time init flow |
 | SpecTree | `spec-tree.spec.ts`, `spec-editor.spec.ts`, `trash-and-palette.spec.ts` | Tree expand, click, palette spec-picker |

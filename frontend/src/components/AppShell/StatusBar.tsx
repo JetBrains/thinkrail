@@ -67,11 +67,21 @@ export function StatusBar({ onOpenSessionManager }: StatusBarProps) {
         <div className="status-bg-sessions" ref={dd.ref}>
           <button
             className={`status-sessions-btn${bgCount > 0 ? " status-sessions-btn--bg" : ""}`}
-            onClick={bgCount > 0 ? dd.toggle : onOpenSessionManager}
+            onClick={onOpenSessionManager}
           >
             {allLive.length} session{allLive.length !== 1 ? "s" : ""}
-            {bgCount > 0 && <span className="status-bg-count"> ({bgCount} background)</span>}
           </button>
+          {bgCount > 0 && (
+            <button
+              className="status-sessions-bg-chevron"
+              onClick={dd.toggle}
+              aria-label="Show background sessions"
+              aria-expanded={dd.open}
+            >
+              <span className="status-bg-count">({bgCount} background)</span>
+              <span className="status-sessions-bg-arrow">{dd.open ? "▴" : "▾"}</span>
+            </button>
+          )}
           {dd.open && bgCount > 0 && (
             <div className="status-bg-dropdown">
               {bgSessions.map((s) => (

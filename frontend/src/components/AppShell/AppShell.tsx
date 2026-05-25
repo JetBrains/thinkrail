@@ -1,4 +1,4 @@
-import { useCallback, useState, type ReactNode } from "react";
+import { useCallback, type ReactNode, useState } from "react";
 import { useUiStore } from "@/store/uiStore.ts";
 import { useSessionStore } from "@/store/sessionStore.ts";
 import { useFileStore } from "@/store/fileStore.ts";
@@ -9,7 +9,6 @@ import { LeftPanel } from "./LeftPanel.tsx";
 import { ContextPanel } from "@/components/ContextPanel/ContextPanel.tsx";
 import { ResizeHandle } from "./ResizeHandle.tsx";
 import { SessionPanel } from "@/components/SessionPanel/SessionPanel.tsx";
-import { SessionManager } from "@/components/SessionManager/SessionManager.tsx";
 import {
   NewProjectForm,
   WizardStepper,
@@ -59,6 +58,7 @@ export function AppShell({ onSwitchProject }: { onSwitchProject: () => void }) {
   const rightCollapsed = useUiStore((s) => s.rightPanelCollapsed);
   const toggleLeft = useUiStore((s) => s.toggleLeftPanel);
   const toggleRight = useUiStore((s) => s.toggleRightPanel);
+  const setLeftTab = useUiStore((s) => s.setLeftTab);
 
   const sessions = useSessionStore((s) => s.sessions);
   const activeSessionId = useSessionStore((s) => s.activeSessionId);
@@ -111,15 +111,11 @@ export function AppShell({ onSwitchProject }: { onSwitchProject: () => void }) {
 
   const [leftWidth, setLeftWidth] = useState(LEFT_DEFAULT);
   const [rightWidth, setRightWidth] = useState(RIGHT_DEFAULT);
-  const [showSessionManager, setShowSessionManager] = useState(false);
 
   const handleOpenSessionManager = useCallback(() => {
-    setShowSessionManager(true);
-  }, []);
-
-  const handleCloseSessionManager = useCallback(() => {
-    setShowSessionManager(false);
-  }, []);
+    setLeftTab("sessions");
+    if (leftCollapsed) toggleLeft();
+  }, [setLeftTab, leftCollapsed, toggleLeft]);
 
   const handleLeftResize = useCallback((w: number) => {
     const rightSpace = rightCollapsed ? COLLAPSED_STRIP_W : rightWidth + RESIZE_HANDLE_W;
@@ -212,16 +208,7 @@ export function AppShell({ onSwitchProject }: { onSwitchProject: () => void }) {
         )}
         <div className="center-panel">
           <ViewModeProvider>
-            {showSessionManager ? (
-              <>
-                <div className="sm-tab-bar">
-                  <button className="sm-tab-back" onClick={handleCloseSessionManager}>
-                    {"←"} Back to sessions
-                  </button>
-                </div>
-                <SessionManager onClose={handleCloseSessionManager} />
-              </>
-            ) : centerView === "board" ? (
+            {centerView === "board" ? (
               activeTicketId ? (
                 <MetaTicketDetail ticketId={activeTicketId} />
               ) : (

@@ -1,31 +1,39 @@
-import { useUiStore } from "@/store/uiStore.ts";
-import { ProgressTab } from "@/components/ProgressTab/ProgressTab.tsx";
+import { LEFT_TABS, useUiStore, type LeftTab } from "@/store/uiStore.ts";
 import { FileTree } from "@/components/FileTree/FileTree.tsx";
 import { SpecTree } from "@/components/SpecTree/SpecTree.tsx";
+import { SessionManager } from "@/components/SessionManager/SessionManager.tsx";
 import { PanelCollapseButton } from "./PanelCollapseButton.tsx";
 
-const TABS = ["specs", "files", "progress"] as const;
-const TAB_LABELS: Record<(typeof TABS)[number], string> = {
+const TAB_LABELS: Record<LeftTab, string> = {
   specs: "Specs",
   files: "Files",
-  progress: "Progress",
+  sessions: "Sessions",
 };
 
-function TabContent({ tab }: { tab: string }) {
-  if (tab === "specs") return <SpecTree />;
-  if (tab === "progress") return <ProgressTab />;
-  if (tab === "files") return <FileTree />;
-  return <div className="panel-placeholder">{TAB_LABELS[tab as keyof typeof TAB_LABELS]}</div>;
+function TabContent({ tab }: { tab: LeftTab }) {
+  switch (tab) {
+    case "specs":
+      return <SpecTree />;
+    case "files":
+      return <FileTree />;
+    case "sessions":
+      return <SessionManager />;
+  }
 }
 
 export function LeftPanel() {
-  const activeTab = useUiStore((s) => s.leftActiveTab);
+  const persistedTab = useUiStore((s) => s.leftActiveTab);
   const setTab = useUiStore((s) => s.setLeftTab);
+  // Persisted value may be a deprecated tab no longer in LEFT_TABS.
+  const activeTab: LeftTab = (LEFT_TABS as readonly string[]).includes(persistedTab)
+    ? persistedTab
+    : LEFT_TABS[0];
+  const compact = activeTab === "files" || activeTab === "sessions";
 
   return (
     <div className="left-panel">
       <div className="panel-tabs">
-        {TABS.map((tab) => (
+        {LEFT_TABS.map((tab) => (
           <button
             key={tab}
             className={`panel-tab ${activeTab === tab ? "panel-tab-active" : ""}`}
@@ -36,7 +44,7 @@ export function LeftPanel() {
         ))}
         <PanelCollapseButton side="left" shortcut="B" />
       </div>
-      <div className={`panel-content ${activeTab === "files" ? "panel-content-compact" : ""}`}>
+      <div className={`panel-content ${compact ? "panel-content-compact" : ""}`}>
         <TabContent tab={activeTab} />
       </div>
     </div>

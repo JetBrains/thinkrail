@@ -219,4 +219,4 @@ Questions and approvals also call `incrementPendingInput()` to update the status
 
 - **Parent:** [Web View](WEBVIEW.md) §3
 - **Depends on:** [State Management](../src/store/README.md) (notificationStore), [API Client](../src/api/README.md) (agent event subscriptions)
-- **Related:** [Chat UI](CHAT_UI.md) (question/approval cards trigger alerts), [Session History](SESSION_HISTORY.md) (done events)
+- **Related:** [Chat UI](CHAT_UI.md) (question/approval cards trigger alerts)

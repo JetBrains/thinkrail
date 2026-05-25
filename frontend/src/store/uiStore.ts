@@ -2,7 +2,8 @@ import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import type { EventCategory } from "@/components/ChatStream/renderers/categories.ts";
 
-type LeftTab = "specs" | "files" | "progress";
+export const LEFT_TABS = ["specs", "files", "sessions"] as const;
+export type LeftTab = (typeof LEFT_TABS)[number];
 type Breakpoint = "desktop" | "laptop" | "below-min";
 export type ProjectState = "initialized" | "new" | "existing";
 export type CenterView = "board" | "sessions";
@@ -50,6 +51,11 @@ interface UiStore {
 
   centerView: CenterView;
   setCenterView: (view: CenterView) => void;
+  /** Switch center view to Sessions and focus the sidebar Sessions tab in
+   *  one action. Use from surfaces that mean "show me the Sessions UI",
+   *  not from incidental flows like `createNewSession` that just need
+   *  the center view to be Sessions. */
+  focusSessions: () => void;
 
   /** Per-project last-active session ID. Persisted so a page reload
    *  picks up where the user left off instead of auto-selecting an
@@ -108,6 +114,8 @@ export const useUiStore = create<UiStore>()(
 
       centerView: "sessions" as CenterView,
       setCenterView: (view) => set({ centerView: view }),
+      focusSessions: () =>
+        set({ centerView: "sessions", leftActiveTab: "sessions" }),
 
       lastActiveSessions: {} as Record<string, string>,
       rememberActiveSession: (projectPath, bonsaiSid) =>

@@ -329,7 +329,8 @@ interface SessionStore {
 Panel visibility, palette state, project identity. Uses `persist` middleware.
 
 ```typescript
-type LeftTab = "specs" | "files" | "progress";
+type LeftTab = "specs" | "files" | "sessions";
+type CenterView = "board" | "sessions";
 type Breakpoint = "desktop" | "laptop" | "below-min";
 
 interface UiStore {
@@ -340,6 +341,7 @@ interface UiStore {
   leftDrawerOpen: boolean;
   rightDrawerOpen: boolean;
   leftActiveTab: LeftTab;
+  centerView: CenterView;
   paletteOpen: boolean;
   viewportWidth: number;
   breakpoint: Breakpoint;
@@ -348,12 +350,16 @@ interface UiStore {
   toggleLeftPanel: () => void;
   toggleRightPanel: () => void;
   setLeftTab: (tab: LeftTab) => void;
+  setCenterView: (view: CenterView) => void;
+  focusSessions: () => void;
   togglePalette: () => void;
   updateViewport: (width: number) => void;
 }
 ```
 
-**Persistence key:** `"bonsai-ui"`. Persisted fields: `{ leftPanelCollapsed, rightPanelCollapsed, leftActiveTab }`.
+**`focusSessions` vs. `setCenterView`:** `setCenterView` is a plain setter — use it from incidental flows that just need the center view to land on a particular value (`createNewSession`, wizard navigation). `focusSessions()` is the combined "show me the Sessions UI" action: it sets `centerView = "sessions"` and `leftActiveTab = "sessions"` in one update. Use it from explicit Sessions-UI affordances (header Sessions tab, footer "n sessions" button, clicking a session card). Switching the center view back to Board never touches `leftActiveTab` — the user may want to keep the sessions list visible while browsing tickets.
+
+**Persistence key:** `"bonsai-ui"`. Persisted fields: `{ leftPanelCollapsed, rightPanelCollapsed, leftActiveTab, centerView, chatCategoryVisibility, lastActiveSessions, dismissedWizardOutcomes }`.
 
 **Breakpoint thresholds:** `≥1280` → desktop, `≥1024` → laptop, else → below-min.
 

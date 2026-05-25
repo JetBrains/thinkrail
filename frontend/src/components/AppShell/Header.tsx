@@ -9,6 +9,7 @@ export function Header({ onSwitchProject }: { onSwitchProject: () => void }) {
   const projectName = useUiStore((s) => s.projectName);
   const centerView = useUiStore((s) => s.centerView);
   const setCenterView = useUiStore((s) => s.setCenterView);
+  const focusSessions = useUiStore((s) => s.focusSessions);
   const sessions = useSessionStore((s) => s.sessions);
   const activeSessions = Array.from(sessions.values()).filter(
     (s) => s.status === "running",
@@ -21,7 +22,7 @@ export function Header({ onSwitchProject }: { onSwitchProject: () => void }) {
   };
 
   const handleSelectSessions = () => {
-    setCenterView("sessions");
+    focusSessions();
     useBoardStore.setState({ activeTicketId: null });
   };
 

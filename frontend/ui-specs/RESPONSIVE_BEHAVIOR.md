@@ -130,12 +130,6 @@ At < 1024px:
 - Below 250px: zoom controls move to overlay center-bottom
 - Graph nodes use smaller font (10px) and tighter padding
 
-### Progress Tab (Left Panel)
-
-- Below 200px panel width: progress bars hidden, only percentage text shown
-- Session tracker cards: truncate session name, hide file chips
-- Timeline: hide timestamps, show icons only
-
 ### Chat UI (Center Panel)
 
 - Always full-width responsive — no special breakpoints needed
