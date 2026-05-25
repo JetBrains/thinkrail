@@ -12,8 +12,8 @@ class TestDetectProjectState:
         assert _detect_project_state(tmp_path) == "new"
 
     def test_folder_with_only_dotfiles_is_new(self, tmp_path: Path) -> None:
-        # Background tasks (model-registry cache, etc.) may materialize
-        # .bonsai/ before the user starts work — still a "new" workspace.
+        # Stray dotfiles (.bonsai/, .DS_Store, etc.) don't change the
+        # workspace's "new" verdict.
         (tmp_path / ".bonsai" / "cache").mkdir(parents=True)
         (tmp_path / ".bonsai" / "cache" / "models.json").write_text("[]")
         (tmp_path / ".DS_Store").write_text("")

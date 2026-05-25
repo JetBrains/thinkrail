@@ -38,7 +38,6 @@ INDEXES_DIR = "indexes"
 SETTINGS_FILE = "settings.json"
 INDEX_DB_FILE = "index.db"
 APP_DB_FILE = "bonsai.db"
-MODELS_CACHE_FILE = "models.json"
 # Manifest tracking spec-draft entries inside ``spec-drafts/<ticket>/``.
 MANIFEST_FILE = "manifest.json"
 # Sidecar written next to each trashed item describing the original location.

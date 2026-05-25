@@ -32,10 +32,7 @@ class ModelInfo(BaseModel):
 
     id: str
     label: str
-    group: str  # "current" | "legacy"
     context_window: int
-    max_output: int
-    pricing_tier: str  # "opus" | "sonnet" | "haiku" | runtime-specific tier
 
 
 class RuntimeSkillInfo(BaseModel):
@@ -84,9 +81,9 @@ class IAgentRuntime(Protocol):
     A runtime is the declaration that "this kind of agent is supported": it
     answers what models it provides and how to run a session against one.
     Implementations should be effectively stateless from the protocol's
-    perspective — any per-runtime caches (model lists, credentials) are an
-    internal concern lazy-initialised on demand. There is no
-    startup/shutdown handshake; the registry simply holds the instance.
+    perspective — any per-runtime caches (model lists, skills) are an
+    internal concern. There is no startup/shutdown handshake; the registry
+    simply holds the instance.
 
     Cancellation is callback-driven: ``interrupt`` is invoked by
     ``AgentService.interrupt_task`` and the runtime decides what "interrupt

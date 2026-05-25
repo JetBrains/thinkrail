@@ -16,9 +16,8 @@ import { seedSessionDefaults } from "../helpers/appSettings";
  *
  * Why each assertion lives where it does:
  *  - model: assert on the *selected option's text*, not its value. The
- *    dynamic Anthropic API uses dated ids while the seed uses an undated
- *    form, so the DOM's controlled `<select>` may render the dated label
- *    even though the wiring is correct — matching by label sidesteps it.
+ *    catalog uses dated ids for some models; matching by label keeps
+ *    the assertion stable if the id ever shifts.
  *  - permission mode: option values are literal strings (`"acceptEdits"`
  *    etc.), so `toHaveValue` is unambiguous.
  *  - effort / max turns: pill buttons; the selected one carries the
@@ -30,11 +29,10 @@ test("new-session draft reflects user-scoped session defaults", async ({
   tempProject,
 }) => {
   // Seed before opening the project so the very first WS connect already
-  // has the customized values stored. claude-haiku-4-5 is in the static
-  // backend `_FALLBACK`, so the option is in the picker even before the
-  // dynamic Anthropic model list arrives.
+  // has the customized values stored. The seeded model id must match a
+  // catalog entry in ``backend/app/agent/runtime/claude/models.json``.
   await seedSessionDefaults(tempProject.path, {
-    model: "claude-haiku-4-5",
+    model: "claude-haiku-4-5-20251001",
     permissionMode: "acceptEdits",
     effort: "low",
     maxTurns: 20,

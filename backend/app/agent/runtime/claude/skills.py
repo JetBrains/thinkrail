@@ -1,10 +1,9 @@
 """Claude skill registry — discovers Claude Code skills across sources.
 
-Private to the Claude runtime.  Mirrors the structural pattern of
-``ClaudeModelRegistry`` (see ``models.py``): a stateful internal cache,
-no protocol-level lifecycle, public surface is a single ``list_skills``
-method that returns neutral ``RuntimeSkillInfo`` so consumers stay
-SDK-agnostic.
+Private to the Claude runtime.  Public surface is a single
+``list_skills`` method that returns neutral ``RuntimeSkillInfo`` so
+consumers stay SDK-agnostic.  Internal state is a process-lifetime cache
+keyed by ``(root_dir, root_dir_mtime)``; no protocol-level lifecycle.
 
 Scan order (first-wins dedup by ``id``):
 

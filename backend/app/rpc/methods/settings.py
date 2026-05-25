@@ -109,9 +109,8 @@ def _model_to_dict(model: ModelInfo) -> dict:
 async def list_models(registry: RuntimeRegistry, **_params: Any) -> dict:
     """Return the current model list grouped by runtime.
 
-    Each runtime decides internally whether to refresh on first call,
-    serve from cache, or use a static list — callers never see those
-    semantics.
+    Each runtime owns its catalog — static, lazy, or refreshed — and
+    callers never see those semantics.
 
     Shape::
 
@@ -120,9 +119,8 @@ async def list_models(registry: RuntimeRegistry, **_params: Any) -> dict:
             {
               "runtimeType": "claude",
               "displayName": "Claude Code",
-              "models": [ { id, label, group, contextWindow, ... }, ... ]
-            },
-            ...
+              "models": [ { "id": ..., "label": ..., "contextWindow": ... } ]
+            }
           ]
         }
     """

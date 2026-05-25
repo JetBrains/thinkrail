@@ -108,7 +108,7 @@ class ClaudeRuntime:
         # ``IAgentRuntime`` exposes only the public surface
         # (``list_models``, ``list_skills`` etc.); the registry instances
         # are private to this class.
-        self._models = ClaudeModelRegistry(project_root=app_config.project_root)
+        self._models = ClaudeModelRegistry()
         self._skills = ClaudeSkillRegistry(project_root=app_config.project_root)
 
     # ── IAgentRuntime: model surface ─────────────────────────────────────

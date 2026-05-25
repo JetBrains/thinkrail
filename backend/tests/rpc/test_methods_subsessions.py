@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from unittest.mock import MagicMock
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
@@ -25,7 +25,7 @@ class TestCreateSubsession:
             subsession_type=SubsessionType.discussion,
             name="Discuss auth",
         )
-        svc.create_subsession.return_value = task
+        svc.create_subsession = AsyncMock(return_value=task)
 
         result = await create_subsession(
             svc,

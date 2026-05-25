@@ -141,8 +141,6 @@ export function DraftConfigCard({ bonsaiSid, readOnly, onVisibilityChange }: Dra
   const selectedSpecs = session.specIds
     .map((id) => specs.find((s) => s.id === id))
     .filter(Boolean);
-  const currentModels = models.filter((m) => m.group === "current");
-  const legacyModels = models.filter((m) => m.group === "legacy");
   const modelDef = models.find((m) => m.id === session.model);
   const attachedTicket = session.metaTicketId ? tickets.get(session.metaTicketId) : null;
 
@@ -473,24 +471,11 @@ export function DraftConfigCard({ bonsaiSid, readOnly, onVisibilityChange }: Dra
               {!modelDef && (
                 <option value={session.model}>{session.model}</option>
               )}
-              {currentModels.length > 0 && (
-                <optgroup label="Current">
-                  {currentModels.map((m) => (
-                    <option key={m.id} value={m.id}>
-                      {m.label}
-                    </option>
-                  ))}
-                </optgroup>
-              )}
-              {legacyModels.length > 0 && (
-                <optgroup label="Legacy">
-                  {legacyModels.map((m) => (
-                    <option key={m.id} value={m.id}>
-                      {m.label}
-                    </option>
-                  ))}
-                </optgroup>
-              )}
+              {models.map((m) => (
+                <option key={m.id} value={m.id}>
+                  {m.label}
+                </option>
+              ))}
             </select>
           </span>
 

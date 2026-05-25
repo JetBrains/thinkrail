@@ -7,8 +7,8 @@ registered here so that ``AgentService`` can dispatch ``AgentTask``s by
 
 Runtimes are protocol-stateless: the registry doesn't drive any
 startup/shutdown handshake — any per-runtime caching is an internal
-implementation detail (e.g. ``ClaudeModelRegistry`` lazy-refreshes on
-first use).
+implementation detail (e.g. ``ClaudeModelRegistry`` loads its catalog
+on construction from the package-shipped ``models.json``).
 """
 
 from __future__ import annotations

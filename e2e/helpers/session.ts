@@ -68,10 +68,8 @@ async function resolveOptionValueByLabel(
  * Does NOT wait for activity — call waitForSessionActivity afterwards.
  *
  * `model` may be either a model id (e.g. "claude-haiku-4-5-20251001") or
- * `{ label: "Haiku 4.5" }`. Prefer label-based selection when the test should
- * be agnostic to whether the dynamic model list (Anthropic API ids like
- * "claude-haiku-4-5-20251001") or the static fallback ("claude-haiku-4-5")
- * is in use.
+ * `{ label: "Haiku 4.5" }`. Prefer label-based selection so the test stays
+ * stable if a catalog id ever shifts.
  */
 export async function startSessionWithModel(
   page: Page,

@@ -27,18 +27,22 @@ within roughly one second.
 
 ```python
 async def revise_transcript(text: str, model: str | None = None) -> str:
-    """Rewrite *text* into a faithful summarization via the Anthropic API.
+    """Rewrite *text* into a faithful summarization via the Claude Code CLI.
 
     Args:
         text:  Raw voice transcript — may contain fillers, false starts, repetition.
-        model: Override model id. Defaults to ``claude-haiku-4-5``.
+        model: Override model id or alias. Defaults to ``"haiku"``.
 
     Returns:
         The revised message body (no preamble, no quotation).
 
     Raises:
-        RuntimeError: If the ``anthropic`` SDK is missing or no API key can be
-                      resolved via ``resolve_anthropic_api_key()``.
+        ClaudeSDKError: If the underlying ``claude_agent_sdk.query`` call fails
+                        (transport, process, or upstream error). Propagated to
+                        the RPC layer.
+        RuntimeError:   If the SDK emits a ``ResultMessage`` with
+                        ``is_error=True`` (in-band upstream failure that does
+                        not raise an SDK exception).
     """
 ```
 
@@ -57,16 +61,18 @@ quotation.
 
 | Dependency | Type | Required |
 |---|---|---|
-| `anthropic` | Python package | **Required** — already a project dep (see `model_registry.py`, `context.py`) |
-| `resolve_anthropic_api_key()` | Internal helper | Resolves env var `ANTHROPIC_API_KEY` or the Claude Code managed key on macOS |
+| `claude_agent_sdk` | Python package | **Required** — already a project dep, used by `runtime/claude/runtime.py` |
+
+No key resolution. The SDK's transport reads `ANTHROPIC_BASE_URL` and authenticates
+via the same mechanism the rest of the Claude runtime uses (api_key_helper under
+jbcentral; managed key under a stock Claude Code install).
 
 ## Error Handling
 
 | Condition | Error | Message |
 |---|---|---|
-| `anthropic` package not installed | `RuntimeError` | Includes install hint: `cd backend && uv add anthropic` |
-| No API key available | `RuntimeError` | "No Anthropic API key available. Set ANTHROPIC_API_KEY or run `claude auth login`." |
-| Anthropic API failure | Propagated | Standard SDK exception (e.g. `anthropic.APIError`) |
+| Transport / process / upstream failure | Propagated | Standard SDK exceptions (e.g. `CLIConnectionError`, `ProcessError`) |
+| In-band `ResultMessage` with `is_error=True` | `RuntimeError` | Carries `ResultMessage.result` |
 
 All errors propagate to the RPC layer where `@_handle_errors` maps them to JSON-RPC
 `-32603` internal error, surfaced in the frontend as the inline Retry banner.
@@ -75,12 +81,11 @@ All errors propagate to the RPC layer where `@_handle_errors` maps them to JSON-
 
 | Decision | Choice | Rationale |
 |---|---|---|
-| Model | `claude-haiku-4-5` by default | Fast, cheap, and accurate enough for a copy-edit. Configurable per-call. |
-| Turn count | Single user turn, no tools | This is a pure text transform; no need for an agent loop. |
-| Streaming | Disabled (MVP) | Response completes in well under a second; streaming adds frontend complexity for little UX win. |
-| `max_tokens` | 2048 | Generous cap for a voice transcript (≈15 minutes of speech); still cheap. |
+| Model | `"haiku"` alias by default | Fast, cheap, accurate enough for a copy-edit. The SDK / CLI resolves the alias to the current shipping Haiku, so we never pin a dated id that goes stale. Configurable per-call. |
+| Transport | `claude_agent_sdk.query()` one-shot | Same SDK the runtime already uses. No direct `anthropic` import, no separate auth path. |
+| Tools | `tools=[]`, `allowed_tools=[]`, `permission_mode="dontAsk"`, `max_turns=1` | Pure text transform; built-in tool set fully disabled, no auto-allowed tools, no prompts, single turn. |
+| Streaming | Disabled | Response completes in well under a second; streaming adds frontend complexity for little UX win. |
 | No audio persistence | N/A here | Audio never reaches this module — it only handles text. |
-| Credential source | Shared with model registry | Reuses `resolve_anthropic_api_key()` so users already logged into Claude Code get auto-revise for free. |
 
 ## Related Specs
 

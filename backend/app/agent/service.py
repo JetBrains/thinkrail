@@ -958,7 +958,7 @@ class AgentService:
 
     # -- subsession management --------------------------------------------------
 
-    def create_subsession(
+    async def create_subsession(
         self,
         parent_bonsai_sid: str,
         subsession_type: SubsessionType,
@@ -997,7 +997,7 @@ class AgentService:
             project_root=self._config.project_root,
         )
         task.session_prompt = parent_context
-        task.system_prompt = self._build_context_for(task)
+        task.system_prompt = await self._build_context_for(task)
 
         self._save_task(task)
         return task

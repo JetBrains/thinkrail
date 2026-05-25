@@ -295,10 +295,7 @@ export function SessionStatusLine({
         </button>
         {modelDd.open && (
           <div className="ssl-dropdown">
-            <div className="ssl-dropdown-group">Current</div>
-            {MODEL_OPTIONS.filter((o) => o.group === "current").map(renderModelOption)}
-            <div className="ssl-dropdown-group">Legacy</div>
-            {MODEL_OPTIONS.filter((o) => o.group === "legacy").map(renderModelOption)}
+            {MODEL_OPTIONS.map(renderModelOption)}
           </div>
         )}
       </div>

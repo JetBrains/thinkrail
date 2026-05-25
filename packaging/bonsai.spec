@@ -57,6 +57,7 @@ a = Analysis(
     datas=[
         (frontend_dist, 'frontend_dist'),
         *collect_data_files('claude_agent_sdk'),   # includes _bundled/claude CLI
+        *collect_data_files('app', includes=['**/*.json']),  # e.g. agent/runtime/claude/models.json
         ('../claude-plugin', 'claude-plugin'),       # bonsai agent plugin
     ],
     hiddenimports=hiddenimports,

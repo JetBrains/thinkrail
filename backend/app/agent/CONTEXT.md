@@ -405,7 +405,7 @@ The `prompt` field is optional. When provided, it becomes the `session_prompt` o
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `contextMax` | `int` | Model's context window size (from `_FALLBACK` registry) |
+| `contextMax` | `int` | Model's context window size (from the runtime's `ClaudeModelRegistry` catalog) |
 | `budgetRatio` | `float` | System prompt tokens / context window (0.0–1.0) |
 | `warnings` | `list[str]` | Human-readable warnings when budget exceeds thresholds |
 

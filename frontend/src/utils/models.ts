@@ -1,20 +1,15 @@
 /**
- * Centralized model registry.
- *
- * At startup the frontend fetches the live model list from the backend
- * (which owns the fallback when the Anthropic Models API is unreachable).
- * Until that list arrives `getModels()` returns an empty list; React
- * pickers should subscribe to settingsStore.models and keep their
- * selected value visible while loading. `getContextWindowSize` falls
- * through to its own 200k default.
- *
- * Context window sizes come directly from the API's `max_input_tokens`.
+ * Frontend model registry. The settings store seeds it via
+ * `setDynamicModels` once the `models/list` RPC returns. Until then
+ * `getModels()` is empty; React pickers should subscribe to
+ * `settingsStore.models` and keep their selected value visible while
+ * the list is loading. `getContextWindowSize` falls through to a 200k
+ * default for ids the registry doesn't know.
  */
 
 export interface ModelDef {
   id: string;
   label: string;
-  group: "current" | "legacy";
   contextWindow: number;
 }
 
@@ -47,7 +42,6 @@ export interface ModelOption {
   key: string;
   modelId: string;
   label: string;
-  group: "current" | "legacy";
 }
 
 export function buildModelOptions(models: ModelDef[] = getModels()): ModelOption[] {
@@ -55,7 +49,6 @@ export function buildModelOptions(models: ModelDef[] = getModels()): ModelOption
     key: m.id,
     modelId: m.id,
     label: m.label,
-    group: m.group,
   }));
 }
 

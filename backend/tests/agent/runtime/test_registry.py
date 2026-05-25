@@ -38,10 +38,7 @@ def _model(model_id: str) -> ModelInfo:
     return ModelInfo(
         id=model_id,
         label=model_id,
-        group="current",
         context_window=200_000,
-        max_output=64_000,
-        pricing_tier="sonnet",
     )
 
 

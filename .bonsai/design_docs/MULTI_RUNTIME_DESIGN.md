@@ -15,31 +15,15 @@ tags:
 ---
 # Multi-Runtime Agent Architecture
 
-> Status: **In progress** | Created: 2026-04-29 | Last updated: 2026-05-13 (after harness-abstraction PR 1)
-
 ## Overview
 
-Bonsai is moving from a Claude-SDK-only agent runner to a runtime-agnostic
-contract that can host multiple agent backends — Claude Code SDK today,
-OpenAI Codex (`codex app-server`) next, and any future LLM provider that
-exposes a session-based protocol behind the same interface.
+Bonsai hosts agent backends behind a runtime-agnostic contract. Claude
+Code SDK is the only runtime currently registered; the architecture is
+shaped so additional runtimes (e.g. OpenAI Codex via `codex app-server`)
+can be added without changing the session layer above.
 
-This doc describes the end state and the reasoning behind the
-architectural choices. Read it for *why* the architecture is shaped the
-way it is.
-
-## Current status (2026-05-13)
-
-| Layer | State |
-|-------|-------|
-| `IAgentRuntime` contract + `RuntimeRegistry` | ✅ Shipped (harness-abstraction PR 1) |
-| Runtime-owned model catalog + capability flags | ✅ Shipped (harness-abstraction PR 1) |
-| `AgentConfig.runtime` field + per-runtime dispatch | ✅ Shipped (harness-abstraction PR 1) |
-| Permission engine neutralization | ⏳ Planned — harness-abstraction PR 2 (still uses Claude-shaped mode names) |
-| Unified `BonsaiTool` registry | ⏳ Planned — harness-abstraction PR 3 |
-| `service.update_config` via `IAgentRuntime` | ⏳ Planned — harness-abstraction PR 2 |
-| `revise.py` / `context.py` tokenizer behind runtime | ⏳ Planned — harness-abstraction PR 3 |
-| Codex runtime | ⏳ Pending (`runtime/codex/`) — unblocks after PR 2 + PR 3 |
+This doc describes the architecture and the reasoning behind the
+choices. Read it for *why* the architecture is shaped the way it is.
 
 ## Goals
 
@@ -123,8 +107,7 @@ class IAgentRuntime(Protocol):
 - A runtime is the declaration that "this kind of agent is supported."
   Protocol is intentionally minimal — six surfaces total.
 - **Protocol-stateless.** No `startup` / `shutdown` handshake. Any
-  per-runtime warmup (lazy model-list refresh, credential resolution)
-  is the implementation's private concern, triggered on first use.
+  per-runtime warmup is the implementation's private concern.
 - One instance per `ProjectContext`, constructed with all dependencies
   wired in (tracker, spec service, coordinator, app config). Re-used
   across every session that runtime handles.
@@ -169,10 +152,7 @@ the registry just holds the instances.
 class ModelInfo(BaseModel):           # frozen
     id: str
     label: str
-    group: str                         # "current" | "legacy"
     context_window: int
-    max_output: int
-    pricing_tier: str
 
 DEFAULT_CONTEXT_WINDOW = 200_000             # neutral floor
 ```
@@ -225,12 +205,9 @@ translating its native shape to/from these.
 
 ## Permission flow
 
-> **Mode names today are still Claude-SDK-shaped (`bypassPermissions` /
-> `acceptEdits` / `plan` / `default`).** Harness-abstraction PR 2 will
-> rekey them to neutral names (`bypass` / `accept_edits` / `auto` /
-> `plan` / `default`) and add a per-runtime translation layer at the
-> `runtime/<name>/permissions_adapter.py` boundary. The table below is
-> the *current* shipped behaviour.
+Mode names are Claude-SDK-shaped (`bypassPermissions` / `acceptEdits` /
+`plan` / `default`) — neutral mode names with a per-runtime translation
+layer are a future change, tracked when a second runtime lands.
 
 1. Runtime intercepts a tool call → builds `ToolPermissionRequest` (with
    the *current* `permission_mode` from `task.config`).
@@ -341,7 +318,7 @@ interval). The callback design has zero latency and zero extra code.
       {
         "runtimeType": "claude",
         "displayName": "Claude Code",
-        "models": [ { "id": "...", "label": "...", "group": "current", ... }, ... ]
+        "models": [ { "id": "...", "label": "...", "contextWindow": 200000 }, ... ]
       }
     ]
   }
@@ -375,31 +352,29 @@ backend/app/agent/
     claude/
       __init__.py          # exports ClaudeRuntime
       runtime.py           # ClaudeRuntime — IAgentRuntime impl
-      models.py            # ClaudeModelRegistry (lazy refresh, _FALLBACK, neutral ModelInfo projection)
-      credentials.py       # resolve_anthropic_api_key (env + macOS Keychain)
+      models.py            # ClaudeModelRegistry — loads models.json
+      models.json          # curated model catalog
       hooks.py             # SubagentHooks (subagent / PreCompact correlation)
       adapter.py           # event-shape builders
-  permissions.py           # can_use_tool engine, claude_can_use_tool_adapter (PR 2: latter moves under runtime/claude/)
+  permissions.py           # can_use_tool engine + claude_can_use_tool_adapter
   service.py               # AgentService — wires runtime to tasks
-  tools/                   # bonsai MCP tools (interceptors; PR 3: unified BonsaiTool registry)
+  tools/                   # bonsai MCP tools (interceptors)
 ```
 
-## Acceptance / health
+## SDK boundary
 
-Current:
+The Claude SDK is the only provider SDK currently in tree. Imports
+outside `runtime/claude/` mark the parts of the system that are still
+Claude-shaped and would need a per-runtime path the day a second
+runtime registers:
 
-- Backend test suite green (`uv run pytest` — 1020+).
-- Zero `from app.agent.runner` imports remain.
-- Provider SDK imports under `runtime/claude/` confined to:
-  - `runtime/claude/runtime.py` (claude_agent_sdk)
-  - `runtime/claude/models.py` (anthropic, models endpoint)
+- `app/agent/permissions.py` (claude_agent_sdk permission types).
+- `app/agent/tools/*.py` interceptors (claude_agent_sdk MCP shapes).
+- `app/agent/service.py:update_config` calls `client.set_model` /
+  `client.set_permission_mode` directly rather than going through
+  `IAgentRuntime`.
+- `app/agent/context.py` falls back to the `anthropic` tokenizer when
+  computing context windows.
 
-Out-of-directory SDK imports the project explicitly tracks (slated for
-PR 2 / PR 3 — see `harness_refactoring.md`):
-
-- `app/agent/permissions.py` (claude_agent_sdk) → PR 2
-- `app/agent/tools/*.py` (claude_agent_sdk) → PR 3
-- `app/agent/service.py:update_config` (`client.set_model` /
-  `client.set_permission_mode` direct calls) → PR 2
-- `app/agent/context.py` (anthropic tokenizer fallback) → PR 3
-- `app/agent/revise.py` (anthropic) → PR 3
+`app/agent/revise.py` calls `claude_agent_sdk.query()` for one-shot
+voice-transcript cleanup; the `"haiku"` alias is resolved by the SDK.

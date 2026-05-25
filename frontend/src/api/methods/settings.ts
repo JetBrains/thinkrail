@@ -4,7 +4,6 @@ import type { RuntimeSkillInfo, RuntimeType } from "@/types/agent.ts";
 export type VoiceReviseMode = "auto" | "subsession" | "off";
 
 export interface ProjectSettings {
-  model_refresh_interval_hours: number;
   event_view: string;
   font_size: number;
   compact_font_size: number;

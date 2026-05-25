@@ -64,12 +64,12 @@ Prevention → Detection → Recovery
 
 **File:** `backend/app/agent/service.py` — `_get_context_max()`
 
-Shipped state after harness-abstraction PR 1: the service asks the
-task's runtime instead of carrying a model→window table. The runtime
-owns the lookup including any fallback for ids it doesn't recognise;
-the service falls back to a neutral `DEFAULT_CONTEXT_WINDOW` (200K)
-only when the registry isn't wired or the runtime key in the persisted
-config no longer matches a registered runtime.
+The service asks the task's runtime instead of carrying a model→window
+table. The runtime owns the lookup including any fallback for ids it
+doesn't recognise; the service falls back to a neutral
+`DEFAULT_CONTEXT_WINDOW` (200K) only when the registry isn't wired or
+the runtime key in the persisted config no longer matches a registered
+runtime.
 
 ```python
 def _get_context_max(self, task: AgentTask) -> int:
@@ -84,9 +84,12 @@ def _get_context_max(self, task: AgentTask) -> int:
     return runtime.get_context_window(task.config.model)
 ```
 
-The Claude runtime's `ClaudeModelRegistry` carries the actual
-window-per-model knowledge (live API list + on-disk cache + small
-hardcoded fallback). See `backend/app/agent/runtime/claude/models.py`.
+The Claude runtime's `ClaudeModelRegistry` loads a static catalog from
+`runtime/claude/models.json` (`{id, label, contextWindow}` per entry)
+via `importlib.resources` and returns the matching window per model id
+(Opus 4.7 = 1M, Sonnet 4.6 = 1M, Haiku 4.5 = 200K). Unknown ids fall
+back to `DEFAULT_CONTEXT_WINDOW`. See
+`backend/app/agent/runtime/claude/models.py`.
 
 ### 1b. System prompt budget warnings in `build_context_structured()`
 

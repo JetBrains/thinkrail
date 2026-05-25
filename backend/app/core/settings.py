@@ -21,7 +21,6 @@ SETTINGS_REL_PATH = f"{BONSAI_DIRNAME}/{SETTINGS_FILE}"
 class ProjectSettings(BaseModel, extra="allow"):
     """Per-project settings stored in ``.bonsai/settings.json``."""
 
-    model_refresh_interval_hours: int = 24
     event_view: str = "classic"
     # Font scale settings
     font_size: int = 13  # base font size in px (normal view)

@@ -32,8 +32,7 @@ A runtime is the declaration that "this kind of agent is supported." The
 protocol is intentionally minimal — six surfaces total — and
 **protocol-stateless**: no `startup`/`shutdown` handshake, no
 freshness/refresh metadata leaking out. Any per-runtime caching
-(models, credentials) is an internal implementation detail, triggered
-lazily on first use.
+(models, skills) is an internal implementation detail.
 
 ## Public interface
 
@@ -41,7 +40,7 @@ lazily on first use.
 |--------|-----------|---------|
 | `IAgentRuntime` | `types.py` | Protocol every runtime implements. Class attrs `runtime_type`, `display_name`. Methods: `list_models`, `list_skills`, `get_context_window`, `run_session`, `interrupt` |
 | `RuntimeType` | `types.py` (re-exported from `app.agent.models`) | `Literal["claude", "codex"]` — declared in `models.py` to break a circular import |
-| `ModelInfo` | `types.py` | Neutral frozen Pydantic model — `id, label, group, context_window, max_output, pricing_tier` |
+| `ModelInfo` | `types.py` | Neutral frozen Pydantic model — `id, label, context_window` |
 | `RuntimeSkillInfo` | `types.py` | Neutral frozen Pydantic model — `id, name, description, source`. Describes a slash-command-style skill exposed by the runtime (e.g. Claude Code user/project/plugin skills, custom commands, built-ins). Surfaced in the chat composer's slash autocomplete via `skills/listRuntime`. |
 | `DEFAULT_CONTEXT_WINDOW` | `types.py` | `200_000` — neutral floor for unknown ids |
 | `RuntimeExecutionConfig` | `types.py` | Per-session execution config — `working_directory`, `model` (required), `system_prompt`, `resume_session_id`, `effort`, `max_turns`, `permission_mode`, `stream_text`. Derived from `AgentConfig` + task context inside `AgentService` |
@@ -71,9 +70,7 @@ lazily on first use.
   all of its dependencies wired in (tracker, spec service, coordinator,
   app config). Re-used across every session.
 - **No startup/shutdown handshake.** Runtimes are protocol-stateless.
-  Any per-runtime warmup (e.g. an initial model-list refresh in Claude)
-  is the implementation's internal concern, triggered lazily on first
-  use of whatever method needs the data.
+  Any per-runtime warmup is the implementation's internal concern.
 - **Per-session state stays in `run_session`.** Subagent correlation
   maps, iteration cost-tracking, mode-change records, MCP context
   registration — all created fresh per call.
@@ -95,9 +92,8 @@ def get_context_window(self, model_id: str) -> int: ...
 How a runtime sources its list — static, lazy fetch, periodic refresh,
 remote registry — is invisible to callers. There is intentionally no
 `refresh_models` or `models_status` on the protocol; those leaked
-caching strategy into the contract. The Claude implementation does a
-one-shot lazy refresh on first `list_models()` call; future runtimes are
-free to pick a different strategy.
+caching strategy into the contract. Each runtime owns a static catalog
+or computes one lazily — the contract makes no promise.
 
 `get_context_window(model_id)` returns the size for ids the runtime
 knows, falling back to `DEFAULT_CONTEXT_WINDOW` for unknown ids.

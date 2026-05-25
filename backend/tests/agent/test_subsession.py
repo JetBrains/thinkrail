@@ -186,7 +186,7 @@ class TestCreateSubsession:
     async def test_creates_subsession_with_parent_link(self, tmp_path: Path) -> None:
         service, _ = _make_service(tmp_path)
         parent = await service.prepare_task([], AgentConfig(), name="Main session")
-        sub = service.create_subsession(
+        sub = await service.create_subsession(
             parent_bonsai_sid=parent.bonsai_sid,
             subsession_type=SubsessionType.discussion,
             context="JWT vs sessions",
@@ -205,17 +205,17 @@ class TestCreateSubsession:
             AgentConfig(model="claude-opus-4-6"),
             name="Main",
         )
-        sub = service.create_subsession(
+        sub = await service.create_subsession(
             parent_bonsai_sid=parent.bonsai_sid,
             subsession_type=SubsessionType.discussion,
         )
         assert sub.spec_ids == parent.spec_ids
         assert sub.config.model == parent.config.model
 
-    def test_raises_for_nonexistent_parent(self, tmp_path: Path) -> None:
+    async def test_raises_for_nonexistent_parent(self, tmp_path: Path) -> None:
         service, _ = _make_service(tmp_path)
         with pytest.raises((ValueError, Exception)):
-            service.create_subsession(
+            await service.create_subsession(
                 parent_bonsai_sid="nonexistent",
                 subsession_type=SubsessionType.discussion,
             )
@@ -225,7 +225,7 @@ class TestReturnFlow:
     async def test_request_summary_sets_pending(self, tmp_path: Path) -> None:
         service, _ = _make_service(tmp_path)
         parent = await service.prepare_task([], AgentConfig(), name="Main")
-        sub = service.create_subsession(
+        sub = await service.create_subsession(
             parent_bonsai_sid=parent.bonsai_sid,
             subsession_type=SubsessionType.discussion,
         )
@@ -237,7 +237,7 @@ class TestReturnFlow:
     async def test_approve_summary_stores_text(self, tmp_path: Path) -> None:
         service, _ = _make_service(tmp_path)
         parent = await service.prepare_task([], AgentConfig(), name="Main")
-        sub = service.create_subsession(
+        sub = await service.create_subsession(
             parent_bonsai_sid=parent.bonsai_sid,
             subsession_type=SubsessionType.discussion,
         )
@@ -248,7 +248,7 @@ class TestReturnFlow:
     async def test_dismiss_summary_sets_dismissed(self, tmp_path: Path) -> None:
         service, _ = _make_service(tmp_path)
         parent = await service.prepare_task([], AgentConfig(), name="Main")
-        sub = service.create_subsession(
+        sub = await service.create_subsession(
             parent_bonsai_sid=parent.bonsai_sid,
             subsession_type=SubsessionType.discussion,
         )

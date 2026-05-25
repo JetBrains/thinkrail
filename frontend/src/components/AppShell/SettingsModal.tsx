@@ -238,8 +238,6 @@ function SessionDefaultsSection({ visible }: { visible: boolean }) {
     }
   };
 
-  const current = models.filter((m) => m.group === "current");
-  const legacy = models.filter((m) => m.group === "legacy");
   const selectedModel = models.find((m) => m.id === value.model);
 
   return (
@@ -258,20 +256,9 @@ function SessionDefaultsSection({ visible }: { visible: boolean }) {
           onChange={(e) => setDraftValue({ ...value, model: e.target.value })}
         >
           {!selectedModel && <option value={value.model}>{value.model}</option>}
-          {current.length > 0 && (
-            <optgroup label="Current">
-              {current.map((m) => (
-                <option key={m.id} value={m.id}>{m.label}</option>
-              ))}
-            </optgroup>
-          )}
-          {legacy.length > 0 && (
-            <optgroup label="Legacy">
-              {legacy.map((m) => (
-                <option key={m.id} value={m.id}>{m.label}</option>
-              ))}
-            </optgroup>
-          )}
+          {models.map((m) => (
+            <option key={m.id} value={m.id}>{m.label}</option>
+          ))}
         </select>
       </div>
 

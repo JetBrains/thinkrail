@@ -29,10 +29,7 @@ def _model(model_id: str, *, ctx: int = 1_000_000) -> ModelInfo:
     return ModelInfo(
         id=model_id,
         label=model_id,
-        group="current",
         context_window=ctx,
-        max_output=64_000,
-        pricing_tier="opus",
     )
 
 

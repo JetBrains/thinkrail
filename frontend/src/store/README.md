@@ -591,7 +591,7 @@ Skills are fetched from the backend via `skills/list` RPC on connect and stored 
 
 ### Dynamic Models (`settingsStore.models`)
 
-The model list is fetched from the backend via `models/list` on connect and pushed into `models.ts:setDynamicModels`. There is no frontend fallback — the backend owns the hardcoded fallback (`runtime/claude/models.py:_FALLBACK`) for when the Anthropic API is unreachable. While the initial `models/list` is in flight, `getModels()` returns `[]`; React pickers subscribe to `settingsStore.models` and keep the selected model visible until the backend list arrives. `getContextWindowSize` has its own 200k default that covers session-creation reads in that window.
+The model list is fetched from the backend via `models/list` on connect and pushed into `models.ts:setDynamicModels`. The backend serves a curated static catalog from `runtime/claude/models.json`; there is no frontend fallback. While the initial `models/list` is in flight, `getModels()` returns `[]`; React pickers subscribe to `settingsStore.models` and keep the selected model visible until the backend list arrives. `getContextWindowSize` has its own 200k default that covers session-creation reads in that window.
 
 ### Session Defaults (`settingsStore.sessionDefaults` → `buildDefaultSessionConfig`)
 

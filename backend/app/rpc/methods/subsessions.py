@@ -33,7 +33,7 @@ def _handle_errors(func):  # type: ignore[type-arg]
 @_handle_errors
 async def create_subsession(service: AgentService, **params: Any) -> dict:
     """Create a subsession linked to a parent session."""
-    task = service.create_subsession(
+    task = await service.create_subsession(
         parent_bonsai_sid=params["parentBonsaiSid"],
         subsession_type=SubsessionType(params["type"]),
         context=params.get("context"),

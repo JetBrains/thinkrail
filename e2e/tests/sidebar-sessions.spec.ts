@@ -39,7 +39,7 @@ function seedSession(
     skillId: null,
     specIds: [],
     status,
-    config: { model: "claude-haiku-4-5", maxTurns: 100, permissionMode: "default" },
+    config: { model: "claude-haiku-4-5-20251001", maxTurns: 100, permissionMode: "default" },
     createdAt: now,
     updatedAt: now,
     metrics: {},

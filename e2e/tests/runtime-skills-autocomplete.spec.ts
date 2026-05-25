@@ -30,10 +30,9 @@ import { inputAutocomplete, newSession } from "../helpers/selectors";
  *
  * Per the AppStore-isolation memory note, we seed `session_defaults`
  * explicitly so the spec doesn't rely on whatever the user's previous
- * runs left in `~/.bonsai/bonsai.db`. The static fallback model
- * `claude-haiku-4-5` resolves through the Claude runtime, which makes the
- * effective runtime — and therefore the second section header — `"Claude
- * Code"`.
+ * runs left in `~/.bonsai/bonsai.db`. The seeded model resolves through
+ * the Claude runtime, which makes the effective runtime — and therefore
+ * the second section header — `"Claude Code"`.
  */
 
 // Bonsai's `isMod` returns ctrlKey on macOS and altKey elsewhere
@@ -52,11 +51,9 @@ test("slash autocomplete: mid-input trigger, grouped sections, Tab insertion, ke
   tempProject,
 }) => {
   // Seed user-scoped session defaults BEFORE opening the project, per the
-  // AppStore-isolation memory note.  `claude-haiku-4-5` is in the static
-  // backend `_FALLBACK` list, so its option is renderable even before the
-  // dynamic Anthropic model list arrives.
+  // AppStore-isolation memory note.
   await seedSessionDefaults(tempProject.path, {
-    model: "claude-haiku-4-5",
+    model: "claude-haiku-4-5-20251001",
     permissionMode: "default",
     effort: null,
     maxTurns: 20,

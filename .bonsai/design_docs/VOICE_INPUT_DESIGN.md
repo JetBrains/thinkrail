@@ -247,7 +247,7 @@ updates to `"Transcribing…"` then `"Revising…"`.
 
 | File | Change |
 |---|---|
-| `backend/app/agent/revise.py` | New module. `async def revise_transcript(text, model=None) -> str`. Uses `anthropic.AsyncAnthropic(api_key=resolve_anthropic_api_key())`. Defaults to `claude-haiku-4-5`. Single-turn, `max_tokens=2048`, no streaming. |
+| `backend/app/agent/revise.py` | New module. `async def revise_transcript(text, model=None) -> str`. Uses `claude_agent_sdk.query()` with `allowed_tools=[]` and `permission_mode="dontAsk"`. Defaults to the `"haiku"` alias; the SDK resolves the alias to the current Haiku id. |
 | `backend/app/rpc/methods/agents.py` | New handler `revise_transcript_rpc`, registered as `agent/reviseTranscript`. Params: `{ text, model? }`. Returns `{ text }`. |
 | `backend/app/core/settings.py` | New field `voice_revise_mode: str = "auto"` on `ProjectSettings`. |
 

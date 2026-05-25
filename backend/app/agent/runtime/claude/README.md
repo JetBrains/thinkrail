@@ -14,19 +14,19 @@ tags:
 ---
 # `app.agent.runtime.claude` — Claude SDK Runtime
 
-> Parent: [Runtime Abstraction](../README.md) | Status: **Active** | Created: 2026-04-29 | Last updated: 2026-05-13 (harness-abstraction PR 1)
+> Parent: [Runtime Abstraction](../README.md) | Status: **Active** | Created: 2026-04-29 | Last updated: 2026-05-25 (hardcoded model catalog)
 
 ## Overview
 
 `runtime/claude/` implements `IAgentRuntime` for the Claude Agent SDK.
 It owns the conversational loop, drives the SDK client, maps SDK
-messages onto bonsai's unified event stream, manages the Claude model
-catalog + Anthropic API credentials, and runs the per-session subagent
-/ PreCompact correlation logic.
+messages onto bonsai's unified event stream, serves the static Claude
+model catalog shipped with the package, and runs the per-session
+subagent / PreCompact correlation logic.
 
 The body of `run_session` was migrated verbatim from the legacy
 `app/agent/runner.py`; the module is the only place under `runtime/`
-that imports from `claude_agent_sdk` or `anthropic`.
+that imports from `claude_agent_sdk`.
 
 ## File organisation
 
@@ -34,9 +34,9 @@ that imports from `claude_agent_sdk` or `anthropic`.
 |------|----------------|
 | `__init__.py` | Re-exports `ClaudeRuntime` |
 | `runtime.py` | `class ClaudeRuntime` — IAgentRuntime impl. Owns SDK lifecycle, conversation loop, tool-result serialization, cost-iteration tracking, mode-change tracking. Delegates `list_models()` to `ClaudeModelRegistry` and `list_skills()` to `ClaudeSkillRegistry` |
-| `models.py` | `class ClaudeModelRegistry` — Anthropic models fetch, on-disk cache (`.bonsai/cache/models.json`), 3-entry static fallback, lazy one-shot refresh on first `list_models()` call. Projects internal `_ClaudeRow` rows to neutral `ModelInfo` |
+| `models.py` | `class ClaudeModelRegistry` — loads `models.json` shipped with the package via `importlib.resources` and serves `list_models` / `get_context_window`. No fetch, no cache, no refresh |
+| `models.json` | Curated catalog of Claude models exposed to the picker. Edit-and-ship to add or change a model |
 | `skills.py` | `class ClaudeSkillRegistry` — multi-source skill discovery (user / project / plugin / command / builtin) with first-wins dedup and a process-lifetime mtime cache. See [Skill catalog](#skill-catalog--multi-source-scan) |
-| `credentials.py` | `resolve_anthropic_api_key()` — env var `ANTHROPIC_API_KEY` first, then macOS Keychain (Claude Code's managed key). Private to this directory |
 | `hooks.py` | `class SubagentHooks` — per-session subagent / PreCompact correlation (Task-tool ↔ SubagentStart) |
 | `adapter.py` | Pure event-shape builders — `agent/toolCallStart` / `agent/toolCallEnd` param construction. Boundary the Codex adapter's diff-parity tests will enforce against |
 
@@ -60,9 +60,10 @@ await runtime.interrupt(task, tracker)
 
 - `runtime_type = "claude"`, `display_name = "Claude Code"` (class
   attrs).
-- `app_config` is required (the runtime builds its `ClaudeModelRegistry`
-  rooted at `app_config.project_root`). No `model_registry` parameter —
-  the registry is owned internally.
+- `app_config` is required: the runtime builds its `ClaudeSkillRegistry`
+  rooted at `app_config.project_root` and threads the config into the
+  conversation loop. The `ClaudeModelRegistry` is owned internally and
+  takes no arguments — no `model_registry` parameter.
 - Constructor takes shared dependencies; `ProjectContext.runtime_registry`
   builds one instance per project and registers it. The `AgentService`
   retrieves it via `runtime_registry.get(task.config.runtime)`.
@@ -122,27 +123,20 @@ on interrupt. The runtime's interrupted branch calls
 `hooks.close_orphaned_subagents()` to emit synthetic `subagentEnd`
 events for everything still in `_active_subagent_ids`.
 
-## Model catalog — lazy refresh
+## Model catalog — static
 
-`ClaudeModelRegistry` keeps the model list current without any
-protocol-level lifecycle:
+`ClaudeModelRegistry` is a one-shot JSON loader:
 
-- First call to `list_models()` schedules a one-shot
-  `asyncio.create_task(refresh_models())` if no refresh has run yet.
-  The task handle is stored on the registry so it isn't GC'd; an
-  `add_done_callback` logs any exception.
-- The first call itself returns immediately with whatever the registry
-  already has (cache or fallback). Subsequent calls see the fresh list
-  once the background refresh completes.
-- The internal projection (`tuple[ModelInfo, ...]` + id-keyed index) is
-  cached and invalidated only when `refresh_models` mutates the rows,
-  so per-event hot paths like `_get_context_max` don't rebuild Pydantic
-  objects per call.
-- No periodic refresh loop. The fallback list contains the current Opus
-  4.7 / Sonnet 4.6 / Haiku 4.5, which is good enough until the
-  background refresh upgrades to whatever Anthropic currently returns.
-- `get_context_window(model_id)` consults the projected id-index;
-  returns `DEFAULT_CONTEXT_WINDOW` (200K) for unknown ids.
+- Constructor reads `models.json` from the package via
+  `importlib.resources.files(__package__).joinpath("models.json")` —
+  path-stable across source checkout, wheel install, and zipapp.
+- Each entry is a `{id, label, contextWindow}` triple, projected to
+  `ModelInfo(id=, label=, context_window=)` at load time and kept in a
+  frozen tuple + id-keyed dict for O(1) lookup.
+- No fetch, no cache, no refresh, no fallback. Adding or changing a
+  model is an edit to `models.json` shipped in a normal release.
+- `get_context_window(model_id)` consults the id index; returns
+  `DEFAULT_CONTEXT_WINDOW` (200K) for unknown ids.
 
 ## Skill catalog — multi-source scan
 
@@ -150,8 +144,7 @@ protocol-level lifecycle:
 the user can invoke from inside a Claude Code session — so the chat
 composer can surface them in its slash autocomplete alongside Bonsai's
 bundled skills.  The runtime is a thin one-line delegate; all discovery
-logic lives in `ClaudeSkillRegistry` (`skills.py`), mirroring the
-`ClaudeModelRegistry` split.
+logic lives in `ClaudeSkillRegistry` (`skills.py`).
 
 **Scan order (first-wins dedup by `id`):**
 
@@ -278,7 +271,7 @@ No `cancel_event`, no polling.
 |------|----------------|
 | `backend/tests/agent/runtime/claude/test_runtime.py` | Full `run_session` lifecycle — turn complete, interrupt, multi-turn, tool approval round-trip, cost tracking, plan-mode toggle, all six preserved special-case behaviours |
 | `backend/tests/agent/runtime/claude/test_skills.py` | `TestListSkills` — fixture-tree scan per source kind (user/project/plugin/command/builtin), first-wins dedup ordering, mtime cache hit + invalidation, missing-root silent skip, malformed-SKILL.md logs + skips without raising |
-| `backend/tests/agent/runtime/claude/test_models.py` | `ClaudeModelRegistry` — version parsing, current-vs-legacy classification, projection cache invalidation, on-disk cache round-trip |
+| `backend/tests/agent/runtime/claude/test_models.py` | `ClaudeModelRegistry` — constructor loads `models.json`, `list_models()` returns the three shipped entries in declared order, `get_context_window` returns per-id sizes and the neutral default for unknown ids |
 | `backend/tests/agent/runtime/claude/test_hooks.py` | `SubagentHooks` correlation — Task-tool / SubagentStart ordering, orphan close on interrupt, `parent_to_agent` mapping |
 | `backend/tests/agent/runtime/claude/test_adapter.py` (post-extraction) | Event-shape builder unit tests; locks the `agent/toolCallStart` / `agent/toolCallEnd` payload shape so plan 05's Codex adapter can mirror it |
 
@@ -287,21 +280,20 @@ No `cancel_event`, no polling.
 `runtime/claude/` imports from:
 
 - `claude_agent_sdk` — SDK proper (only `runtime.py`)
-- `anthropic` — Models API client (only `models.py`)
 - `app.agent.{models, permissions, pricing, tools, tracker}`
 - `app.agent.runtime.{events, types}`
 - `app.core.config` — for `AppConfig` typing
 - stdlib
 
-Inside `runtime/`, SDK and provider imports are contained to this
-directory:
+Inside `runtime/`, SDK imports are contained to this directory:
 
 ```
-grep -r 'claude_agent_sdk\|^import anthropic\|^from anthropic' backend/app/agent/runtime/
+grep -r 'claude_agent_sdk' backend/app/agent/runtime/
 # only matches under backend/app/agent/runtime/claude/
 ```
 
-Note: SDK imports remain in shared code outside `runtime/` (in
-`permissions.py`, `tools/*.py`, `service.update_config`, `context.py`,
-`revise.py`). Those are explicitly scoped to harness-abstraction PR 2
-and PR 3 — see `harness_refactoring.md` for the per-leak migration plan.
+Note: `claude_agent_sdk` imports remain in shared code outside
+`runtime/` (in `permissions.py`, `tools/*.py`, `service.update_config`,
+`context.py`). Those are explicitly scoped to harness-abstraction PR 2
+and PR 3 — see `harness_refactoring.md` for the per-leak migration
+plan.

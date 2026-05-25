@@ -1043,7 +1043,6 @@
 .ssl-dropdown-right { left: auto; right: 0; }
 .ssl-dropdown-item:hover { background: var(--hover); color: var(--text); }
 .ssl-dropdown-active { color: var(--blue); }
-.ssl-dropdown-group { padding: var(--space-xs) var(--space-sm); font-size: var(--font-sm); text-transform: uppercase; letter-spacing: 0.5px; color: var(--hint); }
 .ssl-more-btn { padding: 0 6px; line-height: 1; font-size: var(--font-lg2); }
 .ssl-status-wrap { margin-left: auto; }
 

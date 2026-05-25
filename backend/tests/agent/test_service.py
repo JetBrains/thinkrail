@@ -43,10 +43,7 @@ def _install_mock_runtime(service: AgentService) -> MagicMock:
         ModelInfo(
             id="claude-sonnet-4-6",
             label="Sonnet 4.6",
-            group="current",
             context_window=1_000_000,
-            max_output=64_000,
-            pricing_tier="sonnet",
         ),
     ]
 
@@ -403,10 +400,7 @@ class TestSaveTask:
             ModelInfo(
                 id="claude-sonnet-4-6",
                 label="Sonnet 4.6",
-                group="current",
                 context_window=1_000_000,
-                max_output=64_000,
-                pricing_tier="sonnet",
             ),
         ]
         reg = RuntimeRegistry()

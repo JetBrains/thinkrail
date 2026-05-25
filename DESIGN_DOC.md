@@ -217,7 +217,6 @@ backend/
 │   │   ├── context.py       # Context assembly: skill instructions, project metadata, system prompt
 │   │   ├── persistence.py   # Session persistence: metadata JSON + events JSONL
 │   │   ├── permissions.py   # Tool approval routing (canUseTool hook)
-│   │   ├── credentials.py   # API key management
 │   │   ├── revise.py        # Voice transcript revision
 │   │   ├── transcribe.py    # Audio transcription via OpenAI Whisper (optional)
 │   │   ├── visualization.py # MCP visualization tool: 6 vis types rendered in ChatStream

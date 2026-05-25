@@ -27,9 +27,7 @@ test("TaskCreate/TaskUpdate stream collapses into one consolidated card", async 
   writeFileSync(join(tempProject.path, "README.md"), "# task-card e2e\n", "utf8");
   await openProject(page, tempProject.path);
 
-  // Sonnet 4.6 + bypassPermissions: Task tools fire without prompts. Haiku
-  // 4.5's static fallback id `claude-haiku-4-5` is rejected by the API
-  // (requires the dated form), so use Sonnet whose undated id is accepted.
+  // Sonnet 4.6 + bypassPermissions: Task tools fire without prompts.
   await startSessionWithModel(
     page,
     { label: "Sonnet 4.6" },
