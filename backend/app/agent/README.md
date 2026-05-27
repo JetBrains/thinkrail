@@ -355,7 +355,6 @@ All models with multi-word fields use a `camelCase` alias generator (`to_camel` 
 | `AgentConfig` | runtime, model, max_turns/`maxTurns`, permission_mode/`permissionMode`, stream_text/`streamText`, effort | Run configuration. `runtime: RuntimeType` (defaults to `"claude"`) selects which `IAgentRuntime` handles the session. `effort` is `str \| None` — null for auto, or `"low"`/`"medium"`/`"high"`/`"max"`. `extra="ignore"` so persisted session files that still carry the removed `betas` field round-trip cleanly. |
 | `AgentEvent` | bonsai_sid/`bonsaiSid`, session_id/`sessionId`, event_type/`eventType`, payload | Serializable event to send as notification |
 | `AgentResult` | bonsai_sid/`bonsaiSid`, session_id/`sessionId`, result, cost_usd/`costUsd`, turns, duration_ms/`durationMs`, usage | Turn result (sent with `turnComplete`) or final session result (sent with `done`) |
-| `MessageTooLargeError` | message, msg_tokens, remaining_tokens | Exception raised by `send_message()` when a user message would consume >80% of remaining context. Mapped to JSON-RPC error code `-32014`. |
 
 #### Tracker State
 
@@ -364,9 +363,8 @@ The `Tracker` class manages session lifecycle and ancillary per-session state:
 | Field | Type | Description |
 |-------|------|-------------|
 | `_last_messages` | `dict[str, str]` | Last user message per session (for retry after `context_overflow`) |
-| `_context_tokens` | `dict[str, int]` | Latest context token count per session (updated from `agent/costEstimate` events) |
 
-Both are cleaned up by `remove_task()`.
+Cleaned up by `remove_task()`.
 
 #### Interactive Request/Response Models
 
@@ -567,25 +565,20 @@ await runtime.run_session(task, exec_config, handler)
 
 ## Context Management
 
-The agent system has a three-layer approach to context window management: Prevention, Detection, Recovery.
+Conversation-history management and compaction are owned by the Claude Code subprocess that the Claude Agent SDK wraps. Bonsai observes what the SDK does and offers recovery when the SDK reports overflow. See `.bonsai/design_docs/CONTEXT_MANAGEMENT_DESIGN.md` for the full rationale.
 
-### Prevention
+### Detection (observability only)
 
-- **System prompt budget warnings** — `build_context_structured()` computes `budgetRatio` (system prompt tokens / context window). Warnings emitted at 40% and 80% thresholds. Surfaced in `prepare_agent` and `update_draft` RPC responses.
-- **Message size estimation** — `send_message()` estimates incoming message tokens (heuristic: `len(text) / 6`). If the message would consume >80% of remaining context, raises `MessageTooLargeError` (RPC error code `-32014`).
-- **Context max via runtime** — `_get_context_max(task)` delegates to `runtime.get_context_window(task.config.model)`. The runtime owns its own model→window lookup (and any fallback for ids it doesn't recognise). If the registry isn't wired or the runtime is unknown, the service returns the neutral `DEFAULT_CONTEXT_WINDOW` (200K).
-
-### Detection
-
-- **SDK auto-compaction** — `PreCompact` hook wired in `runtime/claude/runtime.py`. Emits `agent/compact` with `{trigger, preTokens}`. Frontend renders via `CompactMarker.tsx`.
-- **Context usage warnings** — `_persisting_notify` emits `agent/contextWarning` at 75% (`"warning"`) and 90% (`"critical"`) context usage after `turnComplete`/`error` events.
-- **Error classification** — `ResultMessage.is_error` with "Prompt is too long" or "prompt_too_long" in the error text → `subtype: "context_overflow"` (recoverable). All other errors → `subtype: "turn_error"`.
+- **`PreCompact` hook** — wired in `runtime/claude/hooks.py`. Emits `agent/compact` with `{trigger, preTokens}`. Frontend renders via `CompactMarker.tsx`. No intervention — the SDK owns compaction.
+- **Per-turn token telemetry** — runtime accumulates per-API-call token counts from `message_start`/`message_delta` SDK events. Emitted as `currentContextWindow` (latest API call) in `agent/costEstimate` and `agent/turnComplete`. Drives the status-line UI.
+- **Context-window catalog** — `_get_context_max(task)` delegates to `runtime.get_context_window(task.config.model)`, which reads the static `ClaudeModelRegistry`. Falls back to `DEFAULT_CONTEXT_WINDOW` (200K) when the runtime is unknown.
+- **Error classification** — `ResultMessage.is_error` with "Prompt is too long" / "prompt_too_long" / "context window" in the message → `subtype: "context_overflow"` (recoverable). All other errors → `subtype: "turn_error"`.
 
 ### Recovery
 
-- **Retry** — `agent/retryLastMessage` RPC resends the last user message (stored in `tracker._last_messages`). SDK may auto-compact on retry.
-- **Fresh session** — frontend offers "Start fresh session" via existing `continueSession` flow.
-- **ErrorBanner** — enhanced for `context_overflow` subtype: shows "Context window full" with Retry/Fresh buttons.
+- **Retry** — `agent/retryLastMessage` RPC resends the last user message (stored in `tracker._last_messages`). SDK typically auto-compacts on the retry.
+- **Fresh session** — frontend offers "Start fresh session" via the existing `continueSession` flow.
+- **ErrorBanner** — for `subtype === "context_overflow"`, renders "Context window full" with Retry / Fresh buttons.
 
 ## TODO
 

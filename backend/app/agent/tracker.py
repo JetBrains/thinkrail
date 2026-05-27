@@ -45,7 +45,6 @@ class Tracker:
         self._interrupted: set[str] = set()
         self._turn_text: dict[str, list[str]] = {}  # bonsai_sid → accumulated text blocks
         self._last_messages: dict[str, str] = {}  # bonsai_sid → last user message (for retry)
-        self._context_tokens: dict[str, int] = {}  # bonsai_sid → latest context token count
         self._approved_sigs: dict[str, set[str]] = {}  # bonsai_sid → remembered approvals
 
     # -- task lifecycle -------------------------------------------------------
@@ -233,7 +232,6 @@ class Tracker:
         self._turn_text.pop(bonsai_sid, None)
         self._pending_requests.pop(bonsai_sid, None)
         self._last_messages.pop(bonsai_sid, None)
-        self._context_tokens.pop(bonsai_sid, None)
 
     def cancel_futures(self, bonsai_sid: str) -> None:
         task_futures = self._futures.pop(bonsai_sid, {})
@@ -285,16 +283,6 @@ class Tracker:
     def get_last_message(self, bonsai_sid: str) -> str | None:
         """Return the last user message, or None if no message was sent."""
         return self._last_messages.get(bonsai_sid)
-
-    # -- context token tracking ------------------------------------------------
-
-    def set_context_tokens(self, bonsai_sid: str, tokens: int) -> None:
-        """Update the latest context token count from cost estimates."""
-        self._context_tokens[bonsai_sid] = tokens
-
-    def get_context_tokens(self, bonsai_sid: str) -> int:
-        """Return the latest known context token count for a session."""
-        return self._context_tokens.get(bonsai_sid, 0)
 
     # -- turn text accumulation ------------------------------------------------
 

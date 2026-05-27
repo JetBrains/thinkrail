@@ -20,34 +20,14 @@ logger = logging.getLogger(__name__)
 
 # ── Token estimation ─────────────────────────────────────────────────────────
 
-def _estimate_tokens_heuristic(text: str) -> int:
-    """Fallback heuristic: ~6 chars per token for Claude's tokenizer."""
-    return len(text) // 6
+def _estimate_tokens(text: str) -> int:
+    """Rough offline estimate: ~4 chars per token for Claude/cl100k-class tokenizers.
 
-
-def _count_tokens_api(text: str, model: str) -> int | None:
-    """Count tokens using the Anthropic API (free endpoint). Returns None on failure."""
-    try:
-        import anthropic
-        client = anthropic.Anthropic()
-        result = client.messages.count_tokens(
-            model=model,
-            system=text,
-            messages=[{"role": "user", "content": "x"}],
-        )
-        # Subtract overhead from the dummy user message (~4 tokens)
-        return max(0, result.input_tokens - 4)
-    except Exception:
-        return None
-
-
-def _estimate_tokens(text: str, model: str | None = None) -> int:
-    """Estimate token count: uses API if model is provided, falls back to heuristic."""
-    if model:
-        result = _count_tokens_api(text, model)
-        if result is not None:
-            return result
-    return _estimate_tokens_heuristic(text)
+    For an exact count after a turn fires, prefer ``ResultMessage.usage.input_tokens``
+    surfaced by the runtime — this estimator only needs to be honest enough for the
+    draft prompt-preview UI.
+    """
+    return len(text) // 4
 
 _FRONTMATTER_RE = re.compile(r"\A---\s*\n.*?\n---\s*\n", re.DOTALL)
 
@@ -315,7 +295,7 @@ async def _build_spec_details(
                 "id": detail.id,
                 "title": detail.title,
                 "content": detail.content,
-                "tokens": _estimate_tokens_heuristic(detail.content),
+                "tokens": _estimate_tokens(detail.content),
             })
         except Exception:
             pass
@@ -361,7 +341,7 @@ def _build_file_details(
             "path": p,
             "name": name,
             "preview": preview,
-            "tokens": _estimate_tokens_heuristic(preview),
+            "tokens": _estimate_tokens(preview),
         })
     return details
 
@@ -558,7 +538,6 @@ async def build_context_structured(
     project_root: Path,
     config: AgentConfig,
     spec_service: SpecService,
-    context_max: int,
     plugin_dir: Path | None = None,
     session_prompt: str | None = None,
     file_paths: list[str] | None = None,
@@ -572,7 +551,6 @@ async def build_context_structured(
     """
     if plugin_dir is None:
         raise ValueError("plugin_dir is required")
-    model = config.model if config else None
 
     ordered: list[tuple[str, str]] = []
 
@@ -614,7 +592,7 @@ async def build_context_structured(
             "key": key,
             "label": SECTION_LABELS.get(key, key),
             "content": content,
-            "tokens": _estimate_tokens(content, model),
+            "tokens": _estimate_tokens(content),
         }
         if key == "specs":
             section["specDetails"] = await _build_spec_details(spec_ids, spec_service)
@@ -623,25 +601,9 @@ async def build_context_structured(
         sections.append(section)
 
     total_tokens = sum(s["tokens"] for s in sections)
-    ratio = total_tokens / context_max if context_max > 0 else 0
-    warnings: list[str] = []
-    if ratio > 0.8:
-        warnings.append(
-            f"System prompt uses {int(ratio * 100)}% of context window "
-            f"({total_tokens:,} / {context_max:,} tokens). "
-            "Very limited room for conversation."
-        )
-    elif ratio > 0.4:
-        warnings.append(
-            f"System prompt uses {int(ratio * 100)}% of context window. "
-            "Consider removing some specs for longer conversations."
-        )
 
     return {
         "full": full,
         "sections": sections,
         "totalTokens": total_tokens,
-        "contextMax": context_max,
-        "budgetRatio": round(ratio, 3),
-        "warnings": warnings,
     }

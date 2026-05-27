@@ -188,23 +188,6 @@ export function wireEvents(client: RpcClient): Unsubscribe {
     }),
   );
 
-  // ── Context warnings ──
-  unsubs.push(
-    client.on("agent/contextWarning", (p) => {
-      const params = p as Record<string, unknown>;
-      const level = params.level as string;
-      useNotificationStore.getState().addToast({
-        bonsaiSid: params.bonsaiSid as string,
-        eventType: "notification",
-        message:
-          level === "critical"
-            ? "Context 90% full \u2014 compaction will happen soon"
-            : "Context 75% full",
-        persistent: false,
-      });
-    }),
-  );
-
   // ── Config changes ──
   unsubs.push(
     client.on("agent/configChanged", (p) => {

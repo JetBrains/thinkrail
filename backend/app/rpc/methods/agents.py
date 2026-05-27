@@ -9,12 +9,11 @@ from app.rpc.context import auto_subscribe_all, get_current_conn
 from app.rpc.errors import (
     FUTURE_NOT_FOUND,
     INTERNAL_ERROR,
-    MESSAGE_TOO_LARGE,
     TASK_NOT_FOUND,
     UNKNOWN_RUNTIME,
     rpc_handler,
 )
-from app.agent.models import AgentConfig, MessageTooLargeError
+from app.agent.models import AgentConfig
 from app.agent.runtime import UnknownRuntimeError
 from app.agent.service import AgentService
 from app.agent.tracker import FutureNotFoundError, TaskNotFoundError
@@ -22,7 +21,6 @@ from app.agent.tracker import FutureNotFoundError, TaskNotFoundError
 _handle_errors = rpc_handler(
     (TaskNotFoundError, TASK_NOT_FOUND, "Agent task not found"),
     (FutureNotFoundError, FUTURE_NOT_FOUND, "No pending request"),
-    (MessageTooLargeError, MESSAGE_TOO_LARGE, "Message too large"),
     (UnknownRuntimeError, UNKNOWN_RUNTIME, "Unknown runtime"),
 )
 
@@ -160,9 +158,6 @@ async def prepare_agent(service: AgentService, **params: Any) -> dict:
         "systemPrompt": structured["full"],
         "sections": structured["sections"],
         "totalTokens": structured["totalTokens"],
-        "contextMax": structured.get("contextMax", 0),
-        "budgetRatio": structured.get("budgetRatio", 0),
-        "warnings": structured.get("warnings", []),
     }
 
 
@@ -190,9 +185,6 @@ async def update_draft(service: AgentService, **params: Any) -> dict:
         "systemPrompt": structured["full"],
         "sections": structured["sections"],
         "totalTokens": structured["totalTokens"],
-        "contextMax": structured.get("contextMax", 0),
-        "budgetRatio": structured.get("budgetRatio", 0),
-        "warnings": structured.get("warnings", []),
     }
 
 

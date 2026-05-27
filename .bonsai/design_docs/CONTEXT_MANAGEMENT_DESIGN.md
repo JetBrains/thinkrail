@@ -2,194 +2,135 @@
 id: context-management-design
 type: architecture-design
 status: active
-title: 'Context Management: Prevent & Recover from "Prompt is too long" Errors'
+title: 'Context Management: Observe Claude Code, Recover from Overflow'
 parent: design-doc
 tags:
 - context-window
 - error-recovery
 ---
-# Context Management: Prevent & Recover from "Prompt is too long" Errors
+# Context Management: Observe Claude Code, Recover from Overflow
 
 ## Context
 
-The Bonsai agent system has no context window management. When the system prompt (with large specs) or accumulated conversation history exceeds the model's context window, the Anthropic API returns "Prompt is too long". This surfaces as a cryptic "Session error: turn error: Prompt is too long" toast with no recovery options.
+Context window management — message history, compaction, summarization — is owned by the Claude Code subprocess that the Claude Agent SDK wraps. Bonsai does **not** manage the conversation log, trim messages, or run its own compaction. Bonsai's job is:
 
-The Claude Agent SDK has built-in auto-compaction (`PreCompact` hook), and the frontend already has a `CompactMarker` component and `agent/compact` event handling — but the backend runner never wires the hook or emits the event.
+1. Assemble the **system prompt** from specs/skills/project metadata.
+2. **Observe** what the SDK does at runtime: token usage per turn, compaction events.
+3. **Recover** cleanly when the SDK reports `Prompt is too long` (the only context-window error that surfaces to the caller).
 
-Additionally, `_get_context_max()` defaults to 200K when the model registry isn't available, causing incorrect context metrics even for 1M-context models.
-
-### Hard Limits Analysis
-
-| Layer | Limit | Value | Causes "Prompt is too long"? |
-|-------|-------|-------|------------------------------|
-| **API** | Context window (Opus/Sonnet 4.6) | 1,000,000 tokens | **YES — the primary cause** |
-| **API** | Context window (Haiku/legacy) | 200,000 tokens | **YES** |
-| **API** | Max output per request | 64K–128K tokens | No (different error) |
-| **API** | Per-message size limit | **None** | N/A — only total context matters |
-| **API** | Rate limits (ITPM) | Tier-dependent | No (produces 429 error) |
-| **SDK** | `max_turns` per `query()` | 50 (Bonsai default) | Indirectly — more turns = more context |
-| **SDK** | `max_buffer_size` (CLI stdout) | 10MB (Bonsai override) | Edge case — very large tool outputs |
-| **SDK** | Internal message stream buffer | 100 messages | No (internal backpressure) |
-| **Bonsai** | Message size validation | **None** | **Gap — no validation at any layer** |
-| **Bonsai** | System prompt size validation | **None** | **Gap — no pre-start check** |
-| **Bonsai** | Context window management | **None** | **Gap — SDK compaction not wired** |
-
-**The context window is the ONLY hard limit producing "Prompt is too long".** Everything (system prompt + all messages + all tool results) must fit within it. There is NO per-message or per-turn limit from the API — just the total window.
-
-**No message or turn size limits exist anywhere in the Bonsai stack.** A user can paste an arbitrarily large message — it flows untouched through:
-- Frontend InputArea (no `maxLength`)
-- WebSocket RPC (no payload size check)
-- `send_message` RPC handler (no validation)
-- `service.send_message()` (validates status only)
-- `tracker.enqueue_message()` (raw queue put)
-- SDK `client.query()` (writes JSON to CLI stdin, no size check)
-
-A single oversized message can trigger "Prompt is too long" even if context usage is low.
-
-## Architecture: Three Layers
+## Architecture: Two Layers
 
 ```
-Prevention → Detection → Recovery
+Detection → Recovery
 ```
 
-1. **Prevention**: Warn about large system prompts before session start
-2. **Detection**: Wire SDK compaction events, emit context warnings, classify errors
-3. **Recovery**: Enhanced error UI with retry/fresh-start options
+- **Detection** — pure observability. Listen for SDK events (`PreCompact`, `ResultMessage.usage`), surface them to the UI as a passive status line / compact marker. No intervention.
+- **Recovery** — when the SDK returns `Prompt is too long`, classify the error and offer two paths: retry the last message (the SDK will auto-compact on the retry) or start a fresh session with the same config.
+
+There is **no Prevention layer**: no pre-flight message-size guard, no static system-prompt threshold warnings, no offline token-count API call. Bonsai cannot reliably predict when the SDK will compact, and predicting badly is worse than letting the SDK do its job and reacting to the rare overflow.
 
 ---
 
-## Layer 1: Prevention
+## Layer 1: Detection (Observability)
 
-### 1a. `_get_context_max()` delegates to the runtime
+### 1a. `PreCompact` hook → `agent/compact` event
 
-**File:** `backend/app/agent/service.py` — `_get_context_max()`
+**File:** `backend/app/agent/runtime/claude/hooks.py` — `SubagentHooks.pre_compact_hook()`
 
-The service asks the task's runtime instead of carrying a model→window
-table. The runtime owns the lookup including any fallback for ids it
-doesn't recognise; the service falls back to a neutral
-`DEFAULT_CONTEXT_WINDOW` (200K) only when the registry isn't wired or
-the runtime key in the persisted config no longer matches a registered
-runtime.
+The Claude SDK invokes `PreCompact` when the Claude Code subprocess is about to compact conversation history. Bonsai's hook emits `agent/compact` with `{trigger, preTokens}` where `preTokens` is the total tokens in the last API call. The frontend renders this as a `CompactMarker` in the chat stream so the user sees that compaction happened.
 
-```python
-def _get_context_max(self, task: AgentTask) -> int:
-    if self.runtime_registry is None:
-        return DEFAULT_CONTEXT_WINDOW
-    try:
-        runtime = self.runtime_registry.get(task.config.runtime)
-    except UnknownRuntimeError:
-        logger.warning("[%s] Unknown runtime %r; using default",
-                       task.bonsai_sid[:8], task.config.runtime)
-        return DEFAULT_CONTEXT_WINDOW
-    return runtime.get_context_window(task.config.model)
-```
+The hook does **not** intervene — it returns `{}` and lets the SDK proceed. The SDK owns the compaction logic.
 
-The Claude runtime's `ClaudeModelRegistry` loads a static catalog from
-`runtime/claude/models.json` (`{id, label, contextWindow}` per entry)
-via `importlib.resources` and returns the matching window per model id
-(Opus 4.7 = 1M, Sonnet 4.6 = 1M, Haiku 4.5 = 200K). Unknown ids fall
-back to `DEFAULT_CONTEXT_WINDOW`. See
-`backend/app/agent/runtime/claude/models.py`.
+### 1b. Per-turn token telemetry
 
-### 1b. System prompt budget warnings in `build_context_structured()`
+**File:** `backend/app/agent/runtime/claude/runtime.py` — `run_session()`
 
-**File:** `backend/app/agent/context.py` — `build_context_structured()`
+For each `message_start` / `message_delta` SDK event, the runtime accumulates per-API-call token counts into an `iterations` list (input, output, cache-create-5m, cache-create-1h, cache-read). These are emitted as `agent/costEstimate` (live) and `agent/turnComplete` (final) events with:
 
-After computing `totalTokens`, compare against a budget. Add `warnings` and `budgetRatio` to the returned dict:
+- `currentContextWindow`: total tokens in the **latest** API call — this is the real context-window occupancy.
+- `iterInputTokens` / `iterCacheRead` / `iterCacheCreate` / `iterOutputTokens`: the per-iteration breakdown for context-display UIs.
 
-- `contextMax`: model's context window size
-- `budgetRatio`: system prompt tokens / context window (0.0–1.0)
-- `warnings`: human-readable warnings at 40% and 80% thresholds
+The frontend's `SessionStatusLine` renders `contextTokens / contextMax` from these values.
 
-### 1c. Message size estimation before send
+### 1c. Model context-window catalog
 
-**File:** `backend/app/agent/service.py` — `send_message()`
+**File:** `backend/app/agent/runtime/claude/models.py` — `ClaudeModelRegistry`
 
-Before enqueueing a message, estimate its token count (heuristic: `len(text) / 6`). Compare against remaining context budget. If the message would consume >80% of remaining context, raise `MessageTooLargeError` (RPC error code `-32014`).
+Static catalog loaded from `runtime/claude/models.json` (`{id, label, contextWindow}` per entry). Used by:
 
-**File:** `backend/app/agent/tracker.py` — `_context_tokens: dict[str, int]` tracks per-session context usage from `agent/costEstimate` events.
+- `service._get_context_max(task)` — populates `metrics.contextMax` in session metadata for the status-line UI.
+- Frontend `getContextWindowSize(model)` — recomputes the same value client-side from the model registry when the user switches models.
 
-### 1d. Surface warnings in RPC responses
+Unknown ids fall back to `DEFAULT_CONTEXT_WINDOW` (200K).
 
-**Files:** `backend/app/rpc/methods/agents.py` — `prepare_agent` and `update_draft`
+### 1d. System-prompt token estimate (UI-only)
 
-Include `warnings`, `contextMax`, `budgetRatio` in the structured prompt response so the frontend can display budget indicators in the draft config card.
+**File:** `backend/app/agent/context.py` — `_estimate_tokens()`
+
+`build_context_structured()` reports `totalTokens` and per-section `tokens` via `len(text) // 4` — the rough chars-per-token ratio for Claude/cl100k-class tokenizers on English/markdown. This drives the stacked-bar preview in the draft config card and nothing else; once a session starts, the real `input_tokens` from `ResultMessage.usage` (surfaced via `agent/costEstimate`) takes over.
+
+There is no Anthropic API call here — the estimate runs offline with zero dependencies.
 
 ---
 
-## Layer 2: Detection
+## Layer 2: Recovery
 
-### 2a. Wire `PreCompact` hook in runner
+### 2a. Classify `Prompt is too long`
 
-**File:** `backend/app/agent/runner.py`
+**File:** `backend/app/agent/runtime/claude/runtime.py` — `ResultMessage` branch in `run_session()`
 
-Add `PreCompact` hook handler alongside existing `SubagentStart`/`SubagentStop`. Emits `agent/compact` event with `{trigger, preTokens}`. The frontend already renders these via `CompactMarker.tsx`.
+When the SDK returns an error `ResultMessage`, the runtime checks the message text for `prompt is too long` / `prompt_too_long` / `context window`. If matched, the emitted `agent/error` event uses `subtype: "context_overflow"` instead of the generic `"turn_error"`. The session stays idle (not terminated).
 
-### 2b. Context usage warnings
-
-**File:** `backend/app/agent/service.py` — `_persisting_notify()`
-
-When processing `agent/turnComplete` or `agent/error` events, check context usage ratio. Emit `agent/contextWarning` at 75% (`"warning"`) and 90% (`"critical"`).
-
-### 2c. Classify "Prompt is too long" errors
-
-**File:** `backend/app/agent/runner.py` — error handling block
-
-Detect "Prompt is too long" / "prompt_too_long" / "context window" in error text. Use `subtype: "context_overflow"` instead of generic `"turn_error"`. Session stays idle (recoverable).
-
----
-
-## Layer 3: Recovery
-
-### 3a. Store last sent message for retry
+### 2b. Store last message for retry
 
 **File:** `backend/app/agent/tracker.py` — `_last_messages: dict[str, str]`
 
-Stores the last user message per session, set by `send_message()`, retrieved by `get_last_message()`.
+`send_message()` calls `tracker.set_last_message()` before enqueuing. `get_last_message()` exposes it via `agent/retryLastMessage`.
 
-### 3b. `retryLastMessage` RPC method
+### 2c. `agent/retryLastMessage` RPC method
 
 **File:** `backend/app/rpc/methods/agents.py`
 
-New `agent/retryLastMessage` handler resends the last user message. SDK may auto-compact on retry.
+Resends the last user message through the same SDK client. The SDK will typically auto-compact on this retry and succeed. If it doesn't, the same `context_overflow` error fires and the user can fall back to a fresh session.
 
-### 3c. Enhanced ErrorBanner for context_overflow
+### 2d. ErrorBanner with Retry / Fresh Session actions
 
 **File:** `frontend/src/components/ChatStream/ErrorBanner.tsx`
 
-When `subtype === "context_overflow"`, render "Context window full" with:
-- **"Retry"** — calls `retryLastMessage` RPC
-- **"Start fresh session"** — creates a new session with same config
+When `agent/error` arrives with `subtype === "context_overflow"`, the banner renders "Context window full" with two actions:
 
-### 3d. Frontend: context warning handler
-
-**File:** `frontend/src/store/wireEvents.ts`
-
-`agent/contextWarning` subscription shows toast: "Context 75% full" / "Context 90% full — compaction will happen soon".
+- **Retry** — calls `agent/retryLastMessage`.
+- **Start fresh session** — creates a new session with the same config (model, specs, skill) and discards the conversation history.
 
 ---
 
-## Files Modified
+## What Bonsai Deliberately Does NOT Do
 
-| File | Changes |
-|------|---------|
-| `backend/app/agent/service.py` | Fix `_get_context_max()`, message size check in `send_message()`, context warnings in `_persisting_notify`, expose `get_last_message` |
-| `backend/app/agent/runner.py` | Wire `PreCompact` hook, classify `context_overflow` errors |
-| `backend/app/agent/context.py` | Add budget warnings to `build_context_structured()`, add `_get_model_context_max()` helper |
-| `backend/app/agent/tracker.py` | Add `_last_messages` dict, `_context_tokens` dict, `set_last_message()`, `get_last_message()`, `set_context_tokens()`, `get_context_tokens()` |
-| `backend/app/agent/models.py` | Add `MessageTooLargeError` exception class |
-| `backend/app/rpc/methods/agents.py` | Add `retry_last_message` handler, surface warnings from structured prompt, handle `MessageTooLargeError` |
-| `backend/app/rpc/server.py` | Register `agent/retryLastMessage` method |
-| `frontend/src/components/ChatStream/ErrorBanner.tsx` | Context overflow recovery card with Retry/Fresh actions |
-| `frontend/src/components/ChatStream/ChatStream.css` | Styles for `.chat-banner-body`, `.chat-banner-actions`, `.chat-banner-btn` |
-| `frontend/src/api/methods/agents.ts` | Add `retryLastMessage` API method |
-| `frontend/src/store/sessionStore.ts` | `retryLastMessage` action, `context_overflow` is recoverable |
-| `frontend/src/store/wireEvents.ts` | `agent/contextWarning` handler, improved `context_overflow` toast |
+| Anti-feature | Why |
+|--------------|-----|
+| Pre-flight message-size guard | The SDK can compact and proceed; predicting overflow with a `len(text) // N` heuristic and refusing to send is wrong more often than it's right. |
+| Static 40%/80% system-prompt warnings | The static system prompt is a small fraction of real usage after a few turns; warning on it anchors UI on the wrong number. |
+| Anthropic `count_tokens` REST call | Requires an API key separate from the SDK's auth path; adds a network dependency for a UI badge. The `// 4` heuristic is honest enough. |
+| Runtime 75%/90% context-usage toasts | Duplicate of `currentContextWindow` already shown in the status line; the "compaction will happen soon" wording was misleading (the SDK decides when to compact, not Bonsai's static `contextMax * 0.9`). |
+| Message-history trimming / summarization | Owned by Claude Code via `PreCompact`. The SDK does not expose the message log for caller manipulation. |
+
+## Files
+
+| File | Responsibility |
+|------|----------------|
+| `backend/app/agent/context.py` | System-prompt assembly; offline token estimator. |
+| `backend/app/agent/service.py` | `_get_context_max()`, `send_message()` (no guard), `_last_messages` plumbing. |
+| `backend/app/agent/tracker.py` | `_last_messages` for retry. |
+| `backend/app/agent/runtime/claude/runtime.py` | Per-turn token telemetry; `context_overflow` classification. |
+| `backend/app/agent/runtime/claude/hooks.py` | `PreCompact` → `agent/compact`. |
+| `backend/app/agent/runtime/claude/models.py` | Static context-window catalog. |
+| `backend/app/rpc/methods/agents.py` | `agent/retryLastMessage` handler. |
+| `frontend/src/components/ChatStream/ErrorBanner.tsx` | Context-overflow recovery card. |
+| `frontend/src/components/ChatStream/SessionStatusLine.tsx` | Passive `contextTokens / contextMax` display. |
+| `frontend/src/store/wireEvents.ts` | `agent/compact` → CompactMarker; `agent/error` (subtype `context_overflow`) → ErrorBanner. |
 
 ## Verification
 
-1. **Unit tests**: Test `_get_context_max` fallback, budget warning thresholds, error classification regex, message size rejection
-2. **Integration test**: Create a session with many specs, verify warnings appear in RPC response
-3. **Manual test — compaction**: Start a long conversation (many tool calls), verify `CompactMarker` appears in chat when SDK auto-compacts
-4. **Manual test — overflow recovery**: Force a "Prompt is too long" error (e.g., use a model with very small context), verify the recovery card appears with Retry/Fresh buttons
-5. **Manual test — warnings**: Watch `SessionStatusLine` context bar during a long session, verify toast appears at 75%/90%
+1. **Unit tests** — `_get_context_max` fallback, error-classification regex, `_last_messages` round-trip.
+2. **Integration test** — start a session with many specs, verify `agent/compact` fires when the SDK compacts (long tool-heavy conversation).
+3. **Manual test — overflow recovery** — force `Prompt is too long` (small-context model + large input), verify the recovery card appears and Retry works.

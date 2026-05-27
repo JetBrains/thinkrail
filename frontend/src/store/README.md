@@ -307,7 +307,7 @@ interface SessionStore {
 **Initial state:** `{ sessions: new Map(), activeSessionId: null, archivedSessions: [] }`
 
 **Key behaviors:**
-- `sendMessage` optimistically appends `userMessage` event and sets status to `"running"`. Backend may reject with `-32014` (MessageTooLarge) if the message exceeds remaining context budget.
+- `sendMessage` optimistically appends `userMessage` event and sets status to `"running"`.
 - `retryLastMessage` calls `agent/retryLastMessage` RPC to resend the last message (used after `context_overflow` errors — SDK may auto-compact on retry)
 - `closeSession` removes from `openTabs` (no END_SIGNAL). Live sessions stay in `sessions` map as background. Terminal sessions (done/error) get archived.
 - `endSession` sends END_SIGNAL to backend, terminates the session
@@ -497,7 +497,6 @@ export function wireEvents(client: RpcClient): Unsubscribe
 | `agent/sessionStart` | `sessionStore.onSessionStart(params)` |
 | `agent/done` | `sessionStore.onSessionDone(params)` + toast + badge |
 | `agent/error` | `sessionStore.onSessionError(params)` + toast + badge. `subtype: "context_overflow"` is recoverable (session → idle). ErrorBanner shows Retry/Fresh Session buttons. |
-| `agent/contextWarning` | Toast notification: "Context 75% full" or "Context 90% full — compaction will happen soon" |
 | `agent/configChanged` | `sessionStore.onConfigChanged(params)` |
 | `agent/askUserQuestion` | `sessionStore.onAskQuestion(params)` + `incrementPendingInput` + persistent toast + badge |
 | `agent/confirmAction` | `sessionStore.onConfirmAction(params)` + `incrementPendingInput` + persistent toast + badge |

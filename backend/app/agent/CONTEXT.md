@@ -108,7 +108,7 @@ def build_context_structured(
 **Returns:** A dict with:
 - `full` (`str`) — the complete system prompt (same as `build_context` output)
 - `sections` (`list[dict]`) — each section with `key`, `label`, `content`, `tokens`. Specs section includes `specDetails` with per-spec breakdown.
-- `totalTokens` (`int`) — estimated total tokens (via Anthropic's `count_tokens` API when available, falls back to `len(text) // 6` heuristic)
+- `totalTokens` (`int`) — estimated total tokens via the `len(text) // 4` heuristic
 
 **Section keys:** `"general"`, `"task"`, `"project"`, `"specs"` — mapped to labels via `SECTION_LABELS` constant.
 
@@ -399,21 +399,11 @@ def _build_context_for(self, task: AgentTask) -> str:
 
 The `prompt` field is optional. When provided, it becomes the `session_prompt` on the `AgentTask` and is placed inside the "Your Task" section of the system prompt, before the SKILL.md body. This field is also available via the `SuggestSession` tool's `prompt` parameter.
 
-## Context Budget Warnings
+## Token Estimation
 
-`build_context_structured()` returns additional fields for context budget management:
+`build_context_structured()` reports `totalTokens` and per-section `tokens` via a `len(text) // 4` heuristic — roughly the chars-per-token ratio of Claude/cl100k-class tokenizers for English/markdown. The estimate is intentionally rough: it only feeds the draft prompt-preview UI. The runtime emits the real `input_tokens` per turn via the `agent/costEstimate` event (`iterations[-1]`), which is what the frontend should treat as ground truth once a session is running.
 
-| Field | Type | Description |
-|-------|------|-------------|
-| `contextMax` | `int` | Model's context window size (from the runtime's `ClaudeModelRegistry` catalog) |
-| `budgetRatio` | `float` | System prompt tokens / context window (0.0–1.0) |
-| `warnings` | `list[str]` | Human-readable warnings when budget exceeds thresholds |
-
-**Thresholds:**
-- `> 0.4` (40%): Warning — "System prompt uses X% of context window. Consider removing some specs."
-- `> 0.8` (80%): Critical — "Very limited room for conversation."
-
-These are surfaced in the `prepare_agent` and `update_draft` RPC responses so the frontend can display budget indicators in the draft config card.
+The context window itself is owned by the runtime (`ClaudeModelRegistry.get_context_window(model)`) and read by the frontend via the model catalog, not by this module.
 
 ## Known Limitations
 

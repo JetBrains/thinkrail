@@ -7,7 +7,7 @@ from datetime import UTC, datetime
 from typing import Any
 
 from app.agent.context import build_context
-from app.agent.models import AgentConfig, AgentTask, MessageTooLargeError, SubsessionType
+from app.agent.models import AgentConfig, AgentTask, SubsessionType
 from app.agent.persistence import append_event, save_session, load_session, list_sessions as list_sessions_from_disk, delete_session as delete_session_from_disk, update_session_metadata
 from app.agent.runtime import (
     DEFAULT_CONTEXT_WINDOW,
@@ -236,18 +236,6 @@ class AgentService:
         if task.status not in ("initializing", "idle"):
             raise ValueError(
                 f"Cannot send message: session is '{task.status}', expected 'initializing' or 'idle'"
-            )
-        # Estimate message size against remaining context budget
-        msg_tokens = len(text) // 6  # fast heuristic: ~6 chars per token
-        ctx_max = self._get_context_max(task)
-        current_ctx = self._tracker.get_context_tokens(bonsai_sid)
-        remaining = ctx_max - current_ctx if current_ctx > 0 else ctx_max
-        if remaining > 0 and msg_tokens > remaining * 0.8:
-            raise MessageTooLargeError(
-                f"Message is too large (~{msg_tokens:,} tokens). "
-                f"Remaining context: ~{remaining:,} tokens.",
-                msg_tokens=msg_tokens,
-                remaining_tokens=remaining,
             )
         self._save_event(bonsai_sid, {
             "eventType": "userMessage",
@@ -664,10 +652,6 @@ class AgentService:
             # Adjust cost estimates to include base cost from previous runs,
             # since the runner starts with total_cost=0 on each invocation.
             if method == "agent/costEstimate":
-                # Track context token usage for message size validation
-                ctx_tokens = params.get("currentContextWindow", 0)
-                if ctx_tokens > 0:
-                    self._tracker.set_context_tokens(task.bonsai_sid, ctx_tokens)
                 if _base_cost > 0:
                     params = {
                         **params,
@@ -713,30 +697,6 @@ class AgentService:
                         "contextMax": ctx_max,
                         "outputTokens": last_out,
                     })
-
-                    # Emit context usage warnings at 75% and 90%
-                    if ctx_max > 0 and ctx_tokens > 0:
-                        ratio = ctx_tokens / ctx_max
-                        if ratio > 0.9:
-                            await _bus.publish_to_session(
-                                task.bonsai_sid, "agent/contextWarning", {
-                                    "bonsaiSid": task.bonsai_sid,
-                                    "level": "critical",
-                                    "ratio": round(ratio, 3),
-                                    "contextTokens": ctx_tokens,
-                                    "contextMax": ctx_max,
-                                },
-                            )
-                        elif ratio > 0.75:
-                            await _bus.publish_to_session(
-                                task.bonsai_sid, "agent/contextWarning", {
-                                    "bonsaiSid": task.bonsai_sid,
-                                    "level": "warning",
-                                    "ratio": round(ratio, 3),
-                                    "contextTokens": ctx_tokens,
-                                    "contextMax": ctx_max,
-                                },
-                            )
 
                 update_session_metadata(self._config.project_root, task.bonsai_sid, {
                     "metrics": dict(_live_metrics),
@@ -951,7 +911,6 @@ class AgentService:
             project_root=self._config.project_root,
             config=task.config,
             spec_service=self._spec_service,
-            context_max=self._get_context_max(task),
             plugin_dir=self._config.plugin_dir,
             file_paths=task.file_paths,
         )

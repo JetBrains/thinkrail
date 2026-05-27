@@ -590,35 +590,3 @@ class TestInterruptTaskRollback:
         assert service._tracker.is_interrupted(task.bonsai_sid) is False
 
 
-class TestMessageTooLarge:
-    async def test_rejects_oversized_message(self) -> None:
-        from app.agent.models import MessageTooLargeError
-
-        service, _, _ = _make_service()
-        task = service._tracker.create_task([], AgentConfig())
-        # initializing → idle
-        service._tracker.set_status(task.bonsai_sid, "idle")
-        # Set context tokens close to the limit
-        service._tracker.set_context_tokens(task.bonsai_sid, 950_000)
-
-        # Message of ~100K tokens (600K chars / 6)
-        huge_text = "x" * 600_000
-        with pytest.raises(MessageTooLargeError):
-            await service.send_message(task.bonsai_sid, huge_text)
-
-    async def test_allows_small_message(self) -> None:
-        service, config, _ = _make_service()
-        config.project_root = Path("/tmp/test")
-        task = service._tracker.create_task([], AgentConfig())
-        # initializing → idle
-        service._tracker.set_status(task.bonsai_sid, "idle")
-        # Context is mostly empty
-        service._tracker.set_context_tokens(task.bonsai_sid, 10_000)
-        # This should not raise (small message, plenty of room)
-        # We can't fully run send_message without persistence, so just check
-        # that the size check itself doesn't block it
-        text = "Hello, how are you?"
-        msg_tokens = len(text) // 6
-        ctx_max = service._get_context_max(task)
-        remaining = ctx_max - 10_000
-        assert msg_tokens < remaining * 0.8  # Would pass the check
