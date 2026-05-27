@@ -111,7 +111,6 @@ function seedStores({
     model: "",
     permissionMode: "default",
     effort: null,
-    maxTurns: 10,
     startedAt: Date.now(),
     events: [],
     metrics: { costUsd: 0, turns: 0, durationMs: 0, contextUsage: undefined },

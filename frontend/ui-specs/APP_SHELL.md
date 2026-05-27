@@ -338,7 +338,7 @@ which has four nav tabs:
 | Tab | Renders | Source of truth |
 |-----|---------|-----------------|
 | Themes | `THEMES` from `utils/theme.ts`, applies via `applyTheme()` | `localStorage` |
-| Session Defaults | Model / permission mode / effort / max-turns form | AppStore (`session_defaults`) via RPC |
+| Session Defaults | Model / permission mode / effort form | AppStore (`session_defaults`) via RPC |
 | Server Info | Hostname, version, port; "copy URL" affordances | `serverInfoStore` |
 | Settings | Inline editor for `.bonsai/settings.json` | Project file |
 

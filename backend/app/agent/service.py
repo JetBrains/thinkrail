@@ -718,7 +718,6 @@ class AgentService:
             system_prompt=spec_context,
             resume_session_id=resume_session_id,
             permission_mode=task.config.permission_mode,
-            max_turns=task.config.max_turns,
             effort=task.config.effort,
             stream_text=task.config.stream_text,
         )

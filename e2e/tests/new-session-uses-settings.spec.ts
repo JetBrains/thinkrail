@@ -35,7 +35,6 @@ test("new-session draft reflects user-scoped session defaults", async ({
     model: "claude-haiku-4-5-20251001",
     permissionMode: "acceptEdits",
     effort: "low",
-    maxTurns: 20,
   });
 
   await openProject(page, tempProject.path);

@@ -306,7 +306,6 @@ export const classicRenderers: ViewRenderers = {
               name: p.name ?? "Suggested Session",
               config: {
                 model: currentSession?.model ?? "sonnet",
-                maxTurns: currentSession?.maxTurns ?? 50,
                 permissionMode: currentSession?.permissionMode ?? "default",
                 streamText: true,
                 effort: currentSession?.effort ?? null,
@@ -402,7 +401,6 @@ export const classicRenderers: ViewRenderers = {
               metaTicketId: p.ticketId ?? undefined,
               config: {
                 model: currentSession?.model ?? "sonnet",
-                maxTurns: currentSession?.maxTurns ?? 50,
                 permissionMode: currentSession?.permissionMode ?? "default",
                 streamText: true,
                 effort: currentSession?.effort ?? null,

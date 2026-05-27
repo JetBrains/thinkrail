@@ -50,7 +50,6 @@ async def run(
         system_prompt=spec_context,
         resume_session_id=resume_session_id,
         permission_mode=task.config.permission_mode,
-        max_turns=task.config.max_turns,
         effort=task.config.effort,
         stream_text=task.config.stream_text,
     )
@@ -187,7 +186,7 @@ class TestContinueSession:
             "name": "test session",
             "skillId": None,
             "specIds": ["spec-1"],
-            "config": {"model": "claude-sonnet-4-6", "maxTurns": 25, "permissionMode": "default", "streamText": True},
+            "config": {"model": "claude-sonnet-4-6", "permissionMode": "default", "streamText": True},
             "status": "done",
             "sessionId": "cli-session-abc",
             "createdAt": "2026-03-07T00:00:00",

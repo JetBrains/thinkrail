@@ -334,7 +334,7 @@ await runtime.run_session(task, exec_config, handler)
 | `RuntimeRegistry` | `runtime/registry.py` | Lookup table from `RuntimeType` to live runtime instance. Constructed once in `ProjectContext`; `AgentService` consumes via `runtime_registry.get(...)` |
 | `ModelInfo` | `runtime/types.py` | Neutral frozen Pydantic — `id, label, context_window` |
 | `DEFAULT_CONTEXT_WINDOW` | `runtime/types.py` | Neutral context-window floor (200K) for unknown model ids |
-| `RuntimeExecutionConfig` | `runtime/types.py` | Per-session execution config (working_directory, model, system_prompt, resume_session_id, effort, max_turns, permission_mode, stream_text) — `model` is required, no Claude-specific defaults |
+| `RuntimeExecutionConfig` | `runtime/types.py` | Per-session execution config (working_directory, model, system_prompt, resume_session_id, effort, permission_mode, stream_text) — `model` is required, no Claude-specific defaults |
 | `RuntimeEvent` | `runtime/events.py` | `(method, params, request_id?)` envelope — distinct from the persisted `AgentEvent` discriminated union in `models.py` |
 | `AgentEventHandler` | `runtime/events.py` | Protocol for the runtime → service callback surface |
 | `make_handler_from_notify` | `runtime/events.py` | Adapter from `_persisting_notify` to `AgentEventHandler` |
@@ -352,7 +352,7 @@ All models with multi-word fields use a `camelCase` alias generator (`to_camel` 
 | Model | Fields (Python / JSON wire) | Description |
 |-------|--------|-------------|
 | `AgentTask` | bonsai_sid/`bonsaiSid`, name, status, spec_ids/`specIds`, skill_id/`skillId`?, session_prompt/`sessionPrompt`?, config, session_id/`sessionId`?, created, updated | Session record. `status` is one of: `initializing`, `idle`, `running`, `waiting`, `done`, `error`. `skill_id` references the selected skill (if any). `session_prompt` holds custom instructions passed via `agent/run` or `SuggestSession`. |
-| `AgentConfig` | runtime, model, max_turns/`maxTurns`, permission_mode/`permissionMode`, stream_text/`streamText`, effort | Run configuration. `runtime: RuntimeType` (defaults to `"claude"`) selects which `IAgentRuntime` handles the session. `effort` is `str \| None` — null for auto, or `"low"`/`"medium"`/`"high"`/`"max"`. `extra="ignore"` so persisted session files that still carry the removed `betas` field round-trip cleanly. |
+| `AgentConfig` | runtime, model, permission_mode/`permissionMode`, stream_text/`streamText`, effort | Run configuration. `runtime: RuntimeType` (defaults to `"claude"`) selects which `IAgentRuntime` handles the session. `effort` is `str \| None` — null for auto, or `"low"`/`"medium"`/`"high"`/`"max"`. `extra="ignore"` so persisted session files that still carry removed fields (e.g. `betas`, `maxTurns`) round-trip cleanly. |
 | `AgentEvent` | bonsai_sid/`bonsaiSid`, session_id/`sessionId`, event_type/`eventType`, payload | Serializable event to send as notification |
 | `AgentResult` | bonsai_sid/`bonsaiSid`, session_id/`sessionId`, result, cost_usd/`costUsd`, turns, duration_ms/`durationMs`, usage | Turn result (sent with `turnComplete`) or final session result (sent with `done`) |
 
@@ -554,7 +554,6 @@ exec_config = RuntimeExecutionConfig(
     system_prompt=spec_context,
     resume_session_id=resume_session_id,
     permission_mode=task.config.permission_mode,
-    max_turns=task.config.max_turns,
     effort=task.config.effort,
     stream_text=task.config.stream_text,
 )

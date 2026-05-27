@@ -85,7 +85,7 @@ export function TicketSession({ ticket, embeddedSid, onSessionStarted }: TicketS
       const baseConfig = await buildDefaultSessionConfig();
       const sid = await startSession({
         specIds: isExecute ? ticket.linkedSpecIds : [],
-        config: isExecute ? { ...baseConfig, maxTurns: 100 } : baseConfig,
+        config: baseConfig,
         name: isExecute
           ? `Execute: ${ticket.title}`
           : `${phase.label}: ${ticket.title}`,

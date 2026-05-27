@@ -85,7 +85,6 @@ describe("classicRenderers.suggestStep approve flow", () => {
     const currentSession: Partial<Session> = {
       bonsaiSid: "parent_sid",
       model: "claude-opus-4-7",
-      maxTurns: 100,
       permissionMode: "bypassPermissions",
       effort: "max",
     };

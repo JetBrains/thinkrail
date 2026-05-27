@@ -24,7 +24,6 @@ describe("buildDefaultSessionConfig", () => {
         model: "claude-haiku-4-5",
         permissionMode: "acceptEdits",
         effort: "low",
-        maxTurns: 20,
       },
     });
 
@@ -32,7 +31,6 @@ describe("buildDefaultSessionConfig", () => {
     expect(cfg.model).toBe("claude-haiku-4-5");
     expect(cfg.effort).toBe("low");
     expect(cfg.permissionMode).toBe("acceptEdits");
-    expect(cfg.maxTurns).toBe(20);
     expect(cfg.streamText).toBe(true);
   });
 
@@ -42,7 +40,6 @@ describe("buildDefaultSessionConfig", () => {
         model: "claude-opus-4-7",
         permissionMode: "default",
         effort: null,
-        maxTurns: 50,
       },
     });
     const cfg = await buildDefaultSessionConfig();

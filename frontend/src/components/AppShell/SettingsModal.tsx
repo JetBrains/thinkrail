@@ -158,10 +158,9 @@ function ServerSection() {
 }
 
 const EFFORT_OPTIONS = [null, "low", "medium", "high", "max"] as const;
-const TURN_OPTIONS = [5, 10, 20, 50, 100] as const;
 
 /**
- * User-scope session defaults — model, permission mode, effort, max turns.
+ * User-scope session defaults — model, permission mode, effort.
  * Persisted via ``appSettings/*`` RPCs in the AppStore, so the values follow
  * the user across every project (unlike ``.bonsai/settings.json`` which is
  * project-scoped). Rendered inline as a `Settings` section instead of its
@@ -216,8 +215,7 @@ function SessionDefaultsSection({ visible }: { visible: boolean }) {
     sessionDefaults !== null &&
     (value.model !== sessionDefaults.model ||
       value.effort !== sessionDefaults.effort ||
-      value.permissionMode !== sessionDefaults.permissionMode ||
-      value.maxTurns !== sessionDefaults.maxTurns);
+      value.permissionMode !== sessionDefaults.permissionMode);
 
   const setDraftValue = (next: SessionDefaults) => {
     setSaveError(null);
@@ -286,22 +284,6 @@ function SessionDefaultsSection({ visible }: { visible: boolean }) {
               onClick={() => setDraftValue({ ...value, effort: e })}
             >
               {e ?? "auto"}
-            </button>
-          ))}
-        </span>
-      </div>
-
-      <div className="user-settings-row">
-        <label className="user-settings-label">Max turns</label>
-        <span className="draft-config-pills">
-          {TURN_OPTIONS.map((t) => (
-            <button
-              key={t}
-              type="button"
-              className={`draft-config-effort-pill ${value.maxTurns === t ? "draft-config-effort-pill--active" : ""}`}
-              onClick={() => setDraftValue({ ...value, maxTurns: t })}
-            >
-              {t}
             </button>
           ))}
         </span>

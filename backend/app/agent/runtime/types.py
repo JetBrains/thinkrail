@@ -69,7 +69,6 @@ class RuntimeExecutionConfig(BaseModel):
     system_prompt: str | None = None
     resume_session_id: str | None = None
     effort: str | None = None
-    max_turns: int = 50
     permission_mode: str = "default"
     stream_text: bool = True
 

@@ -1,8 +1,8 @@
 """User-scoped session-creation defaults.
 
 A single record holding the user's preferred model / permission-mode /
-effort / max-turns for new sessions. Pre-fills every new-session entry
-point so the UI never reverts to a hardcoded baseline.
+effort for new sessions. Pre-fills every new-session entry point so the
+UI never reverts to a hardcoded baseline.
 
 Stored as a JSON value in :class:`AppStore` under the
 :data:`SESSION_DEFAULTS_KEY` setting. Because Bonsai is single-user and
@@ -32,7 +32,6 @@ logger = logging.getLogger(__name__)
 COLD_START_MODEL = "claude-opus-4-7"
 COLD_START_PERMISSION_MODE = "default"
 COLD_START_EFFORT: str | None = None  # ``None`` renders as "auto" in the UI.
-COLD_START_MAX_TURNS = 50
 
 
 # ── AppStore key ───────────────────────────────────────────────────────
@@ -59,7 +58,6 @@ class SessionDefaults(BaseModel):
     model: str = COLD_START_MODEL
     permission_mode: str = COLD_START_PERMISSION_MODE
     effort: str | None = COLD_START_EFFORT
-    max_turns: int = COLD_START_MAX_TURNS
 
 
 # ── Persistence helpers ────────────────────────────────────────────────

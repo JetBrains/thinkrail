@@ -137,7 +137,6 @@ export interface Session {
   model: string;
   permissionMode: string;
   effort: string | null;
-  maxTurns: number;
   startedAt: number;
   events: AgentEvent[];
   metrics: SessionMetrics;

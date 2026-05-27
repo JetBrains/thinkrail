@@ -96,7 +96,6 @@ export type EventType =
 
 export interface AgentConfig {
   model: string;
-  maxTurns: number;
   permissionMode: string;
   streamText: boolean;
 }
@@ -191,7 +190,6 @@ export interface Session {
   permissionMode: string;
   betas: string[];
   effort: string | null;
-  maxTurns: number;
   metaTicketId?: string | null;
   startedAt: number;
   events: AgentEvent[];

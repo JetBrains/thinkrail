@@ -151,7 +151,6 @@ export interface RuntimeSkillInfo {
 
 export interface AgentConfig {
   model: string;
-  maxTurns: number;
   permissionMode: string;
   streamText: boolean;
   effort: string | null;

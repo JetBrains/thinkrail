@@ -43,7 +43,7 @@ freshness/refresh metadata leaking out. Any per-runtime caching
 | `ModelInfo` | `types.py` | Neutral frozen Pydantic model — `id, label, context_window` |
 | `RuntimeSkillInfo` | `types.py` | Neutral frozen Pydantic model — `id, name, description, source`. Describes a slash-command-style skill exposed by the runtime (e.g. Claude Code user/project/plugin skills, custom commands, built-ins). Surfaced in the chat composer's slash autocomplete via `skills/listRuntime`. |
 | `DEFAULT_CONTEXT_WINDOW` | `types.py` | `200_000` — neutral floor for unknown ids |
-| `RuntimeExecutionConfig` | `types.py` | Per-session execution config — `working_directory`, `model` (required), `system_prompt`, `resume_session_id`, `effort`, `max_turns`, `permission_mode`, `stream_text`. Derived from `AgentConfig` + task context inside `AgentService` |
+| `RuntimeExecutionConfig` | `types.py` | Per-session execution config — `working_directory`, `model` (required), `system_prompt`, `resume_session_id`, `effort`, `permission_mode`, `stream_text`. Derived from `AgentConfig` + task context inside `AgentService` |
 | `RuntimeRegistry` | `registry.py` | Lookup table. `register / get / has / all`. Domain exceptions `RuntimeRegistryError`, `DuplicateRuntimeError`, `UnknownRuntimeError` |
 | `RuntimeEvent` | `events.py` | Pydantic envelope `(method, params, request_id?)` — the JSON-RPC shape every runtime emits |
 | `AgentEventHandler` | `events.py` | Protocol with `on_event(event)` and `on_complete(result)` |

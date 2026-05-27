@@ -25,35 +25,38 @@ class TestAgentConfig:
     def test_defaults(self) -> None:
         cfg = AgentConfig()
         assert cfg.model == "claude-sonnet-4-6"
-        assert cfg.max_turns == 50
         assert cfg.permission_mode == "default"
         assert cfg.stream_text is True
 
     def test_custom_values(self) -> None:
-        cfg = AgentConfig(model="claude-opus-4-6", max_turns=10, permission_mode="strict", stream_text=False)
+        cfg = AgentConfig(model="claude-opus-4-6", permission_mode="strict", stream_text=False)
         assert cfg.model == "claude-opus-4-6"
-        assert cfg.max_turns == 10
         assert cfg.stream_text is False
 
     def test_serialization_round_trip(self) -> None:
-        cfg = AgentConfig(model="claude-haiku-4-5-20251001", max_turns=5)
+        cfg = AgentConfig(model="claude-haiku-4-5-20251001")
         data = cfg.model_dump()
         restored = AgentConfig(**data)
         assert restored == cfg
 
     def test_wire_format_uses_camel_case(self) -> None:
-        cfg = AgentConfig(max_turns=10, permission_mode="strict", stream_text=False)
+        cfg = AgentConfig(permission_mode="strict", stream_text=False)
         data = cfg.model_dump(by_alias=True)
-        assert "maxTurns" in data
         assert "permissionMode" in data
         assert "streamText" in data
-        assert data["maxTurns"] == 10
         assert data["permissionMode"] == "strict"
         assert data["streamText"] is False
         # snake_case keys should not appear in wire format
-        assert "max_turns" not in data
         assert "permission_mode" not in data
         assert "stream_text" not in data
+        # legacy field is gone from both wire and python keys
+        assert "maxTurns" not in data
+        assert "max_turns" not in data
+
+    def test_legacy_max_turns_in_input_is_ignored(self) -> None:
+        cfg = AgentConfig.model_validate({"model": "claude-opus-4-6", "maxTurns": 25})
+        assert cfg.model == "claude-opus-4-6"
+        assert not hasattr(cfg, "max_turns")
 
 
 class TestAgentTask:
@@ -103,7 +106,6 @@ class TestAgentTask:
         assert data["specIds"] == ["s1"]
         assert data["sessionId"] == "sess-1"
         # nested config should also use camelCase
-        assert "maxTurns" in data["config"]
         assert "permissionMode" in data["config"]
         assert "streamText" in data["config"]
         # snake_case keys should not appear

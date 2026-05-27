@@ -22,7 +22,6 @@ test("settings modal Session Defaults tab saves new defaults and they flow into 
     model: "claude-opus-4-7",
     permissionMode: "default",
     effort: null,
-    maxTurns: 50,
   });
 
   await openProject(page, tempProject.path);
@@ -63,9 +62,6 @@ test("settings modal Session Defaults tab saves new defaults and they flow into 
   await page
     .locator(`${MODAL} button.draft-config-effort-pill`, { hasText: /^low$/ })
     .click();
-  await page
-    .locator(`${MODAL} button.draft-config-effort-pill`, { hasText: /^20$/ })
-    .click();
   await expect(saveButton).toBeEnabled();
   await expect(saveButton).toHaveAttribute("title", "Save settings");
 
@@ -81,7 +77,6 @@ test("settings modal Session Defaults tab saves new defaults and they flow into 
       model: "claude-sonnet-4-6",
       permissionMode: "acceptEdits",
       effort: "low",
-      maxTurns: 20,
     });
 
   // Close via backdrop click: Save moved focus to a now-disabled button, so

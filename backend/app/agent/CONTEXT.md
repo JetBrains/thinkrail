@@ -392,7 +392,7 @@ def _build_context_for(self, task: AgentTask) -> str:
     "specIds": ["module-agent"],
     "skillId": "module-design",
     "prompt": "Focus on the build_context() helpers.",
-    "config": { "model": "claude-opus-4-6", "maxTurns": 25 }
+    "config": { "model": "claude-opus-4-6", "permissionMode": "default" }
   }
 }
 ```

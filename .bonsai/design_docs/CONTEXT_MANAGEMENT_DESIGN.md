@@ -18,6 +18,36 @@ Context window management — message history, compaction, summarization — is 
 2. **Observe** what the SDK does at runtime: token usage per turn, compaction events.
 3. **Recover** cleanly when the SDK reports `Prompt is too long` (the only context-window error that surfaces to the caller).
 
+Additionally, `_get_context_max()` defaults to 200K when the model registry isn't available, causing incorrect context metrics even for 1M-context models.
+
+### Hard Limits Analysis
+
+| Layer | Limit | Value | Causes "Prompt is too long"? |
+|-------|-------|-------|------------------------------|
+| **API** | Context window (Opus/Sonnet 4.6) | 1,000,000 tokens | **YES — the primary cause** |
+| **API** | Context window (Haiku/legacy) | 200,000 tokens | **YES** |
+| **API** | Max output per request | 64K–128K tokens | No (different error) |
+| **API** | Per-message size limit | **None** | N/A — only total context matters |
+| **API** | Rate limits (ITPM) | Tier-dependent | No (produces 429 error) |
+| **SDK** | `max_turns` per `query()` | Unset (uncapped) — Bonsai relies on user-initiated interrupt | Indirectly — more turns = more context |
+| **SDK** | `max_buffer_size` (CLI stdout) | 10MB (Bonsai override) | Edge case — very large tool outputs |
+| **SDK** | Internal message stream buffer | 100 messages | No (internal backpressure) |
+| **Bonsai** | Message size validation | **None** | **Gap — no validation at any layer** |
+| **Bonsai** | System prompt size validation | **None** | **Gap — no pre-start check** |
+| **Bonsai** | Context window management | **None** | **Gap — SDK compaction not wired** |
+
+**The context window is the ONLY hard limit producing "Prompt is too long".** Everything (system prompt + all messages + all tool results) must fit within it. There is NO per-message or per-turn limit from the API — just the total window.
+
+**No message or turn size limits exist anywhere in the Bonsai stack.** A user can paste an arbitrarily large message — it flows untouched through:
+- Frontend InputArea (no `maxLength`)
+- WebSocket RPC (no payload size check)
+- `send_message` RPC handler (no validation)
+- `service.send_message()` (validates status only)
+- `tracker.enqueue_message()` (raw queue put)
+- SDK `client.query()` (writes JSON to CLI stdin, no size check)
+
+A single oversized message can trigger "Prompt is too long" even if context usage is low.
+
 ## Architecture: Two Layers
 
 ```

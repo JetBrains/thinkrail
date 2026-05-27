@@ -194,7 +194,6 @@ class ClaudeRuntime:
         options = ClaudeAgentOptions(
             system_prompt=spec_context,
             model=task.config.model,
-            max_turns=task.config.max_turns,
             permission_mode=task.config.permission_mode,
             can_use_tool=_can_use_tool,
             include_partial_messages=task.config.stream_text,

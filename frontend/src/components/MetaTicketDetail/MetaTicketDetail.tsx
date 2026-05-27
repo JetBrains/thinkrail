@@ -117,7 +117,7 @@ export function MetaTicketDetail({ ticketId }: MetaTicketDetailProps) {
     const baseConfig = await buildDefaultSessionConfig();
     const sid = await createDraft({
       specIds: isExecute ? ticket.linkedSpecIds : [],
-      config: isExecute ? { ...baseConfig, maxTurns: 100 } : baseConfig,
+      config: baseConfig,
       name: isExecute ? `Execute: ${ticket.title}` : `${skillId.replace("ticket-", "")}: ${ticket.title}`,
       skillId,
       metaTicketId: ticket.id,

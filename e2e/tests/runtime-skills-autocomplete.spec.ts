@@ -56,7 +56,6 @@ test("slash autocomplete: mid-input trigger, grouped sections, Tab insertion, ke
     model: "claude-haiku-4-5-20251001",
     permissionMode: "default",
     effort: null,
-    maxTurns: 20,
   });
 
   await openProject(page, tempProject.path);

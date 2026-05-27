@@ -12,7 +12,6 @@ export interface SessionDefaults {
   model: string;
   permissionMode: string;
   effort: string | null;
-  maxTurns: number;
 }
 
 const BACKEND_URL = process.env.BONSAI_BACKEND_URL ?? "http://localhost:8000";

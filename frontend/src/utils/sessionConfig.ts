@@ -42,7 +42,6 @@ export async function buildDefaultSessionConfig(): Promise<AgentConfig> {
   }
   return {
     model: sd.model,
-    maxTurns: sd.maxTurns,
     permissionMode: sd.permissionMode,
     streamText: true,
     effort: sd.effort,

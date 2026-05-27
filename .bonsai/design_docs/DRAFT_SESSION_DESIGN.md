@@ -186,7 +186,7 @@ Request:
 ```json
 {
   "specIds": ["goal-and-requirements", "module-agent"],
-  "config": { "model": "claude-sonnet-4-6", "maxTurns": 50, "permissionMode": "default", "streamText": true, "betas": [], "effort": null },
+  "config": { "model": "claude-sonnet-4-6", "permissionMode": "default", "streamText": true, "effort": null },
   "skillId": "module-design",
   "name": "Module: session-manager",
   "prompt": null,

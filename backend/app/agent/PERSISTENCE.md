@@ -88,7 +88,7 @@ graph TD
   "name": "session name",
   "skillId": "module-design",
   "specIds": ["spec-1", "spec-2"],
-  "config": { "model": "claude-sonnet-4-6", "maxTurns": 25 },
+  "config": { "model": "claude-sonnet-4-6", "permissionMode": "default" },
   "status": "done",
   "sessionId": "sdk-session-id",
   "createdAt": "2026-03-03T...",

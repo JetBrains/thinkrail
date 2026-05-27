@@ -184,10 +184,9 @@ Note: The `plan` prop was removed from TicketProgressBar. The component now deri
 | Field | Execute Session | Other Sessions |
 |-------|----------------|----------------|
 | `specIds` | `ticket.linkedSpecIds` | `[]` |
-| `maxTurns` | 100 (feature-specific override) | from `buildDefaultSessionConfig()` |
 | `metaTicketId` | `ticket.id` | `ticket.id` |
 
-Other knobs (`model`, `effort`, `permissionMode`) come from `buildDefaultSessionConfig()` (`frontend/src/utils/sessionConfig.ts`), which reads the user-scoped `sessionDefaults` (managed via the header's "User settings" dialog and persisted in the AppStore). Execute overrides `maxTurns` to 100 because plan execution typically needs more turns than the user's default.
+All other knobs (`model`, `effort`, `permissionMode`) come from `buildDefaultSessionConfig()` (`frontend/src/utils/sessionConfig.ts`), which reads the user-scoped `sessionDefaults` (managed via the header's "User settings" dialog and persisted in the AppStore).
 
 When no active session is selected, shows a start prompt with phase description and button. When active, renders with **full parity to the standalone SessionPanel**:
 - `StickyContextBar` — skill/spec/model info bar

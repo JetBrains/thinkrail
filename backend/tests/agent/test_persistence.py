@@ -18,7 +18,7 @@ def _make_session_data(bonsai_sid: str = "task-1", **overrides) -> dict:
         "name": "test session",
         "skillId": "module-design",
         "specIds": ["spec-1"],
-        "config": {"model": "claude-sonnet-4-6", "maxTurns": 25},
+        "config": {"model": "claude-sonnet-4-6"},
         "status": "done",
         "sessionId": "sess-abc",
         "createdAt": "2026-03-03T10:00:00Z",

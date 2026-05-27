@@ -13,8 +13,6 @@ import { PromptPreview } from "./PromptPreview.tsx";
 import { StaleRefsBanner } from "@/components/shared/StaleRefsBanner.tsx";
 import "./DraftConfigCard.css";
 
-const TURN_OPTIONS = [5, 10, 20, 50, 100];
-
 interface DraftConfigCardProps {
   bonsaiSid: string;
   readOnly?: boolean;
@@ -144,9 +142,8 @@ export function DraftConfigCard({ bonsaiSid, readOnly, onVisibilityChange }: Dra
   const modelDef = models.find((m) => m.id === session.model);
   const attachedTicket = session.metaTicketId ? tickets.get(session.metaTicketId) : null;
 
-  const buildConfig = (overrides: Partial<{ model: string; maxTurns: number; permissionMode: string; effort: string | null }>) => ({
+  const buildConfig = (overrides: Partial<{ model: string; permissionMode: string; effort: string | null }>) => ({
     model: overrides.model ?? session.model,
-    maxTurns: overrides.maxTurns ?? session.maxTurns,
     permissionMode: overrides.permissionMode ?? session.permissionMode,
     streamText: true,
     effort: overrides.effort !== undefined ? overrides.effort : session.effort,
@@ -226,7 +223,6 @@ export function DraftConfigCard({ bonsaiSid, readOnly, onVisibilityChange }: Dra
               {modelDef?.label ?? session.model}
             </span>
             <span className="draft-config-pill">{session.permissionMode}</span>
-            <span className="draft-config-pill">{session.maxTurns} turns</span>
             <span className="draft-config-pill">{session.effort ?? "auto"} effort</span>
           </div>
         </div>
@@ -496,21 +492,6 @@ export function DraftConfigCard({ bonsaiSid, readOnly, onVisibilityChange }: Dra
                 ),
               )}
             </select>
-          </span>
-
-          <span className="draft-config-inline">
-            <span className="draft-config-hint">turns:</span>
-            <span className="draft-config-pills">
-              {TURN_OPTIONS.map((t) => (
-                <button
-                  key={t}
-                  className={`draft-config-effort-pill ${session.maxTurns === t ? "draft-config-effort-pill--active" : ""}`}
-                  onClick={() => debouncedUpdate({ config: buildConfig({ maxTurns: t }) })}
-                >
-                  {t}
-                </button>
-              ))}
-            </span>
           </span>
 
           <span className="draft-config-inline">

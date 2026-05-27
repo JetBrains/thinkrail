@@ -10,7 +10,6 @@ export interface SessionDefaults {
   model: string;
   permissionMode: string;
   effort: string | null;
-  maxTurns: number;
 }
 
 export function createAppSettingsApi(client: RpcClient) {

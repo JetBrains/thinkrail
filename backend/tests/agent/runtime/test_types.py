@@ -30,7 +30,6 @@ class TestRuntimeExecutionConfig:
 
     def test_defaults_match_contract(self):
         cfg = RuntimeExecutionConfig(working_directory="/tmp/proj", model="claude-opus-4-7")
-        assert cfg.max_turns == 50
         assert cfg.permission_mode == "default"
         assert cfg.stream_text is True
         assert cfg.effort is None
@@ -44,7 +43,6 @@ class TestRuntimeExecutionConfig:
             system_prompt="be concise",
             resume_session_id="sess-123",
             effort="high",
-            max_turns=10,
             permission_mode="acceptEdits",
             stream_text=False,
         )
@@ -55,7 +53,6 @@ class TestRuntimeExecutionConfig:
             "systemPrompt": "be concise",
             "resumeSessionId": "sess-123",
             "effort": "high",
-            "maxTurns": 10,
             "permissionMode": "acceptEdits",
             "streamText": False,
         }
@@ -66,10 +63,10 @@ class TestRuntimeExecutionConfig:
         cfg = RuntimeExecutionConfig.model_validate({
             "workingDirectory": "/tmp/proj",
             "model": "claude-opus-4-7",
-            "maxTurns": 7,
+            "permissionMode": "acceptEdits",
         })
         assert cfg.working_directory == "/tmp/proj"
-        assert cfg.max_turns == 7
+        assert cfg.permission_mode == "acceptEdits"
 
 
 class TestRuntimeSkillInfo:
