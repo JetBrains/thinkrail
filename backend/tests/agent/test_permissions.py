@@ -73,6 +73,74 @@ class TestAwaitUserResponse:
         assert response["behavior"] == "allow"
         assert tracker.get_task(task.bonsai_sid).status == "running"
 
+    async def test_publishes_status_changed_on_both_transitions(self) -> None:
+        # Without these notifies, the sidebar's sessionList cache stays
+        # at the previous status (e.g. "running" pre-question) and never
+        # learns the session is waiting on the user — and then never
+        # learns it transitioned back to running after the answer. Only
+        # the next unrelated statusChanged would update the panel.
+        tracker = Tracker()
+        task = _make_task(tracker)
+        notify = AsyncMock()
+
+        async def answer_soon():
+            await asyncio.sleep(0.05)
+            futures = tracker._futures.get(task.bonsai_sid, {})
+            for rid, fut in futures.items():
+                if not fut.done():
+                    tracker.resolve_future(task.bonsai_sid, rid, {"behavior": "allow"})
+                    break
+
+        asyncio.get_event_loop().create_task(answer_soon())
+        await _await_user_response(
+            tracker, notify, task, _config(),
+            method="agent/askUserQuestion",
+            params={"bonsaiSid": task.bonsai_sid, "questions": []},
+        )
+
+        status_calls = [
+            c for c in notify.call_args_list
+            if c.args and c.args[0] == "agent/statusChanged"
+        ]
+        assert len(status_calls) == 2, status_calls
+        assert status_calls[0].args[1] == {
+            "bonsaiSid": task.bonsai_sid, "status": "waiting",
+        }
+        assert status_calls[1].args[1] == {
+            "bonsaiSid": task.bonsai_sid, "status": "running",
+        }
+
+    async def test_skips_waiting_publish_when_already_waiting(self) -> None:
+        # Nested permission requests (one question opens another) reuse
+        # the existing waiting state — we should not double-publish.
+        tracker = Tracker()
+        task = _make_task(tracker)
+        tracker.set_status(task.bonsai_sid, "waiting")
+        notify = AsyncMock()
+
+        async def answer_soon():
+            await asyncio.sleep(0.05)
+            futures = tracker._futures.get(task.bonsai_sid, {})
+            for rid, fut in futures.items():
+                if not fut.done():
+                    tracker.resolve_future(task.bonsai_sid, rid, {"behavior": "allow"})
+                    break
+
+        asyncio.get_event_loop().create_task(answer_soon())
+        await _await_user_response(
+            tracker, notify, task, _config(),
+            method="agent/askUserQuestion",
+            params={"bonsaiSid": task.bonsai_sid, "questions": []},
+        )
+
+        status_calls = [
+            c for c in notify.call_args_list
+            if c.args and c.args[0] == "agent/statusChanged"
+        ]
+        # Only the running publish — waiting was already the entry state.
+        assert len(status_calls) == 1
+        assert status_calls[0].args[1]["status"] == "running"
+
     async def test_no_timeout_waits_indefinitely(self) -> None:
         """Even after a long wait, the future stays pending until resolved."""
         tracker = Tracker()

@@ -216,6 +216,9 @@ async def _await_user_response(
     future = tracker.register_future(task.bonsai_sid, request_id)
     if tracker.get_task(task.bonsai_sid).status != "waiting":
         tracker.set_status(task.bonsai_sid, "waiting")
+        await notify("agent/statusChanged", {
+            "bonsaiSid": task.bonsai_sid, "status": "waiting",
+        })
     # Store pending request so session/get can include it
     request_type = "approval" if method == "agent/confirmAction" else "question"
     tracker.set_pending_request(task.bonsai_sid, {
@@ -227,6 +230,9 @@ async def _await_user_response(
     response = await future
     tracker.clear_pending_request(task.bonsai_sid)
     tracker.set_status(task.bonsai_sid, "running")
+    await notify("agent/statusChanged", {
+        "bonsaiSid": task.bonsai_sid, "status": "running",
+    })
     return response, request_id
 
 
