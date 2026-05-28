@@ -10,6 +10,7 @@ import type {
   ArchivedSession,
   PendingRequest,
 } from "@/types/session.ts";
+import type { SessionSummary } from "@/api/methods/sessions.ts";
 import { getClient } from "@/api/index.ts";
 import { createAgentApi } from "@/api/methods/agents.ts";
 import { getContextWindowSize } from "@/utils/models.ts";
@@ -36,6 +37,12 @@ interface SessionStore {
   projectCost: number;
   /** Monotonically increasing counter for default "Session N" names */
   sessionCounter: number;
+  /** Last-fetched session/list response — shared between SessionManager and StatusBar */
+  sessionList: SessionSummary[];
+  /** Refresh `sessionList` from the backend. Idempotent. */
+  refreshSessionList: () => Promise<void>;
+  /** Surgical partial update of one entry in `sessionList`. No-op if not present. */
+  patchSessionInList: (bonsaiSid: string, patch: Partial<SessionSummary>) => void;
 
   /** Create a draft session with sensible defaults. Used by + New, Cmd+T, palette. */
   createNewSession: (prefill?: {
@@ -599,6 +606,23 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
   openTabs: new Set(),
   projectCost: 0,
   sessionCounter: 0,
+  sessionList: [],
+
+  refreshSessionList: async () => {
+    const { createSessionApi } = await import("@/api/methods/sessions.ts");
+    const list = await createSessionApi(getClient()).list();
+    set({ sessionList: list });
+  },
+
+  patchSessionInList: (bonsaiSid, patch) => {
+    set((s) => {
+      const idx = s.sessionList.findIndex((e) => e.bonsaiSid === bonsaiSid);
+      if (idx === -1) return s;
+      const next = [...s.sessionList];
+      next[idx] = { ...next[idx], ...patch };
+      return { sessionList: next };
+    });
+  },
 
   createNewSession: async (prefill) => {
     const state = get();
@@ -1032,6 +1056,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
       openTabs: new Set(),
       projectCost: 0,
       sessionCounter: 0,
+      sessionList: [],
     });
   },
 

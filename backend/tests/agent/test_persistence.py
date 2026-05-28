@@ -156,7 +156,8 @@ class TestListSessions:
         entry = result[0]
         expected_fields = {
             "bonsaiSid", "name", "skillId", "specIds", "status",
-            "model", "createdAt", "updatedAt", "active", "inTracker", "metrics",
+            "model", "metaTicketId", "createdAt", "updatedAt",
+            "active", "inTracker", "metrics",
         }
         assert set(entry.keys()) == expected_fields
 

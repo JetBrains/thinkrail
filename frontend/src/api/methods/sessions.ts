@@ -7,6 +7,8 @@ export interface SessionSummary {
   specIds: string[];
   status: string;
   model?: string;
+  /** The meta-ticket this session is attached to, if any. */
+  metaTicketId?: string | null;
   createdAt: string;
   updatedAt: string;
   metrics?: Record<string, unknown>;

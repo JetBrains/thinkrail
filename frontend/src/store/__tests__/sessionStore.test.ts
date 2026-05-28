@@ -137,4 +137,57 @@ describe("sessionStore remote events", () => {
       expect(useSessionStore.getState().sessions.size).toBe(0);
     });
   });
+
+  describe("patchSessionInList", () => {
+    beforeEach(() => {
+      useSessionStore.setState({
+        sessionList: [
+          {
+            bonsaiSid: "sidA",
+            name: "Alpha",
+            specIds: [],
+            status: "idle",
+            createdAt: "2026-01-01T00:00:00Z",
+            updatedAt: "2026-01-01T00:00:00Z",
+          },
+          {
+            bonsaiSid: "sidB",
+            name: "Bravo",
+            specIds: [],
+            status: "draft",
+            createdAt: "2026-01-01T00:00:00Z",
+            updatedAt: "2026-01-01T00:00:00Z",
+          },
+        ],
+      });
+    });
+
+    it("updates the matching session's fields and replaces the array reference", () => {
+      const before = useSessionStore.getState().sessionList;
+      useSessionStore.getState().patchSessionInList("sidA", { status: "running" });
+      const after = useSessionStore.getState().sessionList;
+
+      expect(after).not.toBe(before);
+      expect(after[0].status).toBe("running");
+      // Untouched entries keep object identity.
+      expect(after[1]).toBe(before[1]);
+    });
+
+    it("is a no-op when the bonsaiSid is not in the list", () => {
+      const before = useSessionStore.getState().sessionList;
+      useSessionStore.getState().patchSessionInList("does-not-exist", { status: "done" });
+      const after = useSessionStore.getState().sessionList;
+
+      expect(after).toBe(before);
+    });
+
+    it("only writes the fields in the patch — leaves the rest intact", () => {
+      useSessionStore.getState().patchSessionInList("sidB", { status: "initializing" });
+      const entry = useSessionStore.getState().sessionList[1];
+
+      expect(entry.status).toBe("initializing");
+      expect(entry.name).toBe("Bravo");
+      expect(entry.bonsaiSid).toBe("sidB");
+    });
+  });
 });

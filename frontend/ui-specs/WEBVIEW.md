@@ -119,7 +119,30 @@ Toggle visibility: `Mod+B`
 
 ### 2.1 Sessions Tab
 
-The Sessions tab renders the full `SessionManager` view: all sessions for the current project grouped by status (Active / Completed / Errors), with Switch-to / Stop per active card and Continue / Delete per completed/errored card. A refresh affordance (`↻`) sits in the top-right.
+The Sessions tab renders the full `SessionManager` view: a flat list of every session for the current project, sorted by `updatedAt` descending. Each row is a dense IDE-tab style card — the panel scans like a source-control panel rather than a series of badged tiles.
+
+Card layout (CSS grid, three rows):
+
+```
+[dot] [name ............................] [time]
+[ticket chip ─ stripe · title · #id           ]   (omitted when no ticket)
+[↻ 3]  [$0.18] .................. [🗑 hover]
+```
+
+- **Status as a 7px dot** at the start of the header row. Colors come from the status palette (`--muted` draft, `--blue` idle/initializing, `--purple` running with a pulse, `--gold` waiting/interrupted, `--green` done, `--red` error). Reading the status word is never necessary.
+- **Name** is the dominant text. Generic auto-names (`/^Session \d+$/`) render in monospace + muted to make custom names visibly dominate. Draft sessions render the name in italic + muted with the literal time slot showing "draft".
+- **Time** is a relative "4h" / "6d" / "now" stamp in tabular numerals. Running sessions show "now" in purple.
+- **Ticket chip** (only when attached): a single chip containing a 4px colored stripe + ticket title + short id (`#xxxx`). The stripe color is deterministically derived from `metaTicketId`, so sessions on the same ticket share the same chip color and cluster pre-attentively as the user scans. When no ticket is attached, the row collapses entirely — card is two lines.
+- **Metrics chips**: `↻ {turns}` and `$ {costUsd}` chips on the bottom row. Hidden when both are zero (draft / fresh session) but the row keeps its height so the grid doesn't jump on first turn.
+- **Delete** is the only explicit action — a small trash icon button on the bottom-right, **hover-revealed**. Clicking anywhere else on the card opens / switches to / restores the session (`onOpen`).
+- **Needs attention** state (status = `waiting`, or `pendingRequest` truthy) lights a 2px `--gold` glow on the left edge of the card.
+
+The panel re-fetches automatically: `session/didCreate` triggers a full `session/list` refresh (the wire payload is minimal); `session/didEnd` and `agent/statusChanged` patch the affected row in place via `sessionStore.patchSessionInList`. An `↻` button in the top-right forces an explicit refresh.
+
+**Removed deliberately:**
+- Status group labels (Active / Pending / etc.) — most projects share one status across most cards, so groups were weak signal. The badge → dot move makes status visible without taking layout real estate.
+- Model label — already visible (and editable) in the chat's bottom toolbar; duplicating it per card was noise.
+- Open / Switch-to / Continue / Stop buttons — the card itself is the open/switch/restore affordance, and every in-session control is one click away after that. Only Delete has no in-session equivalent, so it stays.
 
 The tab is coupled to a set of explicit "show me the Sessions UI" affordances. Other flows that incidentally flip the center view to Sessions deliberately do not steal sidebar focus:
 
@@ -193,7 +216,7 @@ The following views from the old tab-based right panel are now handled different
 
 Always visible at the bottom. Shows:
 - Spec counts (total, done, pending)
-- **"N sessions"** — clickable button that focuses the sidebar Sessions tab (uncollapsing the left panel if needed). When background sessions exist, a chevron next to it toggles a dropdown listing them.
+- **"N sessions"** — clickable button that focuses the sidebar Sessions tab (uncollapsing the left panel if needed). The count is sourced from `sessionStore.sessionList` (the same `session/list` snapshot that backs the sidebar panel), so the pill and the panel always agree — including done/error/draft sessions. When background sessions exist, a chevron next to it toggles a dropdown listing them.
 - Attention indicator when sessions need user input
 - Keyboard shortcut hints
 

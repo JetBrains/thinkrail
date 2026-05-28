@@ -134,6 +134,7 @@ def list_sessions(project_root: Path) -> list[dict[str, Any]]:
                 "specIds": data.get("specIds", []),
                 "status": status,
                 "model": data.get("config", {}).get("model", ""),
+                "metaTicketId": data.get("metaTicketId"),
                 "createdAt": data.get("createdAt", ""),
                 "updatedAt": data.get("updatedAt", ""),
                 # "interrupted" means no live runner → not active for

@@ -7,6 +7,8 @@ from jsonrpcserver import JsonRpcError, Result, Success
 
 from app.agent.models import SubsessionType
 from app.agent.service import AgentService
+from app.rpc.bus import bus
+from app.rpc.context import get_current_conn
 
 _INVALID_PARAMS = -32602
 _INTERNAL_ERROR = -32603
@@ -39,6 +41,21 @@ async def create_subsession(service: AgentService, **params: Any) -> dict:
         context=params.get("context"),
         name=params.get("name", ""),
     )
+    conn = get_current_conn()
+    if conn:
+        task.created_by = conn.display_name
+        await bus.publish_to_project(conn.project_path, "session/didCreate", {
+            "bonsaiSid": task.bonsai_sid,
+            "name": task.name or task.bonsai_sid[:8],
+            "skillId": task.skill_id,
+            "specIds": list(task.spec_ids),
+            "filePaths": list(task.file_paths),
+            "status": task.status,
+            "config": task.config.model_dump(by_alias=True),
+            "metaTicketId": task.meta_ticket_id,
+            "createdAt": task.created,
+            "createdBy": conn.display_name,
+        })
     return {"bonsaiSid": task.bonsai_sid}
 
 

@@ -72,9 +72,17 @@ export const inputAutocomplete = {
 export const sessionManager = {
   panel: ".session-manager",
   card: ".sm-card",
-  continueBtn: "button.sm-btn-continue",
-  stopBtn: "button.sm-btn-stop",
-  deleteBtn: "button.sm-btn-delete",
+  // The card has one explicit action: a hover-revealed trash icon.
+  deleteBtn: "button.sm-icon-btn",
+  ticketChip: ".sm-ticket-chip",
+  ticketTitle: ".sm-ticket-title",
+  ticketId: ".sm-ticket-id",
+  ticketStripe: ".sm-ticket-stripe",
+  statusDot: ".sm-dot",
+  metricsTurns: ".sm-chip--turns",
+  metricsCost: ".sm-chip--cost",
+  ctxMenu: ".sm-ctx-menu",
+  ctxMenuItem: ".sm-ctx-menu-item",
 };
 
 export const statusBar = {

@@ -141,10 +141,12 @@ List all sessions from disk, sorted by modification time (newest first). Returns
 | `name` | `str` | Display name |
 | `skillId` | `str \| None` | Skill used (if any) |
 | `specIds` | `list[str]` | Spec IDs loaded as context |
-| `status` | `str` | Last known status |
+| `status` | `str` | Last known status. Non-terminal statuses (`idle`, `running`, `waiting`, `initializing`) coerce to `interrupted` here because a disk-only session has no live runner. |
 | `model` | `str` | Model name from config |
+| `metaTicketId` | `str \| None` | The meta-ticket this session is attached to, if any. The frontend uses this to render the ticket-stripe chip on the sidebar card. |
 | `createdAt` | `str` | ISO timestamp |
 | `updatedAt` | `str` | ISO timestamp |
+| `active` | `bool` | Whether the session is in a non-terminal status (after the coercion above). Drives the StatusBar's "live" count. |
 | `metrics` | `dict` | Cost/usage metrics |
 
 ### `append_event`

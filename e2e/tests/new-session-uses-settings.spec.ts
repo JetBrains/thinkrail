@@ -5,8 +5,7 @@ import { seedSessionDefaults } from "../helpers/appSettings";
 
 /**
  * Regression: a new session draft must pick up the user-scoped session
- * defaults stored in the AppStore (model / effort / permission mode /
- * max turns).
+ * defaults stored in the AppStore (model / effort / permission mode).
  *
  * Defaults live in the user-scoped AppStore record at
  * ``backend/app/core/session_defaults.py`` (key ``session_defaults``).
@@ -20,8 +19,8 @@ import { seedSessionDefaults } from "../helpers/appSettings";
  *    the assertion stable if the id ever shifts.
  *  - permission mode: option values are literal strings (`"acceptEdits"`
  *    etc.), so `toHaveValue` is unambiguous.
- *  - effort / max turns: pill buttons; the selected one carries the
- *    `--active` modifier on `.draft-config-effort-pill`.
+ *  - effort: pill button; the selected one carries the `--active`
+ *    modifier on `.draft-config-effort-pill`.
  */
 
 test("new-session draft reflects user-scoped session defaults", async ({
@@ -65,16 +64,6 @@ test("new-session draft reflects user-scoped session defaults", async ({
     { hasText: /^low$/ },
   );
   await expect(lowEffortPill).toHaveClass(/draft-config-effort-pill--active/, {
-    timeout: 15_000,
-  });
-
-  // Turns pill row — same component family. 20 is in TURN_OPTIONS so the
-  // seeded value lights an existing pill.
-  const turnsPill = page.locator(
-    "button.draft-config-effort-pill",
-    { hasText: /^20$/ },
-  );
-  await expect(turnsPill).toHaveClass(/draft-config-effort-pill--active/, {
     timeout: 15_000,
   });
 });

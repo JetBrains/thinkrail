@@ -43,6 +43,9 @@ function AppInner({ projectPath: _projectPath, onSwitchProject }: { projectPath:
           useSessionStore.getState()
             .loadActiveSessions(opts)
             .catch((err) => console.warn("[Bonsai] Failed to load sessions:", err));
+          useSessionStore.getState()
+            .refreshSessionList()
+            .catch((err) => console.warn("[Bonsai] Failed to refresh session list:", err));
         });
       console.log("[Bonsai] Fetching specs...");
       useSpecStore.getState().fetchSpecs().then(() => {

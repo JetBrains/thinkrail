@@ -48,6 +48,18 @@ async def run_agent(service: AgentService, **params: Any) -> dict:
     conn = get_current_conn()
     if conn:
         task.created_by = conn.display_name
+        await bus.publish_to_project(conn.project_path, "session/didCreate", {
+            "bonsaiSid": task.bonsai_sid,
+            "name": task.name or task.bonsai_sid[:8],
+            "skillId": task.skill_id,
+            "specIds": list(task.spec_ids),
+            "filePaths": list(task.file_paths),
+            "status": task.status,
+            "config": task.config.model_dump(by_alias=True),
+            "metaTicketId": task.meta_ticket_id,
+            "createdAt": task.created,
+            "createdBy": conn.display_name,
+        })
     auto_subscribe_all(task.bonsai_sid)
     return {"bonsaiSid": task.bonsai_sid}
 

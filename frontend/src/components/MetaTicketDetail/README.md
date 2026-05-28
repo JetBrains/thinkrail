@@ -99,10 +99,13 @@ leftWidth: number                  // sidebar width in px (default 280, min 200)
 **Mount behavior:**
 1. Fetch ticket via `board/get`
 2. Auto-select right panel based on ticket state:
-   - If ticket has active sessions (in sessionStore) -> show last active session
+   - If `boardStore.pendingTicketSession` is set and matches one of this ticket's sessions -> focus that session and clear the hint
+   - Else if ticket has active sessions (in sessionStore) -> show last active session
    - Else if ticket has plan -> show plan
    - Else -> show description
 3. If ticket has plan path -> fetch plan via `board/getPlan`
+
+**Post-mount retargeting:** A subscription effect watches `boardStore.pendingTicketSession` independent of mount. When the hint changes for the currently-mounted ticket — e.g. the user right-clicks a sibling session in the sidebar and selects "Open ticket" while this detail view is already showing a different session — the right panel switches to the newly-hinted session and the hint is cleared.
 
 ### RightPanelContent Type
 

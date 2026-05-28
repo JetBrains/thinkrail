@@ -264,6 +264,7 @@ interface SessionStore {
   activeSessionId: string | null;
   archivedSessions: ArchivedSession[];
   openTabs: Set<string>;  // which sessions have a visible tab
+  sessionList: SessionSummary[];  // last-fetched session/list response — shared with StatusBar + SessionManager
 
   // User-initiated actions
   startSession: (params: { specIds, config, name, skillId?, filePaths? }) => Promise<string>;
@@ -277,6 +278,8 @@ interface SessionStore {
   resolveRequest: (bonsaiSid: string, requestId: string, response: unknown) => void;
   updateConfig: (bonsaiSid: string, config: { model?, permissionMode? }) => Promise<void>;
   restoreSession: (bonsaiSid: string) => Promise<void>;
+  refreshSessionList: () => Promise<void>;
+  patchSessionInList: (bonsaiSid: string, patch: Partial<SessionSummary>) => void;
 
   // Event handlers (called by wireEvents)
   onSessionStart: (params) => void;
@@ -319,6 +322,8 @@ interface SessionStore {
 - `onSessionError` with `subtype === "turn_error"` sets status to `"idle"` (recoverable); other subtypes set `"error"` (terminal)
 - `ensureSession()` internal helper creates placeholder if events arrive before `startSession()` resolves
 - `archivedSessions` is **not persisted** to localStorage — lost on page refresh
+- `sessionList` is the shared `session/list` snapshot used by both `SessionManager` (sidebar) and `StatusBar` (footer pill). `refreshSessionList()` re-fetches it from the backend; `patchSessionInList(sid, patch)` applies a surgical update without a round-trip. `wireEvents` calls `refreshSessionList()` on `session/didCreate` (the wire payload is minimal), and calls `patchSessionInList()` on `session/didEnd` and `agent/statusChanged` (the events carry the new status directly)
+- `boardStore.pendingTicketSession` is a one-shot hint: when the sidebar SessionManager's context menu fires "Open ticket", it writes the bonsaiSid here, the center view flips to Board, and `MetaTicketDetail` consumes the hint to focus that specific session inside the ticket detail (then clears it)
 
 ---
 

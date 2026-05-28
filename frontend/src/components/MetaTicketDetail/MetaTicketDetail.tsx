@@ -39,21 +39,26 @@ export function MetaTicketDetail({ ticketId }: MetaTicketDetailProps) {
       .get(ticketId)
       .then((t) => {
         setTicket(t);
-        // Auto-select right panel based on ticket state
+        // Honour a one-shot "open this session" hint set by the sidebar
+        // context menu before navigating here. Falls back to the regular
+        // last-session / plan / description selection.
+        const pending = useBoardStore.getState().pendingTicketSession;
         let defaultPanel: RightPanelContent = { type: "description" };
-        // Check for active sessions
-        for (let i = t.sessionIds.length - 1; i >= 0; i--) {
-          if (sessions.has(t.sessionIds[i])) {
-            defaultPanel = { type: "session", sessionId: t.sessionIds[i] };
-            break;
+        if (pending && t.sessionIds.includes(pending)) {
+          defaultPanel = { type: "session", sessionId: pending };
+        } else {
+          for (let i = t.sessionIds.length - 1; i >= 0; i--) {
+            if (sessions.has(t.sessionIds[i])) {
+              defaultPanel = { type: "session", sessionId: t.sessionIds[i] };
+              break;
+            }
+          }
+          if (defaultPanel.type === "description" && t.planPath) {
+            defaultPanel = { type: "plan" };
           }
         }
-        // If ticket has plan and no active session, show plan
-        if (defaultPanel.type === "description" && t.planPath) {
-          defaultPanel = { type: "plan" };
-        }
+        if (pending) useBoardStore.getState().setPendingTicketSession(null);
         setRightPanel(defaultPanel);
-        // Fetch plan if ticket has one
         if (t.planPath) {
           lastPlanPath.current = t.planPath;
           api.getPlan(ticketId).then(setPlan).catch(() => {});
@@ -66,6 +71,20 @@ export function MetaTicketDetail({ ticketId }: MetaTicketDetailProps) {
   const boardSummary = useBoardStore((s) => s.tickets.get(ticketId));
   const lastUpdated = useRef(boardSummary?.updated);
   const lastPlanPath = useRef<string | null>(null);
+
+  // Honour pendingTicketSession that arrives *after* this detail panel
+  // mounted — e.g. user is already on this ticket's view, then triggers
+  // "Open ticket" from a sibling session's context menu. The mount
+  // effect above only fires on ticketId changes, so without this the
+  // panel stays on whichever session was selected before.
+  const pendingTicketSession = useBoardStore((s) => s.pendingTicketSession);
+  const setPendingTicketSession = useBoardStore((s) => s.setPendingTicketSession);
+  useEffect(() => {
+    if (!pendingTicketSession || !ticket) return;
+    if (!ticket.sessionIds.includes(pendingTicketSession)) return;
+    setRightPanel({ type: "session", sessionId: pendingTicketSession });
+    setPendingTicketSession(null);
+  }, [pendingTicketSession, ticket, setPendingTicketSession]);
   useEffect(() => {
     if (!boardSummary || boardSummary.updated === lastUpdated.current) return;
     lastUpdated.current = boardSummary.updated;

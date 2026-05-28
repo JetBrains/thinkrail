@@ -41,6 +41,7 @@ export function StatusBar({ onOpenSessionManager }: StatusBarProps) {
     (s) => s.status === "active" || s.status === "draft",
   ).length;
 
+  const sessionList = useSessionStore((s) => s.sessionList);
   const allLive = Array.from(sessions.values()).filter(
     (s) => s.status !== "done" && s.status !== "error",
   );
@@ -48,6 +49,11 @@ export function StatusBar({ onOpenSessionManager }: StatusBarProps) {
   const bgCount = bgSessions.length;
   const attnSessions = allLive.filter((s) => s.pendingRequest !== null);
   const attnCount = attnSessions.length;
+  // Pill matches what the sidebar Sessions panel shows: the full
+  // session/list response (live + on-disk, every status). Falls back
+  // to in-memory live sessions only while the first list() hasn't
+  // resolved.
+  const totalCount = sessionList.length > 0 ? sessionList.length : allLive.length;
 
   return (
     <footer className="status-bar">
@@ -69,7 +75,7 @@ export function StatusBar({ onOpenSessionManager }: StatusBarProps) {
             className={`status-sessions-btn${bgCount > 0 ? " status-sessions-btn--bg" : ""}`}
             onClick={onOpenSessionManager}
           >
-            {allLive.length} session{allLive.length !== 1 ? "s" : ""}
+            {totalCount} session{totalCount !== 1 ? "s" : ""}
           </button>
           {bgCount > 0 && (
             <button

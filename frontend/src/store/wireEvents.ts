@@ -118,10 +118,15 @@ export function wireEvents(client: RpcClient): Unsubscribe {
   );
 
   // ── Multi-client sync notifications ──
+  // A brand-new session brings name/config/createdAt that aren't on the
+  // wire (the payload is minimal), so refetch the list to pull full
+  // metadata. didCreate fires once per session — no need to debounce.
   unsubs.push(
     client.on("session/didCreate", (p) => {
       const params = p as Record<string, unknown>;
       useSessionStore.getState().onRemoteSessionCreated(params);
+      void useSessionStore.getState().refreshSessionList()
+        .catch(() => { /* swallow — best-effort cache update */ });
     }),
   );
   unsubs.push(
@@ -135,13 +140,27 @@ export function wireEvents(client: RpcClient): Unsubscribe {
       const params = p as Record<string, unknown>;
       const bonsaiSid = params.bonsaiSid as string;
       const status = params.status as string;
-      // Update session status in the store if it exists
+      if (!bonsaiSid || !status) return;
+      // Update session status in the in-memory sessions Map if it exists
       const session = useSessionStore.getState().sessions.get(bonsaiSid);
       if (session && session.status !== "done" && session.status !== "error") {
         const sessions = new Map(useSessionStore.getState().sessions);
         sessions.set(bonsaiSid, { ...session, status: status as typeof session.status });
         useSessionStore.setState({ sessions });
       }
+      useSessionStore.getState().patchSessionInList(bonsaiSid, { status });
+    }),
+  );
+
+  // agent/statusChanged fires twice per turn — patch the single affected
+  // row in place instead of refetching the whole list every transition.
+  unsubs.push(
+    client.on("agent/statusChanged", (p) => {
+      const params = p as Record<string, unknown>;
+      const bonsaiSid = params.bonsaiSid as string;
+      const status = params.status as string;
+      if (!bonsaiSid || !status) return;
+      useSessionStore.getState().patchSessionInList(bonsaiSid, { status });
     }),
   );
   unsubs.push(

@@ -1,6 +1,8 @@
 /** Map session status to a display label and CSS class */
 export function getStatusStyle(status: string): { label: string; cls: string } {
   switch (status) {
+    case "draft":
+      return { label: "Draft", cls: "badge-draft" };
     case "initializing":
       return { label: "Initializing", cls: "badge-initializing" };
     case "idle":

@@ -46,6 +46,9 @@ interface BoardStore {
   activateTicket: (id: string) => void;
   /** Show the board view (deactivate any ticket) */
   showBoard: () => void;
+  /** One-shot hint: when MetaTicketDetail next mounts/reads, focus this session. */
+  pendingTicketSession: string | null;
+  setPendingTicketSession: (sid: string | null) => void;
 
   // Notification handlers
   handleDidChange: (ticket: MetaTicketSummary) => void;
@@ -63,6 +66,9 @@ export const useBoardStore = create<BoardStore>((set, get) => ({
   activeTicketId: null,
   loading: false,
   error: null,
+  pendingTicketSession: null,
+
+  setPendingTicketSession: (sid) => set({ pendingTicketSession: sid }),
 
   fetchTickets: async () => {
     set({ loading: true, error: null });

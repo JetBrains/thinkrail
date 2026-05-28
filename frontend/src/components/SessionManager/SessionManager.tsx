@@ -1,27 +1,90 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRpc } from "@/api/hooks/useRpc.tsx";
-import { createSessionApi, type SessionSummary } from "@/api/methods/sessions.ts";
-import { createAgentApi } from "@/api/methods/agents.ts";
+import type { SessionSummary } from "@/api/methods/sessions.ts";
 import { useSessionStore } from "@/store/sessionStore.ts";
+import { useBoardStore } from "@/store/boardStore.ts";
 import { useUiStore } from "@/store/uiStore.ts";
+import { useNotificationStore } from "@/store/notificationStore.ts";
 import { getErrorMessage } from "@/utils/errors.ts";
 import { timeAgo } from "@/utils/format.ts";
 import { getStatusStyle } from "@/utils/status.ts";
 import { modLabel } from "@/utils/platform.ts";
+import { SessionCardContextMenu } from "./SessionCardContextMenu.tsx";
 import "./SessionManager.css";
+
+const TICKET_STRIPE_PALETTE = [
+  "var(--blue)",
+  "var(--purple)",
+  "var(--green)",
+  "var(--gold)",
+  "var(--red)",
+];
+
+function ticketStripeColor(metaTicketId: string | null | undefined): string | null {
+  if (!metaTicketId) return null;
+  let hash = 0;
+  for (let i = 0; i < metaTicketId.length; i++) {
+    hash = ((hash << 5) - hash) + metaTicketId.charCodeAt(i);
+    hash |= 0;
+  }
+  return TICKET_STRIPE_PALETTE[Math.abs(hash) % TICKET_STRIPE_PALETTE.length];
+}
+
+function sortByRecency(sessions: SessionSummary[]): SessionSummary[] {
+  return [...sessions].sort((a, b) => {
+    const ta = Date.parse(a.updatedAt || a.createdAt || "") || 0;
+    const tb = Date.parse(b.updatedAt || b.createdAt || "") || 0;
+    return tb - ta;
+  });
+}
+
+const GENERIC_NAME_RE = /^Session \d+$/;
+
+function readMetricNumber(metrics: Record<string, unknown> | undefined, key: string): number {
+  if (!metrics) return 0;
+  const v = metrics[key];
+  return typeof v === "number" ? v : 0;
+}
+
+function formatCost(usd: number): string {
+  if (usd >= 10) return `$${usd.toFixed(0)}`;
+  if (usd >= 1) return `$${usd.toFixed(2)}`;
+  if (usd > 0) return `$${usd.toFixed(2)}`;
+  return "$0";
+}
+
+type CtxMenuState = {
+  bonsaiSid: string;
+  metaTicketId: string | null;
+  x: number;
+  y: number;
+};
 
 export function SessionManager() {
   const client = useRpc();
   const projectPath = useUiStore((s) => s.projectPath);
+  const setCenterView = useUiStore((s) => s.setCenterView);
   const focusSessions = useUiStore((s) => s.focusSessions);
   const switchSession = useSessionStore((s) => s.switchSession);
   const restoreSession = useSessionStore((s) => s.restoreSession);
-  const endSession = useSessionStore((s) => s.endSession);
   const deleteSession = useSessionStore((s) => s.deleteSession);
+  const sessions = useSessionStore((s) => s.sessionList);
+  const refreshSessionList = useSessionStore((s) => s.refreshSessionList);
+  const tickets = useBoardStore((s) => s.tickets);
+  const openTicket = useBoardStore((s) => s.openTicket);
 
-  const [sessions, setSessions] = useState<SessionSummary[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [ctxMenu, setCtxMenu] = useState<CtxMenuState | null>(null);
+
+  const refresh = useCallback(async () => {
+    try {
+      await refreshSessionList();
+      setError(null);
+    } catch (e) {
+      setError(`Failed to load sessions: ${getErrorMessage(e)}`);
+    }
+  }, [refreshSessionList]);
 
   useEffect(() => {
     let cancelled = false;
@@ -29,8 +92,7 @@ export function SessionManager() {
     setError(null);
     (async () => {
       try {
-        const list = await createSessionApi(client).list();
-        if (!cancelled) setSessions(list);
+        await refreshSessionList();
       } catch (e) {
         if (!cancelled) {
           setError(`Failed to load sessions: ${getErrorMessage(e)}`);
@@ -42,60 +104,18 @@ export function SessionManager() {
     return () => {
       cancelled = true;
     };
-  }, [client, projectPath]);
-
-  const refresh = useCallback(async () => {
-    try {
-      const list = await createSessionApi(client).list();
-      setSessions(list);
-      setError(null);
-    } catch (e) {
-      setError(`Failed to load sessions: ${getErrorMessage(e)}`);
-    }
-  }, [client]);
-
-  const handleContinue = useCallback(
-    async (taskId: string) => {
-      focusSessions();
-      try {
-        await useSessionStore.getState().continueSession(taskId);
-      } catch (e) {
-        console.error("Failed to continue session:", e);
-        setError(`Failed to resume session: ${getErrorMessage(e)}`);
-      }
-    },
-    [focusSessions],
-  );
-
-  const handleStop = useCallback(
-    async (taskId: string) => {
-      try {
-        await createAgentApi(client).end(taskId);
-        if (useSessionStore.getState().sessions.has(taskId)) {
-          try { await endSession(taskId); } catch { /* ignore */ }
-        }
-        setSessions((prev) =>
-          prev.map((s) =>
-            s.bonsaiSid === taskId ? { ...s, status: "done" as const } : s,
-          ),
-        );
-      } catch (e) {
-        console.error("Failed to stop session:", e);
-      }
-    },
-    [client, endSession],
-  );
+  }, [refreshSessionList, projectPath]);
 
   const handleDelete = useCallback(
     async (taskId: string) => {
       try {
         await deleteSession(taskId);
-        setSessions((prev) => prev.filter((s) => s.bonsaiSid !== taskId));
+        await refresh();
       } catch (e) {
         console.error("Failed to delete session:", e);
       }
     },
-    [deleteSession],
+    [deleteSession, refresh],
   );
 
   const handleOpen = useCallback(
@@ -115,121 +135,228 @@ export function SessionManager() {
     [focusSessions, switchSession, restoreSession],
   );
 
+  const handleContextMenu = useCallback(
+    (e: React.MouseEvent, s: SessionSummary) => {
+      e.preventDefault();
+      setCtxMenu({
+        bonsaiSid: s.bonsaiSid,
+        metaTicketId: s.metaTicketId ?? null,
+        x: e.clientX,
+        y: e.clientY,
+      });
+    },
+    [],
+  );
+
+  const handleOpenTicket = useCallback(
+    (ticketId: string, bonsaiSid: string) => {
+      useBoardStore.getState().setPendingTicketSession(bonsaiSid);
+      setCenterView("board");
+      openTicket(ticketId);
+    },
+    [setCenterView, openTicket],
+  );
+
+  const handleCopySid = useCallback(async (bonsaiSid: string) => {
+    try {
+      await navigator.clipboard.writeText(bonsaiSid);
+      useNotificationStore.getState().addToast({
+        eventType: "success",
+        message: `Copied session ID: ${bonsaiSid.slice(0, 8)}…`,
+        persistent: false,
+      });
+    } catch (err) {
+      console.error("Failed to copy session ID:", err);
+      useNotificationStore.getState().addToast({
+        eventType: "error",
+        message: "Could not copy session ID — clipboard blocked",
+        persistent: false,
+      });
+    }
+  }, []);
+
+  const ordered = useMemo(() => sortByRecency(sessions), [sessions]);
+  // Discard the unused RPC client reference so the lint hook stays clean;
+  // the prop is retained because handleDelete may grow to call the API
+  // directly in the future.
+  void client;
+
   if (loading) {
     return <div className="sm-loading">Loading sessions...</div>;
   }
-
-  const active = sessions.filter(
-    (s) => s.status === "idle" || s.status === "running",
-  );
-  const completed = sessions.filter((s) => s.status === "done");
-  const errored = sessions.filter((s) => s.status === "error");
 
   return (
     <div className="session-manager">
       <div className="sm-header">
         <button className="sm-refresh" onClick={refresh} title="Refresh sessions">
-          {"\u21BB"}
+          {"↻"}
         </button>
       </div>
 
       <div className="sm-content">
         {error && <div className="sm-error">{error}</div>}
 
-        {sessions.length === 0 && !error && (
+        {ordered.length === 0 && !error && (
           <div className="sm-empty">No sessions yet. Create one with {modLabel("T")}.</div>
         )}
 
-        {active.length > 0 && (
-          <SessionGroup
-            label="Active"
-            sessions={active}
-            onOpen={handleOpen}
-            onStop={handleStop}
-            onContinue={handleContinue}
-            onDelete={handleDelete}
-          />
-        )}
-        {completed.length > 0 && (
-          <SessionGroup
-            label="Completed"
-            sessions={completed}
-            onOpen={handleOpen}
-            onStop={handleStop}
-            onContinue={handleContinue}
-            onDelete={handleDelete}
-          />
-        )}
-        {errored.length > 0 && (
-          <SessionGroup
-            label="Errors"
-            sessions={errored}
-            onOpen={handleOpen}
-            onStop={handleStop}
-            onContinue={handleContinue}
-            onDelete={handleDelete}
-          />
-        )}
+        {ordered.map((s) => {
+          const ticket = s.metaTicketId ? tickets.get(s.metaTicketId) ?? null : null;
+          // Render the chip whenever the session is ticket-attached, even
+          // if the boardStore hasn't loaded the ticket itself yet — the
+          // stripe + short id still convey "this belongs to a ticket".
+          const ticketTitle = ticket?.title ?? (s.metaTicketId ? "—" : null);
+          const ticketShortId = s.metaTicketId
+            ? `#${(ticket?.id ?? s.metaTicketId).slice(-4)}`
+            : null;
+          return (
+            <SessionCard
+              key={`sm-${s.bonsaiSid}`}
+              session={s}
+              ticketTitle={ticketTitle}
+              ticketShortId={ticketShortId}
+              onOpen={handleOpen}
+              onDelete={handleDelete}
+              onContextMenu={handleContextMenu}
+            />
+          );
+        })}
       </div>
+
+      {ctxMenu && (
+        <SessionCardContextMenu
+          bonsaiSid={ctxMenu.bonsaiSid}
+          metaTicketId={ctxMenu.metaTicketId}
+          x={ctxMenu.x}
+          y={ctxMenu.y}
+          onClose={() => setCtxMenu(null)}
+          onOpenTicket={handleOpenTicket}
+          onCopySid={handleCopySid}
+        />
+      )}
     </div>
   );
 }
 
-function SessionGroup({
-  label,
-  sessions,
+const TrashIcon = (
+  <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <path d="M2.5 4h11" />
+    <path d="M5.5 4V2.75A1.25 1.25 0 0 1 6.75 1.5h2.5A1.25 1.25 0 0 1 10.5 2.75V4" />
+    <path d="M4 4l.7 9.1A1.5 1.5 0 0 0 6.2 14.5h3.6a1.5 1.5 0 0 0 1.5-1.4L12 4" />
+    <path d="M6.75 7v4" />
+    <path d="M9.25 7v4" />
+  </svg>
+);
+
+const TurnsIcon = (
+  <svg className="sm-chip-ic" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <path d="M2 6a4 4 0 1 1 1.2 2.8" />
+    <path d="M2 9V6.5h2.5" />
+  </svg>
+);
+
+function SessionCard({
+  session: s,
+  ticketTitle,
+  ticketShortId,
   onOpen,
-  onStop,
-  onContinue,
   onDelete,
+  onContextMenu,
 }: {
-  label: string;
-  sessions: SessionSummary[];
+  session: SessionSummary;
+  ticketTitle: string | null;
+  ticketShortId: string | null;
   onOpen: (id: string) => void;
-  onStop: (id: string) => void;
-  onContinue: (id: string) => void;
   onDelete: (id: string) => void;
+  onContextMenu: (e: React.MouseEvent, s: SessionSummary) => void;
 }) {
+  const turns = readMetricNumber(s.metrics, "turns");
+  const cost = readMetricNumber(s.metrics, "costUsd");
+  const hasMetrics = turns > 0 || cost > 0;
+  const isDraft = s.status === "draft";
+  const isRunning = s.status === "running";
+  const isWaiting = s.status === "waiting";
+  const isGenericName = GENERIC_NAME_RE.test(s.name);
+  const stripe = ticketStripeColor(s.metaTicketId);
+
+  const classes = [
+    "sm-card",
+    `sm-card--${s.status}`,
+    !ticketTitle && "sm-card--no-ticket",
+    !hasMetrics && "sm-card--no-metrics",
+    isWaiting && "sm-card--needs-attention",
+  ]
+    .filter(Boolean)
+    .join(" ");
+
+  const nameClass = [
+    "sm-name",
+    isDraft && "sm-name--draft",
+    !isDraft && isGenericName && "sm-name--generic",
+  ]
+    .filter(Boolean)
+    .join(" ");
+
   return (
-    <div className="sm-group">
-      <div className="sm-group-label">{label}</div>
-      {sessions.map((s) => {
-        const badge = getStatusStyle(s.status);
-        const isActive = s.status === "idle" || s.status === "running";
-        const isDead = s.status === "done" || s.status === "error";
-        return (
-          <div key={`sm-${s.bonsaiSid}`} className="sm-card" onClick={() => onOpen(s.bonsaiSid)}>
-            <div className="sm-card-top">
-              <span className={`sm-badge ${badge.cls}`}>{badge.label}</span>
-              <span className="sm-card-name">{s.name || s.bonsaiSid.slice(0, 8)}</span>
-              <span className="sm-card-time">{timeAgo(s.createdAt)}</span>
-            </div>
-            <div className="sm-card-meta">
-              {s.model && <span>{s.model}</span>}
-            </div>
-            {isActive && (
-              <div className="sm-card-actions" onClick={(e) => e.stopPropagation()}>
-                <button className="sm-btn" onClick={() => onOpen(s.bonsaiSid)}>
-                  Switch to
-                </button>
-                <button className="sm-btn sm-btn-stop" onClick={() => onStop(s.bonsaiSid)}>
-                  Stop
-                </button>
-              </div>
+    <div
+      className={classes}
+      role="button"
+      tabIndex={0}
+      onClick={() => onOpen(s.bonsaiSid)}
+      onContextMenu={(e) => onContextMenu(e, s)}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          onOpen(s.bonsaiSid);
+        }
+      }}
+    >
+      <span className={`sm-dot sm-dot--${s.status}`} aria-hidden="true" />
+      <span className={nameClass}>{s.name || s.bonsaiSid.slice(0, 8)}</span>
+      <span className={`sm-time${isRunning ? " sm-time--live" : ""}`}>
+        {isRunning ? "now" : timeAgo(s.updatedAt || s.createdAt)}
+      </span>
+
+      {ticketTitle && (
+        <span className="sm-ticket-row">
+          <span className="sm-ticket-chip" style={{ ["--ticket-color" as string]: stripe ?? "var(--blue)" }}>
+            <span className="sm-ticket-stripe" aria-hidden="true" />
+            <span className="sm-ticket-title">{ticketTitle}</span>
+            {ticketShortId && <span className="sm-ticket-id">{ticketShortId}</span>}
+          </span>
+        </span>
+      )}
+
+      <span className="sm-metrics">
+        {hasMetrics && (
+          <>
+            {turns > 0 && (
+              <span className="sm-chip sm-chip--turns" title={`${turns} ${turns === 1 ? "turn" : "turns"}`}>
+                {TurnsIcon}
+                {turns}
+              </span>
             )}
-            {isDead && (
-              <div className="sm-card-actions" onClick={(e) => e.stopPropagation()}>
-                <button className="sm-btn sm-btn-continue" onClick={() => onContinue(s.bonsaiSid)}>
-                  Continue
-                </button>
-                <button className="sm-btn sm-btn-delete" onClick={() => onDelete(s.bonsaiSid)}>
-                  Delete
-                </button>
-              </div>
+            {cost > 0 && (
+              <span className="sm-chip sm-chip--cost" title="Cost">
+                {formatCost(cost)}
+              </span>
             )}
-          </div>
-        );
-      })}
+          </>
+        )}
+      </span>
+
+      <span className="sm-actions" onClick={(e) => e.stopPropagation()}>
+        <span className="sm-status-label">{getStatusStyle(s.status).label.toLowerCase()}</span>
+        <button
+          className="sm-icon-btn"
+          type="button"
+          aria-label="Delete session"
+          title="Delete session"
+          onClick={() => onDelete(s.bonsaiSid)}
+        >
+          {TrashIcon}
+        </button>
+      </span>
     </div>
   );
 }

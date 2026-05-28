@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from typing import Any
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from jsonrpcserver import JsonRpcError
@@ -89,6 +89,30 @@ class TestRunAgent:
         with pytest.raises(JsonRpcError) as exc_info:
             await run_agent(svc)
         assert exc_info.value.code == -32602
+
+    async def test_publishes_did_create(self, svc: MagicMock) -> None:
+        # SuggestSession-approve goes through agent/run; without this
+        # publish, the sidebar SessionManager never refreshes for the
+        # newly-created session until the user hits ↻.
+        task = AgentTask(bonsai_sid="t-run", spec_ids=["s1"], name="Suggested")
+        svc.run_task = AsyncMock(return_value=task)
+        conn = MagicMock(display_name="Alice", project_path="/proj")
+        bus_mock = MagicMock()
+        bus_mock.publish_to_project = AsyncMock()
+        with (
+            patch("app.rpc.methods.agents.get_current_conn", return_value=conn),
+            patch("app.rpc.methods.agents.bus", bus_mock),
+            patch("app.rpc.methods.agents.auto_subscribe_all"),
+        ):
+            await run_agent(svc, specIds=["s1"], config={"model": "claude-sonnet-4-6"})
+        bus_mock.publish_to_project.assert_awaited_once()
+        call_args = bus_mock.publish_to_project.call_args
+        assert call_args.args[0] == "/proj"
+        assert call_args.args[1] == "session/didCreate"
+        payload = call_args.args[2]
+        assert payload["bonsaiSid"] == "t-run"
+        assert payload["name"] == "Suggested"
+        assert payload["createdBy"] == "Alice"
 
 
 class TestInterruptAgent:
