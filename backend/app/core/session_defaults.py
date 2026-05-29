@@ -29,7 +29,7 @@ logger = logging.getLogger(__name__)
 # ``~/.bonsai/bonsai.db``). Module-level so tests and callers can
 # reference them without instantiating the model.
 
-COLD_START_MODEL = "claude-opus-4-7"
+COLD_START_MODEL = "claude-opus-4-8"
 COLD_START_PERMISSION_MODE = "default"
 COLD_START_EFFORT: str | None = None  # ``None`` renders as "auto" in the UI.
 

@@ -17,7 +17,7 @@ import {
  */
 
 const MODELS = [
-  { label: "Opus 4.7" },
+  { label: "Opus 4.8" },
   { label: "Sonnet 4.6" },
   { label: "Haiku 4.5" },
 ] as const;

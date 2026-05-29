@@ -46,7 +46,7 @@ class AgentConfig(BaseModel):
     )
 
     runtime: RuntimeType = "claude"
-    model: str = "claude-sonnet-4-6"
+    model: str = "claude-opus-4-8"
     permission_mode: str = "default"
     stream_text: bool = True
     effort: str | None = None

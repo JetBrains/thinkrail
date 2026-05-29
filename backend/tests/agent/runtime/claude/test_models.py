@@ -11,7 +11,7 @@ class TestClaudeModelRegistry:
         reg = ClaudeModelRegistry()
         ids = [m.id for m in reg.list_models()]
         assert ids == [
-            "claude-opus-4-7",
+            "claude-opus-4-8",
             "claude-sonnet-4-6",
             "claude-haiku-4-5-20251001",
         ]
@@ -24,7 +24,7 @@ class TestClaudeModelRegistry:
 
     def test_get_context_window_opus_is_one_million(self) -> None:
         reg = ClaudeModelRegistry()
-        assert reg.get_context_window("claude-opus-4-7") == 1_000_000
+        assert reg.get_context_window("claude-opus-4-8") == 1_000_000
 
     def test_get_context_window_sonnet_is_one_million(self) -> None:
         reg = ClaudeModelRegistry()

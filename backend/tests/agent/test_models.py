@@ -24,7 +24,7 @@ from app.agent.models import (
 class TestAgentConfig:
     def test_defaults(self) -> None:
         cfg = AgentConfig()
-        assert cfg.model == "claude-sonnet-4-6"
+        assert cfg.model == "claude-opus-4-8"
         assert cfg.permission_mode == "default"
         assert cfg.stream_text is True
 

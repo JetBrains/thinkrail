@@ -19,7 +19,7 @@ test("settings modal Session Defaults tab saves new defaults and they flow into 
   tempProject,
 }) => {
   await seedSessionDefaults(tempProject.path, {
-    model: "claude-opus-4-7",
+    model: "claude-opus-4-8",
     permissionMode: "default",
     effort: null,
   });
@@ -47,7 +47,7 @@ test("settings modal Session Defaults tab saves new defaults and they flow into 
         ),
       { timeout: 15_000 },
     )
-    .toBe("Opus 4.7");
+    .toBe("Opus 4.8");
 
   const permSelect = page.locator(
     `${MODAL} select.draft-config-select:not(.draft-config-select--model)`,
