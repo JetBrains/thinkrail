@@ -442,3 +442,212 @@ class TestOnFileChange:
             assert "spec/didCreate" not in methods
             assert "spec/didDelete" not in methods
             assert "registry/didUpdate" not in methods
+
+
+class TestBonsaihideLiveReload:
+    """Regression: editing .bonsaihide must take effect without a restart,
+    and same-batch .md moves must respect the new rules immediately.
+
+    Bug: on ``refactor/specs-renewal @ 57f6d178a``, after adding
+    ``.bonsai/archive/`` to .bonsaihide and ``git mv``-ing spec .md files
+    into that directory, ``spec_search`` continued to return the archived
+    files (with their new paths) until a manual backend restart.  Two
+    defects compose:
+
+    1. Atomic-write editors (vim, IntelliJ, VSCode, Edit/Write tools) save
+       by write-temp + rename, which watchfiles reports as ``Change.added``
+       rather than ``Change.modified``.  The old check
+       ``ct == Change.modified and Path(p).name == ".bonsaihide"`` missed
+       those events.
+    2. Even when ``Change.modified`` did fire, FileChanged events emitted
+       from the same batch were dispatched against the *stale* in-memory
+       hide rules — the 500 ms-debounced rebuild fired afterwards.  A
+       ``spec_search`` issued in that window returned newly-archived
+       entries.
+    """
+
+    @pytest.fixture
+    async def config(self, tmp_path: Path) -> AppConfig:
+        from app.spec.frontmatter import serialize_frontmatter
+        from app.spec.index import SpecIndex
+
+        bonsai_dir = tmp_path / ".bonsai"
+        bonsai_dir.mkdir()
+
+        # Pre-existing spec that will later be moved into a now-hidden dir.
+        (tmp_path / "mod_a").mkdir()
+        meta = {
+            "id": "mod-a", "type": "module-design",
+            "status": "active", "title": "Module A",
+        }
+        (tmp_path / "mod_a" / "README.md").write_text(
+            serialize_frontmatter(meta, "# Module A\n"), encoding="utf-8",
+        )
+
+        db_path = bonsai_dir / "index.db"
+        async with SpecIndex(db_path) as index:
+            await index.rebuild(tmp_path)
+        return load_config(tmp_path)
+
+    @pytest.fixture
+    async def harness(self, config: AppConfig):
+        """Bring up _start_watcher with the fake_watch pattern so the test
+        can drive _on_file_change directly.  Yields (callback, index,
+        coordinator) for assertions."""
+        import asyncio
+        from app.rpc.server import _start_watcher
+        from app.spec.index import SpecIndex
+
+        captured: dict = {}
+
+        async def fake_watch(paths, cb):
+            captured["cb"] = cb
+            from app.core.watcher import WatchHandle
+            return WatchHandle(_task=asyncio.create_task(asyncio.sleep(999)))
+
+        db_path = config.get_bonsai_dir() / "index.db"
+        index = SpecIndex(db_path)
+        await index.initialize(config.get_project_root())
+        service = SpecService(config, index=index)
+        vis_service = VisualizationService(config, spec_service=service)
+        project_root = config.get_project_root()
+        project_key = str(project_root)
+        project_topic = f"project:{project_key}"
+
+        async def _coordinator_notify(method: str, params: dict) -> None:
+            await bus.publish(project_topic, method, params)
+
+        coordinator = IndexCoordinator(index, project_root, _coordinator_notify)
+        coordinator.start()
+
+        with patch("app.rpc.server.watch", side_effect=fake_watch):
+            handle = await _start_watcher(
+                project_key, config, service, vis_service, coordinator,
+            )
+
+        yield captured["cb"], index, coordinator, project_root
+
+        handle._task.cancel()
+        try:
+            await handle._task
+        except (asyncio.CancelledError, Exception):
+            pass
+        await coordinator.stop()
+        await index.close()
+
+    async def test_atomic_rename_change_added_triggers_reload(
+        self, harness,
+    ) -> None:
+        """A Change.added event for .bonsaihide (atomic-write rename) must
+        be treated as a change — old code only accepted Change.modified."""
+        callback, index, coordinator, project_root = harness
+
+        # User edits .bonsaihide via an editor that saves atomically — the
+        # OS reports Change.added after the rename(2).
+        (project_root / ".bonsaihide").write_text(
+            "mod_a/\n", encoding="utf-8",
+        )
+        bonsaihide_path = str(project_root / ".bonsaihide")
+        await callback({(Change.added, bonsaihide_path)})
+
+        # The synchronous in-memory refresh must have happened — the index's
+        # _bonsaihide_spec is no longer None.
+        assert index._bonsaihide_spec is not None
+        # And the new spec actually matches mod_a/.
+        assert index._bonsaihide_spec.match_file("mod_a/README.md")
+
+    async def test_deleted_bonsaihide_reloads_to_defaults(
+        self, harness,
+    ) -> None:
+        """Change.deleted on .bonsaihide must also trigger a reload (defaults)."""
+        callback, index, coordinator, project_root = harness
+
+        # First set a custom .bonsaihide so we have something to clear.
+        (project_root / ".bonsaihide").write_text(
+            "mod_a/\n", encoding="utf-8",
+        )
+        await callback({(Change.added, str(project_root / ".bonsaihide"))})
+        assert index._bonsaihide_spec is not None
+        assert index._bonsaihide_spec.match_file("mod_a/README.md")
+
+        # Now delete .bonsaihide outright.  The watcher must reload defaults,
+        # which do NOT match mod_a/.
+        (project_root / ".bonsaihide").unlink()
+        await callback({(Change.deleted, str(project_root / ".bonsaihide"))})
+        assert index._bonsaihide_spec is not None
+        assert not index._bonsaihide_spec.match_file("mod_a/README.md")
+
+    async def test_same_batch_hidden_md_not_indexed(
+        self, harness,
+    ) -> None:
+        """A .bonsaihide change and a .md add in the SAME watcher batch:
+        the newly-hidden .md must NOT be indexed.
+
+        This is the witnessed reproduction: edit .bonsaihide, then git mv a
+        spec into the now-hidden dir, all delivered as one batch.
+        """
+        from app.spec.frontmatter import serialize_frontmatter
+
+        callback, index, coordinator, project_root = harness
+
+        # Pre-stage: the .bonsaihide content on disk already hides archive/
+        # (the watcher reads from disk when it sees a change event).
+        (project_root / ".bonsaihide").write_text(
+            "archive/\n", encoding="utf-8",
+        )
+
+        # Pre-stage: the file already exists at the new (hidden) path,
+        # mimicking a completed git mv before the watcher batch arrives.
+        archive_dir = project_root / "archive"
+        archive_dir.mkdir()
+        meta = {
+            "id": "archived-spec", "type": "task-spec",
+            "status": "draft", "title": "Archived",
+        }
+        archived_md = archive_dir / "spec.md"
+        archived_md.write_text(
+            serialize_frontmatter(meta, "# Archived\n"), encoding="utf-8",
+        )
+
+        # One batch carries both events.
+        await callback({
+            (Change.added, str(project_root / ".bonsaihide")),
+            (Change.added, str(archived_md)),
+        })
+        await coordinator._queue.join()
+
+        # The archived spec must NOT be in the index — reindex_file ran
+        # against the freshly-refreshed hide rules.
+        assert await index.get_spec("archived-spec") is None
+
+    async def test_previously_indexed_evicted_after_hide(
+        self, harness,
+    ) -> None:
+        """A file already indexed should be evicted when .bonsaihide hides it.
+
+        Covers the eviction path: index has mod-a; user edits .bonsaihide to
+        hide mod_a/; subsequent reindex_file on mod_a/README.md (triggered
+        either by an in-batch FileChanged or by the debounced full rebuild)
+        removes it.  This test exercises the in-batch path via a synthetic
+        FileChanged for the (still-present-on-disk) file.
+        """
+        callback, index, coordinator, project_root = harness
+
+        # Sanity: mod-a is currently indexed by the fixture's rebuild().
+        spec = await index.get_spec("mod-a")
+        assert spec is not None
+
+        # User adds mod_a/ to .bonsaihide (atomic write reports as added).
+        (project_root / ".bonsaihide").write_text(
+            "mod_a/\n", encoding="utf-8",
+        )
+        readme = str(project_root / "mod_a" / "README.md")
+        await callback({
+            (Change.added, str(project_root / ".bonsaihide")),
+            (Change.modified, readme),
+        })
+        await coordinator._queue.join()
+
+        # mod-a is no longer indexed — the FileChanged for its README ran
+        # against the new hide rules and removed it.
+        assert await index.get_spec("mod-a") is None

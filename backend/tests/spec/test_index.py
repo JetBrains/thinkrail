@@ -1177,3 +1177,40 @@ class TestBonsaihideFiltering:
             await idx.rebuild(tmp_path)
             assert await idx.get_spec("spec-a") is not None
             assert await idx.get_spec("spec-b") is not None
+
+    async def test_set_bonsaihide_spec_replaces_rules(self, tmp_path: Path) -> None:
+        """set_bonsaihide_spec() swaps the in-memory rules atomically.
+
+        Regression for the watcher's same-batch path: after .bonsaihide is
+        edited, the watcher updates the rules synchronously so that any
+        FileChanged events from the same batch see the new rules.
+        """
+        _write_spec_file(tmp_path, "archive/old.md", """\
+            ---
+            id: old-spec
+            type: task-spec
+            ---
+            # Old
+        """)
+
+        db_path = tmp_path / ".bonsai" / "index.db"
+        async with SpecIndex(db_path) as idx:
+            # No hide rules yet — file indexes normally.
+            assert idx._bonsaihide_spec is None
+            result = await idx.reindex_file(tmp_path, tmp_path / "archive" / "old.md")
+            assert result == "spec"
+            assert await idx.get_spec("old-spec") is not None
+
+            # Replace rules to hide archive/.  reindex_file should now treat
+            # the same path as hidden and remove the entry.
+            idx.set_bonsaihide_spec(_make_pathspec(["archive/"]))
+            assert idx._bonsaihide_spec is not None
+            result = await idx.reindex_file(tmp_path, tmp_path / "archive" / "old.md")
+            assert result == "removed"
+            assert await idx.get_spec("old-spec") is None
+
+            # Clearing the rules restores normal behaviour on the next reindex.
+            idx.set_bonsaihide_spec(None)
+            result = await idx.reindex_file(tmp_path, tmp_path / "archive" / "old.md")
+            assert result == "spec"
+            assert await idx.get_spec("old-spec") is not None

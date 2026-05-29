@@ -526,6 +526,31 @@ async def _start_watcher(
     async def _on_file_change(changes: set[tuple[Change, str]]) -> None:
         project_root = config.get_project_root()
 
+        # .bonsaihide change handling runs FIRST so that any .md events in the
+        # same watcher batch are evaluated against the *new* hide rules.
+        #
+        # We accept every change type, not just Change.modified: most modern
+        # editors save by write-temp + rename(2), which watchfiles reports as
+        # Change.added (and on some platforms Change.deleted + Change.added)
+        # rather than Change.modified.  Deleting .bonsaihide is also a real
+        # change — load_bonsaihide() falls back to defaults when the file is
+        # absent.
+        bonsaihide_changed = any(
+            Path(p).name == ".bonsaihide" for _, p in changes
+        )
+        if bonsaihide_changed:
+            new_spec = load_bonsaihide(project_root)
+            # Update the index's in-memory rules *synchronously* before any
+            # FileChanged events from this batch are emitted, so reindex_file()
+            # sees the new rules immediately.  Without this, same-batch
+            # `git mv foo.md notes/foo.md` (with notes/ newly hidden) would
+            # transiently index foo.md at its new path until the 500ms-debounced
+            # rebuild fires.
+            coordinator.update_bonsaihide_spec(new_spec)
+            # Still request a debounced full rebuild — needed to evict entries
+            # that were already indexed but are now hidden by the new rules.
+            coordinator.request_rebuild(bonsaihide_spec=new_spec, reason="bonsaihide changed")
+
         for change_type, path_str in changes:
             path = Path(path_str)
 
@@ -560,18 +585,9 @@ async def _start_watcher(
                         params["changes"] = {}
                     await bus.publish(project_topic, method, params)
 
-        # .bonsaihide change — debounced rebuild via coordinator
-        bonsaihide_modified = any(
-            ct == Change.modified and Path(p).name == ".bonsaihide"
-            for ct, p in changes
-        )
-        if bonsaihide_modified:
-            new_spec = load_bonsaihide(project_root)
-            coordinator.request_rebuild(bonsaihide_spec=new_spec, reason="bonsaihide changed")
-
         if any(ct in (Change.added, Change.deleted) for ct, _ in changes):
             await bus.publish(project_topic, "files/treeChanged", {})
-        elif bonsaihide_modified:
+        elif bonsaihide_changed:
             await bus.publish(project_topic, "files/treeChanged", {})
 
         # Notify frontend about modified files so open editors can refresh

@@ -875,3 +875,125 @@ class TestFileChanged:
             (m, p) for m, p in notifications if m == "docs/didChange"
         ]
         assert len(doc_notifications) == 1
+
+
+# ── TestBonsaihideLiveReload ─────────────────────────────────────────────────
+
+
+class TestBonsaihideLiveReload:
+    """Synchronous hide-rule refresh + same-batch consistency.
+
+    Regression coverage for the .bonsaihide live-reload bug: the watcher
+    must refresh the index's hide rules *before* dispatching same-batch
+    FileChanged events, so newly-hidden paths are recognized immediately
+    rather than after the 500ms-debounced rebuild fires.
+    """
+
+    async def test_update_bonsaihide_spec_takes_effect_immediately(
+        self, coordinator, index, tmp_path, notifications
+    ):
+        """A FileChanged emitted after update_bonsaihide_spec sees the new rules.
+
+        Models the watcher's same-batch path: user edits .bonsaihide to add
+        ``archive/``, then ``git mv``s a file into ``archive/``.  After
+        update_bonsaihide_spec, the FileChanged for the moved file must NOT
+        index it.
+        """
+        import pathspec
+
+        archived = _write_spec_file(
+            tmp_path,
+            "archive/foo.md",
+            """\
+            ---
+            id: archived-spec
+            type: task-spec
+            ---
+            # Archived
+            """,
+        )
+
+        # Refresh rules synchronously to hide archive/.
+        hide_archive = pathspec.PathSpec.from_lines("gitignore", ["archive/"])
+        coordinator.update_bonsaihide_spec(hide_archive)
+
+        # Now emit FileChanged for the newly-archived file (simulates the
+        # watcher seeing a `git mv ... archive/foo.md` add event).
+        coordinator.emit(FileChanged(path=archived))
+        await coordinator._queue.join()
+
+        # The file must NOT be in the index — reindex_file saw the new rules.
+        assert await index.get_spec("archived-spec") is None
+
+    async def test_update_bonsaihide_spec_evicts_previously_indexed(
+        self, coordinator, index, tmp_path, notifications
+    ):
+        """After update_bonsaihide_spec, the next FileChanged removes hidden entries.
+
+        Path 1 of the eviction story: incremental cleanup as files change.
+        Path 2 (full rebuild) is covered by TestDrainBehavior / TestRebuild.
+        """
+        import pathspec
+
+        visible = _write_spec_file(
+            tmp_path,
+            "docs/foo.md",
+            """\
+            ---
+            id: docs-spec
+            type: task-spec
+            ---
+            # Doc
+            """,
+        )
+
+        # First index without any hide rules.
+        coordinator.emit(FileChanged(path=visible))
+        await coordinator._queue.join()
+        assert await index.get_spec("docs-spec") is not None
+
+        # Now hide docs/ and re-emit the same path.
+        coordinator.update_bonsaihide_spec(
+            pathspec.PathSpec.from_lines("gitignore", ["docs/"])
+        )
+        coordinator.emit(FileChanged(path=visible))
+        await coordinator._queue.join()
+
+        assert await index.get_spec("docs-spec") is None
+
+    async def test_update_bonsaihide_spec_none_clears_rules(
+        self, coordinator, index, tmp_path, notifications
+    ):
+        """Passing None to update_bonsaihide_spec restores unfiltered behaviour.
+
+        Models the .bonsaihide-deleted case: load_bonsaihide() falls back to
+        the built-in defaults, which the watcher passes through to
+        update_bonsaihide_spec.  (None is the wire-cleared variant; the real
+        watcher path passes the defaults PathSpec — both must work.)
+        """
+        import pathspec
+
+        archived = _write_spec_file(
+            tmp_path,
+            "archive/foo.md",
+            """\
+            ---
+            id: archived-spec
+            type: task-spec
+            ---
+            # Archived
+            """,
+        )
+
+        coordinator.update_bonsaihide_spec(
+            pathspec.PathSpec.from_lines("gitignore", ["archive/"])
+        )
+        coordinator.emit(FileChanged(path=archived))
+        await coordinator._queue.join()
+        assert await index.get_spec("archived-spec") is None
+
+        # Clear rules — next FileChanged should index it again.
+        coordinator.update_bonsaihide_spec(None)
+        coordinator.emit(FileChanged(path=archived))
+        await coordinator._queue.join()
+        assert await index.get_spec("archived-spec") is not None

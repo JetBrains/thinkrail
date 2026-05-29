@@ -190,6 +190,20 @@ class SpecIndex:
         self._in_transaction: bool = False
         self._bonsaihide_spec: pathspec.PathSpec | None = None
 
+    # ── Hide-rules ────────────────────────────────────────────────────────
+
+    def set_bonsaihide_spec(self, spec: pathspec.PathSpec | None) -> None:
+        """Replace the in-memory ``.bonsaihide`` rules used by ``reindex_file``.
+
+        Synchronous and lock-free — assignment to a single attribute is atomic
+        under the GIL, and ``reindex_file()`` only reads the field (never
+        races against itself because the coordinator dispatches events
+        serially).  Used by the watcher to refresh the hide rules ahead of
+        dispatching same-batch ``FileChanged`` events, so newly-hidden paths
+        are recognized immediately rather than after the debounced rebuild.
+        """
+        self._bonsaihide_spec = spec
+
     # ── Lifecycle ────────────────────────────────────────────────────────
 
     @property
