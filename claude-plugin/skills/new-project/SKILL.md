@@ -15,7 +15,7 @@ You are helping someone turn an idea into a clear, buildable specification. The 
 - Every option you offer must be specific to what they described, not generic placeholders
 - Propose a draft as early as possible — a concrete suggestion is always faster than an open question
 - MVP-first: the right v1 is smaller than the user thinks
-- **Write the file after every confirmed step** — `GOAL&REQUIREMENTS.md` grows section by section. Call `spec_save` after each confirmed step, writing **only the sections confirmed so far**. Never pre-fill unconfirmed sections with `[TBD]` — if a section hasn't been discussed yet, it simply doesn't exist in the file yet.
+- **Write the file after every confirmed step** — `GOAL&REQUIREMENTS.md` grows section by section. Each step ends with a `Section:` note naming exactly what that step produces; after the step's confirmation, `spec_save` **only the sections confirmed so far** and nothing ahead. The **first** save also writes the `# Title` and `> tagline`. Never pre-fill unconfirmed sections with `[TBD]` — if a section hasn't been discussed yet, it simply doesn't exist in the file yet.
 - **Routing is inferred, not asked** — determine personal vs. public from `$ARGUMENTS` + Overview + Problem; ask only if genuinely ambiguous
 - **Every section is conditional** — before entering any section, check three things in order: (1) is it already pre-filled from `$ARGUMENTS` (Step 0.5)? → skip, already saved. (2) is the answer already evident from the working model or confirmed content? → skip or pre-fill+confirm. (3) is it required at all given `depth`/`audience`? → skip if not. Only ask what's both missing and required.
 - **Answers compound** — every confirmed answer updates the working model and reduces what still needs to be asked
@@ -235,7 +235,7 @@ options:
   - "Edit: _____"
 ```
 
-**After confirmation → write file immediately** using `spec_save` with only the title, tagline, and Overview section. No other sections yet — they will be added one by one as confirmed.
+Section: `## Overview`.
 
 **If the user rejects or substantially rewrites the Overview:** re-evaluate `depth`, `audience`, and `scope_signal` before continuing. A rewrite means the initial inference was wrong — don't carry those inferences forward into routing or later steps.
 
@@ -280,7 +280,7 @@ options:
   - "Edit: _____"
 ```
 
-**After confirmation → call `spec_save` to update the file. Then update working model:**
+Section: `## Problem`. Then update working model:
 
 ```
 user_role:     [name if mentioned in Problem answer]
@@ -347,7 +347,7 @@ Show result via `bonsai_visualize` (type `summary-box`) with Must Have / Deferre
 If `urgency = high` OR `scope_signal = large` OR total selected is large:
 > "That's a wide scope for something you're building just for yourself. Want to cut some to v2?"
 
-**After confirmation → call `spec_save` to update the file** with Features section.
+Section: `## V1 Features` — selected features as a checklist.
 
 ### A5 — Tech (conditional)
 
@@ -387,7 +387,7 @@ Always add:
 - `"I have specific constraints: _____"`
 - `"Decide later"`
 
-**After confirmation → call `spec_save` to update the file.** If "Decide later" → leave as `[TBD]`.
+Section: `## Tech Notes` — chosen stack with one-line rationale. If "Decide later" → leave the section as `[TBD]`.
 
 **Always proceed to A-OSS next — do not skip to A-Draft.**
 
@@ -604,14 +604,14 @@ If the user already named alternatives in `$ARGUMENTS` or in the Problem answer:
 
 **Step 2 — Confirm one block at a time:**
 
-Confirm each section with its own `AskUserQuestion` (header = section name, question = inferred text, options: "Looks right" / "Edit: _____"), in order. Only move to the next after the current one is approved. **After each individual confirmation, call `spec_save` immediately — do not wait until all sections are done.**
+Confirm each section with its own `AskUserQuestion` (header = section name, question = inferred text, options: "Looks right" / "Edit: _____"), in order. Only move to the next after the current one is approved. Each block is its own `spec_save` (one section at a time, not batched):
 
-1. Target Users → confirm → **call `spec_save` now**
-2. Jobs to Be Done → confirm → **call `spec_save` now**
-3. Key User Story → confirm → **call `spec_save` now**
-4. Alternatives Considered *(only if `alternatives` is known from user input or research; skip otherwise)* → confirm with options "Looks right" / "Edit: _____" / "Add one I know: _____" → **call `spec_save` now**
+1. `## Target Users`
+2. `## Jobs to Be Done`
+3. `## Key User Story`
+4. `## Alternatives Considered` *(only if `alternatives` is known from user input or research; otherwise skip)* — extra option "Add one I know: _____"
 
-**After all confirmations → update working model:**
+**After all four confirmations → update working model:**
 ```
 user_role:     refine if a more specific role emerged
 has_scenario:  set to true if they gave a concrete story
@@ -654,7 +654,7 @@ Transform into 2–3 quantified metrics. Confirm with `AskUserQuestion` (header:
 
 Then ask: "What would tell you this failed? What's your kill condition?"
 
-**After confirmation → call `spec_save` to update the file. Read the answer:**
+Section: `## Success Metrics`. Then read the answer and update the working model:
 ```
 depth:    upgrade to full if they immediately gave numbers (they think in KPIs)
 urgency:  set to high if they mentioned a launch date or external deadline
@@ -667,7 +667,7 @@ Ask (free text):
 
 Transform into 2–4 binary conditions. Confirm with `AskUserQuestion` (header: "Done Conditions", question: the inferred conditions, options: "Looks right" / "Edit: _____").
 
-**After confirmation → call `spec_save` to update the file. Read the answer:**
+Section: `## Done Conditions`. Then read the answer and update the working model:
 ```
 urgency:      set to high if deadline appears
 scope_signal: upgrade to large if they listed many unrelated conditions
@@ -698,7 +698,7 @@ If the user edits or rejects, ask:
 
 Reject vague inline: "'Better UX' isn't a goal — 'Reduce time to first result from 10 min to 30 sec' is."
 
-**After confirmation → call `spec_save` to update the file.**
+Section: `## Goals` — bullet list of verb-first outcomes.
 
 ---
 
@@ -727,7 +727,7 @@ Use `AskUserQuestion` to confirm:
 - `"Add something that wasn't listed: _____"`
 - `"Move something out of v1: _____"`
 
-**After confirmation → call `spec_save` to update the file.** Each v1 item gets a rationale that directly cites a specific Goal or Success condition:
+Section: `## MVP Scope` with `### In v1` / `### Out of v1` sub-sections. Each v1 item gets a rationale that directly cites a specific Goal or Success condition:
 
 - ✓ `— *enables Goal: reduce time to first invoice*`
 - ✓ `— *required for: user sends invoice without help (Success)*`
@@ -749,7 +749,7 @@ Out-of-v1 as plain bullets.
 
 Otherwise use `AskUserQuestion` with `multiSelect: true`. Options tailored to the domain — e.g. "Must work offline", "GDPR compliance", "Sub-100ms response", "Mobile-first", "Self-hostable", "Multi-tenant". Always include `"None / skip"`.
 
-**After confirmation → call `spec_save` to update the file.**
+Section: `## Non-Functional Requirements` — bullet list of the selected items.
 
 ---
 
@@ -785,7 +785,7 @@ Always add:
 - `"I have specific constraints: _____"`
 - `"Decide later"`
 
-**After confirmation → call `spec_save` to update the file.**
+Section: `## Technology` — table with `Aspect | Choice | Rationale`. If "Decide later" → leave entries as `[TBD]`.
 
 ---
 
