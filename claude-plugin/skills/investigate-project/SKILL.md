@@ -122,7 +122,10 @@ Q1 — header: "Sections"  (multiSelect: true)
    options:
      - "Data Flow — how types/data move between modules"        (default-checked)
      - "Design Decisions — observable tech/pattern choices, each with file:line evidence"
-     - "Findings — TODOs, dead code, security smells found while reading (become tickets)"
+
+   (Findings are NOT a section option — they're always collected while
+    reading and always become board tickets at finalize. Don't gate
+    them on this question.)
 
 Q2 — header: "Depth"
    question: "How deep should the architecture description go?"
@@ -143,7 +146,7 @@ tailored later, in Step 3b, against the real directories.
 Persist the answers as the working model:
 
 ```
-sections:    set of {data-flow, design-decisions, findings}
+sections:    set of {data-flow, design-decisions}
              (overview + module-graph always present)
 abstraction: container | component | decide-later
 graph_org:   set later in Step 3b (user picks a rendered variant)
@@ -153,8 +156,8 @@ These switches drive the rest of the flow:
 
 - `data-flow ∉ sections` → skip Step 5 (Data Flow).
 - `design-decisions ∉ sections` → skip Step 6 (Design Decisions).
-- `findings ∉ sections` → still collect findings cheaply while reading,
-  but skip the finding tickets in Step 9. If selected, emit them.
+- Findings are **always** collected while reading (Step 2.6) and
+  **always** emitted as board tickets in Step 9 — never gated on Q1.
 - `abstraction = container` → Step 4 stays at module + public-API
   level; do **not** drill into module internals. At Step 9, recommend a
   `/module-design` session for each module that warrants its own spec.
@@ -176,7 +179,8 @@ question. Only ask the user when the choice matters.
 Build the **ordered section list** from the Q1 answers — always
 `Overview`, `Module Graph`, `Modules`; then `Data Flow` and
 `Design Decisions` only if selected. (Findings is not a doc section —
-it becomes tickets in Step 9.) Show it via `bonsai_visualize`
+it always becomes tickets in Step 9, regardless of Q1.) Show it via
+`bonsai_visualize`
 `type: "progress-tracker"`, separate from the Step 0 workflow tracker:
 
 ```json
@@ -444,7 +448,7 @@ the user can skip to the workspace).
       "description": "Refine the draft into a final GOAL&REQUIREMENTS.md by answering the questions the code couldn't.",
       "skillId": "new-project",
       "primary": true,
-      "prompt": "⚠️ Onboarding hand-off — these sections were inferred from CODE ONLY by the previous Investigation session. They are educated guesses, not verified intent. Treat them as a starting point, not as confirmed content.\n\nYour job in this Clarify session:\n  • For every section below, ask the user whether the inference is correct. Be specific — propose what's there and ask \"Is this right, or should I rewrite?\".\n  • The Open Questions section lists gaps the code couldn't fill. Walk those one by one with `AskUserQuestion`. These are the must-asks.\n  • Goals and Target Users especially need real user input — code rarely reveals intent. Probe deeper if the user gives short answers.\n  • DESIGN_DOC.md is already done from code. Do NOT touch it — the architecture facts are stable.\n  • When all gaps are resolved and the user confirms each section, save with `spec_save` and promote frontmatter `status: \"draft\"` → `status: \"done\"`.\n\n--- Draft GOAL&REQUIREMENTS.md (inferred from code) ---\n<paste the full draft body verbatim, including the Open Questions section>"
+      "prompt": "⚠️ Onboarding hand-off — these sections were inferred from CODE ONLY by the previous Investigation session. They are educated guesses, not verified intent. Treat them as a starting point, not as confirmed content.\n\nYour job in this Clarify session:\n  • For every section below, ask the user whether the inference is correct. Be specific — propose what's there and ask \"Is this right, or should I rewrite?\".\n  • Save each section the moment it's confirmed. As soon as the user approves a section (unchanged or after a rewrite), `spec_save` that one section immediately — before moving to the next question. Do NOT batch saves to the end: the document must always reflect what the user just confirmed.\n  • The Open Questions section lists gaps the code couldn't fill. Walk those one by one with `AskUserQuestion`. These are the must-asks.\n  • Goals and Target Users especially need real user input — code rarely reveals intent. Probe deeper if the user gives short answers.\n  • DESIGN_DOC.md is already done from code. Do NOT touch it — the architecture facts are stable.\n  • Once every section has been confirmed and saved, do a final `spec_save` that only promotes frontmatter `status: \"draft\"` → `status: \"done\"`.\n\n--- Draft GOAL&REQUIREMENTS.md (inferred from code) ---\n<paste the full draft body verbatim, including the Open Questions section>"
     },
     {
       "type": "navigate",
@@ -468,8 +472,9 @@ the user can skip to the workspace).
     }
     // ...repeat per module worth spinning off
     //
-    // If `findings ∈ sections`, append one create_ticket per finding
-    // (≤8) from Step 2.6. If findings was NOT selected, skip these.
+    // ALWAYS append one create_ticket per finding (≤8) from Step 2.6.
+    // These are the board tickets — never gate them on a question.
+    // If there are zero findings, simply add no create_ticket actions.
     , {
       "type": "create_ticket",
       "id": "finding-<slug>",
