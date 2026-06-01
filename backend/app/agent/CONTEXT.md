@@ -403,7 +403,7 @@ The `prompt` field is optional. When provided, it becomes the `session_prompt` o
 
 `build_context_structured()` reports `totalTokens` and per-section `tokens` via a `len(text) // 4` heuristic — roughly the chars-per-token ratio of Claude/cl100k-class tokenizers for English/markdown. The estimate is intentionally rough: it only feeds the draft prompt-preview UI. The runtime emits the real `input_tokens` per turn via the `agent/costEstimate` event (`iterations[-1]`), which is what the frontend should treat as ground truth once a session is running.
 
-The context window itself is owned by the runtime (`ClaudeModelRegistry.get_context_window(model)`) and read by the frontend via the model catalog, not by this module.
+The context window itself is inferred by the runtime from the live SDK (`ClaudeSDKClient.get_context_usage().rawMaxTokens`) and streamed to the frontend as `contextMax` in turn metrics, not by this module.
 
 ## Known Limitations
 

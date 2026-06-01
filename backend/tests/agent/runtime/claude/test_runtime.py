@@ -1176,6 +1176,173 @@ class TestIterationTracking:
         assert len(turn_complete["iterations"]) == 1
 
 
+class TestClaudeRuntimeCapabilities:
+    """``capabilities()`` projects three default-first LabeledOption lists."""
+
+    def test_returns_three_lists(self) -> None:
+        caps = ClaudeRuntime(app_config=_test_config()).capabilities()
+        assert len(caps.permission_modes) > 0
+        assert len(caps.effort_levels) > 0
+        assert len(caps.models) > 0
+
+    def test_lists_are_sourced_from_the_sdk(self) -> None:
+        from typing import get_args
+
+        from claude_agent_sdk import EffortLevel, PermissionMode
+
+        caps = ClaudeRuntime(app_config=_test_config()).capabilities()
+        # Permission modes are exactly the SDK's accepted set, in SDK order
+        # (``default`` first — the runtime default).
+        assert [p.value for p in caps.permission_modes] == list(get_args(PermissionMode))
+        assert caps.permission_modes[0].value == "default"
+        # Effort levels are the SDK's set with Bonsai's ``"auto"`` (= SDK
+        # ``effort=None``) leading.
+        assert [e.value for e in caps.effort_levels] == ["auto", *get_args(EffortLevel)]
+        assert caps.effort_levels[0].value == "auto"
+        assert caps.models[0].value == "claude-opus-4-8"
+
+    def test_permission_labels_are_the_sdk_values(self) -> None:
+        # No custom labels — the SDK value doubles as the display label.
+        caps = ClaudeRuntime(app_config=_test_config()).capabilities()
+        assert all(p.label == p.value for p in caps.permission_modes)
+
+    def test_models_are_value_label_only(self) -> None:
+        caps = ClaudeRuntime(app_config=_test_config()).capabilities()
+        assert set(caps.models[0].model_dump().keys()) == {"value", "label"}
+
+
+@patch("app.agent.runtime.claude.runtime.ClaudeSDKClient")
+class TestEffortBoundary:
+    """``effort="auto"`` maps to the SDK's ``effort=None``; other values pass through."""
+
+    async def _captured_options(self, MockClient: MagicMock, effort: str) -> Any:
+        from claude_agent_sdk import ResultMessage
+
+        result_msg = MagicMock(spec=ResultMessage)
+        result_msg.session_id = "s1"
+        result_msg.result = "ok"
+        result_msg.is_error = False
+        result_msg.num_turns = 1
+        result_msg.total_cost_usd = 0.0
+        result_msg.usage = {}
+        captured = _setup_capturing_client(MockClient, [result_msg])
+
+        tracker = Tracker()
+        task = tracker.create_task(["spec-1"], AgentConfig(effort=effort))
+        tracker.enqueue_message(task.bonsai_sid, "go")
+        tracker.enqueue_end_signal(task.bonsai_sid)
+        await _run(task, "context", AsyncMock(), tracker)
+        return captured["options"]
+
+    async def test_auto_becomes_none(self, MockClient: MagicMock) -> None:
+        options = await self._captured_options(MockClient, "auto")
+        assert options.effort is None
+
+    async def test_explicit_effort_passes_through(self, MockClient: MagicMock) -> None:
+        options = await self._captured_options(MockClient, "high")
+        assert options.effort == "high"
+
+
+@patch("app.agent.runtime.claude.runtime.ClaudeSDKClient")
+class TestContext1mFlag:
+    """The ``context1m`` flag gates the 1M-context beta (default on)."""
+
+    async def _betas_for(self, MockClient: MagicMock, flags: dict) -> list:
+        from claude_agent_sdk import ResultMessage
+
+        result_msg = MagicMock(spec=ResultMessage)
+        result_msg.session_id = "s1"
+        result_msg.result = "ok"
+        result_msg.is_error = False
+        result_msg.num_turns = 1
+        result_msg.total_cost_usd = 0.0
+        result_msg.usage = {}
+        captured = _setup_capturing_client(MockClient, [result_msg])
+
+        tracker = Tracker()
+        task = tracker.create_task(["spec-1"], AgentConfig(flags=flags))
+        tracker.enqueue_message(task.bonsai_sid, "go")
+        tracker.enqueue_end_signal(task.bonsai_sid)
+        await _run(task, "context", AsyncMock(), tracker)
+        return captured["options"].betas
+
+    async def test_default_requests_1m_beta(self, MockClient: MagicMock) -> None:
+        # Absent flag → the flag's default (True) → beta sent.
+        assert "context-1m-2025-08-07" in await self._betas_for(MockClient, {})
+
+    async def test_flag_off_disables_beta(self, MockClient: MagicMock) -> None:
+        assert await self._betas_for(MockClient, {"context1m": False}) == []
+
+    def test_runtime_declares_the_flag(self, MockClient: MagicMock) -> None:
+        caps = ClaudeRuntime(app_config=_test_config()).capabilities()
+        flag = next(f for f in caps.flags if f.key == "context1m")
+        assert flag.type == "boolean"
+        assert flag.default is True
+
+
+@patch("app.agent.runtime.claude.runtime.ClaudeSDKClient")
+class TestContextMaxStreaming:
+    """The runtime reads the context window from the live client and streams it."""
+
+    async def test_turn_complete_carries_runtime_context_max(self, MockClient: MagicMock) -> None:
+        from claude_agent_sdk import ResultMessage, SystemMessage
+
+        sys_msg = MagicMock(spec=SystemMessage)
+        sys_msg.subtype = "init"
+        sys_msg.data = {"session_id": "s1"}
+        result_msg = MagicMock(spec=ResultMessage)
+        result_msg.session_id = "s1"
+        result_msg.result = "ok"
+        result_msg.is_error = False
+        result_msg.num_turns = 1
+        result_msg.total_cost_usd = 0.0
+        result_msg.usage = {}
+
+        mock_instance = _setup_mock_client(MockClient, [sys_msg, result_msg])
+        mock_instance.get_context_usage = AsyncMock(return_value={"rawMaxTokens": 1_000_000})
+
+        tracker, task = _make_tracker_and_task()
+        notify = AsyncMock()
+        tracker.enqueue_message(task.bonsai_sid, "go")
+        tracker.enqueue_end_signal(task.bonsai_sid)
+
+        await _run(task, "context", notify, tracker)
+
+        turn_complete = next(
+            c.args[1] for c in notify.call_args_list if c.args[0] == "agent/turnComplete"
+        )
+        assert turn_complete["contextMax"] == 1_000_000
+
+    async def test_context_usage_failure_keeps_zero(self, MockClient: MagicMock) -> None:
+        from claude_agent_sdk import ResultMessage, SystemMessage
+
+        sys_msg = MagicMock(spec=SystemMessage)
+        sys_msg.subtype = "init"
+        sys_msg.data = {"session_id": "s1"}
+        result_msg = MagicMock(spec=ResultMessage)
+        result_msg.session_id = "s1"
+        result_msg.result = "ok"
+        result_msg.is_error = False
+        result_msg.num_turns = 1
+        result_msg.total_cost_usd = 0.0
+        result_msg.usage = {}
+
+        mock_instance = _setup_mock_client(MockClient, [sys_msg, result_msg])
+        mock_instance.get_context_usage = AsyncMock(side_effect=RuntimeError("not connected"))
+
+        tracker, task = _make_tracker_and_task()
+        notify = AsyncMock()
+        tracker.enqueue_message(task.bonsai_sid, "go")
+        tracker.enqueue_end_signal(task.bonsai_sid)
+
+        await _run(task, "context", notify, tracker)
+
+        turn_complete = next(
+            c.args[1] for c in notify.call_args_list if c.args[0] == "agent/turnComplete"
+        )
+        assert turn_complete["contextMax"] == 0
+
+
 class TestClaudeRuntimeInterrupt:
     """Direct unit tests for ``ClaudeRuntime.interrupt`` (plan 02 task 5).
 

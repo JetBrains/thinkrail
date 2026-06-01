@@ -67,13 +67,19 @@ class TestSessionDefaultsModel:
         cfg = SessionDefaults(
             model="claude-opus-4-7",
             permission_mode="bypassPermissions",
-            effort=None,
+            effort="high",
         )
         wire = cfg.model_dump(by_alias=True)
         assert "permissionMode" in wire
         assert wire["permissionMode"] == "bypassPermissions"
-        assert wire["effort"] is None
+        assert wire["effort"] == "high"
         assert "maxTurns" not in wire
+
+    def test_legacy_null_effort_coerced_to_auto(self) -> None:
+        # Old persisted records stored ``effort: null``; the before-validator
+        # maps it to the neutral ``"auto"`` so they load cleanly.
+        cfg = SessionDefaults.model_validate({"effort": None})
+        assert cfg.effort == "auto"
 
 
 class TestLoadSessionDefaults:

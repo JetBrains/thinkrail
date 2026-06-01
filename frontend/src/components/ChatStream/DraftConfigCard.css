@@ -201,6 +201,23 @@
   color: var(--blue);
 }
 
+/* Runtime-declared flag toggles — shared between the draft card and user settings. */
+.runtime-flags {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: var(--space-sm);
+}
+.runtime-flag {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: var(--font-sm);
+  cursor: pointer;
+}
+.runtime-flag input {
+  cursor: pointer;
+}
+
 .draft-config-checkbox {
   display: inline-flex;
   align-items: center;

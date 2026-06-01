@@ -5,7 +5,8 @@ import { useSettingsStore } from "@/store/settingsStore.ts";
 import { useUiStore } from "@/store/uiStore.ts";
 import { readFile } from "@/services/files.ts";
 import { getErrorMessage } from "@/utils/errors.ts";
-import { PERMISSION_MODES } from "@/utils/sessionConfig.ts";
+import { useRuntimeCapsStore } from "@/store/runtimeCapsStore.ts";
+import { RuntimeFlags } from "@/components/shared/RuntimeFlags.tsx";
 import type { SessionDefaults } from "@/api/methods/appSettings.ts";
 import {
   type ThemePreference,
@@ -157,8 +158,6 @@ function ServerSection() {
   );
 }
 
-const EFFORT_OPTIONS = [null, "low", "medium", "high", "max"] as const;
-
 /**
  * User-scope session defaults — model, permission mode, effort.
  * Persisted via ``appSettings/*`` RPCs in the AppStore, so the values follow
@@ -170,7 +169,11 @@ function SessionDefaultsSection({ visible }: { visible: boolean }) {
   const sessionDefaults = useSettingsStore((s) => s.sessionDefaults);
   const fetchSessionDefaults = useSettingsStore((s) => s.fetchSessionDefaults);
   const updateSessionDefaults = useSettingsStore((s) => s.updateSessionDefaults);
-  const models = useSettingsStore((s) => s.models) ?? [];
+  const caps = useRuntimeCapsStore((s) => s.capsByRuntime["claude"]);
+  const models = caps?.models ?? [];
+  const permissionModes = caps?.permissionModes ?? [];
+  const effortLevels = caps?.effortLevels ?? [];
+  const flags = caps?.flags ?? [];
 
   const [draft, setDraft] = useState<SessionDefaults | null>(sessionDefaults);
   const [saveError, setSaveError] = useState<string | null>(null);
@@ -211,11 +214,15 @@ function SessionDefaultsSection({ visible }: { visible: boolean }) {
   }
 
   const value = draft ?? sessionDefaults!;
+  const flagValue = (key: string, dflt: boolean): boolean => value.flags?.[key] ?? dflt;
   const dirty =
     sessionDefaults !== null &&
     (value.model !== sessionDefaults.model ||
       value.effort !== sessionDefaults.effort ||
-      value.permissionMode !== sessionDefaults.permissionMode);
+      value.permissionMode !== sessionDefaults.permissionMode ||
+      flags.some(
+        (f) => flagValue(f.key, f.default) !== (sessionDefaults.flags?.[f.key] ?? f.default),
+      ));
 
   const setDraftValue = (next: SessionDefaults) => {
     setSaveError(null);
@@ -236,7 +243,7 @@ function SessionDefaultsSection({ visible }: { visible: boolean }) {
     }
   };
 
-  const selectedModel = models.find((m) => m.id === value.model);
+  const selectedModel = models.find((m) => m.value === value.model);
 
   return (
     <div className="settings-section">
@@ -255,7 +262,7 @@ function SessionDefaultsSection({ visible }: { visible: boolean }) {
         >
           {!selectedModel && <option value={value.model}>{value.model}</option>}
           {models.map((m) => (
-            <option key={m.id} value={m.id}>{m.label}</option>
+            <option key={m.value} value={m.value}>{m.label}</option>
           ))}
         </select>
       </div>
@@ -267,8 +274,11 @@ function SessionDefaultsSection({ visible }: { visible: boolean }) {
           value={value.permissionMode}
           onChange={(e) => setDraftValue({ ...value, permissionMode: e.target.value })}
         >
-          {PERMISSION_MODES.map((m) => (
-            <option key={m} value={m}>{m}</option>
+          {!permissionModes.some((m) => m.value === value.permissionMode) && (
+            <option value={value.permissionMode}>{value.permissionMode}</option>
+          )}
+          {permissionModes.map((m) => (
+            <option key={m.value} value={m.value}>{m.label}</option>
           ))}
         </select>
       </div>
@@ -276,18 +286,34 @@ function SessionDefaultsSection({ visible }: { visible: boolean }) {
       <div className="user-settings-row">
         <label className="user-settings-label">Effort</label>
         <span className="draft-config-pills">
-          {EFFORT_OPTIONS.map((e) => (
+          {effortLevels.map((e) => (
             <button
-              key={e ?? "auto"}
+              key={e.value}
               type="button"
-              className={`draft-config-effort-pill ${value.effort === e ? "draft-config-effort-pill--active" : ""}`}
-              onClick={() => setDraftValue({ ...value, effort: e })}
+              className={`draft-config-effort-pill ${value.effort === e.value ? "draft-config-effort-pill--active" : ""}`}
+              onClick={() => setDraftValue({ ...value, effort: e.value })}
             >
-              {e ?? "auto"}
+              {e.label}
             </button>
           ))}
         </span>
       </div>
+
+      {flags.some((f) => f.type === "boolean") && (
+        <div className="user-settings-row">
+          <label className="user-settings-label">Flags</label>
+          <span className="runtime-flags">
+            <RuntimeFlags
+              flags={flags}
+              value={value.flags ?? {}}
+              idPrefix="flag"
+              onChange={(key, checked) =>
+                setDraftValue({ ...value, flags: { ...value.flags, [key]: checked } })
+              }
+            />
+          </span>
+        </div>
+      )}
 
       {saveError && (
         <div className="token-dialog-error" role="alert">{saveError}</div>

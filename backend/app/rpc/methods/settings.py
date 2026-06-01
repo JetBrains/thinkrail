@@ -1,4 +1,4 @@
-"""RPC handlers for settings/*, appSettings/*, and models/* methods."""
+"""RPC handlers for settings/*, appSettings/*, runtimes/*, and skills/* methods."""
 
 from __future__ import annotations
 
@@ -7,7 +7,12 @@ from typing import Any
 from jsonrpcserver import JsonRpcError, Result, Success
 from pydantic import ValidationError
 
-from app.agent.runtime import ModelInfo, RuntimeRegistry, UnknownRuntimeError
+from app.agent.runtime import (
+    RuntimeCapabilities,
+    RuntimeIdentity,
+    RuntimeRegistry,
+    UnknownRuntimeError,
+)
 from app.core.app_store import AppStore
 from app.core.config import AppConfig
 from app.core.session_defaults import (
@@ -20,7 +25,8 @@ from app.core.settings import (
     load_settings,
     save_settings,
 )
-from app.rpc.errors import UNKNOWN_RUNTIME, rpc_handler
+from app.rpc.errors import UNKNOWN_RUNTIME, rpc_handler, serialize_result
+from app.rpc.schema_export import RuntimesCapabilitiesRequest, RuntimesListResponse
 
 _INTERNAL_ERROR = -32603
 _INVALID_PARAMS = -32602
@@ -38,7 +44,7 @@ _handle_errors_with_runtime = rpc_handler(
 def _handle_errors(func):  # type: ignore[type-arg]
     async def wrapper(first_arg: Any, **params: Any) -> Result:
         try:
-            return Success(await func(first_arg, **params))
+            return Success(serialize_result(await func(first_arg, **params)))
         except (KeyError, TypeError, ValueError, ValidationError) as exc:
             raise JsonRpcError(_INVALID_PARAMS, "Invalid params", str(exc))
         except JsonRpcError:
@@ -93,47 +99,42 @@ async def set_session_defaults(app_store: AppStore, **params: Any) -> dict:
     return cfg.model_dump(by_alias=True)
 
 
-# ── Models ────────────────────────────────────────────────────────────────
-
-
-def _model_to_dict(model: ModelInfo) -> dict:
-    """Project a neutral ``ModelInfo`` into the wire shape.
-
-    No per-model ``runtime`` field — the runtime is carried by the
-    enclosing group, not duplicated on every entry.
-    """
-    return model.model_dump(by_alias=True)
+# ── Runtimes ────────────────────────────────────────────────────────────────
 
 
 @_handle_errors
-async def list_models(registry: RuntimeRegistry, **_params: Any) -> dict:
-    """Return the current model list grouped by runtime.
+async def runtimes_list(registry: RuntimeRegistry, **_params: Any) -> RuntimesListResponse:
+    """Return registered runtimes' identities, sorted by ``runtimeType``.
 
-    Each runtime owns its catalog — static, lazy, or refreshed — and
-    callers never see those semantics.
-
-    Shape::
-
-        {
-          "runtimes": [
-            {
-              "runtimeType": "claude",
-              "displayName": "Claude Code",
-              "models": [ { "id": ..., "label": ..., "contextWindow": ... } ]
-            }
-          ]
-        }
+    Lightweight companion to ``runtimes/capabilities``: the frontend uses
+    this on boot to know which runtimes exist without paying for each
+    runtime's capability payload.
     """
-    return {
-        "runtimes": [
-            {
-                "runtimeType": runtime.runtime_type,
-                "displayName": runtime.display_name,
-                "models": [_model_to_dict(m) for m in runtime.list_models()],
-            }
-            for runtime in registry.all()
+    return RuntimesListResponse(
+        runtimes=[
+            RuntimeIdentity(runtime_type=rt.runtime_type, display_name=rt.display_name)
+            for rt in registry.all()
         ],
-    }
+    )
+
+
+@_handle_errors_with_runtime
+async def runtimes_capabilities(
+    registry: RuntimeRegistry, **params: Any,
+) -> RuntimeCapabilities:
+    """Return one runtime's full ``RuntimeCapabilities`` payload.
+
+    Each runtime decides internally whether its model list is static,
+    cached, or fetched lazily — callers never see those semantics. Order
+    is contract: position 0 of each list is the runtime's default.
+
+    Validates the wire payload through ``RuntimesCapabilitiesRequest`` so
+    the camelCase ``runtimeType`` alias and the ``RuntimeType`` literal are
+    enforced in one place. Raises ``UnknownRuntimeError`` (mapped to
+    ``UNKNOWN_RUNTIME`` -32031) when the runtime isn't registered.
+    """
+    req = RuntimesCapabilitiesRequest.model_validate(params)
+    return registry.get(req.runtime_type).capabilities()
 
 
 # ── Skills ───────────────────────────────────────────────────────────────

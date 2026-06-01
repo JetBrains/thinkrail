@@ -62,8 +62,8 @@ class RuntimeRegistry:
     def all(self) -> list[IAgentRuntime]:
         """Return registered runtimes sorted by ``runtime_type``.
 
-        Deterministic ordering keeps wire output (e.g. ``models/list``)
-        stable across processes, so the frontend picker doesn't shuffle
-        groups based on registration order.
+        Deterministic ordering keeps wire output (e.g. ``runtimes/list``)
+        stable across processes, so the frontend runtime list doesn't
+        shuffle based on registration order.
         """
         return [self._runtimes[k] for k in sorted(self._runtimes)]

@@ -21,7 +21,7 @@ test("settings modal Session Defaults tab saves new defaults and they flow into 
   await seedSessionDefaults(tempProject.path, {
     model: "claude-opus-4-8",
     permissionMode: "default",
-    effort: null,
+    effort: "auto",
   });
 
   await openProject(page, tempProject.path);

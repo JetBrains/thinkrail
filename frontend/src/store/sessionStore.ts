@@ -13,7 +13,6 @@ import type {
 import type { SessionSummary } from "@/api/methods/sessions.ts";
 import { getClient } from "@/api/index.ts";
 import { createAgentApi } from "@/api/methods/agents.ts";
-import { getContextWindowSize } from "@/utils/models.ts";
 import { buildDefaultSessionConfig } from "@/utils/sessionConfig.ts";
 import { useInputDraftStore } from "./inputDraftStore.ts";
 import { useNotificationStore } from "./notificationStore.ts";
@@ -100,7 +99,7 @@ interface SessionStore {
     response: unknown,
   ) => void;
 
-  updateConfig: (bonsaiSid: string, config: { model?: string; permissionMode?: string; effort?: string | null }) => Promise<void>;
+  updateConfig: (bonsaiSid: string, config: { model?: string; permissionMode?: string; effort?: string }) => Promise<void>;
   restartSession: (bonsaiSid: string) => Promise<void>;
 
   continueSession: (bonsaiSid: string) => Promise<void>;
@@ -196,9 +195,12 @@ function reconstructCost(events: AgentEvent[]): number {
  * Scans for turnComplete/interrupted events with usage data and
  * toolCallStart events for tool/file tracking.
  */
-function reconstructContextUsage(events: AgentEvent[], model: string): ContextUsage {
+function reconstructContextUsage(events: AgentEvent[], fallbackContextMax = 0): ContextUsage {
   const cu = emptyContextUsage();
-  cu.contextMax = getContextWindowSize(model);
+  // The context window (bar denominator) is streamed by the runtime on each
+  // turn-end event; fall back to the last-known persisted value for sessions
+  // whose events predate that field.
+  cu.contextMax = fallbackContextMax;
   const toolUseIdToName = new Map<string, string>();
 
   for (const ev of events) {
@@ -232,6 +234,12 @@ function reconstructContextUsage(events: AgentEvent[], model: string): ContextUs
       cu.inputTokens = inputTokens;
       cu.cacheReadTokens = cacheRead;
       cu.cacheCreationTokens = cacheCreation;
+
+      // Runtime-streamed model context window (bar denominator); last turn wins.
+      const turnContextMax = p.contextMax as number | undefined;
+      if (typeof turnContextMax === "number" && turnContextMax > 0) {
+        cu.contextMax = turnContextMax;
+      }
 
       // Convert raw iterations to typed IterationUsage[]
       const iterations: IterationUsage[] = rawIters.map((it) => {
@@ -335,7 +343,9 @@ function applyMetrics(
 
   // Context window = all tokens in the last API call.
   const totalContext = (params.contextWindow as number) || (inputTokens + cacheCreation + cacheRead + outputTokens);
-  const contextMax = getContextWindowSize(session.model);
+  // Denominator is streamed by the runtime on the turn event; carry the
+  // last-known value forward when a given event omits it.
+  const contextMax = (params.contextMax as number) || session.metrics.contextMax || 0;
 
   // Convert raw iterations to typed IterationUsage[]
   const iterations: IterationUsage[] = rawIters.map((it) => ({
@@ -420,7 +430,7 @@ function ensureSession(
     status: "initializing",
     model: "",
     permissionMode: "default",
-    effort: null,
+    effort: "auto",
     startedAt: Date.now(),
     events: [],
     metrics: emptyMetrics(),
@@ -664,7 +674,8 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
         status: resolvedStatus,
         model: config.model,
         permissionMode: config.permissionMode,
-        effort: config.effort ?? null,
+        effort: config.effort ?? "auto",
+        flags: config.flags ?? {},
         startedAt: Date.now(),
         events: existing?.events ?? [],
         metrics: existing?.metrics ?? emptyMetrics(),
@@ -714,7 +725,8 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
         status: "draft",
         model: config.model,
         permissionMode: config.permissionMode,
-        effort: config.effort ?? null,
+        effort: config.effort ?? "auto",
+        flags: config.flags ?? {},
         startedAt: Date.now(),
         events: [],
         metrics: emptyMetrics(),
@@ -760,7 +772,8 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
         ...(changes.config ? {
           model: changes.config.model,
           permissionMode: changes.config.permissionMode,
-          effort: changes.config.effort ?? null,
+          effort: changes.config.effort ?? "auto",
+          flags: changes.config.flags ?? {},
         } : {}),
         ...(changes.name !== undefined ? { name: changes.name } : {}),
         ...(changes.metaTicketId !== undefined ? { metaTicketId: changes.metaTicketId } : {}),
@@ -785,7 +798,9 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
       const promptTokens = session.promptSections
         ? session.promptSections.reduce((sum, sec) => sum + sec.tokens, 0)
         : 0;
-      const contextMax = getContextWindowSize(session.model);
+      // Denominator arrives from the runtime on the first turn; carry forward
+      // any known value (0 → bar hidden until then).
+      const contextMax = session.metrics.contextMax || 0;
       const next = new Map(s.sessions);
       next.set(bonsaiSid, {
         ...session,
@@ -986,8 +1001,8 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
 
     const restoredCost = reconstructCost(events);
     const restoredModel = (data.config?.model as string) ?? "";
-    const restoredCtx = reconstructContextUsage(events, restoredModel);
     const diskMetrics = (data?.metrics ?? {}) as Record<string, unknown>;
+    const restoredCtx = reconstructContextUsage(events, (diskMetrics.contextMax as number) ?? 0);
 
     // Restore system prompt from sessionStart event payload
     const restoredPrompt = events.find((e) => e.eventType === "sessionStart")?.payload.systemPrompt as string | undefined;
@@ -1005,7 +1020,8 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
         : "done",
       model: restoredModel,
       permissionMode: (data.config?.permissionMode as string) ?? "default",
-      effort: (data.config?.effort as string) ?? null,
+      effort: (data.config?.effort as string) ?? "auto",
+      flags: (data.config?.flags as Record<string, boolean>) ?? {},
       startedAt: new Date(data.createdAt).getTime(),
       events,
       metrics: {
@@ -1112,8 +1128,8 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
 
         const restoredCost = reconstructCost(events);
         const entryModel = (data?.config?.model as string) ?? entry.model ?? "";
-        const restoredCtx = reconstructContextUsage(events, entryModel);
         const diskMetrics = (data?.metrics ?? {}) as Record<string, unknown>;
+        const restoredCtx = reconstructContextUsage(events, (diskMetrics.contextMax as number) ?? 0);
 
         // Restore system prompt: from entry (drafts) or from sessionStart event payload
         const restoredPrompt = entry.systemPrompt as string | undefined
@@ -1128,7 +1144,8 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
           status: entry.active && !entry.inTracker ? "done" : ((entry.status as SessionStatus) ?? "idle"),
           model: entryModel,
           permissionMode: (data?.config?.permissionMode as string) ?? "default",
-          effort: (data?.config?.effort as string) ?? null,
+          effort: (data?.config?.effort as string) ?? "auto",
+          flags: (data?.config?.flags as Record<string, boolean>) ?? {},
           startedAt: new Date(entry.createdAt).getTime(),
           events,
           metrics: {
@@ -1327,7 +1344,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
               result: session.status === "done" ? "done" : "error",
               costUsd: session.metrics.costUsd, turns: session.metrics.turns,
               durationMs: session.metrics.durationMs, model: session.model,
-              config: { model: session.model, permissionMode: session.permissionMode, streamText: true, effort: session.effort ?? null },
+              config: { model: session.model, permissionMode: session.permissionMode, streamText: true, effort: session.effort ?? "auto", flags: session.flags ?? {} },
               events: session.events,
             },
           ],
@@ -1535,13 +1552,15 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
       const session = s.sessions.get(bonsaiSid);
       if (!session) return s;
       const newModel = (params.model as string) ?? session.model;
-      const contextMax = getContextWindowSize(newModel);
+      // The runtime re-reports the window on the next turn after a model
+      // switch; carry the current denominator forward until then.
+      const contextMax = (params.contextMax as number) || session.metrics.contextMax || 0;
       const next = new Map(s.sessions);
       next.set(bonsaiSid, {
         ...session,
         model: newModel,
         permissionMode: (params.permissionMode as string) ?? session.permissionMode,
-        effort: (params.effort as string | null) ?? session.effort,
+        effort: (params.effort as string) ?? session.effort,
         metrics: {
           ...session.metrics,
           contextMax,
@@ -1657,7 +1676,8 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
           const iterCacheRead = (params.iterCacheRead as number) ?? 0;
           const iterCacheCreate = (params.iterCacheCreate as number) ?? 0;
           const iterOutput = (params.iterOutputTokens as number) ?? 0;
-          const contextMax = getContextWindowSize(session.model);
+          // costEstimate never carries the window; keep the current denominator.
+          const contextMax = session.metrics.contextMax || 0;
 
           const next = new Map(sessions);
           next.set(bonsaiSid, {
@@ -1973,6 +1993,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
             model: (config.model as string) || existing.model,
             permissionMode: (config.permissionMode as string) || existing.permissionMode,
             effort: (config.effort as string) ?? existing.effort,
+            flags: (config.flags as Record<string, boolean>) ?? existing.flags ?? {},
             status: (params.status as Session["status"]) ?? existing.status,
             createdBy: (params.createdBy as string) ?? existing.createdBy,
           }
@@ -1985,7 +2006,8 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
             status: (params.status as Session["status"]) ?? "draft",
             model: (config.model as string) || "",
             permissionMode: (config.permissionMode as string) || "default",
-            effort: (config.effort as string) ?? null,
+            effort: (config.effort as string) ?? "auto",
+            flags: (config.flags as Record<string, boolean>) ?? {},
             startedAt: Date.now(),
             events: [],
             metrics: emptyMetrics(),
@@ -2122,8 +2144,8 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
 
       const restoredCost = reconstructCost(events);
       const restoredModel = (data.config?.model as string) ?? "";
-      const restoredCtx = reconstructContextUsage(events, restoredModel);
       const diskMetrics = (data?.metrics ?? {}) as Record<string, unknown>;
+      const restoredCtx = reconstructContextUsage(events, (diskMetrics.contextMax as number) ?? 0);
 
       const session: Session = {
         bonsaiSid,
@@ -2136,7 +2158,8 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
           : "done",
         model: restoredModel,
         permissionMode: (data.config?.permissionMode as string) ?? "default",
-        effort: (data.config?.effort as string) ?? null,
+        effort: (data.config?.effort as string) ?? "auto",
+        flags: (data.config?.flags as Record<string, boolean>) ?? {},
         startedAt: new Date(data.createdAt).getTime(),
         events,
         metrics: {

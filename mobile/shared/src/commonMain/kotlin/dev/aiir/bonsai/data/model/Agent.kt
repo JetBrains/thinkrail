@@ -32,12 +32,14 @@ enum class EventType {
 
 @Serializable
 enum class Effort {
+    @SerialName("auto") AUTO,
     @SerialName("low") LOW,
     @SerialName("medium") MEDIUM,
     @SerialName("high") HIGH,
     @SerialName("max") MAX;
 
     val displayLabel: String get() = when (this) {
+        AUTO -> "auto"
         LOW -> "low"
         MEDIUM -> "med"
         HIGH -> "high"

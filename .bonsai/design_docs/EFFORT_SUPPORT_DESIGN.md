@@ -48,25 +48,9 @@ The effort value is stored in `AgentConfig` and persisted with the session. When
 
 ## Effort Values
 
-| Value | Display Label | Behavior |
-|-------|---------------|----------|
-| `null` | "auto" | SDK default — model decides appropriate effort |
-| `"low"` | "low" | Quick responses, minimal reasoning |
-| `"medium"` | "medium" | Balanced reasoning |
-| `"high"` | "high" | Thorough reasoning |
-| `"max"` | "max" | Maximum reasoning depth |
+The effort levels are not hardcoded — pickers read them from the runtime's capabilities (`runtimes/capabilities` → `effortLevels`, a `LabeledOption[]`) via `runtimeCapsStore`. The Claude runtime derives them from the SDK's `EffortLevel` literal, so the offered set follows whatever the installed SDK accepts; this doc deliberately doesn't enumerate them.
 
-Defined as `EFFORT_OPTIONS` array in `SessionStatusLine.tsx`:
-
-```typescript
-const EFFORT_OPTIONS = [
-  { value: null, label: "auto" },
-  { value: "low", label: "low" },
-  { value: "medium", label: "medium" },
-  { value: "high", label: "high" },
-  { value: "max", label: "max" },
-];
-```
+Bonsai prepends one value the SDK has no token for: `"auto"` (position 0, the default). It represents "no explicit effort" — the runtime translates it to SDK `effort=None` at the call boundary, and every other value passes through verbatim.
 
 ## Session Restart Behavior
 
@@ -78,16 +62,16 @@ Effort changes do **not** require a session restart. The value is updated in the
 
 | File | Change |
 |------|--------|
-| `agent/models.py` | `AgentConfig.effort: str \| None = None` — new optional field with `null` default |
-| `agent/service.py` | `update_config()` — accepts `effort` param, updates `task.config.effort`, persists to disk |
-| `agent/runner.py` | Reads `task.config.effort` and passes it to SDK query options |
+| `agent/models.py` | `AgentConfig.effort: str = "auto"` — defaults to `"auto"`; a `field_validator(mode="before")` coerces a legacy persisted `null` to `"auto"`. `SessionDefaults.effort` follows the same shape (`COLD_START_EFFORT = "auto"`). |
+| `agent/service.py` | `update_config()` — accepts `effort` param, validates it against the runtime's `capabilities()`, updates `task.config.effort`, persists to disk |
+| `runtime/claude/runtime.py` | Reads `task.config.effort` and passes it to SDK query options, translating `"auto"` → SDK `effort=None` at the boundary |
 | `rpc/methods/agents.py` | `agent/updateConfig` — passes `effort` param through to service |
 
 ### Frontend
 
 | File | Change |
 |------|--------|
-| `components/ChatStream/SessionStatusLine.tsx` | Effort dropdown: `EFFORT_OPTIONS`, `displayEffort()` helper, `useDropdown()` for open/close, `onChangeEffort` callback |
+| `components/ChatStream/SessionStatusLine.tsx` | Effort dropdown: reads `effortLevels` from `runtimeCapsStore` (the `"claude"` caps), `useDropdown()` for open/close, `onChangeEffort` callback. An out-of-caps active value renders as a raw option. |
 
 ### Wire Format
 
@@ -105,7 +89,7 @@ Response:
 
 | Decision | Choice | Rationale |
 |----------|--------|-----------|
-| `null` = auto | Default effort is `null`, displayed as "auto" | Lets the model decide; no forced default that might degrade quality |
+| `"auto"` = SDK default | Default effort is the string `"auto"`; the runtime translates it to SDK `effort=None` | Lets the model decide; no forced default that might degrade quality. Always a string on the wire — no `null` to special-case. A before-validator coerces legacy persisted `null` to `"auto"`. |
 | No session restart | Effort updated in-place, takes effect next turn | Unlike model changes, effort doesn't require a new SDK session |
 | String enum, not integer | Values are "low"/"medium"/"high"/"max" | Matches SDK API; human-readable; no ambiguous numeric mapping |
 | Dropdown in StatusLine | Same pattern as model and permission mode selectors | Consistent UX; reuses `useDropdown()` hook |

@@ -30,34 +30,34 @@ def _install_mock_runtime(service: AgentService) -> MagicMock:
     the SDK client off the tracker and calls ``client.interrupt()`` — so
     integration tests asserting on the stored client still hold.
     """
-    from app.agent.runtime import RuntimeRegistry
-
-    from app.agent.runtime import ModelInfo
+    from app.agent.runtime import LabeledOption, RuntimeCapabilities, RuntimeRegistry
 
     async def _interrupt(task, tracker):
         client = tracker.get_client(task.bonsai_sid)
         if client is not None:
             await client.interrupt()
 
-    default_models = [
-        ModelInfo(
-            id="claude-sonnet-4-6",
-            label="Sonnet 4.6",
-            context_window=1_000_000,
-        ),
-    ]
+    caps = RuntimeCapabilities(
+        permission_modes=[
+            LabeledOption(value=v, label=v)
+            for v in ("default", "acceptEdits", "bypassPermissions", "plan")
+        ],
+        effort_levels=[
+            LabeledOption(value=v, label=v)
+            for v in ("auto", "low", "medium", "high", "max")
+        ],
+        models=[
+            LabeledOption(value=v, label=v)
+            for v in ("claude-opus-4-8", "claude-sonnet-4-6", "claude-haiku-4-5-20251001")
+        ],
+    )
 
     runtime = MagicMock()
     runtime.runtime_type = "claude"
     runtime.display_name = "Claude (test)"
     runtime.run_session = AsyncMock()
     runtime.interrupt = AsyncMock(side_effect=_interrupt)
-    runtime.list_models = MagicMock(return_value=default_models)
-    runtime.get_context_window = MagicMock(
-        side_effect=lambda mid: next(
-            (m.context_window for m in default_models if m.id == mid), 200_000
-        )
-    )
+    runtime.capabilities = MagicMock(return_value=caps)
     reg = RuntimeRegistry()
     reg.register(runtime)
     service.runtime_registry = reg
@@ -384,28 +384,10 @@ class TestInterruptTask:
 class TestSaveTask:
     def test_new_session_gets_zeroed_metrics(self, tmp_path: Path) -> None:
         """_save_task produces zeroed metrics for a brand-new session (no disk data)."""
-        from app.agent.runtime import ModelInfo, RuntimeRegistry
-
         config = MagicMock()
         config.project_root = tmp_path
         spec_service = MagicMock()
         service = AgentService(config, spec_service)
-
-        # Install a runtime that knows about the default model so _get_context_max
-        # resolves the 1M window instead of the no-registry default of 200K.
-        runtime = MagicMock()
-        runtime.runtime_type = "claude"
-        runtime.get_context_window = MagicMock(return_value=1_000_000)
-        runtime.list_models.return_value = [
-            ModelInfo(
-                id="claude-sonnet-4-6",
-                label="Sonnet 4.6",
-                context_window=1_000_000,
-            ),
-        ]
-        reg = RuntimeRegistry()
-        reg.register(runtime)
-        service.runtime_registry = reg
 
         task = service._tracker.create_task(["s1"], AgentConfig())
         service._save_task(task)
@@ -419,8 +401,8 @@ class TestSaveTask:
         assert m["toolCalls"] == 0
         assert m["durationMs"] == 0
         assert m["contextTokens"] == 0
-        # Default model is claude-sonnet-4-6 with 1M context window
-        assert m["contextMax"] == 1_000_000
+        # contextMax is unknown until the first turn streams it from the runtime.
+        assert m["contextMax"] == 0
         assert m["outputTokens"] == 0
 
     def test_existing_metrics_preserved(self, tmp_path: Path) -> None:
@@ -519,51 +501,50 @@ class TestBuildContext:
         assert "## General Instructions" in context
 
 
-class TestGetContextMax:
-    """``_get_context_max`` delegates to the task's runtime, no fallback knowledge in services."""
+class TestValidateConfigAgainstCaps:
+    """Out-of-caps config values are rejected at launch, not coerced."""
 
-    def _make_registry(self, context_for: dict[str, int]):
-        from app.agent.runtime import RuntimeRegistry
-
-        runtime = MagicMock()
-        runtime.runtime_type = "claude"
-        runtime.get_context_window = MagicMock(
-            side_effect=lambda mid: context_for.get(mid, 200_000)
-        )
-        reg = RuntimeRegistry()
-        reg.register(runtime)
-        return reg
-
-    def test_returns_runtime_value_when_available(self) -> None:
+    def test_valid_config_passes(self) -> None:
         service, _, _ = _make_service()
-        service.runtime_registry = self._make_registry({"claude-opus-4-7": 1_000_000})
-        task = service._tracker.create_task([], AgentConfig(model="claude-opus-4-7"))
-        assert service._get_context_max(task) == 1_000_000
+        task = service._tracker.create_task([], AgentConfig())  # all defaults are in caps
+        service._validate_config_against_caps(task)  # no raise
 
-    def test_returns_200k_when_registry_missing(self) -> None:
+    def test_out_of_caps_model_raises(self) -> None:
+        from app.agent.exceptions import InvalidCapabilityValueError
+
+        service, _, _ = _make_service()
+        task = service._tracker.create_task([], AgentConfig(model="ghost-model"))
+        with pytest.raises(InvalidCapabilityValueError) as exc_info:
+            service._validate_config_against_caps(task)
+        exc = exc_info.value
+        assert exc.field == "model"
+        assert exc.value == "ghost-model"
+        # rpc_data is the wire payload (camelCase) forwarded as error data.
+        assert exc.rpc_data["runtimeType"] == "claude"
+        assert "claude-opus-4-8" in exc.rpc_data["allowed"]
+
+    def test_out_of_caps_effort_raises(self) -> None:
+        from app.agent.exceptions import InvalidCapabilityValueError
+
+        service, _, _ = _make_service()
+        task = service._tracker.create_task([], AgentConfig(effort="bogus"))
+        with pytest.raises(InvalidCapabilityValueError) as exc_info:
+            service._validate_config_against_caps(task)
+        assert exc_info.value.field == "effort"
+
+    def test_no_registry_skips_validation(self) -> None:
         service, _, _ = _make_service()
         service.runtime_registry = None
-        task = service._tracker.create_task([], AgentConfig(model="claude-opus-4-7"))
-        assert service._get_context_max(task) == 200_000
+        task = service._tracker.create_task([], AgentConfig(model="ghost-model"))
+        service._validate_config_against_caps(task)  # no raise — caps unavailable
 
-    def test_runtime_owns_unknown_model_fallback(self) -> None:
-        service, _, _ = _make_service()
-        # Runtime returns 200K for unknown ids — service trusts it, no second-guessing.
-        service.runtime_registry = self._make_registry({"claude-opus-4-7": 1_000_000})
-        task = service._tracker.create_task([], AgentConfig(model="unknown-model"))
-        assert service._get_context_max(task) == 200_000
-
-    def test_unknown_runtime_does_not_raise_returns_default(self) -> None:
-        """Persisted sessions with an unregistered runtime must not crash
-        non-RPC callers (``_save_task`` / ``_run_background`` metrics)."""
-        from app.agent.runtime import DEFAULT_CONTEXT_WINDOW
+    def test_unknown_runtime_skips_validation(self) -> None:
+        from app.agent.runtime import RuntimeRegistry
 
         service, _, _ = _make_service()
-        # Registry has Claude only; task asks for Codex.
-        task = service._tracker.create_task(
-            [], AgentConfig(runtime="codex", model="gpt-5"),
-        )
-        assert service._get_context_max(task) == DEFAULT_CONTEXT_WINDOW
+        service.runtime_registry = RuntimeRegistry()  # claude not registered
+        task = service._tracker.create_task([], AgentConfig(model="ghost-model"))
+        service._validate_config_against_caps(task)  # no raise — runtime unknown
 
 
 class TestInterruptTaskRollback:

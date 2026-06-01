@@ -7,11 +7,13 @@ from datetime import UTC, datetime
 from typing import Any
 
 from app.agent.context import build_context
+from app.agent.exceptions import InvalidCapabilityValueError
 from app.agent.models import AgentConfig, AgentTask, SubsessionType
 from app.agent.persistence import append_event, save_session, load_session, list_sessions as list_sessions_from_disk, delete_session as delete_session_from_disk, update_session_metadata
 from app.agent.runtime import (
-    DEFAULT_CONTEXT_WINDOW,
     IAgentRuntime,
+    LabeledOption,
+    RuntimeCapabilities,
     RuntimeExecutionConfig,
     RuntimeRegistry,
     UnknownRuntimeError,
@@ -47,27 +49,52 @@ class AgentService:
         self.coordinator: Any = None      # Injected by server.py (IndexCoordinator)
         self._restore_draft_sessions()
 
-    def _get_context_max(self, task: AgentTask) -> int:
-        """Ask ``task``'s runtime for the context window of its configured model.
+    def _get_capabilities(self, task: AgentTask) -> RuntimeCapabilities | None:
+        """Return the runtime's capabilities for ``task``, or ``None`` when unavailable.
 
-        The runtime owns the lookup, including any fallback for ids it
-        doesn't recognise — services must not maintain their own
-        model→window tables. When the registry isn't wired (test bootstrap)
-        or the persisted ``task.config.runtime`` no longer maps to a
-        registered runtime, fall back to the neutral default so non-RPC
-        callers (``_save_task``, ``_run_background`` metrics) don't crash.
+        ``None`` (logged at debug) when the registry isn't wired (test
+        bootstrap) or the persisted ``runtime`` no longer maps to a
+        registered runtime — callers skip validation rather than crash.
         """
         if self.runtime_registry is None:
-            return DEFAULT_CONTEXT_WINDOW
+            return None
         try:
             runtime = self.runtime_registry.get(task.config.runtime)
         except UnknownRuntimeError:
-            logger.warning(
-                "[%s] Unknown runtime %r for context-window lookup; using default",
+            logger.debug(
+                "[%s] Unknown runtime %r; skipping capability check",
                 task.bonsai_sid[:8], task.config.runtime,
             )
-            return DEFAULT_CONTEXT_WINDOW
-        return runtime.get_context_window(task.config.model)
+            return None
+        return runtime.capabilities()
+
+    def _validate_config_against_caps(self, task: AgentTask) -> None:
+        """Raise :class:`InvalidCapabilityValueError` if any field on ``task.config`` is out of caps.
+
+        No-op when caps are unavailable (test bootstrap, unknown runtime).
+        Out-of-caps values are preserved on the config (draft creation /
+        restore never mutate them) and only rejected here, at launch.
+        """
+        caps = self._get_capabilities(task)
+        if caps is None:
+            return
+        cfg = task.config
+        self._validate_config_value(task, field="model", value=cfg.model, allowed=caps.models)
+        self._validate_config_value(
+            task, field="permissionMode", value=cfg.permission_mode, allowed=caps.permission_modes,
+        )
+        self._validate_config_value(task, field="effort", value=cfg.effort, allowed=caps.effort_levels)
+
+    def _validate_config_value(
+        self, task: AgentTask, *, field: str, value: str, allowed: list[LabeledOption],
+    ) -> None:
+        """Raise :class:`InvalidCapabilityValueError` if *value* isn't in *allowed*."""
+        allowed_values = [opt.value for opt in allowed]
+        if value not in allowed_values:
+            raise InvalidCapabilityValueError(
+                field=field, value=value,
+                runtime_type=task.config.runtime, allowed=allowed_values,
+            )
 
     def _restore_draft_sessions(self) -> None:
         """Restore draft sessions from disk into the tracker on startup."""
@@ -191,6 +218,7 @@ class AgentService:
         task = self._tracker.get_task(bonsai_sid)
         if task.status != "draft":
             raise ValueError(f"Cannot start: session is '{task.status}', expected 'draft'")
+        self._validate_config_against_caps(task)
         self._tracker.set_status(bonsai_sid, "initializing")
         spec_context = task.system_prompt or await self._build_context_for(task)
         if prompt is not None:
@@ -221,6 +249,7 @@ class AgentService:
             spec_ids, config, skill_id=skill_id, session_prompt=session_prompt, name=name,
         )
         task.meta_ticket_id = meta_ticket_id
+        self._validate_config_against_caps(task)
         self._attach_to_ticket(task)
         spec_context = await self._build_context_for(task)
         bg_task = asyncio.create_task(
@@ -325,11 +354,30 @@ class AgentService:
         permission_mode: str | None = None,
         effort: str | None = None,
     ) -> dict:
-        """Update model and/or permission mode on a live session."""
+        """Update model and/or permission mode on a live session.
+
+        Each non-None field is validated against the runtime's
+        ``capabilities()`` and an :class:`InvalidCapabilityValueError` is
+        raised on mismatch — this is an explicit user edit, so an out-of-caps
+        value is rejected rather than applied.
+        """
         task = self._tracker.get_task(bonsai_sid)
         client = self._tracker.get_client(bonsai_sid)
         if client is None:
             raise ValueError(f"No live client for session {bonsai_sid}")
+        caps = self._get_capabilities(task)
+        if caps is not None:
+            if model is not None:
+                self._validate_config_value(task, field="model", value=model, allowed=caps.models)
+            if permission_mode is not None:
+                self._validate_config_value(
+                    task, field="permissionMode", value=permission_mode,
+                    allowed=caps.permission_modes,
+                )
+            if effort is not None:
+                self._validate_config_value(
+                    task, field="effort", value=effort, allowed=caps.effort_levels,
+                )
         if model is not None:
             logger.info("[%s] update_config: set_model(%s)", bonsai_sid[:8], model)
             await client.set_model(model)
@@ -395,11 +443,13 @@ class AgentService:
         if existing and existing.get("metrics"):
             data["metrics"] = existing["metrics"]
         else:
+            # contextMax (usage-bar denominator) is unknown until the first
+            # turn streams it from the runtime — seed 0 so the bar stays hidden.
             data["metrics"] = {
                 "costUsd": 0, "turns": 0, "toolCalls": 0,
                 "turnCostUsd": 0, "turnTurns": 0,
                 "durationMs": 0, "contextTokens": 0,
-                "contextMax": self._get_context_max(task), "outputTokens": 0,
+                "contextMax": 0, "outputTokens": 0,
             }
         # Preserve existing events from disk if we don't have new ones
         if events is not None:
@@ -544,6 +594,7 @@ class AgentService:
             name=name,
             bonsai_sid=bonsai_sid,
         )
+        self._validate_config_against_caps(task)
 
         # Update metadata only (don't touch events JSONL)
         metadata = {
@@ -606,6 +657,9 @@ class AgentService:
         _base_turns = 0
         _base_duration = 0
         _base_tool_calls = 0
+        # Carry the last-known context window forward across a resume so the
+        # bar keeps its denominator until the first turn re-reports it.
+        _base_context_max = 0
         if resume_session_id:
             _existing = load_session(self._config.project_root, task.bonsai_sid)
             if _existing and _existing.get("metrics"):
@@ -614,6 +668,7 @@ class AgentService:
                 _base_turns = _m.get("turns", 0)
                 _base_duration = _m.get("durationMs", 0)
                 _base_tool_calls = _m.get("toolCalls", 0)
+                _base_context_max = _m.get("contextMax", 0)
 
         # Mutable live metrics dict — updated incrementally by _persisting_notify
         _live_metrics: dict = {
@@ -624,7 +679,7 @@ class AgentService:
             "turnTurns": 0,
             "durationMs": _base_duration,
             "contextTokens": 0,
-            "contextMax": self._get_context_max(task),
+            "contextMax": _base_context_max,
             "outputTokens": 0,
         }
         _wall_start = time.monotonic()
@@ -687,7 +742,10 @@ class AgentService:
                     last_out = iters[-1].get("output_tokens", 0) if iters else (
                         params.get("usage", {}).get("output_tokens", 0)
                     )
-                    ctx_max = self._get_context_max(task)
+                    # contextMax is streamed by the runtime on turn-end events;
+                    # carry the last-known value forward for events that omit it
+                    # (e.g. agent/done).
+                    ctx_max = params.get("contextMax") or _live_metrics.get("contextMax", 0)
                     _live_metrics.update({
                         "costUsd": _base_cost + params.get("costUsd", 0),
                         "turns": _base_turns + params.get("turns", 0),

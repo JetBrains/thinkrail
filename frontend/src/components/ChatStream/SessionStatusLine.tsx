@@ -1,9 +1,8 @@
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { ReactNode, RefObject } from "react";
 import { createPortal } from "react-dom";
 import type { SessionMetrics, SessionStatus } from "@/types/session.ts";
-import { buildModelOptions, currentModelOptionKey } from "@/utils/models.ts";
-import { useSettingsStore } from "@/store/settingsStore.ts";
+import { useRuntimeCapsStore } from "@/store/runtimeCapsStore.ts";
 import { useUiStore } from "@/store/uiStore.ts";
 import type { EventCategory } from "./renderers/categories.ts";
 
@@ -14,21 +13,6 @@ const CATEGORY_LABELS: Record<EventCategory, string> = {
   tools: "tools",
   system: "system",
 };
-
-const EFFORT_OPTIONS = [
-  { value: null, label: "auto" },
-  { value: "low", label: "low" },
-  { value: "medium", label: "medium" },
-  { value: "high", label: "high" },
-  { value: "max", label: "max" },
-] as const;
-
-const PERMISSION_MODES = [
-  { value: "default", label: "default" },
-  { value: "acceptEdits", label: "accept edits" },
-  { value: "bypassPermissions", label: "yolo" },
-  { value: "plan", label: "plan" },
-] as const;
 
 interface StatusInfo { icon: ReactNode; label: string; cssClass: string }
 
@@ -201,14 +185,14 @@ function InfoBlock({ label, stats }: { label: string; stats: InfoStat[] }) {
 interface SessionStatusLineProps {
   model: string;
   permissionMode: string;
-  effort: string | null;
+  effort: string;
   metrics: SessionMetrics;
   status: SessionStatus;
   projectCost: number;
   disabled?: boolean;
   onChangeModel?: (model: string) => void;
   onChangePermissionMode?: (mode: string) => void;
-  onChangeEffort?: (effort: string | null) => void;
+  onChangeEffort?: (effort: string) => void;
   onInterrupt?: () => void;
   onEndSession?: () => void;
   onBackground?: () => void;
@@ -233,9 +217,11 @@ export function SessionStatusLine({
   onBackground,
   actionSlotRef,
 }: SessionStatusLineProps) {
-  // ── Settings store ──
-  const dynamicModels = useSettingsStore((s) => s.models);
-  const MODEL_OPTIONS = useMemo(() => buildModelOptions(dynamicModels ?? []), [dynamicModels]);
+  // ── Runtime capabilities (drives the pickers) ──
+  const caps = useRuntimeCapsStore((s) => s.capsByRuntime["claude"]);
+  const modelOptions = caps?.models ?? [];
+  const permissionModes = caps?.permissionModes ?? [];
+  const effortLevels = caps?.effortLevels ?? [];
   const categoryVisibility = useUiStore((s) => s.chatCategoryVisibility);
   const toggleCategory = useUiStore((s) => s.toggleChatCategory);
 
@@ -245,15 +231,14 @@ export function SessionStatusLine({
   const canInterrupt = isStreaming;
   const { icon: statusIcon, label: statusLabel, cssClass: statusClass } = statusInfo(status);
 
-  const activeKey = currentModelOptionKey(model);
-  const activeOption = MODEL_OPTIONS.find((o) => o.key === activeKey);
+  const activeOption = modelOptions.find((o) => o.value === model);
 
   // ── Dropdowns (model, permission, status) ──
   const modelDd = useDropdown();
   const permDd = useDropdown();
   const statusDd = useDropdown();
 
-  const activePermission = PERMISSION_MODES.find((p) => p.value === permissionMode);
+  const activePermission = permissionModes.find((p) => p.value === permissionMode);
 
   // ── More popover (portaled to body — ancestors have overflow:hidden) ──
   const [moreOpen, setMoreOpen] = useState(false);
@@ -268,12 +253,18 @@ export function SessionStatusLine({
   const contextColor =
     contextPct > 80 ? "var(--red)" : contextPct > 50 ? "var(--gold)" : "var(--green)";
 
-  const renderModelOption = (o: typeof MODEL_OPTIONS[number]) => (
+  // Surface an out-of-caps active model (e.g. after a model retirement) as a
+  // raw entry so the picker still shows what's selected.
+  const modelDropdownOptions = activeOption
+    ? modelOptions
+    : [{ value: model, label: model }, ...modelOptions];
+
+  const renderModelOption = (o: { value: string; label: string }) => (
     <button
-      key={o.key}
-      className={`ssl-dropdown-item${o.key === activeKey ? " ssl-dropdown-active" : ""}`}
+      key={o.value}
+      className={`ssl-dropdown-item${o.value === model ? " ssl-dropdown-active" : ""}`}
       onClick={() => {
-        if (o.key !== activeKey) onChangeModel?.(o.modelId);
+        if (o.value !== model) onChangeModel?.(o.value);
         modelDd.close();
       }}
     >
@@ -295,7 +286,7 @@ export function SessionStatusLine({
         </button>
         {modelDd.open && (
           <div className="ssl-dropdown">
-            {MODEL_OPTIONS.map(renderModelOption)}
+            {modelDropdownOptions.map(renderModelOption)}
           </div>
         )}
       </div>
@@ -314,7 +305,7 @@ export function SessionStatusLine({
         </button>
         {permDd.open && (
           <div className="ssl-dropdown">
-            {PERMISSION_MODES.map((m) => (
+            {permissionModes.map((m) => (
               <button
                 key={m.value}
                 className={`ssl-dropdown-item${m.value === permissionMode ? " ssl-dropdown-active" : ""}`}
@@ -374,7 +365,7 @@ export function SessionStatusLine({
               <div className="ssl-more-col-title">Settings</div>
               <ChipGroup
                 label="Effort"
-                items={EFFORT_OPTIONS}
+                items={effortLevels}
                 isActive={(v) => v === effort}
                 onSelect={(v) => onChangeEffort?.(v)}
                 disabled={disabled}

@@ -6,8 +6,21 @@ import kotlinx.serialization.Serializable
 data class ModelInfo(
     val id: String,
     val label: String = "",
-    val group: String = "",
-    val contextWindow: Long = 0,
+)
+
+/** A value the backend accepts plus its display label (permission mode, effort, or model). */
+@Serializable
+data class LabeledOption(
+    val value: String,
+    val label: String = "",
+)
+
+/** A runtime's declared capabilities, returned by `runtimes/capabilities`. */
+@Serializable
+data class RuntimeCapabilities(
+    val permissionModes: List<LabeledOption> = emptyList(),
+    val effortLevels: List<LabeledOption> = emptyList(),
+    val models: List<LabeledOption> = emptyList(),
 )
 
 @Serializable

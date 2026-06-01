@@ -26,6 +26,7 @@ from collections.abc import Callable
 from typing import Any
 
 from jsonrpcserver import JsonRpcError, Result, Success
+from pydantic import BaseModel
 
 # ── Standard JSON-RPC error codes ──────────────────────────────────────────
 INVALID_PARAMS = -32602
@@ -41,6 +42,22 @@ INDEX_NOT_READY = -32015
 TICKET_NOT_FOUND = -32021
 INVALID_TRANSITION = -32022
 UNKNOWN_RUNTIME = -32031
+INVALID_CAPABILITY_VALUE = -32032
+
+
+def serialize_result(value: Any) -> Any:
+    """Convert Pydantic models in a handler's return value to wire dicts.
+
+    Handlers may return ``BaseModel`` (or ``list[BaseModel]``) directly so
+    the return annotation is the contract; this dumps with ``by_alias=True``
+    so camelCase aliases match the on-wire schema. Pass-through for
+    everything else (``None``, primitives, plain dicts).
+    """
+    if isinstance(value, BaseModel):
+        return value.model_dump(by_alias=True)
+    if isinstance(value, list):
+        return [serialize_result(item) for item in value]
+    return value
 
 
 def rpc_handler(
@@ -51,18 +68,24 @@ def rpc_handler(
     Common mappings (``KeyError``/``TypeError`` → ``INVALID_PARAMS``,
     generic ``Exception`` → ``INTERNAL_ERROR``) are always applied.
     Pass additional ``(ExcType, code, message)`` tuples for domain errors.
+
+    Pydantic ``BaseModel`` returns are auto-serialized via ``serialize_result``
+    so handlers can declare their return type as the actual response model.
+    A domain error may attach an ``rpc_data`` attribute, forwarded as the
+    JSON-RPC error ``data`` (else ``str(exc)``).
     """
 
     def decorator(func: Callable) -> Callable:
         async def wrapper(service: Any, **params: Any) -> Result:
             try:
-                return Success(await func(service, **params))
+                return Success(serialize_result(await func(service, **params)))
             except JsonRpcError:
                 raise
             except Exception as exc:
                 for exc_type, code, message in domain_errors:
                     if isinstance(exc, exc_type):
-                        raise JsonRpcError(code, message, str(exc)) from exc
+                        data = getattr(exc, "rpc_data", None)
+                        raise JsonRpcError(code, message, data if data is not None else str(exc)) from exc
                 if isinstance(exc, (KeyError, TypeError)):
                     raise JsonRpcError(INVALID_PARAMS, "Invalid params", str(exc)) from exc
                 if isinstance(exc, ValueError):

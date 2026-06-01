@@ -9,7 +9,9 @@ import type { RpcClient } from "../client.ts";
 export interface SessionDefaults {
   model: string;
   permissionMode: string;
-  effort: string | null;
+  effort: string;
+  /** Runtime-declared option toggles, keyed by RuntimeFlag.key. */
+  flags?: Record<string, boolean>;
 }
 
 export function createAppSettingsApi(client: RpcClient) {

@@ -14,8 +14,9 @@ across projects, not with any one project tree.
 from __future__ import annotations
 
 import logging
+from typing import Any
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from app.agent.models import to_camel
 from app.core.app_store import AppStore
@@ -31,7 +32,7 @@ logger = logging.getLogger(__name__)
 
 COLD_START_MODEL = "claude-opus-4-8"
 COLD_START_PERMISSION_MODE = "default"
-COLD_START_EFFORT: str | None = None  # ``None`` renders as "auto" in the UI.
+COLD_START_EFFORT = "auto"
 
 
 # ── AppStore key ───────────────────────────────────────────────────────
@@ -57,7 +58,16 @@ class SessionDefaults(BaseModel):
 
     model: str = COLD_START_MODEL
     permission_mode: str = COLD_START_PERMISSION_MODE
-    effort: str | None = COLD_START_EFFORT
+    effort: str = COLD_START_EFFORT
+    # Runtime-declared option toggles (keyed by RuntimeFlag.key); empty means
+    # every flag uses its runtime default.
+    flags: dict[str, bool] = Field(default_factory=dict)
+
+    @field_validator("effort", mode="before")
+    @classmethod
+    def _coerce_legacy_null_effort(cls, v: Any) -> Any:
+        """Map legacy persisted ``effort: null`` to the neutral ``"auto"``."""
+        return "auto" if v is None else v
 
 
 # ── Persistence helpers ────────────────────────────────────────────────

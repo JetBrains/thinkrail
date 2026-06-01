@@ -34,10 +34,11 @@ There is no setup. Bonsai is single-user, localhost-only — no accounts, no tok
 
 ## Code Generation (Backend → Frontend Types)
 
-Frontend TypeScript types are **generated from backend Pydantic models** — never hand-written. Two pipelines:
+Frontend TypeScript types are **generated from backend Pydantic models** — never hand-written. Three pipelines:
 
 1. **REST API types:** FastAPI OpenAPI schema → `openapi-typescript` → `src/api/generated.ts`
 2. **WebSocket event types:** Pydantic `AgentEvent` union → JSON Schema → `json-schema-to-typescript` → `src/types/ws-events.ts`
+3. **RPC payload types:** curated RPC payload models (`rpc/schema_export.py:RPC_PAYLOAD_MODELS`) → JSON Schema → `json-schema-to-typescript` → `src/types/rpc-methods.ts`
 
 ```bash
 cd frontend && npm run generate     # regenerate all types
@@ -45,15 +46,19 @@ cd frontend && npm run generate     # regenerate all types
 
 This runs automatically as a `prebuild` hook (`npm run build` triggers it). Individual steps:
 ```bash
-npm run generate:schema     # export openapi.json from FastAPI
-npm run generate:api        # openapi.json → src/api/generated.ts
-npm run generate:ws-schema  # export ws-events.json from Pydantic models
-npm run generate:ws-types   # ws-events.json → src/types/ws-events.ts
+npm run generate:schema      # export openapi.json from FastAPI
+npm run generate:api         # openapi.json → src/api/generated.ts
+npm run generate:ws-schema   # export ws-events.json from Pydantic models
+npm run generate:ws-types    # ws-events.json → src/types/ws-events.ts
+npm run generate:rpc-schema  # export rpc-methods.json from curated RPC payload models
+npm run generate:rpc-types   # rpc-methods.json → src/types/rpc-methods.ts
 ```
 
-Backend CLI equivalents: `uv run python -m app.cli export-schema` and `export-ws-schema`.
+Backend CLI equivalents: `uv run python -m app.cli export-schema`, `export-ws-schema`, and `export-rpc-schema`.
 
-**Rule:** When you change backend Pydantic models (api/schemas.py, agent/models.py), run `npm run generate` in frontend/ to keep types in sync. Generated files have "DO NOT EDIT" headers — never modify them directly.
+RPC handlers return Pydantic models (or `list[BaseModel]`) directly — `rpc_handler`'s `serialize_result()` dumps them with `by_alias=True`. The wire payload shapes that cross to the frontend are curated in `backend/app/rpc/schema_export.py` and are the source for the `rpc-methods.ts` types.
+
+**Rule:** When you change backend Pydantic models (api/schemas.py, agent/models.py) or curated RPC payload models (rpc/schema_export.py), run `npm run generate` in frontend/ to keep types in sync. Generated files have "DO NOT EDIT" headers — never modify them directly.
 
 ## Code Style — Python Backend
 
@@ -127,7 +132,7 @@ If the comment describes *the current state* of the system and a reader couldn't
 backend/
   app/
     main.py           # FastAPI entry point (create_app factory)
-    cli.py            # Schema export commands (export-schema, export-ws-schema)
+    cli.py            # Schema export commands (export-schema, export-ws-schema, export-rpc-schema)
     api/              # REST API layer (FastAPI routers)
       routers/        # files.py, fs.py, project.py, projects_known.py, server_info.py
     core/             # Config, file I/O, watcher, app_store (SQLite — projects + settings), project bootstrap, settings

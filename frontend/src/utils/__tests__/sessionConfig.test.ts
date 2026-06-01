@@ -1,17 +1,6 @@
 import { describe, it, expect, beforeEach } from "vitest";
-import { buildDefaultSessionConfig, PERMISSION_MODES } from "../sessionConfig.ts";
+import { buildDefaultSessionConfig } from "../sessionConfig.ts";
 import { useSettingsStore } from "@/store/settingsStore.ts";
-
-describe("PERMISSION_MODES", () => {
-  it("matches the agent-side enum exactly", () => {
-    expect(PERMISSION_MODES).toEqual([
-      "default",
-      "acceptEdits",
-      "bypassPermissions",
-      "plan",
-    ]);
-  });
-});
 
 describe("buildDefaultSessionConfig", () => {
   beforeEach(() => {
@@ -34,16 +23,41 @@ describe("buildDefaultSessionConfig", () => {
     expect(cfg.streamText).toBe(true);
   });
 
-  it("passes effort=null through (the 'auto' state)", async () => {
+  it("passes effort='auto' through (the neutral default)", async () => {
     useSettingsStore.setState({
       sessionDefaults: {
         model: "claude-opus-4-7",
         permissionMode: "default",
-        effort: null,
+        effort: "auto",
       },
     });
     const cfg = await buildDefaultSessionConfig();
-    expect(cfg.effort).toBeNull();
+    expect(cfg.effort).toBe("auto");
+  });
+
+  it("carries runtime flags into the draft config", async () => {
+    useSettingsStore.setState({
+      sessionDefaults: {
+        model: "claude-opus-4-8",
+        permissionMode: "default",
+        effort: "auto",
+        flags: { context1m: false },
+      },
+    });
+    const cfg = await buildDefaultSessionConfig();
+    expect(cfg.flags).toEqual({ context1m: false });
+  });
+
+  it("defaults flags to an empty object when absent", async () => {
+    useSettingsStore.setState({
+      sessionDefaults: {
+        model: "claude-opus-4-8",
+        permissionMode: "default",
+        effort: "auto",
+      },
+    });
+    const cfg = await buildDefaultSessionConfig();
+    expect(cfg.flags).toEqual({});
   });
 
   it("throws when the backend fetch resolves to null", async () => {

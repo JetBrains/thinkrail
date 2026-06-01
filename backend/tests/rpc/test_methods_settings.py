@@ -9,28 +9,35 @@ import pytest
 from jsonrpcserver import JsonRpcError
 
 from app.agent.runtime import (
-    ModelInfo,
+    LabeledOption,
+    RuntimeCapabilities,
     RuntimeRegistry,
     RuntimeSkillInfo,
 )
-from app.rpc.errors import UNKNOWN_RUNTIME
-from app.rpc.methods.settings import list_models, list_runtime_skills
+from app.rpc.errors import UNKNOWN_RUNTIME, VALIDATION_ERROR
+from app.rpc.methods.settings import (
+    list_runtime_skills,
+    runtimes_capabilities,
+    runtimes_list,
+)
 
 
-def _fake_runtime(rt: str, models: list[ModelInfo], display: str | None = None) -> MagicMock:
+def _caps(models: list[str]) -> RuntimeCapabilities:
+    return RuntimeCapabilities(
+        permission_modes=[LabeledOption(value="default", label="default")],
+        effort_levels=[LabeledOption(value="auto", label="auto")],
+        models=[LabeledOption(value=m, label=m) for m in models],
+    )
+
+
+def _fake_runtime(
+    rt: str, models: list[str], display: str | None = None,
+) -> MagicMock:
     runtime = MagicMock()
     runtime.runtime_type = rt
     runtime.display_name = display or rt.title()
-    runtime.list_models = MagicMock(return_value=models)
+    runtime.capabilities = MagicMock(return_value=_caps(models))
     return runtime
-
-
-def _model(model_id: str, *, ctx: int = 1_000_000) -> ModelInfo:
-    return ModelInfo(
-        id=model_id,
-        label=model_id,
-        context_window=ctx,
-    )
 
 
 def _success(result_or_response: Any) -> Any:
@@ -39,47 +46,65 @@ def _success(result_or_response: Any) -> Any:
 
 
 @pytest.mark.asyncio
-class TestListModels:
-    async def test_returns_runtimes_object_with_grouped_models(self) -> None:
+class TestRuntimesList:
+    async def test_returns_identities_sorted_by_runtime_type(self) -> None:
         reg = RuntimeRegistry()
-        reg.register(_fake_runtime("claude", [_model("claude-opus-4-7")], display="Claude Code"))
-        reg.register(_fake_runtime("codex", [_model("gpt-5", ctx=400_000)], display="Codex"))
+        reg.register(_fake_runtime("codex", ["gpt-5"], display="Codex"))
+        reg.register(_fake_runtime("claude", ["claude-opus-4-8"], display="Claude Code"))
 
-        result = _success(await list_models(reg))
+        result = _success(await runtimes_list(reg))
 
-        assert "runtimes" in result
-        runtimes = result["runtimes"]
         # ``RuntimeRegistry.all()`` is sorted by ``runtime_type``.
-        assert [r["runtimeType"] for r in runtimes] == ["claude", "codex"]
-        assert runtimes[0]["displayName"] == "Claude Code"
-        assert runtimes[1]["displayName"] == "Codex"
+        assert [r["runtimeType"] for r in result["runtimes"]] == ["claude", "codex"]
+        assert result["runtimes"][0]["displayName"] == "Claude Code"
+        assert result["runtimes"][1]["displayName"] == "Codex"
 
-    async def test_each_group_carries_its_own_models(self) -> None:
+    async def test_identity_has_no_models(self) -> None:
         reg = RuntimeRegistry()
-        reg.register(_fake_runtime("claude", [_model("claude-opus-4-7")]))
-        reg.register(_fake_runtime("codex", [_model("gpt-5", ctx=400_000)]))
+        reg.register(_fake_runtime("claude", ["claude-opus-4-8"]))
+        result = _success(await runtimes_list(reg))
+        assert set(result["runtimes"][0].keys()) == {"runtimeType", "displayName"}
 
-        result = _success(await list_models(reg))
-        runtimes = {r["runtimeType"]: r for r in result["runtimes"]}
-
-        claude_ids = [m["id"] for m in runtimes["claude"]["models"]]
-        codex_ids = [m["id"] for m in runtimes["codex"]["models"]]
-        assert claude_ids == ["claude-opus-4-7"]
-        assert codex_ids == ["gpt-5"]
-
-    async def test_model_entries_do_not_duplicate_runtime_field(self) -> None:
-        # Runtime is on the group, not on every model entry.
+    async def test_empty_registry_returns_empty_list(self) -> None:
         reg = RuntimeRegistry()
-        reg.register(_fake_runtime("claude", [_model("claude-opus-4-7")]))
-
-        result = _success(await list_models(reg))
-        model = result["runtimes"][0]["models"][0]
-        assert "runtime" not in model
-
-    async def test_empty_registry_returns_empty_runtimes_list(self) -> None:
-        reg = RuntimeRegistry()
-        result = _success(await list_models(reg))
+        result = _success(await runtimes_list(reg))
         assert result == {"runtimes": []}
+
+
+@pytest.mark.asyncio
+class TestRuntimesCapabilities:
+    async def test_returns_camel_case_capability_lists(self) -> None:
+        reg = RuntimeRegistry()
+        reg.register(_fake_runtime("claude", ["claude-opus-4-8", "claude-sonnet-4-6"]))
+
+        result = _success(await runtimes_capabilities(reg, runtimeType="claude"))
+
+        assert set(result.keys()) == {"permissionModes", "effortLevels", "models", "flags"}
+        assert result["permissionModes"][0]["value"] == "default"
+        assert result["effortLevels"][0]["value"] == "auto"
+        assert [m["value"] for m in result["models"]] == [
+            "claude-opus-4-8", "claude-sonnet-4-6",
+        ]
+
+    async def test_unknown_runtime_raises_rpc_error_32031(self) -> None:
+        # ``codex`` is a valid RuntimeType literal but not registered.
+        reg = RuntimeRegistry()
+        reg.register(_fake_runtime("claude", ["claude-opus-4-8"]))
+
+        with pytest.raises(JsonRpcError) as exc_info:
+            await runtimes_capabilities(reg, runtimeType="codex")
+        assert exc_info.value.code == UNKNOWN_RUNTIME
+        assert UNKNOWN_RUNTIME == -32031
+
+    async def test_invalid_runtime_type_raises_validation_error(self) -> None:
+        # A value outside the RuntimeType literal is rejected by
+        # ``RuntimesCapabilitiesRequest`` before the registry lookup.
+        reg = RuntimeRegistry()
+        reg.register(_fake_runtime("claude", ["claude-opus-4-8"]))
+
+        with pytest.raises(JsonRpcError) as exc_info:
+            await runtimes_capabilities(reg, runtimeType="bogus")
+        assert exc_info.value.code == VALIDATION_ERROR
 
 
 def _skill(skill_id: str, source: str = "user") -> RuntimeSkillInfo:

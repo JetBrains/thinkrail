@@ -22,11 +22,13 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { render, screen, fireEvent, cleanup, act } from "@testing-library/react";
 
-import { useSettingsStore, type RuntimeModels } from "@/store/settingsStore.ts";
+import { useSettingsStore } from "@/store/settingsStore.ts";
+import { useRuntimeCapsStore } from "@/store/runtimeCapsStore.ts";
 import { useSessionStore } from "@/store/sessionStore.ts";
 import { useInputDraftStore } from "@/store/inputDraftStore.ts";
 import type { Skill } from "@/constants/skills.ts";
 import type { RuntimeSkillInfo, RuntimeType } from "@/types/agent.ts";
+import type { RuntimeIdentity } from "@/types/rpc-methods.ts";
 import type { Session } from "@/types/session.ts";
 
 // ── Mocks ─────────────────────────────────────────────────────────────────
@@ -75,30 +77,29 @@ const RUNTIME_SKILLS: RuntimeSkillInfo[] = [
   { id: "init", name: "Init", description: "Init CLAUDE.md", source: "builtin" },
 ];
 
-const CLAUDE_META: RuntimeModels = {
+const CLAUDE_IDENTITY: RuntimeIdentity = {
   runtimeType: "claude",
   displayName: "Claude Code",
-  models: [],
 };
 
 function seedStores({
   draft = "",
   bonsai = BONSAI_SKILLS,
   runtimeSkills = RUNTIME_SKILLS,
-  runtimeMeta = [CLAUDE_META] as RuntimeModels[],
+  runtimeMeta = [CLAUDE_IDENTITY] as RuntimeIdentity[],
   runtime = "claude" as RuntimeType,
 }: {
   draft?: string;
   bonsai?: Skill[];
   runtimeSkills?: RuntimeSkillInfo[];
-  runtimeMeta?: RuntimeModels[];
+  runtimeMeta?: RuntimeIdentity[];
   runtime?: RuntimeType;
 } = {}) {
   useSettingsStore.setState({
     skills: bonsai,
-    runtimes: runtimeMeta,
     runtimeSkills: new Map<RuntimeType, RuntimeSkillInfo[]>([[runtime, runtimeSkills]]),
   });
+  useRuntimeCapsStore.setState({ runtimes: runtimeMeta });
   // Seed a minimal session so `useSessionStore.sessions.get(sessionId)`
   // returns *something* — the model field is read for runtime derivation.
   const stub = {
@@ -161,10 +162,10 @@ beforeEach(() => {
   // network call.
   useSettingsStore.setState({
     skills: [],
-    runtimes: null,
     runtimeSkills: new Map(),
     loadRuntimeSkills: vi.fn(async () => undefined) as never,
   });
+  useRuntimeCapsStore.setState({ runtimes: null, capsByRuntime: {} });
   useSessionStore.setState({ sessions: new Map() });
   useInputDraftStore.setState({ drafts: new Map() });
 });

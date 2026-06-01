@@ -67,9 +67,10 @@ from app.rpc.methods.settings import (
     ensure_settings,
     get_session_defaults,
     get_settings,
-    list_models,
     list_runtime_skills,
     list_skills,
+    runtimes_capabilities,
+    runtimes_list,
     set_session_defaults,
     update_settings,
 )
@@ -201,7 +202,8 @@ METHODS = {
     "settings/ensureFile": ensure_settings,
     "appSettings/getSessionDefaults": get_session_defaults,
     "appSettings/setSessionDefaults": set_session_defaults,
-    "models/list": list_models,
+    "runtimes/list": runtimes_list,
+    "runtimes/capabilities": runtimes_capabilities,
     "skills/list": list_skills,
     "skills/listRuntime": list_runtime_skills,
 }
@@ -248,7 +250,7 @@ def _bind_methods(
             bound[name] = partial(handler, runtime_registry)
         elif name.startswith("skills/"):
             bound[name] = partial(handler, config)
-        elif name.startswith("models/"):
+        elif name.startswith("runtimes/"):
             bound[name] = partial(handler, runtime_registry)
         else:
             bound[name] = partial(handler, agent_service)

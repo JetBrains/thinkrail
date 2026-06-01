@@ -153,7 +153,9 @@ export interface AgentConfig {
   model: string;
   permissionMode: string;
   streamText: boolean;
-  effort: string | null;
+  effort: string;
+  /** Runtime-declared option toggles, keyed by RuntimeFlag.key. */
+  flags?: Record<string, boolean>;
 }
 
 export interface AskUserQuestionResponse {

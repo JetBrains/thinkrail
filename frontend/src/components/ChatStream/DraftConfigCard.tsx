@@ -3,8 +3,9 @@ import { browseFiles } from "@/services/files.ts";
 import { useSpecStore } from "@/store/specStore.ts";
 import { useSettingsStore } from "@/store/settingsStore.ts";
 import { useSessionStore } from "@/store/sessionStore.ts";
+import { useRuntimeCapsStore } from "@/store/runtimeCapsStore.ts";
+import { RuntimeFlags } from "@/components/shared/RuntimeFlags.tsx";
 import { useBoardStore } from "@/store/boardStore.ts";
-import { PERMISSION_MODES } from "@/utils/sessionConfig.ts";
 import { SkillGrid } from "@/components/shared/SkillGrid.tsx";
 import { SpecSelector } from "@/components/shared/SpecSelector.tsx";
 import { TicketSelector } from "@/components/shared/TicketSelector.tsx";
@@ -29,7 +30,11 @@ export function DraftConfigCard({ bonsaiSid, readOnly, onVisibilityChange }: Dra
   const specs = useSpecStore((s) => s.specs);
   const tickets = useBoardStore((s) => s.tickets);
   const skills = useSettingsStore((s) => s.skills);
-  const models = useSettingsStore((s) => s.models) ?? [];
+  const caps = useRuntimeCapsStore((s) => s.capsByRuntime["claude"]);
+  const models = caps?.models ?? [];
+  const permissionModes = caps?.permissionModes ?? [];
+  const effortLevels = caps?.effortLevels ?? [];
+  const flags = caps?.flags ?? [];
 
   const [editName, setEditName] = useState("");
   const [skillPickerOpen, setSkillPickerOpen] = useState(false);
@@ -139,14 +144,17 @@ export function DraftConfigCard({ bonsaiSid, readOnly, onVisibilityChange }: Dra
   const selectedSpecs = session.specIds
     .map((id) => specs.find((s) => s.id === id))
     .filter(Boolean);
-  const modelDef = models.find((m) => m.id === session.model);
+  const modelDef = models.find((m) => m.value === session.model);
   const attachedTicket = session.metaTicketId ? tickets.get(session.metaTicketId) : null;
 
-  const buildConfig = (overrides: Partial<{ model: string; permissionMode: string; effort: string | null }>) => ({
+  const buildConfig = (
+    overrides: Partial<{ model: string; permissionMode: string; effort: string; flags: Record<string, boolean> }>,
+  ) => ({
     model: overrides.model ?? session.model,
     permissionMode: overrides.permissionMode ?? session.permissionMode,
     streamText: true,
     effort: overrides.effort !== undefined ? overrides.effort : session.effort,
+    flags: overrides.flags ?? session.flags ?? {},
   });
 
   // ── Read-only mode: display-only rendering (used at session start) ──
@@ -223,7 +231,7 @@ export function DraftConfigCard({ bonsaiSid, readOnly, onVisibilityChange }: Dra
               {modelDef?.label ?? session.model}
             </span>
             <span className="draft-config-pill">{session.permissionMode}</span>
-            <span className="draft-config-pill">{session.effort ?? "auto"} effort</span>
+            <span className="draft-config-pill">{session.effort} effort</span>
           </div>
         </div>
 
@@ -468,7 +476,7 @@ export function DraftConfigCard({ bonsaiSid, readOnly, onVisibilityChange }: Dra
                 <option value={session.model}>{session.model}</option>
               )}
               {models.map((m) => (
-                <option key={m.id} value={m.id}>
+                <option key={m.value} value={m.value}>
                   {m.label}
                 </option>
               ))}
@@ -484,30 +492,48 @@ export function DraftConfigCard({ bonsaiSid, readOnly, onVisibilityChange }: Dra
                 debouncedUpdate({ config: buildConfig({ permissionMode: e.target.value }) })
               }
             >
-              {PERMISSION_MODES.map(
-                (m) => (
-                  <option key={m} value={m}>
-                    {m}
-                  </option>
-                ),
+              {!permissionModes.some((m) => m.value === session.permissionMode) && (
+                <option value={session.permissionMode}>{session.permissionMode}</option>
               )}
+              {permissionModes.map((m) => (
+                <option key={m.value} value={m.value}>
+                  {m.label}
+                </option>
+              ))}
             </select>
           </span>
 
           <span className="draft-config-inline">
             <span className="draft-config-hint">effort:</span>
             <span className="draft-config-pills">
-              {([null, "low", "medium", "high", "max"] as const).map((e) => (
+              {effortLevels.map((e) => (
                 <button
-                  key={e ?? "auto"}
-                  className={`draft-config-effort-pill ${session.effort === e ? "draft-config-effort-pill--active" : ""}`}
-                  onClick={() => debouncedUpdate({ config: buildConfig({ effort: e }) })}
+                  key={e.value}
+                  className={`draft-config-effort-pill ${session.effort === e.value ? "draft-config-effort-pill--active" : ""}`}
+                  onClick={() => debouncedUpdate({ config: buildConfig({ effort: e.value }) })}
                 >
-                  {e ?? "auto"}
+                  {e.label}
                 </button>
               ))}
             </span>
           </span>
+
+          {flags.some((f) => f.type === "boolean") && (
+            <span className="draft-config-inline">
+              <span className="runtime-flags">
+                <RuntimeFlags
+                  flags={flags}
+                  value={session.flags ?? {}}
+                  idPrefix="draft-flag"
+                  onChange={(key, checked) =>
+                    debouncedUpdate({
+                      config: buildConfig({ flags: { ...session.flags, [key]: checked } }),
+                    })
+                  }
+                />
+              </span>
+            </span>
+          )}
 
         </div>
       </div>

@@ -6,40 +6,33 @@ import pytest
 
 from app.agent.runtime import (
     DuplicateRuntimeError,
-    ModelInfo,
+    LabeledOption,
+    RuntimeCapabilities,
     RuntimeRegistry,
     UnknownRuntimeError,
 )
 
 
 class _FakeRuntime:
-    def __init__(self, runtime_type: str, models: list[ModelInfo] | None = None) -> None:
+    def __init__(
+        self, runtime_type: str, models: list[LabeledOption] | None = None
+    ) -> None:
         self.runtime_type = runtime_type
         self.display_name = runtime_type.title()
-        self._models = models or []
+        self._models = models or [LabeledOption(value="default-model", label="Default")]
 
-    def list_models(self) -> list[ModelInfo]:
-        return self._models
-
-    def get_context_window(self, model_id: str) -> int:
-        for m in self._models:
-            if m.id == model_id:
-                return m.context_window
-        return 200_000
+    def capabilities(self) -> RuntimeCapabilities:
+        return RuntimeCapabilities(
+            permission_modes=[LabeledOption(value="default", label="default")],
+            effort_levels=[LabeledOption(value="auto", label="auto")],
+            models=self._models,
+        )
 
     async def run_session(self, *args, **kwargs):  # pragma: no cover - not exercised here
         raise NotImplementedError
 
     async def interrupt(self, *args, **kwargs):  # pragma: no cover
         raise NotImplementedError
-
-
-def _model(model_id: str) -> ModelInfo:
-    return ModelInfo(
-        id=model_id,
-        label=model_id,
-        context_window=200_000,
-    )
 
 
 class TestRegister:

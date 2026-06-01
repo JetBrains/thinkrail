@@ -187,8 +187,15 @@ class RpcMethods(private val client: RpcClient) {
     suspend fun settingsUpdate(settings: JsonObject): ProjectSettings =
         call("settings/update", buildJsonObject { put("settings", settings) }, ProjectSettings.serializer())
 
+    suspend fun runtimesCapabilities(runtimeType: String = "claude"): RuntimeCapabilities =
+        call(
+            "runtimes/capabilities",
+            buildParams("runtimeType" to runtimeType),
+            RuntimeCapabilities.serializer(),
+        )
+
     suspend fun modelsList(): List<ModelInfo> =
-        callList("models/list", ModelInfo.serializer())
+        runtimesCapabilities().models.map { ModelInfo(id = it.value, label = it.label) }
 
     suspend fun skillsList(): List<SkillInfo> =
         callList("skills/list", SkillInfo.serializer())

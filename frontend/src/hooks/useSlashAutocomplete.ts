@@ -23,6 +23,7 @@ import type React from "react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { useSettingsStore } from "@/store/settingsStore.ts";
+import { useRuntimeCapsStore } from "@/store/runtimeCapsStore.ts";
 import type { Skill } from "@/constants/skills.ts";
 import type { RuntimeSkillInfo, RuntimeType } from "@/types/agent.ts";
 
@@ -168,7 +169,7 @@ export function useSlashAutocomplete(
   // metadata. Using selectors keeps re-renders narrow.
   const bonsaiSkills = useSettingsStore((s) => s.skills);
   const runtimeSkillsMap = useSettingsStore((s) => s.runtimeSkills);
-  const runtimes = useSettingsStore((s) => s.runtimes);
+  const runtimes = useRuntimeCapsStore((s) => s.runtimes);
 
   const runtimeDisplayName = useMemo(() => {
     const entry = runtimes?.find((r) => r.runtimeType === effectiveRuntime);

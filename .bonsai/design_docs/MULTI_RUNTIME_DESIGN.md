@@ -58,14 +58,13 @@ choices. Read it for *why* the architecture is shaped the way it is.
 │  - prepare_task / start_draft / interrupt_task                │
 │  - _get_runtime(task) → self.runtime_registry.get(            │
 │                            task.config.runtime)               │
-│  - _get_context_max(task) → runtime.get_context_window(...)   │
 └──────────────────┬───────────────────────────────────────────┘
                    │ runtime.run_session(task, exec_config, handler)
                    ▼
        ┌───────────────────────┐
        │  IAgentRuntime        │  Protocol — runtime contract
-       │  - list_models        │
-       │  - get_context_window │
+       │  - capabilities       │
+       │  - list_skills        │
        │  - run_session        │
        │  - interrupt          │
        └───────┬───────────────┘
@@ -91,8 +90,8 @@ class IAgentRuntime(Protocol):
     runtime_type: RuntimeType        # "claude" | "codex"
     display_name: str
 
-    def list_models(self) -> list[ModelInfo]: ...
-    def get_context_window(self, model_id: str) -> int: ...
+    def capabilities(self) -> RuntimeCapabilities: ...
+    def list_skills(self) -> list[RuntimeSkillInfo]: ...
 
     async def run_session(
         self,
@@ -115,14 +114,16 @@ class IAgentRuntime(Protocol):
   → query → stream events → repeat. Exits on `END_SIGNAL`.
 - `interrupt` is the cancellation hook. No `cancel_event`, no polling.
   Each runtime decides what "interrupt the current turn" means.
-- `list_models` returns the runtime's current best view. How the runtime
-  sources it (static list, lazy fetch, periodic refresh, remote API) is
-  invisible to callers. There is no `refresh_models` or `models_status`
-  on the protocol — those leak caching strategy.
-- `get_context_window(model_id)` returns the context-window size for
-  the runtime's own models, falling back to a neutral
-  `DEFAULT_CONTEXT_WINDOW` for unknown ids. Services consult the runtime
-  rather than maintaining their own model→window tables.
+- `capabilities()` declares the runtime's pickable values — permission
+  modes, effort levels, and models — as `RuntimeCapabilities`. How the
+  runtime sources its model list (static list, lazy fetch, periodic
+  refresh, remote API) is invisible to callers. There is no
+  `refresh_models` or `models_status` on the protocol — those leak
+  caching strategy.
+- The model context-window size is not part of the capability surface.
+  It is inferred from the live SDK per session and streamed to the
+  frontend as `contextMax` on turn-end events; the service maintains no
+  model→window table.
 
 ### `RuntimeRegistry`
 
@@ -146,16 +147,35 @@ key gets a clean domain error instead of an opaque `INTERNAL_ERROR`.
 the available runtimes once per project. No `start_all` / `stop_all` —
 the registry just holds the instances.
 
-### `ModelInfo`
+### Runtime capability types
 
 ```python
-class ModelInfo(BaseModel):           # frozen
-    id: str
+class LabeledOption(BaseModel):       # frozen, extra="forbid", camelCase aliases
+    value: str
     label: str
-    context_window: int
 
-DEFAULT_CONTEXT_WINDOW = 200_000             # neutral floor
+class RuntimeFlag(BaseModel):         # frozen — a runtime-declared option toggle
+    key: str                          # AgentConfig.flags key
+    label: str
+    type: Literal["boolean"]          # discriminator; only boolean today
+    default: bool
+    description: str = ""
+
+class RuntimeCapabilities(BaseModel): # frozen
+    permission_modes: list[LabeledOption]
+    effort_levels: list[LabeledOption]
+    models: list[LabeledOption]
+    # each list non-empty; position 0 is the runtime default
+    flags: list[RuntimeFlag] = []     # optional; rendered as settings toggles
+
+class RuntimeIdentity(BaseModel):     # frozen — returned by runtimes/list
+    runtime_type: RuntimeType
+    display_name: str
 ```
+
+The list **order is contract**: position 0 of each capability list is
+the runtime's default. The model context-window size is not modelled
+here — it is inferred from the live SDK at runtime.
 
 ### `RuntimeEvent` and `AgentEventHandler`
 
@@ -309,24 +329,26 @@ interval). The callback design has zero latency and zero extra code.
 - `AgentService._get_runtime(task)` is a one-line registry lookup:
   `self.runtime_registry.get(task.config.runtime)`. Unknown runtime
   raises `UnknownRuntimeError` → RPC layer surfaces `UNKNOWN_RUNTIME`.
-- Frontend model picker hydrates from the `models/list` RPC, which now
-  returns models grouped by runtime:
+- The frontend hydrates its pickers from two RPCs. `runtimes/list`
+  returns the registered runtimes (sorted by `runtimeType`):
+
+  ```json
+  { "runtimes": [ { "runtimeType": "claude", "displayName": "Claude Code" } ] }
+  ```
+
+  `runtimes/capabilities` returns one runtime's capability lists:
 
   ```json
   {
-    "runtimes": [
-      {
-        "runtimeType": "claude",
-        "displayName": "Claude Code",
-        "models": [ { "id": "...", "label": "...", "contextWindow": 200000 }, ... ]
-      }
-    ]
+    "permissionModes": [ { "value": "default", "label": "default" }, ... ],
+    "effortLevels":    [ { "value": "auto", "label": "auto" }, ... ],
+    "models":          [ { "value": "...", "label": "..." }, ... ]
   }
   ```
 
   `displayName` ships from the runtime — frontends don't hardcode a
-  `runtime_type → display_name` mapping. Sorted by `runtime_type` for
-  deterministic rendering.
+  `runtime_type → display_name` mapping. Each capability list's order is
+  the contract; position 0 is the runtime default.
 
 ## Design choices
 
@@ -344,18 +366,19 @@ interval). The callback design has zero latency and zero extra code.
 ```
 backend/app/agent/
   runtime/
-    __init__.py            # public exports — incl. RuntimeRegistry, ModelInfo
-    types.py               # IAgentRuntime, RuntimeExecutionConfig, ModelInfo, DEFAULT_CONTEXT_WINDOW
+    __init__.py            # public exports — incl. RuntimeRegistry, RuntimeCapabilities
+    types.py               # IAgentRuntime, RuntimeExecutionConfig, LabeledOption, RuntimeCapabilities, RuntimeIdentity
     registry.py            # RuntimeRegistry + RuntimeRegistryError / DuplicateRuntimeError / UnknownRuntimeError
     events.py              # RuntimeEvent, AgentEventHandler, make_handler_from_notify
     permissions.py         # ToolPermissionRequest/Response, ToolCategory  (engine lives one level up)
     claude/
       __init__.py          # exports ClaudeRuntime
-      runtime.py           # ClaudeRuntime — IAgentRuntime impl
-      models.py            # ClaudeModelRegistry — loads models.json
-      models.json          # curated model catalog
+      runtime.py           # ClaudeRuntime — IAgentRuntime impl; capabilities() projection
+      models.py            # ClaudeModelRegistry — loads models.json, serves list_options()
+      models.json          # curated model catalog ([{id, label}])
       hooks.py             # SubagentHooks (subagent / PreCompact correlation)
       adapter.py           # event-shape builders
+  exceptions.py            # InvalidCapabilityValueError (→ -32032)
   permissions.py           # can_use_tool engine + claude_can_use_tool_adapter
   service.py               # AgentService — wires runtime to tasks
   tools/                   # bonsai MCP tools (interceptors)

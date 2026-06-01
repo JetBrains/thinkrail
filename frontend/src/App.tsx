@@ -7,6 +7,7 @@ import { useUiStore, sessionLoadStrategy } from "@/store/uiStore.ts";
 import { useVisStore } from "@/store/visStore.ts";
 import { useBoardStore } from "@/store/boardStore.ts";
 import { useSettingsStore } from "@/store/settingsStore.ts";
+import { useRuntimeCapsStore } from "@/store/runtimeCapsStore.ts";
 import { registerKeyboardShortcuts } from "@/utils/keyboard.ts";
 import { applyFontScale } from "@/utils/fontScale.ts";
 import { validateProject } from "@/services/project.ts";
@@ -56,11 +57,12 @@ function AppInner({ projectPath: _projectPath, onSwitchProject }: { projectPath:
       useVisStore.getState().fetchState();
       // Load board tickets
       useBoardStore.getState().fetchTickets();
-      // Load project settings, user-scoped session defaults, model list,
-      // and skills.
+      // Load project settings, user-scoped session defaults, runtime
+      // capabilities (drives the model / permission / effort pickers), and skills.
       useSettingsStore.getState().fetchSettings();
       useSettingsStore.getState().fetchSessionDefaults();
-      useSettingsStore.getState().fetchModels();
+      useRuntimeCapsStore.getState().fetchRuntimes();
+      useRuntimeCapsStore.getState().fetchCapabilities("claude");
       useSettingsStore.getState().fetchSkills();
     } else if (connectionState === "connected" && wiredRef.current) {
       // ── Reconnect: WS recovered — sync session statuses immediately ──

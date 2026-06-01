@@ -33,9 +33,9 @@ that imports from `claude_agent_sdk`.
 | File | Responsibility |
 |------|----------------|
 | `__init__.py` | Re-exports `ClaudeRuntime` |
-| `runtime.py` | `class ClaudeRuntime` — IAgentRuntime impl. Owns SDK lifecycle, conversation loop, tool-result serialization, cost-iteration tracking, mode-change tracking. Delegates `list_models()` to `ClaudeModelRegistry` and `list_skills()` to `ClaudeSkillRegistry` |
-| `models.py` | `class ClaudeModelRegistry` — loads `models.json` shipped with the package via `importlib.resources` and serves `list_models` / `get_context_window`. No fetch, no cache, no refresh |
-| `models.json` | Curated catalog of Claude models exposed to the picker. Edit-and-ship to add or change a model |
+| `runtime.py` | `class ClaudeRuntime` — IAgentRuntime impl. Owns SDK lifecycle, conversation loop, tool-result serialization, cost-iteration tracking, mode-change tracking. `capabilities()` projects the permission/effort/flag module constants plus `self._models.list_options()` (the `context1m` flag gates the 1M-context beta); delegates `list_skills()` to `ClaudeSkillRegistry` |
+| `models.py` | `class ClaudeModelRegistry` — loads `models.json` shipped with the package via `importlib.resources` and serves `list_options()`. No fetch, no cache, no refresh |
+| `models.json` | Curated catalog of Claude models (`[{id, label}]`) exposed to the picker. Edit-and-ship to add or change a model |
 | `skills.py` | `class ClaudeSkillRegistry` — multi-source skill discovery (user / project / plugin / command / builtin) with first-wins dedup and a process-lifetime mtime cache. See [Skill catalog](#skill-catalog--multi-source-scan) |
 | `hooks.py` | `class SubagentHooks` — per-session subagent / PreCompact correlation (Task-tool ↔ SubagentStart) |
 | `adapter.py` | Pure event-shape builders — `agent/toolCallStart` / `agent/toolCallEnd` param construction. Boundary the Codex adapter's diff-parity tests will enforce against |
@@ -52,8 +52,7 @@ runtime = ClaudeRuntime(
     spec_service=...,
     coordinator=...,
 )
-models = runtime.list_models()                           # list[ModelInfo]
-ctx = runtime.get_context_window("claude-opus-4-7")      # int
+caps = runtime.capabilities()                            # RuntimeCapabilities
 result = await runtime.run_session(task, exec_config, handler)
 await runtime.interrupt(task, tracker)
 ```
@@ -130,13 +129,46 @@ events for everything still in `_active_subagent_ids`.
 - Constructor reads `models.json` from the package via
   `importlib.resources.files(__package__).joinpath("models.json")` —
   path-stable across source checkout, wheel install, and zipapp.
-- Each entry is a `{id, label, contextWindow}` triple, projected to
-  `ModelInfo(id=, label=, context_window=)` at load time and kept in a
-  frozen tuple + id-keyed dict for O(1) lookup.
+- Each entry is an `{id, label}` pair, projected to
+  `LabeledOption(value=id, label=label)` at load time and kept in a
+  frozen tuple.
 - No fetch, no cache, no refresh, no fallback. Adding or changing a
   model is an edit to `models.json` shipped in a normal release.
-- `get_context_window(model_id)` consults the id index; returns
-  `DEFAULT_CONTEXT_WINDOW` (200K) for unknown ids.
+- `list_options()` returns the projected `LabeledOption` list, in
+  declared order; `ClaudeRuntime.capabilities()` surfaces it as the
+  `models` capability.
+
+## Capabilities
+
+`ClaudeRuntime.capabilities()` returns a `RuntimeCapabilities` built from
+these sources:
+
+- `permission_modes` ← `get_args(PermissionMode)` from the SDK; the value
+  doubles as the display label.
+- `effort_levels` ← `get_args(EffortLevel)` from the SDK, with Bonsai's `auto`
+  prepended.
+- `models` ← `self._models.list_options()`.
+- `flags` ← module constant `_CLAUDE_FLAGS` — runtime-declared option toggles
+  surfaced in settings (currently the `context1m` boolean, default on).
+
+Sourcing the permission/effort values from the SDK's own literals keeps the
+picker from drifting out of what the runtime accepts — the offered sets follow
+the installed SDK rather than a hand-maintained list. Position 0 of each list
+is the runtime default (`default` / `auto`). The SDK has no token for "no
+explicit effort" (its default `effort=None`), so `auto` represents it and is
+translated back to `effort=None` at the runtime boundary.
+
+The model's context-window size is not in the catalog — it is read from
+the live SDK via `ClaudeSDKClient.get_context_usage().rawMaxTokens`
+(cached per model, fetched at turn-start) and streamed as `contextMax`
+on turn-end events.
+
+The `context1m` flag (on by default) gates the `context-1m-2025-08-07` beta:
+when set, the runtime requests the 1M window, so models that support it (Opus
+4.8, Sonnet 4.6) report 1M and models that don't (Haiku) ignore the beta and
+report their default 200K. Turning the flag off caps the session at 200K.
+Because `contextMax` comes from `get_context_usage()`, the bar reflects
+whichever window the model actually granted — no per-model `supports1M` table.
 
 ## Skill catalog — multi-source scan
 
@@ -271,7 +303,7 @@ No `cancel_event`, no polling.
 |------|----------------|
 | `backend/tests/agent/runtime/claude/test_runtime.py` | Full `run_session` lifecycle — turn complete, interrupt, multi-turn, tool approval round-trip, cost tracking, plan-mode toggle, all six preserved special-case behaviours |
 | `backend/tests/agent/runtime/claude/test_skills.py` | `TestListSkills` — fixture-tree scan per source kind (user/project/plugin/command/builtin), first-wins dedup ordering, mtime cache hit + invalidation, missing-root silent skip, malformed-SKILL.md logs + skips without raising |
-| `backend/tests/agent/runtime/claude/test_models.py` | `ClaudeModelRegistry` — constructor loads `models.json`, `list_models()` returns the three shipped entries in declared order, `get_context_window` returns per-id sizes and the neutral default for unknown ids |
+| `backend/tests/agent/runtime/claude/test_models.py` | `ClaudeModelRegistry` — constructor loads `models.json`, `list_options()` returns the shipped entries as `LabeledOption`s in declared order |
 | `backend/tests/agent/runtime/claude/test_hooks.py` | `SubagentHooks` correlation — Task-tool / SubagentStart ordering, orphan close on interrupt, `parent_to_agent` mapping |
 | `backend/tests/agent/runtime/claude/test_adapter.py` (post-extraction) | Event-shape builder unit tests; locks the `agent/toolCallStart` / `agent/toolCallEnd` payload shape so plan 05's Codex adapter can mirror it |
 

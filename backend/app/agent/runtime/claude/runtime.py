@@ -1,10 +1,9 @@
 """`ClaudeRuntime` — concrete `IAgentRuntime` backed by the Claude Agent SDK.
 
-Body migrated verbatim from ``app.agent.runner.run`` by plan 02 task 2.
-Direct event emission goes through ``handler.on_event(RuntimeEvent(...))``
-(plan 02 task 4); a local ``notify`` shim is retained for downstream
-consumers (``set_tool_context`` and ``claude_can_use_tool_adapter``) that
-still expect the original ``(method, params, request_id=...)`` signature.
+The conversational loop is owned by ``run_session``; direct event emission
+goes through ``handler.on_event(RuntimeEvent(...))``. A local ``notify`` shim
+adapts that to the ``(method, params, request_id=...)`` signature still
+expected by ``set_tool_context`` and ``claude_can_use_tool_adapter``.
 """
 
 from __future__ import annotations
@@ -13,16 +12,19 @@ import logging
 import os
 import time
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, get_args
 
 from claude_agent_sdk import (
     AssistantMessage,
     ClaudeAgentOptions,
     ClaudeSDKClient,
+    EffortLevel,
     HookMatcher,
+    PermissionMode,
     PermissionResultAllow,
     PermissionResultDeny,
     ResultMessage,
+    SdkBeta,
     SystemMessage,
     TextBlock,
     ToolPermissionContext,
@@ -44,7 +46,13 @@ from app.agent.runtime.claude.hooks import SubagentHooks
 from app.agent.runtime.claude.models import ClaudeModelRegistry
 from app.agent.runtime.claude.skills import ClaudeSkillRegistry
 from app.agent.runtime.events import RuntimeEvent
-from app.agent.runtime.types import ModelInfo, RuntimeSkillInfo, RuntimeType
+from app.agent.runtime.types import (
+    LabeledOption,
+    RuntimeCapabilities,
+    RuntimeFlag,
+    RuntimeSkillInfo,
+    RuntimeType,
+)
 from app.agent.tools import MCP_SERVERS
 from app.agent.tools._context import set_tool_context
 from app.agent.tracker import END_SIGNAL, Tracker
@@ -74,6 +82,39 @@ def _serialize_tool_content(content: Any) -> str:
                 parts.append(item.get("text", ""))
         return "\n".join(parts) if parts else str(content)
     return str(content) if content is not None else ""
+
+
+# Permission modes and effort levels are sourced from the SDK's own value sets,
+# so the picker can't drift from what the runtime actually accepts; the value
+# doubles as the display label. Position 0 is the default; the SDK lists
+# ``default`` first. The SDK has no name for "no explicit effort" (its default
+# ``effort=None``), so Bonsai prepends ``"auto"`` for it and translates back at
+# the call boundary.
+_CLAUDE_PERMISSION_MODES: tuple[LabeledOption, ...] = tuple(
+    LabeledOption(value=v, label=v) for v in get_args(PermissionMode)
+)
+
+_CLAUDE_EFFORT_LEVELS: tuple[LabeledOption, ...] = (
+    LabeledOption(value="auto", label="auto"),
+    *(LabeledOption(value=v, label=v) for v in get_args(EffortLevel)),
+)
+
+# The 1M-token context window is opt-out (on by default). Models that support
+# it (Opus 4.8, Sonnet 4.6) extend to 1M; models that don't (Haiku) ignore the
+# beta and stay at their default — the real window is read back from the live
+# client via get_context_usage(). Disabling the flag caps a session at 200k.
+_CONTEXT_1M_FLAG = "context1m"
+_CONTEXT_1M_BETA: SdkBeta = "context-1m-2025-08-07"
+
+_CLAUDE_FLAGS: tuple[RuntimeFlag, ...] = (
+    RuntimeFlag(
+        key=_CONTEXT_1M_FLAG,
+        label="1M context window",
+        type="boolean",
+        default=True,
+        description="Request the 1M-token context window on models that support it (Opus 4.8, Sonnet 4.6). Off caps the session at 200K.",
+    ),
+)
 
 
 class ClaudeRuntime:
@@ -106,18 +147,20 @@ class ClaudeRuntime:
         self.coordinator = coordinator
         # The Claude runtime owns its own model + skill registries.
         # ``IAgentRuntime`` exposes only the public surface
-        # (``list_models``, ``list_skills`` etc.); the registry instances
+        # (``capabilities``, ``list_skills`` etc.); the registry instances
         # are private to this class.
         self._models = ClaudeModelRegistry()
         self._skills = ClaudeSkillRegistry(project_root=app_config.project_root)
 
-    # ── IAgentRuntime: model surface ─────────────────────────────────────
+    # ── IAgentRuntime: capability surface ────────────────────────────────
 
-    def list_models(self) -> list[ModelInfo]:
-        return self._models.list_models()
-
-    def get_context_window(self, model_id: str) -> int:
-        return self._models.get_context_window(model_id)
+    def capabilities(self) -> RuntimeCapabilities:
+        return RuntimeCapabilities(
+            permission_modes=list(_CLAUDE_PERMISSION_MODES),
+            effort_levels=list(_CLAUDE_EFFORT_LEVELS),
+            models=self._models.list_options(),
+            flags=list(_CLAUDE_FLAGS),
+        )
 
     # ── IAgentRuntime: skill surface ─────────────────────────────────────
 
@@ -202,7 +245,10 @@ class ClaudeRuntime:
             mcp_servers=MCP_SERVERS,
             resume=resume_session_id,
             stderr=_on_cli_stderr,
-            effort=task.config.effort,
+            betas=([_CONTEXT_1M_BETA] if task.config.flags.get(_CONTEXT_1M_FLAG, True) else []),
+            # The SDK uses ``effort=None`` for its automatic setting; the
+            # neutral config value for that is the string ``"auto"``.
+            effort=(None if task.config.effort == "auto" else task.config.effort),
             max_buffer_size=10 * 1024 * 1024,  # 10MB — default 1MB is too small for large tool results
             extra_args={"allow-dangerously-skip-permissions": None},  # enable mid-session mode switching to bypassPermissions
             hooks={
@@ -214,6 +260,11 @@ class ClaudeRuntime:
         )
 
         session_id = ""
+        # Model context window (usage-bar denominator), sourced from the live
+        # client per ``_ctx_model``. 0 until the first successful fetch — the
+        # frontend hides the bar while it's 0.
+        context_max = 0
+        _ctx_model = ""
 
         t0 = time.monotonic()
         async with ClaudeSDKClient(options=options) as client:
@@ -248,6 +299,25 @@ class ClaudeRuntime:
                     # context-window occupancy; the *sum* drives cost estimation.
                     iterations: list[dict] = []
                     hooks.iterations = iterations
+
+                    # Refresh the model's context window when the configured
+                    # model changes (covers mid-session switches). rawMaxTokens
+                    # is stable per model, so one control request per model is
+                    # enough; the transport is idle between turns, so this never
+                    # races the response stream below.
+                    if task.config.model != _ctx_model:
+                        try:
+                            usage = await client.get_context_usage()
+                            fetched = int(usage.get("rawMaxTokens") or 0)
+                            if fetched > 0:
+                                context_max = fetched
+                                _ctx_model = task.config.model
+                        except Exception:
+                            logger.debug(
+                                "[%s] get_context_usage failed; keeping last contextMax",
+                                task.bonsai_sid[:8], exc_info=True,
+                            )
+
                     await client.query(message)
 
                     async for sdk_event in client.receive_response():
@@ -461,6 +531,7 @@ class ClaudeRuntime:
                                 "usage": sdk_event.usage or {},
                                 "iterations": iterations,
                                 "contextWindow": context_window,
+                                "contextMax": context_max,
                             }
 
                             if sdk_event.is_error and not interrupted:

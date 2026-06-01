@@ -40,7 +40,8 @@ frontend/src/store/
 ├── specStore.ts           # Spec data, graph, registry
 ├── sessionStore.ts        # Active sessions, events, archived sessions
 ├── boardStore.ts          # Meta-tickets, kanban board state
-├── settingsStore.ts       # Project settings, model list, dynamic skills list
+├── settingsStore.ts       # Project settings, session defaults, dynamic skills list
+├── runtimeCapsStore.ts    # Registered runtimes + per-runtime capability lists (pickers)
 ├── uiStore.ts             # Panel visibility, active tabs, modal state
 ├── costStore.ts           # Cost tracking stub (backend not implemented)
 ├── notificationStore.ts   # Toast queue, tab badges, pending input count
@@ -65,11 +66,11 @@ frontend/src/store/
 │   useNotificationStore()  useFileStore()  useBoardStore() │
 │   useSettingsStore()  useConnectionStore()  useVisStore() │
 ├──────────────────────────────────────────────────────────┤
-│  Zustand Stores (13 stores)                               │
+│  Zustand Stores (15 stores)                               │
 │    specStore       sessionStore    uiStore                │
 │    boardStore      settingsStore   notificationStore      │
 │    fileStore       costStore       trashStore             │
-│    connectionStore visStore                               │
+│    connectionStore visStore        runtimeCapsStore       │
 │    inputDraftStore messageHistoryStore                    │
 │    + serverInfoStore (server info)                        │
 ├──────────────────────────────────────────────────────────┤
@@ -189,7 +190,7 @@ export interface Session {
   model: string;
   permissionMode: string;
   betas: string[];
-  effort: string | null;
+  effort: string;
   metaTicketId?: string | null;
   startedAt: number;
   events: AgentEvent[];
@@ -591,17 +592,32 @@ Pure functions for detecting stale references:
 
 Skills are fetched from the backend via `skills/list` RPC on connect and stored in `settingsStore.skills`. The backend scans `claude-plugin/skills/*/SKILL.md` frontmatter for `id`, `name`, `description`, `icon`, `group`, and `requires` fields. `FALLBACK_SKILLS` from `frontend/src/constants/skills.ts` is used as the initial value and fallback if the RPC fails. All components (`SkillGrid`, `DraftConfigCard`, `InputArea`, `StickyContextBar`) read skills from the store instead of the constant.
 
-### Dynamic Models (`settingsStore.models`)
+### Runtime Capabilities (`runtimeCapsStore`)
 
-The model list is fetched from the backend via `models/list` on connect and pushed into `models.ts:setDynamicModels`. The backend serves a curated static catalog from `runtime/claude/models.json`; there is no frontend fallback. While the initial `models/list` is in flight, `getModels()` returns `[]`; React pickers subscribe to `settingsStore.models` and keep the selected model visible until the backend list arrives. `getContextWindowSize` has its own 200k default that covers session-creation reads in that window.
+`frontend/src/store/runtimeCapsStore.ts` holds the registered runtimes and their capability lists, fed by the `frontend/src/api/methods/runtimes.ts` wrapper:
+
+```typescript
+interface RuntimeCapsStore {
+  runtimes: RuntimeIdentity[];                       // from runtimes/list
+  capsByRuntime: Record<string, RuntimeCapabilities>; // from runtimes/capabilities
+  fetchRuntimes: () => Promise<void>;
+  fetchCapabilities: (runtimeType: string) => Promise<void>;
+}
+```
+
+App boot calls `fetchRuntimes()` + `fetchCapabilities("claude")`. The pickers (`SessionStatusLine`, `DraftConfigCard`, `SettingsModal`) read permission modes, effort levels, and models from the `"claude"` entry of `capsByRuntime` — each is a `LabeledOption[]` (`{ value, label }`) whose order is the contract, with position 0 the runtime default. An active value that is not in the caps (out-of-caps) renders as a raw option / no active pill rather than being dropped.
+
+`RuntimeCapabilities.flags` (a `RuntimeFlag[]`) are runtime-declared option toggles. The shared `components/shared/RuntimeFlags.tsx` renders one control per flag by `type`, so a flag added on the backend appears in both surfaces with no frontend change: `SettingsModal` (persists to `SessionDefaults.flags`) and `DraftConfigCard` (per-draft, in `Session.flags` via the debounced `updateDraft`). `buildDefaultSessionConfig` carries the settings defaults into each new draft's `AgentConfig.flags`. The Claude runtime declares the boolean `context1m` flag (default on), which gates the 1M-context beta.
+
+The model context-window size is not part of capabilities. Pickers read `metrics.contextMax` (the usage-bar denominator) for that, which is `0` until the first turn streams it.
 
 ### Session Defaults (`settingsStore.sessionDefaults` → `buildDefaultSessionConfig`)
 
 Session-creation defaults are **user-scoped**, not project-scoped — they live in the AppStore (`~/.bonsai/bonsai.db`) and travel with the user across every project. The frontend fetches them via `appSettings/getSessionDefaults` on connect and writes via `appSettings/setSessionDefaults` from the "User settings" header dialog.
 
-`frontend/src/utils/sessionConfig.ts` exposes `async buildDefaultSessionConfig()` — every new-session entry point (`sessionStore.createNewSession`, `WelcomeScreen`, `NewProjectScreen`, `MetaTicketDetail`, `TicketSession`, `TicketDescriptionView`) calls it to build the draft's `AgentConfig`. The helper reads from `settingsStore.sessionDefaults` and awaits the initial fetch if the store hasn't received it yet, so the values the user picked in the settings dialog take effect on the very next draft, with no race against a rapid `+ New` click. There is no frontend fallback: if the fetch ultimately resolves to `null` (backend unreachable) the helper throws, surfacing the failure to the caller's existing error path instead of silently substituting hardcoded constants. Cold-start values (`claude-opus-4-7`, `"default"` permission mode, `null` effort, `50` max turns) live in the backend (`app/core/session_defaults.py`).
+`frontend/src/utils/sessionConfig.ts` exposes `async buildDefaultSessionConfig()` — every new-session entry point (`sessionStore.createNewSession`, `WelcomeScreen`, `NewProjectScreen`, `MetaTicketDetail`, `TicketSession`, `TicketDescriptionView`) calls it to build the draft's `AgentConfig`. The helper reads from `settingsStore.sessionDefaults` and awaits the initial fetch if the store hasn't received it yet, so the values the user picked in the settings dialog take effect on the very next draft, with no race against a rapid `+ New` click. There is no frontend fallback: if the fetch ultimately resolves to `null` (backend unreachable) the helper throws, surfacing the failure to the caller's existing error path instead of silently substituting hardcoded constants. Cold-start values (`claude-opus-4-7`, `"default"` permission mode, `"auto"` effort, `50` max turns) live in the backend (`app/core/session_defaults.py`).
 
-The valid permission-mode set is exported from `sessionConfig.ts` as `PERMISSION_MODES`; both the DraftConfigCard dropdown and the User Settings dialog read from that single source rather than inlining literals.
+Pickers source their permission-mode, effort, and model options from `runtimeCapsStore` (the `"claude"` capability lists) rather than inlining literals or a frontend constant.
 
 ### UI Component: `StaleRefsBanner`
 

@@ -5,7 +5,7 @@ from enum import Enum
 from typing import Annotated, Any, Literal, Union
 from uuid import uuid4
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 
 def to_camel(name: str) -> str:
@@ -49,7 +49,16 @@ class AgentConfig(BaseModel):
     model: str = "claude-opus-4-8"
     permission_mode: str = "default"
     stream_text: bool = True
-    effort: str | None = None
+    effort: str = "auto"
+    # Runtime-declared option toggles, keyed by RuntimeFlag.key. Absent keys
+    # fall back to the flag's declared default at the runtime boundary.
+    flags: dict[str, bool] = Field(default_factory=dict)
+
+    @field_validator("effort", mode="before")
+    @classmethod
+    def _coerce_legacy_null_effort(cls, v: Any) -> Any:
+        """Map legacy persisted ``effort: null`` to the neutral ``"auto"``."""
+        return "auto" if v is None else v
 
 
 class QuestionOption(BaseModel):
@@ -196,7 +205,8 @@ class _TurnEndPayload(BaseModel):
     duration_ms: int = 0
     usage: dict[str, Any] = Field(default_factory=dict)
     iterations: list[dict[str, Any]] = Field(default_factory=list)
-    context_window: int = 0
+    context_window: int = 0  # tokens used in the last API call (bar numerator)
+    context_max: int = 0  # model context window from the runtime (bar denominator)
 
 
 class TurnCompletePayload(_TurnEndPayload):

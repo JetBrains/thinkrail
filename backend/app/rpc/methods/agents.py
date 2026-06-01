@@ -9,10 +9,12 @@ from app.rpc.context import auto_subscribe_all, get_current_conn
 from app.rpc.errors import (
     FUTURE_NOT_FOUND,
     INTERNAL_ERROR,
+    INVALID_CAPABILITY_VALUE,
     TASK_NOT_FOUND,
     UNKNOWN_RUNTIME,
     rpc_handler,
 )
+from app.agent.exceptions import InvalidCapabilityValueError
 from app.agent.models import AgentConfig
 from app.agent.runtime import UnknownRuntimeError
 from app.agent.service import AgentService
@@ -22,6 +24,7 @@ _handle_errors = rpc_handler(
     (TaskNotFoundError, TASK_NOT_FOUND, "Agent task not found"),
     (FutureNotFoundError, FUTURE_NOT_FOUND, "No pending request"),
     (UnknownRuntimeError, UNKNOWN_RUNTIME, "Unknown runtime"),
+    (InvalidCapabilityValueError, INVALID_CAPABILITY_VALUE, "Invalid capability value"),
 )
 
 

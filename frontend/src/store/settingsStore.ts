@@ -2,32 +2,14 @@ import { create } from "zustand";
 import { getClient } from "@/api/index.ts";
 import { createSettingsApi, type ProjectSettings } from "@/api/methods/settings.ts";
 import { createAppSettingsApi, type SessionDefaults } from "@/api/methods/appSettings.ts";
-import { type ModelDef, setDynamicModels } from "@/utils/models.ts";
 import { type Skill, FALLBACK_SKILLS } from "@/constants/skills.ts";
 import type { RuntimeSkillInfo, RuntimeType } from "@/types/agent.ts";
-
-/** Models grouped by their owning runtime — the wire shape of `models/list`. */
-export interface RuntimeModels {
-  runtimeType: string;
-  displayName: string;
-  models: ModelDef[];
-}
-
-interface ListModelsResponse {
-  runtimes: RuntimeModels[];
-}
 
 interface SettingsStore {
   /** Parsed project settings from .bonsai/settings.json */
   settings: ProjectSettings | null;
   /** User-scoped session-creation defaults (AppStore-backed). */
   sessionDefaults: SessionDefaults | null;
-  /** Models grouped by runtime (the canonical shape). */
-  runtimes: RuntimeModels[] | null;
-  /** Flat model list — derived from ``runtimes`` for callers that don't care
-   * about the runtime grouping (current picker code). Updated whenever
-   * ``runtimes`` changes. */
-  models: ModelDef[] | null;
   /** Dynamic skills list from backend (falls back to FALLBACK_SKILLS) */
   skills: Skill[];
   fetchSkills: () => Promise<void>;
@@ -51,14 +33,11 @@ interface SettingsStore {
   ensureFile: () => Promise<void>;
   fetchSessionDefaults: () => Promise<void>;
   updateSessionDefaults: (patch: Partial<SessionDefaults>) => Promise<SessionDefaults>;
-  fetchModels: () => Promise<void>;
 }
 
 export const useSettingsStore = create<SettingsStore>((set, get) => ({
   settings: null,
   sessionDefaults: null,
-  runtimes: null,
-  models: null,
   skills: FALLBACK_SKILLS,
   runtimeSkills: new Map(),
 
@@ -122,21 +101,6 @@ export const useSettingsStore = create<SettingsStore>((set, get) => ({
       console.error("Failed to update session defaults:", e);
       set({ sessionDefaults: current }); // rollback
       throw e;
-    }
-  },
-
-  fetchModels: async () => {
-    try {
-      const res = await getClient().request<ListModelsResponse>("models/list");
-      const runtimes = res?.runtimes ?? [];
-      const flat = runtimes.flatMap((r) => r.models);
-      setDynamicModels(flat);
-      set({ runtimes, models: flat });
-    } catch (e) {
-      // Backend may not have models/list yet — leave the list unavailable.
-      // Each runtime owns its own refresh strategy internally; callers
-      // don't see freshness metadata or trigger manual refreshes.
-      console.debug("models/list not available:", e);
     }
   },
 

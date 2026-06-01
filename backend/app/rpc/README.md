@@ -121,7 +121,8 @@ Both sides can send either. The server can initiate requests to the client (e.g.
 | `settings/ensureFile`| `{}`                                                                                       | `ProjectSettings`   | Create settings file with defaults if missing |
 | `appSettings/getSessionDefaults` | `{}`                                                                          | `SessionDefaults`   | Get the user-scoped session-creation defaults (AppStore-backed). Cold-start values returned when the AppStore key is absent. |
 | `appSettings/setSessionDefaults` | `{ model, permissionMode, effort }`                                            | `SessionDefaults`   | Persist the user-scoped session-creation defaults. |
-| `models/list`     | `{}`                                                                                         | `{ runtimes: [{ runtimeType, displayName, models: ModelDef[] }] }` | List models grouped by registered runtime. Static catalog per runtime (Claude reads from `runtime/claude/models.json`). |
+| `runtimes/list`   | `{}`                                                                                         | `RuntimesListResponse { runtimes: [RuntimeIdentity { runtimeType, displayName }] }` | List registered runtimes, sorted by `runtimeType`. |
+| `runtimes/capabilities` | `{ runtimeType: str }`                                                                 | `RuntimeCapabilities { permissionModes, effortLevels, models }` | Capability lists for one runtime — each a list of `LabeledOption { value, label }`, order is contract (position 0 is the runtime default). `runtimeType` is validated; returns `-32031` UNKNOWN_RUNTIME for a valid-but-unregistered runtime and `-32003` VALIDATION_ERROR for a value outside the `RuntimeType` literal. |
 | `skills/list`     | `{}`                                                                                         | `list[SkillDef]`    | List available **Bonsai-bundled** skills with icon, group, requires metadata (scans `claude-plugin/skills/`) |
 | `skills/listRuntime` | `{ runtime: str }`                                                                        | `list[RuntimeSkillInfo]` | List skills exposed by the **active runtime** — Claude Code user/project/plugin skills, custom commands, built-ins. Each entry has `id`, `name`, `description`, `source` (`"user" \| "project" \| "plugin" \| "command" \| "builtin"`). Powers the chat composer's slash autocomplete alongside `skills/list`. Returns `-32031` if `runtime` is not registered. Frontend treats failure/empty result as "no runtime section" (silent fallback — no error toast). |
 
@@ -159,10 +160,10 @@ Both sides can send either. The server can initiate requests to the client (e.g.
 | `agent/notification` | `{ bonsaiSid, sessionId, message, title? }` | General agent notification |
 | `agent/compact` | `{ bonsaiSid, sessionId, trigger, preTokens }` | Context window compacted |
 | `agent/progress` | `{ bonsaiSid, sessionId, status, message }` | Task progress update |
-| `agent/turnComplete` | `{ bonsaiSid, sessionId, result, costUsd, turns, durationMs, usage }` | Turn finished; session is `idle`, ready for next `agent/send` |
-| `agent/interrupted` | `{ bonsaiSid, sessionId }` | Current turn was cancelled via `agent/interrupt`; session is `idle`. Preceded by synthetic `agent/subagentEnd` for any subagents still open when the interrupt fired. |
+| `agent/turnComplete` | `{ bonsaiSid, sessionId, result, costUsd, turns, durationMs, usage, contextMax }` | Turn finished; session is `idle`, ready for next `agent/send`. `contextMax` is the model's context-window size inferred from the live SDK (`get_context_usage().rawMaxTokens`), cached per model and fetched at turn-start. |
+| `agent/interrupted` | `{ bonsaiSid, sessionId, contextMax }` | Current turn was cancelled via `agent/interrupt`; session is `idle`. Preceded by synthetic `agent/subagentEnd` for any subagents still open when the interrupt fired. |
 | `agent/done` | `{ bonsaiSid, sessionId, result, costUsd, turns, durationMs, usage }` | Session closed (via `agent/end` or terminal condition) |
-| `agent/error` | `{ bonsaiSid, sessionId, subtype, errors[], result, costUsd, turns, durationMs, usage }` | Turn error. `subtype` is `"context_overflow"` (prompt exceeded context window — recoverable, session stays idle) or `"turn_error"` (other errors). `subtype: "crash"` for fatal session errors. |
+| `agent/error` | `{ bonsaiSid, sessionId, subtype, errors[], result, costUsd, turns, durationMs, usage, contextMax }` | Turn error. `subtype` is `"context_overflow"` (prompt exceeded context window — recoverable, session stays idle) or `"turn_error"` (other errors). `subtype: "crash"` for fatal session errors. |
 | `agent/permissionDenied` | `{ bonsaiSid, sessionId, toolName, toolInput }` | Tool blocked by permission policy |
 | `agent/statusChanged` | `{ bonsaiSid, status }` | Backend session status changed. Emitted by runner on `idle→running` and `running→idle` transitions. Frontend uses this as the authoritative status signal for non-first turns (since `agent/sessionStart` only fires once per runner). Added to `_SKIP_METRICS` — does not trigger metadata persistence. |
 
@@ -211,7 +212,8 @@ Domain exceptions raised inside handlers are mapped to JSON-RPC error responses:
 | `AgentTaskNotFoundError` | -32011 | "Agent task not found" |
 | `FutureNotFoundError` | -32012 | "No pending request" |
 | `IndexNotReadyError` | -32015 | "Index is still initializing" |
-| `UnknownRuntimeError` | -32031 | "Unknown runtime" — raised by `RuntimeRegistry.get(name)` and surfaced by `agent/run`, `skills/listRuntime`, `models/list` etc. when the requested runtime is not registered |
+| `UnknownRuntimeError` | -32031 | "Unknown runtime" — raised by `RuntimeRegistry.get(name)` and surfaced by `agent/run`, `skills/listRuntime`, `runtimes/capabilities` etc. when the requested runtime is not registered |
+| `InvalidCapabilityValueError` | -32032 | "Invalid capability value" — a `model` / `permissionMode` / `effort` outside the runtime's capabilities at a launch path (`agent/run`/`start_draft`, `run_task`, `continue_session`) or `agent/updateConfig`. `data: { field, value, runtimeType, allowed }`. |
 | `KeyError` / missing params | -32602 | "Invalid params" |
 | Any other exception | -32603 | "Internal error" |
 
@@ -430,9 +432,9 @@ NotifyCallable = Callable[[str, dict, str | None], Awaitable[None]]
 
 ### methods/settings.py
 
-**Responsibility:** jsonrpcserver handlers for `settings/*`, `appSettings/*`, `models/*`, and `skills/*` methods.
+**Responsibility:** jsonrpcserver handlers for `settings/*`, `appSettings/*`, `runtimes/*`, and `skills/*` methods.
 
-**Dependencies:** core/settings (project-scoped), core/session_defaults (user-scoped, AppStore-backed), core/app_store (the SQLite handle that backs `appSettings/*`), agent/runtime (RuntimeRegistry — owns the per-runtime model list and its hardcoded fallback)
+**Dependencies:** core/settings (project-scoped), core/session_defaults (user-scoped, AppStore-backed), core/app_store (the SQLite handle that backs `appSettings/*`), agent/runtime (RuntimeRegistry — owns the per-runtime `capabilities()` projection). `runtimes/capabilities` validates its params via a `RuntimesCapabilitiesRequest` Pydantic model.
 
 ### methods/subsessions.py
 
@@ -511,7 +513,7 @@ The file watcher is **per-project, reference-counted**. It starts when the first
 | WebSocket accept timing | Accept before index init | Prevents frontend 5s `connectTimeout` failure on first connect or schema upgrade. Spec RPCs return empty data until `index/ready`. |
 | Index init concurrency | Per-project `asyncio.Lock` on `_spec_indexes` | Prevents concurrent `rebuild()` when two connections arrive simultaneously. |
 | Per-connection project selection | `?project=` query param on WebSocket URL | Allows the frontend to switch projects without restarting the backend |
-| No RPC-layer models | Domain models serialized directly | Pydantic models in spec/ and agent/ serialize to JSON; no translation layer needed |
+| Handlers return Pydantic models | `rpc_handler`'s `serialize_result()` auto-dumps `BaseModel` / `list[BaseModel]` returns with `by_alias=True` | Handlers return domain models directly — no per-handler `model_dump`. `serialize_result()` also forwards an exception's `rpc_data` attribute as the JSON-RPC error `data`. Curated wire payload models for codegen live in `schema_export.py:RPC_PAYLOAD_MODELS` → `rpc-methods.ts`. |
 
 ## Dependencies
 

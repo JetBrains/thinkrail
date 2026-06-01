@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useSettingsStore } from "@/store/settingsStore.ts";
+import { useRuntimeCapsStore } from "@/store/runtimeCapsStore.ts";
 import { useSessionStore } from "@/store/sessionStore.ts";
 import { useVoiceInput } from "@/hooks/useVoiceInput";
 import {
@@ -77,12 +78,14 @@ export function InputArea({ sessionId, disabled, placeholder, onSend, isRunning,
   // (the only registered runtime today) so the autocomplete still works
   // for drafts that haven't picked a model yet.
   const sessionModel = useSessionStore((s) => s.sessions.get(sessionId)?.model);
-  const runtimesMeta = useSettingsStore((s) => s.runtimes);
+  const capsByRuntime = useRuntimeCapsStore((s) => s.capsByRuntime);
   const sessionRuntime: RuntimeType | undefined = useMemo(() => {
-    if (!sessionModel || !runtimesMeta) return undefined;
-    const hit = runtimesMeta.find((r) => r.models.some((m) => m.id === sessionModel));
-    return (hit?.runtimeType as RuntimeType | undefined);
-  }, [sessionModel, runtimesMeta]);
+    if (!sessionModel) return undefined;
+    const hit = Object.entries(capsByRuntime).find(
+      ([, caps]) => caps.models.some((m) => m.value === sessionModel),
+    );
+    return hit?.[0] as RuntimeType | undefined;
+  }, [sessionModel, capsByRuntime]);
   const effectiveRuntime: RuntimeType = sessionRuntime ?? "claude";
   const loadRuntimeSkills = useSettingsStore((s) => s.loadRuntimeSkills);
   // Single source of truth: textarea value is driven by the draft store

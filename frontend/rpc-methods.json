@@ -1,0 +1,224 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "BonsaiRpcPayloads",
+  "$defs": {
+    "LabeledOption": {
+      "additionalProperties": false,
+      "description": "A value the backend accepts, plus a display label for the UI.\n\nUsed uniformly for permission modes, effort levels, and models on\n``RuntimeCapabilities``. ``extra=\"forbid\"`` surfaces typos at parse time.",
+      "properties": {
+        "value": {
+          "title": "Value",
+          "type": "string"
+        },
+        "label": {
+          "title": "Label",
+          "type": "string"
+        }
+      },
+      "required": [
+        "value",
+        "label"
+      ],
+      "title": "LabeledOption",
+      "type": "object"
+    },
+    "RuntimeFlag": {
+      "additionalProperties": false,
+      "description": "A runtime-declared option toggle, surfaced as a control in settings.\n\nEach runtime advertises its own flags; the frontend renders one control\nper flag and stores the chosen value in ``AgentConfig.flags`` keyed by\n``key``. ``type`` is a discriminator (only ``\"boolean\"`` today) so other\nvalue kinds can be added without changing the shape.",
+      "properties": {
+        "key": {
+          "title": "Key",
+          "type": "string"
+        },
+        "label": {
+          "title": "Label",
+          "type": "string"
+        },
+        "type": {
+          "const": "boolean",
+          "title": "Type",
+          "type": "string"
+        },
+        "default": {
+          "type": "boolean",
+          "title": "Default"
+        },
+        "description": {
+          "default": "",
+          "title": "Description",
+          "type": "string"
+        }
+      },
+      "required": [
+        "key",
+        "label",
+        "type",
+        "default"
+      ],
+      "title": "RuntimeFlag",
+      "type": "object"
+    },
+    "RuntimeIdentity": {
+      "additionalProperties": false,
+      "description": "Lightweight ``{runtimeType, displayName}`` pair for ``runtimes/list``.",
+      "properties": {
+        "runtimeType": {
+          "enum": [
+            "claude",
+            "codex"
+          ],
+          "title": "Runtimetype",
+          "type": "string"
+        },
+        "displayName": {
+          "title": "Displayname",
+          "type": "string"
+        }
+      },
+      "required": [
+        "runtimeType",
+        "displayName"
+      ],
+      "title": "RuntimeIdentity",
+      "type": "object"
+    },
+    "RuntimeCapabilities": {
+      "additionalProperties": false,
+      "description": "What a runtime accepts for the user-tunable fields.\n\nOrder is contract: position 0 of ``permission_modes`` / ``effort_levels`` /\n``models`` is the runtime's default (cold-start picks ``[0].value``).",
+      "properties": {
+        "permissionModes": {
+          "items": {
+            "$ref": "#/$defs/LabeledOption"
+          },
+          "title": "Permissionmodes",
+          "type": "array"
+        },
+        "effortLevels": {
+          "items": {
+            "$ref": "#/$defs/LabeledOption"
+          },
+          "title": "Effortlevels",
+          "type": "array"
+        },
+        "models": {
+          "items": {
+            "$ref": "#/$defs/LabeledOption"
+          },
+          "title": "Models",
+          "type": "array"
+        },
+        "flags": {
+          "items": {
+            "$ref": "#/$defs/RuntimeFlag"
+          },
+          "title": "Flags",
+          "type": "array"
+        }
+      },
+      "required": [
+        "permissionModes",
+        "effortLevels",
+        "models"
+      ],
+      "title": "RuntimeCapabilities",
+      "type": "object"
+    },
+    "RuntimesListResponse": {
+      "additionalProperties": false,
+      "description": "Wire payload returned by ``runtimes/list``.",
+      "properties": {
+        "runtimes": {
+          "items": {
+            "$ref": "#/$defs/RuntimeIdentity"
+          },
+          "title": "Runtimes",
+          "type": "array"
+        }
+      },
+      "required": [
+        "runtimes"
+      ],
+      "title": "RuntimesListResponse",
+      "type": "object"
+    },
+    "RuntimesCapabilitiesRequest": {
+      "additionalProperties": false,
+      "description": "Wire payload accepted by ``runtimes/capabilities``.",
+      "properties": {
+        "runtimeType": {
+          "enum": [
+            "claude",
+            "codex"
+          ],
+          "title": "Runtimetype",
+          "type": "string"
+        }
+      },
+      "required": [
+        "runtimeType"
+      ],
+      "title": "RuntimesCapabilitiesRequest",
+      "type": "object"
+    },
+    "InvalidCapabilityValueData": {
+      "additionalProperties": false,
+      "description": "``data`` payload attached to ``INVALID_CAPABILITY_VALUE`` (-32032).",
+      "properties": {
+        "field": {
+          "title": "Field",
+          "type": "string"
+        },
+        "value": {
+          "title": "Value",
+          "type": "string"
+        },
+        "runtimeType": {
+          "enum": [
+            "claude",
+            "codex"
+          ],
+          "title": "Runtimetype",
+          "type": "string"
+        },
+        "allowed": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Allowed",
+          "type": "array"
+        }
+      },
+      "required": [
+        "field",
+        "value",
+        "runtimeType",
+        "allowed"
+      ],
+      "title": "InvalidCapabilityValueData",
+      "type": "object"
+    }
+  },
+  "anyOf": [
+    {
+      "$ref": "#/$defs/LabeledOption"
+    },
+    {
+      "$ref": "#/$defs/RuntimeFlag"
+    },
+    {
+      "$ref": "#/$defs/RuntimeIdentity"
+    },
+    {
+      "$ref": "#/$defs/RuntimeCapabilities"
+    },
+    {
+      "$ref": "#/$defs/RuntimesListResponse"
+    },
+    {
+      "$ref": "#/$defs/RuntimesCapabilitiesRequest"
+    },
+    {
+      "$ref": "#/$defs/InvalidCapabilityValueData"
+    }
+  ]
+}

@@ -3,37 +3,27 @@
 from __future__ import annotations
 
 from app.agent.runtime.claude.models import ClaudeModelRegistry
-from app.agent.runtime.types import DEFAULT_CONTEXT_WINDOW, ModelInfo
+from app.agent.runtime.types import LabeledOption
 
 
 class TestClaudeModelRegistry:
-    def test_list_models_returns_three_entries_in_declared_order(self) -> None:
+    def test_list_options_returns_three_entries_in_declared_order(self) -> None:
         reg = ClaudeModelRegistry()
-        ids = [m.id for m in reg.list_models()]
-        assert ids == [
+        values = [o.value for o in reg.list_options()]
+        assert values == [
             "claude-opus-4-8",
             "claude-sonnet-4-6",
             "claude-haiku-4-5-20251001",
         ]
 
-    def test_list_models_returns_modelinfo_with_only_three_fields(self) -> None:
+    def test_list_options_returns_labeled_options(self) -> None:
         reg = ClaudeModelRegistry()
-        for m in reg.list_models():
-            assert isinstance(m, ModelInfo)
-            assert set(ModelInfo.model_fields) == {"id", "label", "context_window"}
+        for o in reg.list_options():
+            assert isinstance(o, LabeledOption)
+            assert set(LabeledOption.model_fields) == {"value", "label"}
 
-    def test_get_context_window_opus_is_one_million(self) -> None:
+    def test_first_option_is_opus(self) -> None:
         reg = ClaudeModelRegistry()
-        assert reg.get_context_window("claude-opus-4-8") == 1_000_000
-
-    def test_get_context_window_sonnet_is_one_million(self) -> None:
-        reg = ClaudeModelRegistry()
-        assert reg.get_context_window("claude-sonnet-4-6") == 1_000_000
-
-    def test_get_context_window_haiku_is_two_hundred_thousand(self) -> None:
-        reg = ClaudeModelRegistry()
-        assert reg.get_context_window("claude-haiku-4-5-20251001") == 200_000
-
-    def test_get_context_window_returns_default_for_unknown_id(self) -> None:
-        reg = ClaudeModelRegistry()
-        assert reg.get_context_window("nonexistent-model") == DEFAULT_CONTEXT_WINDOW
+        first = reg.list_options()[0]
+        assert first.value == "claude-opus-4-8"
+        assert first.label == "Opus 4.8"

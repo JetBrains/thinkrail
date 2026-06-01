@@ -2,7 +2,7 @@
 
 This package defines the abstraction layer that lets bonsai run different
 agent backends (Claude SDK today, Codex / others later) behind a single
-interface. Modules will be filled in by subsequent tasks of plan 01.
+interface.
 """
 
 from __future__ import annotations
@@ -24,22 +24,26 @@ from app.agent.runtime.registry import (
     UnknownRuntimeError,
 )
 from app.agent.runtime.types import (
-    DEFAULT_CONTEXT_WINDOW,
     IAgentRuntime,
-    ModelInfo,
+    LabeledOption,
+    RuntimeCapabilities,
     RuntimeExecutionConfig,
+    RuntimeFlag,
+    RuntimeIdentity,
     RuntimeSkillInfo,
     RuntimeType,
 )
 
 __all__ = [
-    "DEFAULT_CONTEXT_WINDOW",
     "AgentEventHandler",
     "DuplicateRuntimeError",
     "IAgentRuntime",
-    "ModelInfo",
+    "LabeledOption",
+    "RuntimeCapabilities",
     "RuntimeEvent",
     "RuntimeExecutionConfig",
+    "RuntimeFlag",
+    "RuntimeIdentity",
     "RuntimeRegistry",
     "RuntimeRegistryError",
     "RuntimeSkillInfo",

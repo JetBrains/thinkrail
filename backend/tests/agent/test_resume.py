@@ -65,7 +65,7 @@ def _make_spec_detail(id: str, title: str, content: str) -> SpecDetail:
 
 
 def _make_service() -> tuple[AgentService, MagicMock, MagicMock]:
-    from app.agent.runtime import RuntimeRegistry
+    from app.agent.runtime import LabeledOption, RuntimeCapabilities, RuntimeRegistry
 
     config = MagicMock()
     spec_service = MagicMock()
@@ -73,14 +73,21 @@ def _make_service() -> tuple[AgentService, MagicMock, MagicMock]:
     service = AgentService(config, spec_service)
 
     # Install mock runtime so service._get_runtime(task) resolves under
-    # runtime_type="claude" (the default on AgentConfig).
+    # runtime_type="claude" (the default on AgentConfig). Caps cover the
+    # default and resume-test model ids so launch-path validation passes.
     runtime = MagicMock()
     runtime.runtime_type = "claude"
     runtime.display_name = "Claude (test)"
     runtime.run_session = AsyncMock()
     runtime.interrupt = AsyncMock()
-    runtime.list_models = MagicMock(return_value=[])
-    runtime.get_context_window = MagicMock(return_value=1_000_000)
+    runtime.capabilities = MagicMock(return_value=RuntimeCapabilities(
+        permission_modes=[LabeledOption(value="default", label="default")],
+        effort_levels=[LabeledOption(value="auto", label="auto")],
+        models=[
+            LabeledOption(value=v, label=v)
+            for v in ("claude-opus-4-8", "claude-sonnet-4-6")
+        ],
+    ))
     reg = RuntimeRegistry()
     reg.register(runtime)
     service.runtime_registry = reg

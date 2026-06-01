@@ -308,7 +308,7 @@ export const classicRenderers: ViewRenderers = {
                 model: currentSession?.model ?? "sonnet",
                 permissionMode: currentSession?.permissionMode ?? "default",
                 streamText: true,
-                effort: currentSession?.effort ?? null,
+                effort: currentSession?.effort ?? "auto",
               },
             });
             store.switchSession(newSid);
@@ -403,7 +403,7 @@ export const classicRenderers: ViewRenderers = {
                 model: currentSession?.model ?? "sonnet",
                 permissionMode: currentSession?.permissionMode ?? "default",
                 streamText: true,
-                effort: currentSession?.effort ?? null,
+                effort: currentSession?.effort ?? "auto",
               },
             });
             store.switchSession(newSid);

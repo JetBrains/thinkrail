@@ -2,20 +2,6 @@ import { useSettingsStore } from "@/store/settingsStore.ts";
 import type { AgentConfig } from "@/types/agent.ts";
 
 /**
- * The four permission modes the agent accepts. Kept as the single source
- * of truth for the picker dropdown (DraftConfigCard) and any validators
- * that gate user input — do not inline this list elsewhere.
- */
-export const PERMISSION_MODES = [
-  "default",
-  "acceptEdits",
-  "bypassPermissions",
-  "plan",
-] as const;
-
-export type PermissionMode = typeof PERMISSION_MODES[number];
-
-/**
  * Build the AgentConfig used to open a new draft / start a new session.
  *
  * Sources every value from the user-scoped ``sessionDefaults`` record
@@ -45,5 +31,6 @@ export async function buildDefaultSessionConfig(): Promise<AgentConfig> {
     permissionMode: sd.permissionMode,
     streamText: true,
     effort: sd.effort,
+    flags: sd.flags ?? {},
   };
 }

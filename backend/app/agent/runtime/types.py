@@ -1,10 +1,10 @@
-"""Runtime contract types — IAgentRuntime, RuntimeType, RuntimeExecutionConfig, ModelInfo, RuntimeSkillInfo."""
+"""Runtime contract types — IAgentRuntime, RuntimeType, RuntimeExecutionConfig, capability types, RuntimeSkillInfo."""
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, Protocol, runtime_checkable
+from typing import TYPE_CHECKING, Any, Literal, Protocol, runtime_checkable
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 # ``RuntimeType`` is defined in ``app.agent.models`` (the definitional site) so
 # ``AgentConfig`` can embed it without a circular import. Re-exported here for
@@ -16,23 +16,86 @@ if TYPE_CHECKING:
     from app.agent.tracker import Tracker
 
 
-# Neutral floor used when a model id is not recognised by any runtime.
-# Lives here (not in a Claude module) so services can reference it without
-# importing provider-specific code.
-DEFAULT_CONTEXT_WINDOW = 200_000
+class LabeledOption(BaseModel):
+    """A value the backend accepts, plus a display label for the UI.
 
-
-class ModelInfo(BaseModel):
-    """Neutral model descriptor returned by ``IAgentRuntime.list_models``.
-
-    Each runtime answers its own list.
+    Used uniformly for permission modes, effort levels, and models on
+    ``RuntimeCapabilities``. ``extra="forbid"`` surfaces typos at parse time.
     """
 
-    model_config = ConfigDict(alias_generator=to_camel, populate_by_name=True, frozen=True)
+    model_config = ConfigDict(
+        extra="forbid",
+        alias_generator=to_camel,
+        populate_by_name=True,
+        frozen=True,
+    )
 
-    id: str
+    value: str
     label: str
-    context_window: int
+
+
+class RuntimeFlag(BaseModel):
+    """A runtime-declared option toggle, surfaced as a control in settings.
+
+    Each runtime advertises its own flags; the frontend renders one control
+    per flag and stores the chosen value in ``AgentConfig.flags`` keyed by
+    ``key``. ``type`` is a discriminator (only ``"boolean"`` today) so other
+    value kinds can be added without changing the shape.
+    """
+
+    model_config = ConfigDict(
+        extra="forbid",
+        alias_generator=to_camel,
+        populate_by_name=True,
+        frozen=True,
+    )
+
+    key: str
+    label: str
+    type: Literal["boolean"]
+    default: bool
+    description: str = ""
+
+
+class RuntimeCapabilities(BaseModel):
+    """What a runtime accepts for the user-tunable fields.
+
+    Order is contract: position 0 of ``permission_modes`` / ``effort_levels`` /
+    ``models`` is the runtime's default (cold-start picks ``[0].value``).
+    """
+
+    model_config = ConfigDict(
+        extra="forbid",
+        alias_generator=to_camel,
+        populate_by_name=True,
+        frozen=True,
+    )
+
+    permission_modes: list[LabeledOption]
+    effort_levels: list[LabeledOption]
+    models: list[LabeledOption]
+    flags: list[RuntimeFlag] = Field(default_factory=list)
+
+    @field_validator("permission_modes", "effort_levels", "models")
+    @classmethod
+    def _reject_empty(cls, v: list[LabeledOption]) -> list[LabeledOption]:
+        if not v:
+            raise ValueError("must declare at least one option")
+        return v
+
+
+class RuntimeIdentity(BaseModel):
+    """Lightweight ``{runtimeType, displayName}`` pair for ``runtimes/list``."""
+
+    model_config = ConfigDict(
+        extra="forbid",
+        alias_generator=to_camel,
+        populate_by_name=True,
+        frozen=True,
+    )
+
+    runtime_type: RuntimeType
+    display_name: str
 
 
 class RuntimeSkillInfo(BaseModel):
@@ -78,7 +141,8 @@ class IAgentRuntime(Protocol):
     """Runtime-agnostic agent contract.
 
     A runtime is the declaration that "this kind of agent is supported": it
-    answers what models it provides and how to run a session against one.
+    declares its capabilities (models, permission modes, effort levels) via a
+    single ``capabilities()`` method and runs sessions against them.
     Implementations should be effectively stateless from the protocol's
     perspective — any per-runtime caches (model lists, skills) are an
     internal concern. There is no startup/shutdown handshake; the registry
@@ -93,13 +157,14 @@ class IAgentRuntime(Protocol):
     runtime_type: RuntimeType
     display_name: str
 
-    def list_models(self) -> list[ModelInfo]:
-        """Return the runtime's current best view of its available models.
+    def capabilities(self) -> RuntimeCapabilities:
+        """Return what this runtime accepts for the user-tunable fields.
 
-        Whether the list is static, periodically refreshed, lazily fetched
-        on first call, or sourced from a remote registry is entirely the
-        runtime's business — callers don't see refresh semantics or
-        freshness metadata.
+        Whether the model list inside is static, periodically refreshed,
+        lazily fetched on first call, or sourced from a remote registry is
+        entirely the runtime's business — callers don't see refresh
+        semantics or freshness metadata. Order is contract: position 0 of
+        each list is the runtime's default.
         """
         ...
 
@@ -110,15 +175,6 @@ class IAgentRuntime(Protocol):
         on first call, or sourced from on-disk roots is entirely the
         runtime's business — callers don't see refresh semantics or
         freshness metadata. Runtimes with no skill surface return ``[]``.
-        """
-        ...
-
-    def get_context_window(self, model_id: str) -> int:
-        """Return the context-window size for ``model_id`` in this runtime.
-
-        Each runtime owns the lookup, including any fallback for ids that
-        aren't in the live list. Services use ``runtime.get_context_window``
-        instead of scanning model metadata themselves.
         """
         ...
 

@@ -36,6 +36,24 @@ class TestExportWsSchema:
         assert isinstance(payload, dict)
 
 
+class TestExportRpcSchema:
+    def test_export_rpc_schema_outputs_curated_models(
+        self, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setattr(sys, "argv", ["bonsai-cli", "export-rpc-schema"])
+        cli.main()
+        captured = capsys.readouterr()
+        payload = json.loads(captured.out)
+        # Top-level anyOf references each curated model under $defs so
+        # json2ts emits one interface per model.
+        assert "anyOf" in payload
+        defs = payload["$defs"]
+        for name in ("LabeledOption", "RuntimeCapabilities", "RuntimeIdentity"):
+            assert name in defs
+        # camelCase aliases drive the generated field names.
+        assert "permissionModes" in defs["RuntimeCapabilities"]["properties"]
+
+
 class TestRemovedSubcommands:
     """Ensure the auth subcommands are unrecognised and exit non-zero."""
 

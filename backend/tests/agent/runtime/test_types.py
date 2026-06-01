@@ -11,10 +11,98 @@ from pydantic import ValidationError
 from app.agent.models import AgentResult, AgentTask
 from app.agent.runtime.types import (
     IAgentRuntime,
+    LabeledOption,
+    RuntimeCapabilities,
     RuntimeExecutionConfig,
+    RuntimeFlag,
+    RuntimeIdentity,
     RuntimeSkillInfo,
     RuntimeType,
 )
+
+
+class TestRuntimeFlag:
+    def test_camelcase_round_trip(self) -> None:
+        flag = RuntimeFlag(
+            key="context1m", label="1M context window", type="boolean",
+            default=True, description="…",
+        )
+        dumped = flag.model_dump(by_alias=True)
+        assert dumped["type"] == "boolean"
+        assert dumped["default"] is True
+        assert RuntimeFlag.model_validate(dumped) == flag
+
+    def test_rejects_unknown_type(self) -> None:
+        with pytest.raises(ValidationError):
+            RuntimeFlag(key="x", label="X", type="slider", default=True)  # type: ignore[arg-type]
+
+
+class TestLabeledOption:
+    def test_required_fields(self):
+        opt = LabeledOption(value="auto", label="auto")
+        assert opt.value == "auto"
+        assert opt.label == "auto"
+
+    def test_rejects_extra_fields(self):
+        # ``extra="forbid"`` — typos in payloads are surfaced at parse time.
+        with pytest.raises(ValidationError):
+            LabeledOption.model_validate({"value": "x", "label": "X", "group": "current"})
+
+    def test_camelcase_round_trip(self):
+        opt = LabeledOption(value="claude-opus-4-8", label="Opus 4.8")
+        dumped = opt.model_dump(by_alias=True)
+        assert dumped == {"value": "claude-opus-4-8", "label": "Opus 4.8"}
+        assert LabeledOption.model_validate(dumped) == opt
+
+    def test_frozen(self):
+        opt = LabeledOption(value="auto", label="auto")
+        with pytest.raises(ValidationError):
+            opt.value = "low"  # type: ignore[misc]
+
+
+class TestRuntimeCapabilities:
+    @staticmethod
+    def _opt(v: str, label: str | None = None) -> LabeledOption:
+        return LabeledOption(value=v, label=label or v)
+
+    def test_constructs_with_three_lists(self):
+        caps = RuntimeCapabilities(
+            permission_modes=[self._opt("default")],
+            effort_levels=[self._opt("auto")],
+            models=[self._opt("claude-opus-4-8", "Opus 4.8")],
+        )
+        assert caps.permission_modes[0].value == "default"
+        assert caps.effort_levels[0].value == "auto"
+        assert caps.models[0].label == "Opus 4.8"
+        assert caps.flags == []  # flags are optional; absent → empty
+
+    def test_rejects_empty_list(self):
+        with pytest.raises(ValidationError, match="at least one option"):
+            RuntimeCapabilities(
+                permission_modes=[self._opt("default")],
+                effort_levels=[],
+                models=[self._opt("claude-opus-4-8")],
+            )
+
+    def test_camelcase_round_trip(self):
+        caps = RuntimeCapabilities(
+            permission_modes=[self._opt("default"), self._opt("plan")],
+            effort_levels=[self._opt("auto"), self._opt("high")],
+            models=[self._opt("claude-opus-4-8", "Opus 4.8")],
+        )
+        dumped = caps.model_dump(by_alias=True)
+        assert "permissionModes" in dumped
+        assert "effortLevels" in dumped
+        assert "models" in dumped
+        assert RuntimeCapabilities.model_validate(dumped) == caps
+
+
+class TestRuntimeIdentity:
+    def test_camelcase_round_trip(self):
+        ident = RuntimeIdentity(runtime_type="claude", display_name="Claude Code")
+        dumped = ident.model_dump(by_alias=True)
+        assert dumped == {"runtimeType": "claude", "displayName": "Claude Code"}
+        assert RuntimeIdentity.model_validate(dumped) == ident
 
 
 class TestRuntimeExecutionConfig:
@@ -108,14 +196,15 @@ class TestIAgentRuntimeProtocol:
             runtime_type: RuntimeType = "claude"
             display_name: str = "Claude (test)"
 
-            def list_models(self):
-                return []
+            def capabilities(self):
+                return RuntimeCapabilities(
+                    permission_modes=[LabeledOption(value="default", label="default")],
+                    effort_levels=[LabeledOption(value="auto", label="auto")],
+                    models=[LabeledOption(value="claude-opus-4-8", label="Opus 4.8")],
+                )
 
             def list_skills(self):
                 return []
-
-            def get_context_window(self, model_id):
-                return 200_000
 
             async def run_session(self, task, exec_config, handler):  # noqa: D401
                 return AgentResult(

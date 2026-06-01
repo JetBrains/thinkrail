@@ -18,9 +18,11 @@ import {
   extractSlashToken,
   useSlashAutocomplete,
 } from "../useSlashAutocomplete.ts";
-import { useSettingsStore, type RuntimeModels } from "@/store/settingsStore.ts";
+import { useSettingsStore } from "@/store/settingsStore.ts";
+import { useRuntimeCapsStore } from "@/store/runtimeCapsStore.ts";
 import type { Skill } from "@/constants/skills.ts";
 import type { RuntimeSkillInfo, RuntimeType } from "@/types/agent.ts";
+import type { RuntimeIdentity } from "@/types/rpc-methods.ts";
 
 // ── Fixtures ──────────────────────────────────────────────────────────────
 
@@ -37,10 +39,9 @@ const RUNTIME_SKILLS: RuntimeSkillInfo[] = [
   { id: "spec-status", name: "Status (runtime)", description: "from runtime", source: "user" },
 ];
 
-const CLAUDE_RUNTIME_META: RuntimeModels = {
+const CLAUDE_RUNTIME_META: RuntimeIdentity = {
   runtimeType: "claude",
   displayName: "Claude Code",
-  models: [],
 };
 
 function seedStore({
@@ -52,13 +53,13 @@ function seedStore({
   bonsai?: Skill[];
   runtimeSkills?: RuntimeSkillInfo[];
   runtime?: RuntimeType;
-  runtimeMeta?: RuntimeModels[];
+  runtimeMeta?: RuntimeIdentity[];
 } = {}) {
   useSettingsStore.setState({
     skills: bonsai,
-    runtimes: runtimeMeta,
     runtimeSkills: new Map<RuntimeType, RuntimeSkillInfo[]>([[runtime, runtimeSkills]]),
   });
+  useRuntimeCapsStore.setState({ runtimes: runtimeMeta });
 }
 
 function fakeKey(key: string): ReactKeyboardEvent {
@@ -72,9 +73,9 @@ function fakeKey(key: string): ReactKeyboardEvent {
 beforeEach(() => {
   useSettingsStore.setState({
     skills: [],
-    runtimes: null,
     runtimeSkills: new Map(),
   });
+  useRuntimeCapsStore.setState({ runtimes: null, capsByRuntime: {} });
 });
 
 // ── extractSlashToken ─────────────────────────────────────────────────────

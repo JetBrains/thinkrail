@@ -38,11 +38,13 @@ freshness/refresh metadata leaking out. Any per-runtime caching
 
 | Symbol | Defined in | Purpose |
 |--------|-----------|---------|
-| `IAgentRuntime` | `types.py` | Protocol every runtime implements. Class attrs `runtime_type`, `display_name`. Methods: `list_models`, `list_skills`, `get_context_window`, `run_session`, `interrupt` |
+| `IAgentRuntime` | `types.py` | Protocol every runtime implements. Class attrs `runtime_type`, `display_name`. Methods: `capabilities`, `list_skills`, `run_session`, `interrupt` |
 | `RuntimeType` | `types.py` (re-exported from `app.agent.models`) | `Literal["claude", "codex"]` — declared in `models.py` to break a circular import |
-| `ModelInfo` | `types.py` | Neutral frozen Pydantic model — `id, label, context_window` |
+| `LabeledOption` | `types.py` | Neutral frozen Pydantic model (`extra="forbid"`, camelCase aliases) — `value, label`. One selectable option in a capability list. |
+| `RuntimeCapabilities` | `types.py` | Neutral frozen Pydantic model — `permission_modes, effort_levels, models` (each `list[LabeledOption]`, validated non-empty, position 0 = default) plus optional `flags: list[RuntimeFlag]`. |
+| `RuntimeFlag` | `types.py` | Neutral frozen Pydantic model — `key, label, type, default, description`. A runtime-declared option toggle (`type="boolean"` today) rendered in settings; the value is stored in `AgentConfig.flags[key]`. |
+| `RuntimeIdentity` | `types.py` | Neutral frozen Pydantic model — `runtime_type, display_name`. Returned by `runtimes/list`. |
 | `RuntimeSkillInfo` | `types.py` | Neutral frozen Pydantic model — `id, name, description, source`. Describes a slash-command-style skill exposed by the runtime (e.g. Claude Code user/project/plugin skills, custom commands, built-ins). Surfaced in the chat composer's slash autocomplete via `skills/listRuntime`. |
-| `DEFAULT_CONTEXT_WINDOW` | `types.py` | `200_000` — neutral floor for unknown ids |
 | `RuntimeExecutionConfig` | `types.py` | Per-session execution config — `working_directory`, `model` (required), `system_prompt`, `resume_session_id`, `effort`, `permission_mode`, `stream_text`. Derived from `AgentConfig` + task context inside `AgentService` |
 | `RuntimeRegistry` | `registry.py` | Lookup table. `register / get / has / all`. Domain exceptions `RuntimeRegistryError`, `DuplicateRuntimeError`, `UnknownRuntimeError` |
 | `RuntimeEvent` | `events.py` | Pydantic envelope `(method, params, request_id?)` — the JSON-RPC shape every runtime emits |
@@ -57,7 +59,7 @@ freshness/refresh metadata leaking out. Any per-runtime caching
 | File | Responsibility |
 |------|----------------|
 | `__init__.py` | Public re-exports |
-| `types.py` | `IAgentRuntime` Protocol, `RuntimeType`, `ModelInfo`, `RuntimeExecutionConfig`, capability + default-window constants |
+| `types.py` | `IAgentRuntime` Protocol, `RuntimeType`, `LabeledOption`, `RuntimeFlag`, `RuntimeCapabilities`, `RuntimeIdentity`, `RuntimeExecutionConfig` |
 | `registry.py` | `RuntimeRegistry` + domain exceptions |
 | `events.py` | `RuntimeEvent`, `AgentEventHandler`, `make_handler_from_notify` |
 | `permissions.py` | Neutral permission types — request/response, category type alias |
@@ -80,25 +82,30 @@ freshness/refresh metadata leaking out. Any per-runtime caching
   error. Cancellation enters via `interrupt(task, tracker)`; the loop
   itself never polls a cancel flag.
 
-## Model surface
+## Capability surface
 
-Each runtime owns its model list. Two methods on the protocol:
+Each runtime declares the selectable values for its pickers — permission
+modes, effort levels, and models — through a single method:
 
 ```python
-def list_models(self) -> list[ModelInfo]: ...
-def get_context_window(self, model_id: str) -> int: ...
+def capabilities(self) -> RuntimeCapabilities: ...
 ```
 
-How a runtime sources its list — static, lazy fetch, periodic refresh,
-remote registry — is invisible to callers. There is intentionally no
-`refresh_models` or `models_status` on the protocol; those leaked
-caching strategy into the contract. Each runtime owns a static catalog
-or computes one lazily — the contract makes no promise.
+`RuntimeCapabilities` carries three `list[LabeledOption]` lists
+(`permission_modes`, `effort_levels`, `models`) and an optional
+`flags: list[RuntimeFlag]` of runtime-declared option toggles. The list
+**order is the contract**: position 0 of each `LabeledOption` list is the
+runtime default. How a runtime
+sources its model list — static, lazy fetch, periodic refresh, remote
+registry — is invisible to callers. There is intentionally no
+`refresh_models` or `models_status` on the protocol; those leaked caching
+strategy into the contract.
 
-`get_context_window(model_id)` returns the size for ids the runtime
-knows, falling back to `DEFAULT_CONTEXT_WINDOW` for unknown ids.
-`AgentService._get_context_max(task)` is a one-line delegation; the
-service never maintains its own model→window table.
+The model context-window size is not part of the capability surface. It
+is inferred from the live SDK per session (Claude reads
+`ClaudeSDKClient.get_context_usage().rawMaxTokens`) and streamed to the
+frontend as `contextMax` on turn-end events. The service maintains no
+model→window table.
 
 ## Skill surface
 
@@ -192,6 +199,6 @@ pattern at `codex-agent.ts:252-260` — same semantics, different surface.
 | `backend/tests/agent/runtime/test_registry.py` | `RuntimeRegistry` register / duplicate / unknown / sorted `all()` |
 | `backend/tests/agent/runtime/test_event_handler.py` | `make_handler_from_notify` forwards method, params, and `request_id` correctly |
 | `backend/tests/agent/runtime/test_permissions.py` | `ToolPermissionRequest`/`Response` round-trip; ToolCategory exhaustiveness |
-| `backend/tests/rpc/test_methods_settings.py` | `models/list` wire shape (option C) — grouped by runtime, with `displayName`, no per-model `runtime` field |
+| `backend/tests/rpc/test_methods_settings.py` | `runtimes/list` + `runtimes/capabilities` wire shape — `RuntimeIdentity` list sorted by `runtimeType`; per-runtime `permissionModes` / `effortLevels` / `models` as `LabeledOption` lists; UNKNOWN_RUNTIME / VALIDATION_ERROR error paths |
 
 Per-runtime tests live under `backend/tests/agent/runtime/<name>/`.

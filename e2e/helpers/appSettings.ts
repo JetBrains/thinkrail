@@ -11,7 +11,8 @@
 export interface SessionDefaults {
   model: string;
   permissionMode: string;
-  effort: string | null;
+  effort: string;
+  flags?: Record<string, boolean>;
 }
 
 const BACKEND_URL = process.env.BONSAI_BACKEND_URL ?? "http://localhost:8000";

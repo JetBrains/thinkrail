@@ -379,6 +379,11 @@
           "title": "Contextwindow",
           "type": "integer"
         },
+        "contextMax": {
+          "default": 0,
+          "title": "Contextmax",
+          "type": "integer"
+        },
         "subtype": {
           "default": "turn_error",
           "title": "Subtype",
@@ -473,6 +478,11 @@
         "contextWindow": {
           "default": 0,
           "title": "Contextwindow",
+          "type": "integer"
+        },
+        "contextMax": {
+          "default": 0,
+          "title": "Contextmax",
           "type": "integer"
         }
       },
@@ -1618,6 +1628,11 @@
         "contextWindow": {
           "default": 0,
           "title": "Contextwindow",
+          "type": "integer"
+        },
+        "contextMax": {
+          "default": 0,
+          "title": "Contextmax",
           "type": "integer"
         },
         "result": {

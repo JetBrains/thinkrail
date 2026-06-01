@@ -96,6 +96,7 @@ export type Iterations = {
   [k: string]: unknown;
 }[];
 export type Contextwindow = number;
+export type Contextmax = number;
 export type Result = string;
 export type Bonsaisid12 = string;
 export type Sessionid13 = string;
@@ -109,6 +110,7 @@ export type Iterations1 = {
   [k: string]: unknown;
 }[];
 export type Contextwindow1 = number;
+export type Contextmax1 = number;
 export type Bonsaisid13 = string;
 export type Sessionid14 = string;
 export type Eventtype13 = "error";
@@ -121,6 +123,7 @@ export type Iterations2 = {
   [k: string]: unknown;
 }[];
 export type Contextwindow2 = number;
+export type Contextmax2 = number;
 export type Subtype = string;
 export type Errors = string[];
 export type Result1 = string;
@@ -385,6 +388,7 @@ export interface TurnCompletePayload {
   usage?: Usage;
   iterations?: Iterations;
   contextWindow?: Contextwindow;
+  contextMax?: Contextmax;
   result?: Result;
 }
 export interface Usage {
@@ -408,6 +412,7 @@ export interface InterruptedPayload {
   usage?: Usage1;
   iterations?: Iterations1;
   contextWindow?: Contextwindow1;
+  contextMax?: Contextmax1;
 }
 export interface Usage1 {
   [k: string]: unknown;
@@ -430,6 +435,7 @@ export interface ErrorPayload {
   usage?: Usage2;
   iterations?: Iterations2;
   contextWindow?: Contextwindow2;
+  contextMax?: Contextmax2;
   subtype?: Subtype;
   errors?: Errors;
   result?: Result1;

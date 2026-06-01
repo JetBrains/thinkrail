@@ -136,7 +136,9 @@ export interface Session {
   status: SessionStatus;
   model: string;
   permissionMode: string;
-  effort: string | null;
+  effort: string;
+  /** Runtime-declared option toggles, keyed by RuntimeFlag.key. */
+  flags?: Record<string, boolean>;
   startedAt: number;
   events: AgentEvent[];
   metrics: SessionMetrics;
