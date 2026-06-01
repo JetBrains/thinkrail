@@ -20,17 +20,17 @@ export type Label1 = string;
 export type Type = "boolean";
 export type Default = boolean;
 export type Description = string;
-export type Runtimetype = "claude" | "codex";
+export type Runtimetype = "claude";
 export type Displayname = string;
 export type Permissionmodes = LabeledOption[];
 export type Effortlevels = LabeledOption[];
 export type Models = LabeledOption[];
 export type Flags = RuntimeFlag[];
 export type Runtimes = RuntimeIdentity[];
-export type Runtimetype1 = "claude" | "codex";
+export type Runtimetype1 = "claude";
 export type Field = string;
 export type Value1 = string;
-export type Runtimetype2 = "claude" | "codex";
+export type Runtimetype2 = "claude";
 export type Allowed = string[];
 
 /**

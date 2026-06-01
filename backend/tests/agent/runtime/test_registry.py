@@ -51,7 +51,7 @@ class TestRegister:
     def test_missing_get_raises(self) -> None:
         reg = RuntimeRegistry()
         with pytest.raises(UnknownRuntimeError, match="not registered"):
-            reg.get("codex")
+            reg.get("missing")
 
     def test_has(self) -> None:
         reg = RuntimeRegistry()
@@ -64,7 +64,7 @@ class TestAllOrdering:
     def test_returns_runtimes_sorted_by_runtime_type(self) -> None:
         reg = RuntimeRegistry()
         # Register out of alphabetical order; ``all()`` must still return sorted.
-        reg.register(_FakeRuntime("codex"))
+        reg.register(_FakeRuntime("zeta"))
         reg.register(_FakeRuntime("claude"))
         types = [rt.runtime_type for rt in reg.all()]
-        assert types == ["claude", "codex"]
+        assert types == ["claude", "zeta"]

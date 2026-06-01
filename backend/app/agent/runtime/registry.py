@@ -32,9 +32,8 @@ class UnknownRuntimeError(RuntimeRegistryError):
     """Raised when a caller asks for a ``RuntimeType`` that wasn't registered.
 
     The RPC layer translates this to ``UNKNOWN_RUNTIME`` (-32031) so a
-    client that sends e.g. ``config.runtime = "codex"`` (valid Literal,
-    not registered) gets a clean domain error instead of an opaque
-    ``INTERNAL_ERROR``.
+    request for a runtime key with no registered instance gets a clean
+    domain error instead of an opaque ``INTERNAL_ERROR``.
     """
 
 

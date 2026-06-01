@@ -2,17 +2,14 @@
 
 The Claude runtime constructs `RuntimeEvent` params dictionaries inline
 in `runtime.run_session`. The shape of those params is the **wire
-contract** that the frontend and persistence layer consume — both
-runtimes (Claude here, Codex in plan 05) must produce structurally
-identical payloads for the same logical event so the UI can render them
-without runtime-aware branches.
+contract** that the frontend and persistence layer consume — any runtime
+must produce structurally identical payloads for the same logical event
+so the UI can render them without runtime-aware branches.
 
 This module exposes pure functions that build those param dicts. They
-take explicit inputs (no SDK types in the function signature) so plan
-05's `CodexProtocolAdapter` can import the same functions — or import
-them as a *contract reference* — to keep its output aligned. The
-diff-parity test in plan 05 asserts that for the same logical edit,
-Claude and Codex produce byte-equal `agent/toolCallStart` payloads.
+take explicit inputs (no SDK types in the function signature) so another
+runtime can reuse them — or treat them as a *contract reference* — to
+keep its output aligned.
 
 Keep these functions stateless. Per-session state (subagent correlation,
 mode-change tracking, cost iteration aggregation) lives in
@@ -38,10 +35,6 @@ def build_tool_call_start_params(
     The caller is responsible for any per-tool input enrichment
     (e.g. ``_previousContent`` injection for ``Write``) before passing
     the input dict in. This keeps the function pure.
-
-    Codex's adapter constructs the same shape from `item/started`
-    (`commandExecution`/`fileChange`/`mcpToolCall`) — see plan 05 for the
-    notification-to-event mapping table.
     """
     params: dict[str, Any] = {
         "bonsaiSid": bonsai_sid,
@@ -70,10 +63,8 @@ def build_tool_call_end_params(
     ``tool_name`` defaults to ``""`` because Claude's
     ``ToolResultBlock`` does not carry the tool name (it's keyed by
     ``tool_use_id`` only). The frontend resolves tool name from its
-    matching ``toolCallStart`` event. Codex emits the name with each
-    result, but the wire shape stays consistent — Codex sends the empty
-    string when it would otherwise duplicate state already known to the
-    frontend.
+    matching ``toolCallStart`` event. A runtime that does carry the name
+    on its result may pass it through; the wire shape stays consistent.
     """
     params: dict[str, Any] = {
         "bonsaiSid": bonsai_sid,

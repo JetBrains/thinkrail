@@ -309,11 +309,11 @@ graph TD
 
 ### Runtime Abstraction
 
-The agent module no longer hardcodes the Claude SDK. `IAgentRuntime` (defined in [`runtime/types.py`](runtime/types.py)) is the contract every backend implements:
+`IAgentRuntime` (defined in [`runtime/types.py`](runtime/types.py)) is the contract every backend implements:
 
 ```python
 class IAgentRuntime(Protocol):
-    runtime_type: RuntimeType        # "claude" | "codex"
+    runtime_type: RuntimeType        # "claude"
     display_name: str
     def capabilities(self) -> RuntimeCapabilities: ...
     def list_skills(self) -> list[RuntimeSkillInfo]: ...

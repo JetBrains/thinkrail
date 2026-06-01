@@ -63,10 +63,7 @@
       "description": "Lightweight ``{runtimeType, displayName}`` pair for ``runtimes/list``.",
       "properties": {
         "runtimeType": {
-          "enum": [
-            "claude",
-            "codex"
-          ],
+          "const": "claude",
           "title": "Runtimetype",
           "type": "string"
         },
@@ -146,10 +143,7 @@
       "description": "Wire payload accepted by ``runtimes/capabilities``.",
       "properties": {
         "runtimeType": {
-          "enum": [
-            "claude",
-            "codex"
-          ],
+          "const": "claude",
           "title": "Runtimetype",
           "type": "string"
         }
@@ -173,10 +167,7 @@
           "type": "string"
         },
         "runtimeType": {
-          "enum": [
-            "claude",
-            "codex"
-          ],
+          "const": "claude",
           "title": "Runtimetype",
           "type": "string"
         },

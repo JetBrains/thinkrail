@@ -2,8 +2,8 @@
 
 These types form the runtime-agnostic permission contract. Each
 ``IAgentRuntime`` implementation translates its native permission shape
-(Claude SDK ``PermissionResultAllow|Deny`` today, Codex sandbox decisions
-later) to/from these neutral models so the permission engine in
+(e.g. Claude SDK ``PermissionResultAllow|Deny``) to/from these neutral
+models so the permission engine in
 ``app.agent.permissions.can_use_tool`` never has to import a backend SDK.
 
 ``ToolCategory`` is the coarse classification that drives mode-based
@@ -29,8 +29,8 @@ class ToolPermissionRequest(BaseModel):
 
     Mirrors the input side of Claude SDK's ``canUseTool`` callback but
     contains no SDK types. ``context`` is an open escape hatch for fields
-    that only make sense for some runtimes (e.g. Codex sandbox metadata)
-    so the shape can grow without another refactor.
+    that only make sense for some runtimes so the shape can grow without
+    another refactor.
     """
 
     model_config = ConfigDict(extra="forbid")

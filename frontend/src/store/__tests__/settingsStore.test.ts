@@ -7,7 +7,7 @@
  *  - failure is silent: the cache entry is left untouched and
  *    `console.debug` is used (matches the existing `fetchSkills`/
  *    `fetchModels` fallback pattern)
- *  - per-runtime caching: independent entries for "claude" and "codex"
+ *  - per-runtime caching: independent entries for different runtimes
  *    coexist on the same Map
  *  - API method passes the runtime through as a named param to
  *    `skills/listRuntime` (camelCase wire shape)
@@ -40,6 +40,10 @@ const RUNTIME_SKILLS: RuntimeSkillInfo[] = [
   { id: "init", name: "Init", description: "Init CLAUDE.md", source: "builtin" },
   { id: "user-skill", name: "User skill", description: "User one", source: "user" },
 ];
+
+// Stand-in for a hypothetical second runtime — the Map keys per runtime, so
+// isolation must hold even though only "claude" is registered today.
+const OTHER_RUNTIME = "other" as RuntimeType;
 
 beforeEach(() => {
   useSettingsStore.setState({ runtimeSkills: new Map() });
@@ -81,7 +85,7 @@ describe("createSettingsApi().listRuntimeSkills", () => {
     stub.request.mockRejectedValueOnce(new Error("Unknown runtime"));
 
     const api = createSettingsApi(stub as unknown as RpcClient);
-    await expect(api.listRuntimeSkills("codex")).rejects.toThrow("Unknown runtime");
+    await expect(api.listRuntimeSkills("claude")).rejects.toThrow("Unknown runtime");
   });
 });
 
@@ -135,11 +139,11 @@ describe("useSettingsStore.loadRuntimeSkills", () => {
 
     // Should *not* throw.
     await expect(
-      useSettingsStore.getState().loadRuntimeSkills("codex"),
+      useSettingsStore.getState().loadRuntimeSkills("claude"),
     ).resolves.toBeUndefined();
 
     // Cache entry remains absent — autocomplete falls back to bonsai-only.
-    expect(useSettingsStore.getState().runtimeSkills.has("codex")).toBe(false);
+    expect(useSettingsStore.getState().runtimeSkills.has("claude")).toBe(false);
     expect(debugSpy).toHaveBeenCalledWith(
       expect.stringContaining("skills/listRuntime"),
       expect.any(Error),
@@ -155,39 +159,39 @@ describe("useSettingsStore.loadRuntimeSkills", () => {
     installStubClient(stubOk);
     await useSettingsStore.getState().loadRuntimeSkills("claude");
 
-    // Second call for "codex" fails — the "claude" entry must be untouched.
+    // Second call for another runtime fails — the "claude" entry must be untouched.
     const stubErr = makeStubClient();
     stubErr.request.mockRejectedValueOnce(new Error("boom"));
     installStubClient(stubErr);
     const debugSpy = vi.spyOn(console, "debug").mockImplementation(() => {});
 
-    await useSettingsStore.getState().loadRuntimeSkills("codex");
+    await useSettingsStore.getState().loadRuntimeSkills(OTHER_RUNTIME);
 
     const map = useSettingsStore.getState().runtimeSkills;
     expect(map.get("claude")).toEqual(RUNTIME_SKILLS);
-    expect(map.has("codex")).toBe(false);
+    expect(map.has(OTHER_RUNTIME)).toBe(false);
 
     debugSpy.mockRestore();
   });
 
   it("supports multiple runtimes coexisting on the same Map", async () => {
     const claudeSkills = RUNTIME_SKILLS;
-    const codexSkills: RuntimeSkillInfo[] = [
-      { id: "codex-thing", name: "Codex Thing", description: "—", source: "builtin" },
+    const otherSkills: RuntimeSkillInfo[] = [
+      { id: "other-thing", name: "Other Thing", description: "—", source: "builtin" },
     ];
 
     const stub = makeStubClient();
     stub.request
       .mockResolvedValueOnce(claudeSkills)
-      .mockResolvedValueOnce(codexSkills);
+      .mockResolvedValueOnce(otherSkills);
     installStubClient(stub);
 
     await useSettingsStore.getState().loadRuntimeSkills("claude");
-    await useSettingsStore.getState().loadRuntimeSkills("codex" as RuntimeType);
+    await useSettingsStore.getState().loadRuntimeSkills(OTHER_RUNTIME);
 
     const map = useSettingsStore.getState().runtimeSkills;
     expect(map.get("claude")).toEqual(claudeSkills);
-    expect(map.get("codex" as RuntimeType)).toEqual(codexSkills);
+    expect(map.get(OTHER_RUNTIME)).toEqual(otherSkills);
   });
 
   it("overwrites the entry on a successful re-fetch for the same runtime", async () => {

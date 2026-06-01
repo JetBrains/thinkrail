@@ -130,8 +130,10 @@ async def runtimes_capabilities(
 
     Validates the wire payload through ``RuntimesCapabilitiesRequest`` so
     the camelCase ``runtimeType`` alias and the ``RuntimeType`` literal are
-    enforced in one place. Raises ``UnknownRuntimeError`` (mapped to
-    ``UNKNOWN_RUNTIME`` -32031) when the runtime isn't registered.
+    enforced in one place — a value outside the literal is rejected as
+    ``VALIDATION_ERROR`` before the lookup. A recognized runtime with no
+    registered instance raises ``UnknownRuntimeError`` (mapped to
+    ``UNKNOWN_RUNTIME`` -32031).
     """
     req = RuntimesCapabilitiesRequest.model_validate(params)
     return registry.get(req.runtime_type).capabilities()
@@ -156,9 +158,8 @@ async def list_runtime_skills(
 
     ``UnknownRuntimeError`` from ``registry.get(runtime)`` is translated
     to RPC error code ``UNKNOWN_RUNTIME`` (-32031) by the decorator, so a
-    request for an unregistered runtime (e.g. ``"codex"`` before its
-    runtime ships) surfaces as a clean domain error rather than an
-    opaque internal error.
+    request for a runtime key with no registered instance surfaces as a
+    clean domain error rather than an opaque internal error.
 
     Each entry uses the camelCase keys produced by
     ``RuntimeSkillInfo.model_dump(by_alias=True)`` — ``id``, ``name``,

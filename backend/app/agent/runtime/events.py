@@ -1,6 +1,6 @@
 """Runtime event types — RuntimeEvent, AgentEventHandler.
 
-Runtimes (Claude SDK today, Codex / others later) emit a unified
+Runtimes emit a unified
 ``RuntimeEvent`` stream that adapters can forward verbatim onto the
 WebSocket. Naming note: ``RuntimeEvent`` is the *runtime-layer* envelope
 (method/params/request_id) — distinct from ``AgentEvent`` in

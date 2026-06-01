@@ -133,8 +133,8 @@ export type EventType =
 
 // ─── Other models ─────────────────────────────────────────────────────────────
 
-/** Mirrors backend `app.agent.models.RuntimeType` (`Literal["claude", "codex"]`). */
-export type RuntimeType = "claude" | "codex";
+/** Mirrors backend `app.agent.models.RuntimeType` (`Literal["claude"]`). */
+export type RuntimeType = "claude";
 
 /**
  * Wire shape of a runtime-exposed skill (autocomplete suggestion).

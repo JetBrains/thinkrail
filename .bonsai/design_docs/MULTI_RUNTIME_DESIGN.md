@@ -17,18 +17,19 @@ tags:
 
 ## Overview
 
-Bonsai hosts agent backends behind a runtime-agnostic contract. Claude
-Code SDK is the only runtime currently registered; the architecture is
-shaped so additional runtimes (e.g. OpenAI Codex via `codex app-server`)
-can be added without changing the session layer above.
+Bonsai hosts agent backends behind a runtime-agnostic contract. The
+Claude Code SDK is the only runtime currently registered; the
+architecture is shaped so additional runtimes can be added without
+changing the session layer above.
 
 This doc describes the architecture and the reasoning behind the
 choices. Read it for *why* the architecture is shaped the way it is.
 
 ## Goals
 
-1. **Add Codex as a first-class runtime** — same UI surface, same session
-   semantics, same permission model as Claude.
+1. **Support additional runtimes behind the contract** — a new runtime
+   gets the same UI surface, session semantics, and permission model as
+   Claude without touching the session layer.
 2. **No regression for Claude flows** — the existing conversational loop,
    tool approvals, AskUserQuestion / ConfirmStatement, subagent
    correlation, persistence, and resume must work unchanged.
@@ -37,8 +38,8 @@ choices. Read it for *why* the architecture is shaped the way it is.
    takes effect uniformly.
 4. **Runtime-neutral event bus** — the WebSocket event stream
    (`agent/textDelta`, `agent/toolCallStart`, etc.) is the unified
-   contract; runtimes either produce these events directly (Claude) or
-   adapt their wire protocol to them (Codex, future).
+   contract; a runtime either produces these events directly (Claude) or
+   adapts its wire protocol to them.
 
 ## Non-goals
 
@@ -69,13 +70,9 @@ choices. Read it for *why* the architecture is shaped the way it is.
        │  - interrupt          │
        └───────┬───────────────┘
                │
-       ┌───────┴────────────┬──────────────────┐
-       ▼                    ▼                  ▼
-  ClaudeRuntime         CodexRuntime       (future …)
-       │                    │
-       │              ┌─────┴─────────┐
-       │              ▼               ▼
-       │        CodexJsonRpcClient   CodexProtocolAdapter
+       ┌───────┴───────────┐
+       ▼                   ▼
+  ClaudeRuntime         (future …)
        │
        ▼
   Claude SDK (in-process)
@@ -87,7 +84,7 @@ choices. Read it for *why* the architecture is shaped the way it is.
 
 ```python
 class IAgentRuntime(Protocol):
-    runtime_type: RuntimeType        # "claude" | "codex"
+    runtime_type: RuntimeType        # "claude"
     display_name: str
 
     def capabilities(self) -> RuntimeCapabilities: ...
@@ -220,8 +217,8 @@ class ToolPermissionResponse(BaseModel):
 ```
 
 `ToolPermissionRequest`/`Response` are runtime-neutral. Each runtime
-(Claude SDK adapter, Codex `handle_server_request`) is responsible for
-translating its native shape to/from these.
+(e.g. the Claude SDK adapter) is responsible for translating its native
+shape to/from these.
 
 ## Permission flow
 
@@ -253,9 +250,6 @@ layer are a future change, tracked when a second runtime lands.
    back to its native shape:
    - **Claude:** `claude_can_use_tool_adapter` returns
      `PermissionResultAllow | PermissionResultDeny`.
-   - **Codex:** `handle_server_request` returns
-     `{decision: "approved" | "denied"}` for command/file approvals,
-     `{action: ..., content: null}` for elicitations.
 
 ### Tool categories — five buckets
 
@@ -293,9 +287,8 @@ Frontend:
   WS message → store → render
 ```
 
-The *only* difference between Claude and Codex sessions on the wire is
-**which runtime constructs the event**. Frontend rendering is
-runtime-agnostic.
+The *only* per-runtime difference on the wire is **which runtime
+constructs the event**. Frontend rendering is runtime-agnostic.
 
 ## Cancellation contract
 
@@ -304,11 +297,10 @@ When the user clicks **Stop**:
 1. `AgentService.interrupt_task(bonsai_sid)` — sets
    `tracker.set_interrupted` (bonsai-internal flag) and
    `tracker.interrupt_futures` (resolves pending user-prompt futures).
-2. `runtime.interrupt(task, tracker)` — runtime-specific cancel:
-   - **Claude:** `await tracker.get_client(sid).interrupt()` (SDK
-     control-protocol message).
-   - **Codex:** `client.notify("turn/interrupt", …)` →
-     wait up to 8s for `turn/completed` → `client.kill()` if no ack.
+2. `runtime.interrupt(task, tracker)` — runtime-specific cancel.
+   Claude calls `await tracker.get_client(sid).interrupt()` (an SDK
+   control-protocol message); each runtime decides what "interrupt the
+   current turn" means for its backend.
 3. `run_session`'s loop exits naturally on the next iteration when its
    message stream terminates. The runtime's existing `interrupted`
    branch emits `agent/interrupted`; no polling, no `cancel_event`,
@@ -322,10 +314,10 @@ interval). The callback design has zero latency and zero extra code.
 
 ## Runtime selection
 
-- `AgentConfig.runtime: RuntimeType = "claude"`. Default keeps existing
-  on-disk sessions backward-compat. `RuntimeType` is `Literal["claude",
-  "codex"]` — declared in `app/agent/models.py` to break a circular
-  import with `runtime/types.py`, re-exported via `runtime/__init__.py`.
+- `AgentConfig.runtime: RuntimeType = "claude"`. `RuntimeType` is
+  `Literal["claude"]` — declared in `app/agent/models.py` to break a
+  circular import with `runtime/types.py`, re-exported via
+  `runtime/__init__.py`. Adding a runtime widens the literal.
 - `AgentService._get_runtime(task)` is a one-line registry lookup:
   `self.runtime_registry.get(task.config.runtime)`. Unknown runtime
   raises `UnknownRuntimeError` → RPC layer surfaces `UNKNOWN_RUNTIME`.

@@ -249,9 +249,8 @@ async def can_use_tool(
     Runtime-neutral entrypoint: takes a ``ToolPermissionRequest`` and
     returns a ``ToolPermissionResponse``. Each ``IAgentRuntime``
     implementation is responsible for translating its native permission
-    shape (Claude SDK, Codex sandbox, etc.) to/from these neutral
-    models — see ``claude_can_use_tool_adapter`` (added in plan 01
-    Task 6).
+    shape to/from these neutral models — see
+    ``claude_can_use_tool_adapter``.
 
     Dispatch order:
     1. ConfirmStatement / AskUserQuestion — interactive transport

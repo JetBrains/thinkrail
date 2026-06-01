@@ -22,7 +22,7 @@ TaskStatus = Literal["draft", "initializing", "idle", "running", "waiting", "don
 # embeds it, and ``runtime.types`` already imports from this module. The
 # canonical export lives in ``app.agent.runtime`` for consumers; this is the
 # definitional site.
-RuntimeType = Literal["claude", "codex"]
+RuntimeType = Literal["claude"]
 
 
 class SubsessionType(str, Enum):

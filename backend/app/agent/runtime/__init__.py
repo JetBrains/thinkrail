@@ -1,8 +1,8 @@
 """Runtime-agnostic agent contract.
 
 This package defines the abstraction layer that lets bonsai run different
-agent backends (Claude SDK today, Codex / others later) behind a single
-interface.
+agent backends behind a single interface. The Claude SDK is the only
+backend today; the contract is shaped so others can be added.
 """
 
 from __future__ import annotations

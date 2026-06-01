@@ -47,17 +47,17 @@ def _success(result_or_response: Any) -> Any:
 
 @pytest.mark.asyncio
 class TestRuntimesList:
-    async def test_returns_identities_sorted_by_runtime_type(self) -> None:
+    async def test_returns_registered_identity_with_display_name(self) -> None:
+        # The RPC maps each registered runtime to its wire identity,
+        # passing ``displayName`` through from the runtime. Sort order is
+        # a registry guarantee, covered by ``test_registry`` directly.
         reg = RuntimeRegistry()
-        reg.register(_fake_runtime("codex", ["gpt-5"], display="Codex"))
         reg.register(_fake_runtime("claude", ["claude-opus-4-8"], display="Claude Code"))
 
         result = _success(await runtimes_list(reg))
 
-        # ``RuntimeRegistry.all()`` is sorted by ``runtime_type``.
-        assert [r["runtimeType"] for r in result["runtimes"]] == ["claude", "codex"]
+        assert [r["runtimeType"] for r in result["runtimes"]] == ["claude"]
         assert result["runtimes"][0]["displayName"] == "Claude Code"
-        assert result["runtimes"][1]["displayName"] == "Codex"
 
     async def test_identity_has_no_models(self) -> None:
         reg = RuntimeRegistry()
@@ -85,16 +85,6 @@ class TestRuntimesCapabilities:
         assert [m["value"] for m in result["models"]] == [
             "claude-opus-4-8", "claude-sonnet-4-6",
         ]
-
-    async def test_unknown_runtime_raises_rpc_error_32031(self) -> None:
-        # ``codex`` is a valid RuntimeType literal but not registered.
-        reg = RuntimeRegistry()
-        reg.register(_fake_runtime("claude", ["claude-opus-4-8"]))
-
-        with pytest.raises(JsonRpcError) as exc_info:
-            await runtimes_capabilities(reg, runtimeType="codex")
-        assert exc_info.value.code == UNKNOWN_RUNTIME
-        assert UNKNOWN_RUNTIME == -32031
 
     async def test_invalid_runtime_type_raises_validation_error(self) -> None:
         # A value outside the RuntimeType literal is rejected by
@@ -169,22 +159,22 @@ class TestListRuntimeSkills:
             "claude", [_skill("claude-only-skill")],
         ))
         reg.register(_fake_runtime_with_skills(
-            "codex", [_skill("codex-only-skill")],
+            "zeta", [_skill("zeta-only-skill")],
         ))
 
         claude_res = _success(await list_runtime_skills(reg, runtime="claude"))
-        codex_res = _success(await list_runtime_skills(reg, runtime="codex"))
+        zeta_res = _success(await list_runtime_skills(reg, runtime="zeta"))
         assert [s["id"] for s in claude_res] == ["claude-only-skill"]
-        assert [s["id"] for s in codex_res] == ["codex-only-skill"]
+        assert [s["id"] for s in zeta_res] == ["zeta-only-skill"]
 
     async def test_unknown_runtime_raises_rpc_error_32031(self) -> None:
-        # No Codex runtime registered — registry.get("codex") raises
+        # registry.get for a runtime with no registered instance raises
         # UnknownRuntimeError, which the decorator must map to -32031.
         reg = RuntimeRegistry()
         reg.register(_fake_runtime_with_skills("claude", []))
 
         with pytest.raises(JsonRpcError) as exc_info:
-            await list_runtime_skills(reg, runtime="codex")
+            await list_runtime_skills(reg, runtime="ghost")
         # JsonRpcError exposes the error code on ``.code`` (jsonrpcserver
         # 6.x).  Compare against the constant so a future code change is
         # caught here rather than only at the protocol layer.

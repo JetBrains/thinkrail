@@ -231,8 +231,7 @@ class TestIAgentRuntimeProtocol:
         assert not isinstance(Partial(), IAgentRuntime)
 
     def test_runtime_type_literal_values(self):
-        # Verify the literal type itself permits exactly the planned values.
-        assert set(get_args(RuntimeType)) == {"claude", "codex"}
+        assert set(get_args(RuntimeType)) == {"claude"}
 
     def test_protocol_signatures_are_async(self):
         # Spot-check method annotations exist and are coroutine functions.

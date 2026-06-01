@@ -133,10 +133,10 @@ describe("useRuntimeCapsStore.fetchCapabilities", () => {
     const debugSpy = vi.spyOn(console, "debug").mockImplementation(() => {});
 
     await expect(
-      useRuntimeCapsStore.getState().fetchCapabilities("codex"),
+      useRuntimeCapsStore.getState().fetchCapabilities("claude"),
     ).resolves.toBeUndefined();
 
-    expect(useRuntimeCapsStore.getState().capsByRuntime.codex).toBeUndefined();
+    expect(useRuntimeCapsStore.getState().capsByRuntime.claude).toBeUndefined();
     debugSpy.mockRestore();
   });
 });

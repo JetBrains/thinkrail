@@ -24,10 +24,9 @@ tags:
 
 ## Goal
 
-Introduce the runtime-agnostic contract that future Claude / Codex /
-other backends will implement, and make the permission engine
-runtime-neutral. Zero runtime behaviour change — only new types and a
-permissions refactor.
+Introduce the runtime-agnostic contract that backends implement, and
+make the permission engine runtime-neutral. Zero runtime behaviour
+change — only new types and a permissions refactor.
 
 ## What landed
 

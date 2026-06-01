@@ -38,7 +38,7 @@ that imports from `claude_agent_sdk`.
 | `models.json` | Curated catalog of Claude models (`[{id, label}]`) exposed to the picker. Edit-and-ship to add or change a model |
 | `skills.py` | `class ClaudeSkillRegistry` — multi-source skill discovery (user / project / plugin / command / builtin) with first-wins dedup and a process-lifetime mtime cache. See [Skill catalog](#skill-catalog--multi-source-scan) |
 | `hooks.py` | `class SubagentHooks` — per-session subagent / PreCompact correlation (Task-tool ↔ SubagentStart) |
-| `adapter.py` | Pure event-shape builders — `agent/toolCallStart` / `agent/toolCallEnd` param construction. Boundary the Codex adapter's diff-parity tests will enforce against |
+| `adapter.py` | Pure event-shape builders — `agent/toolCallStart` / `agent/toolCallEnd` param construction. Locks the payload shape as the wire contract any runtime adapter must mirror |
 
 ## Public interface
 
@@ -305,7 +305,7 @@ No `cancel_event`, no polling.
 | `backend/tests/agent/runtime/claude/test_skills.py` | `TestListSkills` — fixture-tree scan per source kind (user/project/plugin/command/builtin), first-wins dedup ordering, mtime cache hit + invalidation, missing-root silent skip, malformed-SKILL.md logs + skips without raising |
 | `backend/tests/agent/runtime/claude/test_models.py` | `ClaudeModelRegistry` — constructor loads `models.json`, `list_options()` returns the shipped entries as `LabeledOption`s in declared order |
 | `backend/tests/agent/runtime/claude/test_hooks.py` | `SubagentHooks` correlation — Task-tool / SubagentStart ordering, orphan close on interrupt, `parent_to_agent` mapping |
-| `backend/tests/agent/runtime/claude/test_adapter.py` (post-extraction) | Event-shape builder unit tests; locks the `agent/toolCallStart` / `agent/toolCallEnd` payload shape so plan 05's Codex adapter can mirror it |
+| `backend/tests/agent/runtime/claude/test_adapter.py` | Event-shape builder unit tests; locks the `agent/toolCallStart` / `agent/toolCallEnd` payload shape so any runtime adapter can mirror it |
 
 ## Module boundary
 

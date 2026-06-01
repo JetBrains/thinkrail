@@ -1,8 +1,7 @@
 """Tests for ``runtime/claude/adapter.py`` event-shape builders.
 
-These functions define the wire contract that plan 05's Codex adapter
-must mirror for the diff-parity acceptance criterion. The tests assert
-that:
+These functions define the wire contract that any runtime adapter must
+mirror. The tests assert that:
 
 - ``agent/toolCallStart`` payloads have a stable, byte-equal shape for a
   given input — no field reordering, no surprise additions.
@@ -114,9 +113,9 @@ class TestBuildToolCallEndParams:
         assert params["isError"] is True
         assert params["output"] == "boom"
 
-    def test_codex_can_supply_tool_name(self) -> None:
-        # Codex emits the tool name with each result; the wire shape
-        # carries it through untouched.
+    def test_tool_name_can_be_supplied(self) -> None:
+        # A runtime that carries the tool name on its result can pass it
+        # through; the wire shape carries it untouched.
         params = build_tool_call_end_params(
             bonsai_sid="sid", session_id="s", tool_use_id="t",
             output="42", is_error=False, tool_name="Bash",
@@ -157,11 +156,11 @@ class TestBuildTextDeltaParams:
         assert "agentId" not in params
 
 
-class TestDiffParityContract:
-    """The shape builders are the wire contract plan 05 must mirror.
+class TestWireContract:
+    """The shape builders are the wire contract every runtime must mirror.
 
-    These tests assert structural properties that the Codex adapter
-    must preserve — same keys, same order, same type semantics.
+    These tests assert structural properties any runtime adapter must
+    preserve — same keys, same order, same type semantics.
     """
 
     def test_tool_call_start_keys_match_documented_contract(self) -> None:
@@ -169,8 +168,7 @@ class TestDiffParityContract:
             bonsai_sid="x", session_id="x", tool_use_id="x",
             tool_name="Edit", tool_input={"a": 1},
         )
-        # The minimum required key set. Plan 05's Codex adapter MUST
-        # produce these exact keys for the diff-parity test to pass.
+        # The minimum required key set every runtime adapter must produce.
         required_keys = {"bonsaiSid", "sessionId", "toolUseId", "toolName", "toolInput"}
         assert required_keys.issubset(params.keys())
 
@@ -184,8 +182,8 @@ class TestDiffParityContract:
 
     def test_no_unexpected_keys_in_minimal_shape(self) -> None:
         # Without agent_id, the start event must have exactly 5 keys —
-        # the Codex adapter must NOT introduce extra keys for the same
-        # logical event (e.g. no separate `parent_id` field).
+        # an adapter must NOT introduce extra keys for the same logical
+        # event (e.g. no separate `parent_id` field).
         params = build_tool_call_start_params(
             bonsai_sid="x", session_id="x", tool_use_id="x",
             tool_name="Read", tool_input={},

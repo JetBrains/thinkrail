@@ -18,8 +18,8 @@ tags:
 ## Overview
 
 `runtime/` defines the runtime-agnostic contract that decouples
-`AgentService` from any specific LLM backend. Each backend (Claude SDK
-today, Codex / others later) implements `IAgentRuntime`; the service
+`AgentService` from any specific LLM backend. Each backend implements
+`IAgentRuntime` (the Claude SDK is the only one today); the service
 resolves a runtime per task via `runtime_registry.get(task.config.runtime)`
 and delegates the conversational loop to it.
 
@@ -39,7 +39,7 @@ freshness/refresh metadata leaking out. Any per-runtime caching
 | Symbol | Defined in | Purpose |
 |--------|-----------|---------|
 | `IAgentRuntime` | `types.py` | Protocol every runtime implements. Class attrs `runtime_type`, `display_name`. Methods: `capabilities`, `list_skills`, `run_session`, `interrupt` |
-| `RuntimeType` | `types.py` (re-exported from `app.agent.models`) | `Literal["claude", "codex"]` — declared in `models.py` to break a circular import |
+| `RuntimeType` | `types.py` (re-exported from `app.agent.models`) | `Literal["claude"]` — declared in `models.py` to break a circular import |
 | `LabeledOption` | `types.py` | Neutral frozen Pydantic model (`extra="forbid"`, camelCase aliases) — `value, label`. One selectable option in a capability list. |
 | `RuntimeCapabilities` | `types.py` | Neutral frozen Pydantic model — `permission_modes, effort_levels, models` (each `list[LabeledOption]`, validated non-empty, position 0 = default) plus optional `flags: list[RuntimeFlag]`. |
 | `RuntimeFlag` | `types.py` | Neutral frozen Pydantic model — `key, label, type, default, description`. A runtime-declared option toggle (`type="boolean"` today) rendered in settings; the value is stored in `AgentConfig.flags[key]`. |
@@ -63,8 +63,7 @@ freshness/refresh metadata leaking out. Any per-runtime caching
 | `registry.py` | `RuntimeRegistry` + domain exceptions |
 | `events.py` | `RuntimeEvent`, `AgentEventHandler`, `make_handler_from_notify` |
 | `permissions.py` | Neutral permission types — request/response, category type alias |
-| `claude/` | First implementation — see [`claude/README.md`](claude/README.md) |
-| `codex/` | Second implementation, planned (PR 2 + PR 3 unblock it) |
+| `claude/` | Claude SDK implementation — see [`claude/README.md`](claude/README.md) |
 
 ## Lifecycle assumptions
 
@@ -123,8 +122,8 @@ def list_skills(self) -> list[RuntimeSkillInfo]: ...
 (`"user" | "project" | "plugin" | "command" | "builtin"`). Sourcing
 strategy is the runtime's internal concern — the Claude implementation
 scans on-disk roots with a `(root_dir, root_dir_mtime)` cache; future
-runtimes are free to pick a different strategy. Runtimes with no skill
-surface (e.g. Codex when first registered) return `[]`.
+runtimes are free to pick a different strategy. A runtime with no skill
+surface returns `[]`.
 
 No default is added to the Protocol — Protocols have no implementation
 bodies. Each implementation declares its own `list_skills`.
@@ -160,12 +159,14 @@ level up. The Claude adapter currently sits in `app/agent/permissions.py`
 alongside the engine; harness-abstraction PR 2 will relocate it to
 `runtime/claude/permissions_adapter.py`.
 
-## Planned implementations
+## Implementations
 
-| Runtime | Status | Module | Plan |
-|---------|--------|--------|------|
-| Claude (SDK in-process) | ✅ shipped | `runtime/claude/` | harness-abstraction PR 1 |
-| Codex (subprocess JSON-RPC) | pending | `runtime/codex/` | unblocks after harness-abstraction PR 2 + PR 3 |
+| Runtime | Status | Module |
+|---------|--------|--------|
+| Claude (SDK in-process) | ✅ shipped | `runtime/claude/` |
+
+Claude is the only runtime today; the contract is shaped so others can
+be added under `runtime/<name>/` and registered alongside it.
 
 ## Cancellation invariant
 
@@ -176,8 +177,7 @@ runs **alongside** the running `run_session` (not from inside it) — when
 1. `tracker.set_interrupted(sid)` — bonsai-internal flag
 2. `tracker.interrupt_futures(sid)` — resolves any pending user-prompt futures with deny+interrupt
 3. `runtime.interrupt(task, tracker)` — runtime-specific cancel
-   (Claude calls `client.interrupt()`; Codex sends `turn/interrupt` then
-   kills the subprocess after a grace period)
+   (Claude calls `client.interrupt()`; each runtime defines its own)
 
 If step 3 cannot resolve the runtime (e.g. `task.config.runtime` no
 longer matches any registered runtime), `AgentService.interrupt_task`
@@ -187,9 +187,6 @@ emitting spurious `agent/interrupted` events on subsequent turns.
 The conversational loop in `run_session` never checks a cancel flag.
 It exits naturally when its message stream terminates or when
 `tracker.get_next_message` returns `END_SIGNAL`.
-
-This mirrors the reference's `AbortSignal.addEventListener('abort', …)`
-pattern at `codex-agent.ts:252-260` — same semantics, different surface.
 
 ## Tests
 
