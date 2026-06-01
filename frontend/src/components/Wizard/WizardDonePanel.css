@@ -270,6 +270,45 @@
 }
 
 /* ── Document preview ──────────────────────────────────────────── */
+.wiz-done-docs {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+.wiz-done-main--split .wiz-done-docs {
+  flex: 0 0 calc(60% - 8px);
+}
+
+/* Tab strip — only rendered when ≥2 artifacts; sits on top of the
+   doc panel and acts as the title/selector. Single-artifact case
+   still uses the inline pill (`.wiz-done-doc-pill`) inside the doc. */
+.wiz-done-doc-tabs {
+  display: flex;
+  gap: 2px;
+  flex-shrink: 0;
+}
+
+.wiz-done-doc-tab {
+  background: transparent;
+  border: none;
+  border-bottom: 2px solid transparent;
+  padding: 7px 14px;
+  font-family: ui-monospace, Menlo, monospace;
+  font-size: 12px;
+  color: var(--hint);
+  cursor: pointer;
+  transition: color 120ms ease, border-color 120ms ease;
+}
+.wiz-done-doc-tab:hover {
+  color: var(--muted);
+}
+.wiz-done-doc-tab--active {
+  color: var(--text);
+  border-bottom-color: var(--green);
+}
+
 .wiz-done-doc {
   flex: 1;
   min-height: 0;
@@ -278,8 +317,8 @@
   border-radius: var(--radius-md);
   padding: 20px 24px 32px;
 }
-.wiz-done-main--split .wiz-done-doc {
-  flex: 0 0 calc(60% - 8px);
+.wiz-done-doc-tabs + .wiz-done-doc {
+  margin-top: 8px;
 }
 
 .wiz-done-doc-head {

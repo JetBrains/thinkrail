@@ -16,13 +16,12 @@ vi.mock("@/services/projects.ts", () => ({
 // Mock the project service used by handleOpen.
 const validateProjectMock = vi.hoisted(() => vi.fn());
 
-const scanProjectMock = vi.hoisted(() => vi.fn());
-const initEngineMock = vi.hoisted(() => vi.fn());
-
 vi.mock("@/services/project.ts", () => ({
   validateProject: validateProjectMock,
-  scanProject: scanProjectMock,
-  initEngine: initEngineMock,
+  // ExistingProjectDetect lives in AppShell now — picker only navigates,
+  // it never calls scan/init.
+  scanProject: vi.fn(),
+  initEngine: vi.fn(),
 }));
 
 // Mock fs service so the autocomplete effect doesn't hit the network.
@@ -38,20 +37,7 @@ describe("ProjectPicker", () => {
   beforeEach(() => {
     getKnownProjectsMock.mockReset();
     validateProjectMock.mockReset();
-    scanProjectMock.mockReset();
-    initEngineMock.mockReset();
     getKnownProjectsMock.mockResolvedValue([]);
-    scanProjectMock.mockResolvedValue({
-      important_files: [],
-      top_folders: [],
-      engine_guidance: [],
-    });
-    initEngineMock.mockResolvedValue({
-      ok: true,
-      created: true,
-      file: "CLAUDE.md",
-      init_command: "claude init",
-    });
   });
 
   afterEach(() => {
@@ -117,7 +103,7 @@ describe("ProjectPicker", () => {
     expect(validateProjectMock).toHaveBeenCalledWith("/tmp/alpha");
   });
 
-  it("state=existing shows detect screen instead of calling onSelect", async () => {
+  it("state=existing still calls onSelect — AppShell renders the detect screen later", async () => {
     getKnownProjectsMock.mockResolvedValue([
       {
         path: "/tmp/legacy",
@@ -135,71 +121,11 @@ describe("ProjectPicker", () => {
     const onSelect = vi.fn();
     const { container } = render(<ProjectPicker onSelect={onSelect} />);
     await screen.findByText("legacy");
-    const row = container.querySelector(
-      ".picker-recent-item",
-    ) as HTMLButtonElement;
-    fireEvent.click(row);
-    await screen.findByRole("button", { name: /Start investigation/i });
-    expect(onSelect).not.toHaveBeenCalled();
-    expect(scanProjectMock).toHaveBeenCalledWith("/tmp/legacy");
-  });
-
-  it("init agent button calls initEngine then re-scans", async () => {
-    getKnownProjectsMock.mockResolvedValue([
-      {
-        path: "/tmp/oldproj",
-        name: "oldproj",
-        registered_at: "2026-01-01T00:00:00Z",
-        last_opened_at: "2026-01-02T00:00:00Z",
-      },
-    ]);
-    validateProjectMock.mockResolvedValue({
-      state: "existing",
-      exists: true,
-      path: "/tmp/oldproj",
-      name: "oldproj",
-    });
-    scanProjectMock
-      .mockResolvedValueOnce({
-        important_files: [],
-        top_folders: [],
-        engine_guidance: [
-          {
-            engine: "claude",
-            display_name: "Claude Code",
-            file: "CLAUDE.md",
-            found: false,
-            init_command: "claude init",
-          },
-        ],
-      })
-      .mockResolvedValueOnce({
-        important_files: [],
-        top_folders: [],
-        engine_guidance: [
-          {
-            engine: "claude",
-            display_name: "Claude Code",
-            file: "CLAUDE.md",
-            found: true,
-            init_command: "claude init",
-          },
-        ],
-      });
-
-    const { container } = render(<ProjectPicker onSelect={() => {}} />);
-    await screen.findByText("oldproj");
     fireEvent.click(
       container.querySelector(".picker-recent-item") as HTMLButtonElement,
     );
-    const initBtn = await screen.findByRole("button", { name: /Init Claude Code/i });
-    fireEvent.click(initBtn);
     await waitFor(() => {
-      expect(initEngineMock).toHaveBeenCalledWith("claude", "/tmp/oldproj");
-    });
-    // Second scan refreshes the row from missing → found.
-    await waitFor(() => {
-      expect(scanProjectMock).toHaveBeenCalledTimes(2);
+      expect(onSelect).toHaveBeenCalledWith("/tmp/legacy");
     });
   });
 

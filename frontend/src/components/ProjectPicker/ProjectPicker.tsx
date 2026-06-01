@@ -5,7 +5,6 @@ import {
   getKnownProjects,
   type KnownProject,
 } from "@/services/projects.ts";
-import { ExistingProjectDetect } from "./ExistingProjectDetect.tsx";
 import "./ProjectPicker.css";
 
 interface ProjectPickerProps {
@@ -20,10 +19,6 @@ export function ProjectPicker({ onSelect, onClose }: ProjectPickerProps) {
   const [loading, setLoading] = useState(false);
   const [recents, setRecents] = useState<KnownProject[]>([]);
   const [showPasteInput, setShowPasteInput] = useState(false);
-  // When validateProject reports state="existing", we show the
-  // onboarding "what we'll read" screen before handing off to the
-  // workspace. New / initialized projects bypass it.
-  const [detectTarget, setDetectTarget] = useState<{ path: string; name: string } | null>(null);
 
   const [suggestions, setSuggestions] = useState<string[]>([]);
   const [highlightIdx, setHighlightIdx] = useState(-1);
@@ -86,10 +81,9 @@ export function ProjectPicker({ onSelect, onClose }: ProjectPickerProps) {
           setDirNotFound(true);
           return;
         }
-        if (validateData.state === "existing") {
-          setDetectTarget({ path: validateData.path, name: validateData.name });
-          return;
-        }
+        // state="existing" navigates to the workspace too — AppShell
+        // renders the detect/onboarding screen there based on the same
+        // projectState (see AppShell.tsx).
         onSelect(validateData.path);
       } catch (e) {
         setError((e as Error).message ?? "Cannot reach backend");
@@ -143,17 +137,6 @@ export function ProjectPicker({ onSelect, onClose }: ProjectPickerProps) {
     },
     [handleOpen, showSuggestions, suggestions, highlightIdx, acceptSuggestion],
   );
-
-  if (detectTarget) {
-    return (
-      <ExistingProjectDetect
-        projectPath={detectTarget.path}
-        projectName={detectTarget.name}
-        onCancel={() => setDetectTarget(null)}
-        onContinue={() => onSelect(detectTarget.path)}
-      />
-    );
-  }
 
   return (
     <div className={`picker-container ${onClose ? "picker-modal" : ""}`} onClick={onClose}>

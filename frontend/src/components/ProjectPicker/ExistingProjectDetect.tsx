@@ -1,25 +1,22 @@
 import { useCallback, useEffect, useState, type ReactNode } from "react";
-import { initEngine, scanProject, type ProjectScan } from "@/services/project.ts";
+import { useNavigate } from "react-router-dom";
 import type { ScanEngineGuidance } from "@/api/rest.ts";
 import { formatBytes } from "@/utils/format.ts";
+import { useUiStore } from "@/store/uiStore.ts";
 import { WizardStepper } from "@/components/Wizard/WizardStepper.tsx";
-import type { WizardStep } from "@/components/Wizard/registry.ts";
+import { getWizardConfig, entryTransition } from "@/components/Wizard/registry.ts";
+import { useStartWizardStep } from "@/components/Wizard/useStartWizardStep.ts";
+import { derivePhase } from "@/components/Wizard/phase.ts";
+import { useProjectScan } from "./useProjectScan.ts";
 import "@/components/Wizard/NewProjectForm.css";
 import "./ExistingProjectDetect.css";
 
-interface ExistingProjectDetectProps {
-  projectPath: string;
-  projectName: string;
-  onCancel: () => void;
-  onContinue: (selectedKeys: string[]) => void;
-}
-
-const STEPPER_STEPS: WizardStep[] = [
-  { label: "Read repo", status: "active" },
-  { label: "Investigate", status: "pending" },
-  { label: "Goal & Requirements", status: "pending" },
-  { label: "Design doc", status: "pending" },
-];
+// This chain's identity. The skill + the session_prompt builder both
+// come from the wizard registry (single source) — the page only
+// collects inputs (selected files) and hands them to the registry's
+// entry transition. All agent instructions live in the skill's SKILL.md.
+const CHAIN_ID = "investigate-project";
+const ENTRY = entryTransition(CHAIN_ID);
 
 interface DetectRowProps {
   icon: string;
@@ -55,80 +52,89 @@ function engineDescription(g: ScanEngineGuidance): ReactNode {
   return `${g.display_name} guidance not found`;
 }
 
-export function ExistingProjectDetect({
-  projectPath,
-  projectName,
-  onCancel,
-  onContinue,
-}: ExistingProjectDetectProps) {
-  const [scan, setScan] = useState<ProjectScan | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [selected, setSelected] = useState<Set<string>>(new Set());
-  const [initBusy, setInitBusy] = useState<Set<string>>(new Set());
-  const [initError, setInitError] = useState<string | null>(null);
+export function ExistingProjectDetect() {
+  const navigate = useNavigate();
+  const projectPath = useUiStore((s) => s.projectPath);
+  const projectName = useUiStore((s) => s.projectName);
+  const setProjectState = useUiStore((s) => s.setProjectState);
+  const setCenterView = useUiStore((s) => s.setCenterView);
+  const setCurrentChain = useUiStore((s) => s.setCurrentChain);
+  const startWizardStep = useStartWizardStep();
 
+  // Pin the wizard chain so AppShell renders the correct stepper
+  // labels ("What we'll read / Investigation / Clarify / Verify &
+  // save") for every subsequent session in this flow.
   useEffect(() => {
-    let cancelled = false;
-    scanProject(projectPath)
-      .then((data) => {
-        if (cancelled) return;
-        setScan(data);
-        const initial = new Set<string>();
-        data.important_files.forEach((f) => initial.add(f.name));
-        data.top_folders.forEach((f) => initial.add(f.name));
-        data.engine_guidance.forEach((g) => g.found && initial.add(g.file));
-        setSelected(initial);
-      })
-      .catch((e: Error) => {
-        if (!cancelled) setError(e.message ?? "Failed to scan project");
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [projectPath]);
+    setCurrentChain("investigate-project");
+  }, [setCurrentChain]);
 
-  const toggle = (key: string) => {
-    setSelected((prev) => {
-      const next = new Set(prev);
-      if (next.has(key)) next.delete(key);
-      else next.add(key);
-      return next;
+  const { scan, error, selected, toggle, initBusy, initError, initEngineFor } =
+    useProjectScan(projectPath);
+
+  const [submitting, setSubmitting] = useState(false);
+  const [startError, setStartError] = useState<string | null>(null);
+
+  // This screen is the pre-chat phase of investigate-project —
+  // derivePhase(null) returns "pre-chat", and the registry resolves
+  // that to "What we'll read":active. Phase is NEVER hardcoded.
+  // The chain hint is required because the wizard registry computes
+  // the stepper based on the chain — without it, ambiguous skills
+  // would fall back to their default chain.
+  const stepperSteps =
+    getWizardConfig(CHAIN_ID, derivePhase({ session: null }), CHAIN_ID)
+      ?.steps ?? [];
+
+  const handleStart = useCallback(async () => {
+    if (!scan || submitting) return;
+    setStartError(null);
+    setSubmitting(true);
+    setProjectState("initialized");
+    // Wizard takeovers gate on ``centerView === "sessions"`` in
+    // AppShell — without this the chat+doc layout never renders even
+    // after the session starts. Same as NewProjectForm.
+    setCenterView("sessions");
+
+    // The investigation instructions live in `session_prompt`
+    // (rendered into the agent's "## Your Task" section of the system
+    // prompt — see backend/app/agent/context.py). The first user
+    // message is just a short kick so the conversational loop starts;
+    // the actual instructions are persistent and don't pollute the
+    // chat transcript.
+    const sessionPrompt = ENTRY?.buildPrompt?.({
+      projectName,
+      selectedPaths: Array.from(selected),
     });
-  };
 
-  const handleInit = useCallback(
-    async (engine: string) => {
-      setInitError(null);
-      setInitBusy((prev) => new Set(prev).add(engine));
-      try {
-        await initEngine(engine, projectPath);
-        const fresh = await scanProject(projectPath);
-        setScan(fresh);
-        setSelected((prev) => {
-          const next = new Set(prev);
-          fresh.engine_guidance.forEach((g) => g.found && next.add(g.file));
-          return next;
-        });
-      } catch (e) {
-        setInitError((e as Error).message ?? "Failed to init engine");
-      } finally {
-        setInitBusy((prev) => {
-          const next = new Set(prev);
-          next.delete(engine);
-          return next;
-        });
-      }
-    },
-    [projectPath],
-  );
+    try {
+      await startWizardStep({
+        skillId: ENTRY?.target ?? CHAIN_ID,
+        chainId: CHAIN_ID,
+        name: projectName,
+        prompt: sessionPrompt,
+        kick: "Begin investigation.",
+      });
+    } catch (e) {
+      setProjectState("existing");
+      setSubmitting(false);
+      setStartError((e as Error).message ?? "Failed to start session");
+    }
+  }, [scan, submitting, selected, projectName, setProjectState, setCenterView, startWizardStep]);
+
+  const handleCancel = useCallback(() => {
+    navigate("/");
+  }, [navigate]);
+
+  if (!projectPath) {
+    return null;
+  }
 
   if (error) {
     return (
       <div className="detect-screen">
-        <WizardStepper steps={STEPPER_STEPS} />
+        <WizardStepper steps={stepperSteps} />
         <div className="np-form detect-form">
           <p className="detect-error">{error}</p>
-          <button className="np-form-btn" onClick={onCancel}>Back</button>
+          <button className="np-form-btn" onClick={handleCancel}>Back</button>
         </div>
       </div>
     );
@@ -137,7 +143,7 @@ export function ExistingProjectDetect({
   if (!scan) {
     return (
       <div className="detect-screen">
-        <WizardStepper steps={STEPPER_STEPS} />
+        <WizardStepper steps={stepperSteps} />
         <div className="np-form detect-form">
           <p className="np-form-lead">Scanning {projectName}…</p>
         </div>
@@ -152,7 +158,7 @@ export function ExistingProjectDetect({
 
   return (
     <div className="detect-screen">
-      <WizardStepper steps={STEPPER_STEPS} />
+      <WizardStepper steps={stepperSteps} />
 
       <div className="np-form detect-form">
         <header className="detect-project-header">
@@ -196,7 +202,7 @@ export function ExistingProjectDetect({
                     ) : (
                       <button
                         className="detect-init-btn"
-                        onClick={() => handleInit(g.engine)}
+                        onClick={() => initEngineFor(g.engine)}
                         disabled={initBusy.has(g.engine)}
                       >
                         {initBusy.has(g.engine) ? "Creating…" : `Init ${g.display_name}`}
@@ -258,22 +264,23 @@ export function ExistingProjectDetect({
           )}
         </div>
 
+        {startError && <p className="detect-error">{startError}</p>}
+
         <div className="np-form-actions">
           <span className="np-form-hint">
             ✓ {selected.size} of {totalSelectable} selected
           </span>
           <div className="np-form-actions-buttons">
-            <button className="np-form-btn" onClick={onCancel} type="button">
+            <button className="np-form-btn" onClick={handleCancel} disabled={submitting} type="button">
               Cancel
             </button>
             <button
               className="np-form-btn np-form-btn-primary"
-              onClick={() => onContinue(Array.from(selected))}
-              disabled={selected.size === 0}
+              onClick={handleStart}
+              disabled={submitting || selected.size === 0}
               type="button"
-              title="Investigation flow is not implemented yet"
             >
-              Start investigation
+              {submitting ? "Starting…" : "Start investigation"}
               <svg className="np-form-btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true">
                 <path d="M5 12h14M13 5l7 7-7 7" />
               </svg>

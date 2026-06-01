@@ -1,13 +1,20 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { useSessionStore } from "@/store/sessionStore";
 import { useUiStore } from "@/store/uiStore";
 import { useNotificationStore } from "@/store/notificationStore";
 import { useVoiceInput } from "@/hooks/useVoiceInput";
-import { buildDefaultSessionConfig } from "@/utils/sessionConfig";
 import { WizardStepper } from "./WizardStepper";
-import { getWizardConfig } from "./registry";
+import { getWizardConfig, entryTransition } from "./registry";
+import { useStartWizardStep } from "./useStartWizardStep";
+import { derivePhase } from "./phase";
 import "./NewProjectForm.css";
+
+// This chain's identity. The skill + the session_prompt builder come
+// from the wizard registry (single source); this form only collects the
+// raw inputs (name, idea, attached doc) and hands them to the entry
+// transition.
+const CHAIN_ID = "new-project";
+const ENTRY = entryTransition(CHAIN_ID);
 
 /**
  * The "Describe" step of the new-project wizard chain. Collects a name,
@@ -21,10 +28,17 @@ export function NewProjectForm() {
   const [submitting, setSubmitting] = useState(false);
   const [attachedFile, setAttachedFile] = useState<{ name: string; content: string } | null>(null);
   const [nameError, setNameError] = useState(false);
-  const startSession = useSessionStore((s) => s.startSession);
+  const startWizardStep = useStartWizardStep();
   const setProjectState = useUiStore((s) => s.setProjectState);
   const setCenterView = useUiStore((s) => s.setCenterView);
+  const setCurrentChain = useUiStore((s) => s.setCurrentChain);
   const navigate = useNavigate();
+
+  // Pin the new-project chain so AppShell renders new-project's own
+  // stepper labels and not the investigate-project chain labels.
+  useEffect(() => {
+    setCurrentChain("new-project");
+  }, [setCurrentChain]);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const voice = useVoiceInput();
@@ -82,27 +96,31 @@ export function NewProjectForm() {
     setProjectState("initialized");
     setCenterView("sessions");
 
-    const parts: string[] = [];
-    parts.push(`Project name: ${name}`);
-    if (text) parts.push(text);
+    // Fold the optional attached doc into the idea text; the registry's
+    // entry transition turns (name + idea) into the session_prompt.
+    const ideaParts: string[] = [];
+    if (text) ideaParts.push(text);
     if (attachedFile) {
-      parts.push(`--- Attached: ${attachedFile.name} ---\n${attachedFile.content}`);
+      ideaParts.push(`--- Attached: ${attachedFile.name} ---\n${attachedFile.content}`);
     }
-    const prompt = parts.join("\n\n");
+    const prompt =
+      ENTRY?.buildPrompt?.({ projectName: name, ideaText: ideaParts.join("\n\n") }) ??
+      [`Project name: ${name}`, ...ideaParts].join("\n\n");
 
     try {
-      const bonsaiSid = await startSession({
-        specIds: [],
-        config: await buildDefaultSessionConfig(),
+      // The idea text is the kick message (not a session_prompt) for the
+      // greenfield entry — the agent's first turn reacts to it directly.
+      await startWizardStep({
+        skillId: ENTRY?.target ?? CHAIN_ID,
+        chainId: CHAIN_ID,
         name,
-        skillId: "new-project",
+        kick: prompt,
       });
-      await useSessionStore.getState().sendMessage(bonsaiSid, prompt);
     } catch {
       setProjectState("new");
       setSubmitting(false);
     }
-  }, [input, sessionName, attachedFile, submitting, startSession, setProjectState, setCenterView]);
+  }, [input, sessionName, attachedFile, submitting, startWizardStep, setProjectState, setCenterView]);
 
   const handleCancel = useCallback(() => {
     navigate("/");
@@ -120,10 +138,14 @@ export function NewProjectForm() {
 
   const canSubmit = !submitting && (!!input.trim() || !!attachedFile);
 
-  // The form is the FIRST intro step of new-project — show the stepper
-  // with that step active by asking the registry. Falls back to an empty
-  // stepper if the registry is mis-wired (defensive).
-  const formStepperSteps = getWizardConfig("new-project", "initializing")?.steps ?? [];
+  // The form is the pre-chat phase of new-project — derivePhase(null)
+  // returns "pre-chat", and the registry resolves that to "Describe":active.
+  // Phase is NEVER hardcoded here: if the phase derivation rule changes
+  // (e.g. a new lifecycle stage is added), this page picks it up
+  // automatically. Falls back to an empty stepper if the registry is
+  // mis-wired (defensive).
+  const formStepperSteps =
+    getWizardConfig(CHAIN_ID, derivePhase({ session: null }))?.steps ?? [];
 
   return (
     <div className="np-form-screen">

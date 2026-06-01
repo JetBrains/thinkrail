@@ -45,6 +45,12 @@ export function Root() {
       // projectState is fetched from the server on workspace mount
       // (see App.tsx) — picker no longer needs to guess.
       useUiStore.getState().setProjectState(null);
+      // Reset wizard chain so the next entry-point screen (new-project
+      // form or detect screen) gets to pin the right chain itself.
+      useUiStore.getState().setCurrentChain(null);
+      // Drop the cumulative stepper journey — it belongs to the project
+      // we're leaving; the next project starts a fresh path.
+      useUiStore.getState().clearWizardJourney();
       localStorage.setItem(LAST_PROJECT_KEY, path);
       navigate(`/${pathToSlug(path)}/workspace`, { state: { projectPath: path } });
     },

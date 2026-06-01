@@ -311,6 +311,53 @@
   margin-top: var(--space-sm);
 }
 
+/* Mermaid popup — opened from the ⧉ button in the ZoomBar.
+   Fills the viewport (minus a small inset) so the diagram has the
+   maximum possible canvas. */
+.md-mermaid-popup {
+  width: calc(100vw - 32px);
+  height: calc(100vh - 32px);
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.md-mermaid-popup-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--border);
+  background: var(--elevated);
+}
+
+.md-mermaid-popup-close {
+  border: none;
+  background: transparent;
+  color: var(--muted);
+  font-size: 22px;
+  line-height: 1;
+  width: 28px;
+  height: 28px;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+}
+.md-mermaid-popup-close:hover {
+  background: var(--hover);
+  color: var(--text);
+}
+
+.md-mermaid-popup-body {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: 20px 24px;
+}
+
 .fv-loading {
   display: flex;
   align-items: center;

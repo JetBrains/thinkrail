@@ -5,17 +5,17 @@ import type {
   OutcomeAction,
   Session,
   SessionOutcome,
-  StartSessionAction,
 } from "@/types/session";
 import { useUiStore } from "@/store/uiStore";
 import { useSessionStore } from "@/store/sessionStore";
 import { useBoardStore } from "@/store/boardStore";
 import { useFileStore } from "@/store/fileStore";
 import { useNotificationStore } from "@/store/notificationStore";
-import { readFile } from "@/services/files";
-import { MarkdownPreview } from "@/components/FileViewer/MarkdownPreview";
-import { buildDefaultSessionConfig } from "@/utils/sessionConfig";
-import { artifactPathCandidates } from "./registry";
+import { ArtifactTabs } from "./ArtifactTabs";
+import { ArtifactDocView } from "./ArtifactDocView";
+import { useArtifactContents } from "./useArtifactContents";
+import { resolveFollowupChain, outcomeTransitions, type StepTransition } from "./registry";
+import { useStartWizardStep } from "./useStartWizardStep";
 import "./WizardDonePanel.css";
 
 interface WizardDonePanelProps {
@@ -23,110 +23,111 @@ interface WizardDonePanelProps {
   outcome: SessionOutcome;
 }
 
+// Start-session CTAs come from the wizard registry (the flow's single
+// source) — NOT from the backend outcome. Only the content-derived
+// actions (suggested tickets, navigation) come from the agent's outcome.
 function partitionActions(actions: OutcomeAction[]): {
-  primary: StartSessionAction[];
   navigate: NavigateAction[];
   tickets: CreateTicketAction[];
 } {
-  const primary: StartSessionAction[] = [];
   const navigate: NavigateAction[] = [];
   const tickets: CreateTicketAction[] = [];
   for (const a of actions) {
-    switch (a.type) {
-      case "start_session":
-        primary.push(a);
-        break;
-      case "navigate":
-        navigate.push(a);
-        break;
-      case "create_ticket":
-        tickets.push(a);
-        break;
-    }
+    if (a.type === "navigate") navigate.push(a);
+    else if (a.type === "create_ticket") tickets.push(a);
   }
-  return { primary, navigate, tickets };
+  return { navigate, tickets };
 }
 
 export function WizardDonePanel({ session, outcome }: WizardDonePanelProps) {
   const projectPath = useUiStore((s) => s.projectPath);
+  const projectName = useUiStore((s) => s.projectName);
   const setCenterView = useUiStore((s) => s.setCenterView);
+  const currentChain = useUiStore((s) => s.currentChain);
+  const startWizardStep = useStartWizardStep();
   const dismissWizardOutcome = useUiStore((s) => s.dismissWizardOutcome);
-  const startSession = useSessionStore((s) => s.startSession);
   const patchOutcomeAction = useSessionStore((s) => s.patchOutcomeAction);
   const createTicket = useBoardStore((s) => s.createTicket);
   const openFile = useFileStore((s) => s.openFile);
 
-  const { primary, navigate, tickets } = useMemo(
+  const { navigate, tickets } = useMemo(
     () => partitionActions(outcome.actions),
     [outcome.actions],
   );
 
-  // The "headline" CTA — first start_session marked primary, else first start_session.
-  const heroAction = useMemo<StartSessionAction | null>(() => {
-    return primary.find((a) => a.primary) ?? primary[0] ?? null;
-  }, [primary]);
-
-  const secondaryStartActions = useMemo(
-    () => primary.filter((a) => a !== heroAction),
-    [primary, heroAction],
+  // Start-session CTAs are owned by the registry (the flow lives in one
+  // place), resolved for the step this session belongs to in the active
+  // chain. The headline CTA is the one marked primary, else the first.
+  const transitions = useMemo(
+    () => outcomeTransitions(session.skillId, currentChain ?? undefined),
+    [session.skillId, currentChain],
+  );
+  const heroTransition = useMemo<StepTransition | null>(
+    () => transitions.find((t) => t.primary) ?? transitions[0] ?? null,
+    [transitions],
+  );
+  const secondaryTransitions = useMemo(
+    () => transitions.filter((t) => t !== heroTransition),
+    [transitions, heroTransition],
   );
 
-  const firstArtifact = outcome.artifacts.find((a) => a.openOnDone ?? true);
+  const openableArtifacts = useMemo(
+    () => outcome.artifacts.filter((a) => a.openOnDone ?? true),
+    [outcome.artifacts],
+  );
+  // Kept for legacy callers (navigate-to-files target uses it).
+  const firstArtifact = openableArtifacts[0] ?? null;
 
-  const [docContent, setDocContent] = useState<string | null>(null);
+  // When multiple artifacts are openable, the doc panel shows one at a
+  // time with a tab strip — instead of splitting the panel vertically.
+  // Default-select the first artifact; switching tabs is purely visual,
+  // contents are already loaded in parallel.
+  const [activeArtifactPath, setActiveArtifactPath] = useState<string | null>(
+    firstArtifact?.path ?? null,
+  );
   useEffect(() => {
-    if (!firstArtifact || !projectPath) return;
-    let cancelled = false;
-    const candidates = artifactPathCandidates(firstArtifact.path);
-    (async () => {
-      for (const candidate of candidates) {
-        try {
-          const data = await readFile(projectPath, candidate);
-          if (cancelled) return;
-          if (data?.content != null) {
-            setDocContent(data.content);
-            return;
-          }
-        } catch {
-          // try next candidate
-        }
-      }
-      if (!cancelled) setDocContent("");
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [firstArtifact, projectPath]);
+    // Sync selection if the artifact list changes (e.g. outcome refresh).
+    if (
+      activeArtifactPath == null ||
+      !openableArtifacts.some((a) => a.path === activeArtifactPath)
+    ) {
+      setActiveArtifactPath(firstArtifact?.path ?? null);
+    }
+  }, [openableArtifacts, firstArtifact, activeArtifactPath]);
+  const activeArtifact =
+    openableArtifacts.find((a) => a.path === activeArtifactPath) ??
+    firstArtifact;
+
+  const docContents = useArtifactContents(projectPath, openableArtifacts);
 
   const [busyActionId, setBusyActionId] = useState<string | null>(null);
 
-  const sendMessage = useSessionStore((s) => s.sendMessage);
-
   const handleStart = useCallback(
-    async (action: StartSessionAction) => {
+    async (t: StepTransition) => {
       if (busyActionId) return;
-      setBusyActionId(action.id);
+      setBusyActionId(t.id);
       try {
-        const bonsaiSid = await startSession({
-          specIds: [],
-          config: await buildDefaultSessionConfig(),
-          name: action.title,
-          skillId: action.skillId,
+        // The transition builds the next session's ``session_prompt``
+        // from runtime context (e.g. the draft G&R body produced by the
+        // previous step). It belongs in ``session_prompt`` → the agent's
+        // "## Your Task" system-prompt section, not the chat transcript.
+        const sessionPrompt =
+          t.buildPrompt?.({ projectName, artifacts: docContents })?.trim() || undefined;
+        // `startWizardStep` pins the resolved follow-up chain, seeds the
+        // journey, and kicks the session — so the cumulative stepper keeps
+        // growing instead of resetting when the chain changes.
+        await startWizardStep({
+          skillId: t.target,
+          chainId: resolveFollowupChain(currentChain, t.target),
+          name: t.label,
+          prompt: sessionPrompt,
+          kick: "Begin.",
         });
-        // The runtime creates the task in "initializing" and waits for a
-        // user message to begin its conversation loop. Without this kick
-        // the session would sit idle forever. Use the action's explicit
-        // prompt if the skill provided one; otherwise send a generic
-        // "begin" so the new skill takes over and runs its Step 1.
-        const opener =
-          (action.prompt ?? "").trim() ||
-          `Let's start the ${action.title.replace(/^[^a-zA-Z]+/, "")} flow.`;
-        await sendMessage(bonsaiSid, opener);
       } finally {
         setBusyActionId(null);
       }
     },
-    [busyActionId, startSession, sendMessage],
+    [busyActionId, startWizardStep, currentChain, projectName, docContents],
   );
 
   const handleNavigate = useCallback(
@@ -225,35 +226,35 @@ export function WizardDonePanel({ session, outcome }: WizardDonePanelProps) {
         </div>
       )}
 
-      {(heroAction || navigate.length > 0 || secondaryStartActions.length > 0) && (
+      {(heroTransition || navigate.length > 0 || secondaryTransitions.length > 0) && (
         <div className="wiz-done-next-step-row">
-          {heroAction && (
+          {heroTransition && (
             <button
               type="button"
               className="wiz-done-cta wiz-done-cta--primary"
-              onClick={() => handleStart(heroAction)}
+              onClick={() => handleStart(heroTransition)}
               disabled={busyActionId !== null}
             >
               <span className="wiz-done-cta-body">
-                <span className="wiz-done-cta-title">{heroAction.title}</span>
-                {heroAction.description && (
-                  <span className="wiz-done-cta-desc">{heroAction.description}</span>
+                <span className="wiz-done-cta-title">{heroTransition.label}</span>
+                {heroTransition.description && (
+                  <span className="wiz-done-cta-desc">{heroTransition.description}</span>
                 )}
               </span>
               <span className="wiz-done-cta-arrow" aria-hidden="true">→</span>
             </button>
           )}
-          {secondaryStartActions.map((a) => (
+          {secondaryTransitions.map((t) => (
             <button
-              key={a.id}
+              key={t.id}
               type="button"
               className="wiz-done-cta wiz-done-cta--alt"
-              onClick={() => handleStart(a)}
+              onClick={() => handleStart(t)}
               disabled={busyActionId !== null}
             >
               <span className="wiz-done-cta-body">
-                <span className="wiz-done-cta-title">{a.title}</span>
-                {a.description && <span className="wiz-done-cta-desc">{a.description}</span>}
+                <span className="wiz-done-cta-title">{t.label}</span>
+                {t.description && <span className="wiz-done-cta-desc">{t.description}</span>}
               </span>
               <span className="wiz-done-cta-arrow" aria-hidden="true">→</span>
             </button>
@@ -276,22 +277,24 @@ export function WizardDonePanel({ session, outcome }: WizardDonePanelProps) {
         </div>
       )}
 
-      <div className={`wiz-done-main${firstArtifact && tickets.length > 0 ? " wiz-done-main--split" : ""}`}>
-        {firstArtifact && (
-          <div className="wiz-done-doc">
-            <div className="wiz-done-doc-head">
-              <span className="wiz-done-doc-pill">{firstArtifact.path.replace(/^\.bonsai\//, "")}</span>
-              {firstArtifact.label && <span className="wiz-done-doc-label">{firstArtifact.label}</span>}
-            </div>
-            <div className="wiz-done-doc-body">
-              {docContent == null ? (
-                <p className="wiz-done-doc-loading">Loading…</p>
-              ) : docContent === "" ? (
-                <p className="wiz-done-doc-loading">No content yet.</p>
-              ) : (
-                <MarkdownPreview content={docContent} />
-              )}
-            </div>
+      <div className={`wiz-done-main${openableArtifacts.length > 0 && tickets.length > 0 ? " wiz-done-main--split" : ""}`}>
+        {openableArtifacts.length > 0 && (
+          <div className="wiz-done-docs">
+            {openableArtifacts.length > 1 && (
+              <ArtifactTabs
+                artifacts={openableArtifacts}
+                activePath={activeArtifact.path}
+                onSelect={setActiveArtifactPath}
+              />
+            )}
+            <ArtifactDocView
+              path={activeArtifact.path}
+              label={activeArtifact.label}
+              body={docContents[activeArtifact.path]}
+              // Inline header is redundant when the tab strip already names
+              // the file; show it only in single-artifact mode.
+              showHeader={openableArtifacts.length === 1}
+            />
           </div>
         )}
 

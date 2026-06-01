@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import type { EventCategory } from "@/components/ChatStream/renderers/categories.ts";
+import type { JourneyEntry } from "@/components/Wizard/registry.ts";
 
 export const LEFT_TABS = ["specs", "files", "sessions"] as const;
 export type LeftTab = (typeof LEFT_TABS)[number];
@@ -36,6 +37,21 @@ interface UiStore {
   setProject: (path: string) => void;
   projectState: ProjectState | null;
   setProjectState: (state: ProjectState | null) => void;
+  /** Active wizard chain ID — disambiguates which set of stepper
+   *  labels to show when a wizard skill participates in more than one
+   *  chain (e.g. ``new-project`` runs as the standalone greenfield
+   *  flow under chain "new-project", or as the Clarify session under
+   *  chain "investigate-project"). Set by the entry-point screen,
+   *  cleared when the user returns to the picker. */
+  currentChain: string | null;
+  setCurrentChain: (chain: string | null) => void;
+  /** Ordered list of wizard sessions the user has actually launched —
+   *  the source for the cumulative top stepper (see `stepperFromJourney`).
+   *  Appended on every entry/follow-up session start, cleared when the
+   *  user returns to the picker. Persisted so a reload keeps the journey. */
+  wizardJourney: JourneyEntry[];
+  appendWizardStep: (entry: JourneyEntry) => void;
+  clearWizardJourney: () => void;
   leftPanelCollapsed: boolean;
   rightPanelCollapsed: boolean;
   leftDrawerOpen: boolean;
@@ -103,6 +119,18 @@ export const useUiStore = create<UiStore>()(
         set({ projectPath: path, projectName: path.split("/").pop() ?? "Project" }),
       projectState: null,
       setProjectState: (state) => set({ projectState: state }),
+      currentChain: null,
+      setCurrentChain: (chain) => set({ currentChain: chain }),
+      wizardJourney: [] as JourneyEntry[],
+      appendWizardStep: (entry) =>
+        set((s) =>
+          // Idempotent: re-rendering or re-selecting a session must not
+          // duplicate or reorder its cells.
+          s.wizardJourney.some((e) => e.bonsaiSid === entry.bonsaiSid)
+            ? s
+            : { wizardJourney: [...s.wizardJourney, entry] },
+        ),
+      clearWizardJourney: () => set({ wizardJourney: [] }),
       leftPanelCollapsed: false,
       rightPanelCollapsed: false,
       leftDrawerOpen: false,
@@ -173,6 +201,15 @@ export const useUiStore = create<UiStore>()(
         lastActiveSessions: state.lastActiveSessions,
         dismissedWizardOutcomes: state.dismissedWizardOutcomes,
         ticketArtifactBarCollapsed: state.ticketArtifactBarCollapsed,
+        // Persist the active chain hint so a reload / reopening a project
+        // mid-flow keeps the stepper on the right chain. Without this,
+        // `currentChain` resets to null on reload and a `new-project`
+        // session (which lives in BOTH the new-project and investigate
+        // chains) resolves to the greenfield labels, overwriting the
+        // investigate steps. Cleared on project switch (Root.handleSelect).
+        currentChain: state.currentChain,
+        // Persist the cumulative stepper journey for the same reason.
+        wizardJourney: state.wizardJourney,
       }),
     },
   ),
