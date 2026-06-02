@@ -52,7 +52,7 @@ async def create_subsession(service: AgentService, **params: Any) -> dict:
             "filePaths": list(task.file_paths),
             "status": task.status,
             "config": task.config.model_dump(by_alias=True),
-            "metaTicketId": task.meta_ticket_id,
+            "ticketId": task.ticket_id,
             "createdAt": task.created,
             "createdBy": conn.display_name,
         })

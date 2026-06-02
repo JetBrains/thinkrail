@@ -160,12 +160,15 @@ describe("classicRenderers.suggestStep approve flow", () => {
     // load a nonexistent skills/default/SKILL.md.
     expect(arg.skillId).toBeUndefined();
     expect(arg.specIds).toEqual(["module-core", "module-app-store"]);
-    expect(arg.metaTicketId).toBe("mt_test");
+    expect(arg.ticketId).toBe("mt_test");
     expect(arg.name).toBe("Step 1: Create backend/app/core/last_used.py");
     expect(arg.config.model).toBe("claude-opus-4-7");
     expect(arg.config.permissionMode).toBe("bypassPermissions");
     expect(arg.config.effort).toBe("max");
-    expect(switchSession).toHaveBeenCalledWith("new_sid");
+    // In ticket-route we intentionally stay on the orchestrator session
+    // so the user can watch step events flow back. switchSession would
+    // flip the global active session away from it.
+    expect(switchSession).not.toHaveBeenCalled();
     // The new session must be kicked off with the step's instructions
     // — otherwise it sits idle forever.
     expect(sendMessage).toHaveBeenCalledWith("new_sid", fullPayload.agentInstructions);

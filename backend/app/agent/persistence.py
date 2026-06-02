@@ -18,6 +18,16 @@ from app.core.fileio import delete_file, ensure_dir, read_text, write_text
 logger = logging.getLogger(__name__)
 
 
+# ── Todo snapshot state (in-memory, incremental) ──────────────────────────────
+# Per-session ordered task dict, keyed by (project_root, bonsai_sid). Each
+# entry is the same shape derive_todo_snapshot's internal table uses
+# (key → {key, subject, activeForm, status}) plus a parallel ordered_keys
+# list and a TaskCreate counter. Re-derived from disk on first touch after
+# restart so a fresh backend doesn't lose history.
+_SnapshotState = dict[str, Any]
+_snapshot_cache: dict[tuple[str, str], _SnapshotState] = {}
+
+
 def _sessions_dir(project_root: Path) -> Path:
     """Return the sessions directory path without creating it.
 
@@ -134,7 +144,10 @@ def list_sessions(project_root: Path) -> list[dict[str, Any]]:
                 "specIds": data.get("specIds", []),
                 "status": status,
                 "model": data.get("config", {}).get("model", ""),
-                "metaTicketId": data.get("metaTicketId"),
+                # Sessions are persisted with key "ticketId" (matching
+                # AgentTask.ticket_id → camelCase). The legacy
+                # "metaTicketId" fallback covers any pre-rename files.
+                "ticketId": data.get("ticketId") or data.get("metaTicketId"),
                 "createdAt": data.get("createdAt", ""),
                 "updatedAt": data.get("updatedAt", ""),
                 # "interrupted" means no live runner → not active for
@@ -142,6 +155,11 @@ def list_sessions(project_root: Path) -> list[dict[str, Any]]:
                 "active": status not in ("done", "error", "interrupted"),
                 "inTracker": False,
                 "metrics": data.get("metrics", {}),
+                # Persisted snapshot of the latest TodoWrite/Task* state.
+                # The frontend uses this as a cold-cache fallback when the
+                # session isn't loaded in memory, so Tasks (n/m) sub-rows
+                # under collapsed/old phases survive a page reload.
+                "todos": data.get("todos", []),
             }
             # Include full config and system prompt for draft sessions
             if status == "draft":
@@ -149,6 +167,8 @@ def list_sessions(project_root: Path) -> list[dict[str, Any]]:
                 entry["systemPrompt"] = data.get("systemPrompt")
                 entry["sessionPrompt"] = data.get("sessionPrompt")
                 entry["filePaths"] = data.get("filePaths", [])
+                entry["subagentMode"] = data.get("subagentMode")
+                entry["stepGate"] = data.get("stepGate")
             result.append(entry)
         except Exception:
             logger.exception("Failed to read session file %s", path)
@@ -172,7 +192,13 @@ def load_events(project_root: Path, bonsai_sid: str) -> list[dict[str, Any]]:
 
 
 def append_event(project_root: Path, bonsai_sid: str, event: dict[str, Any]) -> None:
-    """Append a single event to the session's .events.jsonl log. O(1) operation."""
+    """Append a single event to the session's .events.jsonl log. O(1) operation.
+
+    When the event is a Todo*/Task* tool call we additionally update the
+    session's incremental todo snapshot and persist it into the metadata
+    JSON so the list_sessions RPC can serve it without rescanning events.
+    See app/agent/todo_snapshot.py for the derivation.
+    """
     meta = _meta_path(project_root, bonsai_sid)
     if not meta.is_file():
         return
@@ -183,6 +209,73 @@ def append_event(project_root: Path, bonsai_sid: str, event: dict[str, Any]) -> 
             f.write(json.dumps(event, default=str) + "\n")
     except Exception:
         logger.exception("Failed to append event for session %s", bonsai_sid)
+        return
+
+    from app.agent.todo_snapshot import is_todo_event
+    if is_todo_event(event):
+        _refresh_todo_snapshot(project_root, bonsai_sid, event)
+
+
+def _refresh_todo_snapshot(
+    project_root: Path, bonsai_sid: str, event: dict[str, Any],
+) -> None:
+    """Update the cached snapshot for *bonsai_sid* with *event* and persist.
+
+    On first use after restart the cache is hydrated from the full events
+    log (which already contains *event* because :func:`append_event` writes
+    it before calling this function). On subsequent calls the cached state
+    is mutated in-place, so each event costs O(1) instead of O(N).
+
+    Best-effort: failures are logged and swallowed so a snapshot bug never
+    blocks event appends.
+    """
+    from app.agent.todo_snapshot import (
+        apply_todo_event,
+        build_snapshot_state,
+        new_snapshot_state,
+        render_snapshot,
+    )
+
+    try:
+        key = (str(project_root), bonsai_sid)
+        state = _snapshot_cache.get(key)
+        if state is None:
+            # Hydrate from disk; the in-progress event is already present
+            # in events.jsonl so we must NOT re-apply it after building.
+            evts = _events_path(project_root, bonsai_sid)
+            if evts.is_file():
+                events: list[dict[str, Any]] = []
+                try:
+                    with evts.open("r", encoding="utf-8") as f:
+                        for line in f:
+                            line = line.strip()
+                            if not line:
+                                continue
+                            try:
+                                events.append(json.loads(line))
+                            except json.JSONDecodeError:
+                                continue
+                except OSError:
+                    events = []
+                state = build_snapshot_state(events)
+            else:
+                state = new_snapshot_state()
+                apply_todo_event(state, event)
+            _snapshot_cache[key] = state
+        else:
+            apply_todo_event(state, event)
+        update_session_metadata(
+            project_root, bonsai_sid, {"todos": render_snapshot(state)},
+        )
+    except Exception:
+        logger.exception(
+            "Failed to refresh todo snapshot for session %s", bonsai_sid,
+        )
+
+
+def _evict_snapshot(project_root: Path, bonsai_sid: str) -> None:
+    """Drop the cached snapshot for a session (e.g. on delete)."""
+    _snapshot_cache.pop((str(project_root), bonsai_sid), None)
 
 
 def update_session_metadata(
@@ -240,4 +333,5 @@ def delete_session(project_root: Path, bonsai_sid: str) -> bool:
     if evts.is_file():
         delete_file(evts)
         deleted = True
+    _evict_snapshot(project_root, bonsai_sid)
     return deleted

@@ -11,17 +11,6 @@ export function createTrashApi(client: RpcClient) {
         "trash/restoreSpec", { specId },
       ),
 
-    restorePlan: (ticketId: string) =>
-      client.request<null>("trash/restorePlan", { ticketId }),
-
-    restoreDraft: (trashItemId: string) =>
-      client.request<{ manifestEntry: Record<string, unknown> }>(
-        "trash/restoreDraft", { trashItemId },
-      ),
-
-    restorePatches: (ticketId: string) =>
-      client.request<null>("trash/restorePatches", { ticketId }),
-
     purge: (type: string, id: string) =>
       client.request<null>("trash/purge", { type, id }),
 

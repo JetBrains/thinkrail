@@ -1,6 +1,6 @@
 export interface TrashedItem {
   id: string;
-  type: string; // "sessions" | "tickets" | "specs" | "plans" | "drafts" | "patches"
+  type: string; // "sessions" | "tickets" | "specs"
   trashedAt: string;
   originalDir: string;
   context: Record<string, unknown>;

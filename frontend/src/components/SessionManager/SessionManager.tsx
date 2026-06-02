@@ -10,6 +10,7 @@ import { timeAgo } from "@/utils/format.ts";
 import { getStatusStyle } from "@/utils/status.ts";
 import { modLabel } from "@/utils/platform.ts";
 import { SessionCardContextMenu } from "./SessionCardContextMenu.tsx";
+import { groupByTicket, type TicketGroup } from "./groupByTicket.ts";
 import "./SessionManager.css";
 
 const TICKET_STRIPE_PALETTE = [
@@ -20,11 +21,11 @@ const TICKET_STRIPE_PALETTE = [
   "var(--red)",
 ];
 
-function ticketStripeColor(metaTicketId: string | null | undefined): string | null {
-  if (!metaTicketId) return null;
+function ticketStripeColor(ticketId: string | null | undefined): string | null {
+  if (!ticketId) return null;
   let hash = 0;
-  for (let i = 0; i < metaTicketId.length; i++) {
-    hash = ((hash << 5) - hash) + metaTicketId.charCodeAt(i);
+  for (let i = 0; i < ticketId.length; i++) {
+    hash = ((hash << 5) - hash) + ticketId.charCodeAt(i);
     hash |= 0;
   }
   return TICKET_STRIPE_PALETTE[Math.abs(hash) % TICKET_STRIPE_PALETTE.length];
@@ -55,7 +56,7 @@ function formatCost(usd: number): string {
 
 type CtxMenuState = {
   bonsaiSid: string;
-  metaTicketId: string | null;
+  ticketId: string | null;
   x: number;
   y: number;
 };
@@ -140,7 +141,7 @@ export function SessionManager() {
       e.preventDefault();
       setCtxMenu({
         bonsaiSid: s.bonsaiSid,
-        metaTicketId: s.metaTicketId ?? null,
+        ticketId: s.ticketId ?? null,
         x: e.clientX,
         y: e.clientY,
       });
@@ -149,8 +150,7 @@ export function SessionManager() {
   );
 
   const handleOpenTicket = useCallback(
-    (ticketId: string, bonsaiSid: string) => {
-      useBoardStore.getState().setPendingTicketSession(bonsaiSid);
+    (ticketId: string, _bonsaiSid: string) => {
       setCenterView("board");
       openTicket(ticketId);
     },
@@ -176,6 +176,16 @@ export function SessionManager() {
   }, []);
 
   const ordered = useMemo(() => sortByRecency(sessions), [sessions]);
+  const grouped = useMemo(() => groupByTicket(ordered), [ordered]);
+
+  const handleOpenTicketGroup = useCallback(
+    (group: TicketGroup) => {
+      setCenterView("board");
+      openTicket(group.ticketId);
+    },
+    [setCenterView, openTicket],
+  );
+
   // Discard the unused RPC client reference so the lint hook stays clean;
   // the prop is retained because handleDelete may grow to call the API
   // directly in the future.
@@ -196,25 +206,31 @@ export function SessionManager() {
       <div className="sm-content">
         {error && <div className="sm-error">{error}</div>}
 
-        {ordered.length === 0 && !error && (
+        {grouped.length === 0 && !error && (
           <div className="sm-empty">No sessions yet. Create one with {modLabel("T")}.</div>
         )}
 
-        {ordered.map((s) => {
-          const ticket = s.metaTicketId ? tickets.get(s.metaTicketId) ?? null : null;
-          // Render the chip whenever the session is ticket-attached, even
-          // if the boardStore hasn't loaded the ticket itself yet — the
-          // stripe + short id still convey "this belongs to a ticket".
-          const ticketTitle = ticket?.title ?? (s.metaTicketId ? "—" : null);
-          const ticketShortId = s.metaTicketId
-            ? `#${(ticket?.id ?? s.metaTicketId).slice(-4)}`
-            : null;
+        {grouped.map((entry) => {
+          if (entry.kind === "ticket") {
+            const ticket = tickets.get(entry.ticketId) ?? null;
+            return (
+              <TicketGroupCard
+                key={`sm-t-${entry.ticketId}`}
+                group={entry}
+                title={ticket?.title ?? `Ticket #${entry.ticketId.slice(-4)}`}
+                shortId={`#${entry.ticketId.slice(-4)}`}
+                onOpen={handleOpenTicketGroup}
+              />
+            );
+          }
+          // Standalone session: render the existing card. Ticket-related
+          // props are null because the session has no ticket.
           return (
             <SessionCard
-              key={`sm-${s.bonsaiSid}`}
-              session={s}
-              ticketTitle={ticketTitle}
-              ticketShortId={ticketShortId}
+              key={`sm-${entry.session.bonsaiSid}`}
+              session={entry.session}
+              ticketTitle={null}
+              ticketShortId={null}
               onOpen={handleOpen}
               onDelete={handleDelete}
               onContextMenu={handleContextMenu}
@@ -226,7 +242,7 @@ export function SessionManager() {
       {ctxMenu && (
         <SessionCardContextMenu
           bonsaiSid={ctxMenu.bonsaiSid}
-          metaTicketId={ctxMenu.metaTicketId}
+          ticketId={ctxMenu.ticketId}
           x={ctxMenu.x}
           y={ctxMenu.y}
           onClose={() => setCtxMenu(null)}
@@ -255,6 +271,69 @@ const TurnsIcon = (
   </svg>
 );
 
+function TicketGroupCard({
+  group,
+  title,
+  shortId,
+  onOpen,
+}: {
+  group: TicketGroup;
+  title: string;
+  shortId: string;
+  onOpen: (group: TicketGroup) => void;
+}) {
+  const stripe = ticketStripeColor(group.ticketId);
+  const count = group.sessions.length;
+  // Status: attention beats running beats idle. Mirrors the focus rule
+  // (the user wanted to land on whichever session needs them first).
+  const needsAttention = group.attentionCount > 0;
+  const running = !needsAttention && group.runningCount > 0;
+  const statusLabel = needsAttention
+    ? `${group.attentionCount} needs attention`
+    : running
+      ? `${group.runningCount} running`
+      : "idle";
+  const classes = [
+    "sm-card",
+    "sm-card--ticket-group",
+    needsAttention && "sm-card--needs-attention",
+    running && "sm-card--running",
+  ]
+    .filter(Boolean)
+    .join(" ");
+
+  return (
+    <div
+      className={classes}
+      role="button"
+      tabIndex={0}
+      style={{ ["--ticket-color" as string]: stripe ?? "var(--blue)" }}
+      onClick={() => onOpen(group)}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          onOpen(group);
+        }
+      }}
+    >
+      <span className="sm-ticket-stripe sm-ticket-stripe--lead" aria-hidden="true" />
+      <span className="sm-name" title={title}>{title}</span>
+      <span className="sm-ticket-id">{shortId}</span>
+      <span className="sm-time">{timeAgo(group.latestActivity)}</span>
+      <span className="sm-metrics">
+        <span className="sm-chip" title="Sessions attached to this ticket">
+          {count} {count === 1 ? "session" : "sessions"}
+        </span>
+      </span>
+      <span className="sm-actions">
+        <span className={`sm-status-label${needsAttention ? " sm-status-label--attention" : running ? " sm-status-label--running" : ""}`}>
+          {statusLabel}
+        </span>
+      </span>
+    </div>
+  );
+}
+
 function SessionCard({
   session: s,
   ticketTitle,
@@ -277,7 +356,7 @@ function SessionCard({
   const isRunning = s.status === "running";
   const isWaiting = s.status === "waiting";
   const isGenericName = GENERIC_NAME_RE.test(s.name);
-  const stripe = ticketStripeColor(s.metaTicketId);
+  const stripe = ticketStripeColor(s.ticketId);
 
   const classes = [
     "sm-card",

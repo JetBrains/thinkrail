@@ -432,6 +432,114 @@ class TestSaveTask:
         assert loaded["metrics"]["toolCalls"] == 10
 
 
+class TestSubagentModePersistence:
+    """Cover AgentTask.subagent_mode / step_gate save + restore."""
+
+    def test_restore_draft_sessions_hydrates_subagent_mode_and_step_gate(
+        self, tmp_path: Path,
+    ) -> None:
+        """Regression: backend startup must re-attach the on-disk mode/gate
+        to the rehydrated draft Task.  Caught during Phase G UX testing —
+        without this fix, the live tracker overlay clobbered disk values
+        with defaults after every restart.
+        """
+        from app.agent.persistence import save_session
+
+        save_session(tmp_path, {
+            "bonsaiSid": "draft-restore",
+            "name": "n",
+            "skillId": "ticket-implement",
+            "specIds": [],
+            "config": AgentConfig().model_dump(by_alias=True),
+            "status": "draft",
+            "ticketId": "mt_test",
+            "subagentMode": "subagent",
+            "stepGate": "autonomous",
+            "createdAt": "2026-05-30T00:00:00Z",
+            "updatedAt": "2026-05-30T00:00:00Z",
+            "metrics": {},
+        })
+
+        config = MagicMock()
+        config.project_root = tmp_path
+        service = AgentService(config, MagicMock())
+        _install_mock_runtime(service)
+        service._restore_draft_sessions()
+
+        task = service._tracker.get_task("draft-restore")
+        assert task is not None
+        assert task.subagent_mode == "subagent"
+        assert task.step_gate == "autonomous"
+
+    def test_get_session_data_overlays_live_tracker_subagent_mode(
+        self, tmp_path: Path,
+    ) -> None:
+        """Regression: live tracker subagent_mode/step_gate must beat disk —
+        otherwise stale disk values bleed through to /session/get after a
+        mode change has been applied in-memory but not yet flushed.
+        """
+        from app.agent.persistence import save_session
+
+        save_session(tmp_path, {
+            "bonsaiSid": "live-1",
+            "name": "n",
+            "skillId": "ticket-implement",
+            "specIds": [],
+            "config": AgentConfig().model_dump(by_alias=True),
+            "status": "draft",
+            "subagentMode": "step-session",  # stale on disk
+            "stepGate": "approve",
+            "createdAt": "2026-05-30T00:00:00Z",
+            "updatedAt": "2026-05-30T00:00:00Z",
+            "metrics": {},
+        })
+
+        config = MagicMock()
+        config.project_root = tmp_path
+        service = AgentService(config, MagicMock())
+        _install_mock_runtime(service)
+        service._restore_draft_sessions()
+        # Simulate the user picking a different mode after hydration —
+        # the in-memory task is the live truth.
+        task = service._tracker.get_task("live-1")
+        task.subagent_mode = "subagent"
+        task.step_gate = "autonomous"
+
+        data = service.get_session_data("live-1")
+        assert data is not None
+        assert data["subagentMode"] == "subagent"
+        assert data["stepGate"] == "autonomous"
+
+    def test_defaults_are_step_session_and_approve(self, tmp_path: Path) -> None:
+        config = MagicMock()
+        config.project_root = tmp_path
+        service = AgentService(config, MagicMock())
+        _install_mock_runtime(service)
+
+        task = service._tracker.create_task(["s1"], AgentConfig())
+        assert task.subagent_mode == "step-session"
+        assert task.step_gate == "approve"
+
+    def test_save_task_serializes_subagent_mode_and_step_gate(
+        self, tmp_path: Path,
+    ) -> None:
+        from app.agent.persistence import load_session
+
+        config = MagicMock()
+        config.project_root = tmp_path
+        service = AgentService(config, MagicMock())
+        _install_mock_runtime(service)
+
+        task = service._tracker.create_task(["s1"], AgentConfig())
+        task.subagent_mode = "subagent"
+        task.step_gate = "autonomous"
+        service._save_task(task)
+
+        loaded = load_session(tmp_path, task.bonsai_sid)
+        assert loaded is not None
+        assert loaded["subagentMode"] == "subagent"
+        assert loaded["stepGate"] == "autonomous"
+
 class TestBuildContext:
     async def test_builds_context_from_specs(self) -> None:
         from pathlib import Path

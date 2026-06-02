@@ -15,6 +15,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any, get_args
 
 from claude_agent_sdk import (
+    AgentDefinition,
     AssistantMessage,
     ClaudeAgentOptions,
     ClaudeSDKClient,
@@ -37,6 +38,19 @@ from claude_agent_sdk.types import StreamEvent
 from app.agent.models import AgentResult, AgentTask, to_camel
 from app.agent.permissions import claude_can_use_tool_adapter
 from app.agent.pricing import estimate_cost
+from app.agent.subagents import TICKET_STEP_EXECUTOR
+
+
+def _build_agents_for(task: AgentTask) -> dict[str, AgentDefinition]:
+    """Return SDK agent definitions to register for ``task``.
+
+    Currently empty for every session except ticket-implement orchestrators
+    running in subagent mode, which gets the ``ticket-step-executor``
+    registered so the orchestrator's ``Task`` calls can target it.
+    """
+    if task.skill_id == "ticket-implement" and task.subagent_mode == "subagent":
+        return {"ticket-step-executor": TICKET_STEP_EXECUTOR}
+    return {}
 from app.agent.runtime.claude.adapter import (
     build_text_delta_params,
     build_tool_call_end_params,
@@ -234,6 +248,11 @@ class ClaudeRuntime:
         # (happens when the backend runs inside a Claude Code terminal during development)
         env_overrides = {k: "" for k in ("CLAUDECODE", "CLAUDE_CODE_EXECPATH") if k in os.environ}
 
+        # Register the ticket-step-executor subagent when the orchestrator is
+        # ticket-implement in subagent mode — see TICKET_LIFECYCLE_DESIGN.md
+        # § Implementation orchestration modes.
+        agents = _build_agents_for(task)
+
         options = ClaudeAgentOptions(
             system_prompt=spec_context,
             model=task.config.model,
@@ -256,6 +275,7 @@ class ClaudeRuntime:
                 "SubagentStop": [HookMatcher(hooks=[hooks.stop_hook])],
                 "PreCompact": [HookMatcher(hooks=[hooks.pre_compact_hook])],
             },
+            **({"agents": agents} if agents else {}),
             **({"env": env_overrides} if env_overrides else {}),
         )
 
@@ -544,10 +564,30 @@ class ClaudeRuntime:
                                     or "prompt_too_long" in _err_lower
                                     or "context window" in _err_lower
                                 )
+                                # When the SDK signals is_error with no `result` text,
+                                # the most common cause is the model hitting its
+                                # per-turn max_output_tokens cap, or a transient API
+                                # condition. Surface a clearer message so the UI
+                                # doesn't show a bare "turn_error" with no detail.
+                                if not error_text:
+                                    out_tokens = (sdk_event.usage or {}).get("output_tokens", 0)
+                                    error_text = (
+                                        "SDK turn ended with error but provided no "
+                                        f"message (output_tokens={out_tokens}). "
+                                        "Likely cause: hit per-turn output-token cap "
+                                        "or transient API issue. The session is "
+                                        "recoverable — send another message to continue."
+                                    )
+                                    logger.warning(
+                                        "[%s] SDK is_error with empty result; "
+                                        "usage=%s sdk_event=%r",
+                                        task.bonsai_sid[:8], sdk_event.usage,
+                                        sdk_event,
+                                    )
                                 await handler.on_event(RuntimeEvent(method="agent/error", params={
                                     **_turn_event,
                                     "subtype": "context_overflow" if is_context_overflow else "turn_error",
-                                    "errors": [error_text] if error_text else [],
+                                    "errors": [error_text],
                                     "result": error_text,
                                 }))
                             elif interrupted:

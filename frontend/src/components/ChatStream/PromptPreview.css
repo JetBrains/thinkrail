@@ -166,7 +166,7 @@
 .prompt-file-preview--image {
   height: auto;
   padding: var(--space-sm);
-  background: var(--surface);
+  background: var(--panel);
   text-align: center;
 }
 .prompt-file-image {

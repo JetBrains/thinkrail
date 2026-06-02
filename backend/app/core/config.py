@@ -22,14 +22,16 @@ BONSAI_DIRNAME = ".bonsai"
 # Subdirectories under ``project_root / .bonsai / ...``.  Use these instead
 # of string literals so that any future rename happens in one place.
 SESSIONS_DIR = "sessions"
-PLANS_DIR = "plans"
-META_TICKETS_DIR = "meta-tickets"
-SPEC_DRAFTS_DIR = "spec-drafts"
-SPEC_PATCHES_DIR = "spec-patches"
+TICKETS_DIR = "tickets"
 TRASH_DIR = "trash"
 CACHE_DIR = "cache"
 IMPLEMENTATION_TASKS_DIR = "implementation_tasks"
 DESIGN_DOCS_DIR = "design_docs"
+# Legacy: retained as no-op constants so old trash data can still be listed/purged.
+# No new code should write under these paths.
+PLANS_DIR = "plans"
+SPEC_DRAFTS_DIR = "spec-drafts"
+SPEC_PATCHES_DIR = "spec-patches"
 
 # Subdirectory under the server-wide data dir (``~/.bonsai/indexes/...``).
 INDEXES_DIR = "indexes"

@@ -1,7 +1,7 @@
 import { useCallback, useState } from "react";
 import { useBoardStore } from "@/store/boardStore.ts";
-import type { MetaTicketSummary } from "@/types/board.ts";
-import { MetaTicketBoard } from "./MetaTicketBoard.tsx";
+import type { TicketSummary } from "@/types/board.ts";
+import { TicketBoard } from "./TicketBoard.tsx";
 import { TaskBoard } from "./TaskBoard.tsx";
 import { CreateTicketModal } from "./CreateTicketModal.tsx";
 import "./BoardView.css";
@@ -16,7 +16,7 @@ export function BoardView({ onOpenTicket }: BoardViewProps) {
   const [modalOpen, setModalOpen] = useState(false);
   const [topRatio, setTopRatio] = useState(0.5);
 
-  const ticketList: MetaTicketSummary[] = Array.from(tickets.values());
+  const ticketList: TicketSummary[] = Array.from(tickets.values());
 
   const handleOpenModal = useCallback(() => setModalOpen(true), []);
   const handleCloseModal = useCallback(() => setModalOpen(false), []);
@@ -54,15 +54,15 @@ export function BoardView({ onOpenTicket }: BoardViewProps) {
 
   return (
     <div className="board-view">
-      {/* Top: Meta-tickets */}
+      {/* Top: Tickets */}
       <div className="board-section" style={{ flex: `0 0 ${topRatio * 100}%` }}>
         <div className="board-section-header">
-          <span className="board-section-title">Meta-Tickets</span>
+          <span className="board-section-title">Tickets</span>
           <button className="board-new-btn" onClick={handleOpenModal}>
             + New
           </button>
         </div>
-        <MetaTicketBoard tickets={ticketList} onOpenTicket={onOpenTicket} />
+        <TicketBoard tickets={ticketList} onOpenTicket={onOpenTicket} />
       </div>
 
       {/* Resize handle */}

@@ -253,6 +253,5 @@ class TestCrossInjection:
         await ctx.start()
 
         assert ctx.board_service.trash_service is ctx.trash_service
-        assert ctx.board_service.spec_drafts.trash_service is ctx.trash_service
 
         await ctx.shutdown()

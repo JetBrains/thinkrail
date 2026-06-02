@@ -38,7 +38,7 @@ class Tracker:
 
     def __init__(self) -> None:
         self._tasks: dict[str, AgentTask] = {}
-        self._pending_requests: dict[str, dict[str, Any]] = {}  # bonsai_sid → pending request params
+        self._pending_requests: dict[str, list[dict[str, Any]]] = {}  # bonsai_sid → list of pending requests (in insertion order)
         self._futures: dict[str, dict[str, asyncio.Future[dict]]] = {}
         self._queues: dict[str, asyncio.Queue[Any]] = {}
         self._clients: dict[str, Any] = {}
@@ -205,14 +205,30 @@ class Tracker:
 
     # -- pending request tracking -----------------------------------------------
 
-    def set_pending_request(self, bonsai_sid: str, request: dict[str, Any]) -> None:
-        self._pending_requests[bonsai_sid] = request
+    def add_pending_request(self, bonsai_sid: str, request: dict[str, Any]) -> None:
+        """Append a pending request to the session's queue.
 
-    def get_pending_request(self, bonsai_sid: str) -> dict[str, Any] | None:
-        return self._pending_requests.get(bonsai_sid)
+        Multiple concurrent requests are supported (used by ticket-implement's
+        subagent mode when the orchestrator emits several suggest_step cards
+        in one assistant turn). Requests are identified by ``requestId`` for
+        resolution; the order in this list is the order they appear in the UI.
+        """
+        self._pending_requests.setdefault(bonsai_sid, []).append(request)
 
-    def clear_pending_request(self, bonsai_sid: str) -> None:
-        self._pending_requests.pop(bonsai_sid, None)
+    def list_pending_requests(self, bonsai_sid: str) -> list[dict[str, Any]]:
+        """Return a snapshot copy of the session's pending requests."""
+        return list(self._pending_requests.get(bonsai_sid, []))
+
+    def remove_pending_request(self, bonsai_sid: str, request_id: str) -> None:
+        """Remove the request matching ``request_id``; no-op if not found."""
+        bucket = self._pending_requests.get(bonsai_sid)
+        if not bucket:
+            return
+        self._pending_requests[bonsai_sid] = [
+            r for r in bucket if r.get("requestId") != request_id
+        ]
+        if not self._pending_requests[bonsai_sid]:
+            self._pending_requests.pop(bonsai_sid, None)
 
     # -- remembered approvals -------------------------------------------------
 

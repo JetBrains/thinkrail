@@ -9,7 +9,12 @@ export interface DraftUpdateParams {
   config?: AgentConfig;
   prompt?: string | null;
   name?: string;
-  metaTicketId?: string | null;
+  ticketId?: string | null;
+  /** ticket-implement only. Picks how the orchestrator dispatches plan
+   *  steps. See `.bonsai/design_docs/TICKET_LIFECYCLE_DESIGN.md`. */
+  subagentMode?: "step-session" | "subagent";
+  /** Only meaningful when subagentMode === "subagent". */
+  stepGate?: "approve" | "autonomous";
 }
 
 export function createAgentApi(client: RpcClient) {

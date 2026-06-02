@@ -28,7 +28,12 @@ export type WsEvents =
   | SuggestStepEvent
   | RequestResolvedEvent
   | RequestExpiredEvent
-  | UserMessageEvent;
+  | UserMessageEvent
+  | ProposeChangeEvent
+  | SetPreviewFileEvent
+  | ClearPreviewFileEvent
+  | ArtifactAddedEvent
+  | ArtifactLabeledEvent;
 export type Bonsaisid = string;
 export type Sessionid = string;
 export type Eventtype = "sessionStart";
@@ -185,6 +190,7 @@ export type Specids = string[];
 export type Name = string;
 export type Reason = string;
 export type Prompt1 = string | null;
+export type Ticketid = string | null;
 export type Requestid2 = string;
 export type Bonsaisid18 = string;
 export type Sessionid19 = string;
@@ -195,7 +201,7 @@ export type Requestid3 = string;
 export type Bonsaisid19 = string;
 export type Sessionid20 = string;
 export type Eventtype19 = "suggestStep";
-export type Ticketid = string;
+export type Ticketid1 = string;
 export type Stepnumber = number;
 export type Steptitle = string;
 export type Skill1 = string;
@@ -220,6 +226,38 @@ export type Sessionid23 = string;
 export type Eventtype22 = "userMessage";
 export type Text1 = string;
 export type Ismarkdown = boolean;
+export type Bonsaisid23 = string;
+export type Sessionid24 = string;
+export type Eventtype23 = "proposeChange";
+export type Requestid7 = string;
+export type Filepath = string;
+export type Oldstring = string;
+export type Newstring = string;
+export type Section1 = string | null;
+export type Rationale = string | null;
+export type Bonsaisid24 = string;
+export type Sessionid25 = string;
+export type Eventtype24 = "setPreviewFile";
+export type Path1 = string | null;
+export type Section2 = string | null;
+export type Bonsaisid25 = string;
+export type Sessionid26 = string;
+export type Eventtype25 = "clearPreviewFile";
+export type Bonsaisid26 = string;
+export type Sessionid27 = string;
+export type Eventtype26 = "artifactAdded";
+export type Path2 = string;
+export type Kind = "write" | "edit" | "propose-change" | "preview";
+export type Role = string | null;
+export type Label2 = string | null;
+export type Firsttouchedat = string;
+export type Lasttouchedat = string;
+export type Bonsaisid27 = string;
+export type Sessionid28 = string;
+export type Eventtype27 = "artifactLabeled";
+export type Path3 = string;
+export type Role1 = string | null;
+export type Label3 = string | null;
 
 export interface SessionStartEvent {
   bonsaiSid: Bonsaisid;
@@ -582,6 +620,7 @@ export interface SuggestSessionPayload {
   name?: Name;
   reason?: Reason;
   prompt?: Prompt1;
+  ticketId?: Ticketid;
   requestId?: Requestid2;
 }
 export interface SuggestDescriptionEvent {
@@ -608,7 +647,7 @@ export interface SuggestStepEvent {
  * Orchestrator proposes the next plan step for execution.
  */
 export interface SuggestStepPayload {
-  ticketId?: Ticketid;
+  ticketId?: Ticketid1;
   stepNumber?: Stepnumber;
   stepTitle?: Steptitle;
   skill?: Skill1;
@@ -655,4 +694,82 @@ export interface UserMessageEvent {
 export interface UserMessagePayload {
   text: Text1;
   isMarkdown?: Ismarkdown;
+}
+export interface ProposeChangeEvent {
+  bonsaiSid: Bonsaisid23;
+  sessionId: Sessionid24;
+  eventType: Eventtype23;
+  payload: ProposeChangePayload;
+}
+/**
+ * Agent proposes an amendment to a spec file; user reviews via four-button card.
+ */
+export interface ProposeChangePayload {
+  requestId?: Requestid7;
+  filePath: Filepath;
+  oldString: Oldstring;
+  newString: Newstring;
+  section?: Section1;
+  rationale?: Rationale;
+}
+export interface SetPreviewFileEvent {
+  bonsaiSid: Bonsaisid24;
+  sessionId: Sessionid25;
+  eventType: Eventtype24;
+  payload: SetPreviewFilePayload;
+}
+/**
+ * Open a file in the right Context Panel's Preview tab. Path null
+ * means clear the preview (replaces the deprecated ClearPreviewFile).
+ */
+export interface SetPreviewFilePayload {
+  path: Path1;
+  section?: Section2;
+}
+export interface ClearPreviewFileEvent {
+  bonsaiSid: Bonsaisid25;
+  sessionId: Sessionid26;
+  eventType: Eventtype25;
+  payload: ClearPreviewFilePayload;
+}
+/**
+ * DEPRECATED: hide the Preview tab. Use SetPreviewFile with path=null.
+ */
+export interface ClearPreviewFilePayload {}
+export interface ArtifactAddedEvent {
+  bonsaiSid: Bonsaisid26;
+  sessionId: Sessionid27;
+  eventType: Eventtype26;
+  payload: ArtifactAddedPayload;
+}
+/**
+ * A new artifact was recorded on the session.
+ */
+export interface ArtifactAddedPayload {
+  artifact: SessionArtifact;
+}
+/**
+ * One file the session produced or focused on.
+ */
+export interface SessionArtifact {
+  path: Path2;
+  kind: Kind;
+  role?: Role;
+  label?: Label2;
+  firstTouchedAt: Firsttouchedat;
+  lastTouchedAt: Lasttouchedat;
+}
+export interface ArtifactLabeledEvent {
+  bonsaiSid: Bonsaisid27;
+  sessionId: Sessionid28;
+  eventType: Eventtype27;
+  payload: ArtifactLabeledPayload;
+}
+/**
+ * An existing artifact got a role/label update.
+ */
+export interface ArtifactLabeledPayload {
+  path: Path3;
+  role?: Role1;
+  label?: Label3;
 }

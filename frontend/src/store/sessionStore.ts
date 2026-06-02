@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import type { AgentEvent, AgentConfig } from "@/types/agent.ts";
+import type { AgentEvent, AgentConfig, SessionArtifact } from "@/types/agent.ts";
 import type {
   Session,
   SessionStatus,
@@ -23,6 +23,38 @@ import { getErrorMessage } from "@/utils/errors.ts";
 import { useSpecStore } from "./specStore.ts";
 import { useSettingsStore } from "./settingsStore.ts";
 import { findStaleSpecIds, isSkillValid } from "@/utils/staleRefs.ts";
+
+/** Two artifact paths refer to the same file if they're equal OR one is a
+ *  suffix of the other (covers legacy entries where one side is absolute and
+ *  the other is project-relative).
+ */
+function _sameArtifactFile(a: string, b: string): boolean {
+  return a === b || a.endsWith("/" + b) || b.endsWith("/" + a);
+}
+
+/** Collapse an artifact list so the same logical file appears at most once.
+ *  When duplicates exist, keep the most-recently-touched entry (or, lacking
+ *  timestamps, the last occurrence — which matches the natural append order
+ *  used by record_artifact).
+ */
+function dedupArtifacts(arr: SessionArtifact[]): SessionArtifact[] {
+  if (arr.length <= 1) return arr;
+  const out: SessionArtifact[] = [];
+  for (const item of arr) {
+    const existingIdx = out.findIndex((x) => _sameArtifactFile(x.path, item.path));
+    if (existingIdx < 0) {
+      out.push(item);
+      continue;
+    }
+    const existing = out[existingIdx];
+    const newer =
+      (item.lastTouchedAt ?? "") >= (existing.lastTouchedAt ?? "")
+        ? item
+        : existing;
+    out[existingIdx] = newer;
+  }
+  return out;
+}
 
 interface SessionStore {
   sessions: Map<string, Session>;
@@ -48,7 +80,7 @@ interface SessionStore {
     skillId?: string;
     specIds?: string[];
     name?: string;
-    metaTicketId?: string;
+    ticketId?: string;
   }) => Promise<string>;
 
   startSession: (params: {
@@ -57,7 +89,9 @@ interface SessionStore {
     name: string;
     skillId?: string;
     prompt?: string;
-    metaTicketId?: string;
+    ticketId?: string;
+    /** Marks the session as a stage-default (auto-spawned by the ticket view). */
+    kind?: "stage-default";
   }) => Promise<string>;
   createDraft: (params: {
     specIds: string[];
@@ -65,8 +99,10 @@ interface SessionStore {
     name: string;
     skillId?: string;
     prompt?: string;
-    metaTicketId?: string;
+    ticketId?: string;
     filePaths?: string[];
+    /** Marks the draft as a stage-default (auto-spawned by the ticket view). */
+    kind?: "stage-default";
   }) => Promise<string>;
   updateDraft: (bonsaiSid: string, changes: {
     specIds?: string[];
@@ -75,7 +111,9 @@ interface SessionStore {
     config?: AgentConfig;
     prompt?: string | null;
     name?: string;
-    metaTicketId?: string | null;
+    ticketId?: string | null;
+    subagentMode?: "step-session" | "subagent";
+    stepGate?: "approve" | "autonomous";
   }) => Promise<string>;
   startDraft: (bonsaiSid: string, prompt?: string) => Promise<void>;
   sendMessage: (bonsaiSid: string, text: string, isMarkdown?: boolean) => Promise<void>;
@@ -126,6 +164,12 @@ interface SessionStore {
   onSuggestSession: (params: Record<string, unknown>) => void;
   onSuggestDescription: (params: Record<string, unknown>) => void;
   onSuggestStep: (params: Record<string, unknown>) => void;
+  onProposeChange: (params: Record<string, unknown>) => void;
+  onSetPreviewFile: (params: Record<string, unknown>) => void;
+  onClearPreviewFile: (params: Record<string, unknown>) => void;
+  onArtifactAdded: (params: Record<string, unknown>) => void;
+  onArtifactLabeled: (params: Record<string, unknown>) => void;
+  setPreviewPath: (bonsaiSid: string, path: string | null) => void;
   onRequestExpired: (params: Record<string, unknown>) => void;
   onRequestResolved: (params: Record<string, unknown>) => void;
   onRemoteSessionCreated: (params: Record<string, unknown>) => void;
@@ -370,20 +414,22 @@ function applyMetrics(
     iterations: iterations.length > 0 ? iterations : undefined,
   };
 
-  // If there's a pending request being cleared, mark it as answered
-  // so the event card renders correctly (especially in multi-client
+  // If any pending requests are being cleared, mark each as answered
+  // so the event cards render correctly (especially in multi-client
   // scenarios where turnComplete may arrive before requestResolved).
   let answeredRequests = session.answeredRequests;
-  if (session.pendingRequest && !answeredRequests.has(session.pendingRequest.requestId)) {
-    answeredRequests = new Map(answeredRequests);
-    answeredRequests.set(session.pendingRequest.requestId, { implicitlyResolved: true });
+  for (const req of session.pendingRequests) {
+    if (!answeredRequests.has(req.requestId)) {
+      answeredRequests = new Map(answeredRequests);
+      answeredRequests.set(req.requestId, { implicitlyResolved: true });
+    }
   }
 
   return {
     updated: {
       ...session,
       status,
-      pendingRequest: null,
+      pendingRequests: [],
       answeredRequests,
       metrics: {
         ...session.metrics,
@@ -434,7 +480,7 @@ function ensureSession(
     startedAt: Date.now(),
     events: [],
     metrics: emptyMetrics(),
-    pendingRequest: null,
+    pendingRequests: [],
     answeredRequests: new Map(),
     parentBonsaiSid: null,
     subsessionType: null,
@@ -442,6 +488,9 @@ function ensureSession(
     returnStatus: null,
     returnSummary: null,
     outcome: null,
+    artifacts: [],
+    previewPath: null,
+    previewSection: null,
   });
   return next;
 }
@@ -644,18 +693,18 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
       config: await buildDefaultSessionConfig(),
       name,
       skillId: prefill?.skillId,
-      metaTicketId: prefill?.metaTicketId,
+      ticketId: prefill?.ticketId,
     });
-    if (!prefill?.metaTicketId) {
+    if (!prefill?.ticketId) {
       useUiStore.getState().setCenterView("sessions");
       useBoardStore.setState({ activeTicketId: null });
     }
     return bonsaiSid;
   },
 
-  startSession: async ({ specIds, config, name, skillId, prompt, metaTicketId }) => {
+  startSession: async ({ specIds, config, name, skillId, prompt, ticketId, kind }) => {
     const api = createAgentApi(getClient());
-    const { bonsaiSid } = await api.run({ specIds, config, skillId: skillId ?? undefined, prompt: prompt ?? undefined, name, metaTicketId: metaTicketId ?? undefined });
+    const { bonsaiSid } = await api.run({ specIds, config, skillId: skillId ?? undefined, prompt: prompt ?? undefined, name, ticketId: ticketId ?? undefined });
 
     set((s) => {
       const next = new Map(s.sessions);
@@ -679,16 +728,20 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
         startedAt: Date.now(),
         events: existing?.events ?? [],
         metrics: existing?.metrics ?? emptyMetrics(),
-        pendingRequest: existing?.pendingRequest ?? null,
+        pendingRequests: existing?.pendingRequests ?? [],
         answeredRequests: existing?.answeredRequests ?? new Map(),
-        metaTicketId: metaTicketId ?? null,
+        ticketId: ticketId ?? null,
+        kind: kind ?? undefined,
         parentBonsaiSid: null,
         subsessionType: null,
         subsessionContext: null,
         returnStatus: null,
         returnSummary: null,
+        artifacts: existing?.artifacts ?? [],
+        previewPath: existing?.previewPath ?? null,
+        previewSection: existing?.previewSection ?? null,
       });
-      if (metaTicketId) {
+      if (ticketId) {
         return { sessions: next };
       }
       const tabs = new Set(s.openTabs);
@@ -702,7 +755,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
     return bonsaiSid;
   },
 
-  createDraft: async ({ specIds, config, name, skillId, prompt, metaTicketId, filePaths }) => {
+  createDraft: async ({ specIds, config, name, skillId, prompt, ticketId, filePaths, kind }) => {
     const api = createAgentApi(getClient());
     const { bonsaiSid, systemPrompt, sections } = await api.prepare({
       specIds,
@@ -710,7 +763,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
       skillId: skillId ?? undefined,
       prompt: prompt ?? undefined,
       name,
-      metaTicketId: metaTicketId ?? undefined,
+      ticketId: ticketId ?? undefined,
       filePaths: filePaths ?? undefined,
     });
 
@@ -730,9 +783,10 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
         startedAt: Date.now(),
         events: [],
         metrics: emptyMetrics(),
-        pendingRequest: null,
+        pendingRequests: [],
         answeredRequests: new Map(),
-        metaTicketId: metaTicketId ?? null,
+        ticketId: ticketId ?? null,
+        kind: kind ?? undefined,
         systemPrompt,
         promptSections: (sections as Session["promptSections"]) ?? null,
         parentBonsaiSid: null,
@@ -740,8 +794,11 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
         subsessionContext: null,
         returnStatus: null,
         returnSummary: null,
+        artifacts: [],
+        previewPath: null,
+        previewSection: null,
       });
-      if (metaTicketId) {
+      if (ticketId) {
         return { sessions: next };
       }
       const tabs = new Set(s.openTabs);
@@ -776,8 +833,10 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
           flags: changes.config.flags ?? {},
         } : {}),
         ...(changes.name !== undefined ? { name: changes.name } : {}),
-        ...(changes.metaTicketId !== undefined ? { metaTicketId: changes.metaTicketId } : {}),
+        ...(changes.ticketId !== undefined ? { ticketId: changes.ticketId } : {}),
         ...(changes.filePaths !== undefined ? { filePaths: changes.filePaths } : {}),
+        ...(changes.subagentMode !== undefined ? { subagentMode: changes.subagentMode } : {}),
+        ...(changes.stepGate !== undefined ? { stepGate: changes.stepGate } : {}),
         systemPrompt,
         promptSections,
       });
@@ -928,21 +987,30 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
           ...session,
           status: "initializing",
           restored: undefined,
-          pendingRequest: null,
+          pendingRequests: [],
           answeredRequests: answered,
         });
+        // Ticket-attached sessions don't get a SessionPanel tab — they
+        // live exclusively under the ticket view.
+        if (session.ticketId) {
+          return { sessions: next };
+        }
         const tabs = new Set(s.openTabs);
         tabs.add(bonsaiSid);
         return { sessions: next, openTabs: tabs, activeSessionId: bonsaiSid };
       });
     } else {
-      // Session NOT in memory — restore it first (with tab)
-      await get().restoreSession(bonsaiSid);
+      // Session NOT in memory — restore first without forcing a tab; the
+      // set below adds one only for non-ticket sessions.
+      await get().restoreSession(bonsaiSid, { noTab: true });
       set((s) => {
         const session = s.sessions.get(bonsaiSid);
         if (!session) return s;
         const next = new Map(s.sessions);
         next.set(bonsaiSid, { ...session, status: "initializing", restored: undefined });
+        if (session.ticketId) {
+          return { sessions: next };
+        }
         const tabs = new Set(s.openTabs);
         tabs.add(bonsaiSid);
         return { sessions: next, openTabs: tabs };
@@ -965,6 +1033,9 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
     _ensureSubscribed(bonsaiSid);
     // Already in memory or already being restored — just open tab if needed
     if (get().sessions.has(bonsaiSid) || _restoring.has(bonsaiSid)) {
+      const existing = get().sessions.get(bonsaiSid);
+      // Ticket-attached sessions never become free-standing tabs.
+      if (existing?.ticketId) return;
       if (!noTab) {
         set((s) => {
           const tabs = new Set(s.openTabs);
@@ -1034,9 +1105,12 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
         contextMax: restoredCtx.contextMax,
         contextUsage: restoredCtx,
       },
-      pendingRequest: null,
+      pendingRequests: [],
       answeredRequests: answered,
       restored: !isActive,
+      ticketId: (data.ticketId as string | null | undefined) ?? null,
+      subagentMode: (data as unknown as Record<string, unknown>).subagentMode as Session["subagentMode"] ?? undefined,
+      stepGate: (data as unknown as Record<string, unknown>).stepGate as Session["stepGate"] ?? undefined,
       ...(restoredPrompt ? { systemPrompt: restoredPrompt } : {}),
       parentBonsaiSid: (data as unknown as Record<string, unknown>).parentBonsaiSid as string ?? null,
       subsessionType: (data as unknown as Record<string, unknown>).subsessionType as Session["subsessionType"] ?? null,
@@ -1044,6 +1118,12 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
       returnStatus: (data as unknown as Record<string, unknown>).returnStatus as Session["returnStatus"] ?? null,
       returnSummary: (data as unknown as Record<string, unknown>).returnSummary as string ?? null,
       outcome: ((data as unknown as Record<string, unknown>).outcome as Session["outcome"]) ?? null,
+      artifacts: dedupArtifacts(
+        ((data as unknown as Record<string, unknown>).artifacts as SessionArtifact[]) ?? [],
+      ),
+      previewPath:
+        ((data as unknown as Record<string, unknown>).previewPath as string | null) ?? null,
+      previewSection: null,
     };
 
     set((s) => {
@@ -1051,7 +1131,8 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
       next.set(bonsaiSid, session);
       const nextClosed = new Set(s.closedIds);
       nextClosed.delete(bonsaiSid);
-      if (noTab) {
+      // Ticket-attached sessions never become free-standing tabs.
+      if (noTab || session.ticketId) {
         return { sessions: next, closedIds: nextClosed };
       }
       const tabs = new Set(s.openTabs);
@@ -1158,7 +1239,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
             contextMax: restoredCtx.contextMax,
             contextUsage: restoredCtx,
           },
-          pendingRequest: null,
+          pendingRequests: [],
           answeredRequests: buildAnsweredRequests(events, true),
           // Disk-only sessions have no live runner — surface the
           // RestoredBar with its "Resume" button (which calls
@@ -1173,6 +1254,24 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
           outcome: ((data as unknown as Record<string, unknown>)?.outcome
             ?? (entry as unknown as Record<string, unknown>)?.outcome
             ?? null) as Session["outcome"],
+          artifacts: dedupArtifacts(
+            ((data as unknown as Record<string, unknown>)?.artifacts as SessionArtifact[]) ?? [],
+          ),
+          previewPath:
+            ((data as unknown as Record<string, unknown>)?.previewPath as string | null) ?? null,
+          previewSection: null,
+          subagentMode:
+            ((data as unknown as Record<string, unknown>)?.subagentMode as Session["subagentMode"])
+            ?? ((entry as unknown as Record<string, unknown>)?.subagentMode as Session["subagentMode"])
+            ?? undefined,
+          stepGate:
+            ((data as unknown as Record<string, unknown>)?.stepGate as Session["stepGate"])
+            ?? ((entry as unknown as Record<string, unknown>)?.stepGate as Session["stepGate"])
+            ?? undefined,
+          ticketId:
+            ((data as unknown as Record<string, unknown>)?.ticketId as string | null | undefined)
+            ?? ((entry as unknown as Record<string, unknown>)?.ticketId as string | null | undefined)
+            ?? null,
         });
       }
 
@@ -1274,7 +1373,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
               next.set(bonsaiSid, {
                 ...current,
                 status: backendStatus as SessionStatus,
-                pendingRequest: backendStatus === "idle" || backendStatus === "done" ? null : current.pendingRequest,
+                pendingRequests: backendStatus === "idle" || backendStatus === "done" ? [] : current.pendingRequests,
               });
               return { sessions: next };
             });
@@ -1296,7 +1395,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
                 if (!current) return s;
                 if (current.status !== "initializing" && current.status !== "running" && current.status !== "waiting") return s;
                 const next = new Map(s.sessions);
-                next.set(bonsaiSid, { ...current, status: "done", pendingRequest: null });
+                next.set(bonsaiSid, { ...current, status: "done", pendingRequests: [] });
                 return { sessions: next };
               });
             }
@@ -1378,8 +1477,17 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
   },
 
   openTab: (bonsaiSid) => {
+    const session = get().sessions.get(bonsaiSid);
+    if (!session) return;
+    // Ticket-attached sessions never become free-standing tabs — route
+    // them through the ticket view so the SessionPanel and Tickets view
+    // stay disjoint surfaces (see SessionManager grouping).
+    if (session.ticketId) {
+      useUiStore.getState().setCenterView("board");
+      useBoardStore.getState().openTicket(session.ticketId);
+      return;
+    }
     set((s) => {
-      if (!s.sessions.has(bonsaiSid)) return s;
       const tabs = new Set(s.openTabs);
       tabs.add(bonsaiSid);
       return { openTabs: tabs, activeSessionId: bonsaiSid };
@@ -1392,12 +1500,15 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
 
     useFileStore.setState({ activeFilePath: null, previewFilePath: null, previewFile: null });
 
-    if (session.metaTicketId) {
-      useBoardStore.getState().openTicket(session.metaTicketId);
-    } else {
-      useBoardStore.setState({ activeTicketId: null });
+    // Ticket-attached: open the ticket view with this session as the
+    // centre, never as a SessionPanel tab. Mirrors `openTab` above.
+    if (session.ticketId) {
+      useUiStore.getState().setCenterView("board");
+      useBoardStore.getState().openTicket(session.ticketId);
+      return;
     }
 
+    useBoardStore.setState({ activeTicketId: null });
     set((s) => {
       const tabs = new Set(s.openTabs);
       tabs.add(bonsaiSid);
@@ -1425,7 +1536,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
     const stale = get().getStaleSessionRefs(bonsaiSid);
     if (!stale) return;
 
-    const changes: { specIds?: string[]; filePaths?: string[]; skillId?: string | null; config?: AgentConfig; prompt?: string | null; name?: string; metaTicketId?: string | null } = {};
+    const changes: { specIds?: string[]; filePaths?: string[]; skillId?: string | null; config?: AgentConfig; prompt?: string | null; name?: string; ticketId?: string | null } = {};
     if (stale.staleSpecIds.length > 0) {
       changes.specIds = session.specIds.filter((id) => !stale.staleSpecIds.includes(id));
     }
@@ -1482,7 +1593,8 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
       }
     }
 
-    // Mark request as answered, clear pendingRequest, and restore running status.
+    // Mark request as answered, drop it from pendingRequests, and restore
+    // running status (unless other pending entries keep the session waiting).
     // The backend stays in "running" throughout the turn — only the frontend
     // shows "waiting" while the user answers. Setting "running" here is correct
     // state sync (not optimism), since the backend never left "running".
@@ -1495,10 +1607,9 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
       nextSessions.set(bonsaiSid, {
         ...session,
         status: "running",
-        pendingRequest:
-          session.pendingRequest?.requestId === requestId
-            ? null
-            : session.pendingRequest,
+        pendingRequests: session.pendingRequests.filter(
+          (r) => r.requestId !== requestId,
+        ),
         answeredRequests: answered,
       });
       return { sessions: nextSessions };
@@ -1533,7 +1644,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
       next.set(bonsaiSid, {
         ...session,
         status: "initializing",
-        pendingRequest: null,
+        pendingRequests: [],
         metrics: {
           ...session.metrics,
           contextUsage: {
@@ -1646,8 +1757,8 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
 
   onAgentEvent: (method, params) => {
     const bonsaiSid = params.bonsaiSid as string;
-    // Capture before set() — applyMetrics clears pendingRequest inside the setter.
-    const hadPending = get().sessions.get(bonsaiSid)?.pendingRequest != null;
+    // Capture before set() — applyMetrics clears pendingRequests inside the setter.
+    const hadPending = (get().sessions.get(bonsaiSid)?.pendingRequests.length ?? 0) > 0;
     set((s) => {
       const sessions = appendEvent(s.sessions, bonsaiSid, method, params, s.closedIds);
       let session = sessions.get(bonsaiSid);
@@ -1703,20 +1814,22 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
           const { updated, costDelta } = applyMetrics(session, params, "idle");
           projectCost += costDelta;
 
-          if (method === "agent/interrupted" && session.pendingRequest) {
-            const rid = session.pendingRequest.requestId;
-            // Only mark as denied if user has NOT already answered this request.
+          if (method === "agent/interrupted" && session.pendingRequests.length > 0) {
+            // Only mark each as denied if user has NOT already answered.
             // Race: user clicks Approve (resolveRequest sets answeredRequests),
             // then agent/interrupted arrives — don't clobber the user's answer.
-            if (!updated.answeredRequests.has(rid)) {
-              const answered = new Map(updated.answeredRequests);
-              answered.set(rid, {
-                behavior: "deny",
-                message: "Interrupted",
-                interrupt: true,
-              });
-              updated.answeredRequests = answered;
+            let answered = updated.answeredRequests;
+            for (const req of session.pendingRequests) {
+              if (!answered.has(req.requestId)) {
+                answered = new Map(answered);
+                answered.set(req.requestId, {
+                  behavior: "deny",
+                  message: "Interrupted",
+                  interrupt: true,
+                });
+              }
             }
+            updated.answeredRequests = answered;
           }
 
           sessions.set(bonsaiSid, updated);
@@ -1741,7 +1854,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
     // Clean up notifications when interrupted during a pending request.
     // Only decrement if there was actually a pending request — otherwise
     // the counter goes negative.  hadPending is captured before set() above
-    // because applyMetrics clears pendingRequest inside the setter.
+    // because applyMetrics clears pendingRequests inside the setter.
     if (method === "agent/interrupted") {
       if (hadPending) {
         const ns = useNotificationStore.getState();
@@ -1764,9 +1877,8 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
     const requestId = params.requestId as string;
     set((s) => {
       const session = s.sessions.get(bonsaiSid);
-      // Retry dedup: if same requestId as current pendingRequest, just refresh
-      // (don't append a duplicate event)
-      if (session?.pendingRequest?.requestId === requestId) {
+      // Retry dedup: same requestId already in flight → drop the duplicate event.
+      if (session?.pendingRequests.some((r) => r.requestId === requestId)) {
         return s;
       }
       const sessions = appendEvent(
@@ -1781,11 +1893,11 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
         sessions.set(bonsaiSid, {
           ...updated,
           status: "waiting",
-          pendingRequest: {
+          pendingRequests: [...updated.pendingRequests, {
             requestId,
             type: "question",
             questions: params.questions as PendingRequest["questions"],
-          },
+          }],
         });
       }
       return { sessions };
@@ -1797,8 +1909,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
     const requestId = params.requestId as string;
     set((s) => {
       const session = s.sessions.get(bonsaiSid);
-      // Retry dedup: if same requestId as current pendingRequest, just refresh
-      if (session?.pendingRequest?.requestId === requestId) {
+      if (session?.pendingRequests.some((r) => r.requestId === requestId)) {
         return s;
       }
       const sessions = appendEvent(
@@ -1813,12 +1924,12 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
         sessions.set(bonsaiSid, {
           ...updated,
           status: "waiting",
-          pendingRequest: {
+          pendingRequests: [...updated.pendingRequests, {
             requestId,
             type: "approval",
             toolName: params.toolName as string,
             toolInput: params.toolInput as Record<string, unknown>,
-          },
+          }],
         });
       }
       return { sessions };
@@ -1841,7 +1952,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
         sessions.set(bonsaiSid, {
           ...session,
           status: "waiting",
-          pendingRequest: {
+          pendingRequests: [...session.pendingRequests, {
             requestId,
             type: "suggestion",
             skill: params.skill as string,
@@ -1849,7 +1960,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
             name: params.name as string,
             reason: params.reason as string,
             prompt: (params.prompt as string) ?? undefined,
-          },
+          }],
         });
       }
       return { sessions };
@@ -1872,12 +1983,12 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
         sessions.set(bonsaiSid, {
           ...session,
           status: "waiting",
-          pendingRequest: {
+          pendingRequests: [...session.pendingRequests, {
             requestId,
             type: "description-suggestion",
             description: params.description as string,
             section: (params.section as string) ?? "full",
-          },
+          }],
         });
       }
       return { sessions };
@@ -1900,7 +2011,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
         sessions.set(bonsaiSid, {
           ...session,
           status: "waiting",
-          pendingRequest: {
+          pendingRequests: [...session.pendingRequests, {
             requestId,
             type: "step-proposal",
             ticketId: params.ticketId as string,
@@ -1909,9 +2020,132 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
             skill: params.skill as string,
             inputSpecIds: (params.inputSpecIds as string[]) ?? [],
             reason: params.reason as string,
-          },
+          }],
         });
       }
+      return { sessions };
+    });
+  },
+
+  onProposeChange: (params) => {
+    const bonsaiSid = params.bonsaiSid as string;
+    const requestId = params.requestId as string;
+    const filePath = params.filePath as string;
+    const section = (params.section as string | undefined) ?? null;
+    set((s) => {
+      const sessions = appendEvent(
+        s.sessions,
+        bonsaiSid,
+        "agent/proposeChange",
+        params,
+        s.closedIds,
+      );
+      const session = sessions.get(bonsaiSid);
+      if (session) {
+        // Auto-focus the preview on the file+section about to change so
+        // the user can see the live context while reviewing the card.
+        sessions.set(bonsaiSid, {
+          ...session,
+          status: "waiting",
+          previewPath: filePath || session.previewPath,
+          previewSection: section,
+          pendingRequests: [...session.pendingRequests, {
+            requestId,
+            type: "propose-change",
+            filePath,
+            oldString: params.oldString as string,
+            newString: params.newString as string,
+            section: params.section as string | undefined,
+            rationale: params.rationale as string | undefined,
+          }],
+        });
+      }
+      return { sessions };
+    });
+  },
+
+  onSetPreviewFile: (params) => {
+    const bonsaiSid = params.bonsaiSid as string;
+    const path = (params.path as string | null) ?? null;
+    const section = (params.section as string | undefined) ?? null;
+    set((s) => {
+      const session = s.sessions.get(bonsaiSid);
+      if (!session) return s;
+      const sessions = new Map(s.sessions);
+      sessions.set(bonsaiSid, {
+        ...session,
+        previewPath: path,
+        previewSection: path != null ? section : null,
+      });
+      return { sessions };
+    });
+  },
+
+  onClearPreviewFile: (params) => {
+    // Deprecated alias. Path-null SetPreviewFile is canonical; this stays
+    // for backwards-compat with old persisted events.
+    const bonsaiSid = params.bonsaiSid as string;
+    set((s) => {
+      const session = s.sessions.get(bonsaiSid);
+      if (!session) return s;
+      const sessions = new Map(s.sessions);
+      sessions.set(bonsaiSid, {
+        ...session,
+        previewPath: null,
+        previewSection: null,
+      });
+      return { sessions };
+    });
+  },
+
+  onArtifactAdded: (params) => {
+    const bonsaiSid = params.bonsaiSid as string;
+    const artifact = params.artifact as SessionArtifact;
+    set((s) => {
+      const session = s.sessions.get(bonsaiSid);
+      if (!session) return s;
+      const sessions = new Map(s.sessions);
+      // Match same logical file even when one side is absolute / the other
+      // relative (legacy entries from before path normalization).
+      const existingIdx = session.artifacts.findIndex(
+        (a) => _sameArtifactFile(a.path, artifact.path),
+      );
+      const nextArtifacts =
+        existingIdx >= 0
+          ? session.artifacts.map((a, i) =>
+              i === existingIdx ? { ...a, ...artifact } : a,
+            )
+          : [...session.artifacts, artifact];
+      sessions.set(bonsaiSid, { ...session, artifacts: nextArtifacts });
+      return { sessions };
+    });
+  },
+
+  onArtifactLabeled: (params) => {
+    const bonsaiSid = params.bonsaiSid as string;
+    const path = params.path as string;
+    const role = params.role as string | undefined;
+    const label = params.label as string | undefined;
+    set((s) => {
+      const session = s.sessions.get(bonsaiSid);
+      if (!session) return s;
+      const sessions = new Map(s.sessions);
+      const nextArtifacts = session.artifacts.map((a) =>
+        a.path === path
+          ? { ...a, role: role ?? a.role, label: label ?? a.label }
+          : a,
+      );
+      sessions.set(bonsaiSid, { ...session, artifacts: nextArtifacts });
+      return { sessions };
+    });
+  },
+
+  setPreviewPath: (bonsaiSid, path) => {
+    set((s) => {
+      const session = s.sessions.get(bonsaiSid);
+      if (!session) return s;
+      const sessions = new Map(s.sessions);
+      sessions.set(bonsaiSid, { ...session, previewPath: path });
       return { sessions };
     });
   },
@@ -1929,15 +2163,16 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
       );
       const session = sessions.get(bonsaiSid);
       if (session) {
-        // Clear pendingRequest if it matches the expired request
-        const clearPending =
-          session.pendingRequest?.requestId === requestId;
-        // Mark as expired in answeredRequests
+        // Drop the expired request from the list (no-op if it was already gone)
+        // and mark as expired in answeredRequests so the renderer shows the
+        // terminal state.
         const answered = new Map(session.answeredRequests);
         answered.set(requestId, { expired: true, reason: params.reason });
         sessions.set(bonsaiSid, {
           ...session,
-          pendingRequest: clearPending ? null : session.pendingRequest,
+          pendingRequests: session.pendingRequests.filter(
+            (r) => r.requestId !== requestId,
+          ),
           answeredRequests: answered,
         });
       }
@@ -1956,22 +2191,30 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
       const sessions = new Map(s.sessions);
       const session = sessions.get(bonsaiSid);
       if (session) {
-        const clearPending =
-          session.pendingRequest?.requestId === requestId;
+        const hadMatching = session.pendingRequests.some(
+          (r) => r.requestId === requestId,
+        );
+        const remaining = session.pendingRequests.filter(
+          (r) => r.requestId !== requestId,
+        );
         const answered = new Map(session.answeredRequests);
         answered.set(requestId, { ...response, resolvedBy: params.resolvedBy });
         sessions.set(bonsaiSid, {
           ...session,
-          status: clearPending ? "running" : session.status,
-          pendingRequest: clearPending ? null : session.pendingRequest,
+          // When the resolved request was the only one outstanding, transition
+          // back to running. With multiple pendings (subagent-mode parallel
+          // approvals), the others keep the session in "waiting."
+          status: hadMatching && remaining.length === 0 ? "running" : session.status,
+          pendingRequests: remaining,
           answeredRequests: answered,
         });
       }
       return { sessions };
     });
-    // Only decrement if we actually had this pending
+    // Only decrement if we actually had this pending in flight before resolve.
     const session = get().sessions.get(bonsaiSid);
-    if (!session?.pendingRequest || session.pendingRequest.requestId !== requestId) {
+    const stillPending = session?.pendingRequests.some((r) => r.requestId === requestId);
+    if (!stillPending) {
       useNotificationStore.getState().decrementPendingInput();
     }
   },
@@ -1983,6 +2226,8 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
       const existing = s.sessions.get(bonsaiSid);
       const next = new Map(s.sessions);
       const config = (params.config as Record<string, unknown>) ?? {};
+      const subagentMode = (params.subagentMode as Session["subagentMode"]) ?? undefined;
+      const stepGate = (params.stepGate as Session["stepGate"]) ?? undefined;
       const session: Session = existing
         ? {
             ...existing,
@@ -1996,6 +2241,8 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
             flags: (config.flags as Record<string, boolean>) ?? existing.flags ?? {},
             status: (params.status as Session["status"]) ?? existing.status,
             createdBy: (params.createdBy as string) ?? existing.createdBy,
+            subagentMode: subagentMode ?? existing.subagentMode,
+            stepGate: stepGate ?? existing.stepGate,
           }
         : {
             bonsaiSid,
@@ -2011,7 +2258,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
             startedAt: Date.now(),
             events: [],
             metrics: emptyMetrics(),
-            pendingRequest: null,
+            pendingRequests: [],
             answeredRequests: new Map(),
             createdBy: (params.createdBy as string) ?? undefined,
             parentBonsaiSid: (params.parentBonsaiSid as string) ?? null,
@@ -2019,6 +2266,11 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
             subsessionContext: (params.subsessionContext as string) ?? null,
             returnStatus: null,
             returnSummary: null,
+            artifacts: [],
+            previewPath: null,
+            previewSection: null,
+            subagentMode,
+            stepGate,
           };
       next.set(bonsaiSid, session);
       return { sessions: next };
@@ -2077,7 +2329,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
         sessions.set(bonsaiSid, {
           ...session,
           status: "done",
-          pendingRequest: null,
+          pendingRequests: [],
           metrics: {
             ...session.metrics,
             costUsd: newCost,
@@ -2102,7 +2354,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
         sessions.set(bonsaiSid, {
           ...session,
           status: isRecoverable ? "idle" : "error",
-          pendingRequest: null,
+          pendingRequests: [],
         });
       }
       return { sessions };
@@ -2172,7 +2424,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
           contextMax: restoredCtx.contextMax,
           contextUsage: restoredCtx,
         },
-        pendingRequest: null,
+        pendingRequests: [],
         answeredRequests: new Map(),
         restored: !isActive,
         parentBonsaiSid: (data as unknown as Record<string, unknown>).parentBonsaiSid as string ?? parentBonsaiSid,
@@ -2181,6 +2433,12 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
         returnStatus: (data as unknown as Record<string, unknown>).returnStatus as Session["returnStatus"] ?? null,
         returnSummary: (data as unknown as Record<string, unknown>).returnSummary as string ?? null,
         outcome: ((data as unknown as Record<string, unknown>).outcome as Session["outcome"]) ?? null,
+        artifacts: dedupArtifacts(
+          ((data as unknown as Record<string, unknown>).artifacts as SessionArtifact[]) ?? [],
+        ),
+        previewPath:
+          ((data as unknown as Record<string, unknown>).previewPath as string | null) ?? null,
+        previewSection: null,
       };
 
       set((s) => {
@@ -2303,4 +2561,58 @@ export function stopWatchdog(): void {
     clearInterval(_watchdogTimer);
     _watchdogTimer = null;
   }
+}
+
+// ── ProposeChange aggregation ──────────────────────────────────
+
+export interface HunkRequest {
+  requestId: string;
+  filePath: string;
+  oldString: string;
+  newString: string;
+  section: string | null;
+  rationale: string | null;
+  validationWarnings: { kind: string; message: string }[];
+  state: "pending" | "accepted" | "rejected";
+  resolution: Record<string, unknown> | null;
+}
+
+/** Group a session's proposeChange events by filePath. Each group is ordered
+ *  by event index (creation order). Resolution status is joined from
+ *  `session.answeredRequests` keyed by `requestId`. */
+export function selectProposeChangesByFile(session: Session): Map<string, HunkRequest[]> {
+  const result = new Map<string, HunkRequest[]>();
+  for (const ev of session.events) {
+    if (ev.eventType !== "proposeChange") continue;
+    const p = ev.payload as {
+      requestId?: string;
+      filePath: string;
+      oldString: string;
+      newString: string;
+      section?: string | null;
+      rationale?: string | null;
+      validationWarnings?: { kind: string; message: string }[];
+    };
+    const requestId = p.requestId ?? "";
+    const resolved = session.answeredRequests.get(requestId) as Record<string, unknown> | undefined;
+    let state: "pending" | "accepted" | "rejected" = "pending";
+    if (resolved) {
+      state = resolved.behavior === "allow" ? "accepted" : "rejected";
+    }
+    const hunk: HunkRequest = {
+      requestId,
+      filePath: p.filePath,
+      oldString: p.oldString,
+      newString: p.newString,
+      section: p.section ?? null,
+      rationale: p.rationale ?? null,
+      validationWarnings: p.validationWarnings ?? [],
+      state,
+      resolution: resolved ?? null,
+    };
+    const arr = result.get(p.filePath) ?? [];
+    arr.push(hunk);
+    result.set(p.filePath, arr);
+  }
+  return result;
 }

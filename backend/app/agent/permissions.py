@@ -81,6 +81,8 @@ _INTERCEPTOR_CATEGORIES: dict[str, ToolCategory] = {
     # Read-only / display-only — safe in plan mode.
     "bonsai_visualize": "read",   # renders a card, no side effects
     "SuggestSession": "read",      # notifies frontend; user creates the session
+    "SetPreviewFile": "read",      # UI side-effect only
+    "ClearPreviewFile": "read",    # UI side-effect only
     "spec_search": "read",
     "spec_links": "read",
     "suggest_step": "read",        # interactive proposal; user must approve
@@ -91,6 +93,9 @@ _INTERCEPTOR_CATEGORIES: dict[str, ToolCategory] = {
     "spec_delete": "edit",
     "ChangeTicketStatus": "edit",
     "CreateBoardTicket": "edit",
+    "LabelArtifact": "read",       # display-only annotation
+    "ProposeChange": "edit",       # user approves the actual write in-card,
+                                    # but the underlying intent is mutation
     # SessionFinalize only attaches metadata to the current task — no
     # filesystem writes — but it's an intentional "I'm done" signal, so
     # gate it the same as other mutating tools and rely on the runtime
@@ -221,14 +226,14 @@ async def _await_user_response(
         })
     # Store pending request so session/get can include it
     request_type = "approval" if method == "agent/confirmAction" else "question"
-    tracker.set_pending_request(task.bonsai_sid, {
+    tracker.add_pending_request(task.bonsai_sid, {
         "requestId": request_id,
         "type": request_type,
         **{k: v for k, v in params.items() if k != "bonsaiSid"},
     })
     await notify(method, {**params}, request_id=request_id)
     response = await future
-    tracker.clear_pending_request(task.bonsai_sid)
+    tracker.remove_pending_request(task.bonsai_sid, request_id)
     tracker.set_status(task.bonsai_sid, "running")
     await notify("agent/statusChanged", {
         "bonsaiSid": task.bonsai_sid, "status": "running",

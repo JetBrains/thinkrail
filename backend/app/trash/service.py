@@ -11,12 +11,8 @@ from typing import Any
 
 from app.core.config import (
     BONSAI_DIRNAME,
-    MANIFEST_FILE,
-    META_TICKETS_DIR,
-    PLANS_DIR,
     SESSIONS_DIR,
-    SPEC_DRAFTS_DIR,
-    SPEC_PATCHES_DIR,
+    TICKETS_DIR,
     TRASH_DIR,
 )
 from app.trash.storage import (
@@ -52,7 +48,6 @@ class TrashService:
         if not source_files:
             logger.debug("No session files found for %s — skipping trash", bonsai_sid)
             return
-        # Extract display name from session metadata
         ctx: dict[str, Any] = {}
         if meta.is_file():
             try:
@@ -70,67 +65,47 @@ class TrashService:
     # -- tickets ---------------------------------------------------------------
 
     def trash_ticket(self, ticket_id: str, *, cascade: bool = True) -> None:
-        """Move a ticket's JSON file to trash.
+        """Move a ticket's folder (ticket.json + all artifacts) to trash.
 
-        When *cascade* is True (the default), also trashes the ticket's plan,
-        all spec drafts, and patches before trashing the ticket itself.
+        With the unified folder layout, every file inside
+        ``.bonsai/tickets/{id}/`` is bundled. ``cascade`` is retained for
+        callers but has no behavioral effect now.
         """
-        cascaded: list[str] = []
+        del cascade  # Retained for backwards compatibility with callers.
 
-        if cascade:
-            # Cascade: plan
-            plan_file = self._project_root / BONSAI_DIRNAME / PLANS_DIR / f"{ticket_id}.md"
-            if plan_file.is_file():
-                self.trash_plan(ticket_id)
-                cascaded.append(f"plans/{ticket_id}")
-
-            # Cascade: drafts (each entry individually)
-            drafts_dir = self._project_root / BONSAI_DIRNAME / SPEC_DRAFTS_DIR / ticket_id
-            manifest_path = drafts_dir / MANIFEST_FILE
-            if manifest_path.is_file():
-                raw = json.loads(manifest_path.read_text(encoding="utf-8"))
-                entries = raw.get("entries", [])
-                for i in range(len(entries) - 1, -1, -1):
-                    entry = entries[i]
-                    draft_file = drafts_dir / entry.get("draftPath", "")
-                    self.trash_draft(
-                        ticket_id, i,
-                        manifest_entry=entry,
-                        draft_file=draft_file if draft_file.is_file() else None,
-                    )
-                    cascaded.append(f"drafts/{ticket_id}--{i}")
-                # Clean up empty manifest dir
-                if drafts_dir.is_dir():
-                    shutil.rmtree(drafts_dir)
-
-            # Cascade: patches
-            patches_dir = self._project_root / BONSAI_DIRNAME / SPEC_PATCHES_DIR / ticket_id
-            if patches_dir.is_dir():
-                self.trash_patches(ticket_id)
-                cascaded.append(f"patches/{ticket_id}")
-
-        tickets_dir = self._project_root / BONSAI_DIRNAME / META_TICKETS_DIR
-        ticket_file = tickets_dir / f"{ticket_id}.json"
-        source_files = [f for f in [ticket_file] if f.is_file()]
-        if not source_files:
-            logger.debug("No ticket file found for %s — skipping trash", ticket_id)
+        ticket_folder = self._project_root / BONSAI_DIRNAME / TICKETS_DIR / ticket_id
+        if not ticket_folder.is_dir():
+            logger.debug("No ticket folder found for %s — skipping trash", ticket_id)
             return
-        # Extract display title from ticket metadata
-        ctx: dict[str, Any] = {"cascaded": cascaded} if cascaded else {}
-        if ticket_file.is_file():
+
+        source_files: list[Path] = [p for p in ticket_folder.iterdir() if p.is_file()]
+        if not source_files:
+            logger.debug("Ticket folder %s is empty — skipping trash", ticket_id)
+            return
+
+        ctx: dict[str, Any] = {"artifactDir": str(ticket_folder)}
+        meta = ticket_folder / "ticket.json"
+        if meta.is_file():
             try:
-                info = json.loads(ticket_file.read_text(encoding="utf-8"))
+                info = json.loads(meta.read_text(encoding="utf-8"))
                 if info.get("title"):
                     ctx["title"] = info["title"]
             except Exception:
                 pass
+
         move_to_trash(
-            self._trash_dir, "tickets", ticket_id, source_files, str(tickets_dir),
-            context=ctx,
+            self._trash_dir, "tickets", ticket_id, source_files,
+            str(ticket_folder), context=ctx,
         )
 
+        try:
+            if ticket_folder.is_dir() and not any(ticket_folder.iterdir()):
+                ticket_folder.rmdir()
+        except OSError:
+            pass
+
     def restore_ticket(self, ticket_id: str) -> None:
-        """Restore a trashed ticket back to .bonsai/meta-tickets/."""
+        """Restore a trashed ticket folder back to .bonsai/tickets/."""
         restore_from_trash(self._trash_dir, "tickets", ticket_id)
 
     # -- specs -----------------------------------------------------------------
@@ -157,73 +132,6 @@ class TrashService:
         """Restore a trashed spec and return (registry_entry, links) for re-insertion."""
         ctx = restore_from_trash(self._trash_dir, "specs", spec_id)
         return ctx.get("registryEntry", {}), ctx.get("links", [])
-
-    # -- plans -----------------------------------------------------------------
-
-    def trash_plan(self, ticket_id: str) -> None:
-        """Move .bonsai/plans/{ticket_id}.md to trash."""
-        plans_dir = self._project_root / BONSAI_DIRNAME / PLANS_DIR
-        plan_file = plans_dir / f"{ticket_id}.md"
-        source_files = [plan_file] if plan_file.is_file() else []
-        if not source_files:
-            logger.debug("No plan file found for %s — skipping trash", ticket_id)
-            return
-        move_to_trash(
-            self._trash_dir, "plans", ticket_id, source_files, str(plans_dir),
-            context={"ticketId": ticket_id},
-        )
-
-    def restore_plan(self, ticket_id: str) -> None:
-        """Restore a trashed plan back to .bonsai/plans/."""
-        restore_from_trash(self._trash_dir, "plans", ticket_id)
-
-    # -- drafts ----------------------------------------------------------------
-
-    def trash_draft(
-        self,
-        ticket_id: str,
-        draft_index: int,
-        manifest_entry: dict[str, Any],
-        draft_file: Path | None,
-    ) -> None:
-        """Move a single draft entry to trash with its manifest metadata.
-
-        *draft_file* may be ``None`` for delete-operation drafts that have
-        no file on disk.
-        """
-        item_id = f"{ticket_id}--{draft_index}"
-        source_files = [draft_file] if draft_file and draft_file.is_file() else []
-        original_dir = str(self._project_root / BONSAI_DIRNAME / SPEC_DRAFTS_DIR / ticket_id)
-        move_to_trash(
-            self._trash_dir, "drafts", item_id, source_files, original_dir,
-            context={"ticketId": ticket_id, "manifestEntry": manifest_entry},
-        )
-
-    def restore_draft(self, trash_item_id: str) -> dict[str, Any]:
-        """Restore a trashed draft and return its manifest entry for re-insertion."""
-        ctx = restore_from_trash(self._trash_dir, "drafts", trash_item_id)
-        return ctx.get("manifestEntry", {})
-
-    # -- patches ---------------------------------------------------------------
-
-    def trash_patches(self, ticket_id: str) -> None:
-        """Move all .bonsai/spec-patches/{ticket_id}/ to trash."""
-        patches_dir = self._project_root / BONSAI_DIRNAME / SPEC_PATCHES_DIR / ticket_id
-        if not patches_dir.is_dir():
-            logger.debug("No patches dir found for %s — skipping trash", ticket_id)
-            return
-        source_files = [f for f in patches_dir.iterdir() if f.is_file()]
-        move_to_trash(
-            self._trash_dir, "patches", ticket_id, source_files, str(patches_dir),
-            context={"ticketId": ticket_id},
-        )
-        # Clean up empty source directory
-        if patches_dir.is_dir() and not any(patches_dir.iterdir()):
-            patches_dir.rmdir()
-
-    def restore_patches(self, ticket_id: str) -> None:
-        """Restore a trashed patches directory back to .bonsai/spec-patches/."""
-        restore_from_trash(self._trash_dir, "patches", ticket_id)
 
     # -- generic operations ----------------------------------------------------
 

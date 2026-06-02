@@ -1,54 +1,64 @@
 import type { RpcClient } from "../client.ts";
-import type { MetaTicket, MetaTicketSummary, MetaTicketStatus, MetaTicketType } from "@/types/board.ts";
+import type {
+  ArtifactKind,
+  ArtifactReadResult,
+  Ticket,
+  TicketStatus,
+  TicketSummary,
+  TicketType,
+} from "@/types/board.ts";
 
 
 export function createBoardApi(client: RpcClient) {
   return {
     list: () =>
-      client.request<MetaTicketSummary[]>("board/list"),
+      client.request<TicketSummary[]>("board/list"),
 
     get: (id: string) =>
-      client.request<MetaTicket>("board/get", { id }),
+      client.request<Ticket>("board/get", { id }),
 
     create: (
       title: string,
       body?: string,
-      type?: MetaTicketType,
-      status?: MetaTicketStatus,
+      type?: TicketType,
+      status?: TicketStatus,
     ) =>
-      client.request<MetaTicket>("board/create", { title, body, type, status }),
+      client.request<Ticket>("board/create", { title, body, type, status }),
 
     update: (id: string, updates: {
       title?: string;
       body?: string;
-      status?: MetaTicketStatus;
-      type?: MetaTicketType;
+      status?: TicketStatus;
+      type?: TicketType;
     }) =>
-      client.request<MetaTicket>("board/update", { id, ...updates }),
+      client.request<Ticket>("board/update", { id, ...updates }),
 
     delete: (id: string) =>
       client.request<null>("board/delete", { id }),
 
-    reorder: (id: string, status: MetaTicketStatus, order: number) =>
-      client.request<MetaTicket>("board/reorder", { id, status, order }),
+    reorder: (id: string, status: TicketStatus, order: number) =>
+      client.request<Ticket>("board/reorder", { id, status, order }),
 
     linkSpec: (ticketId: string, specId: string) =>
-      client.request<MetaTicket>("board/linkSpec", { ticketId, specId }),
+      client.request<Ticket>("board/linkSpec", { ticketId, specId }),
 
     unlinkSpec: (ticketId: string, specId: string) =>
-      client.request<MetaTicket>("board/unlinkSpec", { ticketId, specId }),
+      client.request<Ticket>("board/unlinkSpec", { ticketId, specId }),
 
     attachSession: (ticketId: string, sessionId: string) =>
-      client.request<MetaTicket>("board/attachSession", { ticketId, sessionId }),
+      client.request<Ticket>("board/attachSession", { ticketId, sessionId }),
 
     detachSession: (ticketId: string, sessionId: string) =>
-      client.request<MetaTicket>("board/detachSession", { ticketId, sessionId }),
-
-    setPlanPath: (ticketId: string, planPath: string) =>
-      client.request<MetaTicket>("board/setPlanPath", { ticketId, planPath }),
+      client.request<Ticket>("board/detachSession", { ticketId, sessionId }),
 
     setOrchestrator: (ticketId: string, sessionId: string) =>
-      client.request<MetaTicket>("board/setOrchestrator", { ticketId, sessionId }),
+      client.request<Ticket>("board/setOrchestrator", { ticketId, sessionId }),
+
+    skipPhase: (ticketId: string, phase: TicketStatus) =>
+      client.request<Ticket>("board/skipPhase", { ticketId, phase }),
+
+    unskipPhase: (ticketId: string, phase: TicketStatus) =>
+      client.request<Ticket>("board/unskipPhase", { ticketId, phase }),
 
     // Plan methods
     getPlan: (ticketId: string) =>
@@ -72,39 +82,27 @@ export function createBoardApi(client: RpcClient) {
     getNextStep: (ticketId: string) =>
       client.request<Record<string, unknown> | null>("board/getNextStep", { ticketId }),
 
-    // Spec draft methods
-    listDrafts: (ticketId: string) =>
-      client.request<Record<string, unknown>[]>("board/listDrafts", { ticketId }),
+    // Artifact methods
+    readArtifact: (ticketId: string, kind: ArtifactKind) =>
+      client.request<ArtifactReadResult>("board/readArtifact", { ticketId, kind }),
 
-    getDraftDiff: (ticketId: string, index: number) =>
-      client.request<{ original: string; draft: string; path: string; operation: string; registryId: string; registryTitle: string }>(
-        "board/getDraftDiff", { ticketId, index },
-      ),
-
-    applyDraft: (ticketId: string, index: number) =>
-      client.request<null>("board/applyDraft", { ticketId, index }),
-
-    applyAllDrafts: (ticketId: string) =>
-      client.request<null>("board/applyAllDrafts", { ticketId }),
-
-    discardDraft: (ticketId: string, index: number) =>
-      client.request<null>("board/discardDraft", { ticketId, index }),
-
-    discardAllDrafts: (ticketId: string) =>
-      client.request<null>("board/discardAllDrafts", { ticketId }),
-
-    // Spec patch methods (history)
-    listPatches: (ticketId: string) =>
-      client.request<Record<string, unknown>[]>("board/listPatches", { ticketId }),
-
-    getPatchDiff: (ticketId: string, index: number) =>
-      client.request<{ original: string; modified: string; path: string; operation: string }>(
-        "board/getPatchDiff", { ticketId, index },
-      ),
-
-    revertPatch: (ticketId: string, index: number) =>
-      client.request<MetaTicket>("board/revertPatch", { ticketId, index }),
+    // History (per-ticket ProposeChange log, parsed)
+    getHistory: (ticketId: string) =>
+      client.request<HistoryEntry[]>("board/getHistory", { ticketId }),
   };
+}
+
+export interface HistoryEntry {
+  index: number;
+  skill: string | null;
+  filePath: string;
+  specId: string | null;
+  section: string | null;
+  rationale: string | null;
+  appliedAs: "original" | "edited";
+  validation: "ok" | "warnings";
+  timestamp: string;
+  diff: string;
 }
 
 export type BoardApi = ReturnType<typeof createBoardApi>;

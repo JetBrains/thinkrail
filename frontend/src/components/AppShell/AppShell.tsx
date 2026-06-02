@@ -18,7 +18,7 @@ import {
   isWizardSkill,
 } from "@/components/Wizard";
 import { BoardView } from "@/components/BoardView/BoardView.tsx";
-import { MetaTicketDetail } from "@/components/MetaTicketDetail/MetaTicketDetail.tsx";
+import { TicketDetail } from "@/components/TicketDetail/TicketDetail.tsx";
 import { useBoardStore } from "@/store/boardStore.ts";
 import { ViewModeProvider } from "@/context/ViewModeContext.tsx";
 import "@/components/ChatStream/ChatStream.css";
@@ -210,7 +210,7 @@ export function AppShell({ onSwitchProject }: { onSwitchProject: () => void }) {
           <ViewModeProvider>
             {centerView === "board" ? (
               activeTicketId ? (
-                <MetaTicketDetail ticketId={activeTicketId} />
+                <TicketDetail ticketId={activeTicketId} />
               ) : (
                 <BoardView onOpenTicket={handleOpenTicket} />
               )

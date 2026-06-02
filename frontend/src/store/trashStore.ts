@@ -57,15 +57,6 @@ export const useTrashStore = create<TrashState>((set, get) => ({
         case "specs":
           await api.restoreSpec(id);
           break;
-        case "plans":
-          await api.restorePlan(id);
-          break;
-        case "drafts":
-          await api.restoreDraft(id);
-          break;
-        case "patches":
-          await api.restorePatches(id);
-          break;
         default:
           console.warn(`[trashStore] Unknown trash type: ${type}`);
           return;

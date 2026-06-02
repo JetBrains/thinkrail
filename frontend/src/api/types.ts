@@ -19,7 +19,7 @@ export interface AgentRunParams {
   skillId?: string;
   prompt?: string;
   name?: string;
-  metaTicketId?: string;
+  ticketId?: string;
 }
 
 export interface CostSummary {

@@ -151,11 +151,10 @@ class ProjectContext:
 
     @property
     def board_service(self) -> BoardService:
-        """Board service — wires trash and spec_drafts.trash on creation."""
+        """Board service — wires trash on creation."""
         if self._board_service is None:
             svc = BoardService(self.config)
             svc.trash_service = self.trash_service
-            svc.spec_drafts.trash_service = self.trash_service
             self._board_service = svc
         return self._board_service
 

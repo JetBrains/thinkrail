@@ -1,9 +1,9 @@
 import { create } from "zustand";
 import type {
-  MetaTicket,
-  MetaTicketSummary,
-  MetaTicketStatus,
-  MetaTicketType,
+  Ticket,
+  TicketSummary,
+  TicketStatus,
+  TicketType,
 } from "@/types/board.ts";
 import { getClient } from "@/api/index.ts";
 import { createBoardApi } from "@/api/methods/board.ts";
@@ -11,8 +11,14 @@ import { useSpecStore } from "./specStore.ts";
 import { useSessionStore } from "./sessionStore.ts";
 import { findStaleSpecIds, findStaleSessionIds } from "@/utils/staleRefs.ts";
 
+/** Drop the body field so a full Ticket fits TicketSummary. */
+function toSummary(t: Ticket): TicketSummary {
+  const { body: _body, ...rest } = t;
+  return rest;
+}
+
 interface BoardStore {
-  tickets: Map<string, MetaTicketSummary>;
+  tickets: Map<string, TicketSummary>;
   /** Ordered list of ticket IDs open as tabs */
   openTicketIds: string[];
   /** Currently active ticket tab (null = board or session/file is active) */
@@ -24,20 +30,22 @@ interface BoardStore {
   createTicket: (
     title: string,
     body?: string,
-    type?: MetaTicketType,
-    status?: MetaTicketStatus,
-  ) => Promise<MetaTicket>;
+    type?: TicketType,
+    status?: TicketStatus,
+  ) => Promise<Ticket>;
   updateTicket: (
     id: string,
     updates: {
       title?: string;
       body?: string;
-      status?: MetaTicketStatus;
-      type?: MetaTicketType;
+      status?: TicketStatus;
+      type?: TicketType;
     },
-  ) => Promise<MetaTicket>;
+  ) => Promise<Ticket>;
   deleteTicket: (id: string) => Promise<void>;
-  reorderTicket: (id: string, status: MetaTicketStatus, order: number) => Promise<void>;
+  reorderTicket: (id: string, status: TicketStatus, order: number) => Promise<void>;
+  skipPhase: (id: string, phase: TicketStatus) => Promise<Ticket>;
+  unskipPhase: (id: string, phase: TicketStatus) => Promise<Ticket>;
   /** Open a ticket as a tab and activate it */
   openTicket: (id: string) => void;
   /** Close a ticket tab */
@@ -46,16 +54,13 @@ interface BoardStore {
   activateTicket: (id: string) => void;
   /** Show the board view (deactivate any ticket) */
   showBoard: () => void;
-  /** One-shot hint: when MetaTicketDetail next mounts/reads, focus this session. */
-  pendingTicketSession: string | null;
-  setPendingTicketSession: (sid: string | null) => void;
 
   // Notification handlers
-  handleDidChange: (ticket: MetaTicketSummary) => void;
-  handleDidCreate: (ticket: MetaTicketSummary) => void;
+  handleDidChange: (ticket: TicketSummary) => void;
+  handleDidCreate: (ticket: TicketSummary) => void;
   handleDidDelete: (id: string) => void;
   /** Check if a ticket references specs or sessions that no longer exist */
-  getStaleTicketRefs: (ticketId: string) => { staleSpecIds: string[]; staleSessionIds: string[] } | null;
+  getStaleTicketRefs: (ticketId: string, extraKnownSessionIds?: Set<string>) => { staleSpecIds: string[]; staleSessionIds: string[] } | null;
   /** Remove stale spec/session references from a ticket */
   fixStaleTicketRefs: (ticketId: string) => Promise<void>;
 }
@@ -66,16 +71,13 @@ export const useBoardStore = create<BoardStore>((set, get) => ({
   activeTicketId: null,
   loading: false,
   error: null,
-  pendingTicketSession: null,
-
-  setPendingTicketSession: (sid) => set({ pendingTicketSession: sid }),
 
   fetchTickets: async () => {
     set({ loading: true, error: null });
     try {
       const api = createBoardApi(getClient());
       const list = await api.list();
-      const tickets = new Map<string, MetaTicketSummary>();
+      const tickets = new Map<string, TicketSummary>();
       for (const t of list) {
         tickets.set(t.id, t);
       }
@@ -90,7 +92,7 @@ export const useBoardStore = create<BoardStore>((set, get) => ({
     const api = createBoardApi(getClient());
     const ticket = await api.create(title, body, type, status);
     const tickets = new Map(get().tickets);
-    tickets.set(ticket.id, ticket);
+    tickets.set(ticket.id, toSummary(ticket));
     set({ tickets });
     return ticket;
   },
@@ -99,7 +101,7 @@ export const useBoardStore = create<BoardStore>((set, get) => ({
     const api = createBoardApi(getClient());
     const ticket = await api.update(id, updates);
     const tickets = new Map(get().tickets);
-    tickets.set(ticket.id, ticket);
+    tickets.set(ticket.id, toSummary(ticket));
     set({ tickets });
     return ticket;
   },
@@ -108,8 +110,26 @@ export const useBoardStore = create<BoardStore>((set, get) => ({
     const api = createBoardApi(getClient());
     const ticket = await api.reorder(id, status, order);
     const tickets = new Map(get().tickets);
-    tickets.set(ticket.id, ticket);
+    tickets.set(ticket.id, toSummary(ticket));
     set({ tickets });
+  },
+
+  skipPhase: async (id, phase) => {
+    const api = createBoardApi(getClient());
+    const ticket = await api.skipPhase(id, phase);
+    const tickets = new Map(get().tickets);
+    tickets.set(ticket.id, toSummary(ticket));
+    set({ tickets });
+    return ticket;
+  },
+
+  unskipPhase: async (id, phase) => {
+    const api = createBoardApi(getClient());
+    const ticket = await api.unskipPhase(id, phase);
+    const tickets = new Map(get().tickets);
+    tickets.set(ticket.id, toSummary(ticket));
+    set({ tickets });
+    return ticket;
   },
 
   deleteTicket: async (id) => {
@@ -165,7 +185,7 @@ export const useBoardStore = create<BoardStore>((set, get) => ({
       return { tickets, openTicketIds, activeTicketId };
     }),
 
-  getStaleTicketRefs: (ticketId) => {
+  getStaleTicketRefs: (ticketId, extraKnownSessionIds) => {
     const ticket = get().tickets.get(ticketId);
     if (!ticket) return null;
 
@@ -173,10 +193,15 @@ export const useBoardStore = create<BoardStore>((set, get) => ({
     const staleSpecIds = findStaleSpecIds(ticket.linkedSpecIds, specs);
 
     const sessionState = useSessionStore.getState();
-    const liveSids = new Set<string>();
-    for (const [sid] of sessionState.sessions) liveSids.add(sid);
-    for (const a of sessionState.archivedSessions) liveSids.add(a.bonsaiSid);
-    const staleSessionIds = findStaleSessionIds(ticket.sessionIds, liveSids);
+    const knownSids = new Set<string>();
+    for (const [sid] of sessionState.sessions) knownSids.add(sid);
+    for (const a of sessionState.archivedSessions) knownSids.add(a.bonsaiSid);
+    // Sessions present on disk but not yet loaded into the in-memory maps
+    // are still resumable — don't flag them as stale.
+    if (extraKnownSessionIds) {
+      for (const sid of extraKnownSessionIds) knownSids.add(sid);
+    }
+    const staleSessionIds = findStaleSessionIds(ticket.sessionIds, knownSids);
 
     if (staleSpecIds.length === 0 && staleSessionIds.length === 0) return null;
     return { staleSpecIds, staleSessionIds };

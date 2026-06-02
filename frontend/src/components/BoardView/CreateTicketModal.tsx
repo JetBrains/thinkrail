@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { useBoardStore } from "@/store/boardStore.ts";
-import type { MetaTicketType } from "@/types/board.ts";
+import type { TicketType } from "@/types/board.ts";
 import { Modal } from "@/components/ui/index.ts";
 
 interface CreateTicketModalProps {
@@ -11,7 +11,7 @@ interface CreateTicketModalProps {
 export function CreateTicketModal({ open, onClose }: CreateTicketModalProps) {
   const createTicket = useBoardStore((s) => s.createTicket);
   const [title, setTitle] = useState("");
-  const [type, setType] = useState<MetaTicketType>("feature");
+  const [type, setType] = useState<TicketType>("feature");
   const [body, setBody] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
@@ -61,7 +61,7 @@ export function CreateTicketModal({ open, onClose }: CreateTicketModalProps) {
 
         <div className="create-ticket-field">
           <label>Type</label>
-          <select value={type} onChange={(e) => setType(e.target.value as MetaTicketType)}>
+          <select value={type} onChange={(e) => setType(e.target.value as TicketType)}>
             <option value="feature">Feature</option>
             <option value="bug">Bug</option>
             <option value="idea">Idea</option>

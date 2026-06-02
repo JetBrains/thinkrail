@@ -46,7 +46,7 @@ async def run_agent(service: AgentService, **params: Any) -> dict:
         skill_id=params.get("skillId"),
         session_prompt=params.get("prompt"),
         name=params.get("name", ""),
-        meta_ticket_id=params.get("metaTicketId"),
+        ticket_id=params.get("ticketId"),
     )
     conn = get_current_conn()
     if conn:
@@ -59,7 +59,7 @@ async def run_agent(service: AgentService, **params: Any) -> dict:
             "filePaths": list(task.file_paths),
             "status": task.status,
             "config": task.config.model_dump(by_alias=True),
-            "metaTicketId": task.meta_ticket_id,
+            "ticketId": task.ticket_id,
             "createdAt": task.created,
             "createdBy": conn.display_name,
         })
@@ -148,7 +148,7 @@ async def prepare_agent(service: AgentService, **params: Any) -> dict:
         skill_id=params.get("skillId"),
         session_prompt=params.get("prompt"),
         name=params.get("name", ""),
-        meta_ticket_id=params.get("metaTicketId"),
+        ticket_id=params.get("ticketId"),
         file_paths=params.get("filePaths"),
     )
     auto_subscribe_all(task.bonsai_sid)
@@ -163,7 +163,7 @@ async def prepare_agent(service: AgentService, **params: Any) -> dict:
             "filePaths": list(task.file_paths),
             "status": task.status,
             "config": task.config.model_dump(by_alias=True),
-            "metaTicketId": task.meta_ticket_id,
+            "ticketId": task.ticket_id,
             "createdAt": task.created,
             "createdBy": conn.display_name,
         })
@@ -191,10 +191,14 @@ async def update_draft(service: AgentService, **params: Any) -> dict:
         kwargs["session_prompt"] = params["prompt"]
     if "name" in params:
         kwargs["name"] = params["name"]
-    if "metaTicketId" in params:
-        kwargs["meta_ticket_id"] = params["metaTicketId"]
+    if "ticketId" in params:
+        kwargs["ticket_id"] = params["ticketId"]
     if "filePaths" in params:
         kwargs["file_paths"] = params["filePaths"]
+    if "subagentMode" in params:
+        kwargs["subagent_mode"] = params["subagentMode"]
+    if "stepGate" in params:
+        kwargs["step_gate"] = params["stepGate"]
     structured = await service.update_draft(bonsai_sid, **kwargs)
     return {
         "systemPrompt": structured["full"],
@@ -224,7 +228,7 @@ async def start_draft(service: AgentService, **params: Any) -> dict:
             "filePaths": list(task.file_paths),
             "status": task.status,
             "config": task.config.model_dump(by_alias=True),
-            "metaTicketId": task.meta_ticket_id,
+            "ticketId": task.ticket_id,
             "createdAt": task.created,
             "createdBy": conn.display_name,
         })

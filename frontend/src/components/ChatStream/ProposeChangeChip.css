@@ -1,0 +1,110 @@
+.pcc {
+  background: var(--elevated);
+  border-left: 3px solid var(--blue);
+  border-radius: 0 6px 6px 0;
+  padding: 9px 11px;
+  margin: 6px 0;
+  font-size: var(--font-sm);
+}
+.pcc__row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.pcc__icon {
+  font-size: var(--font-md);
+}
+.pcc__path {
+  color: var(--blue);
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: var(--font-sm);
+}
+.pcc__section,
+.pcc__count {
+  color: var(--muted);
+  font-size: var(--font-xs);
+}
+.pcc__progress {
+  display: flex;
+  height: 4px;
+  background: var(--panel);
+  border-radius: 2px;
+  overflow: hidden;
+  margin: 8px 0 6px;
+}
+.pcc__seg--accepted {
+  background: var(--green);
+}
+.pcc__seg--rejected {
+  background: var(--red);
+}
+.pcc__seg--pending {
+  background: color-mix(in srgb, var(--blue) 60%, transparent);
+}
+.pcc__counts {
+  display: flex;
+  gap: 12px;
+  font-size: var(--font-xs);
+  color: var(--muted);
+  margin-bottom: 8px;
+}
+.pcc__accepted {
+  color: var(--green);
+}
+.pcc__rejected {
+  color: var(--red);
+}
+.pcc__pending {
+  color: var(--blue);
+}
+.pcc__actions {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+.pcc__btn {
+  font-size: var(--font-xs);
+  padding: 4px 10px;
+  border-radius: 3px;
+  background: var(--hover);
+  color: var(--text);
+  border: 1px solid var(--border);
+  cursor: pointer;
+}
+.pcc__btn--primary {
+  background: color-mix(in srgb, var(--blue) 50%, transparent);
+  color: #fff;
+  border-color: var(--blue);
+}
+.pcc__btn--danger {
+  background: color-mix(in srgb, var(--red) 30%, transparent);
+  color: color-mix(in srgb, var(--red) 90%, white);
+  border-color: var(--red);
+}
+.pcc__btn--review {
+  background: transparent;
+  color: var(--blue);
+  border-color: color-mix(in srgb, var(--blue) 40%, transparent);
+  margin-left: auto;
+}
+.pcc__discuss {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 8px;
+}
+.pcc__discuss textarea {
+  width: 100%;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  color: var(--text);
+  padding: 6px 8px;
+  font-size: var(--font-sm);
+  border-radius: 4px;
+  box-sizing: border-box;
+}
+.pcc__discuss-actions {
+  display: flex;
+  gap: 6px;
+}

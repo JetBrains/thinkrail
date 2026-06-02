@@ -96,6 +96,19 @@ class ToolApprovalResponse(BaseModel):
 
 # ─── Event payload models ──────────────────────────────────────────────────────
 
+class SessionArtifact(BaseModel):
+    """One file the session produced or focused on."""
+
+    model_config = _CAMEL_CONFIG
+
+    path: str
+    kind: Literal["write", "edit", "propose-change", "preview"]
+    role: str | None = None
+    label: str | None = None
+    first_touched_at: str
+    last_touched_at: str
+
+
 class SessionStartPayload(BaseModel):
     """Emitted once when the SDK session initializes."""
 
@@ -276,6 +289,9 @@ class SuggestSessionPayload(BaseModel):
     name: str = ""
     reason: str = ""
     prompt: str | None = None
+    # If the suggesting session is attached to a ticket, this carries the
+    # ticket id forward so the approved spawn inherits the same link.
+    ticket_id: str | None = None
     request_id: str = ""
 
 
@@ -320,6 +336,53 @@ class RequestExpiredPayload(BaseModel):
 
     request_id: str = ""
     reason: str = "timeout"
+
+
+class ProposeChangePayload(BaseModel):
+    """Agent proposes an amendment to a spec file; user reviews via four-button card."""
+
+    model_config = _CAMEL_CONFIG
+
+    request_id: str = ""
+    file_path: str
+    old_string: str
+    new_string: str
+    section: str | None = None
+    rationale: str | None = None
+
+
+class SetPreviewFilePayload(BaseModel):
+    """Open a file in the right Context Panel's Preview tab. Path null
+    means clear the preview (replaces the deprecated ClearPreviewFile)."""
+
+    model_config = _CAMEL_CONFIG
+
+    path: str | None
+    section: str | None = None
+
+
+class ClearPreviewFilePayload(BaseModel):
+    """DEPRECATED: hide the Preview tab. Use SetPreviewFile with path=null."""
+
+    model_config = _CAMEL_CONFIG
+
+
+class ArtifactAddedPayload(BaseModel):
+    """A new artifact was recorded on the session."""
+
+    model_config = _CAMEL_CONFIG
+
+    artifact: SessionArtifact
+
+
+class ArtifactLabeledPayload(BaseModel):
+    """An existing artifact got a role/label update."""
+
+    model_config = _CAMEL_CONFIG
+
+    path: str
+    role: str | None = None
+    label: str | None = None
 
 
 class UserMessagePayload(BaseModel):
@@ -463,6 +526,31 @@ class UserMessageEvent(_BaseEvent):
     payload: UserMessagePayload
 
 
+class ProposeChangeEvent(_BaseEvent):
+    event_type: Literal["proposeChange"]
+    payload: ProposeChangePayload
+
+
+class SetPreviewFileEvent(_BaseEvent):
+    event_type: Literal["setPreviewFile"]
+    payload: SetPreviewFilePayload
+
+
+class ClearPreviewFileEvent(_BaseEvent):
+    event_type: Literal["clearPreviewFile"]
+    payload: ClearPreviewFilePayload = Field(default_factory=ClearPreviewFilePayload)
+
+
+class ArtifactAddedEvent(_BaseEvent):
+    event_type: Literal["artifactAdded"]
+    payload: ArtifactAddedPayload
+
+
+class ArtifactLabeledEvent(_BaseEvent):
+    event_type: Literal["artifactLabeled"]
+    payload: ArtifactLabeledPayload
+
+
 # Discriminated union — single source of truth for both runtime validation
 # and TypeScript type generation (via `uv run python -m app.cli export-ws-schema`).
 AgentEvent = Annotated[
@@ -490,6 +578,11 @@ AgentEvent = Annotated[
         RequestResolvedEvent,
         RequestExpiredEvent,
         UserMessageEvent,
+        ProposeChangeEvent,
+        SetPreviewFileEvent,
+        ClearPreviewFileEvent,
+        ArtifactAddedEvent,
+        ArtifactLabeledEvent,
     ],
     Field(discriminator="event_type"),
 ]
@@ -617,7 +710,7 @@ class AgentTask(BaseModel):
     session_prompt: str | None = None
     config: AgentConfig = Field(default_factory=AgentConfig)
     session_id: str | None = None
-    meta_ticket_id: str | None = None
+    ticket_id: str | None = None
     system_prompt: str | None = None
     created_by: str | None = None
     created: str = Field(default_factory=lambda: datetime.now(UTC).isoformat())
@@ -628,6 +721,14 @@ class AgentTask(BaseModel):
     return_status: str | None = None
     return_summary: str | None = None
     outcome: SessionOutcome | None = None
+    # ── Per-session artifact list (ticket-linked sessions only) ──
+    artifacts: list[SessionArtifact] = Field(default_factory=list)
+    preview_path: str | None = None
+    # ── ticket-implement orchestration mode (see TICKET_LIFECYCLE_DESIGN.md
+    # § Implementation orchestration modes). Defaults preserve today's
+    # step-session-with-approval-gate behavior.
+    subagent_mode: Literal["step-session", "subagent"] = "step-session"
+    step_gate: Literal["approve", "autonomous"] = "approve"
 
 
 # Resolve forward refs for models that mention SessionOutcome before it was

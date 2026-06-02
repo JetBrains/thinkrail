@@ -1,0 +1,230 @@
+.impl-card {
+  margin: 6px 12px 6px 22px;
+  background: var(--panel);
+  border-radius: 6px;
+  border: 1px solid var(--border, #20222a);
+  overflow: hidden;
+}
+.impl-card__h {
+  padding: 6px 10px;
+  background: color-mix(in srgb, var(--panel) 80%, var(--blue));
+  border-bottom: 1px solid var(--border, #20222a);
+  font-size: var(--font-xs);
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.impl-card__meta {
+  margin-left: auto;
+  color: var(--muted);
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: var(--font-xs);
+  text-transform: none;
+  letter-spacing: 0;
+}
+.impl-card__body {
+  padding: 4px 0;
+}
+.impl-card__empty {
+  padding: 10px 12px;
+  color: var(--muted);
+  font-style: italic;
+  font-size: var(--font-sm);
+}
+
+/* ── PlanCard ── */
+.pc-milestone-group + .pc-milestone-group { border-top: 1px dashed var(--border, #20222a); }
+.pc-milestone {
+  padding: 5px 12px;
+  font-size: var(--font-sm);
+  color: var(--text);
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.pc-milestone--ungrouped { color: var(--muted); }
+.pc-mn { color: var(--muted); font-family: var(--font-mono, ui-monospace, monospace); font-weight: 500; font-size: var(--font-xs); }
+.pc-mt { flex: 1; }
+.pc-mp { color: var(--muted); font-family: var(--font-mono, ui-monospace, monospace); font-size: var(--font-xs); }
+
+.pc-step {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 12px 4px 26px;
+  font-size: var(--font-sm);
+  color: var(--text);
+  cursor: pointer;
+}
+.pc-step:hover { background: color-mix(in srgb, var(--blue) 6%, transparent); }
+.pc-step--cur {
+  background: color-mix(in srgb, var(--blue) 8%, transparent);
+  border-left: 2px solid var(--blue);
+  padding-left: 24px;
+}
+.pc-step--cur .pc-num { color: var(--blue); font-weight: 700; }
+.pc-num { color: var(--muted); font-family: var(--font-mono, ui-monospace, monospace); font-size: var(--font-xs); width: 18px; }
+.pc-title { flex: 1; }
+
+.pc-status {
+  font-size: var(--font-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  font-family: var(--font-mono, ui-monospace, monospace);
+  padding: 1px 6px;
+  border-radius: 3px;
+}
+.pc-status--done { background: color-mix(in srgb, var(--green) 18%, transparent); color: color-mix(in srgb, var(--green) 90%, white); }
+.pc-status--pending { background: color-mix(in srgb, var(--muted) 14%, transparent); color: var(--muted); }
+.pc-status--executing { background: color-mix(in srgb, var(--blue) 20%, transparent); color: var(--blue); }
+.pc-status--failed { background: color-mix(in srgb, var(--red) 20%, transparent); color: color-mix(in srgb, var(--red) 90%, white); }
+
+/* ── SessionsCard ── */
+.sess-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 12px;
+  font-size: var(--font-sm);
+  cursor: pointer;
+}
+.sess-row:hover { background: color-mix(in srgb, var(--blue) 6%, transparent); }
+.sess-icon { width: 16px; text-align: center; }
+.sess-name { flex: 1; }
+.sess-pill {
+  font-size: var(--font-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  font-family: var(--font-mono, ui-monospace, monospace);
+  padding: 1px 6px;
+  border-radius: 3px;
+}
+.sess-pill--running { background: color-mix(in srgb, var(--blue) 20%, transparent); color: var(--blue); }
+.sess-pill--done    { background: color-mix(in srgb, var(--green) 18%, transparent); color: color-mix(in srgb, var(--green) 90%, white); }
+.sess-pill--error   { background: color-mix(in srgb, var(--red) 18%, transparent); color: color-mix(in srgb, var(--red) 90%, white); }
+.sess-pill--idle    { background: color-mix(in srgb, var(--muted) 14%, transparent); color: var(--muted); }
+
+/* ── Row pills + CTA ── */
+.tpl-row-pill {
+  font-size: var(--font-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  padding: 1px 7px;
+  border-radius: 3px;
+  font-family: var(--font-mono, ui-monospace, monospace);
+}
+.tpl-row-pill--planning  { background: color-mix(in srgb, var(--orange, #ffc06b) 18%, transparent); color: var(--orange, #ffc06b); }
+.tpl-row-pill--executing { background: color-mix(in srgb, var(--blue) 20%, transparent); color: var(--blue); }
+.tpl-row-pill--done      { background: color-mix(in srgb, var(--green) 18%, transparent); color: color-mix(in srgb, var(--green) 90%, white); }
+.tpl-row-pill--skipped   { background: color-mix(in srgb, var(--muted) 14%, transparent); color: var(--muted); }
+.tpl-row-pill--future    { background: color-mix(in srgb, var(--muted) 10%, transparent); color: var(--muted); }
+.tpl-row-counter {
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: var(--font-xs);
+  color: var(--muted);
+  margin-left: 4px;
+}
+
+.tpl-cta {
+  margin: 8px 12px 4px 22px;
+  padding: 6px 10px;
+  background: color-mix(in srgb, var(--blue) 14%, transparent);
+  border: 1px solid color-mix(in srgb, var(--blue) 30%, transparent);
+  color: var(--blue);
+  border-radius: 4px;
+  font-size: var(--font-sm);
+  cursor: pointer;
+  width: calc(100% - 34px);
+  text-align: center;
+}
+.tpl-cta:hover { background: color-mix(in srgb, var(--blue) 20%, transparent); }
+
+/* ── TicketArtifactBar ── */
+.tab-bar {
+  display: flex; align-items: center; gap: 4px;
+  background: var(--panel);
+  border-bottom: 1px solid var(--border, #20222a);
+  height: 34px;
+  padding: 0 4px;
+  position: relative;
+}
+.tab-bar--collapsed { gap: 8px; padding: 0 12px; }
+.tab-bar__tabs {
+  flex: 1; display: flex; overflow-x: auto; align-items: stretch; height: 100%;
+  scrollbar-width: thin;
+}
+.tab-bar__tab {
+  display: flex; align-items: center; gap: 6px;
+  padding: 0 12px;
+  background: var(--elevated);
+  color: var(--muted, #9aa0a6);
+  font-size: var(--font-xs);
+  cursor: pointer;
+  border-right: 1px solid var(--border, #20222a);
+  flex-shrink: 0;
+  max-width: 200px;
+}
+.tab-bar__tab:hover { background: var(--hover); color: var(--text); }
+.tab-bar__tab--active {
+  background: var(--bg, #14151a);
+  color: var(--text);
+  border-bottom: 2px solid var(--blue);
+}
+.tab-bar__icon { flex-shrink: 0; }
+.tab-bar__name {
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  font-family: var(--font-mono, ui-monospace, monospace); font-size: var(--font-xs);
+}
+.tab-bar__live {
+  font-size: 9px; padding: 1px 5px; border-radius: 3px;
+  background: color-mix(in srgb, var(--blue) 20%, transparent);
+  color: var(--blue);
+  text-transform: uppercase; letter-spacing: 0.05em;
+  flex-shrink: 0;
+}
+.tab-bar__count {
+  font-size: var(--font-xs); color: var(--muted);
+  margin-left: auto;
+}
+.tab-bar__btn {
+  width: 26px; height: 26px;
+  background: transparent;
+  border: 0;
+  color: var(--muted);
+  cursor: pointer;
+  font-size: var(--font-md);
+  border-radius: 4px;
+}
+.tab-bar__btn:hover { background: var(--elevated); color: var(--text); }
+.tab-bar__dropdown {
+  position: absolute; top: 100%; right: 4px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  min-width: 220px;
+  z-index: 10;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+  padding: 4px 0;
+}
+.tab-bar__dropdown-row {
+  display: flex; align-items: center; gap: 8px;
+  padding: 5px 10px;
+  font-size: var(--font-sm);
+  cursor: pointer;
+  color: var(--text);
+}
+.tab-bar__dropdown-row:hover { background: var(--elevated); }
+.tab-bar__dropdown-row--sel {
+  background: color-mix(in srgb, var(--blue) 10%, transparent);
+}
+
+/* ── TicketPreviewPanel ── */
+.ticket-preview-panel { display: flex; flex-direction: column; height: 100%; min-height: 0; }
+.ticket-preview-body { flex: 1; overflow: auto; min-height: 0; }
+.ticket-preview-empty {
+  padding: 24px; color: var(--muted); font-style: italic; text-align: center;
+}

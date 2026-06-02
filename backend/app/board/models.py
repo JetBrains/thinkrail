@@ -14,16 +14,24 @@ def _to_camel(name: str) -> str:
 
 _CAMEL_CONFIG = ConfigDict(alias_generator=_to_camel, populate_by_name=True)
 
-MetaTicketStatus = Literal[
+TicketStatus = Literal[
     "idea",
-    "described",
-    "specified",
-    "planned",
-    "executing",
+    "product-design",
+    "technical-design",
+    "amend-specs",
+    "implementation-plan",
+    "implementing",
     "done",
 ]
 
-MetaTicketType = Literal["feature", "bug", "idea", "improvement"]
+TicketType = Literal["feature", "bug", "idea", "improvement"]
+
+ArtifactKind = Literal[
+    "product_design",
+    "technical_design",
+    "history",
+    "implementation_plan",
+]
 
 
 def _make_id() -> str:
@@ -34,21 +42,7 @@ def _now_iso() -> str:
     return datetime.now(UTC).isoformat()
 
 
-class SpecPatch(BaseModel):
-    """A permanent record of a spec change, stored as a unified diff patch file."""
-
-    model_config = _CAMEL_CONFIG
-
-    spec_id: str
-    spec_title: str
-    operation: Literal["created", "modified", "deleted"]
-    patch_path: str  # relative path to .patch file
-    spec_path: str   # path to the actual spec file
-    session_id: str = ""
-    created: str = Field(default_factory=_now_iso)
-
-
-class MetaTicket(BaseModel):
+class Ticket(BaseModel):
     """A meta-ticket representing an idea, feature, bug, or improvement."""
 
     model_config = _CAMEL_CONFIG
@@ -56,50 +50,79 @@ class MetaTicket(BaseModel):
     id: str = Field(default_factory=_make_id)
     title: str
     body: str = ""
-    status: MetaTicketStatus = "idea"
-    type: MetaTicketType = "feature"
-    plan_path: str | None = None
+    status: TicketStatus = "idea"
+    type: TicketType = "feature"
+
+    # ── Artifact paths (relative to project root) ─────────────────
+    product_design_path: str | None = None
+    technical_design_path: str | None = None
+    history_path: str | None = None
+    implementation_plan_path: str | None = None
+
+    # ── Staleness flags ─────────────────────────────────────────
+    technical_design_stale: bool = False
+    history_stale: bool = False
+    implementation_plan_stale: bool = False
+
+    # ── Existing fields ─────────────────────────────────────────
     orchestrator_session_id: str | None = None
     linked_spec_ids: list[str] = Field(default_factory=list)
     session_ids: list[str] = Field(default_factory=list)
-    spec_patches: list[SpecPatch] = Field(default_factory=list)
     order: int = 0
     created: str = Field(default_factory=_now_iso)
     updated: str = Field(default_factory=_now_iso)
 
+    # ── Skipped phases (set by user via vertical phase list) ────
+    skipped_phases: list[TicketStatus] = Field(default_factory=list)
 
-class MetaTicketSummary(BaseModel):
+
+class TicketSummary(BaseModel):
     """Lightweight listing model (no body) for the board view."""
 
     model_config = _CAMEL_CONFIG
 
     id: str
     title: str
-    status: MetaTicketStatus
-    type: MetaTicketType
-    plan_path: str | None = None
+    status: TicketStatus
+    type: TicketType
+
+    product_design_path: str | None = None
+    technical_design_path: str | None = None
+    history_path: str | None = None
+    implementation_plan_path: str | None = None
+
+    technical_design_stale: bool = False
+    history_stale: bool = False
+    implementation_plan_stale: bool = False
+
     orchestrator_session_id: str | None = None
     linked_spec_ids: list[str] = Field(default_factory=list)
     session_ids: list[str] = Field(default_factory=list)
-    spec_patch_count: int = 0
     order: int = 0
     created: str = ""
     updated: str = ""
+    skipped_phases: list[TicketStatus] = Field(default_factory=list)
 
     @classmethod
-    def from_ticket(cls, ticket: MetaTicket) -> MetaTicketSummary:
+    def from_ticket(cls, ticket: Ticket) -> TicketSummary:
         """Build a summary from a full ticket, computing derived fields."""
         return cls(
             id=ticket.id,
             title=ticket.title,
             status=ticket.status,
             type=ticket.type,
-            plan_path=ticket.plan_path,
+            product_design_path=ticket.product_design_path,
+            technical_design_path=ticket.technical_design_path,
+            history_path=ticket.history_path,
+            implementation_plan_path=ticket.implementation_plan_path,
+            technical_design_stale=ticket.technical_design_stale,
+            history_stale=ticket.history_stale,
+            implementation_plan_stale=ticket.implementation_plan_stale,
             orchestrator_session_id=ticket.orchestrator_session_id,
             linked_spec_ids=ticket.linked_spec_ids,
             session_ids=ticket.session_ids,
-            spec_patch_count=len(ticket.spec_patches),
             order=ticket.order,
             created=ticket.created,
             updated=ticket.updated,
+            skipped_phases=list(ticket.skipped_phases),
         )

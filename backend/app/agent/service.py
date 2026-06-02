@@ -9,7 +9,7 @@ from typing import Any
 from app.agent.context import build_context
 from app.agent.exceptions import InvalidCapabilityValueError
 from app.agent.models import AgentConfig, AgentTask, SubsessionType
-from app.agent.persistence import append_event, save_session, load_session, list_sessions as list_sessions_from_disk, delete_session as delete_session_from_disk, update_session_metadata
+from app.agent.persistence import append_event, save_session, load_session, list_sessions as list_sessions_from_disk, delete_session as delete_session_from_disk, update_session_metadata, load_events
 from app.agent.runtime import (
     IAgentRuntime,
     LabeledOption,
@@ -24,6 +24,16 @@ from app.core.config import AppConfig
 from app.spec.service import SpecService
 
 logger = logging.getLogger(__name__)
+
+# Skills whose system prompt should be augmented with the ticket's title and
+# body. Covers all per-ticket drafting/implementing skills.
+_TICKET_BODY_SKILLS: frozenset[str] = frozenset({
+    "ticket-product-design",
+    "ticket-technical-design",
+    "ticket-amend-specs",
+    "ticket-implementation-plan",
+    "ticket-implement",
+})
 
 
 class AgentService:
@@ -115,7 +125,9 @@ class AgentService:
                     skill_id=entry.get("skillId"),
                     session_prompt=entry.get("sessionPrompt"),
                     config=AgentConfig(**entry.get("config", {})),
-                    meta_ticket_id=entry.get("metaTicketId"),
+                    ticket_id=entry.get("ticketId"),
+                    subagent_mode=entry.get("subagentMode") or "step-session",
+                    step_gate=entry.get("stepGate") or "approve",
                     system_prompt=entry.get("systemPrompt"),
                     created=entry.get("createdAt", ""),
                     updated=entry.get("updatedAt", ""),
@@ -140,7 +152,7 @@ class AgentService:
         skill_id: str | None = None,
         session_prompt: str | None = None,
         name: str = "",
-        meta_ticket_id: str | None = None,
+        ticket_id: str | None = None,
         file_paths: list[str] | None = None,
     ) -> AgentTask:
         """Create a draft session without starting the runner.
@@ -152,7 +164,7 @@ class AgentService:
             spec_ids, config, skill_id=skill_id, session_prompt=session_prompt, name=name,
         )
         task.status = "draft"
-        task.meta_ticket_id = meta_ticket_id
+        task.ticket_id = ticket_id
         if file_paths:
             task.file_paths = file_paths
         self._attach_to_ticket(task)
@@ -168,8 +180,10 @@ class AgentService:
         config: AgentConfig | None = None,
         session_prompt: str | None = ...,  # type: ignore[assignment]
         name: str | None = ...,  # type: ignore[assignment]
-        meta_ticket_id: str | None = ...,  # type: ignore[assignment]
+        ticket_id: str | None = ...,  # type: ignore[assignment]
         file_paths: list[str] | None = ...,  # type: ignore[assignment]
+        subagent_mode: str | None = None,
+        step_gate: str | None = None,
     ) -> str:
         """Update a draft session's config and rebuild its system prompt.
 
@@ -190,15 +204,21 @@ class AgentService:
             task.session_prompt = session_prompt
         if name is not ...:
             task.name = name
-        if meta_ticket_id is not ...:
-            old_ticket_id = task.meta_ticket_id
-            if old_ticket_id and old_ticket_id != meta_ticket_id and self.board_service:
+        if subagent_mode is not None:
+            if subagent_mode in ("step-session", "subagent"):
+                task.subagent_mode = subagent_mode
+        if step_gate is not None:
+            if step_gate in ("approve", "autonomous"):
+                task.step_gate = step_gate
+        if ticket_id is not ...:
+            old_ticket_id = task.ticket_id
+            if old_ticket_id and old_ticket_id != ticket_id and self.board_service:
                 try:
                     self.board_service.detach_session(old_ticket_id, task.bonsai_sid)
                 except Exception:
                     logger.warning("Failed to detach session from ticket %s", old_ticket_id)
-            task.meta_ticket_id = meta_ticket_id
-            if meta_ticket_id:
+            task.ticket_id = ticket_id
+            if ticket_id:
                 self._attach_to_ticket(task)
         task.system_prompt = await self._build_context_for(task)
         self._save_task(task)
@@ -237,7 +257,7 @@ class AgentService:
         skill_id: str | None = None,
         session_prompt: str | None = None,
         name: str = "",
-        meta_ticket_id: str | None = None,
+        ticket_id: str | None = None,
     ) -> AgentTask:
         """Start a persistent agent session (one-step shortcut).
 
@@ -248,7 +268,7 @@ class AgentService:
         task = self._tracker.create_task(
             spec_ids, config, skill_id=skill_id, session_prompt=session_prompt, name=name,
         )
-        task.meta_ticket_id = meta_ticket_id
+        task.ticket_id = ticket_id
         self._validate_config_against_caps(task)
         self._attach_to_ticket(task)
         spec_context = await self._build_context_for(task)
@@ -430,10 +450,14 @@ class AgentService:
             "config": task.config.model_dump(by_alias=True),
             "status": task.status,
             "sessionId": task.session_id,
-            "metaTicketId": task.meta_ticket_id,
+            "ticketId": task.ticket_id,
             "createdAt": task.created,
             "updatedAt": task.updated,
             "createdBy": task.created_by,
+            "artifacts": [a.model_dump(by_alias=True) for a in task.artifacts],
+            "previewPath": task.preview_path,
+            "subagentMode": task.subagent_mode,
+            "stepGate": task.step_gate,
         }
         if task.system_prompt is not None:
             data["systemPrompt"] = task.system_prompt
@@ -462,6 +486,57 @@ class AgentService:
         """Append an event to the persisted session file."""
         append_event(self._config.project_root, bonsai_sid, event)
 
+    # ── Subagent → plan-step linkage ─────────────────────────────────────
+    # Used by _persisting_notify when the orchestrator (ticket-implement in
+    # subagent mode) emits a Task call carrying a ``[bonsai-step …]`` marker.
+
+    def _mark_step_running(
+        self, ticket_id: str, step_number: int, event_index: int,
+    ) -> None:
+        """Point ``plan.steps[step-1]`` at ``event_index`` and flip status to
+        ``executing``. Best-effort — failures are logged and swallowed so a
+        plan-update bug never blocks the event stream.
+        """
+        if not self.board_service or not self.board_service.plans.plan_exists(ticket_id):
+            return
+        try:
+            plan = self.board_service.plans.read_plan(ticket_id)
+        except Exception:
+            logger.debug("No plan for ticket %s; subagent linkage skipped", ticket_id)
+            return
+        step = next(
+            (s for s in plan.all_steps() if s.number == step_number), None,
+        )
+        if step is None:
+            return
+        step.event_index = event_index
+        step.status = "executing"
+        try:
+            self.board_service.plans.save_plan(ticket_id, plan)
+        except Exception:
+            logger.debug("Failed to persist plan for %s", ticket_id, exc_info=True)
+
+    def _mark_step_finished(
+        self, ticket_id: str, step_number: int, is_error: bool,
+    ) -> None:
+        """Flip ``plan.steps[step-1].status`` to ``done`` (or ``failed``)."""
+        if not self.board_service or not self.board_service.plans.plan_exists(ticket_id):
+            return
+        try:
+            plan = self.board_service.plans.read_plan(ticket_id)
+        except Exception:
+            return
+        step = next(
+            (s for s in plan.all_steps() if s.number == step_number), None,
+        )
+        if step is None:
+            return
+        step.status = "failed" if is_error else "done"
+        try:
+            self.board_service.plans.save_plan(ticket_id, plan)
+        except Exception:
+            logger.debug("Failed to persist plan for %s", ticket_id, exc_info=True)
+
     def list_all_sessions(self) -> list[dict]:
         """List all sessions: in-memory active + on-disk archived."""
         # Start with disk sessions
@@ -478,7 +553,7 @@ class AgentService:
                 "specIds": list(task.spec_ids),
                 "status": task.status,
                 "model": task.config.model,
-                "metaTicketId": task.meta_ticket_id,
+                "ticketId": task.ticket_id,
                 "createdAt": task.created,
                 "updatedAt": task.updated,
                 "active": task.status not in ("done", "error"),
@@ -495,6 +570,8 @@ class AgentService:
                 entry["systemPrompt"] = task.system_prompt
                 entry["sessionPrompt"] = task.session_prompt
                 entry["filePaths"] = list(task.file_paths)
+                entry["subagentMode"] = task.subagent_mode
+                entry["stepGate"] = task.step_gate
             disk[task.bonsai_sid] = entry
         return list(disk.values())
 
@@ -509,9 +586,14 @@ class AgentService:
             data["status"] = task.status
             if task.outcome is not None:
                 data["outcome"] = task.outcome.model_dump(by_alias=True)
-            pending = self._tracker.get_pending_request(bonsai_sid)
-            if pending is not None:
-                data["pendingRequest"] = pending
+            # Live artifacts win over disk (disk lags by one tool-call cycle)
+            data["artifacts"] = [a.model_dump(by_alias=True) for a in task.artifacts]
+            data["previewPath"] = task.preview_path
+            data["pendingRequests"] = self._tracker.list_pending_requests(bonsai_sid)
+            # ticket-implement orchestration mode — live tracker value beats
+            # whatever was on disk before the most recent update_draft.
+            data["subagentMode"] = task.subagent_mode
+            data["stepGate"] = task.step_gate
         else:
             # Not in tracker — correct stale status (no live runner)
             status = data.get("status", "done")
@@ -594,7 +676,21 @@ class AgentService:
             name=name,
             bonsai_sid=bonsai_sid,
         )
+        task.ticket_id = old.get("ticketId")
+        task.subagent_mode = old.get("subagentMode", "step-session")
+        task.step_gate = old.get("stepGate", "approve")
         self._validate_config_against_caps(task)
+
+        # Re-hydrate artifact tracking so the right Context Panel doesn't
+        # reset to empty after a backend restart.
+        from app.agent.models import SessionArtifact
+
+        for entry in old.get("artifacts", []) or []:
+            try:
+                task.artifacts.append(SessionArtifact.model_validate(entry))
+            except Exception:
+                logger.debug("Skipping malformed persisted artifact: %r", entry)
+        task.preview_path = old.get("previewPath")
 
         # Update metadata only (don't touch events JSONL)
         metadata = {
@@ -605,9 +701,14 @@ class AgentService:
             "config": old_config.model_dump(by_alias=True),
             "status": "initializing",
             "sessionId": old_session_id,
+            "ticketId": task.ticket_id,
             "createdAt": old.get("createdAt", task.created),
             "updatedAt": task.updated,
             "metrics": old.get("metrics", {}),
+            "artifacts": [a.model_dump(by_alias=True) for a in task.artifacts],
+            "previewPath": task.preview_path,
+            "subagentMode": task.subagent_mode,
+            "stepGate": task.step_gate,
         }
         save_session(self._config.project_root, metadata)
 
@@ -635,16 +736,27 @@ class AgentService:
         return self.runtime_registry.get(task.config.runtime)
 
     def _attach_to_ticket(self, task: AgentTask) -> None:
-        """Auto-attach session to meta-ticket and set orchestrator if applicable."""
-        if not task.meta_ticket_id or not self.board_service:
+        """Auto-attach session to meta-ticket and set orchestrator if applicable.
+
+        The orchestrator marker is now anchored on `task.skill_id ==
+        "ticket-implement"` rather than a fragile `task.name` prefix check.
+        TicketInfo names implement sessions ``"Implement: <title>"`` —
+        which the old prefix check (``"Execute:"`` / ``"Orchestrate:"``)
+        missed entirely, so `ticket.orchestrator_session_id` was never
+        set and the UI's orchestrator wiring went silent.
+        """
+        if not task.ticket_id or not self.board_service:
             return
         try:
-            self.board_service.attach_session(task.meta_ticket_id, task.bonsai_sid)
-            ticket = self.board_service.get_ticket(task.meta_ticket_id)
-            if ticket.plan_path and (task.name.startswith("Execute:") or task.name.startswith("Orchestrate:")):
-                self.board_service.set_orchestrator(task.meta_ticket_id, task.bonsai_sid)
+            self.board_service.attach_session(task.ticket_id, task.bonsai_sid)
+            ticket = self.board_service.get_ticket(task.ticket_id)
+            if (
+                ticket.implementation_plan_path
+                and task.skill_id == "ticket-implement"
+            ):
+                self.board_service.set_orchestrator(task.ticket_id, task.bonsai_sid)
         except Exception:
-            logger.warning("Failed to attach session to ticket %s", task.meta_ticket_id)
+            logger.warning("Failed to attach session to ticket %s", task.ticket_id)
 
     async def _run_background(
         self,
@@ -684,6 +796,13 @@ class AgentService:
         }
         _wall_start = time.monotonic()
 
+        # Maps SDK tool_use_id → plan step number for in-flight Task subagent
+        # calls. Populated on agent/toolCallStart when the prompt carries a
+        # ``[bonsai-step …]`` marker; drained on the matching agent/toolCallEnd.
+        # Scoped to one orchestrator run; restart loses the mapping (matches
+        # the v2 "no per-subagent restart" limit).
+        _subagent_tool_uses: dict[str, int] = {}
+
         # Publish via EventBus and persist events to disk.
         _bus = self._get_bus()
 
@@ -691,6 +810,74 @@ class AgentService:
             await _bus.publish_to_session(
                 task.bonsai_sid, method, params, request_id=request_id,
             )
+            # Subagent step linkage — when ticket-implement's orchestrator
+            # fires a Task call whose prompt carries a ``[bonsai-step …]``
+            # marker, point the matching plan step at this event's index
+            # and flip status to ``executing``. See TICKET_LIFECYCLE_DESIGN.md
+            # § Implementation orchestration modes.
+            if method == "agent/toolCallStart":
+                tool_name = params.get("toolName") or ""
+                tool_use_id = params.get("toolUseId") or ""
+                tool_input = params.get("toolInput") or {}
+                if tool_name == "Task" and task.ticket_id and tool_use_id:
+                    from app.agent.subagents import parse_bonsai_step_marker
+
+                    prompt_text = (
+                        tool_input.get("prompt")
+                        or tool_input.get("description")
+                        or ""
+                    )
+                    marker = parse_bonsai_step_marker(str(prompt_text))
+                    if marker is not None and marker["ticket_id"] == task.ticket_id:
+                        event_index = len(
+                            load_events(self._config.project_root, task.bonsai_sid)
+                        )
+                        _subagent_tool_uses[tool_use_id] = marker["step"]
+                        self._mark_step_running(
+                            task.ticket_id, marker["step"], event_index,
+                        )
+
+            if method == "agent/toolCallEnd":
+                tool_use_id = params.get("toolUseId") or ""
+                if tool_use_id in _subagent_tool_uses and task.ticket_id:
+                    step_number = _subagent_tool_uses.pop(tool_use_id)
+                    is_error = bool(params.get("isError"))
+                    self._mark_step_finished(
+                        task.ticket_id, step_number, is_error,
+                    )
+
+            # Record artifacts for Write / Edit / NotebookEdit tool calls
+            # (ticket-linked sessions only — helper guards on ticket_id).
+            if method == "agent/toolCallStart":
+                from app.agent.artifacts import record_artifact
+
+                tool_name = params.get("toolName") or ""
+                tool_input = params.get("toolInput") or {}
+                file_path = (
+                    tool_input.get("file_path")
+                    or tool_input.get("notebook_path")
+                )
+                if file_path and tool_name in ("Write", "Edit", "NotebookEdit"):
+                    artifact_kind = "write" if tool_name == "Write" else "edit"
+                    artifact = record_artifact(
+                        task,
+                        str(file_path),
+                        artifact_kind,
+                        self._config.get_project_root(),
+                    )
+                    if artifact is not None:
+                        from app.agent.artifacts import persist_artifact_state
+
+                        persist_artifact_state(self._config.project_root, task)
+                        await _bus.publish_to_session(
+                            task.bonsai_sid,
+                            "ui/artifactAdded",
+                            {
+                                "bonsaiSid": task.bonsai_sid,
+                                "artifact": artifact.model_dump(by_alias=True),
+                            },
+                        )
+
             # Persist streaming events (skip overly frequent and ephemeral ones)
             if method.startswith("agent/") and method not in ("agent/progress", "agent/costEstimate", "agent/statusChanged"):
                 event_type = method.replace("agent/", "")
@@ -830,22 +1017,22 @@ class AgentService:
 
     async def _notify_orchestrator_on_step_complete(self, task: AgentTask) -> None:
         """If this session belongs to a meta-ticket with an orchestrator, notify it."""
-        if not task.meta_ticket_id or not self.board_service:
+        if not task.ticket_id or not self.board_service:
             return
         try:
-            ticket = self.board_service.get_ticket(task.meta_ticket_id)
+            ticket = self.board_service.get_ticket(task.ticket_id)
             orch_sid = ticket.orchestrator_session_id
             if not orch_sid or orch_sid == task.bonsai_sid:
                 return  # Don't notify self, or no orchestrator
 
             # Update the plan step that matches this session
-            if ticket.plan_path and self.board_service.plans.plan_exists(task.meta_ticket_id):
-                plan = self.board_service.plans.read_plan(task.meta_ticket_id)
+            if ticket.implementation_plan_path and self.board_service.plans.plan_exists(task.ticket_id):
+                plan = self.board_service.plans.read_plan(task.ticket_id)
                 for step in plan.all_steps():
                     if step.session_id == task.bonsai_sid:
                         new_status = "done" if task.status == "done" else "failed"
                         self.board_service.plans.update_step_status(
-                            task.meta_ticket_id, step.number, new_status,
+                            task.ticket_id, step.number, new_status,
                         )
                         break
 
@@ -855,72 +1042,11 @@ class AgentService:
                 msg = f"[Step session {task.name or task.bonsai_sid[:8]} {status_word}]"
                 self._tracker.enqueue_message(orch_sid, msg)
         except Exception:
-            logger.debug("Failed to notify orchestrator for ticket %s", task.meta_ticket_id)
+            logger.debug("Failed to notify orchestrator for ticket %s", task.ticket_id)
 
     async def _build_context_for(self, task: AgentTask) -> str:
         t0 = time.monotonic()
-
-        # Inject plan content into session prompt for sessions linked to a
-        # ticket with a plan. The framing depends on the session's role:
-        # - ticket-plan → "Existing Plan" (the planning session refines it)
-        # - ticket-execute → "As the orchestrator" (drives suggest_step)
-        # - any other skill (or none — e.g. step sessions started by
-        #   approving a suggest_step card) → plain "Plan (for reference)"
-        #   so the step session doesn't get told to act as an orchestrator
-        #   and re-emit suggest_step itself.
-        session_prompt = task.session_prompt
-        if task.meta_ticket_id and self.board_service:
-            try:
-                ticket = self.board_service.get_ticket(task.meta_ticket_id)
-                if ticket.plan_path and self.board_service.plans.plan_exists(task.meta_ticket_id):
-                    from app.board.plan import _render_plan
-                    plan = self.board_service.plans.read_plan(task.meta_ticket_id)
-                    plan_text = _render_plan(plan)
-                    if task.skill_id == "ticket-plan":
-                        plan_section = (
-                            "## Existing Plan\n\n"
-                            "The following plan already exists for this ticket. "
-                            "Review it and update/refine it based on the user's feedback. "
-                            "Write the updated plan back to the same file.\n\n"
-                            f"{plan_text}"
-                        )
-                    elif task.skill_id == "ticket-execute":
-                        plan_section = (
-                            "## Implementation Plan\n\n"
-                            "The following plan is associated with this ticket. "
-                            "As the orchestrator, read the plan, identify the next unblocked step, "
-                            "and call `suggest_step` to propose it for execution.\n\n"
-                            f"{plan_text}"
-                        )
-                    else:
-                        plan_section = (
-                            "## Plan (for reference)\n\n"
-                            "The following plan is associated with this ticket. "
-                            "Use it as context for your work; do not act as the "
-                            "orchestrator (do not call `suggest_step`).\n\n"
-                            f"{plan_text}"
-                        )
-                    session_prompt = (
-                        f"{session_prompt}\n\n{plan_section}" if session_prompt else plan_section
-                    )
-            except Exception:
-                logger.debug("Failed to inject plan for ticket %s", task.meta_ticket_id)
-
-        # Inject ticket title + body for describe sessions
-        if task.meta_ticket_id and self.board_service and task.skill_id == "ticket-describe":
-            try:
-                ticket = self.board_service.get_ticket(task.meta_ticket_id)
-                ticket_section = (
-                    "## Current Ticket\n\n"
-                    f"**Title:** {ticket.title}\n\n"
-                    f"**Current body:**\n{ticket.body or '(empty)'}\n"
-                )
-                session_prompt = (
-                    f"{session_prompt}\n\n{ticket_section}" if session_prompt else ticket_section
-                )
-            except Exception:
-                logger.debug("Failed to inject ticket for %s", task.meta_ticket_id)
-
+        session_prompt = self._augment_session_prompt(task)
         ctx = await build_context(
             spec_ids=task.spec_ids,
             skill_id=task.skill_id,
@@ -939,28 +1065,7 @@ class AgentService:
         """Build structured section data for the prompt preview UI."""
         from app.agent.context import build_context_structured
 
-        # Compute the same session_prompt augmentations as _build_context_for
-        session_prompt = task.session_prompt
-        if task.meta_ticket_id and self.board_service:
-            try:
-                ticket = self.board_service.get_ticket(task.meta_ticket_id)
-                if ticket.plan_path and self.board_service.plans.plan_exists(task.meta_ticket_id):
-                    from app.board.plan import _render_plan
-                    plan = self.board_service.plans.read_plan(task.meta_ticket_id)
-                    plan_text = _render_plan(plan)
-                    label = "Existing Plan" if task.skill_id == "ticket-plan" else "Implementation Plan"
-                    plan_section = f"## {label}\n\n{plan_text}"
-                    session_prompt = f"{session_prompt}\n\n{plan_section}" if session_prompt else plan_section
-            except Exception:
-                pass
-            if task.skill_id == "ticket-describe":
-                try:
-                    ticket = self.board_service.get_ticket(task.meta_ticket_id)
-                    ticket_section = f"## Current Ticket\n\n**Title:** {ticket.title}\n\n**Current body:**\n{ticket.body or '(empty)'}\n"
-                    session_prompt = f"{session_prompt}\n\n{ticket_section}" if session_prompt else ticket_section
-                except Exception:
-                    pass
-
+        session_prompt = self._augment_session_prompt(task)
         return await build_context_structured(
             spec_ids=task.spec_ids,
             skill_id=task.skill_id,
@@ -970,6 +1075,143 @@ class AgentService:
             spec_service=self._spec_service,
             plugin_dir=self._config.plugin_dir,
             file_paths=task.file_paths,
+        )
+
+    def _augment_session_prompt(self, task: AgentTask) -> str | None:
+        """Inject plan and ticket sections into ``task.session_prompt``.
+
+        Plan framing depends on the session's role:
+        - ``ticket-implementation-plan`` → "Existing Plan" (refine it)
+        - ``ticket-implement`` → "As the orchestrator" (drives suggest_step)
+        - any other skill (or none — e.g. step sessions started by approving
+          a suggest_step card) → "Plan (for reference)" so step sessions
+          don't act as orchestrator and re-emit suggest_step.
+
+        Ticket title + body are injected for every drafting/implementing
+        skill in :data:`_TICKET_BODY_SKILLS`.
+        """
+        session_prompt = task.session_prompt
+        if not (task.ticket_id and self.board_service):
+            return session_prompt
+
+        try:
+            ticket = self.board_service.get_ticket(task.ticket_id)
+        except Exception:
+            logger.debug("Failed to load ticket %s", task.ticket_id)
+            return session_prompt
+
+        if ticket.implementation_plan_path and self.board_service.plans.plan_exists(task.ticket_id):
+            try:
+                from app.board.plan import _render_plan
+                plan = self.board_service.plans.read_plan(task.ticket_id)
+                plan_text = _render_plan(plan)
+                plan_section = self._render_plan_section(task.skill_id, plan_text)
+                session_prompt = (
+                    f"{session_prompt}\n\n{plan_section}" if session_prompt else plan_section
+                )
+            except Exception:
+                logger.debug("Failed to inject plan for ticket %s", task.ticket_id)
+
+        if task.skill_id in _TICKET_BODY_SKILLS:
+            ticket_section = (
+                "## Current Ticket\n\n"
+                f"**Title:** {ticket.title}\n\n"
+                f"**Current body:**\n{ticket.body or '(empty)'}\n"
+            )
+            session_prompt = (
+                f"{session_prompt}\n\n{ticket_section}" if session_prompt else ticket_section
+            )
+
+        if task.skill_id == "ticket-implement":
+            mode_section = self._render_orchestration_mode_section(task)
+            if mode_section:
+                session_prompt = (
+                    f"{session_prompt}\n\n{mode_section}" if session_prompt else mode_section
+                )
+
+        return session_prompt
+
+    def _render_orchestration_mode_section(self, task: AgentTask) -> str:
+        """Inject mode + failure-policy guidance for ticket-implement orchestrators.
+
+        Branches on ``task.subagent_mode`` × ``task.step_gate``; the failure
+        policy comes from ``.bonsai/settings.json`` (``tickets.subagentFailurePolicy``).
+        See TICKET_LIFECYCLE_DESIGN.md § Implementation orchestration modes.
+        """
+        from app.core.settings import load_settings
+
+        if task.subagent_mode == "step-session":
+            # Today's default — no new behavior to instruct; the existing
+            # plan section above already told the orchestrator to use suggest_step.
+            return ""
+
+        # subagent mode
+        policy = load_settings(self._config.project_root).tickets.subagent_failure_policy
+        policy_line = (
+            "Failure policy: **fail-fast**. On the first sibling failure, stop "
+            "issuing new Task calls; in-flight siblings finish naturally."
+            if policy == "fail-fast"
+            else "Failure policy: **wait-all**. Gather all sibling results "
+            "before reporting; report each as done or failed individually."
+        )
+
+        if task.step_gate == "approve":
+            return (
+                "## Subagent Mode (approve each)\n\n"
+                "You drive plan execution via SDK subagents, not child sessions.\n"
+                "1. Call `Plan.unblocked_steps()` mentally (look at the plan you "
+                "already have): list every step whose `depends_on` is satisfied "
+                "and whose status is `pending`.\n"
+                "2. In a single assistant turn, emit one `suggest_step` tool call "
+                "per unblocked step. The user sees one approval card per step.\n"
+                "3. As each card resolves, immediately invoke "
+                "`Task(subagent_type=\"ticket-step-executor\", prompt=…)`. The "
+                "prompt MUST start with the line:\n\n"
+                "    [bonsai-step ticket={ticket_id} step={step_number}]\n\n"
+                "    followed by the step's description and any relevant context.\n"
+                "4. Await all in-flight Task calls before re-scanning for the "
+                "next batch. Do not call `suggest_step` again until the current "
+                "batch has finished.\n\n"
+                f"{policy_line}"
+            )
+        # autonomous
+        return (
+            "## Subagent Mode (autonomous)\n\n"
+            "You drive plan execution via SDK subagents with no per-step approval.\n"
+            "1. Scan the plan for unblocked steps as above.\n"
+            "2. Emit one `Task(subagent_type=\"ticket-step-executor\", prompt=…)` "
+            "per unblocked step, in a single assistant turn. Each prompt MUST "
+            "start with `[bonsai-step ticket={ticket_id} step={step_number}]`.\n"
+            "3. Do NOT emit `suggest_step` in autonomous mode — that's only "
+            "for the gated variant.\n"
+            "4. Await all in-flight Task calls before re-scanning for the next batch.\n\n"
+            f"{policy_line}"
+        )
+
+    @staticmethod
+    def _render_plan_section(skill_id: str | None, plan_text: str) -> str:
+        if skill_id == "ticket-implementation-plan":
+            return (
+                "## Existing Plan\n\n"
+                "The following plan already exists for this ticket. "
+                "Review it and update/refine it based on the user's feedback. "
+                "Write the updated plan back to the same file.\n\n"
+                f"{plan_text}"
+            )
+        if skill_id == "ticket-implement":
+            return (
+                "## Implementation Plan\n\n"
+                "The following plan is associated with this ticket. "
+                "As the orchestrator, read the plan, identify the next unblocked step, "
+                "and call `suggest_step` to propose it for execution.\n\n"
+                f"{plan_text}"
+            )
+        return (
+            "## Plan (for reference)\n\n"
+            "The following plan is associated with this ticket. "
+            "Use it as context for your work; do not act as the "
+            "orchestrator (do not call `suggest_step`).\n\n"
+            f"{plan_text}"
         )
 
     # -- subsession management --------------------------------------------------

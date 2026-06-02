@@ -18,6 +18,8 @@ export function Header({ onSwitchProject }: { onSwitchProject: () => void }) {
   const ticketCount = tickets.size;
 
   const handleSelectBoard = () => {
+    // `Board` click from inside a ticket route returns to the kanban board (BoardView)
+    useBoardStore.setState({ activeTicketId: null });
     setCenterView("board");
   };
 

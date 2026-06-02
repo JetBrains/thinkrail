@@ -8,6 +8,7 @@ import { useSessionStore } from "@/store/sessionStore.ts";
 import { renderEvent } from "./renderers/registry.ts";
 import { getEventCategory } from "./renderers/categories.ts";
 import { useUiStore } from "@/store/uiStore.ts";
+import { ProposeChangeChip, type HunkSummary } from "./ProposeChangeChip.tsx";
 import { SessionContextMenu } from "./SessionContextMenu.tsx";
 import { SubsessionContextMenu } from "./SubsessionContextMenu.tsx";
 import { ReturnFlowCard } from "./ReturnFlowCard.tsx";
@@ -63,6 +64,7 @@ function buildTranscript(events: AgentEvent[]): string {
 
 export interface ChatStreamHandle {
   scrollToTop: () => void;
+  scrollToEvent: (index: number) => void;
 }
 
 interface ChatStreamProps {
@@ -86,6 +88,7 @@ export const ChatStream = forwardRef<ChatStreamHandle, ChatStreamProps>(function
   const autoScroll = useRef(true);
   const viewMode = useViewMode();
   const categoryVisibility = useUiStore((s) => s.chatCategoryVisibility);
+  const setActiveReview = useUiStore((s) => s.setActiveReview);
 
   // ── Context menu state ──
   const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number; questionRequestId?: string } | null>(null);
@@ -107,6 +110,14 @@ export const ChatStream = forwardRef<ChatStreamHandle, ChatStreamProps>(function
   useImperativeHandle(ref, () => ({
     scrollToTop() {
       scrollRef.current?.scrollTo({ top: 0, behavior: "smooth" });
+    },
+    scrollToEvent(index: number) {
+      const container = scrollRef.current;
+      if (!container) return;
+      const el = container.querySelector<HTMLElement>(`[data-event-index="${index}"]`);
+      if (el) {
+        el.scrollIntoView({ behavior: "smooth", block: "center" });
+      }
     },
   }));
 
@@ -347,6 +358,35 @@ export const ChatStream = forwardRef<ChatStreamHandle, ChatStreamProps>(function
     }
   }
 
+  // ── Pre-scan: group consecutive proposeChange events by filePath ──
+  // Each group renders as one ProposeChangeChip at the first index; subsequent
+  // indices in the same group are skipped to avoid duplicate chips.
+  const proposeGroups = new Map<number, { filePath: string; indices: number[] }>();
+  const proposeFollowers = new Set<number>();
+  {
+    let i = 0;
+    while (i < events.length) {
+      const ev = events[i];
+      if (ev.eventType !== "proposeChange") {
+        i++;
+        continue;
+      }
+      const filePath = (ev.payload as { filePath: string }).filePath;
+      const start = i;
+      const indices: number[] = [];
+      while (
+        i < events.length &&
+        events[i].eventType === "proposeChange" &&
+        (events[i].payload as { filePath: string }).filePath === filePath
+      ) {
+        indices.push(i);
+        i++;
+      }
+      proposeGroups.set(start, { filePath, indices });
+      for (let k = 1; k < indices.length; k++) proposeFollowers.add(indices[k]);
+    }
+  }
+
   // ── Build render context ──
   const ctx: EventRenderContext = {
     toolStates,
@@ -380,6 +420,65 @@ export const ChatStream = forwardRef<ChatStreamHandle, ChatStreamProps>(function
       )}
       {events.map((ev, i) => {
         if (childIndices.has(i)) return null;
+        if (proposeFollowers.has(i)) return null;
+
+        // Render a chip at the first index of each proposeChange group.
+        if (proposeGroups.has(i) && session) {
+          const g = proposeGroups.get(i)!;
+          const summaries: HunkSummary[] = g.indices.map((idx) => {
+            const p = events[idx].payload as {
+              requestId?: string;
+              section?: string | null;
+              oldString: string;
+              newString: string;
+            };
+            const rid = p.requestId ?? "";
+            const resolved = answeredRequests.get(rid) as
+              | Record<string, unknown>
+              | undefined;
+            let state: "pending" | "accepted" | "rejected" = "pending";
+            if (resolved) state = resolved.behavior === "allow" ? "accepted" : "rejected";
+            return {
+              requestId: rid,
+              state,
+              section: p.section ?? null,
+              added: p.newString.split("\n").length,
+              removed: p.oldString.split("\n").length,
+            };
+          });
+          const requestIds = g.indices.map(
+            (idx) => (events[idx].payload as { requestId?: string }).requestId ?? "",
+          );
+          const sid = session.bonsaiSid;
+          return (
+            <div key={`chip-${i}`} data-event-index={i}>
+              <ProposeChangeChip
+                filePath={g.filePath}
+                hunks={summaries}
+                onAcceptAll={() =>
+                  requestIds.forEach((rid) => {
+                    if (rid && !answeredRequests.has(rid))
+                      onResolveRequest(rid, { behavior: "allow", applied: "original" });
+                  })
+                }
+                onRejectAll={() =>
+                  requestIds.forEach((rid) => {
+                    if (rid && !answeredRequests.has(rid))
+                      onResolveRequest(rid, { behavior: "deny", discuss: false });
+                  })
+                }
+                onDiscuss={(text) =>
+                  requestIds.forEach((rid) => {
+                    if (rid && !answeredRequests.has(rid))
+                      onResolveRequest(rid, { behavior: "deny", discuss: true, feedback: text });
+                  })
+                }
+                onReview={() => setActiveReview({ sid, filePath: g.filePath })}
+              />
+            </div>
+          );
+        }
+
         // Filter by user's category toggles in SessionStatusLine —
         // except: pending interaction requests (confirmAction, etc.)
         // stay visible regardless of category, because the user has
@@ -393,7 +492,11 @@ export const ChatStream = forwardRef<ChatStreamHandle, ChatStreamProps>(function
           if (!isPendingInteraction) return null;
         }
         const k = `${i}-${ev.eventType}`;
-        return renderEvent(viewMode, ev, i, k, ctx);
+        return (
+          <div key={k} data-event-index={i}>
+            {renderEvent(viewMode, ev, i, k, ctx)}
+          </div>
+        );
       })}
 
       {session?.returnStatus === "pending" && session?.returnSummary && (

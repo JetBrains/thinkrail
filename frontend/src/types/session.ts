@@ -1,4 +1,4 @@
-import type { AgentConfig, AgentEvent, Question } from "./agent.ts";
+import type { AgentConfig, AgentEvent, Question, SessionArtifact } from "./agent.ts";
 
 export type SessionStatus = "draft" | "initializing" | "idle" | "running" | "waiting" | "done" | "error" | "interrupted";
 
@@ -59,7 +59,7 @@ export interface SessionMetrics {
 
 export interface PendingRequest {
   requestId: string;
-  type: "question" | "approval" | "suggestion" | "statement" | "description-suggestion" | "step-proposal";
+  type: "question" | "approval" | "suggestion" | "statement" | "description-suggestion" | "step-proposal" | "propose-change";
   // Question fields
   questions?: Question[];
   // Approval fields
@@ -81,6 +81,11 @@ export interface PendingRequest {
   stepNumber?: number;
   stepTitle?: string;
   inputSpecIds?: string[];
+  // ProposeChange fields
+  filePath?: string;
+  oldString?: string;
+  newString?: string;
+  rationale?: string;
 }
 
 // ── Session outcome — done-screen contract from the agent ───────────────
@@ -142,11 +147,21 @@ export interface Session {
   startedAt: number;
   events: AgentEvent[];
   metrics: SessionMetrics;
-  pendingRequest: PendingRequest | null;
+  /** Outstanding requests awaiting user response (approval / question /
+   *  suggestion / step-proposal). Today most flows produce at most one
+   *  entry, but ticket-implement's subagent-gated mode emits multiple
+   *  suggest_step cards concurrently when the plan permits parallelism. */
+  pendingRequests: PendingRequest[];
+  /** ticket-implement orchestrator only. Picks how plan steps are
+   *  dispatched. See `.bonsai/design_docs/TICKET_LIFECYCLE_DESIGN.md`
+   *  § Implementation orchestration modes. */
+  subagentMode?: "step-session" | "subagent";
+  /** Only meaningful when subagentMode === "subagent". */
+  stepGate?: "approve" | "autonomous";
   /** Maps requestId → the response that was sent (for rendering answered state) */
   answeredRequests: Map<string, unknown>;
   /** Associated meta-ticket ID (persists across session lifecycle) */
-  metaTicketId?: string | null;
+  ticketId?: string | null;
   /** Who created this session (display name from auth identity) */
   createdBy?: string;
   /** True if this session was loaded from disk (read-only, no live backend runner) */
@@ -158,10 +173,22 @@ export interface Session {
   parentBonsaiSid: string | null;
   subsessionType: "discussion" | "refinement" | null;
   subsessionContext: string | null;
+  /** Identifies how the session was created. "stage-default" sessions are
+   *  auto-spawned by the ticket view for the ticket's current phase. The
+   *  Discard control is hidden for these — the UI created them, not the user. */
+  kind?: "stage-default";
   returnStatus: "pending" | "approved" | "dismissed" | null;
   returnSummary: string | null;
   /** Done-screen contract emitted by the skill via SessionFinalize tool */
   outcome?: SessionOutcome | null;
+  /** Per-session artifact list — files written/edited/proposed during this
+   *  session. Ticket-linked only; empty otherwise. Mirrors AgentTask.artifacts. */
+  artifacts: SessionArtifact[];
+  /** Currently-focused artifact path, or null. Mirrors AgentTask.preview_path. */
+  previewPath: string | null;
+  /** One-shot scroll-to-section anchor from the latest SetPreviewFile call.
+   *  Not persisted on the task — applied once per preview-body load. */
+  previewSection: string | null;
 }
 
 export interface PromptSection {

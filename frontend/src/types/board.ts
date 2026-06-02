@@ -1,60 +1,71 @@
 /** Mirrors backend/app/board/models.py — JSON wire format (camelCase). */
 
-export const META_TICKET_STATUSES = [
+export const TICKET_STATUSES = [
   "idea",
-  "described",
-  "specified",
-  "planned",
-  "executing",
+  "product-design",
+  "technical-design",
+  "amend-specs",
+  "implementation-plan",
+  "implementing",
   "done",
 ] as const;
-export type MetaTicketStatus = (typeof META_TICKET_STATUSES)[number];
+export type TicketStatus = (typeof TICKET_STATUSES)[number];
 
-export const META_TICKET_TYPES = [
+export const TICKET_TYPES = [
   "feature",
   "bug",
   "idea",
   "improvement",
 ] as const;
-export type MetaTicketType = (typeof META_TICKET_TYPES)[number];
+export type TicketType = (typeof TICKET_TYPES)[number];
 
-export interface SpecPatch {
-  specId: string;
-  specTitle: string;
-  operation: "created" | "modified" | "deleted";
-  patchPath: string;
-  specPath: string;
-  sessionId: string;
-  created: string;
-}
+export type ArtifactKind = "product_design" | "technical_design" | "history" | "implementation_plan";
 
-export interface MetaTicket {
+export interface Ticket {
   id: string;
   title: string;
   body: string;
-  status: MetaTicketStatus;
-  type: MetaTicketType;
-  planPath: string | null;
+  status: TicketStatus;
+  type: TicketType;
+  productDesignPath: string | null;
+  technicalDesignPath: string | null;
+  historyPath: string | null;
+  implementationPlanPath: string | null;
+  technicalDesignStale: boolean;
+  historyStale: boolean;
+  implementationPlanStale: boolean;
   orchestratorSessionId: string | null;
   linkedSpecIds: string[];
   sessionIds: string[];
-  specPatches: SpecPatch[];
   order: number;
   created: string;
   updated: string;
+  skippedPhases: TicketStatus[];
 }
 
-export interface MetaTicketSummary {
+export interface TicketSummary {
   id: string;
   title: string;
-  status: MetaTicketStatus;
-  type: MetaTicketType;
-  planPath: string | null;
+  status: TicketStatus;
+  type: TicketType;
+  productDesignPath: string | null;
+  technicalDesignPath: string | null;
+  historyPath: string | null;
+  implementationPlanPath: string | null;
+  technicalDesignStale: boolean;
+  historyStale: boolean;
+  implementationPlanStale: boolean;
   orchestratorSessionId: string | null;
   linkedSpecIds: string[];
   sessionIds: string[];
-  specPatchCount?: number;
   order: number;
   created: string;
+  updated: string;
+  skippedPhases: TicketStatus[];
+}
+
+export interface ArtifactReadResult {
+  content: string | null;
+  stale: boolean;
   updated: string;
 }

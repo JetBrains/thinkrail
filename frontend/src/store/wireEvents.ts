@@ -316,6 +316,50 @@ export function wireEvents(client: RpcClient): Unsubscribe {
     }),
   );
 
+  // ── ProposeChange (spec amendment) ──
+  unsubs.push(
+    client.on("agent/proposeChange", (p) => {
+      const params = p as Record<string, unknown>;
+      const bonsaiSid = params.bonsaiSid as string;
+      useSessionStore.getState().onProposeChange(params);
+      useNotificationStore.getState().incrementPendingInput();
+      useNotificationStore.getState().addToast({
+        bonsaiSid,
+        eventType: "approval",
+        message: `Spec amendment: ${params.filePath ?? ""}`,
+        persistent: true,
+      });
+      useNotificationStore.getState().setBadge(bonsaiSid, {
+        type: "approval",
+        pulsing: true,
+      });
+    }),
+  );
+
+  // ── Preview tab control (agent-driven, UI side-effect only) ──
+  unsubs.push(
+    client.on("ui/setPreviewFile", (p) => {
+      useSessionStore.getState().onSetPreviewFile(p as Record<string, unknown>);
+    }),
+  );
+  unsubs.push(
+    client.on("ui/clearPreviewFile", (p) => {
+      useSessionStore.getState().onClearPreviewFile(p as Record<string, unknown>);
+    }),
+  );
+
+  // ── Per-session artifact tracking (ticket-linked sessions only) ──
+  unsubs.push(
+    client.on("ui/artifactAdded", (p) => {
+      useSessionStore.getState().onArtifactAdded(p as Record<string, unknown>);
+    }),
+  );
+  unsubs.push(
+    client.on("ui/artifactLabeled", (p) => {
+      useSessionStore.getState().onArtifactLabeled(p as Record<string, unknown>);
+    }),
+  );
+
   // ── Orchestrator step proposals ──
   unsubs.push(
     client.on("agent/suggestStep", (p) => {
@@ -346,12 +390,12 @@ export function wireEvents(client: RpcClient): Unsubscribe {
   // ── Board notifications ──
   unsubs.push(
     client.on("board/didChange", (p) => {
-      useBoardStore.getState().handleDidChange(p as import("@/types/board.ts").MetaTicketSummary);
+      useBoardStore.getState().handleDidChange(p as import("@/types/board.ts").TicketSummary);
     }),
   );
   unsubs.push(
     client.on("board/didCreate", (p) => {
-      const params = p as import("@/types/board.ts").MetaTicketSummary & { bonsaiSid?: string };
+      const params = p as import("@/types/board.ts").TicketSummary & { bonsaiSid?: string };
       useBoardStore.getState().handleDidCreate(params);
     }),
   );

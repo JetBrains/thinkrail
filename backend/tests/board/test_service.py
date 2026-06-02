@@ -4,7 +4,6 @@ from pathlib import Path
 
 import pytest
 
-from app.board.models import SpecPatch
 from app.board.service import BoardService, TicketNotFoundError
 from app.board.state_machine import InvalidTransitionError
 from app.core.config import load_config
@@ -19,12 +18,14 @@ def _setup_board(tmp_path: Path) -> BoardService:
 
 
 class TestCreateTicket:
-    def test_creates_file(self, tmp_path: Path) -> None:
+    def test_creates_folder_and_ticket_json(self, tmp_path: Path) -> None:
         svc = _setup_board(tmp_path)
         t = svc.create_ticket("My ticket")
         assert t.title == "My ticket"
         assert t.status == "idea"
-        assert (tmp_path / ".bonsai" / "meta-tickets" / f"{t.id}.json").exists()
+        ticket_dir = tmp_path / ".bonsai" / "tickets" / t.id
+        assert ticket_dir.is_dir()
+        assert (ticket_dir / "ticket.json").is_file()
 
     def test_with_body_and_type(self, tmp_path: Path) -> None:
         svc = _setup_board(tmp_path)
@@ -70,14 +71,14 @@ class TestUpdateTicket:
     def test_update_status(self, tmp_path: Path) -> None:
         svc = _setup_board(tmp_path)
         t = svc.create_ticket("Test")
-        updated = svc.update_ticket(t.id, status="described")
-        assert updated.status == "described"
+        updated = svc.update_ticket(t.id, status="product-design")
+        assert updated.status == "product-design"
 
     def test_invalid_transition_raises(self, tmp_path: Path) -> None:
         svc = _setup_board(tmp_path)
         t = svc.create_ticket("Test")
         with pytest.raises(InvalidTransitionError):
-            svc.update_ticket(t.id, status="executing")
+            svc.update_ticket(t.id, status="implementing")
 
     def test_update_missing_raises(self, tmp_path: Path) -> None:
         svc = _setup_board(tmp_path)
@@ -106,15 +107,6 @@ class TestLinking:
         updated = svc.link_spec(t.id, "spec-1")
         assert "spec-1" in updated.linked_spec_ids
 
-    def test_link_spec_auto_transitions_to_specified(self, tmp_path: Path) -> None:
-        svc = _setup_board(tmp_path)
-        t = svc.create_ticket("Test")
-        assert t.status == "idea"
-        # Move to described first (auto-transition triggers described->specified)
-        svc.update_ticket(t.id, status="described")
-        updated = svc.link_spec(t.id, "spec-1")
-        assert updated.status == "specified"
-
     def test_link_spec_idempotent(self, tmp_path: Path) -> None:
         svc = _setup_board(tmp_path)
         t = svc.create_ticket("Test")
@@ -135,38 +127,159 @@ class TestLinking:
         updated = svc.attach_session(t.id, "session-1")
         assert "session-1" in updated.session_ids
 
-    def test_set_plan_path(self, tmp_path: Path) -> None:
+    def test_set_orchestrator_auto_implementing(self, tmp_path: Path) -> None:
         svc = _setup_board(tmp_path)
         t = svc.create_ticket("Test")
-        svc.update_ticket(t.id, status="described")
-        svc.update_ticket(t.id, status="specified")
-        updated = svc.set_plan_path(t.id, "plans/mt_test.md")
-        assert updated.plan_path == "plans/mt_test.md"
-        assert updated.status == "planned"
-
-    def test_set_orchestrator(self, tmp_path: Path) -> None:
-        svc = _setup_board(tmp_path)
-        t = svc.create_ticket("Test")
-        svc.update_ticket(t.id, status="described")
-        svc.update_ticket(t.id, status="specified")
-        svc.set_plan_path(t.id, "plans/mt_test.md")
+        for status in ("product-design", "technical-design", "amend-specs", "implementation-plan"):
+            svc.update_ticket(t.id, status=status)
         updated = svc.set_orchestrator(t.id, "orch-session-1")
         assert updated.orchestrator_session_id == "orch-session-1"
-        assert updated.status == "executing"
+        assert updated.status == "implementing"
 
 
-class TestSpecPatches:
-    def test_add_spec_patch(self, tmp_path: Path) -> None:
+class TestArtifactBookkeeping:
+    def test_ensure_ticket_dir(self, tmp_path: Path) -> None:
         svc = _setup_board(tmp_path)
-        t = svc.create_ticket("Test")
-        patch = SpecPatch(
-            spec_id="mod-runner", spec_title="Runner",
-            operation="created", patch_path="patches/mod-runner.patch",
-            spec_path="backend/app/agent/README.md", session_id="s1",
+        t = svc.create_ticket("X")
+        d = svc.ensure_ticket_dir(t.id)
+        assert d.is_dir()
+
+    def test_write_product_design_records_path(self, tmp_path: Path) -> None:
+        svc = _setup_board(tmp_path)
+        t = svc.create_ticket("X")
+        svc.write_artifact(t.id, "product_design", "# pd")
+        refreshed = svc.get_ticket(t.id)
+        assert refreshed.product_design_path == f".bonsai/tickets/{t.id}/product-design.md"
+
+    def test_write_technical_design_clears_stale(self, tmp_path: Path) -> None:
+        svc = _setup_board(tmp_path)
+        t = svc.create_ticket("X")
+        from app.board.storage import ticket_path as tp, write_ticket
+        t2 = svc.get_ticket(t.id)
+        t2.technical_design_stale = True
+        write_ticket(tp(tmp_path / ".bonsai" / "tickets", t.id), t2)
+
+        svc.write_artifact(t.id, "technical_design", "# dd")
+        refreshed = svc.get_ticket(t.id)
+        assert refreshed.technical_design_path == f".bonsai/tickets/{t.id}/technical-design.md"
+        assert refreshed.technical_design_stale is False
+
+    def test_read_artifact_returns_none_when_missing(self, tmp_path: Path) -> None:
+        svc = _setup_board(tmp_path)
+        t = svc.create_ticket("X")
+        assert svc.read_artifact(t.id, "product_design") is None
+
+
+class TestProductDesignAutoFallback:
+    def test_empty_body_gets_first_paragraph(self, tmp_path: Path) -> None:
+        svc = _setup_board(tmp_path)
+        t = svc.create_ticket("X")
+        markdown = (
+            "---\n"
+            "ticket_id: mt_x\n"
+            "kind: product_design\n"
+            "---\n\n"
+            "# Product design: Build feature X\n\n"
+            "This feature lets users do Y. It serves Z by addressing the W gap.\n"
+            "\n"
+            "## Goal\n\n"
+            "Detailed goal here.\n"
         )
-        updated = svc.add_spec_patch(t.id, patch)
-        assert len(updated.spec_patches) == 1
-        assert updated.spec_patches[0].spec_id == "mod-runner"
+        svc.write_artifact(t.id, "product_design", markdown)
+        refreshed = svc.get_ticket(t.id)
+        assert refreshed.body.startswith("This feature lets users do Y")
+
+    def test_non_empty_body_is_preserved(self, tmp_path: Path) -> None:
+        svc = _setup_board(tmp_path)
+        t = svc.create_ticket("X", body="Pre-existing body")
+        markdown = "# Title\n\nNew paragraph that should NOT overwrite.\n"
+        svc.write_artifact(t.id, "product_design", markdown)
+        refreshed = svc.get_ticket(t.id)
+        assert refreshed.body == "Pre-existing body"
+
+    def test_other_artifact_kinds_do_not_touch_body(self, tmp_path: Path) -> None:
+        svc = _setup_board(tmp_path)
+        t = svc.create_ticket("X")
+        svc.write_artifact(t.id, "technical_design", "# title\n\nfoo bar baz\n")
+        refreshed = svc.get_ticket(t.id)
+        assert refreshed.body == ""
+
+
+class TestStaleFlagsOnBackwardTransitions:
+    def test_technical_design_to_product_design(self, tmp_path: Path) -> None:
+        svc = _setup_board(tmp_path)
+        t = svc.create_ticket("X")
+        svc.update_ticket(t.id, status="product-design")
+        svc.update_ticket(t.id, status="technical-design")
+        svc.update_ticket(t.id, status="product-design")
+        refreshed = svc.get_ticket(t.id)
+        assert refreshed.technical_design_stale is True
+        assert refreshed.history_stale is False
+
+    def test_amend_specs_to_technical_design(self, tmp_path: Path) -> None:
+        svc = _setup_board(tmp_path)
+        t = svc.create_ticket("X")
+        for status in ("product-design", "technical-design", "amend-specs"):
+            svc.update_ticket(t.id, status=status)
+        svc.update_ticket(t.id, status="technical-design")
+        refreshed = svc.get_ticket(t.id)
+        assert refreshed.history_stale is True
+
+    def test_implementation_plan_to_amend_specs(self, tmp_path: Path) -> None:
+        svc = _setup_board(tmp_path)
+        t = svc.create_ticket("X")
+        for status in ("product-design", "technical-design", "amend-specs", "implementation-plan"):
+            svc.update_ticket(t.id, status=status)
+        svc.update_ticket(t.id, status="amend-specs")
+        refreshed = svc.get_ticket(t.id)
+        assert refreshed.implementation_plan_stale is True
+
+
+class TestOnStatusChangeCommit:
+    def test_amend_specs_to_implementation_plan_commits_paths(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        svc = _setup_board(tmp_path)
+        captured: list[tuple[list[str], str]] = []
+        monkeypatch.setattr(
+            svc, "_commit_paths",
+            lambda paths, msg: captured.append((paths, msg)),
+        )
+
+        t = svc.create_ticket("X")
+        for status in ("product-design", "technical-design", "amend-specs"):
+            svc.update_ticket(t.id, status=status)
+        captured.clear()  # ignore any commits from earlier transitions
+
+        svc.update_ticket(t.id, status="implementation-plan")
+
+        assert len(captured) == 1
+        paths, msg = captured[0]
+        assert ".bonsai/design_docs" in paths
+        assert f".bonsai/tickets/{t.id}/history.patch" in paths
+        assert t.id in msg
+        assert "amend" in msg.lower()
+
+    def test_no_commit_on_backward_transition(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        svc = _setup_board(tmp_path)
+        captured: list = []
+        monkeypatch.setattr(
+            svc, "_commit_paths",
+            lambda paths, msg: captured.append((paths, msg)),
+        )
+
+        t = svc.create_ticket("X")
+        for status in (
+            "product-design", "technical-design", "amend-specs",
+            "implementation-plan",
+        ):
+            svc.update_ticket(t.id, status=status)
+        captured.clear()
+
+        svc.update_ticket(t.id, status="amend-specs")
+        assert captured == []  # backward = stale flag only, no commit
 
 
 class TestDetachSessionFromAll:
@@ -186,22 +299,113 @@ class TestDetachSessionFromAll:
         assert "sess-y" in t1.session_ids
         assert "sess-x" not in t2.session_ids
 
-    def test_clears_orchestrator(self, tmp_path: Path) -> None:
-        svc = _setup_board(tmp_path)
-        t = svc.create_ticket("T")
-        svc.attach_session(t.id, "orch-1")
-        svc.update_ticket(t.id, status="described")
-        svc.update_ticket(t.id, status="specified")
-        svc.set_plan_path(t.id, "plans/test.md")
-        svc.set_orchestrator(t.id, "orch-1")
-
-        svc.detach_session_from_all("orch-1")
-
-        t = svc.get_ticket(t.id)
-        assert t.orchestrator_session_id is None
-        assert "orch-1" not in t.session_ids
-
     def test_noop_when_no_references(self, tmp_path: Path) -> None:
         svc = _setup_board(tmp_path)
         svc.create_ticket("T")
-        svc.detach_session_from_all("nonexistent")  # should not raise
+        svc.detach_session_from_all("nonexistent")
+
+
+class TestUpdateTicketSkipAware:
+    def test_lands_on_skipped_phase_walks_past(self, tmp_path: Path) -> None:
+        svc = _setup_board(tmp_path)
+        t = svc.create_ticket("t")
+        svc.update_ticket(t.id, status="product-design")
+        svc.skip_phase(t.id, "technical-design")
+        # Agent attempts to advance to technical-design — should land on amend-specs
+        updated = svc.update_ticket(t.id, status="technical-design")
+        assert updated.status == "amend-specs"
+
+    def test_backward_transition_ignores_skip_list(self, tmp_path: Path) -> None:
+        svc = _setup_board(tmp_path)
+        t = svc.create_ticket("t")
+        svc.update_ticket(t.id, status="product-design")
+        svc.update_ticket(t.id, status="technical-design")
+        svc.skip_phase(t.id, "product-design")
+        # Backward transition technical-design -> product-design should still work
+        updated = svc.update_ticket(t.id, status="product-design")
+        assert updated.status == "product-design"
+
+
+class TestSkipPhase:
+    def test_appends_to_list(self, tmp_path: Path) -> None:
+        svc = _setup_board(tmp_path)
+        t = svc.create_ticket("t")
+        updated = svc.skip_phase(t.id, "product-design")
+        assert updated.skipped_phases == ["product-design"]
+
+    def test_is_idempotent(self, tmp_path: Path) -> None:
+        svc = _setup_board(tmp_path)
+        t = svc.create_ticket("t")
+        svc.skip_phase(t.id, "product-design")
+        updated = svc.skip_phase(t.id, "product-design")
+        assert updated.skipped_phases == ["product-design"]
+
+    def test_current_advances_status(self, tmp_path: Path) -> None:
+        svc = _setup_board(tmp_path)
+        t = svc.create_ticket("t")
+        svc.update_ticket(t.id, status="product-design")
+        updated = svc.skip_phase(t.id, "product-design")
+        assert updated.status == "technical-design"
+        assert "product-design" in updated.skipped_phases
+
+    def test_future_does_not_change_status(self, tmp_path: Path) -> None:
+        svc = _setup_board(tmp_path)
+        t = svc.create_ticket("t")
+        svc.update_ticket(t.id, status="product-design")
+        updated = svc.skip_phase(t.id, "technical-design")
+        assert updated.status == "product-design"
+        assert "technical-design" in updated.skipped_phases
+
+    def test_past_does_not_change_status(self, tmp_path: Path) -> None:
+        svc = _setup_board(tmp_path)
+        t = svc.create_ticket("t")
+        svc.update_ticket(t.id, status="product-design")
+        svc.update_ticket(t.id, status="technical-design")
+        updated = svc.skip_phase(t.id, "product-design")
+        assert updated.status == "technical-design"
+        assert "product-design" in updated.skipped_phases
+
+    def test_rejects_idea(self, tmp_path: Path) -> None:
+        svc = _setup_board(tmp_path)
+        t = svc.create_ticket("t")
+        with pytest.raises(InvalidTransitionError):
+            svc.skip_phase(t.id, "idea")
+
+    def test_rejects_done(self, tmp_path: Path) -> None:
+        svc = _setup_board(tmp_path)
+        t = svc.create_ticket("t")
+        with pytest.raises(InvalidTransitionError):
+            svc.skip_phase(t.id, "done")
+
+    def test_persists_to_disk(self, tmp_path: Path) -> None:
+        svc = _setup_board(tmp_path)
+        t = svc.create_ticket("t")
+        svc.skip_phase(t.id, "product-design")
+        # Re-read from disk via a fresh BoardService instance (skip the
+        # mkdir helper since .bonsai already exists from the first setup).
+        svc2 = BoardService(load_config(tmp_path))
+        reloaded = svc2.get_ticket(t.id)
+        assert reloaded.skipped_phases == ["product-design"]
+
+
+class TestUnskipPhase:
+    def test_removes(self, tmp_path: Path) -> None:
+        svc = _setup_board(tmp_path)
+        t = svc.create_ticket("t")
+        svc.skip_phase(t.id, "product-design")
+        updated = svc.unskip_phase(t.id, "product-design")
+        assert updated.skipped_phases == []
+
+    def test_unknown_is_noop(self, tmp_path: Path) -> None:
+        svc = _setup_board(tmp_path)
+        t = svc.create_ticket("t")
+        updated = svc.unskip_phase(t.id, "product-design")
+        assert updated.skipped_phases == []
+
+    def test_does_not_change_status(self, tmp_path: Path) -> None:
+        svc = _setup_board(tmp_path)
+        t = svc.create_ticket("t")
+        svc.skip_phase(t.id, "product-design")
+        status_before = svc.get_ticket(t.id).status
+        updated = svc.unskip_phase(t.id, "product-design")
+        assert updated.status == status_before

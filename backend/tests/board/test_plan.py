@@ -172,3 +172,103 @@ class TestPlanService:
         svc.update_step_status("mt_test", 2, "done")
         next_step = svc.get_next_step("mt_test")
         assert next_step is None
+
+
+class TestPlanUnblockedSteps:
+    """Cover ``Plan.unblocked_steps()`` — used by subagent-mode orchestration
+    to fan out parallel-eligible work. See TICKET_LIFECYCLE_DESIGN.md
+    § Implementation orchestration modes.
+    """
+
+    def test_linear_fallback_when_no_depends_on(self) -> None:
+        # Pre-feature plans deserialize with depends_on=[] on every step.
+        # Interpretation: step N depends on step N-1 — sequential.
+        plan = Plan(
+            ticket_id="mt_test",
+            title="t",
+            milestones=[
+                Milestone(number=1, title="m", description="", steps=[
+                    PlanStep(number=1, title="s1", status="pending"),
+                    PlanStep(number=2, title="s2", status="pending"),
+                    PlanStep(number=3, title="s3", status="pending"),
+                ]),
+            ],
+        )
+        assert [s.number for s in plan.unblocked_steps()] == [1]
+
+    def test_linear_fallback_advances_as_steps_complete(self) -> None:
+        plan = Plan(
+            ticket_id="mt_test",
+            title="t",
+            milestones=[
+                Milestone(number=1, title="m", description="", steps=[
+                    PlanStep(number=1, title="s1", status="done"),
+                    PlanStep(number=2, title="s2", status="pending"),
+                    PlanStep(number=3, title="s3", status="pending"),
+                ]),
+            ],
+        )
+        assert [s.number for s in plan.unblocked_steps()] == [2]
+
+    def test_explicit_depends_on_allows_parallel(self) -> None:
+        plan = Plan(
+            ticket_id="mt_test",
+            title="t",
+            milestones=[
+                Milestone(number=1, title="m", description="", steps=[
+                    PlanStep(number=1, title="s1", status="done"),
+                    PlanStep(number=2, title="s2", status="pending", depends_on=[1]),
+                    PlanStep(number=3, title="s3", status="pending", depends_on=[1]),
+                ]),
+            ],
+        )
+        assert sorted(s.number for s in plan.unblocked_steps()) == [2, 3]
+
+    def test_explicit_depends_on_diamond(self) -> None:
+        plan = Plan(
+            ticket_id="mt_test",
+            title="t",
+            milestones=[
+                Milestone(number=1, title="m", description="", steps=[
+                    PlanStep(number=1, title="s1", status="done"),
+                    PlanStep(number=2, title="s2", status="done", depends_on=[1]),
+                    PlanStep(number=3, title="s3", status="done", depends_on=[1]),
+                    PlanStep(number=4, title="s4", status="pending", depends_on=[2, 3]),
+                ]),
+            ],
+        )
+        assert [s.number for s in plan.unblocked_steps()] == [4]
+
+    def test_diamond_blocked_until_both_parents_done(self) -> None:
+        plan = Plan(
+            ticket_id="mt_test",
+            title="t",
+            milestones=[
+                Milestone(number=1, title="m", description="", steps=[
+                    PlanStep(number=1, title="s1", status="done"),
+                    PlanStep(number=2, title="s2", status="done", depends_on=[1]),
+                    PlanStep(number=3, title="s3", status="executing", depends_on=[1]),
+                    PlanStep(number=4, title="s4", status="pending", depends_on=[2, 3]),
+                ]),
+            ],
+        )
+        assert plan.unblocked_steps() == []
+
+    def test_non_pending_steps_never_returned(self) -> None:
+        plan = Plan(
+            ticket_id="mt_test",
+            title="t",
+            milestones=[
+                Milestone(number=1, title="m", description="", steps=[
+                    PlanStep(number=1, title="s1", status="executing"),
+                    PlanStep(number=2, title="s2", status="failed", depends_on=[]),
+                ]),
+            ],
+        )
+        # Status executing → already running, not "unblocked-and-waiting."
+        # Status failed → don't auto-restart, surfaces as an error.
+        assert plan.unblocked_steps() == []
+
+    def test_event_index_default_is_none(self) -> None:
+        step = PlanStep(number=1, title="s")
+        assert step.event_index is None

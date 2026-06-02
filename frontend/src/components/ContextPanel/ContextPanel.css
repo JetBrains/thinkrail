@@ -46,6 +46,17 @@
   min-height: 0;
 }
 
+/* Ticket-route variant hosts TicketPreviewPanel, which manages its own
+ * scroll containers — let it fill the panel without an extra scrollbar. */
+.context-panel__body--flush {
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+.context-panel--ticket {
+  background: var(--panel);
+}
+
 .context-panel__empty {
   color: var(--hint);
   font-size: var(--font-lg);
@@ -144,4 +155,42 @@
   padding: var(--space-md) var(--space-sm);
   font-style: italic;
   line-height: 1.5;
+}
+
+/* ── Preview tab bar (Milestone 8) ───────────────────────────── */
+.context-panel__tabs {
+  display: flex;
+  gap: var(--space-xs);
+  flex: 1;
+  margin-left: var(--space-sm);
+}
+.context-panel__tab {
+  background: transparent;
+  border: none;
+  padding: var(--space-xs) var(--space-sm);
+  cursor: pointer;
+  color: var(--muted);
+  font-size: var(--font-sm);
+  border-bottom: 2px solid transparent;
+}
+.context-panel__tab--active {
+  color: var(--text);
+  border-bottom-color: var(--blue);
+}
+.cp-preview-loading {
+  padding: var(--space-md);
+  color: var(--muted);
+  font-style: italic;
+}
+.cp-preview-path {
+  padding: var(--space-xs) var(--space-md);
+  color: var(--muted);
+  font-size: var(--font-sm);
+  border-bottom: 1px solid var(--border);
+  font-family: 'JetBrains Mono', 'Fira Code', monospace;
+}
+.cp-preview-content {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
 }

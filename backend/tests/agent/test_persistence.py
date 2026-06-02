@@ -156,8 +156,8 @@ class TestListSessions:
         entry = result[0]
         expected_fields = {
             "bonsaiSid", "name", "skillId", "specIds", "status",
-            "model", "metaTicketId", "createdAt", "updatedAt",
-            "active", "inTracker", "metrics",
+            "model", "ticketId", "createdAt", "updatedAt",
+            "active", "inTracker", "metrics", "todos",
         }
         assert set(entry.keys()) == expected_fields
 
@@ -325,4 +325,44 @@ class TestHasPersistedSessions:
     def test_with_session_file_is_true(self, tmp_path: Path) -> None:
         save_session(tmp_path, _make_session_data())
         assert has_persisted_sessions(tmp_path) is True
+
+
+class TestListSessionsExposesSubagentMode:
+    """Regression: ``list_sessions`` must surface ``subagentMode`` and
+    ``stepGate`` for draft sessions so the frontend's draft hydration can
+    initialise the Execution-mode dropdown without an extra round-trip.
+
+    Caught during Phase G UX testing: backend restart restored drafts with
+    default mode/gate despite the on-disk file holding the user's choice.
+    """
+
+    def test_draft_carries_subagent_mode_and_step_gate(
+        self, tmp_path: Path,
+    ) -> None:
+        save_session(tmp_path, _make_session_data(
+            bonsai_sid="draft-1",
+            status="draft",
+            subagentMode="subagent",
+            stepGate="autonomous",
+        ))
+        entries = list_sessions(tmp_path)
+        match = next((e for e in entries if e["bonsaiSid"] == "draft-1"), None)
+        assert match is not None
+        assert match["subagentMode"] == "subagent"
+        assert match["stepGate"] == "autonomous"
+
+    def test_non_draft_omits_subagent_mode(self, tmp_path: Path) -> None:
+        save_session(tmp_path, _make_session_data(
+            bonsai_sid="done-1",
+            status="done",
+            subagentMode="subagent",
+            stepGate="autonomous",
+        ))
+        entries = list_sessions(tmp_path)
+        match = next((e for e in entries if e["bonsaiSid"] == "done-1"), None)
+        assert match is not None
+        # Non-draft entries deliberately don't expose these fields — the
+        # mode picker is only relevant before a session starts.
+        assert "subagentMode" not in match
+        assert "stepGate" not in match
 

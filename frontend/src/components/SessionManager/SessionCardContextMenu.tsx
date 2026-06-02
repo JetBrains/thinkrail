@@ -2,7 +2,7 @@ import { useEffect, useRef } from "react";
 
 interface SessionCardContextMenuProps {
   bonsaiSid: string;
-  metaTicketId: string | null;
+  ticketId: string | null;
   x: number;
   y: number;
   onClose: () => void;
@@ -12,7 +12,7 @@ interface SessionCardContextMenuProps {
 
 export function SessionCardContextMenu({
   bonsaiSid,
-  metaTicketId,
+  ticketId,
   x,
   y,
   onClose,
@@ -38,10 +38,10 @@ export function SessionCardContextMenu({
 
   return (
     <div ref={ref} className="sm-ctx-menu" style={{ left: x, top: y }}>
-      {metaTicketId && (
+      {ticketId && (
         <button
           className="sm-ctx-menu-item"
-          onClick={() => { onOpenTicket(metaTicketId, bonsaiSid); onClose(); }}
+          onClick={() => { onOpenTicket(ticketId, bonsaiSid); onClose(); }}
         >
           Open ticket
         </button>

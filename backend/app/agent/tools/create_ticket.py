@@ -14,7 +14,7 @@ from claude_agent_sdk import PermissionResultAllow, create_sdk_mcp_server, tool
 from app.agent.models import AgentTask
 from app.agent.tools._context import get_tool_context
 from app.agent.tracker import Tracker
-from app.board.models import MetaTicketSummary
+from app.board.models import TicketSummary
 from app.board.service import BoardService
 from app.core.config import AppConfig
 
@@ -70,7 +70,7 @@ async def _create_board_ticket(args: dict) -> dict:
         status=status,
     )
 
-    summary = MetaTicketSummary.from_ticket(ticket)
+    summary = TicketSummary.from_ticket(ticket)
     payload = summary.model_dump(by_alias=True)
     payload["bonsaiSid"] = ctx.task.bonsai_sid
     await ctx.notify("board/didCreate", payload)

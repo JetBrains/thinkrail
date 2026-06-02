@@ -136,9 +136,9 @@ export function SessionTabBar({
             <span className="session-tab-name">
               {prefix}{hasActiveChild ? "\u23F8 " : ""}{typeIcon}{s.name || s.bonsaiSid.slice(0, 8)}
             </span>
-            {s.pendingRequest && (
+            {s.pendingRequests.length > 0 && (
               <span className="session-tab-badge">
-                {s.pendingRequest.type === "question" ? "Q" : "A"}
+                {s.pendingRequests[0].type === "question" ? "Q" : "A"}
               </span>
             )}
             <button

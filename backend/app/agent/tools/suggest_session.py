@@ -126,6 +126,11 @@ async def _suggest_session(args: dict) -> dict:
         "name": args.get("name", ""),
         "reason": args.get("reason", ""),
     }
+    # Inherit the parent's ticket link so the spawned session stays attached
+    # to the same ticket (e.g., ticket-product-design suggesting
+    # ticket-technical-design → both belong to the same ticket).
+    if ctx.task.ticket_id:
+        payload["ticketId"] = ctx.task.ticket_id
     prompt = args.get("prompt")
     if prompt:
         payload["prompt"] = prompt

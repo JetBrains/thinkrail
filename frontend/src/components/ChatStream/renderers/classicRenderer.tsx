@@ -298,12 +298,47 @@ export const classicRenderers: ViewRenderers = {
           ctx.onResolveRequest(requestId, { behavior: "allow" });
           const store = useSessionStore.getState();
           const currentSession = ctx.session;
+          // Carry the ticket link from the payload (auto-filled by the
+          // SuggestSession tool from the parent task's ticket_id);
+          // fall back to the current session's link if missing.
+          const ticketId = p.ticketId ?? currentSession?.ticketId ?? undefined;
+          // Status === ongoing work. If this spawn moves a ticket to a new
+          // phase, advance ticket.status to that phase so the sidebar tree
+          // reflects the new active work. Only one-step-forward transitions
+          // succeed; multi-step advances are silently skipped (the agent
+          // will surface a meaningful error if any).
           try {
+            if (ticketId && p.skill) {
+              const phaseBySkill: Record<string, string> = {
+                "ticket-product-design": "product-design",
+                "ticket-technical-design": "technical-design",
+                "ticket-amend-specs": "amend-specs",
+                "ticket-implementation-plan": "implementation-plan",
+                "ticket-implement": "implementing",
+              };
+              const targetPhase = phaseBySkill[p.skill];
+              if (targetPhase) {
+                const { useBoardStore } = await import("@/store/boardStore.ts");
+                const ticket = useBoardStore.getState().tickets.get(ticketId);
+                const ORDER = [
+                  "idea", "product-design", "technical-design",
+                  "amend-specs", "implementation-plan", "implementing", "done",
+                ];
+                if (ticket && ORDER.indexOf(ticket.status) < ORDER.indexOf(targetPhase)) {
+                  try {
+                    await useBoardStore.getState().updateTicket(ticketId, { status: targetPhase as never });
+                  } catch (e) {
+                    console.warn("[SuggestionCard] Failed to advance ticket status:", e);
+                  }
+                }
+              }
+            }
             const newSid = await store.startSession({
               skillId: p.skill ?? undefined,
               specIds: p.specIds ?? [],
               prompt: p.prompt ?? undefined,
               name: p.name ?? "Suggested Session",
+              ticketId,
               config: {
                 model: currentSession?.model ?? "sonnet",
                 permissionMode: currentSession?.permissionMode ?? "default",
@@ -398,7 +433,7 @@ export const classicRenderers: ViewRenderers = {
               skillId,
               specIds: p.inputSpecIds ?? [],
               name: `Step ${p.stepNumber ?? "?"}: ${p.stepTitle ?? ""}`.trim(),
-              metaTicketId: p.ticketId ?? undefined,
+              ticketId: p.ticketId ?? undefined,
               config: {
                 model: currentSession?.model ?? "sonnet",
                 permissionMode: currentSession?.permissionMode ?? "default",
@@ -406,7 +441,29 @@ export const classicRenderers: ViewRenderers = {
                 effort: currentSession?.effort ?? "auto",
               },
             });
-            store.switchSession(newSid);
+            // NOTE: we intentionally do NOT call store.switchSession(newSid).
+            // In ticket-route the orchestrator chat stays on screen so the
+            // user can watch step events stream back into it. The step
+            // session is reachable via Plan Status + the Implementing phase
+            // row's step sub-rows.
+            // Link the new step session into the plan so the Plan Status
+            // view + done-notification both see the right state. Without
+            // this, step.status stays "pending" forever and the backend's
+            // on-step-complete hook can't match the session to a step.
+            if (p.ticketId && p.stepNumber != null) {
+              try {
+                const { getClient } = await import("@/api/index.ts");
+                const { createBoardApi } = await import("@/api/methods/board.ts");
+                await createBoardApi(getClient()).updateStep(
+                  p.ticketId,
+                  p.stepNumber,
+                  "executing",
+                  newSid,
+                );
+              } catch (linkErr) {
+                console.error("[StepProposalCard] Failed to link step to session:", linkErr);
+              }
+            }
             // startSession leaves the runtime idle (the `prompt` arg
             // would only enrich the system context); the agent doesn't
             // act until a user message arrives.  Send the step's
@@ -486,6 +543,13 @@ export const classicRenderers: ViewRenderers = {
     </div>
   ),
 
+  // proposeChange events are rendered as grouped ProposeChangeChips at the
+  // ChatStream layer (see ChatStream.tsx). The per-event branch is a no-op
+  // so consecutive same-file proposeChange events don't produce duplicate cards.
+  proposeChange: () => null,
+
+  setPreviewFile: () => null,
+  clearPreviewFile: () => null,
   requestResolved: () => null,
   requestExpired: () => null,
 };

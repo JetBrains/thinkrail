@@ -4,8 +4,8 @@ When a session is linked to a ticket that has a plan, the agent's
 system prompt should be augmented with that plan — but the *framing*
 depends on the session's role:
 
-- ``ticket-plan`` skill   → "Existing Plan" (the planning session refines it)
-- ``ticket-execute`` skill → "As the orchestrator" (drives suggest_step)
+- ``ticket-implementation-plan`` skill → "Existing Plan" (refines it)
+- ``ticket-implement`` skill → "As the orchestrator" (drives suggest_step)
 - any other skill or none → "Plan (for reference)" — must NOT instruct
   the session to act as an orchestrator, otherwise step sessions (which
   are created by approving a suggest_step card and inherit the ticket
@@ -67,34 +67,44 @@ async def _build_service_with_plan(tmp_path: Path) -> tuple[AgentService, str, A
             ),
         ],
     )
+    # The plan-injection guard reads ticket.implementation_plan_path; set it
+    # explicitly here since the test bypasses ticket-implementation-plan
+    # (which would set it normally).
+    fresh = board.get_ticket(ticket.id)
+    fresh.implementation_plan_path = f".bonsai/tickets/{ticket.id}/implementation-plan.md"
+    from app.board.storage import ticket_path, write_ticket, tickets_root
+    write_ticket(
+        ticket_path(tickets_root(config.project_root), ticket.id),
+        fresh,
+    )
     return agent, ticket.id, config
 
 
 def _make_task(agent: AgentService, ticket_id: str, skill_id: str | None):
     """Use the same code path the real run/draft flow uses."""
     task = agent._tracker.create_task([], AgentConfig(), skill_id=skill_id)
-    task.meta_ticket_id = ticket_id
+    task.ticket_id = ticket_id
     return task
 
 
 class TestBuildContextPlanInjection:
-    async def test_ticket_execute_skill_gets_orchestrator_framing(
+    async def test_ticket_implement_skill_gets_orchestrator_framing(
         self, tmp_path: Path,
     ) -> None:
         agent, ticket_id, config = await _build_service_with_plan(tmp_path)
-        _seed_skill(config, "ticket-execute")
-        task = _make_task(agent, ticket_id, skill_id="ticket-execute")
+        _seed_skill(config, "ticket-implement")
+        task = _make_task(agent, ticket_id, skill_id="ticket-implement")
         prompt = await agent._build_context_for(task)
         assert "As the orchestrator" in prompt
         assert "suggest_step" in prompt
         assert "Step 1" in prompt  # plan content is present
 
-    async def test_ticket_plan_skill_gets_existing_plan_framing(
+    async def test_ticket_implementation_plan_skill_gets_existing_plan_framing(
         self, tmp_path: Path,
     ) -> None:
         agent, ticket_id, config = await _build_service_with_plan(tmp_path)
-        _seed_skill(config, "ticket-plan")
-        task = _make_task(agent, ticket_id, skill_id="ticket-plan")
+        _seed_skill(config, "ticket-implementation-plan")
+        task = _make_task(agent, ticket_id, skill_id="ticket-implementation-plan")
         prompt = await agent._build_context_for(task)
         assert "Existing Plan" in prompt
         assert "Review it and update" in prompt
@@ -106,7 +116,7 @@ class TestBuildContextPlanInjection:
         """Regression guard for the "step session re-orchestrates" bug.
 
         When a user clicks "Start Step" on a step proposal card, the new
-        session inherits ``metaTicketId`` but should NOT inherit the
+        session inherits ``ticketId`` but should NOT inherit the
         orchestrator role.
         """
         agent, ticket_id, config = await _build_service_with_plan(tmp_path)
@@ -120,3 +130,70 @@ class TestBuildContextPlanInjection:
         assert "Step 1" in prompt  # plan still attached as context
         # The orchestrator framing must NOT be injected.
         assert "As the orchestrator" not in prompt
+
+    async def test_drafting_skill_gets_ticket_body_injected(
+        self, tmp_path: Path,
+    ) -> None:
+        """ticket-product-design (and siblings) should see the ticket's
+        title/body in their prompt — what ticket-describe used to get."""
+        agent, ticket_id, config = await _build_service_with_plan(tmp_path)
+        _seed_skill(config, "ticket-product-design")
+        task = _make_task(agent, ticket_id, skill_id="ticket-product-design")
+        prompt = await agent._build_context_for(task)
+        assert "## Current Ticket" in prompt
+        assert "**Title:** Test" in prompt
+
+
+class TestSubagentModeFraming:
+    """Cover the orchestration-mode section injected for ticket-implement."""
+
+    async def test_step_session_mode_has_no_subagent_section(
+        self, tmp_path: Path,
+    ) -> None:
+        agent, ticket_id, config = await _build_service_with_plan(tmp_path)
+        _seed_skill(config, "ticket-implement")
+        task = _make_task(agent, ticket_id, skill_id="ticket-implement")
+        # Default is step-session
+        prompt = await agent._build_context_for(task)
+        assert "Subagent Mode" not in prompt
+        assert "[bonsai-step" not in prompt
+
+    async def test_subagent_gated_mode_includes_marker_instructions(
+        self, tmp_path: Path,
+    ) -> None:
+        agent, ticket_id, config = await _build_service_with_plan(tmp_path)
+        _seed_skill(config, "ticket-implement")
+        task = _make_task(agent, ticket_id, skill_id="ticket-implement")
+        task.subagent_mode = "subagent"
+        task.step_gate = "approve"
+        prompt = await agent._build_context_for(task)
+        assert "Subagent Mode (approve each)" in prompt
+        assert "[bonsai-step ticket=" in prompt
+        assert "Failure policy: **fail-fast**" in prompt
+
+    async def test_subagent_autonomous_mode_omits_suggest_step(
+        self, tmp_path: Path,
+    ) -> None:
+        agent, ticket_id, config = await _build_service_with_plan(tmp_path)
+        _seed_skill(config, "ticket-implement")
+        task = _make_task(agent, ticket_id, skill_id="ticket-implement")
+        task.subagent_mode = "subagent"
+        task.step_gate = "autonomous"
+        prompt = await agent._build_context_for(task)
+        assert "Subagent Mode (autonomous)" in prompt
+        assert "Do NOT emit `suggest_step`" in prompt
+
+    async def test_wait_all_policy_reflected_in_prompt(
+        self, tmp_path: Path,
+    ) -> None:
+        agent, ticket_id, config = await _build_service_with_plan(tmp_path)
+        _seed_skill(config, "ticket-implement")
+        # Drop a settings.json with wait-all under .bonsai/
+        from app.core.settings import save_settings
+
+        save_settings(tmp_path, {"tickets": {"subagentFailurePolicy": "wait-all"}})
+        task = _make_task(agent, ticket_id, skill_id="ticket-implement")
+        task.subagent_mode = "subagent"
+        task.step_gate = "autonomous"
+        prompt = await agent._build_context_for(task)
+        assert "Failure policy: **wait-all**" in prompt

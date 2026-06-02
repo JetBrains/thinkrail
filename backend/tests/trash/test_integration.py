@@ -38,9 +38,10 @@ class TestSessionTrashIntegration:
         t2 = board.create_ticket("Ticket B")
         board.attach_session(t1.id, "s1")
         board.attach_session(t2.id, "s1")
-        board.update_ticket(t1.id, status="described")
-        board.update_ticket(t1.id, status="specified")
-        board.set_plan_path(t1.id, "plans/test.md")
+        # Walk through the new lifecycle states forward to `implementation-plan`,
+        # then set the orchestrator to flip into `implementing`.
+        for status in ("product-design", "technical-design", "amend-specs", "implementation-plan"):
+            board.update_ticket(t1.id, status=status)
         board.set_orchestrator(t1.id, "s1")
 
         # Detach from all tickets (what AgentService.trash_session does)
@@ -110,8 +111,8 @@ class TestSessionTrashIntegration:
 
         trash.trash_session("x")
         trash.trash_session("y")
-        trash.trash_ticket(t.id)  # cascade also trashes the auto-created plan
+        trash.trash_ticket(t.id)  # no plan auto-created — ticket-only entry
 
-        assert len(trash.list_trashed()) == 4  # 2 sessions + 1 ticket + 1 cascaded plan
+        assert len(trash.list_trashed()) == 3  # 2 sessions + 1 ticket
         trash.empty_trash()
         assert trash.list_trashed() == []

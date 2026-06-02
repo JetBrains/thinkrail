@@ -70,6 +70,16 @@ interface UiStore {
   dismissedWizardOutcomes: string[];
   dismissWizardOutcome: (bonsaiSid: string) => void;
 
+  /** When set, the right preview panel renders a ReviewPanel for the given
+   *  file, sourcing pending+resolved ProposeChange requests from the session. */
+  activeReview: { sid: string; filePath: string } | null;
+  setActiveReview: (review: { sid: string; filePath: string } | null) => void;
+
+  /** When true, the ticket view's right-panel artifact bar shows a single-line
+   *  collapsed header. When false, full tabs. Persisted across sessions. */
+  ticketArtifactBarCollapsed: boolean;
+  setTicketArtifactBarCollapsed: (collapsed: boolean) => void;
+
   toggleLeftPanel: () => void;
   toggleRightPanel: () => void;
   setLeftTab: (tab: LeftTab) => void;
@@ -135,6 +145,12 @@ export const useUiStore = create<UiStore>()(
             : { dismissedWizardOutcomes: [...s.dismissedWizardOutcomes, bonsaiSid] },
         ),
 
+      activeReview: null,
+      setActiveReview: (review) => set({ activeReview: review }),
+
+      ticketArtifactBarCollapsed: false,
+      setTicketArtifactBarCollapsed: (collapsed) => set({ ticketArtifactBarCollapsed: collapsed }),
+
       toggleLeftPanel: () =>
         set((s) => ({ leftPanelCollapsed: !s.leftPanelCollapsed })),
       toggleRightPanel: () =>
@@ -156,6 +172,7 @@ export const useUiStore = create<UiStore>()(
         centerView: state.centerView,
         lastActiveSessions: state.lastActiveSessions,
         dismissedWizardOutcomes: state.dismissedWizardOutcomes,
+        ticketArtifactBarCollapsed: state.ticketArtifactBarCollapsed,
       }),
     },
   ),

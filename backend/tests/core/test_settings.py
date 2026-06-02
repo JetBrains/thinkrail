@@ -37,3 +37,31 @@ def test_voice_revise_mode_roundtrip():
     for mode in ("auto", "subsession", "off"):
         s = ProjectSettings(voice_revise_mode=mode)
         assert ProjectSettings.model_validate(s.model_dump()).voice_revise_mode == mode
+
+
+class TestTicketsSubagentFailurePolicy:
+    def test_default_is_fail_fast(self) -> None:
+        assert ProjectSettings().tickets.subagent_failure_policy == "fail-fast"
+
+    def test_explicit_wait_all_via_camelcase_alias(self) -> None:
+        s = ProjectSettings.model_validate(
+            {"tickets": {"subagentFailurePolicy": "wait-all"}}
+        )
+        assert s.tickets.subagent_failure_policy == "wait-all"
+
+    def test_explicit_wait_all_via_snake_case(self) -> None:
+        s = ProjectSettings.model_validate(
+            {"tickets": {"subagent_failure_policy": "wait-all"}}
+        )
+        assert s.tickets.subagent_failure_policy == "wait-all"
+
+    def test_invalid_value_falls_back_to_default(self) -> None:
+        s = ProjectSettings.model_validate(
+            {"tickets": {"subagentFailurePolicy": "nonsense"}}
+        )
+        assert s.tickets.subagent_failure_policy == "fail-fast"
+
+    def test_missing_tickets_namespace_uses_default(self) -> None:
+        # A settings file that doesn't mention tickets at all still yields the default.
+        s = ProjectSettings.model_validate({"font_size": 14})
+        assert s.tickets.subagent_failure_policy == "fail-fast"

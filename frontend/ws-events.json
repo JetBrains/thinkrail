@@ -1,5 +1,114 @@
 {
   "$defs": {
+    "ArtifactAddedEvent": {
+      "properties": {
+        "bonsaiSid": {
+          "title": "Bonsaisid",
+          "type": "string"
+        },
+        "sessionId": {
+          "default": "",
+          "title": "Sessionid",
+          "type": "string"
+        },
+        "eventType": {
+          "const": "artifactAdded",
+          "title": "Eventtype",
+          "type": "string"
+        },
+        "payload": {
+          "$ref": "#/$defs/ArtifactAddedPayload"
+        }
+      },
+      "required": [
+        "bonsaiSid",
+        "sessionId",
+        "eventType",
+        "payload"
+      ],
+      "title": "ArtifactAddedEvent",
+      "type": "object"
+    },
+    "ArtifactAddedPayload": {
+      "description": "A new artifact was recorded on the session.",
+      "properties": {
+        "artifact": {
+          "$ref": "#/$defs/SessionArtifact"
+        }
+      },
+      "required": [
+        "artifact"
+      ],
+      "title": "ArtifactAddedPayload",
+      "type": "object"
+    },
+    "ArtifactLabeledEvent": {
+      "properties": {
+        "bonsaiSid": {
+          "title": "Bonsaisid",
+          "type": "string"
+        },
+        "sessionId": {
+          "default": "",
+          "title": "Sessionid",
+          "type": "string"
+        },
+        "eventType": {
+          "const": "artifactLabeled",
+          "title": "Eventtype",
+          "type": "string"
+        },
+        "payload": {
+          "$ref": "#/$defs/ArtifactLabeledPayload"
+        }
+      },
+      "required": [
+        "bonsaiSid",
+        "sessionId",
+        "eventType",
+        "payload"
+      ],
+      "title": "ArtifactLabeledEvent",
+      "type": "object"
+    },
+    "ArtifactLabeledPayload": {
+      "description": "An existing artifact got a role/label update.",
+      "properties": {
+        "path": {
+          "title": "Path",
+          "type": "string"
+        },
+        "role": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Role"
+        },
+        "label": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Label"
+        }
+      },
+      "required": [
+        "path"
+      ],
+      "title": "ArtifactLabeledPayload",
+      "type": "object"
+    },
     "AskUserQuestionEvent": {
       "properties": {
         "bonsaiSid": {
@@ -54,6 +163,41 @@
         "questions"
       ],
       "title": "AskUserQuestionPayload",
+      "type": "object"
+    },
+    "ClearPreviewFileEvent": {
+      "properties": {
+        "bonsaiSid": {
+          "title": "Bonsaisid",
+          "type": "string"
+        },
+        "sessionId": {
+          "default": "",
+          "title": "Sessionid",
+          "type": "string"
+        },
+        "eventType": {
+          "const": "clearPreviewFile",
+          "title": "Eventtype",
+          "type": "string"
+        },
+        "payload": {
+          "$ref": "#/$defs/ClearPreviewFilePayload"
+        }
+      },
+      "required": [
+        "bonsaiSid",
+        "sessionId",
+        "eventType",
+        "payload"
+      ],
+      "title": "ClearPreviewFileEvent",
+      "type": "object"
+    },
+    "ClearPreviewFilePayload": {
+      "description": "DEPRECATED: hide the Preview tab. Use SetPreviewFile with path=null.",
+      "properties": {},
+      "title": "ClearPreviewFilePayload",
       "type": "object"
     },
     "CompactEvent": {
@@ -712,6 +856,88 @@
       "title": "ProgressPayload",
       "type": "object"
     },
+    "ProposeChangeEvent": {
+      "properties": {
+        "bonsaiSid": {
+          "title": "Bonsaisid",
+          "type": "string"
+        },
+        "sessionId": {
+          "default": "",
+          "title": "Sessionid",
+          "type": "string"
+        },
+        "eventType": {
+          "const": "proposeChange",
+          "title": "Eventtype",
+          "type": "string"
+        },
+        "payload": {
+          "$ref": "#/$defs/ProposeChangePayload"
+        }
+      },
+      "required": [
+        "bonsaiSid",
+        "sessionId",
+        "eventType",
+        "payload"
+      ],
+      "title": "ProposeChangeEvent",
+      "type": "object"
+    },
+    "ProposeChangePayload": {
+      "description": "Agent proposes an amendment to a spec file; user reviews via four-button card.",
+      "properties": {
+        "requestId": {
+          "default": "",
+          "title": "Requestid",
+          "type": "string"
+        },
+        "filePath": {
+          "title": "Filepath",
+          "type": "string"
+        },
+        "oldString": {
+          "title": "Oldstring",
+          "type": "string"
+        },
+        "newString": {
+          "title": "Newstring",
+          "type": "string"
+        },
+        "section": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Section"
+        },
+        "rationale": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Rationale"
+        }
+      },
+      "required": [
+        "filePath",
+        "oldString",
+        "newString"
+      ],
+      "title": "ProposeChangePayload",
+      "type": "object"
+    },
     "Question": {
       "description": "A single question with selectable options.",
       "properties": {
@@ -898,6 +1124,65 @@
       "title": "RequestResolvedPayload",
       "type": "object"
     },
+    "SessionArtifact": {
+      "description": "One file the session produced or focused on.",
+      "properties": {
+        "path": {
+          "title": "Path",
+          "type": "string"
+        },
+        "kind": {
+          "enum": [
+            "write",
+            "edit",
+            "propose-change",
+            "preview"
+          ],
+          "title": "Kind",
+          "type": "string"
+        },
+        "role": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Role"
+        },
+        "label": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Label"
+        },
+        "firstTouchedAt": {
+          "title": "Firsttouchedat",
+          "type": "string"
+        },
+        "lastTouchedAt": {
+          "title": "Lasttouchedat",
+          "type": "string"
+        }
+      },
+      "required": [
+        "path",
+        "kind",
+        "firstTouchedAt",
+        "lastTouchedAt"
+      ],
+      "title": "SessionArtifact",
+      "type": "object"
+    },
     "SessionOutcome": {
       "description": "What to show on the done screen of a session.\n\nBuilt up by the agent via `session_finalize` (and optionally `session_queue_action`).\nPersisted on the AgentTask so it survives reloads.",
       "properties": {
@@ -1006,6 +1291,68 @@
         }
       },
       "title": "SessionStartPayload",
+      "type": "object"
+    },
+    "SetPreviewFileEvent": {
+      "properties": {
+        "bonsaiSid": {
+          "title": "Bonsaisid",
+          "type": "string"
+        },
+        "sessionId": {
+          "default": "",
+          "title": "Sessionid",
+          "type": "string"
+        },
+        "eventType": {
+          "const": "setPreviewFile",
+          "title": "Eventtype",
+          "type": "string"
+        },
+        "payload": {
+          "$ref": "#/$defs/SetPreviewFilePayload"
+        }
+      },
+      "required": [
+        "bonsaiSid",
+        "sessionId",
+        "eventType",
+        "payload"
+      ],
+      "title": "SetPreviewFileEvent",
+      "type": "object"
+    },
+    "SetPreviewFilePayload": {
+      "description": "Open a file in the right Context Panel's Preview tab. Path null\nmeans clear the preview (replaces the deprecated ClearPreviewFile).",
+      "properties": {
+        "path": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Path"
+        },
+        "section": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Section"
+        }
+      },
+      "required": [
+        "path"
+      ],
+      "title": "SetPreviewFilePayload",
       "type": "object"
     },
     "StartSessionAction": {
@@ -1276,6 +1623,18 @@
           ],
           "default": null,
           "title": "Prompt"
+        },
+        "ticketId": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Ticketid"
         },
         "requestId": {
           "default": "",
@@ -1695,7 +2054,10 @@
   },
   "discriminator": {
     "mapping": {
+      "artifactAdded": "#/$defs/ArtifactAddedEvent",
+      "artifactLabeled": "#/$defs/ArtifactLabeledEvent",
       "askUserQuestion": "#/$defs/AskUserQuestionEvent",
+      "clearPreviewFile": "#/$defs/ClearPreviewFileEvent",
       "compact": "#/$defs/CompactEvent",
       "confirmAction": "#/$defs/ConfirmActionEvent",
       "done": "#/$defs/DoneEvent",
@@ -1704,10 +2066,12 @@
       "notification": "#/$defs/NotificationEvent",
       "permissionDenied": "#/$defs/PermissionDeniedEvent",
       "progress": "#/$defs/ProgressEvent",
+      "proposeChange": "#/$defs/ProposeChangeEvent",
       "ready": "#/$defs/ReadyEvent",
       "requestExpired": "#/$defs/RequestExpiredEvent",
       "requestResolved": "#/$defs/RequestResolvedEvent",
       "sessionStart": "#/$defs/SessionStartEvent",
+      "setPreviewFile": "#/$defs/SetPreviewFileEvent",
       "subagentEnd": "#/$defs/SubagentEndEvent",
       "subagentStart": "#/$defs/SubagentStartEvent",
       "suggestDescription": "#/$defs/SuggestDescriptionEvent",
@@ -1790,6 +2154,21 @@
     },
     {
       "$ref": "#/$defs/UserMessageEvent"
+    },
+    {
+      "$ref": "#/$defs/ProposeChangeEvent"
+    },
+    {
+      "$ref": "#/$defs/SetPreviewFileEvent"
+    },
+    {
+      "$ref": "#/$defs/ClearPreviewFileEvent"
+    },
+    {
+      "$ref": "#/$defs/ArtifactAddedEvent"
+    },
+    {
+      "$ref": "#/$defs/ArtifactLabeledEvent"
     }
   ]
 }

@@ -30,6 +30,12 @@ import type {
   RequestResolvedEvent,
   RequestExpiredEvent,
   UserMessageEvent,
+  ProposeChangeEvent,
+  SetPreviewFileEvent,
+  ClearPreviewFileEvent,
+  ArtifactAddedEvent,
+  ArtifactLabeledEvent,
+  SessionArtifact,
 } from "./ws-events.ts";
 
 export type {
@@ -57,6 +63,12 @@ export type {
   RequestResolvedEvent,
   RequestExpiredEvent,
   UserMessageEvent,
+  ProposeChangeEvent,
+  SetPreviewFileEvent,
+  ClearPreviewFileEvent,
+  ArtifactAddedEvent,
+  ArtifactLabeledEvent,
+  SessionArtifact,
 };
 
 // Re-export generated payload + other types.
@@ -74,6 +86,9 @@ export type {
   SuggestSessionPayload,
   SuggestStepPayload,
   UserMessagePayload,
+  ProposeChangePayload,
+  SetPreviewFilePayload,
+  ClearPreviewFilePayload,
   QuestionOption,
 } from "./ws-events.ts";
 
@@ -112,6 +127,7 @@ export type InteractionRequestEventType = (
   | SuggestSessionEvent
   | SuggestDescriptionEvent
   | SuggestStepEvent
+  | ProposeChangeEvent
 )["eventType"];
 
 /** Resolution of a pending interaction request. */
@@ -123,13 +139,27 @@ export type InteractionResultEventType = (
 /** User-originated input echoed into the event log. */
 export type InputEventType = UserMessageEvent["eventType"];
 
+/** UI-side effects — transient, not persisted. */
+export type UiEventType = (
+  | SetPreviewFileEvent
+  | ClearPreviewFileEvent
+)["eventType"];
+
+/** Per-session artifact tracking events. */
+export type ArtifactEventType = (
+  | ArtifactAddedEvent
+  | ArtifactLabeledEvent
+)["eventType"];
+
 /** Full union of all event type strings — derived from the generated union. */
 export type EventType =
   | ExecutionEventType
   | LifecycleEventType
   | InteractionRequestEventType
   | InteractionResultEventType
-  | InputEventType;
+  | InputEventType
+  | UiEventType
+  | ArtifactEventType;
 
 // ─── Other models ─────────────────────────────────────────────────────────────
 

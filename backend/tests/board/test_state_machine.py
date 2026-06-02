@@ -2,44 +2,118 @@ from __future__ import annotations
 
 import pytest
 
-from app.board.state_machine import InvalidTransitionError, can_transition, validate_transition
+from app.board.state_machine import (
+    InvalidTransitionError,
+    can_transition,
+    is_backward_transition,
+    validate_transition,
+)
 
 
-class TestCanTransition:
-    def test_same_status(self) -> None:
+class TestForwardTransitions:
+    @pytest.mark.parametrize(
+        "src,dst",
+        [
+            ("idea", "product-design"),
+            ("product-design", "technical-design"),
+            ("technical-design", "amend-specs"),
+            ("amend-specs", "implementation-plan"),
+            ("implementation-plan", "implementing"),
+            ("implementing", "done"),
+        ],
+    )
+    def test_allowed(self, src: str, dst: str) -> None:
+        assert can_transition(src, dst)
+
+
+class TestBackwardTransitions:
+    @pytest.mark.parametrize(
+        "src,dst",
+        [
+            ("product-design", "idea"),
+            ("technical-design", "product-design"),
+            ("amend-specs", "technical-design"),
+            ("implementation-plan", "amend-specs"),
+            ("implementing", "implementation-plan"),
+            ("done", "implementing"),
+        ],
+    )
+    def test_allowed(self, src: str, dst: str) -> None:
+        assert can_transition(src, dst)
+
+    def test_classifier(self) -> None:
+        assert is_backward_transition("implementation-plan", "amend-specs")
+        assert not is_backward_transition("amend-specs", "implementation-plan")
+        assert is_backward_transition("done", "implementing")
+        assert is_backward_transition("technical-design", "product-design")
+
+
+class TestRejectedTransitions:
+    @pytest.mark.parametrize(
+        "src,dst",
+        [
+            ("idea", "done"),
+            ("product-design", "done"),
+            ("technical-design", "done"),
+            ("amend-specs", "done"),
+            ("implementation-plan", "done"),
+            ("done", "idea"),
+            ("done", "implementation-plan"),
+            ("idea", "technical-design"),
+            ("product-design", "amend-specs"),
+            ("technical-design", "implementation-plan"),
+            ("amend-specs", "implementing"),
+        ],
+    )
+    def test_rejected(self, src: str, dst: str) -> None:
+        assert not can_transition(src, dst)
+        with pytest.raises(InvalidTransitionError):
+            validate_transition(src, dst)
+
+
+class TestSameStatus:
+    def test_same_status_is_allowed(self) -> None:
         assert can_transition("idea", "idea") is True
-
-    def test_valid_forward(self) -> None:
-        assert can_transition("idea", "described") is True
-        assert can_transition("described", "specified") is True
-        assert can_transition("specified", "planned") is True
-        assert can_transition("planned", "executing") is True
-        assert can_transition("executing", "done") is True
-
-    def test_valid_backward(self) -> None:
-        assert can_transition("done", "executing") is True
-        assert can_transition("specified", "described") is True
-        assert can_transition("planned", "specified") is True
-        assert can_transition("described", "idea") is True
-
-    def test_invalid_skip(self) -> None:
-        assert can_transition("idea", "specified") is False
-        assert can_transition("idea", "planned") is False
-        assert can_transition("idea", "executing") is False
-
-    def test_shortcut_to_done(self) -> None:
-        assert can_transition("idea", "done") is True
-        assert can_transition("described", "done") is True
-        assert can_transition("specified", "done") is True
-        assert can_transition("planned", "done") is True
+        assert can_transition("done", "done") is True
 
 
-class TestValidateTransition:
-    def test_valid(self) -> None:
-        validate_transition("idea", "described")
+class TestNextUnskippedStatus:
+    def test_no_skip(self) -> None:
+        from app.board.state_machine import next_unskipped_status
+        assert next_unskipped_status("product-design", []) == "technical-design"
 
-    def test_invalid_raises(self) -> None:
-        with pytest.raises(InvalidTransitionError) as exc_info:
-            validate_transition("idea", "executing")
-        assert exc_info.value.from_status == "idea"
-        assert exc_info.value.to_status == "executing"
+    def test_skips_one(self) -> None:
+        from app.board.state_machine import next_unskipped_status
+        assert next_unskipped_status("product-design", ["technical-design"]) == "amend-specs"
+
+    def test_skips_many(self) -> None:
+        from app.board.state_machine import next_unskipped_status
+        skipped = ["technical-design", "amend-specs", "implementation-plan"]
+        assert next_unskipped_status("product-design", skipped) == "implementing"
+
+    def test_returns_done_when_all_skipped(self) -> None:
+        from app.board.state_machine import next_unskipped_status
+        skipped = ["technical-design", "amend-specs", "implementation-plan", "implementing"]
+        assert next_unskipped_status("product-design", skipped) == "done"
+
+    def test_at_done_stays_done(self) -> None:
+        from app.board.state_machine import next_unskipped_status
+        assert next_unskipped_status("done", []) == "done"
+
+
+class TestIsSkippable:
+    def test_excludes_idea_and_done(self) -> None:
+        from app.board.state_machine import is_skippable
+        assert is_skippable("idea") is False
+        assert is_skippable("done") is False
+
+    def test_all_middle_phases(self) -> None:
+        from app.board.state_machine import is_skippable
+        for s in (
+            "product-design",
+            "technical-design",
+            "amend-specs",
+            "implementation-plan",
+            "implementing",
+        ):
+            assert is_skippable(s) is True

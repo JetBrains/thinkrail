@@ -282,6 +282,35 @@
   white-space: nowrap;
   line-height: 1;
 }
+.sm-status-label--attention {
+  color: color-mix(in srgb, var(--red) 90%, white);
+  font-weight: 600;
+}
+.sm-status-label--running {
+  color: color-mix(in srgb, var(--blue) 90%, white);
+  font-weight: 600;
+}
+
+/* ── Ticket-group card ── */
+.sm-card--ticket-group {
+  /* Same grid as the session card but with a leading stripe column. The
+     stripe colour is themed by --ticket-color (set inline from the hash). */
+  border-left: 3px solid var(--ticket-color, var(--blue));
+}
+.sm-card--ticket-group .sm-name {
+  font-weight: 600;
+}
+.sm-card--ticket-group .sm-ticket-id {
+  color: var(--hint);
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: var(--font-xs);
+  margin-left: var(--space-xs);
+}
+.sm-ticket-stripe--lead {
+  /* Hidden — the border-left does the job for the group card. Keeps the
+     span around for grid alignment. */
+  display: none;
+}
 
 .sm-icon-btn {
   width: 22px;

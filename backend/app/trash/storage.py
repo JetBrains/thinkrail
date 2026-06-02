@@ -19,7 +19,7 @@ from app.core.config import TRASH_SIDECAR_FILE
 # Discriminator identifying which kind of resource is being trashed.  These
 # values become the first path component under ``.bonsai/trash/`` and steer
 # the type-specific restore logic on the way back.
-TrashItemType = Literal["sessions", "tickets", "plans", "drafts", "patches", "specs"]
+TrashItemType = Literal["sessions", "tickets", "specs"]
 
 
 def move_to_trash(

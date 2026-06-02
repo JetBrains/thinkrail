@@ -8,14 +8,35 @@ settings or user-defined entries are not silently dropped.
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from app.core.config import BONSAI_DIRNAME, SETTINGS_FILE
 from app.core.fileio import write_text
 
 SETTINGS_REL_PATH = f"{BONSAI_DIRNAME}/{SETTINGS_FILE}"
+
+
+SubagentFailurePolicy = Literal["fail-fast", "wait-all"]
+
+
+class TicketsSettings(BaseModel, extra="allow"):
+    """Settings under the ``tickets`` namespace."""
+
+    model_config = ConfigDict(populate_by_name=True)
+
+    subagent_failure_policy: SubagentFailurePolicy = Field(
+        default="fail-fast", alias="subagentFailurePolicy",
+    )
+
+    @field_validator("subagent_failure_policy", mode="before")
+    @classmethod
+    def _coerce_unknown_to_default(cls, value: object) -> object:
+        """Unknown / invalid values fall back to the default rather than 422."""
+        if value in ("fail-fast", "wait-all"):
+            return value
+        return "fail-fast"
 
 
 class ProjectSettings(BaseModel, extra="allow"):
@@ -29,6 +50,9 @@ class ProjectSettings(BaseModel, extra="allow"):
     trash_retention_days: int = 30  # 0 or null to disable auto-purge
     # Voice input revise behavior
     voice_revise_mode: str = "off"  # "auto" | "subsession" | "off"
+    # Ticket-implement subagent execution mode (see TICKET_LIFECYCLE_DESIGN.md
+    # § Implementation orchestration modes).
+    tickets: TicketsSettings = Field(default_factory=TicketsSettings)
 
 
 def _settings_path(project_root: Path) -> Path:

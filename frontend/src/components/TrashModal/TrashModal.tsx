@@ -8,9 +8,6 @@ const TYPE_LABELS: Record<string, string> = {
   sessions: "Sessions",
   tickets: "Tickets",
   specs: "Specs",
-  plans: "Plans",
-  drafts: "Drafts",
-  patches: "Patches",
 };
 
 const ALL_TYPES = Object.keys(TYPE_LABELS);

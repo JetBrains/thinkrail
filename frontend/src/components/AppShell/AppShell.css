@@ -201,6 +201,24 @@
   height: 100%;
 }
 
+/* Ticket-route left panel: same chrome (tab strip + collapse caret),
+ * different body content. */
+.left-panel--ticket {
+  background: var(--panel);
+}
+.panel-tab--static {
+  cursor: default;
+}
+.panel-tab--static:hover {
+  background: transparent;
+}
+.left-panel-ticket-body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: var(--space-lg);
+}
+
 .center-panel {
   flex: 1;
   min-width: 300px;

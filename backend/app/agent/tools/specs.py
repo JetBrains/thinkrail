@@ -80,23 +80,6 @@ async def _index_service() -> AsyncIterator[SpecService]:
         yield SpecService(config, index=index)
 
 
-def _is_draft_mode() -> tuple[bool, str]:
-    """Check if current session should use draft mode (ticket-specify)."""
-    try:
-        ctx = get_tool_context()
-        ticket_id = ctx.task.meta_ticket_id
-        if ticket_id and ctx.task.skill_id == "ticket-specify":
-            return True, ticket_id
-    except Exception:
-        pass
-    return False, ""
-
-
-def _get_draft_service():
-    """Get SpecDraftService from BoardService."""
-    from app.board.service import BoardService
-    ctx = get_tool_context()
-    return BoardService(ctx.config).spec_drafts
 
 
 # ── Schemas ──────────────────────────────────────────────────────────────────
@@ -270,23 +253,6 @@ async def _spec_delete(args: dict) -> dict:
     spec_id = args.get("id", "")
     if not spec_id:
         return _error("Missing required parameter: id")
-
-    # Draft mode: record deletion without actually deleting
-    draft_mode, draft_ticket_id = _is_draft_mode()
-    if draft_mode:
-        try:
-            async with _index_service() as svc:
-                detail = await svc.get_spec(spec_id)
-            draft_svc = _get_draft_service()
-            draft_svc.record_delete(draft_ticket_id, detail.path, registry_id=spec_id)
-            return _ok(
-                f"Draft: recorded deletion of '{spec_id}' "
-                f"(will be applied when you review drafts)"
-            )
-        except SpecNotFoundError:
-            return _error(f"Spec '{spec_id}' not found")
-        except Exception as exc:
-            return _error(f"Failed to record draft deletion: {exc}")
 
     ctx = get_tool_context()
     if ctx.coordinator is not None:

@@ -17,10 +17,14 @@ import "./DraftConfigCard.css";
 interface DraftConfigCardProps {
   bonsaiSid: string;
   readOnly?: boolean;
+  /** Hide the Discard control. Used for stage-default drafts (auto-spawned
+   *  by the ticket view) where discarding makes no sense. When omitted, the
+   *  control is hidden automatically for sessions whose kind is "stage-default". */
+  hideDiscard?: boolean;
   onVisibilityChange?: (visible: boolean) => void;
 }
 
-export function DraftConfigCard({ bonsaiSid, readOnly, onVisibilityChange }: DraftConfigCardProps) {
+export function DraftConfigCard({ bonsaiSid, readOnly, hideDiscard, onVisibilityChange }: DraftConfigCardProps) {
   const session = useSessionStore((s) => s.sessions.get(bonsaiSid));
   const updateDraft = useSessionStore((s) => s.updateDraft);
   const startDraft = useSessionStore((s) => s.startDraft);
@@ -145,7 +149,7 @@ export function DraftConfigCard({ bonsaiSid, readOnly, onVisibilityChange }: Dra
     .map((id) => specs.find((s) => s.id === id))
     .filter(Boolean);
   const modelDef = models.find((m) => m.value === session.model);
-  const attachedTicket = session.metaTicketId ? tickets.get(session.metaTicketId) : null;
+  const attachedTicket = session.ticketId ? tickets.get(session.ticketId) : null;
 
   const buildConfig = (
     overrides: Partial<{ model: string; permissionMode: string; effort: string; flags: Record<string, boolean> }>,
@@ -315,7 +319,7 @@ export function DraftConfigCard({ bonsaiSid, readOnly, onVisibilityChange }: Dra
                 debouncedUpdate({ skillId: id });
                 setSkillPickerOpen(false);
               }}
-              context={{ hasTicket: !!session.metaTicketId }}
+              context={{ hasTicket: !!session.ticketId }}
             />
           </div>
         )}
@@ -373,7 +377,7 @@ export function DraftConfigCard({ bonsaiSid, readOnly, onVisibilityChange }: Dra
               {attachedTicket.title}
               <button
                 className="draft-config-pill-remove"
-                onClick={() => debouncedUpdate({ metaTicketId: null })}
+                onClick={() => debouncedUpdate({ ticketId: null })}
               >
                 {"\u00D7"}
               </button>
@@ -391,9 +395,9 @@ export function DraftConfigCard({ bonsaiSid, readOnly, onVisibilityChange }: Dra
         {ticketPickerOpen && (
           <div className="draft-config-popover">
             <TicketSelector
-              selectedId={session.metaTicketId ?? null}
+              selectedId={session.ticketId ?? null}
               onSelect={(id) => {
-                debouncedUpdate({ metaTicketId: id });
+                debouncedUpdate({ ticketId: id });
                 setTicketPickerOpen(false);
               }}
             />
@@ -518,6 +522,27 @@ export function DraftConfigCard({ bonsaiSid, readOnly, onVisibilityChange }: Dra
             </span>
           </span>
 
+          {session.skillId === "ticket-implement" && (
+            <span className="draft-config-inline" aria-label="Execution mode">
+              <span className="draft-config-hint">mode:</span>
+              <select
+                className="draft-config-select"
+                value={`${session.subagentMode ?? "step-session"}:${session.stepGate ?? "approve"}`}
+                onChange={(e) => {
+                  const [mode, gate] = e.target.value.split(":") as [
+                    "step-session" | "subagent",
+                    "approve" | "autonomous",
+                  ];
+                  debouncedUpdate({ subagentMode: mode, stepGate: gate });
+                }}
+              >
+                <option value="step-session:approve">step sessions (approve each)</option>
+                <option value="subagent:approve">subagents (approve each)</option>
+                <option value="subagent:autonomous">subagents (autonomous)</option>
+              </select>
+            </span>
+          )}
+
           {flags.some((f) => f.type === "boolean") && (
             <span className="draft-config-inline">
               <span className="runtime-flags">
@@ -546,9 +571,11 @@ export function DraftConfigCard({ bonsaiSid, readOnly, onVisibilityChange }: Dra
 
       {/* Actions */}
       <div className="draft-config-actions">
-        <button className="draft-config-btn-discard" onClick={handleDiscard}>
-          Discard
-        </button>
+        {!(hideDiscard ?? session?.kind === "stage-default") && (
+          <button className="draft-config-btn-discard" onClick={handleDiscard}>
+            Discard
+          </button>
+        )}
         <button
           className="draft-config-btn-start"
           onClick={handleStart}

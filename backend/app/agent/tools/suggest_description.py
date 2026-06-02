@@ -20,7 +20,7 @@ from app.agent.models import AgentTask
 from app.agent.runtime.permissions import ToolPermissionResponse
 from app.agent.tools._context import get_tool_context
 from app.agent.tracker import Tracker
-from app.board.models import MetaTicketSummary
+from app.board.models import TicketSummary
 from app.board.service import BoardService, TicketNotFoundError
 from app.core.config import AppConfig
 
@@ -75,7 +75,7 @@ async def _suggest_description(args: dict) -> dict:
     if not description.strip():
         return _error("description must not be empty")
 
-    ticket_id = ctx.task.meta_ticket_id
+    ticket_id = ctx.task.ticket_id
     if not ticket_id:
         return _error("This session is not linked to a meta-ticket")
 
@@ -90,12 +90,12 @@ async def _suggest_description(args: dict) -> dict:
         except TicketNotFoundError:
             return _error(f"Ticket {ticket_id} not found — it may have been deleted")
 
-        # Auto-transition: idea → described when description is applied
+        # Auto-transition: idea → product-design when description is applied
         if ticket.status == "idea":
-            ticket = board_service.update_ticket(ticket_id, status="described")
+            ticket = board_service.update_ticket(ticket_id, status="product-design")
 
         # Notify frontend so the UI refreshes
-        summary = MetaTicketSummary.from_ticket(ticket)
+        summary = TicketSummary.from_ticket(ticket)
         await ctx.notify("board/didChange", summary.model_dump(by_alias=True))
 
         return {

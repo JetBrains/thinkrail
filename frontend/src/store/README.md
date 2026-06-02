@@ -39,7 +39,7 @@ frontend/src/store/
 ├── index.ts               # Re-exports all stores and wireEvents
 ├── specStore.ts           # Spec data, graph, registry
 ├── sessionStore.ts        # Active sessions, events, archived sessions
-├── boardStore.ts          # Meta-tickets, kanban board state
+├── boardStore.ts          # Tickets, kanban board state
 ├── settingsStore.ts       # Project settings, session defaults, dynamic skills list
 ├── runtimeCapsStore.ts    # Registered runtimes + per-runtime capability lists (pickers)
 ├── uiStore.ts             # Panel visibility, active tabs, modal state
@@ -191,11 +191,11 @@ export interface Session {
   permissionMode: string;
   betas: string[];
   effort: string;
-  metaTicketId?: string | null;
+  ticketId?: string | null;
   startedAt: number;
   events: AgentEvent[];
   metrics: SessionMetrics;
-  pendingRequest: PendingRequest | null;
+  pendingRequests: PendingRequest[];
   answeredRequests: Map<string, unknown>;
   systemPrompt?: string;           // full assembled prompt; restored from sessionStart event
   promptSections?: PromptSection[] | null;  // structured sections (in-memory only, not persisted)
@@ -314,17 +314,16 @@ interface SessionStore {
 - `closeSession` removes from `openTabs` (no END_SIGNAL). Live sessions stay in `sessions` map as background. Terminal sessions (done/error) get archived.
 - `endSession` sends END_SIGNAL to backend, terminates the session
 - `openTab` adds a session to `openTabs` and activates it (e.g., from background indicator dropdown)
-- `resolveRequest` calls `agent/respond` RPC, stores in `answeredRequests`, clears `pendingRequest`
+- `resolveRequest` calls `agent/respond` RPC, stores in `answeredRequests`, drops the matching entry from `pendingRequests`
 - `restoreSession` loads from backend, marks all question/approval events as answered with `{ historical: true }`, sets `status: "done"` and `restored: true`, extracts `systemPrompt` from the persisted `sessionStart` event payload
 - `loadActiveSessions` similarly extracts `systemPrompt` from the `sessionStart` event (or from `entry.systemPrompt` for drafts) when building Session objects from persistence
-- `onSuggestSession` stores suggestion params in `pendingRequest` as `{type: "suggestion", skill, specIds, name, reason, requestId}` and appends a `suggestSession` event
+- `onSuggestSession` appends suggestion params to `pendingRequests` as `{type: "suggestion", skill, specIds, name, reason, requestId}` and appends a `suggestSession` event
 - `onAgentEvent` is the generic handler for all streaming events; increments `toolCalls` on `toolCallEnd`, updates metrics on `turnComplete`/`interrupted`. On `costEstimate` events, updates live context window from `currentContextWindow` and per-iteration breakdown (`iterInputTokens`, `iterCacheRead`, `iterCacheCreate`, `iterOutputTokens`) — not persisted, only for live UI display.
 - `onSessionDone` only updates cost, status, and duration — preserves context data from the last `turnComplete` (the `agent/done` event carries no usage data)
 - `onSessionError` with `subtype === "turn_error"` sets status to `"idle"` (recoverable); other subtypes set `"error"` (terminal)
 - `ensureSession()` internal helper creates placeholder if events arrive before `startSession()` resolves
 - `archivedSessions` is **not persisted** to localStorage — lost on page refresh
 - `sessionList` is the shared `session/list` snapshot used by both `SessionManager` (sidebar) and `StatusBar` (footer pill). `refreshSessionList()` re-fetches it from the backend; `patchSessionInList(sid, patch)` applies a surgical update without a round-trip. `wireEvents` calls `refreshSessionList()` on `session/didCreate` (the wire payload is minimal), and calls `patchSessionInList()` on `session/didEnd` and `agent/statusChanged` (the events carry the new status directly)
-- `boardStore.pendingTicketSession` is a one-shot hint: when the sidebar SessionManager's context menu fires "Open ticket", it writes the bonsaiSid here, the center view flips to Board, and `MetaTicketDetail` consumes the hint to focus that specific session inside the ticket detail (then clears it)
 
 ---
 

@@ -1,8 +1,9 @@
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useSessionStore } from "@/store/sessionStore.ts";
 import { useNotificationStore } from "@/store/notificationStore.ts";
 import { getErrorMessage } from "@/utils/errors.ts";
 import { useFileStore } from "@/store/fileStore.ts";
+import { useTicketRouteStore } from "@/store/ticketRouteStore.ts";
 import { modLabel } from "@/utils/platform.ts";
 import type { SessionStatus } from "@/types/session.ts";
 import { ChatStream } from "@/components/ChatStream/ChatStream.tsx";
@@ -15,17 +16,31 @@ import { SessionTabBar } from "./SessionTabBar.tsx";
 import { StickyContextBar } from "./StickyContextBar.tsx";
 import "./SessionPanel.css";
 
+interface Props {
+  hideTabBar?: boolean;
+  hideStickyBar?: boolean;
+  hideContextCard?: boolean;
+  /** When set, SessionPanel locks to this session id instead of the global
+   *  `activeSessionId`, suppresses the tab bar + file viewer overlay, and
+   *  auto-restores the session from disk if it isn't in the in-memory map
+   *  yet. Use from embedded contexts like the ticket route. */
+  embeddedSid?: string | null;
+  /** Forwarded to ChatStream — used by the ticket route to apply
+   *  agent-suggested ticket descriptions to the ticket body. */
+  onApplyDescription?: (text: string) => void | Promise<void>;
+}
+
 export function SessionPanel({
   hideTabBar = false,
   hideStickyBar = false,
   hideContextCard = false,
-}: {
-  hideTabBar?: boolean;
-  hideStickyBar?: boolean;
-  hideContextCard?: boolean;
-} = {}) {
+  embeddedSid = null,
+  onApplyDescription,
+}: Props = {}) {
+  const isEmbedded = embeddedSid != null;
   const sessions = useSessionStore((s) => s.sessions);
-  const activeSessionId = useSessionStore((s) => s.activeSessionId);
+  const globalActiveSessionId = useSessionStore((s) => s.activeSessionId);
+  const activeSessionId = isEmbedded ? embeddedSid : globalActiveSessionId;
   const switchSession = useSessionStore((s) => s.switchSession);
   const closeSession = useSessionStore((s) => s.closeSession);
   const resolveRequest = useSessionStore((s) => s.resolveRequest);
@@ -34,6 +49,7 @@ export function SessionPanel({
   const endSession = useSessionStore((s) => s.endSession);
   const updateConfig = useSessionStore((s) => s.updateConfig);
   const restartSession = useSessionStore((s) => s.restartSession);
+  const restoreSession = useSessionStore((s) => s.restoreSession);
   const projectCost = useSessionStore((s) => s.projectCost);
   const createNewSession = useSessionStore((s) => s.createNewSession);
 
@@ -46,20 +62,66 @@ export function SessionPanel({
   const clearPreview = useFileStore((s) => s.clearPreview);
   const pinPreview = useFileStore((s) => s.pinPreview);
 
+  // Cross-panel scroll: the phase tree dispatches scroll-to-event requests
+  // via ticketRouteStore. We honour them only when embedded *and* the
+  // request targets the session we're showing.
+  const pendingScroll = useTicketRouteStore((s) => s.pendingScroll);
+  const consumeScroll = useTicketRouteStore((s) => s.consumeScroll);
+
   const [contextCardVisible, setContextCardVisible] = useState(true);
   const chatStreamRef = useRef<ChatStreamHandle>(null);
+  const [restoring, setRestoring] = useState(false);
+  const failedRestoreRef = useRef<Set<string>>(new Set());
+
+  // Auto-restore session from disk in embedded mode if it isn't already
+  // in the in-memory map. Restore failures are remembered per sid so a
+  // persistently-bad session doesn't get retried in a tight loop when
+  // the .finally below resets `restoring`.
+  useEffect(() => {
+    if (!isEmbedded || !embeddedSid) return;
+    if (sessions.has(embeddedSid)) return;
+    if (restoring) return;
+    if (failedRestoreRef.current.has(embeddedSid)) return;
+    setRestoring(true);
+    restoreSession(embeddedSid, { noTab: true })
+      .catch((e) => {
+        failedRestoreRef.current.add(embeddedSid);
+        console.error("[SessionPanel] auto-restore failed:", e);
+      })
+      .finally(() => setRestoring(false));
+  }, [isEmbedded, embeddedSid, sessions, restoring, restoreSession]);
+
+  // pendingScroll consumer (embedded mode only).
+  useEffect(() => {
+    if (!isEmbedded || !pendingScroll) return;
+    if (pendingScroll.sessionId !== activeSessionId) return;
+    const target = pendingScroll.eventIndex;
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        chatStreamRef.current?.scrollToEvent(target);
+        consumeScroll();
+      });
+    });
+  }, [isEmbedded, pendingScroll, activeSessionId, consumeScroll]);
   // Shared portal target: SessionStatusLine exposes a slot ref; InputArea
   // portals its action buttons (Continue / Start / Stop / Send) there so
   // they appear right of the session status indicator.
   const [actionSlot, setActionSlot] = useState<HTMLSpanElement | null>(null);
 
   const openTabs = useSessionStore((s) => s.openTabs);
-  const sessionList = Array.from(sessions.values()).filter((s) => openTabs.has(s.bonsaiSid));
-  const fileList = Array.from(openFiles.values());
-  const activeSession = activeSessionId && !activeFilePath && !previewFilePath ? sessions.get(activeSessionId) : null;
+  const sessionList = isEmbedded
+    ? []
+    : Array.from(sessions.values()).filter((s) => openTabs.has(s.bonsaiSid));
+  const fileList = isEmbedded ? [] : Array.from(openFiles.values());
+  // In embedded mode the file viewer never takes over — the ticket route
+  // shows artifacts via its own right-panel surface, and the user opening
+  // a file there shouldn't replace the chat in the center column.
+  const activeSession = isEmbedded
+    ? (activeSessionId ? sessions.get(activeSessionId) ?? null : null)
+    : (activeSessionId && !activeFilePath && !previewFilePath ? sessions.get(activeSessionId) ?? null : null);
 
-  const activeFile = activeFilePath ? openFiles.get(activeFilePath) : null;
-  const displayFile = activeFile ?? (previewFilePath ? previewFileObj : null);
+  const activeFile = !isEmbedded && activeFilePath ? openFiles.get(activeFilePath) : null;
+  const displayFile = isEmbedded ? null : (activeFile ?? (previewFilePath ? previewFileObj : null));
 
   const handleSwitchSession = useCallback(
     (taskId: string) => {
@@ -86,8 +148,9 @@ export function SessionPanel({
   const handleSend = useCallback(
     (text: string, isMarkdown?: boolean) => {
       if (!activeSessionId || !activeSession) return;
-      if (activeSession.pendingRequest && activeSession.pendingRequest.type === "question") {
-        resolveRequest(activeSessionId, activeSession.pendingRequest.requestId, { text });
+      const firstQuestion = activeSession.pendingRequests.find((r) => r.type === "question");
+      if (firstQuestion) {
+        resolveRequest(activeSessionId, firstQuestion.requestId, { text });
         return;
       }
       if (activeSession.status === "draft" || activeSession.status === "initializing" || activeSession.status === "idle") {
@@ -100,8 +163,9 @@ export function SessionPanel({
 
   const handleContinue = useCallback(() => {
     if (!activeSessionId || !activeSession) return;
-    if (activeSession.pendingRequest?.type === "question") {
-      resolveRequest(activeSessionId, activeSession.pendingRequest.requestId, { text: "continue" });
+    const firstQuestion = activeSession.pendingRequests.find((r) => r.type === "question");
+    if (firstQuestion) {
+      resolveRequest(activeSessionId, firstQuestion.requestId, { text: "continue" });
       return;
     }
     if (activeSession.status === "initializing" || activeSession.status === "idle") {
@@ -116,14 +180,15 @@ export function SessionPanel({
   const showSession = activeSession != null && !showFile;
 
   const status = activeSession?.status as SessionStatus | undefined;
-  const hasPending = activeSession?.pendingRequest != null;
+  const firstPending = activeSession?.pendingRequests[0] ?? null;
+  const hasPending = firstPending != null;
   const isDone = status === "done" || status === "error";
   const isRunning = status === "running";
   const canInterrupt = status === "running" || status === "waiting";
 
   const placeholder = hasPending
-    ? activeSession?.pendingRequest?.type === "approval"
-      ? activeSession?.pendingRequest?.toolName === "ExitPlanMode"
+    ? firstPending?.type === "approval"
+      ? firstPending?.toolName === "ExitPlanMode"
         ? "Review the plan above..."
         : "Waiting for your approval above..."
       : "Answer the question above or type a response..."
@@ -138,12 +203,12 @@ export function SessionPanel({
           : "Message Claude...";
 
   const isDraft = status === "draft";
-  const inputDisabled = isDone || isRunning || (hasPending && activeSession?.pendingRequest?.type === "approval");
+  const inputDisabled = isDone || isRunning || (hasPending && firstPending?.type === "approval");
   const showContinue = !inputDisabled && !canInterrupt && !isDraft && (activeSession?.events.length ?? 0) > 0;
 
   return (
     <>
-      {!hideTabBar && (
+      {!hideTabBar && !isEmbedded && (
         <div className="session-tabs-row">
           <SessionTabBar
             sessions={sessionList}
@@ -189,6 +254,7 @@ export function SessionPanel({
                 ? activeSession.events.filter((e) => e.eventType !== "sessionStart")
                 : activeSession.events
             }
+            onApplyDescription={onApplyDescription}
             answeredRequests={activeSession.answeredRequests}
             onResolveRequest={handleResolve}
             session={activeSession}
@@ -238,6 +304,12 @@ export function SessionPanel({
             )}
           </div>
         </>
+      ) : isEmbedded ? (
+        <div className="session-empty">
+          <div className="session-empty-title">
+            {restoring ? "Loading session…" : "Session unavailable"}
+          </div>
+        </div>
       ) : (
         <div className="session-empty">
           <div className="session-empty-title">No active session</div>

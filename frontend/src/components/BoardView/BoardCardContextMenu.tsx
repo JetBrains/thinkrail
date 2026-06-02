@@ -1,24 +1,25 @@
 import { useEffect, useRef } from "react";
-import type { MetaTicketSummary, MetaTicketStatus, MetaTicketType } from "@/types/board.ts";
+import type { TicketSummary, TicketStatus, TicketType } from "@/types/board.ts";
 
-const VALID_TRANSITIONS: Record<MetaTicketStatus, MetaTicketStatus[]> = {
-  idea: ["described", "done"],
-  described: ["idea", "specified", "done"],
-  specified: ["described", "planned", "done"],
-  planned: ["specified", "executing", "done"],
-  executing: ["planned", "done"],
-  done: ["idea", "executing"],
+const VALID_TRANSITIONS: Record<TicketStatus, TicketStatus[]> = {
+  idea: ["product-design"],
+  "product-design": ["idea", "technical-design"],
+  "technical-design": ["product-design", "amend-specs"],
+  "amend-specs": ["technical-design", "implementation-plan"],
+  "implementation-plan": ["amend-specs", "implementing"],
+  implementing: ["implementation-plan", "done"],
+  done: ["implementing"],
 };
 
-const ALL_TYPES: MetaTicketType[] = ["feature", "bug", "idea", "improvement"];
+const ALL_TYPES: TicketType[] = ["feature", "bug", "idea", "improvement"];
 
 interface BoardCardContextMenuProps {
-  ticket: MetaTicketSummary;
+  ticket: TicketSummary;
   x: number;
   y: number;
   onClose: () => void;
   onOpen: (id: string) => void;
-  onUpdateTicket: (id: string, updates: { status?: MetaTicketStatus; type?: MetaTicketType }) => void;
+  onUpdateTicket: (id: string, updates: { status?: TicketStatus; type?: TicketType }) => void;
   onDeleteTicket: (id: string) => void;
 }
 

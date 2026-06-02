@@ -504,8 +504,8 @@ class TestCategorize:
         would deny it whether or not the underlying handler mutates.
         """
         from app.agent.permissions import _INTERCEPTOR_CATEGORIES
-        # SuggestDescription is classified dynamically (apply=true →
-        # "edit", else "read"); it intentionally has no static entry.
+        # SuggestDescription is classified dynamically (apply=true → "edit",
+        # else "read"); it intentionally has no static entry.
         dynamic = {"SuggestDescription"}
         missing = set(INTERCEPTORS) - set(_INTERCEPTOR_CATEGORIES) - dynamic
         assert not missing, (

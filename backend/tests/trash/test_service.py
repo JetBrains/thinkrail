@@ -31,16 +31,22 @@ class TestTrashSession:
 
 
 class TestTrashTicket:
-    def test_moves_ticket_file(self, tmp_path: Path) -> None:
-        tickets_dir = tmp_path / ".bonsai" / "meta-tickets"
-        tickets_dir.mkdir(parents=True)
-        (tickets_dir / "t1.json").write_text('{"id": "t1", "title": "bug"}')
+    def test_moves_ticket_files(self, tmp_path: Path) -> None:
+        ticket_folder = tmp_path / ".bonsai" / "tickets" / "t1"
+        ticket_folder.mkdir(parents=True)
+        (ticket_folder / "ticket.json").write_text('{"id": "t1", "title": "bug"}')
+        (ticket_folder / "product-design.md").write_text("# pd")
 
         svc = _make_trash_service(tmp_path)
         svc.trash_ticket("t1")
 
-        assert not (tickets_dir / "t1.json").exists()
-        assert (tmp_path / ".bonsai" / "trash" / "tickets" / "t1" / "t1.json").exists()
+        # Source files moved out of the folder
+        assert not (ticket_folder / "ticket.json").exists()
+        assert not (ticket_folder / "product-design.md").exists()
+        # Trash item contains both files
+        trash_root = tmp_path / ".bonsai" / "trash" / "tickets" / "t1"
+        assert (trash_root / "ticket.json").exists()
+        assert (trash_root / "product-design.md").exists()
 
 
 class TestRestoreSession:
@@ -63,15 +69,15 @@ class TestRestoreSession:
 
 class TestRestoreTicket:
     def test_restores_ticket(self, tmp_path: Path) -> None:
-        tickets_dir = tmp_path / ".bonsai" / "meta-tickets"
-        tickets_dir.mkdir(parents=True)
-        (tickets_dir / "t2.json").write_text('{"id": "t2"}')
+        ticket_folder = tmp_path / ".bonsai" / "tickets" / "t2"
+        ticket_folder.mkdir(parents=True)
+        (ticket_folder / "ticket.json").write_text('{"id": "t2", "title": "x"}')
 
         svc = _make_trash_service(tmp_path)
         svc.trash_ticket("t2")
         svc.restore_ticket("t2")
 
-        assert (tickets_dir / "t2.json").exists()
+        assert (ticket_folder / "ticket.json").is_file()
 
 
 class TestListAndPurge:
@@ -79,9 +85,9 @@ class TestListAndPurge:
         sessions_dir = tmp_path / ".bonsai" / "sessions"
         sessions_dir.mkdir(parents=True)
         (sessions_dir / "x.json").write_text("{}")
-        tickets_dir = tmp_path / ".bonsai" / "meta-tickets"
-        tickets_dir.mkdir(parents=True)
-        (tickets_dir / "y.json").write_text("{}")
+        ticket_folder = tmp_path / ".bonsai" / "tickets" / "y"
+        ticket_folder.mkdir(parents=True)
+        (ticket_folder / "ticket.json").write_text('{"id": "y"}')
 
         svc = _make_trash_service(tmp_path)
         svc.trash_session("x")
@@ -163,201 +169,43 @@ class TestTrashSpec:
         assert svc.list_trashed(item_type="specs") == []
 
 
-class TestTrashPlan:
-    def test_moves_plan_file(self, tmp_path: Path) -> None:
-        plans_dir = tmp_path / ".bonsai" / "plans"
-        plans_dir.mkdir(parents=True)
-        plan_file = plans_dir / "t1.md"
-        plan_file.write_text("# Plan for t1\n\nSteps here.")
-
-        svc = _make_trash_service(tmp_path)
-        svc.trash_plan("t1")
-
-        assert not plan_file.exists()
-        trash_item = tmp_path / ".bonsai" / "trash" / "plans" / "t1"
-        assert (trash_item / "t1.md").exists()
-
-    def test_restore_plan(self, tmp_path: Path) -> None:
-        plans_dir = tmp_path / ".bonsai" / "plans"
-        plans_dir.mkdir(parents=True)
-        plan_file = plans_dir / "t2.md"
-        plan_file.write_text("# Plan for t2")
-
-        svc = _make_trash_service(tmp_path)
-        svc.trash_plan("t2")
-        assert not plan_file.exists()
-
-        svc.restore_plan("t2")
-        assert plan_file.exists()
-        assert "# Plan for t2" in plan_file.read_text()
-
-    def test_trash_missing_plan_is_noop(self, tmp_path: Path) -> None:
-        svc = _make_trash_service(tmp_path)
-        svc.trash_plan("nonexistent")
-        assert svc.list_trashed(item_type="plans") == []
-
-
-class TestTrashDraft:
-    def test_moves_draft_with_manifest_context(self, tmp_path: Path) -> None:
-        drafts_dir = tmp_path / ".bonsai" / "spec-drafts" / "t1"
-        drafts_dir.mkdir(parents=True)
-        draft_file = drafts_dir / "spec.md"
-        draft_file.write_text("# Draft spec")
-
-        manifest_entry = {
-            "operation": "create",
-            "realPath": "backend/spec.md",
-            "draftPath": "spec.md",
-        }
-
-        svc = _make_trash_service(tmp_path)
-        svc.trash_draft("t1", 0, manifest_entry=manifest_entry, draft_file=draft_file)
-
-        assert not draft_file.exists()
-        trash_item = tmp_path / ".bonsai" / "trash" / "drafts" / "t1--0"
-        assert (trash_item / "_trash.json").exists()
-
-        info = json.loads((trash_item / "_trash.json").read_text())
-        assert info["context"]["manifestEntry"] == manifest_entry
-        assert info["context"]["ticketId"] == "t1"
-
-    def test_restore_draft_returns_manifest_entry(self, tmp_path: Path) -> None:
-        drafts_dir = tmp_path / ".bonsai" / "spec-drafts" / "t2"
-        drafts_dir.mkdir(parents=True)
-        draft_file = drafts_dir / "spec.md"
-        draft_file.write_text("# Draft")
-
-        manifest_entry = {"operation": "update", "realPath": "mod/README.md"}
-
-        svc = _make_trash_service(tmp_path)
-        svc.trash_draft("t2", 0, manifest_entry=manifest_entry, draft_file=draft_file)
-        result = svc.restore_draft("t2--0")
-
-        assert result == manifest_entry
-
-    def test_trash_draft_without_file(self, tmp_path: Path) -> None:
-        """Delete-operation drafts may have no file on disk."""
-        manifest_entry = {"operation": "delete", "realPath": "old/spec.md"}
-
-        svc = _make_trash_service(tmp_path)
-        svc.trash_draft("t3", 2, manifest_entry=manifest_entry, draft_file=None)
-
-        trash_item = tmp_path / ".bonsai" / "trash" / "drafts" / "t3--2"
-        assert (trash_item / "_trash.json").exists()
-        info = json.loads((trash_item / "_trash.json").read_text())
-        assert info["context"]["manifestEntry"] == manifest_entry
-
-
-class TestTrashPatches:
-    def test_moves_all_patch_files(self, tmp_path: Path) -> None:
-        patches_dir = tmp_path / ".bonsai" / "spec-patches" / "t1"
-        patches_dir.mkdir(parents=True)
-        (patches_dir / "mod-a-20260101.patch").write_text("diff content 1")
-        (patches_dir / "mod-b-20260102.patch").write_text("diff content 2")
-
-        svc = _make_trash_service(tmp_path)
-        svc.trash_patches("t1")
-
-        assert not patches_dir.exists()
-        trash_item = tmp_path / ".bonsai" / "trash" / "patches" / "t1"
-        assert (trash_item / "mod-a-20260101.patch").exists()
-        assert (trash_item / "mod-b-20260102.patch").exists()
-
-    def test_restore_patches(self, tmp_path: Path) -> None:
-        patches_dir = tmp_path / ".bonsai" / "spec-patches" / "t2"
-        patches_dir.mkdir(parents=True)
-        (patches_dir / "a.patch").write_text("diff a")
-
-        svc = _make_trash_service(tmp_path)
-        svc.trash_patches("t2")
-        assert not patches_dir.exists()
-
-        svc.restore_patches("t2")
-        assert (patches_dir / "a.patch").exists()
-        assert (patches_dir / "a.patch").read_text() == "diff a"
-
-    def test_trash_missing_patches_is_noop(self, tmp_path: Path) -> None:
-        svc = _make_trash_service(tmp_path)
-        svc.trash_patches("nonexistent")
-        assert svc.list_trashed(item_type="patches") == []
-
-
 class TestCascadeTicket:
-    def test_cascade_trashes_all_related(self, tmp_path: Path) -> None:
-        # Create ticket
-        tickets_dir = tmp_path / ".bonsai" / "meta-tickets"
-        tickets_dir.mkdir(parents=True)
-        (tickets_dir / "t1.json").write_text('{"id": "t1", "title": "bug"}')
-
-        # Create plan
-        plans_dir = tmp_path / ".bonsai" / "plans"
-        plans_dir.mkdir(parents=True)
-        (plans_dir / "t1.md").write_text("# Plan")
-
-        # Create drafts with manifest
-        drafts_dir = tmp_path / ".bonsai" / "spec-drafts" / "t1"
-        drafts_dir.mkdir(parents=True)
-        draft_file = drafts_dir / "mod_a" / "README.md"
-        draft_file.parent.mkdir(parents=True)
-        draft_file.write_text("# Draft A")
-        manifest = {
-            "ticketId": "t1",
-            "sessionId": "",
-            "created": "2026-01-01",
-            "entries": [
-                {
-                    "operation": "create",
-                    "realPath": "mod_a/README.md",
-                    "draftPath": "mod_a/README.md",
-                    "registryId": "",
-                    "registryType": "",
-                    "registryTitle": "",
-                    "registryCovers": [],
-                    "registryTags": [],
-                    "created": "2026-01-01",
-                }
-            ],
-        }
-        (drafts_dir / "manifest.json").write_text(json.dumps(manifest))
-
-        # Create patches
-        patches_dir = tmp_path / ".bonsai" / "spec-patches" / "t1"
-        patches_dir.mkdir(parents=True)
-        (patches_dir / "a.patch").write_text("diff")
+    def test_trashes_entire_folder(self, tmp_path: Path) -> None:
+        # Unified layout: ticket.json + four artifacts in one folder
+        ticket_folder = tmp_path / ".bonsai" / "tickets" / "t1"
+        ticket_folder.mkdir(parents=True)
+        (ticket_folder / "ticket.json").write_text('{"id": "t1", "title": "bug"}')
+        (ticket_folder / "product-design.md").write_text("# pd")
+        (ticket_folder / "technical-design.md").write_text("# td")
+        (ticket_folder / "history.patch").write_text("diff")
+        (ticket_folder / "implementation-plan.md").write_text("# plan")
 
         svc = _make_trash_service(tmp_path)
         svc.trash_ticket("t1", cascade=True)
 
-        # Ticket file moved
-        assert not (tickets_dir / "t1.json").exists()
-        # Plan moved
-        assert not (plans_dir / "t1.md").exists()
-        # Patches moved
-        assert not patches_dir.exists()
+        # Every file moved out
+        for fn in ("ticket.json", "product-design.md", "technical-design.md",
+                   "history.patch", "implementation-plan.md"):
+            assert not (ticket_folder / fn).exists()
 
-        # Verify ticket context has cascaded list
-        trash_ticket = tmp_path / ".bonsai" / "trash" / "tickets" / "t1" / "_trash.json"
-        info = json.loads(trash_ticket.read_text())
-        cascaded = info["context"]["cascaded"]
-        assert "plans/t1" in cascaded
-        assert any("patches/t1" in c for c in cascaded)
-        assert any("drafts/t1" in c for c in cascaded)
+        # Trash context references the ticket folder
+        trash_marker = tmp_path / ".bonsai" / "trash" / "tickets" / "t1" / "_trash.json"
+        info = json.loads(trash_marker.read_text())
+        assert info["context"]["artifactDir"].endswith(".bonsai/tickets/t1")
 
-    def test_no_cascade_only_trashes_ticket(self, tmp_path: Path) -> None:
-        tickets_dir = tmp_path / ".bonsai" / "meta-tickets"
-        tickets_dir.mkdir(parents=True)
-        (tickets_dir / "t2.json").write_text('{"id": "t2"}')
-
-        plans_dir = tmp_path / ".bonsai" / "plans"
-        plans_dir.mkdir(parents=True)
-        (plans_dir / "t2.md").write_text("# Plan")
+    def test_cascade_flag_is_noop(self, tmp_path: Path) -> None:
+        """With unified layout, cascade=False still trashes the whole folder."""
+        ticket_folder = tmp_path / ".bonsai" / "tickets" / "t2"
+        ticket_folder.mkdir(parents=True)
+        (ticket_folder / "ticket.json").write_text('{"id": "t2"}')
+        (ticket_folder / "implementation-plan.md").write_text("# Plan")
 
         svc = _make_trash_service(tmp_path)
         svc.trash_ticket("t2", cascade=False)
 
-        assert not (tickets_dir / "t2.json").exists()
-        # Plan should still be there
-        assert (plans_dir / "t2.md").exists()
+        # Both still trashed despite cascade=False
+        assert not (ticket_folder / "ticket.json").exists()
+        assert not (ticket_folder / "implementation-plan.md").exists()
 
 
 class TestAutoPurge:

@@ -1,7 +1,8 @@
 """Plan document service — read/write/parse implementation plans as Markdown.
 
-Plans live at `.bonsai/plans/{ticket_id}.md` and are the orchestration blueprint
-for executing meta-ticket work via agent sessions.
+Plans live at ``.bonsai/tickets/{ticket_id}/plan.md`` (per-ticket artifact
+folder). They are the orchestration blueprint for executing meta-ticket work
+via agent sessions.
 """
 
 from __future__ import annotations
@@ -13,8 +14,9 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
+from app.board.artifact_paths import artifact_path, ensure_ticket_dir
 from app.board.models import _CAMEL_CONFIG, _to_camel
-from app.core.config import AppConfig, BONSAI_DIRNAME, PLANS_DIR
+from app.core.config import AppConfig
 from app.core.fileio import ensure_dir, read_text, write_text
 
 
@@ -39,6 +41,10 @@ class PlanStep(BaseModel):
     parallel_with: list[int] = Field(default_factory=list)
     input_spec_ids: list[str] = Field(default_factory=list)
     session_id: str | None = None
+    # Index into the orchestrator session's events.jsonl of the toolCallStart
+    # for this step's Task subagent — set in subagent_mode. Mutually exclusive
+    # with session_id (step-session mode).
+    event_index: int | None = None
     agent_instructions: str = ""
     success_criteria: list[SuccessCriterion] = Field(default_factory=list)
 
@@ -78,6 +84,33 @@ class Plan(BaseModel):
         for m in self.milestones:
             result.extend(m.steps)
         return result
+
+    def unblocked_steps(self) -> list[PlanStep]:
+        """Pending steps whose dependencies are all ``done``.
+
+        When a step's ``depends_on`` is empty, falls back to linear ordering
+        (step N depends on step N-1) so plans written before parallelism
+        was supported still execute sequentially.
+
+        Used by subagent-mode orchestration to fan out parallel-eligible
+        work in one assistant turn — see TICKET_LIFECYCLE_DESIGN.md
+        § Implementation orchestration modes.
+        """
+        steps = sorted(self.all_steps(), key=lambda s: s.number)
+        by_number = {s.number: s for s in steps}
+        unblocked: list[PlanStep] = []
+        for step in steps:
+            if step.status != "pending":
+                continue
+            deps = step.depends_on or [
+                s.number for s in steps if s.number < step.number
+            ]
+            if all(
+                by_number.get(n) is not None and by_number[n].status == "done"
+                for n in deps
+            ):
+                unblocked.append(step)
+        return unblocked
 
 
 # -- Markdown serialization ---------------------------------------------------
@@ -301,11 +334,14 @@ class PlanService:
         self._config = config
 
     @property
-    def _plans_dir(self) -> Path:
-        return self._config.get_project_root() / BONSAI_DIRNAME / PLANS_DIR
+    def _project_root(self) -> Path:
+        return self._config.get_project_root()
 
     def _plan_path(self, ticket_id: str) -> Path:
-        return self._plans_dir / f"{ticket_id}.md"
+        return artifact_path(self._project_root, ticket_id, "implementation_plan")
+
+    def _relative_plan_path(self, ticket_id: str) -> str:
+        return self._plan_path(ticket_id).relative_to(self._project_root).as_posix()
 
     def plan_exists(self, ticket_id: str) -> bool:
         return self._plan_path(ticket_id).is_file()
@@ -317,12 +353,13 @@ class PlanService:
         return _parse_plan(content, ticket_id)
 
     def write_plan(self, ticket_id: str, plan: Plan) -> str:
-        """Write a plan to disk. Returns the relative plan path."""
+        """Write a plan to disk. Returns the project-relative plan path."""
+        ensure_ticket_dir(self._project_root, ticket_id)
         path = self._plan_path(ticket_id)
         content = _render_plan(plan)
         ensure_dir(path.parent)
         write_text(path, content)
-        return f"{PLANS_DIR}/{ticket_id}.md"
+        return self._relative_plan_path(ticket_id)
 
     def create_plan(self, ticket_id: str, title: str, steps: list[PlanStep],
                     verification: list[SuccessCriterion] | None = None) -> Plan:

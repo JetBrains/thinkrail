@@ -2,16 +2,34 @@ from __future__ import annotations
 
 from typing import Any
 
-from app.rpc.errors import TICKET_NOT_FOUND, INVALID_TRANSITION, rpc_handler
+from app.board.models import ArtifactKind, TicketSummary
 from app.board.plan import Milestone, Plan, PlanStep, SuccessCriterion
 from app.board.service import BoardService, TicketNotFoundError
 from app.board.state_machine import InvalidTransitionError
-from app.core.config import BONSAI_DIRNAME
+from app.rpc.bus import bus
+from app.rpc.context import get_current_conn
+from app.rpc.errors import INVALID_TRANSITION, TICKET_NOT_FOUND, rpc_handler
 
 _handle_errors = rpc_handler(
     (TicketNotFoundError, TICKET_NOT_FOUND, "Ticket not found"),
     (InvalidTransitionError, INVALID_TRANSITION, "Invalid transition"),
 )
+
+
+async def _broadcast(ticket: Any) -> None:
+    """Publish board/didChange for a ticket mutation to all project subscribers.
+
+    All mutating board methods funnel through here so a BoardView open in
+    a second window sees the change without needing to know which RPC
+    triggered it.
+    """
+    conn = get_current_conn()
+    if conn is None:
+        return
+    summary = TicketSummary.from_ticket(ticket)
+    await bus.publish_to_project(
+        conn.project_path, "board/didChange", summary.model_dump(by_alias=True),
+    )
 
 
 @_handle_errors
@@ -44,6 +62,7 @@ async def update_ticket(service: BoardService, **params: Any) -> dict:
         status=params.get("status"),
         type=params.get("type"),
     )
+    await _broadcast(ticket)
     return ticket.model_dump(by_alias=True)
 
 
@@ -55,46 +74,62 @@ async def delete_ticket(service: BoardService, **params: Any) -> None:
 @_handle_errors
 async def reorder_ticket(service: BoardService, **params: Any) -> dict:
     ticket = service.reorder_ticket(params["id"], params["status"], params["order"])
+    await _broadcast(ticket)
     return ticket.model_dump(by_alias=True)
 
 
 @_handle_errors
 async def link_spec(service: BoardService, **params: Any) -> dict:
     ticket = service.link_spec(params["ticketId"], params["specId"])
+    await _broadcast(ticket)
     return ticket.model_dump(by_alias=True)
 
 
 @_handle_errors
 async def unlink_spec(service: BoardService, **params: Any) -> dict:
     ticket = service.unlink_spec(params["ticketId"], params["specId"])
+    await _broadcast(ticket)
     return ticket.model_dump(by_alias=True)
 
 
 @_handle_errors
 async def attach_session(service: BoardService, **params: Any) -> dict:
     ticket = service.attach_session(params["ticketId"], params["sessionId"])
+    await _broadcast(ticket)
     return ticket.model_dump(by_alias=True)
 
 
 @_handle_errors
 async def detach_session(service: BoardService, **params: Any) -> dict:
     ticket = service.detach_session(params["ticketId"], params["sessionId"])
-    return ticket.model_dump(by_alias=True)
-
-
-@_handle_errors
-async def set_plan_path(service: BoardService, **params: Any) -> dict:
-    ticket = service.set_plan_path(params["ticketId"], params["planPath"])
+    await _broadcast(ticket)
     return ticket.model_dump(by_alias=True)
 
 
 @_handle_errors
 async def set_orchestrator(service: BoardService, **params: Any) -> dict:
     ticket = service.set_orchestrator(params["ticketId"], params["sessionId"])
+    await _broadcast(ticket)
     return ticket.model_dump(by_alias=True)
 
 
-# -- Plan methods -------------------------------------------------------------
+@_handle_errors
+async def skip_phase(service: BoardService, **params: Any) -> dict:
+    """RPC: mark a phase as skipped on a ticket."""
+    ticket = service.skip_phase(params["ticketId"], params["phase"])
+    await _broadcast(ticket)
+    return ticket.model_dump(by_alias=True)
+
+
+@_handle_errors
+async def unskip_phase(service: BoardService, **params: Any) -> dict:
+    """RPC: remove a phase from the skipped list."""
+    ticket = service.unskip_phase(params["ticketId"], params["phase"])
+    await _broadcast(ticket)
+    return ticket.model_dump(by_alias=True)
+
+
+# ── Plan methods ────────────────────────────────────────────────
 
 
 @_handle_errors
@@ -116,9 +151,8 @@ async def create_plan(service: BoardService, **params: Any) -> dict:
     verification = [SuccessCriterion(**c) for c in raw_verification]
 
     plan = service.plans.create_plan(ticket_id, title, steps, verification)
-    # Auto-set planPath on the ticket
-    plan_path = f"plans/{ticket_id}.md"
-    service.set_plan_path(ticket_id, plan_path)
+    # Update the ticket's implementation_plan_path now that the file exists.
+    service.write_artifact(ticket_id, "implementation_plan", service.plans.read_plan_raw(ticket_id))
     return plan.model_dump(by_alias=True)
 
 
@@ -156,10 +190,10 @@ async def save_plan(service: BoardService, **params: Any) -> dict:
         verification=verification,
     )
     result = service.plans.save_plan(ticket_id, plan)
-    # Ensure planPath is set on the ticket
+    # Sync implementation_plan_path on the ticket
     ticket = service.get_ticket(ticket_id)
-    if not ticket.plan_path:
-        service.set_plan_path(ticket_id, f"plans/{ticket_id}.md")
+    if not ticket.implementation_plan_path:
+        service.write_artifact(ticket_id, "implementation_plan", service.plans.read_plan_raw(ticket_id))
     return result.model_dump(by_alias=True)
 
 
@@ -179,10 +213,10 @@ async def save_plan_raw(service: BoardService, **params: Any) -> dict:
     ticket_id = params["ticketId"]
     content = params["content"]
     plan = service.plans.write_plan_raw(ticket_id, content)
-    # Ensure planPath is set on the ticket
+    # Sync ticket.implementation_plan_path
     ticket = service.get_ticket(ticket_id)
-    if not ticket.plan_path:
-        service.set_plan_path(ticket_id, f"plans/{ticket_id}.md")
+    if not ticket.implementation_plan_path:
+        service.write_artifact(ticket_id, "implementation_plan", content)
     return plan.model_dump(by_alias=True)
 
 
@@ -194,177 +228,31 @@ async def get_next_step(service: BoardService, **params: Any) -> dict | None:
     return step.model_dump(by_alias=True)
 
 
-# -- Spec draft methods -------------------------------------------------------
+# ── Artifact methods ───────────────────────────────────────────
 
 
 @_handle_errors
-async def list_drafts(service: BoardService, **params: Any) -> list[dict]:
-    entries = service.spec_drafts.list_drafts(params["ticketId"])
-    return [e.model_dump(by_alias=True) for e in entries]
-
-
-@_handle_errors
-async def get_draft_diff(service: BoardService, **params: Any) -> dict:
-    return service.spec_drafts.get_draft_diff(params["ticketId"], params["index"])
-
-
-@_handle_errors
-async def apply_draft(service: BoardService, **params: Any) -> None:
-    await service.spec_drafts.apply_draft(
-        params["ticketId"], params["index"], board_service=service,
-    )
-
-
-@_handle_errors
-async def apply_all_drafts(service: BoardService, **params: Any) -> None:
-    await service.spec_drafts.apply_all(params["ticketId"], board_service=service)
-
-
-@_handle_errors
-async def discard_draft(service: BoardService, **params: Any) -> None:
-    service.spec_drafts.discard_draft(params["ticketId"], params["index"])
-
-
-@_handle_errors
-async def discard_all_drafts(service: BoardService, **params: Any) -> None:
-    service.spec_drafts.discard_all(params["ticketId"])
-
-
-# -- Spec patch methods -------------------------------------------------------
-
-
-@_handle_errors
-async def list_patches(service: BoardService, **params: Any) -> list[dict]:
-    ticket = service.get_ticket(params["ticketId"])
-    return [p.model_dump(by_alias=True) for p in ticket.spec_patches]
-
-
-@_handle_errors
-async def get_patch_diff(service: BoardService, **params: Any) -> dict:
-    """Read a .patch file and reconstruct original/modified pair for DiffEditor."""
-    ticket = service.get_ticket(params["ticketId"])
-    index = params["index"]
-    if index < 0 or index >= len(ticket.spec_patches):
-        raise IndexError(f"Patch index {index} out of range")
-
-    patch_record = ticket.spec_patches[index]
-    patch_path = service._config.get_project_root() / BONSAI_DIRNAME / patch_record.patch_path
-
-    if not patch_path.is_file():
-        return {
-            "original": "",
-            "modified": "",
-            "path": patch_record.spec_path,
-            "operation": patch_record.operation,
-        }
-
-    from app.core.fileio import read_text
-    patch_content = read_text(patch_path)
-
-    # Reconstruct original and modified from unified diff
-    original_lines: list[str] = []
-    modified_lines: list[str] = []
-    for line in patch_content.splitlines(keepends=True):
-        if line.startswith("---") or line.startswith("+++") or line.startswith("@@"):
-            continue
-        if line.startswith("-"):
-            original_lines.append(line[1:])
-        elif line.startswith("+"):
-            modified_lines.append(line[1:])
-        elif line.startswith(" "):
-            original_lines.append(line[1:])
-            modified_lines.append(line[1:])
-
+async def read_artifact(service: BoardService, **params: Any) -> dict:
+    ticket_id = params["ticketId"]
+    kind: ArtifactKind = params["kind"]
+    content = service.read_artifact(ticket_id, kind)
+    ticket = service.get_ticket(ticket_id)
     return {
-        "original": "".join(original_lines),
-        "modified": "".join(modified_lines),
-        "path": patch_record.spec_path,
-        "operation": patch_record.operation,
+        "content": content,
+        "stale": getattr(ticket, f"{kind}_stale", False),
+        "updated": ticket.updated,
     }
 
 
 @_handle_errors
-async def revert_patch(service: BoardService, **params: Any) -> dict:
-    """Revert a previously applied patch by applying it in reverse."""
-    ticket = service.get_ticket(params["ticketId"])
-    index = params["index"]
-    if index < 0 or index >= len(ticket.spec_patches):
-        raise IndexError(f"Patch index {index} out of range")
+async def get_history(service: BoardService, **params: Any) -> list[dict]:
+    """Parse the per-ticket history.patch log into structured entries.
 
-    patch_record = ticket.spec_patches[index]
-    spec_path = service._config.get_project_root() / patch_record.spec_path
-
-    from app.core.fileio import read_text as _read, write_text as _write, ensure_dir
-    current_content = _read(spec_path) if spec_path.is_file() else ""
-
-    # Read the original from the patch
-    patch_path = service._config.get_project_root() / BONSAI_DIRNAME / patch_record.patch_path
-    if not patch_path.is_file():
-        raise FileNotFoundError(f"Patch file not found: {patch_record.patch_path}")
-
-    patch_content = _read(patch_path)
-    original_lines: list[str] = []
-    for line in patch_content.splitlines(keepends=True):
-        if line.startswith("---") or line.startswith("+++") or line.startswith("@@"):
-            continue
-        if line.startswith("-"):
-            original_lines.append(line[1:])
-        elif line.startswith("+"):
-            pass
-        elif line.startswith(" "):
-            original_lines.append(line[1:])
-
-    original_content = "".join(original_lines)
-
-    # Write the original content back
-    from app.spec.index import SpecIndex
-    from app.spec.service import SpecService
-
-    from app.core.config import get_index_path
-
-    db_path = get_index_path(service._config.get_project_root())
-    if patch_record.operation == "created":
-        try:
-            async with SpecIndex(db_path) as idx:
-                svc = SpecService(service._config, index=idx)
-                svc.trash_service = service.trash_service
-                await svc.delete_spec(patch_record.spec_id)
-        except Exception:
-            pass
-    else:
-        _write(spec_path, original_content)
-        try:
-            async with SpecIndex(db_path) as idx:
-                svc = SpecService(service._config, index=idx)
-                await svc.update_spec(patch_record.spec_id, original_content)
-        except Exception:
-            pass
-
-    # Record a reverse patch
-    import difflib
-    from app.board.models import SpecPatch
-    from datetime import UTC, datetime
-
-    timestamp = datetime.now(UTC).strftime("%Y%m%d%H%M%S")
-    rev_filename = f"{patch_record.spec_id}-revert-{timestamp}.patch"
-    rev_rel = f"spec-patches/{params['ticketId']}/{rev_filename}"
-    rev_diff = difflib.unified_diff(
-        current_content.splitlines(keepends=True),
-        original_content.splitlines(keepends=True),
-        fromfile=f"a/{patch_record.spec_path}",
-        tofile=f"b/{patch_record.spec_path}",
-    )
-    rev_path = service._config.get_project_root() / BONSAI_DIRNAME / rev_rel
-    ensure_dir(rev_path.parent)
-    _write(rev_path, "".join(rev_diff))
-
-    rev_record = SpecPatch(
-        spec_id=patch_record.spec_id,
-        spec_title=f"Revert: {patch_record.spec_title}",
-        operation="modified" if patch_record.operation != "created" else "deleted",
-        patch_path=rev_rel,
-        spec_path=patch_record.spec_path,
-        session_id="revert",
-    )
-    updated = service.add_spec_patch(params["ticketId"], rev_record)
-    return updated.model_dump(by_alias=True)
+    Each entry: index, skill (None for legacy), filePath, specId, section,
+    rationale, appliedAs, validation, timestamp, diff.
+    """
+    from app.board.patch import parse_patch_log
+    ticket_id = params["ticketId"]
+    # Confirm the ticket exists; raises TicketNotFoundError otherwise.
+    service.get_ticket(ticket_id)
+    return parse_patch_log(service._config.get_project_root(), ticket_id)

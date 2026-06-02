@@ -40,7 +40,7 @@
 }
 .draft-config-name-input:focus {
   border-color: var(--blue);
-  background: var(--surface);
+  background: var(--panel);
 }
 .draft-config-name-input::placeholder {
   color: var(--hint);
@@ -99,7 +99,7 @@
   font-size: var(--font-md);
   padding: 2px var(--space-sm);
   border-radius: var(--radius-sm);
-  background: var(--surface);
+  background: var(--panel);
 }
 .draft-config-pill-remove {
   background: none;
@@ -164,7 +164,7 @@
   font-size: var(--font-sm);
 }
 .draft-config-select {
-  background: var(--surface);
+  background: var(--panel);
   color: var(--text);
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
@@ -184,7 +184,7 @@
   gap: 2px;
 }
 .draft-config-effort-pill {
-  background: var(--surface);
+  background: var(--panel);
   border: none;
   color: var(--text);
   padding: 2px var(--space-sm);
@@ -261,7 +261,7 @@
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
   padding: var(--space-sm);
-  background: var(--surface);
+  background: var(--panel);
 }
 .draft-config-prompt-body pre {
   font-size: var(--font-md);
@@ -300,7 +300,7 @@
   border-top: 1px solid var(--border);
 }
 .draft-config-btn-discard {
-  background: var(--surface);
+  background: var(--panel);
   color: var(--text);
   border: 1px solid var(--border);
   padding: var(--space-sm) var(--space-xl);

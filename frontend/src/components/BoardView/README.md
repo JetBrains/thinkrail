@@ -31,7 +31,7 @@ tags:
 
 ## Purpose
 
-The BoardView is the two-level kanban interface for project management. The top half displays meta-tickets organized by lifecycle status (Idea through Done). The bottom half shows legacy task-spec cards (Pending, Active, Done). A draggable resize handle splits the two boards. The Board is a fixed tab in the center panel tab bar, always available alongside session and ticket detail tabs.
+The BoardView is the two-level kanban interface for project management. The top half displays tickets organized by lifecycle status (Idea → Product design → Technical design → Amend specs → Implementation plan → Implementing → Done — seven columns, mirroring the brainstorm-aligned ticket flow). The bottom half shows legacy task-spec cards (Pending, Active, Done). A draggable resize handle splits the two boards. The Board is a fixed tab in the center panel tab bar, always available alongside session and ticket detail tabs.
 
 ## Component Architecture
 
@@ -41,17 +41,18 @@ title: BoardView — Component Hierarchy
 ---
 graph TD
     BoardView["BoardView<br/><i>Split layout + resize</i>"]
-    BoardView --> MetaTicketBoard["MetaTicketBoard<br/><i>6 kanban columns</i>"]
+    BoardView --> MetaTicketBoard["MetaTicketBoard<br/><i>7 kanban columns</i>"]
     BoardView --> ResizeHandle["Resize Handle<br/><i>Draggable split</i>"]
     BoardView --> TaskBoard["TaskBoard<br/><i>3 kanban columns</i>"]
     BoardView --> CreateTicketModal["CreateTicketModal<br/><i>New ticket form</i>"]
 
     MetaTicketBoard --> KanbanCol1["KanbanColumn<br/><i>Idea</i>"]
-    MetaTicketBoard --> KanbanCol2["KanbanColumn<br/><i>Described</i>"]
-    MetaTicketBoard --> KanbanCol3["KanbanColumn<br/><i>Specified</i>"]
-    MetaTicketBoard --> KanbanCol4["KanbanColumn<br/><i>Planned</i>"]
-    MetaTicketBoard --> KanbanCol5["KanbanColumn<br/><i>Executing</i>"]
-    MetaTicketBoard --> KanbanCol6["KanbanColumn<br/><i>Done</i>"]
+    MetaTicketBoard --> KanbanCol2["KanbanColumn<br/><i>Product design</i>"]
+    MetaTicketBoard --> KanbanCol3["KanbanColumn<br/><i>Technical design</i>"]
+    MetaTicketBoard --> KanbanCol4["KanbanColumn<br/><i>Amend specs</i>"]
+    MetaTicketBoard --> KanbanCol5["KanbanColumn<br/><i>Implementation plan</i>"]
+    MetaTicketBoard --> KanbanCol6["KanbanColumn<br/><i>Implementing</i>"]
+    MetaTicketBoard --> KanbanCol7["KanbanColumn<br/><i>Done</i>"]
 
     KanbanCol1 --> MetaTicketCard["MetaTicketCard"]
     TaskBoard --> TaskCol1["KanbanColumn<br/><i>Pending</i>"]
@@ -65,7 +66,7 @@ graph TD
 | File | Responsibility | Props |
 |------|---------------|-------|
 | `BoardView.tsx` | Split layout with draggable resize handle (top ratio 20%-80%), "+ New" button, loading state | `onOpenTicket: (id) => void` |
-| `MetaTicketBoard.tsx` | Groups tickets into 6 status columns, renders KanbanColumn for each | `tickets: MetaTicketSummary[]`, `onOpenTicket: (id) => void` |
+| `MetaTicketBoard.tsx` | Groups tickets into 7 status columns, renders KanbanColumn for each | `tickets: MetaTicketSummary[]`, `onOpenTicket: (id) => void` |
 | `MetaTicketCard.tsx` | Card displaying title, type badge, spec count, plan progress, session count | `ticket: MetaTicketSummary`, `onClick: () => void` |
 | `TaskBoard.tsx` | Legacy task-spec kanban with 3 columns (reads from specStore task specs) | (none) |
 | `TaskCard.tsx` | Simple card showing task title and status | `task: SpecSummary`, `onClick: () => void` |
@@ -101,10 +102,11 @@ Distributes tickets into columns by status:
 | Column | Status Filter | Color Accent |
 |--------|--------------|-------------|
 | Idea | `status === "idea"` | Neutral |
-| Described | `status === "described"` | Teal |
-| Specified | `status === "specified"` | Blue |
-| Planned | `status === "planned"` | Gold |
-| Executing | `status === "executing"` | Green |
+| Product design | `status === "product-design"` | Teal |
+| Technical design | `status === "technical-design"` | Slate |
+| Amend specs | `status === "spec-diff"` | Blue |
+| Implementation plan | `status === "implementation-plan"` | Gold |
+| Implementing | `status === "implementing"` | Green |
 | Done | `status === "done"` | Muted |
 
 ### MetaTicketCard
@@ -171,18 +173,22 @@ interface BoardStore {
 | `board/linkSpec` | `linkSpec(ticketId, specId)` | `{ ticketId, specId }` | `MetaTicket` |
 | `board/unlinkSpec` | `unlinkSpec(ticketId, specId)` | `{ ticketId, specId }` | `MetaTicket` |
 | `board/attachSession` | `attachSession(ticketId, sessionId)` | `{ ticketId, sessionId }` | `MetaTicket` |
-| `board/setPlanPath` | `setPlanPath(ticketId, planPath)` | `{ ticketId, planPath }` | `MetaTicket` |
 | `board/setOrchestrator` | `setOrchestrator(ticketId, sessionId)` | `{ ticketId, sessionId }` | `MetaTicket` |
 | `board/getPlan` | `getPlan(ticketId)` | `{ ticketId }` | `Record \| null` |
 | `board/createPlan` | `createPlan(ticketId, title, steps, verification?)` | `{ ticketId, title, steps, verification? }` | `Record` |
 | `board/updateStep` | `updateStep(ticketId, stepNumber, status, sessionId?)` | `{ ticketId, stepNumber, status, sessionId? }` | `Record` |
 | `board/getNextStep` | `getNextStep(ticketId)` | `{ ticketId }` | `Record \| null` |
+| `board/readArtifact` | `readArtifact(ticketId, kind)` | `{ ticketId, kind }` | `ArtifactReadResult` |
+| `board/previewPatchApply` | `previewPatchApply(ticketId)` | `{ ticketId }` | `PreviewPatchApplyResult` |
 
 ### Types (`types/board.ts`)
 
 ```typescript
-type MetaTicketStatus = "idea" | "described" | "specified" | "planned" | "executing" | "done";
+type MetaTicketStatus =
+  | "idea" | "product-design" | "technical-design" | "spec-diff"
+  | "implementation-plan" | "implementing" | "done";
 type MetaTicketType = "feature" | "bug" | "idea" | "improvement";
+type ArtifactKind = "product_design" | "technical_design" | "spec_diff" | "implementation_plan";
 
 interface MetaTicket {
   id: string;
@@ -190,7 +196,14 @@ interface MetaTicket {
   body: string;
   status: MetaTicketStatus;
   type: MetaTicketType;
-  planPath: string | null;
+  productDesignPath: string | null;
+  technicalDesignPath: string | null;
+  specDiffPath: string | null;
+  implementationPlanPath: string | null;
+  technicalDesignStale: boolean;
+  specDiffStale: boolean;
+  implementationPlanStale: boolean;
+  specDiffAppliedAt: string | null;
   orchestratorSessionId: string | null;
   linkedSpecIds: string[];
   sessionIds: string[];
@@ -199,15 +212,20 @@ interface MetaTicket {
 }
 
 interface MetaTicketSummary {
-  // Same fields as MetaTicket (body omitted on backend but present in type for simplicity)
+  // Mirror of MetaTicket minus the body, plus `specDiffApplied: boolean`
+  // (derived from `specDiffAppliedAt is not None`).
 }
 ```
+
+The right pane of the ticket detail view shows a **TicketDescriptionBanner** at the top, always visible, rendering `ticket.body` with an inline ✎ Edit button. Description is a ticket-level field (not an artifact); it sits between the progress bar and the dynamic artifact / plan / session panel.
+
+See `.bonsai/design_docs/TICKET_LIFECYCLE_DESIGN.md` for the canonical spec of the lifecycle, allowed transitions, patch-apply contract, and artifact storage layout.
 
 ## Design Decisions
 
 | Decision | Choice | Rationale |
 |----------|--------|-----------|
-| Two-level split layout | Meta-tickets top, task-specs bottom | Meta-tickets are the primary workflow; task-specs are legacy read-only context. Split makes both visible. |
+| Two-level split layout | Tickets top, task-specs bottom | Tickets are the primary workflow; task-specs are legacy read-only context. Split makes both visible. |
 | Draggable resize handle | Mouse event listeners on resize div | Same pattern as MetaTicketDetail sidebar resize. No library dependency. |
 | Fixed Board tab | Always visible in center panel tab bar | Board is a primary navigation target, not something you open and close. |
 | Map-based ticket store | `Map<string, MetaTicketSummary>` | O(1) lookups by ID for notification handlers. Preserves insertion order for iteration. |

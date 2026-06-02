@@ -1,8 +1,11 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import { useSpecStore } from "@/store/specStore.ts";
 import { useSessionStore } from "@/store/sessionStore.ts";
+import { useBoardStore } from "@/store/boardStore.ts";
+import { useUiStore } from "@/store/uiStore.ts";
 import { useVisStore } from "@/store/visStore.ts";
 import { modLabel } from "@/utils/platform.ts";
+import type { Session } from "@/types/session.ts";
 
 function useDropdown() {
   const [open, setOpen] = useState(false);
@@ -31,9 +34,44 @@ export function StatusBar({ onOpenSessionManager }: StatusBarProps) {
   const openTab = useSessionStore((s) => s.openTab);
   const endSession = useSessionStore((s) => s.endSession);
   const focusSession = useSessionStore((s) => s.focusSession);
+  const tickets = useBoardStore((s) => s.tickets);
+  const openTicket = useBoardStore((s) => s.openTicket);
+  const setCenterView = useUiStore((s) => s.setCenterView);
   const dashboard = useVisStore((s) => s.dashboard);
   const dd = useDropdown();
   const attnDd = useDropdown();
+
+  // Ticket-attached sessions are routed through the ticket view. The
+  // session never becomes a free-standing tab. Mirrors the SessionManager
+  // grouping rule so the two surfaces behave consistently.
+  const labelFor = useCallback((s: Session): string => {
+    const ticketId = s.ticketId ?? null;
+    const base = s.name || s.bonsaiSid.slice(0, 8);
+    if (!ticketId) return base;
+    const ticket = tickets.get(ticketId) ?? null;
+    const ticketLabel = ticket?.title ?? `Ticket #${ticketId.slice(-4)}`;
+    return `${ticketLabel}: ${base}`;
+  }, [tickets]);
+
+  const openSessionContext = useCallback((s: Session) => {
+    const ticketId = s.ticketId ?? null;
+    if (ticketId) {
+      setCenterView("board");
+      openTicket(ticketId);
+      return;
+    }
+    openTab(s.bonsaiSid);
+  }, [openTab, openTicket, setCenterView]);
+
+  const focusSessionContext = useCallback((s: Session) => {
+    const ticketId = s.ticketId ?? null;
+    if (ticketId) {
+      setCenterView("board");
+      openTicket(ticketId);
+      return;
+    }
+    focusSession(s.bonsaiSid);
+  }, [focusSession, openTicket, setCenterView]);
 
   const total = specs.length;
   const done = specs.filter((s) => s.status === "done").length;
@@ -47,7 +85,7 @@ export function StatusBar({ onOpenSessionManager }: StatusBarProps) {
   );
   const bgSessions = allLive.filter((s) => !openTabsSet.has(s.bonsaiSid));
   const bgCount = bgSessions.length;
-  const attnSessions = allLive.filter((s) => s.pendingRequest !== null);
+  const attnSessions = allLive.filter((s) => s.pendingRequests.length > 0);
   const attnCount = attnSessions.length;
   // Pill matches what the sidebar Sessions panel shows: the full
   // session/list response (live + on-disk, every status). Falls back
@@ -94,10 +132,11 @@ export function StatusBar({ onOpenSessionManager }: StatusBarProps) {
                 <div key={s.bonsaiSid} className="status-bg-item">
                   <button
                     className="status-bg-restore"
-                    onClick={() => { openTab(s.bonsaiSid); dd.close(); }}
+                    title={s.name || s.bonsaiSid}
+                    onClick={() => { openSessionContext(s); dd.close(); }}
                   >
                     <span className={`status-bg-dot status-bg-${s.status}`} />
-                    {s.name || s.bonsaiSid.slice(0, 8)}
+                    {labelFor(s)}
                     <span className="status-bg-state">{s.status}</span>
                   </button>
                   <button
@@ -132,13 +171,14 @@ export function StatusBar({ onOpenSessionManager }: StatusBarProps) {
                     <button
                       key={s.bonsaiSid}
                       className="status-attn-item"
-                      onClick={() => { focusSession(s.bonsaiSid); attnDd.close(); }}
+                      title={s.name || s.bonsaiSid}
+                      onClick={() => { focusSessionContext(s); attnDd.close(); }}
                     >
                       <span className={`status-bg-dot status-bg-${s.status}`} />
-                      <span className="status-attn-name">{s.name || s.bonsaiSid.slice(0, 8)}</span>
-                      <span className={`status-attn-badge status-attn-badge--${s.pendingRequest?.type ?? "question"}`}>
-                        {s.pendingRequest?.type === "approval" ? "A"
-                          : s.pendingRequest?.type === "suggestion" || s.pendingRequest?.type === "step-proposal" ? "S"
+                      <span className="status-attn-name">{labelFor(s)}</span>
+                      <span className={`status-attn-badge status-attn-badge--${s.pendingRequests[0]?.type ?? "question"}`}>
+                        {s.pendingRequests[0]?.type === "approval" ? "A"
+                          : s.pendingRequests[0]?.type === "suggestion" || s.pendingRequests[0]?.type === "step-proposal" ? "S"
                           : "Q"}
                       </span>
                     </button>
