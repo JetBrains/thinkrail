@@ -50,7 +50,7 @@
     "typescript": "^5.7.0",
     "typescript-eslint": "^8.59.2",
     "vite": "^6.4.2",
-    "vitest": "^3.0.0"
+    "vitest": "^4.1.0"
   },
   "overrides": {
     "dompurify": "^3.3.2"
