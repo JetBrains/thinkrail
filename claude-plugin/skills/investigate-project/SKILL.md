@@ -86,12 +86,12 @@ Three artifacts, in this order:
 ## Step-by-Step Process
 
 > **Do not emit a `workflow-progress` tracker.** The onboarding chain
-> steps (What we'll read → Investigation → Clarify → Verify & save) are
-> owned by the host's top stepper, which derives them from a single
-> source (`frontend/src/components/Wizard/registry.ts`). A hand-written
-> copy here only drifts out of sync. The only in-chat progress this
-> skill emits is `doc-progress` (the DESIGN_DOC sections — see Step 1.5),
-> which is *this skill's own* progress, not the chain's.
+> progress is owned by the host's top stepper, which derives it from a
+> single source (`frontend/src/components/Wizard/registry.ts`); the host
+> also suppresses any `workflow-progress` tracker emitted from a wizard
+> session, so one here would simply not render. The only in-chat progress
+> this skill emits is `doc-progress` (the DESIGN_DOC sections — see
+> Step 1.5), which is *this skill's own* progress, not the chain's.
 
 ### Step 1 — Document Setup (ask the user)
 

@@ -1,4 +1,5 @@
 import { lazy, Suspense } from "react";
+import { isWizardSkill } from "@/components/Wizard/registry.ts";
 import { AssistantMessage, BonsaiMessage } from "../AssistantMessage.tsx";
 import { ToolCallCard } from "../ToolCallCard.tsx";
 import { DraftConfigCard } from "../DraftConfigCard.tsx";
@@ -68,6 +69,16 @@ export const compactRenderers: ViewRenderers = {
         }
       }
       if (visInput) {
+        // See classicRenderer: the host WizardStepper owns onboarding-chain
+        // progress; drop an agent-emitted `workflow-progress` tracker inside
+        // a wizard session so it can't render a competing, drifting copy.
+        if (
+          visInput.type === "progress-tracker" &&
+          visInput.visId === "workflow-progress" &&
+          isWizardSkill(ctx.session?.skillId)
+        ) {
+          return null;
+        }
         const visId = visInput.visId;
         const isLatest = !visId || ctx.latestVisByVisId.get(visId) === i;
         return (

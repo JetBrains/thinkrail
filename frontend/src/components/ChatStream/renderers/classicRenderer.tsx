@@ -1,5 +1,6 @@
 import { lazy, Suspense, useState } from "react";
 import { useSessionStore } from "@/store/sessionStore.ts";
+import { isWizardSkill } from "@/components/Wizard/registry.ts";
 import { SystemMessage } from "../SystemMessage.tsx";
 import { AssistantMessage, BonsaiMessage } from "../AssistantMessage.tsx";
 import { ToolCallCard } from "../ToolCallCard.tsx";
@@ -103,6 +104,17 @@ export const classicRenderers: ViewRenderers = {
         }
       }
       if (visInput) {
+        // The host WizardStepper is the single source for onboarding-chain
+        // progress (Wizard/registry.ts). Suppress an agent-emitted
+        // `workflow-progress` tracker inside a wizard session so it can't
+        // render a second, drifting copy. Standalone runs still show it.
+        if (
+          visInput.type === "progress-tracker" &&
+          visInput.visId === "workflow-progress" &&
+          isWizardSkill(ctx.session?.skillId)
+        ) {
+          return null;
+        }
         const visId = visInput.visId;
         const isLatest = !visId || ctx.latestVisByVisId.get(visId) === i;
         return (
