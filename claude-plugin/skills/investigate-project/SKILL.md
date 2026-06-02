@@ -85,25 +85,13 @@ Three artifacts, in this order:
 
 ## Step-by-Step Process
 
-### Step 0 — Show progress
-
-Call `bonsai_visualize` with `type: "progress-tracker"`:
-
-```json
-{
-  "type": "progress-tracker",
-  "title": "Existing Project Onboarding",
-  "visId": "workflow-progress",
-  "data": {
-    "steps": [
-      {"label": "What we'll read", "status": "done"},
-      {"label": "Investigation",   "status": "current", "file": "DESIGN_DOC.md"},
-      {"label": "Clarify",         "status": "pending", "file": "GOAL&REQUIREMENTS.md"},
-      {"label": "Verify & save",   "status": "pending"}
-    ]
-  }
-}
-```
+> **Do not emit a `workflow-progress` tracker.** The onboarding chain
+> steps (What we'll read → Investigation → Clarify → Verify & save) are
+> owned by the host's top stepper, which derives them from a single
+> source (`frontend/src/components/Wizard/registry.ts`). A hand-written
+> copy here only drifts out of sync. The only in-chat progress this
+> skill emits is `doc-progress` (the DESIGN_DOC sections — see Step 1.5),
+> which is *this skill's own* progress, not the chain's.
 
 ### Step 1 — Document Setup (ask the user)
 
@@ -180,8 +168,9 @@ Build the **ordered section list** from the Q1 answers — always
 `Overview`, `Module Graph`, `Modules`; then `Data Flow` and
 `Design Decisions` only if selected. (Findings is not a doc section —
 it always becomes tickets in Step 9, regardless of Q1.) Show it via
-`bonsai_visualize`
-`type: "progress-tracker"`, separate from the Step 0 workflow tracker:
+`bonsai_visualize` `type: "progress-tracker"` with its own
+`visId: "doc-progress"` (this skill's own progress — not the chain
+stepper, which the host owns):
 
 ```json
 {
