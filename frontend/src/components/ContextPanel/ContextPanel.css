@@ -62,22 +62,6 @@
   line-height: 1.6;
 }
 
-/* Dashboard toggle button */
-.context-panel__dash-btn {
-  margin-left: auto;
-  background: transparent;
-  border: 1px solid var(--border);
-  color: var(--muted);
-  font-size: var(--font-lg);
-  cursor: pointer;
-  padding: 2px var(--space-sm);
-  border-radius: var(--radius-sm);
-  line-height: 1.4;
-  flex-shrink: 0;
-}
-.context-panel__dash-btn:hover { color: var(--text); background: var(--hover); border-color: var(--muted); }
-.context-panel__dash-btn--active { color: var(--cyan); border-color: var(--cyan); background: rgba(8,124,250,0.08); }
-
 /* VisTab */
 .vis-tab { display: flex; flex-direction: column; padding: 0; }
 .vis-tab-summary {

@@ -4,7 +4,6 @@ import type { ContextMode } from "./useContextMode.ts";
 import { SpecContext } from "./modes/SpecContext.tsx";
 import { AgentContext } from "./modes/AgentContext.tsx";
 import { CodeContext } from "./modes/CodeContext.tsx";
-import { VisTab } from "./modes/VisTab.tsx";
 import { PreviewTab } from "./PreviewTab.tsx";
 import { PanelCollapseButton } from "@/components/AppShell/PanelCollapseButton.tsx";
 import { useSessionStore } from "@/store/sessionStore.ts";
@@ -23,11 +22,9 @@ const MODE_CONFIG: Record<ContextMode, { icon: string; label: string }> = {
   empty: { icon: "", label: "" },
 };
 
-type PinMode = "none" | "dashboard";
 type TabId = "context" | "preview";
 
-function ModeContent({ mode, pin }: { mode: ContextMode; pin: PinMode }) {
-  if (pin === "dashboard") return <VisTab />;
+function ModeContent({ mode }: { mode: ContextMode }) {
   switch (mode) {
     case "spec": return <SpecContext />;
     case "agent": return <AgentContext />;
@@ -38,11 +35,6 @@ function ModeContent({ mode, pin }: { mode: ContextMode; pin: PinMode }) {
       </div>
     );
   }
-}
-
-function headerConfig(pin: PinMode, autoMode: ContextMode) {
-  if (pin === "dashboard") return { icon: "📊", label: "Dashboard" };
-  return MODE_CONFIG[autoMode];
 }
 
 /** Ticket-route variant: the right panel becomes the ticket artifact preview. */
@@ -107,7 +99,6 @@ export function ContextPanel() {
   const inTicketRoute = centerView === "board" && activeTicketId != null;
 
   const autoMode = useContextMode();
-  const [pin, setPin] = useState<PinMode>("none");
 
   // Preview / artifact state lives per-session in sessionStore. The Preview
   // tab appears whenever the session has either a current focused preview
@@ -140,11 +131,8 @@ export function ContextPanel() {
 
   if (inTicketRoute) return <TicketRouteContextPanel />;
 
-  const config = headerConfig(pin, autoMode);
-  const showLabel = pin !== "none" || autoMode !== "empty";
-
-  const togglePin = (mode: PinMode) =>
-    setPin((prev) => (prev === mode ? "none" : mode));
+  const config = MODE_CONFIG[autoMode];
+  const showLabel = autoMode !== "empty";
 
   return (
     <Card className="context-panel">
@@ -171,19 +159,12 @@ export function ContextPanel() {
         ) : showLabel ? (
           <span className="context-panel__mode-label">{config.label}</span>
         ) : null}
-        <button
-          className={`context-panel__dash-btn${pin === "dashboard" ? " context-panel__dash-btn--active" : ""}`}
-          onClick={() => togglePin("dashboard")}
-          title={pin === "dashboard" ? "Back to context" : "Show dashboard"}
-        >
-          {pin === "dashboard" ? "×" : "📊"}
-        </button>
       </div>
       <div className="context-panel__body">
         {previewActive && activeTab === "preview" ? (
           <PreviewTab />
         ) : (
-          <ModeContent mode={autoMode} pin={pin} />
+          <ModeContent mode={autoMode} />
         )}
       </div>
     </Card>

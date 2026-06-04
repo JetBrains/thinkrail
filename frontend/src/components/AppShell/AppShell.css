@@ -178,7 +178,8 @@
 }
 
 .header-settings-btn,
-.header-files-btn {
+.header-files-btn,
+.header-dashboard-btn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -190,7 +191,8 @@
   transition: color var(--transition-fast);
 }
 .header-settings-btn:hover,
-.header-files-btn:hover { color: var(--text); }
+.header-files-btn:hover,
+.header-dashboard-btn:hover { color: var(--text); }
 .header-files-btn--active,
 .header-files-btn--active:hover { color: var(--purple); }
 

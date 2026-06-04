@@ -4,6 +4,7 @@ import { useSessionStore } from "@/store/sessionStore.ts";
 import { useBoardStore } from "@/store/boardStore.ts";
 import { useConnectionStore } from "@/store/connectionStore.ts";
 import { SettingsModal } from "./SettingsModal.tsx";
+import { DashboardModal } from "./DashboardModal.tsx";
 
 export function Header({ onSwitchProject }: { onSwitchProject: () => void }) {
   const projectName = useUiStore((s) => s.projectName);
@@ -41,6 +42,7 @@ export function Header({ onSwitchProject }: { onSwitchProject: () => void }) {
 
   const connectedClients = useConnectionStore((s) => s.clients);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [dashboardOpen, setDashboardOpen] = useState(false);
 
   const handleToggleBrowser = () => {
     if (browserOpen) {
@@ -116,6 +118,19 @@ export function Header({ onSwitchProject }: { onSwitchProject: () => void }) {
           </svg>
         </button>
         <button
+          className="header-dashboard-btn"
+          onClick={() => setDashboardOpen(true)}
+          title="Dashboard"
+          aria-label="Dashboard"
+        >
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <rect x="3" y="3" width="7" height="9" rx="1" />
+            <rect x="14" y="3" width="7" height="5" rx="1" />
+            <rect x="14" y="12" width="7" height="9" rx="1" />
+            <rect x="3" y="16" width="7" height="5" rx="1" />
+          </svg>
+        </button>
+        <button
           className="header-settings-btn"
           onClick={() => setSettingsOpen(true)}
           title="Settings"
@@ -129,6 +144,7 @@ export function Header({ onSwitchProject }: { onSwitchProject: () => void }) {
       </div>
     </header>
     <SettingsModal open={settingsOpen} onClose={() => setSettingsOpen(false)} />
+    <DashboardModal open={dashboardOpen} onClose={() => setDashboardOpen(false)} />
     </>
   );
 }
