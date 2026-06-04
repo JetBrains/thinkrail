@@ -1619,6 +1619,9 @@
   border-bottom: 1px solid var(--border);
   overflow-x: auto;
   flex-shrink: 0;
+  /* Keep the bar's height constant whether or not any session tab is present
+     — match a tab's box so the empty state (just "+ New") doesn't shrink. */
+  min-height: calc(var(--font-lg) * var(--line-height) + var(--space-sm) * 2 + 2px);
 }
 .session-tab {
   display: flex; align-items: center; gap: var(--space-xs);
