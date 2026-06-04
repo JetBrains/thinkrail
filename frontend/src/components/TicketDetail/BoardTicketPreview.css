@@ -1,0 +1,28 @@
+.board-preview-goto {
+  align-self: center;
+  margin-left: auto;
+  padding: var(--space-xs) var(--space-md);
+  background: var(--blue);
+  color: var(--bg);
+  border: 1px solid var(--blue);
+  border-radius: var(--radius-sm);
+  font-family: var(--font);
+  font-size: var(--font-md);
+  cursor: pointer;
+  white-space: nowrap;
+  transition: opacity var(--transition-fast);
+}
+.board-preview-goto:hover { opacity: 0.9; }
+
+.board-preview-close {
+  align-self: center;
+  background: transparent;
+  border: none;
+  color: var(--muted);
+  font-size: var(--font-lg);
+  line-height: 1;
+  cursor: pointer;
+  padding: 0 var(--space-xs);
+  border-radius: var(--radius-sm);
+}
+.board-preview-close:hover { color: var(--text); background: var(--hover); }

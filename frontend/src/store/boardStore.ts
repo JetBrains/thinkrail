@@ -23,6 +23,9 @@ interface BoardStore {
   openTicketIds: string[];
   /** Currently active ticket tab (null = board or session/file is active) */
   activeTicketId: string | null;
+  /** Ticket being previewed in the right panel from the board (null = none).
+   *  Distinct from `activeTicketId`: a preview keeps the board in the center. */
+  previewTicketId: string | null;
   loading: boolean;
   error: string | null;
 
@@ -54,6 +57,8 @@ interface BoardStore {
   activateTicket: (id: string) => void;
   /** Show the board view (deactivate any ticket) */
   showBoard: () => void;
+  /** Preview a ticket in the right panel without leaving the board */
+  setPreviewTicket: (id: string | null) => void;
 
   // Notification handlers
   handleDidChange: (ticket: TicketSummary) => void;
@@ -69,6 +74,7 @@ export const useBoardStore = create<BoardStore>((set, get) => ({
   tickets: new Map(),
   openTicketIds: [],
   activeTicketId: null,
+  previewTicketId: null,
   loading: false,
   error: null,
 
@@ -147,7 +153,7 @@ export const useBoardStore = create<BoardStore>((set, get) => ({
       const openTicketIds = s.openTicketIds.includes(id)
         ? s.openTicketIds
         : [...s.openTicketIds, id];
-      return { openTicketIds, activeTicketId: id };
+      return { openTicketIds, activeTicketId: id, previewTicketId: null };
     }),
 
   closeTicket: (id) =>
@@ -159,7 +165,9 @@ export const useBoardStore = create<BoardStore>((set, get) => ({
 
   activateTicket: (id) => set({ activeTicketId: id }),
 
-  showBoard: () => set({ activeTicketId: null }),
+  showBoard: () => set({ activeTicketId: null, previewTicketId: null }),
+
+  setPreviewTicket: (id) => set({ previewTicketId: id }),
 
   // Notification handlers (called from wireEvents)
   handleDidChange: (ticket) =>

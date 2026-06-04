@@ -19,6 +19,7 @@ import {
 } from "@/components/Wizard";
 import { BoardView } from "@/components/BoardView/BoardView.tsx";
 import { TicketDetail } from "@/components/TicketDetail/TicketDetail.tsx";
+import { BoardTicketPreview } from "@/components/TicketDetail/BoardTicketPreview.tsx";
 import { useBoardStore } from "@/store/boardStore.ts";
 import { ViewModeProvider } from "@/context/ViewModeContext.tsx";
 import "@/components/ChatStream/ChatStream.css";
@@ -68,6 +69,8 @@ export function AppShell({ onSwitchProject }: { onSwitchProject: () => void }) {
   const setLeftTab = useUiStore((s) => s.setLeftTab);
   const activeTicketId = useBoardStore((s) => s.activeTicketId);
   const openTicket = useBoardStore((s) => s.openTicket);
+  const previewTicketId = useBoardStore((s) => s.previewTicketId);
+  const setPreviewTicket = useBoardStore((s) => s.setPreviewTicket);
 
   const handleOpenTicket = useCallback(
     (ticketId: string) => openTicket(ticketId),
@@ -81,6 +84,8 @@ export function AppShell({ onSwitchProject }: { onSwitchProject: () => void }) {
   // The ticket route (board + open ticket) keeps them — that's where the
   // phase tree (left) and artifact preview (right) live.
   const onBoardView = centerView === "board" && activeTicketId == null;
+  // On the board, a single-clicked ticket previews in the right panel.
+  const showBoardPreview = onBoardView && previewTicketId != null;
 
   const handleOpenSessionManager = useCallback(() => {
     setLeftTab("sessions");
@@ -207,14 +212,28 @@ export function AppShell({ onSwitchProject }: { onSwitchProject: () => void }) {
               activeTicketId ? (
                 <TicketDetail ticketId={activeTicketId} />
               ) : (
-                <BoardView onOpenTicket={handleOpenTicket} />
+                <BoardView onOpenTicket={handleOpenTicket} onPreviewTicket={setPreviewTicket} />
               )
             ) : (
               <SessionPanel />
             )}
           </ViewModeProvider>
         </div>
-        {onBoardView ? null : rightCollapsed ? (
+        {showBoardPreview && previewTicketId ? (
+          <>
+            <ResizeHandle
+              side="right"
+              panelWidth={rightWidth}
+              onResize={handleRightResize}
+              onCollapse={() => setPreviewTicket(null)}
+              min={RIGHT_MIN}
+              collapseThreshold={RIGHT_COLLAPSE_THRESHOLD}
+            />
+            <div style={{ width: rightWidth, height: "100%", overflow: "hidden" }}>
+              <BoardTicketPreview ticketId={previewTicketId} />
+            </div>
+          </>
+        ) : onBoardView ? null : rightCollapsed ? (
           <button className="right-collapse-btn" onClick={toggleRight}
             title={`Open context panel (${modLabel("J")})`}>&#9664;</button>
         ) : (

@@ -8,9 +8,10 @@ import "./BoardView.css";
 
 interface BoardViewProps {
   onOpenTicket: (id: string) => void;
+  onPreviewTicket: (id: string) => void;
 }
 
-export function BoardView({ onOpenTicket }: BoardViewProps) {
+export function BoardView({ onOpenTicket, onPreviewTicket }: BoardViewProps) {
   const tickets = useBoardStore((s) => s.tickets);
   const loading = useBoardStore((s) => s.loading);
   const [modalOpen, setModalOpen] = useState(false);
@@ -62,7 +63,7 @@ export function BoardView({ onOpenTicket }: BoardViewProps) {
             + New ticket
           </button>
         </div>
-        <TicketBoard tickets={ticketList} onOpenTicket={onOpenTicket} />
+        <TicketBoard tickets={ticketList} onOpenTicket={onOpenTicket} onPreviewTicket={onPreviewTicket} />
       </div>
 
       {/* Resize handle */}

@@ -35,9 +35,10 @@ function canTransition(from: TicketStatus, to: TicketStatus): boolean {
 interface TicketBoardProps {
   tickets: TicketSummary[];
   onOpenTicket: (id: string) => void;
+  onPreviewTicket: (id: string) => void;
 }
 
-export function TicketBoard({ tickets, onOpenTicket }: TicketBoardProps) {
+export function TicketBoard({ tickets, onOpenTicket, onPreviewTicket }: TicketBoardProps) {
   const updateTicket = useBoardStore((s) => s.updateTicket);
   const deleteTicket = useBoardStore((s) => s.deleteTicket);
   const reorderTicket = useBoardStore((s) => s.reorderTicket);
@@ -118,6 +119,7 @@ export function TicketBoard({ tickets, onOpenTicket }: TicketBoardProps) {
                   index={index}
                   column={col.status}
                   onOpen={onOpenTicket}
+                  onPreview={onPreviewTicket}
                   onContextMenu={handleContextMenu}
                 />
               ))}

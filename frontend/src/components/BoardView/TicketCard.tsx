@@ -1,4 +1,4 @@
-import { useCallback } from "react";
+import { useCallback, useEffect, useRef } from "react";
 import { useSortable } from "@dnd-kit/react/sortable";
 import type { TicketSummary } from "@/types/board.ts";
 
@@ -7,10 +7,11 @@ interface TicketCardProps {
   index: number;
   column: string;
   onOpen: (id: string) => void;
+  onPreview: (id: string) => void;
   onContextMenu?: (e: React.MouseEvent, id: string) => void;
 }
 
-export function TicketCard({ ticket, index, column, onOpen, onContextMenu }: TicketCardProps) {
+export function TicketCard({ ticket, index, column, onOpen, onPreview, onContextMenu }: TicketCardProps) {
   const { ref, isDragSource } = useSortable({
     id: ticket.id,
     index,
@@ -20,7 +21,24 @@ export function TicketCard({ ticket, index, column, onOpen, onContextMenu }: Tic
     data: { ticket },
   });
 
+  // Disambiguate single vs double click: a single click previews after a
+  // short delay; a double click cancels that and opens the full ticket route.
+  const clickTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => () => { if (clickTimer.current) clearTimeout(clickTimer.current); }, []);
+
   const handleClick = useCallback(() => {
+    if (clickTimer.current) clearTimeout(clickTimer.current);
+    clickTimer.current = setTimeout(() => {
+      clickTimer.current = null;
+      onPreview(ticket.id);
+    }, 220);
+  }, [ticket.id, onPreview]);
+
+  const handleDoubleClick = useCallback(() => {
+    if (clickTimer.current) {
+      clearTimeout(clickTimer.current);
+      clickTimer.current = null;
+    }
     onOpen(ticket.id);
   }, [ticket.id, onOpen]);
 
@@ -42,6 +60,7 @@ export function TicketCard({ ticket, index, column, onOpen, onContextMenu }: Tic
       ref={ref}
       className={`ticket-card ${isDragSource ? "ticket-card--dragging" : ""}`}
       onClick={handleClick}
+      onDoubleClick={handleDoubleClick}
       onContextMenu={handleContextMenu}
     >
       <div className="ticket-card-title">{ticket.title}</div>
