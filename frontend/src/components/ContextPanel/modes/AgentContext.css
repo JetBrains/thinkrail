@@ -1,11 +1,15 @@
 /* ── Agent Context ── */
 .agent-context { display: flex; flex-direction: column; padding: 0; }
 
+/* Flatten the nested sections: no divider lines between sections and no
+   filled header bars — keep only the hover affordance from CollapsibleSection. */
+.agent-context .collapsible-section { border-bottom: none; }
+.agent-context .collapsible-section__header { background: transparent; }
+
 /* Utilization header */
 .agent-context__header {
   display: flex; align-items: center; gap: var(--space-sm);
   padding: var(--space-sm) var(--space-md);
-  border-bottom: 1px solid var(--border);
   flex-shrink: 0;
 }
 .agent-context__pct { font-size: var(--font-xl); font-weight: 700; min-width: 42px; }
@@ -58,13 +62,12 @@
   padding: 3px 0; margin: 2px 0;
   font-size: var(--font-sm); color: var(--muted); font-weight: 600;
   letter-spacing: 0.3px;
-  border-top: 1px dashed var(--border);
 }
 
 /* Turns summary (shown when SDK turns > exchanges) */
 .agent-context__turns-summary {
   font-size: var(--font-sm); color: var(--hint); text-align: center;
-  padding: var(--space-xs) 0 2px; border-top: 1px solid var(--border);
+  padding: var(--space-xs) 0 2px;
   margin-top: 2px;
 }
 

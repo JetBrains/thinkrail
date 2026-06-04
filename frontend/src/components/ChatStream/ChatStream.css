@@ -1900,17 +1900,28 @@
 .vis-fs-close:hover { background: var(--hover); color: var(--text); }
 
 /* ── Restored Session Bar ── */
+/* Mirrors `.input-area` so a restored/ended session reads as the same
+   composer row: a field-styled read-only message on the left + an action
+   button on the right. No top divider/background — the surrounding
+   `.session-bottom` Card already provides the frame. */
 .restored-bar {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  gap: var(--space-sm);
   padding: var(--space-md) var(--space-lg);
-  border-top: 1px solid var(--border);
-  background: var(--panel);
   flex-shrink: 0;
 }
 .restored-bar-text {
-  font-size: var(--font-lg);
+  flex: 1;
+  display: flex;
+  align-items: center;
+  min-height: 36px;
+  padding: var(--space-sm) var(--space-md);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--elevated);
+  font-size: var(--font-size);
+  line-height: var(--line-height);
   color: var(--hint);
   font-style: italic;
 }
