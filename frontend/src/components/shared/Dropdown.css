@@ -3,10 +3,10 @@
   display: inline-block;
 }
 
-/* Base trigger styles use :where() to keep specificity at 0 — every consumer
-   passes a className (e.g. `draft-config-select--model`, `ticket-header-badge--bug`)
-   that owns the trigger's color/background/border. Single-class overrides win
-   automatically regardless of CSS load order. */
+/* Base trigger styles use :where() to keep specificity at 0 — a consumer that
+   passes a className (e.g. `ticket-header-badge--bug`) owns the trigger's
+   color/background/border. Single-class overrides win automatically regardless
+   of CSS load order. */
 :where(.dd-trigger) {
   display: inline-flex;
   align-items: center;

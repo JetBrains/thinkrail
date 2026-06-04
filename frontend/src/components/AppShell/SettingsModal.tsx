@@ -7,6 +7,7 @@ import { readFile } from "@/services/files.ts";
 import { getErrorMessage } from "@/utils/errors.ts";
 import { useRuntimeCapsStore } from "@/store/runtimeCapsStore.ts";
 import { RuntimeFlags } from "@/components/shared/RuntimeFlags.tsx";
+import { Dropdown } from "@/components/shared/Dropdown.tsx";
 import type { SessionDefaults } from "@/api/methods/appSettings.ts";
 import {
   type ThemePreference,
@@ -255,48 +256,42 @@ function SessionDefaultsSection({ visible }: { visible: boolean }) {
 
       <div className="user-settings-row">
         <label className="user-settings-label">Model</label>
-        <select
-          className="draft-config-select draft-config-select--model"
+        <Dropdown
           value={value.model}
-          onChange={(e) => setDraftValue({ ...value, model: e.target.value })}
-        >
-          {!selectedModel && <option value={value.model}>{value.model}</option>}
-          {models.map((m) => (
-            <option key={m.value} value={m.value}>{m.label}</option>
-          ))}
-        </select>
+          options={[
+            ...(selectedModel ? [] : [{ value: value.model, label: value.model }]),
+            ...models.map((m) => ({ value: m.value, label: m.label })),
+          ]}
+          onChange={(v) => setDraftValue({ ...value, model: v })}
+        />
       </div>
 
       <div className="user-settings-row">
         <label className="user-settings-label">Permission mode</label>
-        <select
-          className="draft-config-select"
+        <Dropdown
           value={value.permissionMode}
-          onChange={(e) => setDraftValue({ ...value, permissionMode: e.target.value })}
-        >
-          {!permissionModes.some((m) => m.value === value.permissionMode) && (
-            <option value={value.permissionMode}>{value.permissionMode}</option>
-          )}
-          {permissionModes.map((m) => (
-            <option key={m.value} value={m.value}>{m.label}</option>
-          ))}
-        </select>
+          options={[
+            ...(permissionModes.some((m) => m.value === value.permissionMode)
+              ? []
+              : [{ value: value.permissionMode, label: value.permissionMode }]),
+            ...permissionModes.map((m) => ({ value: m.value, label: m.label })),
+          ]}
+          onChange={(v) => setDraftValue({ ...value, permissionMode: v })}
+        />
       </div>
 
       <div className="user-settings-row">
         <label className="user-settings-label">Effort</label>
-        <span className="draft-config-pills">
-          {effortLevels.map((e) => (
-            <button
-              key={e.value}
-              type="button"
-              className={`draft-config-effort-pill ${value.effort === e.value ? "draft-config-effort-pill--active" : ""}`}
-              onClick={() => setDraftValue({ ...value, effort: e.value })}
-            >
-              {e.label}
-            </button>
-          ))}
-        </span>
+        <Dropdown
+          value={value.effort}
+          options={[
+            ...(effortLevels.some((e) => e.value === value.effort)
+              ? []
+              : [{ value: value.effort, label: value.effort }]),
+            ...effortLevels.map((e) => ({ value: e.value, label: e.label })),
+          ]}
+          onChange={(v) => setDraftValue({ ...value, effort: v })}
+        />
       </div>
 
       {flags.some((f) => f.type === "boolean") && (

@@ -173,33 +173,6 @@
   font-family: inherit;
   cursor: pointer;
 }
-.draft-config-select--model {
-  background: rgba(8, 124, 250, 0.1);
-  color: var(--blue);
-  border-color: rgba(8, 124, 250, 0.3);
-}
-
-.draft-config-pills {
-  display: inline-flex;
-  gap: 2px;
-}
-.draft-config-effort-pill {
-  background: var(--panel);
-  border: none;
-  color: var(--text);
-  padding: 2px var(--space-sm);
-  border-radius: var(--radius-sm);
-  font-size: var(--font-sm);
-  font-family: inherit;
-  cursor: pointer;
-}
-.draft-config-effort-pill:hover {
-  background: var(--hover);
-}
-.draft-config-effort-pill--active {
-  background: rgba(8, 124, 250, 0.15);
-  color: var(--blue);
-}
 
 /* Runtime-declared flag toggles — shared between the draft card and user settings. */
 .runtime-flags {

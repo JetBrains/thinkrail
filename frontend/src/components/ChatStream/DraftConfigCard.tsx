@@ -10,6 +10,7 @@ import { SkillGrid } from "@/components/shared/SkillGrid.tsx";
 import { SpecSelector } from "@/components/shared/SpecSelector.tsx";
 import { TicketSelector } from "@/components/shared/TicketSelector.tsx";
 import { FileSelector } from "@/components/shared/FileSelector.tsx";
+import { Dropdown } from "@/components/shared/Dropdown.tsx";
 import { PromptPreview } from "./PromptPreview.tsx";
 import { StaleRefsBanner } from "@/components/shared/StaleRefsBanner.tsx";
 import "./DraftConfigCard.css";
@@ -469,57 +470,42 @@ export function DraftConfigCard({ bonsaiSid, readOnly, hideDiscard, onVisibility
         <div className="draft-config-value draft-config-value--wrap">
           <span className="draft-config-inline">
             <span className="draft-config-hint">model:</span>
-            <select
-              className="draft-config-select draft-config-select--model"
+            <Dropdown
               value={session.model}
-              onChange={(e) => {
-                debouncedUpdate({ config: buildConfig({ model: e.target.value }) });
-              }}
-            >
-              {!modelDef && (
-                <option value={session.model}>{session.model}</option>
-              )}
-              {models.map((m) => (
-                <option key={m.value} value={m.value}>
-                  {m.label}
-                </option>
-              ))}
-            </select>
+              options={[
+                ...(modelDef ? [] : [{ value: session.model, label: session.model }]),
+                ...models.map((m) => ({ value: m.value, label: m.label })),
+              ]}
+              onChange={(v) => debouncedUpdate({ config: buildConfig({ model: v }) })}
+            />
           </span>
 
           <span className="draft-config-inline">
             <span className="draft-config-hint">perms:</span>
-            <select
-              className="draft-config-select"
+            <Dropdown
               value={session.permissionMode}
-              onChange={(e) =>
-                debouncedUpdate({ config: buildConfig({ permissionMode: e.target.value }) })
-              }
-            >
-              {!permissionModes.some((m) => m.value === session.permissionMode) && (
-                <option value={session.permissionMode}>{session.permissionMode}</option>
-              )}
-              {permissionModes.map((m) => (
-                <option key={m.value} value={m.value}>
-                  {m.label}
-                </option>
-              ))}
-            </select>
+              options={[
+                ...(permissionModes.some((m) => m.value === session.permissionMode)
+                  ? []
+                  : [{ value: session.permissionMode, label: session.permissionMode }]),
+                ...permissionModes.map((m) => ({ value: m.value, label: m.label })),
+              ]}
+              onChange={(v) => debouncedUpdate({ config: buildConfig({ permissionMode: v }) })}
+            />
           </span>
 
           <span className="draft-config-inline">
             <span className="draft-config-hint">effort:</span>
-            <span className="draft-config-pills">
-              {effortLevels.map((e) => (
-                <button
-                  key={e.value}
-                  className={`draft-config-effort-pill ${session.effort === e.value ? "draft-config-effort-pill--active" : ""}`}
-                  onClick={() => debouncedUpdate({ config: buildConfig({ effort: e.value }) })}
-                >
-                  {e.label}
-                </button>
-              ))}
-            </span>
+            <Dropdown
+              value={session.effort}
+              options={[
+                ...(effortLevels.some((e) => e.value === session.effort)
+                  ? []
+                  : [{ value: session.effort, label: session.effort }]),
+                ...effortLevels.map((e) => ({ value: e.value, label: e.label })),
+              ]}
+              onChange={(v) => debouncedUpdate({ config: buildConfig({ effort: v }) })}
+            />
           </span>
 
           {session.skillId === "ticket-implement" && (
