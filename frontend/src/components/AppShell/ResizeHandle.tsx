@@ -8,6 +8,8 @@ interface ResizeHandleProps {
   min: number;
   max?: number;
   collapseThreshold: number;
+  /** Drag still works, but no visible divider line is drawn. */
+  invisible?: boolean;
 }
 
 export function ResizeHandle({
@@ -18,6 +20,7 @@ export function ResizeHandle({
   min,
   max,
   collapseThreshold,
+  invisible,
 }: ResizeHandleProps) {
   const dragging = useRef(false);
   const startX = useRef(0);
@@ -68,16 +71,16 @@ export function ResizeHandle({
       style={{
         width: 4,
         cursor: "col-resize",
-        background: "var(--border)",
+        background: invisible ? "transparent" : "var(--border)",
         flexShrink: 0,
         transition: "background var(--transition-fast)",
       }}
-      onMouseEnter={(e) =>
-        ((e.target as HTMLElement).style.background = "var(--blue)")
-      }
-      onMouseLeave={(e) =>
-        ((e.target as HTMLElement).style.background = "var(--border)")
-      }
+      onMouseEnter={(e) => {
+        if (!invisible) (e.target as HTMLElement).style.background = "var(--blue)";
+      }}
+      onMouseLeave={(e) => {
+        if (!invisible) (e.target as HTMLElement).style.background = "var(--border)";
+      }}
     />
   );
 }

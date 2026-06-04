@@ -11,9 +11,15 @@ import { SessionStatusLine } from "@/components/ChatStream/SessionStatusLine.tsx
 import { InputArea } from "@/components/ChatStream/InputArea.tsx";
 import { FileViewer } from "@/components/FileViewer/FileViewer.tsx";
 import { useMessageHistoryStore } from "@/store/messageHistoryStore";
+import { ContextPanel } from "@/components/ContextPanel/ContextPanel.tsx";
+import { ResizeHandle } from "@/components/AppShell/ResizeHandle.tsx";
+import { useUiStore } from "@/store/uiStore.ts";
 import { SessionTabBar } from "./SessionTabBar.tsx";
 import { StickyContextBar } from "./StickyContextBar.tsx";
 import "./SessionPanel.css";
+
+const CONTEXT_DEFAULT_W = 360;
+const CONTEXT_MIN_W = 240;
 
 interface Props {
   hideTabBar?: boolean;
@@ -70,6 +76,11 @@ export function SessionPanel({
   const chatStreamRef = useRef<ChatStreamHandle>(null);
   const [restoring, setRestoring] = useState(false);
   const failedRestoreRef = useRef<Set<string>>(new Set());
+
+  // In-session context card (right side of the chat). `⌘J` toggles it via
+  // rightPanelCollapsed; width is local and resized with an invisible handle.
+  const rightCollapsed = useUiStore((s) => s.rightPanelCollapsed);
+  const [contextWidth, setContextWidth] = useState(CONTEXT_DEFAULT_W);
 
   // Auto-restore session from disk in embedded mode if it isn't already
   // in the in-memory map. Restore failures are remembered per sid so a
@@ -176,6 +187,9 @@ export function SessionPanel({
   // Determine what to show in the content area
   const showFile = displayFile != null;
   const showSession = activeSession != null && !showFile;
+  // Context card belongs to the full session view only — not the embedded
+  // (ticket-route) or wizard (hideTabBar) chats, and hidden while a file shows.
+  const showContext = !isEmbedded && !hideTabBar && showSession && !rightCollapsed;
 
   const status = activeSession?.status as SessionStatus | undefined;
   const firstPending = activeSession?.pendingRequests[0] ?? null;
@@ -227,7 +241,8 @@ export function SessionPanel({
       {showFile && displayFile ? (
         <FileViewer file={displayFile} />
       ) : showSession && activeSession ? (
-        <>
+        <div className="session-body-row">
+          <div className="session-chat-col">
           {!hideStickyBar && !contextCardVisible && activeSession.events.length > 0 && (
             <StickyContextBar
               skillId={activeSession.skillId ?? undefined}
@@ -294,7 +309,24 @@ export function SessionPanel({
               />
             )}
           </div>
-        </>
+          </div>
+          {showContext && (
+            <>
+              <ResizeHandle
+                side="right"
+                invisible
+                panelWidth={contextWidth}
+                onResize={setContextWidth}
+                onCollapse={() => {}}
+                min={CONTEXT_MIN_W}
+                collapseThreshold={0}
+              />
+              <div className="session-context-col" style={{ width: contextWidth }}>
+                <ContextPanel />
+              </div>
+            </>
+          )}
+        </div>
       ) : isEmbedded ? (
         <div className="session-empty">
           <div className="session-empty-title">

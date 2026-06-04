@@ -148,7 +148,6 @@ export function ContextPanel() {
   return (
     <div className="context-panel">
       <div className="context-panel__header">
-        <PanelCollapseButton side="right" shortcut="J" />
         {previewActive ? (
           <div className="context-panel__tabs" role="tablist">
             <button
@@ -169,10 +168,7 @@ export function ContextPanel() {
             </button>
           </div>
         ) : showLabel ? (
-          <>
-            <span className="context-panel__mode-icon">{config.icon}</span>
-            <span className="context-panel__mode-label">{config.label}</span>
-          </>
+          <span className="context-panel__mode-label">{config.label}</span>
         ) : null}
         <button
           className={`context-panel__dash-btn${pin === "dashboard" ? " context-panel__dash-btn--active" : ""}`}

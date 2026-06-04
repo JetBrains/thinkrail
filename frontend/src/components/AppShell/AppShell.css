@@ -205,6 +205,14 @@
   height: 100%;
 }
 
+/* Board-only right column (ticket-route artifact preview / board ticket
+ * preview). Plain full-fill wrapper — the session context card styling lives
+ * in `.session-context-col` instead. */
+.right-panel-host {
+  height: 100%;
+  overflow: hidden;
+}
+
 /* Ticket-route left panel: same chrome (tab strip + collapse caret),
  * different body content. */
 .left-panel--ticket {

@@ -86,6 +86,10 @@ export function AppShell({ onSwitchProject }: { onSwitchProject: () => void }) {
   const onBoardView = centerView === "board" && activeTicketId == null;
   // On the board, a single-clicked ticket previews in the right panel.
   const showBoardPreview = onBoardView && previewTicketId != null;
+  // The app-level right column exists only for the board: ticket-route artifact
+  // preview or the board ticket preview. The sessions view hosts its context
+  // card inside SessionPanel instead.
+  const hasBoardRight = centerView === "board" && (showBoardPreview || activeTicketId != null);
 
   const handleOpenSessionManager = useCallback(() => {
     setLeftTab("sessions");
@@ -93,10 +97,10 @@ export function AppShell({ onSwitchProject }: { onSwitchProject: () => void }) {
   }, [setLeftTab, leftCollapsed, toggleLeft]);
 
   const handleLeftResize = useCallback((w: number) => {
-    const rightSpace = onBoardView ? 0 : rightCollapsed ? COLLAPSED_STRIP_W : rightWidth + RESIZE_HANDLE_W;
+    const rightSpace = !hasBoardRight ? 0 : rightCollapsed ? COLLAPSED_STRIP_W : rightWidth + RESIZE_HANDLE_W;
     const maxLeft = window.innerWidth - rightSpace - CENTER_MIN - RESIZE_HANDLE_W;
     setLeftWidth(Math.min(w, maxLeft));
-  }, [onBoardView, rightCollapsed, rightWidth]);
+  }, [hasBoardRight, rightCollapsed, rightWidth]);
 
   const handleRightResize = useCallback((w: number) => {
     const leftSpace = leftCollapsed ? COLLAPSED_STRIP_W : leftWidth + RESIZE_HANDLE_W;
@@ -219,7 +223,7 @@ export function AppShell({ onSwitchProject }: { onSwitchProject: () => void }) {
             )}
           </ViewModeProvider>
         </div>
-        {showBoardPreview && previewTicketId ? (
+        {centerView !== "board" ? null : showBoardPreview && previewTicketId ? (
           <>
             <ResizeHandle
               side="right"
@@ -229,11 +233,11 @@ export function AppShell({ onSwitchProject }: { onSwitchProject: () => void }) {
               min={RIGHT_MIN}
               collapseThreshold={RIGHT_COLLAPSE_THRESHOLD}
             />
-            <div style={{ width: rightWidth, height: "100%", overflow: "hidden" }}>
+            <div className="right-panel-host" style={{ width: rightWidth }}>
               <BoardTicketPreview ticketId={previewTicketId} />
             </div>
           </>
-        ) : onBoardView ? null : rightCollapsed ? (
+        ) : activeTicketId == null ? null : rightCollapsed ? (
           <button className="right-collapse-btn" onClick={toggleRight}
             title={`Open context panel (${modLabel("J")})`}>&#9664;</button>
         ) : (
@@ -246,7 +250,7 @@ export function AppShell({ onSwitchProject }: { onSwitchProject: () => void }) {
               min={RIGHT_MIN}
               collapseThreshold={RIGHT_COLLAPSE_THRESHOLD}
             />
-            <div style={{ width: rightWidth, height: "100%", overflow: "hidden" }}>
+            <div className="right-panel-host" style={{ width: rightWidth }}>
               <ContextPanel />
             </div>
           </>
