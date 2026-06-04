@@ -4,7 +4,6 @@ import { useNotificationStore } from "@/store/notificationStore.ts";
 import { getErrorMessage } from "@/utils/errors.ts";
 import { useFileStore } from "@/store/fileStore.ts";
 import { useTicketRouteStore } from "@/store/ticketRouteStore.ts";
-import { modLabel } from "@/utils/platform.ts";
 import type { SessionStatus } from "@/types/session.ts";
 import { ChatStream } from "@/components/ChatStream/ChatStream.tsx";
 import type { ChatStreamHandle } from "@/components/ChatStream/ChatStream.tsx";
@@ -51,7 +50,6 @@ export function SessionPanel({
   const restartSession = useSessionStore((s) => s.restartSession);
   const restoreSession = useSessionStore((s) => s.restoreSession);
   const projectCost = useSessionStore((s) => s.projectCost);
-  const createNewSession = useSessionStore((s) => s.createNewSession);
 
   const openFiles = useFileStore((s) => s.openFiles);
   const activeFilePath = useFileStore((s) => s.activeFilePath);
@@ -224,13 +222,6 @@ export function SessionPanel({
             onClearPreview={clearPreview}
             onPinPreview={pinPreview}
           />
-          <button
-            className="session-new-btn"
-            onClick={() => createNewSession()}
-            title={`New session (${modLabel("T")})`}
-          >
-            + New
-          </button>
         </div>
       )}
       {showFile && displayFile ? (

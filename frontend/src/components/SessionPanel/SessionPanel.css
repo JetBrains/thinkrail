@@ -47,22 +47,3 @@
   min-width: 0;
   border-bottom: none;
 }
-
-.session-new-btn {
-  flex-shrink: 0;
-  align-self: center;
-  margin: 0 var(--space-sm);
-  background: var(--blue);
-  color: var(--bg);
-  border: 1px solid var(--blue);
-  border-radius: var(--radius-sm);
-  padding: var(--space-xs) var(--space-md);
-  font-family: var(--font);
-  font-size: var(--font-lg);
-  cursor: pointer;
-  transition: opacity var(--transition-fast);
-}
-
-.session-new-btn:hover {
-  opacity: 0.9;
-}
