@@ -1,4 +1,4 @@
-import { LEFT_TABS, useUiStore, type LeftTab } from "@/store/uiStore.ts";
+import { LEFT_BROWSER_TABS, useUiStore } from "@/store/uiStore.ts";
 import { useBoardStore } from "@/store/boardStore.ts";
 import { FileTree } from "@/components/FileTree/FileTree.tsx";
 import { SpecTree } from "@/components/SpecTree/SpecTree.tsx";
@@ -6,20 +6,19 @@ import { SessionManager } from "@/components/SessionManager/SessionManager.tsx";
 import { TicketInfo } from "@/components/TicketDetail/TicketInfo.tsx";
 import { PanelCollapseButton } from "./PanelCollapseButton.tsx";
 
-const TAB_LABELS: Record<LeftTab, string> = {
+type BrowserTab = (typeof LEFT_BROWSER_TABS)[number];
+
+const TAB_LABELS: Record<BrowserTab, string> = {
   specs: "Specs",
   files: "Files",
-  sessions: "Sessions",
 };
 
-function TabContent({ tab }: { tab: LeftTab }) {
+function TabContent({ tab }: { tab: BrowserTab }) {
   switch (tab) {
     case "specs":
       return <SpecTree />;
     case "files":
       return <FileTree />;
-    case "sessions":
-      return <SessionManager />;
   }
 }
 
@@ -49,16 +48,29 @@ export function LeftPanel() {
     );
   }
 
-  // Persisted value may be a deprecated tab no longer in LEFT_TABS.
-  const activeTab: LeftTab = (LEFT_TABS as readonly string[]).includes(persistedTab)
-    ? persistedTab
-    : LEFT_TABS[0];
-  const compact = activeTab === "files" || activeTab === "sessions";
+  // Sessions is its own full-panel mode (opened from the header Sessions
+  // button / StatusBar pill), not a tab in the Specs/Files strip. The
+  // collapse caret lives in SessionManager's own header, next to Refresh.
+  if (persistedTab === "sessions") {
+    return (
+      <div className="left-panel">
+        <div className="panel-content panel-content-compact">
+          <SessionManager />
+        </div>
+      </div>
+    );
+  }
+
+  // Persisted value may be a deprecated tab no longer in the browser strip.
+  const activeTab: BrowserTab = (LEFT_BROWSER_TABS as readonly string[]).includes(persistedTab)
+    ? (persistedTab as BrowserTab)
+    : LEFT_BROWSER_TABS[0];
+  const compact = activeTab === "files";
 
   return (
     <div className="left-panel">
       <div className="panel-tabs">
-        {LEFT_TABS.map((tab) => (
+        {LEFT_BROWSER_TABS.map((tab) => (
           <button
             key={tab}
             className={`panel-tab ${activeTab === tab ? "panel-tab-active" : ""}`}

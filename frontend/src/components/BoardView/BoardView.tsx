@@ -59,7 +59,7 @@ export function BoardView({ onOpenTicket }: BoardViewProps) {
         <div className="board-section-header">
           <span className="board-section-title">Tickets</span>
           <button className="board-new-btn" onClick={handleOpenModal}>
-            + New
+            + New ticket
           </button>
         </div>
         <TicketBoard tickets={ticketList} onOpenTicket={onOpenTicket} />

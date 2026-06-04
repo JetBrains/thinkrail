@@ -5,6 +5,9 @@ import type { JourneyEntry } from "@/components/Wizard/registry.ts";
 
 export const LEFT_TABS = ["specs", "files", "sessions"] as const;
 export type LeftTab = (typeof LEFT_TABS)[number];
+/** Tabs rendered in the left-panel strip. "sessions" is a valid LeftTab
+ *  value but renders as its own full-panel mode, not a strip tab. */
+export const LEFT_BROWSER_TABS = ["specs", "files"] as const;
 type Breakpoint = "desktop" | "laptop" | "below-min";
 export type ProjectState = "initialized" | "new" | "existing";
 export type CenterView = "board" | "sessions";

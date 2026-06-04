@@ -77,16 +77,21 @@ export function AppShell({ onSwitchProject }: { onSwitchProject: () => void }) {
   const [leftWidth, setLeftWidth] = useState(LEFT_DEFAULT);
   const [rightWidth, setRightWidth] = useState(RIGHT_DEFAULT);
 
+  // The kanban board is shown full-width: both side panels are hidden there.
+  // The ticket route (board + open ticket) keeps them — that's where the
+  // phase tree (left) and artifact preview (right) live.
+  const onBoardView = centerView === "board" && activeTicketId == null;
+
   const handleOpenSessionManager = useCallback(() => {
     setLeftTab("sessions");
     if (leftCollapsed) toggleLeft();
   }, [setLeftTab, leftCollapsed, toggleLeft]);
 
   const handleLeftResize = useCallback((w: number) => {
-    const rightSpace = rightCollapsed ? COLLAPSED_STRIP_W : rightWidth + RESIZE_HANDLE_W;
+    const rightSpace = onBoardView ? 0 : rightCollapsed ? COLLAPSED_STRIP_W : rightWidth + RESIZE_HANDLE_W;
     const maxLeft = window.innerWidth - rightSpace - CENTER_MIN - RESIZE_HANDLE_W;
     setLeftWidth(Math.min(w, maxLeft));
-  }, [rightCollapsed, rightWidth]);
+  }, [onBoardView, rightCollapsed, rightWidth]);
 
   const handleRightResize = useCallback((w: number) => {
     const leftSpace = leftCollapsed ? COLLAPSED_STRIP_W : leftWidth + RESIZE_HANDLE_W;
@@ -178,7 +183,7 @@ export function AppShell({ onSwitchProject }: { onSwitchProject: () => void }) {
   return (
     <Shell onSwitchProject={onSwitchProject}>
       <div className="layout">
-        {leftCollapsed ? (
+        {onBoardView ? null : leftCollapsed ? (
           <button className="left-collapse-btn" onClick={toggleLeft}
             title={`Open left panel (${modLabel("B")})`}>&#9658;</button>
         ) : (
@@ -209,7 +214,7 @@ export function AppShell({ onSwitchProject }: { onSwitchProject: () => void }) {
             )}
           </ViewModeProvider>
         </div>
-        {rightCollapsed ? (
+        {onBoardView ? null : rightCollapsed ? (
           <button className="right-collapse-btn" onClick={toggleRight}
             title={`Open context panel (${modLabel("J")})`}>&#9664;</button>
         ) : (

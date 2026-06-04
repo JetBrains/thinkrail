@@ -21,7 +21,8 @@
   gap: var(--space-xs);
 }
 
-.sm-refresh {
+.sm-refresh,
+.sm-collapse {
   border: none;
   background: transparent;
   color: var(--hint);
@@ -31,7 +32,8 @@
   padding: var(--space-xs);
   border-radius: var(--radius-sm);
 }
-.sm-refresh:hover { background: var(--hover); color: var(--text); }
+.sm-refresh:hover,
+.sm-collapse:hover { background: var(--hover); color: var(--text); }
 
 .sm-loading, .sm-empty {
   color: var(--hint);

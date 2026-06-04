@@ -177,7 +177,8 @@
   opacity: 0.9;
 }
 
-.header-settings-btn {
+.header-settings-btn,
+.header-files-btn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -188,7 +189,10 @@
   cursor: pointer;
   transition: color var(--transition-fast);
 }
-.header-settings-btn:hover { color: var(--text); }
+.header-settings-btn:hover,
+.header-files-btn:hover { color: var(--text); }
+.header-files-btn--active,
+.header-files-btn--active:hover { color: var(--purple); }
 
 /* ── Panels ── */
 .left-panel,
