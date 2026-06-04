@@ -10,6 +10,9 @@ interface ResizeHandleProps {
   collapseThreshold: number;
   /** Drag still works, but no visible divider line is drawn. */
   invisible?: boolean;
+  /** Resting divider color. Defaults to `var(--border)`; pass the adjacent
+   *  panel's background to make the handle blend into it. */
+  restColor?: string;
 }
 
 export function ResizeHandle({
@@ -21,6 +24,7 @@ export function ResizeHandle({
   max,
   collapseThreshold,
   invisible,
+  restColor = "var(--border)",
 }: ResizeHandleProps) {
   const dragging = useRef(false);
   const startX = useRef(0);
@@ -71,7 +75,7 @@ export function ResizeHandle({
       style={{
         width: 4,
         cursor: "col-resize",
-        background: invisible ? "transparent" : "var(--border)",
+        background: invisible ? "transparent" : restColor,
         flexShrink: 0,
         transition: "background var(--transition-fast)",
       }}
@@ -79,7 +83,7 @@ export function ResizeHandle({
         if (!invisible) (e.target as HTMLElement).style.background = "var(--blue)";
       }}
       onMouseLeave={(e) => {
-        if (!invisible) (e.target as HTMLElement).style.background = "var(--border)";
+        if (!invisible) (e.target as HTMLElement).style.background = restColor;
       }}
     />
   );
