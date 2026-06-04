@@ -66,7 +66,7 @@ export function SessionManager() {
   const projectPath = useUiStore((s) => s.projectPath);
   const focusSessions = useUiStore((s) => s.focusSessions);
   const toggleLeftPanel = useUiStore((s) => s.toggleLeftPanel);
-  const switchSession = useSessionStore((s) => s.switchSession);
+  const focusSession = useSessionStore((s) => s.focusSession);
   const restoreSession = useSessionStore((s) => s.restoreSession);
   const deleteSession = useSessionStore((s) => s.deleteSession);
   const sessions = useSessionStore((s) => s.sessionList);
@@ -124,17 +124,20 @@ export function SessionManager() {
     async (taskId: string) => {
       focusSessions();
       try {
-        if (useSessionStore.getState().sessions.has(taskId)) {
-          switchSession(taskId);
-        } else {
-          await restoreSession(taskId);
+        // Load into memory first if needed; `focusSession` requires the
+        // session to be present. `noTab` avoids a half-navigated state — the
+        // focusSession call below performs the actual navigation (and clears
+        // any open file/preview so the chat actually surfaces).
+        if (!useSessionStore.getState().sessions.has(taskId)) {
+          await restoreSession(taskId, { noTab: true });
         }
+        focusSession(taskId);
       } catch (e) {
         console.error("Failed to open session:", e);
         setError(`Failed to open session: ${getErrorMessage(e)}`);
       }
     },
-    [focusSessions, switchSession, restoreSession],
+    [focusSessions, restoreSession, focusSession],
   );
 
   const handleContextMenu = useCallback(
