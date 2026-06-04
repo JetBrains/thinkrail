@@ -35,6 +35,18 @@
 .sm-refresh:hover,
 .sm-collapse:hover { background: var(--hover); color: var(--text); }
 
+.sm-section-label {
+  font-size: var(--font-sm);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--muted);
+  padding: var(--space-sm) var(--space-xs) var(--space-xs);
+}
+.sm-section-label:not(:first-child) {
+  margin-top: var(--space-sm);
+}
+
 .sm-loading, .sm-empty {
   color: var(--hint);
   font-size: var(--font-lg);

@@ -2,7 +2,6 @@ import { useState, useRef, useEffect, useCallback } from "react";
 import { useSpecStore } from "@/store/specStore.ts";
 import { useSessionStore } from "@/store/sessionStore.ts";
 import { useBoardStore } from "@/store/boardStore.ts";
-import { useUiStore } from "@/store/uiStore.ts";
 import { useVisStore } from "@/store/visStore.ts";
 import { modLabel } from "@/utils/platform.ts";
 import type { Session } from "@/types/session.ts";
@@ -36,7 +35,6 @@ export function StatusBar({ onOpenSessionManager }: StatusBarProps) {
   const focusSession = useSessionStore((s) => s.focusSession);
   const tickets = useBoardStore((s) => s.tickets);
   const openTicket = useBoardStore((s) => s.openTicket);
-  const setCenterView = useUiStore((s) => s.setCenterView);
   const dashboard = useVisStore((s) => s.dashboard);
   const dd = useDropdown();
   const attnDd = useDropdown();
@@ -56,22 +54,20 @@ export function StatusBar({ onOpenSessionManager }: StatusBarProps) {
   const openSessionContext = useCallback((s: Session) => {
     const ticketId = s.ticketId ?? null;
     if (ticketId) {
-      setCenterView("board");
       openTicket(ticketId);
       return;
     }
     openTab(s.bonsaiSid);
-  }, [openTab, openTicket, setCenterView]);
+  }, [openTab, openTicket]);
 
   const focusSessionContext = useCallback((s: Session) => {
     const ticketId = s.ticketId ?? null;
     if (ticketId) {
-      setCenterView("board");
       openTicket(ticketId);
       return;
     }
     focusSession(s.bonsaiSid);
-  }, [focusSession, openTicket, setCenterView]);
+  }, [focusSession, openTicket]);
 
   const total = specs.length;
   const done = specs.filter((s) => s.status === "done").length;

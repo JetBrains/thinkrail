@@ -4,7 +4,6 @@ import { modLabel } from "@/utils/platform.ts";
 import { Header } from "./Header.tsx";
 import { StatusBar } from "./StatusBar.tsx";
 import { LeftPanel } from "./LeftPanel.tsx";
-import { ContextPanel } from "@/components/ContextPanel/ContextPanel.tsx";
 import { ResizeHandle } from "./ResizeHandle.tsx";
 import { SessionPanel } from "@/components/SessionPanel/SessionPanel.tsx";
 import {
@@ -18,7 +17,6 @@ import {
   type WizardUiPhase,
 } from "@/components/Wizard";
 import { BoardView } from "@/components/BoardView/BoardView.tsx";
-import { TicketDetail } from "@/components/TicketDetail/TicketDetail.tsx";
 import { BoardTicketPreview } from "@/components/TicketDetail/BoardTicketPreview.tsx";
 import { useBoardStore } from "@/store/boardStore.ts";
 import { ViewModeProvider } from "@/context/ViewModeContext.tsx";
@@ -65,9 +63,7 @@ export function AppShell({ onSwitchProject }: { onSwitchProject: () => void }) {
   const leftCollapsed = useUiStore((s) => s.leftPanelCollapsed);
   const rightCollapsed = useUiStore((s) => s.rightPanelCollapsed);
   const toggleLeft = useUiStore((s) => s.toggleLeftPanel);
-  const toggleRight = useUiStore((s) => s.toggleRightPanel);
   const setLeftTab = useUiStore((s) => s.setLeftTab);
-  const activeTicketId = useBoardStore((s) => s.activeTicketId);
   const openTicket = useBoardStore((s) => s.openTicket);
   const previewTicketId = useBoardStore((s) => s.previewTicketId);
   const setPreviewTicket = useBoardStore((s) => s.setPreviewTicket);
@@ -80,16 +76,15 @@ export function AppShell({ onSwitchProject }: { onSwitchProject: () => void }) {
   const [leftWidth, setLeftWidth] = useState(LEFT_DEFAULT);
   const [rightWidth, setRightWidth] = useState(RIGHT_DEFAULT);
 
-  // The kanban board is shown full-width: both side panels are hidden there.
-  // The ticket route (board + open ticket) keeps them — that's where the
-  // phase tree (left) and artifact preview (right) live.
-  const onBoardView = centerView === "board" && activeTicketId == null;
+  // The kanban board is shown full-width: the left panel is hidden there.
+  // Tickets now open as tabs in the Sessions view, so the board is always the
+  // kanban (no full-screen ticket route).
+  const onBoardView = centerView === "board";
   // On the board, a single-clicked ticket previews in the right panel.
   const showBoardPreview = onBoardView && previewTicketId != null;
-  // The app-level right column exists only for the board: ticket-route artifact
-  // preview or the board ticket preview. The sessions view hosts its context
-  // card inside SessionPanel instead.
-  const hasBoardRight = centerView === "board" && (showBoardPreview || activeTicketId != null);
+  // The app-level right column exists only for the board ticket preview. The
+  // sessions view (incl. ticket tabs) hosts its context card inside SessionPanel.
+  const hasBoardRight = showBoardPreview;
 
   const handleOpenSessionManager = useCallback(() => {
     setLeftTab("sessions");
@@ -213,17 +208,13 @@ export function AppShell({ onSwitchProject }: { onSwitchProject: () => void }) {
         <div className="center-panel">
           <ViewModeProvider>
             {centerView === "board" ? (
-              activeTicketId ? (
-                <TicketDetail ticketId={activeTicketId} />
-              ) : (
-                <BoardView onOpenTicket={handleOpenTicket} onPreviewTicket={setPreviewTicket} />
-              )
+              <BoardView onOpenTicket={handleOpenTicket} onPreviewTicket={setPreviewTicket} />
             ) : (
               <SessionPanel />
             )}
           </ViewModeProvider>
         </div>
-        {centerView !== "board" ? null : showBoardPreview && previewTicketId ? (
+        {showBoardPreview && previewTicketId ? (
           <>
             <ResizeHandle
               side="right"
@@ -237,24 +228,7 @@ export function AppShell({ onSwitchProject }: { onSwitchProject: () => void }) {
               <BoardTicketPreview ticketId={previewTicketId} />
             </div>
           </>
-        ) : activeTicketId == null ? null : rightCollapsed ? (
-          <button className="right-collapse-btn" onClick={toggleRight}
-            title={`Open context panel (${modLabel("J")})`}>&#9664;</button>
-        ) : (
-          <>
-            <ResizeHandle
-              side="right"
-              panelWidth={rightWidth}
-              onResize={handleRightResize}
-              onCollapse={toggleRight}
-              min={RIGHT_MIN}
-              collapseThreshold={RIGHT_COLLAPSE_THRESHOLD}
-            />
-            <div className="right-panel-host" style={{ width: rightWidth }}>
-              <ContextPanel />
-            </div>
-          </>
-        )}
+        ) : null}
       </div>
       <StatusBar onOpenSessionManager={handleOpenSessionManager} />
     </Shell>

@@ -10,7 +10,7 @@ import { timeAgo } from "@/utils/format.ts";
 import { getStatusStyle } from "@/utils/status.ts";
 import { modLabel } from "@/utils/platform.ts";
 import { SessionCardContextMenu } from "./SessionCardContextMenu.tsx";
-import { groupByTicket, type TicketGroup } from "./groupByTicket.ts";
+import { groupByTicket, type TicketGroup, type GroupedEntry } from "./groupByTicket.ts";
 import "./SessionManager.css";
 
 const TICKET_STRIPE_PALETTE = [
@@ -64,7 +64,6 @@ type CtxMenuState = {
 export function SessionManager() {
   const client = useRpc();
   const projectPath = useUiStore((s) => s.projectPath);
-  const setCenterView = useUiStore((s) => s.setCenterView);
   const focusSessions = useUiStore((s) => s.focusSessions);
   const toggleLeftPanel = useUiStore((s) => s.toggleLeftPanel);
   const switchSession = useSessionStore((s) => s.switchSession);
@@ -74,6 +73,7 @@ export function SessionManager() {
   const refreshSessionList = useSessionStore((s) => s.refreshSessionList);
   const tickets = useBoardStore((s) => s.tickets);
   const openTicket = useBoardStore((s) => s.openTicket);
+  const openTicketIds = useBoardStore((s) => s.openTicketIds);
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -152,10 +152,9 @@ export function SessionManager() {
 
   const handleOpenTicket = useCallback(
     (ticketId: string, _bonsaiSid: string) => {
-      setCenterView("board");
       openTicket(ticketId);
     },
-    [setCenterView, openTicket],
+    [openTicket],
   );
 
   const handleCopySid = useCallback(async (bonsaiSid: string) => {
@@ -176,15 +175,48 @@ export function SessionManager() {
     }
   }, []);
 
-  const ordered = useMemo(() => sortByRecency(sessions), [sessions]);
-  const grouped = useMemo(() => groupByTicket(ordered), [ordered]);
+  // The left list shows only "active" work: sessions with a live backend
+  // runner (and tickets that own one), plus any ticket opened from the board.
+  const grouped = useMemo<GroupedEntry[]>(() => {
+    const active = sortByRecency(sessions.filter((s) => s.active === true));
+    const base = groupByTicket(active);
+    const present = new Set(
+      base.filter((e): e is TicketGroup => e.kind === "ticket").map((e) => e.ticketId),
+    );
+    // Tickets opened from the board show as folders even without an active
+    // session yet.
+    const extra: GroupedEntry[] = [];
+    for (const id of openTicketIds) {
+      if (present.has(id)) continue;
+      const t = tickets.get(id);
+      extra.push({
+        kind: "ticket",
+        ticketId: id,
+        sessions: [],
+        latestActivity: t?.updated ?? "",
+        runningCount: 0,
+        attentionCount: 0,
+      });
+    }
+    return [...base, ...extra].sort(
+      (a, b) => (Date.parse(b.latestActivity) || 0) - (Date.parse(a.latestActivity) || 0),
+    );
+  }, [sessions, openTicketIds, tickets]);
+
+  const ticketEntries = useMemo(
+    () => grouped.filter((e): e is TicketGroup => e.kind === "ticket"),
+    [grouped],
+  );
+  const sessionEntries = useMemo(
+    () => grouped.filter((e): e is Extract<GroupedEntry, { kind: "session" }> => e.kind === "session"),
+    [grouped],
+  );
 
   const handleOpenTicketGroup = useCallback(
     (group: TicketGroup) => {
-      setCenterView("board");
       openTicket(group.ticketId);
     },
-    [setCenterView, openTicket],
+    [openTicket],
   );
 
   // Discard the unused RPC client reference so the lint hook stays clean;
@@ -219,33 +251,40 @@ export function SessionManager() {
           <div className="sm-empty">No sessions yet. Create one with {modLabel("T")}.</div>
         )}
 
-        {grouped.map((entry) => {
-          if (entry.kind === "ticket") {
-            const ticket = tickets.get(entry.ticketId) ?? null;
-            return (
-              <TicketGroupCard
-                key={`sm-t-${entry.ticketId}`}
-                group={entry}
-                title={ticket?.title ?? `Ticket #${entry.ticketId.slice(-4)}`}
-                shortId={`#${entry.ticketId.slice(-4)}`}
-                onOpen={handleOpenTicketGroup}
+        {ticketEntries.length > 0 && (
+          <>
+            <div className="sm-section-label">Tickets</div>
+            {ticketEntries.map((entry) => {
+              const ticket = tickets.get(entry.ticketId) ?? null;
+              return (
+                <TicketGroupCard
+                  key={`sm-t-${entry.ticketId}`}
+                  group={entry}
+                  title={ticket?.title ?? `Ticket #${entry.ticketId.slice(-4)}`}
+                  shortId={`#${entry.ticketId.slice(-4)}`}
+                  onOpen={handleOpenTicketGroup}
+                />
+              );
+            })}
+          </>
+        )}
+
+        {sessionEntries.length > 0 && (
+          <>
+            <div className="sm-section-label">Sessions</div>
+            {sessionEntries.map((entry) => (
+              <SessionCard
+                key={`sm-${entry.session.bonsaiSid}`}
+                session={entry.session}
+                ticketTitle={null}
+                ticketShortId={null}
+                onOpen={handleOpen}
+                onDelete={handleDelete}
+                onContextMenu={handleContextMenu}
               />
-            );
-          }
-          // Standalone session: render the existing card. Ticket-related
-          // props are null because the session has no ticket.
-          return (
-            <SessionCard
-              key={`sm-${entry.session.bonsaiSid}`}
-              session={entry.session}
-              ticketTitle={null}
-              ticketShortId={null}
-              onOpen={handleOpen}
-              onDelete={handleDelete}
-              onContextMenu={handleContextMenu}
-            />
-          );
-        })}
+            ))}
+          </>
+        )}
       </div>
 
       {ctxMenu && (

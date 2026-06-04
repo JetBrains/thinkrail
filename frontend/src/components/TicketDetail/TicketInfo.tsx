@@ -12,6 +12,7 @@ import { buildDefaultSessionConfig } from "@/utils/sessionConfig.ts";
 import { getClient } from "@/api/index.ts";
 import { createBoardApi } from "@/api/methods/board.ts";
 import type { PlanModel } from "./planTypes.ts";
+import "./TicketDetail.css";
 
 const SKILL_TO_PHASE: Partial<Record<string, TicketStatus>> = {
   "ticket-product-design": "product-design",
@@ -43,7 +44,6 @@ export function TicketInfo() {
   const historyEntries = useTicketRouteStore((s) => s.historyEntries);
   const sessionSummaries = useTicketRouteStore((s) => s.sessionSummaries);
   const setTicket = useTicketRouteStore((s) => s.setTicket);
-  const setCenterSessionId = useTicketRouteStore((s) => s.setCenterSessionId);
   const setSelectedArtifact = useTicketRouteStore((s) => s.setSelectedArtifact);
   const requestScroll = useTicketRouteStore((s) => s.requestScroll);
 
@@ -51,6 +51,20 @@ export function TicketInfo() {
   const archivedSessionsList = useSessionStore((s) => s.archivedSessions);
   const createDraft = useSessionStore((s) => s.createDraft);
   const restoreSession = useSessionStore((s) => s.restoreSession);
+  const focusSession = useSessionStore((s) => s.focusSession);
+
+  // Open a ticket-attached session as its own session tab (ticket = folder,
+  // session = file). The ticket tab stays open; the session tab becomes active.
+  const openSessionTab = useCallback(
+    async (sid: string) => {
+      if (useSessionStore.getState().sessions.has(sid)) {
+        focusSession(sid, { allowTicketTab: true });
+      } else {
+        await restoreSession(sid, { allowTicketTab: true });
+      }
+    },
+    [focusSession, restoreSession],
+  );
 
   const updateTicket = useBoardStore((s) => s.updateTicket);
   const updateTicketStore = useBoardStore((s) => s.updateTicket);
@@ -210,7 +224,7 @@ export function TicketInfo() {
   // ── Phase-list event dispatch ──
   const handleSelectPanel = useCallback((p: PhaseListEmit) => {
     if (p.type === "session") {
-      setCenterSessionId(p.sessionId);
+      void openSessionTab(p.sessionId);
       return;
     }
     if (p.type === "artifact") {
@@ -235,12 +249,12 @@ export function TicketInfo() {
       setSelectedArtifact({ kind: "history", phaseFilter: p.phaseFilter });
       return;
     }
-  }, [setCenterSessionId, setSelectedArtifact]);
+  }, [openSessionTab, setSelectedArtifact]);
 
   const handleScrollSessionToEvent = useCallback((sid: string, eventIndex: number) => {
-    setCenterSessionId(sid);
+    void openSessionTab(sid);
     requestAnimationFrame(() => requestScroll(sid, eventIndex));
-  }, [setCenterSessionId, requestScroll]);
+  }, [openSessionTab, requestScroll]);
 
   const handleStartSession = useCallback(
     async (skillId: string, opts?: { previewPath?: string }) => {
@@ -266,14 +280,7 @@ export function TicketInfo() {
 
       const existingSid = phase ? phaseSessionIds[phase] : undefined;
       if (existingSid) {
-        if (!liveSessionsMap.has(existingSid)) {
-          try {
-            await restoreSession(existingSid, { noTab: true });
-          } catch (e) {
-            console.error("[TicketInfo] Failed to restore session:", e);
-          }
-        }
-        setCenterSessionId(existingSid);
+        await openSessionTab(existingSid);
         if (opts?.previewPath) {
           useSessionStore.getState().setPreviewPath(existingSid, opts.previewPath);
         }
@@ -299,12 +306,12 @@ export function TicketInfo() {
       } catch (e) {
         console.error("[TicketInfo] Failed to refresh ticket after createDraft:", e);
       }
-      setCenterSessionId(sid);
+      await openSessionTab(sid);
       if (opts?.previewPath) {
         useSessionStore.getState().setPreviewPath(sid, opts.previewPath);
       }
     },
-    [ticket, createDraft, phaseSessionIds, liveSessionsMap, restoreSession, updateTicketStore, setTicket, setCenterSessionId],
+    [ticket, createDraft, phaseSessionIds, openSessionTab, updateTicketStore, setTicket],
   );
 
   if (!ticket) {

@@ -1,4 +1,5 @@
 import { create } from "zustand";
+import { persist, createJSONStorage } from "zustand/middleware";
 import type {
   Ticket,
   TicketSummary,
@@ -9,6 +10,8 @@ import { getClient } from "@/api/index.ts";
 import { createBoardApi } from "@/api/methods/board.ts";
 import { useSpecStore } from "./specStore.ts";
 import { useSessionStore } from "./sessionStore.ts";
+import { useUiStore } from "./uiStore.ts";
+import { useFileStore } from "./fileStore.ts";
 import { findStaleSpecIds, findStaleSessionIds } from "@/utils/staleRefs.ts";
 
 /** Drop the body field so a full Ticket fits TicketSummary. */
@@ -70,7 +73,7 @@ interface BoardStore {
   fixStaleTicketRefs: (ticketId: string) => Promise<void>;
 }
 
-export const useBoardStore = create<BoardStore>((set, get) => ({
+export const useBoardStore = create<BoardStore>()(persist((set, get) => ({
   tickets: new Map(),
   openTicketIds: [],
   activeTicketId: null,
@@ -87,7 +90,13 @@ export const useBoardStore = create<BoardStore>((set, get) => ({
       for (const t of list) {
         tickets.set(t.id, t);
       }
-      set({ tickets, loading: false });
+      // Drop persisted open-tab ids whose ticket no longer exists.
+      const openTicketIds = get().openTicketIds.filter((id) => tickets.has(id));
+      const activeTicketId =
+        get().activeTicketId && tickets.has(get().activeTicketId as string)
+          ? get().activeTicketId
+          : null;
+      set({ tickets, openTicketIds, activeTicketId, loading: false });
     } catch (e) {
       console.error("[boardStore] fetchTickets error:", e);
       set({ error: (e as Error).message, loading: false });
@@ -148,13 +157,19 @@ export const useBoardStore = create<BoardStore>((set, get) => ({
     set({ tickets, openTicketIds, activeTicketId });
   },
 
-  openTicket: (id) =>
+  openTicket: (id) => {
+    // A ticket opens as a tab in the Sessions view (ticket = folder, session
+    // = file). Also clear any active file/session selection so the ticket tab
+    // becomes the active tab.
+    useUiStore.getState().setCenterView("sessions");
+    useFileStore.setState({ activeFilePath: null, previewFilePath: null, previewFile: null });
     set((s) => {
       const openTicketIds = s.openTicketIds.includes(id)
         ? s.openTicketIds
         : [...s.openTicketIds, id];
       return { openTicketIds, activeTicketId: id, previewTicketId: null };
-    }),
+    });
+  },
 
   closeTicket: (id) =>
     set((s) => {
@@ -240,4 +255,24 @@ export const useBoardStore = create<BoardStore>((set, get) => ({
       ...stale.staleSessionIds.map((id) => api.detachSession(ticketId, id)),
     ]);
   },
+}), {
+  name: "bonsai-board",
+  // Guarded storage: no-op if localStorage is unavailable (e.g. tests).
+  storage: createJSONStorage(() => ({
+    getItem: (name) => {
+      try { return globalThis.localStorage?.getItem(name) ?? null; } catch { return null; }
+    },
+    setItem: (name, value) => {
+      try { globalThis.localStorage?.setItem(name, value); } catch { /* ignore */ }
+    },
+    removeItem: (name) => {
+      try { globalThis.localStorage?.removeItem(name); } catch { /* ignore */ }
+    },
+  })),
+  // Only the open ticket tabs + active tab survive a reload. Ticket data
+  // (the `tickets` Map) is refetched from the backend on load.
+  partialize: (state) => ({
+    openTicketIds: state.openTicketIds,
+    activeTicketId: state.activeTicketId,
+  }),
 }));

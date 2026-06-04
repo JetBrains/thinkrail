@@ -45,7 +45,7 @@ function headerConfig(pin: PinMode, autoMode: ContextMode) {
 }
 
 /** Ticket-route variant: the right panel becomes the ticket artifact preview. */
-function TicketRouteContextPanel() {
+export function TicketRouteContextPanel() {
   const ticket = useTicketRouteStore((s) => s.ticket);
   const plan = useTicketRouteStore((s) => s.plan);
   const historyEntries = useTicketRouteStore((s) => s.historyEntries);

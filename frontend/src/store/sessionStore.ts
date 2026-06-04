@@ -122,10 +122,12 @@ interface SessionStore {
   /** Delete/trash a session: calls backend API, closes tab, removes from store */
   deleteSession: (bonsaiSid: string) => Promise<void>;
   endSession: (bonsaiSid: string) => Promise<void>;
-  /** Open a tab for a session (e.g., from background indicator dropdown) */
-  openTab: (bonsaiSid: string) => void;
+  /** Open a tab for a session (e.g., from background indicator dropdown).
+   *  `allowTicketTab` lets a ticket-attached session open as its own tab
+   *  instead of rerouting to the ticket view (explicit user opens). */
+  openTab: (bonsaiSid: string, opts?: { allowTicketTab?: boolean }) => void;
   /** Ticket-aware focus: opens tab, navigates to ticket if linked, clears conflicting state */
-  focusSession: (bonsaiSid: string) => void;
+  focusSession: (bonsaiSid: string, opts?: { allowTicketTab?: boolean }) => void;
   /** Check if a session references specs or skills that no longer exist */
   getStaleSessionRefs: (bonsaiSid: string) => { staleSpecIds: string[]; staleSkillId: boolean } | null;
   /** Remove stale spec/skill references from a draft session */
@@ -142,7 +144,7 @@ interface SessionStore {
 
   continueSession: (bonsaiSid: string) => Promise<void>;
   retryLastMessage: (bonsaiSid: string) => Promise<void>;
-  restoreSession: (bonsaiSid: string, opts?: { noTab?: boolean }) => Promise<void>;
+  restoreSession: (bonsaiSid: string, opts?: { noTab?: boolean; allowTicketTab?: boolean }) => Promise<void>;
   loadActiveSessions: (opts?: { includeRecentDiskSession?: boolean }) => Promise<void>;
 
   // Subsession actions
@@ -1029,19 +1031,22 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
 
   restoreSession: async (bonsaiSid, opts) => {
     const noTab = opts?.noTab ?? false;
+    const allowTicketTab = opts?.allowTicketTab ?? false;
     // Subscribe to live events for this session (multi-client)
     _ensureSubscribed(bonsaiSid);
     // Already in memory or already being restored — just open tab if needed
     if (get().sessions.has(bonsaiSid) || _restoring.has(bonsaiSid)) {
       const existing = get().sessions.get(bonsaiSid);
-      // Ticket-attached sessions never become free-standing tabs.
-      if (existing?.ticketId) return;
+      // Ticket-attached sessions never become free-standing tabs unless the
+      // caller explicitly opts in.
+      if (existing?.ticketId && !allowTicketTab) return;
       if (!noTab) {
         set((s) => {
           const tabs = new Set(s.openTabs);
           tabs.add(bonsaiSid);
           return { openTabs: tabs, activeSessionId: bonsaiSid };
         });
+        if (allowTicketTab) useBoardStore.setState({ activeTicketId: null });
       }
       return;
     }
@@ -1131,14 +1136,16 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
       next.set(bonsaiSid, session);
       const nextClosed = new Set(s.closedIds);
       nextClosed.delete(bonsaiSid);
-      // Ticket-attached sessions never become free-standing tabs.
-      if (noTab || session.ticketId) {
+      // Ticket-attached sessions never become free-standing tabs unless the
+      // caller explicitly opts in.
+      if (noTab || (session.ticketId && !allowTicketTab)) {
         return { sessions: next, closedIds: nextClosed };
       }
       const tabs = new Set(s.openTabs);
       tabs.add(bonsaiSid);
       return { sessions: next, openTabs: tabs, activeSessionId: bonsaiSid, closedIds: nextClosed };
     });
+    if (allowTicketTab && !noTab) useBoardStore.setState({ activeTicketId: null });
     } finally {
       _restoring.delete(bonsaiSid);
     }
@@ -1476,17 +1483,17 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
     await api.end(bonsaiSid);
   },
 
-  openTab: (bonsaiSid) => {
+  openTab: (bonsaiSid, opts) => {
     const session = get().sessions.get(bonsaiSid);
     if (!session) return;
-    // Ticket-attached sessions never become free-standing tabs — route
-    // them through the ticket view so the SessionPanel and Tickets view
-    // stay disjoint surfaces (see SessionManager grouping).
-    if (session.ticketId) {
+    // Ticket-attached sessions reroute to the ticket view by default, unless
+    // the caller explicitly wants a free-standing session tab.
+    if (session.ticketId && !opts?.allowTicketTab) {
       useUiStore.getState().setCenterView("board");
       useBoardStore.getState().openTicket(session.ticketId);
       return;
     }
+    useBoardStore.setState({ activeTicketId: null });
     set((s) => {
       const tabs = new Set(s.openTabs);
       tabs.add(bonsaiSid);
@@ -1494,15 +1501,15 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
     });
   },
 
-  focusSession: (bonsaiSid) => {
+  focusSession: (bonsaiSid, opts) => {
     const session = get().sessions.get(bonsaiSid);
     if (!session) return;
 
     useFileStore.setState({ activeFilePath: null, previewFilePath: null, previewFile: null });
 
-    // Ticket-attached: open the ticket view with this session as the
-    // centre, never as a SessionPanel tab. Mirrors `openTab` above.
-    if (session.ticketId) {
+    // Ticket-attached: reroute to the ticket view unless the caller wants a
+    // free-standing session tab (explicit user open).
+    if (session.ticketId && !opts?.allowTicketTab) {
       useUiStore.getState().setCenterView("board");
       useBoardStore.getState().openTicket(session.ticketId);
       return;

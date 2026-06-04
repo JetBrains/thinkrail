@@ -11,10 +11,14 @@ import { SessionStatusLine } from "@/components/ChatStream/SessionStatusLine.tsx
 import { InputArea } from "@/components/ChatStream/InputArea.tsx";
 import { FileViewer } from "@/components/FileViewer/FileViewer.tsx";
 import { useMessageHistoryStore } from "@/store/messageHistoryStore";
-import { ContextPanel } from "@/components/ContextPanel/ContextPanel.tsx";
+import { ContextPanel, TicketRouteContextPanel } from "@/components/ContextPanel/ContextPanel.tsx";
 import { ResizeHandle } from "@/components/AppShell/ResizeHandle.tsx";
 import { useUiStore } from "@/store/uiStore.ts";
+import { useBoardStore } from "@/store/boardStore.ts";
+import { TicketInfo } from "@/components/TicketDetail/TicketInfo.tsx";
+import { useTicketRouteData } from "@/components/TicketDetail/useTicketRouteData.ts";
 import { SessionTabBar } from "./SessionTabBar.tsx";
+import { useActiveTabKind } from "./useActiveTabKind.ts";
 import { StickyContextBar } from "./StickyContextBar.tsx";
 import "./SessionPanel.css";
 
@@ -81,6 +85,23 @@ export function SessionPanel({
   // rightPanelCollapsed; width is local and resized with an invisible handle.
   const rightCollapsed = useUiStore((s) => s.rightPanelCollapsed);
   const [contextWidth, setContextWidth] = useState(CONTEXT_DEFAULT_W);
+
+  // Ticket tabs (ticket = folder). Embedded/wizard panels never show ticket UI.
+  const activeTab = useActiveTabKind({ embedded: isEmbedded });
+  const openTicketIds = useBoardStore((s) => s.openTicketIds);
+  const ticketsMap = useBoardStore((s) => s.tickets);
+  const activeTicketId = useBoardStore((s) => s.activeTicketId);
+  const switchTicket = useBoardStore((s) => s.openTicket);
+  const closeTicket = useBoardStore((s) => s.closeTicket);
+  const ticketTabs = (isEmbedded || hideTabBar)
+    ? []
+    : openTicketIds.map((id) => ({
+        id,
+        title: ticketsMap.get(id)?.title ?? `Ticket #${id.slice(-4)}`,
+      }));
+  const isTicketTab = activeTab === "ticket";
+  // Load ticket data into ticketRouteStore while a ticket tab is active.
+  useTicketRouteData(isTicketTab ? activeTicketId : null);
 
   // Auto-restore session from disk in embedded mode if it isn't already
   // in the in-memory map. Restore failures are remembered per sid so a
@@ -189,7 +210,8 @@ export function SessionPanel({
   const showSession = activeSession != null && !showFile;
   // Context card belongs to the full session view only — not the embedded
   // (ticket-route) or wizard (hideTabBar) chats, and hidden while a file shows.
-  const showContext = !isEmbedded && !hideTabBar && showSession && !rightCollapsed;
+  // Shown for a session (agent context) or a ticket tab (artifacts).
+  const showContext = !isEmbedded && !hideTabBar && !rightCollapsed && (showSession || isTicketTab);
 
   const status = activeSession?.status as SessionStatus | undefined;
   const firstPending = activeSession?.pendingRequests[0] ?? null;
@@ -223,8 +245,12 @@ export function SessionPanel({
       {!hideTabBar && !isEmbedded && (
         <div className="session-tabs-row">
           <SessionTabBar
+            tickets={ticketTabs}
+            activeTicketId={activeTicketId}
+            onSwitchTicket={switchTicket}
+            onCloseTicket={closeTicket}
             sessions={sessionList}
-            activeSessionId={!showFile ? activeSessionId : null}
+            activeSessionId={activeSessionId}
             onSwitchSession={handleSwitchSession}
             onCloseSession={closeSession}
             files={fileList}
@@ -240,6 +266,30 @@ export function SessionPanel({
       )}
       {showFile && displayFile ? (
         <FileViewer file={displayFile} />
+      ) : isTicketTab ? (
+        <div className="session-body-row">
+          <div className="session-chat-col">
+            <div className="left-panel-ticket-body">
+              <TicketInfo />
+            </div>
+          </div>
+          {showContext && (
+            <>
+              <ResizeHandle
+                side="right"
+                invisible
+                panelWidth={contextWidth}
+                onResize={setContextWidth}
+                onCollapse={() => {}}
+                min={CONTEXT_MIN_W}
+                collapseThreshold={0}
+              />
+              <div className="session-context-col" style={{ width: contextWidth }}>
+                <TicketRouteContextPanel />
+              </div>
+            </>
+          )}
+        </div>
       ) : showSession && activeSession ? (
         <div className="session-body-row">
           <div className="session-chat-col">
