@@ -1408,9 +1408,6 @@
    *above* the bar and would get clipped. */
 .session-bottom {
   margin: var(--space-sm) var(--space-md) var(--space-md);
-  border: 1px solid var(--border);
-  border-radius: 12px;
-  background: var(--panel);
   flex-shrink: 0;
 }
 .input-area--manual {

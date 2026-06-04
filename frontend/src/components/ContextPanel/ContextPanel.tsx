@@ -13,6 +13,7 @@ import { useBoardStore } from "@/store/boardStore.ts";
 import { useTicketRouteStore } from "@/store/ticketRouteStore.ts";
 import { TicketPreviewPanel } from "@/components/TicketDetail/TicketPreviewPanel.tsx";
 import { useTicketRouteSetPreviewFile } from "./useTicketRouteSetPreviewFile.ts";
+import { Card } from "@/components/ui/index.ts";
 import "./ContextPanel.css";
 
 const MODE_CONFIG: Record<ContextMode, { icon: string; label: string }> = {
@@ -76,7 +77,7 @@ export function TicketRouteContextPanel() {
   useTicketRouteSetPreviewFile(centerSession ?? null, ticket);
 
   return (
-    <div className="context-panel context-panel--ticket">
+    <Card className="context-panel context-panel--ticket">
       <div className="context-panel__header">
         <PanelCollapseButton side="right" shortcut="J" />
         <span className="context-panel__mode-label">Ticket</span>
@@ -96,7 +97,7 @@ export function TicketRouteContextPanel() {
           <div className="context-panel__empty">Loading ticket...</div>
         )}
       </div>
-    </div>
+    </Card>
   );
 }
 
@@ -146,7 +147,7 @@ export function ContextPanel() {
     setPin((prev) => (prev === mode ? "none" : mode));
 
   return (
-    <div className="context-panel">
+    <Card className="context-panel">
       <div className="context-panel__header">
         {previewActive ? (
           <div className="context-panel__tabs" role="tablist">
@@ -185,6 +186,6 @@ export function ContextPanel() {
           <ModeContent mode={autoMode} pin={pin} />
         )}
       </div>
-    </div>
+    </Card>
   );
 }

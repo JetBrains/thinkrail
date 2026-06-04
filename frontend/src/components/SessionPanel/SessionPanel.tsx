@@ -10,6 +10,7 @@ import type { ChatStreamHandle } from "@/components/ChatStream/ChatStream.tsx";
 import { SessionStatusLine } from "@/components/ChatStream/SessionStatusLine.tsx";
 import { InputArea } from "@/components/ChatStream/InputArea.tsx";
 import { FileViewer } from "@/components/FileViewer/FileViewer.tsx";
+import { Card } from "@/components/ui/index.ts";
 import { useMessageHistoryStore } from "@/store/messageHistoryStore";
 import { ContextPanel, TicketRouteContextPanel } from "@/components/ContextPanel/ContextPanel.tsx";
 import { ResizeHandle } from "@/components/AppShell/ResizeHandle.tsx";
@@ -316,7 +317,7 @@ export function SessionPanel({
             session={activeSession}
             onContextCardVisibility={setContextCardVisible}
           />
-          <div className="session-bottom">
+          <Card className="session-bottom">
             {/* Render the status line in every session state — including
                 "draft" — so the model picker, permission mode, effort and
                 the Start/Stop/Continue action slot are present regardless
@@ -358,7 +359,7 @@ export function SessionPanel({
                 actionPortalTarget={actionSlot}
               />
             )}
-          </div>
+          </Card>
           </div>
           {showContext && (
             <>

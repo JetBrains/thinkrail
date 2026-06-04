@@ -1,7 +1,4 @@
 .draft-config-card {
-  border-left: 3px solid var(--gold);
-  background: var(--elevated);
-  border-radius: var(--radius-md);
   padding: var(--space-lg);
   margin: var(--space-lg) var(--space-md);
   display: flex;
@@ -9,7 +6,7 @@
   gap: var(--space-md);
 }
 
-.draft-config-card--drag-over {
+.card.draft-config-card--drag-over {
   outline: 2px dashed var(--blue);
   outline-offset: -2px;
   background: rgba(122, 162, 247, 0.05);

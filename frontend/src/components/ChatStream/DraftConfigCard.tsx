@@ -11,6 +11,7 @@ import { SpecSelector } from "@/components/shared/SpecSelector.tsx";
 import { TicketSelector } from "@/components/shared/TicketSelector.tsx";
 import { FileSelector } from "@/components/shared/FileSelector.tsx";
 import { Dropdown } from "@/components/shared/Dropdown.tsx";
+import { Card } from "@/components/ui/index.ts";
 import { PromptPreview } from "./PromptPreview.tsx";
 import { StaleRefsBanner } from "@/components/shared/StaleRefsBanner.tsx";
 import "./DraftConfigCard.css";
@@ -165,7 +166,7 @@ export function DraftConfigCard({ bonsaiSid, readOnly, hideDiscard, onVisibility
   // ── Read-only mode: display-only rendering (used at session start) ──
   if (readOnly) {
     return (
-      <div className="draft-config-card draft-config-card--readonly" ref={cardRef}>
+      <Card className="draft-config-card draft-config-card--readonly" ref={cardRef}>
         <div className="draft-config-header">
           <span className="draft-config-name">{session.name}</span>
         </div>
@@ -245,12 +246,12 @@ export function DraftConfigCard({ bonsaiSid, readOnly, hideDiscard, onVisibility
           systemPrompt={session.systemPrompt ?? ""}
           sections={session.promptSections}
         />
-      </div>
+      </Card>
     );
   }
 
   return (
-    <div
+    <Card
       className={`draft-config-card${dragOver ? " draft-config-card--drag-over" : ""}`}
       ref={cardRef}
       onDragOver={(e) => {
@@ -570,6 +571,6 @@ export function DraftConfigCard({ bonsaiSid, readOnly, hideDiscard, onVisibility
           {starting ? "Starting..." : "\u25B6 Start Session"}
         </button>
       </div>
-    </div>
+    </Card>
   );
 }

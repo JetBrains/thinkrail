@@ -2,7 +2,6 @@
   display: flex;
   flex-direction: column;
   height: 100%;
-  background: var(--panel);
   overflow: hidden;
 }
 
@@ -52,9 +51,6 @@
   overflow: hidden;
   display: flex;
   flex-direction: column;
-}
-.context-panel--ticket {
-  background: var(--panel);
 }
 
 .context-panel__empty {
