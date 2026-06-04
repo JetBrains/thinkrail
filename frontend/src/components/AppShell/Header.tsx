@@ -20,20 +20,17 @@ export function Header({ onSwitchProject }: { onSwitchProject: () => void }) {
   );
   const tickets = useBoardStore((s) => s.tickets);
   const ticketCount = tickets.size;
-  const activeTicketId = useBoardStore((s) => s.activeTicketId);
-  const inTicketRoute = centerView === "board" && activeTicketId != null;
 
   // The left-panel Specs/Files browser, the header Board/Sessions buttons and
-  // the folder icon form one switcher: exactly one is "active" at a time.
-  // The browser is active only when it's actually visible (not collapsed, not
-  // showing the session list, not overridden by a ticket route).
-  const browserOpen = !inTicketRoute && !leftCollapsed && leftActiveTab !== "sessions";
+  // the folder icon form one switcher: exactly one is "active" at a time. The
+  // browser only lives in the sessions layout (the board is full-width and the
+  // ticket route's left panel is the phase tree), so it's active only there.
+  const browserOpen = centerView === "sessions" && !leftCollapsed && leftActiveTab !== "sessions";
 
   const handleSelectBoard = () => {
     // `Board` click from inside a ticket route returns to the kanban board (BoardView)
     useBoardStore.setState({ activeTicketId: null });
     setCenterView("board");
-    if (browserOpen) toggleLeftPanel();
   };
 
   const handleSelectSessions = () => {
@@ -50,8 +47,13 @@ export function Header({ onSwitchProject }: { onSwitchProject: () => void }) {
       toggleLeftPanel();
       return;
     }
+    // The Specs/Files browser only shows in the sessions layout, so leave the
+    // board / ticket route first — same as opening it from a session window.
+    if (centerView !== "sessions") {
+      useBoardStore.setState({ activeTicketId: null });
+      setCenterView("sessions");
+    }
     if (leftActiveTab === "sessions") setLeftTab("specs");
-    if (inTicketRoute) useBoardStore.setState({ activeTicketId: null });
     if (leftCollapsed) toggleLeftPanel();
   };
 
