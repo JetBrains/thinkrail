@@ -4,6 +4,11 @@
   flex: 1;
   min-height: 0;
   overflow: hidden;
+  /* Inset like the rest of the app's panels; only the top corners round
+     (the toolbar is the card header, the editor is the flush-bottom body). */
+  margin: var(--space-sm) var(--space-md) 0;
+  border-top-left-radius: var(--radius-lg);
+  border-top-right-radius: var(--radius-lg);
 }
 
 /* ── Toolbar ── */
@@ -12,7 +17,6 @@
   align-items: center;
   justify-content: space-between;
   padding: var(--space-sm) var(--space-md);
-  border-bottom: 1px solid var(--border);
   flex-shrink: 0;
   background: var(--panel);
   gap: var(--space-md);
@@ -52,12 +56,16 @@
 
 .fv-actions {
   display: flex;
+  align-items: center;
   gap: var(--space-xs);
   flex-shrink: 0;
 }
 
 .fv-btn {
-  padding: 3px var(--space-md);
+  display: inline-flex;
+  align-items: center;
+  height: 26px;
+  padding: 0 var(--space-md);
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
   background: transparent;
@@ -110,6 +118,14 @@
   user-select: none;
 }
 
+/* File-toolbar variant: match the outlined .fv-btn height/fill. */
+.fv-zoom {
+  height: 26px;
+  background: transparent;
+  padding: 0 2px;
+}
+.fv-zoom .md-zoom-btn { width: 20px; height: 20px; }
+
 .md-zoom-btn {
   width: 22px;
   height: 22px;
@@ -137,15 +153,6 @@
 .md-zoom-level:hover { color: var(--text); }
 
 .md-zoom-sep { width: 1px; height: 14px; background: var(--border); margin: 0 2px; align-self: center; }
-
-/* Global zoom — sticky top-right of the scrollable preview */
-.md-global-zoom {
-  position: sticky;
-  top: var(--space-sm);
-  float: right;
-  margin: var(--space-sm) var(--space-md) 0 0;
-  z-index: 5;
-}
 
 /* Per-diagram — resizable container with zoom controls */
 .md-mermaid-wrapper {

@@ -6,6 +6,7 @@ import { useFontSize } from "@/utils/fontScale.ts";
 import { detectLanguage, languageLabel } from "./languageMap.ts";
 import { EditDropdown } from "./EditDropdown.tsx";
 import { MarkdownPreview } from "./MarkdownPreview.tsx";
+import { ZoomBar } from "@/utils/ZoomBar.tsx";
 import "./FileViewer.css";
 
 export function FileViewer({ file }: { file: OpenFile }) {
@@ -15,6 +16,7 @@ export function FileViewer({ file }: { file: OpenFile }) {
   const openExternal = useFileStore((s) => s.openExternal);
   const [showDropdown, setShowDropdown] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [mdZoom, setMdZoom] = useState(1);
   const monacoTheme = useMonacoTheme();
   const editorFontSize = useFontSize("body");
 
@@ -110,13 +112,22 @@ export function FileViewer({ file }: { file: OpenFile }) {
               )}
             </div>
           )}
+          {showMarkdownPreview && (
+            <ZoomBar
+              zoom={mdZoom}
+              onZoomIn={() => setMdZoom((z) => Math.min(z + 0.1, 2))}
+              onZoomOut={() => setMdZoom((z) => Math.max(z - 0.1, 0.5))}
+              onReset={() => setMdZoom(1)}
+              className="fv-zoom"
+            />
+          )}
         </div>
       </div>
 
       {/* Content: Markdown preview OR Monaco Editor */}
       {showMarkdownPreview ? (
         <div className="fv-editor-container">
-          <MarkdownPreview content={file.content} />
+          <MarkdownPreview content={file.content} zoom={mdZoom} />
         </div>
       ) : (
       <div className="fv-editor-container">

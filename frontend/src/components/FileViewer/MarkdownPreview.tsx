@@ -1,4 +1,4 @@
-import { createContext, useCallback, useContext, useEffect, useRef, useState, type ComponentPropsWithoutRef } from "react";
+import { createContext, useContext, useEffect, useRef, useState, type ComponentPropsWithoutRef } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import remarkFrontmatter from "remark-frontmatter";
@@ -177,27 +177,16 @@ function CodeBlock({ className, children, ...props }: ComponentPropsWithoutRef<"
 
 interface MarkdownPreviewProps {
   content: string;
+  /** Document zoom level — driven by the FileViewer toolbar's zoom control. */
+  zoom?: number;
 }
 
-export function MarkdownPreview({ content }: MarkdownPreviewProps) {
-  const [zoom, setZoom] = useState(1);
-
-  const zoomIn = useCallback(() => setZoom((z) => Math.min(z + 0.1, 2)), []);
-  const zoomOut = useCallback(() => setZoom((z) => Math.max(z - 0.1, 0.5)), []);
-  const resetZoom = useCallback(() => setZoom(1), []);
-
+export function MarkdownPreview({ content, zoom = 1 }: MarkdownPreviewProps) {
   const frontmatter = extractFrontmatter(content);
 
   return (
     <DocZoomContext.Provider value={zoom}>
       <div className="md-preview-container">
-        <ZoomBar
-          zoom={zoom}
-          onZoomIn={zoomIn}
-          onZoomOut={zoomOut}
-          onReset={resetZoom}
-          className="md-global-zoom"
-        />
         <div className="md-preview" style={{ fontSize: `${zoom * 13}px` }}>
           <FrontmatterCard value={frontmatter ?? undefined} />
           <ReactMarkdown
