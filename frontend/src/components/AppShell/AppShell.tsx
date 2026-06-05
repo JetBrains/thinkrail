@@ -202,7 +202,7 @@ export function AppShell({ onSwitchProject }: { onSwitchProject: () => void }) {
               onCollapse={toggleLeft}
               min={LEFT_MIN}
               collapseThreshold={LEFT_COLLAPSE_THRESHOLD}
-              restColor="var(--panel)"
+              restColor="var(--elevated)"
             />
           </>
         )}

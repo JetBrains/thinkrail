@@ -31,8 +31,6 @@
   height: 56px;
   padding: 0 var(--space-lg);
   background: var(--elevated);
-  border-bottom-left-radius: var(--radius-md);
-  border-bottom-right-radius: var(--radius-md);
   flex-shrink: 0;
 }
 
@@ -207,6 +205,11 @@
   height: 100%;
 }
 
+/* Left panel (tickets/sessions/files/specs) matches the top toolbar. */
+.left-panel {
+  background: var(--elevated);
+}
+
 /* Board-only right column (ticket-route artifact preview / board ticket
  * preview). Plain full-fill wrapper — the session context card styling lives
  * in `.session-context-col` instead. */
@@ -218,7 +221,7 @@
 /* Ticket-route left panel: same chrome (tab strip + collapse caret),
  * different body content. */
 .left-panel--ticket {
-  background: var(--panel);
+  background: var(--elevated);
 }
 .panel-tab--static {
   cursor: default;
