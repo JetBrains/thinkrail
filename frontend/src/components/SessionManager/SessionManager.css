@@ -108,6 +108,9 @@
 }
 .sm-card:hover::after,
 .sm-card:hover + .sm-card::after { opacity: 0; }
+/* Ticket cards carry their own border, so suppress the hairline around them. */
+.sm-card--ticket-group::after,
+.sm-card--ticket-group + .sm-card::after { display: none; }
 
 .sm-card::before {
   content: "";
@@ -307,8 +310,10 @@
 
 /* ── Ticket-group card ── */
 .sm-card--ticket-group {
-  /* Same grid as the session card but with a leading stripe column. The
-     stripe colour is themed by --ticket-color (set inline from the hash). */
+  /* Card-styled like the rest of the app (panel fill + border), with a leading
+     stripe column themed by --ticket-color (set inline from the hash). */
+  background: var(--panel);
+  border-color: var(--border);
   border-left: 3px solid var(--ticket-color, var(--blue));
 }
 .sm-card--ticket-group .sm-name {
