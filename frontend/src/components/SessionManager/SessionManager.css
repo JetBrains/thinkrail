@@ -310,11 +310,15 @@
 
 /* ── Ticket-group card ── */
 .sm-card--ticket-group {
-  /* Card-styled like the rest of the app (panel fill + border), with a leading
-     stripe column themed by --ticket-color (set inline from the hash). */
-  background: var(--panel);
-  border-color: var(--border);
-  border-left: 3px solid var(--ticket-color, var(--blue));
+  /* Dark surface (matches the app's main --bg, where the dialog/session-config
+     cards sit) with a purple lead stripe and no box border. */
+  background: var(--bg);
+  border-left: 3px solid var(--purple);
+}
+.sm-card--ticket-group:hover {
+  /* Keep the stripe + no box border on hover (only the bg lifts). */
+  border-color: transparent;
+  border-left-color: var(--purple);
 }
 .sm-card--ticket-group .sm-name {
   font-weight: 600;
