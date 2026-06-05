@@ -11,6 +11,9 @@
   display: flex;
   flex: 1;
   overflow: hidden;
+  /* Elevated backdrop so the center panel's rounded top-left corner reveals
+     the toolbar/left-panel colour instead of a hard dark notch. */
+  background: var(--elevated);
 }
 
 .app-shell-loading {
@@ -242,6 +245,8 @@
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  background: var(--bg);
+  border-top-left-radius: var(--radius-lg);
 }
 
 .center-placeholder {
