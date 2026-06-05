@@ -13,7 +13,7 @@
 .picker-modal {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.5);
+  background: var(--overlay);
   z-index: 2000;
   padding-top: 60px;
 }
@@ -108,7 +108,7 @@
 .picker-cta-primary {
   background: var(--purple);
   border-color: var(--purple);
-  color: #fff;
+  color: var(--on-accent);
   box-shadow: 0 1px 0 rgba(0, 0, 0, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.15);
 }
 .picker-cta-primary:hover:not(:disabled) {
@@ -304,7 +304,7 @@
   border-radius: var(--radius-sm);
   border: 1px solid var(--purple);
   background: var(--purple);
-  color: #fff;
+  color: var(--on-accent);
   font: inherit;
   font-family: inherit;
   font-size: var(--font-lg);
@@ -325,7 +325,7 @@
   background: var(--panel);
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
+  box-shadow: var(--shadow-md);
   z-index: 10;
   max-height: 200px;
   overflow-y: auto;

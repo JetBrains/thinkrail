@@ -368,7 +368,7 @@
   background: var(--elevated);
   border: 1px solid var(--border2);
   border-radius: var(--radius-sm);
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
+  box-shadow: var(--shadow-md);
   padding: var(--space-xs) 0;
   font-size: var(--font-body);
 }

@@ -15,7 +15,7 @@
   border: 1px solid var(--border);
   border-left: 3px solid var(--blue);
   border-radius: var(--radius-sm);
-  box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+  box-shadow: var(--shadow-md);
   cursor: pointer;
   animation: toastIn 0.25s ease-out;
 }

@@ -126,7 +126,7 @@
 
 .welcome-start-btn {
   background: var(--purple);
-  color: #fff;
+  color: var(--on-accent);
   border: none;
   border-radius: var(--radius-md);
   padding: var(--space-sm) var(--space-lg);

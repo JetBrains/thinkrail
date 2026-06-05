@@ -3,7 +3,7 @@
   background: var(--panel);
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
-  box-shadow: 0 8px 32px rgba(0,0,0,0.4);
+  box-shadow: var(--shadow-lg);
   display: flex; flex-direction: column;
   align-self: flex-start;
 }
@@ -39,7 +39,7 @@
 }
 .trash-empty-btn:hover {
   background: var(--red);
-  color: #fff;
+  color: var(--on-accent);
 }
 .trash-empty-btn:disabled {
   opacity: 0.4;
@@ -160,7 +160,7 @@
 }
 .trash-btn--restore:hover {
   background: var(--green);
-  color: #fff;
+  color: var(--on-accent);
 }
 .trash-btn--delete {
   color: var(--red);
@@ -168,7 +168,7 @@
 }
 .trash-btn--delete:hover {
   background: var(--red);
-  color: #fff;
+  color: var(--on-accent);
 }
 
 /* ── Footer ── */

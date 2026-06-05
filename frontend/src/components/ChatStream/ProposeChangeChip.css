@@ -74,7 +74,7 @@
 }
 .pcc__btn--primary {
   background: color-mix(in srgb, var(--blue) 50%, transparent);
-  color: #fff;
+  color: var(--on-accent);
   border-color: var(--blue);
 }
 .pcc__btn--danger {

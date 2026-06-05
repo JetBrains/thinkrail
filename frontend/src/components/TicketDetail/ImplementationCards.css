@@ -2,13 +2,13 @@
   margin: 6px 12px 6px 22px;
   background: var(--panel);
   border-radius: 6px;
-  border: 1px solid var(--border, #20222a);
+  border: 1px solid var(--border);
   overflow: hidden;
 }
 .impl-card__h {
   padding: 6px 10px;
   background: color-mix(in srgb, var(--panel) 80%, var(--blue));
-  border-bottom: 1px solid var(--border, #20222a);
+  border-bottom: 1px solid var(--border);
   font-size: var(--font-xs);
   color: var(--muted);
   text-transform: uppercase;
@@ -36,7 +36,7 @@
 }
 
 /* ── PlanCard ── */
-.pc-milestone-group + .pc-milestone-group { border-top: 1px dashed var(--border, #20222a); }
+.pc-milestone-group + .pc-milestone-group { border-top: 1px dashed var(--border); }
 .pc-milestone {
   padding: 5px 12px;
   font-size: var(--font-sm);
@@ -147,7 +147,7 @@
 .tab-bar {
   display: flex; align-items: center; gap: 4px;
   background: var(--panel);
-  border-bottom: 1px solid var(--border, #20222a);
+  border-bottom: 1px solid var(--border);
   height: 34px;
   padding: 0 4px;
   position: relative;
@@ -161,10 +161,10 @@
   display: flex; align-items: center; gap: 6px;
   padding: 0 12px;
   background: var(--elevated);
-  color: var(--muted, #9aa0a6);
+  color: var(--muted);
   font-size: var(--font-xs);
   cursor: pointer;
-  border-right: 1px solid var(--border, #20222a);
+  border-right: 1px solid var(--border);
   flex-shrink: 0;
   max-width: 200px;
 }
@@ -207,7 +207,7 @@
   border-radius: 4px;
   min-width: 220px;
   z-index: 10;
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+  box-shadow: var(--shadow-md);
   padding: 4px 0;
 }
 .tab-bar__dropdown-row {

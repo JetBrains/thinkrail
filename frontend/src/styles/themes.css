@@ -70,6 +70,14 @@
   --muted: #839496;
   --hint: #93a1a1;
   --sel: #eee8d5;
+  --sunken: rgba(0, 0, 0, 0.05);
+  --shadow-xs: 0 1px 3px rgba(0, 0, 0, 0.08);
+  --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.12);
+  --shadow-md: 0 4px 16px rgba(0, 0, 0, 0.16);
+  --shadow-lg: 0 8px 28px rgba(0, 0, 0, 0.2);
+  --shadow-xl: 0 24px 64px rgba(0, 0, 0, 0.28);
+  --shadow-up: 0 -2px 8px rgba(0, 0, 0, 0.12);
+  --overlay: rgba(0, 0, 0, 0.35);
   color-scheme: light;
 }
 

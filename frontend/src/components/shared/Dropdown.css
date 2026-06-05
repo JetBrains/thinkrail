@@ -55,7 +55,7 @@
   max-height: 320px;
   overflow-y: auto;
   z-index: 100;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+  box-shadow: var(--shadow-sm);
 }
 .dd-menu--right {
   left: auto;

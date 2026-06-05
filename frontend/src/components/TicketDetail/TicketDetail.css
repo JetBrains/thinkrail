@@ -870,7 +870,7 @@
   border: none;
   border-radius: var(--radius-sm);
   background: var(--purple);
-  color: #fff;
+  color: var(--on-accent);
   cursor: pointer;
   font-weight: 500;
   transition: all var(--transition-fast);

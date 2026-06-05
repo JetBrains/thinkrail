@@ -11,7 +11,7 @@
   align-items: baseline;
   padding: 10px 14px;
   background: var(--panel);
-  border-bottom: 1px solid var(--border, #20222a);
+  border-bottom: 1px solid var(--border);
 }
 .rp__path {
   font-family: var(--font-mono, ui-monospace, monospace);
@@ -48,7 +48,7 @@
   align-items: center;
   padding: 6px 14px;
   background: var(--panel);
-  border-bottom: 1px solid var(--border, #20222a);
+  border-bottom: 1px solid var(--border);
 }
 .rp__seg {
   display: flex;
@@ -105,8 +105,8 @@
   color: var(--muted);
   font-style: italic;
   padding: 6px 0;
-  border-top: 1px dashed var(--border, #2a2c33);
-  border-bottom: 1px dashed var(--border, #2a2c33);
+  border-top: 1px dashed var(--border);
+  border-bottom: 1px dashed var(--border);
   margin: 10px 0;
   cursor: pointer;
   font-size: var(--font-sm);
@@ -116,7 +116,7 @@
   display: flex;
   gap: 6px;
   background: var(--panel);
-  border-top: 1px solid var(--border, #20222a);
+  border-top: 1px solid var(--border);
   padding: 8px 12px;
 }
 .rp__btn {
@@ -130,7 +130,7 @@
 }
 .rp__btn--primary {
   background: color-mix(in srgb, var(--blue) 50%, transparent);
-  color: #fff;
+  color: var(--on-accent);
   border-color: var(--blue);
 }
 .rp__btn--danger {
@@ -142,7 +142,7 @@
 .rp__discuss {
   padding: 8px 12px;
   background: var(--panel);
-  border-top: 1px solid var(--border, #20222a);
+  border-top: 1px solid var(--border);
   display: flex;
   flex-direction: column;
   gap: 6px;

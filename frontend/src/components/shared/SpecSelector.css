@@ -34,7 +34,7 @@
   border-radius: var(--radius-sm);
   margin-top: var(--space-xs);
   z-index: 10;
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
+  box-shadow: var(--shadow-md);
 }
 .spec-selector-search {
   width: 100%;

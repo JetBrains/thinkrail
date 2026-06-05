@@ -144,7 +144,7 @@
   border: 1px solid var(--border);
   border-radius: var(--radius-md);
   padding: var(--space-sm);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  box-shadow: var(--shadow-md);
   max-height: 300px;
   overflow-y: auto;
   min-width: 280px;
@@ -284,7 +284,7 @@
 }
 .draft-config-btn-start {
   background: var(--blue);
-  color: #fff;
+  color: var(--on-accent);
   border: none;
   padding: var(--space-sm) var(--space-xl);
   border-radius: var(--radius-md);

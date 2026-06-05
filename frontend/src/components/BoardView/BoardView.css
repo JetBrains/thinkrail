@@ -293,7 +293,7 @@
   border: 1px solid var(--border);
   border-radius: var(--radius-md);
   padding: var(--space-xs) 0;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+  box-shadow: var(--shadow-md);
   min-width: 140px;
 }
 .board-ctx-menu-item {

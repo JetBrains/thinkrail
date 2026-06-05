@@ -14,7 +14,7 @@
   height: 18px;
   border-radius: 50%;
   background: var(--blue);
-  color: #fff;
+  color: var(--on-accent);
   font-size: var(--font-xs);
   font-weight: 700;
   text-align: center;
@@ -155,7 +155,7 @@
   padding: 3px 9px;
   background: var(--elevated);
   color: var(--text);
-  border: 1px solid var(--border, #353a47);
+  border: 1px solid var(--border);
   border-radius: 3px;
   cursor: pointer;
 }

@@ -400,7 +400,7 @@
   background: var(--panel);
   border: 1px solid var(--border);
   border-radius: var(--radius-md);
-  box-shadow: 0 -2px 8px rgba(0,0,0,.25);
+  box-shadow: var(--shadow-up);
   padding: var(--space-xs) 0;
   z-index: 100;
   margin-bottom: var(--space-xs);
@@ -482,7 +482,7 @@
   background: var(--panel);
   border: 1px solid var(--border);
   border-radius: var(--radius-md);
-  box-shadow: 0 -2px 8px rgba(0,0,0,.25);
+  box-shadow: var(--shadow-up);
   padding: var(--space-xs) 0;
   z-index: 100;
   margin-bottom: var(--space-xs);

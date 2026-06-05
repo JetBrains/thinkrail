@@ -1,7 +1,7 @@
 .graph-modal-backdrop {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.65);
+  background: var(--overlay);
   z-index: 1000;
   display: flex;
   align-items: center;
@@ -24,7 +24,7 @@
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.4);
+  box-shadow: var(--shadow-xl);
   animation: graph-modal-slide-in 150ms ease;
 }
 

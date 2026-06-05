@@ -43,7 +43,7 @@
 .wiz-step-active .wiz-step-num {
   background: var(--purple);
   border-color: var(--purple);
-  color: #fff;
+  color: var(--on-accent);
 }
 
 .wiz-step-done {

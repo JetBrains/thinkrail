@@ -54,6 +54,17 @@
   --transition-fast: 120ms ease;
   --transition-normal: 200ms ease;
 
+  /* ── Elevation & overlays (dark default; light themes soften these) ── */
+  --on-accent: #fff;                          /* text/icons on accent-filled buttons */
+  --sunken: rgba(0, 0, 0, 0.12);              /* recessed surfaces (tool I/O blocks) */
+  --shadow-xs: 0 1px 3px rgba(0, 0, 0, 0.18); /* subtle lift (chat bubbles) */
+  --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.3);  /* dropdowns */
+  --shadow-md: 0 4px 16px rgba(0, 0, 0, 0.35);/* popovers / menus / floating cards */
+  --shadow-lg: 0 8px 28px rgba(0, 0, 0, 0.4); /* modals, command palette */
+  --shadow-xl: 0 24px 64px rgba(0, 0, 0, 0.5);/* large centered surfaces */
+  --shadow-up: 0 -2px 8px rgba(0, 0, 0, 0.3); /* upward-popping menus */
+  --overlay: rgba(0, 0, 0, 0.5);              /* modal / full-screen backdrops */
+
   /* ── Chat user-bubble (overridable per theme) ── */
   --bubble-user-bg: rgba(107, 87, 255, 0.12);
   --bubble-user-border: rgba(107, 87, 255, 0.35);
