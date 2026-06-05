@@ -89,24 +89,6 @@
   padding: var(--space-xl) 0;
 }
 
-/* ── Resize handle between boards ── */
-.board-resize-handle {
-  height: 4px;
-  background: var(--border);
-  cursor: row-resize;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
-}
-
-.board-resize-handle-grip {
-  width: 30px;
-  height: 2px;
-  background: var(--border2);
-  border-radius: 1px;
-}
-
 /* ── Ticket card ── */
 .ticket-card {
   background: var(--panel);
@@ -167,25 +149,6 @@
 .ticket-card-filter-btn:hover,
 .ticket-card-filter-btn--active {
   color: var(--blue);
-}
-
-/* ── Task card (implementation tickets) ── */
-.task-card {
-  background: var(--panel);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-md);
-  padding: var(--space-sm);
-}
-
-.task-card-title {
-  font-size: var(--font-lg);
-  color: var(--text);
-}
-
-.task-card-parent {
-  font-size: var(--font-sm);
-  color: var(--hint);
-  margin-top: 3px;
 }
 
 /* ── New ticket button ── */
