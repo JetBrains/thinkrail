@@ -38,7 +38,6 @@
 .session-tabs-row {
   display: flex;
   align-items: stretch;
-  border-bottom: 1px solid var(--border);
   flex-shrink: 0;
 }
 

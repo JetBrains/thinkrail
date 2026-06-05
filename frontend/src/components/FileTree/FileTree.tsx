@@ -141,21 +141,6 @@ export function FileTree() {
   }, [fetchFiles, fileTreeVersion]);
 
   const openFile = useFileStore((s) => s.openFile);
-  const loadPreview = useFileStore((s) => s.loadPreview);
-
-  const handleDoubleClick = useCallback(
-    (entry: FileEntry) => {
-      if (!entry.isDir) {
-        const { previewFilePath, pinPreview } = useFileStore.getState();
-        if (previewFilePath === entry.path) {
-          pinPreview();
-        } else {
-          openFile(entry.path);
-        }
-      }
-    },
-    [openFile],
-  );
 
   const toggleDir = useCallback((path: string) => {
     setCollapsed((prev) => {
@@ -246,10 +231,9 @@ export function FileTree() {
               if (entry.isDir) {
                 toggleDir(entry.path);
               } else {
-                loadPreview(entry.path);
+                openFile(entry.path);
               }
             }}
-            onDoubleClick={() => handleDoubleClick(entry)}
           >
             {/* Indent guides */}
             {entry.depth > 0 && (

@@ -19,8 +19,6 @@ export function SpecTree() {
   const loading = useSpecStore((s) => s.loading);
   const error = useSpecStore((s) => s.error);
   const openFile = useFileStore((s) => s.openFile);
-  const loadPreview = useFileStore((s) => s.loadPreview);
-  const pinPreview = useFileStore((s) => s.pinPreview);
   const [graphOpen, setGraphOpen] = useState(false);
 
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
@@ -113,9 +111,9 @@ export function SpecTree() {
   const handleClick = useCallback(
     (id: string, path: string) => {
       selectSpec(id);
-      loadPreview(path);
+      openFile(path);
     },
-    [selectSpec, loadPreview],
+    [selectSpec, openFile],
   );
 
   const handleArrowClick = useCallback(
@@ -136,14 +134,9 @@ export function SpecTree() {
 
   const handleDoubleClick = useCallback(
     (path: string) => {
-      const { previewFilePath } = useFileStore.getState();
-      if (previewFilePath === path) {
-        pinPreview();
-      } else {
-        openFile(path);
-      }
+      openFile(path);
     },
-    [openFile, pinPreview],
+    [openFile],
   );
 
   if (loading && !graph) {
@@ -267,8 +260,7 @@ export function SpecTree() {
                       key={task.id}
                       className="st-task-card-row"
                       style={{ paddingLeft: task.depth * 16 + 10 }}
-                      onClick={() => loadPreview(task.path)}
-                      onDoubleClick={() => handleDoubleClick(task.path)}
+                      onClick={() => openFile(task.path)}
                     >
                       {task.depth > 0 && (
                         <span className="st-task-dep-arrow">{"\u21B3"}</span>
@@ -325,8 +317,7 @@ export function SpecTree() {
                   key={node.path}
                   className="st-doc-row"
                   style={{ paddingLeft: node.depth * 20 + 4 }}
-                  onClick={() => loadPreview(node.path)}
-                  onDoubleClick={() => handleDoubleClick(node.path)}
+                  onClick={() => openFile(node.path)}
                   title={node.path}
                 >
                   <span className="st-doc-row-icon">{"\uD83D\uDCC4"}</span>

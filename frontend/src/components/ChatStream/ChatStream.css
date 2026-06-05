@@ -1628,7 +1628,10 @@
   cursor: pointer;
   border-bottom: 2px solid transparent;
   white-space: nowrap;
-  transition: all var(--transition-fast);
+  /* Only fade color/background (hover) — NOT border-bottom-color. Animating
+     the active underline makes the outgoing tab's purple linger while the
+     incoming one fades in, so two underlines are briefly visible at once. */
+  transition: color var(--transition-fast), background var(--transition-fast);
 }
 .session-tab:hover { color: var(--muted); background: var(--hover); }
 .session-tab-active { color: var(--text); border-bottom-color: var(--purple); }
