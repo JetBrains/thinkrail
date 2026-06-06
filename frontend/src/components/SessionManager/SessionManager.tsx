@@ -12,6 +12,7 @@ import { modLabel } from "@/utils/platform.ts";
 import { SessionCardContextMenu } from "./SessionCardContextMenu.tsx";
 import { TicketGroupCard } from "./TicketGroupCard.tsx";
 import { groupByTicket, type TicketGroup, type GroupedEntry } from "./groupByTicket.ts";
+import { PHASE_LABELS, phaseForSkill } from "@/components/TicketDetail/phases.ts";
 import "./SessionManager.css";
 
 const TICKET_STRIPE_PALETTE = [
@@ -72,13 +73,44 @@ export function SessionManager() {
   const deleteSession = useSessionStore((s) => s.deleteSession);
   const sessions = useSessionStore((s) => s.sessionList);
   const refreshSessionList = useSessionStore((s) => s.refreshSessionList);
+  const activeSessionId = useSessionStore((s) => s.activeSessionId);
   const tickets = useBoardStore((s) => s.tickets);
   const openTicket = useBoardStore((s) => s.openTicket);
   const openTicketIds = useBoardStore((s) => s.openTicketIds);
+  const focusedTicketId = useBoardStore((s) => s.activeTicketId);
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [ctxMenu, setCtxMenu] = useState<CtxMenuState | null>(null);
+  const [expandedTickets, setExpandedTickets] = useState<Set<string>>(new Set());
+
+  // The ticket the active session belongs to — drives the active-row highlight.
+  const activeSessionTicketId = useMemo(
+    () => sessions.find((s) => s.bonsaiSid === activeSessionId)?.ticketId ?? null,
+    [sessions, activeSessionId],
+  );
+
+  const toggleTicketExpanded = useCallback((ticketId: string) => {
+    setExpandedTickets((prev) => {
+      const next = new Set(prev);
+      if (next.has(ticketId)) next.delete(ticketId);
+      else next.add(ticketId);
+      return next;
+    });
+  }, []);
+
+  // Auto-expand the folder when its ticket is focused (open ticket route) or one
+  // of its sessions is active — so it's clear which ticket you're inside.
+  useEffect(() => {
+    const ids = [focusedTicketId, activeSessionTicketId].filter(Boolean) as string[];
+    if (ids.length === 0) return;
+    setExpandedTickets((prev) => {
+      if (ids.every((id) => prev.has(id))) return prev;
+      const next = new Set(prev);
+      ids.forEach((id) => next.add(id));
+      return next;
+    });
+  }, [focusedTicketId, activeSessionTicketId]);
 
   const refresh = useCallback(async () => {
     try {
@@ -133,6 +165,24 @@ export function SessionManager() {
           await restoreSession(taskId, { noTab: true });
         }
         focusSession(taskId);
+      } catch (e) {
+        console.error("Failed to open session:", e);
+        setError(`Failed to open session: ${getErrorMessage(e)}`);
+      }
+    },
+    [focusSessions, restoreSession, focusSession],
+  );
+
+  // A ticket's session opened from its folder surfaces as a session tab
+  // (allowTicketTab) so its chat shows, while the folder highlights it.
+  const handleOpenTicketSession = useCallback(
+    async (taskId: string) => {
+      focusSessions();
+      try {
+        if (!useSessionStore.getState().sessions.has(taskId)) {
+          await restoreSession(taskId, { noTab: true });
+        }
+        focusSession(taskId, { allowTicketTab: true });
       } catch (e) {
         console.error("Failed to open session:", e);
         setError(`Failed to open session: ${getErrorMessage(e)}`);
@@ -219,6 +269,9 @@ export function SessionManager() {
   const handleOpenTicketGroup = useCallback(
     (group: TicketGroup) => {
       openTicket(group.ticketId);
+      setExpandedTickets((prev) =>
+        prev.has(group.ticketId) ? prev : new Set(prev).add(group.ticketId),
+      );
     },
     [openTicket],
   );
@@ -260,14 +313,52 @@ export function SessionManager() {
             <div className="sm-section-label">Tickets</div>
             {ticketEntries.map((entry) => {
               const ticket = tickets.get(entry.ticketId) ?? null;
+              // Show only the ticket's CURRENT phase + the session(s) running it.
+              const currentPhase = ticket?.status ?? null;
+              const phaseLabel = currentPhase ? PHASE_LABELS[currentPhase] : "";
+              const phaseSessions = sortByRecency(
+                sessions.filter(
+                  (s) => s.ticketId === entry.ticketId && phaseForSkill(s.skillId) === currentPhase,
+                ),
+              );
+              const expanded = expandedTickets.has(entry.ticketId);
               return (
-                <TicketGroupCard
-                  key={`sm-t-${entry.ticketId}`}
-                  group={entry}
-                  title={ticket?.title ?? `Ticket #${entry.ticketId.slice(-4)}`}
-                  shortId={`#${entry.ticketId.slice(-4)}`}
-                  onOpen={handleOpenTicketGroup}
-                />
+                <div key={`sm-t-${entry.ticketId}`} className="sm-ticket-folder">
+                  <TicketGroupCard
+                    group={entry}
+                    title={ticket?.title ?? `Ticket #${entry.ticketId.slice(-4)}`}
+                    shortId={`#${entry.ticketId.slice(-4)}`}
+                    phaseLabel={phaseLabel}
+                    expanded={expanded}
+                    onToggleExpand={() => toggleTicketExpanded(entry.ticketId)}
+                    onOpen={handleOpenTicketGroup}
+                  />
+                  {expanded && (
+                    <>
+                      <div className="sm-phase-row">
+                        <span className="sm-phase-glyph" aria-hidden="true">●</span>
+                        <span className="sm-phase-label">{phaseLabel}</span>
+                      </div>
+                      {phaseSessions.length > 0 ? (
+                        phaseSessions.map((s) => (
+                          <SessionCard
+                            key={`sm-tc-${s.bonsaiSid}`}
+                            session={s}
+                            ticketTitle={null}
+                            ticketShortId={null}
+                            nested
+                            selected={s.bonsaiSid === activeSessionId}
+                            onOpen={handleOpenTicketSession}
+                            onDelete={handleDelete}
+                            onContextMenu={handleContextMenu}
+                          />
+                        ))
+                      ) : (
+                        <div className="sm-phase-empty">No session yet</div>
+                      )}
+                    </>
+                  )}
+                </div>
               );
             })}
           </>
@@ -330,6 +421,8 @@ function SessionCard({
   onOpen,
   onDelete,
   onContextMenu,
+  nested,
+  selected,
 }: {
   session: SessionSummary;
   ticketTitle: string | null;
@@ -337,6 +430,10 @@ function SessionCard({
   onOpen: (id: string) => void;
   onDelete: (id: string) => void;
   onContextMenu: (e: React.MouseEvent, s: SessionSummary) => void;
+  /** Rendered as a child inside an expanded ticket folder (indented). */
+  nested?: boolean;
+  /** The currently-active session — highlighted so "you are here" is clear. */
+  selected?: boolean;
 }) {
   const turns = readMetricNumber(s.metrics, "turns");
   const cost = readMetricNumber(s.metrics, "costUsd");
@@ -353,6 +450,8 @@ function SessionCard({
     !ticketTitle && "sm-card--no-ticket",
     !hasMetrics && "sm-card--no-metrics",
     isWaiting && "sm-card--needs-attention",
+    nested && "sm-card--nested",
+    selected && "sm-card--selected",
   ]
     .filter(Boolean)
     .join(" ");

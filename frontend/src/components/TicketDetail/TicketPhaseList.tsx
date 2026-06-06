@@ -3,49 +3,12 @@ import type { Ticket, TicketStatus, ArtifactKind } from "@/types/board.ts";
 import { useBoardStore } from "@/store/boardStore.ts";
 import { useSessionStore } from "@/store/sessionStore.ts";
 import type { PlanModel } from "./planTypes.ts";
+import { PHASE_LABELS, PHASE_ORDER, PHASE_SKILLS, STATE_ORDER } from "./phases.ts";
 import "./TicketPhaseList.css";
 
-export const STATE_ORDER: Record<TicketStatus, number> = {
-  idea: 0,
-  "product-design": 1,
-  "technical-design": 2,
-  "amend-specs": 3,
-  "implementation-plan": 4,
-  implementing: 5,
-  done: 6,
-};
-
-/** Skill ID associated with each phase. `null` for non-skill phases. */
-export const PHASE_SKILLS: Record<TicketStatus, string | null> = {
-  idea: null,
-  "product-design": "ticket-product-design",
-  "technical-design": "ticket-technical-design",
-  "amend-specs": "ticket-amend-specs",
-  "implementation-plan": "ticket-implementation-plan",
-  implementing: "ticket-implement",
-  done: null,
-};
-
-/** Phases in lifecycle order. */
-export const PHASE_ORDER: TicketStatus[] = [
-  "idea",
-  "product-design",
-  "technical-design",
-  "amend-specs",
-  "implementation-plan",
-  "implementing",
-  "done",
-];
-
-const PHASE_LABELS: Record<TicketStatus, string> = {
-  idea: "Idea",
-  "product-design": "Product design",
-  "technical-design": "Technical design",
-  "amend-specs": "Amend specs",
-  "implementation-plan": "Implementation plan",
-  implementing: "Implementing",
-  done: "Done",
-};
+// Re-export the phase constants from their shared home so existing importers
+// (TicketInfo, TicketHistoryView, …) keep working via this module.
+export { PHASE_ORDER, PHASE_SKILLS, STATE_ORDER } from "./phases.ts";
 
 const PHASE_ARTIFACTS: Record<TicketStatus, ArtifactKind | null> = {
   idea: null,

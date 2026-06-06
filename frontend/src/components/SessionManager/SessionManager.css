@@ -309,19 +309,72 @@
 }
 
 /* ── Ticket-group card ── */
-.sm-card--ticket-group {
-  /* Dark surface (matches the app's main --bg, where the dialog/session-config
-     cards sit) with a purple lead stripe and no box border. */
+/* The ticket folder IS the card — dark surface + purple lead stripe that spans
+   the header and the (contained) session list. The header/child rows inside are
+   transparent rows on this surface. */
+.sm-ticket-folder {
+  display: flex;
+  flex-direction: column;
   background: var(--bg);
   border-left: 3px solid var(--purple);
+  border-radius: var(--radius-md);
+  overflow: hidden;
 }
-.sm-card--ticket-group:hover {
-  /* Keep the stripe + no box border on hover (only the bg lifts). */
-  border-color: transparent;
-  border-left-color: var(--purple);
+.sm-card--ticket-group {
+  background: transparent;
 }
+/* Rows inside the folder get a hover lift but never a box border. */
+.sm-ticket-folder .sm-card:hover { border-color: transparent; }
 .sm-card--ticket-group .sm-name {
   font-weight: 600;
+}
+
+/* Expand/collapse chevron — sits in the (otherwise empty) dot cell. */
+.sm-ticket-chevron {
+  grid-area: dot;
+  width: 16px;
+  height: 16px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  background: transparent;
+  color: var(--hint);
+  font-size: var(--font-sm);
+  cursor: pointer;
+  border-radius: var(--radius-sm);
+  padding: 0;
+}
+.sm-ticket-chevron:hover { color: var(--text); background: var(--hover); }
+
+/* Current-phase step caption inside the folder. */
+.sm-phase-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+  padding: 2px var(--space-sm) 2px calc(var(--space-sm) + 6px);
+  font-size: var(--font-sm);
+  color: var(--muted);
+}
+.sm-phase-glyph { color: var(--blue); font-size: var(--font-xs); }
+.sm-phase-label { text-transform: uppercase; letter-spacing: 0.5px; }
+.sm-phase-empty {
+  padding: 2px var(--space-sm) var(--space-sm) var(--space-lg);
+  font-size: var(--font-sm);
+  color: var(--hint);
+  font-style: italic;
+}
+
+/* Child session rows sit indented inside the folder card. */
+.sm-card--nested { margin-left: var(--space-md); }
+/* No hairline between a folder's stacked children. */
+.sm-card--nested::after,
+.sm-card--nested + .sm-card::after { display: none; }
+
+/* Active session inside a folder — clear "you are here" marker. */
+.sm-card--selected,
+.sm-card--selected:hover {
+  background: color-mix(in srgb, var(--purple) 16%, transparent);
 }
 .sm-card--ticket-group .sm-ticket-id {
   color: var(--hint);
