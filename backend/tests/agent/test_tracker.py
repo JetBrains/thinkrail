@@ -27,6 +27,18 @@ class TestTaskLifecycle:
         retrieved = tracker.get_task(task.bonsai_sid)
         assert retrieved.bonsai_sid == task.bonsai_sid
 
+    def test_create_task_sets_draft_input(self) -> None:
+        tracker = Tracker()
+        task = tracker.create_task(
+            ["s1"], AgentConfig(), draft_input="fix login flow",
+        )
+        assert task.draft_input == "fix login flow"
+
+    def test_create_task_draft_input_defaults_none(self) -> None:
+        tracker = Tracker()
+        task = tracker.create_task(["s1"], AgentConfig())
+        assert task.draft_input is None
+
     def test_get_task_not_found(self) -> None:
         tracker = Tracker()
         with pytest.raises(TaskNotFoundError):

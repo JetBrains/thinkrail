@@ -149,6 +149,8 @@ List all sessions from disk, sorted by modification time (newest first). Returns
 | `active` | `bool` | Whether the session is in a non-terminal status (after the coercion above). Drives the StatusBar's "live" count. |
 | `metrics` | `dict` | Cost/usage metrics |
 
+For `status == "draft"` entries, the listing additionally carries the draft-only fields needed to rehydrate the pre-Start config card — `config`, `systemPrompt`, `sessionPrompt`, and **`draftInput`** (the in-progress prompt text autosaved as the user types). `save_session` round-trips `draftInput` like any other metadata key; it is non-context — never assembled into the system prompt. See [Draft Session](../../../.bonsai/design_docs/DRAFT_SESSION_DESIGN.md).
+
 ### `append_event`
 
 ```python

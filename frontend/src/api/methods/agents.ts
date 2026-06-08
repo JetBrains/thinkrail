@@ -9,6 +9,10 @@ export interface DraftUpdateParams {
   config?: AgentConfig;
   prompt?: string | null;
   name?: string;
+  /** Draft-on-type: in-progress prompt text persisted as the non-context
+   *  `draftInput`. Restored into the input box, never assembled into the
+   *  system prompt. */
+  draftInput?: string;
   ticketId?: string | null;
   /** ticket-implement only. Picks how the orchestrator dispatches plan
    *  steps. See `.bonsai/design_docs/TICKET_LIFECYCLE_DESIGN.md`. */
@@ -22,7 +26,7 @@ export function createAgentApi(client: RpcClient) {
     run: (params: AgentRunParams) =>
       client.request<{ bonsaiSid: string }>("agent/run", params),
 
-    prepare: (params: AgentRunParams) =>
+    prepare: (params: AgentRunParams & { bonsaiSid?: string; draftInput?: string }) =>
       client.request<{ bonsaiSid: string; systemPrompt: string; sections?: unknown[]; totalTokens?: number }>("agent/prepare", params),
 
     updateDraft: (params: DraftUpdateParams) =>

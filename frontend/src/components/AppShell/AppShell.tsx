@@ -1,5 +1,6 @@
 import { useCallback, type ReactNode, useState } from "react";
 import { useUiStore } from "@/store/uiStore.ts";
+import { useDraftFlushOnHide } from "@/hooks/useDraftFlushOnHide.ts";
 import { modLabel } from "@/utils/platform.ts";
 import { Header } from "./Header.tsx";
 import { StatusBar } from "./StatusBar.tsx";
@@ -51,6 +52,8 @@ function Shell({
 }
 
 export function AppShell({ onSwitchProject }: { onSwitchProject: () => void }) {
+  useDraftFlushOnHide();
+
   // Wizard lifecycle owns the "what to render" decision for any
   // wizard-related state (pre-chat / running / done-screen). See
   // useWizardLifecycle.ts — that hook is the only place the projectState

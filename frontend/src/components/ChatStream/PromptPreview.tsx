@@ -16,6 +16,9 @@ const Editor = lazy(() => import("@monaco-editor/react"));
 interface PromptPreviewProps {
   systemPrompt: string;
   sections: PromptSection[] | null | undefined;
+  /** Draft has not been persisted yet, so there is no assembled prompt.
+   *  Render a hint that the preview appears once the user types. */
+  unsaved?: boolean;
 }
 
 const SECTION_COLORS: Record<string, string> = {
@@ -96,10 +99,20 @@ function FilePreviewContent({ name, preview, path }: { name: string; preview: st
   );
 }
 
-export function PromptPreview({ systemPrompt, sections }: PromptPreviewProps) {
+export function PromptPreview({ systemPrompt, sections, unsaved }: PromptPreviewProps) {
   const [expanded, setExpanded] = useState(false);
   const [expandedSections, setExpandedSections] = useState<Set<string>>(new Set());
   const [expandedSpecs, setExpandedSpecs] = useState<Set<string>>(new Set());
+
+  if (unsaved) {
+    return (
+      <div className="prompt-preview prompt-preview--placeholder">
+        <span className="prompt-preview-placeholder-text">
+          System prompt preview appears once you start typing.
+        </span>
+      </div>
+    );
+  }
 
   const totalTokens = sections
     ? sections.reduce((sum, s) => sum + s.tokens, 0)

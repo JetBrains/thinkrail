@@ -170,6 +170,12 @@ export interface Session {
   systemPrompt?: string;
   /** Structured prompt sections for the preview UI */
   promptSections?: PromptSection[] | null;
+  /** Frontend-only draft that has no backend task yet. Layers on
+   *  `status: "draft"`; never sent to or stored by the backend. */
+  unsaved?: boolean;
+  /** True once the user renamed the draft by hand — freezes live name
+   *  derivation from the prompt. */
+  nameManuallySet?: boolean;
   parentBonsaiSid: string | null;
   subsessionType: "discussion" | "refinement" | null;
   subsessionContext: string | null;

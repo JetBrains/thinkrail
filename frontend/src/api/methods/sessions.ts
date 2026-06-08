@@ -27,6 +27,10 @@ export interface SessionSummary {
   systemPrompt?: string;
   /** Present for draft sessions — user's session prompt */
   sessionPrompt?: string;
+  /** Present for draft sessions — in-progress prompt text autosaved as the
+   *  user types. Non-context: restored into the input box, never assembled
+   *  into the system prompt. */
+  draftInput?: string | null;
   /** ticket-implement orchestrator only — execution mode (see
    *  TICKET_LIFECYCLE_DESIGN.md § Implementation orchestration modes). */
   subagentMode?: "step-session" | "subagent";

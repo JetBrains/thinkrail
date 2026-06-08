@@ -1,7 +1,10 @@
 import json
 from pathlib import Path
 
+import pytest
+
 from app.agent.persistence import (
+    _meta_path,
     append_event,
     delete_session,
     has_persisted_sessions,
@@ -10,6 +13,16 @@ from app.agent.persistence import (
     save_session,
     update_session_metadata,
 )
+
+
+class TestSafeSid:
+    @pytest.mark.parametrize("bad", ["../escape", "a/b", "..\\x", ".."])
+    def test_meta_path_rejects_traversal(self, tmp_path: Path, bad: str) -> None:
+        with pytest.raises(ValueError):
+            _meta_path(tmp_path, bad)
+
+    def test_meta_path_allows_normal_ids(self, tmp_path: Path) -> None:
+        assert _meta_path(tmp_path, "task-1").name == "task-1.json"
 
 
 def _make_session_data(bonsai_sid: str = "task-1", **overrides) -> dict:
@@ -365,4 +378,58 @@ class TestListSessionsExposesSubagentMode:
         # mode picker is only relevant before a session starts.
         assert "subagentMode" not in match
         assert "stepGate" not in match
+
+
+class TestDraftInputPersistence:
+    """``draftInput`` is the in-progress prompt text autosaved while a blank
+    draft is typed. It round-trips through ``save_session`` like any other
+    metadata key and is surfaced by ``list_sessions`` for draft entries only,
+    so the input box rehydrates on reload/reconnect.
+    """
+
+    def test_save_session_round_trips_draft_input(self, tmp_path: Path) -> None:
+        save_session(tmp_path, _make_session_data(
+            bonsai_sid="draft-1",
+            status="draft",
+            draftInput="fix login flow",
+        ))
+        loaded = load_session(tmp_path, "draft-1")
+        assert loaded is not None
+        assert loaded["draftInput"] == "fix login flow"
+
+    def test_list_sessions_exposes_draft_input_for_draft(
+        self, tmp_path: Path,
+    ) -> None:
+        save_session(tmp_path, _make_session_data(
+            bonsai_sid="draft-1",
+            status="draft",
+            draftInput="fix login flow",
+        ))
+        entries = list_sessions(tmp_path)
+        match = next((e for e in entries if e["bonsaiSid"] == "draft-1"), None)
+        assert match is not None
+        assert match["draftInput"] == "fix login flow"
+
+    def test_list_sessions_draft_input_defaults_none(
+        self, tmp_path: Path,
+    ) -> None:
+        save_session(tmp_path, _make_session_data(
+            bonsai_sid="draft-1",
+            status="draft",
+        ))
+        entries = list_sessions(tmp_path)
+        match = next((e for e in entries if e["bonsaiSid"] == "draft-1"), None)
+        assert match is not None
+        assert match["draftInput"] is None
+
+    def test_non_draft_omits_draft_input(self, tmp_path: Path) -> None:
+        save_session(tmp_path, _make_session_data(
+            bonsai_sid="done-1",
+            status="done",
+            draftInput="fix login flow",
+        ))
+        entries = list_sessions(tmp_path)
+        match = next((e for e in entries if e["bonsaiSid"] == "done-1"), None)
+        assert match is not None
+        assert "draftInput" not in match
 

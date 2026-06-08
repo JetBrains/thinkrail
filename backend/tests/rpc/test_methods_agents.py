@@ -9,9 +9,13 @@ from jsonrpcserver import JsonRpcError
 from app.agent.models import AgentTask
 from app.agent.tracker import FutureNotFoundError, TaskNotFoundError
 from app.rpc.methods.agents import (
+    _MAX_DRAFT_INPUT,
+    _validated_draft_input,
+    _validated_sid,
     get_agent_status,
     interrupt_agent,
     list_agents,
+    prepare_agent,
     respond_agent,
     run_agent,
 )
@@ -170,3 +174,35 @@ class TestErrorDecorator:
         with pytest.raises(JsonRpcError) as exc_info:
             await list_agents(svc)
         assert exc_info.value.code == -32603
+
+
+class TestDraftOnTypeValidation:
+    def test_validated_sid_accepts_uuid(self) -> None:
+        import uuid
+
+        u = str(uuid.uuid4())
+        assert _validated_sid(u) == u
+
+    def test_validated_sid_none_passes_through(self) -> None:
+        assert _validated_sid(None) is None
+
+    @pytest.mark.parametrize("bad", ["../../etc/passwd", "a/b", "not-a-uuid", "..", ""])
+    def test_validated_sid_rejects_non_uuid(self, bad: str) -> None:
+        with pytest.raises(JsonRpcError) as exc_info:
+            _validated_sid(bad)
+        assert exc_info.value.code == -32602
+
+    def test_validated_draft_input_allows_normal(self) -> None:
+        assert _validated_draft_input("hello") == "hello"
+        assert _validated_draft_input(None) is None
+
+    def test_validated_draft_input_rejects_oversized(self) -> None:
+        with pytest.raises(JsonRpcError) as exc_info:
+            _validated_draft_input("x" * (_MAX_DRAFT_INPUT + 1))
+        assert exc_info.value.code == -32602
+
+    async def test_prepare_agent_rejects_traversal_sid(self, svc: MagicMock) -> None:
+        with pytest.raises(JsonRpcError) as exc_info:
+            await prepare_agent(svc, specIds=[], config={}, bonsaiSid="../../evil")
+        assert exc_info.value.code == -32602
+        svc.prepare_task.assert_not_called()

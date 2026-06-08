@@ -124,6 +124,7 @@ class AgentService:
                     file_paths=entry.get("filePaths", []),
                     skill_id=entry.get("skillId"),
                     session_prompt=entry.get("sessionPrompt"),
+                    draft_input=entry.get("draftInput"),
                     config=AgentConfig(**entry.get("config", {})),
                     ticket_id=entry.get("ticketId"),
                     subagent_mode=entry.get("subagentMode") or "step-session",
@@ -154,14 +155,21 @@ class AgentService:
         name: str = "",
         ticket_id: str | None = None,
         file_paths: list[str] | None = None,
+        bonsai_sid: str | None = None,
+        draft_input: str | None = None,
     ) -> AgentTask:
         """Create a draft session without starting the runner.
 
         Builds the system prompt and persists the task in "draft" status.
         Call ``start_draft`` to actually launch the SDK session.
+
+        ``bonsai_sid``, when supplied, is reused verbatim instead of
+        server-minting one. ``draft_input`` carries the autosaved prompt text —
+        non-context, never fed to ``build_context``.
         """
         task = self._tracker.create_task(
             spec_ids, config, skill_id=skill_id, session_prompt=session_prompt, name=name,
+            bonsai_sid=bonsai_sid, draft_input=draft_input,
         )
         task.status = "draft"
         task.ticket_id = ticket_id
@@ -182,12 +190,13 @@ class AgentService:
         name: str | None = ...,  # type: ignore[assignment]
         ticket_id: str | None = ...,  # type: ignore[assignment]
         file_paths: list[str] | None = ...,  # type: ignore[assignment]
+        draft_input: str | None = ...,  # type: ignore[assignment]
         subagent_mode: str | None = None,
         step_gate: str | None = None,
-    ) -> str:
+    ) -> dict:
         """Update a draft session's config and rebuild its system prompt.
 
-        Returns the new system prompt string.
+        Returns the structured prompt preview: ``{"full", "sections", "totalTokens"}``.
         """
         task = self._tracker.get_task(bonsai_sid)
         if task.status != "draft":
@@ -202,6 +211,8 @@ class AgentService:
             task.config = config
         if session_prompt is not ...:
             task.session_prompt = session_prompt
+        if draft_input is not ...:
+            task.draft_input = draft_input
         if name is not ...:
             task.name = name
         if subagent_mode is not None:
@@ -220,11 +231,25 @@ class AgentService:
             task.ticket_id = ticket_id
             if ticket_id:
                 self._attach_to_ticket(task)
-        task.system_prompt = await self._build_context_for(task)
+        # An autosave touching only draft_input/name leaves the system prompt
+        # unchanged — skip the context assembly (built twice otherwise) and the
+        # structured-sections rebuild the preview path doesn't consume here.
+        text_only = (
+            spec_ids is None
+            and skill_id is ...
+            and config is None
+            and session_prompt is ...
+            and file_paths is ...
+            and ticket_id is ...
+            and subagent_mode is None
+            and step_gate is None
+        )
+        if not text_only:
+            task.system_prompt = await self._build_context_for(task)
         self._save_task(task)
-        # Build structured sections for the prompt preview
-        structured = await self._build_context_structured_for(task)
-        return structured
+        if text_only:
+            return {"full": task.system_prompt or "", "sections": [], "totalTokens": 0}
+        return await self._build_context_structured_for(task)
 
     async def start_draft(
         self,
@@ -445,6 +470,7 @@ class AgentService:
             "name": task.name or task.bonsai_sid[:8],
             "skillId": task.skill_id,
             "sessionPrompt": task.session_prompt,
+            "draftInput": task.draft_input,
             "specIds": list(task.spec_ids),
             "filePaths": list(task.file_paths),
             "config": task.config.model_dump(by_alias=True),
@@ -569,6 +595,7 @@ class AgentService:
                 entry["config"] = task.config.model_dump(by_alias=True)
                 entry["systemPrompt"] = task.system_prompt
                 entry["sessionPrompt"] = task.session_prompt
+                entry["draftInput"] = task.draft_input
                 entry["filePaths"] = list(task.file_paths)
                 entry["subagentMode"] = task.subagent_mode
                 entry["stepGate"] = task.step_gate

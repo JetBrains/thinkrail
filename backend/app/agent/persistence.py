@@ -38,12 +38,20 @@ def _sessions_dir(project_root: Path) -> Path:
     return project_root / BONSAI_DIRNAME / SESSIONS_DIR
 
 
+def _safe_sid(bonsai_sid: str) -> str:
+    """Reject path-traversal characters before a session id becomes a filename,
+    so a crafted id cannot escape the sessions directory."""
+    if "/" in bonsai_sid or "\\" in bonsai_sid or ".." in bonsai_sid:
+        raise ValueError(f"Unsafe bonsai_sid: {bonsai_sid!r}")
+    return bonsai_sid
+
+
 def _meta_path(project_root: Path, bonsai_sid: str) -> Path:
-    return _sessions_dir(project_root) / f"{bonsai_sid}.json"
+    return _sessions_dir(project_root) / f"{_safe_sid(bonsai_sid)}.json"
 
 
 def _events_path(project_root: Path, bonsai_sid: str) -> Path:
-    return _sessions_dir(project_root) / f"{bonsai_sid}.events.jsonl"
+    return _sessions_dir(project_root) / f"{_safe_sid(bonsai_sid)}.events.jsonl"
 
 
 def has_persisted_sessions(project_root: Path) -> bool:
@@ -166,6 +174,7 @@ def list_sessions(project_root: Path) -> list[dict[str, Any]]:
                 entry["config"] = data.get("config", {})
                 entry["systemPrompt"] = data.get("systemPrompt")
                 entry["sessionPrompt"] = data.get("sessionPrompt")
+                entry["draftInput"] = data.get("draftInput")
                 entry["filePaths"] = data.get("filePaths", [])
                 entry["subagentMode"] = data.get("subagentMode")
                 entry["stepGate"] = data.get("stepGate")

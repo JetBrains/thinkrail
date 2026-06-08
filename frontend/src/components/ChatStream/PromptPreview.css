@@ -21,6 +21,15 @@
 .prompt-preview-toggle:hover { color: var(--text); }
 .prompt-preview-token-count { color: var(--hint); font-size: var(--font-md); }
 
+.prompt-preview--placeholder {
+  padding: var(--space-sm) 0;
+}
+.prompt-preview-placeholder-text {
+  color: var(--hint);
+  font-size: var(--font-md);
+  font-style: italic;
+}
+
 /* ── Stacked bar ── */
 .prompt-bar {
   display: flex;

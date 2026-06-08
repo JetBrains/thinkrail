@@ -14,8 +14,13 @@ covers:
 - backend/app/agent/models.py
 - backend/app/rpc/methods/agents.py
 - frontend/src/components/ChatStream/DraftConfigCard.tsx
+- frontend/src/components/ChatStream/InputArea.tsx
 - frontend/src/components/SessionPanel/SessionPanel.tsx
+- frontend/src/components/SessionPanel/SessionTabBar.tsx
 - frontend/src/store/sessionStore.ts
+- frontend/src/store/inputDraftStore.ts
+- frontend/src/store/draftAutosave.ts
+- frontend/src/utils/sessionName.ts
 tags:
 - feature
 - session
@@ -28,8 +33,8 @@ tags:
 
 ## Table of Contents
 1. [Overview](#overview)
-2. [Current State](#current-state)
-3. [Two-Phase Session Lifecycle](#two-phase-session-lifecycle)
+2. [Two-Phase Session Lifecycle](#two-phase-session-lifecycle)
+3. [Draft-on-Type (Lazy Persistence)](#draft-on-type-lazy-persistence)
 4. [Data Flow](#data-flow)
 5. [DraftConfigCard Component](#draftconfigcard-component)
 6. [Changes by Layer](#changes-by-layer)
@@ -73,23 +78,75 @@ The `"draft"` status is added to `TaskStatus`. Draft tasks are persisted to `.bo
 
 The `agent/run` method is unchanged — it remains the one-step shortcut for flows that don't need the draft phase (suggested sessions, meta-ticket auto-starts).
 
+## Draft-on-Type (Lazy Persistence)
+
+The two-phase lifecycle above persists a draft the instant it is created. For **blank** new sessions that is wasteful: clicking **+ New** (or `Cmd/Ctrl+T`, or the Command Palette's "New session") used to write `.bonsai/sessions/{id}.json` and broadcast `session/didCreate` to every client immediately, so abandoned empty "Session N" drafts piled up on disk, in the sidebar, and on other clients.
+
+**Draft-on-type** defers that persistence until the session carries intent. A blank session is born **entirely in the frontend** and touches the backend only once the user actually types a prompt (or starts it).
+
+### Unsaved sub-phase
+
+The feature adds a frontend-only **`unsaved`** flag that layers on the existing `"draft"` status — it is never sent to or stored by the backend. **+ New** mints the `bonsaiSid` client-side (`crypto.randomUUID()`) and inserts an ordinary `"draft"` session with `unsaved: true` and **no RPC**. Because it is a normal draft, `DraftConfigCard`, the `InputArea`, the gold tab dot, and the auto-start path all render and behave unchanged.
+
+```
+ unsaved draft        saved draft            initializing → idle/running → done
+ (frontend only)      (.bonsai/sessions)
+      │                     │                        │
+  + New / Cmd+T        ≥5 chars (debounced)      Start / Send
+  / palette  ─────────▶  OR Start / flush ─────▶  agent/startDraft
+  (no RPC,             agent/prepare(bonsaiSid)
+   no broadcast)       → persist + broadcast
+```
+
+### Save triggers
+
+The session is **saved** (persisted on the backend) on the first of:
+
+- the prompt reaching **≥ 5 non-whitespace characters** — a trailing **~750 ms** debounce with a **~5 s** max-wait so sustained typing still flushes about once per window;
+- the user pressing **Start/Send** — works **regardless** of the threshold, so a 2-char prompt still starts; or
+- a **flush** — input blur, session switch, or page hide (`visibilitychange`/`pagehide`).
+
+Saving calls `agent/prepare` **passing the already-minted `bonsaiSid`** (`tracker.create_task` reuses it rather than reconciling), then flips `unsaved → false` (single-flight, so concurrent triggers create exactly one draft). From that point the session is an ordinary backend draft: the `session/didCreate` broadcast fires — correctly, now that intent exists — further edits autosave via `agent/updateDraft`, and the draft is restorable on reload.
+
+### Persisted typed text (`draftInput`)
+
+The in-progress prompt is **not** `session_prompt` — that field is injected into the system prompt under "Your Task" and would both pollute the context and duplicate as the first message on Start. Instead the draft carries a dedicated, **non-context `draftInput`** field (`AgentTask.draft_input`), persisted on autosave and restored into the input box on reload/reconnect. It is never fed to `build_context`.
+
+### Derived name
+
+Before any text is typed the tab shows a neutral **"New session"**. Once text exists the name is derived live from the prompt (`utils/sessionName.ts`): trim, collapse internal whitespace/newline runs to single spaces, then show as-is if ≤ 15 chars or the first 14 + `…` (label length ≤ 15 **including** the ellipsis). A **manual rename freezes** derivation permanently (`nameManuallySet`). Deleting all text **after** a save reverts the label to "New session" but **keeps** the draft on disk; derivation resumes on the next keystroke unless the name was manually set.
+
+### No duplicate blanks
+
+Triggering a new blank session while an untouched blank `unsaved` tab is already open **focuses that tab** instead of opening another. The guard is intentionally **per-client** — other clients never see an `unsaved` draft, so they cannot and should not dedupe against it.
+
+### Scope guard
+
+Only the bare `createNewSession()` (blank) path defers. Sessions that already carry intent at creation — meta-ticket / stage-default sessions (which call `createDraft` directly) and approved **Suggested** sessions (which use `agent/run`) — **persist immediately, unchanged**. `createDraft` itself remains the immediate-persist primitive, so the scope guard holds by construction.
+
 ## Data Flow
 
 ### Creating a Draft
 
+**Blank** entry points (`+ New`, `Cmd/Ctrl+T`, palette) are **deferred** — no RPC, no broadcast, no file until the user types intent. See [Draft-on-Type (Lazy Persistence)](#draft-on-type-lazy-persistence).
+
+**Pre-configured** drafts that already carry intent (meta-ticket / stage-default sessions) call `createDraft()` directly and persist immediately:
+
 ```
-User clicks "+ New" in the Sessions tab bar (`SessionPanel`)
-  → sessionStore.createNewSession() → createDraft()
+createDraft({ specIds, config, skillId, name, ... })
   → RPC: agent/prepare { specIds, config, skillId, name, ... }
   → AgentService.prepare_task():
       1. tracker.create_task() with status = "draft"
+         (reuses a caller-supplied bonsaiSid when present; else server-mints)
       2. _build_context_for(task) → assembles system prompt
       3. task.system_prompt = assembled prompt
-      4. _save_task(task) → persist to .bonsai/sessions/
+      4. _save_task(task) → persist to .bonsai/sessions/ + broadcast session/didCreate
   → Response: { bonsaiSid, systemPrompt }
   → Frontend: session added to store with status "draft" + systemPrompt
   → DraftConfigCard renders in ChatStream
 ```
+
+On its first save the **blank** path runs this same `agent/prepare`, additionally passing the client-minted `bonsaiSid` and the typed `draftInput`.
 
 ### Adjusting Config
 
@@ -175,8 +232,36 @@ The `DraftConfigCard` is a stacked card rendered at the top of `ChatStream` when
 | `components/ChatStream/PromptPreview.css` | **New** — bar, legend, section, spec entry, rendered markdown styles. |
 | `components/ChatStream/ChatStream.tsx` | Render `DraftConfigCard` when `session.status === "draft"`. |
 | `components/ChatStream/SessionStatusLine.tsx` | Add `"draft"` case to `statusInfo()` switch. |
-| `components/SessionPanel/SessionPanel.tsx` | `+ New` button calls `sessionStore.createNewSession()` → `createDraft()`. Add `"draft"` to `handleSend` status guard. Hide `SessionStatusLine` for drafts. Hide Start button for drafts. Draft-specific placeholder text. |
+| `components/SessionPanel/SessionPanel.tsx` | `+ New` button calls `sessionStore.createNewSession()`, which now **defers** persistence for blank sessions (see [Draft-on-Type deltas](#draft-on-type-deltas)). Add `"draft"` to `handleSend` status guard. Hide `SessionStatusLine` for drafts. Hide Start button for drafts. Draft-specific placeholder text. |
 | `components/SessionPanel/SessionTabBar.tsx` | Gold `--gold` dot color for `"draft"` status in tab bar. |
+
+### Draft-on-Type deltas
+
+Incremental changes layered on the two-phase feature above (see [Draft-on-Type (Lazy Persistence)](#draft-on-type-lazy-persistence)).
+
+**Backend**
+
+| File | Draft-on-type change |
+|------|----------------------|
+| `agent/models.py` | Add `draft_input` (alias `draftInput`) to `AgentTask` — non-context, never fed to `build_context`. |
+| `agent/tracker.py` | `create_task` threads `draft_input` (alongside the already-supported caller `bonsai_sid`). |
+| `agent/service.py` | `prepare_task` accepts `bonsai_sid` + `draft_input`; `update_draft` accepts `draft_input`; `_save_task` writes `draftInput`; `list_all_sessions` includes `draftInput` for drafts. |
+| `agent/persistence.py` | `save_session` persists `draftInput`; `list_sessions` returns it for `status == "draft"` entries. |
+| `rpc/methods/agents.py` | `prepare_agent` reads optional `bonsaiSid` + `draftInput`; `update_draft` reads `draftInput`. |
+
+**Frontend**
+
+| File | Draft-on-type change |
+|------|----------------------|
+| `utils/sessionName.ts` *(new)* | Pure `deriveSessionName(text)` + `DEFAULT_SESSION_NAME`. No React/store deps. |
+| `store/draftAutosave.ts` *(new)* | Module-scoped autosave controller: `noteInput` (750 ms trailing + 5 s max-wait), `flush`, `cancel`. |
+| `types/session.ts` | Add `unsaved?` + `nameManuallySet?` to `Session`. |
+| `store/sessionStore.ts` | `createNewSession` defers (no RPC) + no-duplicate-blanks; new `ensureSaved` / `noteDraftInput` / `commitDraft` / `renameDraft`; `updateDraft` is local-only while `unsaved`; restore seeds `inputDraftStore` from `draftInput`. |
+| `components/ChatStream/InputArea.tsx` | `handleChange` → `noteDraftInput`; textarea `onBlur` → `draftAutosave.flush`. |
+| `components/ChatStream/DraftConfigCard.tsx` | Name input → `renameDraft` (sets the freeze flag); prompt preview shows a placeholder hint while `unsaved`. |
+| app shell (`AppShell` / `useDraftFlushOnHide`) | One `visibilitychange` / `pagehide` listener flushes the active draft. |
+
+`keyboard.ts` (`Cmd/Ctrl+T`) and `CommandPalette.tsx` need **no change** — both already funnel through `createNewSession`, so the deferral is inherited at that single chokepoint.
 
 ## Wire Format
 
@@ -185,10 +270,12 @@ The `DraftConfigCard` is a stacked card rendered at the top of `ChatStream` when
 Request:
 ```json
 {
+  "bonsaiSid": "client-minted-uuid",
   "specIds": ["goal-and-requirements", "module-agent"],
   "config": { "model": "claude-sonnet-4-6", "permissionMode": "default", "streamText": true, "effort": null },
   "skillId": "module-design",
-  "name": "Module: session-manager",
+  "name": "fix login flow",
+  "draftInput": "fix login flow",
   "prompt": null,
   "metaTicketId": null
 }
@@ -202,13 +289,17 @@ Response:
 }
 ```
 
+`bonsaiSid` and `draftInput` are **optional, additive** fields used by the draft-on-type path. When `bonsaiSid` is supplied the backend **reuses** it (no server-mint) and the response echoes it; `draftInput` persists the typed text as the non-context `draft_input`. Omitting both preserves the original immediate-persist behavior.
+
 ### `agent/updateDraft`
 
 Request:
 ```json
 {
   "bonsaiSid": "abc-123-...",
-  "specIds": ["goal-and-requirements"]
+  "specIds": ["goal-and-requirements"],
+  "draftInput": "fix login flow",
+  "name": "fix login flo…"
 }
 ```
 
@@ -218,6 +309,8 @@ Response:
   "systemPrompt": "## General Instructions\n\n..."
 }
 ```
+
+`draftInput` and `name` are **optional, additive** — the draft-on-type autosave sends them to persist the typed text and its derived label without otherwise changing config. Any subset of fields may be sent; omitted fields are left unchanged (Ellipsis-sentinel on the backend).
 
 ### `agent/startDraft`
 
@@ -249,9 +342,17 @@ Response:
 | Auto-start on sendMessage | Typing a message in a draft session starts it with that message | Natural UX — user doesn't have to think about whether to click Start or type. |
 | Discard = end + close | Discard transitions draft → done and removes from tab bar | Clean cleanup. No zombie drafts. |
 | Reuse SkillGrid/SpecSelector | Popover-rendered versions of the modal's existing selectors | DRY. Same components, different container (popover vs modal section). |
+| **Defer save for blank sessions** | Client-minted `bonsaiSid` + frontend-only `unsaved` flag; `agent/prepare` deferred until intent (≥5 non-ws / Start / flush) | Blank `+ New` no longer writes a file or broadcasts until the user types, killing empty "Session N" clutter — without losing autosave protection once text exists. |
+| **`draftInput` separate from `session_prompt`** | A dedicated **non-context** field persists the typed text | `session_prompt` is injected into the system prompt ("Your Task") and would both pollute context and duplicate as the first message on Start. `draftInput` is never fed to `build_context`. |
+| **Live-derived name + manual-rename freeze** | Name tracks the prompt via `deriveSessionName`; a hand rename sets `nameManuallySet` and stops derivation | Glanceable tabs instead of interchangeable "Session N"; respects an explicit user name. |
+| **Single-flight `ensureSaved`** | Per-`bonsaiSid` in-flight promise; reuses the minted id | Concurrent triggers (threshold timer + Start) create exactly one draft; the id is reused, never reconciled. |
+| **No-duplicate-blanks is per-client** | Guard focuses an existing untouched `unsaved` tab on the same client only | Other clients never see an `unsaved` draft, so cross-client dedupe is neither possible nor desired. |
 
 ## Known Limitations
 
 - **Server restart orphans drafts:** If the backend server restarts, draft sessions exist on disk but the in-memory `Tracker` is empty. Calling `updateDraft` or `startDraft` will fail with `TaskNotFoundError`. The draft appears in the UI but cannot be updated or started — it can only be discarded. A future improvement could re-register drafts from disk on server startup.
 - **No draft cleanup:** Drafts older than 24h are not auto-cleaned. Stale drafts accumulate on disk until manually discarded.
+- **Unsaved drafts vanish on reload (by design):** A blank `unsaved` draft has no backend task and no file, so a reload/restart simply doesn't restore it — abandoning a blank leaves no trace. The server-restart-orphan limitation above applies only **after** a draft is saved.
+- **Page-hide tail:** `flush` issues the save over the WebSocket but cannot block unload; `visibilitychange→hidden` fires earlier and more reliably than `beforeunload`. The last **< 750 ms** of uninterrupted typing before a hard kill may not flush in time — an accepted limitation (a backend `draftInput` field was chosen over a synchronous `localStorage` backstop, and the debounce/max-wait window keeps the at-risk tail small).
+- **No migration:** Pre-existing empty "Session N" drafts on disk are left as-is; draft-on-type applies only to sessions created from now on.
 - **`run_task()` not refactored:** The plan called for `run_task()` to internally use `prepare_task()` + `start_draft()`. This was deferred — `run_task()` remains standalone with some duplicated logic. Both paths work correctly. Note: `run_task()` no longer takes a `notify` parameter; all streaming events are routed through the EventBus (`bus.publish_to_session()`).

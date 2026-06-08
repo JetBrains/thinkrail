@@ -57,6 +57,7 @@ class Tracker:
         session_prompt: str | None = None,
         name: str = "",
         bonsai_sid: str | None = None,
+        draft_input: str | None = None,
     ) -> AgentTask:
         task = AgentTask(
             **({"bonsai_sid": bonsai_sid} if bonsai_sid else {}),
@@ -64,6 +65,7 @@ class Tracker:
             spec_ids=spec_ids,
             skill_id=skill_id,
             session_prompt=session_prompt,
+            draft_input=draft_input,
             config=config,
         )
         self._tasks[task.bonsai_sid] = task

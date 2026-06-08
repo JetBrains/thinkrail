@@ -14,6 +14,8 @@ import type { SessionSummary } from "@/api/methods/sessions.ts";
 import { getClient } from "@/api/index.ts";
 import { createAgentApi } from "@/api/methods/agents.ts";
 import { buildDefaultSessionConfig } from "@/utils/sessionConfig.ts";
+import { DEFAULT_SESSION_NAME, SAVE_THRESHOLD, deriveSessionName, nonWs, resolveDraftName } from "@/utils/sessionName.ts";
+import * as draftAutosave from "./draftAutosave.ts";
 import { useInputDraftStore } from "./inputDraftStore.ts";
 import { useNotificationStore } from "./notificationStore.ts";
 import { useBoardStore } from "./boardStore.ts";
@@ -66,8 +68,6 @@ interface SessionStore {
   openTabs: Set<string>;
   /** Sum of costUsd across all known sessions (in-memory + from backend list) */
   projectCost: number;
-  /** Monotonically increasing counter for default "Session N" names */
-  sessionCounter: number;
   /** Last-fetched session/list response — shared between SessionManager and StatusBar */
   sessionList: SessionSummary[];
   /** Refresh `sessionList` from the backend. Idempotent. */
@@ -116,6 +116,19 @@ interface SessionStore {
     stepGate?: "approve" | "autonomous";
   }) => Promise<string>;
   startDraft: (bonsaiSid: string, prompt?: string) => Promise<void>;
+  /** Called by InputArea on each keystroke (after inputDraftStore.setDraft).
+   *  Live-derives the tab name and arms the autosave controller once the
+   *  prompt crosses the save threshold (or the draft is already saved). */
+  noteDraftInput: (bonsaiSid: string, text: string) => void;
+  /** Persist an `unsaved` draft via `agent/prepare`, reusing the minted id.
+   *  Single-flight: concurrent callers share one in-flight save. Resolves
+   *  immediately if already saved. */
+  ensureSaved: (bonsaiSid: string) => Promise<void>;
+  /** Autosave commit target wired into `draftAutosave`: first persist for an
+   *  `unsaved` draft, otherwise an `agent/updateDraft` of the typed text. */
+  commitDraft: (bonsaiSid: string) => Promise<void>;
+  /** Rename a draft by hand. Freezes live name derivation permanently. */
+  renameDraft: (bonsaiSid: string, name: string) => Promise<void>;
   sendMessage: (bonsaiSid: string, text: string, isMarkdown?: boolean) => Promise<void>;
   switchSession: (bonsaiSid: string) => void;
   closeSession: (bonsaiSid: string) => void;
@@ -639,6 +652,10 @@ function buildAnsweredRequests(
 /** Tracks in-flight restoreSession fetches to prevent duplicate concurrent loads. */
 const _restoring = new Set<string>();
 
+/** In-flight `ensureSaved` promises, keyed by bonsaiSid — makes the first
+ *  `agent/prepare` single-flight so concurrent triggers create one draft. */
+const _saving = new Map<string, Promise<void>>();
+
 /** Tracks which session topics this client is subscribed to (multi-client). */
 const _subscribed = new Set<string>();
 
@@ -666,7 +683,6 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
   closedIds: new Set(),
   openTabs: new Set(),
   projectCost: 0,
-  sessionCounter: 0,
   sessionList: [],
 
   refreshSessionList: async () => {
@@ -687,20 +703,77 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
 
   createNewSession: async (prefill) => {
     const state = get();
-    const counter = state.sessionCounter + 1;
-    set({ sessionCounter: counter });
-    const name = prefill?.name ?? `Session ${counter}`;
-    const bonsaiSid = await state.createDraft({
-      specIds: prefill?.specIds ?? [],
-      config: await buildDefaultSessionConfig(),
-      name,
-      skillId: prefill?.skillId,
-      ticketId: prefill?.ticketId,
-    });
-    if (!prefill?.ticketId) {
-      useUiStore.getState().setCenterView("sessions");
-      useBoardStore.setState({ activeTicketId: null });
+
+    // Pre-configured entry points (ticket / stage-default) carry intent at
+    // creation — persist immediately, unchanged.
+    const carriesIntent =
+      !!prefill?.ticketId || (prefill?.specIds?.length ?? 0) > 0 || !!prefill?.skillId;
+    if (carriesIntent) {
+      const bonsaiSid = await state.createDraft({
+        specIds: prefill?.specIds ?? [],
+        config: await buildDefaultSessionConfig(),
+        name: prefill?.name ?? DEFAULT_SESSION_NAME,
+        skillId: prefill?.skillId,
+        ticketId: prefill?.ticketId,
+      });
+      if (!prefill?.ticketId) {
+        useUiStore.getState().setCenterView("sessions");
+        useBoardStore.setState({ activeTicketId: null });
+      }
+      return bonsaiSid;
     }
+
+    // No-duplicate-blanks: focus an existing untouched blank `unsaved` tab
+    // instead of opening another. Per-client by design.
+    const drafts = useInputDraftStore.getState().drafts;
+    for (const [sid, session] of state.sessions) {
+      if (session.unsaved && nonWs(drafts.get(sid) ?? "") === 0) {
+        get().switchSession(sid);
+        get().openTab(sid);
+        useUiStore.getState().setCenterView("sessions");
+        useBoardStore.setState({ activeTicketId: null });
+        return sid;
+      }
+    }
+
+    // Defer: mint client-side, insert an `unsaved` draft, no RPC.
+    const bonsaiSid = crypto.randomUUID();
+    const config = await buildDefaultSessionConfig();
+    set((s) => {
+      const next = new Map(s.sessions);
+      next.set(bonsaiSid, {
+        bonsaiSid,
+        name: prefill?.name ?? DEFAULT_SESSION_NAME,
+        skillId: prefill?.skillId ?? null,
+        specIds: [],
+        filePaths: [],
+        status: "draft",
+        unsaved: true,
+        model: config.model,
+        permissionMode: config.permissionMode,
+        effort: config.effort ?? "auto",
+        flags: config.flags ?? {},
+        startedAt: Date.now(),
+        events: [],
+        metrics: emptyMetrics(),
+        pendingRequests: [],
+        answeredRequests: new Map(),
+        ticketId: null,
+        parentBonsaiSid: null,
+        subsessionType: null,
+        subsessionContext: null,
+        returnStatus: null,
+        returnSummary: null,
+        artifacts: [],
+        previewPath: null,
+        previewSection: null,
+      });
+      const tabs = new Set(s.openTabs);
+      tabs.add(bonsaiSid);
+      return { sessions: next, openTabs: tabs, activeSessionId: bonsaiSid };
+    });
+    useUiStore.getState().setCenterView("sessions");
+    useBoardStore.setState({ activeTicketId: null });
     return bonsaiSid;
   },
 
@@ -774,6 +847,9 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
       next.set(bonsaiSid, {
         bonsaiSid,
         name,
+        // A pre-configured draft's name is intentional, not derived from a
+        // typed prompt — freeze derivation so flush/autosave can't relabel it.
+        nameManuallySet: !!name && name !== DEFAULT_SESSION_NAME,
         skillId: skillId ?? null,
         specIds,
         filePaths: filePaths ?? [],
@@ -812,6 +888,35 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
   },
 
   updateDraft: async (bonsaiSid, changes) => {
+    // While unsaved (no backend task yet) apply config changes locally and
+    // skip the RPC — the first `agent/prepare` carries them on save.
+    const current = get().sessions.get(bonsaiSid);
+    if (current?.unsaved) {
+      set((s) => {
+        const session = s.sessions.get(bonsaiSid);
+        if (!session) return s;
+        const next = new Map(s.sessions);
+        next.set(bonsaiSid, {
+          ...session,
+          ...(changes.specIds !== undefined ? { specIds: changes.specIds } : {}),
+          ...(changes.skillId !== undefined ? { skillId: changes.skillId } : {}),
+          ...(changes.config ? {
+            model: changes.config.model,
+            permissionMode: changes.config.permissionMode,
+            effort: changes.config.effort ?? "auto",
+            flags: changes.config.flags ?? {},
+          } : {}),
+          ...(changes.name !== undefined ? { name: changes.name } : {}),
+          ...(changes.ticketId !== undefined ? { ticketId: changes.ticketId } : {}),
+          ...(changes.filePaths !== undefined ? { filePaths: changes.filePaths } : {}),
+          ...(changes.subagentMode !== undefined ? { subagentMode: changes.subagentMode } : {}),
+          ...(changes.stepGate !== undefined ? { stepGate: changes.stepGate } : {}),
+        });
+        return { sessions: next };
+      });
+      return get().sessions.get(bonsaiSid)?.systemPrompt ?? "";
+    }
+
     const api = createAgentApi(getClient());
     const result = await api.updateDraft({
       bonsaiSid,
@@ -849,6 +954,12 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
   },
 
   startDraft: async (bonsaiSid, prompt) => {
+    // Persist first so Start works even below the autosave threshold, and
+    // cancel any pending autosave timer (ensureSaved already carries the
+    // typed text) so it can't fire a redundant prepare afterwards.
+    draftAutosave.cancel(bonsaiSid);
+    await get().ensureSaved(bonsaiSid);
+
     const api = createAgentApi(getClient());
     await api.startDraft(bonsaiSid, prompt);
 
@@ -882,13 +993,160 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
     });
   },
 
+  noteDraftInput: (bonsaiSid, text) => {
+    const session = get().sessions.get(bonsaiSid);
+    if (!session || session.status !== "draft") return;
+
+    // Live-derive the tab name unless the user renamed by hand. Clearing all
+    // text reverts to the default label but never deletes the draft.
+    if (!session.nameManuallySet) {
+      const name = deriveSessionName(text);
+      if (name !== session.name) {
+        set((s) => {
+          const cur = s.sessions.get(bonsaiSid);
+          if (!cur) return s;
+          const next = new Map(s.sessions);
+          next.set(bonsaiSid, { ...cur, name });
+          return { sessions: next };
+        });
+      }
+    }
+
+    // Threshold gating: arm autosave once the prompt crosses the threshold,
+    // or unconditionally for an already-saved draft.
+    if (nonWs(text) >= SAVE_THRESHOLD || !session.unsaved) {
+      draftAutosave.noteInput(bonsaiSid);
+    }
+  },
+
+  ensureSaved: async (bonsaiSid) => {
+    const session = get().sessions.get(bonsaiSid);
+    if (!session || !session.unsaved) return;
+
+    const inFlight = _saving.get(bonsaiSid);
+    if (inFlight) return inFlight;
+
+    const promise = (async () => {
+      const api = createAgentApi(getClient());
+      // Re-read inside the async body: config/spec/skill/name edits made
+      // between this call and the network dispatch must reach the first save,
+      // not be dropped by a snapshot captured at call time.
+      const cur = get().sessions.get(bonsaiSid);
+      if (!cur) return;
+      const draftInput = useInputDraftStore.getState().getDraft(bonsaiSid);
+      const name = cur.nameManuallySet ? cur.name : deriveSessionName(draftInput);
+      const config: AgentConfig = {
+        model: cur.model,
+        permissionMode: cur.permissionMode,
+        streamText: true,
+        effort: cur.effort,
+        flags: cur.flags ?? {},
+      };
+      const { systemPrompt, sections } = await api.prepare({
+        bonsaiSid,
+        specIds: cur.specIds,
+        config,
+        skillId: cur.skillId ?? undefined,
+        name,
+        draftInput: draftInput || undefined,
+      });
+      set((s) => {
+        const cur = s.sessions.get(bonsaiSid);
+        if (!cur) return s;
+        const next = new Map(s.sessions);
+        next.set(bonsaiSid, {
+          ...cur,
+          unsaved: false,
+          name: cur.nameManuallySet ? cur.name : name,
+          systemPrompt,
+          promptSections: (sections as Session["promptSections"]) ?? cur.promptSections ?? null,
+        });
+        return { sessions: next };
+      });
+    })();
+
+    _saving.set(bonsaiSid, promise);
+    try {
+      await promise;
+    } finally {
+      _saving.delete(bonsaiSid);
+    }
+  },
+
+  commitDraft: async (bonsaiSid) => {
+    const session = get().sessions.get(bonsaiSid);
+    if (!session || session.status !== "draft") return;
+
+    try {
+      if (session.unsaved) {
+        // Autosave/flush must leave no trace for a sub-threshold blank: abandoning
+        // a 2–3 char draft on blur/page-hide should never persist. Start/Send go
+        // through ensureSaved directly, so they still start below the threshold.
+        const draftInput = useInputDraftStore.getState().getDraft(bonsaiSid);
+        if (nonWs(draftInput) < SAVE_THRESHOLD) return;
+        await get().ensureSaved(bonsaiSid);
+        return;
+      }
+
+      const api = createAgentApi(getClient());
+      // Re-read so a rename landing between this call and dispatch isn't lost.
+      // The label is maintained live by noteDraftInput/renameDraft, so persist
+      // it as-is rather than re-deriving (which would mislabel a pre-configured
+      // draft whose input is empty but whose name is meaningful).
+      const cur = get().sessions.get(bonsaiSid);
+      if (!cur) return;
+      const draftInput = useInputDraftStore.getState().getDraft(bonsaiSid);
+      await api.updateDraft({ bonsaiSid, draftInput, name: cur.name });
+    } catch (err) {
+      // Autosave is best-effort: the typed text stays in inputDraftStore and the
+      // next keystroke re-arms a save, so surface a non-fatal toast rather than
+      // throw into the timer/flush callers.
+      useNotificationStore.getState().addToast({
+        eventType: "error",
+        message: `Couldn't save draft: ${getErrorMessage(err)}`,
+        persistent: false,
+        bonsaiSid,
+      });
+    }
+  },
+
+  renameDraft: async (bonsaiSid, name) => {
+    const session = get().sessions.get(bonsaiSid);
+    if (!session) return;
+    set((s) => {
+      const cur = s.sessions.get(bonsaiSid);
+      if (!cur) return s;
+      const next = new Map(s.sessions);
+      next.set(bonsaiSid, { ...cur, name, nameManuallySet: true });
+      return { sessions: next };
+    });
+    // Saved drafts persist the new label through the autosave debounce (its
+    // commit sends the current name), so per-keystroke renaming is one RPC,
+    // not one per character. Unsaved ones stay local until the first save.
+    if (!session.unsaved) draftAutosave.noteInput(bonsaiSid);
+  },
+
   sendMessage: async (bonsaiSid, text, isMarkdown) => {
     // If session is in draft status, auto-start it with this message.
     // Start the session first (sessionStart event arrives via WebSocket during
     // the RPC call), then add the userMessage so it appears after the config card.
     const session = get().sessions.get(bonsaiSid);
     if (session?.status === "draft") {
-      await get().startDraft(bonsaiSid, text);
+      try {
+        await get().startDraft(bonsaiSid, text);
+      } catch (err) {
+        // Start failed before the runner launched. handleSend already cleared
+        // the input optimistically — restore it so the typed text isn't lost,
+        // and don't append the optimistic userMessage.
+        useInputDraftStore.getState().setDraft(bonsaiSid, text);
+        useNotificationStore.getState().addToast({
+          eventType: "error",
+          message: `Couldn't start session: ${getErrorMessage(err)}`,
+          persistent: true,
+          bonsaiSid,
+        });
+        return;
+      }
       set((s) => {
         const sess = s.sessions.get(bonsaiSid);
         if (!sess) return s;
@@ -966,6 +1224,10 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
   },
 
   switchSession: (bonsaiSid) => {
+    const prev = get().activeSessionId;
+    if (prev && prev !== bonsaiSid && get().sessions.get(prev)?.status === "draft") {
+      void draftAutosave.flush(prev);
+    }
     _ensureSubscribed(bonsaiSid);
     set({ activeSessionId: bonsaiSid });
   },
@@ -1131,6 +1393,16 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
       previewSection: null,
     };
 
+    // Draft entries carry the in-progress prompt as `draftInput` — repopulate
+    // the input box and label the tab from it.
+    const draftInput = backendEntry?.draftInput;
+    if (backendEntry?.status === "draft") {
+      if (draftInput) useInputDraftStore.getState().setDraft(bonsaiSid, draftInput);
+      const resolved = resolveDraftName(data.name, draftInput ?? "");
+      session.name = resolved.name;
+      if (resolved.nameManuallySet) session.nameManuallySet = true;
+    }
+
     set((s) => {
       const next = new Map(s.sessions);
       next.set(bonsaiSid, session);
@@ -1152,6 +1424,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
   },
 
   unload: () => {
+    _saving.clear();
     set({
       sessions: new Map(),
       activeSessionId: null,
@@ -1159,7 +1432,6 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
       closedIds: new Set(),
       openTabs: new Set(),
       projectCost: 0,
-      sessionCounter: 0,
       sessionList: [],
     });
   },
@@ -1223,9 +1495,16 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
         const restoredPrompt = entry.systemPrompt as string | undefined
           ?? (events.find((e) => e.eventType === "sessionStart")?.payload.systemPrompt as string | undefined);
 
+        const draftName = entry.status === "draft"
+          ? resolveDraftName(data?.name ?? entry.name, entry.draftInput ?? "")
+          : null;
+
         next.set(entry.bonsaiSid, {
           bonsaiSid: entry.bonsaiSid,
-          name: data?.name ?? entry.name ?? entry.bonsaiSid.slice(0, 8),
+          name: draftName
+            ? draftName.name
+            : (data?.name ?? entry.name ?? entry.bonsaiSid.slice(0, 8)),
+          ...(draftName?.nameManuallySet ? { nameManuallySet: true } : {}),
           skillId: (data?.skillId as string) ?? entry.skillId ?? null,
           specIds: data?.specIds ?? entry.specIds ?? [],
           filePaths: (data?.filePaths as string[]) ?? [],
@@ -1337,9 +1616,17 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
         openTabs: tabs,
         projectCost: totalProjectCost,
         activeSessionId: autoActiveId,
-        sessionCounter: Math.max(s.sessionCounter, all.length),
       };
     });
+
+    // Repopulate the input box for restored drafts from their `draftInput`.
+    for (const result of results) {
+      if (result.status !== "fulfilled") continue;
+      const { entry } = result.value;
+      if (entry.status === "draft" && entry.draftInput) {
+        useInputDraftStore.getState().setDraft(entry.bonsaiSid, entry.draftInput);
+      }
+    }
   },
 
   syncSessionStatuses: async () => {
@@ -1463,19 +1750,42 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
   },
 
   deleteSession: async (bonsaiSid) => {
+    // Cancel any armed autosave so a trailing timer can't re-persist after delete.
+    draftAutosave.cancel(bonsaiSid);
+    const session = get().sessions.get(bonsaiSid);
+    const inFlightSave = _saving.get(bonsaiSid);
+
+    const dropLocally = () => {
+      useInputDraftStore.getState().clearDraft(bonsaiSid);
+      // Close tab (handles activeSessionId switching)
+      get().closeSession(bonsaiSid);
+      // Remove from sessions map and ignore late-arriving events
+      set((s) => {
+        const sessions = new Map(s.sessions);
+        sessions.delete(bonsaiSid);
+        const closedIds = new Set(s.closedIds);
+        closedIds.add(bonsaiSid);
+        return { sessions, closedIds };
+      });
+    };
+
+    // An unsaved draft with no save in flight has no backend task or file —
+    // discard it purely locally, no RPC.
+    if (session?.unsaved && !inFlightSave) {
+      dropLocally();
+      return;
+    }
+
+    // A first save may be mid-flight; let it finish so the file exists to
+    // delete, otherwise its prepare lands after the delete and orphans a file.
+    if (inFlightSave) {
+      try { await inFlightSave; } catch { /* save failed: nothing persisted */ }
+    }
+
     const { createSessionApi } = await import("@/api/methods/sessions.ts");
     const api = createSessionApi(getClient());
     await api.delete(bonsaiSid);
-    // Close tab (handles activeSessionId switching)
-    get().closeSession(bonsaiSid);
-    // Remove from sessions map and ignore late-arriving events
-    set((s) => {
-      const sessions = new Map(s.sessions);
-      sessions.delete(bonsaiSid);
-      const closedIds = new Set(s.closedIds);
-      closedIds.add(bonsaiSid);
-      return { sessions, closedIds };
-    });
+    dropLocally();
   },
 
   endSession: async (bonsaiSid) => {
@@ -2527,6 +2837,10 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
   },
 
 }));
+
+// Route draft-on-type autosave commits (debounce / max-wait / flush) to the
+// store's commitDraft action.
+draftAutosave.setCommitFn((bonsaiSid) => useSessionStore.getState().commitDraft(bonsaiSid));
 
 // ── HMR: force full reload when this module changes ──
 // Zustand's create() produces a new store instance on each HMR re-execution,

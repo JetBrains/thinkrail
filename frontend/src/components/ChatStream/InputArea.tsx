@@ -10,6 +10,7 @@ import {
 } from "@/hooks/useSlashAutocomplete.ts";
 import { useNotificationStore } from "@/store/notificationStore";
 import { useInputDraftStore } from "@/store/inputDraftStore";
+import * as draftAutosave from "@/store/draftAutosave";
 import { isMod, modLabel } from "@/utils/platform";
 import type { VoiceReviseMode } from "@/api/methods/settings.ts";
 import type { RuntimeType } from "@/types/agent.ts";
@@ -417,11 +418,16 @@ export function InputArea({ sessionId, disabled, placeholder, onSend, isRunning,
       if (voice.isRecording) voice.cancelRecording();
       setTextAndDraft(value);
       setIsVoiceTranscript(false);
+      // Draft-on-type: live-derive the tab name and arm autosave once the
+      // prompt crosses the threshold.
+      if (isDraft) {
+        useSessionStore.getState().noteDraftInput(sessionIdRef.current, value);
+      }
       // Autocomplete state is driven by the hook via the (text, caret)
       // props — no inline filtering needed here.  Caret state is updated
       // in the textarea's onSelect/onClick/onKeyUp handlers below.
     },
-    [setTextAndDraft, voice],
+    [setTextAndDraft, voice, isDraft],
   );
 
   // Close the message-history popup when the autocomplete opens, so we
@@ -669,6 +675,9 @@ export function InputArea({ sessionId, disabled, placeholder, onSend, isRunning,
             onClick={updateCaret}
             onKeyUp={updateCaret}
             onKeyDown={handleKeyDown}
+            onBlur={() => {
+              if (isDraft) void draftAutosave.flush(sessionIdRef.current);
+            }}
             placeholder={voice.isRevising ? "Revising..." : voice.isTranscribing ? "Transcribing..." : placeholder}
             disabled={disabled || voice.isTranscribing || voice.isRevising}
             rows={1}

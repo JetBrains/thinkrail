@@ -49,6 +49,7 @@ frontend/src/store/
 ├── trashStore.ts          # Soft-deleted items
 ├── connectionStore.ts     # WebSocket connection state
 ├── inputDraftStore.ts     # Per-session input text drafts
+├── draftAutosave.ts       # Draft-on-type autosave controller (debounce + max-wait; module-scoped, not a store)
 ├── messageHistoryStore.ts # Input message history (up/down arrow)
 ├── visStore.ts            # Visualization dashboard state
 ├── serverInfoStore.ts     # Server info (version, capabilities)
@@ -199,6 +200,8 @@ export interface Session {
   answeredRequests: Map<string, unknown>;
   systemPrompt?: string;           // full assembled prompt; restored from sessionStart event
   promptSections?: PromptSection[] | null;  // structured sections (in-memory only, not persisted)
+  unsaved?: boolean;               // draft-on-type: frontend-only draft, no backend task yet (layers on status "draft")
+  nameManuallySet?: boolean;       // true = user renamed by hand; freezes live name derivation
   restored?: boolean;
 }
 
@@ -317,6 +320,7 @@ interface SessionStore {
 - `resolveRequest` calls `agent/respond` RPC, stores in `answeredRequests`, drops the matching entry from `pendingRequests`
 - `restoreSession` loads from backend, marks all question/approval events as answered with `{ historical: true }`, sets `status: "done"` and `restored: true`, extracts `systemPrompt` from the persisted `sessionStart` event payload
 - `loadActiveSessions` similarly extracts `systemPrompt` from the `sessionStart` event (or from `entry.systemPrompt` for drafts) when building Session objects from persistence
+- **Draft-on-type (lazy persistence):** for blank entry points (`+ New`, `Cmd/Ctrl+T`, palette), `createNewSession` mints a client-side `bonsaiSid` and inserts an `unsaved` `"draft"` session with **no RPC** — focusing an existing untouched blank tab instead of opening a duplicate. Typing routes through `noteDraftInput`, which live-derives `name` (unless `nameManuallySet`) and arms the `draftAutosave` controller only once the prompt crosses the save threshold or the draft is already saved. `ensureSaved` performs the first `agent/prepare` reusing the minted id and flips `unsaved:false` (single-flight); `commitDraft` (the `draftAutosave` commit target) is a no-op for an unsaved sub-threshold draft (so abandoning a blank leaves no trace), calls `ensureSaved` for an unsaved draft once past the threshold, and autosaves an already-saved draft via `agent/updateDraft`. `startDraft`/`sendMessage` `await ensureSaved` first, so Start works below the threshold. `restoreSession`/`loadActiveSessions` seed `inputDraftStore` from the persisted `draftInput`. Full design: [Draft Session](../../../.bonsai/design_docs/DRAFT_SESSION_DESIGN.md).
 - `onSuggestSession` appends suggestion params to `pendingRequests` as `{type: "suggestion", skill, specIds, name, reason, requestId}` and appends a `suggestSession` event
 - `onAgentEvent` is the generic handler for all streaming events; increments `toolCalls` on `toolCallEnd`, updates metrics on `turnComplete`/`interrupted`. On `costEstimate` events, updates live context window from `currentContextWindow` and per-iteration breakdown (`iterInputTokens`, `iterCacheRead`, `iterCacheCreate`, `iterOutputTokens`) — not persisted, only for live UI display.
 - `onSessionDone` only updates cost, status, and duration — preserves context data from the last `turnComplete` (the `agent/done` event carries no usage data)

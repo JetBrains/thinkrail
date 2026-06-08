@@ -708,6 +708,10 @@ class AgentTask(BaseModel):
     file_paths: list[str] = Field(default_factory=list)
     skill_id: str | None = None
     session_prompt: str | None = None
+    # In-progress prompt text autosaved while a blank draft is being typed.
+    # Non-context: never passed to build_context, so it neither pollutes the
+    # system prompt nor re-appears as the first message on Start.
+    draft_input: str | None = None
     config: AgentConfig = Field(default_factory=AgentConfig)
     session_id: str | None = None
     ticket_id: str | None = None

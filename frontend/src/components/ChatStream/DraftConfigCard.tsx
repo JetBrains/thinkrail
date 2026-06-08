@@ -29,6 +29,7 @@ interface DraftConfigCardProps {
 export function DraftConfigCard({ bonsaiSid, readOnly, hideDiscard, onVisibilityChange }: DraftConfigCardProps) {
   const session = useSessionStore((s) => s.sessions.get(bonsaiSid));
   const updateDraft = useSessionStore((s) => s.updateDraft);
+  const renameDraft = useSessionStore((s) => s.renameDraft);
   const startDraft = useSessionStore((s) => s.startDraft);
   const deleteSession = useSessionStore((s) => s.deleteSession);
   const getStaleSessionRefs = useSessionStore((s) => s.getStaleSessionRefs);
@@ -276,7 +277,7 @@ export function DraftConfigCard({ bonsaiSid, readOnly, hideDiscard, onVisibility
           value={editName}
           onChange={(e) => {
             setEditName(e.target.value);
-            debouncedUpdate({ name: e.target.value });
+            void renameDraft(bonsaiSid, e.target.value);
           }}
           maxLength={60}
           placeholder="Session name..."
@@ -554,6 +555,7 @@ export function DraftConfigCard({ bonsaiSid, readOnly, hideDiscard, onVisibility
       <PromptPreview
         systemPrompt={session.systemPrompt ?? ""}
         sections={session.promptSections}
+        unsaved={session.unsaved}
       />
 
       {/* Actions */}

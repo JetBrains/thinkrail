@@ -26,6 +26,7 @@ import { useSettingsStore } from "@/store/settingsStore.ts";
 import { useRuntimeCapsStore } from "@/store/runtimeCapsStore.ts";
 import { useSessionStore } from "@/store/sessionStore.ts";
 import { useInputDraftStore } from "@/store/inputDraftStore.ts";
+import * as draftAutosave from "@/store/draftAutosave.ts";
 import type { Skill } from "@/constants/skills.ts";
 import type { RuntimeSkillInfo, RuntimeType } from "@/types/agent.ts";
 import type { RuntimeIdentity } from "@/types/rpc-methods.ts";
@@ -172,6 +173,7 @@ beforeEach(() => {
 
 afterEach(() => {
   cleanup();
+  vi.restoreAllMocks();
 });
 
 // ── Tests ─────────────────────────────────────────────────────────────────
@@ -323,5 +325,82 @@ describe("InputArea autocomplete (grouped popup)", () => {
 
     expect(screen.queryByText("Bonsai")).toBeNull();
     expect(screen.queryByText("Claude Code")).toBeNull();
+  });
+});
+
+// ── Draft-on-type wiring ────────────────────────────────────────────────────
+
+describe("InputArea draft-on-type", () => {
+  function seedDraftSession() {
+    const draft = {
+      bonsaiSid: SESSION_ID,
+      name: "New session",
+      skillId: null,
+      specIds: [],
+      filePaths: [],
+      status: "draft",
+      unsaved: true,
+      model: "",
+      permissionMode: "default",
+      effort: "auto",
+      flags: {},
+      startedAt: Date.now(),
+      events: [],
+      metrics: { costUsd: 0, turns: 0, durationMs: 0, contextUsage: undefined },
+      pendingRequests: [],
+      answeredRequests: new Map(),
+      ticketId: null,
+      parentBonsaiSid: null,
+      subsessionType: null,
+      subsessionContext: null,
+      returnStatus: null,
+      returnSummary: null,
+    } as unknown as Session;
+    useSettingsStore.setState({ skills: [], runtimeSkills: new Map() });
+    useSessionStore.setState({ sessions: new Map<string, Session>([[SESSION_ID, draft]]) });
+    useInputDraftStore.setState({ drafts: new Map([[SESSION_ID, ""]]) });
+  }
+
+  it("derives the tab name live and arms autosave only past the threshold", () => {
+    seedDraftSession();
+    const noteInputSpy = vi.spyOn(draftAutosave, "noteInput");
+    renderInputArea({ isDraft: true });
+    const textarea = screen.getByPlaceholderText("Type a message") as HTMLTextAreaElement;
+
+    // Below the 5-char threshold: name updates live, autosave stays disarmed.
+    typeIntoTextarea(textarea, "fix");
+    expect(useSessionStore.getState().sessions.get(SESSION_ID)?.name).toBe("fix");
+    expect(noteInputSpy).not.toHaveBeenCalled();
+
+    // Crossing the threshold arms autosave.
+    typeIntoTextarea(textarea, "fix login");
+    expect(useSessionStore.getState().sessions.get(SESSION_ID)?.name).toBe("fix login");
+    expect(noteInputSpy).toHaveBeenCalledWith(SESSION_ID);
+  });
+
+  it("flushes pending text on blur", () => {
+    seedDraftSession();
+    const flushSpy = vi.spyOn(draftAutosave, "flush").mockResolvedValue(undefined);
+    renderInputArea({ isDraft: true });
+    const textarea = screen.getByPlaceholderText("Type a message") as HTMLTextAreaElement;
+
+    typeIntoTextarea(textarea, "fix login flow");
+    fireEvent.blur(textarea);
+
+    expect(flushSpy).toHaveBeenCalledWith(SESSION_ID);
+  });
+
+  it("does not arm autosave or flush for non-draft sessions", () => {
+    seedStores();
+    const noteInputSpy = vi.spyOn(draftAutosave, "noteInput");
+    const flushSpy = vi.spyOn(draftAutosave, "flush").mockResolvedValue(undefined);
+    renderInputArea({ isDraft: false });
+    const textarea = screen.getByPlaceholderText("Type a message") as HTMLTextAreaElement;
+
+    typeIntoTextarea(textarea, "fix login flow");
+    fireEvent.blur(textarea);
+
+    expect(noteInputSpy).not.toHaveBeenCalled();
+    expect(flushSpy).not.toHaveBeenCalled();
   });
 });

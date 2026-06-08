@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import uuid
 from typing import Any
 
 from jsonrpcserver import JsonRpcError
@@ -10,6 +11,7 @@ from app.rpc.errors import (
     FUTURE_NOT_FOUND,
     INTERNAL_ERROR,
     INVALID_CAPABILITY_VALUE,
+    INVALID_PARAMS,
     TASK_NOT_FOUND,
     UNKNOWN_RUNTIME,
     rpc_handler,
@@ -26,6 +28,25 @@ _handle_errors = rpc_handler(
     (UnknownRuntimeError, UNKNOWN_RUNTIME, "Unknown runtime"),
     (InvalidCapabilityValueError, INVALID_CAPABILITY_VALUE, "Invalid capability value"),
 )
+
+_MAX_DRAFT_INPUT = 100_000
+
+
+def _validated_sid(raw: Any) -> str | None:
+    """Validate a client-supplied bonsaiSid as a UUID before it is reused as a
+    session-file name. Returns None when absent so the server mints its own."""
+    if raw is None:
+        return None
+    try:
+        return str(uuid.UUID(str(raw)))
+    except (ValueError, AttributeError, TypeError) as exc:
+        raise JsonRpcError(INVALID_PARAMS, "Invalid bonsaiSid") from exc
+
+
+def _validated_draft_input(raw: Any) -> Any:
+    if isinstance(raw, str) and len(raw) > _MAX_DRAFT_INPUT:
+        raise JsonRpcError(INVALID_PARAMS, "draftInput exceeds maximum length")
+    return raw
 
 
 @_handle_errors
@@ -150,6 +171,8 @@ async def prepare_agent(service: AgentService, **params: Any) -> dict:
         name=params.get("name", ""),
         ticket_id=params.get("ticketId"),
         file_paths=params.get("filePaths"),
+        bonsai_sid=_validated_sid(params.get("bonsaiSid")),
+        draft_input=_validated_draft_input(params.get("draftInput")),
     )
     auto_subscribe_all(task.bonsai_sid)
     conn = get_current_conn()
@@ -189,6 +212,8 @@ async def update_draft(service: AgentService, **params: Any) -> dict:
         kwargs["config"] = AgentConfig(**params["config"])
     if "prompt" in params:
         kwargs["session_prompt"] = params["prompt"]
+    if "draftInput" in params:
+        kwargs["draft_input"] = _validated_draft_input(params["draftInput"])
     if "name" in params:
         kwargs["name"] = params["name"]
     if "ticketId" in params:

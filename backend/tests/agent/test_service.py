@@ -540,6 +540,181 @@ class TestSubagentModePersistence:
         assert loaded["subagentMode"] == "subagent"
         assert loaded["stepGate"] == "autonomous"
 
+class TestPrepareDraftOnType:
+    """Draft-on-type additive params on prepare_task / update_draft."""
+
+    def _service(self, tmp_path: Path) -> AgentService:
+        config = MagicMock()
+        config.project_root = tmp_path
+        service = AgentService(config, MagicMock())
+        _install_mock_runtime(service)
+        service._build_context_for = AsyncMock(return_value="prompt")
+        service._build_context_structured_for = AsyncMock(
+            return_value={"full": "prompt", "sections": [], "totalTokens": 0}
+        )
+        return service
+
+    async def test_prepare_reuses_supplied_bonsai_sid(self, tmp_path: Path) -> None:
+        from app.agent.persistence import load_session
+
+        service = self._service(tmp_path)
+        task = await service.prepare_task(
+            ["s1"], AgentConfig(),
+            bonsai_sid="client-minted", draft_input="fix login flow",
+        )
+        assert task.bonsai_sid == "client-minted"
+        assert task.draft_input == "fix login flow"
+        # The supplied id is reused verbatim — no re-mint — so the persisted
+        # task is keyed by it and echoes it back as bonsaiSid.
+        loaded = load_session(tmp_path, "client-minted")
+        assert loaded is not None
+        assert loaded["bonsaiSid"] == "client-minted"
+
+    async def test_prepare_without_args_server_mints_and_no_draft_input(
+        self, tmp_path: Path,
+    ) -> None:
+        service = self._service(tmp_path)
+        task = await service.prepare_task(["s1"], AgentConfig())
+        assert task.bonsai_sid  # server-minted uuid
+        assert task.draft_input is None
+
+    async def test_prepare_persists_draft_input(self, tmp_path: Path) -> None:
+        from app.agent.persistence import load_session
+
+        service = self._service(tmp_path)
+        task = await service.prepare_task(
+            ["s1"], AgentConfig(),
+            bonsai_sid="d1", draft_input="fix login flow",
+        )
+        loaded = load_session(tmp_path, task.bonsai_sid)
+        assert loaded is not None
+        assert loaded["draftInput"] == "fix login flow"
+
+    async def test_update_draft_sets_draft_input(self, tmp_path: Path) -> None:
+        service = self._service(tmp_path)
+        task = await service.prepare_task(["s1"], AgentConfig(), bonsai_sid="d1")
+        await service.update_draft("d1", draft_input="typed text")
+        assert task.draft_input == "typed text"
+
+    async def test_update_draft_omitting_draft_input_keeps_current(
+        self, tmp_path: Path,
+    ) -> None:
+        service = self._service(tmp_path)
+        task = await service.prepare_task(
+            ["s1"], AgentConfig(), bonsai_sid="d1", draft_input="original",
+        )
+        # Omit draft_input → Ellipsis-sentinel leaves it untouched.
+        await service.update_draft("d1", name="renamed")
+        assert task.draft_input == "original"
+
+    async def test_text_only_update_skips_system_prompt_rebuild(
+        self, tmp_path: Path,
+    ) -> None:
+        service = self._service(tmp_path)
+        await service.prepare_task(["s1"], AgentConfig(), bonsai_sid="d1")
+        service._build_context_for.reset_mock()
+        service._build_context_structured_for.reset_mock()
+        await service.update_draft("d1", draft_input="typed text", name="typed text")
+        service._build_context_for.assert_not_called()
+        service._build_context_structured_for.assert_not_called()
+
+    async def test_config_change_rebuilds_system_prompt(
+        self, tmp_path: Path,
+    ) -> None:
+        service = self._service(tmp_path)
+        await service.prepare_task(["s1"], AgentConfig(), bonsai_sid="d1")
+        service._build_context_for.reset_mock()
+        await service.update_draft("d1", spec_ids=["s1", "s2"])
+        service._build_context_for.assert_called_once()
+
+    async def test_list_all_sessions_includes_draft_input(
+        self, tmp_path: Path,
+    ) -> None:
+        service = self._service(tmp_path)
+        await service.prepare_task(
+            ["s1"], AgentConfig(), bonsai_sid="d1", draft_input="fix login flow",
+        )
+        entry = next(s for s in service.list_all_sessions() if s["bonsaiSid"] == "d1")
+        assert entry["draftInput"] == "fix login flow"
+
+    async def test_draft_input_round_trips_through_both_list_paths(
+        self, tmp_path: Path,
+    ) -> None:
+        """prepare_task then update_draft persists draftInput, and BOTH the
+        in-memory (list_all_sessions) and on-disk (persistence.list_sessions)
+        listings surface the latest text for the draft entry."""
+        from app.agent.persistence import list_sessions
+
+        service = self._service(tmp_path)
+        await service.prepare_task(
+            ["s1"], AgentConfig(), bonsai_sid="d1", draft_input="first draft",
+        )
+        await service.update_draft("d1", draft_input="second draft")
+
+        in_memory = next(
+            s for s in service.list_all_sessions() if s["bonsaiSid"] == "d1"
+        )
+        assert in_memory["draftInput"] == "second draft"
+
+        on_disk = next(
+            s for s in list_sessions(tmp_path) if s["bonsaiSid"] == "d1"
+        )
+        assert on_disk["draftInput"] == "second draft"
+
+    async def test_draft_input_is_not_assembled_into_system_prompt(
+        self, tmp_path: Path,
+    ) -> None:
+        """draft_input is non-context: it must never reach build_context.
+
+        Builds the real system prompt for a draft carrying BOTH a session_prompt
+        and a draft_input. The session_prompt lands under "Your Task"; the
+        draft_input must be absent entirely.
+        """
+        config = MagicMock()
+        config.project_root = tmp_path
+        config.plugin_dir = tmp_path / "plugins"
+        spec_service = MagicMock()
+        spec_service.get_spec = AsyncMock()
+        service = AgentService(config, spec_service)
+        _install_mock_runtime(service)
+
+        task = await service.prepare_task(
+            [], AgentConfig(),
+            bonsai_sid="d1",
+            session_prompt="SENTINEL_SESSION_PROMPT_VISIBLE",
+            draft_input="SENTINEL_DRAFT_INPUT_HIDDEN",
+        )
+        prompt = await service._build_context_for(task)
+
+        assert "SENTINEL_SESSION_PROMPT_VISIBLE" in prompt
+        assert "SENTINEL_DRAFT_INPUT_HIDDEN" not in prompt
+
+    def test_restore_draft_sessions_carries_draft_input(
+        self, tmp_path: Path,
+    ) -> None:
+        from app.agent.persistence import save_session
+
+        save_session(tmp_path, {
+            "bonsaiSid": "draft-restore",
+            "name": "n",
+            "specIds": [],
+            "config": AgentConfig().model_dump(by_alias=True),
+            "status": "draft",
+            "draftInput": "fix login flow",
+            "createdAt": "2026-05-30T00:00:00Z",
+            "updatedAt": "2026-05-30T00:00:00Z",
+            "metrics": {},
+        })
+        config = MagicMock()
+        config.project_root = tmp_path
+        service = AgentService(config, MagicMock())
+        _install_mock_runtime(service)
+        service._restore_draft_sessions()
+
+        task = service._tracker.get_task("draft-restore")
+        assert task.draft_input == "fix login flow"
+
+
 class TestBuildContext:
     async def test_builds_context_from_specs(self) -> None:
         from pathlib import Path
