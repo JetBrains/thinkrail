@@ -1,7 +1,7 @@
 import { test, expect } from "../fixtures";
 import { openProject } from "../helpers/project";
 import { buildSpec, seedProject } from "../helpers/specs";
-import { contextPanel, visTab } from "../helpers/selectors";
+import { visTab } from "../helpers/selectors";
 
 /**
  * Visualization dashboard smoke. The dashboard is pinned via the right-panel
@@ -183,18 +183,12 @@ test.describe("Visualization dashboard", () => {
 
     await openProject(page, tempProject.path);
 
-    // The right-side ContextPanel exposes a chart-icon button that pins the
-    // VisTab dashboard. Click it to enter dashboard mode.
-    const dashBtn = page.locator(contextPanel.dashBtn);
-    await expect(dashBtn).toBeVisible({ timeout: 15_000 });
-    await dashBtn.click();
-    await expect(page.locator(contextPanel.dashBtnActive)).toBeVisible();
-
-    // Header label switches to "Dashboard".
-    await expect(page.locator(contextPanel.modeLabel)).toContainText(
-      "Dashboard",
-      { timeout: 15_000 },
-    );
+    // The dashboard opens as a modal from the header Dashboard button; it
+    // hosts the same VisTab.
+    await page.locator("button.header-dashboard-btn").click();
+    const dashModal = page.locator(".dashboard-modal");
+    await expect(dashModal).toBeVisible({ timeout: 15_000 });
+    await expect(page.locator(".dashboard-modal__title")).toContainText("Dashboard");
 
     // Wait specifically for the LOADED summary (not the transient empty
     // state) before arming. VisTab renders empty → loading → loaded as
@@ -288,8 +282,8 @@ test.describe("Visualization dashboard", () => {
     // Dashboard should still be rendered after recompute.
     await expect(summary.or(empty)).toBeVisible({ timeout: 30_000 });
 
-    // Toggling off the dashboard returns to the auto-detected context mode.
-    await dashBtn.click();
-    await expect(page.locator(contextPanel.dashBtnActive)).toHaveCount(0);
+    // Closing the modal dismisses the dashboard.
+    await page.locator(".dashboard-modal__close").click();
+    await expect(dashModal).toHaveCount(0);
   });
 });

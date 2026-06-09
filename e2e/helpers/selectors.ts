@@ -29,7 +29,7 @@ export const chatStream = {
 };
 
 export const newSession = {
-  newButton: "button.session-new-btn",
+  newButton: "button.session-tabs-new-btn",
   // Draft form widgets.
   modelSelect: "select.draft-config-select--model",
   // The perms <select> shares `.draft-config-select` with the model picker but
@@ -150,7 +150,7 @@ export const createTicketModal = {
 };
 
 export const ticketDetail = {
-  root: ".ticket-detail",
+  root: ".ticket-info-inner",
   rightArea: ".ticket-right-area",
   rightHeader: ".ticket-right-header",
   rightTitle: ".ticket-right-title",

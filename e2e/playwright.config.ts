@@ -102,7 +102,7 @@ export default defineConfig({
     url: FRONTEND_URL,
     // First-run install (`uv sync`, `npm install`) can dominate.
     timeout: 5 * 60_000,
-    reuseExistingServer: false,
+    reuseExistingServer: !!process.env.BONSAI_E2E_REUSE,
     stdout: "pipe",
     stderr: "pipe",
     env: {

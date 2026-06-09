@@ -2,6 +2,7 @@ import { test, expect } from "../fixtures";
 import { openProject } from "../helpers/project";
 import { newSession } from "../helpers/selectors";
 import { seedSessionDefaults } from "../helpers/appSettings";
+import { optionLabels, selectedLabel } from "../helpers/draftConfig";
 
 /**
  * The draft pickers (model / permission / effort) are rendered entirely from
@@ -27,34 +28,19 @@ test("draft pickers render the runtime's declared capabilities in order", async 
   await page.locator(newSession.newButton).click();
 
   // ── Models: declared order, Opus 4.8 (the default) first ──
-  const modelSelect = page.locator(newSession.modelSelect);
-  await expect(modelSelect).toBeVisible({ timeout: 15_000 });
-  await expect
-    .poll(
-      () =>
-        modelSelect.evaluate((el: HTMLSelectElement) =>
-          Array.from(el.options).map((o) => o.text.trim()),
-        ),
-      { timeout: 15_000 },
-    )
-    .toEqual(["Opus 4.8", "Sonnet 4.6", "Haiku 4.5"]);
+  await expect(selectedLabel(page, "model")).toBeVisible({ timeout: 15_000 });
+  expect(await optionLabels(page, "model")).toEqual(["Opus 4.8", "Sonnet 4.6", "Haiku 4.5"]);
 
-  // ── Permission modes: the SDK's accepted set, default-first ──
-  const permSelect = page.locator(newSession.permissionSelect);
-  await expect
-    .poll(() =>
-      permSelect.evaluate((el: HTMLSelectElement) =>
-        Array.from(el.options).map((o) => o.value),
-      ),
-    )
-    .toEqual(["default", "acceptEdits", "plan", "bypassPermissions", "dontAsk", "auto"]);
+  // ── Permission modes: the SDK's accepted set, default-first (value == label) ──
+  expect(await optionLabels(page, "perms")).toEqual([
+    "default", "acceptEdits", "plan", "bypassPermissions", "dontAsk", "auto",
+  ]);
 
   // ── Effort levels: the SDK's set with "auto" (= SDK effort=None) leading ──
-  const effortPills = page.locator("button.draft-config-effort-pill");
-  await expect(effortPills).toHaveText(["auto", "low", "medium", "high", "xhigh", "max"]);
+  expect(await optionLabels(page, "effort")).toEqual([
+    "auto", "low", "medium", "high", "xhigh", "max",
+  ]);
 
-  // Fresh draft uses the cold-start default effort ("auto"), so its pill is active.
-  await expect(effortPills.filter({ hasText: /^auto$/ })).toHaveClass(
-    /draft-config-effort-pill--active/,
-  );
+  // Fresh draft uses the cold-start default effort ("auto").
+  await expect(selectedLabel(page, "effort")).toHaveText("auto");
 });

@@ -5,11 +5,17 @@ import { test, expect } from "../fixtures";
 import { openProject } from "../helpers/project";
 import { seedSessionDefaults } from "../helpers/appSettings";
 import {
-  leftPanel,
+  header,
   newSession,
   sessionManager,
   sessionPanel,
 } from "../helpers/selectors";
+
+/** Open the SessionManager (left panel) via the header Sessions view button. */
+async function openSessionManager(p: Page): Promise<void> {
+  await p.getByRole(header.sessionsTab.role, { name: header.sessionsTab.name }).click();
+  await expect(p.locator(sessionManager.panel)).toBeVisible({ timeout: 15_000 });
+}
 
 /**
  * Draft-on-type — blank-session save is deferred until the prompt carries
@@ -131,8 +137,7 @@ test.describe("Draft-on-type", () => {
     const second = await openSecondClient(browser, tempProject.path);
     try {
       // The 2nd client's Sessions panel starts empty.
-      await second.page.locator(leftPanel.sessionsTab).click();
-      await expect(second.page.locator(sessionManager.panel)).toBeVisible();
+      await openSessionManager(second.page);
       await expect(second.page.locator(sessionManager.card)).toHaveCount(0);
 
       const getSaves = trackSaveFrames(page);
@@ -324,8 +329,9 @@ test.describe("Draft-on-type", () => {
     await page.reload();
     await expect(page.getByText(/\d+ sessions?/)).toBeVisible({ timeout: 30_000 });
 
-    // Open the restored draft from the sidebar.
-    await page.locator(leftPanel.sessionsTab).click();
+    // Open the restored draft from the SessionManager. After a page reload the
+    // draft is still in the backend tracker (active), so it lists as a card.
+    await openSessionManager(page);
     const card = page.locator(sessionManager.card, {
       has: page.locator(".sm-dot--draft"),
     });

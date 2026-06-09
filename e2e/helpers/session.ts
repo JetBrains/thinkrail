@@ -1,75 +1,12 @@
-import { expect, type Locator, type Page } from "@playwright/test";
+import { expect, type Page } from "@playwright/test";
 import { chatStream, newSession, sessionPanel } from "./selectors";
+import { pickOption, selectedLabel } from "./draftConfig";
 
 /**
- * Poll a `<select>` until it contains an option with the given value. The
- * dynamic Anthropic model list arrives after the first WS frame, so on a
- * fresh page the dropdown briefly carries only the static fallback set.
- */
-async function waitForOptionValue(
-  select: Locator,
-  value: string,
-  timeoutMs = 30_000,
-): Promise<void> {
-  await expect
-    .poll(
-      async () =>
-        select.evaluate(
-          (el: HTMLSelectElement, v: string) =>
-            Array.from(el.options).some((o) => o.value === v),
-          value,
-        ),
-      { timeout: timeoutMs, message: `<option value="${value}"> never appeared` },
-    )
-    .toBe(true);
-}
-
-/** Same as {@link waitForOptionValue} but matches by visible text. */
-async function waitForOptionLabel(
-  select: Locator,
-  label: string,
-  timeoutMs = 30_000,
-): Promise<void> {
-  await expect
-    .poll(
-      async () =>
-        select.evaluate(
-          (el: HTMLSelectElement, l: string) =>
-            Array.from(el.options).some((o) => o.text.trim() === l),
-          label,
-        ),
-      { timeout: timeoutMs, message: `<option> with label "${label}" never appeared` },
-    )
-    .toBe(true);
-}
-
-/**
- * Resolve a model select option's `value` attribute by its visible label.
- * Used so we can `toHaveValue(...)` after the round-trip — the DraftConfigCard
- * select is controlled (`value={session.model}`), so its reported value only
- * reflects the new model once `agent/updateDraft` has landed and the store
- * updated. Polling the value gives us a real settle signal instead of a sleep.
- */
-async function resolveOptionValueByLabel(
-  select: Locator,
-  label: string,
-): Promise<string> {
-  const value = await select.evaluate(
-    (el: HTMLSelectElement, l: string) =>
-      Array.from(el.options).find((o) => o.text.trim() === l)?.value ?? "",
-    label,
-  );
-  if (!value) throw new Error(`No <option> matches label "${label}"`);
-  return value;
-}
-
-/**
- * Open the New Session draft, pick a model, type the prompt, and click Start.
- * Does NOT wait for activity — call waitForSessionActivity afterwards.
- *
- * `model` may be either a model id (e.g. "claude-haiku-4-5-20251001") or
- * `{ label: "Haiku 4.5" }`. Prefer label-based selection so the test stays
- * stable if a catalog id ever shifts.
+ * Open the New Session draft, pick a model via the DraftConfigCard dropdown,
+ * type the prompt, and click Send. Does NOT wait for activity — call
+ * waitForSessionActivity afterwards. `model` is a friendly label
+ * (e.g. `{ label: "Sonnet 4.6" }`) so the test stays stable across id changes.
  */
 export async function startSessionWithModel(
   page: Page,
@@ -77,32 +14,16 @@ export async function startSessionWithModel(
   prompt: string,
   opts?: { permissionMode?: string },
 ): Promise<void> {
+  const label = typeof model === "string" ? model : model.label;
   await page.locator(newSession.newButton).click();
-
-  const modelSelect = page.locator(newSession.modelSelect);
-  await expect(modelSelect).toBeVisible();
-  let resolvedModelValue: string;
-  if (typeof model === "string") {
-    await waitForOptionValue(modelSelect, model);
-    resolvedModelValue = model;
-  } else {
-    await waitForOptionLabel(modelSelect, model.label);
-    resolvedModelValue = await resolveOptionValueByLabel(modelSelect, model.label);
-  }
-  await modelSelect.selectOption(resolvedModelValue);
-  // The DraftConfigCard debounces every config edit by 300ms before round-
-  // tripping it through `agent/updateDraft`. The select is controlled by
-  // `session.model`, so its value only stabilises on the chosen option once
-  // the round-trip lands and the store re-renders. Polling toHaveValue is the
-  // correct settle signal — a fixed sleep can let Start fire with the old
-  // model on a loaded backend.
-  await expect(modelSelect).toHaveValue(resolvedModelValue, { timeout: 30_000 });
+  await pickOption(page, "model", label);
+  // The dropdown trigger settling on the chosen label proves the controlled
+  // value updated (debounced `agent/updateDraft` round-trip landed).
+  await expect(selectedLabel(page, "model")).toHaveText(label, { timeout: 30_000 });
 
   if (opts?.permissionMode) {
-    const permSelect = page.locator(newSession.permissionSelect);
-    await permSelect.selectOption(opts.permissionMode);
-    // Same controlled-select round-trip story as the model picker above.
-    await expect(permSelect).toHaveValue(opts.permissionMode, { timeout: 30_000 });
+    await pickOption(page, "perms", opts.permissionMode);
+    await expect(selectedLabel(page, "perms")).toHaveText(opts.permissionMode, { timeout: 30_000 });
   }
 
   const textarea = page.getByPlaceholder(newSession.promptInputPlaceholder);
@@ -113,30 +34,18 @@ export async function startSessionWithModel(
 /**
  * Smoke variant: open a draft, pick a model, click the DraftConfigCard's
  * "▶ Start Session" button. The agent runs with an empty user message —
- * sufficient to verify the SDK round-trips for a given model id, but the
- * agent never sees the test's prompt. Use this for model-connectivity
- * coverage; use {@link startSessionWithModel} when the prompt matters.
+ * enough to verify the SDK round-trips for a given model. Use this for
+ * model-connectivity coverage; use {@link startSessionWithModel} when the
+ * prompt matters.
  */
 export async function startSessionConnectivityCheck(
   page: Page,
   model: string | { label: string },
 ): Promise<void> {
+  const label = typeof model === "string" ? model : model.label;
   await page.locator(newSession.newButton).click();
-  const modelSelect = page.locator(newSession.modelSelect);
-  await expect(modelSelect).toBeVisible();
-  let resolvedModelValue: string;
-  if (typeof model === "string") {
-    await waitForOptionValue(modelSelect, model);
-    resolvedModelValue = model;
-  } else {
-    await waitForOptionLabel(modelSelect, model.label);
-    resolvedModelValue = await resolveOptionValueByLabel(modelSelect, model.label);
-  }
-  await modelSelect.selectOption(resolvedModelValue);
-  // Wait for the controlled select's value to settle on the chosen option —
-  // proves `agent/updateDraft` round-tripped and the store now carries the
-  // selected model. See the analogous comment in startSessionWithModel.
-  await expect(modelSelect).toHaveValue(resolvedModelValue, { timeout: 30_000 });
+  await pickOption(page, "model", label);
+  await expect(selectedLabel(page, "model")).toHaveText(label, { timeout: 30_000 });
   await page
     .getByRole(newSession.startButton.role, { name: newSession.startButton.name })
     .click();

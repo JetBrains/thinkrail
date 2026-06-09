@@ -1,7 +1,8 @@
-import { test, expect } from "../fixtures";
+import { test, expect, type Page } from "../fixtures";
 import { openProject } from "../helpers/project";
 import { header, newSession } from "../helpers/selectors";
 import { seedSessionDefaults, getSessionDefaults } from "../helpers/appSettings";
+import { selectedLabel } from "../helpers/draftConfig";
 
 /**
  * Settings modal round-trip: open → flip Session Defaults → save → verify the
@@ -13,6 +14,21 @@ import { seedSessionDefaults, getSessionDefaults } from "../helpers/appSettings"
 
 const MODAL = ".settings-modal";
 const NAV = `${MODAL} nav[aria-label='Settings sections']`;
+
+// Session Defaults pickers are <Dropdown>s in a `.user-settings-row` keyed by
+// its <label> (Model / Permission mode / Effort). The trigger shows the active
+// option's label; for perms/effort the SDK value doubles as that label.
+const sdTrigger = (rowLabel: string) =>
+  `${MODAL} .user-settings-row:has(label:text-is("${rowLabel}")) .dd-trigger`;
+const sdLabel = (page: Page, rowLabel: string) =>
+  page.locator(`${sdTrigger(rowLabel)} .dd-trigger-label`);
+async function pickSetting(page: Page, rowLabel: string, optLabel: string): Promise<void> {
+  await page.locator(sdTrigger(rowLabel)).click();
+  await page
+    .locator(`${MODAL} .dd-menu[role=listbox] .dd-item`, { hasText: optLabel })
+    .first()
+    .click();
+}
 
 test("settings modal Session Defaults tab saves new defaults and they flow into new sessions", async ({
   page,
@@ -38,30 +54,18 @@ test("settings modal Session Defaults tab saves new defaults and they flow into 
     page.locator(`${MODAL} h3.settings-section__title`),
   ).toHaveText("Session Defaults");
 
-  const modelSelect = page.locator(`${MODAL} select.draft-config-select--model`);
-  await expect
-    .poll(
-      () =>
-        modelSelect.evaluate((el: HTMLSelectElement) =>
-          (el.options[el.selectedIndex]?.text ?? "").trim(),
-        ),
-      { timeout: 15_000 },
-    )
-    .toBe("Opus 4.8");
+  // Seeded defaults are reflected.
+  await expect(sdLabel(page, "Model")).toHaveText("Opus 4.8", { timeout: 15_000 });
+  await expect(sdLabel(page, "Permission mode")).toHaveText("default");
 
-  const permSelect = page.locator(
-    `${MODAL} select.draft-config-select:not(.draft-config-select--model)`,
-  );
-  await expect(permSelect).toHaveValue("default");
   const saveButton = page.locator(`${MODAL} button.token-dialog-btn-primary`);
   await expect(saveButton).toBeDisabled();
   await expect(saveButton).toHaveAttribute("title", "No changes to save");
 
-  await modelSelect.selectOption({ label: "Sonnet 4.6" });
-  await permSelect.selectOption("acceptEdits");
-  await page
-    .locator(`${MODAL} button.draft-config-effort-pill`, { hasText: /^low$/ })
-    .click();
+  // Flip all three.
+  await pickSetting(page, "Model", "Sonnet 4.6");
+  await pickSetting(page, "Permission mode", "acceptEdits");
+  await pickSetting(page, "Effort", "low");
   await expect(saveButton).toBeEnabled();
   await expect(saveButton).toHaveAttribute("title", "Save settings");
 
@@ -84,22 +88,9 @@ test("settings modal Session Defaults tab saves new defaults and they flow into 
   await page.locator(".modal-backdrop").click({ position: { x: 5, y: 5 } });
   await expect(page.locator(MODAL)).toBeHidden({ timeout: 15_000 });
 
+  // A fresh draft inherits the new defaults.
   await page.locator(newSession.newButton).click();
-  const draftModel = page.locator(newSession.modelSelect);
-  await expect
-    .poll(
-      () =>
-        draftModel.evaluate((el: HTMLSelectElement) =>
-          (el.options[el.selectedIndex]?.text ?? "").trim(),
-        ),
-      { timeout: 15_000 },
-    )
-    .toBe("Sonnet 4.6");
-  await expect(page.locator(newSession.permissionSelect)).toHaveValue(
-    "acceptEdits",
-    { timeout: 15_000 },
-  );
-  await expect(
-    page.locator("button.draft-config-effort-pill", { hasText: /^low$/ }).first(),
-  ).toHaveClass(/draft-config-effort-pill--active/, { timeout: 15_000 });
+  await expect(selectedLabel(page, "model")).toHaveText("Sonnet 4.6", { timeout: 15_000 });
+  await expect(selectedLabel(page, "perms")).toHaveText("acceptEdits", { timeout: 15_000 });
+  await expect(selectedLabel(page, "effort")).toHaveText("low", { timeout: 15_000 });
 });

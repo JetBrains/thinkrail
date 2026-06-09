@@ -2,7 +2,7 @@ import { existsSync } from "node:fs";
 import { join } from "node:path";
 import { test, expect } from "../fixtures";
 import { openProject } from "../helpers/project";
-import { seedTrashedPlan } from "../helpers/board";
+import { seedTrashedSpec } from "../helpers/board";
 import { buildSpec, seedProject } from "../helpers/specs";
 import { header, palette, specTree, trashModal } from "../helpers/selectors";
 
@@ -15,13 +15,13 @@ import { header, palette, specTree, trashModal } from "../helpers/selectors";
  */
 
 test.describe("CommandPalette + TrashModal", () => {
-  test("Alt+K opens palette and 'Open Trash' restores a trashed plan", async ({
+  test("Alt+K opens palette and 'Open Trash' restores a trashed spec", async ({
     page,
     tempProject,
   }) => {
     seedProject(tempProject.path, []);
-    const ticketId = "mt_trashed01";
-    seedTrashedPlan(tempProject.path, { ticketId });
+    const specId = "trashed-spec";
+    seedTrashedSpec(tempProject.path, { specId, relPath: `specs/${specId}.md` });
 
     await openProject(page, tempProject.path);
 
@@ -41,26 +41,21 @@ test.describe("CommandPalette + TrashModal", () => {
     await expect(openTrashItem).toBeVisible();
     await openTrashItem.click();
 
-    // Palette closes; TrashModal opens with the seeded trashed plan listed.
+    // Palette closes; TrashModal opens with the seeded trashed spec listed.
     await expect(page.locator(palette.container)).toHaveCount(0);
     await expect(page.locator(trashModal.container)).toBeVisible({
       timeout: 15_000,
     });
-    const trashedPlan = page.locator(trashModal.item).first();
-    await expect(trashedPlan).toBeVisible({ timeout: 15_000 });
-    await expect(trashedPlan).toContainText(ticketId);
+    const trashedItem = page.locator(trashModal.item).first();
+    await expect(trashedItem).toBeVisible({ timeout: 15_000 });
+    await expect(trashedItem).toContainText(specId);
 
-    // Restore the plan — file returns to .bonsai/plans/.
-    await trashedPlan.locator(trashModal.restoreBtn).click();
+    // Restore — the spec file returns to its original location (specs/).
+    await trashedItem.locator(trashModal.restoreBtn).click();
 
-    const planPath = join(
-      tempProject.path,
-      ".bonsai",
-      "plans",
-      `${ticketId}.md`,
-    );
+    const specPath = join(tempProject.path, "specs", `${specId}.md`);
     await expect
-      .poll(() => existsSync(planPath), { timeout: 15_000 })
+      .poll(() => existsSync(specPath), { timeout: 15_000 })
       .toBe(true);
 
     // After restore, the trash list shows the empty state.
