@@ -56,7 +56,6 @@ interface UiStore {
   appendWizardStep: (entry: JourneyEntry) => void;
   clearWizardJourney: () => void;
   leftPanelCollapsed: boolean;
-  rightPanelCollapsed: boolean;
   leftDrawerOpen: boolean;
   rightDrawerOpen: boolean;
   leftActiveTab: LeftTab;
@@ -100,7 +99,6 @@ interface UiStore {
   setTicketArtifactBarCollapsed: (collapsed: boolean) => void;
 
   toggleLeftPanel: () => void;
-  toggleRightPanel: () => void;
   setLeftTab: (tab: LeftTab) => void;
   togglePalette: () => void;
   updateViewport: (width: number) => void;
@@ -135,7 +133,6 @@ export const useUiStore = create<UiStore>()(
         ),
       clearWizardJourney: () => set({ wizardJourney: [] }),
       leftPanelCollapsed: false,
-      rightPanelCollapsed: false,
       leftDrawerOpen: false,
       rightDrawerOpen: false,
       leftActiveTab: "specs" as LeftTab,
@@ -184,8 +181,6 @@ export const useUiStore = create<UiStore>()(
 
       toggleLeftPanel: () =>
         set((s) => ({ leftPanelCollapsed: !s.leftPanelCollapsed })),
-      toggleRightPanel: () =>
-        set((s) => ({ rightPanelCollapsed: !s.rightPanelCollapsed })),
       setLeftTab: (tab) => set({ leftActiveTab: tab }),
       togglePalette: () => set((s) => ({ paletteOpen: !s.paletteOpen })),
       updateViewport: (width) =>
@@ -197,7 +192,6 @@ export const useUiStore = create<UiStore>()(
       name: "bonsai-ui",
       partialize: (state) => ({
         leftPanelCollapsed: state.leftPanelCollapsed,
-        rightPanelCollapsed: state.rightPanelCollapsed,
         leftActiveTab: state.leftActiveTab,
         chatCategoryVisibility: state.chatCategoryVisibility,
         centerView: state.centerView,

@@ -5,12 +5,10 @@ import { SpecContext } from "./modes/SpecContext.tsx";
 import { AgentContext } from "./modes/AgentContext.tsx";
 import { CodeContext } from "./modes/CodeContext.tsx";
 import { PreviewTab } from "./PreviewTab.tsx";
-import { PanelCollapseButton } from "@/components/AppShell/PanelCollapseButton.tsx";
 import { useSessionStore } from "@/store/sessionStore.ts";
-import { useUiStore } from "@/store/uiStore.ts";
-import { useBoardStore } from "@/store/boardStore.ts";
 import { useTicketRouteStore } from "@/store/ticketRouteStore.ts";
 import { TicketPreviewPanel } from "@/components/TicketDetail/TicketPreviewPanel.tsx";
+import { resolvePhaseDefaultSid } from "@/components/TicketDetail/phaseDefaultSession.ts";
 import { useTicketRouteSetPreviewFile } from "./useTicketRouteSetPreviewFile.ts";
 import { Card } from "@/components/ui/index.ts";
 import "./ContextPanel.css";
@@ -45,12 +43,43 @@ export function TicketRouteContextPanel() {
   const selectedArtifact = useTicketRouteStore((s) => s.selectedArtifact);
   const setSelectedArtifact = useTicketRouteStore((s) => s.setSelectedArtifact);
   const setPlan = useTicketRouteStore((s) => s.setPlan);
+  const sessionSummaries = useTicketRouteStore((s) => s.sessionSummaries);
   const centerSessionId = useTicketRouteStore((s) => s.centerSessionId);
+
+  // Default the right panel to the ticket's current-phase session so the
+  // artifact bar + preview follow the live agent without a click. An explicit
+  // `centerSessionId` (set by plan/orchestrator/step clicks) overrides it.
+  const liveSessions = useSessionStore((s) => s.sessions);
+  const archivedSessions = useSessionStore((s) => s.archivedSessions);
+  const restoreSession = useSessionStore((s) => s.restoreSession);
+  const phaseDefaultSid = useMemo(
+    () => resolvePhaseDefaultSid(ticket, liveSessions, archivedSessions, sessionSummaries),
+    [ticket, liveSessions, archivedSessions, sessionSummaries],
+  );
+  const effectiveCenterSid = centerSessionId ?? phaseDefaultSid;
+
+  // Load the resolved session into memory (no tab) so its artifacts +
+  // previewPath are available even before the user opens its session tab.
+  // Guarded against duplicate / tight-retry loads per sid.
+  const failedRestoreRef = useRef<Set<string>>(new Set());
+  useEffect(() => {
+    const sid = effectiveCenterSid;
+    if (!sid) return;
+    if (useSessionStore.getState().sessions.has(sid)) return;
+    if (failedRestoreRef.current.has(sid)) return;
+    let cancelled = false;
+    restoreSession(sid, { noTab: true }).catch(() => {
+      if (!cancelled) failedRestoreRef.current.add(sid);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [effectiveCenterSid, restoreSession]);
 
   // Pull the center session's previewPath + emitted artifacts into the
   // artifact bar so SetPreviewFile output appears without a click.
   const centerSession = useSessionStore(
-    (s) => (centerSessionId ? s.sessions.get(centerSessionId) : null),
+    (s) => (effectiveCenterSid ? s.sessions.get(effectiveCenterSid) ?? null : null),
   );
   const sessionTouchedFiles = useMemo(() => {
     const out: { path: string }[] = [];
@@ -71,7 +100,6 @@ export function TicketRouteContextPanel() {
   return (
     <Card className="context-panel context-panel--ticket">
       <div className="context-panel__header">
-        <PanelCollapseButton side="right" shortcut="J" />
         <span className="context-panel__mode-label">Ticket</span>
       </div>
       <div className="context-panel__body context-panel__body--flush">
@@ -94,10 +122,6 @@ export function TicketRouteContextPanel() {
 }
 
 export function ContextPanel() {
-  const centerView = useUiStore((s) => s.centerView);
-  const activeTicketId = useBoardStore((s) => s.activeTicketId);
-  const inTicketRoute = centerView === "board" && activeTicketId != null;
-
   const autoMode = useContextMode();
 
   // Preview / artifact state lives per-session in sessionStore. The Preview
@@ -128,8 +152,6 @@ export function ContextPanel() {
       lastSeenKey.current = null;
     }
   }, [previewActive, previewPath, artifactCount]);
-
-  if (inTicketRoute) return <TicketRouteContextPanel />;
 
   const config = MODE_CONFIG[autoMode];
   const showLabel = autoMode !== "empty";

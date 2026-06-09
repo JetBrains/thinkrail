@@ -14,7 +14,6 @@ import { Card } from "@/components/ui/index.ts";
 import { useMessageHistoryStore } from "@/store/messageHistoryStore";
 import { ContextPanel, TicketRouteContextPanel } from "@/components/ContextPanel/ContextPanel.tsx";
 import { ResizeHandle } from "@/components/AppShell/ResizeHandle.tsx";
-import { useUiStore } from "@/store/uiStore.ts";
 import { useBoardStore } from "@/store/boardStore.ts";
 import { TicketInfo } from "@/components/TicketDetail/TicketInfo.tsx";
 import { useTicketRouteData } from "@/components/TicketDetail/useTicketRouteData.ts";
@@ -82,9 +81,9 @@ export function SessionPanel({
   const [restoring, setRestoring] = useState(false);
   const failedRestoreRef = useRef<Set<string>>(new Set());
 
-  // In-session context card (right side of the chat). `⌘J` toggles it via
-  // rightPanelCollapsed; width is local and resized with an invisible handle.
-  const rightCollapsed = useUiStore((s) => s.rightPanelCollapsed);
+  // In-session context card (right side of the chat). Always visible — it
+  // can't be collapsed away (there's no affordance to bring it back). Width
+  // is local and resized with an invisible handle.
   const [contextWidth, setContextWidth] = useState(CONTEXT_DEFAULT_W);
 
   // Ticket tabs (ticket = folder). Embedded/wizard panels never show ticket UI.
@@ -212,7 +211,7 @@ export function SessionPanel({
   // Context card belongs to the full session view only — not the embedded
   // (ticket-route) or wizard (hideTabBar) chats, and hidden while a file shows.
   // Shown for a session (agent context) or a ticket tab (artifacts).
-  const showContext = !isEmbedded && !hideTabBar && !rightCollapsed && (showSession || isTicketTab);
+  const showContext = !isEmbedded && !hideTabBar && (showSession || isTicketTab);
 
   const status = activeSession?.status as SessionStatus | undefined;
   const firstPending = activeSession?.pendingRequests[0] ?? null;

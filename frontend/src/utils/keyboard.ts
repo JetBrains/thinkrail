@@ -42,10 +42,6 @@ export function registerKeyboardShortcuts(): () => void {
         e.preventDefault();
         useSessionStore.getState().createNewSession();
         break;
-      case "j": // Mod+J — toggle right panel
-        e.preventDefault();
-        store.toggleRightPanel();
-        break;
     }
   }
 

@@ -64,7 +64,6 @@ export function AppShell({ onSwitchProject }: { onSwitchProject: () => void }) {
 
   const centerView = useUiStore((s) => s.centerView);
   const leftCollapsed = useUiStore((s) => s.leftPanelCollapsed);
-  const rightCollapsed = useUiStore((s) => s.rightPanelCollapsed);
   const toggleLeft = useUiStore((s) => s.toggleLeftPanel);
   const setLeftTab = useUiStore((s) => s.setLeftTab);
   const openTicket = useBoardStore((s) => s.openTicket);
@@ -95,10 +94,10 @@ export function AppShell({ onSwitchProject }: { onSwitchProject: () => void }) {
   }, [setLeftTab, leftCollapsed, toggleLeft]);
 
   const handleLeftResize = useCallback((w: number) => {
-    const rightSpace = !hasBoardRight ? 0 : rightCollapsed ? COLLAPSED_STRIP_W : rightWidth + RESIZE_HANDLE_W;
+    const rightSpace = hasBoardRight ? rightWidth + RESIZE_HANDLE_W : 0;
     const maxLeft = window.innerWidth - rightSpace - CENTER_MIN - RESIZE_HANDLE_W;
     setLeftWidth(Math.min(w, maxLeft));
-  }, [hasBoardRight, rightCollapsed, rightWidth]);
+  }, [hasBoardRight, rightWidth]);
 
   const handleRightResize = useCallback((w: number) => {
     const leftSpace = leftCollapsed ? COLLAPSED_STRIP_W : leftWidth + RESIZE_HANDLE_W;

@@ -55,7 +55,7 @@ export function LeftPanel() {
             {TAB_LABELS[tab]}
           </button>
         ))}
-        <PanelCollapseButton side="left" shortcut="B" />
+        <PanelCollapseButton shortcut="B" />
       </div>
       <div className={`panel-content ${compact ? "panel-content-compact" : ""}`}>
         <TabContent tab={activeTab} />

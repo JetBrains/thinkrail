@@ -68,7 +68,14 @@
   box-sizing: border-box;
   display: flex;
   overflow: hidden;
-  padding: var(--space-sm) var(--space-md) var(--space-md) var(--space-md);
+  padding: var(--space-sm) var(--space-md) var(--space-md) 0;
+}
+
+/* Sit the (invisible) resize grip exactly on the right card's left border:
+   the column hugs the grip (no left padding) and the gap is moved to the
+   chat side so the draggable strip lines up with the visible panel edge. */
+.session-body-row > .resize-handle {
+  margin-left: var(--space-md);
 }
 
 .session-context-col > .context-panel {
