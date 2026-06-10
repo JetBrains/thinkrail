@@ -20,7 +20,6 @@ logger = logging.getLogger(__name__)
 
 from app.core.config import AppConfig
 from app.core.fileio import delete_file, ensure_dir, read_text, write_text
-from app.trash.service import TrashService
 from app.spec.frontmatter import extract_links, parse_frontmatter, serialize_frontmatter
 from app.spec.graph import build_graph
 from app.spec.index import SpecIndex, extract_title
@@ -73,7 +72,6 @@ class SpecService:
     def __init__(self, config: AppConfig, index: SpecIndex | None = None) -> None:
         self._config = config
         self._index = index
-        self.trash_service: TrashService | None = None  # Injected by server.py
 
     @property
     def _root(self) -> Path:
@@ -228,13 +226,7 @@ class SpecService:
 
         file_path = self._root / entry.path
 
-        if self.trash_service:
-            entry_dict = entry.model_dump()
-            links = await self._index.get_links([id], direction="outgoing")
-            related_links = [lnk.model_dump(by_alias=True) for lnk in links]
-            self.trash_service.trash_spec(id, file_path, entry_dict, related_links)
-        else:
-            delete_file(file_path)
+        delete_file(file_path)
 
         # Clean dangling references from other specs' frontmatter
         await self._clean_dangling_refs(id)

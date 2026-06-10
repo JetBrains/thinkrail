@@ -33,8 +33,6 @@ from app.spec.coordinator import (
 )
 from app.spec.index import SpecIndex
 from app.spec.service import SpecService
-from app.trash.service import TrashService
-from app.vis.service import VisualizationService
 
 if TYPE_CHECKING:
     from app.rpc.bus import EventBus
@@ -42,9 +40,9 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 # Type alias for the watcher factory callable passed from server.py.
-# Signature: (key, config, spec_service, vis_service, coordinator) -> WatchHandle
+# Signature: (key, config, spec_service, coordinator) -> WatchHandle
 WatcherFactory = Callable[
-    [str, AppConfig, SpecService, VisualizationService, IndexCoordinator],
+    [str, AppConfig, SpecService, IndexCoordinator],
     Awaitable[WatchHandle],
 ]
 
@@ -64,7 +62,7 @@ class ProjectContext:
 
     Services are created lazily on first access and cached for the
     lifetime of the context.  Cross-injection (coordinator ↔ spec_service,
-    agent_service ↔ trash_service, etc.) happens automatically inside the
+    agent_service ↔ board_service, etc.) happens automatically inside the
     property getters.
     """
 
@@ -95,27 +93,17 @@ class ProjectContext:
         # Lazy service backing fields
         self._spec_service: SpecService | None = None
         self._agent_service: AgentService | None = None
-        self._vis_service: VisualizationService | None = None
         self._board_service: BoardService | None = None
-        self._trash_service: TrashService | None = None
         self._runtime_registry: RuntimeRegistry | None = None
         self._tracker: Tracker | None = None
 
     # ── Lazy service properties ───────────────────────────────────────────
 
     @property
-    def trash_service(self) -> TrashService:
-        """Trash service — stateless, created on first access."""
-        if self._trash_service is None:
-            self._trash_service = TrashService(project_root=self.project_root)
-        return self._trash_service
-
-    @property
     def spec_service(self) -> SpecService:
-        """Spec service — wires coordinator.spec_service and trash on creation."""
+        """Spec service — wires coordinator.spec_service on creation."""
         if self._spec_service is None:
             svc = SpecService(self.config, index=self.index)
-            svc.trash_service = self.trash_service
             # Wire spec_service into coordinator for full delete flow
             self.coordinator.spec_service = svc
             self._spec_service = svc
@@ -130,32 +118,20 @@ class ProjectContext:
 
     @property
     def agent_service(self) -> AgentService:
-        """Agent service — wires coordinator, trash, board, runtime_registry."""
+        """Agent service — wires coordinator, board, runtime_registry."""
         if self._agent_service is None:
             svc = AgentService(self.config, self.spec_service, tracker=self.tracker)
             svc.coordinator = self.coordinator
-            svc.trash_service = self.trash_service
             svc.board_service = self.board_service
             svc.runtime_registry = self.runtime_registry
             self._agent_service = svc
         return self._agent_service
 
     @property
-    def vis_service(self) -> VisualizationService:
-        """Visualization service — created on first access."""
-        if self._vis_service is None:
-            self._vis_service = VisualizationService(
-                self.config, spec_service=self.spec_service,
-            )
-        return self._vis_service
-
-    @property
     def board_service(self) -> BoardService:
-        """Board service — wires trash on creation."""
+        """Board service."""
         if self._board_service is None:
-            svc = BoardService(self.config)
-            svc.trash_service = self.trash_service
-            self._board_service = svc
+            self._board_service = BoardService(self.config)
         return self._board_service
 
     @property
@@ -229,8 +205,7 @@ class ProjectContext:
         # Start watcher (first call only)
         if self.watcher_handle is None and self._watcher_factory is not None:
             self.watcher_handle = await self._watcher_factory(
-                self.key, self.config, self.spec_service,
-                self.vis_service, self.coordinator,
+                self.key, self.config, self.spec_service, self.coordinator,
             )
 
         # No runtime-level startup handshake — runtimes are protocol-stateless.

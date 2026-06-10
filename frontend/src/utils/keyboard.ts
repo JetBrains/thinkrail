@@ -15,15 +15,6 @@ export function registerKeyboardShortcuts(): () => void {
     const meta = isMod(e);
     const store = useUiStore.getState();
 
-    // Escape — always works, closes topmost overlay
-    if (e.key === "Escape") {
-      if (store.paletteOpen) {
-        store.togglePalette();
-        e.preventDefault();
-      }
-      return;
-    }
-
     // Skip other shortcuts when text input focused
     if (isTextInput(e.target)) return;
 
@@ -33,10 +24,6 @@ export function registerKeyboardShortcuts(): () => void {
       case "b": // Mod+B — toggle left panel
         e.preventDefault();
         store.toggleLeftPanel();
-        break;
-      case "k": // Mod+K — command palette
-        e.preventDefault();
-        store.togglePalette();
         break;
       case "t": // Mod+T — new session
         e.preventDefault();

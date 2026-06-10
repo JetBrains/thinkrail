@@ -4,15 +4,12 @@ import { wireEvents } from "@/store/wireEvents.ts";
 import { useSpecStore } from "@/store/specStore.ts";
 import { useSessionStore, startWatchdog, stopWatchdog } from "@/store/sessionStore.ts";
 import { useUiStore, sessionLoadStrategy } from "@/store/uiStore.ts";
-import { useVisStore } from "@/store/visStore.ts";
 import { useBoardStore } from "@/store/boardStore.ts";
 import { useSettingsStore } from "@/store/settingsStore.ts";
 import { useRuntimeCapsStore } from "@/store/runtimeCapsStore.ts";
 import { registerKeyboardShortcuts } from "@/utils/keyboard.ts";
 import { applyFontScale } from "@/utils/fontScale.ts";
 import { validateProject } from "@/services/project.ts";
-import { CommandPalette } from "@/components/CommandPalette/CommandPalette.tsx";
-import { TrashModal } from "@/components/TrashModal/TrashModal.tsx";
 import { ToastContainer } from "@/components/Notifications/ToastContainer.tsx";
 import { AppRoutes } from "./routes.tsx";
 
@@ -53,8 +50,6 @@ function AppInner({ projectPath: _projectPath, onSwitchProject }: { projectPath:
         console.log("[Bonsai] Specs loaded:", useSpecStore.getState().specs.length);
       });
       useSpecStore.getState().fetchGraph();
-      // Load vis dashboard for StatusBar one-liner and VisTab
-      useVisStore.getState().fetchState();
       // Load board tickets
       useBoardStore.getState().fetchTickets();
       // Load project settings, user-scoped session defaults, runtime
@@ -126,8 +121,6 @@ function AppInner({ projectPath: _projectPath, onSwitchProject }: { projectPath:
   return (
     <>
       <AppRoutes onSwitchProject={onSwitchProject} />
-      <CommandPalette />
-      <TrashModal />
       <ToastContainer />
     </>
   );

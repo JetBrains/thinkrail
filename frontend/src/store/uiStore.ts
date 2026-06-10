@@ -7,7 +7,7 @@ export const LEFT_TABS = ["specs", "files", "sessions"] as const;
 export type LeftTab = (typeof LEFT_TABS)[number];
 /** Tabs rendered in the left-panel strip. "sessions" is a valid LeftTab
  *  value but renders as its own full-panel mode, not a strip tab. */
-export const LEFT_BROWSER_TABS = ["specs", "files"] as const;
+export const LEFT_BROWSER_TABS = ["specs", "files", "sessions"] as const;
 type Breakpoint = "desktop" | "laptop" | "below-min";
 export type ProjectState = "initialized" | "new" | "existing";
 export type CenterView = "board" | "sessions";
@@ -59,7 +59,6 @@ interface UiStore {
   leftDrawerOpen: boolean;
   rightDrawerOpen: boolean;
   leftActiveTab: LeftTab;
-  paletteOpen: boolean;
   viewportWidth: number;
   breakpoint: Breakpoint;
   fileTreeVersion: number;
@@ -100,7 +99,6 @@ interface UiStore {
 
   toggleLeftPanel: () => void;
   setLeftTab: (tab: LeftTab) => void;
-  togglePalette: () => void;
   updateViewport: (width: number) => void;
   onFileTreeChanged: () => void;
 }
@@ -136,7 +134,6 @@ export const useUiStore = create<UiStore>()(
       leftDrawerOpen: false,
       rightDrawerOpen: false,
       leftActiveTab: "specs" as LeftTab,
-      paletteOpen: false,
       viewportWidth: typeof window !== "undefined" ? window.innerWidth : 1440,
       breakpoint: "desktop" as Breakpoint,
       fileTreeVersion: 0,
@@ -153,7 +150,7 @@ export const useUiStore = create<UiStore>()(
       centerView: "sessions" as CenterView,
       setCenterView: (view) => set({ centerView: view }),
       focusSessions: () =>
-        set({ centerView: "sessions", leftActiveTab: "sessions" }),
+        set({ centerView: "sessions" }),
 
       lastActiveSessions: {} as Record<string, string>,
       rememberActiveSession: (projectPath, bonsaiSid) =>
@@ -182,7 +179,6 @@ export const useUiStore = create<UiStore>()(
       toggleLeftPanel: () =>
         set((s) => ({ leftPanelCollapsed: !s.leftPanelCollapsed })),
       setLeftTab: (tab) => set({ leftActiveTab: tab }),
-      togglePalette: () => set((s) => ({ paletteOpen: !s.paletteOpen })),
       updateViewport: (width) =>
         set({ viewportWidth: width, breakpoint: computeBreakpoint(width) }),
       onFileTreeChanged: () =>

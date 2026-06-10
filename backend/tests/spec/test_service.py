@@ -14,7 +14,6 @@ from app.core.config import load_config
 from app.spec.frontmatter import serialize_frontmatter
 from app.spec.index import SpecIndex
 from app.spec.service import SpecNotFoundError, SpecService, _extract_title, _generate_id
-from app.trash.service import TrashService
 
 
 class TestHelpers:

@@ -54,9 +54,7 @@ class TestBasicLifecycle:
 
         # Access lazy services — should not raise
         _ = ctx.spec_service
-        _ = ctx.trash_service
         _ = ctx.board_service
-        _ = ctx.vis_service
         _ = ctx.runtime_registry
 
         await ctx.shutdown()
@@ -183,9 +181,7 @@ class TestLazyServiceCaching:
         services = [
             ctx.spec_service,
             ctx.agent_service,
-            ctx.vis_service,
             ctx.board_service,
-            ctx.trash_service,
             ctx.runtime_registry,
         ]
         # All are distinct objects
@@ -203,14 +199,6 @@ class TestCrossInjection:
         await ctx.start()
 
         assert ctx.agent_service.coordinator is ctx.coordinator
-
-        await ctx.shutdown()
-
-    async def test_agent_service_has_trash_service(self, tmp_path: Path) -> None:
-        ctx = _make_ctx(tmp_path)
-        await ctx.start()
-
-        assert ctx.agent_service.trash_service is ctx.trash_service
 
         await ctx.shutdown()
 
@@ -240,18 +228,3 @@ class TestCrossInjection:
 
         await ctx.shutdown()
 
-    async def test_spec_service_has_trash_service(self, tmp_path: Path) -> None:
-        ctx = _make_ctx(tmp_path)
-        await ctx.start()
-
-        assert ctx.spec_service.trash_service is ctx.trash_service
-
-        await ctx.shutdown()
-
-    async def test_board_service_has_trash_service(self, tmp_path: Path) -> None:
-        ctx = _make_ctx(tmp_path)
-        await ctx.start()
-
-        assert ctx.board_service.trash_service is ctx.trash_service
-
-        await ctx.shutdown()

@@ -5,7 +5,6 @@ import { useNotificationStore } from "./notificationStore.ts";
 import { useConnectionStore } from "./connectionStore.ts";
 import { useUiStore } from "./uiStore.ts";
 import { useFileStore } from "./fileStore.ts";
-import { useVisStore } from "./visStore.ts";
 import { useBoardStore } from "./boardStore.ts";
 import { useSettingsStore } from "./settingsStore.ts";
 import type { Unsubscribe } from "@/api/types.ts";
@@ -403,13 +402,6 @@ export function wireEvents(client: RpcClient): Unsubscribe {
     client.on("board/didDelete", (p) => {
       const { id } = p as { id: string };
       useBoardStore.getState().handleDidDelete(id);
-    }),
-  );
-
-  // ── Visualization dashboard ──
-  unsubs.push(
-    client.on("vis/stateChanged", (p) => {
-      useVisStore.getState().onStateChanged(p as import("./visStore.ts").DashboardState);
     }),
   );
 

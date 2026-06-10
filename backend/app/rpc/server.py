@@ -50,15 +50,8 @@ from app.rpc.methods.sessions import (
     list_all_sessions,
     patch_outcome_action,
     restart_session,
-    restore_session,
     subscribe_session,
     unsubscribe_session,
-)
-from app.rpc.methods.trash import (
-    empty_trash,
-    list_trashed,
-    purge_trashed,
-    restore_spec as trash_restore_spec,
 )
 from app.rpc.methods.settings import (
     ensure_settings,
@@ -79,7 +72,6 @@ from app.rpc.methods.subsessions import (
     request_summary as subsession_request_summary,
     revise_summary as subsession_revise_summary,
 )
-from app.rpc.methods.vis import get_vis_state, recompute_vis
 from app.rpc.methods.board import (
     attach_session as board_attach_session,
     create_plan,
@@ -111,7 +103,6 @@ from app.core.bonsaihide import load_bonsaihide
 from app.rpc.project_context import ProjectContext
 from app.spec.coordinator import FileChanged, IndexCoordinator
 from app.spec.service import SpecService
-from app.vis.service import VisualizationService
 
 logger = logging.getLogger(__name__)
 
@@ -141,7 +132,6 @@ METHODS = {
     "session/continue": continue_session,
     "session/restart": restart_session,
     "session/delete": delete_session_data,
-    "session/restore": restore_session,
     "session/subscribe": subscribe_session,
     "session/unsubscribe": unsubscribe_session,
     "session/patchOutcomeAction": patch_outcome_action,
@@ -151,8 +141,6 @@ METHODS = {
     "subsession/dismissSummary": subsession_dismiss_summary,
     "subsession/reviseSummary": subsession_revise_summary,
     "subsession/listChildren": subsession_list_children,
-    "vis/state": get_vis_state,
-    "vis/recompute": recompute_vis,
     "board/list": list_tickets,
     "board/get": get_ticket,
     "board/create": create_ticket,
@@ -175,10 +163,6 @@ METHODS = {
     "board/reorder": board_reorder_ticket,
     "board/readArtifact": read_artifact,
     "board/getHistory": board_get_history,
-    "trash/list": list_trashed,
-    "trash/purge": purge_trashed,
-    "trash/empty": empty_trash,
-    "trash/restoreSpec": trash_restore_spec,
     "settings/get": get_settings,
     "settings/update": update_settings,
     "settings/ensureFile": ensure_settings,
@@ -204,23 +188,17 @@ def _bind_methods(
     config: AppConfig,
     spec_service: SpecService,
     agent_service: AgentService,
-    vis_service: VisualizationService,
     board_service: BoardService,
     runtime_registry: "RuntimeRegistry",
     app_store: "AppStore",
-    trash_service: "TrashService | None" = None,
 ) -> dict:
     """Bind each handler in METHODS to its owning service via partial."""
     bound = {}
     for name, handler in METHODS.items():
         if name.startswith("spec/"):
             bound[name] = partial(handler, spec_service)
-        elif name.startswith("vis/"):
-            bound[name] = partial(handler, vis_service)
         elif name.startswith("board/"):
             bound[name] = partial(handler, board_service)
-        elif name.startswith("trash/") and trash_service:
-            bound[name] = partial(handler, trash_service)
         elif name.startswith("appSettings/"):
             bound[name] = partial(handler, app_store)
         elif name.startswith("settings/"):
@@ -351,9 +329,8 @@ def register_routes(app: FastAPI, app_store: "AppStore | None" = None) -> None:
                         ctx.connection_count += 1
 
             bound_methods = _bind_methods(
-                config, ctx.spec_service, ctx.agent_service, ctx.vis_service,
+                config, ctx.spec_service, ctx.agent_service,
                 ctx.board_service, ctx.runtime_registry, _app_store,
-                ctx.trash_service,
             )
 
             # Notify existing clients BEFORE subscribing the new one,
@@ -372,14 +349,6 @@ def register_routes(app: FastAPI, app_store: "AppStore | None" = None) -> None:
             # this to explicit subscriptions.
             for task in ctx.agent_service.list_tasks():
                 bus.subscribe(conn_id, f"session:{task.bonsai_sid}")
-
-            # Bind vis service to publish via bus for file-change-driven updates.
-            # Initial state is fetched on-demand by the frontend via vis/state.
-            async def _vis_notify(method: str, params: dict) -> None:
-                await bus.publish(project_topic, method, params)
-
-            ctx.vis_service.bind_notify(_vis_notify)
-            asyncio.create_task(ctx.vis_service.refresh())  # Compute in background (no push)
 
             # Start background services (coordinator, watcher, model registry).
             # Idempotent — second connection's call is a no-op.
@@ -495,7 +464,6 @@ async def _start_watcher(
     project_key: str,
     config: AppConfig,
     service: SpecService,
-    vis_service: VisualizationService,
     coordinator: IndexCoordinator,
 ) -> WatchHandle:
     """Start the filesystem watcher for a project directory."""
@@ -579,9 +547,5 @@ async def _start_watcher(
             if change_type == Change.modified:
                 rel = str(Path(path_str).relative_to(config.get_project_root()))
                 await bus.publish(project_topic, "file/didChange", {"path": rel})
-
-        # Recompute dashboard on any .md/.json change
-        if any(Path(p).suffix in (".md", ".json") for _, p in changes):
-            await vis_service.recompute()
 
     return await watch([config.get_project_root()], _on_file_change)

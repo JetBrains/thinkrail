@@ -64,7 +64,6 @@ class BoardService:
     def __init__(self, config: AppConfig) -> None:
         self._config = config
         self.plans = PlanService(config)
-        self.trash_service: Any = None  # Injected by server.py
 
     # ── Paths ─────────────────────────────────────────────────────
 
@@ -183,10 +182,7 @@ class BoardService:
         path = ticket_path(self._tickets_dir, id)
         if not path.is_file():
             raise TicketNotFoundError(f"Ticket '{id}' not found")
-        if self.trash_service:
-            self.trash_service.trash_ticket(id)
-        else:
-            _delete_file(path)
+        _delete_file(path)
 
     def reorder_ticket(
         self, id: str, status: TicketStatus, order: int

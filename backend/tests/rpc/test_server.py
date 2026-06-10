@@ -17,7 +17,6 @@ from app.rpc.bus import bus
 from app.rpc.server import METHODS, register_routes, _start_watcher
 from app.spec.coordinator import IndexCoordinator
 from app.spec.service import SpecService
-from app.vis.service import VisualizationService
 
 
 def _make_app(tmp_path: Path) -> FastAPI:
@@ -81,12 +80,11 @@ class TestMethods:
             "agent/interrupt", "agent/end", "agent/respond", "agent/updateConfig",
             "agent/transcribe",
             "agent/reviseTranscript",
-            "session/list", "session/get", "session/continue", "session/restart", "session/delete", "session/restore",
+            "session/list", "session/get", "session/continue", "session/restart", "session/delete",
             "session/subscribe", "session/unsubscribe", "session/patchOutcomeAction",
             "subsession/create", "subsession/requestSummary",
             "subsession/approveSummary", "subsession/dismissSummary",
             "subsession/reviseSummary", "subsession/listChildren",
-            "vis/state", "vis/recompute",
             "board/list", "board/get", "board/create", "board/update", "board/delete",
             "board/linkSpec", "board/unlinkSpec",
             "board/attachSession", "board/detachSession", "board/setOrchestrator",
@@ -96,8 +94,6 @@ class TestMethods:
             "board/updateStep", "board/getNextStep", "board/reorder",
             "board/readArtifact",
             "board/getHistory",
-            "trash/list", "trash/purge", "trash/empty",
-            "trash/restoreSpec",
             "settings/get", "settings/update", "settings/ensureFile",
             "appSettings/getSessionDefaults", "appSettings/setSessionDefaults",
             "runtimes/list", "runtimes/capabilities",
@@ -280,9 +276,8 @@ class TestWatcher:
         index = SpecIndex(db_path)
         await index.open()
         service = SpecService(config, index=index)
-        vis_service = VisualizationService(config, spec_service=service)
         coordinator = IndexCoordinator(index, tmp_path, AsyncMock())
-        handle = await _start_watcher(str(tmp_path), config, service, vis_service, coordinator)
+        handle = await _start_watcher(str(tmp_path), config, service, coordinator)
         assert handle is not None
         handle._task.cancel()
         try:
@@ -336,7 +331,6 @@ class TestOnFileChange:
         index = SpecIndex(db_path)
         await index.initialize(config.get_project_root())
         service = SpecService(config, index=index)
-        vis_service = VisualizationService(config, spec_service=service)
         project_root = config.get_project_root()
         project_key = str(project_root)
         project_topic = f"project:{project_key}"
@@ -349,7 +343,7 @@ class TestOnFileChange:
         coordinator.start()
 
         with patch("app.rpc.server.watch", side_effect=fake_watch):
-            handle = await _start_watcher(project_key, config, service, vis_service, coordinator)
+            handle = await _start_watcher(project_key, config, service, coordinator)
 
         # Expose coordinator so tests can wait for event processing
         captured["coordinator"] = coordinator
@@ -508,7 +502,6 @@ class TestBonsaihideLiveReload:
         index = SpecIndex(db_path)
         await index.initialize(config.get_project_root())
         service = SpecService(config, index=index)
-        vis_service = VisualizationService(config, spec_service=service)
         project_root = config.get_project_root()
         project_key = str(project_root)
         project_topic = f"project:{project_key}"
@@ -521,7 +514,7 @@ class TestBonsaihideLiveReload:
 
         with patch("app.rpc.server.watch", side_effect=fake_watch):
             handle = await _start_watcher(
-                project_key, config, service, vis_service, coordinator,
+                project_key, config, service, coordinator,
             )
 
         yield captured["cb"], index, coordinator, project_root

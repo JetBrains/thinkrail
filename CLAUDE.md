@@ -141,9 +141,7 @@ backend/
       tools/          # MCP tools: specs.py, suggest_session.py, suggest_description.py, visualization.py, orchestrator.py, change_ticket_status.py
     board/            # Meta-ticket and plan management (models, service, storage, plan, state_machine, spec_drafts)
     rpc/              # WebSocket RPC server + JSON-RPC methods
-      methods/        # specs.py, agents.py, sessions.py, board.py, trash.py, vis.py, settings.py, subsessions.py
-    trash/            # Soft-delete service (service.py, storage.py)
-    vis/              # Visualization dashboard (models.py, service.py)
+      methods/        # specs.py, agents.py, sessions.py, board.py, settings.py, subsessions.py
   tests/              # pytest tests (mirrors app/ structure)
 frontend/
   src/
@@ -157,15 +155,18 @@ frontend/
     types/            # Shared TypeScript types
     utils/            # Utility functions
     constants/        # App constants
+electron/
+  src/                # Electron main-process TypeScript
+  scripts/            # build.sh, stage-backend.js
+packaging/            # PyInstaller spec + entry point (bonsai.spec, entry.py)
 .bonsai/                        # Per-project config (committed to git)
 ~/.bonsai/indexes/<hash>/
   index.db            # SQLite spec index (generated, outside repo)
-.bonsai/implementation_tasks/  # Task specs organized by module (agent/, core/, frontend/, rpc/, spec/)
 .github/workflows/    # CI: tests.yml, nightly.yml, stable.yml, _build.yml, _release.yml
 ```
 
 ## Active Tasks
-See `.bonsai/implementation_tasks/` for work items. All 36 initial implementation tasks are done.
+See `.bonsai/` for specs. All initial implementation tasks are complete.
 
 ## Specifications & Spec-Driven Skills
 

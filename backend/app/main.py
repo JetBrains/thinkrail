@@ -62,28 +62,9 @@ def create_app() -> FastAPI:
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         await app_store.open()
-
-        async def _purge_loop() -> None:
-            from app.core.config import load_config
-            from app.core.settings import load_settings
-            from app.trash.service import TrashService
-
-            while True:
-                try:
-                    cfg = load_config()
-                    settings = load_settings(cfg.get_project_root())
-                    days = settings.trash_retention_days
-                    if days and days > 0:
-                        TrashService(cfg.get_project_root()).auto_purge(days)
-                except Exception:
-                    logging.getLogger(__name__).debug("Auto-purge tick failed", exc_info=True)
-                await asyncio.sleep(3600)
-
-        purge_task = asyncio.create_task(_purge_loop())
         try:
             yield
         finally:
-            purge_task.cancel()
             await app_store.close()
 
     app = FastAPI(title="Bonsai", lifespan=lifespan)

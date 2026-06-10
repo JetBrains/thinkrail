@@ -4,16 +4,13 @@ import { useSessionStore } from "@/store/sessionStore.ts";
 import { useBoardStore } from "@/store/boardStore.ts";
 import { useConnectionStore } from "@/store/connectionStore.ts";
 import { SettingsModal } from "./SettingsModal.tsx";
-import { DashboardModal } from "./DashboardModal.tsx";
 
 export function Header({ onSwitchProject }: { onSwitchProject: () => void }) {
   const projectName = useUiStore((s) => s.projectName);
   const centerView = useUiStore((s) => s.centerView);
   const setCenterView = useUiStore((s) => s.setCenterView);
   const focusSessions = useUiStore((s) => s.focusSessions);
-  const leftActiveTab = useUiStore((s) => s.leftActiveTab);
   const leftCollapsed = useUiStore((s) => s.leftPanelCollapsed);
-  const setLeftTab = useUiStore((s) => s.setLeftTab);
   const toggleLeftPanel = useUiStore((s) => s.toggleLeftPanel);
   const sessions = useSessionStore((s) => s.sessions);
   const activeSessions = Array.from(sessions.values()).filter(
@@ -22,11 +19,7 @@ export function Header({ onSwitchProject }: { onSwitchProject: () => void }) {
   const tickets = useBoardStore((s) => s.tickets);
   const ticketCount = tickets.size;
 
-  // The left-panel Specs/Files browser, the header Board/Sessions buttons and
-  // the folder icon form one switcher: exactly one is "active" at a time. The
-  // browser only lives in the sessions layout (the board is full-width and the
-  // ticket route's left panel is the phase tree), so it's active only there.
-  const browserOpen = centerView === "sessions" && !leftCollapsed && leftActiveTab !== "sessions";
+  const browserOpen = !leftCollapsed;
 
   const handleSelectBoard = () => {
     // `Board` click from inside a ticket route returns to the kanban board (BoardView)
@@ -37,26 +30,13 @@ export function Header({ onSwitchProject }: { onSwitchProject: () => void }) {
   const handleSelectSessions = () => {
     focusSessions();
     useBoardStore.setState({ activeTicketId: null });
-    if (leftCollapsed) toggleLeftPanel();
   };
 
   const connectedClients = useConnectionStore((s) => s.clients);
   const [settingsOpen, setSettingsOpen] = useState(false);
-  const [dashboardOpen, setDashboardOpen] = useState(false);
 
   const handleToggleBrowser = () => {
-    if (browserOpen) {
-      toggleLeftPanel();
-      return;
-    }
-    // The Specs/Files browser only shows in the sessions layout, so leave the
-    // board / ticket route first — same as opening it from a session window.
-    if (centerView !== "sessions") {
-      useBoardStore.setState({ activeTicketId: null });
-      setCenterView("sessions");
-    }
-    if (leftActiveTab === "sessions") setLeftTab("specs");
-    if (leftCollapsed) toggleLeftPanel();
+    toggleLeftPanel();
   };
 
   return (
@@ -71,8 +51,8 @@ export function Header({ onSwitchProject }: { onSwitchProject: () => void }) {
           <button
             type="button"
             role="tab"
-            aria-selected={centerView === "board" && !browserOpen}
-            className={`header-view-btn${centerView === "board" && !browserOpen ? " header-view-btn--active" : ""}`}
+            aria-selected={centerView === "board"}
+            className={`header-view-btn${centerView === "board" ? " header-view-btn--active" : ""}`}
             onClick={handleSelectBoard}
             title="Show board"
           >
@@ -82,8 +62,8 @@ export function Header({ onSwitchProject }: { onSwitchProject: () => void }) {
           <button
             type="button"
             role="tab"
-            aria-selected={centerView === "sessions" && !browserOpen}
-            className={`header-view-btn${centerView === "sessions" && !browserOpen ? " header-view-btn--active" : ""}`}
+            aria-selected={centerView === "sessions"}
+            className={`header-view-btn${centerView === "sessions" ? " header-view-btn--active" : ""}`}
             onClick={handleSelectSessions}
             title="Show sessions"
           >
@@ -118,19 +98,6 @@ export function Header({ onSwitchProject }: { onSwitchProject: () => void }) {
           </svg>
         </button>
         <button
-          className="header-dashboard-btn"
-          onClick={() => setDashboardOpen(true)}
-          title="Dashboard"
-          aria-label="Dashboard"
-        >
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-            <rect x="3" y="3" width="7" height="9" rx="1" />
-            <rect x="14" y="3" width="7" height="5" rx="1" />
-            <rect x="14" y="12" width="7" height="9" rx="1" />
-            <rect x="3" y="16" width="7" height="5" rx="1" />
-          </svg>
-        </button>
-        <button
           className="header-settings-btn"
           onClick={() => setSettingsOpen(true)}
           title="Settings"
@@ -144,7 +111,6 @@ export function Header({ onSwitchProject }: { onSwitchProject: () => void }) {
       </div>
     </header>
     <SettingsModal open={settingsOpen} onClose={() => setSettingsOpen(false)} />
-    <DashboardModal open={dashboardOpen} onClose={() => setDashboardOpen(false)} />
     </>
   );
 }

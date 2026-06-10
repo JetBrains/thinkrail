@@ -67,7 +67,6 @@ export function SessionManager() {
   const client = useRpc();
   const projectPath = useUiStore((s) => s.projectPath);
   const focusSessions = useUiStore((s) => s.focusSessions);
-  const toggleLeftPanel = useUiStore((s) => s.toggleLeftPanel);
   const focusSession = useSessionStore((s) => s.focusSession);
   const restoreSession = useSessionStore((s) => s.restoreSession);
   const deleteSession = useSessionStore((s) => s.deleteSession);
@@ -290,14 +289,6 @@ export function SessionManager() {
       <div className="sm-header">
         <button className="sm-refresh" onClick={refresh} title="Refresh sessions">
           {"↻"}
-        </button>
-        <button
-          className="sm-collapse"
-          onClick={toggleLeftPanel}
-          title={`Hide panel (${modLabel("B")})`}
-          aria-label="Hide panel"
-        >
-          {"◀"}
         </button>
       </div>
 

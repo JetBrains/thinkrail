@@ -349,7 +349,6 @@ interface UiStore {
   rightDrawerOpen: boolean;
   leftActiveTab: LeftTab;
   centerView: CenterView;
-  paletteOpen: boolean;
   viewportWidth: number;
   breakpoint: Breakpoint;
 
@@ -359,7 +358,6 @@ interface UiStore {
   setLeftTab: (tab: LeftTab) => void;
   setCenterView: (view: CenterView) => void;
   focusSessions: () => void;
-  togglePalette: () => void;
   updateViewport: (width: number) => void;
 }
 ```

@@ -9,6 +9,7 @@ type BrowserTab = (typeof LEFT_BROWSER_TABS)[number];
 const TAB_LABELS: Record<BrowserTab, string> = {
   specs: "Specs",
   files: "Files",
+  sessions: "Sessions",
 };
 
 function TabContent({ tab }: { tab: BrowserTab }) {
@@ -17,6 +18,8 @@ function TabContent({ tab }: { tab: BrowserTab }) {
       return <SpecTree />;
     case "files":
       return <FileTree />;
+    case "sessions":
+      return <SessionManager />;
   }
 }
 
@@ -24,24 +27,10 @@ export function LeftPanel() {
   const persistedTab = useUiStore((s) => s.leftActiveTab);
   const setTab = useUiStore((s) => s.setLeftTab);
 
-  // Sessions is its own full-panel mode (opened from the header Sessions
-  // button / StatusBar pill), not a tab in the Specs/Files strip. The
-  // collapse caret lives in SessionManager's own header, next to Refresh.
-  if (persistedTab === "sessions") {
-    return (
-      <div className="left-panel">
-        <div className="panel-content panel-content-compact">
-          <SessionManager />
-        </div>
-      </div>
-    );
-  }
-
-  // Persisted value may be a deprecated tab no longer in the browser strip.
   const activeTab: BrowserTab = (LEFT_BROWSER_TABS as readonly string[]).includes(persistedTab)
     ? (persistedTab as BrowserTab)
     : LEFT_BROWSER_TABS[0];
-  const compact = activeTab === "files";
+  const compact = activeTab === "files" || activeTab === "sessions";
 
   return (
     <div className="left-panel">

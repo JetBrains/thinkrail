@@ -4,11 +4,9 @@ from __future__ import annotations
 
 from typing import Any
 
-from jsonrpcserver import JsonRpcError
-
 from app.rpc.bus import bus
 from app.rpc.context import auto_subscribe_all, get_current_conn
-from app.rpc.errors import INTERNAL_ERROR, rpc_handler
+from app.rpc.errors import rpc_handler
 from app.agent.service import AgentService
 
 _handle_errors = rpc_handler()
@@ -46,16 +44,8 @@ async def restart_session(service: AgentService, **params: Any) -> dict:
 
 @_handle_errors
 async def delete_session_data(service: AgentService, **params: Any) -> None:
-    """Trash a session (soft-delete) and detach from all tickets."""
+    """Delete a session and detach from all tickets."""
     service.trash_session(params["bonsaiSid"])
-
-
-@_handle_errors
-async def restore_session(service: AgentService, **params: Any) -> None:
-    """Restore a trashed session."""
-    if not service.trash_service:
-        raise JsonRpcError(INTERNAL_ERROR, "Trash service not available")
-    service.trash_service.restore_session(params["bonsaiSid"])
 
 
 @_handle_errors

@@ -2,7 +2,6 @@ import { useState, useRef, useEffect, useCallback } from "react";
 import { useSpecStore } from "@/store/specStore.ts";
 import { useSessionStore } from "@/store/sessionStore.ts";
 import { useBoardStore } from "@/store/boardStore.ts";
-import { useVisStore } from "@/store/visStore.ts";
 import { modLabel } from "@/utils/platform.ts";
 import type { Session } from "@/types/session.ts";
 
@@ -35,7 +34,6 @@ export function StatusBar({ onOpenSessionManager }: StatusBarProps) {
   const focusSession = useSessionStore((s) => s.focusSession);
   const tickets = useBoardStore((s) => s.tickets);
   const openTicket = useBoardStore((s) => s.openTicket);
-  const dashboard = useVisStore((s) => s.dashboard);
   const dd = useDropdown();
   const attnDd = useDropdown();
 
@@ -92,17 +90,13 @@ export function StatusBar({ onOpenSessionManager }: StatusBarProps) {
   return (
     <footer className="status-bar">
       <div className="status-left">
-        {dashboard ? (
-          <span className="status-oneliner">{dashboard.one_liner}</span>
-        ) : (
-          <>
-            <span>{total} specs</span>
-            <span className="status-sep" />
-            <span>{done} done</span>
-            <span className="status-sep" />
-            <span>{pending} pending</span>
-          </>
-        )}
+        <>
+          <span>{total} specs</span>
+          <span className="status-sep" />
+          <span>{done} done</span>
+          <span className="status-sep" />
+          <span>{pending} pending</span>
+        </>
         <span className="status-sep" />
         <div className="status-bg-sessions" ref={dd.ref}>
           <button
@@ -189,7 +183,6 @@ export function StatusBar({ onOpenSessionManager }: StatusBarProps) {
         <span className="status-hint">{modLabel("T")} New</span>
         <span className="status-hint">{modLabel("B")} Tree</span>
         <span className="status-hint">{modLabel("J")} Context</span>
-        <span className="status-hint">{modLabel("K")} Search</span>
       </div>
     </footer>
   );

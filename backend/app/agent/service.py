@@ -54,7 +54,6 @@ class AgentService:
         self._tracker = tracker if tracker is not None else Tracker()
         self._running_tasks: dict[str, asyncio.Task[Any]] = {}
         self.board_service: Any = None     # Injected by server.py
-        self.trash_service: Any = None    # Injected by server.py
         self.runtime_registry: RuntimeRegistry | None = None  # Injected by server.py
         self.coordinator: Any = None      # Injected by server.py (IndexCoordinator)
         self._restore_draft_sessions()
@@ -647,17 +646,13 @@ class AgentService:
         return task.model_dump(by_alias=True)
 
     def trash_session(self, bonsai_sid: str) -> None:
-        """Soft-delete a session: detach from tickets, move to trash."""
+        """Delete a session and detach from all tickets."""
         if self.board_service:
             try:
                 self.board_service.detach_session_from_all(bonsai_sid)
             except Exception:
                 logger.warning("Failed to detach session %s from tickets", bonsai_sid)
-        if self.trash_service:
-            self.trash_service.trash_session(bonsai_sid)
-        else:
-            # Fallback: hard-delete if no trash service
-            delete_session_from_disk(self._config.project_root, bonsai_sid)
+        delete_session_from_disk(self._config.project_root, bonsai_sid)
         # Clean up in-memory state if still tracked
         if self._tracker.has_task(bonsai_sid):
             self._tracker.remove_task(bonsai_sid)
