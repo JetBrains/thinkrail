@@ -155,9 +155,6 @@ frontend/
     types/            # Shared TypeScript types
     utils/            # Utility functions
     constants/        # App constants
-electron/
-  src/                # Electron main-process TypeScript
-  scripts/            # build.sh, stage-backend.js
 packaging/            # PyInstaller spec + entry point (bonsai.spec, entry.py)
 .bonsai/                        # Per-project config (committed to git)
 ~/.bonsai/indexes/<hash>/

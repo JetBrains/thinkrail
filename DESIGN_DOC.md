@@ -278,7 +278,6 @@ packaging/                   # Portable executable build infrastructure
 | API | backend/app/api/ | REST API layer: project validation/init, file ops, server info, known-projects registry |
 | Vis | [backend/app/vis/README.md](backend/app/vis/README.md) | Dashboard state computation: spec coverage, tasks, lint, recommendations |
 | Packaging | [packaging/README.md](packaging/README.md) | Portable executable build infrastructure: PyInstaller, CI/CD |
-| Electron | [electron/README.md](electron/README.md) | End-user desktop app: Electron shell wrapping the PyInstaller bundle, electron-builder installers, auto-update |
 | Frontend | [frontend/README.md](frontend/README.md) | React SPA, UI components, state management |
 
 **Feature Designs:**
@@ -457,23 +456,6 @@ GitHub Actions builds executables for Linux, macOS (ARM), and Windows on every p
 Users download from a stable URL: `github.com/<org>/bonsai/releases/tag/nightly-latest`
 
 Build infrastructure lives in `packaging/` (see [packaging/README.md](packaging/README.md)) and `.github/workflows/nightly.yml`.
-
-### End-User Distribution: Electron Desktop App
-
-For end users, Bonsai is distributed as a native desktop installer (`.dmg` / `.AppImage` / `.exe`) — recommended over the standalone CLI executable. The Electron app is a thin shell that spawns the same PyInstaller `bonsai-dir/` bundle as a child process and renders the UI in a sandboxed `BrowserWindow` pointed at `http://127.0.0.1:<free-port>`.
-
-```
-Electron main process
-  ├── pick free port in 9100–9199
-  ├── spawn resources/backend/bonsai --port <p> --no-browser --host 127.0.0.1
-  ├── TCP-poll until ready (30s timeout)
-  ├── BrowserWindow.loadURL('http://127.0.0.1:<p>')
-  └── before-quit: SIGTERM child → 5s grace → SIGKILL (taskkill /F /T on Windows)
-```
-
-`electron-updater` checks GitHub Releases on startup (packaged builds only). Auto-update works on Linux and Windows; macOS requires code signing and is currently a no-op. CI extends the same `build.yml` reusable workflow with an `electron` matrix that consumes the per-OS PyInstaller artifacts and uploads installers + auto-update sidecars (`latest.yml`, `*.blockmap`) into the same release.
-
-Build infrastructure lives in `electron/` (see [electron/README.md](electron/README.md)).
 
 ### Platform Notes
 

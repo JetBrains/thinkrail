@@ -6,9 +6,6 @@ import path from "node:path";
  * Self-contained e2e configuration. `npm test` (in `e2e/`) starts the full
  * Bonsai stack via `./run.sh` from the repo root on free ports and points
  * the spec runner at it. No separate `./run.sh` shell is needed.
- *
- * The Electron e2e suite (`electron/playwright.config.ts`) spawns its own
- * backend; this config only governs the web suite.
  */
 
 function findTwoFreePorts(): [number, number] {
