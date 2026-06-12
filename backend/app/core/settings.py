@@ -46,8 +46,6 @@ class ProjectSettings(BaseModel, extra="allow"):
     # Font scale settings
     font_size: int = 13  # base font size in px (normal view)
     compact_font_size: int = 9  # base font size in px (compact view)
-    # Trash auto-purge
-    trash_retention_days: int = 30  # 0 or null to disable auto-purge
     # Voice input revise behavior
     voice_revise_mode: str = "off"  # "auto" | "subsession" | "off"
     # Ticket-implement subagent execution mode (see TICKET_LIFECYCLE_DESIGN.md
