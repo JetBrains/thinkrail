@@ -10,7 +10,7 @@ import pathspec
 import pytest
 
 from app.spec.index import (
-    BONSAI_INTERNAL_SKIP,
+    THINKRAIL_INTERNAL_SKIP,
     SCHEMA_VERSION,
     RebuildStats,
     SpecIndex,
@@ -62,7 +62,7 @@ class TestSpecIndex:
     """Core lifecycle, schema, and basic operations."""
 
     async def test_open_creates_tables(self, tmp_path: Path) -> None:
-        db_path = tmp_path / ".bonsai" / "index.db"
+        db_path = tmp_path / ".tr" / "index.db"
         async with SpecIndex(db_path) as idx:
             version = await idx.get_schema_version()
             assert version == SCHEMA_VERSION
@@ -352,7 +352,7 @@ class TestRebuild:
             No frontmatter here.
         """)
 
-        db_path = tmp_path / ".bonsai" / "index.db"
+        db_path = tmp_path / ".tr" / "index.db"
         async with SpecIndex(db_path) as idx:
             stats = await idx.rebuild(tmp_path)
             assert stats.specs == 2
@@ -387,7 +387,7 @@ class TestRebuild:
             Missing id field.
         """)
 
-        db_path = tmp_path / ".bonsai" / "index.db"
+        db_path = tmp_path / ".tr" / "index.db"
         async with SpecIndex(db_path) as idx:
             stats = await idx.rebuild(tmp_path)
             assert stats.specs == 0
@@ -404,7 +404,7 @@ class TestRebuild:
             # Spec
         """)
 
-        db_path = tmp_path / ".bonsai" / "index.db"
+        db_path = tmp_path / ".tr" / "index.db"
         async with SpecIndex(db_path) as idx:
             # Insert stale data
             await idx.upsert_spec(_make_entry(id="stale", path="old.md"))
@@ -429,7 +429,7 @@ class TestRebuild:
             Has extra fields.
         """)
 
-        db_path = tmp_path / ".bonsai" / "index.db"
+        db_path = tmp_path / ".tr" / "index.db"
         async with SpecIndex(db_path) as idx:
             stats = await idx.rebuild(tmp_path)
             assert stats.specs == 1
@@ -479,7 +479,7 @@ class TestIncrementalUpdate:
             Content v1.
         """)
 
-        db_path = tmp_path / ".bonsai" / "index.db"
+        db_path = tmp_path / ".tr" / "index.db"
         async with SpecIndex(db_path) as idx:
             await idx.rebuild(tmp_path)
             hash_v1 = await idx.get_stored_hash("spec.md")
@@ -515,7 +515,7 @@ class TestInitialize:
             # My Spec
         """)
 
-        db_path = tmp_path / ".bonsai" / "index.db"
+        db_path = tmp_path / ".tr" / "index.db"
         idx = SpecIndex(db_path)
         stats = await idx.initialize(tmp_path)
         assert stats is not None  # rebuild happened
@@ -537,7 +537,7 @@ class TestInitialize:
             # My Spec
         """)
 
-        db_path = tmp_path / ".bonsai" / "index.db"
+        db_path = tmp_path / ".tr" / "index.db"
 
         # First: initialize to build the index
         idx1 = SpecIndex(db_path)
@@ -561,7 +561,7 @@ class TestInitialize:
             # My Spec
         """)
 
-        db_path = tmp_path / ".bonsai" / "index.db"
+        db_path = tmp_path / ".tr" / "index.db"
 
         # First: create index with correct version
         async with SpecIndex(db_path) as idx:
@@ -590,7 +590,7 @@ class TestInitialize:
             # My Spec
         """)
 
-        db_path = tmp_path / ".bonsai" / "index.db"
+        db_path = tmp_path / ".tr" / "index.db"
 
         # First: create a valid index
         idx1 = SpecIndex(db_path)
@@ -611,8 +611,8 @@ class TestInitialize:
         idx = SpecIndex(db_path)
         assert idx.is_ready is False
 
-    async def test_bonsaihide_applied_during_initialize(self, tmp_path: Path) -> None:
-        """bonsaihide_spec is passed through to rebuild during initialize."""
+    async def test_thinkrailhide_applied_during_initialize(self, tmp_path: Path) -> None:
+        """thinkrailhide_spec is passed through to rebuild during initialize."""
         _write_spec_file(tmp_path, "visible.md", """\
             ---
             id: visible
@@ -628,10 +628,10 @@ class TestInitialize:
             # Hidden
         """)
 
-        db_path = tmp_path / ".bonsai" / "index.db"
+        db_path = tmp_path / ".tr" / "index.db"
         spec = _make_pathspec(["hidden.md"])
         idx = SpecIndex(db_path)
-        stats = await idx.initialize(tmp_path, bonsaihide_spec=spec)
+        stats = await idx.initialize(tmp_path, thinkrailhide_spec=spec)
         assert stats is not None
         assert stats.specs == 1  # only visible.md indexed
         assert await idx.get_spec("visible") is not None
@@ -658,9 +658,9 @@ class TestFindMdFiles:
         assert len(result) == 1
         assert result[0].name == "visible.md"
 
-    def test_allows_bonsai_dir(self, tmp_path: Path) -> None:
-        (tmp_path / ".bonsai").mkdir()
-        (tmp_path / ".bonsai" / "spec.md").write_text("# Spec")
+    def test_allows_thinkrail_dir(self, tmp_path: Path) -> None:
+        (tmp_path / ".tr").mkdir()
+        (tmp_path / ".tr" / "spec.md").write_text("# Spec")
         result = _find_md_files(tmp_path)
         assert len(result) == 1
 
@@ -670,7 +670,7 @@ class TestFindMdFiles:
         result = _find_md_files(tmp_path)
         assert len(result) == 0
 
-    def test_bonsaihide_pathspec(self, tmp_path: Path) -> None:
+    def test_thinkrailhide_pathspec(self, tmp_path: Path) -> None:
         """Pathspec-based filtering excludes matched files."""
         (tmp_path / "include.md").write_text("# Include")
         (tmp_path / "exclude.md").write_text("# Exclude")
@@ -679,7 +679,7 @@ class TestFindMdFiles:
         assert len(result) == 1
         assert result[0].name == "include.md"
 
-    def test_bonsaihide_pathspec_wildcard(self, tmp_path: Path) -> None:
+    def test_thinkrailhide_pathspec_wildcard(self, tmp_path: Path) -> None:
         """Wildcard patterns work like gitignore."""
         (tmp_path / "docs").mkdir()
         (tmp_path / "docs" / "keep.md").write_text("# Keep")
@@ -690,7 +690,7 @@ class TestFindMdFiles:
         assert len(result) == 1
         assert result[0].name == "keep.md"
 
-    def test_bonsaihide_pathspec_negation(self, tmp_path: Path) -> None:
+    def test_thinkrailhide_pathspec_negation(self, tmp_path: Path) -> None:
         """Negation patterns (!) re-include previously excluded files."""
         (tmp_path / "a.md").write_text("# A")
         (tmp_path / "b.md").write_text("# B")
@@ -701,16 +701,16 @@ class TestFindMdFiles:
         assert len(result) == 1
         assert result[0].name == "b.md"
 
-    def test_no_bonsaihide_spec_finds_all(self, tmp_path: Path) -> None:
-        """None bonsaihide_spec means no filtering."""
+    def test_no_thinkrailhide_spec_finds_all(self, tmp_path: Path) -> None:
+        """None thinkrailhide_spec means no filtering."""
         (tmp_path / "a.md").write_text("# A")
         (tmp_path / "b.md").write_text("# B")
         result = _find_md_files(tmp_path, None)
         assert len(result) == 2
 
-    def test_skips_bonsai_internal_dirs(self, tmp_path: Path) -> None:
-        """Files under BONSAI_INTERNAL_SKIP prefixes are excluded."""
-        bonsai = tmp_path / ".bonsai"
+    def test_skips_thinkrail_internal_dirs(self, tmp_path: Path) -> None:
+        """Files under THINKRAIL_INTERNAL_SKIP prefixes are excluded."""
+        thinkrail = tmp_path / ".tr"
         for skip in (
             "trash/specs/deleted-spec/deleted-spec.md",
             "cache/some-cache.md",
@@ -718,32 +718,32 @@ class TestFindMdFiles:
             "plans/brainstorm-plan.md",
             "design_docs/plans/implementation.md",
         ):
-            p = bonsai / skip
+            p = thinkrail / skip
             p.parent.mkdir(parents=True, exist_ok=True)
             p.write_text(f"# {skip}")
 
         result = _find_md_files(tmp_path)
         paths = {str(f.relative_to(tmp_path)) for f in result}
-        for skip_prefix in BONSAI_INTERNAL_SKIP:
+        for skip_prefix in THINKRAIL_INTERNAL_SKIP:
             assert not any(p.startswith(skip_prefix) for p in paths), (
                 f"Expected files under {skip_prefix!r} to be excluded"
             )
 
-    def test_allows_non_skipped_bonsai_subdirs(self, tmp_path: Path) -> None:
-        """Files in .bonsai/ subdirs NOT in the skip set are still found."""
-        bonsai = tmp_path / ".bonsai"
-        (bonsai / "design_docs").mkdir(parents=True)
-        (bonsai / "design_docs" / "SOME_DESIGN.md").write_text("# Design")
-        (bonsai / "implementation_tasks" / "spec").mkdir(parents=True)
-        (bonsai / "implementation_tasks" / "spec" / "some-task.md").write_text("# Task")
+    def test_allows_non_skipped_thinkrail_subdirs(self, tmp_path: Path) -> None:
+        """Files in .tr/ subdirs NOT in the skip set are still found."""
+        thinkrail = tmp_path / ".tr"
+        (thinkrail / "design_docs").mkdir(parents=True)
+        (thinkrail / "design_docs" / "SOME_DESIGN.md").write_text("# Design")
+        (thinkrail / "implementation_tasks" / "spec").mkdir(parents=True)
+        (thinkrail / "implementation_tasks" / "spec" / "some-task.md").write_text("# Task")
 
         result = _find_md_files(tmp_path)
         paths = {str(f.relative_to(tmp_path)) for f in result}
-        assert ".bonsai/design_docs/SOME_DESIGN.md" in paths
-        assert ".bonsai/implementation_tasks/spec/some-task.md" in paths
+        assert ".tr/design_docs/SOME_DESIGN.md" in paths
+        assert ".tr/implementation_tasks/spec/some-task.md" in paths
 
     def test_root_files_not_affected_by_skip(self, tmp_path: Path) -> None:
-        """Project-root .md files are never affected by BONSAI_INTERNAL_SKIP."""
+        """Project-root .md files are never affected by THINKRAIL_INTERNAL_SKIP."""
         (tmp_path / "README.md").write_text("# README")
         result = _find_md_files(tmp_path)
         assert len(result) == 1
@@ -757,8 +757,8 @@ class TestBuiltInSkipPaths:
     """End-to-end: rebuild with skip paths verifies documents table."""
 
     async def test_skipped_files_excluded_from_documents(self, tmp_path: Path) -> None:
-        """Files under every BONSAI_INTERNAL_SKIP prefix are NOT in get_all_documents()."""
-        bonsai = tmp_path / ".bonsai"
+        """Files under every THINKRAIL_INTERNAL_SKIP prefix are NOT in get_all_documents()."""
+        thinkrail = tmp_path / ".tr"
         for skip_file in (
             "trash/specs/deleted-spec/deleted-spec.md",
             "cache/some-cache.md",
@@ -766,44 +766,44 @@ class TestBuiltInSkipPaths:
             "plans/brainstorm-plan.md",
             "design_docs/plans/implementation.md",
         ):
-            p = bonsai / skip_file
+            p = thinkrail / skip_file
             p.parent.mkdir(parents=True, exist_ok=True)
             p.write_text(f"# {skip_file}")
 
         # Also create a project-root doc that should be indexed
         (tmp_path / "README.md").write_text("# README")
 
-        db_path = bonsai / "index.db"
+        db_path = thinkrail / "index.db"
         async with SpecIndex(db_path) as idx:
             stats = await idx.rebuild(tmp_path)
             docs = await idx.get_all_documents()
             doc_paths = {d.path for d in docs}
 
             # Skipped files must not appear
-            assert ".bonsai/trash/specs/deleted-spec/deleted-spec.md" not in doc_paths
-            assert ".bonsai/cache/some-cache.md" not in doc_paths
-            assert ".bonsai/sessions/session-log.md" not in doc_paths
-            assert ".bonsai/plans/brainstorm-plan.md" not in doc_paths
-            assert ".bonsai/design_docs/plans/implementation.md" not in doc_paths
+            assert ".tr/trash/specs/deleted-spec/deleted-spec.md" not in doc_paths
+            assert ".tr/cache/some-cache.md" not in doc_paths
+            assert ".tr/sessions/session-log.md" not in doc_paths
+            assert ".tr/plans/brainstorm-plan.md" not in doc_paths
+            assert ".tr/design_docs/plans/implementation.md" not in doc_paths
 
             # Project-root doc is still there
             assert "README.md" in doc_paths
 
-    async def test_non_skipped_bonsai_dirs_still_indexed(self, tmp_path: Path) -> None:
-        """Files in .bonsai/ dirs NOT in the skip set appear as documents."""
-        bonsai = tmp_path / ".bonsai"
-        (bonsai / "design_docs").mkdir(parents=True)
-        (bonsai / "design_docs" / "SOME_DESIGN.md").write_text("# Some Design")
-        (bonsai / "implementation_tasks" / "spec").mkdir(parents=True)
-        (bonsai / "implementation_tasks" / "spec" / "some-task.md").write_text("# Some Task")
+    async def test_non_skipped_thinkrail_dirs_still_indexed(self, tmp_path: Path) -> None:
+        """Files in .tr/ dirs NOT in the skip set appear as documents."""
+        thinkrail = tmp_path / ".tr"
+        (thinkrail / "design_docs").mkdir(parents=True)
+        (thinkrail / "design_docs" / "SOME_DESIGN.md").write_text("# Some Design")
+        (thinkrail / "implementation_tasks" / "spec").mkdir(parents=True)
+        (thinkrail / "implementation_tasks" / "spec" / "some-task.md").write_text("# Some Task")
 
-        db_path = bonsai / "index.db"
+        db_path = thinkrail / "index.db"
         async with SpecIndex(db_path) as idx:
             await idx.rebuild(tmp_path)
             docs = await idx.get_all_documents()
             doc_paths = {d.path for d in docs}
-            assert ".bonsai/design_docs/SOME_DESIGN.md" in doc_paths
-            assert ".bonsai/implementation_tasks/spec/some-task.md" in doc_paths
+            assert ".tr/design_docs/SOME_DESIGN.md" in doc_paths
+            assert ".tr/implementation_tasks/spec/some-task.md" in doc_paths
 
     async def test_schema_version_is_3(self, tmp_path: Path) -> None:
         """SCHEMA_VERSION constant must be '3'."""
@@ -819,7 +819,7 @@ class TestBuiltInSkipPaths:
             # My Spec
         """)
 
-        db_path = tmp_path / ".bonsai" / "index.db"
+        db_path = tmp_path / ".tr" / "index.db"
 
         # Create index with old schema version
         async with SpecIndex(db_path) as idx:
@@ -859,7 +859,7 @@ class TestGetAllDocuments:
             No frontmatter here.
         """)
 
-        db_path = tmp_path / ".bonsai" / "index.db"
+        db_path = tmp_path / ".tr" / "index.db"
         async with SpecIndex(db_path) as idx:
             stats = await idx.rebuild(tmp_path)
             assert stats.specs == 1
@@ -880,7 +880,7 @@ class TestGetAllDocuments:
             # My Spec
         """)
 
-        db_path = tmp_path / ".bonsai" / "index.db"
+        db_path = tmp_path / ".tr" / "index.db"
         async with SpecIndex(db_path) as idx:
             await idx.rebuild(tmp_path)
             docs = await idx.get_all_documents()
@@ -892,7 +892,7 @@ class TestGetAllDocuments:
         _write_spec_file(tmp_path, "a-doc.md", "# A Doc")
         _write_spec_file(tmp_path, "m-doc.md", "# M Doc")
 
-        db_path = tmp_path / ".bonsai" / "index.db"
+        db_path = tmp_path / ".tr" / "index.db"
         async with SpecIndex(db_path) as idx:
             await idx.rebuild(tmp_path)
             docs = await idx.get_all_documents()
@@ -908,7 +908,7 @@ class TestGetAllDocuments:
             No frontmatter yet.
         """)
 
-        db_path = tmp_path / ".bonsai" / "index.db"
+        db_path = tmp_path / ".tr" / "index.db"
         async with SpecIndex(db_path) as idx:
             await idx.rebuild(tmp_path)
             docs = await idx.get_all_documents()
@@ -947,8 +947,8 @@ class TestIsReadyGuards:
 
         config = AppConfig(
             project_root=tmp_path,
-            bonsai_dir=tmp_path / ".bonsai",
-            plugin_dir=tmp_path / ".bonsai" / "plugins",
+            thinkrail_dir=tmp_path / ".tr",
+            plugin_dir=tmp_path / ".tr" / "plugins",
         )
         mock_index = AsyncMock(spec=SpecIndex)
         type(mock_index).is_ready = PropertyMock(return_value=is_ready)
@@ -996,14 +996,14 @@ class TestIsReadyGuards:
         assert graph.nodes == []
 
 
-# ── TestBonsaihideFiltering ─────────────────────────────────────────────────
+# ── TestThinkRailhideFiltering ─────────────────────────────────────────────────
 
 
-class TestBonsaihideFiltering:
-    """Tests for .bonsaihide filtering in reindex_file(), rebuild(), and initialize()."""
+class TestThinkRailhideFiltering:
+    """Tests for .thinkrailhide filtering in reindex_file(), rebuild(), and initialize()."""
 
-    async def test_reindex_file_skips_bonsaihide_match(self, tmp_path: Path) -> None:
-        """reindex_file() returns 'removed' for paths matching _bonsaihide_spec."""
+    async def test_reindex_file_skips_thinkrailhide_match(self, tmp_path: Path) -> None:
+        """reindex_file() returns 'removed' for paths matching _thinkrailhide_spec."""
         _write_spec_file(tmp_path, "hidden/secret.md", """\
             ---
             id: secret-spec
@@ -1012,9 +1012,9 @@ class TestBonsaihideFiltering:
             # Secret
         """)
 
-        db_path = tmp_path / ".bonsai" / "index.db"
+        db_path = tmp_path / ".tr" / "index.db"
         async with SpecIndex(db_path) as idx:
-            idx._bonsaihide_spec = _make_pathspec(["hidden/"])
+            idx._thinkrailhide_spec = _make_pathspec(["hidden/"])
             result = await idx.reindex_file(tmp_path, tmp_path / "hidden" / "secret.md")
             assert result == "removed"
 
@@ -1031,15 +1031,15 @@ class TestBonsaihideFiltering:
             # Docs Spec
         """)
 
-        db_path = tmp_path / ".bonsai" / "index.db"
+        db_path = tmp_path / ".tr" / "index.db"
         async with SpecIndex(db_path) as idx:
-            # First: index the file normally (no bonsaihide)
+            # First: index the file normally (no thinkrailhide)
             result = await idx.reindex_file(tmp_path, tmp_path / "docs" / "spec.md")
             assert result == "spec"
             assert await idx.get_spec("docs-spec") is not None
 
-            # Now set bonsaihide to hide docs/ and re-index
-            idx._bonsaihide_spec = _make_pathspec(["docs/"])
+            # Now set thinkrailhide to hide docs/ and re-index
+            idx._thinkrailhide_spec = _make_pathspec(["docs/"])
             result = await idx.reindex_file(tmp_path, tmp_path / "docs" / "spec.md")
             assert result == "removed"
             assert await idx.get_spec("docs-spec") is None
@@ -1048,7 +1048,7 @@ class TestBonsaihideFiltering:
         """An unmanaged document already in the index is removed when hidden."""
         _write_spec_file(tmp_path, "notes/readme.md", "# Notes Readme")
 
-        db_path = tmp_path / ".bonsai" / "index.db"
+        db_path = tmp_path / ".tr" / "index.db"
         async with SpecIndex(db_path) as idx:
             # Index as unmanaged document
             result = await idx.reindex_file(tmp_path, tmp_path / "notes" / "readme.md")
@@ -1057,14 +1057,14 @@ class TestBonsaihideFiltering:
             assert any(d.path == "notes/readme.md" for d in docs)
 
             # Hide and re-index
-            idx._bonsaihide_spec = _make_pathspec(["notes/"])
+            idx._thinkrailhide_spec = _make_pathspec(["notes/"])
             result = await idx.reindex_file(tmp_path, tmp_path / "notes" / "readme.md")
             assert result == "removed"
             docs = await idx.get_all_documents()
             assert not any(d.path == "notes/readme.md" for d in docs)
 
     async def test_reindex_file_normal_when_no_match(self, tmp_path: Path) -> None:
-        """Non-hidden files are processed normally when bonsaihide is set."""
+        """Non-hidden files are processed normally when thinkrailhide is set."""
         _write_spec_file(tmp_path, "visible.md", """\
             ---
             id: visible-spec
@@ -1073,28 +1073,28 @@ class TestBonsaihideFiltering:
             # Visible
         """)
 
-        db_path = tmp_path / ".bonsai" / "index.db"
+        db_path = tmp_path / ".tr" / "index.db"
         async with SpecIndex(db_path) as idx:
-            idx._bonsaihide_spec = _make_pathspec(["hidden/"])
+            idx._thinkrailhide_spec = _make_pathspec(["hidden/"])
             result = await idx.reindex_file(tmp_path, tmp_path / "visible.md")
             assert result == "spec"
             assert await idx.get_spec("visible-spec") is not None
 
-    async def test_rebuild_stores_bonsaihide_spec(self, tmp_path: Path) -> None:
-        """rebuild() stores the passed bonsaihide_spec on the index."""
-        db_path = tmp_path / ".bonsai" / "index.db"
+    async def test_rebuild_stores_thinkrailhide_spec(self, tmp_path: Path) -> None:
+        """rebuild() stores the passed thinkrailhide_spec on the index."""
+        db_path = tmp_path / ".tr" / "index.db"
         async with SpecIndex(db_path) as idx:
-            assert idx._bonsaihide_spec is None
+            assert idx._thinkrailhide_spec is None
 
             spec = _make_pathspec(["drafts/"])
-            await idx.rebuild(tmp_path, bonsaihide_spec=spec)
-            assert idx._bonsaihide_spec is spec
+            await idx.rebuild(tmp_path, thinkrailhide_spec=spec)
+            assert idx._thinkrailhide_spec is spec
 
     async def test_rebuild_sets_ready_false_during_execution(self, tmp_path: Path) -> None:
         """rebuild() clears _ready_event at the start to prevent concurrent reindex_file()."""
         _write_spec_file(tmp_path, "a.md", "# A")
 
-        db_path = tmp_path / ".bonsai" / "index.db"
+        db_path = tmp_path / ".tr" / "index.db"
         async with SpecIndex(db_path) as idx:
             assert idx.is_ready is True  # set by __aenter__
 
@@ -1111,13 +1111,13 @@ class TestBonsaihideFiltering:
 
             assert ready_during_rebuild is False
 
-    async def test_initialize_stores_bonsaihide_spec(self, tmp_path: Path) -> None:
-        """initialize() stores the bonsaihide_spec before opening the DB."""
-        db_path = tmp_path / ".bonsai" / "index.db"
+    async def test_initialize_stores_thinkrailhide_spec(self, tmp_path: Path) -> None:
+        """initialize() stores the thinkrailhide_spec before opening the DB."""
+        db_path = tmp_path / ".tr" / "index.db"
         spec = _make_pathspec(["hidden/"])
         idx = SpecIndex(db_path)
-        await idx.initialize(tmp_path, bonsaihide_spec=spec)
-        assert idx._bonsaihide_spec is spec
+        await idx.initialize(tmp_path, thinkrailhide_spec=spec)
+        assert idx._thinkrailhide_spec is spec
         await idx.close()
 
     async def test_rebuild_with_updated_patterns_excludes_new_hidden(self, tmp_path: Path) -> None:
@@ -1137,7 +1137,7 @@ class TestBonsaihideFiltering:
             # WIP
         """)
 
-        db_path = tmp_path / ".bonsai" / "index.db"
+        db_path = tmp_path / ".tr" / "index.db"
         async with SpecIndex(db_path) as idx:
             # First rebuild: no filtering — both indexed
             await idx.rebuild(tmp_path)
@@ -1145,7 +1145,7 @@ class TestBonsaihideFiltering:
             assert await idx.get_spec("wip") is not None
 
             # Second rebuild: hide drafts/
-            await idx.rebuild(tmp_path, bonsaihide_spec=_make_pathspec(["drafts/"]))
+            await idx.rebuild(tmp_path, thinkrailhide_spec=_make_pathspec(["drafts/"]))
             assert await idx.get_spec("keep") is not None
             assert await idx.get_spec("wip") is None
 
@@ -1166,10 +1166,10 @@ class TestBonsaihideFiltering:
             # B
         """)
 
-        db_path = tmp_path / ".bonsai" / "index.db"
+        db_path = tmp_path / ".tr" / "index.db"
         async with SpecIndex(db_path) as idx:
             # First rebuild: hide b.md
-            await idx.rebuild(tmp_path, bonsaihide_spec=_make_pathspec(["b.md"]))
+            await idx.rebuild(tmp_path, thinkrailhide_spec=_make_pathspec(["b.md"]))
             assert await idx.get_spec("spec-a") is not None
             assert await idx.get_spec("spec-b") is None
 
@@ -1178,10 +1178,10 @@ class TestBonsaihideFiltering:
             assert await idx.get_spec("spec-a") is not None
             assert await idx.get_spec("spec-b") is not None
 
-    async def test_set_bonsaihide_spec_replaces_rules(self, tmp_path: Path) -> None:
-        """set_bonsaihide_spec() swaps the in-memory rules atomically.
+    async def test_set_thinkrailhide_spec_replaces_rules(self, tmp_path: Path) -> None:
+        """set_thinkrailhide_spec() swaps the in-memory rules atomically.
 
-        Regression for the watcher's same-batch path: after .bonsaihide is
+        Regression for the watcher's same-batch path: after .thinkrailhide is
         edited, the watcher updates the rules synchronously so that any
         FileChanged events from the same batch see the new rules.
         """
@@ -1193,24 +1193,24 @@ class TestBonsaihideFiltering:
             # Old
         """)
 
-        db_path = tmp_path / ".bonsai" / "index.db"
+        db_path = tmp_path / ".tr" / "index.db"
         async with SpecIndex(db_path) as idx:
             # No hide rules yet — file indexes normally.
-            assert idx._bonsaihide_spec is None
+            assert idx._thinkrailhide_spec is None
             result = await idx.reindex_file(tmp_path, tmp_path / "archive" / "old.md")
             assert result == "spec"
             assert await idx.get_spec("old-spec") is not None
 
             # Replace rules to hide archive/.  reindex_file should now treat
             # the same path as hidden and remove the entry.
-            idx.set_bonsaihide_spec(_make_pathspec(["archive/"]))
-            assert idx._bonsaihide_spec is not None
+            idx.set_thinkrailhide_spec(_make_pathspec(["archive/"]))
+            assert idx._thinkrailhide_spec is not None
             result = await idx.reindex_file(tmp_path, tmp_path / "archive" / "old.md")
             assert result == "removed"
             assert await idx.get_spec("old-spec") is None
 
             # Clearing the rules restores normal behaviour on the next reindex.
-            idx.set_bonsaihide_spec(None)
+            idx.set_thinkrailhide_spec(None)
             result = await idx.reindex_file(tmp_path, tmp_path / "archive" / "old.md")
             assert result == "spec"
             assert await idx.get_spec("old-spec") is not None

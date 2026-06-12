@@ -99,7 +99,7 @@ def rpc_payload_json_schema() -> dict[str, Any]:
 
     return {
         "$schema": "http://json-schema.org/draft-07/schema#",
-        "title": "BonsaiRpcPayloads",
+        "title": "ThinkRailRpcPayloads",
         "$defs": defs,
         "anyOf": [
             {"$ref": f"#/$defs/{model.__name__}"} for model in RPC_PAYLOAD_MODELS

@@ -11,9 +11,9 @@ from app.board.artifact_paths import (
 
 
 class TestTicketDir:
-    def test_returns_under_dot_bonsai(self, tmp_path: Path) -> None:
+    def test_returns_under_dot_thinkrail(self, tmp_path: Path) -> None:
         result = ticket_dir(tmp_path, "mt_abcd1234")
-        assert result == tmp_path / ".bonsai" / "tickets" / "mt_abcd1234"
+        assert result == tmp_path / ".tr" / "tickets" / "mt_abcd1234"
 
 
 class TestArtifactPath:
@@ -41,9 +41,9 @@ class TestEnsureTicketDir:
     def test_creates_missing_dir(self, tmp_path: Path) -> None:
         d = ensure_ticket_dir(tmp_path, "mt_new")
         assert d.is_dir()
-        assert d == tmp_path / ".bonsai" / "tickets" / "mt_new"
+        assert d == tmp_path / ".tr" / "tickets" / "mt_new"
 
     def test_idempotent(self, tmp_path: Path) -> None:
         ensure_ticket_dir(tmp_path, "mt_x")
         ensure_ticket_dir(tmp_path, "mt_x")
-        assert (tmp_path / ".bonsai" / "tickets" / "mt_x").is_dir()
+        assert (tmp_path / ".tr" / "tickets" / "mt_x").is_dir()

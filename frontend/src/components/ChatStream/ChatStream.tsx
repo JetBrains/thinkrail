@@ -12,6 +12,11 @@ import { ProposeChangeChip, type HunkSummary } from "./ProposeChangeChip.tsx";
 import { SessionContextMenu } from "./SessionContextMenu.tsx";
 import { SubsessionContextMenu } from "./SubsessionContextMenu.tsx";
 import { ReturnFlowCard } from "./ReturnFlowCard.tsx";
+import {
+  EXPAND_ALL_EVENT,
+  COLLAPSE_EVENTS_EVENT,
+  COLLAPSE_ALL_EVENT,
+} from "./useExpandCollapse.ts";
 import type { ApprovalInfo, EventRenderContext, TaskItem } from "./renderers/types.ts";
 import "./compact.css";
 
@@ -135,15 +140,15 @@ export const ChatStream = forwardRef<ChatStreamHandle, ChatStreamProps>(function
   }, []);
 
   const handleExpandAll = useCallback(() => {
-    document.dispatchEvent(new CustomEvent("bonsai:expandAll"));
+    document.dispatchEvent(new CustomEvent(EXPAND_ALL_EVENT));
   }, []);
 
   const handleCollapseEvents = useCallback(() => {
-    document.dispatchEvent(new CustomEvent("bonsai:collapseEvents"));
+    document.dispatchEvent(new CustomEvent(COLLAPSE_EVENTS_EVENT));
   }, []);
 
   const handleCollapseAll = useCallback(() => {
-    document.dispatchEvent(new CustomEvent("bonsai:collapseAll"));
+    document.dispatchEvent(new CustomEvent(COLLAPSE_ALL_EVENT));
   }, []);
 
   const handleCopyTranscript = useCallback(() => {
@@ -172,7 +177,7 @@ export const ChatStream = forwardRef<ChatStreamHandle, ChatStreamProps>(function
       return `- "${q.question}": was "${prev ?? "unknown"}"`;
     });
     const msg = `I'd like to revise my answer:\n${parts.join("\n")}\n\nPlease ask me again.`;
-    useSessionStore.getState().sendMessage(session.bonsaiSid, msg);
+    useSessionStore.getState().sendMessage(session.thinkrailSid, msg);
   }, [ctxMenu, session, events, answeredRequests]);
 
   // ── Pre-scan: index toolCallEnd results by toolUseId ──
@@ -198,11 +203,11 @@ export const ChatStream = forwardRef<ChatStreamHandle, ChatStreamProps>(function
       activeSubagents.clear();
   }
 
-  // ── Pre-scan: track latest bonsai_visualize event per visId ──
+  // ── Pre-scan: track latest thinkrail_visualize event per visId ──
   const latestVisByVisId = new Map<string, number>();
   for (let i = 0; i < events.length; i++) {
     const ev = events[i];
-    if (ev.eventType === "toolCallStart" && ev.payload.toolName.endsWith("bonsai_visualize")) {
+    if (ev.eventType === "toolCallStart" && ev.payload.toolName.endsWith("thinkrail_visualize")) {
       const visId = ev.payload.toolInput.visId as string | undefined;
       if (visId) latestVisByVisId.set(visId, i);
     }
@@ -231,7 +236,7 @@ export const ChatStream = forwardRef<ChatStreamHandle, ChatStreamProps>(function
       const parentIdx = agentStartIdx.get(agentId);
       if (parentIdx === undefined) continue;
       const isVis = ev.eventType === "toolCallStart" &&
-        ev.payload.toolName.endsWith("bonsai_visualize");
+        ev.payload.toolName.endsWith("thinkrail_visualize");
       const isInteraction = ev.eventType === "askUserQuestion" || ev.eventType === "confirmAction" || ev.eventType === "suggestSession" || ev.eventType === "suggestDescription";
       if (!isVis && !isInteraction) {
         subagentChildren.get(parentIdx)!.push(i);
@@ -416,7 +421,7 @@ export const ChatStream = forwardRef<ChatStreamHandle, ChatStreamProps>(function
       onContextMenu={handleContextMenu}
     >
       {session?.status === "draft" && (
-        <DraftConfigCard bonsaiSid={session.bonsaiSid} />
+        <DraftConfigCard thinkrailSid={session.thinkrailSid} />
       )}
       {events.map((ev, i) => {
         if (childIndices.has(i)) return null;
@@ -449,7 +454,7 @@ export const ChatStream = forwardRef<ChatStreamHandle, ChatStreamProps>(function
           const requestIds = g.indices.map(
             (idx) => (events[idx].payload as { requestId?: string }).requestId ?? "",
           );
-          const sid = session.bonsaiSid;
+          const sid = session.thinkrailSid;
           return (
             <div key={`chip-${i}`} data-event-index={i}>
               <ProposeChangeChip
@@ -501,28 +506,28 @@ export const ChatStream = forwardRef<ChatStreamHandle, ChatStreamProps>(function
 
       {session?.returnStatus === "pending" && session?.returnSummary && (
         <ReturnFlowCard
-          bonsaiSid={session.bonsaiSid}
+          thinkrailSid={session.thinkrailSid}
           subsessionType={session.subsessionType ?? "discussion"}
           proposedSummary={session.returnSummary}
           onApprove={(text) => {
             import("@/store/sessionStore.ts").then(({ useSessionStore }) => {
-              useSessionStore.getState().approveReturn(session.bonsaiSid, text);
+              useSessionStore.getState().approveReturn(session.thinkrailSid, text);
             }).catch(console.error);
           }}
           onDismiss={() => {
             import("@/store/sessionStore.ts").then(({ useSessionStore }) => {
-              useSessionStore.getState().dismissReturn(session.bonsaiSid);
+              useSessionStore.getState().dismissReturn(session.thinkrailSid);
             }).catch(console.error);
           }}
           onRevise={(feedback) => {
             import("@/store/sessionStore.ts").then(({ useSessionStore }) => {
-              useSessionStore.getState().reviseReturn(session.bonsaiSid, feedback);
+              useSessionStore.getState().reviseReturn(session.thinkrailSid, feedback);
             }).catch(console.error);
           }}
         />
       )}
 
-      <SubsessionContextMenu containerRef={scrollRef} sessionId={session?.bonsaiSid ?? ""} />
+      <SubsessionContextMenu containerRef={scrollRef} sessionId={session?.thinkrailSid ?? ""} />
 
       {!autoScroll.current && (
         <button

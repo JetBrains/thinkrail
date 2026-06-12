@@ -5,7 +5,7 @@
  * and run json-schema-to-typescript to regenerate this file.
  */
 
-export type BonsaiRpcPayloads =
+export type ThinkRailRpcPayloads =
   | LabeledOption
   | RuntimeFlag
   | RuntimeIdentity

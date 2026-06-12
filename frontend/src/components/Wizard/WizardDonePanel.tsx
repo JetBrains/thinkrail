@@ -137,7 +137,7 @@ export function WizardDonePanel({ session, outcome }: WizardDonePanelProps) {
       // outcome as dismissed so re-activating this session (clicking it
       // in the tab bar, or after a page reload) drops them into the
       // regular session UX instead of the done-screen.
-      dismissWizardOutcome(session.bonsaiSid);
+      dismissWizardOutcome(session.thinkrailSid);
       if (action.target === "board") {
         useBoardStore.setState({ activeTicketId: null });
         setCenterView("board");
@@ -151,7 +151,7 @@ export function WizardDonePanel({ session, outcome }: WizardDonePanelProps) {
         setCenterView("sessions");
       }
     },
-    [setCenterView, dismissWizardOutcome, session.bonsaiSid, openFile, firstArtifact, projectPath],
+    [setCenterView, dismissWizardOutcome, session.thinkrailSid, openFile, firstArtifact, projectPath],
   );
 
   const handleAddTicket = useCallback(
@@ -164,12 +164,12 @@ export function WizardDonePanel({ session, outcome }: WizardDonePanelProps) {
         // "idea" column so it's visible in the next-action column from
         // the start.
         await createTicket(action.title, action.body ?? undefined, undefined, "product-design");
-        await patchOutcomeAction(session.bonsaiSid, action.id, { state: "applied" });
+        await patchOutcomeAction(session.thinkrailSid, action.id, { state: "applied" });
       } finally {
         setBusyActionId(null);
       }
     },
-    [busyActionId, createTicket, patchOutcomeAction, session.bonsaiSid],
+    [busyActionId, createTicket, patchOutcomeAction, session.thinkrailSid],
   );
 
   const [expandedTickets, setExpandedTickets] = useState<Set<string>>(new Set());
@@ -195,7 +195,7 @@ export function WizardDonePanel({ session, outcome }: WizardDonePanelProps) {
       for (const t of pendingTickets) {
         try {
           await createTicket(t.title, t.body ?? undefined, undefined, "product-design");
-          await patchOutcomeAction(session.bonsaiSid, t.id, { state: "applied" });
+          await patchOutcomeAction(session.thinkrailSid, t.id, { state: "applied" });
           succeeded++;
         } catch (e) {
           console.error("[WizardDonePanel] failed to add ticket", t.id, e);
@@ -215,7 +215,7 @@ export function WizardDonePanel({ session, outcome }: WizardDonePanelProps) {
     } finally {
       setBusyActionId(null);
     }
-  }, [busyActionId, pendingTickets, createTicket, patchOutcomeAction, session.bonsaiSid]);
+  }, [busyActionId, pendingTickets, createTicket, patchOutcomeAction, session.thinkrailSid]);
 
   return (
     <div className="wiz-done">

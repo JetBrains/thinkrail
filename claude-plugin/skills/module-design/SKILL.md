@@ -12,7 +12,7 @@ You are helping the user create a **Module Design Specification** (README.md). A
 
 ## Show Progress
 
-Show current workflow position by calling `bonsai_visualize` with type `progress-tracker`:
+Show current workflow position by calling `thinkrail_visualize` with type `progress-tracker`:
 ```json
 {
   "type": "progress-tracker",
@@ -30,7 +30,7 @@ Show current workflow position by calling `bonsai_visualize` with type `progress
 }
 ```
 
-When specifying a module, highlight the current module using `bonsai_visualize` `diagram` type with the module marked as `current`.
+When specifying a module, highlight the current module using `thinkrail_visualize` `diagram` type with the module marked as `current`.
 
 ## Prerequisites
 
@@ -104,7 +104,7 @@ Use AskUserQuestion (multiSelect: true):
 
 ### Step 7: Generate the specification
 
-Before writing, show the module's architecture using `bonsai_visualize` with type `diagram`:
+Before writing, show the module's architecture using `thinkrail_visualize` with type `diagram`:
 ```json
 {
   "type": "diagram",
@@ -126,7 +126,7 @@ Before writing, show the module's architecture using `bonsai_visualize` with typ
 
 Use `Write` to create the module README.md with YAML frontmatter (`type: "module-design"`, `status: "active"`, `covers: ["{module}/"]`). Include:
 - Module purpose from Step 2
-- Architecture description from Step 3 (reference the bonsai_visualize diagram shown above; do NOT put ASCII art diagrams in the README — use plain text or mermaid if needed)
+- Architecture description from Step 3 (reference the thinkrail_visualize diagram shown above; do NOT put ASCII art diagrams in the README — use plain text or mermaid if needed)
 - Public interface table from Step 4
 - Output contract table (extracted from return types)
 - Internal file organization (auto-detected)

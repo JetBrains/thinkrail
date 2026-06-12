@@ -4,80 +4,18 @@ import { FileTree } from "@/components/FileTree/FileTree.tsx";
 import { SpecTree } from "@/components/SpecTree/SpecTree.tsx";
 import { SessionManager } from "@/components/SessionManager/SessionManager.tsx";
 import { ResizeHandle } from "@/components/AppShell/ResizeHandle.tsx";
-import { useBoardStore } from "@/store/boardStore.ts";
-import type { TicketSummary } from "@/types/board.ts";
-import { PHASE_LABELS } from "@/components/TicketDetail/phases.ts";
 import "./SessionsLeftPanel.css";
 
-type SessionsLeftTab = "tickets" | "sessions" | "specs" | "files";
+type SessionsLeftTab = "sessions" | "specs" | "files";
 
 const TAB_LABELS: Record<SessionsLeftTab, string> = {
-  tickets: "Tickets",
   sessions: "Sessions",
   specs: "Specs",
   files: "Files",
 };
 
-interface TicketItemProps {
-  ticket: TicketSummary;
-  onOpen: (id: string) => void;
-  onPreview: (id: string) => void;
-}
-
-function TicketItem({ ticket, onOpen, onPreview }: TicketItemProps) {
-  const phaseLabel = PHASE_LABELS[ticket.status] || ticket.status;
-
-  return (
-    <div
-      className="sessions-left-ticket"
-      onClick={() => onOpen(ticket.id)}
-      onMouseEnter={() => onPreview(ticket.id)}
-    >
-      <div className="sessions-left-ticket-header">
-        <span className="sessions-left-ticket-title">{ticket.title}</span>
-        <span className="sessions-left-ticket-id">#{ticket.id.slice(-4)}</span>
-      </div>
-      <div className="sessions-left-ticket-meta">
-        <span className="sessions-left-ticket-phase">{phaseLabel}</span>
-        <span className="sessions-left-ticket-type">{ticket.type}</span>
-      </div>
-    </div>
-  );
-}
-
-function TicketsContent() {
-  const tickets = useBoardStore((s) => s.tickets);
-  const openTicket = useBoardStore((s) => s.openTicket);
-  const setPreviewTicket = useBoardStore((s) => s.setPreviewTicket);
-
-  const ticketList = Array.from(tickets.values()).sort((a, b) => {
-    const ta = Date.parse(a.updated || a.created || "") || 0;
-    const tb = Date.parse(b.updated || b.created || "") || 0;
-    return tb - ta;
-  });
-
-  if (ticketList.length === 0) {
-    return <div className="sessions-left-empty">No tickets yet</div>;
-  }
-
-  return (
-    <div className="sessions-left-tickets-list">
-      {ticketList.map((ticket) => (
-        <TicketItem
-          key={ticket.id}
-          ticket={ticket}
-          onOpen={openTicket}
-          onPreview={setPreviewTicket}
-        />
-      ))}
-    </div>
-  );
-}
-
 function TabContent({ tab }: { tab: SessionsLeftTab }) {
   switch (tab) {
-    case "tickets":
-      return <TicketsContent />;
     case "sessions":
       return (
         <div className="sessions-left-sessions-content">

@@ -22,7 +22,7 @@ from app.agent.tools._context import get_tool_context
 from app.agent.tracker import Tracker
 from app.board.models import TicketSummary
 from app.board.service import BoardService, TicketNotFoundError
-from app.core.config import AppConfig
+from app.core.config import AppConfig, MCP_PREFIX
 
 logger = logging.getLogger(__name__)
 
@@ -109,12 +109,12 @@ async def _suggest_description(args: dict) -> dict:
 
     # Interactive flow: send card → await user response
     request_id = str(uuid4())
-    future = ctx.tracker.register_future(ctx.task.bonsai_sid, request_id)
+    future = ctx.tracker.register_future(ctx.task.thinkrail_sid, request_id)
 
     await ctx.notify(
         "agent/suggestDescription",
         {
-            "bonsaiSid": ctx.task.bonsai_sid,
+            "thinkrailSid": ctx.task.thinkrail_sid,
             "description": description,
             "section": section,
         },
@@ -142,7 +142,7 @@ async def _suggest_description(args: dict) -> dict:
 
 
 suggest_description_mcp_server = create_sdk_mcp_server(
-    name="bonsai-describe", tools=[_suggest_description]
+    name=f"{MCP_PREFIX}describe", tools=[_suggest_description]
 )
 
 

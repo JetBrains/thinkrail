@@ -1,6 +1,6 @@
 ---
 name: bug-fix
-description: "Reactive, symptom-driven skill for bug fixes. Edits the project's bonsai specs to capture the correct intent (or bootstraps a properly-connected spec when the area was uncovered), then suggests a follow-up session to align code to the corrected spec. Treats a bug as a spec/code discrepancy: fix the spec half here; code half is handed off."
+description: "Reactive, symptom-driven skill for bug fixes. Edits the project's thinkrail specs to capture the correct intent (or bootstraps a properly-connected spec when the area was uncovered), then suggests a follow-up session to align code to the corrected spec. Treats a bug as a spec/code discrepancy: fix the spec half here; code half is handed off."
 icon: "🐞"
 group: Creation
 argument-hint: "[short symptom]"
@@ -8,11 +8,11 @@ argument-hint: "[short symptom]"
 
 # Bug Fix
 
-You are running an **algorithmic, gate-by-gate bug-triage pipeline**. A bug is, by definition, a **discrepancy between intent and behaviour** — *intent* lives in the project's bonsai specifications, *behaviour* lives in the source code. This skill fixes the **spec half** of that discrepancy (or bootstraps a properly-connected spec when the affected area is uncovered), then hands off the **code half** to a separate session via `SuggestSession`.
+You are running an **algorithmic, gate-by-gate bug-triage pipeline**. A bug is, by definition, a **discrepancy between intent and behaviour** — *intent* lives in the project's thinkrail specifications, *behaviour* lives in the source code. This skill fixes the **spec half** of that discrepancy (or bootstraps a properly-connected spec when the affected area is uncovered), then hands off the **code half** to a separate session via `SuggestSession`.
 
 The pipeline has **eight gates** (G1–G8). Each gate has a strict contract: defined inputs, the tools it may use, the named in-prompt data shape it produces, and an explicit ratification step where the user confirms before the pipeline advances. Gates fire in strict order. A failure to ratify aborts the pipeline cleanly with a short post-mortem.
 
-This skill performs **no code edits**. It only edits files under `.bonsai/`. The single deliverable is a corrected/extended specification plus a `SuggestSession` hand-off card — never an `Edit`/`Write` against `backend/`, `frontend/`, `claude-plugin/skills/`, `run.sh`, or any other source path.
+This skill performs **no code edits**. It only edits files under `{{TR_DIR}}/`. The single deliverable is a corrected/extended specification plus a `SuggestSession` hand-off card — never an `Edit`/`Write` against `backend/`, `frontend/`, `claude-plugin/skills/`, `run.sh`, or any other source path.
 
 ## Architecture
 
@@ -25,7 +25,7 @@ flowchart TD
   G4 -- A silent --> G5a["G5 Draft (bootstrap)"]
   G4 -- B wrong --> G5b["G5 Draft (edit)"]
   G4 -- C code-only --> G5c["G5 Draft (no-op)"]
-  G4 -- D feature, not bug --> Hbs["Hand-off to /bonsai-brainstorm"]
+  G4 -- D feature, not bug --> Hbs["Hand-off to /thinkrail-brainstorm"]
   G5a --> G6["G6 Self-validate (inline checklist)"]
   G5b --> G6
   G5c --> G7
@@ -61,7 +61,7 @@ Initialise:
 }
 ```
 
-After **every** gate transition (G1 → G2, G2 → G3, …), re-emit `bonsai_visualize` with the same `visId: "bug-fix-pipeline"` so the UI updates in place. Do not create a new tracker per gate — re-use the same `visId`.
+After **every** gate transition (G1 → G2, G2 → G3, …), re-emit `thinkrail_visualize` with the same `visId: "bug-fix-pipeline"` so the UI updates in place. Do not create a new tracker per gate — re-use the same `visId`.
 
 For **case D**, set G5/G6/G7 to `skipped` and G8 to `current` after G4 ratifies. For **case C**, G5/G6 are `skipped` and G7/G8 proceed normally. On **abort**, set the active step to `error`; do not retroactively rewrite earlier `done` steps.
 
@@ -85,7 +85,7 @@ HandoffPayload  = { prompt: str, specIds: [str], reason: str,
 ```
 
 - `severity ∈ { "blocker", "major", "minor", "cosmetic" }`.
-- `Classification.case ∈ { "A", "B", "C", "D" }`. **Case D** ("feature, not bug") short-circuits the pipeline: G5–G8 are skipped and the skill emits a hand-off to `/bonsai-brainstorm` with the intake context.
+- `Classification.case ∈ { "A", "B", "C", "D" }`. **Case D** ("feature, not bug") short-circuits the pipeline: G5–G8 are skipped and the skill emits a hand-off to `/thinkrail-brainstorm` with the intake context.
 - `kind = "create"` for case-A bootstraps; `kind = "modify"` for case-B edits.
 
 ## G1 Intake
@@ -125,7 +125,7 @@ BugReport = {
 }
 ```
 
-Present the assembled `BugReport` via `bonsai_visualize` `summary-box` (see *Visualizations* below) and ask `AskUserQuestion`: **Confirm / Edit / Abort**. Only on Confirm advance to G2.
+Present the assembled `BugReport` via `thinkrail_visualize` `summary-box` (see *Visualizations* below) and ask `AskUserQuestion`: **Confirm / Edit / Abort**. Only on Confirm advance to G2.
 
 ## G2 Repro
 
@@ -167,7 +167,7 @@ The `unverified` flag (any `ReproOutcome` with `attempted: false` *or* `matches_
 ## G3 Locate
 
 **Inputs:** `BugReport.symptom`, the codebase, the spec registry.
-**Tools:** `Grep`, `Glob`, `Read`, `mcp__bonsai-specs__registry_query` (with `covers=<path>`).
+**Tools:** `Grep`, `Glob`, `Read`, `mcp__thinkrail-specs__registry_query` (with `covers=<path>`).
 **Output:** an `Evidence`.
 **Ratification:** present the evidence; user can add or remove files via free-form before advancing.
 
@@ -175,7 +175,7 @@ The `unverified` flag (any `ReproOutcome` with `attempted: false` *or* `matches_
 
 1. **Grep / Glob** — search the codebase for symbols, error strings, file names, and keywords mentioned in `BugReport.symptom` and `BugReport.expected`. Prefer specific, anchored patterns to broad ones; bias toward backend (`backend/app/...`) and frontend (`frontend/src/...`) source paths first, then top-level scripts (`run.sh`, etc.).
 2. **Read** — open the most plausible candidate files at the relevant line ranges. Capture `file:line` references (e.g., `run.sh:80-85`) to use later in G8's `Evidence.suspected_files`.
-3. **`mcp__bonsai-specs__registry_query`** — for each suspected file path, query the registry with `covers=<path>` to find covering specs. Collect each hit as a `SpecRef = { id, path, type, covers }`.
+3. **`mcp__thinkrail-specs__registry_query`** — for each suspected file path, query the registry with `covers=<path>` to find covering specs. Collect each hit as a `SpecRef = { id, path, type, covers }`.
 
 ### Composing `Evidence`
 
@@ -191,7 +191,7 @@ If `gap` is true, set the working hypothesis to **case A** (silent) — it will 
 
 ### Ratification
 
-Render `Evidence` via `bonsai_visualize` `data-table` titled *"Suspected files vs covering specs"*:
+Render `Evidence` via `thinkrail_visualize` `data-table` titled *"Suspected files vs covering specs"*:
 
 - **Columns:** `["Suspected file", "Covering spec(s)"]`.
 - **Rows:** one per `suspected_files` entry; the second column lists every `SpecRef.id` whose `covers` matches, or "— (no spec)" when none.
@@ -207,13 +207,13 @@ Loop until the user picks "Evidence looks right". Never advance to G4 with stale
 ## G4 Classify
 
 **Inputs:** `Evidence`, `BugReport.expected`.
-**Tools:** `mcp__bonsai-specs__spec_get` for each `Evidence.covering_specs` entry.
+**Tools:** `mcp__thinkrail-specs__spec_get` for each `Evidence.covering_specs` entry.
 **Output:** a `Classification` with `case ∈ {A, B, C, D}`.
-**Ratification:** present reasoning + classification via `bonsai_visualize` `summary-box`; user picks **Confirm / Reclassify / Abort**.
+**Ratification:** present reasoning + classification via `thinkrail_visualize` `summary-box`; user picks **Confirm / Reclassify / Abort**.
 
 ### Read the covering specs
 
-For each `SpecRef` in `Evidence.covering_specs`, call `mcp__bonsai-specs__spec_get` and extract:
+For each `SpecRef` in `Evidence.covering_specs`, call `mcp__thinkrail-specs__spec_get` and extract:
 
 - The spec's stated intent (Purpose, Expected behaviour, Public Interface, etc., depending on type).
 - Any explicit guarantees / non-guarantees relevant to `BugReport.symptom`.
@@ -228,7 +228,7 @@ Apply the case taxonomy verbatim from product-design §1 / design-doc §2 G4:
 | **A — Silent** | Nothing about this area (`Evidence.gap` is true) | The wrong thing | The spec corpus has a coverage gap; we must **add** intent. | G5 Draft (bootstrap, see §Tier-selection). |
 | **B — Wrong** | Something incorrect or outdated | The wrong thing | Existing spec drifted from intent; we must **correct** it. | G5 Draft (focused diff against existing spec). |
 | **C — Code-only** | The right thing | The wrong thing | Spec is fine; only code needs to change. | G5 Draft is a **no-op**; pipeline still runs G7/G8 to fire `SuggestSession` with the unchanged spec ids. |
-| **D — Feature, not bug** | The right thing for current scope | The right thing for current scope | The user's `expected` describes new functionality the project never intended. | **Short-circuit**: skip G5–G7 entirely; G8 reroutes to `/bonsai-brainstorm`. |
+| **D — Feature, not bug** | The right thing for current scope | The right thing for current scope | The user's `expected` describes new functionality the project never intended. | **Short-circuit**: skip G5–G7 entirely; G8 reroutes to `/thinkrail-brainstorm`. |
 
 ### Case D feature-request guard
 
@@ -240,7 +240,7 @@ Before settling on A/B/C, scan `BugReport.expected` and any covering spec conten
 
 If any signal fires **and** there is no spec hint that this behaviour was ever intended, classify as **case D**. Justification must explicitly cite the signals.
 
-Case D **short-circuits the pipeline**: skip G5, G6, G7. Proceed directly to G8, which uses the case-D `/bonsai-brainstorm` reroute prompt (see G8).
+Case D **short-circuits the pipeline**: skip G5, G6, G7. Proceed directly to G8, which uses the case-D `/thinkrail-brainstorm` reroute prompt (see G8).
 
 ### Composing `Classification`
 
@@ -259,7 +259,7 @@ Classification = {
 
 ### Ratification
 
-Render the classification via `bonsai_visualize` `summary-box` titled *"Classification"*:
+Render the classification via `thinkrail_visualize` `summary-box` titled *"Classification"*:
 
 ```
 {
@@ -288,11 +288,11 @@ If `confidence` is `"low"` **and** the user picks "Reclassify", **re-run G3 then
 ## G5 Draft
 
 **Inputs:** `Classification`, `BugReport`, `Evidence`.
-**Tools (case A):** `mcp__bonsai-specs__registry_query` (for parent/sibling lookup); the **3-section bootstrap template** below.
-**Tools (case B):** `mcp__bonsai-specs__spec_get` to read existing content; compose a focused diff.
+**Tools (case A):** `mcp__thinkrail-specs__registry_query` (for parent/sibling lookup); the **3-section bootstrap template** below.
+**Tools (case B):** `mcp__thinkrail-specs__spec_get` to read existing content; compose a focused diff.
 **Tools (case C):** none — this gate is a **no-op**.
 **Output:** `DraftEdits = [SpecEdit]` (possibly empty for case C).
-**Ratification (case A only, when borderline):** `bonsai_visualize` `comparison` + `AskUserQuestion` to pick tier. Always: per-file diff preview before approval.
+**Ratification (case A only, when borderline):** `thinkrail_visualize` `comparison` + `AskUserQuestion` to pick tier. Always: per-file diff preview before approval.
 
 > Case **D** never reaches G5 — it short-circuits at G4 to G8.
 
@@ -309,7 +309,7 @@ The affected area has no covering spec (`Evidence.gap` is true). Apply the **tie
 | Expected behaviour requires multiple sub-sections, interfaces, or describes a whole module | **Delegate** to `/module-design` |
 | Expected behaviour is a focused sub-component of an existing module | **Delegate** to `/submodule-design` |
 
-If the heuristic returns a borderline result, **ask the user** rather than deciding. Use `bonsai_visualize` `comparison` titled *"Bootstrap tier"* with one option per tier (showing a 1-line description + pros/cons), then `AskUserQuestion` with the same tier names. Do **not** pick silently.
+If the heuristic returns a borderline result, **ask the user** rather than deciding. Use `thinkrail_visualize` `comparison` titled *"Bootstrap tier"* with one option per tier (showing a 1-line description + pros/cons), then `AskUserQuestion` with the same tier names. Do **not** pick silently.
 
 For **Delegate**: stop the Draft gate and invoke `/module-design` (or `/submodule-design`) via the Skill tool, supplying `BugReport` (especially `expected`) as the initial input. Once the new spec is saved, **resume `/bug-fix` at G6** with `DraftEdits` populated from the delegated session's output.
 
@@ -336,7 +336,7 @@ any explicit guarantees / non-guarantees. Bullet points encouraged.}
 
 For the **Inline** tier, the same three sub-sections appear as a *new section* of the closest existing parent spec (heading depth +1 below the parent's existing structure). No standalone file is created; `SpecEdit.kind = "modify"` and the diff is surgical.
 
-For the **Tiny stub** tier, a new standalone file is created at a path under `.bonsai/` that fits the spec's scope (e.g., `.bonsai/RUN_SCRIPT.md` for a developer-workflow spec). `SpecEdit.kind = "create"`. Use `mcp__bonsai-specs__registry_query` to find a sensible parent (nearest architecture or module spec) and any siblings whose `covers` overlaps; populate `parent_id`, `sibling_ids`, and `covers` accordingly.
+For the **Tiny stub** tier, a new standalone file is created at a path under `{{TR_DIR}}/` that fits the spec's scope (e.g., `{{TR_DIR}}/RUN_SCRIPT.md` for a developer-workflow spec). `SpecEdit.kind = "create"`. Use `mcp__thinkrail-specs__registry_query` to find a sensible parent (nearest architecture or module spec) and any siblings whose `covers` overlaps; populate `parent_id`, `sibling_ids`, and `covers` accordingly.
 
 #### Connectivity is non-negotiable (all tiers)
 
@@ -347,7 +347,7 @@ For the **Tiny stub** tier, a new standalone file is created at a path under `.b
 
 ### Case B — focused edit
 
-A covering spec exists but is wrong or outdated. Read it via `mcp__bonsai-specs__spec_get` (the full text, not a slice) and compute a focused diff: only the **lines that need to change** — typically a paragraph in *Expected behaviour* or a bullet in a behaviour list. Never rewrite whole sections when a sentence-level edit suffices.
+A covering spec exists but is wrong or outdated. Read it via `mcp__thinkrail-specs__spec_get` (the full text, not a slice) and compute a focused diff: only the **lines that need to change** — typically a paragraph in *Expected behaviour* or a bullet in a behaviour list. Never rewrite whole sections when a sentence-level edit suffices.
 
 `SpecEdit.kind = "modify"`. `SpecEdit.before` holds the existing relevant snippet; `SpecEdit.after` holds the corrected version. `parent_id`, `sibling_ids`, and `covers` are inherited from the existing spec unless they themselves are stale.
 
@@ -363,7 +363,7 @@ For **each** `SpecEdit` in `DraftEdits`, render a diff preview before any G6 lin
 - **Inline modify** (case A): show a unified diff of the parent spec, highlighting the new section.
 - **Modify** (case B): show a unified diff of the focused before/after.
 
-Use `bonsai_visualize` `data-table` or a fenced markdown diff block as the medium; either is acceptable. Always advance through G6 next, never directly to G7.
+Use `thinkrail_visualize` `data-table` or a fenced markdown diff block as the medium; either is acceptable. Always advance through G6 next, never directly to G7.
 
 ## G6 Self-validate
 
@@ -386,7 +386,7 @@ For each `SpecEdit` in `DraftEdits`, run the **G6 inline lint checklist** (see s
 
 If `LintResult.issues` is empty, advance to G7 silently.
 
-If `LintResult.issues` is non-empty, render via `bonsai_visualize` `status-list` titled *"G6 lint issues"* (one entry per issue, status `error` or `warning`, `meta` showing `where`). Then ask `AskUserQuestion`:
+If `LintResult.issues` is non-empty, render via `thinkrail_visualize` `status-list` titled *"G6 lint issues"* (one entry per issue, status `error` or `warning`, `meta` showing `where`). Then ask `AskUserQuestion`:
 
 - **"Fix and re-validate"** — go back into the relevant `SpecEdit`, address the issues (e.g., add the missing parent link, populate `covers`, fix template completeness), re-run the checklist. Loop until clean or the user picks one of the other options.
 - **"Apply anyway"** — only honoured for `warning`-severity issues. For `error`-severity issues the option is hidden / disabled, and the only remaining choices are Fix or Abort. When Apply-anyway is taken, record the unresolved warnings in working memory; G8's hand-off `prompt` must mention them ("G6 applied with warnings: ...").
@@ -397,7 +397,7 @@ The full project-wide `/spec-lint` runs naturally after `spec_save` at G7 (and a
 ## G7 Apply
 
 **Inputs:** lint-clean `DraftEdits` (or `[]` for case C).
-**Tools:** `mcp__bonsai-specs__spec_save` (per file) and `mcp__bonsai-specs__registry_mutate` (for links + `covers`).
+**Tools:** `mcp__thinkrail-specs__spec_save` (per file) and `mcp__thinkrail-specs__registry_mutate` (for links + `covers`).
 **Output:** `AppliedEdits = { saved: [...], skipped: [...] }`.
 **Ratification:** **per-file final approval** before each `spec_save` call.
 
@@ -412,7 +412,7 @@ If `DraftEdits` is empty (case C, or all edits were skipped at G5 review), set `
    - **Edit** — accept a revised `SpecEdit.after` (or refined `before/after` for case B); re-run G6 against the revised edit, then return here.
    - **Skip** — record `{ path, reason: "user-skipped" }` in `AppliedEdits.skipped` and move to the next edit.
 
-3. **`spec_save`** — call `mcp__bonsai-specs__spec_save` with the `SpecEdit.path`, `SpecEdit.after` content, the spec `type` (inferred from the path / template — typically `module-design` or `submodule-design` for tiny-stub / inline edits), and `status: "active"`.
+3. **`spec_save`** — call `mcp__thinkrail-specs__spec_save` with the `SpecEdit.path`, `SpecEdit.after` content, the spec `type` (inferred from the path / template — typically `module-design` or `submodule-design` for tiny-stub / inline edits), and `status: "active"`.
 
 4. **`registry_mutate`** — add or refresh:
    - `covers` to match `SpecEdit.covers`.
@@ -423,7 +423,7 @@ If `DraftEdits` is empty (case C, or all edits were skipped at G5 review), set `
 
 ### Per-file save tracking
 
-Surface the live save status via `bonsai_visualize` `progress-tracker` titled *"G7 spec save"*:
+Surface the live save status via `thinkrail_visualize` `progress-tracker` titled *"G7 spec save"*:
 
 - One step per `SpecEdit`, label `<path>` (or `<spec_id>` after save returns), status `pending → current → done`/`error`/`skipped`.
 - Update the tracker after **each** `spec_save` + `registry_mutate` pair so the user sees progress in real time.
@@ -433,7 +433,7 @@ If any `spec_save` returns an error, mark that step `error` in the tracker, push
 ## G8 Hand-off
 
 **Inputs:** `BugReport`, `ReproOutcome`, `Classification`, `AppliedEdits`, `Evidence`.
-**Tools:** `SuggestSession` (Bonsai MCP, exposed as `mcp__bonsai-proactive__SuggestSession`).
+**Tools:** `SuggestSession` (ThinkRail MCP, exposed as `mcp__thinkrail-proactive__SuggestSession`).
 **Output:** a single suggested-session card (or none, see *Empty edits due to skip* branch).
 **Ratification:** the user accepts or dismisses the card; the skill emits a Done summary either way.
 
@@ -485,7 +485,7 @@ If `ReproOutcome` is unverified for any reason, the `Repro:` line in `prompt` mu
 
 If G6 was applied with warnings (Apply-anyway picked), append `"G6 applied with warnings: <bullet list of warning messages>"` after the Repro line.
 
-### Branch 2 — Case D reroute to /bonsai-brainstorm
+### Branch 2 — Case D reroute to /thinkrail-brainstorm
 
 When `Classification.case == "D"`, **replace** the SuggestSession payload with:
 
@@ -498,10 +498,10 @@ behaviour is new functionality the project never intended:
   Expected: {BugReport.expected}
   Reasoning: {Classification.justification}
 
-Treat this as a feature design and run /bonsai-brainstorm.
+Treat this as a feature design and run /thinkrail-brainstorm.
 """
 specIds: []
-reason: "Reroute to /bonsai-brainstorm: feature request, not a bug."
+reason: "Reroute to /thinkrail-brainstorm: feature request, not a bug."
 ```
 
 `specIds` is intentionally **empty** for case D; no spec was edited and no covering spec is the "right" target — the brainstorming flow will determine which specs (if any) eventually need to change. The chained-bug guard is **not** appended in this branch (the next session is brainstorming, not bug-fix).
@@ -514,7 +514,7 @@ If `Classification.case ∈ {A, B}` **but** `AppliedEdits.saved` is empty becaus
 
 ## Done summary
 
-After G8 completes (or after the case-D / no-hand-off branch), emit a final `bonsai_visualize` `summary-box` titled *"`/bug-fix` done"* with these sections:
+After G8 completes (or after the case-D / no-hand-off branch), emit a final `thinkrail_visualize` `summary-box` titled *"`/bug-fix` done"* with these sections:
 
 - **Bug** — `symptom`, `expected`, `severity` from `BugReport`.
 - **Repro** — single line: `"verified"` or `"unverified — <ReproOutcome.note>"`.
@@ -522,7 +522,7 @@ After G8 completes (or after the case-D / no-hand-off branch), emit a final `bon
 - **Specs changed** — one row per `AppliedEdits.saved` entry (`<spec_id> — <path> (<kind>)`); shows "— (none)" for case C and the no-hand-off branch.
 - **Hand-off** — one of:
   - *"SuggestSession fired (Branch 1) — code-alignment session for `<symptom>`"*
-  - *"SuggestSession fired (Branch 2) — reroute to `/bonsai-brainstorm`"*
+  - *"SuggestSession fired (Branch 2) — reroute to `/thinkrail-brainstorm`"*
   - *"No hand-off — all spec edits were skipped by the user"*
 - **Code expected to be touched next** — `Evidence.suspected_files` (omitted for case D / no-hand-off).
 
@@ -539,7 +539,7 @@ These guardrails apply at **every** gate. Never weaken them under user pressure;
 - **Never widen scope silently.** If, while investigating, the skill spots an unrelated issue (in code, in another spec, in tooling), it surfaces it in the Done summary but does **not** act on it. The chained-bug guard line in G8 reinforces this rule for the downstream session too.
 - **Honest "unverified" flag.** When `ReproOutcome.attempted` is false **or** `ReproOutcome.matches_symptom` is false, the produced spec edits and the SuggestSession `prompt` explicitly note the fact (the word "unverified" must literally appear). Never paper over it.
 - **Refuse rather than guess.** If `Classification.confidence` is `"low"` and the user can't ratify, the skill stops and reports rather than guessing. If `Evidence.suspected_files` is empty after G3 (genuinely no idea), abort cleanly with a post-mortem. Better to refuse than to ship a misclassified spec edit.
-- **Feature-request guard (case D).** If the user's `expected` describes new functionality the project never intended, classify as case D and reroute to `/bonsai-brainstorm`. **Do not** silently bake new features into specs under the cover of a "bug fix".
+- **Feature-request guard (case D).** If the user's `expected` describes new functionality the project never intended, classify as case D and reroute to `/thinkrail-brainstorm`. **Do not** silently bake new features into specs under the cover of a "bug fix".
 - **Repro safety.** When attempting reproduction in a shell, the G2 deny-list is mandatory and non-negotiable. The skill refuses commands matching the deny-list and asks for a non-destructive repro instead. There is no "force" override.
 - **No code edits in this skill.** Code alignment is *only* done in the follow-up suggested session. Calls to `Edit` / `Write` against `backend/`, `frontend/`, `claude-plugin/skills/`, `run.sh`, or any other source-code path are forbidden by the G6 inline lint checklist (item 6) and by the skill's general posture.
 
@@ -554,7 +554,7 @@ Before executing `BugReport.repro_hint` via `Bash`, match the command (case-inse
 - `git checkout .` (any path-discarding form, including `git checkout -- <path>` against tracked changes).
 - `git branch -D` (force-delete).
 - Pipes from network to shell: `curl ... | sh`, `wget ... | sh`, `bash <(curl ...)`, `sh <(wget ...)`, etc.
-- Redirection (`>`, `>>`) to known-important paths: `.env`, anything under `.bonsai/`, `package.json`, `pyproject.toml`, `Cargo.toml`, and similar project-state files.
+- Redirection (`>`, `>>`) to known-important paths: `.env`, anything under `{{TR_DIR}}/`, `package.json`, `pyproject.toml`, `Cargo.toml`, and similar project-state files.
 - `chmod -R`, `chown -R` outside of `/tmp`.
 
 **On match:** refuse, explicitly **name which rule fired** in the user-facing message, and ask the user (via `AskUserQuestion`) for a non-destructive alternative. Do not weaken or skip the deny-list under any circumstance — including direct user pressure. The correct response to "just run it anyway" is *"I can't, deny-list rule X. Please give me a non-destructive repro."*
@@ -565,12 +565,12 @@ Before executing `BugReport.repro_hint` via `Bash`, match the command (case-inse
 
 Run by this skill prompt against **each** `SpecEdit` *before* `spec_save`:
 
-1. **Parent link** — present, non-empty, and resolves to a real spec id in the registry (verify via `mcp__bonsai-specs__registry_query`). For inline-tier edits, the parent is the spec being modified and the new section sits at the correct heading depth (parent's existing structure +1).
+1. **Parent link** — present, non-empty, and resolves to a real spec id in the registry (verify via `mcp__thinkrail-specs__registry_query`). For inline-tier edits, the parent is the spec being modified and the new section sits at the correct heading depth (parent's existing structure +1).
 2. **Sibling cross-refs** — at least one if peer specs cover related `covers`. If no peers exist, an explicit *"no peers — first spec for this area"* note must appear in the *Cross-references* section.
 3. **`covers` field** — populated; every path matches at least one of `Evidence.suspected_files` (or a glob covering them).
 4. **Template completeness** — for case-A bootstraps, all three template sections (Purpose / Expected behaviour / Cross-references) are populated; no empty headings, no `{placeholder}` text, no leftover `TODO` markers.
 5. **Title** — descriptive (≥ 3 words; not "Untitled" or generic stubs like "Spec" or "Module").
-6. **No code edits** — `SpecEdit.path` is under `.bonsai/` (or another approved spec directory); never under `backend/`, `frontend/`, `claude-plugin/skills/`, `run.sh`, or any source-code path. Failing this check is a **hard error** — `Apply anyway` is not offered.
+6. **No code edits** — `SpecEdit.path` is under `{{TR_DIR}}/` (or another approved spec directory); never under `backend/`, `frontend/`, `claude-plugin/skills/`, `run.sh`, or any source-code path. Failing this check is a **hard error** — `Apply anyway` is not offered.
 
 Failures present as a `status-list` of issues (see *Visualizations*), with options **Fix and re-validate / Apply anyway / Abort**.
 
@@ -582,7 +582,7 @@ The full project-wide `/spec-lint` runs naturally after `spec_save` at G7 (and a
 - **G2 deny-list match** — see *G2 Repro safety deny-list*; refuse and ask the user for a non-destructive repro. Never weaken the deny-list.
 - **G2 mismatch** — observation contradicts the symptom → user-mediated branch (Refine symptom / Proceed anyway / Abort). On Proceed anyway, `ReproOutcome.matches_symptom` stays false and propagates to G8.
 - **G4 low-confidence** — if `Classification.confidence` is `"low"` and the user picks "Reclassify", **re-run G3 then G4** with the user's additional input incorporated into the search. Loop until confidence rises (then re-ratify) or the user picks Confirm or Abort.
-- **G4 case D** — feature, not bug → skip G5–G7, hand off to `/bonsai-brainstorm` (G8 Branch 2). The persistent tracker shows G5/G6/G7 as `skipped`.
+- **G4 case D** — feature, not bug → skip G5–G7, hand off to `/thinkrail-brainstorm` (G8 Branch 2). The persistent tracker shows G5/G6/G7 as `skipped`.
 - **G5 conflict** — if a draft would touch a spec already modified externally (mtime changed since G3 read it), abort and report; the user re-runs `/bug-fix` from scratch. Do not silently re-read.
 - **G6 inline checklist failure** — `error`-severity issues (missing parent, no-code-edits violation, broken `covers`) hide the "Apply anyway" option; only Fix-and-re-validate or Abort are offered. `warning`-severity issues allow Apply-anyway, but the warnings propagate into G8's hand-off `prompt`.
 - **G7 spec_save error** — mark the affected step `error` in the per-file progress-tracker, push `{ path, reason: <error message> }` into `AppliedEdits.skipped`, and ask Retry / Skip / Abort. Other already-saved edits are kept.
@@ -590,7 +590,7 @@ The full project-wide `/spec-lint` runs naturally after `spec_save` at G7 (and a
 
 ## Visualizations
 
-`bonsai_visualize` calls fire at every gate's ratification step plus the persistent pipeline tracker. The mapping is exhaustive — every gate has at least one visualization.
+`thinkrail_visualize` calls fire at every gate's ratification step plus the persistent pipeline tracker. The mapping is exhaustive — every gate has at least one visualization.
 
 | Gate | Visualization | `visId` (suggested) |
 |---|---|---|

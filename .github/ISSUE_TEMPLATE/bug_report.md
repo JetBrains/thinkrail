@@ -29,4 +29,4 @@ What actually happened. Include logs, stack traces, or screenshots if relevant.
 - OS:
 - Python version (`python --version`):
 - Node version (`node --version`):
-- Bonsai version / commit:
+- ThinkRail version / commit:

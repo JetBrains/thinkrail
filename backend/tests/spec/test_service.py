@@ -36,7 +36,7 @@ class TestHelpers:
 async def _setup_index_project(tmp_path: Path) -> tuple[SpecService, SpecIndex]:
     """Create a project with an index-backed SpecService and a seeded spec."""
     config = load_config(tmp_path)
-    db_path = tmp_path / ".bonsai" / "index.db"
+    db_path = tmp_path / ".tr" / "index.db"
     db_path.parent.mkdir(parents=True, exist_ok=True)
 
     # Create a seeded spec on disk before initializing the index

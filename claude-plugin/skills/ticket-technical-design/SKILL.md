@@ -9,7 +9,7 @@ argument-hint: "[ticket-context]"
 
 # Ticket: Technical design (product-design → technical-design)
 
-You are running the **technical design** phase. This step produces `.bonsai/tickets/{id}/technical-design.md` and concludes with a self-review across `product-design.md` + `technical-design.md`.
+You are running the **technical design** phase. This step produces `{{TR_DIR}}/tickets/{id}/technical-design.md` and concludes with a self-review across `product-design.md` + `technical-design.md`.
 
 ## Quick reference
 
@@ -20,7 +20,7 @@ You are running the **technical design** phase. This step produces `.bonsai/tick
 | `LabelArtifact` | Annotate the artifact for the right-panel chip strip (optional) |
 | `ProposeChange` | Fill each section with user approval (4-button card) |
 | `AskUserQuestion` | Clarifying questions, "evolve vs from scratch" branching, architectural-approach picking — never section content |
-| `bonsai_visualize` | Architectural-approach comparison, diagrams |
+| `thinkrail_visualize` | Architectural-approach comparison, diagrams |
 | `ChangeTicketStatus` | Transition to `amend-specs` after confirmation (status === ongoing work; TD is done, next phase becomes active) |
 | `spec_search` | Discover existing architecture / module specs |
 | `Read` | Read `product-design.md` and relevant project specs |
@@ -46,7 +46,7 @@ You are running the **technical design** phase. This step produces `.bonsai/tick
    13. Finalize and transition
    ```
 
-1. **Examine context** *(task #1)* — `Read` `product-design.md` from `.bonsai/tickets/{id}/`. Read related `.bonsai/design_docs/` to understand current architecture.
+1. **Examine context** *(task #1)* — `Read` `product-design.md` from `{{TR_DIR}}/tickets/{id}/`. Read related `{{TR_DIR}}/design_docs/` to understand current architecture.
 
 2. **Staleness branch.** If `technical_design_stale: true` on the ticket, ask via `AskUserQuestion`: "Existing technical design is marked stale. Revise from scratch or evolve the existing one?"
    - *Evolve* — the file already exists; skip the skeleton task (mark task #4 `completed` immediately). Use `ProposeChange` against the existing section content directly. The `old_string` is the section's current text (not a `<!-- pending -->` marker).
@@ -54,9 +54,9 @@ You are running the **technical design** phase. This step produces `.bonsai/tick
 
 3. **Ask technical clarifying questions** *(task #2)* one at a time via `AskUserQuestion`: stack choices, components, interfaces, data flow, error handling, testing, validation. Prefer multiple-choice with `Other:`.
 
-4. **Compare architectural approaches** *(task #3)* in chat — propose 3-5 approaches with description, pros/cons, optional `bonsai_visualize`, recommended choice. The user picks one. This is conversation, not a file change; do not use `ProposeChange` for the comparison itself. The chosen approach informs the content of the Architecture overview and Components sections written next.
+4. **Compare architectural approaches** *(task #3)* in chat — propose 3-5 approaches with description, pros/cons, optional `thinkrail_visualize`, recommended choice. The user picks one. This is conversation, not a file change; do not use `ProposeChange` for the comparison itself. The chosen approach informs the content of the Architecture overview and Components sections written next.
 
-5. **Write the skeleton** *(task #4)* (only on the from-scratch path) to `.bonsai/tickets/{id}/technical-design.md` via `Write`. Use this template:
+5. **Write the skeleton** *(task #4)* (only on the from-scratch path) to `{{TR_DIR}}/tickets/{id}/technical-design.md` via `Write`. Use this template:
 
    ```markdown
    ---
@@ -97,13 +97,13 @@ You are running the **technical design** phase. This step produces `.bonsai/tick
    <!-- pending -->
    ```
 
-6. **Open the preview** — `SetPreviewFile({ path: ".bonsai/tickets/{id}/technical-design.md" })`. Optional: also call `LabelArtifact({ path: ".bonsai/tickets/{id}/technical-design.md", role: "technical_design", label: "Technical design" })` so the chip strip shows "Technical design".
+6. **Open the preview** — `SetPreviewFile({ path: "{{TR_DIR}}/tickets/{id}/technical-design.md" })`. Optional: also call `LabelArtifact({ path: "{{TR_DIR}}/tickets/{id}/technical-design.md", role: "technical_design", label: "Technical design" })` so the chip strip shows "Technical design".
 
 7. **For each section in order** (Architecture overview *(task #5)*, Components *(task #6)*, Interfaces / contracts *(task #7)*, Data flow *(task #8)*, Error handling *(task #9)*, Testing strategy *(task #10)*, Validation criteria *(task #11)*), mark the section's task `in_progress` via `TodoWrite`, then call `ProposeChange`:
 
    ```json
    {
-     "file_path": ".bonsai/tickets/{id}/technical-design.md",
+     "file_path": "{{TR_DIR}}/tickets/{id}/technical-design.md",
      "old_string": "## <Section>\n\n<!-- pending -->",
      "new_string": "## <Section>\n\n<content>",
      "section": "<Section>",
@@ -140,7 +140,7 @@ You are running the **technical design** phase. This step produces `.bonsai/tick
 - Always propose multiple architectural approaches before settling — that comparison happens in chat, not via `ProposeChange`.
 - Skeleton is written first via `Write` (from-scratch path); every section after that goes through `ProposeChange` — this is the user's section-approval surface.
 - Self-review is a runtime check, not a doc section: surface findings in chat via `AskUserQuestion`, address with `ProposeChange` if the user wants. Do not write a "Self-review" section into the technical-design document. Blocking issues do not transition until the user explicitly accepts them.
-- Save the artifact under `.bonsai/tickets/{id}/`; `Write` creates parent directories.
+- Save the artifact under `{{TR_DIR}}/tickets/{id}/`; `Write` creates parent directories.
 
 ## Red flags — STOP
 

@@ -52,8 +52,8 @@ async def _run(
 
 def _test_config(tmp_path: Path | None = None) -> AppConfig:
     """Create a minimal AppConfig for tests."""
-    root = tmp_path or Path("/tmp/bonsai-test")
-    return AppConfig(project_root=root, bonsai_dir=root / ".bonsai", plugin_dir=root / "plugins")
+    root = tmp_path or Path("/tmp/thinkrail-test")
+    return AppConfig(project_root=root, thinkrail_dir=root / ".tr", plugin_dir=root / "plugins")
 
 
 def _setup_mock_client(MockClient: MagicMock, messages: list) -> AsyncMock:
@@ -155,13 +155,13 @@ class TestRunHappyPath:
         notify = AsyncMock()
 
         # Enqueue one message then end signal
-        tracker.enqueue_message(task.bonsai_sid, "Do the thing")
-        tracker.enqueue_end_signal(task.bonsai_sid)
+        tracker.enqueue_message(task.thinkrail_sid, "Do the thing")
+        tracker.enqueue_end_signal(task.thinkrail_sid)
 
         result = await _run(task, "spec context here", notify, tracker)
 
         assert isinstance(result, AgentResult)
-        assert result.bonsai_sid == task.bonsai_sid
+        assert result.thinkrail_sid == task.thinkrail_sid
         assert result.session_id == "sess-1"
         assert result.turns == 3
         assert result.cost_usd == 0.05
@@ -195,11 +195,11 @@ class TestRunHappyPath:
         _setup_mock_client(MockClient, [sys_msg, result_msg])
 
         tracker, task = _make_tracker_and_task()
-        tracker.enqueue_message(task.bonsai_sid, "hello")
-        tracker.enqueue_end_signal(task.bonsai_sid)
+        tracker.enqueue_message(task.thinkrail_sid, "hello")
+        tracker.enqueue_end_signal(task.thinkrail_sid)
 
         await _run(task, "context", AsyncMock(), tracker)
-        assert tracker.get_task(task.bonsai_sid).session_id == "sess-42"
+        assert tracker.get_task(task.thinkrail_sid).session_id == "sess-42"
 
     @patch("app.agent.runtime.claude.runtime.ClaudeSDKClient")
     async def test_multi_turn_accumulates_stats(self, MockClient: MagicMock) -> None:
@@ -251,9 +251,9 @@ class TestRunHappyPath:
         MockClient.return_value.__aexit__ = AsyncMock(return_value=False)
 
         tracker, task = _make_tracker_and_task()
-        tracker.enqueue_message(task.bonsai_sid, "first message")
-        tracker.enqueue_message(task.bonsai_sid, "second message")
-        tracker.enqueue_end_signal(task.bonsai_sid)
+        tracker.enqueue_message(task.thinkrail_sid, "first message")
+        tracker.enqueue_message(task.thinkrail_sid, "second message")
+        tracker.enqueue_end_signal(task.thinkrail_sid)
 
         notify = AsyncMock()
         result = await _run(task, "context", notify, tracker)
@@ -271,7 +271,7 @@ class TestRunHappyPath:
         _setup_mock_client(MockClient, [])
 
         tracker, task = _make_tracker_and_task()
-        tracker.enqueue_end_signal(task.bonsai_sid)
+        tracker.enqueue_end_signal(task.thinkrail_sid)
         notify = AsyncMock()
 
         result = await _run(task, "context", notify, tracker)
@@ -305,8 +305,8 @@ class TestRunHappyPath:
         tracker, task = _make_tracker_and_task()
         assert task.status == "initializing"
 
-        tracker.enqueue_message(task.bonsai_sid, "go")
-        tracker.enqueue_end_signal(task.bonsai_sid)
+        tracker.enqueue_message(task.thinkrail_sid, "go")
+        tracker.enqueue_end_signal(task.thinkrail_sid)
 
         notify = AsyncMock()
         await _run(task, "context", notify, tracker)
@@ -345,8 +345,8 @@ class TestCanUseTool:
         captured = _setup_capturing_client(MockClient, [sys_msg, result_msg])
 
         tracker, task = _make_tracker_and_task()
-        tracker.enqueue_message(task.bonsai_sid, "go")
-        tracker.enqueue_end_signal(task.bonsai_sid)
+        tracker.enqueue_message(task.thinkrail_sid, "go")
+        tracker.enqueue_end_signal(task.thinkrail_sid)
         notify = AsyncMock()
 
         await _run(task, "context", notify, tracker, config=_test_config())
@@ -355,15 +355,15 @@ class TestCanUseTool:
         assert opts.can_use_tool is not None
 
         # Simulate mid-turn question — manually set task to running
-        tracker.set_status(task.bonsai_sid, "running")
+        tracker.set_status(task.thinkrail_sid, "running")
 
         context = MagicMock()
 
         async def resolve_after_register():
             await asyncio.sleep(0.01)
-            for req_id in list(tracker._futures.get(task.bonsai_sid, {})):
+            for req_id in list(tracker._futures.get(task.thinkrail_sid, {})):
                 tracker.resolve_future(
-                    task.bonsai_sid, req_id, {"questions": [], "answers": {"Q?": "A"}}
+                    task.thinkrail_sid, req_id, {"questions": [], "answers": {"Q?": "A"}}
                 )
                 break
 
@@ -395,20 +395,20 @@ class TestCanUseTool:
         captured = _setup_capturing_client(MockClient, [sys_msg, result_msg])
 
         tracker, task = _make_tracker_and_task()
-        tracker.enqueue_message(task.bonsai_sid, "go")
-        tracker.enqueue_end_signal(task.bonsai_sid)
+        tracker.enqueue_message(task.thinkrail_sid, "go")
+        tracker.enqueue_end_signal(task.thinkrail_sid)
 
         await _run(task, "context", AsyncMock(), tracker, config=_test_config())
 
         opts = captured["options"]
         context = MagicMock()
 
-        tracker.set_status(task.bonsai_sid, "running")
+        tracker.set_status(task.thinkrail_sid, "running")
 
         async def resolve_allow():
             await asyncio.sleep(0.01)
-            for req_id in list(tracker._futures.get(task.bonsai_sid, {})):
-                tracker.resolve_future(task.bonsai_sid, req_id, {"behavior": "allow"})
+            for req_id in list(tracker._futures.get(task.thinkrail_sid, {})):
+                tracker.resolve_future(task.thinkrail_sid, req_id, {"behavior": "allow"})
                 break
 
         asyncio.get_event_loop().create_task(resolve_allow())
@@ -435,21 +435,21 @@ class TestCanUseTool:
         captured = _setup_capturing_client(MockClient, [sys_msg, result_msg])
 
         tracker, task = _make_tracker_and_task()
-        tracker.enqueue_message(task.bonsai_sid, "go")
-        tracker.enqueue_end_signal(task.bonsai_sid)
+        tracker.enqueue_message(task.thinkrail_sid, "go")
+        tracker.enqueue_end_signal(task.thinkrail_sid)
 
         await _run(task, "context", AsyncMock(), tracker, config=_test_config())
 
         opts = captured["options"]
         context = MagicMock()
 
-        tracker.set_status(task.bonsai_sid, "running")
+        tracker.set_status(task.thinkrail_sid, "running")
 
         async def resolve_deny():
             await asyncio.sleep(0.01)
-            for req_id in list(tracker._futures.get(task.bonsai_sid, {})):
+            for req_id in list(tracker._futures.get(task.thinkrail_sid, {})):
                 tracker.resolve_future(
-                    task.bonsai_sid, req_id, {"behavior": "deny", "message": "Not allowed", "interrupt": True},
+                    task.thinkrail_sid, req_id, {"behavior": "deny", "message": "Not allowed", "interrupt": True},
                 )
                 break
 
@@ -484,8 +484,8 @@ class TestPluginWiring:
         captured = _setup_capturing_client(MockClient, [sys_msg, result_msg])
 
         tracker, task = _make_tracker_and_task()
-        tracker.enqueue_message(task.bonsai_sid, "go")
-        tracker.enqueue_end_signal(task.bonsai_sid)
+        tracker.enqueue_message(task.thinkrail_sid, "go")
+        tracker.enqueue_end_signal(task.thinkrail_sid)
 
         with tempfile.TemporaryDirectory() as tmpdir:
             plugin_dir = Path(tmpdir)
@@ -516,8 +516,8 @@ class TestPluginWiring:
         captured = _setup_capturing_client(MockClient, [sys_msg, result_msg])
 
         tracker, task = _make_tracker_and_task()
-        tracker.enqueue_message(task.bonsai_sid, "go")
-        tracker.enqueue_end_signal(task.bonsai_sid)
+        tracker.enqueue_message(task.thinkrail_sid, "go")
+        tracker.enqueue_end_signal(task.thinkrail_sid)
 
         await _run(task, "context", AsyncMock(), tracker, plugin_dir=None)
 
@@ -546,11 +546,11 @@ class TestInterruptHandling:
         _setup_mock_client(MockClient, [sys_msg, result_msg])
 
         tracker, task = _make_tracker_and_task()
-        tracker.enqueue_message(task.bonsai_sid, "go")
-        tracker.enqueue_end_signal(task.bonsai_sid)
+        tracker.enqueue_message(task.thinkrail_sid, "go")
+        tracker.enqueue_end_signal(task.thinkrail_sid)
 
         # Set interrupt flag BEFORE the runtime processes ResultMessage
-        tracker.set_interrupted(task.bonsai_sid)
+        tracker.set_interrupted(task.thinkrail_sid)
 
         notify = AsyncMock()
         await _run(task, "context", notify, tracker)
@@ -559,7 +559,7 @@ class TestInterruptHandling:
         assert "agent/interrupted" in method_calls
         assert "agent/turnComplete" not in method_calls
         # Flag should be cleared after processing
-        assert tracker.is_interrupted(task.bonsai_sid) is False
+        assert tracker.is_interrupted(task.thinkrail_sid) is False
 
     @patch("app.agent.runtime.claude.runtime.ClaudeSDKClient")
     async def test_normal_result_emits_turn_complete(self, MockClient: MagicMock) -> None:
@@ -577,8 +577,8 @@ class TestInterruptHandling:
         _setup_mock_client(MockClient, [result_msg])
 
         tracker, task = _make_tracker_and_task()
-        tracker.enqueue_message(task.bonsai_sid, "go")
-        tracker.enqueue_end_signal(task.bonsai_sid)
+        tracker.enqueue_message(task.thinkrail_sid, "go")
+        tracker.enqueue_end_signal(task.thinkrail_sid)
 
         notify = AsyncMock()
         await _run(task, "context", notify, tracker)
@@ -633,12 +633,12 @@ class TestInterruptHandling:
 
         tracker, task = _make_tracker_and_task()
         # First message will be interrupted, second will complete normally
-        tracker.enqueue_message(task.bonsai_sid, "first")
-        tracker.enqueue_message(task.bonsai_sid, "second")
-        tracker.enqueue_end_signal(task.bonsai_sid)
+        tracker.enqueue_message(task.thinkrail_sid, "first")
+        tracker.enqueue_message(task.thinkrail_sid, "second")
+        tracker.enqueue_end_signal(task.thinkrail_sid)
 
         # Set interrupt flag for the first turn
-        tracker.set_interrupted(task.bonsai_sid)
+        tracker.set_interrupted(task.thinkrail_sid)
 
         notify = AsyncMock()
         result = await _run(task, "context", notify, tracker)
@@ -668,9 +668,9 @@ class TestInterruptHandling:
         _setup_mock_client(MockClient, [result_msg])
 
         tracker, task = _make_tracker_and_task()
-        tracker.enqueue_message(task.bonsai_sid, "go")
-        tracker.enqueue_end_signal(task.bonsai_sid)
-        tracker.set_interrupted(task.bonsai_sid)
+        tracker.enqueue_message(task.thinkrail_sid, "go")
+        tracker.enqueue_end_signal(task.thinkrail_sid)
+        tracker.set_interrupted(task.thinkrail_sid)
 
         notify = AsyncMock()
         await _run(task, "context", notify, tracker)
@@ -701,8 +701,8 @@ class TestRunError:
         _setup_mock_client(MockClient, [sys_msg, result_msg])
 
         tracker, task = _make_tracker_and_task()
-        tracker.enqueue_message(task.bonsai_sid, "do something")
-        tracker.enqueue_end_signal(task.bonsai_sid)  # needed so runtime doesn't hang after error recovery
+        tracker.enqueue_message(task.thinkrail_sid, "do something")
+        tracker.enqueue_end_signal(task.thinkrail_sid)  # needed so runtime doesn't hang after error recovery
         notify = AsyncMock()
 
         await _run(task, "context", notify, tracker)
@@ -711,7 +711,7 @@ class TestRunError:
         assert "agent/error" in method_calls
         # After error, runtime recovers to idle (not terminal error),
         # then END_SIGNAL exits the loop gracefully
-        assert tracker.get_task(task.bonsai_sid).status == "idle"
+        assert tracker.get_task(task.thinkrail_sid).status == "idle"
 
     @patch("app.agent.runtime.claude.runtime.ClaudeSDKClient")
     async def test_sdk_exception_propagates(self, MockClient: MagicMock) -> None:
@@ -722,7 +722,7 @@ class TestRunError:
         MockClient.return_value.__aexit__ = AsyncMock(return_value=False)
 
         tracker, task = _make_tracker_and_task()
-        tracker.enqueue_message(task.bonsai_sid, "go")
+        tracker.enqueue_message(task.thinkrail_sid, "go")
 
         with pytest.raises(RuntimeError, match="SDK crash"):
             await _run(task, "context", AsyncMock(), tracker)
@@ -749,8 +749,8 @@ class TestSubagentHooks:
         captured = _setup_capturing_client(MockClient, [sys_msg, result_msg])
 
         tracker, task = _make_tracker_and_task()
-        tracker.enqueue_message(task.bonsai_sid, "go")
-        tracker.enqueue_end_signal(task.bonsai_sid)
+        tracker.enqueue_message(task.thinkrail_sid, "go")
+        tracker.enqueue_end_signal(task.thinkrail_sid)
 
         await _run(task, "context", AsyncMock(), tracker)
 
@@ -783,8 +783,8 @@ class TestSubagentHooks:
         captured = _setup_capturing_client(MockClient, [sys_msg, result_msg])
 
         tracker, task = _make_tracker_and_task()
-        tracker.enqueue_message(task.bonsai_sid, "go")
-        tracker.enqueue_end_signal(task.bonsai_sid)
+        tracker.enqueue_message(task.thinkrail_sid, "go")
+        tracker.enqueue_end_signal(task.thinkrail_sid)
         notify = AsyncMock()
 
         await _run(task, "context", notify, tracker)
@@ -806,7 +806,7 @@ class TestSubagentHooks:
         payload = start_calls[0].args[1]
         assert payload["agentId"] == "agent-42"
         assert payload["agentType"] == "Explore"
-        assert payload["bonsaiSid"] == task.bonsai_sid
+        assert payload["thinkrailSid"] == task.thinkrail_sid
 
     @patch("app.agent.runtime.claude.runtime.ClaudeSDKClient")
     async def test_subagent_stop_emits_notification(self, MockClient: MagicMock) -> None:
@@ -828,8 +828,8 @@ class TestSubagentHooks:
         captured = _setup_capturing_client(MockClient, [sys_msg, result_msg])
 
         tracker, task = _make_tracker_and_task()
-        tracker.enqueue_message(task.bonsai_sid, "go")
-        tracker.enqueue_end_signal(task.bonsai_sid)
+        tracker.enqueue_message(task.thinkrail_sid, "go")
+        tracker.enqueue_end_signal(task.thinkrail_sid)
         notify = AsyncMock()
 
         await _run(task, "context", notify, tracker)
@@ -850,7 +850,7 @@ class TestSubagentHooks:
         assert len(end_calls) == 1
         payload = end_calls[0].args[1]
         assert payload["agentId"] == "agent-42"
-        assert payload["bonsaiSid"] == task.bonsai_sid
+        assert payload["thinkrailSid"] == task.thinkrail_sid
 
     @patch("app.agent.runtime.claude.runtime.ClaudeSDKClient")
     async def test_subagent_agent_id_mapping_end_to_end(self, MockClient: MagicMock) -> None:
@@ -938,8 +938,8 @@ class TestSubagentHooks:
         MockClient.return_value.__aexit__ = AsyncMock(return_value=False)
 
         tracker, task = _make_tracker_and_task()
-        tracker.enqueue_message(task.bonsai_sid, "go")
-        tracker.enqueue_end_signal(task.bonsai_sid)
+        tracker.enqueue_message(task.thinkrail_sid, "go")
+        tracker.enqueue_end_signal(task.thinkrail_sid)
         notify = AsyncMock()
 
         # We need SubagentStart to fire after the Task tool call is processed
@@ -1081,8 +1081,8 @@ class TestIterationTracking:
 
         tracker, task = _make_tracker_and_task()
         notify = AsyncMock()
-        tracker.enqueue_message(task.bonsai_sid, "do stuff")
-        tracker.enqueue_end_signal(task.bonsai_sid)
+        tracker.enqueue_message(task.thinkrail_sid, "do stuff")
+        tracker.enqueue_end_signal(task.thinkrail_sid)
 
         await _run(task, "context", notify, tracker)
 
@@ -1159,8 +1159,8 @@ class TestIterationTracking:
 
         tracker, task = _make_tracker_and_task()
         notify = AsyncMock()
-        tracker.enqueue_message(task.bonsai_sid, "go")
-        tracker.enqueue_end_signal(task.bonsai_sid)
+        tracker.enqueue_message(task.thinkrail_sid, "go")
+        tracker.enqueue_end_signal(task.thinkrail_sid)
 
         await _run(task, "context", notify, tracker)
 
@@ -1195,7 +1195,7 @@ class TestClaudeRuntimeCapabilities:
         # (``default`` first — the runtime default).
         assert [p.value for p in caps.permission_modes] == list(get_args(PermissionMode))
         assert caps.permission_modes[0].value == "default"
-        # Effort levels are the SDK's set with Bonsai's ``"auto"`` (= SDK
+        # Effort levels are the SDK's set with ThinkRail's ``"auto"`` (= SDK
         # ``effort=None``) leading.
         assert [e.value for e in caps.effort_levels] == ["auto", *get_args(EffortLevel)]
         assert caps.effort_levels[0].value == "auto"
@@ -1229,8 +1229,8 @@ class TestEffortBoundary:
 
         tracker = Tracker()
         task = tracker.create_task(["spec-1"], AgentConfig(effort=effort))
-        tracker.enqueue_message(task.bonsai_sid, "go")
-        tracker.enqueue_end_signal(task.bonsai_sid)
+        tracker.enqueue_message(task.thinkrail_sid, "go")
+        tracker.enqueue_end_signal(task.thinkrail_sid)
         await _run(task, "context", AsyncMock(), tracker)
         return captured["options"]
 
@@ -1261,8 +1261,8 @@ class TestContext1mFlag:
 
         tracker = Tracker()
         task = tracker.create_task(["spec-1"], AgentConfig(flags=flags))
-        tracker.enqueue_message(task.bonsai_sid, "go")
-        tracker.enqueue_end_signal(task.bonsai_sid)
+        tracker.enqueue_message(task.thinkrail_sid, "go")
+        tracker.enqueue_end_signal(task.thinkrail_sid)
         await _run(task, "context", AsyncMock(), tracker)
         return captured["options"].betas
 
@@ -1303,8 +1303,8 @@ class TestContextMaxStreaming:
 
         tracker, task = _make_tracker_and_task()
         notify = AsyncMock()
-        tracker.enqueue_message(task.bonsai_sid, "go")
-        tracker.enqueue_end_signal(task.bonsai_sid)
+        tracker.enqueue_message(task.thinkrail_sid, "go")
+        tracker.enqueue_end_signal(task.thinkrail_sid)
 
         await _run(task, "context", notify, tracker)
 
@@ -1332,8 +1332,8 @@ class TestContextMaxStreaming:
 
         tracker, task = _make_tracker_and_task()
         notify = AsyncMock()
-        tracker.enqueue_message(task.bonsai_sid, "go")
-        tracker.enqueue_end_signal(task.bonsai_sid)
+        tracker.enqueue_message(task.thinkrail_sid, "go")
+        tracker.enqueue_end_signal(task.thinkrail_sid)
 
         await _run(task, "context", notify, tracker)
 
@@ -1347,7 +1347,7 @@ class TestClaudeRuntimeInterrupt:
     """Direct unit tests for ``ClaudeRuntime.interrupt`` (plan 02 task 5).
 
     The method is the public hook ``AgentService.interrupt_task`` calls after
-    setting bonsai-internal state (``set_interrupted`` / ``interrupt_futures``).
+    setting thinkrail-internal state (``set_interrupted`` / ``interrupt_futures``).
     Tracker state changes still belong to the service layer — runtime.interrupt
     only delivers the SDK-specific cancel.
     """
@@ -1356,7 +1356,7 @@ class TestClaudeRuntimeInterrupt:
         runtime = ClaudeRuntime(app_config=_test_config())
         tracker, task = _make_tracker_and_task()
         mock_client = AsyncMock()
-        tracker.set_client(task.bonsai_sid, mock_client)
+        tracker.set_client(task.thinkrail_sid, mock_client)
 
         await runtime.interrupt(task, tracker)
 
@@ -1375,7 +1375,7 @@ class TestClaudeRuntimeInterrupt:
         tracker, task = _make_tracker_and_task()
         mock_client = AsyncMock()
         mock_client.interrupt.side_effect = RuntimeError("client gone")
-        tracker.set_client(task.bonsai_sid, mock_client)
+        tracker.set_client(task.thinkrail_sid, mock_client)
 
         # Should not raise — disconnected clients are expected
         await runtime.interrupt(task, tracker)

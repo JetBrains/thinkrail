@@ -5,7 +5,7 @@
  *   - extractSlashToken: start, after-whitespace, mid-URL (negative),
  *     mid-word (negative), caret-at-end vs caret-mid-token.
  *   - Filtering: empty query → all; substring → narrows.
- *   - Grouping: bonsai first, runtime second; dedup hides collisions.
+ *   - Grouping: thinkrail first, runtime second; dedup hides collisions.
  *   - Keyboard nav crosses group boundary; wraps.
  *   - acceptSelected: correct replacement range + caretAfter.
  */
@@ -26,7 +26,7 @@ import type { RuntimeIdentity } from "@/types/rpc-methods.ts";
 
 // ── Fixtures ──────────────────────────────────────────────────────────────
 
-const BONSAI_SKILLS: Skill[] = [
+const THINKRAIL_SKILLS: Skill[] = [
   { id: "spec-status", icon: "S", name: "Status", description: "Show status", group: "Review" },
   { id: "spec-next", icon: "N", name: "Next", description: "Suggest next", group: "Review" },
   { id: "task-spec", icon: "T", name: "Task", description: "Task spec", group: "Creation" },
@@ -35,7 +35,7 @@ const BONSAI_SKILLS: Skill[] = [
 const RUNTIME_SKILLS: RuntimeSkillInfo[] = [
   { id: "review", name: "Review", description: "Review PR", source: "builtin" },
   { id: "init", name: "Init", description: "Init", source: "builtin" },
-  // Will be deduped (collides with bonsai)
+  // Will be deduped (collides with thinkrail)
   { id: "spec-status", name: "Status (runtime)", description: "from runtime", source: "user" },
 ];
 
@@ -45,18 +45,18 @@ const CLAUDE_RUNTIME_META: RuntimeIdentity = {
 };
 
 function seedStore({
-  bonsai = BONSAI_SKILLS,
+  thinkrail = THINKRAIL_SKILLS,
   runtimeSkills = RUNTIME_SKILLS,
   runtime = "claude" as RuntimeType,
   runtimeMeta = [CLAUDE_RUNTIME_META],
 }: {
-  bonsai?: Skill[];
+  thinkrail?: Skill[];
   runtimeSkills?: RuntimeSkillInfo[];
   runtime?: RuntimeType;
   runtimeMeta?: RuntimeIdentity[];
 } = {}) {
   useSettingsStore.setState({
-    skills: bonsai,
+    skills: thinkrail,
     runtimeSkills: new Map<RuntimeType, RuntimeSkillInfo[]>([[runtime, runtimeSkills]]),
   });
   useRuntimeCapsStore.setState({ runtimes: runtimeMeta });
@@ -169,8 +169,8 @@ describe("useSlashAutocomplete", () => {
     const { result } = renderHook(() =>
       useSlashAutocomplete({ text: "/", caret: 1, runtime: "claude", onInsert }),
     );
-    // Bonsai group has all 3 bonsai skills; runtime group has the 2 non-colliding ones.
-    expect(result.current.groups.map((g) => g.label)).toEqual(["Bonsai", "Claude Code"]);
+    // ThinkRail group has all 3 thinkrail skills; runtime group has the 2 non-colliding ones.
+    expect(result.current.groups.map((g) => g.label)).toEqual(["ThinkRail", "Claude Code"]);
     expect(result.current.groups[0].items.map((i) => i.id)).toEqual([
       "spec-status",
       "spec-next",
@@ -183,8 +183,8 @@ describe("useSlashAutocomplete", () => {
     const { result } = renderHook(() =>
       useSlashAutocomplete({ text: "/spec-st", caret: 8, runtime: "claude", onInsert }),
     );
-    // Only one bonsai item matches "spec-st"; runtime section is hidden.
-    expect(result.current.groups.map((g) => g.label)).toEqual(["Bonsai"]);
+    // Only one thinkrail item matches "spec-st"; runtime section is hidden.
+    expect(result.current.groups.map((g) => g.label)).toEqual(["ThinkRail"]);
     expect(result.current.groups[0].items.map((i) => i.id)).toEqual(["spec-status"]);
   });
 
@@ -192,8 +192,8 @@ describe("useSlashAutocomplete", () => {
     const { result } = renderHook(() =>
       useSlashAutocomplete({ text: "/spe", caret: 4, runtime: "claude", onInsert }),
     );
-    expect(result.current.groups.map((g) => g.label)).toEqual(["Bonsai"]);
-    // All three bonsai ids contain "spe": spec-status, spec-next, task-spec.
+    expect(result.current.groups.map((g) => g.label)).toEqual(["ThinkRail"]);
+    // All three thinkrail ids contain "spe": spec-status, spec-next, task-spec.
     expect(result.current.groups[0].items.map((i) => i.id)).toEqual([
       "spec-status",
       "spec-next",
@@ -201,7 +201,7 @@ describe("useSlashAutocomplete", () => {
     ]);
   });
 
-  it("dedupes runtime skills whose id collides with a bonsai id", () => {
+  it("dedupes runtime skills whose id collides with a thinkrail id", () => {
     const { result } = renderHook(() =>
       useSlashAutocomplete({ text: "/", caret: 1, runtime: "claude", onInsert }),
     );
@@ -211,14 +211,14 @@ describe("useSlashAutocomplete", () => {
     expect(ids).toEqual(["review", "init"]);
   });
 
-  it("orders flatItems with bonsai entries first, then runtime", () => {
+  it("orders flatItems with thinkrail entries first, then runtime", () => {
     const { result } = renderHook(() =>
       useSlashAutocomplete({ text: "/", caret: 1, runtime: "claude", onInsert }),
     );
     expect(result.current.flatItems.map((i) => `${i.source}:${i.id}`)).toEqual([
-      "bonsai:spec-status",
-      "bonsai:spec-next",
-      "bonsai:task-spec",
+      "thinkrail:spec-status",
+      "thinkrail:spec-next",
+      "thinkrail:task-spec",
       "runtime:review",
       "runtime:init",
     ]);
@@ -229,7 +229,7 @@ describe("useSlashAutocomplete", () => {
     const { result } = renderHook(() =>
       useSlashAutocomplete({ text: "/", caret: 1, runtime: "claude", onInsert }),
     );
-    expect(result.current.groups.map((g) => g.label)).toEqual(["Bonsai"]);
+    expect(result.current.groups.map((g) => g.label)).toEqual(["ThinkRail"]);
   });
 
   it("falls back to the runtime type as label when no displayName is registered", () => {
@@ -245,14 +245,14 @@ describe("useSlashAutocomplete", () => {
     const { result } = renderHook(() =>
       useSlashAutocomplete({ text: "/", caret: 1, runtime: undefined, onInsert }),
     );
-    expect(result.current.groups.map((g) => g.label)).toEqual(["Bonsai", "Claude Code"]);
+    expect(result.current.groups.map((g) => g.label)).toEqual(["ThinkRail", "Claude Code"]);
   });
 
   it("ArrowDown wraps across the section boundary then back to the start", () => {
     const { result } = renderHook(() =>
       useSlashAutocomplete({ text: "/", caret: 1, runtime: "claude", onInsert }),
     );
-    // flatItems = [3 bonsai, 2 runtime] = 5 items total.
+    // flatItems = [3 thinkrail, 2 runtime] = 5 items total.
     expect(result.current.flatItems).toHaveLength(5);
     expect(result.current.selectedIndex).toBe(0);
 

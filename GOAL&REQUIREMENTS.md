@@ -2,12 +2,12 @@
 id: goal-and-requirements
 type: goal-and-requirements
 status: active
-title: Bonsai Goal & Requirements
+title: ThinkRail Goal & Requirements
 tags:
 - high
 - new-project
 ---
-* Project\Feature name: Bonsai
+* Project\Feature name: ThinkRail
 * Category: new-project
 * Priority: high
 
@@ -17,9 +17,9 @@ Build a developer tool that introduces specification-driven development — wher
 
 ## Description
 
-Bonsai is a developer tool and web workspace for specification-driven development. It provides a Python backend API and a TypeScript/JavaScript frontend that runs on developers' machines, offering a comprehensive environment for creating, editing, and visualizing hierarchical specifications that live in the project repository alongside code. Specs are interconnected, forming a structured knowledge graph that captures project goals, architecture, module designs, and tasks.
+ThinkRail is a developer tool and web workspace for specification-driven development. It provides a Python backend API and a TypeScript/JavaScript frontend that runs on developers' machines, offering a comprehensive environment for creating, editing, and visualizing hierarchical specifications that live in the project repository alongside code. Specs are interconnected, forming a structured knowledge graph that captures project goals, architecture, module designs, and tasks.
 
-Bonsai serves as both a spec management layer and an AI agent orchestrator. By maintaining rich, structured project context in the repo, it enables developers to align AI coding agents with clear intent, scope, and constraints — making agent-assisted development more predictable and effective. The tool can feed specs to agents, monitor their work, and track progress against the specification hierarchy.
+ThinkRail serves as both a spec management layer and an AI agent orchestrator. By maintaining rich, structured project context in the repo, it enables developers to align AI coding agents with clear intent, scope, and constraints — making agent-assisted development more predictable and effective. The tool can feed specs to agents, monitor their work, and track progress against the specification hierarchy.
 
 ## Requirements
 
@@ -41,7 +41,7 @@ Bonsai serves as both a spec management layer and an AI agent orchestrator. By m
 | Frontend language | TypeScript |
 | Frontend framework | React |
 | Communication protocol | JSON-RPC over WebSocket (LSP-inspired) |
-| File watching | watchfiles (spec files, .bonsai/ config files) |
+| File watching | watchfiles (spec files, .tr/ config files) |
 | Data validation | Pydantic 2.0+ (models & serialization) |
 | ASGI server | uvicorn (serving FastAPI) |
 | JSON-RPC library | jsonrpcserver (JSON-RPC 2.0 protocol) |

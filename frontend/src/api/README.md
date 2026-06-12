@@ -150,14 +150,14 @@ createSpecApi(client: RpcClient) => {
 
 ```typescript
 createAgentApi(client: RpcClient) => {
-  run: (params) => Promise<{ bonsaiSid: string }>; // "agent/run"
-  status: (bonsaiSid) => Promise<AgentTask>;        // "agent/status"
+  run: (params) => Promise<{ thinkrailSid: string }>; // "agent/run"
+  status: (thinkrailSid) => Promise<AgentTask>;        // "agent/status"
   list: () => Promise<AgentTask[]>;              // "agent/list"
-  send: (bonsaiSid, text) => Promise<null>;         // "agent/send"
-  end: (bonsaiSid) => Promise<null>;                // "agent/end"
-  interrupt: (bonsaiSid) => Promise<null>;          // "agent/interrupt"
-  respond: (bonsaiSid, requestId, response) => Promise<null>;  // "agent/respond"
-  updateConfig: (bonsaiSid, config) => Promise<{ model, permissionMode }>;  // "agent/updateConfig"
+  send: (thinkrailSid, text) => Promise<null>;         // "agent/send"
+  end: (thinkrailSid) => Promise<null>;                // "agent/end"
+  interrupt: (thinkrailSid) => Promise<null>;          // "agent/interrupt"
+  respond: (thinkrailSid, requestId, response) => Promise<null>;  // "agent/respond"
+  updateConfig: (thinkrailSid, config) => Promise<{ model, permissionMode }>;  // "agent/updateConfig"
 }
 ```
 
@@ -166,9 +166,9 @@ createAgentApi(client: RpcClient) => {
 ```typescript
 createSessionApi(client: RpcClient) => {
   list: () => Promise<SessionSummary[]>;                  // "session/list"
-  get: (bonsaiSid) => Promise<SessionData | null>;          // "session/get"
-  continue: (bonsaiSid) => Promise<{ bonsaiSid: string }>;     // "session/continue"
-  delete: (bonsaiSid) => Promise<boolean>;                  // "session/delete"
+  get: (thinkrailSid) => Promise<SessionData | null>;          // "session/get"
+  continue: (thinkrailSid) => Promise<{ thinkrailSid: string }>;     // "session/continue"
+  delete: (thinkrailSid) => Promise<boolean>;                  // "session/delete"
 }
 ```
 

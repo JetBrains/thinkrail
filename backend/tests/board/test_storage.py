@@ -98,7 +98,7 @@ class TestMigration:
             "planPath": "y",
             "designDocStale": True,
             "planStale": True,
-            "ticketDir": ".bonsai/tickets/mt_old1",
+            "ticketDir": ".tr/tickets/mt_old1",
             "order": 0,
             "created": "2026-01-01T00:00:00+00:00",
             "updated": "2026-01-01T00:00:00+00:00",
@@ -118,7 +118,7 @@ class TestMigration:
 
 class TestLegacyTicketsWipe:
     def test_wipe_skips_non_empty_directory(self, tmp_path: Path) -> None:
-        legacy = tmp_path / ".bonsai" / "meta-tickets"
+        legacy = tmp_path / ".tr" / "meta-tickets"
         legacy.mkdir(parents=True)
         (legacy / "mt_old.json").write_text('{"id": "mt_old", "title": "x"}')
         # Refuses to delete user content from the previous schema.
@@ -126,13 +126,13 @@ class TestLegacyTicketsWipe:
         assert (legacy / "mt_old.json").is_file()
 
     def test_wipe_removes_empty_directory(self, tmp_path: Path) -> None:
-        legacy = tmp_path / ".bonsai" / "meta-tickets"
+        legacy = tmp_path / ".tr" / "meta-tickets"
         legacy.mkdir(parents=True)
         assert wipe_legacy_meta_tickets(tmp_path) is True
         assert not legacy.exists()
 
     def test_wipe_noop_when_missing(self, tmp_path: Path) -> None:
-        (tmp_path / ".bonsai").mkdir()
+        (tmp_path / ".tr").mkdir()
         assert wipe_legacy_meta_tickets(tmp_path) is False
 
 
@@ -169,7 +169,7 @@ class TestReadTicketReconciliation:
 
         ticket = read_ticket(meta)
 
-        assert ticket.product_design_path == ".bonsai/tickets/mt_a/product-design.md"
+        assert ticket.product_design_path == ".tr/tickets/mt_a/product-design.md"
 
     def test_existing_product_design_md_autofills_empty_body(self, tmp_path: Path) -> None:
         folder = tmp_path / "mt_b"
@@ -210,7 +210,7 @@ class TestReadTicketReconciliation:
 
         # ticket.json should now have the path persisted
         raw = json.loads(meta.read_text())
-        assert raw["productDesignPath"] == ".bonsai/tickets/mt_d/product-design.md"
+        assert raw["productDesignPath"] == ".tr/tickets/mt_d/product-design.md"
         assert raw["body"].startswith("First paragraph here")
 
     def test_missing_file_clears_stale_path(self, tmp_path: Path) -> None:
@@ -224,7 +224,7 @@ class TestReadTicketReconciliation:
             "body": "",
             "status": "product-design",
             "type": "feature",
-            "productDesignPath": ".bonsai/tickets/mt_e/product-design.md",
+            "productDesignPath": ".tr/tickets/mt_e/product-design.md",
             "linkedSpecIds": [],
             "sessionIds": [],
             "order": 0,
@@ -239,7 +239,7 @@ class TestReadTicketReconciliation:
 
 class TestListTicketsNewLayout:
     def test_skips_folders_without_ticket_json(self, tmp_path: Path) -> None:
-        base = tmp_path / ".bonsai" / "tickets"
+        base = tmp_path / ".tr" / "tickets"
         base.mkdir(parents=True)
         # Folder with ticket.json
         good = base / "mt_a"
@@ -261,8 +261,8 @@ class TestListTicketsNewLayout:
 
 
 class TestTicketsRoot:
-    def test_returns_under_bonsai(self, tmp_path: Path) -> None:
-        assert tickets_root(tmp_path) == tmp_path / ".bonsai" / "tickets"
+    def test_returns_under_thinkrail(self, tmp_path: Path) -> None:
+        assert tickets_root(tmp_path) == tmp_path / ".tr" / "tickets"
 
 
 class TestDeleteTicket:

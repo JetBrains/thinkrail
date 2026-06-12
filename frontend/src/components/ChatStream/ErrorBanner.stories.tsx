@@ -26,5 +26,5 @@ type Story = StoryObj<typeof meta>;
 
 export const GenericError: Story = {};
 export const ContextOverflow: Story = {
-  args: { errors: undefined, subtype: "context_overflow", bonsaiSid: "sess-123" },
+  args: { errors: undefined, subtype: "context_overflow", thinkrailSid: "sess-123" },
 };

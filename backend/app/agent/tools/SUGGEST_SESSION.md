@@ -15,7 +15,7 @@ tags:
 ---
 # SuggestSession — Backend Spec
 
-> Parent: [Tools Package](README.md) | Feature: [.bonsai/design_docs/SUGGEST_SESSION.md](../../../../.bonsai/design_docs/SUGGEST_SESSION.md) | Status: **Draft** | Created: 2026-03-07 | Updated: 2026-03-20
+> Parent: [Tools Package](README.md) | Feature: [.tr/design_docs/SUGGEST_SESSION.md](../../../../.tr/design_docs/SUGGEST_SESSION.md) | Status: **Draft** | Created: 2026-03-07 | Updated: 2026-03-20
 
 ## Purpose
 
@@ -23,7 +23,7 @@ Backend implementation of the SuggestSession proactive tool. Self-contained in `
 
 The handler performs **in-handler interaction** — validation, card notification, and Future-based suspension happen inside the tool handler via `get_tool_context()`, not through a `canUseTool` interceptor. This ensures the suggestion card is always shown regardless of permission mode, including `bypassPermissions` (yolo mode).
 
-See the [full feature spec](../../../../.bonsai/design_docs/SUGGEST_SESSION.md) for protocol, frontend, and scenarios.
+See the [full feature spec](../../../../.tr/design_docs/SUGGEST_SESSION.md) for protocol, frontend, and scenarios.
 
 ## Wire Format
 
@@ -33,7 +33,7 @@ See the [full feature spec](../../../../.bonsai/design_docs/SUGGEST_SESSION.md) 
 
 ```json
 {
-  "bonsaiSid": "...",
+  "thinkrailSid": "...",
   "skill": "module-design",
   "specIds": ["module-agent"],
   "name": "Design: Agent Context Module",
@@ -86,15 +86,15 @@ async def _suggest_session(args: dict) -> dict:
 
     spec_ids = args.get("specIds", [])
     if spec_ids:
-        spec_error = await _validate_spec_ids(spec_ids, ctx.config.get_bonsai_dir())
+        spec_error = await _validate_spec_ids(spec_ids, ctx.config.get_thinkrail_dir())
         if spec_error:
             return {"content": [{"type": "text", "text": f"Error: {spec_error}"}], "isError": True}
 
     # 2. Interactive flow
     request_id = str(uuid4())
-    future = ctx.tracker.register_future(ctx.task.bonsai_sid, request_id)
+    future = ctx.tracker.register_future(ctx.task.thinkrail_sid, request_id)
     payload = {
-        "bonsaiSid": ctx.task.bonsai_sid,
+        "thinkrailSid": ctx.task.thinkrail_sid,
         "skill": skill,
         "specIds": spec_ids,
         "name": args.get("name", ""),

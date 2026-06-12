@@ -17,19 +17,19 @@ tags:
 ---
 # Visualization — Backend Spec
 
-> Parent: [Tools Package](README.md) | Feature: [.bonsai/design_docs/VISUALIZATION.md](../../../../.bonsai/design_docs/VISUALIZATION.md) | Status: **Active** | Created: 2026-03-16
+> Parent: [Tools Package](README.md) | Feature: [.tr/design_docs/VISUALIZATION.md](../../../../.tr/design_docs/VISUALIZATION.md) | Status: **Active** | Created: 2026-03-16
 
 ## Purpose
 
-Backend implementation of the `bonsai_visualize` MCP tool. Unlike most tools in the `tools/` package, visualization spans **three files** across two deployment contexts:
+Backend implementation of the `thinkrail_visualize` MCP tool. Unlike most tools in the `tools/` package, visualization spans **three files** across two deployment contexts:
 
 | File | Location | Context |
 |------|----------|---------|
 | `_vis_validation.py` | `backend/app/agent/tools/` | Shared validation — imported by both servers |
-| `visualization.py` | `backend/app/agent/tools/` | In-process SDK handler (Bonsai web UI sessions) |
+| `visualization.py` | `backend/app/agent/tools/` | In-process SDK handler (ThinkRail web UI sessions) |
 | `vis-server.py` | `claude-plugin/tools/` | Standalone CLI MCP server (Claude Code sessions) |
 
-See the [full feature spec](../../../../.bonsai/design_docs/VISUALIZATION.md) for protocol, frontend, and scenarios.
+See the [full feature spec](../../../../.tr/design_docs/VISUALIZATION.md) for protocol, frontend, and scenarios.
 
 ## _vis_validation.py
 
@@ -55,18 +55,18 @@ Shared validation module — pure stdlib, zero external dependencies. Both `visu
 
 ## visualization.py
 
-In-process MCP tool handler for Bonsai web UI sessions. Follows the [tool file contract](README.md#tool-file-contract).
+In-process MCP tool handler for ThinkRail web UI sessions. Follows the [tool file contract](README.md#tool-file-contract).
 
 | Export | Type | Description |
 |--------|------|-------------|
-| `VIS_SCHEMA` | `dict` | JSON Schema for `bonsai_visualize` input — includes `type`, `title`, `visId`, `data`, `layout` |
-| `vis_mcp_server` | MCP server | Created via `create_sdk_mcp_server(name="bonsai-vis")`, registered in `tools.MCP_SERVERS` |
+| `VIS_SCHEMA` | `dict` | JSON Schema for `thinkrail_visualize` input — includes `type`, `title`, `visId`, `data`, `layout` |
+| `vis_mcp_server` | MCP server | Created via `create_sdk_mcp_server(name="thinkrail-vis")`, registered in `tools.MCP_SERVERS` |
 | `intercept_visualize()` | `InterceptFn` | Auto-approve — display-only tool with no side effects |
 
 ### Handler flow
 
 ```
-_bonsai_visualize(args) →
+_thinkrail_visualize(args) →
   1. Extract type, title, data from args
   2. Auto-parse JSON string data (LLMs sometimes stringify the object)
   3. Validate with _validate_vis_data()
@@ -89,7 +89,7 @@ The `isError: True` flag tells the SDK to relay the error to the LLM, which can 
 
 ## vis-server.py
 
-Standalone stdio MCP server for use with Claude Code CLI (outside Bonsai web UI). Located at `claude-plugin/tools/vis-server.py`.
+Standalone stdio MCP server for use with Claude Code CLI (outside ThinkRail web UI). Located at `claude-plugin/tools/vis-server.py`.
 
 ### Key exports and constants
 
@@ -140,7 +140,7 @@ The path manipulation allows the CLI server to import from the backend package w
 
 ## VIS_SCHEMA
 
-Full JSON Schema for the `bonsai_visualize` tool input:
+Full JSON Schema for the `thinkrail_visualize` tool input:
 
 ```json
 {

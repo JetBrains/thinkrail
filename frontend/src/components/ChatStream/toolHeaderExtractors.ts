@@ -134,7 +134,7 @@ function fallbackExtractor(input: Record<string, unknown>): ToolHeaderInfo {
 /**
  * Strip the `mcp__servername__` prefix from MCP tool names for display.
  *
- * E.g. `mcp__bonsai-specs__registry_query` → `registry_query`
+ * E.g. `mcp__thinkrail-specs__registry_query` → `registry_query`
  */
 export function cleanToolName(name: string): string {
   const m = name.match(/^mcp__[^_]+__(.+)$/);

@@ -30,7 +30,7 @@ tags:
 
 The PlanService manages implementation plan documents for meta-tickets. Plans are the orchestration blueprint that breaks down a ticket into sequential, dependency-aware steps. Each step maps to an agent session with specific skills, input specs, and success criteria.
 
-Plans are stored as Markdown files at `.bonsai/plans/{ticket_id}.md` and support full round-trip parsing: write a Plan model to Markdown, read it back, and get the same model. This makes plans human-readable, git-friendly, and editable by both agents and developers.
+Plans are stored as Markdown files at `.tr/plans/{ticket_id}.md` and support full round-trip parsing: write a Plan model to Markdown, read it back, and get the same model. This makes plans human-readable, git-friendly, and editable by both agents and developers.
 
 ## Internal Architecture
 
@@ -199,7 +199,7 @@ The serializer always writes milestone format. Steps include the new `Parallel w
 |----------|--------|-----------|
 | Markdown format | Human-readable Markdown with structured sections | Git-friendly, developer-editable, agent-writable. Plans are read by humans more than machines. |
 | Round-trip fidelity | Parse and render produce equivalent plans | Agents can read existing plans, modify them, and write them back without data loss. |
-| Single file per plan | `.bonsai/plans/{ticket_id}.md` | One plan per ticket. Simple path derivation. |
+| Single file per plan | `.tr/plans/{ticket_id}.md` | One plan per ticket. Simple path derivation. |
 | Auto-computed plan status | Derived from step statuses on `update_step_status` | Reduces manual status management. Plan status always reflects reality. |
 | Milestone grouping | Steps grouped into `Milestone` objects; `Plan.all_steps()` provides flat access | Milestones give structure for large plans while `all_steps()` preserves backward-compatible flat iteration. |
 | Dependency tracking | `depends_on: list[int]` referencing step numbers | Simple integer references. `get_next_step` uses this to find unblocked steps. |

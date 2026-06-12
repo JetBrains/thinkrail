@@ -15,9 +15,9 @@ You are generating a **specification status report** for the current project. Th
 
 Use `spec_search` to get specs (with type, status, covers, paths). Use `spec_search` with `type: "task-spec"` for task statuses. Use file mtimes to determine freshness (compare spec mtime vs covered code mtime).
 
-### Step 2: Display using bonsai_visualize
+### Step 2: Display using thinkrail_visualize
 
-Show the status report using `bonsai_visualize` with type `summary-box`:
+Show the status report using `thinkrail_visualize` with type `summary-box`:
 ```json
 {
   "type": "summary-box",
@@ -48,7 +48,7 @@ Show the status report using `bonsai_visualize` with type `summary-box`:
 
 ### Step 3: For deeper analysis (optional)
 
-If the user wants details on specific specs, coverage gaps, or freshness, show additional breakdowns using `bonsai_visualize` `data-table` type:
+If the user wants details on specific specs, coverage gaps, or freshness, show additional breakdowns using `thinkrail_visualize` `data-table` type:
 ```json
 {
   "type": "data-table",
@@ -76,4 +76,4 @@ Use AskUserQuestion:
 - **Fast**: Use `spec_search`, compute metrics directly
 - **Actionable**: Every issue has a suggested action with explicit `/skill-name`
 - **Non-destructive**: Only reads and reports, never modifies code or specs
-- **Visual**: Always display results via `bonsai_visualize`, never ASCII art
+- **Visual**: Always display results via `thinkrail_visualize`, never ASCII art

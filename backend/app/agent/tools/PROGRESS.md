@@ -14,13 +14,13 @@ tags:
 ---
 # UpdateProgress — Backend Spec
 
-> Parent: [Tools Package](README.md) | Feature: [.bonsai/design_docs/UPDATE_PROGRESS.md](../../../../.bonsai/design_docs/UPDATE_PROGRESS.md) | Status: **Draft** | Created: 2026-03-07 | Updated: 2026-03-11
+> Parent: [Tools Package](README.md) | Feature: [.tr/design_docs/UPDATE_PROGRESS.md](../../../../.tr/design_docs/UPDATE_PROGRESS.md) | Status: **Draft** | Created: 2026-03-07 | Updated: 2026-03-11
 
 ## Purpose
 
 Backend implementation of the UpdateProgress proactive tool. Self-contained in `progress.py` following the [tools package pattern](README.md): schema + handler + MCP server + `intercept()` in one file.
 
-See the [full feature spec](../../../../.bonsai/design_docs/UPDATE_PROGRESS.md) for protocol, frontend, and scenarios.
+See the [full feature spec](../../../../.tr/design_docs/UPDATE_PROGRESS.md) for protocol, frontend, and scenarios.
 
 ## Wire Format
 
@@ -30,7 +30,7 @@ See the [full feature spec](../../../../.bonsai/design_docs/UPDATE_PROGRESS.md) 
 
 ```json
 {
-  "bonsaiSid": "...",
+  "thinkrailSid": "...",
   "phase": "analyzing",
   "plan": ["1. Read module specs", "2. Compare with code", "3. Report gaps"],
   "status": "Reading backend/app/spec/README.md..."
@@ -56,7 +56,7 @@ Single file exports:
 async def _update_progress(args: dict) -> dict:
     ctx = get_tool_context()
     await ctx.notify("agent/progressUpdate", {
-        "bonsaiSid": ctx.task.bonsai_sid,
+        "thinkrailSid": ctx.task.thinkrail_sid,
         "phase": args.get("phase", ""),
         "plan": args.get("plan", []),
         "status": args.get("status", ""),

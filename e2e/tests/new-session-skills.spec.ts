@@ -56,7 +56,7 @@ test("new-session skill picker renders every plugin skill", async ({
 
   expect(renderedSorted).toEqual(expected);
 
-  // bonsai-brainstorm is the canary we explicitly want visible — surface a
+  // thinkrail-brainstorm is the canary we explicitly want visible — surface a
   // clear failure if the plugin scan ever drops it.
-  expect(renderedSorted).toContain("bonsai-brainstorm");
+  expect(renderedSorted).toContain("thinkrail-brainstorm");
 });

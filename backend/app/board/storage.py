@@ -13,7 +13,7 @@ from app.board.artifact_paths import (
     ensure_ticket_dir,
 )
 from app.board.models import ArtifactKind, Ticket
-from app.core.config import BONSAI_DIRNAME, TICKETS_DIR
+from app.core.config import PROJECT_DIRNAME, TICKETS_DIR
 from app.core.fileio import ensure_dir, read_text
 
 logger = logging.getLogger(__name__)
@@ -22,13 +22,13 @@ _TICKET_META_FILENAME = "ticket.json"
 
 
 def tickets_root(project_root: Path) -> Path:
-    return project_root / BONSAI_DIRNAME / TICKETS_DIR
+    return project_root / PROJECT_DIRNAME / TICKETS_DIR
 
 
 def ticket_path(base_dir: Path, ticket_id: str) -> Path:
     """Return the file path for a ticket JSON file inside its per-ticket folder.
 
-    ``base_dir`` is expected to be ``{project_root}/.bonsai/tickets/`` (i.e.,
+    ``base_dir`` is expected to be ``{project_root}/.tr/tickets/`` (i.e.,
     ``tickets_root(project_root)``).
     """
     return base_dir / ticket_id / _TICKET_META_FILENAME
@@ -97,7 +97,7 @@ def _reconcile_with_disk(ticket: Ticket, ticket_folder: Path) -> bool:
         file_path = ticket_folder / filename
         attr = _PATH_FIELD[kind]
         if file_path.exists():
-            expected = f".bonsai/tickets/{ticket.id}/{filename}"
+            expected = f"{PROJECT_DIRNAME}/{TICKETS_DIR}/{ticket.id}/{filename}"
             if getattr(ticket, attr) != expected:
                 setattr(ticket, attr, expected)
                 changed = True
@@ -208,13 +208,13 @@ def delete_ticket(path: Path) -> None:
 
 
 def wipe_legacy_meta_tickets(project_root: Path) -> bool:
-    """If ``.bonsai/meta-tickets/`` is present and empty, remove it.
+    """If ``.tr/meta-tickets/`` is present and empty, remove it.
 
     When the folder still has content, leaves it in place and logs a warning
-    — the new schema lives under ``.bonsai/tickets/`` and the user is
+    — the new schema lives under ``.tr/tickets/`` and the user is
     expected to move or discard any meta-tickets data themselves.
     """
-    legacy = project_root / BONSAI_DIRNAME / "meta-tickets"
+    legacy = project_root / PROJECT_DIRNAME / "meta-tickets"
     if not legacy.is_dir():
         return False
     try:
@@ -236,5 +236,5 @@ def wipe_legacy_meta_tickets(project_root: Path) -> bool:
 
 
 def ensure_ticket_folder(project_root: Path, ticket_id: str) -> Path:
-    """Convenience wrapper: ensure ``.bonsai/tickets/{id}/`` exists; return the folder."""
+    """Convenience wrapper: ensure ``.tr/tickets/{id}/`` exists; return the folder."""
     return ensure_ticket_dir(project_root, ticket_id)

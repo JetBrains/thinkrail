@@ -1,12 +1,20 @@
 import { useEffect, useRef } from "react";
 
+import { EVENT_PREFIX } from "@/constants/branding";
+
+/** Expand/collapse DOM CustomEvent names. Dispatched by ChatStream, listened
+ *  to here — shared so the two sides can't drift. */
+export const EXPAND_ALL_EVENT = `${EVENT_PREFIX}expandAll`;
+export const COLLAPSE_EVENTS_EVENT = `${EVENT_PREFIX}collapseEvents`;
+export const COLLAPSE_ALL_EVENT = `${EVENT_PREFIX}collapseAll`;
+
 /**
  * Hook to listen for expand/collapse custom events.
  *
  * Three events exist:
- * - `bonsai:expandAll` — expand everything
- * - `bonsai:collapseEvents` — collapse tool cards, subagents (NOT visualizations)
- * - `bonsai:collapseAll` — collapse everything including visualizations
+ * - {@link EXPAND_ALL_EVENT} — expand everything
+ * - {@link COLLAPSE_EVENTS_EVENT} — collapse tool cards, subagents (NOT visualizations)
+ * - {@link COLLAPSE_ALL_EVENT} — collapse everything including visualizations
  *
  * @param setExpanded - state setter for expand/collapse
  * @param isVisualization - if true, only listens to expandAll and collapseAll (not collapseEvents)
@@ -21,16 +29,16 @@ export function useExpandCollapse(
     const onExpand = () => setExpanded(true);
     const onCollapse = () => setExpanded(false);
 
-    document.addEventListener("bonsai:expandAll", onExpand);
-    document.addEventListener("bonsai:collapseAll", onCollapse);
+    document.addEventListener(EXPAND_ALL_EVENT, onExpand);
+    document.addEventListener(COLLAPSE_ALL_EVENT, onCollapse);
     if (!isVisualization) {
-      document.addEventListener("bonsai:collapseEvents", onCollapse);
+      document.addEventListener(COLLAPSE_EVENTS_EVENT, onCollapse);
     }
     return () => {
-      document.removeEventListener("bonsai:expandAll", onExpand);
-      document.removeEventListener("bonsai:collapseAll", onCollapse);
+      document.removeEventListener(EXPAND_ALL_EVENT, onExpand);
+      document.removeEventListener(COLLAPSE_ALL_EVENT, onCollapse);
       if (!isVisualization) {
-        document.removeEventListener("bonsai:collapseEvents", onCollapse);
+        document.removeEventListener(COLLAPSE_EVENTS_EVENT, onCollapse);
       }
     };
   }, [setExpanded, isVisualization]);

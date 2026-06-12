@@ -1,5 +1,5 @@
 /**
- * Typed REST client for the Bonsai backend.
+ * Typed REST client for the ThinkRail backend.
  *
  * Generated types come from openapi.json (run `npm run generate` to refresh).
  * Usage:

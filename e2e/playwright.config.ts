@@ -4,7 +4,7 @@ import path from "node:path";
 
 /**
  * Self-contained e2e configuration. `npm test` (in `e2e/`) starts the full
- * Bonsai stack via `./run.sh` from the repo root on free ports and points
+ * ThinkRail stack via `./run.sh` from the repo root on free ports and points
  * the spec runner at it. No separate `./run.sh` shell is needed.
  */
 
@@ -40,9 +40,9 @@ function getOrPickPorts(): [number, number] {
   // main process (for `webServer` + global metadata) and once in each
   // worker process (for `use` + project settings). The main process picks
   // the ports and stashes them in an env var; workers inherit env from
-  // the main process and reuse the same values, so the webServer Bonsai
+  // the main process and reuse the same values, so the webServer ThinkRail
   // is on the same ports the workers point their `baseURL` at.
-  const cached = process.env.__BONSAI_E2E_PORTS;
+  const cached = process.env.__THINKRAIL_E2E_PORTS;
   if (cached) {
     const [a, b] = cached.split(",").map((s) => parseInt(s, 10));
     if (Number.isFinite(a) && Number.isFinite(b) && a > 0 && b > 0 && a !== b) {
@@ -50,7 +50,7 @@ function getOrPickPorts(): [number, number] {
     }
   }
   const [a, b] = findTwoFreePorts();
-  process.env.__BONSAI_E2E_PORTS = `${a},${b}`;
+  process.env.__THINKRAIL_E2E_PORTS = `${a},${b}`;
   return [a, b];
 }
 
@@ -61,8 +61,8 @@ const BACKEND_URL = `http://localhost:${BACKEND_PORT}`;
 // Helpers / globalSetup / specs read these from `process.env`. We set them
 // here at config load time so the single worker (workers=1) and the spawned
 // webServer all see the same values.
-process.env.BONSAI_FRONTEND_URL = FRONTEND_URL;
-process.env.BONSAI_BACKEND_URL = BACKEND_URL;
+process.env.THINKRAIL_FRONTEND_URL = FRONTEND_URL;
+process.env.THINKRAIL_BACKEND_URL = BACKEND_URL;
 
 const REPO_ROOT = path.resolve(__dirname, "..");
 
@@ -81,7 +81,7 @@ export default defineConfig({
     trace: "retain-on-failure",
     screenshot: "only-on-failure",
     video: "retain-on-failure",
-    extraHTTPHeaders: { "X-Bonsai-E2E": "1" },
+    extraHTTPHeaders: { "X-ThinkRail-E2E": "1" },
   },
   projects: [
     {
@@ -99,7 +99,7 @@ export default defineConfig({
     url: FRONTEND_URL,
     // First-run install (`uv sync`, `npm install`) can dominate.
     timeout: 5 * 60_000,
-    reuseExistingServer: !!process.env.BONSAI_E2E_REUSE,
+    reuseExistingServer: !!process.env.THINKRAIL_E2E_REUSE,
     stdout: "pipe",
     stderr: "pipe",
     env: {

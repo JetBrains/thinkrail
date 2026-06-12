@@ -69,8 +69,8 @@ export function SubagentBlock({
               const toolName = (ev.payload.toolName as string) ?? "tool";
               if (toolName === "AskUserQuestion") return null;
               if (toolName === "TaskGet" || toolName === "TaskList") return null;
-              // Render bonsai_visualize as VisualizationCard (mirrors ChatStream.tsx)
-              if (toolName.endsWith("bonsai_visualize")) {
+              // Render thinkrail_visualize as VisualizationCard (mirrors ChatStream.tsx)
+              if (toolName.endsWith("thinkrail_visualize")) {
                 const visInput = ev.payload.toolInput as VisData | undefined;
                 if (visInput) {
                   return (

@@ -27,7 +27,7 @@ const SID = "draft-1";
 
 function seedDraft(overrides: Partial<Session> = {}): void {
   const session = {
-    bonsaiSid: SID,
+    thinkrailSid: SID,
     name: "New session",
     skillId: null,
     specIds: [],
@@ -43,7 +43,7 @@ function seedDraft(overrides: Partial<Session> = {}): void {
     pendingRequests: [],
     answeredRequests: new Map(),
     ticketId: null,
-    parentBonsaiSid: null,
+    parentThinkrailSid: null,
     subsessionType: null,
     subsessionContext: null,
     returnStatus: null,
@@ -80,7 +80,7 @@ describe("commitDraft sub-threshold guard", () => {
 
     expect(prepare).toHaveBeenCalledTimes(1);
     expect(prepare).toHaveBeenCalledWith(
-      expect.objectContaining({ bonsaiSid: SID, draftInput: "fix login" }),
+      expect.objectContaining({ thinkrailSid: SID, draftInput: "fix login" }),
     );
     expect(useSessionStore.getState().sessions.get(SID)?.unsaved).toBe(false);
   });
@@ -94,7 +94,7 @@ describe("commitDraft sub-threshold guard", () => {
     expect(prepare).not.toHaveBeenCalled();
     expect(updateDraft).toHaveBeenCalledTimes(1);
     expect(updateDraft).toHaveBeenCalledWith(
-      expect.objectContaining({ bonsaiSid: SID, draftInput: "ab" }),
+      expect.objectContaining({ thinkrailSid: SID, draftInput: "ab" }),
     );
   });
 });
@@ -108,7 +108,7 @@ describe("commitDraft preserves the existing name", () => {
     await useSessionStore.getState().commitDraft(SID);
 
     expect(updateDraft).toHaveBeenCalledWith(
-      expect.objectContaining({ bonsaiSid: SID, name: "Implement: My Ticket" }),
+      expect.objectContaining({ thinkrailSid: SID, name: "Implement: My Ticket" }),
     );
     expect(useSessionStore.getState().sessions.get(SID)?.name).toBe("Implement: My Ticket");
   });
@@ -120,7 +120,7 @@ describe("commitDraft preserves the existing name", () => {
     await useSessionStore.getState().commitDraft(SID);
 
     expect(updateDraft).toHaveBeenCalledWith(
-      expect.objectContaining({ bonsaiSid: SID, name: "WIP" }),
+      expect.objectContaining({ thinkrailSid: SID, name: "WIP" }),
     );
     expect(useSessionStore.getState().sessions.get(SID)?.name).toBe("WIP");
   });

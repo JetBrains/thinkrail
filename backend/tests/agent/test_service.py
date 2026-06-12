@@ -33,7 +33,7 @@ def _install_mock_runtime(service: AgentService) -> MagicMock:
     from app.agent.runtime import LabeledOption, RuntimeCapabilities, RuntimeRegistry
 
     async def _interrupt(task, tracker):
-        client = tracker.get_client(task.bonsai_sid)
+        client = tracker.get_client(task.thinkrail_sid)
         if client is not None:
             await client.interrupt()
 
@@ -78,7 +78,7 @@ class TestRunTask:
         service, _, spec_service = _make_service()
         runtime = service.runtime_registry.get("claude")
         runtime.run_session = AsyncMock(return_value=AgentResult(
-            bonsai_sid="t1",
+            thinkrail_sid="t1",
             session_id="s1",
             result="done",
             cost_usd=0.0,
@@ -103,7 +103,7 @@ class TestRunTask:
         async def slow_run(*args, **kwargs):
             await asyncio.sleep(0.5)
             return AgentResult(
-                bonsai_sid="t1", session_id="s1", result="done",
+                thinkrail_sid="t1", session_id="s1", result="done",
                 cost_usd=0.0, turns=1, duration_ms=500,
             )
 
@@ -117,7 +117,7 @@ class TestRunTask:
         assert task.status == "initializing"
 
         # Clean up
-        bg = service._running_tasks.get(task.bonsai_sid)
+        bg = service._running_tasks.get(task.thinkrail_sid)
         if bg:
             bg.cancel()
             try:
@@ -143,25 +143,25 @@ class TestSendMessage:
         task = service._tracker.create_task(["s1"], AgentConfig())
         # task starts idle — ready for messages
 
-        await service.send_message(task.bonsai_sid, "hello")
+        await service.send_message(task.thinkrail_sid, "hello")
 
-        msg = service._tracker._queues[task.bonsai_sid].get_nowait()
+        msg = service._tracker._queues[task.thinkrail_sid].get_nowait()
         assert msg == "hello"
 
     async def test_send_message_while_running_raises(self) -> None:
         service, _, _ = _make_service()
         task = service._tracker.create_task(["s1"], AgentConfig())
-        service._tracker.set_status(task.bonsai_sid, "idle")
-        service._tracker.set_status(task.bonsai_sid, "running")
+        service._tracker.set_status(task.thinkrail_sid, "idle")
+        service._tracker.set_status(task.thinkrail_sid, "running")
         with pytest.raises(ValueError, match="expected 'initializing' or 'idle'"):
-            await service.send_message(task.bonsai_sid, "hello")
+            await service.send_message(task.thinkrail_sid, "hello")
 
     async def test_send_message_when_done_raises(self) -> None:
         service, _, _ = _make_service()
         task = service._tracker.create_task(["s1"], AgentConfig())
-        service._tracker.set_status(task.bonsai_sid, "done")
+        service._tracker.set_status(task.thinkrail_sid, "done")
         with pytest.raises(ValueError, match="expected 'initializing' or 'idle'"):
-            await service.send_message(task.bonsai_sid, "hello")
+            await service.send_message(task.thinkrail_sid, "hello")
 
 
 class TestEndSession:
@@ -172,18 +172,18 @@ class TestEndSession:
         task = service._tracker.create_task(["s1"], AgentConfig())
         # task starts idle
 
-        await service.end_session(task.bonsai_sid)
+        await service.end_session(task.thinkrail_sid)
 
-        msg = service._tracker._queues[task.bonsai_sid].get_nowait()
+        msg = service._tracker._queues[task.thinkrail_sid].get_nowait()
         assert msg is END_SIGNAL
 
     async def test_end_already_done_is_noop(self) -> None:
         service, _, _ = _make_service()
         task = service._tracker.create_task(["s1"], AgentConfig())
-        service._tracker.set_status(task.bonsai_sid, "done")
+        service._tracker.set_status(task.thinkrail_sid, "done")
 
         # Should not raise
-        await service.end_session(task.bonsai_sid)
+        await service.end_session(task.thinkrail_sid)
 
     async def test_end_session_resolves_pending_futures(self) -> None:
         """A waiting session must have its futures resolved so the runner
@@ -191,12 +191,12 @@ class TestEndSession:
         tool callback forever."""
         service, _, _ = _make_service()
         task = service._tracker.create_task(["s1"], AgentConfig())
-        service._tracker.set_status(task.bonsai_sid, "idle")
-        service._tracker.set_status(task.bonsai_sid, "running")
-        service._tracker.set_status(task.bonsai_sid, "waiting")
-        future = service._tracker.register_future(task.bonsai_sid, "req-1")
+        service._tracker.set_status(task.thinkrail_sid, "idle")
+        service._tracker.set_status(task.thinkrail_sid, "running")
+        service._tracker.set_status(task.thinkrail_sid, "waiting")
+        future = service._tracker.register_future(task.thinkrail_sid, "req-1")
 
-        await service.end_session(task.bonsai_sid)
+        await service.end_session(task.thinkrail_sid)
 
         assert future.done()
         result = future.result()
@@ -211,8 +211,8 @@ class TestGetAndListTasks:
         tasks = service.list_tasks()
         assert len(tasks) == 1
 
-        retrieved = service.get_task(tasks[0].bonsai_sid)
-        assert retrieved.bonsai_sid == tasks[0].bonsai_sid
+        retrieved = service.get_task(tasks[0].thinkrail_sid)
+        assert retrieved.thinkrail_sid == tasks[0].thinkrail_sid
 
     def test_get_nonexistent_raises(self) -> None:
         service, _, _ = _make_service()
@@ -228,9 +228,9 @@ class TestRespond:
     async def test_respond_delegates_to_tracker(self) -> None:
         service, _, _ = _make_service()
         task = service._tracker.create_task(["s1"], AgentConfig())
-        future = service._tracker.register_future(task.bonsai_sid, "req-1")
+        future = service._tracker.register_future(task.thinkrail_sid, "req-1")
 
-        await service.respond(task.bonsai_sid, "req-1", {"answer": "yes"})
+        await service.respond(task.thinkrail_sid, "req-1", {"answer": "yes"})
         result = await future
         assert result == {"answer": "yes"}
 
@@ -239,13 +239,13 @@ class TestRespondPersistsEvent:
     async def test_respond_saves_request_resolved_event(self) -> None:
         service, _, _ = _make_service()
         task = service._tracker.create_task(["s1"], AgentConfig())
-        future = service._tracker.register_future(task.bonsai_sid, "req-1")
+        future = service._tracker.register_future(task.thinkrail_sid, "req-1")
 
         service._save_event = MagicMock()
-        await service.respond(task.bonsai_sid, "req-1", {"behavior": "allow"})
+        await service.respond(task.thinkrail_sid, "req-1", {"behavior": "allow"})
 
         service._save_event.assert_called_once_with(
-            task.bonsai_sid,
+            task.thinkrail_sid,
             {
                 "eventType": "requestResolved",
                 "payload": {"requestId": "req-1", "response": {"behavior": "allow"}},
@@ -260,13 +260,13 @@ class TestInterruptTask:
         """interrupt_task calls client.interrupt() on the stored SDK client."""
         service, _, _ = _make_service()
         task = service._tracker.create_task(["s1"], AgentConfig())
-        service._tracker.set_status(task.bonsai_sid, "idle")
-        service._tracker.set_status(task.bonsai_sid, "running")
+        service._tracker.set_status(task.thinkrail_sid, "idle")
+        service._tracker.set_status(task.thinkrail_sid, "running")
 
         mock_client = AsyncMock()
-        service._tracker.set_client(task.bonsai_sid, mock_client)
+        service._tracker.set_client(task.thinkrail_sid, mock_client)
 
-        await service.interrupt_task(task.bonsai_sid)
+        await service.interrupt_task(task.thinkrail_sid)
 
         mock_client.interrupt.assert_called_once()
 
@@ -274,8 +274,8 @@ class TestInterruptTask:
         """set_interrupted is called before client.interrupt()."""
         service, _, _ = _make_service()
         task = service._tracker.create_task(["s1"], AgentConfig())
-        service._tracker.set_status(task.bonsai_sid, "idle")
-        service._tracker.set_status(task.bonsai_sid, "running")
+        service._tracker.set_status(task.thinkrail_sid, "idle")
+        service._tracker.set_status(task.thinkrail_sid, "running")
 
         call_order: list[str] = []
 
@@ -288,14 +288,14 @@ class TestInterruptTask:
 
         original_set = service._tracker.set_interrupted
 
-        def track_set_interrupted(bonsai_sid: str) -> None:
+        def track_set_interrupted(thinkrail_sid: str) -> None:
             call_order.append("set_interrupted")
-            original_set(bonsai_sid)
+            original_set(thinkrail_sid)
 
         service._tracker.set_interrupted = track_set_interrupted
-        service._tracker.set_client(task.bonsai_sid, mock_client)
+        service._tracker.set_client(task.thinkrail_sid, mock_client)
 
-        await service.interrupt_task(task.bonsai_sid)
+        await service.interrupt_task(task.thinkrail_sid)
 
         assert call_order == ["set_interrupted", "client.interrupt"]
 
@@ -303,13 +303,13 @@ class TestInterruptTask:
         """interrupt_task calls interrupt_futures, not cancel_futures."""
         service, _, _ = _make_service()
         task = service._tracker.create_task(["s1"], AgentConfig())
-        service._tracker.set_status(task.bonsai_sid, "idle")
-        service._tracker.set_status(task.bonsai_sid, "running")
-        service._tracker.set_client(task.bonsai_sid, AsyncMock())
+        service._tracker.set_status(task.thinkrail_sid, "idle")
+        service._tracker.set_status(task.thinkrail_sid, "running")
+        service._tracker.set_client(task.thinkrail_sid, AsyncMock())
 
-        future = service._tracker.register_future(task.bonsai_sid, "req-1")
+        future = service._tracker.register_future(task.thinkrail_sid, "req-1")
 
-        await service.interrupt_task(task.bonsai_sid)
+        await service.interrupt_task(task.thinkrail_sid)
 
         # Future should be resolved (not cancelled)
         assert not future.cancelled()
@@ -322,18 +322,18 @@ class TestInterruptTask:
         """After interrupt, no new background task is created."""
         service, _, _ = _make_service()
         task = service._tracker.create_task(["s1"], AgentConfig())
-        service._tracker.set_status(task.bonsai_sid, "idle")
-        service._tracker.set_status(task.bonsai_sid, "running")
-        service._tracker.set_client(task.bonsai_sid, AsyncMock())
+        service._tracker.set_status(task.thinkrail_sid, "idle")
+        service._tracker.set_status(task.thinkrail_sid, "running")
+        service._tracker.set_client(task.thinkrail_sid, AsyncMock())
 
         # Record existing background tasks
-        service._running_tasks[task.bonsai_sid] = AsyncMock()
-        original_bg = service._running_tasks[task.bonsai_sid]
+        service._running_tasks[task.thinkrail_sid] = AsyncMock()
+        original_bg = service._running_tasks[task.thinkrail_sid]
 
-        await service.interrupt_task(task.bonsai_sid)
+        await service.interrupt_task(task.thinkrail_sid)
 
         # The background task reference should be unchanged (not replaced)
-        assert service._running_tasks.get(task.bonsai_sid) is original_bg
+        assert service._running_tasks.get(task.thinkrail_sid) is original_bg
 
     async def test_interrupt_idle_is_noop(self) -> None:
         """Interrupting an idle session does nothing."""
@@ -341,27 +341,27 @@ class TestInterruptTask:
         task = service._tracker.create_task(["s1"], AgentConfig())
 
         mock_client = AsyncMock()
-        service._tracker.set_client(task.bonsai_sid, mock_client)
+        service._tracker.set_client(task.thinkrail_sid, mock_client)
 
-        await service.interrupt_task(task.bonsai_sid)
+        await service.interrupt_task(task.thinkrail_sid)
 
         mock_client.interrupt.assert_not_called()
-        assert service._tracker.is_interrupted(task.bonsai_sid) is False
+        assert service._tracker.is_interrupted(task.thinkrail_sid) is False
 
     async def test_interrupt_waiting_state(self) -> None:
         """Interrupting a waiting session resolves futures and calls client.interrupt."""
         service, _, _ = _make_service()
         task = service._tracker.create_task(["s1"], AgentConfig())
-        service._tracker.set_status(task.bonsai_sid, "idle")
-        service._tracker.set_status(task.bonsai_sid, "running")
-        service._tracker.set_status(task.bonsai_sid, "waiting")
+        service._tracker.set_status(task.thinkrail_sid, "idle")
+        service._tracker.set_status(task.thinkrail_sid, "running")
+        service._tracker.set_status(task.thinkrail_sid, "waiting")
 
         mock_client = AsyncMock()
-        service._tracker.set_client(task.bonsai_sid, mock_client)
+        service._tracker.set_client(task.thinkrail_sid, mock_client)
 
-        future = service._tracker.register_future(task.bonsai_sid, "req-1")
+        future = service._tracker.register_future(task.thinkrail_sid, "req-1")
 
-        await service.interrupt_task(task.bonsai_sid)
+        await service.interrupt_task(task.thinkrail_sid)
 
         mock_client.interrupt.assert_called_once()
         assert future.done()
@@ -371,14 +371,14 @@ class TestInterruptTask:
         """If no client is stored (edge case), interrupt still sets flag."""
         service, _, _ = _make_service()
         task = service._tracker.create_task(["s1"], AgentConfig())
-        service._tracker.set_status(task.bonsai_sid, "idle")
-        service._tracker.set_status(task.bonsai_sid, "running")
+        service._tracker.set_status(task.thinkrail_sid, "idle")
+        service._tracker.set_status(task.thinkrail_sid, "running")
         # No client set
 
-        await service.interrupt_task(task.bonsai_sid)
+        await service.interrupt_task(task.thinkrail_sid)
 
         # Should have set the flag even without a client
-        assert service._tracker.is_interrupted(task.bonsai_sid) is True
+        assert service._tracker.is_interrupted(task.thinkrail_sid) is True
 
 
 class TestSaveTask:
@@ -393,7 +393,7 @@ class TestSaveTask:
         service._save_task(task)
 
         from app.agent.persistence import load_session
-        loaded = load_session(tmp_path, task.bonsai_sid)
+        loaded = load_session(tmp_path, task.thinkrail_sid)
         assert loaded is not None
         m = loaded["metrics"]
         assert m["costUsd"] == 0
@@ -417,7 +417,7 @@ class TestSaveTask:
         task = service._tracker.create_task(["s1"], AgentConfig())
         # Pre-populate disk with metrics
         save_session(tmp_path, {
-            "bonsaiSid": task.bonsai_sid,
+            "thinkrailSid": task.thinkrail_sid,
             "name": "test",
             "specIds": [],
             "config": {},
@@ -426,7 +426,7 @@ class TestSaveTask:
         })
 
         service._save_task(task)
-        loaded = load_session(tmp_path, task.bonsai_sid)
+        loaded = load_session(tmp_path, task.thinkrail_sid)
         assert loaded is not None
         assert loaded["metrics"]["costUsd"] == 1.5
         assert loaded["metrics"]["toolCalls"] == 10
@@ -446,7 +446,7 @@ class TestSubagentModePersistence:
         from app.agent.persistence import save_session
 
         save_session(tmp_path, {
-            "bonsaiSid": "draft-restore",
+            "thinkrailSid": "draft-restore",
             "name": "n",
             "skillId": "ticket-implement",
             "specIds": [],
@@ -481,7 +481,7 @@ class TestSubagentModePersistence:
         from app.agent.persistence import save_session
 
         save_session(tmp_path, {
-            "bonsaiSid": "live-1",
+            "thinkrailSid": "live-1",
             "name": "n",
             "skillId": "ticket-implement",
             "specIds": [],
@@ -535,7 +535,7 @@ class TestSubagentModePersistence:
         task.step_gate = "autonomous"
         service._save_task(task)
 
-        loaded = load_session(tmp_path, task.bonsai_sid)
+        loaded = load_session(tmp_path, task.thinkrail_sid)
         assert loaded is not None
         assert loaded["subagentMode"] == "subagent"
         assert loaded["stepGate"] == "autonomous"
@@ -554,28 +554,28 @@ class TestPrepareDraftOnType:
         )
         return service
 
-    async def test_prepare_reuses_supplied_bonsai_sid(self, tmp_path: Path) -> None:
+    async def test_prepare_reuses_supplied_thinkrail_sid(self, tmp_path: Path) -> None:
         from app.agent.persistence import load_session
 
         service = self._service(tmp_path)
         task = await service.prepare_task(
             ["s1"], AgentConfig(),
-            bonsai_sid="client-minted", draft_input="fix login flow",
+            thinkrail_sid="client-minted", draft_input="fix login flow",
         )
-        assert task.bonsai_sid == "client-minted"
+        assert task.thinkrail_sid == "client-minted"
         assert task.draft_input == "fix login flow"
         # The supplied id is reused verbatim — no re-mint — so the persisted
-        # task is keyed by it and echoes it back as bonsaiSid.
+        # task is keyed by it and echoes it back as thinkrailSid.
         loaded = load_session(tmp_path, "client-minted")
         assert loaded is not None
-        assert loaded["bonsaiSid"] == "client-minted"
+        assert loaded["thinkrailSid"] == "client-minted"
 
     async def test_prepare_without_args_server_mints_and_no_draft_input(
         self, tmp_path: Path,
     ) -> None:
         service = self._service(tmp_path)
         task = await service.prepare_task(["s1"], AgentConfig())
-        assert task.bonsai_sid  # server-minted uuid
+        assert task.thinkrail_sid  # server-minted uuid
         assert task.draft_input is None
 
     async def test_prepare_persists_draft_input(self, tmp_path: Path) -> None:
@@ -584,15 +584,15 @@ class TestPrepareDraftOnType:
         service = self._service(tmp_path)
         task = await service.prepare_task(
             ["s1"], AgentConfig(),
-            bonsai_sid="d1", draft_input="fix login flow",
+            thinkrail_sid="d1", draft_input="fix login flow",
         )
-        loaded = load_session(tmp_path, task.bonsai_sid)
+        loaded = load_session(tmp_path, task.thinkrail_sid)
         assert loaded is not None
         assert loaded["draftInput"] == "fix login flow"
 
     async def test_update_draft_sets_draft_input(self, tmp_path: Path) -> None:
         service = self._service(tmp_path)
-        task = await service.prepare_task(["s1"], AgentConfig(), bonsai_sid="d1")
+        task = await service.prepare_task(["s1"], AgentConfig(), thinkrail_sid="d1")
         await service.update_draft("d1", draft_input="typed text")
         assert task.draft_input == "typed text"
 
@@ -601,7 +601,7 @@ class TestPrepareDraftOnType:
     ) -> None:
         service = self._service(tmp_path)
         task = await service.prepare_task(
-            ["s1"], AgentConfig(), bonsai_sid="d1", draft_input="original",
+            ["s1"], AgentConfig(), thinkrail_sid="d1", draft_input="original",
         )
         # Omit draft_input → Ellipsis-sentinel leaves it untouched.
         await service.update_draft("d1", name="renamed")
@@ -611,7 +611,7 @@ class TestPrepareDraftOnType:
         self, tmp_path: Path,
     ) -> None:
         service = self._service(tmp_path)
-        await service.prepare_task(["s1"], AgentConfig(), bonsai_sid="d1")
+        await service.prepare_task(["s1"], AgentConfig(), thinkrail_sid="d1")
         service._build_context_for.reset_mock()
         service._build_context_structured_for.reset_mock()
         await service.update_draft("d1", draft_input="typed text", name="typed text")
@@ -622,7 +622,7 @@ class TestPrepareDraftOnType:
         self, tmp_path: Path,
     ) -> None:
         service = self._service(tmp_path)
-        await service.prepare_task(["s1"], AgentConfig(), bonsai_sid="d1")
+        await service.prepare_task(["s1"], AgentConfig(), thinkrail_sid="d1")
         service._build_context_for.reset_mock()
         await service.update_draft("d1", spec_ids=["s1", "s2"])
         service._build_context_for.assert_called_once()
@@ -632,9 +632,9 @@ class TestPrepareDraftOnType:
     ) -> None:
         service = self._service(tmp_path)
         await service.prepare_task(
-            ["s1"], AgentConfig(), bonsai_sid="d1", draft_input="fix login flow",
+            ["s1"], AgentConfig(), thinkrail_sid="d1", draft_input="fix login flow",
         )
-        entry = next(s for s in service.list_all_sessions() if s["bonsaiSid"] == "d1")
+        entry = next(s for s in service.list_all_sessions() if s["thinkrailSid"] == "d1")
         assert entry["draftInput"] == "fix login flow"
 
     async def test_draft_input_round_trips_through_both_list_paths(
@@ -647,17 +647,17 @@ class TestPrepareDraftOnType:
 
         service = self._service(tmp_path)
         await service.prepare_task(
-            ["s1"], AgentConfig(), bonsai_sid="d1", draft_input="first draft",
+            ["s1"], AgentConfig(), thinkrail_sid="d1", draft_input="first draft",
         )
         await service.update_draft("d1", draft_input="second draft")
 
         in_memory = next(
-            s for s in service.list_all_sessions() if s["bonsaiSid"] == "d1"
+            s for s in service.list_all_sessions() if s["thinkrailSid"] == "d1"
         )
         assert in_memory["draftInput"] == "second draft"
 
         on_disk = next(
-            s for s in list_sessions(tmp_path) if s["bonsaiSid"] == "d1"
+            s for s in list_sessions(tmp_path) if s["thinkrailSid"] == "d1"
         )
         assert on_disk["draftInput"] == "second draft"
 
@@ -680,7 +680,7 @@ class TestPrepareDraftOnType:
 
         task = await service.prepare_task(
             [], AgentConfig(),
-            bonsai_sid="d1",
+            thinkrail_sid="d1",
             session_prompt="SENTINEL_SESSION_PROMPT_VISIBLE",
             draft_input="SENTINEL_DRAFT_INPUT_HIDDEN",
         )
@@ -695,7 +695,7 @@ class TestPrepareDraftOnType:
         from app.agent.persistence import save_session
 
         save_session(tmp_path, {
-            "bonsaiSid": "draft-restore",
+            "thinkrailSid": "draft-restore",
             "name": "n",
             "specIds": [],
             "config": AgentConfig().model_dump(by_alias=True),
@@ -756,7 +756,7 @@ class TestBuildContext:
             spec_service=spec_service,
             plugin_dir=Path("/tmp/plugins"),
         )
-        assert "bonsai_visualize" in context
+        assert "thinkrail_visualize" in context
         # Visualization is now a subsection inside General Instructions
         assert "## General Instructions" in context
         assert "### Visualization" in context
@@ -780,7 +780,7 @@ class TestBuildContext:
                 plugin_dir=Path("/tmp/plugins"),
             )
         assert "## Your Task" in context
-        assert "bonsai_visualize" in context
+        assert "thinkrail_visualize" in context
         assert "## General Instructions" in context
 
 
@@ -844,13 +844,13 @@ class TestInterruptTaskRollback:
         task = service._tracker.create_task(
             [], AgentConfig(runtime="claude"),  # Literal-valid but not registered
         )
-        service._tracker.set_status(task.bonsai_sid, "idle")
-        service._tracker.set_status(task.bonsai_sid, "running")
+        service._tracker.set_status(task.thinkrail_sid, "idle")
+        service._tracker.set_status(task.thinkrail_sid, "running")
 
-        await service.interrupt_task(task.bonsai_sid)
+        await service.interrupt_task(task.thinkrail_sid)
 
         # Flag must be cleared so the next ResultMessage doesn't trigger
         # a spurious agent/interrupted event.
-        assert service._tracker.is_interrupted(task.bonsai_sid) is False
+        assert service._tracker.is_interrupted(task.thinkrail_sid) is False
 
 

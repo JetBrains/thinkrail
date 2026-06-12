@@ -83,7 +83,7 @@ describe("StepProposalCard", () => {
 describe("classicRenderers.suggestStep approve flow", () => {
   function buildCtx(overrides: Partial<EventRenderContext> = {}): EventRenderContext {
     const currentSession: Partial<Session> = {
-      bonsaiSid: "parent_sid",
+      thinkrailSid: "parent_sid",
       model: "claude-opus-4-7",
       permissionMode: "bypassPermissions",
       effort: "max",
@@ -105,7 +105,7 @@ describe("classicRenderers.suggestStep approve flow", () => {
   }
 
   const fullPayload = {
-    bonsaiSid: "parent_sid",
+    thinkrailSid: "parent_sid",
     ticketId: "mt_test",
     stepNumber: 1,
     stepTitle: "Create backend/app/core/last_used.py",
@@ -117,7 +117,7 @@ describe("classicRenderers.suggestStep approve flow", () => {
   };
 
   const event = {
-    bonsaiSid: "parent_sid",
+    thinkrailSid: "parent_sid",
     sessionId: "",
     eventType: "suggestStep",
     payload: fullPayload,

@@ -31,12 +31,12 @@ configuration (project root discovery, directory paths, settings), file system o
 (read, write, delete files and directories), and async filesystem watching.
 
 `watcher.py` watches the entire working directory and fires callbacks when files change.
-At this design stage, spec files (`*.md`) and `.bonsai/*` config files are the primary
+At this design stage, spec files (`*.md`) and `.tr/*` config files are the primary
 consumers of change events. Source code files will be added as consumers in later stages
 (e.g. coverage tracking, detecting agent-authored source changes).
 
 The watcher serves two purposes:
-1. **User/external changes** — detect edits made outside Bonsai (editor, git, external tools)
+1. **User/external changes** — detect edits made outside ThinkRail (editor, git, external tools)
    so the backend can validate, postprocess, and notify the frontend to update views.
 2. **Agent changes** — detect spec file edits made by the AI agent during a run, applying
    the same validation/postprocessing pipeline as for user changes (more reliable than
@@ -70,8 +70,8 @@ graph TD
 |------|---------------|------------|
 | `config.py` | App configuration: project root discovery, directory paths, server settings, frozen mode detection | pydantic, pydantic-settings |
 | `fileio.py` | File system operations: read, write, delete files; create directories | — |
-| `project.py` | Lazy auto-creation of `.bonsai/` meta-files and subdirectories; ensures settings.json exists with defaults on access | fileio, settings |
-| `settings.py` | Project settings: load/save/ensure `.bonsai/settings.json` | pydantic, project |
+| `project.py` | Lazy auto-creation of `.tr/` meta-files and subdirectories; ensures settings.json exists with defaults on access | fileio, settings |
+| `settings.py` | Project settings: load/save/ensure `.tr/settings.json` | pydantic, project |
 | `watcher.py` | Async file change watching: detect spec file and config changes | watchfiles / watchdog |
 | `app_store.py` | SQLite-backed registry of known projects + app-wide key/value `settings`. Single-user; no users, tokens, or per-user data. See [APP_STORE.md](APP_STORE.md). | aiosqlite |
 | `network_info.py` | LAN IP, hostname, and Tailscale status detection for mobile client discovery | — |
@@ -97,7 +97,7 @@ graph TD
 | Function            | Signature                    | Description                                    |
 |---------------------|------------------------------|------------------------------------------------|
 | `get_project_root`  | `AppConfig.() → Path`        | Discover and return the project root directory |
-| `get_bonsai_dir`    | `AppConfig.() → Path`        | Path to the `.bonsai/` directory               |
+| `get_thinkrail_dir`    | `AppConfig.() → Path`        | Path to the `.tr/` directory               |
 | `load_config`       | `(project_root) → AppConfig` | Load application settings (Pydantic model)     |
 
 **Port preflight:**
@@ -124,13 +124,13 @@ graph TD
 
 ### project.py
 
-Lazy auto-creation of `.bonsai/` meta-files. Each known meta-file has a default-content factory. When code reads a meta-file via `ensure_meta_file()`, it is created with defaults if it doesn't exist on disk. `ensure_project()` is called at WebSocket connection time as a safety net.
+Lazy auto-creation of `.tr/` meta-files. Each known meta-file has a default-content factory. When code reads a meta-file via `ensure_meta_file()`, it is created with defaults if it doesn't exist on disk. `ensure_project()` is called at WebSocket connection time as a safety net.
 
 | Function | Signature | Description |
 |----------|-----------|-------------|
-| `ensure_meta_file` | `(bonsai_dir: Path, rel_path: str) → str` | Read meta-file if exists; create with defaults if missing. Returns file content. Raises `ValueError` for unknown files. |
-| `ensure_meta_dir` | `(bonsai_dir: Path, name: str) → Path` | Ensure `.bonsai/{name}/` directory exists. Returns path. |
-| `ensure_project` | `(project_root: Path) → None` | Ensure all known meta-files and subdirectories exist under `.bonsai/`. |
+| `ensure_meta_file` | `(thinkrail_dir: Path, rel_path: str) → str` | Read meta-file if exists; create with defaults if missing. Returns file content. Raises `ValueError` for unknown files. |
+| `ensure_meta_dir` | `(thinkrail_dir: Path, name: str) → Path` | Ensure `.tr/{name}/` directory exists. Returns path. |
+| `ensure_project` | `(project_root: Path) → None` | Ensure all known meta-files and subdirectories exist under `.tr/`. |
 
 Known meta-files: `settings.json`.
 Known subdirectories: `sessions`, `trash`, `plans`, `meta-tickets`, `spec-drafts`, `spec-patches`.
@@ -139,7 +139,7 @@ Known subdirectories: `sessions`, `trash`, `plans`, `meta-tickets`, `spec-drafts
 
 | Function | Signature | Description |
 |----------|-----------|-------------|
-| `load_settings` | `(project_root: Path) → ProjectSettings` | Read `.bonsai/settings.json`, creating defaults if missing (via `ensure_meta_file`) |
+| `load_settings` | `(project_root: Path) → ProjectSettings` | Read `.tr/settings.json`, creating defaults if missing (via `ensure_meta_file`) |
 | `save_settings` | `(project_root: Path, data: dict) → ProjectSettings` | Validate and write settings |
 | `ensure_settings_file` | `(project_root: Path) → ProjectSettings` | Delegates to `load_settings` (which now auto-creates) |
 
@@ -147,9 +147,9 @@ Known subdirectories: `sessions`, `trash`, `plans`, `meta-tickets`, `spec-drafts
 
 | Model | Fields | Description |
 |-------|--------|-------------|
-| `AppConfig` | project_root, bonsai_dir, plugin_dir | Application configuration (Pydantic) |
+| `AppConfig` | project_root, thinkrail_dir, plugin_dir | Application configuration (Pydantic) |
 | `ServerSettings` | backend_port, backend_host | Server bind settings (Pydantic BaseSettings, reads `.env` + env vars) |
-| `ProjectSettings` | event_view, font_size, compact_font_size, voice_revise_mode | User-configurable per-project settings (`.bonsai/settings.json`). Session-creation defaults (model / effort / permission_mode) are *not* here — they're user-scoped, see `SessionDefaults` below. `voice_revise_mode` (default `"off"`) controls what happens to a voice transcript after recording: `"off"` leaves the raw transcript alone; `"auto"` runs a one-shot server-side revise (see [VOICE_INPUT_DESIGN.md](../../../.bonsai/design_docs/VOICE_INPUT_DESIGN.md) — Revision 2); `"subsession"` starts a refinement subsession (v1 behavior). Unknown keys in `settings.json` (e.g. legacy `user_respond_timeout`) are tolerated via `extra="allow"`. |
+| `ProjectSettings` | event_view, font_size, compact_font_size, voice_revise_mode | User-configurable per-project settings (`.tr/settings.json`). Session-creation defaults (model / effort / permission_mode) are *not* here — they're user-scoped, see `SessionDefaults` below. `voice_revise_mode` (default `"off"`) controls what happens to a voice transcript after recording: `"off"` leaves the raw transcript alone; `"auto"` runs a one-shot server-side revise (see [VOICE_INPUT_DESIGN.md](../../../.tr/design_docs/VOICE_INPUT_DESIGN.md) — Revision 2); `"subsession"` starts a refinement subsession (v1 behavior). Unknown keys in `settings.json` (e.g. legacy `user_respond_timeout`) are tolerated via `extra="allow"`. |
 | `SessionDefaults` | model, permission_mode, effort | User-scoped session-creation defaults — applied to every new draft across every project. Stored as a JSON value in `AppStore.settings` under the `session_defaults` key (see `app.core.session_defaults`). Cold-start values: `model=claude-opus-4-7`, `permission_mode="default"`, `effort=None` (renders as "auto" in the UI). Read/written through the `appSettings/getSessionDefaults` and `appSettings/setSessionDefaults` RPCs. |
 | `WatchHandle` | (opaque) | Handle to a running file watch |
 

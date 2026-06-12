@@ -39,7 +39,7 @@ export function buildSpec(opts: {
 }
 
 /**
- * Seed a temp-project directory with a `.bonsai/` marker plus one or more
+ * Seed a temp-project directory with a `.tr/` marker plus one or more
  * spec files. The picker will recognise the directory as an existing project.
  *
  * The backend rebuilds its index when the project is opened, so any specs
@@ -49,7 +49,7 @@ export function seedProject(
   projectPath: string,
   specs: { relPath: string; content: string }[],
 ): void {
-  mkdirSync(join(projectPath, ".bonsai"), { recursive: true });
+  mkdirSync(join(projectPath, ".tr"), { recursive: true });
   for (const s of specs) {
     const full = join(projectPath, s.relPath);
     mkdirSync(join(full, ".."), { recursive: true });

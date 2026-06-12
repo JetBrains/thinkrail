@@ -7,7 +7,7 @@ import { restClient } from "@/api/rest.ts";
  * Used in the Header component's project selector.
  */
 const MOCK_PROJECTS = [
-  { path: "/Users/you/src/bonsai", name: "bonsai", registered_at: "", last_opened_at: "" },
+  { path: "/Users/you/src/thinkrail", name: "thinkrail", registered_at: "", last_opened_at: "" },
   { path: "/Users/you/src/inventory-service", name: "inventory-service", registered_at: "", last_opened_at: "" },
   { path: "/Users/you/src/api-gateway", name: "api-gateway", registered_at: "", last_opened_at: "" },
 ];
@@ -73,7 +73,7 @@ export const SingleProject: Story = {
     restClient.GET = ((url: string, opts: unknown) => {
       if (url === "/api/projects/known") {
         return Promise.resolve({
-          data: [{ path: "/Users/you/src/bonsai", name: "bonsai", registered_at: "", last_opened_at: "" }],
+          data: [{ path: "/Users/you/src/thinkrail", name: "thinkrail", registered_at: "", last_opened_at: "" }],
           error: undefined,
         });
       }
@@ -92,7 +92,7 @@ export const SingleProject: Story = {
 export const ManyProjects: Story = {
   beforeEach: () => {
     const manyProjects = [
-      { path: "/Users/you/src/bonsai", name: "bonsai", registered_at: "", last_opened_at: "" },
+      { path: "/Users/you/src/thinkrail", name: "thinkrail", registered_at: "", last_opened_at: "" },
       { path: "/Users/you/src/inventory-service", name: "inventory-service", registered_at: "", last_opened_at: "" },
       { path: "/Users/you/src/api-gateway", name: "api-gateway", registered_at: "", last_opened_at: "" },
       { path: "/Users/you/src/auth-service", name: "auth-service", registered_at: "", last_opened_at: "" },

@@ -9,11 +9,11 @@ import {
 } from "../draftAutosave.ts";
 
 describe("draftAutosave", () => {
-  let commit: ReturnType<typeof vi.fn<(bonsaiSid: string) => void>>;
+  let commit: ReturnType<typeof vi.fn<(thinkrailSid: string) => void>>;
 
   beforeEach(() => {
     vi.useFakeTimers();
-    commit = vi.fn<(bonsaiSid: string) => void>();
+    commit = vi.fn<(thinkrailSid: string) => void>();
     setCommitFn(commit);
   });
 
@@ -92,7 +92,7 @@ describe("draftAutosave", () => {
     expect(commit).not.toHaveBeenCalled();
   });
 
-  it("isolates timers per bonsaiSid", () => {
+  it("isolates timers per thinkrailSid", () => {
     noteInput("a");
     vi.advanceTimersByTime(500);
     noteInput("b");

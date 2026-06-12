@@ -17,7 +17,7 @@ tags:
 ---
 # SQLite Index & Concurrency Model
 
-> Status: **Active** | Created: 2026-04-27 | Parent: [FRONTMATTER_REGISTRY_DESIGN.md](../../../.bonsai/design_docs/FRONTMATTER_REGISTRY_DESIGN.md)
+> Status: **Active** | Created: 2026-04-27 | Parent: [FRONTMATTER_REGISTRY_DESIGN.md](../../../.tr/design_docs/FRONTMATTER_REGISTRY_DESIGN.md)
 
 Defines the SQLite index schema, rebuild/recovery strategy, and the IndexCoordinator concurrency model that serializes all index mutations.
 
@@ -25,7 +25,7 @@ Defines the SQLite index schema, rebuild/recovery strategy, and the IndexCoordin
 
 ## SQLite Index Schema
 
-**File:** `~/.bonsai/indexes/<project-hash>/index.db` (outside the project repo, in the server data directory)
+**File:** `~/.tr/indexes/<project-hash>/index.db` (outside the project repo, in the server data directory)
 
 **Library:** `aiosqlite` (consistent with existing `app_store.py`)
 
@@ -93,14 +93,14 @@ Triggered when:
 - `index.db` is corrupt (failed PRAGMA integrity check)
 - User/agent explicitly requests rebuild
 - Schema version mismatch (after upgrade)
-- `.bonsaihide` file changes (debounced — see [Concurrency Model](#concurrency-model))
+- `.thinkrailhide` file changes (debounced — see [Concurrency Model](#concurrency-model))
 
 Process (executed by the IndexCoordinator's single consumer):
 1. Drain any pending `FileChanged` events from the queue (stale — rebuild re-scans everything)
 2. Emit `index/rebuilding` notification to frontend
 3. Begin an explicit SQLite transaction (`BEGIN IMMEDIATE`)
 4. Delete all rows from `specs`, `links`, and `documents` tables
-5. Discover all `.md` files via async tree walk (respecting `.bonsaihide`)
+5. Discover all `.md` files via async tree walk (respecting `.thinkrailhide`)
 6. Read and parse each file asynchronously (`aiofiles`), classify, and insert
 7. Stamp schema version in `_meta`
 8. Commit the transaction — readers atomically see all new data
@@ -132,7 +132,7 @@ On WebSocket connect (per-project, guarded by `threading.Lock` for dict access):
 Triggered on cold start when the index already exists and the schema version matches. Runs as a background task through the coordinator's event queue.
 
 Process:
-1. Walk all `.md` files under project root (async, respecting `.bonsaihide`)
+1. Walk all `.md` files under project root (async, respecting `.thinkrailhide`)
 2. For each file, call `reindex_file()` which compares `content_hash` with stored value
 3. Files with matching hashes are skipped (no-op)
 4. Files with changed content are re-parsed and upserted, with individual notifications emitted
@@ -151,7 +151,7 @@ All index mutations are serialized through an **IndexCoordinator** — a single-
 | Event | Fields | Emitted By | Effect |
 |-------|--------|-----------|--------|
 | `FileChanged` | `path`, `deleted` | File watcher | Coordinator calls `reindex_file()` |
-| `RebuildRequested` | `bonsaihide_spec`, `reason` | Init, `.bonsaihide` watcher | Full transactional rebuild |
+| `RebuildRequested` | `thinkrailhide_spec`, `reason` | Init, `.thinkrailhide` watcher | Full transactional rebuild |
 | `DiffScanRequested` | *(none)* | Init (cold start) | Background incremental scan of all files |
 | `SpecDeleteRequested` | `spec_id` | Agent `spec_delete` tool | File removal + cross-file cleanup + index update |
 
@@ -164,7 +164,7 @@ All index mutations are serialized through an **IndexCoordinator** — a single-
 
 ### Debounce
 
-Rapid `.bonsaihide` edits are coalesced: the coordinator's `request_rebuild()` method manages a 500ms quiescence timer. Only after 500ms with no further changes does a `RebuildRequested` event enter the queue — carrying the latest `.bonsaihide` patterns.
+Rapid `.thinkrailhide` edits are coalesced: the coordinator's `request_rebuild()` method manages a 500ms quiescence timer. Only after 500ms with no further changes does a `RebuildRequested` event enter the queue — carrying the latest `.thinkrailhide` patterns.
 
 ### Readiness Signaling
 

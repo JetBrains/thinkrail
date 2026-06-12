@@ -80,7 +80,7 @@ def build_context(
 | `project_root` | `Path` | Absolute path to the project directory |
 | `config` | `AgentConfig` | Run configuration — may influence context composition (e.g., permission_mode) |
 | `spec_service` | `SpecService` | Service to load spec content by ID |
-| `plugin_dir` | `Path` | Bonsai's plugin directory (contains `skills/`). Set via `AppConfig.plugin_dir`, which resolves to the `claude-plugin/` directory in the Bonsai installation (not the target project). |
+| `plugin_dir` | `Path` | ThinkRail's plugin directory (contains `skills/`). Set via `AppConfig.plugin_dir`, which resolves to the `claude-plugin/` directory in the ThinkRail installation (not the target project). |
 | `session_prompt` | `str \| None` | Custom instructions or task description for this session. Placed inside the "Your Task" section before the SKILL.md body. Passed via `agent/run` RPC `prompt` param or `SuggestSession` tool. |
 
 **Returns:** A composed system prompt string with framing sections.
@@ -125,7 +125,7 @@ The system prompt is assembled in this order, with framing text between sections
 
 ### Visualization
 
-You have access to the `bonsai_visualize` MCP tool for rendering structured visual
+You have access to the `thinkrail_visualize` MCP tool for rendering structured visual
 output in the UI. Use it instead of ASCII art, markdown tables, or plain-text diagrams
 whenever the output would benefit from visual structure.
 
@@ -245,7 +245,7 @@ When both `skill_id` is `None` and `spec_ids` is empty, the system prompt contai
 1. **General Instructions** — behavioral rules, visualization tool reference, interaction style, spec workflow, and available skills table
 2. **Project Metadata** — working directory
 
-This ensures the agent always knows about `bonsai_visualize`, `AskUserQuestion` patterns, and available skills, even in free-form sessions with no skill or specs.
+This ensures the agent always knows about `thinkrail_visualize`, `AskUserQuestion` patterns, and available skills, even in free-form sessions with no skill or specs.
 
 ## General Instructions Content
 
@@ -255,7 +255,7 @@ The General Instructions section consolidates behavioral rules that were previou
 
 | Subsection | Content | Rationale |
 |------------|---------|-----------|
-| **Visualization** | `bonsai_visualize` tool reference, 6 available types, layout hints (`width`, `maxHeight`), 6 primary status values, when to use, anti-patterns (no Bash/ANSI/ASCII) | Previously copy-pasted into 13/14 skills. Without this, the model doesn't know `bonsai_visualize` exists. |
+| **Visualization** | `thinkrail_visualize` tool reference, 6 available types, layout hints (`width`, `maxHeight`), 6 primary status values, when to use, anti-patterns (no Bash/ANSI/ASCII) | Previously copy-pasted into 13/14 skills. Without this, the model doesn't know `thinkrail_visualize` exists. |
 | **Interaction Style** | Use `AskUserQuestion` for decisions, 2-4 choices, end with "What's next?" | Previously repeated in 13/14 skills. Ensures consistent interaction pattern. |
 | **Spec-Driven Workflow** | Use `spec_search` at start, write YAML frontmatter with Edit/Write tools after saving, use `spec_delete` to remove, respect spec hierarchy | Previously in 10-11/14 skills. Grounds the agent in the spec-driven methodology. |
 | **Proactive Suggestions** | `SuggestSession` triggers, key tips (`specIds`, `prompt`, `reason`), behavioral rules (respect dismissals, limit to 1-3) | Agents need to know the tool exists and when to use it proactively. Parameter details come from the tool schema. |
@@ -305,9 +305,9 @@ The `build_context` function uses SKILL.md in two ways:
 
 ### Plugin Directory Resolution
 
-Skills are part of the Bonsai application, not the target project. The plugin directory points to the `claude-plugin/` folder in the Bonsai installation:
+Skills are part of the ThinkRail application, not the target project. The plugin directory points to the `claude-plugin/` folder in the ThinkRail installation:
 
-- `AppConfig.plugin_dir` is set by `load_config()` using the Bonsai repo root (derived from the package location: `backend/app/core/config.py` → `../../../claude-plugin/`)
+- `AppConfig.plugin_dir` is set by `load_config()` using the ThinkRail repo root (derived from the package location: `backend/app/core/config.py` → `../../../claude-plugin/`)
 - This is independent of `project_root`, which is the user's connected project directory
 
 ## SKILL.md Cleanup Guide
@@ -317,7 +317,7 @@ With General Instructions now handling common behavioral rules, existing SKILL.m
 | Boilerplate to remove | Was in | Now handled by |
 |-----------------------|--------|----------------|
 | "NEVER use Bash, echo, printf, or ANSI escape codes for visual output" | 13/14 skills | General Instructions → Visualization |
-| "Use `bonsai_visualize` tool for all structured visual output" | 13/14 skills | General Instructions → Visualization |
+| "Use `thinkrail_visualize` tool for all structured visual output" | 13/14 skills | General Instructions → Visualization |
 | "Use the `AskUserQuestion` tool for every design decision" | 13/14 skills | General Instructions → Interaction Style |
 | "Use `spec_search`" as a first step | 11/14 skills | General Instructions → Spec-Driven Workflow |
 | Available visualization types reference (progress-tracker, summary-box, etc.) | 13/14 skills | General Instructions → Visualization |
@@ -360,7 +360,7 @@ This is a single-file submodule. No classes — just a pure function with helper
 | Frontmatter stripping | Remove YAML frontmatter from SKILL.md | Frontmatter is metadata for the plugin system (name, description), not instructions for the agent. Including it would confuse the prompt. |
 | Pure function | `build_context()` not a class | No state to manage. Takes inputs, returns a string. Simple to test and compose. |
 | Config parameter | Accept `AgentConfig` | Future-proofs for config-dependent context (e.g., include/exclude sections based on permission_mode or other flags). Currently used minimally. |
-| Plugin dir from Bonsai root | `plugin_dir` derived from Bonsai installation path, not target project | Skills are part of Bonsai itself (shipped in `claude-plugin/`). Target projects don't contain skill definitions. Derived from package location for robustness. |
+| Plugin dir from ThinkRail root | `plugin_dir` derived from ThinkRail installation path, not target project | Skills are part of ThinkRail itself (shipped in `claude-plugin/`). Target projects don't contain skill definitions. Derived from package location for robustness. |
 
 ## Integration with Agent Module
 
@@ -416,5 +416,5 @@ The context window itself is inferred by the runtime from the live SDK (`ClaudeS
 
 - **Parent:** [Agent Module](README.md)
 - **Depends on:** [Spec Module](../spec/README.md) (for `spec_service.get_spec()`)
-- **Depends on:** [Core Config](../core/README.md) (for `AppConfig.plugin_dir` — Bonsai installation path)
+- **Depends on:** [Core Config](../core/README.md) (for `AppConfig.plugin_dir` — ThinkRail installation path)
 - **Used by:** `service.py` (calls `build_context()` in `run_task`)

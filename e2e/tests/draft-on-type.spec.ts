@@ -24,11 +24,11 @@ async function openSessionManager(p: Page): Promise<void> {
  *
  * Conventions honoured here (project-memory e2e gotchas):
  *  - `session_defaults` is seeded explicitly per test — the AppStore at
- *    `~/.bonsai/bonsai.db` is shared across e2e and defaults don't persist.
+ *    `~/.tr/tr.db` is shared across e2e and defaults don't persist.
  *  - Drafts are submitted via the keyboard (Ctrl+Enter on this macOS Chromium
  *    runner — `isMod` reads `ctrlKey` on Mac), never the Send/Start button,
  *    which portals into a slot that only mounts for non-draft sessions.
- *  - "No file" is a disk check of `.bonsai/sessions/`; "no broadcast" is a
+ *  - "No file" is a disk check of `.tr/sessions/`; "no broadcast" is a
  *    second browser context whose session list must not gain an entry.
  *  - Save counts are observed from the WebSocket frames the page sends
  *    (`agent/prepare` first save, `agent/updateDraft` thereafter) rather than
@@ -47,7 +47,7 @@ const AUTOSAVE_SETTLE_MS = 1_500;
 
 /** Count `{id}.json` session files on disk (events sidecars are `.events.jsonl`). */
 function sessionFileCount(projectPath: string): number {
-  const dir = join(projectPath, ".bonsai", "sessions");
+  const dir = join(projectPath, ".tr", "sessions");
   if (!existsSync(dir)) return 0;
   return readdirSync(dir).filter((f) => f.endsWith(".json")).length;
 }
@@ -58,7 +58,7 @@ function sessionFileCount(projectPath: string): number {
  * without an LLM round-trip.
  */
 function readSessionField(projectPath: string, field: string): unknown {
-  const dir = join(projectPath, ".bonsai", "sessions");
+  const dir = join(projectPath, ".tr", "sessions");
   if (!existsSync(dir)) return null;
   const files = readdirSync(dir).filter((f) => f.endsWith(".json"));
   if (files.length === 0) return null;
@@ -115,7 +115,7 @@ async function openSecondClient(
   browser: Browser,
   projectPath: string,
 ): Promise<{ page: Page; close: () => Promise<void> }> {
-  const ctx = await browser.newContext({ extraHTTPHeaders: { "X-Bonsai-E2E": "1" } });
+  const ctx = await browser.newContext({ extraHTTPHeaders: { "X-ThinkRail-E2E": "1" } });
   const page = await ctx.newPage();
   await openProject(page, projectPath);
   return { page, close: () => ctx.close() };
@@ -427,17 +427,17 @@ test.describe("Draft-on-type", () => {
     // the e2e harness (it needs a live agent to emit `suggest_session`); this
     // exercises the immediate-persist contract that approval relies on.
     const ok = await page.evaluate(async (model) => {
-      const client = (window as unknown as { __bonsaiClient?: {
-        request: (m: string, p: object) => Promise<{ bonsaiSid: string }>;
-      } }).__bonsaiClient;
+      const client = (window as unknown as { __thinkrailClient?: {
+        request: (m: string, p: object) => Promise<{ thinkrailSid: string }>;
+      } }).__thinkrailClient;
       if (!client) return false;
       const res = await client.request("agent/prepare", {
         specIds: [],
         config: { model, permissionMode: "default", streamText: true, effort: null },
-        skillId: "bonsai-brainstorm",
+        skillId: "thinkrail-brainstorm",
         name: "Intent-carrying session",
       });
-      return typeof res?.bonsaiSid === "string";
+      return typeof res?.thinkrailSid === "string";
     }, DEFAULTS.model);
     expect(ok).toBe(true);
 

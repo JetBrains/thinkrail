@@ -2,7 +2,7 @@
 name: ticket-amend-specs
 description: |
   Use when a ticket is in the `technical-design` state and the project
-  specs under `.bonsai/design_docs/*.md` need amending to reflect what the
+  specs under `{{TR_DIR}}/design_docs/*.md` need amending to reflect what the
   technical-design says. Symptoms: technical-design.md introduces concepts
   absent from existing specs, contradicts the current architecture, or
   adds new modules/submodules.
@@ -14,17 +14,17 @@ argument-hint: "[ticket-context]"
 
 # Ticket: Amend specs (technical-design → amend-specs)
 
-You are amending the project's `.bonsai/design_docs/*.md` files interactively, one file at a time, one section at a time, to reflect what the ticket's `technical-design.md` says. Each amendment is approved by the user via an inline diff card with four buttons; on accept the change is applied immediately and appended (as a unified-diff hunk plus metadata header) to `.bonsai/tickets/{id}/spec-diff.patch` — a per-ticket session log of what was changed.
+You are amending the project's `{{TR_DIR}}/design_docs/*.md` files interactively, one file at a time, one section at a time, to reflect what the ticket's `technical-design.md` says. Each amendment is approved by the user via an inline diff card with four buttons; on accept the change is applied immediately and appended (as a unified-diff hunk plus metadata header) to `{{TR_DIR}}/tickets/{id}/spec-diff.patch` — a per-ticket session log of what was changed.
 
 ## Quick reference
 
 | Tool | Use for |
 |---|---|
-| `ProposeChange` | Every amendment to `.bonsai/design_docs/*.md` |
+| `ProposeChange` | Every amendment to `{{TR_DIR}}/design_docs/*.md` |
 | `SetPreviewFile` / `ClearPreviewFile` | Show the file under edit beside the chat |
 | `LabelArtifact` | Annotate amended specs in the right-panel chip strip (optional) |
 | `spec_search` | Discover which specs are relevant |
-| `bonsai_visualize` | Render the amendment plan |
+| `thinkrail_visualize` | Render the amendment plan |
 | `AskUserQuestion` | Plan approval, dispositions on rejection |
 | `ChangeTicketStatus` | Transition to `implementation-plan` |
 | `Read` | Read `product-design.md`, `technical-design.md`, project specs |
@@ -43,13 +43,13 @@ You are amending the project's `.bonsai/design_docs/*.md` files interactively, o
    6. Finalize and transition
    ```
 
-1. **Examine context** *(task #1)* — `Read` `product-design.md` + `technical-design.md` from `.bonsai/tickets/{id}/`. Use `spec_search` to enumerate project specs related to what the technical design touches.
+1. **Examine context** *(task #1)* — `Read` `product-design.md` + `technical-design.md` from `{{TR_DIR}}/tickets/{id}/`. Use `spec_search` to enumerate project specs related to what the technical design touches.
 
 2. **Staleness branch.** If `spec_diff_stale: true` on the ticket, ask via `AskUserQuestion`: "Existing amendments are flagged stale (upstream design changed). Revise from scratch or evolve?" Branch:
    - *Evolve* — re-read the existing `.patch` log for prior intent; treat current on-disk specs as the in-progress baseline; continue refining.
    - *From scratch* — same on-disk state, but treat the existing amendments as the baseline and re-derive intent from `technical-design.md`.
 
-3. **Build amendment plan** *(task #2)* — propose which spec files to amend, ordered general → specific (project goals/requirements → architecture → module designs → submodule designs → task specs). Each entry has `(file, rationale)`. Render via `bonsai_visualize` (`type: summary-box`, `visId: amendment-plan`).
+3. **Build amendment plan** *(task #2)* — propose which spec files to amend, ordered general → specific (project goals/requirements → architecture → module designs → submodule designs → task specs). Each entry has `(file, rationale)`. Render via `thinkrail_visualize` (`type: summary-box`, `visId: amendment-plan`).
 
 4. **Get plan approval** *(task #3)* — ask via `AskUserQuestion`: "Plan looks right?" with options "Approved", "Drop one: _____", "Add one I missed: _____", "Reorder: _____". Iterate until approved.
 
@@ -86,7 +86,7 @@ You are amending the project's `.bonsai/design_docs/*.md` files interactively, o
 
 ## Red flags — STOP
 
-- About to call `Write` or `Edit` on a file under `.bonsai/design_docs/`? STOP. Use `ProposeChange`. Reason: bypasses the approval gate, the `.patch` log, validation, and auto-link.
+- About to call `Write` or `Edit` on a file under `{{TR_DIR}}/design_docs/`? STOP. Use `ProposeChange`. Reason: bypasses the approval gate, the `.patch` log, validation, and auto-link.
 - About to `git commit` during the step? STOP. The backend commits at the end (on transition to `implementation-plan`). A skill-side commit double-commits.
 - Skipping the amendment-plan approval (jumping straight into edits)? STOP. The plan is where the user shapes scope; skipping it forfeits their veto on which files get touched.
 - `ProposeChange` returned `discuss: true`? Treat it like Reject — the user's feedback is the next instruction. Don't re-propose the identical change.
@@ -96,7 +96,7 @@ You are amending the project's `.bonsai/design_docs/*.md` files interactively, o
 
 ## Output format
 
-Each successful `ProposeChange` writes one hunk + metadata header to `.bonsai/tickets/{id}/spec-diff.patch`:
+Each successful `ProposeChange` writes one hunk + metadata header to `{{TR_DIR}}/tickets/{id}/spec-diff.patch`:
 
 ```
 # == amendment N =================================
@@ -107,8 +107,8 @@ Each successful `ProposeChange` writes one hunk + metadata header to `.bonsai/ti
 # validation: ok                (or 'warnings' if frontmatter/links flagged)
 # timestamp:  2026-05-22T15:30:00Z
 
---- a/.bonsai/design_docs/MODULE_X.md
-+++ b/.bonsai/design_docs/MODULE_X.md
+--- a/{{TR_DIR}}/design_docs/MODULE_X.md
++++ b/{{TR_DIR}}/design_docs/MODULE_X.md
 @@ -10,3 +10,3 @@
  ## Components
 -Foo handles bar.

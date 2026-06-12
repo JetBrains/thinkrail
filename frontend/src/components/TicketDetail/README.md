@@ -73,7 +73,7 @@ graph TD
 | `TicketSpecView.tsx` | Placeholder spec viewer ("coming soon") | `specId, specTitle` |
 | `TicketPlanView.tsx` | Three-tab plan editor: **View** (read-only rendered milestones+steps), **Steps** (structured form for adding/editing milestones and steps), **Raw** (MarkdownEditor for direct markdown editing). Uses `board/savePlan` and `board/savePlanRaw` RPCs. | `plan, ticketId, onPlanUpdated` |
 | `TicketSpecChangesView.tsx` | Right panel tab showing spec changes grouped by session. Each session group is collapsible and lists individual `SpecChange` entries with change_type badge, spec title, summary, and expandable detail. | `ticket: MetaTicket` |
-| `TicketDraftsView.tsx` | Spec drafts review panel: lists pending draft entries from `.bonsai/spec-drafts/{ticket_id}/`. Monaco DiffEditor for side-by-side comparison (original vs draft). Per-entry Apply/Discard buttons + global Apply All/Discard All. Uses `board/listDrafts`, `board/getDraftDiff`, `board/applyDraft` RPCs. | `ticketId, onDraftsChanged?` |
+| `TicketDraftsView.tsx` | Spec drafts review panel: lists pending draft entries from `.tr/spec-drafts/{ticket_id}/`. Monaco DiffEditor for side-by-side comparison (original vs draft). Per-entry Apply/Discard buttons + global Apply All/Discard All. Uses `board/listDrafts`, `board/getDraftDiff`, `board/applyDraft` RPCs. | `ticketId, onDraftsChanged?` |
 | `MetaTicketDetail.css` | All detail view styles | |
 
 ## Component Interface

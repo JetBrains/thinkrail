@@ -24,7 +24,7 @@ export function resolvePhaseDefaultSid(
   const matches: { sid: string; isDraft: boolean; ts: number }[] = [];
   for (const sid of ticket.sessionIds) {
     const live = liveSessions.get(sid);
-    const archived = !live ? archivedSessions.find((a) => a.bonsaiSid === sid) : null;
+    const archived = !live ? archivedSessions.find((a) => a.thinkrailSid === sid) : null;
     const summary = !live && !archived ? sessionSummaries.get(sid) : null;
     const skillId = live?.skillId ?? archived?.skillId ?? summary?.skillId ?? null;
     if (skillId !== skill) continue;

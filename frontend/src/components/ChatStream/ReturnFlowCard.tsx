@@ -2,7 +2,7 @@ import { useCallback, useState } from "react";
 import { Button } from "../ui/Button";
 
 interface ReturnFlowCardProps {
-  bonsaiSid: string;
+  thinkrailSid: string;
   subsessionType: "discussion" | "refinement";
   proposedSummary: string;
   onApprove: (text: string) => void;
@@ -13,7 +13,7 @@ interface ReturnFlowCardProps {
 }
 
 export function ReturnFlowCard({
-  bonsaiSid,
+  thinkrailSid,
   subsessionType,
   proposedSummary,
   onApprove,
@@ -43,7 +43,7 @@ export function ReturnFlowCard({
   }, [feedback, onRevise]);
 
   return (
-    <div className="return-flow-card" data-bonsai-sid={bonsaiSid}>
+    <div className="return-flow-card" data-thinkrail-sid={thinkrailSid}>
       <div className="return-flow-header">
         <span className="return-flow-icon">{isRefinement ? "\u270f\ufe0f" : "\ud83d\udccb"}</span>
         <span className="return-flow-title">

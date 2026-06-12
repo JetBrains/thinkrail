@@ -48,7 +48,7 @@ const SID = "draft-session-1";
 
 function makeDraft(overrides: Partial<Session> = {}): Session {
   return {
-    bonsaiSid: SID,
+    thinkrailSid: SID,
     name: "New session",
     skillId: null,
     specIds: [],
@@ -65,7 +65,7 @@ function makeDraft(overrides: Partial<Session> = {}): Session {
     pendingRequests: [],
     answeredRequests: new Map(),
     ticketId: null,
-    parentBonsaiSid: null,
+    parentThinkrailSid: null,
     subsessionType: null,
     subsessionContext: null,
     returnStatus: null,
@@ -104,7 +104,7 @@ describe("DraftConfigCard name input", () => {
     useSessionStore.setState({ renameDraft: renameSpy });
 
     try {
-      render(<DraftConfigCard bonsaiSid={SID} />);
+      render(<DraftConfigCard thinkrailSid={SID} />);
 
       const input = screen.getByPlaceholderText("Session name...") as HTMLInputElement;
       fireEvent.change(input, { target: { value: "fix login" } });
@@ -133,7 +133,7 @@ describe("DraftConfigCard name input", () => {
 describe("DraftConfigCard prompt preview placeholder", () => {
   it("passes unsaved=true to PromptPreview while the draft is unsaved", () => {
     seed(makeDraft({ unsaved: true }));
-    render(<DraftConfigCard bonsaiSid={SID} />);
+    render(<DraftConfigCard thinkrailSid={SID} />);
 
     const preview = screen.getByTestId("prompt-preview");
     expect(preview.getAttribute("data-unsaved")).toBe("true");
@@ -141,7 +141,7 @@ describe("DraftConfigCard prompt preview placeholder", () => {
 
   it("passes unsaved=false once the draft has been saved", () => {
     seed(makeDraft({ unsaved: false, systemPrompt: "## General\n..." }));
-    render(<DraftConfigCard bonsaiSid={SID} />);
+    render(<DraftConfigCard thinkrailSid={SID} />);
 
     const preview = screen.getByTestId("prompt-preview");
     expect(preview.getAttribute("data-unsaved")).toBe("false");

@@ -3,7 +3,7 @@ import { AssistantMessage } from "./AssistantMessage";
 import "./ChatStream.css";
 
 /**
- * AssistantMessage is a Bonsai (assistant) chat bubble: avatar + name + a
+ * AssistantMessage is a ThinkRail (assistant) chat bubble: avatar + name + a
  * markdown-rendered body, with an optional streaming cursor.
  */
 const meta = {
@@ -14,7 +14,7 @@ const meta = {
     docs: {
       description: {
         component:
-          "AssistantMessage is a Bonsai (assistant) chat bubble: avatar + name + a markdown-rendered body, with an optional streaming cursor.\n\n📍 **In the app:** in the chat transcript (Sessions tab) for every assistant turn — the cursor shows while text is still streaming in.",
+          "AssistantMessage is a ThinkRail (assistant) chat bubble: avatar + name + a markdown-rendered body, with an optional streaming cursor.\n\n📍 **In the app:** in the chat transcript (Sessions tab) for every assistant turn — the cursor shows while text is still streaming in.",
       },
     },
   },

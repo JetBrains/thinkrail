@@ -13,6 +13,7 @@ import re
 from datetime import UTC, datetime
 from pathlib import Path
 
+from app.board.artifact_paths import artifact_path
 from app.spec.frontmatter import FrontmatterError, parse_frontmatter
 
 logger = logging.getLogger(__name__)
@@ -176,7 +177,7 @@ def append_amendment(
 ) -> Path:
     """Append a metadata header + unified-diff hunk to the ticket's .patch log."""
     ts = timestamp or datetime.now(UTC).isoformat()
-    log_path = project_root / ".bonsai" / "tickets" / ticket_id / "history.patch"
+    log_path = artifact_path(project_root, ticket_id, "history")
     log_path.parent.mkdir(parents=True, exist_ok=True)
     existing = log_path.read_text(encoding="utf-8") if log_path.is_file() else ""
     n = _next_amendment_number(existing)
@@ -217,7 +218,7 @@ def parse_patch_log(project_root: Path, ticket_id: str) -> list[dict]:
 
     Missing on-disk file → empty list.
     """
-    log_path = project_root / ".bonsai" / "tickets" / ticket_id / "history.patch"
+    log_path = artifact_path(project_root, ticket_id, "history")
     if not log_path.is_file():
         return []
     text = log_path.read_text(encoding="utf-8")

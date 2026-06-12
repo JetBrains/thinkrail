@@ -38,10 +38,10 @@ function orderSessionsWithHierarchy(sessions: Session[]): Session[] {
   const roots: Session[] = [];
 
   for (const s of sessions) {
-    if (s.parentBonsaiSid) {
-      const children = byParent.get(s.parentBonsaiSid) ?? [];
+    if (s.parentThinkrailSid) {
+      const children = byParent.get(s.parentThinkrailSid) ?? [];
       children.push(s);
-      byParent.set(s.parentBonsaiSid, children);
+      byParent.set(s.parentThinkrailSid, children);
     } else {
       roots.push(s);
     }
@@ -50,7 +50,7 @@ function orderSessionsWithHierarchy(sessions: Session[]): Session[] {
   const result: Session[] = [];
   function addWithChildren(session: Session) {
     result.push(session);
-    const children = byParent.get(session.bonsaiSid) ?? [];
+    const children = byParent.get(session.thinkrailSid) ?? [];
     for (const child of children) {
       addWithChildren(child);
     }
@@ -65,9 +65,9 @@ function orderSessionsWithHierarchy(sessions: Session[]): Session[] {
 function nestingDepth(session: Session, allSessions: Session[]): number {
   let depth = 0;
   let current = session;
-  while (current.parentBonsaiSid) {
+  while (current.parentThinkrailSid) {
     depth++;
-    const parent = allSessions.find((s) => s.bonsaiSid === current.parentBonsaiSid);
+    const parent = allSessions.find((s) => s.thinkrailSid === current.parentThinkrailSid);
     if (!parent) break;
     current = parent;
   }
@@ -166,17 +166,17 @@ export function SessionTabBar({
         const depth = nestingDepth(s, sessions);
         const prefix = "\u21B3".repeat(depth);
         const hasActiveChild = sessions.some(
-          (child) => child.parentBonsaiSid === s.bonsaiSid &&
+          (child) => child.parentThinkrailSid === s.thinkrailSid &&
           child.status !== "done" && child.status !== "error"
         );
-        const isActive = s.bonsaiSid === activeSessionId && kind === "session";
+        const isActive = s.thinkrailSid === activeSessionId && kind === "session";
         return (
           <div
-            key={`s-${s.bonsaiSid}`}
+            key={`s-${s.thinkrailSid}`}
             ref={isActive ? activeTabRef : undefined}
             className={`session-tab ${isActive ? "session-tab-active" : ""}`}
             style={{ opacity: hasActiveChild ? 0.5 : 1 }}
-            onClick={() => handleSwitchSession(s.bonsaiSid)}
+            onClick={() => handleSwitchSession(s.thinkrailSid)}
           >
             <span
               className="session-tab-dot"
@@ -189,7 +189,7 @@ export function SessionTabBar({
               <MessageCircle size={12} strokeWidth={1.5} className="session-tab-type-icon" />
             )}
             <span className="session-tab-name">
-              {prefix}{hasActiveChild ? "\u23F8 " : ""}{s.name || s.bonsaiSid.slice(0, 8)}
+              {prefix}{hasActiveChild ? "\u23F8 " : ""}{s.name || s.thinkrailSid.slice(0, 8)}
             </span>
             {s.pendingRequests.length > 0 && (
               <span className="session-tab-badge">
@@ -200,7 +200,7 @@ export function SessionTabBar({
               className="session-tab-close"
               onClick={(e) => {
                 e.stopPropagation();
-                onCloseSession(s.bonsaiSid);
+                onCloseSession(s.thinkrailSid);
               }}
             >
               <X size={12} strokeWidth={1.5} />

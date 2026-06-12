@@ -79,9 +79,9 @@ If analyzing the full project, use `Write` to create a `DESIGN_DOC.md` skeleton 
 
 ## High-Level Architecture
 
-{Generate architecture diagram using `bonsai_visualize` `diagram` type — do NOT put ASCII art here}
+{Generate architecture diagram using `thinkrail_visualize` `diagram` type — do NOT put ASCII art here}
 
-[Architecture diagram rendered via bonsai_visualize in chat]
+[Architecture diagram rendered via thinkrail_visualize in chat]
 
 ---
 

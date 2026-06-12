@@ -106,7 +106,7 @@ class RuntimeSkillInfo(BaseModel):
 
     model_config = ConfigDict(alias_generator=to_camel, populate_by_name=True, frozen=True)
 
-    id: str  # e.g. "review", "specdriven:ticket-specify"
+    id: str  # e.g. "review", "thinkrail:ticket-specify"
     name: str  # human-readable name (defaults to id)
     description: str  # short one-liner
     source: str  # "user" | "project" | "plugin" | "command" | "builtin"

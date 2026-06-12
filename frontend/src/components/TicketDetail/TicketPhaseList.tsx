@@ -132,7 +132,7 @@ interface Props {
   sessionTodoState: Map<string, SessionTodoSnapshot>;
   onStartSession: (skillId: string, opts?: { previewPath?: string }) => void;
   onSelectPanel: (panel: PhaseListEmit) => void;
-  onScrollSessionToEvent: (bonsaiSid: string, eventIndex: number) => void;
+  onScrollSessionToEvent: (thinkrailSid: string, eventIndex: number) => void;
 }
 
 const LABELS_BY_ARTIFACT: Record<ArtifactKind, string> = {

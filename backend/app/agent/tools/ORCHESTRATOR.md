@@ -88,7 +88,7 @@ graph TD
 ## Suggest Step Tool
 
 **Tool name:** `suggest_step`
-**MCP server:** `bonsai-orchestrator` (or added to `bonsai-proactive`)
+**MCP server:** `thinkrail-orchestrator` (or added to `thinkrail-proactive`)
 **Pattern:** Interactive tool — validates, sends card, suspends on Future, returns on response
 
 ### Schema
@@ -132,7 +132,7 @@ sequenceDiagram
     Tool->>Plan: read_plan(ticketId)
     Tool->>Tool: validate step exists
     Tool->>Tool: validate dependencies done
-    Tool->>Future: register_future(bonsaiSid, requestId)
+    Tool->>Future: register_future(thinkrailSid, requestId)
     Tool->>Notify: notify("agent/suggestStep", payload, requestId)
     Notify->>UI: Interactive card shown
 
@@ -162,7 +162,7 @@ Validation failures return MCP `isError` responses — no card is shown.
 ```typescript
 // agent/suggestStep notification
 {
-  bonsaiSid: string;       // orchestrator session ID
+  thinkrailSid: string;       // orchestrator session ID
   ticketId: string;
   stepNumber: number;
   stepTitle: string;
@@ -187,14 +187,14 @@ async def _notify_orchestrator_on_step_complete(self, task: AgentTask) -> None:
     # 2. Load ticket, find orchestrator session
     ticket = self.board_service.get_ticket(task.meta_ticket_id)
     orch_sid = ticket.orchestrator_session_id
-    if not orch_sid or orch_sid == task.bonsai_sid:
+    if not orch_sid or orch_sid == task.thinkrail_sid:
         return  # Don't notify self
 
     # 3. Update plan step status matching this session
     if ticket.plan_path and self.board_service.plans.plan_exists(task.meta_ticket_id):
         plan = self.board_service.plans.read_plan(task.meta_ticket_id)
         for step in plan.all_steps():
-            if step.session_id == task.bonsai_sid:
+            if step.session_id == task.thinkrail_sid:
                 new_status = "done" if task.status == "done" else "failed"
                 self.board_service.plans.update_step_status(
                     task.meta_ticket_id, step.number, new_status,
@@ -204,7 +204,7 @@ async def _notify_orchestrator_on_step_complete(self, task: AgentTask) -> None:
     # 4. Inject message into orchestrator session
     if self._tracker.has_task(orch_sid):
         status_word = "completed successfully" if task.status == "done" else f"ended with status: {task.status}"
-        msg = f"[Step session {task.name or task.bonsai_sid[:8]} {status_word}]"
+        msg = f"[Step session {task.name or task.thinkrail_sid[:8]} {status_word}]"
         self._tracker.enqueue_message(orch_sid, msg)
 ```
 
@@ -257,10 +257,10 @@ Sessions are automatically registered as orchestrators based on their name prefi
 
 ```python
 if meta_ticket_id and self.board_service:
-    self.board_service.attach_session(meta_ticket_id, task.bonsai_sid)
+    self.board_service.attach_session(meta_ticket_id, task.thinkrail_sid)
     ticket = self.board_service.get_ticket(meta_ticket_id)
     if ticket.plan_path and (name.startswith("Execute:") or name.startswith("Orchestrate:")):
-        self.board_service.set_orchestrator(meta_ticket_id, task.bonsai_sid)
+        self.board_service.set_orchestrator(meta_ticket_id, task.thinkrail_sid)
 ```
 
 | Session Name | Orchestrator? | Auto-Transition |
@@ -289,7 +289,7 @@ Four skills in `claude-plugin/skills/` map to the ticket lifecycle stages. Each 
 |-------|-----------|--------|
 | `ticket-describe` | File read, project analysis | Updates ticket body via description |
 | `ticket-specify` | `Write`/`Edit` tools (with frontmatter) | Creates spec files with frontmatter; watcher handles indexing automatically |
-| `ticket-plan` | `board/createPlan` (via spec tools or direct) | Creates `.bonsai/plans/{id}.md` |
+| `ticket-plan` | `board/createPlan` (via spec tools or direct) | Creates `.tr/plans/{id}.md` |
 | `ticket-execute` | `suggest_step`, delegates to step sessions | Orchestrates full plan execution |
 
 ## Design Decisions

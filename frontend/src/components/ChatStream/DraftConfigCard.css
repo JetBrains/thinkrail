@@ -165,6 +165,12 @@
   color: var(--muted);
   font-size: var(--font-sm);
 }
+/* Borderless dropdown trigger — matches the session status-line style. */
+.draft-config-dd {
+  border: none;
+  color: var(--muted);
+  padding: 1px 4px;
+}
 .draft-config-select {
   background: var(--panel);
   color: var(--text);

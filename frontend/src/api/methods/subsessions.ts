@@ -3,26 +3,26 @@ import type { RpcClient } from "../client.ts";
 export function createSubsessionApi(client: RpcClient) {
   return {
     create: (params: {
-      parentBonsaiSid: string;
+      parentThinkrailSid: string;
       type: "discussion" | "refinement";
       context?: string;
       name?: string;
-    }) => client.request<{ bonsaiSid: string }>("subsession/create", params),
+    }) => client.request<{ thinkrailSid: string }>("subsession/create", params),
 
-    requestSummary: (bonsaiSid: string) =>
-      client.request<{ ok: true }>("subsession/requestSummary", { bonsaiSid }),
+    requestSummary: (thinkrailSid: string) =>
+      client.request<{ ok: true }>("subsession/requestSummary", { thinkrailSid }),
 
-    approveSummary: (bonsaiSid: string, text: string) =>
-      client.request<{ ok: true }>("subsession/approveSummary", { bonsaiSid, text }),
+    approveSummary: (thinkrailSid: string, text: string) =>
+      client.request<{ ok: true }>("subsession/approveSummary", { thinkrailSid, text }),
 
-    dismissSummary: (bonsaiSid: string) =>
-      client.request<{ ok: true }>("subsession/dismissSummary", { bonsaiSid }),
+    dismissSummary: (thinkrailSid: string) =>
+      client.request<{ ok: true }>("subsession/dismissSummary", { thinkrailSid }),
 
-    reviseSummary: (bonsaiSid: string, feedback: string) =>
-      client.request<{ ok: true }>("subsession/reviseSummary", { bonsaiSid, feedback }),
+    reviseSummary: (thinkrailSid: string, feedback: string) =>
+      client.request<{ ok: true }>("subsession/reviseSummary", { thinkrailSid, feedback }),
 
-    listChildren: (parentBonsaiSid: string) =>
-      client.request<{ children: unknown[] }>("subsession/listChildren", { parentBonsaiSid }),
+    listChildren: (parentThinkrailSid: string) =>
+      client.request<{ children: unknown[] }>("subsession/listChildren", { parentThinkrailSid }),
   };
 }
 

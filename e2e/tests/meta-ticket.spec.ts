@@ -96,7 +96,7 @@ test.describe("MetaTicketDetail", () => {
     // The ticket file on disk reflects the new body.
     const ticketPath = join(
       tempProject.path,
-      ".bonsai",
+      ".tr",
       "tickets",
       ticketId,
       "ticket.json",

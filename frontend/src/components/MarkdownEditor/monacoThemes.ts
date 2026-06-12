@@ -1,11 +1,9 @@
 import type { editor } from "monaco-editor";
+import { APP_SLUG } from "@/constants/branding.ts";
 
 /**
- * Monaco theme definitions for each Bonsai theme.
- *
- * Editor colors are derived from the CSS variables in styles/theme-dark.css,
- * styles/theme-light.css, and styles/themes.css. Token rules are shared
- * across dark and light variants (with adjusted foreground colors for light).
+ * Monaco editor color definitions. The app uses a single dark palette
+ * (see useMonacoTheme); colors mirror the semantic tokens in styles/tokens.css.
  */
 
 const DARK_TOKEN_RULES: editor.ITokenThemeRule[] = [
@@ -68,7 +66,7 @@ const LIGHT_TOKEN_RULES: editor.ITokenThemeRule[] = [
   { token: "constant", foreground: "0033B3" },
 ];
 
-/** Helper to build a dark theme definition from Bonsai CSS variable colors. */
+/** Helper to build a dark theme definition from ThinkRail CSS variable colors. */
 function darkTheme(
   bg: string, panel: string, text: string, border: string,
   sel: string, hint: string, _muted: string,
@@ -170,4 +168,4 @@ export const MONACO_THEMES: Record<string, editor.IStandaloneThemeData> = {
 };
 
 /** Monaco theme name prefix used for registration. */
-export const MONACO_THEME_PREFIX = "bonsai-";
+export const MONACO_THEME_PREFIX = `${APP_SLUG}-`;

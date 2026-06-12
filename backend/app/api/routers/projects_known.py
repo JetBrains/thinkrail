@@ -1,6 +1,6 @@
 """REST endpoints for the known-projects registry.
 
-Bonsai is single-user and localhost-only — these endpoints are
+ThinkRail is single-user and localhost-only — these endpoints are
 tokenless. They expose the ``AppStore`` known-projects table for the
 frontend ProjectPicker. There is no per-user view; all clients see the
 same global registry.

@@ -22,7 +22,7 @@ const meta = {
     title: "Describe Your Project",
     subtitle: (
       <>
-        Bonsai will help shape your idea into a clear<br />
+        ThinkRail will help shape your idea into a clear<br />
         Goal &amp; Requirements document.
       </>
     ),

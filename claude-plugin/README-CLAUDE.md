@@ -1,16 +1,16 @@
-# Bonsai - Claude Code Plugin for Spec-Driven Development
+# ThinkRail - Claude Code Plugin for Spec-Driven Development
 
 ## Project Type and Context
 - **Type**: VSCode extension plugin for Claude Code
 - **Purpose**: Implement spec-driven development workflow through interactive commands
-- **Main Commands**: `/bonsai:design` and `/bonsai:implement`
-- **Specification Storage**: All specs stored in `<project_root>/bonsai/` directory
+- **Main Commands**: `/thinkrail:design` and `/thinkrail:implement`
+- **Specification Storage**: All specs stored in `<project_root>/thinkrail/` directory
 
 ## Core Workflow Overview
 
 The plugin implements a 2-phase development approach:
 
-### Phase 1: Design (`/bonsai:design`)
+### Phase 1: Design (`/thinkrail:design`)
 
 Interactive specification creation through 4 structured steps:
 
@@ -19,22 +19,22 @@ Interactive specification creation through 4 structured steps:
 3. **Design Review** - Self-criticism and improvement suggestions
 4. **Plan** - Generate implementation plan
 
-### Phase 2: Implementation (`/bonsai:implement`)
+### Phase 2: Implementation (`/thinkrail:implement`)
 Structured implementation following generated specifications and plans.
 
 ---
 
 ## Detailed Command Workflows
 
-### `/bonsai:design` - Specification Creation
+### `/thinkrail:design` - Specification Creation
 
 This command guides users through creating hierarchical system specifications.
 
 #### Progress Tracking During Design
 
-The `/bonsai:design` command maintains a progress tracking file to show current status and completed steps.
+The `/thinkrail:design` command maintains a progress tracking file to show current status and completed steps.
 
-**Progress File**: `bonsai/.design-progress.md`
+**Progress File**: `thinkrail/.design-progress.md`
 
 **Progress Format**:
 ```markdown
@@ -47,7 +47,7 @@ The `/bonsai:design` command maintains a progress tracking file to show current 
 
 ## Step 1: Init ✓
 - Status: Completed
-- Requirements file: bonsai/requirements.md
+- Requirements file: thinkrail/requirements.md
 - Technology stack: Confirmed
 - Completed: 2026-01-28 14:45
 
@@ -57,9 +57,9 @@ The `/bonsai:design` command maintains a progress tracking file to show current 
 - Specifications created: 3/5
 
 ### Component Status:
-- [✓] backend-services (bonsai/backend-services.md)
-- [✓] data-model (bonsai/data-model.md)
-- [○] api-gateway (bonsai/backend-services/api-gateway.md) - In progress
+- [✓] backend-services (thinkrail/backend-services.md)
+- [✓] data-model (thinkrail/data-model.md)
+- [○] api-gateway (thinkrail/backend-services/api-gateway.md) - In progress
 - [ ] frontend-app
 - [ ] testing-framework
 
@@ -86,7 +86,7 @@ The `/bonsai:design` command maintains a progress tracking file to show current 
 - `[×]` - Blocked/Failed (with reason)
 
 **Update Rules**:
-1. Create `.design-progress.md` when `/bonsai:design` starts
+1. Create `.design-progress.md` when `/thinkrail:design` starts
 2. Update after each significant action (completing step, creating spec, etc.)
 3. Show current component being worked on
 4. Track percentage completion for multi-component steps
@@ -97,10 +97,10 @@ The `/bonsai:design` command maintains a progress tracking file to show current 
 
 - **Step transitions**: "Starting Step 2: Core Design"
 - **Progress references**: "Completing Step 1 (Init)..."
-- **Milestone completions**: "✓ Step 1 Complete: Requirements saved to bonsai/requirements.md"
+- **Milestone completions**: "✓ Step 1 Complete: Requirements saved to thinkrail/requirements.md"
 - **Multi-step progress**: "Designing component 3 of 5: api-gateway"
 - **Component progress**: "[○] Creating specification for api-gateway..."
-- **Component completion**: "✓ api-gateway specification saved to bonsai/backend-services/api-gateway.md"
+- **Component completion**: "✓ api-gateway specification saved to thinkrail/backend-services/api-gateway.md"
 - **Percentage updates**: "Core Design: 60% complete (3/5 components)"
 - **Next action hints**: "Next: Designing frontend-app component"
 
@@ -111,7 +111,7 @@ Agent: Starting Step 1: Init - Initial Requirements Alignment
 
 [asks questions...]
 
-Agent: ✓ Step 1 Complete: Requirements saved to bonsai/requirements.md
+Agent: ✓ Step 1 Complete: Requirements saved to thinkrail/requirements.md
        Starting Step 2: Core Design (5 components identified)
 
 Agent: Creating specification 1/5: backend-services
@@ -140,7 +140,7 @@ Agent: ✓ backend-services specification complete
    - Target users and scale
 2. Only ask questions when necessary - don't ask if the answer is obvious from context
 3. Create summary of agreed requirements
-4. Save requirements to structured YAML/Markdown file in `bonsai/` directory
+4. Save requirements to structured YAML/Markdown file in `thinkrail/` directory
 5. **Update progress**: Mark Step 1 as complete with checkmark and timestamp
 
 **Example Interaction**:
@@ -153,7 +153,7 @@ Agent: Asks about expected user count
 [... clarifying questions ...]
 Agent: Presents summary for confirmation
 User: "ok"
-Agent: Saves to bonsai/requirements.md or similar
+Agent: Saves to thinkrail/requirements.md or similar
 ```
 
 #### Step 2: Verify and Adjust Core Design
@@ -171,7 +171,7 @@ Agent: Saves to bonsai/requirements.md or similar
 
 **Output Structure**:
 
-- Top-level: `bonsai/MAIN.md` - High-level system architecture
+- Top-level: `thinkrail/MAIN.md` - High-level system architecture
 - Component specs: Individual markdown files with explicit links to parent specs
 - Hierarchical organization using compound specs (see below)
 
@@ -197,7 +197,7 @@ Agent: Saves to bonsai/requirements.md or similar
 
 **Example Structure**:
 ```
-bonsai/
+thinkrail/
 ├── MAIN.md                    # Top-level architecture
 ├── server/
 │   ├── server.md             # Server component spec (parent)
@@ -271,7 +271,7 @@ Proceed with current design, or would you like to address any concerns?
 - Mark complete when PLAN.md is saved
 - **Final update**: Mark entire design phase as complete, show summary
 
-**Output**: `bonsai/PLAN.md` file with structured implementation steps.
+**Output**: `thinkrail/PLAN.md` file with structured implementation steps.
 
 **Plan Format**:
 
@@ -295,7 +295,7 @@ Proceed with current design, or would you like to address any concerns?
    - File paths to be created/modified
    - Testing requirements
    - Acceptance criteria
-5. Save PLAN.md to `bonsai/PLAN.md`
+5. Save PLAN.md to `thinkrail/PLAN.md`
 6. **Update progress**: Mark Step 4 complete
 7. **Finalize**: Update `.design-progress.md` to show design phase completion:
 
@@ -347,7 +347,7 @@ Here's how `.design-progress.md` evolves during a full design session:
 
 ## Step 1: Init ✓
 - Status: Completed
-- Requirements file: bonsai/requirements.md
+- Requirements file: thinkrail/requirements.md
 - Technology stack: Node.js, Express, React, PostgreSQL
 - Completed: 2026-01-28 14:42
 
@@ -383,7 +383,7 @@ Here's how `.design-progress.md` evolves during a full design session:
 
 ## Step 1: Init ✓
 - Status: Completed
-- Requirements file: bonsai/requirements.md
+- Requirements file: thinkrail/requirements.md
 - Technology stack: Node.js, Express, React, PostgreSQL
 - Completed: 2026-01-28 14:42
 
@@ -394,9 +394,9 @@ Here's how `.design-progress.md` evolves during a full design session:
 - Started: 2026-01-28 14:42
 
 ### Component Status:
-- [✓] backend-api (bonsai/backend-api.md) - Completed 14:50
-- [✓] database-schema (bonsai/database-schema.md) - Completed 14:55
-- [○] frontend-ui (bonsai/frontend-ui.md) - In progress
+- [✓] backend-api (thinkrail/backend-api.md) - Completed 14:50
+- [✓] database-schema (thinkrail/database-schema.md) - Completed 14:55
+- [○] frontend-ui (thinkrail/frontend-ui.md) - In progress
 
 ## Step 3: Design Review
 - Status: Pending
@@ -423,7 +423,7 @@ Here's how `.design-progress.md` evolves during a full design session:
 - Components Designed: 3/3
 
 ## Step 1: Init ✓
-- Requirements file: bonsai/requirements.md
+- Requirements file: thinkrail/requirements.md
 - Technology stack: Node.js, Express, React, PostgreSQL
 - Completed: 2026-01-28 14:42
 
@@ -432,9 +432,9 @@ Here's how `.design-progress.md` evolves during a full design session:
 - Completed: 2026-01-28 15:05
 
 ### Components:
-- [✓] backend-api (bonsai/backend-api.md)
-- [✓] database-schema (bonsai/database-schema.md)
-- [✓] frontend-ui (bonsai/frontend-ui.md)
+- [✓] backend-api (thinkrail/backend-api.md)
+- [✓] database-schema (thinkrail/database-schema.md)
+- [✓] frontend-ui (thinkrail/frontend-ui.md)
 
 ## Step 3: Design Review [IN PROGRESS]
 - Status: In Progress
@@ -463,7 +463,7 @@ Here's how `.design-progress.md` evolves during a full design session:
 - Components Designed: 3
 
 ## Step 1: Init ✓
-- Requirements file: bonsai/requirements.md
+- Requirements file: thinkrail/requirements.md
 - Completed: 2026-01-28 14:42
 
 ## Step 2: Core Design ✓
@@ -471,9 +471,9 @@ Here's how `.design-progress.md` evolves during a full design session:
 - Completed: 2026-01-28 15:05
 
 ### Components:
-- [✓] backend-api (bonsai/backend-api.md)
-- [✓] database-schema (bonsai/database-schema.md)
-- [✓] frontend-ui (bonsai/frontend-ui.md)
+- [✓] backend-api (thinkrail/backend-api.md)
+- [✓] database-schema (thinkrail/database-schema.md)
+- [✓] frontend-ui (thinkrail/frontend-ui.md)
 
 ## Step 3: Design Review ✓
 - Review completed: No major concerns
@@ -481,24 +481,24 @@ Here's how `.design-progress.md` evolves during a full design session:
 - Completed: 2026-01-28 15:10
 
 ## Step 4: Plan ✓
-- Plan file: bonsai/PLAN.md
+- Plan file: thinkrail/PLAN.md
 - Implementation tasks: 12
 - Completed: 2026-01-28 15:20
 
 ## Ready for Implementation
-Run `/bonsai:implement` to begin implementation phase.
+Run `/thinkrail:implement` to begin implementation phase.
 ```
 
 ---
 
-### `/bonsai:implement` - Implementation Execution
+### `/thinkrail:implement` - Implementation Execution
 
 #### Step 4: Implement
 
 **Goal**: Follow the plan while keeping specifications and plan up-to-date.
 
 **Process**:
-1. Follow steps from `bonsai/PLAN.md`
+1. Follow steps from `thinkrail/PLAN.md`
 2. Update `PLAN.md` with progress markers:
    - `[v]` - Done
    - `[o]` - Ongoing
@@ -506,7 +506,7 @@ Run `/bonsai:implement` to begin implementation phase.
    - `[x]` - Failed
 3. Show progress in Claude Code interface (status bar if possible)
 4. If issues arise or requirements change:
-   - **Option A**: If specs need updating → return to `/bonsai:design` Step 2
+   - **Option A**: If specs need updating → return to `/thinkrail:design` Step 2
    - **Option B**: If specs are current → update PLAN.md and continue
 
 **Key Rule**: Keep PLAN.md synchronized with actual progress at all times.
@@ -527,9 +527,9 @@ Run `/bonsai:implement` to begin implementation phase.
 
 ### Resuming Interrupted Design Sessions
 
-If a `/bonsai:design` session is interrupted, the agent should:
+If a `/thinkrail:design` session is interrupted, the agent should:
 
-1. **Check for existing progress file**: Read `bonsai/.design-progress.md`
+1. **Check for existing progress file**: Read `thinkrail/.design-progress.md`
 2. **Identify last completed step**: Look for `✓` markers and `[IN PROGRESS]` status
 3. **Resume from interruption point**:
    - If Step 1 incomplete: Restart Step 1
@@ -553,9 +553,9 @@ When user requests changes during design:
 
 ```markdown
 ### Component Status:
-- [✓] backend-api (bonsai/backend-api.md) - Completed 14:50
-- [○] database-schema (bonsai/database-schema.md) - Updating 15:20 (was ✓ 14:55)
-- [✓] frontend-ui (bonsai/frontend-ui.md) - Completed 15:05
+- [✓] backend-api (thinkrail/backend-api.md) - Completed 14:50
+- [○] database-schema (thinkrail/database-schema.md) - Updating 15:20 (was ✓ 14:55)
+- [✓] frontend-ui (thinkrail/frontend-ui.md) - Completed 15:05
 
 ## Change Log:
 - 15:20: Updating database-schema per user request (add caching layer)
@@ -568,9 +568,9 @@ Use `[×]` marker for blocked or failed tasks:
 
 ```markdown
 ### Component Status:
-- [✓] backend-api (bonsai/backend-api.md)
+- [✓] backend-api (thinkrail/backend-api.md)
 - [×] payment-service - BLOCKED: Waiting for payment provider API docs
-- [○] frontend-ui (bonsai/frontend-ui.md) - In progress
+- [○] frontend-ui (thinkrail/frontend-ui.md) - In progress
 ```
 
 When blocked:
@@ -590,7 +590,7 @@ When blocked:
 
 **Example 1 - Simple Hierarchy**:
 ```
-.bonsai/
+.tr/
 ├── backend-services.md        # Parent spec
 └── backend-services/          # Child specs directory
     ├── user-service.md
@@ -600,7 +600,7 @@ When blocked:
 
 **Example 2 - Multi-Level Hierarchy**:
 ```
-.bonsai/
+.tr/
 ├── e-commerce-platform.md     # Root
 ├── e-commerce-platform/
 │   ├── frontend.md            # Child & parent
@@ -616,7 +616,7 @@ When blocked:
 
 **Example 3 - Grouping Without Parents**:
 ```
-.bonsai/
+.tr/
 ├── services/                  # Directory for organization only
 │   ├── user-service.md
 │   └── auth-service.md
@@ -641,40 +641,40 @@ Each specification markdown file should include:
 - **Iterative**: Start high-level, drill down as needed
 - **Flexible**: Simple specs can become compound specs by adding child directory
 - **Connected**: Use relative paths to show relationships
-- **Discoverable**: Agent should explore existing `.bonsai/` to learn conventions
+- **Discoverable**: Agent should explore existing `.tr/` to learn conventions
 - **Adaptive**: Match existing format if specs already exist
 
 ---
 
 ## Command Usage Examples
 
-### `/bonsai:design` Examples
+### `/thinkrail:design` Examples
 
 ```bash
 # Start with high-level purpose
-/bonsai:design build a user authentication system with social login
+/thinkrail:design build a user authentication system with social login
 
 # Start with project goal
-/bonsai:design create a real-time chat application
+/thinkrail:design create a real-time chat application
 
 # Game example
-/bonsai:design cli-based football manager simulator
+/thinkrail:design cli-based football manager simulator
 
 # Complex application
-/bonsai:design application that examines TweedeKamer laws weekly, summarizes them in English, and generates video podcast
+/thinkrail:design application that examines TweedeKamer laws weekly, summarizes them in English, and generates video podcast
 
 # Specific component
-/bonsai:design user-authentication-service
+/thinkrail:design user-authentication-service
 
 # Interactive mode
-/bonsai:design
+/thinkrail:design
 ```
 
 ---
 
 ## Complete Walkthrough Example: Ping-Pong Server
 
-Here's a detailed example of the `/bonsai:design` workflow for a simple client-server ping-pong application.
+Here's a detailed example of the `/thinkrail:design` workflow for a simple client-server ping-pong application.
 
 **User Request**: "Design a simple client-server ping-pong project in Kotlin using Ktor with simple authorization"
 
@@ -703,7 +703,7 @@ Let me clarify the requirements for your ping-pong application:
 
 **Agent**: Perfect. Here's the requirements summary:
 
-**Requirements Summary** (`bonsai/requirements.md`):
+**Requirements Summary** (`thinkrail/requirements.md`):
 ```yaml
 project_name: ping-pong-server
 description: Client-server ping-pong game with authorization
@@ -729,7 +729,7 @@ scale:
   deployment: Single server instance
 ```
 
-✓ Step 1 Complete: Requirements saved to bonsai/requirements.md
+✓ Step 1 Complete: Requirements saved to thinkrail/requirements.md
 
 ### Step 2: Core Design - Component Specifications
 
@@ -743,7 +743,7 @@ Based on the requirements, I've identified these components:
 
 Creating specification 1/4: Server API [○]
 
-**Server API Specification** (`bonsai/server-api.md`):
+**Server API Specification** (`thinkrail/server-api.md`):
 ```markdown
 # Server API Component
 
@@ -778,7 +778,7 @@ Next: authentication-module component
 
 **Agent**: Creating specification 2/4: Authentication Module [○]
 
-**Authentication Module Specification** (`bonsai/authentication-module.md`):
+**Authentication Module Specification** (`thinkrail/authentication-module.md`):
 ```markdown
 # Authentication Module
 
@@ -816,7 +816,7 @@ Core Design: 50% complete (2/4 components)
 
 **Agent**: Creating specification 3/4: Database Schema [○]
 
-**Database Schema Specification** (`bonsai/database-schema.md`):
+**Database Schema Specification** (`thinkrail/database-schema.md`):
 ```markdown
 # Database Schema
 
@@ -870,7 +870,7 @@ Core Design: 75% complete (3/4 components)
 
 **Agent**: Creating specification 4/4: CLI Client [○]
 
-**CLI Client Specification** (`bonsai/cli-client.md`):
+**CLI Client Specification** (`thinkrail/cli-client.md`):
 ```markdown
 # CLI Client
 
@@ -962,7 +962,7 @@ Proceed with current design, or would you like to address any concerns?
 
 **Agent**: Starting Step 4: Plan
 
-**Implementation Plan** (`bonsai/PLAN.md`):
+**Implementation Plan** (`thinkrail/PLAN.md`):
 
 ```markdown
 # Implementation Plan: Ping-Pong Server
@@ -1051,7 +1051,7 @@ Proceed with current design, or would you like to address any concerns?
 - Tests pass with >80% coverage
 ```
 
-✓ Step 4 Complete: Implementation plan saved to bonsai/PLAN.md
+✓ Step 4 Complete: Implementation plan saved to thinkrail/PLAN.md
 
 **Final Summary:**
 
@@ -1059,13 +1059,13 @@ Proceed with current design, or would you like to address any concerns?
 
 All 4 steps completed. Ready for implementation phase.
 
-**Next Command**: `/bonsai:implement` to begin implementation
+**Next Command**: `/thinkrail:implement` to begin implementation
 
 ---
 
 ## Multi-Component Design Workflow Example
 
-The `/bonsai:design` command supports designing multiple related components in a single session:
+The `/thinkrail:design` command supports designing multiple related components in a single session:
 
 1. **Purpose**: "build a blog platform with comments"
 2. **Component Identification**:
@@ -1082,9 +1082,9 @@ The `/bonsai:design` command supports designing multiple related components in a
 
 ## Implementation Notes for Agent
 
-### When Implementing `/bonsai:design`:
+### When Implementing `/thinkrail:design`:
 
-1. **Always check** for existing specs in `bonsai/` to learn conventions
+1. **Always check** for existing specs in `thinkrail/` to learn conventions
 2. **Check for existing progress file** on session start - resume if found
 3. **Create `.design-progress.md`** at the start of new design session
 4. **Update progress file** after each significant action:
@@ -1140,14 +1140,14 @@ The `/bonsai:design` command supports designing multiple related components in a
 **Example Pattern**:
 
 ```text
-Agent: ✓ backend-api specification saved to bonsai/backend-api.md
+Agent: ✓ backend-api specification saved to thinkrail/backend-api.md
        Core Design: 33% complete (1/3 components)
 
        Now creating database-schema specification [○]
        [asks questions about database design...]
 ```
 
-### When Implementing `/bonsai:implement`:
+### When Implementing `/thinkrail:implement`:
 
 1. **Read PLAN.md first** to understand implementation steps
 2. **Update PLAN.md** after completing each step
@@ -1158,16 +1158,16 @@ Agent: ✓ backend-api specification saved to bonsai/backend-api.md
 
 ### File Locations
 
-- **Requirements**: `bonsai/requirements.md` (or similar)
-- **Main Architecture**: `bonsai/MAIN.md`
-- **Implementation Plan**: `bonsai/PLAN.md`
-- **Progress Tracking**: `bonsai/.design-progress.md`
-- **Visualization**: `bonsai/graph.html` (auto-generated)
-- **Component Specs**: `bonsai/<component-name>.md` or `bonsai/<category>/<component-name>.md`
+- **Requirements**: `thinkrail/requirements.md` (or similar)
+- **Main Architecture**: `thinkrail/MAIN.md`
+- **Implementation Plan**: `thinkrail/PLAN.md`
+- **Progress Tracking**: `thinkrail/.design-progress.md`
+- **Visualization**: `thinkrail/graph.html` (auto-generated)
+- **Component Specs**: `thinkrail/<component-name>.md` or `thinkrail/<category>/<component-name>.md`
 
 ### Directory Structure
 
-The `bonsai/` directory should be created in the project root and can be:
+The `thinkrail/` directory should be created in the project root and can be:
 - Committed to version control for team collaboration
 - Added to `.gitignore` for local-only specifications
 
@@ -1175,14 +1175,14 @@ The `bonsai/` directory should be created in the project root and can be:
 
 ## Interactive Visualization
 
-Bonsai includes an **auto-updating interactive graph visualization** that shows the relationships between all design components in real-time.
+ThinkRail includes an **auto-updating interactive graph visualization** that shows the relationships between all design components in real-time.
 
 ### How It Works
 
 The visualization uses a **hooks-based approach** that automatically regenerates a static HTML file whenever specs are created or modified:
 
 1. **Agent creates spec** → Hook triggers
-2. **Generator scans `bonsai/`** → Parses all markdown files
+2. **Generator scans `thinkrail/`** → Parses all markdown files
 3. **Builds graph data** → Extracts dependencies from markdown links
 4. **Generates HTML** → Self-contained file with embedded Cytoscape.js
 5. **Browser auto-refreshes** → Shows updated graph
@@ -1208,9 +1208,9 @@ The visualization uses a **hooks-based approach** that automatically regenerates
    {
      "hooks": {
        "PostToolUse": [{
-         "name": "bonsai-visualizer",
+         "name": "thinkrail-visualizer",
          "tool": "write_file",
-         "condition": "path.includes('bonsai/') && path.endsWith('.md')",
+         "condition": "path.includes('thinkrail/') && path.endsWith('.md')",
          "command": "node visualizer/dist/generate-graph.js"
        }]
      }
@@ -1220,10 +1220,10 @@ The visualization uses a **hooks-based approach** that automatically regenerates
 3. **Open visualization:**
    ```bash
    # Option 1: Direct open (with meta refresh)
-   open bonsai/graph.html
+   open thinkrail/graph.html
 
    # Option 2: LiveServer (recommended - instant refresh)
-   npx live-server bonsai --port=8000 --entry-file=graph.html
+   npx live-server thinkrail --port=8000 --entry-file=graph.html
    ```
 
 ### Features
@@ -1246,7 +1246,7 @@ The visualization uses a **hooks-based approach** that automatically regenerates
 
 ### During Design Session
 
-As you run `/bonsai:design`, the graph automatically updates:
+As you run `/thinkrail:design`, the graph automatically updates:
 
 ```
 Agent: Creating specification 1/4: Server API [○]
@@ -1291,8 +1291,8 @@ Agent: Creating specification 2/4: Authentication Module [○]
 ## Project Status
 
 This is a VSCode extension plugin for Claude Code. The plugin should:
-- Register custom commands (`/bonsai:design`, `/bonsai:implement`)
+- Register custom commands (`/thinkrail:design`, `/thinkrail:implement`)
 - Provide interactive multi-step workflows
-- Manage specification files in `.bonsai/` directory
+- Manage specification files in `.tr/` directory
 - Integrate with Claude Code's interface for progress display
 - Support iterative refinement of specifications

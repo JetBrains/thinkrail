@@ -6,6 +6,7 @@ import { QuestionTabBar } from "./QuestionTabBar.tsx";
 import { QuestionOptionsPanel } from "./QuestionOptionsPanel.tsx";
 import { QuestionPreviewPanel } from "./QuestionPreviewPanel.tsx";
 import { ChatMarkdown } from "./ChatMarkdown.tsx";
+import { PRODUCT_NAME } from "@/constants/branding";
 
 interface QuestionCardProps {
   questions: Question[];
@@ -284,7 +285,7 @@ export function QuestionCard({
     );
   }
 
-  // Answered state \u2014 render as ordinary Bonsai/You message bubbles so
+  // Answered state \u2014 render as ordinary ThinkRail/You message bubbles so
   // the resolved Q&A flows naturally with the rest of the dialog.  Only
   // the pending (unanswered) state shows the structured options card.
   if (answered && (selectedAnswers || interrupted)) {
@@ -295,9 +296,9 @@ export function QuestionCard({
         {questions.map((q) => (
           <div key={q.question} className="chat-qa-pair">
             <div className="chat-assistant">
-              <div className="msg-avatar msg-avatar-assistant" aria-hidden="true">B</div>
+              <div className="msg-avatar msg-avatar-assistant" aria-hidden="true">T</div>
               <div className="msg-content">
-                <div className="msg-who">Bonsai</div>
+                <div className="msg-who">{PRODUCT_NAME}</div>
                 <div className="msg-bubble msg-bubble-assistant">
                   <ChatMarkdown content={questionMd(q)} />
                 </div>

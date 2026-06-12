@@ -1,4 +1,4 @@
-"""Project-level settings stored in ``.bonsai/settings.json``.
+"""Project-level settings stored in ``.tr/settings.json``.
 
 Provides load / save / ensure helpers and a Pydantic model describing the
 schema.  Unknown keys are preserved (``extra = "allow"``) so that future
@@ -12,10 +12,10 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
-from app.core.config import BONSAI_DIRNAME, SETTINGS_FILE
+from app.core.config import PROJECT_DIRNAME, SETTINGS_FILE
 from app.core.fileio import write_text
 
-SETTINGS_REL_PATH = f"{BONSAI_DIRNAME}/{SETTINGS_FILE}"
+SETTINGS_REL_PATH = f"{PROJECT_DIRNAME}/{SETTINGS_FILE}"
 
 
 SubagentFailurePolicy = Literal["fail-fast", "wait-all"]
@@ -40,7 +40,7 @@ class TicketsSettings(BaseModel, extra="allow"):
 
 
 class ProjectSettings(BaseModel, extra="allow"):
-    """Per-project settings stored in ``.bonsai/settings.json``."""
+    """Per-project settings stored in ``.tr/settings.json``."""
 
     event_view: str = "classic"
     # Font scale settings
@@ -60,7 +60,7 @@ def _settings_path(project_root: Path) -> Path:
 def load_settings(project_root: Path) -> ProjectSettings:
     """Return settings from disk, or defaults if the file is missing.
 
-    Read-only — never creates ``.bonsai/settings.json``.  Use
+    Read-only — never creates ``.tr/settings.json``.  Use
     :func:`ensure_settings_file` or :func:`save_settings` to materialize.
     """
     path = _settings_path(project_root)
@@ -84,8 +84,8 @@ def ensure_settings_file(project_root: Path) -> ProjectSettings:
     """Create the settings file with defaults if it doesn't exist yet."""
     from app.core.project import ensure_meta_file
 
-    bonsai_dir = project_root / BONSAI_DIRNAME
-    content = ensure_meta_file(bonsai_dir, SETTINGS_FILE)
+    thinkrail_dir = project_root / PROJECT_DIRNAME
+    content = ensure_meta_file(thinkrail_dir, SETTINGS_FILE)
     try:
         return ProjectSettings.model_validate_json(content)
     except Exception:

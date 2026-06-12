@@ -29,7 +29,7 @@ tags:
 
 ## Purpose
 
-The Spec module is the core domain layer of Bonsai. It owns all spec file operations — parsing YAML frontmatter and content from Markdown files, validating their structure, managing the SQLite index (`~/.bonsai/indexes/<project-hash>/index.db`, stored outside the repo in the server data directory), and building the hierarchy graph that maps parent-child and cross-reference relationships. Frontmatter in each spec file is the **sole source of truth**; the SQLite index is a generated cache. See [Frontmatter + SQLite Index Design](../../../.bonsai/design_docs/FRONTMATTER_REGISTRY_DESIGN.md) for the full architecture.
+The Spec module is the core domain layer of ThinkRail. It owns all spec file operations — parsing YAML frontmatter and content from Markdown files, validating their structure, managing the SQLite index (`~/.tr/indexes/<project-hash>/index.db`, stored outside the repo in the server data directory), and building the hierarchy graph that maps parent-child and cross-reference relationships. Frontmatter in each spec file is the **sole source of truth**; the SQLite index is a generated cache. See [Frontmatter + SQLite Index Design](../../../.tr/design_docs/FRONTMATTER_REGISTRY_DESIGN.md) for the full architecture.
 
 ## Internal Architecture
 
@@ -129,20 +129,20 @@ Read methods (`list_specs`, `get_graph`) return empty results when `index.is_rea
 | `get_spec` | `SpecDetail` | Spec not found, file missing on disk, `IndexNotReadyError` during init |
 | `create_spec` | `SpecDetail` | Path conflict, invalid type, duplicate ID, `IndexNotReadyError` during init |
 | `update_spec` | `SpecDetail` | Spec not found, validation failure |
-| `delete_spec` | `None` | Spec not found. File moved to `.bonsai/trash/specs/{id}/`. Dangling refs in other specs' frontmatter are cleaned. |
+| `delete_spec` | `None` | Spec not found. File moved to `.tr/trash/specs/{id}/`. Dangling refs in other specs' frontmatter are cleaned. |
 | `get_graph` | `SpecGraph` (includes `documents` list) | Index missing (triggers rebuild) |
 
 ## Design Decisions
 
 | Decision | Choice | Rationale |
 |----------|--------|-----------|
-| Metadata storage | YAML frontmatter in each spec file | Self-contained, git-friendly, no merge conflicts. [Full design](../../../.bonsai/design_docs/FRONTMATTER_REGISTRY_DESIGN.md) |
-| Index storage | Per-project SQLite (`~/.bonsai/indexes/<hash>/index.db`, outside repo) | Fast SQL queries, rebuildable from frontmatter. Replaces `registry.json`. |
+| Metadata storage | YAML frontmatter in each spec file | Self-contained, git-friendly, no merge conflicts. [Full design](../../../.tr/design_docs/FRONTMATTER_REGISTRY_DESIGN.md) |
+| Index storage | Per-project SQLite (`~/.tr/indexes/<hash>/index.db`, outside repo) | Fast SQL queries, rebuildable from frontmatter. Replaces `registry.json`. |
 | Graph storage | In-memory, rebuilt from SQLite on changes | Graph is derived from the index which mirrors frontmatter |
 | Internal pattern | Service facade | Simplicity — single entry point makes the module easy to test and reason about |
-| Document filtering | Built-in skip paths + `.bonsaihide` at index time | `.bonsai/` infrastructure dirs (trash, cache, sessions, plans) are never meaningful as unmanaged docs. Index-time filtering is consistent with `.bonsaihide`. Explicit list — new dirs require code change. |
+| Document filtering | Built-in skip paths + `.thinkrailhide` at index time | `.tr/` infrastructure dirs (trash, cache, sessions, plans) are never meaningful as unmanaged docs. Index-time filtering is consistent with `.thinkrailhide`. Explicit list — new dirs require code change. |
 | Index initialization | Single-pass `initialize()` replacing `open()` + `_ensure_schema()` + `ensure_ready()` | Eliminates fresh-DB bug where version was stamped before rebuild. One version check, one code path. |
-| bonsaihide filtering | `pathspec.PathSpec` (gitignore syntax) in `_find_md_files()` and `reindex_file()` | Unified with file tree sidebar. Patterns stored on `SpecIndex`, loaded from shared `core/bonsaihide` module. Applied on both full rebuild and incremental per-file reindex. `.bonsaihide` changes trigger a full rebuild. |
+| thinkrailhide filtering | `pathspec.PathSpec` (gitignore syntax) in `_find_md_files()` and `reindex_file()` | Unified with file tree sidebar. Patterns stored on `SpecIndex`, loaded from shared `core/thinkrailhide` module. Applied on both full rebuild and incremental per-file reindex. `.thinkrailhide` changes trigger a full rebuild. |
 
 ## Dependencies
 
@@ -154,15 +154,15 @@ Read methods (`list_specs`, `get_graph`) return empty results when `index.is_rea
 | `aiofiles` | Non-blocking file reads in index rebuild and reindex |
 | `trash/service` | Soft-delete for spec files (injected via `trash_service` attribute) |
 | `pydantic` | Model validation and serialization |
-| `pathspec` | gitignore-style pattern matching for `.bonsaihide` filtering in `_find_md_files()` |
-| `core/bonsaihide` | Shared `.bonsaihide` pattern loading (used by both file tree API and index rebuild) |
+| `pathspec` | gitignore-style pattern matching for `.thinkrailhide` filtering in `_find_md_files()` |
+| `core/thinkrailhide` | Shared `.thinkrailhide` pattern loading (used by both file tree API and index rebuild) |
 
 ## Known Limitations
 
 - **Incomplete feature support:** Spec diffing, merge conflict resolution, and bulk operations (move, rename with link updates) are not yet designed.
 - **Links are frontmatter-only:** Link management is done by editing frontmatter in spec files (by agents via `Edit` tool or by users directly). No dedicated RPC method for link CRUD — the watcher picks up changes.
 - **Index rebuild cost:** Full rebuild scans all `.md` files in the project. Incremental updates via content hashing mitigate this for normal operation, but first-clone rebuild may be slow for large projects. Rebuild uses a single atomic SQLite transaction (WAL mode), so readers see pre-rebuild data until the commit — no empty or partial states.
-- **Explicit document skip list:** Built-in skip paths for `.bonsai/` internal dirs are an explicit constant in `_find_md_files()`. New `.bonsai/` subdirs that produce `.md` files require manual addition to the list.
+- **Explicit document skip list:** Built-in skip paths for `.tr/` internal dirs are an explicit constant in `_find_md_files()`. New `.tr/` subdirs that produce `.md` files require manual addition to the list.
 
 ## Sub-modules
 

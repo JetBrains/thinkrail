@@ -13,7 +13,7 @@ test("opens an already-initialized project and shows the AppShell", async ({
   page,
   tempProject,
 }) => {
-  mkdirSync(join(tempProject.path, ".bonsai"), { recursive: true });
+  mkdirSync(join(tempProject.path, ".tr"), { recursive: true });
 
   await openProject(page, tempProject.path);
 

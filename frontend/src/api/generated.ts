@@ -58,7 +58,7 @@ export interface paths {
         };
         /**
          * List Projects
-         * @description List directories containing a .bonsai/ directory.
+         * @description List directories containing a project meta directory.
          */
         get: operations["list_projects_api_project_list_get"];
         put?: never;

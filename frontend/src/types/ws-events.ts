@@ -34,24 +34,24 @@ export type WsEvents =
   | ClearPreviewFileEvent
   | ArtifactAddedEvent
   | ArtifactLabeledEvent;
-export type Bonsaisid = string;
+export type Thinkrailsid = string;
 export type Sessionid = string;
 export type Eventtype = "sessionStart";
 export type Sessionid1 = string;
 export type Systemprompt = string;
 export type Inferencebudgettokens = number | null;
-export type Bonsaisid1 = string;
+export type Thinkrailsid1 = string;
 export type Sessionid2 = string;
 export type Eventtype1 = "textDelta";
 export type Text = string;
 export type Agentid = string | null;
-export type Bonsaisid2 = string;
+export type Thinkrailsid2 = string;
 export type Sessionid3 = string;
 export type Eventtype2 = "toolCallStart";
 export type Tooluseid = string;
 export type Toolname = string;
 export type Agentid1 = string | null;
-export type Bonsaisid3 = string;
+export type Thinkrailsid3 = string;
 export type Sessionid4 = string;
 export type Eventtype3 = "toolCallEnd";
 export type Tooluseid1 = string;
@@ -59,37 +59,37 @@ export type Toolname1 = string;
 export type Output = string;
 export type Iserror = boolean;
 export type Agentid2 = string | null;
-export type Bonsaisid4 = string;
+export type Thinkrailsid4 = string;
 export type Sessionid5 = string;
 export type Eventtype4 = "subagentStart";
 export type Agentid3 = string;
 export type Agenttype = string;
-export type Bonsaisid5 = string;
+export type Thinkrailsid5 = string;
 export type Sessionid6 = string;
 export type Eventtype5 = "subagentEnd";
 export type Agentid4 = string;
-export type Bonsaisid6 = string;
+export type Thinkrailsid6 = string;
 export type Sessionid7 = string;
 export type Eventtype6 = "compact";
 export type Trigger = string;
 export type Pretokens = number;
-export type Bonsaisid7 = string;
+export type Thinkrailsid7 = string;
 export type Sessionid8 = string;
 export type Eventtype7 = "progress";
 export type Message = string;
-export type Bonsaisid8 = string;
+export type Thinkrailsid8 = string;
 export type Sessionid9 = string;
 export type Eventtype8 = "notification";
 export type Message1 = string;
 export type Type = string | null;
-export type Bonsaisid9 = string;
+export type Thinkrailsid9 = string;
 export type Sessionid10 = string;
 export type Eventtype9 = "permissionDenied";
 export type Toolname2 = string | null;
-export type Bonsaisid10 = string;
+export type Thinkrailsid10 = string;
 export type Sessionid11 = string;
 export type Eventtype10 = "ready";
-export type Bonsaisid11 = string;
+export type Thinkrailsid11 = string;
 export type Sessionid12 = string;
 export type Eventtype11 = "turnComplete";
 export type Turncostusd = number;
@@ -103,7 +103,7 @@ export type Iterations = {
 export type Contextwindow = number;
 export type Contextmax = number;
 export type Result = string;
-export type Bonsaisid12 = string;
+export type Thinkrailsid12 = string;
 export type Sessionid13 = string;
 export type Eventtype12 = "interrupted";
 export type Turncostusd1 = number;
@@ -116,7 +116,7 @@ export type Iterations1 = {
 }[];
 export type Contextwindow1 = number;
 export type Contextmax1 = number;
-export type Bonsaisid13 = string;
+export type Thinkrailsid13 = string;
 export type Sessionid14 = string;
 export type Eventtype13 = "error";
 export type Turncostusd2 = number;
@@ -132,7 +132,7 @@ export type Contextmax2 = number;
 export type Subtype = string;
 export type Errors = string[];
 export type Result1 = string;
-export type Bonsaisid14 = string;
+export type Thinkrailsid14 = string;
 export type Sessionid15 = string;
 export type Eventtype14 = "done";
 export type Result2 = string;
@@ -162,7 +162,7 @@ export type Title2 = string;
 export type Description1 = string | null;
 export type Target = "board" | "specs" | "graph" | "files";
 export type Actions = (CreateTicketAction | StartSessionAction | NavigateAction)[];
-export type Bonsaisid15 = string;
+export type Thinkrailsid15 = string;
 export type Sessionid16 = string;
 export type Eventtype15 = "askUserQuestion";
 export type Question1 = string;
@@ -174,7 +174,7 @@ export type Multiselect = boolean;
 export type Questions = Question[];
 export type Attempt = number;
 export type Requestid = string;
-export type Bonsaisid16 = string;
+export type Thinkrailsid16 = string;
 export type Sessionid17 = string;
 export type Eventtype16 = "confirmAction";
 export type Toolname3 = string;
@@ -182,7 +182,7 @@ export type Tooluseid2 = string | null;
 export type Attempt1 = number;
 export type Requestid1 = string;
 export type Description3 = string | null;
-export type Bonsaisid17 = string;
+export type Thinkrailsid17 = string;
 export type Sessionid18 = string;
 export type Eventtype17 = "suggestSession";
 export type Skill = string;
@@ -192,13 +192,13 @@ export type Reason = string;
 export type Prompt1 = string | null;
 export type Ticketid = string | null;
 export type Requestid2 = string;
-export type Bonsaisid18 = string;
+export type Thinkrailsid18 = string;
 export type Sessionid19 = string;
 export type Eventtype18 = "suggestDescription";
 export type Description4 = string;
 export type Section = string;
 export type Requestid3 = string;
-export type Bonsaisid19 = string;
+export type Thinkrailsid19 = string;
 export type Sessionid20 = string;
 export type Eventtype19 = "suggestStep";
 export type Ticketid1 = string;
@@ -209,24 +209,24 @@ export type Inputspecids = string[];
 export type Agentinstructions = string;
 export type Reason1 = string;
 export type Requestid4 = string;
-export type Bonsaisid20 = string;
+export type Thinkrailsid20 = string;
 export type Sessionid21 = string;
 export type Eventtype20 = "requestResolved";
 export type Requestid5 = string;
 export type Response = {
   [k: string]: unknown;
 } | null;
-export type Bonsaisid21 = string;
+export type Thinkrailsid21 = string;
 export type Sessionid22 = string;
 export type Eventtype21 = "requestExpired";
 export type Requestid6 = string;
 export type Reason2 = string;
-export type Bonsaisid22 = string;
+export type Thinkrailsid22 = string;
 export type Sessionid23 = string;
 export type Eventtype22 = "userMessage";
 export type Text1 = string;
 export type Ismarkdown = boolean;
-export type Bonsaisid23 = string;
+export type Thinkrailsid23 = string;
 export type Sessionid24 = string;
 export type Eventtype23 = "proposeChange";
 export type Requestid7 = string;
@@ -235,15 +235,15 @@ export type Oldstring = string;
 export type Newstring = string;
 export type Section1 = string | null;
 export type Rationale = string | null;
-export type Bonsaisid24 = string;
+export type Thinkrailsid24 = string;
 export type Sessionid25 = string;
 export type Eventtype24 = "setPreviewFile";
 export type Path1 = string | null;
 export type Section2 = string | null;
-export type Bonsaisid25 = string;
+export type Thinkrailsid25 = string;
 export type Sessionid26 = string;
 export type Eventtype25 = "clearPreviewFile";
-export type Bonsaisid26 = string;
+export type Thinkrailsid26 = string;
 export type Sessionid27 = string;
 export type Eventtype26 = "artifactAdded";
 export type Path2 = string;
@@ -252,7 +252,7 @@ export type Role = string | null;
 export type Label2 = string | null;
 export type Firsttouchedat = string;
 export type Lasttouchedat = string;
-export type Bonsaisid27 = string;
+export type Thinkrailsid27 = string;
 export type Sessionid28 = string;
 export type Eventtype27 = "artifactLabeled";
 export type Path3 = string;
@@ -260,7 +260,7 @@ export type Role1 = string | null;
 export type Label3 = string | null;
 
 export interface SessionStartEvent {
-  bonsaiSid: Bonsaisid;
+  thinkrailSid: Thinkrailsid;
   sessionId: Sessionid;
   eventType: Eventtype;
   payload: SessionStartPayload;
@@ -275,7 +275,7 @@ export interface SessionStartPayload {
   [k: string]: unknown;
 }
 export interface TextDeltaEvent {
-  bonsaiSid: Bonsaisid1;
+  thinkrailSid: Thinkrailsid1;
   sessionId: Sessionid2;
   eventType: Eventtype1;
   payload: TextDeltaPayload;
@@ -288,7 +288,7 @@ export interface TextDeltaPayload {
   agentId?: Agentid;
 }
 export interface ToolCallStartEvent {
-  bonsaiSid: Bonsaisid2;
+  thinkrailSid: Thinkrailsid2;
   sessionId: Sessionid3;
   eventType: Eventtype2;
   payload: ToolCallStartPayload;
@@ -306,7 +306,7 @@ export interface Toolinput {
   [k: string]: unknown;
 }
 export interface ToolCallEndEvent {
-  bonsaiSid: Bonsaisid3;
+  thinkrailSid: Thinkrailsid3;
   sessionId: Sessionid4;
   eventType: Eventtype3;
   payload: ToolCallEndPayload;
@@ -322,7 +322,7 @@ export interface ToolCallEndPayload {
   agentId?: Agentid2;
 }
 export interface SubagentStartEvent {
-  bonsaiSid: Bonsaisid4;
+  thinkrailSid: Thinkrailsid4;
   sessionId: Sessionid5;
   eventType: Eventtype4;
   payload: SubagentStartPayload;
@@ -335,7 +335,7 @@ export interface SubagentStartPayload {
   agentType: Agenttype;
 }
 export interface SubagentEndEvent {
-  bonsaiSid: Bonsaisid5;
+  thinkrailSid: Thinkrailsid5;
   sessionId: Sessionid6;
   eventType: Eventtype5;
   payload: SubagentEndPayload;
@@ -347,7 +347,7 @@ export interface SubagentEndPayload {
   agentId: Agentid4;
 }
 export interface CompactEvent {
-  bonsaiSid: Bonsaisid6;
+  thinkrailSid: Thinkrailsid6;
   sessionId: Sessionid7;
   eventType: Eventtype6;
   payload: CompactPayload;
@@ -360,7 +360,7 @@ export interface CompactPayload {
   preTokens?: Pretokens;
 }
 export interface ProgressEvent {
-  bonsaiSid: Bonsaisid7;
+  thinkrailSid: Thinkrailsid7;
   sessionId: Sessionid8;
   eventType: Eventtype7;
   payload: ProgressPayload;
@@ -372,7 +372,7 @@ export interface ProgressPayload {
   message?: Message;
 }
 export interface NotificationEvent {
-  bonsaiSid: Bonsaisid8;
+  thinkrailSid: Thinkrailsid8;
   sessionId: Sessionid9;
   eventType: Eventtype8;
   payload: NotificationPayload;
@@ -386,7 +386,7 @@ export interface NotificationPayload {
   [k: string]: unknown;
 }
 export interface PermissionDeniedEvent {
-  bonsaiSid: Bonsaisid9;
+  thinkrailSid: Thinkrailsid9;
   sessionId: Sessionid10;
   eventType: Eventtype9;
   payload: PermissionDeniedPayload;
@@ -399,7 +399,7 @@ export interface PermissionDeniedPayload {
   [k: string]: unknown;
 }
 export interface ReadyEvent {
-  bonsaiSid: Bonsaisid10;
+  thinkrailSid: Thinkrailsid10;
   sessionId: Sessionid11;
   eventType: Eventtype10;
   payload: ReadyPayload;
@@ -409,7 +409,7 @@ export interface ReadyEvent {
  */
 export interface ReadyPayload {}
 export interface TurnCompleteEvent {
-  bonsaiSid: Bonsaisid11;
+  thinkrailSid: Thinkrailsid11;
   sessionId: Sessionid12;
   eventType: Eventtype11;
   payload: TurnCompletePayload;
@@ -433,7 +433,7 @@ export interface Usage {
   [k: string]: unknown;
 }
 export interface InterruptedEvent {
-  bonsaiSid: Bonsaisid12;
+  thinkrailSid: Thinkrailsid12;
   sessionId: Sessionid13;
   eventType: Eventtype12;
   payload: InterruptedPayload;
@@ -456,7 +456,7 @@ export interface Usage1 {
   [k: string]: unknown;
 }
 export interface ErrorEvent {
-  bonsaiSid: Bonsaisid13;
+  thinkrailSid: Thinkrailsid13;
   sessionId: Sessionid14;
   eventType: Eventtype13;
   payload: ErrorPayload;
@@ -482,7 +482,7 @@ export interface Usage2 {
   [k: string]: unknown;
 }
 export interface DoneEvent {
-  bonsaiSid: Bonsaisid14;
+  thinkrailSid: Thinkrailsid14;
   sessionId: Sessionid15;
   eventType: Eventtype14;
   payload: DonePayload;
@@ -556,7 +556,7 @@ export interface NavigateAction {
   target: Target;
 }
 export interface AskUserQuestionEvent {
-  bonsaiSid: Bonsaisid15;
+  thinkrailSid: Thinkrailsid15;
   sessionId: Sessionid16;
   eventType: Eventtype15;
   payload: AskUserQuestionPayload;
@@ -586,7 +586,7 @@ export interface QuestionOption {
   description: Description2;
 }
 export interface ConfirmActionEvent {
-  bonsaiSid: Bonsaisid16;
+  thinkrailSid: Thinkrailsid16;
   sessionId: Sessionid17;
   eventType: Eventtype16;
   payload: ConfirmActionPayload;
@@ -606,7 +606,7 @@ export interface Toolinput1 {
   [k: string]: unknown;
 }
 export interface SuggestSessionEvent {
-  bonsaiSid: Bonsaisid17;
+  thinkrailSid: Thinkrailsid17;
   sessionId: Sessionid18;
   eventType: Eventtype17;
   payload: SuggestSessionPayload;
@@ -624,7 +624,7 @@ export interface SuggestSessionPayload {
   requestId?: Requestid2;
 }
 export interface SuggestDescriptionEvent {
-  bonsaiSid: Bonsaisid18;
+  thinkrailSid: Thinkrailsid18;
   sessionId: Sessionid19;
   eventType: Eventtype18;
   payload: SuggestDescriptionPayload;
@@ -638,7 +638,7 @@ export interface SuggestDescriptionPayload {
   requestId?: Requestid3;
 }
 export interface SuggestStepEvent {
-  bonsaiSid: Bonsaisid19;
+  thinkrailSid: Thinkrailsid19;
   sessionId: Sessionid20;
   eventType: Eventtype19;
   payload: SuggestStepPayload;
@@ -657,7 +657,7 @@ export interface SuggestStepPayload {
   requestId?: Requestid4;
 }
 export interface RequestResolvedEvent {
-  bonsaiSid: Bonsaisid20;
+  thinkrailSid: Thinkrailsid20;
   sessionId: Sessionid21;
   eventType: Eventtype20;
   payload: RequestResolvedPayload;
@@ -670,7 +670,7 @@ export interface RequestResolvedPayload {
   response?: Response;
 }
 export interface RequestExpiredEvent {
-  bonsaiSid: Bonsaisid21;
+  thinkrailSid: Thinkrailsid21;
   sessionId: Sessionid22;
   eventType: Eventtype21;
   payload: RequestExpiredPayload;
@@ -683,7 +683,7 @@ export interface RequestExpiredPayload {
   reason?: Reason2;
 }
 export interface UserMessageEvent {
-  bonsaiSid: Bonsaisid22;
+  thinkrailSid: Thinkrailsid22;
   sessionId: Sessionid23;
   eventType: Eventtype22;
   payload: UserMessagePayload;
@@ -696,7 +696,7 @@ export interface UserMessagePayload {
   isMarkdown?: Ismarkdown;
 }
 export interface ProposeChangeEvent {
-  bonsaiSid: Bonsaisid23;
+  thinkrailSid: Thinkrailsid23;
   sessionId: Sessionid24;
   eventType: Eventtype23;
   payload: ProposeChangePayload;
@@ -713,7 +713,7 @@ export interface ProposeChangePayload {
   rationale?: Rationale;
 }
 export interface SetPreviewFileEvent {
-  bonsaiSid: Bonsaisid24;
+  thinkrailSid: Thinkrailsid24;
   sessionId: Sessionid25;
   eventType: Eventtype24;
   payload: SetPreviewFilePayload;
@@ -727,7 +727,7 @@ export interface SetPreviewFilePayload {
   section?: Section2;
 }
 export interface ClearPreviewFileEvent {
-  bonsaiSid: Bonsaisid25;
+  thinkrailSid: Thinkrailsid25;
   sessionId: Sessionid26;
   eventType: Eventtype25;
   payload: ClearPreviewFilePayload;
@@ -737,7 +737,7 @@ export interface ClearPreviewFileEvent {
  */
 export interface ClearPreviewFilePayload {}
 export interface ArtifactAddedEvent {
-  bonsaiSid: Bonsaisid26;
+  thinkrailSid: Thinkrailsid26;
   sessionId: Sessionid27;
   eventType: Eventtype26;
   payload: ArtifactAddedPayload;
@@ -760,7 +760,7 @@ export interface SessionArtifact {
   lastTouchedAt: Lasttouchedat;
 }
 export interface ArtifactLabeledEvent {
-  bonsaiSid: Bonsaisid27;
+  thinkrailSid: Thinkrailsid27;
   sessionId: Sessionid28;
   eventType: Eventtype27;
   payload: ArtifactLabeledPayload;

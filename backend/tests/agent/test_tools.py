@@ -25,7 +25,7 @@ from app.core.config import AppConfig, get_index_path
 @pytest.fixture(autouse=True)
 def _isolate_data_dir(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """Route get_data_dir() to a temp directory so index paths stay isolated."""
-    data_dir = tmp_path / ".bonsai_server"
+    data_dir = tmp_path / ".thinkrail_server"
     data_dir.mkdir()
     monkeypatch.setattr("app.core.config.get_data_dir", lambda: data_dir)
 
@@ -37,13 +37,13 @@ def _isolate_data_dir(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
 
 def _make_config(tmp_path: Path) -> AppConfig:
     """Build an AppConfig rooted in a temp directory."""
-    bonsai_dir = tmp_path / ".bonsai"
-    bonsai_dir.mkdir(exist_ok=True)
+    thinkrail_dir = tmp_path / ".tr"
+    thinkrail_dir.mkdir(exist_ok=True)
     plugin_dir = tmp_path / "plugin"
     plugin_dir.mkdir(exist_ok=True)
     return AppConfig(
         project_root=tmp_path,
-        bonsai_dir=bonsai_dir,
+        thinkrail_dir=thinkrail_dir,
         plugin_dir=plugin_dir,
     )
 
@@ -156,8 +156,8 @@ class TestSuggestSessionInHandlerInteraction:
         await _write_index(config.get_project_root(), ["spec-a"])
 
         tracker, task = _make_tracker_and_task()
-        tracker.set_status(task.bonsai_sid, "idle")
-        tracker.set_status(task.bonsai_sid, "running")
+        tracker.set_status(task.thinkrail_sid, "idle")
+        tracker.set_status(task.thinkrail_sid, "running")
         notify = AsyncMock()
         set_tool_context(tracker, notify, task, config)
 
@@ -170,8 +170,8 @@ class TestSuggestSessionInHandlerInteraction:
 
         async def resolve_approve():
             await asyncio.sleep(0.01)
-            for req_id in list(tracker._futures.get(task.bonsai_sid, {})):
-                tracker.resolve_future(task.bonsai_sid, req_id, {"behavior": "allow"})
+            for req_id in list(tracker._futures.get(task.thinkrail_sid, {})):
+                tracker.resolve_future(task.thinkrail_sid, req_id, {"behavior": "allow"})
                 break
 
         asyncio.get_event_loop().create_task(resolve_approve())
@@ -186,7 +186,7 @@ class TestSuggestSessionInHandlerInteraction:
         call_args = notify.call_args
         assert call_args.args[0] == "agent/suggestSession"
         params = call_args.args[1]
-        assert params["bonsaiSid"] == task.bonsai_sid
+        assert params["thinkrailSid"] == task.thinkrail_sid
         assert params["skill"] == "module-design"
         assert params["specIds"] == ["spec-a"]
 
@@ -200,8 +200,8 @@ class TestSuggestSessionInHandlerInteraction:
         (skill_dir / "SKILL.md").write_text("# skill")
 
         tracker, task = _make_tracker_and_task()
-        tracker.set_status(task.bonsai_sid, "idle")
-        tracker.set_status(task.bonsai_sid, "running")
+        tracker.set_status(task.thinkrail_sid, "idle")
+        tracker.set_status(task.thinkrail_sid, "running")
         notify = AsyncMock()
         set_tool_context(tracker, notify, task, config)
 
@@ -214,8 +214,8 @@ class TestSuggestSessionInHandlerInteraction:
 
         async def resolve_deny():
             await asyncio.sleep(0.01)
-            for req_id in list(tracker._futures.get(task.bonsai_sid, {})):
-                tracker.resolve_future(task.bonsai_sid, req_id, {"behavior": "deny"})
+            for req_id in list(tracker._futures.get(task.thinkrail_sid, {})):
+                tracker.resolve_future(task.thinkrail_sid, req_id, {"behavior": "deny"})
                 break
 
         asyncio.get_event_loop().create_task(resolve_deny())
@@ -545,7 +545,7 @@ class TestToolRegistration:
     def test_only_three_tools_registered(self) -> None:
         from app.agent.tools.specs import _spec_delete, _spec_links, _spec_search, specs_mcp_server
         # Verify server name and that all three tool handlers are callable
-        assert specs_mcp_server["name"] == "bonsai-specs"
+        assert specs_mcp_server["name"] == "thinkrail-specs"
         assert all(hasattr(t, "handler") for t in [_spec_search, _spec_links, _spec_delete])
 
     def test_old_tools_not_registered(self) -> None:
@@ -754,15 +754,15 @@ class TestValidateVisData:
 
 
 # ===========================================================================
-# bonsai_visualize handler — integration tests
+# thinkrail_visualize handler — integration tests
 # ===========================================================================
 
 
-class TestBonsaiVisualizeHandler:
+class TestThinkRailVisualizeHandler:
     async def test_valid_payload_returns_success(self) -> None:
-        from app.agent.tools.visualization import _bonsai_visualize
+        from app.agent.tools.visualization import _thinkrail_visualize
 
-        result = await _bonsai_visualize.handler({
+        result = await _thinkrail_visualize.handler({
             "type": "progress-tracker",
             "title": "Build",
             "data": {"steps": [{"label": "Compile", "status": "done"}]},
@@ -771,9 +771,9 @@ class TestBonsaiVisualizeHandler:
         assert "Rendered" in result["content"][0]["text"]
 
     async def test_invalid_payload_returns_error(self) -> None:
-        from app.agent.tools.visualization import _bonsai_visualize
+        from app.agent.tools.visualization import _thinkrail_visualize
 
-        result = await _bonsai_visualize.handler({
+        result = await _thinkrail_visualize.handler({
             "type": "summary-box",
             "title": "Bad",
             "data": {"wrong_key": "nope"},
@@ -782,9 +782,9 @@ class TestBonsaiVisualizeHandler:
         assert "Validation error" in result["content"][0]["text"]
 
     async def test_json_string_data_auto_parsed(self) -> None:
-        from app.agent.tools.visualization import _bonsai_visualize
+        from app.agent.tools.visualization import _thinkrail_visualize
 
-        result = await _bonsai_visualize.handler({
+        result = await _thinkrail_visualize.handler({
             "type": "status-list",
             "title": "Items",
             "data": '{"items": [{"label": "X", "status": "done"}]}',
@@ -793,9 +793,9 @@ class TestBonsaiVisualizeHandler:
         assert "Rendered" in result["content"][0]["text"]
 
     async def test_invalid_json_string_data(self) -> None:
-        from app.agent.tools.visualization import _bonsai_visualize
+        from app.agent.tools.visualization import _thinkrail_visualize
 
-        result = await _bonsai_visualize.handler({
+        result = await _thinkrail_visualize.handler({
             "type": "diagram",
             "title": "Bad",
             "data": "not json at all{{{",
@@ -804,9 +804,9 @@ class TestBonsaiVisualizeHandler:
         assert "must be a JSON object, not a string" in result["content"][0]["text"]
 
     async def test_unknown_type_returns_error(self) -> None:
-        from app.agent.tools.visualization import _bonsai_visualize
+        from app.agent.tools.visualization import _thinkrail_visualize
 
-        result = await _bonsai_visualize.handler({
+        result = await _thinkrail_visualize.handler({
             "type": "sparkline",
             "title": "Nope",
             "data": {},

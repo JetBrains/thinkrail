@@ -1,4 +1,4 @@
-"""CLI commands for Bonsai utilities.
+"""CLI commands for ThinkRail utilities.
 
 Usage::
 
@@ -10,6 +10,8 @@ from __future__ import annotations
 
 import argparse
 import sys
+
+from app.core.config import PRODUCT_NAME
 
 
 def _export_schema(output: str | None) -> None:
@@ -52,7 +54,7 @@ def _export_rpc_schema(output: str | None) -> None:
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(prog="bonsai-cli", description="Bonsai utilities")
+    parser = argparse.ArgumentParser(prog="thinkrail-cli", description=f"{PRODUCT_NAME} utilities")
     sub = parser.add_subparsers(dest="command")
 
     # export-schema

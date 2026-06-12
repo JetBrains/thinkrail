@@ -22,7 +22,7 @@ from app.spec.service import SpecService
 def _make_app(tmp_path: Path) -> FastAPI:
     """Create a test app with a fresh tokenless AppStore.
 
-    Bonsai is single-user / localhost-only — no users, tokens, or
+    ThinkRail is single-user / localhost-only — no users, tokens, or
     handshake auth.  The store is opened lazily inside the WS handler.
     """
     app = FastAPI()
@@ -40,8 +40,8 @@ def _ws_url(tmp_path: Path) -> str:
 
 
 def _make_config(tmp_path: Path) -> AppConfig:
-    bonsai_dir = tmp_path / ".bonsai"
-    bonsai_dir.mkdir(exist_ok=True)
+    thinkrail_dir = tmp_path / ".tr"
+    thinkrail_dir.mkdir(exist_ok=True)
     return load_config(tmp_path)
 
 
@@ -106,7 +106,7 @@ class TestMethods:
 
 class TestWebSocket:
     def test_connect_and_receive_response(self, tmp_path: Path) -> None:
-        _make_config(tmp_path)  # ensure .bonsai exists
+        _make_config(tmp_path)  # ensure .tr exists
         app = _make_app(tmp_path)
         client = TestClient(app)
 
@@ -271,8 +271,8 @@ class TestWatcher:
 
         config = _make_config(tmp_path)
         # Use a temp path for the index (in production, get_index_path() computes
-        # the path under ~/.bonsai/indexes/<hash>/)
-        db_path = tmp_path / ".bonsai" / "index.db"
+        # the path under ~/.tr/indexes/<hash>/)
+        db_path = tmp_path / ".tr" / "index.db"
         index = SpecIndex(db_path)
         await index.open()
         service = SpecService(config, index=index)
@@ -294,15 +294,15 @@ class TestOnFileChange:
         from app.spec.frontmatter import serialize_frontmatter
         from app.spec.index import SpecIndex
 
-        bonsai_dir = tmp_path / ".bonsai"
-        bonsai_dir.mkdir()
+        thinkrail_dir = tmp_path / ".tr"
+        thinkrail_dir.mkdir()
         # Create spec file with frontmatter
         (tmp_path / "mod_a").mkdir()
         meta = {"id": "mod-a", "type": "module-design", "status": "active", "title": "Module A"}
         content = serialize_frontmatter(meta, "# Module A\n")
         (tmp_path / "mod_a" / "README.md").write_text(content, encoding="utf-8")
         # Build index (use local temp path for tests)
-        db_path = bonsai_dir / "index.db"
+        db_path = thinkrail_dir / "index.db"
         async with SpecIndex(db_path) as index:
             await index.rebuild(tmp_path)
         return load_config(tmp_path)
@@ -327,7 +327,7 @@ class TestOnFileChange:
             return WatchHandle(_task=asyncio.create_task(asyncio.sleep(999)))
 
         # Use local temp path for tests (production uses get_index_path())
-        db_path = config.get_bonsai_dir() / "index.db"
+        db_path = config.get_thinkrail_dir() / "index.db"
         index = SpecIndex(db_path)
         await index.initialize(config.get_project_root())
         service = SpecService(config, index=index)
@@ -437,12 +437,12 @@ class TestOnFileChange:
             assert "registry/didUpdate" not in methods
 
 
-class TestBonsaihideLiveReload:
-    """Regression: editing .bonsaihide must take effect without a restart,
+class TestThinkRailhideLiveReload:
+    """Regression: editing .thinkrailhide must take effect without a restart,
     and same-batch .md moves must respect the new rules immediately.
 
     Bug: on ``refactor/specs-renewal @ 57f6d178a``, after adding
-    ``.bonsai/archive/`` to .bonsaihide and ``git mv``-ing spec .md files
+    ``.tr/archive/`` to .thinkrailhide and ``git mv``-ing spec .md files
     into that directory, ``spec_search`` continued to return the archived
     files (with their new paths) until a manual backend restart.  Two
     defects compose:
@@ -450,7 +450,7 @@ class TestBonsaihideLiveReload:
     1. Atomic-write editors (vim, IntelliJ, VSCode, Edit/Write tools) save
        by write-temp + rename, which watchfiles reports as ``Change.added``
        rather than ``Change.modified``.  The old check
-       ``ct == Change.modified and Path(p).name == ".bonsaihide"`` missed
+       ``ct == Change.modified and Path(p).name == ".thinkrailhide"`` missed
        those events.
     2. Even when ``Change.modified`` did fire, FileChanged events emitted
        from the same batch were dispatched against the *stale* in-memory
@@ -464,8 +464,8 @@ class TestBonsaihideLiveReload:
         from app.spec.frontmatter import serialize_frontmatter
         from app.spec.index import SpecIndex
 
-        bonsai_dir = tmp_path / ".bonsai"
-        bonsai_dir.mkdir()
+        thinkrail_dir = tmp_path / ".tr"
+        thinkrail_dir.mkdir()
 
         # Pre-existing spec that will later be moved into a now-hidden dir.
         (tmp_path / "mod_a").mkdir()
@@ -477,7 +477,7 @@ class TestBonsaihideLiveReload:
             serialize_frontmatter(meta, "# Module A\n"), encoding="utf-8",
         )
 
-        db_path = bonsai_dir / "index.db"
+        db_path = thinkrail_dir / "index.db"
         async with SpecIndex(db_path) as index:
             await index.rebuild(tmp_path)
         return load_config(tmp_path)
@@ -498,7 +498,7 @@ class TestBonsaihideLiveReload:
             from app.core.watcher import WatchHandle
             return WatchHandle(_task=asyncio.create_task(asyncio.sleep(999)))
 
-        db_path = config.get_bonsai_dir() / "index.db"
+        db_path = config.get_thinkrail_dir() / "index.db"
         index = SpecIndex(db_path)
         await index.initialize(config.get_project_root())
         service = SpecService(config, index=index)
@@ -530,61 +530,61 @@ class TestBonsaihideLiveReload:
     async def test_atomic_rename_change_added_triggers_reload(
         self, harness,
     ) -> None:
-        """A Change.added event for .bonsaihide (atomic-write rename) must
+        """A Change.added event for .thinkrailhide (atomic-write rename) must
         be treated as a change — old code only accepted Change.modified."""
         callback, index, coordinator, project_root = harness
 
-        # User edits .bonsaihide via an editor that saves atomically — the
+        # User edits .thinkrailhide via an editor that saves atomically — the
         # OS reports Change.added after the rename(2).
-        (project_root / ".bonsaihide").write_text(
+        (project_root / ".thinkrailhide").write_text(
             "mod_a/\n", encoding="utf-8",
         )
-        bonsaihide_path = str(project_root / ".bonsaihide")
-        await callback({(Change.added, bonsaihide_path)})
+        thinkrailhide_path = str(project_root / ".thinkrailhide")
+        await callback({(Change.added, thinkrailhide_path)})
 
         # The synchronous in-memory refresh must have happened — the index's
-        # _bonsaihide_spec is no longer None.
-        assert index._bonsaihide_spec is not None
+        # _thinkrailhide_spec is no longer None.
+        assert index._thinkrailhide_spec is not None
         # And the new spec actually matches mod_a/.
-        assert index._bonsaihide_spec.match_file("mod_a/README.md")
+        assert index._thinkrailhide_spec.match_file("mod_a/README.md")
 
-    async def test_deleted_bonsaihide_reloads_to_defaults(
+    async def test_deleted_thinkrailhide_reloads_to_defaults(
         self, harness,
     ) -> None:
-        """Change.deleted on .bonsaihide must also trigger a reload (defaults)."""
+        """Change.deleted on .thinkrailhide must also trigger a reload (defaults)."""
         callback, index, coordinator, project_root = harness
 
-        # First set a custom .bonsaihide so we have something to clear.
-        (project_root / ".bonsaihide").write_text(
+        # First set a custom .thinkrailhide so we have something to clear.
+        (project_root / ".thinkrailhide").write_text(
             "mod_a/\n", encoding="utf-8",
         )
-        await callback({(Change.added, str(project_root / ".bonsaihide"))})
-        assert index._bonsaihide_spec is not None
-        assert index._bonsaihide_spec.match_file("mod_a/README.md")
+        await callback({(Change.added, str(project_root / ".thinkrailhide"))})
+        assert index._thinkrailhide_spec is not None
+        assert index._thinkrailhide_spec.match_file("mod_a/README.md")
 
-        # Now delete .bonsaihide outright.  The watcher must reload defaults,
+        # Now delete .thinkrailhide outright.  The watcher must reload defaults,
         # which do NOT match mod_a/.
-        (project_root / ".bonsaihide").unlink()
-        await callback({(Change.deleted, str(project_root / ".bonsaihide"))})
-        assert index._bonsaihide_spec is not None
-        assert not index._bonsaihide_spec.match_file("mod_a/README.md")
+        (project_root / ".thinkrailhide").unlink()
+        await callback({(Change.deleted, str(project_root / ".thinkrailhide"))})
+        assert index._thinkrailhide_spec is not None
+        assert not index._thinkrailhide_spec.match_file("mod_a/README.md")
 
     async def test_same_batch_hidden_md_not_indexed(
         self, harness,
     ) -> None:
-        """A .bonsaihide change and a .md add in the SAME watcher batch:
+        """A .thinkrailhide change and a .md add in the SAME watcher batch:
         the newly-hidden .md must NOT be indexed.
 
-        This is the witnessed reproduction: edit .bonsaihide, then git mv a
+        This is the witnessed reproduction: edit .thinkrailhide, then git mv a
         spec into the now-hidden dir, all delivered as one batch.
         """
         from app.spec.frontmatter import serialize_frontmatter
 
         callback, index, coordinator, project_root = harness
 
-        # Pre-stage: the .bonsaihide content on disk already hides archive/
+        # Pre-stage: the .thinkrailhide content on disk already hides archive/
         # (the watcher reads from disk when it sees a change event).
-        (project_root / ".bonsaihide").write_text(
+        (project_root / ".thinkrailhide").write_text(
             "archive/\n", encoding="utf-8",
         )
 
@@ -603,7 +603,7 @@ class TestBonsaihideLiveReload:
 
         # One batch carries both events.
         await callback({
-            (Change.added, str(project_root / ".bonsaihide")),
+            (Change.added, str(project_root / ".thinkrailhide")),
             (Change.added, str(archived_md)),
         })
         await coordinator._queue.join()
@@ -615,9 +615,9 @@ class TestBonsaihideLiveReload:
     async def test_previously_indexed_evicted_after_hide(
         self, harness,
     ) -> None:
-        """A file already indexed should be evicted when .bonsaihide hides it.
+        """A file already indexed should be evicted when .thinkrailhide hides it.
 
-        Covers the eviction path: index has mod-a; user edits .bonsaihide to
+        Covers the eviction path: index has mod-a; user edits .thinkrailhide to
         hide mod_a/; subsequent reindex_file on mod_a/README.md (triggered
         either by an in-batch FileChanged or by the debounced full rebuild)
         removes it.  This test exercises the in-batch path via a synthetic
@@ -629,13 +629,13 @@ class TestBonsaihideLiveReload:
         spec = await index.get_spec("mod-a")
         assert spec is not None
 
-        # User adds mod_a/ to .bonsaihide (atomic write reports as added).
-        (project_root / ".bonsaihide").write_text(
+        # User adds mod_a/ to .thinkrailhide (atomic write reports as added).
+        (project_root / ".thinkrailhide").write_text(
             "mod_a/\n", encoding="utf-8",
         )
         readme = str(project_root / "mod_a" / "README.md")
         await callback({
-            (Change.added, str(project_root / ".bonsaihide")),
+            (Change.added, str(project_root / ".thinkrailhide")),
             (Change.modified, readme),
         })
         await coordinator._queue.join()

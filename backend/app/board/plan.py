@@ -1,6 +1,6 @@
 """Plan document service — read/write/parse implementation plans as Markdown.
 
-Plans live at ``.bonsai/tickets/{ticket_id}/plan.md`` (per-ticket artifact
+Plans live at ``.tr/tickets/{ticket_id}/plan.md`` (per-ticket artifact
 folder). They are the orchestration blueprint for executing meta-ticket work
 via agent sessions.
 """

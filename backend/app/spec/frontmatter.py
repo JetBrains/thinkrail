@@ -10,7 +10,7 @@ model in ``models.py`` — the single source of truth for the frontmatter
 schema.
 
 Design reference:
-    .bonsai/design_docs/FRONTMATTER_REGISTRY_DESIGN.md §Frontmatter Schema
+    .tr/design_docs/FRONTMATTER_REGISTRY_DESIGN.md §Frontmatter Schema
 """
 
 from __future__ import annotations

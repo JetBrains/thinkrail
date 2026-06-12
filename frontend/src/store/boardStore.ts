@@ -1,4 +1,5 @@
 import { create } from "zustand";
+import { STORAGE_PREFIX } from "@/constants/branding.ts";
 import { persist, createJSONStorage } from "zustand/middleware";
 import type {
   Ticket,
@@ -218,7 +219,7 @@ export const useBoardStore = create<BoardStore>()(persist((set, get) => ({
     const sessionState = useSessionStore.getState();
     const knownSids = new Set<string>();
     for (const [sid] of sessionState.sessions) knownSids.add(sid);
-    for (const a of sessionState.archivedSessions) knownSids.add(a.bonsaiSid);
+    for (const a of sessionState.archivedSessions) knownSids.add(a.thinkrailSid);
     // Sessions present on disk but not yet loaded into the in-memory maps
     // are still resumable — don't flag them as stale.
     if (extraKnownSessionIds) {
@@ -256,7 +257,7 @@ export const useBoardStore = create<BoardStore>()(persist((set, get) => ({
     ]);
   },
 }), {
-  name: "bonsai-board",
+  name: `${STORAGE_PREFIX}board`,
   // Guarded storage: no-op if localStorage is unavailable (e.g. tests).
   storage: createJSONStorage(() => ({
     getItem: (name) => {

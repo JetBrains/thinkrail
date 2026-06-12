@@ -35,8 +35,8 @@ async def run(
         # ClaudeRuntime requires a real AppConfig now (it builds its own model
         # registry against ``project_root``). Provide a minimal stub.
         from app.core.config import AppConfig
-        root = Path("/tmp/bonsai-test")
-        config = AppConfig(project_root=root, bonsai_dir=root / ".bonsai", plugin_dir=root / "plugins")
+        root = Path("/tmp/thinkrail-test")
+        config = AppConfig(project_root=root, thinkrail_dir=root / ".tr", plugin_dir=root / "plugins")
     runtime = ClaudeRuntime(
         tracker=tracker,
         app_config=config,
@@ -140,8 +140,8 @@ class TestRunnerResumeParam:
 
         tracker = Tracker()
         task = tracker.create_task(["spec-1"], AgentConfig())
-        tracker.enqueue_message(task.bonsai_sid, "hello")
-        tracker.enqueue_end_signal(task.bonsai_sid)
+        tracker.enqueue_message(task.thinkrail_sid, "hello")
+        tracker.enqueue_end_signal(task.thinkrail_sid)
 
         await run(task, "context", AsyncMock(), tracker, resume_session_id="old-sess-123")
 
@@ -169,8 +169,8 @@ class TestRunnerResumeParam:
 
         tracker = Tracker()
         task = tracker.create_task(["spec-1"], AgentConfig())
-        tracker.enqueue_message(task.bonsai_sid, "hello")
-        tracker.enqueue_end_signal(task.bonsai_sid)
+        tracker.enqueue_message(task.thinkrail_sid, "hello")
+        tracker.enqueue_end_signal(task.thinkrail_sid)
 
         await run(task, "context", AsyncMock(), tracker)
 
@@ -189,7 +189,7 @@ class TestContinueSession:
     ) -> None:
         """continue_session passes stored sessionId to runtime as resume_session_id."""
         mock_load.return_value = {
-            "bonsaiSid": "sid-1",
+            "thinkrailSid": "sid-1",
             "name": "test session",
             "skillId": None,
             "specIds": ["spec-1"],
@@ -204,13 +204,13 @@ class TestContinueSession:
         service, config, spec_service = _make_service()
         runtime = service.runtime_registry.get("claude")
         runtime.run_session = AsyncMock(return_value=AgentResult(
-            bonsai_sid="sid-1", session_id="cli-session-new",
+            thinkrail_sid="sid-1", session_id="cli-session-new",
             result="done", cost_usd=0.0, turns=0, duration_ms=0,
         ))
         spec_service.get_spec.return_value = _make_spec_detail("spec-1", "T", "C")
 
         task = await service.continue_session("sid-1")
-        assert task.bonsai_sid == "sid-1"
+        assert task.thinkrail_sid == "sid-1"
         assert task.status == "initializing"
 
         # Wait for background task
@@ -227,7 +227,7 @@ class TestContinueSession:
     async def test_continue_missing_session_id_raises(self, mock_load: MagicMock) -> None:
         """If stored session has no sessionId, raise ValueError."""
         mock_load.return_value = {
-            "bonsaiSid": "sid-1",
+            "thinkrailSid": "sid-1",
             "name": "old session",
             "skillId": None,
             "specIds": [],
@@ -264,7 +264,7 @@ class TestContinueSession:
     async def test_continue_empty_session_id_raises(self, mock_load: MagicMock) -> None:
         """Empty string sessionId should also raise."""
         mock_load.return_value = {
-            "bonsaiSid": "sid-1",
+            "thinkrailSid": "sid-1",
             "name": "old",
             "skillId": None,
             "specIds": [],

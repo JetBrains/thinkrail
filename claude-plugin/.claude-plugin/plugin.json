@@ -1,9 +1,9 @@
 {
-  "name": "specdriven",
+  "name": "thinkrail",
   "version": "2.2.0",
   "description": "Specification-driven development plugin for Claude Code. Provides 20 skills for creating, tracking, validating, and orchestrating project specifications, brainstorming, ticket workflows, and reactive bug fixes — with structured visualizations.",
   "author": {
-    "name": "SpecDriven"
+    "name": "ThinkRail"
   },
   "license": "MIT",
   "keywords": [

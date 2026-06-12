@@ -86,12 +86,12 @@ class TestListSkills:
         registry, home, _ = _make_skill_registry(tmp_path, monkeypatch)
         _write_skill_md(
             home / ".claude" / "plugins" / "marketplaces" / "official"
-            / "plugins" / "specdriven" / "skills" / "ticket-specify" / "SKILL.md",
+            / "plugins" / "thinkrail" / "skills" / "ticket-specify" / "SKILL.md",
             "Ticket Specify", "Create or modify specifications for a meta-ticket",
         )
 
         skills = registry.list_skills()
-        plugin_skill = next(s for s in skills if s.id == "specdriven:ticket-specify")
+        plugin_skill = next(s for s in skills if s.id == "thinkrail:ticket-specify")
         assert plugin_skill.source == "plugin"
         assert plugin_skill.name == "Ticket Specify"
 

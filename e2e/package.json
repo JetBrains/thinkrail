@@ -1,8 +1,8 @@
 {
-  "name": "bonsai-e2e",
+  "name": "thinkrail-e2e",
   "private": true,
   "version": "0.0.0",
-  "description": "End-to-end tests for Bonsai (Playwright)",
+  "description": "End-to-end tests for ThinkRail (Playwright)",
   "scripts": {
     "test": "playwright test",
     "test:headed": "playwright test --headed",

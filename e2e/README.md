@@ -14,7 +14,7 @@ tags:
   - e2e
   - playwright
 ---
-# Bonsai e2e tests
+# ThinkRail e2e tests
 
 Playwright tests that drive the real backend + frontend in a browser. They lock
 in observable behavior (UI flows, WS/REST round-trips, persistence) so the
@@ -28,7 +28,7 @@ upcoming Python→Bun backend rewrite has a regression net.
 - Chromium is installed: `npx playwright install chromium`.
 
 The suite is self-starting: `playwright.config.ts` declares a `webServer` that
-spawns the full Bonsai stack (`./run.sh` from the repo root) on dynamically-
+spawns the full ThinkRail stack (`./run.sh` from the repo root) on dynamically-
 picked free ports, then tears it down at the end of the run. You do **not**
 need a separately-running `./run.sh` — but see below if you want to reuse one.
 
@@ -44,7 +44,7 @@ npx playwright install chromium
 
 ```bash
 cd e2e
-npm test                   # full suite, headless (starts Bonsai automatically)
+npm test                   # full suite, headless (starts ThinkRail automatically)
 npm test -- spec-tree      # subset by basename
 npm run test:headed        # full suite with visible browser
 npm run test:ui            # Playwright UI mode
@@ -79,7 +79,7 @@ e2e/
     session.ts          # startSessionWithModel, startSessionConnectivityCheck,
                         #   waitForSessionActivity, waitForIdle, endSession
     selectors.ts        # central CSS/role selectors for every screen
-    board.ts, specs.ts  # seed helpers that write `.bonsai/` state directly
+    board.ts, specs.ts  # seed helpers that write `.tr/` state directly
     appSettings.ts      # seedSessionDefaults / getSessionDefaults — direct
                         #   JSON-RPC client for the app-scope `appSettings/*`
                         #   methods (used to pre-load user-scoped session
@@ -88,7 +88,7 @@ e2e/
     *.spec.ts           # one spec per surface area
 ```
 
-Bonsai is single-user / localhost-only — there's no auth fixture, no admin
+ThinkRail is single-user / localhost-only — there's no auth fixture, no admin
 user, no token. Every spec opens a fresh `tempProject` and goes straight to
 `openProject(page, tempProject.path)`.
 
@@ -98,7 +98,7 @@ user, no token. Every spec opens a fresh `tempProject` and goes straight to
    you `test`, `expect`, and the `tempProject` fixture).
 2. Use the helpers in `helpers/` rather than raw selectors so churn is absorbed
    in one place. Add new selectors to `helpers/selectors.ts`.
-3. Seed any `.bonsai/` state through the seed helpers (`seedProject`,
+3. Seed any `.tr/` state through the seed helpers (`seedProject`,
    `seedTicket`, `seedDrafts`, `seedTrashedPlan`) — write to disk before
    `openProject`. Avoid driving setup through real LLM calls when the goal is
    to exercise the UI for that state.
@@ -170,8 +170,8 @@ spec — directly or transitively — except where noted as a documented gap.
 
 ## Project isolation
 
-Every spec uses the `tempProject` fixture (a fresh `os.tmpdir()/bonsai-e2e-*`
-directory) and seeds `.bonsai/` state on disk before driving the UI. No spec
+Every spec uses the `tempProject` fixture (a fresh `os.tmpdir()/thinkrail-e2e-*`
+directory) and seeds `.tr/` state on disk before driving the UI. No spec
 depends on the source repo's working state — the previous `REPO_ROOT`-pinned
 `new-session-model.spec.ts` was migrated to `tempProject` because leftover
 session state in the dev project produced flaky agent startup.

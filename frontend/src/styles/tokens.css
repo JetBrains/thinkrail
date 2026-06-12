@@ -1,9 +1,9 @@
 /*
- * Bonsai Design Tokens
+ * ThinkRail Design Tokens
  *
  * Font sizes and radii use fixed pixel values. Spacing derives from
  * --font-base via calc() ratios. --font-base is set by JS from
- * .bonsai/settings.json (default: 13px).
+ * .tr/settings.json (default: 13px).
  *
  * Compact mode (.chat-stream--compact in compact.css) overrides these with
  * its own smaller scale based on --compact-font-base (9px).
@@ -97,7 +97,25 @@
   --shadow-up: 0 -2px 8px rgba(0, 0, 0, 0.3); /* upward-popping menus */
   --overlay: rgba(0, 0, 0, 0.5);              /* modal / full-screen backdrops */
 
-  /* ── Chat user-bubble (overridable per theme) ── */
+  /* ── Chat user-bubble ── */
   --bubble-user-bg: rgba(107, 87, 255, 0.12);
   --bubble-user-border: rgba(107, 87, 255, 0.35);
+
+  /* ── Semantic colors (JetBrains New UI / Darcula) ── */
+  --bg: #2B2B30;
+  --bg-dark: #171719;
+  --bg-input: #272830;
+  --panel: rgba(23, 23, 25, 0.8);
+  --panel-blur: 100px;
+  --elevated: #2B2D30;
+  --hover: #393B40;
+  --border: #2B2D30;
+  --border2: #43454A;
+  --text: #dfe1e5;
+  --text-40: rgba(223, 225, 229, 0.40);
+  --muted: #a8adb5;
+  --hint: #6f737a;
+  --sel: #2d4f67;
+
+  color-scheme: dark;
 }

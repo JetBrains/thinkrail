@@ -9,7 +9,7 @@ argument-hint: "[ticket-title-or-context]"
 
 # Ticket: Product design (idea → product-design)
 
-You are running the first step of the brainstorm-aligned ticket flow. This step is the **product design** phase. It produces `.bonsai/tickets/{id}/product-design.md` and a short blurb for the ticket body (kanban card and detail header).
+You are running the first step of the brainstorm-aligned ticket flow. This step is the **product design** phase. It produces `{{TR_DIR}}/tickets/{id}/product-design.md` and a short blurb for the ticket body (kanban card and detail header).
 
 ## Quick reference
 
@@ -44,16 +44,16 @@ You are running the first step of the brainstorm-aligned ticket flow. This step 
    12. Finalize and transition
    ```
 
-1. **Examine the context** *(task #1)*: **Read project context** — current ticket title + any existing body, plus relevant `.bonsai/design_docs/` files. Do not waste time on areas unrelated to the request.
+1. **Examine the context** *(task #1)*: **Read project context** — current ticket title + any existing body, plus relevant `{{TR_DIR}}/design_docs/` files. Do not waste time on areas unrelated to the request.
 2. **Ask product clarifying questions** *(task #2)* via `AskUserQuestion` — purpose, user stories, design, user experience, user requirements, product and feature value, product/feature success criteria, product/feature validation criteria. You goal for this step is to extract intent the user has. Prefer multiple-choice with a free-form `Other:` option. Always show your recommendation and explanation. All connected questions must be asked one at a time. Stop only when the picture is completely clear.
 3. **Update description** *(task #3)*: **Update the ticket body** via `SuggestDescription` with a short human-oriented blurb (What / Purpose, ~3-6 lines). Pass `apply: true` when the user says "just write it". If you forget this step, the backend auto-fills the body from the first paragraph of the markdown — explicit is better.
 4. **Create product design document**:
-   1. **Write the skeleton** *(task #4)* to `.bonsai/tickets/{id}/product-design.md` via `Write`: see template below. Note, it is just a default template that ought to be adjusted to user's case and intent.
-   2. **Open the preview** — `SetPreviewFile({ path: ".bonsai/tickets/{id}/product-design.md" })`. The right Context Panel switches to the Preview tab. Optional: also call `LabelArtifact({ path: ".bonsai/tickets/{id}/product-design.md", role: "product_design", label: "Product design" })` so the chip strip shows "Product design" instead of the raw filename.
+   1. **Write the skeleton** *(task #4)* to `{{TR_DIR}}/tickets/{id}/product-design.md` via `Write`: see template below. Note, it is just a default template that ought to be adjusted to user's case and intent.
+   2. **Open the preview** — `SetPreviewFile({ path: "{{TR_DIR}}/tickets/{id}/product-design.md" })`. The right Context Panel switches to the Preview tab. Optional: also call `LabelArtifact({ path: "{{TR_DIR}}/tickets/{id}/product-design.md", role: "product_design", label: "Product design" })` so the chip strip shows "Product design" instead of the raw filename.
    3. **For each section in order** (Goal *(task #5)*, User stories *(task #6)*, User requirements *(task #7)*, Product value *(task #8)*, Success criteria *(task #9)*, Validation criteria *(task #10)*), mark the section's task `in_progress` via `TodoWrite`, then call `ProposeChange`:
       ```json
       {
-      "file_path": ".bonsai/tickets/{id}/product-design.md",
+      "file_path": "{{TR_DIR}}/tickets/{id}/product-design.md",
       "old_string": "## <Section>\n\n<!-- pending -->",
       "new_string": "## <Section>\n\n<content>",
       "section": "<Section>",
@@ -124,7 +124,7 @@ kind: product_design
 - This is the **product** phase. Don't get technical (no architecture, no implementation choices). That comes in `ticket-technical-design`.
 - The ticket body blurb is for the kanban card; the file is the full doc.
 - Skeleton is written first via `Write`; every section after that goes through `ProposeChange` — this is the user's section-approval surface.
-- Save the artifact under `.bonsai/tickets/{id}/`; `Write` creates parent directories.
+- Save the artifact under `{{TR_DIR}}/tickets/{id}/`; `Write` creates parent directories.
 
 ## Red flags — STOP
 

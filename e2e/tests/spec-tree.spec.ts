@@ -66,7 +66,7 @@ test.describe("SpecTree", () => {
     page,
     tempProject,
   }) => {
-    // Seed a `.bonsai/` so the picker accepts it as a valid project, but
+    // Seed a `.tr/` so the picker accepts it as a valid project, but
     // no spec files yet.
     seedProject(tempProject.path, []);
 

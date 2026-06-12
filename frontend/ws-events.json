@@ -2,8 +2,8 @@
   "$defs": {
     "ArtifactAddedEvent": {
       "properties": {
-        "bonsaiSid": {
-          "title": "Bonsaisid",
+        "thinkrailSid": {
+          "title": "Thinkrailsid",
           "type": "string"
         },
         "sessionId": {
@@ -21,7 +21,7 @@
         }
       },
       "required": [
-        "bonsaiSid",
+        "thinkrailSid",
         "sessionId",
         "eventType",
         "payload"
@@ -44,8 +44,8 @@
     },
     "ArtifactLabeledEvent": {
       "properties": {
-        "bonsaiSid": {
-          "title": "Bonsaisid",
+        "thinkrailSid": {
+          "title": "Thinkrailsid",
           "type": "string"
         },
         "sessionId": {
@@ -63,7 +63,7 @@
         }
       },
       "required": [
-        "bonsaiSid",
+        "thinkrailSid",
         "sessionId",
         "eventType",
         "payload"
@@ -111,8 +111,8 @@
     },
     "AskUserQuestionEvent": {
       "properties": {
-        "bonsaiSid": {
-          "title": "Bonsaisid",
+        "thinkrailSid": {
+          "title": "Thinkrailsid",
           "type": "string"
         },
         "sessionId": {
@@ -130,7 +130,7 @@
         }
       },
       "required": [
-        "bonsaiSid",
+        "thinkrailSid",
         "sessionId",
         "eventType",
         "payload"
@@ -167,8 +167,8 @@
     },
     "ClearPreviewFileEvent": {
       "properties": {
-        "bonsaiSid": {
-          "title": "Bonsaisid",
+        "thinkrailSid": {
+          "title": "Thinkrailsid",
           "type": "string"
         },
         "sessionId": {
@@ -186,7 +186,7 @@
         }
       },
       "required": [
-        "bonsaiSid",
+        "thinkrailSid",
         "sessionId",
         "eventType",
         "payload"
@@ -202,8 +202,8 @@
     },
     "CompactEvent": {
       "properties": {
-        "bonsaiSid": {
-          "title": "Bonsaisid",
+        "thinkrailSid": {
+          "title": "Thinkrailsid",
           "type": "string"
         },
         "sessionId": {
@@ -221,7 +221,7 @@
         }
       },
       "required": [
-        "bonsaiSid",
+        "thinkrailSid",
         "sessionId",
         "eventType",
         "payload"
@@ -250,8 +250,8 @@
     },
     "ConfirmActionEvent": {
       "properties": {
-        "bonsaiSid": {
-          "title": "Bonsaisid",
+        "thinkrailSid": {
+          "title": "Thinkrailsid",
           "type": "string"
         },
         "sessionId": {
@@ -269,7 +269,7 @@
         }
       },
       "required": [
-        "bonsaiSid",
+        "thinkrailSid",
         "sessionId",
         "eventType",
         "payload"
@@ -378,8 +378,8 @@
     },
     "DoneEvent": {
       "properties": {
-        "bonsaiSid": {
-          "title": "Bonsaisid",
+        "thinkrailSid": {
+          "title": "Thinkrailsid",
           "type": "string"
         },
         "sessionId": {
@@ -397,7 +397,7 @@
         }
       },
       "required": [
-        "bonsaiSid",
+        "thinkrailSid",
         "sessionId",
         "eventType",
         "payload"
@@ -450,8 +450,8 @@
     },
     "ErrorEvent": {
       "properties": {
-        "bonsaiSid": {
-          "title": "Bonsaisid",
+        "thinkrailSid": {
+          "title": "Thinkrailsid",
           "type": "string"
         },
         "sessionId": {
@@ -469,7 +469,7 @@
         }
       },
       "required": [
-        "bonsaiSid",
+        "thinkrailSid",
         "sessionId",
         "eventType",
         "payload"
@@ -551,8 +551,8 @@
     },
     "InterruptedEvent": {
       "properties": {
-        "bonsaiSid": {
-          "title": "Bonsaisid",
+        "thinkrailSid": {
+          "title": "Thinkrailsid",
           "type": "string"
         },
         "sessionId": {
@@ -570,7 +570,7 @@
         }
       },
       "required": [
-        "bonsaiSid",
+        "thinkrailSid",
         "sessionId",
         "eventType",
         "payload"
@@ -683,8 +683,8 @@
     },
     "NotificationEvent": {
       "properties": {
-        "bonsaiSid": {
-          "title": "Bonsaisid",
+        "thinkrailSid": {
+          "title": "Thinkrailsid",
           "type": "string"
         },
         "sessionId": {
@@ -702,7 +702,7 @@
         }
       },
       "required": [
-        "bonsaiSid",
+        "thinkrailSid",
         "sessionId",
         "eventType",
         "payload"
@@ -768,8 +768,8 @@
     },
     "PermissionDeniedEvent": {
       "properties": {
-        "bonsaiSid": {
-          "title": "Bonsaisid",
+        "thinkrailSid": {
+          "title": "Thinkrailsid",
           "type": "string"
         },
         "sessionId": {
@@ -787,7 +787,7 @@
         }
       },
       "required": [
-        "bonsaiSid",
+        "thinkrailSid",
         "sessionId",
         "eventType",
         "payload"
@@ -817,8 +817,8 @@
     },
     "ProgressEvent": {
       "properties": {
-        "bonsaiSid": {
-          "title": "Bonsaisid",
+        "thinkrailSid": {
+          "title": "Thinkrailsid",
           "type": "string"
         },
         "sessionId": {
@@ -836,7 +836,7 @@
         }
       },
       "required": [
-        "bonsaiSid",
+        "thinkrailSid",
         "sessionId",
         "eventType",
         "payload"
@@ -858,8 +858,8 @@
     },
     "ProposeChangeEvent": {
       "properties": {
-        "bonsaiSid": {
-          "title": "Bonsaisid",
+        "thinkrailSid": {
+          "title": "Thinkrailsid",
           "type": "string"
         },
         "sessionId": {
@@ -877,7 +877,7 @@
         }
       },
       "required": [
-        "bonsaiSid",
+        "thinkrailSid",
         "sessionId",
         "eventType",
         "payload"
@@ -991,8 +991,8 @@
     },
     "ReadyEvent": {
       "properties": {
-        "bonsaiSid": {
-          "title": "Bonsaisid",
+        "thinkrailSid": {
+          "title": "Thinkrailsid",
           "type": "string"
         },
         "sessionId": {
@@ -1010,7 +1010,7 @@
         }
       },
       "required": [
-        "bonsaiSid",
+        "thinkrailSid",
         "sessionId",
         "eventType",
         "payload"
@@ -1026,8 +1026,8 @@
     },
     "RequestExpiredEvent": {
       "properties": {
-        "bonsaiSid": {
-          "title": "Bonsaisid",
+        "thinkrailSid": {
+          "title": "Thinkrailsid",
           "type": "string"
         },
         "sessionId": {
@@ -1045,7 +1045,7 @@
         }
       },
       "required": [
-        "bonsaiSid",
+        "thinkrailSid",
         "sessionId",
         "eventType",
         "payload"
@@ -1072,8 +1072,8 @@
     },
     "RequestResolvedEvent": {
       "properties": {
-        "bonsaiSid": {
-          "title": "Bonsaisid",
+        "thinkrailSid": {
+          "title": "Thinkrailsid",
           "type": "string"
         },
         "sessionId": {
@@ -1091,7 +1091,7 @@
         }
       },
       "required": [
-        "bonsaiSid",
+        "thinkrailSid",
         "sessionId",
         "eventType",
         "payload"
@@ -1236,8 +1236,8 @@
     },
     "SessionStartEvent": {
       "properties": {
-        "bonsaiSid": {
-          "title": "Bonsaisid",
+        "thinkrailSid": {
+          "title": "Thinkrailsid",
           "type": "string"
         },
         "sessionId": {
@@ -1255,7 +1255,7 @@
         }
       },
       "required": [
-        "bonsaiSid",
+        "thinkrailSid",
         "sessionId",
         "eventType",
         "payload"
@@ -1295,8 +1295,8 @@
     },
     "SetPreviewFileEvent": {
       "properties": {
-        "bonsaiSid": {
-          "title": "Bonsaisid",
+        "thinkrailSid": {
+          "title": "Thinkrailsid",
           "type": "string"
         },
         "sessionId": {
@@ -1314,7 +1314,7 @@
         }
       },
       "required": [
-        "bonsaiSid",
+        "thinkrailSid",
         "sessionId",
         "eventType",
         "payload"
@@ -1416,8 +1416,8 @@
     },
     "SubagentEndEvent": {
       "properties": {
-        "bonsaiSid": {
-          "title": "Bonsaisid",
+        "thinkrailSid": {
+          "title": "Thinkrailsid",
           "type": "string"
         },
         "sessionId": {
@@ -1435,7 +1435,7 @@
         }
       },
       "required": [
-        "bonsaiSid",
+        "thinkrailSid",
         "sessionId",
         "eventType",
         "payload"
@@ -1459,8 +1459,8 @@
     },
     "SubagentStartEvent": {
       "properties": {
-        "bonsaiSid": {
-          "title": "Bonsaisid",
+        "thinkrailSid": {
+          "title": "Thinkrailsid",
           "type": "string"
         },
         "sessionId": {
@@ -1478,7 +1478,7 @@
         }
       },
       "required": [
-        "bonsaiSid",
+        "thinkrailSid",
         "sessionId",
         "eventType",
         "payload"
@@ -1507,8 +1507,8 @@
     },
     "SuggestDescriptionEvent": {
       "properties": {
-        "bonsaiSid": {
-          "title": "Bonsaisid",
+        "thinkrailSid": {
+          "title": "Thinkrailsid",
           "type": "string"
         },
         "sessionId": {
@@ -1526,7 +1526,7 @@
         }
       },
       "required": [
-        "bonsaiSid",
+        "thinkrailSid",
         "sessionId",
         "eventType",
         "payload"
@@ -1560,8 +1560,8 @@
     },
     "SuggestSessionEvent": {
       "properties": {
-        "bonsaiSid": {
-          "title": "Bonsaisid",
+        "thinkrailSid": {
+          "title": "Thinkrailsid",
           "type": "string"
         },
         "sessionId": {
@@ -1579,7 +1579,7 @@
         }
       },
       "required": [
-        "bonsaiSid",
+        "thinkrailSid",
         "sessionId",
         "eventType",
         "payload"
@@ -1647,8 +1647,8 @@
     },
     "SuggestStepEvent": {
       "properties": {
-        "bonsaiSid": {
-          "title": "Bonsaisid",
+        "thinkrailSid": {
+          "title": "Thinkrailsid",
           "type": "string"
         },
         "sessionId": {
@@ -1666,7 +1666,7 @@
         }
       },
       "required": [
-        "bonsaiSid",
+        "thinkrailSid",
         "sessionId",
         "eventType",
         "payload"
@@ -1725,8 +1725,8 @@
     },
     "TextDeltaEvent": {
       "properties": {
-        "bonsaiSid": {
-          "title": "Bonsaisid",
+        "thinkrailSid": {
+          "title": "Thinkrailsid",
           "type": "string"
         },
         "sessionId": {
@@ -1744,7 +1744,7 @@
         }
       },
       "required": [
-        "bonsaiSid",
+        "thinkrailSid",
         "sessionId",
         "eventType",
         "payload"
@@ -1780,8 +1780,8 @@
     },
     "ToolCallEndEvent": {
       "properties": {
-        "bonsaiSid": {
-          "title": "Bonsaisid",
+        "thinkrailSid": {
+          "title": "Thinkrailsid",
           "type": "string"
         },
         "sessionId": {
@@ -1799,7 +1799,7 @@
         }
       },
       "required": [
-        "bonsaiSid",
+        "thinkrailSid",
         "sessionId",
         "eventType",
         "payload"
@@ -1850,8 +1850,8 @@
     },
     "ToolCallStartEvent": {
       "properties": {
-        "bonsaiSid": {
-          "title": "Bonsaisid",
+        "thinkrailSid": {
+          "title": "Thinkrailsid",
           "type": "string"
         },
         "sessionId": {
@@ -1869,7 +1869,7 @@
         }
       },
       "required": [
-        "bonsaiSid",
+        "thinkrailSid",
         "sessionId",
         "eventType",
         "payload"
@@ -1916,8 +1916,8 @@
     },
     "TurnCompleteEvent": {
       "properties": {
-        "bonsaiSid": {
-          "title": "Bonsaisid",
+        "thinkrailSid": {
+          "title": "Thinkrailsid",
           "type": "string"
         },
         "sessionId": {
@@ -1935,7 +1935,7 @@
         }
       },
       "required": [
-        "bonsaiSid",
+        "thinkrailSid",
         "sessionId",
         "eventType",
         "payload"
@@ -2005,8 +2005,8 @@
     },
     "UserMessageEvent": {
       "properties": {
-        "bonsaiSid": {
-          "title": "Bonsaisid",
+        "thinkrailSid": {
+          "title": "Thinkrailsid",
           "type": "string"
         },
         "sessionId": {
@@ -2024,7 +2024,7 @@
         }
       },
       "required": [
-        "bonsaiSid",
+        "thinkrailSid",
         "sessionId",
         "eventType",
         "payload"

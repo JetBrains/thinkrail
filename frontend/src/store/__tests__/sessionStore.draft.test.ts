@@ -35,10 +35,10 @@ function makeStubClient(
     const handler = routes[method];
     if (handler) return handler(params);
     // Sensible defaults for the draft RPCs so unrouted calls don't reject.
-    if (method === "agent/prepare") return { bonsaiSid: params.bonsaiSid, systemPrompt: "SP", sections: [] };
+    if (method === "agent/prepare") return { thinkrailSid: params.thinkrailSid, systemPrompt: "SP", sections: [] };
     if (method === "agent/updateDraft") return { systemPrompt: "SP", sections: [] };
-    if (method === "agent/run") return { bonsaiSid: "server-run-id" };
-    if (method === "agent/startDraft") return { bonsaiSid: params.bonsaiSid };
+    if (method === "agent/run") return { thinkrailSid: "server-run-id" };
+    if (method === "agent/startDraft") return { thinkrailSid: params.thinkrailSid };
     if (method === "session/list") return [];
     if (method === "session/get") return null;
     return null;
@@ -141,7 +141,7 @@ describe("ensureSaved", () => {
     const stub = makeStubClient({
       "agent/prepare": (params) =>
         new Promise((resolve) => {
-          resolvePrepare = () => resolve({ bonsaiSid: params.bonsaiSid, systemPrompt: "SP", sections: [] });
+          resolvePrepare = () => resolve({ thinkrailSid: params.thinkrailSid, systemPrompt: "SP", sections: [] });
         }),
     });
     install(stub);
@@ -158,7 +158,7 @@ describe("ensureSaved", () => {
     const prepareCalls = callsTo(stub, "agent/prepare");
     expect(prepareCalls).toHaveLength(1);
     // The minted id is reused verbatim, never reconciled.
-    expect(prepareCalls[0].bonsaiSid).toBe(sid);
+    expect(prepareCalls[0].thinkrailSid).toBe(sid);
     expect(prepareCalls[0].draftInput).toBe("fix login flow");
 
     const session = useSessionStore.getState().sessions.get(sid);
@@ -249,7 +249,7 @@ describe("createDraft name handling", () => {
   beforeEach(() => seedDefaults());
 
   it("freezes derivation for a pre-configured draft with a meaningful name", async () => {
-    install(makeStubClient({ "agent/prepare": () => ({ bonsaiSid: "pre-1", systemPrompt: "SP", sections: [] }) }));
+    install(makeStubClient({ "agent/prepare": () => ({ thinkrailSid: "pre-1", systemPrompt: "SP", sections: [] }) }));
     const sid = await useSessionStore.getState().createNewSession({
       skillId: "ticket-implement",
       name: "Implement: My Ticket",
@@ -265,7 +265,7 @@ describe("createDraft name handling", () => {
   });
 
   it("leaves derivation enabled for a pre-configured draft with the default name", async () => {
-    install(makeStubClient({ "agent/prepare": () => ({ bonsaiSid: "pre-2", systemPrompt: "SP", sections: [] }) }));
+    install(makeStubClient({ "agent/prepare": () => ({ thinkrailSid: "pre-2", systemPrompt: "SP", sections: [] }) }));
     const sid = await useSessionStore.getState().createNewSession({ skillId: "some-skill" });
 
     expect(useSessionStore.getState().sessions.get(sid)?.nameManuallySet).toBeFalsy();
@@ -277,7 +277,7 @@ describe("createDraft name handling", () => {
 describe("restore repopulates inputDraftStore", () => {
   it("loadActiveSessions seeds the input box from draftInput", async () => {
     const entry = {
-      bonsaiSid: "draft-sid",
+      thinkrailSid: "draft-sid",
       name: "fix login flow",
       specIds: [],
       status: "draft",
@@ -291,7 +291,7 @@ describe("restore repopulates inputDraftStore", () => {
     const stub = makeStubClient({
       "session/list": () => [entry],
       "session/get": () => ({
-        bonsaiSid: "draft-sid",
+        thinkrailSid: "draft-sid",
         name: "fix login flow",
         specIds: [],
         config: { model: "claude-sonnet-4-6", permissionMode: "default" },
@@ -311,7 +311,7 @@ describe("restore repopulates inputDraftStore", () => {
 
   it("restores the rename freeze for a draft whose input was cleared", async () => {
     const entry = {
-      bonsaiSid: "draft-empty",
+      thinkrailSid: "draft-empty",
       name: "WIP", // meaningful name, empty input (text cleared after a save)
       specIds: [],
       status: "draft",
@@ -325,7 +325,7 @@ describe("restore repopulates inputDraftStore", () => {
     const stub = makeStubClient({
       "session/list": () => [entry],
       "session/get": () => ({
-        bonsaiSid: "draft-empty",
+        thinkrailSid: "draft-empty",
         name: "WIP",
         specIds: [],
         config: { model: "claude-sonnet-4-6", permissionMode: "default" },
@@ -362,12 +362,12 @@ describe("scope guard (immediate persist preserved)", () => {
     });
 
     expect(callsTo(stub, "agent/prepare")).toHaveLength(1);
-    // createDraft does not pass a client-minted bonsaiSid — the server mints.
-    expect(callsTo(stub, "agent/prepare")[0].bonsaiSid).toBeUndefined();
+    // createDraft does not pass a client-minted thinkrailSid — the server mints.
+    expect(callsTo(stub, "agent/prepare")[0].thinkrailSid).toBeUndefined();
   });
 
   it("the agent/run (Suggested) path persists immediately", async () => {
-    const stub = makeStubClient({ "agent/run": () => ({ bonsaiSid: "run-sid" }) });
+    const stub = makeStubClient({ "agent/run": () => ({ thinkrailSid: "run-sid" }) });
     install(stub);
 
     await useSessionStore.getState().startSession({

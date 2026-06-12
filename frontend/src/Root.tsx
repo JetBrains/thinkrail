@@ -1,4 +1,5 @@
 import { useCallback, useEffect } from "react";
+import { STORAGE_PREFIX } from "@/constants/branding.ts";
 import { Navigate, useNavigate, useLocation } from "react-router-dom";
 import { RpcProvider } from "@/api/index.ts";
 import { App } from "./App.tsx";
@@ -11,7 +12,7 @@ import { useServerInfoStore } from "@/store/serverInfoStore.ts";
 const BACKEND = location.host;
 const WS_PROTO = location.protocol === "https:" ? "wss:" : "ws:";
 
-const LAST_PROJECT_KEY = "bonsai-last-project";
+const LAST_PROJECT_KEY = `${STORAGE_PREFIX}last-project`;
 
 function pathToSlug(fsPath: string): string {
   return encodeURIComponent(fsPath.split("/").filter(Boolean).pop() ?? "project");

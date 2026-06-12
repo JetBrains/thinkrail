@@ -1,14 +1,14 @@
 #!/usr/bin/env python3
-"""Minimal MCP server exposing the bonsai_visualize tool.
+"""Minimal MCP server exposing the thinkrail_visualize tool.
 
 Implements the MCP protocol over stdio (JSON-RPC 2.0).
 Zero external dependencies — stdlib only.
 
 The tool accepts structured visualization data and returns a compact
-text confirmation. The actual rendering happens in the Bonsai frontend
+text confirmation. The actual rendering happens in the ThinkRail frontend
 via the agent/toolCallStart WebSocket event.
 
-In CLI fallback mode (when not connected to Bonsai web UI), the tool
+In CLI fallback mode (when not connected to ThinkRail web UI), the tool
 returns a Markdown-formatted version of the visualization.
 """
 
@@ -25,11 +25,11 @@ from app.agent.tools._vis_validation import (
 )
 
 TOOL_DEFINITION = {
-    "name": "bonsai_visualize",
+    "name": "thinkrail_visualize",
     "description": (
-        "Render a structured visualization in the Bonsai UI. "
+        "Render a structured visualization in the ThinkRail UI. "
         "Use this instead of ASCII art, ANSI escape codes, or Bash echo commands. "
-        "The Bonsai frontend renders the data as an interactive card."
+        "The ThinkRail frontend renders the data as an interactive card."
     ),
     "inputSchema": {
         "type": "object",
@@ -192,7 +192,7 @@ MD_RENDERERS = {
 
 
 def handle_tool_call(arguments: dict) -> dict:
-    """Process a bonsai_visualize tool call."""
+    """Process a thinkrail_visualize tool call."""
     vis_type = arguments.get("type", "")
     title = arguments.get("title", vis_type)
     data = arguments.get("data", {})
@@ -274,7 +274,7 @@ def main() -> None:
                 "result": {
                     "protocolVersion": "2024-11-05",
                     "capabilities": {"tools": {}},
-                    "serverInfo": {"name": "bonsai-vis", "version": "1.0.0"},
+                    "serverInfo": {"name": "thinkrail-vis", "version": "1.0.0"},
                 },
             })
         elif method == "notifications/initialized":
@@ -291,7 +291,7 @@ def main() -> None:
             params = msg.get("params", {})
             tool_name = params.get("name", "")
             arguments = params.get("arguments", {})
-            if tool_name == "bonsai_visualize":
+            if tool_name == "thinkrail_visualize":
                 result = handle_tool_call(arguments)
             else:
                 result = {

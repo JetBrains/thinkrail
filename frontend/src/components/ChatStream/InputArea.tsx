@@ -108,7 +108,7 @@ export function InputArea({ sessionId, disabled, placeholder, onSend, isRunning,
 
   // Refresh the runtime skill cache on session/runtime change.  Silent on
   // failure (the store action only logs to console.debug — see design doc
-  // §6.5) so the popup gracefully falls back to a Bonsai-only list.
+  // §6.5) so the popup gracefully falls back to a ThinkRail-only list.
   useEffect(() => {
     loadRuntimeSkills(effectiveRuntime);
   }, [effectiveRuntime, loadRuntimeSkills]);

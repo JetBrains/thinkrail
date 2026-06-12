@@ -14,7 +14,7 @@ class TestExportSchema:
     def test_export_schema_outputs_valid_json(
         self, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        monkeypatch.setattr(sys, "argv", ["bonsai-cli", "export-schema"])
+        monkeypatch.setattr(sys, "argv", ["thinkrail-cli", "export-schema"])
         cli.main()
         captured = capsys.readouterr()
         payload = json.loads(captured.out)
@@ -27,7 +27,7 @@ class TestExportWsSchema:
     def test_export_ws_schema_outputs_valid_json(
         self, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        monkeypatch.setattr(sys, "argv", ["bonsai-cli", "export-ws-schema"])
+        monkeypatch.setattr(sys, "argv", ["thinkrail-cli", "export-ws-schema"])
         cli.main()
         captured = capsys.readouterr()
         payload = json.loads(captured.out)
@@ -40,7 +40,7 @@ class TestExportRpcSchema:
     def test_export_rpc_schema_outputs_curated_models(
         self, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        monkeypatch.setattr(sys, "argv", ["bonsai-cli", "export-rpc-schema"])
+        monkeypatch.setattr(sys, "argv", ["thinkrail-cli", "export-rpc-schema"])
         cli.main()
         captured = capsys.readouterr()
         payload = json.loads(captured.out)
@@ -60,10 +60,10 @@ class TestRemovedSubcommands:
     @pytest.mark.parametrize(
         "argv",
         [
-            ["bonsai-cli", "create-user", "--id", "x", "--name", "y"],
-            ["bonsai-cli", "list-users"],
-            ["bonsai-cli", "set-admin", "--id", "x"],
-            ["bonsai-cli", "delete-user", "--id", "x"],
+            ["thinkrail-cli", "create-user", "--id", "x", "--name", "y"],
+            ["thinkrail-cli", "list-users"],
+            ["thinkrail-cli", "set-admin", "--id", "x"],
+            ["thinkrail-cli", "delete-user", "--id", "x"],
         ],
     )
     def test_subcommand_rejected(

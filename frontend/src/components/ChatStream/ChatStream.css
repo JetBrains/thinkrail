@@ -1195,7 +1195,7 @@
 .input-autocomplete-desc { color: var(--hint); font-size: var(--font-md); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 /* Grouped sections inside the autocomplete popup — non-selectable label
-   above each run of items (Bonsai, then the active runtime). */
+   above each run of items (ThinkRail, then the active runtime). */
 .input-autocomplete-group + .input-autocomplete-group {
   border-top: 1px solid var(--border);
   margin-top: 2px;

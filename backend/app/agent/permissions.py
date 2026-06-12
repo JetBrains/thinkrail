@@ -66,7 +66,7 @@ _TOOL_CATEGORIES: dict[str, ToolCategory] = {
     "TaskList": "read",
 }
 
-# Per-interceptor semantic categories for Bonsai's own MCP tools. Keyed
+# Per-interceptor semantic categories for ThinkRail's own MCP tools. Keyed
 # by the same suffix used in ``INTERCEPTORS``. Without this map, every
 # interceptor would fall back to the catch-all ``"mcp"`` bucket — which
 # plan mode denies — but mutating tools like ``spec_delete`` would still
@@ -79,7 +79,7 @@ _TOOL_CATEGORIES: dict[str, ToolCategory] = {
 # else ``read``). It is classified dynamically inside ``categorize``.
 _INTERCEPTOR_CATEGORIES: dict[str, ToolCategory] = {
     # Read-only / display-only — safe in plan mode.
-    "bonsai_visualize": "read",   # renders a card, no side effects
+    "thinkrail_visualize": "read",   # renders a card, no side effects
     "SuggestSession": "read",      # notifies frontend; user creates the session
     "SetPreviewFile": "read",      # UI side-effect only
     "ClearPreviewFile": "read",    # UI side-effect only
@@ -218,25 +218,25 @@ async def _await_user_response(
     Returns ``(response_dict, request_id)``.
     """
     request_id = str(uuid4())
-    future = tracker.register_future(task.bonsai_sid, request_id)
-    if tracker.get_task(task.bonsai_sid).status != "waiting":
-        tracker.set_status(task.bonsai_sid, "waiting")
+    future = tracker.register_future(task.thinkrail_sid, request_id)
+    if tracker.get_task(task.thinkrail_sid).status != "waiting":
+        tracker.set_status(task.thinkrail_sid, "waiting")
         await notify("agent/statusChanged", {
-            "bonsaiSid": task.bonsai_sid, "status": "waiting",
+            "thinkrailSid": task.thinkrail_sid, "status": "waiting",
         })
     # Store pending request so session/get can include it
     request_type = "approval" if method == "agent/confirmAction" else "question"
-    tracker.add_pending_request(task.bonsai_sid, {
+    tracker.add_pending_request(task.thinkrail_sid, {
         "requestId": request_id,
         "type": request_type,
-        **{k: v for k, v in params.items() if k != "bonsaiSid"},
+        **{k: v for k, v in params.items() if k != "thinkrailSid"},
     })
     await notify(method, {**params}, request_id=request_id)
     response = await future
-    tracker.remove_pending_request(task.bonsai_sid, request_id)
-    tracker.set_status(task.bonsai_sid, "running")
+    tracker.remove_pending_request(task.thinkrail_sid, request_id)
+    tracker.set_status(task.thinkrail_sid, "running")
     await notify("agent/statusChanged", {
-        "bonsaiSid": task.bonsai_sid, "status": "running",
+        "thinkrailSid": task.thinkrail_sid, "status": "running",
     })
     return response, request_id
 
@@ -279,7 +279,7 @@ async def can_use_tool(
         response, _request_id = await _await_user_response(
             tracker, notify, task, config,
             method="agent/askUserQuestion",
-            params={"bonsaiSid": task.bonsai_sid, "questions": input_data.get("questions", [])},
+            params={"thinkrailSid": task.thinkrail_sid, "questions": input_data.get("questions", [])},
         )
         if response.get("behavior") == "deny":
             return ToolPermissionResponse(
@@ -313,14 +313,14 @@ async def can_use_tool(
 
     # Default: generic tool approval (with session-scoped remember)
     sig = _approval_signature(tool_name, input_data)
-    if sig and tracker.is_tool_approved(task.bonsai_sid, sig):
+    if sig and tracker.is_tool_approved(task.thinkrail_sid, sig):
         return ToolPermissionResponse(behavior="allow")
 
     response, _request_id = await _await_user_response(
         tracker, notify, task, config,
         method="agent/confirmAction",
         params={
-            "bonsaiSid": task.bonsai_sid,
+            "thinkrailSid": task.thinkrail_sid,
             "toolName": tool_name,
             "toolInput": input_data,
             "toolUseId": request.tool_use_id,
@@ -328,7 +328,7 @@ async def can_use_tool(
     )
     if response.get("behavior") == "allow":
         if sig:
-            tracker.remember_approval(task.bonsai_sid, sig)
+            tracker.remember_approval(task.thinkrail_sid, sig)
         return ToolPermissionResponse(behavior="allow")
     return ToolPermissionResponse(
         behavior="deny",
@@ -357,7 +357,7 @@ async def claude_can_use_tool_adapter(
     """
     ctx_session_id = getattr(context, "session_id", None)
     if not isinstance(ctx_session_id, str):
-        ctx_session_id = task.bonsai_sid
+        ctx_session_id = task.thinkrail_sid
     req = ToolPermissionRequest(
         tool_name=tool_name,
         input=input_data,

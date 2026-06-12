@@ -74,7 +74,7 @@ class TestScanProjectTopFolders:
         assert names == {"src"}
 
     async def test_ignores_dotfolders(self, tmp_path: Path) -> None:
-        (tmp_path / ".bonsai").mkdir()
+        (tmp_path / ".tr").mkdir()
         (tmp_path / ".github").mkdir()
         (tmp_path / "app").mkdir()
 

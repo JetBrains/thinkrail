@@ -15,9 +15,9 @@ You are the **workflow orchestrator** for specification-driven development. You 
 
 Use `spec_search` to get specs (type, status, covers, paths). Use `spec_search` with `type: "task-spec"` for task statuses. Identify coverage gaps by comparing registered `covers` entries against source directories.
 
-### Step 2: Display recommendations using bonsai_visualize
+### Step 2: Display recommendations using thinkrail_visualize
 
-Show recommendations using `bonsai_visualize` with type `status-list`:
+Show recommendations using `thinkrail_visualize` with type `status-list`:
 ```json
 {
   "type": "status-list",

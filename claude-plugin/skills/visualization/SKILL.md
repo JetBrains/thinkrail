@@ -1,13 +1,13 @@
 ---
 name: visualization
-description: Utility skill for generating rich visualizations using the bonsai_visualize MCP tool. Provides patterns for progress trackers, summary boxes, comparisons, data tables, status lists, and diagrams. Other skills reference this for consistent visual output.
+description: Utility skill for generating rich visualizations using the thinkrail_visualize MCP tool. Provides patterns for progress trackers, summary boxes, comparisons, data tables, status lists, and diagrams. Other skills reference this for consistent visual output.
 icon: "📊"
 group: Visualization
 ---
 
 # Visualization Toolkit
 
-You are a **visualization utility** for specification-driven development. Use the `bonsai_visualize` MCP tool for all structured visual output. All other skills should apply these patterns for consistent, clear visualizations.
+You are a **visualization utility** for specification-driven development. Use the `thinkrail_visualize` MCP tool for all structured visual output. All other skills should apply these patterns for consistent, clear visualizations.
 
 ## When to Use
 
@@ -17,7 +17,7 @@ You are a **visualization utility** for specification-driven development. Use th
 
 ## Direct Invocation
 
-When invoked directly (`/specdriven:visualization`):
+When invoked directly (`/thinkrail:visualization`):
 
 ### Step 1: Gather data
 
@@ -28,7 +28,7 @@ Use `spec_search` for spec metadata and `spec_search` with `type: "task-spec"` f
 
 ### Step 2: Show dashboard
 
-Call `bonsai_visualize` with a `summary-box` showing the overall project status:
+Call `thinkrail_visualize` with a `summary-box` showing the overall project status:
 ```json
 {
   "type": "summary-box",
@@ -65,7 +65,7 @@ Use AskUserQuestion:
 
 ## Visualization Types Reference
 
-Call `bonsai_visualize` with the appropriate type:
+Call `thinkrail_visualize` with the appropriate type:
 
 ### 1. `progress-tracker` — Workflow steps with status
 
@@ -239,7 +239,7 @@ Use Markdown formatting:
 ## Key Principles
 
 - **Structured data over text**: Describe WHAT to show, let the UI decide HOW
-- **Use `bonsai_visualize` for all structured displays**: Never fall back to ASCII art
+- **Use `thinkrail_visualize` for all structured displays**: Never fall back to ASCII art
 - **Consistency**: Same status values and types across all skills
 - **Clarity**: Visualizations make complex information easier to understand
 - **Brevity**: Keep data focused

@@ -27,7 +27,7 @@ class _SPAStaticFiles(StaticFiles):
             raise
 
 from app.api import setup as setup_api
-from app.core.config import get_data_dir
+from app.core.config import PRODUCT_NAME, get_data_dir
 from app.core.app_store import AppStore
 from app.rpc.server import register_routes
 
@@ -54,7 +54,7 @@ def _find_frontend_dist() -> Path | None:
 
 
 def create_app() -> FastAPI:
-    """Create and configure the Bonsai FastAPI application."""
+    """Create and configure the FastAPI application."""
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s — %(message)s")
 
     app_store = AppStore(get_data_dir())
@@ -67,7 +67,7 @@ def create_app() -> FastAPI:
         finally:
             await app_store.close()
 
-    app = FastAPI(title="Bonsai", lifespan=lifespan)
+    app = FastAPI(title=PRODUCT_NAME, lifespan=lifespan)
 
     app.add_middleware(
         CORSMiddleware,

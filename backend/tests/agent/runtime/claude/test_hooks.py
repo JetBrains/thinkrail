@@ -52,7 +52,7 @@ class TestStartHookEmitsEvent:
         assert ev.params["agentId"] == "agent-1"
         assert ev.params["agentType"] == "Explore"
         assert ev.params["sessionId"] == "sess-A"
-        assert ev.params["bonsaiSid"] == hooks.task.bonsai_sid
+        assert ev.params["thinkrailSid"] == hooks.task.thinkrail_sid
 
 
 class TestStopHookEmitsEvent:
@@ -67,7 +67,7 @@ class TestStopHookEmitsEvent:
         assert ev.method == "agent/subagentEnd"
         assert ev.params["agentId"] == "agent-1"
         assert ev.params["sessionId"] == "sess-B"
-        assert ev.params["bonsaiSid"] == hooks.task.bonsai_sid
+        assert ev.params["thinkrailSid"] == hooks.task.thinkrail_sid
 
 
 class TestParentToolCorrelation:
@@ -207,7 +207,7 @@ class TestPreCompactHook:
         ev = handler.events[0]
         assert ev.method == "agent/compact"
         assert ev.params["sessionId"] == "sess-pc"
-        assert ev.params["bonsaiSid"] == hooks.task.bonsai_sid
+        assert ev.params["thinkrailSid"] == hooks.task.thinkrail_sid
         assert ev.params["trigger"] == "auto"
         assert ev.params["preTokens"] == 0
 

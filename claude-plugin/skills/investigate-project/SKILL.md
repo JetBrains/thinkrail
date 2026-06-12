@@ -37,7 +37,7 @@ Three artifacts, in this order:
    the code substantiates: module graph, public APIs per module, data
    flow, key design decisions you can *observe* (e.g. "uses event-loop
    pattern: see `app/main.py:42`"). Save section-by-section via
-   `spec_save`. Never use ASCII art for diagrams — use `bonsai_visualize`
+   `spec_save`. Never use ASCII art for diagrams — use `thinkrail_visualize`
    in chat and a Mermaid fenced block in the file.
 2. **`GOAL&REQUIREMENTS.md`** at the project root, draft only —
    `type: "goal-and-requirements"`, `status: "draft"`,
@@ -62,7 +62,7 @@ Three artifacts, in this order:
 - **Derived lists are selectors, not the author's choice.** Whenever you
   produce a list the user might want to curate — candidate graph
   organizations, the project's capabilities, etc. — *show the
-  candidates* (rendered diagrams via `bonsai_visualize`, or the bullet
+  candidates* (rendered diagrams via `thinkrail_visualize`, or the bullet
   list) and then run `AskUserQuestion` so the user picks what goes in.
   Don't silently decide for them. Applies to the Module Graph variants
   (Step 3b) and the capabilities list (Step 7).
@@ -168,7 +168,7 @@ Build the **ordered section list** from the Q1 answers — always
 `Overview`, `Module Graph`, `Modules`; then `Data Flow` and
 `Design Decisions` only if selected. (Findings is not a doc section —
 it always becomes tickets in Step 9, regardless of Q1.) Show it via
-`bonsai_visualize` `type: "progress-tracker"` with its own
+`thinkrail_visualize` `type: "progress-tracker"` with its own
 `visId: "doc-progress"` (this skill's own progress — not the chain
 stepper, which the host owns):
 
@@ -239,7 +239,7 @@ proceed until the save returned.
 
 **3b — Module Graph (render variants, the user picks).** Don't choose
 the organization yourself. Render **2–3 candidate graphs** of the *same*
-modules, each grouped differently, via `bonsai_visualize`
+modules, each grouped differently, via `thinkrail_visualize`
 `type: "diagram"` (structured `nodes`/`edges`, NOT ASCII) — a distinct
 `visId` per variant:
 
@@ -307,7 +307,7 @@ Advance `doc-progress`: mark `Modules` `done`, next selected section
 
 **Skip if `data-flow ∉ sections`.** Move directly to Step 7 (G&R draft).
 
-Show via `bonsai_visualize` `type: "diagram"` (left-to-right):
+Show via `thinkrail_visualize` `type: "diagram"` (left-to-right):
 
 ```json
 {
@@ -388,7 +388,7 @@ via `spec_save` once DESIGN_DOC is complete (G&R stays draft).
 
 ### Step 8 — Final review
 
-Show the result via `bonsai_visualize` `type: "summary-box"`:
+Show the result via `thinkrail_visualize` `type: "summary-box"`:
 
 ```json
 {

@@ -31,7 +31,7 @@ from app.board.patch import (
     validate_amended_file,
 )
 from app.board.service import BoardService, TicketNotFoundError
-from app.core.config import AppConfig
+from app.core.config import AppConfig, MCP_PREFIX, PROJECT_DIRNAME, TICKETS_DIR
 
 logger = logging.getLogger(__name__)
 
@@ -44,7 +44,7 @@ PROPOSE_CHANGE_SCHEMA: dict = {
             "type": "string",
             "description": (
                 "Project-relative path of the spec file to amend. Must be "
-                "inside the project root. Usually under .bonsai/design_docs/."
+                "inside the project root. Usually under .tr/design_docs/."
             ),
         },
         "old_string": {
@@ -97,14 +97,14 @@ def _resolve_ticket_artifact(
 ) -> tuple[str, ArtifactKind] | None:
     """Return (ticket_id, kind) when ``file_path`` is a per-ticket artifact.
 
-    Matches paths shaped ``.bonsai/tickets/<id>/<known-artifact-filename>``.
+    Matches paths shaped ``<meta-dir>/tickets/<id>/<known-artifact-filename>``.
     """
     try:
         rel = (project_root / file_path).resolve().relative_to(project_root.resolve())
     except ValueError:
         return None
     parts = rel.parts
-    if len(parts) != 4 or parts[0] != ".bonsai" or parts[1] != "tickets":
+    if len(parts) != 4 or parts[0] != PROJECT_DIRNAME or parts[1] != TICKETS_DIR:
         return None
     kind = _FILENAME_TO_KIND.get(parts[3])
     if kind is None:
@@ -118,7 +118,7 @@ def _resolve_ticket_artifact(
     "card with four buttons (Accept / Edit / Discuss / Reject). On accept "
     "the change is applied immediately and appended to the ticket's "
     "history.patch log. Use ONLY this tool for spec amendments during "
-    "the amend-specs step — never use Write or Edit on .bonsai/design_docs/.",
+    "the amend-specs step — never use Write or Edit on .tr/design_docs/.",
     PROPOSE_CHANGE_SCHEMA,
 )
 async def _propose_change(args: dict) -> dict:
@@ -154,9 +154,9 @@ async def _propose_change(args: dict) -> dict:
 
     # Suspend the agent and notify the frontend.
     request_id = str(uuid4())
-    future = ctx.tracker.register_future(ctx.task.bonsai_sid, request_id)
+    future = ctx.tracker.register_future(ctx.task.thinkrail_sid, request_id)
     payload: dict = {
-        "bonsaiSid": ctx.task.bonsai_sid,
+        "thinkrailSid": ctx.task.thinkrail_sid,
         "filePath": file_path,
         "oldString": old_string,
         "newString": new_string,
@@ -240,7 +240,7 @@ async def _propose_change(args: dict) -> dict:
         await ctx.notify(
             "ui/artifactAdded",
             {
-                "bonsaiSid": ctx.task.bonsai_sid,
+                "thinkrailSid": ctx.task.thinkrail_sid,
                 "artifact": artifact.model_dump(by_alias=True),
             },
         )
@@ -253,7 +253,7 @@ async def _propose_change(args: dict) -> dict:
 
 
 propose_change_mcp_server = create_sdk_mcp_server(
-    name="bonsai-amend",
+    name=f"{MCP_PREFIX}amend",
     tools=[_propose_change],
 )
 

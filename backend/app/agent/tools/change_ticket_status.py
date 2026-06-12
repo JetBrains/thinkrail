@@ -18,7 +18,7 @@ from app.agent.tools._context import get_tool_context
 from app.agent.tracker import Tracker
 from app.board.service import BoardService, TicketNotFoundError
 from app.board.state_machine import InvalidTransitionError
-from app.core.config import AppConfig
+from app.core.config import AppConfig, MCP_PREFIX
 
 logger = logging.getLogger(__name__)
 
@@ -47,15 +47,15 @@ def _error(text: str) -> dict:
     return {"content": [{"type": "text", "text": f"Error: {text}"}], "isError": True}
 
 
-def _recover_ticket_id(board_service: BoardService, bonsai_sid: str) -> str | None:
-    """Scan tickets for one that already lists ``bonsai_sid`` in its
+def _recover_ticket_id(board_service: BoardService, thinkrail_sid: str) -> str | None:
+    """Scan tickets for one that already lists ``thinkrail_sid`` in its
     ``session_ids``. If exactly one match is found, return its id; otherwise
     None (caller should hard-fail). Lets us self-heal sessions whose
     in-memory / on-disk ``ticket_id`` got lost (e.g., older SuggestSession
     spawns that didn't carry the link forward)."""
     matches: list[str] = []
     for ticket in board_service.list_tickets():
-        if bonsai_sid in ticket.session_ids:
+        if thinkrail_sid in ticket.session_ids:
             matches.append(ticket.id)
             if len(matches) > 1:
                 return None
@@ -80,7 +80,7 @@ async def _change_ticket_status(args: dict) -> dict:
 
     # Self-heal a missing link by reverse-lookup on ticket.session_ids.
     if not ticket_id:
-        recovered = _recover_ticket_id(board_service, ctx.task.bonsai_sid)
+        recovered = _recover_ticket_id(board_service, ctx.task.thinkrail_sid)
         if recovered is None:
             return _error(
                 "This session is not linked to a ticket "
@@ -90,7 +90,7 @@ async def _change_ticket_status(args: dict) -> dict:
         ctx.task.ticket_id = recovered
         logger.info(
             "Recovered ticket link for session %s -> %s",
-            ctx.task.bonsai_sid[:8], recovered,
+            ctx.task.thinkrail_sid[:8], recovered,
         )
 
     try:
@@ -116,7 +116,7 @@ async def _change_ticket_status(args: dict) -> dict:
 
 
 change_ticket_status_mcp_server = create_sdk_mcp_server(
-    name="bonsai-ticket-status", tools=[_change_ticket_status]
+    name=f"{MCP_PREFIX}ticket-status", tools=[_change_ticket_status]
 )
 
 

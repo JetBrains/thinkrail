@@ -1,10 +1,10 @@
 """App-level persistent storage backed by SQLite.
 
 Manages the known-projects registry and app-wide key/value settings.
-Bonsai is single-user and localhost-only, so there are no users,
+ThinkRail is single-user and localhost-only, so there are no users,
 tokens, or per-user preferences here. All data lives in a single
-SQLite database at ``~/.bonsai/bonsai.db`` (or
-``$BONSAI_DATA_DIR/bonsai.db``).
+SQLite database at ``~/.tr/tr.db`` (or
+``$THINKRAIL_DATA_DIR/tr.db``).
 """
 
 from __future__ import annotations

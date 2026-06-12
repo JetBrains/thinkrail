@@ -19,7 +19,7 @@ tags:
 
 ## Overview
 
-Bonsai targets desktop/laptop screens with a minimum viewport width of 1024px. Below that threshold, the three-panel layout gracefully degrades by auto-collapsing side panels. The center panel (sessions) is always visible.
+ThinkRail targets desktop/laptop screens with a minimum viewport width of 1024px. Below that threshold, the three-panel layout gracefully degrades by auto-collapsing side panels. The center panel (sessions) is always visible.
 
 ## Breakpoints
 
@@ -111,7 +111,7 @@ When the viewport resizes (window resize, not panel drag):
 ## Header Adaptation
 
 At < 1024px, the header adapts:
-- Logo text shortens: "🌿 Bonsai" → "🌿"
+- Logo text shortens: "🌿 ThinkRail" → "🌿"
 - Project name hidden
 - Session count pill hidden
 - Only essential buttons: `☰` (left), `☰` (right), `⚙` (settings). The `+ New` session button is reached inside the Sessions view, not from the header.

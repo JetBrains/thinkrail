@@ -70,7 +70,7 @@ describe("createSettingsApi().listRuntimeSkills", () => {
     // wire keys (id/name/description/source) are already camelCase so the
     // payload round-trips verbatim.
     const payload: RuntimeSkillInfo[] = [
-      { id: "specdriven:ticket-specify", name: "Ticket Specify", description: "x", source: "plugin" },
+      { id: "thinkrail:ticket-specify", name: "Ticket Specify", description: "x", source: "plugin" },
     ];
     stub.request.mockResolvedValueOnce(payload);
 
@@ -142,7 +142,7 @@ describe("useSettingsStore.loadRuntimeSkills", () => {
       useSettingsStore.getState().loadRuntimeSkills("claude"),
     ).resolves.toBeUndefined();
 
-    // Cache entry remains absent — autocomplete falls back to bonsai-only.
+    // Cache entry remains absent — autocomplete falls back to thinkrail-only.
     expect(useSettingsStore.getState().runtimeSkills.has("claude")).toBe(false);
     expect(debugSpy).toHaveBeenCalledWith(
       expect.stringContaining("skills/listRuntime"),

@@ -26,14 +26,14 @@ class TestBuildToolCallStartParams:
 
     def test_full_shape_for_edit_call(self) -> None:
         params = build_tool_call_start_params(
-            bonsai_sid="sid-123",
+            thinkrail_sid="sid-123",
             session_id="sess-abc",
             tool_use_id="tu-001",
             tool_name="Edit",
             tool_input={"file_path": "/x.py", "old_string": "a", "new_string": "b"},
         )
         assert params == {
-            "bonsaiSid": "sid-123",
+            "thinkrailSid": "sid-123",
             "sessionId": "sess-abc",
             "toolUseId": "tu-001",
             "toolName": "Edit",
@@ -42,14 +42,14 @@ class TestBuildToolCallStartParams:
 
     def test_omits_agent_id_when_none(self) -> None:
         params = build_tool_call_start_params(
-            bonsai_sid="sid", session_id="s", tool_use_id="t",
+            thinkrail_sid="sid", session_id="s", tool_use_id="t",
             tool_name="Read", tool_input={},
         )
         assert "agentId" not in params
 
     def test_includes_agent_id_when_set(self) -> None:
         params = build_tool_call_start_params(
-            bonsai_sid="sid", session_id="s", tool_use_id="t",
+            thinkrail_sid="sid", session_id="s", tool_use_id="t",
             tool_name="Read", tool_input={}, agent_id="sub-1",
         )
         assert params["agentId"] == "sub-1"
@@ -61,7 +61,7 @@ class TestBuildToolCallStartParams:
             "file_path": "/x", "content": "hi", "_previousContent": "prev",
         }
         params = build_tool_call_start_params(
-            bonsai_sid="sid", session_id="s", tool_use_id="t",
+            thinkrail_sid="sid", session_id="s", tool_use_id="t",
             tool_name="Write", tool_input=custom_input,
         )
         assert params["toolInput"] == custom_input
@@ -70,11 +70,11 @@ class TestBuildToolCallStartParams:
         # The frontend does not require ordered keys, but byte-equality
         # in tests is easier when the order is deterministic.
         params = build_tool_call_start_params(
-            bonsai_sid="sid", session_id="s", tool_use_id="t",
+            thinkrail_sid="sid", session_id="s", tool_use_id="t",
             tool_name="Bash", tool_input={"command": "ls"}, agent_id="a",
         )
         assert list(params.keys()) == [
-            "bonsaiSid", "sessionId", "toolUseId", "toolName", "toolInput", "agentId",
+            "thinkrailSid", "sessionId", "toolUseId", "toolName", "toolInput", "agentId",
         ]
 
 
@@ -86,18 +86,18 @@ class TestBuildToolCallEndParams:
         # canonical marker that the frontend should resolve from the
         # matching toolCallStart event.
         params = build_tool_call_end_params(
-            bonsai_sid="sid", session_id="s", tool_use_id="t",
+            thinkrail_sid="sid", session_id="s", tool_use_id="t",
             output="ok", is_error=False,
         )
         assert params["toolName"] == ""
 
     def test_full_shape(self) -> None:
         params = build_tool_call_end_params(
-            bonsai_sid="sid-1", session_id="sess", tool_use_id="tu-9",
+            thinkrail_sid="sid-1", session_id="sess", tool_use_id="tu-9",
             output="result text", is_error=False,
         )
         assert params == {
-            "bonsaiSid": "sid-1",
+            "thinkrailSid": "sid-1",
             "sessionId": "sess",
             "toolUseId": "tu-9",
             "toolName": "",
@@ -107,7 +107,7 @@ class TestBuildToolCallEndParams:
 
     def test_error_flag_propagates(self) -> None:
         params = build_tool_call_end_params(
-            bonsai_sid="sid", session_id="s", tool_use_id="t",
+            thinkrail_sid="sid", session_id="s", tool_use_id="t",
             output="boom", is_error=True,
         )
         assert params["isError"] is True
@@ -117,14 +117,14 @@ class TestBuildToolCallEndParams:
         # A runtime that carries the tool name on its result can pass it
         # through; the wire shape carries it untouched.
         params = build_tool_call_end_params(
-            bonsai_sid="sid", session_id="s", tool_use_id="t",
+            thinkrail_sid="sid", session_id="s", tool_use_id="t",
             output="42", is_error=False, tool_name="Bash",
         )
         assert params["toolName"] == "Bash"
 
     def test_omits_agent_id_when_none(self) -> None:
         params = build_tool_call_end_params(
-            bonsai_sid="sid", session_id="s", tool_use_id="t",
+            thinkrail_sid="sid", session_id="s", tool_use_id="t",
             output="", is_error=False,
         )
         assert "agentId" not in params
@@ -135,23 +135,23 @@ class TestBuildTextDeltaParams:
 
     def test_basic_shape(self) -> None:
         params = build_text_delta_params(
-            bonsai_sid="sid", session_id="s", text="hello",
+            thinkrail_sid="sid", session_id="s", text="hello",
         )
         assert params == {
-            "bonsaiSid": "sid",
+            "thinkrailSid": "sid",
             "sessionId": "s",
             "text": "hello",
         }
 
     def test_includes_agent_id(self) -> None:
         params = build_text_delta_params(
-            bonsai_sid="sid", session_id="s", text="hi", agent_id="sub-1",
+            thinkrail_sid="sid", session_id="s", text="hi", agent_id="sub-1",
         )
         assert params["agentId"] == "sub-1"
 
     def test_omits_agent_id_when_none(self) -> None:
         params = build_text_delta_params(
-            bonsai_sid="sid", session_id="s", text="hi",
+            thinkrail_sid="sid", session_id="s", text="hi",
         )
         assert "agentId" not in params
 
@@ -165,19 +165,19 @@ class TestWireContract:
 
     def test_tool_call_start_keys_match_documented_contract(self) -> None:
         params = build_tool_call_start_params(
-            bonsai_sid="x", session_id="x", tool_use_id="x",
+            thinkrail_sid="x", session_id="x", tool_use_id="x",
             tool_name="Edit", tool_input={"a": 1},
         )
         # The minimum required key set every runtime adapter must produce.
-        required_keys = {"bonsaiSid", "sessionId", "toolUseId", "toolName", "toolInput"}
+        required_keys = {"thinkrailSid", "sessionId", "toolUseId", "toolName", "toolInput"}
         assert required_keys.issubset(params.keys())
 
     def test_tool_call_end_keys_match_documented_contract(self) -> None:
         params = build_tool_call_end_params(
-            bonsai_sid="x", session_id="x", tool_use_id="x",
+            thinkrail_sid="x", session_id="x", tool_use_id="x",
             output="", is_error=False,
         )
-        required_keys = {"bonsaiSid", "sessionId", "toolUseId", "toolName", "output", "isError"}
+        required_keys = {"thinkrailSid", "sessionId", "toolUseId", "toolName", "output", "isError"}
         assert required_keys.issubset(params.keys())
 
     def test_no_unexpected_keys_in_minimal_shape(self) -> None:
@@ -185,7 +185,7 @@ class TestWireContract:
         # an adapter must NOT introduce extra keys for the same logical
         # event (e.g. no separate `parent_id` field).
         params = build_tool_call_start_params(
-            bonsai_sid="x", session_id="x", tool_use_id="x",
+            thinkrail_sid="x", session_id="x", tool_use_id="x",
             tool_name="Read", tool_input={},
         )
         assert len(params) == 5

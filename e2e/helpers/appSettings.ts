@@ -1,7 +1,7 @@
 /**
  * Direct JSON-RPC helper for the app-scope `appSettings/*` methods.
  *
- * Bonsai's frontend talks to the backend over a WebSocket. Tests can
+ * ThinkRail's frontend talks to the backend over a WebSocket. Tests can
  * borrow that protocol to seed or read the user-scoped session-defaults
  * record without driving the UI — useful when you need a known
  * pre-condition before opening a project (e.g. to assert the new draft
@@ -15,7 +15,7 @@ export interface SessionDefaults {
   flags?: Record<string, boolean>;
 }
 
-const BACKEND_URL = process.env.BONSAI_BACKEND_URL ?? "http://localhost:8000";
+const BACKEND_URL = process.env.THINKRAIL_BACKEND_URL ?? "http://localhost:8000";
 
 function wsUrl(projectPath: string): string {
   const base = BACKEND_URL

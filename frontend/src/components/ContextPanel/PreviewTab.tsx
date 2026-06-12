@@ -30,7 +30,7 @@ export function PreviewTab() {
       <ArtifactStrip
         artifacts={session.artifacts}
         activePath={activePath}
-        onSelect={(p) => setPreviewPath(session.bonsaiSid, p)}
+        onSelect={(p) => setPreviewPath(session.thinkrailSid, p)}
       />
       <PreviewBody
         path={activePath}

@@ -3,22 +3,22 @@ import { useSessionStore } from "@/store/sessionStore.ts";
 interface ErrorBannerProps {
   errors?: string[];
   subtype?: string;
-  bonsaiSid?: string;
+  thinkrailSid?: string;
 }
 
-export function ErrorBanner({ errors, subtype, bonsaiSid }: ErrorBannerProps) {
+export function ErrorBanner({ errors, subtype, thinkrailSid }: ErrorBannerProps) {
   const isContextOverflow = subtype === "context_overflow";
 
   const handleRetry = () => {
-    if (bonsaiSid) {
-      useSessionStore.getState().retryLastMessage(bonsaiSid);
+    if (thinkrailSid) {
+      useSessionStore.getState().retryLastMessage(thinkrailSid);
     }
   };
 
   const handleFreshSession = () => {
-    if (bonsaiSid) {
+    if (thinkrailSid) {
       // Use the existing continueDraft flow to create a fresh session
-      useSessionStore.getState().continueSession(bonsaiSid);
+      useSessionStore.getState().continueSession(thinkrailSid);
     }
   };
 
@@ -41,7 +41,7 @@ export function ErrorBanner({ errors, subtype, bonsaiSid }: ErrorBannerProps) {
           ))}
         </ul>
       )}
-      {isContextOverflow && bonsaiSid && (
+      {isContextOverflow && thinkrailSid && (
         <div className="chat-banner-actions">
           <button className="chat-banner-btn" onClick={handleRetry}>
             Retry

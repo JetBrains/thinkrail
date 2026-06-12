@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Build a standalone Bonsai executable and install it to ~/.local/bin (no sudo).
+# Build a standalone ThinkRail executable and install it to ~/.local/bin (no sudo).
 #
 # Usage:
 #   ./build_and_install.sh                # build + install to ~/.local/bin
@@ -9,10 +9,10 @@
 #   ./build_and_install.sh --prefix DIR   # install into DIR/bin instead of ~/.local/bin
 #
 # Output:
-#   packaging/dist/bonsai          (single-file executable; broken on macOS 15+)
-#   packaging/dist/bonsai-dir/     (directory bundle; this is what gets installed)
-#   <prefix>/libexec/bonsai/       (installed bundle, default prefix: ~/.local)
-#   <prefix>/bin/bonsai            (symlink into the bundle's launcher)
+#   packaging/dist/thinkrail          (single-file executable; broken on macOS 15+)
+#   packaging/dist/thinkrail-dir/     (directory bundle; this is what gets installed)
+#   <prefix>/libexec/thinkrail/       (installed bundle, default prefix: ~/.local)
+#   <prefix>/bin/thinkrail            (symlink into the bundle's launcher)
 
 set -e
 
@@ -75,10 +75,10 @@ uv sync
 echo "==> Building standalone executable with PyInstaller"
 cd "$ROOT/packaging"
 uv run --project "$ROOT/backend" --with pyinstaller \
-    pyinstaller bonsai.spec --noconfirm --distpath dist --workpath build
+    pyinstaller thinkrail.spec --noconfirm --distpath dist --workpath build
 
-BINARY="$ROOT/packaging/dist/bonsai"
-DIR_BINARY="$ROOT/packaging/dist/bonsai-dir/bonsai"
+BINARY="$ROOT/packaging/dist/thinkrail"
+DIR_BINARY="$ROOT/packaging/dist/thinkrail-dir/thinkrail"
 
 echo ""
 echo "Build complete."
@@ -87,8 +87,8 @@ echo "  Directory:    $DIR_BINARY"
 
 # ── Install to <prefix>/bin (no sudo — defaults to ~/.local/bin) ──
 #
-# We install the PyInstaller *directory* bundle (bonsai-dir/) into
-# <prefix>/libexec/bonsai and symlink <prefix>/bin/bonsai to its launcher.
+# We install the PyInstaller *directory* bundle (thinkrail-dir/) into
+# <prefix>/libexec/thinkrail and symlink <prefix>/bin/thinkrail to its launcher.
 #
 # Why not the single-file binary? On recent macOS (Sequoia / 15+), the
 # single-file PyInstaller bootloader unpacks to /var/folders/.../_MEI*
@@ -99,9 +99,9 @@ INSTALLED=""
 ON_PATH=0
 if [ "$INSTALL" = "1" ]; then
     BIN_DIR="$PREFIX/bin"
-    LIBEXEC_DIR="$PREFIX/libexec/bonsai"
-    DEST="$BIN_DIR/bonsai"
-    SRC_DIR="$ROOT/packaging/dist/bonsai-dir"
+    LIBEXEC_DIR="$PREFIX/libexec/thinkrail"
+    DEST="$BIN_DIR/thinkrail"
+    SRC_DIR="$ROOT/packaging/dist/thinkrail-dir"
 
     echo ""
     echo "==> Installing bundle to $LIBEXEC_DIR"
@@ -109,8 +109,8 @@ if [ "$INSTALL" = "1" ]; then
     rm -rf "$LIBEXEC_DIR"
     cp -R "$SRC_DIR" "$LIBEXEC_DIR"
 
-    echo "==> Linking $DEST -> $LIBEXEC_DIR/bonsai"
-    ln -sf "$LIBEXEC_DIR/bonsai" "$DEST"
+    echo "==> Linking $DEST -> $LIBEXEC_DIR/thinkrail"
+    ln -sf "$LIBEXEC_DIR/thinkrail" "$DEST"
     INSTALLED="$DEST"
     echo "    Installed: $DEST"
 
@@ -123,7 +123,7 @@ fi
 echo ""
 if [ -n "$INSTALLED" ]; then
     if [ "$ON_PATH" = "1" ]; then
-        echo "Run with:  bonsai            (auto-opens browser at http://127.0.0.1:8000)"
+        echo "Run with:  thinkrail            (auto-opens browser at http://127.0.0.1:8000)"
     else
         echo "NOTE: $BIN_DIR is not on your PATH."
         echo "      Add it to your shell profile, e.g.:"

@@ -26,7 +26,7 @@ _VALID_TRANSITIONS: dict[TaskStatus, set[TaskStatus]] = {
 
 
 class TaskNotFoundError(Exception):
-    """Raised when a bonsai_sid does not exist."""
+    """Raised when a thinkrail_sid does not exist."""
 
 
 class FutureNotFoundError(Exception):
@@ -38,14 +38,14 @@ class Tracker:
 
     def __init__(self) -> None:
         self._tasks: dict[str, AgentTask] = {}
-        self._pending_requests: dict[str, list[dict[str, Any]]] = {}  # bonsai_sid → list of pending requests (in insertion order)
+        self._pending_requests: dict[str, list[dict[str, Any]]] = {}  # thinkrail_sid → list of pending requests (in insertion order)
         self._futures: dict[str, dict[str, asyncio.Future[dict]]] = {}
         self._queues: dict[str, asyncio.Queue[Any]] = {}
         self._clients: dict[str, Any] = {}
         self._interrupted: set[str] = set()
-        self._turn_text: dict[str, list[str]] = {}  # bonsai_sid → accumulated text blocks
-        self._last_messages: dict[str, str] = {}  # bonsai_sid → last user message (for retry)
-        self._approved_sigs: dict[str, set[str]] = {}  # bonsai_sid → remembered approvals
+        self._turn_text: dict[str, list[str]] = {}  # thinkrail_sid → accumulated text blocks
+        self._last_messages: dict[str, str] = {}  # thinkrail_sid → last user message (for retry)
+        self._approved_sigs: dict[str, set[str]] = {}  # thinkrail_sid → remembered approvals
 
     # -- task lifecycle -------------------------------------------------------
 
@@ -56,11 +56,11 @@ class Tracker:
         skill_id: str | None = None,
         session_prompt: str | None = None,
         name: str = "",
-        bonsai_sid: str | None = None,
+        thinkrail_sid: str | None = None,
         draft_input: str | None = None,
     ) -> AgentTask:
         task = AgentTask(
-            **({"bonsai_sid": bonsai_sid} if bonsai_sid else {}),
+            **({"thinkrail_sid": thinkrail_sid} if thinkrail_sid else {}),
             name=name,
             spec_ids=spec_ids,
             skill_id=skill_id,
@@ -68,29 +68,29 @@ class Tracker:
             draft_input=draft_input,
             config=config,
         )
-        self._tasks[task.bonsai_sid] = task
-        self._queues[task.bonsai_sid] = asyncio.Queue()
+        self._tasks[task.thinkrail_sid] = task
+        self._queues[task.thinkrail_sid] = asyncio.Queue()
         return task
 
-    def get_task(self, bonsai_sid: str) -> AgentTask:
+    def get_task(self, thinkrail_sid: str) -> AgentTask:
         try:
-            return self._tasks[bonsai_sid]
+            return self._tasks[thinkrail_sid]
         except KeyError:
-            raise TaskNotFoundError(f"Session '{bonsai_sid}' not found")
+            raise TaskNotFoundError(f"Session '{thinkrail_sid}' not found")
 
-    def has_task(self, bonsai_sid: str) -> bool:
-        return bonsai_sid in self._tasks
+    def has_task(self, thinkrail_sid: str) -> bool:
+        return thinkrail_sid in self._tasks
 
     def add_task(self, task: AgentTask) -> None:
         """Add an existing task into the tracker (e.g., restoring from disk)."""
-        self._tasks[task.bonsai_sid] = task
-        self._queues[task.bonsai_sid] = asyncio.Queue()
+        self._tasks[task.thinkrail_sid] = task
+        self._queues[task.thinkrail_sid] = asyncio.Queue()
 
     def list_tasks(self) -> list[AgentTask]:
         return list(self._tasks.values())
 
-    def set_status(self, bonsai_sid: str, status: TaskStatus) -> None:
-        task = self.get_task(bonsai_sid)
+    def set_status(self, thinkrail_sid: str, status: TaskStatus) -> None:
+        task = self.get_task(thinkrail_sid)
         if task.status == status:
             return
         allowed = _VALID_TRANSITIONS[task.status]
@@ -101,14 +101,14 @@ class Tracker:
         task.status = status
         task.updated = datetime.now(UTC).isoformat()
 
-    def set_session_id(self, bonsai_sid: str, session_id: str) -> None:
-        task = self.get_task(bonsai_sid)
+    def set_session_id(self, thinkrail_sid: str, session_id: str) -> None:
+        task = self.get_task(thinkrail_sid)
         task.session_id = session_id
         task.updated = datetime.now(UTC).isoformat()
 
-    def set_outcome(self, bonsai_sid: str, outcome: SessionOutcome) -> AgentTask:
+    def set_outcome(self, thinkrail_sid: str, outcome: SessionOutcome) -> AgentTask:
         """Attach the skill's done-screen contract to the task."""
-        task = self.get_task(bonsai_sid)
+        task = self.get_task(thinkrail_sid)
         task.outcome = outcome
         task.updated = datetime.now(UTC).isoformat()
         return task
@@ -120,7 +120,7 @@ class Tracker:
     _PATCHABLE_ACTION_FIELDS: frozenset[str] = frozenset({"state", "title", "body"})
 
     def patch_outcome_action(
-        self, bonsai_sid: str, action_id: str, patch: dict[str, Any]
+        self, thinkrail_sid: str, action_id: str, patch: dict[str, Any]
     ) -> AgentTask:
         """Apply a partial update to one action inside the outcome.
 
@@ -130,7 +130,7 @@ class Tracker:
         anything else is dropped. Silent no-op if the outcome or action
         is missing.
         """
-        task = self.get_task(bonsai_sid)
+        task = self.get_task(thinkrail_sid)
         if task.outcome is None:
             return task
         safe_patch = {
@@ -148,66 +148,66 @@ class Tracker:
 
     # -- live SDK client reference --------------------------------------------
 
-    def set_client(self, bonsai_sid: str, client: Any) -> None:
-        self._clients[bonsai_sid] = client
+    def set_client(self, thinkrail_sid: str, client: Any) -> None:
+        self._clients[thinkrail_sid] = client
 
-    def get_client(self, bonsai_sid: str) -> Any | None:
-        return self._clients.get(bonsai_sid)
+    def get_client(self, thinkrail_sid: str) -> Any | None:
+        return self._clients.get(thinkrail_sid)
 
-    def clear_client(self, bonsai_sid: str) -> None:
-        self._clients.pop(bonsai_sid, None)
+    def clear_client(self, thinkrail_sid: str) -> None:
+        self._clients.pop(thinkrail_sid, None)
 
     # -- message queue --------------------------------------------------------
 
-    def enqueue_message(self, bonsai_sid: str, text: str) -> None:
+    def enqueue_message(self, thinkrail_sid: str, text: str) -> None:
         """Push a user message onto the session's queue."""
-        self.get_task(bonsai_sid)  # validate task exists
-        self._queues[bonsai_sid].put_nowait(text)
+        self.get_task(thinkrail_sid)  # validate task exists
+        self._queues[thinkrail_sid].put_nowait(text)
 
-    def enqueue_end_signal(self, bonsai_sid: str) -> None:
+    def enqueue_end_signal(self, thinkrail_sid: str) -> None:
         """Push the END_SIGNAL sentinel to close the conversation loop."""
-        self.get_task(bonsai_sid)  # validate task exists
-        self._queues[bonsai_sid].put_nowait(_END_SIGNAL)
+        self.get_task(thinkrail_sid)  # validate task exists
+        self._queues[thinkrail_sid].put_nowait(_END_SIGNAL)
 
-    async def get_next_message(self, bonsai_sid: str) -> str | object:
+    async def get_next_message(self, thinkrail_sid: str) -> str | object:
         """Await the next item from the session's queue.
 
         Returns the user message text, or ``END_SIGNAL`` if the session
         should close.
         """
-        self.get_task(bonsai_sid)  # validate task exists
-        return await self._queues[bonsai_sid].get()
+        self.get_task(thinkrail_sid)  # validate task exists
+        return await self._queues[thinkrail_sid].get()
 
     # -- future management ----------------------------------------------------
 
     def register_future(
-        self, bonsai_sid: str, request_id: str
+        self, thinkrail_sid: str, request_id: str
     ) -> asyncio.Future[dict]:
         """Register a Future for a pending user response.
 
         The future waits indefinitely until ``resolve_future`` or
         ``cancel_futures`` is called — there is no timeout.
         """
-        self.get_task(bonsai_sid)  # validate task exists
+        self.get_task(thinkrail_sid)  # validate task exists
         loop = asyncio.get_event_loop()
         future: asyncio.Future[dict] = loop.create_future()
 
-        task_futures = self._futures.setdefault(bonsai_sid, {})
+        task_futures = self._futures.setdefault(thinkrail_sid, {})
         task_futures[request_id] = future
         return future
 
-    def resolve_future(self, bonsai_sid: str, request_id: str, response: dict) -> None:
-        task_futures = self._futures.get(bonsai_sid, {})
+    def resolve_future(self, thinkrail_sid: str, request_id: str, response: dict) -> None:
+        task_futures = self._futures.get(thinkrail_sid, {})
         future = task_futures.pop(request_id, None)
         if future is None:
-            logger.warning("No pending future for session %s request %s (already resolved or timed out)", bonsai_sid, request_id)
+            logger.warning("No pending future for session %s request %s (already resolved or timed out)", thinkrail_sid, request_id)
             return
         if not future.done():
             future.set_result(response)
 
     # -- pending request tracking -----------------------------------------------
 
-    def add_pending_request(self, bonsai_sid: str, request: dict[str, Any]) -> None:
+    def add_pending_request(self, thinkrail_sid: str, request: dict[str, Any]) -> None:
         """Append a pending request to the session's queue.
 
         Multiple concurrent requests are supported (used by ticket-implement's
@@ -215,75 +215,75 @@ class Tracker:
         in one assistant turn). Requests are identified by ``requestId`` for
         resolution; the order in this list is the order they appear in the UI.
         """
-        self._pending_requests.setdefault(bonsai_sid, []).append(request)
+        self._pending_requests.setdefault(thinkrail_sid, []).append(request)
 
-    def list_pending_requests(self, bonsai_sid: str) -> list[dict[str, Any]]:
+    def list_pending_requests(self, thinkrail_sid: str) -> list[dict[str, Any]]:
         """Return a snapshot copy of the session's pending requests."""
-        return list(self._pending_requests.get(bonsai_sid, []))
+        return list(self._pending_requests.get(thinkrail_sid, []))
 
-    def remove_pending_request(self, bonsai_sid: str, request_id: str) -> None:
+    def remove_pending_request(self, thinkrail_sid: str, request_id: str) -> None:
         """Remove the request matching ``request_id``; no-op if not found."""
-        bucket = self._pending_requests.get(bonsai_sid)
+        bucket = self._pending_requests.get(thinkrail_sid)
         if not bucket:
             return
-        self._pending_requests[bonsai_sid] = [
+        self._pending_requests[thinkrail_sid] = [
             r for r in bucket if r.get("requestId") != request_id
         ]
-        if not self._pending_requests[bonsai_sid]:
-            self._pending_requests.pop(bonsai_sid, None)
+        if not self._pending_requests[thinkrail_sid]:
+            self._pending_requests.pop(thinkrail_sid, None)
 
     # -- remembered approvals -------------------------------------------------
 
-    def is_tool_approved(self, bonsai_sid: str, signature: str) -> bool:
-        return signature in self._approved_sigs.get(bonsai_sid, set())
+    def is_tool_approved(self, thinkrail_sid: str, signature: str) -> bool:
+        return signature in self._approved_sigs.get(thinkrail_sid, set())
 
-    def remember_approval(self, bonsai_sid: str, signature: str) -> None:
-        self._approved_sigs.setdefault(bonsai_sid, set()).add(signature)
+    def remember_approval(self, thinkrail_sid: str, signature: str) -> None:
+        self._approved_sigs.setdefault(thinkrail_sid, set()).add(signature)
 
-    def remove_task(self, bonsai_sid: str) -> None:
+    def remove_task(self, thinkrail_sid: str) -> None:
         """Remove a completed task and all associated state."""
-        self._tasks.pop(bonsai_sid, None)
-        self._queues.pop(bonsai_sid, None)
-        self._futures.pop(bonsai_sid, None)
-        self._clients.pop(bonsai_sid, None)
-        self._interrupted.discard(bonsai_sid)
-        self._turn_text.pop(bonsai_sid, None)
-        self._pending_requests.pop(bonsai_sid, None)
-        self._last_messages.pop(bonsai_sid, None)
+        self._tasks.pop(thinkrail_sid, None)
+        self._queues.pop(thinkrail_sid, None)
+        self._futures.pop(thinkrail_sid, None)
+        self._clients.pop(thinkrail_sid, None)
+        self._interrupted.discard(thinkrail_sid)
+        self._turn_text.pop(thinkrail_sid, None)
+        self._pending_requests.pop(thinkrail_sid, None)
+        self._last_messages.pop(thinkrail_sid, None)
 
-    def cancel_futures(self, bonsai_sid: str) -> None:
-        task_futures = self._futures.pop(bonsai_sid, {})
+    def cancel_futures(self, thinkrail_sid: str) -> None:
+        task_futures = self._futures.pop(thinkrail_sid, {})
         for future in task_futures.values():
             if not future.done():
                 future.cancel()
 
     # -- interrupt management -------------------------------------------------
 
-    def set_interrupted(self, bonsai_sid: str) -> None:
+    def set_interrupted(self, thinkrail_sid: str) -> None:
         """Mark session as interrupted.
 
         Called by ``service.interrupt_task()`` before calling
         ``client.interrupt()`` so the runner knows to emit
         ``agent/interrupted`` instead of ``agent/turnComplete``.
         """
-        self._interrupted.add(bonsai_sid)
+        self._interrupted.add(thinkrail_sid)
 
-    def is_interrupted(self, bonsai_sid: str) -> bool:
+    def is_interrupted(self, thinkrail_sid: str) -> bool:
         """Check whether the session has a pending interrupt flag."""
-        return bonsai_sid in self._interrupted
+        return thinkrail_sid in self._interrupted
 
-    def clear_interrupted(self, bonsai_sid: str) -> None:
+    def clear_interrupted(self, thinkrail_sid: str) -> None:
         """Clear the interrupt flag after the runner has processed it."""
-        self._interrupted.discard(bonsai_sid)
+        self._interrupted.discard(thinkrail_sid)
 
-    def interrupt_futures(self, bonsai_sid: str) -> None:
+    def interrupt_futures(self, thinkrail_sid: str) -> None:
         """Resolve pending futures with deny + interrupt instead of cancelling.
 
         Unlike ``cancel_futures()`` which raises ``CancelledError``, this
         produces a clean ``PermissionResultDeny(interrupt=True)`` that tells
         the SDK to stop the turn gracefully.
         """
-        task_futures = self._futures.pop(bonsai_sid, {})
+        task_futures = self._futures.pop(thinkrail_sid, {})
         for future in task_futures.values():
             if not future.done():
                 future.set_result({
@@ -294,29 +294,29 @@ class Tracker:
 
     # -- last message (for retry) ------------------------------------------------
 
-    def set_last_message(self, bonsai_sid: str, text: str) -> None:
+    def set_last_message(self, thinkrail_sid: str, text: str) -> None:
         """Store the last user message for potential retry."""
-        self._last_messages[bonsai_sid] = text
+        self._last_messages[thinkrail_sid] = text
 
-    def get_last_message(self, bonsai_sid: str) -> str | None:
+    def get_last_message(self, thinkrail_sid: str) -> str | None:
         """Return the last user message, or None if no message was sent."""
-        return self._last_messages.get(bonsai_sid)
+        return self._last_messages.get(thinkrail_sid)
 
     # -- turn text accumulation ------------------------------------------------
 
-    def append_turn_text(self, bonsai_sid: str, text: str) -> None:
+    def append_turn_text(self, thinkrail_sid: str, text: str) -> None:
         """Append assistant text to the current turn buffer.
 
         Called by the runner for each ``TextBlock`` so that ``can_use_tool``
         can inject accumulated plan content into ``ExitPlanMode`` payloads.
         """
-        self._turn_text.setdefault(bonsai_sid, []).append(text)
+        self._turn_text.setdefault(thinkrail_sid, []).append(text)
 
-    def get_turn_text(self, bonsai_sid: str) -> str:
+    def get_turn_text(self, thinkrail_sid: str) -> str:
         """Return accumulated assistant text for the current turn."""
-        parts = self._turn_text.get(bonsai_sid, [])
+        parts = self._turn_text.get(thinkrail_sid, [])
         return "".join(parts)
 
-    def clear_turn_text(self, bonsai_sid: str) -> None:
+    def clear_turn_text(self, thinkrail_sid: str) -> None:
         """Clear the turn text buffer (called at the start of each query)."""
-        self._turn_text.pop(bonsai_sid, None)
+        self._turn_text.pop(thinkrail_sid, None)

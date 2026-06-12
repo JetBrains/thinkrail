@@ -30,7 +30,7 @@ def persist_artifact_state(project_root: Path, task: AgentTask) -> None:
     """
     update_session_metadata(
         project_root,
-        task.bonsai_sid,
+        task.thinkrail_sid,
         {
             "artifacts": [a.model_dump(by_alias=True) for a in task.artifacts],
             "previewPath": task.preview_path,

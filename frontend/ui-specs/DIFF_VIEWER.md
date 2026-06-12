@@ -32,7 +32,7 @@ The central idea is that spec changes *cause* code changes. The Diff Viewer visu
 ```
 Git commits
     ↓ (extract)
-Mapping files (.bonsai/mappings.json + per-spec .[name]_mappings.json)
+Mapping files (.tr/mappings.json + per-spec .[name]_mappings.json)
     ↓ (read)
 Diff Viewer
     ↓ (display)
@@ -77,7 +77,7 @@ Side-by-side: spec diff ←→ code diff
 
 ## 2. Mapping File Format
 
-### Project-wide mapping: `.bonsai/mappings.json`
+### Project-wide mapping: `.tr/mappings.json`
 
 Index of all spec-to-code mappings. Points to per-spec mapping files.
 
@@ -161,7 +161,7 @@ For each new git commit:
         - Extract code hunks (git diff for covered files)
         - Identify spec section headers from hunk context
         - Write to per-spec mapping file
-        - Update .bonsai/mappings.json index
+        - Update .tr/mappings.json index
 ```
 
 ### Backend API Additions

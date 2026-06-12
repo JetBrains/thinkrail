@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
-# Bonsai binary installer.
+# ThinkRail binary installer.
 #
 # Public-repo install:
 #   curl -fsSL https://raw.githubusercontent.com/JetBrains/bonsai/main/install.sh | bash
 #
-# Private/internal repo (while bonsai is still private):
+# Private/internal repo (while thinkrail is still private):
 #   curl -fsSL -H "Authorization: Bearer $(gh auth token)" \
 #     https://raw.githubusercontent.com/JetBrains/bonsai/main/install.sh \
 #     | GH_TOKEN=$(gh auth token) bash -s -- --channel nightly
@@ -16,15 +16,15 @@
 # Options (pass after `-s --`):
 #   --channel stable|nightly   (default: stable)
 #   --version X.Y.Z|latest     (default: latest)
-#   --prefix DIR               (default: ~/.local; binary lands at <prefix>/bin/bonsai)
+#   --prefix DIR               (default: ~/.local; binary lands at <prefix>/bin/thinkrail)
 #                              Allowed chars: A-Z a-z 0-9 _ - . / ~ and space.
 #   --no-modify-path           don't touch shell rc files; just print PATH advice
 #
-# After install: run `bonsai`. To update later: `bonsai upgrade`.
+# After install: run `thinkrail`. To update later: `thinkrail upgrade`.
 
 set -euo pipefail
 
-REPO="${BONSAI_REPO:-JetBrains/bonsai}"
+REPO="${THINKRAIL_REPO:-JetBrains/bonsai}"
 CHANNEL="stable"
 VERSION="latest"
 PREFIX="${HOME}/.local"
@@ -32,7 +32,7 @@ MODIFY_PATH=1
 
 usage() {
     cat >&2 <<'EOF'
-Bonsai binary installer.
+ThinkRail binary installer.
 
 Usage:
   curl -fsSL https://raw.githubusercontent.com/JetBrains/bonsai/main/install.sh | bash
@@ -41,13 +41,13 @@ Usage:
 Options:
   --channel stable|nightly   (default: stable)
   --version X.Y.Z|latest     (default: latest)
-  --prefix DIR               (default: ~/.local; binary lands at <prefix>/bin/bonsai)
+  --prefix DIR               (default: ~/.local; binary lands at <prefix>/bin/thinkrail)
                              Allowed chars: A-Z a-z 0-9 _ - . / ~ and space.
   --no-modify-path           don't touch shell rc files; just print PATH advice
 
 Auth (private repo): set GH_TOKEN, GITHUB_TOKEN, or have `gh` authenticated.
 
-After install: run `bonsai`. To update later: `bonsai upgrade`.
+After install: run `thinkrail`. To update later: `thinkrail upgrade`.
 EOF
     exit "${1:-0}"
 }
@@ -119,7 +119,7 @@ detect_arch() {
 
 OS=$(detect_os)
 ARCH=$(detect_arch)
-ASSET_NAME="bonsai-${OS}-${ARCH}"
+ASSET_NAME="thinkrail-${OS}-${ARCH}"
 [ "$OS" = "windows" ] && ASSET_NAME="${ASSET_NAME}.exe"
 
 api() {
@@ -230,13 +230,13 @@ echo "  → ok"
 
 BIN_DIR="$PREFIX/bin"
 mkdir -p "$BIN_DIR"
-DEST="$BIN_DIR/bonsai"
-[ "$OS" = "windows" ] && DEST="$BIN_DIR/bonsai.exe"
+DEST="$BIN_DIR/thinkrail"
+[ "$OS" = "windows" ] && DEST="$BIN_DIR/thinkrail.exe"
 mv "$TMP/$ASSET_NAME" "$DEST"
 chmod +x "$DEST"
 echo "Installed → $DEST"
 
-CONFIG_DIR="${HOME}/.config/bonsai"
+CONFIG_DIR="${HOME}/.config/thinkrail"
 mkdir -p "$CONFIG_DIR"
 cat > "$CONFIG_DIR/install.json" <<EOF
 {
@@ -249,7 +249,7 @@ cat > "$CONFIG_DIR/install.json" <<EOF
 EOF
 
 echo
-echo "Bonsai ${TAG#v} ($CHANNEL) installed."
+echo "ThinkRail ${TAG#v} ($CHANNEL) installed."
 
 # ── PATH setup ────────────────────────────────────────────────────────────
 # If $BIN_DIR is already on PATH there's nothing to do. Otherwise try to
@@ -291,7 +291,7 @@ case ":$PATH:" in
                     rc_line="export PATH=\"\$PATH:$BIN_DIR\""
                     ;;
                 fish)
-                    rc_file="$HOME/.config/fish/conf.d/bonsai.fish"
+                    rc_file="$HOME/.config/fish/conf.d/thinkrail.fish"
                     # Single-quote the path so spaces (allowed by the prefix
                     # validator) don't get split into multiple fish arguments.
                     rc_line="fish_add_path '$BIN_DIR'"
@@ -302,8 +302,8 @@ case ":$PATH:" in
             esac
 
             if [ -n "$rc_file" ]; then
-                marker_begin="# >>> bonsai PATH >>>"
-                marker_end="# <<< bonsai PATH <<<"
+                marker_begin="# >>> thinkrail PATH >>>"
+                marker_end="# <<< thinkrail PATH <<<"
                 # If the desired rc_line already lives between our markers,
                 # there's nothing to do. Otherwise strip any existing marker
                 # block (so reinstalling with a different --prefix doesn't
@@ -367,5 +367,5 @@ if [ "$PATH_NEEDS_MANUAL_ADD" -eq 1 ]; then
     echo "Add to PATH:    export PATH=\"\$PATH:$BIN_DIR\""
 fi
 
-echo "Run:            bonsai"
-echo "Upgrade later:  bonsai upgrade"
+echo "Run:            thinkrail"
+echo "Upgrade later:  thinkrail upgrade"

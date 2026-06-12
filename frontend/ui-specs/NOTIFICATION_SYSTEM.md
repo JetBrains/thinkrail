@@ -128,7 +128,7 @@ Optional audio notification for pending user input.
 
 - Sound: short, subtle ping (200ms, low volume)
 - Plays once per event, not repeatedly
-- `soundEnabled` is persisted via Zustand `persist` middleware (storage key `"bonsai-notification-sound"`)
+- `soundEnabled` is persisted via Zustand `persist` middleware (storage key `"thinkrail-notification-sound"`)
 - Toggled via `toggleSound()` action
 
 ## Notification Priority

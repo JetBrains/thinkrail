@@ -18,7 +18,7 @@ from app.agent.models import AgentTask
 from app.agent.runtime.permissions import ToolPermissionResponse
 from app.agent.tools._context import get_tool_context
 from app.agent.tracker import Tracker
-from app.core.config import AppConfig
+from app.core.config import AppConfig, MCP_PREFIX
 from app.spec.index import SpecIndex
 
 logger = logging.getLogger(__name__)
@@ -32,7 +32,7 @@ SUGGEST_SESSION_SCHEMA: dict = {
             "description": (
                 "Skill ID for the suggested session. "
                 "Use the SHORT name without namespace prefix "
-                "(e.g. 'module-design', 'task-spec', NOT 'specdriven:module-design')."
+                "(e.g. 'module-design', 'task-spec', NOT 'thinkrail:module-design')."
             ),
         },
         "specIds": {
@@ -117,10 +117,10 @@ async def _suggest_session(args: dict) -> dict:
 
     # --- Interactive flow: send card → await developer response ---
     request_id = str(uuid4())
-    future = ctx.tracker.register_future(ctx.task.bonsai_sid, request_id)
+    future = ctx.tracker.register_future(ctx.task.thinkrail_sid, request_id)
 
     payload: dict[str, Any] = {
-        "bonsaiSid": ctx.task.bonsai_sid,
+        "thinkrailSid": ctx.task.thinkrail_sid,
         "skill": skill,
         "specIds": spec_ids,
         "name": args.get("name", ""),
@@ -166,7 +166,7 @@ async def _suggest_session(args: dict) -> dict:
 
 
 suggest_session_mcp_server = create_sdk_mcp_server(
-    name="bonsai-proactive", tools=[_suggest_session]
+    name=f"{MCP_PREFIX}proactive", tools=[_suggest_session]
 )
 
 

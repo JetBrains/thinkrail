@@ -6,7 +6,7 @@ import { type Skill, FALLBACK_SKILLS } from "@/constants/skills.ts";
 import type { RuntimeSkillInfo, RuntimeType } from "@/types/agent.ts";
 
 interface SettingsStore {
-  /** Parsed project settings from .bonsai/settings.json */
+  /** Parsed project settings from .tr/settings.json */
   settings: ProjectSettings | null;
   /** User-scoped session-creation defaults (AppStore-backed). */
   sessionDefaults: SessionDefaults | null;
@@ -24,7 +24,7 @@ interface SettingsStore {
    * Fetch runtime skills for ``runtime`` via ``skills/listRuntime`` and
    * cache them on the store. Silent on failure — logs to ``console.debug``
    * and leaves the cache entry untouched, so the autocomplete popup
-   * gracefully falls back to a Bonsai-only list (design doc §6.5, §7).
+   * gracefully falls back to a ThinkRail-only list (design doc §6.5, §7).
    */
   loadRuntimeSkills: (runtime: RuntimeType) => Promise<void>;
 

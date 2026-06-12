@@ -20,11 +20,11 @@ tags:
 ---
 # Visualization Card — Frontend Spec
 
-> Parent: [Chat UI](CHAT_UI.md) | Feature: [.bonsai/design_docs/VISUALIZATION.md](../../.bonsai/design_docs/VISUALIZATION.md) | Status: **Active** | Created: 2026-03-16
+> Parent: [Chat UI](CHAT_UI.md) | Feature: [.tr/design_docs/VISUALIZATION.md](../../.tr/design_docs/VISUALIZATION.md) | Status: **Active** | Created: 2026-03-16
 
 ## Purpose
 
-Frontend rendering layer for the `bonsai_visualize` MCP tool. Takes structured visualization data from `toolCallStart` events and renders rich interactive cards within the ChatStream. Supports 6 visualization types, visId-based auto-collapse, layout hints, Mermaid diagrams, and graceful error handling.
+Frontend rendering layer for the `thinkrail_visualize` MCP tool. Takes structured visualization data from `toolCallStart` events and renders rich interactive cards within the ChatStream. Supports 6 visualization types, visId-based auto-collapse, layout hints, Mermaid diagrams, and graceful error handling.
 
 ## Component Tree
 
@@ -117,7 +117,7 @@ Renders a `<span>` with the icon character and color from the maps above. Used b
 
 ### `ensureMermaid()` — `utils/mermaid.ts`
 
-Initializes Mermaid once with dark theme configuration matching the Bonsai UI (JetBrains Mono font, custom colors). Called before any diagram render. Shared by both `VisualizationCard` (diagrams) and `MarkdownPreview` (code fences).
+Initializes Mermaid once with dark theme configuration matching the ThinkRail UI (JetBrains Mono font, custom colors). Called before any diagram render. Shared by both `VisualizationCard` (diagrams) and `MarkdownPreview` (code fences).
 
 ### `toMermaidSyntax()` — exported from `VisualizationCard.tsx`
 
@@ -210,7 +210,7 @@ React class component wrapping each `VisualizationCard`. Catches render errors a
 ## Related Specs
 
 - **Parent:** [Chat UI](CHAT_UI.md)
-- **Feature:** [.bonsai/design_docs/VISUALIZATION.md](../../.bonsai/design_docs/VISUALIZATION.md)
+- **Feature:** [.tr/design_docs/VISUALIZATION.md](../../.tr/design_docs/VISUALIZATION.md)
 - **Types:** `types/vis.ts`
 - **Mermaid utils:** `utils/mermaid.ts`
 - **CSS:** `ChatStream.css` (`.vis-card*`, `.vis-collapsed-marker*` classes)

@@ -10,7 +10,7 @@ from app.agent.models import AgentTask
 from app.agent.runtime.permissions import ToolPermissionResponse
 from app.agent.tools._context import get_tool_context
 from app.agent.tracker import Tracker
-from app.core.config import AppConfig
+from app.core.config import AppConfig, MCP_PREFIX
 
 
 LABEL_ARTIFACT_SCHEMA: dict = {
@@ -75,7 +75,7 @@ async def _label_artifact(args: dict) -> dict:
         )
     persist_artifact_state(ctx.config.get_project_root(), ctx.task)
 
-    payload: dict = {"bonsaiSid": ctx.task.bonsai_sid, "path": artifact.path}
+    payload: dict = {"thinkrailSid": ctx.task.thinkrail_sid, "path": artifact.path}
     if role is not None:
         payload["role"] = role
     if label is not None:
@@ -85,7 +85,7 @@ async def _label_artifact(args: dict) -> dict:
 
 
 label_artifact_mcp_server = create_sdk_mcp_server(
-    name="bonsai-label-artifact",
+    name=f"{MCP_PREFIX}label-artifact",
     tools=[_label_artifact],
 )
 

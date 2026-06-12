@@ -219,7 +219,7 @@ interface MetaTicketSummary {
 
 The right pane of the ticket detail view shows a **TicketDescriptionBanner** at the top, always visible, rendering `ticket.body` with an inline ✎ Edit button. Description is a ticket-level field (not an artifact); it sits between the progress bar and the dynamic artifact / plan / session panel.
 
-See `.bonsai/design_docs/TICKET_LIFECYCLE_DESIGN.md` for the canonical spec of the lifecycle, allowed transitions, patch-apply contract, and artifact storage layout.
+See `.tr/design_docs/TICKET_LIFECYCLE_DESIGN.md` for the canonical spec of the lifecycle, allowed transitions, patch-apply contract, and artifact storage layout.
 
 ## Design Decisions
 

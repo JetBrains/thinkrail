@@ -84,7 +84,7 @@ sequenceDiagram
     participant S as Claude SDK
 
     F->>B: agent/run {specIds, config}
-    B-->>F: {bonsaiSid}
+    B-->>F: {thinkrailSid}
     Note over B: state: initializing
     B->>S: create SDK client (async)
     Note over B: state: idle (SDK client ready)
@@ -92,7 +92,7 @@ sequenceDiagram
     rect rgb(40, 40, 60)
         Note over F,S: Conversation loop (repeats)
 
-        F->>B: agent/send {bonsaiSid, text}
+        F->>B: agent/send {thinkrailSid, text}
         B->>S: query(text)
         Note over B: state: running
         B-->>F: agent/statusChanged {status: running}
@@ -120,7 +120,7 @@ sequenceDiagram
         Note over B: state: idle
     end
 
-    F->>B: agent/end {bonsaiSid}
+    F->>B: agent/end {thinkrailSid}
     B->>S: close SDK client
     B-->>F: agent/done
     Note over B: state: done
@@ -147,8 +147,8 @@ sequenceDiagram
 
     Note over R: state: running
 
-    F->>Svc: agent/interrupt {bonsaiSid}
-    Svc->>Svc: tracker.interrupt_futures(bonsaiSid)
+    F->>Svc: agent/interrupt {thinkrailSid}
+    Svc->>Svc: tracker.interrupt_futures(thinkrailSid)
     Svc->>SDK: client.interrupt()
     SDK->>CLI: control_request {subtype: interrupt}
     CLI-->>SDK: control_response {subtype: success}
@@ -162,7 +162,7 @@ sequenceDiagram
     Note over R: state: idle
 
     Note over F: user can send another message
-    F->>Svc: agent/send {bonsaiSid, text}
+    F->>Svc: agent/send {thinkrailSid, text}
     R->>R: tracker.set_status(running)
     R-->>F: agent/statusChanged {status: running}
     Note over R: same client, same context, state: running
@@ -184,15 +184,15 @@ sequenceDiagram
     participant Svc as service.py
     participant R as runtime/claude/runtime.py
     participant SDK as Claude SDK (CLI)
-    participant Disk as .bonsai/sessions/
+    participant Disk as .tr/sessions/
 
-    F->>Svc: session/continue {bonsaiSid}
-    Svc->>Disk: load_session(bonsaiSid)
+    F->>Svc: session/continue {thinkrailSid}
+    Svc->>Disk: load_session(thinkrailSid)
     Disk-->>Svc: metadata (incl. sessionId)
 
     Note over Svc: Validate: sessionId must exist
 
-    Svc->>Svc: create AgentTask (same bonsai_sid)
+    Svc->>Svc: create AgentTask (same thinkrail_sid)
     Svc->>Svc: build spec_context (fresh)
     Svc->>R: run(task, spec_context, ...,<br/>resume_session_id=old_sessionId)
 
@@ -209,7 +209,7 @@ sequenceDiagram
 
 | Aspect | Design |
 |--------|--------|
-| **Session identity** | Same `bonsai_sid` is reused. The CLI may assign a new internal `session_id`. |
+| **Session identity** | Same `thinkrail_sid` is reused. The CLI may assign a new internal `session_id`. |
 | **Context restoration** | Full conversation history restored natively by CLI — no text replay, no truncation. |
 | **System prompt** | Fresh spec context is built from current specs/skills (passed via `system_prompt`). |
 | **Event persistence** | New events from the resumed session append to the same `.events.jsonl` file. |
@@ -281,7 +281,7 @@ graph TD
 | `tracker.py` | Session lifecycle (initializing/idle/running/waiting/done/error), message queue per session (`asyncio.Queue`), registry of in-flight `asyncio.Future` objects keyed by `requestId`, **interrupt flag** per session for notification routing. Project-scoped — owned by `ProjectContext`, shared with `AgentService` and every runtime instance | models |
 | `persistence.py` | Session persistence — split storage: metadata in `.json`, events in append-only `.events.jsonl`. Save/load/list/append/delete. See [PERSISTENCE.md](PERSISTENCE.md). | core/fileio |
 | `pricing.py` | Per-model token pricing and cost estimation. Tier-based (opus/sonnet/haiku). `estimate_cost()` used by runner for live cost streaming. | — |
-| `tools/` | Self-contained MCP tools package. Each tool is one file: schema + handler + MCP server + `intercept()`. Spec tools (`spec_search`, `spec_links`, `spec_delete`) query the SQLite index and handle multi-file cleanup — agents use standard `Write`/`Edit` for spec file creation/editing. Exports `MCP_SERVERS`, `INTERCEPTORS`, and `set_tool_context()`/`get_tool_context()` (contextvars for yolo mode). See [tools/README.md](tools/README.md), [SPECS_TOOLS.md](tools/SPECS_TOOLS.md). Harness-abstraction PR 3 will replace this with a unified `BonsaiTool` registry + per-runtime adapter. | claude-agent-sdk, tracker, models |
+| `tools/` | Self-contained MCP tools package. Each tool is one file: schema + handler + MCP server + `intercept()`. Spec tools (`spec_search`, `spec_links`, `spec_delete`) query the SQLite index and handle multi-file cleanup — agents use standard `Write`/`Edit` for spec file creation/editing. Exports `MCP_SERVERS`, `INTERCEPTORS`, and `set_tool_context()`/`get_tool_context()` (contextvars for yolo mode). See [tools/README.md](tools/README.md), [SPECS_TOOLS.md](tools/SPECS_TOOLS.md). Harness-abstraction PR 3 will replace this with a unified `ThinkRailTool` registry + per-runtime adapter. | claude-agent-sdk, tracker, models |
 
 ## Public Interface
 
@@ -292,18 +292,18 @@ graph TD
 | Method | Signature | Description |
 |--------|-----------|-------------|
 | `run_task` | `(spec_ids: list[str], config: AgentConfig, skill_id: str \| None = None, session_prompt: str \| None = None, name: str = "") -> AgentTask` | Start a persistent agent session. Builds context from specs, skill, session prompt, and project metadata via `context.build_context()`, then launches the background runner. The runner publishes events via the EventBus (`rpc/bus.py`). Task is created in `initializing` state and returned immediately. |
-| `send_message` | `(bonsai_sid: str, text: str, *, is_markdown: bool = False) -> None` | Send a user message to the session, triggering a new turn. Enqueues the message; runner picks it up and calls `client.query()`. Accepted during `initializing` (queued until SDK client is ready) and `idle`. |
-| `interrupt_task` | `(bonsai_sid: str) -> None` | Cancel the current turn non-destructively. Calls `tracker.interrupt_futures()` to resolve pending futures with deny+interrupt, then calls `client.interrupt()` on the stored SDK client. The runner stays alive, the client is preserved, and the session returns to `idle` — ready for new messages with full context intact. |
-| `end_session` | `(bonsai_sid: str) -> None` | Gracefully close the session and SDK client. Session enters `done` state. |
-| `update_config` | `(bonsai_sid: str, model: str \| None = None, permission_mode: str \| None = None, effort: str \| None = None) -> dict` | Update config on a live session. Each provided value is validated against the runtime's `capabilities()`; an out-of-caps value raises `InvalidCapabilityValueError` → `-32032`. Model and permissionMode go through the SDK client directly today; effort is stored on `task.config` and takes effect on the next turn. Harness-abstraction PR 2 will route these through `IAgentRuntime.update_running_session` instead of touching the SDK client from the service layer. |
-| `get_task` | `(bonsai_sid: str) -> AgentTask` | Get current session status and metadata |
+| `send_message` | `(thinkrail_sid: str, text: str, *, is_markdown: bool = False) -> None` | Send a user message to the session, triggering a new turn. Enqueues the message; runner picks it up and calls `client.query()`. Accepted during `initializing` (queued until SDK client is ready) and `idle`. |
+| `interrupt_task` | `(thinkrail_sid: str) -> None` | Cancel the current turn non-destructively. Calls `tracker.interrupt_futures()` to resolve pending futures with deny+interrupt, then calls `client.interrupt()` on the stored SDK client. The runner stays alive, the client is preserved, and the session returns to `idle` — ready for new messages with full context intact. |
+| `end_session` | `(thinkrail_sid: str) -> None` | Gracefully close the session and SDK client. Session enters `done` state. |
+| `update_config` | `(thinkrail_sid: str, model: str \| None = None, permission_mode: str \| None = None, effort: str \| None = None) -> dict` | Update config on a live session. Each provided value is validated against the runtime's `capabilities()`; an out-of-caps value raises `InvalidCapabilityValueError` → `-32032`. Model and permissionMode go through the SDK client directly today; effort is stored on `task.config` and takes effect on the next turn. Harness-abstraction PR 2 will route these through `IAgentRuntime.update_running_session` instead of touching the SDK client from the service layer. |
+| `get_task` | `(thinkrail_sid: str) -> AgentTask` | Get current session status and metadata |
 | `list_tasks` | `() -> list[AgentTask]` | List all sessions (initializing, idle, running, waiting, done, error) |
-| `respond` | `(bonsai_sid: str, request_id: str, response: dict) -> None` | Resolve a pending `asyncio.Future` with the client's answer (for mid-turn interactions) |
+| `respond` | `(thinkrail_sid: str, request_id: str, response: dict) -> None` | Resolve a pending `asyncio.Future` with the client's answer (for mid-turn interactions) |
 | `list_all_sessions` | `() -> list[dict]` | List all sessions: in-memory active + on-disk archived (metadata only) |
-| `get_session_data` | `(bonsai_sid: str) -> dict \| None` | Get full session data including events from disk |
-| `continue_session` | `async (bonsai_sid: str) -> AgentTask` | **Resume a session using SDK native `--resume`.** Loads stored `sessionId` from disk, validates it exists, builds fresh spec context, then launches `_run_background` with `resume_session_id=old_session_id`. Runner publishes via EventBus. Raises `ValueError` if session not found or has no stored `sessionId`. |
-| `restart_session` | `async (bonsai_sid: str) -> AgentTask` | End current session and resume with current (updated) config. |
-| `trash_session` | `(bonsai_sid: str) -> None` | Soft-delete: detach from all tickets via `BoardService.detach_session_from_all`, move files to `.bonsai/trash/` via `TrashService`, clean up in-memory tracker state. Falls back to hard-delete if no TrashService is available. |
+| `get_session_data` | `(thinkrail_sid: str) -> dict \| None` | Get full session data including events from disk |
+| `continue_session` | `async (thinkrail_sid: str) -> AgentTask` | **Resume a session using SDK native `--resume`.** Loads stored `sessionId` from disk, validates it exists, builds fresh spec context, then launches `_run_background` with `resume_session_id=old_session_id`. Runner publishes via EventBus. Raises `ValueError` if session not found or has no stored `sessionId`. |
+| `restart_session` | `async (thinkrail_sid: str) -> AgentTask` | End current session and resume with current (updated) config. |
+| `trash_session` | `(thinkrail_sid: str) -> None` | Soft-delete: detach from all tickets via `BoardService.detach_session_from_all`, move files to `.tr/trash/` via `TrashService`, clean up in-memory tracker state. Falls back to hard-delete if no TrashService is available. |
 
 > **Multi-client note (2026-04-12):** The `notify: Callable` parameter and `rebind_notify()` method have been removed. The runtime now publishes events via the EventBus singleton (`rpc/bus.py`), which routes to all subscribed WebSocket connections. This eliminates the need to pass or rebind callbacks on reconnect.
 
@@ -344,7 +344,7 @@ await runtime.run_session(task, exec_config, handler)
 | `UnknownRuntimeError` / `DuplicateRuntimeError` | `runtime/registry.py` | Domain exceptions; RPC translates `UnknownRuntimeError` → `UNKNOWN_RUNTIME (-32031)` |
 | `InvalidCapabilityValueError` | `exceptions.py` | Raised when a `model`/`permissionMode`/`effort` is outside the runtime's `capabilities()` at a launch path (`start_draft`, `run_task`, `continue_session`) or `update_config`. RPC translates it → `INVALID_CAPABILITY_VALUE (-32032)` with `data: {field, value, runtimeType, allowed}` |
 
-For the cross-cutting design see [`.bonsai/design_docs/MULTI_RUNTIME_DESIGN.md`](../../../.bonsai/design_docs/MULTI_RUNTIME_DESIGN.md). The Claude implementation is documented at [`runtime/claude/README.md`](runtime/claude/README.md).
+For the cross-cutting design see [`.tr/design_docs/MULTI_RUNTIME_DESIGN.md`](../../../.tr/design_docs/MULTI_RUNTIME_DESIGN.md). The Claude implementation is documented at [`runtime/claude/README.md`](runtime/claude/README.md).
 
 ### Models
 
@@ -354,10 +354,10 @@ All models with multi-word fields use a `camelCase` alias generator (`to_camel` 
 
 | Model | Fields (Python / JSON wire) | Description |
 |-------|--------|-------------|
-| `AgentTask` | bonsai_sid/`bonsaiSid`, name, status, spec_ids/`specIds`, skill_id/`skillId`?, session_prompt/`sessionPrompt`?, draft_input/`draftInput`?, config, session_id/`sessionId`?, created, updated | Session record. `status` is one of: `draft`, `initializing`, `idle`, `running`, `waiting`, `done`, `error`. `skill_id` references the selected skill (if any). `session_prompt` holds custom instructions passed via `agent/run` or `SuggestSession`. `draft_input` holds the in-progress prompt text autosaved while a blank draft is being typed (see [Draft Session](../../../.bonsai/design_docs/DRAFT_SESSION_DESIGN.md)); unlike `session_prompt` it is **non-context** — never fed to `build_context`, so it neither pollutes the system prompt nor re-appears as the first message when the draft starts. |
+| `AgentTask` | thinkrail_sid/`thinkrailSid`, name, status, spec_ids/`specIds`, skill_id/`skillId`?, session_prompt/`sessionPrompt`?, draft_input/`draftInput`?, config, session_id/`sessionId`?, created, updated | Session record. `status` is one of: `draft`, `initializing`, `idle`, `running`, `waiting`, `done`, `error`. `skill_id` references the selected skill (if any). `session_prompt` holds custom instructions passed via `agent/run` or `SuggestSession`. `draft_input` holds the in-progress prompt text autosaved while a blank draft is being typed (see [Draft Session](../../../.tr/design_docs/DRAFT_SESSION_DESIGN.md)); unlike `session_prompt` it is **non-context** — never fed to `build_context`, so it neither pollutes the system prompt nor re-appears as the first message when the draft starts. |
 | `AgentConfig` | runtime, model, permission_mode/`permissionMode`, stream_text/`streamText`, effort, flags | Run configuration. `runtime: RuntimeType` (defaults to `"claude"`) selects which `IAgentRuntime` handles the session. `effort` is `str = "auto"` — `"auto"` (the default, = SDK `effort=None`) plus the runtime's SDK-derived effort levels; a `field_validator(mode="before")` coerces a legacy persisted `null` to `"auto"`. On the wire `effort` is always a string. `flags: dict[str, bool]` holds runtime-declared option toggles (keyed by `RuntimeFlag.key`); absent keys fall back to the flag's default at the runtime boundary. `extra="ignore"` so persisted session files that still carry removed fields (e.g. `betas`, `maxTurns`) round-trip cleanly. |
-| `AgentEvent` | bonsai_sid/`bonsaiSid`, session_id/`sessionId`, event_type/`eventType`, payload | Serializable event to send as notification |
-| `AgentResult` | bonsai_sid/`bonsaiSid`, session_id/`sessionId`, result, cost_usd/`costUsd`, turns, duration_ms/`durationMs`, usage | Turn result (sent with `turnComplete`) or final session result (sent with `done`) |
+| `AgentEvent` | thinkrail_sid/`thinkrailSid`, session_id/`sessionId`, event_type/`eventType`, payload | Serializable event to send as notification |
+| `AgentResult` | thinkrail_sid/`thinkrailSid`, session_id/`sessionId`, result, cost_usd/`costUsd`, turns, duration_ms/`durationMs`, usage | Turn result (sent with `turnComplete`) or final session result (sent with `done`) |
 
 #### Tracker State
 
@@ -391,7 +391,7 @@ These types define the data exchanged during mid-turn interactions. Both `AskUse
 
 The SDK uses a single `canUseTool` callback for both questions and tool approvals. `permissions.can_use_tool` distinguishes them by `tool_name`:
 
-| `tool_name` in `canUseTool` | Bonsai protocol method | Frontend response -> SDK return |
+| `tool_name` in `canUseTool` | ThinkRail protocol method | Frontend response -> SDK return |
 |------------------------------|------------------------|-------------------------------|
 | `"AskUserQuestion"` | `agent/askUserQuestion` | `AskUserQuestionResponse` -> `PermissionResultAllow(updated_input={"questions": [...], "answers": {...}})` |
 | `"SuggestSession"` | — (auto-approved by interceptor) | `PermissionResultAllow(behavior="allow")`. Interactive flow (card, Future, await) runs inside the tool handler via `get_tool_context()` — not in `canUseTool`. See [SuggestSession Backend Spec](tools/SUGGEST_SESSION.md). |
@@ -418,7 +418,7 @@ These map 1-to-1 to the `agent/*` notification methods in the protocol:
 | `done` | Session closed (via `agent/end` or session-level termination) | `agent/done` | Implemented |
 | `error` | `SDKResultMessage` error subtypes / unhandled exception | `agent/error` | Implemented — classifies "Prompt is too long" errors as `subtype: "context_overflow"` (recoverable, session stays idle). Other errors use `subtype: "turn_error"`. |
 | `permission_denied` | `SDKResultMessage.permission_denials` | `agent/permissionDenied` | TODO |
-| `status_changed` | `tracker.set_status()` in runner — emitted on `idle→running` and `running→idle` transitions | `agent/statusChanged` | Implemented. Payload: `{bonsaiSid, status}`. Frontend uses this as the authoritative status signal for non-first turns (since `agent/sessionStart` only fires once per runner). |
+| `status_changed` | `tracker.set_status()` in runner — emitted on `idle→running` and `running→idle` transitions | `agent/statusChanged` | Implemented. Payload: `{thinkrailSid, status}`. Frontend uses this as the authoritative status signal for non-first turns (since `agent/sessionStart` only fires once per runner). |
 
 ### Interactive Request/Response Flow
 
@@ -426,15 +426,15 @@ For mid-turn interactions where the agent needs user input, `runtime/claude/runt
 
 | Trigger | Server sends | Client responds with |
 |---------|-------------|----------------------|
-| `canUseTool` fires with `tool_name="AskUserQuestion"` | `agent/askUserQuestion` (JSON-RPC request with `id`); params: `{ bonsaiSid, questions }` | `agent/respond { bonsaiSid, requestId, response: AskUserQuestionResponse }` |
-| SuggestSession tool handler (via `get_tool_context()`) | `agent/suggestSession` (JSON-RPC request with `id`); params: `{ bonsaiSid, skill, specIds, name, reason, prompt? }` | `agent/respond { bonsaiSid, requestId, response: ToolApprovalResponse }` — approve: `{"behavior":"allow"}`, dismiss: `{"behavior":"deny", "dismissReason": "..."}` |
-| `canUseTool` fires with any other `tool_name` | `agent/confirmAction` (JSON-RPC request with `id`); params: `{ bonsaiSid, toolName, toolInput }` | `agent/respond { bonsaiSid, requestId, response: ToolApprovalResponse }` |
+| `canUseTool` fires with `tool_name="AskUserQuestion"` | `agent/askUserQuestion` (JSON-RPC request with `id`); params: `{ thinkrailSid, questions }` | `agent/respond { thinkrailSid, requestId, response: AskUserQuestionResponse }` |
+| SuggestSession tool handler (via `get_tool_context()`) | `agent/suggestSession` (JSON-RPC request with `id`); params: `{ thinkrailSid, skill, specIds, name, reason, prompt? }` | `agent/respond { thinkrailSid, requestId, response: ToolApprovalResponse }` — approve: `{"behavior":"allow"}`, dismiss: `{"behavior":"deny", "dismissReason": "..."}` |
+| `canUseTool` fires with any other `tool_name` | `agent/confirmAction` (JSON-RPC request with `id`); params: `{ thinkrailSid, toolName, toolInput }` | `agent/respond { thinkrailSid, requestId, response: ToolApprovalResponse }` |
 
 **Suspension mechanism:**
 1. Runner registers a new `asyncio.Future` in `tracker.py` keyed by `requestId`
 2. Runner sends the JSON-RPC request to the frontend via the `notify` callback
 3. Runner `await`s the Future
-4. Frontend user responds -> RPC layer calls `service.respond(bonsai_sid, request_id, response)`
+4. Frontend user responds -> RPC layer calls `service.respond(thinkrail_sid, request_id, response)`
 5. `tracker.py` resolves the Future; runner resumes and returns the response to the SDK
 
 **Timeout:** If no response arrives within a configurable deadline, the Future is cancelled, the action is auto-denied, and an `agent/notification` event is sent to inform the frontend.
@@ -445,10 +445,10 @@ The tracker manages an **interrupt flag** per session, used to coordinate betwee
 
 | Method | Signature | Description |
 |--------|-----------|-------------|
-| `set_interrupted` | `(bonsai_sid: str) -> None` | Set the interrupt flag for this session. Called by `service.interrupt_task()` before calling `client.interrupt()`. |
-| `is_interrupted` | `(bonsai_sid: str) -> bool` | Check whether the interrupt flag is set. Called by the runtime when processing `ResultMessage` to decide between emitting `agent/interrupted` vs `agent/turnComplete`. |
-| `clear_interrupted` | `(bonsai_sid: str) -> None` | Clear the interrupt flag after processing. Called by the runtime after emitting the `agent/interrupted` notification. |
-| `interrupt_futures` | `(bonsai_sid: str) -> None` | Resolve all pending futures for this session with `{"behavior": "deny", "message": "Interrupted", "interrupt": true}`. Unlike `cancel_futures()` (which raises `CancelledError`), this produces a clean `PermissionResultDeny(interrupt=True)` that tells the SDK to stop the turn gracefully. |
+| `set_interrupted` | `(thinkrail_sid: str) -> None` | Set the interrupt flag for this session. Called by `service.interrupt_task()` before calling `client.interrupt()`. |
+| `is_interrupted` | `(thinkrail_sid: str) -> bool` | Check whether the interrupt flag is set. Called by the runtime when processing `ResultMessage` to decide between emitting `agent/interrupted` vs `agent/turnComplete`. |
+| `clear_interrupted` | `(thinkrail_sid: str) -> None` | Clear the interrupt flag after processing. Called by the runtime after emitting the `agent/interrupted` notification. |
+| `interrupt_futures` | `(thinkrail_sid: str) -> None` | Resolve all pending futures for this session with `{"behavior": "deny", "message": "Interrupted", "interrupt": true}`. Unlike `cancel_futures()` (which raises `CancelledError`), this produces a clean `PermissionResultDeny(interrupt=True)` that tells the SDK to stop the turn gracefully. |
 
 **Why resolve instead of cancel?** Cancelling a future raises `CancelledError` which propagates unpredictably through the SDK's `can_use_tool` callback. Resolving with `deny + interrupt=True` uses the SDK's intended mechanism — `PermissionResultDeny(interrupt=True)` tells the SDK to end the turn cleanly and emit a `ResultMessage`.
 
@@ -459,11 +459,11 @@ The tracker manages an **interrupt flag** per session, used to coordinate betwee
 ```python
 # Task starts in initializing — SDK client not yet ready
 async with ClaudeSDKClient(options=options) as client:
-    tracker.set_client(task.bonsai_sid, client)
-    tracker.set_status(task.bonsai_sid, "idle")  # SDK client ready → initializing → idle
+    tracker.set_client(task.thinkrail_sid, client)
+    tracker.set_status(task.thinkrail_sid, "idle")  # SDK client ready → initializing → idle
 
     while True:
-        message = await tracker.get_next_message(task.bonsai_sid)  # blocks until agent/send
+        message = await tracker.get_next_message(task.thinkrail_sid)  # blocks until agent/send
 
         if message is END_SIGNAL:
             break  # agent/end was called
@@ -475,13 +475,13 @@ async with ClaudeSDKClient(options=options) as client:
             # Map SDK events -> notifications (same as current)
 
             if isinstance(sdk_event, ResultMessage):
-                if tracker.is_interrupted(task.bonsai_sid):
+                if tracker.is_interrupted(task.thinkrail_sid):
                     # Interrupt path — emit interrupted, not turnComplete
                     await notify("agent/interrupted", {...})
-                    tracker.clear_interrupted(task.bonsai_sid)
+                    tracker.clear_interrupted(task.thinkrail_sid)
                 else:
                     await notify("agent/turnComplete", {...})
-                tracker.set_status(task.bonsai_sid, "idle")
+                tracker.set_status(task.thinkrail_sid, "idle")
                 break  # back to conversation loop, same client
 
     # Session closed -> emit agent/done
@@ -506,7 +506,7 @@ Sections are ordered General Instructions → Skill → Project → Specs, with 
 
 ## Plugin Wiring
 
-The Bonsai `claude-plugin/` is wired into the Claude Agent SDK client as a **local plugin** via `ClaudeAgentOptions.plugins`. This gives sessions native SDK-level support for plugin hooks, custom commands, and namespaced skill invocation — beyond what context assembly alone provides.
+The ThinkRail `claude-plugin/` is wired into the Claude Agent SDK client as a **local plugin** via `ClaudeAgentOptions.plugins`. This gives sessions native SDK-level support for plugin hooks, custom commands, and namespaced skill invocation — beyond what context assembly alone provides.
 
 ### How It Works
 
@@ -567,7 +567,7 @@ await runtime.run_session(task, exec_config, handler)
 
 ## Context Management
 
-Conversation-history management and compaction are owned by the Claude Code subprocess that the Claude Agent SDK wraps. Bonsai observes what the SDK does and offers recovery when the SDK reports overflow. See `.bonsai/design_docs/CONTEXT_MANAGEMENT_DESIGN.md` for the full rationale.
+Conversation-history management and compaction are owned by the Claude Code subprocess that the Claude Agent SDK wraps. ThinkRail observes what the SDK does and offers recovery when the SDK reports overflow. See `.tr/design_docs/CONTEXT_MANAGEMENT_DESIGN.md` for the full rationale.
 
 ### Detection (observability only)
 
@@ -606,7 +606,7 @@ Conversation-history management and compaction are owned by the Claude Code subp
 | Notify callback | Injected into runner at session start; supports both notifications (`request_id=None`) and server-initiated requests (`request_id` set) | Keeps the runner decoupled from WebSocket details; RPC layer owns the connection and callback creation |
 | Agent file change tracking | Filesystem watcher (core/watcher), not tool call interception | Watcher is ground truth — catches all file changes regardless of source (agent, user, external). Same pipeline as user changes: watcher -> spec/service -> rpc/notifications. |
 | Context assembly | Dedicated `context.py` submodule with pipeline: gather -> compose | Separates prompt construction from session orchestration. Pure function, easy to test. Supports specs, skills, and project metadata as distinct sources with framing prompts. |
-| Plugin wiring | Pass `plugin_dir` to SDK via `plugins=[{"type": "local", "path": ...}]` | Enables native SDK features (hooks, commands, namespaced skills) beyond what system prompt text provides. Bonsai plugin only — no project-local plugin discovery. |
+| Plugin wiring | Pass `plugin_dir` to SDK via `plugins=[{"type": "local", "path": ...}]` | Enables native SDK features (hooks, commands, namespaced skills) beyond what system prompt text provides. ThinkRail plugin only — no project-local plugin discovery. |
 | Dual skill loading | Skills loaded both in context.py (prompt text) and via SDK plugin (native) | Context assembly provides explicit framing for the LLM. SDK plugin enables runtime hook/command support. Intentional duplication, may consolidate later. |
 | Silent skip on missing plugin | Empty `plugins` list when `plugin_dir` is None or doesn't exist | Graceful degradation — sessions work without a plugin, matching current behavior. No error, no warning. |
 

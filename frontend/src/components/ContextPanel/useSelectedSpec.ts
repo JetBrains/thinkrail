@@ -3,8 +3,8 @@ import { useSpecStore } from "@/store/specStore.ts";
 import type { SpecEntry } from "@/types/spec.ts";
 
 function isSpecFile(path: string): boolean {
-  if (path.includes("/.bonsai/")) return true;
-  if (path.startsWith(".bonsai/")) return true;
+  if (path.includes("/.tr/")) return true;
+  if (path.startsWith(".tr/")) return true;
   const specs = useSpecStore.getState().specs;
   return specs.some((s) => path === s.path || path.endsWith(`/${s.path}`));
 }

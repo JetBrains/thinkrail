@@ -34,15 +34,15 @@ from app.core.config import AppConfig
 
 def _make_task(tracker: Tracker) -> AgentTask:
     task = tracker.create_task(["s1"], AgentConfig())
-    tracker.set_status(task.bonsai_sid, "idle")
-    tracker.set_status(task.bonsai_sid, "running")
+    tracker.set_status(task.thinkrail_sid, "idle")
+    tracker.set_status(task.thinkrail_sid, "running")
     return task
 
 
 def _config() -> AppConfig:
     return AppConfig(
         project_root=Path("/tmp/test"),
-        bonsai_dir=Path("/tmp/test/.bonsai"),
+        thinkrail_dir=Path("/tmp/test/.tr"),
         plugin_dir=Path("/tmp/test/plugins"),
     )
 
@@ -57,21 +57,21 @@ class TestAwaitUserResponse:
 
         async def answer_soon():
             await asyncio.sleep(0.05)
-            futures = tracker._futures.get(task.bonsai_sid, {})
+            futures = tracker._futures.get(task.thinkrail_sid, {})
             for rid, fut in futures.items():
                 if not fut.done():
-                    tracker.resolve_future(task.bonsai_sid, rid, {"behavior": "allow", "answers": {"q": "a"}})
+                    tracker.resolve_future(task.thinkrail_sid, rid, {"behavior": "allow", "answers": {"q": "a"}})
                     break
 
         asyncio.get_event_loop().create_task(answer_soon())
         response, request_id = await _await_user_response(
             tracker, notify, task, _config(),
             method="agent/askUserQuestion",
-            params={"bonsaiSid": task.bonsai_sid, "questions": []},
+            params={"thinkrailSid": task.thinkrail_sid, "questions": []},
         )
 
         assert response["behavior"] == "allow"
-        assert tracker.get_task(task.bonsai_sid).status == "running"
+        assert tracker.get_task(task.thinkrail_sid).status == "running"
 
     async def test_publishes_status_changed_on_both_transitions(self) -> None:
         # Without these notifies, the sidebar's sessionList cache stays
@@ -85,17 +85,17 @@ class TestAwaitUserResponse:
 
         async def answer_soon():
             await asyncio.sleep(0.05)
-            futures = tracker._futures.get(task.bonsai_sid, {})
+            futures = tracker._futures.get(task.thinkrail_sid, {})
             for rid, fut in futures.items():
                 if not fut.done():
-                    tracker.resolve_future(task.bonsai_sid, rid, {"behavior": "allow"})
+                    tracker.resolve_future(task.thinkrail_sid, rid, {"behavior": "allow"})
                     break
 
         asyncio.get_event_loop().create_task(answer_soon())
         await _await_user_response(
             tracker, notify, task, _config(),
             method="agent/askUserQuestion",
-            params={"bonsaiSid": task.bonsai_sid, "questions": []},
+            params={"thinkrailSid": task.thinkrail_sid, "questions": []},
         )
 
         status_calls = [
@@ -104,10 +104,10 @@ class TestAwaitUserResponse:
         ]
         assert len(status_calls) == 2, status_calls
         assert status_calls[0].args[1] == {
-            "bonsaiSid": task.bonsai_sid, "status": "waiting",
+            "thinkrailSid": task.thinkrail_sid, "status": "waiting",
         }
         assert status_calls[1].args[1] == {
-            "bonsaiSid": task.bonsai_sid, "status": "running",
+            "thinkrailSid": task.thinkrail_sid, "status": "running",
         }
 
     async def test_skips_waiting_publish_when_already_waiting(self) -> None:
@@ -115,22 +115,22 @@ class TestAwaitUserResponse:
         # the existing waiting state — we should not double-publish.
         tracker = Tracker()
         task = _make_task(tracker)
-        tracker.set_status(task.bonsai_sid, "waiting")
+        tracker.set_status(task.thinkrail_sid, "waiting")
         notify = AsyncMock()
 
         async def answer_soon():
             await asyncio.sleep(0.05)
-            futures = tracker._futures.get(task.bonsai_sid, {})
+            futures = tracker._futures.get(task.thinkrail_sid, {})
             for rid, fut in futures.items():
                 if not fut.done():
-                    tracker.resolve_future(task.bonsai_sid, rid, {"behavior": "allow"})
+                    tracker.resolve_future(task.thinkrail_sid, rid, {"behavior": "allow"})
                     break
 
         asyncio.get_event_loop().create_task(answer_soon())
         await _await_user_response(
             tracker, notify, task, _config(),
             method="agent/askUserQuestion",
-            params={"bonsaiSid": task.bonsai_sid, "questions": []},
+            params={"thinkrailSid": task.thinkrail_sid, "questions": []},
         )
 
         status_calls = [
@@ -149,17 +149,17 @@ class TestAwaitUserResponse:
 
         async def answer_after_delay():
             await asyncio.sleep(0.2)
-            futures = tracker._futures.get(task.bonsai_sid, {})
+            futures = tracker._futures.get(task.thinkrail_sid, {})
             for rid, fut in futures.items():
                 if not fut.done():
-                    tracker.resolve_future(task.bonsai_sid, rid, {"behavior": "allow"})
+                    tracker.resolve_future(task.thinkrail_sid, rid, {"behavior": "allow"})
                     break
 
         asyncio.get_event_loop().create_task(answer_after_delay())
         response, _request_id = await _await_user_response(
             tracker, notify, task, _config(),
             method="agent/askUserQuestion",
-            params={"bonsaiSid": task.bonsai_sid, "questions": []},
+            params={"thinkrailSid": task.thinkrail_sid, "questions": []},
         )
         assert response["behavior"] == "allow"
 
@@ -177,9 +177,9 @@ class TestCanUseToolNeutral:
 
         async def resolve_allow():
             await asyncio.sleep(0.02)
-            for req_id in list(tracker._futures.get(task.bonsai_sid, {})):
+            for req_id in list(tracker._futures.get(task.thinkrail_sid, {})):
                 tracker.resolve_future(
-                    task.bonsai_sid, req_id, {"behavior": "allow"},
+                    task.thinkrail_sid, req_id, {"behavior": "allow"},
                 )
                 break
 
@@ -211,9 +211,9 @@ class TestCanUseToolNeutral:
 
         async def resolve_deny():
             await asyncio.sleep(0.02)
-            for req_id in list(tracker._futures.get(task.bonsai_sid, {})):
+            for req_id in list(tracker._futures.get(task.thinkrail_sid, {})):
                 tracker.resolve_future(
-                    task.bonsai_sid,
+                    task.thinkrail_sid,
                     req_id,
                     {"behavior": "deny", "message": "nope", "interrupt": True},
                 )
@@ -236,9 +236,9 @@ class TestCanUseToolNeutral:
 
         async def resolve_answer():
             await asyncio.sleep(0.02)
-            for req_id in list(tracker._futures.get(task.bonsai_sid, {})):
+            for req_id in list(tracker._futures.get(task.thinkrail_sid, {})):
                 tracker.resolve_future(
-                    task.bonsai_sid,
+                    task.thinkrail_sid,
                     req_id,
                     {"questions": [{"question": "Q?"}], "answers": {"Q?": "A"}},
                 )
@@ -266,7 +266,7 @@ class TestCanUseToolNeutral:
         notify = AsyncMock()
 
         req = ToolPermissionRequest(
-            tool_name="mcp__bonsai-specs__spec_search",
+            tool_name="mcp__thinkrail-specs__spec_search",
             input={},
         )
         response = await can_use_tool(
@@ -317,7 +317,7 @@ class TestClaudeCanUseToolAdapter:
         assert req.input == {"command": "ls"}
         assert req.tool_use_id == "tu-1"
         # SDK ToolPermissionContext has no session_id → falls back to task sid
-        assert req.session_id == task.bonsai_sid
+        assert req.session_id == task.thinkrail_sid
 
     async def test_deny_path_returns_permission_result_deny(self) -> None:
         tracker = Tracker()
@@ -373,8 +373,8 @@ class TestClaudeCanUseToolAdapter:
         task = tracker.create_task(
             ["s1"], AgentConfig(permission_mode="bypassPermissions"),
         )
-        tracker.set_status(task.bonsai_sid, "idle")
-        tracker.set_status(task.bonsai_sid, "running")
+        tracker.set_status(task.thinkrail_sid, "idle")
+        tracker.set_status(task.thinkrail_sid, "running")
         notify = AsyncMock()
         captured: dict[str, ToolPermissionRequest] = {}
 
@@ -396,7 +396,7 @@ class TestClaudeCanUseToolAdapter:
 
     async def test_session_id_taken_from_context_when_present(self) -> None:
         """If the SDK context carries a ``session_id`` attr, prefer it
-        over the task's bonsai_sid."""
+        over the task's thinkrail_sid."""
         tracker = Tracker()
         task = _make_task(tracker)
         notify = AsyncMock()
@@ -452,20 +452,20 @@ class TestCategorize:
         "tool_name, expected",
         [
             # Read-only / display-only interceptors — safe in plan mode.
-            ("mcp__bonsai-specs__spec_search", "read"),
-            ("mcp__bonsai-specs__spec_links", "read"),
-            ("mcp__bonsai-vis__bonsai_visualize", "read"),
-            ("mcp__bonsai-proactive__SuggestSession", "read"),
-            ("mcp__bonsai-orchestrator__suggest_step", "read"),
+            ("mcp__thinkrail-specs__spec_search", "read"),
+            ("mcp__thinkrail-specs__spec_links", "read"),
+            ("mcp__thinkrail-vis__thinkrail_visualize", "read"),
+            ("mcp__thinkrail-proactive__SuggestSession", "read"),
+            ("mcp__thinkrail-orchestrator__suggest_step", "read"),
             # Mutating interceptors — must be denied in plan mode.
-            ("mcp__bonsai-specs__spec_delete", "edit"),
-            ("mcp__bonsai-ticket-status__ChangeTicketStatus", "edit"),
+            ("mcp__thinkrail-specs__spec_delete", "edit"),
+            ("mcp__thinkrail-ticket-status__ChangeTicketStatus", "edit"),
         ],
     )
     def test_mcp_interceptor_routes_to_proper_category(
         self, tool_name: str, expected: str,
     ) -> None:
-        """Bonsai's own MCP tools are categorized by their interceptor
+        """ThinkRail's own MCP tools are categorized by their interceptor
         suffix so plan mode can allow read-only tools while denying
         mutating ones (instead of treating them all as opaque ``mcp``)."""
         assert categorize(tool_name) == expected
@@ -477,13 +477,13 @@ class TestCategorize:
         mode must let it through — classify as ``"read"``.
         """
         assert categorize(
-            "mcp__bonsai-describe__SuggestDescription",
+            "mcp__thinkrail-describe__SuggestDescription",
         ) == "read"
         assert categorize(
-            "mcp__bonsai-describe__SuggestDescription", {},
+            "mcp__thinkrail-describe__SuggestDescription", {},
         ) == "read"
         assert categorize(
-            "mcp__bonsai-describe__SuggestDescription",
+            "mcp__thinkrail-describe__SuggestDescription",
             {"apply": False},
         ) == "read"
 
@@ -492,7 +492,7 @@ class TestCategorize:
         denied in plan mode, so classify as ``"edit"``.
         """
         assert categorize(
-            "mcp__bonsai-describe__SuggestDescription",
+            "mcp__thinkrail-describe__SuggestDescription",
             {"apply": True},
         ) == "edit"
 
@@ -696,9 +696,9 @@ class TestCanUseToolModeFiltering:
 
         async def resolve_allow() -> None:
             await asyncio.sleep(0.02)
-            for req_id in list(tracker._futures.get(task.bonsai_sid, {})):
+            for req_id in list(tracker._futures.get(task.thinkrail_sid, {})):
                 tracker.resolve_future(
-                    task.bonsai_sid, req_id, {"behavior": "allow"},
+                    task.thinkrail_sid, req_id, {"behavior": "allow"},
                 )
                 break
 
@@ -817,9 +817,9 @@ class TestCanUseToolModeFiltering:
 
         async def resolve_allow() -> None:
             await asyncio.sleep(0.02)
-            for req_id in list(tracker._futures.get(task.bonsai_sid, {})):
+            for req_id in list(tracker._futures.get(task.thinkrail_sid, {})):
                 tracker.resolve_future(
-                    task.bonsai_sid, req_id, {"behavior": "allow"},
+                    task.thinkrail_sid, req_id, {"behavior": "allow"},
                 )
                 break
 
@@ -842,7 +842,7 @@ class TestCanUseToolModeFiltering:
     async def test_plan_mode_allows_read_only_mcp_interceptor(
         self,
     ) -> None:
-        """Read-only Bonsai MCP tools (``spec_search``, etc.) are
+        """Read-only ThinkRail MCP tools (``spec_search``, etc.) are
         categorized as ``"read"`` so plan mode allows them through to
         their interceptor handler."""
         tracker = Tracker()
@@ -850,7 +850,7 @@ class TestCanUseToolModeFiltering:
         notify = AsyncMock()
 
         req = ToolPermissionRequest(
-            tool_name="mcp__bonsai-specs__spec_search",
+            tool_name="mcp__thinkrail-specs__spec_search",
             input={},
             permission_mode="plan",
         )
@@ -863,19 +863,19 @@ class TestCanUseToolModeFiltering:
     @pytest.mark.parametrize(
         "tool_name, tool_input",
         [
-            ("mcp__bonsai-specs__spec_delete", {}),
+            ("mcp__thinkrail-specs__spec_delete", {}),
             # SuggestDescription only mutates with apply=true.
             (
-                "mcp__bonsai-describe__SuggestDescription",
+                "mcp__thinkrail-describe__SuggestDescription",
                 {"apply": True},
             ),
-            ("mcp__bonsai-ticket-status__ChangeTicketStatus", {}),
+            ("mcp__thinkrail-ticket-status__ChangeTicketStatus", {}),
         ],
     )
     async def test_plan_mode_denies_mutating_mcp_interceptor(
         self, tool_name: str, tool_input: dict,
     ) -> None:
-        """Mutating Bonsai MCP tools (``spec_delete``,
+        """Mutating ThinkRail MCP tools (``spec_delete``,
         ``SuggestDescription`` w/ ``apply=true``, ``ChangeTicketStatus``)
         are categorized as ``"edit"`` so plan mode auto-denies before
         the interceptor's auto-approve path can run. Otherwise plan
@@ -919,7 +919,7 @@ class TestCanUseToolModeFiltering:
         notify = AsyncMock()
 
         req = ToolPermissionRequest(
-            tool_name="mcp__bonsai-describe__SuggestDescription",
+            tool_name="mcp__thinkrail-describe__SuggestDescription",
             input={"description": "draft"},  # no apply flag
             permission_mode="plan",
         )
@@ -949,9 +949,9 @@ class TestInteractiveBuiltinsBypassModeFilter:
 
         async def resolve_answer():
             await asyncio.sleep(0.02)
-            for req_id in list(tracker._futures.get(task.bonsai_sid, {})):
+            for req_id in list(tracker._futures.get(task.thinkrail_sid, {})):
                 tracker.resolve_future(
-                    task.bonsai_sid, req_id,
+                    task.thinkrail_sid, req_id,
                     {"questions": [{"question": "Q?"}], "answers": {"Q?": "A"}},
                 )
                 break

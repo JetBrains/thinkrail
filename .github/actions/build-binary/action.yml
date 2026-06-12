@@ -1,4 +1,4 @@
-name: Build Bonsai binary
+name: Build ThinkRail binary
 description: Builds the frontend, injects version metadata, and runs PyInstaller. Output at packaging/dist/<artifact-name>.
 
 inputs:
@@ -9,7 +9,7 @@ inputs:
     description: "Release channel: nightly, stable, or dev"
     required: true
   artifact-name:
-    description: "Final artifact filename (e.g. bonsai-linux-x64 or bonsai-windows-x64.exe)"
+    description: "Final artifact filename (e.g. thinkrail-linux-x64 or thinkrail-windows-x64.exe)"
     required: true
 
 outputs:
@@ -46,7 +46,7 @@ runs:
 
     - name: Run PyInstaller
       shell: bash
-      run: cd packaging && pyinstaller bonsai.spec --noconfirm --distpath dist --workpath build
+      run: cd packaging && pyinstaller thinkrail.spec --noconfirm --distpath dist --workpath build
 
     - id: rename
       name: Rename artifact
@@ -55,9 +55,9 @@ runs:
         ARTIFACT_NAME: ${{ inputs.artifact-name }}
       run: |
         if [ "$RUNNER_OS" = "Windows" ]; then
-          src="packaging/dist/bonsai.exe"
+          src="packaging/dist/thinkrail.exe"
         else
-          src="packaging/dist/bonsai"
+          src="packaging/dist/thinkrail"
         fi
         dst="packaging/dist/${ARTIFACT_NAME}"
         mv "$src" "$dst"

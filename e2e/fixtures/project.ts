@@ -5,12 +5,12 @@ import { join } from "node:path";
 
 export type TempProject = { path: string };
 
-const BACKEND_URL = process.env.BONSAI_BACKEND_URL ?? "http://localhost:8000";
+const BACKEND_URL = process.env.THINKRAIL_BACKEND_URL ?? "http://localhost:8000";
 
 /**
  * Best-effort: remove the project from the backend's known-projects registry.
  *
- * Bonsai is single-user — there's no per-user view that scopes recent projects.
+ * ThinkRail is single-user — there's no per-user view that scopes recent projects.
  * Without this teardown, every test leaks a recent into the AppStore, and after
  * ~20 tests the picker layout pushes the "Open Project" button outside the
  * viewport, breaking subsequent specs.
@@ -39,7 +39,7 @@ async function unregisterKnownProject(path: string): Promise<void> {
 
 export const test = base.extend<{ tempProject: TempProject }>({
   tempProject: async ({}, use) => {
-    const path = mkdtempSync(join(tmpdir(), "bonsai-e2e-"));
+    const path = mkdtempSync(join(tmpdir(), "thinkrail-e2e-"));
     try {
       await use({ path });
     } finally {

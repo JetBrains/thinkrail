@@ -19,7 +19,7 @@ tags:
 ---
 # Skill Session Start Button — Frontend Spec
 
-> Parent: [SKILL_SESSION_START_DESIGN.md](../../.bonsai/design_docs/SKILL_SESSION_START_DESIGN.md) | Status: **Active** | Created: 2026-03-11
+> Parent: [SKILL_SESSION_START_DESIGN.md](../../.tr/design_docs/SKILL_SESSION_START_DESIGN.md) | Status: **Active** | Created: 2026-03-11
 
 ## Overview
 

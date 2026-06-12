@@ -48,7 +48,7 @@ export function CompactSubagent({
             if (ev.eventType === "toolCallStart") {
               const toolName = (ev.payload.toolName as string) ?? "tool";
               if (toolName === "AskUserQuestion") return null;
-              if (toolName.endsWith("bonsai_visualize")) return null;
+              if (toolName.endsWith("thinkrail_visualize")) return null;
               const toolUseId = (ev.payload.toolUseId as string) ?? "";
               const end = toolStates.get(toolUseId);
               const state = end?.finished

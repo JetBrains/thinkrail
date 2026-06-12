@@ -1,8 +1,6 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { PRODUCT_NAME } from "@/constants/branding";
 import "./tokens.css";
-import "./theme-dark.css";
-import "./theme-light.css";
 
 /**
  * Design Tokens showcase - displays all available design tokens in the system.

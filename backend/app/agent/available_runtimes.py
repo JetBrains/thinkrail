@@ -1,4 +1,4 @@
-"""Single source of truth for the agent engines bonsai supports.
+"""Single source of truth for the agent engines thinkrail supports.
 
 Listing engine classes here means adding a new backend (e.g. Codex) is
 a one-line change. Onboarding code reads static engine metadata

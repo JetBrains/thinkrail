@@ -1,4 +1,4 @@
-"""Bonsai standalone entry point for PyInstaller-packaged executable."""
+"""ThinkRail standalone entry point for PyInstaller-packaged executable."""
 from __future__ import annotations
 
 import argparse
@@ -13,8 +13,8 @@ from app.version import VERSION, check_in_background, print_banner
 
 def _run_server(argv: list[str]) -> int:
     parser = argparse.ArgumentParser(
-        prog="bonsai",
-        description="Bonsai - specification-driven development workspace",
+        prog="thinkrail",
+        description="ThinkRail - specification-driven development workspace",
     )
     parser.add_argument("--version", action="version", version=VERSION)
     parser.add_argument("--port", type=int, default=8000, help="Server port (default: 8000)")
@@ -37,7 +37,7 @@ def _run_server(argv: list[str]) -> int:
 
     browse_host = "127.0.0.1" if args.host == "0.0.0.0" else args.host
     url = f"http://{browse_host}:{port}"
-    print(f"Starting Bonsai on {url}")
+    print(f"Starting ThinkRail on {url}")
     print("Open the URL in your browser to pick a project.")
 
     if not args.no_browser:
@@ -54,8 +54,8 @@ def _run_server(argv: list[str]) -> int:
 
 def _run_upgrade(argv: list[str]) -> int:
     parser = argparse.ArgumentParser(
-        prog="bonsai upgrade",
-        description="Re-download and install the latest Bonsai for the current channel.",
+        prog="thinkrail upgrade",
+        description="Re-download and install the latest ThinkRail for the current channel.",
     )
     parser.add_argument("--channel", choices=["stable", "nightly"],
                         help="Override channel (default: read from install metadata)")

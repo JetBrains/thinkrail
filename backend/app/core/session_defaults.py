@@ -5,9 +5,9 @@ effort for new sessions. Pre-fills every new-session entry point so the
 UI never reverts to a hardcoded baseline.
 
 Stored as a JSON value in :class:`AppStore` under the
-:data:`SESSION_DEFAULTS_KEY` setting. Because Bonsai is single-user and
+:data:`SESSION_DEFAULTS_KEY` setting. Because ThinkRail is single-user and
 localhost-only, the AppStore is effectively the user scope — these
-preferences live in ``~/.bonsai/bonsai.db`` and travel with the user
+preferences live in ``~/.tr/tr.db`` and travel with the user
 across projects, not with any one project tree.
 """
 
@@ -31,7 +31,7 @@ logger = logging.getLogger(__name__)
 # ── Cold-start defaults ────────────────────────────────────────────────
 #
 # Used only when the AppStore key is absent (fresh install or wiped
-# ``~/.bonsai/bonsai.db``). Module-level so tests and callers can
+# ``~/.tr/tr.db``). Module-level so tests and callers can
 # reference them without instantiating the model.
 
 COLD_START_MODEL = "claude-opus-4-8"

@@ -100,11 +100,11 @@ export function PreviewBody({ path, section, version }: Props) {
       const grouped = selectProposeChangesByFile(session);
       const hunks = grouped.get(path) ?? [];
       const handleResolve = (rid: string, resp: ProposeChangeResponse) =>
-        resolveRequest(session.bonsaiSid, rid, resp);
+        resolveRequest(session.thinkrailSid, rid, resp);
       const handleAcceptAll = () => {
         for (const h of hunks) {
           if (h.state === "pending") {
-            resolveRequest(session.bonsaiSid, h.requestId, {
+            resolveRequest(session.thinkrailSid, h.requestId, {
               behavior: "allow",
               applied: "original",
             });
@@ -114,7 +114,7 @@ export function PreviewBody({ path, section, version }: Props) {
       const handleRejectAll = () => {
         for (const h of hunks) {
           if (h.state === "pending") {
-            resolveRequest(session.bonsaiSid, h.requestId, {
+            resolveRequest(session.thinkrailSid, h.requestId, {
               behavior: "deny",
               discuss: false,
             });
@@ -124,7 +124,7 @@ export function PreviewBody({ path, section, version }: Props) {
       const handleDiscuss = (text: string) => {
         for (const h of hunks) {
           if (h.state === "pending") {
-            resolveRequest(session.bonsaiSid, h.requestId, {
+            resolveRequest(session.thinkrailSid, h.requestId, {
               behavior: "deny",
               discuss: true,
               feedback: text,

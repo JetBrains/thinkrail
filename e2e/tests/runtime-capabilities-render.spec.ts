@@ -15,7 +15,7 @@ test("draft pickers render the runtime's declared capabilities in order", async 
   page,
   tempProject,
 }) => {
-  // Seed in-caps defaults explicitly: the AppStore (~/.bonsai/bonsai.db) is
+  // Seed in-caps defaults explicitly: the AppStore (~/.tr/tr.db) is
   // shared across e2e tests, so a sibling spec's out-of-caps seed could
   // otherwise leak a stray raw <option> into the model list.
   await seedSessionDefaults(tempProject.path, {

@@ -42,19 +42,22 @@ from app.agent.tools.visualization import intercept_visualize, vis_mcp_server
 # Type for intercept functions: (input_data, tracker, notify, task, config) -> result
 InterceptFn = Callable[..., Coroutine[Any, Any, ToolPermissionResponse]]
 
-MCP_SERVERS: dict[str, Any] = {
-    "bonsai-vis": vis_mcp_server,
-    "bonsai-proactive": suggest_session_mcp_server,
-    "bonsai-describe": suggest_description_mcp_server,
-    "bonsai-preview": preview_mcp_server,
-    "bonsai-amend": propose_change_mcp_server,
-    "bonsai-specs": specs_mcp_server,
-    "bonsai-orchestrator": orchestrator_mcp_server,
-    "bonsai-ticket-status": change_ticket_status_mcp_server,
-    "bonsai-create-ticket": create_ticket_mcp_server,
-    "bonsai-label-artifact": label_artifact_mcp_server,
-    "bonsai-session-outcome": session_outcome_mcp_server,
-}
+# Registry keyed by each server's own ``name`` (set via ``MCP_PREFIX`` in the
+# tool module), so the prefix is defined in exactly one place.
+_MCP_SERVER_LIST = [
+    vis_mcp_server,
+    suggest_session_mcp_server,
+    suggest_description_mcp_server,
+    preview_mcp_server,
+    propose_change_mcp_server,
+    specs_mcp_server,
+    orchestrator_mcp_server,
+    change_ticket_status_mcp_server,
+    create_ticket_mcp_server,
+    label_artifact_mcp_server,
+    session_outcome_mcp_server,
+]
+MCP_SERVERS: dict[str, Any] = {s["name"]: s for s in _MCP_SERVER_LIST}
 
 # canUseTool interceptors — keyed by tool name suffix.
 # permissions.py iterates this dict and dispatches to the matching function.
@@ -62,7 +65,7 @@ MCP_SERVERS: dict[str, Any] = {
 # get_tool_context().  Interactive tools (SuggestSession) handle their own
 # Future-based suspension inside the handler.
 INTERCEPTORS: dict[str, InterceptFn] = {
-    "bonsai_visualize": intercept_visualize,
+    "thinkrail_visualize": intercept_visualize,
     "SuggestSession": intercept_suggest_session,
     "SuggestDescription": intercept_suggest_description,
     "SetPreviewFile": intercept_preview,

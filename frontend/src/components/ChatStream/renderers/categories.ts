@@ -51,14 +51,14 @@ const BASE_CATEGORIES: Record<EventType, EventCategory> = {
  * Classify an event for the dialog/tools/system visibility toggles.
  *
  * Mostly a lookup by eventType, but tool calls need payload inspection:
- * `bonsai_visualize` renders artifacts (comparisons like "Architecture
+ * `thinkrail_visualize` renders artifacts (comparisons like "Architecture
  * Approaches", diagrams) that are part of the conversation, so they
  * stay visible in dialog-only mode.
  */
 export function getEventCategory(event: AgentEvent): EventCategory {
   if (event.eventType === "toolCallStart" || event.eventType === "toolCallEnd") {
     const toolName = event.payload.toolName;
-    if (toolName && toolName.endsWith("bonsai_visualize")) return "dialog";
+    if (toolName && toolName.endsWith("thinkrail_visualize")) return "dialog";
   }
   return BASE_CATEGORIES[event.eventType];
 }

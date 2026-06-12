@@ -1,6 +1,6 @@
 import { lazy, Suspense } from "react";
 import { isWizardSkill } from "@/components/Wizard/registry.ts";
-import { AssistantMessage, BonsaiMessage } from "../AssistantMessage.tsx";
+import { AssistantMessage, ThinkRailMessage } from "../AssistantMessage.tsx";
 import { ToolCallCard } from "../ToolCallCard.tsx";
 import { DraftConfigCard } from "../DraftConfigCard.tsx";
 import { VisualizationCard, VisErrorBoundary } from "../VisualizationCard.tsx";
@@ -27,7 +27,7 @@ export const compactRenderers: ViewRenderers = {
   sessionStart: (_ev, _i, k, ctx) => (
     <DraftConfigCard
       key={k}
-      bonsaiSid={ctx.session!.bonsaiSid}
+      thinkrailSid={ctx.session!.thinkrailSid}
       readOnly
       onVisibilityChange={ctx.onContextCardVisibility}
     />
@@ -54,7 +54,7 @@ export const compactRenderers: ViewRenderers = {
     if (p.toolName === "TaskGet" || p.toolName === "TaskList") return null;
 
     // Visualizations: collapsible in compact mode
-    if (p.toolName.endsWith("bonsai_visualize")) {
+    if (p.toolName.endsWith("thinkrail_visualize")) {
       const visInput = p.toolInput as VisData | undefined;
       if (visInput && typeof visInput.data === "string") {
         try {
@@ -82,11 +82,11 @@ export const compactRenderers: ViewRenderers = {
         const visId = visInput.visId;
         const isLatest = !visId || ctx.latestVisByVisId.get(visId) === i;
         return (
-          <BonsaiMessage key={k} contentClassName="msg-content--vis">
+          <ThinkRailMessage key={k} contentClassName="msg-content--vis">
             <VisErrorBoundary>
               <VisualizationCard data={visInput} collapsed={!isLatest} compactMode />
             </VisErrorBoundary>
-          </BonsaiMessage>
+          </ThinkRailMessage>
         );
       }
     }

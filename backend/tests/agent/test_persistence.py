@@ -25,9 +25,9 @@ class TestSafeSid:
         assert _meta_path(tmp_path, "task-1").name == "task-1.json"
 
 
-def _make_session_data(bonsai_sid: str = "task-1", **overrides) -> dict:
+def _make_session_data(thinkrail_sid: str = "task-1", **overrides) -> dict:
     base = {
-        "bonsaiSid": bonsai_sid,
+        "thinkrailSid": thinkrail_sid,
         "name": "test session",
         "skillId": "module-design",
         "specIds": ["spec-1"],
@@ -48,10 +48,10 @@ def _make_session_data(bonsai_sid: str = "task-1", **overrides) -> dict:
 class TestSaveSession:
     def test_creates_metadata_file(self, tmp_path: Path) -> None:
         save_session(tmp_path, _make_session_data())
-        meta = tmp_path / ".bonsai" / "sessions" / "task-1.json"
+        meta = tmp_path / ".tr" / "sessions" / "task-1.json"
         assert meta.is_file()
         data = json.loads(meta.read_text())
-        assert data["bonsaiSid"] == "task-1"
+        assert data["thinkrailSid"] == "task-1"
         assert "events" not in data
 
     def test_strips_events_to_jsonl(self, tmp_path: Path) -> None:
@@ -61,49 +61,31 @@ class TestSaveSession:
         ]
         save_session(tmp_path, _make_session_data(events=events))
 
-        meta = tmp_path / ".bonsai" / "sessions" / "task-1.json"
+        meta = tmp_path / ".tr" / "sessions" / "task-1.json"
         assert "events" not in json.loads(meta.read_text())
 
-        evts = tmp_path / ".bonsai" / "sessions" / "task-1.events.jsonl"
+        evts = tmp_path / ".tr" / "sessions" / "task-1.events.jsonl"
         assert evts.is_file()
         lines = [l for l in evts.read_text().splitlines() if l.strip()]
         assert len(lines) == 2
         assert json.loads(lines[0])["eventType"] == "sessionStart"
 
-    def test_empty_bonsai_sid_noop(self, tmp_path: Path) -> None:
-        save_session(tmp_path, {"bonsaiSid": ""})
-        sessions_dir = tmp_path / ".bonsai" / "sessions"
+    def test_empty_thinkrail_sid_noop(self, tmp_path: Path) -> None:
+        save_session(tmp_path, {"thinkrailSid": ""})
+        sessions_dir = tmp_path / ".tr" / "sessions"
         assert not sessions_dir.exists() or not list(sessions_dir.iterdir())
 
     def test_creates_events_jsonl_without_events(self, tmp_path: Path) -> None:
         save_session(tmp_path, _make_session_data())
-        evts = tmp_path / ".bonsai" / "sessions" / "task-1.events.jsonl"
+        evts = tmp_path / ".tr" / "sessions" / "task-1.events.jsonl"
         assert evts.is_file()
         assert evts.read_text() == ""
 
     def test_creates_sessions_dir(self, tmp_path: Path) -> None:
-        sessions_dir = tmp_path / ".bonsai" / "sessions"
+        sessions_dir = tmp_path / ".tr" / "sessions"
         assert not sessions_dir.exists()
         save_session(tmp_path, _make_session_data())
         assert sessions_dir.is_dir()
-
-    def test_backward_compat_taskId_key(self, tmp_path: Path) -> None:
-        """Old-format data with 'taskId' key should still save correctly."""
-        old_data = {
-            "taskId": "old-task-1",
-            "name": "old session",
-            "specIds": [],
-            "config": {},
-            "status": "done",
-            "createdAt": "2026-01-01T00:00:00Z",
-            "updatedAt": "2026-01-01T00:00:00Z",
-        }
-        save_session(tmp_path, old_data)
-        meta = tmp_path / ".bonsai" / "sessions" / "old-task-1.json"
-        assert meta.is_file()
-        data = json.loads(meta.read_text())
-        assert data["bonsaiSid"] == "old-task-1"
-        assert "taskId" not in data
 
 
 # -- load_session --------------------------------------------------------------
@@ -115,7 +97,7 @@ class TestLoadSession:
         save_session(tmp_path, _make_session_data(events=events))
         loaded = load_session(tmp_path, "task-1")
         assert loaded is not None
-        assert loaded["bonsaiSid"] == "task-1"
+        assert loaded["thinkrailSid"] == "task-1"
         assert loaded["events"] == events
 
     def test_missing_returns_none(self, tmp_path: Path) -> None:
@@ -128,22 +110,10 @@ class TestLoadSession:
         assert loaded["events"] == []
 
     def test_malformed_json_returns_none(self, tmp_path: Path) -> None:
-        sessions_dir = tmp_path / ".bonsai" / "sessions"
+        sessions_dir = tmp_path / ".tr" / "sessions"
         sessions_dir.mkdir(parents=True)
         (sessions_dir / "bad.json").write_text("{broken", encoding="utf-8")
         assert load_session(tmp_path, "bad") is None
-
-    def test_backward_compat_loads_old_taskId_key(self, tmp_path: Path) -> None:
-        """Files with old 'taskId' key should load with 'bonsaiSid'."""
-        sessions_dir = tmp_path / ".bonsai" / "sessions"
-        sessions_dir.mkdir(parents=True)
-        old_meta = {"taskId": "old-1", "name": "old", "status": "done"}
-        (sessions_dir / "old-1.json").write_text(json.dumps(old_meta))
-        (sessions_dir / "old-1.events.jsonl").touch()
-        loaded = load_session(tmp_path, "old-1")
-        assert loaded is not None
-        assert loaded["bonsaiSid"] == "old-1"
-        assert "taskId" not in loaded
 
 
 # -- list_sessions -------------------------------------------------------------
@@ -168,7 +138,7 @@ class TestListSessions:
         assert len(result) == 1
         entry = result[0]
         expected_fields = {
-            "bonsaiSid", "name", "skillId", "specIds", "status",
+            "thinkrailSid", "name", "skillId", "specIds", "status",
             "model", "ticketId", "createdAt", "updatedAt",
             "active", "inTracker", "metrics", "todos",
         }
@@ -198,7 +168,7 @@ class TestAppendEvent:
     def test_creates_jsonl_file(self, tmp_path: Path) -> None:
         save_session(tmp_path, _make_session_data())
         append_event(tmp_path, "task-1", {"eventType": "textDelta", "payload": {}})
-        evts = tmp_path / ".bonsai" / "sessions" / "task-1.events.jsonl"
+        evts = tmp_path / ".tr" / "sessions" / "task-1.events.jsonl"
         assert evts.is_file()
         lines = [l for l in evts.read_text().splitlines() if l.strip()]
         assert len(lines) == 1
@@ -207,7 +177,7 @@ class TestAppendEvent:
         save_session(tmp_path, _make_session_data())
         for i in range(3):
             append_event(tmp_path, "task-1", {"eventType": f"event_{i}", "payload": {}})
-        evts = tmp_path / ".bonsai" / "sessions" / "task-1.events.jsonl"
+        evts = tmp_path / ".tr" / "sessions" / "task-1.events.jsonl"
         lines = [l for l in evts.read_text().splitlines() if l.strip()]
         assert len(lines) == 3
         for i, line in enumerate(lines):
@@ -215,7 +185,7 @@ class TestAppendEvent:
 
     def test_does_not_touch_metadata(self, tmp_path: Path) -> None:
         save_session(tmp_path, _make_session_data())
-        meta = tmp_path / ".bonsai" / "sessions" / "task-1.json"
+        meta = tmp_path / ".tr" / "sessions" / "task-1.json"
         original = meta.read_text()
         append_event(tmp_path, "task-1", {"eventType": "textDelta", "payload": {}})
         assert meta.read_text() == original
@@ -223,7 +193,7 @@ class TestAppendEvent:
     def test_missing_session_noop(self, tmp_path: Path) -> None:
         # Should not raise or create any file
         append_event(tmp_path, "nonexistent", {"eventType": "x", "payload": {}})
-        sessions_dir = tmp_path / ".bonsai" / "sessions"
+        sessions_dir = tmp_path / ".tr" / "sessions"
         jsonl_files = list(sessions_dir.glob("*.events.jsonl")) if sessions_dir.exists() else []
         assert len(jsonl_files) == 0
 
@@ -235,8 +205,8 @@ class TestDeleteSession:
     def test_removes_both_files(self, tmp_path: Path) -> None:
         events = [{"eventType": "done", "payload": {}}]
         save_session(tmp_path, _make_session_data(events=events))
-        meta = tmp_path / ".bonsai" / "sessions" / "task-1.json"
-        evts = tmp_path / ".bonsai" / "sessions" / "task-1.events.jsonl"
+        meta = tmp_path / ".tr" / "sessions" / "task-1.json"
+        evts = tmp_path / ".tr" / "sessions" / "task-1.events.jsonl"
         assert meta.is_file() and evts.is_file()
         assert delete_session(tmp_path, "task-1") is True
         assert not meta.exists() and not evts.exists()
@@ -244,7 +214,7 @@ class TestDeleteSession:
     def test_metadata_only(self, tmp_path: Path) -> None:
         save_session(tmp_path, _make_session_data())
         assert delete_session(tmp_path, "task-1") is True
-        assert not (tmp_path / ".bonsai" / "sessions" / "task-1.json").exists()
+        assert not (tmp_path / ".tr" / "sessions" / "task-1.json").exists()
 
     def test_nonexistent_returns_false(self, tmp_path: Path) -> None:
         assert delete_session(tmp_path, "nope") is False
@@ -306,7 +276,7 @@ class TestRoundTrip:
 
         loaded = load_session(tmp_path, "task-1")
         assert loaded is not None
-        assert loaded["bonsaiSid"] == "task-1"
+        assert loaded["thinkrailSid"] == "task-1"
         assert loaded["name"] == "test session"
         assert loaded["events"] == events
 
@@ -332,7 +302,7 @@ class TestHasPersistedSessions:
         assert has_persisted_sessions(tmp_path) is False
 
     def test_empty_sessions_dir_is_false(self, tmp_path: Path) -> None:
-        (tmp_path / ".bonsai" / "sessions").mkdir(parents=True)
+        (tmp_path / ".tr" / "sessions").mkdir(parents=True)
         assert has_persisted_sessions(tmp_path) is False
 
     def test_with_session_file_is_true(self, tmp_path: Path) -> None:
@@ -353,26 +323,26 @@ class TestListSessionsExposesSubagentMode:
         self, tmp_path: Path,
     ) -> None:
         save_session(tmp_path, _make_session_data(
-            bonsai_sid="draft-1",
+            thinkrail_sid="draft-1",
             status="draft",
             subagentMode="subagent",
             stepGate="autonomous",
         ))
         entries = list_sessions(tmp_path)
-        match = next((e for e in entries if e["bonsaiSid"] == "draft-1"), None)
+        match = next((e for e in entries if e["thinkrailSid"] == "draft-1"), None)
         assert match is not None
         assert match["subagentMode"] == "subagent"
         assert match["stepGate"] == "autonomous"
 
     def test_non_draft_omits_subagent_mode(self, tmp_path: Path) -> None:
         save_session(tmp_path, _make_session_data(
-            bonsai_sid="done-1",
+            thinkrail_sid="done-1",
             status="done",
             subagentMode="subagent",
             stepGate="autonomous",
         ))
         entries = list_sessions(tmp_path)
-        match = next((e for e in entries if e["bonsaiSid"] == "done-1"), None)
+        match = next((e for e in entries if e["thinkrailSid"] == "done-1"), None)
         assert match is not None
         # Non-draft entries deliberately don't expose these fields — the
         # mode picker is only relevant before a session starts.
@@ -389,7 +359,7 @@ class TestDraftInputPersistence:
 
     def test_save_session_round_trips_draft_input(self, tmp_path: Path) -> None:
         save_session(tmp_path, _make_session_data(
-            bonsai_sid="draft-1",
+            thinkrail_sid="draft-1",
             status="draft",
             draftInput="fix login flow",
         ))
@@ -401,12 +371,12 @@ class TestDraftInputPersistence:
         self, tmp_path: Path,
     ) -> None:
         save_session(tmp_path, _make_session_data(
-            bonsai_sid="draft-1",
+            thinkrail_sid="draft-1",
             status="draft",
             draftInput="fix login flow",
         ))
         entries = list_sessions(tmp_path)
-        match = next((e for e in entries if e["bonsaiSid"] == "draft-1"), None)
+        match = next((e for e in entries if e["thinkrailSid"] == "draft-1"), None)
         assert match is not None
         assert match["draftInput"] == "fix login flow"
 
@@ -414,22 +384,22 @@ class TestDraftInputPersistence:
         self, tmp_path: Path,
     ) -> None:
         save_session(tmp_path, _make_session_data(
-            bonsai_sid="draft-1",
+            thinkrail_sid="draft-1",
             status="draft",
         ))
         entries = list_sessions(tmp_path)
-        match = next((e for e in entries if e["bonsaiSid"] == "draft-1"), None)
+        match = next((e for e in entries if e["thinkrailSid"] == "draft-1"), None)
         assert match is not None
         assert match["draftInput"] is None
 
     def test_non_draft_omits_draft_input(self, tmp_path: Path) -> None:
         save_session(tmp_path, _make_session_data(
-            bonsai_sid="done-1",
+            thinkrail_sid="done-1",
             status="done",
             draftInput="fix login flow",
         ))
         entries = list_sessions(tmp_path)
-        match = next((e for e in entries if e["bonsaiSid"] == "done-1"), None)
+        match = next((e for e in entries if e["thinkrailSid"] == "done-1"), None)
         assert match is not None
         assert "draftInput" not in match
 

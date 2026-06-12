@@ -12,7 +12,7 @@ You are creating an **actionable Task Specification**. Guide the user through st
 
 ## Show Progress
 
-Show current workflow position by calling `bonsai_visualize` with type `progress-tracker`:
+Show current workflow position by calling `thinkrail_visualize` with type `progress-tracker`:
 ```json
 {
   "type": "progress-tracker",
@@ -89,7 +89,7 @@ Use AskUserQuestion (multiSelect: true):
 
 ### Step 6: Generate the task spec
 
-Use `Write` to create the task spec at `.bonsai/implementation_tasks/{module_path}/{type}_{name}.md` with YAML frontmatter (`type: "task-spec"`, `status: "active"`, `tags: ["{priority}", "{type}"]`):
+Use `Write` to create the task spec at `{{TR_DIR}}/implementation_tasks/{module_path}/{type}_{name}.md` with YAML frontmatter (`type: "task-spec"`, `status: "active"`, `tags: ["{priority}", "{type}"]`):
 ```markdown
 # {Action verb} {component}: {specific description}
 

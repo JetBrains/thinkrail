@@ -73,7 +73,7 @@ interface SessionStore {
   /** Refresh `sessionList` from the backend. Idempotent. */
   refreshSessionList: () => Promise<void>;
   /** Surgical partial update of one entry in `sessionList`. No-op if not present. */
-  patchSessionInList: (bonsaiSid: string, patch: Partial<SessionSummary>) => void;
+  patchSessionInList: (thinkrailSid: string, patch: Partial<SessionSummary>) => void;
 
   /** Create a draft session with sensible defaults. Used by + New, Cmd+T, palette. */
   createNewSession: (prefill?: {
@@ -104,7 +104,7 @@ interface SessionStore {
     /** Marks the draft as a stage-default (auto-spawned by the ticket view). */
     kind?: "stage-default";
   }) => Promise<string>;
-  updateDraft: (bonsaiSid: string, changes: {
+  updateDraft: (thinkrailSid: string, changes: {
     specIds?: string[];
     filePaths?: string[];
     skillId?: string | null;
@@ -115,56 +115,56 @@ interface SessionStore {
     subagentMode?: "step-session" | "subagent";
     stepGate?: "approve" | "autonomous";
   }) => Promise<string>;
-  startDraft: (bonsaiSid: string, prompt?: string) => Promise<void>;
+  startDraft: (thinkrailSid: string, prompt?: string) => Promise<void>;
   /** Called by InputArea on each keystroke (after inputDraftStore.setDraft).
    *  Live-derives the tab name and arms the autosave controller once the
    *  prompt crosses the save threshold (or the draft is already saved). */
-  noteDraftInput: (bonsaiSid: string, text: string) => void;
+  noteDraftInput: (thinkrailSid: string, text: string) => void;
   /** Persist an `unsaved` draft via `agent/prepare`, reusing the minted id.
    *  Single-flight: concurrent callers share one in-flight save. Resolves
    *  immediately if already saved. */
-  ensureSaved: (bonsaiSid: string) => Promise<void>;
+  ensureSaved: (thinkrailSid: string) => Promise<void>;
   /** Autosave commit target wired into `draftAutosave`: first persist for an
    *  `unsaved` draft, otherwise an `agent/updateDraft` of the typed text. */
-  commitDraft: (bonsaiSid: string) => Promise<void>;
+  commitDraft: (thinkrailSid: string) => Promise<void>;
   /** Rename a draft by hand. Freezes live name derivation permanently. */
-  renameDraft: (bonsaiSid: string, name: string) => Promise<void>;
-  sendMessage: (bonsaiSid: string, text: string, isMarkdown?: boolean) => Promise<void>;
-  switchSession: (bonsaiSid: string) => void;
-  closeSession: (bonsaiSid: string) => void;
+  renameDraft: (thinkrailSid: string, name: string) => Promise<void>;
+  sendMessage: (thinkrailSid: string, text: string, isMarkdown?: boolean) => Promise<void>;
+  switchSession: (thinkrailSid: string) => void;
+  closeSession: (thinkrailSid: string) => void;
   /** Delete/trash a session: calls backend API, closes tab, removes from store */
-  deleteSession: (bonsaiSid: string) => Promise<void>;
-  endSession: (bonsaiSid: string) => Promise<void>;
+  deleteSession: (thinkrailSid: string) => Promise<void>;
+  endSession: (thinkrailSid: string) => Promise<void>;
   /** Open a tab for a session (e.g., from background indicator dropdown).
    *  `allowTicketTab` lets a ticket-attached session open as its own tab
    *  instead of rerouting to the ticket view (explicit user opens). */
-  openTab: (bonsaiSid: string, opts?: { allowTicketTab?: boolean }) => void;
+  openTab: (thinkrailSid: string, opts?: { allowTicketTab?: boolean }) => void;
   /** Ticket-aware focus: opens tab, navigates to ticket if linked, clears conflicting state */
-  focusSession: (bonsaiSid: string, opts?: { allowTicketTab?: boolean }) => void;
+  focusSession: (thinkrailSid: string, opts?: { allowTicketTab?: boolean }) => void;
   /** Check if a session references specs or skills that no longer exist */
-  getStaleSessionRefs: (bonsaiSid: string) => { staleSpecIds: string[]; staleSkillId: boolean } | null;
+  getStaleSessionRefs: (thinkrailSid: string) => { staleSpecIds: string[]; staleSkillId: boolean } | null;
   /** Remove stale spec/skill references from a draft session */
-  fixStaleSessionRefs: (bonsaiSid: string) => Promise<void>;
-  interruptSession: (bonsaiSid: string) => Promise<void>;
+  fixStaleSessionRefs: (thinkrailSid: string) => Promise<void>;
+  interruptSession: (thinkrailSid: string) => Promise<void>;
   resolveRequest: (
-    bonsaiSid: string,
+    thinkrailSid: string,
     requestId: string,
     response: unknown,
   ) => void;
 
-  updateConfig: (bonsaiSid: string, config: { model?: string; permissionMode?: string; effort?: string }) => Promise<void>;
-  restartSession: (bonsaiSid: string) => Promise<void>;
+  updateConfig: (thinkrailSid: string, config: { model?: string; permissionMode?: string; effort?: string }) => Promise<void>;
+  restartSession: (thinkrailSid: string) => Promise<void>;
 
-  continueSession: (bonsaiSid: string) => Promise<void>;
-  retryLastMessage: (bonsaiSid: string) => Promise<void>;
-  restoreSession: (bonsaiSid: string, opts?: { noTab?: boolean; allowTicketTab?: boolean }) => Promise<void>;
+  continueSession: (thinkrailSid: string) => Promise<void>;
+  retryLastMessage: (thinkrailSid: string) => Promise<void>;
+  restoreSession: (thinkrailSid: string, opts?: { noTab?: boolean; allowTicketTab?: boolean }) => Promise<void>;
   loadActiveSessions: (opts?: { includeRecentDiskSession?: boolean }) => Promise<void>;
 
   // Subsession actions
-  createSubsession: (parentBonsaiSid: string, type: "discussion" | "refinement", context?: string, name?: string) => Promise<string>;
-  approveReturn: (bonsaiSid: string, text: string) => Promise<void>;
-  dismissReturn: (bonsaiSid: string) => Promise<void>;
-  reviseReturn: (bonsaiSid: string, feedback: string) => Promise<void>;
+  createSubsession: (parentThinkrailSid: string, type: "discussion" | "refinement", context?: string, name?: string) => Promise<string>;
+  approveReturn: (thinkrailSid: string, text: string) => Promise<void>;
+  dismissReturn: (thinkrailSid: string) => Promise<void>;
+  reviseReturn: (thinkrailSid: string, feedback: string) => Promise<void>;
 
   /** Poll backend for actual status of sessions stuck in transient states */
   syncSessionStatuses: () => Promise<void>;
@@ -184,7 +184,7 @@ interface SessionStore {
   onClearPreviewFile: (params: Record<string, unknown>) => void;
   onArtifactAdded: (params: Record<string, unknown>) => void;
   onArtifactLabeled: (params: Record<string, unknown>) => void;
-  setPreviewPath: (bonsaiSid: string, path: string | null) => void;
+  setPreviewPath: (thinkrailSid: string, path: string | null) => void;
   onRequestExpired: (params: Record<string, unknown>) => void;
   onRequestResolved: (params: Record<string, unknown>) => void;
   onRemoteSessionCreated: (params: Record<string, unknown>) => void;
@@ -196,7 +196,7 @@ interface SessionStore {
   onSessionMetadataUpdate: (task: Record<string, unknown>) => void;
   /** Update one action inside the active session outcome and persist via RPC. */
   patchOutcomeAction: (
-    bonsaiSid: string,
+    thinkrailSid: string,
     actionId: string,
     patch: Record<string, unknown>,
   ) => Promise<void>;
@@ -476,15 +476,15 @@ function applyMetrics(
  */
 function ensureSession(
   sessions: Map<string, Session>,
-  bonsaiSid: string,
+  thinkrailSid: string,
   closedIds?: Set<string>,
 ): Map<string, Session> {
-  if (sessions.has(bonsaiSid)) return sessions;
-  if (closedIds?.has(bonsaiSid)) return sessions;
+  if (sessions.has(thinkrailSid)) return sessions;
+  if (closedIds?.has(thinkrailSid)) return sessions;
   const next = new Map(sessions);
-  next.set(bonsaiSid, {
-    bonsaiSid,
-    name: bonsaiSid.slice(0, 8),
+  next.set(thinkrailSid, {
+    thinkrailSid,
+    name: thinkrailSid.slice(0, 8),
     skillId: null,
     specIds: [],
     filePaths: [],
@@ -497,7 +497,7 @@ function ensureSession(
     metrics: emptyMetrics(),
     pendingRequests: [],
     answeredRequests: new Map(),
-    parentBonsaiSid: null,
+    parentThinkrailSid: null,
     subsessionType: null,
     subsessionContext: null,
     returnStatus: null,
@@ -512,7 +512,7 @@ function ensureSession(
 
 function appendEvent(
   sessions: Map<string, Session>,
-  bonsaiSid: string,
+  thinkrailSid: string,
   method: string,
   params: Record<string, unknown>,
   closedIds?: Set<string>,
@@ -521,11 +521,11 @@ function appendEvent(
   // not stored in events history.
   if (method === "agent/costEstimate" || method === "agent/statusChanged") return sessions;
   // Don't create phantom sessions — only update sessions that already exist
-  if (!sessions.has(bonsaiSid)) return sessions;
-  if (closedIds?.has(bonsaiSid)) return sessions;
+  if (!sessions.has(thinkrailSid)) return sessions;
+  if (closedIds?.has(thinkrailSid)) return sessions;
 
-  const withSession = ensureSession(sessions, bonsaiSid, closedIds);
-  const session = withSession.get(bonsaiSid);
+  const withSession = ensureSession(sessions, thinkrailSid, closedIds);
+  const session = withSession.get(thinkrailSid);
   if (!session) return sessions;
 
   // Defense-in-depth dedup: skip if an event with the same requestId already exists
@@ -538,7 +538,7 @@ function appendEvent(
   }
 
   const event = {
-    bonsaiSid,
+    thinkrailSid,
     sessionId: (params.sessionId as string) ?? "",
     eventType: method.replace("agent/", "") as AgentEvent["eventType"],
     payload: params,
@@ -607,7 +607,7 @@ function appendEvent(
     metrics.contextUsage = cu;
   }
 
-  next.set(bonsaiSid, {
+  next.set(thinkrailSid, {
     ...session,
     events: [...session.events, event],
     metrics,
@@ -652,7 +652,7 @@ function buildAnsweredRequests(
 /** Tracks in-flight restoreSession fetches to prevent duplicate concurrent loads. */
 const _restoring = new Set<string>();
 
-/** In-flight `ensureSaved` promises, keyed by bonsaiSid — makes the first
+/** In-flight `ensureSaved` promises, keyed by thinkrailSid — makes the first
  *  `agent/prepare` single-flight so concurrent triggers create one draft. */
 const _saving = new Map<string, Promise<void>>();
 
@@ -661,14 +661,14 @@ const _subscribed = new Set<string>();
 
 /** Subscribe to a session's event topic so this client receives live updates.
  *  Safe to call multiple times — deduplicates via _subscribed set. */
-function _ensureSubscribed(bonsaiSid: string): void {
-  if (_subscribed.has(bonsaiSid)) return;
-  _subscribed.add(bonsaiSid);
+function _ensureSubscribed(thinkrailSid: string): void {
+  if (_subscribed.has(thinkrailSid)) return;
+  _subscribed.add(thinkrailSid);
   import("@/api/methods/sessions.ts").then(({ createSessionApi }) => {
     const api = createSessionApi(getClient());
-    api.subscribe(bonsaiSid).catch(() => {
+    api.subscribe(thinkrailSid).catch(() => {
       // Connection not ready or session gone — will retry on next open
-      _subscribed.delete(bonsaiSid);
+      _subscribed.delete(thinkrailSid);
     });
   });
 }
@@ -691,9 +691,9 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
     set({ sessionList: list });
   },
 
-  patchSessionInList: (bonsaiSid, patch) => {
+  patchSessionInList: (thinkrailSid, patch) => {
     set((s) => {
-      const idx = s.sessionList.findIndex((e) => e.bonsaiSid === bonsaiSid);
+      const idx = s.sessionList.findIndex((e) => e.thinkrailSid === thinkrailSid);
       if (idx === -1) return s;
       const next = [...s.sessionList];
       next[idx] = { ...next[idx], ...patch };
@@ -709,7 +709,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
     const carriesIntent =
       !!prefill?.ticketId || (prefill?.specIds?.length ?? 0) > 0 || !!prefill?.skillId;
     if (carriesIntent) {
-      const bonsaiSid = await state.createDraft({
+      const thinkrailSid = await state.createDraft({
         specIds: prefill?.specIds ?? [],
         config: await buildDefaultSessionConfig(),
         name: prefill?.name ?? DEFAULT_SESSION_NAME,
@@ -720,7 +720,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
         useUiStore.getState().setCenterView("sessions");
         useBoardStore.setState({ activeTicketId: null });
       }
-      return bonsaiSid;
+      return thinkrailSid;
     }
 
     // No-duplicate-blanks: focus an existing untouched blank `unsaved` tab
@@ -737,12 +737,12 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
     }
 
     // Defer: mint client-side, insert an `unsaved` draft, no RPC.
-    const bonsaiSid = crypto.randomUUID();
+    const thinkrailSid = crypto.randomUUID();
     const config = await buildDefaultSessionConfig();
     set((s) => {
       const next = new Map(s.sessions);
-      next.set(bonsaiSid, {
-        bonsaiSid,
+      next.set(thinkrailSid, {
+        thinkrailSid,
         name: prefill?.name ?? DEFAULT_SESSION_NAME,
         skillId: prefill?.skillId ?? null,
         specIds: [],
@@ -759,7 +759,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
         pendingRequests: [],
         answeredRequests: new Map(),
         ticketId: null,
-        parentBonsaiSid: null,
+        parentThinkrailSid: null,
         subsessionType: null,
         subsessionContext: null,
         returnStatus: null,
@@ -769,28 +769,28 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
         previewSection: null,
       });
       const tabs = new Set(s.openTabs);
-      tabs.add(bonsaiSid);
-      return { sessions: next, openTabs: tabs, activeSessionId: bonsaiSid };
+      tabs.add(thinkrailSid);
+      return { sessions: next, openTabs: tabs, activeSessionId: thinkrailSid };
     });
     useUiStore.getState().setCenterView("sessions");
     useBoardStore.setState({ activeTicketId: null });
-    return bonsaiSid;
+    return thinkrailSid;
   },
 
   startSession: async ({ specIds, config, name, skillId, prompt, ticketId, kind }) => {
     const api = createAgentApi(getClient());
-    const { bonsaiSid } = await api.run({ specIds, config, skillId: skillId ?? undefined, prompt: prompt ?? undefined, name, ticketId: ticketId ?? undefined });
+    const { thinkrailSid } = await api.run({ specIds, config, skillId: skillId ?? undefined, prompt: prompt ?? undefined, name, ticketId: ticketId ?? undefined });
 
     set((s) => {
       const next = new Map(s.sessions);
-      const existing = next.get(bonsaiSid);
+      const existing = next.get(thinkrailSid);
       // Merge with placeholder if events arrived before this resolved.
       // Preserve status if agent/ready already transitioned it past "initializing".
       const resolvedStatus = existing && existing.status !== "initializing"
         ? existing.status
         : "initializing";
-      next.set(bonsaiSid, {
-        bonsaiSid,
+      next.set(thinkrailSid, {
+        thinkrailSid,
         name,
         skillId: skillId ?? null,
         specIds,
@@ -807,7 +807,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
         answeredRequests: existing?.answeredRequests ?? new Map(),
         ticketId: ticketId ?? null,
         kind: kind ?? undefined,
-        parentBonsaiSid: null,
+        parentThinkrailSid: null,
         subsessionType: null,
         subsessionContext: null,
         returnStatus: null,
@@ -820,19 +820,19 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
         return { sessions: next };
       }
       const tabs = new Set(s.openTabs);
-      tabs.add(bonsaiSid);
-      return { sessions: next, openTabs: tabs, activeSessionId: bonsaiSid };
+      tabs.add(thinkrailSid);
+      return { sessions: next, openTabs: tabs, activeSessionId: thinkrailSid };
     });
 
     // Clear file viewer so the new session becomes visible immediately
     useFileStore.setState({ activeFilePath: null, previewFilePath: null, previewFile: null });
 
-    return bonsaiSid;
+    return thinkrailSid;
   },
 
   createDraft: async ({ specIds, config, name, skillId, prompt, ticketId, filePaths, kind }) => {
     const api = createAgentApi(getClient());
-    const { bonsaiSid, systemPrompt, sections } = await api.prepare({
+    const { thinkrailSid, systemPrompt, sections } = await api.prepare({
       specIds,
       config,
       skillId: skillId ?? undefined,
@@ -844,8 +844,8 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
 
     set((s) => {
       const next = new Map(s.sessions);
-      next.set(bonsaiSid, {
-        bonsaiSid,
+      next.set(thinkrailSid, {
+        thinkrailSid,
         name,
         // A pre-configured draft's name is intentional, not derived from a
         // typed prompt — freeze derivation so flush/autosave can't relabel it.
@@ -867,7 +867,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
         kind: kind ?? undefined,
         systemPrompt,
         promptSections: (sections as Session["promptSections"]) ?? null,
-        parentBonsaiSid: null,
+        parentThinkrailSid: null,
         subsessionType: null,
         subsessionContext: null,
         returnStatus: null,
@@ -880,23 +880,23 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
         return { sessions: next };
       }
       const tabs = new Set(s.openTabs);
-      tabs.add(bonsaiSid);
-      return { sessions: next, openTabs: tabs, activeSessionId: bonsaiSid };
+      tabs.add(thinkrailSid);
+      return { sessions: next, openTabs: tabs, activeSessionId: thinkrailSid };
     });
 
-    return bonsaiSid;
+    return thinkrailSid;
   },
 
-  updateDraft: async (bonsaiSid, changes) => {
+  updateDraft: async (thinkrailSid, changes) => {
     // While unsaved (no backend task yet) apply config changes locally and
     // skip the RPC — the first `agent/prepare` carries them on save.
-    const current = get().sessions.get(bonsaiSid);
+    const current = get().sessions.get(thinkrailSid);
     if (current?.unsaved) {
       set((s) => {
-        const session = s.sessions.get(bonsaiSid);
+        const session = s.sessions.get(thinkrailSid);
         if (!session) return s;
         const next = new Map(s.sessions);
-        next.set(bonsaiSid, {
+        next.set(thinkrailSid, {
           ...session,
           ...(changes.specIds !== undefined ? { specIds: changes.specIds } : {}),
           ...(changes.skillId !== undefined ? { skillId: changes.skillId } : {}),
@@ -914,22 +914,22 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
         });
         return { sessions: next };
       });
-      return get().sessions.get(bonsaiSid)?.systemPrompt ?? "";
+      return get().sessions.get(thinkrailSid)?.systemPrompt ?? "";
     }
 
     const api = createAgentApi(getClient());
     const result = await api.updateDraft({
-      bonsaiSid,
+      thinkrailSid,
       ...changes,
     });
     const systemPrompt = result.systemPrompt as string;
     const promptSections = (result.sections as Session["promptSections"]) ?? null;
 
     set((s) => {
-      const session = s.sessions.get(bonsaiSid);
+      const session = s.sessions.get(thinkrailSid);
       if (!session || session.status !== "draft") return s;
       const next = new Map(s.sessions);
-      next.set(bonsaiSid, {
+      next.set(thinkrailSid, {
         ...session,
         ...(changes.specIds !== undefined ? { specIds: changes.specIds } : {}),
         ...(changes.skillId !== undefined ? { skillId: changes.skillId } : {}),
@@ -953,18 +953,18 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
     return systemPrompt;
   },
 
-  startDraft: async (bonsaiSid, prompt) => {
+  startDraft: async (thinkrailSid, prompt) => {
     // Persist first so Start works even below the autosave threshold, and
     // cancel any pending autosave timer (ensureSaved already carries the
     // typed text) so it can't fire a redundant prepare afterwards.
-    draftAutosave.cancel(bonsaiSid);
-    await get().ensureSaved(bonsaiSid);
+    draftAutosave.cancel(thinkrailSid);
+    await get().ensureSaved(thinkrailSid);
 
     const api = createAgentApi(getClient());
-    await api.startDraft(bonsaiSid, prompt);
+    await api.startDraft(thinkrailSid, prompt);
 
     set((s) => {
-      const session = s.sessions.get(bonsaiSid);
+      const session = s.sessions.get(thinkrailSid);
       if (!session) return s;
       // Seed context with system prompt tokens so the counter doesn't start at 0
       const promptTokens = session.promptSections
@@ -974,7 +974,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
       // any known value (0 → bar hidden until then).
       const contextMax = session.metrics.contextMax || 0;
       const next = new Map(s.sessions);
-      next.set(bonsaiSid, {
+      next.set(thinkrailSid, {
         ...session,
         status: "initializing",
         metrics: {
@@ -993,8 +993,8 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
     });
   },
 
-  noteDraftInput: (bonsaiSid, text) => {
-    const session = get().sessions.get(bonsaiSid);
+  noteDraftInput: (thinkrailSid, text) => {
+    const session = get().sessions.get(thinkrailSid);
     if (!session || session.status !== "draft") return;
 
     // Live-derive the tab name unless the user renamed by hand. Clearing all
@@ -1003,10 +1003,10 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
       const name = deriveSessionName(text);
       if (name !== session.name) {
         set((s) => {
-          const cur = s.sessions.get(bonsaiSid);
+          const cur = s.sessions.get(thinkrailSid);
           if (!cur) return s;
           const next = new Map(s.sessions);
-          next.set(bonsaiSid, { ...cur, name });
+          next.set(thinkrailSid, { ...cur, name });
           return { sessions: next };
         });
       }
@@ -1015,15 +1015,15 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
     // Threshold gating: arm autosave once the prompt crosses the threshold,
     // or unconditionally for an already-saved draft.
     if (nonWs(text) >= SAVE_THRESHOLD || !session.unsaved) {
-      draftAutosave.noteInput(bonsaiSid);
+      draftAutosave.noteInput(thinkrailSid);
     }
   },
 
-  ensureSaved: async (bonsaiSid) => {
-    const session = get().sessions.get(bonsaiSid);
+  ensureSaved: async (thinkrailSid) => {
+    const session = get().sessions.get(thinkrailSid);
     if (!session || !session.unsaved) return;
 
-    const inFlight = _saving.get(bonsaiSid);
+    const inFlight = _saving.get(thinkrailSid);
     if (inFlight) return inFlight;
 
     const promise = (async () => {
@@ -1031,9 +1031,9 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
       // Re-read inside the async body: config/spec/skill/name edits made
       // between this call and the network dispatch must reach the first save,
       // not be dropped by a snapshot captured at call time.
-      const cur = get().sessions.get(bonsaiSid);
+      const cur = get().sessions.get(thinkrailSid);
       if (!cur) return;
-      const draftInput = useInputDraftStore.getState().getDraft(bonsaiSid);
+      const draftInput = useInputDraftStore.getState().getDraft(thinkrailSid);
       const name = cur.nameManuallySet ? cur.name : deriveSessionName(draftInput);
       const config: AgentConfig = {
         model: cur.model,
@@ -1043,7 +1043,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
         flags: cur.flags ?? {},
       };
       const { systemPrompt, sections } = await api.prepare({
-        bonsaiSid,
+        thinkrailSid,
         specIds: cur.specIds,
         config,
         skillId: cur.skillId ?? undefined,
@@ -1051,10 +1051,10 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
         draftInput: draftInput || undefined,
       });
       set((s) => {
-        const cur = s.sessions.get(bonsaiSid);
+        const cur = s.sessions.get(thinkrailSid);
         if (!cur) return s;
         const next = new Map(s.sessions);
-        next.set(bonsaiSid, {
+        next.set(thinkrailSid, {
           ...cur,
           unsaved: false,
           name: cur.nameManuallySet ? cur.name : name,
@@ -1065,16 +1065,16 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
       });
     })();
 
-    _saving.set(bonsaiSid, promise);
+    _saving.set(thinkrailSid, promise);
     try {
       await promise;
     } finally {
-      _saving.delete(bonsaiSid);
+      _saving.delete(thinkrailSid);
     }
   },
 
-  commitDraft: async (bonsaiSid) => {
-    const session = get().sessions.get(bonsaiSid);
+  commitDraft: async (thinkrailSid) => {
+    const session = get().sessions.get(thinkrailSid);
     if (!session || session.status !== "draft") return;
 
     try {
@@ -1082,9 +1082,9 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
         // Autosave/flush must leave no trace for a sub-threshold blank: abandoning
         // a 2–3 char draft on blur/page-hide should never persist. Start/Send go
         // through ensureSaved directly, so they still start below the threshold.
-        const draftInput = useInputDraftStore.getState().getDraft(bonsaiSid);
+        const draftInput = useInputDraftStore.getState().getDraft(thinkrailSid);
         if (nonWs(draftInput) < SAVE_THRESHOLD) return;
-        await get().ensureSaved(bonsaiSid);
+        await get().ensureSaved(thinkrailSid);
         return;
       }
 
@@ -1093,10 +1093,10 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
       // The label is maintained live by noteDraftInput/renameDraft, so persist
       // it as-is rather than re-deriving (which would mislabel a pre-configured
       // draft whose input is empty but whose name is meaningful).
-      const cur = get().sessions.get(bonsaiSid);
+      const cur = get().sessions.get(thinkrailSid);
       if (!cur) return;
-      const draftInput = useInputDraftStore.getState().getDraft(bonsaiSid);
-      await api.updateDraft({ bonsaiSid, draftInput, name: cur.name });
+      const draftInput = useInputDraftStore.getState().getDraft(thinkrailSid);
+      await api.updateDraft({ thinkrailSid, draftInput, name: cur.name });
     } catch (err) {
       // Autosave is best-effort: the typed text stays in inputDraftStore and the
       // next keystroke re-arms a save, so surface a non-fatal toast rather than
@@ -1105,58 +1105,58 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
         eventType: "error",
         message: `Couldn't save draft: ${getErrorMessage(err)}`,
         persistent: false,
-        bonsaiSid,
+        thinkrailSid,
       });
     }
   },
 
-  renameDraft: async (bonsaiSid, name) => {
-    const session = get().sessions.get(bonsaiSid);
+  renameDraft: async (thinkrailSid, name) => {
+    const session = get().sessions.get(thinkrailSid);
     if (!session) return;
     set((s) => {
-      const cur = s.sessions.get(bonsaiSid);
+      const cur = s.sessions.get(thinkrailSid);
       if (!cur) return s;
       const next = new Map(s.sessions);
-      next.set(bonsaiSid, { ...cur, name, nameManuallySet: true });
+      next.set(thinkrailSid, { ...cur, name, nameManuallySet: true });
       return { sessions: next };
     });
     // Saved drafts persist the new label through the autosave debounce (its
     // commit sends the current name), so per-keystroke renaming is one RPC,
     // not one per character. Unsaved ones stay local until the first save.
-    if (!session.unsaved) draftAutosave.noteInput(bonsaiSid);
+    if (!session.unsaved) draftAutosave.noteInput(thinkrailSid);
   },
 
-  sendMessage: async (bonsaiSid, text, isMarkdown) => {
+  sendMessage: async (thinkrailSid, text, isMarkdown) => {
     // If session is in draft status, auto-start it with this message.
     // Start the session first (sessionStart event arrives via WebSocket during
     // the RPC call), then add the userMessage so it appears after the config card.
-    const session = get().sessions.get(bonsaiSid);
+    const session = get().sessions.get(thinkrailSid);
     if (session?.status === "draft") {
       try {
-        await get().startDraft(bonsaiSid, text);
+        await get().startDraft(thinkrailSid, text);
       } catch (err) {
         // Start failed before the runner launched. handleSend already cleared
         // the input optimistically — restore it so the typed text isn't lost,
         // and don't append the optimistic userMessage.
-        useInputDraftStore.getState().setDraft(bonsaiSid, text);
+        useInputDraftStore.getState().setDraft(thinkrailSid, text);
         useNotificationStore.getState().addToast({
           eventType: "error",
           message: `Couldn't start session: ${getErrorMessage(err)}`,
           persistent: true,
-          bonsaiSid,
+          thinkrailSid,
         });
         return;
       }
       set((s) => {
-        const sess = s.sessions.get(bonsaiSid);
+        const sess = s.sessions.get(thinkrailSid);
         if (!sess) return s;
         const next = new Map(s.sessions);
-        next.set(bonsaiSid, {
+        next.set(thinkrailSid, {
           ...sess,
           events: [
             ...sess.events,
             {
-              bonsaiSid,
+              thinkrailSid,
               sessionId: "",
               eventType: "userMessage" as const,
               payload: { text, isMarkdown: isMarkdown ?? false },
@@ -1173,15 +1173,15 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
     //   idle → running happens when runner calls client.query()
     //   and we receive agent/sessionStart or agent/textDelta.
     set((s) => {
-      const session = s.sessions.get(bonsaiSid);
+      const session = s.sessions.get(thinkrailSid);
       if (!session) return s;
       const next = new Map(s.sessions);
-      next.set(bonsaiSid, {
+      next.set(thinkrailSid, {
         ...session,
         events: [
           ...session.events,
           {
-            bonsaiSid,
+            thinkrailSid,
             sessionId: "",
             eventType: "userMessage" as const,
             payload: { text, isMarkdown: isMarkdown ?? false },
@@ -1192,7 +1192,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
     });
     try {
       const api = createAgentApi(getClient());
-      await api.send(bonsaiSid, text, isMarkdown);
+      await api.send(thinkrailSid, text, isMarkdown);
     } catch (err) {
       console.error("[sendMessage] failed:", err);
       const msg = getErrorMessage(err);
@@ -1200,14 +1200,14 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
         eventType: "error",
         message: `Send failed: ${msg}`,
         persistent: true,
-        bonsaiSid,
+        thinkrailSid,
       });
       // Remove optimistic userMessage on failure
       set((s) => {
-        const session = s.sessions.get(bonsaiSid);
+        const session = s.sessions.get(thinkrailSid);
         if (!session) return s;
         const next = new Map(s.sessions);
-        next.set(bonsaiSid, {
+        next.set(thinkrailSid, {
           ...session,
           events: session.events.filter(
             (e, i) =>
@@ -1223,31 +1223,31 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
     }
   },
 
-  switchSession: (bonsaiSid) => {
+  switchSession: (thinkrailSid) => {
     const prev = get().activeSessionId;
-    if (prev && prev !== bonsaiSid && get().sessions.get(prev)?.status === "draft") {
+    if (prev && prev !== thinkrailSid && get().sessions.get(prev)?.status === "draft") {
       void draftAutosave.flush(prev);
     }
-    _ensureSubscribed(bonsaiSid);
-    set({ activeSessionId: bonsaiSid });
+    _ensureSubscribed(thinkrailSid);
+    set({ activeSessionId: thinkrailSid });
   },
 
-  continueSession: async (bonsaiSid) => {
+  continueSession: async (thinkrailSid) => {
     const { createSessionApi } = await import("@/api/methods/sessions.ts");
     const api = createSessionApi(getClient());
-    await api.continue(bonsaiSid);
+    await api.continue(thinkrailSid);
 
     // If session is in memory, just update it
-    if (get().sessions.has(bonsaiSid)) {
+    if (get().sessions.has(thinkrailSid)) {
       set((s) => {
-        const session = s.sessions.get(bonsaiSid);
+        const session = s.sessions.get(thinkrailSid);
         if (!session) return s;
 
         // Reconstruct answered requests, marking unresolved as historical
         const answered = buildAnsweredRequests(session.events, false);
 
         const next = new Map(s.sessions);
-        next.set(bonsaiSid, {
+        next.set(thinkrailSid, {
           ...session,
           status: "initializing",
           restored: undefined,
@@ -1260,75 +1260,75 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
           return { sessions: next };
         }
         const tabs = new Set(s.openTabs);
-        tabs.add(bonsaiSid);
-        return { sessions: next, openTabs: tabs, activeSessionId: bonsaiSid };
+        tabs.add(thinkrailSid);
+        return { sessions: next, openTabs: tabs, activeSessionId: thinkrailSid };
       });
     } else {
       // Session NOT in memory — restore first without forcing a tab; the
       // set below adds one only for non-ticket sessions.
-      await get().restoreSession(bonsaiSid, { noTab: true });
+      await get().restoreSession(thinkrailSid, { noTab: true });
       set((s) => {
-        const session = s.sessions.get(bonsaiSid);
+        const session = s.sessions.get(thinkrailSid);
         if (!session) return s;
         const next = new Map(s.sessions);
-        next.set(bonsaiSid, { ...session, status: "initializing", restored: undefined });
+        next.set(thinkrailSid, { ...session, status: "initializing", restored: undefined });
         if (session.ticketId) {
           return { sessions: next };
         }
         const tabs = new Set(s.openTabs);
-        tabs.add(bonsaiSid);
+        tabs.add(thinkrailSid);
         return { sessions: next, openTabs: tabs };
       });
     }
   },
 
-  retryLastMessage: async (bonsaiSid) => {
+  retryLastMessage: async (thinkrailSid) => {
     try {
       const api = createAgentApi(getClient());
-      await api.retryLastMessage(bonsaiSid);
+      await api.retryLastMessage(thinkrailSid);
     } catch (err) {
       console.error("retryLastMessage failed:", err);
     }
   },
 
-  restoreSession: async (bonsaiSid, opts) => {
+  restoreSession: async (thinkrailSid, opts) => {
     const noTab = opts?.noTab ?? false;
     const allowTicketTab = opts?.allowTicketTab ?? false;
     // Subscribe to live events for this session (multi-client)
-    _ensureSubscribed(bonsaiSid);
+    _ensureSubscribed(thinkrailSid);
     // Already in memory or already being restored — just open tab if needed
-    if (get().sessions.has(bonsaiSid) || _restoring.has(bonsaiSid)) {
-      const existing = get().sessions.get(bonsaiSid);
+    if (get().sessions.has(thinkrailSid) || _restoring.has(thinkrailSid)) {
+      const existing = get().sessions.get(thinkrailSid);
       // Ticket-attached sessions never become free-standing tabs unless the
       // caller explicitly opts in.
       if (existing?.ticketId && !allowTicketTab) return;
       if (!noTab) {
         set((s) => {
           const tabs = new Set(s.openTabs);
-          tabs.add(bonsaiSid);
-          return { openTabs: tabs, activeSessionId: bonsaiSid };
+          tabs.add(thinkrailSid);
+          return { openTabs: tabs, activeSessionId: thinkrailSid };
         });
         if (allowTicketTab) useBoardStore.setState({ activeTicketId: null });
       }
       return;
     }
     // Load from backend (guard against concurrent fetches)
-    _restoring.add(bonsaiSid);
+    _restoring.add(thinkrailSid);
     try {
     const { createSessionApi } = await import("@/api/methods/sessions.ts");
     const api = createSessionApi(getClient());
-    const data = await api.get(bonsaiSid);
-    console.log("[restoreSession]", bonsaiSid, "data:", data ? `${(data.events ?? []).length} events` : "null");
+    const data = await api.get(thinkrailSid);
+    console.log("[restoreSession]", thinkrailSid, "data:", data ? `${(data.events ?? []).length} events` : "null");
     if (!data) return;
 
     // Check if this session has a live backend runner
     const allSessions = await api.list();
-    const backendEntry = allSessions.find((s) => s.bonsaiSid === bonsaiSid);
+    const backendEntry = allSessions.find((s) => s.thinkrailSid === thinkrailSid);
     const isActive = backendEntry?.active === true;
 
     // Convert backend events to AgentEvent format
     const events: AgentEvent[] = (data.events ?? []).map((ev: Record<string, unknown>) => ({
-      bonsaiSid,
+      thinkrailSid,
       sessionId: ((ev.payload as Record<string, unknown>)?.sessionId as string) ?? "",
       eventType: ((ev.eventType as string) ?? "notification") as AgentEvent["eventType"],
       payload: (ev.payload as Record<string, unknown>) ?? ev,
@@ -1346,8 +1346,8 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
     const restoredPrompt = events.find((e) => e.eventType === "sessionStart")?.payload.systemPrompt as string | undefined;
 
     const session: Session = {
-      bonsaiSid,
-      name: data.name ?? bonsaiSid.slice(0, 8),
+      thinkrailSid,
+      name: data.name ?? thinkrailSid.slice(0, 8),
       skillId: (data.skillId as string) ?? null,
       specIds: data.specIds ?? [],
       filePaths: (data.filePaths as string[]) ?? [],
@@ -1379,7 +1379,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
       subagentMode: (data as unknown as Record<string, unknown>).subagentMode as Session["subagentMode"] ?? undefined,
       stepGate: (data as unknown as Record<string, unknown>).stepGate as Session["stepGate"] ?? undefined,
       ...(restoredPrompt ? { systemPrompt: restoredPrompt } : {}),
-      parentBonsaiSid: (data as unknown as Record<string, unknown>).parentBonsaiSid as string ?? null,
+      parentThinkrailSid: (data as unknown as Record<string, unknown>).parentThinkrailSid as string ?? null,
       subsessionType: (data as unknown as Record<string, unknown>).subsessionType as Session["subsessionType"] ?? null,
       subsessionContext: (data as unknown as Record<string, unknown>).subsessionContext as string ?? null,
       returnStatus: (data as unknown as Record<string, unknown>).returnStatus as Session["returnStatus"] ?? null,
@@ -1397,7 +1397,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
     // the input box and label the tab from it.
     const draftInput = backendEntry?.draftInput;
     if (backendEntry?.status === "draft") {
-      if (draftInput) useInputDraftStore.getState().setDraft(bonsaiSid, draftInput);
+      if (draftInput) useInputDraftStore.getState().setDraft(thinkrailSid, draftInput);
       const resolved = resolveDraftName(data.name, draftInput ?? "");
       session.name = resolved.name;
       if (resolved.nameManuallySet) session.nameManuallySet = true;
@@ -1405,21 +1405,21 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
 
     set((s) => {
       const next = new Map(s.sessions);
-      next.set(bonsaiSid, session);
+      next.set(thinkrailSid, session);
       const nextClosed = new Set(s.closedIds);
-      nextClosed.delete(bonsaiSid);
+      nextClosed.delete(thinkrailSid);
       // Ticket-attached sessions never become free-standing tabs unless the
       // caller explicitly opts in.
       if (noTab || (session.ticketId && !allowTicketTab)) {
         return { sessions: next, closedIds: nextClosed };
       }
       const tabs = new Set(s.openTabs);
-      tabs.add(bonsaiSid);
-      return { sessions: next, openTabs: tabs, activeSessionId: bonsaiSid, closedIds: nextClosed };
+      tabs.add(thinkrailSid);
+      return { sessions: next, openTabs: tabs, activeSessionId: thinkrailSid, closedIds: nextClosed };
     });
     if (allowTicketTab && !noTab) useBoardStore.setState({ activeTicketId: null });
     } finally {
-      _restoring.delete(bonsaiSid);
+      _restoring.delete(thinkrailSid);
     }
   },
 
@@ -1451,7 +1451,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
 
     // Filter to active sessions not already in memory
     const currentSessions = get().sessions;
-    const toLoad = all.filter((e) => e.active && !currentSessions.has(e.bonsaiSid));
+    const toLoad = all.filter((e) => e.active && !currentSessions.has(e.thinkrailSid));
 
     // Backend-restart recovery: if no live runners but the project has
     // produced a deliverable (state=initialized), load the most recent
@@ -1459,14 +1459,14 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
     // Backend sorts list_sessions by mtime descending, so the first
     // entry is the freshest.
     if (includeRecentDiskSession && toLoad.length === 0) {
-      const recent = all.find((e) => !currentSessions.has(e.bonsaiSid));
+      const recent = all.find((e) => !currentSessions.has(e.thinkrailSid));
       if (recent) toLoad.push(recent);
     }
 
     // Fetch full data (with events) for each session in parallel
     const results = await Promise.allSettled(
       toLoad.map(async (entry) => {
-        const data = await api.get(entry.bonsaiSid);
+        const data = await api.get(entry.thinkrailSid);
         return { entry, data };
       }),
     );
@@ -1476,11 +1476,11 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
       for (const result of results) {
         if (result.status === "rejected") continue;
         const { entry, data } = result.value;
-        if (next.has(entry.bonsaiSid)) continue;
+        if (next.has(entry.thinkrailSid)) continue;
 
         // Convert backend events to AgentEvent format
         const events: AgentEvent[] = (data?.events ?? []).map((ev: Record<string, unknown>) => ({
-          bonsaiSid: entry.bonsaiSid,
+          thinkrailSid: entry.thinkrailSid,
           sessionId: ((ev.payload as Record<string, unknown>)?.sessionId as string) ?? "",
           eventType: ((ev.eventType as string) ?? "notification") as AgentEvent["eventType"],
           payload: (ev.payload as Record<string, unknown>) ?? ev,
@@ -1499,11 +1499,11 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
           ? resolveDraftName(data?.name ?? entry.name, entry.draftInput ?? "")
           : null;
 
-        next.set(entry.bonsaiSid, {
-          bonsaiSid: entry.bonsaiSid,
+        next.set(entry.thinkrailSid, {
+          thinkrailSid: entry.thinkrailSid,
           name: draftName
             ? draftName.name
-            : (data?.name ?? entry.name ?? entry.bonsaiSid.slice(0, 8)),
+            : (data?.name ?? entry.name ?? entry.thinkrailSid.slice(0, 8)),
           ...(draftName?.nameManuallySet ? { nameManuallySet: true } : {}),
           skillId: (data?.skillId as string) ?? entry.skillId ?? null,
           specIds: data?.specIds ?? entry.specIds ?? [],
@@ -1532,7 +1532,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
           // session/continue) instead of the regular input area.
           restored: !entry.inTracker,
           ...(restoredPrompt ? { systemPrompt: restoredPrompt } : {}),
-          parentBonsaiSid: (data as unknown as Record<string, unknown>)?.parentBonsaiSid as string ?? null,
+          parentThinkrailSid: (data as unknown as Record<string, unknown>)?.parentThinkrailSid as string ?? null,
           subsessionType: (data as unknown as Record<string, unknown>)?.subsessionType as Session["subsessionType"] ?? null,
           subsessionContext: (data as unknown as Record<string, unknown>)?.subsessionContext as string ?? null,
           returnStatus: (data as unknown as Record<string, unknown>)?.returnStatus as Session["returnStatus"] ?? null,
@@ -1564,7 +1564,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
       // Also add cost from in-memory sessions not in the backend list
       // (shouldn't happen normally, but be safe)
       for (const [sid, session] of s.sessions) {
-        if (!all.find((e) => e.bonsaiSid === sid)) {
+        if (!all.find((e) => e.thinkrailSid === sid)) {
           totalProjectCost += session.metrics.costUsd;
         }
       }
@@ -1584,7 +1584,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
           : undefined;
         // Only accept the remembered ID if the session still exists in the
         // list — otherwise it's stale (session deleted or moved).
-        if (remembered && all.some((e) => e.bonsaiSid === remembered)) {
+        if (remembered && all.some((e) => e.thinkrailSid === remembered)) {
           autoActiveId = remembered;
         }
       }
@@ -1594,11 +1594,11 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
           ?? activeCandidates.sort(
             (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
           )[0];
-        autoActiveId = best?.bonsaiSid ?? null;
+        autoActiveId = best?.thinkrailSid ?? null;
         if (!autoActiveId && includeRecentDiskSession) {
           const loaded = results.find((r) => r.status === "fulfilled");
           if (loaded?.status === "fulfilled") {
-            autoActiveId = loaded.value.entry.bonsaiSid;
+            autoActiveId = loaded.value.entry.thinkrailSid;
           }
         }
       }
@@ -1607,7 +1607,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
       const tabs = new Set(s.openTabs);
       for (const result of results) {
         if (result.status === "fulfilled") {
-          tabs.add(result.value.entry.bonsaiSid);
+          tabs.add(result.value.entry.thinkrailSid);
         }
       }
 
@@ -1624,7 +1624,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
       if (result.status !== "fulfilled") continue;
       const { entry } = result.value;
       if (entry.status === "draft" && entry.draftInput) {
-        useInputDraftStore.getState().setDraft(entry.bonsaiSid, entry.draftInput);
+        useInputDraftStore.getState().setDraft(entry.thinkrailSid, entry.draftInput);
       }
     }
   },
@@ -1642,11 +1642,11 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
 
     const api = createAgentApi(getClient());
     await Promise.allSettled(
-      toCheck.map(async (bonsaiSid) => {
+      toCheck.map(async (thinkrailSid) => {
         try {
-          const task = await api.status(bonsaiSid);
+          const task = await api.status(thinkrailSid);
           const backendStatus = task.status; // "initializing" | "idle" | "running" | "waiting" | "done" | "error"
-          const session = get().sessions.get(bonsaiSid);
+          const session = get().sessions.get(thinkrailSid);
           if (!session) return;
 
           // Map backend TaskStatus to frontend SessionStatus
@@ -1657,14 +1657,14 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
           if (backendStatus === "running") return; // still running, no update needed
 
           if (session.status !== backendStatus) {
-            console.log(`[syncSessionStatuses] ${bonsaiSid}: ${session.status} → ${backendStatus}`);
+            console.log(`[syncSessionStatuses] ${thinkrailSid}: ${session.status} → ${backendStatus}`);
             set((s) => {
-              const current = s.sessions.get(bonsaiSid);
+              const current = s.sessions.get(thinkrailSid);
               if (!current) return s;
               // Don't overwrite if status already changed (e.g., event arrived)
               if (current.status !== "initializing" && current.status !== "running" && current.status !== "waiting") return s;
               const next = new Map(s.sessions);
-              next.set(bonsaiSid, {
+              next.set(thinkrailSid, {
                 ...current,
                 status: backendStatus as SessionStatus,
                 pendingRequests: backendStatus === "idle" || backendStatus === "done" ? [] : current.pendingRequests,
@@ -1677,52 +1677,52 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
           // network/timeout errors (transient — leave status unchanged).
           const isRpcError = err && typeof err === "object" && "code" in err;
           if (isRpcError) {
-            const session = get().sessions.get(bonsaiSid);
+            const session = get().sessions.get(thinkrailSid);
             if (!session) return;
             // Grace period: don't mark as done if session entered initializing < 10s ago
             // to avoid racing with continueSession (backend task not yet created).
             const isRecent = session.status === "initializing" && (Date.now() - session.startedAt) < 10_000;
             if (!isRecent && (session.status === "initializing" || session.status === "running" || session.status === "waiting")) {
-              console.log(`[syncSessionStatuses] ${bonsaiSid}: task not found, marking done`);
+              console.log(`[syncSessionStatuses] ${thinkrailSid}: task not found, marking done`);
               set((s) => {
-                const current = s.sessions.get(bonsaiSid);
+                const current = s.sessions.get(thinkrailSid);
                 if (!current) return s;
                 if (current.status !== "initializing" && current.status !== "running" && current.status !== "waiting") return s;
                 const next = new Map(s.sessions);
-                next.set(bonsaiSid, { ...current, status: "done", pendingRequests: [] });
+                next.set(thinkrailSid, { ...current, status: "done", pendingRequests: [] });
                 return { sessions: next };
               });
             }
           } else {
             // Network error — leave status unchanged, will retry on next poll
-            console.warn(`[syncSessionStatuses] ${bonsaiSid}: network error, skipping`, err);
+            console.warn(`[syncSessionStatuses] ${thinkrailSid}: network error, skipping`, err);
           }
         }
       }),
     );
   },
 
-  closeSession: (bonsaiSid) => {
+  closeSession: (thinkrailSid) => {
     // Close the tab. Live sessions stay in the store (background). No END_SIGNAL.
     set((s) => {
-      const session = s.sessions.get(bonsaiSid);
+      const session = s.sessions.get(thinkrailSid);
       if (!session) return s;
 
       const tabs = new Set(s.openTabs);
-      tabs.delete(bonsaiSid);
+      tabs.delete(thinkrailSid);
 
       // Pick next active from remaining open tabs
       const nextActive =
-        s.activeSessionId === bonsaiSid
+        s.activeSessionId === thinkrailSid
           ? (Array.from(tabs).find((id) => s.sessions.has(id)) ?? null)
           : s.activeSessionId;
 
       // Terminal sessions: remove from store and archive
       if (session.status === "done" || session.status === "error") {
         const next = new Map(s.sessions);
-        next.delete(bonsaiSid);
+        next.delete(thinkrailSid);
         const nextClosed = new Set(s.closedIds);
-        nextClosed.add(bonsaiSid);
+        nextClosed.add(thinkrailSid);
         return {
           sessions: next,
           openTabs: tabs,
@@ -1731,7 +1731,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
           archivedSessions: [
             ...s.archivedSessions,
             {
-              bonsaiSid: session.bonsaiSid, name: session.name,
+              thinkrailSid: session.thinkrailSid, name: session.name,
               skillId: session.skillId, specIds: session.specIds,
               startedAt: session.startedAt, endedAt: Date.now(),
               result: session.status === "done" ? "done" : "error",
@@ -1749,22 +1749,22 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
     });
   },
 
-  deleteSession: async (bonsaiSid) => {
+  deleteSession: async (thinkrailSid) => {
     // Cancel any armed autosave so a trailing timer can't re-persist after delete.
-    draftAutosave.cancel(bonsaiSid);
-    const session = get().sessions.get(bonsaiSid);
-    const inFlightSave = _saving.get(bonsaiSid);
+    draftAutosave.cancel(thinkrailSid);
+    const session = get().sessions.get(thinkrailSid);
+    const inFlightSave = _saving.get(thinkrailSid);
 
     const dropLocally = () => {
-      useInputDraftStore.getState().clearDraft(bonsaiSid);
+      useInputDraftStore.getState().clearDraft(thinkrailSid);
       // Close tab (handles activeSessionId switching)
-      get().closeSession(bonsaiSid);
+      get().closeSession(thinkrailSid);
       // Remove from sessions map and ignore late-arriving events
       set((s) => {
         const sessions = new Map(s.sessions);
-        sessions.delete(bonsaiSid);
+        sessions.delete(thinkrailSid);
         const closedIds = new Set(s.closedIds);
-        closedIds.add(bonsaiSid);
+        closedIds.add(thinkrailSid);
         return { sessions, closedIds };
       });
     };
@@ -1784,17 +1784,17 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
 
     const { createSessionApi } = await import("@/api/methods/sessions.ts");
     const api = createSessionApi(getClient());
-    await api.delete(bonsaiSid);
+    await api.delete(thinkrailSid);
     dropLocally();
   },
 
-  endSession: async (bonsaiSid) => {
+  endSession: async (thinkrailSid) => {
     const api = createAgentApi(getClient());
-    await api.end(bonsaiSid);
+    await api.end(thinkrailSid);
   },
 
-  openTab: (bonsaiSid, opts) => {
-    const session = get().sessions.get(bonsaiSid);
+  openTab: (thinkrailSid, opts) => {
+    const session = get().sessions.get(thinkrailSid);
     if (!session) return;
     // Ticket-attached sessions reroute to the ticket view by default, unless
     // the caller explicitly wants a free-standing session tab.
@@ -1806,13 +1806,13 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
     useBoardStore.setState({ activeTicketId: null });
     set((s) => {
       const tabs = new Set(s.openTabs);
-      tabs.add(bonsaiSid);
-      return { openTabs: tabs, activeSessionId: bonsaiSid };
+      tabs.add(thinkrailSid);
+      return { openTabs: tabs, activeSessionId: thinkrailSid };
     });
   },
 
-  focusSession: (bonsaiSid, opts) => {
-    const session = get().sessions.get(bonsaiSid);
+  focusSession: (thinkrailSid, opts) => {
+    const session = get().sessions.get(thinkrailSid);
     if (!session) return;
 
     useFileStore.setState({ activeFilePath: null, previewFilePath: null, previewFile: null });
@@ -1828,13 +1828,13 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
     useBoardStore.setState({ activeTicketId: null });
     set((s) => {
       const tabs = new Set(s.openTabs);
-      tabs.add(bonsaiSid);
-      return { openTabs: tabs, activeSessionId: bonsaiSid };
+      tabs.add(thinkrailSid);
+      return { openTabs: tabs, activeSessionId: thinkrailSid };
     });
   },
 
-  getStaleSessionRefs: (bonsaiSid) => {
-    const session = get().sessions.get(bonsaiSid);
+  getStaleSessionRefs: (thinkrailSid) => {
+    const session = get().sessions.get(thinkrailSid);
     if (!session) return null;
 
     const specs = useSpecStore.getState().specs;
@@ -1846,11 +1846,11 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
     return { staleSpecIds, staleSkillId };
   },
 
-  fixStaleSessionRefs: async (bonsaiSid) => {
-    const session = get().sessions.get(bonsaiSid);
+  fixStaleSessionRefs: async (thinkrailSid) => {
+    const session = get().sessions.get(thinkrailSid);
     if (!session) return;
 
-    const stale = get().getStaleSessionRefs(bonsaiSid);
+    const stale = get().getStaleSessionRefs(thinkrailSid);
     if (!stale) return;
 
     const changes: { specIds?: string[]; filePaths?: string[]; skillId?: string | null; config?: AgentConfig; prompt?: string | null; name?: string; ticketId?: string | null } = {};
@@ -1862,40 +1862,40 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
     }
 
     if (session.status === "draft") {
-      await get().updateDraft(bonsaiSid, changes);
+      await get().updateDraft(thinkrailSid, changes);
     } else {
       // For non-draft sessions, update locally only (display fix)
       const sessions = new Map(get().sessions);
       const updated = { ...session };
       if (changes.specIds) updated.specIds = changes.specIds;
       if (changes.skillId === null) updated.skillId = null;
-      sessions.set(bonsaiSid, updated);
+      sessions.set(thinkrailSid, updated);
       set({ sessions });
     }
   },
 
-  interruptSession: async (bonsaiSid) => {
+  interruptSession: async (thinkrailSid) => {
     try {
       const api = createAgentApi(getClient());
-      await api.interrupt(bonsaiSid);
+      await api.interrupt(thinkrailSid);
       // Status transition is handled by the agent/interrupted notification
     } catch (err) {
       console.warn("[interruptSession] failed:", err);
     }
   },
 
-  resolveRequest: (bonsaiSid, requestId, response) => {
+  resolveRequest: (thinkrailSid, requestId, response) => {
     // Send the response to the backend via agent/respond RPC method.
     // This resolves the asyncio.Future in the backend tracker.
     const api = createAgentApi(getClient());
-    api.respond(bonsaiSid, requestId, response).catch((err) => {
+    api.respond(thinkrailSid, requestId, response).catch((err) => {
       console.error("Failed to send agent/respond:", err);
     });
 
     // Refinement subsession: when user picks a version (not "Adjust"),
     // automatically trigger return flow to propagate text to parent.
-    const session = get().sessions.get(bonsaiSid);
-    if (session?.subsessionType === "refinement" && session?.parentBonsaiSid) {
+    const session = get().sessions.get(thinkrailSid);
+    if (session?.subsessionType === "refinement" && session?.parentThinkrailSid) {
       const r = response as { questions?: { options?: { label: string; description: string }[] }[]; answers?: Record<string, string> };
       if (r.answers && r.questions) {
         const firstAnswer = Object.values(r.answers)[0];
@@ -1904,7 +1904,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
           const question = r.questions[0];
           const selectedOption = question?.options?.find((o: { label: string }) => o.label === firstAnswer);
           if (selectedOption?.description) {
-            get().approveReturn(bonsaiSid, selectedOption.description);
+            get().approveReturn(thinkrailSid, selectedOption.description);
           }
         }
       }
@@ -1916,12 +1916,12 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
     // shows "waiting" while the user answers. Setting "running" here is correct
     // state sync (not optimism), since the backend never left "running".
     set((s) => {
-      const session = s.sessions.get(bonsaiSid);
+      const session = s.sessions.get(thinkrailSid);
       if (!session) return s;
       const nextSessions = new Map(s.sessions);
       const answered = new Map(session.answeredRequests);
       answered.set(requestId, response);
-      nextSessions.set(bonsaiSid, {
+      nextSessions.set(thinkrailSid, {
         ...session,
         status: "running",
         pendingRequests: session.pendingRequests.filter(
@@ -1936,29 +1936,29 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
     const ns = useNotificationStore.getState();
     ns.decrementPendingInput();
     for (const t of ns.toasts) {
-      if (t.bonsaiSid === bonsaiSid && (t.eventType === "question" || t.eventType === "approval" || t.eventType === "suggestion")) {
+      if (t.thinkrailSid === thinkrailSid && (t.eventType === "question" || t.eventType === "approval" || t.eventType === "suggestion")) {
         ns.dismissToast(t.id);
       }
     }
-    ns.clearBadge(bonsaiSid);
+    ns.clearBadge(thinkrailSid);
   },
 
-  updateConfig: async (bonsaiSid, config) => {
+  updateConfig: async (thinkrailSid, config) => {
     const api = createAgentApi(getClient());
-    await api.updateConfig(bonsaiSid, config);
+    await api.updateConfig(thinkrailSid, config);
   },
 
-  restartSession: async (bonsaiSid) => {
+  restartSession: async (thinkrailSid) => {
     const { createSessionApi } = await import("@/api/methods/sessions.ts");
     const api = createSessionApi(getClient());
-    await api.restart(bonsaiSid);
+    await api.restart(thinkrailSid);
     // Backend creates a new session starting in initializing
     set((s) => {
-      const session = s.sessions.get(bonsaiSid);
+      const session = s.sessions.get(thinkrailSid);
       if (!session) return s;
       const next = new Map(s.sessions);
       const cu = session.metrics.contextUsage;
-      next.set(bonsaiSid, {
+      next.set(thinkrailSid, {
         ...session,
         status: "initializing",
         pendingRequests: [],
@@ -1975,16 +1975,16 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
   },
 
   onConfigChanged: (params) => {
-    const bonsaiSid = params.bonsaiSid as string;
+    const thinkrailSid = params.thinkrailSid as string;
     set((s) => {
-      const session = s.sessions.get(bonsaiSid);
+      const session = s.sessions.get(thinkrailSid);
       if (!session) return s;
       const newModel = (params.model as string) ?? session.model;
       // The runtime re-reports the window on the next turn after a model
       // switch; carry the current denominator forward until then.
       const contextMax = (params.contextMax as number) || session.metrics.contextMax || 0;
       const next = new Map(s.sessions);
-      next.set(bonsaiSid, {
+      next.set(thinkrailSid, {
         ...session,
         model: newModel,
         permissionMode: (params.permissionMode as string) ?? session.permissionMode,
@@ -2000,14 +2000,14 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
   },
 
   onSessionStart: (params) => {
-    const bonsaiSid = params.bonsaiSid as string;
+    const thinkrailSid = params.thinkrailSid as string;
     set((s) => {
-      const withSession = ensureSession(s.sessions, bonsaiSid, s.closedIds);
-      const session = withSession.get(bonsaiSid);
+      const withSession = ensureSession(s.sessions, thinkrailSid, s.closedIds);
+      const session = withSession.get(thinkrailSid);
       if (!session) return s;
       const next = new Map(withSession);
       const cu = session.metrics.contextUsage;
-      next.set(bonsaiSid, {
+      next.set(thinkrailSid, {
         ...session,
         status: session.status === "initializing" || session.status === "idle" ? "running" : session.status,
         model: (params.model as string) ?? session.model,
@@ -2015,7 +2015,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
         events: [
           ...session.events,
           {
-            bonsaiSid,
+            thinkrailSid,
             sessionId: (params.sessionId as string) ?? "",
             eventType: "sessionStart",
             payload: params,
@@ -2034,28 +2034,28 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
   },
 
   onSessionMetadataUpdate: (task) => {
-    const bonsaiSid = task.bonsaiSid as string | undefined;
-    if (!bonsaiSid) return;
+    const thinkrailSid = task.thinkrailSid as string | undefined;
+    if (!thinkrailSid) return;
     set((s) => {
-      const existing = s.sessions.get(bonsaiSid);
+      const existing = s.sessions.get(thinkrailSid);
       if (!existing) return s;
       const outcome = (task.outcome as Session["outcome"]) ?? null;
       const next = new Map(s.sessions);
-      next.set(bonsaiSid, { ...existing, outcome });
+      next.set(thinkrailSid, { ...existing, outcome });
       return { sessions: next };
     });
   },
 
-  patchOutcomeAction: async (bonsaiSid, actionId, patch) => {
+  patchOutcomeAction: async (thinkrailSid, actionId, patch) => {
     // Optimistic update for instant feedback
     set((s) => {
-      const existing = s.sessions.get(bonsaiSid);
+      const existing = s.sessions.get(thinkrailSid);
       if (!existing?.outcome) return s;
       const nextActions = existing.outcome.actions.map((a) =>
         a.id === actionId ? ({ ...a, ...patch } as typeof a) : a,
       );
       const next = new Map(s.sessions);
-      next.set(bonsaiSid, {
+      next.set(thinkrailSid, {
         ...existing,
         outcome: { ...existing.outcome, actions: nextActions },
       });
@@ -2063,7 +2063,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
     });
     try {
       await getClient().request("session/patchOutcomeAction", {
-        bonsaiSid,
+        thinkrailSid,
         actionId,
         patch,
       });
@@ -2073,12 +2073,12 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
   },
 
   onAgentEvent: (method, params) => {
-    const bonsaiSid = params.bonsaiSid as string;
+    const thinkrailSid = params.thinkrailSid as string;
     // Capture before set() — applyMetrics clears pendingRequests inside the setter.
-    const hadPending = (get().sessions.get(bonsaiSid)?.pendingRequests.length ?? 0) > 0;
+    const hadPending = (get().sessions.get(thinkrailSid)?.pendingRequests.length ?? 0) > 0;
     set((s) => {
-      const sessions = appendEvent(s.sessions, bonsaiSid, method, params, s.closedIds);
-      let session = sessions.get(bonsaiSid);
+      const sessions = appendEvent(s.sessions, thinkrailSid, method, params, s.closedIds);
+      let session = sessions.get(thinkrailSid);
       let projectCost = s.projectCost;
       if (session) {
         // Belt-and-suspenders: if we receive work events while idle, transition
@@ -2087,14 +2087,14 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
         if (session.status === "idle") {
           if (_RUNNING_SIGNALS.has(method)) {
             const updated = { ...session, status: "running" as SessionStatus };
-            sessions.set(bonsaiSid, updated);
+            sessions.set(thinkrailSid, updated);
             session = updated;
           }
         }
 
         if (method === "agent/ready") {
           if (session.status === "initializing") {
-            sessions.set(bonsaiSid, { ...session, status: "idle" });
+            sessions.set(thinkrailSid, { ...session, status: "idle" });
           }
         } else if (method === "agent/costEstimate") {
           const est = params.estimatedCostUsd as number;
@@ -2108,7 +2108,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
           const contextMax = session.metrics.contextMax || 0;
 
           const next = new Map(sessions);
-          next.set(bonsaiSid, {
+          next.set(thinkrailSid, {
             ...session,
             metrics: {
               ...session.metrics,
@@ -2149,7 +2149,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
             updated.answeredRequests = answered;
           }
 
-          sessions.set(bonsaiSid, updated);
+          sessions.set(thinkrailSid, updated);
         } else if (method === "agent/statusChanged") {
           const newStatus = params.status as SessionStatus;
           // Apply backend status unless frontend is in a frontend-only state
@@ -2161,7 +2161,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
             session.status !== "done" &&
             session.status !== "error"
           ) {
-            sessions.set(bonsaiSid, { ...session, status: newStatus });
+            sessions.set(thinkrailSid, { ...session, status: newStatus });
           }
         }
       }
@@ -2178,36 +2178,36 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
         ns.decrementPendingInput();
         for (const t of ns.toasts) {
           if (
-            t.bonsaiSid === bonsaiSid &&
+            t.thinkrailSid === thinkrailSid &&
             (t.eventType === "question" || t.eventType === "approval" || t.eventType === "suggestion")
           ) {
             ns.dismissToast(t.id);
           }
         }
-        ns.clearBadge(bonsaiSid);
+        ns.clearBadge(thinkrailSid);
       }
     }
   },
 
   onAskQuestion: (params) => {
-    const bonsaiSid = params.bonsaiSid as string;
+    const thinkrailSid = params.thinkrailSid as string;
     const requestId = params.requestId as string;
     set((s) => {
-      const session = s.sessions.get(bonsaiSid);
+      const session = s.sessions.get(thinkrailSid);
       // Retry dedup: same requestId already in flight → drop the duplicate event.
       if (session?.pendingRequests.some((r) => r.requestId === requestId)) {
         return s;
       }
       const sessions = appendEvent(
         s.sessions,
-        bonsaiSid,
+        thinkrailSid,
         "agent/askUserQuestion",
         params,
         s.closedIds,
       );
-      const updated = sessions.get(bonsaiSid);
+      const updated = sessions.get(thinkrailSid);
       if (updated) {
-        sessions.set(bonsaiSid, {
+        sessions.set(thinkrailSid, {
           ...updated,
           status: "waiting",
           pendingRequests: [...updated.pendingRequests, {
@@ -2222,23 +2222,23 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
   },
 
   onConfirmAction: (params) => {
-    const bonsaiSid = params.bonsaiSid as string;
+    const thinkrailSid = params.thinkrailSid as string;
     const requestId = params.requestId as string;
     set((s) => {
-      const session = s.sessions.get(bonsaiSid);
+      const session = s.sessions.get(thinkrailSid);
       if (session?.pendingRequests.some((r) => r.requestId === requestId)) {
         return s;
       }
       const sessions = appendEvent(
         s.sessions,
-        bonsaiSid,
+        thinkrailSid,
         "agent/confirmAction",
         params,
         s.closedIds,
       );
-      const updated = sessions.get(bonsaiSid);
+      const updated = sessions.get(thinkrailSid);
       if (updated) {
-        sessions.set(bonsaiSid, {
+        sessions.set(thinkrailSid, {
           ...updated,
           status: "waiting",
           pendingRequests: [...updated.pendingRequests, {
@@ -2254,19 +2254,19 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
   },
 
   onSuggestSession: (params) => {
-    const bonsaiSid = params.bonsaiSid as string;
+    const thinkrailSid = params.thinkrailSid as string;
     const requestId = params.requestId as string;
     set((s) => {
       const sessions = appendEvent(
         s.sessions,
-        bonsaiSid,
+        thinkrailSid,
         "agent/suggestSession",
         params,
         s.closedIds,
       );
-      const session = sessions.get(bonsaiSid);
+      const session = sessions.get(thinkrailSid);
       if (session) {
-        sessions.set(bonsaiSid, {
+        sessions.set(thinkrailSid, {
           ...session,
           status: "waiting",
           pendingRequests: [...session.pendingRequests, {
@@ -2285,19 +2285,19 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
   },
 
   onSuggestDescription: (params) => {
-    const bonsaiSid = params.bonsaiSid as string;
+    const thinkrailSid = params.thinkrailSid as string;
     const requestId = params.requestId as string;
     set((s) => {
       const sessions = appendEvent(
         s.sessions,
-        bonsaiSid,
+        thinkrailSid,
         "agent/suggestDescription",
         params,
         s.closedIds,
       );
-      const session = sessions.get(bonsaiSid);
+      const session = sessions.get(thinkrailSid);
       if (session) {
-        sessions.set(bonsaiSid, {
+        sessions.set(thinkrailSid, {
           ...session,
           status: "waiting",
           pendingRequests: [...session.pendingRequests, {
@@ -2313,19 +2313,19 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
   },
 
   onSuggestStep: (params) => {
-    const bonsaiSid = params.bonsaiSid as string;
+    const thinkrailSid = params.thinkrailSid as string;
     const requestId = params.requestId as string;
     set((s) => {
       const sessions = appendEvent(
         s.sessions,
-        bonsaiSid,
+        thinkrailSid,
         "agent/suggestStep",
         params,
         s.closedIds,
       );
-      const session = sessions.get(bonsaiSid);
+      const session = sessions.get(thinkrailSid);
       if (session) {
-        sessions.set(bonsaiSid, {
+        sessions.set(thinkrailSid, {
           ...session,
           status: "waiting",
           pendingRequests: [...session.pendingRequests, {
@@ -2345,23 +2345,23 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
   },
 
   onProposeChange: (params) => {
-    const bonsaiSid = params.bonsaiSid as string;
+    const thinkrailSid = params.thinkrailSid as string;
     const requestId = params.requestId as string;
     const filePath = params.filePath as string;
     const section = (params.section as string | undefined) ?? null;
     set((s) => {
       const sessions = appendEvent(
         s.sessions,
-        bonsaiSid,
+        thinkrailSid,
         "agent/proposeChange",
         params,
         s.closedIds,
       );
-      const session = sessions.get(bonsaiSid);
+      const session = sessions.get(thinkrailSid);
       if (session) {
         // Auto-focus the preview on the file+section about to change so
         // the user can see the live context while reviewing the card.
-        sessions.set(bonsaiSid, {
+        sessions.set(thinkrailSid, {
           ...session,
           status: "waiting",
           previewPath: filePath || session.previewPath,
@@ -2382,14 +2382,14 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
   },
 
   onSetPreviewFile: (params) => {
-    const bonsaiSid = params.bonsaiSid as string;
+    const thinkrailSid = params.thinkrailSid as string;
     const path = (params.path as string | null) ?? null;
     const section = (params.section as string | undefined) ?? null;
     set((s) => {
-      const session = s.sessions.get(bonsaiSid);
+      const session = s.sessions.get(thinkrailSid);
       if (!session) return s;
       const sessions = new Map(s.sessions);
-      sessions.set(bonsaiSid, {
+      sessions.set(thinkrailSid, {
         ...session,
         previewPath: path,
         previewSection: path != null ? section : null,
@@ -2401,12 +2401,12 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
   onClearPreviewFile: (params) => {
     // Deprecated alias. Path-null SetPreviewFile is canonical; this stays
     // for backwards-compat with old persisted events.
-    const bonsaiSid = params.bonsaiSid as string;
+    const thinkrailSid = params.thinkrailSid as string;
     set((s) => {
-      const session = s.sessions.get(bonsaiSid);
+      const session = s.sessions.get(thinkrailSid);
       if (!session) return s;
       const sessions = new Map(s.sessions);
-      sessions.set(bonsaiSid, {
+      sessions.set(thinkrailSid, {
         ...session,
         previewPath: null,
         previewSection: null,
@@ -2416,10 +2416,10 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
   },
 
   onArtifactAdded: (params) => {
-    const bonsaiSid = params.bonsaiSid as string;
+    const thinkrailSid = params.thinkrailSid as string;
     const artifact = params.artifact as SessionArtifact;
     set((s) => {
-      const session = s.sessions.get(bonsaiSid);
+      const session = s.sessions.get(thinkrailSid);
       if (!session) return s;
       const sessions = new Map(s.sessions);
       // Match same logical file even when one side is absolute / the other
@@ -2433,18 +2433,18 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
               i === existingIdx ? { ...a, ...artifact } : a,
             )
           : [...session.artifacts, artifact];
-      sessions.set(bonsaiSid, { ...session, artifacts: nextArtifacts });
+      sessions.set(thinkrailSid, { ...session, artifacts: nextArtifacts });
       return { sessions };
     });
   },
 
   onArtifactLabeled: (params) => {
-    const bonsaiSid = params.bonsaiSid as string;
+    const thinkrailSid = params.thinkrailSid as string;
     const path = params.path as string;
     const role = params.role as string | undefined;
     const label = params.label as string | undefined;
     set((s) => {
-      const session = s.sessions.get(bonsaiSid);
+      const session = s.sessions.get(thinkrailSid);
       if (!session) return s;
       const sessions = new Map(s.sessions);
       const nextArtifacts = session.artifacts.map((a) =>
@@ -2452,40 +2452,40 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
           ? { ...a, role: role ?? a.role, label: label ?? a.label }
           : a,
       );
-      sessions.set(bonsaiSid, { ...session, artifacts: nextArtifacts });
+      sessions.set(thinkrailSid, { ...session, artifacts: nextArtifacts });
       return { sessions };
     });
   },
 
-  setPreviewPath: (bonsaiSid, path) => {
+  setPreviewPath: (thinkrailSid, path) => {
     set((s) => {
-      const session = s.sessions.get(bonsaiSid);
+      const session = s.sessions.get(thinkrailSid);
       if (!session) return s;
       const sessions = new Map(s.sessions);
-      sessions.set(bonsaiSid, { ...session, previewPath: path });
+      sessions.set(thinkrailSid, { ...session, previewPath: path });
       return { sessions };
     });
   },
 
   onRequestExpired: (params) => {
-    const bonsaiSid = params.bonsaiSid as string;
+    const thinkrailSid = params.thinkrailSid as string;
     const requestId = params.requestId as string;
     set((s) => {
       const sessions = appendEvent(
         s.sessions,
-        bonsaiSid,
+        thinkrailSid,
         "agent/requestExpired",
         params,
         s.closedIds,
       );
-      const session = sessions.get(bonsaiSid);
+      const session = sessions.get(thinkrailSid);
       if (session) {
         // Drop the expired request from the list (no-op if it was already gone)
         // and mark as expired in answeredRequests so the renderer shows the
         // terminal state.
         const answered = new Map(session.answeredRequests);
         answered.set(requestId, { expired: true, reason: params.reason });
-        sessions.set(bonsaiSid, {
+        sessions.set(thinkrailSid, {
           ...session,
           pendingRequests: session.pendingRequests.filter(
             (r) => r.requestId !== requestId,
@@ -2498,7 +2498,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
   },
 
   onRequestResolved: (params) => {
-    const bonsaiSid = params.bonsaiSid as string;
+    const thinkrailSid = params.thinkrailSid as string;
     const requestId = params.requestId as string;
     // The backend forwards the original response object (with `behavior` field
     // for approvals, `answers` for questions) so the renderer can determine
@@ -2506,7 +2506,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
     const response = (params.response as Record<string, unknown>) ?? {};
     set((s) => {
       const sessions = new Map(s.sessions);
-      const session = sessions.get(bonsaiSid);
+      const session = sessions.get(thinkrailSid);
       if (session) {
         const hadMatching = session.pendingRequests.some(
           (r) => r.requestId === requestId,
@@ -2516,7 +2516,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
         );
         const answered = new Map(session.answeredRequests);
         answered.set(requestId, { ...response, resolvedBy: params.resolvedBy });
-        sessions.set(bonsaiSid, {
+        sessions.set(thinkrailSid, {
           ...session,
           // When the resolved request was the only one outstanding, transition
           // back to running. With multiple pendings (subagent-mode parallel
@@ -2529,7 +2529,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
       return { sessions };
     });
     // Only decrement if we actually had this pending in flight before resolve.
-    const session = get().sessions.get(bonsaiSid);
+    const session = get().sessions.get(thinkrailSid);
     const stillPending = session?.pendingRequests.some((r) => r.requestId === requestId);
     if (!stillPending) {
       useNotificationStore.getState().decrementPendingInput();
@@ -2537,10 +2537,10 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
   },
 
   onRemoteSessionCreated: (params) => {
-    const bonsaiSid = params.bonsaiSid as string;
+    const thinkrailSid = params.thinkrailSid as string;
     set((s) => {
       // If session already exists (created locally), update metadata
-      const existing = s.sessions.get(bonsaiSid);
+      const existing = s.sessions.get(thinkrailSid);
       const next = new Map(s.sessions);
       const config = (params.config as Record<string, unknown>) ?? {};
       const subagentMode = (params.subagentMode as Session["subagentMode"]) ?? undefined;
@@ -2562,8 +2562,8 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
             stepGate: stepGate ?? existing.stepGate,
           }
         : {
-            bonsaiSid,
-            name: (params.name as string) || bonsaiSid.slice(0, 8),
+            thinkrailSid,
+            name: (params.name as string) || thinkrailSid.slice(0, 8),
             skillId: (params.skillId as string) ?? null,
             specIds: (params.specIds as string[]) ?? [],
             filePaths: (params.filePaths as string[]) ?? [],
@@ -2578,7 +2578,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
             pendingRequests: [],
             answeredRequests: new Map(),
             createdBy: (params.createdBy as string) ?? undefined,
-            parentBonsaiSid: (params.parentBonsaiSid as string) ?? null,
+            parentThinkrailSid: (params.parentThinkrailSid as string) ?? null,
             subsessionType: (params.subsessionType as Session["subsessionType"]) ?? null,
             subsessionContext: (params.subsessionContext as string) ?? null,
             returnStatus: null,
@@ -2589,17 +2589,17 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
             subagentMode,
             stepGate,
           };
-      next.set(bonsaiSid, session);
+      next.set(thinkrailSid, session);
       return { sessions: next };
     });
   },
 
   onRemoteUserMessage: (params) => {
-    const bonsaiSid = params.bonsaiSid as string;
+    const thinkrailSid = params.thinkrailSid as string;
     const text = params.text as string;
     const isMarkdown = (params.isMarkdown as boolean) ?? false;
     set((s) => {
-      const session = s.sessions.get(bonsaiSid);
+      const session = s.sessions.get(thinkrailSid);
       if (!session) return s;
       // Skip if we already have this message (sent by us optimistically)
       const lastEvent = session.events[session.events.length - 1];
@@ -2610,12 +2610,12 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
         return s;
       }
       const next = new Map(s.sessions);
-      next.set(bonsaiSid, {
+      next.set(thinkrailSid, {
         ...session,
         events: [
           ...session.events,
           {
-            bonsaiSid,
+            thinkrailSid,
             sessionId: "",
             eventType: "userMessage" as const,
             payload: { text, isMarkdown },
@@ -2627,10 +2627,10 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
   },
 
   onSessionDone: (params) => {
-    const bonsaiSid = params.bonsaiSid as string;
+    const thinkrailSid = params.thinkrailSid as string;
     set((s) => {
-      const sessions = appendEvent(s.sessions, bonsaiSid, "agent/done", params, s.closedIds);
-      const session = sessions.get(bonsaiSid);
+      const sessions = appendEvent(s.sessions, thinkrailSid, "agent/done", params, s.closedIds);
+      const session = sessions.get(thinkrailSid);
       let projectCost = s.projectCost;
       if (session) {
         // agent/done carries no usage/context data — only update
@@ -2643,7 +2643,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
         // next-step contract land in the same render cycle — no flash
         // of a "session ended" view between the two notifications.
         const payloadOutcome = (params.outcome as Session["outcome"]) ?? null;
-        sessions.set(bonsaiSid, {
+        sessions.set(thinkrailSid, {
           ...session,
           status: "done",
           pendingRequests: [],
@@ -2661,14 +2661,14 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
   },
 
   onSessionError: (params) => {
-    const bonsaiSid = params.bonsaiSid as string;
+    const thinkrailSid = params.thinkrailSid as string;
     const subtype = params.subtype as string;
     const isRecoverable = subtype === "turn_error" || subtype === "context_overflow";
     set((s) => {
-      const sessions = appendEvent(s.sessions, bonsaiSid, "agent/error", params, s.closedIds);
-      const session = sessions.get(bonsaiSid);
+      const sessions = appendEvent(s.sessions, thinkrailSid, "agent/error", params, s.closedIds);
+      const session = sessions.get(thinkrailSid);
       if (session) {
-        sessions.set(bonsaiSid, {
+        sessions.set(thinkrailSid, {
           ...session,
           status: isRecoverable ? "idle" : "error",
           pendingRequests: [],
@@ -2680,13 +2680,13 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
 
   // ── Subsession actions ──
 
-  createSubsession: async (parentBonsaiSid, type, context, name) => {
+  createSubsession: async (parentThinkrailSid, type, context, name) => {
     const { createSubsessionApi } = await import("@/api/methods/subsessions.ts");
     const client = getClient();
     const api = createSubsessionApi(client);
 
-    const { bonsaiSid } = await api.create({
-      parentBonsaiSid,
+    const { thinkrailSid } = await api.create({
+      parentThinkrailSid,
       type,
       context,
       name: name ?? (type === "discussion" ? "Discussion" : "Refinement"),
@@ -2695,17 +2695,17 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
     // Load the created subsession from backend
     const { createSessionApi } = await import("@/api/methods/sessions.ts");
     const sessionApi = createSessionApi(client);
-    const data = await sessionApi.get(bonsaiSid);
+    const data = await sessionApi.get(thinkrailSid);
 
     if (data) {
       // Check if this session has a live backend runner
       const allSessions = await sessionApi.list();
-      const backendEntry = allSessions.find((s) => s.bonsaiSid === bonsaiSid);
+      const backendEntry = allSessions.find((s) => s.thinkrailSid === thinkrailSid);
       const isActive = backendEntry?.active === true;
 
       // Convert backend events to AgentEvent format
       const events: AgentEvent[] = (data.events ?? []).map((ev: Record<string, unknown>) => ({
-        bonsaiSid,
+        thinkrailSid,
         sessionId: ((ev.payload as Record<string, unknown>)?.sessionId as string) ?? "",
         eventType: ((ev.eventType as string) ?? "notification") as AgentEvent["eventType"],
         payload: (ev.payload as Record<string, unknown>) ?? ev,
@@ -2717,8 +2717,8 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
       const restoredCtx = reconstructContextUsage(events, (diskMetrics.contextMax as number) ?? 0);
 
       const session: Session = {
-        bonsaiSid,
-        name: data.name ?? bonsaiSid.slice(0, 8),
+        thinkrailSid,
+        name: data.name ?? thinkrailSid.slice(0, 8),
         skillId: (data.skillId as string) ?? null,
         specIds: data.specIds ?? [],
         filePaths: (data.filePaths as string[]) ?? [],
@@ -2744,7 +2744,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
         pendingRequests: [],
         answeredRequests: new Map(),
         restored: !isActive,
-        parentBonsaiSid: (data as unknown as Record<string, unknown>).parentBonsaiSid as string ?? parentBonsaiSid,
+        parentThinkrailSid: (data as unknown as Record<string, unknown>).parentThinkrailSid as string ?? parentThinkrailSid,
         subsessionType: (data as unknown as Record<string, unknown>).subsessionType as Session["subsessionType"] ?? type,
         subsessionContext: (data as unknown as Record<string, unknown>).subsessionContext as string ?? context ?? null,
         returnStatus: (data as unknown as Record<string, unknown>).returnStatus as Session["returnStatus"] ?? null,
@@ -2760,50 +2760,50 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
 
       set((s) => {
         const next = new Map(s.sessions);
-        next.set(bonsaiSid, session);
+        next.set(thinkrailSid, session);
         const tabs = new Set(s.openTabs);
-        tabs.add(bonsaiSid);
-        return { sessions: next, openTabs: tabs, activeSessionId: bonsaiSid };
+        tabs.add(thinkrailSid);
+        return { sessions: next, openTabs: tabs, activeSessionId: thinkrailSid };
       });
     }
-    return bonsaiSid;
+    return thinkrailSid;
   },
 
-  approveReturn: async (bonsaiSid, text) => {
+  approveReturn: async (thinkrailSid, text) => {
     const { createSubsessionApi } = await import("@/api/methods/subsessions.ts");
     const api = createSubsessionApi(getClient());
-    await api.approveSummary(bonsaiSid, text);
+    await api.approveSummary(thinkrailSid, text);
     set((s) => {
-      const session = s.sessions.get(bonsaiSid);
+      const session = s.sessions.get(thinkrailSid);
       if (!session) return s;
       const next = new Map(s.sessions);
-      next.set(bonsaiSid, { ...session, returnStatus: "approved" as const, returnSummary: text });
+      next.set(thinkrailSid, { ...session, returnStatus: "approved" as const, returnSummary: text });
       return { sessions: next };
     });
   },
 
-  dismissReturn: async (bonsaiSid) => {
+  dismissReturn: async (thinkrailSid) => {
     const { createSubsessionApi } = await import("@/api/methods/subsessions.ts");
     const api = createSubsessionApi(getClient());
-    await api.dismissSummary(bonsaiSid);
+    await api.dismissSummary(thinkrailSid);
     set((s) => {
-      const session = s.sessions.get(bonsaiSid);
+      const session = s.sessions.get(thinkrailSid);
       if (!session) return s;
       const next = new Map(s.sessions);
-      next.set(bonsaiSid, { ...session, returnStatus: "dismissed" as const });
+      next.set(thinkrailSid, { ...session, returnStatus: "dismissed" as const });
       return { sessions: next };
     });
   },
 
-  reviseReturn: async (bonsaiSid, feedback) => {
+  reviseReturn: async (thinkrailSid, feedback) => {
     const { createSubsessionApi } = await import("@/api/methods/subsessions.ts");
     const api = createSubsessionApi(getClient());
-    await api.reviseSummary(bonsaiSid, feedback);
+    await api.reviseSummary(thinkrailSid, feedback);
   },
 
   onSubsessionReturned: (params) => {
     const p = params as Record<string, unknown>;
-    const parentSid = p.parentBonsaiSid as string;
+    const parentSid = p.parentThinkrailSid as string;
     const subsessionType = p.type as string;
     const summary = p.summary as string;
 
@@ -2819,12 +2819,12 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
         if (!parent) return s;
         const next = new Map(s.sessions);
         const event = {
-          bonsaiSid: parentSid,
+          thinkrailSid: parentSid,
           sessionId: "",
           eventType: "notification" as const,
           payload: {
             type: "subsessionResult",
-            childBonsaiSid: p.childBonsaiSid,
+            childThinkRailSid: p.childThinkRailSid,
             childName: p.childName ?? "Subsession",
             subsessionType: p.type,
             summary,
@@ -2840,7 +2840,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
 
 // Route draft-on-type autosave commits (debounce / max-wait / flush) to the
 // store's commitDraft action.
-draftAutosave.setCommitFn((bonsaiSid) => useSessionStore.getState().commitDraft(bonsaiSid));
+draftAutosave.setCommitFn((thinkrailSid) => useSessionStore.getState().commitDraft(thinkrailSid));
 
 // ── HMR: force full reload when this module changes ──
 // Zustand's create() produces a new store instance on each HMR re-execution,

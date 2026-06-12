@@ -3,14 +3,14 @@ import type { FullConfig } from "@playwright/test";
 /**
  * Liveness probe — assert the backend is reachable before any spec runs.
  *
- * `playwright.config.ts` spawns the full Bonsai stack via `./run.sh` as a
+ * `playwright.config.ts` spawns the full ThinkRail stack via `./run.sh` as a
  * `webServer`. Playwright waits on the frontend URL to return 200 before
  * calling globalSetup. The frontend can come up a beat before the backend,
  * so we poll `/api/server-info` here rather than expect a single fetch to
  * succeed.
  */
 
-const BACKEND_URL = process.env.BONSAI_BACKEND_URL ?? "http://localhost:8000";
+const BACKEND_URL = process.env.THINKRAIL_BACKEND_URL ?? "http://localhost:8000";
 
 export default async function globalSetup(_config: FullConfig): Promise<void> {
   const url = `${BACKEND_URL.replace(/\/$/, "")}/api/server-info`;

@@ -12,17 +12,17 @@ class TestDetectProjectState:
         assert _detect_project_state(tmp_path) == "new"
 
     def test_folder_with_only_dotfiles_is_new(self, tmp_path: Path) -> None:
-        # Stray dotfiles (.bonsai/, .DS_Store, etc.) don't change the
+        # Stray dotfiles (.tr/, .DS_Store, etc.) don't change the
         # workspace's "new" verdict.
-        (tmp_path / ".bonsai" / "cache").mkdir(parents=True)
-        (tmp_path / ".bonsai" / "cache" / "models.json").write_text("[]")
+        (tmp_path / ".tr" / "cache").mkdir(parents=True)
+        (tmp_path / ".tr" / "cache" / "models.json").write_text("[]")
         (tmp_path / ".DS_Store").write_text("")
         assert _detect_project_state(tmp_path) == "new"
 
     def test_half_baked_new_project_session_is_still_new(self, tmp_path: Path) -> None:
         # Session started but no deliverable yet — user should still see
         # the welcome screen on reopen (per product decision).
-        sessions = tmp_path / ".bonsai" / "sessions"
+        sessions = tmp_path / ".tr" / "sessions"
         sessions.mkdir(parents=True)
         (sessions / "abc.json").write_text("{}")
         assert _detect_project_state(tmp_path) == "new"
@@ -54,31 +54,31 @@ class TestDetectProjectState:
         (tmp_path / "GOAL&REQUIREMENTS.md").write_text("# Project\n")
         assert _detect_project_state(tmp_path) == "initialized"
 
-    # Agents typically write the spec INSIDE `.bonsai/` rather than at
+    # Agents typically write the spec INSIDE `.tr/` rather than at
     # project root.  Both locations must register as "initialized" —
     # otherwise the user gets dragged back into the new-project flow
     # after a real session has finished.
-    def test_spec_inside_bonsai_dir_marks_initialized(self, tmp_path: Path) -> None:
-        bonsai = tmp_path / ".bonsai"
-        bonsai.mkdir()
-        (bonsai / "GOAL&REQUIREMENTS.md").write_text("# Project\n")
+    def test_spec_inside_thinkrail_dir_marks_initialized(self, tmp_path: Path) -> None:
+        thinkrail = tmp_path / ".tr"
+        thinkrail.mkdir()
+        (thinkrail / "GOAL&REQUIREMENTS.md").write_text("# Project\n")
         assert _detect_project_state(tmp_path) == "initialized"
 
     def test_board_tickets_mark_initialized(self, tmp_path: Path) -> None:
         # Once the user has board state, the project has clearly moved
         # past "new" — even if the spec is missing.
-        mt = tmp_path / ".bonsai" / "meta-tickets"
+        mt = tmp_path / ".tr" / "meta-tickets"
         mt.mkdir(parents=True)
         (mt / "mt_abc.json").write_text("{}")
         assert _detect_project_state(tmp_path) == "initialized"
 
     def test_saved_plan_marks_initialized(self, tmp_path: Path) -> None:
-        plans = tmp_path / ".bonsai" / "plans"
+        plans = tmp_path / ".tr" / "plans"
         plans.mkdir(parents=True)
         (plans / "plan.json").write_text("{}")
         assert _detect_project_state(tmp_path) == "initialized"
 
     def test_empty_meta_tickets_dir_does_not_mark_initialized(self, tmp_path: Path) -> None:
         # Watcher might create the empty dir before any ticket lands.
-        (tmp_path / ".bonsai" / "meta-tickets").mkdir(parents=True)
+        (tmp_path / ".tr" / "meta-tickets").mkdir(parents=True)
         assert _detect_project_state(tmp_path) == "new"

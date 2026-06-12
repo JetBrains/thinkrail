@@ -2,7 +2,7 @@
   display: flex;
   width: min(720px, 90vw);
   height: min(520px, 80vh);
-  background: var(--panel);
+  background: var(--bg-dark);
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
   overflow: hidden;
@@ -89,40 +89,3 @@
   color: var(--green);
 }
 
-.settings-themes {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-
-.settings-theme-option {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: var(--space-sm) var(--space-md);
-  background: transparent;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  color: var(--muted);
-  font-family: var(--font);
-  font-size: var(--font-md);
-  cursor: pointer;
-  transition: all var(--transition-fast);
-}
-.settings-theme-option:hover {
-  background: var(--hover);
-  color: var(--text);
-  border-color: var(--muted);
-}
-.settings-theme-option--active {
-  background: var(--hover);
-  color: var(--text);
-  border-color: var(--blue);
-}
-
-.settings-theme-option__scheme {
-  font-size: var(--font-sm);
-  color: var(--hint);
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-}

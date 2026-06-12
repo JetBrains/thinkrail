@@ -194,7 +194,7 @@ prefilled: {
 
 ## Step 1 — Orient
 
-Show workflow position via `bonsai_visualize` (type `progress-tracker`):
+Show workflow position via `thinkrail_visualize` (type `progress-tracker`):
 
 ```json
 {
@@ -342,7 +342,7 @@ Think through the full domain before writing the question. Identify all logical 
 
 Send **all groups in one `AskUserQuestion`** call (`multiSelect: true` per group). Every feature is its own option — never bundle.
 
-Show result via `bonsai_visualize` (type `summary-box`) with Must Have / Deferred split.
+Show result via `thinkrail_visualize` (type `summary-box`) with Must Have / Deferred split.
 
 If `urgency = high` OR `scope_signal = large` OR total selected is large:
 > "That's a wide scope for something you're building just for yourself. Want to cut some to v2?"
@@ -411,7 +411,7 @@ AskUserQuestion:
 
 **Otherwise** (normal flow): use `WebSearch` to find popular open-source repositories that already solve this problem (search GitHub using the confirmed tech). Pick the top 2–3 results by stars/activity and briefly note what each does.
 
-Show results via `bonsai_visualize` (type `summary-box`, title "Similar open-source projects"), one entry per repo — always include `url` to the GitHub repo:
+Show results via `thinkrail_visualize` (type `summary-box`, title "Similar open-source projects"), one entry per repo — always include `url` to the GitHub repo:
 ```json
 { "label": "[repo-name ★ stars]", "value": "[one-line description]", "url": "https://github.com/..." }
 ```
@@ -433,7 +433,7 @@ If "Yes" → call `spec_save` to add an **Alternatives Considered** section list
 
 **Always show this summary before calling `spec_save`.**
 
-Show via `bonsai_visualize` (type `summary-box`, `visId: "spec-draft"`):
+Show via `thinkrail_visualize` (type `summary-box`, `visId: "spec-draft"`):
 
 ```json
 {
@@ -502,7 +502,7 @@ drives the next step from the buttons it renders.
 
 After `SessionFinalize`, send a brief confirmation ("Spec saved.") and end your turn.
 
-Update progress tracker via `bonsai_visualize` — mark Goal & Scope as **done**:
+Update progress tracker via `thinkrail_visualize` — mark Goal & Scope as **done**:
 
 ```json
 {
@@ -575,7 +575,7 @@ AskUserQuestion:
 
 Use `WebSearch` to find real competing products in this space. For each result that looks relevant, use `WebFetch` to understand what it does.
 
-Show results via `bonsai_visualize` (type `summary-box`, title "Existing solutions"), one entry per product — always include `url` (never omit it):
+Show results via `thinkrail_visualize` (type `summary-box`, title "Existing solutions"), one entry per product — always include `url` (never omit it):
 ```json
 { "label": "[Product Name]", "value": "[one-line description]", "url": "https://..." }
 ```
@@ -595,7 +595,7 @@ options:
 
 If "Haven't looked yet" → pause and tell the user to explore the links and come back. Don't proceed until they answer.
 
-From the selected alternatives, synthesize **Alternatives Considered** using `bonsai_visualize` (type `summary-box`, title "Alternatives Considered") — one entry per product, always with `url`:
+From the selected alternatives, synthesize **Alternatives Considered** using `thinkrail_visualize` (type `summary-box`, title "Alternatives Considered") — one entry per product, always with `url`:
 ```json
 { "label": "[Product Name]", "value": "[what it does] — [specific gap]", "url": "https://..." }
 ```
@@ -712,7 +712,7 @@ This is the most important step. Think through the full product domain exhaustiv
 
 Send **all groups in a single `AskUserQuestion`** call (`multiSelect: true` per group). Every feature is its own individually selectable option — never bundle. Aim for 4–8 options per group. Features are user-visible capabilities — not implementation details.
 
-Show result via `bonsai_visualize` (type `summary-box`) with In v1 / Out of v1 split.
+Show result via `thinkrail_visualize` (type `summary-box`) with In v1 / Out of v1 split.
 
 If `urgency = high`: open with "Given your timeline, I'd push everything non-essential to v2 — let's be ruthless about what goes in v1."
 
@@ -793,7 +793,7 @@ Section: `## Technology` — table with `Aspect | Choice | Rationale`. If "Decid
 
 **Always show this summary before calling `spec_save`.**
 
-Show via `bonsai_visualize` (type `summary-box`, `visId: "spec-draft"`):
+Show via `thinkrail_visualize` (type `summary-box`, `visId: "spec-draft"`):
 
 ```json
 {
@@ -832,7 +832,7 @@ Then call `SessionFinalize` to declare the done-screen contract. Same
 shape as A-Save above:
 
 - `summary`: short banner about the saved spec.
-- `artifacts`: include `GOAL&REQUIREMENTS.md` (at project root, **not** under `.bonsai/`) with `openOnDone: true`.
+- `artifacts`: include `GOAL&REQUIREMENTS.md` (at project root, **not** under `{{TR_DIR}}/`) with `openOnDone: true`.
 - `actions`: at minimum a primary `start_session` for `architecture-design`,
   a `navigate` to `board` as the skip path, plus one `create_ticket` per
   V1 feature (use the rationale as `body`) and one `create_ticket` per
@@ -840,7 +840,7 @@ shape as A-Save above:
 
 The user applies each queued ticket from the done screen.
 
-Update progress tracker via `bonsai_visualize` — mark Goal & Scope as **done**:
+Update progress tracker via `thinkrail_visualize` — mark Goal & Scope as **done**:
 
 ```json
 {

@@ -91,7 +91,7 @@ export function TicketInfo() {
     const out: Partial<Record<TicketStatus, string>> = {};
     for (const sid of ticket.sessionIds) {
       const live = liveSessionsMap.get(sid);
-      const archived = !live ? archivedSessionsList.find((a) => a.bonsaiSid === sid) : null;
+      const archived = !live ? archivedSessionsList.find((a) => a.thinkrailSid === sid) : null;
       const summary = !live && !archived ? sessionSummaries.get(sid) : null;
       const skillId = live?.skillId ?? archived?.skillId ?? summary?.skillId ?? null;
       if (!skillId) continue;

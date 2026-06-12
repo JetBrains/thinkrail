@@ -50,7 +50,7 @@ All communication happens over a single WebSocket at `/ws?project=<path>`. Messa
 
 Both sides can send either. The server can initiate requests to the client (e.g. asking a question mid-agent-run), and the client responds via `agent/respond`.
 
-**Wire format convention:** All JSON-RPC params and result keys use **camelCase** (e.g. `bonsaiSid`, `sessionId`, `specIds`). Python models use `snake_case` internally and convert via Pydantic `alias_generator` + `model_dump(by_alias=True)`.
+**Wire format convention:** All JSON-RPC params and result keys use **camelCase** (e.g. `thinkrailSid`, `sessionId`, `specIds`). Python models use `snake_case` internally and convert via Pydantic `alias_generator` + `model_dump(by_alias=True)`.
 
 ## Methods
 
@@ -64,20 +64,20 @@ Both sides can send either. The server can initiate requests to the client (e.g.
 | `spec/update`     | `{ id: str, content: str }`                                                                  | `SpecDetail`        | Update spec content                                                                                                                                         |
 | `spec/delete`     | `{ id: str }`                                                                                | `null`              | Delete a spec                                                                                                                                               |
 | `spec/graph`      | `{}`                                                                                         | `SpecGraph`         | Get spec hierarchy graph                                                                                                                                    |
-| `agent/run`       | `{ specIds: list[str], config: AgentConfig, skillId?: str }`                                 | `{ bonsaiSid: str }`   | Start a persistent agent session with spec and optional skill context. If `skillId` is provided, the skill's instructions (from the Bonsai plugin's `SKILL.md`) are loaded and prepended to the system prompt. Session starts in `idle` state, ready for messages. `sessionId` arrives later via `agent/sessionStart` notification. See [Agent Context](../agent/CONTEXT.md). |
-| `agent/send`      | `{ bonsaiSid: str, text: str }`                                                                 | `null`              | Send a user message to the session, triggering a new turn. Session must be `idle`. |
-| `agent/retryLastMessage` | `{ bonsaiSid: str }`                                                                      | `{ ok: bool }`      | Retry the last user message (e.g. after a `context_overflow` error). SDK may auto-compact on retry. |
-| `agent/status`    | `{ bonsaiSid: str }`                                                                            | `AgentTask`         | Get session status and metadata                                                                                                                             |
+| `agent/run`       | `{ specIds: list[str], config: AgentConfig, skillId?: str }`                                 | `{ thinkrailSid: str }`   | Start a persistent agent session with spec and optional skill context. If `skillId` is provided, the skill's instructions (from the ThinkRail plugin's `SKILL.md`) are loaded and prepended to the system prompt. Session starts in `idle` state, ready for messages. `sessionId` arrives later via `agent/sessionStart` notification. See [Agent Context](../agent/CONTEXT.md). |
+| `agent/send`      | `{ thinkrailSid: str, text: str }`                                                                 | `null`              | Send a user message to the session, triggering a new turn. Session must be `idle`. |
+| `agent/retryLastMessage` | `{ thinkrailSid: str }`                                                                      | `{ ok: bool }`      | Retry the last user message (e.g. after a `context_overflow` error). SDK may auto-compact on retry. |
+| `agent/status`    | `{ thinkrailSid: str }`                                                                            | `AgentTask`         | Get session status and metadata                                                                                                                             |
 | `agent/list`      | `{}`                                                                                         | `list[AgentTask]`   | List all agent sessions                                                                                                                                     |
-| `agent/interrupt` | `{ bonsaiSid: str }`                                                                            | `null`              | Cancel the current turn. Session stays `idle` and can accept new messages.                                                                                  |
-| `agent/end`       | `{ bonsaiSid: str }`                                                                            | `null`              | Gracefully close the session. Session enters `done` state.                                                                                                  |
-| `agent/respond`   | `{ bonsaiSid: str, requestId: str, response: AskUserQuestionResponse \| ToolApprovalResponse }` | `null`              | Respond to a pending server→client request. See [Agent Module models](../agent/README.md#interactive-requestresponse-models) for response type definitions. |
-| `session/list`    | `{}`                                                                                         | `list[SessionSummary]` | List all sessions (in-memory active + on-disk archived from `.bonsai/sessions/`) |
-| `session/get`     | `{ bonsaiSid: str }`                                                                            | `SessionData \| null`  | Get full session data including events from disk |
-| `session/continue`| `{ bonsaiSid: str }`                                                                            | `{ bonsaiSid: str }`   | Resume a session — reuses the same `bonsaiSid`, loads old conversation as context for a new SDK session |
-| `session/delete`  | `{ bonsaiSid: str }`                                                                            | `bool`              | Delete a session from disk |
-| `session/subscribe` | `{ bonsaiSid: str }`                                                                          | `null`              | Subscribe calling connection to a session's event topic (multi-client) |
-| `session/unsubscribe` | `{ bonsaiSid: str }`                                                                        | `null`              | Unsubscribe calling connection from a session's event topic |
+| `agent/interrupt` | `{ thinkrailSid: str }`                                                                            | `null`              | Cancel the current turn. Session stays `idle` and can accept new messages.                                                                                  |
+| `agent/end`       | `{ thinkrailSid: str }`                                                                            | `null`              | Gracefully close the session. Session enters `done` state.                                                                                                  |
+| `agent/respond`   | `{ thinkrailSid: str, requestId: str, response: AskUserQuestionResponse \| ToolApprovalResponse }` | `null`              | Respond to a pending server→client request. See [Agent Module models](../agent/README.md#interactive-requestresponse-models) for response type definitions. |
+| `session/list`    | `{}`                                                                                         | `list[SessionSummary]` | List all sessions (in-memory active + on-disk archived from `.tr/sessions/`) |
+| `session/get`     | `{ thinkrailSid: str }`                                                                            | `SessionData \| null`  | Get full session data including events from disk |
+| `session/continue`| `{ thinkrailSid: str }`                                                                            | `{ thinkrailSid: str }`   | Resume a session — reuses the same `thinkrailSid`, loads old conversation as context for a new SDK session |
+| `session/delete`  | `{ thinkrailSid: str }`                                                                            | `bool`              | Delete a session from disk |
+| `session/subscribe` | `{ thinkrailSid: str }`                                                                          | `null`              | Subscribe calling connection to a session's event topic (multi-client) |
+| `session/unsubscribe` | `{ thinkrailSid: str }`                                                                        | `null`              | Unsubscribe calling connection from a session's event topic |
 | `agent/transcribe`| `{ audioBase64: str, mimeType: str }`                                                        | `{ text: str }`     | Transcribe audio via OpenAI Whisper API (fallback for browsers without Web Speech API). See [TRANSCRIBE.md](../agent/TRANSCRIBE.md). |
 | `vis/state`       | `{}`                                                                                         | `DashboardState`    | Return the current dashboard state without recomputing. State is computed on WebSocket connect and after file changes. |
 | `vis/recompute`   | `{}`                                                                                         | `DashboardState`    | Force a dashboard recompute from registry, specs, and tasks on disk. Returns the new state and pushes `vis/stateChanged` notification. |
@@ -85,9 +85,9 @@ Both sides can send either. The server can initiate requests to the client (e.g.
 | `trash/purge`     | `{ type: str, id: str }`                                                                     | `null`              | Permanently delete a specific trashed item |
 | `trash/empty`     | `{ type?: str }`                                                                             | `null`              | Permanently delete all trashed items, optionally filtered by type |
 | `trash/restoreSpec` | `{ specId: str }`                                                                          | `{ registryEntry, links }` | Restore a trashed spec: moves file back to original location and returns registry entry + links for caller to re-insert into registry |
-| `trash/restorePlan` | `{ ticketId: str }`                                                                        | `null`              | Restore a trashed plan file back to `.bonsai/plans/` |
+| `trash/restorePlan` | `{ ticketId: str }`                                                                        | `null`              | Restore a trashed plan file back to `.tr/plans/` |
 | `trash/restoreDraft` | `{ trashItemId: str }`                                                                    | `{ manifestEntry }` | Restore a trashed draft file and return its manifest entry for re-insertion |
-| `trash/restorePatches` | `{ ticketId: str }`                                                                     | `null`              | Restore trashed patches directory back to `.bonsai/spec-patches/` |
+| `trash/restorePatches` | `{ ticketId: str }`                                                                     | `null`              | Restore trashed patches directory back to `.tr/spec-patches/` |
 | `board/list`      | `{}`                                                                                         | `list[TicketSummary]` | List all meta-tickets |
 | `board/get`       | `{ id: str }`                                                                                | `MetaTicket`        | Get full ticket with body, patches, links |
 | `board/create`    | `{ title: str, body?: str, type?: str }`                                                     | `MetaTicket`        | Create a new meta-ticket |
@@ -123,7 +123,7 @@ Both sides can send either. The server can initiate requests to the client (e.g.
 | `appSettings/setSessionDefaults` | `{ model, permissionMode, effort }`                                            | `SessionDefaults`   | Persist the user-scoped session-creation defaults. |
 | `runtimes/list`   | `{}`                                                                                         | `RuntimesListResponse { runtimes: [RuntimeIdentity { runtimeType, displayName }] }` | List registered runtimes, sorted by `runtimeType`. |
 | `runtimes/capabilities` | `{ runtimeType: str }`                                                                 | `RuntimeCapabilities { permissionModes, effortLevels, models }` | Capability lists for one runtime — each a list of `LabeledOption { value, label }`, order is contract (position 0 is the runtime default). `runtimeType` is validated; returns `-32031` UNKNOWN_RUNTIME for a valid-but-unregistered runtime and `-32003` VALIDATION_ERROR for a value outside the `RuntimeType` literal. |
-| `skills/list`     | `{}`                                                                                         | `list[SkillDef]`    | List available **Bonsai-bundled** skills with icon, group, requires metadata (scans `claude-plugin/skills/`) |
+| `skills/list`     | `{}`                                                                                         | `list[SkillDef]`    | List available **ThinkRail-bundled** skills with icon, group, requires metadata (scans `claude-plugin/skills/`) |
 | `skills/listRuntime` | `{ runtime: str }`                                                                        | `list[RuntimeSkillInfo]` | List skills exposed by the **active runtime** — Claude Code user/project/plugin skills, custom commands, built-ins. Each entry has `id`, `name`, `description`, `source` (`"user" \| "project" \| "plugin" \| "command" \| "builtin"`). Powers the chat composer's slash autocomplete alongside `skills/list`. Returns `-32031` if `runtime` is not registered. Frontend treats failure/empty result as "no runtime section" (silent fallback — no error toast). |
 
 ### Server → Client (notifications)
@@ -143,37 +143,37 @@ Both sides can send either. The server can initiate requests to the client (e.g.
 
 | Method | Params | Description |
 | --- | --- | --- |
-| `files/treeChanged` | `{}` | File added/deleted in project, or `.bonsaihide` modified |
+| `files/treeChanged` | `{}` | File added/deleted in project, or `.thinkrailhide` modified |
 | `file/didChange` | `{ path: str }` | File content modified on disk (relative path from project root) |
 
 #### Agent Streaming Events
 
 | Method | Params | Description |
 | --- | --- | --- |
-| `agent/ready` | `{ bonsaiSid }` | SDK client initialized; session transitions from `initializing` to `idle` |
-| `agent/sessionStart` | `{ bonsaiSid, sessionId, model, tools[], cwd, permissionMode }` | Agent session initialized |
-| `agent/textDelta` | `{ bonsaiSid, sessionId, text, streaming, agentId? }` | Text output (streaming or full block). `agentId` present when text originates from a subagent. |
-| `agent/toolCallStart` | `{ bonsaiSid, sessionId, toolUseId, toolName, toolInput, agentId? }` | Agent started a tool call. `agentId` present when the tool call originates from a subagent. |
-| `agent/toolCallEnd` | `{ bonsaiSid, sessionId, toolUseId, toolName, output, isError, agentId? }` | Tool call completed with result. `agentId` present when the tool call originates from a subagent. |
-| `agent/subagentStart` | `{ bonsaiSid, sessionId, agentId, agentType, taskToolUseId? }` | Subagent spawned. `taskToolUseId` is the `toolUseId` of the Task tool call that spawned this subagent (used internally by the backend to resolve `agentId` on subsequent events via `parent_tool_use_id`). |
-| `agent/subagentEnd` | `{ bonsaiSid, sessionId, agentId }` | Subagent finished |
-| `agent/notification` | `{ bonsaiSid, sessionId, message, title? }` | General agent notification |
-| `agent/compact` | `{ bonsaiSid, sessionId, trigger, preTokens }` | Context window compacted |
-| `agent/progress` | `{ bonsaiSid, sessionId, status, message }` | Task progress update |
-| `agent/turnComplete` | `{ bonsaiSid, sessionId, result, costUsd, turns, durationMs, usage, contextMax }` | Turn finished; session is `idle`, ready for next `agent/send`. `contextMax` is the model's context-window size inferred from the live SDK (`get_context_usage().rawMaxTokens`), cached per model and fetched at turn-start. |
-| `agent/interrupted` | `{ bonsaiSid, sessionId, contextMax }` | Current turn was cancelled via `agent/interrupt`; session is `idle`. Preceded by synthetic `agent/subagentEnd` for any subagents still open when the interrupt fired. |
-| `agent/done` | `{ bonsaiSid, sessionId, result, costUsd, turns, durationMs, usage }` | Session closed (via `agent/end` or terminal condition) |
-| `agent/error` | `{ bonsaiSid, sessionId, subtype, errors[], result, costUsd, turns, durationMs, usage, contextMax }` | Turn error. `subtype` is `"context_overflow"` (prompt exceeded context window — recoverable, session stays idle) or `"turn_error"` (other errors). `subtype: "crash"` for fatal session errors. |
-| `agent/permissionDenied` | `{ bonsaiSid, sessionId, toolName, toolInput }` | Tool blocked by permission policy |
-| `agent/statusChanged` | `{ bonsaiSid, status }` | Backend session status changed. Emitted by runner on `idle→running` and `running→idle` transitions. Frontend uses this as the authoritative status signal for non-first turns (since `agent/sessionStart` only fires once per runner). Added to `_SKIP_METRICS` — does not trigger metadata persistence. |
+| `agent/ready` | `{ thinkrailSid }` | SDK client initialized; session transitions from `initializing` to `idle` |
+| `agent/sessionStart` | `{ thinkrailSid, sessionId, model, tools[], cwd, permissionMode }` | Agent session initialized |
+| `agent/textDelta` | `{ thinkrailSid, sessionId, text, streaming, agentId? }` | Text output (streaming or full block). `agentId` present when text originates from a subagent. |
+| `agent/toolCallStart` | `{ thinkrailSid, sessionId, toolUseId, toolName, toolInput, agentId? }` | Agent started a tool call. `agentId` present when the tool call originates from a subagent. |
+| `agent/toolCallEnd` | `{ thinkrailSid, sessionId, toolUseId, toolName, output, isError, agentId? }` | Tool call completed with result. `agentId` present when the tool call originates from a subagent. |
+| `agent/subagentStart` | `{ thinkrailSid, sessionId, agentId, agentType, taskToolUseId? }` | Subagent spawned. `taskToolUseId` is the `toolUseId` of the Task tool call that spawned this subagent (used internally by the backend to resolve `agentId` on subsequent events via `parent_tool_use_id`). |
+| `agent/subagentEnd` | `{ thinkrailSid, sessionId, agentId }` | Subagent finished |
+| `agent/notification` | `{ thinkrailSid, sessionId, message, title? }` | General agent notification |
+| `agent/compact` | `{ thinkrailSid, sessionId, trigger, preTokens }` | Context window compacted |
+| `agent/progress` | `{ thinkrailSid, sessionId, status, message }` | Task progress update |
+| `agent/turnComplete` | `{ thinkrailSid, sessionId, result, costUsd, turns, durationMs, usage, contextMax }` | Turn finished; session is `idle`, ready for next `agent/send`. `contextMax` is the model's context-window size inferred from the live SDK (`get_context_usage().rawMaxTokens`), cached per model and fetched at turn-start. |
+| `agent/interrupted` | `{ thinkrailSid, sessionId, contextMax }` | Current turn was cancelled via `agent/interrupt`; session is `idle`. Preceded by synthetic `agent/subagentEnd` for any subagents still open when the interrupt fired. |
+| `agent/done` | `{ thinkrailSid, sessionId, result, costUsd, turns, durationMs, usage }` | Session closed (via `agent/end` or terminal condition) |
+| `agent/error` | `{ thinkrailSid, sessionId, subtype, errors[], result, costUsd, turns, durationMs, usage, contextMax }` | Turn error. `subtype` is `"context_overflow"` (prompt exceeded context window — recoverable, session stays idle) or `"turn_error"` (other errors). `subtype: "crash"` for fatal session errors. |
+| `agent/permissionDenied` | `{ thinkrailSid, sessionId, toolName, toolInput }` | Tool blocked by permission policy |
+| `agent/statusChanged` | `{ thinkrailSid, status }` | Backend session status changed. Emitted by runner on `idle→running` and `running→idle` transitions. Frontend uses this as the authoritative status signal for non-first turns (since `agent/sessionStart` only fires once per runner). Added to `_SKIP_METRICS` — does not trigger metadata persistence. |
 
 #### Multi-Client Sync Events
 
 | Method | Params | Description |
 | --- | --- | --- |
-| `session/didCreate` | `{ bonsaiSid, name, skillId, specIds, filePaths, status, config, metaTicketId, createdAt }` | A session was created or started — published to project topic so all clients see the new session with full metadata |
-| `session/userMessage` | `{ bonsaiSid, text, isMarkdown }` | A user sent a message from another client — append to chat stream |
-| `agent/requestResolved` | `{ bonsaiSid, requestId, resolvedBy, response }` | An interactive request (question/approval) was answered by another client — dismiss the pending card |
+| `session/didCreate` | `{ thinkrailSid, name, skillId, specIds, filePaths, status, config, metaTicketId, createdAt }` | A session was created or started — published to project topic so all clients see the new session with full metadata |
+| `session/userMessage` | `{ thinkrailSid, text, isMarkdown }` | A user sent a message from another client — append to chat stream |
+| `agent/requestResolved` | `{ thinkrailSid, requestId, resolvedBy, response }` | An interactive request (question/approval) was answered by another client — dismiss the pending card |
 | `connection/didJoin` | `{ connId, userId, displayName }` | A new client connected to the project |
 | `connection/didLeave` | `{ connId, userId, displayName }` | A client disconnected from the project |
 
@@ -195,9 +195,9 @@ The server suspends an `asyncio.Future` keyed by `requestId` until the client re
 
 | Method | Params | Expected Response | Description |
 | --- | --- | --- | --- |
-| `agent/askUserQuestion` | `{ bonsaiSid, requestId, questions: Question[] }` | [`AskUserQuestionResponse`](../agent/README.md#interactive-requestresponse-models) | Ask the user a question during an agent run |
-| `agent/confirmAction` | `{ bonsaiSid, requestId, toolName, toolInput }` | [`ToolApprovalResponse`](../agent/README.md#interactive-requestresponse-models) | Request approval for a tool action. When `toolName === "ExitPlanMode"`, `toolInput` is enriched with `planContent: string` (accumulated assistant text). See [ExitPlanMode enrichment](../agent/README.md#exitplanmode-plan-content-enrichment). |
-| `agent/suggestSession` | `{ bonsaiSid, requestId, skill, specIds, name, reason }` | [`ToolApprovalResponse`](../agent/README.md#interactive-requestresponse-models) | Suggest a follow-up session to the developer. Approve creates a new session with the suggested skill/specs; dismiss returns `PermissionResultAllow` with `dismissed: true` so the agent continues. |
+| `agent/askUserQuestion` | `{ thinkrailSid, requestId, questions: Question[] }` | [`AskUserQuestionResponse`](../agent/README.md#interactive-requestresponse-models) | Ask the user a question during an agent run |
+| `agent/confirmAction` | `{ thinkrailSid, requestId, toolName, toolInput }` | [`ToolApprovalResponse`](../agent/README.md#interactive-requestresponse-models) | Request approval for a tool action. When `toolName === "ExitPlanMode"`, `toolInput` is enriched with `planContent: string` (accumulated assistant text). See [ExitPlanMode enrichment](../agent/README.md#exitplanmode-plan-content-enrichment). |
+| `agent/suggestSession` | `{ thinkrailSid, requestId, skill, specIds, name, reason }` | [`ToolApprovalResponse`](../agent/README.md#interactive-requestresponse-models) | Suggest a follow-up session to the developer. Approve creates a new session with the suggested skill/specs; dismiss returns `PermissionResultAllow` with `dismissed: true` so the agent continues. |
 
 All methods originate from the SDK's `canUseTool` callback. `runner.py` distinguishes them by `tool_name`: `"AskUserQuestion"` → `agent/askUserQuestion`, `"SuggestSession"` → `agent/suggestSession`, `"ExitPlanMode"` → `agent/confirmAction` (enriched with `planContent`), any other tool → `agent/confirmAction`. See [Agent Module — Interactive Request/Response Models](../agent/README.md#interactive-requestresponse-models) for `Question`, `QuestionOption`, `AskUserQuestionResponse`, and `ToolApprovalResponse` type definitions. See [SuggestSession Backend Spec](../agent/tools/SUGGEST_SESSION.md) for the suggestion wire format.
 
@@ -270,7 +270,7 @@ title: "Watcher path (per-project, reference-counted)"
 ---
 graph TD
     Connect["WebSocket connect<br/>/ws?project=path"]
-    Validate["Validate project path<br/>+ .bonsai/ structure"]
+    Validate["Validate project path<br/>+ .tr/ structure"]
     Acquire["_acquire_watcher — ref count++"]
     Watch["core/watcher.watch(project_root, _on_file_change)"]
     Change["File change on disk"]
@@ -315,7 +315,7 @@ graph TD
 
 **Topics:**
 - `project:{path}` — file changes, spec updates, vis state, board changes
-- `session:{bonsai_sid}` — agent session events, interactive requests
+- `session:{thinkrail_sid}` — agent session events, interactive requests
 
 **Key methods:**
 - `register(conn)` / `unregister(conn_id)` — connection lifecycle
@@ -383,13 +383,13 @@ NotifyCallable = Callable[[str, dict, str | None], Awaitable[None]]
 | `end_session` | `(**params) → None` | Handler for `agent/end` |
 | `respond_agent` | `(**params) → None` | Handler for `agent/respond` |
 
-`run_agent` calls `agent/service.run_task` (no `notify` parameter — the runner publishes via EventBus). Auto-subscribes all project connections to the new session topic. Returns `{ bonsaiSid }` immediately. The `sessionId` arrives later via `agent/sessionStart` notification.
+`run_agent` calls `agent/service.run_task` (no `notify` parameter — the runner publishes via EventBus). Auto-subscribes all project connections to the new session topic. Returns `{ thinkrailSid }` immediately. The `sessionId` arrives later via `agent/sessionStart` notification.
 
-`send_message` routes to `agent/service.send_message(bonsai_sid, text)`, which enqueues the message. Also publishes `session/userMessage` to the bus so other clients see the message in their chat stream.
+`send_message` routes to `agent/service.send_message(thinkrail_sid, text)`, which enqueues the message. Also publishes `session/userMessage` to the bus so other clients see the message in their chat stream.
 
-`end_session` routes to `agent/service.end_session(bonsai_sid)`, which sends a sentinel to the runner's message queue, causing it to close the SDK client and emit `agent/done`.
+`end_session` routes to `agent/service.end_session(thinkrail_sid)`, which sends a sentinel to the runner's message queue, causing it to close the SDK client and emit `agent/done`.
 
-`respond_agent` routes to `agent/service.respond(bonsai_sid, request_id, response)`, which resolves the pending `asyncio.Future` in `tracker.py`. Also publishes `agent/requestResolved` so other clients dismiss the pending approval card.
+`respond_agent` routes to `agent/service.respond(thinkrail_sid, request_id, response)`, which resolves the pending `asyncio.Future` in `tracker.py`. Also publishes `agent/requestResolved` so other clients dismiss the pending approval card.
 
 ### methods/trash.py
 
@@ -468,7 +468,7 @@ graph TD
 - WebSocket URL: `/ws?project=<path>[&last_seen=<timestamp>]`
 - On connect:
   1. Validate `project` param exists (close with 4001 if missing)
-  2. Call `ensure_project(project_path)` to auto-create missing `.bonsai/` meta-files and subdirectories (close with 4002 on filesystem error)
+  2. Call `ensure_project(project_path)` to auto-create missing `.tr/` meta-files and subdirectories (close with 4002 on filesystem error)
   3. Accept WebSocket connection (immediate — within frontend's 5s `connectTimeout`)
   4. Build per-connection `AppConfig`, `SpecService`. Reuse or create per-project `SpecIndex` (guarded by per-project `asyncio.Lock`).
   5. If index is new: start background `asyncio.Task` for `index.initialize()` → emit `index/ready` notification when complete.
@@ -488,11 +488,11 @@ The file watcher is **per-project, reference-counted**. It starts when the first
 2. `_start_watcher()` calls `core/watcher.watch([project_root], _on_file_change)`.
 3. On file change, `_on_file_change(changes)` publishes events to the **project topic** via `bus.publish`:
    - Spec files (`.md`) → `spec/didChange`, `spec/didCreate`, or `spec/didDelete` (frontmatter parsed, index updated); unmanaged documents → `docs/didChange`
-   - `.bonsaihide` modified → `files/treeChanged` + background index rebuild with fresh patterns → `index/ready` when complete
+   - `.thinkrailhide` modified → `files/treeChanged` + background index rebuild with fresh patterns → `index/ready` when complete
 
    **Guard:** `reindex_file()` is only called when `index.is_ready` is `True`. During background initialization, spec-related reindexing is skipped (the full rebuild catches all files). Non-spec events (`files/treeChanged`, `file/didChange`) fire normally.
 
-   When `.bonsaihide` is modified, the watcher reloads patterns from disk and launches a background `_rebuild_on_bonsaihide()` task that calls `index.rebuild()` with the new patterns, then emits `index/ready`. During rebuild, `is_ready` is `False`, preventing concurrent `reindex_file()` calls.
+   When `.thinkrailhide` is modified, the watcher reloads patterns from disk and launches a background `_rebuild_on_thinkrailhide()` task that calls `index.rebuild()` with the new patterns, then emits `index/ready`. During rebuild, `is_ready` is `False`, preventing concurrent `reindex_file()` calls.
 
    - Any modified file → `file/didChange` with relative path
 4. `_release_watcher(project_key)` decrements the ref count. When it reaches 0, the watcher is stopped.
@@ -527,14 +527,14 @@ The file watcher is **per-project, reference-counted**. It starts when the first
 | `spec/service` | Spec CRUD operations; watcher postprocessing |
 | `agent/service` | Agent task management (no longer takes `notify` parameter) |
 | `vis/service` | Dashboard state computation and push notifications |
-| `trash/service` | Soft-delete operations for all `.bonsai/` data types |
+| `trash/service` | Soft-delete operations for all `.tr/` data types |
 | `board/service` | Ticket and plan management |
 | `core/watcher` | File change detection |
 | `core/config` | Project root path for watcher |
 
 ## Known Limitations
 
-- **No authentication:** Bonsai is single-user and localhost-only. The WebSocket handshake accepts a `?project=<path>` query without any token check. There is no concept of users, tokens, or admin roles. (See [Storage Architecture](../../../.bonsai/design_docs/STORAGE_ARCHITECTURE.md) for the rationale.)
+- **No authentication:** ThinkRail is single-user and localhost-only. The WebSocket handshake accepts a `?project=<path>` query without any token check. There is no concept of users, tokens, or admin roles. (See [Storage Architecture](../../../.tr/design_docs/STORAGE_ARCHITECTURE.md) for the rationale.)
 - **Broadcast-all for sessions:** All connections receive all session events for the project. Per-client session filtering is available via `session/subscribe` and `session/unsubscribe`.
 - **Ring buffer capacity:** Replay buffer holds 200 events per topic. Events older than that are lost from the buffer (still persisted to `.events.jsonl` on disk).
 - **Pending agent futures on disconnect:** If all clients disconnect mid-agent-run, agent events are published to the bus with no subscribers (silently dropped). Events are still persisted to disk. Pending `asyncio.Future` objects in `tracker.py` will time out per the configured deadline.

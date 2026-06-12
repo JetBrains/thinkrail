@@ -1,4 +1,4 @@
-"""Tests for the bonsai-preview MCP tools (SetPreviewFile, ClearPreviewFile)."""
+"""Tests for the thinkrail-preview MCP tools (SetPreviewFile, ClearPreviewFile)."""
 
 from __future__ import annotations
 
@@ -15,18 +15,18 @@ from app.core.config import AppConfig
 
 @pytest.fixture(autouse=True)
 def _isolate_data_dir(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    data_dir = tmp_path / ".bonsai_server"
+    data_dir = tmp_path / ".thinkrail_server"
     data_dir.mkdir()
     monkeypatch.setattr("app.core.config.get_data_dir", lambda: data_dir)
 
 
 def _make_config(tmp_path: Path) -> AppConfig:
-    bonsai_dir = tmp_path / ".bonsai"
-    bonsai_dir.mkdir(exist_ok=True)
+    thinkrail_dir = tmp_path / ".tr"
+    thinkrail_dir.mkdir(exist_ok=True)
     plugin_dir = tmp_path / "plugin"
     plugin_dir.mkdir(exist_ok=True)
     return AppConfig(
-        project_root=tmp_path, bonsai_dir=bonsai_dir, plugin_dir=plugin_dir,
+        project_root=tmp_path, thinkrail_dir=thinkrail_dir, plugin_dir=plugin_dir,
     )
 
 
@@ -39,7 +39,7 @@ async def test_set_preview_file_emits_notification(tmp_path: Path) -> None:
     set_tool_context(tracker, notify, task, _make_config(tmp_path))
 
     result = await _set_preview_file.handler({
-        "path": ".bonsai/design_docs/X.md",
+        "path": ".tr/design_docs/X.md",
         "section": "Components",
     })
 
@@ -47,9 +47,9 @@ async def test_set_preview_file_emits_notification(tmp_path: Path) -> None:
     notify.assert_called_once()
     method, payload = notify.call_args.args[:2]
     assert method == "ui/setPreviewFile"
-    assert payload["path"] == ".bonsai/design_docs/X.md"
+    assert payload["path"] == ".tr/design_docs/X.md"
     assert payload["section"] == "Components"
-    assert payload["bonsaiSid"] == task.bonsai_sid
+    assert payload["thinkrailSid"] == task.thinkrail_sid
 
 
 async def test_set_preview_file_without_section(tmp_path: Path) -> None:
@@ -60,7 +60,7 @@ async def test_set_preview_file_without_section(tmp_path: Path) -> None:
     notify = AsyncMock()
     set_tool_context(tracker, notify, task, _make_config(tmp_path))
 
-    await _set_preview_file.handler({"path": ".bonsai/design_docs/X.md"})
+    await _set_preview_file.handler({"path": ".tr/design_docs/X.md"})
 
     payload = notify.call_args.args[1]
     assert "section" not in payload
@@ -102,5 +102,5 @@ async def test_clear_preview_file_emits_notification(tmp_path: Path) -> None:
     notify.assert_called_once()
     method, payload = notify.call_args.args[:2]
     assert method == "ui/setPreviewFile"
-    assert payload["bonsaiSid"] == task.bonsai_sid
+    assert payload["thinkrailSid"] == task.thinkrail_sid
     assert payload["path"] is None

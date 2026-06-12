@@ -5,7 +5,7 @@ agent tools.  Backed by ``SpecIndex`` (SQLite) with YAML frontmatter
 as the source of truth for spec metadata.
 
 Design reference:
-    .bonsai/design_docs/FRONTMATTER_REGISTRY_DESIGN.md §Write Flow, §Read Flow
+    .tr/design_docs/FRONTMATTER_REGISTRY_DESIGN.md §Write Flow, §Read Flow
 """
 
 from __future__ import annotations

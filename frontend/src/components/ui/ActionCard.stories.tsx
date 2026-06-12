@@ -39,6 +39,6 @@ export const Secondary: Story = {
   args: {
     icon: <FolderHeart size={20} strokeWidth={1.5} className="picker-cta-icon" />,
     title: "Open an existing project",
-    subtitle: "Bonsai will investigate the code with you",
+    subtitle: "ThinkRail will investigate the code with you",
   },
 };

@@ -11,8 +11,8 @@ from app.core.config import load_config
 
 def _setup_board(tmp_path: Path) -> BoardService:
     """Create a minimal project and return a BoardService."""
-    bonsai_dir = tmp_path / ".bonsai"
-    bonsai_dir.mkdir()
+    thinkrail_dir = tmp_path / ".tr"
+    thinkrail_dir.mkdir()
     config = load_config(tmp_path)
     return BoardService(config)
 
@@ -23,7 +23,7 @@ class TestCreateTicket:
         t = svc.create_ticket("My ticket")
         assert t.title == "My ticket"
         assert t.status == "idea"
-        ticket_dir = tmp_path / ".bonsai" / "tickets" / t.id
+        ticket_dir = tmp_path / ".tr" / "tickets" / t.id
         assert ticket_dir.is_dir()
         assert (ticket_dir / "ticket.json").is_file()
 
@@ -149,7 +149,7 @@ class TestArtifactBookkeeping:
         t = svc.create_ticket("X")
         svc.write_artifact(t.id, "product_design", "# pd")
         refreshed = svc.get_ticket(t.id)
-        assert refreshed.product_design_path == f".bonsai/tickets/{t.id}/product-design.md"
+        assert refreshed.product_design_path == f".tr/tickets/{t.id}/product-design.md"
 
     def test_write_technical_design_clears_stale(self, tmp_path: Path) -> None:
         svc = _setup_board(tmp_path)
@@ -157,11 +157,11 @@ class TestArtifactBookkeeping:
         from app.board.storage import ticket_path as tp, write_ticket
         t2 = svc.get_ticket(t.id)
         t2.technical_design_stale = True
-        write_ticket(tp(tmp_path / ".bonsai" / "tickets", t.id), t2)
+        write_ticket(tp(tmp_path / ".tr" / "tickets", t.id), t2)
 
         svc.write_artifact(t.id, "technical_design", "# dd")
         refreshed = svc.get_ticket(t.id)
-        assert refreshed.technical_design_path == f".bonsai/tickets/{t.id}/technical-design.md"
+        assert refreshed.technical_design_path == f".tr/tickets/{t.id}/technical-design.md"
         assert refreshed.technical_design_stale is False
 
     def test_read_artifact_returns_none_when_missing(self, tmp_path: Path) -> None:
@@ -255,8 +255,8 @@ class TestOnStatusChangeCommit:
 
         assert len(captured) == 1
         paths, msg = captured[0]
-        assert ".bonsai/design_docs" in paths
-        assert f".bonsai/tickets/{t.id}/history.patch" in paths
+        assert ".tr/design_docs" in paths
+        assert f".tr/tickets/{t.id}/history.patch" in paths
         assert t.id in msg
         assert "amend" in msg.lower()
 
@@ -382,7 +382,7 @@ class TestSkipPhase:
         t = svc.create_ticket("t")
         svc.skip_phase(t.id, "product-design")
         # Re-read from disk via a fresh BoardService instance (skip the
-        # mkdir helper since .bonsai already exists from the first setup).
+        # mkdir helper since .tr already exists from the first setup).
         svc2 = BoardService(load_config(tmp_path))
         reloaded = svc2.get_ticket(t.id)
         assert reloaded.skipped_phases == ["product-design"]

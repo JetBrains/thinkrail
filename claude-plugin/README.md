@@ -1,4 +1,4 @@
-# SpecDriven — Claude Code Specification-Driven Development Plugin
+# ThinkRail — Claude Code Specification-Driven Development Plugin
 
 A complete specification-driven development system for Claude Code. Provides skills (slash commands), a spec registry, workflow orchestration, hooks, rich terminal visualizations, and validation tools to ensure your project is always guided by and consistent with its specifications.
 
@@ -9,8 +9,8 @@ A complete specification-driven development system for Claude Code. Provides ski
 claude --plugin-dir ./plugin
 
 # Then in Claude Code:
-/specdriven:spec-init MyProject
-/specdriven:goal-and-requirements  # Define goal and requirements
+/thinkrail:spec-init MyProject
+/thinkrail:goal-and-requirements  # Define goal and requirements
 ```
 
 ## Plugin Structure
@@ -22,7 +22,7 @@ plugin/
 ├── skills/                      # 20 skill definitions
 │   ├── goal-and-requirements/SKILL.md  # Goal + requirements (GOAL&REQUIREMENTS.md)
 │   ├── new-project/SKILL.md     # Brand-new project bootstrap
-│   ├── bonsai-brainstorm/SKILL.md  # Brainstorm new features end-to-end
+│   ├── thinkrail-brainstorm/SKILL.md  # Brainstorm new features end-to-end
 │   ├── architecture-design/SKILL.md
 │   ├── module-design/SKILL.md
 │   ├── submodule-design/SKILL.md
@@ -51,56 +51,56 @@ plugin/
 
 | Skill | Command | Purpose |
 |-------|---------|---------|
-| Goal & Requirements | `/specdriven:goal-and-requirements` | Define project goal, requirements, and tech stack — creates GOAL&REQUIREMENTS.md |
-| New Project | `/specdriven:new-project` | Bootstrap a brand-new project: vision, MVP scope, success criteria, and technology stack |
+| Goal & Requirements | `/thinkrail:goal-and-requirements` | Define project goal, requirements, and tech stack — creates GOAL&REQUIREMENTS.md |
+| New Project | `/thinkrail:new-project` | Bootstrap a brand-new project: vision, MVP scope, success criteria, and technology stack |
 
 ### Brainstorming (1 skill)
 
 | Skill | Command | Purpose |
 |-------|---------|---------|
-| Bonsai Brainstorm | `/specdriven:bonsai-brainstorm` | Translate user intent into product + technical design + spec diff for new features or behavioural changes |
+| ThinkRail Brainstorm | `/thinkrail:thinkrail-brainstorm` | Translate user intent into product + technical design + spec diff for new features or behavioural changes |
 
 ### Specification Creation (4 skills)
 
 | Skill | Command | Purpose |
 |-------|---------|---------|
-| Architecture Design | `/specdriven:architecture-design` | Create DESIGN_DOC.md — pipeline diagrams, data flow, decisions |
-| Module Design | `/specdriven:module-design` | Module README.md — API docs, contracts, internals |
-| Sub-Module Design | `/specdriven:submodule-design` | Focused docs for algorithms and sub-components |
-| Task Specification | `/specdriven:task-spec` | Actionable bug fix / feature implementation specs |
+| Architecture Design | `/thinkrail:architecture-design` | Create DESIGN_DOC.md — pipeline diagrams, data flow, decisions |
+| Module Design | `/thinkrail:module-design` | Module README.md — API docs, contracts, internals |
+| Sub-Module Design | `/thinkrail:submodule-design` | Focused docs for algorithms and sub-components |
+| Task Specification | `/thinkrail:task-spec` | Actionable bug fix / feature implementation specs |
 
 ### Visualization Skills (2 skills)
 
 | Skill | Command | Purpose |
 |-------|---------|---------|
-| Visualization | `/specdriven:visualization` | Terminal visualization toolkit — ASCII diagrams, box formatting, progress indicators |
-| CLI Progress | `/specdriven:cli-progress` | Workflow progress tracking — phase visualization, milestone dashboards |
+| Visualization | `/thinkrail:visualization` | Terminal visualization toolkit — ASCII diagrams, box formatting, progress indicators |
+| CLI Progress | `/thinkrail:cli-progress` | Workflow progress tracking — phase visualization, milestone dashboards |
 
 ### Workflow and Tooling (6 skills)
 
 | Skill | Command | Purpose |
 |-------|---------|---------|
-| Initialize | `/specdriven:spec-init` | Set up spec-driven development — directories, registry, CLAUDE.md |
-| Status | `/specdriven:spec-status` | Dashboard — coverage, freshness, gaps, health |
-| Next | `/specdriven:spec-next` | Suggest what to specify next based on gaps and priorities |
-| From Code | `/specdriven:spec-from-code` | Reverse-engineer spec skeletons from existing code |
-| Lint | `/specdriven:spec-lint` | Validate spec structure, links, completeness |
-| Review | `/specdriven:spec-review` | Deep review of spec accuracy against code |
+| Initialize | `/thinkrail:spec-init` | Set up spec-driven development — directories, registry, CLAUDE.md |
+| Status | `/thinkrail:spec-status` | Dashboard — coverage, freshness, gaps, health |
+| Next | `/thinkrail:spec-next` | Suggest what to specify next based on gaps and priorities |
+| From Code | `/thinkrail:spec-from-code` | Reverse-engineer spec skeletons from existing code |
+| Lint | `/thinkrail:spec-lint` | Validate spec structure, links, completeness |
+| Review | `/thinkrail:spec-review` | Deep review of spec accuracy against code |
 
 ### Ticket Workflow (4 skills)
 
 | Skill | Command | Purpose |
 |-------|---------|---------|
-| Ticket Describe | `/specdriven:ticket-describe` | Help formulate a structured meta-ticket (What / Purpose / How / Success Criteria) |
-| Ticket Specify | `/specdriven:ticket-specify` | Create or modify specifications for a meta-ticket |
-| Ticket Plan | `/specdriven:ticket-plan` | Produce an ordered implementation plan from linked specs |
-| Ticket Execute | `/specdriven:ticket-execute` | Orchestrate execution of a meta-ticket's plan and track progress |
+| Ticket Describe | `/thinkrail:ticket-describe` | Help formulate a structured meta-ticket (What / Purpose / How / Success Criteria) |
+| Ticket Specify | `/thinkrail:ticket-specify` | Create or modify specifications for a meta-ticket |
+| Ticket Plan | `/thinkrail:ticket-plan` | Produce an ordered implementation plan from linked specs |
+| Ticket Execute | `/thinkrail:ticket-execute` | Orchestrate execution of a meta-ticket's plan and track progress |
 
 ### Bug & Triage (1 skill)
 
 | Skill | Command | Purpose |
 |-------|---------|---------|
-| Bug Fix | `/specdriven:bug-fix` | Reactive bug-fix flow — edit existing specs (or bootstrap one) to capture correct intent for an observed bug, then suggest a code-fix session |
+| Bug Fix | `/thinkrail:bug-fix` | Reactive bug-fix flow — edit existing specs (or bootstrap one) to capture correct intent for an observed bug, then suggest a code-fix session |
 
 ## Workflow
 
@@ -123,43 +123,43 @@ Level 5: /task-spec (implementation tasks)
 ### New Project
 
 ```
-/specdriven:spec-init MyProject          # 1. Scaffold directories and registry
-/specdriven:goal-and-requirements        # 2. Define goal and requirements (GOAL&REQUIREMENTS.md)
-/specdriven:architecture-design          # 3. Document architecture
-/specdriven:module-design src/core       # 4. Specify each module
-/specdriven:task-spec add_auth           # 5. Create implementation tasks
+/thinkrail:spec-init MyProject          # 1. Scaffold directories and registry
+/thinkrail:goal-and-requirements        # 2. Define goal and requirements (GOAL&REQUIREMENTS.md)
+/thinkrail:architecture-design          # 3. Document architecture
+/thinkrail:module-design src/core       # 4. Specify each module
+/thinkrail:task-spec add_auth           # 5. Create implementation tasks
 # ... implement guided by specs ...
-/specdriven:spec-lint                    # 6. Validate everything
+/thinkrail:spec-lint                    # 6. Validate everything
 ```
 
 ### Existing Codebase
 
 ```
-/specdriven:spec-init MyProject          # 1. Set up tracking
-/specdriven:goal-and-requirements        # 2. Define goal and requirements
-/specdriven:spec-from-code               # 3. Generate spec skeletons from code
-/specdriven:spec-status                  # 4. See coverage gaps
-/specdriven:spec-next                    # 5. Get prioritized recommendations
+/thinkrail:spec-init MyProject          # 1. Set up tracking
+/thinkrail:goal-and-requirements        # 2. Define goal and requirements
+/thinkrail:spec-from-code               # 3. Generate spec skeletons from code
+/thinkrail:spec-status                  # 4. See coverage gaps
+/thinkrail:spec-next                    # 5. Get prioritized recommendations
 # ... fill gaps ...
-/specdriven:spec-lint                    # 6. Validate
+/thinkrail:spec-lint                    # 6. Validate
 ```
 
 ### Ongoing Development
 
 ```
-/specdriven:cli-progress                 # Check workflow progress
-/specdriven:spec-status                  # Check health
-/specdriven:spec-next                    # What needs attention?
-/specdriven:spec-review src/parser       # Deep review of specific module
-/specdriven:task-spec fix_bug            # Document before fixing
+/thinkrail:cli-progress                 # Check workflow progress
+/thinkrail:spec-status                  # Check health
+/thinkrail:spec-next                    # What needs attention?
+/thinkrail:spec-review src/parser       # Deep review of specific module
+/thinkrail:task-spec fix_bug            # Document before fixing
 # ... fix bug, update spec ...
-/specdriven:spec-lint                    # Validate changes
+/thinkrail:spec-lint                    # Validate changes
 ```
 
 ## Architecture
 
 ```
-SpecDriven Plugin
+ThinkRail Plugin
 ├── CLAUDE.md                 # Enforces spec-driven behavior in Claude sessions
 ├── Spec Index                 # YAML frontmatter in each spec + SQLite cache (outside repo)
 ├── Foundation Skills (2)     # Goal & requirements + new-project bootstrap
@@ -175,7 +175,7 @@ SpecDriven Plugin
 
 ### Spec Index (YAML Frontmatter + SQLite)
 
-Each spec file carries its own metadata as YAML frontmatter (id, type, status, links, tags, covers). A per-project SQLite cache (`~/.bonsai/indexes/<hash>/index.db`, stored outside the repo) enables fast queries and graph traversal — always rebuildable from frontmatter.
+Each spec file carries its own metadata as YAML frontmatter (id, type, status, links, tags, covers). A per-project SQLite cache (`~/.tr/indexes/<hash>/index.db`, stored outside the repo) enables fast queries and graph traversal — always rebuildable from frontmatter.
 
 - **Spec entries**: type, path, status (draft/active/stale/done/deprecated), timestamps
 - **Links**: parent/child, depends-on, references, implements relationships
@@ -183,7 +183,7 @@ Each spec file carries its own metadata as YAML frontmatter (id, type, status, l
 - All creation skills auto-register specs and maintain links
 - Supports types: goal-and-requirements, architecture-design, module-design, submodule-design, task-spec
 
-### Progress Tracking (`.bonsai/.progress.yaml`)
+### Progress Tracking (`.tr/.progress.yaml`)
 
 Persistent workflow progress across sessions:
 - Current phase and step status
@@ -211,10 +211,10 @@ Rich CLI visualizations integrated into all skills:
 
 ```bash
 # During development — load from local directory
-claude --plugin-dir /path/to/specdriven/plugin
+claude --plugin-dir /path/to/thinkrail/plugin
 
 # Or reference in your project's .claude/settings.json:
-# { "plugins": ["/path/to/specdriven/plugin"] }
+# { "plugins": ["/path/to/thinkrail/plugin"] }
 ```
 
 ### Option 2: Copy skills directly

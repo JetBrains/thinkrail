@@ -18,7 +18,7 @@ from app.agent.runtime.permissions import ToolPermissionResponse
 from app.agent.tools._context import get_tool_context
 from app.agent.tracker import Tracker
 from app.board.plan import PlanService
-from app.core.config import AppConfig
+from app.core.config import AppConfig, MCP_PREFIX
 
 logger = logging.getLogger(__name__)
 
@@ -89,10 +89,10 @@ async def _suggest_step(args: dict) -> dict:
 
     # Send interactive card to frontend
     request_id = str(uuid4())
-    future = ctx.tracker.register_future(ctx.task.bonsai_sid, request_id)
+    future = ctx.tracker.register_future(ctx.task.thinkrail_sid, request_id)
 
     payload: dict[str, Any] = {
-        "bonsaiSid": ctx.task.bonsai_sid,
+        "thinkrailSid": ctx.task.thinkrail_sid,
         "ticketId": ticket_id,
         "stepNumber": step_number,
         "stepTitle": step.title,
@@ -134,7 +134,7 @@ async def _suggest_step(args: dict) -> dict:
 
 
 orchestrator_mcp_server = create_sdk_mcp_server(
-    name="bonsai-orchestrator", tools=[_suggest_step]
+    name=f"{MCP_PREFIX}orchestrator", tools=[_suggest_step]
 )
 
 

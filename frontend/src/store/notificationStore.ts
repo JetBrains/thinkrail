@@ -1,9 +1,10 @@
 import { create } from "zustand";
+import { STORAGE_PREFIX } from "@/constants/branding.ts";
 import { persist } from "zustand/middleware";
 
 interface Toast {
   id: string;
-  bonsaiSid?: string;
+  thinkrailSid?: string;
   eventType: "question" | "approval" | "suggestion" | "notification" | "error" | "success";
   message: string;
   persistent: boolean;
@@ -85,7 +86,7 @@ export const useNotificationStore = create<NotificationStore>()(
       toggleSound: () => set((s) => ({ soundEnabled: !s.soundEnabled })),
     }),
     {
-      name: "bonsai-notification-sound",
+      name: `${STORAGE_PREFIX}notification-sound`,
       partialize: (state) => ({ soundEnabled: state.soundEnabled }),
     },
   ),

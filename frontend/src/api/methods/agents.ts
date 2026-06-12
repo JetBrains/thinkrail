@@ -2,7 +2,7 @@ import type { RpcClient } from "../client.ts";
 import type { AgentTask, AgentRunParams, AgentConfig } from "../types.ts";
 
 export interface DraftUpdateParams {
-  bonsaiSid: string;
+  thinkrailSid: string;
   specIds?: string[];
   filePaths?: string[];
   skillId?: string | null;
@@ -15,7 +15,7 @@ export interface DraftUpdateParams {
   draftInput?: string;
   ticketId?: string | null;
   /** ticket-implement only. Picks how the orchestrator dispatches plan
-   *  steps. See `.bonsai/design_docs/TICKET_LIFECYCLE_DESIGN.md`. */
+   *  steps. See `.tr/design_docs/TICKET_LIFECYCLE_DESIGN.md`. */
   subagentMode?: "step-session" | "subagent";
   /** Only meaningful when subagentMode === "subagent". */
   stepGate?: "approve" | "autonomous";
@@ -24,39 +24,39 @@ export interface DraftUpdateParams {
 export function createAgentApi(client: RpcClient) {
   return {
     run: (params: AgentRunParams) =>
-      client.request<{ bonsaiSid: string }>("agent/run", params),
+      client.request<{ thinkrailSid: string }>("agent/run", params),
 
-    prepare: (params: AgentRunParams & { bonsaiSid?: string; draftInput?: string }) =>
-      client.request<{ bonsaiSid: string; systemPrompt: string; sections?: unknown[]; totalTokens?: number }>("agent/prepare", params),
+    prepare: (params: AgentRunParams & { thinkrailSid?: string; draftInput?: string }) =>
+      client.request<{ thinkrailSid: string; systemPrompt: string; sections?: unknown[]; totalTokens?: number }>("agent/prepare", params),
 
     updateDraft: (params: DraftUpdateParams) =>
       client.request<{ systemPrompt: string; sections?: unknown[]; totalTokens?: number }>("agent/updateDraft", params),
 
-    startDraft: (bonsaiSid: string, prompt?: string) =>
-      client.request<{ bonsaiSid: string }>("agent/startDraft", { bonsaiSid, ...(prompt !== undefined ? { prompt } : {}) }),
+    startDraft: (thinkrailSid: string, prompt?: string) =>
+      client.request<{ thinkrailSid: string }>("agent/startDraft", { thinkrailSid, ...(prompt !== undefined ? { prompt } : {}) }),
 
-    status: (bonsaiSid: string) =>
-      client.request<AgentTask>("agent/status", { bonsaiSid }),
+    status: (thinkrailSid: string) =>
+      client.request<AgentTask>("agent/status", { thinkrailSid }),
 
     list: () => client.request<AgentTask[]>("agent/list"),
 
-    send: (bonsaiSid: string, text: string, isMarkdown?: boolean) =>
-      client.request<null>("agent/send", { bonsaiSid, text, ...(isMarkdown ? { isMarkdown } : {}) }),
+    send: (thinkrailSid: string, text: string, isMarkdown?: boolean) =>
+      client.request<null>("agent/send", { thinkrailSid, text, ...(isMarkdown ? { isMarkdown } : {}) }),
 
-    retryLastMessage: (bonsaiSid: string) =>
-      client.request<{ ok: boolean }>("agent/retryLastMessage", { bonsaiSid }),
+    retryLastMessage: (thinkrailSid: string) =>
+      client.request<{ ok: boolean }>("agent/retryLastMessage", { thinkrailSid }),
 
-    end: (bonsaiSid: string) =>
-      client.request<null>("agent/end", { bonsaiSid }),
+    end: (thinkrailSid: string) =>
+      client.request<null>("agent/end", { thinkrailSid }),
 
-    interrupt: (bonsaiSid: string) =>
-      client.request<null>("agent/interrupt", { bonsaiSid }),
+    interrupt: (thinkrailSid: string) =>
+      client.request<null>("agent/interrupt", { thinkrailSid }),
 
-    respond: (bonsaiSid: string, requestId: string, response: unknown) =>
-      client.request<null>("agent/respond", { bonsaiSid, requestId, response }),
+    respond: (thinkrailSid: string, requestId: string, response: unknown) =>
+      client.request<null>("agent/respond", { thinkrailSid, requestId, response }),
 
-    updateConfig: (bonsaiSid: string, config: { model?: string; permissionMode?: string; effort?: string }) =>
-      client.request<{ model: string; permissionMode: string; effort: string }>("agent/updateConfig", { bonsaiSid, ...config }),
+    updateConfig: (thinkrailSid: string, config: { model?: string; permissionMode?: string; effort?: string }) =>
+      client.request<{ model: string; permissionMode: string; effort: string }>("agent/updateConfig", { thinkrailSid, ...config }),
 
     transcribe: (audioBase64: string, mimeType: string) =>
       client.request<{ text: string }>("agent/transcribe", { audioBase64, mimeType }),

@@ -7,7 +7,7 @@ services).  One ``ProjectContext`` per project, cached in a single
 No FastAPI dependencies — this is a pure service container.
 
 Design reference:
-    .bonsai/coordinator-lifecycle-redesign/design-doc.md
+    .tr/coordinator-lifecycle-redesign/design-doc.md
 """
 
 from __future__ import annotations
@@ -23,7 +23,7 @@ from app.agent.runtime.claude import ClaudeRuntime
 from app.agent.service import AgentService
 from app.agent.tracker import Tracker
 from app.board.service import BoardService
-from app.core.bonsaihide import load_bonsaihide
+from app.core.thinkrailhide import load_thinkrailhide
 from app.core.config import AppConfig, get_index_path
 from app.core.watcher import WatchHandle
 from app.spec.coordinator import (
@@ -166,11 +166,11 @@ class ProjectContext:
         the SQLite DB and probes ``_meta.schema_version``.  Heavy work
         (rebuild, diff scan) is delegated to :meth:`start_services`.
         """
-        bonsaihide_spec = load_bonsaihide(self.project_root)
-        self._bonsaihide_spec = bonsaihide_spec
+        thinkrailhide_spec = load_thinkrailhide(self.project_root)
+        self._thinkrailhide_spec = thinkrailhide_spec
 
         try:
-            needs_rebuild = await self.index.open_and_check(bonsaihide_spec)
+            needs_rebuild = await self.index.open_and_check(thinkrailhide_spec)
             self._needs_rebuild = needs_rebuild
         except Exception:
             logger.exception("ProjectContext.start() failed for %s", self.key)
@@ -195,7 +195,7 @@ class ProjectContext:
         if hasattr(self, "_needs_rebuild"):
             if self._needs_rebuild:
                 self.coordinator.emit(RebuildRequested(
-                    bonsaihide_spec=self._bonsaihide_spec, reason="init",
+                    thinkrailhide_spec=self._thinkrailhide_spec, reason="init",
                 ))
             else:
                 await self._notify_fn("index/ready", {})

@@ -1,0 +1,36 @@
+{
+  "id": "mt_bcd2f1da",
+  "title": "Draft-on-type: defer blank-session save until the user types a prompt",
+  "body": "## What\nBlank new sessions (**+ New**, **Cmd/Ctrl+T**, Command Palette) stay **local-only in the frontend until the user types real prompt text** (\u2265 5 non-whitespace chars). Only then is the session created and autosaved on the backend (debounced), with its name derived live from the prompt. Pre-configured drafts that already carry intent \u2014 meta-ticket sessions and approved Suggested sessions \u2014 keep persisting immediately.\n\n## Purpose\nToday clicking **+ New** writes a draft to disk and broadcasts it to every client instantly, so abandoned empty \"Session N\" drafts pile up. Deferring the save until there's real intent stops that clutter on the backend, the sidebar, and other clients \u2014 while still protecting in-progress typing via autosave and giving each draft a meaningful, glanceable name from what the user is actually asking.",
+  "status": "done",
+  "type": "improvement",
+  "productDesignPath": ".tr/tickets/mt_bcd2f1da/product-design.md",
+  "technicalDesignPath": ".tr/tickets/mt_bcd2f1da/technical-design.md",
+  "historyPath": ".tr/tickets/mt_bcd2f1da/history.patch",
+  "implementationPlanPath": ".tr/tickets/mt_bcd2f1da/implementation-plan.md",
+  "technicalDesignStale": false,
+  "historyStale": false,
+  "implementationPlanStale": false,
+  "orchestratorSessionId": "3af59fc9-a7e1-407d-a087-ac52b13c95e9",
+  "linkedSpecIds": [
+    "module-agent",
+    "state-management",
+    "agent-persistence",
+    "draft-session-design"
+  ],
+  "sessionIds": [
+    "09e92973-0670-40a3-9e57-af238e24c802",
+    "9c22ff5a-956d-4187-966f-b2a02abd02be",
+    "c8c4c9b9-e51f-4dfe-9351-63264db98368",
+    "f8cc9f6b-ddfc-411f-be15-b9a09536cbfb",
+    "7fcce03c-8a29-49b3-adc2-15e5fa82257f",
+    "e97834a3-df59-4149-98d9-7410b4382edf",
+    "9cd82100-7e34-407f-9169-00acd27262cd",
+    "103faaf4-0b8a-4956-9f3e-c99a36d5cd28",
+    "3af59fc9-a7e1-407d-a087-ac52b13c95e9"
+  ],
+  "order": 0,
+  "created": "2026-06-02T10:45:45.876167+00:00",
+  "updated": "2026-06-04T14:53:39.111387+00:00",
+  "skippedPhases": []
+}

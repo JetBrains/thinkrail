@@ -407,7 +407,7 @@ class _BaseEvent(BaseModel):
         json_schema_serialization_defaults_required=True,
     )
 
-    bonsai_sid: str
+    thinkrail_sid: str
     session_id: str = ""
 
 
@@ -608,7 +608,7 @@ class AgentResult(BaseModel):
 
     model_config = _CAMEL_CONFIG
 
-    bonsai_sid: str
+    thinkrail_sid: str
     session_id: str
     result: str
     cost_usd: float
@@ -701,7 +701,7 @@ class AgentTask(BaseModel):
 
     model_config = _CAMEL_CONFIG
 
-    bonsai_sid: str = Field(default_factory=lambda: str(uuid4()))
+    thinkrail_sid: str = Field(default_factory=lambda: str(uuid4()))
     name: str = ""
     status: TaskStatus = "initializing"
     spec_ids: list[str] = Field(default_factory=list)
@@ -719,7 +719,7 @@ class AgentTask(BaseModel):
     created_by: str | None = None
     created: str = Field(default_factory=lambda: datetime.now(UTC).isoformat())
     updated: str = Field(default_factory=lambda: datetime.now(UTC).isoformat())
-    parent_bonsai_sid: str | None = None
+    parent_thinkrail_sid: str | None = None
     subsession_type: SubsessionType | None = None
     subsession_context: str | None = None
     return_status: str | None = None

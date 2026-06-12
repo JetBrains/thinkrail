@@ -146,9 +146,9 @@ export function WelcomeScreen({ sessions, onSwitchSession }: WelcomeScreenProps)
             <div className="welcome-sessions-label">Open sessions</div>
             {sessions.map((s) => (
               <button
-                key={s.bonsaiSid}
+                key={s.thinkrailSid}
                 className="welcome-session-item"
-                onClick={() => onSwitchSession(s.bonsaiSid)}
+                onClick={() => onSwitchSession(s.thinkrailSid)}
               >
                 <span
                   className="welcome-session-dot"

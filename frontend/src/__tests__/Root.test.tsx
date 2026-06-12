@@ -86,7 +86,7 @@ describe("Root", () => {
     expect(url).not.toContain("?token=");
   });
 
-  it("does not read bonsai_token from localStorage on mount", () => {
+  it("does not read thinkrail_token from localStorage on mount", () => {
     const getItemSpy = vi.spyOn(Storage.prototype, "getItem");
     render(
       <MemoryRouter initialEntries={["/"]}>
@@ -94,7 +94,7 @@ describe("Root", () => {
       </MemoryRouter>,
     );
     const tokenReads = getItemSpy.mock.calls.filter(
-      (args) => args[0] === "bonsai_token",
+      (args) => args[0] === "thinkrail_token",
     );
     expect(tokenReads).toHaveLength(0);
   });

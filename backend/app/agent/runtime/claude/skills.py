@@ -17,7 +17,7 @@ Scan order (first-wins dedup by ``id``):
 
 Cached for the process lifetime, keyed by the mtime of every root.  Any
 unexpected error inside ``list_skills`` is swallowed and an empty list
-is returned — autocomplete falls back to Bonsai-only without an error
+is returned — autocomplete falls back to ThinkRail-only without an error
 toast (per design §3 / §5.2).
 """
 
@@ -112,7 +112,7 @@ class ClaudeSkillRegistry:
         """Discover skills across all scan sources, with caching.
 
         Any unexpected error returns ``[]`` — autocomplete falls back to
-        Bonsai-only without an error toast (per design §3 / §5.2).
+        ThinkRail-only without an error toast (per design §3 / §5.2).
         """
         try:
             return self._list_skills_uncached()

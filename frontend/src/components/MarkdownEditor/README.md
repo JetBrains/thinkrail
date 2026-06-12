@@ -18,7 +18,7 @@ tags:
 
 ## Purpose
 
-Reusable editor component wrapping Monaco Editor with an optional rendered markdown preview. Provides consistent editing UX for markdown content across the app. Syncs Monaco theme with the active Bonsai UI theme.
+Reusable editor component wrapping Monaco Editor with an optional rendered markdown preview. Provides consistent editing UX for markdown content across the app. Syncs Monaco theme with the active ThinkRail UI theme.
 
 ## Public Interface
 
@@ -44,7 +44,7 @@ Toggle controlled by Edit/Preview tab buttons (hidden when `preview={false}`).
 
 ## Theme Sync
 
-**Hook:** `useMonacoTheme()` — observes `data-theme` attribute on `<html>` via `MutationObserver`. Maps 8 Bonsai themes to Monaco theme definitions. Registers and applies themes globally — all Monaco instances sync simultaneously (FileViewer, DiffCard, MarkdownEditor).
+**Hook:** `useMonacoTheme()` — observes `data-theme` attribute on `<html>` via `MutationObserver`. Maps 8 ThinkRail themes to Monaco theme definitions. Registers and applies themes globally — all Monaco instances sync simultaneously (FileViewer, DiffCard, MarkdownEditor).
 
 **Theme definitions:** `monacoThemes.ts` — dark token rules (IntelliJ-style) + light token rules. Editor colors (background, foreground, selection, gutter, scrollbar, etc.) derived from CSS variables in `styles/themes.css` and `styles/theme-dark.css` / `styles/theme-light.css`.
 

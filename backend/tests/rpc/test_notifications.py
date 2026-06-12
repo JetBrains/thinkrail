@@ -29,19 +29,19 @@ class TestMakeNotify:
 
     async def test_sends_request_with_id(self, mock_ws: AsyncMock) -> None:
         notify = make_notify(mock_ws)
-        await notify("agent/askUserQuestion", {"bonsaiSid": "t1"}, request_id="req-42")
+        await notify("agent/askUserQuestion", {"thinkrailSid": "t1"}, request_id="req-42")
 
         mock_ws.send_text.assert_called_once()
         msg = json.loads(mock_ws.send_text.call_args[0][0])
         assert msg["jsonrpc"] == "2.0"
         assert msg["method"] == "agent/askUserQuestion"
         assert msg["id"] == "req-42"
-        assert msg["params"]["bonsaiSid"] == "t1"
+        assert msg["params"]["thinkrailSid"] == "t1"
         assert msg["params"]["requestId"] == "req-42"
 
     async def test_does_not_mutate_original_params(self, mock_ws: AsyncMock) -> None:
         notify = make_notify(mock_ws)
-        params = {"bonsaiSid": "t1"}
+        params = {"thinkrailSid": "t1"}
         await notify("agent/askUserQuestion", params, request_id="req-1")
 
         assert "requestId" not in params

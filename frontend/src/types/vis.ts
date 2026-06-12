@@ -1,4 +1,4 @@
-/** Visualization data types for the bonsai_visualize MCP tool. */
+/** Visualization data types for the thinkrail_visualize MCP tool. */
 
 export type VisStatus =
   | "done"

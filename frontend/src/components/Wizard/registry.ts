@@ -66,7 +66,7 @@ export interface WizardConfig {
   /** Steps shown in the top stepper. */
   steps: WizardStep[];
   /** Project-relative path to the file previewed in the right pane.
-   *  The panel also tries `.bonsai/<basename>` as a fallback. */
+   *  The panel also tries `.tr/<basename>` as a fallback. */
   artifactPath: string;
 }
 
@@ -83,7 +83,7 @@ export interface WizardConfig {
  * "Clarify" step under chain "investigate-project").
  */
 export interface JourneyEntry {
-  bonsaiSid: string;
+  thinkrailSid: string;
   skillId: string;
   chainId: string | null;
 }
@@ -189,7 +189,7 @@ function buildInvestigatePrompt(ctx: StepPromptContext): string {
   ].join("\n");
 }
 
-/** Find an artifact body by basename, tolerating `.bonsai/` prefixes. */
+/** Find an artifact body by basename, tolerating `.tr/` prefixes. */
 function artifactBody(
   artifacts: StepPromptContext["artifacts"],
   basename: string,
@@ -197,7 +197,7 @@ function artifactBody(
   if (!artifacts) return undefined;
   const want = basename.toLowerCase();
   for (const [path, body] of Object.entries(artifacts)) {
-    if (body && path.toLowerCase().replace(/^\.bonsai\//, "").endsWith(want)) {
+    if (body && path.toLowerCase().replace(/^\.tr\//, "").endsWith(want)) {
       return body;
     }
   }
@@ -366,13 +366,13 @@ export function isWizardSkill(skillId: string | null | undefined): boolean {
  * Resolve the candidate locations to try when reading an artifact file.
  *
  * Skills aren't 100% consistent about whether they pass `FOO.md` or
- * `.bonsai/FOO.md`. Returns the original path plus the root- and
- * `.bonsai/`-prefixed variants, deduplicated, in priority order.
+ * `.tr/FOO.md`. Returns the original path plus the root- and
+ * `.tr/`-prefixed variants, deduplicated, in priority order.
  */
 export function artifactPathCandidates(filePath: string): string[] {
-  const trimmed = filePath.replace(/^\.bonsai\//, "");
+  const trimmed = filePath.replace(/^\.tr\//, "");
   const seen = new Set<string>();
-  return [filePath, trimmed, `.bonsai/${trimmed}`].filter((p) => {
+  return [filePath, trimmed, `.tr/${trimmed}`].filter((p) => {
     if (seen.has(p)) return false;
     seen.add(p);
     return true;
@@ -578,7 +578,7 @@ export function stepperFromJourney(
 
   // Active entry = the journey item for the active session; fall back to
   // the last item (the normal case — you just launched it).
-  let activeEntryIdx = resolved.findIndex((r) => r.entry.bonsaiSid === activeSid);
+  let activeEntryIdx = resolved.findIndex((r) => r.entry.thinkrailSid === activeSid);
   if (activeEntryIdx < 0) activeEntryIdx = resolved.length - 1;
 
   const steps = cellsToSteps(

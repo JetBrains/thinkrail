@@ -1,17 +1,17 @@
 import { useEffect, useRef } from "react";
 
 interface SessionCardContextMenuProps {
-  bonsaiSid: string;
+  thinkrailSid: string;
   ticketId: string | null;
   x: number;
   y: number;
   onClose: () => void;
-  onOpenTicket: (ticketId: string, bonsaiSid: string) => void;
-  onCopySid: (bonsaiSid: string) => void;
+  onOpenTicket: (ticketId: string, thinkrailSid: string) => void;
+  onCopySid: (thinkrailSid: string) => void;
 }
 
 export function SessionCardContextMenu({
-  bonsaiSid,
+  thinkrailSid,
   ticketId,
   x,
   y,
@@ -41,17 +41,17 @@ export function SessionCardContextMenu({
       {ticketId && (
         <button
           className="sm-ctx-menu-item"
-          onClick={() => { onOpenTicket(ticketId, bonsaiSid); onClose(); }}
+          onClick={() => { onOpenTicket(ticketId, thinkrailSid); onClose(); }}
         >
           Open ticket
         </button>
       )}
       <button
         className="sm-ctx-menu-item sm-ctx-menu-item--id"
-        onClick={() => { onCopySid(bonsaiSid); onClose(); }}
-        title={`Click to copy: ${bonsaiSid}`}
+        onClick={() => { onCopySid(thinkrailSid); onClose(); }}
+        title={`Click to copy: ${thinkrailSid}`}
       >
-        Session ID: <span className="sm-ctx-menu-id-text">{bonsaiSid}</span>
+        Session ID: <span className="sm-ctx-menu-id-text">{thinkrailSid}</span>
         <svg
           className="sm-ctx-menu-id-icon"
           viewBox="0 0 16 16"

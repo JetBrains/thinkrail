@@ -20,7 +20,7 @@ tags:
 
 ## Purpose
 
-Stateless session persistence — saves, loads, lists, and deletes agent session data under `.bonsai/sessions/`. Uses a split storage model: metadata in `.json` files, events in append-only `.events.jsonl` logs. Pure functions with no internal state. All functions take `project_root: Path` as first argument; the service layer owns serialization of domain models into the dict format that persistence writes to disk.
+Stateless session persistence — saves, loads, lists, and deletes agent session data under `.tr/sessions/`. Uses a split storage model: metadata in `.json` files, events in append-only `.events.jsonl` logs. Pure functions with no internal state. All functions take `project_root: Path` as first argument; the service layer owns serialization of domain models into the dict format that persistence writes to disk.
 
 ## Architecture
 
@@ -45,9 +45,9 @@ graph TD
         Delete["delete_session()"]
     end
 
-    subgraph Disk[".bonsai/sessions/"]
-        Meta["{bonsaiSid}.json<br/><i>metadata</i>"]
-        Events["{bonsaiSid}.events.jsonl<br/><i>append-only log</i>"]
+    subgraph Disk[".tr/sessions/"]
+        Meta["{thinkrailSid}.json<br/><i>metadata</i>"]
+        Events["{thinkrailSid}.events.jsonl<br/><i>append-only log</i>"]
     end
 
     SaveTask --> Save
@@ -74,17 +74,17 @@ graph TD
 
 ```
 {project_root}/
-  .bonsai/
+  .tr/
     sessions/
-      {bonsaiSid}.json            ← metadata (small, rewritten on status change)
-      {bonsaiSid}.events.jsonl    ← append-only event log (one JSON per line)
+      {thinkrailSid}.json            ← metadata (small, rewritten on status change)
+      {thinkrailSid}.events.jsonl    ← append-only event log (one JSON per line)
 ```
 
-### Metadata file (`{bonsaiSid}.json`)
+### Metadata file (`{thinkrailSid}.json`)
 
 ```json
 {
-  "bonsaiSid": "uuid",
+  "thinkrailSid": "uuid",
   "name": "session name",
   "skillId": "module-design",
   "specIds": ["spec-1", "spec-2"],
@@ -97,7 +97,7 @@ graph TD
 }
 ```
 
-### Events log (`{bonsaiSid}.events.jsonl`)
+### Events log (`{thinkrailSid}.events.jsonl`)
 
 ```
 {"eventType":"sessionStart","payload":{...}}
@@ -117,15 +117,15 @@ Each line is a self-contained JSON object. New events are appended with a single
 def save_session(project_root: Path, data: dict[str, Any]) -> None
 ```
 
-Write session metadata to `.bonsai/sessions/{bonsaiSid}.json`. If `data` contains an `"events"` key, those events are bulk-written to the `.events.jsonl` file (used during initial save). The events key is stripped from the metadata file. Silently returns if `data["bonsaiSid"]` is missing or empty. For backward compatibility, accepts `"taskId"` as a fallback key and migrates it to `"bonsaiSid"`.
+Write session metadata to `.tr/sessions/{thinkrailSid}.json`. If `data` contains an `"events"` key, those events are bulk-written to the `.events.jsonl` file (used during initial save). The events key is stripped from the metadata file. Silently returns if `data["thinkrailSid"]` is missing or empty. For backward compatibility, accepts `"taskId"` as a fallback key and migrates it to `"thinkrailSid"`.
 
 ### `load_session`
 
 ```python
-def load_session(project_root: Path, bonsai_sid: str) -> dict[str, Any] | None
+def load_session(project_root: Path, thinkrail_sid: str) -> dict[str, Any] | None
 ```
 
-Load a session from disk — reads metadata from `.json` and events from `.events.jsonl`, combining them into a single dict with an `"events"` key. Returns `None` if the metadata file does not exist. For backward compatibility, migrates old `"taskId"` keys to `"bonsaiSid"` on read.
+Load a session from disk — reads metadata from `.json` and events from `.events.jsonl`, combining them into a single dict with an `"events"` key. Returns `None` if the metadata file does not exist. For backward compatibility, migrates old `"taskId"` keys to `"thinkrailSid"` on read.
 
 ### `list_sessions`
 
@@ -137,7 +137,7 @@ List all sessions from disk, sorted by modification time (newest first). Returns
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `bonsaiSid` | `str` | Session identifier |
+| `thinkrailSid` | `str` | Session identifier |
 | `name` | `str` | Display name |
 | `skillId` | `str \| None` | Skill used (if any) |
 | `specIds` | `list[str]` | Spec IDs loaded as context |
@@ -149,12 +149,12 @@ List all sessions from disk, sorted by modification time (newest first). Returns
 | `active` | `bool` | Whether the session is in a non-terminal status (after the coercion above). Drives the StatusBar's "live" count. |
 | `metrics` | `dict` | Cost/usage metrics |
 
-For `status == "draft"` entries, the listing additionally carries the draft-only fields needed to rehydrate the pre-Start config card — `config`, `systemPrompt`, `sessionPrompt`, and **`draftInput`** (the in-progress prompt text autosaved as the user types). `save_session` round-trips `draftInput` like any other metadata key; it is non-context — never assembled into the system prompt. See [Draft Session](../../../.bonsai/design_docs/DRAFT_SESSION_DESIGN.md).
+For `status == "draft"` entries, the listing additionally carries the draft-only fields needed to rehydrate the pre-Start config card — `config`, `systemPrompt`, `sessionPrompt`, and **`draftInput`** (the in-progress prompt text autosaved as the user types). `save_session` round-trips `draftInput` like any other metadata key; it is non-context — never assembled into the system prompt. See [Draft Session](../../../.tr/design_docs/DRAFT_SESSION_DESIGN.md).
 
 ### `append_event`
 
 ```python
-def append_event(project_root: Path, bonsai_sid: str, event: dict[str, Any]) -> None
+def append_event(project_root: Path, thinkrail_sid: str, event: dict[str, Any]) -> None
 ```
 
 Append a single event to the session's `.events.jsonl` log. **O(1) operation** — opens the file in append mode and writes one JSON line. Does not read or rewrite existing data.
@@ -162,12 +162,12 @@ Append a single event to the session's `.events.jsonl` log. **O(1) operation** �
 ### `delete_session`
 
 ```python
-def delete_session(project_root: Path, bonsai_sid: str) -> bool
+def delete_session(project_root: Path, thinkrail_sid: str) -> bool
 ```
 
 Delete a session from disk — removes both the `.json` metadata file and the `.events.jsonl` log. Returns `True` if any file was deleted, `False` if neither existed.
 
-> **Note:** In practice, `service.py` always uses `trash_service.trash_session()` (soft-delete to `.bonsai/trash/sessions/`) instead of calling this function directly. This hard-delete function remains as a fallback for cases where no `trash_service` is injected.
+> **Note:** In practice, `service.py` always uses `trash_service.trash_session()` (soft-delete to `.tr/trash/sessions/`) instead of calling this function directly. This hard-delete function remains as a fallback for cases where no `trash_service` is injected.
 
 ## File Organization
 

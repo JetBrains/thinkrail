@@ -40,13 +40,13 @@ If `$ARGUMENTS` is provided, use it as project name. Otherwise auto-detect from 
 Create these directories (skip any that already exist):
 
 ```
-.bonsai/                              # Spec tracking and registry
-.bonsai/implementation_tasks/         # Active task specifications
+{{TR_DIR}}/                              # Spec tracking and registry
+{{TR_DIR}}/implementation_tasks/         # Active task specifications
 ```
 
 ### Step 3: Understand the spec index
 
-Bonsai uses **YAML frontmatter** in each spec file as the source of truth. A per-project SQLite cache (`~/.bonsai/indexes/<hash>/index.db`, stored outside the repo) is generated automatically from frontmatter by the file watcher. No manual registry file is needed.
+ThinkRail uses **YAML frontmatter** in each spec file as the source of truth. A per-project SQLite cache (`~/.tr/indexes/<hash>/index.db`, stored outside the repo) is generated automatically from frontmatter by the file watcher. No manual registry file is needed.
 
 **Frontmatter example in a spec file:**
 ```yaml
@@ -92,7 +92,7 @@ This project uses specification-driven development.
 {Brief description of the project and its main components}
 
 ## Active Tasks
-See .bonsai/implementation_tasks/ for active work items.
+See {{TR_DIR}}/implementation_tasks/ for active work items.
 
 ## Specifications
 Run /spec-status to see specification coverage.
@@ -121,7 +121,7 @@ Print a summary:
 Spec-driven development initialized for {project-name}!
 
 Created:
-  .bonsai/                   - Project metadata directory
+  {{TR_DIR}}/                   - Project metadata directory
   .claude/CLAUDE.md        - Development rules
   {other files created}
 

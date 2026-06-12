@@ -24,7 +24,7 @@ export function ArtifactDocView({ path, label, body, showHeader = true }: Artifa
     <div className="wiz-done-doc">
       {showHeader && (
         <div className="wiz-done-doc-head">
-          <span className="wiz-done-doc-pill">{path.replace(/^\.bonsai\//, "")}</span>
+          <span className="wiz-done-doc-pill">{path.replace(/^\.tr\//, "")}</span>
           {label && <span className="wiz-done-doc-label">{label}</span>}
         </div>
       )}

@@ -16,7 +16,7 @@ from app.agent.tools._context import get_tool_context
 from app.agent.tracker import Tracker
 from app.board.models import TicketSummary
 from app.board.service import BoardService
-from app.core.config import AppConfig
+from app.core.config import AppConfig, MCP_PREFIX
 
 logger = logging.getLogger(__name__)
 
@@ -72,7 +72,7 @@ async def _create_board_ticket(args: dict) -> dict:
 
     summary = TicketSummary.from_ticket(ticket)
     payload = summary.model_dump(by_alias=True)
-    payload["bonsaiSid"] = ctx.task.bonsai_sid
+    payload["thinkrailSid"] = ctx.task.thinkrail_sid
     await ctx.notify("board/didCreate", payload)
 
     return {
@@ -86,7 +86,7 @@ async def _create_board_ticket(args: dict) -> dict:
 
 
 create_ticket_mcp_server = create_sdk_mcp_server(
-    name="bonsai-create-ticket", tools=[_create_board_ticket]
+    name=f"{MCP_PREFIX}create-ticket", tools=[_create_board_ticket]
 )
 
 

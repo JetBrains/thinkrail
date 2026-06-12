@@ -121,7 +121,7 @@ interface ChatStreamProps {
 **Pre-pass computations** (done before rendering):
 1. `toolStates` Map: iterates all events to collect `toolCallEnd` payloads keyed by `toolUseId`
 2. `activeSubagents` Set: iterates all events, adds on `subagentStart`, deletes on `subagentEnd`, **clears on `interrupted` or `turnComplete`** (turn-end events implicitly close all open subagents because the SDK's `SubagentStop` hook isn't guaranteed to fire on interrupt)
-3. `subagentChildren` Map + `childIndices` Set: **agentId-based grouping** of child events under their parent `subagentStart`. First pass builds `agentStartIdx` (Map of `agentId → subagentStart event index`), cleared on `interrupted`/`turnComplete`. Second pass iterates all events — those with a `payload.agentId` matching a known subagent are added as children of that subagent's start event. Events of type `bonsai_visualize`, `askUserQuestion`, and `confirmAction` are hoisted to top-level (not grouped under the subagent) so they remain visible when the SubagentBlock is collapsed. The `agentId` field is set by the backend, which resolves the SDK's `parent_tool_use_id` on each message via a `tool_use_id → agent_id` mapping built from `SubagentStart` hooks.
+3. `subagentChildren` Map + `childIndices` Set: **agentId-based grouping** of child events under their parent `subagentStart`. First pass builds `agentStartIdx` (Map of `agentId → subagentStart event index`), cleared on `interrupted`/`turnComplete`. Second pass iterates all events — those with a `payload.agentId` matching a known subagent are added as children of that subagent's start event. Events of type `thinkrail_visualize`, `askUserQuestion`, and `confirmAction` are hoisted to top-level (not grouped under the subagent) so they remain visible when the SubagentBlock is collapsed. The `agentId` field is set by the backend, which resolves the SDK's `parent_tool_use_id` on each message via a `tool_use_id → agent_id` mapping built from `SubagentStart` hooks.
 
 ---
 
@@ -199,7 +199,7 @@ interface ToolCallCardProps {
 
 **Smart Header** (`.chat-tool-header`, always visible, clickable when not running):
 - `.chat-tool-icon`: emoji from `TOOL_ICONS` lookup
-- `.chat-tool-name`: `cleanToolName(toolName)` — strips `mcp__servername__` prefix for display (e.g., `mcp__bonsai-specs__registry_query` → `registry_query`), `color: var(--blue)`, `font-weight: 600`
+- `.chat-tool-name`: `cleanToolName(toolName)` — strips `mcp__servername__` prefix for display (e.g., `mcp__thinkrail-specs__registry_query` → `registry_query`), `color: var(--blue)`, `font-weight: 600`
 - `.chat-tool-input`: smart summary from `extractToolHeader()` registry (see below), `color: var(--muted)`, 11px, truncated with `text-overflow: ellipsis`, `flex: 1 1 auto`
 - `.chat-tool-badge`: optional metadata badge (e.g. "4 lines", "3 files"), `color: var(--muted)`, 10px
 - `.chat-tool-status`: status icon + text, colored with `borderColor`, `margin-left: auto`
@@ -804,7 +804,7 @@ interface InputAreaProps {
 
 Root: `<div className="input-area">` with `style={{ position: "relative" }}`
 
-See [Markdown Input Design](../../.bonsai/design_docs/DUAL_MODE_INPUT_DESIGN.md) for full architecture.
+See [Markdown Input Design](../../.tr/design_docs/DUAL_MODE_INPUT_DESIGN.md) for full architecture.
 
 **Always-markdown input** — no text/markdown mode toggle. All messages are sent as markdown (`onSend(trimmed, true)`). The toolbar is always visible.
 
@@ -825,27 +825,27 @@ renders the popup and forwards textarea + caret state into the hook.
   `token.slice(1).toLowerCase()`; matches are `id.includes(query)`
   (case-insensitive substring; empty query matches all).
 - **Two sources, two sections:**
-  1. **"Bonsai"** — bundled skills from the `useSettingsStore` `skills`
+  1. **"ThinkRail"** — bundled skills from the `useSettingsStore` `skills`
      map (populated by `skills/list`). Always rendered first.
   2. **Active runtime's `displayName`** (e.g. **"Claude Code"**) —
      skills from `useSettingsStore.runtimeSkills.get(runtime)`,
      populated lazily by `loadRuntimeSkills(runtime)` on session mount
      (calls `skills/listRuntime`).
   Section headers are non-selectable separator rows.
-- **Dedup:** runtime entries whose `id` collides with any Bonsai skill
-  id are hidden from the runtime section (Bonsai wins). Per-section
+- **Dedup:** runtime entries whose `id` collides with any ThinkRail skill
+  id are hidden from the runtime section (ThinkRail wins). Per-section
   fields use the same item markup (icon + `/{id}` cyan + description
   hint).
 - **Silent fallback:** if `skills/listRuntime` fails, returns `[]`, or
   the active runtime has no skill surface, the runtime section is
   omitted entirely — no toast, no inline warning. The popup still
-  shows the Bonsai section.
+  shows the ThinkRail section.
 - **Dropdown (`.input-autocomplete`):** appears above input
   (`bottom: 100%`), max-height 240px.
 - **Each item (`.input-autocomplete-item`):** icon + `/{skill.id}`
   (cyan) + description (hint, 11px). Section headers use a separate
   non-interactive class.
-- **Keyboard:** ArrowUp/ArrowDown move across the flat order (Bonsai
+- **Keyboard:** ArrowUp/ArrowDown move across the flat order (ThinkRail
   entries first, then runtime entries), wrapping at the ends. Tab/Enter
   accept the highlighted suggestion. Escape closes.
 - **Active item:** `.input-autocomplete-active`.
@@ -858,7 +858,7 @@ renders the popup and forwards textarea + caret state into the hook.
 - `onMouseDown` (not `onClick`) used on items to prevent textarea blur.
 
 Full algorithm + data shapes: see
-[Runtime Skills Autocomplete design](../../.bonsai/runtime-skills-autocomplete/design-doc.md).
+[Runtime Skills Autocomplete design](../../.tr/runtime-skills-autocomplete/design-doc.md).
 
 **Markdown toolbar** (`.input-md-toolbar`, always visible):
 - Preview toggle button (`.input-md-tab`): toggles side-by-side split-pane preview. Highlighted (`.input-md-tab--active`) when active.
@@ -889,7 +889,7 @@ Full algorithm + data shapes: see
 - On stop: awaits `voice.stopRecording()`, sets textarea text to transcript, auto-resizes
 - Speech API mode: `interimText` synced into textarea in real-time during recording
 - Disabled when `disabled || voice.isTranscribing`
-- Uses `useVoiceInput()` hook — see [Voice Input Design](../../.bonsai/design_docs/VOICE_INPUT_DESIGN.md)
+- Uses `useVoiceInput()` hook — see [Voice Input Design](../../.tr/design_docs/VOICE_INPUT_DESIGN.md)
 
 **Send button** (`.input-send`):
 - Background: `var(--blue)`, label "Send"
@@ -932,7 +932,7 @@ inputDisabled = isDone || isRunning || (hasPending && (pendingRequest.type === "
 
 ### `<VisualizationCard>`
 
-Rendered for `toolCallStart` events where `toolName === "bonsai_visualize"`. See [Visualization Design](../../.bonsai/design_docs/VISUALIZATION_DESIGN.md).
+Rendered for `toolCallStart` events where `toolName === "thinkrail_visualize"`. See [Visualization Design](../../.tr/design_docs/VISUALIZATION_DESIGN.md).
 
 ```typescript
 // VisData is a discriminated union on `type`
@@ -983,7 +983,7 @@ At session start, `DraftConfigCard` is rendered in **read-only mode** to display
 
 ```typescript
 interface DraftConfigCardProps {
-  bonsaiSid: string;
+  thinkrailSid: string;
   readOnly?: boolean;
   onVisibilityChange?: (visible: boolean) => void;
 }
@@ -1001,7 +1001,7 @@ When `readOnly` is true, the component renders a display-only version of the dra
 
 Uses `IntersectionObserver` on `cardRef` to track visibility via `onVisibilityChange` — used by `StickyContextBar` to show/hide a condensed context bar when the card scrolls out of view.
 
-**Data source:** Reads all data from the session store by `bonsaiSid`. For `systemPrompt` and `promptSections`: available in-memory for sessions started from a draft; for restored sessions, `systemPrompt` is extracted from the persisted `sessionStart` event payload. `PromptPreview` falls back to markdown rendering of raw `systemPrompt` when structured `promptSections` are unavailable.
+**Data source:** Reads all data from the session store by `thinkrailSid`. For `systemPrompt` and `promptSections`: available in-memory for sessions started from a draft; for restored sessions, `systemPrompt` is extracted from the persisted `sessionStart` event payload. `PromptPreview` falls back to markdown rendering of raw `systemPrompt` when structured `promptSections` are unavailable.
 
 **CSS classes:** `.draft-config-card--readonly` (modifier, removes margin), `.draft-config-name` (plain text session name), `.draft-config-card--drag-over` (dashed blue outline when dragging files over), plus shared `.draft-config-*` classes from DraftConfigCard
 
@@ -1016,7 +1016,7 @@ Users can attach project files to a draft session. Attached file paths are liste
 - `+ attach file` button opens a `FileSelector` popover
 - Read-only mode: pills only (no buttons)
 
-**Drag-and-drop:** Files can be dragged from the left-panel `FileTree` and dropped onto the draft card. Uses native HTML5 drag API with custom MIME type `application/x-bonsai-file`. Drop zone shows dashed blue outline (`.draft-config-card--drag-over`).
+**Drag-and-drop:** Files can be dragged from the left-panel `FileTree` and dropped onto the draft card. Uses native HTML5 drag API with custom MIME type `application/x-thinkrail-file`. Drop zone shows dashed blue outline (`.draft-config-card--drag-over`).
 
 ### `<FileSelector>`
 
@@ -1051,7 +1051,7 @@ Reuses the same expand/collapse state (`expandedSpecs`) and CSS classes (`prompt
 
 ### FileTree — Drag Source
 
-File rows (not directories) in `FileTree` are draggable (`draggable="true"`). On drag start, sets `application/x-bonsai-file` and `text/plain` data transfer types with the file path.
+File rows (not directories) in `FileTree` are draggable (`draggable="true"`). On drag start, sets `application/x-thinkrail-file` and `text/plain` data transfer types with the file path.
 
 **CSS:** `.ft-row[draggable="true"]` gets `cursor: grab`.
 
@@ -1386,9 +1386,9 @@ RPC server
 
 ## View Modes
 
-ChatStream supports multiple view modes, controlled by `event_view` in `.bonsai/settings.json`. The architecture uses a **renderer registry pattern**: pre-scan logic is shared, but each event type delegates to a view-specific renderer component.
+ChatStream supports multiple view modes, controlled by `event_view` in `.tr/settings.json`. The architecture uses a **renderer registry pattern**: pre-scan logic is shared, but each event type delegates to a view-specific renderer component.
 
-**Design:** [compact-event-view-design.md](../../docs/superpowers/specs/2026-04-08-compact-event-view-design.md) | **Task:** [feature_compact_event_view.md](../../.bonsai/implementation_tasks/frontend/feature_compact_event_view.md)
+**Design:** [compact-event-view-design.md](../../docs/superpowers/specs/2026-04-08-compact-event-view-design.md) | **Task:** [feature_compact_event_view.md](../../.tr/implementation_tasks/frontend/feature_compact_event_view.md)
 
 ### Architecture
 
@@ -1445,12 +1445,12 @@ Right-click on the chat stream opens a `SessionContextMenu` component (fixed-pos
 | Item | Condition | Behavior |
 |------|-----------|----------|
 | Switch to [mode] view | Always | Toggles classic/compact via `settingsStore.updateSettings({ event_view })` |
-| Expand all | Always | Dispatches `bonsai:expandAll` CustomEvent on document |
-| Collapse all | Always | Dispatches `bonsai:collapseAll` CustomEvent on document |
+| Expand all | Always | Dispatches `thinkrail:expandAll` CustomEvent on document |
+| Collapse all | Always | Dispatches `thinkrail:collapseAll` CustomEvent on document |
 | Copy transcript | Always | Builds plain-text from events, writes to clipboard |
 | Revise answer | Right-click on answered QuestionCard | Sends user message asking agent to re-ask the question |
 
-**Expand/Collapse implementation:** `useExpandCollapse.ts` hook listens for `bonsai:expandAll` / `bonsai:collapseAll` on `document`. Used by ToolCallCard, SubagentBlock, CompactToolLine, CompactSubagent.
+**Expand/Collapse implementation:** `useExpandCollapse.ts` hook listens for `thinkrail:expandAll` / `thinkrail:collapseAll` on `document`. Used by ToolCallCard, SubagentBlock, CompactToolLine, CompactSubagent.
 
 **Question detection:** Answered QuestionCard renders `data-question-request-id={requestId}` on its root. `findQuestionRequestId()` walks up from click target to find it.
 

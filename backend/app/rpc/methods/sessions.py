@@ -21,37 +21,37 @@ async def list_all_sessions(service: AgentService, **params: Any) -> list[dict]:
 @_handle_errors
 async def get_session(service: AgentService, **params: Any) -> dict | None:
     """Get full session data including events."""
-    return service.get_session_data(params["bonsaiSid"])
+    return service.get_session_data(params["thinkrailSid"])
 
 
 @_handle_errors
 async def continue_session(service: AgentService, **params: Any) -> dict:
-    """Continue a dead session — reuse same bonsai_sid with old conversation as context."""
-    bonsai_sid = params["bonsaiSid"]
-    auto_subscribe_all(bonsai_sid)
-    task = await service.continue_session(bonsai_sid)
-    return {"bonsaiSid": task.bonsai_sid}
+    """Continue a dead session — reuse same thinkrail_sid with old conversation as context."""
+    thinkrail_sid = params["thinkrailSid"]
+    auto_subscribe_all(thinkrail_sid)
+    task = await service.continue_session(thinkrail_sid)
+    return {"thinkrailSid": task.thinkrail_sid}
 
 
 @_handle_errors
 async def restart_session(service: AgentService, **params: Any) -> dict:
     """End current session and resume with updated config."""
-    bonsai_sid = params["bonsaiSid"]
-    auto_subscribe_all(bonsai_sid)
-    task = await service.restart_session(bonsai_sid)
-    return {"bonsaiSid": task.bonsai_sid}
+    thinkrail_sid = params["thinkrailSid"]
+    auto_subscribe_all(thinkrail_sid)
+    task = await service.restart_session(thinkrail_sid)
+    return {"thinkrailSid": task.thinkrail_sid}
 
 
 @_handle_errors
 async def delete_session_data(service: AgentService, **params: Any) -> None:
     """Delete a session and detach from all tickets."""
-    service.trash_session(params["bonsaiSid"])
+    service.trash_session(params["thinkrailSid"])
 
 
 @_handle_errors
 async def subscribe_session(service: AgentService, **params: Any) -> None:
     """Subscribe the calling connection to a session's event topic."""
-    auto_subscribe_all(params["bonsaiSid"])
+    auto_subscribe_all(params["thinkrailSid"])
 
 
 @_handle_errors
@@ -59,7 +59,7 @@ async def unsubscribe_session(service: AgentService, **params: Any) -> None:
     """Unsubscribe the calling connection from a session's event topic."""
     conn = get_current_conn()
     if conn:
-        bus.unsubscribe(conn.conn_id, f"session:{params['bonsaiSid']}")
+        bus.unsubscribe(conn.conn_id, f"session:{params['thinkrailSid']}")
 
 
 @_handle_errors
@@ -70,7 +70,7 @@ async def patch_outcome_action(service: AgentService, **params: Any) -> dict | N
     when 'Add to board' completes, the action's state moves to 'applied'
     so the button stays in the 'added' state across reloads.
     """
-    bonsai_sid = params["bonsaiSid"]
+    thinkrail_sid = params["thinkrailSid"]
     action_id = params["actionId"]
     patch = params.get("patch", {})
-    return service.patch_outcome_action(bonsai_sid, action_id, patch)
+    return service.patch_outcome_action(thinkrail_sid, action_id, patch)

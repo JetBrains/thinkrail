@@ -15,7 +15,7 @@ tags:
 ---
 # Frontmatter Schema & Data Flows
 
-> Status: **Active** | Created: 2026-04-27 | Parent: [FRONTMATTER_REGISTRY_DESIGN.md](../../../.bonsai/design_docs/FRONTMATTER_REGISTRY_DESIGN.md)
+> Status: **Active** | Created: 2026-04-27 | Parent: [FRONTMATTER_REGISTRY_DESIGN.md](../../../.tr/design_docs/FRONTMATTER_REGISTRY_DESIGN.md)
 
 Defines the YAML frontmatter format for spec files, file discovery and classification rules, read/write flows, and unmanaged document support.
 
@@ -69,7 +69,7 @@ priority: high          # custom field — preserved in extras
 
 # Spec Module — Design Specification
 
-The Spec module is the core domain layer of Bonsai...
+The Spec module is the core domain layer of ThinkRail...
 ```
 
 ### Link Fields → Link Table Mapping
@@ -89,7 +89,7 @@ The index resolves bidirectional views (e.g., "which specs depend on me?") via S
 
 ## File Discovery & Classification
 
-The indexer scans all `.md` files in the project (respecting `.bonsaihide` rules) and classifies each:
+The indexer scans all `.md` files in the project (respecting `.thinkrailhide` rules) and classifies each:
 
 ```
 .md file found
@@ -107,7 +107,7 @@ The indexer scans all `.md` files in the project (respecting `.bonsaihide` rules
 
 ### Scan Directories
 
-By default, the indexer scans from the project root. Files matched by `.bonsaihide` patterns are excluded (consistent with existing file listing behavior).
+By default, the indexer scans from the project root. Files matched by `.thinkrailhide` patterns are excluded (consistent with existing file listing behavior).
 
 ### Promoting Unmanaged → Managed
 
@@ -171,7 +171,7 @@ Plain Markdown files without valid frontmatter are auto-discovered during indexi
 - **Separate type** — a dedicated `DocumentEntry` model (not a fake `SpecEntry`) preserves the managed/unmanaged boundary.
 - **Minimal notification** — a single `docs/didChange` event triggers a graph re-fetch.
 - **Visual separation** — the SpecTree renders documents in a collapsible section below managed specs.
-- **Noise filtering** — `.bonsai/` infrastructure dirs (trash, cache, sessions, plans) are excluded at index time via built-in skip paths. Project-specific noise is handled by `.bonsaihide`.
+- **Noise filtering** — `.tr/` infrastructure dirs (trash, cache, sessions, plans) are excluded at index time via built-in skip paths. Project-specific noise is handled by `.thinkrailhide`.
 
 ### Data Model
 
@@ -193,11 +193,11 @@ class SpecGraph(BaseModel):
 
 ### Index-time Filtering
 
-`_find_md_files()` applies a fourth exclusion layer — a constant set of `.bonsai/` internal paths that are never meaningful as unmanaged docs:
+`_find_md_files()` applies a fourth exclusion layer — a constant set of `.tr/` internal paths that are never meaningful as unmanaged docs:
 
-- `.bonsai/trash`, `.bonsai/cache`, `.bonsai/sessions`, `.bonsai/plans`, `.bonsai/design_docs/plans`
+- `.tr/trash`, `.tr/cache`, `.tr/sessions`, `.tr/plans`, `.tr/design_docs/plans`
 
-This is an explicit list (not a wildcard). New `.bonsai/` subdirs that produce `.md` files require manual addition.
+This is an explicit list (not a wildcard). New `.tr/` subdirs that produce `.md` files require manual addition.
 
 ### SpecTree Rendering
 

@@ -2,7 +2,7 @@
 set -e
 
 REPO_URL="https://github.com/JetBrains/bonsai.git"
-REPO_DIR="bonsai"
+REPO_DIR="thinkrail"
 
 echo "Cloning $REPO_URL ..."
 git clone "$REPO_URL" "$REPO_DIR"

@@ -32,7 +32,7 @@ tags:
 
 ## Overview
 
-The Bonsai web view is a three-panel workspace for specification-driven development with AI agents. The center panel hosts Claude agent sessions (custom Chat UI) and file views, while the right panel is a context-aware sidebar that auto-switches between spec context, agent context, and code context based on what's active in the center (showing an empty welcome state when nothing is selected). The left panel hosts three tabs — spec tree, file tree, and the session manager.
+The ThinkRail web view is a three-panel workspace for specification-driven development with AI agents. The center panel hosts Claude agent sessions (custom Chat UI) and file views, while the right panel is a context-aware sidebar that auto-switches between spec context, agent context, and code context based on what's active in the center (showing an empty welcome state when nothing is selected). The left panel hosts three tabs — spec tree, file tree, and the session manager.
 
 ## Architecture
 
@@ -85,13 +85,13 @@ All three panels have **flexible width**, resizable via drag handles between the
 
 ```
 ┌─────────────────────────────────────────────────────────────────────┐
-│ 🌿 Bonsai │ Project: <name> │ [Board] [Sessions] │         [⚙]   │
+│ 🌿 ThinkRail │ Project: <name> │ [Board] [Sessions] │         [⚙]   │
 └─────────────────────────────────────────────────────────────────────┘
 ```
 
 | Element | Description |
 | --- | --- |
-| Logo | "🌿 Bonsai" branding |
+| Logo | "🌿 ThinkRail" branding |
 | Project name | Current project root name; click to switch project |
 | Board / Sessions tabs | Center view switcher; Sessions tab shows live count of running sessions |
 | Settings (`⚙`) | Opens the settings modal |
@@ -107,7 +107,7 @@ Toggle visibility: `Mod+B`
 | Tab | Description |
 | --- | --- |
 | **Specs** | Hierarchical tree of specifications grouped by type (goal → architecture → module → submodule → task). Each node shows icon, title, and status badge (✓ done, ● active, ○ pending, ! waiting, ~ stale). |
-| **Files** | Folder tree of the project repository. Visibility is controlled by `.bonsaihide` (gitignore-style config file in project root; `!` prefix for exceptions, last-match-wins). Toolbar has Collapse All, Expand All, and a Show Hidden toggle (👁) that temporarily bypasses `.bonsaihide` rules. Toggle state is persisted per-project in `localStorage`. |
+| **Files** | Folder tree of the project repository. Visibility is controlled by `.thinkrailhide` (gitignore-style config file in project root; `!` prefix for exceptions, last-match-wins). Toolbar has Collapse All, Expand All, and a Show Hidden toggle (👁) that temporarily bypasses `.thinkrailhide` rules. Toggle state is persisted per-project in `localStorage`. |
 | **Sessions** | Full session list for the current project (`SessionManager`). See §2.1. |
 
 ### Behavior

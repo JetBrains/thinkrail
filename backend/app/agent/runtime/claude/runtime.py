@@ -102,7 +102,7 @@ def _serialize_tool_content(content: Any) -> str:
 # so the picker can't drift from what the runtime actually accepts; the value
 # doubles as the display label. Position 0 is the default; the SDK lists
 # ``default`` first. The SDK has no name for "no explicit effort" (its default
-# ``effort=None``), so Bonsai prepends ``"auto"`` for it and translates back at
+# ``effort=None``), so ThinkRail prepends ``"auto"`` for it and translates back at
 # the call boundary.
 _CLAUDE_PERMISSION_MODES: tuple[LabeledOption, ...] = tuple(
     LabeledOption(value=v, label=v) for v in get_args(PermissionMode)
@@ -154,7 +154,7 @@ class ClaudeRuntime:
         "# Project context for Claude Code\n"
         "\n"
         "<!--\n"
-        "  This file was bootstrapped by Bonsai. Run `claude init` (or open\n"
+        "  This file was bootstrapped by ThinkRail. Run `claude init` (or open\n"
         "  Claude Code and use the `/init` slash command) to have Claude\n"
         "  analyse this repository and populate the sections below.\n"
         "-->\n"
@@ -320,11 +320,11 @@ class ClaudeRuntime:
         t0 = time.monotonic()
         async with ClaudeSDKClient(options=options) as client:
             sdk_init_ms = int((time.monotonic() - t0) * 1000)
-            logger.info("[%s] SDK client ready in %dms", task.bonsai_sid[:8], sdk_init_ms)
-            tracker.set_client(task.bonsai_sid, client)
-            tracker.set_status(task.bonsai_sid, "idle")
+            logger.info("[%s] SDK client ready in %dms", task.thinkrail_sid[:8], sdk_init_ms)
+            tracker.set_client(task.thinkrail_sid, client)
+            tracker.set_status(task.thinkrail_sid, "idle")
             await handler.on_event(RuntimeEvent(method="agent/ready", params={
-                "bonsaiSid": task.bonsai_sid,
+                "thinkrailSid": task.thinkrail_sid,
             }))
             # Track tool calls that change permission mode (ExitPlanMode, EnterPlanMode)
             # so we can notify the frontend when the SDK changes mode internally.
@@ -332,17 +332,17 @@ class ClaudeRuntime:
             try:
                 # -- conversation loop --
                 while True:
-                    message = await tracker.get_next_message(task.bonsai_sid)
+                    message = await tracker.get_next_message(task.thinkrail_sid)
 
                     if message is END_SIGNAL:
                         break
 
-                    tracker.set_status(task.bonsai_sid, "running")
+                    tracker.set_status(task.thinkrail_sid, "running")
                     await handler.on_event(RuntimeEvent(method="agent/statusChanged", params={
-                        "bonsaiSid": task.bonsai_sid,
+                        "thinkrailSid": task.thinkrail_sid,
                         "status": "running",
                     }))
-                    tracker.clear_turn_text(task.bonsai_sid)
+                    tracker.clear_turn_text(task.thinkrail_sid)
                     turn_t0 = time.monotonic()
                     turn_input = turn_output = turn_cache_write_5m = turn_cache_write_1h = turn_cache_read = 0
                     # Per-iteration tracking — each API call within the turn
@@ -366,7 +366,7 @@ class ClaudeRuntime:
                         except Exception:
                             logger.debug(
                                 "[%s] get_context_usage failed; keeping last contextMax",
-                                task.bonsai_sid[:8], exc_info=True,
+                                task.thinkrail_sid[:8], exc_info=True,
                             )
 
                     await client.query(message)
@@ -377,11 +377,11 @@ class ClaudeRuntime:
                             first_init = not session_id
                             session_id = new_sid
                             hooks.session_id = session_id
-                            tracker.set_session_id(task.bonsai_sid, session_id)
+                            tracker.set_session_id(task.thinkrail_sid, session_id)
                             if first_init:
                                 sdk_data = {to_camel(k): v for k, v in sdk_event.data.items()}
                                 await handler.on_event(RuntimeEvent(method="agent/sessionStart", params={
-                                    "bonsaiSid": task.bonsai_sid,
+                                    "thinkrailSid": task.thinkrail_sid,
                                     "sessionId": session_id,
                                     "systemPrompt": spec_context,
                                     **sdk_data,
@@ -391,11 +391,11 @@ class ClaudeRuntime:
                             agent_id = hooks.resolve_agent_id(sdk_event.parent_tool_use_id)
                             for block in sdk_event.content:
                                 if isinstance(block, TextBlock):
-                                    tracker.append_turn_text(task.bonsai_sid, block.text)
+                                    tracker.append_turn_text(task.thinkrail_sid, block.text)
                                     await handler.on_event(RuntimeEvent(
                                         method="agent/textDelta",
                                         params=build_text_delta_params(
-                                            bonsai_sid=task.bonsai_sid,
+                                            thinkrail_sid=task.thinkrail_sid,
                                             session_id=session_id,
                                             text=block.text,
                                             agent_id=agent_id,
@@ -425,7 +425,7 @@ class ClaudeRuntime:
                                     await handler.on_event(RuntimeEvent(
                                         method="agent/toolCallStart",
                                         params=build_tool_call_start_params(
-                                            bonsai_sid=task.bonsai_sid,
+                                            thinkrail_sid=task.thinkrail_sid,
                                             session_id=session_id,
                                             tool_use_id=block.id,
                                             tool_name=block.name,
@@ -446,7 +446,7 @@ class ClaudeRuntime:
                                         if new_mode and not (block.is_error or False):
                                             task.config.permission_mode = new_mode
                                             await handler.on_event(RuntimeEvent(method="agent/configChanged", params={
-                                                "bonsaiSid": task.bonsai_sid,
+                                                "thinkrailSid": task.thinkrail_sid,
                                                 "model": task.config.model,
                                                 "permissionMode": new_mode,
                                                 "effort": task.config.effort,
@@ -454,7 +454,7 @@ class ClaudeRuntime:
                                         await handler.on_event(RuntimeEvent(
                                             method="agent/toolCallEnd",
                                             params=build_tool_call_end_params(
-                                                bonsai_sid=task.bonsai_sid,
+                                                thinkrail_sid=task.thinkrail_sid,
                                                 session_id=session_id,
                                                 tool_use_id=block.tool_use_id,
                                                 output=_serialize_tool_content(block.content),
@@ -511,7 +511,7 @@ class ClaudeRuntime:
                                     + _last_iter.get("output_tokens", 0)
                                 )
                                 await handler.on_event(RuntimeEvent(method="agent/costEstimate", params={
-                                    "bonsaiSid": task.bonsai_sid,
+                                    "thinkrailSid": task.thinkrail_sid,
                                     "sessionId": session_id,
                                     "estimatedTurnCostUsd": est,
                                     "estimatedCostUsd": total_cost + est,
@@ -532,7 +532,7 @@ class ClaudeRuntime:
                         elif isinstance(sdk_event, ResultMessage):
                             turn_ms = int((time.monotonic() - turn_t0) * 1000)
                             logger.info("[%s] turn completed in %dms (cost=$%.4f)",
-                                        task.bonsai_sid[:8], turn_ms, sdk_event.total_cost_usd or 0.0)
+                                        task.thinkrail_sid[:8], turn_ms, sdk_event.total_cost_usd or 0.0)
                             final_est = estimate_cost(
                                 task.config.model, turn_input, turn_output,
                                 turn_cache_write_5m, turn_cache_write_1h, turn_cache_read,
@@ -540,7 +540,7 @@ class ClaudeRuntime:
                             logger.debug(
                                 "[%s] cost detail: sdk=$%.4f est=$%.4f "
                                 "in=%d out=%d cw5m=%d cw1h=%d cr=%d turns=%d",
-                                task.bonsai_sid[:8],
+                                task.thinkrail_sid[:8],
                                 sdk_event.total_cost_usd or 0.0, final_est,
                                 turn_input, turn_output,
                                 turn_cache_write_5m, turn_cache_write_1h, turn_cache_read,
@@ -556,9 +556,9 @@ class ClaudeRuntime:
                             duration_ms = int((time.monotonic() - start_time) * 1000)
 
                             # Check if this ResultMessage came from an interrupt
-                            interrupted = tracker.is_interrupted(task.bonsai_sid)
+                            interrupted = tracker.is_interrupted(task.thinkrail_sid)
                             if interrupted:
-                                tracker.clear_interrupted(task.bonsai_sid)
+                                tracker.clear_interrupted(task.thinkrail_sid)
 
                             # Context window = total tokens in the last API
                             # call (last iteration), including cached tokens.
@@ -572,7 +572,7 @@ class ClaudeRuntime:
 
                             # Common fields for all turn-end events
                             _turn_event = {
-                                "bonsaiSid": task.bonsai_sid,
+                                "thinkrailSid": task.thinkrail_sid,
                                 "sessionId": sdk_event.session_id or session_id,
                                 "turnCostUsd": turn_cost,
                                 "turnTurns": turn_turns,
@@ -612,7 +612,7 @@ class ClaudeRuntime:
                                     logger.warning(
                                         "[%s] SDK is_error with empty result; "
                                         "usage=%s sdk_event=%r",
-                                        task.bonsai_sid[:8], sdk_event.usage,
+                                        task.thinkrail_sid[:8], sdk_event.usage,
                                         sdk_event,
                                     )
                                 await handler.on_event(RuntimeEvent(method="agent/error", params={
@@ -633,14 +633,14 @@ class ClaudeRuntime:
                                     **_turn_event,
                                     "result": sdk_event.result or "",
                                 }))
-                            tracker.set_status(task.bonsai_sid, "idle")
+                            tracker.set_status(task.thinkrail_sid, "idle")
                             await handler.on_event(RuntimeEvent(method="agent/statusChanged", params={
-                                "bonsaiSid": task.bonsai_sid,
+                                "thinkrailSid": task.thinkrail_sid,
                                 "status": "idle",
                             }))
                             break  # back to conversation loop, same client
             finally:
-                tracker.clear_client(task.bonsai_sid)
+                tracker.clear_client(task.thinkrail_sid)
 
         # Session closed gracefully (END_SIGNAL received)
         duration_ms = int((time.monotonic() - start_time) * 1000)
@@ -653,7 +653,7 @@ class ClaudeRuntime:
             task.outcome.model_dump(by_alias=True) if task.outcome is not None else None
         )
         await handler.on_event(RuntimeEvent(method="agent/done", params={
-            "bonsaiSid": task.bonsai_sid,
+            "thinkrailSid": task.thinkrail_sid,
             "sessionId": session_id,
             "result": "",
             "costUsd": total_cost,
@@ -664,7 +664,7 @@ class ClaudeRuntime:
         }))
 
         return AgentResult(
-            bonsai_sid=task.bonsai_sid,
+            thinkrail_sid=task.thinkrail_sid,
             session_id=session_id,
             result="",
             cost_usd=total_cost,
@@ -676,11 +676,11 @@ class ClaudeRuntime:
         """Interrupt the SDK turn for ``task``.
 
         ``AgentService.interrupt_task`` keeps ``set_interrupted`` and
-        ``interrupt_futures`` (bonsai-internal state); this method only
+        ``interrupt_futures`` (thinkrail-internal state); this method only
         delivers the runtime-specific cancel — the existing ``interrupted``
         branch in ``run_session`` reacts to the resulting ``ResultMessage``.
         """
-        client = tracker.get_client(task.bonsai_sid)
+        client = tracker.get_client(task.thinkrail_sid)
         if client is None:
             return
         try:

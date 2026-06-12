@@ -18,7 +18,7 @@ export function WizardDocPanel({ filePath }: WizardDocPanelProps) {
   const sessions = useSessionStore((s) => s.sessions);
   const activeSession = activeSessionId ? sessions.get(activeSessionId) : null;
 
-  // Tolerate skills that hand us either the root path or `.bonsai/`-
+  // Tolerate skills that hand us either the root path or `.tr/`-
   // prefixed path. Memoised so `fetchFile`'s deps stay honest.
   const candidates = useMemo(() => artifactPathCandidates(filePath), [filePath]);
 
@@ -59,7 +59,7 @@ export function WizardDocPanel({ filePath }: WizardDocPanelProps) {
   return (
     <div className="wiz-doc-panel">
       <div className="wiz-doc-panel-header">
-        <span className="wiz-doc-panel-title">{filePath.replace(/^\.bonsai\//, "")}</span>
+        <span className="wiz-doc-panel-title">{filePath.replace(/^\.tr\//, "")}</span>
         {activeSession?.status === "running" && (
           <span className="wiz-doc-panel-badge">
             {content == null ? "generating…" : "updating…"}

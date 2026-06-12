@@ -55,7 +55,7 @@ export default tseslint.config(
       "react-hooks/exhaustive-deps": "warn",
 
       // ── React Compiler advisory rules (eslint-plugin-react-hooks v7) ───
-      // Bonsai is not using React Compiler. These rules surface migration
+      // ThinkRail is not using React Compiler. These rules surface migration
       // hints rather than real bugs and produce a lot of noise on idiomatic
       // React 18/19 code. Disable until we adopt React Compiler.
       "react-hooks/set-state-in-effect": "off",

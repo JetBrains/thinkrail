@@ -48,7 +48,7 @@ runs:
         security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$keychain_password" "$keychain_path"
 
         rm -f "$cert_path"
-        echo "BONSAI_KEYCHAIN=$keychain_path" >> "$GITHUB_ENV"
+        echo "THINKRAIL_KEYCHAIN=$keychain_path" >> "$GITHUB_ENV"
 
     - name: Codesign binary
       shell: bash
@@ -58,7 +58,7 @@ runs:
       run: |
         set -eu
         codesign --force --timestamp --options=runtime \
-          --keychain "$BONSAI_KEYCHAIN" \
+          --keychain "$THINKRAIL_KEYCHAIN" \
           --sign "$SIGNING_IDENTITY" \
           "$BINARY_PATH"
         codesign --verify --verbose=2 "$BINARY_PATH"
@@ -91,5 +91,5 @@ runs:
       shell: bash
       run: |
         set +e
-        [ -n "${BONSAI_KEYCHAIN:-}" ] && security delete-keychain "$BONSAI_KEYCHAIN"
+        [ -n "${THINKRAIL_KEYCHAIN:-}" ] && security delete-keychain "$THINKRAIL_KEYCHAIN"
         exit 0

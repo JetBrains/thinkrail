@@ -2,14 +2,14 @@
 
 Manages the per-project spec index — a generated cache rebuilt from YAML
 frontmatter in spec files.  The index is stored outside the project repo
-in the server data directory (``~/.bonsai/indexes/<hash>/index.db``),
+in the server data directory (``~/.tr/indexes/<hash>/index.db``),
 following the VS Code / Bazel pattern for external per-project caches.
 
 Provides schema creation, full rebuild from disk, incremental upsert,
 and query methods.  The index can be deleted and rebuilt at any time.
 
 Design reference:
-    .bonsai/design_docs/FRONTMATTER_REGISTRY_DESIGN.md §SQLite Index Schema
+    .tr/design_docs/FRONTMATTER_REGISTRY_DESIGN.md §SQLite Index Schema
 """
 
 from __future__ import annotations
@@ -31,7 +31,7 @@ import pathspec
 from pydantic import ValidationError
 
 from app.core.config import (
-    BONSAI_DIRNAME,
+    PROJECT_DIRNAME,
     CACHE_DIR,
     DESIGN_DOCS_DIR,
     PLANS_DIR,
@@ -48,10 +48,10 @@ logger = logging.getLogger(__name__)
 
 SCHEMA_VERSION = "3"  # bumped: forces rebuild to apply built-in skip paths
 
-# .bonsai/ subdirectories that are Bonsai infrastructure — never meaningful as
+# .tr/ subdirectories that are ThinkRail infrastructure — never meaningful as
 # unmanaged documents.  Checked as path prefixes during _find_md_files().
-BONSAI_INTERNAL_SKIP = frozenset(
-    f"{BONSAI_DIRNAME}/{sub}/"
+THINKRAIL_INTERNAL_SKIP = frozenset(
+    f"{PROJECT_DIRNAME}/{sub}/"
     for sub in (
         TRASH_DIR,
         CACHE_DIR,
@@ -176,7 +176,7 @@ class SpecIndex:
     """Async facade over the per-project spec index SQLite database.
 
     The index is stored outside the repo at
-    ``~/.bonsai/indexes/<project-hash>/index.db``.  Use
+    ``~/.tr/indexes/<project-hash>/index.db``.  Use
     :func:`app.core.config.get_index_path` to compute the path.
 
     Follows the same lifecycle pattern as :class:`AppStore`:
@@ -188,12 +188,12 @@ class SpecIndex:
         self._conn: aiosqlite.Connection | None = None
         self._ready_event = asyncio.Event()
         self._in_transaction: bool = False
-        self._bonsaihide_spec: pathspec.PathSpec | None = None
+        self._thinkrailhide_spec: pathspec.PathSpec | None = None
 
     # ── Hide-rules ────────────────────────────────────────────────────────
 
-    def set_bonsaihide_spec(self, spec: pathspec.PathSpec | None) -> None:
-        """Replace the in-memory ``.bonsaihide`` rules used by ``reindex_file``.
+    def set_thinkrailhide_spec(self, spec: pathspec.PathSpec | None) -> None:
+        """Replace the in-memory ``.thinkrailhide`` rules used by ``reindex_file``.
 
         Synchronous and lock-free — assignment to a single attribute is atomic
         under the GIL, and ``reindex_file()`` only reads the field (never
@@ -202,7 +202,7 @@ class SpecIndex:
         dispatching same-batch ``FileChanged`` events, so newly-hidden paths
         are recognized immediately rather than after the debounced rebuild.
         """
-        self._bonsaihide_spec = spec
+        self._thinkrailhide_spec = spec
 
     # ── Lifecycle ────────────────────────────────────────────────────────
 
@@ -229,13 +229,13 @@ class SpecIndex:
     async def initialize(
         self,
         project_root: Path,
-        bonsaihide_spec: pathspec.PathSpec | None = None,
+        thinkrailhide_spec: pathspec.PathSpec | None = None,
     ) -> RebuildStats | None:
         """Single-pass init: connect → PRAGMAs → version check → rebuild if needed.
 
         Returns :class:`RebuildStats` if a rebuild was performed, else ``None``.
         """
-        self._bonsaihide_spec = bonsaihide_spec
+        self._thinkrailhide_spec = thinkrailhide_spec
         await self.open()
 
         # Probe schema version — catch OperationalError on fresh DB
@@ -258,14 +258,14 @@ class SpecIndex:
         # Rebuild (sets _ready_event internally) or mark ready
         if needs_rebuild:
             await self._conn.executescript(_DROP_ALL + "\n" + _SCHEMA)
-            return await self.rebuild(project_root, bonsaihide_spec)
+            return await self.rebuild(project_root, thinkrailhide_spec)
 
         self._ready_event.set()
         return None
 
     async def open_and_check(
         self,
-        bonsaihide_spec: pathspec.PathSpec | None = None,
+        thinkrailhide_spec: pathspec.PathSpec | None = None,
     ) -> bool:
         """Open the database, check schema version, and prepare for operation.
 
@@ -279,7 +279,7 @@ class SpecIndex:
         When no rebuild is needed, sets ``_ready_event`` so reads work
         immediately while a background differential scan runs.
         """
-        self._bonsaihide_spec = bonsaihide_spec
+        self._thinkrailhide_spec = thinkrailhide_spec
         await self.open()
 
         needs_rebuild = False
@@ -416,8 +416,8 @@ class SpecIndex:
         """
         rel_path = str(file_path.relative_to(project_root))
 
-        # Skip files hidden by .bonsaihide (clean up if previously indexed)
-        if self._bonsaihide_spec is not None and self._bonsaihide_spec.match_file(rel_path):
+        # Skip files hidden by .thinkrailhide (clean up if previously indexed)
+        if self._thinkrailhide_spec is not None and self._thinkrailhide_spec.match_file(rel_path):
             await self.remove_by_path(rel_path)
             return "removed"
 
@@ -639,29 +639,29 @@ class SpecIndex:
     async def rebuild(
         self,
         project_root: Path,
-        bonsaihide_spec: pathspec.PathSpec | None = None,
+        thinkrailhide_spec: pathspec.PathSpec | None = None,
     ) -> RebuildStats:
         """Perform a full rebuild of the index from disk.
 
         Scans all ``.md`` files under *project_root* (excluding patterns
-        matched by *bonsaihide_spec*), parses frontmatter, classifies each
+        matched by *thinkrailhide_spec*), parses frontmatter, classifies each
         file, and populates the index.
 
         Sets ``is_ready`` to ``False`` during execution to prevent concurrent
         ``reindex_file()`` calls, and restores it when done (even on error).
         """
-        self._bonsaihide_spec = bonsaihide_spec
+        self._thinkrailhide_spec = thinkrailhide_spec
         self._ready_event.clear()
         stats = RebuildStats()
         try:
-            return await self._do_rebuild(project_root, bonsaihide_spec, stats)
+            return await self._do_rebuild(project_root, thinkrailhide_spec, stats)
         finally:
             self._ready_event.set()
 
     async def _do_rebuild(
         self,
         project_root: Path,
-        bonsaihide_spec: pathspec.PathSpec | None,
+        thinkrailhide_spec: pathspec.PathSpec | None,
         stats: RebuildStats,
     ) -> RebuildStats:
         """Inner rebuild logic — called by :meth:`rebuild` inside try/finally."""
@@ -674,7 +674,7 @@ class SpecIndex:
             await self._db.execute("DELETE FROM specs")
             await self._db.execute("DELETE FROM documents")
 
-            md_files = await asyncio.to_thread(_find_md_files, project_root, bonsaihide_spec)
+            md_files = await asyncio.to_thread(_find_md_files, project_root, thinkrailhide_spec)
 
             for file_path in md_files:
                 rel_path = str(file_path.relative_to(project_root))
@@ -778,12 +778,12 @@ class SpecIndex:
 
 def _find_md_files(
     project_root: Path,
-    bonsaihide_spec: pathspec.PathSpec | None = None,
+    thinkrailhide_spec: pathspec.PathSpec | None = None,
 ) -> list[Path]:
     """Recursively find all ``.md`` files under *project_root*.
 
     Excludes hidden directories (starting with ``.``), ``node_modules``,
-    and paths matching *bonsaihide_spec* (gitignore-style matching via
+    and paths matching *thinkrailhide_spec* (gitignore-style matching via
     ``pathspec``).
     """
     results: list[Path] = []
@@ -792,18 +792,18 @@ def _find_md_files(
     for file_path in project_root.rglob("*.md"):
         # Skip hidden directories and known non-content dirs
         parts = file_path.relative_to(project_root).parts
-        if any(p.startswith(".") and p != BONSAI_DIRNAME for p in parts):
+        if any(p.startswith(".") and p != PROJECT_DIRNAME for p in parts):
             continue
         if any(p in skip_dirs for p in parts):
             continue
 
-        # Skip .bonsai/ infrastructure directories (trash, cache, etc.)
+        # Skip .tr/ infrastructure directories (trash, cache, etc.)
         rel = str(file_path.relative_to(project_root))
-        if any(rel.startswith(prefix) for prefix in BONSAI_INTERNAL_SKIP):
+        if any(rel.startswith(prefix) for prefix in THINKRAIL_INTERNAL_SKIP):
             continue
 
-        # Check bonsaihide patterns (gitignore-style matching)
-        if bonsaihide_spec is not None and bonsaihide_spec.match_file(rel):
+        # Check thinkrailhide patterns (gitignore-style matching)
+        if thinkrailhide_spec is not None and thinkrailhide_spec.match_file(rel):
             continue
 
         results.append(file_path)

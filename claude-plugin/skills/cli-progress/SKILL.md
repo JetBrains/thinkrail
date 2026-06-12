@@ -1,6 +1,6 @@
 ---
 name: cli-progress
-description: Show and track specification-driven development progress. Displays phase progress, milestone completion, and workflow status using bonsai_visualize. Use at the beginning of any phase or to check overall progress.
+description: Show and track specification-driven development progress. Displays phase progress, milestone completion, and workflow status using thinkrail_visualize. Use at the beginning of any phase or to check overall progress.
 icon: "📉"
 group: Visualization
 ---
@@ -20,7 +20,7 @@ Use `spec_search` to get specs by type and status, and `spec_search` with `type:
 
 ### Step 2: Show workflow progress
 
-Call `bonsai_visualize` with type `progress-tracker`:
+Call `thinkrail_visualize` with type `progress-tracker`:
 ```json
 {
   "type": "progress-tracker",
@@ -45,7 +45,7 @@ Set each step's `status` based on what actually exists:
 
 ### Step 3: Show task summary (if tasks exist)
 
-Call `bonsai_visualize` with type `summary-box`:
+Call `thinkrail_visualize` with type `summary-box`:
 ```json
 {
   "type": "summary-box",
@@ -81,6 +81,6 @@ Use AskUserQuestion:
 ## Key Principles
 
 - **Always show context**: User should always know where they are in the workflow
-- **Use `bonsai_visualize`**: All progress displays go through the visualization tool
+- **Use `thinkrail_visualize`**: All progress displays go through the visualization tool
 - **Non-blocking**: Progress display should be quick and not interrupt workflow
 - **Hook context**: When files are edited, the PostToolUse hook prints a one-liner summary automatically

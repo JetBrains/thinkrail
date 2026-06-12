@@ -9,17 +9,35 @@ from pathlib import Path
 from pydantic import BaseModel
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+# User-facing product name.  Single source of truth for window titles, CLI
+# banners, and any string shown to a human.
+PRODUCT_NAME = "ThinkRail"
+
+# Lowercase technical slug used to namespace MCP servers, env vars, and the
+# user config dir.  Kept separate from ``PRODUCT_NAME`` so renaming the display
+# name never silently changes protocol identifiers or on-disk paths.
+APP_SLUG = "thinkrail"
+# Prefix for this app's own MCP server names (e.g. ``thinkrail-vis``).
+MCP_PREFIX = f"{APP_SLUG}-"
+# Prefix for environment variables (e.g. ``THINKRAIL_DATA_DIR``).
+ENV_PREFIX = f"{APP_SLUG.upper()}_"
+# Name of the per-user config dir under ``~/.config/`` (update metadata, etc.).
+CONFIG_DIRNAME = APP_SLUG
+
 # Probe up to +PORT_PROBE_RANGE from the requested port when it's busy. Matches
 # the developer-facing run.sh preflight so the standalone binary and the dev
 # shell script use the same fallback window.
 PORT_PROBE_RANGE = 10
 
-# Name of the per-project meta directory (also reused as the server-wide
-# data dir name under ``~/``).  Single source of truth — every join like
-# ``project_root / ".bonsai" / ...`` should reference this constant.
-BONSAI_DIRNAME = ".bonsai"
+# Name of the per-project meta directory.  Single source of truth — every
+# join like ``project_root / PROJECT_DIRNAME / ...`` should reference this
+# constant, never a string literal.
+PROJECT_DIRNAME = ".tr"
 
-# Subdirectories under ``project_root / .bonsai / ...``.  Use these instead
+# Name of the server-wide data dir under ``~/`` (SQLite + global state).
+DATA_DIRNAME = ".tr"
+
+# Subdirectories under ``project_root / .tr / ...``.  Use these instead
 # of string literals so that any future rename happens in one place.
 SESSIONS_DIR = "sessions"
 TICKETS_DIR = "tickets"
@@ -33,17 +51,20 @@ PLANS_DIR = "plans"
 SPEC_DRAFTS_DIR = "spec-drafts"
 SPEC_PATCHES_DIR = "spec-patches"
 
-# Subdirectory under the server-wide data dir (``~/.bonsai/indexes/...``).
+# Subdirectory under the server-wide data dir (``~/.tr/indexes/...``).
 INDEXES_DIR = "indexes"
 
-# Well-known filenames inside ``.bonsai/`` (or its subdirectories).
+# Well-known filenames inside ``.tr/`` (or its subdirectories).
 SETTINGS_FILE = "settings.json"
 INDEX_DB_FILE = "index.db"
-APP_DB_FILE = "bonsai.db"
+APP_DB_FILE = "tr.db"
 # Manifest tracking spec-draft entries inside ``spec-drafts/<ticket>/``.
 MANIFEST_FILE = "manifest.json"
 # Sidecar written next to each trashed item describing the original location.
 TRASH_SIDECAR_FILE = "_trash.json"
+# Project-root ignore file (gitignore-style) listing paths to hide from spec
+# indexing and the file tree.
+HIDE_FILE = f".{APP_SLUG}hide"
 
 # Two anchors are needed in frozen (PyInstaller) mode:
 #   * _BUNDLE_ROOT — bundled resources (claude-plugin/, frontend dist). Lives at
@@ -105,13 +126,13 @@ def find_free_port(
 def get_data_dir() -> Path:
     """Return the server-wide data directory for SQLite and global state.
 
-    Set ``BONSAI_DATA_DIR`` environment variable (or in ``.env``) to
-    override the default ``~/.bonsai/``.
+    Set the ``THINKRAIL_DATA_DIR`` environment variable (or in ``.env``) to
+    override the default ``~/.tr/``.
     """
-    env = os.environ.get("BONSAI_DATA_DIR")
+    env = os.environ.get(f"{ENV_PREFIX}DATA_DIR")
     if env:
         return Path(env).expanduser().resolve()
-    return Path.home() / BONSAI_DIRNAME
+    return Path.home() / DATA_DIRNAME
 
 
 def get_index_path(project_root: Path) -> Path:
@@ -119,7 +140,7 @@ def get_index_path(project_root: Path) -> Path:
 
     Returns a path under the server data directory::
 
-        ~/.bonsai/indexes/<sha256-of-project-root>[:16]/index.db
+        ~/.tr/indexes/<sha256-of-project-root>[:16]/index.db
 
     This follows the VS Code / Bazel pattern for per-project caches
     stored in a central location, keyed by a hash of the project path.
@@ -136,23 +157,23 @@ def get_index_path(project_root: Path) -> Path:
 
 class AppConfig(BaseModel):
     project_root: Path
-    bonsai_dir: Path
+    thinkrail_dir: Path
     plugin_dir: Path
 
     def get_project_root(self) -> Path:
         """Return the project root directory."""
         return self.project_root
 
-    def get_bonsai_dir(self) -> Path:
-        """Return the path to the ``.bonsai/`` directory."""
-        return self.bonsai_dir
+    def get_thinkrail_dir(self) -> Path:
+        """Return the path to the ``.tr/`` directory."""
+        return self.thinkrail_dir
 
 
 def _discover_root() -> Path:
-    """Walk upward from cwd looking for a ``.bonsai/`` directory."""
+    """Walk upward from cwd looking for a project meta directory."""
     current = Path.cwd().resolve()
     for parent in [current, *current.parents]:
-        if (parent / BONSAI_DIRNAME).is_dir():
+        if (parent / PROJECT_DIRNAME).is_dir():
             return parent
     return current
 
@@ -162,6 +183,6 @@ def load_config(project_root: Path | None = None) -> AppConfig:
     root = project_root or _discover_root()
     return AppConfig(
         project_root=root,
-        bonsai_dir=root / BONSAI_DIRNAME,
+        thinkrail_dir=root / PROJECT_DIRNAME,
         plugin_dir=_BUNDLE_ROOT / "claude-plugin",
     )

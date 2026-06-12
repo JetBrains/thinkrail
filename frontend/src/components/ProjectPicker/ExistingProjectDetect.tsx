@@ -189,7 +189,7 @@ export function ExistingProjectDetect() {
               <div className="detect-project-path">{projectPath}</div>
             </div>
           </div>
-          <span className="detect-pill">No <code>.bonsai/</code> yet</span>
+          <span className="detect-pill">No <code>.tr/</code> yet</span>
         </header>
 
         <div className="detect-list-scroll">

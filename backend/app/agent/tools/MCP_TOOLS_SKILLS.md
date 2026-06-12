@@ -18,7 +18,7 @@ tags:
 ---
 # MCP Tools & Skill Instruction Changes
 
-> Status: **Active** | Created: 2026-04-27 | Parent: [FRONTMATTER_REGISTRY_DESIGN.md](../../../../.bonsai/design_docs/FRONTMATTER_REGISTRY_DESIGN.md)
+> Status: **Active** | Created: 2026-04-27 | Parent: [FRONTMATTER_REGISTRY_DESIGN.md](../../../../.tr/design_docs/FRONTMATTER_REGISTRY_DESIGN.md)
 
 Defines the 3 custom MCP tools that replace the original 7, and the patterns for updating all 18 skill instruction files.
 
@@ -71,7 +71,7 @@ The current 7 MCP tools (`spec_list`, `spec_get`, `spec_save`, `spec_delete`, `s
 
 **Cleanup steps:**
 1. Emit `SpecDeleteRequested` event to the IndexCoordinator
-2. Coordinator moves file to `.bonsai/trash/` (soft-delete, restorable)
+2. Coordinator moves file to `.tr/trash/` (soft-delete, restorable)
 3. Find all other specs whose frontmatter references this ID → edit their frontmatter to remove dangling refs
 4. Watcher re-indexes all changed files via coordinator
 5. Push notifications: `spec/didDelete` + `spec/didUpdate` for cleaned specs
@@ -94,7 +94,7 @@ The current 7 MCP tools (`spec_list`, `spec_get`, `spec_save`, `spec_delete`, `s
 
 ```python
 MCP_SERVERS: dict[str, Any] = {
-    "bonsai-specs": specs_mcp_server,  # spec_search, spec_links, spec_delete
+    "thinkrail-specs": specs_mcp_server,  # spec_search, spec_links, spec_delete
 }
 
 INTERCEPTORS: dict[str, InterceptFn] = {

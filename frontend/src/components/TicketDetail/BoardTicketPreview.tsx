@@ -44,7 +44,7 @@ export function BoardTicketPreview({ ticketId }: { ticketId: string }) {
       .list()
       .then((summaries) => {
         const map = new Map<string, SessionSummary>();
-        for (const s of summaries) map.set(s.bonsaiSid, s);
+        for (const s of summaries) map.set(s.thinkrailSid, s);
         setSessionSummaries(map);
       })
       .catch(() => {});

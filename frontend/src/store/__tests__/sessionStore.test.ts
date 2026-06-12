@@ -9,7 +9,7 @@ describe("sessionStore remote events", () => {
   describe("onRemoteSessionCreated", () => {
     it("creates a new session when it does not exist", () => {
       useSessionStore.getState().onRemoteSessionCreated({
-        bonsaiSid: "sid1",
+        thinkrailSid: "sid1",
         name: "Test Session",
         skillId: null,
         specIds: ["s1"],
@@ -32,7 +32,7 @@ describe("sessionStore remote events", () => {
       // reverted to defaults after page reload because the hydration paths
       // dropped these fields on the floor.
       useSessionStore.getState().onRemoteSessionCreated({
-        bonsaiSid: "sid-mode",
+        thinkrailSid: "sid-mode",
         name: "Modal",
         skillId: "ticket-implement",
         status: "draft",
@@ -48,7 +48,7 @@ describe("sessionStore remote events", () => {
 
     it("defaults subagentMode/stepGate to undefined when remote omits them", () => {
       useSessionStore.getState().onRemoteSessionCreated({
-        bonsaiSid: "sid-nomode",
+        thinkrailSid: "sid-nomode",
         name: "NoMode",
         config: {},
       });
@@ -60,14 +60,14 @@ describe("sessionStore remote events", () => {
     it("updates existing session metadata", () => {
       // Pre-populate a session
       useSessionStore.getState().onRemoteSessionCreated({
-        bonsaiSid: "sid1",
+        thinkrailSid: "sid1",
         name: "Original",
         config: {},
       });
 
       // Update with new metadata
       useSessionStore.getState().onRemoteSessionCreated({
-        bonsaiSid: "sid1",
+        thinkrailSid: "sid1",
         name: "Updated",
         status: "running",
         config: { model: "claude-sonnet-4-6" },
@@ -80,9 +80,9 @@ describe("sessionStore remote events", () => {
       expect(session!.createdBy).toBe("Bob");
     });
 
-    it("defaults name to truncated bonsaiSid when not provided", () => {
+    it("defaults name to truncated thinkrailSid when not provided", () => {
       useSessionStore.getState().onRemoteSessionCreated({
-        bonsaiSid: "abcdef1234567890",
+        thinkrailSid: "abcdef1234567890",
         config: {},
       });
 
@@ -95,13 +95,13 @@ describe("sessionStore remote events", () => {
     it("appends a user message event", () => {
       // Create a session first
       useSessionStore.getState().onRemoteSessionCreated({
-        bonsaiSid: "sid1",
+        thinkrailSid: "sid1",
         name: "Test",
         config: {},
       });
 
       useSessionStore.getState().onRemoteUserMessage({
-        bonsaiSid: "sid1",
+        thinkrailSid: "sid1",
         text: "Hello from another client",
         isMarkdown: false,
         sentBy: "Bob",
@@ -115,20 +115,20 @@ describe("sessionStore remote events", () => {
 
     it("deduplicates messages with same text as last event", () => {
       useSessionStore.getState().onRemoteSessionCreated({
-        bonsaiSid: "sid1",
+        thinkrailSid: "sid1",
         name: "Test",
         config: {},
       });
 
       // First message
       useSessionStore.getState().onRemoteUserMessage({
-        bonsaiSid: "sid1",
+        thinkrailSid: "sid1",
         text: "Hello",
       });
 
       // Same message again (simulating dedup)
       useSessionStore.getState().onRemoteUserMessage({
-        bonsaiSid: "sid1",
+        thinkrailSid: "sid1",
         text: "Hello",
       });
 
@@ -138,18 +138,18 @@ describe("sessionStore remote events", () => {
 
     it("does not dedup when text differs", () => {
       useSessionStore.getState().onRemoteSessionCreated({
-        bonsaiSid: "sid1",
+        thinkrailSid: "sid1",
         name: "Test",
         config: {},
       });
 
       useSessionStore.getState().onRemoteUserMessage({
-        bonsaiSid: "sid1",
+        thinkrailSid: "sid1",
         text: "Hello",
       });
 
       useSessionStore.getState().onRemoteUserMessage({
-        bonsaiSid: "sid1",
+        thinkrailSid: "sid1",
         text: "World",
       });
 
@@ -159,7 +159,7 @@ describe("sessionStore remote events", () => {
 
     it("ignores messages for unknown sessions", () => {
       useSessionStore.getState().onRemoteUserMessage({
-        bonsaiSid: "unknown",
+        thinkrailSid: "unknown",
         text: "Hello",
       });
 
@@ -173,7 +173,7 @@ describe("sessionStore remote events", () => {
       useSessionStore.setState({
         sessionList: [
           {
-            bonsaiSid: "sidA",
+            thinkrailSid: "sidA",
             name: "Alpha",
             specIds: [],
             status: "idle",
@@ -181,7 +181,7 @@ describe("sessionStore remote events", () => {
             updatedAt: "2026-01-01T00:00:00Z",
           },
           {
-            bonsaiSid: "sidB",
+            thinkrailSid: "sidB",
             name: "Bravo",
             specIds: [],
             status: "draft",
@@ -203,7 +203,7 @@ describe("sessionStore remote events", () => {
       expect(after[1]).toBe(before[1]);
     });
 
-    it("is a no-op when the bonsaiSid is not in the list", () => {
+    it("is a no-op when the thinkrailSid is not in the list", () => {
       const before = useSessionStore.getState().sessionList;
       useSessionStore.getState().patchSessionInList("does-not-exist", { status: "done" });
       const after = useSessionStore.getState().sessionList;
@@ -217,7 +217,7 @@ describe("sessionStore remote events", () => {
 
       expect(entry.status).toBe("initializing");
       expect(entry.name).toBe("Bravo");
-      expect(entry.bonsaiSid).toBe("sidB");
+      expect(entry.thinkrailSid).toBe("sidB");
     });
   });
 });
@@ -230,7 +230,7 @@ function makePcSession(
   answered: Record<string, unknown> = {},
 ): Session {
   return {
-    bonsaiSid: "s1",
+    thinkrailSid: "s1",
     events,
     answeredRequests: new Map(Object.entries(answered)),
   } as unknown as Session;

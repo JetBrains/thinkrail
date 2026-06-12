@@ -7,7 +7,7 @@ from __future__ import annotations
 
 from app.agent.subagents import (
     TICKET_STEP_EXECUTOR,
-    parse_bonsai_step_marker,
+    parse_thinkrail_step_marker,
 )
 
 
@@ -34,27 +34,27 @@ class TestTicketStepExecutorDefinition:
         assert "ChangeTicketStatus" in prompt
 
 
-class TestBonsaiStepMarker:
+class TestThinkRailStepMarker:
     def test_parse_marker_with_ticket_and_step(self) -> None:
-        prompt = "[bonsai-step ticket=mt_abc12 step=5]\nDo the thing\n"
-        result = parse_bonsai_step_marker(prompt)
+        prompt = "[thinkrail-step ticket=mt_abc12 step=5]\nDo the thing\n"
+        result = parse_thinkrail_step_marker(prompt)
         assert result == {"ticket_id": "mt_abc12", "step": 5}
 
     def test_parse_marker_tolerates_leading_whitespace(self) -> None:
-        prompt = "\n  [bonsai-step ticket=mt_abc12 step=42]\nRest\n"
-        result = parse_bonsai_step_marker(prompt)
+        prompt = "\n  [thinkrail-step ticket=mt_abc12 step=42]\nRest\n"
+        result = parse_thinkrail_step_marker(prompt)
         assert result == {"ticket_id": "mt_abc12", "step": 42}
 
     def test_parse_marker_missing_returns_none(self) -> None:
-        assert parse_bonsai_step_marker("just a prompt with no marker") is None
+        assert parse_thinkrail_step_marker("just a prompt with no marker") is None
 
     def test_parse_marker_malformed_returns_none(self) -> None:
-        assert parse_bonsai_step_marker("[bonsai-step ticket=mt_abc12]") is None
-        assert parse_bonsai_step_marker("[bonsai-step step=5]") is None
-        assert parse_bonsai_step_marker("[bonsai-step]") is None
+        assert parse_thinkrail_step_marker("[thinkrail-step ticket=mt_abc12]") is None
+        assert parse_thinkrail_step_marker("[thinkrail-step step=5]") is None
+        assert parse_thinkrail_step_marker("[thinkrail-step]") is None
 
     def test_parse_marker_empty_returns_none(self) -> None:
-        assert parse_bonsai_step_marker("") is None
+        assert parse_thinkrail_step_marker("") is None
 
 
 class TestRuntimeAgentRegistration:

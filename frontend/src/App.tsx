@@ -22,7 +22,7 @@ function AppInner({ projectPath: _projectPath, onSwitchProject, newProjectData }
 
   // Wire events + fetch initial data on connect
   useEffect(() => {
-    console.log("[Bonsai] Connection state:", connectionState);
+    console.log("[ThinkRail] Connection state:", connectionState);
     if (connectionState === "connected" && !wiredRef.current) {
       // ── Initial connect ──
       wiredRef.current = true;
@@ -41,14 +41,14 @@ function AppInner({ projectPath: _projectPath, onSwitchProject, newProjectData }
           if (!opts) return;
           useSessionStore.getState()
             .loadActiveSessions(opts)
-            .catch((err) => console.warn("[Bonsai] Failed to load sessions:", err));
+            .catch((err) => console.warn("[ThinkRail] Failed to load sessions:", err));
           useSessionStore.getState()
             .refreshSessionList()
-            .catch((err) => console.warn("[Bonsai] Failed to refresh session list:", err));
+            .catch((err) => console.warn("[ThinkRail] Failed to refresh session list:", err));
         });
-      console.log("[Bonsai] Fetching specs...");
+      console.log("[ThinkRail] Fetching specs...");
       useSpecStore.getState().fetchSpecs().then(() => {
-        console.log("[Bonsai] Specs loaded:", useSpecStore.getState().specs.length);
+        console.log("[ThinkRail] Specs loaded:", useSpecStore.getState().specs.length);
       });
       useSpecStore.getState().fetchGraph();
       // Load board tickets
@@ -62,9 +62,9 @@ function AppInner({ projectPath: _projectPath, onSwitchProject, newProjectData }
       useSettingsStore.getState().fetchSkills();
     } else if (connectionState === "connected" && wiredRef.current) {
       // ── Reconnect: WS recovered — sync session statuses immediately ──
-      console.log("[Bonsai] Reconnected — syncing session statuses");
+      console.log("[ThinkRail] Reconnected — syncing session statuses");
       useSessionStore.getState().syncSessionStatuses().catch((err) => {
-        console.warn("[Bonsai] Failed to sync session statuses on reconnect:", err);
+        console.warn("[ThinkRail] Failed to sync session statuses on reconnect:", err);
       });
     }
     if (connectionState === "disconnected" || connectionState === "failed") {

@@ -37,7 +37,7 @@ def _write_spec_file(root: Path, rel_path: str, content: str) -> Path:
 @pytest.fixture
 async def index(tmp_path: Path):
     """Create a SpecIndex with schema, yield, then close."""
-    db_path = tmp_path / ".bonsai" / "index.db"
+    db_path = tmp_path / ".tr" / "index.db"
     idx = SpecIndex(db_path)
     async with idx:
         yield idx
@@ -877,26 +877,26 @@ class TestFileChanged:
         assert len(doc_notifications) == 1
 
 
-# ── TestBonsaihideLiveReload ─────────────────────────────────────────────────
+# ── TestThinkRailhideLiveReload ─────────────────────────────────────────────────
 
 
-class TestBonsaihideLiveReload:
+class TestThinkRailhideLiveReload:
     """Synchronous hide-rule refresh + same-batch consistency.
 
-    Regression coverage for the .bonsaihide live-reload bug: the watcher
+    Regression coverage for the .thinkrailhide live-reload bug: the watcher
     must refresh the index's hide rules *before* dispatching same-batch
     FileChanged events, so newly-hidden paths are recognized immediately
     rather than after the 500ms-debounced rebuild fires.
     """
 
-    async def test_update_bonsaihide_spec_takes_effect_immediately(
+    async def test_update_thinkrailhide_spec_takes_effect_immediately(
         self, coordinator, index, tmp_path, notifications
     ):
-        """A FileChanged emitted after update_bonsaihide_spec sees the new rules.
+        """A FileChanged emitted after update_thinkrailhide_spec sees the new rules.
 
-        Models the watcher's same-batch path: user edits .bonsaihide to add
+        Models the watcher's same-batch path: user edits .thinkrailhide to add
         ``archive/``, then ``git mv``s a file into ``archive/``.  After
-        update_bonsaihide_spec, the FileChanged for the moved file must NOT
+        update_thinkrailhide_spec, the FileChanged for the moved file must NOT
         index it.
         """
         import pathspec
@@ -915,7 +915,7 @@ class TestBonsaihideLiveReload:
 
         # Refresh rules synchronously to hide archive/.
         hide_archive = pathspec.PathSpec.from_lines("gitignore", ["archive/"])
-        coordinator.update_bonsaihide_spec(hide_archive)
+        coordinator.update_thinkrailhide_spec(hide_archive)
 
         # Now emit FileChanged for the newly-archived file (simulates the
         # watcher seeing a `git mv ... archive/foo.md` add event).
@@ -925,10 +925,10 @@ class TestBonsaihideLiveReload:
         # The file must NOT be in the index — reindex_file saw the new rules.
         assert await index.get_spec("archived-spec") is None
 
-    async def test_update_bonsaihide_spec_evicts_previously_indexed(
+    async def test_update_thinkrailhide_spec_evicts_previously_indexed(
         self, coordinator, index, tmp_path, notifications
     ):
-        """After update_bonsaihide_spec, the next FileChanged removes hidden entries.
+        """After update_thinkrailhide_spec, the next FileChanged removes hidden entries.
 
         Path 1 of the eviction story: incremental cleanup as files change.
         Path 2 (full rebuild) is covered by TestDrainBehavior / TestRebuild.
@@ -953,7 +953,7 @@ class TestBonsaihideLiveReload:
         assert await index.get_spec("docs-spec") is not None
 
         # Now hide docs/ and re-emit the same path.
-        coordinator.update_bonsaihide_spec(
+        coordinator.update_thinkrailhide_spec(
             pathspec.PathSpec.from_lines("gitignore", ["docs/"])
         )
         coordinator.emit(FileChanged(path=visible))
@@ -961,14 +961,14 @@ class TestBonsaihideLiveReload:
 
         assert await index.get_spec("docs-spec") is None
 
-    async def test_update_bonsaihide_spec_none_clears_rules(
+    async def test_update_thinkrailhide_spec_none_clears_rules(
         self, coordinator, index, tmp_path, notifications
     ):
-        """Passing None to update_bonsaihide_spec restores unfiltered behaviour.
+        """Passing None to update_thinkrailhide_spec restores unfiltered behaviour.
 
-        Models the .bonsaihide-deleted case: load_bonsaihide() falls back to
+        Models the .thinkrailhide-deleted case: load_thinkrailhide() falls back to
         the built-in defaults, which the watcher passes through to
-        update_bonsaihide_spec.  (None is the wire-cleared variant; the real
+        update_thinkrailhide_spec.  (None is the wire-cleared variant; the real
         watcher path passes the defaults PathSpec — both must work.)
         """
         import pathspec
@@ -985,7 +985,7 @@ class TestBonsaihideLiveReload:
             """,
         )
 
-        coordinator.update_bonsaihide_spec(
+        coordinator.update_thinkrailhide_spec(
             pathspec.PathSpec.from_lines("gitignore", ["archive/"])
         )
         coordinator.emit(FileChanged(path=archived))
@@ -993,7 +993,7 @@ class TestBonsaihideLiveReload:
         assert await index.get_spec("archived-spec") is None
 
         # Clear rules — next FileChanged should index it again.
-        coordinator.update_bonsaihide_spec(None)
+        coordinator.update_thinkrailhide_spec(None)
         coordinator.emit(FileChanged(path=archived))
         await coordinator._queue.join()
         assert await index.get_spec("archived-spec") is not None

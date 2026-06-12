@@ -14,11 +14,11 @@ tags:
 ---
 # App Store — Module Design
 
-> Parent: [Storage Architecture](../../../.bonsai/design_docs/STORAGE_ARCHITECTURE.md) | Status: **Active** | Updated: 2026-05-04
+> Parent: [Storage Architecture](../../../.tr/design_docs/STORAGE_ARCHITECTURE.md) | Status: **Active** | Updated: 2026-05-04
 
 ## Purpose
 
-Central abstraction for app-level persistent storage. Owns the SQLite database connection at `~/.bonsai/bonsai.db` and exposes typed async methods for the **known-projects registry** and **app-wide key/value settings**. Bonsai is single-user and localhost-only — there is no concept of users, tokens, or per-user preferences in this module.
+Central abstraction for app-level persistent storage. Owns the SQLite database connection at `~/.tr/tr.db` and exposes typed async methods for the **known-projects registry** and **app-wide key/value settings**. ThinkRail is single-user and localhost-only — there is no concept of users, tokens, or per-user preferences in this module.
 
 ## Internal Architecture
 
@@ -33,7 +33,7 @@ graph TD
         Settings["Settings get/set"]
     end
 
-    subgraph SQLite["~/.bonsai/bonsai.db"]
+    subgraph SQLite["~/.tr/tr.db"]
         SV["_schema_version"]
         ST["settings"]
         PT["projects"]
@@ -118,7 +118,7 @@ CREATE TABLE projects (
 CREATE INDEX idx_projects_last_opened ON projects(last_opened_at DESC);
 ```
 
-See [`STORAGE_ARCHITECTURE.md`](../../../.bonsai/design_docs/STORAGE_ARCHITECTURE.md#schema-v3) for the canonical definition.
+See [`STORAGE_ARCHITECTURE.md`](../../../.tr/design_docs/STORAGE_ARCHITECTURE.md#schema-v3) for the canonical definition.
 
 ## Migration v2 → v3
 

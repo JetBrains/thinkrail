@@ -43,12 +43,12 @@ class TestTicket:
             "title": "Test",
             "linkedSpecIds": ["s1"],
             "sessionIds": ["sid1"],
-            "implementationPlanPath": ".bonsai/tickets/mt_test/implementation-plan.md",
+            "implementationPlanPath": ".tr/tickets/mt_test/implementation-plan.md",
             "technicalDesignStale": True,
         })
         assert t.linked_spec_ids == ["s1"]
         assert t.session_ids == ["sid1"]
-        assert t.implementation_plan_path == ".bonsai/tickets/mt_test/implementation-plan.md"
+        assert t.implementation_plan_path == ".tr/tickets/mt_test/implementation-plan.md"
         assert t.technical_design_stale is True
 
 

@@ -17,7 +17,7 @@ from app.agent.models import AgentTask
 from app.agent.runtime.permissions import ToolPermissionResponse
 from app.agent.tools._context import get_tool_context
 from app.agent.tracker import Tracker
-from app.core.config import AppConfig
+from app.core.config import AppConfig, MCP_PREFIX
 
 
 SET_PREVIEW_FILE_SCHEMA: dict = {
@@ -67,7 +67,7 @@ async def _set_preview_file(args: dict) -> dict:
     # sees the same path that set_preview stored on disk.
     from app.agent.artifacts import _to_relative
     notif_path = None if path is None else _to_relative(project_root, path)
-    payload: dict = {"bonsaiSid": ctx.task.bonsai_sid, "path": notif_path}
+    payload: dict = {"thinkrailSid": ctx.task.thinkrail_sid, "path": notif_path}
     if section and notif_path is not None:
         payload["section"] = section
     await ctx.notify("ui/setPreviewFile", payload)
@@ -89,13 +89,13 @@ async def _clear_preview_file(args: dict) -> dict:
     persist_artifact_state(project_root, ctx.task)
     await ctx.notify(
         "ui/setPreviewFile",
-        {"bonsaiSid": ctx.task.bonsai_sid, "path": None},
+        {"thinkrailSid": ctx.task.thinkrail_sid, "path": None},
     )
     return _ok("Preview cleared.")
 
 
 preview_mcp_server = create_sdk_mcp_server(
-    name="bonsai-preview",
+    name=f"{MCP_PREFIX}preview",
     tools=[_set_preview_file, _clear_preview_file],
 )
 

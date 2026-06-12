@@ -1,7 +1,7 @@
 import type { StorybookConfig } from "@storybook/react-vite";
 
 /**
- * Storybook config for Bonsai's design system.
+ * Storybook config for ThinkRail's design system.
  *
  * Stories + MDX docs live next to the code they document, under src/.
  * The project's vite.config.ts is auto-merged by @storybook/react-vite,

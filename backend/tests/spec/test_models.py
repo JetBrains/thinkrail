@@ -37,7 +37,7 @@ class TestSpecEntry:
         entry = SpecEntry(
             id="e2",
             type="task-spec",
-            path=".bonsai/implementation_tasks/fix.txt",
+            path=".tr/implementation_tasks/fix.txt",
             title="Fix bug",
             status="active",
             covers=["src/"],

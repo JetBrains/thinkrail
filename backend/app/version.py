@@ -11,6 +11,8 @@ import urllib.request
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
+from app.core.config import CONFIG_DIRNAME, ENV_PREFIX, PRODUCT_NAME
+
 try:
     from app._version import __channel__ as CHANNEL
     from app._version import __commit__ as COMMIT
@@ -20,10 +22,10 @@ except ImportError:
     CHANNEL = "dev"
     COMMIT = ""
 
-GITHUB_REPO = os.environ.get("BONSAI_GITHUB_REPO", "JetBrains/bonsai")
+GITHUB_REPO = os.environ.get(f"{ENV_PREFIX}GITHUB_REPO", "JetBrains/bonsai")
 GITHUB_API = f"https://api.github.com/repos/{GITHUB_REPO}"
 
-CACHE_PATH = Path.home() / ".config" / "bonsai" / "update-check.json"
+CACHE_PATH = Path.home() / ".config" / CONFIG_DIRNAME / "update-check.json"
 CACHE_TTL = timedelta(hours=6)
 HTTP_TIMEOUT = 5.0
 
@@ -49,7 +51,7 @@ def is_newer(latest: str, current: str) -> bool:
 
 def print_banner() -> None:
     suffix = f" · {COMMIT}" if COMMIT else ""
-    print(f"Bonsai {VERSION} ({CHANNEL}){suffix}", flush=True)
+    print(f"{PRODUCT_NAME} {VERSION} ({CHANNEL}){suffix}", flush=True)
 
 
 def _read_cache() -> tuple[str, str] | None:
@@ -143,7 +145,7 @@ def _check_and_announce() -> None:
 
     if is_newer(latest, VERSION):
         print(
-            f"[update] Bonsai {latest} is available (current: {VERSION}). Run: bonsai upgrade",
+            f"[update] {PRODUCT_NAME} {latest} is available (current: {VERSION}). Run: thinkrail upgrade",
             file=sys.stdout,
             flush=True,
         )
@@ -156,6 +158,6 @@ def check_in_background() -> None:
         return
     threading.Thread(
         target=_check_and_announce,
-        name="bonsai-update-check",
+        name="thinkrail-update-check",
         daemon=True,
     ).start()

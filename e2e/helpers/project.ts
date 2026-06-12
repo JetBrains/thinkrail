@@ -3,7 +3,7 @@ import { existsSync, mkdirSync, writeFileSync } from "node:fs";
 import { basename, dirname, join } from "node:path";
 import { appShell, projectPicker } from "./selectors";
 
-const BACKEND_URL = process.env.BONSAI_BACKEND_URL ?? "http://localhost:8000";
+const BACKEND_URL = process.env.THINKRAIL_BACKEND_URL ?? "http://localhost:8000";
 
 // The picker's two top CTAs trigger a native osascript folder dialog Playwright
 // cannot drive — the recents list is the only DOM-driveable path.
@@ -26,10 +26,10 @@ export async function openProject(page: Page, path: string): Promise<void> {
   // specs drive) only for an "initialized" project — one holding a spec
   // deliverable, board ticket, or plan. An empty dir is "new" (welcome) and a
   // dir with files but no spec is "existing" (investigation wizard); both lack
-  // the status bar. A non-empty `.bonsai/plans/` flips the state to
+  // the status bar. A non-empty `.tr/plans/` flips the state to
   // "initialized" without surfacing anything in the UI: plans are loaded per
   // meta-ticket, so an unreferenced marker file appears in no panel.
-  const planMarker = join(path, ".bonsai", "plans", ".gitkeep");
+  const planMarker = join(path, ".tr", "plans", ".gitkeep");
   if (!existsSync(planMarker)) {
     mkdirSync(dirname(planMarker), { recursive: true });
     writeFileSync(planMarker, "", "utf8");

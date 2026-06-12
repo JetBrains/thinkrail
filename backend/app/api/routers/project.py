@@ -22,9 +22,9 @@ from app.api.schemas import (
     ScanFile,
     ScanFolder,
 )
-from app.core.bonsaihide import load_bonsaihide
+from app.core.thinkrailhide import load_thinkrailhide
 from app.version import VERSION
-from app.core.config import BONSAI_DIRNAME
+from app.core.config import PROJECT_DIRNAME
 from app.spec.service import SPEC_FILENAME_MAP
 
 router = APIRouter(tags=["project"])
@@ -48,22 +48,30 @@ def _has_spec_deliverable(non_dot_children: list[Path]) -> bool:
     return False
 
 
-def _bonsai_has_meaningful_state(p: Path) -> bool:
-    """True if the project's ``.bonsai/`` dir already holds real work —
+def _project_meta_dir(p: Path) -> Path | None:
+    """Return the project's ``.tr`` meta dir, or ``None`` if absent."""
+    meta = p / PROJECT_DIRNAME
+    if meta.is_dir():
+        return meta
+    return None
+
+
+def _thinkrail_has_meaningful_state(p: Path) -> bool:
+    """True if the project's meta dir already holds real work —
     a finalized spec, a board ticket, or a plan.
 
-    The agent writes most artifacts inside ``.bonsai/`` rather than the
+    The agent writes most artifacts inside the meta dir rather than the
     project root (spec, tickets, plans, sessions). Only ``meta-tickets``,
     ``plans``, and the spec markers count as "real" — a bare ``sessions``
     directory can be left behind by a draft that never produced anything.
     """
-    bonsai_dir = p / BONSAI_DIRNAME
-    if not bonsai_dir.is_dir():
+    thinkrail_dir = _project_meta_dir(p)
+    if thinkrail_dir is None:
         return False
     try:
-        # A finalized spec written inside `.bonsai/`.
+        # A finalized spec written inside `.tr/`.
         for marker in _SPEC_MARKERS:
-            f = bonsai_dir / marker
+            f = thinkrail_dir / marker
             if f.is_file():
                 try:
                     if f.stat().st_size > 0:
@@ -71,11 +79,11 @@ def _bonsai_has_meaningful_state(p: Path) -> bool:
                 except OSError:
                     continue
         # Any committed meta-ticket.
-        mt_dir = bonsai_dir / "meta-tickets"
+        mt_dir = thinkrail_dir / "meta-tickets"
         if mt_dir.is_dir() and any(mt_dir.glob("*.json")):
             return True
         # Any saved plan.
-        plans_dir = bonsai_dir / "plans"
+        plans_dir = thinkrail_dir / "plans"
         if plans_dir.is_dir() and any(plans_dir.iterdir()):
             return True
     except OSError:
@@ -90,8 +98,8 @@ def _detect_project_state(p: Path) -> ProjectState:
       - ``existing``: has user files but no spec — normal workspace
 
     A spec deliverable can live at the project root OR inside
-    ``.bonsai/`` (where the agent typically writes it). Tickets and
-    plans inside ``.bonsai/`` also count — once the user has board
+    ``.tr/`` (where the agent typically writes it). Tickets and
+    plans inside ``.tr/`` also count — once the user has board
     state, the project is no longer "new" even if no spec was saved.
 
     Falls back to ``existing`` on permission errors — safer than pushing
@@ -101,7 +109,7 @@ def _detect_project_state(p: Path) -> ProjectState:
         non_dot = [c for c in p.iterdir() if not c.name.startswith(".")]
     except OSError:
         return "existing"
-    if _has_spec_deliverable(non_dot) or _bonsai_has_meaningful_state(p):
+    if _has_spec_deliverable(non_dot) or _thinkrail_has_meaningful_state(p):
         return "initialized"
     return "new" if not non_dot else "existing"
 
@@ -113,7 +121,7 @@ async def health_check() -> HealthResponse:
 
 @router.get("/api/project/list", response_model=ProjectListResponse)
 async def list_projects(base: str = Query(default=""), max_depth: int = Query(default=4)) -> ProjectListResponse:
-    """List directories containing a .bonsai/ directory."""
+    """List directories containing a project meta directory."""
     root = Path(base).expanduser().resolve() if base else Path.home()
     projects: list[ProjectInfo] = []
 
@@ -130,7 +138,7 @@ async def list_projects(base: str = Query(default=""), max_depth: int = Query(de
         for child in children:
             if not child.is_dir() or child.name.startswith("."):
                 continue
-            if (child / BONSAI_DIRNAME).is_dir():
+            if _project_meta_dir(child) is not None:
                 projects.append(ProjectInfo(path=str(child), name=child.name))
             else:
                 _scan(child, depth + 1)
@@ -213,7 +221,7 @@ async def scan_project(path: str = Query(...)) -> ProjectScanResponse:
     if not root.is_dir():
         return ProjectScanResponse(important_files=[], top_folders=[], engine_guidance=[])
 
-    spec = load_bonsaihide(root)
+    spec = load_thinkrailhide(root)
 
     important_files: list[ScanFile] = []
     top_folders: list[ScanFolder] = []
@@ -229,7 +237,7 @@ async def scan_project(path: str = Query(...)) -> ProjectScanResponse:
         if spec.match_file(rel + "/" if is_dir else rel):
             continue
         if is_dir:
-            # ``.bonsai/`` is exempted by bonsaihide's default ignore set
+            # ``.tr/`` is exempted by thinkrailhide's default ignore set
             # but we don't want it as an onboarding folder either.
             if rel.startswith("."):
                 continue
@@ -328,7 +336,7 @@ async def list_files(
     if not root.is_dir():
         return ProjectFilesResponse(entries=[])
 
-    spec = load_bonsaihide(root)
+    spec = load_thinkrailhide(root)
     entries: list[FileEntry] = []
 
     def walk(dir_path: Path, depth: int) -> None:

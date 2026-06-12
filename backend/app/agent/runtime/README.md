@@ -23,7 +23,7 @@ tags:
 resolves a runtime per task via `runtime_registry.get(task.config.runtime)`
 and delegates the conversational loop to it.
 
-See `.bonsai/design_docs/MULTI_RUNTIME_DESIGN.md` for the cross-cutting
+See `.tr/design_docs/MULTI_RUNTIME_DESIGN.md` for the cross-cutting
 architecture; this module spec covers the runtime contract surface.
 
 ## Design principle
@@ -111,7 +111,7 @@ model→window table.
 Each runtime also owns the list of slash-command-style **skills** it
 exposes — Claude Code's user/project/plugin skills, custom commands,
 built-ins like `/review`/`/init`/`/security-review`, etc. These power
-the chat composer's slash autocomplete (alongside Bonsai's bundled
+the chat composer's slash autocomplete (alongside ThinkRail's bundled
 skills). One method on the protocol:
 
 ```python
@@ -174,7 +174,7 @@ be added under `runtime/<name>/` and registered alongside it.
 runs **alongside** the running `run_session` (not from inside it) — when
 `AgentService.interrupt_task` fires, both happen:
 
-1. `tracker.set_interrupted(sid)` — bonsai-internal flag
+1. `tracker.set_interrupted(sid)` — thinkrail-internal flag
 2. `tracker.interrupt_futures(sid)` — resolves any pending user-prompt futures with deny+interrupt
 3. `runtime.interrupt(task, tracker)` — runtime-specific cancel
    (Claude calls `client.interrupt()`; each runtime defines its own)

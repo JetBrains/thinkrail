@@ -1,6 +1,6 @@
 """Per-session TodoWrite/TaskCreate/TaskUpdate snapshot derivation.
 
-The Bonsai frontend renders a "Tasks (n/m)" sub-row under each phase based
+The ThinkRail frontend renders a "Tasks (n/m)" sub-row under each phase based
 on the latest todo state emitted by the running agent. Historically that
 derivation lived only in the frontend, walking the events of an
 in-memory session — which meant the sub-row vanished after a reload until

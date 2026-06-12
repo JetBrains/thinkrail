@@ -72,7 +72,7 @@ class AgentService:
         except UnknownRuntimeError:
             logger.debug(
                 "[%s] Unknown runtime %r; skipping capability check",
-                task.bonsai_sid[:8], task.config.runtime,
+                task.thinkrail_sid[:8], task.config.runtime,
             )
             return None
         return runtime.capabilities()
@@ -111,12 +111,12 @@ class AgentService:
         for entry in disk_sessions:
             if entry.get("status") != "draft":
                 continue
-            sid = entry.get("bonsaiSid", "")
+            sid = entry.get("thinkrailSid", "")
             if not sid or self._tracker.has_task(sid):
                 continue
             try:
                 task = AgentTask(
-                    bonsai_sid=sid,
+                    thinkrail_sid=sid,
                     name=entry.get("name", ""),
                     status="draft",
                     spec_ids=entry.get("specIds", []),
@@ -154,7 +154,7 @@ class AgentService:
         name: str = "",
         ticket_id: str | None = None,
         file_paths: list[str] | None = None,
-        bonsai_sid: str | None = None,
+        thinkrail_sid: str | None = None,
         draft_input: str | None = None,
     ) -> AgentTask:
         """Create a draft session without starting the runner.
@@ -162,13 +162,13 @@ class AgentService:
         Builds the system prompt and persists the task in "draft" status.
         Call ``start_draft`` to actually launch the SDK session.
 
-        ``bonsai_sid``, when supplied, is reused verbatim instead of
+        ``thinkrail_sid``, when supplied, is reused verbatim instead of
         server-minting one. ``draft_input`` carries the autosaved prompt text —
         non-context, never fed to ``build_context``.
         """
         task = self._tracker.create_task(
             spec_ids, config, skill_id=skill_id, session_prompt=session_prompt, name=name,
-            bonsai_sid=bonsai_sid, draft_input=draft_input,
+            thinkrail_sid=thinkrail_sid, draft_input=draft_input,
         )
         task.status = "draft"
         task.ticket_id = ticket_id
@@ -181,7 +181,7 @@ class AgentService:
 
     async def update_draft(
         self,
-        bonsai_sid: str,
+        thinkrail_sid: str,
         spec_ids: list[str] | None = None,
         skill_id: str | None = ...,  # type: ignore[assignment]
         config: AgentConfig | None = None,
@@ -197,7 +197,7 @@ class AgentService:
 
         Returns the structured prompt preview: ``{"full", "sections", "totalTokens"}``.
         """
-        task = self._tracker.get_task(bonsai_sid)
+        task = self._tracker.get_task(thinkrail_sid)
         if task.status != "draft":
             raise ValueError(f"Cannot update: session is '{task.status}', expected 'draft'")
         if spec_ids is not None:
@@ -224,7 +224,7 @@ class AgentService:
             old_ticket_id = task.ticket_id
             if old_ticket_id and old_ticket_id != ticket_id and self.board_service:
                 try:
-                    self.board_service.detach_session(old_ticket_id, task.bonsai_sid)
+                    self.board_service.detach_session(old_ticket_id, task.thinkrail_sid)
                 except Exception:
                     logger.warning("Failed to detach session from ticket %s", old_ticket_id)
             task.ticket_id = ticket_id
@@ -252,25 +252,25 @@ class AgentService:
 
     async def start_draft(
         self,
-        bonsai_sid: str,
+        thinkrail_sid: str,
         prompt: str | None = None,
     ) -> AgentTask:
         """Start a draft session — transitions to initializing and launches the runner.
 
         If *prompt* is provided it is enqueued as the first user message.
         """
-        task = self._tracker.get_task(bonsai_sid)
+        task = self._tracker.get_task(thinkrail_sid)
         if task.status != "draft":
             raise ValueError(f"Cannot start: session is '{task.status}', expected 'draft'")
         self._validate_config_against_caps(task)
-        self._tracker.set_status(bonsai_sid, "initializing")
+        self._tracker.set_status(thinkrail_sid, "initializing")
         spec_context = task.system_prompt or await self._build_context_for(task)
         if prompt is not None:
-            self._tracker.enqueue_message(bonsai_sid, prompt)
+            self._tracker.enqueue_message(thinkrail_sid, prompt)
         bg_task = asyncio.create_task(
             self._run_background(task, spec_context)
         )
-        self._running_tasks[task.bonsai_sid] = bg_task
+        self._running_tasks[task.thinkrail_sid] = bg_task
         self._save_task(task)
         return task
 
@@ -299,46 +299,46 @@ class AgentService:
         bg_task = asyncio.create_task(
             self._run_background(task, spec_context)
         )
-        self._running_tasks[task.bonsai_sid] = bg_task
+        self._running_tasks[task.thinkrail_sid] = bg_task
         self._save_task(task)
         return task
 
-    async def send_message(self, bonsai_sid: str, text: str, *, is_markdown: bool = False) -> None:
+    async def send_message(self, thinkrail_sid: str, text: str, *, is_markdown: bool = False) -> None:
         """Send a user message to the session, triggering a new turn."""
-        task = self._tracker.get_task(bonsai_sid)
+        task = self._tracker.get_task(thinkrail_sid)
         if task.status not in ("initializing", "idle"):
             raise ValueError(
                 f"Cannot send message: session is '{task.status}', expected 'initializing' or 'idle'"
             )
-        self._save_event(bonsai_sid, {
+        self._save_event(thinkrail_sid, {
             "eventType": "userMessage",
             "payload": {"text": text, "isMarkdown": is_markdown},
         })
-        self._tracker.set_last_message(bonsai_sid, text)
-        self._tracker.enqueue_message(bonsai_sid, text)
+        self._tracker.set_last_message(thinkrail_sid, text)
+        self._tracker.enqueue_message(thinkrail_sid, text)
 
-    async def interrupt_task(self, bonsai_sid: str) -> None:
+    async def interrupt_task(self, thinkrail_sid: str) -> None:
         """Cancel the current turn non-destructively.
 
         Delegates the runtime-specific cancel to the runtime's ``interrupt``
         hook (Claude calls ``client.interrupt()``); ``set_interrupted`` and
-        ``interrupt_futures`` stay here because they are bonsai-internal
+        ``interrupt_futures`` stay here because they are thinkrail-internal
         state, not runtime-internal. The runner stays alive — no re-launch
         needed.
         """
-        task = self._tracker.get_task(bonsai_sid)
+        task = self._tracker.get_task(thinkrail_sid)
         if task.status not in ("running", "waiting"):
             # Already idle/done — nothing to interrupt
             return
 
         # 1. Set interrupt flag BEFORE calling runtime.interrupt() so the
         #    runner knows to emit agent/interrupted instead of turnComplete.
-        self._tracker.set_interrupted(bonsai_sid)
+        self._tracker.set_interrupted(thinkrail_sid)
 
         # 2. Resolve pending futures with deny+interrupt (for waiting state).
         #    Unlike cancel_futures(), this produces a clean
         #    PermissionResultDeny(interrupt=True) through the SDK.
-        self._tracker.interrupt_futures(bonsai_sid)
+        self._tracker.interrupt_futures(thinkrail_sid)
 
         # 3. Delegate the runtime-specific cancel via the registry. If the
         #    runtime can't be resolved (registry not wired, unknown runtime
@@ -348,52 +348,52 @@ class AgentService:
         try:
             runtime = self._get_runtime(task)
         except UnknownRuntimeError as exc:
-            self._tracker.clear_interrupted(bonsai_sid)
+            self._tracker.clear_interrupted(thinkrail_sid)
             logger.warning(
                 "[%s] interrupt: runtime %r not registered: %s",
-                bonsai_sid[:8], task.config.runtime, exc,
+                thinkrail_sid[:8], task.config.runtime, exc,
             )
             return
         await runtime.interrupt(task, self._tracker)
 
-    async def end_session(self, bonsai_sid: str) -> None:
+    async def end_session(self, thinkrail_sid: str) -> None:
         """Gracefully close the session."""
         try:
-            task = self._tracker.get_task(bonsai_sid)
+            task = self._tracker.get_task(thinkrail_sid)
             if task.status in ("done", "error"):
                 return  # already finished
             if task.status == "draft":
                 # Draft sessions have no runner — just clean up directly
-                self._tracker.set_status(bonsai_sid, "done")
+                self._tracker.set_status(thinkrail_sid, "done")
                 self._save_task(task)
-                self._tracker.remove_task(bonsai_sid)
+                self._tracker.remove_task(thinkrail_sid)
                 return
             # If the runner is blocked awaiting a user response, the end
             # signal we enqueue below would never be picked up. Resolve
             # any pending futures with deny+interrupt so the tool callback
             # returns and the runner can drain the queue.
-            self._tracker.interrupt_futures(bonsai_sid)
-            self._tracker.enqueue_end_signal(bonsai_sid)
+            self._tracker.interrupt_futures(thinkrail_sid)
+            self._tracker.enqueue_end_signal(thinkrail_sid)
         except Exception:
             # Task not in memory (e.g. backend restarted) — update on disk only
-            existing = load_session(self._config.project_root, bonsai_sid)
+            existing = load_session(self._config.project_root, thinkrail_sid)
             if existing and existing.get("status") not in ("done", "error"):
                 existing["status"] = "done"
                 save_session(self._config.project_root, existing)
 
-    def get_task(self, bonsai_sid: str) -> AgentTask:
-        return self._tracker.get_task(bonsai_sid)
+    def get_task(self, thinkrail_sid: str) -> AgentTask:
+        return self._tracker.get_task(thinkrail_sid)
 
-    def get_last_message(self, bonsai_sid: str) -> str | None:
+    def get_last_message(self, thinkrail_sid: str) -> str | None:
         """Return the last user message sent to this session (for retry)."""
-        return self._tracker.get_last_message(bonsai_sid)
+        return self._tracker.get_last_message(thinkrail_sid)
 
     def list_tasks(self) -> list[AgentTask]:
         return self._tracker.list_tasks()
 
     async def update_config(
         self,
-        bonsai_sid: str,
+        thinkrail_sid: str,
         model: str | None = None,
         permission_mode: str | None = None,
         effort: str | None = None,
@@ -405,10 +405,10 @@ class AgentService:
         raised on mismatch — this is an explicit user edit, so an out-of-caps
         value is rejected rather than applied.
         """
-        task = self._tracker.get_task(bonsai_sid)
-        client = self._tracker.get_client(bonsai_sid)
+        task = self._tracker.get_task(thinkrail_sid)
+        client = self._tracker.get_client(thinkrail_sid)
         if client is None:
-            raise ValueError(f"No live client for session {bonsai_sid}")
+            raise ValueError(f"No live client for session {thinkrail_sid}")
         caps = self._get_capabilities(task)
         if caps is not None:
             if model is not None:
@@ -423,37 +423,37 @@ class AgentService:
                     task, field="effort", value=effort, allowed=caps.effort_levels,
                 )
         if model is not None:
-            logger.info("[%s] update_config: set_model(%s)", bonsai_sid[:8], model)
+            logger.info("[%s] update_config: set_model(%s)", thinkrail_sid[:8], model)
             await client.set_model(model)
             task.config.model = model
         if permission_mode is not None:
-            logger.info("[%s] update_config: set_permission_mode(%s)", bonsai_sid[:8], permission_mode)
+            logger.info("[%s] update_config: set_permission_mode(%s)", thinkrail_sid[:8], permission_mode)
             try:
                 await client.set_permission_mode(permission_mode)
             except Exception:
-                logger.exception("[%s] set_permission_mode(%s) FAILED", bonsai_sid[:8], permission_mode)
+                logger.exception("[%s] set_permission_mode(%s) FAILED", thinkrail_sid[:8], permission_mode)
                 raise
             task.config.permission_mode = permission_mode
-            logger.info("[%s] update_config: permission_mode updated to %s", bonsai_sid[:8], permission_mode)
+            logger.info("[%s] update_config: permission_mode updated to %s", thinkrail_sid[:8], permission_mode)
         if effort is not None:
             task.config.effort = effort
         self._save_task(task)
         return {"model": task.config.model, "permissionMode": task.config.permission_mode, "effort": task.config.effort}
 
-    async def restart_session(self, bonsai_sid: str) -> AgentTask:
+    async def restart_session(self, thinkrail_sid: str) -> AgentTask:
         """End current session and resume with current (updated) config."""
-        self._tracker.enqueue_end_signal(bonsai_sid)
-        bg_task = self._running_tasks.get(bonsai_sid)
+        self._tracker.enqueue_end_signal(thinkrail_sid)
+        bg_task = self._running_tasks.get(thinkrail_sid)
         if bg_task:
             try:
                 await bg_task
             except Exception:
                 pass
-        return await self.continue_session(bonsai_sid)
+        return await self.continue_session(thinkrail_sid)
 
-    async def respond(self, bonsai_sid: str, request_id: str, response: dict) -> None:
-        self._tracker.resolve_future(bonsai_sid, request_id, response)
-        self._save_event(bonsai_sid, {
+    async def respond(self, thinkrail_sid: str, request_id: str, response: dict) -> None:
+        self._tracker.resolve_future(thinkrail_sid, request_id, response)
+        self._save_event(thinkrail_sid, {
             "eventType": "requestResolved",
             "payload": {"requestId": request_id, "response": response},
         })
@@ -463,10 +463,10 @@ class AgentService:
     def _save_task(self, task: AgentTask, events: list[dict] | None = None) -> None:
         """Persist current task state to disk."""
         # Load existing metadata to preserve metrics and events
-        existing = load_session(self._config.project_root, task.bonsai_sid)
+        existing = load_session(self._config.project_root, task.thinkrail_sid)
         data: dict = {
-            "bonsaiSid": task.bonsai_sid,
-            "name": task.name or task.bonsai_sid[:8],
+            "thinkrailSid": task.thinkrail_sid,
+            "name": task.name or task.thinkrail_sid[:8],
             "skillId": task.skill_id,
             "sessionPrompt": task.session_prompt,
             "draftInput": task.draft_input,
@@ -507,13 +507,13 @@ class AgentService:
             data["events"] = existing.get("events", [])
         save_session(self._config.project_root, data)
 
-    def _save_event(self, bonsai_sid: str, event: dict) -> None:
+    def _save_event(self, thinkrail_sid: str, event: dict) -> None:
         """Append an event to the persisted session file."""
-        append_event(self._config.project_root, bonsai_sid, event)
+        append_event(self._config.project_root, thinkrail_sid, event)
 
     # ── Subagent → plan-step linkage ─────────────────────────────────────
     # Used by _persisting_notify when the orchestrator (ticket-implement in
-    # subagent mode) emits a Task call carrying a ``[bonsai-step …]`` marker.
+    # subagent mode) emits a Task call carrying a ``[thinkrail-step …]`` marker.
 
     def _mark_step_running(
         self, ticket_id: str, step_number: int, event_index: int,
@@ -565,14 +565,14 @@ class AgentService:
     def list_all_sessions(self) -> list[dict]:
         """List all sessions: in-memory active + on-disk archived."""
         # Start with disk sessions
-        disk = {s["bonsaiSid"]: s for s in list_sessions_from_disk(self._config.project_root)}
+        disk = {s["thinkrailSid"]: s for s in list_sessions_from_disk(self._config.project_root)}
         # Overlay in-memory active sessions (they have fresher status)
         for task in self._tracker.list_tasks():
             # Preserve name from disk if the in-memory task has no custom name
-            disk_entry = disk.get(task.bonsai_sid, {})
-            name = task.name or disk_entry.get("name") or task.bonsai_sid[:8]
+            disk_entry = disk.get(task.thinkrail_sid, {})
+            name = task.name or disk_entry.get("name") or task.thinkrail_sid[:8]
             entry: dict[str, Any] = {
-                "bonsaiSid": task.bonsai_sid,
+                "thinkrailSid": task.thinkrail_sid,
                 "name": name,
                 "skillId": task.skill_id,
                 "specIds": list(task.spec_ids),
@@ -598,24 +598,24 @@ class AgentService:
                 entry["filePaths"] = list(task.file_paths)
                 entry["subagentMode"] = task.subagent_mode
                 entry["stepGate"] = task.step_gate
-            disk[task.bonsai_sid] = entry
+            disk[task.thinkrail_sid] = entry
         return list(disk.values())
 
-    def get_session_data(self, bonsai_sid: str) -> dict | None:
+    def get_session_data(self, thinkrail_sid: str) -> dict | None:
         """Get full session data (events included) from disk, overlaid with live tracker state."""
-        data = load_session(self._config.project_root, bonsai_sid)
+        data = load_session(self._config.project_root, thinkrail_sid)
         if data is None:
             return None
         # Overlay in-memory tracker state (status, pending request) for active sessions
-        if self._tracker.has_task(bonsai_sid):
-            task = self._tracker.get_task(bonsai_sid)
+        if self._tracker.has_task(thinkrail_sid):
+            task = self._tracker.get_task(thinkrail_sid)
             data["status"] = task.status
             if task.outcome is not None:
                 data["outcome"] = task.outcome.model_dump(by_alias=True)
             # Live artifacts win over disk (disk lags by one tool-call cycle)
             data["artifacts"] = [a.model_dump(by_alias=True) for a in task.artifacts]
             data["previewPath"] = task.preview_path
-            data["pendingRequests"] = self._tracker.list_pending_requests(bonsai_sid)
+            data["pendingRequests"] = self._tracker.list_pending_requests(thinkrail_sid)
             # ticket-implement orchestration mode — live tracker value beats
             # whatever was on disk before the most recent update_draft.
             data["subagentMode"] = task.subagent_mode
@@ -628,7 +628,7 @@ class AgentService:
         return data
 
     def patch_outcome_action(
-        self, bonsai_sid: str, action_id: str, patch: dict[str, Any]
+        self, thinkrail_sid: str, action_id: str, patch: dict[str, Any]
     ) -> dict | None:
         """Apply a partial update to one outcome action and persist it.
 
@@ -639,37 +639,37 @@ class AgentService:
         Returns the updated task as a dict, or None if the session is
         not in the tracker.
         """
-        if not self._tracker.has_task(bonsai_sid):
+        if not self._tracker.has_task(thinkrail_sid):
             return None
-        task = self._tracker.patch_outcome_action(bonsai_sid, action_id, patch)
+        task = self._tracker.patch_outcome_action(thinkrail_sid, action_id, patch)
         self._save_task(task)
         return task.model_dump(by_alias=True)
 
-    def trash_session(self, bonsai_sid: str) -> None:
+    def trash_session(self, thinkrail_sid: str) -> None:
         """Delete a session and detach from all tickets."""
         if self.board_service:
             try:
-                self.board_service.detach_session_from_all(bonsai_sid)
+                self.board_service.detach_session_from_all(thinkrail_sid)
             except Exception:
-                logger.warning("Failed to detach session %s from tickets", bonsai_sid)
-        delete_session_from_disk(self._config.project_root, bonsai_sid)
+                logger.warning("Failed to detach session %s from tickets", thinkrail_sid)
+        delete_session_from_disk(self._config.project_root, thinkrail_sid)
         # Clean up in-memory state if still tracked
-        if self._tracker.has_task(bonsai_sid):
-            self._tracker.remove_task(bonsai_sid)
-            self._running_tasks.pop(bonsai_sid, None)
+        if self._tracker.has_task(thinkrail_sid):
+            self._tracker.remove_task(thinkrail_sid)
+            self._running_tasks.pop(thinkrail_sid, None)
 
-    async def continue_session(self, bonsai_sid: str) -> AgentTask:
+    async def continue_session(self, thinkrail_sid: str) -> AgentTask:
         """Resume a session using the SDK's native --resume <sessionId>.
 
-        Reuses the same bonsai_sid. The CLI restores full conversation
+        Reuses the same thinkrail_sid. The CLI restores full conversation
         context natively — no lossy text replay needed.
         """
-        if bonsai_sid in self._running_tasks:
-            raise ValueError(f"Session {bonsai_sid} is already running")
+        if thinkrail_sid in self._running_tasks:
+            raise ValueError(f"Session {thinkrail_sid} is already running")
 
-        old = load_session(self._config.project_root, bonsai_sid)
+        old = load_session(self._config.project_root, thinkrail_sid)
         if not old:
-            raise ValueError(f"Session {bonsai_sid} not found on disk")
+            raise ValueError(f"Session {thinkrail_sid} not found on disk")
 
         old_session_id = old.get("sessionId")
         # Fallback: look for sessionId in persisted events (sessionStart)
@@ -681,10 +681,10 @@ class AgentService:
                         break
         if not old_session_id:
             raise ValueError(
-                f"Cannot resume session {bonsai_sid}: no stored sessionId"
+                f"Cannot resume session {thinkrail_sid}: no stored sessionId"
             )
 
-        # Re-create task with SAME bonsai_sid
+        # Re-create task with SAME thinkrail_sid
         old_config = AgentConfig(**old.get("config", {}))
         old_spec_ids = old.get("specIds", [])
         skill_id = old.get("skillId")
@@ -696,7 +696,7 @@ class AgentService:
             skill_id=skill_id,
             session_prompt=session_prompt,
             name=name,
-            bonsai_sid=bonsai_sid,
+            thinkrail_sid=thinkrail_sid,
         )
         task.ticket_id = old.get("ticketId")
         task.subagent_mode = old.get("subagentMode", "step-session")
@@ -716,7 +716,7 @@ class AgentService:
 
         # Update metadata only (don't touch events JSONL)
         metadata = {
-            "bonsaiSid": bonsai_sid,
+            "thinkrailSid": thinkrail_sid,
             "name": name,
             "skillId": skill_id,
             "specIds": old_spec_ids,
@@ -741,7 +741,7 @@ class AgentService:
             self._run_background(task, spec_context,
                                  resume_session_id=old_session_id)
         )
-        self._running_tasks[task.bonsai_sid] = bg_task
+        self._running_tasks[task.thinkrail_sid] = bg_task
         return task
 
     # -- helpers --------------------------------------------------------------
@@ -770,13 +770,13 @@ class AgentService:
         if not task.ticket_id or not self.board_service:
             return
         try:
-            self.board_service.attach_session(task.ticket_id, task.bonsai_sid)
+            self.board_service.attach_session(task.ticket_id, task.thinkrail_sid)
             ticket = self.board_service.get_ticket(task.ticket_id)
             if (
                 ticket.implementation_plan_path
                 and task.skill_id == "ticket-implement"
             ):
-                self.board_service.set_orchestrator(task.ticket_id, task.bonsai_sid)
+                self.board_service.set_orchestrator(task.ticket_id, task.thinkrail_sid)
         except Exception:
             logger.warning("Failed to attach session to ticket %s", task.ticket_id)
 
@@ -795,7 +795,7 @@ class AgentService:
         # bar keeps its denominator until the first turn re-reports it.
         _base_context_max = 0
         if resume_session_id:
-            _existing = load_session(self._config.project_root, task.bonsai_sid)
+            _existing = load_session(self._config.project_root, task.thinkrail_sid)
             if _existing and _existing.get("metrics"):
                 _m = _existing["metrics"]
                 _base_cost = _m.get("costUsd", 0.0)
@@ -820,7 +820,7 @@ class AgentService:
 
         # Maps SDK tool_use_id → plan step number for in-flight Task subagent
         # calls. Populated on agent/toolCallStart when the prompt carries a
-        # ``[bonsai-step …]`` marker; drained on the matching agent/toolCallEnd.
+        # ``[thinkrail-step …]`` marker; drained on the matching agent/toolCallEnd.
         # Scoped to one orchestrator run; restart loses the mapping (matches
         # the v2 "no per-subagent restart" limit).
         _subagent_tool_uses: dict[str, int] = {}
@@ -830,10 +830,10 @@ class AgentService:
 
         async def _persisting_notify(method: str, params: dict, request_id: str | None = None) -> None:
             await _bus.publish_to_session(
-                task.bonsai_sid, method, params, request_id=request_id,
+                task.thinkrail_sid, method, params, request_id=request_id,
             )
             # Subagent step linkage — when ticket-implement's orchestrator
-            # fires a Task call whose prompt carries a ``[bonsai-step …]``
+            # fires a Task call whose prompt carries a ``[thinkrail-step …]``
             # marker, point the matching plan step at this event's index
             # and flip status to ``executing``. See TICKET_LIFECYCLE_DESIGN.md
             # § Implementation orchestration modes.
@@ -842,17 +842,17 @@ class AgentService:
                 tool_use_id = params.get("toolUseId") or ""
                 tool_input = params.get("toolInput") or {}
                 if tool_name == "Task" and task.ticket_id and tool_use_id:
-                    from app.agent.subagents import parse_bonsai_step_marker
+                    from app.agent.subagents import parse_thinkrail_step_marker
 
                     prompt_text = (
                         tool_input.get("prompt")
                         or tool_input.get("description")
                         or ""
                     )
-                    marker = parse_bonsai_step_marker(str(prompt_text))
+                    marker = parse_thinkrail_step_marker(str(prompt_text))
                     if marker is not None and marker["ticket_id"] == task.ticket_id:
                         event_index = len(
-                            load_events(self._config.project_root, task.bonsai_sid)
+                            load_events(self._config.project_root, task.thinkrail_sid)
                         )
                         _subagent_tool_uses[tool_use_id] = marker["step"]
                         self._mark_step_running(
@@ -892,10 +892,10 @@ class AgentService:
 
                         persist_artifact_state(self._config.project_root, task)
                         await _bus.publish_to_session(
-                            task.bonsai_sid,
+                            task.thinkrail_sid,
                             "ui/artifactAdded",
                             {
-                                "bonsaiSid": task.bonsai_sid,
+                                "thinkrailSid": task.thinkrail_sid,
                                 "artifact": artifact.model_dump(by_alias=True),
                             },
                         )
@@ -909,9 +909,9 @@ class AgentService:
                 if request_id is not None:
                     payload["requestId"] = request_id
                 try:
-                    self._save_event(task.bonsai_sid, {"eventType": event_type, "payload": payload})
+                    self._save_event(task.thinkrail_sid, {"eventType": event_type, "payload": payload})
                 except Exception:
-                    logger.exception("Failed to persist event %s for session %s", method, task.bonsai_sid)
+                    logger.exception("Failed to persist event %s for session %s", method, task.thinkrail_sid)
 
             # Adjust cost estimates to include base cost from previous runs,
             # since the runner starts with total_cost=0 on each invocation.
@@ -965,7 +965,7 @@ class AgentService:
                         "outputTokens": last_out,
                     })
 
-                update_session_metadata(self._config.project_root, task.bonsai_sid, {
+                update_session_metadata(self._config.project_root, task.thinkrail_sid, {
                     "metrics": dict(_live_metrics),
                 })
 
@@ -974,7 +974,7 @@ class AgentService:
             if method == "agent/sessionStart":
                 sid = params.get("sessionId", "")
                 if sid:
-                    update_session_metadata(self._config.project_root, task.bonsai_sid, {
+                    update_session_metadata(self._config.project_root, task.thinkrail_sid, {
                         "sessionId": sid,
                     }, overwrite=False)
         notify = _persisting_notify
@@ -993,24 +993,24 @@ class AgentService:
 
         try:
             await runtime.run_session(task, exec_config, handler)
-            self._tracker.set_status(task.bonsai_sid, "done")
+            self._tracker.set_status(task.thinkrail_sid, "done")
             self._save_task(task)
-            self._tracker.remove_task(task.bonsai_sid)
+            self._tracker.remove_task(task.thinkrail_sid)
         except asyncio.CancelledError:
             # Should no longer happen during interrupt (uses client.interrupt() now).
             # Keep as safety net for unexpected cancellation.
-            logger.warning("Runner for %s received unexpected CancelledError", task.bonsai_sid)
+            logger.warning("Runner for %s received unexpected CancelledError", task.thinkrail_sid)
         except Exception as exc:
-            logger.exception("Agent session %s failed", task.bonsai_sid)
+            logger.exception("Agent session %s failed", task.thinkrail_sid)
             if task.status not in ("done", "error"):
-                self._tracker.set_status(task.bonsai_sid, "error")
+                self._tracker.set_status(task.thinkrail_sid, "error")
             self._save_task(task)
-            self._tracker.remove_task(task.bonsai_sid)
+            self._tracker.remove_task(task.thinkrail_sid)
             try:
                 await notify(
                     "agent/error",
                     {
-                        "bonsaiSid": task.bonsai_sid,
+                        "thinkrailSid": task.thinkrail_sid,
                         "sessionId": task.session_id or "",
                         "subtype": "crash",
                         "errors": [str(exc)],
@@ -1019,21 +1019,21 @@ class AgentService:
             except Exception:
                 pass
         finally:
-            self._running_tasks.pop(task.bonsai_sid, None)
+            self._running_tasks.pop(task.thinkrail_sid, None)
             # Notify all project clients that the session ended
             try:
                 await self._get_bus().publish_to_project(
                     str(self._config.project_root),
                     "session/didEnd",
                     {
-                        "bonsaiSid": task.bonsai_sid,
+                        "thinkrailSid": task.thinkrail_sid,
                         "status": task.status,
                     },
                 )
             except Exception:
                 pass
             # Clean up the session topic now that the runner is done
-            self._get_bus().cleanup_topic(f"session:{task.bonsai_sid}")
+            self._get_bus().cleanup_topic(f"session:{task.thinkrail_sid}")
             # Notify orchestrator if this was a step session
             await self._notify_orchestrator_on_step_complete(task)
 
@@ -1044,14 +1044,14 @@ class AgentService:
         try:
             ticket = self.board_service.get_ticket(task.ticket_id)
             orch_sid = ticket.orchestrator_session_id
-            if not orch_sid or orch_sid == task.bonsai_sid:
+            if not orch_sid or orch_sid == task.thinkrail_sid:
                 return  # Don't notify self, or no orchestrator
 
             # Update the plan step that matches this session
             if ticket.implementation_plan_path and self.board_service.plans.plan_exists(task.ticket_id):
                 plan = self.board_service.plans.read_plan(task.ticket_id)
                 for step in plan.all_steps():
-                    if step.session_id == task.bonsai_sid:
+                    if step.session_id == task.thinkrail_sid:
                         new_status = "done" if task.status == "done" else "failed"
                         self.board_service.plans.update_step_status(
                             task.ticket_id, step.number, new_status,
@@ -1061,7 +1061,7 @@ class AgentService:
             # Inject a message into the orchestrator session
             if self._tracker.has_task(orch_sid):
                 status_word = "completed successfully" if task.status == "done" else f"ended with status: {task.status}"
-                msg = f"[Step session {task.name or task.bonsai_sid[:8]} {status_word}]"
+                msg = f"[Step session {task.name or task.thinkrail_sid[:8]} {status_word}]"
                 self._tracker.enqueue_message(orch_sid, msg)
         except Exception:
             logger.debug("Failed to notify orchestrator for ticket %s", task.ticket_id)
@@ -1080,7 +1080,7 @@ class AgentService:
             file_paths=task.file_paths,
         )
         ms = int((time.monotonic() - t0) * 1000)
-        logger.info("[%s] build_context: %dms (%d chars)", task.bonsai_sid[:8], ms, len(ctx))
+        logger.info("[%s] build_context: %dms (%d chars)", task.thinkrail_sid[:8], ms, len(ctx))
         return ctx
 
     async def _build_context_structured_for(self, task: AgentTask) -> dict:
@@ -1157,7 +1157,7 @@ class AgentService:
         """Inject mode + failure-policy guidance for ticket-implement orchestrators.
 
         Branches on ``task.subagent_mode`` × ``task.step_gate``; the failure
-        policy comes from ``.bonsai/settings.json`` (``tickets.subagentFailurePolicy``).
+        policy comes from ``.tr/settings.json`` (``tickets.subagentFailurePolicy``).
         See TICKET_LIFECYCLE_DESIGN.md § Implementation orchestration modes.
         """
         from app.core.settings import load_settings
@@ -1189,7 +1189,7 @@ class AgentService:
                 "3. As each card resolves, immediately invoke "
                 "`Task(subagent_type=\"ticket-step-executor\", prompt=…)`. The "
                 "prompt MUST start with the line:\n\n"
-                "    [bonsai-step ticket={ticket_id} step={step_number}]\n\n"
+                "    [thinkrail-step ticket={ticket_id} step={step_number}]\n\n"
                 "    followed by the step's description and any relevant context.\n"
                 "4. Await all in-flight Task calls before re-scanning for the "
                 "next batch. Do not call `suggest_step` again until the current "
@@ -1203,7 +1203,7 @@ class AgentService:
             "1. Scan the plan for unblocked steps as above.\n"
             "2. Emit one `Task(subagent_type=\"ticket-step-executor\", prompt=…)` "
             "per unblocked step, in a single assistant turn. Each prompt MUST "
-            "start with `[bonsai-step ticket={ticket_id} step={step_number}]`.\n"
+            "start with `[thinkrail-step ticket={ticket_id} step={step_number}]`.\n"
             "3. Do NOT emit `suggest_step` in autonomous mode — that's only "
             "for the gated variant.\n"
             "4. Await all in-flight Task calls before re-scanning for the next batch.\n\n"
@@ -1240,7 +1240,7 @@ class AgentService:
 
     async def create_subsession(
         self,
-        parent_bonsai_sid: str,
+        parent_thinkrail_sid: str,
         subsession_type: SubsessionType,
         context: str | None = None,
         name: str = "",
@@ -1249,14 +1249,14 @@ class AgentService:
         from app.agent.context import build_parent_context
 
         # Validate parent exists (in tracker or on disk)
-        if self._tracker.has_task(parent_bonsai_sid):
-            parent = self._tracker.get_task(parent_bonsai_sid)
+        if self._tracker.has_task(parent_thinkrail_sid):
+            parent = self._tracker.get_task(parent_thinkrail_sid)
             parent_spec_ids = parent.spec_ids
             parent_config = parent.config
         else:
-            parent_data = load_session(self._config.project_root, parent_bonsai_sid)
+            parent_data = load_session(self._config.project_root, parent_thinkrail_sid)
             if parent_data is None:
-                raise ValueError(f"Parent session {parent_bonsai_sid!r} not found")
+                raise ValueError(f"Parent session {parent_thinkrail_sid!r} not found")
             parent_spec_ids = parent_data.get("specIds", [])
             parent_config = AgentConfig(**parent_data.get("config", {}))
 
@@ -1265,13 +1265,13 @@ class AgentService:
             config=AgentConfig(**parent_config.model_dump()),
             name=name,
         )
-        task.parent_bonsai_sid = parent_bonsai_sid
+        task.parent_thinkrail_sid = parent_thinkrail_sid
         task.subsession_type = subsession_type
         task.subsession_context = context
         task.status = "draft"
 
         parent_context = build_parent_context(
-            parent_sid=parent_bonsai_sid,
+            parent_sid=parent_thinkrail_sid,
             subsession_type=subsession_type,
             subsession_context=context,
             project_root=self._config.project_root,
@@ -1282,9 +1282,9 @@ class AgentService:
         self._save_task(task)
         return task
 
-    def request_summary(self, bonsai_sid: str) -> None:
+    def request_summary(self, thinkrail_sid: str) -> None:
         """Ask the subsession agent to propose a return summary."""
-        task = self._tracker.get_task(bonsai_sid)
+        task = self._tracker.get_task(thinkrail_sid)
         task.return_status = "pending"
         task.updated = datetime.now(UTC).isoformat()
         self._save_task(task)
@@ -1294,30 +1294,30 @@ class AgentService:
                 "Write a concise summary that captures the decision, rationale, "
                 "and any action items. This will be sent back to the parent session."
             )
-            self._tracker.enqueue_message(bonsai_sid, summary_prompt)
+            self._tracker.enqueue_message(thinkrail_sid, summary_prompt)
 
-    def approve_summary(self, bonsai_sid: str, text: str) -> None:
+    def approve_summary(self, thinkrail_sid: str, text: str) -> None:
         """Approve a return summary for the subsession."""
-        task = self._tracker.get_task(bonsai_sid)
+        task = self._tracker.get_task(thinkrail_sid)
         task.return_status = "approved"
         task.return_summary = text
         task.updated = datetime.now(UTC).isoformat()
         self._save_task(task)
 
-    def dismiss_summary(self, bonsai_sid: str) -> None:
+    def dismiss_summary(self, thinkrail_sid: str) -> None:
         """Dismiss the return flow without returning anything."""
-        task = self._tracker.get_task(bonsai_sid)
+        task = self._tracker.get_task(thinkrail_sid)
         task.return_status = "dismissed"
         task.return_summary = None
         task.updated = datetime.now(UTC).isoformat()
         self._save_task(task)
 
-    def revise_summary(self, bonsai_sid: str, feedback: str) -> None:
+    def revise_summary(self, thinkrail_sid: str, feedback: str) -> None:
         """Ask the subsession agent to rewrite the summary with feedback."""
-        task = self._tracker.get_task(bonsai_sid)
+        task = self._tracker.get_task(thinkrail_sid)
         task.return_status = "pending"
         task.updated = datetime.now(UTC).isoformat()
         self._save_task(task)
         if task.status in ("initializing", "idle"):
             revision_prompt = f"Please revise the summary based on this feedback:\n\n{feedback}"
-            self._tracker.enqueue_message(bonsai_sid, revision_prompt)
+            self._tracker.enqueue_message(thinkrail_sid, revision_prompt)

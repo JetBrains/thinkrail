@@ -1,6 +1,6 @@
-# Contributing to Bonsai
+# Contributing to ThinkRail
 
-Thanks for your interest in Bonsai! Contributions of all kinds are welcome — bug
+Thanks for your interest in ThinkRail! Contributions of all kinds are welcome — bug
 reports, fixes, features, docs, and feedback.
 
 By contributing, you agree that your contributions will be licensed under the
@@ -31,7 +31,7 @@ approach before investing significant effort.
 
 ```bash
 git clone https://github.com/JetBrains/bonsai.git
-cd bonsai
+cd thinkrail
 ./run.sh
 ```
 
@@ -71,7 +71,7 @@ Generated files carry a "DO NOT EDIT" header — never modify them directly.
 
 ## Specification-driven development
 
-Bonsai is developed spec-first: hierarchical specs live in `.bonsai/` alongside
+ThinkRail is developed spec-first: hierarchical specs live in `.tr/` alongside
 the code. When you change behaviour, update the corresponding spec in the same PR.
 See `CLAUDE.md` for the spec workflow and the available `/spec-*` skills.
 

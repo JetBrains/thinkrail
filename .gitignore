@@ -26,17 +26,17 @@ Thumbs.db
 # claude code extra
 frontend/.claude/
 
-# Bonsai runtime (legacy generated files)
-.bonsai/.progress.yaml
-.bonsai/.progress.json
+# ThinkRail runtime (legacy generated files)
+.tr/.progress.yaml
+.tr/.progress.json
 .claude/settings.local.json
-.bonsai/sessions/
-.bonsai/cache/
+.tr/sessions/
+.tr/cache/
 
 # Spec dashboard (generated)
-.bonsai/dashboard.html
-.bonsai/dashboard.json
-.bonsai/vendor/
+.tr/dashboard.html
+.tr/dashboard.json
+.tr/vendor/
 
 # TypeScript build
 *.tsbuildinfo
@@ -77,10 +77,10 @@ mobile/gradle/wrapper/gradle-wrapper.jar
 docs/
 POST.md
 
-.bonsai/trash/
+.tr/trash/
 /.claude/scheduled_tasks.lock
 /backend/.claude/scheduled_tasks.lock
 
 # Don't need them rn in the repo
-.bonsai/plans/
-.bonsai/meta-tickets/
+.tr/plans/
+.tr/meta-tickets/

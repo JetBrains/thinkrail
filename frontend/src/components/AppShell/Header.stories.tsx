@@ -14,7 +14,7 @@ import "./AppShell.css";
  * with icons, and an ellipsis menu for accessing Files & Specs and Dashboard.
  */
 const MOCK_PROJECTS = [
-  { path: "/Users/you/src/bonsai", name: "bonsai", registered_at: "", last_opened_at: "" },
+  { path: "/Users/you/src/thinkrail", name: "thinkrail", registered_at: "", last_opened_at: "" },
   { path: "/Users/you/src/inventory-service", name: "inventory-service", registered_at: "", last_opened_at: "" },
   { path: "/Users/you/src/api-gateway", name: "api-gateway", registered_at: "", last_opened_at: "" },
 ];
@@ -98,7 +98,7 @@ export const WithActiveSessions: Story = {
         [
           "s1",
           {
-            bonsaiSid: "s1",
+            thinkrailSid: "s1",
             name: "Investigation",
             status: "running",
           } as any,
@@ -106,7 +106,7 @@ export const WithActiveSessions: Story = {
         [
           "s2",
           {
-            bonsaiSid: "s2",
+            thinkrailSid: "s2",
             name: "Architecture design",
             status: "running",
           } as any,

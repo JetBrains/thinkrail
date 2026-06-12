@@ -187,7 +187,7 @@ class TestBuildGeneralInstructions:
     def test_visualization_subsection_content(self, tmp_path: Path) -> None:
         (tmp_path / "skills").mkdir()
         result = _build_general_instructions(tmp_path)
-        assert "bonsai_visualize" in result
+        assert "thinkrail_visualize" in result
         assert "progress-tracker" in result
         assert "Anti-patterns" in result
 
@@ -345,6 +345,27 @@ class TestBuildContext:
         assert 'You are running the "test-skill" skill.' in result
         assert "# Test skill" in result
 
+    async def test_skill_dir_placeholder_is_substituted(self, tmp_path: Path) -> None:
+        from app.core.config import PROJECT_DIRNAME
+
+        plugin = tmp_path / "plugin"
+        _write_skill_md(
+            plugin / "skills" / "ph-skill",
+            "ph-skill",
+            "Placeholder skill",
+            body="Write to {{TR_DIR}}/tickets/{id}/product-design.md",
+        )
+        result = await build_context(
+            spec_ids=[],
+            skill_id="ph-skill",
+            project_root=Path("/project"),
+            config=AgentConfig(),
+            spec_service=MagicMock(),
+            plugin_dir=plugin,
+        )
+        assert "{{TR_DIR}}" not in result
+        assert f"{PROJECT_DIRNAME}/tickets/" in result
+
     async def test_skill_not_found_raises(self, tmp_path: Path) -> None:
         plugin = self._make_plugin_dir(tmp_path)
         with pytest.raises(FileNotFoundError, match="nonexistent"):
@@ -413,7 +434,7 @@ class TestBuildContext:
         )
         assert "## Visualization Tool" not in result
         # But visualization content IS present inside General Instructions
-        assert "bonsai_visualize" in result
+        assert "thinkrail_visualize" in result
 
     async def test_full_session_all_sections(self, tmp_path: Path) -> None:
         """Full session with skill + specs has all four sections."""

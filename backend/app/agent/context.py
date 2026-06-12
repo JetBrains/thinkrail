@@ -14,9 +14,15 @@ import re
 from pathlib import Path
 
 from app.agent.models import AgentConfig
+from app.core.config import PROJECT_DIRNAME
 from app.spec.service import SpecService
 
 logger = logging.getLogger(__name__)
+
+# Placeholder skills use instead of hardcoding the meta-dir name.  Substituted
+# with ``PROJECT_DIRNAME`` when a SKILL.md body is loaded, so the directory
+# name lives in one place (core/config.py) rather than in every skill.
+SKILL_DIR_PLACEHOLDER = "{{TR_DIR}}"
 
 # ── Token estimation ─────────────────────────────────────────────────────────
 
@@ -116,7 +122,7 @@ def _build_general_instructions(plugin_dir: Path) -> str:
     vis = """\
 ### Visualization
 
-You have access to the `bonsai_visualize` MCP tool for rendering structured visual \
+You have access to the `thinkrail_visualize` MCP tool for rendering structured visual \
 output in the UI. Use it instead of ASCII art, markdown tables, or plain-text diagrams \
 whenever the output would benefit from visual structure.
 
@@ -250,7 +256,8 @@ def _load_skill(skill_id: str, plugin_dir: Path) -> str:
             f"Skill '{skill_id}' not found: {skill_path} does not exist"
         )
     raw = skill_path.read_text(encoding="utf-8")
-    return _strip_frontmatter(raw)
+    body = _strip_frontmatter(raw)
+    return body.replace(SKILL_DIR_PLACEHOLDER, PROJECT_DIRNAME)
 
 
 async def _build_specs_section(spec_ids: list[str], spec_service: SpecService) -> str:

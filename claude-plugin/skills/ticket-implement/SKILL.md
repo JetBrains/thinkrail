@@ -36,7 +36,7 @@ You are NOT implementing the steps yourself. You coordinate. **Your execution mo
 
 2. **Execute plan steps** *(task #2)* — stays `in_progress` until every plan step is `done`. Follow the mode-specific instructions injected into your system prompt:
    - **Step-session mode (default).** Sequentially: call `suggest_step` for the next unblocked step → wait for the completion message → check results → repeat.
-   - **Subagent gated mode.** In one assistant turn, emit one `suggest_step` tool call per unblocked step (steps whose `depends_on` is satisfied). As each card resolves, invoke `Task(subagent_type="ticket-step-executor", prompt=…)` for the approved step. The prompt MUST begin with `[bonsai-step ticket={ticket_id} step={step_number}]` so the runtime can link the Task block to the plan step.
+   - **Subagent gated mode.** In one assistant turn, emit one `suggest_step` tool call per unblocked step (steps whose `depends_on` is satisfied). As each card resolves, invoke `Task(subagent_type="ticket-step-executor", prompt=…)` for the approved step. The prompt MUST begin with `[thinkrail-step ticket={ticket_id} step={step_number}]` so the runtime can link the Task block to the plan step.
    - **Subagent autonomous mode.** Same as gated but skip `suggest_step` — go straight to parallel `Task` calls.
 
    Wait for the current batch to finish before scanning the plan for the next batch.
@@ -55,7 +55,7 @@ You are NOT implementing the steps yourself. You coordinate. **Your execution mo
 ## Available tools
 
 - `suggest_step` — propose a plan step for execution (sends approval card to user; used in step-session mode and in subagent-gated mode)
-- `Task` — SDK subagent invocation; in subagent mode, target `subagent_type="ticket-step-executor"` with a prompt that starts with `[bonsai-step ticket={ticket_id} step={step_number}]`
+- `Task` — SDK subagent invocation; in subagent mode, target `subagent_type="ticket-step-executor"` with a prompt that starts with `[thinkrail-step ticket={ticket_id} step={step_number}]`
 - `spec_search` / `Read` — check spec state
 - `AskUserQuestion` — ask the user for decisions when the plan needs adjustment
 - `ChangeTicketStatus` — transition to `done` after all steps verified
@@ -66,4 +66,4 @@ You are NOT implementing the steps yourself. You coordinate. **Your execution mo
 - About to orchestrate steps without first marking task #2 `in_progress` via `TodoWrite`? STOP. The Tasks (n/m) sub-row stalls — users can't see what you're working on.
 - About to call `TodoWrite` only once (at the start)? STOP. You must re-emit after each task to update statuses; the frontend reads the latest snapshot per session.
 - About to emit `suggest_step` while `subagent_mode == "subagent"` and `step_gate == "autonomous"`? STOP. Autonomous mode skips the approval card; go straight to `Task`.
-- About to invoke `Task` without the `[bonsai-step ticket=… step=…]` marker on the first line of the prompt? STOP. Without the marker the runtime can't link the Task block to the plan step, the step row in the phase tree won't navigate to it, and the plan step's status won't flip when the Task completes.
+- About to invoke `Task` without the `[thinkrail-step ticket=… step=…]` marker on the first line of the prompt? STOP. Without the marker the runtime can't link the Task block to the plan step, the step row in the phase tree won't navigate to it, and the plan step's status won't flip when the Task completes.

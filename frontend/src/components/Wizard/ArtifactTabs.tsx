@@ -34,7 +34,7 @@ export function ArtifactTabs<T extends ArtifactTab>({
             className={`wiz-done-doc-tab${isActive ? " wiz-done-doc-tab--active" : ""}`}
             onClick={() => onSelect(artifact.path)}
           >
-            {artifact.path.replace(/^\.bonsai\//, "")}
+            {artifact.path.replace(/^\.tr\//, "")}
           </button>
         );
       })}

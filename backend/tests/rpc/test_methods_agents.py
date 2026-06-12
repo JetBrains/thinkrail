@@ -33,10 +33,10 @@ def svc() -> MagicMock:
 
 class TestGetAgentStatus:
     async def test_returns_task(self, svc: MagicMock) -> None:
-        task = AgentTask(bonsai_sid="t1", status="running", spec_ids=["s1"], session_id="sess-1")
+        task = AgentTask(thinkrail_sid="t1", status="running", spec_ids=["s1"], session_id="sess-1")
         svc.get_task.return_value = task
-        result = _unwrap(await get_agent_status(svc, bonsaiSid="t1"))
-        assert result["bonsaiSid"] == "t1"
+        result = _unwrap(await get_agent_status(svc, thinkrailSid="t1"))
+        assert result["thinkrailSid"] == "t1"
         assert result["status"] == "running"
         # Wire format uses camelCase
         assert result["specIds"] == ["s1"]
@@ -48,7 +48,7 @@ class TestGetAgentStatus:
     async def test_not_found(self, svc: MagicMock) -> None:
         svc.get_task.side_effect = TaskNotFoundError("nope")
         with pytest.raises(JsonRpcError) as exc_info:
-            await get_agent_status(svc, bonsaiSid="missing")
+            await get_agent_status(svc, thinkrailSid="missing")
         assert exc_info.value.code == -32011
 
     async def test_missing_param(self, svc: MagicMock) -> None:
@@ -60,13 +60,13 @@ class TestGetAgentStatus:
 class TestListAgents:
     async def test_returns_list(self, svc: MagicMock) -> None:
         svc.list_tasks.return_value = [
-            AgentTask(bonsai_sid="t1", status="done", spec_ids=["s1"]),
-            AgentTask(bonsai_sid="t2", status="running"),
+            AgentTask(thinkrail_sid="t1", status="done", spec_ids=["s1"]),
+            AgentTask(thinkrail_sid="t2", status="running"),
         ]
         result = _unwrap(await list_agents(svc))
         assert len(result) == 2
-        assert result[0]["bonsaiSid"] == "t1"
-        assert result[1]["bonsaiSid"] == "t2"
+        assert result[0]["thinkrailSid"] == "t1"
+        assert result[1]["thinkrailSid"] == "t2"
         # Wire format uses camelCase
         assert result[0]["specIds"] == ["s1"]
         assert "spec_ids" not in result[0]
@@ -79,12 +79,12 @@ class TestListAgents:
 
 class TestRunAgent:
     async def test_returns_task_id(self, svc: MagicMock) -> None:
-        task = AgentTask(bonsai_sid="t1")
+        task = AgentTask(thinkrail_sid="t1")
         svc.run_task = AsyncMock(return_value=task)
         result = _unwrap(await run_agent(
             svc, specIds=["s1"], config={"model": "claude-sonnet-4-6"}
         ))
-        assert result == {"bonsaiSid": "t1"}
+        assert result == {"thinkrailSid": "t1"}
         svc.run_task.assert_called_once()
         call_args = svc.run_task.call_args
         assert call_args[0][0] == ["s1"]
@@ -98,7 +98,7 @@ class TestRunAgent:
         # SuggestSession-approve goes through agent/run; without this
         # publish, the sidebar SessionManager never refreshes for the
         # newly-created session until the user hits ↻.
-        task = AgentTask(bonsai_sid="t-run", spec_ids=["s1"], name="Suggested")
+        task = AgentTask(thinkrail_sid="t-run", spec_ids=["s1"], name="Suggested")
         svc.run_task = AsyncMock(return_value=task)
         conn = MagicMock(display_name="Alice", project_path="/proj")
         bus_mock = MagicMock()
@@ -114,7 +114,7 @@ class TestRunAgent:
         assert call_args.args[0] == "/proj"
         assert call_args.args[1] == "session/didCreate"
         payload = call_args.args[2]
-        assert payload["bonsaiSid"] == "t-run"
+        assert payload["thinkrailSid"] == "t-run"
         assert payload["name"] == "Suggested"
         assert payload["createdBy"] == "Alice"
 
@@ -122,13 +122,13 @@ class TestRunAgent:
 class TestInterruptAgent:
     async def test_interrupts(self, svc: MagicMock) -> None:
         svc.interrupt_task = AsyncMock()
-        await interrupt_agent(svc, bonsaiSid="t1")
+        await interrupt_agent(svc, thinkrailSid="t1")
         svc.interrupt_task.assert_called_once_with("t1")
 
     async def test_not_found(self, svc: MagicMock) -> None:
         svc.interrupt_task = AsyncMock(side_effect=TaskNotFoundError("nope"))
         with pytest.raises(JsonRpcError) as exc_info:
-            await interrupt_agent(svc, bonsaiSid="missing")
+            await interrupt_agent(svc, thinkrailSid="missing")
         assert exc_info.value.code == -32011
 
     async def test_missing_param(self, svc: MagicMock) -> None:
@@ -141,19 +141,19 @@ class TestRespondAgent:
     async def test_responds(self, svc: MagicMock) -> None:
         svc.respond = AsyncMock()
         response = {"behavior": "allow"}
-        await respond_agent(svc, bonsaiSid="t1", requestId="r1", response=response)
+        await respond_agent(svc, thinkrailSid="t1", requestId="r1", response=response)
         svc.respond.assert_called_once_with("t1", "r1", response)
 
     async def test_task_not_found(self, svc: MagicMock) -> None:
         svc.respond = AsyncMock(side_effect=TaskNotFoundError("nope"))
         with pytest.raises(JsonRpcError) as exc_info:
-            await respond_agent(svc, bonsaiSid="x", requestId="r1", response={})
+            await respond_agent(svc, thinkrailSid="x", requestId="r1", response={})
         assert exc_info.value.code == -32011
 
     async def test_future_not_found(self, svc: MagicMock) -> None:
         svc.respond = AsyncMock(side_effect=FutureNotFoundError("no future"))
         with pytest.raises(JsonRpcError) as exc_info:
-            await respond_agent(svc, bonsaiSid="t1", requestId="bad", response={})
+            await respond_agent(svc, thinkrailSid="t1", requestId="bad", response={})
         assert exc_info.value.code == -32012
 
     async def test_missing_params(self, svc: MagicMock) -> None:
@@ -166,7 +166,7 @@ class TestErrorDecorator:
     async def test_future_not_found(self, svc: MagicMock) -> None:
         svc.get_task.side_effect = FutureNotFoundError("no future")
         with pytest.raises(JsonRpcError) as exc_info:
-            await get_agent_status(svc, bonsaiSid="t1")
+            await get_agent_status(svc, thinkrailSid="t1")
         assert exc_info.value.code == -32012
 
     async def test_internal_error(self, svc: MagicMock) -> None:
@@ -203,6 +203,6 @@ class TestDraftOnTypeValidation:
 
     async def test_prepare_agent_rejects_traversal_sid(self, svc: MagicMock) -> None:
         with pytest.raises(JsonRpcError) as exc_info:
-            await prepare_agent(svc, specIds=[], config={}, bonsaiSid="../../evil")
+            await prepare_agent(svc, specIds=[], config={}, thinkrailSid="../../evil")
         assert exc_info.value.code == -32602
         svc.prepare_task.assert_not_called()

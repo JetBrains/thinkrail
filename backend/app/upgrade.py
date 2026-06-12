@@ -9,13 +9,14 @@ import subprocess
 import sys
 from pathlib import Path
 
+from app.core.config import CONFIG_DIRNAME, ENV_PREFIX, PRODUCT_NAME
 from app.version import CHANNEL, VERSION
 
 INSTALL_SCRIPT_URL = os.environ.get(
-    "BONSAI_INSTALL_SCRIPT_URL",
+    f"{ENV_PREFIX}INSTALL_SCRIPT_URL",
     "https://raw.githubusercontent.com/JetBrains/bonsai/main/install.sh",
 )
-INSTALL_METADATA_PATH = Path.home() / ".config" / "bonsai" / "install.json"
+INSTALL_METADATA_PATH = Path.home() / ".config" / CONFIG_DIRNAME / "install.json"
 
 _VERSION_RE = re.compile(r"^(?:latest|\d+\.\d+\.\d+(?:-nightly\.\d+)?)$")
 _PREFIX_FORBIDDEN_CHARS = set(';|&`$<>\n\r"\'\\')
@@ -81,7 +82,7 @@ def run_upgrade(channel: str | None = None, version: str = "latest") -> int:
         return 1
     prefix: str = raw_prefix  # type: ignore[assignment]
 
-    print(f"Upgrading Bonsai (current: {VERSION}, channel: {resolved_channel}) ...")
+    print(f"Upgrading {PRODUCT_NAME} (current: {VERSION}, channel: {resolved_channel}) ...")
 
     token = _discover_token()
     curl_cmd = ["curl", "-fsSL"]

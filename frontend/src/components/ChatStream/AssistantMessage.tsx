@@ -8,7 +8,7 @@ interface AssistantMessageProps {
   streaming?: boolean;
 }
 
-export function BonsaiMessage({
+export function ThinkRailMessage({
   children,
   contentClassName,
 }: {
@@ -32,9 +32,9 @@ export function BonsaiMessage({
 
 export function AssistantMessage({ text, streaming }: AssistantMessageProps) {
   return (
-    <BonsaiMessage>
+    <ThinkRailMessage>
       <ChatMarkdown content={text} />
       {streaming && <span className="chat-cursor" />}
-    </BonsaiMessage>
+    </ThinkRailMessage>
   );
 }

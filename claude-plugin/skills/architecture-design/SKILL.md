@@ -10,13 +10,13 @@ argument-hint: "[project-name]"
 
 You are helping the user create an **Architecture Design Document** (DESIGN_DOC.md). Guide them through structured questions — auto-detect as much as possible from existing code. Read the codebase first, present your analysis and ask the user to confirm/correct — not start from scratch. The user should finalize an architecture doc in ~5-7 multi-choice decisions.
 
-**File location:** save `DESIGN_DOC.md` at the **project root**, never inside `.bonsai/`. `.bonsai/` holds operational artifacts (plans, tickets, sessions) — top-level deliverables (GOAL&REQUIREMENTS.md, DESIGN_DOC.md, README.md) live at the project root alongside the user's code.
+**File location:** save `DESIGN_DOC.md` at the **project root**, never inside `{{TR_DIR}}/`. `{{TR_DIR}}/` holds operational artifacts (plans, tickets, sessions) — top-level deliverables (GOAL&REQUIREMENTS.md, DESIGN_DOC.md, README.md) live at the project root alongside the user's code.
 
 ## Step-by-Step Guided Process
 
 ### Step 0: Show Progress
 
-Show current workflow position by calling `bonsai_visualize` with type `progress-tracker`:
+Show current workflow position by calling `thinkrail_visualize` with type `progress-tracker`:
 ```json
 {
   "type": "progress-tracker",
@@ -46,7 +46,7 @@ Present findings: "I found these major components: [list]. Here's how they seem 
 
 ### Step 2: Architecture pattern with visual comparison
 
-Provide several most-common architecture approaches for the goal and **visualize them side-by-side** using `bonsai_visualize` with type `comparison`. Include a `visualization` field with a Mermaid diagram illustrating each approach's component structure:
+Provide several most-common architecture approaches for the goal and **visualize them side-by-side** using `thinkrail_visualize` with type `comparison`. Include a `visualization` field with a Mermaid diagram illustrating each approach's component structure:
 ```json
 {
   "type": "comparison",
@@ -93,7 +93,7 @@ Present 2-3 alternative ways to group the discovered modules. For example:
 
 ### Step 4: Data flow
 
-Based on code analysis, present the discovered type flow. Visualize it using `bonsai_visualize` with type `diagram` (use structured `nodes`/`edges`, NOT ASCII art):
+Based on code analysis, present the discovered type flow. Visualize it using `thinkrail_visualize` with type `diagram` (use structured `nodes`/`edges`, NOT ASCII art):
 ```json
 {
   "type": "diagram",
@@ -147,7 +147,7 @@ Use AskUserQuestion:
 ### Step 7: Generate the document
 
 Use `Write` to create `DESIGN_DOC.md` with YAML frontmatter (`type: "architecture-design"`, `status: "active"`). Include:
-- Architecture diagram generated via `bonsai_visualize` `diagram` type
+- Architecture diagram generated via `thinkrail_visualize` `diagram` type
 - Annotated source tree from auto-detection
 - Data flow with concrete types from code analysis
 - Design decisions with rationale from user choices
@@ -155,7 +155,7 @@ Use `Write` to create `DESIGN_DOC.md` with YAML frontmatter (`type: "architectur
 
 ### Step 8: Visual confirmation and review
 
-Show complete architecture using `bonsai_visualize` with type `summary-box`:
+Show complete architecture using `thinkrail_visualize` with type `summary-box`:
 ```json
 {
   "type": "summary-box",

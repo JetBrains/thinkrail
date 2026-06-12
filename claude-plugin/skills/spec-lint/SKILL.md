@@ -16,9 +16,9 @@ You are validating specifications for **structural quality, completeness, and co
 
 Use `spec_search` for the full spec list. Use `spec_links` to get all links and validate that all `from`/`to` IDs reference existing specs. For each spec, use `Read` to read the content and check for required sections per type.
 
-### Step 2: Display lint results using bonsai_visualize
+### Step 2: Display lint results using thinkrail_visualize
 
-Show the lint report using `bonsai_visualize` with type `data-table`:
+Show the lint report using `thinkrail_visualize` with type `data-table`:
 ```json
 {
   "type": "data-table",

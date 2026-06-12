@@ -11,7 +11,7 @@ export function AppRoutes({ onSwitchProject, newProjectData }: { onSwitchProject
       >
         <Route index element={null} />
         <Route path="spec/:specId" element={null} />
-        <Route path="session/:bonsaiSid" element={null} />
+        <Route path="session/:thinkrailSid" element={null} />
         <Route path="graph" element={null} />
       </Route>
     </Routes>

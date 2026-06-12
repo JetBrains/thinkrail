@@ -19,13 +19,13 @@ tags:
 
 ## Purpose
 
-A single MCP server (`bonsai-specs`) exposing **3 tools** that give the Claude agent structured access to the spec index. These tools exist only for operations that standard file tools (`Read`, `Write`, `Edit`, `Glob`) cannot do: querying the SQLite index and performing multi-file cleanup on delete.
+A single MCP server (`thinkrail-specs`) exposing **3 tools** that give the Claude agent structured access to the spec index. These tools exist only for operations that standard file tools (`Read`, `Write`, `Edit`, `Glob`) cannot do: querying the SQLite index and performing multi-file cleanup on delete.
 
 Agents create and edit spec files directly using standard `Write`/`Edit` tools — writing YAML frontmatter + Markdown content. The file watcher validates and indexes changes automatically.
 
 **File:** `backend/app/agent/tools/specs.py`
-**MCP server name:** `bonsai-specs`
-**Architecture rationale:** [Frontmatter + SQLite Index Design](../../../../.bonsai/design_docs/FRONTMATTER_REGISTRY_DESIGN.md)
+**MCP server name:** `thinkrail-specs`
+**Architecture rationale:** [Frontmatter + SQLite Index Design](../../../../.tr/design_docs/FRONTMATTER_REGISTRY_DESIGN.md)
 
 ---
 
@@ -141,7 +141,7 @@ SPEC_DELETE_SCHEMA = {
 ```
 
 **Cleanup steps:**
-1. Move file to `.bonsai/trash/` (soft-delete, restorable)
+1. Move file to `.tr/trash/` (soft-delete, restorable)
 2. Find all other specs whose frontmatter references this ID → edit their frontmatter to remove the reference
 3. Watcher re-indexes all changed files
 4. Push `spec/didDelete` + `spec/didUpdate` for cleaned specs
@@ -262,6 +262,6 @@ Agent uses Write/Edit tool to create/modify spec file
 ## Related Specs
 
 - **Parent:** [Agent Tools](README.md)
-- **Architecture:** [Frontmatter + SQLite Index Design](../../../../.bonsai/design_docs/FRONTMATTER_REGISTRY_DESIGN.md)
+- **Architecture:** [Frontmatter + SQLite Index Design](../../../../.tr/design_docs/FRONTMATTER_REGISTRY_DESIGN.md)
 - **Wraps:** [Spec Module](../../spec/README.md)
 - **Sibling tools:** [Visualization](VISUALIZATION.md), [SuggestSession](SUGGEST_SESSION.md)

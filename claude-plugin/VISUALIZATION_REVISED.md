@@ -1,4 +1,4 @@
-# Bonsai Visualization System — Revised Design
+# ThinkRail Visualization System — Revised Design
 
 > **Status:** Design proposal
 > **Replaces:** `claude-plugin/VISUALIZATION.md` (current ANSI-based system)
@@ -8,7 +8,7 @@
 
 The current visualization system instructs the LLM to render ANSI-colored ASCII art in the chat. This fails because:
 
-1. **Channel mismatch:** Claude Code renders Markdown, not ANSI. The Bonsai web UI renders React components, not terminal escape codes.
+1. **Channel mismatch:** Claude Code renders Markdown, not ANSI. The ThinkRail web UI renders React components, not terminal escape codes.
 2. **Bash misuse:** The LLM uses `Bash(echo -e "\e[1;36m...")` to emit ANSI colors, producing garbled output.
 3. **No interactivity:** Static text boxes can't be clicked, expanded, updated, or linked to other data.
 4. **Duplication:** `compute-dashboard.py` generates dashboard data externally, disconnected from the agent's live context.
@@ -34,7 +34,7 @@ The current visualization system instructs the LLM to render ANSI-colored ASCII 
 
 **Skills describe WHAT to visualize (structured data). The environment decides HOW to render it.**
 
-- In the **Bonsai web UI**: Rich interactive React components
+- In the **ThinkRail web UI**: Rich interactive React components
 - In **Claude Code CLI**: Clean Markdown fallback (no ANSI, no Bash)
 
 ### Two Visualization Channels
@@ -47,7 +47,7 @@ The current visualization system instructs the LLM to render ANSI-colored ASCII 
 │  (interactive, per-turn) │  (background, always-on)          │
 │                          │                                    │
 │  LLM calls MCP tool      │  VisualizationService watches     │
-│  bonsai_visualize(data)  │  files, events, registry          │
+│  thinkrail_visualize(data)  │  files, events, registry          │
 │        ↓                 │        ↓                          │
 │  SDK processes tool call │  Computes metrics (coverage,      │
 │        ↓                 │  progress, lint, tasks)            │
@@ -68,16 +68,16 @@ The current visualization system instructs the LLM to render ANSI-colored ASCII 
 
 ### How It Works
 
-The LLM calls an MCP tool registered in the specdriven plugin. The existing event pipeline carries the data to the frontend.
+The LLM calls an MCP tool registered in the thinkrail plugin. The existing event pipeline carries the data to the frontend.
 
 ```
-1. Skill instruction tells LLM: "Call bonsai_visualize with structured data"
-2. LLM generates tool call: bonsai_visualize({ type: "progress-tracker", ... })
+1. Skill instruction tells LLM: "Call thinkrail_visualize with structured data"
+2. LLM generates tool call: thinkrail_visualize({ type: "progress-tracker", ... })
 3. Claude Agent SDK processes it via the plugin MCP server
-4. Runner emits agent/toolCallStart with { toolName: "bonsai_visualize", toolInput: {...} }
+4. Runner emits agent/toolCallStart with { toolName: "thinkrail_visualize", toolInput: {...} }
 5. ChatStream.tsx pattern-matches on toolName:
    - "AskUserQuestion" → QuestionCard (existing)
-   - "bonsai_visualize" → VisualizationCard (new)
+   - "thinkrail_visualize" → VisualizationCard (new)
    - anything else → ToolCallCard (existing)
 6. VisualizationCard renders the structured data as a rich component
 7. MCP tool returns a compact text confirmation to the SDK
@@ -103,7 +103,7 @@ New code:
 ```tsx
 case "toolCallStart": {
   if ((p.toolName as string) === "AskUserQuestion") return null;
-  if ((p.toolName as string) === "bonsai_visualize") {
+  if ((p.toolName as string) === "thinkrail_visualize") {
     return (
       <VisualizationCard
         key={k}
@@ -117,13 +117,13 @@ case "toolCallStart": {
 
 ### MCP Tool Definition
 
-**Location:** New tool in the specdriven plugin (alongside existing skill definitions)
+**Location:** New tool in the thinkrail plugin (alongside existing skill definitions)
 
 ```typescript
-// Tool schema for bonsai_visualize
+// Tool schema for thinkrail_visualize
 {
-  name: "bonsai_visualize",
-  description: "Render a structured visualization in the Bonsai UI. Use this instead of ASCII art or Bash echo commands.",
+  name: "thinkrail_visualize",
+  description: "Render a structured visualization in the ThinkRail UI. Use this instead of ASCII art or Bash echo commands.",
   inputSchema: {
     type: "object",
     required: ["type", "data"],
@@ -336,7 +336,7 @@ Structural diagram (architecture, data flow, component relationships).
 
 **Location:** `backend/app/vis/service.py` (new module)
 
-Replaces `compute-dashboard.py` with a live, stateful service integrated into the Bonsai backend.
+Replaces `compute-dashboard.py` with a live, stateful service integrated into the ThinkRail backend.
 
 ```python
 class VisualizationService:
@@ -439,13 +439,13 @@ unsubs.push(
 
 **Before** (causes Bash misuse):
 ```markdown
-- Use terminal graphics to show goal structure (see `/specdriven:visualization` patterns)
-- APPLY COLOURS from the `/specdriven:visualization` Color Output Guide when rendering (ANSI codes for dark theme)
+- Use terminal graphics to show goal structure (see `/thinkrail:visualization` patterns)
+- APPLY COLOURS from the `/thinkrail:visualization` Color Output Guide when rendering (ANSI codes for dark theme)
 ```
 
 **After** (uses structured visualization):
 ```markdown
-- Call `bonsai_visualize` tool with structured data for all visualizations
+- Call `thinkrail_visualize` tool with structured data for all visualizations
 - NEVER use Bash, echo, or printf to render visual output
 - NEVER embed ANSI escape codes in text output
 - For simple inline status, use Markdown formatting (bold, tables, code blocks)
@@ -459,7 +459,7 @@ Replace the "Color Output Guide" in `VISUALIZATION.md` / `visualization/SKILL.md
 ## Visualization Guide
 
 ### For structured data (preferred)
-Call `bonsai_visualize` with the appropriate type:
+Call `thinkrail_visualize` with the appropriate type:
 - Workflow progress → type: "progress-tracker"
 - Requirements/specs summary → type: "summary-box"
 - Architecture options → type: "comparison"
@@ -477,40 +477,40 @@ Use Markdown:
 ### Anti-patterns (NEVER do these)
 - ❌ Bash echo/printf for visual output
 - ❌ ANSI escape codes (\e[1;36m, etc.)
-- ❌ Hand-drawn ASCII boxes in text (use bonsai_visualize instead)
+- ❌ Hand-drawn ASCII boxes in text (use thinkrail_visualize instead)
 ```
 
 ### Per-Skill Changes
 
 **goal-and-requirements/SKILL.md:**
-- Lines 17-18: Replace ANSI instruction with `bonsai_visualize` reference
+- Lines 17-18: Replace ANSI instruction with `thinkrail_visualize` reference
 - Lines 290-291: Same replacement
-- Step 1 (show progress): Replace ASCII box with `bonsai_visualize({ type: "progress-tracker", ... })`
-- Step 7 (visual confirmation): Replace box with `bonsai_visualize({ type: "summary-box", ... })`
+- Step 1 (show progress): Replace ASCII box with `thinkrail_visualize({ type: "progress-tracker", ... })`
+- Step 7 (visual confirmation): Replace box with `thinkrail_visualize({ type: "summary-box", ... })`
 - VISUALIZATION section (lines 330-358): Replace entire ASCII template with JSON schema for `summary-box`
 
 **architecture-design/SKILL.md:**
 - Lines 18-19: Replace ANSI instruction
-- Line 118: Replace "ASCII art pipeline diagram" with `bonsai_visualize({ type: "diagram", ... })`
-- Approach comparison: Use `bonsai_visualize({ type: "comparison", ... })`
+- Line 118: Replace "ASCII art pipeline diagram" with `thinkrail_visualize({ type: "diagram", ... })`
+- Approach comparison: Use `thinkrail_visualize({ type: "comparison", ... })`
 
 **task-spec/SKILL.md:**
 - Lines 18-19: Replace ANSI instruction
-- Confirmation displays: Use `bonsai_visualize({ type: "summary-box", ... })`
+- Confirmation displays: Use `thinkrail_visualize({ type: "summary-box", ... })`
 
 **module-design/SKILL.md:**
 - Lines 18-19: Replace ANSI instruction
-- Component diagrams: Use `bonsai_visualize({ type: "diagram", ... })`
+- Component diagrams: Use `thinkrail_visualize({ type: "diagram", ... })`
 
 **cli-progress/SKILL.md:**
 - Line 27: Remove "ANSI progress display" reference
-- Use `bonsai_visualize({ type: "progress-tracker", ... })` for workflow display
+- Use `thinkrail_visualize({ type: "progress-tracker", ... })` for workflow display
 - OR: Rely on autonomous channel (ProgressTab already shows this data)
 
 **spec-status/SKILL.md:**
 - Lines 23, 58: Remove "ANSI" references
 - Use autonomous dashboard state from `vis/state` RPC method
-- Show details via `bonsai_visualize({ type: "data-table", ... })` if needed
+- Show details via `thinkrail_visualize({ type: "data-table", ... })` if needed
 
 **visualization/SKILL.md:**
 - Remove entire "Color Output Guide" section (lines 48-63)
@@ -521,11 +521,11 @@ Use Markdown:
 
 ## CLI Fallback (Claude Code Context)
 
-When the agent runs in Claude Code CLI (not Bonsai web UI), the MCP tool detects the context and returns Markdown instead of relying on frontend rendering.
+When the agent runs in Claude Code CLI (not ThinkRail web UI), the MCP tool detects the context and returns Markdown instead of relying on frontend rendering.
 
 ### Detection
 
-The MCP tool checks for the Bonsai backend connection. If absent, it falls back to Markdown rendering.
+The MCP tool checks for the ThinkRail backend connection. If absent, it falls back to Markdown rendering.
 
 ### Markdown Rendering Examples
 
@@ -576,7 +576,7 @@ The MCP tool checks for the Bonsai backend connection. If absent, it falls back 
 | `compute-dashboard.py` script | `VisualizationService` in backend | Phase 2 |
 | PostToolUse hook trigger | File watcher + agent event subscription | Phase 2 |
 | `dashboard.json` static file | Live `DashboardState` in memory + RPC | Phase 2 |
-| `dashboard.html` standalone page | VisTab in Bonsai right panel | Phase 2 |
+| `dashboard.html` standalone page | VisTab in ThinkRail right panel | Phase 2 |
 | stdout one-liner for hooks | StatusBar component (already exists) | Phase 2 |
 | Cytoscape.js graph in HTML | Existing `GraphView` component (already exists) | Already done |
 
@@ -608,10 +608,10 @@ During migration, both systems run in parallel:
 **Goal:** Skills use structured data via MCP tool. Frontend renders rich components.
 
 **Changes:**
-1. Create `bonsai_visualize` MCP tool in specdriven plugin
+1. Create `thinkrail_visualize` MCP tool in thinkrail plugin
 2. Create `VisualizationCard` React component with renderers for each type
-3. Add pattern match in `ChatStream.tsx` for `bonsai_visualize` tool calls
-4. Update skill files to use `bonsai_visualize` instead of text boxes
+3. Add pattern match in `ChatStream.tsx` for `thinkrail_visualize` tool calls
+4. Update skill files to use `thinkrail_visualize` instead of text boxes
 5. Add CLI Markdown fallback in MCP tool
 
 **New files:**
@@ -666,7 +666,7 @@ During migration, both systems run in parallel:
 **Changes:**
 1. Remove PostToolUse and SessionStart hooks for `compute-dashboard.py`
 2. Remove `compute-dashboard.py` and `dashboard-template.html`
-3. Remove generated files: `.bonsai/dashboard.json`, `.bonsai/dashboard.html`, `.bonsai/vendor/`
+3. Remove generated files: `.tr/dashboard.json`, `.tr/dashboard.html`, `.tr/vendor/`
 4. Update `VISUALIZATION.md` → point entirely to this document
 5. Clean up any remaining references
 
@@ -679,7 +679,7 @@ During migration, both systems run in parallel:
 
 ### D1: Hybrid Collapse for Repeated Visualizations
 
-**Decision:** When the LLM calls `bonsai_visualize` multiple times with the same `visId`, previous cards auto-collapse to a thin "updated" marker. The latest card renders in full.
+**Decision:** When the LLM calls `thinkrail_visualize` multiple times with the same `visId`, previous cards auto-collapse to a thin "updated" marker. The latest card renders in full.
 
 **Why:** Preserves history (expandable) while keeping chat clean. Avoids the complexity of in-place DOM replacement.
 
@@ -692,13 +692,13 @@ During migration, both systems run in parallel:
 const latestVisByVisId = new Map<string, number>(); // visId → last event index
 for (let i = 0; i < events.length; i++) {
   const ev = events[i];
-  if (ev.eventType === "toolCallStart" && ev.payload.toolName === "bonsai_visualize") {
+  if (ev.eventType === "toolCallStart" && ev.payload.toolName === "thinkrail_visualize") {
     const visId = (ev.payload.toolInput as any)?.visId;
     if (visId) latestVisByVisId.set(visId, i);
   }
 }
 
-// In render — for bonsai_visualize events:
+// In render — for thinkrail_visualize events:
 const visId = (p.toolInput as any)?.visId;
 const isLatest = !visId || latestVisByVisId.get(visId) === i;
 if (!isLatest) {
@@ -725,7 +725,7 @@ return <VisualizationCard key={k} data={p.toolInput as VisData} />;
 
 The VisTab is always available (not context-dependent like Spec/Code tabs), since dashboard data is project-wide.
 
-### D4: Auto-Allow for bonsai_visualize
+### D4: Auto-Allow for thinkrail_visualize
 
 **Decision:** Auto-allow without user approval. Display-only tool with no side effects.
 
@@ -739,11 +739,11 @@ async def can_use_tool(
 ) -> PermissionResultAllow | PermissionResultDeny:
     if tool_name == "AskUserQuestion":
         # ... existing question handling ...
-    elif tool_name == "bonsai_visualize":
+    elif tool_name == "thinkrail_visualize":
         # Auto-allow: display-only, no side effects
         return PermissionResultAllow(behavior="allow")
     else:
         # ... existing approval flow ...
 ```
 
-**Note:** Unlike `AskUserQuestion` (which modifies `updated_input` in the response), `bonsai_visualize` passes through unchanged — the frontend handles rendering from the original `toolInput`.
+**Note:** Unlike `AskUserQuestion` (which modifies `updated_input` in the response), `thinkrail_visualize` passes through unchanged — the frontend handles rendering from the original `toolInput`.

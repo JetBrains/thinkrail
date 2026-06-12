@@ -133,7 +133,7 @@ export interface SessionOutcome {
 }
 
 export interface Session {
-  bonsaiSid: string;
+  thinkrailSid: string;
   name: string;
   skillId: string | null;
   specIds: string[];
@@ -153,7 +153,7 @@ export interface Session {
    *  suggest_step cards concurrently when the plan permits parallelism. */
   pendingRequests: PendingRequest[];
   /** ticket-implement orchestrator only. Picks how plan steps are
-   *  dispatched. See `.bonsai/design_docs/TICKET_LIFECYCLE_DESIGN.md`
+   *  dispatched. See `.tr/design_docs/TICKET_LIFECYCLE_DESIGN.md`
    *  § Implementation orchestration modes. */
   subagentMode?: "step-session" | "subagent";
   /** Only meaningful when subagentMode === "subagent". */
@@ -176,7 +176,7 @@ export interface Session {
   /** True once the user renamed the draft by hand — freezes live name
    *  derivation from the prompt. */
   nameManuallySet?: boolean;
-  parentBonsaiSid: string | null;
+  parentThinkrailSid: string | null;
   subsessionType: "discussion" | "refinement" | null;
   subsessionContext: string | null;
   /** Identifies how the session was created. "stage-default" sessions are
@@ -207,7 +207,7 @@ export interface PromptSection {
 }
 
 export interface ArchivedSession {
-  bonsaiSid: string;
+  thinkrailSid: string;
   name: string;
   skillId: string | null;
   specIds: string[];

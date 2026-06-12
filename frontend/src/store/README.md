@@ -20,7 +20,7 @@ tags:
 
 ## Purpose
 
-Centralized state management for the Bonsai frontend using **Zustand**. Defines the global state shape, store organization, and data flow patterns. All persistent UI state lives in Zustand stores; ephemeral state (hover, focus, animation) stays in component-local React state.
+Centralized state management for the ThinkRail frontend using **Zustand**. Defines the global state shape, store organization, and data flow patterns. All persistent UI state lives in Zustand stores; ephemeral state (hover, focus, animation) stays in component-local React state.
 
 ## Library Choice: Zustand
 
@@ -103,7 +103,7 @@ export interface AgentConfig {
 }
 
 export interface AgentEvent {
-  bonsaiSid: string;
+  thinkrailSid: string;
   sessionId: string;
   eventType: EventType;
   payload: Record<string, unknown>;
@@ -182,7 +182,7 @@ export interface PendingRequest {
 }
 
 export interface Session {
-  bonsaiSid: string;
+  thinkrailSid: string;
   name: string;
   skillId: string | null;
   specIds: string[];
@@ -206,7 +206,7 @@ export interface Session {
 }
 
 export interface ArchivedSession {
-  bonsaiSid: string;
+  thinkrailSid: string;
   name: string;
   skillId: string | null;
   specIds: string[];
@@ -272,18 +272,18 @@ interface SessionStore {
 
   // User-initiated actions
   startSession: (params: { specIds, config, name, skillId?, filePaths? }) => Promise<string>;
-  sendMessage: (bonsaiSid: string, text: string) => Promise<void>;
-  retryLastMessage: (bonsaiSid: string) => Promise<void>;
-  switchSession: (bonsaiSid: string) => void;
-  closeSession: (bonsaiSid: string) => void;
-  endSession: (bonsaiSid: string) => Promise<void>;
-  interruptSession: (bonsaiSid: string) => Promise<void>;
-  openTab: (bonsaiSid: string) => void;
-  resolveRequest: (bonsaiSid: string, requestId: string, response: unknown) => void;
-  updateConfig: (bonsaiSid: string, config: { model?, permissionMode? }) => Promise<void>;
-  restoreSession: (bonsaiSid: string) => Promise<void>;
+  sendMessage: (thinkrailSid: string, text: string) => Promise<void>;
+  retryLastMessage: (thinkrailSid: string) => Promise<void>;
+  switchSession: (thinkrailSid: string) => void;
+  closeSession: (thinkrailSid: string) => void;
+  endSession: (thinkrailSid: string) => Promise<void>;
+  interruptSession: (thinkrailSid: string) => Promise<void>;
+  openTab: (thinkrailSid: string) => void;
+  resolveRequest: (thinkrailSid: string, requestId: string, response: unknown) => void;
+  updateConfig: (thinkrailSid: string, config: { model?, permissionMode? }) => Promise<void>;
+  restoreSession: (thinkrailSid: string) => Promise<void>;
   refreshSessionList: () => Promise<void>;
-  patchSessionInList: (bonsaiSid: string, patch: Partial<SessionSummary>) => void;
+  patchSessionInList: (thinkrailSid: string, patch: Partial<SessionSummary>) => void;
 
   // Event handlers (called by wireEvents)
   onSessionStart: (params) => void;
@@ -291,7 +291,7 @@ interface SessionStore {
   onAskQuestion: (params) => void;
   onConfirmAction: (params) => void;
   onConfirmStatement: (params) => void;
-  onSuggestSession: (params: { bonsaiSid: string; skill: string; specIds: string[]; name: string; reason: string; requestId: string }) => void;
+  onSuggestSession: (params: { thinkrailSid: string; skill: string; specIds: string[]; name: string; reason: string; requestId: string }) => void;
   onSuggestDescription: (params) => void;
   onSuggestStep: (params) => void;
   onSessionDone: (params) => void;
@@ -320,7 +320,7 @@ interface SessionStore {
 - `resolveRequest` calls `agent/respond` RPC, stores in `answeredRequests`, drops the matching entry from `pendingRequests`
 - `restoreSession` loads from backend, marks all question/approval events as answered with `{ historical: true }`, sets `status: "done"` and `restored: true`, extracts `systemPrompt` from the persisted `sessionStart` event payload
 - `loadActiveSessions` similarly extracts `systemPrompt` from the `sessionStart` event (or from `entry.systemPrompt` for drafts) when building Session objects from persistence
-- **Draft-on-type (lazy persistence):** for blank entry points (`+ New`, `Cmd/Ctrl+T`, palette), `createNewSession` mints a client-side `bonsaiSid` and inserts an `unsaved` `"draft"` session with **no RPC** — focusing an existing untouched blank tab instead of opening a duplicate. Typing routes through `noteDraftInput`, which live-derives `name` (unless `nameManuallySet`) and arms the `draftAutosave` controller only once the prompt crosses the save threshold or the draft is already saved. `ensureSaved` performs the first `agent/prepare` reusing the minted id and flips `unsaved:false` (single-flight); `commitDraft` (the `draftAutosave` commit target) is a no-op for an unsaved sub-threshold draft (so abandoning a blank leaves no trace), calls `ensureSaved` for an unsaved draft once past the threshold, and autosaves an already-saved draft via `agent/updateDraft`. `startDraft`/`sendMessage` `await ensureSaved` first, so Start works below the threshold. `restoreSession`/`loadActiveSessions` seed `inputDraftStore` from the persisted `draftInput`. Full design: [Draft Session](../../../.bonsai/design_docs/DRAFT_SESSION_DESIGN.md).
+- **Draft-on-type (lazy persistence):** for blank entry points (`+ New`, `Cmd/Ctrl+T`, palette), `createNewSession` mints a client-side `thinkrailSid` and inserts an `unsaved` `"draft"` session with **no RPC** — focusing an existing untouched blank tab instead of opening a duplicate. Typing routes through `noteDraftInput`, which live-derives `name` (unless `nameManuallySet`) and arms the `draftAutosave` controller only once the prompt crosses the save threshold or the draft is already saved. `ensureSaved` performs the first `agent/prepare` reusing the minted id and flips `unsaved:false` (single-flight); `commitDraft` (the `draftAutosave` commit target) is a no-op for an unsaved sub-threshold draft (so abandoning a blank leaves no trace), calls `ensureSaved` for an unsaved draft once past the threshold, and autosaves an already-saved draft via `agent/updateDraft`. `startDraft`/`sendMessage` `await ensureSaved` first, so Start works below the threshold. `restoreSession`/`loadActiveSessions` seed `inputDraftStore` from the persisted `draftInput`. Full design: [Draft Session](../../../.tr/design_docs/DRAFT_SESSION_DESIGN.md).
 - `onSuggestSession` appends suggestion params to `pendingRequests` as `{type: "suggestion", skill, specIds, name, reason, requestId}` and appends a `suggestSession` event
 - `onAgentEvent` is the generic handler for all streaming events; increments `toolCalls` on `toolCallEnd`, updates metrics on `turnComplete`/`interrupted`. On `costEstimate` events, updates live context window from `currentContextWindow` and per-iteration breakdown (`iterInputTokens`, `iterCacheRead`, `iterCacheCreate`, `iterOutputTokens`) — not persisted, only for live UI display.
 - `onSessionDone` only updates cost, status, and duration — preserves context data from the last `turnComplete` (the `agent/done` event carries no usage data)
@@ -364,7 +364,7 @@ interface UiStore {
 
 **`focusSessions` vs. `setCenterView`:** `setCenterView` is a plain setter — use it from incidental flows that just need the center view to land on a particular value (`createNewSession`, wizard navigation). `focusSessions()` is the combined "show me the Sessions UI" action: it sets `centerView = "sessions"` and `leftActiveTab = "sessions"` in one update. Use it from explicit Sessions-UI affordances (header Sessions tab, footer "n sessions" button, clicking a session card). Switching the center view back to Board never touches `leftActiveTab` — the user may want to keep the sessions list visible while browsing tickets.
 
-**Persistence key:** `"bonsai-ui"`. Persisted fields: `{ leftPanelCollapsed, rightPanelCollapsed, leftActiveTab, centerView, chatCategoryVisibility, lastActiveSessions, dismissedWizardOutcomes }`.
+**Persistence key:** `"thinkrail-ui"`. Persisted fields: `{ leftPanelCollapsed, rightPanelCollapsed, leftActiveTab, centerView, chatCategoryVisibility, lastActiveSessions, dismissedWizardOutcomes }`.
 
 **Breakpoint thresholds:** `≥1280` → desktop, `≥1024` → laptop, else → below-min.
 
@@ -402,15 +402,15 @@ interface NotificationStore {
 
   addToast: (toast: Omit<Toast, "id" | "createdAt">) => void;
   dismissToast: (id: string) => void;
-  setBadge: (bonsaiSid: string, badge: TabBadge) => void;
-  clearBadge: (bonsaiSid: string) => void;
+  setBadge: (thinkrailSid: string, badge: TabBadge) => void;
+  clearBadge: (thinkrailSid: string) => void;
   incrementPendingInput: () => void;
   decrementPendingInput: () => void;
   toggleSound: () => void;
 }
 ```
 
-**Persistence key:** `"bonsai-notification-sound"`. Persisted: `{ soundEnabled }`.
+**Persistence key:** `"thinkrail-notification-sound"`. Persisted: `{ soundEnabled }`.
 
 **Toast behavior:** Max 5 visible (oldest dropped). Auto-dismiss: 5s normal, 8s error. Toast IDs: sequential `"toast-1"`, `"toast-2"`, etc.
 
@@ -486,7 +486,7 @@ export function wireEvents(client: RpcClient): Unsubscribe
 
 | Event | Action |
 |---|---|
-| `file/didChange` | `fileStore.onFileChanged(path)`. Also triggers `settingsStore.fetchSettings()` when path is `.bonsai/settings.json`. |
+| `file/didChange` | `fileStore.onFileChanged(path)`. Also triggers `settingsStore.fetchSettings()` when path is `.tr/settings.json`. |
 | `files/treeChanged` | `uiStore.onFileTreeChanged()` |
 
 ### Agent streaming → sessionStore.onAgentEvent
@@ -582,8 +582,8 @@ Pure functions for detecting stale references:
 ### Store Methods
 
 **sessionStore:**
-- `getStaleSessionRefs(bonsaiSid)` — returns `{ staleSpecIds, staleSkillId }` or `null`
-- `fixStaleSessionRefs(bonsaiSid)` — removes stale refs; persists via `updateDraft` for drafts
+- `getStaleSessionRefs(thinkrailSid)` — returns `{ staleSpecIds, staleSkillId }` or `null`
+- `fixStaleSessionRefs(thinkrailSid)` — removes stale refs; persists via `updateDraft` for drafts
 
 **boardStore:**
 - `getStaleTicketRefs(ticketId)` — returns `{ staleSpecIds, staleSessionIds }` or `null`
@@ -614,7 +614,7 @@ The model context-window size is not part of capabilities. Pickers read `metrics
 
 ### Session Defaults (`settingsStore.sessionDefaults` → `buildDefaultSessionConfig`)
 
-Session-creation defaults are **user-scoped**, not project-scoped — they live in the AppStore (`~/.bonsai/bonsai.db`) and travel with the user across every project. The frontend fetches them via `appSettings/getSessionDefaults` on connect and writes via `appSettings/setSessionDefaults` from the "User settings" header dialog.
+Session-creation defaults are **user-scoped**, not project-scoped — they live in the AppStore (`~/.tr/tr.db`) and travel with the user across every project. The frontend fetches them via `appSettings/getSessionDefaults` on connect and writes via `appSettings/setSessionDefaults` from the "User settings" header dialog.
 
 `frontend/src/utils/sessionConfig.ts` exposes `async buildDefaultSessionConfig()` — every new-session entry point (`sessionStore.createNewSession`, `WelcomeScreen`, `NewProjectScreen`, `MetaTicketDetail`, `TicketSession`, `TicketDescriptionView`) calls it to build the draft's `AgentConfig`. The helper reads from `settingsStore.sessionDefaults` and awaits the initial fetch if the store hasn't received it yet, so the values the user picked in the settings dialog take effect on the very next draft, with no race against a rapid `+ New` click. There is no frontend fallback: if the fetch ultimately resolves to `null` (backend unreachable) the helper throws, surfacing the failure to the caller's existing error path instead of silently substituting hardcoded constants. Cold-start values (`claude-opus-4-7`, `"default"` permission mode, `"auto"` effort, `50` max turns) live in the backend (`app/core/session_defaults.py`).
 
@@ -628,7 +628,7 @@ Pickers source their permission-mode, effort, and model options from `runtimeCap
 
 ## Known Limitations
 
-- **Some UI preferences live in `localStorage`, not Zustand** — FileTree component manages `collapsed` and `showHidden` state in `localStorage` (keys: `bonsai-filetree-collapsed-{projectPath}`, `bonsai-filetree-showHidden-{projectPath}`). These are component-local, not in any Zustand store.
+- **Some UI preferences live in `localStorage`, not Zustand** — FileTree component manages `collapsed` and `showHidden` state in `localStorage` (keys: `thinkrail-filetree-collapsed-{projectPath}`, `thinkrail-filetree-showHidden-{projectPath}`). These are component-local, not in any Zustand store.
 - **No undo/redo**
 - **Session events accumulate unbounded** — no pruning for long sessions
 - **No cross-tab sync** — multiple browser tabs have independent stores

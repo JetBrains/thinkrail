@@ -28,26 +28,26 @@ from app.core.config import AppConfig
 
 @pytest.fixture(autouse=True)
 def _isolate_data_dir(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    data_dir = tmp_path / ".bonsai_server"
+    data_dir = tmp_path / ".thinkrail_server"
     data_dir.mkdir()
     monkeypatch.setattr("app.core.config.get_data_dir", lambda: data_dir)
 
 
 def _make_config(tmp_path: Path) -> AppConfig:
-    bonsai_dir = tmp_path / ".bonsai"
-    bonsai_dir.mkdir(exist_ok=True)
+    thinkrail_dir = tmp_path / ".tr"
+    thinkrail_dir.mkdir(exist_ok=True)
     plugin_dir = tmp_path / "plugin"
     plugin_dir.mkdir(exist_ok=True)
     return AppConfig(
-        project_root=tmp_path, bonsai_dir=bonsai_dir, plugin_dir=plugin_dir,
+        project_root=tmp_path, thinkrail_dir=thinkrail_dir, plugin_dir=plugin_dir,
     )
 
 
 def _make_tracker_and_task() -> tuple[Tracker, AgentTask]:
     tracker = Tracker()
     task = tracker.create_task(["spec-1"], AgentConfig())
-    tracker.set_status(task.bonsai_sid, "idle")
-    tracker.set_status(task.bonsai_sid, "running")
+    tracker.set_status(task.thinkrail_sid, "idle")
+    tracker.set_status(task.thinkrail_sid, "running")
     return tracker, task
 
 
@@ -74,8 +74,8 @@ def _seed_plan(config: AppConfig, ticket_id: str) -> PlanService:
 async def _resolve_future_with(tracker: Tracker, task: AgentTask, response: dict) -> None:
     """Wait a beat, then resolve whatever future the handler is awaiting."""
     await asyncio.sleep(0.01)
-    for req_id in list(tracker._futures.get(task.bonsai_sid, {})):
-        tracker.resolve_future(task.bonsai_sid, req_id, response)
+    for req_id in list(tracker._futures.get(task.thinkrail_sid, {})):
+        tracker.resolve_future(task.thinkrail_sid, req_id, response)
         break
 
 

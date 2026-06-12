@@ -239,17 +239,17 @@ describe("Wizard registry", () => {
 // cell for entry steps with a custom window).
 describe("stepperFromJourney — cumulative cross-chain stepper", () => {
   const INVESTIGATE: JourneyEntry = {
-    bonsaiSid: "s1",
+    thinkrailSid: "s1",
     skillId: "investigate-project",
     chainId: "investigate-project",
   };
   const CLARIFY: JourneyEntry = {
-    bonsaiSid: "s2",
+    thinkrailSid: "s2",
     skillId: "new-project",
     chainId: "investigate-project",
   };
   const ARCHITECTURE: JourneyEntry = {
-    bonsaiSid: "s3",
+    thinkrailSid: "s3",
     skillId: "architecture-design",
     chainId: "new-project",
   };

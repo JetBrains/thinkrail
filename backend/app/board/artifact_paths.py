@@ -1,4 +1,4 @@
-"""Path helpers for per-ticket artifact files under ``.bonsai/tickets/``.
+"""Path helpers for per-ticket artifact files under ``.tr/tickets/``.
 
 Each ticket gets a folder keyed by stable ID (``mt_xxxxxxxx``); the four
 brainstorm artifacts live inside.
@@ -8,6 +8,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from app.board.models import ArtifactKind
+from app.core.config import PROJECT_DIRNAME, TICKETS_DIR
 
 ARTIFACT_FILENAMES: dict[ArtifactKind, str] = {
     "product_design": "product-design.md",
@@ -23,7 +24,7 @@ LEGACY_HISTORY_FILENAME = "spec-diff.patch"
 
 
 def ticket_dir(project_root: Path, ticket_id: str) -> Path:
-    return project_root / ".bonsai" / "tickets" / ticket_id
+    return project_root / PROJECT_DIRNAME / TICKETS_DIR / ticket_id
 
 
 def artifact_path(project_root: Path, ticket_id: str, kind: ArtifactKind) -> Path:

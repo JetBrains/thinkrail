@@ -10,9 +10,14 @@ import { timeAgo } from "@/utils/format.ts";
 import { getStatusStyle } from "@/utils/status.ts";
 import { modLabel } from "@/utils/platform.ts";
 import { SessionCardContextMenu } from "./SessionCardContextMenu.tsx";
-import { TicketGroupCard } from "./TicketGroupCard.tsx";
 import { groupByTicket, type TicketGroup, type GroupedEntry } from "./groupByTicket.ts";
-import { PHASE_LABELS, phaseForSkill } from "@/components/TicketDetail/phases.ts";
+import {
+  PHASE_LABELS,
+  PHASE_ORDER,
+  STATE_ORDER,
+  phaseForSkill,
+} from "@/components/TicketDetail/phases.ts";
+import type { TicketStatus } from "@/types/board.ts";
 import "./SessionManager.css";
 
 const TICKET_STRIPE_PALETTE = [
@@ -57,7 +62,7 @@ function formatCost(usd: number): string {
 }
 
 type CtxMenuState = {
-  bonsaiSid: string;
+  thinkrailSid: string;
   ticketId: string | null;
   x: number;
   y: number;
@@ -71,6 +76,7 @@ export function SessionManager() {
   const restoreSession = useSessionStore((s) => s.restoreSession);
   const deleteSession = useSessionStore((s) => s.deleteSession);
   const sessions = useSessionStore((s) => s.sessionList);
+  const liveSessions = useSessionStore((s) => s.sessions);
   const refreshSessionList = useSessionStore((s) => s.refreshSessionList);
   const activeSessionId = useSessionStore((s) => s.activeSessionId);
   const tickets = useBoardStore((s) => s.tickets);
@@ -81,35 +87,18 @@ export function SessionManager() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [ctxMenu, setCtxMenu] = useState<CtxMenuState | null>(null);
-  const [expandedTickets, setExpandedTickets] = useState<Set<string>>(new Set());
 
-  // The ticket the active session belongs to — drives the active-row highlight.
+  // The ticket the active session belongs to. A ticket is expanded only while
+  // it (its file) is open or one of its sessions is active — so navigating to
+  // another ticket/session collapses the previous one.
   const activeSessionTicketId = useMemo(
-    () => sessions.find((s) => s.bonsaiSid === activeSessionId)?.ticketId ?? null,
-    [sessions, activeSessionId],
+    () =>
+      (activeSessionId
+        ? liveSessions.get(activeSessionId)?.ticketId ??
+          sessions.find((s) => s.thinkrailSid === activeSessionId)?.ticketId
+        : null) ?? null,
+    [liveSessions, sessions, activeSessionId],
   );
-
-  const toggleTicketExpanded = useCallback((ticketId: string) => {
-    setExpandedTickets((prev) => {
-      const next = new Set(prev);
-      if (next.has(ticketId)) next.delete(ticketId);
-      else next.add(ticketId);
-      return next;
-    });
-  }, []);
-
-  // Auto-expand the folder when its ticket is focused (open ticket route) or one
-  // of its sessions is active — so it's clear which ticket you're inside.
-  useEffect(() => {
-    const ids = [focusedTicketId, activeSessionTicketId].filter(Boolean) as string[];
-    if (ids.length === 0) return;
-    setExpandedTickets((prev) => {
-      if (ids.every((id) => prev.has(id))) return prev;
-      const next = new Set(prev);
-      ids.forEach((id) => next.add(id));
-      return next;
-    });
-  }, [focusedTicketId, activeSessionTicketId]);
 
   const refresh = useCallback(async () => {
     try {
@@ -194,7 +183,7 @@ export function SessionManager() {
     (e: React.MouseEvent, s: SessionSummary) => {
       e.preventDefault();
       setCtxMenu({
-        bonsaiSid: s.bonsaiSid,
+        thinkrailSid: s.thinkrailSid,
         ticketId: s.ticketId ?? null,
         x: e.clientX,
         y: e.clientY,
@@ -204,18 +193,18 @@ export function SessionManager() {
   );
 
   const handleOpenTicket = useCallback(
-    (ticketId: string, _bonsaiSid: string) => {
+    (ticketId: string, _thinkrailSid: string) => {
       openTicket(ticketId);
     },
     [openTicket],
   );
 
-  const handleCopySid = useCallback(async (bonsaiSid: string) => {
+  const handleCopySid = useCallback(async (thinkrailSid: string) => {
     try {
-      await navigator.clipboard.writeText(bonsaiSid);
+      await navigator.clipboard.writeText(thinkrailSid);
       useNotificationStore.getState().addToast({
         eventType: "success",
-        message: `Copied session ID: ${bonsaiSid.slice(0, 8)}…`,
+        message: `Copied session ID: ${thinkrailSid.slice(0, 8)}…`,
         persistent: false,
       });
     } catch (err) {
@@ -267,10 +256,8 @@ export function SessionManager() {
 
   const handleOpenTicketGroup = useCallback(
     (group: TicketGroup) => {
+      // Opening sets it as the active ticket, which derives `expanded`.
       openTicket(group.ticketId);
-      setExpandedTickets((prev) =>
-        prev.has(group.ticketId) ? prev : new Set(prev).add(group.ticketId),
-      );
     },
     [openTicket],
   );
@@ -302,56 +289,88 @@ export function SessionManager() {
         {ticketEntries.length > 0 && (
           <>
             <div className="sm-section-label">Tickets</div>
+            <div className="sm-tickets-list">
             {ticketEntries.map((entry) => {
               const ticket = tickets.get(entry.ticketId) ?? null;
-              // Show only the ticket's CURRENT phase + the session(s) running it.
-              const currentPhase = ticket?.status ?? null;
-              const phaseLabel = currentPhase ? PHASE_LABELS[currentPhase] : "";
-              const phaseSessions = sortByRecency(
-                sessions.filter(
-                  (s) => s.ticketId === entry.ticketId && phaseForSkill(s.skillId) === currentPhase,
-                ),
-              );
-              const expanded = expandedTickets.has(entry.ticketId);
+              const status = ticket?.status ?? null;
+              // Expanded only while this ticket's file is open or one of its
+              // sessions is active; navigating elsewhere collapses it.
+              const expanded =
+                entry.ticketId === focusedTicketId ||
+                entry.ticketId === activeSessionTicketId;
+
+              // Process steps = lifecycle phases up to and including the
+              // current one (history + current); future phases are hidden.
+              const steps = status
+                ? PHASE_ORDER.filter(
+                    (p) => p !== "idea" && p !== "done" && STATE_ORDER[p] <= STATE_ORDER[status],
+                  )
+                : [];
+              const sessionForPhase = (phase: TicketStatus): SessionSummary | null =>
+                sortByRecency(
+                  sessions.filter(
+                    (s) => s.ticketId === entry.ticketId && phaseForSkill(s.skillId) === phase,
+                  ),
+                )[0] ?? null;
+
               return (
-                <div key={`sm-t-${entry.ticketId}`} className="sm-ticket-folder">
-                  <TicketGroupCard
-                    group={entry}
-                    title={ticket?.title ?? `Ticket #${entry.ticketId.slice(-4)}`}
-                    shortId={`#${entry.ticketId.slice(-4)}`}
-                    phaseLabel={phaseLabel}
-                    expanded={expanded}
-                    onToggleExpand={() => toggleTicketExpanded(entry.ticketId)}
-                    onOpen={handleOpenTicketGroup}
-                  />
-                  {expanded && (
-                    <>
-                      <div className="sm-phase-row">
-                        <span className="sm-phase-glyph" aria-hidden="true">●</span>
-                        <span className="sm-phase-label">{phaseLabel}</span>
-                      </div>
-                      {phaseSessions.length > 0 ? (
-                        phaseSessions.map((s) => (
-                          <SessionCard
-                            key={`sm-tc-${s.bonsaiSid}`}
-                            session={s}
-                            ticketTitle={null}
-                            ticketShortId={null}
-                            nested
-                            selected={s.bonsaiSid === activeSessionId}
-                            onOpen={handleOpenTicketSession}
-                            onDelete={handleDelete}
-                            onContextMenu={handleContextMenu}
-                          />
-                        ))
-                      ) : (
-                        <div className="sm-phase-empty">No session yet</div>
+                <div
+                  key={`sm-t-${entry.ticketId}`}
+                  className={`sm-ticket-item${entry.ticketId === focusedTicketId ? " sm-ticket-item--active" : ""}`}
+                >
+                  <div
+                    className="sm-ticket-head"
+                    onClick={() => handleOpenTicketGroup(entry)}
+                  >
+                    <div className="sessions-left-ticket-header">
+                      <span className="sessions-left-ticket-title">
+                        {ticket?.title ?? `Ticket #${entry.ticketId.slice(-4)}`}
+                      </span>
+                      <span className="sessions-left-ticket-id">#{entry.ticketId.slice(-4)}</span>
+                    </div>
+                    <div className="sessions-left-ticket-meta">
+                      {status && (
+                        <span className="sessions-left-ticket-phase">{PHASE_LABELS[status]}</span>
                       )}
-                    </>
+                      {ticket && <span className="sessions-left-ticket-type">{ticket.type}</span>}
+                    </div>
+                  </div>
+
+                  {expanded && steps.length > 0 && (
+                    <div className="sm-steps">
+                      {steps.map((phase) => {
+                        const phaseSession = sessionForPhase(phase);
+                        const isCurrent = status === phase;
+                        const isActive =
+                          !!phaseSession && phaseSession.thinkrailSid === activeSessionId;
+                        return (
+                          <button
+                            key={`sm-step-${entry.ticketId}-${phase}`}
+                            type="button"
+                            className={`sm-step${isActive ? " sm-step--active" : ""}${phaseSession ? "" : " sm-step--disabled"}`}
+                            disabled={!phaseSession}
+                            onClick={
+                              phaseSession
+                                ? () => handleOpenTicketSession(phaseSession.thinkrailSid)
+                                : undefined
+                            }
+                          >
+                            <span className="sm-step-glyph" aria-hidden="true">
+                              {isCurrent ? "●" : "✓"}
+                            </span>
+                            <span className="sm-step-label">{PHASE_LABELS[phase]}</span>
+                            {isCurrent && !phaseSession && (
+                              <span className="sm-step-hint">no session yet</span>
+                            )}
+                          </button>
+                        );
+                      })}
+                    </div>
                   )}
                 </div>
               );
             })}
+            </div>
           </>
         )}
 
@@ -360,7 +379,7 @@ export function SessionManager() {
             <div className="sm-section-label">Sessions</div>
             {sessionEntries.map((entry) => (
               <SessionCard
-                key={`sm-${entry.session.bonsaiSid}`}
+                key={`sm-${entry.session.thinkrailSid}`}
                 session={entry.session}
                 ticketTitle={null}
                 ticketShortId={null}
@@ -375,7 +394,7 @@ export function SessionManager() {
 
       {ctxMenu && (
         <SessionCardContextMenu
-          bonsaiSid={ctxMenu.bonsaiSid}
+          thinkrailSid={ctxMenu.thinkrailSid}
           ticketId={ctxMenu.ticketId}
           x={ctxMenu.x}
           y={ctxMenu.y}
@@ -460,17 +479,17 @@ function SessionCard({
       className={classes}
       role="button"
       tabIndex={0}
-      onClick={() => onOpen(s.bonsaiSid)}
+      onClick={() => onOpen(s.thinkrailSid)}
       onContextMenu={(e) => onContextMenu(e, s)}
       onKeyDown={(e) => {
         if (e.key === "Enter" || e.key === " ") {
           e.preventDefault();
-          onOpen(s.bonsaiSid);
+          onOpen(s.thinkrailSid);
         }
       }}
     >
       <span className={`sm-dot sm-dot--${s.status}`} aria-hidden="true" />
-      <span className={nameClass}>{s.name || s.bonsaiSid.slice(0, 8)}</span>
+      <span className={nameClass}>{s.name || s.thinkrailSid.slice(0, 8)}</span>
       <span className={`sm-time${isRunning ? " sm-time--live" : ""}`}>
         {isRunning ? "now" : timeAgo(s.updatedAt || s.createdAt)}
       </span>
@@ -510,7 +529,7 @@ function SessionCard({
           type="button"
           aria-label="Delete session"
           title="Delete session"
-          onClick={() => onDelete(s.bonsaiSid)}
+          onClick={() => onDelete(s.thinkrailSid)}
         >
           {TrashIcon}
         </button>

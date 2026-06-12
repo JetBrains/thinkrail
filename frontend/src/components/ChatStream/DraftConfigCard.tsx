@@ -1,4 +1,5 @@
 import { useState, useCallback, useRef, useEffect } from "react";
+import { DND_FILE_MIME } from "@/constants/branding.ts";
 import { browseFiles } from "@/services/files.ts";
 import { useSpecStore } from "@/store/specStore.ts";
 import { useSettingsStore } from "@/store/settingsStore.ts";
@@ -17,7 +18,7 @@ import { StaleRefsBanner } from "@/components/shared/StaleRefsBanner.tsx";
 import "./DraftConfigCard.css";
 
 interface DraftConfigCardProps {
-  bonsaiSid: string;
+  thinkrailSid: string;
   readOnly?: boolean;
   /** Hide the Discard control. Used for stage-default drafts (auto-spawned
    *  by the ticket view) where discarding makes no sense. When omitted, the
@@ -26,8 +27,8 @@ interface DraftConfigCardProps {
   onVisibilityChange?: (visible: boolean) => void;
 }
 
-export function DraftConfigCard({ bonsaiSid, readOnly, hideDiscard, onVisibilityChange }: DraftConfigCardProps) {
-  const session = useSessionStore((s) => s.sessions.get(bonsaiSid));
+export function DraftConfigCard({ thinkrailSid, readOnly, hideDiscard, onVisibilityChange }: DraftConfigCardProps) {
+  const session = useSessionStore((s) => s.sessions.get(thinkrailSid));
   const updateDraft = useSessionStore((s) => s.updateDraft);
   const renameDraft = useSessionStore((s) => s.renameDraft);
   const startDraft = useSessionStore((s) => s.startDraft);
@@ -108,7 +109,7 @@ export function DraftConfigCard({ bonsaiSid, readOnly, hideDiscard, onVisibility
       setUpdating(true);
       debounceRef.current = setTimeout(async () => {
         try {
-          await updateDraft(bonsaiSid, changes);
+          await updateDraft(thinkrailSid, changes);
         } catch (err) {
           console.error("[DraftConfigCard] update failed:", err);
         } finally {
@@ -116,28 +117,28 @@ export function DraftConfigCard({ bonsaiSid, readOnly, hideDiscard, onVisibility
         }
       }, 300);
     },
-    [bonsaiSid, updateDraft],
+    [thinkrailSid, updateDraft],
   );
 
   const handleStart = useCallback(async () => {
     setStarting(true);
     try {
-      await startDraft(bonsaiSid, "");
+      await startDraft(thinkrailSid, "");
     } catch (err) {
       console.error("[DraftConfigCard] start failed:", err);
       setStarting(false);
     }
-  }, [bonsaiSid, startDraft]);
+  }, [thinkrailSid, startDraft]);
 
   const handleDiscard = useCallback(async () => {
-    await deleteSession(bonsaiSid);
-  }, [bonsaiSid, deleteSession]);
+    await deleteSession(thinkrailSid);
+  }, [thinkrailSid, deleteSession]);
 
   if (!session) return null;
   if (!readOnly && session.status !== "draft") return null;
 
   const skill = session.skillId ? skills.find((s) => s.id === session.skillId) : null;
-  const staleRefs = getStaleSessionRefs(bonsaiSid);
+  const staleRefs = getStaleSessionRefs(thinkrailSid);
   const staleMessage = staleRefs
     ? [
         staleRefs.staleSpecIds.length > 0
@@ -173,7 +174,7 @@ export function DraftConfigCard({ bonsaiSid, readOnly, hideDiscard, onVisibility
         </div>
 
         {staleMessage && (
-          <StaleRefsBanner message={staleMessage} onFix={() => fixStaleSessionRefs(bonsaiSid)} />
+          <StaleRefsBanner message={staleMessage} onFix={() => fixStaleSessionRefs(thinkrailSid)} />
         )}
 
         {/* Skill */}
@@ -256,7 +257,7 @@ export function DraftConfigCard({ bonsaiSid, readOnly, hideDiscard, onVisibility
       className={`draft-config-card${dragOver ? " draft-config-card--drag-over" : ""}`}
       ref={cardRef}
       onDragOver={(e) => {
-        if (e.dataTransfer.types.includes("application/x-bonsai-file")) {
+        if (e.dataTransfer.types.includes(DND_FILE_MIME)) {
           e.preventDefault();
           setDragOver(true);
         }
@@ -265,7 +266,7 @@ export function DraftConfigCard({ bonsaiSid, readOnly, hideDiscard, onVisibility
       onDrop={(e) => {
         e.preventDefault();
         setDragOver(false);
-        const path = e.dataTransfer.getData("application/x-bonsai-file");
+        const path = e.dataTransfer.getData(DND_FILE_MIME);
         if (path && !session.filePaths.includes(path)) {
           debouncedUpdate({ filePaths: [...session.filePaths, path] });
         }
@@ -277,7 +278,7 @@ export function DraftConfigCard({ bonsaiSid, readOnly, hideDiscard, onVisibility
           value={editName}
           onChange={(e) => {
             setEditName(e.target.value);
-            void renameDraft(bonsaiSid, e.target.value);
+            void renameDraft(thinkrailSid, e.target.value);
           }}
           maxLength={60}
           placeholder="Session name..."
@@ -287,7 +288,7 @@ export function DraftConfigCard({ bonsaiSid, readOnly, hideDiscard, onVisibility
       </div>
 
       {staleMessage && (
-        <StaleRefsBanner message={staleMessage} onFix={() => fixStaleSessionRefs(bonsaiSid)} />
+        <StaleRefsBanner message={staleMessage} onFix={() => fixStaleSessionRefs(thinkrailSid)} />
       )}
 
       {/* Skill Row */}
@@ -473,6 +474,7 @@ export function DraftConfigCard({ bonsaiSid, readOnly, hideDiscard, onVisibility
           <span className="draft-config-inline">
             <span className="draft-config-hint">model:</span>
             <Dropdown
+              className="draft-config-dd"
               value={session.model}
               options={[
                 ...(modelDef ? [] : [{ value: session.model, label: session.model }]),
@@ -485,6 +487,7 @@ export function DraftConfigCard({ bonsaiSid, readOnly, hideDiscard, onVisibility
           <span className="draft-config-inline">
             <span className="draft-config-hint">perms:</span>
             <Dropdown
+              className="draft-config-dd"
               value={session.permissionMode}
               options={[
                 ...(permissionModes.some((m) => m.value === session.permissionMode)
@@ -499,6 +502,7 @@ export function DraftConfigCard({ bonsaiSid, readOnly, hideDiscard, onVisibility
           <span className="draft-config-inline">
             <span className="draft-config-hint">effort:</span>
             <Dropdown
+              className="draft-config-dd"
               value={session.effort}
               options={[
                 ...(effortLevels.some((e) => e.value === session.effort)

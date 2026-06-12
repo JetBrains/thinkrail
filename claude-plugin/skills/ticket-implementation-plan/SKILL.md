@@ -9,7 +9,7 @@ argument-hint: "[ticket-context]"
 
 # Ticket: Implementation plan (spec-diff → implementation-plan)
 
-You are writing the implementation plan. **On entry to this step, the backend automatically applies `spec-diff.patch` to the project's `.bonsai/design_docs/*.md` files** (if not already applied), so when you read specs they reflect the ticket's target state.
+You are writing the implementation plan. **On entry to this step, the backend automatically applies `spec-diff.patch` to the project's `{{TR_DIR}}/design_docs/*.md` files** (if not already applied), so when you read specs they reflect the ticket's target state.
 
 If the apply failed (conflict), the user will see an error before this skill starts; you should not be invoked in that case.
 
@@ -26,13 +26,13 @@ If the apply failed (conflict), the user will see an error before this skill sta
    6. Finalize and transition
    ```
 
-1. **Examine context** *(task #1)* — if `.bonsai/tickets/{id}/implementation-plan.md` already exists (possibly with `implementation_plan_stale: true`), read it; ask via `AskUserQuestion`: "Existing plan found. Revise from scratch or evolve existing?" Preserve step numbers and session IDs from previous versions. Then `Read` `product-design.md` + `technical-design.md` + the updated `.bonsai/design_docs/*.md` files (use `spec_search`).
+1. **Examine context** *(task #1)* — if `{{TR_DIR}}/tickets/{id}/implementation-plan.md` already exists (possibly with `implementation_plan_stale: true`), read it; ask via `AskUserQuestion`: "Existing plan found. Revise from scratch or evolve existing?" Preserve step numbers and session IDs from previous versions. Then `Read` `product-design.md` + `technical-design.md` + the updated `{{TR_DIR}}/design_docs/*.md` files (use `spec_search`).
 
 2. **Decide plan depth** *(task #2)* — ask via `AskUserQuestion`: "How granular? (a) Milestones only, (b) Milestones + steps, (c) Full detail with small tasks (recommended)."
 
 3. **Propose milestone structure** *(task #3)* — in chat, propose milestones and their step structure. Iterate with the user until aligned. This is conversation, not a file write.
 
-4. **Draft milestones and steps** *(task #4)* — `Write` the plan to `.bonsai/tickets/{id}/implementation-plan.md` using the format below. Every step MUST include the 5 mandatory success criteria.
+4. **Draft milestones and steps** *(task #4)* — `Write` the plan to `{{TR_DIR}}/tickets/{id}/implementation-plan.md` using the format below. Every step MUST include the 5 mandatory success criteria.
 
 5. **Verify against ticket success criteria** *(task #5)* — walk the ticket's success criteria once more and verify each is addressed by at least one step's success criteria. Patch the plan if anything is missed.
 

@@ -1,4 +1,4 @@
-# Bonsai
+# ThinkRail
 
 This project uses specification-driven development.
 
@@ -21,7 +21,7 @@ cd frontend && npm run dev                  # frontend only
 
 ## First-Time Setup
 
-There is no setup. Bonsai is single-user, localhost-only — no accounts, no tokens, no login screen. Run `./run.sh` (or `cd backend && uv run python -m app.main`) and open http://localhost:3000.
+There is no setup. ThinkRail is single-user, localhost-only — no accounts, no tokens, no login screen. Run `./run.sh` (or `cd backend && uv run python -m app.main`) and open http://localhost:3000.
 
 ## Dependency Management
 - **Backend:** `cd backend && uv add <package>` to add deps; `uv sync` to install
@@ -155,15 +155,15 @@ frontend/
     types/            # Shared TypeScript types
     utils/            # Utility functions
     constants/        # App constants
-packaging/            # PyInstaller spec + entry point (bonsai.spec, entry.py)
-.bonsai/                        # Per-project config (committed to git)
-~/.bonsai/indexes/<hash>/
+packaging/            # PyInstaller spec + entry point (thinkrail.spec, entry.py)
+.tr/                        # Per-project config (committed to git)
+~/.tr/indexes/<hash>/
   index.db            # SQLite spec index (generated, outside repo)
 .github/workflows/    # CI: tests.yml, nightly.yml, stable.yml, _build.yml, _release.yml
 ```
 
 ## Active Tasks
-See `.bonsai/` for specs. All initial implementation tasks are complete.
+See `.tr/` for specs. All initial implementation tasks are complete.
 
 ## Specifications & Spec-Driven Skills
 

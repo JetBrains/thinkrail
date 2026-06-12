@@ -56,7 +56,7 @@ The `tools/__init__.py` re-exports what the runner and permissions need:
 | `__init__.py` | Re-exports `MCP_SERVERS`, `INTERCEPTORS`, and context helpers from all tool files | Active |
 | `_context.py` | `contextvars`-based session context: `set_tool_context()`, `get_tool_context()`, `ToolContext` dataclass | Active |
 | `suggest_session.py` | SuggestSession proactive tool — in-handler interaction via context (validates, shows card, awaits response) | Active |
-| `visualization.py` | bonsai_visualize display tool — agent renders structured visualizations in the UI | Active |
+| `visualization.py` | thinkrail_visualize display tool — agent renders structured visualizations in the UI | Active |
 | `specs.py` | Spec MCP tools — 3 tools: `spec_search`, `spec_links`, `spec_delete` | Active |
 | `suggest_description.py` | SuggestDescription proactive tool — agent proposes meta-ticket descriptions | Active |
 | `orchestrator.py` | Orchestrator tool — proposes next plan step for ticket execution | Active |
@@ -78,16 +78,16 @@ from app.agent.tools.orchestrator import intercept_orchestrator, orchestrator_mc
 from app.agent.tools.change_ticket_status import intercept_change_ticket_status, change_ticket_status_mcp_server
 
 MCP_SERVERS: dict[str, Any] = {
-    "bonsai-vis": vis_mcp_server,
-    "bonsai-proactive": suggest_session_mcp_server,
-    "bonsai-specs": specs_mcp_server,
-    "bonsai-describe": suggest_description_mcp_server,
-    "bonsai-orchestrator": orchestrator_mcp_server,
-    "bonsai-ticket-status": change_ticket_status_mcp_server,
+    "thinkrail-vis": vis_mcp_server,
+    "thinkrail-proactive": suggest_session_mcp_server,
+    "thinkrail-specs": specs_mcp_server,
+    "thinkrail-describe": suggest_description_mcp_server,
+    "thinkrail-orchestrator": orchestrator_mcp_server,
+    "thinkrail-ticket-status": change_ticket_status_mcp_server,
 }
 
 INTERCEPTORS: dict[str, InterceptFn] = {
-    "bonsai_visualize": intercept_visualize,
+    "thinkrail_visualize": intercept_visualize,
     "SuggestSession": intercept_suggest_session,
     "SuggestDescription": intercept_suggest_description,
     "suggest_step": intercept_orchestrator,
@@ -155,7 +155,7 @@ The previous architecture relied on `canUseTool` interceptors to inject session 
 |------|----------------------|-------------------|
 | `SuggestSession` | Validate → Future → card → await response | No card shown, returns generic "Suggestion processed." |
 | `spec_*` (3 tools) | Inject `_config` into `updated_input` | `RuntimeError: Missing _config in tool args` |
-| `bonsai_visualize` | Auto-approve (no-op) | No impact (interceptor was a no-op) |
+| `thinkrail_visualize` | Auto-approve (no-op) | No impact (interceptor was a no-op) |
 
 With `contextvars`, tool handlers read session context directly — no dependency on the permission hook.
 
@@ -249,15 +249,15 @@ async def _suggest_session(args: dict) -> dict:
     # Validate specIds exist in index
     spec_ids = args.get("specIds", [])
     if spec_ids:
-        spec_error = await _validate_spec_ids(spec_ids, ctx.config.get_bonsai_dir())
+        spec_error = await _validate_spec_ids(spec_ids, ctx.config.get_thinkrail_dir())
         if spec_error:
             return _error(spec_error)
 
     # Interactive flow: send card → await developer response
     request_id = str(uuid4())
-    future = ctx.tracker.register_future(ctx.task.bonsai_sid, request_id)
+    future = ctx.tracker.register_future(ctx.task.thinkrail_sid, request_id)
     payload = {
-        "bonsaiSid": ctx.task.bonsai_sid,
+        "thinkrailSid": ctx.task.thinkrail_sid,
         "skill": skill,
         "specIds": spec_ids,
         "name": args.get("name", ""),
@@ -277,7 +277,7 @@ async def _suggest_session(args: dict) -> dict:
     return {"content": [{"type": "text", "text": f"✓ Session '{args.get('name', '')}' approved and created."}]}
 
 suggest_session_mcp_server = create_sdk_mcp_server(
-    name="bonsai-proactive", tools=[_suggest_session]
+    name="thinkrail-proactive", tools=[_suggest_session]
 )
 ```
 
@@ -297,12 +297,12 @@ async def _spec_search(args: dict) -> dict:
 
 | Key | Server name | Tools exposed | Description |
 |-----|-------------|--------------|-------------|
-| `"bonsai-vis"` | `bonsai-vis` | `bonsai_visualize` | Display-only visualization rendering |
-| `"bonsai-proactive"` | `bonsai-proactive` | `SuggestSession` | Interactive session suggestion |
-| `"bonsai-specs"` | `bonsai-specs` | `spec_search`, `spec_links`, `spec_delete` | Spec search, link queries, and deletion |
-| `"bonsai-describe"` | `bonsai-describe` | `SuggestDescription` | Propose meta-ticket descriptions |
-| `"bonsai-orchestrator"` | `bonsai-orchestrator` | `suggest_step` | Propose next plan step for execution |
-| `"bonsai-ticket-status"` | `bonsai-ticket-status` | `ChangeTicketStatus` | Transition meta-ticket status |
+| `"thinkrail-vis"` | `thinkrail-vis` | `thinkrail_visualize` | Display-only visualization rendering |
+| `"thinkrail-proactive"` | `thinkrail-proactive` | `SuggestSession` | Interactive session suggestion |
+| `"thinkrail-specs"` | `thinkrail-specs` | `spec_search`, `spec_links`, `spec_delete` | Spec search, link queries, and deletion |
+| `"thinkrail-describe"` | `thinkrail-describe` | `SuggestDescription` | Propose meta-ticket descriptions |
+| `"thinkrail-orchestrator"` | `thinkrail-orchestrator` | `suggest_step` | Propose next plan step for execution |
+| `"thinkrail-ticket-status"` | `thinkrail-ticket-status` | `ChangeTicketStatus` | Transition meta-ticket status |
 
 ## Adding a New Tool
 
@@ -335,5 +335,5 @@ No changes needed to `runtime/claude/runtime.py`, `permissions.py`, or `service.
 
 - **Parent:** [Agent Module](../README.md)
 - **Tool specs:** [SuggestSession](SUGGEST_SESSION.md), [Visualization](VISUALIZATION.md), [UpdateProgress](PROGRESS.md), [Spec Tools](SPECS_TOOLS.md), [Orchestrator](ORCHESTRATOR.md)
-- **Feature specs:** [Proactive Agent Experience](../../../../.bonsai/design_docs/PROACTIVE_AGENT_EXPERIENCE_DESIGN.md)
+- **Feature specs:** [Proactive Agent Experience](../../../../.tr/design_docs/PROACTIVE_AGENT_EXPERIENCE_DESIGN.md)
 - **Consumer:** [agent/permissions.py](../permissions.py) (routes `INTERCEPTORS` + SDK built-ins), [agent/runtime/claude/runtime.py](../runtime/claude/runtime.py) (sets context + wires `MCP_SERVERS` into SDK)

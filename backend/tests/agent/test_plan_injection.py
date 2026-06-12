@@ -28,18 +28,18 @@ from app.spec.service import SpecService
 
 @pytest.fixture(autouse=True)
 def _isolate_data_dir(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    data_dir = tmp_path / ".bonsai_server"
+    data_dir = tmp_path / ".thinkrail_server"
     data_dir.mkdir()
     monkeypatch.setattr("app.core.config.get_data_dir", lambda: data_dir)
 
 
 def _make_config(tmp_path: Path) -> AppConfig:
-    bonsai_dir = tmp_path / ".bonsai"
-    bonsai_dir.mkdir(exist_ok=True)
+    thinkrail_dir = tmp_path / ".tr"
+    thinkrail_dir.mkdir(exist_ok=True)
     plugin_dir = tmp_path / "plugin"
     plugin_dir.mkdir(exist_ok=True)
     return AppConfig(
-        project_root=tmp_path, bonsai_dir=bonsai_dir, plugin_dir=plugin_dir,
+        project_root=tmp_path, thinkrail_dir=thinkrail_dir, plugin_dir=plugin_dir,
     )
 
 
@@ -71,7 +71,7 @@ async def _build_service_with_plan(tmp_path: Path) -> tuple[AgentService, str, A
     # explicitly here since the test bypasses ticket-implementation-plan
     # (which would set it normally).
     fresh = board.get_ticket(ticket.id)
-    fresh.implementation_plan_path = f".bonsai/tickets/{ticket.id}/implementation-plan.md"
+    fresh.implementation_plan_path = f".tr/tickets/{ticket.id}/implementation-plan.md"
     from app.board.storage import ticket_path, write_ticket, tickets_root
     write_ticket(
         ticket_path(tickets_root(config.project_root), ticket.id),
@@ -156,7 +156,7 @@ class TestSubagentModeFraming:
         # Default is step-session
         prompt = await agent._build_context_for(task)
         assert "Subagent Mode" not in prompt
-        assert "[bonsai-step" not in prompt
+        assert "[thinkrail-step" not in prompt
 
     async def test_subagent_gated_mode_includes_marker_instructions(
         self, tmp_path: Path,
@@ -168,7 +168,7 @@ class TestSubagentModeFraming:
         task.step_gate = "approve"
         prompt = await agent._build_context_for(task)
         assert "Subagent Mode (approve each)" in prompt
-        assert "[bonsai-step ticket=" in prompt
+        assert "[thinkrail-step ticket=" in prompt
         assert "Failure policy: **fail-fast**" in prompt
 
     async def test_subagent_autonomous_mode_omits_suggest_step(
@@ -188,7 +188,7 @@ class TestSubagentModeFraming:
     ) -> None:
         agent, ticket_id, config = await _build_service_with_plan(tmp_path)
         _seed_skill(config, "ticket-implement")
-        # Drop a settings.json with wait-all under .bonsai/
+        # Drop a settings.json with wait-all under .tr/
         from app.core.settings import save_settings
 
         save_settings(tmp_path, {"tickets": {"subagentFailurePolicy": "wait-all"}})

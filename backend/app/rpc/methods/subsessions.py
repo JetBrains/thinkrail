@@ -36,7 +36,7 @@ def _handle_errors(func):  # type: ignore[type-arg]
 async def create_subsession(service: AgentService, **params: Any) -> dict:
     """Create a subsession linked to a parent session."""
     task = await service.create_subsession(
-        parent_bonsai_sid=params["parentBonsaiSid"],
+        parent_thinkrail_sid=params["parentThinkrailSid"],
         subsession_type=SubsessionType(params["type"]),
         context=params.get("context"),
         name=params.get("name", ""),
@@ -45,8 +45,8 @@ async def create_subsession(service: AgentService, **params: Any) -> dict:
     if conn:
         task.created_by = conn.display_name
         await bus.publish_to_project(conn.project_path, "session/didCreate", {
-            "bonsaiSid": task.bonsai_sid,
-            "name": task.name or task.bonsai_sid[:8],
+            "thinkrailSid": task.thinkrail_sid,
+            "name": task.name or task.thinkrail_sid[:8],
             "skillId": task.skill_id,
             "specIds": list(task.spec_ids),
             "filePaths": list(task.file_paths),
@@ -56,33 +56,33 @@ async def create_subsession(service: AgentService, **params: Any) -> dict:
             "createdAt": task.created,
             "createdBy": conn.display_name,
         })
-    return {"bonsaiSid": task.bonsai_sid}
+    return {"thinkrailSid": task.thinkrail_sid}
 
 
 @_handle_errors
 async def request_summary(service: AgentService, **params: Any) -> dict:
     """Ask subsession agent to propose a return summary."""
-    service.request_summary(params["bonsaiSid"])
+    service.request_summary(params["thinkrailSid"])
     return {"ok": True}
 
 
 @_handle_errors
 async def approve_summary(service: AgentService, **params: Any) -> dict:
     """Approve a return summary."""
-    bonsai_sid = params["bonsaiSid"]
+    thinkrail_sid = params["thinkrailSid"]
     text = params["text"]
-    service.approve_summary(bonsai_sid, text)
+    service.approve_summary(thinkrail_sid, text)
 
     # Notify parent session
-    task = service._tracker.get_task(bonsai_sid)
-    if task.parent_bonsai_sid:
+    task = service._tracker.get_task(thinkrail_sid)
+    if task.parent_thinkrail_sid:
         from app.rpc.bus import bus
         await bus.publish_to_session(
-            task.parent_bonsai_sid,
+            task.parent_thinkrail_sid,
             "subsession/returned",
             {
-                "parentBonsaiSid": task.parent_bonsai_sid,
-                "childBonsaiSid": bonsai_sid,
+                "parentThinkrailSid": task.parent_thinkrail_sid,
+                "childThinkRailSid": thinkrail_sid,
                 "childName": task.name,
                 "type": task.subsession_type.value if task.subsession_type else "discussion",
                 "summary": text,
@@ -94,14 +94,14 @@ async def approve_summary(service: AgentService, **params: Any) -> dict:
 @_handle_errors
 async def dismiss_summary(service: AgentService, **params: Any) -> dict:
     """Dismiss the return flow without returning anything."""
-    service.dismiss_summary(params["bonsaiSid"])
+    service.dismiss_summary(params["thinkrailSid"])
     return {"ok": True}
 
 
 @_handle_errors
 async def revise_summary(service: AgentService, **params: Any) -> dict:
     """Ask agent to rewrite summary with feedback."""
-    service.revise_summary(params["bonsaiSid"], params["feedback"])
+    service.revise_summary(params["thinkrailSid"], params["feedback"])
     return {"ok": True}
 
 
@@ -112,6 +112,6 @@ async def list_children(service: AgentService, **params: Any) -> dict:
 
     children = _list_children(
         service._config.project_root,
-        params["parentBonsaiSid"],
+        params["parentThinkrailSid"],
     )
     return {"children": children}

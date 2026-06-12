@@ -8,7 +8,7 @@ interface ArtifactRef {
 
 /**
  * Load the markdown body of each artifact in parallel. Tries the
- * usual ``GOAL&REQUIREMENTS.md`` / ``.bonsai/GOAL&REQUIREMENTS.md``
+ * usual ``GOAL&REQUIREMENTS.md`` / ``.tr/GOAL&REQUIREMENTS.md``
  * fallbacks (see ``artifactPathCandidates``). Returns a map keyed by
  * artifact path; missing entries stay ``undefined`` until the fetch
  * resolves so callers can render a loading state.

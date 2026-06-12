@@ -479,3 +479,109 @@
 }
 .sm-ctx-menu-item--id:hover .sm-ctx-menu-id-icon { color: var(--text); }
 .sm-ctx-menu-item--id:hover .sm-ctx-menu-id-text { color: var(--text); }
+
+/* ── Tickets list — same spacing as the original Tickets tab ── */
+.sm-tickets-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px 0;
+}
+
+/* ── Unified-list ticket card — bordered box that grows when expanded.
+   Collapsed (head only) matches the original Tickets-tab card. ── */
+.sm-ticket-item {
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  transition: all 0.15s ease;
+}
+.sm-ticket-item:hover {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: var(--primary);
+  transform: translateY(-1px);
+}
+.sm-ticket-item--active {
+  border-color: var(--primary);
+}
+
+/* Clickable header (title + meta) — opens + expands the ticket. */
+.sm-ticket-head {
+  padding: 12px;
+  cursor: pointer;
+}
+.sessions-left-ticket-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+.sessions-left-ticket-title {
+  flex: 1;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.sessions-left-ticket-id {
+  font-size: 11px;
+  color: var(--text-tertiary);
+  font-family: var(--font-mono);
+  flex-shrink: 0;
+}
+.sessions-left-ticket-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 11px;
+}
+.sessions-left-ticket-phase {
+  padding: 2px 6px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text-secondary);
+  font-size: 10px;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+.sessions-left-ticket-type {
+  color: var(--text-tertiary);
+  font-size: 11px;
+}
+
+/* ── Expanded ticket: process steps (done + current phases) ── */
+.sm-steps {
+  display: flex;
+  flex-direction: column;
+  padding: 6px 6px 6px 12px;
+  border-top: 1px solid var(--border);
+}
+.sm-step {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  width: 100%;
+  padding: 4px 8px;
+  background: transparent;
+  border: none;
+  border-radius: var(--radius-sm);
+  color: var(--muted);
+  font-family: var(--font);
+  font-size: var(--font-md);
+  text-align: left;
+  cursor: pointer;
+  transition: background var(--transition-fast), color var(--transition-fast);
+}
+.sm-step:hover:not(:disabled) { background: var(--hover); color: var(--text); }
+.sm-step--active { background: var(--hover); color: var(--text); }
+.sm-step--disabled { cursor: default; opacity: 0.7; }
+.sm-step-glyph { flex-shrink: 0; width: 14px; text-align: center; color: var(--hint); }
+.sm-step--active .sm-step-glyph { color: var(--primary); }
+.sm-step-label { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sm-step-hint { color: var(--hint); font-size: var(--font-sm); }

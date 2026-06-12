@@ -2,7 +2,7 @@ import { lazy, Suspense, useState } from "react";
 import { useSessionStore } from "@/store/sessionStore.ts";
 import { isWizardSkill } from "@/components/Wizard/registry.ts";
 import { SystemMessage } from "../SystemMessage.tsx";
-import { AssistantMessage, BonsaiMessage } from "../AssistantMessage.tsx";
+import { AssistantMessage, ThinkRailMessage } from "../AssistantMessage.tsx";
 import { ToolCallCard } from "../ToolCallCard.tsx";
 import { DraftConfigCard } from "../DraftConfigCard.tsx";
 import { VisualizationCard, VisErrorBoundary } from "../VisualizationCard.tsx";
@@ -62,7 +62,7 @@ export const classicRenderers: ViewRenderers = {
   sessionStart: (_ev, _i, k, ctx) => (
     <DraftConfigCard
       key={k}
-      bonsaiSid={ctx.session!.bonsaiSid}
+      thinkrailSid={ctx.session!.thinkrailSid}
       readOnly
       onVisibilityChange={ctx.onContextCardVisibility}
     />
@@ -89,7 +89,7 @@ export const classicRenderers: ViewRenderers = {
     if (p.toolName === "AskUserQuestion") return null;
     if (p.toolName === "TaskGet" || p.toolName === "TaskList") return null;
 
-    if (p.toolName.endsWith("bonsai_visualize")) {
+    if (p.toolName.endsWith("thinkrail_visualize")) {
       const visInput = p.toolInput as VisData | undefined;
       if (visInput && typeof visInput.data === "string") {
         try {
@@ -118,11 +118,11 @@ export const classicRenderers: ViewRenderers = {
         const visId = visInput.visId;
         const isLatest = !visId || ctx.latestVisByVisId.get(visId) === i;
         return (
-          <BonsaiMessage key={k} contentClassName="msg-content--vis">
+          <ThinkRailMessage key={k} contentClassName="msg-content--vis">
             <VisErrorBoundary>
               <VisualizationCard data={visInput} collapsed={!isLatest} />
             </VisErrorBoundary>
-          </BonsaiMessage>
+          </ThinkRailMessage>
         );
       }
     }
@@ -523,7 +523,7 @@ export const classicRenderers: ViewRenderers = {
       key={k}
       subtype={ev.payload.subtype}
       errors={ev.payload.errors}
-      bonsaiSid={ctx.session?.bonsaiSid}
+      thinkrailSid={ctx.session?.thinkrailSid}
     />
   ),
 

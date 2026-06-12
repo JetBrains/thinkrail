@@ -164,14 +164,14 @@ class TestRuntimeSkillInfo:
 
     def test_round_trip_with_camel_case_aliases(self):
         info = RuntimeSkillInfo(
-            id="specdriven:ticket-specify",
+            id="thinkrail:ticket-specify",
             name="Ticket Specify",
             description="Create or modify specifications for a meta-ticket.",
             source="plugin",
         )
         dumped = info.model_dump(by_alias=True)
         assert dumped == {
-            "id": "specdriven:ticket-specify",
+            "id": "thinkrail:ticket-specify",
             "name": "Ticket Specify",
             "description": "Create or modify specifications for a meta-ticket.",
             "source": "plugin",
@@ -211,7 +211,7 @@ class TestIAgentRuntimeProtocol:
 
             async def run_session(self, task, exec_config, handler):  # noqa: D401
                 return AgentResult(
-                    bonsai_sid=task.bonsai_sid,
+                    thinkrail_sid=task.thinkrail_sid,
                     session_id="s",
                     result="",
                     cost_usd=0.0,

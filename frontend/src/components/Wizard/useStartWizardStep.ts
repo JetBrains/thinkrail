@@ -39,18 +39,18 @@ export function useStartWizardStep(): (opts: StartWizardStepOpts) => Promise<str
       // Pin the chain before the session becomes active so its stepper
       // cells resolve to the right labels on first render.
       setCurrentChain(chainId);
-      const bonsaiSid = await startSession({
+      const thinkrailSid = await startSession({
         specIds: [],
         config: await buildDefaultSessionConfig(),
         name,
         skillId,
         prompt,
       });
-      appendWizardStep({ bonsaiSid, skillId, chainId });
+      appendWizardStep({ thinkrailSid, skillId, chainId });
       // The runtime waits for a user message before starting its loop;
       // the real task lives in `prompt` above, so the kick is minimal.
-      await sendMessage(bonsaiSid, kick);
-      return bonsaiSid;
+      await sendMessage(thinkrailSid, kick);
+      return thinkrailSid;
     },
     [startSession, sendMessage, setCurrentChain, appendWizardStep],
   );

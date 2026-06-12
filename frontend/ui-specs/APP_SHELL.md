@@ -323,7 +323,7 @@ The center panel has `min-width: 300px` enforced via CSS (`.center-panel`).
 ```tsx
 function Header({ onSwitchProject }: { onSwitchProject: () => void }) {
   // Left side:
-  //   - Logo text "Bonsai" (purple, font-weight 600)
+  //   - Logo text "ThinkRail" (purple, font-weight 600)
   //   - Project button (calls onSwitchProject, shows projectName from uiStore)
   //   - Board / Sessions view-switcher tablist
   //   - Multi-client presence indicator (hidden when only one client connected)
@@ -340,7 +340,7 @@ which has four nav tabs:
 | Themes | `THEMES` from `utils/theme.ts`, applies via `applyTheme()` | `localStorage` |
 | Session Defaults | Model / permission mode / effort form | AppStore (`session_defaults`) via RPC |
 | Server Info | Hostname, version, port; "copy URL" affordances | `serverInfoStore` |
-| Settings | Inline editor for `.bonsai/settings.json` | Project file |
+| Settings | Inline editor for `.tr/settings.json` | Project file |
 
 Theme switching, server info, and session-default editing all live inside this
 modal — there are no standalone header buttons for them.

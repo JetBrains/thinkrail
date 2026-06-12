@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { STORAGE_PREFIX, DND_FILE_MIME } from "@/constants/branding.ts";
 import { FolderOpen, Folder, FileText, Eye, EyeOff, ChevronsDownUp, ChevronsUpDown } from "lucide-react";
 import { getProjectFiles } from "@/services/project.ts";
 import { useUiStore } from "@/store/uiStore.ts";
@@ -19,7 +20,7 @@ interface FileEntry {
 function fileIcon(name: string, isDir: boolean): { icon: string; cls: string } {
   if (isDir) {
     // Special directories
-    if (name === ".bonsai") return { icon: "S", cls: "fi-specs" };
+    if (name === ".tr") return { icon: "S", cls: "fi-specs" };
     if (name === "src") return { icon: "S", cls: "fi-src" };
     if (name === "tests" || name === "test") return { icon: "T", cls: "fi-test" };
     return { icon: "", cls: "fi-dir" };
@@ -85,11 +86,11 @@ function computeDefaultCollapsed(entries: FileEntry[]): Set<string> {
 }
 
 function storageKey(projectPath: string): string {
-  return `bonsai-filetree-collapsed-${projectPath}`;
+  return `${STORAGE_PREFIX}filetree-collapsed-${projectPath}`;
 }
 
 function showHiddenKey(projectPath: string): string {
-  return `bonsai-filetree-showHidden-${projectPath}`;
+  return `${STORAGE_PREFIX}filetree-showHidden-${projectPath}`;
 }
 
 function readShowHidden(projectPath: string): boolean {
@@ -225,7 +226,7 @@ export function FileTree() {
             draggable={!entry.isDir}
             onDragStart={(e) => {
               e.dataTransfer.setData("text/plain", entry.path);
-              e.dataTransfer.setData("application/x-bonsai-file", entry.path);
+              e.dataTransfer.setData(DND_FILE_MIME, entry.path);
             }}
             onClick={() => {
               setSelected(entry.path);

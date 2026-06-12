@@ -4,7 +4,7 @@ When ``ticket-implement`` runs with ``task.subagent_mode == "subagent"``, the
 runtime registers the agents below via ``ClaudeAgentOptions.agents`` so the
 orchestrator can invoke them through the SDK's ``Task`` tool.
 
-See ``.bonsai/design_docs/TICKET_LIFECYCLE_DESIGN.md`` §
+See ``.tr/design_docs/TICKET_LIFECYCLE_DESIGN.md`` §
 *Implementation orchestration modes* for the full design.
 """
 
@@ -27,7 +27,7 @@ _STEP_EXECUTOR_TOOLS: list[str] = [
     "Grep",
     "Glob",
     "Bash",
-    # Bonsai MCP tools (registered names)
+    # ThinkRail MCP tools (registered names)
     "ProposeChange",
     "SetPreviewFile",
     "ClearPreviewFile",
@@ -37,12 +37,12 @@ _STEP_EXECUTOR_TOOLS: list[str] = [
 
 TICKET_STEP_EXECUTOR = AgentDefinition(
     description=(
-        "Execute one plan step for a Bonsai ticket. Reads relevant specs and "
+        "Execute one plan step for a ThinkRail ticket. Reads relevant specs and "
         "source, edits files via ProposeChange, returns a one-paragraph summary."
     ),
     tools=_STEP_EXECUTOR_TOOLS,
     prompt=(
-        "You are executing one plan step for a Bonsai ticket. "
+        "You are executing one plan step for a ThinkRail ticket. "
         "Read the referenced specs and source files, do the work, "
         "propose every file edit via ProposeChange (never Write/Edit "
         "specs directly), and return a one-paragraph summary of what "
@@ -60,19 +60,19 @@ TICKET_STEP_EXECUTOR = AgentDefinition(
 # the persistence interceptor can link the resulting Task tool block back to
 # the plan step. Example:
 #
-#     [bonsai-step ticket=mt_abc12 step=5]
+#     [thinkrail-step ticket=mt_abc12 step=5]
 #     <step description>
 #
 # The marker has both ticket id and step number so out-of-order events or
 # stale matches across different tickets can be detected.
 
 _MARKER_RE = re.compile(
-    r"^\[bonsai-step\s+ticket=(?P<ticket>[^\s\]]+)\s+step=(?P<step>\d+)\]",
+    r"^\[thinkrail-step\s+ticket=(?P<ticket>[^\s\]]+)\s+step=(?P<step>\d+)\]",
 )
 
 
-def parse_bonsai_step_marker(prompt: str) -> dict[str, Any] | None:
-    """Parse the leading ``[bonsai-step …]`` marker on a Task prompt.
+def parse_thinkrail_step_marker(prompt: str) -> dict[str, Any] | None:
+    """Parse the leading ``[thinkrail-step …]`` marker on a Task prompt.
 
     Returns ``{"ticket_id": str, "step": int}`` on success, ``None`` if the
     prompt has no marker or the marker is malformed (missing ticket or step).

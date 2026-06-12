@@ -1,0 +1,395 @@
+---
+id: multi-runtime-design
+type: architecture-design
+status: active
+title: Multi-Runtime Agent Architecture
+covers:
+- backend/app/agent/runtime/
+- backend/app/agent/permissions.py
+- backend/app/agent/service.py
+tags:
+- backend
+- agent
+- runtime
+- architecture
+---
+# Multi-Runtime Agent Architecture
+
+## Overview
+
+ThinkRail hosts agent backends behind a runtime-agnostic contract. The
+Claude Code SDK is the only runtime currently registered; the
+architecture is shaped so additional runtimes can be added without
+changing the session layer above.
+
+This doc describes the architecture and the reasoning behind the
+choices. Read it for *why* the architecture is shaped the way it is.
+
+## Goals
+
+1. **Support additional runtimes behind the contract** — a new runtime
+   gets the same UI surface, session semantics, and permission model as
+   Claude without touching the session layer.
+2. **No regression for Claude flows** — the existing conversational loop,
+   tool approvals, AskUserQuestion / ConfirmStatement, subagent
+   correlation, persistence, and resume must work unchanged.
+3. **Single permission engine** — one canonical `can_use_tool` decides
+   allow/deny for every runtime, so toggling permission mode mid-session
+   takes effect uniformly.
+4. **Runtime-neutral event bus** — the WebSocket event stream
+   (`agent/textDelta`, `agent/toolCallStart`, etc.) is the unified
+   contract; a runtime either produces these events directly (Claude) or
+   adapts its wire protocol to them.
+
+## Non-goals
+
+- Replacing the Claude SDK with our own LLM client.
+- Per-message runtime switching. Runtime is fixed for the session
+  lifetime; resume re-uses the original runtime.
+- Vendor-neutral tool API. ThinkRail's frontend renders Claude-shape tool
+  inputs (`{file_path, old_string, new_string}` for `Edit`, etc.); other
+  runtimes must translate *to* that shape on their boundary, not the
+  other way.
+
+## Architecture overview
+
+```
+┌──────────────────────────────────────────────────────────────┐
+│  AgentService                                                 │
+│  - prepare_task / start_draft / interrupt_task                │
+│  - _get_runtime(task) → self.runtime_registry.get(            │
+│                            task.config.runtime)               │
+└──────────────────┬───────────────────────────────────────────┘
+                   │ runtime.run_session(task, exec_config, handler)
+                   ▼
+       ┌───────────────────────┐
+       │  IAgentRuntime        │  Protocol — runtime contract
+       │  - capabilities       │
+       │  - list_skills        │
+       │  - run_session        │
+       │  - interrupt          │
+       └───────┬───────────────┘
+               │
+       ┌───────┴───────────┐
+       ▼                   ▼
+  ClaudeRuntime         (future …)
+       │
+       ▼
+  Claude SDK (in-process)
+```
+
+## Key contracts
+
+### `IAgentRuntime`
+
+```python
+class IAgentRuntime(Protocol):
+    runtime_type: RuntimeType        # "claude"
+    display_name: str
+
+    def capabilities(self) -> RuntimeCapabilities: ...
+    def list_skills(self) -> list[RuntimeSkillInfo]: ...
+
+    async def run_session(
+        self,
+        task: AgentTask,
+        exec_config: RuntimeExecutionConfig,
+        handler: AgentEventHandler,
+    ) -> AgentResult: ...
+
+    async def interrupt(self, task: AgentTask, tracker: Tracker) -> None: ...
+```
+
+- A runtime is the declaration that "this kind of agent is supported."
+  Protocol is intentionally minimal — six surfaces total.
+- **Protocol-stateless.** No `startup` / `shutdown` handshake. Any
+  per-runtime warmup is the implementation's private concern.
+- One instance per `ProjectContext`, constructed with all dependencies
+  wired in (tracker, spec service, coordinator, app config). Re-used
+  across every session that runtime handles.
+- `run_session` owns the conversational loop: `tracker.get_next_message`
+  → query → stream events → repeat. Exits on `END_SIGNAL`.
+- `interrupt` is the cancellation hook. No `cancel_event`, no polling.
+  Each runtime decides what "interrupt the current turn" means.
+- `capabilities()` declares the runtime's pickable values — permission
+  modes, effort levels, and models — as `RuntimeCapabilities`. How the
+  runtime sources its model list (static list, lazy fetch, periodic
+  refresh, remote API) is invisible to callers. There is no
+  `refresh_models` or `models_status` on the protocol — those leak
+  caching strategy.
+- The model context-window size is not part of the capability surface.
+  It is inferred from the live SDK per session and streamed to the
+  frontend as `contextMax` on turn-end events; the service maintains no
+  model→window table.
+
+### `RuntimeRegistry`
+
+`backend/app/agent/runtime/registry.py` — lookup table from
+`RuntimeType` to live `IAgentRuntime` instance.
+
+```python
+class RuntimeRegistry:
+    def register(self, runtime: IAgentRuntime) -> None: ...
+    def get(self, runtime_type: RuntimeType) -> IAgentRuntime: ...
+    def has(self, runtime_type: RuntimeType) -> bool: ...
+    def all(self) -> list[IAgentRuntime]: ...   # sorted by runtime_type
+```
+
+Domain exceptions: `RuntimeRegistryError`, `DuplicateRuntimeError`,
+`UnknownRuntimeError`. The RPC layer translates `UnknownRuntimeError` to
+`UNKNOWN_RUNTIME (-32031)` so a client sending an unregistered runtime
+key gets a clean domain error instead of an opaque `INTERNAL_ERROR`.
+
+`ProjectContext.runtime_registry` lazy property constructs and registers
+the available runtimes once per project. No `start_all` / `stop_all` —
+the registry just holds the instances.
+
+### Runtime capability types
+
+```python
+class LabeledOption(BaseModel):       # frozen, extra="forbid", camelCase aliases
+    value: str
+    label: str
+
+class RuntimeFlag(BaseModel):         # frozen — a runtime-declared option toggle
+    key: str                          # AgentConfig.flags key
+    label: str
+    type: Literal["boolean"]          # discriminator; only boolean today
+    default: bool
+    description: str = ""
+
+class RuntimeCapabilities(BaseModel): # frozen
+    permission_modes: list[LabeledOption]
+    effort_levels: list[LabeledOption]
+    models: list[LabeledOption]
+    # each list non-empty; position 0 is the runtime default
+    flags: list[RuntimeFlag] = []     # optional; rendered as settings toggles
+
+class RuntimeIdentity(BaseModel):     # frozen — returned by runtimes/list
+    runtime_type: RuntimeType
+    display_name: str
+```
+
+The list **order is contract**: position 0 of each capability list is
+the runtime's default. The model context-window size is not modelled
+here — it is inferred from the live SDK at runtime.
+
+### `RuntimeEvent` and `AgentEventHandler`
+
+```python
+class RuntimeEvent(BaseModel):
+    method: str          # "agent/textDelta", "agent/toolCallStart", …
+    params: dict
+    request_id: str | None = None  # for confirmAction / askUserQuestion
+
+class AgentEventHandler(Protocol):
+    async def on_event(self, event: RuntimeEvent) -> None: ...
+    async def on_complete(self, result: AgentResult) -> None: ...
+```
+
+- `RuntimeEvent` carries the JSON-RPC envelope shape `(method, params,
+  request_id)` — the same shape the WebSocket already emits.
+- Naming: `RuntimeEvent` is the *runtime-layer* envelope.
+  `AgentEvent` (`app/agent/models.py`) is the *persisted* discriminated
+  union written to `.events.jsonl`. Same data flows through both, but
+  they live at different layers and must not be confused.
+- `make_handler_from_notify(notify)` adapts the existing
+  `_persisting_notify` callable to the handler protocol; the
+  `request_id` kwarg is load-bearing — without it, frontend
+  `agent/respond` cannot match a reply to its pending request.
+
+### Permission types
+
+```python
+class ToolPermissionRequest(BaseModel):
+    tool_name: str
+    input: dict
+    tool_use_id: str | None
+    session_id: str | None
+    permission_mode: str = "default"
+    context: dict = {}              # escape hatch for runtime-specific fields
+
+class ToolPermissionResponse(BaseModel):
+    behavior: Literal["allow", "deny"]
+    updated_input: dict | None = None
+    message: str | None = None
+    interrupt: bool = False
+```
+
+`ToolPermissionRequest`/`Response` are runtime-neutral. Each runtime
+(e.g. the Claude SDK adapter) is responsible for translating its native
+shape to/from these.
+
+## Permission flow
+
+Mode names are Claude-SDK-shaped (`bypassPermissions` / `acceptEdits` /
+`plan` / `default`) — neutral mode names with a per-runtime translation
+layer are a future change, tracked when a second runtime lands.
+
+1. Runtime intercepts a tool call → builds `ToolPermissionRequest` (with
+   the *current* `permission_mode` from `task.config`).
+2. `permissions.can_use_tool(request, …)` runs:
+   - Built-in interactive primitives (`ConfirmStatement`,
+     `AskUserQuestion`) short-circuit to the user-prompt flow.
+   - **Mode-category filter** — `evaluate_mode(mode, categorize(name))`
+     resolves the `(mode, category)` cell against the table:
+
+     | mode               | read  | net   | edit  | bash  | mcp   |
+     |--------------------|-------|-------|-------|-------|-------|
+     | `bypassPermissions`| allow | allow | allow | allow | allow |
+     | `plan`             | allow | allow | deny  | deny  | deny  |
+     | `acceptEdits`      | allow | allow | allow | None  | None  |
+     | `default`          | allow | allow | None  | None  | None  |
+
+     `None` cells fall through.
+   - INTERCEPTORS dispatch — thinkrail's MCP tools auto-approve in their
+     fast path (mode filter runs *before* this so plan mode can still
+     deny mutating tools like `spec_delete` / `ChangeTicketStatus`).
+   - Default — `agent/confirmAction` user prompt; waits indefinitely for the user's response.
+3. Response returned as `ToolPermissionResponse`. Each runtime maps it
+   back to its native shape:
+   - **Claude:** `claude_can_use_tool_adapter` returns
+     `PermissionResultAllow | PermissionResultDeny`.
+
+### Tool categories — five buckets
+
+`ToolCategory = Literal["read", "net", "edit", "bash", "mcp"]`
+
+The classification is centralised in `app/agent/permissions.py`:
+
+- `_TOOL_CATEGORIES` — explicit map for built-in Claude SDK tools.
+- `_INTERCEPTOR_CATEGORIES` — per-thinkrail-MCP-tool overrides
+  (`spec_search`/`spec_links`/`thinkrail_visualize` = `read`,
+  `spec_delete`/`ChangeTicketStatus` = `edit`).
+- `categorize()` does dynamic special-case resolution
+  (`SuggestDescription` is `edit` iff `apply=true`, else `read`).
+- Unknown tools default to `edit` (fail-closed, requires approval).
+
+A flat lookup table is used because Claude SDK tools come from the SDK
+without a registration hook. The trade-off is documented drift risk;
+mitigated by the `test_every_built_in_tool_classified` test that
+asserts every tool emitted by the runner is classified.
+
+## Event flow
+
+```
+Runtime emits:
+  await handler.on_event(RuntimeEvent(method, params, request_id))
+
+handler (built by make_handler_from_notify):
+  forwards to _persisting_notify(method, params, request_id)
+
+_persisting_notify:
+  1. WebSocket broadcast (live frontend)
+  2. append_event() → .events.jsonl (replay on resume)
+
+Frontend:
+  WS message → store → render
+```
+
+The *only* per-runtime difference on the wire is **which runtime
+constructs the event**. Frontend rendering is runtime-agnostic.
+
+## Cancellation contract
+
+When the user clicks **Stop**:
+
+1. `AgentService.interrupt_task(thinkrail_sid)` — sets
+   `tracker.set_interrupted` (thinkrail-internal flag) and
+   `tracker.interrupt_futures` (resolves pending user-prompt futures).
+2. `runtime.interrupt(task, tracker)` — runtime-specific cancel.
+   Claude calls `await tracker.get_client(sid).interrupt()` (an SDK
+   control-protocol message); each runtime decides what "interrupt the
+   current turn" means for its backend.
+3. `run_session`'s loop exits naturally on the next iteration when its
+   message stream terminates. The runtime's existing `interrupted`
+   branch emits `agent/interrupted`; no polling, no `cancel_event`,
+   no `asyncio.Event`.
+
+Cancellation is callback-driven, not flag-polled. The `interrupt`
+method runs alongside the loop, not from inside it. The reason: a
+polling design forces the inner loop to race the iterator against the
+event, which is both more code and slower (interrupt latency = poll
+interval). The callback design has zero latency and zero extra code.
+
+## Runtime selection
+
+- `AgentConfig.runtime: RuntimeType = "claude"`. `RuntimeType` is
+  `Literal["claude"]` — declared in `app/agent/models.py` to break a
+  circular import with `runtime/types.py`, re-exported via
+  `runtime/__init__.py`. Adding a runtime widens the literal.
+- `AgentService._get_runtime(task)` is a one-line registry lookup:
+  `self.runtime_registry.get(task.config.runtime)`. Unknown runtime
+  raises `UnknownRuntimeError` → RPC layer surfaces `UNKNOWN_RUNTIME`.
+- The frontend hydrates its pickers from two RPCs. `runtimes/list`
+  returns the registered runtimes (sorted by `runtimeType`):
+
+  ```json
+  { "runtimes": [ { "runtimeType": "claude", "displayName": "Claude Code" } ] }
+  ```
+
+  `runtimes/capabilities` returns one runtime's capability lists:
+
+  ```json
+  {
+    "permissionModes": [ { "value": "default", "label": "default" }, ... ],
+    "effortLevels":    [ { "value": "auto", "label": "auto" }, ... ],
+    "models":          [ { "value": "...", "label": "..." }, ... ]
+  }
+  ```
+
+  `displayName` ships from the runtime — frontends don't hardcode a
+  `runtime_type → display_name` mapping. Each capability list's order is
+  the contract; position 0 is the runtime default.
+
+## Design choices
+
+| Decision | Choice | Reason |
+|---|---|---|
+| Runtime contract shape | One `IAgentRuntime` with `run_session` + `interrupt` | ThinkRail's session is long-lived and conversational; install/login go through separate RPC handlers instead of factory methods |
+| Cancellation | `interrupt(task, tracker)` callback | Zero-latency cancel without flag-polling in the inner loop |
+| Tool categorisation | Flat `_TOOL_CATEGORIES` + `_INTERCEPTOR_CATEGORIES` | Claude SDK tools have no registration hook; per-interceptor overrides handle thinkrail's MCP tools |
+| Permission "always allow" | Mode-only (`bypassPermissions`/`acceptEdits`) | Coarser than per-pattern allowlists, simpler to reason about; per-pattern allowlist is future work |
+| Claude protocol adapter | Small shape-builders in `runtime/claude/adapter.py` | ThinkRail's frontend consumes Claude-shape events directly, so far less translation is needed; the small adapter is the boundary that cross-runtime parity tests enforce against |
+| `AgentEventHandler` | `on_event(RuntimeEvent)` envelope | Matches thinkrail's existing JSON-RPC wire format |
+
+## File organisation
+
+```
+backend/app/agent/
+  runtime/
+    __init__.py            # public exports — incl. RuntimeRegistry, RuntimeCapabilities
+    types.py               # IAgentRuntime, RuntimeExecutionConfig, LabeledOption, RuntimeCapabilities, RuntimeIdentity
+    registry.py            # RuntimeRegistry + RuntimeRegistryError / DuplicateRuntimeError / UnknownRuntimeError
+    events.py              # RuntimeEvent, AgentEventHandler, make_handler_from_notify
+    permissions.py         # ToolPermissionRequest/Response, ToolCategory  (engine lives one level up)
+    claude/
+      __init__.py          # exports ClaudeRuntime
+      runtime.py           # ClaudeRuntime — IAgentRuntime impl; capabilities() projection
+      models.py            # ClaudeModelRegistry — loads models.json, serves list_options()
+      models.json          # curated model catalog ([{id, label}])
+      hooks.py             # SubagentHooks (subagent / PreCompact correlation)
+      adapter.py           # event-shape builders
+  exceptions.py            # InvalidCapabilityValueError (→ -32032)
+  permissions.py           # can_use_tool engine + claude_can_use_tool_adapter
+  service.py               # AgentService — wires runtime to tasks
+  tools/                   # thinkrail MCP tools (interceptors)
+```
+
+## SDK boundary
+
+The Claude SDK is the only provider SDK currently in tree. Imports
+outside `runtime/claude/` mark the parts of the system that are still
+Claude-shaped and would need a per-runtime path the day a second
+runtime registers:
+
+- `app/agent/permissions.py` (claude_agent_sdk permission types).
+- `app/agent/tools/*.py` interceptors (claude_agent_sdk MCP shapes).
+- `app/agent/service.py:update_config` calls `client.set_model` /
+  `client.set_permission_mode` directly rather than going through
+  `IAgentRuntime`.
+- `app/agent/context.py` falls back to the `anthropic` tokenizer when
+  computing context windows.
+
+`app/agent/revise.py` calls `claude_agent_sdk.query()` for one-shot
+voice-transcript cleanup; the `"haiku"` alias is resolved by the SDK.

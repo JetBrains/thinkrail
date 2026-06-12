@@ -42,7 +42,7 @@ export function StatusBar({ onOpenSessionManager }: StatusBarProps) {
   // grouping rule so the two surfaces behave consistently.
   const labelFor = useCallback((s: Session): string => {
     const ticketId = s.ticketId ?? null;
-    const base = s.name || s.bonsaiSid.slice(0, 8);
+    const base = s.name || s.thinkrailSid.slice(0, 8);
     if (!ticketId) return base;
     const ticket = tickets.get(ticketId) ?? null;
     const ticketLabel = ticket?.title ?? `Ticket #${ticketId.slice(-4)}`;
@@ -55,7 +55,7 @@ export function StatusBar({ onOpenSessionManager }: StatusBarProps) {
       openTicket(ticketId);
       return;
     }
-    openTab(s.bonsaiSid);
+    openTab(s.thinkrailSid);
   }, [openTab, openTicket]);
 
   const focusSessionContext = useCallback((s: Session) => {
@@ -64,7 +64,7 @@ export function StatusBar({ onOpenSessionManager }: StatusBarProps) {
       openTicket(ticketId);
       return;
     }
-    focusSession(s.bonsaiSid);
+    focusSession(s.thinkrailSid);
   }, [focusSession, openTicket]);
 
   const total = specs.length;
@@ -77,7 +77,7 @@ export function StatusBar({ onOpenSessionManager }: StatusBarProps) {
   const allLive = Array.from(sessions.values()).filter(
     (s) => s.status !== "done" && s.status !== "error",
   );
-  const bgSessions = allLive.filter((s) => !openTabsSet.has(s.bonsaiSid));
+  const bgSessions = allLive.filter((s) => !openTabsSet.has(s.thinkrailSid));
   const bgCount = bgSessions.length;
   const attnSessions = allLive.filter((s) => s.pendingRequests.length > 0);
   const attnCount = attnSessions.length;
@@ -119,10 +119,10 @@ export function StatusBar({ onOpenSessionManager }: StatusBarProps) {
           {dd.open && bgCount > 0 && (
             <div className="status-bg-dropdown">
               {bgSessions.map((s) => (
-                <div key={s.bonsaiSid} className="status-bg-item">
+                <div key={s.thinkrailSid} className="status-bg-item">
                   <button
                     className="status-bg-restore"
-                    title={s.name || s.bonsaiSid}
+                    title={s.name || s.thinkrailSid}
                     onClick={() => { openSessionContext(s); dd.close(); }}
                   >
                     <span className={`status-bg-dot status-bg-${s.status}`} />
@@ -131,7 +131,7 @@ export function StatusBar({ onOpenSessionManager }: StatusBarProps) {
                   </button>
                   <button
                     className="status-bg-end"
-                    onClick={() => endSession(s.bonsaiSid)}
+                    onClick={() => endSession(s.thinkrailSid)}
                     title="End session"
                   >
                     &#10005;
@@ -159,9 +159,9 @@ export function StatusBar({ onOpenSessionManager }: StatusBarProps) {
                 <div className="status-attn-dropdown">
                   {attnSessions.map((s) => (
                     <button
-                      key={s.bonsaiSid}
+                      key={s.thinkrailSid}
                       className="status-attn-item"
-                      title={s.name || s.bonsaiSid}
+                      title={s.name || s.thinkrailSid}
                       onClick={() => { focusSessionContext(s); attnDd.close(); }}
                     >
                       <span className={`status-bg-dot status-bg-${s.status}`} />

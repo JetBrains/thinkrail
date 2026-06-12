@@ -41,12 +41,12 @@ const onGlobals = ({ globals }: { globals?: { theme?: string } }) => applyTheme(
 channel.on(SET_GLOBALS, onGlobals);
 channel.on(GLOBALS_UPDATED, onGlobals);
 
-// Dark docs chrome (Bonsai is dark-first) so themed content — whose --text is
+// Dark docs chrome (ThinkRail is dark-first) so themed content — whose --text is
 // light — stays readable. Without this the white default docs background
 // washes out the type samples.
 const docsTheme = create({
   base: "dark",
-  brandTitle: "Bonsai Design System",
+  brandTitle: "ThinkRail Design System",
   appBg: "#0D0D0E",
   appContentBg: "#0D0D0E",
   appPreviewBg: "#0D0D0E",
@@ -66,7 +66,7 @@ const preview: Preview = {
   initialGlobals: { theme: DEFAULT_THEME },
   globalTypes: {
     theme: {
-      description: "Bonsai theme",
+      description: "ThinkRail theme",
       toolbar: {
         title: "Theme",
         icon: "paintbrush",

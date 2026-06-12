@@ -200,7 +200,7 @@ export interface ToolApprovalResponse {
 }
 
 export interface AgentResult {
-  bonsaiSid: string;
+  thinkrailSid: string;
   sessionId: string;
   result: string;
   costUsd: number;
@@ -210,7 +210,7 @@ export interface AgentResult {
 }
 
 export interface AgentTask {
-  bonsaiSid: string;
+  thinkrailSid: string;
   status: TaskStatus;
   specIds: string[];
   config: AgentConfig;

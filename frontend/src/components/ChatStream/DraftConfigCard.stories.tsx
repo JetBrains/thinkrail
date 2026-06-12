@@ -26,7 +26,7 @@ const MODELS: ModelDef[] = [
 ];
 
 const session = {
-  bonsaiSid: SID,
+  thinkrailSid: SID,
   name: "Session 1",
   skillId: null,
   specIds: [],
@@ -42,9 +42,9 @@ const session = {
   pendingRequest: null,
   answeredRequests: new Map(),
   metaTicketId: null,
-  systemPrompt: "You are Bonsai, a spec-driven development agent…",
+  systemPrompt: "You are ThinkRail, a spec-driven development agent…",
   promptSections: null,
-  parentBonsaiSid: null,
+  parentThinkrailSid: null,
   subsessionType: null,
   subsessionContext: null,
   returnStatus: null,
@@ -75,7 +75,7 @@ const meta = {
     docs: { description: { component:
       "DraftConfigCard is the pre-start session config: name, attachments, model / permission / turns / effort, a system-prompt preview, and Discard / Start Session.\n\n📍 **In the app:** at the top of the chat stream (Sessions tab) for a draft session, before you press Start Session." } },
   },
-  args: { bonsaiSid: SID },
+  args: { thinkrailSid: SID },
   decorators: [
     (Story) => (
       <RpcContext.Provider value={{} as RpcClient}>

@@ -15,8 +15,8 @@ from app.core.config import load_config
 
 
 def _setup(tmp_path: Path) -> PlanService:
-    bonsai_dir = tmp_path / ".bonsai"
-    bonsai_dir.mkdir()
+    thinkrail_dir = tmp_path / ".tr"
+    thinkrail_dir.mkdir()
     return PlanService(load_config(tmp_path))
 
 
@@ -92,9 +92,9 @@ class TestRenderAndParse:
 
     def test_render_with_session(self) -> None:
         plan = _sample_plan()
-        plan.milestones[0].steps[0].session_id = "bonsai_sid_xyz"
+        plan.milestones[0].steps[0].session_id = "thinkrail_sid_xyz"
         md = _render_plan(plan)
-        assert "bonsai_sid_xyz" in md
+        assert "thinkrail_sid_xyz" in md
 
 
 class TestPlanService:

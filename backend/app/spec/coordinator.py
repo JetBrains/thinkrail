@@ -42,9 +42,9 @@ class FileChanged(IndexEvent):
 
 @dataclass(frozen=True)
 class RebuildRequested(IndexEvent):
-    """Full rebuild requested (init, .bonsaihide change, manual)."""
+    """Full rebuild requested (init, .thinkrailhide change, manual)."""
 
-    bonsaihide_spec: pathspec.PathSpec | None = None
+    thinkrailhide_spec: pathspec.PathSpec | None = None
     reason: str = ""
 
 
@@ -133,33 +133,33 @@ class IndexCoordinator:
         """Enqueue an event for processing.  Non-blocking."""
         self._queue.put_nowait(event)
 
-    def update_bonsaihide_spec(self, spec: pathspec.PathSpec | None) -> None:
-        """Refresh the index's ``.bonsaihide`` rules synchronously.
+    def update_thinkrailhide_spec(self, spec: pathspec.PathSpec | None) -> None:
+        """Refresh the index's ``.thinkrailhide`` rules synchronously.
 
-        Called from the watcher when ``.bonsaihide`` changes, *before* any
+        Called from the watcher when ``.thinkrailhide`` changes, *before* any
         same-batch ``FileChanged`` events are enqueued.  The single-consumer
         invariant is preserved: events queued before this call were already
         emitted by a producer that observed the *old* rules, and the consumer
-        reads ``_bonsaihide_spec`` only when dispatching, so any not-yet-
+        reads ``_thinkrailhide_spec`` only when dispatching, so any not-yet-
         dispatched events will see the new rules.
 
         A debounced ``request_rebuild`` is still needed afterwards to evict
         previously-indexed entries that the new rules now hide.
         """
-        self._index.set_bonsaihide_spec(spec)
+        self._index.set_thinkrailhide_spec(spec)
 
     def request_rebuild(
         self,
-        bonsaihide_spec: pathspec.PathSpec | None = None,
+        thinkrailhide_spec: pathspec.PathSpec | None = None,
         reason: str = "",
     ) -> None:
-        """Request a rebuild with 500ms debounce for rapid .bonsaihide edits.
+        """Request a rebuild with 500ms debounce for rapid .thinkrailhide edits.
 
         Multiple calls within 500ms coalesce — only the latest
-        *bonsaihide_spec* is used when the rebuild finally fires.
+        *thinkrailhide_spec* is used when the rebuild finally fires.
         """
         self._pending_rebuild = RebuildRequested(
-            bonsaihide_spec=bonsaihide_spec,
+            thinkrailhide_spec=thinkrailhide_spec,
             reason=reason,
         )
 
@@ -245,7 +245,7 @@ class IndexCoordinator:
         await self._notify("index/rebuilding", {})
 
         try:
-            await self._index.rebuild(self._project_root, event.bonsaihide_spec)
+            await self._index.rebuild(self._project_root, event.thinkrailhide_spec)
         except Exception:
             logger.exception("Rebuild failed")
             raise
@@ -258,7 +258,7 @@ class IndexCoordinator:
 
         try:
             md_files = await asyncio.to_thread(
-                _find_md_files, self._project_root, self._index._bonsaihide_spec
+                _find_md_files, self._project_root, self._index._thinkrailhide_spec
             )
 
             # Track paths seen on disk so we can detect offline deletions

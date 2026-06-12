@@ -23,7 +23,7 @@ from typing import Any
 
 def build_tool_call_start_params(
     *,
-    bonsai_sid: str,
+    thinkrail_sid: str,
     session_id: str,
     tool_use_id: str,
     tool_name: str,
@@ -37,7 +37,7 @@ def build_tool_call_start_params(
     the input dict in. This keeps the function pure.
     """
     params: dict[str, Any] = {
-        "bonsaiSid": bonsai_sid,
+        "thinkrailSid": thinkrail_sid,
         "sessionId": session_id,
         "toolUseId": tool_use_id,
         "toolName": tool_name,
@@ -50,7 +50,7 @@ def build_tool_call_start_params(
 
 def build_tool_call_end_params(
     *,
-    bonsai_sid: str,
+    thinkrail_sid: str,
     session_id: str,
     tool_use_id: str,
     output: str,
@@ -67,7 +67,7 @@ def build_tool_call_end_params(
     on its result may pass it through; the wire shape stays consistent.
     """
     params: dict[str, Any] = {
-        "bonsaiSid": bonsai_sid,
+        "thinkrailSid": thinkrail_sid,
         "sessionId": session_id,
         "toolUseId": tool_use_id,
         "toolName": tool_name,
@@ -81,14 +81,14 @@ def build_tool_call_end_params(
 
 def build_text_delta_params(
     *,
-    bonsai_sid: str,
+    thinkrail_sid: str,
     session_id: str,
     text: str,
     agent_id: str | None = None,
 ) -> dict[str, Any]:
     """Build params for an ``agent/textDelta`` runtime event."""
     params: dict[str, Any] = {
-        "bonsaiSid": bonsai_sid,
+        "thinkrailSid": thinkrail_sid,
         "sessionId": session_id,
         "text": text,
     }

@@ -186,7 +186,7 @@ describe("TicketPhaseList", () => {
       <TicketPhaseList
         ticket={makeTicket({
           status: "technical-design",
-          productDesignPath: ".bonsai/tickets/mt_test/product-design.md",
+          productDesignPath: ".tr/tickets/mt_test/product-design.md",
         })}
         plan={null}
         phaseSessionIds={{}}
@@ -207,7 +207,7 @@ describe("TicketPhaseList", () => {
   it("Implementing row label opens its session via onSelectPanel", () => {
     const onSelectPanel = vi.fn();
     useSessionStore.setState({
-      sessions: new Map([["sess1", { bonsaiSid: "sess1", name: "Implementation", status: "running" }]]),
+      sessions: new Map([["sess1", { thinkrailSid: "sess1", name: "Implementation", status: "running" }]]),
     } as unknown as ReturnType<typeof useSessionStore.getState>);
     render(
       <TicketPhaseList

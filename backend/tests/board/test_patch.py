@@ -101,11 +101,11 @@ class TestValidateAmendedFile:
 
 class TestAppendAmendment:
     def test_creates_log_with_first_amendment(self, tmp_path: Path) -> None:
-        (tmp_path / ".bonsai" / "tickets" / "mt_x").mkdir(parents=True)
+        (tmp_path / ".tr" / "tickets" / "mt_x").mkdir(parents=True)
         log_path = append_amendment(
             project_root=tmp_path,
             ticket_id="mt_x",
-            file_path=".bonsai/design_docs/MODULE_X.md",
+            file_path=".tr/design_docs/MODULE_X.md",
             old_content="Foo handles bar.\n",
             new_content="Foo handles bar and baz.\n",
             spec_id="spec_abc",
@@ -123,13 +123,13 @@ class TestAppendAmendment:
         assert "# applied_as: original" in text
         assert "# validation: ok" in text
         assert "# timestamp:  2026-05-22T15:30:00Z" in text
-        assert "--- a/.bonsai/design_docs/MODULE_X.md" in text
-        assert "+++ b/.bonsai/design_docs/MODULE_X.md" in text
+        assert "--- a/.tr/design_docs/MODULE_X.md" in text
+        assert "+++ b/.tr/design_docs/MODULE_X.md" in text
         assert "-Foo handles bar." in text
         assert "+Foo handles bar and baz." in text
 
     def test_appends_numbered_entries(self, tmp_path: Path) -> None:
-        (tmp_path / ".bonsai" / "tickets" / "mt_x").mkdir(parents=True)
+        (tmp_path / ".tr" / "tickets" / "mt_x").mkdir(parents=True)
         kwargs: dict = dict(
             project_root=tmp_path, ticket_id="mt_x",
             file_path="f.md", old_content="a\n", new_content="b\n",
@@ -146,7 +146,7 @@ class TestAppendAmendment:
         assert "\n\n\n\n" not in text
 
     def test_optional_fields_render_none(self, tmp_path: Path) -> None:
-        (tmp_path / ".bonsai" / "tickets" / "mt_x").mkdir(parents=True)
+        (tmp_path / ".tr" / "tickets" / "mt_x").mkdir(parents=True)
         log_path = append_amendment(
             project_root=tmp_path, ticket_id="mt_x", file_path="f.md",
             old_content="a\n", new_content="b\n",
@@ -167,7 +167,7 @@ class TestParsePatchLog:
     had ended before it had begun."""
 
     def _write_two(self, tmp_path: Path) -> Path:
-        (tmp_path / ".bonsai" / "tickets" / "mt_x").mkdir(parents=True)
+        (tmp_path / ".tr" / "tickets" / "mt_x").mkdir(parents=True)
         common: dict = dict(
             project_root=tmp_path, ticket_id="mt_x",
             file_path="f.md", old_content="a\n", new_content="b\n",

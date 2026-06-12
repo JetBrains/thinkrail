@@ -1,7 +1,7 @@
 """Subagent / PreCompact hook helpers for the Claude runtime.
 
 The Claude SDK invokes ``SubagentStart`` / ``SubagentStop`` / ``PreCompact``
-hooks during a session; bonsai needs to (a) emit unified ``RuntimeEvent`` s
+hooks during a session; thinkrail needs to (a) emit unified ``RuntimeEvent`` s
 to the handler so the frontend can render subagent blocks, and (b) correlate
 ``parent_tool_use_id`` (an SDK identifier) with our internal ``agent_id`` so
 streamed assistant / tool messages can be grouped under the right subagent.
@@ -63,7 +63,7 @@ class SubagentHooks:
             parent_id = self._pending_task_tool_ids.pop(0)
             self._parent_to_agent[parent_id] = agent_id
         await self._emit("agent/subagentStart", {
-            "bonsaiSid": self.task.bonsai_sid,
+            "thinkrailSid": self.task.thinkrail_sid,
             "sessionId": self.session_id,
             "agentId": agent_id,
             "agentType": hook_input["agent_type"],
@@ -75,7 +75,7 @@ class SubagentHooks:
     ) -> dict[str, Any]:
         self._active_subagent_ids.discard(hook_input["agent_id"])
         await self._emit("agent/subagentEnd", {
-            "bonsaiSid": self.task.bonsai_sid,
+            "thinkrailSid": self.task.thinkrail_sid,
             "sessionId": self.session_id,
             "agentId": hook_input["agent_id"],
         })
@@ -95,7 +95,7 @@ class SubagentHooks:
                 + last.get("output_tokens", 0)
             )
         await self._emit("agent/compact", {
-            "bonsaiSid": self.task.bonsai_sid,
+            "thinkrailSid": self.task.thinkrail_sid,
             "sessionId": self.session_id,
             "trigger": trigger,
             "preTokens": pre_tokens,
@@ -121,7 +121,7 @@ class SubagentHooks:
         """
         for orphan_id in list(self._active_subagent_ids):
             await self._emit("agent/subagentEnd", {
-                "bonsaiSid": self.task.bonsai_sid,
+                "thinkrailSid": self.task.thinkrail_sid,
                 "sessionId": self.session_id,
                 "agentId": orphan_id,
             })

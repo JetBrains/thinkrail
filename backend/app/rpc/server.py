@@ -97,9 +97,9 @@ from app.rpc.methods.board import (
     update_ticket,
 )
 from app.agent.persistence import has_persisted_sessions
-from app.core.config import AppConfig, BONSAI_DIRNAME, load_config
+from app.core.config import AppConfig, get_data_dir, load_config
 from app.core.watcher import WatchHandle, watch
-from app.core.bonsaihide import load_bonsaihide
+from app.core.thinkrailhide import load_thinkrailhide
 from app.rpc.project_context import ProjectContext
 from app.spec.coordinator import FileChanged, IndexCoordinator
 from app.spec.service import SpecService
@@ -227,7 +227,7 @@ def register_routes(app: FastAPI, app_store: "AppStore | None" = None) -> None:
 
     *app_store* is the app-wide SQLite store used to track known
     projects.  When ``None`` (tests / legacy), a temporary store is
-    created lazily inside ``~/.bonsai``.
+    created lazily inside ``~/.tr``.
     """
     from app.core.app_store import AppStore as _AS
 
@@ -238,7 +238,7 @@ def register_routes(app: FastAPI, app_store: "AppStore | None" = None) -> None:
         nonlocal _app_store
         # Lazy-init for test scenarios where no store was provided
         if _app_store is None:
-            _app_store = _AS(Path.home() / BONSAI_DIRNAME)
+            _app_store = _AS(get_data_dir())
         # Ensure the store is open (idempotent if already open)
         if not _app_store.is_open:
             await _app_store.open()
@@ -350,7 +350,7 @@ def register_routes(app: FastAPI, app_store: "AppStore | None" = None) -> None:
             # client receives events for every session.  Phase 3 will restrict
             # this to explicit subscriptions.
             for task in ctx.agent_service.list_tasks():
-                bus.subscribe(conn_id, f"session:{task.bonsai_sid}")
+                bus.subscribe(conn_id, f"session:{task.thinkrail_sid}")
 
             # Start background services (coordinator, watcher, model registry).
             # Idempotent — second connection's call is a no-op.
@@ -480,30 +480,30 @@ async def _start_watcher(
     async def _on_file_change(changes: set[tuple[Change, str]]) -> None:
         project_root = config.get_project_root()
 
-        # .bonsaihide change handling runs FIRST so that any .md events in the
+        # .thinkrailhide change handling runs FIRST so that any .md events in the
         # same watcher batch are evaluated against the *new* hide rules.
         #
         # We accept every change type, not just Change.modified: most modern
         # editors save by write-temp + rename(2), which watchfiles reports as
         # Change.added (and on some platforms Change.deleted + Change.added)
-        # rather than Change.modified.  Deleting .bonsaihide is also a real
-        # change — load_bonsaihide() falls back to defaults when the file is
+        # rather than Change.modified.  Deleting .thinkrailhide is also a real
+        # change — load_thinkrailhide() falls back to defaults when the file is
         # absent.
-        bonsaihide_changed = any(
-            Path(p).name == ".bonsaihide" for _, p in changes
+        thinkrailhide_changed = any(
+            Path(p).name == ".thinkrailhide" for _, p in changes
         )
-        if bonsaihide_changed:
-            new_spec = load_bonsaihide(project_root)
+        if thinkrailhide_changed:
+            new_spec = load_thinkrailhide(project_root)
             # Update the index's in-memory rules *synchronously* before any
             # FileChanged events from this batch are emitted, so reindex_file()
             # sees the new rules immediately.  Without this, same-batch
             # `git mv foo.md notes/foo.md` (with notes/ newly hidden) would
             # transiently index foo.md at its new path until the 500ms-debounced
             # rebuild fires.
-            coordinator.update_bonsaihide_spec(new_spec)
+            coordinator.update_thinkrailhide_spec(new_spec)
             # Still request a debounced full rebuild — needed to evict entries
             # that were already indexed but are now hidden by the new rules.
-            coordinator.request_rebuild(bonsaihide_spec=new_spec, reason="bonsaihide changed")
+            coordinator.request_rebuild(thinkrailhide_spec=new_spec, reason="thinkrailhide changed")
 
         for change_type, path_str in changes:
             path = Path(path_str)
@@ -541,7 +541,7 @@ async def _start_watcher(
 
         if any(ct in (Change.added, Change.deleted) for ct, _ in changes):
             await bus.publish(project_topic, "files/treeChanged", {})
-        elif bonsaihide_changed:
+        elif thinkrailhide_changed:
             await bus.publish(project_topic, "files/treeChanged", {})
 
         # Notify frontend about modified files so open editors can refresh

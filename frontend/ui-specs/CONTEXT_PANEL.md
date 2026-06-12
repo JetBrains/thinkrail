@@ -184,7 +184,7 @@ export function useContextMode(): ContextMode {
 
 **Priority:** file/preview > active session > selected spec > empty.
 
-`isSpecFile(path)` checks `/.bonsai/` prefix and matches against `specStore.specs` paths.
+`isSpecFile(path)` checks `/.tr/` prefix and matches against `specStore.specs` paths.
 
 ---
 

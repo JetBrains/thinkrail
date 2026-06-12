@@ -152,7 +152,7 @@ export function AppShell({ onSwitchProject }: { onSwitchProject: () => void }) {
               </ViewModeProvider>
             }
             rightPanel={<WizardDocPanel filePath={wizardConfig.artifactPath} />}
-            rightPanelTitle={wizardConfig.artifactPath.replace(/^\.bonsai\//, "")}
+            rightPanelTitle={wizardConfig.artifactPath.replace(/^\.tr\//, "")}
           />
         </Shell>
       );

@@ -9,20 +9,13 @@ import { useRuntimeCapsStore } from "@/store/runtimeCapsStore.ts";
 import { RuntimeFlags } from "@/components/shared/RuntimeFlags.tsx";
 import { Dropdown } from "@/components/shared/Dropdown.tsx";
 import type { SessionDefaults } from "@/api/methods/appSettings.ts";
-import {
-  type ThemePreference,
-  THEMES,
-  getThemePreference,
-  applyTheme,
-} from "@/utils/theme.ts";
 import "./SettingsModal.css";
 
-const SETTINGS_PATH = ".bonsai/settings.json";
+const SETTINGS_PATH = ".tr/settings.json";
 
-type Section = "themes" | "defaults" | "server" | "settings";
+type Section = "defaults" | "server" | "settings";
 
 const SECTIONS: { id: Section; label: string }[] = [
-  { id: "themes", label: "Themes" },
   { id: "defaults", label: "Session Defaults" },
   { id: "server", label: "Server Info" },
   { id: "settings", label: "Settings" },
@@ -34,7 +27,7 @@ interface SettingsModalProps {
 }
 
 export function SettingsModal({ open, onClose }: SettingsModalProps) {
-  const [section, setSection] = useState<Section>("themes");
+  const [section, setSection] = useState<Section>("defaults");
 
   return (
     <Modal open={open} onClose={onClose}>
@@ -55,41 +48,12 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
           ))}
         </nav>
         <div className="settings-modal__content">
-          {section === "themes" && <ThemesSection />}
           {section === "defaults" && <SessionDefaultsSection visible={section === "defaults"} />}
           {section === "server" && <ServerSection />}
           {section === "settings" && <SettingsSection />}
         </div>
       </div>
     </Modal>
-  );
-}
-
-function ThemesSection() {
-  const [current, setCurrent] = useState<ThemePreference>(getThemePreference);
-
-  const handleSelect = (id: ThemePreference) => {
-    applyTheme(id);
-    setCurrent(id);
-  };
-
-  return (
-    <div className="settings-section">
-      <h3 className="settings-section__title">Themes</h3>
-      <div className="settings-themes">
-        {THEMES.map((t) => (
-          <button
-            key={t.id}
-            type="button"
-            className={`settings-theme-option${t.id === current ? " settings-theme-option--active" : ""}`}
-            onClick={() => handleSelect(t.id)}
-          >
-            <span className="settings-theme-option__label">{t.label}</span>
-            <span className="settings-theme-option__scheme">{t.colorScheme}</span>
-          </button>
-        ))}
-      </div>
-    </div>
   );
 }
 
@@ -162,7 +126,7 @@ function ServerSection() {
 /**
  * User-scope session defaults — model, permission mode, effort.
  * Persisted via ``appSettings/*`` RPCs in the AppStore, so the values follow
- * the user across every project (unlike ``.bonsai/settings.json`` which is
+ * the user across every project (unlike ``.tr/settings.json`` which is
  * project-scoped). Rendered inline as a `Settings` section instead of its
  * own dialog so the top-bar gear is a single entry point to everything.
  */

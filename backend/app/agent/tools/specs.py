@@ -1,4 +1,4 @@
-"""Spec MCP tools — bonsai-specs server (3 tools).
+"""Spec MCP tools — thinkrail-specs server (3 tools).
 
 Three tools giving the Claude agent structured access to the spec index.
 Custom tools exist only for operations standard file tools cannot do:
@@ -9,7 +9,7 @@ tools — writing YAML frontmatter + Markdown content.  The file watcher
 validates and indexes changes automatically.
 
 Design reference:
-    .bonsai/design_docs/FRONTMATTER_REGISTRY_DESIGN.md §MCP Tools Redesign
+    .tr/design_docs/FRONTMATTER_REGISTRY_DESIGN.md §MCP Tools Redesign
     backend/app/agent/tools/SPECS_TOOLS.md
 """
 
@@ -26,7 +26,7 @@ from app.agent.models import AgentTask
 from app.agent.runtime.permissions import ToolPermissionResponse
 from app.agent.tools._context import get_tool_context
 from app.agent.tracker import Tracker
-from app.core.config import AppConfig
+from app.core.config import AppConfig, MCP_PREFIX
 from app.spec.index import SpecIndex
 from app.spec.service import SpecNotFoundError, SpecService
 from app.spec.models import RECOGNIZED_LINK_TYPES, RECOGNIZED_STATUSES, RECOGNIZED_TYPES
@@ -289,7 +289,7 @@ async def _spec_delete(args: dict) -> dict:
 # ── MCP server ───────────────────────────────────────────────────────────────
 
 specs_mcp_server = create_sdk_mcp_server(
-    name="bonsai-specs",
+    name=f"{MCP_PREFIX}specs",
     tools=[_spec_search, _spec_links, _spec_delete],
 )
 

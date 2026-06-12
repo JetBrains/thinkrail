@@ -1,4 +1,4 @@
-"""Bonsai visualization MCP tool.
+"""ThinkRail visualization MCP tool.
 
 In-process MCP tool that renders structured visualizations in the frontend.
 The actual rendering happens client-side via the toolCallStart event's
@@ -15,7 +15,7 @@ from claude_agent_sdk import create_sdk_mcp_server, tool
 from app.agent.models import AgentTask
 from app.agent.runtime.permissions import ToolPermissionResponse
 from app.agent.tracker import Tracker
-from app.core.config import AppConfig
+from app.core.config import AppConfig, MCP_PREFIX
 
 from app.agent.tools._vis_validation import (
     VALID_STATUSES,
@@ -84,13 +84,13 @@ def _error_response(vis_type: str, hint: str) -> dict:
 
 
 @tool(
-    "bonsai_visualize",
-    "Render a structured visualization in the Bonsai UI. "
+    "thinkrail_visualize",
+    "Render a structured visualization in the ThinkRail UI. "
     "Use this instead of ASCII art, ANSI escape codes, or Bash echo commands. "
-    "The Bonsai frontend renders the data as an interactive card.",
+    "The ThinkRail frontend renders the data as an interactive card.",
     VIS_SCHEMA,
 )
-async def _bonsai_visualize(args: dict) -> dict:
+async def _thinkrail_visualize(args: dict) -> dict:
     vis_type = args.get("type", "")
     title = args.get("title", vis_type)
     data = args.get("data", {})
@@ -120,7 +120,7 @@ async def _bonsai_visualize(args: dict) -> dict:
     return {"content": [{"type": "text", "text": f"✓ Rendered: {title} ({vis_type})"}]}
 
 
-vis_mcp_server = create_sdk_mcp_server(name="bonsai-vis", tools=[_bonsai_visualize])
+vis_mcp_server = create_sdk_mcp_server(name=f"{MCP_PREFIX}vis", tools=[_thinkrail_visualize])
 
 
 async def intercept_visualize(

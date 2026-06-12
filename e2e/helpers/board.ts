@@ -1,6 +1,6 @@
 /**
  * Helpers for seeding meta-tickets, plans, and spec drafts directly to the
- * temp project's `.bonsai/` directory so board specs don't need an LLM call
+ * temp project's `.tr/` directory so board specs don't need an LLM call
  * to put the system into a non-trivial state.
  *
  * The shapes mirror what the Python backend writes — we keep them in sync
@@ -42,7 +42,7 @@ function nowIso(): string {
 }
 
 /**
- * Write a ticket to `.bonsai/tickets/{id}/ticket.json` (the per-ticket folder
+ * Write a ticket to `.tr/tickets/{id}/ticket.json` (the per-ticket folder
  * layout the board loader walks). Returns the generated ticket id.
  */
 export function seedTicket(projectPath: string, opts: SeedTicketOpts): string {
@@ -62,7 +62,7 @@ export function seedTicket(projectPath: string, opts: SeedTicketOpts): string {
     created: nowIso(),
     updated: nowIso(),
   };
-  const dir = join(projectPath, ".bonsai", "tickets", id);
+  const dir = join(projectPath, ".tr", "tickets", id);
   mkdirSync(dir, { recursive: true });
   writeFileSync(join(dir, "ticket.json"), JSON.stringify(ticket, null, 2) + "\n", "utf8");
   return id;
@@ -86,7 +86,7 @@ export interface SeedPlanOpts {
 }
 
 /**
- * Write a plan markdown file under `.bonsai/plans/{ticketId}.md` matching the
+ * Write a plan markdown file under `.tr/plans/{ticketId}.md` matching the
  * plan parser's milestone format. Returns the path written (relative to the
  * project root).
  */
@@ -126,7 +126,7 @@ export function seedPlan(projectPath: string, opts: SeedPlanOpts): string {
   }
   lines.push("");
 
-  const planRel = `.bonsai/plans/${opts.ticketId}.md`;
+  const planRel = `.tr/plans/${opts.ticketId}.md`;
   const planPath = join(projectPath, planRel);
   mkdirSync(join(planPath, ".."), { recursive: true });
   writeFileSync(planPath, lines.join("\n"), "utf8");
@@ -141,7 +141,7 @@ export interface SeedTrashedSpecOpts {
 }
 
 /**
- * Seed a trashed spec into `.bonsai/trash/specs/<specId>/`. Mirrors
+ * Seed a trashed spec into `.tr/trash/specs/<specId>/`. Mirrors
  * TrashService.trash_spec — restore (the only wired trash-restore RPC) moves
  * the file back to originalDir and re-inserts the registry entry.
  */
@@ -153,7 +153,7 @@ export function seedTrashedSpec(
   const segments = relPath.split("/");
   const fileName = segments[segments.length - 1];
   const originalDir = join(projectPath, ...segments.slice(0, -1));
-  const trashDir = join(projectPath, ".bonsai", "trash", "specs", opts.specId);
+  const trashDir = join(projectPath, ".tr", "trash", "specs", opts.specId);
   mkdirSync(trashDir, { recursive: true });
   writeFileSync(
     join(trashDir, fileName),
@@ -188,7 +188,7 @@ export interface SeedDraftEntry {
 }
 
 /**
- * Write a draft manifest + draft files under `.bonsai/spec-drafts/{ticketId}/`.
+ * Write a draft manifest + draft files under `.tr/spec-drafts/{ticketId}/`.
  * Each entry is a draft change waiting to be applied.
  */
 export function seedDrafts(
@@ -196,7 +196,7 @@ export function seedDrafts(
   ticketId: string,
   entries: SeedDraftEntry[],
 ): void {
-  const ticketDir = join(projectPath, ".bonsai", "spec-drafts", ticketId);
+  const ticketDir = join(projectPath, ".tr", "spec-drafts", ticketId);
   mkdirSync(ticketDir, { recursive: true });
 
   const manifestEntries = entries.map((e) => {

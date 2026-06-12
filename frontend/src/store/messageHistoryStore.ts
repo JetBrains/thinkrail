@@ -1,4 +1,5 @@
 import { create } from "zustand";
+import { STORAGE_PREFIX } from "@/constants/branding.ts";
 import { persist } from "zustand/middleware";
 
 interface MessageHistoryStore {
@@ -18,7 +19,7 @@ export const useMessageHistoryStore = create<MessageHistoryStore>()(
         })),
     }),
     {
-      name: "bonsai-message-history",
+      name: `${STORAGE_PREFIX}message-history`,
       partialize: (state) => ({ history: state.history }),
     },
   ),

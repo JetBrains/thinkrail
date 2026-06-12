@@ -5,7 +5,7 @@ events to topics; the bus fans out to subscribed connections.
 
 Topics:
     project:{path}      — file changes, spec updates, vis state, board
-    session:{bonsai_sid} — agent events, interactive requests
+    session:{thinkrail_sid} — agent events, interactive requests
 """
 
 from __future__ import annotations
@@ -173,7 +173,7 @@ class EventBus:
 
     async def publish_to_session(
         self,
-        bonsai_sid: str,
+        thinkrail_sid: str,
         method: str,
         params: dict,
         request_id: str | None = None,
@@ -181,7 +181,7 @@ class EventBus:
     ) -> None:
         """Convenience: publish to a session topic."""
         await self.publish(
-            f"session:{bonsai_sid}", method, params,
+            f"session:{thinkrail_sid}", method, params,
             request_id=request_id, source_user=source_user,
         )
 

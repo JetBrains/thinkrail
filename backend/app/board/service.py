@@ -2,7 +2,7 @@
 
 Manages the per-ticket lifecycle (idea → product-design → technical-design →
 amend-specs → implementation-plan → implementing → done), per-ticket
-artifact files under ``.bonsai/tickets/{id}/``, and side-effects for state
+artifact files under ``.tr/tickets/{id}/``, and side-effects for state
 transitions (single commit on entry to ``implementation-plan`` covering all
 accumulated spec amendments + the per-ticket .patch log).
 """
@@ -45,7 +45,7 @@ from app.board.storage import (
     wipe_legacy_meta_tickets,
     write_ticket,
 )
-from app.core.config import AppConfig
+from app.core.config import AppConfig, DESIGN_DOCS_DIR, PROJECT_DIRNAME, TICKETS_DIR
 
 logger = logging.getLogger(__name__)
 
@@ -326,8 +326,8 @@ class BoardService:
         if from_status == "amend-specs" and to_status == "implementation-plan":
             self._commit_paths(
                 [
-                    ".bonsai/design_docs",
-                    f".bonsai/tickets/{ticket_id}/history.patch",
+                    f"{PROJECT_DIRNAME}/{DESIGN_DOCS_DIR}",
+                    f"{PROJECT_DIRNAME}/{TICKETS_DIR}/{ticket_id}/history.patch",
                 ],
                 f"[ticket {ticket_id}] amend specs",
             )

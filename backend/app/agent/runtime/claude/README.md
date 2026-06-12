@@ -20,7 +20,7 @@ tags:
 
 `runtime/claude/` implements `IAgentRuntime` for the Claude Agent SDK.
 It owns the conversational loop, drives the SDK client, maps SDK
-messages onto bonsai's unified event stream, serves the static Claude
+messages onto thinkrail's unified event stream, serves the static Claude
 model catalog shipped with the package, and runs the per-session
 subagent / PreCompact correlation logic.
 
@@ -96,7 +96,7 @@ The loop terminates on `END_SIGNAL` (graceful end_session), interrupt
 ## SubagentHooks correlation
 
 The Claude SDK's `Task` tool spawns a child agent and emits
-`SubagentStart` / `SubagentStop` hooks. Bonsai needs to:
+`SubagentStart` / `SubagentStop` hooks. ThinkRail needs to:
 
 1. Emit `agent/subagentStart` / `agent/subagentEnd` events to the
    frontend so subagent blocks render.
@@ -109,7 +109,7 @@ The Claude SDK's `Task` tool spawns a child agent and emits
   whose Stop hasn't. Used to emit synthetic `agent/subagentEnd` on
   interrupt.
 - `_parent_to_agent: dict[str, str]` — maps SDK
-  `parent_tool_use_id` → bonsai `agent_id`. Streamed events from the
+  `parent_tool_use_id` → thinkrail `agent_id`. Streamed events from the
   child carry the parent id; the runtime resolves the agent id via
   `hooks.resolve_agent_id`.
 - `_pending_task_tool_ids: list[str]` — queue of `Task` tool-use ids
@@ -145,7 +145,7 @@ these sources:
 
 - `permission_modes` ← `get_args(PermissionMode)` from the SDK; the value
   doubles as the display label.
-- `effort_levels` ← `get_args(EffortLevel)` from the SDK, with Bonsai's `auto`
+- `effort_levels` ← `get_args(EffortLevel)` from the SDK, with ThinkRail's `auto`
   prepended.
 - `models` ← `self._models.list_options()`.
 - `flags` ← module constant `_CLAUDE_FLAGS` — runtime-declared option toggles
@@ -174,7 +174,7 @@ whichever window the model actually granted — no per-model `supports1M` table.
 
 `ClaudeRuntime.list_skills()` exposes the slash-command-style skills
 the user can invoke from inside a Claude Code session — so the chat
-composer can surface them in its slash autocomplete alongside Bonsai's
+composer can surface them in its slash autocomplete alongside ThinkRail's
 bundled skills.  The runtime is a thin one-line delegate; all discovery
 logic lives in `ClaudeSkillRegistry` (`skills.py`).
 
@@ -207,15 +207,15 @@ model catalog.
 - Malformed `SKILL.md` → `logger.warning(..., exc_info=True)`, skipped
   (mirrors the existing pattern in `scan_skill_frontmatter`).
 - Any unexpected error in `list_skills` itself → caught, returns `[]`.
-  Drives the frontend's "Bonsai-only silent fallback" UX rule (the
+  Drives the frontend's "ThinkRail-only silent fallback" UX rule (the
   runtime section just disappears, no toast).
 
 **Why dedup is first-wins.** User-scoped overrides take precedence so a
 developer can locally shadow a plugin- or built-in-supplied skill by
 dropping a `SKILL.md` into `~/.claude/skills/<id>/`. Project-scoped
 beats plugin/built-in for the same reason. The frontend additionally
-dedups runtime skills whose `id` collides with a Bonsai bundled skill
-(Bonsai wins) — see [Runtime Skills Autocomplete design](../../../../.bonsai/runtime-skills-autocomplete/design-doc.md).
+dedups runtime skills whose `id` collides with a ThinkRail bundled skill
+(ThinkRail wins) — see [Runtime Skills Autocomplete design](../../../../.tr/runtime-skills-autocomplete/design-doc.md).
 
 **Wire surface.** Exposed via the `skills/listRuntime` RPC method in
 `backend/app/rpc/methods/settings.py`; see
@@ -226,7 +226,7 @@ dedups runtime skills whose `id` collides with a Bonsai bundled skill
 These behaviours were called out in plan 02's Risks section and must
 remain intact:
 
-1. **`CLAUDECODE` env stripping** — when bonsai runs inside a Claude
+1. **`CLAUDECODE` env stripping** — when thinkrail runs inside a Claude
    Code terminal during development, the SDK's bundled CLI rejects
    nested sessions. Strip `CLAUDECODE` and `CLAUDE_CODE_EXECPATH`
    before spawning.
@@ -281,7 +281,7 @@ the next tool call without any runtime API call.
 `ClaudeRuntime.interrupt(task, tracker)`:
 
 ```python
-client = tracker.get_client(task.bonsai_sid)
+client = tracker.get_client(task.thinkrail_sid)
 if client is None:
     return
 try:

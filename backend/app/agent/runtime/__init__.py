@@ -1,6 +1,6 @@
 """Runtime-agnostic agent contract.
 
-This package defines the abstraction layer that lets bonsai run different
+This package defines the abstraction layer that lets thinkrail run different
 agent backends behind a single interface. The Claude SDK is the only
 backend today; the contract is shaped so others can be added.
 """

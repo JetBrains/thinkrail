@@ -7,11 +7,11 @@ export function setClient(client: RpcClientType): void {
   _client = client;
   // Dev-only debug hook so you can manually resolve a stuck pending request
   // from DevTools when a card fails to render:
-  //   window.__bonsaiClient.notify("agent/respond", {
-  //     bonsaiSid, requestId, response: { behavior: "deny", discuss: false }
+  //   window.__thinkrailClient.notify("agent/respond", {
+  //     thinkrailSid, requestId, response: { behavior: "deny", discuss: false }
   //   })
   if (typeof window !== "undefined" && import.meta.env.DEV) {
-    (window as unknown as { __bonsaiClient?: RpcClientType }).__bonsaiClient = client;
+    (window as unknown as { __thinkrailClient?: RpcClientType }).__thinkrailClient = client;
   }
 }
 

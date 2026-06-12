@@ -1,7 +1,7 @@
 [project]
-name = "bonsai-backend"
+name = "tr-backend"
 version = "0.1.0"
-description = "Bonsai — specification-driven development workspace"
+description = "ThinkRail — specification-driven development workspace"
 requires-python = ">=3.11"
 dependencies = [
     "pydantic>=2.0",

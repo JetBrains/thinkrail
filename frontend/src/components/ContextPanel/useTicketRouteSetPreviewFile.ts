@@ -30,7 +30,7 @@ export function useTicketRouteSetPreviewFile(
   useEffect(() => {
     if (!session) return;
     const previewPath = session.previewPath;
-    const key = `${session.bonsaiSid}:${previewPath ?? ""}`;
+    const key = `${session.thinkrailSid}:${previewPath ?? ""}`;
     if (key === lastKeyRef.current) return;
     lastKeyRef.current = key;
 

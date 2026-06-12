@@ -34,16 +34,16 @@ jobs:
       matrix:
         include:
           - os: ubuntu-latest
-            artifact_name: bonsai-linux-x64
+            artifact_name: thinkrail-linux-x64
           - os: ubuntu-24.04-arm
-            artifact_name: bonsai-linux-arm64
+            artifact_name: thinkrail-linux-arm64
 #          Disabled for now because runner waiting time is too long.
 #          - os: macos-13
-#            artifact_name: bonsai-macos-x64
+#            artifact_name: thinkrail-macos-x64
           - os: macos-14
-            artifact_name: bonsai-macos-arm64
+            artifact_name: thinkrail-macos-arm64
           - os: windows-latest
-            artifact_name: bonsai-windows-x64.exe
+            artifact_name: thinkrail-windows-x64.exe
 
     runs-on: ${{ matrix.os }}
 

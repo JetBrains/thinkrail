@@ -22,7 +22,7 @@ from app.agent.models import AgentTask, SessionOutcome
 from app.agent.runtime.permissions import ToolPermissionResponse
 from app.agent.tools._context import get_tool_context
 from app.agent.tracker import Tracker
-from app.core.config import AppConfig
+from app.core.config import AppConfig, MCP_PREFIX
 
 logger = logging.getLogger(__name__)
 
@@ -137,8 +137,8 @@ async def _session_finalize(args: dict) -> dict:
             f"Keep it to one banner-style line."
         )
 
-    bonsai_sid = ctx.task.bonsai_sid
-    updated = ctx.tracker.set_outcome(bonsai_sid, outcome)
+    thinkrail_sid = ctx.task.thinkrail_sid
+    updated = ctx.tracker.set_outcome(thinkrail_sid, outcome)
 
     # Tell the frontend the session metadata changed so the done-screen can
     # render the outcome as soon as it's available — even before status=done.
@@ -152,7 +152,7 @@ async def _session_finalize(args: dict) -> dict:
     # loop would sit waiting for the next user message and the status would
     # never flip to "done" — the frontend would stay stuck in the
     # in-progress goal layout.
-    ctx.tracker.enqueue_end_signal(bonsai_sid)
+    ctx.tracker.enqueue_end_signal(thinkrail_sid)
 
     summary = (
         f"Outcome saved: {len(outcome.artifacts)} artifact(s), "
@@ -162,7 +162,7 @@ async def _session_finalize(args: dict) -> dict:
 
 
 session_outcome_mcp_server = create_sdk_mcp_server(
-    name="bonsai-session-outcome", tools=[_session_finalize]
+    name=f"{MCP_PREFIX}session-outcome", tools=[_session_finalize]
 )
 
 

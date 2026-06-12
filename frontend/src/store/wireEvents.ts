@@ -66,8 +66,8 @@ export function wireEvents(client: RpcClient): Unsubscribe {
     client.on("file/didChange", (p) => {
       const { path } = p as { path: string };
       useFileStore.getState().onFileChanged(path);
-      // Reload settings when .bonsai/settings.json changes on disk
-      if (path === ".bonsai/settings.json") {
+      // Reload settings when .tr/settings.json changes on disk
+      if (path === ".tr/settings.json") {
         useSettingsStore.getState().fetchSettings();
       }
     }),
@@ -137,17 +137,17 @@ export function wireEvents(client: RpcClient): Unsubscribe {
   unsubs.push(
     client.on("session/didEnd", (p) => {
       const params = p as Record<string, unknown>;
-      const bonsaiSid = params.bonsaiSid as string;
+      const thinkrailSid = params.thinkrailSid as string;
       const status = params.status as string;
-      if (!bonsaiSid || !status) return;
+      if (!thinkrailSid || !status) return;
       // Update session status in the in-memory sessions Map if it exists
-      const session = useSessionStore.getState().sessions.get(bonsaiSid);
+      const session = useSessionStore.getState().sessions.get(thinkrailSid);
       if (session && session.status !== "done" && session.status !== "error") {
         const sessions = new Map(useSessionStore.getState().sessions);
-        sessions.set(bonsaiSid, { ...session, status: status as typeof session.status });
+        sessions.set(thinkrailSid, { ...session, status: status as typeof session.status });
         useSessionStore.setState({ sessions });
       }
-      useSessionStore.getState().patchSessionInList(bonsaiSid, { status });
+      useSessionStore.getState().patchSessionInList(thinkrailSid, { status });
     }),
   );
 
@@ -156,10 +156,10 @@ export function wireEvents(client: RpcClient): Unsubscribe {
   unsubs.push(
     client.on("agent/statusChanged", (p) => {
       const params = p as Record<string, unknown>;
-      const bonsaiSid = params.bonsaiSid as string;
+      const thinkrailSid = params.thinkrailSid as string;
       const status = params.status as string;
-      if (!bonsaiSid || !status) return;
-      useSessionStore.getState().patchSessionInList(bonsaiSid, { status });
+      if (!thinkrailSid || !status) return;
+      useSessionStore.getState().patchSessionInList(thinkrailSid, { status });
     }),
   );
   unsubs.push(
@@ -167,12 +167,12 @@ export function wireEvents(client: RpcClient): Unsubscribe {
       const params = p as Record<string, unknown>;
       useSessionStore.getState().onSessionDone(params);
       useNotificationStore.getState().addToast({
-        bonsaiSid: params.bonsaiSid as string,
+        thinkrailSid: params.thinkrailSid as string,
         eventType: "success",
         message: "Session completed",
         persistent: false,
       });
-      useNotificationStore.getState().setBadge(params.bonsaiSid as string, {
+      useNotificationStore.getState().setBadge(params.thinkrailSid as string, {
         type: "done",
         pulsing: false,
       });
@@ -190,7 +190,7 @@ export function wireEvents(client: RpcClient): Unsubscribe {
         ? "Context window full"
         : errors[0] || subtype || "unknown error";
       useNotificationStore.getState().addToast({
-        bonsaiSid: params.bonsaiSid as string,
+        thinkrailSid: params.thinkrailSid as string,
         eventType: "error",
         message: isCrash
           ? `Session crashed: ${detail}`
@@ -199,7 +199,7 @@ export function wireEvents(client: RpcClient): Unsubscribe {
             : `Session error: ${detail}`,
         persistent: isCrash,
       });
-      useNotificationStore.getState().setBadge(params.bonsaiSid as string, {
+      useNotificationStore.getState().setBadge(params.thinkrailSid as string, {
         type: "error",
         pulsing: false,
       });
@@ -225,16 +225,16 @@ export function wireEvents(client: RpcClient): Unsubscribe {
   unsubs.push(
     client.on("agent/askUserQuestion", (p) => {
       const params = p as Record<string, unknown>;
-      const bonsaiSid = params.bonsaiSid as string;
+      const thinkrailSid = params.thinkrailSid as string;
       useSessionStore.getState().onAskQuestion(params);
       useNotificationStore.getState().incrementPendingInput();
       useNotificationStore.getState().addToast({
-        bonsaiSid,
+        thinkrailSid,
         eventType: "question",
         message: "Agent has a question",
         persistent: true,
       });
-      useNotificationStore.getState().setBadge(bonsaiSid, {
+      useNotificationStore.getState().setBadge(thinkrailSid, {
         type: "question",
         pulsing: true,
       });
@@ -244,16 +244,16 @@ export function wireEvents(client: RpcClient): Unsubscribe {
   unsubs.push(
     client.on("agent/confirmAction", (p) => {
       const params = p as Record<string, unknown>;
-      const bonsaiSid = params.bonsaiSid as string;
+      const thinkrailSid = params.thinkrailSid as string;
       useSessionStore.getState().onConfirmAction(params);
       useNotificationStore.getState().incrementPendingInput();
       useNotificationStore.getState().addToast({
-        bonsaiSid,
+        thinkrailSid,
         eventType: "approval",
         message: `Approve: ${(params.toolName as string) ?? "action"}`,
         persistent: true,
       });
-      useNotificationStore.getState().setBadge(bonsaiSid, {
+      useNotificationStore.getState().setBadge(thinkrailSid, {
         type: "approval",
         pulsing: true,
       });
@@ -279,16 +279,16 @@ export function wireEvents(client: RpcClient): Unsubscribe {
   unsubs.push(
     client.on("agent/suggestSession", (p) => {
       const params = p as Record<string, unknown>;
-      const bonsaiSid = params.bonsaiSid as string;
+      const thinkrailSid = params.thinkrailSid as string;
       useSessionStore.getState().onSuggestSession(params);
       useNotificationStore.getState().incrementPendingInput();
       useNotificationStore.getState().addToast({
-        bonsaiSid,
+        thinkrailSid,
         eventType: "suggestion",
         message: "Agent suggests a new session",
         persistent: false,
       });
-      useNotificationStore.getState().setBadge(bonsaiSid, {
+      useNotificationStore.getState().setBadge(thinkrailSid, {
         type: "suggestion",
         pulsing: true,
       });
@@ -299,16 +299,16 @@ export function wireEvents(client: RpcClient): Unsubscribe {
   unsubs.push(
     client.on("agent/suggestDescription", (p) => {
       const params = p as Record<string, unknown>;
-      const bonsaiSid = params.bonsaiSid as string;
+      const thinkrailSid = params.thinkrailSid as string;
       useSessionStore.getState().onSuggestDescription(params);
       useNotificationStore.getState().incrementPendingInput();
       useNotificationStore.getState().addToast({
-        bonsaiSid,
+        thinkrailSid,
         eventType: "suggestion",
         message: "Agent suggests a description",
         persistent: false,
       });
-      useNotificationStore.getState().setBadge(bonsaiSid, {
+      useNotificationStore.getState().setBadge(thinkrailSid, {
         type: "suggestion",
         pulsing: true,
       });
@@ -319,16 +319,16 @@ export function wireEvents(client: RpcClient): Unsubscribe {
   unsubs.push(
     client.on("agent/proposeChange", (p) => {
       const params = p as Record<string, unknown>;
-      const bonsaiSid = params.bonsaiSid as string;
+      const thinkrailSid = params.thinkrailSid as string;
       useSessionStore.getState().onProposeChange(params);
       useNotificationStore.getState().incrementPendingInput();
       useNotificationStore.getState().addToast({
-        bonsaiSid,
+        thinkrailSid,
         eventType: "approval",
         message: `Spec amendment: ${params.filePath ?? ""}`,
         persistent: true,
       });
-      useNotificationStore.getState().setBadge(bonsaiSid, {
+      useNotificationStore.getState().setBadge(thinkrailSid, {
         type: "approval",
         pulsing: true,
       });
@@ -363,16 +363,16 @@ export function wireEvents(client: RpcClient): Unsubscribe {
   unsubs.push(
     client.on("agent/suggestStep", (p) => {
       const params = p as Record<string, unknown>;
-      const bonsaiSid = params.bonsaiSid as string;
+      const thinkrailSid = params.thinkrailSid as string;
       useSessionStore.getState().onSuggestStep(params);
       useNotificationStore.getState().incrementPendingInput();
       useNotificationStore.getState().addToast({
-        bonsaiSid,
+        thinkrailSid,
         eventType: "suggestion",
         message: `Step ${params.stepNumber}: ${params.stepTitle}`,
         persistent: false,
       });
-      useNotificationStore.getState().setBadge(bonsaiSid, {
+      useNotificationStore.getState().setBadge(thinkrailSid, {
         type: "suggestion",
         pulsing: true,
       });
@@ -394,7 +394,7 @@ export function wireEvents(client: RpcClient): Unsubscribe {
   );
   unsubs.push(
     client.on("board/didCreate", (p) => {
-      const params = p as import("@/types/board.ts").TicketSummary & { bonsaiSid?: string };
+      const params = p as import("@/types/board.ts").TicketSummary & { thinkrailSid?: string };
       useBoardStore.getState().handleDidCreate(params);
     }),
   );

@@ -193,7 +193,7 @@ class TestPublish:
         bus.register(conn)
         bus.subscribe("c1", "session:sid1")
 
-        await bus.publish_to_session("sid1", "agent/done", {"bonsaiSid": "sid1"})
+        await bus.publish_to_session("sid1", "agent/done", {"thinkrailSid": "sid1"})
 
         msg = json.loads(conn.ws.send_text.call_args[0][0])
         assert msg["method"] == "agent/done"

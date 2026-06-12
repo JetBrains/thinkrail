@@ -142,7 +142,7 @@ export function SessionPanel({
   const openTabs = useSessionStore((s) => s.openTabs);
   const sessionList = isEmbedded
     ? []
-    : Array.from(sessions.values()).filter((s) => openTabs.has(s.bonsaiSid));
+    : Array.from(sessions.values()).filter((s) => openTabs.has(s.thinkrailSid));
   const fileList = isEmbedded ? [] : Array.from(openFiles.values());
   // In embedded mode the file viewer never takes over — the ticket route
   // shows artifacts via its own right-panel surface, and the user opening
@@ -312,27 +312,27 @@ export function SessionPanel({
               projectCost={projectCost}
               disabled={activeSession.restored || isDone}
               actionSlotRef={setActionSlot}
-              onChangeModel={(m) => updateConfig(activeSession.bonsaiSid, { model: m })}
-              onChangePermissionMode={(m) => updateConfig(activeSession.bonsaiSid, { permissionMode: m })}
-              onInterrupt={() => interruptSession(activeSession.bonsaiSid)}
-              onEndSession={() => endSession(activeSession.bonsaiSid)}
-              onBackground={() => closeSession(activeSession.bonsaiSid)}
+              onChangeModel={(m) => updateConfig(activeSession.thinkrailSid, { model: m })}
+              onChangePermissionMode={(m) => updateConfig(activeSession.thinkrailSid, { permissionMode: m })}
+              onInterrupt={() => interruptSession(activeSession.thinkrailSid)}
+              onEndSession={() => endSession(activeSession.thinkrailSid)}
+              onBackground={() => closeSession(activeSession.thinkrailSid)}
               onChangeEffort={async (e) => {
-                await updateConfig(activeSession.bonsaiSid, { effort: e });
-                await restartSession(activeSession.bonsaiSid);
+                await updateConfig(activeSession.thinkrailSid, { effort: e });
+                await restartSession(activeSession.thinkrailSid);
               }}
             />
             {activeSession.restored || isDone ? (
-              <RestoredBar bonsaiSid={activeSession.bonsaiSid} ended={isDone && !activeSession.restored} />
+              <RestoredBar thinkrailSid={activeSession.thinkrailSid} ended={isDone && !activeSession.restored} />
             ) : (
               <InputArea
-                sessionId={activeSession.bonsaiSid}
+                sessionId={activeSession.thinkrailSid}
                 disabled={inputDisabled}
                 placeholder={placeholder}
                 onSend={handleSend}
                 isRunning={isRunning}
                 canInterrupt={canInterrupt}
-                onInterrupt={() => interruptSession(activeSession!.bonsaiSid)}
+                onInterrupt={() => interruptSession(activeSession!.thinkrailSid)}
                 showContinue={showContinue}
                 onContinue={handleContinue}
                 isDraft={isDraft}
@@ -403,20 +403,20 @@ export function SessionPanel({
   return <div className="session-single-panel">{leftPanelContent}</div>;
 }
 
-function RestoredBar({ bonsaiSid, ended }: { bonsaiSid: string; ended?: boolean }) {
+function RestoredBar({ thinkrailSid, ended }: { thinkrailSid: string; ended?: boolean }) {
   const handleResume = useCallback(async () => {
     try {
-      await useSessionStore.getState().continueSession(bonsaiSid);
+      await useSessionStore.getState().continueSession(thinkrailSid);
     } catch (e) {
       console.error("Failed to resume session:", e);
       useNotificationStore.getState().addToast({
         eventType: "error",
         message: `Resume failed: ${getErrorMessage(e)}`,
         persistent: true,
-        bonsaiSid,
+        thinkrailSid,
       });
     }
-  }, [bonsaiSid]);
+  }, [thinkrailSid]);
 
   return (
     <div className="restored-bar">

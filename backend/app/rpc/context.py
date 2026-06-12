@@ -24,8 +24,8 @@ def get_current_conn():
         return None
 
 
-def auto_subscribe_all(bonsai_sid: str) -> None:
-    """Subscribe every connection on the same project to *bonsai_sid*'s topic.
+def auto_subscribe_all(thinkrail_sid: str) -> None:
+    """Subscribe every connection on the same project to *thinkrail_sid*'s topic.
 
     Phase 1 behaviour: all clients on the project receive all session events.
     Phase 3 will restrict this to explicit per-client subscriptions.
@@ -34,6 +34,6 @@ def auto_subscribe_all(bonsai_sid: str) -> None:
 
     conn = get_current_conn()
     if conn:
-        topic = f"session:{bonsai_sid}"
+        topic = f"session:{thinkrail_sid}"
         for c in bus.connections_for_project(conn.project_path):
             bus.subscribe(c.conn_id, topic)

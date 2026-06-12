@@ -18,7 +18,7 @@ tags:
 
 ## Overview
 
-Bonsai uses a CSS custom property system for theming. The default is a dark theme (JetBrains New UI / Darcula-inspired). A light theme variant is auto-activated via `prefers-color-scheme`. Users can override with an explicit preference.
+ThinkRail uses a CSS custom property system for theming. The default is a dark theme (JetBrains New UI / Darcula-inspired). A light theme variant is auto-activated via `prefers-color-scheme`. Users can override with an explicit preference.
 
 ## Theme Architecture
 
@@ -73,8 +73,8 @@ All colors are defined as CSS custom properties on `:root`. Components reference
 
 | Token | Formula | Default (base=13px) |
 | --- | --- | --- |
-| `--font-base` | set by JS from `.bonsai/settings.json` | `13px` |
-| `--compact-font-base` | set by JS from `.bonsai/settings.json` | `9px` |
+| `--font-base` | set by JS from `.tr/settings.json` | `13px` |
+| `--compact-font-base` | set by JS from `.tr/settings.json` | `9px` |
 | `--font-xs` | `calc(--font-base * 0.69)` | `9.0px` |
 | `--font-sm` | `calc(--font-base * 0.77)` | `10.0px` |
 | `--font-md` | `calc(--font-base * 0.85)` | `11.1px` |
@@ -105,7 +105,7 @@ All colors are defined as CSS custom properties on `:root`. Components reference
 
 ### Settings-Driven Font Scale
 
-All font, spacing, and radius tokens derive from `--font-base` via CSS `calc()` ratios. The base value is read from `.bonsai/settings.json` and applied to `:root` by `frontend/src/utils/fontScale.ts`.
+All font, spacing, and radius tokens derive from `--font-base` via CSS `calc()` ratios. The base value is read from `.tr/settings.json` and applied to `:root` by `frontend/src/utils/fontScale.ts`.
 
 **Settings fields:**
 - `font_size` (default: 13) — base font size for normal view
@@ -115,7 +115,7 @@ All font, spacing, and radius tokens derive from `--font-base` via CSS `calc()` 
 
 **Monaco editors:** Use the `useFontSize(step)` hook from `fontScale.ts` to get computed px values.
 
-**Live reload:** Changes to `.bonsai/settings.json` are detected by the file watcher and pushed to the frontend via `file/didChange` notification, which triggers a settings re-fetch and CSS update.
+**Live reload:** Changes to `.tr/settings.json` are detected by the file watcher and pushed to the frontend via `file/didChange` notification, which triggers a settings re-fetch and CSS update.
 
 ### Transition Tokens
 
@@ -132,7 +132,7 @@ All font, spacing, and radius tokens derive from `--font-base` via CSS `calc()` 
 type ThemePreference = "dark" | "light" | "system";
 ```
 
-- Stored in `localStorage` under key `bonsai-theme`
+- Stored in `localStorage` under key `thinkrail-theme`
 - Default: `"system"` (follows OS preference)
 - Applied by setting `data-theme` attribute on `<html>`
 
@@ -146,11 +146,11 @@ function applyTheme(preference: ThemePreference): void {
   } else {
     html.setAttribute("data-theme", preference);
   }
-  localStorage.setItem("bonsai-theme", preference);
+  localStorage.setItem("thinkrail-theme", preference);
 }
 
 // On app start:
-const saved = localStorage.getItem("bonsai-theme") as ThemePreference || "system";
+const saved = localStorage.getItem("thinkrail-theme") as ThemePreference || "system";
 applyTheme(saved);
 ```
 

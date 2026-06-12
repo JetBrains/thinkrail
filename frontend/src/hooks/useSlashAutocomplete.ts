@@ -2,19 +2,19 @@
  * `useSlashAutocomplete` — slash-command autocomplete hook for the chat
  * composer.
  *
- * Implements the mid-input trigger + grouped (Bonsai + active runtime)
+ * Implements the mid-input trigger + grouped (ThinkRail + active runtime)
  * suggestions described in
- * `.bonsai/runtime-skills-autocomplete/design-doc.md` §6.1–6.4.
+ * `.tr/runtime-skills-autocomplete/design-doc.md` §6.1–6.4.
  *
  * Responsibilities:
  *  - Detect the active `/token` at the caret (§6.2).
- *  - Build two groups — Bonsai first, runtime second — with dedup so
- *    Bonsai's skill ids win over any colliding runtime skill (§6.3).
+ *  - Build two groups — ThinkRail first, runtime second — with dedup so
+ *    ThinkRail's skill ids win over any colliding runtime skill (§6.3).
  *  - Expose keyboard navigation that wraps across the group boundary
  *    and inserts the chosen suggestion at the caret (§6.4).
  *
  * The hook is intentionally storage-agnostic on the consumer side: it
- * reads bonsai skills + per-runtime skill caches from `useSettingsStore`
+ * reads thinkrail skills + per-runtime skill caches from `useSettingsStore`
  * and only asks the caller for `text`, `caret`, `runtime`, and an
  * `onInsert` callback.
  */
@@ -25,6 +25,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useSettingsStore } from "@/store/settingsStore.ts";
 import { useRuntimeCapsStore } from "@/store/runtimeCapsStore.ts";
 import type { Skill } from "@/constants/skills.ts";
+import { PRODUCT_NAME } from "@/constants/branding";
 import type { RuntimeSkillInfo, RuntimeType } from "@/types/agent.ts";
 
 // ─── Public interfaces — verbatim from design doc §6.1 ───────────────────────
@@ -34,11 +35,11 @@ export interface SkillSuggestion {
   name: string;
   description: string;
   icon?: string;
-  source: "bonsai" | "runtime";
+  source: "thinkrail" | "runtime";
 }
 
 export interface SuggestionGroup {
-  /** "Bonsai" or the runtime's displayName (e.g. "Claude Code"). */
+  /** "ThinkRail" or the runtime's displayName (e.g. "Claude Code"). */
   label: string;
   items: SkillSuggestion[];
 }
@@ -46,7 +47,7 @@ export interface SuggestionGroup {
 export interface UseSlashAutocompleteResult {
   /** Empty when the popup is closed (no active /token at caret). */
   groups: SuggestionGroup[];
-  /** Bonsai items first, then runtime items — same order keyboard nav uses. */
+  /** ThinkRail items first, then runtime items — same order keyboard nav uses. */
   flatItems: SkillSuggestion[];
   selectedIndex: number;
   setSelectedIndex: (i: number) => void;
@@ -135,13 +136,13 @@ function filterByQuery<T extends { id: string }>(items: readonly T[], query: str
   return items.filter((s) => s.id.toLowerCase().includes(query));
 }
 
-function bonsaiSkillToSuggestion(s: Skill): SkillSuggestion {
+function thinkrailSkillToSuggestion(s: Skill): SkillSuggestion {
   return {
     id: s.id,
     name: s.name,
     description: s.description,
     icon: s.icon,
-    source: "bonsai",
+    source: "thinkrail",
   };
 }
 
@@ -157,7 +158,7 @@ function runtimeSkillToSuggestion(s: RuntimeSkillInfo): SkillSuggestion {
 // ─── Hook implementation ─────────────────────────────────────────────────────
 
 const DEFAULT_RUNTIME: RuntimeType = "claude";
-const BONSAI_LABEL = "Bonsai";
+const THINKRAIL_LABEL = PRODUCT_NAME;
 
 export function useSlashAutocomplete(
   opts: UseSlashAutocompleteOpts,
@@ -165,9 +166,9 @@ export function useSlashAutocomplete(
   const { text, caret, runtime, onInsert } = opts;
   const effectiveRuntime: RuntimeType = runtime ?? DEFAULT_RUNTIME;
 
-  // Subscribe to the bonsai skills + per-runtime skill cache + runtime
+  // Subscribe to the thinkrail skills + per-runtime skill cache + runtime
   // metadata. Using selectors keeps re-renders narrow.
-  const bonsaiSkills = useSettingsStore((s) => s.skills);
+  const thinkrailSkills = useSettingsStore((s) => s.skills);
   const runtimeSkillsMap = useSettingsStore((s) => s.runtimeSkills);
   const runtimes = useRuntimeCapsStore((s) => s.runtimes);
 
@@ -199,22 +200,22 @@ export function useSlashAutocomplete(
     }
 
     const query = token.query;
-    const bonsaiIds = new Set(bonsaiSkills.map((s) => s.id));
-    const runtimeDeduped = runtimeSkills.filter((s) => !bonsaiIds.has(s.id));
+    const thinkrailIds = new Set(thinkrailSkills.map((s) => s.id));
+    const runtimeDeduped = runtimeSkills.filter((s) => !thinkrailIds.has(s.id));
 
-    const bonsaiItems = filterByQuery(bonsaiSkills, query).map(bonsaiSkillToSuggestion);
+    const thinkrailItems = filterByQuery(thinkrailSkills, query).map(thinkrailSkillToSuggestion);
     const runtimeItems = filterByQuery(runtimeDeduped, query).map(runtimeSkillToSuggestion);
 
     const built: SuggestionGroup[] = [];
-    if (bonsaiItems.length > 0) {
-      built.push({ label: BONSAI_LABEL, items: bonsaiItems });
+    if (thinkrailItems.length > 0) {
+      built.push({ label: THINKRAIL_LABEL, items: thinkrailItems });
     }
     if (runtimeItems.length > 0) {
       built.push({ label: runtimeDisplayName, items: runtimeItems });
     }
     const flat = built.flatMap((g) => g.items);
     return { groups: built, flatItems: flat };
-  }, [token, bonsaiSkills, runtimeSkills, runtimeDisplayName]);
+  }, [token, thinkrailSkills, runtimeSkills, runtimeDisplayName]);
 
   // Clamp selectedIndex when the result set shrinks (e.g. user narrows
   // the query mid-typing).

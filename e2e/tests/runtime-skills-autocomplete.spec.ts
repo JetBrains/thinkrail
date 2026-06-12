@@ -5,15 +5,15 @@ import { inputAutocomplete, newSession } from "../helpers/selectors";
 
 /**
  * Slash autocomplete in the chat composer — mid-input trigger + grouped
- * (Bonsai + active runtime) popup.
+ * (ThinkRail + active runtime) popup.
  *
  * Locks in the behaviour described in
- * `.bonsai/runtime-skills-autocomplete/design-doc.md` §3 (UX) and §8.3
+ * `.tr/runtime-skills-autocomplete/design-doc.md` §3 (UX) and §8.3
  * (e2e plan):
  *
  *  - `/` after whitespace mid-textarea opens the popup (not just at the
  *    start of input).
- *  - Two sections render: "Bonsai" first, then the active runtime's
+ *  - Two sections render: "ThinkRail" first, then the active runtime's
  *    `displayName` ("Claude Code") — assertions match on **visible text**,
  *    not value, per the e2e-model-picker memory note.
  *  - ArrowDown crosses the section boundary into the runtime group.
@@ -30,12 +30,12 @@ import { inputAutocomplete, newSession } from "../helpers/selectors";
  *
  * Per the AppStore-isolation memory note, we seed `session_defaults`
  * explicitly so the spec doesn't rely on whatever the user's previous
- * runs left in `~/.bonsai/bonsai.db`. The seeded model resolves through
+ * runs left in `~/.tr/tr.db`. The seeded model resolves through
  * the Claude runtime, which makes the effective runtime — and therefore
  * the second section header — `"Claude Code"`.
  */
 
-// Bonsai's `isMod` returns ctrlKey on macOS and altKey elsewhere
+// ThinkRail's `isMod` returns ctrlKey on macOS and altKey elsewhere
 // (`frontend/src/utils/platform.ts::IS_MAC` is derived from
 // `navigator.userAgent`).  Playwright's `Desktop Chrome` device pins
 // the userAgent to a `Windows NT` string regardless of the host OS, so
@@ -73,47 +73,47 @@ test("slash autocomplete: mid-input trigger, grouped sections, Tab insertion, ke
   await textarea.fill("Some context /");
   await textarea.focus();
 
-  const bonsaiHeader = page.locator(inputAutocomplete.sectionHeader, {
-    hasText: "Bonsai",
+  const thinkrailHeader = page.locator(inputAutocomplete.sectionHeader, {
+    hasText: "ThinkRail",
   });
   const runtimeHeader = page.locator(inputAutocomplete.sectionHeader, {
     hasText: "Claude Code",
   });
   // Section headers asserted by visible text, not value — see the
   // e2e-model-picker memory note.
-  await expect(bonsaiHeader).toBeVisible({ timeout: 15_000 });
+  await expect(thinkrailHeader).toBeVisible({ timeout: 15_000 });
   await expect(runtimeHeader).toBeVisible({ timeout: 15_000 });
 
-  // Bonsai section is rendered first in DOM order; runtime section
+  // ThinkRail section is rendered first in DOM order; runtime section
   // ("Claude Code") second.
   const firstGroup = page.locator(inputAutocomplete.group).first();
   const secondGroup = page.locator(inputAutocomplete.group).nth(1);
   await expect(firstGroup.locator(inputAutocomplete.sectionHeader)).toHaveText(
-    "Bonsai",
+    "ThinkRail",
   );
   await expect(secondGroup.locator(inputAutocomplete.sectionHeader)).toHaveText(
     "Claude Code",
   );
 
   // ── ArrowDown crosses the section boundary ──────────────────────────────
-  // The hook starts with the first Bonsai item highlighted.  Pressing
-  // ArrowDown `bonsaiCount` times walks past the last Bonsai item and into
+  // The hook starts with the first ThinkRail item highlighted.  Pressing
+  // ArrowDown `thinkrailCount` times walks past the last ThinkRail item and into
   // the runtime section.
-  const bonsaiCount = await firstGroup.locator(inputAutocomplete.item).count();
+  const thinkrailCount = await firstGroup.locator(inputAutocomplete.item).count();
   expect(
-    bonsaiCount,
-    "expected at least one Bonsai skill in the first group",
+    thinkrailCount,
+    "expected at least one ThinkRail skill in the first group",
   ).toBeGreaterThan(0);
 
-  // Sanity: the active item starts inside the Bonsai group.
+  // Sanity: the active item starts inside the ThinkRail group.
   await expect(firstGroup.locator(inputAutocomplete.active)).toHaveCount(1);
 
-  for (let i = 0; i < bonsaiCount; i++) {
+  for (let i = 0; i < thinkrailCount; i++) {
     await textarea.press("ArrowDown");
   }
 
-  // After `bonsaiCount` ArrowDowns the active item must sit in the
-  // runtime group; the Bonsai group should no longer hold any active item.
+  // After `thinkrailCount` ArrowDowns the active item must sit in the
+  // runtime group; the ThinkRail group should no longer hold any active item.
   await expect(secondGroup.locator(inputAutocomplete.active)).toHaveCount(1);
   await expect(firstGroup.locator(inputAutocomplete.active)).toHaveCount(0);
 
@@ -123,13 +123,13 @@ test("slash autocomplete: mid-input trigger, grouped sections, Tab insertion, ke
   await expect(page.locator(inputAutocomplete.popup)).toHaveCount(0);
 
   // ── Tab inserts `/spec-status `, preserving prefix ──────────────────────
-  // The substring `spec-stat` is a unique filter — among the Bonsai skills
+  // The substring `spec-stat` is a unique filter — among the ThinkRail skills
   // it matches only `spec-status` (and none of the Claude built-ins).
   // That makes Tab acceptance deterministic regardless of how many
   // additional spec-* skills the project ships.
   await textarea.fill("Some context /spec-stat");
 
-  // Only the Bonsai section should be present (no runtime built-in matches
+  // Only the ThinkRail section should be present (no runtime built-in matches
   // "spec-stat") and it should contain `/spec-status`.
   await expect(page.locator(inputAutocomplete.group)).toHaveCount(1);
   await expect(

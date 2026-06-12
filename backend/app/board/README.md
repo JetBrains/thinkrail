@@ -31,9 +31,9 @@ tags:
 The Board module is the meta-ticket lifecycle engine. It combines issue tracking with agent orchestration, managing the full progression of work items from raw idea through specification, planning, execution, and completion. Each meta-ticket acts as a container linking specs, sessions, and plans into a cohesive workflow.
 
 The module owns:
-- Meta-ticket CRUD and persistence (JSON files under `.bonsai/meta-tickets/`)
+- Meta-ticket CRUD and persistence (JSON files under `.tr/meta-tickets/`)
 - Status state machine with validated transitions and auto-advancement
-- Plan document management (Markdown files under `.bonsai/plans/`)
+- Plan document management (Markdown files under `.tr/plans/`)
 - Linking specs, sessions, and orchestrator sessions to tickets
 
 ## Internal Architecture
@@ -80,7 +80,7 @@ graph TD
 |------|---------------|------------|
 | `models.py` | Pydantic models: MetaTicket, MetaTicketSummary, SpecChange, status/type literals, camelCase serialization config. `MetaTicketSummary.from_ticket()` builds summaries with `spec_change_count`. | pydantic |
 | `service.py` | Facade — all ticket CRUD, spec linking, session attachment, orchestrator setting, plan auto-detection. Composes `PlanService` and `SpecDraftService`. | models, storage, state_machine, plan, spec_drafts, core/config |
-| `spec_drafts.py` | SpecDraftService — shadow directory for spec changes during ticket-specify sessions. Writes go to `.bonsai/spec-drafts/{ticket_id}/` with manifest tracking. Supports apply/discard per-entry or all-at-once. | core/config, core/fileio, spec/service |
+| `spec_drafts.py` | SpecDraftService — shadow directory for spec changes during ticket-specify sessions. Writes go to `.tr/spec-drafts/{ticket_id}/` with manifest tracking. Supports apply/discard per-entry or all-at-once. | core/config, core/fileio, spec/service |
 | `storage.py` | Ticket file I/O: `ticket_path`, `read_ticket`, `write_ticket` (atomic via temp+rename), `list_tickets`, `delete_ticket` | models, core/fileio |
 | `state_machine.py` | `VALID_TRANSITIONS` dict, `can_transition`, `validate_transition`, `InvalidTransitionError` | models |
 | `plan.py` | PlanService + Plan/PlanStep/SuccessCriterion models + Markdown render/parse round-trip | models (camelCase config), core/config, core/fileio |
@@ -96,9 +96,9 @@ graph TD
 |--------|-----------|-------------|
 | `list_tickets` | `() -> list[MetaTicketSummary]` | List all tickets with auto-detected plan paths |
 | `get_ticket` | `(id: str) -> MetaTicket` | Get full ticket with auto-plan detection |
-| `create_ticket` | `(title: str, body: str, type: MetaTicketType) -> MetaTicket` | Create new ticket (defaults to `idea` status). Auto-creates a draft plan skeleton at `.bonsai/plans/{ticket_id}.md` and sets `plan_path`. |
+| `create_ticket` | `(title: str, body: str, type: MetaTicketType) -> MetaTicket` | Create new ticket (defaults to `idea` status). Auto-creates a draft plan skeleton at `.tr/plans/{ticket_id}.md` and sets `plan_path`. |
 | `update_ticket` | `(id: str, *, title?, body?, status?, type?) -> MetaTicket` | Update fields; validates status transitions |
-| `delete_ticket` | `(id: str) -> None` | Soft-delete ticket to `.bonsai/trash/` via TrashService (falls back to hard-delete if no TrashService) |
+| `delete_ticket` | `(id: str) -> None` | Soft-delete ticket to `.tr/trash/` via TrashService (falls back to hard-delete if no TrashService) |
 | `detach_session` | `(ticket_id: str, session_id: str) -> MetaTicket` | Remove a session reference from a ticket's session_ids and clear orchestrator_session_id if it matches |
 | `detach_session_from_all` | `(session_id: str) -> None` | Scan all tickets and detach the given session. Called automatically when a session is trashed. |
 | `link_spec` | `(ticket_id: str, spec_id: str) -> MetaTicket` | Link a spec; auto-transitions `described` to `specified` |
@@ -110,7 +110,7 @@ graph TD
 
 **Properties:**
 - `plans: PlanService` — sub-service for plan document operations (see [PLAN_SERVICE.md](PLAN_SERVICE.md))
-- `spec_drafts: SpecDraftService` — sub-service for spec draft management during ticket-specify sessions. Drafts stored at `.bonsai/spec-drafts/{ticket_id}/` with a manifest.json tracking operations (create/update/delete). See `docs/superpowers/specs/2026-04-03-spec-drafts-design.md`.
+- `spec_drafts: SpecDraftService` — sub-service for spec draft management during ticket-specify sessions. Drafts stored at `.tr/spec-drafts/{ticket_id}/` with a manifest.json tracking operations (create/update/delete). See `docs/superpowers/specs/2026-04-03-spec-drafts-design.md`.
 
 ### Models
 
@@ -130,7 +130,7 @@ The service automatically advances ticket status when preconditions are met:
 |---------|------|----|-----------|
 | SuggestDescription | `idea` | `described` | Agent suggests a description (via "Describe with AI") |
 | `link_spec` | `described` | `specified` | First spec linked |
-| Plan file detected | `specified` | `planned` | `.bonsai/plans/{id}.md` exists (checked on `list_tickets` / `get_ticket`) |
+| Plan file detected | `specified` | `planned` | `.tr/plans/{id}.md` exists (checked on `list_tickets` / `get_ticket`) |
 | `set_plan_path` | `specified` | `planned` | Explicit plan path set |
 | `set_orchestrator` | `planned` | `executing` | Orchestrator session assigned |
 
@@ -190,7 +190,7 @@ An MCP tool that agents call after writing or editing a spec file to record what
 
 | Decision | Choice | Rationale |
 |----------|--------|-----------|
-| File-per-ticket storage | Individual JSON files at `.bonsai/meta-tickets/{id}.json` | Simple, git-friendly, no shared-file contention. Each ticket is an independent unit. |
+| File-per-ticket storage | Individual JSON files at `.tr/meta-tickets/{id}.json` | Simple, git-friendly, no shared-file contention. Each ticket is an independent unit. |
 | Atomic writes | temp file + rename | Prevents partial writes on crash. Same pattern as the spec registry. |
 | Auto-detection of plans | `list_tickets` and `get_ticket` check for plan file existence | Decouples plan creation (by agent) from ticket metadata. Plans can be created by any tool. |
 | Auto-transitions | Service methods advance status on preconditions | Reduces manual status management. Developer only needs to link specs / create plans / set orchestrator. |
@@ -202,7 +202,7 @@ An MCP tool that agents call after writing or editing a spec file to record what
 
 | Dependency | Usage |
 |------------|-------|
-| `core/config` | Project root path for `.bonsai/` directory location |
+| `core/config` | Project root path for `.tr/` directory location |
 | `core/fileio` | `ensure_dir`, `read_text`, `write_text` for plan files; `read_text` for ticket files |
 | `pydantic` | Model validation and camelCase serialization |
 

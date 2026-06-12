@@ -22,8 +22,8 @@ from app.spec.index import SpecIndex
 
 def _make_ctx(tmp_path: Path, **kwargs) -> ProjectContext:
     """Create a ProjectContext with a real temp DB and no-op notify."""
-    bonsai_dir = tmp_path / ".bonsai"
-    bonsai_dir.mkdir(parents=True, exist_ok=True)
+    thinkrail_dir = tmp_path / ".tr"
+    thinkrail_dir.mkdir(parents=True, exist_ok=True)
     config = load_config(project_root=tmp_path)
     notify_fn = kwargs.pop("notify_fn", AsyncMock())
     return ProjectContext(

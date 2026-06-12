@@ -31,7 +31,7 @@ tags:
 
 ## Purpose
 
-The Frontend module is a React/TypeScript single-page application that provides the Bonsai web workspace. It communicates with the Python backend over a single WebSocket (JSON-RPC 2.0), renders agent sessions as a custom Chat UI, visualizes the spec hierarchy, and provides tools for spec-driven development.
+The Frontend module is a React/TypeScript single-page application that provides the ThinkRail web workspace. It communicates with the Python backend over a single WebSocket (JSON-RPC 2.0), renders agent sessions as a custom Chat UI, visualizes the spec hierarchy, and provides tools for spec-driven development.
 
 ## Internal Architecture
 

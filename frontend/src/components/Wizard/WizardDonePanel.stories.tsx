@@ -13,7 +13,7 @@ import "./WizardDonePanel.css";
  * Handlers read from the live Zustand stores; this story only exercises the
  * presentational layer, so a minimal session stub is enough.
  */
-const session = { bonsaiSid: "story-done" } as Session;
+const session = { thinkrailSid: "story-done" } as Session;
 
 const outcome: SessionOutcome = {
   summary: "Project planted. Doc saved to GOAL&REQUIREMENTS.md.",

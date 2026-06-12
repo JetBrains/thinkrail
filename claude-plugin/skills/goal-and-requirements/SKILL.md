@@ -66,7 +66,7 @@ Creates or updates `GOAL&REQUIREMENTS.md` at the project root:
 
 ## Step 1 — Orient
 
-Show workflow position via `bonsai_visualize` (type `progress-tracker`):
+Show workflow position via `thinkrail_visualize` (type `progress-tracker`):
 
 ```json
 {
@@ -94,12 +94,12 @@ Show workflow position via `bonsai_visualize` (type `progress-tracker`):
 Read:
 - `package.json` / `Cargo.toml` / `pyproject.toml` / `go.mod` — language, framework, dependencies
 - Directory structure — architecture pattern, module layout
-- Existing `GOAL&REQUIREMENTS.md`, `DESIGN_DOC.md`, `.bonsai/` spec files if present
+- Existing `GOAL&REQUIREMENTS.md`, `DESIGN_DOC.md`, `{{TR_DIR}}/` spec files if present
 - Any files directly relevant to what `$ARGUMENTS` describes
 
 Build a mental model: what does this project do, what tech is it using, what conventions does it follow, what area would this change touch?
 
-Show findings via `bonsai_visualize` (type `summary-box`):
+Show findings via `thinkrail_visualize` (type `summary-box`):
 
 ```json
 {
@@ -142,7 +142,7 @@ Use `AskUserQuestion`:
 
 Propose what's in and what's out for this change. Ground it in the existing codebase — reference real modules, APIs, or data models.
 
-Show via `bonsai_visualize` (type `summary-box`, `visId: "change-scope"`):
+Show via `thinkrail_visualize` (type `summary-box`, `visId: "change-scope"`):
 
 ```json
 {
@@ -181,7 +181,7 @@ Use `AskUserQuestion`:
 
 Based on confirmed scope, derive must-have requirements. For each, propose 3–5 concrete requirements and ask the user to confirm or adjust.
 
-Show ongoing requirements state via `bonsai_visualize` (type `summary-box`, `visId: "requirements-summary"`). Update it after each confirmation.
+Show ongoing requirements state via `thinkrail_visualize` (type `summary-box`, `visId: "requirements-summary"`). Update it after each confirmation.
 
 Group into:
 - **Must have** — the change doesn't ship without these
@@ -192,7 +192,7 @@ Group into:
 
 ## Step 6 — Draft and confirm
 
-Draft the full `GOAL&REQUIREMENTS.md`. Show compact summary via `bonsai_visualize` (type `summary-box`, `visId: "goal-draft"`).
+Draft the full `GOAL&REQUIREMENTS.md`. Show compact summary via `thinkrail_visualize` (type `summary-box`, `visId: "goal-draft"`).
 
 Use `AskUserQuestion`:
 - "Save it"
@@ -232,7 +232,7 @@ If the user picks **"Start implementing"**, call `SuggestSession`:
   "skill": "task-spec",
   "name": "Build v1",
   "reason": "Implement the features from GOAL&REQUIREMENTS.md",
-  "prompt": "Read GOAL&REQUIREMENTS.md (and DESIGN_DOC.md / module README.md files if they exist). For each feature listed under 'In v1': 1) implement it following the specs, 2) run a spec alignment check — if discrepancies exist show them via bonsai_visualize summary-box titled 'Spec vs Code' then use AskUserQuestion (one at a time): 'Update spec to match code' / 'Update code to match spec' / 'Leave as-is'. Only move to the next feature after resolving all discrepancies."
+  "prompt": "Read GOAL&REQUIREMENTS.md (and DESIGN_DOC.md / module README.md files if they exist). For each feature listed under 'In v1': 1) implement it following the specs, 2) run a spec alignment check — if discrepancies exist show them via thinkrail_visualize summary-box titled 'Spec vs Code' then use AskUserQuestion (one at a time): 'Update spec to match code' / 'Update code to match spec' / 'Leave as-is'. Only move to the next feature after resolving all discrepancies."
 }
 ```
 

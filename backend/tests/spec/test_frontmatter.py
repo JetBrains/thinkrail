@@ -38,7 +38,7 @@ priority: high
 ---
 # Spec Module — Design Specification
 
-The Spec module is the core domain layer of Bonsai...
+The Spec module is the core domain layer of ThinkRail...
 """
 
 MINIMAL_SPEC = """\

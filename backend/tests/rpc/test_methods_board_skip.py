@@ -16,7 +16,7 @@ def _unwrap(result: Any) -> Any:
 
 
 def _board(tmp_path) -> BoardService:
-    (tmp_path / ".bonsai").mkdir()
+    (tmp_path / ".tr").mkdir()
     return BoardService(load_config(tmp_path))
 
 

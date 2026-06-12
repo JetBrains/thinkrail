@@ -28,7 +28,7 @@ class TestFreshSchema:
         store = AppStore(tmp_path)
         await store.open()
         try:
-            db_path = tmp_path / "bonsai.db"
+            db_path = tmp_path / "tr.db"
             assert db_path.is_file()
 
             # Use a separate sync connection so we don't fight WAL/locks.
@@ -151,7 +151,7 @@ class TestMigration:
         p1_dir.mkdir()
         p2_dir.mkdir()
 
-        db_path = tmp_path / "bonsai.db"
+        db_path = tmp_path / "tr.db"
 
         # Build a v2 database using raw aiosqlite (no AppStore involved).
         conn = await aiosqlite.connect(str(db_path))

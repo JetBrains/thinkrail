@@ -2,7 +2,7 @@
 id: design-doc
 type: architecture-design
 status: active
-title: Bonsai Architecture Design
+title: ThinkRail Architecture Design
 depends-on:
 - goal-and-requirements
 covers:
@@ -11,7 +11,7 @@ covers:
 tags:
 - architecture
 ---
-# Bonsai — Architecture Design
+# ThinkRail — Architecture Design
 
 > Status: **Active** | Created: 2026-02-25
 
@@ -29,9 +29,9 @@ tags:
 
 ## Overview
 
-Bonsai is a developer tool and web workspace for specification-driven development. It provides a Python backend API and a TypeScript/JavaScript frontend that runs on developers' machines, offering a comprehensive environment for creating, editing, and visualizing hierarchical specifications that live in the project repository alongside code.
+ThinkRail is a developer tool and web workspace for specification-driven development. It provides a Python backend API and a TypeScript/JavaScript frontend that runs on developers' machines, offering a comprehensive environment for creating, editing, and visualizing hierarchical specifications that live in the project repository alongside code.
 
-Bonsai serves as both a spec management layer and an AI agent orchestrator — enabling developers to align AI coding agents with clear intent, scope, and constraints through structured project context.
+ThinkRail serves as both a spec management layer and an AI agent orchestrator — enabling developers to align AI coding agents with clear intent, scope, and constraints through structured project context.
 
 ## Goals & Constraints
 
@@ -56,7 +56,7 @@ Bonsai serves as both a spec management layer and an AI agent orchestrator — e
 
 ```mermaid
 ---
-title: Bonsai — System Architecture
+title: ThinkRail — System Architecture
 ---
 graph TD
     subgraph FEG ["React Frontend"]
@@ -114,7 +114,7 @@ This mirrors the Language Server Protocol pattern exactly.
     ▼                                                       ▼
   Browser                              ┌──── File Watcher ────┐
                                        │  spec files (*.md)    │
-                                       │  .bonsai/* config     │
+                                       │  .tr/* config     │
                                        └───────────────────────┘
 ```
 
@@ -207,7 +207,7 @@ backend/
 │   │   ├── validator.py     # Spec validation
 │   │   ├── graph.py         # Hierarchy & graph building
 │   │   ├── frontmatter.py   # YAML frontmatter parsing and serialization
-│   │   ├── index.py         # SQLite index management (.bonsai/index.db)
+│   │   ├── index.py         # SQLite index management (.tr/index.db)
 │   │   └── migrate.py       # Migration from legacy registry.json to frontmatter
 │   ├── agent/               # Agent Domain Module
 │   │   ├── models.py        # AgentTask, AgentEvent, AgentResult models
@@ -226,22 +226,22 @@ backend/
 │   ├── board/               # Meta-Ticket & Plan Module
 │   │   ├── models.py        # MetaTicket, Plan, Step, SpecDraft models
 │   │   ├── service.py       # BoardService — CRUD, plan management, draft/patch operations
-│   │   ├── storage.py       # File-based storage (.bonsai/meta-tickets/, plans/)
+│   │   ├── storage.py       # File-based storage (.tr/meta-tickets/, plans/)
 │   │   ├── plan.py          # Plan parsing and serialization
 │   │   ├── state_machine.py # Ticket status transitions (idea→described→specified→planned→executing→done)
 │   │   └── spec_drafts.py   # Spec draft management for tickets
 │   ├── trash/               # Soft-Delete Module
 │   │   ├── service.py       # TrashService — soft-delete, restore, purge, auto-cleanup
-│   │   └── storage.py       # Trash directory management (.bonsai/trash/)
+│   │   └── storage.py       # Trash directory management (.tr/trash/)
 │   ├── vis/                 # Visualization Dashboard Module
 │   │   ├── models.py        # Dashboard dataclasses (DashboardState, WorkflowStep, etc.)
 │   │   └── service.py       # VisualizationService: compute dashboard state, push notifications
 │   └── core/                # Shared Core
 │       ├── config.py        # App configuration (frozen mode detection for packaging)
-│       ├── settings.py      # Project settings (.bonsai/settings.json)
+│       ├── settings.py      # Project settings (.tr/settings.json)
 │       ├── fileio.py        # File system operations (read, write, delete files/dirs)
 │       ├── watcher.py       # Async file change watching
-│       ├── project.py       # .bonsai/ directory bootstrap and meta-file management
+│       ├── project.py       # .tr/ directory bootstrap and meta-file management
 │       ├── app_store.py     # SQLite-backed known-projects registry and app-level settings
 │       └── network_info.py  # LAN IP / hostname detection for mobile discovery
 ├── tests/
@@ -254,7 +254,7 @@ backend/
 
 packaging/                   # Portable executable build infrastructure
 ├── entry.py                 # Standalone entry point (CLI args, browser auto-open)
-└── bonsai.spec              # PyInstaller spec (onefile + onedir outputs)
+└── thinkrail.spec              # PyInstaller spec (onefile + onedir outputs)
 ```
 
 **Key Dependencies:**
@@ -284,15 +284,15 @@ packaging/                   # Portable executable build infrastructure
 
 | Feature | Spec | Description |
 |---------|------|-------------|
-| Proactive Agent Experience | [PROACTIVE_AGENT_EXPERIENCE_DESIGN.md](.bonsai/design_docs/PROACTIVE_AGENT_EXPERIENCE_DESIGN.md) | Agent-driven UI: SuggestSession and UpdateProgress tools via canUseTool interception |
-| MCP Visualization | [VISUALIZATION_DESIGN.md](.bonsai/design_docs/VISUALIZATION_DESIGN.md) | Structured visual output via MCP tool: 6 vis types rendered in ChatStream |
-| Voice Input | [VOICE_INPUT_DESIGN.md](.bonsai/design_docs/VOICE_INPUT_DESIGN.md) | Browser voice input: Web Speech API + MediaRecorder/Whisper fallback |
-| Effort Support | [EFFORT_SUPPORT_DESIGN.md](.bonsai/design_docs/EFFORT_SUPPORT_DESIGN.md) | Configurable reasoning effort level passed to Claude SDK |
-| Frontmatter + SQLite Index | [FRONTMATTER_REGISTRY_DESIGN.md](.bonsai/design_docs/FRONTMATTER_REGISTRY_DESIGN.md) | Replace registry.json with frontmatter in specs + SQLite index cache |
-| Dual Mode Input | [DUAL_MODE_INPUT_DESIGN.md](.bonsai/design_docs/DUAL_MODE_INPUT_DESIGN.md) | Text + voice input modes with revision pipeline |
-| Skill Session Start | [SKILL_SESSION_START_DESIGN.md](.bonsai/design_docs/SKILL_SESSION_START_DESIGN.md) | Session creation with skill context and spec pre-loading |
-| Concurrency Orchestration | [CONCURRENCY_ORCHESTRATION_DESIGN.md](.bonsai/design_docs/CONCURRENCY_ORCHESTRATION_DESIGN.md) | Multi-step plan execution with agent session orchestration |
-| Storage Architecture | [STORAGE_ARCHITECTURE.md](.bonsai/design_docs/STORAGE_ARCHITECTURE.md) | File-based storage layout for sessions, plans, tickets, trash |
+| Proactive Agent Experience | [PROACTIVE_AGENT_EXPERIENCE_DESIGN.md](.tr/design_docs/PROACTIVE_AGENT_EXPERIENCE_DESIGN.md) | Agent-driven UI: SuggestSession and UpdateProgress tools via canUseTool interception |
+| MCP Visualization | [VISUALIZATION_DESIGN.md](.tr/design_docs/VISUALIZATION_DESIGN.md) | Structured visual output via MCP tool: 6 vis types rendered in ChatStream |
+| Voice Input | [VOICE_INPUT_DESIGN.md](.tr/design_docs/VOICE_INPUT_DESIGN.md) | Browser voice input: Web Speech API + MediaRecorder/Whisper fallback |
+| Effort Support | [EFFORT_SUPPORT_DESIGN.md](.tr/design_docs/EFFORT_SUPPORT_DESIGN.md) | Configurable reasoning effort level passed to Claude SDK |
+| Frontmatter + SQLite Index | [FRONTMATTER_REGISTRY_DESIGN.md](.tr/design_docs/FRONTMATTER_REGISTRY_DESIGN.md) | Replace registry.json with frontmatter in specs + SQLite index cache |
+| Dual Mode Input | [DUAL_MODE_INPUT_DESIGN.md](.tr/design_docs/DUAL_MODE_INPUT_DESIGN.md) | Text + voice input modes with revision pipeline |
+| Skill Session Start | [SKILL_SESSION_START_DESIGN.md](.tr/design_docs/SKILL_SESSION_START_DESIGN.md) | Session creation with skill context and spec pre-loading |
+| Concurrency Orchestration | [CONCURRENCY_ORCHESTRATION_DESIGN.md](.tr/design_docs/CONCURRENCY_ORCHESTRATION_DESIGN.md) | Multi-step plan execution with agent session orchestration |
+| Storage Architecture | [STORAGE_ARCHITECTURE.md](.tr/design_docs/STORAGE_ARCHITECTURE.md) | File-based storage layout for sessions, plans, tickets, trash |
 
 ## Frontend (TypeScript/JavaScript)
 
@@ -360,9 +360,9 @@ Backend Pydantic Models
 
 ## Data Model
 
-Specs are Markdown files with YAML frontmatter carrying all metadata (`id`, `type`, `status`, links, tags, covers). Frontmatter is the **sole source of truth**. A per-project SQLite cache (`.bonsai/index.db`, `.gitignored`) enables fast queries and graph traversal — always rebuildable from frontmatter. Plain `.md` files without frontmatter are auto-discovered as unmanaged documents.
+Specs are Markdown files with YAML frontmatter carrying all metadata (`id`, `type`, `status`, links, tags, covers). Frontmatter is the **sole source of truth**. A per-project SQLite cache (`.tr/index.db`, `.gitignored`) enables fast queries and graph traversal — always rebuildable from frontmatter. Plain `.md` files without frontmatter are auto-discovered as unmanaged documents.
 
-Full schema, index tables, discovery rules, and migration plan: **[Frontmatter + SQLite Index Design](.bonsai/design_docs/FRONTMATTER_REGISTRY_DESIGN.md)**
+Full schema, index tables, discovery rules, and migration plan: **[Frontmatter + SQLite Index Design](.tr/design_docs/FRONTMATTER_REGISTRY_DESIGN.md)**
 
 ## API Design
 
@@ -371,15 +371,15 @@ Full schema, index tables, discovery rules, and migration plan: **[Frontmatter +
 **Project selection:** The WebSocket URL includes a `project` query parameter specifying the project directory: `ws://host/ws?project=/path/to/dir`. The backend validates the project directory and creates per-connection services scoped to that project.
 
 **REST endpoints** for project and file management:
-- `GET /api/project/validate?path=...` — check if path is a valid Bonsai project
-- `POST /api/project/init` — initialize `.bonsai/` in a new directory
-- `GET /api/project/files?path=...&show_hidden=false` — list project directory tree. Visibility is controlled by `.bonsaihide` (gitignore-style config in project root; `pathspec` library). Pass `show_hidden=true` to bypass `.bonsaihide` rules and return all files.
+- `GET /api/project/validate?path=...` — check if path is a valid ThinkRail project
+- `POST /api/project/init` — initialize `.tr/` in a new directory
+- `GET /api/project/files?path=...&show_hidden=false` — list project directory tree. Visibility is controlled by `.thinkrailhide` (gitignore-style config in project root; `pathspec` library). Pass `show_hidden=true` to bypass `.thinkrailhide` rules and return all files.
 - `GET /api/file/read?project=...&path=...` — read file contents
 - `POST /api/file/write` — write file contents `{ project, path, content }`
 - `GET /api/fs/list-dirs?base=...&prefix=...` — list subdirectories for path autocompletion (max 20, directories only)
 - `POST /api/file/open-external` — open file in editor `{ project, path, editor: "idea"|"code"|"vim"|"nvim"|"nano" }`. Terminal editors (vim, nvim, nano, vi) open in a terminal emulator window.
 
-**Session persistence:** Agent sessions are persisted to `.bonsai/sessions/{taskId}.json`. Events are saved as they stream. Completed/errored sessions survive backend restarts and page refreshes. The `session/continue` method replays old conversation history as context for a new SDK session.
+**Session persistence:** Agent sessions are persisted to `.tr/sessions/{taskId}.json`. Events are saved as they stream. Completed/errored sessions survive backend restarts and page refreshes. The `session/continue` method replays old conversation history as context for a new SDK session.
 
 Communication flows in three directions over a single WebSocket at `/ws?project=...`:
 - **Client → Server requests:** `spec/*` CRUD + graph, `agent/*` session management, `session/*` persistence (list, get, continue, delete)
@@ -394,20 +394,20 @@ Full protocol reference (method tables, params, message shapes): **[RPC Module s
 |----------|--------|-----------|
 | Architecture pattern | Hybrid — layered top-level (frontend/backend) with modular domains inside backend | Clean separation between transport (RPC), domain logic (Spec, Agent), and infrastructure (Core). Each module has one responsibility. |
 | Communication protocol | JSON-RPC 2.0 over WebSocket | LSP-style true bidirectional messaging. Server can push notifications and initiate requests (e.g., agent questions). Single connection, simple framing. |
-| Spec storage | Markdown files with YAML frontmatter | Self-contained, git-friendly. Each file carries its own metadata. [Details](.bonsai/design_docs/FRONTMATTER_REGISTRY_DESIGN.md) |
-| Spec index | Per-project SQLite (`.bonsai/index.db`, `.gitignored`) | Generated cache for fast queries. Rebuildable from frontmatter. Replaces former `registry.json`. |
+| Spec storage | Markdown files with YAML frontmatter | Self-contained, git-friendly. Each file carries its own metadata. [Details](.tr/design_docs/FRONTMATTER_REGISTRY_DESIGN.md) |
+| Spec index | Per-project SQLite (`.tr/index.db`, `.gitignored`) | Generated cache for fast queries. Rebuildable from frontmatter. Replaces former `registry.json`. |
 | Agent MCP tools | 3 custom tools (`spec_search`, `spec_links`, `spec_delete`) | Only for operations standard file tools can't do. Agents use `Write`/`Edit`/`Read` for spec files. [Details](backend/app/agent/tools/SPECS_TOOLS.md) |
 | Graph visualization | Custom DOM + SVG (no library) | Layered view shows ≤15 nodes. D3/React Flow/Cytoscape add 80-170KB for no benefit at this scale. |
 | State management | Zustand (frontend) | 1KB, hook-based, no boilerplate. Stores split by domain for isolation. |
 | Agent SDK integration | Isolated in `runner.py` only | Single swap point for SDK versions. Service and tracker are SDK-agnostic. |
 | File change tracking | Filesystem watcher, not tool call interception | Ground truth — catches all file changes regardless of source (agent, user, external tool). Same validation pipeline for all changes. |
-| Single-user, localhost | No authentication; tokenless WebSocket and REST. Multi-tab UX is supported (a single user opening multiple browser tabs) via EventBus pub/sub, but there are no accounts, tokens, or admin roles. | `GOAL&REQUIREMENTS.md` constraint: localhost-only single-user developer tool. See [Storage Architecture](.bonsai/design_docs/STORAGE_ARCHITECTURE.md). |
+| Single-user, localhost | No authentication; tokenless WebSocket and REST. Multi-tab UX is supported (a single user opening multiple browser tabs) via EventBus pub/sub, but there are no accounts, tokens, or admin roles. | `GOAL&REQUIREMENTS.md` constraint: localhost-only single-user developer tool. See [Storage Architecture](.tr/design_docs/STORAGE_ARCHITECTURE.md). |
 
 **Design Philosophy:** Start simple, add complexity only when proven necessary. Each module has one clear responsibility. The code should be small enough to read end-to-end. Prefer explicit wiring over implicit magic.
 
 ## Deployment
 
-Bonsai runs locally on developer machines. No external database — all state is file-based in the repo.
+ThinkRail runs locally on developer machines. No external database — all state is file-based in the repo.
 
 ### Runtime Modes
 
@@ -416,13 +416,13 @@ Bonsai runs locally on developer machines. No external database — all state is
 - Frontend: `npm run dev` (Vite dev server on port 3000, proxies `/ws`, `/api/*` to backend)
 
 **Packaged mode** (single executable):
-- `./bonsai [--port 8000] [--host 0.0.0.0] [--no-browser]`
+- `./thinkrail [--port 8000] [--host 0.0.0.0] [--no-browser]`
 - One process serves everything: FastAPI handles `/ws` and `/api/*` routes, built frontend is served as static files at `/` with SPA fallback (`html=True`)
 - Auto-opens browser on startup (unless `--no-browser`)
 
 ### Packaging Architecture
 
-Bonsai is distributed as a portable executable via PyInstaller — no Python, Node.js, or other prerequisites required. The build bundles the Python 3.11 runtime, all backend dependencies (including native Rust/C extensions), and the pre-built frontend into a single binary.
+ThinkRail is distributed as a portable executable via PyInstaller — no Python, Node.js, or other prerequisites required. The build bundles the Python 3.11 runtime, all backend dependencies (including native Rust/C extensions), and the pre-built frontend into a single binary.
 
 ```
 Build pipeline:
@@ -430,7 +430,7 @@ Build pipeline:
   PyInstaller bundles: Python + backend deps + frontend/dist/ → executable
 
 Runtime (packaged):
-  ./bonsai --port 8000
+  ./thinkrail --port 8000
     ├── FastAPI/uvicorn
     │     ├── /ws       → WebSocket RPC (existing)
     │     ├── /api/*    → REST endpoints (existing)
@@ -438,7 +438,7 @@ Runtime (packaged):
     └── Opens browser → http://localhost:8000
 ```
 
-**Frozen mode detection:** `backend/app/core/config.py` checks `sys.frozen` to determine if running inside a PyInstaller bundle. In frozen mode, `_BONSAI_ROOT` points to the directory containing the executable (for `.env` loading) instead of traversing `__file__` parents. `backend/app/main.py` uses `sys._MEIPASS` to locate the bundled `frontend_dist/` data directory.
+**Frozen mode detection:** `backend/app/core/config.py` checks `sys.frozen` to determine if running inside a PyInstaller bundle. In frozen mode, `_THINKRAIL_ROOT` points to the directory containing the executable (for `.env` loading) instead of traversing `__file__` parents. `backend/app/main.py` uses `sys._MEIPASS` to locate the bundled `frontend_dist/` data directory.
 
 **Frontend serving:** `main.py` mounts `StaticFiles(directory=frontend_dist, html=True)` as the last route in `create_app()`. Because explicit routes (`/ws`, `/api/*`) are registered first, they take priority. The static mount acts as a catch-all for the SPA.
 
@@ -453,14 +453,14 @@ GitHub Actions builds executables for Linux, macOS (ARM), and Windows on every p
 1. **Matrix build** (`ubuntu-latest`, `macos-latest`, `windows-latest`): checkout → build frontend (`npm ci && npm run build`) → install backend + PyInstaller → build executable
 2. **Release job**: collects artifacts, creates/updates a rolling `nightly-latest` pre-release on GitHub
 
-Users download from a stable URL: `github.com/<org>/bonsai/releases/tag/nightly-latest`
+Users download from a stable URL: `github.com/<org>/thinkrail/releases/tag/nightly-latest`
 
 Build infrastructure lives in `packaging/` (see [packaging/README.md](packaging/README.md)) and `.github/workflows/nightly.yml`.
 
 ### Platform Notes
 
 - **Linux**: `chmod +x` required after download. No signing issues.
-- **macOS**: Unsigned executables trigger Gatekeeper. Users run `xattr -d com.apple.quarantine bonsai-macos` on first use.
+- **macOS**: Unsigned executables trigger Gatekeeper. Users run `xattr -d com.apple.quarantine thinkrail-macos` on first use.
 - **Windows**: May trigger SmartScreen. Users click "More info" → "Run anyway".
 
 ## Open Questions

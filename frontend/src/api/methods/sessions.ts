@@ -1,7 +1,7 @@
 import type { RpcClient } from "../client.ts";
 
 export interface SessionSummary {
-  bonsaiSid: string;
+  thinkrailSid: string;
   name: string;
   skillId?: string;
   specIds: string[];
@@ -39,7 +39,7 @@ export interface SessionSummary {
 }
 
 export interface SessionData {
-  bonsaiSid: string;
+  thinkrailSid: string;
   name: string;
   skillId?: string;
   specIds: string[];
@@ -65,23 +65,23 @@ export function createSessionApi(client: RpcClient) {
   return {
     list: () => client.request<SessionSummary[]>("session/list"),
 
-    get: (bonsaiSid: string) =>
-      client.request<SessionData | null>("session/get", { bonsaiSid }),
+    get: (thinkrailSid: string) =>
+      client.request<SessionData | null>("session/get", { thinkrailSid }),
 
-    continue: (bonsaiSid: string) =>
-      client.request<{ bonsaiSid: string }>("session/continue", { bonsaiSid }),
+    continue: (thinkrailSid: string) =>
+      client.request<{ thinkrailSid: string }>("session/continue", { thinkrailSid }),
 
-    restart: (bonsaiSid: string) =>
-      client.request<{ bonsaiSid: string }>("session/restart", { bonsaiSid }),
+    restart: (thinkrailSid: string) =>
+      client.request<{ thinkrailSid: string }>("session/restart", { thinkrailSid }),
 
-    delete: (bonsaiSid: string) =>
-      client.request<boolean>("session/delete", { bonsaiSid }),
+    delete: (thinkrailSid: string) =>
+      client.request<boolean>("session/delete", { thinkrailSid }),
 
-    subscribe: (bonsaiSid: string) =>
-      client.request<void>("session/subscribe", { bonsaiSid }),
+    subscribe: (thinkrailSid: string) =>
+      client.request<void>("session/subscribe", { thinkrailSid }),
 
-    unsubscribe: (bonsaiSid: string) =>
-      client.request<void>("session/unsubscribe", { bonsaiSid }),
+    unsubscribe: (thinkrailSid: string) =>
+      client.request<void>("session/unsubscribe", { thinkrailSid }),
   };
 }
 

@@ -16,7 +16,7 @@ const meta = {
       "ReturnFlowCard appears when a subsession proposes content to hand back to its parent — \"discussion\" offers Approve & return, \"refinement\" offers put-in-input / send-as-message, both with inline Edit and Revise.\n\n📍 **In the app:** inline in the chat stream (Sessions tab) of a subsession when it's ready to return to its parent." } },
   },
   args: {
-    bonsaiSid: "sess-123",
+    thinkrailSid: "sess-123",
     subsessionType: "discussion",
     proposedSummary:
       "We agreed to extract a shared Button with primary/secondary/danger/ghost variants and migrate the wizard screens first.",

@@ -1,4 +1,5 @@
 import { create } from "zustand";
+import { STORAGE_PREFIX } from "@/constants/branding.ts";
 import { persist } from "zustand/middleware";
 import type { EventCategory } from "@/components/ChatStream/renderers/categories.ts";
 import type { JourneyEntry } from "@/components/Wizard/registry.ts";
@@ -78,14 +79,14 @@ interface UiStore {
    *  picks up where the user left off instead of auto-selecting an
    *  unrelated session by mtime. */
   lastActiveSessions: Record<string, string>;
-  rememberActiveSession: (projectPath: string, bonsaiSid: string | null) => void;
+  rememberActiveSession: (projectPath: string, thinkrailSid: string | null) => void;
 
-  /** bonsaiSids whose wizard done-screen the user has explicitly
+  /** thinkrailSids whose wizard done-screen the user has explicitly
    *  dismissed (e.g. clicked "Open workspace"). Persisted so reactivating
    *  the session doesn't drag the user back into the done-screen — they
    *  said they're done with the flow globally. */
   dismissedWizardOutcomes: string[];
-  dismissWizardOutcome: (bonsaiSid: string) => void;
+  dismissWizardOutcome: (thinkrailSid: string) => void;
 
   /** When set, the right preview panel renders a ReviewPanel for the given
    *  file, sourcing pending+resolved ProposeChange requests from the session. */
@@ -125,7 +126,7 @@ export const useUiStore = create<UiStore>()(
         set((s) =>
           // Idempotent: re-rendering or re-selecting a session must not
           // duplicate or reorder its cells.
-          s.wizardJourney.some((e) => e.bonsaiSid === entry.bonsaiSid)
+          s.wizardJourney.some((e) => e.thinkrailSid === entry.thinkrailSid)
             ? s
             : { wizardJourney: [...s.wizardJourney, entry] },
         ),
@@ -153,21 +154,21 @@ export const useUiStore = create<UiStore>()(
         set({ centerView: "sessions" }),
 
       lastActiveSessions: {} as Record<string, string>,
-      rememberActiveSession: (projectPath, bonsaiSid) =>
+      rememberActiveSession: (projectPath, thinkrailSid) =>
         set((s) => {
           if (!projectPath) return s;
           const next = { ...s.lastActiveSessions };
-          if (bonsaiSid) next[projectPath] = bonsaiSid;
+          if (thinkrailSid) next[projectPath] = thinkrailSid;
           else delete next[projectPath];
           return { lastActiveSessions: next };
         }),
 
       dismissedWizardOutcomes: [] as string[],
-      dismissWizardOutcome: (bonsaiSid) =>
+      dismissWizardOutcome: (thinkrailSid) =>
         set((s) =>
-          s.dismissedWizardOutcomes.includes(bonsaiSid)
+          s.dismissedWizardOutcomes.includes(thinkrailSid)
             ? s
-            : { dismissedWizardOutcomes: [...s.dismissedWizardOutcomes, bonsaiSid] },
+            : { dismissedWizardOutcomes: [...s.dismissedWizardOutcomes, thinkrailSid] },
         ),
 
       activeReview: null,
@@ -185,7 +186,7 @@ export const useUiStore = create<UiStore>()(
         set((s) => ({ fileTreeVersion: s.fileTreeVersion + 1 })),
     }),
     {
-      name: "bonsai-ui",
+      name: `${STORAGE_PREFIX}ui`,
       partialize: (state) => ({
         leftPanelCollapsed: state.leftPanelCollapsed,
         leftActiveTab: state.leftActiveTab,

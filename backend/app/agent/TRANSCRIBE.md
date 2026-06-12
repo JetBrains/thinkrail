@@ -81,5 +81,5 @@ All errors propagate to the RPC layer where `@_handle_errors` maps them to JSON-
 ## Related Specs
 
 - **Parent:** [Agent Module](README.md)
-- **Feature design:** [Voice Input Design](../../.bonsai/design_docs/VOICE_INPUT_DESIGN.md)
+- **Feature design:** [Voice Input Design](../../.tr/design_docs/VOICE_INPUT_DESIGN.md)
 - **RPC method:** `agent/transcribe` in [RPC Module](../rpc/README.md)
