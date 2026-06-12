@@ -2,6 +2,7 @@ import { useCallback, useMemo, useState } from "react";
 import { useSpecStore } from "@/store/specStore.ts";
 import { useFileStore } from "@/store/fileStore.ts";
 import { GraphModal } from "@/components/GraphView/GraphModal.tsx";
+import { CoverageBadge } from "@/components/ui";
 import {
   buildDocTree,
   buildTree,
@@ -9,7 +10,7 @@ import {
   getTasksForSpec,
   specTypeIcon,
   statusBadge,
-} from "./treeUtils.ts";
+} from "./treeUtils.tsx";
 import "./SpecTree.css";
 
 export function SpecTree() {
@@ -175,20 +176,6 @@ export function SpecTree() {
         const doneCount =
           tasks?.filter((t) => t.status === "done").length ?? 0;
 
-        const pillCls = tasksOpen
-          ? "st-task-pill-expanded"
-          : doneCount === taskCount
-            ? "st-task-pill-alldone"
-            : doneCount > 0
-              ? "st-task-pill-progress"
-              : "st-task-pill-none";
-
-        const pillIcon =
-          doneCount === taskCount
-            ? "\u2713"
-            : doneCount > 0
-              ? "\u25D1"
-              : "\u25CB";
 
         return (
           <div key={node.id}>
@@ -233,12 +220,12 @@ export function SpecTree() {
 
               {/* Task completion pill — always visible when tasks > 0 */}
               {taskCount > 0 && (
-                <span
-                  className={`st-task-pill ${pillCls}`}
+                <CoverageBadge
+                  done={doneCount}
+                  total={taskCount}
+                  expanded={tasksOpen}
                   onClick={(e) => handlePillClick(e, node.id)}
-                >
-                  {pillIcon} {doneCount}/{taskCount}
-                </span>
+                />
               )}
 
               {/* Status badge */}

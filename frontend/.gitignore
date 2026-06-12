@@ -3,3 +3,6 @@ dist/
 .vite/
 *.local
 /openapi.json
+
+# Storybook
+storybook-static/

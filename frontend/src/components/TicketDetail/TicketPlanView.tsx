@@ -4,6 +4,7 @@ import { createBoardApi } from "@/api/methods/board.ts";
 import { MarkdownEditor } from "@/components/MarkdownEditor/MarkdownEditor.tsx";
 import { useSessionStore } from "@/store/sessionStore.ts";
 import { useTicketRouteStore } from "@/store/ticketRouteStore.ts";
+import { Button } from "@/components/ui/Button";
 
 interface PlanStepView {
   number: number;
@@ -335,15 +336,15 @@ function PlanStepsTab({ milestones, verification, ticketId, planTitle, planStatu
               </div>
             </div>
           ))}
-          <button className="ticket-plan-add-btn" onClick={() => addStep(mIdx)}>+ Add Step</button>
+          <Button className="ticket-plan-add-btn" size="sm" onClick={() => addStep(mIdx)}>+ Add Step</Button>
         </div>
       ))}
-      <button className="ticket-plan-add-btn" onClick={addMilestone}>+ Add Milestone</button>
+      <Button className="ticket-plan-add-btn" size="sm" onClick={addMilestone}>+ Add Milestone</Button>
 
       <div className="ticket-plan-form-actions">
-        <button className="ticket-plan-save-btn" onClick={handleSave} disabled={saving}>
+        <Button variant="primary" onClick={handleSave} disabled={saving}>
           {saving ? "Saving..." : "Save Plan"}
-        </button>
+        </Button>
       </div>
     </div>
   );
@@ -404,9 +405,9 @@ function PlanRawTab({ ticketId, onSave }: {
         preview={true}
       />
       <div className="ticket-plan-form-actions">
-        <button className="ticket-plan-save-btn" onClick={handleSave} disabled={saving}>
+        <Button variant="primary" onClick={handleSave} disabled={saving}>
           {saving ? "Saving..." : "Save"}
-        </button>
+        </Button>
       </div>
     </div>
   );

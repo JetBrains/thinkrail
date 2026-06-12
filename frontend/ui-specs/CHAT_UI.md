@@ -199,7 +199,7 @@ interface ToolCallCardProps {
 
 **Smart Header** (`.chat-tool-header`, always visible, clickable when not running):
 - `.chat-tool-icon`: emoji from `TOOL_ICONS` lookup
-- `.chat-tool-name`: `cleanToolName(toolName)` — strips `mcp__servername__` prefix for display (e.g., `mcp__bonsai-specs__registry_query` → `registry_query`), `color: var(--cyan)`, `font-weight: 600`
+- `.chat-tool-name`: `cleanToolName(toolName)` — strips `mcp__servername__` prefix for display (e.g., `mcp__bonsai-specs__registry_query` → `registry_query`), `color: var(--blue)`, `font-weight: 600`
 - `.chat-tool-input`: smart summary from `extractToolHeader()` registry (see below), `color: var(--muted)`, 11px, truncated with `text-overflow: ellipsis`, `flex: 1 1 auto`
 - `.chat-tool-badge`: optional metadata badge (e.g. "4 lines", "3 files"), `color: var(--muted)`, 10px
 - `.chat-tool-status`: status icon + text, colored with `borderColor`, `margin-left: auto`
@@ -221,7 +221,7 @@ interface ToolCallCardProps {
 **Structured Body** (`.chat-tool-body`, toggle on header click):
 - Only rendered when `expanded`
 - **Input detail** (`<ToolInputDetail>`): shown when `rawInput` has >1 non-internal key. Renders key-value pairs with type-aware coloring:
-  - Keys: `var(--gold)`, strings: `var(--green)`, numbers: `var(--purple)`, booleans: `var(--blue)`
+  - Keys: `var(--gold)`, strings: `var(--green)`, numbers: `var(--primary)`, booleans: `var(--blue)`
   - Keys starting with `_` are skipped
   - Long strings (>200 chars) truncated with "show full" toggle
   - Nested objects rendered as indented `JSON.stringify`
@@ -328,7 +328,7 @@ Uses the `intellij-darcula` custom theme (shared with `FileViewer`).
 
 **Header** (`.diff-card-header`, always visible, clickable when not running):
 - `.diff-card-icon`: emoji from `TOOL_ICONS` (Edit/Write → ✏️, NotebookEdit → 📓)
-- `.diff-card-name`: tool name, `color: var(--cyan)`, `font-weight: 600`
+- `.diff-card-name`: tool name, `color: var(--blue)`, `font-weight: 600`
 - `.diff-card-path`: truncated file path, `max-width: 300px`
 - `.diff-card-lang`: language badge from `detectLanguage()`
 - `.diff-card-stats`: `+N` (green) / `-N` (red) line change counts
@@ -465,7 +465,7 @@ interface SuggestionCardProps {
 2. **Name** (`.chat-suggestion-name`): suggested session name, `font-weight: 600`, `font-size: 13px`, `color: var(--text)`
 3. **Reason** (`.chat-suggestion-reason`): why the agent suggests this, `font-size: 12px`, `color: var(--muted)`
 4. **Meta row** (`.chat-suggestion-meta`): skill pill + spec IDs inline
-   - **Skill pill** (`.chat-suggestion-skill`): `color: var(--cyan)`, `background: rgba(125,207,255,0.1)`, `padding: 2px 8px`, `border-radius: 4px`, `font-size: 11px`, inline pill showing skill ID — only rendered when `skill` is non-empty
+   - **Skill pill** (`.chat-suggestion-skill`): `color: var(--blue)`, `background: rgba(125,207,255,0.1)`, `padding: 2px 8px`, `border-radius: 4px`, `font-size: 11px`, inline pill showing skill ID — only rendered when `skill` is non-empty
    - **Spec IDs** (`.chat-suggestion-specs`): comma-separated spec IDs, `font-size: 11px`, `color: var(--hint)` — only rendered when `specIds.length > 0`
 5. **Prompt section** (`.chat-suggestion-prompt-section`, optional): Collapsible section showing `session_prompt` instructions from the agent
    - Toggle button (`.chat-suggestion-prompt-toggle`): `▸ Instructions` / `▾ Instructions`
@@ -524,7 +524,7 @@ case "suggestSession":
 | `.chat-suggestion-header` | Header label | `font-size: 9px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--blue)` |
 | `.chat-suggestion-name` | Session name | `font-weight: 600; font-size: 13px; color: var(--text)` |
 | `.chat-suggestion-reason` | Reason text | `font-size: 12px; color: var(--muted)` |
-| `.chat-suggestion-skill` | Skill pill | `color: var(--cyan); background: rgba(125,207,255,0.1); padding: 2px 8px; border-radius: 4px; font-size: 11px` |
+| `.chat-suggestion-skill` | Skill pill | `color: var(--blue); background: rgba(125,207,255,0.1); padding: 2px 8px; border-radius: 4px; font-size: 11px` |
 | `.chat-suggestion-specs` | Spec IDs list | `font-size: 11px; color: var(--hint)` |
 | `.chat-suggestion-prompt-section` | Prompt container | Collapsible section |
 | `.chat-suggestion-prompt-toggle` | Expand/collapse button | `font-size: 11px; cursor: pointer` |
@@ -554,7 +554,7 @@ interface ApprovalCardProps {
 - Root: `<div className="chat-approval [chat-approval-answered?]">` — `border: 2px solid var(--gold)`, `max-width: 90%`, `background: var(--elevated)`, `slideUp`
 - When `answered`: `opacity: 0.7`
 - `.chat-approval-title`: "Action requires approval", `color: var(--gold)`, 12px bold
-- `.chat-approval-tool`: tool name (`.chat-tool-name` class → `var(--cyan)`) + formatted input (`.chat-approval-input`)
+- `.chat-approval-tool`: tool name (`.chat-tool-name` class → `var(--blue)`) + formatted input (`.chat-approval-input`)
 - `.chat-approval-desc`: optional description, 11px, `var(--muted)`
 
 **`formatToolInput()` logic:**
@@ -608,8 +608,8 @@ interface PlanApprovalCardProps {
 **Title extraction:** `extractPlanTitle(planContent)` extracts a short title from the plan markdown — first `#` heading, or first line, or fallback `"Plan"`.
 
 **When not answered** (pending — full card):
-- Root: `<div className="chat-plan-approval">` — `border: 2px solid var(--purple)`, `max-width: 90%`, `background: var(--elevated)`, `slideUp`
-- `.chat-plan-approval-header`: "Plan Ready for Review" — 9px uppercase, `font-weight: 700`, `color: var(--purple)`, `letter-spacing: 0.5px`
+- Root: `<div className="chat-plan-approval">` — `border: 2px solid var(--primary)`, `max-width: 90%`, `background: var(--elevated)`, `slideUp`
+- `.chat-plan-approval-header`: "Plan Ready for Review" — 9px uppercase, `font-weight: 700`, `color: var(--primary)`, `letter-spacing: 0.5px`
 - `.chat-plan-approval-body`: `<ChatMarkdown content={planContent} />` — renders full plan as markdown, `max-height: 400px`, `overflow-y: auto`, `resize: vertical`, `min-height: 60px`
 - `.chat-plan-approval-empty`: Shown when `!planContent` — italic hint text "Plan written to file — approve to continue"
 - `.chat-plan-approval-tags`: If `allowedPrompts` present, shows "Requested permissions:" label (`.chat-plan-approval-tags-label`) + tag chips
@@ -628,18 +628,18 @@ interface PlanApprovalCardProps {
 
 | Class | Element | Key Styles |
 |---|---|---|
-| `.chat-plan-approval` | Root | `border: 2px solid var(--purple); max-width: 90%; bg: var(--elevated); animation: slideUp` |
-| `.chat-plan-approval-header` | Uppercase label (pending) | `font-size: 9px; text-transform: uppercase; font-weight: 700; color: var(--purple); letter-spacing: 0.5px` |
+| `.chat-plan-approval` | Root | `border: 2px solid var(--primary); max-width: 90%; bg: var(--elevated); animation: slideUp` |
+| `.chat-plan-approval-header` | Uppercase label (pending) | `font-size: 9px; text-transform: uppercase; font-weight: 700; color: var(--primary); letter-spacing: 0.5px` |
 | `.chat-plan-approval-body` | Markdown plan content | `border: 1px solid var(--border); max-height: 400px; overflow-y: auto; resize: vertical; min-height: 60px` |
 | `.chat-plan-approval-empty` | Fallback when no content | `font-size: 12px; font-style: italic; color: var(--hint)` |
 | `.chat-plan-approval-tags` | Tags wrapper | `display: flex; flex-wrap: wrap; gap: var(--space-xs)` |
 | `.chat-plan-approval-tags-label` | "Requested permissions:" | `font-size: 11px; color: var(--muted)` |
-| `.chat-plan-approval-tag` | Permission tag chip | `font-size: 11px; bg: rgba(187,154,247,0.1); color: var(--purple); border-radius: 3px` |
+| `.chat-plan-approval-tag` | Permission tag chip | `font-size: 11px; bg: rgba(187,154,247,0.1); color: var(--primary); border-radius: 3px` |
 | `.chat-plan-approval-answered` | Answered state | `opacity: 0.7; border-width: 1px; border-color: var(--border)` |
 | `.chat-plan-approval--approved` | Approved modifier | `border-color: var(--green)` |
 | `.chat-plan-approval--denied` | Denied modifier | `border-color: var(--red)` |
 | `.chat-plan-approval-row` | Answered compact row | `display: flex; align-items: center; gap: var(--space-md); font-size: 12px; cursor: pointer; user-select: none` |
-| `.chat-plan-approval-label` | "Plan Review" label | `color: var(--purple); font-weight: 600; white-space: nowrap` |
+| `.chat-plan-approval-label` | "Plan Review" label | `color: var(--primary); font-weight: 600; white-space: nowrap` |
 | `.chat-plan-approval-title` | Extracted plan title | `flex: 1; text-overflow: ellipsis; color: var(--text)` |
 | `.chat-plan-approval-status` | Status text wrapper | `white-space: nowrap; font-weight: 500` |
 | `.chat-plan-approval-approved` | "✓ Approved" text | `color: var(--green)` |
@@ -1125,7 +1125,7 @@ Returns `null` when no sessions and no files/preview.
 - Name (`.session-tab-name`): `max-width: 120px`, truncated
 - Pending request badge (`.session-tab-badge`): animated pulse, shows `"Q"` for question, `"A"` for approval, or `"S"` for suggestion
 - Close button (`.session-tab-close`): hidden by default, visible on tab hover
-- Active tab: `.session-tab-active` → `color: var(--text)`, `border-bottom: 2px solid var(--purple)`
+- Active tab: `.session-tab-active` → `color: var(--text)`, `border-bottom: 2px solid var(--primary)`
 
 **Separator** (`.session-tab-sep`): 1px × 16px between session and file tabs
 
@@ -1261,7 +1261,7 @@ RPC server
 | `.chat-cursor` | Streaming cursor | `7×14px block; animation: blink 1s step-end infinite` |
 | `.chat-tool` | ToolCallCard root | `border-left: 3px solid {dynamic}; bg: var(--elevated); max-width: 90%` |
 | `.chat-tool-header` | ToolCallCard header | `flex; gap: sm; padding: sm md; cursor: pointer; font-size: 12px` |
-| `.chat-tool-name` | Tool name | `color: var(--cyan); font-weight: 600` |
+| `.chat-tool-name` | Tool name | `color: var(--blue); font-weight: 600` |
 | `.chat-tool-input` | Tool input summary | `color: var(--muted); font-size: 11px; flex: 1 1 auto; ellipsis` |
 | `.chat-tool-badge` | Header metadata badge | `color: var(--muted); font-size: 10px` |
 | `.chat-tool-status` | Tool status | `margin-left: auto; font-size: 11px` |
@@ -1270,19 +1270,19 @@ RPC server
 | `.tool-input-detail` | Structured input container | key-value pairs with type coloring |
 | `.tool-input-key` | Input key name | `color: var(--gold)` |
 | `.tool-input-value` | Input string value | `color: var(--green)` |
-| `.tool-input-value--number` | Input number value | `color: var(--purple)` |
+| `.tool-input-value--number` | Input number value | `color: var(--primary)` |
 | `.tool-input-value--bool` | Input bool/null value | `color: var(--blue)` |
 | `.tool-output` | Output pre block | `font-size: 11px; pre-wrap; bg: rgba(0,0,0,0.12)` |
 | `.tool-output--error` | Error output | `bg: rgba(red, 0.06); border: 1px solid rgba(red, 0.18)` |
 | `.tool-output--json .json-key` | JSON key | `color: var(--gold)` |
 | `.tool-output--json .json-string` | JSON string | `color: var(--green)` |
-| `.tool-output--json .json-number` | JSON number | `color: var(--purple)` |
+| `.tool-output--json .json-number` | JSON number | `color: var(--primary)` |
 | `.tool-output--json .json-bool` | JSON bool/null | `color: var(--blue)` |
-| `.tool-output-expand` | Truncation expand button | `text-align: center; color: var(--cyan)` |
+| `.tool-output-expand` | Truncation expand button | `text-align: center; color: var(--blue)` |
 | `.diff-card` | DiffCard root | `border-left: 3px solid {dynamic}; bg: var(--elevated); max-width: 90%; animation: slideUp` |
 | `.diff-card--compact` | DiffCard compact variant | `border-left-width: 2px; bg: transparent; max-width: 100%` |
 | `.diff-card-header` | DiffCard header | `flex; gap: sm; padding: sm md; cursor: pointer; font-size: 12px` |
-| `.diff-card-name` | Tool name | `color: var(--cyan); font-weight: 600` |
+| `.diff-card-name` | Tool name | `color: var(--blue); font-weight: 600` |
 | `.diff-card-path` | File path | `color: var(--muted); font-size: 11px; max-width: 300px; text-overflow: ellipsis` |
 | `.diff-card-lang` | Language badge | `font-size: 10px; color: var(--hint); bg: var(--hover); border-radius: sm` |
 | `.diff-card-stats` | Change stats | `font-size: 11px; flex; gap: xs` |
@@ -1297,20 +1297,20 @@ RPC server
 | `.chat-subagent` | SubagentBlock root | `margin-left: 12px; padding-left: 12px; border-left: 2px solid var(--border2)` |
 | `.chat-subagent-header` | Subagent header | `flex; color: var(--muted); font-size: 12px` |
 | `.chat-spinner` | CSS spinner | `10×10px; border-top: var(--blue); animation: spin 0.8s` |
-| `.chat-question` | QuestionCard root | `border: 2px solid var(--purple); max-width: 90%; bg: var(--elevated)` |
+| `.chat-question` | QuestionCard root | `border: 2px solid var(--primary); max-width: 90%; bg: var(--elevated)` |
 | `.chat-question-answered` | Answered state | `opacity: 0.7` |
-| `.chat-question-header` | Section header | `9px; uppercase; color: var(--purple)` |
+| `.chat-question-header` | Section header | `9px; uppercase; color: var(--primary)` |
 | `.chat-option` | Option button | `flex; padding: sm md; border: 1px solid border; border-radius: sm` |
-| `.chat-option-selected` | Selected option | `border-color: var(--purple); bg: rgba(187,154,247,0.1)` |
+| `.chat-option-selected` | Selected option | `border-color: var(--primary); bg: rgba(187,154,247,0.1)` |
 | `.chat-suggestion` | SuggestionCard root | `border: 2px solid var(--blue); max-width: 90%; bg: var(--elevated)` |
 | `.chat-suggestion-answered` | Answered state | `opacity: 0.7` |
 | `.chat-suggestion-header` | Header label | `9px; uppercase; color: var(--blue)` |
 | `.chat-suggestion-name` | Session name | `font-weight: 600; font-size: 13px` |
-| `.chat-suggestion-skill` | Skill pill | `color: var(--cyan); bg: rgba(125,207,255,0.1); border-radius: 4px` |
+| `.chat-suggestion-skill` | Skill pill | `color: var(--blue); bg: rgba(125,207,255,0.1); border-radius: 4px` |
 | `.chat-approval` | ApprovalCard root | `border: 2px solid var(--gold); max-width: 90%; bg: var(--elevated)` |
 | `.chat-approval-title` | Title | `color: var(--gold); font-weight: 600; font-size: 12px` |
 | `.chat-btn` | Generic button | `padding: xs lg; border: 1px solid border; bg: transparent; font-size: 12px` |
-| `.chat-btn-primary` | Primary button | `bg: var(--purple); color: var(--bg)` |
+| `.chat-btn-primary` | Primary button | `bg: var(--primary); color: var(--bg)` |
 | `.chat-btn-approve` | Approve button | `bg: var(--green); color: var(--bg)` |
 | `.chat-btn-deny` | Deny button | `border-color: var(--red); color: var(--red)` |
 | `.chat-banner` | Banner base | `border-radius: md; padding: md lg; font-size: 12px; animation: slideUp` |
@@ -1344,9 +1344,9 @@ RPC server
 | `.input-autocomplete-active` | Highlighted item | `bg: var(--hover); color: var(--text)` |
 | `.session-tabs` | Tab bar root | `flex; border-bottom: 1px solid border; overflow-x: auto` |
 | `.session-tab` | Tab | `flex; padding: sm md; font-size: 12px; border-bottom: 2px solid transparent` |
-| `.session-tab-active` | Active tab | `color: var(--text); border-bottom-color: var(--purple)` |
+| `.session-tab-active` | Active tab | `color: var(--text); border-bottom-color: var(--primary)` |
 | `.session-tab-dot` | Status dot | `6×6px; border-radius: 50%` |
-| `.session-tab-badge` | Pending badge | `9px; bg: var(--purple); animation: pulse 2s` |
+| `.session-tab-badge` | Pending badge | `9px; bg: var(--primary); animation: pulse 2s` |
 | `.session-tab-close` | Close button | `opacity: 0; visible on tab hover` |
 | `.restored-bar` | Restored bar root | `flex; border-top: 1px solid border; bg: var(--panel)` |
 | `.restored-bar-btn` | Resume button | `bg: var(--blue); color: #fff` |
@@ -1357,15 +1357,15 @@ RPC server
 | `.session-context-row` | Context row | `flex; gap: sm` |
 | `.session-context-pill` | Info pill | `font-size: 11px; border-radius: 4px; padding: 2px 8px` |
 | `.session-context-pill--model` | Model pill variant | `color: var(--blue)` |
-| `.session-context-pill--beta` | Beta pill variant | `color: var(--cyan)` |
+| `.session-context-pill--beta` | Beta pill variant | `color: var(--blue)` |
 | `.chat-approval-compact` | Compact approval | Single-line answered approval |
 | `.chat-approval--approved` | Approved state | `border-color: var(--green)` |
 | `.chat-approval--denied` | Denied state | `border-color: var(--red)` |
-| `.chat-plan-approval` | PlanApprovalCard root | `border: 2px solid var(--purple); max-width: 90%; bg: var(--elevated)` |
-| `.chat-plan-approval-header` | Uppercase label | `font-size: 9px; text-transform: uppercase; font-weight: 700; color: var(--purple)` |
+| `.chat-plan-approval` | PlanApprovalCard root | `border: 2px solid var(--primary); max-width: 90%; bg: var(--elevated)` |
+| `.chat-plan-approval-header` | Uppercase label | `font-size: 9px; text-transform: uppercase; font-weight: 700; color: var(--primary)` |
 | `.chat-plan-approval-body` | Markdown content | `max-height: 400px; overflow-y: auto; resize: vertical` |
 | `.chat-plan-approval-empty` | No-content fallback | `font-size: 12px; font-style: italic; color: var(--hint)` |
-| `.chat-plan-approval-tag` | Permission chip | `font-size: 11px; bg: rgba(187,154,247,0.1); color: var(--purple)` |
+| `.chat-plan-approval-tag` | Permission chip | `font-size: 11px; bg: rgba(187,154,247,0.1); color: var(--primary)` |
 | `.chat-plan-approval-answered` | Answered state | `opacity: 0.7; border-width: 1px` |
 | `.chat-plan-approval--approved` | Approved modifier | `border-color: var(--green)` |
 | `.chat-plan-approval--denied` | Denied modifier | `border-color: var(--red)` |

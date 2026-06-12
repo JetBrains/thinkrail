@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Modal, CopyButton } from "@/components/ui/index.ts";
+import { Modal, CopyButton, Button } from "@/components/ui/index.ts";
 import { useServerInfoStore } from "@/store/serverInfoStore.ts";
 import { useSettingsStore } from "@/store/settingsStore.ts";
 import { useUiStore } from "@/store/uiStore.ts";
@@ -318,14 +318,14 @@ function SessionDefaultsSection({ visible }: { visible: boolean }) {
         {savedAt && !dirty && (
           <span className="settings-section__saved">Saved ✓</span>
         )}
-        <button
-          className="token-dialog-btn token-dialog-btn-primary"
+        <Button
+          variant="primary"
           onClick={handleSave}
           disabled={!dirty || saving}
           title={!dirty ? "No changes to save" : "Save settings"}
         >
           {saving ? "Saving…" : "Save"}
-        </button>
+        </Button>
       </div>
     </div>
   );

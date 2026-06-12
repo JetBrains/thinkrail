@@ -64,7 +64,7 @@ export function ToolInputDetail({ input }: ToolInputDetailProps) {
 
   return (
     <div className="tool-input-detail">
-      <div className="tool-section-label">Input</div>
+      <div className="tool-section-label text-uppercase">Input</div>
       <div className="tool-input-entries">
         {entries.map(([key, value]) => (
           <div key={key} className="tool-input-kv">

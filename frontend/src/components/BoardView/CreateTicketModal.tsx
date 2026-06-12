@@ -1,12 +1,19 @@
 import { useCallback, useEffect, useState } from "react";
 import { useBoardStore } from "@/store/boardStore.ts";
 import type { TicketType } from "@/types/board.ts";
-import { Modal } from "@/components/ui/index.ts";
+import { Modal, Button, Input, Select, type SelectOption } from "@/components/ui/index.ts";
 
 interface CreateTicketModalProps {
   open: boolean;
   onClose: () => void;
 }
+
+const TYPE_OPTIONS: SelectOption[] = [
+  { label: "Feature", value: "feature" },
+  { label: "Bug", value: "bug" },
+  { label: "Idea", value: "idea" },
+  { label: "Improvement", value: "improvement" },
+];
 
 export function CreateTicketModal({ open, onClose }: CreateTicketModalProps) {
   const createTicket = useBoardStore((s) => s.createTicket);
@@ -51,22 +58,21 @@ export function CreateTicketModal({ open, onClose }: CreateTicketModalProps) {
 
         <div className="create-ticket-field">
           <label>Title</label>
-          <input
+          <Input
             autoFocus
             value={title}
             onChange={(e) => setTitle(e.target.value)}
-            placeholder="What do you want to build or fix?"
+            placeholder="Ticket"
           />
         </div>
 
         <div className="create-ticket-field">
           <label>Type</label>
-          <select value={type} onChange={(e) => setType(e.target.value as TicketType)}>
-            <option value="feature">Feature</option>
-            <option value="bug">Bug</option>
-            <option value="idea">Idea</option>
-            <option value="improvement">Improvement</option>
-          </select>
+          <Select
+            value={type}
+            options={TYPE_OPTIONS}
+            onChange={(value) => setType(value as TicketType)}
+          />
         </div>
 
         <div className="create-ticket-field">
@@ -80,14 +86,14 @@ export function CreateTicketModal({ open, onClose }: CreateTicketModalProps) {
         </div>
 
         <div className="create-ticket-actions">
-          <button onClick={onClose}>Cancel</button>
-          <button
-            className="primary"
+          <Button onClick={onClose}>Cancel</Button>
+          <Button
+            variant="primary"
             onClick={handleSubmit}
             disabled={!title.trim() || submitting}
           >
             {submitting ? "Creating..." : "Create"}
-          </button>
+          </Button>
         </div>
       </div>
     </Modal>

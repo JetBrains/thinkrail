@@ -12,6 +12,7 @@ import { buildDefaultSessionConfig } from "@/utils/sessionConfig.ts";
 import { getClient } from "@/api/index.ts";
 import { createBoardApi } from "@/api/methods/board.ts";
 import type { PlanModel } from "./planTypes.ts";
+import { Button } from "@/components/ui/Button";
 import "./TicketDetail.css";
 
 const SKILL_TO_PHASE: Partial<Record<string, TicketStatus>> = {
@@ -389,8 +390,8 @@ export function TicketInfo() {
             </button>
           ) : (
             <div className="ticket-desc-edit-actions">
-              <button onClick={handleSaveDescription}>Save</button>
-              <button onClick={handleCancelDescription}>Cancel</button>
+              <Button variant="primary" size="sm" onClick={handleSaveDescription}>Save</Button>
+              <Button size="sm" onClick={handleCancelDescription}>Cancel</Button>
             </div>
           )}
         </div>

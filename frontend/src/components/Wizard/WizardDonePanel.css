@@ -70,7 +70,7 @@
 }
 .wiz-done-cta:hover:not(:disabled) {
   transform: translateY(-1px);
-  border-color: var(--purple);
+  border-color: var(--primary);
 }
 .wiz-done-cta:disabled { opacity: 0.5; cursor: not-allowed; }
 
@@ -98,7 +98,7 @@
   color: var(--muted);
   flex-shrink: 0;
 }
-.wiz-done-cta--primary .wiz-done-cta-arrow { color: var(--purple); }
+.wiz-done-cta--primary .wiz-done-cta-arrow { color: var(--primary); }
 
 /* ── Suggested tickets ─────────────────────────────────────────── */
 /* Solid card matching .wiz-done-cta visual (border + radius). Sizes to
@@ -160,9 +160,9 @@
   border-radius: 7px;
   font-size: 12px;
   font-weight: 600;
-  background: var(--purple);
+  background: var(--primary);
   color: var(--on-accent);
-  border: 1px solid var(--purple);
+  border: 1px solid var(--primary);
   cursor: pointer;
   box-shadow: 0 1px 0 rgba(0, 0, 0, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.15);
 }
@@ -245,16 +245,16 @@
   font-weight: 600;
   letter-spacing: 0.02em;
   background: rgba(107, 87, 255, 0.18);
-  color: var(--purple);
+  color: var(--primary);
   border: 1px solid rgba(107, 87, 255, 0.4);
   flex-shrink: 0;
   cursor: pointer;
   transition: opacity 120ms, background 120ms, color 120ms;
 }
 .wiz-done-add-btn:hover:not(:disabled) {
-  background: var(--purple);
+  background: var(--primary);
   color: var(--on-accent);
-  border-color: var(--purple);
+  border-color: var(--primary);
 }
 .wiz-done-add-btn:disabled { opacity: 0.5; cursor: not-allowed; }
 

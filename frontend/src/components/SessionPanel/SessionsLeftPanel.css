@@ -1,0 +1,217 @@
+.sessions-left-panel {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  background: rgba(22, 22, 24, 0.8);
+  backdrop-filter: blur(50px);
+  -webkit-backdrop-filter: blur(50px);
+  border-radius: 8px;
+  overflow: hidden;
+  position: relative;
+  flex-shrink: 0;
+}
+
+.sessions-left-panel--collapsed {
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: visible;
+}
+
+.sessions-left-tabs {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  padding: 8px 8px 0 8px;
+  background: transparent;
+  border-bottom: 1px solid var(--border);
+  position: relative;
+}
+
+/* ── Collapse button (inside tab bar) ─────────────────────────── */
+.sessions-left-collapse-btn {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: none;
+  border-radius: 6px;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all 0.2s;
+  z-index: 1;
+}
+
+.sessions-left-collapse-btn:hover {
+  color: var(--text-primary);
+  background: rgba(255, 255, 255, 0.05);
+}
+
+/* ── Expand button (when panel is collapsed) ──────────────────── */
+.sessions-left-expand-btn {
+  position: absolute;
+  top: 12px;
+  left: 8px;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: none;
+  border-radius: 6px;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.sessions-left-expand-btn:hover {
+  color: var(--text-primary);
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.sessions-left-tab {
+  padding: 8px 12px;
+  background: transparent;
+  border: none;
+  color: var(--muted);
+  font-size: var(--font-sm);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  cursor: pointer;
+  transition: color 0.15s ease, background-color 0.15s ease;
+  border-radius: var(--radius-md) var(--radius-md) 0 0;
+  position: relative;
+}
+
+.sessions-left-tab:hover {
+  color: var(--text);
+}
+
+.sessions-left-tab-active {
+  color: var(--text);
+}
+
+.sessions-left-tab-active::after {
+  content: "";
+  position: absolute;
+  bottom: 0;
+  left: 8px;
+  right: 8px;
+  height: 2px;
+  background: white;
+  border-radius: 2px 2px 0 0;
+}
+
+.sessions-left-content {
+  flex: 1;
+  overflow-y: auto;
+  background: transparent;
+  padding: 0 8px 8px 8px;
+}
+
+/* Tickets list styling */
+.sessions-left-tickets-list {
+  padding: 12px 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.sessions-left-ticket {
+  padding: 12px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.sessions-left-ticket:hover {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: var(--primary);
+  transform: translateY(-1px);
+}
+
+.sessions-left-ticket-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.sessions-left-ticket-title {
+  flex: 1;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sessions-left-ticket-id {
+  font-size: 11px;
+  color: var(--text-tertiary);
+  font-family: var(--font-mono);
+  flex-shrink: 0;
+}
+
+.sessions-left-ticket-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 11px;
+}
+
+.sessions-left-ticket-phase {
+  padding: 2px 6px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text-secondary);
+  font-size: 10px;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.sessions-left-ticket-type {
+  color: var(--text-tertiary);
+  font-size: 11px;
+}
+
+.sessions-left-empty {
+  padding: 24px 12px;
+  text-align: center;
+  color: var(--text-tertiary);
+  font-size: 13px;
+}
+
+/* Hide SessionManager's header and section labels when embedded in left panel */
+.sessions-left-sessions-content .sm-header {
+  display: none;
+}
+
+.sessions-left-sessions-content .sm-section-label {
+  display: none;
+}
+
+/* Adjust SessionManager content area */
+.sessions-left-sessions-content .session-manager {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+.sessions-left-sessions-content .sm-content {
+  flex: 1;
+  overflow-y: auto;
+}

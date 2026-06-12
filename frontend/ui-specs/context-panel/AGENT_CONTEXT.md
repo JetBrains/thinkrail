@@ -174,7 +174,7 @@ Categories (in bar order):
   1. "Input (fresh)"    → var(--blue)
   2. "Cache read"       → var(--green)
   3. "Cache creation"   → var(--gold)
-  4. "Output"           → var(--purple, var(--cyan))
+  4. "Output"           → var(--primary, var(--blue))
 
 total = sum of all 4 values
 widthPct = (value / total) * 100 for each

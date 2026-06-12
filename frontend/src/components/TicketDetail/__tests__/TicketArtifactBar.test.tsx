@@ -1,16 +1,17 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi, afterEach } from "vitest";
 import { render, screen, fireEvent, cleanup } from "@testing-library/react";
+import { FileText, ScrollText } from "lucide-react";
 
 afterEach(cleanup);
 
 import { TicketArtifactBar, type ArtifactEntry } from "@/components/TicketDetail/TicketArtifactBar.tsx";
 
 const entries: ArtifactEntry[] = [
-  { id: "pd", icon: "📄", label: "product-design.md", live: false },
-  { id: "td", icon: "📄", label: "technical-design.md", live: false },
-  { id: "plan", icon: "📄", label: "implementation-plan.md", live: true },
-  { id: "hist", icon: "📜", label: "History", live: false },
+  { id: "pd", icon: <FileText size={12} strokeWidth={1.5} />, label: "product-design.md", live: false },
+  { id: "td", icon: <FileText size={12} strokeWidth={1.5} />, label: "technical-design.md", live: false },
+  { id: "plan", icon: <FileText size={12} strokeWidth={1.5} />, label: "implementation-plan.md", live: true },
+  { id: "hist", icon: <ScrollText size={12} strokeWidth={1.5} />, label: "History", live: false },
 ];
 
 describe("TicketArtifactBar — tabs mode", () => {

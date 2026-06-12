@@ -3,7 +3,7 @@ import { NODE_WIDTH, NODE_HEIGHT } from "./graphLayout.ts";
 
 const TYPE_COLORS: Record<string, string> = {
   "goal-and-requirements": "var(--gold)",
-  "architecture-design": "var(--purple)",
+  "architecture-design": "var(--primary)",
   "module-design": "var(--blue)",
   "submodule-design": "var(--blue)",
   "task-spec": "var(--green)",

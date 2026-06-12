@@ -1,4 +1,5 @@
 import { useEffect, useRef } from "react";
+import { Pencil, Package, Code, Terminal } from "lucide-react";
 
 interface EditDropdownProps {
   onEditInPlace: () => void;
@@ -30,16 +31,20 @@ export function EditDropdown({
   return (
     <div className="fv-dropdown" ref={ref}>
       <button className="fv-dropdown-item" onClick={onEditInPlace}>
-        {"\u270F\uFE0F"} Edit in place
+        <Pencil size={14} style={{ marginRight: "8px" }} />
+        Edit in place
       </button>
       <button className="fv-dropdown-item" onClick={onOpenIdea}>
-        {"\u{1F4E6}"} Open in IntelliJ IDEA
+        <Package size={14} style={{ marginRight: "8px" }} />
+        Open in IntelliJ IDEA
       </button>
       <button className="fv-dropdown-item" onClick={onOpenVscode}>
-        {"\u{1F535}"} Open in VS Code
+        <Code size={14} style={{ marginRight: "8px" }} />
+        Open in VS Code
       </button>
       <button className="fv-dropdown-item" onClick={onOpenVim}>
-        {"\u{1F4BB}"} Open in Vim
+        <Terminal size={14} style={{ marginRight: "8px" }} />
+        Open in Vim
       </button>
     </div>
   );

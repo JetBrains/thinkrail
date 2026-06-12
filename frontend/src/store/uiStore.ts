@@ -10,7 +10,7 @@ export type LeftTab = (typeof LEFT_TABS)[number];
 export const LEFT_BROWSER_TABS = ["specs", "files", "sessions"] as const;
 type Breakpoint = "desktop" | "laptop" | "below-min";
 export type ProjectState = "initialized" | "new" | "existing";
-export type CenterView = "board" | "sessions";
+export type CenterView = "sessions" | "board" | "specs" | "files";
 
 export type ChatCategoryVisibility = Record<EventCategory, boolean>;
 

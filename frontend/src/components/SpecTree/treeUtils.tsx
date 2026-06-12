@@ -1,3 +1,4 @@
+import { Target, Building2, Package, Puzzle, PencilLine, FileText, Check } from "lucide-react";
 import type { DocumentEntry, SpecGraph, SpecEntry } from "@/types/spec.ts";
 
 export interface TreeNode {
@@ -83,20 +84,20 @@ export function buildTree(graph: SpecGraph): TreeNode[] {
 }
 
 /** Map spec type to an icon character and CSS class. */
-export function specTypeIcon(type: string): { icon: string; cls: string } {
+export function specTypeIcon(type: string): { icon: React.ReactNode; cls: string } {
   switch (type) {
     case "goal-and-requirements":
-      return { icon: "\u{1F3AF}", cls: "st-icon-goal" };
+      return { icon: <Target size={14} strokeWidth={1.5} />, cls: "st-icon-goal" };
     case "architecture-design":
-      return { icon: "\u{1F3D7}", cls: "st-icon-arch" };
+      return { icon: <Building2 size={14} strokeWidth={1.5} />, cls: "st-icon-arch" };
     case "module-design":
-      return { icon: "\u{1F4E6}", cls: "st-icon-module" };
+      return { icon: <Package size={14} strokeWidth={1.5} />, cls: "st-icon-module" };
     case "submodule-design":
-      return { icon: "\u{1F9E9}", cls: "st-icon-submodule" };
+      return { icon: <Puzzle size={14} strokeWidth={1.5} />, cls: "st-icon-submodule" };
     case "task-spec":
-      return { icon: "\u270F\uFE0F", cls: "st-icon-task" };
+      return { icon: <PencilLine size={14} strokeWidth={1.5} />, cls: "st-icon-task" };
     default:
-      return { icon: "\u{1F4C4}", cls: "st-icon-default" };
+      return { icon: <FileText size={14} strokeWidth={1.5} />, cls: "st-icon-default" };
   }
 }
 
@@ -201,10 +202,10 @@ export function buildTaskTree(
 }
 
 /** Map spec status to a badge character and CSS class. */
-export function statusBadge(status: string): { badge: string; cls: string } {
+export function statusBadge(status: string): { badge: React.ReactNode; cls: string } {
   switch (status) {
     case "done":
-      return { badge: "\u2713", cls: "st-badge-done" };
+      return { badge: <Check size={12} strokeWidth={2} />, cls: "st-badge-done" };
     case "active":
       return { badge: "\u25CF", cls: "st-badge-active" };
     case "pending":

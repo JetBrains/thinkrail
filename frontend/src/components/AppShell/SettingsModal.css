@@ -52,7 +52,7 @@
 
 .settings-section__title {
   margin: 0 0 var(--space-md);
-  font-size: var(--font-lg2);
+  font-size: var(--font-body);
   font-weight: 600;
   color: var(--text);
 }

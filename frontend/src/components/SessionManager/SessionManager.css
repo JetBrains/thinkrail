@@ -26,7 +26,7 @@
   border: none;
   background: transparent;
   color: var(--hint);
-  font-size: var(--font-lg);
+  font-size: var(--font-body);
   line-height: 1;
   cursor: pointer;
   padding: var(--space-xs);
@@ -49,7 +49,7 @@
 
 .sm-loading, .sm-empty {
   color: var(--hint);
-  font-size: var(--font-lg);
+  font-size: var(--font-body);
   font-style: italic;
   text-align: center;
   padding: var(--space-xl);
@@ -155,7 +155,7 @@
 .sm-dot--initializing { background: var(--blue); }
 .sm-dot--idle         { background: var(--blue); }
 .sm-dot--running      {
-  background: var(--purple);
+  background: var(--primary);
   animation: sm-dot-pulse 1.8s ease-in-out infinite;
 }
 .sm-dot--waiting      { background: var(--gold); }
@@ -205,7 +205,7 @@
   white-space: nowrap;
 }
 .sm-time--live {
-  color: var(--purple);
+  color: var(--primary);
   font-weight: 500;
 }
 
@@ -316,7 +316,7 @@
   display: flex;
   flex-direction: column;
   background: var(--bg);
-  border-left: 3px solid var(--purple);
+  border-left: 3px solid var(--primary);
   border-radius: var(--radius-md);
   overflow: hidden;
 }
@@ -374,7 +374,7 @@
 /* Active session inside a folder — clear "you are here" marker. */
 .sm-card--selected,
 .sm-card--selected:hover {
-  background: color-mix(in srgb, var(--purple) 16%, transparent);
+  background: color-mix(in srgb, var(--primary) 16%, transparent);
 }
 .sm-card--ticket-group .sm-ticket-id {
   color: var(--hint);
@@ -443,7 +443,7 @@
   border: 0;
   color: var(--text);
   font-family: var(--font);
-  font-size: var(--font-lg);
+  font-size: var(--font-body);
   padding: var(--space-sm) var(--space-md);
   cursor: pointer;
 }

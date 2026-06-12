@@ -1,0 +1,67 @@
+/* ── Screen container ─────────────────────────────────────────── */
+.fullscreen-layout {
+  position: relative;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  overflow-y: auto;
+  background: var(--bg);
+  min-height: 0;
+}
+
+.fullscreen-layout::before {
+  content: "";
+  position: fixed;
+  bottom: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 100%;
+  max-width: 1200px;
+  height: 600px;
+  background-image: url('../../assets/sphere-bg.svg');
+  background-repeat: no-repeat;
+  background-position: center bottom;
+  background-size: contain;
+  pointer-events: none;
+  z-index: 0;
+  opacity: 0.8;
+}
+
+.fullscreen-layout::after {
+  content: '';
+  flex: 1;
+  min-height: 0;
+}
+
+/* ── Container (wide blurred background) ──────────────────────── */
+.fullscreen-container {
+  position: relative;
+  z-index: 0;
+  width: calc(100% - 48px);
+  height: calc(100vh - 24px);
+  margin: 0 24px 24px;
+  padding: 48px 24px 24px;
+  background: rgba(22, 22, 24, 0.8);
+  backdrop-filter: blur(50px);
+  -webkit-backdrop-filter: blur(50px);
+  border-radius: 8px;
+  display: flex;
+  justify-content: center;
+}
+
+@media (max-height: 800px) {
+  .fullscreen-container {
+    margin: 24px auto 0;
+    padding: 24px 24px 24px;
+  }
+}
+
+/* ── Content (constrained width) ──────────────────────────────── */
+.fullscreen-content {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  align-items: center;
+}

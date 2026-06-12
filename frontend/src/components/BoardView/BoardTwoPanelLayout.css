@@ -1,0 +1,71 @@
+/* ── Screen container ─────────────────────────────────────────── */
+.board-twopanel-layout {
+  position: relative;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  background: var(--bg);
+  min-height: 0;
+  overflow: hidden;
+}
+
+.board-twopanel-layout::before {
+  content: "";
+  position: fixed;
+  bottom: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 100%;
+  max-width: 1200px;
+  height: 600px;
+  background-image: url('../../assets/sphere-bg.svg');
+  background-repeat: no-repeat;
+  background-position: center bottom;
+  background-size: contain;
+  pointer-events: none;
+  z-index: 0;
+  opacity: 0.8;
+}
+
+/* ── Container (holds two islands with gap) ───────────────────── */
+.board-twopanel-container {
+  position: relative;
+  z-index: 0;
+  flex: 1;
+  width: calc(100% - 48px);
+  margin: 0 24px 24px;
+  display: flex;
+  gap: 16px;
+  min-height: 0;
+  overflow: hidden;
+}
+
+/* ── Left island (blurred container) ──────────────────────────── */
+.board-twopanel-left {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+  background: rgba(22, 22, 24, 0.8);
+  backdrop-filter: blur(50px);
+  -webkit-backdrop-filter: blur(50px);
+  border-radius: 8px;
+  padding: 16px;
+}
+
+/* ── Right island (blurred container, smaller) ────────────────── */
+.board-twopanel-right {
+  position: relative;
+  flex: 0 0 400px;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+  background: rgba(22, 22, 24, 0.8);
+  backdrop-filter: blur(50px);
+  -webkit-backdrop-filter: blur(50px);
+  border-radius: 8px;
+  padding: 16px;
+}

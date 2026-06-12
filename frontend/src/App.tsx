@@ -12,8 +12,9 @@ import { applyFontScale } from "@/utils/fontScale.ts";
 import { validateProject } from "@/services/project.ts";
 import { ToastContainer } from "@/components/Notifications/ToastContainer.tsx";
 import { AppRoutes } from "./routes.tsx";
+import type { NewProjectData } from "@/components/ProjectPicker/ProjectPicker.tsx";
 
-function AppInner({ projectPath: _projectPath, onSwitchProject }: { projectPath: string; onSwitchProject: () => void }) {
+function AppInner({ projectPath: _projectPath, onSwitchProject, newProjectData }: { projectPath: string; onSwitchProject: (projectPath?: string) => void; newProjectData?: NewProjectData }) {
   const client = useRpc();
   const connectionState = useConnectionState();
   const wiredRef = useRef(false);
@@ -120,7 +121,7 @@ function AppInner({ projectPath: _projectPath, onSwitchProject }: { projectPath:
 
   return (
     <>
-      <AppRoutes onSwitchProject={onSwitchProject} />
+      <AppRoutes onSwitchProject={onSwitchProject} newProjectData={newProjectData} />
       <ToastContainer />
     </>
   );
@@ -129,9 +130,11 @@ function AppInner({ projectPath: _projectPath, onSwitchProject }: { projectPath:
 export function App({
   projectPath,
   onSwitchProject,
+  newProjectData,
 }: {
   projectPath: string;
-  onSwitchProject: () => void;
+  onSwitchProject: (projectPath?: string) => void;
+  newProjectData?: NewProjectData;
 }) {
-  return <AppInner projectPath={projectPath} onSwitchProject={onSwitchProject} />;
+  return <AppInner projectPath={projectPath} onSwitchProject={onSwitchProject} newProjectData={newProjectData} />;
 }

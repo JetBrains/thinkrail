@@ -11,7 +11,7 @@ import { SpecSelector } from "@/components/shared/SpecSelector.tsx";
 import { TicketSelector } from "@/components/shared/TicketSelector.tsx";
 import { FileSelector } from "@/components/shared/FileSelector.tsx";
 import { Dropdown } from "@/components/shared/Dropdown.tsx";
-import { Card } from "@/components/ui/index.ts";
+import { Card, Button } from "@/components/ui/index.ts";
 import { PromptPreview } from "./PromptPreview.tsx";
 import { StaleRefsBanner } from "@/components/shared/StaleRefsBanner.tsx";
 import "./DraftConfigCard.css";
@@ -561,17 +561,17 @@ export function DraftConfigCard({ bonsaiSid, readOnly, hideDiscard, onVisibility
       {/* Actions */}
       <div className="draft-config-actions">
         {!(hideDiscard ?? session?.kind === "stage-default") && (
-          <button className="draft-config-btn-discard" onClick={handleDiscard}>
+          <Button variant="default" onClick={handleDiscard}>
             Discard
-          </button>
+          </Button>
         )}
-        <button
-          className="draft-config-btn-start"
+        <Button
+          variant="primary"
           onClick={handleStart}
           disabled={starting}
         >
           {starting ? "Starting..." : "\u25B6 Start Session"}
-        </button>
+        </Button>
       </div>
     </Card>
   );

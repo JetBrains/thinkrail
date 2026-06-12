@@ -3,7 +3,7 @@ import "./ImplementationCards.css";
 
 export interface ArtifactEntry {
   id: string;
-  icon: string;
+  icon: React.ReactNode;
   label: string;
   live: boolean;
 }

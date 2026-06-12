@@ -1,4 +1,5 @@
 import { useCallback, useState } from "react";
+import { Button } from "../ui/Button";
 
 interface ReturnFlowCardProps {
   bonsaiSid: string;
@@ -72,33 +73,33 @@ export function ReturnFlowCard({
             rows={3}
           />
           <div className="return-flow-revise-actions">
-            <button className="chat-btn chat-btn-primary" onClick={handleRevise} disabled={!feedback.trim()}>
+            <Button variant="primary" onClick={handleRevise} disabled={!feedback.trim()}>
               Send feedback
-            </button>
-            <button className="chat-btn" onClick={() => setRevising(false)}>Cancel</button>
+            </Button>
+            <Button onClick={() => setRevising(false)}>Cancel</Button>
           </div>
         </div>
       ) : (
         <div className="return-flow-actions">
           {isRefinement ? (
             <>
-              <button className="chat-btn chat-btn-primary" onClick={() => onPutInInput?.(displayText)}>
+              <Button variant="primary" onClick={() => onPutInInput?.(displayText)}>
                 Put in input box
-              </button>
-              <button className="chat-btn chat-btn-primary" onClick={() => onSendAsMessage?.(displayText)}>
+              </Button>
+              <Button variant="primary" onClick={() => onSendAsMessage?.(displayText)}>
                 Send as message
-              </button>
+              </Button>
             </>
           ) : (
-            <button className="chat-btn chat-btn-approve" onClick={handleApprove}>
+            <Button variant="approve" onClick={handleApprove}>
               Approve &amp; return
-            </button>
+            </Button>
           )}
-          <button className="chat-btn" onClick={() => setEditing(!editing)}>
+          <Button onClick={() => setEditing(!editing)}>
             {editing ? "Preview" : "Edit"}
-          </button>
-          <button className="chat-btn" onClick={() => setRevising(true)}>Revise</button>
-          <button className="chat-btn chat-btn-muted" onClick={onDismiss}>Dismiss</button>
+          </Button>
+          <Button onClick={() => setRevising(true)}>Revise</Button>
+          <Button variant="muted" onClick={onDismiss}>Dismiss</Button>
         </div>
       )}
     </div>

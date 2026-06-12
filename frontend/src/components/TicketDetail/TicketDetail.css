@@ -30,7 +30,7 @@
 }
 
 .ticket-header-title-input {
-  font-size: var(--font-lg2);
+  font-size: var(--font-body);
   font-weight: 600;
   color: var(--text);
   line-height: 1.3;
@@ -148,7 +148,7 @@
 }
 
 .ticket-section-clickable--active {
-  background: var(--sel);
+  background: #2C2947;
 }
 
 .ticket-section-action {
@@ -445,7 +445,7 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  font-size: var(--font-lg);
+  font-size: var(--font-body);
   color: var(--text);
   border-bottom: 1px solid var(--border);
 }
@@ -464,7 +464,7 @@
 }
 
 .ticket-linked-item--active {
-  background: var(--sel);
+  background: #2C2947;
   border-left: 2px solid var(--blue);
 }
 
@@ -484,18 +484,18 @@
 }
 
 .ticket-linked-status--done {
-  background: #1a3a1a;
+  background: #0F1F17;
   color: var(--green);
 }
 
 .ticket-linked-status--active,
 .ticket-linked-status--executing {
-  background: #1a1a3a;
+  background: #17171F;
   color: var(--blue);
 }
 
 .ticket-linked-status--failed {
-  background: #3a1a1a;
+  background: #1F0F0F;
   color: var(--red);
 }
 
@@ -619,7 +619,7 @@
 }
 .ticket-plan-attention-glyph {
   font-weight: 700;
-  font-size: var(--font-lg);
+  font-size: var(--font-body);
   width: 1.4em;
   height: 1.4em;
   border-radius: 50%;
@@ -682,7 +682,7 @@
 }
 
 .ticket-plan-step-icon {
-  font-size: var(--font-lg2);
+  font-size: var(--font-body);
 }
 
 .ticket-plan-step-title {
@@ -707,7 +707,7 @@
 .ticket-plan-criterion {
   display: flex;
   gap: var(--space-sm);
-  font-size: var(--font-lg);
+  font-size: var(--font-body);
   color: var(--muted);
   line-height: 1.6;
 }
@@ -718,7 +718,7 @@
 }
 
 .ticket-plan-milestone-header {
-  font-size: var(--font-lg);
+  font-size: var(--font-body);
   font-weight: 600;
   color: var(--muted);
   text-transform: uppercase;
@@ -747,7 +747,7 @@
   transition: all var(--transition-fast);
 }
 .ticket-plan-tab:hover { color: var(--muted); background: var(--hover); }
-.ticket-plan-tab--active { color: var(--text); background: var(--sel); border-color: var(--purple); }
+.ticket-plan-tab--active { color: var(--text); background: #2C2947; border-color: var(--primary); }
 
 /* ── Plan Steps editor ── */
 .ticket-plan-form { gap: var(--space-lg); }
@@ -786,17 +786,17 @@
   border-radius: var(--radius-sm);
   color: var(--text);
   font-family: var(--font);
-  font-size: var(--font-lg);
+  font-size: var(--font-body);
   outline: none;
 }
-.ticket-plan-form-input:focus { border-color: var(--purple); }
+.ticket-plan-form-input:focus { border-color: var(--primary); }
 
 .ticket-plan-form-remove {
   border: none;
   background: transparent;
   color: var(--hint);
   cursor: pointer;
-  font-size: var(--font-lg2);
+  font-size: var(--font-body);
   padding: 0 var(--space-xs);
 }
 .ticket-plan-form-remove:hover { color: var(--red); }
@@ -826,7 +826,7 @@
   outline: none;
   width: 140px;
 }
-.ticket-plan-form-input-sm:focus { border-color: var(--purple); }
+.ticket-plan-form-input-sm:focus { border-color: var(--primary); }
 
 .ticket-plan-form-textarea {
   padding: var(--space-xs) var(--space-sm);
@@ -840,7 +840,7 @@
   resize: vertical;
   width: 100%;
 }
-.ticket-plan-form-textarea:focus { border-color: var(--purple); }
+.ticket-plan-form-textarea:focus { border-color: var(--primary); }
 
 .ticket-plan-add-btn {
   padding: var(--space-xs) var(--space-md);
@@ -865,11 +865,11 @@
 
 .ticket-plan-save-btn {
   padding: var(--space-xs) var(--space-lg);
-  font-size: var(--font-lg);
+  font-size: var(--font-body);
   font-family: var(--font);
   border: none;
   border-radius: var(--radius-sm);
-  background: var(--purple);
+  background: var(--primary);
   color: var(--on-accent);
   cursor: pointer;
   font-weight: 500;
@@ -894,13 +894,13 @@
   border-radius: var(--radius-sm);
   color: var(--text);
   font-family: var(--font-mono, monospace);
-  font-size: var(--font-lg);
+  font-size: var(--font-body);
   line-height: 1.6;
   outline: none;
   resize: none;
   tab-size: 2;
 }
-.ticket-plan-raw-editor:focus { border-color: var(--purple); }
+.ticket-plan-raw-editor:focus { border-color: var(--primary); }
 
 /* ── Description split pane (editor + AI chat) ── */
 .ticket-describe-split {
@@ -1006,7 +1006,7 @@
 
 .spec-view-tab {
   padding: var(--space-sm) var(--space-md);
-  font-size: var(--font-lg);
+  font-size: var(--font-body);
   background: none;
   border: none;
   border-bottom: 2px solid transparent;
@@ -1083,11 +1083,11 @@
   gap: var(--space-sm);
   padding: var(--space-sm) var(--space-md);
   cursor: pointer;
-  font-size: var(--font-lg);
+  font-size: var(--font-body);
   transition: background var(--transition-fast);
 }
 .spec-diffs-entry:hover { background: var(--hover); }
-.spec-diffs-entry--active { background: var(--sel); }
+.spec-diffs-entry--active { background: #2C2947; }
 
 .spec-diffs-op {
   font-size: var(--font-sm);
@@ -1114,7 +1114,7 @@
   background: transparent;
   color: var(--red);
   cursor: pointer;
-  font-size: var(--font-lg2);
+  font-size: var(--font-body);
   padding: 0 var(--space-xs);
   opacity: 0;
   transition: opacity var(--transition-fast);

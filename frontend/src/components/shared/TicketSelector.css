@@ -7,7 +7,7 @@
   background: transparent;
   color: var(--text);
   font-family: var(--font);
-  font-size: var(--font-lg);
+  font-size: var(--font-body);
   outline: none;
 }
 .ticket-selector-search::placeholder { color: var(--hint); }
@@ -16,7 +16,7 @@
   display: flex; justify-content: space-between; align-items: center;
   width: 100%; padding: var(--space-sm) var(--space-md);
   border: none; background: transparent;
-  color: var(--text); font-family: var(--font); font-size: var(--font-lg);
+  color: var(--text); font-family: var(--font); font-size: var(--font-body);
   cursor: pointer; text-align: left;
 }
 .ticket-selector-item:hover { background: var(--hover); }
@@ -30,4 +30,4 @@
 .ticket-selector-status--executing { color: var(--gold); }
 .ticket-selector-status--done { color: var(--muted); }
 .ticket-selector-type { font-size: var(--font-sm); color: var(--hint); }
-.ticket-selector-empty { padding: var(--space-md); color: var(--hint); font-size: var(--font-lg); text-align: center; }
+.ticket-selector-empty { padding: var(--space-md); color: var(--hint); font-size: var(--font-body); text-align: center; }

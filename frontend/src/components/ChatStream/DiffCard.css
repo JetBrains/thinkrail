@@ -12,11 +12,11 @@
   gap: var(--space-sm);
   padding: var(--space-sm) var(--space-md);
   cursor: pointer;
-  font-size: var(--font-lg);
+  font-size: var(--font-body);
 }
 .diff-card-header:hover { background: var(--hover); }
-.diff-card-icon { font-size: var(--font-lg2); }
-.diff-card-name { color: var(--cyan); font-weight: 600; }
+.diff-card-icon { font-size: var(--font-body); }
+.diff-card-name { color: var(--blue); font-weight: 600; }
 .diff-card-path {
   color: var(--muted);
   font-size: var(--font-md);
@@ -89,7 +89,7 @@
   color: var(--fg);
   padding: var(--space-xs) var(--space-md);
   cursor: pointer;
-  font-size: var(--font-lg);
+  font-size: var(--font-body);
 }
 .diff-card-large-warning button:hover {
   background: var(--border);
@@ -99,7 +99,7 @@
   padding: var(--space-md);
   text-align: center;
   color: var(--muted);
-  font-size: var(--font-lg);
+  font-size: var(--font-body);
 }
 
 /* ── DiffCard compact variant (inside SubagentBlock) ── */
@@ -113,7 +113,7 @@
   font-size: var(--font-md);
 }
 .diff-card--compact .diff-card-icon {
-  font-size: var(--font-lg);
+  font-size: var(--font-body);
 }
 .diff-card--compact .diff-card-editor {
   min-width: 700px;

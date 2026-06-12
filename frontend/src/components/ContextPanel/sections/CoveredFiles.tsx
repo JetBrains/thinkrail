@@ -1,3 +1,4 @@
+import { Folder, FileText } from "lucide-react";
 import { CollapsibleSection } from "../CollapsibleSection.tsx";
 import { useSelectedSpec } from "../useSelectedSpec.ts";
 import { useFileStore } from "@/store/fileStore.ts";
@@ -33,7 +34,11 @@ export function CoveredFiles() {
               onDoubleClick={() => isDir ? undefined : openFile(pattern)}
               title={pattern}
             >
-              <span className="covered-files__icon">{isDir ? "📁" : "📄"}</span>
+              {isDir ? (
+                <Folder size={12} strokeWidth={1.5} className="covered-files__icon" />
+              ) : (
+                <FileText size={12} strokeWidth={1.5} className="covered-files__icon" />
+              )}
               <span className="covered-files__path">{pattern}</span>
             </button>
           );

@@ -134,7 +134,7 @@
   background: transparent;
   color: var(--text);
   font-family: var(--font);
-  font-size: var(--font-lg2);
+  font-size: var(--font-body);
   cursor: pointer;
   display: flex;
   align-items: center;
@@ -208,9 +208,9 @@
 .md-preview a:hover { text-decoration: underline; }
 
 .md-preview code {
-  font-family: var(--font);
+  font-family: var(--font-mono);
   background: var(--elevated);
-  color: var(--cyan);
+  color: var(--blue);
   padding: 2px var(--space-sm);
   border-radius: var(--radius-sm);
   font-size: 0.9em;
@@ -229,12 +229,12 @@
   background: transparent;
   padding: 0;
   color: var(--text);
-  font-size: var(--font-lg);
+  font-size: var(--font-body);
   line-height: 1.6;
 }
 
 .md-preview blockquote {
-  border-left: 3px solid var(--purple);
+  border-left: 3px solid var(--primary);
   margin: 1em 0;
   padding: 0.5em 1em;
   color: var(--muted);
@@ -258,7 +258,7 @@
   border: 1px solid var(--border);
   padding: var(--space-sm) var(--space-md);
   text-align: left;
-  font-size: var(--font-lg);
+  font-size: var(--font-body);
 }
 
 .md-preview th {
@@ -371,7 +371,7 @@
   justify-content: center;
   height: 100%;
   color: var(--hint);
-  font-size: var(--font-lg);
+  font-size: var(--font-body);
 }
 
 /* ── Edit Dropdown ── */
@@ -396,7 +396,7 @@
   background: transparent;
   color: var(--text);
   font-family: var(--font);
-  font-size: var(--font-lg);
+  font-size: var(--font-body);
   text-align: left;
   cursor: pointer;
   transition: background var(--transition-fast);

@@ -23,6 +23,9 @@ frontend/.vite/
 .DS_Store
 Thumbs.db
 
+# claude code extra
+frontend/.claude/
+
 # Bonsai runtime (legacy generated files)
 .bonsai/.progress.yaml
 .bonsai/.progress.json
@@ -67,6 +70,9 @@ mobile/gradle/wrapper/gradle-wrapper.jar
 
 # Playwright MCP scratch dir (browser snapshots/console logs from agent sessions)
 .playwright-mcp/
+
+# Design-system extraction: verification screenshots (scratch artifacts)
+/step*.png
 
 docs/
 POST.md

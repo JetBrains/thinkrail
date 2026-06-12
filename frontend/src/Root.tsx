@@ -2,7 +2,7 @@ import { useCallback, useEffect } from "react";
 import { Navigate, useNavigate, useLocation } from "react-router-dom";
 import { RpcProvider } from "@/api/index.ts";
 import { App } from "./App.tsx";
-import { ProjectPicker } from "@/components/ProjectPicker/ProjectPicker.tsx";
+import { ProjectPicker, type NewProjectData } from "@/components/ProjectPicker/ProjectPicker.tsx";
 import { useFileStore } from "@/store/fileStore.ts";
 import { useSessionStore } from "@/store/sessionStore.ts";
 import { useUiStore } from "@/store/uiStore.ts";
@@ -39,7 +39,7 @@ export function Root() {
   }, []);
 
   const handleSelect = useCallback(
-    (path: string) => {
+    (path: string, newProjectData?: NewProjectData) => {
       useFileStore.getState().unload();
       useSessionStore.getState().unload();
       // projectState is fetched from the server on workspace mount
@@ -51,16 +51,24 @@ export function Root() {
       // Drop the cumulative stepper journey — it belongs to the project
       // we're leaving; the next project starts a fresh path.
       useUiStore.getState().clearWizardJourney();
+      // Reset centerView to sessions so the new project starts with
+      // the appropriate default view instead of inheriting the persisted
+      // centerView from the previous project.
+      useUiStore.getState().setCenterView("sessions");
       localStorage.setItem(LAST_PROJECT_KEY, path);
-      navigate(`/${pathToSlug(path)}/workspace`, { state: { projectPath: path } });
+      navigate(`/${pathToSlug(path)}/workspace`, { state: { projectPath: path, newProjectData } });
     },
     [navigate],
   );
 
-  // "Switch project" navigates to / (workspace is still in history → back returns to it)
-  const handleSwitchProject = useCallback(() => {
-    navigate("/");
-  }, [navigate]);
+  // "Switch project" navigates to / or opens a specific project
+  const handleSwitchProject = useCallback((projectPath?: string) => {
+    if (projectPath) {
+      handleSelect(projectPath);
+    } else {
+      navigate("/");
+    }
+  }, [navigate, handleSelect]);
 
   // ── /workspace → redirect to last project ────────────────────────────────
   if (location.pathname === "/workspace") {
@@ -78,12 +86,14 @@ export function Root() {
   }
 
   // ── /:slug/workspace → workspace ─────────────────────────────────────────
-  const projectPath = (location.state as { projectPath?: string } | null)?.projectPath;
+  const state = location.state as { projectPath?: string; newProjectData?: NewProjectData } | null;
+  const projectPath = state?.projectPath;
+  const newProjectData = state?.newProjectData;
   if (isWorkspacePath(location.pathname) && projectPath) {
     const wsUrl = `${WS_PROTO}//${BACKEND}/ws?project=${encodeURIComponent(projectPath)}`;
     return (
       <RpcProvider url={wsUrl} key={projectPath}>
-        <App projectPath={projectPath} onSwitchProject={handleSwitchProject} />
+        <App projectPath={projectPath} onSwitchProject={handleSwitchProject} newProjectData={newProjectData} />
       </RpcProvider>
     );
   }

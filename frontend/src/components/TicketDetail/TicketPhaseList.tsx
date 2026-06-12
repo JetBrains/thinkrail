@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { FileText } from "lucide-react";
 import type { Ticket, TicketStatus, ArtifactKind } from "@/types/board.ts";
 import { useBoardStore } from "@/store/boardStore.ts";
 import { useSessionStore } from "@/store/sessionStore.ts";
@@ -511,7 +512,7 @@ export function TicketPhaseList({
                               title={path}
                               onClick={() => onSelectPanel({ type: "file", filePath: path })}
                             >
-                              <span className="tpl-task-glyph">{"📄"}</span>
+                              <FileText size={12} strokeWidth={1.5} className="tpl-task-glyph" />
                               <span className="tpl-task-text">{path.split("/").pop() ?? path}</span>
                             </div>
                           ))}

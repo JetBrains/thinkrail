@@ -1,6 +1,6 @@
 const LEGEND_ITEMS = [
   { label: "Goal", color: "var(--gold)" },
-  { label: "Architecture", color: "var(--purple)" },
+  { label: "Architecture", color: "var(--primary)" },
   { label: "Module", color: "var(--blue)" },
   { label: "Task", color: "var(--green)" },
 ];

@@ -1,0 +1,54 @@
+import { Meta, Typeset } from "@storybook/addon-docs/blocks";
+
+<Meta title="Foundations/Typography" />
+
+export const SCALE = [
+  "var(--font-xs)",
+  "var(--font-sm)",
+  "var(--font-body)",
+  "var(--font-md)",
+];
+
+export const SAMPLE = "The quick brown fox jumps over the lazy dog";
+export const UPPERCASE_SAMPLE = "Section Label";
+
+# Typography
+
+Type scale + font families from `src/styles/tokens.css`. Font sizes use fixed
+pixel values (10px–25px). The scale is **family-independent** — the same
+`--font-xs … --font-xl` steps shown below in each of the three families.
+
+## Geist — UI / body (`--font`)
+
+<Typeset fontSizes={SCALE} fontWeight={400} sampleText={SAMPLE} fontFamily="var(--font)" />
+
+## JetBrains Mono — code (`--font-mono`)
+
+<Typeset fontSizes={SCALE} fontWeight={400} sampleText={SAMPLE} fontFamily="var(--font-mono)" />
+
+## Sentient — display accent (`--font-accent`)
+
+<Typeset fontSizes={SCALE} fontWeight={400} sampleText={SAMPLE} fontFamily="var(--font-accent)" />
+
+## Uppercase Labels
+
+Standard uppercase label style for section headers, table headers, and UI labels.
+Use the `.text-uppercase` utility class or the CSS custom properties:
+- `--uppercase-size` (13px / `--font-body`)
+- `--uppercase-weight` (500 / medium)
+- `--uppercase-spacing` (0.5px)
+
+<div style={{ marginTop: '24px', padding: '24px', background: 'var(--panel)', borderRadius: '8px' }}>
+  <div style={{
+    fontSize: '13px',
+    fontWeight: 500,
+    letterSpacing: '0.5px',
+    textTransform: 'uppercase',
+    color: 'var(--muted)'
+  }}>
+    {UPPERCASE_SAMPLE}
+  </div>
+  <div style={{ marginTop: '16px', fontSize: '12px', color: 'var(--hint)', fontFamily: 'var(--font-mono)' }}>
+    font-size: 13px (--font-body) · font-weight: 500 · letter-spacing: 0.5px · text-transform: uppercase
+  </div>
+</div>

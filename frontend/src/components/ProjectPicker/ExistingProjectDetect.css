@@ -1,24 +1,10 @@
-/* Layout shell — mirrors np-form-screen but for a standalone (non-AppShell)
-   mount so the picker can render the detect screen at the page root.
-   Stepper sits at the top; the form below absorbs the rest. */
-.detect-screen {
-  height: 100vh;
-  display: flex;
-  flex-direction: column;
-  background: var(--bg);
-  color: var(--text);
-  overflow: hidden;
-}
-
-/* Force the np-form into a vertical box that fits the remaining space
-   so the file list can scroll internally while the action buttons stay
-   pinned at the bottom of the form. */
+/* ── Form container (within FullScreenLayout) ──────────────────── */
 .detect-form {
-  flex: 1;
-  min-height: 0;
+  width: 100%;
   display: flex;
   flex-direction: column;
-  padding-bottom: 18px;
+  gap: 16px;
+  max-height: calc(100vh - 140px);
 }
 
 /* ── Project header (above the H2) ──────────────────────────────── */
@@ -42,7 +28,8 @@
 .detect-leaf {
   width: 18px;
   height: 18px;
-  color: var(--green);
+  color: #fff;
+  opacity: 0.6;
   flex-shrink: 0;
 }
 
@@ -96,28 +83,49 @@
   margin-top: 0 !important;
 }
 
-/* ── Row ─────────────────────────────────────────────────────────── */
+/* ── Row (matches recent project item styling) ──────────────────── */
 .detect-row {
   display: flex;
   align-items: center;
   gap: 12px;
-  padding: 9px 12px;
+  padding: 10px 12px;
   border-radius: 8px;
-  background: var(--elevated);
-  border: 1px solid var(--border);
+  background: var(--input-bg);
+  border: 1px solid transparent;
   margin-bottom: 6px;
+  transition: background 150ms ease, border-color 150ms ease;
+}
+
+.detect-row-clickable {
+  cursor: pointer;
+}
+
+.detect-row-clickable:hover {
+  background: var(--white-10);
+}
+
+.detect-row-clickable:focus {
+  outline: none;
+}
+
+.detect-row-selected {
+  border-color: var(--primary);
 }
 
 .detect-row-missing {
   background: var(--panel);
   border-style: dashed;
+  border-color: var(--border);
 }
 
 .detect-row-icon {
-  font-size: 16px;
   width: 22px;
-  text-align: center;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   flex-shrink: 0;
+  color: #fff;
+  opacity: 0.6;
 }
 
 .detect-row-info {
@@ -182,4 +190,27 @@
 .detect-init-btn:disabled {
   opacity: 0.55;
   cursor: not-allowed;
+}
+
+/* ── Checkbox (like screenshot) ───────────────────────────────────── */
+.detect-checkbox {
+  width: 24px;
+  height: 24px;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  transition: background 150ms ease, border-color 150ms ease;
+}
+
+.detect-checkbox-checked {
+  background: #6C63FF;
+  border-color: #6C63FF;
+}
+
+.detect-checkbox svg {
+  color: #fff;
 }

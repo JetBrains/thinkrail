@@ -76,7 +76,7 @@ The left border color is set via inline style from the `EVENT_COLORS` map:
 
 | Event Type | Border Color |
 | --- | --- |
-| `question` | `var(--purple)` |
+| `question` | `var(--primary)` |
 | `approval` | `var(--gold)` |
 | `success` | `var(--green)` |
 | `error` | `var(--red)` |

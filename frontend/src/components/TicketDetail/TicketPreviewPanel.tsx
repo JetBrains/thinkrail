@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { FileText, ScrollText } from "lucide-react";
 import type { Ticket, TicketStatus } from "@/types/board.ts";
 import { useUiStore } from "@/store/uiStore.ts";
 import { useSessionStore } from "@/store/sessionStore.ts";
@@ -60,9 +61,9 @@ function entryLabel(a: SelectedArtifact): string {
   return a.filePath.split("/").pop() ?? a.filePath;
 }
 
-function entryIcon(a: SelectedArtifact): string {
-  if (a.kind === "history") return "📜";
-  return "📄";
+function entryIcon(a: SelectedArtifact): React.ReactNode {
+  if (a.kind === "history") return <ScrollText size={12} strokeWidth={1.5} />;
+  return <FileText size={12} strokeWidth={1.5} />;
 }
 
 export function TicketPreviewPanel(props: Props) {

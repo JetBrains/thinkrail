@@ -59,6 +59,7 @@ export type WizardUiPhase = "pre-chat" | "running" | "done-screen";
 export interface WizardStep {
   label: string;
   status: WizardStepStatus;
+  icon?: string;
 }
 
 export interface WizardConfig {
@@ -255,12 +256,12 @@ const WIZARD_FLOW: SessionStep[] = [
     aliases: ["goal-and-requirements"],
     artifact: "GOAL&REQUIREMENTS.md",
     chains: ["new-project"],
-    preChat: { label: "Describe" },
-    runningLabel: "Guided session",
-    outcomeLabel: "Goal & Requirements doc",
+    preChat: { label: "Describe project" },
+    runningLabel: "Define goals",
+    outcomeLabel: "Goals ready",
     enter: {
       id: "new-project.enter",
-      label: "Describe",
+      label: "Describe project",
       target: "new-project",
       buildPrompt: buildDescribePrompt,
     },
@@ -271,8 +272,8 @@ const WIZARD_FLOW: SessionStep[] = [
     id: "architecture-design",
     artifact: "DESIGN_DOC.md",
     chains: ["new-project"],
-    runningLabel: "Architecture",
-    outcomeLabel: "Design doc",
+    runningLabel: "Define architecture",
+    outcomeLabel: "Architecture ready",
   },
 
   // ── Chain: investigate-project (existing-project onboarding) ──────
@@ -284,12 +285,12 @@ const WIZARD_FLOW: SessionStep[] = [
     id: "investigate-project",
     artifact: "DESIGN_DOC.md",
     chains: ["investigate-project"],
-    preChat: { label: "What we'll read" },
+    preChat: { label: "Select files" },
     runningLabel: "Investigation",
     outcomeLabel: "Review",
     enter: {
       id: "investigate-project.enter",
-      label: "What we'll read",
+      label: "Select files",
       target: "investigate-project",
       buildPrompt: buildInvestigatePrompt,
     },
@@ -397,6 +398,22 @@ function chainSteps(chainId: string): SessionStep[] {
 }
 
 /**
+ * Map step label to its lucide-react icon name.
+ */
+const STEP_ICONS: Record<string, string> = {
+  "Describe project": "grid-2x2-plus",
+  "Define goals": "target",
+  "Goals ready": "book-check",
+  "Define architecture": "pencil-ruler",
+  "Architecture ready": "pencil-ruler",
+  "Select files": "file-text",
+  "Investigation": "brain",
+  "Review": "eye",
+  "Clarify": "diamond-plus",
+  "Verify & save": "badge-check",
+};
+
+/**
  * One stepper cell, tagged with its owner and phase. `ownerIdx` is the
  * index of the thing the cell belongs to — a step within a chain walk
  * (`getWizardConfig`) or a session within the journey
@@ -431,6 +448,7 @@ function cellsToSteps(
   return cells.map((c, i) => ({
     label: c.label,
     status: i < activeIdx ? "done" : i === activeIdx ? "active" : "pending",
+    icon: STEP_ICONS[c.label],
   }));
 }
 

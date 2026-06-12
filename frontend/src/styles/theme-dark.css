@@ -5,18 +5,22 @@
  * Based on JetBrains IDE dark theme colors:
  * - Near-black backgrounds with warm gray tones
  * - Muted borders, high-contrast text
- * - Purple (#6B57FF) as primary accent
+ * - Purple (#8C81FF) as primary accent
  */
 
 :root,
 [data-theme="dark"] {
-  --bg: #1e1f22;
-  --panel: #2b2d30;
-  --elevated: #393b40;
-  --hover: #43454a;
-  --border: #43454a;
-  --border2: #5a5d63;
+  --bg: #2B2B30;
+  --bg-dark: #171719;
+  --bg-input: #272830;
+  --panel: rgba(23, 23, 25, 0.8);
+  --panel-blur: 100px;
+  --elevated: #2B2D30;
+  --hover: #393B40;
+  --border: #2B2D30;
+  --border2: #43454A;
   --text: #dfe1e5;
+  --text-40: rgba(223, 225, 229, 0.40);
   --muted: #a8adb5;
   --hint: #6f737a;
   --sel: #2d4f67;

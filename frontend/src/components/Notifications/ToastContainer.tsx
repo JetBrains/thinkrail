@@ -3,7 +3,7 @@ import { useSessionStore } from "@/store/sessionStore.ts";
 import "./ToastContainer.css";
 
 const EVENT_COLORS: Record<string, string> = {
-  question: "var(--purple)",
+  question: "var(--primary)",
   approval: "var(--gold)",
   success: "var(--green)",
   error: "var(--red)",

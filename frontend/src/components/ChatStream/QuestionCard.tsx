@@ -1,6 +1,7 @@
 import { useState, useRef, useCallback, useEffect } from "react";
 import type { Question } from "@/types/agent.ts";
 import { isMod, modLabel } from "@/utils/platform.ts";
+import { Button } from "../ui/Button";
 import { QuestionTabBar } from "./QuestionTabBar.tsx";
 import { QuestionOptionsPanel } from "./QuestionOptionsPanel.tsx";
 import { QuestionPreviewPanel } from "./QuestionPreviewPanel.tsx";
@@ -373,27 +374,27 @@ export function QuestionCard({
                 <span className="chat-question-warning">
                   {questions.length - answeredIndices.size} of {questions.length} unanswered
                 </span>
-                <button className="chat-btn chat-btn-primary" onClick={submitAll}>
+                <Button variant="primary" onClick={submitAll}>
                   Submit anyway
-                </button>
-                <button className="chat-btn" onClick={() => setConfirmingSubmit(false)}>
+                </Button>
+                <Button onClick={() => setConfirmingSubmit(false)}>
                   Cancel
-                </button>
+                </Button>
               </>
             ) : (
               <>
                 {questions.length > 1 && answeredIndices.size < questions.length && (
-                  <button className="chat-btn" onClick={advanceToNext}>
+                  <Button onClick={advanceToNext}>
                     Next &rarr;
-                  </button>
+                  </Button>
                 )}
-                <button
-                  className="chat-btn chat-btn-primary"
+                <Button
+                  variant="primary"
                   onClick={handleSubmit}
                   disabled={answeredIndices.size === 0}
                 >
                   {questions.length === 1 ? "Submit" : "Submit all"}
-                </button>
+                </Button>
                 <span>
                   {isMulti ? "Enter toggles" : "Enter selects"}
                   {questions.length > 1 ? " / \u2190\u2192 switches" : ""}
@@ -404,8 +405,7 @@ export function QuestionCard({
           </div>
 
           <div className="question-discuss-row">
-            <button
-              className="chat-btn"
+            <Button
               onClick={() => {
                 const questionText = questions.map((qq) => qq.question).join("\n");
                 import("@/store/sessionStore.ts").then(({ useSessionStore }) => {
@@ -423,7 +423,7 @@ export function QuestionCard({
               }}
             >
               Discuss first
-            </button>
+            </Button>
           </div>
         </>
       )}

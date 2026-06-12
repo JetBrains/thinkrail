@@ -34,7 +34,7 @@
   transition: all var(--transition-fast);
 }
 .markdown-editor-tab:hover { color: var(--muted); background: var(--hover); }
-.markdown-editor-tab--active { color: var(--text); background: var(--sel); border-color: var(--purple); }
+.markdown-editor-tab--active { color: var(--text); background: #2C2947; border-color: var(--primary); }
 
 /* ── Preview pane ── */
 .markdown-editor-preview {
@@ -65,7 +65,7 @@
   padding: 1px var(--space-xs);
   border-radius: var(--radius-sm);
   font-size: 0.9em;
-  font-family: 'JetBrains Mono', 'Fira Code', monospace;
+  font-family: var(--font-mono);
 }
 
 .markdown-editor-preview pre {
@@ -88,7 +88,7 @@
 .markdown-editor-preview li { margin: 0.2em 0; }
 
 .markdown-editor-preview blockquote {
-  border-left: 3px solid var(--purple);
+  border-left: 3px solid var(--primary);
   padding-left: var(--space-md);
   color: var(--muted);
   margin: 0.6em 0;
@@ -103,7 +103,7 @@
 .markdown-editor-preview td {
   border: 1px solid var(--border);
   padding: var(--space-xs) var(--space-sm);
-  font-size: var(--font-lg);
+  font-size: var(--font-body);
 }
 .markdown-editor-preview th {
   background: var(--elevated);

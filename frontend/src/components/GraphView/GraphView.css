@@ -31,7 +31,7 @@
   border-radius: var(--radius-sm);
   background: transparent;
   color: var(--muted);
-  font-size: var(--font-lg);
+  font-size: var(--font-body);
   cursor: pointer;
   padding: 2px var(--space-sm);
   font-family: var(--font);
@@ -74,7 +74,7 @@
   background: transparent;
   color: var(--text);
   font-family: var(--font);
-  font-size: var(--font-lg2);
+  font-size: var(--font-body);
   cursor: pointer;
   display: flex;
   align-items: center;
@@ -118,4 +118,4 @@
   align-items: center;
   justify-content: center;
 }
-.graph-empty-text { color: var(--hint); font-size: var(--font-lg); }
+.graph-empty-text { color: var(--hint); font-size: var(--font-body); }

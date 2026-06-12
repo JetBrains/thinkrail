@@ -1,12 +1,13 @@
 {
-  "default_model": "claude-opus-4-7",
-  "default_effort": "high",
   "model_refresh_interval_hours": 24,
   "event_view": "classic",
   "font_size": 12,
   "compact_font_size": 10,
-  "user_respond_timeout": 300.0,
+  "trash_retention_days": 30,
+  "voice_revise_mode": "off",
+  "default_model": "claude-opus-4-7",
+  "default_effort": "high",
+  "user_respond_timeout": 300,
   "user_respond_timeout_behavior": "interrupt",
-  "user_respond_retry_max_attempts": 3,
-  "trash_retention_days": 30
+  "user_respond_retry_max_attempts": 3
 }

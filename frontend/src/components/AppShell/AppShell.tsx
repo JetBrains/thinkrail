@@ -3,14 +3,15 @@ import { useUiStore } from "@/store/uiStore.ts";
 import { useDraftFlushOnHide } from "@/hooks/useDraftFlushOnHide.ts";
 import { modLabel } from "@/utils/platform.ts";
 import { Header } from "./Header.tsx";
-import { StatusBar } from "./StatusBar.tsx";
 import { LeftPanel } from "./LeftPanel.tsx";
 import { ResizeHandle } from "./ResizeHandle.tsx";
 import { SessionPanel } from "@/components/SessionPanel/SessionPanel.tsx";
+import { SessionsLeftPanel } from "@/components/SessionPanel/SessionsLeftPanel.tsx";
+import { SessionsViewLayout } from "@/components/SessionPanel/SessionsViewLayout.tsx";
 import {
-  WizardStepper,
   WizardDocPanel,
   WizardDonePanel,
+  TwoPanelLayout,
   getWizardConfig,
   stepperFromJourney,
   useWizardLifecycle,
@@ -18,7 +19,6 @@ import {
   type WizardUiPhase,
 } from "@/components/Wizard";
 import { BoardView } from "@/components/BoardView/BoardView.tsx";
-import { BoardTicketPreview } from "@/components/TicketDetail/BoardTicketPreview.tsx";
 import { useBoardStore } from "@/store/boardStore.ts";
 import { ViewModeProvider } from "@/context/ViewModeContext.tsx";
 import "@/components/ChatStream/ChatStream.css";
@@ -27,25 +27,27 @@ import "./AppShell.css";
 
 // Panel sizing
 const LEFT_DEFAULT = 260;
-const RIGHT_DEFAULT = 380;
 const LEFT_MIN = 140;
-const RIGHT_MIN = 200;
 const LEFT_COLLAPSE_THRESHOLD = 100;
-const RIGHT_COLLAPSE_THRESHOLD = 150;
 const CENTER_MIN = 300;
-const COLLAPSED_STRIP_W = 20;
 const RESIZE_HANDLE_W = 4;
 
 function Shell({
   onSwitchProject,
   children,
+  wizardSteps,
 }: {
   onSwitchProject: () => void;
   children: ReactNode;
+  wizardSteps?: WizardConfig | null;
 }) {
   return (
     <div className="app-shell">
-      <Header onSwitchProject={onSwitchProject} />
+      <Header
+        onSwitchProject={onSwitchProject}
+        variant={wizardSteps ? "wizard" : "default"}
+        wizardSteps={wizardSteps?.steps}
+      />
       {children}
     </div>
   );
@@ -65,9 +67,7 @@ export function AppShell({ onSwitchProject }: { onSwitchProject: () => void }) {
   const centerView = useUiStore((s) => s.centerView);
   const leftCollapsed = useUiStore((s) => s.leftPanelCollapsed);
   const toggleLeft = useUiStore((s) => s.toggleLeftPanel);
-  const setLeftTab = useUiStore((s) => s.setLeftTab);
   const openTicket = useBoardStore((s) => s.openTicket);
-  const previewTicketId = useBoardStore((s) => s.previewTicketId);
   const setPreviewTicket = useBoardStore((s) => s.setPreviewTicket);
 
   const handleOpenTicket = useCallback(
@@ -76,34 +76,13 @@ export function AppShell({ onSwitchProject }: { onSwitchProject: () => void }) {
   );
 
   const [leftWidth, setLeftWidth] = useState(LEFT_DEFAULT);
-  const [rightWidth, setRightWidth] = useState(RIGHT_DEFAULT);
 
-  // The kanban board is shown full-width: the left panel is hidden there.
-  // Tickets now open as tabs in the Sessions view, so the board is always the
-  // kanban (no full-screen ticket route).
   const onBoardView = centerView === "board";
-  // On the board, a single-clicked ticket previews in the right panel.
-  const showBoardPreview = onBoardView && previewTicketId != null;
-  // The app-level right column exists only for the board ticket preview. The
-  // sessions view (incl. ticket tabs) hosts its context card inside SessionPanel.
-  const hasBoardRight = showBoardPreview;
-
-  const handleOpenSessionManager = useCallback(() => {
-    setLeftTab("sessions");
-    if (leftCollapsed) toggleLeft();
-  }, [setLeftTab, leftCollapsed, toggleLeft]);
 
   const handleLeftResize = useCallback((w: number) => {
-    const rightSpace = hasBoardRight ? rightWidth + RESIZE_HANDLE_W : 0;
-    const maxLeft = window.innerWidth - rightSpace - CENTER_MIN - RESIZE_HANDLE_W;
+    const maxLeft = window.innerWidth - CENTER_MIN - RESIZE_HANDLE_W;
     setLeftWidth(Math.min(w, maxLeft));
-  }, [hasBoardRight, rightWidth]);
-
-  const handleRightResize = useCallback((w: number) => {
-    const leftSpace = leftCollapsed ? COLLAPSED_STRIP_W : leftWidth + RESIZE_HANDLE_W;
-    const maxRight = window.innerWidth - leftSpace - CENTER_MIN - RESIZE_HANDLE_W;
-    setRightWidth(Math.min(w, maxRight));
-  }, [leftCollapsed, leftWidth]);
+  }, []);
 
   // ── Wizard branches (driven by useWizardLifecycle) ──────────────────
   // Every branch maps 1:1 to a `WizardLifecycleState.kind`. The hook
@@ -120,8 +99,9 @@ export function AppShell({ onSwitchProject }: { onSwitchProject: () => void }) {
 
   if (lifecycle.kind === "pre-chat") {
     const PreChat = lifecycle.chain.preChatComponent;
+    const wizardConfig = getWizardConfig(lifecycle.chain.id, "pre-chat");
     return (
-      <Shell onSwitchProject={onSwitchProject}>
+      <Shell onSwitchProject={onSwitchProject} wizardSteps={wizardConfig}>
         <div className="np-fullscreen">
           <PreChat />
         </div>
@@ -149,8 +129,7 @@ export function AppShell({ onSwitchProject }: { onSwitchProject: () => void }) {
       lifecycle.chainHint,
     );
     return (
-      <Shell onSwitchProject={onSwitchProject}>
-        {wizardConfig && <WizardStepper steps={wizardConfig.steps} />}
+      <Shell onSwitchProject={onSwitchProject} wizardSteps={wizardConfig}>
         <WizardDonePanel session={lifecycle.session} outcome={lifecycle.outcome} />
       </Shell>
     );
@@ -165,18 +144,16 @@ export function AppShell({ onSwitchProject }: { onSwitchProject: () => void }) {
     );
     if (wizardConfig) {
       return (
-        <Shell onSwitchProject={onSwitchProject}>
-          <WizardStepper steps={wizardConfig.steps} />
-          <div className="layout layout-goal">
-            <div className="goal-chat">
+        <Shell onSwitchProject={onSwitchProject} wizardSteps={wizardConfig}>
+          <TwoPanelLayout
+            leftPanel={
               <ViewModeProvider>
                 <SessionPanel hideTabBar hideStickyBar hideContextCard />
               </ViewModeProvider>
-            </div>
-            <div className="goal-doc">
-              <WizardDocPanel filePath={wizardConfig.artifactPath} />
-            </div>
-          </div>
+            }
+            rightPanel={<WizardDocPanel filePath={wizardConfig.artifactPath} />}
+            rightPanelTitle={wizardConfig.artifactPath.replace(/^\.bonsai\//, "")}
+          />
         </Shell>
       );
     }
@@ -186,27 +163,48 @@ export function AppShell({ onSwitchProject }: { onSwitchProject: () => void }) {
   }
 
   // lifecycle.kind === "none" (or "running" with missing config) → regular layout.
+  const onSessionsView = centerView === "sessions";
+
+  // Sessions view uses island layout with sphere background
+  if (onSessionsView) {
+    return (
+      <Shell onSwitchProject={onSwitchProject}>
+        <ViewModeProvider>
+          <SessionsViewLayout
+            leftPanel={<SessionsLeftPanel />}
+            mainContent={<SessionPanel />}
+          />
+        </ViewModeProvider>
+      </Shell>
+    );
+  }
+
+  // Board and other views use regular layout
   return (
     <Shell onSwitchProject={onSwitchProject}>
       <div className="layout">
-        {onBoardView ? null : leftCollapsed ? (
-          <button className="left-collapse-btn" onClick={toggleLeft}
-            title={`Open left panel (${modLabel("B")})`}>&#9658;</button>
-        ) : (
-          <>
-            <div style={{ width: leftWidth, height: "100%", overflow: "hidden" }}>
-              <LeftPanel />
-            </div>
-            <ResizeHandle
-              side="left"
-              panelWidth={leftWidth}
-              onResize={handleLeftResize}
-              onCollapse={toggleLeft}
-              min={LEFT_MIN}
-              collapseThreshold={LEFT_COLLAPSE_THRESHOLD}
-              restColor="var(--elevated)"
-            />
-          </>
+        {/* Board view: no left panel */}
+        {onBoardView ? null : (
+          /* Other views: show regular LeftPanel */
+          leftCollapsed ? (
+            <button className="left-collapse-btn" onClick={toggleLeft}
+              title={`Open left panel (${modLabel("B")})`}>&#9658;</button>
+          ) : (
+            <>
+              <div style={{ width: leftWidth, height: "100%", overflow: "hidden" }}>
+                <LeftPanel />
+              </div>
+              <ResizeHandle
+                side="left"
+                panelWidth={leftWidth}
+                onResize={handleLeftResize}
+                onCollapse={toggleLeft}
+                min={LEFT_MIN}
+                collapseThreshold={LEFT_COLLAPSE_THRESHOLD}
+                restColor="var(--elevated)"
+              />
+            </>
+          )
         )}
         <div className="center-panel">
           <ViewModeProvider>
@@ -217,23 +215,7 @@ export function AppShell({ onSwitchProject }: { onSwitchProject: () => void }) {
             )}
           </ViewModeProvider>
         </div>
-        {showBoardPreview && previewTicketId ? (
-          <>
-            <ResizeHandle
-              side="right"
-              panelWidth={rightWidth}
-              onResize={handleRightResize}
-              onCollapse={() => setPreviewTicket(null)}
-              min={RIGHT_MIN}
-              collapseThreshold={RIGHT_COLLAPSE_THRESHOLD}
-            />
-            <div className="right-panel-host" style={{ width: rightWidth }}>
-              <BoardTicketPreview ticketId={previewTicketId} />
-            </div>
-          </>
-        ) : null}
       </div>
-      <StatusBar onOpenSessionManager={handleOpenSessionManager} />
     </Shell>
   );
 }

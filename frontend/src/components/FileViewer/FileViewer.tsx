@@ -7,6 +7,7 @@ import { detectLanguage, languageLabel } from "./languageMap.ts";
 import { EditDropdown } from "./EditDropdown.tsx";
 import { MarkdownPreview } from "./MarkdownPreview.tsx";
 import { ZoomBar } from "@/utils/ZoomBar.tsx";
+import { Button } from "@/components/ui/Button.tsx";
 import "./FileViewer.css";
 
 export function FileViewer({ file }: { file: OpenFile }) {
@@ -95,12 +96,12 @@ export function FileViewer({ file }: { file: OpenFile }) {
             </>
           ) : (
             <div style={{ position: "relative" }}>
-              <button
-                className="fv-btn fv-btn-edit"
+              <Button
+                size="xs"
                 onClick={() => setShowDropdown(!showDropdown)}
               >
                 Edit
-              </button>
+              </Button>
               {showDropdown && (
                 <EditDropdown
                   onEditInPlace={handleEditInPlace}

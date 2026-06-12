@@ -1,8 +1,12 @@
 import { useCallback, useState } from "react";
+import { Plus } from "lucide-react";
 import { useBoardStore } from "@/store/boardStore.ts";
 import type { TicketSummary } from "@/types/board.ts";
 import { TicketBoard } from "./TicketBoard.tsx";
 import { CreateTicketModal } from "./CreateTicketModal.tsx";
+import { BoardTwoPanelLayout } from "./BoardTwoPanelLayout.tsx";
+import { BoardTicketPreview } from "@/components/TicketDetail/BoardTicketPreview.tsx";
+import { Button } from "@/components/ui/Button";
 import "./BoardView.css";
 
 interface BoardViewProps {
@@ -13,6 +17,8 @@ interface BoardViewProps {
 export function BoardView({ onOpenTicket, onPreviewTicket }: BoardViewProps) {
   const tickets = useBoardStore((s) => s.tickets);
   const loading = useBoardStore((s) => s.loading);
+  const previewTicketId = useBoardStore((s) => s.previewTicketId);
+  const setPreviewTicket = useBoardStore((s) => s.setPreviewTicket);
   const [modalOpen, setModalOpen] = useState(false);
 
   const ticketList: TicketSummary[] = Array.from(tickets.values());
@@ -24,19 +30,34 @@ export function BoardView({ onOpenTicket, onPreviewTicket }: BoardViewProps) {
     return <div className="center-placeholder">Loading board...</div>;
   }
 
-  return (
-    <div className="board-view">
-      <div className="board-section" style={{ flex: 1 }}>
-        <div className="board-section-header">
-          <span className="board-section-title">Tickets</span>
-          <button className="board-new-btn" onClick={handleOpenModal}>
-            + New ticket
-          </button>
-        </div>
-        <TicketBoard tickets={ticketList} onOpenTicket={onOpenTicket} onPreviewTicket={onPreviewTicket} />
+  const boardContent = (
+    <div className="board-section" style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+      <div className="board-section-header">
+        <span className="board-section-title">Tickets</span>
+        <Button
+          variant="primary"
+          size="sm"
+          onClick={handleOpenModal}
+          leadingIcon={<Plus size={16} strokeWidth={2} />}
+        >
+          New ticket
+        </Button>
       </div>
-
-      <CreateTicketModal open={modalOpen} onClose={handleCloseModal} />
+      <TicketBoard tickets={ticketList} onOpenTicket={onOpenTicket} onPreviewTicket={onPreviewTicket} />
     </div>
+  );
+
+  const ticketPreview = previewTicketId ? (
+    <BoardTicketPreview ticketId={previewTicketId} />
+  ) : undefined;
+
+  return (
+    <>
+      <BoardTwoPanelLayout
+        leftPanel={boardContent}
+        rightPanel={ticketPreview}
+      />
+      <CreateTicketModal open={modalOpen} onClose={handleCloseModal} />
+    </>
   );
 }

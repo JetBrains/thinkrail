@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { Button } from "../ui/Button";
 
 interface ApprovalCardProps {
   toolName: string;
@@ -106,12 +107,12 @@ export function ApprovalCard({
       </div>
       {description && <div className="chat-approval-desc">{description}</div>}
       <div className="chat-approval-actions">
-        <button className="chat-btn chat-btn-approve" onClick={onApprove}>
+        <Button variant="approve" onClick={onApprove}>
           Approve
-        </button>
-        <button className="chat-btn chat-btn-deny" onClick={onDeny}>
+        </Button>
+        <Button variant="deny" onClick={onDeny}>
           Deny
-        </button>
+        </Button>
       </div>
     </div>
   );

@@ -24,6 +24,7 @@
 export { WizardStepper } from "./WizardStepper";
 export { WizardDocPanel } from "./WizardDocPanel";
 export { WizardDonePanel } from "./WizardDonePanel";
+export { TwoPanelLayout } from "./TwoPanelLayout";
 export { useWizardLifecycle, type WizardLifecycleState } from "./useWizardLifecycle";
 export { useStartWizardStep, type StartWizardStepOpts } from "./useStartWizardStep";
 export { derivePhase } from "./phase";

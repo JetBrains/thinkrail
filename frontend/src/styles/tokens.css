@@ -1,16 +1,23 @@
 /*
- * Bonsai Design Tokens — Settings-Driven Scale
+ * Bonsai Design Tokens
  *
- * All font sizes, spacing, and radii derive from --font-base via calc() ratios.
- * --font-base is set by JS from .bonsai/settings.json (default: 13px).
+ * Font sizes and radii use fixed pixel values. Spacing derives from
+ * --font-base via calc() ratios. --font-base is set by JS from
+ * .bonsai/settings.json (default: 13px).
  *
- * IMPORTANT: CSS custom properties resolve var() at definition, not at use.
- * If you add/change a derived token here, you MUST also update the matching
- * block in compact.css (.chat-stream--compact) so compact mode recalculates
- * with its own --font-base.
+ * Compact mode (.chat-stream--compact in compact.css) overrides these with
+ * its own smaller scale based on --compact-font-base (9px).
  *
  * Accent colors are shared across themes; semantic colors set per-theme.
  */
+
+@font-face {
+  font-family: 'Cabinet Grotesk';
+  src: url('../assets/fonts/CabinetGrotesk-Extrabold.otf') format('opentype');
+  font-weight: 800;
+  font-style: normal;
+  font-display: swap;
+}
 
 :root {
   /* ── Base (set by JS from settings.json via applyFontScale()) ── */
@@ -18,25 +25,50 @@
   --compact-font-base: 9px;
 
   /* ── Accent colors (JetBrains brand palette) ── */
-  --blue: #3B74EE;
-  --purple: #6B57FF;
-  --green: #21D789;
-  --red: #F75464;
-  --gold: #E8A336;
-  --cyan: #087CFA;
+  --primary: #8C81FF;
+  --primary-10: rgba(140, 129, 255, 0.10);
+  --primary-20: rgba(140, 129, 255, 0.20);
+  --primary-40: rgba(140, 129, 255, 0.40);
+  --primary-60: rgba(140, 129, 255, 0.60);
+  --primary-80: rgba(140, 129, 255, 0.80);
+  --secondary: #464857;
+  --blue: #6AC8FF;
+  --green: #6AD859;
+  --red: #FF4B75;
+  --gold: #FFD54B;
 
-  /* ── Font scale (ratios of --font-base) ── */
-  --font-xs:   calc(var(--font-base) * 0.69);
-  --font-sm:   calc(var(--font-base) * 0.77);
-  --font-md:   calc(var(--font-base) * 0.85);
-  --font-lg:   calc(var(--font-base) * 0.92);
-  --font-body: var(--font-base);
-  --font-lg2:  calc(var(--font-base) * 1.15);
-  --font-xl:   calc(var(--font-base) * 1.31);
+  /* ── White opacity scale ── */
+  --white-5: rgba(255, 255, 255, 0.05);
+  --white-10: rgba(255, 255, 255, 0.10);
+  --white-20: rgba(255, 255, 255, 0.20);
+  --white-40: rgba(255, 255, 255, 0.40);
+  --white-60: rgba(255, 255, 255, 0.60);
+  --white-80: rgba(255, 255, 255, 0.80);
+  --white-100: rgba(255, 255, 255, 1);
+
+  /* ── Input ── */
+  --input-bg: #272830;
+
+  /* ── Font scale (fixed pixel values) ── */
+  --font-xs:   10px;
+  --font-sm:   12px;
+  --font-md:   15px;
+  --font-lg:   18px;
+  --font-body: 13px;
+  --font-lg2:  20px;
+  --font-xl:   25px;
+  --font-xxl:  40px;
 
   /* ── Typography ── */
-  --font: "JetBrains Mono", "Fira Code", "SF Mono", "Cascadia Code", monospace;
+  --font: "Geist", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --font-mono: "JetBrains Mono", "Fira Code", "SF Mono", "Cascadia Code", monospace;
+  --font-accent: "Cabinet Grotesk", sans-serif;
   --line-height: 1.6;
+
+  /* ── Uppercase label style ── */
+  --uppercase-size: 13px;
+  --uppercase-weight: 500;
+  --uppercase-spacing: 0.5px;
 
   /* ── Spacing scale (ratios of --font-base) ── */
   --space-xs: calc(var(--font-base) * 0.31);
@@ -45,10 +77,10 @@
   --space-lg: calc(var(--font-base) * 1.23);
   --space-xl: calc(var(--font-base) * 1.85);
 
-  /* ── Radii scale (ratios of --font-base) ── */
-  --radius-sm: calc(var(--font-base) * 0.31);
-  --radius-md: calc(var(--font-base) * 0.46);
-  --radius-lg: calc(var(--font-base) * 0.62);
+  /* ── Radii scale ── */
+  --radius-sm: 4px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
 
   /* ── Transitions ── */
   --transition-fast: 120ms ease;

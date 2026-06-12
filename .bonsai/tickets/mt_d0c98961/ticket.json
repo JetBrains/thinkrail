@@ -1,0 +1,21 @@
+{
+  "id": "mt_d0c98961",
+  "title": "Test ticket",
+  "body": "",
+  "status": "idea",
+  "type": "feature",
+  "productDesignPath": null,
+  "technicalDesignPath": null,
+  "historyPath": null,
+  "implementationPlanPath": null,
+  "technicalDesignStale": false,
+  "historyStale": false,
+  "implementationPlanStale": false,
+  "orchestratorSessionId": null,
+  "linkedSpecIds": [],
+  "sessionIds": [],
+  "order": 0,
+  "created": "2026-06-08T07:58:28.105961+00:00",
+  "updated": "2026-06-08T07:58:28.105968+00:00",
+  "skippedPhases": []
+}

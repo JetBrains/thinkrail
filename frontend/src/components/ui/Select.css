@@ -1,0 +1,85 @@
+.select-container {
+  position: relative;
+  width: 100%;
+}
+
+.select-button {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: var(--space-sm) var(--space-md);
+  color: var(--text);
+  font-family: var(--font);
+  font-size: var(--font-body);
+  cursor: pointer;
+  transition: border-color 0.2s;
+}
+
+.select-button:hover:not(.select-button--disabled) {
+  border-color: var(--border-hover);
+}
+
+.select-button:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+.select-button--disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.select-button-text {
+  flex: 1;
+  text-align: left;
+}
+
+.select-button-icon {
+  color: var(--muted);
+  flex-shrink: 0;
+  transition: transform 0.2s;
+}
+
+.select-menu {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  z-index: 1000;
+  overflow: hidden;
+}
+
+.select-menu-item {
+  width: 100%;
+  display: block;
+  padding: var(--space-sm) var(--space-md);
+  background: none;
+  border: none;
+  color: var(--text);
+  font-family: var(--font);
+  font-size: var(--font-body);
+  text-align: left;
+  cursor: pointer;
+  transition: background-color 0.15s;
+}
+
+.select-menu-item:hover {
+  background: var(--bg-hover);
+}
+
+.select-menu-item--selected {
+  background: var(--accent);
+  color: var(--bg);
+}
+
+.select-menu-item--selected:hover {
+  background: var(--accent);
+}

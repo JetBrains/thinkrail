@@ -48,10 +48,10 @@
   background: var(--orange, #ffc06b);
 }
 .hunk--discussing {
-  background: color-mix(in srgb, var(--purple, #b8aacb) 7%, transparent);
+  background: color-mix(in srgb, var(--primary, #b8aacb) 7%, transparent);
 }
 .hunk--discussing .hunk__index {
-  background: var(--purple, #b8aacb);
+  background: var(--primary, #b8aacb);
 }
 
 .hunk__body {
@@ -170,7 +170,7 @@
   background: color-mix(in srgb, var(--orange, #ffc06b) 22%, var(--elevated));
 }
 .hunk__btn--discuss {
-  background: color-mix(in srgb, var(--purple, #b8aacb) 22%, var(--elevated));
+  background: color-mix(in srgb, var(--primary, #b8aacb) 22%, var(--elevated));
 }
 .hunk__btn--reject {
   background: color-mix(in srgb, var(--red) 22%, var(--elevated));
@@ -213,7 +213,7 @@
   box-sizing: border-box;
 }
 .hunk__discuss-textarea {
-  border: 1px solid color-mix(in srgb, var(--purple, #b8aacb) 40%, transparent);
+  border: 1px solid color-mix(in srgb, var(--primary, #b8aacb) 40%, transparent);
   border-radius: 4px;
   margin: 4px 0;
   font-family: inherit;

@@ -14,7 +14,7 @@
   background: transparent;
   color: var(--muted);
   font-family: var(--font);
-  font-size: var(--font-lg);
+  font-size: var(--font-body);
   cursor: pointer;
   text-align: left;
 }
@@ -76,7 +76,7 @@
   gap: var(--space-sm);
   padding: var(--space-xs) 0;
   cursor: pointer;
-  font-size: var(--font-lg);
+  font-size: var(--font-body);
   font-family: var(--font);
   color: var(--text);
 }
@@ -102,7 +102,7 @@
   padding: var(--space-sm) var(--space-md);
   max-height: 200px;
   overflow-y: auto;
-  font-size: var(--font-lg);
+  font-size: var(--font-body);
   line-height: 1.7;
   color: var(--text);
 }

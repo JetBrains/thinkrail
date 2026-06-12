@@ -13,7 +13,7 @@
 .spec-chip-remove {
   border: none; background: transparent;
   color: var(--hint); cursor: pointer;
-  font-size: var(--font-lg); line-height: 1;
+  font-size: var(--font-body); line-height: 1;
 }
 .spec-chip-remove:hover { color: var(--red); }
 .spec-selector-add {
@@ -44,7 +44,7 @@
   background: transparent;
   color: var(--text);
   font-family: var(--font);
-  font-size: var(--font-lg);
+  font-size: var(--font-body);
   outline: none;
 }
 .spec-selector-search::placeholder { color: var(--hint); }
@@ -53,13 +53,13 @@
   display: flex; justify-content: space-between; align-items: center;
   width: 100%; padding: var(--space-sm) var(--space-md);
   border: none; background: transparent;
-  color: var(--text); font-family: var(--font); font-size: var(--font-lg);
+  color: var(--text); font-family: var(--font); font-size: var(--font-body);
   cursor: pointer; text-align: left;
 }
 .spec-selector-item:hover { background: var(--hover); }
 .spec-selector-item-selected { background: rgba(122, 162, 247, 0.07); }
 .spec-selector-item-type { font-size: var(--font-sm); color: var(--hint); }
-.spec-selector-empty { padding: var(--space-md); color: var(--hint); font-size: var(--font-lg); text-align: center; }
+.spec-selector-empty { padding: var(--space-md); color: var(--hint); font-size: var(--font-body); text-align: center; }
 
 /* Inline mode — no absolute positioning, used inside popovers */
 .spec-selector-inline {

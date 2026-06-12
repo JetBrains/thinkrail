@@ -9,7 +9,8 @@ import {
 import { RpcClient, type RpcClientOptions } from "../client.ts";
 import type { ConnectionState } from "../types.ts";
 
-const RpcContext = createContext<RpcClient | null>(null);
+// Exported so tests/stories can provide a mock client without a live WebSocket.
+export const RpcContext = createContext<RpcClient | null>(null);
 
 export function useRpc(): RpcClient {
   const client = useContext(RpcContext);

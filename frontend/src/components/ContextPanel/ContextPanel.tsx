@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { FileText, Bot, Folder, type LucideIcon } from "lucide-react";
 import { useContextMode } from "./useContextMode.ts";
 import type { ContextMode } from "./useContextMode.ts";
 import { SpecContext } from "./modes/SpecContext.tsx";
@@ -13,11 +14,11 @@ import { useTicketRouteSetPreviewFile } from "./useTicketRouteSetPreviewFile.ts"
 import { Card } from "@/components/ui/index.ts";
 import "./ContextPanel.css";
 
-const MODE_CONFIG: Record<ContextMode, { icon: string; label: string }> = {
-  spec: { icon: "📋", label: "Spec Context" },
-  agent: { icon: "🤖", label: "Agent Context" },
-  code: { icon: "📁", label: "Code Context" },
-  empty: { icon: "", label: "" },
+const MODE_CONFIG: Record<ContextMode, { icon: LucideIcon | null; label: string }> = {
+  spec: { icon: FileText, label: "Spec Context" },
+  agent: { icon: Bot, label: "Agent Context" },
+  code: { icon: Folder, label: "Code Context" },
+  empty: { icon: null, label: "" },
 };
 
 type TabId = "context" | "preview";

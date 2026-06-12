@@ -1,0 +1,130 @@
+/* ── Container with blurred background (island) ───────────────── */
+.session-content-layout {
+  position: relative;
+  flex: 1;
+  background: rgba(22, 22, 24, 0.8);
+  backdrop-filter: blur(50px);
+  -webkit-backdrop-filter: blur(50px);
+  border-radius: 8px;
+  padding: 16px;
+  display: flex;
+  gap: 24px;
+  min-height: 0;
+  overflow: hidden;
+}
+
+/* ── Left panel (session content) ─────────────────────────────── */
+.session-content-left {
+  flex: 2;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+}
+
+/* ── Right panel (context/artifacts) ──────────────────────────── */
+.session-content-right {
+  position: relative;
+  flex: 1;
+  background: var(--bg);
+  border-radius: 8px;
+  padding: 16px;
+  min-height: 0;
+  overflow-y: auto;
+  transition: all 0.3s;
+}
+
+.session-content-right--collapsed {
+  flex: 0 0 48px;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  overflow: visible;
+}
+
+/* ── Collapse button (inside right panel) ─────────────────────── */
+.session-content-collapse-btn {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: none;
+  border-radius: 6px;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all 0.2s;
+  z-index: 1;
+}
+
+.session-content-collapse-btn:hover {
+  color: var(--text-primary);
+}
+
+/* ── Collapsed title (rotated) ────────────────────────────────── */
+.session-content-collapsed-title {
+  position: absolute;
+  top: 0;
+  left: 50%;
+  bottom: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transform: translateX(-50%) rotate(90deg);
+  transform-origin: center center;
+  font-size: 13px;
+  color: var(--text-secondary);
+  pointer-events: none;
+  width: calc(100vh - 120px);
+  max-width: calc(100vh - 120px);
+}
+
+.session-content-collapsed-title > span {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+}
+
+/* ── Expand button (when panel is collapsed) ──────────────────── */
+.session-content-expand-btn {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: none;
+  border-radius: 6px;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.session-content-expand-btn:hover {
+  color: var(--text-primary);
+}
+
+/* ── Single panel (no right panel) ────────────────────────────── */
+.session-content-single {
+  position: relative;
+  flex: 1;
+  background: rgba(22, 22, 24, 0.8);
+  backdrop-filter: blur(50px);
+  -webkit-backdrop-filter: blur(50px);
+  border-radius: 8px;
+  padding: 8px;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+}

@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { Button } from "../ui/Button";
 
 interface StepProposalCardProps {
   ticketId: string;
@@ -121,28 +122,28 @@ export default function StepProposalCard({
             }}
           />
           <div className="chat-suggestion-actions">
-            <button
-              className="chat-btn chat-btn-deny"
+            <Button
+              variant="deny"
               onClick={() => onDismiss(dismissText.trim() || undefined)}
             >
               Dismiss
-            </button>
-            <button
-              className="chat-btn chat-btn-muted"
+            </Button>
+            <Button
+              variant="muted"
               onClick={() => { setDismissing(false); setDismissText(""); }}
             >
               Cancel
-            </button>
+            </Button>
           </div>
         </div>
       ) : (
         <div className="chat-suggestion-actions">
-          <button className="chat-btn chat-btn-approve" onClick={onApprove}>
+          <Button variant="approve" onClick={onApprove}>
             Start Step
-          </button>
-          <button className="chat-btn chat-btn-deny" onClick={() => setDismissing(true)}>
+          </Button>
+          <Button variant="deny" onClick={() => setDismissing(true)}>
             Dismiss…
-          </button>
+          </Button>
         </div>
       )}
     </div>

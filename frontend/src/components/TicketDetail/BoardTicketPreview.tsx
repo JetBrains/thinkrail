@@ -5,6 +5,7 @@ import { createSessionApi, type SessionSummary } from "@/api/methods/sessions.ts
 import { useBoardStore } from "@/store/boardStore.ts";
 import { useTicketRouteStore } from "@/store/ticketRouteStore.ts";
 import { TicketInfo } from "./TicketInfo.tsx";
+import { Button } from "@/components/ui/Button";
 import "./BoardTicketPreview.css";
 
 /** Right-panel preview of a board ticket. Loads the same data the ticket
@@ -56,13 +57,14 @@ export function BoardTicketPreview({ ticketId }: { ticketId: string }) {
     <div className="context-panel context-panel--ticket">
       <div className="context-panel__header">
         <span className="context-panel__mode-label">Ticket preview</span>
-        <button
-          className="board-preview-goto"
+        <Button
+          variant="primary"
+          size="sm"
           onClick={() => openTicket(ticketId)}
           title="Open the full ticket"
         >
           Go to ticket {"↗"}
-        </button>
+        </Button>
         <button
           className="board-preview-close"
           onClick={() => setPreviewTicket(null)}

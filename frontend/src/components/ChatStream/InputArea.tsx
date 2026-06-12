@@ -16,6 +16,7 @@ import type { VoiceReviseMode } from "@/api/methods/settings.ts";
 import type { RuntimeType } from "@/types/agent.ts";
 import { ChatMarkdown } from "./ChatMarkdown";
 import { MessageHistory } from "./MessageHistory";
+import { Button } from "@/components/ui/Button";
 
 interface InputAreaProps {
   sessionId: string;
@@ -776,8 +777,7 @@ export function InputArea({ sessionId, disabled, placeholder, onSend, isRunning,
         )}
       </div>
       {isVoiceTranscript && text.trim() && (
-        <button
-          className="chat-btn"
+        <Button
           onClick={() => {
             import("@/store/sessionStore.ts").then(({ useSessionStore }) => {
               const store = useSessionStore.getState();
@@ -787,7 +787,7 @@ export function InputArea({ sessionId, disabled, placeholder, onSend, isRunning,
           }}
         >
           Revise with agent
-        </button>
+        </Button>
       )}
       {/* Session-lifecycle actions (Continue / Start / Stop) — portal
           into the status line.  Send stays here next to the textarea. */}
@@ -809,26 +809,28 @@ export function InputArea({ sessionId, disabled, placeholder, onSend, isRunning,
             </button>
           )}
           {isDraft && (
-            <button
-              className="input-send"
+            <Button
+              variant="primary"
+              size="sm"
               onClick={handleSend}
               disabled={disabled}
             >
               Start
-            </button>
+            </Button>
           )}
         </div>,
         actionPortalTarget,
       )}
       {!isDraft && !(isRunning && onInterrupt) && (
         <div className="input-actions">
-          <button
-            className="input-send"
+          <Button
+            variant="primary"
+            size="sm"
             onClick={handleSend}
             disabled={disabled || !text.trim()}
           >
             Send
-          </button>
+          </Button>
         </div>
       )}
     </div>

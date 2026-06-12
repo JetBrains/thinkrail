@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { FolderOpen, Folder, FileText, Eye, EyeOff, ChevronsDownUp, ChevronsUpDown } from "lucide-react";
 import { getProjectFiles } from "@/services/project.ts";
 import { useUiStore } from "@/store/uiStore.ts";
 import { useFileStore } from "@/store/fileStore.ts";
@@ -198,17 +199,17 @@ export function FileTree() {
     <div className="ft">
       <div className="ft-toolbar">
         <button className="ft-toolbar-btn" onClick={collapseAll} title="Collapse All">
-          ⊟
+          <ChevronsDownUp size={14} strokeWidth={1.5} />
         </button>
         <button className="ft-toolbar-btn" onClick={expandAll} title="Expand All">
-          ⊞
+          <ChevronsUpDown size={14} strokeWidth={1.5} />
         </button>
         <button
           className={`ft-toolbar-btn${showHidden ? " ft-toolbar-btn-active" : ""}`}
           onClick={toggleShowHidden}
           title={showHidden ? "Hide hidden files" : "Show hidden files"}
         >
-          👁
+          {showHidden ? <Eye size={14} strokeWidth={1.5} /> : <EyeOff size={14} strokeWidth={1.5} />}
         </button>
       </div>
       {visible.map((entry) => {
@@ -251,7 +252,11 @@ export function FileTree() {
 
             {/* File/folder icon */}
             <span className={`ft-icon ${cls}`}>
-              {entry.isDir ? (isOpen ? "\u{1F4C2}" : "\u{1F4C1}") : "\u{1F4C4}"}
+              {entry.isDir ? (
+                isOpen ? <FolderOpen size={14} strokeWidth={1.5} /> : <Folder size={14} strokeWidth={1.5} />
+              ) : (
+                <FileText size={14} strokeWidth={1.5} />
+              )}
             </span>
 
             {/* Name */}

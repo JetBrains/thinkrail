@@ -189,7 +189,7 @@ Computes bounding box and scales/translates to fit. Max scale capped at 1.5x.
 | Spec Type | Left Accent Color | Icon |
 |---|---|---|
 | `goal-and-requirements` | `var(--gold)` | 🎯 |
-| `architecture-design` | `var(--purple)` | 🏛 |
+| `architecture-design` | `var(--primary)` | 🏛 |
 | `module-design` | `var(--blue)` | 📦 |
 | `submodule-design` | `var(--blue)` | 📦 |
 | `task-spec` | `var(--green)` | 📋 |

@@ -13,6 +13,10 @@ interface ResizeHandleProps {
   /** Resting divider color. Defaults to `var(--border)`; pass the adjacent
    *  panel's background to make the handle blend into it. */
   restColor?: string;
+  /** Width of the resize handle in pixels. Defaults to 4. */
+  handleWidth?: number;
+  /** Hover color for the resize handle. Defaults to `var(--blue)`. */
+  hoverColor?: string;
 }
 
 export function ResizeHandle({
@@ -25,6 +29,8 @@ export function ResizeHandle({
   collapseThreshold,
   invisible,
   restColor = "var(--border)",
+  handleWidth = 4,
+  hoverColor = "var(--blue)",
 }: ResizeHandleProps) {
   const dragging = useRef(false);
   const startX = useRef(0);
@@ -73,14 +79,14 @@ export function ResizeHandle({
       className="resize-handle"
       onMouseDown={onMouseDown}
       style={{
-        width: 4,
+        width: handleWidth,
         cursor: "col-resize",
         background: invisible ? "transparent" : restColor,
         flexShrink: 0,
         transition: "background var(--transition-fast)",
       }}
       onMouseEnter={(e) => {
-        if (!invisible) (e.target as HTMLElement).style.background = "var(--blue)";
+        if (!invisible) (e.target as HTMLElement).style.background = hoverColor;
       }}
       onMouseLeave={(e) => {
         if (!invisible) (e.target as HTMLElement).style.background = restColor;

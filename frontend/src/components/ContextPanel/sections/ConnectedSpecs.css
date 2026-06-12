@@ -25,7 +25,7 @@
   background: transparent;
   color: var(--text);
   font-family: var(--font);
-  font-size: var(--font-lg);
+  font-size: var(--font-body);
   line-height: 1.5;
   text-align: left;
   cursor: pointer;

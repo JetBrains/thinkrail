@@ -22,11 +22,11 @@ interface PromptPreviewProps {
 }
 
 const SECTION_COLORS: Record<string, string> = {
-  general: "#6B57FF",
-  task: "#087CFA",
-  project: "#21D789",
+  general: "#8C81FF",
+  task: "#6AC8FF",
+  project: "#6AD859",
   files: "#56B6C2",
-  specs: "#E8A336",
+  specs: "#FFD54B",
 };
 
 const IMAGE_EXTS = new Set(["png", "jpg", "jpeg", "gif", "svg", "webp", "ico", "bmp"]);
@@ -203,7 +203,7 @@ export function PromptPreview({ systemPrompt, sections, unsaved }: PromptPreview
                         return (
                           <div key={spec.id} className="prompt-spec-entry">
                             <div className="prompt-spec-header" onClick={() => toggleSpec(spec.id)}>
-                              <span style={{ color: specOpen ? "#E8A336" : "var(--hint)" }}>
+                              <span style={{ color: specOpen ? "#FFD54B" : "var(--hint)" }}>
                                 {specOpen ? "\u25BC" : "\u25B6"}
                               </span>
                               <span>{spec.title}</span>

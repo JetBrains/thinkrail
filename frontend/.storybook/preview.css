@@ -1,0 +1,42 @@
+/*
+ * Storybook-scoped styles.
+ *
+ * We deliberately do NOT import the app's global.css here: it contains
+ * app-shell layout resets (`body { overflow: hidden }`, `#root { height:100vh }`)
+ * that lock the app to a fixed full-height shell and, when loaded into
+ * Storybook's iframe, break docs-page scrolling.
+ *
+ * Instead we load only the design system — tokens + theme layers — plus the
+ * one harmless reset (box-sizing) that the token-based examples rely on.
+ */
+@import "../src/styles/tokens.css";
+@import "../src/styles/theme-dark.css";
+@import "../src/styles/theme-light.css";
+@import "../src/styles/themes.css";
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+/*
+ * Base typography from the app's global.css `html` rule. The app relies on
+ * inheritance from <html> for the default font; without this, Storybook text
+ * not explicitly styled by a component falls back to the browser serif. We
+ * intentionally omit global.css's `body { overflow: hidden }` / `#root` resets.
+ */
+html {
+  font-family: var(--font);
+  font-size: var(--font-body);
+  line-height: var(--line-height);
+  color: var(--text);
+}
+
+/* ── Typography Utilities ── */
+.text-uppercase {
+  font-size: 13px;
+  font-weight: 500;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+}

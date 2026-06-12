@@ -1,0 +1,13 @@
+<!--
+  Load the same web fonts the app loads in index.html. Storybook's preview
+  iframe has its own <head> and doesn't inherit the app's index.html, so
+  without this Geist / JetBrains Mono silently fall back to the system font
+  and stories/docs wouldn't match the real app. (Sentient loads via the
+  @font-face in tokens.css.)
+-->
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link
+  href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap"
+  rel="stylesheet"
+/>

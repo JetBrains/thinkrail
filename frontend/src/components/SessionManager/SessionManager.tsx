@@ -17,7 +17,7 @@ import "./SessionManager.css";
 
 const TICKET_STRIPE_PALETTE = [
   "var(--blue)",
-  "var(--purple)",
+  "var(--primary)",
   "var(--green)",
   "var(--gold)",
   "var(--red)",

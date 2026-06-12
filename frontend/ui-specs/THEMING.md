@@ -62,12 +62,10 @@ All colors are defined as CSS custom properties on `:root`. Components reference
 
 | Token | Purpose | Value |
 | --- | --- | --- |
-| `--blue` | Primary accent, links, active | `#3B74EE` |
-| `--purple` | Interactive, branding | `#6B57FF` |
-| `--green` | Success, done, additions | `#21D789` |
-| `--red` | Error, deletions, danger | `#F75464` |
-| `--gold` | Warning, pending, approvals | `#E8A336` |
-| `--cyan` | Code, tool names | `#087CFA` |
+| `--blue` | Primary accent, links, active | `#6AC8FF` |
+| `--green` | Success, done, additions | `#6AD859` |
+| `--red` | Error, deletions, danger | `#FF4B75` |
+| `--gold` | Warning, pending, approvals | `#FFD54B` |
 
 **Note:** Accent colors are the same in dark and light themes for brand consistency. Their alpha variants (used for backgrounds) adjust automatically since they overlay different base colors.
 

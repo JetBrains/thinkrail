@@ -1,0 +1,30 @@
+import { Meta } from "@storybook/addon-docs/blocks";
+
+<Meta title="Introduction" />
+
+# Bonsai Design System
+
+This Storybook documents the **existing** design system of the Bonsai frontend —
+its design tokens and reusable components — extracted directly from the codebase.
+
+## How it's organized
+
+- **Foundations** — the design tokens that already power the app: colors, typography,
+  spacing, radii, and transitions. Sourced from `src/styles/tokens.css` and the
+  per-theme semantic layers in `src/styles/theme-*.css` / `themes.css`.
+- **Components** — the shared UI primitives that already exist in the codebase
+  (e.g. `Modal`, `Dropdown`, `CopyButton`).
+
+## Theming
+
+Use the **Theme** switcher in the toolbar above to preview any story across
+Bonsai's themes — Darcula, High Contrast, Dracula, Nord, Solarized Dark/Light,
+and Claude Code. It sets `data-theme` on the document exactly as the app's
+`applyTheme()` does. (The app's "Light" theme is omitted here — it's currently
+an unimplemented stub with the same values as dark.)
+
+## Conventions
+
+- All visual values come from CSS custom properties (`var(--token)`); stories
+  render against the real `global.css`, so what you see matches the app.
+- Stories import the **real** components — they document, they don't reimplement.

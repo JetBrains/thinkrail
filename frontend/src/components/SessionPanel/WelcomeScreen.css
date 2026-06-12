@@ -39,7 +39,7 @@
 }
 
 .welcome-name-input:focus {
-  border-bottom-color: var(--purple);
+  border-bottom-color: var(--primary);
 }
 
 .welcome-name-input::placeholder {
@@ -67,7 +67,7 @@
 }
 
 .welcome-textarea:focus {
-  border-color: var(--purple);
+  border-color: var(--primary);
 }
 
 .welcome-textarea::placeholder {
@@ -125,7 +125,7 @@
 }
 
 .welcome-start-btn {
-  background: var(--purple);
+  background: var(--primary);
   color: var(--on-accent);
   border: none;
   border-radius: var(--radius-md);

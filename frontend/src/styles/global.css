@@ -59,13 +59,13 @@ body {
 
 /* ── Focus ── */
 :focus-visible {
-  outline: 2px solid var(--blue);
+  outline: 1px solid rgba(255, 255, 255, 0.3);
   outline-offset: 2px;
 }
 
 /* ── Selection ── */
 ::selection {
-  background: var(--sel);
+  background: #2C2947;
 }
 
 /* ── Links ── */
@@ -76,5 +76,13 @@ a {
 
 a:hover {
   text-decoration: underline;
+}
+
+/* ── Typography Utilities ── */
+.text-uppercase {
+  font-size: var(--uppercase-size); /* 13px / --font-body */
+  font-weight: var(--uppercase-weight); /* 500 / medium */
+  letter-spacing: var(--uppercase-spacing); /* 0.5px */
+  text-transform: uppercase;
 }
 

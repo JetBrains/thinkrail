@@ -1,4 +1,5 @@
 import { useEffect, useRef } from "react";
+import { Pencil, MessageCircle, File, X, Folder, Plus } from "lucide-react";
 import type { Session } from "@/types/session.ts";
 import type { OpenFile } from "@/store/fileStore.ts";
 import { useBoardStore } from "@/store/boardStore.ts";
@@ -6,6 +7,7 @@ import { useFileStore } from "@/store/fileStore.ts";
 import { useSessionStore } from "@/store/sessionStore.ts";
 import { modLabel } from "@/utils/platform.ts";
 import { useActiveTabKind } from "./useActiveTabKind.ts";
+import { Button } from "@/components/ui/Button";
 
 export interface TicketTab {
   id: string;
@@ -139,7 +141,7 @@ export function SessionTabBar({
             className={`session-tab ticket-tab ${isActive ? "session-tab-active" : ""}`}
             onClick={() => onSwitchTicket(t.id)}
           >
-            <span className="file-tab-icon">{"\u{1F4C1}"}</span>
+            <Folder size={12} strokeWidth={1.5} className="file-tab-icon" />
             <span className="session-tab-name">{t.title}</span>
             <button
               className="session-tab-close"
@@ -148,7 +150,7 @@ export function SessionTabBar({
                 onCloseTicket(t.id);
               }}
             >
-              {"×"}
+              <X size={12} strokeWidth={1.5} />
             </button>
           </div>
         );
@@ -163,7 +165,6 @@ export function SessionTabBar({
       {orderSessionsWithHierarchy(sessions).map((s) => {
         const depth = nestingDepth(s, sessions);
         const prefix = "\u21B3".repeat(depth);
-        const typeIcon = s.subsessionType === "refinement" ? "\u270F\uFE0F " : s.subsessionType === "discussion" ? "\uD83D\uDCAC " : "";
         const hasActiveChild = sessions.some(
           (child) => child.parentBonsaiSid === s.bonsaiSid &&
           child.status !== "done" && child.status !== "error"
@@ -181,8 +182,14 @@ export function SessionTabBar({
               className="session-tab-dot"
               style={{ background: statusDotColor(s.status) }}
             />
+            {s.subsessionType === "refinement" && (
+              <Pencil size={12} strokeWidth={1.5} className="session-tab-type-icon" />
+            )}
+            {s.subsessionType === "discussion" && (
+              <MessageCircle size={12} strokeWidth={1.5} className="session-tab-type-icon" />
+            )}
             <span className="session-tab-name">
-              {prefix}{hasActiveChild ? "\u23F8 " : ""}{typeIcon}{s.name || s.bonsaiSid.slice(0, 8)}
+              {prefix}{hasActiveChild ? "\u23F8 " : ""}{s.name || s.bonsaiSid.slice(0, 8)}
             </span>
             {s.pendingRequests.length > 0 && (
               <span className="session-tab-badge">
@@ -196,7 +203,7 @@ export function SessionTabBar({
                 onCloseSession(s.bonsaiSid);
               }}
             >
-              {"\u00D7"}
+              <X size={12} strokeWidth={1.5} />
             </button>
           </div>
         );
@@ -214,9 +221,9 @@ export function SessionTabBar({
           className={`session-tab file-tab ${f.path === activeFilePath && kind === "file" ? "session-tab-active" : ""}`}
           onClick={() => handleSwitchFile(f.path)}
         >
-          <span className="file-tab-icon">{"\u{1F4C4}"}</span>
+          <File size={12} strokeWidth={1.5} className="file-tab-icon" />
           <span className="session-tab-name">{f.name}</span>
-          {f.isDirty && <span className="file-tab-dirty">{"\u25CF"}</span>}
+          {f.isDirty && <span className="file-tab-dirty">*</span>}
           <button
             className="session-tab-close"
             onClick={(e) => {
@@ -224,7 +231,7 @@ export function SessionTabBar({
               onCloseFile(f.path);
             }}
           >
-            {"\u00D7"}
+            <X size={12} strokeWidth={1.5} />
           </button>
         </div>
       ))}
@@ -235,7 +242,7 @@ export function SessionTabBar({
           className={`session-tab file-tab file-tab-preview ${previewIsActive ? "session-tab-active" : ""}`}
           onDoubleClick={() => onPinPreview()}
         >
-          <span className="file-tab-icon">{"\u{1F4C4}"}</span>
+          <File size={12} strokeWidth={1.5} className="file-tab-icon" />
           <span className="session-tab-name">
             {previewFile?.name ?? previewFilePath!.split("/").pop()}
           </span>
@@ -246,19 +253,20 @@ export function SessionTabBar({
               onClearPreview();
             }}
           >
-            {"\u00D7"}
+            <X size={12} strokeWidth={1.5} />
           </button>
         </div>
       )}
 
       <div className="session-tabs-spacer" />
-      <button
-        className="session-tabs-new-btn"
+      <Button
+        variant="primary"
+        size="xs"
         onClick={() => createNewSession()}
         title={`New session (${modLabel("T")})`}
       >
-        + New
-      </button>
+        <Plus size={14} strokeWidth={2} />
+      </Button>
     </div>
   );
 }

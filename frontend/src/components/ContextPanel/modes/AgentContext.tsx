@@ -19,7 +19,7 @@ const BREAKDOWN_ITEMS = [
   { key: "inputTokens" as const, label: "Input (fresh)", color: "var(--blue)" },
   { key: "cacheReadTokens" as const, label: "Cache read", color: "var(--green)" },
   { key: "cacheCreationTokens" as const, label: "Cache creation", color: "var(--gold)" },
-  { key: "outputTokens" as const, label: "Output", color: "var(--purple, var(--cyan))" },
+  { key: "outputTokens" as const, label: "Output", color: "var(--primary, var(--blue))" },
 ] as const;
 
 function TokenBreakdown({ cu }: { cu: ContextUsage }) {
@@ -84,7 +84,7 @@ function TurnHistory({ turns, runBoundaries }: { turns: TurnUsage[]; runBoundari
 
   return (
     <div className="agent-context__turns">
-      <div className="agent-context__turn-row agent-context__turn-header">
+      <div className="agent-context__turn-row agent-context__turn-header text-uppercase">
         <span>#</span>
         <span>Input</span>
         <span>Output</span>
@@ -122,7 +122,7 @@ function ToolCalls({
 
   return (
     <div className="agent-context__tool-table">
-      <div className="agent-context__tool-row agent-context__tool-header">
+      <div className="agent-context__tool-row agent-context__tool-header text-uppercase">
         <span>Tool</span>
         <span>Calls</span>
         <span>In ~tok</span>
@@ -155,7 +155,7 @@ function FilesAccessed({ filesRead, filesWritten }: { filesRead: string[]; files
     <div className="agent-context__files">
       {filesRead.length > 0 && (
         <>
-          <div className="agent-context__file-label">Read ({filesRead.length})</div>
+          <div className="agent-context__file-label text-uppercase">Read ({filesRead.length})</div>
           {filesRead.slice(0, MAX_FILES).map((f) => (
             <div
               key={f}
@@ -173,7 +173,7 @@ function FilesAccessed({ filesRead, filesWritten }: { filesRead: string[]; files
       )}
       {filesWritten.length > 0 && (
         <>
-          <div className="agent-context__file-label">Written ({filesWritten.length})</div>
+          <div className="agent-context__file-label text-uppercase">Written ({filesWritten.length})</div>
           {filesWritten.slice(0, MAX_FILES).map((f) => (
             <div
               key={f}

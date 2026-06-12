@@ -12,7 +12,7 @@
   padding: var(--space-sm) var(--space-md);
   flex-shrink: 0;
 }
-.agent-context__pct { font-size: var(--font-xl); font-weight: 700; min-width: 42px; }
+.agent-context__pct { font-size: var(--font-body); font-weight: 700; min-width: 42px; }
 .agent-context__pct-bar {
   flex: 1; height: 4px; background: var(--border); border-radius: 2px; overflow: hidden;
 }
@@ -50,8 +50,7 @@
   font-variant-numeric: tabular-nums;
 }
 .agent-context__turn-header {
-  color: var(--muted); font-weight: 600; font-size: var(--font-sm);
-  text-transform: uppercase; letter-spacing: 0.3px;
+  color: var(--muted);
 }
 .agent-context__turn-row:not(.agent-context__turn-header):not(.agent-context__run-separator) { color: var(--text); }
 .agent-context__turn-dim { color: var(--hint); }
@@ -82,8 +81,7 @@
   font-variant-numeric: tabular-nums;
 }
 .agent-context__tool-header {
-  color: var(--muted); font-weight: 600; font-size: var(--font-sm);
-  text-transform: uppercase; letter-spacing: 0.3px;
+  color: var(--muted);
 }
 .agent-context__tool-row:not(.agent-context__tool-header) { color: var(--text); }
 .agent-context__tool-name {
@@ -93,11 +91,11 @@
 /* Files list */
 .agent-context__files { display: flex; flex-direction: column; gap: 1px; }
 .agent-context__file-label {
-  font-size: var(--font-sm); font-weight: 600; color: var(--muted); text-transform: uppercase;
+  color: var(--muted);
   margin-top: var(--space-xs); margin-bottom: 1px;
 }
 .agent-context__file-entry {
-  font-size: var(--font-sm); color: var(--cyan); overflow: hidden;
+  font-size: var(--font-sm); color: var(--blue); overflow: hidden;
   text-overflow: ellipsis; white-space: nowrap; cursor: pointer;
   padding: 1px 0;
 }
@@ -119,6 +117,6 @@
 
 /* Empty state */
 .agent-context__empty {
-  padding: var(--space-lg); font-size: var(--font-lg); color: var(--hint);
+  padding: var(--space-lg); font-size: var(--font-body); color: var(--hint);
   text-align: center; font-style: italic;
 }

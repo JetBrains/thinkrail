@@ -129,7 +129,7 @@ Card layout (CSS grid, three rows):
 [↻ 3]  [$0.18] .................. [🗑 hover]
 ```
 
-- **Status as a 7px dot** at the start of the header row. Colors come from the status palette (`--muted` draft, `--blue` idle/initializing, `--purple` running with a pulse, `--gold` waiting/interrupted, `--green` done, `--red` error). Reading the status word is never necessary.
+- **Status as a 7px dot** at the start of the header row. Colors come from the status palette (`--muted` draft, `--blue` idle/initializing, `--primary` running with a pulse, `--gold` waiting/interrupted, `--green` done, `--red` error). Reading the status word is never necessary.
 - **Name** is the dominant text. Generic auto-names (`/^Session \d+$/`) render in monospace + muted to make custom names visibly dominate. Draft sessions render the name in italic + muted with the literal time slot showing "draft".
 - **Time** is a relative "4h" / "6d" / "now" stamp in tabular numerals. Running sessions show "now" in purple.
 - **Ticket chip** (only when attached): a single chip containing a 4px colored stripe + ticket title + short id (`#xxxx`). The stripe color is deterministically derived from `metaTicketId`, so sessions on the same ticket share the same chip color and cluster pre-attentively as the user scans. When no ticket is attached, the row collapses entirely — card is two lines.

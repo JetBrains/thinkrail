@@ -5,6 +5,11 @@
   overflow: hidden;
 }
 
+/* Override .card background when used with .context-panel */
+.card.context-panel {
+  background: transparent;
+}
+
 .context-panel__header {
   display: flex;
   align-items: stretch;
@@ -13,7 +18,6 @@
   min-height: calc(var(--font-base) * 2.4);
   border-bottom: 1px solid var(--border);
   flex-shrink: 0;
-  background: color-mix(in srgb, var(--elevated) 30%, transparent);
 }
 
 .context-panel__header > .context-panel__mode-icon,
@@ -27,7 +31,7 @@
 }
 
 .context-panel__mode-icon {
-  font-size: var(--font-lg);
+  font-size: var(--font-body);
 }
 
 .context-panel__mode-label {
@@ -55,12 +59,28 @@
 
 .context-panel__empty {
   color: var(--hint);
-  font-size: var(--font-lg);
+  font-size: var(--font-body);
   text-align: center;
   padding: var(--space-xl) var(--space-md);
   font-style: italic;
   line-height: 1.6;
 }
+
+/* Dashboard toggle button */
+.context-panel__dash-btn {
+  margin-left: auto;
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--muted);
+  font-size: var(--font-body);
+  cursor: pointer;
+  padding: 2px var(--space-sm);
+  border-radius: var(--radius-sm);
+  line-height: 1.4;
+  flex-shrink: 0;
+}
+.context-panel__dash-btn:hover { color: var(--text); background: var(--hover); border-color: var(--muted); }
+.context-panel__dash-btn--active { color: var(--blue); border-color: var(--blue); background: rgba(8,124,250,0.08); }
 
 /* VisTab */
 .vis-tab { display: flex; flex-direction: column; padding: 0; }
@@ -70,11 +90,11 @@
   border-bottom: 1px solid var(--border);
   flex-shrink: 0;
 }
-.vis-tab-pct { font-size: var(--font-xl); font-weight: 700; color: var(--cyan); min-width: 42px; }
+.vis-tab-pct { font-size: var(--font-body); font-weight: 700; color: var(--blue); min-width: 42px; }
 .vis-tab-pct-bar {
   flex: 1; height: 4px; background: var(--border); border-radius: 2px; overflow: hidden;
 }
-.vis-tab-pct-fill { height: 100%; background: var(--cyan); border-radius: 2px; transition: width 0.4s ease; }
+.vis-tab-pct-fill { height: 100%; background: var(--blue); border-radius: 2px; transition: width 0.4s ease; }
 .vis-tab-meta { font-size: var(--font-sm); color: var(--muted); white-space: nowrap; }
 .vis-tab-refresh-btn {
   background: transparent; border: none; color: var(--hint); font-size: var(--font-body);
@@ -99,7 +119,7 @@
   padding: 2px 0;
 }
 .vis-tab-workflow-label { flex: 1; }
-.vis-tab-workflow-file { font-size: var(--font-sm); color: var(--cyan); }
+.vis-tab-workflow-file { font-size: var(--font-sm); color: var(--blue); }
 
 .vis-tab-coverage-warn { font-size: var(--font-md); color: var(--red); margin-bottom: var(--space-xs); }
 .vis-tab-coverage-list { display: flex; flex-direction: column; gap: 1px; max-height: 140px; overflow-y: auto; }
@@ -114,7 +134,7 @@
 }
 .vis-tab-rec-title { font-size: var(--font-md); font-weight: 600; color: var(--text); }
 .vis-tab-rec-reason { font-size: var(--font-sm); color: var(--hint); margin: 1px 0; }
-.vis-tab-rec-action { font-size: var(--font-sm); color: var(--cyan); background: rgba(8,124,250,0.08); padding: 0 var(--space-xs); border-radius: 2px; }
+.vis-tab-rec-action { font-size: var(--font-sm); color: var(--blue); background: rgba(8,124,250,0.08); padding: 0 var(--space-xs); border-radius: 2px; }
 
 .vis-tab-lint-badge {
   font-size: var(--font-sm); font-weight: 600; padding: 0 var(--space-sm); border-radius: var(--radius-sm);
@@ -125,8 +145,8 @@
 .vis-tab-lint-icon { flex-shrink: 0; font-size: var(--font-md); }
 .vis-tab-lint-msg { color: var(--muted); line-height: 1.4; }
 
-.vis-tab-loading { padding: var(--space-lg); font-size: var(--font-lg); color: var(--hint); text-align: center; font-style: italic; }
-.vis-tab-empty { padding: var(--space-lg); font-size: var(--font-lg); color: var(--hint); text-align: center; display: flex; flex-direction: column; gap: var(--space-md); align-items: center; }
+.vis-tab-loading { padding: var(--space-lg); font-size: var(--font-body); color: var(--hint); text-align: center; font-style: italic; }
+.vis-tab-empty { padding: var(--space-lg); font-size: var(--font-body); color: var(--hint); text-align: center; display: flex; flex-direction: column; gap: var(--space-md); align-items: center; }
 
 .section-placeholder {
   color: var(--hint);

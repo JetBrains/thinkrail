@@ -1,0 +1,90 @@
+import { Meta, ColorPalette, ColorItem } from "@storybook/addon-docs/blocks";
+
+<Meta title="Foundations/Colors" />
+
+export const ACCENTS = [
+  { token: "--primary", role: "Primary accent (purple)" },
+  { token: "--secondary", role: "Secondary button color" },
+  { token: "--blue", role: "Links / info" },
+  { token: "--green", role: "Success" },
+  { token: "--red", role: "Error / danger" },
+  { token: "--gold", role: "Warning" },
+];
+
+export const SEMANTIC = [
+  { token: "--bg", role: "App background" },
+  { token: "--bg-dark", role: "Darker background" },
+  { token: "--bg-input", role: "Input background" },
+  { token: "--panel", role: "Panel surface" },
+  { token: "--elevated", role: "Elevated surface" },
+  { token: "--hover", role: "Hover surface" },
+  { token: "--border", role: "Default border" },
+  { token: "--border2", role: "Stronger border" },
+  { token: "--text", role: "Primary text" },
+  { token: "--muted", role: "Muted text" },
+  { token: "--hint", role: "Hint text" },
+  { token: "--sel", role: "Selection" },
+];
+
+export const WHITE_OPACITY = [
+  { token: "--white-5", role: "5% opacity" },
+  { token: "--white-10", role: "10% opacity" },
+  { token: "--white-20", role: "20% opacity" },
+  { token: "--white-40", role: "40% opacity" },
+  { token: "--white-60", role: "60% opacity" },
+  { token: "--white-80", role: "80% opacity" },
+  { token: "--white-100", role: "100% opacity" },
+];
+
+# Colors
+
+Color tokens sourced from `src/styles/tokens.css` (accents, shared across themes)
+and `src/styles/theme-*.css` / `themes.css` (semantic roles, redefined per theme).
+Each swatch is a live `var(--token)` reference — change the **Theme** in the
+toolbar and the semantic colors re-resolve.
+
+## Accent palette
+
+JetBrains brand accents from `tokens.css`. Identical in every theme.
+
+<ColorPalette>
+  {ACCENTS.map((c) => (
+    <ColorItem key={c.token} title={c.token} subtitle={c.role} colors={{ [c.token]: `var(${c.token})` }} />
+  ))}
+</ColorPalette>
+
+## Semantic colors
+
+Surface, border and text roles from `theme-*.css` / `themes.css`.
+
+<ColorPalette>
+  {SEMANTIC.map((c) => (
+    <ColorItem key={c.token} title={c.token} subtitle={c.role} colors={{ [c.token]: `var(${c.token})` }} />
+  ))}
+</ColorPalette>
+
+## White opacity scale
+
+White color at varying opacity levels from `tokens.css`. Used for hovers and overlays.
+
+<div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: '8px', padding: '16px', background: '#0D0D0E', borderRadius: '4px' }}>
+  {WHITE_OPACITY.map((c) => (
+    <div key={c.token} style={{ textAlign: 'center' }}>
+      <div style={{
+        width: '100%',
+        height: '80px',
+        background: `var(${c.token})`,
+        borderRadius: '4px',
+        border: '1px solid rgba(255,255,255,0.1)'
+      }} />
+      <div style={{ marginTop: '8px', fontSize: '11px', color: '#dfe1e5' }}>{c.token}</div>
+      <div style={{ fontSize: '10px', color: '#888' }}>{c.role}</div>
+    </div>
+  ))}
+</div>
+
+<ColorPalette>
+  {WHITE_OPACITY.map((c) => (
+    <ColorItem key={c.token} title={c.token} subtitle={c.role} colors={{ [c.token]: `var(${c.token})` }} />
+  ))}
+</ColorPalette>

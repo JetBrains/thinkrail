@@ -6,6 +6,11 @@
   gap: var(--space-md);
 }
 
+/* Override .card margin when used with .draft-config-card */
+.card.draft-config-card {
+  margin: 0;
+}
+
 .card.draft-config-card--drag-over {
   outline: 2px dashed var(--blue);
   outline-offset: -2px;
@@ -103,7 +108,7 @@
   border: none;
   color: var(--muted);
   cursor: pointer;
-  font-size: var(--font-lg);
+  font-size: var(--font-body);
   padding: 0 2px;
   line-height: 1;
   opacity: 0.6;
@@ -210,7 +215,7 @@
   border: none;
   color: var(--muted);
   cursor: pointer;
-  font-size: var(--font-lg);
+  font-size: var(--font-body);
   padding: var(--space-xs) var(--space-sm);
   border-radius: var(--radius-sm);
   font-family: inherit;

@@ -1,0 +1,148 @@
+/* ── Screen container ─────────────────────────────────────────── */
+.twopanel-layout {
+  position: relative;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  background: var(--bg);
+  min-height: 0;
+  overflow: hidden;
+}
+
+.twopanel-layout::before {
+  content: "";
+  position: fixed;
+  bottom: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 100%;
+  max-width: 1200px;
+  height: 600px;
+  background-image: url('../../assets/sphere-bg.svg');
+  background-repeat: no-repeat;
+  background-position: center bottom;
+  background-size: contain;
+  pointer-events: none;
+  z-index: 0;
+  opacity: 0.8;
+}
+
+/* ── Container (wide blurred background) ──────────────────────── */
+.twopanel-container {
+  position: relative;
+  z-index: 0;
+  flex: 1;
+  width: calc(100% - 48px);
+  margin: 0 24px 24px;
+  padding: 16px;
+  background: rgba(22, 22, 24, 0.8);
+  backdrop-filter: blur(50px);
+  -webkit-backdrop-filter: blur(50px);
+  border-radius: 8px;
+  display: flex;
+  gap: 24px;
+  min-height: 0;
+  overflow: hidden;
+}
+
+/* ── Left panel (chat input) ──────────────────────────────────── */
+.twopanel-left {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+}
+
+/* ── Right panel (content/document) ───────────────────────────── */
+.twopanel-right {
+  position: relative;
+  flex: 1;
+  background: var(--bg);
+  border-radius: 8px;
+  padding: 16px;
+  min-height: 0;
+  overflow-y: auto;
+  transition: all 0.3s;
+}
+
+.twopanel-right--collapsed {
+  flex: 0 0 48px;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  overflow: visible;
+}
+
+/* ── Collapse button (inside right panel) ─────────────────────── */
+.twopanel-collapse-btn {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: none;
+  border-radius: 6px;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all 0.2s;
+  z-index: 1;
+}
+
+.twopanel-collapse-btn:hover {
+  color: var(--text-primary);
+}
+
+/* ── Collapsed title (rotated file name) ──────────────────────── */
+.twopanel-collapsed-title {
+  position: absolute;
+  top: 0;
+  left: 50%;
+  bottom: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transform: translateX(-50%) rotate(90deg);
+  transform-origin: center center;
+  font-size: 13px;
+  color: var(--text-secondary);
+  pointer-events: none;
+  width: calc(100vh - 120px);
+  max-width: calc(100vh - 120px);
+}
+
+.twopanel-collapsed-title > span {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+}
+
+/* ── Expand button (when panel is collapsed) ──────────────────── */
+.twopanel-expand-btn {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: none;
+  border-radius: 6px;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.twopanel-expand-btn:hover {
+  color: var(--text-primary);
+}

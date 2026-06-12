@@ -16,13 +16,16 @@
     "generate:ws-types": "json2ts -i ws-events.json -o src/types/ws-events.ts --no-additionalProperties",
     "generate:rpc-schema": "cd ../backend && uv run python -m app.cli export-rpc-schema -o ../frontend/rpc-methods.json",
     "generate:rpc-types": "json2ts -i rpc-methods.json -o src/types/rpc-methods.ts --no-additionalProperties",
-    "generate": "npm run generate:schema && npm run generate:api && npm run generate:ws-schema && npm run generate:ws-types && npm run generate:rpc-schema && npm run generate:rpc-types"
+    "generate": "npm run generate:schema && npm run generate:api && npm run generate:ws-schema && npm run generate:ws-types && npm run generate:rpc-schema && npm run generate:rpc-types",
+    "storybook": "storybook dev -p 6006",
+    "build-storybook": "storybook build"
   },
   "dependencies": {
     "@dnd-kit/abstract": "^0.3.2",
     "@dnd-kit/helpers": "^0.3.2",
     "@dnd-kit/react": "^0.3.2",
     "@monaco-editor/react": "^4.7.0",
+    "lucide-react": "^1.16.0",
     "mermaid": "^11.13.0",
     "monaco-editor": "^0.55.1",
     "openapi-fetch": "^0.17.0",
@@ -36,6 +39,8 @@
   },
   "devDependencies": {
     "@eslint/js": "^9.39.4",
+    "@storybook/addon-docs": "10.4.1",
+    "@storybook/react-vite": "10.4.1",
     "@testing-library/react": "^16.0.0",
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
@@ -47,6 +52,7 @@
     "jsdom": "^29.0.0",
     "json-schema-to-typescript": "^15.0.4",
     "openapi-typescript": "^7.13.0",
+    "storybook": "10.4.1",
     "typescript": "^5.7.0",
     "typescript-eslint": "^8.59.2",
     "vite": "^6.4.2",

@@ -6,7 +6,7 @@
  */
 
 .st {
-  font-size: var(--font-lg);
+  font-size: var(--font-body);
   line-height: 1;
   user-select: none;
 }
@@ -57,11 +57,11 @@
 }
 
 .st-row-selected {
-  background: var(--sel);
+  background: #2C2947;
 }
 
 .st-row-selected:hover {
-  background: var(--sel);
+  background: #2C2947;
 }
 
 /* ── Indent guides ── */
@@ -102,12 +102,7 @@
   font-size: var(--font-body);
 }
 
-.st-icon-goal      { color: var(--gold); }
-.st-icon-arch      { color: var(--purple); }
-.st-icon-module    { color: var(--blue); }
-.st-icon-submodule { color: var(--teal); }
-.st-icon-task      { color: var(--muted); }
-.st-icon-default   { color: var(--hint); }
+/* Icons inherit text color */
 
 /* ── Title ── */
 .st-title {
@@ -202,9 +197,9 @@
 
 /* Expanded state */
 .st-task-pill-expanded {
-  background: #6B57FF33;
+  background: #8C81FF33;
   color: #a89bff;
-  border-color: #6B57FF55;
+  border-color: #8C81FF55;
 }
 
 /* ── Task card ── */
@@ -249,7 +244,7 @@
 /* ── Empty / loading states ── */
 .st-empty {
   color: var(--hint);
-  font-size: var(--font-lg);
+  font-size: var(--font-body);
   padding: var(--space-lg);
   text-align: center;
 }

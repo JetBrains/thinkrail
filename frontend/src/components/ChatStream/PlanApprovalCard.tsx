@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { Button } from "../ui/Button";
 import { ChatMarkdown } from "./ChatMarkdown.tsx";
 
 interface AllowedPrompt {
@@ -151,28 +152,28 @@ export function PlanApprovalCard({
             }}
           />
           <div className="chat-plan-approval-reason-actions">
-            <button
-              className="chat-btn chat-btn-deny"
+            <Button
+              variant="deny"
               onClick={() => onDeny(reason.trim() || undefined)}
             >
               Submit Rejection
-            </button>
-            <button
-              className="chat-btn chat-btn-muted"
+            </Button>
+            <Button
+              variant="muted"
               onClick={() => { setRejecting(false); setReason(""); }}
             >
               Cancel
-            </button>
+            </Button>
           </div>
         </div>
       ) : (
         <div className="chat-plan-approval-actions">
-          <button className="chat-btn chat-btn-approve" onClick={onApprove}>
+          <Button variant="approve" onClick={onApprove}>
             Approve Plan
-          </button>
-          <button className="chat-btn chat-btn-deny" onClick={() => setRejecting(true)}>
+          </Button>
+          <Button variant="deny" onClick={() => setRejecting(true)}>
             Reject Plan
-          </button>
+          </Button>
         </div>
       )}
     </div>

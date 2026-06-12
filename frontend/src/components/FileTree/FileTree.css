@@ -6,7 +6,7 @@
  */
 
 .ft {
-  font-size: var(--font-lg);
+  font-size: var(--font-body);
   line-height: 1;
   user-select: none;
 }
@@ -44,7 +44,7 @@
 }
 
 .ft-toolbar-btn-active {
-  background: var(--sel);
+  background: #2C2947;
   color: var(--text);
   border-color: var(--border);
 }
@@ -65,11 +65,11 @@
 }
 
 .ft-row-selected {
-  background: var(--sel);
+  background: #2C2947;
 }
 
 .ft-row-selected:hover {
-  background: var(--sel);
+  background: #2C2947;
 }
 
 /* ── Indent guides ── */
@@ -110,21 +110,7 @@
   font-size: var(--font-body);
 }
 
-/* Icon colors by file type — IntelliJ-style */
-.fi-dir   { color: var(--gold); }
-.fi-specs  { color: var(--purple); }
-.fi-src   { color: var(--blue); }
-.fi-test  { color: var(--green); }
-.fi-py    { color: #3572A5; }
-.fi-ts    { color: #3178C6; }
-.fi-js    { color: #F0DB4F; }
-.fi-css   { color: #563D7C; }
-.fi-html  { color: #E34C26; }
-.fi-json  { color: var(--gold); }
-.fi-md    { color: var(--blue); }
-.fi-config { color: var(--hint); }
-.fi-lock  { color: var(--hint); }
-.fi-default { color: var(--muted); }
+/* Icons inherit text color */
 
 /* ── Name ── */
 .ft-name {
@@ -146,7 +132,7 @@
 /* ── Empty state ── */
 .ft-empty {
   color: var(--hint);
-  font-size: var(--font-lg);
+  font-size: var(--font-body);
   padding: var(--space-lg);
   text-align: center;
 }

@@ -64,7 +64,7 @@
   flex-shrink: 0;
 }
 .compact-log-name {
-  color: var(--cyan);
+  color: var(--blue);
   font-weight: 600;
   white-space: nowrap;
 }
@@ -209,8 +209,8 @@
   align-items: center;
   gap: var(--space-xs);
   padding: 2px 6px;
-  font-size: var(--font-lg);
-  border-left: 2px solid var(--purple);
+  font-size: var(--font-body);
+  border-left: 2px solid var(--primary);
   cursor: pointer;
   border-radius: 2px;
 }
@@ -223,7 +223,7 @@
   flex-shrink: 0;
 }
 .compact-subagent-name {
-  color: var(--purple);
+  color: var(--primary);
   font-weight: 600;
   white-space: nowrap;
 }

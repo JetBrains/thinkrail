@@ -12,10 +12,7 @@
   background: color-mix(in srgb, var(--elevated) 40%, transparent);
   color: var(--text);
   font-family: var(--font);
-  font-size: var(--font-md);
   font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
   cursor: pointer;
   transition: background var(--transition-fast);
 }
@@ -60,7 +57,7 @@
 }
 
 .collapsible-section__expand {
-  font-size: var(--font-lg);
+  font-size: var(--font-body);
   color: var(--hint);
   padding: 2px var(--space-xs);
   border-radius: var(--radius-sm);

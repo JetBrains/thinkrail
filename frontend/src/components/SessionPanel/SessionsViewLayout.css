@@ -1,0 +1,60 @@
+/* ── Screen container with sphere background ─────────────────── */
+.sessions-view-layout {
+  position: relative;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  background: var(--bg);
+  min-height: 0;
+  overflow: hidden;
+}
+
+.sessions-view-layout::before {
+  content: "";
+  position: fixed;
+  bottom: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 100%;
+  max-width: 1200px;
+  height: 600px;
+  background-image: url('../../assets/sphere-bg.svg');
+  background-repeat: no-repeat;
+  background-position: center bottom;
+  background-size: contain;
+  pointer-events: none;
+  z-index: 0;
+  opacity: 0.8;
+}
+
+/* ── Container (holds left island + main content) ─────────────── */
+.sessions-view-container {
+  position: relative;
+  z-index: 0;
+  flex: 1;
+  width: calc(100% - 48px);
+  margin: 0 24px 24px;
+  display: flex;
+  gap: 16px;
+  min-height: 0;
+  overflow: hidden;
+}
+
+/* ── Left island (width controlled by inner panel) ───────────── */
+.sessions-view-left {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+}
+
+/* ── Main content area (flexible, contains TwoPanelLayout) ────── */
+.sessions-view-main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+}

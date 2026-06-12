@@ -1,13 +1,15 @@
 import { useCallback, useEffect, useState, type ReactNode } from "react";
 import { useNavigate } from "react-router-dom";
+import { Grid2x2, File, Folder, Bot, ArrowRight } from "lucide-react";
 import type { ScanEngineGuidance } from "@/api/rest.ts";
 import { formatBytes } from "@/utils/format.ts";
 import { useUiStore } from "@/store/uiStore.ts";
-import { WizardStepper } from "@/components/Wizard/WizardStepper.tsx";
-import { getWizardConfig, entryTransition } from "@/components/Wizard/registry.ts";
+import { entryTransition } from "@/components/Wizard/registry.ts";
 import { useStartWizardStep } from "@/components/Wizard/useStartWizardStep.ts";
-import { derivePhase } from "@/components/Wizard/phase.ts";
+import { FullScreenLayout } from "@/components/Wizard/FullScreenLayout";
 import { useProjectScan } from "./useProjectScan.ts";
+import { Button } from "@/components/ui/Button";
+import { PRODUCT_NAME } from "@/constants/branding";
 import "@/components/Wizard/NewProjectForm.css";
 import "./ExistingProjectDetect.css";
 
@@ -19,22 +21,51 @@ const CHAIN_ID = "investigate-project";
 const ENTRY = entryTransition(CHAIN_ID);
 
 interface DetectRowProps {
-  icon: string;
+  icon: ReactNode;
   name: string;
   description: ReactNode;
-  action: ReactNode;
+  checked?: boolean;
+  onToggle?: () => void;
+  action?: ReactNode;
   missing?: boolean;
 }
 
-function DetectRow({ icon, name, description, action, missing }: DetectRowProps) {
+function DetectRow({ icon, name, description, checked, onToggle, action, missing }: DetectRowProps) {
+  const handleClick = useCallback(() => {
+    if (onToggle && !missing) {
+      onToggle();
+    }
+  }, [onToggle, missing]);
+
+  const classNames = [
+    "detect-row",
+    missing && "detect-row-missing",
+    onToggle && !missing && "detect-row-clickable",
+    checked && "detect-row-selected",
+  ].filter(Boolean).join(" ");
+
   return (
-    <div className={`detect-row ${missing ? "detect-row-missing" : ""}`}>
+    <div
+      className={classNames}
+      onClick={handleClick}
+      role={onToggle && !missing ? "checkbox" : undefined}
+      aria-checked={onToggle && !missing ? checked : undefined}
+      tabIndex={onToggle && !missing ? 0 : undefined}
+    >
       <div className="detect-row-icon">{icon}</div>
       <div className="detect-row-info">
         <div className="detect-row-name">{name}</div>
         <div className="detect-row-desc">{description}</div>
       </div>
-      {action}
+      {action || (onToggle && !missing && (
+        <div className={`detect-checkbox ${checked ? "detect-checkbox-checked" : ""}`}>
+          {checked && (
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <path d="M13 4L6 11L3 8" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+            </svg>
+          )}
+        </div>
+      ))}
     </div>
   );
 }
@@ -73,16 +104,6 @@ export function ExistingProjectDetect() {
 
   const [submitting, setSubmitting] = useState(false);
   const [startError, setStartError] = useState<string | null>(null);
-
-  // This screen is the pre-chat phase of investigate-project —
-  // derivePhase(null) returns "pre-chat", and the registry resolves
-  // that to "What we'll read":active. Phase is NEVER hardcoded.
-  // The chain hint is required because the wizard registry computes
-  // the stepper based on the chain — without it, ambiguous skills
-  // would fall back to their default chain.
-  const stepperSteps =
-    getWizardConfig(CHAIN_ID, derivePhase({ session: null }), CHAIN_ID)
-      ?.steps ?? [];
 
   const handleStart = useCallback(async () => {
     if (!scan || submitting) return;
@@ -130,24 +151,18 @@ export function ExistingProjectDetect() {
 
   if (error) {
     return (
-      <div className="detect-screen">
-        <WizardStepper steps={stepperSteps} />
-        <div className="np-form detect-form">
-          <p className="detect-error">{error}</p>
-          <button className="np-form-btn" onClick={handleCancel}>Back</button>
-        </div>
-      </div>
+      <FullScreenLayout maxWidth={700}>
+        <p className="detect-error">{error}</p>
+        <Button onClick={handleCancel}>Back</Button>
+      </FullScreenLayout>
     );
   }
 
   if (!scan) {
     return (
-      <div className="detect-screen">
-        <WizardStepper steps={stepperSteps} />
-        <div className="np-form detect-form">
-          <p className="np-form-lead">Scanning {projectName}…</p>
-        </div>
-      </div>
+      <FullScreenLayout maxWidth={700}>
+        <p className="np-form-lead">Scanning {projectName}…</p>
+      </FullScreenLayout>
     );
   }
 
@@ -157,16 +172,18 @@ export function ExistingProjectDetect() {
     scan.engine_guidance.filter((g) => g.found).length;
 
   return (
-    <div className="detect-screen">
-      <WizardStepper steps={stepperSteps} />
+    <FullScreenLayout maxWidth={620}>
+      <div className="detect-form">
+        <div className="np-form-header">
+          <h2 className="np-form-h2">What I'll read first</h2>
+          <p className="np-form-lead">
+            {PRODUCT_NAME} will read these files to figure out what this project is. Deselect anything you'd rather skip.
+          </p>
+        </div>
 
-      <div className="np-form detect-form">
         <header className="detect-project-header">
           <div className="detect-project-info">
-            <svg className="detect-leaf" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-              <path d="M12 22V11" />
-              <path d="M5 11c0-4 3-7 7-7s7 3 7 7c0 4-3 7-7 7s-7-3-7-7Z" />
-            </svg>
+            <Grid2x2 size={18} strokeWidth={1.5} className="detect-leaf" />
             <div>
               <div className="detect-project-name">{projectName}</div>
               <div className="detect-project-path">{projectPath}</div>
@@ -175,11 +192,6 @@ export function ExistingProjectDetect() {
           <span className="detect-pill">No <code>.bonsai/</code> yet</span>
         </header>
 
-        <h2 className="np-form-h2">What I’ll read first</h2>
-        <p className="np-form-lead">
-          Bonsai will read these files to figure out what this project is. Deselect anything you’d rather skip.
-        </p>
-
         <div className="detect-list-scroll">
           {scan.engine_guidance.length > 0 && (
             <>
@@ -187,27 +199,25 @@ export function ExistingProjectDetect() {
               {scan.engine_guidance.map((g) => (
                 <DetectRow
                   key={g.engine}
-                  icon={g.found ? "🤖" : "⚠️"}
+                  icon={g.found ? <Bot size={16} strokeWidth={1.5} /> : "⚠️"}
                   name={g.file}
                   description={engineDescription(g)}
                   missing={!g.found}
+                  checked={g.found ? selected.has(g.file) : undefined}
+                  onToggle={g.found ? () => toggle(g.file) : undefined}
                   action={
-                    g.found ? (
-                      <input
-                        type="checkbox"
-                        checked={selected.has(g.file)}
-                        onChange={() => toggle(g.file)}
-                        aria-label={`Include ${g.file}`}
-                      />
-                    ) : (
+                    !g.found ? (
                       <button
                         className="detect-init-btn"
-                        onClick={() => initEngineFor(g.engine)}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          initEngineFor(g.engine);
+                        }}
                         disabled={initBusy.has(g.engine)}
                       >
                         {initBusy.has(g.engine) ? "Creating…" : `Init ${g.display_name}`}
                       </button>
-                    )
+                    ) : undefined
                   }
                 />
               ))}
@@ -224,17 +234,11 @@ export function ExistingProjectDetect() {
             scan.important_files.map((f) => (
               <DetectRow
                 key={f.name}
-                icon="📄"
+                icon={<File size={16} strokeWidth={1.5} />}
                 name={f.name}
                 description={`${f.description} · ${formatBytes(f.size)}`}
-                action={
-                  <input
-                    type="checkbox"
-                    checked={selected.has(f.name)}
-                    onChange={() => toggle(f.name)}
-                    aria-label={`Include ${f.name}`}
-                  />
-                }
+                checked={selected.has(f.name)}
+                onToggle={() => toggle(f.name)}
               />
             ))
           )}
@@ -248,17 +252,11 @@ export function ExistingProjectDetect() {
             scan.top_folders.map((f) => (
               <DetectRow
                 key={f.name}
-                icon="📁"
+                icon={<Folder size={16} strokeWidth={1.5} />}
                 name={`${f.name}/`}
                 description={`${f.entry_count} ${f.entry_count === 1 ? "entry" : "entries"}`}
-                action={
-                  <input
-                    type="checkbox"
-                    checked={selected.has(f.name)}
-                    onChange={() => toggle(f.name)}
-                    aria-label={`Include folder ${f.name}`}
-                  />
-                }
+                checked={selected.has(f.name)}
+                onToggle={() => toggle(f.name)}
               />
             ))
           )}
@@ -271,23 +269,21 @@ export function ExistingProjectDetect() {
             ✓ {selected.size} of {totalSelectable} selected
           </span>
           <div className="np-form-actions-buttons">
-            <button className="np-form-btn" onClick={handleCancel} disabled={submitting} type="button">
+            <Button onClick={handleCancel} disabled={submitting} type="button">
               Cancel
-            </button>
-            <button
-              className="np-form-btn np-form-btn-primary"
+            </Button>
+            <Button
+              variant="primary"
               onClick={handleStart}
               disabled={submitting || selected.size === 0}
               type="button"
+              trailingIcon={<ArrowRight size={16} strokeWidth={2} className="np-form-btn-icon" />}
             >
               {submitting ? "Starting…" : "Start investigation"}
-              <svg className="np-form-btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true">
-                <path d="M5 12h14M13 5l7 7-7 7" />
-              </svg>
-            </button>
+            </Button>
           </div>
         </div>
       </div>
-    </div>
+    </FullScreenLayout>
   );
 }

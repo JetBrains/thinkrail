@@ -20,6 +20,7 @@ import { useTicketRouteData } from "@/components/TicketDetail/useTicketRouteData
 import { SessionTabBar } from "./SessionTabBar.tsx";
 import { useActiveTabKind } from "./useActiveTabKind.ts";
 import { StickyContextBar } from "./StickyContextBar.tsx";
+import { SessionContentLayout } from "./SessionContentLayout.tsx";
 import "./SessionPanel.css";
 
 const CONTEXT_DEFAULT_W = 360;
@@ -240,7 +241,11 @@ export function SessionPanel({
   const inputDisabled = isDone || isRunning || (hasPending && firstPending?.type === "approval");
   const showContinue = !inputDisabled && !canInterrupt && !isDraft && (activeSession?.events.length ?? 0) > 0;
 
-  return (
+  // When not embedded and not hideTabBar, use TwoPanelLayout
+  const useNewLayout = !isEmbedded && !hideTabBar;
+
+  // Build left panel content (tabs + main content area)
+  const leftPanelContent = (
     <>
       {!hideTabBar && !isEmbedded && (
         <div className="session-tabs-row">
@@ -267,32 +272,13 @@ export function SessionPanel({
       {showFile && displayFile ? (
         <FileViewer file={displayFile} />
       ) : isTicketTab ? (
-        <div className="session-body-row">
-          <div className="session-chat-col">
-            <div className="left-panel-ticket-body">
-              <TicketInfo />
-            </div>
+        <div className="session-chat-col">
+          <div className="left-panel-ticket-body">
+            <TicketInfo />
           </div>
-          {showContext && (
-            <>
-              <ResizeHandle
-                side="right"
-                invisible
-                panelWidth={contextWidth}
-                onResize={setContextWidth}
-                onCollapse={() => {}}
-                min={CONTEXT_MIN_W}
-                collapseThreshold={0}
-              />
-              <div className="session-context-col" style={{ width: contextWidth }}>
-                <TicketRouteContextPanel />
-              </div>
-            </>
-          )}
         </div>
       ) : showSession && activeSession ? (
-        <div className="session-body-row">
-          <div className="session-chat-col">
+        <div className="session-chat-col">
           {!hideStickyBar && !contextCardVisible && activeSession.events.length > 0 && (
             <StickyContextBar
               skillId={activeSession.skillId ?? undefined}
@@ -317,11 +303,6 @@ export function SessionPanel({
             onContextCardVisibility={setContextCardVisible}
           />
           <Card className="session-bottom">
-            {/* Render the status line in every session state — including
-                "draft" — so the model picker, permission mode, effort and
-                the Start/Stop/Continue action slot are present regardless
-                of how the session was started. Keeps the wizard chat and
-                the regular session window visually 1:1. */}
             <SessionStatusLine
               model={activeSession.model}
               permissionMode={activeSession.permissionMode}
@@ -359,23 +340,6 @@ export function SessionPanel({
               />
             )}
           </Card>
-          </div>
-          {showContext && (
-            <>
-              <ResizeHandle
-                side="right"
-                invisible
-                panelWidth={contextWidth}
-                onResize={setContextWidth}
-                onCollapse={() => {}}
-                min={CONTEXT_MIN_W}
-                collapseThreshold={0}
-              />
-              <div className="session-context-col" style={{ width: contextWidth }}>
-                <ContextPanel />
-              </div>
-            </>
-          )}
         </div>
       ) : isEmbedded ? (
         <div className="session-empty">
@@ -393,6 +357,50 @@ export function SessionPanel({
       )}
     </>
   );
+
+  // Build right panel content (context/artifacts)
+  const rightPanelContent = showContext && useNewLayout ? (
+    isTicketTab ? <TicketRouteContextPanel /> : <ContextPanel />
+  ) : undefined;
+
+  // For embedded/wizard views, use old layout with ResizeHandle
+  if (isEmbedded || hideTabBar) {
+    return (
+      <>
+        {leftPanelContent}
+        {!isEmbedded && !hideTabBar && showContext && rightPanelContent && (
+          <>
+            <ResizeHandle
+              side="right"
+              invisible
+              panelWidth={contextWidth}
+              onResize={setContextWidth}
+              onCollapse={() => {}}
+              min={CONTEXT_MIN_W}
+              collapseThreshold={0}
+            />
+            <div className="session-context-col" style={{ width: contextWidth }}>
+              {rightPanelContent}
+            </div>
+          </>
+        )}
+      </>
+    );
+  }
+
+  // For regular sessions view, use SessionContentLayout (content-only, no background wrapper)
+  if (useNewLayout) {
+    return (
+      <SessionContentLayout
+        leftPanel={leftPanelContent}
+        rightPanel={rightPanelContent}
+        rightPanelTitle={isTicketTab ? "Artifacts" : "Context"}
+      />
+    );
+  }
+
+  // Fallback for old layout (shouldn't reach here for new layout)
+  return <div className="session-single-panel">{leftPanelContent}</div>;
 }
 
 function RestoredBar({ bonsaiSid, ended }: { bonsaiSid: string; ended?: boolean }) {

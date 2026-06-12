@@ -293,8 +293,6 @@
   white-space: nowrap;
 }
 
-.tpl-task-item--done .tpl-task-glyph { color: var(--green, #2a9d4a); }
+/* Task glyphs inherit text color */
 .tpl-task-item--done .tpl-task-text { color: var(--hint); text-decoration: line-through; }
-.tpl-task-item--running .tpl-task-glyph { color: var(--gold, #d4a017); }
-.tpl-task-item--pending .tpl-task-glyph { color: var(--hint); }
 .tpl-task-item--pending .tpl-task-text { color: var(--hint); }

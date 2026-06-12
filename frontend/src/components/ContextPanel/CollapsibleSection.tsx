@@ -28,7 +28,7 @@ export function CollapsibleSection({
     <div className={`collapsible-section ${expanded ? "collapsible-section--expanded" : ""}`}>
       <button className="collapsible-section__header" onClick={toggle}>
         <span className="collapsible-section__chevron">{expanded ? "\u25BC" : "\u25B6"}</span>
-        <span className="collapsible-section__title">{title}</span>
+        <span className="collapsible-section__title text-uppercase">{title}</span>
         {count !== undefined && (
           <span className="collapsible-section__count">{count}</span>
         )}
