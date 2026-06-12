@@ -43,7 +43,7 @@ Supported platforms: Linux x64/arm64, macOS x64/arm64, Windows x64.
 
 Once installed, run `thinkrail` to start. To update later: `thinkrail upgrade` (Linux/macOS; on Windows, re-run the installer command above).
 
-> **macOS first-launch:** binaries are not yet code-signed. macOS will show a Gatekeeper warning the first time you run `thinkrail`. Either right-click the binary → **Open**, or run `xattr -d com.apple.quarantine ~/.local/bin/thinkrail` once.
+> **macOS first-launch:** the `curl … | bash` command above downloads the binary with `curl`, which does **not** quarantine it — macOS runs it without a Gatekeeper prompt. If you instead download the binary directly from the [Releases page](../../releases/latest) in a browser, macOS quarantines it and Gatekeeper blocks the first launch; clear it with right-click → **Open**, or `xattr -d com.apple.quarantine ~/.local/bin/thinkrail`.
 
 **Authentication.** ThinkRail drives Claude Code under the hood, so Claude Code needs to be authenticated.
 

@@ -1,0 +1,80 @@
+name: Sign binaries via JetBrains CodeSign
+description: Downloads the JetBrains codesign-client (GPG + checksum verified) and signs the macOS and Windows binaries in place. Must run on a runner with access to the JetBrains internal network (codesign.labs.jb.gg).
+
+inputs:
+  macos-binary:
+    description: Path to the macOS binary to sign (empty to skip)
+    required: false
+    default: ""
+  windows-binary:
+    description: Path to the Windows .exe to sign (empty to skip)
+    required: false
+    default: ""
+  service-account-name:
+    description: CodeSign SERVICE_ACCOUNT_NAME
+    required: true
+  service-account-token:
+    description: CodeSign SERVICE_ACCOUNT_TOKEN
+    required: true
+
+runs:
+  using: composite
+  steps:
+    - name: Download and verify codesign client
+      shell: bash
+      run: |
+        set -eu
+        base=codesign-client-linux-amd64
+        dist=https://codesign-distribution.labs.jb.gg
+
+        curl -fsSL -o "$base" "$dist/$base"
+        curl -fsSL -o "$base.sha256" "$dist/$base.sha256"
+        curl -fsSL -o "$base.sha256.asc" "$dist/$base.sha256.asc"
+
+        # gpgv verifies the signature without gpg-agent, which fails to
+        # start on the signing runner.
+        curl -fsSL -o jetbrains.keys https://download-cdn.jetbrains.com/KEYS
+        gpg --no-autostart --dearmor < jetbrains.keys > jetbrains.gpg
+        gpgv --keyring "$PWD/jetbrains.gpg" "$base.sha256.asc" "$base.sha256"
+        sha256sum -c "$base.sha256"
+
+        chmod +x "$base"
+        echo "CODESIGN_CLIENT=$PWD/$base" >> "$GITHUB_ENV"
+
+    - name: Sign macOS binary
+      if: inputs.macos-binary != ''
+      shell: bash
+      env:
+        SERVICE_ACCOUNT_NAME: ${{ inputs.service-account-name }}
+        SERVICE_ACCOUNT_TOKEN: ${{ inputs.service-account-token }}
+        MACOS_BINARY: ${{ inputs.macos-binary }}
+      run: |
+        set -eu
+        # No hardened runtime: it enables library validation, which rejects
+        # the PyInstaller-bundled Python (ad-hoc, different Team ID) at launch.
+        # Notarization (the only thing that needs hardened runtime) isn't
+        # possible for a single binary anyway.
+        "$CODESIGN_CLIENT" \
+          -denoted-content-type="application/x-mac-app-bin" \
+          -extensions "mac_codesign_force=true" \
+          "$MACOS_BINARY"
+        # The client writes the signed result to signed/<name>, not in place.
+        signed=$(find signed -type f -name "$(basename "$MACOS_BINARY")" | head -1)
+        [ -n "$signed" ] || { echo "::error::no signed output for $MACOS_BINARY"; exit 1; }
+        mv "$signed" "$MACOS_BINARY"
+
+    - name: Sign Windows binary
+      if: inputs.windows-binary != ''
+      shell: bash
+      env:
+        SERVICE_ACCOUNT_NAME: ${{ inputs.service-account-name }}
+        SERVICE_ACCOUNT_TOKEN: ${{ inputs.service-account-token }}
+        WINDOWS_BINARY: ${{ inputs.windows-binary }}
+      run: |
+        set -eu
+        "$CODESIGN_CLIENT" \
+          -extensions "jsign_replace=true" \
+          "$WINDOWS_BINARY"
+        signed=$(find signed -type f -name "$(basename "$WINDOWS_BINARY")" | head -1)
+        [ -n "$signed" ] || { echo "::error::no signed output for $WINDOWS_BINARY"; exit 1; }
+        mv "$signed" "$WINDOWS_BINARY"

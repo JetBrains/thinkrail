@@ -28,8 +28,55 @@ jobs:
       channel: ${{ inputs.channel }}
     secrets: inherit
 
-  release:
+  sign:
     needs: build
+    if: ${{ vars.CODESIGN_RUNNER != '' }}
+    runs-on: ${{ vars.CODESIGN_RUNNER || 'ubuntu-latest' }}
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/download-artifact@v8
+        with:
+          path: artifacts
+          merge-multiple: true
+
+      - id: resolve
+        shell: bash
+        run: |
+          set -eu
+          mac=$(ls artifacts/*-macos-arm64 2>/dev/null | head -1)
+          win=$(ls artifacts/*-windows-x64.exe 2>/dev/null | head -1)
+          [ -n "$mac" ] || { echo "::error::no *-macos-arm64 artifact to sign"; exit 1; }
+          [ -n "$win" ] || { echo "::error::no *-windows-x64.exe artifact to sign"; exit 1; }
+          {
+            echo "mac=$mac"
+            echo "win=$win"
+            echo "mac_name=$(basename "$mac")"
+            echo "win_name=$(basename "$win")"
+          } >> "$GITHUB_OUTPUT"
+
+      - uses: ./.github/actions/codesign
+        with:
+          macos-binary: ${{ steps.resolve.outputs.mac }}
+          windows-binary: ${{ steps.resolve.outputs.win }}
+          service-account-name: ${{ secrets.CODESIGN_SERVICE_ACCOUNT_NAME }}
+          service-account-token: ${{ secrets.CODESIGN_SERVICE_ACCOUNT_TOKEN }}
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: ${{ steps.resolve.outputs.mac_name }}
+          path: ${{ steps.resolve.outputs.mac }}
+          overwrite: true
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: ${{ steps.resolve.outputs.win_name }}
+          path: ${{ steps.resolve.outputs.win }}
+          overwrite: true
+
+  release:
+    needs: [build, sign]
+    if: ${{ always() && needs.build.result == 'success' && needs.sign.result != 'failure' }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6

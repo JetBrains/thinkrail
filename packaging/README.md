@@ -136,7 +136,7 @@ cd packaging && pyinstaller thinkrail.spec --noconfirm --distpath dist --workpat
 | **Frontend bundled as data** | `frontend/dist/` → `frontend_dist` via PyInstaller datas | Frontend is pre-built static files. No Node.js needed at runtime. Backend serves them via FastAPI `StaticFiles`. |
 | **Python 3.11 in CI** | Pin to 3.11 on GitHub Actions | Better PyInstaller compatibility than bleeding-edge Python. Local dev can use any 3.11+. |
 | **Rolling nightly release** | Single `nightly-latest` tag, updated on every push to main | Stable download URL for early testers. No version management overhead during early development. |
-| **No code signing** | Unsigned executables initially | Code signing costs $200-400/year. Can be added later when distributing to a wider audience. Document workarounds for macOS Gatekeeper and Windows SmartScreen. |
+| **Code signing** | JetBrains CodeSign service signs the Windows `.exe` and the macOS binary | Free for JetBrains projects; signs server-side with JetBrains' certs (DigiCert EV for Windows, Developer ID for macOS). The `sign` job runs on a self-hosted runner with access to the internal network (`codesign.labs.jb.gg`), gated on the `CODESIGN_RUNNER` repository variable — unset means releases ship unsigned. |
 | **Browser auto-open** | Timer-based (1.5s delay after uvicorn start) | Simple approach. The delay ensures uvicorn is accepting connections before the browser requests the page. |
 
 ## Dependencies
@@ -152,8 +152,8 @@ cd packaging && pyinstaller thinkrail.spec --noconfirm --distpath dist --workpat
 ## Known Limitations
 
 - **No cross-compilation:** Must build on each target OS. GitHub Actions handles this via matrix builds, but local builds only produce executables for the current OS.
-- **macOS Gatekeeper:** Unsigned executables are quarantined. Users must run `xattr -d com.apple.quarantine thinkrail-macos` or right-click > Open.
-- **Windows SmartScreen:** Unsigned executables trigger a warning. Users click "More info" > "Run anyway".
+- **macOS notarization:** A standalone binary cannot be notarized or stapled (only `.app`/`.dmg`/`.pkg` can), so the signed binary carries no notarization ticket. A copy downloaded from the Releases page in a **browser** is quarantined and Gatekeeper blocks the first launch until cleared (`xattr -d com.apple.quarantine` or right-click > Open). The `curl`-based installer does not quarantine, so it runs without a prompt.
+- **Windows SmartScreen:** the EV-signed `.exe` clears SmartScreen. When signing is not configured (`CODESIGN_RUNNER` unset), a browser-downloaded `.exe` triggers the warning and users click "More info" > "Run anyway".
 - **Single-file startup latency:** The onefile executable extracts to a temp directory on launch (~3-8 seconds). Subsequent launches may be faster if the OS caches the extraction.
 - **Transcription unavailable:** The `openai` package (used for Whisper transcription) is not included in the build. Transcription requires the full dev setup.
 - **tkinter excluded:** The file browse dialog fallback to tkinter is unavailable in packaged mode. Users need `zenity` (GTK) or `kdialog` (KDE) on Linux for the file picker.
