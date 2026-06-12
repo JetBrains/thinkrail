@@ -3,7 +3,7 @@ import { STORAGE_PREFIX } from "@/constants/branding.ts";
 import { Navigate, useNavigate, useLocation } from "react-router-dom";
 import { RpcProvider } from "@/api/index.ts";
 import { App } from "./App.tsx";
-import { ProjectPicker, type NewProjectData } from "@/components/ProjectPicker/ProjectPicker.tsx";
+import { ProjectPicker } from "@/components/ProjectPicker/ProjectPicker.tsx";
 import { useFileStore } from "@/store/fileStore.ts";
 import { useSessionStore } from "@/store/sessionStore.ts";
 import { useUiStore } from "@/store/uiStore.ts";
@@ -40,7 +40,7 @@ export function Root() {
   }, []);
 
   const handleSelect = useCallback(
-    (path: string, newProjectData?: NewProjectData) => {
+    (path: string) => {
       useFileStore.getState().unload();
       useSessionStore.getState().unload();
       // projectState is fetched from the server on workspace mount
@@ -57,7 +57,7 @@ export function Root() {
       // centerView from the previous project.
       useUiStore.getState().setCenterView("sessions");
       localStorage.setItem(LAST_PROJECT_KEY, path);
-      navigate(`/${pathToSlug(path)}/workspace`, { state: { projectPath: path, newProjectData } });
+      navigate(`/${pathToSlug(path)}/workspace`, { state: { projectPath: path } });
     },
     [navigate],
   );
@@ -87,14 +87,13 @@ export function Root() {
   }
 
   // ── /:slug/workspace → workspace ─────────────────────────────────────────
-  const state = location.state as { projectPath?: string; newProjectData?: NewProjectData } | null;
+  const state = location.state as { projectPath?: string } | null;
   const projectPath = state?.projectPath;
-  const newProjectData = state?.newProjectData;
   if (isWorkspacePath(location.pathname) && projectPath) {
     const wsUrl = `${WS_PROTO}//${BACKEND}/ws?project=${encodeURIComponent(projectPath)}`;
     return (
       <RpcProvider url={wsUrl} key={projectPath}>
-        <App projectPath={projectPath} onSwitchProject={handleSwitchProject} newProjectData={newProjectData} />
+        <App projectPath={projectPath} onSwitchProject={handleSwitchProject} />
       </RpcProvider>
     );
   }

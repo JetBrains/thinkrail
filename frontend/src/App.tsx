@@ -12,9 +12,8 @@ import { applyFontScale } from "@/utils/fontScale.ts";
 import { validateProject } from "@/services/project.ts";
 import { ToastContainer } from "@/components/Notifications/ToastContainer.tsx";
 import { AppRoutes } from "./routes.tsx";
-import type { NewProjectData } from "@/components/ProjectPicker/ProjectPicker.tsx";
 
-function AppInner({ projectPath: _projectPath, onSwitchProject, newProjectData }: { projectPath: string; onSwitchProject: (projectPath?: string) => void; newProjectData?: NewProjectData }) {
+function AppInner({ projectPath, onSwitchProject }: { projectPath: string; onSwitchProject: (projectPath?: string) => void }) {
   const client = useRpc();
   const connectionState = useConnectionState();
   const wiredRef = useRef(false);
@@ -29,11 +28,11 @@ function AppInner({ projectPath: _projectPath, onSwitchProject, newProjectData }
       setClient(client);
       wireCleanupRef.current?.();
       wireCleanupRef.current = wireEvents(client);
-      useUiStore.getState().setProject(_projectPath);
+      useUiStore.getState().setProject(projectPath);
       // Session loading is gated on project state: state="new" defers
       // to the welcome screen; state="initialized" also recovers the
       // most recent disk session (backend-restart case).
-      validateProject(_projectPath)
+      validateProject(projectPath)
         .catch(() => ({ state: "initialized" as const }))
         .then((d) => {
           useUiStore.getState().setProjectState(d.state);
@@ -70,7 +69,7 @@ function AppInner({ projectPath: _projectPath, onSwitchProject, newProjectData }
     if (connectionState === "disconnected" || connectionState === "failed") {
       wiredRef.current = false;
     }
-  }, [connectionState, client]);
+  }, [connectionState, client, projectPath]);
 
   // Watchdog: start/stop based on connection state
   useEffect(() => {
@@ -121,7 +120,7 @@ function AppInner({ projectPath: _projectPath, onSwitchProject, newProjectData }
 
   return (
     <>
-      <AppRoutes onSwitchProject={onSwitchProject} newProjectData={newProjectData} />
+      <AppRoutes onSwitchProject={onSwitchProject} />
       <ToastContainer />
     </>
   );
@@ -130,11 +129,9 @@ function AppInner({ projectPath: _projectPath, onSwitchProject, newProjectData }
 export function App({
   projectPath,
   onSwitchProject,
-  newProjectData,
 }: {
   projectPath: string;
   onSwitchProject: (projectPath?: string) => void;
-  newProjectData?: NewProjectData;
 }) {
-  return <AppInner projectPath={projectPath} onSwitchProject={onSwitchProject} newProjectData={newProjectData} />;
+  return <AppInner projectPath={projectPath} onSwitchProject={onSwitchProject} />;
 }

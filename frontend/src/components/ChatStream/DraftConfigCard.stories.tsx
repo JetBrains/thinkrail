@@ -2,12 +2,13 @@ import type { Meta, StoryObj } from "@storybook/react-vite";
 import { DraftConfigCard } from "./DraftConfigCard";
 import { useSessionStore } from "@/store/sessionStore";
 import { useSettingsStore } from "@/store/settingsStore";
+import { useRuntimeCapsStore } from "@/store/runtimeCapsStore";
 import { useSpecStore } from "@/store/specStore";
 import { useBoardStore } from "@/store/boardStore";
 import { useUiStore } from "@/store/uiStore";
 import { FALLBACK_SKILLS } from "@/constants/skills";
 import type { Session } from "@/types/session";
-import type { ModelDef } from "@/utils/models";
+import type { RuntimeCapabilities } from "@/types/rpc-methods";
 import { RpcContext } from "@/api/hooks/useRpc";
 import type { RpcClient } from "@/api/client";
 import "./DraftConfigCard.css";
@@ -20,10 +21,20 @@ import "./DraftConfigCard.css";
  */
 const SID = "story-draft";
 
-const MODELS: ModelDef[] = [
-  { id: "claude-opus-4-8", label: "Opus 4.8", group: "current", contextWindow: 1_000_000 },
-  { id: "claude-sonnet-4-6", label: "Sonnet 4.6", group: "current", contextWindow: 1_000_000 },
-];
+const CAPS: RuntimeCapabilities = {
+  models: [
+    { value: "claude-opus-4-8", label: "Opus 4.8" },
+    { value: "claude-sonnet-4-6", label: "Sonnet 4.6" },
+  ],
+  permissionModes: [
+    { value: "default", label: "Default" },
+    { value: "acceptEdits", label: "Accept edits" },
+  ],
+  effortLevels: [
+    { value: "auto", label: "Auto" },
+    { value: "high", label: "High" },
+  ],
+};
 
 const session = {
   thinkrailSid: SID,
@@ -35,13 +46,12 @@ const session = {
   model: "claude-opus-4-8",
   permissionMode: "default",
   effort: "auto",
-  maxTurns: 50,
   startedAt: Date.now(),
   events: [],
   metrics: {} as Session["metrics"],
-  pendingRequest: null,
+  pendingRequests: [],
   answeredRequests: new Map(),
-  metaTicketId: null,
+  ticketId: null,
   systemPrompt: "You are ThinkRail, a spec-driven development agent…",
   promptSections: null,
   parentThinkrailSid: null,
@@ -49,6 +59,9 @@ const session = {
   subsessionContext: null,
   returnStatus: null,
   returnSummary: null,
+  artifacts: [],
+  previewPath: null,
+  previewSection: null,
 } satisfies Session;
 
 // Seed the stores in `beforeEach` (runs right before THIS story renders) — NOT
@@ -58,7 +71,8 @@ const session = {
 // per-render makes this story self-sufficient regardless of evaluation order.
 function seedStores() {
   useSessionStore.setState({ sessions: new Map([[SID, session]]) });
-  useSettingsStore.setState({ skills: FALLBACK_SKILLS, models: MODELS });
+  useSettingsStore.setState({ skills: FALLBACK_SKILLS });
+  useRuntimeCapsStore.setState({ capsByRuntime: { claude: CAPS } });
   useSpecStore.setState({ specs: [] });
   useBoardStore.setState({ tickets: new Map() });
   useUiStore.setState({ projectPath: "/mock/project" });

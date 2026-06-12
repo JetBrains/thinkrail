@@ -2,6 +2,7 @@ name: Tests
 
 on:
   push:
+    branches: [main]
   pull_request:
 
 jobs:
@@ -33,3 +34,27 @@ jobs:
           uv run python -m app.cli export-schema -o ../frontend/openapi.json.new
           diff ../frontend/openapi.json ../frontend/openapi.json.new || \
             (echo "openapi.json is out of date — run: cd backend && uv run python -m app.cli export-schema -o ../frontend/openapi.json" && exit 1)
+
+  test-frontend:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install dependencies
+        working-directory: frontend
+        run: npm ci
+
+      - name: Typecheck
+        working-directory: frontend
+        run: npx tsc -b
+
+      - name: Lint
+        working-directory: frontend
+        run: npx eslint src/

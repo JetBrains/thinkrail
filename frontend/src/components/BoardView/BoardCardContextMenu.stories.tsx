@@ -1,6 +1,6 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { BoardCardContextMenu } from "./BoardCardContextMenu";
-import type { MetaTicketSummary } from "@/types/board.ts";
+import type { TicketSummary } from "@/types/board.ts";
 import "./BoardView.css";
 
 /**
@@ -8,18 +8,25 @@ import "./BoardView.css";
  * status transitions for the current status, the other ticket types, and a
  * danger Delete. Positioned at the click coords.
  */
-const ticket: MetaTicketSummary = {
+const ticket: TicketSummary = {
   id: "t1",
   title: "Extract a shared Button",
-  status: "specified",
+  status: "technical-design",
   type: "feature",
-  planPath: null,
+  productDesignPath: null,
+  technicalDesignPath: null,
+  historyPath: null,
+  implementationPlanPath: null,
+  technicalDesignStale: false,
+  historyStale: false,
+  implementationPlanStale: false,
   orchestratorSessionId: null,
   linkedSpecIds: [],
   sessionIds: [],
   order: 0,
   created: "",
   updated: "",
+  skippedPhases: [],
 };
 
 const meta = {

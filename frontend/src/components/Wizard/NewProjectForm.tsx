@@ -36,7 +36,7 @@ export function NewProjectForm() {
   const setProjectState = useUiStore((s) => s.setProjectState);
   const setCenterView = useUiStore((s) => s.setCenterView);
   const setCurrentChain = useUiStore((s) => s.setCurrentChain);
-  const setStoreProjectPath = useUiStore((s) => s.setProjectPath);
+  const setStoreProjectPath = useUiStore((s) => s.setProject);
   const navigate = useNavigate();
 
   // Pin the new-project chain so AppShell renders new-project's own

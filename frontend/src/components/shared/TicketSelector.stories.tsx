@@ -2,7 +2,7 @@ import type { Meta, StoryObj } from "@storybook/react-vite";
 import { useState } from "react";
 import { TicketSelector } from "./TicketSelector";
 import { useBoardStore } from "@/store/boardStore.ts";
-import type { MetaTicketSummary } from "@/types/board.ts";
+import type { TicketSummary } from "@/types/board.ts";
 
 /**
  * TicketSelector is a searchable list of meta-tickets, each showing its status
@@ -12,31 +12,38 @@ import type { MetaTicketSummary } from "@/types/board.ts";
 function ticket(
   id: string,
   title: string,
-  status: MetaTicketSummary["status"],
-  type: MetaTicketSummary["type"],
+  status: TicketSummary["status"],
+  type: TicketSummary["type"],
   order: number,
-): MetaTicketSummary {
+): TicketSummary {
   return {
     id,
     title,
     status,
     type,
-    planPath: null,
+    productDesignPath: null,
+    technicalDesignPath: null,
+    historyPath: null,
+    implementationPlanPath: null,
+    technicalDesignStale: false,
+    historyStale: false,
+    implementationPlanStale: false,
     orchestratorSessionId: null,
     linkedSpecIds: [],
     sessionIds: [],
     order,
     created: "",
     updated: "",
+    skippedPhases: [],
   };
 }
 
-const MOCK_TICKETS: MetaTicketSummary[] = [
-  ticket("t1", "Add Storybook design system", "executing", "feature", 0),
-  ticket("t2", "Fix dropdown overflow on narrow viewports", "described", "bug", 1),
+const MOCK_TICKETS: TicketSummary[] = [
+  ticket("t1", "Add Storybook design system", "implementing", "feature", 0),
+  ticket("t2", "Fix dropdown overflow on narrow viewports", "product-design", "bug", 1),
   ticket("t3", "Extract a shared Button component", "idea", "improvement", 2),
-  ticket("t4", "Dark light-theme is an unimplemented stub", "specified", "bug", 3),
-  ticket("t5", "Per-project theme presets", "planned", "idea", 4),
+  ticket("t4", "Dark light-theme is an unimplemented stub", "technical-design", "bug", 3),
+  ticket("t5", "Per-project theme presets", "implementation-plan", "idea", 4),
 ];
 
 const meta = {

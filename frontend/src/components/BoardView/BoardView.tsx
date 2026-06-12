@@ -18,7 +18,6 @@ export function BoardView({ onOpenTicket, onPreviewTicket }: BoardViewProps) {
   const tickets = useBoardStore((s) => s.tickets);
   const loading = useBoardStore((s) => s.loading);
   const previewTicketId = useBoardStore((s) => s.previewTicketId);
-  const setPreviewTicket = useBoardStore((s) => s.setPreviewTicket);
   const [modalOpen, setModalOpen] = useState(false);
 
   const ticketList: TicketSummary[] = Array.from(tickets.values());

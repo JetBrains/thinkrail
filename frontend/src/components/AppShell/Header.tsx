@@ -20,7 +20,6 @@ export function Header({ onSwitchProject, variant = "default", wizardSteps }: He
   const focusSessions = useUiStore((s) => s.focusSessions);
   const leftActiveTab = useUiStore((s) => s.leftActiveTab);
   const leftCollapsed = useUiStore((s) => s.leftPanelCollapsed);
-  const setLeftTab = useUiStore((s) => s.setLeftTab);
   const toggleLeftPanel = useUiStore((s) => s.toggleLeftPanel);
 
   // The left-panel Specs/Files browser, the header Board/Ticket buttons and

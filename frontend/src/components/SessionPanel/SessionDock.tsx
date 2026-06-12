@@ -72,7 +72,7 @@ export function SessionDock({
       <SessionStatusLine
         model={model}
         permissionMode={permissionMode}
-        effort={effort}
+        effort={effort ?? ""}
         metrics={metrics}
         status={status}
         projectCost={projectCost}

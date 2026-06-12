@@ -9,7 +9,7 @@ export interface DropdownOption {
   disabled?: boolean;
 }
 
-interface DropdownButtonProps extends Omit<ComponentPropsWithRef<"button">, "onClick"> {
+interface DropdownButtonProps extends Omit<ComponentPropsWithRef<"button">, "onClick" | "onSelect"> {
   /** Button label */
   children: ReactNode;
   /** Dropdown options */

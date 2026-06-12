@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
-import { Plus, FileText, FolderPlus, Code } from "lucide-react";
+import { FileText, FolderPlus, Code } from "lucide-react";
 import { DropdownButton } from "./DropdownButton";
 import "../Wizard/NewProjectForm.css";
 

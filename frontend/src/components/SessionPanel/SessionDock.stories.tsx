@@ -1,9 +1,10 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { SessionDock } from "./SessionDock";
 import { useSettingsStore } from "@/store/settingsStore";
+import { useRuntimeCapsStore } from "@/store/runtimeCapsStore";
 import { FALLBACK_SKILLS } from "@/constants/skills";
 import type { SessionMetrics } from "@/types/session";
-import type { ModelDef } from "@/utils/models";
+import type { RuntimeCapabilities } from "@/types/rpc-methods";
 import { RpcContext } from "@/api/hooks/useRpc";
 import type { RpcClient } from "@/api/client";
 import "@/components/ChatStream/ChatStream.css";
@@ -19,10 +20,20 @@ import "@/components/ChatStream/ChatStream.css";
  * via `parameters.docs.description.component` below, since autodocs otherwise
  * shows the component's own TSDoc, not this comment.)
  */
-const MODELS: ModelDef[] = [
-  { id: "claude-opus-4-8", label: "Opus 4.8", group: "current", contextWindow: 1_000_000 },
-  { id: "claude-sonnet-4-6", label: "Sonnet 4.6", group: "current", contextWindow: 1_000_000 },
-];
+const CAPS: RuntimeCapabilities = {
+  models: [
+    { value: "claude-opus-4-8", label: "Opus 4.8" },
+    { value: "claude-sonnet-4-6", label: "Sonnet 4.6" },
+  ],
+  permissionModes: [
+    { value: "default", label: "Default" },
+    { value: "acceptEdits", label: "Accept edits" },
+  ],
+  effortLevels: [
+    { value: "auto", label: "Auto" },
+    { value: "high", label: "High" },
+  ],
+};
 
 const metrics: SessionMetrics = {
   costUsd: 0.42,
@@ -39,7 +50,8 @@ const meta = {
   title: "Chat/SessionDock",
   component: SessionDock,
   beforeEach: () => {
-    useSettingsStore.setState({ skills: FALLBACK_SKILLS, models: MODELS });
+    useSettingsStore.setState({ skills: FALLBACK_SKILLS });
+    useRuntimeCapsStore.setState({ capsByRuntime: { claude: CAPS } });
   },
   parameters: {
     layout: "padded",

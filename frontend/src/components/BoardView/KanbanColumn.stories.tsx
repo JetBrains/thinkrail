@@ -1,18 +1,21 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { DragDropProvider } from "@dnd-kit/react";
 import { KanbanColumn } from "./KanbanColumn";
-import { MetaTicketCard } from "./MetaTicketCard";
-import type { MetaTicketSummary } from "@/types/board.ts";
+import { TicketCard } from "./TicketCard";
+import type { TicketSummary } from "@/types/board.ts";
 import "./BoardView.css";
 
 /**
  * KanbanColumn is a droppable board column with a header, count badge, and an
- * empty state. Shown here populated with MetaTicketCards and empty.
+ * empty state. Shown here populated with TicketCards and empty.
  */
-function ticket(id: string, title: string, type: MetaTicketSummary["type"]): MetaTicketSummary {
+function ticket(id: string, title: string, type: TicketSummary["type"]): TicketSummary {
   return {
     id, title, type, status: "idea",
-    planPath: null, orchestratorSessionId: null, linkedSpecIds: [], sessionIds: [], order: 0, created: "", updated: "",
+    productDesignPath: null, technicalDesignPath: null, historyPath: null, implementationPlanPath: null,
+    technicalDesignStale: false, historyStale: false, implementationPlanStale: false,
+    orchestratorSessionId: null, linkedSpecIds: [], sessionIds: [], order: 0, created: "", updated: "",
+    skippedPhases: [],
   };
 }
 
@@ -49,7 +52,7 @@ export const WithTickets: Story = {
   render: (args) => (
     <KanbanColumn {...args}>
       {TICKETS.map((t, i) => (
-        <MetaTicketCard key={t.id} ticket={t} index={i} column="idea" onOpen={() => {}} />
+        <TicketCard key={t.id} ticket={t} index={i} column="idea" onOpen={() => {}} onPreview={() => {}} />
       ))}
     </KanbanColumn>
   ),

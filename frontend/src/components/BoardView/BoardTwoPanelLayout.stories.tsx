@@ -69,6 +69,5 @@ export const BoardWithTicket: Story = {
   args: {
     leftPanel: mockBoardContent,
     rightPanel: mockTicketDetail,
-    onCollapse: () => console.log("Panel collapsed"),
   },
 };

@@ -13,44 +13,89 @@ import "@/components/ChatStream/ChatStream.css";
  * Used at the top of the SessionPanel to switch between open sessions and files.
  */
 
-const sampleSessions: Session[] = [
-  {
-    thinkrailSid: "sess-001",
-    name: "Main session",
+function makeSession(overrides: Partial<Session>): Session {
+  return {
+    thinkrailSid: "sess-000",
+    name: "Session",
+    skillId: null,
+    specIds: [],
+    filePaths: [],
     status: "running",
-    parentThinkrailSid: null,
-    subsessionType: undefined,
+    model: "claude-sonnet-4-5",
+    permissionMode: "default",
+    effort: "medium",
+    startedAt: Date.now(),
+    events: [],
+    metrics: {
+      costUsd: 0,
+      turns: 0,
+      toolCalls: 0,
+      contextTokens: 0,
+      contextMax: 0,
+      durationMs: 0,
+      filesChanged: {},
+      contextUsage: {
+        contextMax: 0,
+        contextTokens: 0,
+        outputTokens: 0,
+        cacheReadTokens: 0,
+        cacheCreationTokens: 0,
+        inputTokens: 0,
+        turnHistory: [],
+        runBoundaries: [],
+        toolCallCounts: {},
+        toolTokens: {},
+        filesRead: [],
+        filesWritten: [],
+      },
+    },
     pendingRequests: [],
-  } as Session,
-  {
-    thinkrailSid: "sess-002",
-    name: "Bug fix",
-    status: "done",
+    answeredRequests: new Map(),
     parentThinkrailSid: null,
-    subsessionType: undefined,
-    pendingRequests: [],
-  } as Session,
-  {
+    subsessionType: null,
+    subsessionContext: null,
+    returnStatus: null,
+    returnSummary: null,
+    artifacts: [],
+    previewPath: null,
+    previewSection: null,
+    ...overrides,
+  };
+}
+
+function makeFile(overrides: Partial<OpenFile> & Pick<OpenFile, "path" | "name">): OpenFile {
+  return {
+    content: "",
+    originalContent: "",
+    mode: "preview",
+    isDirty: false,
+    saving: false,
+    ...overrides,
+  };
+}
+
+const sampleSessions: Session[] = [
+  makeSession({ thinkrailSid: "sess-001", name: "Main session", status: "running" }),
+  makeSession({ thinkrailSid: "sess-002", name: "Bug fix", status: "done" }),
+  makeSession({
     thinkrailSid: "sess-003",
     name: "Refinement",
     status: "running",
     parentThinkrailSid: "sess-001",
     subsessionType: "refinement",
-    pendingRequests: [],
-  } as Session,
-  {
+  }),
+  makeSession({
     thinkrailSid: "sess-004",
     name: "Discussion",
     status: "running",
     parentThinkrailSid: "sess-001",
     subsessionType: "discussion",
-    pendingRequests: [],
-  } as Session,
+  }),
 ];
 
 const sampleFiles: OpenFile[] = [
-  { path: "/src/App.tsx", name: "App.tsx", isDirty: false },
-  { path: "/src/index.tsx", name: "index.tsx", isDirty: true },
+  makeFile({ path: "/src/App.tsx", name: "App.tsx", isDirty: false }),
+  makeFile({ path: "/src/index.tsx", name: "index.tsx", isDirty: true }),
 ];
 
 const sampleTickets = [
@@ -145,7 +190,7 @@ export const FileTabActive: Story = {
 
 export const WithPreview: Story = {
   args: {
-    previewFile: { path: "/src/utils/helper.ts", name: "helper.ts", isDirty: false },
+    previewFile: makeFile({ path: "/src/utils/helper.ts", name: "helper.ts", isDirty: false }),
     previewFilePath: "/src/utils/helper.ts",
   },
 };
@@ -167,30 +212,21 @@ export const FilesOnly: Story = {
 export const WithSubsessionTypes: Story = {
   args: {
     sessions: [
-      {
-        thinkrailSid: "sess-001",
-        name: "Main session",
-        status: "running",
-        parentThinkrailSid: null,
-        subsessionType: undefined,
-        pendingRequests: [],
-      } as Session,
-      {
+      makeSession({ thinkrailSid: "sess-001", name: "Main session", status: "running" }),
+      makeSession({
         thinkrailSid: "sess-002",
         name: "Code refinement",
         status: "running",
         parentThinkrailSid: "sess-001",
         subsessionType: "refinement",
-        pendingRequests: [],
-      } as Session,
-      {
+      }),
+      makeSession({
         thinkrailSid: "sess-003",
         name: "Architecture discussion",
         status: "running",
         parentThinkrailSid: "sess-001",
         subsessionType: "discussion",
-        pendingRequests: [],
-      } as Session,
+      }),
     ],
     activeSessionId: "sess-002",
     files: [],
