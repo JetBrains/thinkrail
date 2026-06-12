@@ -6,6 +6,7 @@ from pathlib import Path
 
 import pytest
 
+from app.agent.runtime import RuntimeFlag
 from app.core.app_store import AppStore
 from app.core.session_defaults import (
     COLD_START_EFFORT,
@@ -16,6 +17,10 @@ from app.core.session_defaults import (
     load_session_defaults,
     save_session_defaults,
 )
+
+
+def _flag(key: str, default: bool) -> RuntimeFlag:
+    return RuntimeFlag(key=key, label=key, type="boolean", default=default)
 
 
 @pytest.fixture
@@ -112,3 +117,49 @@ class TestLoadSessionDefaults:
         await app_store.set_setting(SESSION_DEFAULTS_KEY, {"model": 123})
         cfg = await load_session_defaults(app_store)
         assert cfg.model == COLD_START_MODEL
+
+
+class TestColdStartSeeding:
+    @pytest.mark.asyncio
+    async def test_seeds_declared_flags_at_their_defaults(
+        self, app_store: AppStore,
+    ) -> None:
+        cfg = await load_session_defaults(app_store, [_flag("context1m", True)])
+        assert cfg.flags == {"context1m": True}
+
+    @pytest.mark.asyncio
+    async def test_cold_start_persists_the_record_once(
+        self, app_store: AppStore,
+    ) -> None:
+        await load_session_defaults(app_store, [_flag("context1m", True)])
+        raw = await app_store.get_setting(SESSION_DEFAULTS_KEY)
+        assert raw is not None
+        assert raw["flags"] == {"context1m": True}
+
+    @pytest.mark.asyncio
+    async def test_existing_record_returned_verbatim(
+        self, app_store: AppStore,
+    ) -> None:
+        # A stored record is authoritative — no implicit flag fill once it
+        # exists, even if a runtime declares a default-on flag.
+        await app_store.set_setting(
+            SESSION_DEFAULTS_KEY, {"model": "claude-opus-4-8", "flags": {}},
+        )
+        cfg = await load_session_defaults(app_store, [_flag("context1m", True)])
+        assert cfg.flags == {}
+
+
+class TestSaveStoresVerbatim:
+    @pytest.mark.asyncio
+    async def test_save_does_not_fill_flags(self, app_store: AppStore) -> None:
+        await save_session_defaults(app_store, SessionDefaults(flags={}))
+        raw = await app_store.get_setting(SESSION_DEFAULTS_KEY)
+        assert raw["flags"] == {}
+
+    @pytest.mark.asyncio
+    async def test_save_keeps_given_flags(self, app_store: AppStore) -> None:
+        await save_session_defaults(
+            app_store, SessionDefaults(flags={"context1m": False}),
+        )
+        raw = await app_store.get_setting(SESSION_DEFAULTS_KEY)
+        assert raw["flags"] == {"context1m": False}

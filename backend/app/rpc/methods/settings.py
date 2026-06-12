@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from typing import Any
 
 from jsonrpcserver import JsonRpcError, Result, Success
@@ -28,6 +29,8 @@ from app.core.settings import (
 from app.rpc.errors import UNKNOWN_RUNTIME, rpc_handler, serialize_result
 from app.rpc.schema_export import RuntimesCapabilitiesRequest, RuntimesListResponse
 
+logger = logging.getLogger(__name__)
+
 _INTERNAL_ERROR = -32603
 _INVALID_PARAMS = -32602
 
@@ -42,14 +45,30 @@ _handle_errors_with_runtime = rpc_handler(
 
 
 def _handle_errors(func):  # type: ignore[type-arg]
-    async def wrapper(first_arg: Any, **params: Any) -> Result:
+    async def wrapper(*args: Any, **params: Any) -> Result:
         try:
-            return Success(serialize_result(await func(first_arg, **params)))
+            return Success(serialize_result(await func(*args, **params)))
         except (KeyError, TypeError, ValueError, ValidationError) as exc:
             raise JsonRpcError(_INVALID_PARAMS, "Invalid params", str(exc))
         except JsonRpcError:
             raise
     return wrapper
+
+
+def _declared_flags(registry: RuntimeRegistry) -> list[Any]:
+    """Collect every registered runtime's declared flags.
+
+    Session defaults carry no runtime, so the cold-start record is seeded
+    with flags from all runtimes. A runtime whose ``capabilities`` raises is
+    skipped rather than failing the whole request.
+    """
+    flags: list[Any] = []
+    for rt in registry.all():
+        try:
+            flags.extend(rt.capabilities().flags)
+        except Exception:
+            logger.debug("capabilities() failed for a runtime", exc_info=True)
+    return flags
 
 
 # ── Settings ──────────────────────────────────────────────────────────────
@@ -82,21 +101,25 @@ async def ensure_settings(config: AppConfig, **_params: Any) -> dict:
 
 
 @_handle_errors
-async def get_session_defaults(app_store: AppStore, **_params: Any) -> dict:
+async def get_session_defaults(
+    app_store: AppStore, registry: RuntimeRegistry, **_params: Any,
+) -> dict:
     """Return the user's session-creation defaults.
 
-    Falls back to cold-start defaults when the AppStore key is absent.
+    On cold start the record is seeded once — including each runtime flag
+    at its declared default — so the client mirrors a complete record
+    without computing defaults itself.
     """
-    cfg = await load_session_defaults(app_store)
+    cfg = await load_session_defaults(app_store, _declared_flags(registry))
     return cfg.model_dump(by_alias=True)
 
 
 @_handle_errors
 async def set_session_defaults(app_store: AppStore, **params: Any) -> dict:
-    """Validate and persist the user's session-creation defaults."""
+    """Validate and persist the user's session-creation defaults verbatim."""
     cfg = SessionDefaults.model_validate(params)
-    await save_session_defaults(app_store, cfg)
-    return cfg.model_dump(by_alias=True)
+    saved = await save_session_defaults(app_store, cfg)
+    return saved.model_dump(by_alias=True)
 
 
 # ── Runtimes ────────────────────────────────────────────────────────────────

@@ -14,12 +14,16 @@ across projects, not with any one project tree.
 from __future__ import annotations
 
 import logging
-from typing import Any
+from collections.abc import Sequence
+from typing import TYPE_CHECKING, Any
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from app.agent.models import to_camel
 from app.core.app_store import AppStore
+
+if TYPE_CHECKING:
+    from app.agent.runtime import RuntimeFlag
 
 logger = logging.getLogger(__name__)
 
@@ -73,30 +77,38 @@ class SessionDefaults(BaseModel):
 # ── Persistence helpers ────────────────────────────────────────────────
 
 
-async def load_session_defaults(app_store: AppStore) -> SessionDefaults:
-    """Return the persisted record, or cold-start defaults on miss.
-
-    Always returns a fully-populated model — callers never need to
-    handle the absent case themselves. A corrupt/invalid stored payload
-    is logged and treated as absent (degrades to cold-start).
-    """
-    raw = await app_store.get_setting(SESSION_DEFAULTS_KEY)
-    if not raw:
-        return SessionDefaults()
-    try:
-        return SessionDefaults.model_validate(raw)
-    except Exception:
-        logger.debug(
-            "Failed to validate stored %s; falling back to cold-start",
-            SESSION_DEFAULTS_KEY,
-            exc_info=True,
-        )
-        return SessionDefaults()
+def _cold_start_defaults(declared_flags: Sequence[RuntimeFlag]) -> SessionDefaults:
+    """The record written on first access: field defaults, plus each
+    runtime-declared flag at its declared default."""
+    return SessionDefaults(flags={f.key: f.default for f in declared_flags})
 
 
 async def save_session_defaults(
     app_store: AppStore, cfg: SessionDefaults
 ) -> SessionDefaults:
-    """Persist *cfg* and return it (for echo to the caller)."""
+    """Persist *cfg* verbatim and return it (for echo to the caller)."""
     await app_store.set_setting(SESSION_DEFAULTS_KEY, cfg.model_dump())
     return cfg
+
+
+async def load_session_defaults(
+    app_store: AppStore, declared_flags: Sequence[RuntimeFlag] = ()
+) -> SessionDefaults:
+    """Return the stored record, seeding it once on cold start.
+
+    When no valid record exists, the cold-start defaults — including each
+    runtime flag at its declared default — are written once and returned.
+    Every later read returns the stored record verbatim. A corrupt payload
+    is logged and reseeded.
+    """
+    raw = await app_store.get_setting(SESSION_DEFAULTS_KEY)
+    if raw:
+        try:
+            return SessionDefaults.model_validate(raw)
+        except Exception:
+            logger.debug(
+                "Failed to validate stored %s; reseeding cold-start defaults",
+                SESSION_DEFAULTS_KEY,
+                exc_info=True,
+            )
+    return await save_session_defaults(app_store, _cold_start_defaults(declared_flags))

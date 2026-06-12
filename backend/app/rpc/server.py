@@ -199,6 +199,8 @@ def _bind_methods(
             bound[name] = partial(handler, spec_service)
         elif name.startswith("board/"):
             bound[name] = partial(handler, board_service)
+        elif name == "appSettings/getSessionDefaults":
+            bound[name] = partial(handler, app_store, runtime_registry)
         elif name.startswith("appSettings/"):
             bound[name] = partial(handler, app_store)
         elif name.startswith("settings/"):
