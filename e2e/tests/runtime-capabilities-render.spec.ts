@@ -27,9 +27,9 @@ test("draft pickers render the runtime's declared capabilities in order", async 
   await openProject(page, tempProject.path);
   await page.locator(newSession.newButton).click();
 
-  // ── Models: declared order, Opus 4.8 (the default) first ──
+  // ── Models: declared catalog order, capability-descending ──
   await expect(selectedLabel(page, "model")).toBeVisible({ timeout: 15_000 });
-  expect(await optionLabels(page, "model")).toEqual(["Opus 4.8", "Sonnet 4.6", "Haiku 4.5"]);
+  expect(await optionLabels(page, "model")).toEqual(["Fable 5", "Opus 4.8", "Sonnet 4.6", "Haiku 4.5"]);
 
   // ── Permission modes: the SDK's accepted set, default-first (value == label) ──
   expect(await optionLabels(page, "perms")).toEqual([

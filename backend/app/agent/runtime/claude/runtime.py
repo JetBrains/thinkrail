@@ -114,9 +114,10 @@ _CLAUDE_EFFORT_LEVELS: tuple[LabeledOption, ...] = (
 )
 
 # The 1M-token context window is opt-out (on by default). Models that support
-# it (Opus 4.8, Sonnet 4.6) extend to 1M; models that don't (Haiku) ignore the
-# beta and stay at their default — the real window is read back from the live
-# client via get_context_usage(). Disabling the flag caps a session at 200k.
+# it (Fable 5, Opus 4.8, Sonnet 4.6) extend to 1M; models that don't (Haiku)
+# ignore the beta and stay at their default — the real window is read back from
+# the live client via get_context_usage(). Disabling the flag caps a session at
+# 200k.
 _CONTEXT_1M_FLAG = "context1m"
 _CONTEXT_1M_BETA: SdkBeta = "context-1m-2025-08-07"
 
@@ -126,7 +127,7 @@ _CLAUDE_FLAGS: tuple[RuntimeFlag, ...] = (
         label="1M context window",
         type="boolean",
         default=True,
-        description="Request the 1M-token context window on models that support it (Opus 4.8, Sonnet 4.6). Off caps the session at 200K.",
+        description="Request the 1M-token context window on models that support it (Fable 5, Opus 4.8, Sonnet 4.6). Off caps the session at 200K.",
     ),
 )
 

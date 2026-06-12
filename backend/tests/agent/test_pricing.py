@@ -4,6 +4,9 @@ from app.agent.pricing import PRICES, _resolve_tier, estimate_cost
 
 
 class TestResolveTier:
+    def test_fable_model(self):
+        assert _resolve_tier("claude-fable-5") is PRICES["fable"]
+
     def test_opus_model(self):
         assert _resolve_tier("claude-opus-4-6") is PRICES["opus"]
 
@@ -62,6 +65,21 @@ class TestEstimateCost:
             + 50_000 * 0.30 / 1_000_000    # cache read
         )
         assert abs(cost - expected) < 1e-10
+
+    def test_fable_pricing(self):
+        cost = estimate_cost("claude-fable-5", input_tokens=1_000_000, output_tokens=1_000_000)
+        assert cost == 60.0  # $10 input + $50 output
+
+    def test_fable_cache_pricing(self):
+        cost = estimate_cost(
+            "claude-fable-5",
+            input_tokens=0,
+            output_tokens=0,
+            cache_creation_5m_tokens=1_000_000,
+            cache_creation_1h_tokens=1_000_000,
+            cache_read_tokens=1_000_000,
+        )
+        assert cost == 33.50  # $12.50 5m write + $20 1h write + $1 read
 
     def test_opus_pricing(self):
         cost = estimate_cost("claude-opus-4-6", input_tokens=1_000_000, output_tokens=1_000_000)

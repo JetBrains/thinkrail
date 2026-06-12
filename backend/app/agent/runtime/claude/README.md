@@ -164,9 +164,9 @@ the live SDK via `ClaudeSDKClient.get_context_usage().rawMaxTokens`
 on turn-end events.
 
 The `context1m` flag (on by default) gates the `context-1m-2025-08-07` beta:
-when set, the runtime requests the 1M window, so models that support it (Opus
-4.8, Sonnet 4.6) report 1M and models that don't (Haiku) ignore the beta and
-report their default 200K. Turning the flag off caps the session at 200K.
+when set, the runtime requests the 1M window, so models that support it (Fable
+5, Opus 4.8, Sonnet 4.6) report 1M and models that don't (Haiku) ignore the
+beta and report their default 200K. Turning the flag off caps the session at 200K.
 Because `contextMax` comes from `get_context_usage()`, the bar reflects
 whichever window the model actually granted — no per-model `supports1M` table.
 

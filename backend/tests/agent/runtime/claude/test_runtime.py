@@ -1199,7 +1199,7 @@ class TestClaudeRuntimeCapabilities:
         # ``effort=None``) leading.
         assert [e.value for e in caps.effort_levels] == ["auto", *get_args(EffortLevel)]
         assert caps.effort_levels[0].value == "auto"
-        assert caps.models[0].value == "claude-opus-4-8"
+        assert caps.models[0].value == "claude-fable-5"
 
     def test_permission_labels_are_the_sdk_values(self) -> None:
         # No custom labels — the SDK value doubles as the display label.

@@ -7,10 +7,11 @@ from app.agent.runtime.types import LabeledOption
 
 
 class TestClaudeModelRegistry:
-    def test_list_options_returns_three_entries_in_declared_order(self) -> None:
+    def test_list_options_returns_four_entries_in_declared_order(self) -> None:
         reg = ClaudeModelRegistry()
         values = [o.value for o in reg.list_options()]
         assert values == [
+            "claude-fable-5",
             "claude-opus-4-8",
             "claude-sonnet-4-6",
             "claude-haiku-4-5-20251001",
@@ -22,8 +23,8 @@ class TestClaudeModelRegistry:
             assert isinstance(o, LabeledOption)
             assert set(LabeledOption.model_fields) == {"value", "label"}
 
-    def test_first_option_is_opus(self) -> None:
+    def test_first_option_is_fable(self) -> None:
         reg = ClaudeModelRegistry()
         first = reg.list_options()[0]
-        assert first.value == "claude-opus-4-8"
-        assert first.label == "Opus 4.8"
+        assert first.value == "claude-fable-5"
+        assert first.label == "Fable 5"

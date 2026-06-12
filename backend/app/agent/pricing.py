@@ -4,12 +4,19 @@ Prices are in USD per token, derived from Anthropic's published rates.
 Used by the runner to emit live cost estimates during streaming.
 
 Pricing source: https://platform.claude.com/docs/en/about-claude/pricing
-Updated: 2026-04-07 (Opus 4.5+, Sonnet 4+, Haiku 4.5 rates)
+Updated: 2026-06-12 (Fable 5, Opus 4.5+, Sonnet 4+, Haiku 4.5 rates)
 """
 
 from __future__ import annotations
 
 PRICES: dict[str, dict[str, float]] = {
+    "fable": {
+        "input": 10.0 / 1_000_000,
+        "output": 50.0 / 1_000_000,
+        "cache_write_5m": 12.50 / 1_000_000,
+        "cache_write_1h": 20.0 / 1_000_000,
+        "cache_read": 1.0 / 1_000_000,
+    },
     "opus": {
         "input": 5.0 / 1_000_000,
         "output": 25.0 / 1_000_000,
@@ -37,6 +44,8 @@ PRICES: dict[str, dict[str, float]] = {
 def _resolve_tier(model: str) -> dict[str, float]:
     """Map model ID string to pricing tier."""
     m = model.lower()
+    if "fable" in m:
+        return PRICES["fable"]
     if "opus" in m:
         return PRICES["opus"]
     if "haiku" in m:
