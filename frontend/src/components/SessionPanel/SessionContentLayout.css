@@ -8,7 +8,7 @@
   border-radius: 8px;
   padding: 16px;
   display: flex;
-  gap: 24px;
+  gap: 0;
   min-height: 0;
   overflow: hidden;
 }
@@ -20,6 +20,9 @@
   flex-direction: column;
   min-height: 0;
   overflow: hidden;
+  /* Breathing room sits to the LEFT of the resize handle so the handle hugs
+     the right (context) panel's edge instead of floating in a gutter. */
+  margin-right: 16px;
 }
 
 /* ── Right panel (context/artifacts) ──────────────────────────── */
@@ -31,7 +34,6 @@
   padding: 16px;
   min-height: 0;
   overflow-y: auto;
-  transition: all 0.3s;
 }
 
 .session-content-right--collapsed {

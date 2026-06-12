@@ -303,7 +303,7 @@ export function SessionManager() {
               // current one (history + current); future phases are hidden.
               const steps = status
                 ? PHASE_ORDER.filter(
-                    (p) => p !== "idea" && p !== "done" && STATE_ORDER[p] <= STATE_ORDER[status],
+                    (p) => p !== "done" && STATE_ORDER[p] <= STATE_ORDER[status],
                   )
                 : [];
               const sessionForPhase = (phase: TicketStatus): SessionSummary | null =>
@@ -347,7 +347,7 @@ export function SessionManager() {
                           <button
                             key={`sm-step-${entry.ticketId}-${phase}`}
                             type="button"
-                            className={`sm-step${isActive ? " sm-step--active" : ""}${phaseSession ? "" : " sm-step--disabled"}`}
+                            className={`sm-step ${isCurrent ? "sm-step--current" : "sm-step--past"}${isActive ? " sm-step--active" : ""}${phaseSession ? "" : " sm-step--disabled"}`}
                             disabled={!phaseSession}
                             onClick={
                               phaseSession
@@ -383,6 +383,7 @@ export function SessionManager() {
                 session={entry.session}
                 ticketTitle={null}
                 ticketShortId={null}
+                selected={entry.session.thinkrailSid === activeSessionId}
                 onOpen={handleOpen}
                 onDelete={handleDelete}
                 onContextMenu={handleContextMenu}

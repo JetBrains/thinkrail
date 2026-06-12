@@ -274,8 +274,8 @@ export function TicketPhaseList({
           // amend-specs uses its own dedicated "Amendments" entry instead.
           const showChangesRow = !isAmendSpecs && changesCount > 0;
           // Implementing row surfaces plan steps as sub-rows so the user can
-          // jump into each step session from the tree. The orchestrator
-          // session itself shows via the existing "session" sub-row.
+          // jump into each step session from the tree. The phase's own session
+          // opens by clicking the phase row label.
           const planSteps = phase.key === "implementing"
             ? (plan?.milestones.flatMap((m) => m.steps) ?? [])
             : [];
@@ -572,15 +572,6 @@ export function TicketPhaseList({
                         </div>
                       )}
                     </>
-                  )}
-                  {hasSession && sid && (
-                    <div
-                      className="tpl-sub-row tpl-sub-row--session"
-                      onClick={() => onSelectPanel({ type: "session", sessionId: sid })}
-                    >
-                      <span className="tpl-sub-arrow">{"└→"}</span>
-                      <span className="tpl-sub-label">session</span>
-                    </div>
                   )}
                   {showPlanSteps && planSteps.map((step) => {
                     const glyph =

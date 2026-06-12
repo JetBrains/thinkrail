@@ -28,7 +28,7 @@
   border-radius: var(--radius-sm);
   color: var(--muted);
   font-family: var(--font);
-  font-size: var(--font-md);
+  font-size: var(--font-body);
   text-align: left;
   cursor: pointer;
   transition: all var(--transition-fast);
@@ -52,14 +52,14 @@
 
 .settings-section__title {
   margin: 0 0 var(--space-md);
-  font-size: var(--font-body);
+  font-size: var(--font-md);
   font-weight: 600;
   color: var(--text);
 }
 
 .settings-section__hint {
-  color: var(--hint);
-  font-size: var(--font-md);
+  color: var(--muted);
+  font-size: var(--font-sm);
 }
 
 .settings-section__code {
@@ -69,7 +69,7 @@
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
   font-family: var(--font-mono, monospace);
-  font-size: var(--font-md);
+  font-size: var(--font-body);
   line-height: 1.5;
   color: var(--text);
   white-space: pre;
@@ -85,7 +85,7 @@
   margin-top: var(--space-md);
 }
 .settings-section__saved {
-  font-size: var(--font-md);
+  font-size: var(--font-sm);
   color: var(--green);
 }
 

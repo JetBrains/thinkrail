@@ -953,7 +953,7 @@
 .user-settings-label {
   flex: 0 0 130px;
   font-size: var(--font-sm);
-  color: var(--hint);
+  color: var(--muted);
 }
 
 .header-token-active {
@@ -982,7 +982,7 @@
 
 .server-info-value {
   color: var(--text);
-  font-size: var(--font-md);
+  font-size: var(--font-body);
 }
 
 .server-info-copy-btn {

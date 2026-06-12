@@ -557,12 +557,33 @@
 
 /* ── Expanded ticket: process steps (done + current phases) ── */
 .sm-steps {
+  position: relative;
   display: flex;
   flex-direction: column;
-  padding: 6px 6px 6px 12px;
+  padding: 6px 6px 6px 26px;
   border-top: 1px solid var(--border);
 }
+/* Nesting tree: a vertical trunk with a short branch into each step. */
+.sm-steps::before {
+  content: "";
+  position: absolute;
+  left: 14px;
+  top: 0;
+  bottom: 14px;
+  width: 1px;
+  background: var(--border);
+}
+.sm-step::before {
+  content: "";
+  position: absolute;
+  left: -12px;
+  top: 50%;
+  width: 8px;
+  height: 1px;
+  background: var(--border);
+}
 .sm-step {
+  position: relative;
   display: flex;
   align-items: center;
   gap: var(--space-sm);
@@ -571,17 +592,21 @@
   background: transparent;
   border: none;
   border-radius: var(--radius-sm);
-  color: var(--muted);
+  color: var(--text);
   font-family: var(--font);
   font-size: var(--font-md);
   text-align: left;
   cursor: pointer;
   transition: background var(--transition-fast), color var(--transition-fast);
 }
-.sm-step:hover:not(:disabled) { background: var(--hover); color: var(--text); }
-.sm-step--active { background: var(--hover); color: var(--text); }
-.sm-step--disabled { cursor: default; opacity: 0.7; }
-.sm-step-glyph { flex-shrink: 0; width: 14px; text-align: center; color: var(--hint); }
-.sm-step--active .sm-step-glyph { color: var(--primary); }
+/* Row fill only on hover or when this step's session is the open one — the
+   current phase is marked by the blue ● glyph, not a persistent fill. */
+.sm-step:hover:not(:disabled) { background: var(--hover); }
+.sm-step--active { background: color-mix(in srgb, var(--primary) 16%, transparent); }
+.sm-step--disabled { cursor: default; }
+/* Mirror the PROGRESS (TicketPhaseList) glyph palette: ✓ green = done, ● blue = current. */
+.sm-step-glyph { flex-shrink: 0; width: 1em; text-align: center; color: var(--hint); }
+.sm-step--past .sm-step-glyph { color: var(--green, #2a9d4a); }
+.sm-step--current .sm-step-glyph { color: var(--blue); }
 .sm-step-label { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .sm-step-hint { color: var(--hint); font-size: var(--font-sm); }

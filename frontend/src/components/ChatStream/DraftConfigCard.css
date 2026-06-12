@@ -71,7 +71,7 @@
   position: relative;
 }
 .draft-config-label {
-  color: var(--hint);
+  color: var(--muted);
   font-size: var(--font-sm);
   text-transform: uppercase;
   letter-spacing: 0.5px;
@@ -165,11 +165,14 @@
   color: var(--muted);
   font-size: var(--font-sm);
 }
-/* Borderless dropdown trigger — matches the session status-line style. */
+/* Borderless dropdown trigger — matches the session status-line style.
+   Same size as the row labels; value text uses --text so it reads as the
+   chosen value against the muted labels. */
 .draft-config-dd {
   border: none;
-  color: var(--muted);
+  color: var(--text);
   padding: 1px 4px;
+  font-size: var(--font-sm);
 }
 .draft-config-select {
   background: var(--panel);
@@ -193,6 +196,7 @@
   align-items: center;
   gap: 4px;
   font-size: var(--font-sm);
+  color: var(--muted);
   cursor: pointer;
 }
 .runtime-flag input {

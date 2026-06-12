@@ -13,7 +13,7 @@ import { validateProject } from "@/services/project.ts";
 import { ToastContainer } from "@/components/Notifications/ToastContainer.tsx";
 import { AppRoutes } from "./routes.tsx";
 
-function AppInner({ projectPath, onSwitchProject }: { projectPath: string; onSwitchProject: (projectPath?: string) => void }) {
+function AppInner({ projectPath: _projectPath, onSwitchProject }: { projectPath: string; onSwitchProject: (projectPath?: string) => void }) {
   const client = useRpc();
   const connectionState = useConnectionState();
   const wiredRef = useRef(false);
@@ -28,11 +28,11 @@ function AppInner({ projectPath, onSwitchProject }: { projectPath: string; onSwi
       setClient(client);
       wireCleanupRef.current?.();
       wireCleanupRef.current = wireEvents(client);
-      useUiStore.getState().setProject(projectPath);
+      useUiStore.getState().setProject(_projectPath);
       // Session loading is gated on project state: state="new" defers
       // to the welcome screen; state="initialized" also recovers the
       // most recent disk session (backend-restart case).
-      validateProject(projectPath)
+      validateProject(_projectPath)
         .catch(() => ({ state: "initialized" as const }))
         .then((d) => {
           useUiStore.getState().setProjectState(d.state);
@@ -69,7 +69,7 @@ function AppInner({ projectPath, onSwitchProject }: { projectPath: string; onSwi
     if (connectionState === "disconnected" || connectionState === "failed") {
       wiredRef.current = false;
     }
-  }, [connectionState, client, projectPath]);
+  }, [connectionState, client]);
 
   // Watchdog: start/stop based on connection state
   useEffect(() => {

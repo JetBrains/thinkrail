@@ -4,6 +4,7 @@ import { Navigate, useNavigate, useLocation } from "react-router-dom";
 import { RpcProvider } from "@/api/index.ts";
 import { App } from "./App.tsx";
 import { ProjectPicker } from "@/components/ProjectPicker/ProjectPicker.tsx";
+import { registerKnownProject } from "@/services/projects.ts";
 import { useFileStore } from "@/store/fileStore.ts";
 import { useSessionStore } from "@/store/sessionStore.ts";
 import { useUiStore } from "@/store/uiStore.ts";
@@ -57,6 +58,11 @@ export function Root() {
       // centerView from the previous project.
       useUiStore.getState().setCenterView("sessions");
       localStorage.setItem(LAST_PROJECT_KEY, path);
+      // Record the opened project in the recent/known list. Explicit open is
+      // user intent, so it belongs in Recent immediately — the backend only
+      // registers lazily once a session is persisted. Fire-and-forget.
+      const name = path.replace(/[/\\]+$/, "").split(/[/\\]/).pop() || path;
+      void registerKnownProject(path, name).catch(() => { /* non-fatal */ });
       navigate(`/${pathToSlug(path)}/workspace`, { state: { projectPath: path } });
     },
     [navigate],
