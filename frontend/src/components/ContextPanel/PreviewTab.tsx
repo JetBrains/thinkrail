@@ -11,7 +11,7 @@ export function PreviewTab() {
 
   if (!session) return null;
 
-  // Default focus: explicit previewPath if set, else first artifact, else nothing.
+  // Default focus: explicit preview if set, else first artifact, else nothing.
   const activePath = session.previewPath ?? session.artifacts[0]?.path ?? null;
 
   if (!activePath) {
@@ -23,6 +23,8 @@ export function PreviewTab() {
   }
 
   const activeArtifact = session.artifacts.find((a) => a.path === activePath);
+  // lastTouchedAt bumps whenever the artifact is re-touched, so PreviewBody
+  // re-fetches on each write (complements its own file/didChange subscription).
   const version = activeArtifact?.lastTouchedAt ?? null;
 
   return (

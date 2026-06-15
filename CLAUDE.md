@@ -79,6 +79,7 @@ Follow these conventions for all new Python code:
 - **`@dataclass`** for simple internal containers (no serialization needed)
 - **Pydantic `BaseModel`** for anything crossing API/storage boundaries
 - `Field(default_factory=list)` for mutable defaults in Pydantic models
+- **Define models in dependency order: a referenced model comes before the model that references it.** This lets you write the reference directly (`field: Artifact`) instead of a quoted forward ref (`field: "Artifact"`) that needs a trailing `Model.model_rebuild()` to resolve. If a file ends up with `model_rebuild()` calls, reorder the class definitions to remove them rather than keeping the forward refs.
 
 ### Error Handling
 - Graceful fallback: try/except returning safe defaults — never crash on non-critical paths

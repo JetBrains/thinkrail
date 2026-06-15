@@ -11,11 +11,9 @@ import "./BoardView.css";
  */
 function ticket(id: string, title: string, type: TicketSummary["type"]): TicketSummary {
   return {
-    id, title, type, status: "idea",
+    id, title, type, lifecycle: "created",
     productDesignPath: null, technicalDesignPath: null, historyPath: null, implementationPlanPath: null,
-    technicalDesignStale: false, historyStale: false, implementationPlanStale: false,
-    orchestratorSessionId: null, linkedSpecIds: [], sessionIds: [], order: 0, created: "", updated: "",
-    skippedPhases: [],
+    orchestrator: null, linkedSpecIds: [], sessionIds: [], order: 0, created: "", updated: "", rev: 0,
   };
 }
 

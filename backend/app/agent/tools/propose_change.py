@@ -112,6 +112,19 @@ def _resolve_ticket_artifact(
     return parts[2], kind
 
 
+def _auto_accept_edits(config: AppConfig, ticket_id: str | None) -> bool:
+    """True when the ticket opts into automatic artifact edits
+    (``orchestration.artifact_edits == "auto"``) — ProposeChange then applies
+    the change directly instead of suspending for the inline diff card."""
+    if not ticket_id:
+        return False
+    try:
+        cfg = BoardService(config).get_ticket(ticket_id).orchestration
+        return getattr(cfg, "artifact_edits", "ask") == "auto"
+    except Exception:
+        return False
+
+
 @tool(
     "ProposeChange",
     "Propose an amendment to a spec file. The user sees an inline diff "
@@ -152,21 +165,26 @@ async def _propose_change(args: dict) -> dict:
             "— include more surrounding context"
         )
 
-    # Suspend the agent and notify the frontend.
-    request_id = str(uuid4())
-    future = ctx.tracker.register_future(ctx.task.thinkrail_sid, request_id)
-    payload: dict = {
-        "thinkrailSid": ctx.task.thinkrail_sid,
-        "filePath": file_path,
-        "oldString": old_string,
-        "newString": new_string,
-    }
-    if section:
-        payload["section"] = section
-    if rationale:
-        payload["rationale"] = rationale
-    await ctx.notify("agent/proposeChange", payload, request_id=request_id)
-    response: dict = await future
+    # When the ticket opts into automatic artifact edits, apply directly.
+    # Otherwise suspend the agent and let the user Accept / Edit / Discuss /
+    # Reject via the inline diff card.
+    if _auto_accept_edits(ctx.config, ticket_id):
+        response: dict = {"behavior": "allow", "applied": "original"}
+    else:
+        request_id = str(uuid4())
+        future = ctx.tracker.register_future(ctx.task.thinkrail_sid, request_id)
+        payload: dict = {
+            "thinkrailSid": ctx.task.thinkrail_sid,
+            "filePath": file_path,
+            "oldString": old_string,
+            "newString": new_string,
+        }
+        if section:
+            payload["section"] = section
+        if rationale:
+            payload["rationale"] = rationale
+        await ctx.notify("agent/proposeChange", payload, request_id=request_id)
+        response = await future
 
     behavior = response.get("behavior", "deny")
     if behavior == "deny":

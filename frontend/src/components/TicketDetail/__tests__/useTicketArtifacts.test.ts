@@ -6,12 +6,11 @@ function makeTicket(o: Partial<Ticket> = {}): Ticket {
   return {
     id: "t1",
     title: "x",
-    status: "implementing",
+    stages: [],
     productDesignPath: null,
     technicalDesignPath: null,
     historyPath: null,
     implementationPlanPath: null,
-    skippedPhases: [],
     ...o,
   } as unknown as Ticket;
 }

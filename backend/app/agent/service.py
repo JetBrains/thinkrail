@@ -305,7 +305,14 @@ class AgentService:
 
     async def send_message(self, thinkrail_sid: str, text: str, *, is_markdown: bool = False) -> None:
         """Send a user message to the session, triggering a new turn."""
-        task = self._tracker.get_task(thinkrail_sid)
+        from app.agent.tracker import TaskNotFoundError
+        try:
+            task = self._tracker.get_task(thinkrail_sid)
+        except TaskNotFoundError:
+            raise ValueError(
+                f"Cannot send message: session '{thinkrail_sid}' is not in the live tracker "
+                "(session may need to be resumed first)"
+            )
         if task.status not in ("initializing", "idle"):
             raise ValueError(
                 f"Cannot send message: session is '{task.status}', expected 'initializing' or 'idle'"
@@ -645,6 +652,87 @@ class AgentService:
         self._save_task(task)
         return task.model_dump(by_alias=True)
 
+    def parent_id_of(self, thinkrail_sid: str) -> str | None:
+        """The session's parent thinkrail_sid, read from tracker or disk."""
+        if self._tracker.has_task(thinkrail_sid):
+            return self._tracker.get_task(thinkrail_sid).parent_thinkrail_sid
+        data = load_session(self._config.project_root, thinkrail_sid) or {}
+        return (
+            data.get("parentThinkrailSid")
+            or data.get("parentSessionId")
+            or data.get("parentBonsaiSid")
+            or data.get("parentId")
+        )
+
+    async def _broadcast_blocked(self, parent_id: str | None) -> None:
+        """Emit session/didUpdate for parent_id so blocked state refreshes live."""
+        if not parent_id:
+            return
+        try:
+            parent_payload = self.get_session_data(parent_id)
+            if parent_payload is None:
+                return
+            parent_payload.pop("events", None)
+            await self._get_bus().publish_to_project(
+                str(self._config.project_root),
+                "session/didUpdate",
+                {"task": parent_payload},
+            )
+        except Exception:
+            logger.debug("Failed to broadcast parent blocked for %s", parent_id, exc_info=True)
+
+    def _is_ticket_orchestrator(self, task: AgentTask) -> bool:
+        """True when this session IS its ticket's orchestrator (role, not skill)."""
+        if not task.ticket_id or not self.board_service:
+            return False
+        try:
+            ticket = self.board_service.get_ticket(task.ticket_id)
+        except Exception:
+            return False
+        orch = ticket.orchestrator
+        return bool(orch and orch.kind == "session" and orch.session_id == task.thinkrail_sid)
+
+    async def promote_to_ticket(
+        self,
+        thinkrail_sid: str,
+        *,
+        title: str,
+        body: str = "",
+        type: str = "feature",
+    ) -> Any:
+        """Promote a standalone session into a ticket's orchestrator, keeping its transcript."""
+        if self._tracker.has_task(thinkrail_sid):
+            task = self._tracker.get_task(thinkrail_sid)
+        else:
+            data = load_session(self._config.project_root, thinkrail_sid)
+            if data is None:
+                raise ValueError(f"Session {thinkrail_sid!r} not found")
+            if data.get("status") not in ("initializing", "idle", "running", "waiting", "done", "error", "draft"):
+                data = {**data, "status": "idle"}
+            task = AgentTask.model_validate(data)
+        if task.ticket_id:
+            raise ValueError(f"Session {thinkrail_sid!r} already belongs to a ticket")
+        if task.parent_thinkrail_sid:
+            raise ValueError(f"Session {thinkrail_sid!r} is a subsession; cannot promote")
+        if not self.board_service:
+            raise RuntimeError("AgentService.board_service not wired")
+        ticket = self.board_service.create_ticket(
+            title=title, body=body, type=type, spawn_orchestrator=False,
+        )
+        self.board_service.attach_session(ticket.id, thinkrail_sid)
+        self.board_service.set_orchestrator(ticket.id, thinkrail_sid)
+        task.ticket_id = ticket.id
+        update_session_metadata(self._config.project_root, thinkrail_sid, {"ticketId": ticket.id})
+        if self._tracker.has_task(thinkrail_sid):
+            self._tracker.get_task(thinkrail_sid).ticket_id = ticket.id
+            self._tracker.enqueue_message(
+                thinkrail_sid,
+                f"This session is now the orchestrator of ticket {ticket.id} "
+                f'("{title}"). Review the discussion above, then propose a stage '
+                f"pipeline with propose_pipeline and drive it.",
+            )
+        return self.board_service.get_ticket(ticket.id)
+
     def trash_session(self, thinkrail_sid: str) -> None:
         """Delete a session and detach from all tickets."""
         if self.board_service:
@@ -758,24 +846,11 @@ class AgentService:
         return self.runtime_registry.get(task.config.runtime)
 
     def _attach_to_ticket(self, task: AgentTask) -> None:
-        """Auto-attach session to meta-ticket and set orchestrator if applicable.
-
-        The orchestrator marker is now anchored on `task.skill_id ==
-        "ticket-implement"` rather than a fragile `task.name` prefix check.
-        TicketInfo names implement sessions ``"Implement: <title>"`` —
-        which the old prefix check (``"Execute:"`` / ``"Orchestrate:"``)
-        missed entirely, so `ticket.orchestrator_session_id` was never
-        set and the UI's orchestrator wiring went silent.
-        """
         if not task.ticket_id or not self.board_service:
             return
         try:
             self.board_service.attach_session(task.ticket_id, task.thinkrail_sid)
-            ticket = self.board_service.get_ticket(task.ticket_id)
-            if (
-                ticket.implementation_plan_path
-                and task.skill_id == "ticket-implement"
-            ):
+            if task.skill_id == "ticket-orchestrator":
                 self.board_service.set_orchestrator(task.ticket_id, task.thinkrail_sid)
         except Exception:
             logger.warning("Failed to attach session to ticket %s", task.ticket_id)
@@ -1034,37 +1109,139 @@ class AgentService:
                 pass
             # Clean up the session topic now that the runner is done
             self._get_bus().cleanup_topic(f"session:{task.thinkrail_sid}")
-            # Notify orchestrator if this was a step session
-            await self._notify_orchestrator_on_step_complete(task)
+            # Finalize the stage node + resume the orchestrator (if ticket-linked)
+            await self._on_ticket_session_finished(task)
 
-    async def _notify_orchestrator_on_step_complete(self, task: AgentTask) -> None:
-        """If this session belongs to a meta-ticket with an orchestrator, notify it."""
+    async def _on_ticket_session_finished(self, task: AgentTask) -> None:
+        """A ticket-linked session has ended. Finalize its stage node (if it ran
+        one), refresh the ticket state for the UI, and resume the orchestrator so
+        it can verify the result and launch the next ready node.
+
+        Three kinds of finished session reach here:
+          - a stage node's session  → recordRunFinish flips the node done/failed
+          - an implement sub-step    → its plan step's status is updated
+          - the orchestrator itself  → nothing to finalize, and we never self-resume
+        """
         if not task.ticket_id or not self.board_service:
             return
         try:
             ticket = self.board_service.get_ticket(task.ticket_id)
-            orch_sid = ticket.orchestrator_session_id
-            if not orch_sid or orch_sid == task.thinkrail_sid:
-                return  # Don't notify self, or no orchestrator
+        except Exception:
+            return
 
-            # Update the plan step that matches this session
-            if ticket.implementation_plan_path and self.board_service.plans.plan_exists(task.ticket_id):
+        def _node_for_session(nodes: list, sid: str):
+            """The node whose latest session-run is `sid`, anywhere in the tree."""
+            for node in nodes:
+                run = node.runs[-1] if node.runs else None
+                if run is not None and run.kind == "session" and run.session_id == sid:
+                    return node
+                if node.children:
+                    found = _node_for_session(node.children, sid)
+                    if found is not None:
+                        return found
+            return None
+
+        # 1. Stage node whose latest run is this session → mark it done/failed.
+        node = _node_for_session(ticket.stages, task.thinkrail_sid)
+        finalized_label: str | None = None
+        if node is not None and node.runs and node.runs[-1].status == "running":
+            from datetime import UTC, datetime
+
+            summary = task.outcome.summary if task.outcome else None
+            try:
+                self.board_service.apply(task.ticket_id, {
+                    "op": "recordRunFinish",
+                    "id": node.id,
+                    "isError": task.status != "done",
+                    "summary": summary,
+                    "completedAt": datetime.now(UTC).isoformat(),
+                })
+                finalized_label = node.title
+            except Exception:
+                logger.debug("recordRunFinish failed for node %s", node.id, exc_info=True)
+
+        # 2. Otherwise, an implement sub-step → update its plan step status.
+        elif ticket.implementation_plan_path and self.board_service.plans.plan_exists(task.ticket_id):
+            try:
                 plan = self.board_service.plans.read_plan(task.ticket_id)
                 for step in plan.all_steps():
                     if step.session_id == task.thinkrail_sid:
-                        new_status = "done" if task.status == "done" else "failed"
                         self.board_service.plans.update_step_status(
-                            task.ticket_id, step.number, new_status,
+                            task.ticket_id, step.number,
+                            "done" if task.status == "done" else "failed",
                         )
                         break
+            except Exception:
+                logger.debug("plan step update failed for %s", task.ticket_id, exc_info=True)
 
-            # Inject a message into the orchestrator session
-            if self._tracker.has_task(orch_sid):
-                status_word = "completed successfully" if task.status == "done" else f"ended with status: {task.status}"
-                msg = f"[Step session {task.name or task.thinkrail_sid[:8]} {status_word}]"
-                self._tracker.enqueue_message(orch_sid, msg)
+        # 3. Refresh the UI — node/plan status changed.
+        try:
+            from app.board.ticket_state import publish_ticket_state
+            await publish_ticket_state(
+                self.board_service, str(self._config.project_root), task.ticket_id,
+            )
         except Exception:
-            logger.debug("Failed to notify orchestrator for ticket %s", task.ticket_id)
+            logger.debug("publish_ticket_state failed for %s", task.ticket_id, exc_info=True)
+
+        # 4. Resume the orchestrator so it verifies the result and advances.
+        orch_sid = ticket.orchestrator.session_id if ticket.orchestrator else None
+        if orch_sid and orch_sid != task.thinkrail_sid and self._tracker.has_task(orch_sid):
+            label = finalized_label or task.name or task.thinkrail_sid[:8]
+            status_word = "completed" if task.status == "done" else f"ended with status '{task.status}'"
+            self._tracker.enqueue_message(
+                orch_sid,
+                f"[Stage '{label}' {status_word}] Review its output against the ticket goal, "
+                f"adjust the pipeline if needed, then start the next ready node "
+                f"(or finalize the ticket if every stage is done).",
+            )
+
+    async def complete_node(self, ticket_id: str, node_id: str) -> None:
+        """Force-complete a stage node (the UI 'Complete stage' action): mark it
+        done, refresh the ticket state, and resume the orchestrator to advance —
+        for when the user finalizes a stage manually instead of via the agent."""
+        if not self.board_service:
+            return
+        from datetime import UTC, datetime
+        from app.board.ops import find_node
+        try:
+            ticket = self.board_service.get_ticket(ticket_id)
+        except Exception:
+            return
+        node = find_node(ticket.stages, node_id)
+        if node is None:
+            return
+        # recordRunFinish needs an open run; synthesize one for a node that was
+        # never started so a manual completion still flips it to done.
+        if not node.runs or node.runs[-1].status != "running":
+            try:
+                self.board_service.apply(ticket_id, {
+                    "op": "recordRunStart", "id": node_id,
+                    "run": {"kind": "session", "status": "running"},
+                })
+            except Exception:
+                logger.debug("complete_node recordRunStart failed for %s", node_id, exc_info=True)
+        try:
+            self.board_service.apply(ticket_id, {
+                "op": "recordRunFinish", "id": node_id,
+                "isError": False, "completedAt": datetime.now(UTC).isoformat(),
+            })
+        except Exception:
+            logger.debug("complete_node recordRunFinish failed for %s", node_id, exc_info=True)
+            return
+        try:
+            from app.board.ticket_state import publish_ticket_state
+            await publish_ticket_state(
+                self.board_service, str(self._config.project_root), ticket_id,
+            )
+        except Exception:
+            logger.debug("publish_ticket_state failed for %s", ticket_id, exc_info=True)
+        orch_sid = ticket.orchestrator.session_id if ticket.orchestrator else None
+        if orch_sid and self._tracker.has_task(orch_sid):
+            self._tracker.enqueue_message(
+                orch_sid,
+                f"[Stage '{node.title}' marked complete by the user] Start the next "
+                f"ready node (or finalize the ticket if every stage is done).",
+            )
 
     async def _build_context_for(self, task: AgentTask) -> str:
         t0 = time.monotonic()

@@ -14,13 +14,22 @@ from typing import Any
 
 from pydantic import BaseModel, ConfigDict, TypeAdapter
 
-from app.agent.models import RuntimeType, to_camel
+from app.agent.models import (
+    Artifact,
+    RuntimeType,
+    SessionConfig,
+    SessionMetrics,
+    SessionResult,
+    TodoItem,
+    to_camel,
+)
 from app.agent.runtime.types import (
     LabeledOption,
     RuntimeCapabilities,
     RuntimeFlag,
     RuntimeIdentity,
 )
+from app.board.ticket_state import TicketState
 
 
 class RuntimesListResponse(BaseModel):
@@ -74,6 +83,12 @@ RPC_PAYLOAD_MODELS: tuple[type[BaseModel], ...] = (
     RuntimesListResponse,
     RuntimesCapabilitiesRequest,
     InvalidCapabilityValueData,
+    SessionConfig,
+    Artifact,
+    SessionMetrics,
+    TodoItem,
+    SessionResult,
+    TicketState,
 )
 
 

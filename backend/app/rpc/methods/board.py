@@ -3,26 +3,20 @@ from __future__ import annotations
 from typing import Any
 
 from app.board.models import ArtifactKind, TicketSummary
-from app.board.plan import Milestone, Plan, PlanStep, SuccessCriterion
 from app.board.service import BoardService, TicketNotFoundError
-from app.board.state_machine import InvalidTransitionError
+from app.board.ticket_state import build_ticket_state, publish_ticket_state
+from app.board.work_node import DagError
 from app.rpc.bus import bus
 from app.rpc.context import get_current_conn
 from app.rpc.errors import INVALID_TRANSITION, TICKET_NOT_FOUND, rpc_handler
 
 _handle_errors = rpc_handler(
     (TicketNotFoundError, TICKET_NOT_FOUND, "Ticket not found"),
-    (InvalidTransitionError, INVALID_TRANSITION, "Invalid transition"),
+    (DagError, INVALID_TRANSITION, "Invalid DAG mutation"),
 )
 
 
-async def _broadcast(ticket: Any) -> None:
-    """Publish board/didChange for a ticket mutation to all project subscribers.
-
-    All mutating board methods funnel through here so a BoardView open in
-    a second window sees the change without needing to know which RPC
-    triggered it.
-    """
+async def _broadcast(service: BoardService, ticket: Any) -> None:
     conn = get_current_conn()
     if conn is None:
         return
@@ -30,6 +24,7 @@ async def _broadcast(ticket: Any) -> None:
     await bus.publish_to_project(
         conn.project_path, "board/didChange", summary.model_dump(by_alias=True),
     )
+    await publish_ticket_state(service, conn.project_path, ticket.id)
 
 
 @_handle_errors
@@ -43,12 +38,25 @@ async def get_ticket(service: BoardService, **params: Any) -> dict:
 
 
 @_handle_errors
+async def get_state(service: BoardService, **params: Any) -> dict:
+    return build_ticket_state(service, params["id"]).model_dump(by_alias=True)
+
+
+@_handle_errors
+async def apply(service: BoardService, **params: Any) -> dict:
+    ticket = service.apply(params["ticketId"], params["op"])
+    conn = get_current_conn()
+    if conn is not None:
+        await publish_ticket_state(service, conn.project_path, ticket.id)
+    return build_ticket_state(service, ticket.id).model_dump(by_alias=True)
+
+
+@_handle_errors
 async def create_ticket(service: BoardService, **params: Any) -> dict:
     ticket = service.create_ticket(
         title=params["title"],
         body=params.get("body", ""),
         type=params.get("type", "feature"),
-        status=params.get("status", "idea"),
     )
     return ticket.model_dump(by_alias=True)
 
@@ -59,10 +67,9 @@ async def update_ticket(service: BoardService, **params: Any) -> dict:
         id=params["id"],
         title=params.get("title"),
         body=params.get("body"),
-        status=params.get("status"),
         type=params.get("type"),
     )
-    await _broadcast(ticket)
+    await _broadcast(service, ticket)
     return ticket.model_dump(by_alias=True)
 
 
@@ -73,159 +80,44 @@ async def delete_ticket(service: BoardService, **params: Any) -> None:
 
 @_handle_errors
 async def reorder_ticket(service: BoardService, **params: Any) -> dict:
-    ticket = service.reorder_ticket(params["id"], params["status"], params["order"])
-    await _broadcast(ticket)
+    ticket = service.reorder_ticket(params["id"], params["order"])
+    await _broadcast(service, ticket)
     return ticket.model_dump(by_alias=True)
 
 
 @_handle_errors
 async def link_spec(service: BoardService, **params: Any) -> dict:
     ticket = service.link_spec(params["ticketId"], params["specId"])
-    await _broadcast(ticket)
+    await _broadcast(service, ticket)
     return ticket.model_dump(by_alias=True)
 
 
 @_handle_errors
 async def unlink_spec(service: BoardService, **params: Any) -> dict:
     ticket = service.unlink_spec(params["ticketId"], params["specId"])
-    await _broadcast(ticket)
+    await _broadcast(service, ticket)
     return ticket.model_dump(by_alias=True)
 
 
 @_handle_errors
 async def attach_session(service: BoardService, **params: Any) -> dict:
     ticket = service.attach_session(params["ticketId"], params["sessionId"])
-    await _broadcast(ticket)
+    await _broadcast(service, ticket)
     return ticket.model_dump(by_alias=True)
 
 
 @_handle_errors
 async def detach_session(service: BoardService, **params: Any) -> dict:
     ticket = service.detach_session(params["ticketId"], params["sessionId"])
-    await _broadcast(ticket)
+    await _broadcast(service, ticket)
     return ticket.model_dump(by_alias=True)
 
 
 @_handle_errors
 async def set_orchestrator(service: BoardService, **params: Any) -> dict:
     ticket = service.set_orchestrator(params["ticketId"], params["sessionId"])
-    await _broadcast(ticket)
+    await _broadcast(service, ticket)
     return ticket.model_dump(by_alias=True)
-
-
-@_handle_errors
-async def skip_phase(service: BoardService, **params: Any) -> dict:
-    """RPC: mark a phase as skipped on a ticket."""
-    ticket = service.skip_phase(params["ticketId"], params["phase"])
-    await _broadcast(ticket)
-    return ticket.model_dump(by_alias=True)
-
-
-@_handle_errors
-async def unskip_phase(service: BoardService, **params: Any) -> dict:
-    """RPC: remove a phase from the skipped list."""
-    ticket = service.unskip_phase(params["ticketId"], params["phase"])
-    await _broadcast(ticket)
-    return ticket.model_dump(by_alias=True)
-
-
-# ── Plan methods ────────────────────────────────────────────────
-
-
-@_handle_errors
-async def get_plan(service: BoardService, **params: Any) -> dict | None:
-    ticket_id = params["ticketId"]
-    if not service.plans.plan_exists(ticket_id):
-        return None
-    return service.plans.read_plan(ticket_id).model_dump(by_alias=True)
-
-
-@_handle_errors
-async def create_plan(service: BoardService, **params: Any) -> dict:
-    ticket_id = params["ticketId"]
-    title = params["title"]
-    raw_steps = params.get("steps", [])
-    raw_verification = params.get("verification", [])
-
-    steps = [PlanStep(**s) for s in raw_steps]
-    verification = [SuccessCriterion(**c) for c in raw_verification]
-
-    plan = service.plans.create_plan(ticket_id, title, steps, verification)
-    # Update the ticket's implementation_plan_path now that the file exists.
-    service.write_artifact(ticket_id, "implementation_plan", service.plans.read_plan_raw(ticket_id))
-    return plan.model_dump(by_alias=True)
-
-
-@_handle_errors
-async def update_step(service: BoardService, **params: Any) -> dict:
-    plan = service.plans.update_step_status(
-        ticket_id=params["ticketId"],
-        step_number=params["stepNumber"],
-        status=params["status"],
-        session_id=params.get("sessionId"),
-    )
-    return plan.model_dump(by_alias=True)
-
-
-@_handle_errors
-async def save_plan(service: BoardService, **params: Any) -> dict:
-    """Save a full structured plan (milestones + verification)."""
-    ticket_id = params["ticketId"]
-    raw_plan = params["plan"]
-    milestones = [
-        Milestone(
-            number=m["number"],
-            title=m["title"],
-            description=m.get("description", ""),
-            steps=[PlanStep(**s) for s in m.get("steps", [])],
-        )
-        for m in raw_plan.get("milestones", [])
-    ]
-    verification = [SuccessCriterion(**c) for c in raw_plan.get("verification", [])]
-    plan = Plan(
-        ticket_id=ticket_id,
-        title=raw_plan.get("title", ""),
-        status=raw_plan.get("status", "draft"),
-        milestones=milestones,
-        verification=verification,
-    )
-    result = service.plans.save_plan(ticket_id, plan)
-    # Sync implementation_plan_path on the ticket
-    ticket = service.get_ticket(ticket_id)
-    if not ticket.implementation_plan_path:
-        service.write_artifact(ticket_id, "implementation_plan", service.plans.read_plan_raw(ticket_id))
-    return result.model_dump(by_alias=True)
-
-
-@_handle_errors
-async def get_plan_raw(service: BoardService, **params: Any) -> dict:
-    """Return the raw markdown content of a plan file."""
-    ticket_id = params["ticketId"]
-    if not service.plans.plan_exists(ticket_id):
-        return {"content": ""}
-    content = service.plans.read_plan_raw(ticket_id)
-    return {"content": content}
-
-
-@_handle_errors
-async def save_plan_raw(service: BoardService, **params: Any) -> dict:
-    """Write raw markdown and return the parsed plan."""
-    ticket_id = params["ticketId"]
-    content = params["content"]
-    plan = service.plans.write_plan_raw(ticket_id, content)
-    # Sync ticket.implementation_plan_path
-    ticket = service.get_ticket(ticket_id)
-    if not ticket.implementation_plan_path:
-        service.write_artifact(ticket_id, "implementation_plan", content)
-    return plan.model_dump(by_alias=True)
-
-
-@_handle_errors
-async def get_next_step(service: BoardService, **params: Any) -> dict | None:
-    step = service.plans.get_next_step(params["ticketId"])
-    if step is None:
-        return None
-    return step.model_dump(by_alias=True)
 
 
 # ── Artifact methods ───────────────────────────────────────────
@@ -239,9 +131,38 @@ async def read_artifact(service: BoardService, **params: Any) -> dict:
     ticket = service.get_ticket(ticket_id)
     return {
         "content": content,
-        "stale": getattr(ticket, f"{kind}_stale", False),
         "updated": ticket.updated,
     }
+
+
+@_handle_errors
+async def board_complete_node(service: BoardService, **params: Any) -> dict:
+    ticket_id = params["ticketId"]
+    node_id = params["nodeId"]
+    agent_service = getattr(service, "agent_service", None)
+    if agent_service is not None:
+        await agent_service.complete_node(ticket_id, node_id)
+    else:
+        from datetime import UTC, datetime
+        try:
+            service.apply(ticket_id, {"op": "recordRunFinish", "id": node_id,
+                                      "isError": False, "completedAt": datetime.now(UTC).isoformat()})
+        except Exception:
+            pass
+        await _broadcast(service, service.get_ticket(ticket_id))
+    return build_ticket_state(service, ticket_id).model_dump(by_alias=True)
+
+
+@_handle_errors
+async def board_refine_node(service: BoardService, **params: Any) -> dict:
+    ticket_id = params["ticketId"]
+    node_id = params["nodeId"]
+    agent_service = getattr(service, "agent_service", None)
+    if agent_service is not None:
+        await agent_service.refine_node(ticket_id, node_id)
+    else:
+        await _broadcast(service, service.get_ticket(ticket_id))
+    return build_ticket_state(service, ticket_id).model_dump(by_alias=True)
 
 
 @_handle_errors
@@ -253,6 +174,19 @@ async def get_history(service: BoardService, **params: Any) -> list[dict]:
     """
     from app.board.patch import parse_patch_log
     ticket_id = params["ticketId"]
-    # Confirm the ticket exists; raises TicketNotFoundError otherwise.
     service.get_ticket(ticket_id)
     return parse_patch_log(service._config.get_project_root(), ticket_id)
+
+
+@_handle_errors
+async def skip_phase(service: BoardService, **params: Any) -> dict:
+    """RPC: mark a phase as skipped on a ticket (stub — not fully implemented)."""
+    ticket = service.get_ticket(params["ticketId"])
+    return ticket.model_dump(by_alias=True)
+
+
+@_handle_errors
+async def unskip_phase(service: BoardService, **params: Any) -> dict:
+    """RPC: remove a phase from the skipped list (stub — not fully implemented)."""
+    ticket = service.get_ticket(params["ticketId"])
+    return ticket.model_dump(by_alias=True)

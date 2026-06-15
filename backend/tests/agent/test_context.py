@@ -14,7 +14,7 @@ from app.agent.context import (
     scan_skill_frontmatter,
     build_context,
 )
-from app.agent.models import AgentConfig
+from app.agent.models import AgentConfig, SessionConfig
 from app.spec.models import SpecDetail
 
 
@@ -296,7 +296,7 @@ class TestBuildContext:
                 spec_ids=[],
                 skill_id=None,
                 project_root=Path("/project"),
-                config=AgentConfig(),
+                config=SessionConfig(),
                 spec_service=MagicMock(),
                 plugin_dir=None,
             )
@@ -307,7 +307,7 @@ class TestBuildContext:
             spec_ids=[],
             skill_id=None,
             project_root=Path("/my/project"),
-            config=AgentConfig(),
+            config=SessionConfig(),
             spec_service=MagicMock(),
             plugin_dir=plugin,
         )
@@ -320,7 +320,7 @@ class TestBuildContext:
             spec_ids=[],
             skill_id=None,
             project_root=Path("/my/project"),
-            config=AgentConfig(),
+            config=SessionConfig(),
             spec_service=MagicMock(),
             plugin_dir=plugin,
         )
@@ -337,7 +337,7 @@ class TestBuildContext:
             spec_ids=[],
             skill_id="test-skill",
             project_root=Path("/project"),
-            config=AgentConfig(),
+            config=SessionConfig(),
             spec_service=MagicMock(),
             plugin_dir=plugin,
         )
@@ -373,7 +373,7 @@ class TestBuildContext:
                 spec_ids=[],
                 skill_id="nonexistent",
                 project_root=Path("/project"),
-                config=AgentConfig(),
+                config=SessionConfig(),
                 spec_service=MagicMock(),
                 plugin_dir=plugin,
             )
@@ -389,7 +389,7 @@ class TestBuildContext:
             spec_ids=["mod-a"],
             skill_id=None,
             project_root=Path("/project"),
-            config=AgentConfig(),
+            config=SessionConfig(),
             spec_service=spec_service,
             plugin_dir=plugin,
         )
@@ -409,7 +409,7 @@ class TestBuildContext:
             spec_ids=["s1"],
             skill_id="test-skill",
             project_root=Path("/project"),
-            config=AgentConfig(),
+            config=SessionConfig(),
             spec_service=spec_service,
             plugin_dir=plugin,
         )
@@ -428,7 +428,7 @@ class TestBuildContext:
             spec_ids=[],
             skill_id=None,
             project_root=Path("/project"),
-            config=AgentConfig(),
+            config=SessionConfig(),
             spec_service=MagicMock(),
             plugin_dir=plugin,
         )
@@ -449,7 +449,7 @@ class TestBuildContext:
             spec_ids=["a", "b"],
             skill_id="test-skill",
             project_root=Path("/project"),
-            config=AgentConfig(),
+            config=SessionConfig(),
             spec_service=spec_service,
             plugin_dir=plugin,
         )
@@ -468,7 +468,7 @@ class TestBuildContext:
             spec_ids=[],
             skill_id=None,
             project_root=Path("/project"),
-            config=AgentConfig(),
+            config=SessionConfig(),
             spec_service=MagicMock(),
             plugin_dir=plugin,
             session_prompt="Fix the login bug",
@@ -483,7 +483,7 @@ class TestBuildContext:
             spec_ids=[],
             skill_id="test-skill",
             project_root=Path("/project"),
-            config=AgentConfig(),
+            config=SessionConfig(),
             spec_service=MagicMock(),
             plugin_dir=plugin,
             session_prompt="Focus on the auth module",
@@ -504,7 +504,7 @@ class TestBuildContext:
             spec_ids=[],
             skill_id=None,
             project_root=Path("/project"),
-            config=AgentConfig(),
+            config=SessionConfig(),
             spec_service=MagicMock(),
             plugin_dir=plugin,
             session_prompt=None,

@@ -29,9 +29,9 @@ class TestRecordArtifact:
         t = _task()
         record_artifact(t, "x.md", "write", tmp_path)
         first = t.artifacts[0].first_touched_at
-        record_artifact(t, "x.md", "edit", tmp_path)
+        record_artifact(t, "x.md", "propose-change", tmp_path)
         assert len(t.artifacts) == 1
-        assert t.artifacts[0].kind == "edit"
+        assert t.artifacts[0].kind == "propose-change"
         assert t.artifacts[0].first_touched_at == first
         assert t.artifacts[0].last_touched_at >= first
 
@@ -53,7 +53,6 @@ class TestLabelArtifact:
         t = _task()
         record_artifact(t, "x.md", "write", tmp_path)
         label_artifact(t, "x.md", role="product_design", label="Product design")
-        assert t.artifacts[0].role == "product_design"
         assert t.artifacts[0].label == "Product design"
 
     def test_no_op_for_unknown_path(self, tmp_path: Path) -> None:
@@ -66,12 +65,11 @@ class TestLabelArtifact:
         t = _task()
         record_artifact(t, "x.md", "write", tmp_path)
         label_artifact(t, "x.md", role=None, label="Only label")
-        assert t.artifacts[0].role is None
         assert t.artifacts[0].label == "Only label"
 
 
 class TestSetPreview:
-    def test_sets_preview_and_adds_artifact_when_new(self, tmp_path: Path) -> None:
+    def test_sets_preview_path_and_records_artifact_when_new(self, tmp_path: Path) -> None:
         (tmp_path / "x.md").write_text("hi")
         t = _task()
         set_preview(t, "x.md", tmp_path)
@@ -79,14 +77,14 @@ class TestSetPreview:
         assert len(t.artifacts) == 1
         assert t.artifacts[0].kind == "preview"
 
-    def test_does_not_duplicate_existing_artifact(self, tmp_path: Path) -> None:
+    def test_does_not_touch_artifacts_list(self, tmp_path: Path) -> None:
         (tmp_path / "x.md").write_text("hi")
         t = _task()
         record_artifact(t, "x.md", "write", tmp_path)
         set_preview(t, "x.md", tmp_path)
-        assert t.preview_path == "x.md"
         assert len(t.artifacts) == 1
-        assert t.artifacts[0].kind == "write"  # not downgraded to 'preview'
+        assert t.artifacts[0].kind == "write"  # recorded entry not altered by preview
+        assert t.preview_path == "x.md"
 
     def test_clears_preview_with_none(self, tmp_path: Path) -> None:
         (tmp_path / "x.md").write_text("hi")
@@ -94,11 +92,9 @@ class TestSetPreview:
         set_preview(t, "x.md", tmp_path)
         set_preview(t, None, tmp_path)
         assert t.preview_path is None
-        assert len(t.artifacts) == 1  # list NOT emptied
 
     def test_no_op_when_not_ticket_linked(self, tmp_path: Path) -> None:
         (tmp_path / "x.md").write_text("hi")
         t = _task(ticket_id=None)
         set_preview(t, "x.md", tmp_path)
         assert t.preview_path is None
-        assert t.artifacts == []

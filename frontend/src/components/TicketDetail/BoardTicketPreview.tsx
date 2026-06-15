@@ -15,7 +15,6 @@ import "./BoardTicketPreview.css";
 export function BoardTicketPreview({ ticketId }: { ticketId: string }) {
   const setTicketId = useTicketRouteStore((s) => s.setTicketId);
   const setTicket = useTicketRouteStore((s) => s.setTicket);
-  const setPlan = useTicketRouteStore((s) => s.setPlan);
   const setHistoryEntries = useTicketRouteStore((s) => s.setHistoryEntries);
   const setSessionSummaries = useTicketRouteStore((s) => s.setSessionSummaries);
   const clearRoute = useTicketRouteStore((s) => s.clear);
@@ -27,15 +26,7 @@ export function BoardTicketPreview({ ticketId }: { ticketId: string }) {
     clearRoute();
     setTicketId(ticketId);
     const board = createBoardApi(getClient());
-    board
-      .get(ticketId)
-      .then((t) => {
-        setTicket(t);
-        if (t.implementationPlanPath) {
-          board.getPlan(ticketId).then(setPlan).catch(() => {});
-        }
-      })
-      .catch(() => {});
+    board.get(ticketId).then(setTicket).catch(() => {});
     board
       .getHistory(ticketId)
       .then((rows) => setHistoryEntries(rows))
@@ -51,7 +42,7 @@ export function BoardTicketPreview({ ticketId }: { ticketId: string }) {
     return () => {
       clearRoute();
     };
-  }, [ticketId, clearRoute, setTicketId, setTicket, setPlan, setHistoryEntries, setSessionSummaries]);
+  }, [ticketId, clearRoute, setTicketId, setTicket, setHistoryEntries, setSessionSummaries]);
 
   return (
     <div className="context-panel context-panel--ticket">

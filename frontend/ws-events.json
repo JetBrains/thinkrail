@@ -1,5 +1,45 @@
 {
   "$defs": {
+    "Artifact": {
+      "description": "A file a session touched, or a diff it proposed.",
+      "properties": {
+        "path": {
+          "title": "Path",
+          "type": "string"
+        },
+        "kind": {
+          "$ref": "#/$defs/ArtifactKind"
+        },
+        "label": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Label"
+        },
+        "created": {
+          "default": "",
+          "title": "Created",
+          "type": "string"
+        },
+        "updated": {
+          "default": "",
+          "title": "Updated",
+          "type": "string"
+        }
+      },
+      "required": [
+        "path",
+        "kind"
+      ],
+      "title": "Artifact",
+      "type": "object"
+    },
     "ArtifactAddedEvent": {
       "properties": {
         "thinkrailSid": {
@@ -41,6 +81,14 @@
       ],
       "title": "ArtifactAddedPayload",
       "type": "object"
+    },
+    "ArtifactKind": {
+      "enum": [
+        "file",
+        "diff"
+      ],
+      "title": "ArtifactKind",
+      "type": "string"
     },
     "ArtifactLabeledEvent": {
       "properties": {
@@ -436,7 +484,7 @@
         "outcome": {
           "anyOf": [
             {
-              "$ref": "#/$defs/SessionOutcome"
+              "$ref": "#/$defs/SessionResult"
             },
             {
               "type": "null"
@@ -733,37 +781,6 @@
         }
       },
       "title": "NotificationPayload",
-      "type": "object"
-    },
-    "OutcomeArtifact": {
-      "description": "A file produced or finalized by the session \u2014 opened on the done screen.",
-      "properties": {
-        "path": {
-          "title": "Path",
-          "type": "string"
-        },
-        "label": {
-          "anyOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Label"
-        },
-        "openOnDone": {
-          "default": true,
-          "title": "Openondone",
-          "type": "boolean"
-        }
-      },
-      "required": [
-        "path"
-      ],
-      "title": "OutcomeArtifact",
       "type": "object"
     },
     "PermissionDeniedEvent": {
@@ -1125,7 +1142,7 @@
       "type": "object"
     },
     "SessionArtifact": {
-      "description": "One file the session produced or focused on.",
+      "description": "A file touched or proposed by a session during a ticket run.",
       "properties": {
         "path": {
           "title": "Path",
@@ -1166,25 +1183,25 @@
           "title": "Label"
         },
         "firstTouchedAt": {
+          "default": "",
           "title": "Firsttouchedat",
           "type": "string"
         },
         "lastTouchedAt": {
+          "default": "",
           "title": "Lasttouchedat",
           "type": "string"
         }
       },
       "required": [
         "path",
-        "kind",
-        "firstTouchedAt",
-        "lastTouchedAt"
+        "kind"
       ],
       "title": "SessionArtifact",
       "type": "object"
     },
-    "SessionOutcome": {
-      "description": "What to show on the done screen of a session.\n\nBuilt up by the agent via `session_finalize` (and optionally `session_queue_action`).\nPersisted on the AgentTask so it survives reloads.",
+    "SessionResult": {
+      "description": "The value a session hands back to its parent, plus its done-screen.",
       "properties": {
         "summary": {
           "anyOf": [
@@ -1198,9 +1215,33 @@
           "default": null,
           "title": "Summary"
         },
+        "status": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Status"
+        },
+        "delivery": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Delivery"
+        },
         "artifacts": {
           "items": {
-            "$ref": "#/$defs/OutcomeArtifact"
+            "$ref": "#/$defs/Artifact"
           },
           "title": "Artifacts",
           "type": "array"
@@ -1231,7 +1272,7 @@
           "type": "array"
         }
       },
-      "title": "SessionOutcome",
+      "title": "SessionResult",
       "type": "object"
     },
     "SessionStartEvent": {

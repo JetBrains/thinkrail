@@ -246,7 +246,7 @@ async def _spec_links(args: dict) -> dict:
 @tool(
     "spec_delete",
     "Delete a spec with multi-file cleanup. "
-    "Moves file to trash and cleans dangling references from other specs.",
+    "Removes the spec file and cleans dangling references from other specs.",
     SPEC_DELETE_SCHEMA,
 )
 async def _spec_delete(args: dict) -> dict:

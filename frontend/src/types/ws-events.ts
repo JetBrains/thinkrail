@@ -140,10 +140,14 @@ export type Costusd3 = number;
 export type Turns3 = number;
 export type Durationms3 = number;
 export type Summary = string | null;
+export type Status = string | null;
+export type Delivery = string | null;
 export type Path = string;
+export type ArtifactKind = "file" | "diff";
 export type Label = string | null;
-export type Openondone = boolean;
-export type Artifacts = OutcomeArtifact[];
+export type Created = string;
+export type Updated = string;
+export type Artifacts = Artifact[];
 export type Type1 = "create_ticket";
 export type Id = string;
 export type Title = string;
@@ -496,29 +500,30 @@ export interface DonePayload {
   turns?: Turns3;
   durationMs?: Durationms3;
   usage?: Usage3;
-  outcome?: SessionOutcome | null;
+  outcome?: SessionResult | null;
 }
 export interface Usage3 {
   [k: string]: unknown;
 }
 /**
- * What to show on the done screen of a session.
- *
- * Built up by the agent via `session_finalize` (and optionally `session_queue_action`).
- * Persisted on the AgentTask so it survives reloads.
+ * The value a session hands back to its parent, plus its done-screen.
  */
-export interface SessionOutcome {
+export interface SessionResult {
   summary?: Summary;
+  status?: Status;
+  delivery?: Delivery;
   artifacts?: Artifacts;
   actions?: Actions;
 }
 /**
- * A file produced or finalized by the session — opened on the done screen.
+ * A file a session touched, or a diff it proposed.
  */
-export interface OutcomeArtifact {
+export interface Artifact {
   path: Path;
+  kind: ArtifactKind;
   label?: Label;
-  openOnDone?: Openondone;
+  created?: Created;
+  updated?: Updated;
 }
 /**
  * Queued ticket creation. Rendered as an 'Add to board' button.
@@ -749,15 +754,15 @@ export interface ArtifactAddedPayload {
   artifact: SessionArtifact;
 }
 /**
- * One file the session produced or focused on.
+ * A file touched or proposed by a session during a ticket run.
  */
 export interface SessionArtifact {
   path: Path2;
   kind: Kind;
   role?: Role;
   label?: Label2;
-  firstTouchedAt: Firsttouchedat;
-  lastTouchedAt: Lasttouchedat;
+  firstTouchedAt?: Firsttouchedat;
+  lastTouchedAt?: Lasttouchedat;
 }
 export interface ArtifactLabeledEvent {
   thinkrailSid: Thinkrailsid27;

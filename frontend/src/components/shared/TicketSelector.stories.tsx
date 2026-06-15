@@ -12,38 +12,35 @@ import type { TicketSummary } from "@/types/board.ts";
 function ticket(
   id: string,
   title: string,
-  status: TicketSummary["status"],
+  lifecycle: TicketSummary["lifecycle"],
   type: TicketSummary["type"],
   order: number,
 ): TicketSummary {
   return {
     id,
     title,
-    status,
+    lifecycle,
     type,
     productDesignPath: null,
     technicalDesignPath: null,
     historyPath: null,
     implementationPlanPath: null,
-    technicalDesignStale: false,
-    historyStale: false,
-    implementationPlanStale: false,
-    orchestratorSessionId: null,
+    orchestrator: null,
     linkedSpecIds: [],
     sessionIds: [],
     order,
     created: "",
     updated: "",
-    skippedPhases: [],
+    rev: 0,
   };
 }
 
 const MOCK_TICKETS: TicketSummary[] = [
-  ticket("t1", "Add Storybook design system", "implementing", "feature", 0),
-  ticket("t2", "Fix dropdown overflow on narrow viewports", "product-design", "bug", 1),
-  ticket("t3", "Extract a shared Button component", "idea", "improvement", 2),
-  ticket("t4", "Dark light-theme is an unimplemented stub", "technical-design", "bug", 3),
-  ticket("t5", "Per-project theme presets", "implementation-plan", "idea", 4),
+  ticket("t1", "Add Storybook design system", "implementation", "feature", 0),
+  ticket("t2", "Fix dropdown overflow on narrow viewports", "design", "bug", 1),
+  ticket("t3", "Extract a shared Button component", "created", "improvement", 2),
+  ticket("t4", "Dark light-theme is an unimplemented stub", "design", "bug", 3),
+  ticket("t5", "Per-project theme presets", "implementation", "idea", 4),
 ];
 
 const meta = {

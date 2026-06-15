@@ -21,7 +21,7 @@ You are running the first step of the brainstorm-aligned ticket flow. This step 
 | `ProposeChange` | Fill each section with user approval (4-button card) |
 | `SuggestDescription` | Update the ticket body blurb (unchanged) |
 | `AskUserQuestion` | Clarifying questions and branching choices — never section content |
-| `ChangeTicketStatus` | Transition to `technical-design` after confirmation (status === ongoing work; PD work is done, next phase becomes active) |
+| `SessionFinalize` | Finalize the stage after the user confirms — hands control back to the orchestrator, which verifies the artifact and advances the pipeline |
 | `TodoWrite` | Surface the workflow as live tasks in the ticket's "Tasks (n/m)" sub-row (call once at the start; re-emit after each task to update statuses) |
 
 
@@ -32,7 +32,7 @@ You are running the first step of the brainstorm-aligned ticket flow. This step 
    ```
     1. Examine context
     2. Ask clarifying questions
-    3. Update ticket description
+    3. Refine description (only if needed)
     4. Write document skeleton
     5. Draft section: Goal
     6. Draft section: User stories
@@ -41,12 +41,12 @@ You are running the first step of the brainstorm-aligned ticket flow. This step 
     9. Draft section: Success criteria
    10. Draft section: Validation criteria
    11. Self-review document
-   12. Finalize and transition
+   12. Finalize the stage
    ```
 
 1. **Examine the context** *(task #1)*: **Read project context** — current ticket title + any existing body, plus relevant `{{TR_DIR}}/design_docs/` files. Do not waste time on areas unrelated to the request.
 2. **Ask product clarifying questions** *(task #2)* via `AskUserQuestion` — purpose, user stories, design, user experience, user requirements, product and feature value, product/feature success criteria, product/feature validation criteria. You goal for this step is to extract intent the user has. Prefer multiple-choice with a free-form `Other:` option. Always show your recommendation and explanation. All connected questions must be asked one at a time. Stop only when the picture is completely clear.
-3. **Update description** *(task #3)*: **Update the ticket body** via `SuggestDescription` with a short human-oriented blurb (What / Purpose, ~3-6 lines). Pass `apply: true` when the user says "just write it". If you forget this step, the backend auto-fills the body from the first paragraph of the markdown — explicit is better.
+3. **Refine description — only if needed** *(task #3)*: The **orchestrator owns the ticket description** and keeps it ultra-brief. Do **not** expand it into a multi-line blurb. Only call `SuggestDescription` if the current description is wrong, misleading, or ambiguous — and then keep it as short or shorter (1–2 sentences max), correcting rather than growing it. If the description is already clear, **skip this step** (mark task #3 done and move on). The full detail belongs in `product-design.md`, not the body.
 4. **Create product design document**:
    1. **Write the skeleton** *(task #4)* to `{{TR_DIR}}/tickets/{id}/product-design.md` via `Write`: see template below. Note, it is just a default template that ought to be adjusted to user's case and intent.
    2. **Open the preview** — `SetPreviewFile({ path: "{{TR_DIR}}/tickets/{id}/product-design.md" })`. The right Context Panel switches to the Preview tab. Optional: also call `LabelArtifact({ path: "{{TR_DIR}}/tickets/{id}/product-design.md", role: "product_design", label: "Product design" })` so the chip strip shows "Product design" instead of the raw filename.
@@ -76,9 +76,16 @@ You are running the first step of the brainstorm-aligned ticket flow. This step 
       - *Accept and proceed* — mark task #11 `completed` without changes; issues become known limitations.
       - *Cancel transition* — leave the ticket where it is for manual work.
    - Do NOT write a "Self-review" section into the document.
-6. **Finalize** *(task #12)*
+6. **Finalize the stage** *(task #12)*
    1. **`ClearPreviewFile()`** once all sections are filled.
-   2. **Propose the state transition** via `AskUserQuestion`: "Product design looks complete. Shall I move the ticket to `technical-design`?" If yes, call `ChangeTicketStatus({ status: 'technical-design' })`. (Status === ongoing work: the UI flipped status to `product-design` when the user clicked Run; now that the work is done, we advance to the next phase.)
+   2. **Confirm with the user** via `AskUserQuestion`: "Product design looks complete. Finalize this stage and hand control back to the orchestrator?" If yes, call `SessionFinalize` with the artifact and a one-line summary:
+      ```json
+      {
+        "summary": "Product design complete — product-design.md drafted and self-reviewed.",
+        "artifacts": [{ "path": "{{TR_DIR}}/tickets/{id}/product-design.md", "label": "Product design" }]
+      }
+      ```
+   You do **not** advance the ticket yourself. Finalizing ends this stage and automatically resumes the orchestrator, which reviews your artifact, adjusts the pipeline if needed, and starts the next stage (`technical-design`).
 
 ### Product design document template
 
@@ -131,7 +138,7 @@ kind: product_design
 - About to call `Edit` on `product-design.md` to fill a section? STOP. Use `ProposeChange` so the user can inline-edit, discuss, or reject before the write lands.
 - About to use `AskUserQuestion` to approve a section's *content*? STOP. The 4-button `ProposeChange` card is the section-approval surface now. `AskUserQuestion` is for clarifying questions and branching choices.
 - About to fill multiple sections in one `ProposeChange` call? STOP. Per-call should cover one section. The `section` field labels the card; bundling makes the card ambiguous.
-- About to commit during the skill? STOP. These drafting skills do not commit at all. Commits happen later, only on amend-specs → implementation-plan transitions, via `BoardService.on_status_change`.
-- `<!-- pending -->` marker still in the file when you're about to transition? STOP. That section is unfilled. Either fill it or remove the marker explicitly via `ProposeChange`.
+- About to commit during the skill? STOP. These drafting skills do not commit at all. Commits happen later — only when the amend-specs stage completes, where the board service commits the accumulated spec changes + the patch log.
+- `<!-- pending -->` marker still in the file when you're about to finalize? STOP. That section is unfilled. Either fill it or remove the marker explicitly via `ProposeChange`.
 - Drafting a section without first marking its task `in_progress` via `TodoWrite`? STOP. The Tasks (n/m) sub-row stalls — users can't see what you're working on.
 - About to call `TodoWrite` only once (at the start)? STOP. You must re-emit after each task to update statuses; the frontend reads the latest snapshot per session.

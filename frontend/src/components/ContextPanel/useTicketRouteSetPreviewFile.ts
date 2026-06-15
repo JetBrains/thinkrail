@@ -1,6 +1,7 @@
 import { useEffect, useRef } from "react";
 import { useTicketRouteStore } from "@/store/ticketRouteStore.ts";
-import type { Ticket, TicketStatus } from "@/types/board.ts";
+import type { Ticket } from "@/types/board.ts";
+import type { TicketStatus } from "@/components/TicketDetail/phases.ts";
 import type { Session } from "@/types/session.ts";
 import type { SelectedArtifact } from "@/components/TicketDetail/useTicketArtifacts.ts";
 
@@ -39,11 +40,17 @@ export function useTicketRouteSetPreviewFile(
       return;
     }
     const skill = session.skillId;
-    if (!skill) return;
-    const phase = SKILL_TO_PHASE[skill];
-    if (!phase) return;
-    const defaultArtifact = PHASE_TO_DEFAULT[phase];
-    if (defaultArtifact) setSelectedArtifact(defaultArtifact);
+    if (skill) {
+      const phase = SKILL_TO_PHASE[skill];
+      if (phase) {
+        const defaultArtifact = PHASE_TO_DEFAULT[phase];
+        if (defaultArtifact) { setSelectedArtifact(defaultArtifact); return; }
+      }
+    }
+    // No preview, no skill match: fall back to the session's first artifact so
+    // stage nodes whose agent never called SetPreviewFile still focus something.
+    const first = session.artifacts[0];
+    if (first) setSelectedArtifact(mapPath(first.path, ticket));
   }, [session, ticket, setSelectedArtifact]);
 }
 
@@ -57,6 +64,21 @@ function mapPath(p: string, ticket: Ticket | null): SelectedArtifact {
       return { kind: "history", phaseFilter: "amend-specs" };
     if (p === ticket.implementationPlanPath)
       return { kind: "plan" };
+    // The canonical artifact may not be written yet (so the ticket's *Path
+    // field is still null), but its location is predictable. Recognize it by
+    // the per-ticket folder + canonical filename so the preview uses
+    // TicketArtifactView (which reads via the board RPC and shows "not on disk
+    // yet" gracefully) instead of a raw /api/file/read that 404s mid-write.
+    if (p.includes(`tickets/${ticket.id}/`)) {
+      if (p.endsWith("/product-design.md"))
+        return { kind: "canonical", artifact: "product_design" };
+      if (p.endsWith("/technical-design.md"))
+        return { kind: "canonical", artifact: "technical_design" };
+      if (p.endsWith("/history.patch"))
+        return { kind: "history", phaseFilter: "amend-specs" };
+      if (p.endsWith("/implementation-plan.md"))
+        return { kind: "plan" };
+    }
   }
   return { kind: "file", filePath: p };
 }

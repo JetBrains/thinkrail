@@ -7,6 +7,41 @@
   overflow: hidden;
 }
 
+/* ── Board body row (kanban + right panel) ── */
+.board-body-row {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.board-main {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.board-right-panel {
+  flex-shrink: 0;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.board-preview-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  color: var(--hint);
+  font-size: var(--font-md);
+  text-align: center;
+  padding: var(--space-lg);
+}
+
 /* ── Board section (top or bottom half) ── */
 .board-section {
   display: flex;

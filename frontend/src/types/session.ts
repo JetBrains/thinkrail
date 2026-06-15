@@ -1,6 +1,6 @@
 import type { AgentConfig, AgentEvent, Question, SessionArtifact } from "./agent.ts";
 
-export type SessionStatus = "draft" | "initializing" | "idle" | "running" | "waiting" | "done" | "error" | "interrupted";
+export type SessionStatus = "draft" | "initializing" | "idle" | "running" | "waiting" | "finished" | "done" | "error" | "interrupted";
 
 /** Token usage for a single API call within a turn (one "iteration"). */
 export interface IterationUsage {

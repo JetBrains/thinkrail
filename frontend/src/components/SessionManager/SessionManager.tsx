@@ -11,13 +11,9 @@ import { getStatusStyle } from "@/utils/status.ts";
 import { modLabel } from "@/utils/platform.ts";
 import { SessionCardContextMenu } from "./SessionCardContextMenu.tsx";
 import { groupByTicket, type TicketGroup, type GroupedEntry } from "./groupByTicket.ts";
-import {
-  PHASE_LABELS,
-  PHASE_ORDER,
-  STATE_ORDER,
-  phaseForSkill,
-} from "@/components/TicketDetail/phases.ts";
-import type { TicketStatus } from "@/types/board.ts";
+import { StageGraph } from "@/components/TicketDetail/StageGraph.tsx";
+import { useTicketStateStore } from "@/store/ticketStateStore.ts";
+import { findStageNode, latestNodeSessionId } from "@/utils/lifecycle.ts";
 import "./SessionManager.css";
 
 const TICKET_STRIPE_PALETTE = [
@@ -76,7 +72,6 @@ export function SessionManager() {
   const restoreSession = useSessionStore((s) => s.restoreSession);
   const deleteSession = useSessionStore((s) => s.deleteSession);
   const sessions = useSessionStore((s) => s.sessionList);
-  const liveSessions = useSessionStore((s) => s.sessions);
   const refreshSessionList = useSessionStore((s) => s.refreshSessionList);
   const activeSessionId = useSessionStore((s) => s.activeSessionId);
   const tickets = useBoardStore((s) => s.tickets);
@@ -87,18 +82,24 @@ export function SessionManager() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [ctxMenu, setCtxMenu] = useState<CtxMenuState | null>(null);
+  const [expandedTickets, setExpandedTickets] = useState<Set<string>>(new Set());
 
-  // The ticket the active session belongs to. A ticket is expanded only while
-  // it (its file) is open or one of its sessions is active — so navigating to
-  // another ticket/session collapses the previous one.
-  const activeSessionTicketId = useMemo(
-    () =>
-      (activeSessionId
-        ? liveSessions.get(activeSessionId)?.ticketId ??
-          sessions.find((s) => s.thinkrailSid === activeSessionId)?.ticketId
-        : null) ?? null,
-    [liveSessions, sessions, activeSessionId],
-  );
+  // Auto-expand the ticket the user is focused on so its stages are visible.
+  useEffect(() => {
+    if (!focusedTicketId) return;
+    setExpandedTickets((prev) =>
+      prev.has(focusedTicketId) ? prev : new Set(prev).add(focusedTicketId),
+    );
+  }, [focusedTicketId]);
+
+  const toggleTicketExpanded = useCallback((ticketId: string) => {
+    setExpandedTickets((prev) => {
+      const next = new Set(prev);
+      if (next.has(ticketId)) next.delete(ticketId);
+      else next.add(ticketId);
+      return next;
+    });
+  }, []);
 
   const refresh = useCallback(async () => {
     try {
@@ -161,16 +162,16 @@ export function SessionManager() {
     [focusSessions, restoreSession, focusSession],
   );
 
-  // A ticket's session opened from its folder surfaces as a session tab
-  // (allowTicketTab) so its chat shows, while the folder highlights it.
-  const handleOpenTicketSession = useCallback(
-    async (taskId: string) => {
+  // Open a ticket-attached session (orchestrator or stage) as a session tab,
+  // keeping the ticket context (allowTicketTab).
+  const openTicketSession = useCallback(
+    async (sid: string) => {
       focusSessions();
       try {
-        if (!useSessionStore.getState().sessions.has(taskId)) {
-          await restoreSession(taskId, { noTab: true });
+        if (!useSessionStore.getState().sessions.has(sid)) {
+          await restoreSession(sid, { noTab: true });
         }
-        focusSession(taskId, { allowTicketTab: true });
+        focusSession(sid, { allowTicketTab: true });
       } catch (e) {
         console.error("Failed to open session:", e);
         setError(`Failed to open session: ${getErrorMessage(e)}`);
@@ -292,80 +293,45 @@ export function SessionManager() {
             <div className="sm-tickets-list">
             {ticketEntries.map((entry) => {
               const ticket = tickets.get(entry.ticketId) ?? null;
-              const status = ticket?.status ?? null;
-              // Expanded only while this ticket's file is open or one of its
-              // sessions is active; navigating elsewhere collapses it.
-              const expanded =
-                entry.ticketId === focusedTicketId ||
-                entry.ticketId === activeSessionTicketId;
-
-              // Process steps = lifecycle phases up to and including the
-              // current one (history + current); future phases are hidden.
-              const steps = status
-                ? PHASE_ORDER.filter(
-                    (p) => p !== "done" && STATE_ORDER[p] <= STATE_ORDER[status],
-                  )
-                : [];
-              const sessionForPhase = (phase: TicketStatus): SessionSummary | null =>
-                sortByRecency(
-                  sessions.filter(
-                    (s) => s.ticketId === entry.ticketId && phaseForSkill(s.skillId) === phase,
-                  ),
-                )[0] ?? null;
+              const expanded = expandedTickets.has(entry.ticketId);
 
               return (
                 <div
                   key={`sm-t-${entry.ticketId}`}
                   className={`sm-ticket-item${entry.ticketId === focusedTicketId ? " sm-ticket-item--active" : ""}`}
                 >
-                  <div
-                    className="sm-ticket-head"
-                    onClick={() => handleOpenTicketGroup(entry)}
-                  >
-                    <div className="sessions-left-ticket-header">
-                      <span className="sessions-left-ticket-title">
-                        {ticket?.title ?? `Ticket #${entry.ticketId.slice(-4)}`}
-                      </span>
-                      <span className="sessions-left-ticket-id">#{entry.ticketId.slice(-4)}</span>
-                    </div>
-                    <div className="sessions-left-ticket-meta">
-                      {status && (
-                        <span className="sessions-left-ticket-phase">{PHASE_LABELS[status]}</span>
-                      )}
-                      {ticket && <span className="sessions-left-ticket-type">{ticket.type}</span>}
+                  <div className="sm-ticket-head" style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                    <button
+                      type="button"
+                      className="sm-ticket-chevron"
+                      onClick={(e) => { e.stopPropagation(); toggleTicketExpanded(entry.ticketId); }}
+                      title={expanded ? "Collapse stages" : "Expand stages"}
+                      aria-label={expanded ? "Collapse stages" : "Expand stages"}
+                      style={{ background: "none", border: "none", cursor: "pointer", padding: "0 2px", color: "var(--text-muted)" }}
+                    >
+                      {expanded ? "▾" : "▸"}
+                    </button>
+                    <div
+                      onClick={() => handleOpenTicketGroup(entry)}
+                      style={{ flex: 1, minWidth: 0, cursor: "pointer" }}
+                    >
+                      <div className="sessions-left-ticket-header">
+                        <span className="sessions-left-ticket-title">
+                          {ticket?.title ?? `Ticket #${entry.ticketId.slice(-4)}`}
+                        </span>
+                        <span className="sessions-left-ticket-id">#{entry.ticketId.slice(-4)}</span>
+                      </div>
+                      <div className="sessions-left-ticket-meta">
+                        {ticket && <span className="sessions-left-ticket-type">{ticket.type}</span>}
+                      </div>
                     </div>
                   </div>
-
-                  {expanded && steps.length > 0 && (
-                    <div className="sm-steps">
-                      {steps.map((phase) => {
-                        const phaseSession = sessionForPhase(phase);
-                        const isCurrent = status === phase;
-                        const isActive =
-                          !!phaseSession && phaseSession.thinkrailSid === activeSessionId;
-                        return (
-                          <button
-                            key={`sm-step-${entry.ticketId}-${phase}`}
-                            type="button"
-                            className={`sm-step ${isCurrent ? "sm-step--current" : "sm-step--past"}${isActive ? " sm-step--active" : ""}${phaseSession ? "" : " sm-step--disabled"}`}
-                            disabled={!phaseSession}
-                            onClick={
-                              phaseSession
-                                ? () => handleOpenTicketSession(phaseSession.thinkrailSid)
-                                : undefined
-                            }
-                          >
-                            <span className="sm-step-glyph" aria-hidden="true">
-                              {isCurrent ? "●" : "✓"}
-                            </span>
-                            <span className="sm-step-label">{PHASE_LABELS[phase]}</span>
-                            {isCurrent && !phaseSession && (
-                              <span className="sm-step-hint">no session yet</span>
-                            )}
-                          </button>
-                        );
-                      })}
-                    </div>
+                  {expanded && (
+                    <TicketStageTree
+                      ticketId={entry.ticketId}
+                      onOpenSession={openTicketSession}
+                      onOpenTicket={openTicket}
+                    />
                   )}
                 </div>
               );
@@ -404,6 +370,54 @@ export function SessionManager() {
           onCopySid={handleCopySid}
         />
       )}
+    </div>
+  );
+}
+
+/** Orchestrator + stage graph for one ticket, shown inline when a ticket row
+ *  in the left list is expanded. Mirrors the main ticket view's stage tree and
+ *  opens the relevant session on click. */
+function TicketStageTree({ ticketId, onOpenSession, onOpenTicket }: {
+  ticketId: string;
+  onOpenSession: (sid: string) => void;
+  onOpenTicket: (ticketId: string) => void;
+}) {
+  const state = useTicketStateStore((s) => s.states.get(ticketId));
+  useEffect(() => {
+    if (!state) void useTicketStateStore.getState().fetch(ticketId).catch(() => {});
+  }, [ticketId, state]);
+
+  if (!state) {
+    return <div className="sm-ticket-stages-loading" style={{ padding: "4px 10px", opacity: 0.6, fontSize: "0.8em" }}>Loading stages…</div>;
+  }
+
+  const orchSid = state.orchestrator?.sessionId ?? null;
+  const stages = state.stages ?? [];
+
+  return (
+    <div className="sm-ticket-stages" style={{ paddingLeft: 6 }}>
+      {orchSid && (
+        <button
+          type="button"
+          className="sm-stage-orch"
+          onClick={() => onOpenSession(orchSid)}
+          title="Open orchestrator session"
+          style={{ display: "block", width: "100%", textAlign: "left", background: "none", border: "none", cursor: "pointer", padding: "3px 8px", color: "var(--text)", fontSize: "0.85em" }}
+        >
+          {"🎼 Orchestrator"}
+        </button>
+      )}
+      <StageGraph
+        state={state}
+        onFocusNode={(nodeId) => {
+          const node = findStageNode(stages, nodeId);
+          const sid = node ? latestNodeSessionId(node) : null;
+          if (sid) onOpenSession(sid);
+        }}
+        onFocusSession={(sid) => onOpenSession(sid)}
+        onOpenFile={() => onOpenTicket(ticketId)}
+        onSelectArtifact={() => onOpenTicket(ticketId)}
+      />
     </div>
   );
 }

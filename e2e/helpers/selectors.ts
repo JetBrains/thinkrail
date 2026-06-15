@@ -204,42 +204,6 @@ export const fileTree = {
   showHiddenBtn: "button.ft-toolbar-btn[title*='hidden files']",
 };
 
-export const trashModal = {
-  container: ".trash-container",
-  title: ".trash-title",
-  count: ".trash-count",
-  pill: ".trash-pill",
-  pillActive: ".trash-pill--active",
-  list: ".trash-list",
-  item: ".trash-item",
-  itemName: ".trash-item-name",
-  emptyMsg: ".trash-empty-msg",
-  restoreBtn: "button.trash-btn--restore",
-  deleteBtn: "button.trash-btn--delete",
-  emptyAllBtn: "button.trash-empty-btn",
-};
-
-export const palette = {
-  container: ".palette-container",
-  input: ".palette-input",
-  results: ".palette-results",
-  item: ".palette-item",
-  itemSelected: ".palette-item-selected",
-  itemTitle: ".palette-item-title",
-  itemBadge: ".palette-item-badge",
-  empty: ".palette-empty",
-};
-
-export const visTab = {
-  root: ".vis-tab",
-  loading: ".vis-tab-loading",
-  empty: ".vis-tab-empty",
-  pct: ".vis-tab-pct",
-  pctBar: ".vis-tab-pct-bar",
-  refreshBtn: "button.vis-tab-refresh-btn",
-  workflowStep: ".vis-tab-workflow-step",
-};
-
 export const contextPanel = {
   root: ".context-panel",
   dashBtn: ".context-panel__dash-btn",

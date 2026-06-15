@@ -1,11 +1,9 @@
 import type { SessionArtifact } from "@/types/agent.ts";
 import "./ArtifactStrip.css";
 
-const KIND_MARKS: Record<SessionArtifact["kind"], string> = {
-  write: "+",
-  edit: "~",
-  "propose-change": "≈",
-  preview: "●",
+const KIND_MARKS: Record<string, string> = {
+  file: "●",
+  diff: "≈",
 };
 
 interface Props {

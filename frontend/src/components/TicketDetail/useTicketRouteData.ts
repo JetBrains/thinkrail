@@ -7,47 +7,32 @@ import { useBoardStore } from "@/store/boardStore.ts";
 import { useTicketRouteStore } from "@/store/ticketRouteStore.ts";
 
 /**
- * Loads a ticket's data (ticket + plan + history + session summaries) into the
+ * Loads a ticket's data (ticket + history + session summaries) into the
  * singleton `ticketRouteStore` and keeps it fresh. Used by whatever surface is
  * showing the active ticket (the ticket tab in SessionPanel). Reloads when
  * `ticketId` changes and clears on unmount / when null.
- *
- * Unlike the old TicketDetail center host, this does NOT auto-create a phase
- * draft or promote a center session — the ticket tab shows an overview, and
- * sessions open as their own tabs.
  */
 export function useTicketRouteData(ticketId: string | null): void {
   const setTicketId = useTicketRouteStore((s) => s.setTicketId);
   const setTicket = useTicketRouteStore((s) => s.setTicket);
-  const setPlan = useTicketRouteStore((s) => s.setPlan);
   const setHistoryEntries = useTicketRouteStore((s) => s.setHistoryEntries);
   const setSessionSummaries = useTicketRouteStore((s) => s.setSessionSummaries);
   const clearRoute = useTicketRouteStore((s) => s.clear);
 
   const ticket = useTicketRouteStore((s) => s.ticket);
   const liveSessionsMap = useSessionStore((s) => s.sessions);
-  const lastPlanPath = useRef<string | null>(null);
 
-  // ── Mount / ticketId change: clear stale route state, fetch ticket + plan ──
+  // ── Mount / ticketId change: clear stale route state, fetch ticket ──
   useEffect(() => {
     clearRoute();
     if (!ticketId) return;
     setTicketId(ticketId);
     const api = createBoardApi(getClient());
-    api
-      .get(ticketId)
-      .then((t) => {
-        setTicket(t);
-        if (t.implementationPlanPath) {
-          lastPlanPath.current = t.implementationPlanPath;
-          api.getPlan(ticketId).then(setPlan).catch(() => {});
-        }
-      })
-      .catch(() => {});
+    api.get(ticketId).then(setTicket).catch(() => {});
     return () => {
       clearRoute();
     };
-  }, [ticketId, clearRoute, setTicketId, setTicket, setPlan]);
+  }, [ticketId, clearRoute, setTicketId, setTicket]);
 
   // ── Session summaries (kept up to date as the ticket gains sessions) ──
   useEffect(() => {
@@ -89,28 +74,21 @@ export function useTicketRouteData(ticketId: string | null): void {
     if (!ticketId) return;
     if (!boardSummary || boardSummary.updated === lastUpdated.current) return;
     lastUpdated.current = boardSummary.updated;
-    const api = createBoardApi(getClient());
-    api
-      .get(ticketId)
-      .then((t) => {
-        setTicket(t);
-        if (t.implementationPlanPath && t.implementationPlanPath !== lastPlanPath.current) {
-          lastPlanPath.current = t.implementationPlanPath;
-          api.getPlan(ticketId).then(setPlan).catch(() => {});
-        }
-      })
-      .catch(() => {});
-  }, [boardSummary?.updated, ticketId, setTicket, setPlan]); // eslint-disable-line react-hooks/exhaustive-deps
+    createBoardApi(getClient()).get(ticketId).then(setTicket).catch(() => {});
+  }, [boardSummary?.updated, ticketId, setTicket]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // ── Direct subscription to board/didChange for *this* ticket ──
+  // ── Direct subscription to board/didChange + ticket/didChange for *this* ticket ──
   useEffect(() => {
     if (!ticketId) return;
     const client = getClient();
-    const unsub = client.on("board/didChange", (p: unknown) => {
+    const refetch = (p: unknown) => {
       const summary = p as { id?: string };
       if (!summary?.id || summary.id !== ticketId) return;
       createBoardApi(getClient()).get(ticketId).then(setTicket).catch(() => {});
-    });
-    return () => { unsub(); };
+    };
+    const u1 = client.on("board/didChange", refetch);
+    // ticket/didChange is emitted by publish_ticket_state (DAG stage mutations)
+    const u2 = client.on("ticket/didChange", refetch);
+    return () => { u1(); u2(); };
   }, [ticketId, setTicket]);
 }

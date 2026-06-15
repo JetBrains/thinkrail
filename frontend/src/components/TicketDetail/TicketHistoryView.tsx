@@ -2,46 +2,32 @@ import { useEffect, useMemo, useState } from "react";
 import Editor from "@monaco-editor/react";
 import { getClient } from "@/api/index.ts";
 import { createBoardApi, type HistoryEntry } from "@/api/methods/board.ts";
-import type { TicketStatus } from "@/types/board.ts";
 import { useMonacoTheme } from "@/components/MarkdownEditor/useMonacoTheme.ts";
 import { useFontSize } from "@/utils/fontScale.ts";
 
 interface Props {
   ticketId: string;
-  /** Initial filter applied on mount and whenever the prop changes from
-   *  the outside (e.g. user clicks "Changes (N)" on a different phase
-   *  row). The user can override via the in-header dropdown without
-   *  losing the route signal. */
-  phaseFilter?: TicketStatus;
+  /** Initial filter (a skill id) applied on mount and whenever the prop
+   *  changes from the outside. The user can override via the in-header
+   *  dropdown without losing the route signal. */
+  phaseFilter?: string;
 }
 
-const PHASE_BY_SKILL: Record<string, TicketStatus> = {
-  "ticket-product-design": "product-design",
-  "ticket-technical-design": "technical-design",
-  "ticket-amend-specs": "amend-specs",
-  "ticket-implementation-plan": "implementation-plan",
-  "ticket-implement": "implementing",
+const SKILL_LABELS: Record<string, string> = {
+  "ticket-product-design": "Product design",
+  "ticket-technical-design": "Technical design",
+  "ticket-amend-specs": "Amend specs",
+  "ticket-implementation-plan": "Implementation plan",
+  "ticket-implement": "Implementing",
 };
 
-const PHASE_LABELS: Record<TicketStatus, string> = {
-  idea: "Idea",
-  "product-design": "Product design",
-  "technical-design": "Technical design",
-  "amend-specs": "Amend specs",
-  "implementation-plan": "Implementation plan",
-  implementing: "Implementing",
-  done: "Done",
-};
-
-const FILTERABLE_PHASES: TicketStatus[] = [
-  "product-design",
-  "technical-design",
-  "amend-specs",
-  "implementation-plan",
-  "implementing",
+const FILTERABLE_SKILLS: string[] = [
+  "ticket-product-design",
+  "ticket-technical-design",
+  "ticket-amend-specs",
+  "ticket-implementation-plan",
+  "ticket-implement",
 ];
-
-type FilterValue = "all" | TicketStatus;
 
 export function TicketHistoryView({ ticketId, phaseFilter }: Props) {
   const [entries, setEntries] = useState<HistoryEntry[] | null>(null);
@@ -49,7 +35,7 @@ export function TicketHistoryView({ ticketId, phaseFilter }: Props) {
   // Internal filter state: starts at the prop value, can be overridden
   // by the in-header dropdown. Resync whenever the prop changes so
   // re-routing from elsewhere lands the right filter.
-  const [filter, setFilter] = useState<FilterValue>(phaseFilter ?? "all");
+  const [filter, setFilter] = useState<string>(phaseFilter ?? "all");
   useEffect(() => {
     setFilter(phaseFilter ?? "all");
   }, [phaseFilter]);
@@ -75,13 +61,13 @@ export function TicketHistoryView({ ticketId, phaseFilter }: Props) {
   const filtered = useMemo(() => {
     if (!entries) return null;
     if (filter === "all") return entries;
-    return entries.filter((e) => e.skill && PHASE_BY_SKILL[e.skill] === filter);
+    return entries.filter((e) => e.skill === filter);
   }, [entries, filter]);
 
-  const title = filter === "amend-specs"
+  const title = filter === "ticket-amend-specs"
     ? "Amendments"
     : filter !== "all"
-      ? `Changes — ${PHASE_LABELS[filter]}`
+      ? `Changes — ${SKILL_LABELS[filter] ?? filter}`
       : "History";
 
   return (
@@ -96,11 +82,11 @@ export function TicketHistoryView({ ticketId, phaseFilter }: Props) {
             Filter
             <select
               value={filter}
-              onChange={(e) => setFilter(e.target.value as FilterValue)}
+              onChange={(e) => setFilter(e.target.value)}
             >
               <option value="all">All phases</option>
-              {FILTERABLE_PHASES.map((p) => (
-                <option key={p} value={p}>{PHASE_LABELS[p]}</option>
+              {FILTERABLE_SKILLS.map((p) => (
+                <option key={p} value={p}>{SKILL_LABELS[p]}</option>
               ))}
             </select>
           </label>
@@ -131,8 +117,7 @@ function HistoryEntryCard({ entry }: { entry: HistoryEntry }) {
   const monacoTheme = useMonacoTheme();
   const fontSize = useFontSize("body");
 
-  const phase = entry.skill && PHASE_BY_SKILL[entry.skill];
-  const phaseLabel = phase ? PHASE_LABELS[phase] : "—";
+  const phaseLabel = entry.skill ? SKILL_LABELS[entry.skill] ?? entry.skill : "—";
 
   return (
     <li className="ticket-history-entry">

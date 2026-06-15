@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { useUiStore } from "@/store/uiStore.ts";
 import { useSessionStore, selectProposeChangesByFile } from "@/store/sessionStore.ts";
 import { readFile } from "@/services/files.ts";
+import { getClient } from "@/api/index.ts";
 import { MarkdownPreview } from "@/components/FileViewer/MarkdownPreview.tsx";
 import { ReviewPanel } from "./ReviewPanel.tsx";
 import type { ProposeChangeResponse } from "./Hunk.tsx";
@@ -24,6 +25,17 @@ export function PreviewBody({ path, section, version }: Props) {
   const [waiting, setWaiting] = useState(false);
   const containerRef = useRef<HTMLDivElement | null>(null);
   const prevPathRef = useRef<string | null>(null);
+  // Bumped when the watcher reports this file changed on disk. The `version`
+  // prop (artifact lastTouchedAt) doesn't reliably propagate, so this is the
+  // primary live-refresh trigger after a ProposeChange / Write writes the file.
+  const [fileRev, setFileRev] = useState(0);
+
+  useEffect(() => {
+    const unsub = getClient().on("file/didChange", (p: unknown) => {
+      if ((p as { path?: string }).path === path) setFileRev((n) => n + 1);
+    });
+    return () => { unsub(); };
+  }, [path]);
 
   useEffect(() => {
     if (!project) return;
@@ -75,7 +87,7 @@ export function PreviewBody({ path, section, version }: Props) {
       cancelled = true;
       if (timer) clearTimeout(timer);
     };
-  }, [project, path, version]);
+  }, [project, path, version, fileRev]);
 
   useEffect(() => {
     if (!section || content == null || !containerRef.current) return;

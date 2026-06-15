@@ -1,8 +1,7 @@
 from app.agent.models import (
-    AgentConfig,
+    SessionConfig,
     AgentEvent,
     AgentResult,
-    AgentTask,
     AskUserQuestionResponse,
     Question,
     QuestionOption,
@@ -12,11 +11,10 @@ from app.agent.service import AgentService
 from app.agent.tracker import FutureNotFoundError, TaskNotFoundError, Tracker
 
 __all__ = [
-    "AgentConfig",
+    "SessionConfig",
     "AgentEvent",
     "AgentResult",
     "AgentService",
-    "AgentTask",
     "AskUserQuestionResponse",
     "FutureNotFoundError",
     "Question",

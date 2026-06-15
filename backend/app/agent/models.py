@@ -1,11 +1,11 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime
-from enum import Enum
+from enum import StrEnum
 from typing import Annotated, Any, Literal, Union
 from uuid import uuid4
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 
 def to_camel(name: str) -> str:
@@ -16,50 +16,14 @@ def to_camel(name: str) -> str:
 
 _CAMEL_CONFIG = ConfigDict(alias_generator=to_camel, populate_by_name=True)
 
-TaskStatus = Literal["draft", "initializing", "idle", "running", "waiting", "done", "error"]
-
-# Declared here (rather than in app.agent.runtime.types) because ``AgentConfig``
+# Declared here (rather than in app.agent.runtime.types) because ``SessionConfig``
 # embeds it, and ``runtime.types`` already imports from this module. The
 # canonical export lives in ``app.agent.runtime`` for consumers; this is the
 # definitional site.
 RuntimeType = Literal["claude"]
 
 
-class SubsessionType(str, Enum):
-    """Type of subsession — determines return flow behavior."""
-
-    discussion = "discussion"
-    refinement = "refinement"
-
-
 # ─── Interaction request/response models ──────────────────────────────────────
-
-class AgentConfig(BaseModel):
-    """User-facing run configuration. Persisted per session."""
-
-    # ``extra="ignore"`` so older session files round-trip without raising
-    # if they carry fields that have since been removed from this model.
-    model_config = ConfigDict(
-        alias_generator=to_camel,
-        populate_by_name=True,
-        extra="ignore",
-    )
-
-    runtime: RuntimeType = "claude"
-    model: str = "claude-opus-4-8"
-    permission_mode: str = "default"
-    stream_text: bool = True
-    effort: str = "auto"
-    # Runtime-declared option toggles, keyed by RuntimeFlag.key. Absent keys
-    # fall back to the flag's declared default at the runtime boundary.
-    flags: dict[str, bool] = Field(default_factory=dict)
-
-    @field_validator("effort", mode="before")
-    @classmethod
-    def _coerce_legacy_null_effort(cls, v: Any) -> Any:
-        """Map legacy persisted ``effort: null`` to the neutral ``"auto"``."""
-        return "auto" if v is None else v
-
 
 class QuestionOption(BaseModel):
     """A selectable option within a question."""
@@ -94,20 +58,197 @@ class ToolApprovalResponse(BaseModel):
     interrupt: bool = False
 
 
-# ─── Event payload models ──────────────────────────────────────────────────────
+# ─── Session outcome ──────────────────────────────────────────────────────────
+# A skill emits an outcome at finalization. The frontend renders the outcome on
+# the done screen as a banner + artifact previews + a row of action buttons.
+# Adding new action types is intentionally cheap: add a new BaseModel below,
+# include it in the OutcomeAction union, and teach the frontend dispatcher.
 
-class SessionArtifact(BaseModel):
-    """One file the session produced or focused on."""
+
+class OutcomeArtifact(BaseModel):
+    """A file produced or finalized by the session — opened on the done screen."""
 
     model_config = _CAMEL_CONFIG
 
     path: str
-    kind: Literal["write", "edit", "propose-change", "preview"]
-    role: str | None = None
     label: str | None = None
-    first_touched_at: str
-    last_touched_at: str
+    open_on_done: bool = True
 
+
+class CreateTicketAction(BaseModel):
+    """Queued ticket creation. Rendered as an 'Add to board' button.
+
+    `state="pending"` until the user clicks; `state="applied"` once the ticket
+    has been created on the board.
+    """
+
+    model_config = _CAMEL_CONFIG
+
+    type: Literal["create_ticket"] = "create_ticket"
+    id: str
+    title: str
+    body: str | None = None
+    state: Literal["pending", "applied"] = "pending"
+
+
+class StartSessionAction(BaseModel):
+    """Recommended follow-up session. Rendered as a primary/secondary CTA."""
+
+    model_config = _CAMEL_CONFIG
+
+    type: Literal["start_session"] = "start_session"
+    id: str
+    title: str
+    description: str | None = None
+    skill_id: str
+    prompt: str | None = None
+    primary: bool = False
+
+
+class NavigateAction(BaseModel):
+    """UI navigation only — no agent or tool call."""
+
+    model_config = _CAMEL_CONFIG
+
+    type: Literal["navigate"] = "navigate"
+    id: str
+    title: str
+    description: str | None = None
+    target: Literal["board", "specs", "graph", "files"]
+
+
+OutcomeAction = Annotated[
+    Union[CreateTicketAction, StartSessionAction, NavigateAction],
+    Field(discriminator="type"),
+]
+
+
+class SessionOutcome(BaseModel):
+    """Input contract for the SessionFinalize tool — the agent's declared
+    done-screen (summary, artifacts to open, follow-up actions). Mapped into
+    the session's :class:`SessionResult` for persistence.
+    """
+
+    model_config = _CAMEL_CONFIG
+
+    summary: str | None = None
+    artifacts: list[OutcomeArtifact] = Field(default_factory=list)
+    actions: list[OutcomeAction] = Field(default_factory=list)
+
+
+# ─── Session model ──────────────────────────────────────────────────────────
+# A Session wraps an agent conversation. A Session belongs to at most one ticket
+# (``ticket_id``) and may be a quick subsession of another session
+# (``parent_session_id``). See SESSION_TICKET_MODEL.md.
+
+DEFAULT_RUNTIME: RuntimeType = "claude"
+DEFAULT_MODEL = "claude-opus-4-8"
+DEFAULT_PERMISSION_MODE = "default"
+DEFAULT_EFFORT = "auto"
+
+
+class SessionStatus(StrEnum):
+    DRAFT = "draft"
+    RUNNING = "running"
+    WAITING = "waiting"
+    IDLE = "idle"
+    FINISHED = "finished"
+    ERROR = "error"
+
+
+TaskStatus = Literal[
+    "draft", "initializing", "idle", "running", "waiting", "done", "error"
+]
+
+
+class ArtifactKind(StrEnum):
+    FILE = "file"
+    DIFF = "diff"
+
+
+class SessionConfig(BaseModel):
+    """Run configuration for a session."""
+
+    model_config = ConfigDict(
+        alias_generator=to_camel,
+        populate_by_name=True,
+        extra="ignore",
+    )
+
+    runtime: RuntimeType = DEFAULT_RUNTIME
+    model: str = DEFAULT_MODEL
+    permission_mode: str = DEFAULT_PERMISSION_MODE
+    stream_text: bool = True
+    effort: str = DEFAULT_EFFORT
+    flags: dict[str, bool] = Field(default_factory=dict)
+
+    @field_validator("effort", mode="before")
+    @classmethod
+    def _coerce_legacy_null_effort(cls, v: Any) -> Any:
+        return DEFAULT_EFFORT if v is None else v
+
+
+AgentConfig = SessionConfig
+
+
+class Artifact(BaseModel):
+    """A file a session touched, or a diff it proposed."""
+
+    model_config = _CAMEL_CONFIG
+
+    path: str
+    kind: ArtifactKind
+    label: str | None = None
+    created: str = ""
+    updated: str = ""
+
+    @field_validator("kind", mode="before")
+    @classmethod
+    def _coerce_legacy_kind(cls, v: Any) -> Any:
+        valid = {k.value for k in ArtifactKind}
+        if v not in valid:
+            return ArtifactKind.FILE
+        return v
+
+
+class SessionMetrics(BaseModel):
+    """Run cost and usage, computed from the event stream."""
+
+    model_config = _CAMEL_CONFIG
+
+    cost_usd: float = 0.0
+    turns: int = 0
+    tool_calls: int = 0
+    duration_ms: int = 0
+    context_tokens: int = 0
+    context_max: int = 0
+    output_tokens: int = 0
+
+
+class TodoItem(BaseModel):
+    model_config = _CAMEL_CONFIG
+
+    key: str
+    content: str
+    status: str = "pending"
+
+
+class SessionResult(BaseModel):
+    """The value a session hands back to its parent, plus its done-screen."""
+
+    model_config = _CAMEL_CONFIG
+
+    summary: str | None = None
+    status: str | None = None
+    # How the parent consumes a returned subsession result, chosen at return
+    # time: "context" (result card in the parent chat) | "input" (fill the
+    # parent's input box) | "send" (auto-send as a parent message).
+    delivery: str | None = None
+    artifacts: list[Artifact] = Field(default_factory=list)
+    actions: list[OutcomeAction] = Field(default_factory=list)
+
+
+# ─── Event payload models ──────────────────────────────────────────────────────
 
 class SessionStartPayload(BaseModel):
     """Emitted once when the SDK session initializes."""
@@ -250,10 +391,10 @@ class DonePayload(BaseModel):
     turns: int = 0
     duration_ms: int = 0
     usage: dict[str, Any] = Field(default_factory=dict)
-    # Same shape as ``AgentTask.outcome``. Bundling it here makes the
-    # session-end + outcome transition atomic on the wire — the frontend
-    # never sees ``status=done`` without the next-step contract.
-    outcome: "SessionOutcome | None" = None
+    # The session's result. Bundling it on the done event makes the
+    # session-end + result transition atomic on the wire — the frontend
+    # never sees a finished session without its next-step contract.
+    outcome: SessionResult | None = None
 
 
 class AskUserQuestionPayload(BaseModel):
@@ -365,6 +506,19 @@ class ClearPreviewFilePayload(BaseModel):
     """DEPRECATED: hide the Preview tab. Use SetPreviewFile with path=null."""
 
     model_config = _CAMEL_CONFIG
+
+
+class SessionArtifact(BaseModel):
+    """A file touched or proposed by a session during a ticket run."""
+
+    model_config = _CAMEL_CONFIG
+
+    path: str
+    kind: Literal["write", "edit", "propose-change", "preview"]
+    role: str | None = None
+    label: str | None = None
+    first_touched_at: str = ""
+    last_touched_at: str = ""
 
 
 class ArtifactAddedPayload(BaseModel):
@@ -617,83 +771,9 @@ class AgentResult(BaseModel):
     usage: dict[str, Any] = Field(default_factory=dict)
 
 
-# ─── Session outcome ──────────────────────────────────────────────────────────
-# A skill emits an outcome at finalization. The frontend renders the outcome on
-# the done screen as a banner + artifact previews + a row of action buttons.
-# Adding new action types is intentionally cheap: add a new BaseModel below,
-# include it in the OutcomeAction union, and teach the frontend dispatcher.
-
-
-class OutcomeArtifact(BaseModel):
-    """A file produced or finalized by the session — opened on the done screen."""
-
-    model_config = _CAMEL_CONFIG
-
-    path: str
-    label: str | None = None
-    open_on_done: bool = True
-
-
-class CreateTicketAction(BaseModel):
-    """Queued ticket creation. Rendered as an 'Add to board' button.
-
-    `state="pending"` until the user clicks; `state="applied"` once the ticket
-    has been created on the board.
-    """
-
-    model_config = _CAMEL_CONFIG
-
-    type: Literal["create_ticket"] = "create_ticket"
-    id: str
-    title: str
-    body: str | None = None
-    state: Literal["pending", "applied"] = "pending"
-
-
-class StartSessionAction(BaseModel):
-    """Recommended follow-up session. Rendered as a primary/secondary CTA."""
-
-    model_config = _CAMEL_CONFIG
-
-    type: Literal["start_session"] = "start_session"
-    id: str
-    title: str
-    description: str | None = None
-    skill_id: str
-    prompt: str | None = None
-    primary: bool = False
-
-
-class NavigateAction(BaseModel):
-    """UI navigation only — no agent or tool call."""
-
-    model_config = _CAMEL_CONFIG
-
-    type: Literal["navigate"] = "navigate"
-    id: str
-    title: str
-    description: str | None = None
-    target: Literal["board", "specs", "graph", "files"]
-
-
-OutcomeAction = Annotated[
-    Union[CreateTicketAction, StartSessionAction, NavigateAction],
-    Field(discriminator="type"),
-]
-
-
-class SessionOutcome(BaseModel):
-    """What to show on the done screen of a session.
-
-    Built up by the agent via `session_finalize` (and optionally `session_queue_action`).
-    Persisted on the AgentTask so it survives reloads.
-    """
-
-    model_config = _CAMEL_CONFIG
-
-    summary: str | None = None
-    artifacts: list[OutcomeArtifact] = Field(default_factory=list)
-    actions: list[OutcomeAction] = Field(default_factory=list)
+class SubsessionType(StrEnum):
+    discussion = "discussion"
+    refinement = "refinement"
 
 
 class AgentTask(BaseModel):
@@ -735,7 +815,6 @@ class AgentTask(BaseModel):
     step_gate: Literal["approve", "autonomous"] = "approve"
 
 
-# Resolve forward refs for models that mention SessionOutcome before it was
-# declared (DonePayload is defined earlier in the file because it is part of
-# the agent event hierarchy).
+# Resolve forward refs now that every model in the module is defined
+# (DonePayload embeds SessionResult, part of the agent event hierarchy).
 DonePayload.model_rebuild()

@@ -6,9 +6,13 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from app.agent.models import AgentConfig, AgentResult
+from pathlib import Path
+
+from app.agent.models import AgentTask, SessionConfig, AgentResult
 from app.agent.service import AgentService
 from app.agent.tracker import TaskNotFoundError
+from app.board.service import BoardService
+from app.core.config import load_config
 from app.spec.models import SpecDetail
 
 
@@ -32,8 +36,8 @@ def _install_mock_runtime(service: AgentService) -> MagicMock:
     """
     from app.agent.runtime import LabeledOption, RuntimeCapabilities, RuntimeRegistry
 
-    async def _interrupt(task, tracker):
-        client = tracker.get_client(task.thinkrail_sid)
+    async def _interrupt(thinkrail_session, tracker):
+        client = tracker.get_client(thinkrail_session.thinkrail_sid)
         if client is not None:
             await client.interrupt()
 
@@ -89,12 +93,12 @@ class TestRunTask:
             "spec-1", "Test Spec", "# Content"
         )
 
-        task = await service.run_task(["spec-1"], AgentConfig())
+        thinkrail_session = await service.run_task(["spec-1"], SessionConfig())
 
-        assert task.status == "initializing"
-        assert task.spec_ids == ["spec-1"]
+        assert thinkrail_session.status == "initializing"
+        assert thinkrail_session.spec_ids == ["spec-1"]
 
-        # Wait for background task to complete
+        # Wait for background thinkrail_session to complete
         await asyncio.sleep(0.05)
 
         runtime.run_session.assert_called_once()
@@ -112,12 +116,12 @@ class TestRunTask:
         runtime.run_session = AsyncMock(side_effect=slow_run)
         spec_service.get_spec.return_value = _make_spec_detail("s1", "T", "C")
 
-        task = await service.run_task(["s1"], AgentConfig())
-        # Task starts as pending — runner transitions to idle/running
-        assert task.status == "initializing"
+        thinkrail_session = await service.run_task(["s1"], SessionConfig())
+        # Task starts as initializing — runner transitions to idle/running
+        assert thinkrail_session.status == "initializing"
 
         # Clean up
-        bg = service._running_tasks.get(task.thinkrail_sid)
+        bg = service._running_tasks.get(thinkrail_session.thinkrail_sid)
         if bg:
             bg.cancel()
             try:
@@ -131,37 +135,37 @@ class TestRunTask:
         runtime.run_session = AsyncMock(side_effect=RuntimeError("boom"))
         spec_service.get_spec.return_value = _make_spec_detail("s1", "T", "C")
 
-        task = await service.run_task(["s1"], AgentConfig())
+        thinkrail_session = await service.run_task(["s1"], SessionConfig())
         await asyncio.sleep(0.05)
 
-        assert task.status == "error"
+        assert thinkrail_session.status == "error"
 
 
 class TestSendMessage:
     async def test_send_message_enqueues(self) -> None:
         service, _, _ = _make_service()
-        task = service._tracker.create_task(["s1"], AgentConfig())
-        # task starts idle — ready for messages
+        thinkrail_session = service._tracker.create_task(["s1"], SessionConfig())
+        # thinkrail_session starts draft — ready for messages
 
-        await service.send_message(task.thinkrail_sid, "hello")
+        await service.send_message(thinkrail_session.thinkrail_sid, "hello")
 
-        msg = service._tracker._queues[task.thinkrail_sid].get_nowait()
+        msg = service._tracker._queues[thinkrail_session.thinkrail_sid].get_nowait()
         assert msg == "hello"
 
     async def test_send_message_while_running_raises(self) -> None:
         service, _, _ = _make_service()
-        task = service._tracker.create_task(["s1"], AgentConfig())
-        service._tracker.set_status(task.thinkrail_sid, "idle")
-        service._tracker.set_status(task.thinkrail_sid, "running")
+        thinkrail_session = service._tracker.create_task(["s1"], SessionConfig())
+        service._tracker.set_status(thinkrail_session.thinkrail_sid, "idle")
+        service._tracker.set_status(thinkrail_session.thinkrail_sid, "running")
         with pytest.raises(ValueError, match="expected 'initializing' or 'idle'"):
-            await service.send_message(task.thinkrail_sid, "hello")
+            await service.send_message(thinkrail_session.thinkrail_sid, "hello")
 
-    async def test_send_message_when_done_raises(self) -> None:
+    async def test_send_message_when_finished_raises(self) -> None:
         service, _, _ = _make_service()
-        task = service._tracker.create_task(["s1"], AgentConfig())
-        service._tracker.set_status(task.thinkrail_sid, "done")
+        thinkrail_session = service._tracker.create_task(["s1"], SessionConfig())
+        service._tracker.set_status(thinkrail_session.thinkrail_sid, "done")
         with pytest.raises(ValueError, match="expected 'initializing' or 'idle'"):
-            await service.send_message(task.thinkrail_sid, "hello")
+            await service.send_message(thinkrail_session.thinkrail_sid, "hello")
 
 
 class TestEndSession:
@@ -169,34 +173,34 @@ class TestEndSession:
         from app.agent.tracker import END_SIGNAL
 
         service, _, _ = _make_service()
-        task = service._tracker.create_task(["s1"], AgentConfig())
-        # task starts idle
+        thinkrail_session = service._tracker.create_task(["s1"], SessionConfig())
+        service._tracker.set_status(thinkrail_session.thinkrail_sid, "idle")
 
-        await service.end_session(task.thinkrail_sid)
+        await service.end_session(thinkrail_session.thinkrail_sid)
 
-        msg = service._tracker._queues[task.thinkrail_sid].get_nowait()
+        msg = service._tracker._queues[thinkrail_session.thinkrail_sid].get_nowait()
         assert msg is END_SIGNAL
 
-    async def test_end_already_done_is_noop(self) -> None:
+    async def test_end_already_finished_is_noop(self) -> None:
         service, _, _ = _make_service()
-        task = service._tracker.create_task(["s1"], AgentConfig())
-        service._tracker.set_status(task.thinkrail_sid, "done")
+        thinkrail_session = service._tracker.create_task(["s1"], SessionConfig())
+        service._tracker.set_status(thinkrail_session.thinkrail_sid, "done")
 
         # Should not raise
-        await service.end_session(task.thinkrail_sid)
+        await service.end_session(thinkrail_session.thinkrail_sid)
 
     async def test_end_session_resolves_pending_futures(self) -> None:
         """A waiting session must have its futures resolved so the runner
         can pick up the end signal — otherwise it stays blocked in the
         tool callback forever."""
         service, _, _ = _make_service()
-        task = service._tracker.create_task(["s1"], AgentConfig())
-        service._tracker.set_status(task.thinkrail_sid, "idle")
-        service._tracker.set_status(task.thinkrail_sid, "running")
-        service._tracker.set_status(task.thinkrail_sid, "waiting")
-        future = service._tracker.register_future(task.thinkrail_sid, "req-1")
+        thinkrail_session = service._tracker.create_task(["s1"], SessionConfig())
+        service._tracker.set_status(thinkrail_session.thinkrail_sid, "idle")
+        service._tracker.set_status(thinkrail_session.thinkrail_sid, "running")
+        service._tracker.set_status(thinkrail_session.thinkrail_sid, "waiting")
+        future = service._tracker.register_future(thinkrail_session.thinkrail_sid, "req-1")
 
-        await service.end_session(task.thinkrail_sid)
+        await service.end_session(thinkrail_session.thinkrail_sid)
 
         assert future.done()
         result = future.result()
@@ -207,7 +211,7 @@ class TestEndSession:
 class TestGetAndListTasks:
     def test_get_task(self) -> None:
         service, _, _ = _make_service()
-        service._tracker.create_task(["s1"], AgentConfig())
+        service._tracker.create_task(["s1"], SessionConfig())
         tasks = service.list_tasks()
         assert len(tasks) == 1
 
@@ -227,10 +231,10 @@ class TestGetAndListTasks:
 class TestRespond:
     async def test_respond_delegates_to_tracker(self) -> None:
         service, _, _ = _make_service()
-        task = service._tracker.create_task(["s1"], AgentConfig())
-        future = service._tracker.register_future(task.thinkrail_sid, "req-1")
+        thinkrail_session = service._tracker.create_task(["s1"], SessionConfig())
+        future = service._tracker.register_future(thinkrail_session.thinkrail_sid, "req-1")
 
-        await service.respond(task.thinkrail_sid, "req-1", {"answer": "yes"})
+        await service.respond(thinkrail_session.thinkrail_sid, "req-1", {"answer": "yes"})
         result = await future
         assert result == {"answer": "yes"}
 
@@ -238,14 +242,14 @@ class TestRespond:
 class TestRespondPersistsEvent:
     async def test_respond_saves_request_resolved_event(self) -> None:
         service, _, _ = _make_service()
-        task = service._tracker.create_task(["s1"], AgentConfig())
-        future = service._tracker.register_future(task.thinkrail_sid, "req-1")
+        thinkrail_session = service._tracker.create_task(["s1"], SessionConfig())
+        future = service._tracker.register_future(thinkrail_session.thinkrail_sid, "req-1")
 
         service._save_event = MagicMock()
-        await service.respond(task.thinkrail_sid, "req-1", {"behavior": "allow"})
+        await service.respond(thinkrail_session.thinkrail_sid, "req-1", {"behavior": "allow"})
 
         service._save_event.assert_called_once_with(
-            task.thinkrail_sid,
+            thinkrail_session.thinkrail_sid,
             {
                 "eventType": "requestResolved",
                 "payload": {"requestId": "req-1", "response": {"behavior": "allow"}},
@@ -259,23 +263,23 @@ class TestInterruptTask:
     async def test_interrupt_calls_client_interrupt(self) -> None:
         """interrupt_task calls client.interrupt() on the stored SDK client."""
         service, _, _ = _make_service()
-        task = service._tracker.create_task(["s1"], AgentConfig())
-        service._tracker.set_status(task.thinkrail_sid, "idle")
-        service._tracker.set_status(task.thinkrail_sid, "running")
+        thinkrail_session = service._tracker.create_task(["s1"], SessionConfig())
+        service._tracker.set_status(thinkrail_session.thinkrail_sid, "idle")
+        service._tracker.set_status(thinkrail_session.thinkrail_sid, "running")
 
         mock_client = AsyncMock()
-        service._tracker.set_client(task.thinkrail_sid, mock_client)
+        service._tracker.set_client(thinkrail_session.thinkrail_sid, mock_client)
 
-        await service.interrupt_task(task.thinkrail_sid)
+        await service.interrupt_task(thinkrail_session.thinkrail_sid)
 
         mock_client.interrupt.assert_called_once()
 
     async def test_interrupt_sets_flag_before_client_interrupt(self) -> None:
         """set_interrupted is called before client.interrupt()."""
         service, _, _ = _make_service()
-        task = service._tracker.create_task(["s1"], AgentConfig())
-        service._tracker.set_status(task.thinkrail_sid, "idle")
-        service._tracker.set_status(task.thinkrail_sid, "running")
+        thinkrail_session = service._tracker.create_task(["s1"], SessionConfig())
+        service._tracker.set_status(thinkrail_session.thinkrail_sid, "idle")
+        service._tracker.set_status(thinkrail_session.thinkrail_sid, "running")
 
         call_order: list[str] = []
 
@@ -293,23 +297,23 @@ class TestInterruptTask:
             original_set(thinkrail_sid)
 
         service._tracker.set_interrupted = track_set_interrupted
-        service._tracker.set_client(task.thinkrail_sid, mock_client)
+        service._tracker.set_client(thinkrail_session.thinkrail_sid, mock_client)
 
-        await service.interrupt_task(task.thinkrail_sid)
+        await service.interrupt_task(thinkrail_session.thinkrail_sid)
 
         assert call_order == ["set_interrupted", "client.interrupt"]
 
     async def test_interrupt_resolves_futures_with_deny(self) -> None:
         """interrupt_task calls interrupt_futures, not cancel_futures."""
         service, _, _ = _make_service()
-        task = service._tracker.create_task(["s1"], AgentConfig())
-        service._tracker.set_status(task.thinkrail_sid, "idle")
-        service._tracker.set_status(task.thinkrail_sid, "running")
-        service._tracker.set_client(task.thinkrail_sid, AsyncMock())
+        thinkrail_session = service._tracker.create_task(["s1"], SessionConfig())
+        service._tracker.set_status(thinkrail_session.thinkrail_sid, "idle")
+        service._tracker.set_status(thinkrail_session.thinkrail_sid, "running")
+        service._tracker.set_client(thinkrail_session.thinkrail_sid, AsyncMock())
 
-        future = service._tracker.register_future(task.thinkrail_sid, "req-1")
+        future = service._tracker.register_future(thinkrail_session.thinkrail_sid, "req-1")
 
-        await service.interrupt_task(task.thinkrail_sid)
+        await service.interrupt_task(thinkrail_session.thinkrail_sid)
 
         # Future should be resolved (not cancelled)
         assert not future.cancelled()
@@ -319,49 +323,49 @@ class TestInterruptTask:
         assert result["interrupt"] is True
 
     async def test_interrupt_no_relaunch(self) -> None:
-        """After interrupt, no new background task is created."""
+        """After interrupt, no new background thinkrail_session is created."""
         service, _, _ = _make_service()
-        task = service._tracker.create_task(["s1"], AgentConfig())
-        service._tracker.set_status(task.thinkrail_sid, "idle")
-        service._tracker.set_status(task.thinkrail_sid, "running")
-        service._tracker.set_client(task.thinkrail_sid, AsyncMock())
+        thinkrail_session = service._tracker.create_task(["s1"], SessionConfig())
+        service._tracker.set_status(thinkrail_session.thinkrail_sid, "idle")
+        service._tracker.set_status(thinkrail_session.thinkrail_sid, "running")
+        service._tracker.set_client(thinkrail_session.thinkrail_sid, AsyncMock())
 
         # Record existing background tasks
-        service._running_tasks[task.thinkrail_sid] = AsyncMock()
-        original_bg = service._running_tasks[task.thinkrail_sid]
+        service._running_tasks[thinkrail_session.thinkrail_sid] = AsyncMock()
+        original_bg = service._running_tasks[thinkrail_session.thinkrail_sid]
 
-        await service.interrupt_task(task.thinkrail_sid)
+        await service.interrupt_task(thinkrail_session.thinkrail_sid)
 
-        # The background task reference should be unchanged (not replaced)
-        assert service._running_tasks.get(task.thinkrail_sid) is original_bg
+        # The background thinkrail_session reference should be unchanged (not replaced)
+        assert service._running_tasks.get(thinkrail_session.thinkrail_sid) is original_bg
 
     async def test_interrupt_idle_is_noop(self) -> None:
         """Interrupting an idle session does nothing."""
         service, _, _ = _make_service()
-        task = service._tracker.create_task(["s1"], AgentConfig())
+        thinkrail_session = service._tracker.create_task(["s1"], SessionConfig())
 
         mock_client = AsyncMock()
-        service._tracker.set_client(task.thinkrail_sid, mock_client)
+        service._tracker.set_client(thinkrail_session.thinkrail_sid, mock_client)
 
-        await service.interrupt_task(task.thinkrail_sid)
+        await service.interrupt_task(thinkrail_session.thinkrail_sid)
 
         mock_client.interrupt.assert_not_called()
-        assert service._tracker.is_interrupted(task.thinkrail_sid) is False
+        assert service._tracker.is_interrupted(thinkrail_session.thinkrail_sid) is False
 
     async def test_interrupt_waiting_state(self) -> None:
         """Interrupting a waiting session resolves futures and calls client.interrupt."""
         service, _, _ = _make_service()
-        task = service._tracker.create_task(["s1"], AgentConfig())
-        service._tracker.set_status(task.thinkrail_sid, "idle")
-        service._tracker.set_status(task.thinkrail_sid, "running")
-        service._tracker.set_status(task.thinkrail_sid, "waiting")
+        thinkrail_session = service._tracker.create_task(["s1"], SessionConfig())
+        service._tracker.set_status(thinkrail_session.thinkrail_sid, "idle")
+        service._tracker.set_status(thinkrail_session.thinkrail_sid, "running")
+        service._tracker.set_status(thinkrail_session.thinkrail_sid, "waiting")
 
         mock_client = AsyncMock()
-        service._tracker.set_client(task.thinkrail_sid, mock_client)
+        service._tracker.set_client(thinkrail_session.thinkrail_sid, mock_client)
 
-        future = service._tracker.register_future(task.thinkrail_sid, "req-1")
+        future = service._tracker.register_future(thinkrail_session.thinkrail_sid, "req-1")
 
-        await service.interrupt_task(task.thinkrail_sid)
+        await service.interrupt_task(thinkrail_session.thinkrail_sid)
 
         mock_client.interrupt.assert_called_once()
         assert future.done()
@@ -370,15 +374,15 @@ class TestInterruptTask:
     async def test_interrupt_no_client_does_not_raise(self) -> None:
         """If no client is stored (edge case), interrupt still sets flag."""
         service, _, _ = _make_service()
-        task = service._tracker.create_task(["s1"], AgentConfig())
-        service._tracker.set_status(task.thinkrail_sid, "idle")
-        service._tracker.set_status(task.thinkrail_sid, "running")
+        thinkrail_session = service._tracker.create_task(["s1"], SessionConfig())
+        service._tracker.set_status(thinkrail_session.thinkrail_sid, "idle")
+        service._tracker.set_status(thinkrail_session.thinkrail_sid, "running")
         # No client set
 
-        await service.interrupt_task(task.thinkrail_sid)
+        await service.interrupt_task(thinkrail_session.thinkrail_sid)
 
         # Should have set the flag even without a client
-        assert service._tracker.is_interrupted(task.thinkrail_sid) is True
+        assert service._tracker.is_interrupted(thinkrail_session.thinkrail_sid) is True
 
 
 class TestSaveTask:
@@ -389,11 +393,11 @@ class TestSaveTask:
         spec_service = MagicMock()
         service = AgentService(config, spec_service)
 
-        task = service._tracker.create_task(["s1"], AgentConfig())
-        service._save_task(task)
+        thinkrail_session = service._tracker.create_task(["s1"], SessionConfig())
+        service._save_task(thinkrail_session)
 
         from app.agent.persistence import load_session
-        loaded = load_session(tmp_path, task.thinkrail_sid)
+        loaded = load_session(tmp_path, thinkrail_session.thinkrail_sid)
         assert loaded is not None
         m = loaded["metrics"]
         assert m["costUsd"] == 0
@@ -405,28 +409,27 @@ class TestSaveTask:
         assert m["contextMax"] == 0
         assert m["outputTokens"] == 0
 
-    def test_existing_metrics_preserved(self, tmp_path: Path) -> None:
-        """_save_task preserves existing metrics from disk."""
-        from app.agent.persistence import save_session, load_session
+    def test_model_metrics_persist(self, tmp_path: Path) -> None:
+        """_save_task preserves metrics that were written to disk separately."""
+        from app.agent.persistence import load_session, save_session
 
         config = MagicMock()
         config.project_root = tmp_path
         spec_service = MagicMock()
         service = AgentService(config, spec_service)
 
-        task = service._tracker.create_task(["s1"], AgentConfig())
-        # Pre-populate disk with metrics
+        thinkrail_session = service._tracker.create_task(["s1"], SessionConfig())
         save_session(tmp_path, {
-            "thinkrailSid": task.thinkrail_sid,
+            "thinkrailSid": thinkrail_session.thinkrail_sid,
             "name": "test",
             "specIds": [],
             "config": {},
             "status": "idle",
             "metrics": {"costUsd": 1.5, "toolCalls": 10, "turns": 3},
         })
+        service._save_task(thinkrail_session)
 
-        service._save_task(task)
-        loaded = load_session(tmp_path, task.thinkrail_sid)
+        loaded = load_session(tmp_path, thinkrail_session.thinkrail_sid)
         assert loaded is not None
         assert loaded["metrics"]["costUsd"] == 1.5
         assert loaded["metrics"]["toolCalls"] == 10
@@ -450,7 +453,7 @@ class TestSubagentModePersistence:
             "name": "n",
             "skillId": "ticket-implement",
             "specIds": [],
-            "config": AgentConfig().model_dump(by_alias=True),
+            "config": SessionConfig().model_dump(by_alias=True),
             "status": "draft",
             "ticketId": "mt_test",
             "subagentMode": "subagent",
@@ -466,10 +469,10 @@ class TestSubagentModePersistence:
         _install_mock_runtime(service)
         service._restore_draft_sessions()
 
-        task = service._tracker.get_task("draft-restore")
-        assert task is not None
-        assert task.subagent_mode == "subagent"
-        assert task.step_gate == "autonomous"
+        thinkrail_session = service._tracker.get_task("draft-restore")
+        assert thinkrail_session is not None
+        assert thinkrail_session.subagent_mode == "subagent"
+        assert thinkrail_session.step_gate == "autonomous"
 
     def test_get_session_data_overlays_live_tracker_subagent_mode(
         self, tmp_path: Path,
@@ -485,7 +488,7 @@ class TestSubagentModePersistence:
             "name": "n",
             "skillId": "ticket-implement",
             "specIds": [],
-            "config": AgentConfig().model_dump(by_alias=True),
+            "config": SessionConfig().model_dump(by_alias=True),
             "status": "draft",
             "subagentMode": "step-session",  # stale on disk
             "stepGate": "approve",
@@ -500,10 +503,10 @@ class TestSubagentModePersistence:
         _install_mock_runtime(service)
         service._restore_draft_sessions()
         # Simulate the user picking a different mode after hydration —
-        # the in-memory task is the live truth.
-        task = service._tracker.get_task("live-1")
-        task.subagent_mode = "subagent"
-        task.step_gate = "autonomous"
+        # the in-memory thinkrail_session is the live truth.
+        thinkrail_session = service._tracker.get_task("live-1")
+        thinkrail_session.subagent_mode = "subagent"
+        thinkrail_session.step_gate = "autonomous"
 
         data = service.get_session_data("live-1")
         assert data is not None
@@ -516,9 +519,9 @@ class TestSubagentModePersistence:
         service = AgentService(config, MagicMock())
         _install_mock_runtime(service)
 
-        task = service._tracker.create_task(["s1"], AgentConfig())
-        assert task.subagent_mode == "step-session"
-        assert task.step_gate == "approve"
+        thinkrail_session = service._tracker.create_task(["s1"], SessionConfig())
+        assert thinkrail_session.subagent_mode == "step-session"
+        assert thinkrail_session.step_gate == "approve"
 
     def test_save_task_serializes_subagent_mode_and_step_gate(
         self, tmp_path: Path,
@@ -530,12 +533,12 @@ class TestSubagentModePersistence:
         service = AgentService(config, MagicMock())
         _install_mock_runtime(service)
 
-        task = service._tracker.create_task(["s1"], AgentConfig())
-        task.subagent_mode = "subagent"
-        task.step_gate = "autonomous"
-        service._save_task(task)
+        thinkrail_session = service._tracker.create_task(["s1"], SessionConfig())
+        thinkrail_session.subagent_mode = "subagent"
+        thinkrail_session.step_gate = "autonomous"
+        service._save_task(thinkrail_session)
 
-        loaded = load_session(tmp_path, task.thinkrail_sid)
+        loaded = load_session(tmp_path, thinkrail_session.thinkrail_sid)
         assert loaded is not None
         assert loaded["subagentMode"] == "subagent"
         assert loaded["stepGate"] == "autonomous"
@@ -558,14 +561,14 @@ class TestPrepareDraftOnType:
         from app.agent.persistence import load_session
 
         service = self._service(tmp_path)
-        task = await service.prepare_task(
-            ["s1"], AgentConfig(),
+        thinkrail_session = await service.prepare_task(
+            ["s1"], SessionConfig(),
             thinkrail_sid="client-minted", draft_input="fix login flow",
         )
-        assert task.thinkrail_sid == "client-minted"
-        assert task.draft_input == "fix login flow"
+        assert thinkrail_session.thinkrail_sid == "client-minted"
+        assert thinkrail_session.draft_input == "fix login flow"
         # The supplied id is reused verbatim — no re-mint — so the persisted
-        # task is keyed by it and echoes it back as thinkrailSid.
+        # thinkrail_session is keyed by it and echoes it back as thinkrailSid.
         loaded = load_session(tmp_path, "client-minted")
         assert loaded is not None
         assert loaded["thinkrailSid"] == "client-minted"
@@ -574,44 +577,44 @@ class TestPrepareDraftOnType:
         self, tmp_path: Path,
     ) -> None:
         service = self._service(tmp_path)
-        task = await service.prepare_task(["s1"], AgentConfig())
-        assert task.thinkrail_sid  # server-minted uuid
-        assert task.draft_input is None
+        thinkrail_session = await service.prepare_task(["s1"], SessionConfig())
+        assert thinkrail_session.thinkrail_sid  # server-minted uuid
+        assert thinkrail_session.draft_input is None
 
     async def test_prepare_persists_draft_input(self, tmp_path: Path) -> None:
         from app.agent.persistence import load_session
 
         service = self._service(tmp_path)
-        task = await service.prepare_task(
-            ["s1"], AgentConfig(),
+        thinkrail_session = await service.prepare_task(
+            ["s1"], SessionConfig(),
             thinkrail_sid="d1", draft_input="fix login flow",
         )
-        loaded = load_session(tmp_path, task.thinkrail_sid)
+        loaded = load_session(tmp_path, thinkrail_session.thinkrail_sid)
         assert loaded is not None
         assert loaded["draftInput"] == "fix login flow"
 
     async def test_update_draft_sets_draft_input(self, tmp_path: Path) -> None:
         service = self._service(tmp_path)
-        task = await service.prepare_task(["s1"], AgentConfig(), thinkrail_sid="d1")
+        thinkrail_session = await service.prepare_task(["s1"], SessionConfig(), thinkrail_sid="d1")
         await service.update_draft("d1", draft_input="typed text")
-        assert task.draft_input == "typed text"
+        assert thinkrail_session.draft_input == "typed text"
 
     async def test_update_draft_omitting_draft_input_keeps_current(
         self, tmp_path: Path,
     ) -> None:
         service = self._service(tmp_path)
-        task = await service.prepare_task(
-            ["s1"], AgentConfig(), thinkrail_sid="d1", draft_input="original",
+        thinkrail_session = await service.prepare_task(
+            ["s1"], SessionConfig(), thinkrail_sid="d1", draft_input="original",
         )
         # Omit draft_input → Ellipsis-sentinel leaves it untouched.
         await service.update_draft("d1", name="renamed")
-        assert task.draft_input == "original"
+        assert thinkrail_session.draft_input == "original"
 
     async def test_text_only_update_skips_system_prompt_rebuild(
         self, tmp_path: Path,
     ) -> None:
         service = self._service(tmp_path)
-        await service.prepare_task(["s1"], AgentConfig(), thinkrail_sid="d1")
+        await service.prepare_task(["s1"], SessionConfig(), thinkrail_sid="d1")
         service._build_context_for.reset_mock()
         service._build_context_structured_for.reset_mock()
         await service.update_draft("d1", draft_input="typed text", name="typed text")
@@ -622,7 +625,7 @@ class TestPrepareDraftOnType:
         self, tmp_path: Path,
     ) -> None:
         service = self._service(tmp_path)
-        await service.prepare_task(["s1"], AgentConfig(), thinkrail_sid="d1")
+        await service.prepare_task(["s1"], SessionConfig(), thinkrail_sid="d1")
         service._build_context_for.reset_mock()
         await service.update_draft("d1", spec_ids=["s1", "s2"])
         service._build_context_for.assert_called_once()
@@ -632,7 +635,7 @@ class TestPrepareDraftOnType:
     ) -> None:
         service = self._service(tmp_path)
         await service.prepare_task(
-            ["s1"], AgentConfig(), thinkrail_sid="d1", draft_input="fix login flow",
+            ["s1"], SessionConfig(), thinkrail_sid="d1", draft_input="fix login flow",
         )
         entry = next(s for s in service.list_all_sessions() if s["thinkrailSid"] == "d1")
         assert entry["draftInput"] == "fix login flow"
@@ -647,7 +650,7 @@ class TestPrepareDraftOnType:
 
         service = self._service(tmp_path)
         await service.prepare_task(
-            ["s1"], AgentConfig(), thinkrail_sid="d1", draft_input="first draft",
+            ["s1"], SessionConfig(), thinkrail_sid="d1", draft_input="first draft",
         )
         await service.update_draft("d1", draft_input="second draft")
 
@@ -678,13 +681,13 @@ class TestPrepareDraftOnType:
         service = AgentService(config, spec_service)
         _install_mock_runtime(service)
 
-        task = await service.prepare_task(
-            [], AgentConfig(),
+        thinkrail_session = await service.prepare_task(
+            [], SessionConfig(),
             thinkrail_sid="d1",
             session_prompt="SENTINEL_SESSION_PROMPT_VISIBLE",
             draft_input="SENTINEL_DRAFT_INPUT_HIDDEN",
         )
-        prompt = await service._build_context_for(task)
+        prompt = await service._build_context_for(thinkrail_session)
 
         assert "SENTINEL_SESSION_PROMPT_VISIBLE" in prompt
         assert "SENTINEL_DRAFT_INPUT_HIDDEN" not in prompt
@@ -698,7 +701,7 @@ class TestPrepareDraftOnType:
             "thinkrailSid": "draft-restore",
             "name": "n",
             "specIds": [],
-            "config": AgentConfig().model_dump(by_alias=True),
+            "config": SessionConfig().model_dump(by_alias=True),
             "status": "draft",
             "draftInput": "fix login flow",
             "createdAt": "2026-05-30T00:00:00Z",
@@ -711,8 +714,8 @@ class TestPrepareDraftOnType:
         _install_mock_runtime(service)
         service._restore_draft_sessions()
 
-        task = service._tracker.get_task("draft-restore")
-        assert task.draft_input == "fix login flow"
+        thinkrail_session = service._tracker.get_task("draft-restore")
+        assert thinkrail_session.draft_input == "fix login flow"
 
 
 class TestBuildContext:
@@ -730,7 +733,7 @@ class TestBuildContext:
             spec_ids=["s1", "s2"],
             skill_id=None,
             project_root=Path("/tmp/test-project"),
-            config=AgentConfig(),
+            config=SessionConfig(),
             spec_service=spec_service,
             plugin_dir=Path("/tmp/plugins"),
         )
@@ -752,7 +755,7 @@ class TestBuildContext:
             spec_ids=[],
             skill_id=None,
             project_root=Path("/tmp/test-project"),
-            config=AgentConfig(),
+            config=SessionConfig(),
             spec_service=spec_service,
             plugin_dir=Path("/tmp/plugins"),
         )
@@ -775,7 +778,7 @@ class TestBuildContext:
                 spec_ids=[],
                 skill_id="test-skill",
                 project_root=Path("/tmp/test-project"),
-                config=AgentConfig(),
+                config=SessionConfig(),
                 spec_service=spec_service,
                 plugin_dir=Path("/tmp/plugins"),
             )
@@ -789,16 +792,16 @@ class TestValidateConfigAgainstCaps:
 
     def test_valid_config_passes(self) -> None:
         service, _, _ = _make_service()
-        task = service._tracker.create_task([], AgentConfig())  # all defaults are in caps
-        service._validate_config_against_caps(task)  # no raise
+        thinkrail_session = service._tracker.create_task([], SessionConfig())  # all defaults are in caps
+        service._validate_config_against_caps(thinkrail_session)  # no raise
 
     def test_out_of_caps_model_raises(self) -> None:
         from app.agent.exceptions import InvalidCapabilityValueError
 
         service, _, _ = _make_service()
-        task = service._tracker.create_task([], AgentConfig(model="ghost-model"))
+        thinkrail_session = service._tracker.create_task([], SessionConfig(model="ghost-model"))
         with pytest.raises(InvalidCapabilityValueError) as exc_info:
-            service._validate_config_against_caps(task)
+            service._validate_config_against_caps(thinkrail_session)
         exc = exc_info.value
         assert exc.field == "model"
         assert exc.value == "ghost-model"
@@ -810,24 +813,24 @@ class TestValidateConfigAgainstCaps:
         from app.agent.exceptions import InvalidCapabilityValueError
 
         service, _, _ = _make_service()
-        task = service._tracker.create_task([], AgentConfig(effort="bogus"))
+        thinkrail_session = service._tracker.create_task([], SessionConfig(effort="bogus"))
         with pytest.raises(InvalidCapabilityValueError) as exc_info:
-            service._validate_config_against_caps(task)
+            service._validate_config_against_caps(thinkrail_session)
         assert exc_info.value.field == "effort"
 
     def test_no_registry_skips_validation(self) -> None:
         service, _, _ = _make_service()
         service.runtime_registry = None
-        task = service._tracker.create_task([], AgentConfig(model="ghost-model"))
-        service._validate_config_against_caps(task)  # no raise — caps unavailable
+        thinkrail_session = service._tracker.create_task([], SessionConfig(model="ghost-model"))
+        service._validate_config_against_caps(thinkrail_session)  # no raise — caps unavailable
 
     def test_unknown_runtime_skips_validation(self) -> None:
         from app.agent.runtime import RuntimeRegistry
 
         service, _, _ = _make_service()
         service.runtime_registry = RuntimeRegistry()  # claude not registered
-        task = service._tracker.create_task([], AgentConfig(model="ghost-model"))
-        service._validate_config_against_caps(task)  # no raise — runtime unknown
+        thinkrail_session = service._tracker.create_task([], SessionConfig(model="ghost-model"))
+        service._validate_config_against_caps(thinkrail_session)  # no raise — runtime unknown
 
 
 class TestInterruptTaskRollback:
@@ -841,16 +844,149 @@ class TestInterruptTaskRollback:
         # Empty registry → UnknownRuntimeError on lookup
         service.runtime_registry = RuntimeRegistry()
 
-        task = service._tracker.create_task(
-            [], AgentConfig(runtime="claude"),  # Literal-valid but not registered
+        thinkrail_session = service._tracker.create_task(
+            [], SessionConfig(runtime="claude"),  # Literal-valid but not registered
         )
-        service._tracker.set_status(task.thinkrail_sid, "idle")
-        service._tracker.set_status(task.thinkrail_sid, "running")
+        service._tracker.set_status(thinkrail_session.thinkrail_sid, "idle")
+        service._tracker.set_status(thinkrail_session.thinkrail_sid, "running")
 
-        await service.interrupt_task(task.thinkrail_sid)
+        await service.interrupt_task(thinkrail_session.thinkrail_sid)
 
         # Flag must be cleared so the next ResultMessage doesn't trigger
         # a spurious agent/interrupted event.
-        assert service._tracker.is_interrupted(task.thinkrail_sid) is False
+        assert service._tracker.is_interrupted(thinkrail_session.thinkrail_sid) is False
+
+
+def _make_service_with_board(tmp_path: Path) -> tuple[AgentService, BoardService]:
+    """Build an AgentService wired to a real BoardService for integration tests."""
+    thinkrail_dir = tmp_path / ".tr"
+    thinkrail_dir.mkdir()
+    config = load_config(tmp_path)
+    board = BoardService(config)
+    service = AgentService(config, MagicMock())
+    _install_mock_runtime(service)
+    service.board_service = board
+    board.agent_service = service
+    return service, board
+
+
+class TestAttachToTicket:
+    def _session(self, skill_id: str | None):
+        return AgentTask(ticket_id="t1", skill_id=skill_id, config=SessionConfig())
+
+    def test_orchestrator_skill_becomes_ticket_orchestrator(self) -> None:
+        service, _, _ = _make_service()
+        service.board_service = MagicMock()
+        s = self._session("ticket-orchestrator")
+        service._attach_to_ticket(s)
+        service.board_service.attach_session.assert_called_once_with("t1", s.thinkrail_sid)
+        service.board_service.set_orchestrator.assert_called_once_with("t1", s.thinkrail_sid)
+
+    def test_non_orchestrator_skill_attaches_without_setting_orchestrator(self) -> None:
+        service, _, _ = _make_service()
+        service.board_service = MagicMock()
+        s = self._session("ticket-implement")
+        service._attach_to_ticket(s)
+        service.board_service.attach_session.assert_called_once()
+        service.board_service.set_orchestrator.assert_not_called()
+
+
+class TestIsTicketOrchestrator:
+    def test_true_for_role(self, tmp_path: Path) -> None:
+        svc, board = _make_service_with_board(tmp_path)
+        ticket = board.create_ticket("t", spawn_orchestrator=False)
+        session = AgentTask(name="s", ticket_id=ticket.id, skill_id="thinkrail-brainstorm")
+        board.set_orchestrator(ticket.id, session.thinkrail_sid)
+        assert svc._is_ticket_orchestrator(session) is True
+
+    def test_false_when_not_ref(self, tmp_path: Path) -> None:
+        svc, board = _make_service_with_board(tmp_path)
+        ticket = board.create_ticket("t", spawn_orchestrator=False)
+        session = AgentTask(name="s", ticket_id=ticket.id)
+        assert svc._is_ticket_orchestrator(session) is False
+
+    def test_false_when_no_ticket_id(self, tmp_path: Path) -> None:
+        svc, board = _make_service_with_board(tmp_path)
+        session = AgentTask(name="s")
+        assert svc._is_ticket_orchestrator(session) is False
+
+    def test_false_when_no_board_service(self) -> None:
+        service, _, _ = _make_service()
+        service.board_service = None
+        session = AgentTask(name="s", ticket_id="t1")
+        assert service._is_ticket_orchestrator(session) is False
+
+
+class TestPromoteToTicket:
+    async def test_adopts_session_as_orchestrator(self, tmp_path: Path) -> None:
+        svc, board = _make_service_with_board(tmp_path)
+        session = svc._tracker.create_task([], SessionConfig(), name="chat")
+        svc._save_task(session)
+
+        ticket = await svc.promote_to_ticket(session.thinkrail_sid, title="My feature")
+
+        assert ticket.orchestrator is not None
+        assert ticket.orchestrator.kind == "session"
+        assert ticket.orchestrator.session_id == session.thinkrail_sid
+        refreshed = svc._tracker.get_task(session.thinkrail_sid)
+        assert refreshed.ticket_id == ticket.id
+
+    async def test_rejects_session_already_in_ticket(self, tmp_path: Path) -> None:
+        svc, board = _make_service_with_board(tmp_path)
+        t = board.create_ticket("t", spawn_orchestrator=False)
+        session = svc._tracker.create_task([], SessionConfig(), name="x")
+        session.ticket_id = t.id
+        svc._save_task(session)
+
+        with pytest.raises(ValueError, match="already belongs to a ticket"):
+            await svc.promote_to_ticket(session.thinkrail_sid, title="y")
+
+    async def test_rejects_subsession(self, tmp_path: Path) -> None:
+        svc, board = _make_service_with_board(tmp_path)
+        session = svc._tracker.create_task([], SessionConfig(), name="sub")
+        session.parent_thinkrail_sid = "some-parent-sid"
+        svc._save_task(session)
+
+        with pytest.raises(ValueError, match="subsession"):
+            await svc.promote_to_ticket(session.thinkrail_sid, title="z")
+
+    async def test_no_fresh_orchestrator_spawned(self, tmp_path: Path) -> None:
+        svc, board = _make_service_with_board(tmp_path)
+        spawned = []
+        board.on_ticket_created = lambda tid, title: spawned.append(tid) or None
+        session = svc._tracker.create_task([], SessionConfig(), name="chat")
+        svc._save_task(session)
+
+        await svc.promote_to_ticket(session.thinkrail_sid, title="Feature X")
+
+        assert spawned == []
+
+    async def test_promote_persists_ticket_id_to_disk(self, tmp_path: Path) -> None:
+        from app.agent.persistence import load_session
+
+        svc, board = _make_service_with_board(tmp_path)
+        session = svc._tracker.create_task([], SessionConfig(), name="chat")
+        svc._save_task(session)
+
+        ticket = await svc.promote_to_ticket(session.thinkrail_sid, title="Persisted ticket")
+
+        loaded = load_session(tmp_path, session.thinkrail_sid)
+        assert loaded is not None
+        assert (loaded.get("ticketId") or loaded.get("ticket_id")) == ticket.id
+
+    async def test_promote_tolerates_legacy_disk_status(self, tmp_path: Path) -> None:
+        # A disk-only session written before the status set was trimmed still
+        # carries the removed "initializing" value; promotion must not 500 on it.
+        from app.agent.persistence import save_session
+
+        svc, board = _make_service_with_board(tmp_path)
+        sid = "legacy-init-1"
+        save_session(tmp_path, {"thinkrailSid": sid, "name": "old", "status": "initializing",
+                                "created": "t", "updated": "t"})
+
+        ticket = await svc.promote_to_ticket(sid, title="Legacy promote")
+
+        assert ticket.orchestrator is not None
+        assert ticket.orchestrator.session_id == sid
 
 

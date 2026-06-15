@@ -3,10 +3,10 @@ import type {
   ArtifactKind,
   ArtifactReadResult,
   Ticket,
-  TicketStatus,
   TicketSummary,
   TicketType,
 } from "@/types/board.ts";
+import type { TicketState } from "@/types/rpc-methods.ts";
 
 
 export function createBoardApi(client: RpcClient) {
@@ -17,18 +17,28 @@ export function createBoardApi(client: RpcClient) {
     get: (id: string) =>
       client.request<Ticket>("board/get", { id }),
 
+    getState: (id: string) =>
+      client.request<TicketState>("board/getState", { id }),
+
+    applyOp: (ticketId: string, op: Record<string, unknown>) =>
+      client.request<TicketState>("board/apply", { ticketId, op }),
+
+    completeNode: (ticketId: string, nodeId: string) =>
+      client.request<TicketState>("board/completeNode", { ticketId, nodeId }),
+
+    refineNode: (ticketId: string, nodeId: string) =>
+      client.request<TicketState>("board/refineNode", { ticketId, nodeId }),
+
     create: (
       title: string,
       body?: string,
       type?: TicketType,
-      status?: TicketStatus,
     ) =>
-      client.request<Ticket>("board/create", { title, body, type, status }),
+      client.request<Ticket>("board/create", { title, body, type }),
 
     update: (id: string, updates: {
       title?: string;
       body?: string;
-      status?: TicketStatus;
       type?: TicketType;
     }) =>
       client.request<Ticket>("board/update", { id, ...updates }),
@@ -36,8 +46,8 @@ export function createBoardApi(client: RpcClient) {
     delete: (id: string) =>
       client.request<null>("board/delete", { id }),
 
-    reorder: (id: string, status: TicketStatus, order: number) =>
-      client.request<Ticket>("board/reorder", { id, status, order }),
+    reorder: (id: string, order: number) =>
+      client.request<Ticket>("board/reorder", { id, order }),
 
     linkSpec: (ticketId: string, specId: string) =>
       client.request<Ticket>("board/linkSpec", { ticketId, specId }),
@@ -54,33 +64,8 @@ export function createBoardApi(client: RpcClient) {
     setOrchestrator: (ticketId: string, sessionId: string) =>
       client.request<Ticket>("board/setOrchestrator", { ticketId, sessionId }),
 
-    skipPhase: (ticketId: string, phase: TicketStatus) =>
-      client.request<Ticket>("board/skipPhase", { ticketId, phase }),
-
-    unskipPhase: (ticketId: string, phase: TicketStatus) =>
-      client.request<Ticket>("board/unskipPhase", { ticketId, phase }),
-
-    // Plan methods
-    getPlan: (ticketId: string) =>
-      client.request<Record<string, unknown> | null>("board/getPlan", { ticketId }),
-
-    createPlan: (ticketId: string, title: string, steps: Record<string, unknown>[], verification?: Record<string, unknown>[]) =>
-      client.request<Record<string, unknown>>("board/createPlan", { ticketId, title, steps, verification }),
-
-    savePlan: (ticketId: string, plan: Record<string, unknown>) =>
-      client.request<Record<string, unknown>>("board/savePlan", { ticketId, plan }),
-
-    getPlanRaw: (ticketId: string) =>
-      client.request<{ content: string }>("board/getPlanRaw", { ticketId }),
-
-    savePlanRaw: (ticketId: string, content: string) =>
-      client.request<Record<string, unknown>>("board/savePlanRaw", { ticketId, content }),
-
-    updateStep: (ticketId: string, stepNumber: number, status: string, sessionId?: string) =>
-      client.request<Record<string, unknown>>("board/updateStep", { ticketId, stepNumber, status, sessionId }),
-
-    getNextStep: (ticketId: string) =>
-      client.request<Record<string, unknown> | null>("board/getNextStep", { ticketId }),
+    setOrchestration: (ticketId: string, config: Record<string, unknown>) =>
+      client.request<TicketState>("board/apply", { ticketId, op: { op: "setOrchestration", config } }),
 
     // Artifact methods
     readArtifact: (ticketId: string, kind: ArtifactKind) =>

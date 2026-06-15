@@ -18,6 +18,8 @@ import {
   COLLAPSE_ALL_EVENT,
 } from "./useExpandCollapse.ts";
 import type { ApprovalInfo, EventRenderContext, TaskItem } from "./renderers/types.ts";
+import { getClient } from "@/api/index.ts";
+import { createBoardApi } from "@/api/methods/board.ts";
 import "./compact.css";
 
 /** Shared type for tool call end-state, used by SubagentBlock too. */
@@ -87,7 +89,7 @@ export const ChatStream = forwardRef<ChatStreamHandle, ChatStreamProps>(function
   onResolveRequest,
   session,
   onContextCardVisibility,
-  onApplyDescription,
+  onApplyDescription: onApplyDescriptionProp,
 }, ref) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const autoScroll = useRef(true);
@@ -391,6 +393,20 @@ export const ChatStream = forwardRef<ChatStreamHandle, ChatStreamProps>(function
       for (let k = 1; k < indices.length; k++) proposeFollowers.add(indices[k]);
     }
   }
+
+  // When no onApplyDescription is provided (workspace view) but the session
+  // is linked to a ticket, auto-apply the description via the board API.
+  const onApplyDescription = useCallback((text: string) => {
+    if (onApplyDescriptionProp) {
+      onApplyDescriptionProp(text);
+      return;
+    }
+    const ticketId = session?.ticketId;
+    if (!ticketId) return;
+    createBoardApi(getClient()).update(ticketId, { body: text }).catch((e) => {
+      console.error("[ChatStream] Failed to apply description to ticket:", e);
+    });
+  }, [onApplyDescriptionProp, session?.ticketId]);
 
   // ── Build render context ──
   const ctx: EventRenderContext = {

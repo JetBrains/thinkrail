@@ -37,14 +37,14 @@ export function SubsessionContextMenu({ containerRef, sessionId }: SubsessionCon
 
   if (!visible) return null;
 
-  const handleAction = (type: "discussion" | "refinement") => {
+  const handleAction = () => {
     import("@/store/sessionStore.ts").then(({ useSessionStore }) => {
       const store = useSessionStore.getState();
       store.createSubsession(
-        sessionId, type, selectedText,
-        type === "discussion"
-          ? "Discuss: " + selectedText.slice(0, 40)
-          : "Refine selection"
+        sessionId,
+        "discussion",
+        selectedText,
+        "Discuss: " + selectedText.slice(0, 40),
       );
     }).catch(console.error);
     setVisible(false);
@@ -53,11 +53,8 @@ export function SubsessionContextMenu({ containerRef, sessionId }: SubsessionCon
   return (
     <div className="subsession-context-menu" style={{ position: "fixed", left: position.x, top: position.y, zIndex: 1000 }}>
       <div className="context-menu-label">Selected text</div>
-      <button className="context-menu-item" onClick={() => handleAction("discussion")}>
+      <button className="context-menu-item" onClick={handleAction}>
         Discuss in subsession
-      </button>
-      <button className="context-menu-item" onClick={() => handleAction("refinement")}>
-        Refine in subsession
       </button>
     </div>
   );

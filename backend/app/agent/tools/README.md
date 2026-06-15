@@ -60,7 +60,6 @@ The `tools/__init__.py` re-exports what the runner and permissions need:
 | `specs.py` | Spec MCP tools — 3 tools: `spec_search`, `spec_links`, `spec_delete` | Active |
 | `suggest_description.py` | SuggestDescription proactive tool — agent proposes meta-ticket descriptions | Active |
 | `orchestrator.py` | Orchestrator tool — proposes next plan step for ticket execution | Active |
-| `change_ticket_status.py` | ChangeTicketStatus tool — transitions meta-ticket status | Active |
 | `_vis_validation.py` | Shared visualization validation — pure stdlib, imported by `visualization.py` and `vis-server.py` | Active |
 | `progress.py` | UpdateProgress proactive tool — agent broadcasts phase/plan/status | Future |
 
@@ -75,7 +74,6 @@ from app.agent.tools.suggest_session import intercept_suggest_session, suggest_s
 from app.agent.tools.suggest_description import intercept_suggest_description, suggest_description_mcp_server
 from app.agent.tools.visualization import intercept_visualize, vis_mcp_server
 from app.agent.tools.orchestrator import intercept_orchestrator, orchestrator_mcp_server
-from app.agent.tools.change_ticket_status import intercept_change_ticket_status, change_ticket_status_mcp_server
 
 MCP_SERVERS: dict[str, Any] = {
     "thinkrail-vis": vis_mcp_server,
@@ -83,7 +81,6 @@ MCP_SERVERS: dict[str, Any] = {
     "thinkrail-specs": specs_mcp_server,
     "thinkrail-describe": suggest_description_mcp_server,
     "thinkrail-orchestrator": orchestrator_mcp_server,
-    "thinkrail-ticket-status": change_ticket_status_mcp_server,
 }
 
 INTERCEPTORS: dict[str, InterceptFn] = {
@@ -91,7 +88,6 @@ INTERCEPTORS: dict[str, InterceptFn] = {
     "SuggestSession": intercept_suggest_session,
     "SuggestDescription": intercept_suggest_description,
     "suggest_step": intercept_orchestrator,
-    "ChangeTicketStatus": intercept_change_ticket_status,
     "spec_search": intercept_specs,
     "spec_links": intercept_specs,
     "spec_delete": intercept_specs,
@@ -302,7 +298,6 @@ async def _spec_search(args: dict) -> dict:
 | `"thinkrail-specs"` | `thinkrail-specs` | `spec_search`, `spec_links`, `spec_delete` | Spec search, link queries, and deletion |
 | `"thinkrail-describe"` | `thinkrail-describe` | `SuggestDescription` | Propose meta-ticket descriptions |
 | `"thinkrail-orchestrator"` | `thinkrail-orchestrator` | `suggest_step` | Propose next plan step for execution |
-| `"thinkrail-ticket-status"` | `thinkrail-ticket-status` | `ChangeTicketStatus` | Transition meta-ticket status |
 
 ## Adding a New Tool
 

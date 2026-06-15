@@ -75,7 +75,7 @@ export function StatusBar({ onOpenSessionManager }: StatusBarProps) {
 
   const sessionList = useSessionStore((s) => s.sessionList);
   const allLive = Array.from(sessions.values()).filter(
-    (s) => s.status !== "done" && s.status !== "error",
+    (s) => s.status !== "finished" && s.status !== "error",
   );
   const bgSessions = allLive.filter((s) => !openTabsSet.has(s.thinkrailSid));
   const bgCount = bgSessions.length;

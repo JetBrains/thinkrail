@@ -1,30 +1,23 @@
-import type { Ticket, ArtifactKind, TicketStatus } from "@/types/board.ts";
+import type { Ticket, ArtifactKind } from "@/types/board.ts";
 
 /** A selection in the right-column artifact bar. */
 export type SelectedArtifact =
   | { kind: "canonical"; artifact: Exclude<ArtifactKind, "implementation_plan" | "history"> }
   | { kind: "plan" }
-  /** Parsed history view. Optional `phaseFilter` pre-selects the in-header
-   *  filter dropdown (e.g. amend-specs → "Amendments" body title). */
-  | { kind: "history"; phaseFilter?: TicketStatus }
+  /** Parsed history view. Optional `phaseFilter` (a skill id) pre-selects
+   *  the in-header filter dropdown (e.g. ticket-amend-specs → "Amendments"). */
+  | { kind: "history"; phaseFilter?: string }
   | { kind: "file"; filePath: string };
 
 /** Pure derivation of the artifact list shown in the right column.
  *
- *  Order: phase canonicals (PD, TD), plan, phase-scoped amendments (when
- *  applicable), full history, session-touched files (deduped).
- *
- *  The raw `history.patch` file is NOT surfaced as a canonical artifact —
- *  the file is a log, not a deliverable. The user instead navigates via
- *  the phase-scoped `phase_diff` entry or the full `history` view.
- *
- *  Files touched during the amend-specs phase are also excluded from the
- *  per-file `file` entries: their changes are represented by the
- *  Amendments view, so listing them as standalone pinned artifacts would
- *  be redundant noise that sticks around forever once the phase moves on. */
+ *  Order: phase canonicals (PD, TD), plan, full history, session-touched
+ *  files (deduped). Files touched during the amend-specs phase are excluded
+ *  from per-file entries — the History view is their single source of truth. */
 export function deriveTicketArtifacts(
   ticket: Ticket,
-  _plan: unknown,
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  plan: any,
   historyCount: number,
   sessionTouchedFiles: { path: string }[],
   /** Project-relative paths of files touched by amend-specs. These get
@@ -37,7 +30,7 @@ export function deriveTicketArtifacts(
     out.push({ kind: "canonical", artifact: "product_design" });
   if (ticket.technicalDesignPath)
     out.push({ kind: "canonical", artifact: "technical_design" });
-  if (ticket.implementationPlanPath) out.push({ kind: "plan" });
+  if (ticket.implementationPlanPath || plan) out.push({ kind: "plan" });
   if (historyCount > 0) out.push({ kind: "history" });
 
   const canonicalPaths = new Set<string>(

@@ -4,21 +4,22 @@ import { persist, createJSONStorage } from "zustand/middleware";
 import type {
   Ticket,
   TicketSummary,
-  TicketStatus,
   TicketType,
 } from "@/types/board.ts";
 import { getClient } from "@/api/index.ts";
 import { createBoardApi } from "@/api/methods/board.ts";
+import { deriveLifecycle } from "@/utils/lifecycle.ts";
 import { useSpecStore } from "./specStore.ts";
 import { useSessionStore } from "./sessionStore.ts";
 import { useUiStore } from "./uiStore.ts";
 import { useFileStore } from "./fileStore.ts";
 import { findStaleSpecIds, findStaleSessionIds } from "@/utils/staleRefs.ts";
 
-/** Drop the body field so a full Ticket fits TicketSummary. */
+/** Project a full Ticket onto the board's TicketSummary: drop body, drop the
+ *  stages DAG, and derive the coarse lifecycle from those stages. */
 function toSummary(t: Ticket): TicketSummary {
-  const { body: _body, ...rest } = t;
-  return rest;
+  const { body: _body, stages, orchestration: _orchestration, ...rest } = t;
+  return { ...rest, lifecycle: deriveLifecycle(stages ?? []) };
 }
 
 interface BoardStore {
@@ -38,21 +39,17 @@ interface BoardStore {
     title: string,
     body?: string,
     type?: TicketType,
-    status?: TicketStatus,
   ) => Promise<Ticket>;
   updateTicket: (
     id: string,
     updates: {
       title?: string;
       body?: string;
-      status?: TicketStatus;
       type?: TicketType;
     },
   ) => Promise<Ticket>;
   deleteTicket: (id: string) => Promise<void>;
-  reorderTicket: (id: string, status: TicketStatus, order: number) => Promise<void>;
-  skipPhase: (id: string, phase: TicketStatus) => Promise<Ticket>;
-  unskipPhase: (id: string, phase: TicketStatus) => Promise<Ticket>;
+  reorderTicket: (id: string, order: number) => Promise<void>;
   /** Open a ticket as a tab and activate it */
   openTicket: (id: string) => void;
   /** Close a ticket tab */
@@ -104,9 +101,9 @@ export const useBoardStore = create<BoardStore>()(persist((set, get) => ({
     }
   },
 
-  createTicket: async (title, body, type, status) => {
+  createTicket: async (title, body, type) => {
     const api = createBoardApi(getClient());
-    const ticket = await api.create(title, body, type, status);
+    const ticket = await api.create(title, body, type);
     const tickets = new Map(get().tickets);
     tickets.set(ticket.id, toSummary(ticket));
     set({ tickets });
@@ -122,30 +119,12 @@ export const useBoardStore = create<BoardStore>()(persist((set, get) => ({
     return ticket;
   },
 
-  reorderTicket: async (id, status, order) => {
+  reorderTicket: async (id, order) => {
     const api = createBoardApi(getClient());
-    const ticket = await api.reorder(id, status, order);
+    const ticket = await api.reorder(id, order);
     const tickets = new Map(get().tickets);
     tickets.set(ticket.id, toSummary(ticket));
     set({ tickets });
-  },
-
-  skipPhase: async (id, phase) => {
-    const api = createBoardApi(getClient());
-    const ticket = await api.skipPhase(id, phase);
-    const tickets = new Map(get().tickets);
-    tickets.set(ticket.id, toSummary(ticket));
-    set({ tickets });
-    return ticket;
-  },
-
-  unskipPhase: async (id, phase) => {
-    const api = createBoardApi(getClient());
-    const ticket = await api.unskipPhase(id, phase);
-    const tickets = new Map(get().tickets);
-    tickets.set(ticket.id, toSummary(ticket));
-    set({ tickets });
-    return ticket;
   },
 
   deleteTicket: async (id) => {

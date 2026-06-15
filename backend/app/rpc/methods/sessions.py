@@ -45,7 +45,10 @@ async def restart_session(service: AgentService, **params: Any) -> dict:
 @_handle_errors
 async def delete_session_data(service: AgentService, **params: Any) -> None:
     """Delete a session and detach from all tickets."""
-    service.trash_session(params["thinkrailSid"])
+    thinkrail_sid = params["thinkrailSid"]
+    parent_id = service.parent_id_of(thinkrail_sid)
+    service.trash_session(thinkrail_sid)
+    await service._broadcast_blocked(parent_id)
 
 
 @_handle_errors
@@ -74,3 +77,15 @@ async def patch_outcome_action(service: AgentService, **params: Any) -> dict | N
     action_id = params["actionId"]
     patch = params.get("patch", {})
     return service.patch_outcome_action(thinkrail_sid, action_id, patch)
+
+
+@_handle_errors
+async def promote_to_ticket(service: AgentService, **params: Any) -> dict:
+    """Promote a standalone session to a ticket's orchestrator without losing its transcript."""
+    ticket = await service.promote_to_ticket(
+        params["thinkrailSid"],
+        title=params["title"],
+        body=params.get("body", ""),
+        type=params.get("type", "feature"),
+    )
+    return ticket.model_dump(by_alias=True)

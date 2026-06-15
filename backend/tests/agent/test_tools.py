@@ -911,13 +911,6 @@ class TestInterceptorsReturnNeutralResponse:
         assert isinstance(result, ToolPermissionResponse)
         assert result.behavior == "allow"
 
-    async def test_intercept_change_ticket_status_returns_neutral_allow(self, tmp_path: Path) -> None:
-        from app.agent.tools.change_ticket_status import intercept_change_ticket_status
-
-        result = await self._invoke(intercept_change_ticket_status, tmp_path)
-        assert isinstance(result, ToolPermissionResponse)
-        assert result.behavior == "allow"
-
     def test_no_claude_sdk_permission_imports_in_tools_package(self) -> None:
         """The whole point of Task 7: interceptor modules must not
         reference Claude SDK permission types. Walk each module's AST
@@ -926,7 +919,6 @@ class TestInterceptorsReturnNeutralResponse:
         import ast
 
         from app.agent.tools import (
-            change_ticket_status as ct_mod,
             orchestrator as orch_mod,
             specs as specs_mod,
             suggest_description as sd_mod,
@@ -934,7 +926,7 @@ class TestInterceptorsReturnNeutralResponse:
             visualization as vis_mod,
         )
 
-        modules = [ct_mod, orch_mod, specs_mod, sd_mod, ss_mod, vis_mod]
+        modules = [orch_mod, specs_mod, sd_mod, ss_mod, vis_mod]
         forbidden = {"PermissionResultAllow", "PermissionResultDeny"}
         for mod in modules:
             tree = ast.parse(open(mod.__file__).read())

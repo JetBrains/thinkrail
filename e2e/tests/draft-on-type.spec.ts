@@ -5,15 +5,15 @@ import { test, expect } from "../fixtures";
 import { openProject } from "../helpers/project";
 import { seedSessionDefaults } from "../helpers/appSettings";
 import {
-  header,
+  leftPanel,
   newSession,
   sessionManager,
   sessionPanel,
 } from "../helpers/selectors";
 
-/** Open the SessionManager (left panel) via the header Sessions view button. */
+/** Open the SessionManager via the left panel's Sessions tab. */
 async function openSessionManager(p: Page): Promise<void> {
-  await p.getByRole(header.sessionsTab.role, { name: header.sessionsTab.name }).click();
+  await p.locator(leftPanel.sessionsTab).click();
   await expect(p.locator(sessionManager.panel)).toBeVisible({ timeout: 15_000 });
 }
 

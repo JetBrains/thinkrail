@@ -15,10 +15,6 @@ from app.agent.tools.suggest_session import (
     intercept_suggest_session,
     suggest_session_mcp_server,
 )
-from app.agent.tools.change_ticket_status import (
-    change_ticket_status_mcp_server,
-    intercept_change_ticket_status,
-)
 from app.agent.tools.create_ticket import (
     create_ticket_mcp_server,
     intercept_create_board_ticket,
@@ -27,6 +23,7 @@ from app.agent.tools.label_artifact import (
     intercept_label_artifact,
     label_artifact_mcp_server,
 )
+from app.agent.tools.orchestration import intercept_orchestration, orchestration_mcp_server
 from app.agent.tools.orchestrator import intercept_orchestrator, orchestrator_mcp_server
 from app.agent.tools.preview import intercept_preview, preview_mcp_server
 from app.agent.tools.propose_change import (
@@ -46,13 +43,13 @@ InterceptFn = Callable[..., Coroutine[Any, Any, ToolPermissionResponse]]
 # tool module), so the prefix is defined in exactly one place.
 _MCP_SERVER_LIST = [
     vis_mcp_server,
+    orchestration_mcp_server,
     suggest_session_mcp_server,
     suggest_description_mcp_server,
     preview_mcp_server,
     propose_change_mcp_server,
     specs_mcp_server,
     orchestrator_mcp_server,
-    change_ticket_status_mcp_server,
     create_ticket_mcp_server,
     label_artifact_mcp_server,
     session_outcome_mcp_server,
@@ -74,8 +71,13 @@ INTERCEPTORS: dict[str, InterceptFn] = {
     "spec_search": intercept_specs,
     "spec_links": intercept_specs,
     "spec_delete": intercept_specs,
+    "propose_pipeline": intercept_orchestration,
+    "add_node": intercept_orchestration,
+    "remove_node": intercept_orchestration,
+    "set_depends_on": intercept_orchestration,
+    "propose_children": intercept_orchestration,
+    "start_node": intercept_orchestration,
     "suggest_step": intercept_orchestrator,
-    "ChangeTicketStatus": intercept_change_ticket_status,
     "CreateBoardTicket": intercept_create_board_ticket,
     "LabelArtifact": intercept_label_artifact,
     "SessionFinalize": intercept_session_finalize,

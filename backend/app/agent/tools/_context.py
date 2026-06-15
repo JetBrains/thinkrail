@@ -31,6 +31,7 @@ class ToolContext:
     config: AppConfig
     spec_service: SpecService | None = None  # cached service from server (reuses index connection)
     coordinator: IndexCoordinator | None = None  # serialized index mutations
+    agent_service: Any = None  # late-bound; lets tools spawn nested sessions (start_node)
 
 
 _tool_context: contextvars.ContextVar[ToolContext] = contextvars.ContextVar(
@@ -45,12 +46,13 @@ def set_tool_context(
     config: AppConfig,
     spec_service: SpecService | None = None,
     coordinator: "IndexCoordinator | None" = None,
+    agent_service: Any = None,
 ) -> contextvars.Token:
     """Set session context.  Called by the runtime before SDK operations."""
     return _tool_context.set(
         ToolContext(
             tracker=tracker, notify=notify, task=task, config=config,
-            spec_service=spec_service, coordinator=coordinator,
+            spec_service=spec_service, coordinator=coordinator, agent_service=agent_service,
         )
     )
 

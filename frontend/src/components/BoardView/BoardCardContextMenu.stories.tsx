@@ -11,22 +11,19 @@ import "./BoardView.css";
 const ticket: TicketSummary = {
   id: "t1",
   title: "Extract a shared Button",
-  status: "technical-design",
+  lifecycle: "design",
   type: "feature",
   productDesignPath: null,
   technicalDesignPath: null,
   historyPath: null,
   implementationPlanPath: null,
-  technicalDesignStale: false,
-  historyStale: false,
-  implementationPlanStale: false,
-  orchestratorSessionId: null,
+  orchestrator: null,
   linkedSpecIds: [],
   sessionIds: [],
   order: 0,
   created: "",
   updated: "",
-  skippedPhases: [],
+  rev: 0,
 };
 
 const meta = {

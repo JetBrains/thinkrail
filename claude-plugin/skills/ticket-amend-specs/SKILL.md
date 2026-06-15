@@ -14,7 +14,7 @@ argument-hint: "[ticket-context]"
 
 # Ticket: Amend specs (technical-design → amend-specs)
 
-You are amending the project's `{{TR_DIR}}/design_docs/*.md` files interactively, one file at a time, one section at a time, to reflect what the ticket's `technical-design.md` says. Each amendment is approved by the user via an inline diff card with four buttons; on accept the change is applied immediately and appended (as a unified-diff hunk plus metadata header) to `{{TR_DIR}}/tickets/{id}/spec-diff.patch` — a per-ticket session log of what was changed.
+You are amending the project's `{{TR_DIR}}/design_docs/*.md` files interactively, one file at a time, one section at a time, to reflect what the ticket's `technical-design.md` says. Each amendment is approved by the user via an inline diff card with four buttons; on accept the change is applied immediately and appended (as a unified-diff hunk plus metadata header) to `{{TR_DIR}}/tickets/{id}/history.patch` — a per-ticket session log of what was changed.
 
 ## Quick reference
 
@@ -26,7 +26,7 @@ You are amending the project's `{{TR_DIR}}/design_docs/*.md` files interactively
 | `spec_search` | Discover which specs are relevant |
 | `thinkrail_visualize` | Render the amendment plan |
 | `AskUserQuestion` | Plan approval, dispositions on rejection |
-| `ChangeTicketStatus` | Transition to `implementation-plan` |
+| `SessionFinalize` | Finalize the stage after the user confirms — hands control back to the orchestrator, which verifies the artifact and advances the pipeline |
 | `Read` | Read `product-design.md`, `technical-design.md`, project specs |
 | `TodoWrite` | Surface the workflow as live tasks in the ticket's "Tasks (n/m)" sub-row (call once at the start; re-emit after each task to update statuses) |
 
@@ -40,7 +40,7 @@ You are amending the project's `{{TR_DIR}}/design_docs/*.md` files interactively
    3. Get plan approval
    4. Apply amendments file by file
    5. Cross-file self-review
-   6. Finalize and transition
+   6. Finalize the stage
    ```
 
 1. **Examine context** *(task #1)* — `Read` `product-design.md` + `technical-design.md` from `{{TR_DIR}}/tickets/{id}/`. Use `spec_search` to enumerate project specs related to what the technical design touches.
@@ -80,14 +80,20 @@ You are amending the project's `{{TR_DIR}}/design_docs/*.md` files interactively
       - *Cancel transition* — keep ticket on amend-specs for further manual work.
    - Same rule for the intra-file checks in task #4: surface findings in chat, not in the spec file.
 
-7. **Finalize and transition** *(task #6)*
+7. **Finalize the stage** *(task #6)*
    1. `ClearPreviewFile()`.
-   2. `AskUserQuestion`: "All amendments done and self-reviewed. Move ticket to `implementation-plan`?" If yes, call `ChangeTicketStatus({ status: 'implementation-plan' })`. The backend commits all accumulated spec changes + the .patch log in one commit at this point.
+   2. **Confirm with the user** via `AskUserQuestion`: "All amendments done and self-reviewed. Finalize this stage and hand control back to the orchestrator?" If yes, call `SessionFinalize` with a one-line summary (this stage amends project specs and logs to `history.patch` — there is no single markdown artifact, so the artifacts list is empty):
+      ```json
+      {
+        "summary": "Specs amended — N change(s) applied and logged to history.patch."
+      }
+      ```
+   You do **not** advance the ticket yourself. Finalizing ends this stage — the board service commits the accumulated spec changes + the patch log — and resumes the orchestrator, which starts the next stage (`implementation-plan`).
 
 ## Red flags — STOP
 
 - About to call `Write` or `Edit` on a file under `{{TR_DIR}}/design_docs/`? STOP. Use `ProposeChange`. Reason: bypasses the approval gate, the `.patch` log, validation, and auto-link.
-- About to `git commit` during the step? STOP. The backend commits at the end (on transition to `implementation-plan`). A skill-side commit double-commits.
+- About to `git commit` during the step? STOP. The backend commits when this stage finalizes. A skill-side commit double-commits.
 - Skipping the amendment-plan approval (jumping straight into edits)? STOP. The plan is where the user shapes scope; skipping it forfeits their veto on which files get touched.
 - `ProposeChange` returned `discuss: true`? Treat it like Reject — the user's feedback is the next instruction. Don't re-propose the identical change.
 - One `ProposeChange` call covering multiple unrelated edits? STOP. Per-call should be small and focused. Split into multiple calls.
@@ -96,7 +102,7 @@ You are amending the project's `{{TR_DIR}}/design_docs/*.md` files interactively
 
 ## Output format
 
-Each successful `ProposeChange` writes one hunk + metadata header to `{{TR_DIR}}/tickets/{id}/spec-diff.patch`:
+Each successful `ProposeChange` writes one hunk + metadata header to `{{TR_DIR}}/tickets/{id}/history.patch`:
 
 ```
 # == amendment N =================================

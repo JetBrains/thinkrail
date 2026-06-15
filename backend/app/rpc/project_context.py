@@ -118,12 +118,66 @@ class ProjectContext:
 
     @property
     def agent_service(self) -> AgentService:
-        """Agent service — wires coordinator, board, runtime_registry."""
+        """Agent service — wires coordinator, board, and runtime registry.
+
+        agent_service ⟷ runtime registry form a dependency cycle (the service
+        holds the registry; each runtime holds the service back, for
+        nested-session tools like start_node). We break it by creating the
+        service first — it doesn't touch the registry until run time — then
+        building the registry with the service injected into each runtime's
+        constructor (the same DI path as spec_service / coordinator).
+        """
         if self._agent_service is None:
             svc = AgentService(self.config, self.spec_service, tracker=self.tracker)
             svc.coordinator = self.coordinator
             svc.board_service = self.board_service
-            svc.runtime_registry = self.runtime_registry
+            self._runtime_registry = self._build_runtime_registry(svc)
+            svc.runtime_registry = self._runtime_registry
+            self.board_service.agent_service = svc
+
+            async def _spawn_and_kick(ticket_id: str, title: str) -> None:
+                from app.agent.models import SessionConfig
+
+                task = await svc.run_task(
+                    spec_ids=[], config=SessionConfig(),
+                    skill_id="ticket-orchestrator", ticket_id=ticket_id,
+                    name=f"Orchestrate: {title}",
+                )
+                # run_task leaves the session idle; send the bootstrap turn so
+                # the orchestrator reads the ticket and proposes the pipeline.
+                await svc.send_message(
+                    task.thinkrail_sid,
+                    "A new ticket has been created. Read its description, then "
+                    "run intake: ask 1–2 questions focused only on the essence "
+                    "(what is this about) — do NOT ask design or implementation "
+                    "questions. Co-write an ultra-brief description (3 words to "
+                    "2 short sentences) via SuggestDescription. Once the "
+                    "description is settled, choose the pipeline with ONE "
+                    "AskUserQuestion carrying two questions — Q1 base pipeline "
+                    "(Full / Simplified / Inlined brainstorming) and Q2 additional "
+                    "stages as checkboxes (market research, UI-mockups, "
+                    "AI-criticism, …) — then call propose_pipeline with the "
+                    "composed DAG. Do NOT dispatch any stages until the user "
+                    "has chosen a pipeline.",
+                )
+
+            def _spawn_orchestrator(ticket_id: str, title: str) -> str | None:
+                """Fire-and-forget the ticket-orchestrator session for a new ticket.
+
+                Returns None — ``ticket.orchestrator`` is set when the session
+                attaches (see AgentService._attach_to_ticket). No running loop
+                (e.g. unit tests) → no spawn.
+                """
+                import asyncio
+
+                try:
+                    loop = asyncio.get_running_loop()
+                except RuntimeError:
+                    return None
+                loop.create_task(_spawn_and_kick(ticket_id, title))
+                return None
+
+            self.board_service.on_ticket_created = _spawn_orchestrator
             self._agent_service = svc
         return self._agent_service
 
@@ -136,26 +190,35 @@ class ProjectContext:
 
     @property
     def runtime_registry(self) -> RuntimeRegistry:
-        """Runtime registry — created on first access.
+        """Runtime registry — built as part of agent_service.
 
-        Runtimes are constructed once here with all of their dependencies
-        wired in (tracker, spec service, coordinator). Runtimes are
-        protocol-stateless; any per-runtime warmup (e.g. Claude model-list
-        refresh) is lazy and triggered internally on first use.
+        Each runtime holds a back-reference to agent_service (for
+        nested-session tools), so the registry is constructed inside the
+        agent_service property with that reference injected. Accessing the
+        registry first just builds agent_service, which caches it here.
         """
         if self._runtime_registry is None:
-            reg = RuntimeRegistry()
-            reg.register(
-                ClaudeRuntime(
-                    app_config=self.config,
-                    plugin_dir=self.config.plugin_dir,
-                    tracker=self.tracker,
-                    spec_service=self.spec_service,
-                    coordinator=self.coordinator,
-                )
-            )
-            self._runtime_registry = reg
+            _ = self.agent_service  # builds + caches self._runtime_registry
+        assert self._runtime_registry is not None
         return self._runtime_registry
+
+    def _build_runtime_registry(self, agent_service: AgentService) -> RuntimeRegistry:
+        """Construct the registry with every runtime dependency wired in
+        (tracker, spec service, coordinator, agent service). Runtimes are
+        protocol-stateless; per-runtime warmup (e.g. Claude model-list
+        refresh) is lazy and triggered internally on first use."""
+        reg = RuntimeRegistry()
+        reg.register(
+            ClaudeRuntime(
+                app_config=self.config,
+                plugin_dir=self.config.plugin_dir,
+                tracker=self.tracker,
+                spec_service=self.spec_service,
+                coordinator=self.coordinator,
+                agent_service=agent_service,
+            )
+        )
+        return reg
 
     # ── Lifecycle ─────────────────────────────────────────────────────────
 

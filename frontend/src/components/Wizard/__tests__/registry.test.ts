@@ -36,9 +36,9 @@ describe("Wizard registry", () => {
       const c = getWizardConfig("new-project", "pre-chat");
       expect(c).not.toBeNull();
       expect(c!.steps.map((s) => `${s.label}:${s.status}`)).toEqual([
-        "Describe:active",
-        "Guided session:pending",
-        "Goal & Requirements doc:pending",
+        "Describe project:active",
+        "Define goals:pending",
+        "Goals ready:pending",
       ]);
     });
 
@@ -46,18 +46,18 @@ describe("Wizard registry", () => {
       const c = getWizardConfig("new-project", "running");
       expect(c!.artifactPath).toBe("GOAL&REQUIREMENTS.md");
       expect(c!.steps.map((s) => `${s.label}:${s.status}`)).toEqual([
-        "Describe:done",
-        "Guided session:active",
-        "Goal & Requirements doc:pending",
+        "Describe project:done",
+        "Define goals:active",
+        "Goals ready:pending",
       ]);
     });
 
     it("done-screen makes the G&R outcome cell active", () => {
       const c = getWizardConfig("new-project", "done-screen");
       expect(c!.steps.map((s) => `${s.label}:${s.status}`)).toEqual([
-        "Describe:done",
-        "Guided session:done",
-        "Goal & Requirements doc:active",
+        "Describe project:done",
+        "Define goals:done",
+        "Goals ready:active",
       ]);
     });
 
@@ -65,18 +65,18 @@ describe("Wizard registry", () => {
       const c = getWizardConfig("architecture-design", "running");
       expect(c!.artifactPath).toBe("DESIGN_DOC.md");
       expect(c!.steps.map((s) => `${s.label}:${s.status}`)).toEqual([
-        "Describe:done",
-        "Guided session:done",
-        "Goal & Requirements doc:done",
-        "Architecture:active",
-        "Design doc:pending",
+        "Describe project:done",
+        "Define goals:done",
+        "Goals ready:done",
+        "Define architecture:active",
+        "Architecture ready:pending",
       ]);
     });
 
     it("architecture-design done-screen makes the final outcome cell active", () => {
       const c = getWizardConfig("architecture-design", "done-screen");
       const last = c!.steps[c!.steps.length - 1];
-      expect(last).toEqual({ label: "Design doc", status: "active" });
+      expect(last).toMatchObject({ label: "Architecture ready", status: "active" });
     });
   });
 
@@ -93,7 +93,7 @@ describe("Wizard registry", () => {
       );
       expect(c!.artifactPath).toBe("DESIGN_DOC.md");
       expect(c!.steps.map((s) => `${s.label}:${s.status}`)).toEqual([
-        "What we'll read:active",
+        "Select files:active",
         "Investigation:pending",
         "Review:pending",
       ]);
@@ -106,7 +106,7 @@ describe("Wizard registry", () => {
         "investigate-project",
       );
       expect(c!.steps.map((s) => `${s.label}:${s.status}`)).toEqual([
-        "What we'll read:done",
+        "Select files:done",
         "Investigation:active",
         "Review:pending",
       ]);
@@ -119,7 +119,7 @@ describe("Wizard registry", () => {
         "investigate-project",
       );
       expect(c!.steps.map((s) => `${s.label}:${s.status}`)).toEqual([
-        "What we'll read:done",
+        "Select files:done",
         "Investigation:done",
         "Review:active",
       ]);
@@ -129,7 +129,7 @@ describe("Wizard registry", () => {
       const c = getWizardConfig("new-project", "running", "investigate-project");
       expect(c!.artifactPath).toBe("GOAL&REQUIREMENTS.md");
       expect(c!.steps.map((s) => `${s.label}:${s.status}`)).toEqual([
-        "What we'll read:done",
+        "Select files:done",
         "Investigation:done",
         "Review:done",
         "Clarify:active",
@@ -140,7 +140,7 @@ describe("Wizard registry", () => {
     it("Clarify done-screen makes 'Verify & save' active (final outcome)", () => {
       const c = getWizardConfig("new-project", "done-screen", "investigate-project");
       expect(c!.steps.map((s) => `${s.label}:${s.status}`)).toEqual([
-        "What we'll read:done",
+        "Select files:done",
         "Investigation:done",
         "Review:done",
         "Clarify:done",
@@ -155,7 +155,7 @@ describe("Wizard registry", () => {
         "investigate-project",
       );
       expect(c!.steps.map((s) => `${s.label}:${s.status}`)).toEqual([
-        "What we'll read:done",
+        "Select files:done",
         "Investigation:done",
         "Review:done",
         "Clarify:active",
@@ -166,7 +166,7 @@ describe("Wizard registry", () => {
     it("architecture-design stays on the new-project chain only", () => {
       const c = getWizardConfig("architecture-design", "running");
       expect(c!.steps.some((s) => s.label === "Investigation")).toBe(false);
-      expect(c!.steps.some((s) => s.label === "Architecture")).toBe(true);
+      expect(c!.steps.some((s) => s.label === "Define architecture")).toBe(true);
     });
   });
 
@@ -263,7 +263,7 @@ describe("stepperFromJourney — cumulative cross-chain stepper", () => {
 
   it("entry session shows its 3 cells, running cell active", () => {
     expect(labels([INVESTIGATE], "s1", "running")).toEqual([
-      "What we'll read:done",
+      "Select files:done",
       "Investigation:active",
       "Review:pending",
     ]);
@@ -273,7 +273,7 @@ describe("stepperFromJourney — cumulative cross-chain stepper", () => {
     // This is the regression: a `new-project` session in the investigate
     // chain must NOT relabel the path to Describe/Guided session/G&R.
     expect(labels([INVESTIGATE, CLARIFY], "s2", "done-screen")).toEqual([
-      "What we'll read:done",
+      "Select files:done",
       "Investigation:done",
       "Review:done",
       "Clarify:done",
@@ -283,13 +283,13 @@ describe("stepperFromJourney — cumulative cross-chain stepper", () => {
 
   it("Architecture appends two cells across the chain boundary, prior steps stay done", () => {
     expect(labels([INVESTIGATE, CLARIFY, ARCHITECTURE], "s3", "running")).toEqual([
-      "What we'll read:done",
+      "Select files:done",
       "Investigation:done",
       "Review:done",
       "Clarify:done",
       "Verify & save:done",
-      "Architecture:active",
-      "Design doc:pending",
+      "Define architecture:active",
+      "Architecture ready:pending",
     ]);
   });
 
@@ -302,7 +302,7 @@ describe("stepperFromJourney — cumulative cross-chain stepper", () => {
 
   it("falls back to the last entry when the active sid isn't in the journey", () => {
     expect(labels([INVESTIGATE, CLARIFY], "unknown", "done-screen")).toEqual([
-      "What we'll read:done",
+      "Select files:done",
       "Investigation:done",
       "Review:done",
       "Clarify:done",

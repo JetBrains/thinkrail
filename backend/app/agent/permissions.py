@@ -86,12 +86,18 @@ _INTERCEPTOR_CATEGORIES: dict[str, ToolCategory] = {
     "spec_search": "read",
     "spec_links": "read",
     "suggest_step": "read",        # interactive proposal; user must approve
+    # Orchestration DAG mutations — blocked in plan mode; interactive stage
+    # gate for start_node is handled inside the handler itself.
+    "propose_pipeline": "edit",
+    "add_node": "edit",
+    "remove_node": "edit",
+    "set_depends_on": "edit",
+    "propose_children": "edit",
+    "start_node": "edit",
     # Mutating — must be denied in plan mode. ``spec_delete`` removes
-    # spec files; ``ChangeTicketStatus`` flips ticket state. Neither
-    # goes through a second permission gate inside their handler, so
-    # the gate has to live here.
+    # spec files; it doesn't go through a second permission gate inside
+    # its handler, so the gate has to live here.
     "spec_delete": "edit",
-    "ChangeTicketStatus": "edit",
     "CreateBoardTicket": "edit",
     "LabelArtifact": "read",       # display-only annotation
     "ProposeChange": "edit",       # user approves the actual write in-card,
@@ -265,8 +271,8 @@ async def can_use_tool(
        ``answers``).
     2. Mode-category filter — enforces ``permission_mode`` against the
        tool's category. Runs before INTERCEPTORS so plan mode can
-       deny mutating MCP tools (``spec_delete``, ``ChangeTicketStatus``,
-       ``SuggestDescription``) that auto-approve in their interceptor.
+       deny mutating MCP tools (``spec_delete``, ``SuggestDescription``)
+       that auto-approve in their interceptor.
     3. INTERCEPTORS — suffix-matched MCP tool interceptors. Real tool
        logic lives in their handlers via ``get_tool_context()``.
     4. Default — generic tool approval via ``agent/confirmAction``.
@@ -378,3 +384,15 @@ async def claude_can_use_tool_adapter(
         message=response.message or "Denied",
         interrupt=response.interrupt,
     )
+
+
+# ── Orchestration stage gate ──────────────────────────────────────────────────
+
+def _gate_for_tool(skill_id: str | None, orch_cfg: dict) -> str:
+    """Resolve stage gate mode from ticket orchestration config."""
+    return orch_cfg.get("stage_gate") or orch_cfg.get("stageGate") or "approve"
+
+
+def _orchestration_gate(skill_id: str | None, orch_cfg: dict) -> str:
+    """Return 'approve' or 'autonomous' for the start_node stage gate."""
+    return _gate_for_tool(skill_id, orch_cfg)

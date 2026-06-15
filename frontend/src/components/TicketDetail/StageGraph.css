@@ -1,0 +1,364 @@
+/* ── Stage tree container ── */
+.stage-graph {
+  display: flex;
+  flex-direction: column;
+  margin-top: 2px;
+}
+
+/* ── Orchestrator root row (in TicketInfo) ── */
+.stage-orchestrator-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 6px;
+  border-radius: var(--radius-sm, 4px);
+  cursor: pointer;
+  font-size: var(--font-sm, 11px);
+  color: var(--text);
+  position: relative;
+}
+
+.stage-orchestrator-row--active .stage-orchestrator-label {
+  color: var(--blue, #3B74EE);
+}
+
+.stage-orchestrator-row:hover {
+  background: var(--hover, rgba(127, 127, 127, 0.1));
+}
+
+.stage-orchestrator-row--disabled {
+  cursor: default;
+  opacity: 0.5;
+}
+
+.stage-orchestrator-row--disabled:hover {
+  background: none;
+}
+
+.stage-orchestrator-label {
+  flex: 1;
+  font-size: var(--font-sm, 11px);
+  color: var(--muted);
+}
+
+.stage-orch-live-dot {
+  flex-shrink: 0;
+}
+
+.stage-orch-waiting {
+  flex-shrink: 0;
+  font-size: var(--font-xs, 10px);
+  opacity: 0.7;
+}
+
+.stage-gear-btn {
+  flex-shrink: 0;
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--hint, #6f737a);
+  font-size: var(--font-sm, 11px);
+  padding: 1px 3px;
+  border-radius: var(--radius-sm, 4px);
+  line-height: 1;
+  margin-left: auto;
+  transition: color var(--transition-fast, 120ms ease);
+}
+
+.stage-gear-btn:hover {
+  color: var(--text);
+}
+
+/* ── Orchestration settings popover ── */
+.stage-orch-popover {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  z-index: 200;
+  background: var(--panel, #2b2d30);
+  border: 1px solid var(--border, #43454a);
+  border-radius: var(--radius-md, 6px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+  padding: 8px;
+  min-width: 220px;
+  margin-top: 2px;
+}
+
+/* ── Stage tree rows ── */
+.stage-tree {
+  display: flex;
+  flex-direction: column;
+}
+
+.stage-row {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 2px 6px;
+  border-radius: var(--radius-sm, 4px);
+  cursor: pointer;
+  font-size: var(--font-sm, 11px);
+  color: var(--text);
+  position: relative;
+  min-height: 20px;
+}
+
+.stage-row:hover {
+  background: var(--hover, rgba(127, 127, 127, 0.1));
+}
+
+/* ── Rail connector (left-side tree line) ── */
+.stage-row-rail {
+  display: flex;
+  align-items: stretch;
+  flex-shrink: 0;
+}
+
+.stage-rail-segment {
+  width: 12px;
+  flex-shrink: 0;
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Vertical guide line for non-last siblings */
+.stage-rail-segment--branch::before {
+  content: "";
+  position: absolute;
+  left: 5px;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  background: var(--border, #43454a);
+  opacity: 0.5;
+}
+
+/* Elbow connector for the row itself */
+.stage-rail-segment--elbow::before {
+  content: "";
+  position: absolute;
+  left: 5px;
+  top: 0;
+  bottom: 50%;
+  width: 1px;
+  background: var(--border, #43454a);
+  opacity: 0.5;
+}
+
+.stage-rail-segment--elbow::after {
+  content: "";
+  position: absolute;
+  left: 5px;
+  top: 50%;
+  width: 7px;
+  height: 1px;
+  background: var(--border, #43454a);
+  opacity: 0.5;
+}
+
+.stage-chevron {
+  width: 10px;
+  flex-shrink: 0;
+  text-align: center;
+  font-size: 9px;
+  color: var(--muted);
+  cursor: pointer;
+  line-height: 1;
+}
+
+.stage-icon {
+  width: 13px;
+  flex-shrink: 0;
+  text-align: center;
+  color: var(--muted);
+  font-size: var(--font-sm, 11px);
+}
+
+.stage-title {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+  font-size: var(--font-sm, 11px);
+}
+
+.stage-actions {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  flex-shrink: 0;
+  margin-left: auto;
+}
+
+.stage-status {
+  font-size: var(--font-xs, 10px);
+  color: var(--hint);
+  text-transform: lowercase;
+}
+
+.stage-icon-btn {
+  font-size: var(--font-xs, 10px);
+  padding: 1px 3px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm, 4px);
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.1s, color 0.1s, border-color 0.1s;
+  white-space: nowrap;
+  line-height: 1.4;
+}
+
+.stage-row:hover .stage-icon-btn {
+  opacity: 1;
+}
+
+.stage-icon-btn:hover {
+  color: var(--blue, #3B74EE);
+  border-color: var(--border);
+  background: var(--elevated, transparent);
+}
+
+/* ── Status colors ── */
+.stage-running .stage-icon { color: var(--blue, #3B74EE); }
+.stage-done .stage-icon { color: var(--green, #21D789); }
+.stage-failed .stage-icon { color: var(--red, #F75464); }
+.stage-done .stage-title { color: var(--muted); }
+
+/* ── Sub-rows (artifact, session) ── */
+.stage-sub-rows {
+  display: flex;
+  flex-direction: column;
+}
+
+.stage-sub-row {
+  font-size: var(--font-xs, 10px);
+  color: var(--muted);
+  padding-top: 1px;
+  padding-bottom: 1px;
+}
+
+/* ── Shimmer animation for running status ── */
+@keyframes stage-shimmer {
+  0%   { opacity: 1; }
+  50%  { opacity: 0.45; }
+  100% { opacity: 1; }
+}
+
+/* ── Live dot pulse for running rows ── */
+@keyframes stage-live-pulse {
+  0%   { transform: scale(1);   opacity: 1; }
+  50%  { transform: scale(1.5); opacity: 0.5; }
+  100% { transform: scale(1);   opacity: 1; }
+}
+
+.stage-live-dot {
+  display: inline-block;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--blue, #3B74EE);
+  flex-shrink: 0;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .stage-running .stage-icon,
+  .stage-running .stage-status {
+    animation: stage-shimmer 1.8s ease-in-out infinite;
+  }
+
+  .stage-sub-row--active .stage-icon {
+    animation: stage-shimmer 1.8s ease-in-out infinite;
+  }
+
+  .stage-live-dot {
+    animation: stage-live-pulse 1.4s ease-in-out infinite;
+  }
+}
+
+/* ── Session sub-row: n/m todo count ── */
+.stage-session-count {
+  font-size: var(--font-xs, 10px);
+  color: var(--hint);
+  flex-shrink: 0;
+  margin-left: auto;
+}
+
+/* ── Session expanded rows (todos + files) ── */
+.stage-session-todo-row .stage-session-todo-glyph {
+  color: var(--muted);
+}
+
+.stage-session-todo-row .stage-session-todo-content {
+  color: var(--muted);
+}
+
+.stage-session-file-row {
+  cursor: pointer;
+}
+
+.stage-session-file-row:hover {
+  background: var(--hover, rgba(127, 127, 127, 0.1));
+}
+
+/* ── Orchestration controls (now only in popover) ── */
+.orchestration-controls {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.orch-segment {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 5px;
+}
+
+.orch-segment-label {
+  font-size: var(--font-xs, 10px);
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.orch-segment-pills {
+  display: flex;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm, 4px);
+  overflow: hidden;
+}
+
+.orch-pill {
+  font-size: var(--font-xs, 10px);
+  padding: 2px 6px;
+  border: none;
+  border-left: 1px solid var(--border);
+  background: var(--elevated, transparent);
+  color: var(--muted);
+  cursor: pointer;
+  line-height: 1.5;
+  transition: background 0.1s, color 0.1s;
+}
+
+.orch-pill:first-child {
+  border-left: none;
+}
+
+.orch-pill:hover {
+  color: var(--text);
+  background: var(--hover, rgba(127, 127, 127, 0.1));
+}
+
+.orch-pill--active {
+  background: var(--purple, #6B57FF);
+  color: #fff;
+}
+
+.orch-pill--active:hover {
+  background: var(--purple, #6B57FF);
+  color: #fff;
+}

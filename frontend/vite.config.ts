@@ -48,6 +48,9 @@ export default defineConfig(({ mode }) => {
         "@": path.resolve(__dirname, "src"),
       },
     },
+    test: {
+      setupFiles: ["./vitest.setup.ts"],
+    },
     server: {
       port: frontendPort,
       host: "0.0.0.0",

@@ -33,7 +33,6 @@ class TestWriteAndRead:
         assert loaded.id == t.id
         assert loaded.title == "Test ticket"
         assert loaded.body == "Description"
-        assert loaded.status == "idea"
 
     def test_json_format(self, tmp_path: Path) -> None:
         t = Ticket(title="Test", linked_spec_ids=["s1"])

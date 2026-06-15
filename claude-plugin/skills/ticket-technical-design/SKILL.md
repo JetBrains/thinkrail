@@ -21,7 +21,7 @@ You are running the **technical design** phase. This step produces `{{TR_DIR}}/t
 | `ProposeChange` | Fill each section with user approval (4-button card) |
 | `AskUserQuestion` | Clarifying questions, "evolve vs from scratch" branching, architectural-approach picking — never section content |
 | `thinkrail_visualize` | Architectural-approach comparison, diagrams |
-| `ChangeTicketStatus` | Transition to `amend-specs` after confirmation (status === ongoing work; TD is done, next phase becomes active) |
+| `SessionFinalize` | Finalize the stage after the user confirms — hands control back to the orchestrator, which verifies the artifact and advances the pipeline |
 | `spec_search` | Discover existing architecture / module specs |
 | `Read` | Read `product-design.md` and relevant project specs |
 | `TodoWrite` | Surface the workflow as live tasks in the ticket's "Tasks (n/m)" sub-row (call once at the start; re-emit after each task to update statuses) |
@@ -43,7 +43,7 @@ You are running the **technical design** phase. This step produces `{{TR_DIR}}/t
    10. Draft section: Testing strategy
    11. Draft section: Validation criteria
    12. Self-review document
-   13. Finalize and transition
+   13. Finalize the stage
    ```
 
 1. **Examine context** *(task #1)* — `Read` `product-design.md` from `{{TR_DIR}}/tickets/{id}/`. Read related `{{TR_DIR}}/design_docs/` to understand current architecture.
@@ -130,16 +130,23 @@ You are running the **technical design** phase. This step produces `{{TR_DIR}}/t
       - *Cancel transition* — leave the ticket where it is for manual work.
    - Do NOT write a "Self-review" section into the document. The doc records the design, not the review.
 
-9. **Finalize** *(task #13)*
+9. **Finalize the stage** *(task #13)*
    1. **`ClearPreviewFile()`**.
-   2. **Propose the state transition** via `AskUserQuestion`: "Technical design and self-review complete. Shall I move the ticket to `amend-specs`?" If yes, call `ChangeTicketStatus({ status: 'amend-specs' })`. (Status === ongoing work: TD is done, the next active phase is amending the project specs.)
+   2. **Confirm with the user** via `AskUserQuestion`: "Technical design looks complete. Finalize this stage and hand control back to the orchestrator?" If yes, call `SessionFinalize` with the artifact and a one-line summary:
+      ```json
+      {
+        "summary": "Technical design complete — technical-design.md drafted and self-reviewed.",
+        "artifacts": [{ "path": "{{TR_DIR}}/tickets/{id}/technical-design.md", "label": "Technical design" }]
+      }
+      ```
+   You do **not** advance the ticket yourself. Finalizing ends this stage and automatically resumes the orchestrator, which reviews your artifact, adjusts the pipeline if needed, and starts the next stage (`amend-specs`).
 
 ## Guidelines
 
 - This is the **technical** phase. The product design is fixed input.
 - Always propose multiple architectural approaches before settling — that comparison happens in chat, not via `ProposeChange`.
 - Skeleton is written first via `Write` (from-scratch path); every section after that goes through `ProposeChange` — this is the user's section-approval surface.
-- Self-review is a runtime check, not a doc section: surface findings in chat via `AskUserQuestion`, address with `ProposeChange` if the user wants. Do not write a "Self-review" section into the technical-design document. Blocking issues do not transition until the user explicitly accepts them.
+- Self-review is a runtime check, not a doc section: surface findings in chat via `AskUserQuestion`, address with `ProposeChange` if the user wants. Do not write a "Self-review" section into the technical-design document. Blocking issues do not finalize until the user explicitly accepts them.
 - Save the artifact under `{{TR_DIR}}/tickets/{id}/`; `Write` creates parent directories.
 
 ## Red flags — STOP
@@ -147,8 +154,8 @@ You are running the **technical design** phase. This step produces `{{TR_DIR}}/t
 - About to call `Edit` on `technical-design.md` to fill a section? STOP. Use `ProposeChange` so the user can inline-edit, discuss, or reject before the write lands.
 - About to use `AskUserQuestion` to approve a section's *content*? STOP. The 4-button `ProposeChange` card is the section-approval surface now. `AskUserQuestion` is for clarifying questions and the "evolve vs from scratch" + architectural-approach branching choices only.
 - About to fill multiple sections in one `ProposeChange` call? STOP. Per-call should cover one section. The `section` field labels the card; bundling makes the card ambiguous.
-- About to commit during the skill? STOP. These drafting skills do not commit at all. Commits happen later, only on amend-specs → implementation-plan transitions, via `BoardService.on_status_change`.
-- `<!-- pending -->` marker still in the file when you're about to transition? STOP. That section is unfilled. Either fill it or remove the marker explicitly via `ProposeChange`.
-- Blocking issues in self-review and you're about to transition anyway? STOP. Self-review is a hard gate; surface the issues in chat and propose the user goes back to revise.
+- About to commit during the skill? STOP. These drafting skills do not commit at all. Commits happen later — only when the amend-specs stage completes, where the board service commits the accumulated spec changes + the patch log.
+- `<!-- pending -->` marker still in the file when you're about to finalize? STOP. That section is unfilled. Either fill it or remove the marker explicitly via `ProposeChange`.
+- Blocking issues in self-review and you're about to finalize anyway? STOP. Self-review is a hard gate; surface the issues in chat and propose the user goes back to revise.
 - Drafting a section without first marking its task `in_progress` via `TodoWrite`? STOP. The Tasks (n/m) sub-row stalls — users can't see what you're working on.
 - About to call `TodoWrite` only once (at the start)? STOP. You must re-emit after each task to update statuses; the frontend reads the latest snapshot per session.

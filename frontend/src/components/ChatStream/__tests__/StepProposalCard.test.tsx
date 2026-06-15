@@ -140,9 +140,9 @@ describe("classicRenderers.suggestStep approve flow", () => {
 
     const ctx = buildCtx();
     const node = classicRenderers.suggestStep!(event as never, 0, "k", ctx);
-    const { container } = render(<>{node}</>);
+    render(<>{node}</>);
 
-    fireEvent.click(container.querySelector(".chat-btn-approve") as HTMLButtonElement);
+    fireEvent.click(screen.getByText("Start Step"));
     // Yield twice — once for startSession, once for sendMessage
     await new Promise((r) => setTimeout(r, 0));
     await new Promise((r) => setTimeout(r, 0));
@@ -179,7 +179,7 @@ describe("classicRenderers.suggestStep approve flow", () => {
     const node = classicRenderers.suggestStep!(event as never, 0, "k", ctx);
     const { container } = render(<>{node}</>);
 
-    fireEvent.click(container.querySelector(".chat-btn-deny") as HTMLButtonElement);
+    fireEvent.click(screen.getByText("Dismiss…"));
     const textarea = container.querySelector("textarea") as HTMLTextAreaElement;
     fireEvent.change(textarea, { target: { value: "skip for now" } });
     fireEvent.click(screen.getByText("Dismiss"));

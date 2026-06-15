@@ -459,7 +459,6 @@ class TestCategorize:
             ("mcp__thinkrail-orchestrator__suggest_step", "read"),
             # Mutating interceptors — must be denied in plan mode.
             ("mcp__thinkrail-specs__spec_delete", "edit"),
-            ("mcp__thinkrail-ticket-status__ChangeTicketStatus", "edit"),
         ],
     )
     def test_mcp_interceptor_routes_to_proper_category(
@@ -869,19 +868,17 @@ class TestCanUseToolModeFiltering:
                 "mcp__thinkrail-describe__SuggestDescription",
                 {"apply": True},
             ),
-            ("mcp__thinkrail-ticket-status__ChangeTicketStatus", {}),
         ],
     )
     async def test_plan_mode_denies_mutating_mcp_interceptor(
         self, tool_name: str, tool_input: dict,
     ) -> None:
         """Mutating ThinkRail MCP tools (``spec_delete``,
-        ``SuggestDescription`` w/ ``apply=true``, ``ChangeTicketStatus``)
-        are categorized as ``"edit"`` so plan mode auto-denies before
-        the interceptor's auto-approve path can run. Otherwise plan
-        mode could still delete spec files, write ticket descriptions,
-        or transition ticket states — none of which have a second
-        permission gate inside their handlers.
+        ``SuggestDescription`` w/ ``apply=true``) are categorized as
+        ``"edit"`` so plan mode auto-denies before the interceptor's
+        auto-approve path can run. Otherwise plan mode could still
+        delete spec files or write ticket descriptions — neither of
+        which has a second permission gate inside their handlers.
         """
         tracker = Tracker()
         task = _make_task(tracker)

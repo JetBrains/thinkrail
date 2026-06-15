@@ -159,11 +159,7 @@ export function WizardDonePanel({ session, outcome }: WizardDonePanelProps) {
       if (busyActionId || action.state === "applied") return;
       setBusyActionId(action.id);
       try {
-        // Wizard outcome already collected enough context to draft the
-        // body; the ticket lands in "described" rather than the default
-        // "idea" column so it's visible in the next-action column from
-        // the start.
-        await createTicket(action.title, action.body ?? undefined, undefined, "product-design");
+        await createTicket(action.title, action.body ?? undefined, undefined);
         await patchOutcomeAction(session.thinkrailSid, action.id, { state: "applied" });
       } finally {
         setBusyActionId(null);
@@ -194,7 +190,7 @@ export function WizardDonePanel({ session, outcome }: WizardDonePanelProps) {
     try {
       for (const t of pendingTickets) {
         try {
-          await createTicket(t.title, t.body ?? undefined, undefined, "product-design");
+          await createTicket(t.title, t.body ?? undefined, undefined);
           await patchOutcomeAction(session.thinkrailSid, t.id, { state: "applied" });
           succeeded++;
         } catch (e) {

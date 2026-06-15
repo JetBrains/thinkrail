@@ -32,14 +32,16 @@ const IconHourglass = () => (
 
 function statusInfo(status: SessionStatus): StatusInfo {
   switch (status) {
-    case "draft":        return { icon: "✏",            label: "draft", cssClass: "idle" };
-    case "initializing": return { icon: <IconHourglass />, label: "initializing", cssClass: "initializing" };
-    case "running":      return { icon: "",              label: "running", cssClass: "running" };
+    case "draft":
+    case "initializing": return { icon: "✏",              label: status, cssClass: "idle" };
+    case "running":      return { icon: "",                label: "running", cssClass: "running" };
     case "waiting":      return { icon: <IconHourglass />, label: "waiting", cssClass: "waiting" };
-    case "idle":         return { icon: "💤",            label: "idle", cssClass: "idle" };
-    case "interrupted":  return { icon: "⏸",            label: "interrupted", cssClass: "interrupted" };
+    case "idle":         return { icon: "💤",              label: "idle", cssClass: "idle" };
+    case "interrupted":  return { icon: "⚡",              label: "interrupted", cssClass: "idle" };
+    case "finished":
     case "done":
-    case "error":        return { icon: "⏹",            label: "ended", cssClass: "ended" };
+    case "error":        return { icon: "⏹",              label: status === "error" ? "error" : "done", cssClass: "ended" };
+    default:             return { icon: "?",               label: status as string, cssClass: "idle" };
   }
 }
 
@@ -196,6 +198,7 @@ interface SessionStatusLineProps {
   onInterrupt?: () => void;
   onEndSession?: () => void;
   onBackground?: () => void;
+  onPromoteToTicket?: () => void;
   /** Ref-callback for the right-aligned slot where InputArea portals
    *  its session-action buttons (Continue / Start / Stop). */
   actionSlotRef?: (el: HTMLSpanElement | null) => void;
@@ -215,6 +218,7 @@ export function SessionStatusLine({
   onInterrupt,
   onEndSession,
   onBackground,
+  onPromoteToTicket,
   actionSlotRef,
 }: SessionStatusLineProps) {
   // ── Runtime capabilities (drives the pickers) ──
@@ -227,7 +231,7 @@ export function SessionStatusLine({
 
   // ── Derived flags ──
   const isStreaming = status === "running" || status === "waiting";
-  const isTerminal = status === "done" || status === "error";
+  const isTerminal = status === "finished" || status === "done" || status === "error" || status === "interrupted";
   const canInterrupt = isStreaming;
   const { icon: statusIcon, label: statusLabel, cssClass: statusClass } = statusInfo(status);
 
@@ -429,7 +433,7 @@ export function SessionStatusLine({
           onClick={() => !isTerminal && statusDd.toggle()}
           disabled={isTerminal}
         >
-          {(status === "initializing" || status === "running") && <span className="ssl-status-spinner" />}
+          {status === "running" && <span className="ssl-status-spinner" />}
           {statusIcon} {statusLabel}
           {!isTerminal && <ChevronDown />}
         </button>
@@ -446,6 +450,11 @@ export function SessionStatusLine({
             <button className="ssl-dropdown-item" onClick={() => { onBackground?.(); statusDd.close(); }}>
               ↓ Background
             </button>
+            {onPromoteToTicket && (
+              <button className="ssl-dropdown-item" onClick={() => { onPromoteToTicket(); statusDd.close(); }}>
+                ↑ Promote to ticket
+              </button>
+            )}
           </div>
         )}
       </div>

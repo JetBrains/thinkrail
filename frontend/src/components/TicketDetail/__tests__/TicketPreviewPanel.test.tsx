@@ -17,30 +17,30 @@ vi.mock("../TicketArtifactView.tsx", () => ({
     <div data-testid="art-view">{kind}</div>
   ),
 }));
-vi.mock("../TicketPlanView.tsx", () => ({
-  TicketPlanView: () => <div data-testid="plan-view">Plan</div>,
-}));
 vi.mock("../TicketHistoryView.tsx", () => ({
   TicketHistoryView: () => <div data-testid="history-view">History</div>,
 }));
-vi.mock("../TicketFileView.tsx", () => ({
-  TicketFileView: ({ filePath }: { filePath: string }) => (
-    <div data-testid="file-view">{filePath}</div>
+vi.mock("@/components/ContextPanel/PreviewBody.tsx", () => ({
+  PreviewBody: ({ path }: { path: string }) => (
+    <div data-testid="file-view">{path}</div>
   ),
 }));
 
 import { TicketPreviewPanel } from "@/components/TicketDetail/TicketPreviewPanel.tsx";
 import type { Ticket } from "@/types/board.ts";
 
+// Stages with a running plan-executing node → lifecycle derives to
+// "implementation", so the plan is the default artifact.
 const ticket: Ticket = {
   id: "t1",
   title: "x",
-  status: "implementing",
+  stages: [
+    { id: "impl", title: "Implement", executesPlan: true, status: "running" },
+  ],
   productDesignPath: "pd.md",
   technicalDesignPath: null,
   historyPath: null,
   implementationPlanPath: "impl.md",
-  skippedPhases: [],
 } as unknown as Ticket;
 
 describe("TicketPreviewPanel", () => {
@@ -48,37 +48,31 @@ describe("TicketPreviewPanel", () => {
     render(
       <TicketPreviewPanel
         ticket={ticket}
-        plan={null}
         historyEntries={[]}
         sessionTouchedFiles={[]}
-        onPlanUpdated={vi.fn()}
       />,
     );
     expect(screen.getByText(/product-design\.md/i)).toBeTruthy();
     expect(screen.getByText(/implementation-plan\.md/i)).toBeTruthy();
   });
 
-  it("default selection prefers canonical artifact for current phase", () => {
+  it("default selection prefers the plan when in implementation", () => {
     render(
       <TicketPreviewPanel
         ticket={ticket}
-        plan={null}
         historyEntries={[]}
         sessionTouchedFiles={[]}
-        onPlanUpdated={vi.fn()}
       />,
     );
-    expect(screen.getByTestId("plan-view")).toBeTruthy();
+    expect(screen.getByTestId("art-view").textContent).toBe("implementation_plan");
   });
 
   it("clicking a tab updates the active preview", () => {
     render(
       <TicketPreviewPanel
         ticket={ticket}
-        plan={null}
         historyEntries={[]}
         sessionTouchedFiles={[]}
-        onPlanUpdated={vi.fn()}
       />,
     );
     fireEvent.click(screen.getByText(/product-design\.md/i));
@@ -89,10 +83,8 @@ describe("TicketPreviewPanel", () => {
     render(
       <TicketPreviewPanel
         ticket={ticket}
-        plan={null}
         historyEntries={[{}, {}]}
         sessionTouchedFiles={[]}
-        onPlanUpdated={vi.fn()}
       />,
     );
     fireEvent.click(screen.getByText(/^History$/));

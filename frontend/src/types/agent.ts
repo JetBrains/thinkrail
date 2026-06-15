@@ -35,6 +35,7 @@ import type {
   ClearPreviewFileEvent,
   ArtifactAddedEvent,
   ArtifactLabeledEvent,
+  Artifact,
   SessionArtifact,
 } from "./ws-events.ts";
 
@@ -68,6 +69,7 @@ export type {
   ClearPreviewFileEvent,
   ArtifactAddedEvent,
   ArtifactLabeledEvent,
+  Artifact,
   SessionArtifact,
 };
 
@@ -92,7 +94,7 @@ export type {
   QuestionOption,
 } from "./ws-events.ts";
 
-export type TaskStatus = "idle" | "running" | "done" | "error";
+export type TaskStatus = "draft" | "initializing" | "running" | "waiting" | "idle" | "finished" | "done" | "error" | "interrupted";
 
 // ─── Semantic event type groups ───────────────────────────────────────────────
 // Derived from the generated event interfaces — strings live only in ws-events.ts.

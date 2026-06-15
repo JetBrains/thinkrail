@@ -96,7 +96,7 @@ class IndexCoordinator:
         self._consumer_task: asyncio.Task[None] | None = None
         self._delete_futures: dict[int, asyncio.Future[None]] = {}
 
-        # Injected post-creation (like TrashService pattern in server.py)
+        # Injected post-creation by server.py
         self.spec_service: SpecService | None = None
 
         # Debounce state for rebuild requests
@@ -298,14 +298,14 @@ class IndexCoordinator:
     async def _handle_spec_delete(self, event: SpecDeleteRequested) -> None:
         """Handle spec deletion request from agent tools.
 
-        When ``spec_service`` is set, performs the full delete flow: move file
-        to trash, clean dangling references in other specs, and remove from the
-        index.  Falls back to index-only removal when no service is available.
+        When ``spec_service`` is set, performs the full delete flow: remove the
+        spec file, clean dangling references in other specs, and remove it from
+        the index.  Falls back to index-only removal when no service is available.
         """
         future = self._delete_futures.pop(id(event), None)
         try:
             if self.spec_service is not None:
-                # Full flow: file move to trash + dangling ref cleanup + index removal
+                # Full flow: file removal + dangling ref cleanup + index removal
                 await self.spec_service.delete_spec(event.spec_id)
             else:
                 # Fallback: just remove from index

@@ -6,6 +6,7 @@ import type { ArtifactKind } from "@/types/board.ts";
 import { MarkdownEditor } from "@/components/MarkdownEditor/MarkdownEditor.tsx";
 import { useMonacoTheme } from "@/components/MarkdownEditor/useMonacoTheme.ts";
 import { useFontSize } from "@/utils/fontScale.ts";
+import { useTicketStateStore } from "@/store/ticketStateStore.ts";
 
 interface Props {
   ticketId: string;
@@ -19,12 +20,34 @@ const LABELS: Record<ArtifactKind, string> = {
   implementation_plan: "Implementation plan",
 };
 
+// Mirrors backend artifact_paths.ARTIFACT_FILENAMES — the on-disk filename
+// each kind resolves to under .tr/tickets/{id}/.
+const FILENAMES: Record<ArtifactKind, string> = {
+  product_design: "product-design.md",
+  technical_design: "technical-design.md",
+  history: "history.patch",
+  implementation_plan: "implementation-plan.md",
+};
+
 export function TicketArtifactView({ ticketId, kind }: Props) {
   const [content, setContent] = useState<string | null>(null);
-  const [stale, setStale] = useState(false);
   const [loading, setLoading] = useState(true);
   const monacoTheme = useMonacoTheme();
   const fontSize = useFontSize("body");
+  const ticketRev = useTicketStateStore((s) => s.states.get(ticketId)?.rev ?? 0);
+  // Bumped when the watcher reports this artifact's file changed on disk, so
+  // the preview refreshes live while a stage session writes it (the file is
+  // written via the Write tool, which never bumps ticketRev).
+  const [fileRev, setFileRev] = useState(0);
+
+  useEffect(() => {
+    const expected = `.tr/tickets/${ticketId}/${FILENAMES[kind]}`;
+    const unsub = getClient().on("file/didChange", (p: unknown) => {
+      const path = (p as { path?: string }).path;
+      if (path === expected) setFileRev((n) => n + 1);
+    });
+    return () => { unsub(); };
+  }, [ticketId, kind]);
 
   useEffect(() => {
     let cancelled = false;
@@ -35,7 +58,6 @@ export function TicketArtifactView({ ticketId, kind }: Props) {
       .then((res) => {
         if (cancelled) return;
         setContent(res.content);
-        setStale(res.stale);
         setLoading(false);
       })
       .catch(() => {
@@ -44,20 +66,19 @@ export function TicketArtifactView({ ticketId, kind }: Props) {
     return () => {
       cancelled = true;
     };
-  }, [ticketId, kind]);
+  }, [ticketId, kind, ticketRev, fileRev]);
 
   return (
     <div className="ticket-artifact-view">
       <header className="ticket-artifact-header">
         <h3 className="ticket-artifact-title">
           {LABELS[kind]}
-          {stale && <span className="ticket-artifact-stale">~ stale</span>}
         </h3>
       </header>
       <div className="ticket-artifact-body">
         {loading && <div className="center-placeholder">Loading…</div>}
         {!loading && content == null && (
-          <div className="center-placeholder">No {LABELS[kind].toLowerCase()} on disk yet.</div>
+          <div className="center-placeholder">No {(LABELS[kind] ?? String(kind)).toLowerCase()} on disk yet.</div>
         )}
         {!loading && content === "" && (
           <div className="center-placeholder">(empty file)</div>

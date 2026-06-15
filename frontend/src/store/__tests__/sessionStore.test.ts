@@ -205,17 +205,17 @@ describe("sessionStore remote events", () => {
 
     it("is a no-op when the thinkrailSid is not in the list", () => {
       const before = useSessionStore.getState().sessionList;
-      useSessionStore.getState().patchSessionInList("does-not-exist", { status: "done" });
+      useSessionStore.getState().patchSessionInList("does-not-exist", { status: "finished" });
       const after = useSessionStore.getState().sessionList;
 
       expect(after).toBe(before);
     });
 
     it("only writes the fields in the patch — leaves the rest intact", () => {
-      useSessionStore.getState().patchSessionInList("sidB", { status: "initializing" });
+      useSessionStore.getState().patchSessionInList("sidB", { status: "waiting" });
       const entry = useSessionStore.getState().sessionList[1];
 
-      expect(entry.status).toBe("initializing");
+      expect(entry.status).toBe("waiting");
       expect(entry.name).toBe("Bravo");
       expect(entry.thinkrailSid).toBe("sidB");
     });

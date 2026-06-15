@@ -1,12 +1,12 @@
 import { useEffect, useMemo, useState } from "react";
 import { FileText, ScrollText } from "lucide-react";
-import type { Ticket, TicketStatus } from "@/types/board.ts";
+import type { Ticket } from "@/types/board.ts";
+import { deriveLifecycle } from "@/utils/lifecycle.ts";
 import { useUiStore } from "@/store/uiStore.ts";
 import { useSessionStore } from "@/store/sessionStore.ts";
 import { PreviewBody } from "@/components/ContextPanel/PreviewBody.tsx";
 import { TicketArtifactBar, type ArtifactEntry } from "./TicketArtifactBar.tsx";
 import { TicketArtifactView } from "./TicketArtifactView.tsx";
-import { TicketPlanView } from "./TicketPlanView.tsx";
 import { TicketHistoryView } from "./TicketHistoryView.tsx";
 import { TicketFileView } from "./TicketFileView.tsx";
 import { deriveTicketArtifacts, type SelectedArtifact } from "./useTicketArtifacts.ts";
@@ -18,25 +18,13 @@ interface HistoryEntryLike {
 
 interface Props {
   ticket: Ticket;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  plan: any;
   historyEntries: HistoryEntryLike[];
   sessionTouchedFiles: { path: string }[];
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  onPlanUpdated: (p: any) => void;
   /** Optional controlled selection. When provided, the panel's selection
    *  becomes externally driven; clicks update via `onSelectArtifact`. */
   selectedArtifact?: SelectedArtifact | null;
   onSelectArtifact?: (a: SelectedArtifact | null) => void;
 }
-
-const PHASE_TO_DEFAULT: Partial<Record<TicketStatus, SelectedArtifact>> = {
-  "product-design": { kind: "canonical", artifact: "product_design" },
-  "technical-design": { kind: "canonical", artifact: "technical_design" },
-  "amend-specs": { kind: "history", phaseFilter: "amend-specs" },
-  "implementation-plan": { kind: "plan" },
-  implementing: { kind: "plan" },
-};
 
 function entryId(a: SelectedArtifact): string {
   if (a.kind === "canonical") return `canonical:${a.artifact}`;
@@ -67,7 +55,7 @@ function entryIcon(a: SelectedArtifact): React.ReactNode {
 }
 
 export function TicketPreviewPanel(props: Props) {
-  const { ticket, plan, historyEntries, sessionTouchedFiles, onPlanUpdated } = props;
+  const { ticket, historyEntries, sessionTouchedFiles } = props;
   const collapsed = useUiStore((s) => s.ticketArtifactBarCollapsed);
   const setCollapsed = useUiStore((s) => s.setTicketArtifactBarCollapsed);
 
@@ -97,12 +85,12 @@ export function TicketPreviewPanel(props: Props) {
   const artifacts = useMemo(
     () => deriveTicketArtifacts(
       ticket,
-      plan,
+      null,
       historyEntries.length,
       sessionTouchedFiles,
       amendSpecsFilePaths,
     ),
-    [ticket, plan, historyEntries.length, sessionTouchedFiles, amendSpecsFilePaths],
+    [ticket, historyEntries.length, sessionTouchedFiles, amendSpecsFilePaths],
   );
 
   const entries: ArtifactEntry[] = useMemo(
@@ -111,18 +99,21 @@ export function TicketPreviewPanel(props: Props) {
         id: entryId(a),
         icon: entryIcon(a),
         label: entryLabel(a),
-        live: a.kind === "plan" && ticket.status === "implementing",
+        live: false,
       })),
-    [artifacts, ticket.status],
+    [artifacts],
   );
 
+  // During implementation, the plan is the artifact the user most wants to
+  // see first; otherwise fall back to the first derived artifact (PD/TD).
+  const lifecycle = useMemo(() => deriveLifecycle(ticket.stages), [ticket.stages]);
   const defaultArtifact = useMemo<SelectedArtifact | null>(() => {
-    const preferred = PHASE_TO_DEFAULT[ticket.status];
-    if (preferred && artifacts.find((a) => entryId(a) === entryId(preferred))) {
-      return preferred;
+    if (lifecycle === "implementation") {
+      const planEntry = artifacts.find((a) => a.kind === "plan");
+      if (planEntry) return planEntry;
     }
     return artifacts[0] ?? null;
-  }, [ticket.status, artifacts]);
+  }, [artifacts, lifecycle]);
 
   // Controlled vs uncontrolled selection. If `selectedArtifact` is provided,
   // selection is externally driven; otherwise it's locally tracked.
@@ -185,7 +176,7 @@ export function TicketPreviewPanel(props: Props) {
               <TicketArtifactView ticketId={ticket.id} kind={selected.artifact} />
             )}
             {selected?.kind === "plan" && (
-              <TicketPlanView plan={plan} ticketId={ticket.id} onPlanUpdated={onPlanUpdated} />
+              <TicketArtifactView ticketId={ticket.id} kind="implementation_plan" />
             )}
             {selected?.kind === "history" && (
               <TicketHistoryView ticketId={ticket.id} phaseFilter={selected.phaseFilter} />

@@ -1,15 +1,5 @@
 import { useEffect, useRef } from "react";
-import type { TicketSummary, TicketStatus, TicketType } from "@/types/board.ts";
-
-const VALID_TRANSITIONS: Record<TicketStatus, TicketStatus[]> = {
-  idea: ["product-design"],
-  "product-design": ["idea", "technical-design"],
-  "technical-design": ["product-design", "amend-specs"],
-  "amend-specs": ["technical-design", "implementation-plan"],
-  "implementation-plan": ["amend-specs", "implementing"],
-  implementing: ["implementation-plan", "done"],
-  done: ["implementing"],
-};
+import type { TicketSummary, TicketType } from "@/types/board.ts";
 
 const ALL_TYPES: TicketType[] = ["feature", "bug", "idea", "improvement"];
 
@@ -19,7 +9,7 @@ interface BoardCardContextMenuProps {
   y: number;
   onClose: () => void;
   onOpen: (id: string) => void;
-  onUpdateTicket: (id: string, updates: { status?: TicketStatus; type?: TicketType }) => void;
+  onUpdateTicket: (id: string, updates: { type?: TicketType }) => void;
   onDeleteTicket: (id: string) => void;
 }
 
@@ -36,26 +26,11 @@ export function BoardCardContextMenu({
     return () => document.removeEventListener("mousedown", handleClick);
   }, [onClose]);
 
-  const validStatuses = VALID_TRANSITIONS[ticket.status] ?? [];
-
   return (
     <div ref={ref} className="board-ctx-menu" style={{ left: x, top: y }}>
       <button className="board-ctx-menu-item" onClick={() => { onOpen(ticket.id); onClose(); }}>
         Open
       </button>
-
-      <div className="board-ctx-menu-sep" />
-
-      <div className="board-ctx-menu-label">Status</div>
-      {validStatuses.map((s) => (
-        <button
-          key={s}
-          className="board-ctx-menu-item board-ctx-menu-item--indent"
-          onClick={() => { onUpdateTicket(ticket.id, { status: s }); onClose(); }}
-        >
-          {s}
-        </button>
-      ))}
 
       <div className="board-ctx-menu-sep" />
 

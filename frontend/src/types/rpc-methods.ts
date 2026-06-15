@@ -12,7 +12,13 @@ export type ThinkRailRpcPayloads =
   | RuntimeCapabilities
   | RuntimesListResponse
   | RuntimesCapabilitiesRequest
-  | InvalidCapabilityValueData;
+  | InvalidCapabilityValueData
+  | SessionConfig
+  | Artifact
+  | SessionMetrics
+  | TodoItem
+  | SessionResult
+  | TicketState;
 export type Value = string;
 export type Label = string;
 export type Key = string;
@@ -32,6 +38,93 @@ export type Field = string;
 export type Value1 = string;
 export type Runtimetype2 = "claude";
 export type Allowed = string[];
+export type Runtime = "claude";
+export type Model = string;
+export type Permissionmode = string;
+export type Streamtext = boolean;
+export type Effort = string;
+export type Path = string;
+export type ArtifactKind = "file" | "diff";
+export type Label2 = string | null;
+export type Created = string;
+export type Updated = string;
+export type Costusd = number;
+export type Turns = number;
+export type Toolcalls = number;
+export type Durationms = number;
+export type Contexttokens = number;
+export type Contextmax = number;
+export type Outputtokens = number;
+export type Key1 = string;
+export type Content = string;
+export type Status = string;
+export type Summary = string | null;
+export type Status1 = string | null;
+export type Delivery = string | null;
+export type Artifacts = Artifact[];
+export type Type1 = "create_ticket";
+export type Id = string;
+export type Title = string;
+export type Body = string | null;
+export type State = "pending" | "applied";
+export type Type2 = "start_session";
+export type Id1 = string;
+export type Title1 = string;
+export type Description1 = string | null;
+export type Skillid = string;
+export type Prompt = string | null;
+export type Primary = boolean;
+export type Type3 = "navigate";
+export type Id2 = string;
+export type Title2 = string;
+export type Description2 = string | null;
+export type Target = "board" | "specs" | "graph" | "files";
+export type Actions = (CreateTicketAction | StartSessionAction | NavigateAction)[];
+export type Id3 = string;
+export type Title3 = string;
+export type Body1 = string;
+export type Type4 = string;
+export type Rev = number;
+export type Lifecycle = "created" | "design" | "implementation" | "done";
+export type Kind = "session" | "builtin";
+export type Sessionid = string | null;
+export type Builtinid = string | null;
+export type Stagegate = "approve" | "autonomous";
+export type Stepgate = "approve" | "autonomous";
+export type Failurepolicy = "fail-fast" | "wait-all";
+export type Stepexecution = "interactive" | "subagent";
+export type Artifactedits = "ask" | "auto";
+export type Id4 = string;
+export type Title4 = string;
+export type Skill = string | null;
+export type Dependson = string[];
+export type Status2 = "pending" | "running" | "done" | "failed";
+export type Kind1 = "session" | "subagent";
+export type Sessionid1 = string | null;
+export type Orchestratorsid = string | null;
+export type Tooluseid = string | null;
+export type Agentid = string | null;
+export type Status3 = "running" | "done" | "failed" | "cancelled";
+export type Summary1 = string | null;
+export type Usage = {
+  [k: string]: unknown;
+} | null;
+export type Runs = NodeRun[];
+export type Summary2 = string | null;
+export type Artifactkind = string | null;
+export type Executesplan = boolean;
+export type Children = WorkNode[] | null;
+export type Completedat = string | null;
+export type Stages = WorkNode[];
+export type Thinkrailsid = string;
+export type Skillid1 = string | null;
+export type Status4 = string;
+export type Name = string;
+export type Summary3 = string | null;
+export type Sessions = SessionRef[];
+export type Linkedspecids = string[];
+export type Created1 = string;
+export type Updated1 = string;
 
 /**
  * A value the backend accepts, plus a display label for the UI.
@@ -47,7 +140,7 @@ export interface LabeledOption {
  * A runtime-declared option toggle, surfaced as a control in settings.
  *
  * Each runtime advertises its own flags; the frontend renders one control
- * per flag and stores the chosen value in ``AgentConfig.flags`` keyed by
+ * per flag and stores the chosen value in ``SessionConfig.flags`` keyed by
  * ``key``. ``type`` is a discriminator (only ``"boolean"`` today) so other
  * value kinds can be added without changing the shape.
  */
@@ -97,4 +190,155 @@ export interface InvalidCapabilityValueData {
   value: Value1;
   runtimeType: Runtimetype2;
   allowed: Allowed;
+}
+/**
+ * Run configuration for a session.
+ */
+export interface SessionConfig {
+  runtime?: Runtime;
+  model?: Model;
+  permissionMode?: Permissionmode;
+  streamText?: Streamtext;
+  effort?: Effort;
+  flags?: Flags1;
+}
+export interface Flags1 {
+  [k: string]: boolean;
+}
+/**
+ * A file a session touched, or a diff it proposed.
+ */
+export interface Artifact {
+  path: Path;
+  kind: ArtifactKind;
+  label?: Label2;
+  created?: Created;
+  updated?: Updated;
+}
+/**
+ * Run cost and usage, computed from the event stream.
+ */
+export interface SessionMetrics {
+  costUsd?: Costusd;
+  turns?: Turns;
+  toolCalls?: Toolcalls;
+  durationMs?: Durationms;
+  contextTokens?: Contexttokens;
+  contextMax?: Contextmax;
+  outputTokens?: Outputtokens;
+}
+export interface TodoItem {
+  key: Key1;
+  content: Content;
+  status?: Status;
+}
+/**
+ * The value a session hands back to its parent, plus its done-screen.
+ */
+export interface SessionResult {
+  summary?: Summary;
+  status?: Status1;
+  delivery?: Delivery;
+  artifacts?: Artifacts;
+  actions?: Actions;
+}
+/**
+ * Queued ticket creation. Rendered as an 'Add to board' button.
+ *
+ * `state="pending"` until the user clicks; `state="applied"` once the ticket
+ * has been created on the board.
+ */
+export interface CreateTicketAction {
+  type?: Type1;
+  id: Id;
+  title: Title;
+  body?: Body;
+  state?: State;
+}
+/**
+ * Recommended follow-up session. Rendered as a primary/secondary CTA.
+ */
+export interface StartSessionAction {
+  type?: Type2;
+  id: Id1;
+  title: Title1;
+  description?: Description1;
+  skillId: Skillid;
+  prompt?: Prompt;
+  primary?: Primary;
+}
+/**
+ * UI navigation only — no agent or tool call.
+ */
+export interface NavigateAction {
+  type?: Type3;
+  id: Id2;
+  title: Title2;
+  description?: Description2;
+  target: Target;
+}
+export interface TicketState {
+  id: Id3;
+  title: Title3;
+  body?: Body1;
+  type?: Type4;
+  rev?: Rev;
+  lifecycle?: Lifecycle;
+  orchestrator?: OrchestratorRef | null;
+  orchestration?: OrchestrationConfig;
+  stages?: Stages;
+  sessions?: Sessions;
+  linkedSpecIds?: Linkedspecids;
+  created?: Created1;
+  updated?: Updated1;
+}
+/**
+ * Reference to a ticket's orchestrator driver. ``kind="session"`` points at a
+ * Session via ``session_id``; ``kind="builtin"`` names a registered pipeline via
+ * ``builtin_id``. See SESSION_TICKET_MODEL.md §"The orchestrator".
+ */
+export interface OrchestratorRef {
+  kind?: Kind;
+  sessionId?: Sessionid;
+  builtinId?: Builtinid;
+}
+/**
+ * Per-ticket orchestration gates + failure policy (see design §3).
+ */
+export interface OrchestrationConfig {
+  stageGate?: Stagegate;
+  stepGate?: Stepgate;
+  failurePolicy?: Failurepolicy;
+  stepExecution?: Stepexecution;
+  artifactEdits?: Artifactedits;
+}
+export interface WorkNode {
+  id: Id4;
+  title: Title4;
+  skill?: Skill;
+  dependsOn?: Dependson;
+  status?: Status2;
+  runs?: Runs;
+  summary?: Summary2;
+  artifactKind?: Artifactkind;
+  executesPlan?: Executesplan;
+  children?: Children;
+  completedAt?: Completedat;
+}
+export interface NodeRun {
+  kind: Kind1;
+  sessionId?: Sessionid1;
+  orchestratorSid?: Orchestratorsid;
+  toolUseId?: Tooluseid;
+  agentId?: Agentid;
+  status?: Status3;
+  summary?: Summary1;
+  usage?: Usage;
+}
+export interface SessionRef {
+  thinkrailSid: Thinkrailsid;
+  skillId?: Skillid1;
+  status?: Status4;
+  name?: Name;
+  summary?: Summary3;
 }

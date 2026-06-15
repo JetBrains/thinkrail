@@ -52,7 +52,7 @@ class SessionDefaults(BaseModel):
 
     Field names use snake_case internally and serialize to camelCase on
     the wire via the shared :func:`to_camel` alias generator (same
-    pattern as ``AgentConfig``). ``populate_by_name=True`` so both wire
+    pattern as ``SessionConfig``). ``populate_by_name=True`` so both wire
     (``permissionMode``) and Python (``permission_mode``) keys are
     accepted as input — required because we round-trip the dict through
     SQLite which stores whichever key style the writer used.

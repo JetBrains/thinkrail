@@ -16,7 +16,6 @@ const meta = {
   },
   args: {
     childName: "design discussion",
-    subsessionType: "discussion",
     summary: "Agreed to extract a Button with primary/secondary/danger/ghost variants and migrate the wizard first.",
   },
 } satisfies Meta<typeof SubsessionResultCard>;
@@ -28,7 +27,6 @@ export const Discussion: Story = {};
 export const Refinement: Story = {
   args: {
     childName: "ticket refinement",
-    subsessionType: "refinement",
     summary: "Rewrote the ticket description with acceptance criteria and three edge cases.",
   },
 };

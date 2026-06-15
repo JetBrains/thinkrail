@@ -392,6 +392,15 @@ export function wireEvents(client: RpcClient): Unsubscribe {
       useBoardStore.getState().handleDidChange(p as import("@/types/board.ts").TicketSummary);
     }),
   );
+  // ticket/didChange carries a full TicketState — apply it to keep the stage
+  // graph and artifact rev in sync without a round-trip.
+  unsubs.push(
+    client.on("ticket/didChange", (p) => {
+      import("@/store/ticketStateStore.ts").then(({ useTicketStateStore }) => {
+        useTicketStateStore.getState().apply(p as import("@/types/rpc-methods.ts").TicketState);
+      });
+    }),
+  );
   unsubs.push(
     client.on("board/didCreate", (p) => {
       const params = p as import("@/types/board.ts").TicketSummary & { thinkrailSid?: string };

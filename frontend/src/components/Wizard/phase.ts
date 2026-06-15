@@ -18,6 +18,6 @@ export function derivePhase(args: {
 }): WizardUiPhase {
   const { session } = args;
   if (!session) return "pre-chat";
-  if (session.status === "done" || session.status === "error") return "done-screen";
+  if (session.status === "finished" || session.status === "error") return "done-screen";
   return "running";
 }

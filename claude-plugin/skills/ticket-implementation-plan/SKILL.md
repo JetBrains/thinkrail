@@ -23,7 +23,7 @@ If the apply failed (conflict), the user will see an error before this skill sta
    3. Propose milestone structure
    4. Draft milestones and steps
    5. Verify against ticket success criteria
-   6. Finalize and transition
+   6. Finalize the stage
    ```
 
 1. **Examine context** *(task #1)* — if `{{TR_DIR}}/tickets/{id}/implementation-plan.md` already exists (possibly with `implementation_plan_stale: true`), read it; ask via `AskUserQuestion`: "Existing plan found. Revise from scratch or evolve existing?" Preserve step numbers and session IDs from previous versions. Then `Read` `product-design.md` + `technical-design.md` + the updated `{{TR_DIR}}/design_docs/*.md` files (use `spec_search`).
@@ -36,7 +36,14 @@ If the apply failed (conflict), the user will see an error before this skill sta
 
 5. **Verify against ticket success criteria** *(task #5)* — walk the ticket's success criteria once more and verify each is addressed by at least one step's success criteria. Patch the plan if anything is missed.
 
-6. **Finalize and transition** *(task #6)* — `AskUserQuestion`: "Plan ready. Move to `implementing`?" If yes, call `ChangeTicketStatus` with `status='implementing'`. (Status === ongoing work: the plan is done; the next active phase is implementing.)
+6. **Finalize the stage** *(task #6)* — **Confirm with the user** via `AskUserQuestion`: "Plan looks ready. Finalize this stage and hand control back to the orchestrator?" If yes, call `SessionFinalize` with the artifact and a one-line summary:
+   ```json
+   {
+     "summary": "Implementation plan ready — implementation-plan.md drafted.",
+     "artifacts": [{ "path": "{{TR_DIR}}/tickets/{id}/implementation-plan.md", "label": "Implementation plan" }]
+   }
+   ```
+   You do **not** advance the ticket yourself. Finalizing ends this stage and automatically resumes the orchestrator, which reviews your artifact, adjusts the pipeline if needed, and starts the next stage (`implementing`).
 
 ## Plan format
 
@@ -82,7 +89,7 @@ If the apply failed (conflict), the user will see an error before this skill sta
 
 - `Write` — create/update `implementation-plan.md`
 - `Read` / `spec_search` — read amended specs + design docs
-- `ChangeTicketStatus` — transition to `implementing` (status === ongoing work; plan is done, next active phase is implementing)
+- `SessionFinalize` — finalize the stage after the user confirms; hands control back to the orchestrator, which verifies the artifact and advances the pipeline
 - `AskUserQuestion` — collect input on depth + revision
 - `TodoWrite` — surface the workflow as live tasks in the ticket's "Tasks (n/m)" sub-row (call once at the start; re-emit after each task to update statuses)
 

@@ -138,7 +138,7 @@ class ClaudeRuntime:
     The conversational loop is owned by ``run_session``. Per-session state
     (tracker queue, MCP tool context, subagent correlation maps) is reset
     each call; runtime-level dependencies (tracker, plugin dir, model
-    registry, spec service, coordinator) come in via ``__init__`` so that
+    registry, spec service, coordinator, agent service) come in via ``__init__`` so that
     ``AgentService`` can construct one ``ClaudeRuntime`` per service
     lifetime and re-use it for every session.
     """
@@ -185,12 +185,14 @@ class ClaudeRuntime:
         plugin_dir: Path | None = None,
         spec_service: Any = None,
         coordinator: Any = None,
+        agent_service: Any = None,
     ) -> None:
         self.tracker = tracker
         self.app_config = app_config
         self.plugin_dir = plugin_dir
         self.spec_service = spec_service
         self.coordinator = coordinator
+        self.agent_service = agent_service
         # The Claude runtime owns its own model + skill registries.
         # ``IAgentRuntime`` exposes only the public surface
         # (``capabilities``, ``list_skills`` etc.); the registry instances
@@ -229,8 +231,6 @@ class ClaudeRuntime:
         if tracker is None:
             raise RuntimeError("ClaudeRuntime.run_session requires a tracker")
         plugin_dir = self.plugin_dir
-        spec_service = self.spec_service
-        coordinator = self.coordinator
         config = self.app_config
         spec_context = exec_config.system_prompt or ""
         cwd = exec_config.working_directory
@@ -259,7 +259,12 @@ class ClaudeRuntime:
         # can access session state (tracker, notify, task, config) via
         # get_tool_context().  This is critical for yolo mode where the CLI
         # bypasses canUseTool and invokes MCP tools directly.
-        set_tool_context(tracker, notify, task, config, spec_service=spec_service, coordinator=coordinator)
+        set_tool_context(
+            tracker, notify, task, config,
+            spec_service=self.spec_service,
+            coordinator=self.coordinator,
+            agent_service=self.agent_service,
+        )
 
         def _on_cli_stderr(line: str) -> None:
             logger.debug("CLI stderr: %s", line)

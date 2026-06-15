@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING, Any, Literal, Protocol, runtime_checkable
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 # ``RuntimeType`` is defined in ``app.agent.models`` (the definitional site) so
-# ``AgentConfig`` can embed it without a circular import. Re-exported here for
+# ``SessionConfig`` can embed it without a circular import. Re-exported here for
 # consumers that already use ``from app.agent.runtime import RuntimeType``.
 from app.agent.models import AgentResult, AgentTask, RuntimeType, to_camel
 
@@ -38,7 +38,7 @@ class RuntimeFlag(BaseModel):
     """A runtime-declared option toggle, surfaced as a control in settings.
 
     Each runtime advertises its own flags; the frontend renders one control
-    per flag and stores the chosen value in ``AgentConfig.flags`` keyed by
+    per flag and stores the chosen value in ``SessionConfig.flags`` keyed by
     ``key``. ``type`` is a discriminator (only ``"boolean"`` today) so other
     value kinds can be added without changing the shape.
     """
@@ -113,9 +113,9 @@ class RuntimeSkillInfo(BaseModel):
 
 
 class RuntimeExecutionConfig(BaseModel):
-    """Runtime-internal execution config derived from AgentConfig + task context.
+    """Runtime-internal execution config derived from SessionConfig + task context.
 
-    Held separately from AgentConfig (the user-facing persisted config) because
+    Held separately from SessionConfig (the user-facing persisted config) because
     it carries fields that only make sense at execution time — working_directory,
     system_prompt, resume_session_id — and is the contract every IAgentRuntime
     consumes.

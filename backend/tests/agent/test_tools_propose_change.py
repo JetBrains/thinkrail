@@ -33,7 +33,7 @@ def _make_config(tmp_path: Path) -> AppConfig:
 
 
 def _make_ticket(svc, title: str = "T"):
-    return svc.create_ticket(title=title, status="amend-specs")
+    return svc.create_ticket(title=title)
 
 
 async def _resolve_pending(tracker: Tracker, thinkrail_sid: str, response: dict) -> None:
@@ -262,3 +262,44 @@ async def test_propose_change_non_ticket_session_skips_log_and_link(tmp_path: Pa
     # No .patch log was created
     log_paths = list((tmp_path / ".tr").rglob("history.patch"))
     assert log_paths == []
+
+
+async def test_propose_change_auto_accept_skips_card(tmp_path: Path) -> None:
+    """orchestration.artifact_edits == 'auto' → apply directly, no card, no
+    suspended future. (If it suspended, this test would hang.)"""
+    from app.agent.tools.propose_change import _propose_change
+    from app.board.service import BoardService
+
+    config = _make_config(tmp_path)
+    (tmp_path / ".tr" / "design_docs").mkdir(parents=True)
+    spec = tmp_path / ".tr" / "design_docs" / "X.md"
+    spec.write_text("---\nid: spec_x\n---\n\nFoo.\n")
+
+    svc = BoardService(config)
+    ticket = _make_ticket(svc)
+    svc.apply(ticket.id, {"op": "setOrchestration", "config": {"artifactEdits": "auto"}})
+    assert svc.get_ticket(ticket.id).orchestration.artifact_edits == "auto"
+
+    tracker = Tracker()
+    task = tracker.create_task([], AgentConfig())
+    task.ticket_id = ticket.id
+    notify = AsyncMock()
+    set_tool_context(tracker, notify, task, config)
+
+    # No future is resolved on purpose — the auto path must not suspend.
+    result = await _propose_change.handler({
+        "file_path": ".tr/design_docs/X.md",
+        "old_string": "Foo.",
+        "new_string": "Foo and bar.",
+        "section": "Body",
+    })
+
+    assert "Foo and bar." in spec.read_text()
+    body = json.loads(result["content"][0]["text"])
+    assert body["applied"] == "original"
+    # The interactive card was never shown.
+    methods = [c.args[0] for c in notify.call_args_list]
+    assert "agent/proposeChange" not in methods
+    # The amendment is still logged to history.patch.
+    log = (tmp_path / ".tr" / "tickets" / ticket.id / "history.patch").read_text()
+    assert "# == amendment 1 ==" in log

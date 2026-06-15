@@ -49,6 +49,7 @@ from app.rpc.methods.sessions import (
     get_session,
     list_all_sessions,
     patch_outcome_action,
+    promote_to_ticket as session_promote_to_ticket,
     restart_session,
     subscribe_session,
     unsubscribe_session,
@@ -73,27 +74,22 @@ from app.rpc.methods.subsessions import (
     revise_summary as subsession_revise_summary,
 )
 from app.rpc.methods.board import (
+    apply as board_apply,
     attach_session as board_attach_session,
-    create_plan,
+    board_complete_node,
+    board_refine_node,
     create_ticket,
     delete_ticket,
     detach_session as board_detach_session,
     get_history as board_get_history,
-    get_next_step,
-    get_plan,
-    get_plan_raw,
+    get_state as board_get_state,
     get_ticket,
     link_spec as board_link_spec,
     list_tickets,
     read_artifact,
     reorder_ticket as board_reorder_ticket,
-    save_plan,
-    save_plan_raw,
     set_orchestrator as board_set_orchestrator,
-    skip_phase as board_skip_phase,
     unlink_spec as board_unlink_spec,
-    unskip_phase as board_unskip_phase,
-    update_step,
     update_ticket,
 )
 from app.agent.persistence import has_persisted_sessions
@@ -135,6 +131,7 @@ METHODS = {
     "session/subscribe": subscribe_session,
     "session/unsubscribe": unsubscribe_session,
     "session/patchOutcomeAction": patch_outcome_action,
+    "session/promoteToTicket": session_promote_to_ticket,
     "subsession/create": subsession_create,
     "subsession/requestSummary": subsession_request_summary,
     "subsession/approveSummary": subsession_approve_summary,
@@ -143,6 +140,8 @@ METHODS = {
     "subsession/listChildren": subsession_list_children,
     "board/list": list_tickets,
     "board/get": get_ticket,
+    "board/getState": board_get_state,
+    "board/apply": board_apply,
     "board/create": create_ticket,
     "board/update": update_ticket,
     "board/delete": delete_ticket,
@@ -151,18 +150,11 @@ METHODS = {
     "board/attachSession": board_attach_session,
     "board/detachSession": board_detach_session,
     "board/setOrchestrator": board_set_orchestrator,
-    "board/skipPhase": board_skip_phase,
-    "board/unskipPhase": board_unskip_phase,
-    "board/getPlan": get_plan,
-    "board/createPlan": create_plan,
-    "board/savePlan": save_plan,
-    "board/getPlanRaw": get_plan_raw,
-    "board/savePlanRaw": save_plan_raw,
-    "board/updateStep": update_step,
-    "board/getNextStep": get_next_step,
     "board/reorder": board_reorder_ticket,
     "board/readArtifact": read_artifact,
     "board/getHistory": board_get_history,
+    "board/completeNode": board_complete_node,
+    "board/refineNode": board_refine_node,
     "settings/get": get_settings,
     "settings/update": update_settings,
     "settings/ensureFile": ensure_settings,
@@ -544,9 +536,12 @@ async def _start_watcher(
         elif thinkrailhide_changed:
             await bus.publish(project_topic, "files/treeChanged", {})
 
-        # Notify frontend about modified files so open editors can refresh
+        # Notify frontend about written files so open editors and ticket
+        # artifact previews can refresh. Includes Change.added: an agent's
+        # first Write of an artifact (e.g. product-design.md) reports as
+        # added, and the preview must refresh on that first write too.
         for change_type, path_str in changes:
-            if change_type == Change.modified:
+            if change_type in (Change.modified, Change.added):
                 rel = str(Path(path_str).relative_to(config.get_project_root()))
                 await bus.publish(project_topic, "file/didChange", {"path": rel})
 

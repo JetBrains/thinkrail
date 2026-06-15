@@ -16,9 +16,8 @@ from typing import Any
 from claude_agent_sdk import AgentDefinition
 
 # The subagent's tool set mirrors what today's step session can do, minus the
-# two tools the orchestrator alone owns:
+# orchestration tool the orchestrator alone owns:
 #   * ``suggest_step`` — only the orchestrator proposes new plan steps.
-#   * ``ChangeTicketStatus`` — only the orchestrator advances the lifecycle.
 _STEP_EXECUTOR_TOOLS: list[str] = [
     # SDK built-ins
     "Read",
@@ -47,8 +46,8 @@ TICKET_STEP_EXECUTOR = AgentDefinition(
         "propose every file edit via ProposeChange (never Write/Edit "
         "specs directly), and return a one-paragraph summary of what "
         "you changed.\n\n"
-        "Do not call suggest_step or ChangeTicketStatus — those are the "
-        "orchestrator's responsibility. If you cannot complete the step "
+        "Do not call suggest_step — that is the orchestrator's "
+        "responsibility. If you cannot complete the step "
         "(missing context, blocked dependency, contradiction with another "
         "spec), return a one-paragraph explanation of the blocker."
     ),
@@ -83,3 +82,23 @@ def parse_thinkrail_step_marker(prompt: str) -> dict[str, Any] | None:
     if not m:
         return None
     return {"ticket_id": m.group("ticket"), "step": int(m.group("step"))}
+
+
+# ── Node-prompt marker ───────────────────────────────────────────────────────
+
+_NODE_MARKER_RE = re.compile(
+    r"^\[thinkrail-node\s+ticket=(?P<ticket>[^\s\]]+)\s+node=(?P<node>[^\s\]]+)\]",
+)
+
+
+def parse_thinkrail_node_marker(prompt: str) -> dict[str, Any] | None:
+    """Parse the leading ``[thinkrail-node …]`` marker on a Task prompt.
+
+    Returns ``{"ticket_id": str, "node": str}`` or ``None``.
+    """
+    if not prompt:
+        return None
+    m = _NODE_MARKER_RE.match(prompt.lstrip("\n").strip())
+    if not m:
+        return None
+    return {"ticket_id": m.group("ticket"), "node": m.group("node")}

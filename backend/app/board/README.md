@@ -152,12 +152,6 @@ idea --> described --> specified --> planned --> executing --> done
 | `executing` | `planned`, `done` |
 | `done` | `idea`, `executing` |
 
-### Agent Tool: ChangeTicketStatus
-
-**File:** `backend/app/agent/tools/change_ticket_status.py`
-
-An MCP tool that allows agents to change a ticket's status. The agent proposes a status change, which requires user confirmation via `AskUserQuestion` before being applied. This enables agents to advance the ticket lifecycle (e.g., moving from `idea` to `described` after generating a description) while keeping the user in the loop.
-
 ### Agent Tool: RecordSpecChange
 
 **File:** `backend/app/agent/tools/record_spec_change.py`

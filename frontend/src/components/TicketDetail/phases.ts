@@ -1,6 +1,14 @@
 /** Single source of truth for the ticket phase lifecycle — order, labels, the
  *  skill that runs each phase, and the reverse skill→phase lookup. */
-import type { TicketStatus } from "@/types/board.ts";
+
+export type TicketStatus =
+  | "idea"
+  | "product-design"
+  | "technical-design"
+  | "amend-specs"
+  | "implementation-plan"
+  | "implementing"
+  | "done";
 
 /** Numeric rank of each phase in lifecycle order. */
 export const STATE_ORDER: Record<TicketStatus, number> = {

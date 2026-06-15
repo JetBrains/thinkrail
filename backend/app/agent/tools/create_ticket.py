@@ -59,15 +59,12 @@ async def _create_board_ticket(args: dict) -> dict:
         return _error("title is required")
 
     body = args.get("body", "").strip()
-    # Infer initial status from what's provided: title+body → described, title only → idea
-    status = "described" if body else "idea"
 
     board_service = BoardService(ctx.config)
     ticket = board_service.create_ticket(
         title=title,
         body=body,
         type=args.get("type", "feature"),
-        status=status,
     )
 
     summary = TicketSummary.from_ticket(ticket)

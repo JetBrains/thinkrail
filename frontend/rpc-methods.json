@@ -24,7 +24,7 @@
     },
     "RuntimeFlag": {
       "additionalProperties": false,
-      "description": "A runtime-declared option toggle, surfaced as a control in settings.\n\nEach runtime advertises its own flags; the frontend renders one control\nper flag and stores the chosen value in ``AgentConfig.flags`` keyed by\n``key``. ``type`` is a discriminator (only ``\"boolean\"`` today) so other\nvalue kinds can be added without changing the shape.",
+      "description": "A runtime-declared option toggle, surfaced as a control in settings.\n\nEach runtime advertises its own flags; the frontend renders one control\nper flag and stores the chosen value in ``SessionConfig.flags`` keyed by\n``key``. ``type`` is a discriminator (only ``\"boolean\"`` today) so other\nvalue kinds can be added without changing the shape.",
       "properties": {
         "key": {
           "title": "Key",
@@ -187,6 +187,827 @@
       ],
       "title": "InvalidCapabilityValueData",
       "type": "object"
+    },
+    "SessionConfig": {
+      "description": "Run configuration for a session.",
+      "properties": {
+        "runtime": {
+          "const": "claude",
+          "default": "claude",
+          "title": "Runtime",
+          "type": "string"
+        },
+        "model": {
+          "default": "claude-opus-4-8",
+          "title": "Model",
+          "type": "string"
+        },
+        "permissionMode": {
+          "default": "default",
+          "title": "Permissionmode",
+          "type": "string"
+        },
+        "streamText": {
+          "default": true,
+          "title": "Streamtext",
+          "type": "boolean"
+        },
+        "effort": {
+          "default": "auto",
+          "title": "Effort",
+          "type": "string"
+        },
+        "flags": {
+          "additionalProperties": {
+            "type": "boolean"
+          },
+          "title": "Flags",
+          "type": "object"
+        }
+      },
+      "title": "SessionConfig",
+      "type": "object"
+    },
+    "ArtifactKind": {
+      "enum": [
+        "file",
+        "diff"
+      ],
+      "title": "ArtifactKind",
+      "type": "string"
+    },
+    "Artifact": {
+      "description": "A file a session touched, or a diff it proposed.",
+      "properties": {
+        "path": {
+          "title": "Path",
+          "type": "string"
+        },
+        "kind": {
+          "$ref": "#/$defs/ArtifactKind"
+        },
+        "label": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Label"
+        },
+        "created": {
+          "default": "",
+          "title": "Created",
+          "type": "string"
+        },
+        "updated": {
+          "default": "",
+          "title": "Updated",
+          "type": "string"
+        }
+      },
+      "required": [
+        "path",
+        "kind"
+      ],
+      "title": "Artifact",
+      "type": "object"
+    },
+    "SessionMetrics": {
+      "description": "Run cost and usage, computed from the event stream.",
+      "properties": {
+        "costUsd": {
+          "default": 0.0,
+          "title": "Costusd",
+          "type": "number"
+        },
+        "turns": {
+          "default": 0,
+          "title": "Turns",
+          "type": "integer"
+        },
+        "toolCalls": {
+          "default": 0,
+          "title": "Toolcalls",
+          "type": "integer"
+        },
+        "durationMs": {
+          "default": 0,
+          "title": "Durationms",
+          "type": "integer"
+        },
+        "contextTokens": {
+          "default": 0,
+          "title": "Contexttokens",
+          "type": "integer"
+        },
+        "contextMax": {
+          "default": 0,
+          "title": "Contextmax",
+          "type": "integer"
+        },
+        "outputTokens": {
+          "default": 0,
+          "title": "Outputtokens",
+          "type": "integer"
+        }
+      },
+      "title": "SessionMetrics",
+      "type": "object"
+    },
+    "TodoItem": {
+      "properties": {
+        "key": {
+          "title": "Key",
+          "type": "string"
+        },
+        "content": {
+          "title": "Content",
+          "type": "string"
+        },
+        "status": {
+          "default": "pending",
+          "title": "Status",
+          "type": "string"
+        }
+      },
+      "required": [
+        "key",
+        "content"
+      ],
+      "title": "TodoItem",
+      "type": "object"
+    },
+    "CreateTicketAction": {
+      "description": "Queued ticket creation. Rendered as an 'Add to board' button.\n\n`state=\"pending\"` until the user clicks; `state=\"applied\"` once the ticket\nhas been created on the board.",
+      "properties": {
+        "type": {
+          "const": "create_ticket",
+          "default": "create_ticket",
+          "title": "Type",
+          "type": "string"
+        },
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "title": {
+          "title": "Title",
+          "type": "string"
+        },
+        "body": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Body"
+        },
+        "state": {
+          "default": "pending",
+          "enum": [
+            "pending",
+            "applied"
+          ],
+          "title": "State",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "title"
+      ],
+      "title": "CreateTicketAction",
+      "type": "object"
+    },
+    "NavigateAction": {
+      "description": "UI navigation only \u2014 no agent or tool call.",
+      "properties": {
+        "type": {
+          "const": "navigate",
+          "default": "navigate",
+          "title": "Type",
+          "type": "string"
+        },
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "title": {
+          "title": "Title",
+          "type": "string"
+        },
+        "description": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Description"
+        },
+        "target": {
+          "enum": [
+            "board",
+            "specs",
+            "graph",
+            "files"
+          ],
+          "title": "Target",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "title",
+        "target"
+      ],
+      "title": "NavigateAction",
+      "type": "object"
+    },
+    "StartSessionAction": {
+      "description": "Recommended follow-up session. Rendered as a primary/secondary CTA.",
+      "properties": {
+        "type": {
+          "const": "start_session",
+          "default": "start_session",
+          "title": "Type",
+          "type": "string"
+        },
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "title": {
+          "title": "Title",
+          "type": "string"
+        },
+        "description": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Description"
+        },
+        "skillId": {
+          "title": "Skillid",
+          "type": "string"
+        },
+        "prompt": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Prompt"
+        },
+        "primary": {
+          "default": false,
+          "title": "Primary",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "id",
+        "title",
+        "skillId"
+      ],
+      "title": "StartSessionAction",
+      "type": "object"
+    },
+    "SessionResult": {
+      "description": "The value a session hands back to its parent, plus its done-screen.",
+      "properties": {
+        "summary": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Summary"
+        },
+        "status": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Status"
+        },
+        "delivery": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Delivery"
+        },
+        "artifacts": {
+          "items": {
+            "$ref": "#/$defs/Artifact"
+          },
+          "title": "Artifacts",
+          "type": "array"
+        },
+        "actions": {
+          "items": {
+            "discriminator": {
+              "mapping": {
+                "create_ticket": "#/$defs/CreateTicketAction",
+                "navigate": "#/$defs/NavigateAction",
+                "start_session": "#/$defs/StartSessionAction"
+              },
+              "propertyName": "type"
+            },
+            "oneOf": [
+              {
+                "$ref": "#/$defs/CreateTicketAction"
+              },
+              {
+                "$ref": "#/$defs/StartSessionAction"
+              },
+              {
+                "$ref": "#/$defs/NavigateAction"
+              }
+            ]
+          },
+          "title": "Actions",
+          "type": "array"
+        }
+      },
+      "title": "SessionResult",
+      "type": "object"
+    },
+    "NodeRun": {
+      "properties": {
+        "kind": {
+          "enum": [
+            "session",
+            "subagent"
+          ],
+          "title": "Kind",
+          "type": "string"
+        },
+        "sessionId": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Sessionid"
+        },
+        "orchestratorSid": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Orchestratorsid"
+        },
+        "toolUseId": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Tooluseid"
+        },
+        "agentId": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Agentid"
+        },
+        "status": {
+          "default": "running",
+          "enum": [
+            "running",
+            "done",
+            "failed",
+            "cancelled"
+          ],
+          "title": "Status",
+          "type": "string"
+        },
+        "summary": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Summary"
+        },
+        "usage": {
+          "anyOf": [
+            {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Usage"
+        }
+      },
+      "required": [
+        "kind"
+      ],
+      "title": "NodeRun",
+      "type": "object"
+    },
+    "OrchestrationConfig": {
+      "description": "Per-ticket orchestration gates + failure policy (see design \u00a73).",
+      "properties": {
+        "stageGate": {
+          "default": "approve",
+          "enum": [
+            "approve",
+            "autonomous"
+          ],
+          "title": "Stagegate",
+          "type": "string"
+        },
+        "stepGate": {
+          "default": "approve",
+          "enum": [
+            "approve",
+            "autonomous"
+          ],
+          "title": "Stepgate",
+          "type": "string"
+        },
+        "failurePolicy": {
+          "default": "fail-fast",
+          "enum": [
+            "fail-fast",
+            "wait-all"
+          ],
+          "title": "Failurepolicy",
+          "type": "string"
+        },
+        "stepExecution": {
+          "default": "interactive",
+          "enum": [
+            "interactive",
+            "subagent"
+          ],
+          "title": "Stepexecution",
+          "type": "string"
+        },
+        "artifactEdits": {
+          "default": "ask",
+          "enum": [
+            "ask",
+            "auto"
+          ],
+          "title": "Artifactedits",
+          "type": "string"
+        }
+      },
+      "title": "OrchestrationConfig",
+      "type": "object"
+    },
+    "OrchestratorRef": {
+      "description": "Reference to a ticket's orchestrator driver. ``kind=\"session\"`` points at a\nSession via ``session_id``; ``kind=\"builtin\"`` names a registered pipeline via\n``builtin_id``. See SESSION_TICKET_MODEL.md \u00a7\"The orchestrator\".",
+      "properties": {
+        "kind": {
+          "default": "session",
+          "enum": [
+            "session",
+            "builtin"
+          ],
+          "title": "Kind",
+          "type": "string"
+        },
+        "sessionId": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Sessionid"
+        },
+        "builtinId": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Builtinid"
+        }
+      },
+      "title": "OrchestratorRef",
+      "type": "object"
+    },
+    "SessionRef": {
+      "properties": {
+        "thinkrailSid": {
+          "title": "Thinkrailsid",
+          "type": "string"
+        },
+        "skillId": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Skillid"
+        },
+        "status": {
+          "default": "",
+          "title": "Status",
+          "type": "string"
+        },
+        "name": {
+          "default": "",
+          "title": "Name",
+          "type": "string"
+        },
+        "summary": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Summary"
+        }
+      },
+      "required": [
+        "thinkrailSid"
+      ],
+      "title": "SessionRef",
+      "type": "object"
+    },
+    "WorkNode": {
+      "properties": {
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "title": {
+          "title": "Title",
+          "type": "string"
+        },
+        "skill": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Skill"
+        },
+        "dependsOn": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Dependson",
+          "type": "array"
+        },
+        "status": {
+          "default": "pending",
+          "enum": [
+            "pending",
+            "running",
+            "done",
+            "failed"
+          ],
+          "title": "Status",
+          "type": "string"
+        },
+        "runs": {
+          "items": {
+            "$ref": "#/$defs/NodeRun"
+          },
+          "title": "Runs",
+          "type": "array"
+        },
+        "summary": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Summary"
+        },
+        "artifactKind": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Artifactkind"
+        },
+        "executesPlan": {
+          "default": false,
+          "title": "Executesplan",
+          "type": "boolean"
+        },
+        "children": {
+          "anyOf": [
+            {
+              "items": {
+                "$ref": "#/$defs/WorkNode"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Children"
+        },
+        "completedAt": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Completedat"
+        }
+      },
+      "required": [
+        "id",
+        "title"
+      ],
+      "title": "WorkNode",
+      "type": "object"
+    },
+    "TicketState": {
+      "properties": {
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "title": {
+          "title": "Title",
+          "type": "string"
+        },
+        "body": {
+          "default": "",
+          "title": "Body",
+          "type": "string"
+        },
+        "type": {
+          "default": "feature",
+          "title": "Type",
+          "type": "string"
+        },
+        "rev": {
+          "default": 0,
+          "title": "Rev",
+          "type": "integer"
+        },
+        "lifecycle": {
+          "default": "created",
+          "enum": [
+            "created",
+            "design",
+            "implementation",
+            "done"
+          ],
+          "title": "Lifecycle",
+          "type": "string"
+        },
+        "orchestrator": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/OrchestratorRef"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "orchestration": {
+          "$ref": "#/$defs/OrchestrationConfig"
+        },
+        "stages": {
+          "items": {
+            "$ref": "#/$defs/WorkNode"
+          },
+          "title": "Stages",
+          "type": "array"
+        },
+        "sessions": {
+          "items": {
+            "$ref": "#/$defs/SessionRef"
+          },
+          "title": "Sessions",
+          "type": "array"
+        },
+        "linkedSpecIds": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Linkedspecids",
+          "type": "array"
+        },
+        "created": {
+          "default": "",
+          "title": "Created",
+          "type": "string"
+        },
+        "updated": {
+          "default": "",
+          "title": "Updated",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "title"
+      ],
+      "title": "TicketState",
+      "type": "object"
     }
   },
   "anyOf": [
@@ -210,6 +1031,24 @@
     },
     {
       "$ref": "#/$defs/InvalidCapabilityValueData"
+    },
+    {
+      "$ref": "#/$defs/SessionConfig"
+    },
+    {
+      "$ref": "#/$defs/Artifact"
+    },
+    {
+      "$ref": "#/$defs/SessionMetrics"
+    },
+    {
+      "$ref": "#/$defs/TodoItem"
+    },
+    {
+      "$ref": "#/$defs/SessionResult"
+    },
+    {
+      "$ref": "#/$defs/TicketState"
     }
   ]
 }

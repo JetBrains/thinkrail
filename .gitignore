@@ -84,3 +84,4 @@ POST.md
 # Don't need them rn in the repo
 .tr/plans/
 .tr/meta-tickets/
+.tr/design_docs/

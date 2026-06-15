@@ -58,7 +58,6 @@ frontend/src/api/
 │   ├── board.ts         # board/* methods (tickets, kanban)
 │   ├── settings.ts      # settings/* methods (project config, models, skills)
 │   ├── appSettings.ts   # appSettings/* methods (user-scoped session defaults)
-│   ├── trash.ts         # trash/* methods (soft-delete, restore)
 │   └── subsessions.ts   # subsession/* methods (sub-agent orchestration)
 └── hooks/
     └── useRpc.tsx        # RpcProvider, useRpc(), useConnectionState()

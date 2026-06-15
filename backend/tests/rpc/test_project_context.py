@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import asyncio
 from pathlib import Path
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -225,6 +225,42 @@ class TestCrossInjection:
         # Accessing spec_service wires coordinator.spec_service
         _ = ctx.spec_service
         assert ctx.coordinator.spec_service is ctx.spec_service
+
+        await ctx.shutdown()
+
+
+class TestOrchestratorSpawn:
+    """A new ticket is born with its ticket-orchestrator session (design §2.2/§9)."""
+
+    async def test_accessing_agent_service_wires_on_ticket_created(self, tmp_path: Path) -> None:
+        ctx = _make_ctx(tmp_path)
+        await ctx.start()
+
+        # The RPC layer touches agent_service when binding methods (server.py
+        # _bind_methods), which wires the spawn hook before any board/create.
+        _ = ctx.agent_service
+        assert ctx.board_service.on_ticket_created is not None
+
+        await ctx.shutdown()
+
+    async def test_creating_ticket_spawns_orchestrator_session(self, tmp_path: Path) -> None:
+        ctx = _make_ctx(tmp_path)
+        await ctx.start()
+
+        svc = ctx.agent_service
+        svc.run_task = AsyncMock(return_value=MagicMock(thinkrail_sid="orch-sid"))
+        svc.send_message = AsyncMock()
+
+        ticket = ctx.board_service.create_ticket(title="My ticket")
+        # _spawn_orchestrator schedules _spawn_and_kick on the running loop.
+        for _ in range(5):
+            await asyncio.sleep(0)
+
+        svc.run_task.assert_awaited_once()
+        kwargs = svc.run_task.await_args.kwargs
+        assert kwargs["skill_id"] == "ticket-orchestrator"
+        assert kwargs["ticket_id"] == ticket.id
+        svc.send_message.assert_awaited_once()
 
         await ctx.shutdown()
 

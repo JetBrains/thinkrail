@@ -9,7 +9,6 @@ import { PreviewTab } from "./PreviewTab.tsx";
 import { useSessionStore } from "@/store/sessionStore.ts";
 import { useTicketRouteStore } from "@/store/ticketRouteStore.ts";
 import { TicketPreviewPanel } from "@/components/TicketDetail/TicketPreviewPanel.tsx";
-import { resolvePhaseDefaultSid } from "@/components/TicketDetail/phaseDefaultSession.ts";
 import { useTicketRouteSetPreviewFile } from "./useTicketRouteSetPreviewFile.ts";
 import { Card } from "@/components/ui/index.ts";
 import "./ContextPanel.css";
@@ -39,25 +38,16 @@ function ModeContent({ mode }: { mode: ContextMode }) {
 /** Ticket-route variant: the right panel becomes the ticket artifact preview. */
 export function TicketRouteContextPanel() {
   const ticket = useTicketRouteStore((s) => s.ticket);
-  const plan = useTicketRouteStore((s) => s.plan);
   const historyEntries = useTicketRouteStore((s) => s.historyEntries);
   const selectedArtifact = useTicketRouteStore((s) => s.selectedArtifact);
   const setSelectedArtifact = useTicketRouteStore((s) => s.setSelectedArtifact);
-  const setPlan = useTicketRouteStore((s) => s.setPlan);
-  const sessionSummaries = useTicketRouteStore((s) => s.sessionSummaries);
   const centerSessionId = useTicketRouteStore((s) => s.centerSessionId);
 
-  // Default the right panel to the ticket's current-phase session so the
-  // artifact bar + preview follow the live agent without a click. An explicit
-  // `centerSessionId` (set by plan/orchestrator/step clicks) overrides it.
-  const liveSessions = useSessionStore((s) => s.sessions);
-  const archivedSessions = useSessionStore((s) => s.archivedSessions);
+  // The right panel follows the explicitly-focused session (set by
+  // orchestrator/stage/step clicks); with none, it stays empty until one is
+  // focused.
   const restoreSession = useSessionStore((s) => s.restoreSession);
-  const phaseDefaultSid = useMemo(
-    () => resolvePhaseDefaultSid(ticket, liveSessions, archivedSessions, sessionSummaries),
-    [ticket, liveSessions, archivedSessions, sessionSummaries],
-  );
-  const effectiveCenterSid = centerSessionId ?? phaseDefaultSid;
+  const effectiveCenterSid = centerSessionId;
 
   // Load the resolved session into memory (no tab) so its artifacts +
   // previewPath are available even before the user opens its session tab.
@@ -107,10 +97,8 @@ export function TicketRouteContextPanel() {
         {ticket ? (
           <TicketPreviewPanel
             ticket={ticket}
-            plan={plan}
             historyEntries={historyEntries}
             sessionTouchedFiles={sessionTouchedFiles}
-            onPlanUpdated={setPlan}
             selectedArtifact={selectedArtifact}
             onSelectArtifact={setSelectedArtifact}
           />

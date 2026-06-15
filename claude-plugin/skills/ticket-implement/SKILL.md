@@ -29,7 +29,7 @@ You are NOT implementing the steps yourself. You coordinate. **Your execution mo
    1. Read and summarize plan
    2. Execute plan steps
    3. Run verification criteria
-   4. Mark ticket done
+   4. Finalize the stage
    ```
 
 1. **Read and summarize plan** *(task #1)* — read the plan (provided in your context). Summarize the current state — what's done, what's pending, what's next.
@@ -43,7 +43,13 @@ You are NOT implementing the steps yourself. You coordinate. **Your execution mo
 
 3. **Run verification criteria** *(task #3)* — when all steps are complete, go through the Verification section of the plan. Check each criterion. If any fail, return task #2 to `in_progress` and propose a corrective step.
 
-4. **Mark ticket done** *(task #4)* — propose via `AskUserQuestion`: "All steps complete and verified. Shall I mark the ticket `done`?" If yes, call `ChangeTicketStatus({ status: 'done' })`. (Status === ongoing work: implementing is finished, no more active work.)
+4. **Finalize the stage** *(task #4)* — **Confirm with the user** via `AskUserQuestion`: "All steps complete and verified. Finalize the implementation and hand back to the orchestrator?" If yes, call `SessionFinalize` with a one-line summary (artifacts optional):
+   ```json
+   {
+     "summary": "Implementation complete — all plan steps verified."
+   }
+   ```
+   You do **not** mark the ticket done yourself. Finalizing ends this last stage and resumes the orchestrator; with every stage done, the ticket's lifecycle derives to `done`.
 
 ## Guidelines
 
@@ -58,7 +64,7 @@ You are NOT implementing the steps yourself. You coordinate. **Your execution mo
 - `Task` — SDK subagent invocation; in subagent mode, target `subagent_type="ticket-step-executor"` with a prompt that starts with `[thinkrail-step ticket={ticket_id} step={step_number}]`
 - `spec_search` / `Read` — check spec state
 - `AskUserQuestion` — ask the user for decisions when the plan needs adjustment
-- `ChangeTicketStatus` — transition to `done` after all steps verified
+- `SessionFinalize` — finalize the stage after the user confirms; hands control back to the orchestrator, which (with every stage done) derives the ticket's lifecycle to `done`
 - `TodoWrite` — surface the workflow as live tasks in the ticket's "Tasks (n/m)" sub-row (call once at the start; re-emit after each task to update statuses)
 
 ## Red flags — STOP

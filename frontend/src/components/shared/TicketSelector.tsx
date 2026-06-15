@@ -36,7 +36,7 @@ export function TicketSelector({ selectedId, onSelect }: TicketSelectorProps) {
           >
             <span className="ticket-selector-item-title">{t.title}</span>
             <span className="ticket-selector-item-meta">
-              <span className={`ticket-selector-status ticket-selector-status--${t.status}`}>{t.status}</span>
+              <span className={`ticket-selector-status ticket-selector-status--${t.lifecycle}`}>{t.lifecycle}</span>
               <span className="ticket-selector-type">{t.type}</span>
             </span>
           </button>

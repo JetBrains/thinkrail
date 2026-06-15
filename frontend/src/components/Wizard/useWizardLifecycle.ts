@@ -33,7 +33,7 @@ export type WizardLifecycleState =
       activeSessionId: string;
       chainHint: string | null;
     }
-  /** A wizard session finished with an outcome the user hasn't dismissed. */
+  /** A wizard session finished with a result the user hasn't dismissed. */
   | {
       kind: "done-screen";
       session: Session;
