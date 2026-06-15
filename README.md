@@ -8,15 +8,7 @@ Specification-driven development workspace. Hierarchical, interconnected specs l
 
 ### For end users
 
-Install with a single command (works while the repo is internal — uses your `gh` auth):
-
-```bash
-TOKEN=$(gh auth token)
-curl -fsSL -H "Authorization: Bearer $TOKEN" https://raw.githubusercontent.com/JetBrains/thinkrail/main/install.sh \
-  | GH_TOKEN="$TOKEN" bash -s -- --channel nightly
-```
-
-Once the repo is public, the plain form will work for everyone:
+Install with a single command:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/JetBrains/thinkrail/main/install.sh | bash
