@@ -9,7 +9,7 @@ By contributing, you agree that your contributions will be licensed under the
 
 ## Reporting bugs and requesting features
 
-Open a [GitHub issue](https://github.com/JetBrains/bonsai/issues). Before filing,
+Open a [GitHub issue](https://github.com/JetBrains/thinkrail/issues). Before filing,
 search existing issues to avoid duplicates. For bug reports, include:
 
 - What you did, what you expected, and what actually happened
@@ -18,8 +18,8 @@ search existing issues to avoid duplicates. For bug reports, include:
 
 ## Finding something to work on
 
-Issues labelled [`up for grabs`](https://github.com/JetBrains/bonsai/labels/up%20for%20grabs)
-and [`good first issue`](https://github.com/JetBrains/bonsai/labels/good%20first%20issue)
+Issues labelled [`up for grabs`](https://github.com/JetBrains/thinkrail/labels/up%20for%20grabs)
+and [`good first issue`](https://github.com/JetBrains/thinkrail/labels/good%20first%20issue)
 are a good place to start. If you'd like to take one, leave a comment so others
 know it's being worked on. For larger changes, open an issue to discuss the
 approach before investing significant effort.
@@ -30,7 +30,7 @@ approach before investing significant effort.
 (installed automatically by `run.sh` if missing).
 
 ```bash
-git clone https://github.com/JetBrains/bonsai.git
+git clone https://github.com/JetBrains/thinkrail.git
 cd thinkrail
 ./run.sh
 ```

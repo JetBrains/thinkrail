@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -e
 
-REPO_URL="https://github.com/JetBrains/bonsai.git"
+REPO_URL="https://github.com/JetBrains/thinkrail.git"
 REPO_DIR="thinkrail"
 
 echo "Cloning $REPO_URL ..."

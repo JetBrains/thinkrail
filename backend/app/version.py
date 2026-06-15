@@ -22,7 +22,7 @@ except ImportError:
     CHANNEL = "dev"
     COMMIT = ""
 
-GITHUB_REPO = os.environ.get(f"{ENV_PREFIX}GITHUB_REPO", "JetBrains/bonsai")
+GITHUB_REPO = os.environ.get(f"{ENV_PREFIX}GITHUB_REPO", "JetBrains/thinkrail")
 GITHUB_API = f"https://api.github.com/repos/{GITHUB_REPO}"
 
 CACHE_PATH = Path.home() / ".config" / CONFIG_DIRNAME / "update-check.json"

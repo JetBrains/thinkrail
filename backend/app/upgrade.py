@@ -14,7 +14,7 @@ from app.version import CHANNEL, VERSION
 
 INSTALL_SCRIPT_URL = os.environ.get(
     f"{ENV_PREFIX}INSTALL_SCRIPT_URL",
-    "https://raw.githubusercontent.com/JetBrains/bonsai/main/install.sh",
+    "https://raw.githubusercontent.com/JetBrains/thinkrail/main/install.sh",
 )
 INSTALL_METADATA_PATH = Path.home() / ".config" / CONFIG_DIRNAME / "install.json"
 
@@ -60,7 +60,7 @@ def run_upgrade(channel: str | None = None, version: str = "latest") -> int:
         print(
             "Automatic upgrade on Windows is not yet supported.\n"
             "Download the latest binary from:\n"
-            "  https://github.com/JetBrains/bonsai/releases",
+            "https://github.com/JetBrains/thinkrail/releases",
             file=sys.stderr,
         )
         return 1
