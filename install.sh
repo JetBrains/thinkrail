@@ -2,16 +2,7 @@
 # ThinkRail binary installer.
 #
 # Public-repo install:
-#   curl -fsSL https://raw.githubusercontent.com/JetBrains/bonsai/main/install.sh | bash
-#
-# Private/internal repo (while thinkrail is still private):
-#   curl -fsSL -H "Authorization: Bearer $(gh auth token)" \
-#     https://raw.githubusercontent.com/JetBrains/bonsai/main/install.sh \
-#     | GH_TOKEN=$(gh auth token) bash -s -- --channel nightly
-#
-# Auth precedence: $GH_TOKEN → $GITHUB_TOKEN → `gh auth token` (if `gh` is on PATH).
-# With a token, downloads go via the authenticated API asset endpoint.
-# Without a token, the public release-download URL is used.
+#   curl -fsSL https://raw.githubusercontent.com/JetBrains/thinkrail/main/install.sh | bash
 #
 # Options (pass after `-s --`):
 #   --channel stable|nightly   (default: stable)
@@ -24,7 +15,7 @@
 
 set -euo pipefail
 
-REPO="${THINKRAIL_REPO:-JetBrains/bonsai}"
+REPO="${THINKRAIL_REPO:-JetBrains/thinkrail}"
 CHANNEL="stable"
 VERSION="latest"
 PREFIX="${HOME}/.local"
@@ -35,7 +26,7 @@ usage() {
 ThinkRail binary installer.
 
 Usage:
-  curl -fsSL https://raw.githubusercontent.com/JetBrains/bonsai/main/install.sh | bash
+  curl -fsSL https://raw.githubusercontent.com/JetBrains/thinkrail/main/install.sh | bash
   curl -fsSL ... | bash -s -- --channel nightly --version 0.2.0 --prefix ~/.local
 
 Options:
