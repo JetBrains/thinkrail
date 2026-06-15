@@ -30,7 +30,8 @@ jobs:
 
   sign:
     needs: build
-    if: ${{ vars.CODESIGN_RUNNER != '' }}
+    # if: ${{ vars.CODESIGN_RUNNER != '' }}
+    if: false
     runs-on: ${{ vars.CODESIGN_RUNNER || 'ubuntu-latest' }}
     steps:
       - uses: actions/checkout@v6
