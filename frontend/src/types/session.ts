@@ -38,6 +38,10 @@ export interface ContextUsage {
   cacheCreationTokens: number;
   inputTokens: number;
   turnHistory: TurnUsage[];
+  /** The turn currently in flight, updated live from costEstimate. Null
+   *  between turns; appended to turnHistory once the turn completes. Its
+   *  costUsd is an estimate (rendered with a ~ prefix). */
+  liveTurn?: TurnUsage | null;
   /** Indices into turnHistory where a new session run (resume) began. */
   runBoundaries: number[];
   toolCallCounts: Record<string, number>;

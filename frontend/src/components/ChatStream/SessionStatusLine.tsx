@@ -386,6 +386,16 @@ export function SessionStatusLine({
               <InfoBlock
                 label="Cost"
                 stats={[
+                  ...(isStreaming && metrics.contextUsage.liveTurn
+                    ? [{
+                        value: (
+                          <span className="ssl-cost-active">
+                            ~${metrics.contextUsage.liveTurn.costUsd.toFixed(2)}
+                          </span>
+                        ),
+                        sub: "current turn",
+                      }]
+                    : []),
                   {
                     value: (
                       <span className={isStreaming ? "ssl-cost-active" : undefined}>

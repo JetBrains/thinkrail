@@ -49,8 +49,16 @@ function TokenBreakdown({ cu }: { cu: ContextUsage }) {
 
 // ── Turn History ────────────────────────────────────────────────────────────
 
-function TurnHistory({ turns, runBoundaries }: { turns: TurnUsage[]; runBoundaries: number[] }) {
-  if (turns.length === 0) return <div className="agent-context__empty">No turns yet</div>;
+function TurnHistory({
+  turns,
+  runBoundaries,
+  liveTurn,
+}: {
+  turns: TurnUsage[];
+  runBoundaries: number[];
+  liveTurn?: TurnUsage | null;
+}) {
+  if (turns.length === 0 && !liveTurn) return <div className="agent-context__empty">No turns yet</div>;
 
   const boundarySet = new Set(runBoundaries);
   const totalSdkTurns = turns.reduce((sum, t) => sum + t.sdkTurns, 0);
@@ -78,6 +86,20 @@ function TurnHistory({ turns, runBoundaries }: { turns: TurnUsage[]; runBoundari
         <span>{fmtTokens(t.inputTokens)}</span>
         <span>{fmtTokens(t.outputTokens)}</span>
         <span>${t.costUsd.toFixed(2)}</span>
+      </div>,
+    );
+  }
+
+  if (liveTurn) {
+    rows.push(
+      <div key="live" className="agent-context__turn-row agent-context__turn-row--live">
+        <span className="agent-context__turn-dim">
+          <span className="agent-context__turn-live-dot" />
+          {liveTurn.turnIndex + 1}
+        </span>
+        <span>{fmtTokens(liveTurn.inputTokens)}</span>
+        <span>{fmtTokens(liveTurn.outputTokens)}</span>
+        <span>~${liveTurn.costUsd.toFixed(2)}</span>
       </div>,
     );
   }
@@ -273,8 +295,8 @@ export function AgentContext() {
         <TokenBreakdown cu={cu} />
       </CollapsibleSection>
 
-      <CollapsibleSection title="Turn History" count={cu.turnHistory.length}>
-        <TurnHistory turns={cu.turnHistory} runBoundaries={cu.runBoundaries} />
+      <CollapsibleSection title="Turn History" count={cu.turnHistory.length + (cu.liveTurn ? 1 : 0)}>
+        <TurnHistory turns={cu.turnHistory} runBoundaries={cu.runBoundaries} liveTurn={cu.liveTurn} />
       </CollapsibleSection>
 
       <CollapsibleSection title="Tool Calls" count={totalTools}>

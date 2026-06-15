@@ -129,10 +129,10 @@ export interface IterationUsage {
 
 export interface TurnUsage {
   turnIndex: number;
-  inputTokens: number;         // fresh input from last iteration
-  outputTokens: number;        // output from last iteration
-  cacheCreationTokens: number; // cache create from last iteration
-  cacheReadTokens: number;     // cache read from last iteration
+  inputTokens: number;         // cumulative fresh input across the turn's iterations
+  outputTokens: number;        // cumulative output across the turn's iterations
+  cacheCreationTokens: number; // cumulative cache-creation across the turn
+  cacheReadTokens: number;     // cumulative cache-read across the turn
   totalContextTokens: number;  // last iteration total (= input + cacheRead + cacheCreate + output)
   costUsd: number;
   timestamp: number;
@@ -148,6 +148,7 @@ export interface ContextUsage {
   cacheCreationTokens: number;
   inputTokens: number;         // fresh input only (non-cached)
   turnHistory: TurnUsage[];
+  liveTurn?: TurnUsage | null; // in-flight turn (live cost estimate); null between turns
   runBoundaries: number[];     // indices where session resumed
   toolCallCounts: Record<string, number>;
   toolTokens: Record<string, { inputTokens: number; outputTokens: number }>;
