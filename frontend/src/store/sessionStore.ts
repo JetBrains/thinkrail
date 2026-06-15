@@ -284,6 +284,14 @@ function reconstructContextUsage(events: AgentEvent[], fallbackContextMax = 0): 
       const cacheRead = lastIter ? ((lastIter.cache_read_input_tokens as number) ?? 0) : (usage.cache_read_input_tokens ?? 0);
       const outputTokens = lastIter ? ((lastIter.output_tokens as number) ?? 0) : (usage.output_tokens ?? 0);
 
+      // Turn-history row shows cumulative turn totals (summed across iterations);
+      // the context breakdown below stays last-iteration for the window bar.
+      const sumIters = (key: string): number => rawIters.reduce((s, it) => s + ((it[key] as number) ?? 0), 0);
+      const turnInput = rawIters.length > 0 ? sumIters("input_tokens") : (usage.input_tokens ?? 0);
+      const turnOutput = rawIters.length > 0 ? sumIters("output_tokens") : (usage.output_tokens ?? 0);
+      const turnCacheCreation = rawIters.length > 0 ? sumIters("cache_creation_input_tokens") : (usage.cache_creation_input_tokens ?? 0);
+      const turnCacheRead = rawIters.length > 0 ? sumIters("cache_read_input_tokens") : (usage.cache_read_input_tokens ?? 0);
+
       const totalContext = (p.contextWindow ?? 0) || (inputTokens + cacheCreation + cacheRead + outputTokens);
 
       cu.contextTokens = totalContext;
@@ -316,10 +324,10 @@ function reconstructContextUsage(events: AgentEvent[], fallbackContextMax = 0): 
 
       cu.turnHistory.push({
         turnIndex: cu.turnHistory.length,
-        inputTokens,
-        outputTokens,
-        cacheCreationTokens: cacheCreation,
-        cacheReadTokens: cacheRead,
+        inputTokens: turnInput,
+        outputTokens: turnOutput,
+        cacheCreationTokens: turnCacheCreation,
+        cacheReadTokens: turnCacheRead,
         totalContextTokens: totalContext,
         costUsd: p.turnCostUsd ?? 0,
         timestamp: 0, // not available from persisted events
@@ -397,6 +405,15 @@ function applyMetrics(
   const cacheRead = lastIter ? (lastIter.cache_read_input_tokens ?? 0) : (usage.cache_read_input_tokens ?? 0);
   const outputTokens = lastIter ? (lastIter.output_tokens ?? 0) : (usage.output_tokens ?? 0);
 
+  // Turn-history row shows cumulative turn totals (summed across iterations) so
+  // input/output grow monotonically with the cost; the breakdown above stays
+  // last-iteration for the context-window bar.
+  const sumIters = (key: string): number => rawIters.reduce((s, it) => s + (it[key] ?? 0), 0);
+  const turnInput = rawIters.length > 0 ? sumIters("input_tokens") : (usage.input_tokens ?? 0);
+  const turnOutput = rawIters.length > 0 ? sumIters("output_tokens") : (usage.output_tokens ?? 0);
+  const turnCacheCreation = rawIters.length > 0 ? sumIters("cache_creation_input_tokens") : (usage.cache_creation_input_tokens ?? 0);
+  const turnCacheRead = rawIters.length > 0 ? sumIters("cache_read_input_tokens") : (usage.cache_read_input_tokens ?? 0);
+
   // Context window = all tokens in the last API call.
   const totalContext = (params.contextWindow as number) || (inputTokens + cacheCreation + cacheRead + outputTokens);
   // Denominator is streamed by the runtime on the turn event; carry the
@@ -415,10 +432,10 @@ function applyMetrics(
   const prevUsage = session.metrics.contextUsage;
   const turnUsage: TurnUsage = {
     turnIndex: prevUsage.turnHistory.length,
-    inputTokens,
-    outputTokens,
-    cacheCreationTokens: cacheCreation,
-    cacheReadTokens: cacheRead,
+    inputTokens: turnInput,
+    outputTokens: turnOutput,
+    cacheCreationTokens: turnCacheCreation,
+    cacheReadTokens: turnCacheRead,
     totalContextTokens: totalContext,
     costUsd: (params.turnCostUsd as number) ?? 0,
     timestamp: Date.now(),
@@ -458,6 +475,7 @@ function applyMetrics(
         cacheCreationTokens: cacheCreation,
         inputTokens,
         turnHistory: [...prevUsage.turnHistory, turnUsage],
+        liveTurn: null,
       },
     },
   };
@@ -2072,14 +2090,35 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
           }
         } else if (method === "agent/costEstimate") {
           const est = params.estimatedCostUsd as number;
-          // Context from latest iteration (not cumulative turn totals)
+          const turnEst = params.estimatedTurnCostUsd as number;
+          // Context bar / breakdown reflect the latest iteration (last API call).
           const contextTokens = (params.currentContextWindow as number) ?? 0;
           const iterInput = (params.iterInputTokens as number) ?? 0;
           const iterCacheRead = (params.iterCacheRead as number) ?? 0;
           const iterCacheCreate = (params.iterCacheCreate as number) ?? 0;
           const iterOutput = (params.iterOutputTokens as number) ?? 0;
+          // Turn-history row shows cumulative turn totals so input/output grow
+          // monotonically with the cost (the latest iteration resets to 0 at the
+          // start of each tool-use loop).
+          const turnInput = (params.turnInputTokens as number) ?? 0;
+          const turnOutput = (params.turnOutputTokens as number) ?? 0;
+          const turnCacheRead = (params.turnCacheRead as number) ?? 0;
+          const turnCacheWrite = (params.turnCacheWrite as number) ?? 0;
           // costEstimate never carries the window; keep the current denominator.
           const contextMax = session.metrics.contextMax || 0;
+
+          const prevUsage = session.metrics.contextUsage;
+          const liveTurn: TurnUsage = {
+            turnIndex: prevUsage.turnHistory.length,
+            inputTokens: turnInput,
+            outputTokens: turnOutput,
+            cacheCreationTokens: turnCacheWrite,
+            cacheReadTokens: turnCacheRead,
+            totalContextTokens: contextTokens,
+            costUsd: typeof turnEst === "number" ? turnEst : 0,
+            timestamp: prevUsage.liveTurn?.timestamp ?? Date.now(),
+            sdkTurns: 0,
+          };
 
           const next = new Map(sessions);
           next.set(thinkrailSid, {
@@ -2090,13 +2129,14 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
               contextTokens,
               contextMax,
               contextUsage: {
-                ...session.metrics.contextUsage,
+                ...prevUsage,
                 contextMax,
                 contextTokens,
                 inputTokens: iterInput,
                 cacheReadTokens: iterCacheRead,
                 cacheCreationTokens: iterCacheCreate,
                 outputTokens: iterOutput,
+                liveTurn,
               },
             },
           });
@@ -2622,6 +2662,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
             costUsd: newCost,
             turns: (params.turns as number) ?? session.metrics.turns,
             durationMs: (params.durationMs as number) ?? session.metrics.durationMs,
+            contextUsage: { ...session.metrics.contextUsage, liveTurn: null },
           },
           outcome: payloadOutcome ?? session.outcome ?? null,
         });
@@ -2642,6 +2683,10 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
           ...session,
           status: isRecoverable ? "idle" : "error",
           pendingRequests: [],
+          metrics: {
+            ...session.metrics,
+            contextUsage: { ...session.metrics.contextUsage, liveTurn: null },
+          },
         });
       }
       return { sessions };
