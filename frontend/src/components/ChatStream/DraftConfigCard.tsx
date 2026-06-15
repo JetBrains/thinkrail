@@ -8,6 +8,7 @@ import { useRuntimeCapsStore } from "@/store/runtimeCapsStore.ts";
 import { RuntimeFlags } from "@/components/shared/RuntimeFlags.tsx";
 import { useBoardStore } from "@/store/boardStore.ts";
 import { SkillGrid } from "@/components/shared/SkillGrid.tsx";
+import { SkillIcon } from "@/constants/skillIcons.tsx";
 import { SpecSelector } from "@/components/shared/SpecSelector.tsx";
 import { TicketSelector } from "@/components/shared/TicketSelector.tsx";
 import { FileSelector } from "@/components/shared/FileSelector.tsx";
@@ -183,7 +184,7 @@ export function DraftConfigCard({ thinkrailSid, readOnly, hideDiscard, onVisibil
           <div className="draft-config-value">
             {skill ? (
               <span className="draft-config-pill">
-                {skill.icon} {skill.name}
+                <SkillIcon skillId={skill.id} className="draft-config-skill-icon" /> {skill.name}
               </span>
             ) : (
               <span className="draft-config-muted">none</span>
@@ -297,7 +298,7 @@ export function DraftConfigCard({ thinkrailSid, readOnly, hideDiscard, onVisibil
         <div className="draft-config-value">
           {skill ? (
             <span className="draft-config-pill">
-              {skill.icon} {skill.name}
+              <SkillIcon skillId={skill.id} className="draft-config-skill-icon" /> {skill.name}
               <button
                 className="draft-config-pill-remove"
                 onClick={() => debouncedUpdate({ skillId: null })}
@@ -517,21 +518,23 @@ export function DraftConfigCard({ thinkrailSid, readOnly, hideDiscard, onVisibil
           {session.skillId === "ticket-implement" && (
             <span className="draft-config-inline" aria-label="Execution mode">
               <span className="draft-config-hint">mode:</span>
-              <select
-                className="draft-config-select"
+              <Dropdown
+                className="draft-config-dd"
                 value={`${session.subagentMode ?? "step-session"}:${session.stepGate ?? "approve"}`}
-                onChange={(e) => {
-                  const [mode, gate] = e.target.value.split(":") as [
+                options={[
+                  { value: "step-session:approve", label: "step sessions (approve each)" },
+                  { value: "subagent:approve", label: "subagents (approve each)" },
+                  { value: "subagent:autonomous", label: "subagents (autonomous)" },
+                ]}
+                onChange={(v) => {
+                  const [mode, gate] = v.split(":") as [
                     "step-session" | "subagent",
                     "approve" | "autonomous",
                   ];
                   debouncedUpdate({ subagentMode: mode, stepGate: gate });
                 }}
-              >
-                <option value="step-session:approve">step sessions (approve each)</option>
-                <option value="subagent:approve">subagents (approve each)</option>
-                <option value="subagent:autonomous">subagents (autonomous)</option>
-              </select>
+                ariaLabel="Execution mode"
+              />
             </span>
           )}
 

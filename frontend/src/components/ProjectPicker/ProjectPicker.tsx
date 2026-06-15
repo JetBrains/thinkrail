@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useState } from "react";
 import { Grid2x2Plus, FolderHeart, Grid2x2 } from "lucide-react";
 import { validateProject } from "@/services/project.ts";
-import { browseFolder } from "@/services/fs.ts";
+import { browseFolder, getDefaultRoot } from "@/services/fs.ts";
 import {
   getKnownProjects,
   type KnownProject,
 } from "@/services/projects.ts";
+import { NewProjectForm } from "@/components/Wizard/NewProjectForm";
 import { PRODUCT_NAME } from "@/constants/branding";
 import "./ProjectPicker.css";
 
@@ -17,11 +18,16 @@ interface ProjectPickerProps {
 export function ProjectPicker({ onSelect, onClose }: ProjectPickerProps) {
   const [loading, setLoading] = useState(false);
   const [recents, setRecents] = useState<KnownProject[]>([]);
+  const [mode, setMode] = useState<"welcome" | "new">("welcome");
+  const [defaultRoot, setDefaultRoot] = useState("");
 
   useEffect(() => {
     getKnownProjects()
       .then(setRecents)
       .catch(() => setRecents([]));
+    getDefaultRoot()
+      .then(setDefaultRoot)
+      .catch(() => setDefaultRoot(""));
   }, []);
 
   const handleOpen = useCallback(
@@ -52,6 +58,17 @@ export function ProjectPicker({ onSelect, onClose }: ProjectPickerProps) {
     }
   }, [handleOpen]);
 
+  if (mode === "new") {
+    return (
+      <NewProjectForm
+        mode="create"
+        defaultRoot={defaultRoot}
+        onSelect={onSelect}
+        onCancel={() => setMode("welcome")}
+      />
+    );
+  }
+
   return (
     <div className={`picker-container ${onClose ? "picker-modal" : ""}`} onClick={onClose}>
       <div className="picker-welcome" onClick={(e) => e.stopPropagation()}>
@@ -68,7 +85,7 @@ export function ProjectPicker({ onSelect, onClose }: ProjectPickerProps) {
           <div className="picker-ctas">
             <button
               className="picker-cta picker-cta-primary"
-              onClick={openBrowse}
+              onClick={() => setMode("new")}
               disabled={loading}
             >
               <span className="picker-cta-h">

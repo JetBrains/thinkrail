@@ -145,11 +145,11 @@
 
 /* ── TicketArtifactBar ── */
 .tab-bar {
-  display: flex; align-items: center; gap: 4px;
-  background: var(--panel);
+  display: flex; align-items: center; gap: 2px;
+  background: transparent;
   border-bottom: 1px solid var(--border);
   height: 34px;
-  padding: 0 4px;
+  padding: 0 var(--space-sm);
   position: relative;
 }
 .tab-bar--collapsed { gap: 8px; padding: 0 12px; }
@@ -159,30 +159,29 @@
 }
 .tab-bar__tab {
   display: flex; align-items: center; gap: 6px;
-  padding: 0 12px;
-  background: var(--elevated);
-  color: var(--muted);
-  font-size: var(--font-xs);
+  padding: 0 var(--space-md);
+  background: transparent;
+  color: var(--hint);
+  font-size: var(--font-sm);
   cursor: pointer;
-  border-right: 1px solid var(--border);
+  border-bottom: 2px solid transparent;
   flex-shrink: 0;
   max-width: 200px;
 }
-.tab-bar__tab:hover { background: var(--hover); color: var(--text); }
+.tab-bar__tab:hover { color: var(--text); }
 .tab-bar__tab--active {
-  background: var(--bg, #14151a);
   color: var(--text);
-  border-bottom: 2px solid var(--blue);
+  border-bottom-color: var(--primary);
 }
-.tab-bar__icon { flex-shrink: 0; }
+.tab-bar__icon { flex-shrink: 0; display: inline-flex; align-items: center; }
 .tab-bar__name {
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-  font-family: var(--font-mono, ui-monospace, monospace); font-size: var(--font-xs);
+  font-family: var(--font-mono, ui-monospace, monospace); font-size: var(--font-body);
 }
 .tab-bar__live {
   font-size: 9px; padding: 1px 5px; border-radius: 3px;
-  background: color-mix(in srgb, var(--blue) 20%, transparent);
-  color: var(--blue);
+  background: color-mix(in srgb, var(--primary) 20%, transparent);
+  color: var(--primary);
   text-transform: uppercase; letter-spacing: 0.05em;
   flex-shrink: 0;
 }
@@ -191,15 +190,15 @@
   margin-left: auto;
 }
 .tab-bar__btn {
+  display: inline-flex; align-items: center; justify-content: center;
   width: 26px; height: 26px;
   background: transparent;
   border: 0;
   color: var(--muted);
   cursor: pointer;
-  font-size: var(--font-md);
   border-radius: 4px;
 }
-.tab-bar__btn:hover { background: var(--elevated); color: var(--text); }
+.tab-bar__btn:hover { background: var(--hover); color: var(--text); }
 .tab-bar__dropdown {
   position: absolute; top: 100%; right: 4px;
   background: var(--panel);
@@ -219,7 +218,7 @@
 }
 .tab-bar__dropdown-row:hover { background: var(--elevated); }
 .tab-bar__dropdown-row--sel {
-  background: color-mix(in srgb, var(--blue) 10%, transparent);
+  background: color-mix(in srgb, var(--primary) 10%, transparent);
 }
 
 /* ── TicketPreviewPanel ── */

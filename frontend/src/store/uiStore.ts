@@ -15,6 +15,15 @@ export type CenterView = "sessions" | "board" | "specs" | "files";
 
 export type ChatCategoryVisibility = Record<EventCategory, boolean>;
 
+/** Idea collected in the picker before navigation. The project path / RPC
+ *  don't exist until the workspace mounts, so the new-project session is
+ *  started post-navigation from this carry. */
+export interface PendingNewProject {
+  name: string;
+  ideaText: string;
+  attachedFile: { name: string; content: string } | null;
+}
+
 /**
  * Resolve what to do with sessions for a given project state.
  * Returns `null` when the welcome screen handles the workspace (state="new").
@@ -41,6 +50,10 @@ interface UiStore {
   setProject: (path: string) => void;
   projectState: ProjectState | null;
   setProjectState: (state: ProjectState | null) => void;
+  /** New-project idea carried from the picker across navigation; consumed
+   *  once the workspace mounts to auto-start the session. Not persisted. */
+  pendingNewProject: PendingNewProject | null;
+  setPendingNewProject: (p: PendingNewProject | null) => void;
   /** Active wizard chain ID — disambiguates which set of stepper
    *  labels to show when a wizard skill participates in more than one
    *  chain (e.g. ``new-project`` runs as the standalone greenfield
@@ -119,6 +132,9 @@ export const useUiStore = create<UiStore>()(
         set({ projectPath: path, projectName: path.split("/").pop() ?? "Project" }),
       projectState: null,
       setProjectState: (state) => set({ projectState: state }),
+
+      pendingNewProject: null,
+      setPendingNewProject: (pendingNewProject) => set({ pendingNewProject }),
       currentChain: null,
       setCurrentChain: (chain) => set({ currentChain: chain }),
       wizardJourney: [] as JourneyEntry[],

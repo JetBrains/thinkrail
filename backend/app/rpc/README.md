@@ -105,6 +105,8 @@ Both sides can send either. The server can initiate requests to the client (e.g.
 | `board/savePlanRaw`| `{ ticketId: str, content: str }`                                                           | `Plan`              | Save plan from raw markdown |
 | `board/updateStep`| `{ ticketId: str, stepNumber: int, status: str, sessionId?: str }`                           | `Plan`              | Update a plan step's status |
 | `board/getNextStep`| `{ ticketId: str }`                                                                         | `Step \| null`      | Get the next actionable step |
+| `board/readArtifact`| `{ ticketId: str, kind: ArtifactKind }`                                                    | `{ content, stale, updated }` | Read an artifact file (product/technical design, plan, history) |
+| `board/writeArtifact`| `{ ticketId: str, kind: ArtifactKind, content: str }`                                     | `{ content, stale, updated }` | Persist edited artifact content to disk |
 | `board/listDrafts`| `{ ticketId: str }`                                                                          | `list[DraftEntry]`  | List spec draft entries for a ticket |
 | `board/getDraftDiff`| `{ ticketId: str, index: int }`                                                             | `DraftDiff`         | Get diff for a specific draft |
 | `board/applyDraft`| `{ ticketId: str, index: int }`                                                              | `null`              | Apply a single draft to the registry |

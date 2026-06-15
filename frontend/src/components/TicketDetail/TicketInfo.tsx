@@ -1,18 +1,18 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import type { Ticket, TicketType, OrchestrationConfig } from "@/types/board.ts";
+import { ChevronDown, ChevronRight } from "lucide-react";
+import type { Ticket, TicketType, OrchestrationConfig, WorkNode } from "@/types/board.ts";
 import { useBoardStore } from "@/store/boardStore.ts";
 import { useSessionStore } from "@/store/sessionStore.ts";
 import { useTicketRouteStore } from "@/store/ticketRouteStore.ts";
+import { Dropdown } from "@/components/shared/Dropdown.tsx";
 import { getClient } from "@/api/index.ts";
-import { createBoardApi } from "@/api/methods/board.ts";
+import { createBoardApi, type HistoryEntry } from "@/api/methods/board.ts";
 import { StaleRefsBanner } from "@/components/shared/StaleRefsBanner.tsx";
 import { timeAgo } from "@/utils/format.ts";
 import { deriveLifecycle, findStageNode, latestNodeSessionId } from "@/utils/lifecycle.ts";
 import { StageGraph } from "./StageGraph.tsx";
 import { OrchestrationControls } from "./OrchestrationControls.tsx";
-import { MarkdownEditor } from "@/components/MarkdownEditor/MarkdownEditor.tsx";
 import { ChatMarkdown } from "@/components/ChatStream/ChatMarkdown.tsx";
-import { Button } from "@/components/ui/Button";
 import "./TicketDetail.css";
 
 const TYPE_OPTIONS: TicketType[] = [
@@ -60,12 +60,8 @@ export function TicketInfo() {
   const getStaleTicketRefs = useBoardStore((s) => s.getStaleTicketRefs);
   const fixStaleTicketRefs = useBoardStore((s) => s.fixStaleTicketRefs);
 
-  const [descHeight, setDescHeight] = useState(140);
-  const [editingDescription, setEditingDescription] = useState(false);
-  const [descDraft, setDescDraft] = useState(ticket?.body ?? "");
   const [editTitle, setEditTitle] = useState(ticket?.title ?? "");
 
-  useEffect(() => setDescDraft(ticket?.body ?? ""), [ticket?.body]);
   useEffect(() => setEditTitle(ticket?.title ?? ""), [ticket?.title]);
 
   const knownSessionIds = useMemo(
@@ -73,22 +69,50 @@ export function TicketInfo() {
     [sessionSummaries],
   );
 
+  // Group history entries by the file they changed; files ordered by their
+  // most recent change (highest entry index) so recent activity sits on top.
+  const historyByFile = useMemo(() => {
+    const map = new Map<string, HistoryEntry[]>();
+    for (const e of historyEntries) {
+      const key = (e.filePath || "(unknown file)").replace(/^\.\//, "");
+      const arr = map.get(key);
+      if (arr) arr.push(e);
+      else map.set(key, [e]);
+    }
+    return [...map.entries()].sort(
+      (a, b) => Math.max(...b[1].map((e) => e.index)) - Math.max(...a[1].map((e) => e.index)),
+    );
+  }, [historyEntries]);
+
   const lifecycle = useMemo(
     () => deriveLifecycle(ticket?.stages ?? []),
     [ticket?.stages],
   );
 
-  const handleSaveDescription = useCallback(async () => {
-    if (!ticket) return;
-    const updated = await updateTicket(ticket.id, { body: descDraft });
-    setTicket(updated as Ticket);
-    setEditingDescription(false);
-  }, [updateTicket, ticket, descDraft, setTicket]);
-
-  const handleCancelDescription = useCallback(() => {
-    setDescDraft(ticket?.body ?? "");
-    setEditingDescription(false);
-  }, [ticket?.body]);
+  // When the ticket is orchestrated, the orchestrator is the outermost level:
+  // render a synthetic root WorkNode whose children are the stages, so the
+  // progress tree reads Orchestrator → stages → steps → runs. Without an
+  // orchestrator the stages render flat (top-level), as before.
+  const orchSid = ticket?.orchestrator?.sessionId ?? null;
+  const stageNodes = useMemo<WorkNode[]>(() => {
+    const stages = ticket?.stages ?? [];
+    if (!orchSid) return stages;
+    const live = liveSessionsMap.get(orchSid);
+    const archived = !live ? archivedSessionsList.find((a) => a.thinkrailSid === orchSid) : null;
+    const raw = live?.status ?? archived?.result ?? "interrupted";
+    const status: WorkNode["status"] =
+      raw === "running" || raw === "waiting" ? "running"
+        : raw === "done" ? "done"
+        : raw === "error" ? "failed" : "pending";
+    const root = {
+      id: "__orchestrator__",
+      title: "Orchestrator",
+      status,
+      runs: [{ kind: "session", sessionId: orchSid }],
+      children: stages,
+    } as unknown as WorkNode;
+    return [root];
+  }, [ticket?.stages, orchSid, liveSessionsMap, archivedSessionsList]);
 
   const handleTitleBlur = useCallback(async () => {
     if (!ticket) return;
@@ -102,9 +126,9 @@ export function TicketInfo() {
   }, [editTitle, ticket, updateTicket, setTicket]);
 
   const handleTypeChange = useCallback(
-    async (e: React.ChangeEvent<HTMLSelectElement>) => {
+    async (type: TicketType) => {
       if (!ticket) return;
-      const updated = await updateTicket(ticket.id, { type: e.target.value as TicketType });
+      const updated = await updateTicket(ticket.id, { type });
       setTicket(updated as Ticket);
     },
     [ticket, updateTicket, setTicket],
@@ -121,24 +145,6 @@ export function TicketInfo() {
         .catch((e) => console.error("[TicketInfo] Failed to update orchestration:", e));
     },
     [ticket, setTicket],
-  );
-
-  const handleDescResize = useCallback(
-    (e: React.MouseEvent) => {
-      e.preventDefault();
-      const startY = e.clientY;
-      const startH = descHeight;
-      const handleMove = (ev: MouseEvent) => {
-        setDescHeight(Math.max(60, startH + ev.clientY - startY));
-      };
-      const handleUp = () => {
-        document.removeEventListener("mousemove", handleMove);
-        document.removeEventListener("mouseup", handleUp);
-      };
-      document.addEventListener("mousemove", handleMove);
-      document.addEventListener("mouseup", handleUp);
-    },
-    [descHeight],
   );
 
   if (!ticket) {
@@ -173,15 +179,14 @@ export function TicketInfo() {
           </div>
           <div className="ticket-header-prop-row">
             <span className="ticket-header-prop-label">Type</span>
-            <select
+            <Dropdown<TicketType>
               className={`ticket-header-badge ticket-header-badge--${ticket.type}`}
               value={ticket.type}
+              options={TYPE_OPTIONS.map((t) => ({ value: t, label: t }))}
               onChange={handleTypeChange}
-            >
-              {TYPE_OPTIONS.map((t) => (
-                <option key={t} value={t}>{t}</option>
-              ))}
-            </select>
+              align="right"
+              ariaLabel="Ticket type"
+            />
           </div>
         </div>
         <div className="ticket-header-meta">
@@ -199,52 +204,20 @@ export function TicketInfo() {
         </div>
       </div>
 
-      {/* ── Description preview / editor ── */}
+      {/* ── Description (read-only rendered markdown) ── */}
       <div className="ticket-section">
         <div className="ticket-section-header">
           <span className="ticket-section-title">Description</span>
-          {!editingDescription ? (
-            <button
-              className="ticket-desc-edit-btn"
-              title="Edit description"
-              onClick={() => setEditingDescription(true)}
-            >
-              {"✎"}
-            </button>
-          ) : (
-            <div className="ticket-desc-edit-actions">
-              <Button variant="primary" size="sm" onClick={handleSaveDescription}>Save</Button>
-              <Button size="sm" onClick={handleCancelDescription}>Cancel</Button>
-            </div>
-          )}
         </div>
-        {editingDescription ? (
-          <div style={{ height: descHeight, minHeight: 60, display: "flex", flexDirection: "column" }}>
-            <MarkdownEditor
-              value={descDraft}
-              onChange={setDescDraft}
-              preview={false}
-              initialMode="edit"
-              lineNumbers="off"
-            />
+        {ticket.body ? (
+          <div className="ticket-description-preview">
+            <ChatMarkdown content={ticket.body} />
           </div>
         ) : (
-          <div
-            className="ticket-description-preview"
-            style={{ maxHeight: descHeight, overflow: "auto" }}
-          >
-            {ticket.body ? (
-              <div className="ticket-description-preview-text">
-                <ChatMarkdown content={ticket.body} />
-              </div>
-            ) : (
-              <div className="ticket-description-empty">
-                No description yet. Click {"✎"} to add one, or run <code>ticket-product-design</code> to populate it.
-              </div>
-            )}
+          <div className="ticket-description-empty">
+            No description yet. Run <code>ticket-product-design</code> to populate it.
           </div>
         )}
-        <div className="ticket-desc-resize-handle" onMouseDown={handleDescResize} />
       </div>
 
       {/* ── Progress (vertical phase list with expandable artifacts/sessions) ── */}
@@ -261,35 +234,11 @@ export function TicketInfo() {
         <OrchestrationControls config={ticket.orchestration} onChange={handleOrchChange} />
       </div>
 
-      {/* ── Orchestrator entry point ── */}
-      {ticket.orchestrator?.sessionId && (() => {
-        const sid = ticket.orchestrator!.sessionId!;
-        const live = liveSessionsMap.get(sid);
-        const archived = !live ? archivedSessionsList.find((a) => a.thinkrailSid === sid) : null;
-        const status = live?.status ?? archived?.result ?? "interrupted";
-        const isRunning = status === "running" || status === "waiting";
-        return (
-          <div
-            className="ticket-history-row"
-            onClick={() => void openSessionTab(sid)}
-            title="Open orchestrator session"
-            style={{ cursor: "pointer" }}
-          >
-            <span className="ticket-history-row-title">
-              {isRunning ? "● " : "○ "}Orchestrator
-            </span>
-            <span className="ticket-history-row-count" style={{ opacity: 0.6, fontSize: "0.75em" }}>
-              {status}
-            </span>
-          </div>
-        );
-      })()}
-
       <StageGraph
-        state={ticket as unknown as Parameters<typeof StageGraph>[0]["state"]}
+        state={{ ...ticket, stages: stageNodes } as unknown as Parameters<typeof StageGraph>[0]["state"]}
         onFocusNode={(nodeId) => {
-          // Clicking a stage opens its latest session (if it has run one).
-          const node = findStageNode(ticket.stages, nodeId);
+          // Clicking a stage (or the orchestrator root) opens its latest session.
+          const node = findStageNode(stageNodes, nodeId);
           const sid = node ? latestNodeSessionId(node) : null;
           if (sid) void openSessionTab(sid);
         }}
@@ -304,18 +253,82 @@ export function TicketInfo() {
         }}
       />
 
-      <div
-        className={`ticket-history-row ${historyEntries.length === 0 ? "ticket-history-row--empty" : ""}`}
-        onClick={() => setSelectedArtifact({ kind: "history" })}
-        title={
-          historyEntries.length === 0
-            ? "No amendments yet — apply a ProposeChange to start a history"
-            : undefined
-        }
-      >
-        <span className="ticket-history-row-title">History</span>
-        <span className="ticket-history-row-count">({historyEntries.length})</span>
+      <div className="ticket-history-section">
+        <div
+          className={`ticket-history-row ${historyEntries.length === 0 ? "ticket-history-row--empty" : ""}`}
+          onClick={() => setSelectedArtifact({ kind: "history" })}
+          title={
+            historyEntries.length === 0
+              ? "No amendments yet — apply a ProposeChange to start a history"
+              : "Open full history"
+          }
+        >
+          <span className="ticket-history-row-title">History</span>
+          <span className="ticket-history-row-count">({historyEntries.length})</span>
+        </div>
+        {historyEntries.length > 0 && (
+          <ul className="ticket-history-mini">
+            {historyByFile.map(([file, entries]) => (
+              <HistoryFileGroup
+                key={file}
+                file={file}
+                entries={entries}
+                onOpenStep={(index) => setSelectedArtifact({ kind: "history", expandIndex: index })}
+              />
+            ))}
+          </ul>
+        )}
       </div>
     </div>
+  );
+}
+
+/** One file in the overview history list. Collapsed by default; expanding
+ *  reveals the steps (#index) that changed this file, newest first. */
+function HistoryFileGroup({
+  file,
+  entries,
+  onOpenStep,
+}: {
+  file: string;
+  entries: HistoryEntry[];
+  onOpenStep: (index: number) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  // Last two path segments so same-named files (e.g. two README.md) are distinct.
+  const name = file.split("/").filter(Boolean).slice(-2).join("/") || file;
+  const steps = [...entries].sort((a, b) => b.index - a.index);
+
+  return (
+    <li className="ticket-history-file">
+      <div className="ticket-history-file-head" title={file} onClick={() => setOpen((v) => !v)}>
+        <span className="ticket-history-file-chev">
+          {open ? (
+            <ChevronDown size={14} strokeWidth={1.5} aria-hidden="true" />
+          ) : (
+            <ChevronRight size={14} strokeWidth={1.5} aria-hidden="true" />
+          )}
+        </span>
+        <span className="ticket-history-file-name">{name}</span>
+        <span className="ticket-history-file-count">{entries.length}</span>
+      </div>
+      {open && (
+        <ol className="ticket-history-file-steps">
+          {steps.map((e) => (
+            <li
+              key={e.index}
+              className="ticket-history-mini-item"
+              title={e.rationale ?? e.section ?? undefined}
+              onClick={() => onOpenStep(e.index)}
+            >
+              <span className="ticket-history-mini-num">#{e.index}</span>
+              <span className="ticket-history-mini-name">
+                {e.section || e.rationale || e.timestamp.slice(0, 19).replace("T", " ")}
+              </span>
+            </li>
+          ))}
+        </ol>
+      )}
+    </li>
   );
 }

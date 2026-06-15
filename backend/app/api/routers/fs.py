@@ -9,9 +9,21 @@ from pathlib import Path
 from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel
 
-from app.api.schemas import DirListResponse, FolderPickResponse, OkResponse
+from app.api.schemas import (
+    DefaultRootResponse,
+    DirListResponse,
+    FolderPickResponse,
+    OkResponse,
+)
+from app.core.config import PRODUCT_NAME
 
 router = APIRouter(prefix="/api/fs", tags=["fs"])
+
+
+@router.get("/default-root", response_model=DefaultRootResponse)
+async def default_root() -> DefaultRootResponse:
+    """Default parent directory for new projects: ``~/<ProductName>``."""
+    return DefaultRootResponse(root=str(Path.home() / PRODUCT_NAME))
 
 
 class _MkdirBody(BaseModel):

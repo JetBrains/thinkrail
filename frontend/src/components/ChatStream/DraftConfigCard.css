@@ -103,6 +103,9 @@
   border-radius: var(--radius-sm);
   background: var(--panel);
 }
+.draft-config-skill-icon {
+  color: var(--blue);
+}
 .draft-config-pill-remove {
   background: none;
   border: none;
@@ -145,12 +148,12 @@
   top: 100%;
   left: 44px;
   z-index: 100;
-  background: var(--elevated);
+  background: var(--bg-dark);
   border: 1px solid var(--border);
   border-radius: var(--radius-md);
   padding: var(--space-sm);
   box-shadow: var(--shadow-md);
-  max-height: 300px;
+  max-height: 460px;
   overflow-y: auto;
   min-width: 280px;
   margin-top: var(--space-xs);
@@ -174,16 +177,6 @@
   padding: 1px 4px;
   font-size: var(--font-sm);
 }
-.draft-config-select {
-  background: var(--panel);
-  color: var(--text);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  padding: 2px var(--space-sm);
-  font-size: var(--font-md);
-  font-family: inherit;
-  cursor: pointer;
-}
 
 /* Runtime-declared flag toggles — shared between the draft card and user settings. */
 .runtime-flags {
@@ -201,6 +194,9 @@
 }
 .runtime-flag input {
   cursor: pointer;
+}
+.draft-config-card input[type="checkbox"] {
+  accent-color: var(--blue);
 }
 
 .draft-config-checkbox {
@@ -296,22 +292,4 @@
 }
 .draft-config-btn-discard:hover {
   background: var(--hover);
-}
-.draft-config-btn-start {
-  background: var(--blue);
-  color: var(--on-accent);
-  border: none;
-  padding: var(--space-sm) var(--space-xl);
-  border-radius: var(--radius-md);
-  font-size: var(--font-body);
-  font-family: inherit;
-  cursor: pointer;
-  font-weight: 500;
-}
-.draft-config-btn-start:hover {
-  opacity: 0.9;
-}
-.draft-config-btn-start:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
 }

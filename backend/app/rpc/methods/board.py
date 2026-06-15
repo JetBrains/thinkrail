@@ -166,6 +166,20 @@ async def board_refine_node(service: BoardService, **params: Any) -> dict:
 
 
 @_handle_errors
+async def write_artifact(service: BoardService, **params: Any) -> dict:
+    """Persist edited artifact content to the ticket's file on disk."""
+    ticket_id = params["ticketId"]
+    kind: ArtifactKind = params["kind"]
+    content = params["content"]
+    service.write_artifact(ticket_id, kind, content)
+    ticket = service.get_ticket(ticket_id)
+    return {
+        "content": content,
+        "updated": ticket.updated,
+    }
+
+
+@_handle_errors
 async def get_history(service: BoardService, **params: Any) -> list[dict]:
     """Parse the per-ticket history.patch log into structured entries.
 

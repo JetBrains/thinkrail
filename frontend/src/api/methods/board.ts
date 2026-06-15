@@ -71,6 +71,9 @@ export function createBoardApi(client: RpcClient) {
     readArtifact: (ticketId: string, kind: ArtifactKind) =>
       client.request<ArtifactReadResult>("board/readArtifact", { ticketId, kind }),
 
+    writeArtifact: (ticketId: string, kind: ArtifactKind, content: string) =>
+      client.request<ArtifactReadResult>("board/writeArtifact", { ticketId, kind, content }),
+
     // History (per-ticket ProposeChange log, parsed)
     getHistory: (ticketId: string) =>
       client.request<HistoryEntry[]>("board/getHistory", { ticketId }),

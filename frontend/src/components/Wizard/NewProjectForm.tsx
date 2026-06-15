@@ -3,31 +3,48 @@ import { useNavigate } from "react-router-dom";
 import { useUiStore } from "@/store/uiStore";
 import { useNotificationStore } from "@/store/notificationStore";
 import { useVoiceInput } from "@/hooks/useVoiceInput";
-import { browseFolder } from "@/services/fs";
-import { entryTransition } from "./registry";
+import { FolderOpen } from "lucide-react";
+import { browseFolder, makeDirectory } from "@/services/fs";
+import { slugify } from "@/utils/slug";
 import { useStartWizardStep } from "./useStartWizardStep";
+import { NEW_PROJECT_CHAIN, NEW_PROJECT_SKILL, composeNewProjectKick } from "./newProjectKick";
 import { FullScreenLayout } from "./FullScreenLayout";
 import { Button } from "@/components/ui/Button";
 import { PRODUCT_NAME } from "@/constants/branding";
 import "./NewProjectForm.css";
 
-// This chain's identity. The skill + the session_prompt builder come
-// from the wizard registry (single source); this form only collects the
-// raw inputs (name, idea, attached doc) and hands them to the entry
-// transition.
-const CHAIN_ID = "new-project";
-const ENTRY = entryTransition(CHAIN_ID);
+interface NewProjectFormProps {
+  /** "create": collect the idea + create the folder, then hand the path to
+   *  `onSelect` to navigate (pre-navigation, no RPC). The post-navigation
+   *  auto-start then kicks off the session.
+   *  "start": the project is already open (RPC up) — start the session
+   *  directly. Used when an empty existing folder lands in state "new". */
+  mode?: "create" | "start";
+  /** create mode: default parent directory for the path field (~/ThinkRail). */
+  defaultRoot?: string;
+  /** create mode: navigate into the freshly-created project. */
+  onSelect?: (path: string) => void;
+  /** Cancel handler. Defaults to navigating back to the picker. */
+  onCancel?: () => void;
+}
 
 /**
- * The "Describe" step of the new-project wizard chain. Collects a name,
- * an idea description, and an optional attached doc. On submit, starts a
- * session with `skillId: "new-project"` — AppShell then takes over and
- * renders the chat+doc wizard layout for the running session.
+ * The "Describe" step of the new-project wizard chain. Collects a name, an
+ * idea description, an optional attached doc, and (in create mode) the target
+ * folder. The skill + prompt builder come from the wizard registry.
  */
-export function NewProjectForm() {
+export function NewProjectForm({ mode = "start", defaultRoot, onSelect, onCancel }: NewProjectFormProps) {
+  const createMode = mode === "create";
+
+  const storeProjectPath = useUiStore((s) => s.projectPath);
   const [input, setInput] = useState("");
   const [sessionName, setSessionName] = useState("");
-  const [projectPath, setProjectPath] = useState("");
+  const [projectPath, setProjectPath] = useState(createMode ? (defaultRoot ?? "") : (storeProjectPath ?? ""));
+  const [pathEdited, setPathEdited] = useState(false);
+  // Parent directory the project folder lives in. Defaults to ~/ThinkRail;
+  // overridden when the user picks another location via the folder dialog.
+  const [root, setRoot] = useState(defaultRoot ?? "");
+  const [rootOverridden, setRootOverridden] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [attachedFile, setAttachedFile] = useState<{ name: string; content: string } | null>(null);
   const [nameError, setNameError] = useState(false);
@@ -37,13 +54,42 @@ export function NewProjectForm() {
   const setCenterView = useUiStore((s) => s.setCenterView);
   const setCurrentChain = useUiStore((s) => s.setCurrentChain);
   const setStoreProjectPath = useUiStore((s) => s.setProject);
+  const setPendingNewProject = useUiStore((s) => s.setPendingNewProject);
   const navigate = useNavigate();
 
-  // Pin the new-project chain so AppShell renders new-project's own
-  // stepper labels and not the investigate-project chain labels.
+  // Pin the new-project chain so AppShell renders new-project's stepper labels.
   useEffect(() => {
     setCurrentChain("new-project");
   }, [setCurrentChain]);
+
+  // Adopt the fetched default root until the user picks another location.
+  useEffect(() => {
+    if (!rootOverridden) setRoot(defaultRoot ?? "");
+  }, [defaultRoot, rootOverridden]);
+
+  // create mode: keep the path in sync with `<root>/<slug>` until the user
+  // hand-edits the field directly.
+  useEffect(() => {
+    if (!createMode || pathEdited) return;
+    const slug = slugify(sessionName);
+    const base = root.replace(/\/+$/, "");
+    setProjectPath(slug ? `${base}/${slug}` : base);
+  }, [createMode, pathEdited, sessionName, root]);
+
+  const handleBrowseLocation = useCallback(async () => {
+    try {
+      const data = await browseFolder();
+      if (data?.path) {
+        setRoot(data.path.replace(/\/+$/, ""));
+        setRootOverridden(true);
+        setPathEdited(false);
+        setPathError(false);
+      }
+    } catch {
+      // user cancelled or no native picker — keep the current path
+    }
+  }, []);
+
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const voice = useVoiceInput();
@@ -76,18 +122,6 @@ export function NewProjectForm() {
     }
   }, [voice]);
 
-  const handleBrowseFolder = useCallback(async () => {
-    try {
-      const data = await browseFolder();
-      if (data?.path) {
-        setProjectPath(data.path);
-        setPathError(false);
-      }
-    } catch {
-      // User cancelled or error - ignore
-    }
-  }, []);
-
   const handleFileChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -109,7 +143,7 @@ export function NewProjectForm() {
       setNameError(true);
       return;
     }
-    if (!path) {
+    if (createMode && !path) {
       setPathError(true);
       return;
     }
@@ -117,39 +151,47 @@ export function NewProjectForm() {
     if (submitting) return;
 
     setSubmitting(true);
+
+    if (createMode) {
+      // Pre-navigation: create the folder, stash the idea, and navigate. The
+      // session is started post-navigation (RPC is scoped to the path).
+      try {
+        await makeDirectory(path);
+      } catch {
+        setPathError(true);
+        setSubmitting(false);
+        return;
+      }
+      setPendingNewProject({ name, ideaText: text, attachedFile });
+      onSelect?.(path);
+      return;
+    }
+
+    // start mode: the project is already open; start the session now.
     setProjectState("initialized");
     setCenterView("sessions");
-    setStoreProjectPath(path);
-
-    // Fold the optional attached doc into the idea text; the registry's
-    // entry transition turns (name + idea) into the session_prompt.
-    const ideaParts: string[] = [];
-    if (text) ideaParts.push(text);
-    if (attachedFile) {
-      ideaParts.push(`--- Attached: ${attachedFile.name} ---\n${attachedFile.content}`);
-    }
-    const prompt =
-      ENTRY?.buildPrompt?.({ projectName: name, ideaText: ideaParts.join("\n\n") }) ??
-      [`Project name: ${name}`, ...ideaParts].join("\n\n");
-
+    if (path) setStoreProjectPath(path);
     try {
-      // The idea text is the kick message (not a session_prompt) for the
-      // greenfield entry — the agent's first turn reacts to it directly.
       await startWizardStep({
-        skillId: ENTRY?.target ?? CHAIN_ID,
-        chainId: CHAIN_ID,
+        skillId: NEW_PROJECT_SKILL,
+        chainId: NEW_PROJECT_CHAIN,
         name,
-        kick: prompt,
+        kick: composeNewProjectKick({ name, ideaText: text, attachedFile }),
       });
     } catch {
       setProjectState("new");
       setSubmitting(false);
     }
-  }, [input, sessionName, projectPath, attachedFile, submitting, startWizardStep, setProjectState, setCenterView, setStoreProjectPath]);
+  }, [
+    createMode, input, sessionName, projectPath, attachedFile, submitting,
+    startWizardStep, setProjectState, setCenterView, setStoreProjectPath,
+    setPendingNewProject, onSelect,
+  ]);
 
   const handleCancel = useCallback(() => {
-    navigate("/");
-  }, [navigate]);
+    if (onCancel) onCancel();
+    else navigate("/");
+  }, [onCancel, navigate]);
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
@@ -190,25 +232,34 @@ export function NewProjectForm() {
             )}
           </div>
 
-          <div className="np-form-field">
-            <div className="np-form-label">Location</div>
-            <button
-              type="button"
-              className={`np-form-location${pathError ? " np-form-location--error" : ""}`}
-              onClick={handleBrowseFolder}
-              disabled={submitting}
-            >
-              <span className="np-form-location-text">
-                {projectPath || "choose root folder"}
-              </span>
-              <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
-                <path d="M2 4.5C2 3.67157 2.67157 3 3.5 3H5.87868C6.17413 3 6.45732 3.1173 6.66421 3.32421L7.83579 4.49579C8.04268 4.7027 8.32587 4.82 8.62132 4.82H12.5C13.3284 4.82 14 5.49157 14 6.32V11.5C14 12.3284 13.3284 13 12.5 13H3.5C2.67157 13 2 12.3284 2 11.5V4.5Z" stroke="currentColor" strokeWidth="1.2"/>
-              </svg>
-            </button>
-            {pathError && (
-              <div className="np-form-name-error">Please choose a folder</div>
-            )}
-          </div>
+          {createMode && (
+            <div className="np-form-field">
+              <div className="np-form-label">Location</div>
+              <div className="np-form-path">
+                <input
+                  className={`np-form-input${pathError ? " np-form-input--error" : ""}`}
+                  type="text"
+                  placeholder={`${defaultRoot ?? "~/ThinkRail"}/project`}
+                  value={projectPath}
+                  onChange={(e) => { setProjectPath(e.target.value); setPathEdited(true); setPathError(false); }}
+                  disabled={submitting}
+                  spellCheck={false}
+                />
+                <button
+                  type="button"
+                  className="np-form-path-browse"
+                  onClick={handleBrowseLocation}
+                  disabled={submitting}
+                  title="Choose a different location"
+                >
+                  <FolderOpen size={16} strokeWidth={1.5} aria-hidden="true" />
+                </button>
+              </div>
+              {pathError && (
+                <div className="np-form-name-error">Please enter a valid folder path</div>
+              )}
+            </div>
+          )}
 
           <div className="np-form-field">
             <div className="np-form-label">Description</div>

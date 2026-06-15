@@ -2,8 +2,8 @@
 ticket_id: mt_bcd2f1da
 kind: product_design
 ---
-
 # Product design: Draft-on-type — defer blank-session save until the user types a prompt
+
 
 ## Goal
 

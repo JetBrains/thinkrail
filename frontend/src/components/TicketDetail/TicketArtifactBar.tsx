@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { ChevronDown, Maximize2, Minimize2 } from "lucide-react";
 import "./ImplementationCards.css";
 
 export interface ArtifactEntry {
@@ -37,14 +38,14 @@ export function TicketArtifactBar(props: Props) {
           title="Show all artifacts"
           onClick={() => setDropdownOpen((v) => !v)}
         >
-          ▾
+          <ChevronDown size={14} strokeWidth={1.5} aria-hidden="true" />
         </button>
         <button
           className="tab-bar__btn"
           title="Expand"
           onClick={() => onToggleCollapsed(false)}
         >
-          ⇱
+          <Maximize2 size={14} strokeWidth={1.5} aria-hidden="true" />
         </button>
         {dropdownOpen && (
           <div className="tab-bar__dropdown">
@@ -93,7 +94,7 @@ export function TicketArtifactBar(props: Props) {
         title="Collapse"
         onClick={() => onToggleCollapsed(true)}
       >
-        ⇲
+        <Minimize2 size={14} strokeWidth={1.5} aria-hidden="true" />
       </button>
     </div>
   );

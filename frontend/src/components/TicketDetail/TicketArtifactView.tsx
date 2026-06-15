@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import Editor from "@monaco-editor/react";
 import { getClient } from "@/api/index.ts";
 import { createBoardApi } from "@/api/methods/board.ts";
@@ -30,8 +30,12 @@ const FILENAMES: Record<ArtifactKind, string> = {
 };
 
 export function TicketArtifactView({ ticketId, kind }: Props) {
+  // `content` is the last value persisted on disk; `draft` is the editor buffer.
+  // Their divergence is the dirty state that surfaces the Save button.
   const [content, setContent] = useState<string | null>(null);
+  const [draft, setDraft] = useState<string>("");
   const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
   const monacoTheme = useMonacoTheme();
   const fontSize = useFontSize("body");
   const ticketRev = useTicketStateStore((s) => s.states.get(ticketId)?.rev ?? 0);
@@ -49,15 +53,18 @@ export function TicketArtifactView({ ticketId, kind }: Props) {
     return () => { unsub(); };
   }, [ticketId, kind]);
 
+  const editable = kind !== "history";
+  const dirty = editable && content != null && draft !== content;
+
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
-    const api = createBoardApi(getClient());
-    api
+    createBoardApi(getClient())
       .readArtifact(ticketId, kind)
       .then((res) => {
         if (cancelled) return;
         setContent(res.content);
+        setDraft(res.content ?? "");
         setLoading(false);
       })
       .catch(() => {
@@ -67,6 +74,19 @@ export function TicketArtifactView({ ticketId, kind }: Props) {
       cancelled = true;
     };
   }, [ticketId, kind, ticketRev, fileRev]);
+
+  const handleSave = useCallback(async () => {
+    setSaving(true);
+    try {
+      const res = await createBoardApi(getClient()).writeArtifact(ticketId, kind, draft);
+      setContent(res.content);
+      setDraft(res.content ?? "");
+    } catch (err) {
+      console.error("[TicketArtifactView] save failed:", err);
+    } finally {
+      setSaving(false);
+    }
+  }, [ticketId, kind, draft]);
 
   return (
     <div className="ticket-artifact-view">
@@ -80,30 +100,38 @@ export function TicketArtifactView({ ticketId, kind }: Props) {
         {!loading && content == null && (
           <div className="center-placeholder">No {(LABELS[kind] ?? String(kind)).toLowerCase()} on disk yet.</div>
         )}
-        {!loading && content === "" && (
-          <div className="center-placeholder">(empty file)</div>
-        )}
-        {!loading && content != null && content !== "" && (
+        {!loading && content != null && (
           kind === "history" ? (
-            <Editor
-              height="100%"
-              defaultLanguage="diff"
-              value={content}
-              theme={monacoTheme}
-              options={{
-                readOnly: true,
-                minimap: { enabled: false },
-                fontSize,
-                lineNumbers: "on",
-                scrollBeyondLastLine: false,
-              }}
-            />
+            content === "" ? (
+              <div className="center-placeholder">(empty file)</div>
+            ) : (
+              <Editor
+                height="100%"
+                defaultLanguage="diff"
+                value={content}
+                theme={monacoTheme}
+                options={{
+                  readOnly: true,
+                  minimap: { enabled: false },
+                  fontSize,
+                  lineNumbers: "on",
+                  scrollBeyondLastLine: false,
+                }}
+              />
+            )
           ) : (
             <MarkdownEditor
-              value={content}
-              onChange={() => { /* read-only */ }}
-              preview={true}
+              value={draft}
+              onChange={setDraft}
+              preview
               initialMode="preview"
+              actions={
+                dirty ? (
+                  <button className="ticket-artifact-save" onClick={handleSave} disabled={saving}>
+                    {saving ? "Saving…" : "Save"}
+                  </button>
+                ) : null
+              }
             />
           )
         )}

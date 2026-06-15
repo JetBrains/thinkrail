@@ -24,3 +24,9 @@ export async function browseFolder(): Promise<FolderPick | null> {
   const { data } = await restClient.GET("/api/fs/browse");
   return data ?? null;
 }
+
+/** Default parent directory for new projects (~/ThinkRail). */
+export async function getDefaultRoot(): Promise<string> {
+  const { data } = await restClient.GET("/api/fs/default-root");
+  return data?.root ?? "";
+}

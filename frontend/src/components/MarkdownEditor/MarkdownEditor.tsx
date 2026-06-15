@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import Editor from "@monaco-editor/react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -21,6 +21,8 @@ interface MarkdownEditorProps {
   minimap?: boolean;
   /** Line numbers display. Default: "on" */
   lineNumbers?: "on" | "off";
+  /** Extra controls rendered at the right of the Edit/Preview toggle row. */
+  actions?: ReactNode;
 }
 
 export function MarkdownEditor({
@@ -32,6 +34,7 @@ export function MarkdownEditor({
   initialMode = "edit",
   minimap = false,
   lineNumbers = "on",
+  actions,
 }: MarkdownEditorProps) {
   const [mode, setMode] = useState<"edit" | "preview">(initialMode);
   const monacoTheme = useMonacoTheme();
@@ -53,6 +56,7 @@ export function MarkdownEditor({
           >
             Preview
           </button>
+          {actions}
         </div>
       )}
       {mode === "edit" ? (
@@ -78,7 +82,7 @@ export function MarkdownEditor({
               renderLineHighlight: "all",
               overviewRulerBorder: false,
             }}
-            height={typeof height === "number" ? height : "100%"}
+            height={height}
           />
         </div>
       ) : (

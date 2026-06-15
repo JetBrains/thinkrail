@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { useRpc } from "@/api/hooks/useRpc.tsx";
+import { useRpcOptional } from "@/api/hooks/useRpc.tsx";
 import { RpcError } from "@/api/errors.ts";
 
 type VoiceMode = "speech-api" | "media-recorder" | "unsupported";
@@ -34,7 +34,7 @@ export interface UseVoiceInputReturn {
 }
 
 export function useVoiceInput(): UseVoiceInputReturn {
-  const client = useRpc();
+  const client = useRpcOptional();
   const [mode] = useState<VoiceMode>(detectMode);
   const [isRecording, setIsRecording] = useState(false);
   const [isTranscribing, setIsTranscribing] = useState(false);
@@ -215,6 +215,7 @@ export function useVoiceInput(): UseVoiceInputReturn {
         // Convert to base64 and send to backend
         setIsTranscribing(true);
         try {
+          if (!client) throw new Error("Voice transcription unavailable");
           const buffer = await blob.arrayBuffer();
           const base64 = btoa(
             new Uint8Array(buffer).reduce((data, byte) => data + String.fromCharCode(byte), ""),
@@ -292,6 +293,7 @@ export function useVoiceInput(): UseVoiceInputReturn {
   }, [mode]);
 
   const reviseTranscript = useCallback(async (text: string): Promise<string> => {
+    if (!client) return text;
     setIsRevising(true);
     try {
       const result = await client.request<{ text: string }>("agent/reviseTranscript", { text });
@@ -302,7 +304,9 @@ export function useVoiceInput(): UseVoiceInputReturn {
   }, [client]);
 
   return {
-    isSupported: mode !== "unsupported",
+    // Voice needs the backend (transcription RPC); disable it when there's no
+    // connected client (e.g. the pre-navigation new-project form).
+    isSupported: client != null && mode !== "unsupported",
     mode,
     isRecording,
     isTranscribing,

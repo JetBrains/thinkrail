@@ -5,8 +5,9 @@ export type SelectedArtifact =
   | { kind: "canonical"; artifact: Exclude<ArtifactKind, "implementation_plan" | "history"> }
   | { kind: "plan" }
   /** Parsed history view. Optional `phaseFilter` (a skill id) pre-selects
-   *  the in-header filter dropdown (e.g. ticket-amend-specs → "Amendments"). */
-  | { kind: "history"; phaseFilter?: string }
+   *  the in-header filter dropdown (e.g. ticket-amend-specs → "Amendments").
+   *  Optional `expandIndex` auto-expands and scrolls to that entry. */
+  | { kind: "history"; phaseFilter?: string; expandIndex?: number }
   | { kind: "file"; filePath: string };
 
 /** Pure derivation of the artifact list shown in the right column.

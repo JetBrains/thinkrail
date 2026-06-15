@@ -142,6 +142,10 @@ class FolderPickResponse(BaseModel):
     error: str | None = None
 
 
+class DefaultRootResponse(BaseModel):
+    root: str
+
+
 # ── server_info.py ──────────────────────────────────────────────────────────
 
 class TailscaleInfoResponse(BaseModel):

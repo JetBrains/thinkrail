@@ -262,6 +262,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/fs/default-root": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Default Root
+         * @description Default parent directory for new projects: ``~/<ProductName>``.
+         */
+        get: operations["default_root_api_fs_default_root_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/fs/list-dirs": {
         parameters: {
             query?: never;
@@ -343,6 +363,11 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        /** DefaultRootResponse */
+        DefaultRootResponse: {
+            /** Root */
+            root: string;
+        };
         /** DirListResponse */
         DirListResponse: {
             /** Dirs */
@@ -1039,6 +1064,26 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    default_root_api_fs_default_root_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DefaultRootResponse"];
                 };
             };
         };

@@ -20,6 +20,13 @@ export function useRpc(): RpcClient {
   return client;
 }
 
+/** Like {@link useRpc} but returns null instead of throwing when there is no
+ *  provider — for components that may render before a project/RPC exists
+ *  (e.g. the pre-navigation new-project form). */
+export function useRpcOptional(): RpcClient | null {
+  return useContext(RpcContext);
+}
+
 export function useConnectionState(): ConnectionState {
   const client = useRpc();
   const [state, setState] = useState<ConnectionState>(client.state);

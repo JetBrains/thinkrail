@@ -1,21 +1,40 @@
 /* ── Skill Grid ── */
-.skill-grid { display: flex; flex-direction: column; gap: var(--space-md); }
+/* Categories flow into two columns; each category keeps its skills as a
+   single-per-row vertical list. Multi-column (vs grid) lets variable-height
+   category blocks pack without leaving row-aligned gaps. */
+.skill-grid {
+  columns: 2;
+  column-gap: var(--space-lg);
+  /* Enough room for two comfortable category columns; the (max-width-less)
+     popover grows to fit. */
+  min-width: 440px;
+}
+.skill-group {
+  break-inside: avoid;
+  -webkit-column-break-inside: avoid;
+  margin-bottom: var(--space-md);
+}
 .skill-group-label { font-size: var(--font-sm); color: var(--hint); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: var(--space-xs); }
-.skill-group-cards { display: flex; flex-wrap: wrap; gap: var(--space-sm); }
+.skill-group-cards { display: flex; flex-direction: column; gap: var(--space-xs); }
 .skill-card {
-  display: flex; align-items: center; gap: var(--space-xs);
-  padding: var(--space-xs) var(--space-md);
-  border: 1px solid var(--border);
+  display: flex; align-items: center; gap: var(--space-sm);
+  width: 100%;
+  padding: var(--space-xs) var(--space-sm);
+  border: 1px solid transparent;
   border-radius: var(--radius-sm);
   background: transparent;
   color: var(--muted);
   font-family: var(--font);
-  font-size: var(--font-md);
+  font-size: var(--font-body);
+  text-align: left;
   cursor: pointer;
   transition: all var(--transition-fast);
 }
-.skill-card:hover { border-color: var(--blue); color: var(--text); }
+.skill-card:hover,
+.skill-card:focus-visible { border-color: var(--blue); color: var(--text); outline: none; }
 .skill-card-selected { border-color: var(--blue); background: rgba(122, 162, 247, 0.07); color: var(--text); }
 .skill-card--irrelevant { opacity: 0.35; cursor: default; }
-.skill-card--irrelevant:hover { border-color: var(--border); color: var(--muted); }
-.skill-card-icon { font-size: var(--font-body); }
+.skill-card--irrelevant:hover { border-color: transparent; color: var(--muted); }
+.skill-card-icon { display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; }
+.skill-card-selected .skill-card-icon { color: var(--blue); }
+.skill-card-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

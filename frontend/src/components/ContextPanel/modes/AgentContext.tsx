@@ -10,7 +10,7 @@ import "./AgentContext.css";
 function pctColor(pct: number): string {
   if (pct >= 90) return "var(--red)";
   if (pct >= 70) return "var(--gold)";
-  return "var(--green)";
+  return "var(--blue)";
 }
 
 // ── Token Breakdown ─────────────────────────────────────────────────────────

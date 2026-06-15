@@ -1,5 +1,6 @@
 import { useCallback, useState } from "react";
 import Editor from "@monaco-editor/react";
+import { ExternalLink } from "lucide-react";
 import { useFileStore, type OpenFile } from "@/store/fileStore.ts";
 import { useMonacoTheme } from "@/components/MarkdownEditor/useMonacoTheme.ts";
 import { useFontSize } from "@/utils/fontScale.ts";
@@ -7,7 +8,6 @@ import { detectLanguage, languageLabel } from "./languageMap.ts";
 import { EditDropdown } from "./EditDropdown.tsx";
 import { MarkdownPreview } from "./MarkdownPreview.tsx";
 import { ZoomBar } from "@/utils/ZoomBar.tsx";
-import { Button } from "@/components/ui/Button.tsx";
 import "./FileViewer.css";
 
 export function FileViewer({ file }: { file: OpenFile }) {
@@ -16,7 +16,6 @@ export function FileViewer({ file }: { file: OpenFile }) {
   const saveFile = useFileStore((s) => s.saveFile);
   const openExternal = useFileStore((s) => s.openExternal);
   const [showDropdown, setShowDropdown] = useState(false);
-  const [copied, setCopied] = useState(false);
   const [mdZoom, setMdZoom] = useState(1);
   const monacoTheme = useMonacoTheme();
   const editorFontSize = useFontSize("body");
@@ -45,21 +44,6 @@ export function FileViewer({ file }: { file: OpenFile }) {
     saveFile(file.path);
   }, [file.path, saveFile]);
 
-  const handleCancel = useCallback(() => {
-    updateContent(file.path, file.originalContent);
-    setMode(file.path, "preview");
-  }, [file.path, file.originalContent, updateContent, setMode]);
-
-  const handleCopy = useCallback(async () => {
-    try {
-      await navigator.clipboard.writeText(file.content);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    } catch {
-      // fallback
-    }
-  }, [file.content]);
-
   const language = detectLanguage(file.name);
   const langLabel = languageLabel(file.name);
   const isMarkdown = file.name.endsWith(".md") || file.name.endsWith(".markdown");
@@ -78,41 +62,45 @@ export function FileViewer({ file }: { file: OpenFile }) {
           <span className="fv-meta">{sizeKb} KB</span>
         </div>
         <div className="fv-actions">
-          <button className="fv-btn" onClick={handleCopy}>
-            {copied ? "Copied!" : "Copy"}
-          </button>
-          {file.mode === "edit" ? (
-            <>
-              <button
-                className="fv-btn fv-btn-save"
-                onClick={handleSave}
-                disabled={!file.isDirty || file.saving}
-              >
-                {file.saving ? "Saving..." : "Save"}
+          {/* Preview / Edit toggle — same button style as the artifacts panel. */}
+          <div className="fv-mode-tabs">
+            <button
+              className={`markdown-editor-tab ${file.mode === "edit" ? "markdown-editor-tab--active" : ""}`}
+              onClick={handleEditInPlace}
+            >
+              Edit
+            </button>
+            <button
+              className={`markdown-editor-tab ${file.mode === "preview" ? "markdown-editor-tab--active" : ""}`}
+              onClick={() => setMode(file.path, "preview")}
+            >
+              Preview
+            </button>
+            {file.mode === "edit" && file.isDirty && (
+              <button className="fv-mode-save" onClick={handleSave} disabled={file.saving}>
+                {file.saving ? "Saving…" : "Save"}
               </button>
-              <button className="fv-btn" onClick={handleCancel}>
-                Cancel
-              </button>
-            </>
-          ) : (
-            <div style={{ position: "relative" }}>
-              <Button
-                size="xs"
-                onClick={() => setShowDropdown(!showDropdown)}
-              >
-                Edit
-              </Button>
-              {showDropdown && (
-                <EditDropdown
-                  onEditInPlace={handleEditInPlace}
-                  onOpenIdea={handleOpenIdea}
-                  onOpenVscode={handleOpenVscode}
-                  onOpenVim={handleOpenVim}
-                  onClose={() => setShowDropdown(false)}
-                />
-              )}
-            </div>
-          )}
+            )}
+          </div>
+          {/* Open in an external editor (IntelliJ / VS Code / Vim). */}
+          <div style={{ position: "relative" }}>
+            <button
+              className="fv-ext-btn"
+              onClick={() => setShowDropdown((v) => !v)}
+              title="Open in external editor"
+            >
+              <ExternalLink size={16} strokeWidth={1.5} aria-hidden="true" />
+            </button>
+            {showDropdown && (
+              <EditDropdown
+                onEditInPlace={handleEditInPlace}
+                onOpenIdea={handleOpenIdea}
+                onOpenVscode={handleOpenVscode}
+                onOpenVim={handleOpenVim}
+                onClose={() => setShowDropdown(false)}
+              />
+            )}
+          </div>
           {showMarkdownPreview && (
             <ZoomBar
               zoom={mdZoom}

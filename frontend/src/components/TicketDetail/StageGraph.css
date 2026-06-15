@@ -172,7 +172,7 @@
   width: 13px;
   flex-shrink: 0;
   text-align: center;
-  color: var(--muted);
+  color: var(--hint);
   font-size: var(--font-sm, 11px);
 }
 

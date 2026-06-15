@@ -166,6 +166,39 @@
 }
 .np-form-input--error { border-color: var(--red) !important; }
 
+/* Location: editable path + folder icon that opens the native picker. */
+.np-form-path {
+  display: flex;
+  gap: 8px;
+  align-items: stretch;
+}
+.np-form-path .np-form-input {
+  width: auto;
+  flex: 1;
+  min-width: 0;
+}
+.np-form-path-browse {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  border: none;
+  border-radius: 8px;
+  background: #272830;
+  color: var(--muted);
+  cursor: pointer;
+  transition: color 150ms ease, box-shadow 150ms ease;
+}
+.np-form-path-browse:hover {
+  color: var(--text);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.2);
+}
+.np-form-path-browse:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
 .np-form-name-error {
   font-size: 11px;
   color: var(--red);

@@ -89,3 +89,12 @@
   color: var(--green);
 }
 
+/* Borderless dropdown trigger — same look as the draft CONFIG row
+   (muted labels + readable value, single small size). */
+.settings-dd {
+  border: none;
+  color: var(--text);
+  padding: 1px 4px;
+  font-size: var(--font-sm);
+}
+

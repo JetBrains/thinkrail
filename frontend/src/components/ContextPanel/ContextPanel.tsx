@@ -91,7 +91,7 @@ export function TicketRouteContextPanel() {
   return (
     <Card className="context-panel context-panel--ticket">
       <div className="context-panel__header">
-        <span className="context-panel__mode-label">Ticket</span>
+        <span className="context-panel__mode-label">Artifacts</span>
       </div>
       <div className="context-panel__body context-panel__body--flush">
         {ticket ? (

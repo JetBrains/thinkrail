@@ -50,8 +50,8 @@ function entryLabel(a: SelectedArtifact): string {
 }
 
 function entryIcon(a: SelectedArtifact): React.ReactNode {
-  if (a.kind === "history") return <ScrollText size={12} strokeWidth={1.5} />;
-  return <FileText size={12} strokeWidth={1.5} />;
+  if (a.kind === "history") return <ScrollText size={14} strokeWidth={1.5} />;
+  return <FileText size={14} strokeWidth={1.5} />;
 }
 
 export function TicketPreviewPanel(props: Props) {
@@ -179,7 +179,11 @@ export function TicketPreviewPanel(props: Props) {
               <TicketArtifactView ticketId={ticket.id} kind="implementation_plan" />
             )}
             {selected?.kind === "history" && (
-              <TicketHistoryView ticketId={ticket.id} phaseFilter={selected.phaseFilter} />
+              <TicketHistoryView
+                ticketId={ticket.id}
+                phaseFilter={selected.phaseFilter}
+                expandIndex={selected.expandIndex}
+              />
             )}
             {selected?.kind === "file" && <TicketFileView filePath={selected.filePath} />}
             {!selected && <div className="ticket-preview-empty">No artifact selected</div>}

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { ChevronDown, ChevronRight, File, Folder, FolderOpen } from "lucide-react";
 import { getProjectFiles } from "@/services/project.ts";
 import { useUiStore } from "@/store/uiStore.ts";
 import "./FileSelector.css";
@@ -95,12 +96,25 @@ export function FileSelector({ selectedPaths, onToggle }: FileSelectorProps) {
             >
               {!search && entry.isDir && (
                 <span className="file-selector-arrow">
-                  {isOpen ? "\u25BE" : "\u25B8"}
+                  {isOpen ? (
+                    <ChevronDown size={12} strokeWidth={1.5} aria-hidden="true" />
+                  ) : (
+                    <ChevronRight size={12} strokeWidth={1.5} aria-hidden="true" />
+                  )}
                 </span>
               )}
-              <span className="file-selector-name">
-                {entry.isDir ? `\u{1F4C1} ${entry.name}` : entry.name}
+              <span className="file-selector-icon">
+                {entry.isDir ? (
+                  isOpen ? (
+                    <FolderOpen size={14} strokeWidth={1.5} aria-hidden="true" />
+                  ) : (
+                    <Folder size={14} strokeWidth={1.5} aria-hidden="true" />
+                  )
+                ) : (
+                  <File size={14} strokeWidth={1.5} aria-hidden="true" />
+                )}
               </span>
+              <span className="file-selector-name">{entry.name}</span>
               {isSelected && <span className="file-selector-check">{"\u2713"}</span>}
             </div>
           );

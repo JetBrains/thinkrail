@@ -1,7 +1,7 @@
 import type { ComponentType } from "react";
 import type { ProjectState } from "@/store/uiStore";
 import { ExistingProjectDetect } from "@/components/ProjectPicker/ExistingProjectDetect";
-import { NewProjectForm } from "./NewProjectForm";
+import { NewProjectPreChat } from "./NewProjectPreChat";
 
 /**
  * Each wizard chain owns a pre-chat page — a fullscreen form/scan
@@ -39,7 +39,7 @@ export interface ChainConfig {
 const CHAINS: ChainConfig[] = [
   {
     id: "new-project",
-    preChatComponent: NewProjectForm,
+    preChatComponent: NewProjectPreChat,
     triggerProjectState: "new",
   },
   {

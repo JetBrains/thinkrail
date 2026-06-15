@@ -61,33 +61,45 @@
   flex-shrink: 0;
 }
 
-.fv-btn {
+/* Preview/Edit toggle — reuses the .markdown-editor-tab button style (box +
+   blue active border). Plain flex container so there's no bar border-bottom. */
+.fv-mode-tabs {
   display: inline-flex;
   align-items: center;
-  height: 26px;
-  padding: 0 var(--space-md);
-  border: 1px solid var(--border);
+  gap: 2px;
+}
+
+/* Save — blue outline, matches the artifacts panel Save. */
+.fv-mode-save {
+  margin-left: var(--space-xs);
+  background: transparent;
+  color: var(--blue);
+  border: 1px solid var(--blue);
+  border-radius: var(--radius-sm);
+  padding: 2px var(--space-md);
+  font-size: var(--font-md);
+  font-family: inherit;
+  cursor: pointer;
+  transition: background var(--transition-fast);
+}
+.fv-mode-save:hover { background: color-mix(in srgb, var(--blue) 15%, transparent); }
+.fv-mode-save:disabled { opacity: 0.6; cursor: not-allowed; }
+
+/* Open-in-external-editor icon button. */
+.fv-ext-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border: none;
   border-radius: var(--radius-sm);
   background: transparent;
   color: var(--muted);
-  font-family: var(--font);
-  font-size: var(--font-md);
   cursor: pointer;
-  transition: all var(--transition-fast);
+  transition: background var(--transition-fast), color var(--transition-fast);
 }
-.fv-btn:hover { background: var(--hover); color: var(--text); }
-.fv-btn:disabled { opacity: 0.4; cursor: not-allowed; }
-
-.fv-btn-edit {
-  border-color: var(--blue);
-  color: var(--blue);
-}
-
-.fv-btn-save {
-  border-color: var(--green);
-  color: var(--green);
-}
-.fv-btn-save:hover { background: rgba(33, 215, 137, 0.1); }
+.fv-ext-btn:hover { background: var(--hover); color: var(--text); }
 
 /* ── Editor/Preview Container ── */
 .fv-editor-container {
@@ -287,7 +299,7 @@
 
 /* Task list checkboxes (GFM) */
 .md-preview input[type="checkbox"] {
-  accent-color: var(--blue);
+  accent-color: var(--primary);
   margin-right: var(--space-xs);
 }
 

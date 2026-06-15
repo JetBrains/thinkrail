@@ -43,8 +43,18 @@
 }
 
 .file-selector-arrow {
-  font-size: var(--font-sm);
+  display: inline-flex;
+  align-items: center;
   width: 12px;
+  flex-shrink: 0;
+  color: var(--muted);
+}
+
+.file-selector-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
   color: var(--muted);
 }
 

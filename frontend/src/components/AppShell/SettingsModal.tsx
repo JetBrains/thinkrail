@@ -221,6 +221,7 @@ function SessionDefaultsSection({ visible }: { visible: boolean }) {
       <div className="user-settings-row">
         <label className="user-settings-label">Model</label>
         <Dropdown
+          className="settings-dd"
           value={value.model}
           options={[
             ...(selectedModel ? [] : [{ value: value.model, label: value.model }]),
@@ -233,6 +234,7 @@ function SessionDefaultsSection({ visible }: { visible: boolean }) {
       <div className="user-settings-row">
         <label className="user-settings-label">Permission mode</label>
         <Dropdown
+          className="settings-dd"
           value={value.permissionMode}
           options={[
             ...(permissionModes.some((m) => m.value === value.permissionMode)
@@ -247,6 +249,7 @@ function SessionDefaultsSection({ visible }: { visible: boolean }) {
       <div className="user-settings-row">
         <label className="user-settings-label">Effort</label>
         <Dropdown
+          className="settings-dd"
           value={value.effort}
           options={[
             ...(effortLevels.some((e) => e.value === value.effort)

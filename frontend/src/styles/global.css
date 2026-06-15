@@ -65,6 +65,12 @@ body {
   background: #2C2947;
 }
 
+/* ── Form controls ── */
+input[type="checkbox"],
+input[type="radio"] {
+  accent-color: var(--primary);
+}
+
 /* ── Links ── */
 a {
   color: var(--blue);

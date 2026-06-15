@@ -1,4 +1,5 @@
 import { type Skill } from "@/constants/skills";
+import { SkillIcon } from "@/constants/skillIcons.tsx";
 import { useSettingsStore } from "@/store/settingsStore.ts";
 import "./SkillGrid.css";
 
@@ -36,7 +37,7 @@ export function SkillGrid({ selectedId, onSelect, context }: SkillGridProps) {
                       onSelect(selectedId === skill.id ? null : skill.id);
                     }}
                   >
-                    <span className="skill-card-icon">{skill.icon}</span>
+                    <span className="skill-card-icon"><SkillIcon skillId={skill.id} size={16} /></span>
                     <span className="skill-card-name">{skill.name}</span>
                   </button>
                 );

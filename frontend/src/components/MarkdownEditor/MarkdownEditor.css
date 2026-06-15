@@ -16,6 +16,7 @@
 /* ── Edit / Preview toggle ── */
 .markdown-editor-tabs {
   display: flex;
+  align-items: center;
   gap: 2px;
   padding: var(--space-xs) var(--space-sm);
   border-bottom: 1px solid var(--border);
@@ -34,7 +35,14 @@
   transition: all var(--transition-fast);
 }
 .markdown-editor-tab:hover { color: var(--muted); background: var(--hover); }
-.markdown-editor-tab--active { color: var(--text); background: #2C2947; border-color: var(--primary); }
+.markdown-editor-tab--active {
+  color: var(--text);
+  background: color-mix(in srgb, var(--blue) 15%, transparent);
+  border-color: var(--blue);
+}
+
+/* Align the toggle with the heading + rendered content (shared --space-lg edge). */
+.ticket-artifact-view .markdown-editor-tabs { padding-left: var(--space-lg); }
 
 /* ── Preview pane ── */
 .markdown-editor-preview {

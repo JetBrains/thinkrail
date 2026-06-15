@@ -179,19 +179,6 @@
   border: 1px solid var(--border);
   border-radius: var(--radius-md);
   padding: var(--space-sm) var(--space-md);
-  cursor: pointer;
-  transition: border-color var(--transition-fast);
-}
-
-.ticket-description-preview:hover {
-  border-color: var(--blue);
-}
-
-.ticket-description-preview-text {
-  font-size: var(--font-md);
-  color: var(--muted);
-  line-height: 1.4;
-  white-space: pre-wrap;
 }
 
 .ticket-description-empty {
@@ -200,51 +187,6 @@
   font-size: var(--font-md);
 }
 
-.ticket-desc-edit-btn {
-  background: transparent;
-  border: none;
-  cursor: pointer;
-  color: var(--hint);
-  font-size: var(--font-sm);
-  padding: 0 var(--space-xs);
-}
-
-.ticket-desc-edit-btn:hover {
-  color: var(--text);
-}
-
-.ticket-desc-edit-actions {
-  display: flex;
-  gap: var(--space-xs);
-}
-
-.ticket-desc-edit-actions button {
-  background: var(--panel);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  padding: 2px var(--space-sm);
-  cursor: pointer;
-  font-size: var(--font-sm);
-  color: var(--text);
-}
-
-.ticket-desc-edit-actions button:hover {
-  background: var(--panel-hover, color-mix(in srgb, var(--panel) 80%, var(--text)));
-}
-
-.ticket-description-textarea {
-  width: 100%;
-  resize: none;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  padding: var(--space-sm);
-  background: var(--panel);
-  color: var(--text);
-  font-family: inherit;
-  font-size: var(--font-sm);
-  line-height: 1.4;
-  box-sizing: border-box;
-}
 
 /* ── Sidebar History row (below Progress) ── */
 .ticket-history-row {
@@ -272,6 +214,93 @@
 
 .ticket-history-row-count {
   color: var(--hint);
+}
+
+/* ── Overview compact history list (grouped by file) ── */
+.ticket-history-section {
+  display: flex;
+  flex-direction: column;
+}
+.ticket-history-mini {
+  list-style: none;
+  margin: var(--space-xs) 0 0;
+  padding: var(--space-xs);
+  background: var(--white-5);
+  border-radius: var(--radius-md);
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+.ticket-history-mini-item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  padding: 3px var(--space-sm);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  font-size: var(--font-sm);
+  color: var(--muted);
+}
+.ticket-history-mini-item:hover {
+  background: var(--hover);
+  color: var(--text);
+}
+.ticket-history-mini-num {
+  color: var(--hint);
+  font-family: var(--font-mono, ui-monospace, monospace);
+  min-width: 2.5em;
+  flex-shrink: 0;
+}
+.ticket-history-mini-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ticket-history-file {
+  display: flex;
+  flex-direction: column;
+}
+.ticket-history-file-head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+  padding: 3px var(--space-sm);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  font-size: var(--font-sm);
+  color: var(--text);
+}
+.ticket-history-file-head:hover {
+  background: var(--hover);
+}
+.ticket-history-file-chev {
+  display: inline-flex;
+  align-items: center;
+  flex-shrink: 0;
+  color: var(--hint);
+}
+.ticket-history-file-name {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ticket-history-file-count {
+  flex-shrink: 0;
+  color: var(--hint);
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: var(--font-xs);
+  background: color-mix(in srgb, var(--muted) 14%, transparent);
+  padding: 0 6px;
+  border-radius: 999px;
+}
+.ticket-history-file-steps {
+  list-style: none;
+  margin: 0 0 2px;
+  padding: 0 0 0 var(--space-lg);
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
 }
 
 /* ── Ticket history view (per-phase Changes / all History) ── */
@@ -304,6 +333,49 @@
   margin: 0;
 }
 
+/* Flex-column height chain so the body (and the Monaco editor inside it, which
+   renders at height:100%) fills the panel instead of collapsing to one line. */
+.ticket-artifact-view {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+}
+.ticket-artifact-view .ticket-artifact-header {
+  flex-shrink: 0;
+  padding: var(--space-md) var(--space-lg) var(--space-sm);
+}
+.ticket-artifact-save {
+  margin-left: auto;
+  background: transparent;
+  color: var(--blue);
+  border: 1px solid var(--blue);
+  border-radius: var(--radius-sm);
+  padding: 2px var(--space-md);
+  font-size: var(--font-md);
+  font-family: inherit;
+  cursor: pointer;
+  transition: background var(--transition-fast);
+}
+.ticket-artifact-save:hover {
+  background: color-mix(in srgb, var(--blue) 15%, transparent);
+}
+.ticket-artifact-save:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+.ticket-artifact-view .ticket-artifact-title {
+  margin: 0;
+  font-size: var(--font-lg);
+  font-weight: 600;
+}
+.ticket-artifact-view .ticket-artifact-body {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
 .ticket-history-filter {
   margin-left: auto;
   font-size: var(--font-xs);
@@ -312,19 +384,15 @@
   align-items: center;
   gap: var(--space-xs);
 }
-.ticket-history-filter label {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-xs);
+.ticket-history-filter-label {
+  color: var(--muted);
 }
-.ticket-history-filter select {
-  background: var(--elevated);
+/* Borderless trigger — matches the draft CONFIG dropdowns. */
+.ticket-history-filter-dd {
+  border: none;
   color: var(--text);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  padding: 2px 6px;
-  font-family: inherit;
-  font-size: var(--font-xs);
+  padding: 1px 4px;
+  font-size: var(--font-sm);
 }
 
 .ticket-history-list {
@@ -339,7 +407,7 @@
 .ticket-history-entry {
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
-  background: var(--panel);
+  background: transparent;
 }
 
 .ticket-history-entry-header {
@@ -352,7 +420,7 @@
 }
 
 .ticket-history-entry-header:hover {
-  background: color-mix(in srgb, var(--panel) 80%, var(--text));
+  background: var(--hover);
 }
 
 .ticket-history-entry-index {
@@ -379,8 +447,9 @@
 }
 
 .ticket-history-entry-chev {
+  display: inline-flex;
+  align-items: center;
   color: var(--hint);
-  font-size: var(--font-sm);
 }
 
 .ticket-history-entry-body {
@@ -408,28 +477,6 @@
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
   overflow: hidden;
-}
-
-/* Description resize handle (bottom of preview) */
-.ticket-desc-resize-handle {
-  height: 3px;
-  cursor: row-resize;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  margin-top: 2px;
-}
-
-.ticket-desc-resize-handle::after {
-  content: "";
-  width: 20px;
-  height: 2px;
-  background: var(--border);
-  border-radius: 1px;
-}
-
-.ticket-desc-resize-handle:hover::after {
-  background: var(--border2);
 }
 
 /* ── Linked items list ── */

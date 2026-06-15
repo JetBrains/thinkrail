@@ -197,7 +197,7 @@
 }
 
 .chat-md input[type="checkbox"] {
-  accent-color: var(--blue);
+  accent-color: var(--primary);
   margin-right: var(--space-xs);
 }
 
