@@ -46,20 +46,12 @@ git clone <repo-url>
 ./run.sh
 ```
 
-The script installs all dependencies, starts the backend and frontend, and opens:
+The script installs all dependencies, starts the backend and frontend, and opens (by default):
 
 - **Frontend:** http://localhost:3000
 - **Backend:** http://localhost:8000
 
 Press `Ctrl+C` to stop. Cleanup is automatic.
-
-### Building distributables locally
-
-```bash
-./build_and_install.sh         # standalone CLI executable (PyInstaller)
-```
-
-See [`packaging/README.md`](packaging/README.md) for details.
 
 ### Prerequisites
 
@@ -74,29 +66,6 @@ See [`packaging/README.md`](packaging/README.md) for details.
 | `BACKEND_HOST` | `0.0.0.0` | Backend bind address |
 | `BACKEND_PORT` | `8000` | Backend port |
 | `FRONTEND_PORT` | `3000` | Frontend port |
-
-### Migrating from `registry.json` to Frontmatter
-
-ThinkRail now stores spec metadata as YAML frontmatter inside each `.md` file instead of a centralized `registry.json`. If your project was created before this change, run the migration script to convert:
-
-```bash
-# From the project root
-uv run python scripts/migrate_registry.py
-
-# Or specify a project path explicitly
-uv run python scripts/migrate_registry.py /path/to/your/project
-```
-
-The script will:
-
-1. Read all entries and links from `.tr/registry.json`
-2. Inject YAML frontmatter into each spec file
-3. Archive the old registry to `.tr/registry.json.bak`
-4. Print a summary of migrated / skipped / errored files
-
-The SQLite index (`index.db`) is rebuilt automatically on the next ThinkRail startup — no manual step needed.
-
-> **Note:** Files that already have frontmatter are skipped, so the script is safe to re-run.
 
 ### Development
 
