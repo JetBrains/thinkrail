@@ -1,6 +1,10 @@
 [
-  { "id": "claude-fable-5",            "label": "Fable 5" },
-  { "id": "claude-opus-4-8",           "label": "Opus 4.8" },
-  { "id": "claude-sonnet-4-6",         "label": "Sonnet 4.6" },
-  { "id": "claude-haiku-4-5-20251001", "label": "Haiku 4.5" }
+  { "id": "claude-fable-5",            "label": "Fable 5",
+    "pricing": { "input": 10.0, "output": 50.0, "cacheWrite5m": 12.5, "cacheWrite1h": 20.0, "cacheRead": 1.0 } },
+  { "id": "claude-opus-4-8",           "label": "Opus 4.8",
+    "pricing": { "input": 5.0, "output": 25.0, "cacheWrite5m": 6.25, "cacheWrite1h": 10.0, "cacheRead": 0.5 } },
+  { "id": "claude-sonnet-4-6",         "label": "Sonnet 4.6",
+    "pricing": { "input": 3.0, "output": 15.0, "cacheWrite5m": 3.75, "cacheWrite1h": 6.0, "cacheRead": 0.3 } },
+  { "id": "claude-haiku-4-5-20251001", "label": "Haiku 4.5",
+    "pricing": { "input": 1.0, "output": 5.0, "cacheWrite5m": 1.25, "cacheWrite1h": 2.0, "cacheRead": 0.1 } }
 ]

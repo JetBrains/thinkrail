@@ -66,8 +66,6 @@ interface SessionStore {
   closedIds: Set<string>;
   /** Which sessions have a visible tab in the tab bar */
   openTabs: Set<string>;
-  /** Sum of costUsd across all known sessions (in-memory + from backend list) */
-  projectCost: number;
   /** Last-fetched session/list response — shared between SessionManager and StatusBar */
   sessionList: SessionSummary[];
   /** Refresh `sessionList` from the backend. Idempotent. */
@@ -375,15 +373,14 @@ function reconstructContextUsage(events: AgentEvent[], fallbackContextMax = 0): 
 
 /**
  * Apply cost + metrics from event params to a session, returning the
- * updated session and the change in project-wide cost.
+ * updated session.
  */
 function applyMetrics(
   session: Session,
   params: Record<string, unknown>,
   status: SessionStatus,
-): { updated: Session; costDelta: number } {
+): Session {
   const newCost = (params.costUsd as number) ?? session.metrics.costUsd;
-  const costDelta = newCost - session.metrics.costUsd;
 
   // Parse the usage dict from the SDK (arrives on turnComplete/interrupted/done)
   const usage = (params.usage as Record<string, number> | undefined) ?? {};
@@ -441,31 +438,28 @@ function applyMetrics(
   }
 
   return {
-    updated: {
-      ...session,
-      status,
-      pendingRequests: [],
-      answeredRequests,
-      metrics: {
-        ...session.metrics,
-        costUsd: newCost,
-        turns: (params.turns as number) ?? session.metrics.turns,
-        durationMs: (params.durationMs as number) ?? session.metrics.durationMs,
-        contextTokens: totalContext,
+    ...session,
+    status,
+    pendingRequests: [],
+    answeredRequests,
+    metrics: {
+      ...session.metrics,
+      costUsd: newCost,
+      turns: (params.turns as number) ?? session.metrics.turns,
+      durationMs: (params.durationMs as number) ?? session.metrics.durationMs,
+      contextTokens: totalContext,
+      contextMax,
+      contextUsage: {
+        ...prevUsage,
         contextMax,
-        contextUsage: {
-          ...prevUsage,
-          contextMax,
-          contextTokens: totalContext,
-          outputTokens,
-          cacheReadTokens: cacheRead,
-          cacheCreationTokens: cacheCreation,
-          inputTokens,
-          turnHistory: [...prevUsage.turnHistory, turnUsage],
-        },
+        contextTokens: totalContext,
+        outputTokens,
+        cacheReadTokens: cacheRead,
+        cacheCreationTokens: cacheCreation,
+        inputTokens,
+        turnHistory: [...prevUsage.turnHistory, turnUsage],
       },
     },
-    costDelta,
   };
 }
 
@@ -682,7 +676,6 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
   archivedSessions: [],
   closedIds: new Set(),
   openTabs: new Set(),
-  projectCost: 0,
   sessionList: [],
 
   refreshSessionList: async () => {
@@ -1431,7 +1424,6 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
       archivedSessions: [],
       closedIds: new Set(),
       openTabs: new Set(),
-      projectCost: 0,
       sessionList: [],
     });
   },
@@ -1440,14 +1432,6 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
     const { createSessionApi } = await import("@/api/methods/sessions.ts");
     const api = createSessionApi(getClient());
     const all = await api.list();
-
-    // Compute project cost from ALL sessions returned by the list API
-    // (includes metrics.costUsd from persisted metadata)
-    let totalProjectCost = 0;
-    for (const entry of all) {
-      const m = entry.metrics;
-      totalProjectCost += (typeof m?.costUsd === "number" ? m.costUsd : 0);
-    }
 
     // Filter to active sessions not already in memory
     const currentSessions = get().sessions;
@@ -1561,14 +1545,6 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
         });
       }
 
-      // Also add cost from in-memory sessions not in the backend list
-      // (shouldn't happen normally, but be safe)
-      for (const [sid, session] of s.sessions) {
-        if (!all.find((e) => e.thinkrailSid === sid)) {
-          totalProjectCost += session.metrics.costUsd;
-        }
-      }
-
       // Auto-activate the most relevant session if none is active yet.
       // Priority:
       //   1. Already-active in store (no-op after first load).
@@ -1614,7 +1590,6 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
       return {
         sessions: next,
         openTabs: tabs,
-        projectCost: totalProjectCost,
         activeSessionId: autoActiveId,
       };
     });
@@ -2079,7 +2054,6 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
     set((s) => {
       const sessions = appendEvent(s.sessions, thinkrailSid, method, params, s.closedIds);
       let session = sessions.get(thinkrailSid);
-      let projectCost = s.projectCost;
       if (session) {
         // Belt-and-suspenders: if we receive work events while idle, transition
         // to running.  Catches the case where agent/statusChanged was missed
@@ -2126,10 +2100,9 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
               },
             },
           });
-          return { sessions: next, projectCost };
+          return { sessions: next };
         } else if (method === "agent/turnComplete" || method === "agent/interrupted") {
-          const { updated, costDelta } = applyMetrics(session, params, "idle");
-          projectCost += costDelta;
+          const updated = applyMetrics(session, params, "idle");
 
           if (method === "agent/interrupted" && session.pendingRequests.length > 0) {
             // Only mark each as denied if user has NOT already answered.
@@ -2165,7 +2138,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
           }
         }
       }
-      return { sessions, projectCost };
+      return { sessions };
     });
 
     // Clean up notifications when interrupted during a pending request.
@@ -2631,14 +2604,11 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
     set((s) => {
       const sessions = appendEvent(s.sessions, thinkrailSid, "agent/done", params, s.closedIds);
       const session = sessions.get(thinkrailSid);
-      let projectCost = s.projectCost;
       if (session) {
         // agent/done carries no usage/context data — only update
         // cost, status, and duration.  Preserve context from the
         // last turnComplete so the display doesn't blank out.
         const newCost = (params.costUsd as number) ?? session.metrics.costUsd;
-        const costDelta = newCost - session.metrics.costUsd;
-        projectCost += costDelta;
         // Outcome is bundled into agent/done so the status flip and the
         // next-step contract land in the same render cycle — no flash
         // of a "session ended" view between the two notifications.
@@ -2656,7 +2626,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
           outcome: payloadOutcome ?? session.outcome ?? null,
         });
       }
-      return { sessions, projectCost };
+      return { sessions };
     });
   },
 

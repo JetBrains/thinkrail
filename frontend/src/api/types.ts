@@ -22,16 +22,3 @@ export interface AgentRunParams {
   ticketId?: string;
 }
 
-export interface CostSummary {
-  sessionCost: number;
-  projectCost: number;
-  sessionTokens: number;
-  projectTokens: number;
-  budget: CostBudget | null;
-}
-
-export interface CostBudget {
-  amount: number;
-  scope: "session" | "project";
-  warnAt: number;
-}

@@ -37,7 +37,7 @@ from claude_agent_sdk.types import StreamEvent
 
 from app.agent.models import AgentResult, AgentTask, to_camel
 from app.agent.permissions import claude_can_use_tool_adapter
-from app.agent.pricing import estimate_cost
+from app.agent.pricing import TokenUsage, cost
 from app.agent.subagents import TICKET_STEP_EXECUTOR
 
 
@@ -244,6 +244,7 @@ class ClaudeRuntime:
         start_time = time.monotonic()
         total_cost = 0.0
         total_turns = 0
+        rates = self._models.rates_for(task.config.model)
 
         # Subagent lifecycle hooks — owns the parent_tool_use_id ↔ agent_id
         # correlation map and emits SubagentStart/Stop/PreCompact events.
@@ -503,10 +504,13 @@ class ClaudeRuntime:
                                     iterations[-1]["output_tokens"] = call_output
 
                             if etype in ("message_start", "message_delta"):
-                                est = estimate_cost(
-                                    task.config.model, turn_input, turn_output,
-                                    turn_cache_write_5m, turn_cache_write_1h, turn_cache_read,
-                                )
+                                est = cost(TokenUsage(
+                                    input_tokens=turn_input,
+                                    output_tokens=turn_output,
+                                    cache_read_tokens=turn_cache_read,
+                                    cache_write_5m_tokens=turn_cache_write_5m,
+                                    cache_write_1h_tokens=turn_cache_write_1h,
+                                ), rates)
                                 # Context window = all tokens in the latest
                                 # API call (last iteration).
                                 _last_iter = iterations[-1] if iterations else {}
@@ -539,24 +543,26 @@ class ClaudeRuntime:
                             turn_ms = int((time.monotonic() - turn_t0) * 1000)
                             logger.info("[%s] turn completed in %dms (cost=$%.4f)",
                                         task.thinkrail_sid[:8], turn_ms, sdk_event.total_cost_usd or 0.0)
-                            final_est = estimate_cost(
-                                task.config.model, turn_input, turn_output,
-                                turn_cache_write_5m, turn_cache_write_1h, turn_cache_read,
-                            )
+                            turn_cost = cost(TokenUsage(
+                                input_tokens=turn_input,
+                                output_tokens=turn_output,
+                                cache_read_tokens=turn_cache_read,
+                                cache_write_5m_tokens=turn_cache_write_5m,
+                                cache_write_1h_tokens=turn_cache_write_1h,
+                            ), rates)
                             logger.debug(
-                                "[%s] cost detail: sdk=$%.4f est=$%.4f "
+                                "[%s] cost detail: sdk=$%.4f computed=$%.4f "
                                 "in=%d out=%d cw5m=%d cw1h=%d cr=%d turns=%d",
                                 task.thinkrail_sid[:8],
-                                sdk_event.total_cost_usd or 0.0, final_est,
+                                sdk_event.total_cost_usd or 0.0, turn_cost,
                                 turn_input, turn_output,
                                 turn_cache_write_5m, turn_cache_write_1h, turn_cache_read,
                                 sdk_event.num_turns or 0,
                             )
-                            # total_cost_usd is CUMULATIVE — assign, derive per-turn delta
-                            sdk_cost = sdk_event.total_cost_usd or 0.0
-                            turn_cost = max(0.0, sdk_cost - total_cost)
-                            total_cost = sdk_cost
-                            # num_turns is PER-TURN — accumulate
+                            # SDK total_cost_usd is per-turn and auth-gated (often 0
+                            # under managed auth); we price tokens ourselves.
+                            total_cost += turn_cost
+                            # num_turns is per-turn — accumulate
                             turn_turns = sdk_event.num_turns or 0
                             total_turns += turn_turns
                             duration_ms = int((time.monotonic() - start_time) * 1000)

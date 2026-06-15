@@ -10,7 +10,6 @@ interface SessionDockProps {
   effort: string | null;
   metrics: SessionMetrics;
   status: SessionStatus;
-  projectCost: number;
   /** Status line disabled (restored / ended sessions). */
   statusDisabled?: boolean;
   onChangeModel?: (model: string) => void;
@@ -46,7 +45,6 @@ export function SessionDock({
   effort,
   metrics,
   status,
-  projectCost,
   statusDisabled,
   onChangeModel,
   onChangePermissionMode,
@@ -75,7 +73,6 @@ export function SessionDock({
         effort={effort ?? ""}
         metrics={metrics}
         status={status}
-        projectCost={projectCost}
         disabled={statusDisabled}
         actionSlotRef={setActionSlot}
         onChangeModel={onChangeModel}

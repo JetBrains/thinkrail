@@ -1,77 +1,43 @@
-"""Per-model token pricing and cost estimation.
+"""Token-usage cost primitives.
 
-Prices are in USD per token, derived from Anthropic's published rates.
-Used by the runner to emit live cost estimates during streaming.
-
-Pricing source: https://platform.claude.com/docs/en/about-claude/pricing
-Updated: 2026-06-12 (Fable 5, Opus 4.5+, Sonnet 4+, Haiku 4.5 rates)
+Runtime-agnostic: ``cost()`` turns a normalized ``TokenUsage`` into USD given a
+``ModelRates``. Each runtime owns its own rates (e.g. Claude's live in its model
+catalog) and maps its native usage into ``TokenUsage``.
 """
 
 from __future__ import annotations
 
-PRICES: dict[str, dict[str, float]] = {
-    "fable": {
-        "input": 10.0 / 1_000_000,
-        "output": 50.0 / 1_000_000,
-        "cache_write_5m": 12.50 / 1_000_000,
-        "cache_write_1h": 20.0 / 1_000_000,
-        "cache_read": 1.0 / 1_000_000,
-    },
-    "opus": {
-        "input": 5.0 / 1_000_000,
-        "output": 25.0 / 1_000_000,
-        "cache_write_5m": 6.25 / 1_000_000,
-        "cache_write_1h": 10.0 / 1_000_000,
-        "cache_read": 0.50 / 1_000_000,
-    },
-    "sonnet": {
-        "input": 3.0 / 1_000_000,
-        "output": 15.0 / 1_000_000,
-        "cache_write_5m": 3.75 / 1_000_000,
-        "cache_write_1h": 6.0 / 1_000_000,
-        "cache_read": 0.30 / 1_000_000,
-    },
-    "haiku": {
-        "input": 1.0 / 1_000_000,
-        "output": 5.0 / 1_000_000,
-        "cache_write_5m": 1.25 / 1_000_000,
-        "cache_write_1h": 2.0 / 1_000_000,
-        "cache_read": 0.10 / 1_000_000,
-    },
-}
+from dataclasses import dataclass
 
 
-def _resolve_tier(model: str) -> dict[str, float]:
-    """Map model ID string to pricing tier."""
-    m = model.lower()
-    if "fable" in m:
-        return PRICES["fable"]
-    if "opus" in m:
-        return PRICES["opus"]
-    if "haiku" in m:
-        return PRICES["haiku"]
-    return PRICES["sonnet"]  # default fallback
+@dataclass(frozen=True)
+class TokenUsage:
+    """Normalized token counts for a single turn, summed across API calls."""
+
+    input_tokens: int = 0
+    output_tokens: int = 0
+    cache_read_tokens: int = 0
+    cache_write_5m_tokens: int = 0
+    cache_write_1h_tokens: int = 0
 
 
-def estimate_cost(
-    model: str,
-    input_tokens: int,
-    output_tokens: int,
-    cache_creation_5m_tokens: int = 0,
-    cache_creation_1h_tokens: int = 0,
-    cache_read_tokens: int = 0,
-) -> float:
-    """Estimate cost in USD from token counts and model ID.
+@dataclass(frozen=True)
+class ModelRates:
+    """Per-token USD rates for one model."""
 
-    ``input_tokens`` is the non-cached input count (the API reports cached
-    tokens separately in ``cache_creation_input_tokens`` and
-    ``cache_read_input_tokens``).
-    """
-    p = _resolve_tier(model)
+    input: float
+    output: float
+    cache_write_5m: float
+    cache_write_1h: float
+    cache_read: float
+
+
+def cost(usage: TokenUsage, rates: ModelRates) -> float:
+    """USD cost of ``usage`` at ``rates``."""
     return (
-        input_tokens * p["input"]
-        + output_tokens * p["output"]
-        + cache_creation_5m_tokens * p["cache_write_5m"]
-        + cache_creation_1h_tokens * p["cache_write_1h"]
-        + cache_read_tokens * p["cache_read"]
+        usage.input_tokens * rates.input
+        + usage.output_tokens * rates.output
+        + usage.cache_write_5m_tokens * rates.cache_write_5m
+        + usage.cache_write_1h_tokens * rates.cache_write_1h
+        + usage.cache_read_tokens * rates.cache_read
     )

@@ -43,7 +43,6 @@ frontend/src/store/
 ├── settingsStore.ts       # Project settings, session defaults, dynamic skills list
 ├── runtimeCapsStore.ts    # Registered runtimes + per-runtime capability lists (pickers)
 ├── uiStore.ts             # Panel visibility, active tabs, modal state
-├── costStore.ts           # Cost tracking stub (backend not implemented)
 ├── notificationStore.ts   # Toast queue, tab badges, pending input count
 ├── fileStore.ts           # Open file tabs, preview tab, editor state
 ├── trashStore.ts          # Soft-deleted items
@@ -67,10 +66,10 @@ frontend/src/store/
 │   useNotificationStore()  useFileStore()  useBoardStore() │
 │   useSettingsStore()  useConnectionStore()  useVisStore() │
 ├──────────────────────────────────────────────────────────┤
-│  Zustand Stores (15 stores)                               │
+│  Zustand Stores (14 stores)                               │
 │    specStore       sessionStore    uiStore                │
 │    boardStore      settingsStore   notificationStore      │
-│    fileStore       costStore       trashStore             │
+│    fileStore       trashStore                             │
 │    connectionStore visStore        runtimeCapsStore       │
 │    inputDraftStore messageHistoryStore                    │
 │    + serverInfoStore (server info)                        │
@@ -370,26 +369,7 @@ interface UiStore {
 
 ---
 
-### 4. costStore
-
-**Stub — all actions are no-ops.** Plain Zustand, no middleware.
-
-```typescript
-interface CostStore {
-  summary: CostSummary | null;
-  loading: boolean;
-
-  fetchSummary: () => Promise<void>;    // no-op
-  setBudget: (budget: CostBudget) => Promise<void>;  // no-op
-  reset: () => Promise<void>;           // no-op
-  startPolling: () => void;             // sets 5s interval
-  stopPolling: () => void;
-}
-```
-
----
-
-### 5. notificationStore
+### 4. notificationStore
 
 Toast queue, tab badges, pending input counter. Uses `persist` middleware.
 
@@ -416,7 +396,7 @@ interface NotificationStore {
 
 ---
 
-### 6. fileStore
+### 5. fileStore
 
 Open file tabs, preview tab, editor state. Plain Zustand, no middleware.
 
@@ -633,7 +613,6 @@ Pickers source their permission-mode, effort, and model options from `runtimeCap
 - **Session events accumulate unbounded** — no pruning for long sessions
 - **No cross-tab sync** — multiple browser tabs have independent stores
 - **`archivedSessions` lost on refresh** — not persisted
-- **`costStore` is a stub** — all no-ops until backend implements cost endpoints
 - **`fileStore` not in index barrel** — must import directly
 - **No devtools middleware** — Redux DevTools not wired
 

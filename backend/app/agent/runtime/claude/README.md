@@ -248,17 +248,19 @@ remain intact:
    joins the text blocks rather than calling `str()` (which produces
    Python repr with single quotes — bad for the chat UI).
 
-## Cost / turns semantics — SDK gotcha
+## Cost / turns semantics
 
-The SDK's `ResultMessage` carries cumulative *and* per-turn fields with
-similar names:
+Cost is computed from token usage, not from the SDK's reported cost.
+Per turn the runtime prices the turn's tokens with `pricing.cost(TokenUsage(...),
+rates)` — `rates` from `ClaudeModelRegistry.rates_for(task.config.model)` — and
+accumulates the session total (`total_cost += turn_cost`). This is auth-robust:
+token counts are always reported, whereas the SDK's `ResultMessage.total_cost_usd`
+is a per-turn client-side estimate that is often 0 under managed auth. The runtime
+reads `total_cost_usd` only for a debug comparison log; it never feeds the
+displayed cost.
 
-- `total_cost_usd` — **cumulative** session total. Assign, don't accumulate.
-- `num_turns` — **per-turn** SDK turn count for this turn only. Accumulate.
-
-Mixing these up double-counts cost / under-counts turns. The runtime
-splits them at `runtime.py` cost-update lines (search for
-`task.cost_usd =` vs `task.turns +=`).
+`num_turns` is the SDK's per-turn turn count for this turn only — accumulate it
+into `total_turns`.
 
 ## Permission integration
 

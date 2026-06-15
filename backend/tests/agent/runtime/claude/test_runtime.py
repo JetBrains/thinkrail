@@ -9,7 +9,9 @@ import pytest
 from pathlib import Path
 
 from app.agent.models import AgentConfig, AgentResult, AgentTask
+from app.agent.pricing import TokenUsage, cost
 from app.agent.runtime.claude import ClaudeRuntime
+from app.agent.runtime.claude.models import ClaudeModelRegistry
 from app.agent.runtime.events import make_handler_from_notify
 from app.agent.runtime.types import RuntimeExecutionConfig
 from app.agent.tracker import Tracker
@@ -101,6 +103,23 @@ def _make_tracker_and_task() -> tuple[Tracker, AgentTask]:
     return tracker, task
 
 
+def _stream_event(raw: dict) -> Any:
+    """Build a mock SDK StreamEvent wrapping a raw Anthropic stream event."""
+    from claude_agent_sdk.types import StreamEvent
+
+    ev = MagicMock(spec=StreamEvent)
+    ev.event = raw
+    return ev
+
+
+def _turn_stream(input_tokens: int, output_tokens: int) -> list:
+    """One message_start + message_delta carrying a turn's token usage."""
+    return [
+        _stream_event({"type": "message_start", "message": {"usage": {"input_tokens": input_tokens}}}),
+        _stream_event({"type": "message_delta", "usage": {"output_tokens": output_tokens}}),
+    ]
+
+
 class TestRunHappyPath:
     @patch("app.agent.runtime.claude.runtime.ClaudeSDKClient")
     async def test_single_turn_then_end(self, MockClient: MagicMock) -> None:
@@ -148,7 +167,8 @@ class TestRunHappyPath:
 
         _setup_mock_client(
             MockClient,
-            [sys_msg, assistant_msg, assistant_msg2, user_msg, result_msg],
+            [sys_msg, assistant_msg, assistant_msg2, user_msg,
+             *_turn_stream(input_tokens=100, output_tokens=200), result_msg],
         )
 
         tracker, task = _make_tracker_and_task()
@@ -164,7 +184,11 @@ class TestRunHappyPath:
         assert result.thinkrail_sid == task.thinkrail_sid
         assert result.session_id == "sess-1"
         assert result.turns == 3
-        assert result.cost_usd == 0.05
+        # Cost is priced from the turn's tokens (not the SDK's total_cost_usd).
+        rates = ClaudeModelRegistry().rates_for(task.config.model)
+        assert result.cost_usd == pytest.approx(
+            cost(TokenUsage(input_tokens=100, output_tokens=200), rates)
+        )
 
         method_calls = [call.args[0] for call in notify.call_args_list]
         assert "agent/sessionStart" in method_calls
@@ -210,12 +234,14 @@ class TestRunHappyPath:
         sys_msg.subtype = "init"
         sys_msg.data = {"session_id": "s1"}
 
+        # total_cost_usd is set only so the runtime's debug log can format it;
+        # cost is priced from the turn's tokens, not this field.
         result1 = MagicMock(spec=ResultMessage)
         result1.session_id = "s1"
         result1.result = "turn 1 done"
         result1.is_error = False
         result1.num_turns = 2             # per-turn: 2 SDK turns in this turn
-        result1.total_cost_usd = 0.03     # cumulative: $0.03 after turn 1
+        result1.total_cost_usd = 0.0
         result1.usage = {}
 
         result2 = MagicMock(spec=ResultMessage)
@@ -223,8 +249,13 @@ class TestRunHappyPath:
         result2.result = "turn 2 done"
         result2.is_error = False
         result2.num_turns = 1             # per-turn: 1 SDK turn in this turn
-        result2.total_cost_usd = 0.05     # cumulative: $0.05 after turn 2
+        result2.total_cost_usd = 0.0
         result2.usage = {}
+
+        # Turn 2 is cheaper than turn 1 — the pre-fix bug made the session total
+        # drop to the cheaper turn instead of accumulating.
+        turn1_usage = TokenUsage(input_tokens=200_000, output_tokens=50_000)
+        turn2_usage = TokenUsage(input_tokens=10_000, output_tokens=2_000)
 
         mock_instance = AsyncMock()
         call_count = 0
@@ -235,14 +266,18 @@ class TestRunHappyPath:
                     yield msg
             return fake_receive
 
-        # First query returns sys_msg + result1, second returns result2
+        # First query returns sys_msg + turn-1 stream + result1, second returns turn-2 stream + result2
         async def dynamic_query(prompt):
             nonlocal call_count
             call_count += 1
             if call_count == 1:
-                mock_instance.receive_response = make_receive([sys_msg, result1])
+                mock_instance.receive_response = make_receive(
+                    [sys_msg, *_turn_stream(turn1_usage.input_tokens, turn1_usage.output_tokens), result1]
+                )
             else:
-                mock_instance.receive_response = make_receive([result2])
+                mock_instance.receive_response = make_receive(
+                    [*_turn_stream(turn2_usage.input_tokens, turn2_usage.output_tokens), result2]
+                )
 
         mock_instance.query = dynamic_query
         mock_instance.receive_response = make_receive([])
@@ -258,8 +293,13 @@ class TestRunHappyPath:
         notify = AsyncMock()
         result = await _run(task, "context", notify, tracker)
 
+        rates = ClaudeModelRegistry().rates_for(task.config.model)
+        cost1 = cost(turn1_usage, rates)
+        cost2 = cost(turn2_usage, rates)
+
         assert result.turns == 3  # 2 + 1
-        assert result.cost_usd == pytest.approx(0.05)  # 0.03 + 0.02
+        assert result.cost_usd == pytest.approx(cost1 + cost2)
+        assert result.cost_usd > cost1  # accumulates; never drops to the cheaper turn
 
         method_calls = [call.args[0] for call in notify.call_args_list]
         assert method_calls.count("agent/turnComplete") == 2
@@ -592,12 +632,14 @@ class TestInterruptHandling:
         """After interrupt, runtime goes back to idle and can process next message."""
         from claude_agent_sdk import ResultMessage
 
+        # total_cost_usd set only for the runtime's debug log formatting; cost
+        # is priced from tokens.
         result1 = MagicMock(spec=ResultMessage)
         result1.session_id = "s1"
         result1.result = ""
         result1.is_error = False
         result1.num_turns = 1             # per-turn
-        result1.total_cost_usd = 0.01     # cumulative
+        result1.total_cost_usd = 0.0
         result1.usage = {}
 
         result2 = MagicMock(spec=ResultMessage)
@@ -605,8 +647,12 @@ class TestInterruptHandling:
         result2.result = "completed"
         result2.is_error = False
         result2.num_turns = 1             # per-turn: 1 SDK turn in this turn
-        result2.total_cost_usd = 0.03     # cumulative: $0.03 total
+        result2.total_cost_usd = 0.0
         result2.usage = {}
+
+        # Both turns accrue cost (the interrupted turn's tokens count too).
+        turn1_usage = TokenUsage(input_tokens=5_000, output_tokens=1_000)
+        turn2_usage = TokenUsage(input_tokens=3_000, output_tokens=600)
 
         mock_instance = AsyncMock()
         call_count = 0
@@ -621,9 +667,13 @@ class TestInterruptHandling:
             nonlocal call_count
             call_count += 1
             if call_count == 1:
-                mock_instance.receive_response = make_receive([result1])
+                mock_instance.receive_response = make_receive(
+                    [*_turn_stream(turn1_usage.input_tokens, turn1_usage.output_tokens), result1]
+                )
             else:
-                mock_instance.receive_response = make_receive([result2])
+                mock_instance.receive_response = make_receive(
+                    [*_turn_stream(turn2_usage.input_tokens, turn2_usage.output_tokens), result2]
+                )
 
         mock_instance.query = dynamic_query
         mock_instance.receive_response = make_receive([])
@@ -650,7 +700,8 @@ class TestInterruptHandling:
         assert method_calls.index("agent/interrupted") < method_calls.index("agent/turnComplete")
         # Both turns processed — stats accumulated
         assert result.turns == 2
-        assert result.cost_usd == pytest.approx(0.03)
+        rates = ClaudeModelRegistry().rates_for(task.config.model)
+        assert result.cost_usd == pytest.approx(cost(turn1_usage, rates) + cost(turn2_usage, rates))
 
     @patch("app.agent.runtime.claude.runtime.ClaudeSDKClient")
     async def test_interrupt_error_result_treated_as_interrupt(self, MockClient: MagicMock) -> None:

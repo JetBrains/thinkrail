@@ -68,7 +68,6 @@ const meta = {
     effort: "auto",
     metrics,
     status: "draft",
-    projectCost: 0,
     sessionId: "story-dock",
     inputDisabled: false,
     placeholder: "Type a message to start, or adjust config above…",
@@ -103,5 +102,5 @@ type Story = StoryObj<typeof meta>;
 export const Draft: Story = {};
 
 export const Running: Story = {
-  args: { status: "running", isDraft: false, isRunning: true, canInterrupt: true, projectCost: 0.42, placeholder: "Agent is working…" },
+  args: { status: "running", isDraft: false, isRunning: true, canInterrupt: true, placeholder: "Agent is working…" },
 };

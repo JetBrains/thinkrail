@@ -190,7 +190,6 @@ interface SessionStatusLineProps {
   effort: string;
   metrics: SessionMetrics;
   status: SessionStatus;
-  projectCost: number;
   disabled?: boolean;
   onChangeModel?: (model: string) => void;
   onChangePermissionMode?: (mode: string) => void;
@@ -210,7 +209,6 @@ export function SessionStatusLine({
   effort,
   metrics,
   status,
-  projectCost,
   disabled,
   onChangeModel,
   onChangePermissionMode,
@@ -394,9 +392,8 @@ export function SessionStatusLine({
                         {isStreaming ? `~$${metrics.costUsd.toFixed(2)}` : `$${metrics.costUsd.toFixed(2)}`}
                       </span>
                     ),
-                    sub: "this turn",
+                    sub: "session total",
                   },
-                  { value: `$${projectCost.toFixed(2)}`, sub: "project total" },
                 ]}
               />
               <InfoBlock

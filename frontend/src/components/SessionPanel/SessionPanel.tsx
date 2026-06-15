@@ -60,7 +60,6 @@ export function SessionPanel({
   const updateConfig = useSessionStore((s) => s.updateConfig);
   const restartSession = useSessionStore((s) => s.restartSession);
   const restoreSession = useSessionStore((s) => s.restoreSession);
-  const projectCost = useSessionStore((s) => s.projectCost);
 
   const openFiles = useFileStore((s) => s.openFiles);
   const activeFilePath = useFileStore((s) => s.activeFilePath);
@@ -309,7 +308,6 @@ export function SessionPanel({
               effort={activeSession.effort ?? null}
               metrics={activeSession.metrics}
               status={status ?? "idle"}
-              projectCost={projectCost}
               disabled={activeSession.restored || isDone}
               actionSlotRef={setActionSlot}
               onChangeModel={(m) => updateConfig(activeSession.thinkrailSid, { model: m })}
