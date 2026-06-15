@@ -55,6 +55,21 @@
 .agent-context__turn-row:not(.agent-context__turn-header):not(.agent-context__run-separator) { color: var(--text); }
 .agent-context__turn-dim { color: var(--hint); }
 
+/* In-flight turn row */
+.agent-context__turn-row--live { color: var(--muted); }
+.agent-context__turn-row--live .agent-context__turn-dim {
+  display: inline-flex; align-items: center;
+}
+.agent-context__turn-live-dot {
+  display: inline-block; width: 5px; height: 5px; border-radius: 50%;
+  background: var(--blue); margin-right: 5px;
+  animation: agent-context-live-pulse 1.6s ease-in-out infinite;
+}
+@keyframes agent-context-live-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.3; }
+}
+
 /* Run separator */
 .agent-context__run-separator {
   display: flex; align-items: center; justify-content: center;
