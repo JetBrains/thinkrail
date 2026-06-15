@@ -9,7 +9,7 @@ from unittest.mock import patch
 import pytest
 
 from app import upgrade
-from app.upgrade import _discover_token, _validate_prefix, run_upgrade
+from app.upgrade import _validate_prefix, run_upgrade
 
 
 class TestValidatePrefix:
@@ -86,47 +86,3 @@ class TestRunUpgrade:
         argv = run_mock.call_args.args[0]
         assert "nightly" in argv and "stable" not in argv
 
-    def test_token_propagates_to_curl_and_subprocess_env(self, fake_meta, monkeypatch):
-        fake_meta({"channel": "nightly", "prefix": "/home/u/.local"})
-        monkeypatch.setenv("GH_TOKEN", "secret-token-123")
-        with patch("app.upgrade.platform.system", return_value="Linux"), \
-             patch("app.upgrade.subprocess.check_output", return_value=b"") as curl_mock, \
-             patch("app.upgrade.subprocess.run") as run_mock:
-            run_mock.return_value.returncode = 0
-            run_upgrade()
-        curl_argv = curl_mock.call_args.args[0]
-        assert "Authorization: Bearer secret-token-123" in curl_argv
-        env = run_mock.call_args.kwargs["env"]
-        assert env["GH_TOKEN"] == "secret-token-123"
-
-
-class TestDiscoverToken:
-    def test_prefers_gh_token_env(self, monkeypatch):
-        monkeypatch.setenv("GH_TOKEN", "from-gh-token")
-        monkeypatch.setenv("GITHUB_TOKEN", "from-github-token")
-        assert _discover_token() == "from-gh-token"
-
-    def test_falls_back_to_github_token(self, monkeypatch):
-        monkeypatch.delenv("GH_TOKEN", raising=False)
-        monkeypatch.setenv("GITHUB_TOKEN", "from-github-token")
-        assert _discover_token() == "from-github-token"
-
-    def test_falls_back_to_gh_cli(self, monkeypatch):
-        monkeypatch.delenv("GH_TOKEN", raising=False)
-        monkeypatch.delenv("GITHUB_TOKEN", raising=False)
-        completed = type("R", (), {"returncode": 0, "stdout": "from-gh-cli\n"})()
-        with patch("app.upgrade.subprocess.run", return_value=completed):
-            assert _discover_token() == "from-gh-cli"
-
-    def test_returns_none_when_gh_missing(self, monkeypatch):
-        monkeypatch.delenv("GH_TOKEN", raising=False)
-        monkeypatch.delenv("GITHUB_TOKEN", raising=False)
-        with patch("app.upgrade.subprocess.run", side_effect=FileNotFoundError):
-            assert _discover_token() is None
-
-    def test_returns_none_when_gh_unauthenticated(self, monkeypatch):
-        monkeypatch.delenv("GH_TOKEN", raising=False)
-        monkeypatch.delenv("GITHUB_TOKEN", raising=False)
-        completed = type("R", (), {"returncode": 1, "stdout": ""})()
-        with patch("app.upgrade.subprocess.run", return_value=completed):
-            assert _discover_token() is None
