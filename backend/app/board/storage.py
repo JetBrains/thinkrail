@@ -6,6 +6,7 @@ import os
 import shutil
 import tempfile
 from pathlib import Path
+import shutil
 
 from app.board.artifact_paths import (
     ARTIFACT_FILENAMES,
@@ -194,14 +195,9 @@ def list_tickets(base_dir: Path) -> list[Ticket]:
 
 
 def delete_ticket(path: Path) -> None:
-    """Delete a meta-ticket's ``ticket.json`` (and its containing folder if empty)."""
-    path.unlink()
     folder = path.parent
-    try:
-        if folder.is_dir() and not any(folder.iterdir()):
-            folder.rmdir()
-    except OSError:
-        pass
+    if folder.exists():
+        shutil.rmtree(folder)  
 
 
 # ── Legacy-layout cleanup ────────────────────────────────────────
