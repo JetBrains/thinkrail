@@ -228,6 +228,45 @@ class TestTrashSession:
         with pytest.raises(asyncio.CancelledError):
             await runner
 
+    async def test_trash_after_end_cancels_runner_before_final_status(
+        self,
+        tmp_path: Path,
+    ) -> None:
+        from app.agent.tracker import END_SIGNAL
+
+        service, config, _ = _make_service()
+        config.project_root = tmp_path
+        thinkrail_session = service._tracker.create_task(["s1"], SessionConfig())
+        service._tracker.set_status(thinkrail_session.thinkrail_sid, "idle")
+        runtime = service.runtime_registry.get("claude")
+        started = asyncio.Event()
+
+        async def _wait_for_end_then_linger(*_args, **_kwargs) -> AgentResult:
+            started.set()
+            msg = await service._tracker.get_next_message(thinkrail_session.thinkrail_sid)
+            assert msg is END_SIGNAL
+            await asyncio.sleep(60)
+            return AgentResult(
+                thinkrail_sid=thinkrail_session.thinkrail_sid,
+                session_id="sdk-session",
+                result="done",
+                cost_usd=0,
+                turns=0,
+                duration_ms=0,
+            )
+
+        runtime.run_session = AsyncMock(side_effect=_wait_for_end_then_linger)
+        runner = asyncio.create_task(service._run_background(thinkrail_session, "context"))
+        service._running_tasks[thinkrail_session.thinkrail_sid] = runner
+        await started.wait()
+
+        await service.end_session(thinkrail_session.thinkrail_sid)
+        service.trash_session(thinkrail_session.thinkrail_sid)
+        await runner
+
+        assert not service._tracker.has_task(thinkrail_session.thinkrail_sid)
+        assert thinkrail_session.thinkrail_sid not in service._running_tasks
+
 
 class TestRunBackground:
     async def test_run_background_tolerates_session_deleted_before_final_status(
