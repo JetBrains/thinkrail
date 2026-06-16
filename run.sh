@@ -131,6 +131,11 @@ echo "Installing frontend dependencies..."
 cd "$ROOT/frontend"
 npm install
 
+# Generate frontend API/RPC schemas before Vite starts. The Vite dev plugin
+# watches these files, but its first run expects openapi.json to already exist.
+echo "Generating frontend schemas..."
+npm run generate
+
 # ── Start backend ──
 echo "Starting backend on :$BACKEND_PORT..."
 cd "$ROOT/backend"
