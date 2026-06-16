@@ -6,7 +6,6 @@ import os
 import shutil
 import tempfile
 from pathlib import Path
-import shutil
 
 from app.board.artifact_paths import (
     ARTIFACT_FILENAMES,
@@ -197,7 +196,8 @@ def list_tickets(base_dir: Path) -> list[Ticket]:
 def delete_ticket(path: Path) -> None:
     folder = path.parent
     if folder.exists():
-        shutil.rmtree(folder)  
+        shutil.rmtree(folder)
+
 
 
 # ── Legacy-layout cleanup ────────────────────────────────────────
