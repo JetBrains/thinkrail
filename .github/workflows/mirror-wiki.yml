@@ -1,0 +1,73 @@
+name: Mirror Wiki
+
+on:
+  push:
+    branches: [main]
+    paths: ["wiki/**"]
+  # Temporary credential check: dry-runs the mirror on PRs touching wiki/ without
+  # pushing. Remove this `pull_request` trigger once a real mirror has succeeded.
+  pull_request:
+    paths: ["wiki/**"]
+
+permissions:
+  contents: write
+
+concurrency:
+  group: mirror-wiki
+  cancel-in-progress: false
+
+jobs:
+  mirror:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Clone wiki repo
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          git clone "https://x-access-token:${GH_TOKEN}@github.com/${{ github.repository }}.wiki.git" .wiki
+
+      - name: Sync wiki/ into the wiki working tree
+        run: |
+          set -euo pipefail
+          rsync -a --delete --exclude='.git' wiki/ .wiki/
+          cd .wiki
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add -A
+          {
+            echo "### Pending wiki changes"
+            echo '```'
+            git status --short || true
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Dry-run — verify wiki credentials without pushing
+        if: github.event_name == 'pull_request'
+        working-directory: .wiki
+        run: |
+          set -euo pipefail
+          if git diff --cached --quiet; then
+            echo "No content changes — verifying push access only."
+          else
+            git commit -m "dry-run (not pushed)"
+          fi
+          echo "Contacting the wiki remote with --dry-run (no refs are updated)…"
+          git push --dry-run
+          echo "✅ Wiki credentials OK — a real push would succeed."
+
+      - name: Push to wiki
+        if: github.event_name == 'push'
+        working-directory: .wiki
+        run: |
+          set -euo pipefail
+          if git diff --cached --quiet; then
+            echo "No changes to mirror."
+            exit 0
+          fi
+          git commit -m "Mirror wiki from ${{ github.sha }}"
+          git push
+          echo "✅ Wiki updated."
