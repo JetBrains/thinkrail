@@ -4,7 +4,7 @@ import asyncio
 import logging
 import time
 from datetime import UTC, datetime
-from typing import Any
+from typing import Any, Literal
 
 from app.agent.context import build_context
 from app.agent.exceptions import InvalidCapabilityValueError
@@ -282,7 +282,7 @@ class AgentService:
         session_prompt: str | None = None,
         name: str = "",
         ticket_id: str | None = None,
-        subagent_mode: str | None = None,
+        subagent_mode: Literal["step-session", "subagent"] | None = None,
     ) -> AgentTask:
         """Start a persistent agent session (one-step shortcut).
 
