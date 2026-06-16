@@ -744,8 +744,11 @@ class AgentService:
         if running is not None and not running.done():
             running.cancel()
         delete_session_from_disk(self._config.project_root, thinkrail_sid)
-        # Clean up in-memory state if still tracked
         if self._tracker.has_task(thinkrail_sid):
+            # Clear ticket_id first: cancelling the runner above triggers its
+            # finally → _on_ticket_session_finished, which would otherwise
+            # resume the orchestrator for a session that was just deleted.
+            self._tracker.get_task(thinkrail_sid).ticket_id = None
             self._tracker.remove_task(thinkrail_sid)
 
     async def continue_session(self, thinkrail_sid: str) -> AgentTask:

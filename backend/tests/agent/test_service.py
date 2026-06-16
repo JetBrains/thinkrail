@@ -267,6 +267,36 @@ class TestTrashSession:
         assert not service._tracker.has_task(thinkrail_session.thinkrail_sid)
         assert thinkrail_session.thinkrail_sid not in service._running_tasks
 
+    async def test_trash_does_not_resume_orchestrator(self, tmp_path: Path) -> None:
+        service, board = _make_service_with_board(tmp_path)
+
+        orchestrator = service._tracker.create_task([], SessionConfig(), name="orch")
+        orch_sid = orchestrator.thinkrail_sid
+        ticket = board.create_ticket("t", spawn_orchestrator=False)
+        board.set_orchestrator(ticket.id, orch_sid)
+
+        worker = service._tracker.create_task(["s1"], SessionConfig(), name="worker")
+        worker.ticket_id = ticket.id
+        board.attach_session(ticket.id, worker.thinkrail_sid)
+        runtime = service.runtime_registry.get("claude")
+        started = asyncio.Event()
+
+        async def _linger(*_args, **_kwargs) -> AgentResult:
+            started.set()
+            await asyncio.Event().wait()
+            raise AssertionError("runner should have been cancelled")
+
+        runtime.run_session = AsyncMock(side_effect=_linger)
+        runner = asyncio.create_task(service._run_background(worker, "context"))
+        service._running_tasks[worker.thinkrail_sid] = runner
+        await started.wait()
+
+        service.trash_session(worker.thinkrail_sid)
+        await runner
+
+        assert not service._tracker.has_task(worker.thinkrail_sid)
+        assert service._tracker._queues[orch_sid].empty()
+
 
 class TestRunBackground:
     async def test_run_background_tolerates_session_deleted_before_final_status(
