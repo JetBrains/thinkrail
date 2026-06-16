@@ -8,7 +8,7 @@ from typing import Any
 
 from app.agent.context import build_context
 from app.agent.exceptions import InvalidCapabilityValueError
-from app.agent.models import AgentConfig, AgentTask, SubsessionType
+from app.agent.models import AgentConfig, AgentTask, SubagentMode, SubsessionType
 from app.agent.persistence import append_event, save_session, load_session, list_sessions as list_sessions_from_disk, delete_session as delete_session_from_disk, update_session_metadata, load_events
 from app.agent.runtime import (
     IAgentRuntime,
@@ -282,6 +282,7 @@ class AgentService:
         session_prompt: str | None = None,
         name: str = "",
         ticket_id: str | None = None,
+        subagent_mode: SubagentMode | None = None,
     ) -> AgentTask:
         """Start a persistent agent session (one-step shortcut).
 
@@ -293,6 +294,8 @@ class AgentService:
             spec_ids, config, skill_id=skill_id, session_prompt=session_prompt, name=name,
         )
         task.ticket_id = ticket_id
+        if subagent_mode is not None:
+            task.subagent_mode = subagent_mode
         self._validate_config_against_caps(task)
         self._attach_to_ticket(task)
         spec_context = await self._build_context_for(task)

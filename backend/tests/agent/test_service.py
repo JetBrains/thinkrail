@@ -140,6 +140,39 @@ class TestRunTask:
 
         assert thinkrail_session.status == "error"
 
+    @pytest.mark.parametrize("passed, expected", [
+        ("subagent", "subagent"),
+        ("step-session", "step-session"),
+        (None, "step-session"),  # default preserved when the kwarg isn't passed
+    ])
+    async def test_threads_subagent_mode(self, passed, expected) -> None:
+        """run_task forwards subagent_mode onto the task in both step modes.
+
+        Regression: the implement-stage launch used to raise
+        ``TypeError: run_task() got an unexpected keyword argument
+        'subagent_mode'`` because run_task didn't accept this kwarg (PR #7).
+        """
+        service, _, spec_service = _make_service()
+        runtime = service.runtime_registry.get("claude")
+        runtime.run_session = AsyncMock(return_value=AgentResult(
+            thinkrail_sid="t1", session_id="s1", result="done",
+            cost_usd=0.0, turns=1, duration_ms=1,
+        ))
+        spec_service.get_spec.return_value = _make_spec_detail("s1", "T", "C")
+
+        kwargs = {} if passed is None else {"subagent_mode": passed}
+        task = await service.run_task(["s1"], SessionConfig(), **kwargs)
+
+        assert task.subagent_mode == expected
+
+        bg = service._running_tasks.get(task.thinkrail_sid)
+        if bg:
+            bg.cancel()
+            try:
+                await bg
+            except (asyncio.CancelledError, Exception):
+                pass
+
 
 class TestSendMessage:
     async def test_send_message_enqueues(self) -> None:
