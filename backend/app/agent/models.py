@@ -776,6 +776,9 @@ class SubsessionType(StrEnum):
     refinement = "refinement"
 
 
+SubagentMode = Literal["step-session", "subagent"]
+
+
 class AgentTask(BaseModel):
     """Task record tracking an agent run."""
 
@@ -811,7 +814,7 @@ class AgentTask(BaseModel):
     # ── ticket-implement orchestration mode (see TICKET_LIFECYCLE_DESIGN.md
     # § Implementation orchestration modes). Defaults preserve today's
     # step-session-with-approval-gate behavior.
-    subagent_mode: Literal["step-session", "subagent"] = "step-session"
+    subagent_mode: SubagentMode = "step-session"
     step_gate: Literal["approve", "autonomous"] = "approve"
 
 
