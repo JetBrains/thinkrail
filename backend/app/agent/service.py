@@ -282,6 +282,7 @@ class AgentService:
         session_prompt: str | None = None,
         name: str = "",
         ticket_id: str | None = None,
+        subagent_mode: str | None = None,
     ) -> AgentTask:
         """Start a persistent agent session (one-step shortcut).
 
@@ -293,6 +294,8 @@ class AgentService:
             spec_ids, config, skill_id=skill_id, session_prompt=session_prompt, name=name,
         )
         task.ticket_id = ticket_id
+        if subagent_mode in ("step-session", "subagent"):
+            task.subagent_mode = subagent_mode
         self._validate_config_against_caps(task)
         self._attach_to_ticket(task)
         spec_context = await self._build_context_for(task)
