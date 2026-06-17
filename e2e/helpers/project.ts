@@ -1,7 +1,7 @@
 import { expect, type Page } from "@playwright/test";
 import { existsSync, mkdirSync, writeFileSync } from "node:fs";
 import { basename, dirname, join } from "node:path";
-import { appShell, projectPicker } from "./selectors";
+import { header, projectPicker } from "./selectors";
 
 const BACKEND_URL = process.env.THINKRAIL_BACKEND_URL ?? "http://localhost:8000";
 
@@ -22,13 +22,13 @@ async function registerKnownProject(path: string): Promise<void> {
 }
 
 export async function openProject(page: Page, path: string): Promise<void> {
-  // The backend opens straight to the sessions workspace (the status bar these
-  // specs drive) only for an "initialized" project — one holding a spec
-  // deliverable, board ticket, or plan. An empty dir is "new" (welcome) and a
-  // dir with files but no spec is "existing" (investigation wizard); both lack
-  // the status bar. A non-empty `.tr/plans/` flips the state to
-  // "initialized" without surfacing anything in the UI: plans are loaded per
-  // meta-ticket, so an unreferenced marker file appears in no panel.
+  // The backend opens straight to the sessions workspace only for an
+  // "initialized" project — one holding a spec deliverable, board ticket, or
+  // plan. An empty dir is "new" (welcome) and a dir with files but no spec is
+  // "existing" (investigation wizard); both land on a wizard instead. A
+  // non-empty `.tr/plans/` flips the state to "initialized" without surfacing
+  // anything in the UI: plans are loaded per meta-ticket, so an unreferenced
+  // marker file appears in no panel.
   const planMarker = join(path, ".tr", "plans", ".gitkeep");
   if (!existsSync(planMarker)) {
     mkdirSync(dirname(planMarker), { recursive: true });
@@ -47,5 +47,8 @@ export async function openProject(page: Page, path: string): Promise<void> {
   await expect(recent).toBeVisible({ timeout: 15_000 });
   await recent.first().click();
 
-  await expect(page.getByText(appShell.statusSessionsLabel)).toBeVisible({ timeout: 30_000 });
+  // The header settings gear renders only inside the workspace (never on the
+  // picker), so its appearance confirms we've left the picker and the
+  // workspace chrome is up.
+  await expect(page.locator(header.settingsButton)).toBeVisible({ timeout: 30_000 });
 }
