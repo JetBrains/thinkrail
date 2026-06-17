@@ -113,10 +113,7 @@ export const ChatStream = forwardRef<ChatStreamHandle, ChatStreamProps>(function
     if (!el) return;
     const atBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 50;
     autoScroll.current = atBottom;
-    setShowJumpButton((prev) => {
-      const next = !atBottom;
-      return prev === next ? prev : next;
-    });
+    setShowJumpButton(!atBottom);
   }, []);
 
   useImperativeHandle(ref, () => ({
