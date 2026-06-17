@@ -547,7 +547,7 @@ export const ChatStream = forwardRef<ChatStreamHandle, ChatStreamProps>(function
 
       <SubsessionContextMenu containerRef={scrollRef} sessionId={session?.thinkrailSid ?? ""} />
 
-      {showJumpButton  && (
+      {showJumpButton && (
         <button
           className="chat-jump-btn"
           onClick={() => {
