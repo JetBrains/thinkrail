@@ -95,3 +95,32 @@ export async function getSessionDefaults(
     "appSettings/getSessionDefaults",
   );
 }
+
+/**
+ * Wire shape of the analytics consent toggle. Only `enabled` crosses the
+ * wire — the backend keeps the per-install id to itself — so the absence of
+ * an `installationId` field here is itself part of the privacy contract.
+ */
+export interface AnalyticsStatus {
+  enabled: boolean;
+}
+
+export async function setAnalyticsConsent(
+  projectPath: string,
+  enabled: boolean,
+): Promise<AnalyticsStatus> {
+  return callRpc<AnalyticsStatus>(
+    projectPath,
+    "appSettings/setAnalyticsConsent",
+    { enabled },
+  );
+}
+
+export async function getAnalyticsConsent(
+  projectPath: string,
+): Promise<AnalyticsStatus> {
+  return callRpc<AnalyticsStatus>(
+    projectPath,
+    "appSettings/getAnalyticsConsent",
+  );
+}
