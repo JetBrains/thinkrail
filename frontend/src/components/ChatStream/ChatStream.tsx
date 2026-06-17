@@ -100,6 +100,7 @@ export const ChatStream = forwardRef<ChatStreamHandle, ChatStreamProps>(function
   // ── Context menu state ──
   const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number; questionRequestId?: string } | null>(null);
 
+  const [showJumpButton, setShowJumpButton] = useState(false);
   // Auto-scroll to bottom on new events
   useEffect(() => {
     if (autoScroll.current && scrollRef.current) {
@@ -110,8 +111,12 @@ export const ChatStream = forwardRef<ChatStreamHandle, ChatStreamProps>(function
   const handleScroll = useCallback(() => {
     const el = scrollRef.current;
     if (!el) return;
-    const distFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
-    autoScroll.current = distFromBottom < 50;
+    const atBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 50;
+    autoScroll.current = atBottom;
+    setShowJumpButton((prev) => {
+      const next = !atBottom;
+      return prev === next ? prev : next;
+    });
   }, []);
 
   useImperativeHandle(ref, () => ({
@@ -545,11 +550,12 @@ export const ChatStream = forwardRef<ChatStreamHandle, ChatStreamProps>(function
 
       <SubsessionContextMenu containerRef={scrollRef} sessionId={session?.thinkrailSid ?? ""} />
 
-      {!autoScroll.current && (
+      {showJumpButton  && (
         <button
           className="chat-jump-btn"
           onClick={() => {
             autoScroll.current = true;
+            setShowJumpButton(false);
             scrollRef.current?.scrollTo({
               top: scrollRef.current.scrollHeight,
               behavior: "smooth",
