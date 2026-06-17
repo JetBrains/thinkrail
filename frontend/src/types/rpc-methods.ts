@@ -18,7 +18,8 @@ export type ThinkRailRpcPayloads =
   | SessionMetrics
   | TodoItem
   | SessionResult
-  | TicketState;
+  | TicketState
+  | AnalyticsStatus;
 export type Value = string;
 export type Label = string;
 export type Key = string;
@@ -125,6 +126,7 @@ export type Sessions = SessionRef[];
 export type Linkedspecids = string[];
 export type Created1 = string;
 export type Updated1 = string;
+export type Enabled = boolean;
 
 /**
  * A value the backend accepts, plus a display label for the UI.
@@ -341,4 +343,15 @@ export interface SessionRef {
   status?: Status4;
   name?: Name;
   summary?: Summary3;
+}
+/**
+ * Wire view of consent for the in-app toggle.
+ *
+ * Every analytics event is stamped and sent backend-side, so the frontend
+ * never needs the ``installation_id`` — only the ``enabled`` flag crosses
+ * the wire. No default: the handler always sets it, so the field is required
+ * on the wire (non-optional in the generated TypeScript).
+ */
+export interface AnalyticsStatus {
+  enabled: Enabled;
 }

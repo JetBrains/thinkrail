@@ -56,12 +56,14 @@ from app.rpc.methods.sessions import (
 )
 from app.rpc.methods.settings import (
     ensure_settings,
+    get_analytics_consent,
     get_session_defaults,
     get_settings,
     list_runtime_skills,
     list_skills,
     runtimes_capabilities,
     runtimes_list,
+    set_analytics_consent,
     set_session_defaults,
     update_settings,
 )
@@ -162,6 +164,8 @@ METHODS = {
     "settings/ensureFile": ensure_settings,
     "appSettings/getSessionDefaults": get_session_defaults,
     "appSettings/setSessionDefaults": set_session_defaults,
+    "appSettings/getAnalyticsConsent": get_analytics_consent,
+    "appSettings/setAnalyticsConsent": set_analytics_consent,
     "runtimes/list": runtimes_list,
     "runtimes/capabilities": runtimes_capabilities,
     "skills/list": list_skills,

@@ -29,6 +29,7 @@ from app.agent.runtime.types import (
     RuntimeFlag,
     RuntimeIdentity,
 )
+from app.analytics import AnalyticsStatus
 from app.board.ticket_state import TicketState
 
 
@@ -89,6 +90,7 @@ RPC_PAYLOAD_MODELS: tuple[type[BaseModel], ...] = (
     TodoItem,
     SessionResult,
     TicketState,
+    AnalyticsStatus,
 )
 
 
