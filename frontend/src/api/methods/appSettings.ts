@@ -1,4 +1,7 @@
 import type { RpcClient } from "../client.ts";
+import type { AnalyticsStatus } from "@/types/rpc-methods.ts";
+
+export type { AnalyticsStatus };
 
 /**
  * User-scoped session-creation defaults, served by the backend's
@@ -21,6 +24,12 @@ export function createAppSettingsApi(client: RpcClient) {
 
     setSessionDefaults: (cfg: SessionDefaults) =>
       client.request<SessionDefaults>("appSettings/setSessionDefaults", cfg),
+
+    getAnalyticsConsent: () =>
+      client.request<AnalyticsStatus>("appSettings/getAnalyticsConsent"),
+
+    setAnalyticsConsent: (enabled: boolean) =>
+      client.request<AnalyticsStatus>("appSettings/setAnalyticsConsent", { enabled }),
   };
 }
 
