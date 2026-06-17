@@ -194,8 +194,8 @@ async def _start_node(args: dict) -> dict:
     await agent_service.send_message(
         child.thinkrail_sid,
         f"You are running stage '{node.title}' (node {node.id}) of ticket "
-        f"{ticket_id}. Read the linked specs/source, do the work, propose every "
-        f"file edit via ProposeChange, and call SessionFinalize when the "
+        f"{ticket_id}. Read the linked specs/source, do the work, edit files "
+        f"directly, and call SessionFinalize when the "
         f"deliverable is ready." + impl_hint,
     )
     return _ok(f"✓ launched session {child.thinkrail_sid[:8]} for node {node.id}")
