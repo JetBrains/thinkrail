@@ -93,7 +93,6 @@ export type Stagegate = "approve" | "autonomous";
 export type Stepgate = "approve" | "autonomous";
 export type Failurepolicy = "fail-fast" | "wait-all";
 export type Stepexecution = "interactive" | "subagent";
-export type Artifactedits = "ask" | "auto";
 export type Id4 = string;
 export type Title4 = string;
 export type Skill = string | null;
@@ -310,7 +309,6 @@ export interface OrchestrationConfig {
   stepGate?: Stepgate;
   failurePolicy?: Failurepolicy;
   stepExecution?: Stepexecution;
-  artifactEdits?: Artifactedits;
 }
 export interface WorkNode {
   id: Id4;

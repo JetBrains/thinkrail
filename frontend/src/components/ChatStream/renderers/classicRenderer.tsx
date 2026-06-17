@@ -501,8 +501,6 @@ export const classicRenderers: ViewRenderers = {
     </div>
   ),
 
-  proposeChange: () => null,
-
   setPreviewFile: () => null,
   clearPreviewFile: () => null,
   requestResolved: () => null,

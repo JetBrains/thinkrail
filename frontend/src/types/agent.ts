@@ -157,8 +157,7 @@ export type EventType =
   | InteractionResultEventType
   | InputEventType
   | UiEventType
-  | ArtifactEventType
-  | "proposeChange";
+  | ArtifactEventType;
 
 // ─── Other models ─────────────────────────────────────────────────────────────
 
