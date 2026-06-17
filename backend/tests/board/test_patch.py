@@ -2,12 +2,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
-import pytest
-
 from app.board.patch import (
-    AmendmentError,
     append_amendment,
-    apply_amendment,
     build_change_diff,
     extract_spec_id_for_link,
     parse_patch_log,
@@ -39,60 +35,6 @@ class TestBuildChangeDiff:
     def test_no_change_returns_empty(self) -> None:
         diff = build_change_diff("f.md", [("same\n", "same\n")])
         assert "@@" not in diff
-
-
-class TestApplyAmendment:
-    def test_replaces_old_with_new(self, tmp_path: Path) -> None:
-        f = tmp_path / "spec.md"
-        f.write_text("---\nid: foo\n---\n\n## Components\nFoo handles bar.\n")
-        result = apply_amendment(
-            project_root=tmp_path,
-            file_path="spec.md",
-            old_string="Foo handles bar.",
-            new_string="Foo handles bar and baz.",
-        )
-        assert "Foo handles bar and baz." in result
-        assert f.read_text() == result
-
-    def test_errors_when_old_string_not_unique(self, tmp_path: Path) -> None:
-        f = tmp_path / "spec.md"
-        f.write_text("dup\nmiddle\ndup\n")
-        with pytest.raises(AmendmentError, match="not unique"):
-            apply_amendment(
-                project_root=tmp_path,
-                file_path="spec.md",
-                old_string="dup",
-                new_string="new",
-            )
-
-    def test_errors_when_old_string_not_present(self, tmp_path: Path) -> None:
-        f = tmp_path / "spec.md"
-        f.write_text("nothing here\n")
-        with pytest.raises(AmendmentError, match="not found"):
-            apply_amendment(
-                project_root=tmp_path,
-                file_path="spec.md",
-                old_string="missing",
-                new_string="new",
-            )
-
-    def test_errors_when_path_outside_project_root(self, tmp_path: Path) -> None:
-        with pytest.raises(AmendmentError, match="outside project root"):
-            apply_amendment(
-                project_root=tmp_path,
-                file_path="../escape.md",
-                old_string="x",
-                new_string="y",
-            )
-
-    def test_errors_when_file_does_not_exist(self, tmp_path: Path) -> None:
-        with pytest.raises(AmendmentError, match="does not exist"):
-            apply_amendment(
-                project_root=tmp_path,
-                file_path="missing.md",
-                old_string="x",
-                new_string="y",
-            )
 
 
 class TestValidateAmendedFile:

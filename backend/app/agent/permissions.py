@@ -100,8 +100,6 @@ _INTERCEPTOR_CATEGORIES: dict[str, ToolCategory] = {
     "spec_delete": "edit",
     "CreateBoardTicket": "edit",
     "LabelArtifact": "read",       # display-only annotation
-    "ProposeChange": "edit",       # user approves the actual write in-card,
-                                    # but the underlying intent is mutation
     # SessionFinalize only attaches metadata to the current task — no
     # filesystem writes — but it's an intentional "I'm done" signal, so
     # gate it the same as other mutating tools and rely on the runtime

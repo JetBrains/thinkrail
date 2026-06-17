@@ -1,8 +1,7 @@
 """PostToolUse hook that records ticket-session file changes to history.patch.
 
-Replaces the logging/validation/auto-link half of the retired ProposeChange
-tool. Fires after every successful Edit/Write/MultiEdit, in every permission
-mode. The recorded diff is built straight from the tool's own change data
+Fires after every successful Edit/Write/MultiEdit, in every permission mode.
+The recorded diff is built straight from the tool's own change data
 (old_string/new_string/content) — no file read, no reversal. Auto-link and
 artifact bookkeeping run only for .tr spec/artifact files.
 """

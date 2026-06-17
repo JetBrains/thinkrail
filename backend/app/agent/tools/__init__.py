@@ -26,10 +26,6 @@ from app.agent.tools.label_artifact import (
 from app.agent.tools.orchestration import intercept_orchestration, orchestration_mcp_server
 from app.agent.tools.orchestrator import intercept_orchestrator, orchestrator_mcp_server
 from app.agent.tools.preview import intercept_preview, preview_mcp_server
-from app.agent.tools.propose_change import (
-    intercept_propose_change,
-    propose_change_mcp_server,
-)
 from app.agent.tools.session_outcome import (
     intercept_session_finalize,
     session_outcome_mcp_server,
@@ -47,7 +43,6 @@ _MCP_SERVER_LIST = [
     suggest_session_mcp_server,
     suggest_description_mcp_server,
     preview_mcp_server,
-    propose_change_mcp_server,
     specs_mcp_server,
     orchestrator_mcp_server,
     create_ticket_mcp_server,
@@ -67,7 +62,6 @@ INTERCEPTORS: dict[str, InterceptFn] = {
     "SuggestDescription": intercept_suggest_description,
     "SetPreviewFile": intercept_preview,
     "ClearPreviewFile": intercept_preview,
-    "ProposeChange": intercept_propose_change,
     "spec_search": intercept_specs,
     "spec_links": intercept_specs,
     "spec_delete": intercept_specs,
