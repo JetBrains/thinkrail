@@ -6,6 +6,7 @@ from app.board.artifact_paths import (
     ARTIFACT_FILENAMES,
     artifact_path,
     ensure_ticket_dir,
+    resolve_ticket_artifact,
     ticket_dir,
 )
 
@@ -47,3 +48,16 @@ class TestEnsureTicketDir:
         ensure_ticket_dir(tmp_path, "mt_x")
         ensure_ticket_dir(tmp_path, "mt_x")
         assert (tmp_path / ".tr" / "tickets" / "mt_x").is_dir()
+
+
+class TestResolveTicketArtifact:
+    def test_resolves_per_ticket_artifact(self, tmp_path: Path) -> None:
+        assert resolve_ticket_artifact(
+            tmp_path, ".tr/tickets/mt_abc/product-design.md",
+        ) == ("mt_abc", "product_design")
+
+    def test_returns_none_for_design_doc(self, tmp_path: Path) -> None:
+        assert resolve_ticket_artifact(tmp_path, ".tr/design_docs/X.md") is None
+
+    def test_returns_none_for_unknown_filename(self, tmp_path: Path) -> None:
+        assert resolve_ticket_artifact(tmp_path, ".tr/tickets/mt_abc/notes.md") is None

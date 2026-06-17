@@ -249,29 +249,26 @@ class BoardService:
         """Idempotent: create the per-ticket folder if missing."""
         return _ensure_dir(self._project_root, ticket_id)
 
-    def write_artifact(self, ticket_id: str, kind: ArtifactKind, content: str) -> Path:
-        """Write an artifact file under the ticket's folder and update bookkeeping.
+    def sync_artifact_bookkeeping(self, ticket_id: str, kind: ArtifactKind) -> None:
+        """Refresh ticket bookkeeping after an artifact file was edited in place.
 
-        Side-effect: when writing ``product_design`` and the ticket body is
-        currently empty, populate the body with the first non-empty paragraph
-        from the markdown (after frontmatter). This guarantees the ticket has
-        a visible description even if the skill skipped ``SuggestDescription``.
+        The Edit/Write tools write the file directly, so this updates the
+        relevant ``*_path``, the product-design body fallback, and ``updated``
+        from the on-disk file — without rewriting it. No-op if the file or
+        ticket is missing.
         """
-        assert kind in ARTIFACT_FILENAMES
-        self.ensure_ticket_dir(ticket_id)
         p = artifact_path(self._project_root, ticket_id, kind)
-        p.parent.mkdir(parents=True, exist_ok=True)
-        p.write_text(content, encoding="utf-8")
-
+        if not p.is_file():
+            return
         try:
             ticket = self.get_ticket(ticket_id)
         except TicketNotFoundError:
-            return p
+            return
         rel = p.relative_to(self._project_root).as_posix()
         if kind == "product_design":
             ticket.product_design_path = rel
             if not ticket.body:
-                fallback = _extract_first_paragraph(content)
+                fallback = _extract_first_paragraph(p.read_text(encoding="utf-8"))
                 if fallback:
                     ticket.body = fallback
         elif kind == "technical_design":
@@ -282,6 +279,20 @@ class BoardService:
             ticket.implementation_plan_path = rel
         ticket.updated = _now_iso()
         write_ticket(ticket_path(self._tickets_dir, ticket_id), ticket)
+
+    def write_artifact(self, ticket_id: str, kind: ArtifactKind, content: str) -> Path:
+        """Write an artifact file under the ticket's folder and update bookkeeping.
+
+        Side-effect (via sync_artifact_bookkeeping): when writing
+        ``product_design`` and the ticket body is empty, populate the body with
+        the first non-empty paragraph from the markdown.
+        """
+        assert kind in ARTIFACT_FILENAMES
+        self.ensure_ticket_dir(ticket_id)
+        p = artifact_path(self._project_root, ticket_id, kind)
+        p.parent.mkdir(parents=True, exist_ok=True)
+        p.write_text(content, encoding="utf-8")
+        self.sync_artifact_bookkeeping(ticket_id, kind)
         return p
 
     def read_artifact(self, ticket_id: str, kind: ArtifactKind) -> str | None:
