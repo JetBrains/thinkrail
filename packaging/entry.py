@@ -63,6 +63,10 @@ def _run_upgrade(argv: list[str]) -> int:
                         help="Install a specific version (default: latest)")
     args = parser.parse_args(argv)
 
+    from app import analytics
+    from app.analytics import UpgradeStartedEvent
+    analytics.emit_oneshot(UpgradeStartedEvent())
+
     from app.upgrade import run_upgrade
     return run_upgrade(channel=args.channel, version=args.version)
 

@@ -12,6 +12,8 @@ from typing import Any
 
 from claude_agent_sdk import create_sdk_mcp_server, tool
 
+from app import analytics
+from app.analytics import VisualizationShownEvent
 from app.agent.models import AgentTask
 from app.agent.runtime.permissions import ToolPermissionResponse
 from app.agent.tracker import Tracker
@@ -91,6 +93,7 @@ def _error_response(vis_type: str, hint: str) -> dict:
     VIS_SCHEMA,
 )
 async def _thinkrail_visualize(args: dict) -> dict:
+    analytics.track_event(VisualizationShownEvent())
     vis_type = args.get("type", "")
     title = args.get("title", vis_type)
     data = args.get("data", {})
