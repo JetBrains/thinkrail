@@ -9,7 +9,9 @@ import { SessionPanel } from "@/components/SessionPanel/SessionPanel.tsx";
 import { SessionsLeftPanel } from "@/components/SessionPanel/SessionsLeftPanel.tsx";
 import { SessionsViewLayout } from "@/components/SessionPanel/SessionsViewLayout.tsx";
 import {
+  WizardDocPanel,
   WizardDonePanel,
+  TwoPanelLayout,
   getWizardConfig,
   stepperFromJourney,
   useWizardLifecycle,
@@ -143,12 +145,15 @@ export function AppShell({ onSwitchProject }: { onSwitchProject: () => void }) {
     if (wizardConfig) {
       return (
         <Shell onSwitchProject={onSwitchProject} wizardSteps={wizardConfig}>
-          <ViewModeProvider>
-            <SessionsViewLayout
-              leftPanel={<SessionsLeftPanel />}
-              mainContent={<SessionPanel />}
-            />
-          </ViewModeProvider>
+          <TwoPanelLayout
+            leftPanel={
+              <ViewModeProvider>
+                <SessionPanel hideTabBar hideStickyBar hideContextCard />
+              </ViewModeProvider>
+            }
+            rightPanel={<WizardDocPanel filePath={wizardConfig.artifactPath} />}
+            rightPanelTitle={wizardConfig.artifactPath.replace(/^\.tr\//, "")}
+          />
         </Shell>
       );
     }

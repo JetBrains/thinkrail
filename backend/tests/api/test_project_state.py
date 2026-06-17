@@ -31,13 +31,16 @@ class TestDetectProjectState:
         (tmp_path / "README.md").write_text("hi")
         assert _detect_project_state(tmp_path) == "existing"
 
-    def test_goal_requirements_with_content_marks_initialized(self, tmp_path: Path) -> None:
+    def test_goal_requirements_alone_is_existing(self, tmp_path: Path) -> None:
+        # Goal&requirements is the first onboarding artifact — on its own
+        # the user is still mid-onboarding, so the investigate flow should
+        # pick the project up rather than skipping straight to a session.
         (tmp_path / "GOAL&REQUIREMENTS.md").write_text("# Project\n\nOverview...")
-        assert _detect_project_state(tmp_path) == "initialized"
+        assert _detect_project_state(tmp_path) == "existing"
 
-    def test_underscore_variant_marks_initialized(self, tmp_path: Path) -> None:
+    def test_underscore_goal_variant_alone_is_existing(self, tmp_path: Path) -> None:
         (tmp_path / "GOAL_AND_REQUIREMENTS.md").write_text("# Project\n")
-        assert _detect_project_state(tmp_path) == "initialized"
+        assert _detect_project_state(tmp_path) == "existing"
 
     def test_design_doc_marks_initialized(self, tmp_path: Path) -> None:
         (tmp_path / "DESIGN_DOC.md").write_text("# Architecture\n")
@@ -49,19 +52,25 @@ class TestDetectProjectState:
         (tmp_path / "GOAL&REQUIREMENTS.md").write_text("")
         assert _detect_project_state(tmp_path) == "existing"
 
-    def test_initialized_overrides_user_files(self, tmp_path: Path) -> None:
+    def test_design_doc_overrides_user_files(self, tmp_path: Path) -> None:
         (tmp_path / "src.py").write_text("print('hi')")
-        (tmp_path / "GOAL&REQUIREMENTS.md").write_text("# Project\n")
+        (tmp_path / "DESIGN_DOC.md").write_text("# Architecture\n")
         assert _detect_project_state(tmp_path) == "initialized"
 
-    # Agents typically write the spec INSIDE `.tr/` rather than at
-    # project root.  Both locations must register as "initialized" —
-    # otherwise the user gets dragged back into the new-project flow
-    # after a real session has finished.
-    def test_spec_inside_thinkrail_dir_marks_initialized(self, tmp_path: Path) -> None:
+    # Agents typically write the spec INSIDE `.tr/` rather than at project
+    # root. A goal spec there (with no later deliverable) keeps the project
+    # "existing" so the investigate flow re-reads it instead of either
+    # skipping onboarding or restarting it from scratch.
+    def test_goal_inside_thinkrail_dir_is_existing(self, tmp_path: Path) -> None:
         thinkrail = tmp_path / ".tr"
         thinkrail.mkdir()
         (thinkrail / "GOAL&REQUIREMENTS.md").write_text("# Project\n")
+        assert _detect_project_state(tmp_path) == "existing"
+
+    def test_design_doc_inside_thinkrail_dir_marks_initialized(self, tmp_path: Path) -> None:
+        thinkrail = tmp_path / ".tr"
+        thinkrail.mkdir()
+        (thinkrail / "DESIGN_DOC.md").write_text("# Architecture\n")
         assert _detect_project_state(tmp_path) == "initialized"
 
     def test_board_tickets_mark_initialized(self, tmp_path: Path) -> None:

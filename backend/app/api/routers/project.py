@@ -30,22 +30,33 @@ from app.spec.service import SPEC_FILENAME_MAP
 router = APIRouter(tags=["project"])
 
 
-# Deliverables of the spec-driven flows.  Reuses SPEC_FILENAME_MAP to
-# stay in sync with what the agent's spec_save tool actually writes.
-_SPEC_MARKERS: frozenset[str] = frozenset(SPEC_FILENAME_MAP)
+# Spec deliverables split by onboarding stage, derived from
+# SPEC_FILENAME_MAP so the markers stay in sync with what the agent's
+# spec_save tool writes. GOAL&REQUIREMENTS is the FIRST artifact the
+# onboarding flow produces — on its own it means the user is still
+# mid-onboarding, so it leaves the project "existing" (the investigate
+# flow re-reads it) rather than "initialized". Later deliverables (the
+# design doc) — plus board tickets and saved plans — mean real work has
+# happened and the session should just be restored.
+_INITIAL_SPEC_TYPES: frozenset[str] = frozenset({"goal-and-requirements"})
+_INITIAL_SPEC_MARKERS: frozenset[str] = frozenset(
+    name for name, spec_type in SPEC_FILENAME_MAP.items() if spec_type in _INITIAL_SPEC_TYPES
+)
+_DELIVERABLE_MARKERS: frozenset[str] = frozenset(
+    name for name, spec_type in SPEC_FILENAME_MAP.items() if spec_type not in _INITIAL_SPEC_TYPES
+)
 
 
-def _has_spec_deliverable(non_dot_children: list[Path]) -> bool:
-    """True if any spec marker exists at project root with non-empty content."""
-    for child in non_dot_children:
-        if child.name not in _SPEC_MARKERS or not child.is_file():
-            continue
-        try:
-            if child.stat().st_size > 0:
-                return True
-        except OSError:
-            continue
-    return False
+def _is_nonempty_file(path: Path) -> bool:
+    try:
+        return path.is_file() and path.stat().st_size > 0
+    except OSError:
+        return False
+
+
+def _has_marker(children: list[Path], markers: frozenset[str]) -> bool:
+    """True if any child is a non-empty file whose name is in ``markers``."""
+    return any(c.name in markers and _is_nonempty_file(c) for c in children)
 
 
 def _project_meta_dir(p: Path) -> Path | None:
@@ -56,34 +67,23 @@ def _project_meta_dir(p: Path) -> Path | None:
     return None
 
 
-def _thinkrail_has_meaningful_state(p: Path) -> bool:
-    """True if the project's meta dir already holds real work —
-    a finalized spec, a board ticket, or a plan.
+def _thinkrail_has_deliverable(meta: Path | None) -> bool:
+    """True if the meta dir holds real work past the initial goal spec —
+    a later spec deliverable, a board ticket, or a saved plan.
 
     The agent writes most artifacts inside the meta dir rather than the
-    project root (spec, tickets, plans, sessions). Only ``meta-tickets``,
-    ``plans``, and the spec markers count as "real" — a bare ``sessions``
-    directory can be left behind by a draft that never produced anything.
+    project root. A bare ``sessions`` directory doesn't count — it can be
+    left behind by a draft that never produced anything.
     """
-    thinkrail_dir = _project_meta_dir(p)
-    if thinkrail_dir is None:
+    if meta is None:
         return False
     try:
-        # A finalized spec written inside `.tr/`.
-        for marker in _SPEC_MARKERS:
-            f = thinkrail_dir / marker
-            if f.is_file():
-                try:
-                    if f.stat().st_size > 0:
-                        return True
-                except OSError:
-                    continue
-        # Any committed meta-ticket.
-        mt_dir = thinkrail_dir / "meta-tickets"
+        if any(_is_nonempty_file(meta / marker) for marker in _DELIVERABLE_MARKERS):
+            return True
+        mt_dir = meta / "meta-tickets"
         if mt_dir.is_dir() and any(mt_dir.glob("*.json")):
             return True
-        # Any saved plan.
-        plans_dir = thinkrail_dir / "plans"
+        plans_dir = meta / "plans"
         if plans_dir.is_dir() and any(plans_dir.iterdir()):
             return True
     except OSError:
@@ -91,27 +91,37 @@ def _thinkrail_has_meaningful_state(p: Path) -> bool:
     return False
 
 
+def _thinkrail_has_goal(meta: Path | None) -> bool:
+    """True if an initial goal&requirements spec lives inside ``.tr/``."""
+    if meta is None:
+        return False
+    return any(_is_nonempty_file(meta / marker) for marker in _INITIAL_SPEC_MARKERS)
+
+
 def _detect_project_state(p: Path) -> ProjectState:
     """Classify a directory:
-      - ``initialized``: a spec deliverable exists — restore session
+      - ``initialized``: a later spec deliverable, ticket, or plan exists
+        — real work has happened, restore the session
+      - ``existing``: has user files OR only an initial goal spec — keep
+        onboarding via the investigate flow, which reads what's there
       - ``new``: empty workspace — show welcome
-      - ``existing``: has user files but no spec — normal workspace
 
-    A spec deliverable can live at the project root OR inside
-    ``.tr/`` (where the agent typically writes it). Tickets and
-    plans inside ``.tr/`` also count — once the user has board
-    state, the project is no longer "new" even if no spec was saved.
-
-    Falls back to ``existing`` on permission errors — safer than pushing
-    the user into the new-project flow on an unreadable directory.
+    Deliverables can live at the project root OR inside ``.tr/`` (where the
+    agent typically writes them). Falls back to ``existing`` on permission
+    errors — safer than pushing the user into the new-project flow on an
+    unreadable directory.
     """
     try:
         non_dot = [c for c in p.iterdir() if not c.name.startswith(".")]
     except OSError:
         return "existing"
-    if _has_spec_deliverable(non_dot) or _thinkrail_has_meaningful_state(p):
+
+    meta = _project_meta_dir(p)
+    if _has_marker(non_dot, _DELIVERABLE_MARKERS) or _thinkrail_has_deliverable(meta):
         return "initialized"
-    return "new" if not non_dot else "existing"
+    if non_dot or _thinkrail_has_goal(meta):
+        return "existing"
+    return "new"
 
 
 @router.get("/api/health", response_model=HealthResponse)
