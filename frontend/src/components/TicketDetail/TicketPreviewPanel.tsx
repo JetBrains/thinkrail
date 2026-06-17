@@ -3,8 +3,6 @@ import { FileText, ScrollText } from "lucide-react";
 import type { Ticket } from "@/types/board.ts";
 import { deriveLifecycle } from "@/utils/lifecycle.ts";
 import { useUiStore } from "@/store/uiStore.ts";
-import { useSessionStore } from "@/store/sessionStore.ts";
-import { PreviewBody } from "@/components/ContextPanel/PreviewBody.tsx";
 import { TicketArtifactBar, type ArtifactEntry } from "./TicketArtifactBar.tsx";
 import { TicketArtifactView } from "./TicketArtifactView.tsx";
 import { TicketHistoryView } from "./TicketHistoryView.tsx";
@@ -59,22 +57,6 @@ export function TicketPreviewPanel(props: Props) {
   const collapsed = useUiStore((s) => s.ticketArtifactBarCollapsed);
   const setCollapsed = useUiStore((s) => s.setTicketArtifactBarCollapsed);
 
-  // Review mode: ChatStream's "Review →" button on a ProposeChange chip sets
-  // uiStore.activeReview. In sessions-route the ContextPanel's PreviewBody
-  // honours it; in ticket-route we honour it here. Only react when the
-  // review's session belongs to this ticket so a stale activeReview from
-  // another route doesn't leak in.
-  const activeReview = useUiStore((s) => s.activeReview);
-  const setActiveReview = useUiStore((s) => s.setActiveReview);
-  const reviewSessionInTicket =
-    activeReview != null && ticket.sessionIds.includes(activeReview.sid);
-  const reviewing = reviewSessionInTicket ? activeReview : null;
-  const reviewVersion = useSessionStore((s) => {
-    if (!reviewing) return null;
-    const ses = s.sessions.get(reviewing.sid);
-    return ses?.artifacts.find((a) => a.path === reviewing.filePath)?.lastTouchedAt ?? null;
-  });
-
   const amendSpecsFilePaths = useMemo(() => {
     const s = new Set<string>();
     for (const e of historyEntries) {
@@ -128,25 +110,11 @@ export function TicketPreviewPanel(props: Props) {
   const baseSelected =
     (isControlled ? props.selectedArtifact : internalSelected) ?? defaultArtifact;
 
-  // While reviewing, surface the file under review in the bar (mapped to its
-  // canonical entry when applicable) so the user sees what's being reviewed.
-  const reviewBarSelection = useMemo<SelectedArtifact | null>(() => {
-    if (!reviewing) return null;
-    const p = reviewing.filePath;
-    if (p === ticket.productDesignPath) return { kind: "canonical", artifact: "product_design" };
-    if (p === ticket.technicalDesignPath) return { kind: "canonical", artifact: "technical_design" };
-    if (p === ticket.implementationPlanPath) return { kind: "plan" };
-    return { kind: "file", filePath: p };
-  }, [reviewing, ticket]);
-
-  const selected = reviewBarSelection ?? baseSelected;
+  const selected = baseSelected;
   const selectedId = selected ? entryId(selected) : null;
   const onSelectId = (id: string) => {
     const found = artifacts.find((a) => entryId(a) === id);
     if (!found) return;
-    // Leaving the review surface clears review mode so the body falls back
-    // to the regular artifact view.
-    if (reviewing) setActiveReview(null);
     if (isControlled) {
       props.onSelectArtifact?.(found);
     } else {
@@ -164,31 +132,21 @@ export function TicketPreviewPanel(props: Props) {
         onToggleCollapsed={setCollapsed}
       />
       <div className="ticket-preview-body">
-        {reviewing ? (
-          <PreviewBody
-            path={reviewing.filePath}
-            section={null}
-            version={reviewVersion}
-          />
-        ) : (
-          <>
-            {selected?.kind === "canonical" && (
-              <TicketArtifactView ticketId={ticket.id} kind={selected.artifact} />
-            )}
-            {selected?.kind === "plan" && (
-              <TicketArtifactView ticketId={ticket.id} kind="implementation_plan" />
-            )}
-            {selected?.kind === "history" && (
-              <TicketHistoryView
-                ticketId={ticket.id}
-                phaseFilter={selected.phaseFilter}
-                expandIndex={selected.expandIndex}
-              />
-            )}
-            {selected?.kind === "file" && <TicketFileView filePath={selected.filePath} />}
-            {!selected && <div className="ticket-preview-empty">No artifact selected</div>}
-          </>
+        {selected?.kind === "canonical" && (
+          <TicketArtifactView ticketId={ticket.id} kind={selected.artifact} />
         )}
+        {selected?.kind === "plan" && (
+          <TicketArtifactView ticketId={ticket.id} kind="implementation_plan" />
+        )}
+        {selected?.kind === "history" && (
+          <TicketHistoryView
+            ticketId={ticket.id}
+            phaseFilter={selected.phaseFilter}
+            expandIndex={selected.expandIndex}
+          />
+        )}
+        {selected?.kind === "file" && <TicketFileView filePath={selected.filePath} />}
+        {!selected && <div className="ticket-preview-empty">No artifact selected</div>}
       </div>
     </div>
   );

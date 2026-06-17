@@ -30,7 +30,6 @@ import type {
   RequestResolvedEvent,
   RequestExpiredEvent,
   UserMessageEvent,
-  ProposeChangeEvent,
   SetPreviewFileEvent,
   ClearPreviewFileEvent,
   ArtifactAddedEvent,
@@ -64,7 +63,6 @@ export type {
   RequestResolvedEvent,
   RequestExpiredEvent,
   UserMessageEvent,
-  ProposeChangeEvent,
   SetPreviewFileEvent,
   ClearPreviewFileEvent,
   ArtifactAddedEvent,
@@ -88,7 +86,6 @@ export type {
   SuggestSessionPayload,
   SuggestStepPayload,
   UserMessagePayload,
-  ProposeChangePayload,
   SetPreviewFilePayload,
   ClearPreviewFilePayload,
   QuestionOption,
@@ -129,7 +126,6 @@ export type InteractionRequestEventType = (
   | SuggestSessionEvent
   | SuggestDescriptionEvent
   | SuggestStepEvent
-  | ProposeChangeEvent
 )["eventType"];
 
 /** Resolution of a pending interaction request. */
@@ -161,7 +157,8 @@ export type EventType =
   | InteractionResultEventType
   | InputEventType
   | UiEventType
-  | ArtifactEventType;
+  | ArtifactEventType
+  | "proposeChange";
 
 // ─── Other models ─────────────────────────────────────────────────────────────
 
