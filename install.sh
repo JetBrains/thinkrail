@@ -10,6 +10,7 @@
 #   --prefix DIR               (default: ~/.local; binary lands at <prefix>/bin/thinkrail)
 #                              Allowed chars: A-Z a-z 0-9 _ - . / ~ and space.
 #   --no-modify-path           don't touch shell rc files; just print PATH advice
+#   --analytics|--no-analytics enable/disable anonymous usage analytics (default: enabled)
 #
 # After install: run `thinkrail`. To update later: `thinkrail upgrade`.
 
@@ -20,6 +21,7 @@ CHANNEL="stable"
 VERSION="latest"
 PREFIX="${HOME}/.local"
 MODIFY_PATH=1
+ANALYTICS="true"
 
 usage() {
     cat >&2 <<'EOF'
@@ -35,6 +37,7 @@ Options:
   --prefix DIR               (default: ~/.local; binary lands at <prefix>/bin/thinkrail)
                              Allowed chars: A-Z a-z 0-9 _ - . / ~ and space.
   --no-modify-path           don't touch shell rc files; just print PATH advice
+  --analytics|--no-analytics enable/disable anonymous usage analytics (default: enabled)
 
 After install: run `thinkrail`. To update later: `thinkrail upgrade`.
 EOF
@@ -50,6 +53,8 @@ while [ $# -gt 0 ]; do
         --prefix)          PREFIX="$2";        shift 2 ;;
         --prefix=*)        PREFIX="${1#*=}";   shift ;;
         --no-modify-path)  MODIFY_PATH=0;      shift ;;
+        --analytics)       ANALYTICS="true";   shift ;;
+        --no-analytics)    ANALYTICS="false";  shift ;;
         -h|--help)         usage 0 ;;
         *) echo "Unknown arg: $1" >&2; usage 1 ;;
     esac
@@ -183,12 +188,23 @@ cat > "$CONFIG_DIR/install.json" <<EOF
   "version": "${TAG#v}",
   "tag": "$TAG",
   "prefix": "$PREFIX",
+  "analytics": $ANALYTICS,
   "installed_at": "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 }
 EOF
 
 echo
 echo "ThinkRail ${TAG#v} ($CHANNEL) installed."
+
+# Anonymous usage analytics notice (default: enabled). The only stable
+# identifier is a per-install id; no personal data is collected. The AppStore
+# record is authoritative — this only seeds the default on first run.
+if [ "$ANALYTICS" = "true" ]; then
+    echo "Analytics:      anonymous usage analytics is ON (per-install id only, no personal data)."
+    echo "                Disable anytime: thinkrail analytics --disable"
+else
+    echo "Analytics:      anonymous usage analytics is OFF."
+fi
 
 # ── PATH setup ────────────────────────────────────────────────────────────
 # If $BIN_DIR is already on PATH there's nothing to do. Otherwise try to
