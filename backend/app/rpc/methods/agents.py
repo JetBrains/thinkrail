@@ -16,6 +16,8 @@ from app.rpc.errors import (
     UNKNOWN_RUNTIME,
     rpc_handler,
 )
+from app import analytics
+from app.analytics import AgentSessionStartedEvent, VoiceTranscriptRevisedEvent
 from app.agent.exceptions import InvalidCapabilityValueError
 from app.agent.models import AgentConfig
 from app.agent.runtime import UnknownRuntimeError
@@ -69,6 +71,7 @@ async def run_agent(service: AgentService, **params: Any) -> dict:
         name=params.get("name", ""),
         ticket_id=params.get("ticketId"),
     )
+    analytics.track_event(AgentSessionStartedEvent())
     conn = get_current_conn()
     if conn:
         task.created_by = conn.display_name
@@ -156,6 +159,7 @@ async def transcribe_audio(service: AgentService, **params: Any) -> dict:
 async def revise_transcript_rpc(service: AgentService, **params: Any) -> dict:
     """One-shot voice-transcript revise via ``claude_agent_sdk.query``."""
     from app.agent.revise import revise_transcript
+    analytics.track_event(VoiceTranscriptRevisedEvent())
     text = await revise_transcript(params["text"], model=params.get("model"))
     return {"text": text}
 
@@ -241,6 +245,7 @@ async def start_draft(service: AgentService, **params: Any) -> dict:
         thinkrail_sid,
         prompt=params.get("prompt"),
     )
+    analytics.track_event(AgentSessionStartedEvent())
     # Publish full metadata so other clients have name, config, specs
     conn = get_current_conn()
     if conn:
