@@ -160,13 +160,36 @@ def _next_amendment_number(log_text: str) -> int:
     return log_text.count("# == amendment ") + 1
 
 
+def build_change_diff(file_path: str, changes: list[tuple[str, str]]) -> str:
+    """Format ``(old, new)`` snippet pairs into unified-diff text.
+
+    One ``--- a/<path>`` / ``+++ b/<path>`` header followed by one hunk per
+    change. Line numbers are relative to each snippet — the log is a patch
+    stream, not a file snapshot. Snippets are newline-terminated first so
+    hunks never run together.
+    """
+    parts: list[str] = [f"--- a/{file_path}\n", f"+++ b/{file_path}\n"]
+    emitted = False
+    for old, new in changes:
+        old_lines = old.splitlines(keepends=True)
+        new_lines = new.splitlines(keepends=True)
+        if old_lines and not old_lines[-1].endswith("\n"):
+            old_lines[-1] += "\n"
+        if new_lines and not new_lines[-1].endswith("\n"):
+            new_lines[-1] += "\n"
+        body = list(difflib.unified_diff(old_lines, new_lines))[2:]
+        if body:
+            parts.extend(body)
+            emitted = True
+    return "".join(parts) if emitted else ""
+
+
 def append_amendment(
     *,
     project_root: Path,
     ticket_id: str,
     file_path: str,
-    old_content: str,
-    new_content: str,
+    diff: str,
     spec_id: str | None,
     section: str | None,
     rationale: str | None,
@@ -175,7 +198,7 @@ def append_amendment(
     skill: str | None = None,
     timestamp: str | None = None,
 ) -> Path:
-    """Append a metadata header + unified-diff hunk to the ticket's .patch log."""
+    """Append a metadata header + unified-diff hunk to the ticket's history.patch log."""
     ts = timestamp or datetime.now(UTC).isoformat()
     log_path = artifact_path(project_root, ticket_id, "history")
     log_path.parent.mkdir(parents=True, exist_ok=True)
@@ -188,14 +211,6 @@ def append_amendment(
         spec_id=spec_id, section=section, rationale=rationale,
         applied_as=applied_as, validation=validation, timestamp=ts,
     )
-    diff_lines = list(difflib.unified_diff(
-        old_content.splitlines(keepends=True),
-        new_content.splitlines(keepends=True),
-        fromfile=f"a/{file_path}",
-        tofile=f"b/{file_path}",
-    ))
-    diff = "".join(diff_lines)
-
     separator = "" if not existing else "\n\n"
     log_path.write_text(existing + separator + header + "\n" + diff, encoding="utf-8")
     return log_path

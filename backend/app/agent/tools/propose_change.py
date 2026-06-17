@@ -27,6 +27,7 @@ from app.board.patch import (
     AmendmentError,
     apply_amendment,
     append_amendment,
+    build_change_diff,
     extract_spec_id_for_link,
     validate_amended_file,
 )
@@ -231,8 +232,7 @@ async def _propose_change(args: dict) -> dict:
             project_root=project_root,
             ticket_id=ticket_id,
             file_path=file_path,
-            old_content=content_before,
-            new_content=new_content,
+            diff=build_change_diff(file_path, [(content_before, new_content)]),
             spec_id=spec_id,
             section=section,
             rationale=rationale,

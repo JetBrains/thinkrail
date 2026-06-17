@@ -8,10 +8,37 @@ from app.board.patch import (
     AmendmentError,
     append_amendment,
     apply_amendment,
+    build_change_diff,
     extract_spec_id_for_link,
     parse_patch_log,
     validate_amended_file,
 )
+
+
+class TestBuildChangeDiff:
+    def test_single_change_has_header_and_hunk(self) -> None:
+        diff = build_change_diff(
+            ".tr/design_docs/X.md",
+            [("Foo.\n", "Foo and bar.\n")],
+        )
+        assert "--- a/.tr/design_docs/X.md" in diff
+        assert "+++ b/.tr/design_docs/X.md" in diff
+        assert "-Foo." in diff
+        assert "+Foo and bar." in diff
+
+    def test_snippet_without_trailing_newline_is_well_formed(self) -> None:
+        diff = build_change_diff("f.md", [("Foo.", "Bar.")])
+        assert "-Foo.\n" in diff
+        assert "+Bar.\n" in diff
+
+    def test_multiple_changes_emit_multiple_hunks(self) -> None:
+        diff = build_change_diff("f.md", [("a\n", "A\n"), ("b\n", "B\n")])
+        assert diff.count("@@") >= 4
+        assert diff.count("--- a/f.md") == 1
+
+    def test_no_change_returns_empty(self) -> None:
+        diff = build_change_diff("f.md", [("same\n", "same\n")])
+        assert "@@" not in diff
 
 
 class TestApplyAmendment:
@@ -106,8 +133,7 @@ class TestAppendAmendment:
             project_root=tmp_path,
             ticket_id="mt_x",
             file_path=".tr/design_docs/MODULE_X.md",
-            old_content="Foo handles bar.\n",
-            new_content="Foo handles bar and baz.\n",
+            diff=build_change_diff(".tr/design_docs/MODULE_X.md", [("Foo handles bar.\n", "Foo handles bar and baz.\n")]),
             spec_id="spec_abc",
             section="Components",
             rationale="add baz",
@@ -132,7 +158,7 @@ class TestAppendAmendment:
         (tmp_path / ".tr" / "tickets" / "mt_x").mkdir(parents=True)
         kwargs: dict = dict(
             project_root=tmp_path, ticket_id="mt_x",
-            file_path="f.md", old_content="a\n", new_content="b\n",
+            file_path="f.md", diff=build_change_diff("f.md", [("a\n", "b\n")]),
             spec_id=None, section=None, rationale=None,
             applied_as="original", validation="ok",
             timestamp="2026-05-22T15:30:00Z",
@@ -149,7 +175,7 @@ class TestAppendAmendment:
         (tmp_path / ".tr" / "tickets" / "mt_x").mkdir(parents=True)
         log_path = append_amendment(
             project_root=tmp_path, ticket_id="mt_x", file_path="f.md",
-            old_content="a\n", new_content="b\n",
+            diff=build_change_diff("f.md", [("a\n", "b\n")]),
             spec_id=None, section=None, rationale=None,
             applied_as="original", validation="ok",
             timestamp="2026-05-22T15:30:00Z",
@@ -170,7 +196,7 @@ class TestParsePatchLog:
         (tmp_path / ".tr" / "tickets" / "mt_x").mkdir(parents=True)
         common: dict = dict(
             project_root=tmp_path, ticket_id="mt_x",
-            file_path="f.md", old_content="a\n", new_content="b\n",
+            file_path="f.md", diff=build_change_diff("f.md", [("a\n", "b\n")]),
             spec_id=None, section="Goal", rationale="why",
             applied_as="original", validation="ok",
             timestamp="2026-05-22T15:30:00Z",
