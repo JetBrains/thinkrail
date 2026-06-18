@@ -231,6 +231,7 @@ See `.tr/design_docs/TICKET_LIFECYCLE_DESIGN.md` for the canonical spec of the l
 | Map-based ticket store | `Map<string, MetaTicketSummary>` | O(1) lookups by ID for notification handlers. Preserves insertion order for iteration. |
 | Notification handlers | `handleDidChange`, `handleDidCreate`, `handleDidDelete` | Backend pushes ticket changes; handlers update the Map in place without re-fetching the full list. |
 | Ticket tabs as overlay | `openTicketIds` + `activeTicketId` in boardStore | Clicking a card opens a detail tab; clicking the Board tab returns to the kanban. Multiple tickets can be open as tabs. |
+| Delete cascades to sessions | `deleteTicket`/`handleDidDelete` call `sessionStore.removeSessionsForTicket` | The backend trashes a deleted ticket's sessions; the store drops them locally (sessions, tabs, cached list) so the Sessions panel doesn't show a ghost ticket folder. |
 
 ## Known Limitations
 
