@@ -132,6 +132,10 @@ interface SessionStore {
   closeSession: (thinkrailSid: string) => void;
   /** Delete/trash a session: calls backend API, closes tab, removes from store */
   deleteSession: (thinkrailSid: string) => Promise<void>;
+  /** Drop every session attached to a ticket from local state (sessions map,
+   *  open tabs, cached list). Called when the ticket is deleted — the backend
+   *  cascade-trashes the same sessions, so this just keeps the UI in sync. */
+  removeSessionsForTicket: (ticketId: string) => void;
   endSession: (thinkrailSid: string) => Promise<void>;
   /** Open a tab for a session (e.g., from background indicator dropdown).
    *  `allowTicketTab` lets a ticket-attached session open as its own tab
@@ -1778,6 +1782,39 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
     const api = createSessionApi(getClient());
     await api.delete(thinkrailSid);
     dropLocally();
+  },
+
+  removeSessionsForTicket: (ticketId) => {
+    const ids = new Set<string>();
+    for (const [sid, sess] of get().sessions) {
+      if (sess.ticketId === ticketId) ids.add(sid);
+    }
+    for (const e of get().sessionList) {
+      if (e.ticketId === ticketId) ids.add(e.thinkrailSid);
+    }
+    if (ids.size === 0) return;
+
+    for (const sid of ids) {
+      // Stop any armed autosave so a trailing timer can't re-persist a session
+      // whose ticket is gone.
+      draftAutosave.cancel(sid);
+      useInputDraftStore.getState().clearDraft(sid);
+    }
+
+    set((s) => {
+      const sessions = new Map(s.sessions);
+      const openTabs = new Set(s.openTabs);
+      const closedIds = new Set(s.closedIds);
+      for (const sid of ids) {
+        sessions.delete(sid);
+        openTabs.delete(sid);
+        closedIds.add(sid);
+      }
+      const sessionList = s.sessionList.filter((e) => !ids.has(e.thinkrailSid));
+      const activeSessionId =
+        s.activeSessionId && ids.has(s.activeSessionId) ? null : s.activeSessionId;
+      return { sessions, openTabs, closedIds, sessionList, activeSessionId };
+    });
   },
 
   endSession: async (thinkrailSid) => {
