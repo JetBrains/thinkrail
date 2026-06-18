@@ -194,14 +194,15 @@ def list_tickets(base_dir: Path) -> list[Ticket]:
 
 
 def delete_ticket(path: Path) -> None:
-    """Delete a meta-ticket: remove its per-ticket folder and everything inside
-    (``ticket.json`` plus artifacts — design docs, plan, history)."""
-    if not path.exists():
+    """Delete the ticket at ``path`` (its ``ticket.json``): remove the whole
+    per-ticket folder — ``ticket.json`` plus all artifacts (design docs,
+    plan, history)."""
+    if path.name != _TICKET_META_FILENAME or not path.is_file():
         raise FileNotFoundError(path)
     folder = path.parent
-    # Guard: only ever remove a per-ticket subfolder (``…/tickets/{id}/``),
-    # never the tickets root itself.
-    if folder.is_dir() and folder.parent.name == TICKETS_DIR:
+    # ``folder`` is the per-ticket dir; only rmtree it when it sits directly
+    # under ``.tr/tickets/`` — never a stray path or the tickets root itself.
+    if folder.parent.parts[-2:] == (PROJECT_DIRNAME, TICKETS_DIR):
         shutil.rmtree(folder, ignore_errors=True)
     else:
         path.unlink(missing_ok=True)
