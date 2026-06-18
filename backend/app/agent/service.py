@@ -534,6 +534,7 @@ class AgentService:
         """
         if not self.board_service or not self.board_service.plans.plan_exists(ticket_id):
             return
+        from app.board.plan import StepStatus
         try:
             plan = self.board_service.plans.read_plan(ticket_id)
         except Exception:
@@ -545,7 +546,7 @@ class AgentService:
         if step is None:
             return
         step.event_index = event_index
-        step.status = "executing"
+        step.status = StepStatus.EXECUTING
         try:
             self.board_service.plans.save_plan(ticket_id, plan)
         except Exception:
@@ -557,6 +558,7 @@ class AgentService:
         """Flip ``plan.steps[step-1].status`` to ``done`` (or ``failed``)."""
         if not self.board_service or not self.board_service.plans.plan_exists(ticket_id):
             return
+        from app.board.plan import StepStatus
         try:
             plan = self.board_service.plans.read_plan(ticket_id)
         except Exception:
@@ -566,7 +568,7 @@ class AgentService:
         )
         if step is None:
             return
-        step.status = "failed" if is_error else "done"
+        step.status = StepStatus.FAILED if is_error else StepStatus.DONE
         try:
             self.board_service.plans.save_plan(ticket_id, plan)
         except Exception:
@@ -1138,6 +1140,7 @@ class AgentService:
         """
         if not task.ticket_id or not self.board_service:
             return
+        from app.board.work_node import RunStatus
         try:
             ticket = self.board_service.get_ticket(task.ticket_id)
         except Exception:
@@ -1158,7 +1161,7 @@ class AgentService:
         # 1. Stage node whose latest run is this session → mark it done/failed.
         node = _node_for_session(ticket.stages, task.thinkrail_sid)
         finalized_label: str | None = None
-        if node is not None and node.runs and node.runs[-1].status == "running":
+        if node is not None and node.runs and node.runs[-1].status == RunStatus.RUNNING:
             from datetime import UTC, datetime
 
             summary = task.outcome.summary if task.outcome else None
@@ -1176,13 +1179,14 @@ class AgentService:
 
         # 2. Otherwise, an implement sub-step → update its plan step status.
         elif ticket.implementation_plan_path and self.board_service.plans.plan_exists(task.ticket_id):
+            from app.board.plan import StepStatus
             try:
                 plan = self.board_service.plans.read_plan(task.ticket_id)
                 for step in plan.all_steps():
                     if step.session_id == task.thinkrail_sid:
                         self.board_service.plans.update_step_status(
                             task.ticket_id, step.number,
-                            "done" if task.status == TaskStatus.DONE else "failed",
+                            StepStatus.DONE if task.status == TaskStatus.DONE else StepStatus.FAILED,
                         )
                         break
             except Exception:
@@ -1217,6 +1221,7 @@ class AgentService:
             return
         from datetime import UTC, datetime
         from app.board.ops import find_node
+        from app.board.work_node import RunStatus
         try:
             ticket = self.board_service.get_ticket(ticket_id)
         except Exception:
@@ -1226,7 +1231,7 @@ class AgentService:
             return
         # recordRunFinish needs an open run; synthesize one for a node that was
         # never started so a manual completion still flips it to done.
-        if not node.runs or node.runs[-1].status != "running":
+        if not node.runs or node.runs[-1].status != RunStatus.RUNNING:
             try:
                 self.board_service.apply(ticket_id, {
                     "op": "recordRunStart", "id": node_id,

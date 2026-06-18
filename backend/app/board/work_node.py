@@ -7,14 +7,26 @@ See TICKET_LIFECYCLE_DESIGN.md (Data model — WorkNode).
 
 from __future__ import annotations
 
+from enum import StrEnum
 from typing import Literal
 
 from pydantic import BaseModel, Field
 
 from app.board.models import _CAMEL_CONFIG
 
-NodeStatus = Literal["pending", "running", "done", "failed"]
-RunStatus = Literal["running", "done", "failed", "cancelled"]
+
+class NodeStatus(StrEnum):
+    PENDING = "pending"
+    RUNNING = "running"
+    DONE = "done"
+    FAILED = "failed"
+
+
+class RunStatus(StrEnum):
+    RUNNING = "running"
+    DONE = "done"
+    FAILED = "failed"
+    CANCELLED = "cancelled"
 
 
 class NodeRun(BaseModel):
@@ -25,7 +37,7 @@ class NodeRun(BaseModel):
     orchestrator_sid: str | None = None  # kind == "subagent": parent session
     tool_use_id: str | None = None       # kind == "subagent": Task tool_use id
     agent_id: str | None = None          # kind == "subagent": SDK subagent transcript id
-    status: RunStatus = "running"
+    status: RunStatus = RunStatus.RUNNING
     summary: str | None = None
     usage: dict | None = None            # {tokens, cost}
 
@@ -37,7 +49,7 @@ class WorkNode(BaseModel):
     title: str
     skill: str | None = None
     depends_on: list[str] = Field(default_factory=list)
-    status: NodeStatus = "pending"
+    status: NodeStatus = NodeStatus.PENDING
     runs: list[NodeRun] = Field(default_factory=list)
     summary: str | None = None
     artifact_kind: str | None = None
@@ -64,10 +76,10 @@ def ready_node_ids(nodes: list[WorkNode]) -> list[str]:
     out: list[str] = []
     ordered = list(nodes)
     for i, n in enumerate(ordered):
-        if n.status != "pending":
+        if n.status != NodeStatus.PENDING:
             continue
         deps = n.depends_on or [m.id for m in ordered[:i]]
-        if all(by_id.get(d) is not None and by_id[d].status == "done" for d in deps):
+        if all(by_id.get(d) is not None and by_id[d].status == NodeStatus.DONE for d in deps):
             out.append(n.id)
     return out
 
@@ -108,13 +120,13 @@ def derive_lifecycle(stages: list[WorkNode]) -> Lifecycle:
         return "created"
     impl = next((n for n in stages if n.executes_plan), None)
     terminal = stages[-1]
-    if terminal.status == "done" or (
-        impl is not None and impl.status == "done"
-        and all(n.status in ("done", "failed") for n in stages)
+    if terminal.status == NodeStatus.DONE or (
+        impl is not None and impl.status == NodeStatus.DONE
+        and all(n.status in (NodeStatus.DONE, NodeStatus.FAILED) for n in stages)
     ):
         return "done"
-    if impl is not None and impl.status in ("running", "done"):
+    if impl is not None and impl.status in (NodeStatus.RUNNING, NodeStatus.DONE):
         return "implementation"
-    if any(n.status in ("running", "done") for n in stages):
+    if any(n.status in (NodeStatus.RUNNING, NodeStatus.DONE) for n in stages):
         return "design"
     return "created"

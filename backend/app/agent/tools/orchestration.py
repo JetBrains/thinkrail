@@ -21,7 +21,7 @@ from app.core.config import AppConfig, MCP_PREFIX
 from app.board.ops import find_node
 from app.board.service import BoardService, TicketNotFoundError
 from app.board.ticket_state import publish_ticket_state
-from app.board.work_node import DagError
+from app.board.work_node import DagError, NodeStatus
 
 logger = logging.getLogger(__name__)
 
@@ -129,7 +129,7 @@ async def _start_node(args: dict) -> dict:
         return _error(f"unknown node {args['id']!r}")
 
     # Idempotency: if the node already has a running session, return it.
-    if node.status in ("running", "done") and node.runs:
+    if node.status in (NodeStatus.RUNNING, NodeStatus.DONE) and node.runs:
         last_sid = node.runs[-1].session_id
         return _ok(
             f"node {node.id!r} is already {node.status}"
@@ -139,7 +139,7 @@ async def _start_node(args: dict) -> dict:
     unfinished = [
         dep_id
         for dep_id in node.depends_on
-        if (dep := find_node(ticket.stages, dep_id)) is None or dep.status != "done"
+        if (dep := find_node(ticket.stages, dep_id)) is None or dep.status != NodeStatus.DONE
     ]
     if unfinished:
         return _error(

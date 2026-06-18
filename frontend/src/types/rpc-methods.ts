@@ -98,13 +98,13 @@ export type Id4 = string;
 export type Title4 = string;
 export type Skill = string | null;
 export type Dependson = string[];
-export type Status2 = "pending" | "running" | "done" | "failed";
+export type NodeStatus = "pending" | "running" | "done" | "failed";
 export type Kind1 = "session" | "subagent";
 export type Sessionid1 = string | null;
 export type Orchestratorsid = string | null;
 export type Tooluseid = string | null;
 export type Agentid = string | null;
-export type Status3 = "running" | "done" | "failed" | "cancelled";
+export type RunStatus = "running" | "done" | "failed" | "cancelled";
 export type Summary1 = string | null;
 export type Usage = {
   [k: string]: unknown;
@@ -118,7 +118,7 @@ export type Completedat = string | null;
 export type Stages = WorkNode[];
 export type Thinkrailsid = string;
 export type Skillid1 = string | null;
-export type Status4 = string;
+export type Status2 = string;
 export type Name = string;
 export type Summary3 = string | null;
 export type Sessions = SessionRef[];
@@ -317,7 +317,7 @@ export interface WorkNode {
   title: Title4;
   skill?: Skill;
   dependsOn?: Dependson;
-  status?: Status2;
+  status?: NodeStatus;
   runs?: Runs;
   summary?: Summary2;
   artifactKind?: Artifactkind;
@@ -331,14 +331,14 @@ export interface NodeRun {
   orchestratorSid?: Orchestratorsid;
   toolUseId?: Tooluseid;
   agentId?: Agentid;
-  status?: Status3;
+  status?: RunStatus;
   summary?: Summary1;
   usage?: Usage;
 }
 export interface SessionRef {
   thinkrailSid: Thinkrailsid;
   skillId?: Skillid1;
-  status?: Status4;
+  status?: Status2;
   name?: Name;
   summary?: Summary3;
 }

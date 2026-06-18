@@ -19,7 +19,7 @@ from app.agent.models import AgentTask
 from app.agent.runtime.permissions import ToolPermissionResponse
 from app.agent.tools._context import get_tool_context
 from app.agent.tracker import Tracker
-from app.board.plan import PlanService
+from app.board.plan import PlanService, StepStatus
 from app.core.config import AppConfig, MCP_PREFIX
 
 logger = logging.getLogger(__name__)
@@ -80,11 +80,11 @@ async def _suggest_step(args: dict) -> dict:
     if step is None:
         return _error(f"Step {step_number} not found in plan")
 
-    if step.status not in ("pending",):
+    if step.status not in (StepStatus.PENDING,):
         return _error(f"Step {step_number} is already '{step.status}', cannot propose")
 
     # Check dependencies are met
-    done_steps = {s.number for s in all_steps if s.status == "done"}
+    done_steps = {s.number for s in all_steps if s.status == StepStatus.DONE}
     unmet = [d for d in step.depends_on if d not in done_steps]
     if unmet:
         deps = ", ".join(f"Step {d}" for d in unmet)

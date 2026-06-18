@@ -628,15 +628,8 @@
           "title": "Agentid"
         },
         "status": {
-          "default": "running",
-          "enum": [
-            "running",
-            "done",
-            "failed",
-            "cancelled"
-          ],
-          "title": "Status",
-          "type": "string"
+          "$ref": "#/$defs/RunStatus",
+          "default": "running"
         },
         "summary": {
           "anyOf": [
@@ -669,6 +662,16 @@
       ],
       "title": "NodeRun",
       "type": "object"
+    },
+    "NodeStatus": {
+      "enum": [
+        "pending",
+        "running",
+        "done",
+        "failed"
+      ],
+      "title": "NodeStatus",
+      "type": "string"
     },
     "OrchestrationConfig": {
       "description": "Per-ticket orchestration gates + failure policy (see design \u00a73).",
@@ -753,6 +756,16 @@
       "title": "OrchestratorRef",
       "type": "object"
     },
+    "RunStatus": {
+      "enum": [
+        "running",
+        "done",
+        "failed",
+        "cancelled"
+      ],
+      "title": "RunStatus",
+      "type": "string"
+    },
     "SessionRef": {
       "properties": {
         "thinkrailSid": {
@@ -830,15 +843,8 @@
           "type": "array"
         },
         "status": {
-          "default": "pending",
-          "enum": [
-            "pending",
-            "running",
-            "done",
-            "failed"
-          ],
-          "title": "Status",
-          "type": "string"
+          "$ref": "#/$defs/NodeStatus",
+          "default": "pending"
         },
         "runs": {
           "items": {
