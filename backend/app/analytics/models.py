@@ -10,7 +10,7 @@ every event must be a subset of it.
 
 from __future__ import annotations
 
-from typing import Annotated, Literal, Union
+from typing import Annotated, Literal, Union, get_args
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -108,17 +108,10 @@ AnalyticsEvent = Annotated[
 
 # ── Privacy invariant ──────────────────────────────────────────────────
 
-ANALYTICS_EVENT_MODELS: tuple[type[_AnalyticsEvent], ...] = (
-    AppInstalledEvent,
-    AppStartedEvent,
-    AgentSessionStartedEvent,
-    SpecsViewedEvent,
-    SpecGraphViewedEvent,
-    BoardViewedEvent,
-    VoiceTranscriptRevisedEvent,
-    VisualizationShownEvent,
-    OrchestratorStepSuggestedEvent,
-    UpgradeStartedEvent,
+# The union's members, unwrapped from the ``Annotated[Union[...], Field(...)]``
+# alias — derived rather than re-listed so the two never drift.
+ANALYTICS_EVENT_MODELS: tuple[type[_AnalyticsEvent], ...] = get_args(
+    get_args(AnalyticsEvent)[0]
 )
 
 # Every field name that may appear on any event. A field outside this set is a
