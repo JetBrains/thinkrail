@@ -8,7 +8,7 @@ from typing import Any
 
 from app.agent.context import build_context
 from app.agent.exceptions import InvalidCapabilityValueError
-from app.agent.models import AgentConfig, AgentTask, SubagentMode, SubsessionType
+from app.agent.models import AgentConfig, AgentTask, SubagentMode, SubsessionType, TaskStatus
 from app.agent.persistence import append_event, save_session, load_session, list_sessions as list_sessions_from_disk, delete_session as delete_session_from_disk, update_session_metadata, load_events
 from app.agent.runtime import (
     IAgentRuntime,
@@ -198,7 +198,7 @@ class AgentService:
         Returns the structured prompt preview: ``{"full", "sections", "totalTokens"}``.
         """
         task = self._tracker.get_task(thinkrail_sid)
-        if task.status != "draft":
+        if task.status != TaskStatus.DRAFT:
             raise ValueError(f"Cannot update: session is '{task.status}', expected 'draft'")
         if spec_ids is not None:
             task.spec_ids = spec_ids
@@ -260,10 +260,10 @@ class AgentService:
         If *prompt* is provided it is enqueued as the first user message.
         """
         task = self._tracker.get_task(thinkrail_sid)
-        if task.status != "draft":
+        if task.status != TaskStatus.DRAFT:
             raise ValueError(f"Cannot start: session is '{task.status}', expected 'draft'")
         self._validate_config_against_caps(task)
-        self._tracker.set_status(thinkrail_sid, "initializing")
+        self._tracker.set_status(thinkrail_sid, TaskStatus.INITIALIZING)
         spec_context = task.system_prompt or await self._build_context_for(task)
         if prompt is not None:
             self._tracker.enqueue_message(thinkrail_sid, prompt)
@@ -316,7 +316,7 @@ class AgentService:
                 f"Cannot send message: session '{thinkrail_sid}' is not in the live tracker "
                 "(session may need to be resumed first)"
             )
-        if task.status not in ("initializing", "idle"):
+        if task.status not in (TaskStatus.INITIALIZING, TaskStatus.IDLE):
             raise ValueError(
                 f"Cannot send message: session is '{task.status}', expected 'initializing' or 'idle'"
             )
@@ -337,7 +337,7 @@ class AgentService:
         needed.
         """
         task = self._tracker.get_task(thinkrail_sid)
-        if task.status not in ("running", "waiting"):
+        if task.status not in (TaskStatus.RUNNING, TaskStatus.WAITING):
             # Already idle/done — nothing to interrupt
             return
 
@@ -370,11 +370,11 @@ class AgentService:
         """Gracefully close the session."""
         try:
             task = self._tracker.get_task(thinkrail_sid)
-            if task.status in ("done", "error"):
+            if task.status in (TaskStatus.DONE, TaskStatus.ERROR):
                 return  # already finished
-            if task.status == "draft":
+            if task.status == TaskStatus.DRAFT:
                 # Draft sessions have no runner — just clean up directly
-                self._tracker.set_status(thinkrail_sid, "done")
+                self._tracker.set_status(thinkrail_sid, TaskStatus.DONE)
                 self._save_task(task)
                 self._tracker.remove_task(thinkrail_sid)
                 return
@@ -591,7 +591,7 @@ class AgentService:
                 "ticketId": task.ticket_id,
                 "createdAt": task.created,
                 "updatedAt": task.updated,
-                "active": task.status not in ("done", "error"),
+                "active": task.status not in (TaskStatus.DONE, TaskStatus.ERROR),
                 "inTracker": True,
                 "metrics": disk_entry.get("metrics", {}),
                 "outcome": (
@@ -600,7 +600,7 @@ class AgentService:
                     else disk_entry.get("outcome")
                 ),
             }
-            if task.status == "draft":
+            if task.status == TaskStatus.DRAFT:
                 entry["config"] = task.config.model_dump(by_alias=True)
                 entry["systemPrompt"] = task.system_prompt
                 entry["sessionPrompt"] = task.session_prompt
@@ -1072,7 +1072,7 @@ class AgentService:
         try:
             await runtime.run_session(task, exec_config, handler)
             if self._tracker.has_task(task.thinkrail_sid):
-                self._tracker.set_status(task.thinkrail_sid, "done")
+                self._tracker.set_status(task.thinkrail_sid, TaskStatus.DONE)
                 self._save_task(task)
                 self._tracker.remove_task(task.thinkrail_sid)
         except asyncio.CancelledError:
@@ -1091,8 +1091,8 @@ class AgentService:
                 )
                 return
             logger.exception("Agent session %s failed", task.thinkrail_sid)
-            if task.status not in ("done", "error"):
-                self._tracker.set_status(task.thinkrail_sid, "error")
+            if task.status not in (TaskStatus.DONE, TaskStatus.ERROR):
+                self._tracker.set_status(task.thinkrail_sid, TaskStatus.ERROR)
             self._save_task(task)
             self._tracker.remove_task(task.thinkrail_sid)
             try:
@@ -1166,7 +1166,7 @@ class AgentService:
                 self.board_service.apply(task.ticket_id, {
                     "op": "recordRunFinish",
                     "id": node.id,
-                    "isError": task.status != "done",
+                    "isError": task.status != TaskStatus.DONE,
                     "summary": summary,
                     "completedAt": datetime.now(UTC).isoformat(),
                 })
@@ -1182,7 +1182,7 @@ class AgentService:
                     if step.session_id == task.thinkrail_sid:
                         self.board_service.plans.update_step_status(
                             task.ticket_id, step.number,
-                            "done" if task.status == "done" else "failed",
+                            "done" if task.status == TaskStatus.DONE else "failed",
                         )
                         break
             except Exception:
@@ -1201,7 +1201,7 @@ class AgentService:
         orch_sid = ticket.orchestrator.session_id if ticket.orchestrator else None
         if orch_sid and orch_sid != task.thinkrail_sid and self._tracker.has_task(orch_sid):
             label = finalized_label or task.name or task.thinkrail_sid[:8]
-            status_word = "completed" if task.status == "done" else f"ended with status '{task.status}'"
+            status_word = "completed" if task.status == TaskStatus.DONE else f"ended with status '{task.status}'"
             self._tracker.enqueue_message(
                 orch_sid,
                 f"[Stage '{label}' {status_word}] Review its output against the ticket goal, "
@@ -1479,7 +1479,7 @@ class AgentService:
         task.return_status = "pending"
         task.updated = datetime.now(UTC).isoformat()
         self._save_task(task)
-        if task.status in ("initializing", "idle"):
+        if task.status in (TaskStatus.INITIALIZING, TaskStatus.IDLE):
             summary_prompt = (
                 "Please summarize the key conclusions from our discussion. "
                 "Write a concise summary that captures the decision, rationale, "
@@ -1509,6 +1509,6 @@ class AgentService:
         task.return_status = "pending"
         task.updated = datetime.now(UTC).isoformat()
         self._save_task(task)
-        if task.status in ("initializing", "idle"):
+        if task.status in (TaskStatus.INITIALIZING, TaskStatus.IDLE):
             revision_prompt = f"Please revise the summary based on this feedback:\n\n{feedback}"
             self._tracker.enqueue_message(thinkrail_sid, revision_prompt)
