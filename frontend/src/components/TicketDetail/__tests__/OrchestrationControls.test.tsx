@@ -64,16 +64,4 @@ describe("OrchestrationControls", () => {
     expect(screen.getByLabelText("stages: approve").classList.contains("orch-pill--active")).toBe(false);
   });
 
-  it("calls onChange for artifact-edits — auto", () => {
-    const onChange = vi.fn();
-    render(<OrchestrationControls config={{ artifactEdits: "ask" }} onChange={onChange} />);
-    fireEvent.click(screen.getByLabelText("artifact-edits: auto"));
-    expect(onChange).toHaveBeenCalledWith({ artifactEdits: "auto" });
-  });
-
-  it("artifact-edits defaults to ask when undefined", () => {
-    render(<OrchestrationControls config={{}} onChange={vi.fn()} />);
-    expect(screen.getByLabelText("artifact-edits: ask").classList.contains("orch-pill--active")).toBe(true);
-    expect(screen.getByLabelText("artifact-edits: auto").classList.contains("orch-pill--active")).toBe(false);
-  });
 });

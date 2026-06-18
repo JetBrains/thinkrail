@@ -56,6 +56,7 @@ from app.agent.runtime.claude.adapter import (
     build_tool_call_end_params,
     build_tool_call_start_params,
 )
+from app.agent.runtime.claude.change_log_hook import ChangeLogHook
 from app.agent.runtime.claude.hooks import SubagentHooks
 from app.agent.runtime.claude.models import ClaudeModelRegistry
 from app.agent.runtime.claude.skills import ClaudeSkillRegistry
@@ -251,6 +252,7 @@ class ClaudeRuntime:
         # The runtime updates ``hooks.session_id`` after SDK init and
         # ``hooks.iterations`` at the start of each turn.
         hooks = SubagentHooks(task, handler)
+        change_hook = ChangeLogHook(task, config)
 
         plugins = []
         if plugin_dir and Path(plugin_dir).is_dir():
@@ -312,6 +314,7 @@ class ClaudeRuntime:
                 "SubagentStart": [HookMatcher(hooks=[hooks.start_hook])],
                 "SubagentStop": [HookMatcher(hooks=[hooks.stop_hook])],
                 "PreCompact": [HookMatcher(hooks=[hooks.pre_compact_hook])],
+                "PostToolUse": [HookMatcher(hooks=[change_hook.post_tool_use])],
             },
             **({"agents": agents} if agents else {}),
             **({"env": env_overrides} if env_overrides else {}),

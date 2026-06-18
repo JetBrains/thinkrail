@@ -52,7 +52,6 @@ class TestTicket:
         assert t.orchestration.step_gate == "approve"
         assert t.orchestration.failure_policy == "fail-fast"
         assert t.orchestration.step_execution == "interactive"
-        assert t.orchestration.artifact_edits == "ask"
 
     def test_camel_case_serialization(self) -> None:
         t = Ticket(title="Test", linked_spec_ids=["s1"])

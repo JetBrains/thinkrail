@@ -58,12 +58,6 @@ export function OrchestrationControls({ config, onChange }: {
         value={config.stepExecution}
         onChange={(v) => onChange({ stepExecution: v })}
       />
-      <Segment
-        label="Artifact-edits"
-        options={["ask", "auto"] as const}
-        value={config.artifactEdits ?? "ask"}
-        onChange={(v) => onChange({ artifactEdits: v })}
-      />
     </div>
   );
 }

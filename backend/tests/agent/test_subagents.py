@@ -21,10 +21,8 @@ class TestTicketStepExecutorDefinition:
         # Only the orchestrator emits suggest_step.
         assert "suggest_step" not in tools
 
-    def test_includes_propose_change_and_editing_tools(self) -> None:
+    def test_includes_editing_tools(self) -> None:
         tools = set(TICKET_STEP_EXECUTOR.tools or [])
-        assert "ProposeChange" in tools
-        # Step subagents need basic editing surface.
         assert {"Write", "Edit"}.issubset(tools)
 
     def test_prompt_disallows_orchestrator_responsibilities(self) -> None:

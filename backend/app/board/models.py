@@ -46,7 +46,6 @@ class OrchestrationConfig(BaseModel):
     step_gate: Literal["approve", "autonomous"] = "approve"
     failure_policy: Literal["fail-fast", "wait-all"] = "fail-fast"
     step_execution: Literal["interactive", "subagent"] = "interactive"
-    artifact_edits: Literal["ask", "auto"] = "ask"
 
 
 class OrchestratorRef(BaseModel):

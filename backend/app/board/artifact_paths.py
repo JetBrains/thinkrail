@@ -36,3 +36,28 @@ def ensure_ticket_dir(project_root: Path, ticket_id: str) -> Path:
     d = ticket_dir(project_root, ticket_id)
     d.mkdir(parents=True, exist_ok=True)
     return d
+
+
+_FILENAME_TO_KIND: dict[str, ArtifactKind] = {
+    filename: kind for kind, filename in ARTIFACT_FILENAMES.items()
+}
+
+
+def resolve_ticket_artifact(
+    project_root: Path, file_path: str,
+) -> tuple[str, ArtifactKind] | None:
+    """Return (ticket_id, kind) when ``file_path`` is a per-ticket artifact.
+
+    Matches paths shaped ``<meta-dir>/tickets/<id>/<known-artifact-filename>``.
+    """
+    try:
+        rel = (project_root / file_path).resolve().relative_to(project_root.resolve())
+    except ValueError:
+        return None
+    parts = rel.parts
+    if len(parts) != 4 or parts[0] != PROJECT_DIRNAME or parts[1] != TICKETS_DIR:
+        return None
+    kind = _FILENAME_TO_KIND.get(parts[3])
+    if kind is None:
+        return None
+    return parts[2], kind

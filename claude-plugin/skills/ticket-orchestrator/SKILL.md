@@ -19,8 +19,8 @@ the plan (future), the frontier (present), and a brief history (past summaries).
 
 - **Every stage runs as an interactive session.** To launch a ready node, call
   `start_node(id="<nodeId>")`. This opens a real session (running the node's
-  `skill`) that the user can chat with and whose file edits flow through
-  `ProposeChange`. The implementing node (`executesPlan: true`) is the same call
+  `skill`) that the user can chat with and whose file edits are made directly via
+  `Edit`. The implementing node (`executesPlan: true`) is the same call
   — it launches a nested `ticket-implement` session. You do **not** dispatch
   stages as `Agent` subagents.
 - **You yield after launching.** Launching a stage ends your turn — the session

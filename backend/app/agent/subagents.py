@@ -27,7 +27,6 @@ _STEP_EXECUTOR_TOOLS: list[str] = [
     "Glob",
     "Bash",
     # ThinkRail MCP tools (registered names)
-    "ProposeChange",
     "SetPreviewFile",
     "ClearPreviewFile",
     "LabelArtifact",
@@ -37,15 +36,14 @@ _STEP_EXECUTOR_TOOLS: list[str] = [
 TICKET_STEP_EXECUTOR = AgentDefinition(
     description=(
         "Execute one plan step for a ThinkRail ticket. Reads relevant specs and "
-        "source, edits files via ProposeChange, returns a one-paragraph summary."
+        "source, edits files via Edit, returns a one-paragraph summary."
     ),
     tools=_STEP_EXECUTOR_TOOLS,
     prompt=(
         "You are executing one plan step for a ThinkRail ticket. "
         "Read the referenced specs and source files, do the work, "
-        "propose every file edit via ProposeChange (never Write/Edit "
-        "specs directly), and return a one-paragraph summary of what "
-        "you changed.\n\n"
+        "edit files directly with Edit/Write, and return a one-paragraph "
+        "summary of what you changed.\n\n"
         "Do not call suggest_step — that is the orchestrator's "
         "responsibility. If you cannot complete the step "
         "(missing context, blocked dependency, contradiction with another "

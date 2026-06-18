@@ -479,19 +479,6 @@ class RequestExpiredPayload(BaseModel):
     reason: str = "timeout"
 
 
-class ProposeChangePayload(BaseModel):
-    """Agent proposes an amendment to a spec file; user reviews via four-button card."""
-
-    model_config = _CAMEL_CONFIG
-
-    request_id: str = ""
-    file_path: str
-    old_string: str
-    new_string: str
-    section: str | None = None
-    rationale: str | None = None
-
-
 class SetPreviewFilePayload(BaseModel):
     """Open a file in the right Context Panel's Preview tab. Path null
     means clear the preview (replaces the deprecated ClearPreviewFile)."""
@@ -514,6 +501,9 @@ class SessionArtifact(BaseModel):
     model_config = _CAMEL_CONFIG
 
     path: str
+    # "propose-change" retained for backward compatibility with sessions
+    # recorded before the dedicated amendment tool was retired (no new code
+    # writes it — see app/agent/artifacts.py:_ArtifactKind).
     kind: Literal["write", "edit", "propose-change", "preview"]
     role: str | None = None
     label: str | None = None
@@ -680,11 +670,6 @@ class UserMessageEvent(_BaseEvent):
     payload: UserMessagePayload
 
 
-class ProposeChangeEvent(_BaseEvent):
-    event_type: Literal["proposeChange"]
-    payload: ProposeChangePayload
-
-
 class SetPreviewFileEvent(_BaseEvent):
     event_type: Literal["setPreviewFile"]
     payload: SetPreviewFilePayload
@@ -732,7 +717,6 @@ AgentEvent = Annotated[
         RequestResolvedEvent,
         RequestExpiredEvent,
         UserMessageEvent,
-        ProposeChangeEvent,
         SetPreviewFileEvent,
         ClearPreviewFileEvent,
         ArtifactAddedEvent,
