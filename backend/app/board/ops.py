@@ -14,7 +14,7 @@ from __future__ import annotations
 from collections.abc import Iterator
 from typing import Any
 
-from app.board.work_node import NodeRun, WorkNode, DagError, validate_dag
+from app.board.work_node import NodeRun, NodeStatus, RunStatus, WorkNode, DagError, validate_dag
 
 
 def _iter_nodes(nodes: list[WorkNode]) -> Iterator[WorkNode]:
@@ -57,7 +57,7 @@ def apply_op(stages: list[WorkNode], op: dict[str, Any]) -> list[WorkNode]:
         target = by_id.get(op["id"])
         if target is None:
             raise DagError(f"unknown node {op['id']!r}")
-        if target.status in ("done", "running"):
+        if target.status in (NodeStatus.DONE, NodeStatus.RUNNING):
             raise DagError(f"cannot remove {target.status} node {target.id!r}")
         nodes = [n for n in nodes if n.id != op["id"]]
         for n in nodes:
@@ -82,25 +82,25 @@ def apply_op(stages: list[WorkNode], op: dict[str, Any]) -> list[WorkNode]:
         target = find_node(nodes, op["id"])
         if target is None:
             raise DagError(f"unknown node {op['id']!r}")
-        target.status = "pending"   # history in .runs / .completed_at preserved
+        target.status = NodeStatus.PENDING   # history in .runs / .completed_at preserved
 
     elif kind == "recordRunStart":
         target = find_node(nodes, op["id"])
         if target is None:
             raise DagError(f"unknown node {op['id']!r}")
         target.runs.append(NodeRun.model_validate(op["run"]))
-        target.status = "running"
+        target.status = NodeStatus.RUNNING
 
     elif kind == "recordRunFinish":
         target = find_node(nodes, op["id"])
         if target is None or not target.runs:
             raise DagError(f"no open run for node {op['id']!r}")
         run = target.runs[-1]
-        run.status = "failed" if op.get("isError") else "done"
+        run.status = RunStatus.FAILED if op.get("isError") else RunStatus.DONE
         run.summary = op.get("summary")
-        target.status = run.status
+        target.status = NodeStatus(run.status)
         target.summary = run.summary
-        if run.status == "done":
+        if run.status == RunStatus.DONE:
             target.completed_at = op["completedAt"]
 
     else:

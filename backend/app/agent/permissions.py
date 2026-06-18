@@ -12,7 +12,7 @@ from claude_agent_sdk import (
     ToolPermissionContext,
 )
 
-from app.agent.models import AgentTask
+from app.agent.models import AgentTask, TaskStatus
 from app.agent.runtime.permissions import (
     ToolCategory,
     ToolPermissionRequest,
@@ -223,8 +223,8 @@ async def _await_user_response(
     """
     request_id = str(uuid4())
     future = tracker.register_future(task.thinkrail_sid, request_id)
-    if tracker.get_task(task.thinkrail_sid).status != "waiting":
-        tracker.set_status(task.thinkrail_sid, "waiting")
+    if tracker.get_task(task.thinkrail_sid).status != TaskStatus.WAITING:
+        tracker.set_status(task.thinkrail_sid, TaskStatus.WAITING)
         await notify("agent/statusChanged", {
             "thinkrailSid": task.thinkrail_sid, "status": "waiting",
         })
@@ -238,7 +238,7 @@ async def _await_user_response(
     await notify(method, {**params}, request_id=request_id)
     response = await future
     tracker.remove_pending_request(task.thinkrail_sid, request_id)
-    tracker.set_status(task.thinkrail_sid, "running")
+    tracker.set_status(task.thinkrail_sid, TaskStatus.RUNNING)
     await notify("agent/statusChanged", {
         "thinkrailSid": task.thinkrail_sid, "status": "running",
     })

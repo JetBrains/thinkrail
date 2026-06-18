@@ -90,10 +90,6 @@ async def _suggest_description(args: dict) -> dict:
         except TicketNotFoundError:
             return _error(f"Ticket {ticket_id} not found — it may have been deleted")
 
-        # Auto-transition: idea → product-design when description is applied
-        if ticket.status == "idea":
-            ticket = board_service.update_ticket(ticket_id, status="product-design")
-
         # Notify frontend so the UI refreshes
         summary = TicketSummary.from_ticket(ticket)
         await ctx.notify("board/didChange", summary.model_dump(by_alias=True))

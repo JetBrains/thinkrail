@@ -139,7 +139,7 @@ class SessionOutcome(BaseModel):
 # ─── Session model ──────────────────────────────────────────────────────────
 # A Session wraps an agent conversation. A Session belongs to at most one ticket
 # (``ticket_id``) and may be a quick subsession of another session
-# (``parent_session_id``). See SESSION_TICKET_MODEL.md.
+# (``parent_thinkrail_sid``).
 
 DEFAULT_RUNTIME: RuntimeType = "claude"
 DEFAULT_MODEL = "claude-opus-4-8"
@@ -147,18 +147,14 @@ DEFAULT_PERMISSION_MODE = "default"
 DEFAULT_EFFORT = "auto"
 
 
-class SessionStatus(StrEnum):
+class TaskStatus(StrEnum):
     DRAFT = "draft"
+    INITIALIZING = "initializing"
+    IDLE = "idle"
     RUNNING = "running"
     WAITING = "waiting"
-    IDLE = "idle"
-    FINISHED = "finished"
+    DONE = "done"
     ERROR = "error"
-
-
-TaskStatus = Literal[
-    "draft", "initializing", "idle", "running", "waiting", "done", "error"
-]
 
 
 class ArtifactKind(StrEnum):
@@ -770,7 +766,7 @@ class AgentTask(BaseModel):
 
     thinkrail_sid: str = Field(default_factory=lambda: str(uuid4()))
     name: str = ""
-    status: TaskStatus = "initializing"
+    status: TaskStatus = TaskStatus.INITIALIZING
     spec_ids: list[str] = Field(default_factory=list)
     file_paths: list[str] = Field(default_factory=list)
     skill_id: str | None = None

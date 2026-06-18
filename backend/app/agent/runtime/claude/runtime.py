@@ -35,7 +35,7 @@ from claude_agent_sdk import (
 )
 from claude_agent_sdk.types import StreamEvent
 
-from app.agent.models import AgentResult, AgentTask, to_camel
+from app.agent.models import AgentResult, AgentTask, TaskStatus, to_camel
 from app.agent.permissions import claude_can_use_tool_adapter
 from app.agent.pricing import TokenUsage, cost
 from app.agent.subagents import TICKET_STEP_EXECUTOR
@@ -332,7 +332,7 @@ class ClaudeRuntime:
             sdk_init_ms = int((time.monotonic() - t0) * 1000)
             logger.info("[%s] SDK client ready in %dms", task.thinkrail_sid[:8], sdk_init_ms)
             tracker.set_client(task.thinkrail_sid, client)
-            tracker.set_status(task.thinkrail_sid, "idle")
+            tracker.set_status(task.thinkrail_sid, TaskStatus.IDLE)
             await handler.on_event(RuntimeEvent(method="agent/ready", params={
                 "thinkrailSid": task.thinkrail_sid,
             }))
@@ -347,7 +347,7 @@ class ClaudeRuntime:
                     if message is END_SIGNAL:
                         break
 
-                    tracker.set_status(task.thinkrail_sid, "running")
+                    tracker.set_status(task.thinkrail_sid, TaskStatus.RUNNING)
                     await handler.on_event(RuntimeEvent(method="agent/statusChanged", params={
                         "thinkrailSid": task.thinkrail_sid,
                         "status": "running",
@@ -648,7 +648,7 @@ class ClaudeRuntime:
                                     **_turn_event,
                                     "result": sdk_event.result or "",
                                 }))
-                            tracker.set_status(task.thinkrail_sid, "idle")
+                            tracker.set_status(task.thinkrail_sid, TaskStatus.IDLE)
                             await handler.on_event(RuntimeEvent(method="agent/statusChanged", params={
                                 "thinkrailSid": task.thinkrail_sid,
                                 "status": "idle",

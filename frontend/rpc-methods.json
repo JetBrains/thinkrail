@@ -628,15 +628,8 @@
           "title": "Agentid"
         },
         "status": {
-          "default": "running",
-          "enum": [
-            "running",
-            "done",
-            "failed",
-            "cancelled"
-          ],
-          "title": "Status",
-          "type": "string"
+          "$ref": "#/$defs/RunStatus",
+          "default": "running"
         },
         "summary": {
           "anyOf": [
@@ -669,6 +662,16 @@
       ],
       "title": "NodeRun",
       "type": "object"
+    },
+    "NodeStatus": {
+      "enum": [
+        "pending",
+        "running",
+        "done",
+        "failed"
+      ],
+      "title": "NodeStatus",
+      "type": "string"
     },
     "OrchestrationConfig": {
       "description": "Per-ticket orchestration gates + failure policy (see design \u00a73).",
@@ -714,7 +717,7 @@
       "type": "object"
     },
     "OrchestratorRef": {
-      "description": "Reference to a ticket's orchestrator driver. ``kind=\"session\"`` points at a\nSession via ``session_id``; ``kind=\"builtin\"`` names a registered pipeline via\n``builtin_id``. See SESSION_TICKET_MODEL.md \u00a7\"The orchestrator\".",
+      "description": "Reference to a ticket's orchestrator driver. ``kind=\"session\"`` points at a\nSession via ``session_id``; ``kind=\"builtin\"`` names a registered pipeline via\n``builtin_id``.",
       "properties": {
         "kind": {
           "default": "session",
@@ -752,6 +755,16 @@
       },
       "title": "OrchestratorRef",
       "type": "object"
+    },
+    "RunStatus": {
+      "enum": [
+        "running",
+        "done",
+        "failed",
+        "cancelled"
+      ],
+      "title": "RunStatus",
+      "type": "string"
     },
     "SessionRef": {
       "properties": {
@@ -830,15 +843,8 @@
           "type": "array"
         },
         "status": {
-          "default": "pending",
-          "enum": [
-            "pending",
-            "running",
-            "done",
-            "failed"
-          ],
-          "title": "Status",
-          "type": "string"
+          "$ref": "#/$defs/NodeStatus",
+          "default": "pending"
         },
         "runs": {
           "items": {

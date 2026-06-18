@@ -39,6 +39,7 @@ from app.board.storage import (
     wipe_legacy_meta_tickets,
     write_ticket,
 )
+from app.board.work_node import NodeStatus
 from app.core.config import AppConfig, DESIGN_DOCS_DIR, PROJECT_DIRNAME, TICKETS_DIR
 
 logger = logging.getLogger(__name__)
@@ -199,7 +200,7 @@ class BoardService:
         if op.get("op") != "recordRunFinish" or op.get("isError"):
             return
         node = next((n for n in ticket.stages if n.id == op.get("id")), None)
-        if node is None or node.status != "done" or node.skill != "ticket-amend-specs":
+        if node is None or node.status != NodeStatus.DONE or node.skill != "ticket-amend-specs":
             return
         self._commit_paths(
             [

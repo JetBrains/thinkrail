@@ -205,7 +205,7 @@ describe("sessionStore remote events", () => {
 
     it("is a no-op when the thinkrailSid is not in the list", () => {
       const before = useSessionStore.getState().sessionList;
-      useSessionStore.getState().patchSessionInList("does-not-exist", { status: "finished" });
+      useSessionStore.getState().patchSessionInList("does-not-exist", { status: "done" });
       const after = useSessionStore.getState().sessionList;
 
       expect(after).toBe(before);
