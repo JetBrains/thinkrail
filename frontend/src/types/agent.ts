@@ -91,7 +91,7 @@ export type {
   QuestionOption,
 } from "./ws-events.ts";
 
-export type TaskStatus = "draft" | "initializing" | "running" | "waiting" | "idle" | "finished" | "done" | "error" | "interrupted";
+export type TaskStatus = "draft" | "initializing" | "running" | "waiting" | "idle" | "done" | "error" | "interrupted";
 
 // ─── Semantic event type groups ───────────────────────────────────────────────
 // Derived from the generated event interfaces — strings live only in ws-events.ts.

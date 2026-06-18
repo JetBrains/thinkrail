@@ -38,7 +38,6 @@ function statusInfo(status: SessionStatus): StatusInfo {
     case "waiting":      return { icon: <IconHourglass />, label: "waiting", cssClass: "waiting" };
     case "idle":         return { icon: "💤",              label: "idle", cssClass: "idle" };
     case "interrupted":  return { icon: "⚡",              label: "interrupted", cssClass: "idle" };
-    case "finished":
     case "done":
     case "error":        return { icon: "⏹",              label: status === "error" ? "error" : "done", cssClass: "ended" };
     default:             return { icon: "?",               label: status as string, cssClass: "idle" };
@@ -229,7 +228,7 @@ export function SessionStatusLine({
 
   // ── Derived flags ──
   const isStreaming = status === "running" || status === "waiting";
-  const isTerminal = status === "finished" || status === "done" || status === "error" || status === "interrupted";
+  const isTerminal = status === "done" || status === "error" || status === "interrupted";
   const canInterrupt = isStreaming;
   const { icon: statusIcon, label: statusLabel, cssClass: statusClass } = statusInfo(status);
 
