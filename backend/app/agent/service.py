@@ -8,7 +8,7 @@ from typing import Any
 
 from app.agent.context import build_context
 from app.agent.exceptions import InvalidCapabilityValueError
-from app.agent.models import AgentConfig, AgentTask, SubsessionType
+from app.agent.models import AgentConfig, AgentTask, SubagentMode, SubsessionType
 from app.agent.persistence import append_event, save_session, load_session, list_sessions as list_sessions_from_disk, delete_session as delete_session_from_disk, update_session_metadata, load_events
 from app.agent.runtime import (
     IAgentRuntime,
@@ -282,6 +282,7 @@ class AgentService:
         session_prompt: str | None = None,
         name: str = "",
         ticket_id: str | None = None,
+        subagent_mode: SubagentMode | None = None,
     ) -> AgentTask:
         """Start a persistent agent session (one-step shortcut).
 
@@ -293,6 +294,8 @@ class AgentService:
             spec_ids, config, skill_id=skill_id, session_prompt=session_prompt, name=name,
         )
         task.ticket_id = ticket_id
+        if subagent_mode is not None:
+            task.subagent_mode = subagent_mode
         self._validate_config_against_caps(task)
         self._attach_to_ticket(task)
         spec_context = await self._build_context_for(task)
@@ -740,11 +743,16 @@ class AgentService:
                 self.board_service.detach_session_from_all(thinkrail_sid)
             except Exception:
                 logger.warning("Failed to detach session %s from tickets", thinkrail_sid)
+        running = self._running_tasks.pop(thinkrail_sid, None)
+        if running is not None and not running.done():
+            running.cancel()
         delete_session_from_disk(self._config.project_root, thinkrail_sid)
-        # Clean up in-memory state if still tracked
         if self._tracker.has_task(thinkrail_sid):
+            # Clear ticket_id first: cancelling the runner above triggers its
+            # finally → _on_ticket_session_finished, which would otherwise
+            # resume the orchestrator for a session that was just deleted.
+            self._tracker.get_task(thinkrail_sid).ticket_id = None
             self._tracker.remove_task(thinkrail_sid)
-            self._running_tasks.pop(thinkrail_sid, None)
 
     async def continue_session(self, thinkrail_sid: str) -> AgentTask:
         """Resume a session using the SDK's native --resume <sessionId>.
@@ -1068,14 +1076,25 @@ class AgentService:
 
         try:
             await runtime.run_session(task, exec_config, handler)
-            self._tracker.set_status(task.thinkrail_sid, "done")
-            self._save_task(task)
-            self._tracker.remove_task(task.thinkrail_sid)
+            if self._tracker.has_task(task.thinkrail_sid):
+                self._tracker.set_status(task.thinkrail_sid, "done")
+                self._save_task(task)
+                self._tracker.remove_task(task.thinkrail_sid)
         except asyncio.CancelledError:
             # Should no longer happen during interrupt (uses client.interrupt() now).
             # Keep as safety net for unexpected cancellation.
-            logger.warning("Runner for %s received unexpected CancelledError", task.thinkrail_sid)
+            if self._tracker.has_task(task.thinkrail_sid):
+                logger.warning("Runner for %s received unexpected CancelledError", task.thinkrail_sid)
+            else:
+                logger.debug("Runner for %s cancelled after session deletion", task.thinkrail_sid)
         except Exception as exc:
+            if not self._tracker.has_task(task.thinkrail_sid):
+                logger.debug(
+                    "Agent session %s failed after it was deleted",
+                    task.thinkrail_sid,
+                    exc_info=True,
+                )
+                return
             logger.exception("Agent session %s failed", task.thinkrail_sid)
             if task.status not in ("done", "error"):
                 self._tracker.set_status(task.thinkrail_sid, "error")
