@@ -147,9 +147,14 @@ DEFAULT_PERMISSION_MODE = "default"
 DEFAULT_EFFORT = "auto"
 
 
-TaskStatus = Literal[
-    "draft", "initializing", "idle", "running", "waiting", "done", "error"
-]
+class TaskStatus(StrEnum):
+    DRAFT = "draft"
+    INITIALIZING = "initializing"
+    IDLE = "idle"
+    RUNNING = "running"
+    WAITING = "waiting"
+    DONE = "done"
+    ERROR = "error"
 
 
 class ArtifactKind(StrEnum):
@@ -761,7 +766,7 @@ class AgentTask(BaseModel):
 
     thinkrail_sid: str = Field(default_factory=lambda: str(uuid4()))
     name: str = ""
-    status: TaskStatus = "initializing"
+    status: TaskStatus = TaskStatus.INITIALIZING
     spec_ids: list[str] = Field(default_factory=list)
     file_paths: list[str] = Field(default_factory=list)
     skill_id: str | None = None
