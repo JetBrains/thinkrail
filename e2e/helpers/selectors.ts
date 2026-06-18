@@ -57,9 +57,10 @@ export const sessionPanel = {
   statusButton: ".session-status-line .ssl-status",
   statusDropdownItem: ".ssl-dropdown-item",
   // InputArea controls. Send/Start are generic <Button>s now (no .input-send
-  // class); the non-draft "Send" lives in the .input-actions slot.
+  // class). The .input-actions slot also holds the portaled Continue button,
+  // so match the Send button by its label to stay unambiguous.
   inputTextarea: ".input-textarea",
-  inputSend: ".input-actions button",
+  inputSend: '.input-actions button:has-text("Send")',
   inputInterrupt: "button.input-interrupt",
   messagePlaceholder: /Message Claude/,
 };

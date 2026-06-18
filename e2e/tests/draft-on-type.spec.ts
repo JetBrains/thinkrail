@@ -418,6 +418,15 @@ test.describe("Draft-on-type", () => {
     const getSaves = trackSaveFrames(page);
     await openProject(page, tempProject.path);
 
+    // The dev RPC client attaches once the WebSocket connects — openProject
+    // only guarantees the workspace chrome, so wait for the client before
+    // driving it directly (otherwise this races and `client` is undefined).
+    await page.waitForFunction(
+      () => !!(window as unknown as { __thinkrailClient?: unknown }).__thinkrailClient,
+      null,
+      { timeout: 15_000 },
+    );
+
     // The blank `+ New` path defers; the intent-carrying path (meta-ticket /
     // suggested sessions) hits an immediate `agent/prepare` (createDraft) or
     // `agent/run`. Drive that primitive directly via the dev-exposed RPC
