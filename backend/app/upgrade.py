@@ -9,14 +9,13 @@ import subprocess
 import sys
 from pathlib import Path
 
-from app.core.config import CONFIG_DIRNAME, ENV_PREFIX, PRODUCT_NAME
+from app.core.config import ENV_PREFIX, INSTALL_METADATA_PATH, PRODUCT_NAME
 from app.version import CHANNEL, VERSION
 
 INSTALL_SCRIPT_URL = os.environ.get(
     f"{ENV_PREFIX}INSTALL_SCRIPT_URL",
     "https://raw.githubusercontent.com/JetBrains/thinkrail/main/install.sh",
 )
-INSTALL_METADATA_PATH = Path.home() / ".config" / CONFIG_DIRNAME / "install.json"
 
 _VERSION_RE = re.compile(r"^(?:latest|\d+\.\d+\.\d+(?:-nightly\.\d+)?)$")
 _PREFIX_FORBIDDEN_CHARS = set(';|&`$<>\n\r"\'\\')

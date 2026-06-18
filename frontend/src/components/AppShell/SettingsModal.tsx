@@ -13,10 +13,11 @@ import "./SettingsModal.css";
 
 const SETTINGS_PATH = ".tr/settings.json";
 
-type Section = "defaults" | "server" | "settings";
+type Section = "defaults" | "privacy" | "server" | "settings";
 
 const SECTIONS: { id: Section; label: string }[] = [
   { id: "defaults", label: "Session Defaults" },
+  { id: "privacy", label: "Privacy" },
   { id: "server", label: "Server Info" },
   { id: "settings", label: "Settings" },
 ];
@@ -49,6 +50,7 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
         </nav>
         <div className="settings-modal__content">
           {section === "defaults" && <SessionDefaultsSection visible={section === "defaults"} />}
+          {section === "privacy" && <PrivacySection visible={section === "privacy"} />}
           {section === "server" && <ServerSection />}
           {section === "settings" && <SettingsSection />}
         </div>
@@ -293,6 +295,60 @@ function SessionDefaultsSection({ visible }: { visible: boolean }) {
         >
           {saving ? "Saving…" : "Save"}
         </Button>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Anonymous-analytics consent toggle, bound to the same AppStore consent
+ * record as the `thinkrail analytics` CLI and the install flag. Toggling
+ * applies immediately (opt-in mints a fresh installation id; opt-out clears
+ * it). Analytics is on by default — see README "Analytics & Privacy".
+ */
+function PrivacySection({ visible }: { visible: boolean }) {
+  const analyticsConsent = useSettingsStore((s) => s.analyticsConsent);
+  const fetchAnalyticsConsent = useSettingsStore((s) => s.fetchAnalyticsConsent);
+  const setAnalyticsEnabled = useSettingsStore((s) => s.setAnalyticsEnabled);
+  const wasVisibleRef = useRef(false);
+
+  useEffect(() => {
+    if (!visible) {
+      wasVisibleRef.current = false;
+      return;
+    }
+    if (!wasVisibleRef.current) {
+      wasVisibleRef.current = true;
+      if (analyticsConsent === null) fetchAnalyticsConsent();
+    }
+  }, [visible, analyticsConsent, fetchAnalyticsConsent]);
+
+  const enabled = analyticsConsent?.enabled ?? true;
+
+  return (
+    <div className="settings-section">
+      <h3 className="settings-section__title">Privacy</h3>
+      <p className="settings-section__hint">
+        ThinkRail collects anonymous usage analytics to understand which
+        features get used and whether installs stay active. The only stable
+        identifier is a random per-install id. Never collected: project paths,
+        file/spec/ticket names, prompts, code, transcripts, or anything that
+        identifies you. Stored on this machine and shared across all projects.
+      </p>
+
+      <div className="user-settings-row">
+        <label className="user-settings-label">Usage analytics</label>
+        <span className="runtime-flags">
+          <label className="runtime-flag">
+            <input
+              type="checkbox"
+              checked={enabled}
+              disabled={analyticsConsent === null}
+              onChange={(e) => setAnalyticsEnabled(e.target.checked)}
+            />
+            Send anonymous usage analytics
+          </label>
+        </span>
       </div>
     </div>
   );

@@ -25,6 +25,9 @@ Options:
 
 # Custom install prefix
 ... | bash -s -- --prefix ~/.local
+
+# Opt out of anonymous usage analytics
+... | bash -s -- --no-analytics
 ```
 
 The installer detects your OS and architecture, downloads the matching binary from the [latest release](../../releases/latest), verifies the SHA256 checksum, and installs to `~/.local/bin/thinkrail`. If `~/.local/bin` isn't on your `PATH`, the installer appends it to your shell's rc file (`~/.bashrc`, `~/.bash_profile`, `~/.zshrc`, or `~/.config/fish/conf.d/thinkrail.fish` depending on `$SHELL`) — open a new terminal or `source` the file to pick it up. Re-running with a different `--prefix` rewrites the existing entry rather than stacking a second one. Pass `--no-modify-path` to opt out.
@@ -38,6 +41,22 @@ Once installed, run `thinkrail` to start. To update later: `thinkrail upgrade` (
 > **macOS first-launch:** the `curl … | bash` command above downloads the binary with `curl`, which does **not** quarantine it — macOS runs it without a Gatekeeper prompt. If you instead download the binary directly from the [Releases page](../../releases/latest) in a browser, macOS quarantines it and Gatekeeper blocks the first launch; clear it with right-click → **Open**, or `xattr -d com.apple.quarantine ~/.local/bin/thinkrail`.
 
 **Authentication.** ThinkRail drives Claude Code under the hood, so Claude Code needs to be authenticated.
+
+### Analytics & Privacy
+
+ThinkRail collects **anonymous usage analytics**, and it is **on by default**. The data answers product questions — are installs still active over time, which channels/platforms people install from, and which top-level features get used — and nothing more.
+
+**The only stable identifier** is a random per-install `installation_id` (a `uuid4`) generated on your machine. Alongside it, events carry low-cardinality, non-personal environment metadata: release channel (`stable`/`nightly`/`dev`), version, OS (`macos`/`linux`/`windows`), and architecture (`x64`/`arm64`).
+
+**Never collected:** project paths, file/spec/ticket names, prompts, code, transcripts, token counts, hostnames, usernames, or IP-derived fields.
+
+Turn it off any time — all three paths flip the same setting:
+
+- **At install:** `... | bash -s -- --no-analytics`
+- **CLI:** `thinkrail analytics --disable` (and `--enable` / `--status`)
+- **In-app:** Settings → **Privacy** → toggle off
+
+Disabling deletes the `installation_id` and stops all network calls; re-enabling generates a fresh id (no continuity across an opt-out).
 
 ### For developers
 

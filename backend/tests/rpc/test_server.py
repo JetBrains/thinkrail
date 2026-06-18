@@ -95,6 +95,7 @@ class TestMethods:
             "board/completeNode", "board/refineNode",
             "settings/get", "settings/update", "settings/ensureFile",
             "appSettings/getSessionDefaults", "appSettings/setSessionDefaults",
+            "appSettings/getAnalyticsConsent", "appSettings/setAnalyticsConsent",
             "runtimes/list", "runtimes/capabilities",
             "agent/retryLastMessage",
             "skills/list",

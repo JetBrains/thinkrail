@@ -24,6 +24,10 @@ ENV_PREFIX = f"{APP_SLUG.upper()}_"
 # Name of the per-user config dir under ``~/.config/`` (update metadata, etc.).
 CONFIG_DIRNAME = APP_SLUG
 
+# Installer metadata written by ``install.sh`` (channel, version, prefix,
+# analytics opt-out). Read by the self-upgrade path and by analytics seeding.
+INSTALL_METADATA_PATH = Path.home() / ".config" / CONFIG_DIRNAME / "install.json"
+
 # Probe up to +PORT_PROBE_RANGE from the requested port when it's busy. Matches
 # the developer-facing run.sh preflight so the standalone binary and the dev
 # shell script use the same fallback window.
