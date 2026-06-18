@@ -194,14 +194,17 @@ def list_tickets(base_dir: Path) -> list[Ticket]:
 
 
 def delete_ticket(path: Path) -> None:
-    """Delete a meta-ticket's ``ticket.json`` (and its containing folder if empty)."""
-    path.unlink()
+    """Delete a meta-ticket: remove its per-ticket folder and everything inside
+    (``ticket.json`` plus artifacts — design docs, plan, history)."""
+    if not path.exists():
+        raise FileNotFoundError(path)
     folder = path.parent
-    try:
-        if folder.is_dir() and not any(folder.iterdir()):
-            folder.rmdir()
-    except OSError:
-        pass
+    # Guard: only ever remove a per-ticket subfolder (``…/tickets/{id}/``),
+    # never the tickets root itself.
+    if folder.is_dir() and folder.parent.name == TICKETS_DIR:
+        shutil.rmtree(folder, ignore_errors=True)
+    else:
+        path.unlink(missing_ok=True)
 
 
 # ── Legacy-layout cleanup ────────────────────────────────────────

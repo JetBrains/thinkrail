@@ -1,4 +1,4 @@
-import { existsSync } from "node:fs";
+import { existsSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { test, expect } from "../fixtures";
 import { openProject } from "../helpers/project";
@@ -41,6 +41,11 @@ test.describe("ticket deletion cascade", () => {
       orchestratorSessionId: orchSid,
     });
 
+    // An artifact in the ticket folder makes it non-empty, so deletion must
+    // remove the whole folder — not just `ticket.json`.
+    const ticketDir = join(tempProject.path, ".tr", "tickets", ticketId);
+    writeFileSync(join(ticketDir, "product-design.md"), "# design\n", "utf8");
+
     const orchPath = join(tempProject.path, ".tr", "sessions", `${orchSid}.json`);
     const stepPath = join(tempProject.path, ".tr", "sessions", `${stepSid}.json`);
     expect(existsSync(orchPath)).toBe(true);
@@ -65,12 +70,17 @@ test.describe("ticket deletion cascade", () => {
     // The card disappears from the board…
     await expect(card).toHaveCount(0, { timeout: 15_000 });
 
-    // …and the cascade removes both session files from disk.
+    // …the cascade removes both session files from disk…
     await expect
       .poll(() => existsSync(orchPath), { timeout: 15_000 })
       .toBe(false);
     await expect
       .poll(() => existsSync(stepPath), { timeout: 15_000 })
+      .toBe(false);
+
+    // …and the ticket folder (artifacts included) is gone too.
+    await expect
+      .poll(() => existsSync(ticketDir), { timeout: 15_000 })
       .toBe(false);
   });
 });

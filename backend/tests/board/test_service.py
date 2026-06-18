@@ -99,6 +99,17 @@ class TestDeleteTicket:
         trashed = {c.args[0] for c in svc.agent_service.trash_session.call_args_list}
         assert trashed == {"bs_step1", "bs_step2", "bs_orch"}
 
+    def test_delete_removes_ticket_folder_and_artifacts(self, tmp_path: Path) -> None:
+        svc = _setup_board(tmp_path)
+        t = svc.create_ticket("With artifacts")
+        svc.write_artifact(t.id, "product_design", "# design")
+        ticket_dir = tmp_path / ".tr" / "tickets" / t.id
+        assert (ticket_dir / "product-design.md").is_file()
+
+        svc.delete_ticket(t.id)
+
+        assert not ticket_dir.exists()
+
     def test_delete_without_agent_service_still_removes_ticket(self, tmp_path: Path) -> None:
         svc = _setup_board(tmp_path)
         t = svc.create_ticket("No agent")

@@ -98,7 +98,7 @@ graph TD
 | `get_ticket` | `(id: str) -> MetaTicket` | Get full ticket with auto-plan detection |
 | `create_ticket` | `(title: str, body: str, type: MetaTicketType) -> MetaTicket` | Create new ticket (defaults to `idea` status). Auto-creates a draft plan skeleton at `.tr/plans/{ticket_id}.md` and sets `plan_path`. |
 | `update_ticket` | `(id: str, *, title?, body?, status?, type?) -> MetaTicket` | Update fields; validates status transitions |
-| `delete_ticket` | `(id: str) -> None` | Delete the ticket file, then cascade-trash its sessions (orchestrator + attached) via `agent_service.trash_session` so none linger in the Sessions panel or on disk |
+| `delete_ticket` | `(id: str) -> None` | Remove the ticket's folder (`ticket.json` + artifacts: design docs, plan, history), then cascade-trash its sessions (orchestrator + attached) via `agent_service.trash_session` so nothing lingers in the Sessions panel or on disk |
 | `detach_session` | `(ticket_id: str, session_id: str) -> MetaTicket` | Remove a session reference from a ticket's session_ids and clear orchestrator_session_id if it matches |
 | `detach_session_from_all` | `(session_id: str) -> None` | Scan all tickets and detach the given session. Called automatically when a session is trashed. |
 | `link_spec` | `(ticket_id: str, spec_id: str) -> MetaTicket` | Link a spec; auto-transitions `described` to `specified` |
