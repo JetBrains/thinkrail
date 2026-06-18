@@ -118,7 +118,7 @@ class AgentService:
                 task = AgentTask(
                     thinkrail_sid=sid,
                     name=entry.get("name", ""),
-                    status="draft",
+                    status=TaskStatus.DRAFT,
                     spec_ids=entry.get("specIds", []),
                     file_paths=entry.get("filePaths", []),
                     skill_id=entry.get("skillId"),
@@ -170,7 +170,7 @@ class AgentService:
             spec_ids, config, skill_id=skill_id, session_prompt=session_prompt, name=name,
             thinkrail_sid=thinkrail_sid, draft_input=draft_input,
         )
-        task.status = "draft"
+        task.status = TaskStatus.DRAFT
         task.ticket_id = ticket_id
         if file_paths:
             task.file_paths = file_paths
@@ -1464,7 +1464,7 @@ class AgentService:
         task.parent_thinkrail_sid = parent_thinkrail_sid
         task.subsession_type = subsession_type
         task.subsession_context = context
-        task.status = "draft"
+        task.status = TaskStatus.DRAFT
 
         parent_context = build_parent_context(
             parent_sid=parent_thinkrail_sid,
