@@ -139,7 +139,7 @@ class SessionOutcome(BaseModel):
 # ─── Session model ──────────────────────────────────────────────────────────
 # A Session wraps an agent conversation. A Session belongs to at most one ticket
 # (``ticket_id``) and may be a quick subsession of another session
-# (``parent_session_id``). See SESSION_TICKET_MODEL.md.
+# (``parent_thinkrail_sid``).
 
 DEFAULT_RUNTIME: RuntimeType = "claude"
 DEFAULT_MODEL = "claude-opus-4-8"

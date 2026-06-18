@@ -296,7 +296,7 @@ export interface TicketState {
 /**
  * Reference to a ticket's orchestrator driver. ``kind="session"`` points at a
  * Session via ``session_id``; ``kind="builtin"`` names a registered pipeline via
- * ``builtin_id``. See SESSION_TICKET_MODEL.md §"The orchestrator".
+ * ``builtin_id``.
  */
 export interface OrchestratorRef {
   kind?: Kind;
