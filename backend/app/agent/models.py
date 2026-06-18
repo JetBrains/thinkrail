@@ -147,15 +147,6 @@ DEFAULT_PERMISSION_MODE = "default"
 DEFAULT_EFFORT = "auto"
 
 
-class SessionStatus(StrEnum):
-    DRAFT = "draft"
-    RUNNING = "running"
-    WAITING = "waiting"
-    IDLE = "idle"
-    FINISHED = "finished"
-    ERROR = "error"
-
-
 TaskStatus = Literal[
     "draft", "initializing", "idle", "running", "waiting", "done", "error"
 ]
