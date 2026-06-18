@@ -26,6 +26,7 @@ class _SPAStaticFiles(StaticFiles):
                 return await super().get_response("index.html", scope)
             raise
 
+from app import analytics
 from app.api import setup as setup_api
 from app.core.config import PRODUCT_NAME, get_data_dir
 from app.core.app_store import AppStore
@@ -63,6 +64,7 @@ def create_app() -> FastAPI:
     async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         await app_store.open()
         try:
+            await analytics.initialize(app_store)
             yield
         finally:
             await app_store.close()

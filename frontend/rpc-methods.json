@@ -999,6 +999,20 @@
       ],
       "title": "TicketState",
       "type": "object"
+    },
+    "AnalyticsStatus": {
+      "description": "Wire view of consent for the in-app toggle.\n\nEvery analytics event is stamped and sent backend-side, so the frontend\nnever needs the ``installation_id`` \u2014 only the ``enabled`` flag crosses\nthe wire. No default: the handler always sets it, so the field is required\non the wire (non-optional in the generated TypeScript).",
+      "properties": {
+        "enabled": {
+          "title": "Enabled",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "enabled"
+      ],
+      "title": "AnalyticsStatus",
+      "type": "object"
     }
   },
   "anyOf": [
@@ -1040,6 +1054,9 @@
     },
     {
       "$ref": "#/$defs/TicketState"
+    },
+    {
+      "$ref": "#/$defs/AnalyticsStatus"
     }
   ]
 }

@@ -13,6 +13,8 @@ from uuid import uuid4
 
 from claude_agent_sdk import create_sdk_mcp_server, tool
 
+from app import analytics
+from app.analytics import OrchestratorStepSuggestedEvent
 from app.agent.models import AgentTask
 from app.agent.runtime.permissions import ToolPermissionResponse
 from app.agent.tools._context import get_tool_context
@@ -54,6 +56,7 @@ def _error(text: str) -> dict:
     SUGGEST_STEP_SCHEMA,
 )
 async def _suggest_step(args: dict) -> dict:
+    analytics.track_event(OrchestratorStepSuggestedEvent())
     ctx = get_tool_context()
     ticket_id = args.get("ticketId", "")
     step_number = args.get("stepNumber", 0)
