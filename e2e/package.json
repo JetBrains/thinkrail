@@ -10,7 +10,10 @@
     "report": "playwright show-report"
   },
   "devDependencies": {
-    "@playwright/test": "^1.49.0",
+    "@playwright/test": "1.59.1",
     "@types/node": "^22.10.0"
+  },
+  "dependencies": {
+    "playwright": "1.59.1"
   }
 }
