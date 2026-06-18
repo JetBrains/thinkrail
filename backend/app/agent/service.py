@@ -660,12 +660,7 @@ class AgentService:
         if self._tracker.has_task(thinkrail_sid):
             return self._tracker.get_task(thinkrail_sid).parent_thinkrail_sid
         data = load_session(self._config.project_root, thinkrail_sid) or {}
-        return (
-            data.get("parentThinkrailSid")
-            or data.get("parentSessionId")
-            or data.get("parentBonsaiSid")
-            or data.get("parentId")
-        )
+        return data.get("parentThinkrailSid")
 
     async def _broadcast_blocked(self, parent_id: str | None) -> None:
         """Emit session/didUpdate for parent_id so blocked state refreshes live."""
