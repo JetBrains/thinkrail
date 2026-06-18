@@ -17,5 +17,5 @@ test("opens an already-initialized project and shows the AppShell", async ({
 
   await openProject(page, tempProject.path);
 
-  await expect(page.locator(appShell.statusBar)).toBeVisible();
+  await expect(page.locator(appShell.viewSwitcher)).toBeVisible();
 });

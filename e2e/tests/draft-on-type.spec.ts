@@ -5,6 +5,7 @@ import { test, expect } from "../fixtures";
 import { openProject } from "../helpers/project";
 import { seedSessionDefaults } from "../helpers/appSettings";
 import {
+  header,
   leftPanel,
   newSession,
   sessionManager,
@@ -146,7 +147,7 @@ test.describe("Draft-on-type", () => {
       await openBlankDraft(page);
       // Type nothing, then abandon by reloading the page.
       await page.reload();
-      await expect(page.getByText(/\d+ sessions?/)).toBeVisible({ timeout: 30_000 });
+      await expect(page.locator(header.settingsButton)).toBeVisible({ timeout: 30_000 });
 
       // No save RPC ever left the client.
       expect(getSaves().prepare).toBe(0);
@@ -327,7 +328,7 @@ test.describe("Draft-on-type", () => {
     await page.waitForTimeout(AUTOSAVE_SETTLE_MS);
 
     await page.reload();
-    await expect(page.getByText(/\d+ sessions?/)).toBeVisible({ timeout: 30_000 });
+    await expect(page.locator(header.settingsButton)).toBeVisible({ timeout: 30_000 });
 
     // Open the restored draft from the SessionManager. After a page reload the
     // draft is still in the backend tracker (active), so it lists as a card.

@@ -1,11 +1,14 @@
 import { test, expect } from "../fixtures";
 import { openProject } from "../helpers/project";
 import { buildSpec, seedProject } from "../helpers/specs";
-import { fileViewer, specTree } from "../helpers/selectors";
+import { fileViewer, leftPanel, specTree } from "../helpers/selectors";
 
 /**
  * SpecTree smoke: when the project has spec files, the tree lists them and
  * clicking a row loads the FileViewer (markdown preview) for that spec.
+ *
+ * The workspace's left panel defaults to the Sessions tab, so each test
+ * switches to the Specs tab to surface the SpecTree.
  */
 
 test.describe("SpecTree", () => {
@@ -38,6 +41,7 @@ test.describe("SpecTree", () => {
     ]);
 
     await openProject(page, tempProject.path);
+    await page.locator(leftPanel.specsTab).click();
 
     // Tree lists the seeded specs (poll — the index rebuilds asynchronously
     // after the project is opened).
@@ -71,6 +75,7 @@ test.describe("SpecTree", () => {
     seedProject(tempProject.path, []);
 
     await openProject(page, tempProject.path);
+    await page.locator(leftPanel.specsTab).click();
 
     await expect(page.locator(specTree.empty)).toBeVisible({ timeout: 30_000 });
     await expect(page.locator(specTree.empty)).toContainText(/No specifications/);

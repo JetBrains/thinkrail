@@ -45,7 +45,7 @@ test("settings modal Session Defaults tab saves new defaults and they flow into 
   await page.locator(header.settingsButton).click();
   await expect(page.locator(MODAL)).toBeVisible({ timeout: 15_000 });
 
-  for (const label of ["Themes", "Session Defaults", "Server Info", "Settings"]) {
+  for (const label of ["Session Defaults", "Privacy", "Server Info", "Settings"]) {
     await expect(page.locator(`${NAV} button`, { hasText: label })).toBeVisible();
   }
 
@@ -58,7 +58,7 @@ test("settings modal Session Defaults tab saves new defaults and they flow into 
   await expect(sdLabel(page, "Model")).toHaveText("Opus 4.8", { timeout: 15_000 });
   await expect(sdLabel(page, "Permission mode")).toHaveText("default");
 
-  const saveButton = page.locator(`${MODAL} button.token-dialog-btn-primary`);
+  const saveButton = page.locator(`${MODAL} button.np-form-btn-primary`);
   await expect(saveButton).toBeDisabled();
   await expect(saveButton).toHaveAttribute("title", "No changes to save");
 
