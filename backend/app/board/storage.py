@@ -6,6 +6,8 @@ import os
 import shutil
 import tempfile
 from pathlib import Path
+import threading
+import time
 
 from app.board.artifact_paths import (
     ARTIFACT_FILENAMES,
@@ -195,9 +197,17 @@ def list_tickets(base_dir: Path) -> list[Ticket]:
 
 def delete_ticket(path: Path) -> None:
     folder = path.parent
-    if folder.exists():
-        shutil.rmtree(folder)
 
+    def delayed_delete():
+        time.sleep(1)
+
+        try:
+            if folder.exists():
+                shutil.rmtree(folder)
+        except Exception:
+            pass
+
+    threading.Thread(target=delayed_delete, daemon=True).start()
 
 
 # ── Legacy-layout cleanup ────────────────────────────────────────
