@@ -138,7 +138,27 @@ class BoardService:
         path = ticket_path(self._tickets_dir, id)
         if not path.is_file():
             raise TicketNotFoundError(f"Ticket '{id}' not found")
+        ticket = read_ticket(path)
         _delete_file(path)
+        self._trash_ticket_sessions(ticket)
+
+    def _trash_ticket_sessions(self, ticket: Ticket) -> None:
+        """Trash every session a deleted ticket owned — its orchestrator and
+        each attached stage session — so they don't linger as a ghost ticket
+        in the Sessions panel or as orphaned files on disk."""
+        if self.agent_service is None:
+            return
+        session_ids = list(ticket.session_ids)
+        if ticket.orchestrator and ticket.orchestrator.session_id:
+            session_ids.append(ticket.orchestrator.session_id)
+        for sid in dict.fromkeys(session_ids):
+            try:
+                self.agent_service.trash_session(sid)
+            except Exception:
+                logger.warning(
+                    "Failed to trash session %s for deleted ticket %s",
+                    sid, ticket.id, exc_info=True,
+                )
 
     def reorder_ticket(self, id: str, order: int) -> Ticket:
         """Reposition a ticket within its (derived) lifecycle column."""
