@@ -79,6 +79,11 @@ async def update_ticket(service: BoardService, **params: Any) -> dict:
 @_handle_errors
 async def delete_ticket(service: BoardService, **params: Any) -> None:
     service.delete_ticket(params["id"])
+    conn = get_current_conn()
+    if conn is not None:
+        await bus.publish_to_project(
+            conn.project_path, "board/didDelete", {"id": params["id"]},
+        )
 
 
 @_handle_errors
