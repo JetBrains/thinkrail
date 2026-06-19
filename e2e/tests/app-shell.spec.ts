@@ -3,7 +3,7 @@ import { openProject } from "../helpers/project";
 import { appShell } from "../helpers/selectors";
 
 /**
- * AppShell smoke: status bar visible once the project is open.
+ * AppShell smoke: the workspace chrome is up once the project is open.
  */
 
 test.describe("AppShell chrome", () => {
@@ -11,8 +11,7 @@ test.describe("AppShell chrome", () => {
     await openProject(page, tempProject.path);
   });
 
-  test("status bar is visible after the project loads", async ({ page }) => {
-    await expect(page.locator(appShell.statusBar)).toBeVisible();
-    await expect(page.getByText(appShell.statusSessionsLabel)).toBeVisible();
+  test("workspace chrome is visible after the project loads", async ({ page }) => {
+    await expect(page.locator(appShell.viewSwitcher)).toBeVisible();
   });
 });

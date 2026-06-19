@@ -3,7 +3,7 @@ import { join } from "node:path";
 import { test, expect } from "../fixtures";
 import { openProject } from "../helpers/project";
 import { buildSpec, seedProject } from "../helpers/specs";
-import { fileViewer, specTree } from "../helpers/selectors";
+import { fileViewer, leftPanel, specTree } from "../helpers/selectors";
 
 /**
  * Spec editor smoke: edit-in-place flow via the FileViewer.
@@ -35,6 +35,7 @@ test.describe("Spec editor", () => {
     ]);
 
     await openProject(page, tempProject.path);
+    await page.locator(leftPanel.specsTab).click();
 
     // Open the spec.
     const row = page.locator(specTree.row, { hasText: "Storage Module" });
@@ -42,9 +43,8 @@ test.describe("Spec editor", () => {
     await row.click();
     await expect(page.locator(fileViewer.root)).toBeVisible();
 
-    // Switch to Edit mode (dropdown → "Edit in place").
-    await page.locator(fileViewer.editButton).click();
-    await page.locator(fileViewer.editInPlaceItem).click();
+    // Switch to Edit mode via the toolbar's Preview/Edit toggle.
+    await page.locator(fileViewer.editTab).click();
 
     // Wait for Monaco to mount, then click the view surface to focus it.
     // The .ime-text-area is intentionally aria-hidden, so we drive Monaco
@@ -58,12 +58,12 @@ test.describe("Spec editor", () => {
     const newContent = `---\nid: storage-module\ntype: module-design\nstatus: active\ntitle: Storage Module\n---\n\n# Storage Module\n\nUpdated body — ${Date.now()}.\n`;
     await page.keyboard.insertText(newContent);
 
-    // Save. The button is enabled while the doc is dirty and disables once
-    // the write completes (isDirty → false), giving us a clean wait point.
+    // Save appears once the doc is dirty (mode=edit & isDirty) and unmounts
+    // after the write completes (isDirty → false), giving us a clean wait point.
     const saveBtn = page.locator(fileViewer.saveButton);
-    await expect(saveBtn).toBeEnabled();
+    await expect(saveBtn).toBeVisible({ timeout: 15_000 });
     await saveBtn.click();
-    await expect(saveBtn).toBeDisabled();
+    await expect(saveBtn).toHaveCount(0, { timeout: 15_000 });
 
     // Disk content matches (asserts REST write actually persisted).
     const disk = readFileSync(join(tempProject.path, relPath), "utf8");
@@ -83,6 +83,7 @@ test.describe("Spec editor", () => {
     ]);
 
     await openProject(page, tempProject.path);
+    await page.locator(leftPanel.specsTab).click();
 
     // The "Unmanaged Documents" header appears in the SpecTree because the
     // index rejected the frontmatter. Expand it and assert the file shows up.

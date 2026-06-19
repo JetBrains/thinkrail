@@ -5,31 +5,33 @@ import { startSessionWithModel, waitForSessionActivity } from "../helpers/sessio
 import { newSession, sessionPanel } from "../helpers/selectors";
 
 /**
- * Subsession blocking (session-model unification, Phase 2).
+ * Subsession nesting + the parent "active child" tab marker.
  *
- * A subsession is a session with a `parent_id` that blocks its parent while
- * it is in flight. `blocked` is **backend-derived** (any child status not in
- * {draft, finished}) and served on the session payload; the SessionTabBar
- * shows it as a `⏸` prefix + dimmed parent tab. This drives the real flow —
- * branch a subsession via `/discuss`, start it, end it — and asserts only on
- * the status-driven `⏸` indicator (not on agent output), so it stays stable.
+ * A subsession is a session with a `parent_id`. The SessionTabBar nests it
+ * under its parent with a `↳` prefix and marks the parent tab with `⏸` while
+ * it has any non-terminal child — the marker is client-derived (a child whose
+ * status isn't done/error, drafts included) and clears once the child ends.
+ * (The new UI dropped the older parent-input-blocking; this `⏸` marker is the
+ * remaining signal.) This drives the real flow — branch a subsession via
+ * `/discuss`, start it, end it — asserting on the status-driven `⏸` marker so
+ * it stays stable regardless of agent output.
  */
 
-const PAUSE = "⏸"; // ⏸ — SessionTabBar's blocked-parent marker
+const PAUSE = "⏸"; // ⏸ — SessionTabBar's "parent has a non-terminal child" marker
 const ARROW = "↳"; // ↳ — subsession nesting prefix
 
-const blockedTabs = (page: Page) =>
+const markedParentTabs = (page: Page) =>
   page.locator(".session-tab-name").filter({ hasText: PAUSE });
 const subsessionTabs = (page: Page) =>
   page.locator(".session-tab-name").filter({ hasText: ARROW });
 // The subsession tab (↳) and the parent tab (its name derives from the parent
-// prompt below); used to switch tabs to inspect each session's input state.
+// prompt below); used to switch between the two sessions.
 const subsessionTab = (page: Page) =>
   page.locator(".session-tab").filter({ hasText: ARROW });
 const parentTab = (page: Page) =>
   page.locator(".session-tab").filter({ hasText: /Reply with/i });
 
-test("a running subsession blocks its parent; ending it unblocks", async ({
+test("a non-terminal subsession marks its parent tab until it ends", async ({
   page,
   tempProject,
 }) => {
@@ -52,8 +54,8 @@ test("a running subsession blocks its parent; ending it unblocks", async ({
     timeout: 90_000,
   });
 
-  // No child yet → parent is not blocked.
-  await expect(blockedTabs(page)).toHaveCount(0);
+  // No child yet → the parent carries no marker.
+  await expect(markedParentTabs(page)).toHaveCount(0);
 
   // Branch a subsession off the parent via the /discuss slash command.
   await page
@@ -61,29 +63,22 @@ test("a running subsession blocks its parent; ending it unblocks", async ({
     .fill("/discuss tradeoffs of JWT vs server-side sessions");
   await page.locator(sessionPanel.inputSend).click();
 
-  // The subsession opens as a draft, nested under the parent (↳), and a draft
-  // child does NOT block the parent yet.
+  // The subsession opens as a draft, nested under the parent (↳). A
+  // non-terminal child — even a draft — marks the parent tab with ⏸.
   const startBtn = page.getByRole(newSession.startButton.role, {
     name: newSession.startButton.name,
   });
   await expect(startBtn).toBeVisible({ timeout: 15_000 });
   await expect(subsessionTabs(page)).toHaveCount(1);
-  await expect(blockedTabs(page)).toHaveCount(0);
+  await expect(markedParentTabs(page)).toHaveCount(1, { timeout: 15_000 });
 
-  // Start the subsession → its runner goes live → the parent becomes blocked.
+  // Start the subsession → its runner goes live; the parent stays marked.
   await startBtn.click();
-  await expect(blockedTabs(page)).toHaveCount(1, { timeout: 45_000 });
+  await expect(markedParentTabs(page)).toHaveCount(1, { timeout: 45_000 });
 
-  // A blocked parent refuses input: its textarea is disabled and shows the
-  // paused hint (enforced both in the UI and the backend).
-  await parentTab(page).click();
-  const parentInput = page.locator(sessionPanel.inputTextarea);
-  await expect(parentInput).toBeDisabled();
-  await expect(parentInput).toHaveAttribute("placeholder", /Paused/i);
-
-  // Back to the subsession. Interrupt it to idle first (the discuss agent keeps
-  // asking its own questions, so ending mid-turn races a fresh question and the
-  // end signal never drains). From idle there is no live turn to re-ask.
+  // Interrupt the subsession to idle first (the discuss agent keeps asking its
+  // own questions, so ending mid-turn races a fresh question and the end signal
+  // never drains). From idle there is no live turn to re-ask.
   await subsessionTab(page).click();
   const stopBtn = page.getByRole("button", { name: /^Stop$/ });
   await expect(stopBtn).toBeVisible({ timeout: 45_000 });
@@ -92,15 +87,15 @@ test("a running subsession blocks its parent; ending it unblocks", async ({
     timeout: 45_000,
   });
 
-  // End the subsession from idle → finished → parent unblocks.
+  // End the subsession from idle → finished → the parent's marker clears.
   await page.locator(sessionPanel.statusButton).click();
   await page
     .locator(sessionPanel.statusDropdownItem)
     .filter({ hasText: /End session/i })
     .click();
-  await expect(blockedTabs(page)).toHaveCount(0, { timeout: 45_000 });
+  await expect(markedParentTabs(page)).toHaveCount(0, { timeout: 45_000 });
 
-  // The parent is usable again — input re-enabled.
+  // The parent tab survives the subsession's lifecycle and stays selectable.
   await parentTab(page).click();
-  await expect(page.locator(sessionPanel.inputTextarea)).toBeEnabled();
+  await expect(parentTab(page)).toHaveCount(1);
 });
