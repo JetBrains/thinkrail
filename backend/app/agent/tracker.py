@@ -15,13 +15,13 @@ _END_SIGNAL = object()
 END_SIGNAL = _END_SIGNAL  # public alias
 
 _VALID_TRANSITIONS: dict[TaskStatus, set[TaskStatus]] = {
-    "draft": {"initializing", "done", "error"},
-    "initializing": {"idle", "done", "error"},
-    "idle": {"running", "done", "error"},
-    "running": {"idle", "waiting", "done", "error"},
-    "waiting": {"running", "idle", "done", "error"},
-    "done": set(),
-    "error": set(),
+    TaskStatus.DRAFT: {TaskStatus.INITIALIZING, TaskStatus.DONE, TaskStatus.ERROR},
+    TaskStatus.INITIALIZING: {TaskStatus.IDLE, TaskStatus.DONE, TaskStatus.ERROR},
+    TaskStatus.IDLE: {TaskStatus.RUNNING, TaskStatus.DONE, TaskStatus.ERROR},
+    TaskStatus.RUNNING: {TaskStatus.IDLE, TaskStatus.WAITING, TaskStatus.DONE, TaskStatus.ERROR},
+    TaskStatus.WAITING: {TaskStatus.RUNNING, TaskStatus.IDLE, TaskStatus.DONE, TaskStatus.ERROR},
+    TaskStatus.DONE: set(),
+    TaskStatus.ERROR: set(),
 }
 
 

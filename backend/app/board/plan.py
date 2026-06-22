@@ -9,8 +9,8 @@ from __future__ import annotations
 
 import re
 from datetime import date
+from enum import StrEnum
 from pathlib import Path
-from typing import Literal
 
 from pydantic import BaseModel, Field
 
@@ -21,6 +21,20 @@ from app.core.fileio import ensure_dir, read_text, write_text
 
 
 # -- Models -------------------------------------------------------------------
+
+class StepStatus(StrEnum):
+    PENDING = "pending"
+    EXECUTING = "executing"
+    DONE = "done"
+    FAILED = "failed"
+
+
+class PlanStatus(StrEnum):
+    DRAFT = "draft"
+    READY = "ready"
+    EXECUTING = "executing"
+    DONE = "done"
+
 
 class SuccessCriterion(BaseModel):
     model_config = _CAMEL_CONFIG
@@ -34,7 +48,7 @@ class PlanStep(BaseModel):
 
     number: int
     title: str
-    status: Literal["pending", "executing", "done", "failed"] = "pending"
+    status: StepStatus = StepStatus.PENDING
     skill: str = "default"
     milestone_number: int = 1
     depends_on: list[int] = Field(default_factory=list)
@@ -62,9 +76,9 @@ class Milestone(BaseModel):
         """Computed from step statuses."""
         if not self.steps:
             return "pending"
-        if any(s.status == "executing" for s in self.steps):
+        if any(s.status == StepStatus.EXECUTING for s in self.steps):
             return "executing"
-        if all(s.status in ("done", "failed") for s in self.steps):
+        if all(s.status in (StepStatus.DONE, StepStatus.FAILED) for s in self.steps):
             return "done"
         return "pending"
 
@@ -74,7 +88,7 @@ class Plan(BaseModel):
 
     ticket_id: str
     title: str
-    status: Literal["draft", "ready", "executing", "done"] = "draft"
+    status: PlanStatus = PlanStatus.DRAFT
     milestones: list[Milestone] = Field(default_factory=list)
     verification: list[SuccessCriterion] = Field(default_factory=list)
 
@@ -100,13 +114,13 @@ class Plan(BaseModel):
         by_number = {s.number: s for s in steps}
         unblocked: list[PlanStep] = []
         for step in steps:
-            if step.status != "pending":
+            if step.status != StepStatus.PENDING:
                 continue
             deps = step.depends_on or [
                 s.number for s in steps if s.number < step.number
             ]
             if all(
-                by_number.get(n) is not None and by_number[n].status == "done"
+                by_number.get(n) is not None and by_number[n].status == StepStatus.DONE
                 for n in deps
             ):
                 unblocked.append(step)
@@ -381,22 +395,22 @@ class PlanService:
 
     def update_step_status(
         self, ticket_id: str, step_number: int,
-        status: str, session_id: str | None = None,
+        status: StepStatus, session_id: str | None = None,
     ) -> Plan:
         """Update a step's status and optionally its session ID."""
         plan = self.read_plan(ticket_id)
         for step in plan.all_steps():
             if step.number == step_number:
-                step.status = status  # type: ignore[assignment]
+                step.status = status
                 if session_id is not None:
                     step.session_id = session_id
                 break
         # Auto-update plan status
         all_steps = plan.all_steps()
-        if any(s.status == "executing" for s in all_steps):
-            plan.status = "executing"
-        if all(s.status in ("done", "failed") for s in all_steps) and all_steps:
-            plan.status = "done"
+        if any(s.status == StepStatus.EXECUTING for s in all_steps):
+            plan.status = PlanStatus.EXECUTING
+        if all(s.status in (StepStatus.DONE, StepStatus.FAILED) for s in all_steps) and all_steps:
+            plan.status = PlanStatus.DONE
         self.write_plan(ticket_id, plan)
         return plan
 
@@ -434,9 +448,9 @@ class PlanService:
         """Find the next unblocked pending step, respecting milestone order."""
         plan = self.read_plan(ticket_id)
         all_steps = plan.all_steps()
-        done_steps = {s.number for s in all_steps if s.status == "done"}
+        done_steps = {s.number for s in all_steps if s.status == StepStatus.DONE}
         for step in all_steps:
-            if step.status != "pending":
+            if step.status != StepStatus.PENDING:
                 continue
             # Check dependencies
             if all(d in done_steps for d in step.depends_on):

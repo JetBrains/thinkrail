@@ -1,11 +1,11 @@
 /**
- * Helpers for seeding meta-tickets, plans, and spec drafts directly to the
- * temp project's `.tr/` directory so board specs don't need an LLM call
+ * Helpers for seeding meta-tickets, plans, spec drafts, and sessions directly
+ * to the temp project's `.tr/` directory so board specs don't need an LLM call
  * to put the system into a non-trivial state.
  *
  * The shapes mirror what the Python backend writes — we keep them in sync
- * with `backend/app/board/models.py`, `backend/app/board/plan.py`, and
- * `backend/app/board/spec_drafts.py`.
+ * with `backend/app/board/models.py`, `backend/app/board/plan.py`,
+ * `backend/app/board/spec_drafts.py`, and `backend/app/agent/persistence.py`.
  */
 
 import { mkdirSync, writeFileSync } from "node:fs";
@@ -27,6 +27,9 @@ export interface SeedTicketOpts {
   order?: number;
   linkedSpecIds?: string[];
   sessionIds?: string[];
+  /** Orchestrator session id (legacy `orchestratorSessionId` field — the
+   *  backend migrates it to `orchestrator.session_id` on load). */
+  orchestratorSessionId?: string | null;
   planPath?: string | null;
 }
 
@@ -54,7 +57,7 @@ export function seedTicket(projectPath: string, opts: SeedTicketOpts): string {
     status: opts.status ?? "idea",
     type: opts.type ?? "feature",
     planPath: opts.planPath ?? null,
-    orchestratorSessionId: null,
+    orchestratorSessionId: opts.orchestratorSessionId ?? null,
     linkedSpecIds: opts.linkedSpecIds ?? [],
     sessionIds: opts.sessionIds ?? [],
     specPatches: [],
@@ -66,6 +69,40 @@ export function seedTicket(projectPath: string, opts: SeedTicketOpts): string {
   mkdirSync(dir, { recursive: true });
   writeFileSync(join(dir, "ticket.json"), JSON.stringify(ticket, null, 2) + "\n", "utf8");
   return id;
+}
+
+export interface SeedSessionOpts {
+  id: string;
+  name?: string;
+  ticketId?: string | null;
+  status?: "done" | "error" | "idle" | "running" | "draft";
+  model?: string;
+  skillId?: string | null;
+}
+
+/**
+ * Write a session to `.tr/sessions/{id}.json` (+ an empty `.events.jsonl`),
+ * matching the metadata shape `app/agent/persistence.py` reads. Returns the id.
+ */
+export function seedSession(projectPath: string, opts: SeedSessionOpts): string {
+  const sid = opts.id;
+  const meta = {
+    thinkrailSid: sid,
+    name: opts.name ?? sid,
+    skillId: opts.skillId ?? null,
+    specIds: [],
+    status: opts.status ?? "done",
+    config: { model: opts.model ?? "claude-sonnet-4-6" },
+    ticketId: opts.ticketId ?? null,
+    createdAt: nowIso(),
+    updatedAt: nowIso(),
+    metrics: {},
+  };
+  const dir = join(projectPath, ".tr", "sessions");
+  mkdirSync(dir, { recursive: true });
+  writeFileSync(join(dir, `${sid}.json`), JSON.stringify(meta, null, 2) + "\n", "utf8");
+  writeFileSync(join(dir, `${sid}.events.jsonl`), "", "utf8");
+  return sid;
 }
 
 export interface SeedPlanStep {

@@ -35,7 +35,7 @@ from claude_agent_sdk import (
 )
 from claude_agent_sdk.types import StreamEvent
 
-from app.agent.models import AgentResult, AgentTask, to_camel
+from app.agent.models import AgentResult, AgentTask, TaskStatus, to_camel
 from app.agent.permissions import claude_can_use_tool_adapter
 from app.agent.pricing import TokenUsage, cost
 from app.agent.subagents import TICKET_STEP_EXECUTOR
@@ -56,6 +56,7 @@ from app.agent.runtime.claude.adapter import (
     build_tool_call_end_params,
     build_tool_call_start_params,
 )
+from app.agent.runtime.claude.change_log_hook import ChangeLogHook
 from app.agent.runtime.claude.hooks import SubagentHooks
 from app.agent.runtime.claude.models import ClaudeModelRegistry
 from app.agent.runtime.claude.skills import ClaudeSkillRegistry
@@ -251,6 +252,7 @@ class ClaudeRuntime:
         # The runtime updates ``hooks.session_id`` after SDK init and
         # ``hooks.iterations`` at the start of each turn.
         hooks = SubagentHooks(task, handler)
+        change_hook = ChangeLogHook(task, config)
 
         plugins = []
         if plugin_dir and Path(plugin_dir).is_dir():
@@ -312,6 +314,7 @@ class ClaudeRuntime:
                 "SubagentStart": [HookMatcher(hooks=[hooks.start_hook])],
                 "SubagentStop": [HookMatcher(hooks=[hooks.stop_hook])],
                 "PreCompact": [HookMatcher(hooks=[hooks.pre_compact_hook])],
+                "PostToolUse": [HookMatcher(hooks=[change_hook.post_tool_use])],
             },
             **({"agents": agents} if agents else {}),
             **({"env": env_overrides} if env_overrides else {}),
@@ -329,7 +332,7 @@ class ClaudeRuntime:
             sdk_init_ms = int((time.monotonic() - t0) * 1000)
             logger.info("[%s] SDK client ready in %dms", task.thinkrail_sid[:8], sdk_init_ms)
             tracker.set_client(task.thinkrail_sid, client)
-            tracker.set_status(task.thinkrail_sid, "idle")
+            tracker.set_status(task.thinkrail_sid, TaskStatus.IDLE)
             await handler.on_event(RuntimeEvent(method="agent/ready", params={
                 "thinkrailSid": task.thinkrail_sid,
             }))
@@ -344,7 +347,7 @@ class ClaudeRuntime:
                     if message is END_SIGNAL:
                         break
 
-                    tracker.set_status(task.thinkrail_sid, "running")
+                    tracker.set_status(task.thinkrail_sid, TaskStatus.RUNNING)
                     await handler.on_event(RuntimeEvent(method="agent/statusChanged", params={
                         "thinkrailSid": task.thinkrail_sid,
                         "status": "running",
@@ -645,7 +648,7 @@ class ClaudeRuntime:
                                     **_turn_event,
                                     "result": sdk_event.result or "",
                                 }))
-                            tracker.set_status(task.thinkrail_sid, "idle")
+                            tracker.set_status(task.thinkrail_sid, TaskStatus.IDLE)
                             await handler.on_event(RuntimeEvent(method="agent/statusChanged", params={
                                 "thinkrailSid": task.thinkrail_sid,
                                 "status": "idle",

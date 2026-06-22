@@ -160,8 +160,19 @@ packaging/            # PyInstaller spec + entry point (thinkrail.spec, entry.py
 .tr/                        # Per-project config (committed to git)
 ~/.tr/indexes/<hash>/
   index.db            # SQLite spec index (generated, outside repo)
-.github/workflows/    # CI: tests.yml, nightly.yml, stable.yml, _build.yml, _release.yml
+.github/workflows/    # CI: tests.yml, nightly.yml, stable.yml, _build.yml, _release.yml, mirror-wiki.yml
+wiki/                 # GitHub Wiki source (docs-as-code) — see "Wiki"
+  <Page-Name>.md      # one file per wiki page (wiki-native names, bare wiki links)
+  assets/<Page-Stem>/ # screenshots per page (folder name = page filename stem)
 ```
+
+## Wiki
+
+The project's GitHub Wiki is maintained in-repo under `wiki/` (source of truth) and mirrored **one-way** to the GitHub Wiki tab on push to `main` (`.github/workflows/mirror-wiki.yml`, via `rsync --delete`).
+
+- **Edit `wiki/` in a PR — never the GitHub Wiki tab.** Direct edits there are overwritten on the next mirror.
+- **Pages** keep wiki-native filenames and bare wiki-style links (`[Working with Tickets](Working-with-Tickets)`, no `.md`) so the mirror round-trips.
+- **Screenshots/assets** go in `wiki/assets/<Page-Stem>/`, where the folder name is the page's filename without `.md` (e.g. `Working-with-Tickets.md` → `wiki/assets/Working-with-Tickets/`). Reference them with relative paths.
 
 ## Active Tasks
 See `.tr/` for specs. All initial implementation tasks are complete.

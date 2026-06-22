@@ -28,7 +28,11 @@ export async function startSessionWithModel(
 
   const textarea = page.getByPlaceholder(newSession.promptInputPlaceholder);
   await textarea.fill(prompt);
-  await page.locator("button.input-send").click();
+  // Submit the draft via the keyboard chord — the Start/Send affordance is a
+  // portaled generic <Button> now, so the documented Mod+Enter path is the
+  // stable submit. `isMod` reads ctrlKey on Mac, altKey elsewhere.
+  const isMac = await page.evaluate(() => /Mac|iPhone|iPad|iPod/.test(navigator.userAgent));
+  await textarea.press(`${isMac ? "Control" : "Alt"}+Enter`);
 }
 
 /**

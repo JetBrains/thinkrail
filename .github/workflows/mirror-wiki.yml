@@ -1,0 +1,54 @@
+name: Mirror Wiki
+
+on:
+  push:
+    branches: [main]
+    paths: ["wiki/**"]
+
+permissions:
+  contents: write
+
+concurrency:
+  group: mirror-wiki
+  cancel-in-progress: false
+
+jobs:
+  mirror:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Clone wiki repo
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          git clone "https://x-access-token:${GH_TOKEN}@github.com/${{ github.repository }}.wiki.git" .wiki
+
+      - name: Sync wiki/ into the wiki working tree
+        run: |
+          set -euo pipefail
+          rsync -a --delete --exclude='.git' wiki/ .wiki/
+          cd .wiki
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add -A
+          {
+            echo "### Wiki changes"
+            echo '```'
+            git status --short || true
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Push to wiki
+        working-directory: .wiki
+        run: |
+          set -euo pipefail
+          if git diff --cached --quiet; then
+            echo "No changes to mirror."
+            exit 0
+          fi
+          git commit -m "Mirror wiki from ${{ github.sha }}"
+          git push
+          echo "✅ Wiki updated."

@@ -14,13 +14,13 @@ argument-hint: "[ticket-context]"
 
 # Ticket: Amend specs (technical-design → amend-specs)
 
-You are amending the project's `{{TR_DIR}}/design_docs/*.md` files interactively, one file at a time, one section at a time, to reflect what the ticket's `technical-design.md` says. Each amendment is approved by the user via an inline diff card with four buttons; on accept the change is applied immediately and appended (as a unified-diff hunk plus metadata header) to `{{TR_DIR}}/tickets/{id}/history.patch` — a per-ticket session log of what was changed.
+You are amending the project's `{{TR_DIR}}/design_docs/*.md` files interactively, one file at a time, one section at a time, to reflect what the ticket's `technical-design.md` says. Each amendment is a standard `Edit`; in `default` mode the user approves it via the edit prompt (auto-applied in `acceptEdits`/yolo); every applied edit is appended (as a unified-diff hunk plus metadata header) to `{{TR_DIR}}/tickets/{id}/history.patch` automatically.
 
 ## Quick reference
 
 | Tool | Use for |
 |---|---|
-| `ProposeChange` | Every amendment to `{{TR_DIR}}/design_docs/*.md` |
+| `Edit` | Every amendment to `{{TR_DIR}}/design_docs/*.md` |
 | `SetPreviewFile` / `ClearPreviewFile` | Show the file under edit beside the chat |
 | `LabelArtifact` | Annotate amended specs in the right-panel chip strip (optional) |
 | `spec_search` | Discover which specs are relevant |
@@ -60,12 +60,11 @@ You are amending the project's `{{TR_DIR}}/design_docs/*.md` files interactively
    b. `Read` the file. Identify the sections that need amending against `technical-design.md`.
 
    c. **For each section/paragraph that needs to change:**
-      - Call `ProposeChange({ file_path, old_string, new_string, section, rationale })`.
-      - On `applied: 'original' | 'edited'`: move on. If `validation: 'warnings'`, note them and consider a follow-up fix.
-      - On `discuss: true`: revise the proposal based on `feedback` and re-propose. Do not re-propose the identical change.
-      - On `discuss: false`: user rejected; move on or ask via `AskUserQuestion` what to do.
+      - Call `Edit({ file_path, old_string, new_string })` per section/paragraph.
+      - In `default` mode the user approves or denies the diff; if denied, the tool result carries the reason — revise and re-edit (don't re-issue the identical edit).
+      - If validation warnings surface, note them and consider a follow-up fix.
 
-   d. **Intra-file self-review.** After the last section of this file, `Read` the (now-amended) file. Check for: internal contradictions, broken cross-section references, missing context the new sections assume. Propose fixes via more `ProposeChange` calls. Otherwise note "self-review: clean" in the chat for transparency.
+   d. **Intra-file self-review.** After the last section of this file, `Read` the (now-amended) file. Check for: internal contradictions, broken cross-section references, missing context the new sections assume. Fix via more `Edit` calls. Otherwise note "self-review: clean" in the chat for transparency.
 
 6. **Cross-file self-review** *(task #5)* — runtime check that surfaces findings in chat, no spec gets a "Self-review" section.
    1. Once all files in the plan are done, `Read` them together (plus `technical-design.md`). Check for:
@@ -75,7 +74,7 @@ You are amending the project's `{{TR_DIR}}/design_docs/*.md` files interactively
       - Concerns raised in TD that no spec file picked up.
    2. Report findings in chat as a short list (one bullet per issue). If clean, say "Cross-file self-review: clean."
    3. Ask via `AskUserQuestion`: "Cross-file self-review found N issues. How do you want to proceed?" Options:
-      - *Address now* — emit `ProposeChange` calls fixing each issue, then mark task #5 `completed` and continue.
+      - *Address now* — fix each issue via `Edit` calls, then mark task #5 `completed` and continue.
       - *Accept and proceed* — mark task #5 `completed` without changes.
       - *Cancel transition* — keep ticket on amend-specs for further manual work.
    - Same rule for the intra-file checks in task #4: surface findings in chat, not in the spec file.
@@ -92,24 +91,21 @@ You are amending the project's `{{TR_DIR}}/design_docs/*.md` files interactively
 
 ## Red flags — STOP
 
-- About to call `Write` or `Edit` on a file under `{{TR_DIR}}/design_docs/`? STOP. Use `ProposeChange`. Reason: bypasses the approval gate, the `.patch` log, validation, and auto-link.
 - About to `git commit` during the step? STOP. The backend commits when this stage finalizes. A skill-side commit double-commits.
 - Skipping the amendment-plan approval (jumping straight into edits)? STOP. The plan is where the user shapes scope; skipping it forfeits their veto on which files get touched.
-- `ProposeChange` returned `discuss: true`? Treat it like Reject — the user's feedback is the next instruction. Don't re-propose the identical change.
-- One `ProposeChange` call covering multiple unrelated edits? STOP. Per-call should be small and focused. Split into multiple calls.
+- Edit was denied? Treat the returned reason as the next instruction; don't re-issue the identical edit.
+- One `Edit`/`MultiEdit` covering multiple unrelated changes? Keep edits small and focused.
 - Drafting amendments without first marking the current task `in_progress` via `TodoWrite`? STOP. The Tasks (n/m) sub-row stalls — users can't see what you're working on.
 - About to call `TodoWrite` only once (at the start)? STOP. You must re-emit after each task to update statuses; the frontend reads the latest snapshot per session.
 
 ## Output format
 
-Each successful `ProposeChange` writes one hunk + metadata header to `{{TR_DIR}}/tickets/{id}/history.patch`:
+After each applied `Edit`, the backend appends one hunk + metadata header to `{{TR_DIR}}/tickets/{id}/history.patch`:
 
 ```
 # == amendment N =================================
 # spec_id:    spec_abc12
-# section:    Components
-# rationale:  Add baz handling per technical-design.md
-# applied_as: original          (or 'edited' if the user revised)
+# applied_as: original
 # validation: ok                (or 'warnings' if frontmatter/links flagged)
 # timestamp:  2026-05-22T15:30:00Z
 

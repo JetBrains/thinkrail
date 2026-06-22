@@ -18,7 +18,7 @@ You are running the first step of the brainstorm-aligned ticket flow. This step 
 | `Write` | Initial skeleton (one call at the start) |
 | `SetPreviewFile` / `ClearPreviewFile` | Show the artifact-in-progress beside the chat |
 | `LabelArtifact` | Annotate the artifact for the right-panel chip strip (optional) |
-| `ProposeChange` | Fill each section with user approval (4-button card) |
+| `Edit` | Fill each section (standard edit approval) |
 | `SuggestDescription` | Update the ticket body blurb (unchanged) |
 | `AskUserQuestion` | Clarifying questions and branching choices — never section content |
 | `SessionFinalize` | Finalize the stage after the user confirms — hands control back to the orchestrator, which verifies the artifact and advances the pipeline |
@@ -50,20 +50,17 @@ You are running the first step of the brainstorm-aligned ticket flow. This step 
 4. **Create product design document**:
    1. **Write the skeleton** *(task #4)* to `{{TR_DIR}}/tickets/{id}/product-design.md` via `Write`: see template below. Note, it is just a default template that ought to be adjusted to user's case and intent.
    2. **Open the preview** — `SetPreviewFile({ path: "{{TR_DIR}}/tickets/{id}/product-design.md" })`. The right Context Panel switches to the Preview tab. Optional: also call `LabelArtifact({ path: "{{TR_DIR}}/tickets/{id}/product-design.md", role: "product_design", label: "Product design" })` so the chip strip shows "Product design" instead of the raw filename.
-   3. **For each section in order** (Goal *(task #5)*, User stories *(task #6)*, User requirements *(task #7)*, Product value *(task #8)*, Success criteria *(task #9)*, Validation criteria *(task #10)*), mark the section's task `in_progress` via `TodoWrite`, then call `ProposeChange`:
+   3. **For each section in order** (Goal *(task #5)*, User stories *(task #6)*, User requirements *(task #7)*, Product value *(task #8)*, Success criteria *(task #9)*, Validation criteria *(task #10)*), mark the section's task `in_progress` via `TodoWrite`, then call `Edit({ file_path, old_string, new_string })`:
       ```json
       {
       "file_path": "{{TR_DIR}}/tickets/{id}/product-design.md",
       "old_string": "## <Section>\n\n<!-- pending -->",
-      "new_string": "## <Section>\n\n<content>",
-      "section": "<Section>",
-      "rationale": "..."
+      "new_string": "## <Section>\n\n<content>"
       }
       ```
-      After the user resolves the card, mark the section's task `completed` via `TodoWrite` and advance to the next section.
-   - On `applied: 'original' | 'edited'`: mark task `completed`, move on. The Preview tab updates automatically.
-   - On `discuss: true`: keep task `in_progress`. Revise the proposal per `feedback` and re-propose. Don't re-propose the identical text.
-   - On `discuss: false` (reject): mark task `completed` (the user explicitly chose to skip). Leave the `<!-- pending -->` marker in place — the Self-review step will surface it.
+      After the user approves or denies the edit:
+   - On approval: the edit applies (auto-logged by the backend); mark the section's task `completed` via `TodoWrite` and advance.
+   - On deny: the tool result carries the user's reason. If it's actionable feedback, revise per the feedback and re-edit (keep the task `in_progress`). If the user indicates the section should be skipped/left as-is, mark the task `completed` and move on — leave the `<!-- pending -->` marker in place for the Self-review step to surface.
 5. **Self-review** *(task #11)* — runtime check that surfaces findings in chat, not a doc section.
    1. `Read` the in-progress `product-design.md`. Cross-check for:
       - Placeholders (`<!-- pending -->`, `TODO`, `TBD`).
@@ -72,7 +69,7 @@ You are running the first step of the brainstorm-aligned ticket flow. This step 
       - Missing pieces — purpose stated but stories absent, value claimed but no success criteria, etc.
    2. Report findings in chat as a short list (one bullet per issue). If there are none, say "Self-review: clean."
    3. Ask via `AskUserQuestion`: "Self-review found N issues. How do you want to proceed?" Options:
-      - *Address now* — emit `ProposeChange` calls fixing each issue, then mark task #11 `completed` and continue.
+      - *Address now* — fix each issue via `Edit` calls, then mark task #11 `completed` and continue.
       - *Accept and proceed* — mark task #11 `completed` without changes; issues become known limitations.
       - *Cancel transition* — leave the ticket where it is for manual work.
    - Do NOT write a "Self-review" section into the document.
@@ -130,15 +127,14 @@ kind: product_design
 - Skip the "propose 3-5 approaches" sub-step — describing is not multi-alternative.
 - This is the **product** phase. Don't get technical (no architecture, no implementation choices). That comes in `ticket-technical-design`.
 - The ticket body blurb is for the kanban card; the file is the full doc.
-- Skeleton is written first via `Write`; every section after that goes through `ProposeChange` — this is the user's section-approval surface.
+- Skeleton is written first via `Write`; every section after that is filled with `Edit` — the standard edit approval prompt is the section-approval surface.
 - Save the artifact under `{{TR_DIR}}/tickets/{id}/`; `Write` creates parent directories.
 
 ## Red flags — STOP
 
-- About to call `Edit` on `product-design.md` to fill a section? STOP. Use `ProposeChange` so the user can inline-edit, discuss, or reject before the write lands.
-- About to use `AskUserQuestion` to approve a section's *content*? STOP. The 4-button `ProposeChange` card is the section-approval surface now. `AskUserQuestion` is for clarifying questions and branching choices.
-- About to fill multiple sections in one `ProposeChange` call? STOP. Per-call should cover one section. The `section` field labels the card; bundling makes the card ambiguous.
+- About to use `AskUserQuestion` to approve a section's *content*? STOP. The standard edit approval prompt is the section-approval surface. `AskUserQuestion` is for clarifying questions and branching choices.
+- About to fill multiple sections in one `Edit` call? STOP. Per-call should cover one section; bundling makes the diff ambiguous.
 - About to commit during the skill? STOP. These drafting skills do not commit at all. Commits happen later — only when the amend-specs stage completes, where the board service commits the accumulated spec changes + the patch log.
-- `<!-- pending -->` marker still in the file when you're about to finalize? STOP. That section is unfilled. Either fill it or remove the marker explicitly via `ProposeChange`.
+- `<!-- pending -->` marker still in the file when you're about to finalize? STOP. That section is unfilled. Either fill it or remove the marker explicitly via `Edit`.
 - Drafting a section without first marking its task `in_progress` via `TodoWrite`? STOP. The Tasks (n/m) sub-row stalls — users can't see what you're working on.
 - About to call `TodoWrite` only once (at the start)? STOP. You must re-emit after each task to update statuses; the frontend reads the latest snapshot per session.

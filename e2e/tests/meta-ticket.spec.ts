@@ -1,5 +1,3 @@
-import { readFileSync } from "node:fs";
-import { join } from "node:path";
 import { test, expect } from "../fixtures";
 import { openProject } from "../helpers/project";
 import { seedTicket } from "../helpers/board";
@@ -7,18 +5,22 @@ import { buildSpec, seedProject } from "../helpers/specs";
 import { boardView, ticketDetail } from "../helpers/selectors";
 
 /**
- * MetaTicketDetail smoke: open a seeded ticket, edit description, link a spec,
- * verify TicketProgressBar reflects ticket status. Sessions are exercised by
- * the session-* specs — here we only assert the sidebar count for a seeded
- * sessionId so we don't need an LLM call.
+ * MetaTicketDetail smoke (new ticket route). Open a seeded ticket from the
+ * board and confirm the detail panel renders its title, linked-spec count,
+ * read-only description, and section chrome — then "Go to ticket" enters the
+ * full route.
+ *
+ * The redesigned ticket UI made the body read-only (no inline editor) and
+ * replaced the phase/progress bar with a stage-derived lifecycle + StageGraph,
+ * so this asserts what the route now exposes rather than driving an edit.
  */
 
 test.describe("MetaTicketDetail", () => {
-  test("renders ticket, edits description, reflects state in progress bar", async ({
+  test("renders a seeded ticket preview and enters the full route", async ({
     page,
     tempProject,
   }) => {
-    // Seed a spec so the linked-specs list shows a real entry.
+    // Seed a spec so the linked-specs count shows a real entry.
     seedProject(tempProject.path, [
       {
         relPath: "specs/example-spec.md",
@@ -31,7 +33,7 @@ test.describe("MetaTicketDetail", () => {
       },
     ]);
 
-    const ticketId = seedTicket(tempProject.path, {
+    seedTicket(tempProject.path, {
       title: "Implement widget",
       body: "Initial body.",
       status: "technical-design",
@@ -43,70 +45,36 @@ test.describe("MetaTicketDetail", () => {
     await openProject(page, tempProject.path);
 
     // Tab selection is persisted to localStorage, so previous tests can leave
-    // uiStore on either Sessions or Board. Force Board explicitly.
+    // uiStore on either view. Force Board explicitly.
     await page.getByRole("tab", { name: "Board" }).click();
 
     const card = page.locator(boardView.ticketCard, { hasText: "Implement widget" });
     await expect(card).toBeVisible({ timeout: 15_000 });
-    await card.click();
 
+    // Board single-click opens the read-only preview (BoardTicketPreview →
+    // TicketInfo); the board stays in the center.
+    await card.click();
     await expect(page.locator(ticketDetail.root)).toBeVisible({ timeout: 15_000 });
 
-    // Sidebar header shows the title.
+    // Header shows the title and the linked-spec count.
     await expect(page.locator(ticketDetail.headerTitleInput)).toHaveValue(
       "Implement widget",
     );
-
-    // Linked specs surface as a count in the header (the detail no longer
-    // lists them by title here).
     await expect(page.locator(ticketDetail.root)).toContainText("1 spec", {
       timeout: 15_000,
     });
 
-    // Progress section (TicketPhaseList): the current-phase row reflects the
-    // ticket status — here "technical-design" → "Technical design".
-    await expect(
-      page.locator(".ticket-section-title", { hasText: "Progress" }),
-    ).toBeVisible();
-    await expect(page.locator(".tpl-row--current .tpl-label")).toContainText(
-      "Technical design",
-    );
+    // The seeded body renders read-only in the Description section.
+    await expect(page.locator(ticketDetail.root)).toContainText("Initial body.");
 
-    // The board single-click opens a read-only preview; enter the full ticket
-    // route to edit (Monaco only mounts there).
+    // The detail panel's section chrome renders (Description + Orchestration).
+    await expect(
+      page.locator(ticketDetail.sectionTitle, { hasText: "Orchestration" }),
+    ).toBeVisible();
+
+    // "Go to ticket" enters the full ticket route — the detail still renders
+    // (now as the ticket tab's body).
     await page.getByRole("button", { name: /Go to ticket/ }).click();
     await expect(page.locator(ticketDetail.root)).toBeVisible({ timeout: 15_000 });
-
-    // Edit the description: the inline ✎ toggles a MarkdownEditor (Monaco),
-    // with Save/Cancel in the section header. Drive Monaco via its accessible
-    // textarea (its `.view-lines` can be zero-height in this narrow panel).
-    await page.locator(".ticket-desc-edit-btn").click();
-    const editor = page.getByRole("textbox", { name: "Editor content" });
-    await expect(editor).toBeAttached({ timeout: 15_000 });
-    await editor.focus();
-    await page.keyboard.press("ControlOrMeta+a");
-    await page.keyboard.press("Delete");
-    const newBody = `Updated body — ${Date.now()}`;
-    await page.keyboard.insertText(newBody);
-
-    await page
-      .locator(".ticket-desc-edit-actions button", { hasText: "Save" })
-      .click();
-
-    // The ticket file on disk reflects the new body.
-    const ticketPath = join(
-      tempProject.path,
-      ".tr",
-      "tickets",
-      ticketId,
-      "ticket.json",
-    );
-    await expect
-      .poll(
-        () => JSON.parse(readFileSync(ticketPath, "utf8")).body as string,
-        { timeout: 15_000 },
-      )
-      .toContain("Updated body");
   });
-
 });

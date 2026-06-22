@@ -140,6 +140,39 @@ class TestRunTask:
 
         assert thinkrail_session.status == "error"
 
+    @pytest.mark.parametrize("passed, expected", [
+        ("subagent", "subagent"),
+        ("step-session", "step-session"),
+        (None, "step-session"),  # default preserved when the kwarg isn't passed
+    ])
+    async def test_threads_subagent_mode(self, passed, expected) -> None:
+        """run_task forwards subagent_mode onto the task in both step modes.
+
+        Regression: the implement-stage launch used to raise
+        ``TypeError: run_task() got an unexpected keyword argument
+        'subagent_mode'`` because run_task didn't accept this kwarg (PR #7).
+        """
+        service, _, spec_service = _make_service()
+        runtime = service.runtime_registry.get("claude")
+        runtime.run_session = AsyncMock(return_value=AgentResult(
+            thinkrail_sid="t1", session_id="s1", result="done",
+            cost_usd=0.0, turns=1, duration_ms=1,
+        ))
+        spec_service.get_spec.return_value = _make_spec_detail("s1", "T", "C")
+
+        kwargs = {} if passed is None else {"subagent_mode": passed}
+        task = await service.run_task(["s1"], SessionConfig(), **kwargs)
+
+        assert task.subagent_mode == expected
+
+        bg = service._running_tasks.get(task.thinkrail_sid)
+        if bg:
+            bg.cancel()
+            try:
+                await bg
+            except (asyncio.CancelledError, Exception):
+                pass
+
 
 class TestSendMessage:
     async def test_send_message_enqueues(self) -> None:
@@ -206,6 +239,124 @@ class TestEndSession:
         result = future.result()
         assert result["behavior"] == "deny"
         assert result["interrupt"] is True
+
+
+class TestTrashSession:
+    async def test_trash_session_cancels_live_runner(self, tmp_path: Path) -> None:
+        service, config, _ = _make_service()
+        config.project_root = tmp_path
+        thinkrail_session = service._tracker.create_task(["s1"], SessionConfig())
+        service._tracker.set_status(thinkrail_session.thinkrail_sid, "idle")
+
+        async def _run_forever() -> None:
+            await asyncio.Event().wait()
+
+        runner = asyncio.create_task(_run_forever())
+        service._running_tasks[thinkrail_session.thinkrail_sid] = runner
+
+        service.trash_session(thinkrail_session.thinkrail_sid)
+
+        assert not service._tracker.has_task(thinkrail_session.thinkrail_sid)
+        assert thinkrail_session.thinkrail_sid not in service._running_tasks
+        with pytest.raises(asyncio.CancelledError):
+            await runner
+
+    async def test_trash_after_end_cancels_runner_before_final_status(
+        self,
+        tmp_path: Path,
+    ) -> None:
+        from app.agent.tracker import END_SIGNAL
+
+        service, config, _ = _make_service()
+        config.project_root = tmp_path
+        thinkrail_session = service._tracker.create_task(["s1"], SessionConfig())
+        service._tracker.set_status(thinkrail_session.thinkrail_sid, "idle")
+        runtime = service.runtime_registry.get("claude")
+        started = asyncio.Event()
+
+        async def _wait_for_end_then_linger(*_args, **_kwargs) -> AgentResult:
+            started.set()
+            msg = await service._tracker.get_next_message(thinkrail_session.thinkrail_sid)
+            assert msg is END_SIGNAL
+            await asyncio.sleep(60)
+            return AgentResult(
+                thinkrail_sid=thinkrail_session.thinkrail_sid,
+                session_id="sdk-session",
+                result="done",
+                cost_usd=0,
+                turns=0,
+                duration_ms=0,
+            )
+
+        runtime.run_session = AsyncMock(side_effect=_wait_for_end_then_linger)
+        runner = asyncio.create_task(service._run_background(thinkrail_session, "context"))
+        service._running_tasks[thinkrail_session.thinkrail_sid] = runner
+        await started.wait()
+
+        await service.end_session(thinkrail_session.thinkrail_sid)
+        service.trash_session(thinkrail_session.thinkrail_sid)
+        await runner
+
+        assert not service._tracker.has_task(thinkrail_session.thinkrail_sid)
+        assert thinkrail_session.thinkrail_sid not in service._running_tasks
+
+    async def test_trash_does_not_resume_orchestrator(self, tmp_path: Path) -> None:
+        service, board = _make_service_with_board(tmp_path)
+
+        orchestrator = service._tracker.create_task([], SessionConfig(), name="orch")
+        orch_sid = orchestrator.thinkrail_sid
+        ticket = board.create_ticket("t", spawn_orchestrator=False)
+        board.set_orchestrator(ticket.id, orch_sid)
+
+        worker = service._tracker.create_task(["s1"], SessionConfig(), name="worker")
+        worker.ticket_id = ticket.id
+        board.attach_session(ticket.id, worker.thinkrail_sid)
+        runtime = service.runtime_registry.get("claude")
+        started = asyncio.Event()
+
+        async def _linger(*_args, **_kwargs) -> AgentResult:
+            started.set()
+            await asyncio.Event().wait()
+            raise AssertionError("runner should have been cancelled")
+
+        runtime.run_session = AsyncMock(side_effect=_linger)
+        runner = asyncio.create_task(service._run_background(worker, "context"))
+        service._running_tasks[worker.thinkrail_sid] = runner
+        await started.wait()
+
+        service.trash_session(worker.thinkrail_sid)
+        await runner
+
+        assert not service._tracker.has_task(worker.thinkrail_sid)
+        assert service._tracker._queues[orch_sid].empty()
+
+
+class TestRunBackground:
+    async def test_run_background_tolerates_session_deleted_before_final_status(
+        self,
+        tmp_path: Path,
+    ) -> None:
+        service, config, _ = _make_service()
+        config.project_root = tmp_path
+        thinkrail_session = service._tracker.create_task(["s1"], SessionConfig())
+        runtime = service.runtime_registry.get("claude")
+
+        async def _delete_then_return(*_args, **_kwargs) -> AgentResult:
+            service._tracker.remove_task(thinkrail_session.thinkrail_sid)
+            return AgentResult(
+                thinkrail_sid=thinkrail_session.thinkrail_sid,
+                session_id="sdk-session",
+                result="done",
+                cost_usd=0,
+                turns=0,
+                duration_ms=0,
+            )
+
+        runtime.run_session = AsyncMock(side_effect=_delete_then_return)
+
+        await service._run_background(thinkrail_session, "context")
+
+        assert not service._tracker.has_task(thinkrail_session.thinkrail_sid)
 
 
 class TestGetAndListTasks:
@@ -988,5 +1139,3 @@ class TestPromoteToTicket:
 
         assert ticket.orchestrator is not None
         assert ticket.orchestrator.session_id == sid
-
-

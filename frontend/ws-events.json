@@ -873,88 +873,6 @@
       "title": "ProgressPayload",
       "type": "object"
     },
-    "ProposeChangeEvent": {
-      "properties": {
-        "thinkrailSid": {
-          "title": "Thinkrailsid",
-          "type": "string"
-        },
-        "sessionId": {
-          "default": "",
-          "title": "Sessionid",
-          "type": "string"
-        },
-        "eventType": {
-          "const": "proposeChange",
-          "title": "Eventtype",
-          "type": "string"
-        },
-        "payload": {
-          "$ref": "#/$defs/ProposeChangePayload"
-        }
-      },
-      "required": [
-        "thinkrailSid",
-        "sessionId",
-        "eventType",
-        "payload"
-      ],
-      "title": "ProposeChangeEvent",
-      "type": "object"
-    },
-    "ProposeChangePayload": {
-      "description": "Agent proposes an amendment to a spec file; user reviews via four-button card.",
-      "properties": {
-        "requestId": {
-          "default": "",
-          "title": "Requestid",
-          "type": "string"
-        },
-        "filePath": {
-          "title": "Filepath",
-          "type": "string"
-        },
-        "oldString": {
-          "title": "Oldstring",
-          "type": "string"
-        },
-        "newString": {
-          "title": "Newstring",
-          "type": "string"
-        },
-        "section": {
-          "anyOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Section"
-        },
-        "rationale": {
-          "anyOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Rationale"
-        }
-      },
-      "required": [
-        "filePath",
-        "oldString",
-        "newString"
-      ],
-      "title": "ProposeChangePayload",
-      "type": "object"
-    },
     "Question": {
       "description": "A single question with selectable options.",
       "properties": {
@@ -2107,7 +2025,6 @@
       "notification": "#/$defs/NotificationEvent",
       "permissionDenied": "#/$defs/PermissionDeniedEvent",
       "progress": "#/$defs/ProgressEvent",
-      "proposeChange": "#/$defs/ProposeChangeEvent",
       "ready": "#/$defs/ReadyEvent",
       "requestExpired": "#/$defs/RequestExpiredEvent",
       "requestResolved": "#/$defs/RequestResolvedEvent",
@@ -2195,9 +2112,6 @@
     },
     {
       "$ref": "#/$defs/UserMessageEvent"
-    },
-    {
-      "$ref": "#/$defs/ProposeChangeEvent"
     },
     {
       "$ref": "#/$defs/SetPreviewFileEvent"

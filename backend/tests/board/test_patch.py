@@ -2,70 +2,39 @@ from __future__ import annotations
 
 from pathlib import Path
 
-import pytest
-
 from app.board.patch import (
-    AmendmentError,
     append_amendment,
-    apply_amendment,
+    build_change_diff,
     extract_spec_id_for_link,
     parse_patch_log,
     validate_amended_file,
 )
 
 
-class TestApplyAmendment:
-    def test_replaces_old_with_new(self, tmp_path: Path) -> None:
-        f = tmp_path / "spec.md"
-        f.write_text("---\nid: foo\n---\n\n## Components\nFoo handles bar.\n")
-        result = apply_amendment(
-            project_root=tmp_path,
-            file_path="spec.md",
-            old_string="Foo handles bar.",
-            new_string="Foo handles bar and baz.",
+class TestBuildChangeDiff:
+    def test_single_change_has_header_and_hunk(self) -> None:
+        diff = build_change_diff(
+            ".tr/design_docs/X.md",
+            [("Foo.\n", "Foo and bar.\n")],
         )
-        assert "Foo handles bar and baz." in result
-        assert f.read_text() == result
+        assert "--- a/.tr/design_docs/X.md" in diff
+        assert "+++ b/.tr/design_docs/X.md" in diff
+        assert "-Foo." in diff
+        assert "+Foo and bar." in diff
 
-    def test_errors_when_old_string_not_unique(self, tmp_path: Path) -> None:
-        f = tmp_path / "spec.md"
-        f.write_text("dup\nmiddle\ndup\n")
-        with pytest.raises(AmendmentError, match="not unique"):
-            apply_amendment(
-                project_root=tmp_path,
-                file_path="spec.md",
-                old_string="dup",
-                new_string="new",
-            )
+    def test_snippet_without_trailing_newline_is_well_formed(self) -> None:
+        diff = build_change_diff("f.md", [("Foo.", "Bar.")])
+        assert "-Foo.\n" in diff
+        assert "+Bar.\n" in diff
 
-    def test_errors_when_old_string_not_present(self, tmp_path: Path) -> None:
-        f = tmp_path / "spec.md"
-        f.write_text("nothing here\n")
-        with pytest.raises(AmendmentError, match="not found"):
-            apply_amendment(
-                project_root=tmp_path,
-                file_path="spec.md",
-                old_string="missing",
-                new_string="new",
-            )
+    def test_multiple_changes_emit_multiple_hunks(self) -> None:
+        diff = build_change_diff("f.md", [("a\n", "A\n"), ("b\n", "B\n")])
+        assert diff.count("@@") >= 4
+        assert diff.count("--- a/f.md") == 1
 
-    def test_errors_when_path_outside_project_root(self, tmp_path: Path) -> None:
-        with pytest.raises(AmendmentError, match="outside project root"):
-            apply_amendment(
-                project_root=tmp_path,
-                file_path="../escape.md",
-                old_string="x",
-                new_string="y",
-            )
-
-    def test_errors_when_file_does_not_exist(self, tmp_path: Path) -> None:
-        with pytest.raises(AmendmentError, match="does not exist"):
-            apply_amendment(
-                project_root=tmp_path,
-                file_path="missing.md",
-                old_string="x",
-                new_string="y",
-            )
+    def test_no_change_returns_empty(self) -> None:
+        diff = build_change_diff("f.md", [("same\n", "same\n")])
+        assert "@@" not in diff
 
 
 class TestValidateAmendedFile:
@@ -106,8 +75,7 @@ class TestAppendAmendment:
             project_root=tmp_path,
             ticket_id="mt_x",
             file_path=".tr/design_docs/MODULE_X.md",
-            old_content="Foo handles bar.\n",
-            new_content="Foo handles bar and baz.\n",
+            diff=build_change_diff(".tr/design_docs/MODULE_X.md", [("Foo handles bar.\n", "Foo handles bar and baz.\n")]),
             spec_id="spec_abc",
             section="Components",
             rationale="add baz",
@@ -132,7 +100,7 @@ class TestAppendAmendment:
         (tmp_path / ".tr" / "tickets" / "mt_x").mkdir(parents=True)
         kwargs: dict = dict(
             project_root=tmp_path, ticket_id="mt_x",
-            file_path="f.md", old_content="a\n", new_content="b\n",
+            file_path="f.md", diff=build_change_diff("f.md", [("a\n", "b\n")]),
             spec_id=None, section=None, rationale=None,
             applied_as="original", validation="ok",
             timestamp="2026-05-22T15:30:00Z",
@@ -149,7 +117,7 @@ class TestAppendAmendment:
         (tmp_path / ".tr" / "tickets" / "mt_x").mkdir(parents=True)
         log_path = append_amendment(
             project_root=tmp_path, ticket_id="mt_x", file_path="f.md",
-            old_content="a\n", new_content="b\n",
+            diff=build_change_diff("f.md", [("a\n", "b\n")]),
             spec_id=None, section=None, rationale=None,
             applied_as="original", validation="ok",
             timestamp="2026-05-22T15:30:00Z",
@@ -170,7 +138,7 @@ class TestParsePatchLog:
         (tmp_path / ".tr" / "tickets" / "mt_x").mkdir(parents=True)
         common: dict = dict(
             project_root=tmp_path, ticket_id="mt_x",
-            file_path="f.md", old_content="a\n", new_content="b\n",
+            file_path="f.md", diff=build_change_diff("f.md", [("a\n", "b\n")]),
             spec_id=None, section="Goal", rationale="why",
             applied_as="original", validation="ok",
             timestamp="2026-05-22T15:30:00Z",

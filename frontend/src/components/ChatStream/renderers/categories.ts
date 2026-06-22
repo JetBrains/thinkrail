@@ -17,7 +17,6 @@ const BASE_CATEGORIES: Record<EventType, EventCategory> = {
   suggestSession: "dialog",
   suggestDescription: "dialog",
   suggestStep: "dialog",
-  proposeChange: "dialog",
   error: "dialog",
 
   // Tools — agent's mechanical work: config (model, system prompt),

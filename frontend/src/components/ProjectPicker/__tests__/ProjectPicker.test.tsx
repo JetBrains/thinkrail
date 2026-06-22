@@ -29,6 +29,7 @@ vi.mock("@/services/fs.ts", () => ({
   listDirs: vi.fn(async () => ({ dirs: [] })),
   makeDirectory: vi.fn(),
   browseFolder: vi.fn(async () => null),
+  getDefaultRoot: vi.fn(async () => ""),
 }));
 
 import { ProjectPicker } from "../ProjectPicker.tsx";

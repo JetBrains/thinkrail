@@ -18,7 +18,7 @@ from app.agent.models import AgentTask, SessionArtifact
 from app.agent.persistence import update_session_metadata
 
 
-_ArtifactKind = Literal["write", "edit", "propose-change", "preview"]
+_ArtifactKind = Literal["write", "edit", "preview"]
 
 
 def persist_artifact_state(project_root: Path, task: AgentTask) -> None:
@@ -51,10 +51,10 @@ def _to_relative(project_root: Path, path: str) -> str:
     """Return ``path`` as a project-relative string when it falls inside
     ``project_root``. Pass other inputs through unchanged.
 
-    Agents call ``SetPreviewFile`` / ``ProposeChange`` with whatever form they
-    happen to have (absolute when using ``Write``, relative when reading from
-    a known path). Normalizing here keeps a single canonical form on disk so
-    the same logical file doesn't show up twice in the artifact list.
+    Agents call ``SetPreviewFile`` / ``Write`` with whatever form they happen
+    to have (absolute when using ``Write``, relative when reading from a known
+    path). Normalizing here keeps a single canonical form on disk so the same
+    logical file doesn't show up twice in the artifact list.
     """
     try:
         abs_path = (project_root / path).resolve()

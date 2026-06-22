@@ -265,14 +265,33 @@ class TestTicketsRoot:
 
 
 class TestDeleteTicket:
-    def test_delete(self, tmp_path: Path) -> None:
+    def test_delete_removes_whole_folder(self, tmp_path: Path) -> None:
         t = Ticket(title="Delete me")
-        path = ticket_path(tmp_path, t.id)
+        path = ticket_path(tickets_root(tmp_path), t.id)
         write_ticket(path, t)
-        assert path.exists()
+        (path.parent / "product-design.md").write_text("# design", encoding="utf-8")
         delete_ticket(path)
-        assert not path.exists()
+        assert not path.parent.exists()  # folder + artifacts gone
 
     def test_delete_missing_raises(self, tmp_path: Path) -> None:
         with pytest.raises(FileNotFoundError):
-            delete_ticket(tmp_path / "nope.json")
+            delete_ticket(ticket_path(tickets_root(tmp_path), "mt_absent"))
+
+    def test_delete_rejects_non_ticket_json(self, tmp_path: Path) -> None:
+        folder = tickets_root(tmp_path) / "mt_a"
+        folder.mkdir(parents=True)
+        stray = folder / "notes.md"
+        stray.write_text("x", encoding="utf-8")
+        with pytest.raises(FileNotFoundError):
+            delete_ticket(stray)
+
+    def test_delete_outside_tickets_root_only_unlinks_file(self, tmp_path: Path) -> None:
+        # A ``ticket.json`` not under ``.tr/tickets/`` must only remove the
+        # file — never rmtree its (unknown) folder.
+        folder = tmp_path / "elsewhere"
+        folder.mkdir()
+        path = folder / "ticket.json"
+        write_ticket(path, Ticket(title="Stray"))
+        delete_ticket(path)
+        assert not path.exists()
+        assert folder.exists()

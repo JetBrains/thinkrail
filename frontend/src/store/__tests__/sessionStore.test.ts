@@ -205,7 +205,7 @@ describe("sessionStore remote events", () => {
 
     it("is a no-op when the thinkrailSid is not in the list", () => {
       const before = useSessionStore.getState().sessionList;
-      useSessionStore.getState().patchSessionInList("does-not-exist", { status: "finished" });
+      useSessionStore.getState().patchSessionInList("does-not-exist", { status: "done" });
       const after = useSessionStore.getState().sessionList;
 
       expect(after).toBe(before);
@@ -222,57 +222,3 @@ describe("sessionStore remote events", () => {
   });
 });
 
-import { selectProposeChangesByFile } from "../sessionStore.ts";
-import type { Session } from "@/types/session.ts";
-
-function makePcSession(
-  events: { eventType: string; payload: Record<string, unknown> }[],
-  answered: Record<string, unknown> = {},
-): Session {
-  return {
-    thinkrailSid: "s1",
-    events,
-    answeredRequests: new Map(Object.entries(answered)),
-  } as unknown as Session;
-}
-
-describe("selectProposeChangesByFile", () => {
-  it("returns empty map when no events", () => {
-    const result = selectProposeChangesByFile(makePcSession([]));
-    expect(result.size).toBe(0);
-  });
-
-  it("groups proposeChange events by filePath in event order", () => {
-    const events = [
-      { eventType: "proposeChange", payload: { requestId: "r1", filePath: "a.md", oldString: "x", newString: "y" } },
-      { eventType: "proposeChange", payload: { requestId: "r2", filePath: "b.md", oldString: "u", newString: "v" } },
-      { eventType: "proposeChange", payload: { requestId: "r3", filePath: "a.md", oldString: "p", newString: "q" } },
-    ];
-    const result = selectProposeChangesByFile(makePcSession(events));
-    expect(Array.from(result.keys())).toEqual(["a.md", "b.md"]);
-    expect(result.get("a.md")!.map((h) => h.requestId)).toEqual(["r1", "r3"]);
-    expect(result.get("b.md")!.map((h) => h.requestId)).toEqual(["r2"]);
-  });
-
-  it("marks resolved hunks with their resolution", () => {
-    const events = [
-      { eventType: "proposeChange", payload: { requestId: "r1", filePath: "a.md", oldString: "x", newString: "y" } },
-    ];
-    const answered = { r1: { behavior: "allow", applied: "original" } };
-    const result = selectProposeChangesByFile(makePcSession(events, answered));
-    const h = result.get("a.md")![0];
-    expect(h.state).toBe("accepted");
-    expect(h.resolution).toEqual({ behavior: "allow", applied: "original" });
-  });
-
-  it("marks deny+discuss as rejected (with feedback retained)", () => {
-    const events = [
-      { eventType: "proposeChange", payload: { requestId: "r1", filePath: "a.md", oldString: "x", newString: "y" } },
-    ];
-    const answered = { r1: { behavior: "deny", discuss: true, feedback: "wrong angle" } };
-    const result = selectProposeChangesByFile(makePcSession(events, answered));
-    const h = result.get("a.md")![0];
-    expect(h.state).toBe("rejected");
-    expect(h.resolution).toEqual({ behavior: "deny", discuss: true, feedback: "wrong angle" });
-  });
-});

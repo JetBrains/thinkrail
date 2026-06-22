@@ -132,6 +132,10 @@ interface SessionStore {
   closeSession: (thinkrailSid: string) => void;
   /** Delete/trash a session: calls backend API, closes tab, removes from store */
   deleteSession: (thinkrailSid: string) => Promise<void>;
+  /** Drop every session attached to a ticket from local state (sessions map,
+   *  open tabs, cached list). Called when the ticket is deleted — the backend
+   *  cascade-trashes the same sessions, so this just keeps the UI in sync. */
+  removeSessionsForTicket: (ticketId: string) => void;
   endSession: (thinkrailSid: string) => Promise<void>;
   /** Open a tab for a session (e.g., from background indicator dropdown).
    *  `allowTicketTab` lets a ticket-attached session open as its own tab
@@ -177,7 +181,6 @@ interface SessionStore {
   onSuggestSession: (params: Record<string, unknown>) => void;
   onSuggestDescription: (params: Record<string, unknown>) => void;
   onSuggestStep: (params: Record<string, unknown>) => void;
-  onProposeChange: (params: Record<string, unknown>) => void;
   onSetPreviewFile: (params: Record<string, unknown>) => void;
   onClearPreviewFile: (params: Record<string, unknown>) => void;
   onArtifactAdded: (params: Record<string, unknown>) => void;
@@ -1781,6 +1784,39 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
     dropLocally();
   },
 
+  removeSessionsForTicket: (ticketId) => {
+    const ids = new Set<string>();
+    for (const [sid, sess] of get().sessions) {
+      if (sess.ticketId === ticketId) ids.add(sid);
+    }
+    for (const e of get().sessionList) {
+      if (e.ticketId === ticketId) ids.add(e.thinkrailSid);
+    }
+    if (ids.size === 0) return;
+
+    for (const sid of ids) {
+      // Stop any armed autosave so a trailing timer can't re-persist a session
+      // whose ticket is gone.
+      draftAutosave.cancel(sid);
+      useInputDraftStore.getState().clearDraft(sid);
+    }
+
+    set((s) => {
+      const sessions = new Map(s.sessions);
+      const openTabs = new Set(s.openTabs);
+      const closedIds = new Set(s.closedIds);
+      for (const sid of ids) {
+        sessions.delete(sid);
+        openTabs.delete(sid);
+        closedIds.add(sid);
+      }
+      const sessionList = s.sessionList.filter((e) => !ids.has(e.thinkrailSid));
+      const activeSessionId =
+        s.activeSessionId && ids.has(s.activeSessionId) ? null : s.activeSessionId;
+      return { sessions, openTabs, closedIds, sessionList, activeSessionId };
+    });
+  },
+
   endSession: async (thinkrailSid) => {
     const api = createAgentApi(getClient());
     await api.end(thinkrailSid);
@@ -2357,43 +2393,6 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
     });
   },
 
-  onProposeChange: (params) => {
-    const thinkrailSid = params.thinkrailSid as string;
-    const requestId = params.requestId as string;
-    const filePath = params.filePath as string;
-    const section = (params.section as string | undefined) ?? null;
-    set((s) => {
-      const sessions = appendEvent(
-        s.sessions,
-        thinkrailSid,
-        "agent/proposeChange",
-        params,
-        s.closedIds,
-      );
-      const session = sessions.get(thinkrailSid);
-      if (session) {
-        // Auto-focus the preview on the file+section about to change so
-        // the user can see the live context while reviewing the card.
-        sessions.set(thinkrailSid, {
-          ...session,
-          status: "waiting",
-          previewPath: filePath || session.previewPath,
-          previewSection: section,
-          pendingRequests: [...session.pendingRequests, {
-            requestId,
-            type: "propose-change",
-            filePath,
-            oldString: params.oldString as string,
-            newString: params.newString as string,
-            section: params.section as string | undefined,
-            rationale: params.rationale as string | undefined,
-          }],
-        });
-      }
-      return { sessions };
-    });
-  },
-
   onSetPreviewFile: (params) => {
     const thinkrailSid = params.thinkrailSid as string;
     const path = (params.path as string | null) ?? null;
@@ -2899,56 +2898,3 @@ export function stopWatchdog(): void {
   }
 }
 
-// ── ProposeChange aggregation ──────────────────────────────────
-
-export interface HunkRequest {
-  requestId: string;
-  filePath: string;
-  oldString: string;
-  newString: string;
-  section: string | null;
-  rationale: string | null;
-  validationWarnings: { kind: string; message: string }[];
-  state: "pending" | "accepted" | "rejected";
-  resolution: Record<string, unknown> | null;
-}
-
-/** Group a session's proposeChange events by filePath. Each group is ordered
- *  by event index (creation order). Resolution status is joined from
- *  `session.answeredRequests` keyed by `requestId`. */
-export function selectProposeChangesByFile(session: Session): Map<string, HunkRequest[]> {
-  const result = new Map<string, HunkRequest[]>();
-  for (const ev of session.events) {
-    if (ev.eventType !== "proposeChange") continue;
-    const p = ev.payload as {
-      requestId?: string;
-      filePath: string;
-      oldString: string;
-      newString: string;
-      section?: string | null;
-      rationale?: string | null;
-      validationWarnings?: { kind: string; message: string }[];
-    };
-    const requestId = p.requestId ?? "";
-    const resolved = session.answeredRequests.get(requestId) as Record<string, unknown> | undefined;
-    let state: "pending" | "accepted" | "rejected" = "pending";
-    if (resolved) {
-      state = resolved.behavior === "allow" ? "accepted" : "rejected";
-    }
-    const hunk: HunkRequest = {
-      requestId,
-      filePath: p.filePath,
-      oldString: p.oldString,
-      newString: p.newString,
-      section: p.section ?? null,
-      rationale: p.rationale ?? null,
-      validationWarnings: p.validationWarnings ?? [],
-      state,
-      resolution: resolved ?? null,
-    };
-    const arr = result.get(p.filePath) ?? [];
-    arr.push(hunk);
-    result.set(p.filePath, arr);
-  }
-  return result;
-}

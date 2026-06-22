@@ -101,11 +101,6 @@ interface UiStore {
   dismissedWizardOutcomes: string[];
   dismissWizardOutcome: (thinkrailSid: string) => void;
 
-  /** When set, the right preview panel renders a ReviewPanel for the given
-   *  file, sourcing pending+resolved ProposeChange requests from the session. */
-  activeReview: { sid: string; filePath: string } | null;
-  setActiveReview: (review: { sid: string; filePath: string } | null) => void;
-
   /** When true, the ticket view's right-panel artifact bar shows a single-line
    *  collapsed header. When false, full tabs. Persisted across sessions. */
   ticketArtifactBarCollapsed: boolean;
@@ -186,9 +181,6 @@ export const useUiStore = create<UiStore>()(
             ? s
             : { dismissedWizardOutcomes: [...s.dismissedWizardOutcomes, thinkrailSid] },
         ),
-
-      activeReview: null,
-      setActiveReview: (review) => set({ activeReview: review }),
 
       ticketArtifactBarCollapsed: false,
       setTicketArtifactBarCollapsed: (collapsed) => set({ ticketArtifactBarCollapsed: collapsed }),

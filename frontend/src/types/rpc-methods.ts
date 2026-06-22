@@ -18,7 +18,8 @@ export type ThinkRailRpcPayloads =
   | SessionMetrics
   | TodoItem
   | SessionResult
-  | TicketState;
+  | TicketState
+  | AnalyticsStatus;
 export type Value = string;
 export type Label = string;
 export type Key = string;
@@ -93,18 +94,17 @@ export type Stagegate = "approve" | "autonomous";
 export type Stepgate = "approve" | "autonomous";
 export type Failurepolicy = "fail-fast" | "wait-all";
 export type Stepexecution = "interactive" | "subagent";
-export type Artifactedits = "ask" | "auto";
 export type Id4 = string;
 export type Title4 = string;
 export type Skill = string | null;
 export type Dependson = string[];
-export type Status2 = "pending" | "running" | "done" | "failed";
+export type NodeStatus = "pending" | "running" | "done" | "failed";
 export type Kind1 = "session" | "subagent";
 export type Sessionid1 = string | null;
 export type Orchestratorsid = string | null;
 export type Tooluseid = string | null;
 export type Agentid = string | null;
-export type Status3 = "running" | "done" | "failed" | "cancelled";
+export type RunStatus = "running" | "done" | "failed" | "cancelled";
 export type Summary1 = string | null;
 export type Usage = {
   [k: string]: unknown;
@@ -118,13 +118,14 @@ export type Completedat = string | null;
 export type Stages = WorkNode[];
 export type Thinkrailsid = string;
 export type Skillid1 = string | null;
-export type Status4 = string;
+export type Status2 = string;
 export type Name = string;
 export type Summary3 = string | null;
 export type Sessions = SessionRef[];
 export type Linkedspecids = string[];
 export type Created1 = string;
 export type Updated1 = string;
+export type Enabled = boolean;
 
 /**
  * A value the backend accepts, plus a display label for the UI.
@@ -295,7 +296,7 @@ export interface TicketState {
 /**
  * Reference to a ticket's orchestrator driver. ``kind="session"`` points at a
  * Session via ``session_id``; ``kind="builtin"`` names a registered pipeline via
- * ``builtin_id``. See SESSION_TICKET_MODEL.md §"The orchestrator".
+ * ``builtin_id``.
  */
 export interface OrchestratorRef {
   kind?: Kind;
@@ -310,14 +311,13 @@ export interface OrchestrationConfig {
   stepGate?: Stepgate;
   failurePolicy?: Failurepolicy;
   stepExecution?: Stepexecution;
-  artifactEdits?: Artifactedits;
 }
 export interface WorkNode {
   id: Id4;
   title: Title4;
   skill?: Skill;
   dependsOn?: Dependson;
-  status?: Status2;
+  status?: NodeStatus;
   runs?: Runs;
   summary?: Summary2;
   artifactKind?: Artifactkind;
@@ -331,14 +331,25 @@ export interface NodeRun {
   orchestratorSid?: Orchestratorsid;
   toolUseId?: Tooluseid;
   agentId?: Agentid;
-  status?: Status3;
+  status?: RunStatus;
   summary?: Summary1;
   usage?: Usage;
 }
 export interface SessionRef {
   thinkrailSid: Thinkrailsid;
   skillId?: Skillid1;
-  status?: Status4;
+  status?: Status2;
   name?: Name;
   summary?: Summary3;
+}
+/**
+ * Wire view of consent for the in-app toggle.
+ *
+ * Every analytics event is stamped and sent backend-side, so the frontend
+ * never needs the ``installation_id`` — only the ``enabled`` flag crosses
+ * the wire. No default: the handler always sets it, so the field is required
+ * on the wire (non-optional in the generated TypeScript).
+ */
+export interface AnalyticsStatus {
+  enabled: Enabled;
 }

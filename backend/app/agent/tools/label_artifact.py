@@ -22,7 +22,7 @@ LABEL_ARTIFACT_SCHEMA: dict = {
             "description": (
                 "Project-relative path of the artifact to label. Must "
                 "already be tracked in the session's artifact list — "
-                "call AFTER Write / ProposeChange, not before."
+                "call AFTER Write / Edit, not before."
             ),
         },
         "role": {
@@ -71,7 +71,7 @@ async def _label_artifact(args: dict) -> dict:
     if artifact is None:
         return _ok(
             f"Warning: artifact '{path}' is not tracked yet; "
-            "call LabelArtifact AFTER Write/Edit/ProposeChange.",
+            "call LabelArtifact AFTER Write/Edit.",
         )
     persist_artifact_state(ctx.config.get_project_root(), ctx.task)
 

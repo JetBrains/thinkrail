@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from typing import Any
 
+from app import analytics
+from app.analytics import BoardViewedEvent
 from app.board.models import ArtifactKind, TicketSummary
 from app.board.service import BoardService, TicketNotFoundError
 from app.board.ticket_state import build_ticket_state, publish_ticket_state
@@ -29,6 +31,7 @@ async def _broadcast(service: BoardService, ticket: Any) -> None:
 
 @_handle_errors
 async def list_tickets(service: BoardService, **params: Any) -> list[dict]:
+    analytics.track_event(BoardViewedEvent())
     return [t.model_dump(by_alias=True) for t in service.list_tickets()]
 
 
@@ -76,6 +79,11 @@ async def update_ticket(service: BoardService, **params: Any) -> dict:
 @_handle_errors
 async def delete_ticket(service: BoardService, **params: Any) -> None:
     service.delete_ticket(params["id"])
+    conn = get_current_conn()
+    if conn is not None:
+        await bus.publish_to_project(
+            conn.project_path, "board/didDelete", {"id": params["id"]},
+        )
 
 
 @_handle_errors

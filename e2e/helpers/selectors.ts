@@ -14,9 +14,11 @@ export const projectPicker = {
 };
 
 export const appShell = {
-  // Status bar text — also used as the "shell is ready" signal.
-  statusSessionsLabel: /\d+ sessions?/,
-  statusBar: ".status-bar",
+  // The status-bar footer was removed in the new UI. The header's Board/
+  // Workspace switcher is part of the persistent workspace chrome, so its
+  // presence is the "shell is ready" signal (openProject also waits on the
+  // header settings gear, which only renders inside the workspace).
+  viewSwitcher: '[role="tablist"][aria-label="Center view"]',
 };
 
 export const chatStream = {
@@ -29,7 +31,9 @@ export const chatStream = {
 };
 
 export const newSession = {
-  newButton: "button.session-tabs-new-btn",
+  // The session-tab strip's "+ New" button is now an icon-only <Button>; its
+  // tooltip is the only stable hook (e.g. "New session (Alt+T)").
+  newButton: 'button[title^="New session"]',
   // Draft form widgets.
   modelSelect: "select.draft-config-select--model",
   // The perms <select> shares `.draft-config-select` with the model picker but
@@ -52,9 +56,11 @@ export const sessionPanel = {
   statusLine: ".session-status-line",
   statusButton: ".session-status-line .ssl-status",
   statusDropdownItem: ".ssl-dropdown-item",
-  // InputArea controls.
+  // InputArea controls. Send/Start are generic <Button>s now (no .input-send
+  // class). The .input-actions slot also holds the portaled Continue button,
+  // so match the Send button by its label to stay unambiguous.
   inputTextarea: ".input-textarea",
-  inputSend: "button.input-send",
+  inputSend: '.input-actions button:has-text("Send")',
   inputInterrupt: "button.input-interrupt",
   messagePlaceholder: /Message Claude/,
 };
@@ -85,10 +91,6 @@ export const sessionManager = {
   ctxMenuItem: ".sm-ctx-menu-item",
 };
 
-export const statusBar = {
-  sessionsButton: "button.status-sessions-btn",
-};
-
 export const header = {
   logo: ".header-logo",
   themeButton: 'button.header-btn[title="Switch theme"]',
@@ -97,8 +99,9 @@ export const header = {
   newButton: { role: "button", name: /\+ New/ } as const,
   settingsButton: 'button.header-settings-btn',
   // Center view switcher — drives uiStore.centerView ("board" | "sessions").
-  boardTab: { role: "tab", name: /^Board( \d+)?$/ } as const,
-  sessionsTab: { role: "tab", name: /^Sessions( \d+)?$/ } as const,
+  // Labels are "Board" and "Workspace" (the latter was "Sessions" pre-redesign).
+  boardTab: { role: "tab", name: /^Board$/ } as const,
+  workspaceTab: { role: "tab", name: /^Workspace$/ } as const,
 };
 
 export const serverInfoDialog = {
@@ -117,16 +120,18 @@ export const specTree = {
 export const fileViewer = {
   root: ".fv",
   path: ".fv-path",
-  editButton: "button.fv-btn-edit",
-  saveButton: "button.fv-btn-save",
-  editInPlaceItem: ".fv-dropdown-item:has-text('Edit in place')",
+  // Preview/Edit is a mode toggle now (no dropdown). Monaco is read-only in
+  // preview; the Save button only mounts while editing AND dirty.
+  editTab: '.fv-mode-tabs button.markdown-editor-tab:text-is("Edit")',
+  previewTab: '.fv-mode-tabs button.markdown-editor-tab:text-is("Preview")',
+  saveButton: "button.fv-mode-save",
   monacoEditor: ".fv .monaco-editor",
   monacoViewLines: ".fv .monaco-editor .view-lines",
   markdownPreview: ".md-preview",
 };
 
 export const boardView = {
-  root: ".board-view",
+  root: ".board-section",
   newButton: "button.board-new-btn",
   kanbanColumns: ".kanban-columns",
   kanbanColumn: ".kanban-column",
@@ -185,11 +190,14 @@ export const ticketDetail = {
 };
 
 export const leftPanel = {
-  panelTab: ".panel-tab",
-  panelTabActive: ".panel-tab-active",
-  filesTab: "button.panel-tab:has-text('Files')",
-  specsTab: "button.panel-tab:has-text('Specs')",
-  sessionsTab: "button.panel-tab:has-text('Sessions')",
+  // The default Workspace view renders the SessionsLeftPanel (`.sessions-left-tab`
+  // tabs, default tab = Sessions); the board/regular layout uses `.panel-tab`.
+  // Match either so specs don't depend on which layout is active.
+  panelTab: ".sessions-left-tab, .panel-tab",
+  panelTabActive: ".sessions-left-tab-active, .panel-tab-active",
+  filesTab: "button.sessions-left-tab:has-text('Files'), button.panel-tab:has-text('Files')",
+  specsTab: "button.sessions-left-tab:has-text('Specs'), button.panel-tab:has-text('Specs')",
+  sessionsTab: "button.sessions-left-tab:has-text('Sessions'), button.panel-tab:has-text('Sessions')",
 };
 
 export const fileTree = {
