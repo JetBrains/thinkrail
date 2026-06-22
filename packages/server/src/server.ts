@@ -1,5 +1,7 @@
 import { join, normalize } from "node:path";
 import { PROTOCOL_VERSION, WS_CHANNELS } from "@thinkrail-pi/contracts";
+import { handleRequest } from "./handlers";
+import { listProjects } from "./projects";
 
 export interface CreateServerOptions {
 	port?: number;
@@ -38,12 +40,26 @@ export function createServer(options: CreateServerOptions = {}): RunningServer {
 				ws.send(
 					JSON.stringify({
 						channel: WS_CHANNELS.serverWelcome,
-						data: { protocolVersion: PROTOCOL_VERSION, projects: [] },
+						data: { protocolVersion: PROTOCOL_VERSION, projects: listProjects() },
 					}),
 				);
 			},
-			message() {
-				// Dispatch registry is empty until M4 (project/workspace/fs/git/terminal handlers).
+			async message(ws, message) {
+				const raw = typeof message === "string" ? message : message.toString();
+				let req: { id?: string; method?: string; params?: unknown };
+				try {
+					req = JSON.parse(raw);
+				} catch {
+					return;
+				}
+				if (!req.id || !req.method) return;
+				try {
+					const result = await handleRequest(req.method, req.params);
+					ws.send(JSON.stringify({ id: req.id, ok: true, result }));
+				} catch (err) {
+					const error = err instanceof Error ? err.message : String(err);
+					ws.send(JSON.stringify({ id: req.id, ok: false, error }));
+				}
 			},
 		},
 	});

@@ -24,12 +24,16 @@ for development / e2e).
   `@earendil-works/pi-coding-agent` (runtime, M10), Bun/Node.
 - **Forbidden:** importing `web`/`cli`/`desktop`; being bundled into the browser.
 
-## Surface (current — M3)
+## Surface (current — M4)
 
 - `createServer({ port?, host?, staticDir? }) → { port, stop }`: `Bun.serve` with `/health`, a `/ws`
   upgrade, static SPA serving (when `staticDir` is set; `index.html` fallback, path-contained), and a WS
-  that pushes **`server.welcome`** (`{ protocolVersion, projects }`) on open. Dispatch registry is empty.
+  that pushes **`server.welcome`** (`{ protocolVersion, projects }`) on open and dispatches requests.
 - `dev.ts`: `resolveShellEnv()` → `createServer` from `THINKRAIL_PI_PORT`/`_HOST`/`_STATIC_DIR`.
+- `handlers.ts`: the WS method→handler registry. M4: `project.open` / `project.list` / `project.close`.
+- `persistence.ts`: JSON app state under `dataDir()` — `THINKRAIL_PI_DATA_DIR` (dev/e2e isolation) else
+  `~/.thinkrail-pi`. `projects.ts`: open a git repo as a project (validate via `git rev-parse
+  --show-toplevel`, dedupe by root), list (by `lastOpened`), close.
 
 ## Get right (firms up as features land)
 

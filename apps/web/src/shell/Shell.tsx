@@ -1,4 +1,5 @@
 import { PRODUCT_NAME } from "../constants/branding";
+import { ProjectTree } from "../panels/ProjectTree";
 import { useAppStore } from "../store/appStore";
 import type { ConnectionStatus } from "../transport";
 
@@ -33,7 +34,7 @@ export function Shell() {
 			</header>
 			<div className="grid min-h-0 grid-cols-[240px_1fr_320px]">
 				<aside data-testid="left-nav" className="overflow-auto border-r border-border p-md">
-					<div className="text-xs uppercase tracking-wider text-muted">Projects</div>
+					<ProjectTree />
 				</aside>
 				<main data-testid="center-tabs" className="flex items-center justify-center text-hint">
 					Open a file or start a chat
