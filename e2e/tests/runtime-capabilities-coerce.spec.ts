@@ -1,8 +1,9 @@
 import { test, expect } from "../fixtures";
 import { openProject } from "../helpers/project";
 import { newSession } from "../helpers/selectors";
-import { seedSessionDefaults } from "../helpers/appSettings";
+import { seedSessionDefaults, getSessionDefaults, type SessionDefaults } from "../helpers/appSettings";
 import { selectedLabel } from "../helpers/draftConfig";
+import { acquireAppStoreLock, releaseAppStoreLock } from "../helpers/appStoreLock";
 
 /**
  * Out-of-caps config values (after a model retirement or a removed effort
@@ -11,6 +12,18 @@ import { selectedLabel } from "../helpers/draftConfig";
  * The picker prepends the unknown value as a raw selected option, so its
  * dropdown trigger shows the value verbatim.
  */
+
+let _savedDefaults: SessionDefaults;
+
+test.beforeEach(async ({ tempProject }) => {
+  await acquireAppStoreLock();
+  _savedDefaults = await getSessionDefaults(tempProject.path);
+});
+
+test.afterEach(async ({ tempProject }) => {
+  await seedSessionDefaults(tempProject.path, _savedDefaults);
+  releaseAppStoreLock();
+});
 
 test("an out-of-caps effort is preserved and shown raw", async ({
   page,

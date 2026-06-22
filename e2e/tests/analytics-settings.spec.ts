@@ -1,7 +1,8 @@
 import { test, expect, type Page } from "../fixtures";
 import { openProject } from "../helpers/project";
 import { header } from "../helpers/selectors";
-import { getAnalyticsConsent, setAnalyticsConsent } from "../helpers/appSettings";
+import { getAnalyticsConsent, setAnalyticsConsent, type AnalyticsStatus } from "../helpers/appSettings";
+import { acquireAppStoreLock, releaseAppStoreLock } from "../helpers/appStoreLock";
 
 /**
  * Settings → Privacy: the in-app analytics toggle is bound to the same
@@ -12,6 +13,18 @@ import { getAnalyticsConsent, setAnalyticsConsent } from "../helpers/appSettings
  * AppStore is shared across every project and test run, so each test seeds a
  * known starting state first.
  */
+
+let _savedConsent: AnalyticsStatus;
+
+test.beforeEach(async ({ tempProject }) => {
+  await acquireAppStoreLock();
+  _savedConsent = await getAnalyticsConsent(tempProject.path);
+});
+
+test.afterEach(async ({ tempProject }) => {
+  await setAnalyticsConsent(tempProject.path, _savedConsent.enabled);
+  releaseAppStoreLock();
+});
 
 const MODAL = ".settings-modal";
 const NAV = `${MODAL} nav[aria-label='Settings sections']`;

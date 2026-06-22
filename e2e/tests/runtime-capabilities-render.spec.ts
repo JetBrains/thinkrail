@@ -1,8 +1,9 @@
 import { test, expect } from "../fixtures";
 import { openProject } from "../helpers/project";
 import { newSession } from "../helpers/selectors";
-import { seedSessionDefaults } from "../helpers/appSettings";
+import { seedSessionDefaults, getSessionDefaults, type SessionDefaults } from "../helpers/appSettings";
 import { optionLabels, selectedLabel } from "../helpers/draftConfig";
+import { acquireAppStoreLock, releaseAppStoreLock } from "../helpers/appStoreLock";
 
 /**
  * The draft pickers (model / permission / effort) are rendered entirely from
@@ -10,6 +11,18 @@ import { optionLabels, selectedLabel } from "../helpers/draftConfig";
  * the frontend. This asserts every option renders, in caps order, with the
  * runtime default (caps[0]) leading.
  */
+
+let _savedDefaults: SessionDefaults;
+
+test.beforeEach(async ({ tempProject }) => {
+  await acquireAppStoreLock();
+  _savedDefaults = await getSessionDefaults(tempProject.path);
+});
+
+test.afterEach(async ({ tempProject }) => {
+  await seedSessionDefaults(tempProject.path, _savedDefaults);
+  releaseAppStoreLock();
+});
 
 test("draft pickers render the runtime's declared capabilities in order", async ({
   page,

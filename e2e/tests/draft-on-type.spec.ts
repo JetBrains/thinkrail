@@ -3,7 +3,8 @@ import { join } from "node:path";
 import type { Browser, Page } from "@playwright/test";
 import { test, expect } from "../fixtures";
 import { openProject } from "../helpers/project";
-import { seedSessionDefaults } from "../helpers/appSettings";
+import { seedSessionDefaults, getSessionDefaults, type SessionDefaults } from "../helpers/appSettings";
+import { acquireAppStoreLock, releaseAppStoreLock } from "../helpers/appStoreLock";
 import {
   header,
   leftPanel,
@@ -123,10 +124,17 @@ async function openSecondClient(
 }
 
 test.describe("Draft-on-type", () => {
+  let _savedDefaults: SessionDefaults;
+
   test.beforeEach(async ({ tempProject }) => {
-    // Seed defaults before any UI opens so the first draft inherits a known
-    // model/permission/effort (shared AppStore — never assume isolation).
+    await acquireAppStoreLock();
+    _savedDefaults = await getSessionDefaults(tempProject.path);
     await seedSessionDefaults(tempProject.path, { ...DEFAULTS });
+  });
+
+  test.afterEach(async ({ tempProject }) => {
+    await seedSessionDefaults(tempProject.path, _savedDefaults);
+    releaseAppStoreLock();
   });
 
   // 1. Empty abandon — type nothing, abandon: no file, no broadcast to a 2nd client.

@@ -1,7 +1,8 @@
 import { test, expect } from "../fixtures";
 import { openProject } from "../helpers/project";
-import { seedSessionDefaults } from "../helpers/appSettings";
+import { seedSessionDefaults, getSessionDefaults, type SessionDefaults } from "../helpers/appSettings";
 import { inputAutocomplete, newSession } from "../helpers/selectors";
+import { acquireAppStoreLock, releaseAppStoreLock } from "../helpers/appStoreLock";
 
 /**
  * Slash autocomplete in the chat composer — mid-input trigger + grouped
@@ -45,6 +46,18 @@ import { inputAutocomplete, newSession } from "../helpers/selectors";
 // macOS hosts and silently no-op the submit (as a real session, not
 // the test, would correctly fall through to a newline insert).
 const SUBMIT_CHORD = "Alt+Enter";
+
+let _savedDefaults: SessionDefaults;
+
+test.beforeEach(async ({ tempProject }) => {
+  await acquireAppStoreLock();
+  _savedDefaults = await getSessionDefaults(tempProject.path);
+});
+
+test.afterEach(async ({ tempProject }) => {
+  await seedSessionDefaults(tempProject.path, _savedDefaults);
+  releaseAppStoreLock();
+});
 
 test("slash autocomplete: mid-input trigger, grouped sections, Tab insertion, keyboard submit", async ({
   page,
