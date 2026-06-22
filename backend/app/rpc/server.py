@@ -175,11 +175,27 @@ METHODS = {
 # Per-project service container (survives WebSocket reconnects).
 _projects: dict[str, ProjectContext] = {}
 
-# Guards _projects dict access.  threading.Lock (not asyncio.Lock) because
-# Starlette's TestClient runs each websocket_connect() on a separate event
-# loop — asyncio primitives deadlock across loops.  The lock is held only
-# for sync dict operations, never across an await.
+# Guards _projects (and _startup_locks) access.  threading.Lock (not
+# asyncio.Lock) because Starlette's TestClient runs each websocket_connect()
+# on a separate event loop — asyncio primitives deadlock across loops.  The
+# lock is held only for sync dict operations, never across an await.
 _projects_lock = threading.Lock()
+
+# Per-project startup locks — serialize the first connection's
+# create+start+store so only one ProjectContext.start() runs per project.
+# Without this, two concurrent connections both open and initialize the same
+# SQLite index and one fails with "database is locked".
+_startup_locks: dict[str, threading.Lock] = {}
+
+
+def _startup_lock_for(key: str) -> threading.Lock:
+    """Return the per-project startup lock, creating it on first use."""
+    with _projects_lock:
+        lock = _startup_locks.get(key)
+        if lock is None:
+            lock = threading.Lock()
+            _startup_locks[key] = lock
+        return lock
 
 
 def _bind_methods(
@@ -299,34 +315,40 @@ def register_routes(app: FastAPI, app_store: "AppStore | None" = None) -> None:
                     ctx = _projects[key]
                     ctx.connection_count += 1
 
-            # No existing context — create and start before storing.
-            # This ensures a failed start() never leaves a broken context
-            # in _projects for other connections to find.
             if ctx is None:
-                async def _coordinator_notify(method: str, params: dict) -> None:
-                    await bus.publish(project_topic, method, params)
+                # First connection for this project: serialize startup so only
+                # one ProjectContext.start() ever runs.  The blocking acquire
+                # is offloaded to a thread so it never stalls the event loop
+                # (in production every connection shares one loop); releasing
+                # from the loop thread is fine — threading.Lock isn't owned.
+                startup_lock = _startup_lock_for(key)
+                await asyncio.to_thread(startup_lock.acquire)
+                try:
+                    # Re-check under the startup lock — a racing connection may
+                    # have created and stored the context while we waited.
+                    with _projects_lock:
+                        if key in _projects:
+                            ctx = _projects[key]
+                            ctx.connection_count += 1
 
-                new_ctx = ProjectContext(
-                    key, project_path, config,
-                    notify_fn=_coordinator_notify,
-                    watcher_factory=_start_watcher,
-                )
-                await new_ctx.start()
+                    if ctx is None:
+                        async def _coordinator_notify(method: str, params: dict) -> None:
+                            await bus.publish(project_topic, method, params)
 
-                # Store only after start() succeeds.  Re-check under lock
-                # in case another connection raced us.
-                with _projects_lock:
-                    if key in _projects:
-                        # Another connection created this project concurrently.
-                        # Discard ours, use theirs.
-                        ctx = _projects[key]
-                        ctx.connection_count += 1
-                        # Shut down our duplicate outside the lock.
-                        asyncio.create_task(new_ctx.shutdown())
-                    else:
-                        ctx = new_ctx
-                        _projects[key] = ctx
-                        ctx.connection_count += 1
+                        new_ctx = ProjectContext(
+                            key, project_path, config,
+                            notify_fn=_coordinator_notify,
+                            watcher_factory=_start_watcher,
+                        )
+                        # Start before storing so a failed start() never leaves
+                        # a broken context in _projects for others to find.
+                        await new_ctx.start()
+                        with _projects_lock:
+                            _projects[key] = new_ctx
+                            new_ctx.connection_count += 1
+                            ctx = new_ctx
+                finally:
+                    startup_lock.release()
 
             bound_methods = _bind_methods(
                 config, ctx.spec_service, ctx.agent_service,
