@@ -51,3 +51,27 @@ export const LongString: Story = {
     },
   },
 };
+
+export const ProposePipeline: Story = {
+  args: {
+    toolName: "propose_pipeline",
+    input: {
+      nodes: [
+        { id: "product-design", title: "Product design", skill: "ticket-product-design" },
+        {
+          id: "technical-design",
+          title: "Technical design",
+          skill: "ticket-technical-design",
+          dependsOn: ["product-design"],
+        },
+        {
+          id: "implementation",
+          title: "Implementation",
+          skill: "ticket-implement",
+          executesPlan: true,
+          dependsOn: ["technical-design"],
+        },
+      ],
+    },
+  },
+};

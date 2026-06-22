@@ -35,6 +35,14 @@ function str(v: unknown): string {
   return typeof v === "string" ? v : "";
 }
 
+function records(v: unknown): Record<string, unknown>[] {
+  return Array.isArray(v)
+    ? v.filter((item): item is Record<string, unknown> => (
+      typeof item === "object" && item !== null && !Array.isArray(item)
+    ))
+    : [];
+}
+
 // ── Extractors ──
 
 const bashExtractor: HeaderExtractor = (input, output) => {
@@ -107,6 +115,20 @@ const askUserExtractor: HeaderExtractor = (input) => {
   return { summary: truncate(q) };
 };
 
+const proposePipelineExtractor: HeaderExtractor = (input) => {
+  const nodes = records(input.nodes);
+  const titles = nodes
+    .map((node) => str(node.title) || str(node.id))
+    .filter(Boolean);
+  const count = nodes.length;
+  return {
+    summary: count > 0
+      ? `${count} stages: ${truncate(titles.join(" -> "), 90)}`
+      : "Pipeline proposal",
+    badge: "pipeline",
+  };
+};
+
 // ── Registry ──
 
 const EXTRACTORS: Record<string, HeaderExtractor> = {
@@ -118,6 +140,7 @@ const EXTRACTORS: Record<string, HeaderExtractor> = {
   WebSearch: webSearchExtractor,
   WebFetch: webFetchExtractor,
   AskUserQuestion: askUserExtractor,
+  propose_pipeline: proposePipelineExtractor,
 };
 
 /** Fallback: pick the first string-valued field from input. */

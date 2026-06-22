@@ -1,11 +1,42 @@
 import { useState } from "react";
+import { VisualizationCard } from "./VisualizationCard.tsx";
+import {
+  isPipelineTool,
+  nodeMeta,
+  parsePipelineNodes,
+  pipelineToVisData,
+} from "./pipelineToolVisualization.ts";
 
 interface ToolInputDetailProps {
   input: Record<string, unknown>;
+  toolName?: string;
 }
 
 /** Max chars before a string value is truncated with a toggle. */
 const STRING_TRUNCATE = 200;
+
+function PipelineToolInput({ input }: { input: Record<string, unknown> }) {
+  const nodes = parsePipelineNodes(input);
+  if (!nodes) return null;
+
+  return (
+    <div className="tool-input-pipeline">
+      <VisualizationCard data={pipelineToVisData(nodes)} compactMode />
+      <div className="tool-input-pipeline-list" aria-label="Pipeline stages">
+        {nodes.map((node) => (
+          <div key={node.id} className="tool-input-pipeline-row">
+            <span className="tool-input-pipeline-id">{node.id}</span>
+            <span className="tool-input-pipeline-title">{node.title}</span>
+            <span className="tool-input-pipeline-meta">{nodeMeta(node)}</span>
+            <span className="tool-input-pipeline-deps">
+              {node.dependsOn.length > 0 ? `after ${node.dependsOn.join(", ")}` : "entry"}
+            </span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
 
 function ValueSpan({ value }: { value: unknown }) {
   const [showFull, setShowFull] = useState(false);
@@ -58,9 +89,18 @@ function ValueSpan({ value }: { value: unknown }) {
  * purple for numbers, blue for booleans). Internal keys starting with `_`
  * are skipped.
  */
-export function ToolInputDetail({ input }: ToolInputDetailProps) {
+export function ToolInputDetail({ input, toolName }: ToolInputDetailProps) {
   const entries = Object.entries(input).filter(([k]) => !k.startsWith("_"));
   if (entries.length === 0) return null;
+
+  if (isPipelineTool(toolName) && parsePipelineNodes(input) !== null) {
+    return (
+      <div className="tool-input-detail">
+        <div className="tool-section-label text-uppercase">Input</div>
+        <PipelineToolInput input={input} />
+      </div>
+    );
+  }
 
   return (
     <div className="tool-input-detail">

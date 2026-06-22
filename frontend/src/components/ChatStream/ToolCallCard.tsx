@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { extractToolHeader, cleanToolName } from "./toolHeaderExtractors.ts";
 import { ToolInputDetail } from "./ToolInputDetail.tsx";
+import { shouldRenderToolInputDetail } from "./pipelineToolVisualization.ts";
 import { ToolOutputBody } from "./ToolOutputBody.tsx";
 import { useExpandCollapse } from "./useExpandCollapse.ts";
 
@@ -94,8 +95,8 @@ export function ToolCallCard({
       </div>
       {expanded && (
         <div className="chat-tool-body">
-          {rawInput && Object.keys(rawInput).filter(k => !k.startsWith("_")).length > 1 && (
-            <ToolInputDetail input={rawInput} />
+          {rawInput && shouldRenderToolInputDetail(displayName, rawInput) && (
+            <ToolInputDetail input={rawInput} toolName={displayName} />
           )}
           {output && (
             <ToolOutputBody output={output} isError={isError} />

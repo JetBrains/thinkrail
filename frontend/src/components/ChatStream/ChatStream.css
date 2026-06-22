@@ -244,6 +244,15 @@
 .tool-input-value--bool { color: var(--blue); }
 .tool-input-value--nested { color: var(--muted); font-size: var(--font-sm); margin: 2px 0 0; padding: var(--space-xs) var(--space-sm); background: rgba(0, 0, 0, 0.08); border-radius: var(--radius-sm); }
 .tool-input-toggle { background: none; border: none; color: var(--blue); font-size: var(--font-sm); cursor: pointer; padding: 0 var(--space-xs); text-decoration: underline; }
+.tool-input-pipeline { display: flex; flex-direction: column; gap: var(--space-sm); }
+.tool-input-pipeline .vis-card { max-width: 100%; }
+.tool-input-pipeline .vis-card-body { min-height: 160px; }
+.tool-input-pipeline-list { display: flex; flex-direction: column; gap: 2px; padding: var(--space-sm) var(--space-md); background: rgba(0, 0, 0, 0.12); border-radius: var(--radius-sm); }
+.tool-input-pipeline-row { display: grid; grid-template-columns: minmax(64px, 0.75fr) minmax(0, 1.5fr) minmax(0, 1fr) minmax(0, 1fr); gap: var(--space-sm); align-items: center; min-height: 22px; font-size: var(--font-md); color: var(--muted); }
+.tool-input-pipeline-id { color: var(--gold); font-family: var(--font-mono); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tool-input-pipeline-title { color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tool-input-pipeline-meta { color: var(--blue); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tool-input-pipeline-deps { color: var(--hint); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 /* ── Content-Aware Tool Output ── */
 .tool-output { font-size: var(--font-md); white-space: pre-wrap; word-break: break-word; color: var(--muted); margin: 0; padding: var(--space-sm) var(--space-md); background: rgba(0, 0, 0, 0.12); border-radius: var(--radius-sm); }
