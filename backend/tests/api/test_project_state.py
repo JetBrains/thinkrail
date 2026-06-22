@@ -2,9 +2,24 @@
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 from app.api.routers.project import _detect_project_state
+from app.board.storage import _TICKET_META_FILENAME, tickets_root
+
+# Artifact filenames, named once so the tests track the production markers
+# instead of re-hardcoding the same strings across every case.
+GOAL_DOC = "GOAL&REQUIREMENTS.md"
+GOAL_DOC_UNDERSCORE = "GOAL_AND_REQUIREMENTS.md"
+DESIGN_DOC = "DESIGN_DOC.md"
+
+
+def _write_ticket(project_root: Path, ticket_id: str = "mt_abc") -> None:
+    """Create a real board ticket at ``.tr/tickets/<id>/ticket.json``."""
+    folder = tickets_root(project_root) / ticket_id
+    folder.mkdir(parents=True)
+    (folder / _TICKET_META_FILENAME).write_text(json.dumps({"title": "A ticket"}))
 
 
 class TestDetectProjectState:
@@ -35,26 +50,26 @@ class TestDetectProjectState:
         # Goal&requirements is the first onboarding artifact — on its own
         # the user is still mid-onboarding, so the investigate flow should
         # pick the project up rather than skipping straight to a session.
-        (tmp_path / "GOAL&REQUIREMENTS.md").write_text("# Project\n\nOverview...")
+        (tmp_path / GOAL_DOC).write_text("# Project\n\nOverview...")
         assert _detect_project_state(tmp_path) == "existing"
 
     def test_underscore_goal_variant_alone_is_existing(self, tmp_path: Path) -> None:
-        (tmp_path / "GOAL_AND_REQUIREMENTS.md").write_text("# Project\n")
+        (tmp_path / GOAL_DOC_UNDERSCORE).write_text("# Project\n")
         assert _detect_project_state(tmp_path) == "existing"
 
     def test_design_doc_marks_initialized(self, tmp_path: Path) -> None:
-        (tmp_path / "DESIGN_DOC.md").write_text("# Architecture\n")
+        (tmp_path / DESIGN_DOC).write_text("# Architecture\n")
         assert _detect_project_state(tmp_path) == "initialized"
 
     def test_empty_goal_file_is_not_initialized(self, tmp_path: Path) -> None:
         # spec_save creates the file with at least a title — a zero-byte
         # file means nothing was actually persisted yet.
-        (tmp_path / "GOAL&REQUIREMENTS.md").write_text("")
+        (tmp_path / GOAL_DOC).write_text("")
         assert _detect_project_state(tmp_path) == "existing"
 
     def test_design_doc_overrides_user_files(self, tmp_path: Path) -> None:
         (tmp_path / "src.py").write_text("print('hi')")
-        (tmp_path / "DESIGN_DOC.md").write_text("# Architecture\n")
+        (tmp_path / DESIGN_DOC).write_text("# Architecture\n")
         assert _detect_project_state(tmp_path) == "initialized"
 
     # Agents typically write the spec INSIDE `.tr/` rather than at project
@@ -64,30 +79,29 @@ class TestDetectProjectState:
     def test_goal_inside_thinkrail_dir_is_existing(self, tmp_path: Path) -> None:
         thinkrail = tmp_path / ".tr"
         thinkrail.mkdir()
-        (thinkrail / "GOAL&REQUIREMENTS.md").write_text("# Project\n")
+        (thinkrail / GOAL_DOC).write_text("# Project\n")
         assert _detect_project_state(tmp_path) == "existing"
 
     def test_design_doc_inside_thinkrail_dir_marks_initialized(self, tmp_path: Path) -> None:
         thinkrail = tmp_path / ".tr"
         thinkrail.mkdir()
-        (thinkrail / "DESIGN_DOC.md").write_text("# Architecture\n")
+        (thinkrail / DESIGN_DOC).write_text("# Architecture\n")
         assert _detect_project_state(tmp_path) == "initialized"
 
-    def test_board_tickets_mark_initialized(self, tmp_path: Path) -> None:
+    def test_board_ticket_marks_initialized(self, tmp_path: Path) -> None:
         # Once the user has board state, the project has clearly moved
         # past "new" — even if the spec is missing.
-        mt = tmp_path / ".tr" / "meta-tickets"
-        mt.mkdir(parents=True)
-        (mt / "mt_abc.json").write_text("{}")
+        _write_ticket(tmp_path)
         assert _detect_project_state(tmp_path) == "initialized"
 
-    def test_saved_plan_marks_initialized(self, tmp_path: Path) -> None:
-        plans = tmp_path / ".tr" / "plans"
-        plans.mkdir(parents=True)
-        (plans / "plan.json").write_text("{}")
-        assert _detect_project_state(tmp_path) == "initialized"
+    def test_empty_tickets_dir_does_not_mark_initialized(self, tmp_path: Path) -> None:
+        # The watcher (or a wiped board) can leave the dir behind with no
+        # ticket.json inside — that's not real board state.
+        tickets_root(tmp_path).mkdir(parents=True)
+        assert _detect_project_state(tmp_path) == "new"
 
-    def test_empty_meta_tickets_dir_does_not_mark_initialized(self, tmp_path: Path) -> None:
-        # Watcher might create the empty dir before any ticket lands.
-        (tmp_path / ".tr" / "meta-tickets").mkdir(parents=True)
+    def test_orphan_ticket_folder_without_meta_does_not_mark_initialized(self, tmp_path: Path) -> None:
+        # A folder under tickets/ with no ticket.json is an orphan artifact
+        # dir from a prior layout — it must not count as real board state.
+        (tickets_root(tmp_path) / "mt_orphan").mkdir(parents=True)
         assert _detect_project_state(tmp_path) == "new"

@@ -22,6 +22,7 @@ from app.api.schemas import (
     ScanFile,
     ScanFolder,
 )
+from app.board.storage import list_tickets, tickets_root
 from app.core.thinkrailhide import load_thinkrailhide
 from app.version import VERSION
 from app.core.config import PROJECT_DIRNAME
@@ -67,32 +68,29 @@ def _project_meta_dir(p: Path) -> Path | None:
     return None
 
 
-def _thinkrail_has_deliverable(meta: Path | None) -> bool:
-    """True if the meta dir holds real work past the initial goal spec —
-    a later spec deliverable, a board ticket, or a saved plan.
+def _thinkrail_has_deliverable(p: Path) -> bool:
+    """True if the project holds real work past the initial goal spec —
+    a later spec deliverable written inside ``.tr/``, or a board ticket.
 
     The agent writes most artifacts inside the meta dir rather than the
     project root. A bare ``sessions`` directory doesn't count — it can be
-    left behind by a draft that never produced anything.
+    left behind by a draft that never produced anything. Plans live inside
+    their ticket folder, so a ticket already subsumes them.
     """
+    meta = _project_meta_dir(p)
     if meta is None:
         return False
+    if any(_is_nonempty_file(meta / marker) for marker in _DELIVERABLE_MARKERS):
+        return True
     try:
-        if any(_is_nonempty_file(meta / marker) for marker in _DELIVERABLE_MARKERS):
-            return True
-        mt_dir = meta / "meta-tickets"
-        if mt_dir.is_dir() and any(mt_dir.glob("*.json")):
-            return True
-        plans_dir = meta / "plans"
-        if plans_dir.is_dir() and any(plans_dir.iterdir()):
-            return True
+        return bool(list_tickets(tickets_root(p)))
     except OSError:
         return False
-    return False
 
 
-def _thinkrail_has_goal(meta: Path | None) -> bool:
+def _thinkrail_has_goal(p: Path) -> bool:
     """True if an initial goal&requirements spec lives inside ``.tr/``."""
+    meta = _project_meta_dir(p)
     if meta is None:
         return False
     return any(_is_nonempty_file(meta / marker) for marker in _INITIAL_SPEC_MARKERS)
@@ -116,10 +114,9 @@ def _detect_project_state(p: Path) -> ProjectState:
     except OSError:
         return "existing"
 
-    meta = _project_meta_dir(p)
-    if _has_marker(non_dot, _DELIVERABLE_MARKERS) or _thinkrail_has_deliverable(meta):
+    if _has_marker(non_dot, _DELIVERABLE_MARKERS) or _thinkrail_has_deliverable(p):
         return "initialized"
-    if non_dot or _thinkrail_has_goal(meta):
+    if non_dot or _thinkrail_has_goal(p):
         return "existing"
     return "new"
 
