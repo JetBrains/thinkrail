@@ -5,7 +5,8 @@
 		"declaration": true,
 		"declarationMap": true,
 		"outDir": "./dist",
-		"rootDir": "./src"
+		"rootDir": "./src",
+		"types": ["bun"]
 	},
 	"include": ["src"],
 	"references": [{ "path": "../contracts" }]
