@@ -1,76 +1,45 @@
-import type { CSSProperties } from "react";
 import { PRODUCT_NAME } from "../constants/branding";
 import { useAppStore } from "../store/appStore";
 import type { ConnectionStatus } from "../transport";
-
-const styles: Record<string, CSSProperties> = {
-	shell: { display: "grid", gridTemplateRows: "auto 1fr", height: "100%" },
-	topbar: {
-		display: "flex",
-		alignItems: "center",
-		justifyContent: "space-between",
-		padding: "var(--space-sm) var(--space-lg)",
-		borderBottom: "1px solid var(--border2)",
-		background: "var(--bg-dark)",
-	},
-	wordmark: {
-		fontFamily: "var(--font-accent)",
-		fontWeight: 800,
-		fontSize: "var(--font-lg)",
-		color: "var(--primary)",
-		letterSpacing: "0.5px",
-	},
-	status: {
-		display: "inline-flex",
-		alignItems: "center",
-		gap: "var(--space-sm)",
-		color: "var(--muted)",
-		fontSize: "var(--font-sm)",
-	},
-	dot: { width: 8, height: 8, borderRadius: "50%" },
-	body: { display: "grid", gridTemplateColumns: "240px 1fr 320px", minHeight: 0 },
-	left: { borderRight: "1px solid var(--border)", padding: "var(--space-md)", overflow: "auto" },
-	center: { display: "flex", alignItems: "center", justifyContent: "center", color: "var(--hint)" },
-	right: { borderLeft: "1px solid var(--border)", padding: "var(--space-md)", overflow: "auto" },
-	colLabel: {
-		textTransform: "uppercase",
-		fontSize: "var(--font-xs)",
-		letterSpacing: "var(--uppercase-spacing)",
-		color: "var(--muted)",
-	},
-};
 
 const STATUS_LABEL: Record<ConnectionStatus, string> = {
 	connected: "Connected",
 	connecting: "Connecting…",
 	disconnected: "Disconnected",
 };
-const STATUS_COLOR: Record<ConnectionStatus, string> = {
-	connected: "var(--green)",
-	connecting: "var(--gold)",
-	disconnected: "var(--red)",
+
+const STATUS_DOT: Record<ConnectionStatus, string> = {
+	connected: "bg-green",
+	connecting: "bg-gold",
+	disconnected: "bg-red",
 };
 
 export function Shell() {
 	const status = useAppStore((s) => s.status);
 	return (
-		<div data-testid="shell" style={styles.shell}>
-			<header style={styles.topbar}>
-				<span style={styles.wordmark}>{PRODUCT_NAME}</span>
-				<span data-testid="connection-status" data-status={status} style={styles.status}>
-					<span style={{ ...styles.dot, background: STATUS_COLOR[status] }} />
+		<div data-testid="shell" className="grid h-full grid-rows-[auto_1fr]">
+			<header className="flex items-center justify-between border-b border-border2 bg-bg-dark px-lg py-sm">
+				<span className="font-[var(--font-accent)] text-lg font-extrabold tracking-[0.5px] text-primary">
+					{PRODUCT_NAME}
+				</span>
+				<span
+					data-testid="connection-status"
+					data-status={status}
+					className="inline-flex items-center gap-sm text-sm text-muted"
+				>
+					<span className={`size-2 rounded-full ${STATUS_DOT[status]}`} />
 					{STATUS_LABEL[status]}
 				</span>
 			</header>
-			<div style={styles.body}>
-				<aside data-testid="left-nav" style={styles.left}>
-					<div style={styles.colLabel}>Projects</div>
+			<div className="grid min-h-0 grid-cols-[240px_1fr_320px]">
+				<aside data-testid="left-nav" className="overflow-auto border-r border-border p-md">
+					<div className="text-xs uppercase tracking-wider text-muted">Projects</div>
 				</aside>
-				<main data-testid="center-tabs" style={styles.center}>
+				<main data-testid="center-tabs" className="flex items-center justify-center text-hint">
 					Open a file or start a chat
 				</main>
-				<aside data-testid="right-panel" style={styles.right}>
-					<div style={styles.colLabel}>All files · Changes</div>
+				<aside data-testid="right-panel" className="overflow-auto border-l border-border p-md">
+					<div className="text-xs uppercase tracking-wider text-muted">All files · Changes</div>
 				</aside>
 			</div>
 		</div>

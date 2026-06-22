@@ -91,6 +91,9 @@ Architecture decisions live as spec-graph nodes, dogfooding the spec layer the p
 - **`prompt()` throws while a session is streaming** → call `steer()` / `followUp()`. Errors arrive via
   the event stream + thrown methods, not a crash signal — wrap each call and forward to the WS client.
 - **UI panels are layout-agnostic**; the shell arranges them (desktop multi-pane / mobile single-view).
+- **Web styling = Tailwind v4 utilities mapped to the CSS-var tokens** (`@theme inline` in
+  `apps/web/src/index.css`); themes swap the token set via `[data-theme]`. Components use utilities,
+  **never inline `style` objects or raw hex** — that's what keeps the UI themeable and responsive.
 - The transport's **host endpoint is a parameter** (default same-origin); `server.welcome` carries a
   protocol version so an independently-shipped UI can detect host drift.
 

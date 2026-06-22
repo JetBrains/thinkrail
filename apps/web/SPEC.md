@@ -37,6 +37,19 @@ Built at M3: `transport` (id-correlated request, channel subscribe + replay, rec
 parameter), `store` (connection + welcome), `wireTransport`, the branded `shell` (3-column frame + status
 pill). The `panels/` (FileTree, Editor, ChangesPanel, TerminalView, ChatView, Composer) land M4–M13.
 
+## Styling & theming
+
+- **Tailwind v4 utilities, mapped to the design tokens** (`src/index.css` `@theme inline`). Components
+  use utilities (`bg-bg-dark`, `text-primary`, `border-border`, `px-lg`, `text-lg`) — **never inline
+  `style` objects, never raw hex.** Responsive (`md:` …) and states (`hover:` / `focus-visible:`) come
+  from Tailwind (inline styles can't express them, and the responsive shell needs them).
+- **`src/styles/tokens.css` is the theme contract.** A *theme* is one set of CSS custom properties; a
+  theme swap = changing the token block via `[data-theme="…"]` on `<html>` (`applyTheme(id)`) — nothing
+  in components changes. `@theme inline` keeps utilities pointing at the live `var(--token)`, so the swap
+  re-themes everything. V1 ships one dark theme, structured for N (pibun's theme engine, lifted at V2).
+- Token names that collide with Tailwind namespaces (`--font-mono`, `--font-accent`, `--radius-*`) are
+  used as token arbitrary values (`font-[var(--font-accent)]`), not `@theme` mappings.
+
 ## Get right
 
 - **`apps/web` depends on `packages/contracts` only.** Never value-import `pi`; never import `server`/`shared`.

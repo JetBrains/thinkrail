@@ -1,1 +1,41 @@
 @import "tailwindcss";
+@import "./styles/tokens.css";
+@import "./styles/global.css";
+
+/*
+ * Map the ThinkRail design tokens (tokens.css) onto Tailwind's theme namespaces. `inline` makes the
+ * utilities resolve to the live `var(--token)` (not a baked value), so swapping the token set via
+ * `[data-theme="…"]` re-themes everything. Colors/spacing/text don't collide with token names; the
+ * `--font-mono` / `--font-accent` / `--radius-*` tokens DO collide with Tailwind namespaces, so those
+ * are referenced as token arbitrary values (e.g. `font-[var(--font-accent)]`) instead.
+ */
+@theme inline {
+	--color-bg: var(--bg);
+	--color-bg-dark: var(--bg-dark);
+	--color-elevated: var(--elevated);
+	--color-hover: var(--hover);
+	--color-border: var(--border);
+	--color-border2: var(--border2);
+	--color-text: var(--text);
+	--color-muted: var(--muted);
+	--color-hint: var(--hint);
+	--color-primary: var(--primary);
+	--color-blue: var(--blue);
+	--color-green: var(--green);
+	--color-red: var(--red);
+	--color-gold: var(--gold);
+	--color-on-accent: var(--on-accent);
+
+	--font-sans: var(--font);
+
+	--text-xs: var(--font-xs);
+	--text-sm: var(--font-sm);
+	--text-md: var(--font-md);
+	--text-lg: var(--font-lg);
+
+	--spacing-xs: var(--space-xs);
+	--spacing-sm: var(--space-sm);
+	--spacing-md: var(--space-md);
+	--spacing-lg: var(--space-lg);
+	--spacing-xl: var(--space-xl);
+}
