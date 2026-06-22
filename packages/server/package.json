@@ -1,0 +1,23 @@
+{
+	"name": "@thinkrail-pi/server",
+	"version": "0.0.0",
+	"private": true,
+	"type": "module",
+	"exports": {
+		".": "./src/index.ts"
+	},
+	"scripts": {
+		"dev": "bun run --watch src/index.ts",
+		"typecheck": "tsc --noEmit"
+	},
+	"dependencies": {
+		"@thinkrail-pi/contracts": "workspace:*",
+		"@thinkrail-pi/shared": "workspace:*",
+		"@earendil-works/pi-coding-agent": "^0.79.10",
+		"bun-pty": "^0.4.10"
+	},
+	"devDependencies": {
+		"@types/bun": "^1.3.14",
+		"typescript": "^6.0.3"
+	}
+}

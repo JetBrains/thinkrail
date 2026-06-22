@@ -1,0 +1,17 @@
+{
+	"name": "@thinkrail-pi/contracts",
+	"version": "0.0.0",
+	"private": true,
+	"type": "module",
+	"exports": {
+		".": "./src/index.ts"
+	},
+	"scripts": {
+		"typecheck": "tsc --noEmit"
+	},
+	"devDependencies": {
+		"@earendil-works/pi-agent-core": "^0.79.10",
+		"@earendil-works/pi-ai": "^0.79.10",
+		"typescript": "^6.0.3"
+	}
+}

@@ -1,0 +1,18 @@
+{
+	"name": "@thinkrail-pi/shared",
+	"version": "0.0.0",
+	"private": true,
+	"type": "module",
+	"exports": {
+		"./shellEnv": "./src/shellEnv.ts"
+	},
+	"scripts": {
+		"typecheck": "tsc --noEmit"
+	},
+	"dependencies": {
+		"@thinkrail-pi/contracts": "workspace:*"
+	},
+	"devDependencies": {
+		"typescript": "^6.0.3"
+	}
+}
