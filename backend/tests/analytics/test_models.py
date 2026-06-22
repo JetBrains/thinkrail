@@ -1,10 +1,12 @@
 from __future__ import annotations
 
-from pydantic import TypeAdapter
+import pytest
+from pydantic import TypeAdapter, ValidationError
 
 from app.analytics.models import (
     ANALYTICS_EVENT_MODELS,
     EVENT_FIELD_ALLOWLIST,
+    AgentSessionCompletedEvent,
     AnalyticsConsent,
     AnalyticsEvent,
     AnalyticsStatus,
@@ -55,6 +57,21 @@ class TestEventUnion:
         wire = SpecsViewedEvent(installation_id="x").model_dump(by_alias=True)
         assert set(wire) == {"event", "installationId"}
         assert wire["event"] == "specs_viewed"
+
+    def test_session_completed_carries_only_enum_dimensions(self) -> None:
+        wire = AgentSessionCompletedEvent(
+            installation_id="x", outcome="error", files_written_bucket="4-10"
+        ).model_dump(by_alias=True)
+        assert set(wire) == {"event", "installationId", "outcome", "filesWrittenBucket"}
+        assert wire["outcome"] == "error"
+        assert wire["filesWrittenBucket"] == "4-10"
+
+    def test_session_completed_rejects_out_of_range_bucket(self) -> None:
+        ta = TypeAdapter(AnalyticsEvent)
+        with pytest.raises(ValidationError):
+            ta.validate_python(
+                {"event": "agent_session_completed", "filesWrittenBucket": "7"}
+            )
 
 
 class TestConsentModel:

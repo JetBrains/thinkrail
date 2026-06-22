@@ -56,9 +56,14 @@ The three product questions it serves:
 | `os` | yes (env) | `macos` \| `linux` \| `windows` |
 | `arch` | yes (env) | `x64` \| `arm64` |
 
-The `event` discriminator itself is a closed `Literal` (one value per event type), so the only per-event variation is which named event fired.
+The `event` discriminator itself is a closed `Literal` (one value per event type). A few events additionally carry **closed, low-cardinality enum dimensions** — never free-form values, never raw numbers:
 
-**Never sent:** project paths, file/spec/ticket names, prompts, code, transcripts, token counts, hostnames, usernames, or IP-derived fields.
+| Field | On event | Cardinality |
+|-------|----------|-------------|
+| `outcome` | `agent_session_completed` | `completed` \| `error` \| `cancelled` |
+| `files_written_bucket` | `agent_session_completed` | `0` \| `1-3` \| `4-10` \| `11+` (bucketed count of distinct files written/edited) |
+
+**Never sent:** project paths, file/spec/ticket names, prompts, code, transcripts, token counts, **raw file counts**, hostnames, usernames, or IP-derived fields. Quantitative signal is always bucketed to a closed `Literal`, never an open integer. The written-file count is derived from a transient in-memory set of paths that is never persisted or sent.
 
 The complete field set of the `AnalyticsEvent` union is asserted against an explicit allowlist in `backend/tests/analytics/test_models.py`. Any future field addition that is not in the allowlist fails CI — a content leak cannot land silently.
 
@@ -136,6 +141,7 @@ graph TD
 | `AppInstalledEvent` | `event="app_installed"`, `installationId`, `channel`, `version`, `os`, `arch` | Acquisition — emitted once, when the `installation_id` is first minted. |
 | `AppStartedEvent` | `event="app_started"`, `installationId`, `channel`, `version`, `os`, `arch` | Retention / churn — emitted on each backend startup. |
 | Feature events | `event="<name>"`, `installationId` | One named event per top-level feature (see table below). Each carries only the installation id. |
+| `AgentSessionCompletedEvent` | `event="agent_session_completed"`, `installationId`, `outcome`, `filesWrittenBucket` | Session terminal state — the one feature event carrying enum dimensions (coarse outcome + bucketed count of distinct files written/edited). |
 | `AnalyticsConsent` | `enabled: bool`, `installationId: str \| None` | The persisted consent record; the single runtime source of truth. **Backend-internal — never crosses the wire.** |
 | `AnalyticsStatus` | `enabled: bool` | Wire view of consent for the UI toggle. Every event is sent backend-side, so the frontend never sees the `installation_id` — only `enabled` crosses the wire. The curated RPC payload model. |
 | `AnalyticsEvent` | `Annotated[Union[...], Field(discriminator="event")]` | Discriminated union — single source of truth for validation and the privacy allowlist test. |
@@ -147,6 +153,7 @@ Each top-level feature has its own event type. They are coarse by design — one
 | Event | Emit location | Rationale |
 |-------|---------------|-----------|
 | `AgentSessionStartedEvent` | `rpc/methods/agents.py:run_agent` and `start_draft` | The two ways a user starts a session — direct run and draft Start. |
+| `AgentSessionCompletedEvent` | `agent/service.py:_run_background` (`finally`) | The single terminal point covering every end path (done/error/cancel). Carries `outcome` and the bucketed `files_written_bucket` (distinct files written/edited, counted for every session) — closes the core-loop "do sessions finish and produce changes" question. |
 | `SpecsViewedEvent` | `rpc/methods/specs.py:list_specs` | Primary spec-browsing entry. |
 | `SpecGraphViewedEvent` | `rpc/methods/specs.py:get_graph` | Distinct spec-graph visualization. |
 | `BoardViewedEvent` | `rpc/methods/board.py:list_tickets` | Board view entry. |

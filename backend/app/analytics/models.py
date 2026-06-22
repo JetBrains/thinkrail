@@ -61,6 +61,20 @@ class AgentSessionStartedEvent(_AnalyticsEvent):
     event: Literal["agent_session_started"] = "agent_session_started"
 
 
+class AgentSessionCompletedEvent(_AnalyticsEvent):
+    """A session reached a terminal state.
+
+    ``outcome`` is the coarse end state; ``files_written_bucket`` is the
+    bucketed count of distinct files the session wrote or edited (never the
+    raw count or any path). Together they answer "do sessions finish, and do
+    they produce changes" without inspecting what was changed.
+    """
+
+    event: Literal["agent_session_completed"] = "agent_session_completed"
+    outcome: Literal["completed", "error", "cancelled"] = "completed"
+    files_written_bucket: Literal["0", "1-3", "4-10", "11+"] = "0"
+
+
 class SpecsViewedEvent(_AnalyticsEvent):
     event: Literal["specs_viewed"] = "specs_viewed"
 
@@ -94,6 +108,7 @@ AnalyticsEvent = Annotated[
         AppInstalledEvent,
         AppStartedEvent,
         AgentSessionStartedEvent,
+        AgentSessionCompletedEvent,
         SpecsViewedEvent,
         SpecGraphViewedEvent,
         BoardViewedEvent,
@@ -118,7 +133,16 @@ ANALYTICS_EVENT_MODELS: tuple[type[_AnalyticsEvent], ...] = get_args(
 # potential content leak; ``tests/analytics/test_models.py`` asserts the union
 # of all event fields equals this allowlist, so adding one fails CI.
 EVENT_FIELD_ALLOWLIST: frozenset[str] = frozenset(
-    {"event", "installation_id", "channel", "version", "os", "arch"}
+    {
+        "event",
+        "installation_id",
+        "channel",
+        "version",
+        "os",
+        "arch",
+        "outcome",
+        "files_written_bucket",
+    }
 )
 
 
