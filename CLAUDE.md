@@ -1,0 +1,101 @@
+# ThinkRail-PI
+
+A ThinkRail-branded desktop-and-mobile client for the `pi` coding agent. The app is a thin host that
+runs `pi` and bridges it to a rich UI; `pi` owns models, skills, compaction, cost, and session state.
+
+Canonical specs (read these first):
+- `goal-and-requirements.md` — product goal + V1/V2 scope
+- `architecture.md` — top-level architecture, decisions, invariants
+- `docs/V1-TUTORIAL.md` — the buildable V1 milestone ladder (M0–M14), gotchas, dependency pins, type map
+- `docs/V2-ROADMAP.md` — the destination V1 is designed to reach
+
+## Module structure & boundaries (top-priority requirement)
+
+The app is built as a set of **clearly bounded modules**. This is a primary design requirement, not a
+nice-to-have — treat it with the same weight as the non-negotiable invariants below.
+- **Every module has a `SPEC.md`** that states its boundary explicitly: what it owns, what it exposes
+  as its public surface, and what it must *not* reach into (allowed deps and forbidden deps).
+- **Boundaries should be covered by tests** where practical — a module's public surface and its
+  boundary rules are worth exercising with tests, not just relying on convention. This is a goal, not a
+  hard gate: aim for coverage, but don't block on guaranteeing it everywhere.
+- **The spec leads the code.** A change that moves or blurs a boundary updates the module's `SPEC.md`
+  first, then the code and the tests that pin it.
+
+## Engine: `pi` only, in-process
+
+Built around the `pi` coding agent, run **in-process** via `@earendil-works/pi-coding-agent`
+(`createAgentSession`) — not a subprocess. No second runtime (no `claude-agent-sdk`), V1 or V2. We never
+assemble the prompt ourselves; we influence the agent only by what we feed `pi` (context, files, `pi`
+skills/extensions) and which flags we spawn it with.
+
+Tradeoff: in-process means **no crash isolation** — a fatal agent/provider fault takes the whole host
+down. Sessions still run concurrently (cooperative on one event loop); the subprocess RPC mode is the
+only alternative if fault isolation ever becomes worth the complexity.
+
+> The package scope is `@earendil-works/*`. The `@mariozechner/*` scope is the **deprecated** old name —
+> do not use it.
+
+## Architecture (three rings)
+
+- **Engine host** — `packages/server` (+ `packages/shared`), launched by `apps/cli` (V1) or
+  `apps/desktop` (Electrobun, deferred). `createServer()` = `Bun.serve` HTTP+WS + `AgentSessionManager`
+  (one in-process `AgentSession` per tab) + handlers + persistence.
+- **The wire** — `packages/contracts`: the typed, versioned protocol. Types-only.
+- **UI client** — `apps/web`: mobile-first React, ships independently, dials a host over the wire.
+
+V1 entrypoint is `apps/cli`: a `thinkrail-pi` bin that boots the host in-process and opens the browser.
+Remote/phone access (V2) is over Tailscale; auth stays external (the app carries an `owner` field).
+
+**V1 shape (Worktree IDE):** left = projects (git repos) → workspaces (each a `git
+worktree`, own branch/cwd, under `~/.thinkrail-pi/worktrees`); center = a tabbed area of Monaco file tabs
++ chat tabs; right = an All-files tree + Changes (git diff) + terminals, all scoped to the active
+worktree. The shell is built **first**, `pi` connected **last**. Deferred to V2: spec-graph viewer,
+PR/Checks/Review.
+
+## Repo layout
+
+```
+goal-and-requirements.md, architecture.md   top-level specs (repo root)
+apps/
+  cli/        V1 entrypoint: boot host + open browser   (SPEC.md)
+  web/        mobile-first UI client                    (SPEC.md)
+  desktop/    Electrobun launcher — DEFERRED            (SPEC.md)
+packages/
+  server/     createServer(): Bun.serve + AgentSessionManager  (SPEC.md)
+  contracts/  the wire (types-only)                     (SPEC.md)
+  shared/     shellEnv (server-side only)               (SPEC.md)
+```
+
+## Spec graph (how decisions are recorded)
+
+Architecture decisions live as spec-graph nodes, dogfooding the spec layer the product is about:
+- Top-level specs (`goal-and-requirements.md`, `architecture.md`) in the **repo root**.
+- Each module's spec is co-located as `<module>/SPEC.md`.
+- Frontmatter: `id`, `type` (goal-and-requirements | architecture-design | module-design |
+  submodule-design | task-spec), `status` (draft | active | stale | done | deprecated), `title`,
+  `parent` (single link), `depends-on` / `references` / `implements` (link lists), `covers` / `tags`.
+- **Specs are the source of truth and are updated during implementation.** A module spec is `draft`
+  until its design firms up, then `active`. Keep them honest as code lands.
+
+## Non-negotiable invariants
+
+- **`apps/web` depends on `packages/contracts` only** — never on `server`/`shared`. This is what makes
+  the UI shippable without the host.
+- **Never *value*-import `pi` in browser-bundled code; import types only, from the `/base` entries.**
+  `@earendil-works/pi-coding-agent` is server-only and never reaches `contracts`/`web` (it pulls
+  `node:fs` + provider SDKs). `pi-agent-core` + `pi-ai` are type-only devDeps of `contracts`.
+- **One id model:** the UI tab id vs `session.sessionId` (the `AgentSession` id). No separate pi UUID.
+- **`pi` owns state**; the host is a thin bridge and does not recompute what `pi` reports (cost, stats).
+- **Streaming:** `text_delta` / `thinking_delta` **APPEND**; `tool_execution_update.partialResult`
+  **REPLACE**.
+- **`prompt()` throws while a session is streaming** → call `steer()` / `followUp()`. Errors arrive via
+  the event stream + thrown methods, not a crash signal — wrap each call and forward to the WS client.
+- **UI panels are layout-agnostic**; the shell arranges them (desktop multi-pane / mobile single-view).
+- The transport's **host endpoint is a parameter** (default same-origin); `server.welcome` carries a
+  protocol version so an independently-shipped UI can detect host drift.
+
+## Stack
+
+Bun + Turbo monorepo · TypeScript (strict) · React 19 + Zustand + Tailwind v4 (web) · in-process `pi`
+via `@earendil-works/pi-coding-agent` (Node ≥ 22.19; verify Bun-compat at Checkpoint 0). Pinned versions
+in `docs/V1-TUTORIAL.md` Appendix F. On-disk app state under `~/.thinkrail-pi`.
