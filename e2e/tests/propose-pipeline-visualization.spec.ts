@@ -1,10 +1,8 @@
 import { test, expect } from "../fixtures";
-import type { Page } from "@playwright/test";
-import { basename } from "node:path";
 import { seedArchivedSession } from "../helpers/archivedSession";
-import { chatStream, projectPicker } from "../helpers/selectors";
-
-const BACKEND_URL = process.env.THINKRAIL_BACKEND_URL ?? "http://localhost:8000";
+import { seedTicket } from "../helpers/board";
+import { openProject } from "../helpers/project";
+import { chatStream } from "../helpers/selectors";
 
 const SID = "e2e-propose-pipeline";
 const SDK_SESSION_ID = "sdk-propose-pipeline";
@@ -26,29 +24,14 @@ const pipelineNodes = [
   },
 ];
 
-async function openProjectWithSeededSession(page: Page, path: string): Promise<void> {
-  const res = await fetch(`${BACKEND_URL.replace(/\/$/, "")}/api/projects/known`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ path, name: basename(path) }),
-  });
-  if (!res.ok) {
-    throw new Error(`Failed to register known project ${path}: ${res.status} ${await res.text()}`);
-  }
-
-  await page.goto("/");
-  const recent = page.locator(projectPicker.recentItem, { hasText: path });
-  await expect(recent).toBeVisible({ timeout: 15_000 });
-  await recent.first().click();
-  await expect(page.locator(chatStream.toolCard, { hasText: "propose_pipeline" })).toBeVisible({
-    timeout: 30_000,
-  });
-}
-
 test("propose_pipeline renders a readable diagram instead of raw JSON", async ({
   page,
   tempProject,
 }, testInfo) => {
+  seedTicket(tempProject.path, {
+    id: "mt_e2epipeline",
+    title: "Pipeline visual regression",
+  });
   seedArchivedSession(tempProject.path, {
     thinkrailSid: SID,
     name: "Pipeline visual regression",
@@ -106,7 +89,7 @@ test("propose_pipeline renders a readable diagram instead of raw JSON", async ({
     ],
   });
 
-  await openProjectWithSeededSession(page, tempProject.path);
+  await openProject(page, tempProject.path);
 
   const toolCard = page.locator(".chat-tool", { hasText: "propose_pipeline" });
   await expect(toolCard).toBeVisible({ timeout: 30_000 });
