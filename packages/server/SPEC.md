@@ -24,16 +24,19 @@ for development / e2e).
   `@earendil-works/pi-coding-agent` (runtime, M10), Bun/Node.
 - **Forbidden:** importing `web`/`cli`/`desktop`; being bundled into the browser.
 
-## Surface (current — M4)
+## Surface (current — M5)
 
 - `createServer({ port?, host?, staticDir? }) → { port, stop }`: `Bun.serve` with `/health`, a `/ws`
   upgrade, static SPA serving (when `staticDir` is set; `index.html` fallback, path-contained), and a WS
   that pushes **`server.welcome`** (`{ protocolVersion, projects }`) on open and dispatches requests.
 - `dev.ts`: `resolveShellEnv()` → `createServer` from `THINKRAIL_PI_PORT`/`_HOST`/`_STATIC_DIR`.
-- `handlers.ts`: the WS method→handler registry. M4: `project.open` / `project.list` / `project.close`.
+- `handlers.ts`: the WS method→handler registry — `project.*` (M4) and `workspace.create` / `list` /
+  `remove` / `diffStats` (M5).
 - `persistence.ts`: JSON app state under `dataDir()` — `THINKRAIL_PI_DATA_DIR` (dev/e2e isolation) else
   `~/.thinkrail-pi`. `projects.ts`: open a git repo as a project (validate via `git rev-parse
   --show-toplevel`, dedupe by root), list (by `lastOpened`), close.
+- `workspaces.ts`: a workspace = a `git worktree` on its own branch under
+  `dataDir/worktrees/<projectId>/<branch>`; create (off the repo HEAD), list (with diff stats), remove.
 
 ## Get right (firms up as features land)
 

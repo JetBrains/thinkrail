@@ -1,4 +1,5 @@
 import { closeProject, listProjects, openProject } from "./projects";
+import { createWorkspace, listWorkspaces, removeWorkspace, workspaceDiffStats } from "./workspaces";
 
 type Handler = (params: unknown) => unknown | Promise<unknown>;
 
@@ -9,7 +10,18 @@ const handlers: Record<string, Handler> = {
 		closeProject((params as { id: string }).id);
 		return { ok: true } as const;
 	},
-	// workspace.* / fs.* / git.* / terminal.* / session.* land in M5–M10.
+	"workspace.create": (params) =>
+		createWorkspace(
+			(params as { projectId: string }).projectId,
+			(params as { name?: string }).name,
+		),
+	"workspace.list": (params) => listWorkspaces((params as { projectId: string }).projectId),
+	"workspace.remove": (params) => {
+		removeWorkspace((params as { id: string }).id);
+		return { ok: true } as const;
+	},
+	"workspace.diffStats": (params) => workspaceDiffStats((params as { id: string }).id),
+	// fs.* / git.* / terminal.* / session.* land in M6–M10.
 };
 
 /** Route a WS request to its handler. Throws on unknown method (→ a `{ ok:false }` WS response). */

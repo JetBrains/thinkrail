@@ -3,7 +3,7 @@
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
-import type { Project } from "@thinkrail-pi/contracts";
+import type { Project, Workspace } from "@thinkrail-pi/contracts";
 
 export function dataDir(): string {
 	return process.env.THINKRAIL_PI_DATA_DIR ?? join(homedir(), ".thinkrail-pi");
@@ -28,4 +28,12 @@ export function loadProjects(): Project[] {
 
 export function saveProjects(projects: Project[]): void {
 	writeJson("projects.json", projects);
+}
+
+export function loadWorkspaces(): Workspace[] {
+	return readJson<Workspace[]>("workspaces.json", []);
+}
+
+export function saveWorkspaces(workspaces: Workspace[]): void {
+	writeJson("workspaces.json", workspaces);
 }

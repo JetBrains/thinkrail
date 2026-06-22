@@ -8,7 +8,9 @@ const PORT = 24252; // dedicated e2e port — never collides with dev:server (24
 
 export default defineConfig({
 	testDir: "./e2e",
-	fullyParallel: true,
+	// Serial: the suite shares one stateful host (one DATA_DIR), so tests must not race on persistence.
+	fullyParallel: false,
+	workers: 1,
 	forbidOnly: !!process.env.CI,
 	retries: process.env.CI ? 1 : 0,
 	timeout: 30_000,
