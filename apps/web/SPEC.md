@@ -1,7 +1,7 @@
 ---
 id: module-web
 type: module-design
-status: draft
+status: active
 title: Web UI client
 parent: architecture
 depends-on: [module-contracts]
@@ -12,6 +12,14 @@ tags: [v1, ui]
 
 The mobile-first React UI. Ships as static assets and dials an engine host over the wire. Renders `pi`'s
 event stream as a chat-centric, multi-session IDE shell.
+
+## Boundary
+
+- **Owns:** the browser UI — transport client, store, panels, the responsive shell, branding tokens.
+- **Public surface:** the built static bundle (`dist/`) — a deployable artifact that dials a host.
+- **Allowed deps:** `@thinkrail-pi/contracts` (types + WS constants) ONLY; React / Zustand / Vite / etc.
+- **Forbidden:** importing `server` / `shared` / any `pi` package (value or type) — enforced by the M1
+  bundle gate (`bun build` shows no provider SDK / `node:fs`).
 
 ## Internal structure
 
@@ -24,6 +32,10 @@ event stream as a chat-centric, multi-session IDE shell.
 - **shell/** — the 3-column frame: left project→workspace nav, center tabbed area (file tabs +
   chat tabs), right All-files/Changes panel with terminals below. Desktop multi-pane / mobile
   single-view-with-switcher, breakpoint-driven.
+
+Built at M3: `transport` (id-correlated request, channel subscribe + replay, reconnect, endpoint
+parameter), `store` (connection + welcome), `wireTransport`, the branded `shell` (3-column frame + status
+pill). The `panels/` (FileTree, Editor, ChangesPanel, TerminalView, ChatView, Composer) land M4–M13.
 
 ## Get right
 

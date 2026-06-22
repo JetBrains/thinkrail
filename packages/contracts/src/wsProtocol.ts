@@ -62,3 +62,28 @@ export interface WsMethodMap {
 export type WsMethodName = keyof WsMethodMap;
 export type WsParams<M extends WsMethodName> = WsMethodMap[M]["params"];
 export type WsResult<M extends WsMethodName> = WsMethodMap[M]["result"];
+
+/** Client→host request. `sessionId` routes a command to a specific session (M10+). */
+export interface WsRequest<M extends WsMethodName = WsMethodName> {
+	id: string;
+	method: M;
+	params: WsParams<M>;
+	sessionId?: string;
+}
+
+/** Host→client reply, correlated by `id`. */
+export interface WsResponse {
+	id: string;
+	ok: boolean;
+	result?: unknown;
+	error?: string;
+}
+
+/** Host→client push on a channel (no correlation id). */
+export interface WsPush {
+	channel: WsChannel;
+	data: unknown;
+}
+
+/** Anything the host sends: a correlated response or a channel push (discriminate on `channel`). */
+export type WsServerMessage = WsResponse | WsPush;

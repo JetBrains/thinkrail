@@ -17,10 +17,12 @@
 		"test": "turbo run test",
 		"lint": "biome check .",
 		"format": "biome check --write .",
-		"prepare": "husky"
+		"prepare": "husky",
+		"e2e": "playwright test"
 	},
 	"devDependencies": {
 		"@biomejs/biome": "^2.5.0",
+		"@playwright/test": "^1.61.0",
 		"husky": "^9.1.7",
 		"turbo": "^2.9.18",
 		"typescript": "^6.0.3"

@@ -1,0 +1,36 @@
+* {
+	box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+	height: 100%;
+	margin: 0;
+}
+
+body {
+	background: var(--bg);
+	color: var(--text);
+	font-family: var(--font);
+	font-size: var(--font-base);
+	line-height: var(--line-height);
+	-webkit-font-smoothing: antialiased;
+}
+
+::selection {
+	background: #2c2947;
+}
+
+a {
+	color: var(--blue);
+}
+
+::-webkit-scrollbar {
+	width: 10px;
+	height: 10px;
+}
+::-webkit-scrollbar-thumb {
+	background: var(--border2);
+	border-radius: var(--radius-md);
+}

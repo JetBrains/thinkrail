@@ -1,0 +1,82 @@
+:root {
+	/* Accent (ThinkRail brand) */
+	--primary: #8c81ff;
+	--primary-10: rgba(140, 129, 255, 0.1);
+	--primary-20: rgba(140, 129, 255, 0.2);
+	--primary-40: rgba(140, 129, 255, 0.4);
+	--primary-60: rgba(140, 129, 255, 0.6);
+	--primary-80: rgba(140, 129, 255, 0.8);
+	--secondary: #464857;
+	--blue: #6ac8ff;
+	--green: #6ad859;
+	--red: #ff4b75;
+	--gold: #ffd54b;
+	/* White opacity scale */
+	--white-5: rgba(255, 255, 255, 0.05);
+	--white-10: rgba(255, 255, 255, 0.1);
+	--white-20: rgba(255, 255, 255, 0.2);
+	--white-40: rgba(255, 255, 255, 0.4);
+	--white-60: rgba(255, 255, 255, 0.6);
+	--white-80: rgba(255, 255, 255, 0.8);
+	--white-100: rgba(255, 255, 255, 1);
+	/* Elevation / overlays */
+	--on-accent: #fff;
+	--sunken: rgba(0, 0, 0, 0.12);
+	--overlay: rgba(0, 0, 0, 0.5);
+	--shadow-xs: 0 1px 3px rgba(0, 0, 0, 0.18);
+	--shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.3);
+	--shadow-md: 0 4px 16px rgba(0, 0, 0, 0.35);
+	--shadow-lg: 0 8px 28px rgba(0, 0, 0, 0.4);
+	--shadow-xl: 0 24px 64px rgba(0, 0, 0, 0.5);
+	--shadow-up: 0 -2px 8px rgba(0, 0, 0, 0.3);
+	/* Chat user bubble (intentionally #6B57FF, not --primary) */
+	--bubble-user-bg: rgba(107, 87, 255, 0.12);
+	--bubble-user-border: rgba(107, 87, 255, 0.35);
+	/* Semantic (JetBrains New UI / Darcula) */
+	--bg: #2b2b30;
+	--bg-dark: #171719;
+	--bg-input: #272830;
+	--input-bg: #272830;
+	--panel: rgba(23, 23, 25, 0.8);
+	--panel-blur: 100px;
+	--elevated: #2b2d30;
+	--hover: #393b40;
+	--border: #2b2d30;
+	--border2: #43454a;
+	--text: #dfe1e5;
+	--text-40: rgba(223, 225, 229, 0.4);
+	--muted: #a8adb5;
+	--hint: #6f737a;
+	--sel: #2d4f67;
+	color-scheme: dark;
+	/* Type scale (fixed px) */
+	--font-xs: 10px;
+	--font-sm: 12px;
+	--font-body: 13px;
+	--font-md: 15px;
+	--font-lg: 18px;
+	--font-lg2: 20px;
+	--font-xl: 25px;
+	--font-xxl: 40px;
+	--line-height: 1.6;
+	--font-base: 13px;
+	--compact-font-base: 9px;
+	--uppercase-size: 13px;
+	--uppercase-weight: 500;
+	--uppercase-spacing: 0.5px;
+	--radius-sm: 4px;
+	--radius-md: 8px;
+	--radius-lg: 12px;
+	--transition-fast: 120ms ease;
+	--transition-normal: 200ms ease;
+	/* Spacing (only calc family — tracks --font-base) */
+	--space-xs: calc(var(--font-base) * 0.31);
+	--space-sm: calc(var(--font-base) * 0.62);
+	--space-md: calc(var(--font-base) * 0.92);
+	--space-lg: calc(var(--font-base) * 1.23);
+	--space-xl: calc(var(--font-base) * 1.85);
+	/* Fonts */
+	--font: "Geist", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+	--font-mono: "JetBrains Mono", "Fira Code", "SF Mono", "Cascadia Code", monospace;
+	--font-accent: "Cabinet Grotesk", sans-serif;
+}

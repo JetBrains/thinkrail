@@ -94,6 +94,18 @@ Architecture decisions live as spec-graph nodes, dogfooding the spec layer the p
 - The transport's **host endpoint is a parameter** (default same-origin); `server.welcome` carries a
   protocol version so an independently-shipped UI can detect host drift.
 
+## Verification (run for every app-affecting change)
+
+Every change that touches the app is verified by the **e2e suite** before it's considered done.
+`bun run e2e` is **fully self-contained**: it builds the web app, boots the host on a dedicated port
+(24252) with an **isolated state dir** (never touches `~/.thinkrail-pi`), seeds fixtures (Playwright
+`globalSetup`), runs the suite headless against the real web UI, then tears the host down and cleans up
+(`globalTeardown`). Tests live in `e2e/` and assert via `data-testid` / `data-status` hooks. When
+Electrobun lands, the same suite runs against the desktop app too.
+
+Fast gates (also the husky pre-commit): `bun run lint` (biome) + `bun run typecheck`. Unit tests:
+`bun run test` (bun test, per package). One-time setup for a fresh machine: `bunx playwright install chromium`.
+
 ## Stack
 
 Bun + Turbo monorepo · TypeScript (strict) · React 19 + Zustand + Tailwind v4 (web) · in-process `pi`

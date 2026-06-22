@@ -1,13 +1,19 @@
-import { PROTOCOL_VERSION } from "@thinkrail-pi/contracts";
+import "./styles/tokens.css";
+import "./styles/global.css";
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
-import "./index.css";
+import { Shell } from "./shell/Shell";
+import { applyFontScale } from "./utils/fontScale";
+import { initTransport } from "./wireTransport";
+
+applyFontScale();
+initTransport();
 
 const root = document.getElementById("root");
 if (root) {
 	createRoot(root).render(
 		<StrictMode>
-			<div>ThinkRail-PI — protocol v{PROTOCOL_VERSION}</div>
+			<Shell />
 		</StrictMode>,
 	);
 }
