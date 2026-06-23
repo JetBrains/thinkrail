@@ -96,6 +96,7 @@ class TestMethods:
             "settings/get", "settings/update", "settings/ensureFile",
             "appSettings/getSessionDefaults", "appSettings/setSessionDefaults",
             "appSettings/getAnalyticsConsent", "appSettings/setAnalyticsConsent",
+            "appSettings/trackOnboardingAction",
             "runtimes/list", "runtimes/capabilities",
             "agent/retryLastMessage",
             "skills/list",

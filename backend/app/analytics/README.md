@@ -60,8 +60,11 @@ The `event` discriminator itself is a closed `Literal` (one value per event type
 
 | Field | On event | Cardinality |
 |-------|----------|-------------|
-| `outcome` | `agent_session_completed` | `completed` \| `error` \| `cancelled` |
+по| `outcome` | `agent_session_completed`, `onboarding_step_completed` | `completed` \| `error` \| `cancelled` |
 | `files_written_bucket` | `agent_session_completed` | `0` \| `1-3` \| `4-10` \| `11+` (bucketed count of distinct files written/edited) |
+| `step` | `onboarding_step_completed`, `onboarding_outcome_action` | `goal_and_requirements` \| `architecture` \| `investigation` |
+| `action` | `onboarding_outcome_action` | `continue` \| `open_workspace` \| `add_suggested_tickets` |
+| `kind` | `project_created` | `new` \| `existing` \| `initialized` (starting state of the registered folder) |
 
 **Never sent:** project paths, file/spec/ticket names, prompts, code, transcripts, token counts, **raw file counts**, hostnames, usernames, or IP-derived fields. Quantitative signal is always bucketed to a closed `Literal`, never an open integer. The written-file count is derived from a transient in-memory set of paths that is never persisted or sent.
 
@@ -154,6 +157,9 @@ Each top-level feature has its own event type. They are coarse by design — one
 |-------|---------------|-----------|
 | `AgentSessionStartedEvent` | `rpc/methods/agents.py:run_agent` and `start_draft` | The two ways a user starts a session — direct run and draft Start. |
 | `AgentSessionCompletedEvent` | `agent/service.py:_run_background` (`finally`) | The single terminal point covering every end path (done/error/cancel). Carries `outcome` and the bucketed `files_written_bucket` (distinct files written/edited, counted for every session) — closes the core-loop "do sessions finish and produce changes" question. |
+| `OnboardingStepCompletedEvent` | `agent/service.py:_run_background` (`finally`) | Fires alongside session-completed only when the session's `skill_id` maps to a wizard step (`_ONBOARDING_STEP_BY_SKILL`). Carries the coarse `step` + `outcome` — the activation funnel through onboarding. |
+| `OnboardingOutcomeActionEvent` | frontend `WizardDonePanel` → `appSettings/trackOnboardingAction` RPC | The fork taken on a step's done-screen — `continue` / `open_workspace` / `add_suggested_tickets`. Frontend-originated (the only such event): these are client-side decisions the backend can't observe. The client sends only `skillId` + the closed `action`; the backend maps the skill to `step` and stamps the id. |
+| `ProjectCreatedEvent` | `api/routers/projects_known.py:register_known_project` | Fires only on a first-time project registration (`register_project` returns `is_new`); `kind` (via `_detect_project_state`) splits greenfield from existing-codebase. Answers "how many projects created, and of what kind". Re-opening a known project emits nothing. |
 | `SpecsViewedEvent` | `rpc/methods/specs.py:list_specs` | Primary spec-browsing entry. |
 | `SpecGraphViewedEvent` | `rpc/methods/specs.py:get_graph` | Distinct spec-graph visualization. |
 | `BoardViewedEvent` | `rpc/methods/board.py:list_tickets` | Board view entry. |

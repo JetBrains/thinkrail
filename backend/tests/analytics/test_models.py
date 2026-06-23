@@ -73,6 +73,46 @@ class TestEventUnion:
                 {"event": "agent_session_completed", "filesWrittenBucket": "7"}
             )
 
+    def test_onboarding_step_carries_only_enum_dimensions(self) -> None:
+        ta = TypeAdapter(AnalyticsEvent)
+        ev = ta.validate_python(
+            {"event": "onboarding_step_completed", "step": "architecture", "outcome": "completed"}
+        )
+        wire = ev.model_dump(by_alias=True)
+        assert set(wire) == {"event", "installationId", "step", "outcome"}
+        assert wire["step"] == "architecture"
+
+    def test_onboarding_step_rejects_unknown_step(self) -> None:
+        ta = TypeAdapter(AnalyticsEvent)
+        with pytest.raises(ValidationError):
+            ta.validate_python({"event": "onboarding_step_completed", "step": "deploy"})
+
+    def test_project_created_carries_kind(self) -> None:
+        ta = TypeAdapter(AnalyticsEvent)
+        wire = ta.validate_python(
+            {"event": "project_created", "kind": "existing"}
+        ).model_dump(by_alias=True)
+        assert set(wire) == {"event", "installationId", "kind"}
+        assert wire["kind"] == "existing"
+
+    def test_project_created_rejects_unknown_kind(self) -> None:
+        ta = TypeAdapter(AnalyticsEvent)
+        with pytest.raises(ValidationError):
+            ta.validate_python({"event": "project_created", "kind": "cloned"})
+
+    def test_onboarding_outcome_action_carries_only_enum_dimensions(self) -> None:
+        ta = TypeAdapter(AnalyticsEvent)
+        wire = ta.validate_python(
+            {"event": "onboarding_outcome_action", "step": "architecture", "action": "open_workspace"}
+        ).model_dump(by_alias=True)
+        assert set(wire) == {"event", "installationId", "step", "action"}
+        assert wire["action"] == "open_workspace"
+
+    def test_onboarding_outcome_action_rejects_unknown_action(self) -> None:
+        ta = TypeAdapter(AnalyticsEvent)
+        with pytest.raises(ValidationError):
+            ta.validate_python({"event": "onboarding_outcome_action", "action": "delete_repo"})
+
 
 class TestConsentModel:
     def test_defaults_to_opt_out_posture(self) -> None:

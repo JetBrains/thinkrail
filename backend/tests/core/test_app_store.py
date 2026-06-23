@@ -109,6 +109,15 @@ class TestProjects:
         assert len(projects) == 1
         assert projects[0].name == "proj-renamed"
 
+    async def test_register_project_reports_first_insert(
+        self, store: AppStore, tmp_path: Path
+    ) -> None:
+        """The first registration of a path returns True; re-registering False."""
+        proj = tmp_path / "proj"
+        proj.mkdir()
+        assert await store.register_project(str(proj), "proj") is True
+        assert await store.register_project(str(proj), "proj") is False
+
     async def test_update_last_opened(self, store: AppStore, tmp_path: Path) -> None:
         proj = tmp_path / "proj"
         proj.mkdir()

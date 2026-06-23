@@ -1140,12 +1140,20 @@ class AgentService:
                 pass
         finally:
             self._running_tasks.pop(task.thinkrail_sid, None)
+            _outcome = _analytics_outcome(task.status)
             analytics.track_event(
                 analytics.AgentSessionCompletedEvent(
-                    outcome=_analytics_outcome(task.status),
+                    outcome=_outcome,
                     files_written_bucket=_files_written_bucket(len(_written_files)),
                 )
             )
+            _onboarding_step = analytics.ONBOARDING_STEP_BY_SKILL.get(task.skill_id or "")
+            if _onboarding_step is not None:
+                analytics.track_event(
+                    analytics.OnboardingStepCompletedEvent(
+                        step=_onboarding_step, outcome=_outcome,
+                    )
+                )
             # Notify all project clients that the session ended
             try:
                 await self._get_bus().publish_to_project(
