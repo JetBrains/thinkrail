@@ -1,5 +1,13 @@
 {
   "$defs": {
+    "ActionState": {
+      "enum": [
+        "pending",
+        "applied"
+      ],
+      "title": "ActionState",
+      "type": "string"
+    },
     "Artifact": {
       "description": "A file a session touched, or a diff it proposed.",
       "properties": {
@@ -408,13 +416,8 @@
           "title": "Body"
         },
         "state": {
-          "default": "pending",
-          "enum": [
-            "pending",
-            "applied"
-          ],
-          "title": "State",
-          "type": "string"
+          "$ref": "#/$defs/ActionState",
+          "default": "pending"
         }
       },
       "required": [

@@ -43,7 +43,7 @@ class TicketState(BaseModel):
     body: str = ""
     type: str = "feature"
     rev: int = 0
-    lifecycle: Lifecycle = "created"
+    lifecycle: Lifecycle = Lifecycle.CREATED
     orchestrator: OrchestratorRef | None = None
     orchestration: OrchestrationConfig = Field(default_factory=OrchestrationConfig)
     stages: list[WorkNode] = Field(default_factory=list)

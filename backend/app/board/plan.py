@@ -36,6 +36,14 @@ class PlanStatus(StrEnum):
     DONE = "done"
 
 
+_STEP_TERMINAL = frozenset({StepStatus.DONE, StepStatus.FAILED})
+
+
+def is_terminal(status: StepStatus) -> bool:
+    """Step reached a final state (done or failed)."""
+    return status in _STEP_TERMINAL
+
+
 class SuccessCriterion(BaseModel):
     model_config = _CAMEL_CONFIG
 
@@ -72,15 +80,15 @@ class Milestone(BaseModel):
     steps: list[PlanStep] = Field(default_factory=list)
 
     @property
-    def status(self) -> str:
+    def status(self) -> StepStatus:
         """Computed from step statuses."""
         if not self.steps:
-            return "pending"
+            return StepStatus.PENDING
         if any(s.status == StepStatus.EXECUTING for s in self.steps):
-            return "executing"
-        if all(s.status in (StepStatus.DONE, StepStatus.FAILED) for s in self.steps):
-            return "done"
-        return "pending"
+            return StepStatus.EXECUTING
+        if all(is_terminal(s.status) for s in self.steps):
+            return StepStatus.DONE
+        return StepStatus.PENDING
 
 
 class Plan(BaseModel):
@@ -195,7 +203,7 @@ def _parse_plan(content: str, ticket_id: str) -> Plan:
       a single implicit milestone for backward compatibility.
     """
     title = ""
-    status = "draft"
+    status = PlanStatus.DRAFT
     milestones: list[Milestone] = []
     verification: list[SuccessCriterion] = []
 
@@ -274,7 +282,7 @@ def _parse_steps(section: str, *, milestone_number: int = 1) -> list[PlanStep]:
         title = step_match.group(2).strip()
 
         # Parse fields
-        status = _extract_field(block, "Status") or "pending"
+        status = _extract_field(block, "Status") or StepStatus.PENDING
         skill = _extract_field(block, "Skill") or "default"
         session_id = _extract_field(block, "Session") or None
         agent_instructions = _extract_field(block, "Agent instructions") or ""
@@ -386,7 +394,7 @@ class PlanService:
         plan = Plan(
             ticket_id=ticket_id,
             title=title,
-            status="draft",
+            status=PlanStatus.DRAFT,
             milestones=milestones,
             verification=verification or [],
         )
@@ -409,7 +417,7 @@ class PlanService:
         all_steps = plan.all_steps()
         if any(s.status == StepStatus.EXECUTING for s in all_steps):
             plan.status = PlanStatus.EXECUTING
-        if all(s.status in (StepStatus.DONE, StepStatus.FAILED) for s in all_steps) and all_steps:
+        if all(is_terminal(s.status) for s in all_steps) and all_steps:
             plan.status = PlanStatus.DONE
         self.write_plan(ticket_id, plan)
         return plan

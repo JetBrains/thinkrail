@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import secrets
 from datetime import UTC, datetime
+from enum import StrEnum
 from typing import TYPE_CHECKING, Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
@@ -26,7 +27,11 @@ ArtifactKind = Literal[
     "implementation_plan",
 ]
 
-Lifecycle = Literal["created", "design", "implementation", "done"]
+class Lifecycle(StrEnum):
+    CREATED = "created"
+    DESIGN = "design"
+    IMPLEMENTATION = "implementation"
+    DONE = "done"
 
 
 def _make_id() -> str:
@@ -111,7 +116,7 @@ class TicketSummary(BaseModel):
     id: str
     title: str
     type: TicketType
-    lifecycle: Lifecycle = "created"
+    lifecycle: Lifecycle = Lifecycle.CREATED
 
     product_design_path: str | None = None
     technical_design_path: str | None = None

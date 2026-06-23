@@ -67,7 +67,7 @@ export type Type1 = "create_ticket";
 export type Id = string;
 export type Title = string;
 export type Body = string | null;
-export type State = "pending" | "applied";
+export type ActionState = "pending" | "applied";
 export type Type2 = "start_session";
 export type Id1 = string;
 export type Title1 = string;
@@ -254,7 +254,7 @@ export interface CreateTicketAction {
   id: Id;
   title: Title;
   body?: Body;
-  state?: State;
+  state?: ActionState;
 }
 /**
  * Recommended follow-up session. Rendered as a primary/secondary CTA.
