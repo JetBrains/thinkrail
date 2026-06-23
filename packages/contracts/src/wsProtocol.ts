@@ -22,6 +22,7 @@ export const WS_METHODS = {
 	terminalWrite: "terminal.write",
 	terminalResize: "terminal.resize",
 	terminalClose: "terminal.close",
+	dialogSelectDirectory: "dialog.selectDirectory",
 } as const;
 
 /** Server→client push channels. */
@@ -57,6 +58,7 @@ export interface WsMethodMap {
 	"terminal.write": { params: { id: string; data: string }; result: Ack };
 	"terminal.resize": { params: { id: string; cols: number; rows: number }; result: Ack };
 	"terminal.close": { params: { id: string }; result: Ack };
+	"dialog.selectDirectory": { params: Record<string, never>; result: { path: string | null } };
 }
 
 export type WsMethodName = keyof WsMethodMap;

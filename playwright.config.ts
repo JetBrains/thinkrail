@@ -1,6 +1,6 @@
 import { fileURLToPath } from "node:url";
 import { defineConfig, devices } from "@playwright/test";
-import { E2E_DATA_DIR } from "./e2e/fixtures/paths";
+import { E2E_DATA_DIR, E2E_FIXTURE_REPO } from "./e2e/fixtures/paths";
 
 const rootDir = fileURLToPath(new URL(".", import.meta.url));
 const staticDir = fileURLToPath(new URL("./apps/web/dist", import.meta.url));
@@ -34,6 +34,8 @@ export default defineConfig({
 			THINKRAIL_PI_PORT: String(PORT),
 			THINKRAIL_PI_STATIC_DIR: staticDir,
 			THINKRAIL_PI_DATA_DIR: E2E_DATA_DIR,
+			// Stub the host's native directory picker so "Open project" is drivable headlessly.
+			THINKRAIL_PI_PICK_DIR: E2E_FIXTURE_REPO,
 		},
 	},
 });

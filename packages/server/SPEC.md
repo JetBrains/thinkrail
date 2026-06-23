@@ -30,13 +30,16 @@ for development / e2e).
   upgrade, static SPA serving (when `staticDir` is set; `index.html` fallback, path-contained), and a WS
   that pushes **`server.welcome`** (`{ protocolVersion, projects }`) on open and dispatches requests.
 - `dev.ts`: `resolveShellEnv()` → `createServer` from `THINKRAIL_PI_PORT`/`_HOST`/`_STATIC_DIR`.
-- `handlers.ts`: the WS method→handler registry — `project.*` (M4) and `workspace.create` / `list` /
-  `remove` / `diffStats` (M5).
+- `handlers.ts`: the WS method→handler registry — `project.*`, `workspace.*`, and `dialog.selectDirectory`.
 - `persistence.ts`: JSON app state under `dataDir()` — `THINKRAIL_PI_DATA_DIR` (dev/e2e isolation) else
   `~/.thinkrail-pi`. `projects.ts`: open a git repo as a project (validate via `git rev-parse
   --show-toplevel`, dedupe by root), list (by `lastOpened`), close.
 - `workspaces.ts`: a workspace = a `git worktree` on its own branch under
-  `dataDir/worktrees/<projectId>/<branch>`; create (off the repo HEAD), list (with diff stats), remove.
+  `dataDir/worktrees/<projectId>/<branch>`; create (off the repo HEAD; **branch name made unique** — archiving
+  leaves the branch behind, so re-creating must not collide), list (with diff stats), remove
+  (`git worktree remove`; keeps the branch).
+- `dialog.ts`: `selectDirectory()` — the host's **native** folder picker (macOS `osascript`), so the browser
+  "Open project" gets a real OS dialog. `THINKRAIL_PI_PICK_DIR` overrides it for dev/e2e.
 
 ## Get right (firms up as features land)
 

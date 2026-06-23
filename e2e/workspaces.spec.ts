@@ -1,27 +1,38 @@
 import { execFileSync } from "node:child_process";
+import type { Page } from "@playwright/test";
 import { expect, test } from "@playwright/test";
 import { E2E_FIXTURE_REPO } from "./fixtures/paths";
 
-test("creates a git-worktree workspace under a project", async ({ page }) => {
+/** Open the fixture repo as a project via the (stubbed) directory picker; it auto-selects + expands. */
+async function openFixtureProject(page: Page): Promise<void> {
 	await page.goto("/");
 	await expect(page.getByTestId("connection-status")).toHaveAttribute("data-status", "connected");
-
 	await page.getByTestId("add-project-menu").click();
 	await page.getByTestId("menu-open-project").click();
-	await expect(page.getByTestId("open-project-dialog")).toBeVisible();
-	await page.getByTestId("add-project-input").fill(E2E_FIXTURE_REPO);
-	await page.getByTestId("add-project-submit").click();
-	await expect(
-		page.getByTestId("project-item").filter({ hasText: "sample-project" }),
-	).toBeVisible();
+	await expect(page.getByTestId("project-item").first()).toBeVisible();
+}
 
-	// The project auto-selects on open → create a workspace.
-	await page.getByTestId("add-workspace").click();
-	await expect(page.getByTestId("workspace-item")).toBeVisible();
+test("creates, archives, and re-creates worktree workspaces (no branch collision)", async ({
+	page,
+}) => {
+	await openFixtureProject(page);
+	const items = page.getByTestId("workspace-item");
+	const addWorkspace = page.getByTestId("add-workspace").first();
 
-	// A real git worktree was created (not just UI state): the repo now lists ≥ 2 worktrees.
+	// Create a workspace — a real git worktree appears.
+	await addWorkspace.click();
+	await expect(items).toHaveCount(1);
 	const worktrees = execFileSync("git", ["-C", E2E_FIXTURE_REPO, "worktree", "list"], {
 		encoding: "utf8",
 	});
 	expect(worktrees.trim().split("\n").length).toBeGreaterThanOrEqual(2);
+
+	// Archive it — `git worktree remove` leaves the branch behind.
+	await items.first().hover();
+	await items.first().getByTestId("workspace-archive").click();
+	await expect(items).toHaveCount(0);
+
+	// Create again — must succeed despite the lingering branch (the bug was a silent no-op here).
+	await addWorkspace.click();
+	await expect(items).toHaveCount(1);
 });

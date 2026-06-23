@@ -22,6 +22,25 @@ function toBranch(name: string): string {
 	);
 }
 
+function branchExists(repoPath: string, branch: string): boolean {
+	return git(repoPath, ["show-ref", "--verify", "--quiet", `refs/heads/${branch}`]).ok;
+}
+
+/** A branch name not yet in the repo — `base`, else `base-2`, `base-3`, … (archiving leaves branches). */
+function uniqueBranch(repoPath: string, base: string): string {
+	if (!branchExists(repoPath, base)) return base;
+	let n = 2;
+	while (branchExists(repoPath, `${base}-${n}`)) n += 1;
+	return `${base}-${n}`;
+}
+
+/** First free `workspace-N` — skips branches left behind by archived workspaces. */
+function nextAutoBranch(repoPath: string): string {
+	let n = 1;
+	while (branchExists(repoPath, `workspace-${n}`)) n += 1;
+	return `workspace-${n}`;
+}
+
 /** Working-tree changes of a worktree vs its base branch. */
 function diffStats(worktreePath: string, baseBranch: string): DiffStats {
 	const result = git(worktreePath, ["diff", "--shortstat", baseBranch]);
@@ -38,9 +57,10 @@ export function createWorkspace(projectId: string, name?: string): Workspace {
 	if (!project) throw new Error(`Unknown project: ${projectId}`);
 
 	const all = loadWorkspaces();
-	const count = all.filter((w) => w.projectId === projectId).length;
-	const wsName = name?.trim() || `workspace-${count + 1}`;
-	const branch = toBranch(wsName);
+	const branch = name?.trim()
+		? uniqueBranch(project.path, toBranch(name))
+		: nextAutoBranch(project.path);
+	const wsName = branch;
 
 	const head = git(project.path, ["rev-parse", "--abbrev-ref", "HEAD"]);
 	const baseBranch = head.ok ? head.out : "HEAD";

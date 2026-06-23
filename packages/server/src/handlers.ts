@@ -1,3 +1,4 @@
+import { selectDirectory } from "./dialog";
 import { closeProject, listProjects, openProject } from "./projects";
 import { createWorkspace, listWorkspaces, removeWorkspace, workspaceDiffStats } from "./workspaces";
 
@@ -21,6 +22,7 @@ const handlers: Record<string, Handler> = {
 		return { ok: true } as const;
 	},
 	"workspace.diffStats": (params) => workspaceDiffStats((params as { id: string }).id),
+	"dialog.selectDirectory": () => selectDirectory(),
 	// fs.* / git.* / terminal.* / session.* land in M6–M10.
 };
 

@@ -12,13 +12,6 @@ import {
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import {
-	Dialog,
-	DialogContent,
-	DialogFooter,
-	DialogHeader,
-	DialogTitle,
-} from "@/components/ui/dialog";
-import {
 	DropdownMenu,
 	DropdownMenuContent,
 	DropdownMenuGroup,
@@ -38,9 +31,6 @@ export function ProjectTree() {
 	const activeWorkspaceId = useAppStore((s) => s.activeWorkspaceId);
 
 	const [expanded, setExpanded] = useState<Set<string>>(() => new Set());
-	const [dialogOpen, setDialogOpen] = useState(false);
-	const [path, setPath] = useState("");
-	const [opening, setOpening] = useState(false);
 	const [creatingFor, setCreatingFor] = useState<string | null>(null);
 
 	const loadWorkspaces = async (projectId: string) => {
@@ -71,17 +61,22 @@ export function ProjectTree() {
 	const openProject = async (rawPath: string) => {
 		const trimmed = rawPath.trim();
 		if (!trimmed) return;
-		setOpening(true);
 		try {
 			const project = await getTransport().request("project.open", { path: trimmed });
 			useAppStore.getState().setProjects(await getTransport().request("project.list", {}));
-			setPath("");
-			setDialogOpen(false);
 			await selectProject(project.id);
 		} catch {
 			// Error surfacing (toast) comes with the error-handling pass; ignore for now.
-		} finally {
-			setOpening(false);
+		}
+	};
+
+	/** "Open project" → ask the host for a directory via its native picker, then open it. */
+	const pickAndOpen = async () => {
+		try {
+			const { path } = await getTransport().request("dialog.selectDirectory", {});
+			if (path) await openProject(path);
+		} catch {
+			// Cancelled / unavailable — nothing to do.
 		}
 	};
 
@@ -115,13 +110,13 @@ export function ProjectTree() {
 				<span className="text-xs uppercase tracking-wider text-muted">Projects</span>
 				<AddProjectMenu
 					projects={projects}
-					onOpenDialog={() => setDialogOpen(true)}
+					onOpen={() => void pickAndOpen()}
 					onOpenRecent={(p) => void openProject(p)}
 				/>
 			</header>
 
 			{projects.length === 0 ? (
-				<EmptyState onOpen={() => setDialogOpen(true)} />
+				<EmptyState onOpen={() => void pickAndOpen()} />
 			) : (
 				<ul className="flex flex-col">
 					{projects.map((project) => {
@@ -161,26 +156,17 @@ export function ProjectTree() {
 					})}
 				</ul>
 			)}
-
-			<OpenProjectDialog
-				open={dialogOpen}
-				onOpenChange={setDialogOpen}
-				path={path}
-				onPathChange={setPath}
-				opening={opening}
-				onSubmit={() => void openProject(path)}
-			/>
 		</nav>
 	);
 }
 
 function AddProjectMenu({
 	projects,
-	onOpenDialog,
+	onOpen,
 	onOpenRecent,
 }: {
 	projects: Project[];
-	onOpenDialog: () => void;
+	onOpen: () => void;
 	onOpenRecent: (path: string) => void;
 }) {
 	return (
@@ -191,7 +177,7 @@ function AddProjectMenu({
 				</Button>
 			</DropdownMenuTrigger>
 			<DropdownMenuContent align="end">
-				<DropdownMenuItem data-testid="menu-open-project" onSelect={onOpenDialog}>
+				<DropdownMenuItem data-testid="menu-open-project" onSelect={() => onOpen()}>
 					<Folder />
 					<span>Open project</span>
 				</DropdownMenuItem>
@@ -346,60 +332,5 @@ function EmptyState({ onOpen }: { onOpen: () => void }) {
 				Open project
 			</Button>
 		</div>
-	);
-}
-
-function OpenProjectDialog({
-	open,
-	onOpenChange,
-	path,
-	onPathChange,
-	opening,
-	onSubmit,
-}: {
-	open: boolean;
-	onOpenChange: (open: boolean) => void;
-	path: string;
-	onPathChange: (value: string) => void;
-	opening: boolean;
-	onSubmit: () => void;
-}) {
-	return (
-		<Dialog open={open} onOpenChange={onOpenChange}>
-			<DialogContent data-testid="open-project-dialog">
-				<DialogHeader>
-					<DialogTitle>Open project</DialogTitle>
-				</DialogHeader>
-				<form
-					className="flex flex-col gap-sm"
-					onSubmit={(event) => {
-						event.preventDefault();
-						onSubmit();
-					}}
-				>
-					<label htmlFor="open-project-path" className="text-xs text-muted">
-						Repository path
-					</label>
-					<input
-						id="open-project-path"
-						data-testid="add-project-input"
-						value={path}
-						onChange={(event) => onPathChange(event.target.value)}
-						placeholder="/path/to/git/repo"
-						className="w-full rounded-[var(--radius-sm)] border border-border2 bg-bg-dark px-sm py-xs text-sm text-text outline-none placeholder:text-hint focus-visible:ring-2 focus-visible:ring-primary"
-					/>
-					<DialogFooter>
-						<Button
-							type="submit"
-							data-testid="add-project-submit"
-							disabled={opening || !path.trim()}
-						>
-							{opening ? <Loader2 className="size-4 animate-spin" /> : null}
-							Open
-						</Button>
-					</DialogFooter>
-				</form>
-			</DialogContent>
-		</Dialog>
 	);
 }
