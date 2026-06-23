@@ -1,16 +1,7 @@
 import { execFileSync } from "node:child_process";
-import type { Page } from "@playwright/test";
 import { expect, test } from "@playwright/test";
+import { openFixtureProject } from "./fixtures/app";
 import { E2E_FIXTURE_REPO } from "./fixtures/paths";
-
-/** Open the fixture repo as a project via the (stubbed) directory picker; it auto-selects + expands. */
-async function openFixtureProject(page: Page): Promise<void> {
-	await page.goto("/");
-	await expect(page.getByTestId("connection-status")).toHaveAttribute("data-status", "connected");
-	await page.getByTestId("add-project-menu").click();
-	await page.getByTestId("menu-open-project").click();
-	await expect(page.getByTestId("project-item").first()).toBeVisible();
-}
 
 test("creates, archives, and re-creates worktree workspaces (no branch collision)", async ({
 	page,

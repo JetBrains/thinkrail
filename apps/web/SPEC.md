@@ -33,9 +33,9 @@ event stream as a chat-centric, multi-session IDE shell.
   chat tabs), right All-files/Changes panel with terminals below. Desktop multi-pane / mobile
   single-view-with-switcher, breakpoint-driven.
 
-Built at M3: `transport` (id-correlated request, channel subscribe + replay, reconnect, endpoint
-parameter), `store` (connection + welcome), `wireTransport`, the branded `shell` (3-column frame + status
-pill). The `panels/` (FileTree, Editor, ChangesPanel, TerminalView, ChatView, Composer) land M4–M13.
+Built so far: `transport` / `store` / `wireTransport` / branded `shell` (M3); `ProjectTree` (M4–M5);
+`FileTree` + `RightPanel` (All files, M6). Editor / ChangesPanel / TerminalView / ChatView / Composer
+land M7–M13. UI primitives live in `components/ui/` (shadcn), `cn()` in `lib/utils.ts`.
 
 ## Styling & theming
 

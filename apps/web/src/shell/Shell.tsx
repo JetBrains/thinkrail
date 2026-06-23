@@ -1,5 +1,6 @@
 import { PRODUCT_NAME } from "../constants/branding";
 import { ProjectTree } from "../panels/ProjectTree";
+import { RightPanel } from "../panels/RightPanel";
 import { useAppStore } from "../store/appStore";
 import type { ConnectionStatus } from "../transport";
 
@@ -39,8 +40,8 @@ export function Shell() {
 				<main data-testid="center-tabs" className="flex items-center justify-center text-hint">
 					Open a file or start a chat
 				</main>
-				<aside data-testid="right-panel" className="overflow-auto border-l border-border p-md">
-					<div className="text-xs uppercase tracking-wider text-muted">All files · Changes</div>
+				<aside data-testid="right-panel" className="min-h-0 border-l border-border">
+					<RightPanel />
 				</aside>
 			</div>
 		</div>
