@@ -1,3 +1,4 @@
+import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "../components/ui/resizable";
 import { PRODUCT_NAME } from "../constants/branding";
 import { CenterTabs } from "../panels/CenterTabs";
 import { ProjectTree } from "../panels/ProjectTree";
@@ -35,22 +36,35 @@ export function Shell() {
 					{STATUS_LABEL[status]}
 				</span>
 			</header>
-			<div className="grid min-h-0 grid-cols-[240px_1fr_320px]">
-				<aside data-testid="left-nav" className="overflow-auto border-r border-border2 p-md">
-					<ProjectTree />
-				</aside>
-				<main data-testid="center-tabs" className="min-h-0">
-					<CenterTabs />
-				</main>
-				<aside data-testid="right-panel" className="flex min-h-0 flex-col border-l border-border2">
-					<div className="min-h-0 flex-1">
-						<RightPanel />
-					</div>
-					<div className="h-2/5 min-h-0 border-t border-border2">
-						<TerminalsPanel />
-					</div>
-				</aside>
-			</div>
+			<ResizablePanelGroup direction="horizontal" autoSaveId="thinkrail-shell" className="min-h-0">
+				<ResizablePanel id="left" order={1} defaultSize={18} minSize={12}>
+					<aside data-testid="left-nav" className="h-full overflow-auto p-md">
+						<ProjectTree />
+					</aside>
+				</ResizablePanel>
+				<ResizableHandle direction="horizontal" data-testid="resize-left" />
+				<ResizablePanel id="center" order={2} defaultSize={52} minSize={28}>
+					<main data-testid="center-tabs" className="h-full min-h-0">
+						<CenterTabs />
+					</main>
+				</ResizablePanel>
+				<ResizableHandle direction="horizontal" data-testid="resize-right" withHandle />
+				<ResizablePanel id="right" order={3} defaultSize={30} minSize={16}>
+					<ResizablePanelGroup direction="vertical" autoSaveId="thinkrail-right">
+						<ResizablePanel id="right-files" order={1} defaultSize={60} minSize={20}>
+							<div data-testid="right-panel" className="h-full min-h-0">
+								<RightPanel />
+							</div>
+						</ResizablePanel>
+						<ResizableHandle direction="vertical" data-testid="resize-terminals" withHandle />
+						<ResizablePanel id="right-terminals" order={2} defaultSize={40} minSize={15}>
+							<div className="h-full min-h-0">
+								<TerminalsPanel />
+							</div>
+						</ResizablePanel>
+					</ResizablePanelGroup>
+				</ResizablePanel>
+			</ResizablePanelGroup>
 		</div>
 	);
 }
