@@ -28,10 +28,12 @@ for development / e2e).
 
 - `createServer({ port?, host?, staticDir? }) → { port, stop }`: `Bun.serve` with `/health`, a `/ws`
   upgrade, static SPA serving (when `staticDir` is set; `index.html` fallback, path-contained), and a WS
-  that pushes **`server.welcome`** (`{ protocolVersion, projects }`) on open and dispatches requests.
+  that pushes **`server.welcome`** (`{ protocolVersion, projects }`) on open and dispatches requests. Each
+  socket subscribes to the `terminal.data` topic; PTY output is fanned out via `server.publish`. `stop()`
+  kills all PTYs.
 - `dev.ts`: `resolveShellEnv()` → `createServer` from `THINKRAIL_PI_PORT`/`_HOST`/`_STATIC_DIR`.
 - `handlers.ts`: the WS method→handler registry — `project.*`, `workspace.*`, `dialog.selectDirectory`,
-  `fs.readDir`/`fs.readFile`, `git.status`/`git.diff`.
+  `fs.readDir`/`fs.readFile`, `git.status`/`git.diff`, `terminal.*`.
 - `persistence.ts`: JSON app state under `dataDir()` — `THINKRAIL_PI_DATA_DIR` (dev/e2e isolation) else
   `~/.thinkrail-pi`. `projects.ts`: open a git repo as a project (validate via `git rev-parse
   --show-toplevel`, dedupe by root; assign a stable unique readable `slug`), list (by `lastOpened`), close.
@@ -46,6 +48,9 @@ for development / e2e).
 - `git.ts`: `gitStatus` / `gitDiff(workspaceId, path?)` — a worktree's changed files + unified diff vs its
   base branch (untracked files listed, and shown in full via `--no-index`). `gitExec.ts` is the shared
   `git(cwd, args)` runner used here and by `workspaces.ts`.
+- `terminalManager.ts`: `bun-pty` PTYs keyed by id, each rooted in a workspace's worktree (cwd). Output is
+  pushed on the `terminal.data` channel via the injected publisher; `create`/`write`/`resize`/`close` plus
+  `closeAllTerminals()` on shutdown.
 
 ## Get right (firms up as features land)
 

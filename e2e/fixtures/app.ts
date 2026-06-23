@@ -1,7 +1,7 @@
 import { execFileSync } from "node:child_process";
 import { rmSync } from "node:fs";
 import { join } from "node:path";
-import type { Page } from "@playwright/test";
+import type { Locator, Page } from "@playwright/test";
 import { expect } from "@playwright/test";
 import { E2E_DATA_DIR, E2E_FIXTURE_REPO } from "./paths";
 
@@ -36,4 +36,22 @@ export async function openFixtureProject(page: Page): Promise<void> {
 	await page.getByTestId("add-project-menu").click();
 	await page.getByTestId("menu-open-project").click();
 	await expect(page.getByTestId("project-item").first()).toBeVisible();
+}
+
+/** The terminal layer currently shown (exactly one is `data-visible="true"` at a time). */
+export function visibleTerminal(page: Page): Locator {
+	return page.locator('[data-testid="terminal-instance"][data-visible="true"]');
+}
+
+/** Open a new terminal and wait until its PTY is wired up (ready to receive input). */
+export async function openTerminal(page: Page): Promise<void> {
+	await page.getByTestId("terminal-add").click();
+	await expect(visibleTerminal(page)).toHaveAttribute("data-ready", "true");
+}
+
+/** Type a command into the visible terminal and submit it. */
+export async function runInTerminal(page: Page, command: string): Promise<void> {
+	await visibleTerminal(page).locator(".xterm-helper-textarea").focus();
+	await page.keyboard.type(command);
+	await page.keyboard.press("Enter");
 }

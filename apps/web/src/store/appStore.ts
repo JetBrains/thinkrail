@@ -11,6 +11,13 @@ export interface EditorTab {
 	content: string;
 }
 
+/** A terminal tab. `clientId` is the stable UI key; the server PTY id is owned by its `TerminalInstance`. */
+export interface TerminalTab {
+	clientId: string;
+	workspaceId: string;
+	title: string;
+}
+
 interface AppState {
 	status: ConnectionStatus;
 	protocolVersion: number | null;
@@ -21,6 +28,9 @@ interface AppState {
 	/** Center tabs belong to a workspace — switching workspaces swaps the visible tab set. */
 	tabsByWorkspace: Record<string, EditorTab[]>;
 	activeTabByWorkspace: Record<string, string | null>;
+	/** Terminals are workspace-scoped too; their instances stay mounted (hidden) to preserve buffers. */
+	terminalsByWorkspace: Record<string, TerminalTab[]>;
+	activeTerminalByWorkspace: Record<string, string | null>;
 	setStatus: (status: ConnectionStatus) => void;
 	setWelcome: (protocolVersion: number) => void;
 	setProjects: (projects: Project[]) => void;
@@ -31,6 +41,9 @@ interface AppState {
 	closeTab: (id: string) => void;
 	setActiveTab: (id: string) => void;
 	clearWorkspaceTabs: (workspaceId: string) => void;
+	addTerminal: (workspaceId: string) => void;
+	closeTerminalTab: (workspaceId: string, clientId: string) => void;
+	setActiveTerminalTab: (workspaceId: string, clientId: string) => void;
 }
 
 export const useAppStore = create<AppState>((set) => ({
@@ -42,6 +55,8 @@ export const useAppStore = create<AppState>((set) => ({
 	activeWorkspaceId: null,
 	tabsByWorkspace: {},
 	activeTabByWorkspace: {},
+	terminalsByWorkspace: {},
+	activeTerminalByWorkspace: {},
 	setStatus: (status) => set({ status }),
 	setWelcome: (protocolVersion) => set({ protocolVersion }),
 	setProjects: (projects) => set({ projects }),
@@ -82,7 +97,46 @@ export const useAppStore = create<AppState>((set) => ({
 	clearWorkspaceTabs: (workspaceId) =>
 		set((s) => {
 			const { [workspaceId]: _tabs, ...tabsByWorkspace } = s.tabsByWorkspace;
-			const { [workspaceId]: _active, ...activeTabByWorkspace } = s.activeTabByWorkspace;
-			return { tabsByWorkspace, activeTabByWorkspace };
+			const { [workspaceId]: _activeTab, ...activeTabByWorkspace } = s.activeTabByWorkspace;
+			// Dropping the terminals unmounts their instances, which close the PTYs server-side.
+			const { [workspaceId]: _terms, ...terminalsByWorkspace } = s.terminalsByWorkspace;
+			const { [workspaceId]: _activeTerm, ...activeTerminalByWorkspace } =
+				s.activeTerminalByWorkspace;
+			return {
+				tabsByWorkspace,
+				activeTabByWorkspace,
+				terminalsByWorkspace,
+				activeTerminalByWorkspace,
+			};
 		}),
+	addTerminal: (workspaceId) =>
+		set((s) => {
+			const list = s.terminalsByWorkspace[workspaceId] ?? [];
+			const clientId = crypto.randomUUID();
+			const tab: TerminalTab = { clientId, workspaceId, title: `Terminal ${list.length + 1}` };
+			return {
+				terminalsByWorkspace: { ...s.terminalsByWorkspace, [workspaceId]: [...list, tab] },
+				activeTerminalByWorkspace: { ...s.activeTerminalByWorkspace, [workspaceId]: clientId },
+			};
+		}),
+	closeTerminalTab: (workspaceId, clientId) =>
+		set((s) => {
+			const list = (s.terminalsByWorkspace[workspaceId] ?? []).filter(
+				(t) => t.clientId !== clientId,
+			);
+			const wasActive = s.activeTerminalByWorkspace[workspaceId] === clientId;
+			return {
+				terminalsByWorkspace: { ...s.terminalsByWorkspace, [workspaceId]: list },
+				activeTerminalByWorkspace: {
+					...s.activeTerminalByWorkspace,
+					[workspaceId]: wasActive
+						? (list.at(-1)?.clientId ?? null)
+						: (s.activeTerminalByWorkspace[workspaceId] ?? null),
+				},
+			};
+		}),
+	setActiveTerminalTab: (workspaceId, clientId) =>
+		set((s) => ({
+			activeTerminalByWorkspace: { ...s.activeTerminalByWorkspace, [workspaceId]: clientId },
+		})),
 }));

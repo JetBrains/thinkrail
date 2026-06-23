@@ -25,9 +25,9 @@ event stream as a chat-centric, multi-session IDE shell.
 
 - **transport/** — single WebSocket client; id-correlated `request`, channel `subscribe` with replay,
   reconnect/backoff. The host endpoint is a parameter (default same-origin via `inferUrl`).
-- **store/** — Zustand; connection + welcome, projects/workspaces, and **center tabs keyed by workspace**
-  (switching workspaces swaps the visible tab set). Per-session pi runtime (messages, streaming, stats)
-  joins at M10–M11.
+- **store/** — Zustand; connection + welcome, projects/workspaces, and **center tabs + terminals keyed by
+  workspace** (switching workspaces swaps both). Per-session pi runtime (messages, streaming, stats) joins
+  at M10–M11.
 - **panels/** — layout-agnostic, store-driven: `ProjectTree` (project→workspace nav), `FileTree` (All
   files), `Editor` (Monaco, center tabs), `ChangesPanel` + `DiffViewer`, `TerminalView`, `ChatView`,
   `Composer`. A panel fills its container and never knows its arrangement.
@@ -37,8 +37,13 @@ event stream as a chat-centric, multi-session IDE shell.
 
 Built so far: `transport` / `store` / `wireTransport` / branded `shell` (M3); `ProjectTree` (M4–M5);
 `FileTree` + `RightPanel` (All files, M6); `CenterTabs` + lazy `MonacoEditor` (file tabs, M7);
-`ChangesPanel` + lazy `DiffViewer` (Changes tab, shiki diff vs base, M8). TerminalView / ChatView /
-Composer land M9–M13. UI primitives live in `components/ui/` (shadcn), `cn()` in `lib/utils.ts`.
+`ChangesPanel` + lazy `DiffViewer` (Changes tab, shiki diff vs base, M8); `TerminalsPanel` + lazy
+`TerminalInstance` (workspace-scoped xterm PTYs, lower-right, M9). ChatView / Composer land M11–M13. UI
+primitives live in `components/ui/` (shadcn), `cn()` in `lib/utils.ts`.
+
+`TerminalInstance` uses xterm's DOM renderer with the fit / unicode11 / clipboard addons; webgl / image /
+ligatures are deferred so terminal output stays in the DOM (assertable + accessible). Inactive terminals
+are kept mounted but `hidden` to preserve their buffers, and re-fit when shown.
 
 ## Styling & theming
 

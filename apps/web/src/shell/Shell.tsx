@@ -2,6 +2,7 @@ import { PRODUCT_NAME } from "../constants/branding";
 import { CenterTabs } from "../panels/CenterTabs";
 import { ProjectTree } from "../panels/ProjectTree";
 import { RightPanel } from "../panels/RightPanel";
+import { TerminalsPanel } from "../panels/TerminalsPanel";
 import { useAppStore } from "../store/appStore";
 import type { ConnectionStatus } from "../transport";
 
@@ -41,8 +42,13 @@ export function Shell() {
 				<main data-testid="center-tabs" className="min-h-0">
 					<CenterTabs />
 				</main>
-				<aside data-testid="right-panel" className="min-h-0 border-l border-border">
-					<RightPanel />
+				<aside data-testid="right-panel" className="flex min-h-0 flex-col border-l border-border">
+					<div className="min-h-0 flex-1">
+						<RightPanel />
+					</div>
+					<div className="h-2/5 min-h-0 border-t border-border">
+						<TerminalsPanel />
+					</div>
 				</aside>
 			</div>
 		</div>
