@@ -34,7 +34,7 @@ export function TerminalsPanel() {
 
 	return (
 		<div data-testid="terminal-panel" className="flex h-full min-h-0 flex-col bg-bg-dark">
-			<div className="flex h-7 shrink-0 items-center gap-xs border-b border-border pr-xs pl-sm">
+			<div className="flex h-7 shrink-0 items-center gap-xs border-b border-border2 pr-xs pl-sm">
 				<span className="shrink-0 text-xs uppercase tracking-wider text-muted">Terminal</span>
 				<div className="flex min-w-0 flex-1 items-center gap-px overflow-x-auto">
 					{tabs.map((tab) => (

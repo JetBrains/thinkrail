@@ -33,7 +33,7 @@ export function CenterTabs() {
 		<div className="flex h-full min-h-0 flex-col">
 			<div
 				role="tablist"
-				className="flex h-8 shrink-0 items-stretch overflow-x-auto border-b border-border bg-bg-dark"
+				className="flex h-8 shrink-0 items-stretch overflow-x-auto border-b border-border2 bg-bg-dark"
 			>
 				{openTabs.map((tab) => {
 					const isActive = tab.id === activeTabId;
@@ -42,7 +42,7 @@ export function CenterTabs() {
 							key={tab.id}
 							data-testid="editor-tab"
 							data-active={isActive}
-							className={`group flex items-center gap-xs border-r border-border pl-sm pr-xs text-sm ${
+							className={`group flex items-center gap-xs border-r border-border2 pl-sm pr-xs text-sm ${
 								isActive ? "bg-bg text-text" : "text-muted hover:bg-hover"
 							}`}
 						>

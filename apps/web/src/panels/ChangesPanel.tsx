@@ -67,7 +67,7 @@ export function ChangesPanel({ workspaceId }: { workspaceId: string }) {
 
 	return (
 		<div className="flex h-full min-h-0 flex-col">
-			<ul className="max-h-1/3 shrink-0 overflow-auto border-b border-border">
+			<ul className="max-h-1/3 shrink-0 overflow-auto border-b border-border2">
 				{status.changes.map((change) => (
 					<li key={change.path}>
 						<button

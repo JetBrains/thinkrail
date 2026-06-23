@@ -12,7 +12,7 @@ export function RightPanel() {
 
 	return (
 		<div className="flex h-full min-h-0 flex-col">
-			<div className="flex h-7 shrink-0 items-center gap-md border-b border-border px-sm">
+			<div className="flex h-7 shrink-0 items-center gap-md border-b border-border2 px-sm">
 				<TabButton testid="tab-files" active={tab === "files"} onClick={() => setTab("files")}>
 					All files
 				</TabButton>

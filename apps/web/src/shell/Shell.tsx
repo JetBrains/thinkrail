@@ -36,17 +36,17 @@ export function Shell() {
 				</span>
 			</header>
 			<div className="grid min-h-0 grid-cols-[240px_1fr_320px]">
-				<aside data-testid="left-nav" className="overflow-auto border-r border-border p-md">
+				<aside data-testid="left-nav" className="overflow-auto border-r border-border2 p-md">
 					<ProjectTree />
 				</aside>
 				<main data-testid="center-tabs" className="min-h-0">
 					<CenterTabs />
 				</main>
-				<aside data-testid="right-panel" className="flex min-h-0 flex-col border-l border-border">
+				<aside data-testid="right-panel" className="flex min-h-0 flex-col border-l border-border2">
 					<div className="min-h-0 flex-1">
 						<RightPanel />
 					</div>
-					<div className="h-2/5 min-h-0 border-t border-border">
+					<div className="h-2/5 min-h-0 border-t border-border2">
 						<TerminalsPanel />
 					</div>
 				</aside>
