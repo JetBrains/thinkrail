@@ -1,6 +1,5 @@
 import { expect, type Page } from "@playwright/test";
-import { existsSync, mkdirSync, writeFileSync } from "node:fs";
-import { basename, dirname, join } from "node:path";
+import { basename } from "node:path";
 import { header, projectPicker } from "./selectors";
 
 const BACKEND_URL = process.env.THINKRAIL_BACKEND_URL ?? "http://localhost:8000";
@@ -22,19 +21,15 @@ async function registerKnownProject(path: string): Promise<void> {
 }
 
 export async function openProject(page: Page, path: string): Promise<void> {
-  // The backend opens straight to the sessions workspace only for an
-  // "initialized" project — one holding a spec deliverable, board ticket, or
-  // plan. An empty dir is "new" (welcome) and a dir with files but no spec is
-  // "existing" (investigation wizard); both land on a wizard instead. A
-  // non-empty `.tr/plans/` flips the state to "initialized" without surfacing
-  // anything in the UI: plans are loaded per meta-ticket, so an unreferenced
-  // marker file appears in no panel.
-  const planMarker = join(path, ".tr", "plans", ".gitkeep");
-  if (!existsSync(planMarker)) {
-    mkdirSync(dirname(planMarker), { recursive: true });
-    writeFileSync(planMarker, "", "utf8");
-  }
-
+  // Opens the project from the picker and waits until we've left the picker
+  // (workspace chrome up). This does NOT guarantee the full workspace layout:
+  // the backend only opens straight into the sessions workspace (left-panel
+  // Sessions/Specs/Files tabs, restored session) for an *initialized* project —
+  // one holding a board ticket or a spec deliverable (`.tr/DESIGN_DOC.md`). A
+  // project with only sessions/drafts on disk is "new"/"existing" and lands on
+  // the onboarding wizard, which has no left panel. Callers that need the left
+  // panel must seed an initialized marker first: `seedTicket(...)` or
+  // `seedDeliverable(...)` (helpers/board.ts).
   await registerKnownProject(path);
 
   if (page.url() === "about:blank") {
