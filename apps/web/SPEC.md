@@ -36,9 +36,9 @@ event stream as a chat-centric, multi-session IDE shell.
   single-view-with-switcher, breakpoint-driven.
 
 Built so far: `transport` / `store` / `wireTransport` / branded `shell` (M3); `ProjectTree` (M4–M5);
-`FileTree` + `RightPanel` (All files, M6); `CenterTabs` + lazy `MonacoEditor` (file tabs, M7).
-ChangesPanel / TerminalView / ChatView / Composer land M8–M13. UI primitives live in `components/ui/`
-(shadcn), `cn()` in `lib/utils.ts`.
+`FileTree` + `RightPanel` (All files, M6); `CenterTabs` + lazy `MonacoEditor` (file tabs, M7);
+`ChangesPanel` + lazy `DiffViewer` (Changes tab, shiki diff vs base, M8). TerminalView / ChatView /
+Composer land M9–M13. UI primitives live in `components/ui/` (shadcn), `cn()` in `lib/utils.ts`.
 
 ## Styling & theming
 

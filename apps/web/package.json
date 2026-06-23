@@ -14,6 +14,8 @@
 		"@radix-ui/react-dialog": "^1.1.17",
 		"@radix-ui/react-dropdown-menu": "^2.1.18",
 		"@radix-ui/react-tooltip": "^1.2.10",
+		"@shikijs/langs": "4.2.0",
+		"@shikijs/themes": "4.2.0",
 		"@thinkrail-pi/contracts": "workspace:*",
 		"@xterm/addon-clipboard": "^0.2.0",
 		"@xterm/addon-fit": "^0.11.0",

@@ -2,17 +2,9 @@ import { randomUUID } from "node:crypto";
 import { mkdirSync, rmSync } from "node:fs";
 import { dirname, join } from "node:path";
 import type { DiffStats, Workspace } from "@thinkrail-pi/contracts";
+import { git } from "./gitExec";
 import { dataDir, loadProjects, loadWorkspaces, saveWorkspaces } from "./persistence";
 import { getProjects } from "./projects";
-
-function git(cwd: string, args: string[]): { ok: boolean; out: string; err: string } {
-	const result = Bun.spawnSync(["git", "-C", cwd, ...args], { stdout: "pipe", stderr: "pipe" });
-	return {
-		ok: result.success,
-		out: new TextDecoder().decode(result.stdout).trim(),
-		err: new TextDecoder().decode(result.stderr).trim(),
-	};
-}
 
 function toBranch(name: string): string {
 	return (

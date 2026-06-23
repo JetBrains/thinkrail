@@ -24,14 +24,14 @@ for development / e2e).
   `@earendil-works/pi-coding-agent` (runtime, M10), Bun/Node.
 - **Forbidden:** importing `web`/`cli`/`desktop`; being bundled into the browser.
 
-## Surface (current — M5)
+## Surface (current — M8)
 
 - `createServer({ port?, host?, staticDir? }) → { port, stop }`: `Bun.serve` with `/health`, a `/ws`
   upgrade, static SPA serving (when `staticDir` is set; `index.html` fallback, path-contained), and a WS
   that pushes **`server.welcome`** (`{ protocolVersion, projects }`) on open and dispatches requests.
 - `dev.ts`: `resolveShellEnv()` → `createServer` from `THINKRAIL_PI_PORT`/`_HOST`/`_STATIC_DIR`.
 - `handlers.ts`: the WS method→handler registry — `project.*`, `workspace.*`, `dialog.selectDirectory`,
-  `fs.readDir`/`fs.readFile`.
+  `fs.readDir`/`fs.readFile`, `git.status`/`git.diff`.
 - `persistence.ts`: JSON app state under `dataDir()` — `THINKRAIL_PI_DATA_DIR` (dev/e2e isolation) else
   `~/.thinkrail-pi`. `projects.ts`: open a git repo as a project (validate via `git rev-parse
   --show-toplevel`, dedupe by root; assign a stable unique readable `slug`), list (by `lastOpened`), close.
@@ -43,6 +43,9 @@ for development / e2e).
   "Open project" gets a real OS dialog. `THINKRAIL_PI_PICK_DIR` overrides it for dev/e2e.
 - `files.ts`: `readDir` / `readFile(workspaceId, path)` — list a directory / read a UTF-8 text file inside
   the active worktree (every path resolved + contained to the worktree root; `.git` hidden; dirs first).
+- `git.ts`: `gitStatus` / `gitDiff(workspaceId, path?)` — a worktree's changed files + unified diff vs its
+  base branch (untracked files listed, and shown in full via `--no-index`). `gitExec.ts` is the shared
+  `git(cwd, args)` runner used here and by `workspaces.ts`.
 
 ## Get right (firms up as features land)
 

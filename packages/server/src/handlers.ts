@@ -1,5 +1,6 @@
 import { selectDirectory } from "./dialog";
 import { readDir, readFile } from "./files";
+import { gitDiff, gitStatus } from "./git";
 import { closeProject, listProjects, openProject } from "./projects";
 import { createWorkspace, listWorkspaces, removeWorkspace, workspaceDiffStats } from "./workspaces";
 
@@ -28,7 +29,10 @@ const handlers: Record<string, Handler> = {
 		readDir((params as { workspaceId: string }).workspaceId, (params as { path: string }).path),
 	"fs.readFile": (params) =>
 		readFile((params as { workspaceId: string }).workspaceId, (params as { path: string }).path),
-	// git.* / terminal.* / session.* land in M8–M10.
+	"git.status": (params) => gitStatus((params as { workspaceId: string }).workspaceId),
+	"git.diff": (params) =>
+		gitDiff((params as { workspaceId: string }).workspaceId, (params as { path?: string }).path),
+	// terminal.* / session.* land in M9–M10.
 };
 
 /** Route a WS request to its handler. Throws on unknown method (→ a `{ ok:false }` WS response). */
