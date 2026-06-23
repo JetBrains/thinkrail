@@ -151,7 +151,7 @@ spec — directly or transitively — except where noted as a documented gap.
 | MetaTicketDetail (TicketDescriptionView, TicketInfo, TicketProgressBar) | `meta-ticket.spec.ts`, `plan-and-drafts.spec.ts` | Edit description, link spec, plan/drafts |
 | Notifications/ToastContainer | (gap) | Specs assert against `ChatStream`'s `ErrorBanner`; the toast renderer itself has no spec — documented gap |
 | ProjectPicker | `project-picker.spec.ts`, `project-init.spec.ts`, `_smoke.spec.ts` | Recent list, autocomplete, invalid path |
-| SessionManager (sidebar Sessions tab, card click, footer button) | `sidebar-sessions.spec.ts` | Renders 3 tabs; footer focuses Sessions + uncollapses; view↔sidebar coupling; card click from Board |
+| SessionManager (sidebar Sessions tab, finished-session visibility) | `sidebar-sessions.spec.ts`, `draft-on-type.spec.ts` | Finished standalone sessions list as cards; finished ticket sessions surface as ticket folders; draft cards reopen |
 | SessionPanel (SessionTabBar, StickyContextBar, WelcomeScreen) | `session-lifecycle.spec.ts`, every spec that opens an empty project | Routing between welcome/session views |
 | SessionPanel/NewProjectScreen | `project-init.spec.ts` | First-time init flow |
 | SpecTree | `spec-tree.spec.ts`, `spec-editor.spec.ts`, `trash-and-palette.spec.ts` | Tree expand, click, palette spec-picker |
