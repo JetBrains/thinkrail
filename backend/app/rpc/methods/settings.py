@@ -8,12 +8,14 @@ from typing import Any
 from jsonrpcserver import JsonRpcError, Result, Success
 from pydantic import ValidationError
 
+from app import analytics
 from app.agent.runtime import (
     RuntimeCapabilities,
     RuntimeIdentity,
     RuntimeRegistry,
     UnknownRuntimeError,
 )
+from app.analytics import AnalyticsStatus
 from app.core.app_store import AppStore
 from app.core.config import AppConfig
 from app.core.session_defaults import (
@@ -120,6 +122,30 @@ async def set_session_defaults(app_store: AppStore, **params: Any) -> dict:
     cfg = SessionDefaults.model_validate(params)
     saved = await save_session_defaults(app_store, cfg)
     return saved.model_dump(by_alias=True)
+
+
+@_handle_errors
+async def get_analytics_consent(app_store: AppStore, **_params: Any) -> AnalyticsStatus:
+    """Return analytics enablement for the Settings toggle (no id on the wire)."""
+    consent = await analytics.get_status(app_store)
+    return AnalyticsStatus(enabled=consent.enabled)
+
+
+@_handle_errors
+async def set_analytics_consent(app_store: AppStore, **params: Any) -> AnalyticsStatus:
+    """Toggle analytics and return the refreshed enablement.
+
+    ``enabled=true`` mints a fresh ``installation_id`` (``opt_in``);
+    ``enabled=false`` clears it (``opt_out``). Refreshes the in-process state
+    so the running server respects the change immediately. The id stays
+    backend-side — only ``enabled`` crosses the wire.
+    """
+    if bool(params.get("enabled")):
+        await analytics.opt_in(app_store)
+    else:
+        await analytics.opt_out(app_store)
+    consent = await analytics.reload_state(app_store)
+    return AnalyticsStatus(enabled=consent.enabled)
 
 
 # ── Runtimes ────────────────────────────────────────────────────────────────

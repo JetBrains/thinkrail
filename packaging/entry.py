@@ -63,14 +63,39 @@ def _run_upgrade(argv: list[str]) -> int:
                         help="Install a specific version (default: latest)")
     args = parser.parse_args(argv)
 
+    from app import analytics
+    from app.analytics import UpgradeStartedEvent
+    analytics.emit_oneshot(UpgradeStartedEvent())
+
     from app.upgrade import run_upgrade
     return run_upgrade(channel=args.channel, version=args.version)
+
+
+def _run_analytics(argv: list[str]) -> int:
+    parser = argparse.ArgumentParser(
+        prog="thinkrail analytics",
+        description="Enable, disable, or show the status of anonymous usage analytics.",
+    )
+    group = parser.add_mutually_exclusive_group(required=True)
+    group.add_argument("--enable", action="store_true",
+                       help="Enable analytics (mints a fresh installation id)")
+    group.add_argument("--disable", action="store_true",
+                       help="Disable analytics and delete the installation id")
+    group.add_argument("--status", action="store_true",
+                       help="Show whether analytics is enabled")
+    args = parser.parse_args(argv)
+
+    from app.analytics import run_cli
+    action = "enable" if args.enable else "disable" if args.disable else "status"
+    return run_cli(action)
 
 
 def main() -> None:
     argv = sys.argv[1:]
     if argv and argv[0] == "upgrade":
         sys.exit(_run_upgrade(argv[1:]))
+    if argv and argv[0] == "analytics":
+        sys.exit(_run_analytics(argv[1:]))
     sys.exit(_run_server(argv))
 
 

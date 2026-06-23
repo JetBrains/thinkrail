@@ -1,9 +1,8 @@
 """Spec amendment helpers.
 
-Provides the primitives used by the ``ProposeChange`` MCP tool to amend
-spec files in place: substitute text, validate the result, log the diff to
-the per-ticket ``history.patch`` session log, and surface the spec id
-for ticket auto-linking.
+Provides primitives for amending spec files in place: validate the result,
+log the diff to the per-ticket ``history.patch`` session log, and surface the
+spec id for ticket auto-linking.
 """
 from __future__ import annotations
 
@@ -17,49 +16,6 @@ from app.board.artifact_paths import artifact_path
 from app.spec.frontmatter import FrontmatterError, parse_frontmatter
 
 logger = logging.getLogger(__name__)
-
-
-class AmendmentError(Exception):
-    """Raised by :func:`apply_amendment` when args don't match the file."""
-
-
-# ── apply ───────────────────────────────────────────────────────
-
-
-def apply_amendment(
-    *,
-    project_root: Path,
-    file_path: str,
-    old_string: str,
-    new_string: str,
-) -> str:
-    """Replace ``old_string`` with ``new_string`` in ``file_path`` under ``project_root``.
-
-    Returns the post-amendment file content. Raises :class:`AmendmentError`
-    if ``old_string`` is missing or not unique, or if ``file_path`` escapes
-    the project root.
-    """
-    root = project_root.resolve()
-    abs_path = (project_root / file_path).resolve()
-    try:
-        abs_path.relative_to(root)
-    except ValueError:
-        raise AmendmentError(f"file_path '{file_path}' is outside project root")
-    if not abs_path.is_file():
-        raise AmendmentError(f"file '{file_path}' does not exist")
-
-    content = abs_path.read_text(encoding="utf-8")
-    occurrences = content.count(old_string)
-    if occurrences == 0:
-        raise AmendmentError(f"old_string not found in '{file_path}'")
-    if occurrences > 1:
-        raise AmendmentError(
-            f"old_string not unique in '{file_path}' "
-            f"({occurrences} occurrences) — include more surrounding context"
-        )
-    new_content = content.replace(old_string, new_string, 1)
-    abs_path.write_text(new_content, encoding="utf-8")
-    return new_content
 
 
 # ── validate ────────────────────────────────────────────────────
@@ -160,13 +116,36 @@ def _next_amendment_number(log_text: str) -> int:
     return log_text.count("# == amendment ") + 1
 
 
+def build_change_diff(file_path: str, changes: list[tuple[str, str]]) -> str:
+    """Format ``(old, new)`` snippet pairs into unified-diff text.
+
+    One ``--- a/<path>`` / ``+++ b/<path>`` header followed by one hunk per
+    change. Line numbers are relative to each snippet — the log is a patch
+    stream, not a file snapshot. Snippets are newline-terminated first so
+    hunks never run together.
+    """
+    parts: list[str] = [f"--- a/{file_path}\n", f"+++ b/{file_path}\n"]
+    emitted = False
+    for old, new in changes:
+        old_lines = old.splitlines(keepends=True)
+        new_lines = new.splitlines(keepends=True)
+        if old_lines and not old_lines[-1].endswith("\n"):
+            old_lines[-1] += "\n"
+        if new_lines and not new_lines[-1].endswith("\n"):
+            new_lines[-1] += "\n"
+        body = list(difflib.unified_diff(old_lines, new_lines))[2:]
+        if body:
+            parts.extend(body)
+            emitted = True
+    return "".join(parts) if emitted else ""
+
+
 def append_amendment(
     *,
     project_root: Path,
     ticket_id: str,
     file_path: str,
-    old_content: str,
-    new_content: str,
+    diff: str,
     spec_id: str | None,
     section: str | None,
     rationale: str | None,
@@ -175,7 +154,7 @@ def append_amendment(
     skill: str | None = None,
     timestamp: str | None = None,
 ) -> Path:
-    """Append a metadata header + unified-diff hunk to the ticket's .patch log."""
+    """Append a metadata header + unified-diff hunk to the ticket's history.patch log."""
     ts = timestamp or datetime.now(UTC).isoformat()
     log_path = artifact_path(project_root, ticket_id, "history")
     log_path.parent.mkdir(parents=True, exist_ok=True)
@@ -188,14 +167,6 @@ def append_amendment(
         spec_id=spec_id, section=section, rationale=rationale,
         applied_as=applied_as, validation=validation, timestamp=ts,
     )
-    diff_lines = list(difflib.unified_diff(
-        old_content.splitlines(keepends=True),
-        new_content.splitlines(keepends=True),
-        fromfile=f"a/{file_path}",
-        tofile=f"b/{file_path}",
-    ))
-    diff = "".join(diff_lines)
-
     separator = "" if not existing else "\n\n"
     log_path.write_text(existing + separator + header + "\n" + diff, encoding="utf-8")
     return log_path

@@ -139,7 +139,7 @@ class SessionOutcome(BaseModel):
 # ─── Session model ──────────────────────────────────────────────────────────
 # A Session wraps an agent conversation. A Session belongs to at most one ticket
 # (``ticket_id``) and may be a quick subsession of another session
-# (``parent_session_id``). See SESSION_TICKET_MODEL.md.
+# (``parent_thinkrail_sid``).
 
 DEFAULT_RUNTIME: RuntimeType = "claude"
 DEFAULT_MODEL = "claude-opus-4-8"
@@ -147,18 +147,14 @@ DEFAULT_PERMISSION_MODE = "default"
 DEFAULT_EFFORT = "auto"
 
 
-class SessionStatus(StrEnum):
+class TaskStatus(StrEnum):
     DRAFT = "draft"
+    INITIALIZING = "initializing"
+    IDLE = "idle"
     RUNNING = "running"
     WAITING = "waiting"
-    IDLE = "idle"
-    FINISHED = "finished"
+    DONE = "done"
     ERROR = "error"
-
-
-TaskStatus = Literal[
-    "draft", "initializing", "idle", "running", "waiting", "done", "error"
-]
 
 
 class ArtifactKind(StrEnum):
@@ -479,19 +475,6 @@ class RequestExpiredPayload(BaseModel):
     reason: str = "timeout"
 
 
-class ProposeChangePayload(BaseModel):
-    """Agent proposes an amendment to a spec file; user reviews via four-button card."""
-
-    model_config = _CAMEL_CONFIG
-
-    request_id: str = ""
-    file_path: str
-    old_string: str
-    new_string: str
-    section: str | None = None
-    rationale: str | None = None
-
-
 class SetPreviewFilePayload(BaseModel):
     """Open a file in the right Context Panel's Preview tab. Path null
     means clear the preview (replaces the deprecated ClearPreviewFile)."""
@@ -514,6 +497,9 @@ class SessionArtifact(BaseModel):
     model_config = _CAMEL_CONFIG
 
     path: str
+    # "propose-change" retained for backward compatibility with sessions
+    # recorded before the dedicated amendment tool was retired (no new code
+    # writes it — see app/agent/artifacts.py:_ArtifactKind).
     kind: Literal["write", "edit", "propose-change", "preview"]
     role: str | None = None
     label: str | None = None
@@ -680,11 +666,6 @@ class UserMessageEvent(_BaseEvent):
     payload: UserMessagePayload
 
 
-class ProposeChangeEvent(_BaseEvent):
-    event_type: Literal["proposeChange"]
-    payload: ProposeChangePayload
-
-
 class SetPreviewFileEvent(_BaseEvent):
     event_type: Literal["setPreviewFile"]
     payload: SetPreviewFilePayload
@@ -732,7 +713,6 @@ AgentEvent = Annotated[
         RequestResolvedEvent,
         RequestExpiredEvent,
         UserMessageEvent,
-        ProposeChangeEvent,
         SetPreviewFileEvent,
         ClearPreviewFileEvent,
         ArtifactAddedEvent,
@@ -786,7 +766,7 @@ class AgentTask(BaseModel):
 
     thinkrail_sid: str = Field(default_factory=lambda: str(uuid4()))
     name: str = ""
-    status: TaskStatus = "initializing"
+    status: TaskStatus = TaskStatus.INITIALIZING
     spec_ids: list[str] = Field(default_factory=list)
     file_paths: list[str] = Field(default_factory=list)
     skill_id: str | None = None

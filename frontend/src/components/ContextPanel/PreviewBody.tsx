@@ -1,11 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import { useUiStore } from "@/store/uiStore.ts";
-import { useSessionStore, selectProposeChangesByFile } from "@/store/sessionStore.ts";
 import { readFile } from "@/services/files.ts";
 import { getClient } from "@/api/index.ts";
 import { MarkdownPreview } from "@/components/FileViewer/MarkdownPreview.tsx";
-import { ReviewPanel } from "./ReviewPanel.tsx";
-import type { ProposeChangeResponse } from "./Hunk.tsx";
 
 interface Props {
   path: string;
@@ -16,10 +13,6 @@ interface Props {
 
 export function PreviewBody({ path, section, version }: Props) {
   const project = useUiStore((s) => s.projectPath);
-  const activeReview = useUiStore((s) => s.activeReview);
-  const setActiveReview = useUiStore((s) => s.setActiveReview);
-  const sessions = useSessionStore((s) => s.sessions);
-  const resolveRequest = useSessionStore((s) => s.resolveRequest);
 
   const [content, setContent] = useState<string | null>(null);
   const [waiting, setWaiting] = useState(false);
@@ -27,7 +20,7 @@ export function PreviewBody({ path, section, version }: Props) {
   const prevPathRef = useRef<string | null>(null);
   // Bumped when the watcher reports this file changed on disk. The `version`
   // prop (artifact lastTouchedAt) doesn't reliably propagate, so this is the
-  // primary live-refresh trigger after a ProposeChange / Write writes the file.
+  // primary live-refresh trigger after the agent writes the file.
   const [fileRev, setFileRev] = useState(0);
 
   useEffect(() => {
@@ -99,65 +92,6 @@ export function PreviewBody({ path, section, version }: Props) {
       }
     }
   }, [section, content]);
-
-  // ── Review-mode branch ──────────────────────────────────
-  if (
-    activeReview &&
-    activeReview.filePath === path &&
-    content !== null &&
-    content !== ""
-  ) {
-    const session = sessions.get(activeReview.sid);
-    if (session) {
-      const grouped = selectProposeChangesByFile(session);
-      const hunks = grouped.get(path) ?? [];
-      const handleResolve = (rid: string, resp: ProposeChangeResponse) =>
-        resolveRequest(session.thinkrailSid, rid, resp);
-      const handleAcceptAll = () => {
-        for (const h of hunks) {
-          if (h.state === "pending") {
-            resolveRequest(session.thinkrailSid, h.requestId, {
-              behavior: "allow",
-              applied: "original",
-            });
-          }
-        }
-      };
-      const handleRejectAll = () => {
-        for (const h of hunks) {
-          if (h.state === "pending") {
-            resolveRequest(session.thinkrailSid, h.requestId, {
-              behavior: "deny",
-              discuss: false,
-            });
-          }
-        }
-      };
-      const handleDiscuss = (text: string) => {
-        for (const h of hunks) {
-          if (h.state === "pending") {
-            resolveRequest(session.thinkrailSid, h.requestId, {
-              behavior: "deny",
-              discuss: true,
-              feedback: text,
-            });
-          }
-        }
-      };
-      return (
-        <ReviewPanel
-          filePath={path}
-          content={content}
-          hunks={hunks}
-          onResolve={handleResolve}
-          onAcceptAll={handleAcceptAll}
-          onRejectAll={handleRejectAll}
-          onDiscuss={handleDiscuss}
-          onExit={() => setActiveReview(null)}
-        />
-      );
-    }
-  }
 
   // ── Default file-viewer branch ─────────────────────────
   if (content == null) {

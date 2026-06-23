@@ -30,7 +30,6 @@ import type {
   RequestResolvedEvent,
   RequestExpiredEvent,
   UserMessageEvent,
-  ProposeChangeEvent,
   SetPreviewFileEvent,
   ClearPreviewFileEvent,
   ArtifactAddedEvent,
@@ -64,7 +63,6 @@ export type {
   RequestResolvedEvent,
   RequestExpiredEvent,
   UserMessageEvent,
-  ProposeChangeEvent,
   SetPreviewFileEvent,
   ClearPreviewFileEvent,
   ArtifactAddedEvent,
@@ -88,13 +86,12 @@ export type {
   SuggestSessionPayload,
   SuggestStepPayload,
   UserMessagePayload,
-  ProposeChangePayload,
   SetPreviewFilePayload,
   ClearPreviewFilePayload,
   QuestionOption,
 } from "./ws-events.ts";
 
-export type TaskStatus = "draft" | "initializing" | "running" | "waiting" | "idle" | "finished" | "done" | "error" | "interrupted";
+export type TaskStatus = "draft" | "initializing" | "running" | "waiting" | "idle" | "done" | "error" | "interrupted";
 
 // ─── Semantic event type groups ───────────────────────────────────────────────
 // Derived from the generated event interfaces — strings live only in ws-events.ts.
@@ -129,7 +126,6 @@ export type InteractionRequestEventType = (
   | SuggestSessionEvent
   | SuggestDescriptionEvent
   | SuggestStepEvent
-  | ProposeChangeEvent
 )["eventType"];
 
 /** Resolution of a pending interaction request. */

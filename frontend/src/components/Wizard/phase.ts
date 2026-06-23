@@ -10,7 +10,7 @@ import type { WizardUiPhase } from "./registry";
  * that's how stepper and rendered view drift apart.
  *
  *   - no session yet              → `pre-chat`
- *   - session finished/errored    → `done-screen`
+ *   - session done/errored        → `done-screen`
  *   - session in any other state  → `running`
  */
 export function derivePhase(args: {
@@ -18,6 +18,6 @@ export function derivePhase(args: {
 }): WizardUiPhase {
   const { session } = args;
   if (!session) return "pre-chat";
-  if (session.status === "finished" || session.status === "error") return "done-screen";
+  if (session.status === "done" || session.status === "error") return "done-screen";
   return "running";
 }

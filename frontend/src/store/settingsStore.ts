@@ -1,7 +1,11 @@
 import { create } from "zustand";
 import { getClient } from "@/api/index.ts";
 import { createSettingsApi, type ProjectSettings } from "@/api/methods/settings.ts";
-import { createAppSettingsApi, type SessionDefaults } from "@/api/methods/appSettings.ts";
+import {
+  createAppSettingsApi,
+  type SessionDefaults,
+  type AnalyticsStatus,
+} from "@/api/methods/appSettings.ts";
 import { type Skill, FALLBACK_SKILLS } from "@/constants/skills.ts";
 import type { RuntimeSkillInfo, RuntimeType } from "@/types/agent.ts";
 
@@ -10,6 +14,8 @@ interface SettingsStore {
   settings: ProjectSettings | null;
   /** User-scoped session-creation defaults (AppStore-backed). */
   sessionDefaults: SessionDefaults | null;
+  /** Anonymous-analytics enablement (AppStore-backed; id stays backend-side). */
+  analyticsConsent: AnalyticsStatus | null;
   /** Dynamic skills list from backend (falls back to FALLBACK_SKILLS) */
   skills: Skill[];
   fetchSkills: () => Promise<void>;
@@ -33,11 +39,14 @@ interface SettingsStore {
   ensureFile: () => Promise<void>;
   fetchSessionDefaults: () => Promise<void>;
   updateSessionDefaults: (patch: Partial<SessionDefaults>) => Promise<SessionDefaults>;
+  fetchAnalyticsConsent: () => Promise<void>;
+  setAnalyticsEnabled: (enabled: boolean) => Promise<void>;
 }
 
 export const useSettingsStore = create<SettingsStore>((set, get) => ({
   settings: null,
   sessionDefaults: null,
+  analyticsConsent: null,
   skills: FALLBACK_SKILLS,
   runtimeSkills: new Map(),
 
@@ -101,6 +110,29 @@ export const useSettingsStore = create<SettingsStore>((set, get) => ({
       console.error("Failed to update session defaults:", e);
       set({ sessionDefaults: current }); // rollback
       throw e;
+    }
+  },
+
+  fetchAnalyticsConsent: async () => {
+    try {
+      const api = createAppSettingsApi(getClient());
+      const analyticsConsent = await api.getAnalyticsConsent();
+      set({ analyticsConsent });
+    } catch (e) {
+      console.error("Failed to fetch analytics consent:", e);
+    }
+  },
+
+  setAnalyticsEnabled: async (enabled) => {
+    const current = get().analyticsConsent;
+    set({ analyticsConsent: { enabled } }); // optimistic
+    try {
+      const api = createAppSettingsApi(getClient());
+      const saved = await api.setAnalyticsConsent(enabled);
+      set({ analyticsConsent: saved });
+    } catch (e) {
+      console.error("Failed to update analytics consent:", e);
+      set({ analyticsConsent: current }); // rollback
     }
   },
 

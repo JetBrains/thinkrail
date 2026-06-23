@@ -259,7 +259,7 @@ export function TicketInfo() {
           onClick={() => setSelectedArtifact({ kind: "history" })}
           title={
             historyEntries.length === 0
-              ? "No amendments yet — apply a ProposeChange to start a history"
+              ? "No changes yet — edit a spec to start a history"
               : "Open full history"
           }
         >

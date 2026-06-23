@@ -501,11 +501,6 @@ export const classicRenderers: ViewRenderers = {
     </div>
   ),
 
-  // proposeChange events are rendered as grouped ProposeChangeChips at the
-  // ChatStream layer (see ChatStream.tsx). The per-event branch is a no-op
-  // so consecutive same-file proposeChange events don't produce duplicate cards.
-  proposeChange: () => null,
-
   setPreviewFile: () => null,
   clearPreviewFile: () => null,
   requestResolved: () => null,

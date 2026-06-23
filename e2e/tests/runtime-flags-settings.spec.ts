@@ -39,7 +39,7 @@ test("the runtime's 1M-context flag renders in settings and persists when toggle
 
   await flag.uncheck();
 
-  const saveButton = page.locator(`${MODAL} button.token-dialog-btn-primary`);
+  const saveButton = page.locator(`${MODAL} button.np-form-btn-primary`);
   await expect(saveButton).toBeEnabled();
   await saveButton.click();
   await expect(page.locator(`${MODAL} .settings-section__saved`)).toBeVisible({

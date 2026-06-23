@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from unittest.mock import MagicMock
 
 import pytest
 
@@ -84,6 +85,52 @@ class TestDeleteTicket:
         svc = _setup_board(tmp_path)
         with pytest.raises(TicketNotFoundError):
             svc.delete_ticket("mt_nope")
+
+    def test_delete_trashes_orchestrator_and_attached_sessions(self, tmp_path: Path) -> None:
+        svc = _setup_board(tmp_path)
+        svc.agent_service = MagicMock()
+        t = svc.create_ticket("With sessions")
+        svc.attach_session(t.id, "bs_step1")
+        svc.attach_session(t.id, "bs_step2")
+        svc.set_orchestrator(t.id, "bs_orch")
+
+        svc.delete_ticket(t.id)
+
+        trashed = {c.args[0] for c in svc.agent_service.trash_session.call_args_list}
+        assert trashed == {"bs_step1", "bs_step2", "bs_orch"}
+
+    def test_delete_removes_ticket_folder_and_artifacts(self, tmp_path: Path) -> None:
+        svc = _setup_board(tmp_path)
+        t = svc.create_ticket("With artifacts")
+        svc.write_artifact(t.id, "product_design", "# design")
+        ticket_dir = tmp_path / ".tr" / "tickets" / t.id
+        assert (ticket_dir / "product-design.md").is_file()
+
+        svc.delete_ticket(t.id)
+
+        assert not ticket_dir.exists()
+
+    def test_delete_without_agent_service_still_removes_ticket(self, tmp_path: Path) -> None:
+        svc = _setup_board(tmp_path)
+        t = svc.create_ticket("No agent")
+        svc.attach_session(t.id, "bs_x")
+        svc.delete_ticket(t.id)
+        with pytest.raises(TicketNotFoundError):
+            svc.get_ticket(t.id)
+
+    def test_delete_continues_when_a_trash_call_raises(self, tmp_path: Path) -> None:
+        svc = _setup_board(tmp_path)
+        svc.agent_service = MagicMock()
+        svc.agent_service.trash_session.side_effect = RuntimeError("boom")
+        t = svc.create_ticket("Boom")
+        svc.attach_session(t.id, "bs_a")
+        svc.attach_session(t.id, "bs_b")
+
+        svc.delete_ticket(t.id)  # swallows per-session failures
+
+        assert svc.agent_service.trash_session.call_count == 2
+        with pytest.raises(TicketNotFoundError):
+            svc.get_ticket(t.id)
 
 
 class TestLinking:

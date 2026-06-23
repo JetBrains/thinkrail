@@ -29,7 +29,6 @@ export type WsEvents =
   | RequestResolvedEvent
   | RequestExpiredEvent
   | UserMessageEvent
-  | ProposeChangeEvent
   | SetPreviewFileEvent
   | ClearPreviewFileEvent
   | ArtifactAddedEvent
@@ -232,33 +231,24 @@ export type Text1 = string;
 export type Ismarkdown = boolean;
 export type Thinkrailsid23 = string;
 export type Sessionid24 = string;
-export type Eventtype23 = "proposeChange";
-export type Requestid7 = string;
-export type Filepath = string;
-export type Oldstring = string;
-export type Newstring = string;
+export type Eventtype23 = "setPreviewFile";
+export type Path1 = string | null;
 export type Section1 = string | null;
-export type Rationale = string | null;
 export type Thinkrailsid24 = string;
 export type Sessionid25 = string;
-export type Eventtype24 = "setPreviewFile";
-export type Path1 = string | null;
-export type Section2 = string | null;
+export type Eventtype24 = "clearPreviewFile";
 export type Thinkrailsid25 = string;
 export type Sessionid26 = string;
-export type Eventtype25 = "clearPreviewFile";
-export type Thinkrailsid26 = string;
-export type Sessionid27 = string;
-export type Eventtype26 = "artifactAdded";
+export type Eventtype25 = "artifactAdded";
 export type Path2 = string;
 export type Kind = "write" | "edit" | "propose-change" | "preview";
 export type Role = string | null;
 export type Label2 = string | null;
 export type Firsttouchedat = string;
 export type Lasttouchedat = string;
-export type Thinkrailsid27 = string;
-export type Sessionid28 = string;
-export type Eventtype27 = "artifactLabeled";
+export type Thinkrailsid26 = string;
+export type Sessionid27 = string;
+export type Eventtype26 = "artifactLabeled";
 export type Path3 = string;
 export type Role1 = string | null;
 export type Label3 = string | null;
@@ -700,27 +690,10 @@ export interface UserMessagePayload {
   text: Text1;
   isMarkdown?: Ismarkdown;
 }
-export interface ProposeChangeEvent {
+export interface SetPreviewFileEvent {
   thinkrailSid: Thinkrailsid23;
   sessionId: Sessionid24;
   eventType: Eventtype23;
-  payload: ProposeChangePayload;
-}
-/**
- * Agent proposes an amendment to a spec file; user reviews via four-button card.
- */
-export interface ProposeChangePayload {
-  requestId?: Requestid7;
-  filePath: Filepath;
-  oldString: Oldstring;
-  newString: Newstring;
-  section?: Section1;
-  rationale?: Rationale;
-}
-export interface SetPreviewFileEvent {
-  thinkrailSid: Thinkrailsid24;
-  sessionId: Sessionid25;
-  eventType: Eventtype24;
   payload: SetPreviewFilePayload;
 }
 /**
@@ -729,12 +702,12 @@ export interface SetPreviewFileEvent {
  */
 export interface SetPreviewFilePayload {
   path: Path1;
-  section?: Section2;
+  section?: Section1;
 }
 export interface ClearPreviewFileEvent {
-  thinkrailSid: Thinkrailsid25;
-  sessionId: Sessionid26;
-  eventType: Eventtype25;
+  thinkrailSid: Thinkrailsid24;
+  sessionId: Sessionid25;
+  eventType: Eventtype24;
   payload: ClearPreviewFilePayload;
 }
 /**
@@ -742,9 +715,9 @@ export interface ClearPreviewFileEvent {
  */
 export interface ClearPreviewFilePayload {}
 export interface ArtifactAddedEvent {
-  thinkrailSid: Thinkrailsid26;
-  sessionId: Sessionid27;
-  eventType: Eventtype26;
+  thinkrailSid: Thinkrailsid25;
+  sessionId: Sessionid26;
+  eventType: Eventtype25;
   payload: ArtifactAddedPayload;
 }
 /**
@@ -765,9 +738,9 @@ export interface SessionArtifact {
   lastTouchedAt?: Lasttouchedat;
 }
 export interface ArtifactLabeledEvent {
-  thinkrailSid: Thinkrailsid27;
-  sessionId: Sessionid28;
-  eventType: Eventtype27;
+  thinkrailSid: Thinkrailsid26;
+  sessionId: Sessionid27;
+  eventType: Eventtype26;
   payload: ArtifactLabeledPayload;
 }
 /**

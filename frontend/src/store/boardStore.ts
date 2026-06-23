@@ -135,6 +135,10 @@ export const useBoardStore = create<BoardStore>()(persist((set, get) => ({
     const openTicketIds = get().openTicketIds.filter((tid) => tid !== id);
     const activeTicketId = get().activeTicketId === id ? null : get().activeTicketId;
     set({ tickets, openTicketIds, activeTicketId });
+    // The backend cascade-trashes this ticket's sessions; mirror that locally
+    // (drop them from the Sessions panel) and refetch to reconcile.
+    useSessionStore.getState().removeSessionsForTicket(id);
+    void useSessionStore.getState().refreshSessionList().catch(() => { /* best-effort */ });
   },
 
   openTicket: (id) => {
@@ -179,14 +183,16 @@ export const useBoardStore = create<BoardStore>()(persist((set, get) => ({
       return { tickets };
     }),
 
-  handleDidDelete: (id) =>
+  handleDidDelete: (id) => {
     set((s) => {
       const tickets = new Map(s.tickets);
       tickets.delete(id);
       const openTicketIds = s.openTicketIds.filter((tid) => tid !== id);
       const activeTicketId = s.activeTicketId === id ? null : s.activeTicketId;
       return { tickets, openTicketIds, activeTicketId };
-    }),
+    });
+    useSessionStore.getState().removeSessionsForTicket(id);
+  },
 
   getStaleTicketRefs: (ticketId, extraKnownSessionIds) => {
     const ticket = get().tickets.get(ticketId);

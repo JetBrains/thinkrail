@@ -315,26 +315,6 @@ export function wireEvents(client: RpcClient): Unsubscribe {
     }),
   );
 
-  // ── ProposeChange (spec amendment) ──
-  unsubs.push(
-    client.on("agent/proposeChange", (p) => {
-      const params = p as Record<string, unknown>;
-      const thinkrailSid = params.thinkrailSid as string;
-      useSessionStore.getState().onProposeChange(params);
-      useNotificationStore.getState().incrementPendingInput();
-      useNotificationStore.getState().addToast({
-        thinkrailSid,
-        eventType: "approval",
-        message: `Spec amendment: ${params.filePath ?? ""}`,
-        persistent: true,
-      });
-      useNotificationStore.getState().setBadge(thinkrailSid, {
-        type: "approval",
-        pulsing: true,
-      });
-    }),
-  );
-
   // ── Preview tab control (agent-driven, UI side-effect only) ──
   unsubs.push(
     client.on("ui/setPreviewFile", (p) => {

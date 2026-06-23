@@ -46,13 +46,12 @@ class OrchestrationConfig(BaseModel):
     step_gate: Literal["approve", "autonomous"] = "approve"
     failure_policy: Literal["fail-fast", "wait-all"] = "fail-fast"
     step_execution: Literal["interactive", "subagent"] = "interactive"
-    artifact_edits: Literal["ask", "auto"] = "ask"
 
 
 class OrchestratorRef(BaseModel):
     """Reference to a ticket's orchestrator driver. ``kind="session"`` points at a
     Session via ``session_id``; ``kind="builtin"`` names a registered pipeline via
-    ``builtin_id``. See SESSION_TICKET_MODEL.md §"The orchestrator"."""
+    ``builtin_id``."""
 
     model_config = _CAMEL_CONFIG
 

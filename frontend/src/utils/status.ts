@@ -11,7 +11,6 @@ export function getStatusStyle(status: string): { label: string; cls: string } {
       return { label: "Waiting", cls: "badge-waiting" };
     case "initializing":
       return { label: "Initializing", cls: "badge-draft" };
-    case "finished":
     case "done":
       return { label: "Done", cls: "badge-done" };
     case "error":
