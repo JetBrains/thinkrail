@@ -57,7 +57,7 @@ This spec reflects the **actual implemented code** as of 2026-03-05. Items not y
       // turnComplete: AssistantMessage (if result) + SystemMessage
       // toolCallEnd, subagentEnd: return null (handled by pairing logic)
       // progress: return null (no visible element)
-      <button.chat-jump-btn />         // sticky "Jump to bottom" button (conditional)
+      <button.chat-jump-btn />         // sticky "Jump to bottom" button (when showJumpButton)
     </ChatStream>
     <SessionStatusLine />              // model selector, permission mode selector, cost, tool calls, context bar, status indicator
     <InputArea />                      // textarea + skill autocomplete + send button
@@ -89,10 +89,11 @@ interface ChatStreamProps {
 
 - Root element: `<div className="chat-stream">` with `ref={scrollRef}` and `onScroll={handleScroll}`
 - Iterates `events` with `Array.map`, keyed `${index}-${eventType}`
-- Maintains `autoScroll` ref (boolean, default `true`) — not React state, so no re-render on change
+- Maintains `autoScroll` ref (boolean, default `true`) for auto-scroll-on-new-events — not React state
+- Maintains `showJumpButton` state (boolean, default `false`) for button visibility — updated in `handleScroll` and on button click
 - Pauses auto-scroll when `distFromBottom >= 50px`
-- Resumes and jumps to bottom on "Jump to bottom" button click (smooth scroll)
-- **"Jump to bottom" button:** Rendered only when `!autoScroll.current`. Uses `position: sticky; bottom: var(--space-sm)` — **not** a floating overlay.
+- Resumes and jumps to bottom on "Jump to bottom" button click (smooth scroll); sets `showJumpButton` to `false` immediately on click
+- **"Jump to bottom" button:** Rendered when `showJumpButton` is `true`. Uses `position: sticky; bottom: var(--space-sm)` — **not** a floating overlay.
 
 **Event rendering dispatch table:**
 
@@ -1146,8 +1147,9 @@ Returns `null` when no sessions and no files/preview.
 
 - Auto-scrolls to bottom when `events.length` changes via `useEffect`
 - Pauses when user scrolls up and `distFromBottom >= 50px`
-- `autoScroll` is a `useRef<boolean>` (not state) — toggling it does NOT cause a re-render
-- "Jump to bottom" sticky button appears based on `!autoScroll.current` (only updates on next render from new event)
+- `autoScroll` remains a `useRef<boolean>` for scroll/auto-scroll behavior (not state)
+- `showJumpButton` is React state — updated in `handleScroll` when crossing the 50px bottom threshold, and cleared on button click
+- "Jump to bottom" sticky button visibility follows `showJumpButton` and updates immediately on scroll
 
 ### Event key strategy
 
