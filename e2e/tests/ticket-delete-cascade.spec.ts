@@ -141,8 +141,8 @@ test.describe("ticket deletion cascade", () => {
       // …and B drops it too, driven only by the board/didDelete broadcast — the
       // point of the fix. Without that broadcast B never hears about the delete
       // and keeps a ghost card (and the ticket's sessions). handleDidDelete also
-      // runs removeSessionsForTicket on B (unit-covered); the seeded sessions
-      // here are inactive, so they don't surface in B's Sessions panel.
+      // runs removeSessionsForTicket on B (unit-covered), so the ticket's
+      // sessions leave B's Sessions panel along with the card.
       await expect(cardB).toHaveCount(0, { timeout: 15_000 });
 
       // The cascade still runs through the cross-client path: session files gone.
