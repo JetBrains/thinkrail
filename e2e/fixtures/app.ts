@@ -43,10 +43,15 @@ export function visibleTerminal(page: Page): Locator {
 	return page.locator('[data-testid="terminal-instance"][data-visible="true"]');
 }
 
-/** Open a new terminal and wait until its PTY is wired up (ready to receive input). */
+/** Wait until the visible terminal's PTY is wired up (ready to receive input). */
+export async function waitTerminalReady(page: Page): Promise<void> {
+	await expect(visibleTerminal(page)).toHaveAttribute("data-ready", "true");
+}
+
+/** Open an additional terminal and wait until its PTY is ready. */
 export async function openTerminal(page: Page): Promise<void> {
 	await page.getByTestId("terminal-add").click();
-	await expect(visibleTerminal(page)).toHaveAttribute("data-ready", "true");
+	await waitTerminalReady(page);
 }
 
 /** Type a command into the visible terminal and submit it. */

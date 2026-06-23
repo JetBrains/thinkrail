@@ -1,12 +1,22 @@
 import { expect, test } from "@playwright/test";
-import { openFixtureProject, openTerminal, runInTerminal, visibleTerminal } from "./fixtures/app";
+import {
+	openFixtureProject,
+	openTerminal,
+	runInTerminal,
+	visibleTerminal,
+	waitTerminalReady,
+} from "./fixtures/app";
 
-test("a terminal runs in the active worktree and round-trips I/O", async ({ page }) => {
+test("a workspace opens a terminal automatically, rooted in the worktree, with working I/O", async ({
+	page,
+}) => {
 	await openFixtureProject(page);
 	await page.getByTestId("add-workspace").first().click();
 	await expect(page.getByTestId("workspace-item")).toHaveCount(1);
 
-	await openTerminal(page);
+	// No click needed — landing on the workspace opens a terminal on its own.
+	await expect(page.getByTestId("terminal-tab")).toHaveCount(1);
+	await waitTerminalReady(page);
 	const term = visibleTerminal(page);
 
 	// The PTY's cwd is the worktree (its basename is the workspace branch dir).
@@ -20,16 +30,17 @@ test("a terminal runs in the active worktree and round-trips I/O", async ({ page
 
 test("terminals are workspace-scoped and survive workspace switches", async ({ page }) => {
 	await openFixtureProject(page);
-	await page.getByTestId("add-workspace").first().click(); // workspace 1
-	await openTerminal(page);
+	await page.getByTestId("add-workspace").first().click(); // workspace 1 (auto terminal)
+	await waitTerminalReady(page);
 	await runInTerminal(page, "echo TR_WS1_BUFFER");
 	await expect(visibleTerminal(page)).toContainText("TR_WS1_BUFFER");
 
-	// A fresh second workspace has its own (empty) terminal set.
+	// A fresh second workspace gets its own auto terminal — not workspace 1's.
 	await page.getByTestId("add-workspace").first().click(); // workspace 2 (now active)
 	await expect(page.getByTestId("workspace-item")).toHaveCount(2);
-	await expect(page.getByTestId("terminals-empty")).toBeVisible();
-	await expect(page.getByTestId("terminal-tab")).toHaveCount(0);
+	await waitTerminalReady(page);
+	await expect(page.getByTestId("terminal-tab")).toHaveCount(1);
+	await expect(visibleTerminal(page)).not.toContainText("TR_WS1_BUFFER");
 
 	// Back to workspace 1 → its terminal and buffer are restored (never unmounted).
 	await page.getByTestId("workspace-item").nth(0).getByRole("button").first().click();
@@ -43,7 +54,7 @@ test("multiple terminals per workspace keep independent buffers and can be close
 	await openFixtureProject(page);
 	await page.getByTestId("add-workspace").first().click();
 
-	await openTerminal(page); // terminal 1
+	await waitTerminalReady(page); // the auto terminal (terminal 1)
 	await runInTerminal(page, "echo TR_ONE");
 	await expect(visibleTerminal(page)).toContainText("TR_ONE");
 

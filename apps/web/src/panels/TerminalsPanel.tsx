@@ -1,5 +1,5 @@
 import { Plus, X } from "lucide-react";
-import { lazy, Suspense } from "react";
+import { lazy, Suspense, useEffect } from "react";
 import { type TerminalTab, useAppStore } from "../store/appStore";
 
 const TerminalInstance = lazy(() => import("./TerminalInstance"));
@@ -14,6 +14,15 @@ export function TerminalsPanel() {
 	const addTerminal = useAppStore((s) => s.addTerminal);
 	const closeTerminalTab = useAppStore((s) => s.closeTerminalTab);
 	const setActiveTerminalTab = useAppStore((s) => s.setActiveTerminalTab);
+
+	// Landing on a workspace with no terminals opens one — every worktree gets a shell ready to go.
+	useEffect(() => {
+		if (!activeWorkspaceId) return;
+		const store = useAppStore.getState();
+		if ((store.terminalsByWorkspace[activeWorkspaceId]?.length ?? 0) === 0) {
+			store.addTerminal(activeWorkspaceId);
+		}
+	}, [activeWorkspaceId]);
 
 	const tabs = activeWorkspaceId
 		? (terminalsByWorkspace[activeWorkspaceId] ?? NO_TERMINALS)
