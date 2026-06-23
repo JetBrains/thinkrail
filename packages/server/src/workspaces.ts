@@ -3,6 +3,7 @@ import { mkdirSync } from "node:fs";
 import { dirname, join } from "node:path";
 import type { DiffStats, Workspace } from "@thinkrail-pi/contracts";
 import { dataDir, loadProjects, loadWorkspaces, saveWorkspaces } from "./persistence";
+import { getProjects } from "./projects";
 
 function git(cwd: string, args: string[]): { ok: boolean; out: string; err: string } {
 	const result = Bun.spawnSync(["git", "-C", cwd, ...args], { stdout: "pipe", stderr: "pipe" });
@@ -53,7 +54,7 @@ function diffStats(worktreePath: string, baseBranch: string): DiffStats {
 
 /** Create a workspace = a `git worktree` on its own branch, under the data dir. */
 export function createWorkspace(projectId: string, name?: string): Workspace {
-	const project = loadProjects().find((p) => p.id === projectId);
+	const project = getProjects().find((p) => p.id === projectId);
 	if (!project) throw new Error(`Unknown project: ${projectId}`);
 
 	const all = loadWorkspaces();
@@ -65,7 +66,7 @@ export function createWorkspace(projectId: string, name?: string): Workspace {
 	const head = git(project.path, ["rev-parse", "--abbrev-ref", "HEAD"]);
 	const baseBranch = head.ok ? head.out : "HEAD";
 
-	const worktreePath = join(dataDir(), "worktrees", projectId, branch);
+	const worktreePath = join(dataDir(), "worktrees", project.slug, branch);
 	mkdirSync(dirname(worktreePath), { recursive: true });
 	const added = git(project.path, ["worktree", "add", worktreePath, "-b", branch]);
 	if (!added.ok) throw new Error(`git worktree add failed: ${added.err}`);

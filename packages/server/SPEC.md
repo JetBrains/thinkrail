@@ -33,9 +33,9 @@ for development / e2e).
 - `handlers.ts`: the WS method→handler registry — `project.*`, `workspace.*`, and `dialog.selectDirectory`.
 - `persistence.ts`: JSON app state under `dataDir()` — `THINKRAIL_PI_DATA_DIR` (dev/e2e isolation) else
   `~/.thinkrail-pi`. `projects.ts`: open a git repo as a project (validate via `git rev-parse
-  --show-toplevel`, dedupe by root), list (by `lastOpened`), close.
+  --show-toplevel`, dedupe by root; assign a stable unique readable `slug`), list (by `lastOpened`), close.
 - `workspaces.ts`: a workspace = a `git worktree` on its own branch under
-  `dataDir/worktrees/<projectId>/<branch>`; create (off the repo HEAD; **branch name made unique** — archiving
+  `dataDir/worktrees/<project-slug>/<branch>`; create (off the repo HEAD; **branch name made unique** — archiving
   leaves the branch behind, so re-creating must not collide), list (with diff stats), remove
   (`git worktree remove`; keeps the branch).
 - `dialog.ts`: `selectDirectory()` — the host's **native** folder picker (macOS `osascript`), so the browser

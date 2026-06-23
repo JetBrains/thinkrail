@@ -26,6 +26,8 @@ test("creates, archives, and re-creates worktree workspaces (no branch collision
 		encoding: "utf8",
 	});
 	expect(worktrees.trim().split("\n").length).toBeGreaterThanOrEqual(2);
+	// Worktrees live under a readable project-name dir, not the project id.
+	expect(worktrees).toContain("/worktrees/sample-project/");
 
 	// Archive it: the row goes away AND the worktree is removed from disk (back to just `main`).
 	await items.first().hover();

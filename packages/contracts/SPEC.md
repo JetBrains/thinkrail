@@ -37,7 +37,7 @@ runtime exports being the WS method/channel constants and the protocol version. 
     `off`-inclusive one);
   - the local render union **`PiEvent`** — the real superset `AgentSessionEvent` lives in the Node-only
     `pi-coding-agent`, so it's mirrored here. Finalized when chat lands (M10/M11); until then `= AgentEvent`.
-- **domain.ts** — app entities: `Project` (git repo), `Workspace` (git worktree), `Session` (chat tab),
+- **domain.ts** — app entities: `Project` (git repo + unique `slug`), `Workspace` (git worktree), `Session` (chat tab),
   `FileNode` (file-tree node), `TabStatus`, `Git*`/diff types.
 - **wsProtocol.ts** — `WS_METHODS` (`project.*` / `workspace.*` / `fs.*` / `git.*` / `terminal.*`;
   `session.*` added at M10), `WS_CHANNELS` (`server.welcome` / `pi.event` / `pi.extensionUi` /

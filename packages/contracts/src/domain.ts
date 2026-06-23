@@ -8,6 +8,8 @@ export interface Project {
 	name: string;
 	/** Absolute path to the git repo root. */
 	path: string;
+	/** Stable, unique, filesystem-safe slug from the name — the worktrees dir for this project. */
+	slug: string;
 	/** Epoch ms of last open, for sort order. */
 	lastOpened: number;
 }
