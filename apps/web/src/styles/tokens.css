@@ -48,6 +48,10 @@
 	--muted: #a8adb5;
 	--hint: #6f737a;
 	--sel: #2d4f67;
+	/* Section surfaces — projects sidebar + content group (center / files / terminal). A theme may
+	   differentiate them; this one keeps both on the deep dark for a uniform look. */
+	--surface-sidebar: var(--bg-dark);
+	--surface-content: var(--bg-dark);
 	color-scheme: dark;
 	/* Type scale (fixed px) */
 	--font-xs: 10px;

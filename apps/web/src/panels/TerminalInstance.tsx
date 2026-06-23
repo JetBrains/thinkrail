@@ -14,7 +14,7 @@ function cssVar(name: string): string | undefined {
 /** xterm theme from the live CSS tokens (no raw hex; falls back to xterm defaults if a token is unset). */
 function readTheme(): ITheme {
 	const theme: ITheme = {};
-	const bg = cssVar("--bg-dark");
+	const bg = cssVar("--surface-content");
 	if (bg) theme.background = bg;
 	const fg = cssVar("--text");
 	if (fg) theme.foreground = fg;

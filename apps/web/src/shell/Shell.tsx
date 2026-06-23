@@ -38,13 +38,13 @@ export function Shell() {
 			</header>
 			<ResizablePanelGroup direction="horizontal" autoSaveId="thinkrail-shell" className="min-h-0">
 				<ResizablePanel id="left" order={1} defaultSize={18} minSize={12}>
-					<aside data-testid="left-nav" className="h-full overflow-auto p-md">
+					<aside data-testid="left-nav" className="h-full overflow-auto bg-surface-sidebar p-md">
 						<ProjectTree />
 					</aside>
 				</ResizablePanel>
 				<ResizableHandle direction="horizontal" data-testid="resize-left" />
 				<ResizablePanel id="center" order={2} defaultSize={52} minSize={28}>
-					<main data-testid="center-tabs" className="h-full min-h-0">
+					<main data-testid="center-tabs" className="h-full min-h-0 bg-surface-content">
 						<CenterTabs />
 					</main>
 				</ResizablePanel>
@@ -52,13 +52,13 @@ export function Shell() {
 				<ResizablePanel id="right" order={3} defaultSize={30} minSize={16}>
 					<ResizablePanelGroup direction="vertical" autoSaveId="thinkrail-right">
 						<ResizablePanel id="right-files" order={1} defaultSize={60} minSize={20}>
-							<div data-testid="right-panel" className="h-full min-h-0">
+							<div data-testid="right-panel" className="h-full min-h-0 bg-surface-content">
 								<RightPanel />
 							</div>
 						</ResizablePanel>
 						<ResizableHandle direction="vertical" data-testid="resize-terminals" withHandle />
 						<ResizablePanel id="right-terminals" order={2} defaultSize={40} minSize={15}>
-							<div className="h-full min-h-0">
+							<div className="h-full min-h-0 bg-surface-content">
 								<TerminalsPanel />
 							</div>
 						</ResizablePanel>

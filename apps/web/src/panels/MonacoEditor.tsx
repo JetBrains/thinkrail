@@ -40,7 +40,7 @@ const defineThinkrailTheme: BeforeMount = (m) => {
 	const set = (key: string, value: string) => {
 		if (value) colors[key] = value;
 	};
-	set("editor.background", token("--bg-dark"));
+	set("editor.background", token("--surface-content"));
 	set("editor.foreground", token("--text"));
 	set("editorLineNumber.foreground", token("--hint"));
 	set("editorCursor.foreground", token("--primary"));

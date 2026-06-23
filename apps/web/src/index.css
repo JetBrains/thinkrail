@@ -12,6 +12,8 @@
 @theme inline {
 	--color-bg: var(--bg);
 	--color-bg-dark: var(--bg-dark);
+	--color-surface-sidebar: var(--surface-sidebar);
+	--color-surface-content: var(--surface-content);
 	--color-elevated: var(--elevated);
 	--color-hover: var(--hover);
 	--color-border: var(--border);
