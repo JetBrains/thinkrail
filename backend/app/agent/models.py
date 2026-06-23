@@ -75,7 +75,7 @@ class OutcomeArtifact(BaseModel):
     open_on_done: bool = True
 
 
-class ActionState(StrEnum):
+class TicketActionState(StrEnum):
     PENDING = "pending"
     APPLIED = "applied"
 
@@ -93,7 +93,7 @@ class CreateTicketAction(BaseModel):
     id: str
     title: str
     body: str | None = None
-    state: ActionState = ActionState.PENDING
+    state: TicketActionState = TicketActionState.PENDING
 
 
 class StartSessionAction(BaseModel):
@@ -797,7 +797,7 @@ class SubsessionType(StrEnum):
 SubagentMode = Literal["step-session", "subagent"]
 
 
-class ReturnStatus(StrEnum):
+class SessionReturnStatus(StrEnum):
     PENDING = "pending"
     APPROVED = "approved"
     DISMISSED = "dismissed"
@@ -829,7 +829,7 @@ class AgentTask(BaseModel):
     parent_thinkrail_sid: str | None = None
     subsession_type: SubsessionType | None = None
     subsession_context: str | None = None
-    return_status: ReturnStatus | None = None
+    return_status: SessionReturnStatus | None = None
     return_summary: str | None = None
     outcome: SessionOutcome | None = None
     # ── Per-session artifact list (ticket-linked sessions only) ──

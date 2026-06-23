@@ -10,7 +10,7 @@ import type {
   PendingRequest,
 } from "@/types/session.ts";
 import type { SessionSummary } from "@/api/methods/sessions.ts";
-import { SessionStatus, ReturnStatus, isQuiescent, isTerminal, isTransient } from "@/constants/status.ts";
+import { SessionStatus, SessionReturnStatus, isQuiescent, isTerminal, isTransient } from "@/constants/status.ts";
 import { EventType } from "@/constants/eventTypes.ts";
 import { getClient } from "@/api/index.ts";
 import { createAgentApi } from "@/api/methods/agents.ts";
@@ -2791,7 +2791,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
       const session = s.sessions.get(thinkrailSid);
       if (!session) return s;
       const next = new Map(s.sessions);
-      next.set(thinkrailSid, { ...session, returnStatus: ReturnStatus.Approved, returnSummary: text });
+      next.set(thinkrailSid, { ...session, returnStatus: SessionReturnStatus.Approved, returnSummary: text });
       return { sessions: next };
     });
   },
@@ -2804,7 +2804,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
       const session = s.sessions.get(thinkrailSid);
       if (!session) return s;
       const next = new Map(s.sessions);
-      next.set(thinkrailSid, { ...session, returnStatus: ReturnStatus.Dismissed });
+      next.set(thinkrailSid, { ...session, returnStatus: SessionReturnStatus.Dismissed });
       return { sessions: next };
     });
   },

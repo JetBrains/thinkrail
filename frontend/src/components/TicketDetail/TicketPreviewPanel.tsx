@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { FileText, ScrollText } from "lucide-react";
 import type { Ticket } from "@/types/board.ts";
-import { Lifecycle } from "@/constants/status.ts";
+import { TicketLifecycle } from "@/constants/status.ts";
 import { deriveLifecycle } from "@/utils/lifecycle.ts";
 import { useUiStore } from "@/store/uiStore.ts";
 import { TicketArtifactBar, type ArtifactEntry } from "./TicketArtifactBar.tsx";
@@ -91,7 +91,7 @@ export function TicketPreviewPanel(props: Props) {
   // see first; otherwise fall back to the first derived artifact (PD/TD).
   const lifecycle = useMemo(() => deriveLifecycle(ticket.stages), [ticket.stages]);
   const defaultArtifact = useMemo<SelectedArtifact | null>(() => {
-    if (lifecycle === Lifecycle.Implementation) {
+    if (lifecycle === TicketLifecycle.Implementation) {
       const planEntry = artifacts.find((a) => a.kind === "plan");
       if (planEntry) return planEntry;
     }

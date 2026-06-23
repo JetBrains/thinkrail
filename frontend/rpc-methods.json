@@ -341,14 +341,6 @@
       "title": "TodoItem",
       "type": "object"
     },
-    "ActionState": {
-      "enum": [
-        "pending",
-        "applied"
-      ],
-      "title": "ActionState",
-      "type": "string"
-    },
     "CreateTicketAction": {
       "description": "Queued ticket creation. Rendered as an 'Add to board' button.\n\n`state=\"pending\"` until the user clicks; `state=\"applied\"` once the ticket\nhas been created on the board.",
       "properties": {
@@ -379,7 +371,7 @@
           "title": "Body"
         },
         "state": {
-          "$ref": "#/$defs/ActionState",
+          "$ref": "#/$defs/TicketActionState",
           "default": "pending"
         }
       },
@@ -497,6 +489,14 @@
       "title": "StartSessionAction",
       "type": "object"
     },
+    "TicketActionState": {
+      "enum": [
+        "pending",
+        "applied"
+      ],
+      "title": "TicketActionState",
+      "type": "string"
+    },
     "SessionResult": {
       "description": "The value a session hands back to its parent, plus its done-screen.",
       "properties": {
@@ -571,16 +571,6 @@
       },
       "title": "SessionResult",
       "type": "object"
-    },
-    "Lifecycle": {
-      "enum": [
-        "created",
-        "design",
-        "implementation",
-        "done"
-      ],
-      "title": "Lifecycle",
-      "type": "string"
     },
     "NodeRun": {
       "properties": {
@@ -826,6 +816,16 @@
       "title": "SessionRef",
       "type": "object"
     },
+    "TicketLifecycle": {
+      "enum": [
+        "created",
+        "design",
+        "implementation",
+        "done"
+      ],
+      "title": "TicketLifecycle",
+      "type": "string"
+    },
     "WorkNode": {
       "properties": {
         "id": {
@@ -956,7 +956,7 @@
           "type": "integer"
         },
         "lifecycle": {
-          "$ref": "#/$defs/Lifecycle",
+          "$ref": "#/$defs/TicketLifecycle",
           "default": "created"
         },
         "orchestrator": {

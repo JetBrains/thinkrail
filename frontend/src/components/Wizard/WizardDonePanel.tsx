@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { ActionState } from "@/constants/status.ts";
+import { TicketActionState } from "@/constants/status.ts";
 import type {
   CreateTicketAction,
   NavigateAction,
@@ -157,11 +157,11 @@ export function WizardDonePanel({ session, outcome }: WizardDonePanelProps) {
 
   const handleAddTicket = useCallback(
     async (action: CreateTicketAction) => {
-      if (busyActionId || action.state === ActionState.Applied) return;
+      if (busyActionId || action.state === TicketActionState.Applied) return;
       setBusyActionId(action.id);
       try {
         await createTicket(action.title, action.body ?? undefined, undefined);
-        await patchOutcomeAction(session.thinkrailSid, action.id, { state: ActionState.Applied });
+        await patchOutcomeAction(session.thinkrailSid, action.id, { state: TicketActionState.Applied });
       } finally {
         setBusyActionId(null);
       }
@@ -179,7 +179,7 @@ export function WizardDonePanel({ session, outcome }: WizardDonePanelProps) {
     });
   }, []);
 
-  const pendingTickets = tickets.filter((t) => t.state !== ActionState.Applied);
+  const pendingTickets = tickets.filter((t) => t.state !== TicketActionState.Applied);
   const handleAddAll = useCallback(async () => {
     if (busyActionId || pendingTickets.length === 0) return;
     setBusyActionId("__add_all__");
@@ -192,7 +192,7 @@ export function WizardDonePanel({ session, outcome }: WizardDonePanelProps) {
       for (const t of pendingTickets) {
         try {
           await createTicket(t.title, t.body ?? undefined, undefined);
-          await patchOutcomeAction(session.thinkrailSid, t.id, { state: ActionState.Applied });
+          await patchOutcomeAction(session.thinkrailSid, t.id, { state: TicketActionState.Applied });
           succeeded++;
         } catch (e) {
           console.error("[WizardDonePanel] failed to add ticket", t.id, e);
@@ -300,7 +300,7 @@ export function WizardDonePanel({ session, outcome }: WizardDonePanelProps) {
             <div className="wiz-done-tickets-head">
               <span className="wiz-done-tickets-title">Suggested tickets</span>
               <span className="wiz-done-tickets-counter">
-                <b>{tickets.filter((t) => t.state === ActionState.Applied).length}</b> of {tickets.length} added
+                <b>{tickets.filter((t) => t.state === TicketActionState.Applied).length}</b> of {tickets.length} added
               </span>
               {pendingTickets.length > 0 && (
                 <button
@@ -333,11 +333,11 @@ export function WizardDonePanel({ session, outcome }: WizardDonePanelProps) {
                       <span className="wiz-done-tickets-text">{t.title}</span>
                       <button
                         type="button"
-                        className={`wiz-done-add-btn${t.state === ActionState.Applied ? " wiz-done-add-btn--added" : ""}`}
+                        className={`wiz-done-add-btn${t.state === TicketActionState.Applied ? " wiz-done-add-btn--added" : ""}`}
                         onClick={() => handleAddTicket(t)}
-                        disabled={busyActionId !== null || t.state === ActionState.Applied}
+                        disabled={busyActionId !== null || t.state === TicketActionState.Applied}
                       >
-                        {t.state === ActionState.Applied ? "✓ Added" : "+ Add"}
+                        {t.state === TicketActionState.Applied ? "✓ Added" : "+ Add"}
                       </button>
                     </div>
                     {expanded && hasBody && (

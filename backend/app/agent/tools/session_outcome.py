@@ -18,7 +18,7 @@ from typing import Any
 from claude_agent_sdk import create_sdk_mcp_server, tool
 from pydantic import ValidationError
 
-from app.agent.models import ActionState, AgentTask, SessionOutcome
+from app.agent.models import TicketActionState, AgentTask, SessionOutcome
 from app.agent.runtime.permissions import ToolPermissionResponse
 from app.agent.tools._context import get_tool_context
 from app.agent.tracker import Tracker
@@ -68,7 +68,7 @@ SESSION_FINALIZE_SCHEMA: dict = {
                             "id": {"type": "string", "description": "Stable identifier — survives reloads and lets the frontend mark this action 'applied'."},
                             "title": {"type": "string", "description": "Ticket title."},
                             "body": {"type": "string"},
-                            "state": {"enum": [s.value for s in ActionState], "default": ActionState.PENDING.value},
+                            "state": {"enum": [s.value for s in TicketActionState], "default": TicketActionState.PENDING.value},
                         },
                     },
                     {

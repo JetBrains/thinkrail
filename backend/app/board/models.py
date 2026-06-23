@@ -27,7 +27,7 @@ ArtifactKind = Literal[
     "implementation_plan",
 ]
 
-class Lifecycle(StrEnum):
+class TicketLifecycle(StrEnum):
     CREATED = "created"
     DESIGN = "design"
     IMPLEMENTATION = "implementation"
@@ -116,7 +116,7 @@ class TicketSummary(BaseModel):
     id: str
     title: str
     type: TicketType
-    lifecycle: Lifecycle = Lifecycle.CREATED
+    lifecycle: TicketLifecycle = TicketLifecycle.CREATED
 
     product_design_path: str | None = None
     technical_design_path: str | None = None

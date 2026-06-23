@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState, forwardRef, useImperativeHand
 import type { AgentEvent, AskUserQuestionEvent } from "@/types/agent.ts";
 import type { Session } from "@/types/session.ts";
 import { EventType } from "@/constants/eventTypes.ts";
-import { ReturnStatus, SessionStatus } from "@/constants/status.ts";
+import { SessionReturnStatus, SessionStatus } from "@/constants/status.ts";
 import { DraftConfigCard } from "./DraftConfigCard.tsx";
 import { useViewMode, type ViewMode } from "@/context/ViewModeContext.tsx";
 import { useSettingsStore } from "@/store/settingsStore.ts";
@@ -433,7 +433,7 @@ export const ChatStream = forwardRef<ChatStreamHandle, ChatStreamProps>(function
         );
       })}
 
-      {session?.returnStatus === ReturnStatus.Pending && session?.returnSummary && (
+      {session?.returnStatus === SessionReturnStatus.Pending && session?.returnSummary && (
         <ReturnFlowCard
           thinkrailSid={session.thinkrailSid}
           subsessionType={session.subsessionType ?? "discussion"}

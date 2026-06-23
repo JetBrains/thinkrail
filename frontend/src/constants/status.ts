@@ -6,7 +6,7 @@
  */
 
 import type {
-  Lifecycle as LifecycleWire,
+  TicketLifecycle as TicketLifecycleWire,
   NodeStatus as NodeStatusWire,
   RunStatus as RunStatusWire,
 } from "@/types/rpc-methods.ts";
@@ -52,19 +52,19 @@ export const VisStatus = {
 export type VisStatus = (typeof VisStatus)[keyof typeof VisStatus];
 
 // ── Subsession return flow ──────────────────────────────────────────────────
-export const ReturnStatus = {
+export const SessionReturnStatus = {
   Pending: "pending",
   Approved: "approved",
   Dismissed: "dismissed",
 } as const;
-export type ReturnStatus = (typeof ReturnStatus)[keyof typeof ReturnStatus];
+export type SessionReturnStatus = (typeof SessionReturnStatus)[keyof typeof SessionReturnStatus];
 
 // ── Outcome action state ────────────────────────────────────────────────────
-export const ActionState = {
+export const TicketActionState = {
   Pending: "pending",
   Applied: "applied",
 } as const;
-export type ActionState = (typeof ActionState)[keyof typeof ActionState];
+export type TicketActionState = (typeof TicketActionState)[keyof typeof TicketActionState];
 
 // ── Board node / run status ─────────────────────────────────────────────────
 // Hand-written mirrors of the generated wire unions (rpc-methods.ts is
@@ -87,13 +87,13 @@ export const RunStatus = {
 export type RunStatus = (typeof RunStatus)[keyof typeof RunStatus];
 
 /** Coarse 4-value ticket lifecycle derived from its stage statuses. */
-export const Lifecycle = {
+export const TicketLifecycle = {
   Created: "created",
   Design: "design",
   Implementation: "implementation",
   Done: "done",
 } as const;
-export type Lifecycle = (typeof Lifecycle)[keyof typeof Lifecycle];
+export type TicketLifecycle = (typeof TicketLifecycle)[keyof typeof TicketLifecycle];
 
 type Equal<X, Y> = (<T>() => T extends X ? 1 : 2) extends (<T>() => T extends Y ? 1 : 2) ? true : false;
 type Expect<T extends true> = T;
@@ -101,7 +101,7 @@ type Expect<T extends true> = T;
  *  mirror diverges from its generated wire union after `npm run generate`. */
 export type NodeStatusMatchesWire = Expect<Equal<NodeStatus, NodeStatusWire>>;
 export type RunStatusMatchesWire = Expect<Equal<RunStatus, RunStatusWire>>;
-export type LifecycleMatchesWire = Expect<Equal<Lifecycle, LifecycleWire>>;
+export type TicketLifecycleMatchesWire = Expect<Equal<TicketLifecycle, TicketLifecycleWire>>;
 
 // ── Predicates ──────────────────────────────────────────────────────────────
 // The functions are the call-site API; the Sets are private building blocks

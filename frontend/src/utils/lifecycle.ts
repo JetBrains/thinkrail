@@ -1,8 +1,8 @@
 import type { WorkNode } from "@/types/board.ts";
-import { Lifecycle, NodeStatus, isNodeStarted, isNodeTerminal } from "@/constants/status.ts";
+import { TicketLifecycle, NodeStatus, isNodeStarted, isNodeTerminal } from "@/constants/status.ts";
 
-export function deriveLifecycle(stages: WorkNode[]): Lifecycle {
-  if (!stages || stages.length === 0) return Lifecycle.Created;
+export function deriveLifecycle(stages: WorkNode[]): TicketLifecycle {
+  if (!stages || stages.length === 0) return TicketLifecycle.Created;
   const impl = stages.find((n) => n.executesPlan) ?? null;
   const terminal = stages[stages.length - 1];
   const done = (n: WorkNode) => isNodeTerminal(n.status);
@@ -10,15 +10,15 @@ export function deriveLifecycle(stages: WorkNode[]): Lifecycle {
     terminal.status === NodeStatus.Done ||
     (impl != null && impl.status === NodeStatus.Done && stages.every(done))
   ) {
-    return Lifecycle.Done;
+    return TicketLifecycle.Done;
   }
   if (impl != null && isNodeStarted(impl.status)) {
-    return Lifecycle.Implementation;
+    return TicketLifecycle.Implementation;
   }
   if (stages.some((n) => isNodeStarted(n.status))) {
-    return Lifecycle.Design;
+    return TicketLifecycle.Design;
   }
-  return Lifecycle.Created;
+  return TicketLifecycle.Created;
 }
 
 /** Find a node by id anywhere in the stage tree (stages or children). */

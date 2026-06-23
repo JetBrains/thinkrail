@@ -67,7 +67,7 @@ export type Type1 = "create_ticket";
 export type Id = string;
 export type Title = string;
 export type Body = string | null;
-export type ActionState = "pending" | "applied";
+export type TicketActionState = "pending" | "applied";
 export type Type2 = "start_session";
 export type Id1 = string;
 export type Title1 = string;
@@ -86,7 +86,7 @@ export type Title3 = string;
 export type Body1 = string;
 export type Type4 = string;
 export type Rev = number;
-export type Lifecycle = "created" | "design" | "implementation" | "done";
+export type TicketLifecycle = "created" | "design" | "implementation" | "done";
 export type Kind = "session" | "builtin";
 export type Sessionid = string | null;
 export type Builtinid = string | null;
@@ -254,7 +254,7 @@ export interface CreateTicketAction {
   id: Id;
   title: Title;
   body?: Body;
-  state?: ActionState;
+  state?: TicketActionState;
 }
 /**
  * Recommended follow-up session. Rendered as a primary/secondary CTA.
@@ -284,7 +284,7 @@ export interface TicketState {
   body?: Body1;
   type?: Type4;
   rev?: Rev;
-  lifecycle?: Lifecycle;
+  lifecycle?: TicketLifecycle;
   orchestrator?: OrchestratorRef | null;
   orchestration?: OrchestrationConfig;
   stages?: Stages;

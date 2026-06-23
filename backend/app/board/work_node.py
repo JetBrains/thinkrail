@@ -12,7 +12,7 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
-from app.board.models import Lifecycle, _CAMEL_CONFIG
+from app.board.models import TicketLifecycle, _CAMEL_CONFIG
 
 
 class NodeStatus(StrEnum):
@@ -125,19 +125,19 @@ def validate_dag(nodes: list[WorkNode]) -> None:
             visit(n.id)
 
 
-def derive_lifecycle(stages: list[WorkNode]) -> Lifecycle:
+def derive_lifecycle(stages: list[WorkNode]) -> TicketLifecycle:
     """Coarse 4-value lifecycle for the board, pivoting on the implementing node."""
     if not stages:
-        return Lifecycle.CREATED
+        return TicketLifecycle.CREATED
     impl = next((n for n in stages if n.executes_plan), None)
     terminal = stages[-1]
     if terminal.status == NodeStatus.DONE or (
         impl is not None and impl.status == NodeStatus.DONE
         and all(is_terminal(n.status) for n in stages)
     ):
-        return Lifecycle.DONE
+        return TicketLifecycle.DONE
     if impl is not None and has_started(impl.status):
-        return Lifecycle.IMPLEMENTATION
+        return TicketLifecycle.IMPLEMENTATION
     if any(has_started(n.status) for n in stages):
-        return Lifecycle.DESIGN
-    return Lifecycle.CREATED
+        return TicketLifecycle.DESIGN
+    return TicketLifecycle.CREATED

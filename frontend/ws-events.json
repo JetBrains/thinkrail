@@ -1,13 +1,5 @@
 {
   "$defs": {
-    "ActionState": {
-      "enum": [
-        "pending",
-        "applied"
-      ],
-      "title": "ActionState",
-      "type": "string"
-    },
     "Artifact": {
       "description": "A file a session touched, or a diff it proposed.",
       "properties": {
@@ -416,7 +408,7 @@
           "title": "Body"
         },
         "state": {
-          "$ref": "#/$defs/ActionState",
+          "$ref": "#/$defs/TicketActionState",
           "default": "pending"
         }
       },
@@ -1739,6 +1731,14 @@
       ],
       "title": "TextDeltaPayload",
       "type": "object"
+    },
+    "TicketActionState": {
+      "enum": [
+        "pending",
+        "applied"
+      ],
+      "title": "TicketActionState",
+      "type": "string"
     },
     "ToolCallEndEvent": {
       "properties": {

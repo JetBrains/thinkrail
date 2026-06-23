@@ -8,7 +8,7 @@ from typing import Any
 
 from app.agent.context import build_context
 from app.agent.exceptions import InvalidCapabilityValueError
-from app.agent.models import AgentConfig, AgentTask, ReturnStatus, SubagentMode, SubsessionType, TaskStatus, is_quiescent, is_settled, is_streaming, is_terminal
+from app.agent.models import AgentConfig, AgentTask, SessionReturnStatus, SubagentMode, SubsessionType, TaskStatus, is_quiescent, is_settled, is_streaming, is_terminal
 from app.agent.persistence import append_event, save_session, load_session, list_sessions as list_sessions_from_disk, delete_session as delete_session_from_disk, update_session_metadata, load_events
 from app.agent.runtime import (
     IAgentRuntime,
@@ -1481,7 +1481,7 @@ class AgentService:
     def request_summary(self, thinkrail_sid: str) -> None:
         """Ask the subsession agent to propose a return summary."""
         task = self._tracker.get_task(thinkrail_sid)
-        task.return_status = ReturnStatus.PENDING
+        task.return_status = SessionReturnStatus.PENDING
         task.updated = datetime.now(UTC).isoformat()
         self._save_task(task)
         if is_quiescent(task.status):
@@ -1495,7 +1495,7 @@ class AgentService:
     def approve_summary(self, thinkrail_sid: str, text: str) -> None:
         """Approve a return summary for the subsession."""
         task = self._tracker.get_task(thinkrail_sid)
-        task.return_status = ReturnStatus.APPROVED
+        task.return_status = SessionReturnStatus.APPROVED
         task.return_summary = text
         task.updated = datetime.now(UTC).isoformat()
         self._save_task(task)
@@ -1503,7 +1503,7 @@ class AgentService:
     def dismiss_summary(self, thinkrail_sid: str) -> None:
         """Dismiss the return flow without returning anything."""
         task = self._tracker.get_task(thinkrail_sid)
-        task.return_status = ReturnStatus.DISMISSED
+        task.return_status = SessionReturnStatus.DISMISSED
         task.return_summary = None
         task.updated = datetime.now(UTC).isoformat()
         self._save_task(task)
@@ -1511,7 +1511,7 @@ class AgentService:
     def revise_summary(self, thinkrail_sid: str, feedback: str) -> None:
         """Ask the subsession agent to rewrite the summary with feedback."""
         task = self._tracker.get_task(thinkrail_sid)
-        task.return_status = ReturnStatus.PENDING
+        task.return_status = SessionReturnStatus.PENDING
         task.updated = datetime.now(UTC).isoformat()
         self._save_task(task)
         if is_quiescent(task.status):
