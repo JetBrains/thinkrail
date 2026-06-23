@@ -48,7 +48,7 @@ export function Shell() {
 						<CenterTabs />
 					</main>
 				</ResizablePanel>
-				<ResizableHandle direction="horizontal" data-testid="resize-right" withHandle />
+				<ResizableHandle direction="horizontal" data-testid="resize-right" />
 				<ResizablePanel id="right" order={3} defaultSize={30} minSize={16}>
 					<ResizablePanelGroup direction="vertical" autoSaveId="thinkrail-right">
 						<ResizablePanel id="right-files" order={1} defaultSize={60} minSize={20}>
@@ -56,7 +56,7 @@ export function Shell() {
 								<RightPanel />
 							</div>
 						</ResizablePanel>
-						<ResizableHandle direction="vertical" data-testid="resize-terminals" withHandle />
+						<ResizableHandle direction="vertical" data-testid="resize-terminals" />
 						<ResizablePanel id="right-terminals" order={2} defaultSize={40} minSize={15}>
 							<div className="h-full min-h-0 bg-surface-content">
 								<TerminalsPanel />
