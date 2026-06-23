@@ -1,8 +1,24 @@
-# ThinkRail
+# ThinkRail — Reliable layer between human intent and AI code
+
 
 [![JetBrains incubator project](https://jb.gg/badges/incubator-plastic.svg)](https://confluence.jetbrains.com/display/ALL/JetBrains+on+GitHub)
 
 Specification-driven development workspace. Hierarchical, interconnected specs live in the repo alongside code — helping developers align AI coding agents through structured project context.
+
+## 🛠️ What We Give
+We inject three simple primitives directly into your repository to replace messy, unconstrained agent loops:
+
+* **🌲 Repo-Local Spec Trees** A spec hierarchy directly inside your repo, preserving the architecture, API contracts, and constraints—everything vanilla agents constantly miss.
+* **🎫 Intent-to-Spec Tickets** Drop a ticket with your raw intent, and thinkrail automatically translates it into structured markdown specs and clean code.
+* **🗺️ Visual Alignment Graphs** Interactive graphs to help you brainstorm, make clear design decisions, and keep your agent perfectly aligned.
+
+## 🚀 What You Get
+When these three primitives run together as a single engine, your day-to-day development loop changes completely:
+
+* **🕹️ Regain Control** No more babysitting agents or wrestling with runaway AI loops.
+* **🧩 Effortless Decomposition** Break down messy features into manageable, bite-sized components before writing code.
+* **⚓ Decision Tracking** Every architectural decision and design trade-off is permanently tracked.
+* **🎯 Grip Over Agent's Focus** Keep AI locked onto the task instead of drowning in a sea of irrelevant files.
 
 ## Quick Start
 
