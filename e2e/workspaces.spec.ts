@@ -27,10 +27,14 @@ test("creates, archives, and re-creates worktree workspaces (no branch collision
 	});
 	expect(worktrees.trim().split("\n").length).toBeGreaterThanOrEqual(2);
 
-	// Archive it — `git worktree remove` leaves the branch behind.
+	// Archive it: the row goes away AND the worktree is removed from disk (back to just `main`).
 	await items.first().hover();
 	await items.first().getByTestId("workspace-archive").click();
 	await expect(items).toHaveCount(0);
+	const afterArchive = execFileSync("git", ["-C", E2E_FIXTURE_REPO, "worktree", "list"], {
+		encoding: "utf8",
+	});
+	expect(afterArchive.trim().split("\n").length).toBe(1);
 
 	// Create again — must succeed despite the lingering branch (the bug was a silent no-op here).
 	await addWorkspace.click();
