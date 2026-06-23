@@ -30,7 +30,8 @@ for development / e2e).
   upgrade, static SPA serving (when `staticDir` is set; `index.html` fallback, path-contained), and a WS
   that pushes **`server.welcome`** (`{ protocolVersion, projects }`) on open and dispatches requests.
 - `dev.ts`: `resolveShellEnv()` → `createServer` from `THINKRAIL_PI_PORT`/`_HOST`/`_STATIC_DIR`.
-- `handlers.ts`: the WS method→handler registry — `project.*`, `workspace.*`, `dialog.selectDirectory`, `fs.readDir`.
+- `handlers.ts`: the WS method→handler registry — `project.*`, `workspace.*`, `dialog.selectDirectory`,
+  `fs.readDir`/`fs.readFile`.
 - `persistence.ts`: JSON app state under `dataDir()` — `THINKRAIL_PI_DATA_DIR` (dev/e2e isolation) else
   `~/.thinkrail-pi`. `projects.ts`: open a git repo as a project (validate via `git rev-parse
   --show-toplevel`, dedupe by root; assign a stable unique readable `slug`), list (by `lastOpened`), close.
@@ -40,8 +41,8 @@ for development / e2e).
   (`git worktree remove`; keeps the branch).
 - `dialog.ts`: `selectDirectory()` — the host's **native** folder picker (macOS `osascript`), so the browser
   "Open project" gets a real OS dialog. `THINKRAIL_PI_PICK_DIR` overrides it for dev/e2e.
-- `files.ts`: `readDir(workspaceId, path)` — list a directory inside the active worktree (path-contained
-  to the worktree root; `.git` hidden; dirs first).
+- `files.ts`: `readDir` / `readFile(workspaceId, path)` — list a directory / read a UTF-8 text file inside
+  the active worktree (every path resolved + contained to the worktree root; `.git` hidden; dirs first).
 
 ## Get right (firms up as features land)
 

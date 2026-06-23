@@ -1,9 +1,10 @@
 import type { FileNode } from "@thinkrail-pi/contracts";
 import { ChevronDown, ChevronRight, File as FileIcon, Folder } from "lucide-react";
 import { useEffect, useState } from "react";
+import { useAppStore } from "../store/appStore";
 import { getTransport } from "../wireTransport";
 
-/** Lazy file tree of the active worktree. Double-click-to-open in the editor lands at M7. */
+/** Lazy file tree of the active worktree. Double-click a file to open it as a center editor tab. */
 export function FileTree({ workspaceId }: { workspaceId: string }) {
 	const [nodes, setNodes] = useState<FileNode[] | null>(null);
 
@@ -40,7 +41,7 @@ function FileNodeRow({ node, workspaceId }: { node: FileNode; workspaceId: strin
 	const [children, setChildren] = useState<FileNode[] | null>(null);
 
 	const toggle = async () => {
-		if (!isDir) return; // opening files in the editor lands at M7
+		if (!isDir) return;
 		const next = !expanded;
 		setExpanded(next);
 		if (next && children === null) {
@@ -52,6 +53,26 @@ function FileNodeRow({ node, workspaceId }: { node: FileNode; workspaceId: strin
 		}
 	};
 
+	const open = async () => {
+		const id = `${workspaceId}:${node.path}`;
+		const store = useAppStore.getState();
+		if (store.openTabs.some((t) => t.id === id)) {
+			store.setActiveTab(id);
+			return;
+		}
+		try {
+			const { content } = await getTransport().request("fs.readFile", {
+				workspaceId,
+				path: node.path,
+			});
+			useAppStore
+				.getState()
+				.openTab({ id, workspaceId, path: node.path, name: node.name, content });
+		} catch {
+			// a read failure leaves the tree unchanged
+		}
+	};
+
 	const Chevron = expanded ? ChevronDown : ChevronRight;
 	return (
 		<li>
@@ -60,6 +81,7 @@ function FileNodeRow({ node, workspaceId }: { node: FileNode; workspaceId: strin
 				data-testid="file-node"
 				data-kind={node.kind}
 				onClick={toggle}
+				onDoubleClick={isDir ? undefined : open}
 				className="flex h-6 w-full items-center gap-xs rounded-[var(--radius-sm)] px-xs text-left text-sm text-muted hover:bg-hover"
 			>
 				{isDir ? (

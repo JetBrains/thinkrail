@@ -1,4 +1,5 @@
 import { PRODUCT_NAME } from "../constants/branding";
+import { CenterTabs } from "../panels/CenterTabs";
 import { ProjectTree } from "../panels/ProjectTree";
 import { RightPanel } from "../panels/RightPanel";
 import { useAppStore } from "../store/appStore";
@@ -37,8 +38,8 @@ export function Shell() {
 				<aside data-testid="left-nav" className="overflow-auto border-r border-border p-md">
 					<ProjectTree />
 				</aside>
-				<main data-testid="center-tabs" className="flex items-center justify-center text-hint">
-					Open a file or start a chat
+				<main data-testid="center-tabs" className="min-h-0">
+					<CenterTabs />
 				</main>
 				<aside data-testid="right-panel" className="min-h-0 border-l border-border">
 					<RightPanel />

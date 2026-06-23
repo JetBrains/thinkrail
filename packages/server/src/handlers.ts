@@ -1,5 +1,5 @@
 import { selectDirectory } from "./dialog";
-import { readDir } from "./files";
+import { readDir, readFile } from "./files";
 import { closeProject, listProjects, openProject } from "./projects";
 import { createWorkspace, listWorkspaces, removeWorkspace, workspaceDiffStats } from "./workspaces";
 
@@ -26,7 +26,9 @@ const handlers: Record<string, Handler> = {
 	"dialog.selectDirectory": () => selectDirectory(),
 	"fs.readDir": (params) =>
 		readDir((params as { workspaceId: string }).workspaceId, (params as { path: string }).path),
-	// fs.readFile / git.* / terminal.* / session.* land in M7–M10.
+	"fs.readFile": (params) =>
+		readFile((params as { workspaceId: string }).workspaceId, (params as { path: string }).path),
+	// git.* / terminal.* / session.* land in M8–M10.
 };
 
 /** Route a WS request to its handler. Throws on unknown method (→ a `{ ok:false }` WS response). */
