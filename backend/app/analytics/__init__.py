@@ -8,6 +8,8 @@ module design and the privacy invariant.
 from app.analytics import models
 from app.analytics.consent import get_status, opt_in, opt_out, run_cli
 from app.analytics.models import (
+    ONBOARDING_STEP_BY_SKILL,
+    AgentSessionCompletedEvent,
     AgentSessionStartedEvent,
     AnalyticsConsent,
     AnalyticsEvent,
@@ -15,7 +17,10 @@ from app.analytics.models import (
     AppInstalledEvent,
     AppStartedEvent,
     BoardViewedEvent,
+    OnboardingOutcomeActionEvent,
+    OnboardingStepCompletedEvent,
     OrchestratorStepSuggestedEvent,
+    ProjectCreatedEvent,
     SpecGraphViewedEvent,
     SpecsViewedEvent,
     UpgradeStartedEvent,
@@ -45,6 +50,11 @@ __all__ = [
     "AppInstalledEvent",
     "AppStartedEvent",
     "AgentSessionStartedEvent",
+    "AgentSessionCompletedEvent",
+    "OnboardingStepCompletedEvent",
+    "OnboardingOutcomeActionEvent",
+    "ONBOARDING_STEP_BY_SKILL",
+    "ProjectCreatedEvent",
     "SpecsViewedEvent",
     "SpecGraphViewedEvent",
     "BoardViewedEvent",

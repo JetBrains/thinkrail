@@ -14,7 +14,10 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 
+from app import analytics
+from app.analytics import ProjectCreatedEvent
 from app.api.deps import get_app_store
+from app.api.routers.project import _detect_project_state
 from app.core.app_store import AppStore
 
 # ── Router ─────────────────────────────────────────────────────────────
@@ -65,7 +68,9 @@ async def register_known_project(body: _RegisterBody, store: _Store) -> _OkRespo
     resolved = Path(body.path).expanduser().resolve()
     if not resolved.is_absolute() or not resolved.is_dir():
         raise HTTPException(status_code=422, detail="path must be an existing directory")
-    await store.register_project(str(resolved), body.name)
+    is_new = await store.register_project(str(resolved), body.name)
+    if is_new:
+        analytics.track_event(ProjectCreatedEvent(kind=_detect_project_state(resolved)))
     return _OkResponse()
 
 

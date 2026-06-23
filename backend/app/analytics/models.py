@@ -61,6 +61,52 @@ class AgentSessionStartedEvent(_AnalyticsEvent):
     event: Literal["agent_session_started"] = "agent_session_started"
 
 
+class AgentSessionCompletedEvent(_AnalyticsEvent):
+    """A session reached a terminal state.
+
+    ``outcome`` is the coarse end state; ``files_written_bucket`` is the
+    bucketed count of distinct files the session wrote or edited (never the
+    raw count or any path). Together they answer "do sessions finish, and do
+    they produce changes" without inspecting what was changed.
+    """
+
+    event: Literal["agent_session_completed"] = "agent_session_completed"
+    outcome: Literal["completed", "error", "cancelled"] = "completed"
+    files_written_bucket: Literal["0", "1-3", "4-10", "11+"] = "0"
+
+
+class OnboardingStepCompletedEvent(_AnalyticsEvent):
+    """A wizard step session reached a terminal state. ``step`` is derived
+    backend-side from the session's skill id (see ``ONBOARDING_STEP_BY_SKILL``)."""
+
+    event: Literal["onboarding_step_completed"] = "onboarding_step_completed"
+    step: Literal["goal_and_requirements", "architecture", "investigation"] = (
+        "goal_and_requirements"
+    )
+    outcome: Literal["completed", "error", "cancelled"] = "completed"
+
+
+class OnboardingOutcomeActionEvent(_AnalyticsEvent):
+    """The fork a user took on a wizard step's done-screen. Frontend-originated
+    (the only such event) — the choice is a client-side action the backend
+    cannot observe."""
+
+    event: Literal["onboarding_outcome_action"] = "onboarding_outcome_action"
+    step: Literal["goal_and_requirements", "architecture", "investigation"] = (
+        "goal_and_requirements"
+    )
+    action: Literal["continue", "open_workspace", "add_suggested_tickets"] = "continue"
+
+
+class ProjectCreatedEvent(_AnalyticsEvent):
+    """A project folder was registered for the first time. ``kind`` is its
+    starting state — greenfield (``new``), an existing codebase (``existing``),
+    or one already carrying ThinkRail deliverables (``initialized``)."""
+
+    event: Literal["project_created"] = "project_created"
+    kind: Literal["new", "existing", "initialized"] = "new"
+
+
 class SpecsViewedEvent(_AnalyticsEvent):
     event: Literal["specs_viewed"] = "specs_viewed"
 
@@ -94,6 +140,10 @@ AnalyticsEvent = Annotated[
         AppInstalledEvent,
         AppStartedEvent,
         AgentSessionStartedEvent,
+        AgentSessionCompletedEvent,
+        OnboardingStepCompletedEvent,
+        OnboardingOutcomeActionEvent,
+        ProjectCreatedEvent,
         SpecsViewedEvent,
         SpecGraphViewedEvent,
         BoardViewedEvent,
@@ -118,8 +168,30 @@ ANALYTICS_EVENT_MODELS: tuple[type[_AnalyticsEvent], ...] = get_args(
 # potential content leak; ``tests/analytics/test_models.py`` asserts the union
 # of all event fields equals this allowlist, so adding one fails CI.
 EVENT_FIELD_ALLOWLIST: frozenset[str] = frozenset(
-    {"event", "installation_id", "channel", "version", "os", "arch"}
+    {
+        "event",
+        "installation_id",
+        "channel",
+        "version",
+        "os",
+        "arch",
+        "outcome",
+        "files_written_bucket",
+        "step",
+        "action",
+        "kind",
+    }
 )
+
+
+# Maps a session's ``skill_id`` to its coarse onboarding step; a skill absent
+# here is not a wizard step.
+ONBOARDING_STEP_BY_SKILL: dict[str, str] = {
+    "new-project": "goal_and_requirements",
+    "goal-and-requirements": "goal_and_requirements",
+    "architecture-design": "architecture",
+    "investigate-project": "investigation",
+}
 
 
 # ── Consent record ─────────────────────────────────────────────────────

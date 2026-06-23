@@ -148,6 +148,22 @@ async def set_analytics_consent(app_store: AppStore, **params: Any) -> Analytics
     return AnalyticsStatus(enabled=consent.enabled)
 
 
+@_handle_errors
+async def track_onboarding_action(app_store: AppStore, **params: Any) -> dict:
+    """Record a wizard done-screen decision (the only frontend-originated event).
+
+    The client sends only ``skillId`` + a closed ``action``; the backend maps
+    the skill to a step and stamps the ``installation_id``. A non-wizard skill
+    is ignored; an out-of-set ``action`` is rejected as INVALID_PARAMS.
+    """
+    step = analytics.ONBOARDING_STEP_BY_SKILL.get(params.get("skillId") or "")
+    if step is not None:
+        analytics.track_event(
+            analytics.OnboardingOutcomeActionEvent(step=step, action=params.get("action"))
+        )
+    return {"ok": True}
+
+
 # ── Runtimes ────────────────────────────────────────────────────────────────
 
 

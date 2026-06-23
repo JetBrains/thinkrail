@@ -65,6 +65,7 @@ from app.rpc.methods.settings import (
     runtimes_list,
     set_analytics_consent,
     set_session_defaults,
+    track_onboarding_action,
     update_settings,
 )
 from app.rpc.methods.subsessions import (
@@ -166,6 +167,7 @@ METHODS = {
     "appSettings/setSessionDefaults": set_session_defaults,
     "appSettings/getAnalyticsConsent": get_analytics_consent,
     "appSettings/setAnalyticsConsent": set_analytics_consent,
+    "appSettings/trackOnboardingAction": track_onboarding_action,
     "runtimes/list": runtimes_list,
     "runtimes/capabilities": runtimes_capabilities,
     "skills/list": list_skills,
