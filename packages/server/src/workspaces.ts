@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { mkdirSync } from "node:fs";
+import { mkdirSync, rmSync } from "node:fs";
 import { dirname, join } from "node:path";
 import type { DiffStats, Workspace } from "@thinkrail-pi/contracts";
 import { dataDir, loadProjects, loadWorkspaces, saveWorkspaces } from "./persistence";
@@ -90,12 +90,21 @@ export function listWorkspaces(projectId: string): Workspace[] {
 		.map((w) => ({ ...w, diffStats: diffStats(w.worktreePath, w.baseBranch) }));
 }
 
+/** Archive a workspace: drop its worktree (keep the branch — the work stays recoverable). */
 export function removeWorkspace(id: string): void {
 	const all = loadWorkspaces();
 	const ws = all.find((w) => w.id === id);
 	if (ws) {
 		const project = loadProjects().find((p) => p.id === ws.projectId);
-		if (project) git(project.path, ["worktree", "remove", "--force", ws.worktreePath]);
+		if (project) {
+			const removed = git(project.path, ["worktree", "remove", "--force", ws.worktreePath]);
+			if (!removed.ok) {
+				// Fallback (path drift, dir gone, etc.): delete the dir if it lingers, then prune the
+				// stale registration so `git worktree list` stays clean and the worktree never orphans.
+				rmSync(ws.worktreePath, { recursive: true, force: true });
+				git(project.path, ["worktree", "prune"]);
+			}
+		}
 	}
 	saveWorkspaces(all.filter((w) => w.id !== id));
 }
