@@ -97,6 +97,7 @@ export function ProjectTree() {
 	const archiveWorkspace = async (projectId: string, workspaceId: string) => {
 		try {
 			await getTransport().request("workspace.remove", { id: workspaceId });
+			useAppStore.getState().clearWorkspaceTabs(workspaceId);
 			if (activeWorkspaceId === workspaceId) useAppStore.getState().setActiveWorkspace("");
 			await loadWorkspaces(projectId);
 		} catch {

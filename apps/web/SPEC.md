@@ -25,7 +25,9 @@ event stream as a chat-centric, multi-session IDE shell.
 
 - **transport/** — single WebSocket client; id-correlated `request`, channel `subscribe` with replay,
   reconnect/backoff. The host endpoint is a parameter (default same-origin via `inferUrl`).
-- **store/** — Zustand; per-session runtime (messages, streaming state, stats). Layout/active-panel state.
+- **store/** — Zustand; connection + welcome, projects/workspaces, and **center tabs keyed by workspace**
+  (switching workspaces swaps the visible tab set). Per-session pi runtime (messages, streaming, stats)
+  joins at M10–M11.
 - **panels/** — layout-agnostic, store-driven: `ProjectTree` (project→workspace nav), `FileTree` (All
   files), `Editor` (Monaco, center tabs), `ChangesPanel` + `DiffViewer`, `TerminalView`, `ChatView`,
   `Composer`. A panel fills its container and never knows its arrangement.

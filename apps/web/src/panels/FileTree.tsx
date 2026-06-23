@@ -56,7 +56,7 @@ function FileNodeRow({ node, workspaceId }: { node: FileNode; workspaceId: strin
 	const open = async () => {
 		const id = `${workspaceId}:${node.path}`;
 		const store = useAppStore.getState();
-		if (store.openTabs.some((t) => t.id === id)) {
+		if ((store.tabsByWorkspace[workspaceId] ?? []).some((t) => t.id === id)) {
 			store.setActiveTab(id);
 			return;
 		}

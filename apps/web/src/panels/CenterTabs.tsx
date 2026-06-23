@@ -1,16 +1,23 @@
 import { X } from "lucide-react";
 import { lazy, Suspense } from "react";
-import { useAppStore } from "../store/appStore";
+import { type EditorTab, useAppStore } from "../store/appStore";
 
 // Monaco is heavy — load it only once a file is actually opened (protects first paint + the bundle).
 const MonacoEditor = lazy(() => import("./MonacoEditor"));
 
-/** The center area: a strip of open tabs over the active tab's content. File tabs now; chat tabs at M11. */
+// Stable empty reference so the selector doesn't re-render the component on unrelated state changes.
+const NO_TABS: EditorTab[] = [];
+
+/** The center area: a strip of the active workspace's tabs over the active tab. Chat tabs join at M11. */
 export function CenterTabs() {
-	const openTabs = useAppStore((s) => s.openTabs);
-	const activeTabId = useAppStore((s) => s.activeTabId);
+	const activeWorkspaceId = useAppStore((s) => s.activeWorkspaceId);
+	const tabsByWorkspace = useAppStore((s) => s.tabsByWorkspace);
+	const activeTabByWorkspace = useAppStore((s) => s.activeTabByWorkspace);
 	const setActiveTab = useAppStore((s) => s.setActiveTab);
 	const closeTab = useAppStore((s) => s.closeTab);
+
+	const openTabs = activeWorkspaceId ? (tabsByWorkspace[activeWorkspaceId] ?? NO_TABS) : NO_TABS;
+	const activeTabId = activeWorkspaceId ? (activeTabByWorkspace[activeWorkspaceId] ?? null) : null;
 
 	if (openTabs.length === 0) {
 		return (

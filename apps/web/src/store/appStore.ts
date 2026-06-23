@@ -18,8 +18,9 @@ interface AppState {
 	workspaces: Record<string, Workspace[]>;
 	selectedProjectId: string | null;
 	activeWorkspaceId: string | null;
-	openTabs: EditorTab[];
-	activeTabId: string | null;
+	/** Center tabs belong to a workspace — switching workspaces swaps the visible tab set. */
+	tabsByWorkspace: Record<string, EditorTab[]>;
+	activeTabByWorkspace: Record<string, string | null>;
 	setStatus: (status: ConnectionStatus) => void;
 	setWelcome: (protocolVersion: number) => void;
 	setProjects: (projects: Project[]) => void;
@@ -29,6 +30,7 @@ interface AppState {
 	openTab: (tab: EditorTab) => void;
 	closeTab: (id: string) => void;
 	setActiveTab: (id: string) => void;
+	clearWorkspaceTabs: (workspaceId: string) => void;
 }
 
 export const useAppStore = create<AppState>((set) => ({
@@ -38,8 +40,8 @@ export const useAppStore = create<AppState>((set) => ({
 	workspaces: {},
 	selectedProjectId: null,
 	activeWorkspaceId: null,
-	openTabs: [],
-	activeTabId: null,
+	tabsByWorkspace: {},
+	activeTabByWorkspace: {},
 	setStatus: (status) => set({ status }),
 	setWelcome: (protocolVersion) => set({ protocolVersion }),
 	setProjects: (projects) => set({ projects }),
@@ -48,16 +50,39 @@ export const useAppStore = create<AppState>((set) => ({
 	selectProject: (selectedProjectId) => set({ selectedProjectId }),
 	setActiveWorkspace: (activeWorkspaceId) => set({ activeWorkspaceId }),
 	openTab: (tab) =>
-		set((s) =>
-			s.openTabs.some((t) => t.id === tab.id)
-				? { activeTabId: tab.id }
-				: { openTabs: [...s.openTabs, tab], activeTabId: tab.id },
-		),
+		set((s) => {
+			const tabs = s.tabsByWorkspace[tab.workspaceId] ?? [];
+			return {
+				tabsByWorkspace: tabs.some((t) => t.id === tab.id)
+					? s.tabsByWorkspace
+					: { ...s.tabsByWorkspace, [tab.workspaceId]: [...tabs, tab] },
+				activeTabByWorkspace: { ...s.activeTabByWorkspace, [tab.workspaceId]: tab.id },
+			};
+		}),
 	closeTab: (id) =>
 		set((s) => {
-			const openTabs = s.openTabs.filter((t) => t.id !== id);
-			const activeTabId = s.activeTabId === id ? (openTabs.at(-1)?.id ?? null) : s.activeTabId;
-			return { openTabs, activeTabId };
+			const wsId = s.activeWorkspaceId;
+			if (!wsId) return {};
+			const tabs = (s.tabsByWorkspace[wsId] ?? []).filter((t) => t.id !== id);
+			const wasActive = s.activeTabByWorkspace[wsId] === id;
+			return {
+				tabsByWorkspace: { ...s.tabsByWorkspace, [wsId]: tabs },
+				activeTabByWorkspace: {
+					...s.activeTabByWorkspace,
+					[wsId]: wasActive ? (tabs.at(-1)?.id ?? null) : (s.activeTabByWorkspace[wsId] ?? null),
+				},
+			};
 		}),
-	setActiveTab: (activeTabId) => set({ activeTabId }),
+	setActiveTab: (id) =>
+		set((s) =>
+			s.activeWorkspaceId
+				? { activeTabByWorkspace: { ...s.activeTabByWorkspace, [s.activeWorkspaceId]: id } }
+				: {},
+		),
+	clearWorkspaceTabs: (workspaceId) =>
+		set((s) => {
+			const { [workspaceId]: _tabs, ...tabsByWorkspace } = s.tabsByWorkspace;
+			const { [workspaceId]: _active, ...activeTabByWorkspace } = s.activeTabByWorkspace;
+			return { tabsByWorkspace, activeTabByWorkspace };
+		}),
 }));
