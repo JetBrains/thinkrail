@@ -3,6 +3,7 @@ import { extractToolHeader, cleanToolName } from "./toolHeaderExtractors.ts";
 import { ToolInputDetail } from "./ToolInputDetail.tsx";
 import { ToolOutputBody } from "./ToolOutputBody.tsx";
 import { useExpandCollapse } from "./useExpandCollapse.ts";
+import { CardState } from "@/constants/status.ts";
 
 const TOOL_ICONS: Record<string, string> = {
   Read: "\u{1F4D6}",
@@ -23,8 +24,6 @@ const TOOL_ICONS: Record<string, string> = {
 function getToolIcon(name: string): string {
   return TOOL_ICONS[name] ?? "\u{1F527}";
 }
-
-type CardState = "running" | "success" | "error";
 
 interface ToolCallCardProps {
   toolName: string;
@@ -47,23 +46,23 @@ export function ToolCallCard({
 }: ToolCallCardProps) {
   const [expanded, setExpanded] = useState(false);
   const expandRef = useExpandCollapse(useCallback((v: boolean) => {
-    if (state !== "running") setExpanded(v);
+    if (state !== CardState.Running) setExpanded(v);
   }, [state]));
 
   // Auto-expand when a tool call transitions to error state (live sessions)
   useEffect(() => {
-    if (isError && state === "error") setExpanded(true);
+    if (isError && state === CardState.Error) setExpanded(true);
   }, [isError, state]);
 
   const borderColor =
-    state === "running"
+    state === CardState.Running
       ? "var(--blue)"
       : isError
         ? "var(--red)"
         : "var(--green)";
 
   const statusIcon =
-    state === "running" ? "\u25CF" : isError ? "\u2715" : "\u2713";
+    state === CardState.Running ? "\u25CF" : isError ? "\u2715" : "\u2713";
 
   // Clean MCP tool name prefix for display (keep raw for icon lookup)
   const displayName = cleanToolName(toolName);
@@ -78,7 +77,7 @@ export function ToolCallCard({
     <div ref={expandRef} className={`chat-tool${compact ? " chat-tool--compact" : ""}`} style={{ borderLeftColor: borderColor }}>
       <div
         className="chat-tool-header"
-        onClick={() => state !== "running" && setExpanded(!expanded)}
+        onClick={() => state !== CardState.Running && setExpanded(!expanded)}
       >
         <span className="chat-tool-icon">{getToolIcon(toolName)}</span>
         <span className="chat-tool-name">{displayName}</span>
@@ -89,7 +88,7 @@ export function ToolCallCard({
           <span className="chat-tool-badge">{header.badge}</span>
         )}
         <span className="chat-tool-status" style={{ color: borderColor }}>
-          {statusIcon} {state === "running" ? "running..." : isError ? "error" : "done"}
+          {statusIcon} {state === CardState.Running ? "running..." : isError ? "error" : "done"}
         </span>
       </div>
       {expanded && (

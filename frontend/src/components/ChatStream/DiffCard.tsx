@@ -3,6 +3,7 @@ import { DiffEditor, type DiffOnMount } from "@monaco-editor/react";
 import { detectLanguage, languageLabel } from "@/components/FileViewer/languageMap.ts";
 import { useMonacoTheme } from "@/components/MarkdownEditor/useMonacoTheme.ts";
 import { useFontSize } from "@/utils/fontScale.ts";
+import { CardState } from "@/constants/status.ts";
 import "./DiffCard.css";
 
 const TOOL_ICONS: Record<string, string> = {
@@ -22,8 +23,6 @@ const BINARY_EXTS = new Set([
 ]);
 
 const LARGE_FILE_THRESHOLD = 100_000; // 100KB
-
-type CardState = "running" | "success" | "error";
 
 interface DiffCardProps {
   toolName: string;
@@ -134,21 +133,21 @@ export function DiffCard({
   }, []);
 
   const borderColor =
-    state === "running"
+    state === CardState.Running
       ? "var(--blue)"
       : isError
         ? "var(--red)"
         : "var(--green)";
 
   const statusText =
-    state === "running"
+    state === CardState.Running
       ? "running..."
       : isError
         ? "error"
         : "done";
 
   const statusIcon =
-    state === "running" ? "\u25CF" : isError ? "\u2715" : "\u2713";
+    state === CardState.Running ? "\u25CF" : isError ? "\u2715" : "\u2713";
 
   // Fallback: binary file or missing diff data
   if (!diffData || isBinaryFile(diffData.filePath)) {

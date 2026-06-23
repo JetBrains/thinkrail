@@ -1,3 +1,4 @@
+import { isTerminal } from "@/constants/status.ts";
 import type { Session } from "@/types/session";
 import type { WizardUiPhase } from "./registry";
 
@@ -18,6 +19,6 @@ export function derivePhase(args: {
 }): WizardUiPhase {
   const { session } = args;
   if (!session) return "pre-chat";
-  if (session.status === "done" || session.status === "error") return "done-screen";
+  if (isTerminal(session.status)) return "done-screen";
   return "running";
 }

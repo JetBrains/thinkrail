@@ -4,7 +4,8 @@ import { useNotificationStore } from "@/store/notificationStore.ts";
 import { getErrorMessage } from "@/utils/errors.ts";
 import { useFileStore } from "@/store/fileStore.ts";
 import { useTicketRouteStore } from "@/store/ticketRouteStore.ts";
-import type { SessionStatus } from "@/types/session.ts";
+import { SessionStatus, isQuiescent, isStreaming, isTerminal } from "@/constants/status.ts";
+import { EventType } from "@/constants/eventTypes.ts";
 import { ChatStream } from "@/components/ChatStream/ChatStream.tsx";
 import type { ChatStreamHandle } from "@/components/ChatStream/ChatStream.tsx";
 import { SessionStatusLine } from "@/components/ChatStream/SessionStatusLine.tsx";
@@ -183,7 +184,7 @@ export function SessionPanel({
         resolveRequest(activeSessionId, firstQuestion.requestId, { text });
         return;
       }
-      if (activeSession.status === "draft" || activeSession.status === "initializing" || activeSession.status === "idle") {
+      if (activeSession.status === SessionStatus.Draft || isQuiescent(activeSession.status)) {
         sendMessage(activeSessionId, text, isMarkdown);
       }
       useMessageHistoryStore.getState().addMessage(text);
@@ -198,7 +199,7 @@ export function SessionPanel({
       resolveRequest(activeSessionId, firstQuestion.requestId, { text: "continue" });
       return;
     }
-    if (activeSession.status === "initializing" || activeSession.status === "idle") {
+    if (isQuiescent(activeSession.status)) {
       sendMessage(activeSessionId, "continue");
     }
   }, [activeSessionId, activeSession, resolveRequest, sendMessage]);
@@ -216,9 +217,9 @@ export function SessionPanel({
   const status = activeSession?.status as SessionStatus | undefined;
   const firstPending = activeSession?.pendingRequests[0] ?? null;
   const hasPending = firstPending != null;
-  const isDone = status === "done" || status === "error";
-  const isRunning = status === "running";
-  const canInterrupt = status === "running" || status === "waiting";
+  const isDone = status != null && isTerminal(status);
+  const isRunning = status === SessionStatus.Running;
+  const canInterrupt = status != null && isStreaming(status);
 
   const placeholder = hasPending
     ? firstPending?.type === "approval"
@@ -227,16 +228,16 @@ export function SessionPanel({
         : "Waiting for your approval above..."
       : "Answer the question above or type a response..."
     : isDone
-      ? status === "done"
+      ? status === SessionStatus.Done
         ? "Session complete"
         : "Session ended with error"
       : isRunning
         ? "Agent is working..."
-        : status === "draft"
+        : status === SessionStatus.Draft
           ? "Type a message to start, or adjust config above..."
           : "Message Claude...";
 
-  const isDraft = status === "draft";
+  const isDraft = status === SessionStatus.Draft;
   const inputDisabled = isDone || isRunning || (hasPending && firstPending?.type === "approval");
   const showContinue = !inputDisabled && !canInterrupt && !isDraft && (activeSession?.events.length ?? 0) > 0;
 
@@ -292,7 +293,7 @@ export function SessionPanel({
             ref={chatStreamRef}
             events={
               hideContextCard
-                ? activeSession.events.filter((e) => e.eventType !== "sessionStart")
+                ? activeSession.events.filter((e) => e.eventType !== EventType.SessionStart)
                 : activeSession.events
             }
             onApplyDescription={onApplyDescription}
@@ -307,7 +308,7 @@ export function SessionPanel({
               permissionMode={activeSession.permissionMode}
               effort={activeSession.effort ?? null}
               metrics={activeSession.metrics}
-              status={status ?? "idle"}
+              status={status ?? SessionStatus.Idle}
               disabled={activeSession.restored || isDone}
               actionSlotRef={setActionSlot}
               onChangeModel={(m) => updateConfig(activeSession.thinkrailSid, { model: m })}

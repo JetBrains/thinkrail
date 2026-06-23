@@ -1,4 +1,5 @@
-import type { AgentEvent, EventType } from "@/types/agent.ts";
+import type { AgentEvent } from "@/types/agent.ts";
+import { EventType } from "@/constants/eventTypes.ts";
 
 /**
  * Visibility categories for chat events.  Drives the show/hide toggles
@@ -55,7 +56,7 @@ const BASE_CATEGORIES: Record<EventType, EventCategory> = {
  * stay visible in dialog-only mode.
  */
 export function getEventCategory(event: AgentEvent): EventCategory {
-  if (event.eventType === "toolCallStart" || event.eventType === "toolCallEnd") {
+  if (event.eventType === EventType.ToolCallStart || event.eventType === EventType.ToolCallEnd) {
     const toolName = event.payload.toolName;
     if (toolName && toolName.endsWith("thinkrail_visualize")) return "dialog";
   }

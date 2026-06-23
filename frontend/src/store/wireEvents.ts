@@ -1,4 +1,5 @@
 import type { RpcClient } from "@/api/client.ts";
+import { isTerminal } from "@/constants/status.ts";
 import { useSpecStore } from "./specStore.ts";
 import { useSessionStore } from "./sessionStore.ts";
 import { useNotificationStore } from "./notificationStore.ts";
@@ -142,7 +143,7 @@ export function wireEvents(client: RpcClient): Unsubscribe {
       if (!thinkrailSid || !status) return;
       // Update session status in the in-memory sessions Map if it exists
       const session = useSessionStore.getState().sessions.get(thinkrailSid);
-      if (session && session.status !== "done" && session.status !== "error") {
+      if (session && !isTerminal(session.status)) {
         const sessions = new Map(useSessionStore.getState().sessions);
         sessions.set(thinkrailSid, { ...session, status: status as typeof session.status });
         useSessionStore.setState({ sessions });

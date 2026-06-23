@@ -1,6 +1,7 @@
 import type { AgentConfig, AgentEvent, Question, SessionArtifact } from "./agent.ts";
+import type { ActionState, ReturnStatus, SessionStatus } from "@/constants/status.ts";
 
-export type SessionStatus = "draft" | "initializing" | "idle" | "running" | "waiting" | "done" | "error" | "interrupted";
+export type { SessionStatus };
 
 /** Token usage for a single API call within a turn (one "iteration"). */
 export interface IterationUsage {
@@ -102,7 +103,7 @@ export interface CreateTicketAction {
   id: string;
   title: string;
   body?: string | null;
-  state: "pending" | "applied";
+  state: ActionState;
 }
 
 export interface StartSessionAction {
@@ -182,7 +183,7 @@ export interface Session {
    *  auto-spawned by the ticket view for the ticket's current phase. The
    *  Discard control is hidden for these — the UI created them, not the user. */
   kind?: "stage-default";
-  returnStatus: "pending" | "approved" | "dismissed" | null;
+  returnStatus: ReturnStatus | null;
   returnSummary: string | null;
   /** Done-screen contract emitted by the skill via SessionFinalize tool */
   outcome?: SessionOutcome | null;

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { ChevronDown, ChevronRight } from "lucide-react";
 import type { Ticket, TicketType, OrchestrationConfig, WorkNode } from "@/types/board.ts";
+import { NodeStatus, SessionStatus, isStreaming } from "@/constants/status.ts";
 import { useBoardStore } from "@/store/boardStore.ts";
 import { useSessionStore } from "@/store/sessionStore.ts";
 import { useTicketRouteStore } from "@/store/ticketRouteStore.ts";
@@ -99,11 +100,11 @@ export function TicketInfo() {
     if (!orchSid) return stages;
     const live = liveSessionsMap.get(orchSid);
     const archived = !live ? archivedSessionsList.find((a) => a.thinkrailSid === orchSid) : null;
-    const raw = live?.status ?? archived?.result ?? "interrupted";
+    const raw = live?.status ?? archived?.result ?? SessionStatus.Interrupted;
     const status: WorkNode["status"] =
-      raw === "running" || raw === "waiting" ? "running"
-        : raw === "done" ? "done"
-        : raw === "error" ? "failed" : "pending";
+      isStreaming(raw) ? NodeStatus.Running
+        : raw === SessionStatus.Done ? NodeStatus.Done
+        : raw === SessionStatus.Error ? NodeStatus.Failed : NodeStatus.Pending;
     const root = {
       id: "__orchestrator__",
       title: "Orchestrator",

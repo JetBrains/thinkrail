@@ -1,17 +1,18 @@
 import { useCallback, useMemo, useRef, useState } from "react";
 import { DragDropProvider } from "@dnd-kit/react";
 import { isSortable } from "@dnd-kit/react/sortable";
-import type { Lifecycle, TicketSummary, TicketType } from "@/types/board.ts";
+import { Lifecycle } from "@/constants/status.ts";
+import type { TicketSummary, TicketType } from "@/types/board.ts";
 import { useBoardStore } from "@/store/boardStore.ts";
 import { KanbanColumn } from "./KanbanColumn.tsx";
 import { TicketCard } from "./TicketCard.tsx";
 import { BoardCardContextMenu } from "./BoardCardContextMenu.tsx";
 
 const COLUMNS: { lifecycle: Lifecycle; label: string }[] = [
-  { lifecycle: "created", label: "Created" },
-  { lifecycle: "design", label: "Design" },
-  { lifecycle: "implementation", label: "Implementation" },
-  { lifecycle: "done", label: "Done" },
+  { lifecycle: Lifecycle.Created, label: "Created" },
+  { lifecycle: Lifecycle.Design, label: "Design" },
+  { lifecycle: Lifecycle.Implementation, label: "Implementation" },
+  { lifecycle: Lifecycle.Done, label: "Done" },
 ];
 
 interface TicketBoardProps {

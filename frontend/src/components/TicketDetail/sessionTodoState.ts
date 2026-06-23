@@ -1,4 +1,5 @@
 import type { AgentEvent } from "@/types/agent.ts";
+import { EventType } from "@/constants/eventTypes.ts";
 
 export interface TodoSnapshotItem {
   key: string;
@@ -40,7 +41,7 @@ export function deriveSessionTodoState(events: AgentEvent[]): TodoSnapshot | nul
   let createCounter = 0;
 
   events.forEach((ev, idx) => {
-    if (ev.eventType !== "toolCallStart") return;
+    if (ev.eventType !== EventType.ToolCallStart) return;
     const payload = ev.payload as unknown as Record<string, unknown> | undefined;
     const toolName = payload?.toolName;
     const input = (payload?.toolInput ?? {}) as Record<string, unknown>;

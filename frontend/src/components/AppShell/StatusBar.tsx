@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from "react";
+import { isTerminal } from "@/constants/status.ts";
 import { useSpecStore } from "@/store/specStore.ts";
 import { useSessionStore } from "@/store/sessionStore.ts";
 import { useBoardStore } from "@/store/boardStore.ts";
@@ -75,7 +76,7 @@ export function StatusBar({ onOpenSessionManager }: StatusBarProps) {
 
   const sessionList = useSessionStore((s) => s.sessionList);
   const allLive = Array.from(sessions.values()).filter(
-    (s) => s.status !== "done" && s.status !== "error",
+    (s) => !isTerminal(s.status),
   );
   const bgSessions = allLive.filter((s) => !openTabsSet.has(s.thinkrailSid));
   const bgCount = bgSessions.length;

@@ -1,23 +1,24 @@
-import type { Lifecycle, WorkNode } from "@/types/board.ts";
+import type { WorkNode } from "@/types/board.ts";
+import { Lifecycle, NodeStatus, isNodeStarted, isNodeTerminal } from "@/constants/status.ts";
 
 export function deriveLifecycle(stages: WorkNode[]): Lifecycle {
-  if (!stages || stages.length === 0) return "created";
+  if (!stages || stages.length === 0) return Lifecycle.Created;
   const impl = stages.find((n) => n.executesPlan) ?? null;
   const terminal = stages[stages.length - 1];
-  const done = (n: WorkNode) => n.status === "done" || n.status === "failed";
+  const done = (n: WorkNode) => isNodeTerminal(n.status);
   if (
-    terminal.status === "done" ||
-    (impl != null && impl.status === "done" && stages.every(done))
+    terminal.status === NodeStatus.Done ||
+    (impl != null && impl.status === NodeStatus.Done && stages.every(done))
   ) {
-    return "done";
+    return Lifecycle.Done;
   }
-  if (impl != null && (impl.status === "running" || impl.status === "done")) {
-    return "implementation";
+  if (impl != null && isNodeStarted(impl.status)) {
+    return Lifecycle.Implementation;
   }
-  if (stages.some((n) => n.status === "running" || n.status === "done")) {
-    return "design";
+  if (stages.some((n) => isNodeStarted(n.status))) {
+    return Lifecycle.Design;
   }
-  return "created";
+  return Lifecycle.Created;
 }
 
 /** Find a node by id anywhere in the stage tree (stages or children). */

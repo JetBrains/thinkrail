@@ -1,5 +1,6 @@
 import { lazy, Suspense } from "react";
 import { isWizardSkill } from "@/components/Wizard/registry.ts";
+import { CardState } from "@/constants/status.ts";
 import { AssistantMessage, ThinkRailMessage } from "../AssistantMessage.tsx";
 import { ToolCallCard } from "../ToolCallCard.tsx";
 import { DraftConfigCard } from "../DraftConfigCard.tsx";
@@ -94,7 +95,7 @@ export const compactRenderers: ViewRenderers = {
     const toolName = p.toolName;
     const toolUseId = p.toolUseId;
     const end = ctx.toolStates.get(toolUseId);
-    const state = end?.finished ? (end.isError ? "error" as const : "success" as const) : "running" as const;
+    const state = end?.finished ? (end.isError ? CardState.Error : CardState.Success) : CardState.Running;
 
     // Task tools render the same in both modes
     if (TASK_TOOLS.has(toolName)) {

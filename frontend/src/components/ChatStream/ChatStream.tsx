@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useRef, useState, forwardRef, useImperativeHandle } from "react";
 import type { AgentEvent, AskUserQuestionEvent } from "@/types/agent.ts";
 import type { Session } from "@/types/session.ts";
+import { EventType } from "@/constants/eventTypes.ts";
+import { ReturnStatus, SessionStatus } from "@/constants/status.ts";
 import { DraftConfigCard } from "./DraftConfigCard.tsx";
 import { useViewMode, type ViewMode } from "@/context/ViewModeContext.tsx";
 import { useSettingsStore } from "@/store/settingsStore.ts";
@@ -162,7 +164,7 @@ export const ChatStream = forwardRef<ChatStreamHandle, ChatStreamProps>(function
     // Find the question event to get the question text
     const qEvent = events.find(
       (ev): ev is AskUserQuestionEvent => {
-        if (ev.eventType !== "askUserQuestion") return false;
+        if (ev.eventType !== EventType.AskUserQuestion) return false;
         return ev.payload.requestId === requestId;
       },
     );
@@ -183,7 +185,7 @@ export const ChatStream = forwardRef<ChatStreamHandle, ChatStreamProps>(function
   // ── Pre-scan: index toolCallEnd results by toolUseId ──
   const toolStates = new Map<string, ToolState>();
   for (const ev of events) {
-    if (ev.eventType === "toolCallEnd") {
+    if (ev.eventType === EventType.ToolCallEnd) {
       toolStates.set(ev.payload.toolUseId, {
         output: ev.payload.output,
         isError: ev.payload.isError ?? false,
@@ -195,11 +197,11 @@ export const ChatStream = forwardRef<ChatStreamHandle, ChatStreamProps>(function
   // ── Pre-scan: track which subagents are still running ──
   const activeSubagents = new Set<string>();
   for (const ev of events) {
-    if (ev.eventType === "subagentStart")
+    if (ev.eventType === EventType.SubagentStart)
       activeSubagents.add(ev.payload.agentId);
-    if (ev.eventType === "subagentEnd")
+    if (ev.eventType === EventType.SubagentEnd)
       activeSubagents.delete(ev.payload.agentId);
-    if (ev.eventType === "interrupted" || ev.eventType === "turnComplete")
+    if (ev.eventType === EventType.Interrupted || ev.eventType === EventType.TurnComplete)
       activeSubagents.clear();
   }
 
@@ -207,7 +209,7 @@ export const ChatStream = forwardRef<ChatStreamHandle, ChatStreamProps>(function
   const latestVisByVisId = new Map<string, number>();
   for (let i = 0; i < events.length; i++) {
     const ev = events[i];
-    if (ev.eventType === "toolCallStart" && ev.payload.toolName.endsWith("thinkrail_visualize")) {
+    if (ev.eventType === EventType.ToolCallStart && ev.payload.toolName.endsWith("thinkrail_visualize")) {
       const visId = ev.payload.toolInput.visId as string | undefined;
       if (visId) latestVisByVisId.set(visId, i);
     }
@@ -220,24 +222,24 @@ export const ChatStream = forwardRef<ChatStreamHandle, ChatStreamProps>(function
     const agentStartIdx = new Map<string, number>();
     for (let i = 0; i < events.length; i++) {
       const ev = events[i];
-      if (ev.eventType === "subagentStart") {
+      if (ev.eventType === EventType.SubagentStart) {
         agentStartIdx.set(ev.payload.agentId, i);
         subagentChildren.set(i, []);
       }
     }
     for (let i = 0; i < events.length; i++) {
       const ev = events[i];
-      if (ev.eventType === "subagentStart" || ev.eventType === "subagentEnd"
-          || ev.eventType === "interrupted" || ev.eventType === "turnComplete")
+      if (ev.eventType === EventType.SubagentStart || ev.eventType === EventType.SubagentEnd
+          || ev.eventType === EventType.Interrupted || ev.eventType === EventType.TurnComplete)
         continue;
       // agentId is present on a subset of event types; ReadyEvent.payload is optional
       const agentId = (ev.payload as { agentId?: string | null } | undefined)?.agentId;
       if (!agentId) continue;
       const parentIdx = agentStartIdx.get(agentId);
       if (parentIdx === undefined) continue;
-      const isVis = ev.eventType === "toolCallStart" &&
+      const isVis = ev.eventType === EventType.ToolCallStart &&
         ev.payload.toolName.endsWith("thinkrail_visualize");
-      const isInteraction = ev.eventType === "askUserQuestion" || ev.eventType === "confirmAction" || ev.eventType === "suggestSession" || ev.eventType === "suggestDescription";
+      const isInteraction = ev.eventType === EventType.AskUserQuestion || ev.eventType === EventType.ConfirmAction || ev.eventType === EventType.SuggestSession || ev.eventType === EventType.SuggestDescription;
       if (!isVis && !isInteraction) {
         subagentChildren.get(parentIdx)!.push(i);
         childIndices.add(i);
@@ -257,7 +259,7 @@ export const ChatStream = forwardRef<ChatStreamHandle, ChatStreamProps>(function
     for (let i = 0; i < events.length; i++) {
       if (childIndices.has(i)) continue;
       const ev = events[i];
-      if (ev.eventType !== "toolCallStart") continue;
+      if (ev.eventType !== EventType.ToolCallStart) continue;
       const tn = ev.payload.toolName;
       if (tn !== "TaskCreate" && tn !== "TaskUpdate") continue;
       if (taskCollectionAnchor === null) taskCollectionAnchor = i;
@@ -307,7 +309,7 @@ export const ChatStream = forwardRef<ChatStreamHandle, ChatStreamProps>(function
     const approvalByToolName = new Map<string, { eventIndex: number; requestId: string; toolInput?: unknown; description?: string }[]>();
     for (let i = 0; i < events.length; i++) {
       const ev = events[i];
-      if (ev.eventType === "confirmAction") {
+      if (ev.eventType === EventType.ConfirmAction) {
         const toolName = ev.payload.toolName;
         if (toolName === "ExitPlanMode") continue;
         const entry = {
@@ -331,7 +333,7 @@ export const ChatStream = forwardRef<ChatStreamHandle, ChatStreamProps>(function
     // Pass 2: link toolCallStart events to their approval
     for (let i = 0; i < events.length; i++) {
       const ev = events[i];
-      if (ev.eventType !== "toolCallStart") continue;
+      if (ev.eventType !== EventType.ToolCallStart) continue;
       const toolUseId = ev.payload.toolUseId;
       const toolName = ev.payload.toolName;
 
@@ -405,7 +407,7 @@ export const ChatStream = forwardRef<ChatStreamHandle, ChatStreamProps>(function
       onScroll={handleScroll}
       onContextMenu={handleContextMenu}
     >
-      {session?.status === "draft" && (
+      {session?.status === SessionStatus.Draft && (
         <DraftConfigCard thinkrailSid={session.thinkrailSid} />
       )}
       {events.map((ev, i) => {
@@ -431,7 +433,7 @@ export const ChatStream = forwardRef<ChatStreamHandle, ChatStreamProps>(function
         );
       })}
 
-      {session?.returnStatus === "pending" && session?.returnSummary && (
+      {session?.returnStatus === ReturnStatus.Pending && session?.returnSummary && (
         <ReturnFlowCard
           thinkrailSid={session.thinkrailSid}
           subsessionType={session.subsessionType ?? "discussion"}

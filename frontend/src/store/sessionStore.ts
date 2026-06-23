@@ -2,7 +2,6 @@ import { create } from "zustand";
 import type { AgentEvent, AgentConfig, SessionArtifact } from "@/types/agent.ts";
 import type {
   Session,
-  SessionStatus,
   SessionMetrics,
   ContextUsage,
   TurnUsage,
@@ -11,6 +10,8 @@ import type {
   PendingRequest,
 } from "@/types/session.ts";
 import type { SessionSummary } from "@/api/methods/sessions.ts";
+import { SessionStatus, ReturnStatus, isQuiescent, isTerminal, isTransient } from "@/constants/status.ts";
+import { EventType } from "@/constants/eventTypes.ts";
 import { getClient } from "@/api/index.ts";
 import { createAgentApi } from "@/api/methods/agents.ts";
 import { buildDefaultSessionConfig } from "@/utils/sessionConfig.ts";
@@ -242,7 +243,7 @@ function emptyMetrics(): SessionMetrics {
 function reconstructCost(events: AgentEvent[]): number {
   for (let i = events.length - 1; i >= 0; i--) {
     const ev = events[i];
-    if (ev.eventType === "turnComplete" || ev.eventType === "done") {
+    if (ev.eventType === EventType.TurnComplete || ev.eventType === EventType.Done) {
       const cost = ev.payload.costUsd;
       if (typeof cost === "number") return cost;
     }
@@ -265,12 +266,12 @@ function reconstructContextUsage(events: AgentEvent[], fallbackContextMax = 0): 
 
   for (const ev of events) {
     // Record run boundaries from sessionStart events
-    if (ev.eventType === "sessionStart") {
+    if (ev.eventType === EventType.SessionStart) {
       cu.runBoundaries.push(cu.turnHistory.length);
     }
 
     // Accumulate turn usage from turnComplete/interrupted events
-    if (ev.eventType === "turnComplete" || ev.eventType === "interrupted") {
+    if (ev.eventType === EventType.TurnComplete || ev.eventType === EventType.Interrupted) {
       const p = ev.payload;
       if (!p.usage) continue;
       // usage and iterations use dict[str, Any] on the backend, so values are unknown.
@@ -340,7 +341,7 @@ function reconstructContextUsage(events: AgentEvent[], fallbackContextMax = 0): 
     }
 
     // Track tool calls and files
-    if (ev.eventType === "toolCallStart") {
+    if (ev.eventType === EventType.ToolCallStart) {
       const p = ev.payload;
       const toolName = p.toolName ?? "";
       const toolUseId = p.toolUseId ?? "";
@@ -366,7 +367,7 @@ function reconstructContextUsage(events: AgentEvent[], fallbackContextMax = 0): 
     }
 
     // Track tool output tokens
-    if (ev.eventType === "toolCallEnd") {
+    if (ev.eventType === EventType.ToolCallEnd) {
       const p = ev.payload;
       const toolUseId = p.toolUseId ?? "";
       const toolName = toolUseIdToName.get(toolUseId) ?? "";
@@ -503,7 +504,7 @@ function ensureSession(
     skillId: null,
     specIds: [],
     filePaths: [],
-    status: "initializing",
+    status: SessionStatus.Initializing,
     model: "",
     permissionMode: "default",
     effort: "auto",
@@ -573,7 +574,7 @@ function appendEvent(
       const events = session.events;
       for (let i = events.length - 1; i >= 0; i--) {
         const ev = events[i];
-        if (ev.eventType === "toolCallStart" && ev.payload?.toolUseId === toolUseId) {
+        if (ev.eventType === EventType.ToolCallStart && ev.payload?.toolUseId === toolUseId) {
           toolName = (ev.payload.toolName as string) ?? "";
           break;
         }
@@ -642,10 +643,10 @@ function buildAnsweredRequests(
 
   // First pass: collect requestResolved and requestExpired events
   for (const ev of events) {
-    if (ev.eventType === "requestResolved") {
+    if (ev.eventType === EventType.RequestResolved) {
       const rid = ev.payload.requestId ?? "";
       if (rid) answered.set(rid, ev.payload.response);
-    } else if (ev.eventType === "requestExpired") {
+    } else if (ev.eventType === EventType.RequestExpired) {
       const rid = (ev.payload.requestId as string) ?? "";
       if (rid) answered.set(rid, { expired: true, reason: ev.payload.reason });
     }
@@ -654,7 +655,7 @@ function buildAnsweredRequests(
   // Second pass (non-active only): mark remaining unresolved requests as historical
   if (!isActive) {
     for (const ev of events) {
-      if (ev.eventType === "askUserQuestion" || ev.eventType === "confirmAction" || ev.eventType === "suggestSession" || ev.eventType === "suggestDescription" || ev.eventType === "suggestStep") {
+      if (ev.eventType === EventType.AskUserQuestion || ev.eventType === EventType.ConfirmAction || ev.eventType === EventType.SuggestSession || ev.eventType === EventType.SuggestDescription || ev.eventType === EventType.SuggestStep) {
         const rid = (ev.payload.requestId as string) ?? "";
         if (rid && !answered.has(rid)) answered.set(rid, { historical: true });
       }
@@ -761,7 +762,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
         skillId: prefill?.skillId ?? null,
         specIds: [],
         filePaths: [],
-        status: "draft",
+        status: SessionStatus.Draft,
         unsaved: true,
         model: config.model,
         permissionMode: config.permissionMode,
@@ -800,9 +801,9 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
       const existing = next.get(thinkrailSid);
       // Merge with placeholder if events arrived before this resolved.
       // Preserve status if agent/ready already transitioned it past "initializing".
-      const resolvedStatus = existing && existing.status !== "initializing"
+      const resolvedStatus = existing && existing.status !== SessionStatus.Initializing
         ? existing.status
-        : "initializing";
+        : SessionStatus.Initializing;
       next.set(thinkrailSid, {
         thinkrailSid,
         name,
@@ -867,7 +868,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
         skillId: skillId ?? null,
         specIds,
         filePaths: filePaths ?? [],
-        status: "draft",
+        status: SessionStatus.Draft,
         model: config.model,
         permissionMode: config.permissionMode,
         effort: config.effort ?? "auto",
@@ -941,7 +942,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
 
     set((s) => {
       const session = s.sessions.get(thinkrailSid);
-      if (!session || session.status !== "draft") return s;
+      if (!session || session.status !== SessionStatus.Draft) return s;
       const next = new Map(s.sessions);
       next.set(thinkrailSid, {
         ...session,
@@ -990,7 +991,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
       const next = new Map(s.sessions);
       next.set(thinkrailSid, {
         ...session,
-        status: "initializing",
+        status: SessionStatus.Initializing,
         metrics: {
           ...session.metrics,
           contextTokens: promptTokens,
@@ -1009,7 +1010,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
 
   noteDraftInput: (thinkrailSid, text) => {
     const session = get().sessions.get(thinkrailSid);
-    if (!session || session.status !== "draft") return;
+    if (!session || session.status !== SessionStatus.Draft) return;
 
     // Live-derive the tab name unless the user renamed by hand. Clearing all
     // text reverts to the default label but never deletes the draft.
@@ -1089,7 +1090,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
 
   commitDraft: async (thinkrailSid) => {
     const session = get().sessions.get(thinkrailSid);
-    if (!session || session.status !== "draft") return;
+    if (!session || session.status !== SessionStatus.Draft) return;
 
     try {
       if (session.unsaved) {
@@ -1145,7 +1146,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
     // Start the session first (sessionStart event arrives via WebSocket during
     // the RPC call), then add the userMessage so it appears after the config card.
     const session = get().sessions.get(thinkrailSid);
-    if (session?.status === "draft") {
+    if (session?.status === SessionStatus.Draft) {
       try {
         await get().startDraft(thinkrailSid, text);
       } catch (err) {
@@ -1226,7 +1227,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
           events: session.events.filter(
             (e, i) =>
               !(
-                e.eventType === "userMessage" &&
+                e.eventType === EventType.UserMessage &&
                 i === session.events.length - 1 &&
                 (e.payload.text as string) === text
               ),
@@ -1239,7 +1240,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
 
   switchSession: (thinkrailSid) => {
     const prev = get().activeSessionId;
-    if (prev && prev !== thinkrailSid && get().sessions.get(prev)?.status === "draft") {
+    if (prev && prev !== thinkrailSid && get().sessions.get(prev)?.status === SessionStatus.Draft) {
       void draftAutosave.flush(prev);
     }
     _ensureSubscribed(thinkrailSid);
@@ -1263,7 +1264,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
         const next = new Map(s.sessions);
         next.set(thinkrailSid, {
           ...session,
-          status: "initializing",
+          status: SessionStatus.Initializing,
           restored: undefined,
           pendingRequests: [],
           answeredRequests: answered,
@@ -1285,7 +1286,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
         const session = s.sessions.get(thinkrailSid);
         if (!session) return s;
         const next = new Map(s.sessions);
-        next.set(thinkrailSid, { ...session, status: "initializing", restored: undefined });
+        next.set(thinkrailSid, { ...session, status: SessionStatus.Initializing, restored: undefined });
         if (session.ticketId) {
           return { sessions: next };
         }
@@ -1357,7 +1358,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
     const restoredCtx = reconstructContextUsage(events, (diskMetrics.contextMax as number) ?? 0);
 
     // Restore system prompt from sessionStart event payload
-    const restoredPrompt = events.find((e) => e.eventType === "sessionStart")?.payload.systemPrompt as string | undefined;
+    const restoredPrompt = events.find((e) => e.eventType === EventType.SessionStart)?.payload.systemPrompt as string | undefined;
 
     const session: Session = {
       thinkrailSid,
@@ -1368,8 +1369,8 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
       // If the backend runner is alive, use the actual status; otherwise
       // force "done" since there's nothing driving the session.
       status: isActive
-        ? ((backendEntry?.status as SessionStatus) ?? "idle")
-        : "done",
+        ? ((backendEntry?.status as SessionStatus) ?? SessionStatus.Idle)
+        : SessionStatus.Done,
       model: restoredModel,
       permissionMode: (data.config?.permissionMode as string) ?? "default",
       effort: (data.config?.effort as string) ?? "auto",
@@ -1410,7 +1411,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
     // Draft entries carry the in-progress prompt as `draftInput` — repopulate
     // the input box and label the tab from it.
     const draftInput = backendEntry?.draftInput;
-    if (backendEntry?.status === "draft") {
+    if (backendEntry?.status === SessionStatus.Draft) {
       if (draftInput) useInputDraftStore.getState().setDraft(thinkrailSid, draftInput);
       const resolved = resolveDraftName(data.name, draftInput ?? "");
       session.name = resolved.name;
@@ -1498,9 +1499,9 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
 
         // Restore system prompt: from entry (drafts) or from sessionStart event payload
         const restoredPrompt = entry.systemPrompt as string | undefined
-          ?? (events.find((e) => e.eventType === "sessionStart")?.payload.systemPrompt as string | undefined);
+          ?? (events.find((e) => e.eventType === EventType.SessionStart)?.payload.systemPrompt as string | undefined);
 
-        const draftName = entry.status === "draft"
+        const draftName = entry.status === SessionStatus.Draft
           ? resolveDraftName(data?.name ?? entry.name, entry.draftInput ?? "")
           : null;
 
@@ -1513,7 +1514,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
           skillId: (data?.skillId as string) ?? entry.skillId ?? null,
           specIds: data?.specIds ?? entry.specIds ?? [],
           filePaths: (data?.filePaths as string[]) ?? [],
-          status: entry.active && !entry.inTracker ? "done" : ((entry.status as SessionStatus) ?? "idle"),
+          status: entry.active && !entry.inTracker ? SessionStatus.Done : ((entry.status as SessionStatus) ?? SessionStatus.Idle),
           model: entryModel,
           permissionMode: (data?.config?.permissionMode as string) ?? "default",
           effort: (data?.config?.effort as string) ?? "auto",
@@ -1587,7 +1588,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
       }
       if (!autoActiveId) {
         const activeCandidates = all.filter((e) => e.active);
-        const best = activeCandidates.find((e) => e.status === "running")
+        const best = activeCandidates.find((e) => e.status === SessionStatus.Running)
           ?? activeCandidates.sort(
             (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
           )[0];
@@ -1619,7 +1620,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
     for (const result of results) {
       if (result.status !== "fulfilled") continue;
       const { entry } = result.value;
-      if (entry.status === "draft" && entry.draftInput) {
+      if (entry.status === SessionStatus.Draft && entry.draftInput) {
         useInputDraftStore.getState().setDraft(entry.thinkrailSid, entry.draftInput);
       }
     }
@@ -1630,7 +1631,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
     // Collect sessions in transient states that need checking
     const toCheck: string[] = [];
     for (const [sid, session] of sessions) {
-      if (session.status === "initializing" || session.status === "running" || session.status === "waiting") {
+      if (isTransient(session.status)) {
         toCheck.push(sid);
       }
     }
@@ -1650,7 +1651,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
           // Backend "done" → frontend "done"
           // Backend "error" → frontend "error"
           // Backend "running" → keep current frontend status (still in progress)
-          if (backendStatus === "running") return; // still running, no update needed
+          if (backendStatus === SessionStatus.Running) return; // still running, no update needed
 
           if (session.status !== backendStatus) {
             console.log(`[syncSessionStatuses] ${thinkrailSid}: ${session.status} → ${backendStatus}`);
@@ -1658,12 +1659,12 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
               const current = s.sessions.get(thinkrailSid);
               if (!current) return s;
               // Don't overwrite if status already changed (e.g., event arrived)
-              if (current.status !== "initializing" && current.status !== "running" && current.status !== "waiting") return s;
+              if (!isTransient(current.status)) return s;
               const next = new Map(s.sessions);
               next.set(thinkrailSid, {
                 ...current,
                 status: backendStatus as SessionStatus,
-                pendingRequests: backendStatus === "idle" || backendStatus === "done" ? [] : current.pendingRequests,
+                pendingRequests: backendStatus === SessionStatus.Idle || backendStatus === SessionStatus.Done ? [] : current.pendingRequests,
               });
               return { sessions: next };
             });
@@ -1677,15 +1678,15 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
             if (!session) return;
             // Grace period: don't mark as done if session entered initializing < 10s ago
             // to avoid racing with continueSession (backend task not yet created).
-            const isRecent = session.status === "initializing" && (Date.now() - session.startedAt) < 10_000;
-            if (!isRecent && (session.status === "initializing" || session.status === "running" || session.status === "waiting")) {
+            const isRecent = session.status === SessionStatus.Initializing && (Date.now() - session.startedAt) < 10_000;
+            if (!isRecent && isTransient(session.status)) {
               console.log(`[syncSessionStatuses] ${thinkrailSid}: task not found, marking done`);
               set((s) => {
                 const current = s.sessions.get(thinkrailSid);
                 if (!current) return s;
-                if (current.status !== "initializing" && current.status !== "running" && current.status !== "waiting") return s;
+                if (!isTransient(current.status)) return s;
                 const next = new Map(s.sessions);
-                next.set(thinkrailSid, { ...current, status: "done", pendingRequests: [] });
+                next.set(thinkrailSid, { ...current, status: SessionStatus.Done, pendingRequests: [] });
                 return { sessions: next };
               });
             }
@@ -1714,7 +1715,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
           : s.activeSessionId;
 
       // Terminal sessions: remove from store and archive
-      if (session.status === "done" || session.status === "error") {
+      if (isTerminal(session.status)) {
         const next = new Map(s.sessions);
         next.delete(thinkrailSid);
         const nextClosed = new Set(s.closedIds);
@@ -1730,7 +1731,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
               thinkrailSid: session.thinkrailSid, name: session.name,
               skillId: session.skillId, specIds: session.specIds,
               startedAt: session.startedAt, endedAt: Date.now(),
-              result: session.status === "done" ? "done" : "error",
+              result: session.status === SessionStatus.Done ? SessionStatus.Done : SessionStatus.Error,
               costUsd: session.metrics.costUsd, turns: session.metrics.turns,
               durationMs: session.metrics.durationMs, model: session.model,
               config: { model: session.model, permissionMode: session.permissionMode, streamText: true, effort: session.effort ?? "auto", flags: session.flags ?? {} },
@@ -1890,7 +1891,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
       changes.skillId = null;
     }
 
-    if (session.status === "draft") {
+    if (session.status === SessionStatus.Draft) {
       await get().updateDraft(thinkrailSid, changes);
     } else {
       // For non-draft sessions, update locally only (display fix)
@@ -1952,7 +1953,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
       answered.set(requestId, response);
       nextSessions.set(thinkrailSid, {
         ...session,
-        status: "running",
+        status: SessionStatus.Running,
         pendingRequests: session.pendingRequests.filter(
           (r) => r.requestId !== requestId,
         ),
@@ -1989,7 +1990,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
       const cu = session.metrics.contextUsage;
       next.set(thinkrailSid, {
         ...session,
-        status: "initializing",
+        status: SessionStatus.Initializing,
         pendingRequests: [],
         metrics: {
           ...session.metrics,
@@ -2038,7 +2039,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
       const cu = session.metrics.contextUsage;
       next.set(thinkrailSid, {
         ...session,
-        status: session.status === "initializing" || session.status === "idle" ? "running" : session.status,
+        status: isQuiescent(session.status) ? SessionStatus.Running : session.status,
         model: (params.model as string) ?? session.model,
         systemPrompt: (params.systemPrompt as string) ?? undefined,
         events: [
@@ -2112,17 +2113,17 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
         // Belt-and-suspenders: if we receive work events while idle, transition
         // to running.  Catches the case where agent/statusChanged was missed
         // (e.g. during a WebSocket reconnect).
-        if (session.status === "idle") {
+        if (session.status === SessionStatus.Idle) {
           if (_RUNNING_SIGNALS.has(method)) {
-            const updated = { ...session, status: "running" as SessionStatus };
+            const updated = { ...session, status: SessionStatus.Running };
             sessions.set(thinkrailSid, updated);
             session = updated;
           }
         }
 
         if (method === "agent/ready") {
-          if (session.status === "initializing") {
-            sessions.set(thinkrailSid, { ...session, status: "idle" });
+          if (session.status === SessionStatus.Initializing) {
+            sessions.set(thinkrailSid, { ...session, status: SessionStatus.Idle });
           }
         } else if (method === "agent/costEstimate") {
           const est = params.estimatedCostUsd as number;
@@ -2178,7 +2179,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
           });
           return { sessions: next };
         } else if (method === "agent/turnComplete" || method === "agent/interrupted") {
-          const updated = applyMetrics(session, params, "idle");
+          const updated = applyMetrics(session, params, SessionStatus.Idle);
 
           if (method === "agent/interrupted" && session.pendingRequests.length > 0) {
             // Only mark each as denied if user has NOT already answered.
@@ -2206,9 +2207,8 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
           // terminal state that should only change via onSessionDone/onSessionError.
           if (
             session.status !== newStatus &&
-            session.status !== "waiting" &&
-            session.status !== "done" &&
-            session.status !== "error"
+            session.status !== SessionStatus.Waiting &&
+            !isTerminal(session.status)
           ) {
             sessions.set(thinkrailSid, { ...session, status: newStatus });
           }
@@ -2258,7 +2258,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
       if (updated) {
         sessions.set(thinkrailSid, {
           ...updated,
-          status: "waiting",
+          status: SessionStatus.Waiting,
           pendingRequests: [...updated.pendingRequests, {
             requestId,
             type: "question",
@@ -2289,7 +2289,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
       if (updated) {
         sessions.set(thinkrailSid, {
           ...updated,
-          status: "waiting",
+          status: SessionStatus.Waiting,
           pendingRequests: [...updated.pendingRequests, {
             requestId,
             type: "approval",
@@ -2317,7 +2317,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
       if (session) {
         sessions.set(thinkrailSid, {
           ...session,
-          status: "waiting",
+          status: SessionStatus.Waiting,
           pendingRequests: [...session.pendingRequests, {
             requestId,
             type: "suggestion",
@@ -2348,7 +2348,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
       if (session) {
         sessions.set(thinkrailSid, {
           ...session,
-          status: "waiting",
+          status: SessionStatus.Waiting,
           pendingRequests: [...session.pendingRequests, {
             requestId,
             type: "description-suggestion",
@@ -2376,7 +2376,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
       if (session) {
         sessions.set(thinkrailSid, {
           ...session,
-          status: "waiting",
+          status: SessionStatus.Waiting,
           pendingRequests: [...session.pendingRequests, {
             requestId,
             type: "step-proposal",
@@ -2533,7 +2533,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
           // When the resolved request was the only one outstanding, transition
           // back to running. With multiple pendings (subagent-mode parallel
           // approvals), the others keep the session in "waiting."
-          status: hadMatching && remaining.length === 0 ? "running" : session.status,
+          status: hadMatching && remaining.length === 0 ? SessionStatus.Running : session.status,
           pendingRequests: remaining,
           answeredRequests: answered,
         });
@@ -2579,7 +2579,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
             skillId: (params.skillId as string) ?? null,
             specIds: (params.specIds as string[]) ?? [],
             filePaths: (params.filePaths as string[]) ?? [],
-            status: (params.status as Session["status"]) ?? "draft",
+            status: (params.status as Session["status"]) ?? SessionStatus.Draft,
             model: (config.model as string) || "",
             permissionMode: (config.permissionMode as string) || "default",
             effort: (config.effort as string) ?? "auto",
@@ -2616,7 +2616,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
       // Skip if we already have this message (sent by us optimistically)
       const lastEvent = session.events[session.events.length - 1];
       if (
-        lastEvent?.eventType === "userMessage" &&
+        lastEvent?.eventType === EventType.UserMessage &&
         (lastEvent.payload.text as string) === text
       ) {
         return s;
@@ -2791,7 +2791,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
       const session = s.sessions.get(thinkrailSid);
       if (!session) return s;
       const next = new Map(s.sessions);
-      next.set(thinkrailSid, { ...session, returnStatus: "approved" as const, returnSummary: text });
+      next.set(thinkrailSid, { ...session, returnStatus: ReturnStatus.Approved, returnSummary: text });
       return { sessions: next };
     });
   },
@@ -2804,7 +2804,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
       const session = s.sessions.get(thinkrailSid);
       if (!session) return s;
       const next = new Map(s.sessions);
-      next.set(thinkrailSid, { ...session, returnStatus: "dismissed" as const });
+      next.set(thinkrailSid, { ...session, returnStatus: ReturnStatus.Dismissed });
       return { sessions: next };
     });
   },
@@ -2878,7 +2878,7 @@ export function startWatchdog(): void {
     const sessions = useSessionStore.getState().sessions;
     let hasTransient = false;
     for (const session of sessions.values()) {
-      if (session.status === "initializing" || session.status === "running" || session.status === "waiting") {
+      if (isTransient(session.status)) {
         hasTransient = true;
         break;
       }

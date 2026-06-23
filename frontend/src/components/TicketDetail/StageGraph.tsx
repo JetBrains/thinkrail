@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import type { TicketState } from "@/types/rpc-methods.ts";
+import { NodeStatus } from "@/constants/status.ts";
 import { SessionSubRow } from "./SessionSubRow.tsx";
 import "./StageGraph.css";
 
@@ -7,7 +8,7 @@ type WorkNode = NonNullable<TicketState["stages"]>[number];
 type Run = NonNullable<WorkNode["runs"]>[number];
 
 const STATUS_ICON: Record<string, string> = {
-  pending: "○", running: "●", done: "✓", failed: "✕",
+  [NodeStatus.Pending]: "○", [NodeStatus.Running]: "●", [NodeStatus.Done]: "✓", [NodeStatus.Failed]: "✕",
 };
 
 function RailSegments({ depth, ancestors }: {
@@ -53,14 +54,14 @@ function NodeRow({
   onFocusSession?: (sid: string) => void;
   onOpenFile?: (path: string) => void;
 }) {
-  const status = node.status ?? "pending";
+  const status = node.status ?? NodeStatus.Pending;
   const runs = node.runs ?? [];
   const children = node.children ?? [];
   const isExpandable = !!(node.artifactKind || runs.length > 0 || children.length > 0);
-  const [expanded, setExpanded] = useState(() => status === "running");
+  const [expanded, setExpanded] = useState(() => status === NodeStatus.Running);
 
   useEffect(() => {
-    setExpanded(status === "running");
+    setExpanded(status === NodeStatus.Running);
   }, [status]);
 
   const childAncestors = [...ancestors, !isLast];
@@ -83,7 +84,7 @@ function NodeRow({
         <span className="stage-icon">{STATUS_ICON[status] ?? "○"}</span>
         <span className="stage-title">{node.title}</span>
         <span className="stage-actions">
-          {status === "running" && onCompleteNode && (
+          {status === NodeStatus.Running && onCompleteNode && (
             <button
               className="stage-icon-btn"
               title="Force complete stage"
@@ -93,7 +94,7 @@ function NodeRow({
               {"✓"}
             </button>
           )}
-          {status === "done" && onRefineNode && (
+          {status === NodeStatus.Done && onRefineNode && (
             <button
               className="stage-icon-btn"
               title="Refine (new stage)"
@@ -103,7 +104,7 @@ function NodeRow({
               {"⟳"}
             </button>
           )}
-          {status === "running" && (
+          {status === NodeStatus.Running && (
             <span className="stage-live-dot" aria-hidden="true" />
           )}
           <span className="stage-status">{status}</span>
@@ -124,7 +125,7 @@ function NodeRow({
           )}
           {runs.map((run: Run, idx) => {
             const sid = run.sessionId ?? run.orchestratorSid ?? "";
-            const isActiveRun = status === "running" && idx === runs.length - 1;
+            const isActiveRun = status === NodeStatus.Running && idx === runs.length - 1;
             return (
               <SessionSubRow
                 key={sid}
