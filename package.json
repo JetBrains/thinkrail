@@ -18,7 +18,9 @@
 		"lint": "biome check .",
 		"format": "biome check --write .",
 		"prepare": "husky",
-		"e2e": "playwright test"
+		"e2e": "playwright test",
+		"e2e:headed": "playwright test --headed",
+		"e2e:ui": "playwright test --ui"
 	},
 	"devDependencies": {
 		"@biomejs/biome": "^2.5.0",
