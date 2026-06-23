@@ -94,6 +94,9 @@ Architecture decisions live as spec-graph nodes, dogfooding the spec layer the p
 - **Web styling = Tailwind v4 utilities mapped to the CSS-var tokens** (`@theme inline` in
   `apps/web/src/index.css`); themes swap the token set via `[data-theme]`. Components use utilities,
   **never inline `style` objects or raw hex** — that's what keeps the UI themeable and responsive.
+- **Icons: `lucide-react` only. UI primitives: shadcn/ui** (Radix), copied into
+  `apps/web/src/components/ui/` (we own them) and themed with our token utilities — *not* shadcn's
+  default palette. `cn()` lives in `apps/web/src/lib/utils.ts`.
 - The transport's **host endpoint is a parameter** (default same-origin); `server.welcome` carries a
   protocol version so an independently-shipped UI can detect host drift.
 

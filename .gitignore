@@ -9,3 +9,4 @@ blob-report/
 playwright/.cache/
 
 docs/*
+.playwright-mcp/

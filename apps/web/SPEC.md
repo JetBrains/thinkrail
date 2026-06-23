@@ -49,6 +49,9 @@ pill). The `panels/` (FileTree, Editor, ChangesPanel, TerminalView, ChatView, Co
   re-themes everything. V1 ships one dark theme, structured for N (pibun's theme engine, lifted at V2).
 - Token names that collide with Tailwind namespaces (`--font-mono`, `--font-accent`, `--radius-*`) are
   used as token arbitrary values (`font-[var(--font-accent)]`), not `@theme` mappings.
+- **Icons: `lucide-react`. Components: shadcn/ui** (Radix primitives), copy-in under `src/components/ui/`
+  and themed with our token utilities (`cn()` in `src/lib/utils.ts`) — never shadcn's default oklch
+  palette. Use these for accessible menus / dialogs / tooltips.
 
 ## Get right
 
