@@ -51,7 +51,7 @@ class TestLabeledOption:
     def test_camelcase_round_trip(self):
         opt = LabeledOption(value="claude-opus-4-8", label="Opus 4.8")
         dumped = opt.model_dump(by_alias=True)
-        assert dumped == {"value": "claude-opus-4-8", "label": "Opus 4.8"}
+        assert dumped == {"value": "claude-opus-4-8", "label": "Opus 4.8", "description": ""}
         assert LabeledOption.model_validate(dumped) == opt
 
     def test_frozen(self):

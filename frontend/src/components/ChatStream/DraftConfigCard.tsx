@@ -14,6 +14,7 @@ import { SpecSelector } from "@/components/shared/SpecSelector.tsx";
 import { TicketSelector } from "@/components/shared/TicketSelector.tsx";
 import { FileSelector } from "@/components/shared/FileSelector.tsx";
 import { Dropdown } from "@/components/shared/Dropdown.tsx";
+import { permissionModeLabel, permissionModeTooltip } from "@/utils/permissionMode.ts";
 import { Card, Button } from "@/components/ui/index.ts";
 import { PromptPreview } from "./PromptPreview.tsx";
 import { StaleRefsBanner } from "@/components/shared/StaleRefsBanner.tsx";
@@ -240,7 +241,9 @@ export function DraftConfigCard({ thinkrailSid, readOnly, hideDiscard, onVisibil
             <span className="draft-config-pill draft-config-pill--model">
               {modelDef?.label ?? session.model}
             </span>
-            <span className="draft-config-pill">{session.permissionMode}</span>
+            <span className="draft-config-pill">
+              {permissionModeLabel(permissionModes, session.permissionMode)}
+            </span>
             <span className="draft-config-pill">{session.effort} effort</span>
           </div>
         </div>
@@ -495,7 +498,11 @@ export function DraftConfigCard({ thinkrailSid, readOnly, hideDiscard, onVisibil
                 ...(permissionModes.some((m) => m.value === session.permissionMode)
                   ? []
                   : [{ value: session.permissionMode, label: session.permissionMode }]),
-                ...permissionModes.map((m) => ({ value: m.value, label: m.label })),
+                ...permissionModes.map((m) => ({
+                  value: m.value,
+                  label: m.label,
+                  title: permissionModeTooltip(m),
+                })),
               ]}
               onChange={(v) => debouncedUpdate({ config: buildConfig({ permissionMode: v }) })}
             />

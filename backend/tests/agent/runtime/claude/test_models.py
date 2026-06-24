@@ -22,7 +22,7 @@ class TestClaudeModelRegistry:
         reg = ClaudeModelRegistry()
         for o in reg.list_options():
             assert isinstance(o, LabeledOption)
-            assert set(LabeledOption.model_fields) == {"value", "label"}
+            assert set(LabeledOption.model_fields) == {"value", "label", "description"}
 
     def test_first_option_is_fable(self) -> None:
         reg = ClaudeModelRegistry()
