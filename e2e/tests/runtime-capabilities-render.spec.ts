@@ -1,5 +1,6 @@
 import { test, expect } from "../fixtures";
 import { openProject } from "../helpers/project";
+import { seedDeliverable } from "../helpers/board";
 import { newSession } from "../helpers/selectors";
 import { seedSessionDefaults } from "../helpers/appSettings";
 import { optionLabels, selectedLabel } from "../helpers/draftConfig";
@@ -23,13 +24,16 @@ test("draft pickers render the runtime's declared capabilities in order", async 
     permissionMode: "default",
     effort: "auto",
   });
+  // Initialized project → opens straight into the sessions workspace (a bare
+  // temp dir lands on the onboarding wizard, which has no new-session button).
+  seedDeliverable(tempProject.path);
 
   await openProject(page, tempProject.path);
   await page.locator(newSession.newButton).click();
 
-  // ── Models: declared catalog order, capability-descending ──
+  // ── Models: declared catalog order (Fable 5 is hidden from the picker). ──
   await expect(selectedLabel(page, "model")).toBeVisible({ timeout: 15_000 });
-  expect(await optionLabels(page, "model")).toEqual(["Fable 5", "Opus 4.8", "Sonnet 4.6", "Haiku 4.5"]);
+  expect(await optionLabels(page, "model")).toEqual(["Opus 4.8", "Sonnet 4.6", "Haiku 4.5"]);
 
   // ── Permission modes: friendly labels, default-first, with dontAsk hidden
   //    from the interactive picker (headless-only; see ClaudeRuntime). ──
