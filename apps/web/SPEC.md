@@ -18,32 +18,43 @@ event stream as a chat-centric, multi-session IDE shell.
 - **Owns:** the browser UI — transport client, store, panels, the responsive shell, branding tokens.
 - **Public surface:** the built static bundle (`dist/`) — a deployable artifact that dials a host.
 - **Allowed deps:** `@thinkrail-pi/contracts` (types + WS constants) ONLY; React / Zustand / Vite / etc.
-- **Forbidden:** importing `server` / `shared` / any `pi` package (value or type) — enforced by the M1
-  bundle gate (`bun build` shows no provider SDK / `node:fs`).
+- **Forbidden:** importing `server` / `shared` / any `pi` package (value or type). Kept clean by type-only
+  imports + `verbatimModuleSyntax` (a `dist/` build shows no provider SDK / `node:fs`).
 
-## Internal structure
+## Internal modules
 
-- **transport/** — single WebSocket client; id-correlated `request`, channel `subscribe` with replay,
-  reconnect/backoff. The host endpoint is a parameter (default same-origin via `inferUrl`).
-- **store/** — Zustand; connection + welcome, projects/workspaces, and **center tabs + terminals keyed by
-  workspace** (switching workspaces swaps both). Per-session pi runtime (messages, streaming, stats) joins
-  at M10–M11.
-- **panels/** — layout-agnostic, store-driven: `ProjectTree` (project→workspace nav), `FileTree` (All
-  files), `Editor` (Monaco, center tabs), `ChangesPanel` + `DiffViewer`, `TerminalView`, `ChatView`,
-  `Composer`. A panel fills its container and never knows its arrangement.
-- **shell/** — the 3-column frame: left project→workspace nav, center tabbed area (file tabs +
-  chat tabs), right All-files/Changes panel with terminals below. Desktop multi-pane / mobile
-  single-view-with-switcher, breakpoint-driven.
+Each is a bounded sub-module; `transport`/`store`/`lib` expose an `index.ts` **barrel** (their only public
+surface). `panels`/`components/ui` are imported **per-file by design** — barreling them would pull the
+lazily-loaded Monaco/shiki/xterm chunks into the eager bundle and break the shadcn per-primitive
+convention; their boundary is held by convention + spec. Sibling edges live here, not in the leaves.
 
-Built so far: `transport` / `store` / `wireTransport` / branded `shell` (M3); `ProjectTree` (M4–M5);
-`FileTree` + `RightPanel` (All files, M6); `CenterTabs` + lazy `MonacoEditor` (file tabs, M7);
-`ChangesPanel` + lazy `DiffViewer` (Changes tab, shiki diff vs base, M8); `TerminalsPanel` + lazy
-`TerminalInstance` (workspace-scoped xterm PTYs, lower-right, M9). ChatView / Composer land M11–M13. UI
-primitives live in `components/ui/` (shadcn), `cn()` in `lib/utils.ts`.
+| module | owns | barrel | spec |
+| --- | --- | --- | --- |
+| `transport` | the WS client + its singleton/store wiring | yes | [transport/SPEC.md](src/transport/SPEC.md) |
+| `store` | Zustand: connection, projects/workspaces, workspace-scoped tabs + terminals | yes | [store/SPEC.md](src/store/SPEC.md) |
+| `panels` | layout-agnostic, store-driven feature views | no | [panels/SPEC.md](src/panels/SPEC.md) |
+| `shell` | the responsive frame + composition of panels | no | [shell/SPEC.md](src/shell/SPEC.md) |
+| `components/ui` | shadcn primitives, themed with our tokens | no | [components/ui/SPEC.md](src/components/ui/SPEC.md) |
+| `lib` | `cn()` (clsx + tailwind-merge) | yes | [lib/SPEC.md](src/lib/SPEC.md) |
 
-`TerminalInstance` uses xterm's DOM renderer with the fit / unicode11 / clipboard addons; webgl / image /
-ligatures are deferred so terminal output stays in the DOM (assertable + accessible). Inactive terminals
-are kept mounted but `hidden` to preserve their buffers, and re-fit when shown.
+Leaf utilities without their own spec: `constants/` (branding), `utils/` (font scaling), `styles/` (the
+CSS token theme contract — see Styling & theming). `main.tsx` is the entry/composition root.
+
+### Dependency graph
+
+- `shell` → `panels`, `store`, `transport`, `components/ui`, `constants`
+- `panels` → `store`, `transport`, `components/ui`, `lib`, `contracts`
+- `store` → `transport` (**type-only** — `ConnectionStatus`), `contracts`
+- `transport` → `contracts`, `store` (welcome routing; the `store → transport` back-edge is type-only, so
+  the runtime graph is acyclic)
+- `components/ui` → `lib`
+- leaves (`lib`, `constants`, `utils`, `styles`) → none internal
+
+Rules: a panel never imports another panel sideways; nothing imports `shell` (it's the composition root).
+
+Built through M9: `transport` / `store` / branded `shell` (M3); `ProjectTree` (M4–M5); `FileTree` +
+`RightPanel` (M6); `CenterTabs` + lazy `MonacoEditor` (M7); `ChangesPanel` + lazy `DiffViewer` (M8);
+`TerminalsPanel` + lazy `TerminalInstance` (M9). `ChatView` / `Composer` land M11–M13.
 
 ## Styling & theming
 
