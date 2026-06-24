@@ -2,9 +2,9 @@ import { randomUUID } from "node:crypto";
 import { mkdirSync, rmSync } from "node:fs";
 import { dirname, join } from "node:path";
 import type { DiffStats, Workspace } from "@thinkrail-pi/contracts";
-import { git } from "./gitExec";
-import { dataDir, loadProjects, loadWorkspaces, saveWorkspaces } from "./persistence";
-import { getProjects } from "./projects";
+import { git } from "../git";
+import { dataDir, loadProjects, loadWorkspaces, saveWorkspaces } from "../persistence";
+import { getProjects } from "../projects";
 
 function toBranch(name: string): string {
 	return (

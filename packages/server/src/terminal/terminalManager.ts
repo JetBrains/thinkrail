@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { WS_CHANNELS } from "@thinkrail-pi/contracts";
 import { type IPty, spawn } from "bun-pty";
-import { loadWorkspaces } from "./persistence";
+import { loadWorkspaces } from "../persistence";
 
 type Publish = (channel: string, data: unknown) => void;
 

@@ -1,9 +1,14 @@
-import { selectDirectory } from "./dialog";
-import { readDir, readFile } from "./files";
-import { gitDiff, gitStatus } from "./git";
-import { closeProject, listProjects, openProject } from "./projects";
-import { closeTerminal, createTerminal, resizeTerminal, writeTerminal } from "./terminalManager";
-import { createWorkspace, listWorkspaces, removeWorkspace, workspaceDiffStats } from "./workspaces";
+import { selectDirectory } from "../dialog";
+import { readDir, readFile } from "../fs";
+import { gitDiff, gitStatus } from "../git";
+import { closeProject, listProjects, openProject } from "../projects";
+import { closeTerminal, createTerminal, resizeTerminal, writeTerminal } from "../terminal";
+import {
+	createWorkspace,
+	listWorkspaces,
+	removeWorkspace,
+	workspaceDiffStats,
+} from "../workspaces";
 
 type Handler = (params: unknown) => unknown | Promise<unknown>;
 

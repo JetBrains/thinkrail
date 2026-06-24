@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { basename } from "node:path";
 import type { Project } from "@thinkrail-pi/contracts";
-import { loadProjects, saveProjects } from "./persistence";
+import { loadProjects, saveProjects } from "../persistence";
 
 /** The git repo root for a path, or null if it isn't inside a git work tree. */
 function gitToplevel(path: string): string | null {

@@ -1,8 +1,8 @@
 import { join, normalize } from "node:path";
 import { PROTOCOL_VERSION, WS_CHANNELS } from "@thinkrail-pi/contracts";
+import { listProjects } from "../projects";
+import { closeAllTerminals, setTerminalPublisher } from "../terminal";
 import { handleRequest } from "./handlers";
-import { listProjects } from "./projects";
-import { closeAllTerminals, setTerminalPublisher } from "./terminalManager";
 
 export interface CreateServerOptions {
 	port?: number;

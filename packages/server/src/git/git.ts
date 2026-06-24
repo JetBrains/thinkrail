@@ -1,6 +1,6 @@
 import type { GitFileChange, GitFileStatus, GitStatus, Workspace } from "@thinkrail-pi/contracts";
+import { loadWorkspaces } from "../persistence";
 import { git } from "./gitExec";
-import { loadWorkspaces } from "./persistence";
 
 function workspace(workspaceId: string): Workspace {
 	const ws = loadWorkspaces().find((w) => w.id === workspaceId);
