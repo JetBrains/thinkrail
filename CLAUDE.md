@@ -13,8 +13,16 @@ Canonical specs (read these first):
 
 The app is built as a set of **clearly bounded modules**. This is a primary design requirement, not a
 nice-to-have — treat it with the same weight as the non-negotiable invariants below.
+- **Modules are fractal.** The boundary rule applies at *every* level: each package is a module, and the
+  directories *inside* a package (`packages/server/src/agent/`, `apps/web/src/transport/`, …) are modules
+  too. A sub-module is a directory with an `index.ts` **barrel** as its only public surface; siblings
+  import it **through that barrel, never its internals**. (Exception: where a barrel would defeat
+  code-splitting or a library's per-file convention — e.g. `apps/web/src/panels` and `components/ui`,
+  which lazy-load Monaco/shiki/xterm — imports stay per-file and the boundary is held by spec + convention.)
 - **Every module has a `SPEC.md`** that states its boundary explicitly: what it owns, what it exposes
-  as its public surface, and what it must *not* reach into (allowed deps and forbidden deps).
+  as its public surface, and what it must *not* reach into (allowed deps and forbidden deps). The
+  **dependency edges *between* sibling sub-modules live in the parent module's `SPEC.md`** (a dependency
+  graph), not in each leaf — leaves declare only their own external deps + forbidden reaches.
 - **Boundaries should be covered by tests** where practical — a module's public surface and its
   boundary rules are worth exercising with tests, not just relying on convention. This is a goal, not a
   hard gate: aim for coverage, but don't block on guaranteeing it everywhere.
