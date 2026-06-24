@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState, type ReactNode } from "react";
 import { useNavigate } from "react-router-dom";
-import { Grid2x2, File, Folder, Bot, ArrowRight } from "lucide-react";
+import { Grid2x2, File, Folder, Bot, ArrowRight, FileText, MessagesSquare } from "lucide-react";
 import type { ScanEngineGuidance } from "@/api/rest.ts";
 import { formatBytes } from "@/utils/format.ts";
 import { useUiStore } from "@/store/uiStore.ts";
@@ -9,7 +9,6 @@ import { useStartWizardStep } from "@/components/Wizard/useStartWizardStep.ts";
 import { FullScreenLayout } from "@/components/Wizard/FullScreenLayout";
 import { useProjectScan } from "./useProjectScan.ts";
 import { Button } from "@/components/ui/Button";
-import { PRODUCT_NAME } from "@/constants/branding";
 import "@/components/Wizard/NewProjectForm.css";
 import "./ExistingProjectDetect.css";
 
@@ -177,8 +176,25 @@ export function ExistingProjectDetect() {
         <div className="np-form-header">
           <h2 className="np-form-h2">What I'll read first</h2>
           <p className="np-form-lead">
-            {PRODUCT_NAME} will read these files to figure out what this project is. Deselect anything you'd rather skip.
+            Before we build or improve anything, let's pin down where the project
+            stands today and what we're aiming for.
           </p>
+          <div className="detect-flow" aria-hidden="true">
+            <div className="detect-flow-step">
+              <File size={16} strokeWidth={1.5} />
+              <span>Read project</span>
+            </div>
+            <ArrowRight size={15} className="detect-flow-arrow" />
+            <div className="detect-flow-step">
+              <MessagesSquare size={16} strokeWidth={1.5} />
+              <span>Discuss project state</span>
+            </div>
+            <ArrowRight size={15} className="detect-flow-arrow" />
+            <div className="detect-flow-step">
+              <FileText size={16} strokeWidth={1.5} />
+              <span>Design doc + draft of goals</span>
+            </div>
+          </div>
         </div>
 
         <header className="detect-project-header">

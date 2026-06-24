@@ -68,6 +68,35 @@
   font-size: 10.5px;
 }
 
+/* ── "What happens" mini-flow ───────────────────────────────────── */
+.detect-flow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 4px;
+}
+.detect-flow-step {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 12px;
+  border-radius: 8px;
+  background: var(--input-bg);
+  border: 1px solid var(--border);
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--text);
+}
+.detect-flow-step svg {
+  color: var(--primary);
+  flex-shrink: 0;
+}
+.detect-flow-arrow {
+  color: var(--hint);
+  flex-shrink: 0;
+}
+
 /* ── Agent guidance (pinned above the scroll) ───────────────────── */
 /* Kept out of the scroll area so a missing-guidance row — and its "Init"
    action — is always visible instead of being scrolled past. */
