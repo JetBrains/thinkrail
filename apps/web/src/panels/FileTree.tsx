@@ -1,8 +1,8 @@
 import type { FileNode } from "@thinkrail-pi/contracts";
 import { ChevronDown, ChevronRight, File as FileIcon, Folder } from "lucide-react";
 import { useEffect, useState } from "react";
-import { useAppStore } from "../store/appStore";
-import { getTransport } from "../wireTransport";
+import { useAppStore } from "../store";
+import { getTransport } from "../transport";
 
 /** Lazy file tree of the active worktree. Double-click a file to open it as a center editor tab. */
 export function FileTree({ workspaceId }: { workspaceId: string }) {

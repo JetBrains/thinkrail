@@ -20,8 +20,8 @@ import {
 	DropdownMenuSeparator,
 	DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { useAppStore } from "../store/appStore";
-import { getTransport } from "../wireTransport";
+import { useAppStore } from "../store";
+import { getTransport } from "../transport";
 
 /** Left-nav: projects → workspaces (git worktrees). Open a repo, select it, create/select workspaces. */
 export function ProjectTree() {

@@ -1,6 +1,6 @@
 import { X } from "lucide-react";
 import { lazy, Suspense } from "react";
-import { type EditorTab, useAppStore } from "../store/appStore";
+import { type EditorTab, useAppStore } from "../store";
 
 // Monaco is heavy — load it only once a file is actually opened (protects first paint + the bundle).
 const MonacoEditor = lazy(() => import("./MonacoEditor"));

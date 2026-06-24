@@ -1,6 +1,6 @@
 import type { GitFileStatus, GitStatus } from "@thinkrail-pi/contracts";
 import { lazy, Suspense, useEffect, useState } from "react";
-import { getTransport } from "../wireTransport";
+import { getTransport } from "../transport";
 
 const DiffViewer = lazy(() => import("./DiffViewer"));
 

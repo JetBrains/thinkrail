@@ -1,6 +1,6 @@
 import { Plus, X } from "lucide-react";
 import { lazy, Suspense, useEffect } from "react";
-import { type TerminalTab, useAppStore } from "../store/appStore";
+import { type TerminalTab, useAppStore } from "../store";
 
 const TerminalInstance = lazy(() => import("./TerminalInstance"));
 

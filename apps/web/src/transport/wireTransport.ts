@@ -1,6 +1,6 @@
 import type { Project } from "@thinkrail-pi/contracts";
 import { WS_CHANNELS } from "@thinkrail-pi/contracts";
-import { useAppStore } from "./store/appStore";
+import { useAppStore } from "../store";
 import { WsTransport } from "./transport";
 
 let transport: WsTransport | null = null;

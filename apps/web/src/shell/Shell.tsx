@@ -4,7 +4,7 @@ import { CenterTabs } from "../panels/CenterTabs";
 import { ProjectTree } from "../panels/ProjectTree";
 import { RightPanel } from "../panels/RightPanel";
 import { TerminalsPanel } from "../panels/TerminalsPanel";
-import { useAppStore } from "../store/appStore";
+import { useAppStore } from "../store";
 import type { ConnectionStatus } from "../transport";
 
 const STATUS_LABEL: Record<ConnectionStatus, string> = {

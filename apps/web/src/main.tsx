@@ -2,8 +2,8 @@ import "./index.css";
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { Shell } from "./shell/Shell";
+import { initTransport } from "./transport";
 import { applyFontScale } from "./utils/fontScale";
-import { initTransport } from "./wireTransport";
 
 applyFontScale();
 initTransport();

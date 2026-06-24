@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useAppStore } from "../store/appStore";
+import { useAppStore } from "../store";
 import { ChangesPanel } from "./ChangesPanel";
 import { FileTree } from "./FileTree";
 
