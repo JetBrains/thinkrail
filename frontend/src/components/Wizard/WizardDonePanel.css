@@ -6,58 +6,193 @@
   background: var(--bg);
 }
 
-/* Bottom section: each block (doc, tickets) renders as a rounded card on
-   the page background — no borders, no separator lines. Stacks vertically
-   when only one is present; split modifier turns it into 60/40 cards side
-   by side. Each card scrolls independently. */
-.wiz-done-main {
-  flex: 1;
-  min-height: 0;
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-  padding: 16px 20px 20px;
-  gap: 16px;
-}
-.wiz-done-main--split {
+/* Two-column layout: scrollable content on the left (header, tickets,
+   next-step CTAs), a persistent document preview on the right. Without an
+   artifact the right column is dropped and the left fills the width. */
+.wiz-done--cols {
   flex-direction: row;
 }
 
-/* ── Banner ────────────────────────────────────────────────────── */
-.wiz-done-banner {
+.wiz-done-left {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  overflow-y: auto;
   display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 12px 28px;
-  background: linear-gradient(90deg, rgba(33, 215, 137, 0.10), transparent);
-  flex-shrink: 0;
-  color: var(--text);
-  font-size: 13px;
-}
-.wiz-done-banner-icon { font-size: 18px; line-height: 1; }
-.wiz-done-banner-text code {
-  font-family: ui-monospace, Menlo, monospace;
-  font-size: 12px;
-  color: var(--muted);
+  flex-direction: column;
+  gap: 28px;
+  padding: 28px 32px 32px;
 }
 
-/* ── Next-step CTA row ─────────────────────────────────────────── */
-.wiz-done-next-step-row {
+.wiz-done-right {
+  flex: 0 0 35%;
+  min-width: 320px;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  border-left: 1px solid var(--border);
+}
+
+/* ── Header ────────────────────────────────────────────────────── */
+.wiz-done-header {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.wiz-done-title {
+  margin: 0;
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--text);
+  line-height: 1.25;
+}
+.wiz-done-subtitle {
+  margin: 0;
+  font-size: 13px;
+  color: var(--muted);
+  line-height: 1.5;
+}
+.wiz-done-subtitle-pill {
+  display: inline-flex;
+  align-items: center;
+  font-size: 12px;
+  padding: 2px 8px;
+  border-radius: 6px;
+  background: var(--elevated);
+  border: 1px solid var(--border);
+  color: var(--text);
+  font-family: ui-monospace, Menlo, monospace;
+}
+
+/* ── Sections (tickets, next step) ─────────────────────────────── */
+.wiz-done-section {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.wiz-done-section-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.wiz-done-section-title {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text);
+}
+.wiz-done-section-desc {
+  margin: 0;
+  font-size: 12.5px;
+  color: var(--muted);
+  line-height: 1.5;
+  max-width: 60ch;
+}
+
+.wiz-done-tickets-counter {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  font-size: 11px;
+  padding: 3px 9px;
+  border-radius: 999px;
+  background: rgba(107, 87, 255, 0.16);
+  border: 1px solid rgba(107, 87, 255, 0.4);
+  color: var(--primary);
+  font-variant-numeric: tabular-nums;
+}
+.wiz-done-tickets-counter b {
+  font-weight: 700;
+}
+
+/* ── Suggested tickets list ────────────────────────────────────── */
+.wiz-done-tickets-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.wiz-done-tickets-li {
+  display: flex;
+  flex-direction: column;
+  padding: 6px 10px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--panel);
+  transition: border-color 120ms;
+}
+.wiz-done-tickets-li:hover {
+  border-color: var(--primary);
+}
+.wiz-done-tickets-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+.wiz-done-tickets-check {
+  flex-shrink: 0;
+  width: 16px;
+  height: 16px;
+  accent-color: var(--primary);
+  cursor: pointer;
+}
+.wiz-done-tickets-check:disabled {
+  cursor: default;
+}
+.wiz-done-tickets-text {
+  flex: 1;
+  min-width: 0;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text);
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+.wiz-done-tickets-toggle {
+  flex-shrink: 0;
+  width: 18px;
+  height: 18px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: none;
+  padding: 0;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1;
+  cursor: pointer;
+  transition: transform 120ms ease, color 120ms;
+}
+.wiz-done-tickets-toggle:hover { color: var(--text); }
+.wiz-done-tickets-toggle--open { transform: rotate(90deg); color: var(--text); }
+.wiz-done-tickets-body-expanded {
+  margin: 6px 0 2px 28px;
+  font-size: 12.5px;
+  color: var(--muted);
+  line-height: 1.55;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+/* ── Next-step CTA cards ───────────────────────────────────────── */
+.wiz-done-cta-row {
   display: flex;
   gap: 12px;
   align-items: stretch;
   flex-wrap: wrap;
-  padding: 16px 28px;
-  background: var(--bg);
 }
 
 .wiz-done-cta {
   flex: 1;
-  min-width: 260px;
+  min-width: 240px;
   display: flex;
   gap: 14px;
-  align-items: center;
-  padding: 14px 18px;
+  align-items: flex-start;
+  padding: 16px 18px;
   border-radius: 12px;
   border: 1px solid var(--border);
   background: var(--panel);
@@ -82,6 +217,22 @@
   box-shadow: 0 4px 14px rgba(107, 87, 255, 0.25);
 }
 
+.wiz-done-cta-icon {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  background: var(--elevated);
+  color: var(--muted);
+}
+.wiz-done-cta--primary .wiz-done-cta-icon {
+  background: rgba(107, 87, 255, 0.2);
+  color: var(--primary);
+}
+
 .wiz-done-cta-body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
 .wiz-done-cta-title {
   font-size: 14px;
@@ -93,198 +244,9 @@
   color: var(--muted);
   line-height: 1.45;
 }
-.wiz-done-cta-arrow {
-  font-size: 18px;
-  color: var(--muted);
-  flex-shrink: 0;
-}
-.wiz-done-cta--primary .wiz-done-cta-arrow { color: var(--primary); }
 
-/* ── Suggested tickets ─────────────────────────────────────────── */
-/* Solid card matching .wiz-done-cta visual (border + radius). Sizes to
-   content via `align-self: flex-start` so the background doesn't stretch
-   the full column height when there are only a few tickets. */
-.wiz-done-tickets {
-  background: var(--panel);
-  border: 1px solid var(--border);
-  border-radius: 12px;
-  padding: 14px 18px 14px;
-  min-height: 0;
-  max-height: 100%;
-  overflow-y: auto;
-}
-.wiz-done-main--split .wiz-done-tickets {
-  flex: 0 0 calc(40% - 8px);
-  align-self: flex-start;
-}
-
-.wiz-done-tickets-head {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  flex-wrap: wrap;
-  padding-bottom: 10px;
-  margin-bottom: 6px;
-  border-bottom: 1px solid var(--border);
-}
-.wiz-done-tickets-title {
-  font-size: 13px;
-  color: var(--text);
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-  font-weight: 600;
-}
-.wiz-done-tickets-counter {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 11px;
-  padding: 3px 9px;
-  border-radius: 999px;
-  background: var(--elevated);
-  border: 1px solid var(--border);
-  color: var(--muted);
-}
-.wiz-done-tickets-counter b {
-  color: var(--green);
-  font-weight: 700;
-  font-variant-numeric: tabular-nums;
-}
-
-.wiz-done-add-all-btn {
-  margin-left: auto;
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 5px 12px;
-  border-radius: 7px;
-  font-size: 12px;
-  font-weight: 600;
-  background: var(--primary);
-  color: var(--on-accent);
-  border: 1px solid var(--primary);
-  cursor: pointer;
-  box-shadow: 0 1px 0 rgba(0, 0, 0, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.15);
-}
-.wiz-done-add-all-btn:hover:not(:disabled) { filter: brightness(1.1); }
-.wiz-done-add-all-btn:disabled { opacity: 0.5; cursor: not-allowed; }
-
-.wiz-done-tickets-list {
-  list-style: none;
-  padding: 0;
-  margin: 0;
-  display: flex;
-  flex-direction: column;
-}
-.wiz-done-tickets-li {
-  display: flex;
-  flex-direction: column;
-  padding: 4px 8px;
-  border-radius: 6px;
-  transition: background 120ms;
-}
-.wiz-done-tickets-li + .wiz-done-tickets-li {
-  margin-top: 1px;
-}
-.wiz-done-tickets-li:hover {
-  background: var(--elevated);
-}
-.wiz-done-tickets-row {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  min-width: 0;
-}
-.wiz-done-tickets-toggle {
-  flex-shrink: 0;
-  width: 18px;
-  height: 18px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  background: transparent;
-  border: none;
-  padding: 0;
-  color: var(--muted);
-  font-size: 13px;
-  line-height: 1;
-  cursor: pointer;
-  transition: transform 120ms ease, color 120ms;
-}
-.wiz-done-tickets-toggle:hover:not(:disabled) { color: var(--text); }
-.wiz-done-tickets-toggle--open { transform: rotate(90deg); color: var(--text); }
-.wiz-done-tickets-toggle--empty {
-  color: var(--green);
-  cursor: default;
-}
-.wiz-done-tickets-text {
-  flex: 1;
-  min-width: 0;
-  font-size: 13px;
-  font-weight: 500;
-  color: var(--text);
-  line-height: 1.4;
-  overflow-wrap: anywhere;
-}
-.wiz-done-tickets-body-expanded {
-  margin: 4px 0 4px 28px;
-  font-size: 12.5px;
-  color: var(--muted);
-  line-height: 1.55;
-  white-space: pre-wrap;
-  overflow-wrap: anywhere;
-}
-
-.wiz-done-add-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  padding: 4px 10px;
-  border-radius: 6px;
-  font-size: 11.5px;
-  font-weight: 600;
-  letter-spacing: 0.02em;
-  background: rgba(107, 87, 255, 0.18);
-  color: var(--primary);
-  border: 1px solid rgba(107, 87, 255, 0.4);
-  flex-shrink: 0;
-  cursor: pointer;
-  transition: opacity 120ms, background 120ms, color 120ms;
-}
-.wiz-done-add-btn:hover:not(:disabled) {
-  background: var(--primary);
-  color: var(--on-accent);
-  border-color: var(--primary);
-}
-.wiz-done-add-btn:disabled { opacity: 0.5; cursor: not-allowed; }
-
-.wiz-done-add-btn--added {
-  background: rgba(33, 215, 137, 0.16);
-  color: var(--green);
-  border-color: rgba(33, 215, 137, 0.32);
-  cursor: default;
-}
-.wiz-done-add-btn--added:hover {
-  background: rgba(33, 215, 137, 0.16);
-  color: var(--green);
-}
-
-/* ── Document preview ──────────────────────────────────────────── */
-.wiz-done-docs {
-  flex: 1;
-  min-height: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 0;
-}
-.wiz-done-main--split .wiz-done-docs {
-  flex: 0 0 calc(60% - 8px);
-}
-
-/* Tab strip — only rendered when ≥2 artifacts; sits on top of the
-   doc panel and acts as the title/selector. Single-artifact case
-   still uses the inline pill (`.wiz-done-doc-pill`) inside the doc. */
-.wiz-done-doc-tabs {
+/* ── Document preview (right column) ───────────────────────────── */
+.wiz-done-right .wiz-done-doc-tabs {
   display: flex;
   gap: 2px;
   flex-shrink: 0;
@@ -314,11 +276,7 @@
   min-height: 0;
   overflow-y: auto;
   background: var(--panel);
-  border-radius: var(--radius-md);
   padding: 20px 24px 32px;
-}
-.wiz-done-doc-tabs + .wiz-done-doc {
-  margin-top: 8px;
 }
 
 .wiz-done-doc-head {

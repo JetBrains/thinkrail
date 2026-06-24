@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { TicketActionState } from "@/constants/status.ts";
 import type {
   CreateTicketAction,
   NavigateAction,
@@ -14,12 +13,29 @@ import { useFileStore } from "@/store/fileStore";
 import { useNotificationStore } from "@/store/notificationStore";
 import { ArtifactTabs } from "./ArtifactTabs";
 import { ArtifactDocView } from "./ArtifactDocView";
+import { LucideIcon } from "./LucideIcon";
 import { useArtifactContents } from "./useArtifactContents";
 import { resolveFollowupChain, outcomeTransitions, type StepTransition } from "./registry";
 import { useStartWizardStep } from "./useStartWizardStep";
 import { getClient } from "@/api/index.ts";
 import { createAppSettingsApi, type OnboardingAction } from "@/api/methods/appSettings.ts";
 import "./WizardDonePanel.css";
+
+const SECTION_COPY = {
+  tickets:
+    "From the goals & requirements, tickets were drafted to start working on your project. Select the ones to add to the board.",
+  nextStep:
+    "Pick how you'd like to continue — the tickets selected above are added to the board when you go on.",
+} as const;
+
+// Navigate CTAs come from the backend outcome (not the registry), so their
+// icon is mapped here by destination rather than carried on the action.
+const NAV_ICONS: Record<NavigateAction["target"], string> = {
+  board: "layout-grid",
+  specs: "file-text",
+  graph: "git-fork",
+  files: "folder",
+};
 
 // Fire-and-forget: a failed analytics ping must never disrupt the wizard.
 function trackOnboarding(skillId: string | null, action: OnboardingAction): void {
@@ -113,12 +129,70 @@ export function WizardDonePanel({ session, outcome }: WizardDonePanelProps) {
 
   const [busyActionId, setBusyActionId] = useState<string | null>(null);
 
+  // Ticket checkboxes only SELECT — the chosen tickets are created on the
+  // board when the user commits via a next-step CTA. Default: every
+  // not-yet-applied ticket is selected. Tickets already applied (rare on
+  // first view) stay checked and locked.
+  const [selectedTickets, setSelectedTickets] = useState<Set<string>>(new Set());
+  useEffect(() => {
+    setSelectedTickets(
+      new Set(tickets.filter((t) => t.state !== "applied").map((t) => t.id)),
+    );
+  }, [tickets]);
+  const isChecked = useCallback(
+    (t: CreateTicketAction) => t.state === "applied" || selectedTickets.has(t.id),
+    [selectedTickets],
+  );
+  const toggleSelected = useCallback((id: string) => {
+    setSelectedTickets((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }, []);
+  const selectedCount = tickets.filter(isChecked).length;
+
+  // Creates the checked-and-not-yet-applied tickets on the board, marking
+  // each applied. Errors are aggregated into one toast — a transient blip
+  // on one ticket must not abort the rest (or block the transition).
+  const applySelectedTickets = useCallback(async () => {
+    const toAdd = tickets.filter(
+      (t) => t.state !== "applied" && selectedTickets.has(t.id),
+    );
+    if (toAdd.length === 0) return;
+    trackOnboarding(session.skillId, "add_suggested_tickets");
+    let succeeded = 0;
+    const failedTitles: string[] = [];
+    for (const t of toAdd) {
+      try {
+        await createTicket(t.title, t.body ?? undefined, undefined);
+        await patchOutcomeAction(session.thinkrailSid, t.id, { state: "applied" });
+        succeeded++;
+      } catch (e) {
+        console.error("[WizardDonePanel] failed to add ticket", t.id, e);
+        failedTitles.push(t.title);
+      }
+    }
+    if (failedTitles.length > 0) {
+      useNotificationStore.getState().addToast({
+        eventType: "error",
+        message:
+          `Added ${succeeded}/${toAdd.length}. ` +
+          `Failed: ${failedTitles.slice(0, 3).join(", ")}` +
+          (failedTitles.length > 3 ? ` and ${failedTitles.length - 3} more` : ""),
+        persistent: false,
+      });
+    }
+  }, [tickets, selectedTickets, createTicket, patchOutcomeAction, session.thinkrailSid, session.skillId]);
+
   const handleStart = useCallback(
     async (t: StepTransition) => {
       if (busyActionId) return;
       setBusyActionId(t.id);
       trackOnboarding(session.skillId, "continue");
       try {
+        await applySelectedTickets();
         // The transition builds the next session's ``session_prompt``
         // from runtime context (e.g. the draft G&R body produced by the
         // previous step). It belongs in ``session_prompt`` → the agent's
@@ -139,12 +213,19 @@ export function WizardDonePanel({ session, outcome }: WizardDonePanelProps) {
         setBusyActionId(null);
       }
     },
-    [busyActionId, startWizardStep, currentChain, projectName, docContents, session.skillId],
+    [busyActionId, applySelectedTickets, startWizardStep, currentChain, projectName, docContents, session.skillId],
   );
 
   const handleNavigate = useCallback(
-    (action: NavigateAction) => {
+    async (action: NavigateAction) => {
+      if (busyActionId) return;
+      setBusyActionId(action.id);
       trackOnboarding(session.skillId, "open_workspace");
+      try {
+        await applySelectedTickets();
+      } finally {
+        setBusyActionId(null);
+      }
       // The user is opting out of the wizard for this session — they've
       // seen the done-screen and chose a different destination. Mark the
       // outcome as dismissed so re-activating this session (clicking it
@@ -164,22 +245,7 @@ export function WizardDonePanel({ session, outcome }: WizardDonePanelProps) {
         setCenterView("sessions");
       }
     },
-    [setCenterView, dismissWizardOutcome, session.thinkrailSid, session.skillId, openFile, firstArtifact, projectPath],
-  );
-
-  const handleAddTicket = useCallback(
-    async (action: CreateTicketAction) => {
-      if (busyActionId || action.state === TicketActionState.Applied) return;
-      setBusyActionId(action.id);
-      trackOnboarding(session.skillId, "add_suggested_tickets");
-      try {
-        await createTicket(action.title, action.body ?? undefined, undefined);
-        await patchOutcomeAction(session.thinkrailSid, action.id, { state: TicketActionState.Applied });
-      } finally {
-        setBusyActionId(null);
-      }
-    },
-    [busyActionId, createTicket, patchOutcomeAction, session.thinkrailSid, session.skillId],
+    [busyActionId, applySelectedTickets, setCenterView, dismissWizardOutcome, session.thinkrailSid, session.skillId, openFile, firstArtifact, projectPath],
   );
 
   const [expandedTickets, setExpandedTickets] = useState<Set<string>>(new Set());
@@ -192,167 +258,60 @@ export function WizardDonePanel({ session, outcome }: WizardDonePanelProps) {
     });
   }, []);
 
-  const pendingTickets = tickets.filter((t) => t.state !== TicketActionState.Applied);
-  const handleAddAll = useCallback(async () => {
-    if (busyActionId || pendingTickets.length === 0) return;
-    setBusyActionId("__add_all__");
-    trackOnboarding(session.skillId, "add_suggested_tickets");
-    // Don't bail out of the loop on the first failure — try every ticket
-    // and report the aggregate. This keeps a transient network blip from
-    // turning a 10-ticket batch into a 1-ticket batch.
-    let succeeded = 0;
-    const failedTitles: string[] = [];
-    try {
-      for (const t of pendingTickets) {
-        try {
-          await createTicket(t.title, t.body ?? undefined, undefined);
-          await patchOutcomeAction(session.thinkrailSid, t.id, { state: TicketActionState.Applied });
-          succeeded++;
-        } catch (e) {
-          console.error("[WizardDonePanel] failed to add ticket", t.id, e);
-          failedTitles.push(t.title);
-        }
-      }
-      if (failedTitles.length > 0) {
-        useNotificationStore.getState().addToast({
-          eventType: "error",
-          message:
-            `Added ${succeeded}/${pendingTickets.length}. ` +
-            `Failed: ${failedTitles.slice(0, 3).join(", ")}` +
-            (failedTitles.length > 3 ? ` and ${failedTitles.length - 3} more` : ""),
-          persistent: false,
-        });
-      }
-    } finally {
-      setBusyActionId(null);
-    }
-  }, [busyActionId, pendingTickets, createTicket, patchOutcomeAction, session.thinkrailSid, session.skillId]);
+  const subtitlePath = firstArtifact?.path.replace(/^\.tr\//, "") ?? null;
+  const hasNextStep =
+    heroTransition || navigate.length > 0 || secondaryTransitions.length > 0;
 
   return (
-    <div className="wiz-done">
-      {outcome.summary && (
-        <div className="wiz-done-banner">
-          <span className="wiz-done-banner-icon" aria-hidden="true">🌱</span>
-          <span className="wiz-done-banner-text">{outcome.summary}</span>
-        </div>
-      )}
-
-      {(heroTransition || navigate.length > 0 || secondaryTransitions.length > 0) && (
-        <div className="wiz-done-next-step-row">
-          {heroTransition && (
-            <button
-              type="button"
-              className="wiz-done-cta wiz-done-cta--primary"
-              onClick={() => handleStart(heroTransition)}
-              disabled={busyActionId !== null}
-            >
-              <span className="wiz-done-cta-body">
-                <span className="wiz-done-cta-title">{heroTransition.label}</span>
-                {heroTransition.description && (
-                  <span className="wiz-done-cta-desc">{heroTransition.description}</span>
-                )}
-              </span>
-              <span className="wiz-done-cta-arrow" aria-hidden="true">→</span>
-            </button>
+    <div className={`wiz-done${openableArtifacts.length > 0 ? " wiz-done--cols" : ""}`}>
+      <div className="wiz-done-left">
+        <header className="wiz-done-header">
+          {outcome.summary && <h1 className="wiz-done-title">{outcome.summary}</h1>}
+          {subtitlePath && (
+            <p className="wiz-done-subtitle">
+              The doc is ready and saved to{" "}
+              <code className="wiz-done-subtitle-pill">{subtitlePath}</code>
+            </p>
           )}
-          {secondaryTransitions.map((t) => (
-            <button
-              key={t.id}
-              type="button"
-              className="wiz-done-cta wiz-done-cta--alt"
-              onClick={() => handleStart(t)}
-              disabled={busyActionId !== null}
-            >
-              <span className="wiz-done-cta-body">
-                <span className="wiz-done-cta-title">{t.label}</span>
-                {t.description && <span className="wiz-done-cta-desc">{t.description}</span>}
-              </span>
-              <span className="wiz-done-cta-arrow" aria-hidden="true">→</span>
-            </button>
-          ))}
-          {navigate.map((a) => (
-            <button
-              key={a.id}
-              type="button"
-              className="wiz-done-cta wiz-done-cta--alt"
-              onClick={() => handleNavigate(a)}
-              disabled={busyActionId !== null}
-            >
-              <span className="wiz-done-cta-body">
-                <span className="wiz-done-cta-title">{a.title}</span>
-                {a.description && <span className="wiz-done-cta-desc">{a.description}</span>}
-              </span>
-              <span className="wiz-done-cta-arrow" aria-hidden="true">→</span>
-            </button>
-          ))}
-        </div>
-      )}
-
-      <div className={`wiz-done-main${openableArtifacts.length > 0 && tickets.length > 0 ? " wiz-done-main--split" : ""}`}>
-        {openableArtifacts.length > 0 && (
-          <div className="wiz-done-docs">
-            {openableArtifacts.length > 1 && (
-              <ArtifactTabs
-                artifacts={openableArtifacts}
-                activePath={activeArtifact.path}
-                onSelect={setActiveArtifactPath}
-              />
-            )}
-            <ArtifactDocView
-              path={activeArtifact.path}
-              label={activeArtifact.label}
-              body={docContents[activeArtifact.path]}
-              // Inline header is redundant when the tab strip already names
-              // the file; show it only in single-artifact mode.
-              showHeader={openableArtifacts.length === 1}
-            />
-          </div>
-        )}
+        </header>
 
         {tickets.length > 0 && (
-          <div className="wiz-done-tickets">
-            <div className="wiz-done-tickets-head">
-              <span className="wiz-done-tickets-title">Suggested tickets</span>
+          <section className="wiz-done-section">
+            <div className="wiz-done-section-head">
+              <h2 className="wiz-done-section-title">Suggested tickets</h2>
               <span className="wiz-done-tickets-counter">
-                <b>{tickets.filter((t) => t.state === TicketActionState.Applied).length}</b> of {tickets.length} added
+                <b>{selectedCount}</b>/{tickets.length} tickets selected
               </span>
-              {pendingTickets.length > 0 && (
-                <button
-                  type="button"
-                  className="wiz-done-add-all-btn"
-                  onClick={handleAddAll}
-                  disabled={busyActionId !== null}
-                >
-                  + Add all {pendingTickets.length}
-                </button>
-              )}
             </div>
+            <p className="wiz-done-section-desc">{SECTION_COPY.tickets}</p>
             <ul className="wiz-done-tickets-list">
               {tickets.map((t) => {
                 const hasBody = !!t.body;
                 const expanded = expandedTickets.has(t.id);
+                const applied = t.state === "applied";
                 return (
                   <li key={t.id} className="wiz-done-tickets-li">
                     <div className="wiz-done-tickets-row">
-                      <button
-                        type="button"
-                        className={`wiz-done-tickets-toggle${expanded ? " wiz-done-tickets-toggle--open" : ""}${hasBody ? "" : " wiz-done-tickets-toggle--empty"}`}
-                        onClick={() => hasBody && toggleTicketBody(t.id)}
-                        disabled={!hasBody}
-                        aria-expanded={expanded}
-                        aria-label={hasBody ? (expanded ? "Collapse description" : "Expand description") : undefined}
-                      >
-                        {hasBody ? "▸" : "•"}
-                      </button>
+                      <input
+                        type="checkbox"
+                        className="wiz-done-tickets-check"
+                        checked={isChecked(t)}
+                        disabled={applied || busyActionId !== null}
+                        onChange={() => toggleSelected(t.id)}
+                        aria-label={`Select ticket: ${t.title}`}
+                      />
                       <span className="wiz-done-tickets-text">{t.title}</span>
-                      <button
-                        type="button"
-                        className={`wiz-done-add-btn${t.state === TicketActionState.Applied ? " wiz-done-add-btn--added" : ""}`}
-                        onClick={() => handleAddTicket(t)}
-                        disabled={busyActionId !== null || t.state === TicketActionState.Applied}
-                      >
-                        {t.state === TicketActionState.Applied ? "✓ Added" : "+ Add"}
-                      </button>
+                      {hasBody && (
+                        <button
+                          type="button"
+                          className={`wiz-done-tickets-toggle${expanded ? " wiz-done-tickets-toggle--open" : ""}`}
+                          onClick={() => toggleTicketBody(t.id)}
+                          aria-expanded={expanded}
+                          aria-label={expanded ? "Collapse description" : "Expand description"}
+                        >
+                          ▸
+                        </button>
+                      )}
                     </div>
                     {expanded && hasBody && (
                       <div className="wiz-done-tickets-body-expanded">{t.body}</div>
@@ -361,9 +320,90 @@ export function WizardDonePanel({ session, outcome }: WizardDonePanelProps) {
                 );
               })}
             </ul>
-          </div>
+          </section>
+        )}
+
+        {hasNextStep && (
+          <section className="wiz-done-section">
+            <h2 className="wiz-done-section-title">Choose your next step</h2>
+            <p className="wiz-done-section-desc">{SECTION_COPY.nextStep}</p>
+            <div className="wiz-done-cta-row">
+              {heroTransition && (
+                <button
+                  type="button"
+                  className="wiz-done-cta wiz-done-cta--primary"
+                  onClick={() => handleStart(heroTransition)}
+                  disabled={busyActionId !== null}
+                >
+                  <span className="wiz-done-cta-icon" aria-hidden="true">
+                    <LucideIcon name={heroTransition.icon} size={18} />
+                  </span>
+                  <span className="wiz-done-cta-body">
+                    <span className="wiz-done-cta-title">{heroTransition.label}</span>
+                    {heroTransition.description && (
+                      <span className="wiz-done-cta-desc">{heroTransition.description}</span>
+                    )}
+                  </span>
+                </button>
+              )}
+              {secondaryTransitions.map((t) => (
+                <button
+                  key={t.id}
+                  type="button"
+                  className="wiz-done-cta wiz-done-cta--alt"
+                  onClick={() => handleStart(t)}
+                  disabled={busyActionId !== null}
+                >
+                  <span className="wiz-done-cta-icon" aria-hidden="true">
+                    <LucideIcon name={t.icon} size={18} />
+                  </span>
+                  <span className="wiz-done-cta-body">
+                    <span className="wiz-done-cta-title">{t.label}</span>
+                    {t.description && <span className="wiz-done-cta-desc">{t.description}</span>}
+                  </span>
+                </button>
+              ))}
+              {navigate.map((a) => (
+                <button
+                  key={a.id}
+                  type="button"
+                  className="wiz-done-cta wiz-done-cta--alt"
+                  onClick={() => handleNavigate(a)}
+                  disabled={busyActionId !== null}
+                >
+                  <span className="wiz-done-cta-icon" aria-hidden="true">
+                    <LucideIcon name={NAV_ICONS[a.target]} size={18} />
+                  </span>
+                  <span className="wiz-done-cta-body">
+                    <span className="wiz-done-cta-title">{a.title}</span>
+                    {a.description && <span className="wiz-done-cta-desc">{a.description}</span>}
+                  </span>
+                </button>
+              ))}
+            </div>
+          </section>
         )}
       </div>
+
+      {openableArtifacts.length > 0 && (
+        <div className="wiz-done-right">
+          {openableArtifacts.length > 1 && (
+            <ArtifactTabs
+              artifacts={openableArtifacts}
+              activePath={activeArtifact.path}
+              onSelect={setActiveArtifactPath}
+            />
+          )}
+          <ArtifactDocView
+            path={activeArtifact.path}
+            label={activeArtifact.label}
+            body={docContents[activeArtifact.path]}
+            // Inline header is redundant when the tab strip already names
+            // the file; show it only in single-artifact mode.
+            showHeader={openableArtifacts.length === 1}
+          />
+        </div>
+      )}
     </div>
   );
 }

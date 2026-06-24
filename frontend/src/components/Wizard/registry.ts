@@ -119,6 +119,8 @@ export interface StepTransition {
   description?: string;
   /** Canonical skill id of the step this transition starts. */
   target: string;
+  /** lucide-react icon name shown on the outcome-screen CTA card. */
+  icon?: string;
   /** Marks the headline CTA on the outcome screen. */
   primary?: boolean;
   /** Build the `session_prompt` from runtime context. Omit → the
@@ -231,15 +233,16 @@ function buildClarifyPrompt(ctx: StepPromptContext): string {
   return instructions + draftBlock;
 }
 
-// Shared "Continue → Architecture" hand-off. No prompt: the
+// Shared "Define architecture" hand-off. No prompt: the
 // architecture-design skill reads GOAL&REQUIREMENTS.md from disk itself
 // (matches the action the new-project skill used to emit). Targets the
 // new-project chain, so starting it resets the chain hint.
 const TO_ARCHITECTURE: StepTransition = {
   id: "to-architecture",
-  label: "Continue → Architecture",
+  label: "Define architecture",
   description: "Sketch the stack & modules in a DESIGN_DOC.md before tickets start running.",
   target: "architecture-design",
+  icon: "pencil-ruler",
   primary: true,
 };
 
@@ -265,7 +268,7 @@ const WIZARD_FLOW: SessionStep[] = [
       target: "new-project",
       buildPrompt: buildDescribePrompt,
     },
-    // "Continue → Architecture" is the headline CTA on the G&R outcome.
+    // "Define architecture" is the headline CTA on the G&R outcome.
     outcomeActions: [TO_ARCHITECTURE],
   },
   {
@@ -300,6 +303,7 @@ const WIZARD_FLOW: SessionStep[] = [
         label: "Continue → Clarify the G&R draft",
         description: "Refine the inferred draft into a final GOAL&REQUIREMENTS.md by answering what the code couldn't.",
         target: "new-project",
+        icon: "diamond-plus",
         primary: true,
         buildPrompt: buildClarifyPrompt,
       },
