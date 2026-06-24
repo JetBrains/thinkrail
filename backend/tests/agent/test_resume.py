@@ -223,9 +223,15 @@ class TestContinueSession:
         exec_config = call_args.args[1]
         assert exec_config.resume_session_id == "cli-session-abc"
 
+    @patch("app.agent.service.save_session")
     @patch("app.agent.service.load_session")
-    async def test_continue_missing_session_id_raises(self, mock_load: MagicMock) -> None:
-        """If stored session has no sessionId, raise ValueError."""
+    async def test_continue_missing_session_id_relaunches_fresh(
+        self, mock_load: MagicMock, mock_save: MagicMock,
+    ) -> None:
+        """No stored sessionId → relaunch fresh (resume_session_id=None) rather
+        than raise. A session that never opened a CLI conversation has nothing
+        to resume, so restarting it (e.g. to apply a config change while idle)
+        must still work."""
         mock_load.return_value = {
             "thinkrailSid": "sid-1",
             "name": "old session",
@@ -237,10 +243,21 @@ class TestContinueSession:
             "events": [],
         }
 
-        service, _, _ = _make_service()
+        service, _, spec_service = _make_service()
+        runtime = service.runtime_registry.get("claude")
+        runtime.run_session = AsyncMock(return_value=AgentResult(
+            thinkrail_sid="sid-1", session_id="cli-session-new",
+            result="done", cost_usd=0.0, turns=0, duration_ms=0,
+        ))
+        spec_service.get_spec.return_value = _make_spec_detail("spec-1", "T", "C")
 
-        with pytest.raises(ValueError, match="no stored sessionId"):
-            await service.continue_session("sid-1")
+        task = await service.continue_session("sid-1")
+        assert task.status == "initializing"
+
+        await asyncio.sleep(0.05)
+        runtime.run_session.assert_called_once()
+        exec_config = runtime.run_session.call_args.args[1]
+        assert exec_config.resume_session_id is None
 
     @patch("app.agent.service.load_session")
     async def test_continue_session_not_found_raises(self, mock_load: MagicMock) -> None:
@@ -260,9 +277,12 @@ class TestContinueSession:
         with pytest.raises(ValueError, match="already running"):
             await service.continue_session("sid-1")
 
+    @patch("app.agent.service.save_session")
     @patch("app.agent.service.load_session")
-    async def test_continue_empty_session_id_raises(self, mock_load: MagicMock) -> None:
-        """Empty string sessionId should also raise."""
+    async def test_continue_empty_session_id_relaunches_fresh(
+        self, mock_load: MagicMock, mock_save: MagicMock,
+    ) -> None:
+        """Empty-string sessionId is treated the same as missing — relaunch fresh."""
         mock_load.return_value = {
             "thinkrailSid": "sid-1",
             "name": "old",
@@ -274,7 +294,17 @@ class TestContinueSession:
             "events": [],
         }
 
-        service, _, _ = _make_service()
+        service, _, spec_service = _make_service()
+        runtime = service.runtime_registry.get("claude")
+        runtime.run_session = AsyncMock(return_value=AgentResult(
+            thinkrail_sid="sid-1", session_id="cli-session-new",
+            result="done", cost_usd=0.0, turns=0, duration_ms=0,
+        ))
+        spec_service.get_spec.return_value = _make_spec_detail("spec-1", "T", "C")
 
-        with pytest.raises(ValueError, match="no stored sessionId"):
-            await service.continue_session("sid-1")
+        task = await service.continue_session("sid-1")
+        assert task.status == "initializing"
+
+        await asyncio.sleep(0.05)
+        exec_config = runtime.run_session.call_args.args[1]
+        assert exec_config.resume_session_id is None
