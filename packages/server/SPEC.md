@@ -18,13 +18,14 @@ for development / e2e).
 ## Boundary
 
 - **Owns:** the HTTP+WS server, static serving, the WS dispatch registry, server-side feature services
-  (project/workspace/git/fs/terminal; the `AgentSessionManager` at M10), and `~/.thinkrail-pi` persistence.
+  (project/workspace/git/fs/terminal + the in-process `AgentSession` manager), and `~/.thinkrail-pi`
+  persistence.
 - **Public surface:** `createServer(options) → RunningServer` (`{ port, stop }`).
 - **Allowed deps:** `contracts` (types + WS constants), `shared` (`shellEnv`), `bun-pty`,
   `@earendil-works/pi-coding-agent` (runtime, M10), Bun/Node.
 - **Forbidden:** importing `web`/`cli`/`desktop`; being bundled into the browser.
 
-## Surface (current — M8)
+## Surface (current — M10)
 
 - `createServer({ port?, host?, staticDir? }) → { port, stop }`: `Bun.serve` with `/health`, a `/ws`
   upgrade, static SPA serving (when `staticDir` is set; `index.html` fallback, path-contained), and a WS
@@ -51,16 +52,24 @@ for development / e2e).
 - `terminalManager.ts`: `bun-pty` PTYs keyed by id, each rooted in a workspace's worktree (cwd). Output is
   pushed on the `terminal.data` channel via the injected publisher; `create`/`write`/`resize`/`close` plus
   `closeAllTerminals()` on shutdown.
+- `piRuntime.ts`: the shared pi services — one `AuthStorage` + `ModelRegistry` for every session
+  (`getPiRuntime()`, lazy; `configurePiRuntime()` overrides for tests).
+- `agentSessionManager.ts`: in-process `AgentSession`s keyed by `session.sessionId`. `createSession({ cwd,
+  model?, thinkingLevel? })` → `createAgentSession(...)` with a per-session `SessionManager` + shared
+  runtime; `subscribe` forwards each event tagged with its id (publisher injected; WS `pi.event` wiring at
+  M11). `prompt`/`steer`/`followUp`/`abort`/`setModel`/`setThinkingLevel`/`getSessionStats`;
+  `removeSession` (`unsubscribe`+`dispose`) and `disposeAllSessions()`. `prompt()` while streaming falls
+  back to `steer()`. Verified by a faux-provider test (no auth/network).
 
 ## Get right (firms up as features land)
 
-- **`prompt()` throws while a session is streaming** → `steer()`/`followUp()` (M10).
-- **Errors arrive via the event stream + thrown methods, not a crash signal**; wrap + forward (M10).
+- **`prompt()` throws while a session is streaming** → `steer()`/`followUp()` (handled in `promptSession`).
+- **Errors arrive via the event stream + thrown methods, not a crash signal**; wrap + forward.
 - **No process isolation** — a fatal agent/provider fault takes the whole host down (accepted tradeoff).
 - **WS commands return values directly**; only events + extension-UI use push channels.
 - Binds beyond localhost via `host` (the Tailscale seam).
 
 ## Later
 
-`AgentSessionManager` (M10), `project/workspace/git/fs/terminal` handlers (M4–M9), persistence behind a
-data layer (V2), `owner` threading.
+`session.*` WS methods + `pi.event` forwarding (M11, with the chat UI), extension-UI bridge via
+`bindExtensions` (M12), persistence behind a data layer (V2), `owner` threading.
