@@ -160,17 +160,20 @@
 /* ── Preview tab bar (Milestone 8) ───────────────────────────── */
 .context-panel__tabs {
   display: flex;
-  gap: var(--space-xs);
+  gap: var(--space-md);
   flex: 1;
-  margin-left: var(--space-sm);
+  margin-left: 0;
 }
 .context-panel__tab {
   background: transparent;
   border: none;
-  padding: var(--space-xs) var(--space-sm);
+  padding: var(--space-xs) 0;
   cursor: pointer;
   color: var(--muted);
-  font-size: var(--font-sm);
+  font-size: var(--font-md);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
   border-bottom: 2px solid transparent;
 }
 .context-panel__tab--active {

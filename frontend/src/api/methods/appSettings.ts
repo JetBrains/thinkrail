@@ -30,7 +30,13 @@ export function createAppSettingsApi(client: RpcClient) {
 
     setAnalyticsConsent: (enabled: boolean) =>
       client.request<AnalyticsStatus>("appSettings/setAnalyticsConsent", { enabled }),
+
+    /** Record a wizard done-screen decision; the backend maps skillId→step and stamps the install id. */
+    trackOnboardingAction: (skillId: string, action: OnboardingAction) =>
+      client.request<{ ok: boolean }>("appSettings/trackOnboardingAction", { skillId, action }),
   };
 }
+
+export type OnboardingAction = "continue" | "open_workspace" | "add_suggested_tickets";
 
 export type AppSettingsApi = ReturnType<typeof createAppSettingsApi>;

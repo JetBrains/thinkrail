@@ -1,10 +1,12 @@
 from __future__ import annotations
 
-from pydantic import TypeAdapter
+import pytest
+from pydantic import TypeAdapter, ValidationError
 
 from app.analytics.models import (
     ANALYTICS_EVENT_MODELS,
     EVENT_FIELD_ALLOWLIST,
+    AgentSessionCompletedEvent,
     AnalyticsConsent,
     AnalyticsEvent,
     AnalyticsStatus,
@@ -55,6 +57,61 @@ class TestEventUnion:
         wire = SpecsViewedEvent(installation_id="x").model_dump(by_alias=True)
         assert set(wire) == {"event", "installationId"}
         assert wire["event"] == "specs_viewed"
+
+    def test_session_completed_carries_only_enum_dimensions(self) -> None:
+        wire = AgentSessionCompletedEvent(
+            installation_id="x", outcome="error", files_written_bucket="4-10"
+        ).model_dump(by_alias=True)
+        assert set(wire) == {"event", "installationId", "outcome", "filesWrittenBucket"}
+        assert wire["outcome"] == "error"
+        assert wire["filesWrittenBucket"] == "4-10"
+
+    def test_session_completed_rejects_out_of_range_bucket(self) -> None:
+        ta = TypeAdapter(AnalyticsEvent)
+        with pytest.raises(ValidationError):
+            ta.validate_python(
+                {"event": "agent_session_completed", "filesWrittenBucket": "7"}
+            )
+
+    def test_onboarding_step_carries_only_enum_dimensions(self) -> None:
+        ta = TypeAdapter(AnalyticsEvent)
+        ev = ta.validate_python(
+            {"event": "onboarding_step_completed", "step": "architecture", "outcome": "completed"}
+        )
+        wire = ev.model_dump(by_alias=True)
+        assert set(wire) == {"event", "installationId", "step", "outcome"}
+        assert wire["step"] == "architecture"
+
+    def test_onboarding_step_rejects_unknown_step(self) -> None:
+        ta = TypeAdapter(AnalyticsEvent)
+        with pytest.raises(ValidationError):
+            ta.validate_python({"event": "onboarding_step_completed", "step": "deploy"})
+
+    def test_project_created_carries_kind(self) -> None:
+        ta = TypeAdapter(AnalyticsEvent)
+        wire = ta.validate_python(
+            {"event": "project_created", "kind": "existing"}
+        ).model_dump(by_alias=True)
+        assert set(wire) == {"event", "installationId", "kind"}
+        assert wire["kind"] == "existing"
+
+    def test_project_created_rejects_unknown_kind(self) -> None:
+        ta = TypeAdapter(AnalyticsEvent)
+        with pytest.raises(ValidationError):
+            ta.validate_python({"event": "project_created", "kind": "cloned"})
+
+    def test_onboarding_outcome_action_carries_only_enum_dimensions(self) -> None:
+        ta = TypeAdapter(AnalyticsEvent)
+        wire = ta.validate_python(
+            {"event": "onboarding_outcome_action", "step": "architecture", "action": "open_workspace"}
+        ).model_dump(by_alias=True)
+        assert set(wire) == {"event", "installationId", "step", "action"}
+        assert wire["action"] == "open_workspace"
+
+    def test_onboarding_outcome_action_rejects_unknown_action(self) -> None:
+        ta = TypeAdapter(AnalyticsEvent)
+        with pytest.raises(ValidationError):
+            ta.validate_python({"event": "onboarding_outcome_action", "action": "delete_repo"})
 
 
 class TestConsentModel:

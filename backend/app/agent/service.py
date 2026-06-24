@@ -6,6 +6,7 @@ import time
 from datetime import UTC, datetime
 from typing import Any
 
+from app import analytics
 from app.agent.context import build_context
 from app.agent.exceptions import InvalidCapabilityValueError
 from app.agent.models import AgentConfig, AgentTask, SessionReturnStatus, SubagentMode, SubsessionType, TaskStatus, is_quiescent, is_settled, is_streaming, is_terminal
@@ -24,6 +25,27 @@ from app.core.config import AppConfig
 from app.spec.service import SpecService
 
 logger = logging.getLogger(__name__)
+
+
+def _analytics_outcome(status: TaskStatus) -> str:
+    """Map a terminal task status to the coarse analytics outcome."""
+    if status == TaskStatus.DONE:
+        return "completed"
+    if status == TaskStatus.ERROR:
+        return "error"
+    return "cancelled"
+
+
+def _files_written_bucket(count: int) -> str:
+    """Bucket a written-file count to keep the analytics dimension low-cardinality."""
+    if count == 0:
+        return "0"
+    if count <= 3:
+        return "1-3"
+    if count <= 10:
+        return "4-10"
+    return "11+"
+
 
 # Skills whose system prompt should be augmented with the ticket's title and
 # body. Covers all per-ticket drafting/implementing skills.
@@ -905,6 +927,12 @@ class AgentService:
         # the v2 "no per-subagent restart" limit).
         _subagent_tool_uses: dict[str, int] = {}
 
+        # Distinct project files this session wrote/edited. Transient and
+        # in-memory only — never persisted; used solely for the bucketed
+        # analytics count, which works for every session (not just
+        # ticket-linked ones, unlike task.artifacts).
+        _written_files: set[str] = set()
+
         # Publish via EventBus and persist events to disk.
         _bus = self._get_bus()
 
@@ -960,6 +988,7 @@ class AgentService:
                     or tool_input.get("notebook_path")
                 )
                 if file_path and tool_name in ("Write", "Edit", "NotebookEdit"):
+                    _written_files.add(str(file_path))
                     artifact_kind = "write" if tool_name == "Write" else "edit"
                     artifact = record_artifact(
                         task,
@@ -1111,6 +1140,20 @@ class AgentService:
                 pass
         finally:
             self._running_tasks.pop(task.thinkrail_sid, None)
+            _outcome = _analytics_outcome(task.status)
+            analytics.track_event(
+                analytics.AgentSessionCompletedEvent(
+                    outcome=_outcome,
+                    files_written_bucket=_files_written_bucket(len(_written_files)),
+                )
+            )
+            _onboarding_step = analytics.ONBOARDING_STEP_BY_SKILL.get(task.skill_id or "")
+            if _onboarding_step is not None:
+                analytics.track_event(
+                    analytics.OnboardingStepCompletedEvent(
+                        step=_onboarding_step, outcome=_outcome,
+                    )
+                )
             # Notify all project clients that the session ended
             try:
                 await self._get_bus().publish_to_project(

@@ -219,16 +219,14 @@ export function SessionManager() {
     }
   }, []);
 
-  // The left list shows only "active" work: sessions with a live backend
-  // runner (and tickets that own one), plus any ticket opened from the board.
+  // The left list shows every session (live and on-disk, any status), grouped
+  // by ticket, plus any ticket opened from the board that has no session yet.
   const grouped = useMemo<GroupedEntry[]>(() => {
-    const active = sortByRecency(sessions.filter((s) => s.active === true));
-    const base = groupByTicket(active);
+    const base = groupByTicket(sortByRecency(sessions));
     const present = new Set(
       base.filter((e): e is TicketGroup => e.kind === "ticket").map((e) => e.ticketId),
     );
-    // Tickets opened from the board show as folders even without an active
-    // session yet.
+    // Tickets opened from the board show as folders even without a session yet.
     const extra: GroupedEntry[] = [];
     for (const id of openTicketIds) {
       if (present.has(id)) continue;

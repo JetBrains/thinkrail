@@ -71,6 +71,26 @@ export function seedTicket(projectPath: string, opts: SeedTicketOpts): string {
   return id;
 }
 
+/**
+ * Write a non-empty design-doc deliverable at `.tr/DESIGN_DOC.md`. The backend
+ * classifies a project holding a later spec deliverable (or a ticket) as
+ * "initialized", so the picker opens straight into the workspace rather than
+ * the onboarding wizard. Use when a spec needs the workspace but no ticket.
+ *
+ * Note: the spec indexer picks this file up as an unmanaged document, so it
+ * shows in the SpecTree's documents list — don't use it in specs that assert
+ * an empty SpecTree (seed a `seedTicket` for those instead).
+ */
+export function seedDeliverable(projectPath: string): void {
+  const dir = join(projectPath, ".tr");
+  mkdirSync(dir, { recursive: true });
+  writeFileSync(
+    join(dir, "DESIGN_DOC.md"),
+    "# Design Doc\n\nSeeded e2e deliverable.\n",
+    "utf8",
+  );
+}
+
 export interface SeedSessionOpts {
   id: string;
   name?: string;

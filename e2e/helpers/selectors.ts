@@ -78,6 +78,9 @@ export const inputAutocomplete = {
 export const sessionManager = {
   panel: ".session-manager",
   card: ".sm-card",
+  // Ticket folder row (a ticket group, distinct from a standalone session card).
+  ticketFolder: ".sm-ticket-item",
+  ticketFolderTitle: ".sessions-left-ticket-title",
   // The card has one explicit action: a hover-revealed trash icon.
   deleteBtn: "button.sm-icon-btn",
   ticketChip: ".sm-ticket-chip",

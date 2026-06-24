@@ -6,6 +6,8 @@ import { SpecContext } from "./modes/SpecContext.tsx";
 import { AgentContext } from "./modes/AgentContext.tsx";
 import { CodeContext } from "./modes/CodeContext.tsx";
 import { PreviewTab } from "./PreviewTab.tsx";
+import { WizardDocPanel } from "@/components/Wizard/WizardDocPanel.tsx";
+import { isWizardSkill, getWizardConfig } from "@/components/Wizard/registry.ts";
 import { useSessionStore } from "@/store/sessionStore.ts";
 import { useTicketRouteStore } from "@/store/ticketRouteStore.ts";
 import { TicketPreviewPanel } from "@/components/TicketDetail/TicketPreviewPanel.tsx";
@@ -123,7 +125,17 @@ export function ContextPanel() {
   const artifactCount = useSessionStore(
     (s) => (activeSessionId ? s.sessions.get(activeSessionId)?.artifacts.length ?? 0 : 0),
   );
-  const previewActive = previewPath != null || artifactCount > 0;
+  // Wizard sessions (new-project, architecture-design, …) produce a single
+  // known outcome file. It isn't a tracked artifact until SessionFinalize runs,
+  // so surface it in the Artifacts tab from disk while the session is live.
+  const skillId = useSessionStore(
+    (s) => (activeSessionId ? s.sessions.get(activeSessionId)?.skillId ?? null : null),
+  );
+  const wizardArtifact = isWizardSkill(skillId)
+    ? getWizardConfig(skillId, "running")?.artifactPath ?? null
+    : null;
+  const hasArtifacts = previewPath != null || artifactCount > 0;
+  const previewActive = hasArtifacts || wizardArtifact != null;
 
   const [activeTab, setActiveTab] = useState<TabId>("context");
   const lastSeenKey = useRef<string | null>(null);
@@ -156,7 +168,7 @@ export function ContextPanel() {
               className={`context-panel__tab${activeTab === "context" ? " context-panel__tab--active" : ""}`}
               onClick={() => setActiveTab("context")}
             >
-              Context
+              {config.label || "Context"}
             </button>
             <button
               role="tab"
@@ -164,7 +176,7 @@ export function ContextPanel() {
               className={`context-panel__tab${activeTab === "preview" ? " context-panel__tab--active" : ""}`}
               onClick={() => setActiveTab("preview")}
             >
-              Preview
+              Artifacts
             </button>
           </div>
         ) : showLabel ? (
@@ -173,7 +185,11 @@ export function ContextPanel() {
       </div>
       <div className="context-panel__body">
         {previewActive && activeTab === "preview" ? (
-          <PreviewTab />
+          hasArtifacts ? (
+            <PreviewTab />
+          ) : (
+            <WizardDocPanel filePath={wizardArtifact!} />
+          )
         ) : (
           <ModeContent mode={autoMode} />
         )}

@@ -96,6 +96,7 @@ class TestMethods:
             "settings/get", "settings/update", "settings/ensureFile",
             "appSettings/getSessionDefaults", "appSettings/setSessionDefaults",
             "appSettings/getAnalyticsConsent", "appSettings/setAnalyticsConsent",
+            "appSettings/trackOnboardingAction",
             "runtimes/list", "runtimes/capabilities",
             "agent/retryLastMessage",
             "skills/list",
@@ -248,6 +249,39 @@ class TestMultiClientIntegration:
 
                 resp1 = _send_and_receive(ws1, "spec/list", 1)
                 assert isinstance(resp1["result"], list)
+
+    def test_concurrent_clients_start_context_once(self, tmp_path: Path) -> None:
+        """Two clients racing to open a fresh project trigger exactly one
+        ``ProjectContext.start()``; the loser shares the started context.
+
+        Regression test for the startup race where both connections opened
+        and initialized the same SQLite index concurrently and one failed
+        with ``sqlite3.OperationalError: database is locked``.
+        """
+        from app.rpc.project_context import ProjectContext
+
+        _make_config(tmp_path)
+        app = _make_app(tmp_path)
+        client = TestClient(app)
+
+        starts: list[int] = []
+        original_start = ProjectContext.start
+
+        async def _counting_start(self: ProjectContext) -> None:
+            starts.append(1)
+            # Widen the create→store window so a regressed double-start races.
+            await asyncio.sleep(0.3)
+            return await original_start(self)
+
+        with patch.object(ProjectContext, "start", _counting_start):
+            with client.websocket_connect(_ws_url(tmp_path)) as ws1:
+                with client.websocket_connect(_ws_url(tmp_path)) as ws2:
+                    resp1 = _send_and_receive(ws1, "spec/list", 1)
+                    resp2 = _send_and_receive(ws2, "spec/list", 2)
+                    assert isinstance(resp1["result"], list)
+                    assert isinstance(resp2["result"], list)
+
+        assert len(starts) == 1, f"expected one start(), got {len(starts)}"
 
     def test_clients_get_local_user_identity(self, tmp_path: Path) -> None:
         """In the single-user model every connection is identified as 'local'."""

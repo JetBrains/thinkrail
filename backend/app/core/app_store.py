@@ -240,8 +240,16 @@ class AppStore:
 
         return valid
 
-    async def register_project(self, path: str, name: str) -> None:
-        """Register a project (idempotent — updates name and last_opened_at if already known)."""
+    async def register_project(self, path: str, name: str) -> bool:
+        """Register a project (idempotent — updates name and last_opened_at if already known).
+
+        Returns ``True`` when this path was registered for the first time
+        (a fresh INSERT), ``False`` when it was already known (an UPDATE).
+        """
+        async with self._db.execute(
+            "SELECT 1 FROM projects WHERE path = ?", (path,)
+        ) as cur:
+            is_new = (await cur.fetchone()) is None
         now = _now()
         await self._db.execute(
             """INSERT INTO projects (path, name, registered_at, last_opened_at)
@@ -252,6 +260,7 @@ class AppStore:
             (path, name, now, now),
         )
         await self._db.commit()
+        return is_new
 
     async def update_project_last_opened(self, path: str) -> None:
         await self._db.execute(

@@ -75,7 +75,7 @@ graph TD
 | Method | Signature | Description |
 |--------|-----------|-------------|
 | `list_projects` | `async () -> list[KnownProject]` | All known projects, ordered by `last_opened_at DESC` |
-| `register_project` | `async (path: str, name: str) -> None` | Idempotent upsert (updates name on conflict) |
+| `register_project` | `async (path: str, name: str) -> bool` | Idempotent upsert (updates name on conflict); returns `True` on first-time INSERT, `False` on UPDATE |
 | `update_project_last_opened` | `async (path: str) -> None` | Touch timestamp |
 | `remove_project` | `async (path: str) -> None` | Drop from registry |
 

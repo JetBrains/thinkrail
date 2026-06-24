@@ -17,7 +17,17 @@ import { ArtifactDocView } from "./ArtifactDocView";
 import { useArtifactContents } from "./useArtifactContents";
 import { resolveFollowupChain, outcomeTransitions, type StepTransition } from "./registry";
 import { useStartWizardStep } from "./useStartWizardStep";
+import { getClient } from "@/api/index.ts";
+import { createAppSettingsApi, type OnboardingAction } from "@/api/methods/appSettings.ts";
 import "./WizardDonePanel.css";
+
+// Fire-and-forget: a failed analytics ping must never disrupt the wizard.
+function trackOnboarding(skillId: string | null, action: OnboardingAction): void {
+  if (!skillId) return;
+  void createAppSettingsApi(getClient())
+    .trackOnboardingAction(skillId, action)
+    .catch(() => {});
+}
 
 interface WizardDonePanelProps {
   session: Session;
@@ -107,6 +117,7 @@ export function WizardDonePanel({ session, outcome }: WizardDonePanelProps) {
     async (t: StepTransition) => {
       if (busyActionId) return;
       setBusyActionId(t.id);
+      trackOnboarding(session.skillId, "continue");
       try {
         // The transition builds the next session's ``session_prompt``
         // from runtime context (e.g. the draft G&R body produced by the
@@ -128,11 +139,12 @@ export function WizardDonePanel({ session, outcome }: WizardDonePanelProps) {
         setBusyActionId(null);
       }
     },
-    [busyActionId, startWizardStep, currentChain, projectName, docContents],
+    [busyActionId, startWizardStep, currentChain, projectName, docContents, session.skillId],
   );
 
   const handleNavigate = useCallback(
     (action: NavigateAction) => {
+      trackOnboarding(session.skillId, "open_workspace");
       // The user is opting out of the wizard for this session — they've
       // seen the done-screen and chose a different destination. Mark the
       // outcome as dismissed so re-activating this session (clicking it
@@ -152,13 +164,14 @@ export function WizardDonePanel({ session, outcome }: WizardDonePanelProps) {
         setCenterView("sessions");
       }
     },
-    [setCenterView, dismissWizardOutcome, session.thinkrailSid, openFile, firstArtifact, projectPath],
+    [setCenterView, dismissWizardOutcome, session.thinkrailSid, session.skillId, openFile, firstArtifact, projectPath],
   );
 
   const handleAddTicket = useCallback(
     async (action: CreateTicketAction) => {
       if (busyActionId || action.state === TicketActionState.Applied) return;
       setBusyActionId(action.id);
+      trackOnboarding(session.skillId, "add_suggested_tickets");
       try {
         await createTicket(action.title, action.body ?? undefined, undefined);
         await patchOutcomeAction(session.thinkrailSid, action.id, { state: TicketActionState.Applied });
@@ -166,7 +179,7 @@ export function WizardDonePanel({ session, outcome }: WizardDonePanelProps) {
         setBusyActionId(null);
       }
     },
-    [busyActionId, createTicket, patchOutcomeAction, session.thinkrailSid],
+    [busyActionId, createTicket, patchOutcomeAction, session.thinkrailSid, session.skillId],
   );
 
   const [expandedTickets, setExpandedTickets] = useState<Set<string>>(new Set());
@@ -183,6 +196,7 @@ export function WizardDonePanel({ session, outcome }: WizardDonePanelProps) {
   const handleAddAll = useCallback(async () => {
     if (busyActionId || pendingTickets.length === 0) return;
     setBusyActionId("__add_all__");
+    trackOnboarding(session.skillId, "add_suggested_tickets");
     // Don't bail out of the loop on the first failure — try every ticket
     // and report the aggregate. This keeps a transient network blip from
     // turning a 10-ticket batch into a 1-ticket batch.
@@ -212,7 +226,7 @@ export function WizardDonePanel({ session, outcome }: WizardDonePanelProps) {
     } finally {
       setBusyActionId(null);
     }
-  }, [busyActionId, pendingTickets, createTicket, patchOutcomeAction, session.thinkrailSid]);
+  }, [busyActionId, pendingTickets, createTicket, patchOutcomeAction, session.thinkrailSid, session.skillId]);
 
   return (
     <div className="wiz-done">
