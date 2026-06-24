@@ -1,4 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { SessionStatus } from "@/constants/status.ts";
+import { EventType } from "@/constants/eventTypes.ts";
 import { readFile } from "@/services/files.ts";
 import { useUiStore } from "@/store/uiStore";
 import { useSessionStore } from "@/store/sessionStore";
@@ -50,7 +52,7 @@ export function WizardDocPanel({ filePath }: WizardDocPanelProps) {
 
   // Refresh whenever a tool call completes (agent may have written the file)
   const toolCallEndCount = (activeSession?.events ?? []).filter(
-    (e) => e.eventType === "toolCallEnd",
+    (e) => e.eventType === EventType.ToolCallEnd,
   ).length;
   useEffect(() => {
     if (toolCallEndCount > 0) fetchFile();
@@ -60,7 +62,7 @@ export function WizardDocPanel({ filePath }: WizardDocPanelProps) {
     <div className="wiz-doc-panel">
       <div className="wiz-doc-panel-header">
         <span className="wiz-doc-panel-title">{filePath.replace(/^\.tr\//, "")}</span>
-        {activeSession?.status === "running" && (
+        {activeSession?.status === SessionStatus.Running && (
           <span className="wiz-doc-panel-badge">
             {content == null ? "generating…" : "updating…"}
           </span>

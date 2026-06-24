@@ -12,6 +12,7 @@ import logging
 from pathlib import Path
 from typing import Any
 
+from app.agent.models import TaskStatus, is_ended, is_settled
 from app.core.config import PROJECT_DIRNAME, SESSIONS_DIR
 from app.core.fileio import delete_file, ensure_dir, read_text, write_text
 
@@ -130,14 +131,14 @@ def list_sessions(project_root: Path) -> list[dict[str, Any]]:
         try:
             data = json.loads(read_text(path))
             sid = data.get("thinkrailSid", "")
-            status = data.get("status", "done")
+            status = data.get("status", TaskStatus.DONE)
             # Disk-only sessions with non-terminal status have no live
             # runner.  "interrupted" reflects reality (runner was killed,
             # e.g., by backend restart) and lets the UI keep flow-specific
             # affordances (goal layout, GoalFilePanel) — unlike "done",
             # which the UI treats as a fully-finished session.
-            if status not in ("done", "error", "draft"):
-                status = "interrupted"
+            if not is_settled(status):
+                status = TaskStatus.INTERRUPTED
             entry: dict[str, Any] = {
                 "thinkrailSid": sid,
                 "name": data.get("name", ""),
@@ -153,7 +154,7 @@ def list_sessions(project_root: Path) -> list[dict[str, Any]]:
                 "updatedAt": data.get("updatedAt", ""),
                 # "interrupted" means no live runner → not active for
                 # scheduling, but the UI can still surface it.
-                "active": status not in ("done", "error", "interrupted"),
+                "active": not is_ended(status),
                 "inTracker": False,
                 "metrics": data.get("metrics", {}),
                 # Persisted snapshot of the latest TodoWrite/Task* state.
@@ -163,7 +164,7 @@ def list_sessions(project_root: Path) -> list[dict[str, Any]]:
                 "todos": data.get("todos", []),
             }
             # Include full config and system prompt for draft sessions
-            if status == "draft":
+            if status == TaskStatus.DRAFT:
                 entry["config"] = data.get("config", {})
                 entry["systemPrompt"] = data.get("systemPrompt")
                 entry["sessionPrompt"] = data.get("sessionPrompt")

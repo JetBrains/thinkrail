@@ -75,6 +75,11 @@ class OutcomeArtifact(BaseModel):
     open_on_done: bool = True
 
 
+class TicketActionState(StrEnum):
+    PENDING = "pending"
+    APPLIED = "applied"
+
+
 class CreateTicketAction(BaseModel):
     """Queued ticket creation. Rendered as an 'Add to board' button.
 
@@ -88,7 +93,7 @@ class CreateTicketAction(BaseModel):
     id: str
     title: str
     body: str | None = None
-    state: Literal["pending", "applied"] = "pending"
+    state: TicketActionState = TicketActionState.PENDING
 
 
 class StartSessionAction(BaseModel):
@@ -155,6 +160,39 @@ class TaskStatus(StrEnum):
     WAITING = "waiting"
     DONE = "done"
     ERROR = "error"
+    INTERRUPTED = "interrupted"
+
+
+_TERMINAL_STATUSES = frozenset({TaskStatus.DONE, TaskStatus.ERROR})
+_SETTLED_STATUSES = _TERMINAL_STATUSES | {TaskStatus.DRAFT}
+_ENDED_STATUSES = _TERMINAL_STATUSES | {TaskStatus.INTERRUPTED}
+_STREAMING_STATUSES = frozenset({TaskStatus.RUNNING, TaskStatus.WAITING})
+_QUIESCENT_STATUSES = frozenset({TaskStatus.INITIALIZING, TaskStatus.IDLE})
+
+
+def is_terminal(status: TaskStatus) -> bool:
+    """Session reached a final outcome (done or error)."""
+    return status in _TERMINAL_STATUSES
+
+
+def is_settled(status: TaskStatus) -> bool:
+    """Finished or never-started — no in-flight turn (done, error, draft)."""
+    return status in _SETTLED_STATUSES
+
+
+def is_ended(status: TaskStatus) -> bool:
+    """No live runner — finished or interrupted (done, error, interrupted)."""
+    return status in _ENDED_STATUSES
+
+
+def is_streaming(status: TaskStatus) -> bool:
+    """Actively in a turn — interruptible (running or waiting)."""
+    return status in _STREAMING_STATUSES
+
+
+def is_quiescent(status: TaskStatus) -> bool:
+    """Between turns — ready to accept a message (initializing or idle)."""
+    return status in _QUIESCENT_STATUSES
 
 
 class ArtifactKind(StrEnum):
@@ -759,6 +797,12 @@ class SubsessionType(StrEnum):
 SubagentMode = Literal["step-session", "subagent"]
 
 
+class SessionReturnStatus(StrEnum):
+    PENDING = "pending"
+    APPROVED = "approved"
+    DISMISSED = "dismissed"
+
+
 class AgentTask(BaseModel):
     """Task record tracking an agent run."""
 
@@ -785,7 +829,7 @@ class AgentTask(BaseModel):
     parent_thinkrail_sid: str | None = None
     subsession_type: SubsessionType | None = None
     subsession_context: str | None = None
-    return_status: str | None = None
+    return_status: SessionReturnStatus | None = None
     return_summary: str | None = None
     outcome: SessionOutcome | None = None
     # ── Per-session artifact list (ticket-linked sessions only) ──

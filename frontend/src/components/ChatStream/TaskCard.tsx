@@ -1,6 +1,5 @@
 import type { TaskItem } from "./renderers/types.ts";
-
-type CardState = "running" | "success" | "error";
+import { CardState } from "@/constants/status.ts";
 
 interface TaskCardProps {
   toolName: string;
@@ -95,14 +94,14 @@ function ChecklistCard({
 
 export function TaskCard({ toolName, toolInput, state, isError, tasks }: TaskCardProps) {
   const borderColor =
-    state === "running"
+    state === CardState.Running
       ? "var(--blue)"
       : isError
         ? "var(--red)"
         : "var(--green)";
 
   const stateIcon =
-    state === "running" ? "●" : isError ? "✕" : "✓";
+    state === CardState.Running ? "●" : isError ? "✕" : "✓";
 
   if (toolName === "TodoWrite") {
     const todos = parseTodos(toolInput);

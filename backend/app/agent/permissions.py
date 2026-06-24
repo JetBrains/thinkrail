@@ -226,7 +226,7 @@ async def _await_user_response(
     if tracker.get_task(task.thinkrail_sid).status != TaskStatus.WAITING:
         tracker.set_status(task.thinkrail_sid, TaskStatus.WAITING)
         await notify("agent/statusChanged", {
-            "thinkrailSid": task.thinkrail_sid, "status": "waiting",
+            "thinkrailSid": task.thinkrail_sid, "status": TaskStatus.WAITING,
         })
     # Store pending request so session/get can include it
     request_type = "approval" if method == "agent/confirmAction" else "question"
@@ -240,7 +240,7 @@ async def _await_user_response(
     tracker.remove_pending_request(task.thinkrail_sid, request_id)
     tracker.set_status(task.thinkrail_sid, TaskStatus.RUNNING)
     await notify("agent/statusChanged", {
-        "thinkrailSid": task.thinkrail_sid, "status": "running",
+        "thinkrailSid": task.thinkrail_sid, "status": TaskStatus.RUNNING,
     })
     return response, request_id
 

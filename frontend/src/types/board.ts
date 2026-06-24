@@ -1,12 +1,12 @@
 /** Mirrors backend/app/board/models.py — JSON wire format (camelCase). */
 
 import type {
-  Lifecycle,
+  TicketLifecycle,
   OrchestrationConfig,
   WorkNode,
 } from "./rpc-methods.ts";
 
-export type { Lifecycle, OrchestrationConfig, WorkNode };
+export type { TicketLifecycle, OrchestrationConfig, WorkNode };
 
 export const LIFECYCLES = [
   "created",
@@ -57,7 +57,7 @@ export interface TicketSummary {
   id: string;
   title: string;
   type: TicketType;
-  lifecycle: Lifecycle;
+  lifecycle: TicketLifecycle;
   productDesignPath: string | null;
   technicalDesignPath: string | null;
   historyPath: string | null;

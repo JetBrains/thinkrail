@@ -350,7 +350,7 @@ class ClaudeRuntime:
                     tracker.set_status(task.thinkrail_sid, TaskStatus.RUNNING)
                     await handler.on_event(RuntimeEvent(method="agent/statusChanged", params={
                         "thinkrailSid": task.thinkrail_sid,
-                        "status": "running",
+                        "status": TaskStatus.RUNNING,
                     }))
                     tracker.clear_turn_text(task.thinkrail_sid)
                     turn_t0 = time.monotonic()
@@ -651,7 +651,7 @@ class ClaudeRuntime:
                             tracker.set_status(task.thinkrail_sid, TaskStatus.IDLE)
                             await handler.on_event(RuntimeEvent(method="agent/statusChanged", params={
                                 "thinkrailSid": task.thinkrail_sid,
-                                "status": "idle",
+                                "status": TaskStatus.IDLE,
                             }))
                             break  # back to conversation loop, same client
             finally:

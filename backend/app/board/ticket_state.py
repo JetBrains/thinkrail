@@ -16,7 +16,7 @@ from typing import TYPE_CHECKING
 
 from pydantic import BaseModel, Field
 
-from app.board.models import Lifecycle, OrchestrationConfig, OrchestratorRef, _CAMEL_CONFIG
+from app.board.models import TicketLifecycle, OrchestrationConfig, OrchestratorRef, _CAMEL_CONFIG
 from app.board.work_node import NodeRun, WorkNode, derive_lifecycle
 
 if TYPE_CHECKING:
@@ -43,7 +43,7 @@ class TicketState(BaseModel):
     body: str = ""
     type: str = "feature"
     rev: int = 0
-    lifecycle: Lifecycle = "created"
+    lifecycle: TicketLifecycle = TicketLifecycle.CREATED
     orchestrator: OrchestratorRef | None = None
     orchestration: OrchestrationConfig = Field(default_factory=OrchestrationConfig)
     stages: list[WorkNode] = Field(default_factory=list)

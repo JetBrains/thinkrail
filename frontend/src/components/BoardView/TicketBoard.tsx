@@ -1,17 +1,18 @@
 import { useCallback, useMemo, useRef, useState } from "react";
 import { DragDropProvider } from "@dnd-kit/react";
 import { isSortable } from "@dnd-kit/react/sortable";
-import type { Lifecycle, TicketSummary, TicketType } from "@/types/board.ts";
+import { TicketLifecycle } from "@/constants/status.ts";
+import type { TicketSummary, TicketType } from "@/types/board.ts";
 import { useBoardStore } from "@/store/boardStore.ts";
 import { KanbanColumn } from "./KanbanColumn.tsx";
 import { TicketCard } from "./TicketCard.tsx";
 import { BoardCardContextMenu } from "./BoardCardContextMenu.tsx";
 
-const COLUMNS: { lifecycle: Lifecycle; label: string }[] = [
-  { lifecycle: "created", label: "Created" },
-  { lifecycle: "design", label: "Design" },
-  { lifecycle: "implementation", label: "Implementation" },
-  { lifecycle: "done", label: "Done" },
+const COLUMNS: { lifecycle: TicketLifecycle; label: string }[] = [
+  { lifecycle: TicketLifecycle.Created, label: "Created" },
+  { lifecycle: TicketLifecycle.Design, label: "Design" },
+  { lifecycle: TicketLifecycle.Implementation, label: "Implementation" },
+  { lifecycle: TicketLifecycle.Done, label: "Done" },
 ];
 
 interface TicketBoardProps {
@@ -28,7 +29,7 @@ export function TicketBoard({ tickets, onOpenTicket, onPreviewTicket }: TicketBo
   const [ctxMenu, setCtxMenu] = useState<{ ticketId: string; x: number; y: number } | null>(null);
 
   const grouped = useMemo(() => {
-    const map = new Map<Lifecycle, TicketSummary[]>();
+    const map = new Map<TicketLifecycle, TicketSummary[]>();
     for (const col of COLUMNS) map.set(col.lifecycle, []);
     for (const t of tickets) {
       const list = map.get(t.lifecycle);

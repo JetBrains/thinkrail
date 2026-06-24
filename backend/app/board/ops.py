@@ -14,7 +14,7 @@ from __future__ import annotations
 from collections.abc import Iterator
 from typing import Any
 
-from app.board.work_node import NodeRun, NodeStatus, RunStatus, WorkNode, DagError, validate_dag
+from app.board.work_node import NodeRun, NodeStatus, RunStatus, WorkNode, DagError, has_started, validate_dag
 
 
 def _iter_nodes(nodes: list[WorkNode]) -> Iterator[WorkNode]:
@@ -57,7 +57,7 @@ def apply_op(stages: list[WorkNode], op: dict[str, Any]) -> list[WorkNode]:
         target = by_id.get(op["id"])
         if target is None:
             raise DagError(f"unknown node {op['id']!r}")
-        if target.status in (NodeStatus.DONE, NodeStatus.RUNNING):
+        if has_started(target.status):
             raise DagError(f"cannot remove {target.status} node {target.id!r}")
         nodes = [n for n in nodes if n.id != op["id"]]
         for n in nodes:

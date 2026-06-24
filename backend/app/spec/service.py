@@ -30,6 +30,7 @@ from app.spec.models import (
     SpecDetail,
     SpecEntry,
     SpecGraph,
+    SpecStatus,
     SpecSummary,
 )
 
@@ -162,7 +163,7 @@ class SpecService:
             raise ValueError(f"ID '{spec_id}' already exists")
 
         # Build frontmatter via model and write file
-        fm = Frontmatter(id=spec_id, type=type, status="draft", title=title)
+        fm = Frontmatter(id=spec_id, type=type, status=SpecStatus.DRAFT, title=title)
         file_content = serialize_frontmatter(fm.to_ordered_dict(), body)
 
         file_path = self._root / path
@@ -176,7 +177,7 @@ class SpecService:
         await self._index.upsert_spec(entry)
 
         return SpecDetail(
-            id=spec_id, type=type, path=path, status="draft",
+            id=spec_id, type=type, path=path, status=SpecStatus.DRAFT,
             title=title, content=body, links=[],
         )
 

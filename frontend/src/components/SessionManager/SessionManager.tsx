@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRpc } from "@/api/hooks/useRpc.tsx";
 import type { SessionSummary } from "@/api/methods/sessions.ts";
+import { SessionStatus } from "@/constants/status.ts";
 import { useSessionStore } from "@/store/sessionStore.ts";
 import { useBoardStore } from "@/store/boardStore.ts";
 import { useUiStore } from "@/store/uiStore.ts";
@@ -461,9 +462,9 @@ function SessionCard({
   const turns = readMetricNumber(s.metrics, "turns");
   const cost = readMetricNumber(s.metrics, "costUsd");
   const hasMetrics = turns > 0 || cost > 0;
-  const isDraft = s.status === "draft";
-  const isRunning = s.status === "running";
-  const isWaiting = s.status === "waiting";
+  const isDraft = s.status === SessionStatus.Draft;
+  const isRunning = s.status === SessionStatus.Running;
+  const isWaiting = s.status === SessionStatus.Waiting;
   const isGenericName = GENERIC_NAME_RE.test(s.name);
   const stripe = ticketStripeColor(s.ticketId);
 

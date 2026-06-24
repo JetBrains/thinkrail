@@ -3,14 +3,32 @@
 ``Frontmatter`` is the **single source of truth** for the YAML frontmatter
 schema.  All validation, link extraction, and key-ordering logic lives on the
 model.  Other modules should derive constants (e.g. ``RECOGNIZED_TYPES``) from
-the model's ``Literal`` annotations rather than maintaining separate sets.
+the ``SpecType`` / ``SpecStatus`` enums rather than maintaining separate sets.
 """
 
 from __future__ import annotations
 
-from typing import Any, Literal, get_args
+from enum import StrEnum
+from typing import Any
 
 from pydantic import BaseModel, Field, ValidationError, field_validator  # noqa: F401 – re-exported
+
+
+# Type and status enums — the canonical set of recognised values.
+class SpecType(StrEnum):
+    GOAL_AND_REQUIREMENTS = "goal-and-requirements"
+    ARCHITECTURE_DESIGN = "architecture-design"
+    MODULE_DESIGN = "module-design"
+    SUBMODULE_DESIGN = "submodule-design"
+    TASK_SPEC = "task-spec"
+
+
+class SpecStatus(StrEnum):
+    DRAFT = "draft"
+    ACTIVE = "active"
+    STALE = "stale"
+    DONE = "done"
+    DEPRECATED = "deprecated"
 
 
 class Spec(BaseModel):
@@ -42,7 +60,7 @@ class SpecSummary(BaseModel):
     id: str
     type: str
     path: str
-    status: str
+    status: SpecStatus
     title: str
     tags: list[str] = Field(default_factory=list)
     covers: list[str] = Field(default_factory=list)
@@ -56,7 +74,7 @@ class SpecDetail(BaseModel):
     id: str
     type: str
     path: str
-    status: str
+    status: SpecStatus
     title: str
     tags: list[str] = Field(default_factory=list)
     content: str = ""
@@ -75,7 +93,7 @@ class SpecEntry(BaseModel):
     type: str
     path: str
     title: str
-    status: str = "draft"
+    status: SpecStatus = SpecStatus.DRAFT
     covers: list[str] = Field(default_factory=list)
     tags: list[str] = Field(default_factory=list)
     extras: dict[str, Any] = Field(default_factory=dict)
@@ -84,17 +102,6 @@ class SpecEntry(BaseModel):
 
 
 # ── Frontmatter model (single source of truth) ──────────────────────────────
-
-# Type and status literals — the canonical set of recognised values.
-SpecType = Literal[
-    "goal-and-requirements",
-    "architecture-design",
-    "module-design",
-    "submodule-design",
-    "task-spec",
-]
-
-SpecStatus = Literal["draft", "active", "stale", "done", "deprecated"]
 
 # Canonical key ordering for YAML serialization.
 _FRONTMATTER_KEY_ORDER: list[str] = [
@@ -130,15 +137,15 @@ class Frontmatter(BaseModel):
       through without error.
     - ``populate_by_name = True`` accepts both ``depends_on=`` (Python) and
       ``depends-on=`` (YAML alias).
-    - ``Literal`` type annotations replace the old ``RECOGNIZED_TYPES`` /
-      ``RECOGNIZED_STATUSES`` frozensets.
+    - ``SpecType`` / ``SpecStatus`` enums are the canonical recognised sets;
+      ``RECOGNIZED_TYPES`` / ``RECOGNIZED_STATUSES`` are derived from them.
     """
 
     model_config = {"extra": "allow", "populate_by_name": True}
 
     id: str
     type: SpecType
-    status: SpecStatus = "draft"
+    status: SpecStatus = SpecStatus.DRAFT
 
     @field_validator("id")
     @classmethod
@@ -181,9 +188,9 @@ class Frontmatter(BaseModel):
         # Build a raw dict using aliases (hyphenated keys) for YAML compat.
         raw: dict[str, Any] = {}
         raw["id"] = self.id
-        raw["type"] = self.type
-        if self.status != "draft":
-            raw["status"] = self.status
+        raw["type"] = self.type.value
+        if self.status != SpecStatus.DRAFT:
+            raw["status"] = self.status.value
         if self.title:
             raw["title"] = self.title
         if self.parent is not None:
@@ -242,12 +249,8 @@ class Frontmatter(BaseModel):
 
 # ── Derived constants (backward compatibility) ──────────────────────────────
 
-RECOGNIZED_TYPES: frozenset[str] = frozenset(
-    get_args(Frontmatter.model_fields["type"].annotation)
-)
-RECOGNIZED_STATUSES: frozenset[str] = frozenset(
-    get_args(Frontmatter.model_fields["status"].annotation)
-)
+RECOGNIZED_TYPES: frozenset[str] = frozenset(SpecType)
+RECOGNIZED_STATUSES: frozenset[str] = frozenset(SpecStatus)
 RECOGNIZED_LINK_TYPES: frozenset[str] = frozenset(_FRONTMATTER_LINK_FIELDS.values())
 
 

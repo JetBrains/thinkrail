@@ -6,6 +6,8 @@ import { ChatMarkdown } from "./ChatMarkdown.tsx";
 import { ToolCallCard } from "./ToolCallCard.tsx";
 import { VisualizationCard, VisErrorBoundary } from "./VisualizationCard.tsx";
 import { extractToolInput, type ToolState } from "./ChatStream.tsx";
+import { CardState } from "@/constants/status.ts";
+import { EventType } from "@/constants/eventTypes.ts";
 
 const DIFF_TOOLS = new Set(["Edit", "Write", "NotebookEdit"]);
 const DiffCard = lazy(() => import("./DiffCard.tsx").then(m => ({ default: m.DiffCard })));
@@ -21,7 +23,7 @@ interface SubagentBlockProps {
 function buildSummary(childEvents: AgentEvent[]): string {
   const toolCounts = new Map<string, number>();
   for (const ev of childEvents) {
-    if (ev.eventType === "toolCallStart") {
+    if (ev.eventType === EventType.ToolCallStart) {
       const name = (ev.payload.toolName as string) ?? "tool";
       toolCounts.set(name, (toolCounts.get(name) ?? 0) + 1);
     }
@@ -65,7 +67,7 @@ export function SubagentBlock({
       {expanded && (
         <div className="chat-subagent-body">
           {childEvents.map((ev, ci) => {
-            if (ev.eventType === "toolCallStart") {
+            if (ev.eventType === EventType.ToolCallStart) {
               const toolName = (ev.payload.toolName as string) ?? "tool";
               if (toolName === "AskUserQuestion") return null;
               if (toolName === "TaskGet" || toolName === "TaskList") return null;
@@ -82,10 +84,10 @@ export function SubagentBlock({
               }
               const toolUseId = (ev.payload.toolUseId as string) ?? "";
               const end = toolStates.get(toolUseId);
-              const state = end?.finished ? (end.isError ? "error" as const : "success" as const) : "running" as const;
+              const state = end?.finished ? (end.isError ? CardState.Error : CardState.Success) : CardState.Running;
               if (DIFF_TOOLS.has(toolName)) {
                 return (
-                  <Suspense key={`subagent-diff-${ci}`} fallback={<ToolCallCard toolName={toolName} toolInput={extractToolInput(ev.payload.toolInput)} state="running" compact />}>
+                  <Suspense key={`subagent-diff-${ci}`} fallback={<ToolCallCard toolName={toolName} toolInput={extractToolInput(ev.payload.toolInput)} state={CardState.Running} compact />}>
                     <DiffCard
                       toolName={toolName}
                       toolInput={(ev.payload.toolInput as Record<string, unknown>) ?? {}}
@@ -109,7 +111,7 @@ export function SubagentBlock({
                 />
               );
             }
-            if (ev.eventType === "textDelta") {
+            if (ev.eventType === EventType.TextDelta) {
               return (
                 <div key={`subagent-text-${ci}`} className="chat-subagent-text">
                   <ChatMarkdown content={(ev.payload.text as string) ?? ""} />

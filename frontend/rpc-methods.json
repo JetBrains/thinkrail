@@ -371,13 +371,8 @@
           "title": "Body"
         },
         "state": {
-          "default": "pending",
-          "enum": [
-            "pending",
-            "applied"
-          ],
-          "title": "State",
-          "type": "string"
+          "$ref": "#/$defs/TicketActionState",
+          "default": "pending"
         }
       },
       "required": [
@@ -493,6 +488,14 @@
       ],
       "title": "StartSessionAction",
       "type": "object"
+    },
+    "TicketActionState": {
+      "enum": [
+        "pending",
+        "applied"
+      ],
+      "title": "TicketActionState",
+      "type": "string"
     },
     "SessionResult": {
       "description": "The value a session hands back to its parent, plus its done-screen.",
@@ -813,6 +816,16 @@
       "title": "SessionRef",
       "type": "object"
     },
+    "TicketLifecycle": {
+      "enum": [
+        "created",
+        "design",
+        "implementation",
+        "done"
+      ],
+      "title": "TicketLifecycle",
+      "type": "string"
+    },
     "WorkNode": {
       "properties": {
         "id": {
@@ -943,15 +956,8 @@
           "type": "integer"
         },
         "lifecycle": {
-          "default": "created",
-          "enum": [
-            "created",
-            "design",
-            "implementation",
-            "done"
-          ],
-          "title": "Lifecycle",
-          "type": "string"
+          "$ref": "#/$defs/TicketLifecycle",
+          "default": "created"
         },
         "orchestrator": {
           "anyOf": [
