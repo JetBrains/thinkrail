@@ -12,9 +12,9 @@
 		"test": "bun test"
 	},
 	"dependencies": {
+		"@earendil-works/pi-coding-agent": "0.80.2",
 		"@thinkrail-pi/contracts": "workspace:*",
 		"@thinkrail-pi/shared": "workspace:*",
-		"@earendil-works/pi-coding-agent": "^0.79.10",
 		"bun-pty": "^0.4.10"
 	},
 	"devDependencies": {

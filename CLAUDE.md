@@ -81,9 +81,10 @@ Architecture decisions live as spec-graph nodes, dogfooding the spec layer the p
 
 - **`apps/web` depends on `packages/contracts` only** — never on `server`/`shared`. This is what makes
   the UI shippable without the host.
-- **Never *value*-import `pi` in browser-bundled code; import types only, from the `/base` entries.**
-  `@earendil-works/pi-coding-agent` is server-only and never reaches `contracts`/`web` (it pulls
-  `node:fs` + provider SDKs). `pi-agent-core` + `pi-ai` are type-only devDeps of `contracts`.
+- **Never *value*-import `pi` in browser-bundled code; import types only, from the `pi-ai` /
+  `pi-agent-core` package roots** (`verbatimModuleSyntax` erases type-only imports, so no runtime reaches
+  the bundle). `@earendil-works/pi-coding-agent` is server-only and never reaches `contracts`/`web` (it
+  pulls `node:fs` + provider SDKs). `pi-agent-core` + `pi-ai` are type-only devDeps of `contracts`.
 - **One id model:** the UI tab id vs `session.sessionId` (the `AgentSession` id). No separate pi UUID.
 - **`pi` owns state**; the host is a thin bridge and does not recompute what `pi` reports (cost, stats).
 - **Streaming:** `text_delta` / `thinking_delta` **APPEND**; `tool_execution_update.partialResult`

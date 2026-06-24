@@ -21,19 +21,19 @@ runtime exports being the WS method/channel constants and the protocol version. 
 - **Public surface (`index.ts`):** `export type *` of `piProtocol` + `domain`; `export *` (value) of
   `wsProtocol` (`WS_METHODS`, `WS_CHANNELS`, the typed maps, `PROTOCOL_VERSION`).
 - **Allowed deps:** none at runtime. **Type-only** devDeps on `@earendil-works/pi-ai` +
-  `@earendil-works/pi-agent-core`, imported **only from their `/base` entries**.
+  `@earendil-works/pi-agent-core`, imported **from their package roots** (type-only → erased at build).
 - **Forbidden:** any *value* import of a `pi` package; **any** import (even `type`) of
-  `@earendil-works/pi-coding-agent` (pulls `node:fs`); the pi-ai **provider subpaths** (`/anthropic`,
-  `/openai`, `/google`, … — they statically load the Node provider SDKs); and importing
-  `server` / `shared` / `web`.
+  `@earendil-works/pi-coding-agent` (pulls `node:fs`); the pi-ai **provider / API subpaths**
+  (`/providers/*`, `/api/*`, `/bedrock-provider`, … — they statically load the Node provider SDKs); and
+  importing `server` / `shared` / `web`.
 
 ## Contents
 
-- **piProtocol.ts** — `import type` re-exports from the browser-safe `/base` entries:
-  - `@earendil-works/pi-ai/base`: `Model`, `Message`, `UserMessage`, `AssistantMessage`,
+- **piProtocol.ts** — `import type` re-exports from the pi package roots (type-only → erased at build):
+  - `@earendil-works/pi-ai`: `Model`, `Message`, `UserMessage`, `AssistantMessage`,
     `ToolResultMessage`, `TextContent`, `ThinkingContent`, `ImageContent`, `ToolCall`,
     `AssistantMessageEvent`, `Usage`, `StopReason`;
-  - `@earendil-works/pi-agent-core/base`: `AgentEvent`, `AgentMessage`, `ThinkingLevel` (the
+  - `@earendil-works/pi-agent-core`: `AgentEvent`, `AgentMessage`, `ThinkingLevel` (the
     `off`-inclusive one);
   - the local render union **`PiEvent`** — the real superset `AgentSessionEvent` lives in the Node-only
     `pi-coding-agent`, so it's mirrored here. Finalized when chat lands (M10/M11); until then `= AgentEvent`.
@@ -46,8 +46,9 @@ runtime exports being the WS method/channel constants and the protocol version. 
 
 ## Get right
 
-- **Type-only, from `/base`, always** (verified vs 0.79.10: `/base` → `dist/base.d.ts`, provider-free;
-  providers are separate subpaths that statically import the Node SDKs — never touch them).
+- **Type-only, from the package roots, always** (verified vs 0.80.2: type-only imports are erased by
+  `verbatimModuleSyntax`, so the web bundle stays provider-free; the pi-ai provider/API subpaths
+  statically import the Node SDKs — never touch them). The `/base` entries existed only in 0.79.8–0.79.9.
 - `Model` is generic — expose as `Model<any>`.
 - `AssistantMessageEvent` (the streaming deltas) is nested under `message_update.assistantMessageEvent`,
   never a top-level event `type`.
