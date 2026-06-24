@@ -1,123 +1,242 @@
 /* ── Form container (within FullScreenLayout) ──────────────────── */
+/* Header, hero, skip and Cancel stay put; only `.detect-read` scrolls.
+   Without this the expanded file/folder lists push the form past the
+   viewport and the whole screen overflows. */
 .detect-form {
   width: 100%;
+  flex: 1;
   display: flex;
   flex-direction: column;
   gap: 16px;
   max-height: calc(100vh - 140px);
+  min-height: 0;
+  overflow: hidden;
 }
-
-/* ── Project header (above the H2) ──────────────────────────────── */
-.detect-project-header {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding-bottom: 14px;
-  margin-bottom: 6px;
-  border-bottom: 1px solid var(--border);
-}
-
-.detect-project-info {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  flex: 1;
-  min-width: 0;
-}
-
-.detect-leaf {
-  width: 18px;
-  height: 18px;
-  color: #fff;
-  opacity: 0.6;
+.detect-form > *:not(.detect-read) {
   flex-shrink: 0;
 }
 
-.detect-project-name {
-  font-size: 14px;
-  font-weight: 600;
-  color: var(--text);
-}
-
-.detect-project-path {
-  font-family: ui-monospace, Menlo, monospace;
-  font-size: 11.5px;
-  color: var(--hint);
-  margin-top: 1px;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.detect-pill {
+/* ── Back navigation (compact, top-left) ────────────────────────── */
+.detect-back {
+  align-self: flex-start;
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  font-size: 11px;
+  padding: 4px 8px 4px 4px;
+  border: none;
+  border-radius: 7px;
+  background: transparent;
   color: var(--muted);
-  background: var(--elevated);
-  border: 1px solid var(--border);
-  border-radius: 999px;
-  padding: 3px 10px;
-  white-space: nowrap;
-  flex-shrink: 0;
+  font: inherit;
+  font-family: var(--font);
+  font-size: 13px;
+  cursor: pointer;
+  transition: color 120ms ease, background 120ms ease;
+}
+.detect-back:hover:not(:disabled) {
+  color: var(--text);
+  background: var(--white-10);
+}
+.detect-back:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
 }
 
-.detect-pill code {
-  font-family: ui-monospace, Menlo, monospace;
-  font-size: 10.5px;
-}
-
-/* ── "What happens" mini-flow ───────────────────────────────────── */
+/* ── "What happens" numbered steps ──────────────────────────────── */
 .detect-flow {
+  list-style: none;
+  margin: 12px 0 6px;
+  padding: 0;
   display: flex;
-  align-items: center;
-  gap: 8px;
+  align-items: stretch;
+  gap: 12px;
   flex-wrap: wrap;
-  margin-top: 4px;
 }
 .detect-flow-step {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
-  padding: 7px 12px;
-  border-radius: 8px;
+  gap: 10px;
+  padding: 10px 14px;
+  border-radius: 10px;
   background: var(--input-bg);
   border: 1px solid var(--border);
   font-size: 12.5px;
   font-weight: 500;
   color: var(--text);
 }
+.detect-flow-num {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--primary);
+  color: var(--on-accent);
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1;
+  flex-shrink: 0;
+}
 .detect-flow-step svg {
   color: var(--primary);
   flex-shrink: 0;
 }
-.detect-flow-arrow {
+
+/* ── CTA row: Skip (small) + Start discussion (primary) ─────────── */
+.detect-cta-row {
+  display: flex;
+  gap: 16px;
+  align-items: stretch;
+  flex-wrap: wrap;
+}
+.detect-cta {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  min-width: 220px;
+  text-align: left;
+  padding: 16px 18px;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  background: var(--panel);
+  color: var(--text);
+  font: inherit;
+  font-family: var(--font);
+  cursor: pointer;
+  transition: transform 120ms ease, box-shadow 120ms ease, border-color 120ms ease;
+}
+.detect-cta:hover:not(:disabled) {
+  transform: translateY(-1px);
+  border-color: var(--primary);
+}
+.detect-cta:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+.detect-cta--primary {
+  flex: 2 1 320px;
+  border-color: rgba(108, 99, 255, 0.5);
+  background: linear-gradient(135deg, rgba(108, 99, 255, 0.18) 0%, rgba(108, 99, 255, 0.06) 100%);
+}
+.detect-cta--primary:hover:not(:disabled) {
+  box-shadow: 0 6px 18px rgba(108, 99, 255, 0.28);
+}
+.detect-cta--skip {
+  flex: 1 1 200px;
+}
+.detect-cta-icon {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
+  background: rgba(108, 99, 255, 0.25);
+  color: var(--primary);
+}
+.detect-cta-body {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.detect-cta-title {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text);
+}
+.detect-cta-sub {
+  font-size: 12px;
+  color: var(--muted);
+  line-height: 1.45;
+}
+
+/* ── "What I'll read" — Claude pinned, Files/Folders scroll alone ── */
+/* The read area itself does NOT scroll. Claude guidance stays fixed at
+   the top; each expanded group gets its own bounded, independent scroll
+   so there's never one global scroll over the whole screen. */
+.detect-read {
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-height: 0;
+  overflow: hidden;
+}
+.detect-read-label {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
   color: var(--hint);
+}
+.detect-group {
+  display: flex;
+  flex-direction: column;
   flex-shrink: 0;
 }
-
-/* ── Agent guidance (pinned above the scroll) ───────────────────── */
-/* Kept out of the scroll area so a missing-guidance row — and its "Init"
-   action — is always visible instead of being scrolled past. */
-.detect-guidance {
-  flex-shrink: 0;
-  padding-right: 6px;
+/* Open groups share the leftover height and scroll independently. */
+.detect-group--open {
+  flex: 1 1 0;
+  min-height: 0;
 }
-
-/* ── Scrollable list area (files + folders) ─────────────────────── */
-.detect-list-scroll {
+.detect-group-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  flex-shrink: 0;
+  padding: 9px 12px;
+  border-radius: 8px;
+  background: var(--input-bg);
+  border: 1px solid var(--border);
+  color: var(--text);
+  font: inherit;
+  font-family: var(--font);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  text-align: left;
+}
+.detect-group-toggle:hover:not(:disabled) {
+  background: var(--white-10);
+}
+.detect-group-toggle:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+.detect-group-toggle svg {
+  flex-shrink: 0;
+  color: var(--muted);
+}
+.detect-group-chevron {
+  transition: transform 120ms ease;
+}
+.detect-group-chevron--open {
+  transform: rotate(90deg);
+}
+.detect-group-count {
+  margin-left: auto;
+  font-size: 11px;
+  color: var(--hint);
+  font-variant-numeric: tabular-nums;
+}
+.detect-group-body {
   flex: 1;
   min-height: 0;
   overflow-y: auto;
-  padding-right: 6px;
+  padding: 6px 2px 2px;
 }
 
-.detect-section-label {
-  margin-top: 14px !important;
-}
-.detect-section-label:first-child {
-  margin-top: 0 !important;
+/* ── Agent guidance (pinned — always visible, never scrolls away) ─ */
+.detect-guidance {
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
 }
 
 /* ── Row (matches recent project item styling) ──────────────────── */

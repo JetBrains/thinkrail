@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState, type ReactNode } from "react";
 import { useNavigate } from "react-router-dom";
-import { Grid2x2, File, Folder, Bot, ArrowRight, FileText, MessagesSquare } from "lucide-react";
+import { File, Folder, Bot, ArrowLeft, FileText, MessagesSquare, ScanSearch, ChevronRight } from "lucide-react";
 import type { ScanEngineGuidance } from "@/api/rest.ts";
 import { formatBytes } from "@/utils/format.ts";
 import { useUiStore } from "@/store/uiStore.ts";
@@ -103,6 +103,8 @@ export function ExistingProjectDetect() {
 
   const [submitting, setSubmitting] = useState(false);
   const [startError, setStartError] = useState<string | null>(null);
+  const [filesOpen, setFilesOpen] = useState(false);
+  const [foldersOpen, setFoldersOpen] = useState(false);
 
   const handleStart = useCallback(async () => {
     if (!scan || submitting) return;
@@ -144,6 +146,17 @@ export function ExistingProjectDetect() {
     navigate("/");
   }, [navigate]);
 
+  // Escape hatch: skip the investigation and drop straight onto the board.
+  // Marking the project ``initialized`` clears the pre-chat takeover (the
+  // detect screen) and the board view renders. This is in-memory only —
+  // until a deliverable (ticket/spec) lands on disk the backend still
+  // classifies the dir as ``existing``, so a reload before any work
+  // re-offers onboarding.
+  const handleSkip = useCallback(() => {
+    setProjectState("initialized");
+    setCenterView("board");
+  }, [setProjectState, setCenterView]);
+
   if (!projectPath) {
     return null;
   }
@@ -165,138 +178,197 @@ export function ExistingProjectDetect() {
     );
   }
 
-  const totalSelectable =
-    scan.important_files.length +
-    scan.top_folders.length +
-    scan.engine_guidance.filter((g) => g.found).length;
+  // Group counts shown in the collapsed headers — total, and a "N/M"
+  // form once the user deselects some so the header reflects the trim.
+  const fileCount = scan.important_files.length;
+  const folderCount = scan.top_folders.length;
+  const filesSelected = scan.important_files.filter((f) => selected.has(f.name)).length;
+  const foldersSelected = scan.top_folders.filter((f) => selected.has(f.name)).length;
+  const fileCountLabel = filesSelected === fileCount ? `${fileCount}` : `${filesSelected}/${fileCount}`;
+  const folderCountLabel =
+    foldersSelected === folderCount ? `${folderCount}` : `${foldersSelected}/${folderCount}`;
 
   return (
     <FullScreenLayout maxWidth={620}>
       <div className="detect-form">
+        <button
+          type="button"
+          className="detect-back"
+          onClick={handleCancel}
+          disabled={submitting}
+          aria-label="Back to project picker"
+        >
+          <ArrowLeft size={16} strokeWidth={2} />
+          <span>Back</span>
+        </button>
+
         <div className="np-form-header">
-          <h2 className="np-form-h2">What I'll read first</h2>
+          <h2 className="np-form-h2">Set up {projectName}</h2>
           <p className="np-form-lead">
-            Before we build or improve anything, let's pin down where the project
-            stands today and what we're aiming for.
+            Before we build or improve anything, let's map what's already here
+            and agree on where it's headed.
           </p>
-          <div className="detect-flow" aria-hidden="true">
-            <div className="detect-flow-step">
+          <ol className="detect-flow">
+            <li className="detect-flow-step">
+              <span className="detect-flow-num">1</span>
               <File size={16} strokeWidth={1.5} />
               <span>Read project</span>
-            </div>
-            <ArrowRight size={15} className="detect-flow-arrow" />
-            <div className="detect-flow-step">
+            </li>
+            <li className="detect-flow-step">
+              <span className="detect-flow-num">2</span>
               <MessagesSquare size={16} strokeWidth={1.5} />
-              <span>Discuss project state</span>
-            </div>
-            <ArrowRight size={15} className="detect-flow-arrow" />
-            <div className="detect-flow-step">
+              <span>Discuss project</span>
+            </li>
+            <li className="detect-flow-step">
+              <span className="detect-flow-num">3</span>
               <FileText size={16} strokeWidth={1.5} />
-              <span>Design doc + draft of goals</span>
-            </div>
-          </div>
-        </div>
-
-        <header className="detect-project-header">
-          <div className="detect-project-info">
-            <Grid2x2 size={18} strokeWidth={1.5} className="detect-leaf" />
-            <div>
-              <div className="detect-project-name">{projectName}</div>
-              <div className="detect-project-path">{projectPath}</div>
-            </div>
-          </div>
-          <span className="detect-pill">No <code>.tr/</code> yet</span>
-        </header>
-
-        {scan.engine_guidance.length > 0 && (
-          <div className="detect-guidance">
-            <div className="np-form-label detect-section-label">Agent guidance</div>
-            {scan.engine_guidance.map((g) => (
-              <DetectRow
-                key={g.engine}
-                icon={g.found ? <Bot size={16} strokeWidth={1.5} /> : "⚠️"}
-                name={g.file}
-                description={engineDescription(g)}
-                missing={!g.found}
-                checked={g.found ? selected.has(g.file) : undefined}
-                onToggle={g.found ? () => toggle(g.file) : undefined}
-                action={
-                  !g.found ? (
-                    <button
-                      className="detect-init-btn"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        initEngineFor(g.engine);
-                      }}
-                      disabled={initBusy.has(g.engine)}
-                    >
-                      {initBusy.has(g.engine) ? "Creating…" : `Init ${g.display_name}`}
-                    </button>
-                  ) : undefined
-                }
-              />
-            ))}
-            {initError && <p className="detect-error">{initError}</p>}
-          </div>
-        )}
-
-        <div className="detect-list-scroll">
-          <div className="np-form-label detect-section-label">
-            Files {scan.important_files.length > 0 && `· ${scan.important_files.length}`}
-          </div>
-          {scan.important_files.length === 0 ? (
-            <p className="detect-empty">No high-signal files at the project root.</p>
-          ) : (
-            scan.important_files.map((f) => (
-              <DetectRow
-                key={f.name}
-                icon={<File size={16} strokeWidth={1.5} />}
-                name={f.name}
-                description={`${f.description} · ${formatBytes(f.size)}`}
-                checked={selected.has(f.name)}
-                onToggle={() => toggle(f.name)}
-              />
-            ))
-          )}
-
-          <div className="np-form-label detect-section-label">
-            Folders {scan.top_folders.length > 0 && `· ${scan.top_folders.length}`}
-          </div>
-          {scan.top_folders.length === 0 ? (
-            <p className="detect-empty">No top-level folders.</p>
-          ) : (
-            scan.top_folders.map((f) => (
-              <DetectRow
-                key={f.name}
-                icon={<Folder size={16} strokeWidth={1.5} />}
-                name={`${f.name}/`}
-                description={`${f.entry_count} ${f.entry_count === 1 ? "entry" : "entries"}`}
-                checked={selected.has(f.name)}
-                onToggle={() => toggle(f.name)}
-              />
-            ))
-          )}
+              <span>Design doc + goals</span>
+            </li>
+          </ol>
         </div>
 
         {startError && <p className="detect-error">{startError}</p>}
 
-        <div className="np-form-actions">
-          <span className="np-form-hint">
-            ✓ {selected.size} of {totalSelectable} selected
-          </span>
-          <div className="np-form-actions-buttons">
-            <Button onClick={handleCancel} disabled={submitting} type="button">
-              Cancel
-            </Button>
-            <Button
-              variant="primary"
-              onClick={handleStart}
-              disabled={submitting || selected.size === 0}
+        <div className="detect-cta-row">
+          <button
+            type="button"
+            className="detect-cta detect-cta--skip"
+            onClick={handleSkip}
+            disabled={submitting}
+          >
+            <span className="detect-cta-body">
+              <span className="detect-cta-title">Skip to board</span>
+              <span className="detect-cta-sub">
+                Jump straight in and start creating tickets.
+              </span>
+            </span>
+          </button>
+
+          <button
+            type="button"
+            className="detect-cta detect-cta--primary"
+            onClick={handleStart}
+            disabled={submitting || selected.size === 0}
+          >
+            <span className="detect-cta-icon" aria-hidden="true">
+              <ScanSearch size={20} strokeWidth={1.5} />
+            </span>
+            <span className="detect-cta-body">
+              <span className="detect-cta-title">
+                {submitting ? "Starting…" : "Start discussion"}
+              </span>
+              <span className="detect-cta-sub">
+                I learn how it works, we talk it through, and capture the outcome
+                as Markdown docs plus a clear set of tasks.
+              </span>
+            </span>
+          </button>
+        </div>
+
+        <div className="detect-read">
+          <div className="detect-read-label">What I'll read</div>
+
+          {scan.engine_guidance.length > 0 && (
+            <div className="detect-guidance">
+              {scan.engine_guidance.map((g) => (
+                <DetectRow
+                  key={g.engine}
+                  icon={g.found ? <Bot size={16} strokeWidth={1.5} /> : "⚠️"}
+                  name={g.file}
+                  description={engineDescription(g)}
+                  missing={!g.found}
+                  checked={g.found ? selected.has(g.file) : undefined}
+                  onToggle={g.found ? () => toggle(g.file) : undefined}
+                  action={
+                    !g.found ? (
+                      <button
+                        className="detect-init-btn"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          initEngineFor(g.engine);
+                        }}
+                        disabled={initBusy.has(g.engine)}
+                      >
+                        {initBusy.has(g.engine) ? "Creating…" : `Init ${g.display_name}`}
+                      </button>
+                    ) : undefined
+                  }
+                />
+              ))}
+              {initError && <p className="detect-error">{initError}</p>}
+            </div>
+          )}
+
+          <div className={`detect-group${filesOpen ? " detect-group--open" : ""}`}>
+            <button
               type="button"
-              trailingIcon={<ArrowRight size={16} strokeWidth={2} className="np-form-btn-icon" />}
+              className="detect-group-toggle"
+              onClick={() => setFilesOpen((o) => !o)}
+              aria-expanded={filesOpen}
+              disabled={fileCount === 0}
             >
-              {submitting ? "Starting…" : "Start investigation"}
-            </Button>
+              <ChevronRight
+                size={15}
+                className={`detect-group-chevron${filesOpen ? " detect-group-chevron--open" : ""}`}
+              />
+              <File size={15} strokeWidth={1.5} />
+              <span>Files</span>
+              <span className="detect-group-count">{fileCountLabel}</span>
+            </button>
+            {filesOpen && (
+              <div className="detect-group-body">
+                {fileCount === 0 ? (
+                  <p className="detect-empty">No high-signal files at the project root.</p>
+                ) : (
+                  scan.important_files.map((f) => (
+                    <DetectRow
+                      key={f.name}
+                      icon={<File size={16} strokeWidth={1.5} />}
+                      name={f.name}
+                      description={`${f.description} · ${formatBytes(f.size)}`}
+                      checked={selected.has(f.name)}
+                      onToggle={() => toggle(f.name)}
+                    />
+                  ))
+                )}
+              </div>
+            )}
+          </div>
+
+          <div className={`detect-group${foldersOpen ? " detect-group--open" : ""}`}>
+            <button
+              type="button"
+              className="detect-group-toggle"
+              onClick={() => setFoldersOpen((o) => !o)}
+              aria-expanded={foldersOpen}
+              disabled={folderCount === 0}
+            >
+              <ChevronRight
+                size={15}
+                className={`detect-group-chevron${foldersOpen ? " detect-group-chevron--open" : ""}`}
+              />
+              <Folder size={15} strokeWidth={1.5} />
+              <span>Folders</span>
+              <span className="detect-group-count">{folderCountLabel}</span>
+            </button>
+            {foldersOpen && (
+              <div className="detect-group-body">
+                {folderCount === 0 ? (
+                  <p className="detect-empty">No top-level folders.</p>
+                ) : (
+                  scan.top_folders.map((f) => (
+                    <DetectRow
+                      key={f.name}
+                      icon={<Folder size={16} strokeWidth={1.5} />}
+                      name={`${f.name}/`}
+                      description={`${f.entry_count} ${f.entry_count === 1 ? "entry" : "entries"}`}
+                      checked={selected.has(f.name)}
+                      onToggle={() => toggle(f.name)}
+                    />
+                  ))
+                )}
+              </div>
+            )}
           </div>
         </div>
       </div>
