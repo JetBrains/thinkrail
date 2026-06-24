@@ -192,39 +192,39 @@ export function ExistingProjectDetect() {
           <span className="detect-pill">No <code>.tr/</code> yet</span>
         </header>
 
-        <div className="detect-list-scroll">
-          {scan.engine_guidance.length > 0 && (
-            <>
-              <div className="np-form-label detect-section-label">Agent guidance</div>
-              {scan.engine_guidance.map((g) => (
-                <DetectRow
-                  key={g.engine}
-                  icon={g.found ? <Bot size={16} strokeWidth={1.5} /> : "⚠️"}
-                  name={g.file}
-                  description={engineDescription(g)}
-                  missing={!g.found}
-                  checked={g.found ? selected.has(g.file) : undefined}
-                  onToggle={g.found ? () => toggle(g.file) : undefined}
-                  action={
-                    !g.found ? (
-                      <button
-                        className="detect-init-btn"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          initEngineFor(g.engine);
-                        }}
-                        disabled={initBusy.has(g.engine)}
-                      >
-                        {initBusy.has(g.engine) ? "Creating…" : `Init ${g.display_name}`}
-                      </button>
-                    ) : undefined
-                  }
-                />
-              ))}
-              {initError && <p className="detect-error">{initError}</p>}
-            </>
-          )}
+        {scan.engine_guidance.length > 0 && (
+          <div className="detect-guidance">
+            <div className="np-form-label detect-section-label">Agent guidance</div>
+            {scan.engine_guidance.map((g) => (
+              <DetectRow
+                key={g.engine}
+                icon={g.found ? <Bot size={16} strokeWidth={1.5} /> : "⚠️"}
+                name={g.file}
+                description={engineDescription(g)}
+                missing={!g.found}
+                checked={g.found ? selected.has(g.file) : undefined}
+                onToggle={g.found ? () => toggle(g.file) : undefined}
+                action={
+                  !g.found ? (
+                    <button
+                      className="detect-init-btn"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        initEngineFor(g.engine);
+                      }}
+                      disabled={initBusy.has(g.engine)}
+                    >
+                      {initBusy.has(g.engine) ? "Creating…" : `Init ${g.display_name}`}
+                    </button>
+                  ) : undefined
+                }
+              />
+            ))}
+            {initError && <p className="detect-error">{initError}</p>}
+          </div>
+        )}
 
+        <div className="detect-list-scroll">
           <div className="np-form-label detect-section-label">
             Files {scan.important_files.length > 0 && `· ${scan.important_files.length}`}
           </div>
