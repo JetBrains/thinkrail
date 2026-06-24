@@ -7,6 +7,11 @@ import { useSettingsStore } from "@/store/settingsStore.ts";
 import { useSessionStore } from "@/store/sessionStore.ts";
 import { useRuntimeCapsStore } from "@/store/runtimeCapsStore.ts";
 import { RuntimeFlags } from "@/components/shared/RuntimeFlags.tsx";
+import {
+  effortOptionsForModel,
+  flagsForModel,
+  planModelSwitch,
+} from "@/utils/modelCapabilities.ts";
 import { useBoardStore } from "@/store/boardStore.ts";
 import { SkillGrid } from "@/components/shared/SkillGrid.tsx";
 import { SkillIcon } from "@/constants/skillIcons.tsx";
@@ -44,8 +49,10 @@ export function DraftConfigCard({ thinkrailSid, readOnly, hideDiscard, onVisibil
   const caps = useRuntimeCapsStore((s) => s.capsByRuntime["claude"]);
   const models = caps?.models ?? [];
   const permissionModes = caps?.permissionModes ?? [];
-  const effortLevels = caps?.effortLevels ?? [];
-  const flags = caps?.flags ?? [];
+  // Effort levels and flags are scoped to the draft's selected model so the
+  // picker can't offer an unsound combination (e.g. Haiku + xhigh / 1M).
+  const effortLevels = effortOptionsForModel(caps, session?.model ?? "");
+  const flags = flagsForModel(caps, session?.model ?? "");
 
   const [editName, setEditName] = useState("");
   const [skillPickerOpen, setSkillPickerOpen] = useState(false);
@@ -485,7 +492,13 @@ export function DraftConfigCard({ thinkrailSid, readOnly, hideDiscard, onVisibil
                 ...(modelDef ? [] : [{ value: session.model, label: session.model }]),
                 ...models.map((m) => ({ value: m.value, label: m.label })),
               ]}
-              onChange={(v) => debouncedUpdate({ config: buildConfig({ model: v }) })}
+              onChange={(v) => {
+                // Switching the draft's model clamps the effort to what the new
+                // model accepts (the flag list re-filters on its own; the 1M
+                // flag is simply hidden on models that lack it).
+                const plan = planModelSwitch(caps, v, session.effort, session.flags);
+                debouncedUpdate({ config: buildConfig({ model: v, effort: plan.clampedEffort }) });
+              }}
             />
           </span>
 

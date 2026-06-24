@@ -8,6 +8,7 @@
 export type ThinkRailRpcPayloads =
   | LabeledOption
   | RuntimeFlag
+  | ModelCapability
   | RuntimeIdentity
   | RuntimeCapabilities
   | RuntimesListResponse
@@ -28,12 +29,16 @@ export type Label1 = string;
 export type Type = "boolean";
 export type Default = boolean;
 export type Description1 = string;
+export type Model = string;
+export type Effortlevels = string[];
+export type Flags = string[];
 export type Runtimetype = "claude";
 export type Displayname = string;
 export type Permissionmodes = LabeledOption[];
-export type Effortlevels = LabeledOption[];
+export type Effortlevels1 = LabeledOption[];
 export type Models = LabeledOption[];
-export type Flags = RuntimeFlag[];
+export type Flags1 = RuntimeFlag[];
+export type Modelcapabilities = ModelCapability[];
 export type Runtimes = RuntimeIdentity[];
 export type Runtimetype1 = "claude";
 export type Field = string;
@@ -41,7 +46,7 @@ export type Value1 = string;
 export type Runtimetype2 = "claude";
 export type Allowed = string[];
 export type Runtime = "claude";
-export type Model = string;
+export type Model1 = string;
 export type Permissionmode = string;
 export type Streamtext = boolean;
 export type Effort = string;
@@ -157,6 +162,20 @@ export interface RuntimeFlag {
   description?: Description1;
 }
 /**
+ * Per-model subset of the runtime's tunable options.
+ *
+ * ``effort_levels`` and ``flags`` are *value* /​*key* allowlists scoped to one
+ * model — subsets of the runtime-wide ``RuntimeCapabilities.effort_levels`` /
+ * ``flags`` (which carry the display labels). The UI uses these to show only
+ * the efforts and flags the selected model actually accepts; the backend
+ * clamps unsound combinations at the runtime boundary regardless.
+ */
+export interface ModelCapability {
+  model: Model;
+  effortLevels: Effortlevels;
+  flags?: Flags;
+}
+/**
  * Lightweight ``{runtimeType, displayName}`` pair for ``runtimes/list``.
  */
 export interface RuntimeIdentity {
@@ -168,12 +187,18 @@ export interface RuntimeIdentity {
  *
  * Order is contract: position 0 of ``permission_modes`` / ``effort_levels`` /
  * ``models`` is the runtime's default (cold-start picks ``[0].value``).
+ *
+ * ``effort_levels``/``models``/``flags`` are the runtime-wide menus (with
+ * labels). ``model_capabilities`` narrows them per model — a model with no
+ * entry is unconstrained (the UI shows every option). This lets the picker
+ * reflect that, say, Haiku accepts no effort level and no 1M context window.
  */
 export interface RuntimeCapabilities {
   permissionModes: Permissionmodes;
-  effortLevels: Effortlevels;
+  effortLevels: Effortlevels1;
   models: Models;
-  flags?: Flags;
+  flags?: Flags1;
+  modelCapabilities?: Modelcapabilities;
 }
 /**
  * Wire payload returned by ``runtimes/list``.
@@ -201,13 +226,13 @@ export interface InvalidCapabilityValueData {
  */
 export interface SessionConfig {
   runtime?: Runtime;
-  model?: Model;
+  model?: Model1;
   permissionMode?: Permissionmode;
   streamText?: Streamtext;
   effort?: Effort;
-  flags?: Flags1;
+  flags?: Flags2;
 }
-export interface Flags1 {
+export interface Flags2 {
   [k: string]: boolean;
 }
 /**

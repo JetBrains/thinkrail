@@ -1122,6 +1122,12 @@
   letter-spacing: 0.04em;
 }
 .ssl-more-group:first-of-type { margin-top: 2px; }
+.ssl-more-hint {
+  font-size: var(--font-xs);
+  color: var(--gold);
+  margin-top: 4px;
+  font-style: italic;
+}
 .ssl-more-chips {
   display: flex; flex-wrap: wrap; gap: 3px;
   margin-top: 2px;

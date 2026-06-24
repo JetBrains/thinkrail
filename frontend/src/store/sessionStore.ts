@@ -161,6 +161,11 @@ interface SessionStore {
   ) => void;
 
   updateConfig: (thinkrailSid: string, config: { model?: string; permissionMode?: string; effort?: string }) => Promise<void>;
+  /** Change effort on a live session. Effort can't be applied to a running SDK
+   *  client (no live set_effort), so it's persisted and staged (`pendingRelaunch`)
+   *  to take effect via a seamless relaunch on the next message — rather than
+   *  restarting (and visibly "completing") the session on a routine tweak. */
+  changeEffort: (thinkrailSid: string, effort: string) => Promise<void>;
   restartSession: (thinkrailSid: string) => Promise<void>;
 
   continueSession: (thinkrailSid: string) => Promise<void>;
@@ -1191,6 +1196,25 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
       return;
     }
 
+    // A staged config change (effort) that the live client can't honour is
+    // applied here via a seamless relaunch, folded into this send. The
+    // relaunched runner accepts messages while "initializing", so the message
+    // queues and runs with the new settings.
+    if (session?.pendingRelaunch) {
+      try {
+        await get().restartSession(thinkrailSid);
+      } catch (err) {
+        useInputDraftStore.getState().setDraft(thinkrailSid, text);
+        useNotificationStore.getState().addToast({
+          eventType: "error",
+          message: `Couldn't apply settings: ${getErrorMessage(err)}`,
+          persistent: true,
+          thinkrailSid,
+        });
+        return;
+      }
+    }
+
     // Add user message to events immediately (optimistic).
     // Status is NOT changed here — backend drives transitions:
     //   idle → running happens when runner calls client.query()
@@ -1992,11 +2016,26 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
     await api.updateConfig(thinkrailSid, config);
   },
 
+  changeEffort: async (thinkrailSid, effort) => {
+    // Persist the effort (configChanged echoes it back so the picker updates),
+    // then stage a relaunch instead of restarting now — the new effort is
+    // applied seamlessly on the next message (see sendMessage).
+    const api = createAgentApi(getClient());
+    await api.updateConfig(thinkrailSid, { effort });
+    set((s) => {
+      const session = s.sessions.get(thinkrailSid);
+      if (!session) return s;
+      const next = new Map(s.sessions);
+      next.set(thinkrailSid, { ...session, pendingRelaunch: true });
+      return { sessions: next };
+    });
+  },
+
   restartSession: async (thinkrailSid) => {
-    const { createSessionApi } = await import("@/api/methods/sessions.ts");
-    const api = createSessionApi(getClient());
-    await api.restart(thinkrailSid);
-    // Backend creates a new session starting in initializing
+    // Mark the session as restarting BEFORE the RPC: ending the old run emits
+    // an `agent/done` that arrives mid-call, and `onSessionDone` uses this flag
+    // to treat it as a transient relaunch (no "Session complete" card / flash).
+    // Also clears any staged config change — the relaunch applies it.
     set((s) => {
       const session = s.sessions.get(thinkrailSid);
       if (!session) return s;
@@ -2005,6 +2044,8 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
       next.set(thinkrailSid, {
         ...session,
         status: SessionStatus.Initializing,
+        restarting: true,
+        pendingRelaunch: false,
         pendingRequests: [],
         metrics: {
           ...session.metrics,
@@ -2016,6 +2057,22 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
       });
       return { sessions: next };
     });
+    const { createSessionApi } = await import("@/api/methods/sessions.ts");
+    const api = createSessionApi(getClient());
+    try {
+      await api.restart(thinkrailSid);
+    } catch (err) {
+      // Relaunch failed — clear the guard so the session isn't stuck
+      // suppressing future completions, and surface the error to the caller.
+      set((s) => {
+        const session = s.sessions.get(thinkrailSid);
+        if (!session) return s;
+        const next = new Map(s.sessions);
+        next.set(thinkrailSid, { ...session, restarting: false });
+        return { sessions: next };
+      });
+      throw err;
+    }
   },
 
   onConfigChanged: (params) => {
@@ -2054,6 +2111,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
       next.set(thinkrailSid, {
         ...session,
         status: isQuiescent(session.status) ? SessionStatus.Running : session.status,
+        restarting: false,
         model: (params.model as string) ?? session.model,
         systemPrompt: (params.systemPrompt as string) ?? undefined,
         events: [
@@ -2136,9 +2194,13 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
         }
 
         if (method === "agent/ready") {
-          if (session.status === SessionStatus.Initializing) {
-            sessions.set(thinkrailSid, { ...session, status: SessionStatus.Idle });
-          }
+          // The (relaunched) client is live — clear the restart guard so any
+          // later real completion renders normally.
+          sessions.set(thinkrailSid, {
+            ...session,
+            status: session.status === SessionStatus.Initializing ? SessionStatus.Idle : session.status,
+            restarting: false,
+          });
         } else if (method === "agent/costEstimate") {
           const est = params.estimatedCostUsd as number;
           const turnEst = params.estimatedTurnCostUsd as number;
@@ -2654,6 +2716,12 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
 
   onSessionDone: (params) => {
     const thinkrailSid = params.thinkrailSid as string;
+    // A relaunch in progress (config-change restart) ends the old run with an
+    // `agent/done` that is NOT a real completion — swallow it (no "Session
+    // complete" card, no done status). Do NOT clear `restarting` here: the
+    // `session/didEnd` that follows must see it too. The flag is cleared when
+    // the relaunch goes live (agent/ready / sessionStart).
+    if (get().sessions.get(thinkrailSid)?.restarting) return;
     set((s) => {
       const sessions = appendEvent(s.sessions, thinkrailSid, "agent/done", params, s.closedIds);
       const session = sessions.get(thinkrailSid);

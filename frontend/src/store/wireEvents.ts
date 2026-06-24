@@ -143,6 +143,10 @@ export function wireEvents(client: RpcClient): Unsubscribe {
       if (!thinkrailSid || !status) return;
       // Update session status in the in-memory sessions Map if it exists
       const session = useSessionStore.getState().sessions.get(thinkrailSid);
+      // A config-change relaunch ends the old run, which emits session/didEnd.
+      // Ignore it — the relaunch (agent/ready) drives status. Otherwise the
+      // session flips to "ended" while the relaunched runner is still going.
+      if (session?.restarting) return;
       if (session && !isTerminal(session.status)) {
         const sessions = new Map(useSessionStore.getState().sessions);
         sessions.set(thinkrailSid, { ...session, status: status as typeof session.status });
@@ -166,14 +170,20 @@ export function wireEvents(client: RpcClient): Unsubscribe {
   unsubs.push(
     client.on("agent/done", (p) => {
       const params = p as Record<string, unknown>;
+      const thinkrailSid = params.thinkrailSid as string;
+      // Capture before onSessionDone (which reads the flag to suppress the card).
+      const wasRestarting = useSessionStore.getState().sessions.get(thinkrailSid)?.restarting;
       useSessionStore.getState().onSessionDone(params);
+      // A config-change relaunch's transient end is not a real completion —
+      // no "Session completed" toast / done badge.
+      if (wasRestarting) return;
       useNotificationStore.getState().addToast({
-        thinkrailSid: params.thinkrailSid as string,
+        thinkrailSid,
         eventType: "success",
         message: "Session completed",
         persistent: false,
       });
-      useNotificationStore.getState().setBadge(params.thinkrailSid as string, {
+      useNotificationStore.getState().setBadge(thinkrailSid, {
         type: "done",
         pulsing: false,
       });

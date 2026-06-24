@@ -6,6 +6,7 @@ import { SessionStatus, isEnded, isStreaming } from "@/constants/status.ts";
 import { useRuntimeCapsStore } from "@/store/runtimeCapsStore.ts";
 import { permissionModeTooltip } from "@/utils/permissionMode.ts";
 import { useUiStore } from "@/store/uiStore.ts";
+import { effortOptionsForModel } from "@/utils/modelCapabilities.ts";
 import type { EventCategory } from "./renderers/categories.ts";
 
 // ── Static option lists ──────────────────────────────────────────────
@@ -189,6 +190,9 @@ interface SessionStatusLineProps {
   model: string;
   permissionMode: string;
   effort: string;
+  /** An effort change is staged and will apply on the next message (the live
+   *  client can't change effort) — surfaced as a hint next to the chips. */
+  effortPending?: boolean;
   metrics: SessionMetrics;
   status: SessionStatus;
   disabled?: boolean;
@@ -211,6 +215,7 @@ export function SessionStatusLine({
   model,
   permissionMode,
   effort,
+  effortPending,
   metrics,
   status,
   disabled,
@@ -228,7 +233,9 @@ export function SessionStatusLine({
   const caps = useRuntimeCapsStore((s) => s.capsByRuntime["claude"]);
   const modelOptions = caps?.models ?? [];
   const permissionModes = caps?.permissionModes ?? [];
-  const effortLevels = caps?.effortLevels ?? [];
+  // Effort chips are scoped to the active model — e.g. Haiku offers only
+  // "auto", Sonnet drops "xhigh".
+  const effortLevels = effortOptionsForModel(caps, model);
   const categoryVisibility = useUiStore((s) =>
     isOnboarding ? s.onboardingChatCategoryVisibility : s.chatCategoryVisibility,
   );
@@ -380,6 +387,9 @@ export function SessionStatusLine({
                 onSelect={(v) => onChangeEffort?.(v)}
                 disabled={disabled}
               />
+              {effortPending && (
+                <div className="ssl-more-hint">applies on next message</div>
+              )}
               <ChipGroup
                 label="View"
                 items={(Object.keys(CATEGORY_LABELS) as EventCategory[]).map((c) => ({ value: c, label: CATEGORY_LABELS[c] }))}
