@@ -265,6 +265,7 @@ export const compactRenderers: ViewRenderers = {
         selectedAnswers={isAnswered && !qExpired ? (savedAnswer?.answers as Record<string, string>) : undefined}
         onSubmit={(response) => ctx.onResolveRequest(requestId, response)}
         requestId={requestId}
+        hideDiscuss={isWizardSkill(ctx.session?.skillId)}
         compact
       />
     );
