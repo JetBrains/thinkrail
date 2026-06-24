@@ -300,7 +300,7 @@ export function QuestionCard({
         {questions.map((q) => (
           <div key={q.question} className="chat-qa-pair">
             <div className="chat-assistant">
-              <div className="msg-avatar msg-avatar-assistant" aria-hidden="true">T</div>
+              <div className="msg-avatar msg-avatar-assistant" aria-hidden="true">{PRODUCT_NAME.charAt(0)}</div>
               <div className="msg-content">
                 <div className="msg-who">{PRODUCT_NAME}</div>
                 <div className="msg-bubble msg-bubble-assistant">
